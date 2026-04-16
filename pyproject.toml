@@ -21,6 +21,8 @@ classifiers = [
 
 dependencies = [
     "openai>=1.0.0",
+    "markdown>=3.4.0",
+    "tkinterweb>=3.10",
 ]
 
 [project.urls]

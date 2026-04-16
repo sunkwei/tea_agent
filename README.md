@@ -2,6 +2,11 @@
 
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容接口的 Function Calling 功能实现。它不仅能够调用预设的工具，还具备动态创建、加载和管理工具的能力，实现能力的自我扩展。
 
+仅仅依赖 python 的 tk 库，非常小巧，当然界面上比不过那些基于浏览器的大家伙 :)
+
+## 警告
+本项目未作安全沙盒，建议在虚拟机中执行，起始也不会闯什么大祸，当然你需要明白在做啥！！！
+
 ## 核心特性
 
 - **自主进化 (Self-Evolution)**: 智能体可以根据任务需求，自动编写 Python 代码并调用 `toolkit_save` 创建新工具，随后通过 `toolkit_reload` 立即获得新能力。
@@ -40,7 +45,21 @@ python -m tea_agent.main_db_gui main
   - `main_db_gui.py`: 基于 Tkinter 的 GUI 实现。
 
 ## 配置
-项目支持通过环境变量或 GUI 界面配置 API_KEY、API_URL 和 MODEL。
+三个环境变量
+
+- TEA_AGENT_API=<YOUR API KEY>
+- TEA_AGENT_URL=<YOUR API URL>
+- TEA_AGENT_MODEL=<YOUR MODEL NAME>
+
+## 使用示例：
+
+1. 去年12月26号到今天过去多少天了？
+	一般来说，会自动创建一个工具函数用于获取当前时间，然后在计算间隔的天数
+
+2. 创建一个 powershell 脚本，获取我的公网 ip，然后将该 ip 地址通过邮件发送到 sunkwei@gmail.com，测试成功后，将脚本加到windows计划任务，每天执行一次
+	需要提供你的 smtp，然后大模型都能轻松搞定
+
+3. ....
 
 ## 开源协议
 MIT License

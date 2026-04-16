@@ -1,0 +1,6 @@
+dist/
+tea_agent.egg-info/
+__pycache__
+build/
+.vscode/
+test_session.py

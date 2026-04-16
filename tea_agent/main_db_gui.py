@@ -52,12 +52,12 @@ _memory_ = None
 
 _MD_CSS = """
 <style>
-body { font-family: "Microsoft YaHei", "Segoe UI", sans-serif; font-size: 14px; line-height: 1.6; color: #333; padding: 8px; }
+body { font-family: "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", sans-serif; font-size: 16px; line-height: 1.6; color: #333; padding: 8px; }
 h1, h2, h3, h4, h5, h6 { margin: 0.8em 0 0.4em; color: #1a73e8; }
 h1 { font-size: 1.5em; border-bottom: 2px solid #eee; padding-bottom: 0.3em; }
 h2 { font-size: 1.3em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
 p { margin: 0.5em 0; }
-code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: "Consolas", "Courier New", monospace; font-size: 0.9em; }
+code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: "Noto Sans Mono CJK SC", "Source Han Mono SC", "WenQuanYi Micro Hei Mono", "Consolas", "Courier New", monospace; font-size: 0.9em; }
 pre { background: #f6f8fa; border: 1px solid #ddd; border-radius: 5px; padding: 12px; overflow-x: auto; }
 pre code { background: none; padding: 0; }
 ul, ol { padding-left: 1.5em; }
@@ -167,8 +167,8 @@ class TkGUI:
         left = Frame(main_split, width=220)
         main_split.add(left, weight=1)
 
-        ttk.Label(left, text="聊天主题", font=("黑体", 12, "bold")).pack(pady=5)
-        self.topic_list = Listbox(left, font=("微软雅黑", 10))
+        ttk.Label(left, text="聊天主题", font=("Noto Sans CJK SC", 12, "bold")).pack(pady=5)
+        self.topic_list = Listbox(left, font=("Noto Sans CJK SC", 10))
         self.topic_list.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
         self.topic_list.bind("<<ListboxSelect>>", self.on_topic_select)
         ttk.Button(left, text="➕ 新建主题", command=self.new_topic).pack(
@@ -192,7 +192,7 @@ class TkGUI:
 
         # --- 组件 1: console (ScrolledText) — 用于显示中间结果 ---
         self.console = scrolledtext.ScrolledText(
-            chat_frame, font=("微软雅黑", 11), bg="white", fg="black", wrap=tk.WORD
+            chat_frame, font=("Noto Sans CJK SC", 11), bg="white", fg="black", wrap=tk.WORD
         )
         self.console.config(state=tk.DISABLED)
 
@@ -201,7 +201,7 @@ class TkGUI:
             self.chat_view = HtmlFrame(chat_frame, messages_enabled=False)
         else:
             self.chat_view = scrolledtext.ScrolledText(
-                chat_frame, font=("微软雅黑", 11), bg="#fafafa", fg="black", wrap=tk.WORD
+                chat_frame, font=("Noto Sans CJK SC", 11), bg="#fafafa", fg="black", wrap=tk.WORD
             )
             self.chat_view.config(state=tk.DISABLED)
 
@@ -213,7 +213,7 @@ class TkGUI:
         input_frame = Frame(chat_split)
         chat_split.add(input_frame, weight=1)
         self.input_box = scrolledtext.ScrolledText(
-            input_frame, font=("微软雅黑", 11), height=4, bg="#f8f8f8"
+            input_frame, font=("Noto Sans CJK SC", 14), height=4, bg="#f8f8f8"
         )
         self.input_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
@@ -233,7 +233,7 @@ class TkGUI:
         self.console.tag_configure("ai", foreground="black")
         self.console.tag_configure("tool", foreground="#d68000")
         self.console.tag_configure(
-            "title", foreground="#0066cc", font=("黑体", 12, "bold"))
+            "title", foreground="#0066cc", font=("Noto Sans CJK SC", 12, "bold"))
         self.console.tag_configure("notice", foreground="#008800")
         self.console.tag_configure("error", foreground="#cc0000")
 

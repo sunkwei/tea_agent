@@ -5,6 +5,7 @@ import os
 import os.path as osp
 import sys
 import re
+import string
 import html as html_mod
 from pathlib import Path
 from datetime import datetime
@@ -50,9 +51,9 @@ _memory_ = None
 
 # ====================== Markdown → HTML 渲染 ======================
 
-_MD_CSS = """
+_MD_CSS_TEMPLATE = string.Template("""
 <style>
-body { font-family: "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", sans-serif; font-size: 16px; line-height: 1.6; color: #333; padding: 8px; }
+body { font-family: "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", sans-serif; font-size: ${font_size}px; line-height: 1.6; color: #333; padding: 8px; }
 h1, h2, h3, h4, h5, h6 { margin: 0.8em 0 0.4em; color: #1a73e8; }
 h1 { font-size: 1.5em; border-bottom: 2px solid #eee; padding-bottom: 0.3em; }
 h2 { font-size: 1.3em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
@@ -74,15 +75,18 @@ em { font-style: italic; }
 .msg-timestamp { font-size: 0.8em; color: #999; margin-bottom: 0.3em; }
 .msg-divider { border: none; border-top: 2px solid #e8e8e8; margin: 1.2em 0; }
 </style>
-"""
+""")
+
+_DEFAULT_FONT_SIZE = 16
 
 
-def _render_markdown(text: str) -> str:
+def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
     """将 markdown 文本转换为带样式的 HTML 片段"""
     if not HAS_TKINTERWEB:
         return text
     html_body = markdown.markdown(text, extensions=["fenced_code", "tables", "codehilite"])
-    return f"<html><head>{_MD_CSS}</head><body>{html_body}</body></html>"
+    css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
+    return f"<html><head>{css}</head><body>{html_body}</body></html>"
 
 
 def _chat_to_markdown(messages: List[Dict]) -> str:
@@ -139,6 +143,9 @@ class TkGUI:
 
         # Thinking 开关状态
         self.enable_thinking_var = tk.BooleanVar(value=True)
+
+        # HtmlFrame 缩放级别
+        self._zoom_level = 100  # 百分比，100=正常
 
         # 聊天消息列表 — 用于最终渲染
         # 格式: [{"role": "user"|"ai"|"tool"|"notice", "content": "...", "timestamp": "..."}, ...]
@@ -225,7 +232,7 @@ class TkGUI:
         )
         self.thinking_check.pack(anchor=tk.W, padx=6, pady=2)
 
-        ttk.Label(input_frame, text="Enter 发送 | Shift+Enter 换行 | Ctrl+C 打断",
+        ttk.Label(input_frame, text="Enter 发送 | Shift+Enter 换行 | ESC 打断",
                   foreground="#666").pack(anchor=tk.E, padx=6)
 
         # 样式配置
@@ -240,7 +247,42 @@ class TkGUI:
         # 快捷键绑定
         self.input_box.bind("<Return>", self.send)
         self.input_box.bind("<Shift-Return>", self.newline)
-        self.root.bind("<Control-c>", self.interrupt)
+        self.root.bind("<Escape>", self.interrupt)
+
+        # HtmlFrame 缩放快捷键
+        if HAS_TKINTERWEB:
+            self.root.bind("<Control-equal>", self.zoom_in)
+            self.root.bind("<Control-plus>", self.zoom_in)
+            self.root.bind("<Control-minus>", self.zoom_out)
+            self.root.bind("<Control-underscore>", self.zoom_out)
+
+    def zoom_in(self, e=None):
+        """放大 HtmlFrame 内容"""
+        if not HAS_TKINTERWEB or self._show_mode != "chat_view":
+            return "break"
+        self._zoom_level = min(self._zoom_level + 10, 200)
+        self._apply_zoom()
+        self._update_status(f"🔍 缩放: {self._zoom_level}%")
+        return "break"
+
+    def zoom_out(self, e=None):
+        """缩小 HtmlFrame 内容"""
+        if not HAS_TKINTERWEB or self._show_mode != "chat_view":
+            return "break"
+        self._zoom_level = max(self._zoom_level - 10, 50)
+        self._apply_zoom()
+        self._update_status(f"🔍 缩放: {self._zoom_level}%")
+        return "break"
+
+    def _apply_zoom(self):
+        """根据当前缩放级别重新渲染 chat_view"""
+        if not HAS_TKINTERWEB or not self.chat_messages:
+            return
+        md = _chat_to_markdown(self.chat_messages)
+        font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
+        html = _render_markdown(md, font_size=font_size)
+        self.chat_view.load_html(html)
+        self.root.after(200, self.scroll_to_bottom)
 
     def _switch_display(self, mode: str):
         """切换显示模式: 'console' 或 'chat_view'"""
@@ -263,7 +305,8 @@ class TkGUI:
         """将 self.chat_messages 渲染到 chat_view"""
         md = _chat_to_markdown(self.chat_messages)
         if HAS_TKINTERWEB:
-            html = _render_markdown(md)
+            font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
+            html = _render_markdown(md, font_size=font_size)
             self.chat_view.load_html(html)
         else:
             self.chat_view.config(state=tk.NORMAL)
@@ -428,7 +471,7 @@ class TkGUI:
         self.generating = True
         self.log("AI：", "ai")
 
-        self._update_status("⏳ 生成中... (Ctrl+C 打断)")
+        self._update_status("⏳ 生成中... (ESC 打断)")
 
         def work():
             try:

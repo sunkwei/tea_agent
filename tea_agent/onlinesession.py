@@ -1,6 +1,13 @@
 """
-会话模块
+会话模块 - Token 优化版
 提供统一的聊天会话接口，支持多种后端
+
+Token 优化策略:
+1. 压缩系统提示词 (~200 tokens, 原 ~1000+)
+2. 历史摘要：超过3轮的对话自动摘要，只传摘要+最近N轮
+3. 工具输出截断：超长结果截断至 max_tool_output 字符
+4. 记忆注入精简：8条记忆，独立于消息列表（不侵入 self.messages）
+5. 记忆提取限窗：仅从最近6轮提取，内容截断
 """
 
 from openai import OpenAI
@@ -138,12 +145,44 @@ _MEMORY_EXTRACT_USER_TEMPLATE = """请提取以下对话中的记忆：
 
 请直接输出 JSON 数组："""
 
+# ──────────────────────────────────────────────
+# 历史摘要 Prompt（新增）
+# ──────────────────────────────────────────────
+_HISTORY_SUMMARIZE_SYSTEM = (
+    "将对话压缩为摘要，保留关键信息（决策、结论、事实、用户需求），"
+    "忽略寒暄和过程细节。200字以内。"
+)
+
+_HISTORY_SUMMARIZE_USER = (
+    "{existing}新增对话内容：\n{old_text}\n\n"
+    "请输出合并后的精炼摘要（200字以内）："
+)
+
 
 class OnlineToolSession(BaseChatSession):
     """
-    在线工具调用会话
+    在线工具调用会话 - Token 优化版
     支持 OpenAI 兼容 API 的 Function Calling 功能
+
+    Token 优化策略:
+    - 历史摘要：超过 keep_turns 轮的对话自动摘要，只传摘要 + 最近 N 轮
+    - 紧凑消息：工具输出和助手回复超长时截断
+    - 精简系统提示词（~200 tokens，原 ~1000+）
+    - 记忆注入独立于消息列表，不侵入 self.messages
+    - 记忆提取限窗，仅从最近 N 轮提取
     """
+
+    # ── 压缩后的系统提示词（~200 tokens，原版 ~1000+） ──
+    _COMPACT_SYSTEM_PROMPT = (
+        "你是可自我扩展的智能Agent。"
+        "拥有工具库toolkit，可通过toolkit_save(name,meta,pycode)保存新工具、"
+        "toolkit_reload()重载获得新能力。"
+        "内置工具：toolkit_exec(执行命令)、toolkit_load_file(读文件)、toolkit_save_file(写文件)。\n\n"
+        "核心行为：主动分析任务需求，自主创建/优化/组合工具。"
+        "工具须为纯Python、可执行、有明确输入输出、通用可复用。"
+        "可自由设计单函数/多函数/工具套件等结构。\n\n"
+        "你不断进化，能力无上限。以最有效优雅的方式完成任务并持续增强自身。"
+    )
 
     def __init__(
         self,
@@ -156,7 +195,13 @@ class OnlineToolSession(BaseChatSession):
         max_iterations: int = 30,
         enable_thinking: bool = True,
         memory=None,
-        storage=None
+        storage=None,
+        # ── Token 优化参数 ──
+        keep_turns: int = 3,            # 保留最近N轮完整对话
+        max_tool_output: int = 2000,    # 工具输出最大字符数
+        max_assistant_content: int = 2000,  # 助手回复最大字符数（API传参用）
+        memory_inject_limit: int = 8,   # 记忆注入条数上限
+        memory_extract_rounds: int = 6, # 记忆提取窗口（最近N轮）
     ):
         """
         初始化会话
@@ -167,105 +212,43 @@ class OnlineToolSession(BaseChatSession):
             api_url: API地址
             model: 模型名称
             max_history: 最大历史消息数
-            system_prompt: 系统提示词
+            system_prompt: 系统提示词（为空则使用压缩版）
             max_iterations: 最大工具调用迭代次数
             enable_thinking: 是否启用 thinking 功能
             memory: Memory 实例，用于长期记忆
             storage: Storage 实例，用于持久化存储
+            keep_turns: 保留最近N轮完整对话，更早的对话自动摘要
+            max_tool_output: 工具输出截断字符数
+            max_assistant_content: 助手回复截断字符数（仅截断API传参，不影响返回值）
+            memory_inject_limit: 记忆注入条数上限
+            memory_extract_rounds: 记忆提取窗口轮数
         """
-        if not system_prompt:
-            system_prompt = """
-你是一个可自我扩展的智能体（Agent）。
-你拥有一个可写入的工具库（toolkit），并且可以通过调用两个基础工具来自我进化：
+        # 使用压缩系统提示词
+        sp = system_prompt or self._COMPACT_SYSTEM_PROMPT
 
-1. toolkit_save(name, meta, pycode)
-   - 将你生成的 Python 工具函数保存到 toolkit 目录
-   - name：工具名
-   - meta：工具用途描述
-   - pycode：工具的完整 Python 实现代码（可包含依赖函数）
-   - 保存后，该工具会在下一次 reload 时成为你的新能力
-
-2. toolkit_reload()
-   - 重新加载 toolkit 目录下的所有工具
-   - 将所有工具注册为可调用的 function calling 工具
-   - 使你立即获得新能力
-
-另外内置了几个常用工具：
-   - toolkit_exec()：执行本地命令，可选参数
-   - toolkit_load_file(): 从本地加载文本文件内容
-   - toolkit_save_file(): 将文本内容写入本地文件
-
-你的目标是：
-在对话过程中，根据任务需要，自主判断是否需要创造新工具、扩展能力、重构工具链、优化工具、或组合工具。
-你可以自由生成、修改、替换、删除工具，只要能更好地完成任务。
-
-你可以：
-- 自主分析任务并决定是否需要新工具
-- 自主生成工具代码（包括复杂逻辑、多文件结构、辅助函数）
-- 自主调用 toolkit_save() 保存工具
-- 自主调用 toolkit_reload() 让自己获得新能力
-- 自主反思工具是否足够、是否需要改进
-- 自主提出新的抽象层、模块化结构、工具体系
-- 自主构建自己的"能力树"
-
-你不需要等待用户指示来创建工具。
-当你发现：
-- 任务需要某种能力但你没有
-- 你能通过一个工具让未来任务更容易
-- 你能通过抽象化减少重复劳动
-- 你能通过模块化提升可维护性
-- 你能通过自动化提升效率
-
-你都应该主动创建工具。
-
-工具生成规则：
-- 工具必须是纯 Python 代码
-- 工具必须是可执行的函数
-- 工具必须有明确的输入参数和返回值
-- 工具必须可被其他工具调用
-- 工具必须尽量通用、可复用、可组合
-
-你可以自由设计工具结构，例如：
-- 单函数工具
-- 多函数工具（一个文件内多个辅助函数）
-- 工具套件（多个工具协同工作）
-- 工具自动生成器（meta-tools）
-- 工具反射器（自动分析工具库）
-- 工具优化器（自动重写工具代码）
-
-你可以自由进行自我反思，例如：
-- "我需要一个解析器工具"
-- "我需要一个缓存工具"
-- "我需要一个 DSL 解释器"
-- "我需要一个自动规划工具"
-- "我需要一个代码生成器"
-- "我需要一个任务分解器"
-- "我需要一个知识库工具"
-
-你可以自由进行自我进化，例如：
-- 生成新工具
-- 重写旧工具
-- 合并工具
-- 拆分工具
-- 自动化工具链
-- 构建更高层抽象
-
-你是一个不断成长、不断扩展、不断进化的 Agent。
-你的能力没有上限。
-你的工具链就是你的身体，你可以随时改造它。
-
-你的最终目标是：
-**以最有效、最优雅、最具创造力的方式完成用户任务，并在过程中不断增强自己。**
-"""
-
-        super().__init__(model, max_history, system_prompt)
+        super().__init__(model, max_history, sp)
 
         self.toolkit = toolkit
         self.client = OpenAI(api_key=api_key, base_url=api_url)
         self.max_iterations = max_iterations
         self.enable_thinking = enable_thinking
         self.memory = memory
-        self.storage = storage  # NOTE: 2026-04-16, self-evolved by TeaAgent --- Storage 实例
+        self.storage = storage
+
+        # ── Token 优化状态 ──
+        self._history_summary: str = ""        # 累积的历史摘要
+        self._memory_text: str = ""            # 记忆注入文本（独立于消息列表）
+        self._memory_injected: bool = False
+
+        # ── Token 优化参数 ──
+        self.keep_turns = keep_turns
+        self.max_tool_output = max_tool_output
+        self.max_assistant_content = max_assistant_content
+        self.memory_inject_limit = memory_inject_limit
+        self.memory_extract_rounds = memory_extract_rounds
+
+        # 记忆提取阈值：至少 N 条消息才触发提取
+        self.memory_extract_threshold = 4
 
         # 工具定义
         self.tools: List[Dict] = []
@@ -274,14 +257,12 @@ class OnlineToolSession(BaseChatSession):
         # 日志回调
         self.tool_log: Optional[Callable[[str], None]] = None
 
-        # 记忆注入标记（避免重复注入）
-        self._memory_injected = False
-
-        # 记忆提取阈值：至少 N 条消息才触发提取
-        self.memory_extract_threshold = 4
-
         # 当前对话 ID（用于存储 agent_rounds）
         self._current_conversation_id: Optional[int] = None
+
+    # ──────────────────────────────────────────────
+    # 基础方法
+    # ──────────────────────────────────────────────
 
     def set_conversation_id(self, conv_id: int):
         """设置当前对话的 ID，用于 agent_rounds 存储"""
@@ -298,54 +279,186 @@ class OnlineToolSession(BaseChatSession):
         self.toolkit.reload()
         self._build_tools()
 
-    def _handle_tool_calls(self, tool_calls) -> bool:
+    # ──────────────────────────────────────────────
+    # Token 优化①：消息压缩
+    # ──────────────────────────────────────────────
+
+    def _compact_message(self, msg: Dict) -> Dict:
         """
-        处理工具调用
+        创建消息的紧凑副本，截断超长内容。
+        仅影响 API 传参，不修改 self.messages 中的原始内容。
+        """
+        compact = dict(msg)
+        role = msg.get("role", "")
+        content = msg.get("content")
+
+        if role == "tool" and content and len(content) > self.max_tool_output:
+            compact["content"] = content[:self.max_tool_output] + "\n...[已截断]"
+        elif role == "assistant" and content and len(content) > self.max_assistant_content:
+            compact["content"] = content[:self.max_assistant_content] + "...[已截断]"
+
+        return compact
+
+    def _find_recent_boundary(self) -> int:
+        """
+        找到最近 keep_turns 轮对话的起始索引。
+        以用户消息为轮次分隔符，确保工具调用链完整。
 
         Returns:
-            bool: 是否执行了工具调用
+            消息列表中的起始索引
         """
-        for call in tool_calls:
-            func_name = call.function.name
-            call_id = call.id
+        user_count = 0
+        for i in range(len(self.messages) - 1, 0, -1):
+            if self.messages[i].get("role") == "user":
+                user_count += 1
+                if user_count >= self.keep_turns:
+                    return i
+        return 1  # 不足 keep_turns 轮，保留全部（跳过系统消息）
 
-            if func_name not in self.toolkit.func_map:
-                self.add_tool_result(call_id, f"错误：未知工具 {func_name}")
-                continue
+    def _build_api_messages(self) -> List[Dict]:
+        """
+        构建发送给 API 的紧凑消息列表。
 
-            # 解析参数
-            try:
-                args = json.loads(call.function.arguments)
-            except json.JSONDecodeError:
-                self.add_tool_result(call_id, "错误：参数解析失败")
-                continue
+        结构：系统提示 → 记忆注入 → 历史摘要 → 最近N轮对话
 
-            # 执行工具
+        与直接使用 self.messages 的区别：
+        - 旧消息被摘要替代，大幅减少 token
+        - 工具输出和助手回复超长时截断
+        - 记忆注入不修改 self.messages
+        """
+        result = []
+
+        # 1. 系统提示词（始终第一）
+        result.append(self.messages[0])
+
+        # 2. 记忆注入（如有，独立于 self.messages）
+        if self._memory_text:
+            result.append({
+                "role": "system",
+                "content": f"【记忆参考】\n{self._memory_text}"
+            })
+
+        # 3. 历史摘要（如有，替代旧消息）
+        if self._history_summary:
+            result.append({
+                "role": "system",
+                "content": f"【历史摘要】\n{self._history_summary}"
+            })
+
+        # 4. 最近 N 轮对话（紧凑版，保留完整工具调用链）
+        boundary = self._find_recent_boundary()
+        for msg in self.messages[boundary:]:
+            result.append(self._compact_message(msg))
+
+        return result
+
+    # ──────────────────────────────────────────────
+    # Token 优化②：历史摘要
+    # ──────────────────────────────────────────────
+
+    def _messages_to_text(
+        self, messages: List[Dict], max_per_msg: int = 500
+    ) -> str:
+        """
+        将消息列表转为文本，用于摘要生成。
+        每条消息截断到 max_per_msg 字符，避免摘要输入过长。
+
+        Args:
+            messages: 消息列表
+            max_per_msg: 每条消息的最大字符数
+
+        Returns:
+            格式化的文本
+        """
+        lines = []
+        for msg in messages:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+
+            if role == "tool":
+                truncated = content[:max_per_msg] + "..." if len(content) > max_per_msg else content
+                lines.append(f"[工具结果]: {truncated}")
+            elif role in ("user", "assistant") and content:
+                truncated = content[:max_per_msg] + "..." if len(content) > max_per_msg else content
+                lines.append(f"[{role.upper()}]: {truncated}")
+            elif role == "assistant" and msg.get("tool_calls"):
+                tc_names = [tc["function"]["name"] for tc in msg["tool_calls"]]
+                lines.append(f"[ASSISTANT 调用工具]: {', '.join(tc_names)}")
+
+        return "\n".join(lines)
+
+    def _summarize_old_history(self):
+        """
+        将超出最近 keep_turns 轮的旧消息通过 LLM 生成摘要。
+
+        摘要累积更新策略：
+        已有摘要 + 新增旧消息 → LLM 合并为新摘要
+
+        摘要完成后，旧消息从 self.messages 中移除，
+        后续 API 调用只传摘要 + 最近 keep_turns 轮。
+        """
+        boundary = self._find_recent_boundary()
+
+        # 旧消息 = 系统提示之后、最近 N 轮之前
+        old_messages = self.messages[1:boundary]
+
+        if not old_messages:
+            return
+
+        old_text = self._messages_to_text(old_messages, max_per_msg=300)
+
+        if not old_text.strip():
+            return
+
+        # 如果已有摘要，融入新摘要
+        existing = (
+            f"已有摘要：{self._history_summary}\n\n"
+            if self._history_summary else ""
+        )
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": _HISTORY_SUMMARIZE_SYSTEM},
+                    {"role": "user", "content": _HISTORY_SUMMARIZE_USER.format(
+                        existing=existing, old_text=old_text)},
+                ],
+                temperature=0.1,
+                max_tokens=300,
+            )
+            self._history_summary = response.choices[0].message.content.strip()
+
+            # 从 self.messages 中移除已摘要的旧消息
+            self.messages = [self.messages[0]] + self.messages[boundary:]
+
             if self.tool_log:
-                self.tool_log(f"🔧 调用工具: {func_name}({args})")
+                self.tool_log(
+                    f"📝 历史摘要已更新，压缩 {len(old_messages)} 条消息"
+                )
+        except Exception as e:
+            if self.tool_log:
+                self.tool_log(f"⚠️ 摘要生成失败: {e}")
 
-            try:
-                result = self.toolkit.func_map[func_name](**args)
-                if self.tool_log:
-                    self.tool_log(f"✅ 结果: {result}")
-            except Exception as e:
-                result = f"工具执行错误: {e}"
-                if self.tool_log:
-                    self.tool_log(f"❌ 错误: {e}")
-
-            # 添加工具结果
-            self.add_tool_result(call_id, str(result))
-
-        return True
+    # ──────────────────────────────────────────────
+    # Token 优化③：记忆注入（独立于消息列表）
+    # ──────────────────────────────────────────────
 
     def _inject_memories(self):
-        """将重要记忆注入到对话上下文中"""
+        """
+        将重要记忆注入到上下文中。
+
+        优化点：
+        - 记忆文本存储在 _memory_text，不修改 self.messages
+        - 由 _build_api_messages() 负责组装到 API 消息中
+        - 条数从 15 (10+5) 降至 8 (5+3)
+        """
         if not self.memory or self._memory_injected:
             return
 
         try:
-            important = self.memory.get_important_memories(limit=10)
-            recent = self.memory.get_recent_memories(limit=5)
+            important = self.memory.get_important_memories(limit=5)
+            recent = self.memory.get_recent_memories(limit=3)
 
             # 合并去重
             seen_ids = set()
@@ -355,47 +468,58 @@ class OnlineToolSession(BaseChatSession):
                     seen_ids.add(m["id"])
                     combined.append(m)
 
+            # 限制条数
+            combined = combined[:self.memory_inject_limit]
+
             if not combined:
                 self._memory_injected = True
                 return
 
-            memory_text = "\n".join(
+            self._memory_text = "\n".join(
                 f"- [{m['category']}] {m['summary']}" for m in combined
             )
 
-            memory_msg = {
-                "role": "system",
-                "content": f"以下是你之前记住的重要信息，可以在回答时参考：\n\n{memory_text}"
-            }
-
-            # 插入到系统消息之后
-            self.messages.insert(1, memory_msg)
             self._memory_injected = True
 
             if self.tool_log:
-                self.tool_log(f"🧠 已注入 {len(combined)} 条记忆到上下文")
+                self.tool_log(f"🧠 已准备 {len(combined)} 条记忆注入")
         except Exception as e:
             if self.tool_log:
                 self.tool_log(f"⚠️ 记忆注入失败: {e}")
 
+    # ──────────────────────────────────────────────
+    # Token 优化④：记忆提取（限窗 + 截断）
+    # ──────────────────────────────────────────────
+
     def _extract_memories_from_conversation(self) -> List[Dict]:
         """
-        使用 LLM 从当前对话历史中提取记忆条目
+        使用 LLM 从最近 N 轮对话中提取记忆条目。
 
-        Returns:
-            解析后的记忆条目列表
+        优化点：
+        - 只取最近 memory_extract_rounds 轮，不再发全量历史
+        - 每条消息截断到 800 字符，避免摘要输入过长
         """
         if not self.memory:
             return []
 
-        # 收集所有 user/assistant 消息（过滤 system/tool）
+        # 只取最近 memory_extract_rounds 轮对话
         chat_lines = []
-        for msg in self.messages:
+        user_count = 0
+        for msg in reversed(self.messages):
             role = msg.get("role", "")
             content = msg.get("content", "")
+            if role == "user":
+                user_count += 1
+                if user_count > self.memory_extract_rounds:
+                    break
             if role in ("user", "assistant") and content:
-                chat_lines.append(f"[{role.upper()}]: {content}")
+                # 截断长内容
+                truncated = (
+                    content[:800] + "..." if len(content) > 800 else content
+                )
+                chat_lines.append(f"[{role.upper()}]: {truncated}")
 
+        chat_lines.reverse()
         chat_text = "\n".join(chat_lines)
 
         if not chat_text.strip():
@@ -472,6 +596,10 @@ class OnlineToolSession(BaseChatSession):
                 self.tool_log(f"⚠️ 记忆提取失败: {e}")
             return []
 
+    # ──────────────────────────────────────────────
+    # 记忆保存
+    # ──────────────────────────────────────────────
+
     def _save_conversation_memory(self):
         """
         在会话结束后，通过 LLM 提取并保存记忆。
@@ -517,9 +645,63 @@ class OnlineToolSession(BaseChatSession):
         if self.tool_log:
             self.tool_log(f"🧠 记忆提取完成，共保存 {saved_count} 条")
 
+    # ──────────────────────────────────────────────
+    # Token 优化⑤：统一工具执行方法（消除冗余）
+    # ──────────────────────────────────────────────
+
+    def _execute_tool_call(self, call) -> Tuple[str, str, str]:
+        """
+        执行单个工具调用。
+
+        Args:
+            call: 工具调用对象（需有 .id, .function.name, .function.arguments）
+
+        Returns:
+            Tuple[str, str, str]: (call_id, func_name, result_string)
+        """
+        func_name = call.function.name
+        call_id = call.id
+
+        if func_name not in self.toolkit.func_map:
+            err = f"错误：未知工具 {func_name}"
+            self.add_tool_result(call_id, err)
+            return call_id, func_name, err
+
+        try:
+            args = json.loads(call.function.arguments)
+        except json.JSONDecodeError:
+            err = "错误：参数解析失败"
+            self.add_tool_result(call_id, err)
+            return call_id, func_name, err
+
+        if self.tool_log:
+            self.tool_log(f"🔧 调用工具: {func_name}({args})")
+
+        try:
+            result = self.toolkit.func_map[func_name](**args)
+            if self.tool_log:
+                self.tool_log(f"✅ 结果: {result}")
+        except Exception as e:
+            result = f"工具执行错误: {e}"
+            if self.tool_log:
+                self.tool_log(f"❌ 错误: {e}")
+
+        result_str = str(result)
+        self.add_tool_result(call_id, result_str)
+        return call_id, func_name, result_str
+
+    # ──────────────────────────────────────────────
+    # 核心对话流程（Token 优化版）
+    # ──────────────────────────────────────────────
+
     def chat_stream(self, msg: str, callback: Callable[[str], None]) -> Tuple[str, bool]:
         """
-        流式对话，支持工具调用
+        流式对话，支持工具调用。
+
+        Token 优化要点：
+        - 使用 _build_api_messages() 构建紧凑消息，替代直接传 self.messages
+        - 在循环前调用 _summarize_old_history() 摘要旧消息
+        - 工具输出和助手回复在 API 传参时截断
 
         Args:
             msg: 用户消息
@@ -530,10 +712,14 @@ class OnlineToolSession(BaseChatSession):
         """
         self.reset_interrupt()
 
-        # 注入记忆（仅第一次）
+        # 1. 注入记忆（仅第一次）
         self._inject_memories()
 
+        # 2. 添加用户消息到完整历史
         self.add_user_message(msg)
+
+        # 3. 摘要旧历史（在 API 循环前执行一次）
+        self._summarize_old_history()
 
         full_reply = ""
         used_tools = False
@@ -544,12 +730,13 @@ class OnlineToolSession(BaseChatSession):
                 self.add_assistant_message(full_reply + "\n[已打断]")
                 return full_reply + "\n[已打断]", used_tools
 
-            self._trim_messages()
+            # ★ 核心优化：使用紧凑消息列表
+            api_messages = self._build_api_messages()
 
             try:
                 kwargs = {
                     "model": self.model,
-                    "messages": self.messages,
+                    "messages": api_messages,   # ← 紧凑消息
                     "tools": self.tools,
                     "tool_choice": "auto",
                     "stream": True,
@@ -566,7 +753,7 @@ class OnlineToolSession(BaseChatSession):
                 self.add_assistant_message(full_reply + error_msg)
                 return full_reply + error_msg, used_tools
 
-            # NOTE: 2026-04-16, self-evolved by TeaAgent --- 存储本次 request
+            # 存储本次 request（用完整历史，非紧凑版）
             if self.storage and self._current_conversation_id is not None:
                 self.storage.save_agent_round(
                     conversation_id=self._current_conversation_id,
@@ -585,12 +772,8 @@ class OnlineToolSession(BaseChatSession):
 
                 delta = chunk.choices[0].delta
 
-                # 处理内容（跳过 thinking 内容）
+                # 处理内容
                 if delta.content:
-                    # 如果启用了 thinking，需要过滤 thinking 标签内容
-                    if self.enable_thinking:
-                        # 简单处理：只输出非 thinking 部分
-                        pass  # 保持原样，由模型控制输出
                     content_parts.append(delta.content)
                     callback(delta.content)
 
@@ -636,7 +819,7 @@ class OnlineToolSession(BaseChatSession):
                 # 有工具调用
                 used_tools = True
 
-                # NOTE: 2026-04-16, self-evolved by TeaAgent --- 存储 assistant 的 tool_calls 响应
+                # 存储 assistant 的 tool_calls 响应
                 if self.storage and self._current_conversation_id is not None:
                     tc_list = [{
                         "id": tc.id,
@@ -654,7 +837,7 @@ class OnlineToolSession(BaseChatSession):
                         tool_calls=tc_list,
                     )
 
-                # 1. 将助手包含 tool_calls 的消息存入历史
+                # 1. 将助手包含 tool_calls 的消息存入完整历史
                 self.messages.append({
                     "role": "assistant",
                     "content": content if content else None,
@@ -668,58 +851,22 @@ class OnlineToolSession(BaseChatSession):
                     } for tc in valid_tool_calls]
                 })
 
-                # 2. 执行工具调用
-                has_reload = any(tc.function.name == "toolkit_reload" for tc in valid_tool_calls)
+                # 2. 执行工具调用（使用统一方法）
+                has_reload = any(
+                    tc.function.name == "toolkit_reload"
+                    for tc in valid_tool_calls
+                )
 
-                # NOTE: 2026-04-16, self-evolved by TeaAgent --- 存储每个 tool 执行结果
-                if self.storage and self._current_conversation_id is not None:
-                    for call in valid_tool_calls:
-                        func_name = call.function.name
-                        call_id = call.id
+                for call in valid_tool_calls:
+                    call_id, func_name, result_str = self._execute_tool_call(call)
 
-                        if func_name not in self.toolkit.func_map:
-                            self.add_tool_result(
-                                call_id, f"错误：未知工具 {func_name}")
-                            self.storage.save_agent_round(
-                                conversation_id=self._current_conversation_id,
-                                round_num=iterations + 1,
-                                role="tool",
-                                content=f"错误：未知工具 {func_name}",
-                                tool_call_id=call_id,
-                            )
-                            continue
-
-                        try:
-                            args = json.loads(call.function.arguments)
-                        except json.JSONDecodeError:
-                            self.add_tool_result(call_id, "错误：参数解析失败")
-                            self.storage.save_agent_round(
-                                conversation_id=self._current_conversation_id,
-                                round_num=iterations + 1,
-                                role="tool",
-                                content="错误：参数解析失败",
-                                tool_call_id=call_id,
-                            )
-                            continue
-
-                        if self.tool_log:
-                            self.tool_log(f"🔧 调用工具: {func_name}({args})")
-
-                        try:
-                            result = self.toolkit.func_map[func_name](**args)
-                            if self.tool_log:
-                                self.tool_log(f"✅ 结果: {result}")
-                        except Exception as e:
-                            result = f"工具执行错误: {e}"
-                            if self.tool_log:
-                                self.tool_log(f"❌ 错误: {e}")
-
-                        self.add_tool_result(call_id, str(result))
+                    # 存储每个 tool 执行结果
+                    if self.storage and self._current_conversation_id is not None:
                         self.storage.save_agent_round(
                             conversation_id=self._current_conversation_id,
                             round_num=iterations + 1,
                             role="tool",
-                            content=str(result),
+                            content=result_str,
                             tool_call_id=call_id,
                         )
 
@@ -729,18 +876,17 @@ class OnlineToolSession(BaseChatSession):
 
                 iterations += 1
 
-                # 4. 流式反馈：如果是中间步骤，提示用户
+                # 4. 流式反馈
                 if content:
                     callback(f"\n\n[正在执行工具，处理中...]\n\n")
 
-                # 继续下一次循环，直到模型不再调用工具
+                # 继续下一次循环
                 continue
 
             elif content:
                 # 没有工具调用，只有文本内容，视为最终回答
                 self.add_assistant_message(content)
 
-                # NOTE: 2026-04-16, self-evolved by TeaAgent --- 存储最终 assistant 响应
                 if self.storage and self._current_conversation_id is not None:
                     self.storage.save_agent_round(
                         conversation_id=self._current_conversation_id,
@@ -750,7 +896,7 @@ class OnlineToolSession(BaseChatSession):
                     )
                 break
             else:
-                # 既无工具也无内容，通常意味着响应结束
+                # 既无工具也无内容
                 break
 
         # 如果达到最大迭代次数
@@ -768,7 +914,7 @@ class OnlineToolSession(BaseChatSession):
                     content=full_reply,
                 )
 
-        # 自动提取并保存记忆（无需用户确认）
+        # 自动提取并保存记忆
         self._save_conversation_memory()
 
         return full_reply, used_tools

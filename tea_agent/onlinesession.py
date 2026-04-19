@@ -320,11 +320,6 @@ class OnlineToolSession(BaseChatSession):
         构建发送给 API 的紧凑消息列表。
 
         结构：系统提示 → 记忆注入 → 历史摘要 → 最近N轮对话
-
-        与直接使用 self.messages 的区别：
-        - 旧消息被摘要替代，大幅减少 token
-        - 工具输出和助手回复超长时截断
-        - 记忆注入不修改 self.messages
         """
         result = []
 
@@ -427,7 +422,8 @@ class OnlineToolSession(BaseChatSession):
                 temperature=0.1,
                 max_tokens=300,
             )
-            self._history_summary = response.choices[0].message.content.strip()
+            if isinstance(response.choices[0].message.content, str):
+                self._history_summary = response.choices[0].message.content.strip()
 
             # 从 self.messages 中移除已摘要的旧消息
             self.messages = [self.messages[0]] + self.messages[boundary:]

@@ -30,7 +30,7 @@ if __name__ == "__main__":
 else:
     from .onlinesession import OnlineToolSession
     from .store import Storage
-    from .memory import Memory, get_memory
+    from .memory import get_memory
     from . import tlk
 
 # ====================== 配置区 ======================
@@ -133,7 +133,7 @@ class TkGUI:
 
         globals()["_storage_"] = self.db
         globals()["_memory_"] = self.memory
-        globals()["tlk"]._toolkit_ = self.toolkit
+        globals()["tlk"]._toolkit_ = self.toolkit ## 为 tlk.py 设置全景变量
 
         tlk.toolkit_reload()
 
@@ -323,9 +323,9 @@ class TkGUI:
         """初始化会话"""
         self.sess = OnlineToolSession(
             toolkit=self.toolkit,
-            api_key=API_KEY,
-            api_url=API_URL,
-            model=MODEL,
+            api_key=cast(str, API_KEY),
+            api_url=cast(str, API_URL),
+            model=cast(str, MODEL),
             max_history=10,
             memory=self.memory,
             storage=self.db,
@@ -478,13 +478,9 @@ class TkGUI:
                 conv_id = self.db.save_msg(
                     self.current_topic_id, msg, "", False)
                 self.sess.set_conversation_id(conv_id)
-
                 ai_msg, is_func = self.sess.chat_stream(msg, self.safe_stream)
-
                 self.root.after(0, self._flush_stream_to_messages)
-
                 self.db.save_msg(self.current_topic_id, msg, ai_msg, is_func)
-
                 self.root.after(0, self._render_and_show_chat)
                 self.root.after(0, lambda: self._update_status("✅ 完成"))
             except Exception as ex:

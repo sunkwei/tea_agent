@@ -8,7 +8,7 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, cast
 
 
 class Memory:
@@ -34,7 +34,7 @@ class Memory:
         "general",            # 通用信息
     ]
 
-    def __init__(self, db_path: str = None):
+    def __init__(self, db_path: str=""):
         """
         初始化记忆模块
 
@@ -84,9 +84,9 @@ class Memory:
         self,
         summary: str,
         category: str = "general",
-        tags: List[str] = None,
+        tags: List[str] = [],
         importance: int = 3,
-        source_topic: str = None
+        source_topic: str = ""
     ) -> int:
         """
         添加一条记忆
@@ -115,17 +115,18 @@ class Memory:
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (now, category, summary, tags_json, importance, source_topic, now)
             )
+            last_rowid = cast(int, cursor.lastrowid)
             conn.commit()
-            return cursor.lastrowid
+            return last_rowid
         finally:
             conn.close()
 
     def search_memories(
         self,
-        query: str = None,
-        category: str = None,
-        tags: List[str] = None,
-        min_importance: int = None,
+        query: str = "",
+        category: str = "",
+        tags: List[str] = [],
+        min_importance: int = 0,
         limit: int = 20
     ) -> List[Dict]:
         """
@@ -171,7 +172,7 @@ class Memory:
         finally:
             conn.close()
 
-    def get_recent_memories(self, limit: int = 20, category: str = None) -> List[Dict]:
+    def get_recent_memories(self, limit:int=20, category: str="") -> List[Dict]:
         """
         获取最近的记忆
 
@@ -216,10 +217,10 @@ class Memory:
     def update_memory(
         self,
         memory_id: int,
-        summary: str = None,
-        category: str = None,
-        tags: List[str] = None,
-        importance: int = None
+        summary: str = "",
+        category: str = "",
+        tags: List[str] = [],
+        importance: int = 0
     ) -> bool:
         """更新记忆"""
         fields = []

@@ -139,10 +139,10 @@ def meta_toolkit_memory_stats():
 
 
 def toolkit_memory_search(
-    query: str = None,
-    category: str = None,
-    tags: list = None,
-    min_importance: int = None,
+    query: str = "",
+    category: str = "",
+    tags: list = [],
+    min_importance: int = 3,
     limit: int = 20
 ) -> str:
     """在长期记忆中搜索信息"""
@@ -167,7 +167,7 @@ def toolkit_memory_search(
     return "\n\n".join(lines)
 
 
-def toolkit_memory_recent(limit: int = 20, category: str = None) -> str:
+def toolkit_memory_recent(limit: int=20, category: str="") -> str:
     """获取最近的记忆摘要"""
     from tea_agent.memory import get_memory
     mem = get_memory()

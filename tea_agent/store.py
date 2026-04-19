@@ -5,9 +5,7 @@
 
 import sqlite3
 import json
-from typing import Dict, Optional, List
-from datetime import datetime
-
+from typing import Dict, Optional, List, cast
 
 class Storage:
     def __init__(self, db_path="chat_history.db"):
@@ -58,7 +56,7 @@ class Storage:
         c = self.conn.cursor()
         c.execute('INSERT INTO topics (title) VALUES (?)', (title,))
         self.conn.commit()
-        tid = c.lastrowid
+        tid = cast(int, c.lastrowid)
         c.close()
         return tid
 
@@ -84,7 +82,7 @@ class Storage:
             INSERT INTO conversations (topic_id, user_msg, ai_msg, is_func_calling)
             VALUES (?, ?, ?, ?)
         ''', (topic_id, user_msg, ai_msg, 1 if is_func else 0))
-        conv_id = c.lastrowid
+        conv_id = cast(int, c.lastrowid)
         self.conn.commit()
         c.close()
         self.update_topic_active(topic_id)

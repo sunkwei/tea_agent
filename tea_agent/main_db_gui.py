@@ -28,23 +28,29 @@ if __name__ == "__main__":
     from tea_agent.store import Storage
     from tea_agent.memory import Memory, get_memory
     from tea_agent import tlk
+    from tea_agent.config import load_config, ModelConfig
 else:
     from .onlinesession import OnlineToolSession
     from .store import Storage
     from .memory import get_memory
     from . import tlk
+    from .config import load_config, ModelConfig
 
-# ====================== 配置区 ======================
-API_KEY = os.environ.get("TEA_AGENT_KEY")
-API_URL = os.environ.get("TEA_AGENT_URL")
-MODEL = os.environ.get("TEA_AGENT_MODEL")
+# ====================== 配置加载 ======================
+# 从 $HOME/.tea_agent/config.yaml 加载配置
+# 兼容旧环境变量 TEA_AGENT_KEY/URL/MODEL -> main_model
+_cfg = load_config()
 
-if not API_KEY or not API_URL or not MODEL:
-    print("错误: 请设置以下环境变量：")
-    print("  TEA_AGENT_KEY   : API 密钥")
-    print("  TEA_AGENT_URL   : API 地址")
-    print("  TEA_AGENT_MODEL : 模型名称")
+if not _cfg.main_model.is_configured:
+    print("错误: 请配置主模型 (main_model)")
+    print("  方式1: 编辑 $HOME/.tea_agent/config.yaml")
+    print("  方式2: 设置环境变量 TEA_AGENT_KEY/URL/MODEL")
     sys.exit(1)
+
+API_KEY = _cfg.main_model.api_key
+API_URL = _cfg.main_model.api_url
+MODEL = _cfg.main_model.model_name
+CHEAP_MODEL = _cfg.cheap_model
 
 _storage_ = None
 _toolkit_ = None
@@ -396,11 +402,16 @@ class TkGUI:
             max_history=10,
             memory=self.memory,
             storage=self.db,
+            # 便宜模型配置（用于摘要/记忆提取等低成本任务）
+            cheap_api_key=cast(str, CHEAP_MODEL.api_key),
+            cheap_api_url=cast(str, CHEAP_MODEL.api_url),
+            cheap_model=cast(str, CHEAP_MODEL.model_name),
         )
         self.sess.enable_thinking = self.enable_thinking_var.get()
 
         self.sess.tool_log = self.safe_log_tool
-        self._update_status(f"📡 已连接 | 模型: {MODEL} | 💾 Memory 已启用")
+        cheap_info = f" | 摘要模型: {CHEAP_MODEL.model_name}" if CHEAP_MODEL.model_name else ""
+        self._update_status(f"📡 已连接 | 模型: {MODEL}{cheap_info} | 💾 Memory 已启用")
 
     def _update_status(self, msg: str):
         """更新状态栏"""

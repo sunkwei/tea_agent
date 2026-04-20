@@ -176,6 +176,20 @@ _HISTORY_SUMMARIZE_USER = (
     "请输出合并后的精炼摘要（200字以内）："
 )
 
+# ──────────────────────────────────────────────
+# Topic 摘要 Prompt
+# ──────────────────────────────────────────────
+_TOPIC_SUMMARY_SYSTEM = (
+    "你是一个极简摘要生成器。根据对话内容，生成不超过20字的摘要标题。"
+    "要求：精准概括对话核心主题，不使用书名号，不加引号，不加多余修饰。"
+    "直接输出摘要文本，不要任何额外说明。"
+)
+
+_TOPIC_SUMMARY_USER_TEMPLATE = (
+    "以下是最近3轮对话的用户消息：\n\n{user_msgs}\n\n"
+    "请生成不超过20字的摘要标题："
+)
+
 
 class OnlineToolSession(BaseChatSession):
     """
@@ -219,6 +233,10 @@ class OnlineToolSession(BaseChatSession):
         enable_thinking: bool = True,
         memory=None,
         storage=None,
+        # ── 便宜模型配置（用于摘要、记忆提取等低成本任务） ──
+        cheap_api_key: str = "",
+        cheap_api_url: str = "",
+        cheap_model: str = "",
         # ── Token 优化参数 ──
         keep_turns: int = 3,            # 保留最近N轮完整对话
         max_tool_output: int = 128 * 1024,    # 工具输出最大字符数
@@ -240,6 +258,9 @@ class OnlineToolSession(BaseChatSession):
             enable_thinking: 是否启用 thinking 功能
             memory: Memory 实例，用于长期记忆
             storage: Storage 实例，用于持久化存储
+            cheap_api_key: 便宜模型 API密钥（用于摘要等低成本任务）
+            cheap_api_url: 便宜模型 API地址
+            cheap_model: 便宜模型名称
             keep_turns: 保留最近N轮完整对话，更早的对话自动摘要
             max_tool_output: 工具输出截断字符数
             max_assistant_content: 助手回复截断字符数（仅截断API传参，不影响返回值）
@@ -261,6 +282,13 @@ class OnlineToolSession(BaseChatSession):
         self._thinking_supported: Optional[bool] = None
         self.memory = memory
         self.storage = storage
+
+        # ── 便宜模型客户端（用于摘要、记忆提取等低成本任务） ──
+        self._cheap_client: Optional[OpenAI] = None
+        self._cheap_model_name: str = ""
+        if cheap_api_key and cheap_api_url and cheap_model:
+            self._cheap_client = OpenAI(api_key=cheap_api_key, base_url=cheap_api_url)
+            self._cheap_model_name = cheap_model
 
         # ── Token 优化状态 ──
         self._history_summary: str = ""        # 累积的历史摘要
@@ -303,6 +331,63 @@ class OnlineToolSession(BaseChatSession):
         """重新加载并刷新工具定义"""
         self.toolkit.reload()
         self._build_tools()
+
+
+    def _get_summarize_client(self) -> Tuple[Any, str]:
+        """
+        获取用于摘要/提取任务的客户端和模型名。
+        优先使用 cheap_model（降低成本），未配置时回退到主模型。
+
+        Returns:
+            Tuple[OpenAI, str]: (client, model_name)
+        """
+        if self._cheap_client and self._cheap_model_name:
+            return self._cheap_client, self._cheap_model_name
+        return self.client, self.model
+
+    def generate_topic_summary(self, conversations: List[Dict]) -> Optional[str]:
+        """
+        根据最近3轮对话通过 LLM 生成不超过20字的摘要标题。
+
+        Args:
+            conversations: 最近的对话列表（按时间正序）
+
+        Returns:
+            不超过20字的摘要字符串；若生成失败则返回 None
+        """
+        user_msgs = []
+        for conv in conversations:
+            um = conv.get("user_msg", "").strip()
+            if um:
+                if len(um) > 200:
+                    um = um[:200] + "..."
+                user_msgs.append(f"用户：{um}")
+
+        if not user_msgs:
+            return None
+
+        user_content = _TOPIC_SUMMARY_USER_TEMPLATE.format(
+            user_msgs="\n".join(user_msgs)
+        )
+
+        cli, mdl = self._get_summarize_client()
+        try:
+            response = cli.chat.completions.create(
+                model=mdl,
+                messages=[
+                    {"role": "system", "content": _TOPIC_SUMMARY_SYSTEM},
+                    {"role": "user", "content": user_content},
+                ],
+                temperature=0.3,
+                max_tokens=50,
+            )
+            raw = response.choices[0].message.content.strip()
+            raw = re.sub(r'^["""\']+|["""\']+$', '', raw).strip()
+            if len(raw) > 20:
+                raw = raw[:20]
+            return raw if raw else None
+        except Exception:
+            return None
 
     # ──────────────────────────────────────────────
     # Token 优化①：消息压缩
@@ -437,8 +522,9 @@ class OnlineToolSession(BaseChatSession):
         )
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
+            cli, mdl = self._get_summarize_client()
+            response = cli.chat.completions.create(
+                model=mdl,
                 messages=[
                     {"role": "system", "content": _HISTORY_SUMMARIZE_SYSTEM},
                     {"role": "user", "content": _HISTORY_SUMMARIZE_USER.format(
@@ -547,8 +633,9 @@ class OnlineToolSession(BaseChatSession):
             return []
 
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
+            cli, mdl = self._get_summarize_client()
+            response = cli.chat.completions.create(
+                model=mdl,
                 messages=[
                     {"role": "system", "content": _MEMORY_EXTRACT_SYSTEM},
                     {"role": "user", "content": _MEMORY_EXTRACT_USER_TEMPLATE.format(

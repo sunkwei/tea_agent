@@ -37,14 +37,12 @@ else:
     from .config import load_config, ModelConfig
 
 # ====================== 配置加载 ======================
-# 从 $HOME/.tea_agent/config.yaml 加载配置
-# 兼容旧环境变量 TEA_AGENT_KEY/URL/MODEL -> main_model
+# 优先使用 $HOME/.tea_agent/config.yaml，不存在时使用 tea_agent/config.yaml
 _cfg = load_config()
 
 if not _cfg.main_model.is_configured:
     print("错误: 请配置主模型 (main_model)")
-    print("  方式1: 编辑 $HOME/.tea_agent/config.yaml")
-    print("  方式2: 设置环境变量 TEA_AGENT_KEY/URL/MODEL")
+    print("  编辑 $HOME/.tea_agent/config.yaml 或 tea_agent/config.yaml")
     sys.exit(1)
 
 API_KEY = _cfg.main_model.api_key
@@ -129,7 +127,7 @@ _TOPIC_SUMMARY_USER_TEMPLATE = (
 )
 
 
-def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> str:
+def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Optional[str]:
     """
     根据最近3轮对话通过 LLM 生成不超过20字的摘要。
 
@@ -145,7 +143,6 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> st
     for conv in conversations:
         um = conv.get("user_msg", "").strip()
         if um:
-            # 截断过长消息，每条最多200字
             if len(um) > 200:
                 um = um[:200] + "..."
             user_msgs.append(f"用户：{um}")
@@ -168,9 +165,7 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> st
             max_tokens=50,
         )
         raw = response.choices[0].message.content.strip()
-        # 去除可能的多余标记
         raw = re.sub(r'^["""\']+|["""\']+$', '', raw).strip()
-        # 强制截断为20字
         if len(raw) > 20:
             raw = raw[:20]
         return raw if raw else None
@@ -203,7 +198,7 @@ class TkGUI:
 
         globals()["_storage_"] = self.db
         globals()["_memory_"] = self.memory
-        globals()["tlk"]._toolkit_ = self.toolkit ## 为 tlk.py 设置全景变量
+        globals()["tlk"]._toolkit_ = self.toolkit
 
         tlk.toolkit_reload()
 
@@ -215,16 +210,15 @@ class TkGUI:
         self.enable_thinking_var = tk.BooleanVar(value=True)
 
         # HtmlFrame 缩放级别
-        self._zoom_level = 100  # 百分比，100=正常
+        self._zoom_level = 100
 
-        # 聊天消息列表 — 用于最终渲染
-        # 格式: [{"role": "user"|"ai"|"tool"|"notice", "content": "...", "timestamp": "..."}, ...]
+        # 聊天消息列表
         self.chat_messages: List[Dict] = []
 
         # 当前 stream 累积 buffer
         self._stream_buffer = ""
 
-        # 当前对话 ID（用于 update_msg_rounds）
+        # 当前对话 ID
         self._current_conversation_id: Optional[int] = None
 
         # 创建界面
@@ -270,13 +264,11 @@ class TkGUI:
         chat_frame = Frame(chat_split)
         chat_split.add(chat_frame, weight=4)
 
-        # --- 组件 1: console (ScrolledText) — 用于显示中间结果 ---
         self.console = scrolledtext.ScrolledText(
             chat_frame, font=("Noto Sans CJK SC", 11), bg="white", fg="black", wrap=tk.WORD
         )
         self.console.config(state=tk.DISABLED)
 
-        # --- 组件 2: chat_view (HtmlFrame) — 用于显示最终聊天信息 ---
         if HAS_TKINTERWEB:
             self.chat_view = HtmlFrame(chat_frame, messages_enabled=False)
         else:
@@ -285,7 +277,6 @@ class TkGUI:
             )
             self.chat_view.config(state=tk.DISABLED)
 
-        # 默认显示 console
         self._show_mode = "console"
         self._switch_display("console")
 
@@ -330,7 +321,6 @@ class TkGUI:
             self.root.bind("<Control-underscore>", self.zoom_out)
 
     def zoom_in(self, e=None):
-        """放大 HtmlFrame 内容"""
         if not HAS_TKINTERWEB or self._show_mode != "chat_view":
             return "break"
         self._zoom_level = min(self._zoom_level + 10, 200)
@@ -339,7 +329,6 @@ class TkGUI:
         return "break"
 
     def zoom_out(self, e=None):
-        """缩小 HtmlFrame 内容"""
         if not HAS_TKINTERWEB or self._show_mode != "chat_view":
             return "break"
         self._zoom_level = max(self._zoom_level - 10, 50)
@@ -348,7 +337,6 @@ class TkGUI:
         return "break"
 
     def _apply_zoom(self):
-        """根据当前缩放级别重新渲染 chat_view"""
         if not HAS_TKINTERWEB or not self.chat_messages:
             return
         md = _chat_to_markdown(self.chat_messages)
@@ -358,7 +346,6 @@ class TkGUI:
         self.root.after(200, self.scroll_to_bottom)
 
     def _switch_display(self, mode: str):
-        """切换显示模式: 'console' 或 'chat_view'"""
         if mode == self._show_mode:
             return
         self._show_mode = mode
@@ -368,14 +355,12 @@ class TkGUI:
         else:
             self.console.pack_forget()
             self.chat_view.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
-            self.root.after(400, self.scroll_to_bottom)   # 延迟一点，等渲染完成
+            self.root.after(400, self.scroll_to_bottom)
 
     def scroll_to_bottom(self):
-        # HtmlFrame 内部通常有一个 canvas 或 text，可以通过属性访问并滚动
         self.chat_view.yview_moveto(1.0)
 
     def _render_chat(self):
-        """将 self.chat_messages 渲染到 chat_view"""
         md = _chat_to_markdown(self.chat_messages)
         if HAS_TKINTERWEB:
             font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
@@ -389,7 +374,6 @@ class TkGUI:
             self.chat_view.see(tk.END)
 
     def _now_ts(self) -> str:
-        """获取当前时间戳字符串"""
         return datetime.now().strftime("%H:%M:%S")
 
     def _init_session(self):
@@ -402,7 +386,6 @@ class TkGUI:
             max_history=10,
             memory=self.memory,
             storage=self.db,
-            # 便宜模型配置（用于摘要/记忆提取等低成本任务）
             cheap_api_key=cast(str, CHEAP_MODEL.api_key),
             cheap_api_url=cast(str, CHEAP_MODEL.api_url),
             cheap_model=cast(str, CHEAP_MODEL.model_name),
@@ -414,10 +397,8 @@ class TkGUI:
         self._update_status(f"📡 已连接 | 模型: {MODEL}{cheap_info} | 💾 Memory 已启用")
 
     def _update_status(self, msg: str):
-        """更新状态栏"""
         self.status_var.set(msg)
 
-    # ====================== 安全 UI 更新 ======================
     def safe_stream(self, text):
         self.root.after(0, self.stream, text)
 
@@ -428,7 +409,6 @@ class TkGUI:
         self.root.after(0, self.log_tool, msg)
 
     def on_thinking_toggle(self):
-        """Thinking 开关切换回调"""
         if hasattr(self, 'sess') and self.sess:
             self.sess.enable_thinking = self.enable_thinking_var.get()
             state = "已开启" if self.enable_thinking_var.get() else "已关闭"
@@ -446,7 +426,6 @@ class TkGUI:
         self.log("")
 
     def log(self, msg, tag="ai"):
-        """向 console 追加一行文本，同时记录到 chat_messages"""
         self.console.config(state=tk.NORMAL)
         self.console.insert(tk.END, msg + "\n", tag)
         self.console.see(tk.END)
@@ -456,7 +435,6 @@ class TkGUI:
             self.chat_messages.append({"role": tag, "content": msg, "timestamp": self._now_ts()})
 
     def stream(self, text):
-        """流式输出到 console，同时累积到 _stream_buffer"""
         self.console.config(state=tk.NORMAL)
         self.console.insert(tk.END, text)
         self.console.see(tk.END)
@@ -468,7 +446,6 @@ class TkGUI:
         self.log(msg, "tool")
 
     def _flush_stream_to_messages(self):
-        """将当前 stream buffer 追加到 chat_messages 的 AI 消息中"""
         if self._stream_buffer:
             if self.chat_messages and self.chat_messages[-1]["role"] == "ai":
                 self.chat_messages[-1]["content"] += self._stream_buffer
@@ -477,7 +454,6 @@ class TkGUI:
             self._stream_buffer = ""
 
     def clear_chat(self):
-        """清空 console 和 chat_messages"""
         self.console.config(state=tk.NORMAL)
         self.console.delete("1.0", tk.END)
         self.console.config(state=tk.DISABLED)
@@ -513,35 +489,28 @@ class TkGUI:
         conversations = self.db.get_conversations(topic_id)
         self.sess.load_history(conversations)
 
-        # @2026-04-19 generated by Pro/zai-org/GLM-5.1, 加载时渲染中间工具调用轮次
         for c in conversations:
             self.log(f"你：{c['user_msg']}", "user")
 
             rounds = c.get("rounds_json_parsed")
             if rounds and c.get("is_func_calling"):
-                # 逐条渲染中间工具调用链
                 for rd in rounds:
                     rd_role = rd.get("role", "")
                     if rd_role == "assistant" and rd.get("tool_calls"):
-                        # 助手发起工具调用
                         for tc in rd["tool_calls"]:
                             fn_name = tc.get("function", {}).get("name", "unknown")
                             fn_args = tc.get("function", {}).get("arguments", "")
                             self.log(f"🔧 调用工具：{fn_name}({fn_args})", "tool")
-                        # 如果同时有文本内容，也输出
                         if rd.get("content"):
                             self.log(f"AI：{rd['content']}", "ai")
                     elif rd_role == "tool":
-                        # 工具执行结果
                         result_preview = rd.get("content", "")
                         if len(result_preview) > 200:
                             result_preview = result_preview[:200] + "..."
                         self.log(f"📋 结果：{result_preview}", "tool")
                     elif rd_role == "assistant" and rd.get("content"):
-                        # 最终回答或中间文本
                         self.log(f"AI：{rd['content']}", "ai")
             else:
-                # 无工具调用或无 rounds 数据，回退到简单显示
                 self.log(f"AI：{c['ai_msg']}", "ai")
 
             if c["is_func_calling"]:
@@ -564,49 +533,36 @@ class TkGUI:
         self.input_box.insert(tk.INSERT, "\n")
         return "break"
 
-    # @2026-04-19 generated by Pro/zai-org/GLM-5.1, 通过LLM从最近3轮对话生成≤20字摘要更新topic标题
-    # @2026-04-19 16:40:21 generated by Pro/zai-org/GLM-5.1, _update_topic_summary异常日志增强，避免静默吞错
     def _update_topic_summary(self):
-        """
-        在 AI 回复完成后，从最近3轮对话中提取摘要（≤20字），
-        更新当前 topic 的标题并刷新左侧列表。
-
-        使用 sess 的 OpenAI client 进行 LLM 调用，
-        在后台线程中执行，避免阻塞 UI。
-        """
+        """使用 cheap_model 生成 topic 摘要标题"""
         if not self.current_topic_id or self.current_topic_id < 0:
             return
 
-        # 获取最近3轮对话
         recent = self.db.get_recent_conversations(self.current_topic_id, limit=3)
         if not recent:
             return
 
         try:
+            # 优先使用 cheap_model 降低成本
+            cli, mdl = self.sess._get_summarize_client()
             summary = _generate_topic_summary(
-                client=self.sess.client,
-                model=self.sess.model,
+                client=cli,
+                model=mdl,
                 conversations=recent,
             )
             if summary:
-                # 更新数据库中的标题
                 self.db.update_topic_title(self.current_topic_id, summary)
-                # 刷新左侧列表，保持当前选中
                 self.root.after(0, self._refresh_topics_preserve_selection)
                 if self.sess.tool_log:
                     self.sess.tool_log(f"📝 Topic摘要已更新: {summary}")
         except Exception as e:
-            # 摘要生成失败记录日志，不再静默吞掉
             if self.sess and self.sess.tool_log:
                 self.sess.tool_log(f"⚠️ Topic摘要生成失败: {e}")
                 self.sess.tool_log(traceback.format_exc())
 
     def _refresh_topics_preserve_selection(self):
-        """刷新主题列表并保持当前选中项"""
-        # 记住当前选中
         current_idx = self.topic_list.curselection()
         self.refresh_topics()
-        # 恢复选中
         if current_idx:
             try:
                 self.topic_list.select_set(current_idx[0])
@@ -631,8 +587,6 @@ class TkGUI:
 
         def work():
             try:
-                # @2026-04-19 generated by Pro/zai-org/GLM-5.1, 修复双重save_msg bug
-                # 只创建一次 conversation 行，流结束后 update_msg_rounds 更新
                 conv_id = self.db.save_msg(
                     self.current_topic_id, msg, "", False)
                 self._current_conversation_id = conv_id
@@ -640,7 +594,6 @@ class TkGUI:
                 ai_msg, is_func = self.sess.chat_stream(msg, self.safe_stream)
                 self.root.after(0, self._flush_stream_to_messages)
 
-                # 用最终回复和中间 rounds 一次性更新 conversation 行
                 rounds = self.sess._rounds_collector
                 self.db.update_msg_rounds(
                     conversation_id=conv_id,
@@ -652,14 +605,25 @@ class TkGUI:
                 self.root.after(0, self._render_and_show_chat)
                 self.root.after(0, lambda: self._update_status("✅ 完成"))
 
-                # AI回复后更新topic摘要标题
                 self._update_topic_summary()
             except Exception as ex:
                 ai_msg = f"异常：{ex}"
                 self.safe_stream(ai_msg)
                 self.root.after(0, self._flush_stream_to_messages)
+                # 异常时也尽量保存 rounds 数据
+                if self._current_conversation_id is not None:
+                    rounds = self.sess._rounds_collector
+                    try:
+                        self.db.update_msg_rounds(
+                            conversation_id=self._current_conversation_id,
+                            ai_msg=ai_msg,
+                            is_func_calling=False,
+                            rounds=rounds if rounds else None,
+                        )
+                    except Exception:
+                        pass
                 self.root.after(0, self._render_and_show_chat)
-                self.root.after(0, lambda: self._update_status(f"❌ 错误: {ex}"))
+                self.root.after(0, lambda: self._update_status(f"❌ 错误: {ai_msg}"))
             finally:
                 self.generating = False
                 self.safe_log("")
@@ -668,7 +632,6 @@ class TkGUI:
         return "break"
 
     def _render_and_show_chat(self):
-        """渲染最终聊天信息并切换到 web 视图"""
         self._render_chat()
         self._switch_display("chat_view")
 

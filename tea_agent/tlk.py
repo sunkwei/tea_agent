@@ -1,5 +1,5 @@
 import ast
-from typing import Dict, cast, Callable, Tuple
+from typing import Dict, cast, Callable, Tuple, List, Optional
 import json
 import os
 import os.path as osp
@@ -35,11 +35,11 @@ def meta_toolkit_save() -> dict:
                         "description": "工具函数名，全局唯一，总是 toolkit_ 作为前缀",
                     },
                     "meta": {
-                        "type": "dict",
+                        "type": "object",
                         "description": "工具函数的元描述，符合 OpenAI tool func schema",
                     },
                     "pycode": {
-                        "type": "str",
+                        "type": "string",
                         "description": "工具函数的 python 实现代码"
                     }
                 }
@@ -141,7 +141,7 @@ def meta_toolkit_memory_stats():
 def toolkit_memory_search(
     query: str = "",
     category: str = "",
-    tags: list = [],
+    tags: Optional[List[str]] = None,
     min_importance: int = 3,
     limit: int = 20
 ) -> str:
@@ -167,7 +167,7 @@ def toolkit_memory_search(
     return "\n\n".join(lines)
 
 
-def toolkit_memory_recent(limit: int=20, category: str="") -> str:
+def toolkit_memory_recent(limit: int = 20, category: str = "") -> str:
     """获取最近的记忆摘要"""
     from tea_agent.memory import get_memory
     mem = get_memory()
@@ -251,8 +251,12 @@ class Toolkit:
                     with open(filepath, encoding="utf-8") as f:
                         code = f.read()
 
+                    # 使用受限的 globals 避免污染
+                    safe_globals = {
+                        "__builtins__": __builtins__,
+                    }
                     local_vars = {}
-                    exec(code, globals(), local_vars)
+                    exec(code, safe_globals, local_vars)
 
                     func = local_vars.get(name)
                     func_meta = local_vars.get(f"meta_{name}")
@@ -333,14 +337,10 @@ class Toolkit:
         toolkit_path = self.tool_dir
         filename = osp.join(toolkit_path, f"{name}.py")
 
-        # if osp.exists(filename):
-        #     return (1, f"{filename} exists")
-
         # 1. 校验 meta 有效性
         if not isinstance(meta, dict):
             return (2, "meta must be a dict")
 
-        # 检查基本结构
         if meta.get("type") != "function":
             return (2, f"meta.type must be 'function', 完整的 meta 参考：{meta_exam_str}")
 
@@ -353,7 +353,7 @@ class Toolkit:
             return (2, f"meta.function.name is required, 完整的 meta 参考：{meta_exam_str}")
 
         if func["name"] != name:
-            return (2, f"meta.function.name '{meta['name']}' does not match tool name '{name}'")
+            return (2, f"meta.function.name '{func['name']}' does not match tool name '{name}'")
 
         if not name.startswith("toolkit_"):
             return (2, "tool name must start with 'toolkit_' prefix for security")
@@ -376,8 +376,7 @@ class Toolkit:
 
         # 通过校验，写入文件
         with open(filename, "w", encoding="utf-8") as f:
-            f.write(
-                f"## llm generated tool func, created {time.asctime()}\n\n")
+            f.write(f"## llm generated tool func, created {time.asctime()}\n\n")
             f.write(pycode)
             f.write("\n\n")
             f.write(f"def meta_{name}() -> dict:\n")

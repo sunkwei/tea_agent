@@ -21,34 +21,33 @@ class Memory:
 
     DB_PATH = str(Path.home() / ".tea_agent" / "memory.db")
 
-    # 记忆分类
     CATEGORIES = [
-        "user_preference",    # 用户偏好
-        "fact",               # 事实信息
-        "project_info",       # 项目信息
-        "decision",           # 决策记录
-        "experience",         # 经验教训
-        "code_pattern",       # 代码模式
-        "tool_usage",         # 工具使用经验
-        "environment",        # 环境配置
-        "general",            # 通用信息
+        "user_preference",
+        "fact",
+        "project_info",
+        "decision",
+        "experience",
+        "code_pattern",
+        "tool_usage",
+        "environment",
+        "general",
     ]
 
     def __init__(self, db_path: str=""):
-        """
-        初始化记忆模块
-
-        Args:
-            db_path: 数据库路径，默认使用 $HOME/.tea_agent/memory.db
-        """
         self.db_path = db_path if db_path else self.DB_PATH
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._init_db()
 
     def _get_conn(self) -> sqlite3.Connection:
-        """获取数据库连接"""
+        """获取数据库连接，启用 WAL 模式和性能优化"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        # WAL 模式提升并发性能
+        conn.execute("PRAGMA journal_mode=WAL")
+        # 降低刷盘延迟
+        conn.execute("PRAGMA synchronous=NORMAL")
+        # 增大缓存
+        conn.execute("PRAGMA cache_size=-8000")
         return conn
 
     def _init_db(self):
@@ -84,7 +83,7 @@ class Memory:
         self,
         summary: str,
         category: str = "general",
-        tags: List[str] = [],
+        tags: List[str] = None,
         importance: int = 3,
         source_topic: str = ""
     ) -> int:
@@ -93,9 +92,9 @@ class Memory:
 
         Args:
             summary: 记忆摘要内容
-            category: 分类，见 CATEGORIES
+            category: 分类
             tags: 标签列表
-            importance: 重要度 1-5，5为最重要
+            importance: 重要度 1-5
             source_topic: 来源话题
 
         Returns:
@@ -125,7 +124,7 @@ class Memory:
         self,
         query: str = "",
         category: str = "",
-        tags: List[str] = [],
+        tags: List[str] = None,
         min_importance: int = 0,
         limit: int = 20
     ) -> List[Dict]:
@@ -133,7 +132,7 @@ class Memory:
         搜索记忆
 
         Args:
-            query: 关键词搜索（在 summary 中模糊匹配）
+            query: 关键词搜索
             category: 按分类过滤
             tags: 按标签过滤（包含任一标签即可）
             min_importance: 最低重要度
@@ -142,6 +141,7 @@ class Memory:
         Returns:
             List[Dict]: 记忆列表
         """
+        tags = tags or []
         conditions = []
         params = []
 
@@ -172,17 +172,8 @@ class Memory:
         finally:
             conn.close()
 
-    def get_recent_memories(self, limit:int=20, category: str="") -> List[Dict]:
-        """
-        获取最近的记忆
-
-        Args:
-            limit: 数量限制
-            category: 可选分类过滤
-
-        Returns:
-            List[Dict]: 记忆列表
-        """
+    def get_recent_memories(self, limit: int = 20, category: str = "") -> List[Dict]:
+        """获取最近的记忆"""
         if category:
             return self.search_memories(category=category, limit=limit)
 
@@ -219,7 +210,7 @@ class Memory:
         memory_id: int,
         summary: str = "",
         category: str = "",
-        tags: List[str] = [],
+        tags: List[str] = None,
         importance: int = 0
     ) -> bool:
         """更新记忆"""
@@ -295,7 +286,7 @@ class Memory:
         return d
 
     def close(self):
-        """关闭连接（SQLite 不需要显式关闭，但提供此方法以保持一致性）"""
+        """关闭连接"""
         pass
 
 

@@ -811,13 +811,15 @@ class OnlineToolSession(BaseChatSession):
         if usage is None:
             return
         u = self._last_usage
-        if hasattr(usage, 'prompt_tokens') and usage.prompt_tokens:
-            u["prompt_tokens"] += usage.prompt_tokens
-        if hasattr(usage, 'completion_tokens') and usage.completion_tokens:
-            u["completion_tokens"] += usage.completion_tokens
-        if hasattr(usage, 'total_tokens') and usage.total_tokens:
-            u["total_tokens"] += usage.total_tokens
-        # 如果 total_tokens 缺失，手动计算
+        prompt = getattr(usage, 'prompt_tokens', None)
+        completion = getattr(usage, 'completion_tokens', None)
+        total = getattr(usage, 'total_tokens', None)
+        if prompt:
+            u["prompt_tokens"] += prompt
+        if completion:
+            u["completion_tokens"] += completion
+        if total:
+            u["total_tokens"] += total
         if u["total_tokens"] == 0 and u["prompt_tokens"] and u["completion_tokens"]:
             u["total_tokens"] = u["prompt_tokens"] + u["completion_tokens"]
 
@@ -917,7 +919,8 @@ class OnlineToolSession(BaseChatSession):
                             if self.tool_log:
                                 self.tool_log("⚠️ 模型不支持 thinking，已自动降级")
                             kwargs.pop("extra_body", None)
-                            kwargs.pop("stream_options", None)
+                            # 保留 stream_options 以维持 token 统计
+                            # 若 API 严格不支持此参数，外层异常会捕获并提示
                             response = self.client.chat.completions.create(**kwargs)
                         else:
                             # 非 thinking 相关错误，向上抛出

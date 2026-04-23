@@ -947,6 +947,9 @@ class OnlineToolSession(BaseChatSession):
                 if hasattr(chunk, 'usage') and chunk.usage:
                     self._accumulate_usage(chunk.usage)
 
+                if not hasattr(chunk, 'choices') or not chunk.choices:
+                    continue
+
                 delta = chunk.choices[0].delta
 
                 # 处理内容

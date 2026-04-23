@@ -229,7 +229,7 @@ class OnlineToolSession(BaseChatSession):
         model: str = "glm-5",
         max_history: int = 10,
         system_prompt: str = "",
-        max_iterations: int = 30,
+        max_iterations: int = 50,
         enable_thinking: bool = True,
         memory=None,
         storage=None,

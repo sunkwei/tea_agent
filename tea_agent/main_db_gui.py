@@ -625,9 +625,15 @@ class TkGUI:
                         prompt_tokens=usage["prompt_tokens"],
                         completion_tokens=usage["completion_tokens"],
                     )
-
-                self.root.after(0, self._render_and_show_chat)
-                self.root.after(0, lambda: self._update_status("✅ 完成"))
+                    self.root.after(0, self._render_and_show_chat)
+                    # 刷新界面显示 token 统计
+                    status_msg = (f"✅ 完成 | Tokens: {usage['total_tokens']:,} "
+                                  f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,})")
+                    self.root.after(0, lambda m=status_msg: self._update_status(m))
+                    self.root.after(0, self._refresh_topics_preserve_selection)
+                else:
+                    self.root.after(0, self._render_and_show_chat)
+                    self.root.after(0, lambda: self._update_status("✅ 完成"))
 
                 self._update_topic_summary()
             except Exception as ex:

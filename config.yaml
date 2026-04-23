@@ -1,0 +1,13 @@
+main_model:
+  api_key: sk-283b0de643cd41cb9db6d4169cdcafd4
+  api_url: http://localhost:11434/v1
+  model_name: qwen3.6
+  options:
+    max_tokens: 1024
+    num_gpu: 15
+    temperature: 0.7
+
+cheap_model:
+  api_key: sk-283b0de643cd41cb9db6d4169cdcafd4
+  api_url: http://localhost:11434/v1
+  model_name: qwen3.6

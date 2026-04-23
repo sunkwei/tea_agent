@@ -1,0 +1,9 @@
+main_model:
+  api_key: YOUR_API_KEY
+  api_url: http://localhost:11434/v1
+  model_name: qwen3.6
+
+cheap_model:
+  api_key: YOUR_API_KEY
+  api_url: http://localhost:11434/v1
+  model_name: qwen3.6

@@ -43,7 +43,13 @@ python -m tea_agent.main_db_gui
 ## 项目结构
 - `tea_agent/`: 核心包目录
   - `config.py`: **YAML 配置加载器** (ModelConfig/AgentConfig)，支持主模型与廉价模型配置。
-  - `onlinesession.py`: 处理 LLM 对话流、工具调用循环及流式输出。
+  - `basesession.py`: 聊天会话抽象基类 `BaseChatSession`。
+  - `onlinesession.py`: `OnlineToolSession` 主类，组合各 mixin，编排对话流程。
+  - `session_memory.py`: 记忆注入、LLM 提取、保存。
+  - `session_summarizer.py`: 历史摘要、Topic 摘要、消息压缩。
+  - `session_tool.py`: 工具执行、rounds 收集、工具调用解析。
+  - `session_api.py`: API 调用、流式响应处理、thinking 降级、token 统计。
+  - `session_prompts.py`: Prompt 模板常量。
   - `memory.py`: 记忆提取与管理逻辑。
   - `store.py`: 基于 SQLite 的持久化存储（对话历史、记忆、主题）。
   - `tlk.py`: 工具库 (Toolkit) 的加载、校验与保存逻辑。

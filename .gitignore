@@ -4,3 +4,4 @@ __pycache__
 build/
 .vscode/
 test_session.py
+dump_*/

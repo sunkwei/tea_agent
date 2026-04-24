@@ -44,6 +44,21 @@ class AgentConfig:
     """Agent 全局配置"""
     main_model: ModelConfig = field(default_factory=ModelConfig)
     cheap_model: ModelConfig = field(default_factory=ModelConfig)
+    
+    # 会话参数
+    max_history: int = 10  # 最大历史消息数
+    max_iterations: int = 50  # 最大工具调用迭代次数
+    enable_thinking: bool = True  # 是否启用 thinking 功能
+    
+    # Token 优化参数
+    keep_turns: int = 3  # 保留最近N轮完整对话，更早的对话自动摘要
+    max_tool_output: int = 128 * 1024  # 工具输出截断字符数
+    max_assistant_content: int = 128 * 1024  # 助手回复截断字符数
+    
+    # 记忆参数
+    memory_inject_limit: int = 8  # 记忆注入条数上限
+    memory_extract_rounds: int = 6  # 记忆提取窗口轮数
+    memory_extract_threshold: int = 4  # 记忆提取消息数阈值
 
 
 def load_config(config_path: Optional[str] = None) -> AgentConfig:
@@ -76,7 +91,8 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
         try:
             with open(yaml_path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
-            
+
+            # 加载模型配置
             for m_type in ["main_model", "cheap_model"]:
                 m_data = data.get(m_type, {})
                 if isinstance(m_data, dict):
@@ -85,9 +101,25 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
                     target.api_url = m_data.get("api_url", "")
                     target.model_name = m_data.get("model_name", "")
                     target.options = m_data.get("options", {})
+
+            # 加载会话参数
+            cfg.max_history = int(data.get("max_history", cfg.max_history))
+            cfg.max_iterations = int(data.get("max_iterations", cfg.max_iterations))
+            cfg.enable_thinking = bool(data.get("enable_thinking", cfg.enable_thinking))
+            
+            # 加载 Token 优化参数
+            cfg.keep_turns = int(data.get("keep_turns", cfg.keep_turns))
+            cfg.max_tool_output = int(data.get("max_tool_output", cfg.max_tool_output))
+            cfg.max_assistant_content = int(data.get("max_assistant_content", cfg.max_assistant_content))
+            
+            # 加载记忆参数
+            cfg.memory_inject_limit = int(data.get("memory_inject_limit", cfg.memory_inject_limit))
+            cfg.memory_extract_rounds = int(data.get("memory_extract_rounds", cfg.memory_extract_rounds))
+            cfg.memory_extract_threshold = int(data.get("memory_extract_threshold", cfg.memory_extract_threshold))
+            
         except Exception:
             pass  # 加载失败时使用默认空配置
-            
+
     return cfg
 
 
@@ -116,6 +148,8 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     ensure_config_dir()
 
     data = {}
+    
+    # 保存模型配置
     for m_type in ["main_model", "cheap_model"]:
         target = cfg.main_model if m_type == "main_model" else cfg.cheap_model
         if target.is_configured:
@@ -124,7 +158,24 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
                 "api_url": target.api_url,
                 "model_name": target.model_name,
             }
+            if target.options:
+                m_data["options"] = target.options
             data[m_type] = m_data
+    
+    # 保存会话参数
+    data["max_history"] = cfg.max_history
+    data["max_iterations"] = cfg.max_iterations
+    data["enable_thinking"] = cfg.enable_thinking
+    
+    # 保存 Token 优化参数
+    data["keep_turns"] = cfg.keep_turns
+    data["max_tool_output"] = cfg.max_tool_output
+    data["max_assistant_content"] = cfg.max_assistant_content
+    
+    # 保存记忆参数
+    data["memory_inject_limit"] = cfg.memory_inject_limit
+    data["memory_extract_rounds"] = cfg.memory_extract_rounds
+    data["memory_extract_threshold"] = cfg.memory_extract_threshold
 
     with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
@@ -147,17 +198,40 @@ def create_default_config(config_path: Optional[str] = None) -> str:
 
     template = (
         "# Tea Agent 配置文件\n\n"
+        "# 主模型配置（用于核心对话、代码生成、记忆提取等）\n"
         "main_model:\n"
         "  api_key: \"\"\n"
         "  api_url: \"\"\n"
         "  model_name: \"\"\n"
         "  options:  # 可选参数，如 {extra_body: {thinking: {type: enabled}}}\n"
         "    key: value\n\n"
+        "# 便宜模型配置（用于摘要生成、信息压缩等场景）\n"
         "cheap_model:\n"
         "  api_key: \"\"\n"
         "  api_url: \"\"\n"
         "  model_name: \"\"\n"
-        "  options: {}\n"
+        "  options: {}\n\n"
+        "# ==================== 会话参数 ====================\n"
+        "# 最大历史消息数（保留的对话历史条数）\n"
+        "max_history: 10\n\n"
+        "# 最大工具调用迭代次数（单次对话中最多允许的工具调用循环数）\n"
+        "max_iterations: 50\n\n"
+        "# 是否启用 thinking 功能（模型思考过程展示）\n"
+        "enable_thinking: true\n\n"
+        "# ==================== Token 优化参数 ====================\n"
+        "# 保留最近 N 轮完整对话，更早的对话自动摘要（使用 cheap_model）\n"
+        "keep_turns: 3\n\n"
+        "# 工具输出截断字符数（超过此长度的工具结果会被截断）\n"
+        "max_tool_output: 131072  # 128KB\n\n"
+        "# 助手回复截断字符数（超过此长度的助手回复会被截断）\n"
+        "max_assistant_content: 131072  # 128KB\n\n"
+        "# ==================== 记忆参数 ====================\n"
+        "# 记忆注入条数上限（会话开始时注入的记忆数量）\n"
+        "memory_inject_limit: 8\n\n"
+        "# 记忆提取窗口轮数（从此数量的最近对话中提取记忆）\n"
+        "memory_extract_rounds: 6\n\n"
+        "# 记忆提取消息数阈值（达到此数量才触发记忆提取）\n"
+        "memory_extract_threshold: 4\n"
     )
 
     with open(yaml_path, "w", encoding="utf-8") as f:

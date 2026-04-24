@@ -403,12 +403,22 @@ class TkGUI:
 
     def _init_session(self):
         """初始化会话"""
+        # 从配置中获取参数
+        cfg = get_config()
+        
         self.sess = OnlineToolSession(
             toolkit=self.toolkit,
             api_key=cast(str, API_KEY),
             api_url=cast(str, API_URL),
             model=cast(str, MODEL),
-            max_history=10,
+            max_history=cfg.max_history,
+            max_iterations=cfg.max_iterations,
+            enable_thinking=cfg.enable_thinking,
+            keep_turns=cfg.keep_turns,
+            max_tool_output=cfg.max_tool_output,
+            max_assistant_content=cfg.max_assistant_content,
+            memory_inject_limit=cfg.memory_inject_limit,
+            memory_extract_rounds=cfg.memory_extract_rounds,
             memory=self.memory,
             storage=self.db,
             cheap_api_key=cast(str, CHEAP_MODEL.api_key),

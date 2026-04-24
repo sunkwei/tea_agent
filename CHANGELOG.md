@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.9] - 2026-04-24
+
+### New Features
+- feat: 扩展配置系统，将所有硬编码参数移至 config.yaml
+  - 新增会话参数：`max_history`, `max_iterations`, `enable_thinking`
+  - 新增 Token 优化参数：`keep_turns`, `max_tool_output`, `max_assistant_content`
+  - 新增记忆参数：`memory_inject_limit`, `memory_extract_rounds`, `memory_extract_threshold`
+- feat: 更新 `load_config()` 和 `save_config()` 支持新参数的读写
+- feat: 创建完整的 config.yaml 模板（tea_agent/config.yaml），包含详细注释
+- feat: 创建用户默认配置文件（$HOME/.tea_agent/config.yaml）
+- feat: 更新 `main_db_gui.py` 从配置中读取所有参数，不再硬编码
+
 ## [0.2.8] - 2026-04-24
 
 ### Improvements & Changes

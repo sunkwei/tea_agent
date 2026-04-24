@@ -1,9 +1,53 @@
-main_model:
-  api_key: YOUR_API_KEY
-  api_url: http://localhost:11434/v1
-  model_name: qwen3.6
+# Tea Agent 配置文件
+# 此文件为发布参考模板，位于 tea_agent/config.yaml
+# 用户配置应放在 $HOME/.tea_agent/config.yaml，优先读取
 
+# ==================== 模型配置 ====================
+
+# 主模型配置（用于核心对话、代码生成、记忆提取等）
+main_model:
+  api_key: "YOUR_API_KEY"
+  api_url: "https://api.openai.com/v1"
+  model_name: "glm-5"
+  options:  # 可选参数，如 extra_body 用于 thinking 功能
+    key: value
+
+# 便宜模型配置（用于摘要生成、信息压缩等低成本任务）
 cheap_model:
-  api_key: YOUR_API_KEY
-  api_url: http://localhost:11434/v1
-  model_name: qwen3.6
+  api_key: "YOUR_API_KEY"
+  api_url: "https://api.lite.com/v1"
+  model_name: "qwen-turbo"
+  options: {}
+
+# ==================== 会话参数 ====================
+
+# 最大历史消息数（保留的对话历史条数）
+max_history: 10
+
+# 最大工具调用迭代次数（单次对话中最多允许的工具调用循环数）
+max_iterations: 50
+
+# 是否启用 thinking 功能（模型思考过程展示）
+enable_thinking: true
+
+# ==================== Token 优化参数 ====================
+
+# 保留最近 N 轮完整对话，更早的对话自动摘要（使用 cheap_model）
+keep_turns: 3
+
+# 工具输出截断字符数（超过此长度的工具结果会被截断）
+max_tool_output: 131072  # 128KB
+
+# 助手回复截断字符数（超过此长度的助手回复会被截断）
+max_assistant_content: 131072  # 128KB
+
+# ==================== 记忆参数 ====================
+
+# 记忆注入条数上限（会话开始时注入的记忆数量）
+memory_inject_limit: 8
+
+# 记忆提取窗口轮数（从此数量的最近对话中提取记忆）
+memory_extract_rounds: 6
+
+# 记忆提取消息数阈值（达到此数量才触发记忆提取）
+memory_extract_threshold: 4

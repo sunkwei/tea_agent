@@ -20,7 +20,9 @@ class SessionAPIMixin:
 
     def __init__(self):
         self.client = None
-        self.model: str = ""
+        # 不覆盖子类已设置的 model 值
+        if not hasattr(self, 'model'):
+            self.model: str = ""
         self.enable_thinking: bool = True
         self._thinking_supported: Optional[bool] = None
         self.tool_log: Optional[Callable[[str], None]] = None

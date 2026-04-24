@@ -28,13 +28,13 @@ if __name__ == "__main__":
     from tea_agent.store import Storage
     from tea_agent.memory import Memory, get_memory
     from tea_agent import tlk
-    from tea_agent.config import load_config, ModelConfig
+    from tea_agent.config import load_config, get_config, ModelConfig
 else:
     from .onlinesession import OnlineToolSession
     from .store import Storage
     from .memory import get_memory
     from . import tlk
-    from .config import load_config, ModelConfig
+    from .config import load_config, get_config, ModelConfig
 
 # ====================== 配置加载 ======================
 # 优先使用 $HOME/.tea_agent/config.yaml，不存在时使用 tea_agent/config.yaml

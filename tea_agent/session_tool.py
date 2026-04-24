@@ -24,7 +24,7 @@ class SessionToolMixin:
         self._rounds_collector: List[Dict] = []
         self.messages: List[Dict] = []
 
-    def _build_tools(self) -> List[Dict]:
+    def _build_tools(self):
         """构建工具定义列表"""
         tools = []
         for name, meta in self.toolkit.meta_map.items():

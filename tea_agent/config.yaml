@@ -7,16 +7,16 @@
 # 主模型配置（用于核心对话、代码生成、记忆提取等）
 main_model:
   api_key: "YOUR_API_KEY"
-  api_url: "https://api.openai.com/v1"
-  model_name: "glm-5"
+  api_url: "http://localhost:11434/v1"
+  model_name: "qwen3.6"
   options:  # 可选参数，如 extra_body 用于 thinking 功能
     key: value
 
 # 便宜模型配置（用于摘要生成、信息压缩等低成本任务）
 cheap_model:
   api_key: "YOUR_API_KEY"
-  api_url: "https://api.lite.com/v1"
-  model_name: "qwen-turbo"
+  api_url: "http://localhost:11434/v1"
+  model_name: "qwen3.6"
   options: {}
 
 # ==================== 会话参数 ====================

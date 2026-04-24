@@ -121,6 +121,9 @@ class OnlineToolSession(
         self.memory_inject_limit = memory_inject_limit
         self.memory_extract_rounds = memory_extract_rounds
 
+        # DeepSeek 推理模型特殊处理
+        self._is_deepseek_reasoning = self._check_deepseek_reasoning_model(model)
+
         # 工具定义
         self.tools: List[Dict] = []
         self._build_tools()
@@ -132,6 +135,146 @@ class OnlineToolSession(
     # ──────────────────────────────────────────────
     # 基础方法
     # ──────────────────────────────────────────────
+
+    def _check_deepseek_reasoning_model(self, model: str) -> bool:
+        """
+        检测是否为 DeepSeek 推理模型。
+        
+        DeepSeek 推理模型有特殊的多轮对话要求：
+        - 当模型输出 reasoning_content 后，下一轮请求中如果之前的 assistant 消息包含 
+          reasoning_content 字段，API 会返回 400 错误
+        - 当模型进行了工具调用时，必须在后续请求中回传 reasoning_content，否则也会报错
+        
+        Args:
+            model: 模型名称
+            
+        Returns:
+            是否为 DeepSeek 推理模型
+        """
+        if not model:
+            return False
+        
+        model_lower = model.lower()
+        # 检测常见的 DeepSeek 推理模型
+        deepseek_reasoning_models = [
+            "deepseek-reasoner",
+            "deepseek-r",
+            "deepseek-r1",
+            "deepseek-r2",
+            "deepseek-r3",
+            "deepseek-r4",
+        ]
+        
+        # 检查是否包含 deepseek 且包含 r/r1/r2 等推理标识
+        is_deepseek = "deepseek" in model_lower
+        is_reasoning_model = any(rm in model_lower for rm in deepseek_reasoning_models)
+        
+        return is_deepseek and (is_reasoning_model or "-r" in model_lower)
+
+    def _handle_deepseek_reasoning_content(self, messages: List[Dict]) -> List[Dict]:
+        """
+        处理 DeepSeek 推理模型的 reasoning_content 字段。
+
+        DeepSeek 推理模型的特殊规则：
+        1. 未进行工具调用的轮次：如果 assistant 消息包含 reasoning_content，
+           下一轮请求中必须移除它，否则 API 返回 400 错误
+        2. 进行了工具调用的轮次：在后续所有请求中，必须完整回传 reasoning_content，
+           否则 API 也会报错
+
+        判断逻辑：
+        - 如果 assistant 消息有 tool_calls 且后续有对应的 tool 消息 → 该轮次进行了工具调用
+          → 必须在后续所有请求中保留 reasoning_content
+        - 如果 assistant 消息没有 tool_calls → 未进行工具调用
+          → 必须移除 reasoning_content
+
+        Args:
+            messages: 原始消息列表
+
+        Returns:
+            处理后的消息列表
+        """
+        if not self._is_deepseek_reasoning:
+            return messages
+
+        # 第一步：标记哪些 assistant 消息进行了工具调用
+        tool_call_round_indices = set()  # 记录进行了工具调用的 assistant 消息索引
+
+        for i, msg in enumerate(messages):
+            if msg.get("role") == "assistant" and "tool_calls" in msg and msg["tool_calls"]:
+                # 检查后续是否有对应的 tool 消息
+                has_corresponding_tool = False
+                tool_call_ids = {tc.get("id") for tc in msg["tool_calls"] if tc.get("id")}
+
+                for j in range(i + 1, len(messages)):
+                    next_msg = messages[j]
+                    if next_msg.get("role") == "tool":
+                        # 检查是否对应这个 assistant 的工具调用
+                        if next_msg.get("tool_call_id") in tool_call_ids:
+                            has_corresponding_tool = True
+                    elif next_msg.get("role") == "assistant":
+                        # 遇到下一个 assistant 消息，停止检查
+                        break
+
+                if has_corresponding_tool:
+                    tool_call_round_indices.add(i)
+
+        # 第二步：处理消息
+        processed = []
+        for i, msg in enumerate(messages):
+            if msg.get("role") == "assistant" and "reasoning_content" in msg:
+                # 如果该轮次进行了工具调用，保留 reasoning_content
+                if i in tool_call_round_indices:
+                    processed.append(msg)  # 保留完整的 reasoning_content
+                else:
+                    # 否则移除 reasoning_content
+                    filtered_msg = {k: v for k, v in msg.items() if k != "reasoning_content"}
+                    processed.append(filtered_msg)
+            else:
+                processed.append(msg)
+
+        return processed
+
+    def _process_stream_with_reasoning(self, response, callback) -> Tuple[str, List[Dict], str]:
+        """
+        处理流式响应，收集内容、工具调用数据和 reasoning_content。
+        
+        Args:
+            response: 流式响应迭代器
+            callback: 流式输出回调函数
+            
+        Returns:
+            Tuple[str, List[Dict], str]: (累积文本内容, 工具调用数据列表, reasoning_content)
+        """
+        content_parts = []
+        tool_calls_data = []
+        reasoning_parts = []
+        
+        for chunk in response:
+            # 累积 usage 信息
+            if hasattr(chunk, 'usage') and chunk.usage:
+                self._accumulate_usage(chunk.usage)
+            
+            if not hasattr(chunk, 'choices') or not chunk.choices:
+                continue
+            
+            delta = chunk.choices[0].delta
+            
+            # 处理 reasoning_content
+            if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+                reasoning_parts.append(delta.reasoning_content)
+            
+            # 处理内容
+            if delta.content:
+                content_parts.append(delta.content)
+                callback(delta.content)
+            
+            # 处理工具调用
+            if delta.tool_calls:
+                self._accumulate_tool_calls_from_delta(delta, tool_calls_data)
+        
+        content = "".join(content_parts)
+        reasoning_content = "".join(reasoning_parts)
+        return content, tool_calls_data, reasoning_content
 
     def _setup_default_pipeline(self):
         """设置默认的 Pipeline 步骤"""
@@ -183,20 +326,20 @@ class OnlineToolSession(
     def _execute_tool_loop(self, context: Dict) -> Dict:
         """
         执行工具调用循环。
-        
+
         Args:
             context: 上下文，包含 msg, callback 等
-            
+
         Returns:
             结果字典，包含 full_reply, used_tools 等
         """
         msg = context.get("msg", "")
         callback = context.get("callback", lambda x: None)
-        
+
         full_reply = ""
         used_tools = False
         iterations = 0
-        
+
         while iterations < self.max_iterations:
             if self.interrupted:
                 final_msg = full_reply + "\n[已打断]"
@@ -209,6 +352,8 @@ class OnlineToolSession(
                 }
 
             api_messages = self._build_api_messages()
+            # DeepSeek 推理模型特殊处理
+            api_messages = self._handle_deepseek_reasoning_content(api_messages)
 
             try:
                 response = self._create_chat_stream(api_messages, self.tools)
@@ -224,7 +369,7 @@ class OnlineToolSession(
                 }
 
             # 处理流式响应
-            content, tool_calls_data = self.process_stream_response(response, callback)
+            content, tool_calls_data, reasoning_content = self._process_stream_with_reasoning(response, callback)
             full_reply += content
 
             # 解析工具调用
@@ -236,8 +381,8 @@ class OnlineToolSession(
                 # 收集 assistant tool_calls
                 self._collect_assistant_tool_calls_round(content, valid_tool_calls)
 
-                # 存入完整历史
-                self.messages.append({
+                # 存入完整历史（包含 reasoning_content）
+                assistant_msg = {
                     "role": "assistant",
                     "content": content if content else None,
                     "tool_calls": [{
@@ -248,7 +393,12 @@ class OnlineToolSession(
                             "arguments": tc.function.arguments
                         }
                     } for tc in valid_tool_calls]
-                })
+                }
+                # 如果有 reasoning_content，添加到消息中
+                if reasoning_content:
+                    assistant_msg["reasoning_content"] = reasoning_content
+                
+                self.messages.append(assistant_msg)
 
                 # 执行工具调用
                 has_reload = any(
@@ -273,7 +423,11 @@ class OnlineToolSession(
                 continue
 
             elif content:
-                # 最终文本回答
+                # 最终文本回答（包含 reasoning_content）
+                assistant_msg = {"role": "assistant", "content": content}
+                if reasoning_content:
+                    assistant_msg["reasoning_content"] = reasoning_content
+                self.messages.append(assistant_msg)
                 self.add_assistant_message(content)
                 self._collect_assistant_text_round(content)
                 break
@@ -287,7 +441,7 @@ class OnlineToolSession(
             full_reply += warning
             self.add_assistant_message(full_reply)
             self._collect_max_iterations_round(full_reply)
-        
+
         return {
             "full_reply": full_reply,
             "used_tools": used_tools,

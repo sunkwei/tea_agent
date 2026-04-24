@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.8] - 2026-04-24
+
+### Improvements & Changes
+- changed: 优化 Topic 摘要提取逻辑，同时提取用户消息和 AI 回复，提供更完整的摘要上下文
+- changed: 增强 LLM 返回值边界条件处理，增加 `None`、空字符串、类型安全检查
+- changed: 重构 `_build_api_messages`：工具循环中不压缩消息，仅对历史做压缩处理
+- changed: 实现基于记忆优先级的压缩策略，根据高优先级记忆数量和类别决定压缩程度
+- changed: 保留最新 3 轮完整对话（不压缩），更早的对话使用 cheap_model 生成摘要
+- changed: 优化 thinking 检测逻辑，主模型和便宜模型分别记录 thinking 支持状态，避免每次 API 调用都重复检测
+
+### Bug Fixes
+- fix: 修复 `_clean_topic_summary` 引号清洗不完整的问题，支持中英文引号
+- fix: 修复数据库更新异常未独立捕获的问题，分离数据库操作和 LLM 调用异常处理
+
 ## [0.2.7] - 2026-04-24
 
 ### Refactor

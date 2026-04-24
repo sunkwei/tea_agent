@@ -134,18 +134,29 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
     Args:
         client: OpenAI 客户端实例
         model: 模型名称
-        conversations: 最近的对话列表（按时间正序）
+        conversations: 最近的对话列表（按时间正序），包含 user_msg 和 ai_msg
 
     Returns:
         不超过20字的摘要字符串；若生成失败则返回 None
     """
+    if not conversations:
+        return None
+        
     user_msgs = []
     for conv in conversations:
         um = conv.get("user_msg", "").strip()
+        ai = conv.get("ai_msg", "").strip()
+        
         if um:
             if len(um) > 200:
                 um = um[:200] + "..."
             user_msgs.append(f"用户：{um}")
+        
+        # 同时提取 AI 回复，提供更完整的上下文
+        if ai:
+            if len(ai) > 200:
+                ai = ai[:200] + "..."
+            user_msgs.append(f"AI：{ai}")
 
     if not user_msgs:
         return None
@@ -164,10 +175,24 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
             temperature=0.3,
             max_tokens=50,
         )
-        raw = response.choices[0].message.content.strip()
-        raw = re.sub(r'^["""\']+|["""\']+$', '', raw).strip()
+        
+        # 安全检查返回值
+        if not response.choices or len(response.choices) == 0:
+            return None
+            
+        content = response.choices[0].message.content
+        if not content or not isinstance(content, str):
+            return None
+            
+        raw = content.strip()
+        raw = re.sub(r'^["""\'""\']+|["""\'""\']+$', '', raw).strip()
+        
+        if not raw:
+            return None
+            
         if len(raw) > 20:
             raw = raw[:20]
+            
         return raw if raw else None
     except Exception:
         return None
@@ -565,10 +590,15 @@ class TkGUI:
                 conversations=recent,
             )
             if summary:
-                self.db.update_topic_title(self.current_topic_id, summary)
-                self.root.after(0, self._refresh_topics_preserve_selection)
-                if self.sess.tool_log:
-                    self.sess.tool_log(f"📝 Topic摘要已更新: {summary}")
+                try:
+                    self.db.update_topic_title(self.current_topic_id, summary)
+                    self.root.after(0, self._refresh_topics_preserve_selection)
+                    if self.sess.tool_log:
+                        self.sess.tool_log(f"📝 Topic摘要已更新: {summary}")
+                except Exception as db_e:
+                    if self.sess and self.sess.tool_log:
+                        self.sess.tool_log(f"⚠️ Topic摘要数据库更新失败: {db_e}")
+                        self.sess.tool_log(traceback.format_exc())
         except Exception as e:
             if self.sess and self.sess.tool_log:
                 self.sess.tool_log(f"⚠️ Topic摘要生成失败: {e}")

@@ -24,13 +24,77 @@ class SessionAPIMixin:
         if not hasattr(self, 'model'):
             self.model: str = ""
         self.enable_thinking: bool = True
-        self._thinking_supported: Optional[bool] = None
+        # thinking 支持状态：分别记录主模型和便宜模型
+        self._thinking_supported: Optional[bool] = None  # 主模型
+        self._cheap_thinking_supported: Optional[bool] = None  # 便宜模型
         self.tool_log: Optional[Callable[[str], None]] = None
         self._last_usage: Dict[str, int] = {
             "total_tokens": 0,
             "prompt_tokens": 0,
             "completion_tokens": 0,
         }
+
+    def _probe_thinking_support(self, client=None, model=None, is_cheap=False):
+        """
+        检测模型是否支持 thinking。
+        仅检测一次，避免每次 API 调用都重复检测。
+        
+        Args:
+            client: OpenAI 客户端实例（默认为主客户端）
+            model: 模型名称（默认为主模型）
+            is_cheap: 是否为便宜模型
+        """
+        # 根据 is_cheap 选择要检查和更新的状态字段
+        if is_cheap:
+            if self._cheap_thinking_supported is not None:
+                return  # 已经检测过
+        else:
+            if self._thinking_supported is not None:
+                return  # 已经检测过
+        
+        target_client = client or self.client
+        target_model = model or self.model
+        
+        if not self.enable_thinking or not target_client:
+            return
+        
+        try:
+            # 发送一个极简请求来检测 thinking 支持
+            test_response = target_client.chat.completions.create(
+                model=target_model,
+                messages=[{"role": "user", "content": "Hi"}],
+                stream=False,
+                extra_body={"thinking": {"type": "enabled"}},
+                max_tokens=10,
+            )
+            
+            # 更新对应的状态
+            if is_cheap:
+                self._cheap_thinking_supported = True
+            else:
+                self._thinking_supported = True
+                
+            if self.tool_log:
+                model_type = "便宜模型" if is_cheap else "主模型"
+                self.tool_log(f"🧠 {model_type}支持 thinking，已启用")
+        except Exception as e:
+            err_str = str(e).lower()
+            if ('thinking' in err_str or 'extra_body' in err_str or
+                    'unsupported' in err_str or 'invalid' in err_str):
+                # 更新对应的状态
+                if is_cheap:
+                    self._cheap_thinking_supported = False
+                else:
+                    self._thinking_supported = False
+                    
+                if self.tool_log:
+                    model_type = "便宜模型" if is_cheap else "主模型"
+                    self.tool_log(f"⚠️ {model_type}不支持 thinking，已禁用")
+            else:
+                # 其他错误，不影响 thinking 检测，保持 None 状态
+                if self.tool_log:
+                    model_type = "便宜模型" if is_cheap else "主模型"
+                    self.tool_log(f"⚠️ {model_type} thinking 检测时出错: {e}")
 
     def _accumulate_usage(self, usage):
         """从 API 响应中累积 token 用量"""
@@ -49,19 +113,25 @@ class SessionAPIMixin:
         if u["total_tokens"] == 0 and u["prompt_tokens"] and u["completion_tokens"]:
             u["total_tokens"] = u["prompt_tokens"] + u["completion_tokens"]
 
-    def _create_chat_stream(self, api_messages: List[Dict], tools: List[Dict]):
+    def _create_chat_stream(self, api_messages: List[Dict], tools: List[Dict], client=None, model=None, is_cheap=False):
         """
-        创建流式聊天请求，支持 thinking 自动检测和降级。
+        创建流式聊天请求。
 
         Args:
             api_messages: 紧凑消息列表
             tools: 工具定义列表
+            client: OpenAI 客户端实例（默认为主客户端）
+            model: 模型名称（默认为主模型）
+            is_cheap: 是否为便宜模型（用于选择对应的 thinking 状态）
 
         Returns:
             流式响应迭代器
         """
+        target_client = client or self.client
+        target_model = model or self.model
+        
         kwargs = {
-            "model": self.model,
+            "model": target_model,
             "messages": api_messages,
             "tools": tools,
             "tool_choice": "auto",
@@ -69,38 +139,16 @@ class SessionAPIMixin:
             "stream_options": {"include_usage": True},
         }
 
-        should_try_thinking = (
-            self.enable_thinking
-            and self._thinking_supported is not False
-        )
-        if should_try_thinking:
+        # 根据对应的 thinking 状态决定是否启用
+        if is_cheap:
+            thinking_supported = self._cheap_thinking_supported
+        else:
+            thinking_supported = self._thinking_supported
+            
+        if self.enable_thinking and thinking_supported:
             kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
 
-        try:
-            response = self.client.chat.completions.create(**kwargs)
-            # 调用成功，确认支持 thinking
-            if should_try_thinking and self._thinking_supported is None:
-                self._thinking_supported = True
-                if self.tool_log:
-                    self.tool_log("🧠 模型支持 thinking，已启用")
-            return response
-        except Exception as think_err:
-            # 判断是否为 thinking 不支持的错误
-            if should_try_thinking and self._thinking_supported is None:
-                err_str = str(think_err).lower()
-                if ('thinking' in err_str or 'extra_body' in err_str or
-                        'unsupported' in err_str or 'invalid' in err_str):
-                    # 降级：不带 thinking 重试
-                    self._thinking_supported = False
-                    if self.tool_log:
-                        self.tool_log("⚠️ 模型不支持 thinking，已自动降级")
-                    kwargs.pop("extra_body", None)
-                    return self.client.chat.completions.create(**kwargs)
-                else:
-                    # 非 thinking 相关错误，向上抛出
-                    raise
-            else:
-                raise
+        return target_client.chat.completions.create(**kwargs)
 
     def process_stream_response(self, response, callback: Callable[[str], None]) -> Tuple[str, List[Dict]]:
         """

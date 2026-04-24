@@ -149,6 +149,17 @@ class OnlineToolSession(
         self.reset_summary_state()
         self.reset_usage()
         self._rounds_collector = []
+        
+        # 在会话初始化时检测一次主模型的 thinking 支持
+        self._probe_thinking_support()
+        
+        # 检测便宜模型的 thinking 支持
+        if self._cheap_client and self._cheap_model_name:
+            self._probe_thinking_support(
+                client=self._cheap_client,
+                model=self._cheap_model_name,
+                is_cheap=True
+            )
 
     # ──────────────────────────────────────────────
     # 核心对话流程

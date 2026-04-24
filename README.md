@@ -46,9 +46,9 @@ python -m tea_agent.main_db_gui
   - `basesession.py`: 聊天会话抽象基类 `BaseChatSession`。
   - `onlinesession.py`: `OnlineToolSession` 主类，组合各 mixin，编排对话流程。
   - `session_memory.py`: 记忆注入、LLM 提取、保存。
-  - `session_summarizer.py`: 历史摘要、Topic 摘要、消息压缩。
+  - `session_summarizer.py`: 历史摘要、Topic 摘要、消息压缩（基于记忆优先级策略）。
   - `session_tool.py`: 工具执行、rounds 收集、工具调用解析。
-  - `session_api.py`: API 调用、流式响应处理、thinking 降级、token 统计。
+  - `session_api.py`: API 调用、流式响应处理、thinking 检测（主/便宜模型分别记录）、token 统计。
   - `session_prompts.py`: Prompt 模板常量。
   - `memory.py`: 记忆提取与管理逻辑。
   - `store.py`: 基于 SQLite 的持久化存储（对话历史、记忆、主题）。

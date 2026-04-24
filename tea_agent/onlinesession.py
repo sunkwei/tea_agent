@@ -163,6 +163,8 @@ class OnlineToolSession(
             "deepseek-r2",
             "deepseek-r3",
             "deepseek-r4",
+            "deepseek-v4-pro",
+            "deepseek-v4-flash",
         ]
         
         # 检查是否包含 deepseek 且包含 r/r1/r2 等推理标识
@@ -176,16 +178,9 @@ class OnlineToolSession(
         处理 DeepSeek 推理模型的 reasoning_content 字段。
 
         DeepSeek 推理模型的特殊规则：
-        1. 未进行工具调用的轮次：如果 assistant 消息包含 reasoning_content，
-           下一轮请求中必须移除它，否则 API 返回 400 错误
-        2. 进行了工具调用的轮次：在后续所有请求中，必须完整回传 reasoning_content，
-           否则 API 也会报错
-
-        判断逻辑：
-        - 如果 assistant 消息有 tool_calls 且后续有对应的 tool 消息 → 该轮次进行了工具调用
-          → 必须在后续所有请求中保留 reasoning_content
-        - 如果 assistant 消息没有 tool_calls → 未进行工具调用
-          → 必须移除 reasoning_content
+        1. 在多轮对话中，如果之前的 assistant 消息包含 reasoning_content，
+           必须在后续请求中完整回传该字段，否则 API 会返回 400 错误。
+        2. 无论是否进行了工具调用，reasoning_content 都必须保留。
 
         Args:
             messages: 原始消息列表
@@ -193,46 +188,9 @@ class OnlineToolSession(
         Returns:
             处理后的消息列表
         """
-        if not self._is_deepseek_reasoning:
-            return messages
-
-        # 第一步：标记哪些 assistant 消息进行了工具调用
-        tool_call_round_indices = set()  # 记录进行了工具调用的 assistant 消息索引
-
-        for i, msg in enumerate(messages):
-            if msg.get("role") == "assistant" and "tool_calls" in msg and msg["tool_calls"]:
-                # 检查后续是否有对应的 tool 消息
-                has_corresponding_tool = False
-                tool_call_ids = {tc.get("id") for tc in msg["tool_calls"] if tc.get("id")}
-
-                for j in range(i + 1, len(messages)):
-                    next_msg = messages[j]
-                    if next_msg.get("role") == "tool":
-                        # 检查是否对应这个 assistant 的工具调用
-                        if next_msg.get("tool_call_id") in tool_call_ids:
-                            has_corresponding_tool = True
-                    elif next_msg.get("role") == "assistant":
-                        # 遇到下一个 assistant 消息，停止检查
-                        break
-
-                if has_corresponding_tool:
-                    tool_call_round_indices.add(i)
-
-        # 第二步：处理消息
-        processed = []
-        for i, msg in enumerate(messages):
-            if msg.get("role") == "assistant" and "reasoning_content" in msg:
-                # 如果该轮次进行了工具调用，保留 reasoning_content
-                if i in tool_call_round_indices:
-                    processed.append(msg)  # 保留完整的 reasoning_content
-                else:
-                    # 否则移除 reasoning_content
-                    filtered_msg = {k: v for k, v in msg.items() if k != "reasoning_content"}
-                    processed.append(filtered_msg)
-            else:
-                processed.append(msg)
-
-        return processed
+        # DeepSeek 推理模型要求在后续对话中必须回传 reasoning_content
+        # 之前的逻辑在非工具调用轮次删除了它，导致了 400 错误
+        return messages
 
     def _process_stream_with_reasoning(self, response, callback) -> Tuple[str, List[Dict], str]:
         """

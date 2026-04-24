@@ -53,9 +53,99 @@ def toolkit_reload() -> Dict:
     return tlk.reload()
 
 
-def toolkit_save(name: str, meta: dict, pycode: str) -> Tuple[int, str]:
+def toolkit_save(name: str, meta: dict, pycode: str, version: str = "") -> Tuple[int, str]:
+    """
+    保存工具函数，支持版本管理。
+    
+    Args:
+        name: 工具函数名
+        meta: 工具元数据
+        pycode: 工具函数代码
+        version: 版本号（可选），不提供则自动递增
+        
+    Returns:
+        Tuple[int, str]: (状态码, 消息)
+    """
     tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    return tlk.save(name, meta, pycode)
+    return tlk.save(name, meta, pycode, version)
+
+
+def toolkit_rollback(name: str, version: str) -> Tuple[int, str]:
+    """回滚工具到指定版本"""
+    tlk = cast(Toolkit, globals().get("_toolkit_", None))
+    return tlk.rollback(name, version)
+
+
+def toolkit_list_versions(name: str) -> Tuple[int, List[str]]:
+    """列出工具的所有可用版本"""
+    tlk = cast(Toolkit, globals().get("_toolkit_", None))
+    return tlk.list_versions(name)
+
+
+def meta_toolkit_rollback():
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_rollback",
+            "description": "回滚工具到指定版本。用于撤销有问题的工具更新。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "工具函数名，如 toolkit_my_tool"
+                    },
+                    "version": {
+                        "type": "string",
+                        "description": "要回滚到的版本号，如 1.0.0"
+                    }
+                },
+                "required": ["name", "version"]
+            }
+        }
+    }
+
+
+def meta_toolkit_list_versions():
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_list_versions",
+            "description": "列出工具的所有可用版本。用于查看工具的历史版本。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "工具函数名，如 toolkit_my_tool"
+                    }
+                },
+                "required": ["name"]
+            }
+        }
+    }
+
+
+def toolkit_rollback_impl(name: str, version: str) -> str:
+    """回滚工具到指定版本"""
+    tlk = cast(Toolkit, globals().get("_toolkit_", None))
+    status, msg = tlk.rollback(name, version)
+    if status == 0:
+        return f"✅ {msg}"
+    else:
+        return f"❌ {msg}"
+
+
+def toolkit_list_versions_impl(name: str) -> str:
+    """列出工具的所有可用版本"""
+    tlk = cast(Toolkit, globals().get("_toolkit_", None))
+    status, versions = tlk.list_versions(name)
+    if status == 0:
+        if not versions:
+            return f"工具 {name} 没有历史版本。"
+        return f"工具 {name} 的版本：\n" + "\n".join(f"  - v{v}" for v in versions)
+    else:
+        return f"❌ {versions}"
 
 # ========== Memory 工具函数 ==========
 
@@ -297,6 +387,12 @@ class Toolkit:
         self.func_map["toolkit_save"] = toolkit_save
         self.meta_map["toolkit_save"] = meta_toolkit_save()
 
+        self.func_map["toolkit_rollback"] = toolkit_rollback_impl
+        self.meta_map["toolkit_rollback"] = meta_toolkit_rollback()
+
+        self.func_map["toolkit_list_versions"] = toolkit_list_versions_impl
+        self.meta_map["toolkit_list_versions"] = meta_toolkit_list_versions()
+
         self.func_map["toolkit_memory_search"] = toolkit_memory_search
         self.meta_map["toolkit_memory_search"] = meta_toolkit_memory_search()
 
@@ -307,11 +403,23 @@ class Toolkit:
         self.meta_map["toolkit_memory_stats"] = meta_toolkit_memory_stats()
 
         result["valid_tool"] = {k: {"func": v, "meta": self.meta_map[k]} for k, v in self.func_map.items() if k not in (
-            "toolkit_reload", "toolkit_save", "toolkit_memory_search", "toolkit_memory_recent", "toolkit_memory_stats")}
+            "toolkit_reload", "toolkit_save", "toolkit_rollback", "toolkit_list_versions", "toolkit_memory_search", "toolkit_memory_recent", "toolkit_memory_stats")}
 
         return result
 
-    def save(self, name: str, meta: dict, pycode: str) -> Tuple[int, str]:
+    def save(self, name: str, meta: dict, pycode: str, version: str = "") -> Tuple[int, str]:
+        """
+        保存工具函数到文件，支持版本管理。
+        
+        Args:
+            name: 工具函数名
+            meta: 工具元数据
+            pycode: 工具函数代码
+            version: 版本号（可选），格式如 "1.0.0"。如果不提供，自动递增
+            
+        Returns:
+            Tuple[int, str]: (状态码, 消息)
+        """
         meta_exam = {
             "type": "function",
             "function": {
@@ -374,12 +482,100 @@ class Toolkit:
         if func_def is None:
             return (3, f"Function '{name}' not found in pycode")
 
-        # 通过校验，写入文件
+        # 3. 版本管理
+        # 如果文件已存在，备份旧版本
+        if osp.exists(filename):
+            # 读取现有文件的版本号
+            with open(filename, "r", encoding="utf-8") as f:
+                old_content = f.read()
+            
+            # 自动提取版本号并递增
+            if not version:
+                import re
+                version_match = re.search(r'# version:\s*([\d.]+)', old_content)
+                if version_match:
+                    old_version = version_match.group(1)
+                    # 递增最后一位
+                    parts = old_version.split('.')
+                    parts[-1] = str(int(parts[-1]) + 1)
+                    version = '.'.join(parts)
+                else:
+                    version = "1.0.0"
+            
+            # 创建备份
+            backup_name = f"{name}.v{version}.bak.py"
+            backup_path = osp.join(toolkit_path, backup_name)
+            import shutil
+            shutil.copy2(filename, backup_path)
+        
+        # 如果没有提供版本号，使用默认的 "1.0.0"
+        if not version:
+            version = "1.0.0"
+
+        # 4. 通过校验，写入文件（带版本注释）
         with open(filename, "w", encoding="utf-8") as f:
-            f.write(f"## llm generated tool func, created {time.asctime()}\n\n")
+            f.write(f"## llm generated tool func, created {time.asctime()}\n")
+            f.write(f"# version: {version}\n\n")
             f.write(pycode)
             f.write("\n\n")
             f.write(f"def meta_{name}() -> dict:\n")
             f.write(f"    return {json.dumps(meta, ensure_ascii=False)}\n")
 
-        return (0, "ok")
+        return (0, f"ok (v{version})")
+    
+    def rollback(self, name: str, version: str) -> Tuple[int, str]:
+        """
+        回滚工具到指定版本。
+        
+        Args:
+            name: 工具函数名
+            version: 要回滚到的版本号
+            
+        Returns:
+            Tuple[int, str]: (状态码, 消息)
+        """
+        toolkit_path = self.tool_dir
+        backup_name = f"{name}.v{version}.bak.py"
+        backup_path = osp.join(toolkit_path, backup_name)
+        filename = osp.join(toolkit_path, f"{name}.py")
+        
+        if not osp.exists(backup_path):
+            return (1, f"Version {version} backup not found for {name}")
+        
+        import shutil
+        # 备份当前版本
+        if osp.exists(filename):
+            current_backup = f"{name}.current.bak.py"
+            current_backup_path = osp.join(toolkit_path, current_backup)
+            shutil.copy2(filename, current_backup_path)
+        
+        # 恢复旧版本
+        shutil.copy2(backup_path, filename)
+        
+        return (0, f"Rolled back {name} to v{version}")
+    
+    def list_versions(self, name: str) -> Tuple[int, List[str]]:
+        """
+        列出工具的所有可用版本。
+        
+        Args:
+            name: 工具函数名
+            
+        Returns:
+            Tuple[int, List[str]]: (状态码, 版本列表)
+        """
+        toolkit_path = self.tool_dir
+        versions = []
+        
+        # 查找所有备份文件
+        pattern = f"{name}.v"
+        for filename in os.listdir(toolkit_path):
+            if filename.startswith(pattern) and filename.endswith(".bak.py"):
+                # 提取版本号
+                version = filename[len(pattern):-len(".bak.py")]
+                versions.append(version)
+        
+        # 排序版本号
+        versions.sort(key=lambda v: [int(x) for x in v.split('.')])
+        
+        return (0, versions)

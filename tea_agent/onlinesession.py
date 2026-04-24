@@ -19,6 +19,7 @@ from tea_agent.session_summarizer import SessionSummarizerMixin
 from tea_agent.session_tool import SessionToolMixin
 from tea_agent.session_api import SessionAPIMixin
 from tea_agent.session_prompts import COMPACT_SYSTEM_PROMPT
+from tea_agent.session_pipeline import SessionPipeline
 
 
 class OnlineToolSession(
@@ -123,81 +124,89 @@ class OnlineToolSession(
         # 工具定义
         self.tools: List[Dict] = []
         self._build_tools()
+        
+        # 初始化 Pipeline
+        self.pipeline = SessionPipeline()
+        self._setup_default_pipeline()
 
     # ──────────────────────────────────────────────
     # 基础方法
     # ──────────────────────────────────────────────
 
-    def _build_tools(self):
-        """构建工具定义列表"""
-        self.tools = super()._build_tools()
-
-    def update_tools(self):
-        """重新加载并刷新工具定义"""
-        self.toolkit.reload()
-        self._build_tools()
-
-    def _get_summarize_client(self) -> Tuple[Any, str]:
-        """获取用于摘要/提取任务的客户端和模型名。"""
-        if self._cheap_client and self._cheap_model_name:
-            return self._cheap_client, self._cheap_model_name
-        return self.client, self.model
-
-    def reset_session_state(self):
-        """重置会话状态（用于新会话开始前）"""
-        self.reset_memory_state()
-        self.reset_summary_state()
-        self.reset_usage()
-        self._rounds_collector = []
-        
-        # 在会话初始化时检测一次主模型的 thinking 支持
-        self._probe_thinking_support()
-        
-        # 检测便宜模型的 thinking 支持
-        if self._cheap_client and self._cheap_model_name:
-            self._probe_thinking_support(
-                client=self._cheap_client,
-                model=self._cheap_model_name,
-                is_cheap=True
-            )
-
-    # ──────────────────────────────────────────────
-    # 核心对话流程
-    # ──────────────────────────────────────────────
-
-    def chat_stream(self, msg: str, callback: Callable[[str], None]) -> Tuple[str, bool]:
-        """
-        流式对话，支持工具调用。
-
-        Args:
-            msg: 用户消息
-            callback: 流式输出回调函数
-
-        Returns:
-            Tuple[str, bool]: (助手完整回复, 是否使用了工具调用)
-        """
-        self.reset_interrupt()
-        self.reset_session_state()
-
+    def _setup_default_pipeline(self):
+        """设置默认的 Pipeline 步骤"""
         # 1. 注入记忆
-        self._inject_memories()
-
+        self.pipeline.register_step(
+            name="inject_memories",
+            func=lambda ctx: (self._inject_memories(), {})[1],
+            enabled=True,
+            description="注入重要记忆到上下文",
+            position=10,
+        )
+        
         # 2. 添加用户消息
-        self.add_user_message(msg)
-
+        self.pipeline.register_step(
+            name="add_user_message",
+            func=lambda ctx: (self.add_user_message(ctx.get("user_msg", "")), {})[1],
+            enabled=True,
+            description="添加用户消息到会话历史",
+            position=20,
+        )
+        
         # 3. 摘要旧历史
-        self._summarize_old_history()
+        self.pipeline.register_step(
+            name="summarize_old_history",
+            func=lambda ctx: (self._summarize_old_history(), {})[1],
+            enabled=True,
+            description="将旧对话历史压缩为摘要",
+            position=30,
+        )
+        
+        # 4. 工具调用循环（核心）
+        self.pipeline.register_step(
+            name="tool_loop",
+            func=self._execute_tool_loop,
+            enabled=True,
+            description="执行工具调用循环",
+            position=40,
+        )
+        
+        # 5. 提取记忆
+        self.pipeline.register_step(
+            name="extract_memory",
+            func=lambda ctx: (self._save_conversation_memory(), {})[1],
+            enabled=True,
+            description="从对话中提取并保存记忆",
+            position=50,
+        )
 
+    def _execute_tool_loop(self, context: Dict) -> Dict:
+        """
+        执行工具调用循环。
+        
+        Args:
+            context: 上下文，包含 msg, callback 等
+            
+        Returns:
+            结果字典，包含 full_reply, used_tools 等
+        """
+        msg = context.get("msg", "")
+        callback = context.get("callback", lambda x: None)
+        
         full_reply = ""
         used_tools = False
         iterations = 0
-
+        
         while iterations < self.max_iterations:
             if self.interrupted:
                 final_msg = full_reply + "\n[已打断]"
                 self.add_assistant_message(final_msg)
                 self._collect_interruption_round(final_msg)
-                return final_msg, used_tools
+                return {
+                    "full_reply": final_msg,
+                    "used_tools": used_tools,
+                    "interrupted": True,
+                }
 
             api_messages = self._build_api_messages()
 
@@ -208,7 +217,11 @@ class OnlineToolSession(
                 callback(error_msg)
                 self.add_assistant_message(full_reply + error_msg)
                 self._collect_api_error_round(full_reply + error_msg)
-                return full_reply + error_msg, used_tools
+                return {
+                    "full_reply": full_reply + error_msg,
+                    "used_tools": used_tools,
+                    "error": e,
+                }
 
             # 处理流式响应
             content, tool_calls_data = self.process_stream_response(response, callback)
@@ -274,8 +287,78 @@ class OnlineToolSession(
             full_reply += warning
             self.add_assistant_message(full_reply)
             self._collect_max_iterations_round(full_reply)
+        
+        return {
+            "full_reply": full_reply,
+            "used_tools": used_tools,
+            "iterations": iterations,
+        }
 
-        # 自动提取并保存记忆
-        self._save_conversation_memory()
+    def _build_tools(self):
+        """构建工具定义列表"""
+        self.tools = super()._build_tools()
 
+    def update_tools(self):
+        """重新加载并刷新工具定义"""
+        self.toolkit.reload()
+        self._build_tools()
+
+    def _get_summarize_client(self) -> Tuple[Any, str]:
+        """获取用于摘要/提取任务的客户端和模型名。"""
+        if self._cheap_client and self._cheap_model_name:
+            return self._cheap_client, self._cheap_model_name
+        return self.client, self.model
+
+    def reset_session_state(self):
+        """重置会话状态（用于新会话开始前）"""
+        self.reset_memory_state()
+        self.reset_summary_state()
+        self.reset_usage()
+        self._rounds_collector = []
+        
+        # 在会话初始化时检测一次主模型的 thinking 支持
+        self._probe_thinking_support()
+        
+        # 检测便宜模型的 thinking 支持
+        if self._cheap_client and self._cheap_model_name:
+            self._probe_thinking_support(
+                client=self._cheap_client,
+                model=self._cheap_model_name,
+                is_cheap=True
+            )
+
+    # ──────────────────────────────────────────────
+    # 核心对话流程
+    # ──────────────────────────────────────────────
+
+    def chat_stream(self, msg: str, callback: Callable[[str], None]) -> Tuple[str, bool]:
+        """
+        流式对话，支持工具调用。
+        
+        使用 Pipeline 执行可配置的步骤。
+
+        Args:
+            msg: 用户消息
+            callback: 流式输出回调函数
+
+        Returns:
+            Tuple[str, bool]: (助手完整回复, 是否使用了工具调用)
+        """
+        self.reset_interrupt()
+        self.reset_session_state()
+
+        # 构建执行上下文
+        context = {
+            "user_msg": msg,
+            "msg": msg,
+            "callback": callback,
+        }
+
+        # 执行 Pipeline
+        result = self.pipeline.execute(context)
+        
+        # 提取结果
+        full_reply = result.get("full_reply", "")
+        used_tools = result.get("used_tools", False)
+        
         return full_reply, used_tools

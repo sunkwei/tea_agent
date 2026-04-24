@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-04-24
+
+### New Features
+- feat: 实现插件化会话流程（Pipeline 架构）
+  - 新增 `session_pipeline.py` 模块，管理对话流程步骤
+  - 将 `chat_stream` 拆分为 5 个可配置步骤：注入记忆、添加用户消息、摘要旧历史、工具循环、提取记忆
+  - 支持启用/禁用步骤、重新排序、插入自定义步骤、跳过步骤
+  - 步骤通过名称标识，可以灵活组合
+  
+- feat: 实现工具版本管理
+  - `toolkit_save` 新增 `version` 参数，支持指定版本号
+  - 保存工具时自动备份旧版本（格式：`{name}.v{version}.bak.py`）
+  - 自动递增版本号（如果不提供）
+  - 新增 `toolkit_rollback` 工具，支持回滚到指定版本
+  - 新增 `toolkit_list_versions` 工具，列出所有可用版本
+  - 版本备份文件带有时间戳和版本号注释
+
 ## [0.2.9] - 2026-04-24
 
 ### New Features

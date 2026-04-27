@@ -76,10 +76,6 @@ class BaseChatSession(ABC):
         """
         从数据库加载历史记录，含中间工具调用链。
 
-        如果对话有 rounds_json_parsed，则从中重建完整的工具调用链
-        （assistant tool_calls → tool results → assistant final answer），
-        确保 LLM 后续对话能获得正确的工具调用上下文。
-
         Args:
             conversations: 对话记录列表，每条含 user_msg, ai_msg,
                            is_func_calling, rounds_json_parsed 等字段

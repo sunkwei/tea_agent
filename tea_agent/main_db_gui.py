@@ -11,6 +11,7 @@ import traceback
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, cast, Callable, Optional, List, Tuple
+import logging
 
 try:
     from tkinterweb import HtmlFrame
@@ -18,6 +19,8 @@ try:
     HAS_TKINTERWEB = True
 except ImportError:
     HAS_TKINTERWEB = False
+
+logger = logging.getLogger("main_db_gui")
 
 # ====================== 包导入兼容处理 ======================
 if __name__ == "__main__":
@@ -200,7 +203,8 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
 
 # ====================== GUI 主界面 ======================
 class TkGUI:
-    def __init__(self, root):
+    def __init__(self, root, debug:bool=False):
+        self.debug = debug
         self.root = root
         self.root.title("AI 工具调用助手")
         self.root.geometry("1100x750")
@@ -208,11 +212,13 @@ class TkGUI:
 
         root_path = Path.home() / ".tea_agent"
         if not root_path.exists():
+            logger.info(f"create user path: '{root_path}'")
             os.makedirs(root_path, exist_ok=True)
 
         db_path = root_path / "chat_history.db"
         tool_dir = root_path / "toolkit"
         if not tool_dir.exists():
+            logger.info(f"create user toolkit path: '{tool_dir}'")
             os.makedirs(tool_dir, exist_ok=True)
 
         self.db = Storage(db_path=str(db_path))
@@ -715,11 +721,10 @@ class TkGUI:
             self._update_status("🛑 已打断")
 
 
-def main():
+def main(debug:bool=False, no_gui:bool=False):
+    if no_gui:
+        raise NotImplementedError("No GUI mode is not implemented yet.")
+    
     root = tk.Tk()
-    app = TkGUI(root)
+    app = TkGUI(root, debug=debug)
     root.mainloop()
-
-
-if __name__ == "__main__":
-    main()

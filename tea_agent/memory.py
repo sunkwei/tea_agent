@@ -9,7 +9,9 @@ import os
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional, cast
+import logging
 
+logger = logging.getLogger("memory")
 
 class Memory:
     """
@@ -37,6 +39,8 @@ class Memory:
         self.db_path = db_path if db_path else self.DB_PATH
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._init_db()
+        logger.info(f"using memory db: {self.DB_PATH}")
+
 
     def _get_conn(self) -> sqlite3.Connection:
         """获取数据库连接，启用 WAL 模式和性能优化"""
@@ -106,6 +110,8 @@ class Memory:
         tags = tags or []
         tags_json = json.dumps(tags, ensure_ascii=False)
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        logger.warning(f"add new memory:\nsummary: {summary}\ncategory: {category}\nimportance: {importance}\ntags: {tags}")
 
         conn = self._get_conn()
         try:

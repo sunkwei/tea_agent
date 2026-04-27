@@ -4,7 +4,9 @@ import json
 import os
 import os.path as osp
 import time
+import logging
 
+logger = logging.getLogger("tookit")
 
 def meta_toolkit_reload():
     return {
@@ -148,8 +150,6 @@ def toolkit_list_versions_impl(name: str) -> str:
         return f"❌ {versions}"
 
 # ========== Memory 工具函数 ==========
-
-
 def meta_toolkit_memory_search():
     return {
         "type": "function",
@@ -285,9 +285,9 @@ def toolkit_memory_stats() -> str:
         lines.append(f"  {cat}: {cnt} 条")
     return "\n".join(lines)
 
-
 class Toolkit:
     def __init__(self, tool_dir=None):
+        
         self.func_map: Dict[str, Callable] = {}
         self.meta_map: Dict[str, dict] = {}
 
@@ -304,6 +304,7 @@ class Toolkit:
         os.makedirs(self.tool_dir, exist_ok=True)
 
         self.reload()
+        logger.info(f"Loaded {len(self.func_map)} toolkit functions from {self.tool_dir}")
 
     def reload(self) -> Dict:
         result = {
@@ -441,6 +442,7 @@ class Toolkit:
                 }
             }
         }
+
         meta_exam_str = json.dumps(meta_exam, ensure_ascii=False)
         toolkit_path = self.tool_dir
         filename = osp.join(toolkit_path, f"{name}.py")
@@ -520,6 +522,8 @@ class Toolkit:
             f.write("\n\n")
             f.write(f"def meta_{name}() -> dict:\n")
             f.write(f"    return {json.dumps(meta, ensure_ascii=False)}\n")
+
+        logger.warning(f"save toolkit function: {name}, version:{version}\n==> meta:\n{json.dumps(meta, indent=4)}\n==> pycode:\n{pycode}\n")
 
         return (0, f"ok (v{version})")
     

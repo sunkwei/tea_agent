@@ -12,6 +12,7 @@ Token 优化策略:
 
 from openai import OpenAI
 from typing import List, Dict, Callable, Tuple, Any, Optional
+import logging
 
 from tea_agent.basesession import BaseChatSession
 from tea_agent.session_memory import SessionMemoryMixin
@@ -21,6 +22,7 @@ from tea_agent.session_api import SessionAPIMixin
 from tea_agent.session_prompts import COMPACT_SYSTEM_PROMPT
 from tea_agent.session_pipeline import SessionPipeline
 
+logger = logging.getLogger("session")
 
 class OnlineToolSession(
     BaseChatSession,
@@ -100,6 +102,8 @@ class OnlineToolSession(
         SessionToolMixin.__init__(self)
         SessionAPIMixin.__init__(self)
 
+        logger.info(f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}")
+
         self.toolkit = toolkit
         self.client = OpenAI(api_key=api_key, base_url=api_url)
         self.max_iterations = max_iterations
@@ -131,10 +135,6 @@ class OnlineToolSession(
         # 初始化 Pipeline
         self.pipeline = SessionPipeline()
         self._setup_default_pipeline()
-
-    # ──────────────────────────────────────────────
-    # 基础方法
-    # ──────────────────────────────────────────────
 
     def _check_deepseek_reasoning_model(self, model: str) -> bool:
         """
@@ -239,7 +239,7 @@ class OnlineToolSession(
         # 1. 注入记忆
         self.pipeline.register_step(
             name="inject_memories",
-            func=lambda ctx: (self._inject_memories(), {})[1],
+            func=lambda ctx: (self._inject_memories(), self.messages)[1],
             enabled=True,
             description="注入重要记忆到上下文",
             position=10,
@@ -248,7 +248,7 @@ class OnlineToolSession(
         # 2. 添加用户消息
         self.pipeline.register_step(
             name="add_user_message",
-            func=lambda ctx: (self.add_user_message(ctx.get("user_msg", "")), {})[1],
+            func=lambda ctx: (self.add_user_message(ctx.get("user_msg", "")), self.messages)[1],
             enabled=True,
             description="添加用户消息到会话历史",
             position=20,
@@ -257,7 +257,7 @@ class OnlineToolSession(
         # 3. 摘要旧历史
         self.pipeline.register_step(
             name="summarize_old_history",
-            func=lambda ctx: (self._summarize_old_history(), {})[1],
+            func=lambda ctx: (self._summarize_old_history(), self.messages)[1],
             enabled=True,
             description="将旧对话历史压缩为摘要",
             position=30,
@@ -439,10 +439,6 @@ class OnlineToolSession(
                 is_cheap=True
             )
 
-    # ──────────────────────────────────────────────
-    # 核心对话流程
-    # ──────────────────────────────────────────────
-
     def chat_stream(self, msg: str, callback: Callable[[str], None]) -> Tuple[str, bool]:
         """
         流式对话，支持工具调用。
@@ -456,6 +452,9 @@ class OnlineToolSession(
         Returns:
             Tuple[str, bool]: (助手完整回复, 是否使用了工具调用)
         """
+
+        logger.debug(f"chat_stream: user message: {msg}")
+
         self.reset_interrupt()
         self.reset_session_state()
 

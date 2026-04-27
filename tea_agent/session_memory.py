@@ -11,13 +11,15 @@
 import json
 import re
 from typing import List, Dict, Any, Optional, Callable
+import logging
+
+logger = logging.getLogger("session_memory")
 
 from tea_agent.session_prompts import (
     MEMORY_EXTRACT_SYSTEM,
     MEMORY_EXTRACT_USER_TEMPLATE,
     VALID_MEMORY_CATEGORIES,
 )
-
 
 class SessionMemoryMixin:
     """
@@ -93,6 +95,8 @@ class SessionMemoryMixin:
             if self.tool_log:
                 self.tool_log(f"🧠 已准备 {len(combined)} 条记忆注入")
 
+            logger.debug(f"注入了 {len(combined)} 条记忆, ==> memory text\n{self._memory_text}\n")
+
         except Exception as e:
             self._log_memory_error("记忆注入", e)
 
@@ -156,6 +160,8 @@ class SessionMemoryMixin:
             # 解析并规范化
             memories = self._parse_and_normalize_memories(raw_response)
 
+            logger.debug(f"提取到了 {len(memories)} 条记忆, ==> raw response:\n{json.dumps(raw_response, ensure_ascii=False, indent=4)}\n")
+
             return memories
 
         except Exception as e:
@@ -206,6 +212,7 @@ class SessionMemoryMixin:
         """
         cli, mdl = self._get_summarize_client()
 
+        logger.debug(f"使用模型 {mdl} 进行记忆提取, ==> chat_text:\n{chat_text}")
         response = cli.chat.completions.create(
             model=mdl,
             messages=[
@@ -220,6 +227,7 @@ class SessionMemoryMixin:
             temperature=0.1,
             max_tokens=1024,
         )
+        logger.debug(f"<== 记忆提取完成:\n{response.choices[0].message.content.strip()}")
 
         return response.choices[0].message.content.strip()
 

@@ -6,9 +6,12 @@
 import sqlite3
 import json
 from typing import Dict, Optional, List, cast
+import logging
 
+logger = logging.getLogger("Storage")
 class Storage:
     def __init__(self, db_path="chat_history.db"):
+        logger.info(f"load database {db_path}")
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row

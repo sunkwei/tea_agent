@@ -11,7 +11,9 @@
 
 from typing import List, Dict, Callable, Any, Optional, Tuple
 from dataclasses import dataclass, field
+import logging
 
+logger = logging.getLogger("session_pipeline")
 
 @dataclass
 class PipelineStep:
@@ -122,8 +124,7 @@ class SessionPipeline:
     def get_enabled_steps(self) -> List[Tuple[str, PipelineStep]]:
         """获取所有启用的步骤，按执行顺序排列"""
         return [
-            (name, self._steps[name])
-            for name in self._step_order
+            (name, self._steps[name]) for name in self._step_order
             if self._steps[name].enabled
         ]
     
@@ -146,18 +147,24 @@ class SessionPipeline:
         """
         skip_steps = skip_steps or []
         
-        for name, step in self.get_enabled_steps():
+        logger.info(f"Executing session pipe with context:\n{context}")
+        for i, (name, step) in enumerate(self.get_enabled_steps()):
             # 检查是否要跳过
+            logger.info(f"  Step {i}: {name}")
             if name in skip_steps:
+                logger.info(f"    Skipping step {name}")
                 continue
             
             # 执行步骤
             try:
+                logger.info(f"    Running step {name}, context: {context}")
                 result = step.func(context)
+                logger.info(f"    Result: {result}")
                 # 合并结果到上下文
                 if isinstance(result, dict):
                     context.update(result)
             except Exception as e:
+                logger.warning(f"    Error running step {name}: {e}")
                 context.setdefault("_errors", []).append({
                     "step": name,
                     "error": str(e),
@@ -166,7 +173,7 @@ class SessionPipeline:
             # 检查是否要停止
             if stop_at and name == stop_at:
                 break
-        
+        logger.info(f"Execution complete, with content\n{context}\n")
         return context
     
     def list_steps(self) -> List[Dict[str, Any]]:

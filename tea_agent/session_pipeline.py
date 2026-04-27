@@ -159,7 +159,12 @@ class SessionPipeline:
             try:
                 logger.info(f"    Running step {name}, context: {context}")
                 result = step.func(context)
-                logger.info(f"    Result: {result}")
+                if isinstance(result, list):
+                    logger.info(f"    Result: {len(result)} items")
+                    for item in result:
+                        logger.info(f"    {item}")
+                elif isinstance(result, dict):
+                    logger.info(f"    Result: keys: {result.keys()}")
                 # 合并结果到上下文
                 if isinstance(result, dict):
                     context.update(result)

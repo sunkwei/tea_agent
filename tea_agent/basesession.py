@@ -5,7 +5,9 @@
 
 from abc import ABC, abstractmethod
 from typing import List, Dict, Callable, Tuple
+import logging
 
+logger = logging.getLogger("basesession")
 
 class BaseChatSession(ABC):
     """
@@ -72,19 +74,35 @@ class BaseChatSession(ABC):
         """获取最近的消息（排除系统消息）"""
         return [m for m in self.messages if m["role"] != "system"]
 
-    def load_history(self, conversations: List[Dict]):
+    def load_history(self, conversations: List[Dict], summary: str = ""):
         """
         从数据库加载历史记录，含中间工具调用链。
 
         Args:
             conversations: 对话记录列表，每条含 user_msg, ai_msg,
                            is_func_calling, rounds_json_parsed 等字段
+            summary: 历史对话摘要（如有）
         """
         self.messages = [{"role": "system", "content": self.system_prompt}]
 
+        # 如果有持久化摘要，作为 user + assistant 对注入，而非合并到 system prompt
+        if summary:
+            self.messages.append({
+                "role": "user",
+                "content": f"这是我们之前对话的摘要：\n{summary}"
+            })
+            self.messages.append({
+                "role": "assistant",
+                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"
+            })
+        logger.info(f"加载历史 {len(conversations)}条, 摘要：{summary}")
         for conv in conversations:
             self.messages.append({"role": "user", "content": conv["user_msg"]})
-
+            
+            logger.info(
+                f"==> user '{conv['user_msg']}'\n"
+                f"--> ai '{conv['ai_msg']}'\n"
+            )
             rounds = conv.get("rounds_json_parsed")
             if rounds and conv.get("is_func_calling"):
                 for rd in rounds:

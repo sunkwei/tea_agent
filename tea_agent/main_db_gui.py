@@ -541,8 +541,13 @@ class TkGUI:
             self.log(f"📊 Token 消耗: {total:,} (prompt: {ts.get('total_prompt_tokens', 0):,}, completion: {ts.get('total_completion_tokens', 0):,})", "notice")
             self.log("")
 
-        conversations = self.db.get_conversations(topic_id)
-        self.sess.load_history(conversations)
+        conversations = self.db.get_conversations(topic_id, limit=5)
+        summary = self.db.get_topic_summary(topic_id) or ""
+        self.sess.load_history(conversations, summary)
+
+        if summary:
+            self.log(f"📖 历史摘要：{summary}", "notice")
+            self.log("-" * 50, "notice")
 
         for c in conversations:
             self.log(f"你：{c['user_msg']}", "user")
@@ -651,7 +656,11 @@ class TkGUI:
                     self.current_topic_id, msg, "", False)
                 self._current_conversation_id = conv_id
 
-                ai_msg, is_func = self.sess.chat_stream(msg, self.safe_stream)
+                ai_msg, is_func = self.sess.chat_stream(
+                    msg, 
+                    callback=self.safe_stream,
+                    topic_id=self.current_topic_id
+                )
                 self.root.after(0, self._flush_stream_to_messages)
 
                 rounds = self.sess._rounds_collector

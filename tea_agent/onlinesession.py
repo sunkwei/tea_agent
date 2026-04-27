@@ -119,14 +119,11 @@ class OnlineToolSession(
             self._cheap_model_name = cheap_model
 
         # Token 优化参数
-        self.keep_turns = keep_turns
+        self.keep_turns = 5 # 保持最新 5 轮原始对话内容
         self.max_tool_output = max_tool_output
         self.max_assistant_content = max_assistant_content
         self.memory_inject_limit = memory_inject_limit
         self.memory_extract_rounds = memory_extract_rounds
-
-        # DeepSeek 推理模型特殊处理
-        self._is_deepseek_reasoning = self._check_deepseek_reasoning_model(model)
 
         # 工具定义
         self.tools: List[Dict] = []
@@ -135,62 +132,6 @@ class OnlineToolSession(
         # 初始化 Pipeline
         self.pipeline = SessionPipeline()
         self._setup_default_pipeline()
-
-    def _check_deepseek_reasoning_model(self, model: str) -> bool:
-        """
-        检测是否为 DeepSeek 推理模型。
-        
-        DeepSeek 推理模型有特殊的多轮对话要求：
-        - 当模型输出 reasoning_content 后，下一轮请求中如果之前的 assistant 消息包含 
-          reasoning_content 字段，API 会返回 400 错误
-        - 当模型进行了工具调用时，必须在后续请求中回传 reasoning_content，否则也会报错
-        
-        Args:
-            model: 模型名称
-            
-        Returns:
-            是否为 DeepSeek 推理模型
-        """
-        if not model:
-            return False
-        
-        model_lower = model.lower()
-        # 检测常见的 DeepSeek 推理模型
-        deepseek_reasoning_models = [
-            "deepseek-reasoner",
-            "deepseek-r",
-            "deepseek-r1",
-            "deepseek-r2",
-            "deepseek-r3",
-            "deepseek-r4",
-            "deepseek-v4-pro",
-            "deepseek-v4-flash",
-        ]
-        
-        # 检查是否包含 deepseek 且包含 r/r1/r2 等推理标识
-        is_deepseek = "deepseek" in model_lower
-        is_reasoning_model = any(rm in model_lower for rm in deepseek_reasoning_models)
-        
-        return is_deepseek and (is_reasoning_model or "-r" in model_lower)
-
-    def _handle_deepseek_reasoning_content(self, messages: List[Dict]) -> List[Dict]:
-        """
-        处理 DeepSeek 推理模型的 reasoning_content 字段。
-
-        DeepSeek 推理模型的特殊规则：
-        1. 在多轮对话中，如果之前的 assistant 消息包含 reasoning_content，
-           必须在后续请求中完整回传该字段，否则 API 会返回 400 错误。
-        2. 无论是否进行了工具调用，reasoning_content 都必须保留。
-
-        Args:
-            messages: 原始消息列表
-
-        Returns:
-            处理后的消息列表
-        """
-        # DeepSeek 推理模型要求在后续对话中必须回传 reasoning_content
-        # 之前的逻辑在非工具调用轮次删除了它，导致了 400 错误
-        return messages
 
     def _process_stream_with_reasoning(self, response, callback) -> Tuple[str, List[Dict], str]:
         """
@@ -310,8 +251,6 @@ class OnlineToolSession(
                 }
 
             api_messages = self._build_api_messages()
-            # DeepSeek 推理模型特殊处理
-            api_messages = self._handle_deepseek_reasoning_content(api_messages)
 
             try:
                 response = self._create_chat_stream(api_messages, self.tools)
@@ -428,6 +367,11 @@ class OnlineToolSession(
         self.reset_usage()
         self._rounds_collector = []
         
+        # 将当前 topic_id 注入到 mixins 中
+        if hasattr(self, "current_topic_id") and self.storage:
+             # session_summarizer 需要 topic_id 来持久化摘要
+             self.current_topic_id = self.current_topic_id
+        
         # 在会话初始化时检测一次主模型的 thinking 支持
         self._probe_thinking_support()
         
@@ -439,7 +383,7 @@ class OnlineToolSession(
                 is_cheap=True
             )
 
-    def chat_stream(self, msg: str, callback: Callable[[str], None]) -> Tuple[str, bool]:
+    def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: int = -1) -> Tuple[str, bool]:
         """
         流式对话，支持工具调用。
         
@@ -448,6 +392,7 @@ class OnlineToolSession(
         Args:
             msg: 用户消息
             callback: 流式输出回调函数
+            topic_id: 当前会话的主题 ID
 
         Returns:
             Tuple[str, bool]: (助手完整回复, 是否使用了工具调用)
@@ -455,6 +400,7 @@ class OnlineToolSession(
 
         logger.debug(f"chat_stream: user message: {msg}")
 
+        self.current_topic_id = topic_id
         self.reset_interrupt()
         self.reset_session_state()
 

@@ -25,8 +25,10 @@ class SessionAPIMixin:
             self.model: str = ""
         self.enable_thinking: bool = True
         # thinking 支持状态：分别记录主模型和便宜模型
-        self._thinking_supported: Optional[bool] = None  # 主模型
-        self._cheap_thinking_supported: Optional[bool] = None  # 便宜模型
+        # self._thinking_supported: Optional[bool] = None  # 主模型
+        # self._cheap_thinking_supported: Optional[bool] = None  # 便宜模型
+        self._thinking_supported = True
+        self._cheap_thinking_supported = False
         self.tool_log: Optional[Callable[[str], None]] = None
         self._last_usage: Dict[str, int] = {
             "total_tokens": 0,
@@ -147,6 +149,9 @@ class SessionAPIMixin:
             
         if self.enable_thinking and thinking_supported:
             kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+        
+        if not thinking_supported:
+            kwargs["extra_body"] = {"thinking": {"type": "disable"}}
 
         return target_client.chat.completions.create(**kwargs)
 

@@ -119,7 +119,7 @@ class OnlineToolSession(
             self._cheap_model_name = cheap_model
 
         # Token 优化参数
-        self.keep_turns = 5 # 保持最新 5 轮原始对话内容
+        # self.keep_turns = 5 # 保持最新 5 轮原始对话内容
         self.max_tool_output = max_tool_output
         self.max_assistant_content = max_assistant_content
         self.memory_inject_limit = memory_inject_limit
@@ -177,14 +177,14 @@ class OnlineToolSession(
 
     def _setup_default_pipeline(self):
         """设置默认的 Pipeline 步骤"""
-        # 1. 注入记忆
-        self.pipeline.register_step(
-            name="inject_memories",
-            func=lambda ctx: (self._inject_memories(), self.messages)[1],
-            enabled=True,
-            description="注入重要记忆到上下文",
-            position=10,
-        )
+        # # 1. 注入记忆
+        # self.pipeline.register_step(
+        #     name="inject_memories",
+        #     func=lambda ctx: (self._inject_memories(), self.messages)[1],
+        #     enabled=True,
+        #     description="注入重要记忆到上下文",
+        #     position=10,
+        # )
         
         # 2. 添加用户消息
         self.pipeline.register_step(
@@ -213,14 +213,14 @@ class OnlineToolSession(
             position=40,
         )
         
-        # 5. 提取记忆
-        self.pipeline.register_step(
-            name="extract_memory",
-            func=lambda ctx: (self._save_conversation_memory(), {})[1],
-            enabled=True,
-            description="从对话中提取并保存记忆",
-            position=50,
-        )
+        # # 5. 提取记忆
+        # self.pipeline.register_step(
+        #     name="extract_memory",
+        #     func=lambda ctx: (self._save_conversation_memory(), {})[1],
+        #     enabled=True,
+        #     description="从对话中提取并保存记忆",
+        #     position=50,
+        # )
 
     def _execute_tool_loop(self, context: Dict) -> Dict:
         """
@@ -362,8 +362,8 @@ class OnlineToolSession(
 
     def reset_session_state(self):
         """重置会话状态（用于新会话开始前）"""
-        self.reset_memory_state()
-        self.reset_summary_state()
+        # self.reset_memory_state()
+        # self.reset_summary_state()
         self.reset_usage()
         self._rounds_collector = []
         
@@ -373,15 +373,15 @@ class OnlineToolSession(
              self.current_topic_id = self.current_topic_id
         
         # 在会话初始化时检测一次主模型的 thinking 支持
-        self._probe_thinking_support()
+        # self._probe_thinking_support()
         
-        # 检测便宜模型的 thinking 支持
-        if self._cheap_client and self._cheap_model_name:
-            self._probe_thinking_support(
-                client=self._cheap_client,
-                model=self._cheap_model_name,
-                is_cheap=True
-            )
+        # # 检测便宜模型的 thinking 支持
+        # if self._cheap_client and self._cheap_model_name:
+        #     self._probe_thinking_support(
+        #         client=self._cheap_client,
+        #         model=self._cheap_model_name,
+        #         is_cheap=True
+        #     )
 
     def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: int = -1) -> Tuple[str, bool]:
         """

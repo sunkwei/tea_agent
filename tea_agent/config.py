@@ -51,7 +51,7 @@ class AgentConfig:
     enable_thinking: bool = True  # 是否启用 thinking 功能
     
     # Token 优化参数
-    keep_turns: int = 3  # 保留最近N轮完整对话，更早的对话自动摘要
+    keep_turns: int = 2  # 保留最近N轮完整对话，更早的对话自动摘要
     max_tool_output: int = 128 * 1024  # 工具输出截断字符数
     max_assistant_content: int = 128 * 1024  # 助手回复截断字符数
     

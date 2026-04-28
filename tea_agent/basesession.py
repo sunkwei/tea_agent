@@ -32,6 +32,7 @@ class BaseChatSession(ABC):
         self.model = model
         self.max_history = max_history
         self.system_prompt = system_prompt
+        self._history_summary = ""
 
         # 消息列表
         self.messages: List[Dict] = []
@@ -85,16 +86,20 @@ class BaseChatSession(ABC):
         """
         self.messages = [{"role": "system", "content": self.system_prompt}]
 
-        # 如果有持久化摘要，作为 user + assistant 对注入，而非合并到 system prompt
-        if summary:
-            self.messages.append({
-                "role": "user",
-                "content": f"这是我们之前对话的摘要：\n{summary}"
-            })
-            self.messages.append({
-                "role": "assistant",
-                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"
-            })
+        # # 如果有持久化摘要，作为 user + assistant 对注入，而非合并到 system prompt
+        # if summary:
+        #     self.messages.append({
+        #         "role": "user",
+        #         "content": f"这是我们之前对话的摘要：\n{summary}"
+        #     })
+        #     self.messages.append({
+        #         "role": "assistant",
+        #         "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"
+        #     })
+
+        ## 在 _build_api_messages() 时，合并到 messages 中
+        self._history_summary = summary
+
         logger.info(f"加载历史 {len(conversations)}条, 摘要：{summary}")
         for conv in conversations:
             self.messages.append({"role": "user", "content": conv["user_msg"]})

@@ -39,12 +39,9 @@ class SessionSummarizerMixin:
         self.messages: List[Dict] = []
 
         # 摘要配置
-        self.keep_turns: int = 5
+        self.keep_turns: int = 2
         self.max_tool_output: int = 128 * 1024
         self.max_assistant_content: int = 128 * 1024
-
-        # 摘要状态
-        self._history_summary: str = ""
 
         # 日志回调
         self.tool_log: Optional[Callable[[str], None]] = None
@@ -53,56 +50,41 @@ class SessionSummarizerMixin:
     # 历史摘要 (History Summary)
     # ──────────────────────────────────────────────
 
+    def count_user_msg(self) -> int:
+        return sum([m.get("role") == "user" for m in self.messages])
+
     def _summarize_old_history(self) -> None:
         """
         持久化摘要逻辑：
-        1. 当 messages 中的对话轮数（user 消息数）超过 keep_turns 时，触发摘要更新。
-        2. 将最老的一轮（user + assistant/tool_calls）与数据库中已有的摘要合并，生成新摘要。
-        3. 更新数据库 t_conv_summary 表。
-        4. 从 self.messages 中移除最老的那一轮消息。
+            总是将 _history_summary 与当前 self.messages 中的倒数第 self.keep_turns 轮对话压缩为摘要
+            并存储
         """
-        # 使用循环确保消息数压缩到 keep_turns 以内
-        while True:
-            # 统计当前消息列表中的对话轮数 (排除系统消息和作为摘要注入的 user 消息)
-            user_indices = [
-                i for i, m in enumerate(self.messages) 
-                if m.get("role") == "user" and "这是我们之前对话的摘要" not in m.get("content", "")
-            ]
-            
-            # 只有超过 keep_turns 轮时才进行压缩
-            if len(user_indices) <= self.keep_turns:
-                break
+        ## 如果 user count 超过 keep_turns，触发摘要更新
+        old_text = ""
+        topic_id = getattr(self, "current_topic_id", None)
+        storage = getattr(self, "storage", None)
 
-            # 找到第一轮真实对话的结束边界 (到第二个真实 user 消息之前)
-            first_user_idx = user_indices[0]
-            second_user_idx = user_indices[1]
-            
-            # 提取第一轮对话消息
-            old_messages = self.messages[first_user_idx:second_user_idx]
-            
-            # 转换为文本
-            old_text = self._messages_to_text(old_messages, max_per_msg=300)
-            if not old_text.strip():
-                # 如果这一轮没内容（不该发生），也得移除，防止死循环
-                self.messages = self.messages[:first_user_idx] + self.messages[second_user_idx:]
-                continue
+        old_summary = storage.get_topic_summary(topic_id) if topic_id and storage else ""
 
-            # 获取当前持久化摘要
-            topic_id = getattr(self, "current_topic_id", None)
-            storage = getattr(self, "storage", None)
-            existing_summary = ""
-            if topic_id and storage:
-                existing_summary = storage.get_topic_summary(topic_id) or ""
+        count = self.count_user_msg()
+        if count > self.keep_turns:
+            ## 提取倒数 self.keep_turns 轮对话（user + assistant) 与 _history_summary 合并
+            begin_idx, end_idx = self._find_last_need_summary_pair()
+            if 0 <= begin_idx < end_idx < len(self.messages):
+                ## 需要提取更新摘要
+                messages = self.messages[begin_idx:end_idx]
+                old_text = self._messages_to_text(messages, max_per_msg=300)
 
+        if old_text:
+            ## 调用 LLM 更新摘要
             # 构建 Prompt
             existing = (
-                f"已有摘要：{existing_summary}\n\n"
-                if existing_summary
+                f"已有摘要：{old_summary}\n\n"
+                if old_summary
                 else ""
             )
 
             try:
-                # 调用 LLM 生成摘要
                 cli, mdl = self._get_summarize_client()
                 response = cli.chat.completions.create(
                     model=mdl,
@@ -118,52 +100,23 @@ class SessionSummarizerMixin:
                     temperature=0.1,
                     max_tokens=500,
                 )
-
-                # 更新摘要
                 content = response.choices[0].message.content
                 if isinstance(content, str):
                     new_summary = content.strip()
                     
                     # 同步到内存和数据库
                     self._history_summary = new_summary
+
                     if topic_id and storage:
                         storage.update_topic_summary(topic_id, new_summary)
 
-                    # 从 messages 中移除已摘要的第一轮真实消息
-                    self.messages = self.messages[:first_user_idx] + self.messages[second_user_idx:]
-                    
-                    # 更新或插入摘要消息对 (user + assistant)
-                    summary_user_idx = -1
-                    for i, msg in enumerate(self.messages):
-                        if msg.get("role") == "user" and "这是我们之前对话的摘要" in msg.get("content", ""):
-                            summary_user_idx = i
-                            break
-                    
-                    if summary_user_idx != -1:
-                        # 更新已有的摘要消息对
-                        self.messages[summary_user_idx]["content"] = f"这是我们之前对话的摘要：\n{new_summary}"
-                    else:
-                        # 在系统消息后插入新的摘要消息对
-                        self.messages.insert(1, {
-                            "role": "user",
-                            "content": f"这是我们之前对话的摘要：\n{new_summary}"
-                        })
-                        self.messages.insert(2, {
-                            "role": "assistant",
-                            "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"
-                        })
-
                     if self.tool_log:
-                        self.tool_log(f"📝 历史摘要已持久化，压缩了 1 轮对话")
-                else:
-                    # 如果生成内容无效，跳出循环避免死循环
-                    break
+                        self.tool_log(f"📝 历史摘要更新：{new_summary}")
 
             except Exception as e:
                 if self.tool_log:
                     self.tool_log(f"⚠️ 摘要生成失败: {e}")
-                # 发生异常也跳出，避免死循环
-                break
+        return None
 
     def _get_memory_priority_for_compression(self) -> str:
         """
@@ -318,10 +271,9 @@ class SessionSummarizerMixin:
         构建发送给 API 的消息列表。
 
         压缩策略:
-            1. 系统提示词 (始终第一条)
-            2. 记忆注入 (如有，独立于 messages)
-            3. 历史摘要 (如有，替代旧消息)
-            4. 最新 3 轮完整对话 (不压缩，保留原始内容)
+            1. 系统提示词 (始终第一条)  self.messages[0]
+            2. 历史摘要 (如有，替代旧消息)  self._history_summary
+            3. 最新 n 轮完整对话 (不压缩，保留原始内容)
         
         工具循环内部不调用任何压缩逻辑，仅对输入和返回的历史做压缩。
 
@@ -333,36 +285,15 @@ class SessionSummarizerMixin:
         # 1. 系统提示词 (始终第一)
         result.append(self.messages[0])
 
-        # 2. 记忆注入 (如有，独立于 self.messages)
-        if hasattr(self, "_memory_text") and self._memory_text:
-            result.append(
-                {
-                    "role": "system",
-                    "content": f"【记忆参考】\n{self._memory_text}",
-                }
-            )
-
-        # 3. 历史摘要：作为 user + assistant 对添加
-        # 我们先检查 self.messages 中是否已经包含这对消息
-        summary_pair = []
-        for i, msg in enumerate(self.messages):
-            if msg.get("role") == "user" and "这是我们之前对话的摘要" in msg.get("content", ""):
-                summary_pair.append(msg)
-                # 同时也带上紧随其后的 assistant 确认消息
-                if i + 1 < len(self.messages) and self.messages[i+1].get("role") == "assistant":
-                    summary_pair.append(self.messages[i+1])
-                break
-        
-        if summary_pair:
-            result.extend(summary_pair)
-        elif self._history_summary:
-            # 如果内存里有摘要文本但 messages 里没消息（理论上不该发生，做个兜底）
+        ## 历史摘要内容：该内容总是
+        # 2. 历史摘要：作为 user + assistant 对添加
+        if self._history_summary:
             result.append({
-                "role": "user", 
+                "role": "user",
                 "content": f"这是我们之前对话的摘要：\n{self._history_summary}"
             })
             result.append({
-                "role": "assistant", 
+                "role": "assistant",
                 "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"
             })
 
@@ -371,17 +302,10 @@ class SessionSummarizerMixin:
         # 注意：如果 boundary 刚好指向了摘要消息，我们需要跳过它，因为它已经在上面添加过了
         for i in range(boundary, len(self.messages)):
             msg = self.messages[i]
-            # 过滤掉已经手动添加过的摘要消息对
-            if msg.get("role") == "user" and "这是我们之前对话的摘要" in msg.get("content", ""):
-                continue
-            if i > 0 and self.messages[i-1].get("role") == "user" and "这是我们之前对话的摘要" in self.messages[i-1].get("content", ""):
-                if msg.get("role") == "assistant":
-                    continue
-            
             result.append(msg)
 
         return result
-
+    
     def _compact_message(self, msg: Dict) -> Dict:
         """
         创建消息的紧凑副本，截断超长内容。
@@ -472,17 +396,42 @@ class SessionSummarizerMixin:
 
         for i in range(len(self.messages) - 1, 0, -1):
             msg = self.messages[i]
-            if msg.get("role") == "user":
-                # 排除摘要消息
-                if "这是我们之前对话的摘要" in msg.get("content", ""):
-                    continue
-                
+            if msg.get("role") == "user":                
                 user_count += 1
                 if user_count >= self.keep_turns:
                     return i
 
         # 不足 keep_turns 轮，保留全部 (跳过系统消息)
         return 1
+    
+    def _find_last_need_summary_pair(self) -> Tuple[int, int]:
+        """
+        找到需要提取摘要的最后一个对话对，可能包含 user, assistant, tool 的消息
+        """
+        end_index = -1
+        begin_index = -1
+
+        skip_count = self.keep_turns
+
+        ## 往前找，跳过 keep_turns 个 user，找到后，往后找到第一个 user 之前的 assistant
+        for i in range(len(self.messages) - 1, 0, -1):
+            ## 先跳过 skip_count 轮 assistant
+            role = self.messages[i].get("role")
+            if role == "user":
+                if skip_count > 0:
+                    skip_count -= 1
+                else:
+                    begin_index = i
+                    break
+
+        if begin_index >= 0:
+            for j in range(begin_index + 1, len(self.messages)):
+                role = self.messages[j].get("role")
+                if role == "user":
+                    end_index = j
+                    break
+
+        return begin_index, end_index
 
     # ──────────────────────────────────────────────
     # 状态重置

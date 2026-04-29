@@ -2,21 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.3.2] - 2026-04-29
+## [0.3.3] - 2026-04-29
 
-- feat: Storage 新增 `delete_topic()` 硬删除方法，级联删除 conversations/agent_rounds/token_stats/摘要
-- feat: 新增 TopicDialog 主题管理弹窗
-  - 主题列表（ID/标题/创建时间/Token消耗/对话数/状态）
-  - 新建主题、重命名、停用/启用、硬删除
-  - 双击/按钮切换到选中主题
-  - 导出：选中主题 / 全部主题到 Markdown
-  - 导出模式可选「完整」或「仅用户输入」
+### New Features
+- feat: 主题管理弹窗 TopicDialog
+  - 主题 TreeView 列表（ID/标题/创建时间/Token消耗/对话数/活跃状态）
+  - 新建主题、重命名、停用/启用、硬删除（级联删关联数据）
+  - 双击/按钮切换到选中主题（回调 `switch_topic`）
+  - 导出选中主题 / 全部主题到 Markdown，可选「完整」或「仅用户输入」模式
+  - 左侧面板新增「📁 主题管理」按钮
+
+- feat: `Storage.delete_topic()` 硬删除方法
+  - 级联删除 conversations、agent_rounds、topic_token_stats、t_conv_summary
+  - 不影响其他 topic 数据完整性
+
+- feat: max_iterations 交互式续跑
+  - 外层 `while True` 包装内层工具循环，支持动态扩展迭代上限
+  - 达到上限时通过 `on_status("!MAX_ITER:...")` 通知 GUI
+  - `_handle_max_iter` 弹出 `askyesno` 对话框询问「继续(追加5轮)」或「终止」
+  - `_extra_iterations` / `_max_iter_wait` / `_continue_after_max` 状态机
+  - `reset_session_state` 时重置续跑状态
 
 ### Improvements
-- improve: 跨平台字体自动检测，Windows 优先使用 Microsoft YaHei UI + Cascadia Code
+- improve: 跨平台字体自动检测
+  - Windows 优先 `Microsoft YaHei UI` + `Cascadia Code`
+  - Linux 优先 `Noto Sans CJK SC` + `Noto Sans Mono CJK SC`
   - 懒加载检测（`_init_fonts()`），避免 import 时无 Tk root 报错
-  - CSS font-family 完整回退链覆盖 Windows/Linux 常见中文字体
+  - CSS font-family 完整回退链覆盖常见中文字体
   - tkinter UI 控件字体动态匹配系统可用字体
+
+---
+
+## [0.3.2] - 2026-04-29
 
 ### New Features
 - feat: 重新实现长期记忆系统（全新设计，不同于 0.3.0 版本）

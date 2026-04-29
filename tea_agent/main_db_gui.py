@@ -756,10 +756,8 @@ class TopicDialog(tk.Toplevel):
         )
         if not ok:
             return
-        # Hard delete: we need a store.py method; use deactivate as soft fallback
-        # For now, mark inactive and show warning
-        self.db.update_topic_active(tid, 0)
-        self.stats_var.set(f"⚠️ 主题 #{tid} 已停用（数据库暂无硬删除API，数据仍保留）")
+        self.db.delete_topic(tid)
+        self.stats_var.set(f"✅ 主题 #{tid} 「{title}」已永久删除")
         self._refresh()
 
     def _export_selected(self):

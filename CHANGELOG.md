@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ## [0.3.2] - 2026-04-29
 
+- feat: Storage 新增 `delete_topic()` 硬删除方法，级联删除 conversations/agent_rounds/token_stats/摘要
 - feat: 新增 TopicDialog 主题管理弹窗
   - 主题列表（ID/标题/创建时间/Token消耗/对话数/状态）
   - 新建主题、重命名、停用/启用、硬删除

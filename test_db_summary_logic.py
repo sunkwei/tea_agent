@@ -5,9 +5,7 @@ import json
 from tea_agent.store import Storage
 
 def test_db_summary_logic():
-    db_path = "test_summary.db"
-    if os.path.exists(db_path):
-        os.remove(db_path)
+    import tempfile; db_path = tempfile.mktemp(suffix='.db')
     
     storage = Storage(db_path=db_path)
     
@@ -60,6 +58,7 @@ def test_db_summary_logic():
     print("\nAll database summary logic tests passed! ✓")
     
     # Cleanup
+    storage.conn.close()
     if os.path.exists(db_path):
         os.remove(db_path)
 

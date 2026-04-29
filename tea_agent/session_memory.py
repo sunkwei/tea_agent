@@ -36,8 +36,9 @@ class SessionMemoryMixin:
         if not self.storage:
             return
         from tea_agent.memory import MemoryManager
+        threshold = getattr(self, 'memory_extraction_threshold', 2)
         try:
-            self.memory = MemoryManager(self.storage)
+            self.memory = MemoryManager(self.storage, extraction_threshold=threshold)
             logger.info("MemoryManager 初始化成功")
         except Exception as e:
             logger.warning(f"MemoryManager 初始化失败: {e}")

@@ -393,14 +393,21 @@ class Storage:
         self.conn.commit()
         c.close()
 
-    def get_unsummarized_conversations(self, topic_id: int) -> List[Dict]:
+    def get_unsummarized_conversations(self, topic_id: int, limit:int=-1) -> List[Dict]:
         """获取指定 topic 中尚未摘要的所有对话"""
         c = self.conn.cursor()
-        c.execute('''
-            SELECT * FROM conversations 
-            WHERE topic_id = ? AND is_summarized = 0 
-            ORDER BY stamp ASC
-        ''', (topic_id,))
+        if limit < 0:
+            c.execute('''
+                SELECT * FROM conversations 
+                WHERE topic_id = ? AND is_summarized = 0 
+                ORDER BY stamp ASC
+            ''', (topic_id,))
+        else:
+            c.execute('''
+                SELECT * FROM conversations 
+                WHERE topic_id = ? AND is_summarized = 0 
+                ORDER BY stamp ASC LIMIT ?
+            ''', (topic_id, limit))
         rows = c.fetchall()
         c.close()
         

@@ -55,6 +55,11 @@ class AgentConfig:
     max_tool_output: int = 128 * 1024  # 工具输出截断字符数
     max_assistant_content: int = 128 * 1024  # 助手回复截断字符数
 
+    # 交互与控制参数
+    extra_iterations_on_continue: int = 5  # 续命时追加的工具调用轮数
+    memory_extraction_threshold: int = 2  # 触发记忆提取的最低未摘要消息数
+    chat_page_size: int = 30  # GUI 单页加载的对话轮数
+
 
 def load_config(config_path: Optional[str] = None) -> AgentConfig:
     """
@@ -106,6 +111,11 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
             cfg.keep_turns = int(data.get("keep_turns", cfg.keep_turns))
             cfg.max_tool_output = int(data.get("max_tool_output", cfg.max_tool_output))
             cfg.max_assistant_content = int(data.get("max_assistant_content", cfg.max_assistant_content))
+
+            # 加载交互与控制参数
+            cfg.extra_iterations_on_continue = int(data.get("extra_iterations_on_continue", cfg.extra_iterations_on_continue))
+            cfg.memory_extraction_threshold = int(data.get("memory_extraction_threshold", cfg.memory_extraction_threshold))
+            cfg.chat_page_size = int(data.get("chat_page_size", cfg.chat_page_size))
             
         except Exception:
             pass  # 加载失败时使用默认空配置
@@ -161,6 +171,11 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     data["keep_turns"] = cfg.keep_turns
     data["max_tool_output"] = cfg.max_tool_output
     data["max_assistant_content"] = cfg.max_assistant_content
+
+    # 保存交互与控制参数
+    data["extra_iterations_on_continue"] = cfg.extra_iterations_on_continue
+    data["memory_extraction_threshold"] = cfg.memory_extraction_threshold
+    data["chat_page_size"] = cfg.chat_page_size
     
     with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
@@ -209,7 +224,14 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "# 工具输出截断字符数（超过此长度的工具结果会被截断）\n"
         "max_tool_output: 131072  # 128KB\n\n"
         "# 助手回复截断字符数（超过此长度的助手回复会被截断）\n"
-        "max_assistant_content: 131072  # 128KB\n"
+        "max_assistant_content: 131072  # 128KB\n\n"
+        "# ==================== 交互与控制参数 ====================\n"
+        "# 工具调用达到上限后续命时追加的轮数\n"
+        "extra_iterations_on_continue: 5\n\n"
+        "# 触发自动记忆提取的最少未摘要消息数\n"
+        "memory_extraction_threshold: 2\n\n"
+        "# GUI 单页加载的最大对话轮数（超过则省略更早的对话）\n"
+        "chat_page_size: 30\n"
     )
 
     with open(yaml_path, "w", encoding="utf-8") as f:

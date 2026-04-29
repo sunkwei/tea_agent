@@ -67,6 +67,8 @@ class OnlineToolSession(
         keep_turns: int = 5,
         max_tool_output: int = 128 * 1024,
         max_assistant_content: int = 128 * 1024,
+        extra_iterations_on_continue: int = 5,
+        memory_extraction_threshold: int = 2,
     ):
         """
         初始化会话
@@ -87,6 +89,8 @@ class OnlineToolSession(
             keep_turns: 保留最近N轮完整对话，更早的对话自动摘要
             max_tool_output: 工具输出截断字符数
             max_assistant_content: 助手回复截断字符数
+            extra_iterations_on_continue: 续命时追加的工具调用轮数
+            memory_extraction_threshold: 触发记忆提取的最低未摘要消息数
         """
         sp = system_prompt or self._COMPACT_SYSTEM_PROMPT
         BaseChatSession.__init__(self, model, max_history, sp)
@@ -114,6 +118,8 @@ class OnlineToolSession(
         self.keep_turns = keep_turns
         self.max_tool_output = max_tool_output
         self.max_assistant_content = max_assistant_content
+        self.extra_iterations_on_continue = extra_iterations_on_continue
+        self.memory_extraction_threshold = memory_extraction_threshold
 
         # @2026-04-29 gen by deepseek-v4-pro, max_iterations交互式续跑
         import threading
@@ -384,7 +390,7 @@ class OnlineToolSession(
                             self._collect_max_iterations_round(full_reply)
                             break
                         # 用户选择继续：追加5轮
-                        self._extra_iterations += 5
+                        self._extra_iterations += self.extra_iterations_on_continue
                         self._continue_after_max = False
                         self._max_iter_wait.clear()
                         on_status("⏳ 已续命5轮，继续生成... (ESC 打断)")
@@ -488,12 +494,18 @@ class OnlineToolSession(
         full_reply = result.get("full_reply", "")
         used_tools = result.get("used_tools", False)
         
-        # 自动提取记忆（异步触发，不阻塞）
+        # 自动提取记忆（真正异步，不阻塞）
         # 仅在有效 topic_id 且非打断时触发
         if topic_id > 0 and not result.get("interrupted", False):
-            try:
-                self.trigger_memory_extraction(topic_id)
-            except Exception:
-                pass  # 提取失败不影响主流程
+            import threading
+            def _auto_extract():
+                try:
+                    count = self.trigger_memory_extraction(topic_id)
+                    if count > 0 and on_status:
+                        # on_status 回调内部使用 root.after，线程安全
+                        on_status(f"🧠 自动提取了 {count} 条新记忆")
+                except Exception:
+                    pass  # 提取失败不影响主流程
+            threading.Thread(target=_auto_extract, daemon=True).start()
         
         return full_reply, used_tools

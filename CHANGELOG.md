@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.2] - 2026-04-29
+
+### New Features
+- feat: 重新实现长期记忆系统（全新设计，不同于 0.3.0 版本）
+  - `store.py` 新增 `memories` 表（id/content/category/priority/importance/expires_at/tags/is_active）
+  - 8 个 CRUD 方法：`add_memory`/`get_memory`/`update_memory`/`deactivate_memory`/`delete_memory`/`get_active_memories`/`search_memories`/`get_memory_stats`
+  - `cleanup_expired_memories` 集成在查询中自动清理过期记忆
+  - `get_storage()` 模块级单例供工具函数使用
+
+- feat: 实现 MemoryManager（`memory.py` 新建）
+  - `select_memories()`: 优先级排序 + 相关性排序，自动过期清理
+  - `format_memories()`: 按分类格式化记忆为 system message
+  - `import_from_extraction()`: 批量导入+去重检测
+
+- feat: 实现 SessionMemoryMixin（`session_memory.py` 新建）
+  - `_inject_memory_into_messages()`: 记忆注入至 system prompt
+  - `_build_api_messages()` 集成记忆注入（system → memories → summary → recent）
+  - `trigger_memory_extraction()`: 自动记忆提取流程
+
+- feat: 5 个内置 Memory 工具（`tea_agent/toolkit/`）
+  - `toolkit_memory_add`: 添加记忆（支持分类/优先级/重要度/过期时间/标签）
+  - `toolkit_memory_search`: 搜索记忆（关键词+分类+标签+重要度过滤）
+  - `toolkit_memory_list`: 列出活跃记忆（含统计信息）
+  - `toolkit_memory_forget`: 软删除(失效)/硬删除记忆
+  - `toolkit_memory_extract`: 从未摘要对话提取文本供 Agent 分析
+
+- feat: GUI 新增 MemoryDialog 记忆管理弹窗
+  - 统计栏（总数+分类分布+优先级分布）
+  - 搜索过滤（关键词+分类组合框）
+  - 记忆列表（ID/优先级/分类/内容/重要度/过期/标签）
+  - 添加记忆对话框、软删除/硬删除、双击查看、导出 Markdown
+  - 左侧面板新增「🧠 记忆管理」按钮
+
+- feat: 状态栏动态显示工具调用轮次
+  - `chat_stream` 新增 `on_status` 回调参数
+  - `_execute_tool_loop` 每轮工具调用推送 `"调用工具第{N}轮..."`
+  - GUI 状态栏: `⏳ 生成中... 调用工具第1轮 (ESC 打断)`
+
+### Refactored
+- refactor: 修改代码注释规范统一为 `{date} gen by {model}, {subject}` 格式
+
+### Test Cases
+- test: `test_memory_phase2.py` — MemoryManager 选择/格式化/导入去重测试
+- test: `test_db_summary_logic.py` — 数据库摘要标记逻辑测试
+
+---
+
 ## [0.3.1] - 2026-04-29
 
 ### Breaking Changes

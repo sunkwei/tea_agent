@@ -199,6 +199,292 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
 
 
 # ====================== GUI 主界面 ======================
+
+# ====================== 记忆管理对话框 ======================
+
+# @2026-04-29 gen by deepseek-v4-pro, MemoryDialog记忆管理弹窗+on_status状态回调
+class MemoryDialog(tk.Toplevel):
+    """记忆管理弹窗"""
+    PRIORITY_LABELS = {0: "CRITICAL", 1: "HIGH", 2: "MEDIUM", 3: "LOW"}
+    CATEGORY_LABELS = {
+        "instruction": "指令", "preference": "偏好",
+        "fact": "事实", "reminder": "提醒", "general": "一般"
+    }
+
+    def __init__(self, parent, storage):
+        super().__init__(parent)
+        self.db = storage
+        self.title("🧠 长期记忆管理")
+        self.geometry("800x600")
+        self.minsize(600, 400)
+        self.transient(parent)
+        self.grab_set()
+
+        self._create_ui()
+        self._refresh()
+
+    def _create_ui(self):
+        # 顶部统计栏
+        top = ttk.Frame(self)
+        top.pack(fill=tk.X, padx=10, pady=8)
+
+        self.stats_var = tk.StringVar(value="加载中...")
+        ttk.Label(top, textvariable=self.stats_var, font=("Noto Sans CJK SC", 10)).pack(side=tk.LEFT)
+
+        ttk.Separator(self, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10)
+
+        # 工具栏
+        toolbar = ttk.Frame(self)
+        toolbar.pack(fill=tk.X, padx=10, pady=4)
+
+        ttk.Button(toolbar, text="➕ 添加", command=self._add_dialog).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="🔄 刷新", command=self._refresh).pack(side=tk.LEFT, padx=2)
+
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", lambda *a: self._refresh())
+        search_entry = ttk.Entry(toolbar, textvariable=self.search_var, width=20)
+        search_entry.pack(side=tk.LEFT, padx=(20, 2))
+        ttk.Label(toolbar, text="搜索").pack(side=tk.LEFT)
+
+        self.cat_var = tk.StringVar(value="")
+        cat_combo = ttk.Combobox(toolbar, textvariable=self.cat_var,
+                                 values=["", "instruction", "preference", "fact", "reminder", "general"],
+                                 width=12, state="readonly")
+        cat_combo.pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Label(toolbar, text="分类").pack(side=tk.LEFT)
+        cat_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh())
+
+        # 记忆列表
+        list_frame = ttk.Frame(self)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+
+        columns = ("id", "priority", "category", "content", "importance", "expires", "tags")
+        self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
+
+        self.tree.heading("id", text="ID", command=lambda: self._sort("id"))
+        self.tree.heading("priority", text="优先级", command=lambda: self._sort("priority"))
+        self.tree.heading("category", text="分类")
+        self.tree.heading("content", text="内容")
+        self.tree.heading("importance", text="重要度")
+        self.tree.heading("expires", text="过期")
+        self.tree.heading("tags", text="标签")
+
+        self.tree.column("id", width=40, anchor=tk.CENTER)
+        self.tree.column("priority", width=70, anchor=tk.CENTER)
+        self.tree.column("category", width=60, anchor=tk.CENTER)
+        self.tree.column("content", width=320)
+        self.tree.column("importance", width=60, anchor=tk.CENTER)
+        self.tree.column("expires", width=80, anchor=tk.CENTER)
+        self.tree.column("tags", width=100)
+
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 操作按钮
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill=tk.X, padx=10, pady=6)
+
+        ttk.Button(btn_frame, text="💤 软删除 (失效)", command=self._soft_delete).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="🗑️ 硬删除", command=self._hard_delete).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="📋 导出记忆...", command=self._export).pack(side=tk.RIGHT, padx=2)
+
+        # 绑定双击查看
+        self.tree.bind("<Double-1>", self._on_double_click)
+
+        # 快捷键
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.bind("<Delete>", lambda e: self._soft_delete())
+
+    def _refresh(self):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        try:
+            memories = self.db.get_active_memories(limit=100)
+            stats = self.db.get_memory_stats()
+
+            total = stats.get("total", 0)
+            by_cat = stats.get("by_category", {})
+            by_pri = stats.get("by_priority", {})
+
+            cat_str = " ".join(f"{self.CATEGORY_LABELS.get(k,k)}:{v}" for k, v in sorted(by_cat.items()))
+            pri_str = " ".join(f"{'!!!' if p==0 else '▲' if p==1 else '●' if p==2 else '○'}:{c}"
+                                for p, c in sorted(by_pri.items()))
+            self.stats_var.set(f"活跃: {total} 条 | 分类: {cat_str} | 优先级分布: {pri_str}")
+
+            query = self.search_var.get().strip().lower()
+            cat_filter = self.cat_var.get().strip()
+
+            for m in memories:
+                content = m.get("content", "")
+                if query and query not in content.lower() and query not in (m.get("tags", "") or "").lower():
+                    continue
+                if cat_filter and m.get("category", "") != cat_filter:
+                    continue
+
+                priority = self.PRIORITY_LABELS.get(m.get("priority", 2), str(m["priority"]))
+                category = self.CATEGORY_LABELS.get(m.get("category", ""), m["category"])
+                expires = m.get("expires_at", "") or "永不过期"
+                if len(expires) > 16:
+                    expires = expires[:16]
+                importance = "⭐" * m.get("importance", 3)
+                tags = (m.get("tags") or "")[:60]
+
+                self.tree.insert("", tk.END,
+                                 values=(m["id"], priority, category, content, importance, expires, tags),
+                                 iid=str(m["id"]))
+        except Exception as e:
+            self.stats_var.set(f"加载失败: {e}")
+
+    def _sort(self, col):
+        items = [(str(self.tree.set(i, col)), i) for i in self.tree.get_children("")]
+        if col == "priority":
+            order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+            items.sort(key=lambda x: order.get(x[0], 99))
+        elif col == "id":
+            items.sort(key=lambda x: int(x[0]))
+        else:
+            items.sort()
+        for idx, (_, iid) in enumerate(items):
+            self.tree.move(iid, "", idx)
+
+    def _add_dialog(self):
+        dlg = tk.Toplevel(self)
+        dlg.title("添加记忆")
+        dlg.transient(self)
+        dlg.grab_set()
+        dlg.geometry("500x420")
+
+        fields = [
+            ("内容 (content):", "content", tk.Text, {"height": 3}),
+        ]
+
+        ttk.Label(dlg, text="内容 (必填):").place(x=10, y=10)
+        content_text = tk.Text(dlg, height=3, width=55, font=("Noto Sans CJK SC", 10))
+        content_text.place(x=10, y=32)
+
+        ttk.Label(dlg, text="分类:").place(x=10, y=100)
+        cat_var = tk.StringVar(value="general")
+        ttk.Combobox(dlg, textvariable=cat_var,
+                     values=["instruction", "preference", "fact", "reminder", "general"],
+                     width=14, state="readonly").place(x=60, y=98)
+
+        ttk.Label(dlg, text="优先级 (0-3):").place(x=10, y=132)
+        pri_var = tk.IntVar(value=2)
+        ttk.Spinbox(dlg, from_=0, to=3, textvariable=pri_var, width=4).place(x=100, y=130)
+        ttk.Label(dlg, text="0=CRITICAL  1=HIGH  2=MEDIUM  3=LOW",
+                  font=("", 8), foreground="#666").place(x=150, y=133)
+
+        ttk.Label(dlg, text="重要度 (1-5):").place(x=10, y=164)
+        imp_var = tk.IntVar(value=3)
+        ttk.Spinbox(dlg, from_=1, to=5, textvariable=imp_var, width=4).place(x=100, y=162)
+
+        ttk.Label(dlg, text="标签 (逗号分隔):").place(x=10, y=196)
+        tags_var = tk.StringVar()
+        ttk.Entry(dlg, textvariable=tags_var, width=30).place(x=130, y=194)
+
+        ttk.Label(dlg, text="过期时间 (ISO):").place(x=10, y=228)
+        expires_var = tk.StringVar()
+        ttk.Entry(dlg, textvariable=expires_var, width=30).place(x=130, y=226)
+        ttk.Label(dlg, text="留空=永不过期  格式: 2026-05-01T08:00:00",
+                  font=("", 8), foreground="#666").place(x=130, y=252)
+
+        result_label = ttk.Label(dlg, text="", foreground="#cc0000")
+        result_label.place(x=10, y=290)
+
+        def do_add():
+            content = content_text.get("1.0", tk.END).strip()
+            if not content:
+                result_label.config(text="内容不能为空")
+                return
+            try:
+                mid = self.db.add_memory(
+                    content=content,
+                    category=cat_var.get(),
+                    priority=pri_var.get(),
+                    importance=imp_var.get(),
+                    expires_at=expires_var.get() or None,
+                    tags=tags_var.get(),
+                )
+                result_label.config(text=f"✅ 记忆 #{mid} 已添加", foreground="#008800")
+                dlg.after(800, dlg.destroy)
+                self._refresh()
+            except Exception as e:
+                result_label.config(text=f"❌ {e}")
+
+        ttk.Button(dlg, text="添加", command=do_add).place(x=10, y=330, width=80)
+        ttk.Button(dlg, text="取消", command=dlg.destroy).place(x=100, y=330, width=80)
+
+    def _soft_delete(self):
+        selection = self.tree.selection()
+        if not selection:
+            return
+        for iid in selection:
+            try:
+                self.db.deactivate_memory(int(iid))
+            except Exception:
+                pass
+        self._refresh()
+
+    def _hard_delete(self):
+        selection = self.tree.selection()
+        if not selection:
+            return
+        for iid in selection:
+            try:
+                self.db.delete_memory(int(iid))
+            except Exception:
+                pass
+        self._refresh()
+
+    def _on_double_click(self, event):
+        selection = self.tree.selection()
+        if not selection:
+            return
+        iid = selection[0]
+        item = self.tree.item(iid)
+        values = item["values"]
+        content = values[3]
+
+        dlg = tk.Toplevel(self)
+        dlg.title(f"记忆 #{iid}")
+        dlg.transient(self)
+        dlg.geometry("500x300")
+
+        text = tk.Text(dlg, font=("Noto Sans CJK SC", 11), wrap=tk.WORD)
+        text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        text.insert("1.0", content)
+        text.config(state=tk.DISABLED)
+
+        info = f"优先级: {values[1]} | 分类: {values[2]} | 重要度: {values[4]} | 过期: {values[5]}"
+        ttk.Label(dlg, text=info).pack(pady=(0, 10))
+
+    def _export(self):
+        from tkinter import filedialog
+        memories = self.db.get_active_memories(limit=200)
+        if not memories:
+            return
+        path = filedialog.asksaveasfilename(
+            defaultextension=".md", filetypes=[("Markdown", "*.md"), ("Text", "*.txt")])
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("# 长期记忆导出\\n\\n")
+                for m in memories:
+                    f.write("## #" + str(m["id"]) + " [" + self.PRIORITY_LABELS.get(m["priority"], "?") + "] " + m["content"] + "\\n")
+                    f.write("分类: " + m["category"] + " | 重要度: " + str(m["importance"]) + " | 标签: " + (m.get("tags") or "") + "\\n")
+                    if m.get("expires_at"):
+                        f.write("过期: " + m["expires_at"] + "\\n")
+                    f.write("\\n")
+            self.stats_var.set(f"已导出 {len(memories)} 条到 {path}")
+        except Exception as e:
+            self.stats_var.set(f"导出失败: {e}")
+
+
 class TkGUI:
     def __init__(self, root, debug:bool=False):
         self.debug = debug
@@ -270,6 +556,9 @@ class TkGUI:
         self.topic_list.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
         self.topic_list.bind("<<ListboxSelect>>", self.on_topic_select)
         ttk.Button(left, text="➕ 新建主题", command=self.new_topic).pack(
+            fill=tk.X, padx=4, pady=2)
+        ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
+        ttk.Button(left, text="🧠 记忆管理", command=self.open_memory_dialog).pack(
             fill=tk.X, padx=4, pady=2)
 
         # ===== 右侧面板 =====
@@ -438,6 +727,9 @@ class TkGUI:
 
     def safe_log_tool(self, msg: str):
         self.root.after(0, self.log_tool, msg)
+
+    def safe_update_status(self, msg: str):
+        self.root.after(0, self._update_status, msg)
 
     def on_thinking_toggle(self):
         if hasattr(self, 'sess') and self.sess:
@@ -636,14 +928,16 @@ class TkGUI:
         self.generating = True
         self.log("AI：", "ai")
 
-        self._update_status("⏳ 生成中... (ESC 打断)")
+        mem_count = len(self.db.get_active_memories(50))
+        self._update_status(f"⏳ 生成中... (ESC 打断) | 🧠 {mem_count}")
 
         def work():
             try:
                 ai_msg, is_func = self.sess.chat_stream(
                     msg, 
                     callback=self.safe_stream,
-                    topic_id=self.current_topic_id
+                    topic_id=self.current_topic_id,
+                    on_status=self.safe_update_status,
                 )
                 self.root.after(0, self._flush_stream_to_messages)
 
@@ -708,6 +1002,10 @@ class TkGUI:
     def _render_and_show_chat(self):
         self._render_chat()
         self._switch_display("chat_view")
+
+    def open_memory_dialog(self):
+        """打开记忆管理对话框"""
+        MemoryDialog(self.root, self.db)
 
     def interrupt(self, e=None):
         if self.generating:

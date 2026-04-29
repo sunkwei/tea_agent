@@ -288,13 +288,17 @@ importance 评分：
         count = 0
         for item in results:
             try:
+# NOTE: 2026-04-29 11:29:55, self-evolved by tea_agent --- 修复 ingest_extracted: tags 为 list 时转为逗号分隔字符串
+                tags = item.get("tags", "")
+                if isinstance(tags, list):
+                    tags = ", ".join(tags)
                 self.storage.add_memory(
                     content=item.get("content", "").strip(),
                     category=item.get("category", "general"),
                     priority=item.get("priority", 2),
                     importance=item.get("importance", 3),
                     expires_at=item.get("expires_at"),
-                    tags=item.get("tags", ""),
+                    tags=tags,
                     source_topic_id=topic_id,
                 )
                 count += 1

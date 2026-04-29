@@ -917,7 +917,6 @@ class TkGUI:
         # 加载主题
         self.refresh_topics()
         self.auto_new_topic()
-        self.show_tool_list()
 
     def _create_ui(self):
         """创建界面"""

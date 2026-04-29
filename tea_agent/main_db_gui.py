@@ -1080,6 +1080,7 @@ class TkGUI:
             cheap_api_key=cast(str, CHEAP_MODEL.api_key),
             cheap_api_url=cast(str, CHEAP_MODEL.api_url),
             cheap_model=cast(str, CHEAP_MODEL.model_name),
+            enable_thinking=cfg.enable_thinking,
         )
 
         self.sess.tool_log = self.safe_log_tool

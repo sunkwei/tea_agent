@@ -115,6 +115,12 @@ class OnlineToolSession(
         self.max_tool_output = max_tool_output
         self.max_assistant_content = max_assistant_content
 
+        # @2026-04-29 gen by deepseek-v4-pro, max_iterations交互式续跑（弹框选择继续/终止）
+        import threading
+        self._extra_iterations = 0
+        self._continue_after_max = False
+        self._max_iter_wait = threading.Event()
+
         # 工具定义
         self.tools: List[Dict] = []
         self._build_tools()
@@ -274,7 +280,7 @@ class OnlineToolSession(
         used_tools = False
         iterations = 0
 
-        while iterations < self.max_iterations:
+        while iterations < self.max_iterations + self._extra_iterations:
             if self.interrupted:
                 final_msg = full_reply + "\n[已打断]"
                 self.add_assistant_message(final_msg)
@@ -370,13 +376,134 @@ class OnlineToolSession(
             else:
                 break
 
-        # 达到最大迭代次数
-        if iterations >= self.max_iterations:
-            warning = f"\n\n[警告：已达到最大迭代次数 {self.max_iterations}，对话强制终止]"
-            callback(warning)
-            full_reply += warning
-            self.add_assistant_message(full_reply)
-            self._collect_max_iterations_round(full_reply)
+        # 达到最大迭代次数 - 交互式续跑
+        # 外层循环：当用户选择「继续」时重启内层工具循环
+        while True:
+            effective_max = self.max_iterations + self._extra_iterations
+            
+            while iterations < self.max_iterations + self._extra_iterations:
+                if self.interrupted:
+                    final_msg = full_reply + "\n[已打断]"
+                    self.add_assistant_message(final_msg)
+                    self._collect_interruption_round(final_msg)
+                    return {
+                        "full_reply": final_msg,
+                        "used_tools": used_tools,
+                        "interrupted": True,
+                    }
+
+                api_messages = self._build_api_messages()
+
+                try:
+                    response = self._create_chat_stream(api_messages, self.tools)
+                except Exception as e:
+                    error_msg = f"API调用错误: {e}"
+                    callback(error_msg)
+                    self.add_assistant_message(full_reply + error_msg)
+                    self._collect_api_error_round(full_reply + error_msg)
+                    return {
+                        "full_reply": full_reply + error_msg,
+                        "used_tools": used_tools,
+                        "error": e,
+                    }
+
+                # 处理流式响应
+                content, tool_calls_data, reasoning_content = self._process_stream_with_reasoning(response, callback)
+                full_reply += content
+
+                # 解析工具调用
+                valid_tool_calls = self._parse_tool_calls_from_stream(tool_calls_data)
+
+                if valid_tool_calls:
+                    used_tools = True
+
+                    if on_status:
+                        on_status(f"⏳ 生成中... 调用工具第{iterations+1}轮 (ESC 打断)")
+
+                    # NOTE: 2026-04-28, self-evolved by claude-agent ---
+                    # 收集 assistant tool_calls 时传递 reasoning_content，
+                    # 确保持久化到 rounds_json 时不会丢失。
+                    self._collect_assistant_tool_calls_round(content, valid_tool_calls, reasoning_content)
+
+                    # 存入完整历史（包含 reasoning_content）
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": content if content else None,
+                        "tool_calls": [{
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments
+                            }
+                        } for tc in valid_tool_calls]
+                    }
+                    # 如果有 reasoning_content，添加到消息中
+                    if reasoning_content:
+                        assistant_msg["reasoning_content"] = reasoning_content
+                
+                    self.messages.append(assistant_msg)
+
+                    # 执行工具调用
+                    has_reload = any(
+                        tc.function.name == "toolkit_reload"
+                        for tc in valid_tool_calls
+                    )
+
+                    for call in valid_tool_calls:
+                        call_id, func_name, result_str = self._execute_tool_call(call)
+                        self._collect_tool_call_round(call_id, result_str)
+
+                    # 如果调用了 reload，刷新本地工具定义
+                    if has_reload:
+                        self._build_tools()
+
+                    iterations += 1
+
+                    # 流式反馈
+                    if content:
+                        callback("\n\n[正在执行工具，处理中...]\n\n")
+
+                    continue
+
+                elif content:
+                    # 最终文本回答（包含 reasoning_content）
+                    assistant_msg = {"role": "assistant", "content": content}
+                    if reasoning_content:
+                        assistant_msg["reasoning_content"] = reasoning_content
+                    self.messages.append(assistant_msg)
+                    self._collect_assistant_text_round(content, reasoning_content)
+                    break
+                else:
+                    break
+
+
+            # 内层 while 退出 → 达到 max_iterations
+            if not on_status:
+                warning = f"\n\n[警告：已达到最大迭代次数 {self.max_iterations}，对话终止]"
+                callback(warning)
+                full_reply += warning
+                self.add_assistant_message(full_reply)
+                self._collect_max_iterations_round(full_reply)
+                break
+
+            # 通知 GUI 弹框询问
+            on_status(f"!MAX_ITER:已执行{iterations}轮，上限{effective_max}，是否继续？")
+            self._max_iter_wait.wait(timeout=300)
+            if not self._continue_after_max:
+                warning = f"\n\n[用户选择终止，已执行 {iterations} 轮工具调用]"
+                callback(warning)
+                full_reply += warning
+                self.add_assistant_message(full_reply)
+                self._collect_max_iterations_round(full_reply)
+                break
+
+            # 用户选择继续：追加5轮
+            self._extra_iterations += 5
+            self._continue_after_max = False
+            self._max_iter_wait.clear()
+            on_status("⏳ 已续命5轮，继续生成... (ESC 打断)")
+            # 外层 while continue → 重新进入内层 while
 
         return {
             "full_reply": full_reply,
@@ -406,6 +533,8 @@ class OnlineToolSession(
         self.reset_usage()
         self.reset_cheap_usage()
         self._rounds_collector = []
+        self._extra_iterations = 0
+        self._max_iter_wait.clear()
         
         # NOTE: 2026-04-28, self-evolved by claude-agent ---
         # 清除上一轮 API 会话遗留的 reasoning_content，

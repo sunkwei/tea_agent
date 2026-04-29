@@ -781,7 +781,28 @@ class TkGUI:
         self.root.after(0, self.log_tool, msg)
 
     def safe_update_status(self, msg: str):
-        self.root.after(0, self._update_status, msg)
+        if msg.startswith("!MAX_ITER:"):
+            self.root.after(0, self._handle_max_iter, msg)
+        else:
+            self.root.after(0, self._update_status, msg)
+
+    # @2026-04-29 gen by deepseek-v4-pro, 工具调用达上限时弹框询问继续/终止
+    def _handle_max_iter(self, msg: str):
+        """弹出对话框询问用户是否继续工具调用。"""
+        from tkinter import messagebox
+        display = msg.replace("!MAX_ITER:", "")
+        result = messagebox.askyesno(
+            "达到工具调用上限",
+            f"{display}\n\n选择「是」再执行 5 轮\n选择「否」终止当前回答",
+            parent=self.root,
+        )
+        if hasattr(self, 'sess') and self.sess:
+            self.sess._continue_after_max = result
+            self.sess._max_iter_wait.set()
+            if result:
+                self._update_status("⏳ 已续命 5 轮，继续生成... (ESC 打断)")
+            else:
+                self._update_status("🛑 用户终止工具调用")
 
     def on_thinking_toggle(self):
         if hasattr(self, 'sess') and self.sess:

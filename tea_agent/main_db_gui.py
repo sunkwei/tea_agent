@@ -895,8 +895,6 @@ class TkGUI:
         self.current_topic_id = -1
         self.generating = False
 
-        # Thinking 开关状态
-        self.enable_thinking_var = tk.BooleanVar(value=True)
 
         # HtmlFrame 缩放级别
         self._zoom_level = 100
@@ -982,13 +980,6 @@ class TkGUI:
         )
         self.input_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
-        self.thinking_check = ttk.Checkbutton(
-            input_frame,
-            text="🧠 启用 Thinking",
-            variable=self.enable_thinking_var,
-            command=self.on_thinking_toggle
-        )
-        self.thinking_check.pack(anchor=tk.W, padx=6, pady=2)
 
         ttk.Label(input_frame, text="Enter 发送 | Shift+Enter 换行 | ESC 打断",
                   foreground="#666").pack(anchor=tk.E, padx=6)
@@ -1082,7 +1073,6 @@ class TkGUI:
             model=cast(str, MODEL),
             max_history=cfg.max_history,
             max_iterations=cfg.max_iterations,
-            enable_thinking=cfg.enable_thinking,
             keep_turns=cfg.keep_turns,
             max_tool_output=cfg.max_tool_output,
             max_assistant_content=cfg.max_assistant_content,
@@ -1091,7 +1081,6 @@ class TkGUI:
             cheap_api_url=cast(str, CHEAP_MODEL.api_url),
             cheap_model=cast(str, CHEAP_MODEL.model_name),
         )
-        self.sess.enable_thinking = self.enable_thinking_var.get()
 
         self.sess.tool_log = self.safe_log_tool
         cheap_info = f" | 摘要模型: {CHEAP_MODEL.model_name}" if CHEAP_MODEL.model_name else ""
@@ -1133,13 +1122,6 @@ class TkGUI:
             else:
                 self._update_status("🛑 用户终止工具调用")
 
-    def on_thinking_toggle(self):
-        if hasattr(self, 'sess') and self.sess:
-            self.sess.enable_thinking = self.enable_thinking_var.get()
-            state = "已开启" if self.enable_thinking_var.get() else "已关闭"
-            self._update_status(f"🧠 Thinking {state}")
-
-    def show_tool_list(self):
         self.log("=" * 50, "title")
         self.log(f"📦 已加载工具函数（共 {len(self.toolkit.func_map)} 个）", "title")
         for name in self.toolkit.func_map.keys():

@@ -10,7 +10,7 @@ import html as html_mod
 import traceback
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, cast, Callable, Optional, List, Tuple
+from typing import Optional, Dict, cast, Callable, Optional, List, Tuple
 import logging
 
 try:
@@ -1084,8 +1084,20 @@ class TkGUI:
         )
 
         self.sess.tool_log = self.safe_log_tool
+        import tea_agent.session_ref as _sref; _sref.set_session(self.sess)  # 供 toolkit 工具访问
         cheap_info = f" | 摘要模型: {CHEAP_MODEL.model_name}" if CHEAP_MODEL.model_name else ""
         self._update_status(f"📡 已连接 | 模型: {MODEL}{cheap_info}")
+
+    def toggle_reasoning(self, enable: Optional[bool] = None) -> dict:
+        """切换或查询 reasoning/thinking 状态。供 toolkit 工具调用。"""
+        if self.sess is None:
+            return {"error": "无活跃会话"}
+        if enable is None:
+            return {"enable_thinking": self.sess.enable_thinking}
+        self.sess.enable_thinking = bool(enable)
+        state = "开启" if enable else "关闭"
+        self._update_status(f"🧠 Reasoning 已{state}")
+        return {"enable_thinking": self.sess.enable_thinking, "changed": True}
 
     def _update_status(self, msg: str):
         self.status_var.set(msg)

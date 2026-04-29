@@ -68,7 +68,8 @@ class TestConfigModule(unittest.TestCase):
         
         # 保存
         save_config(cfg, str(self.test_config_path))
-        self.assertTrue(self.test_config_path.int_exists := self.test_config_path.exists())
+# NOTE: 2026-04-29 11:37:47, self-evolved by tea_agent --- 修复两处语法错误: walrus操作符误用 + 删除废代码行
+        self.assertTrue(self.test_config_path.exists())
         
         # 加载并验证
         loaded_cfg = load_config(str(self.test_config_path))
@@ -122,8 +123,8 @@ def run_config_report():
 
 if __name__ == "__main__":
     # Run tests
+# NOTE: 2026-04-29 11:38:01, self-evolved by tea_agent --- 删除无效的 runner = unittest 行
     suite = unittest.TestLoader().loadTestsFromTestCase(TestConfigModule)
-    runner = unittest        # Error here
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
     

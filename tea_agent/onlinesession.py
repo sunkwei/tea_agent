@@ -4,10 +4,9 @@
 
 Token 优化策略:
 1. 压缩系统提示词 (~200 tokens, 原 ~1000+)
-2. 历史摘要：超过3轮的对话自动摘要，只传摘要+最近N轮
+2. 历史摘要：超过5轮的对话自动摘要，只传摘要+最近N轮
 3. 工具输出截断：超长结果截断至 max_tool_output 字符
-4. 记忆注入精简：8条记忆，独立于消息列表（不侵入 self.messages）
-5. 记忆提取限窗：仅从最近6轮提取
+4. 助手回复截断：超长回复截断至 max_assistant_content 字符
 """
 
 from openai import OpenAI
@@ -15,7 +14,6 @@ from typing import List, Dict, Callable, Tuple, Any, Optional
 import logging
 
 from tea_agent.basesession import BaseChatSession
-from tea_agent.session_memory import SessionMemoryMixin
 from tea_agent.session_summarizer import SessionSummarizerMixin
 from tea_agent.session_tool import SessionToolMixin
 from tea_agent.session_api import SessionAPIMixin
@@ -26,7 +24,6 @@ logger = logging.getLogger("session")
 
 class OnlineToolSession(
     BaseChatSession,
-    SessionMemoryMixin,
     SessionSummarizerMixin,
     SessionToolMixin,
     SessionAPIMixin,
@@ -39,8 +36,6 @@ class OnlineToolSession(
     - 历史摘要：超过 keep_turns 轮的对话自动摘要，只传摘要 + 最近 N 轮
     - 紧凑消息：工具输出和助手回复超长时截断
     - 精简系统提示词（~200 tokens，原 ~1000+）
-    - 记忆注入独立于消息列表，不侵入 self.messages
-    - 记忆提取限窗，仅从最近 N 轮提取
 
     中间轮次存储策略:
     - chat_stream 期间收集所有中间 request/response 到 _rounds_collector
@@ -61,16 +56,13 @@ class OnlineToolSession(
         system_prompt: str = "",
         max_iterations: int = 50,
         enable_thinking: bool = True,
-        memory=None,
         storage=None,
         cheap_api_key: str = "",
         cheap_api_url: str = "",
         cheap_model: str = "",
-        keep_turns: int = 3,
+        keep_turns: int = 5,
         max_tool_output: int = 128 * 1024,
         max_assistant_content: int = 128 * 1024,
-        memory_inject_limit: int = 8,
-        memory_extract_rounds: int = 6,
     ):
         """
         初始化会话
@@ -84,7 +76,6 @@ class OnlineToolSession(
             system_prompt: 系统提示词（为空则使用压缩版）
             max_iterations: 最大工具调用迭代次数
             enable_thinking: 是否启用 thinking 功能
-            memory: Memory 实例，用于长期记忆
             storage: Storage 实例，用于持久化存储
             cheap_api_key: 便宜模型 API密钥（用于摘要等低成本任务）
             cheap_api_url: 便宜模型 API地址
@@ -92,12 +83,9 @@ class OnlineToolSession(
             keep_turns: 保留最近N轮完整对话，更早的对话自动摘要
             max_tool_output: 工具输出截断字符数
             max_assistant_content: 助手回复截断字符数
-            memory_inject_limit: 记忆注入条数上限
-            memory_extract_rounds: 记忆提取窗口轮数
         """
         sp = system_prompt or self._COMPACT_SYSTEM_PROMPT
         BaseChatSession.__init__(self, model, max_history, sp)
-        SessionMemoryMixin.__init__(self)
         SessionSummarizerMixin.__init__(self)
         SessionToolMixin.__init__(self)
         SessionAPIMixin.__init__(self)
@@ -108,7 +96,6 @@ class OnlineToolSession(
         self.client = OpenAI(api_key=api_key, base_url=api_url)
         self.max_iterations = max_iterations
         self.enable_thinking = enable_thinking
-        self.memory = memory
         self.storage = storage
 
         # 便宜模型客户端
@@ -119,11 +106,9 @@ class OnlineToolSession(
             self._cheap_model_name = cheap_model
 
         # Token 优化参数
-        # self.keep_turns = 5 # 保持最新 5 轮原始对话内容
+        self.keep_turns = keep_turns
         self.max_tool_output = max_tool_output
         self.max_assistant_content = max_assistant_content
-        self.memory_inject_limit = memory_inject_limit
-        self.memory_extract_rounds = memory_extract_rounds
 
         # 工具定义
         self.tools: List[Dict] = []
@@ -177,15 +162,6 @@ class OnlineToolSession(
 
     def _setup_default_pipeline(self):
         """设置默认的 Pipeline 步骤"""
-        # # 1. 注入记忆
-        # self.pipeline.register_step(
-        #     name="inject_memories",
-        #     func=lambda ctx: (self._inject_memories(), self.messages)[1],
-        #     enabled=True,
-        #     description="注入重要记忆到上下文",
-        #     position=10,
-        # )
-        
         # 2. 添加用户消息
         self.pipeline.register_step(
             name="add_user_message",
@@ -212,16 +188,60 @@ class OnlineToolSession(
             description="执行工具调用循环",
             position=40,
         )
-        
-        # # 5. 提取记忆
-        # self.pipeline.register_step(
-        #     name="extract_memory",
-        #     func=lambda ctx: (self._save_conversation_memory(), {})[1],
-        #     enabled=True,
-        #     description="从对话中提取并保存记忆",
-        #     position=50,
-        # )
 
+    # NOTE: 2026-04-28, self-evolved by claude-agent ---
+    # _build_api_messages 不做 reasoning_content 清除。
+    # reasoning_content 的生命周期管理由两个入口控制：
+    # 1. load_history()  —— 加载历史时清除（basesession.py）
+    # 2. reset_session_state() —— 新一轮 chat_stream 开始时清除（本文件）
+    # 
+    # _build_api_messages 在 tool_loop 期间被调用，此时 reasoning_content
+    # 属于当前 API 会话，必须保留以传给后续请求，满足 DeepSeek 的回传要求。
+    def _build_api_messages(self) -> List[Dict]:
+        """
+        构建发送给 API 的消息列表。
+
+        压缩策略:
+            1. 系统提示词 (始终第一条)
+            2. 历史摘要 (如有，替代旧消息)
+            3. 最新 n 轮完整对话
+        """
+        result: List[Dict] = []
+
+        # 1. 系统提示词 (始终第一)
+        result.append(self.messages[0])
+
+        # 2. 历史摘要
+        if self._history_summary:
+            result.append({
+                "role": "user",
+                "content": f"这是我们之前对话的摘要：\n{self._history_summary}"
+            })
+            result.append({
+                "role": "assistant",
+                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"
+            })
+
+        # 3. 最新 N 轮完整对话
+        boundary = self._find_recent_boundary()
+        for i in range(boundary, len(self.messages)):
+            msg = self.messages[i]
+            msg_copy = dict(msg)
+            # NOTE: 2026-04-28, self-evolved by claude-agent ---
+            # 不在这里清除 reasoning_content。它由 reset_session_state() 统一管理。
+            # 在 tool_loop 期间，必须保留 reasoning_content 以传给 DeepSeek。
+            result.append(msg_copy)
+
+        return result
+
+    # NOTE: 2026-04-29, self-evolved by claude-agent ---
+    # 修复 _execute_tool_loop 中最终文本回复的重复添加问题：
+    # 原代码在 assistant_msg 已 append 到 self.messages 之后，
+    # 又调用 self.add_assistant_message(content) 导致产生两条相邻的
+    # assistant 消息（第一条有 reasoning_content，第二条无）。
+    # 经过 reset_session_state 清除 RC 后，两条消息变成完全相同，
+    # 但 DeepSeek 可能识别出第一条消息本应携带 RC，触发 400 错误。
+    # 修复：删除冗余的 self.add_assistant_message(content) 调用。
     def _execute_tool_loop(self, context: Dict) -> Dict:
         """
         执行工具调用循环。
@@ -275,8 +295,10 @@ class OnlineToolSession(
             if valid_tool_calls:
                 used_tools = True
 
-                # 收集 assistant tool_calls
-                self._collect_assistant_tool_calls_round(content, valid_tool_calls)
+                # NOTE: 2026-04-28, self-evolved by claude-agent ---
+                # 收集 assistant tool_calls 时传递 reasoning_content，
+                # 确保持久化到 rounds_json 时不会丢失。
+                self._collect_assistant_tool_calls_round(content, valid_tool_calls, reasoning_content)
 
                 # 存入完整历史（包含 reasoning_content）
                 assistant_msg = {
@@ -321,12 +343,18 @@ class OnlineToolSession(
 
             elif content:
                 # 最终文本回答（包含 reasoning_content）
+                # NOTE: 2026-04-29, self-evolved by claude-agent ---
+                # 修复：删除冗余的 self.add_assistant_message(content) 调用。
+                # assistant_msg 已包含完整的 reasoning_content，不需要再添加无 RC 的副本。
+                # 之前重复添加导致相邻两条相同内容的 assistant 消息，一条有 RC 一条无，
+                # 跨会话清除 RC 后触发 DeepSeek 400 错误。
                 assistant_msg = {"role": "assistant", "content": content}
                 if reasoning_content:
                     assistant_msg["reasoning_content"] = reasoning_content
                 self.messages.append(assistant_msg)
-                self.add_assistant_message(content)
-                self._collect_assistant_text_round(content)
+                # NOTE: 2026-04-28, self-evolved by claude-agent ---
+                # 传递 reasoning_content 确保持久化时不丢失
+                self._collect_assistant_text_round(content, reasoning_content)
                 break
             else:
                 break
@@ -360,12 +388,24 @@ class OnlineToolSession(
             return self._cheap_client, self._cheap_model_name
         return self.client, self.model
 
+    # NOTE: 2026-04-28, self-evolved by claude-agent ---
+    # reset_session_state 增加对 reasoning_content 的清除。
+    # reasoning_content 是 DeepSeek thinking 模式下的会话内状态，
+    # 只在一个 chat_stream（即一个 API 会话）内有效。
+    # 新一轮 chat_stream 开始时，上一轮遗留的 reasoning_content 
+    # 已失效，必须清除，否则传回 API 将触发 400 错误。
     def reset_session_state(self):
-        """重置会话状态（用于新会话开始前）"""
-        # self.reset_memory_state()
-        # self.reset_summary_state()
+        """
+        重置会话状态。
+        """
         self.reset_usage()
+        self.reset_cheap_usage()
         self._rounds_collector = []
+        
+        # NOTE: 2026-04-28, self-evolved by claude-agent ---
+        # 清除上一轮 API 会话遗留的 reasoning_content，
+        # 避免跨 chat_stream 传递失效的 reasoning_content。
+        self._strip_reasoning_content(self.messages)
         
         # 将当前 topic_id 注入到 mixins 中
         if hasattr(self, "current_topic_id") and self.storage:

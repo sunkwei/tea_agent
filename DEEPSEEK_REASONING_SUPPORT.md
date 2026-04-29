@@ -1,123 +1,132 @@
-# DeepSeek 推理模型支持
+# Thinking 模式 reasoning_content 处理策略
 
-## 问题描述
+## 核心问题
 
-DeepSeek 推理模型（如 deepseek-r1, deepseek-reasoner 等）有特殊的多轮对话要求：
+DeepSeek 推理模型在 thinking 模式下返回 `reasoning_content`（思维链内容）。API 要求：
+- **同一 API 会话内**：后续请求必须将前一轮的 `reasoning_content` 原样传回
+- **跨 API 会话**：上一会话的 `reasoning_content` 在新会话中无效，传回会导致 400 错误
 
-1. **当模型输出 `reasoning_content`（思维链内容）后**，在下一轮请求中：
-   - 如果之前的 assistant 消息包含 `reasoning_content` 字段，**但该轮次未进行工具调用**，必须移除 `reasoning_content`，否则 API 返回 400 错误
-   - 如果之前的 assistant 消息包含 `reasoning_content` 字段，**且该轮次进行了工具调用**，必须在后续**所有**请求中完整回传 `reasoning_content`，否则 API 也会报错
+> Error code: 400 - {'error': {'message': 'The reasoning_content in the thinking mode must be passed back to the API.'}}
 
-## 解决方案
+## 当前策略：生命周期管理
 
-### 1. 模型检测
+reasoning_content 的生命周期 = 一个 `chat_stream` 调用（即一个 API 会话）。
 
-在 `OnlineToolSession` 初始化时，自动检测是否为 DeepSeek 推理模型：
+### 生命周期边界
+
+| 阶段 | 操作 | reasoning_content |
+|------|------|-------------------|
+| **加载历史** | `load_history()` | ❌ 清除（来自旧 API 会话，已失效） |
+| **新一轮开始** | `reset_session_state()` | ❌ 清除（上一轮 chat_stream 遗留） |
+| **tool_loop 期间** | `_build_api_messages()` | ✅ 保留（当前 API 会话内，必须回传） |
+| **持久化** | `_rounds_collector` → DB | ✅ 保留（完整记录，供回放分析） |
+
+### 原理
+
+DeepSeek API 是**无状态**的，但 reasoning_content 是**会话内状态**：
+- 同一 `chat_stream` 内可能多次调用 API（tool_loop），reasoning_content 必须回传
+- 不同 `chat_stream` 是新 API 会话，旧的 reasoning_content 已失效
+
+## 实现
+
+### 1. load_history 清除（basesession.py）
 
 ```python
-self._is_deepseek_reasoning = self._check_deepseek_reasoning_model(model)
+@staticmethod
+def _strip_reasoning_content(messages):
+    for msg in messages:
+        msg.pop("reasoning_content", None)
+
+def load_history(self, conversations, summary=""):
+    ...
+    rounds = conv.get("rounds_json_parsed")
+    if rounds:
+        self._strip_reasoning_content(rounds)  # ← 关键：清除旧会话状态
+        for rd in rounds:
+            self.messages.append(rd)
 ```
 
-检测逻辑：
-- 模型名称包含 "deepseek"
-- 且匹配特定推理模型（deepseek-reasoner, deepseek-r1, deepseek-r2 等）
-- 或模型名称包含 "-r"
-
-### 2. reasoning_content 处理逻辑
-
-#### 核心规则：
-
-**判断某个轮次是否进行了工具调用：**
-- assistant 消息包含 `tool_calls` 字段
-- 且后续有对应的 `tool` 消息（`tool_call_id` 匹配）
-
-**处理策略：**
-- **进行了工具调用的轮次**：该 assistant 消息的 `reasoning_content` 必须在后续**所有**请求中完整保留
-- **未进行工具调用的轮次**：该 assistant 消息的 `reasoning_content` 必须在下一轮请求中移除
-
-## 技术实现
-
-### 1. 流式响应处理
-
-新增 `_process_stream_with_reasoning` 方法，从流式响应中收集 `reasoning_content`：
+### 2. reset_session_state 清除（onlinesession.py）
 
 ```python
-content, tool_calls_data, reasoning_content = self._process_stream_with_reasoning(response, callback)
+def reset_session_state(self):
+    ...
+    self._strip_reasoning_content(self.messages)  # ← 新一轮 chat_stream 前清除
 ```
 
-### 2. 消息存储
-
-在工具调用循环中，将 `reasoning_content` 保存到 assistant 消息：
+### 3. _build_api_messages 保留（onlinesession.py）
 
 ```python
-assistant_msg = {
-    "role": "assistant",
-    "content": content,
-    "tool_calls": [...]
-}
+def _build_api_messages(self):
+    # 不做 reasoning_content 清除！
+    # tool_loop 期间的 reasoning_content 属于当前 API 会话，必须保留
+    ...
+```
+
+### 4. tool_loop 期间存储
+
+```python
+assistant_msg = {"role": "assistant", "content": content, "tool_calls": [...]}
 if reasoning_content:
-    assistant_msg["reasoning_content"] = reasoning_content
-
+    assistant_msg["reasoning_content"] = reasoning_content  # ← 保留
 self.messages.append(assistant_msg)
 ```
 
-### 3. API 请求前处理
+## 便宜模型
 
-在发送 API 请求前，调用 `_handle_deepseek_reasoning_content` 方法处理消息：
-
-```python
-api_messages = self._build_api_messages()
-api_messages = self._handle_deepseek_reasoning_content(api_messages)
-```
-
-处理流程：
-1. 扫描所有 assistant 消息，识别哪些轮次进行了工具调用
-2. 对于进行了工具调用的轮次，标记其索引
-3. 遍历消息列表：
-   - 如果被标记 → 保留 `reasoning_content`
-   - 如果未被标记 → 移除 `reasoning_content`
-
-```python
-from tea_agent.onlinesession import OnlineToolSession
-
-# 使用 DeepSeek 推理模型
-session = OnlineToolSession(
-    toolkit=toolkit,
-    api_key="your-api-key",
-    api_url="https://api.deepseek.com",
-    model="deepseek-r1"  # 自动识别为推理模型
-)
-
-# 正常对话，内部会自动处理 reasoning_content
-response, used_tools = session.chat_stream("你好", callback=print)
-```
-
-## 修改的文件
-
-- `tea_agent/onlinesession.py`：
-  - 添加 `_is_deepseek_reasoning` 属性
-  - 添加 `_check_deepseek_reasoning_model()` 方法
-  - 添加 `_handle_deepseek_reasoning_content()` 方法
-  - 添加 `_process_stream_with_reasoning()` 方法
-  - 修改 `_execute_tool_loop()` 方法
-
-## 测试
-
-运行测试脚本验证功能：
-
-```bash
-python test_deepseek_reasoning.py
-```
-
-测试覆盖：
-- ✓ DeepSeek 推理模型检测
-- ✓ 非 DeepSeek 模型检测
-- ✓ 有工具调用时保留 reasoning_content
-- ✓ 无工具调用时移除 reasoning_content
-- ✓ 非 DeepSeek 模型不修改消息
+便宜模型（用于摘要等）不开启 thinking mode，不会产生 reasoning_content，不受影响。
 
 ## 注意事项
 
-1. **兼容性**：非 DeepSeek 推理模型不受影响，保持原有行为
-2. **透明性**：处理逻辑完全自动，用户无需手动干预
-3. **完整性**：`reasoning_content` 会被正确存储和传递，确保模型推理连贯性
+1. **持久化保留**：rounds_json 中保留 reasoning_content，用于调试和历史回放
+2. **加载清除**：从 DB 加载时自动清除，确保新会话不受旧状态影响
+3. **兼容性**：其他模型无 reasoning_content，pop 操作无副作用
+4. **tool_loop 完整性**：同一 chat_stream 内的多轮 tool_loop 正确回传 reasoning_content
+
+## 已知 Bug 修复记录
+
+### Bug #1: 最终文本回复重复添加 assistant 消息（2026-04-29 修复）
+
+**症状**：多轮对话后触发 400 错误 `reasoning_content must be passed back to the API`
+
+**根因**：`_execute_tool_loop()` 的最终文本回复分支中，`assistant_msg` 已通过 `self.messages.append()` 添加后，又调用 `self.add_assistant_message(content)` 产生第二条无 `reasoning_content` 的重复消息。
+
+```python
+# 修复前（有 bug）：
+elif content:
+    assistant_msg = {"role": "assistant", "content": content}
+    if reasoning_content:
+        assistant_msg["reasoning_content"] = reasoning_content
+    self.messages.append(assistant_msg)        # 第一条：有 RC
+    self.add_assistant_message(content)         # 第二条：无 RC，重复！❌
+    ...
+
+# 修复后：
+elif content:
+    assistant_msg = {"role": "assistant", "content": content}
+    if reasoning_content:
+        assistant_msg["reasoning_content"] = reasoning_content
+    self.messages.append(assistant_msg)        # 唯一一条：有 RC ✅
+    # 不再调用 add_assistant_message（内容已在上方添加）
+    ...
+```
+
+**影响范围**：每次 `chat_stream` 的最终文本回复都会产生一对相邻重复消息（一条有 RC，一条无）。经过 `reset_session_state` 清除后，两条消息内容完全相同但 DeepSeek 可能识别出第一条应携带 RC，触发 400 错误。
+
+**修复文件**：`tea_agent/onlinesession.py` - `_execute_tool_loop` 方法中的 `elif content:` 分支
+
+### 诊断工具
+
+可使用 `toolkit_diag_reasoning` 诊断消息列表中的 RC 问题：
+
+```python
+from toolkit_diag_reasoning import toolkit_diag_reasoning
+report = toolkit_diag_reasoning(json.dumps(messages))
+print(report)
+```
+
+该工具会检测：
+- 相邻重复 assistant 消息
+- tool_calls 消息缺失 reasoning_content
+- reasoning_content 为空值
+- 消息顺序异常

@@ -13,7 +13,7 @@ from tea_agent.session_api import SessionAPIMixin
 class MockSummarizer(SessionSummarizerMixin):
     """模拟类，提供 SessionSummarizerMixin 所需的依赖属性"""
     
-    def __init__(self, keep_turns=3, history_summary=""):
+    def __init__(self, keep_turns=5, history_summary=""):
         self.messages = [
             {"role": "system", "content": "你是一个智能助手。"}
         ]
@@ -64,7 +64,9 @@ def test_find_last_need_summary_pair():
     print("2. 测试 _find_last_need_summary_pair")
     print("=" * 60)
     
-    # --- 场景1: 正常多轮对话 ---
+    # --- 场景1: 正常多轮对话 (keep_turns=2) ---
+    # 算法：从后往前跳过 keep_turns 个 user，begin_idx 为第 (keep_turns+1) 个 user 的位置
+    #       end_idx 为 begin_idx 之后的第一个 user
     s = MockSummarizer(keep_turns=2)
     s.messages = [
         {"role": "system", "content": "sys"},
@@ -78,11 +80,29 @@ def test_find_last_need_summary_pair():
     ]
     
     last_user, last_ai = s._find_last_need_summary_pair()
-    # keep_turns=2: 从后往前，跳过 a3(idx6), a2(idx4)
-    # 下一个 assistant = a1(idx2), 然后找前面的 user = q1(idx1)
-    assert last_ai == 2, f"期望 last_ai=2，实际 {last_ai}"
-    assert last_user == 1, f"期望 last_user=1，实际 {last_user}"
-    print(f"  ✓ 场景1: 正常多轮 -> pair=({last_user}, {last_ai}) 对应 q1..a1")
+    # keep_turns=2: 从后往前跳过 q4(idx7), q3(idx5) → begin_idx=3 (q2)
+    # 从 idx 4 往后找 user → idx 5 (q3) → end_idx=5
+    # 摘要范围: messages[3:5] = [q2, a2]
+    assert last_user == 3, f"期望 last_user=3，实际 {last_user}"
+    assert last_ai == 5, f"期望 last_ai=5，实际 {last_ai}"
+    print(f"  ✓ 场景1: 正常多轮 (keep_turns=2) -> pair=({last_user}, {last_ai}) 摘要范围 [q2..a2]")
+
+    # --- 场景1b: keep_turns=5 时不需要摘要 ---
+    s1b = MockSummarizer(keep_turns=5)
+    s1b.messages = [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "q1"},
+        {"role": "assistant", "content": "a1"},
+        {"role": "user", "content": "q2"},
+        {"role": "assistant", "content": "a2"},
+        {"role": "user", "content": "q3"},
+        {"role": "assistant", "content": "a3"},
+        {"role": "user", "content": "q4"},
+    ]
+    last_user, last_ai = s1b._find_last_need_summary_pair()
+    # 只有4个user，keep_turns=5，不足，应返回 (-1, -1)
+    assert last_user == -1 and last_ai == -1, f"期望 (-1,-1)，实际 ({last_user},{last_ai})"
+    print(f"  ✓ 场景1b: keep_turns=5 不足时不摘要 -> ({last_user}, {last_ai})")
     
     # --- 场景2: 对话不足 keep_turns ---
     s2 = MockSummarizer(keep_turns=3)
@@ -115,17 +135,11 @@ def test_find_last_need_summary_pair():
     ]
     
     last_user, last_ai = s3._find_last_need_summary_pair()
-    # keep_turns=2: 从后往前跳过 a3(idx8), a2(idx6)
-    # ⚠️ 当前行为: 继续遍历，遇到 idx4 assistant 会覆盖 last_ai，遇到 idx2 assistant 再次覆盖
-    # 最终 last_ai=2, last_user=1。这意味着摘要范围 [1,2] 只覆盖了 tool_calls 消息，
-    # 丢失了 tool result 和后续的 assistant 回答。
-    print(f"  ⚠ 场景3 (含工具调用): pair=({last_user}, {last_ai})")
-    print(f"     注意: 当前算法可能截断工具调用链，仅捕获到 idx={last_ai}")
-    print(f"     消息[{last_user}] = {s3.messages[last_user]['content']}")
-    print(f"     消息[{last_ai}] = {s3.messages[last_ai].get('content', '[tool_calls]')[:50]}")
-    # 接受当前行为作为基线
-    assert last_user == 1 and last_ai == 2
-    print(f"  ✓ 场景3: 当前行为已记录")
+    # keep_turns=2: 从后往前跳过 q4(idx9), q3(idx7) → begin_idx=5 (q2)
+    # 从 idx 6 往后找 user → idx 7 (q3) → end_idx=7
+    # 摘要范围: messages[5:7] = [q2, a2]
+    assert last_user == 5 and last_ai == 7, f"期望 (5,7)，实际 ({last_user},{last_ai})"
+    print(f"  ✓ 场景3 (含工具调用): pair=({last_user}, {last_ai}) 摘要范围 [q2..a2]")
     
     print()
 

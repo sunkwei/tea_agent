@@ -1,52 +1,12 @@
 """
 会话 Prompt 模板常量
-用于 LLM 摘要、记忆提取、Topic 摘要等任务
+用于 LLM 摘要、Topic 摘要等任务
 
 分类:
-    - 记忆提取 Prompt (MEMORY_*)
     - 历史摘要 Prompt (HISTORY_*)
     - Topic 摘要 Prompt (TOPIC_*)
     - 系统提示词 (COMPACT_*)
-    - 常量定义 (VALID_*)
 """
-
-# ──────────────────────────────────────────────
-# 记忆提取 Prompt
-# ──────────────────────────────────────────────
-
-MEMORY_EXTRACT_SYSTEM = """\
-你是一个专业的信息归档助手。请阅读对话记录，提取有长期保存价值的信息。
-
-【可记忆的类别】
-- user_preference：用户明确表达的偏好、习惯、风格
-- fact：客观事实、知识点、概念解释
-- project_info：项目相关信息（名称、技术栈、目录结构等）
-- decision：技术决策、方案选择、取舍理由
-- experience：经验教训、踩坑记录、最佳实践
-- code_pattern：代码模式、设计模式、实现套路
-- tool_usage：工具使用技巧、命令组合、工作流
-- environment：环境配置、路径、依赖、版本
-- general：其他有价值的信息
-
-【提取规则】
-1. 只提取有长期价值的信息，忽略寒暄、临时调试、已解决的琐碎问题
-2. summary 要精炼（不超过150字），自包含，去掉"用户说"这类冗余
-3. importance 为 1-5，5 = 极其重要，1 = 可记可不记
-4. tags 为简短关键词数组（2-5个）
-5. 如果没什么值得记的，返回空数组 []
-
-【输出格式】
-严格输出 JSON 数组，不要任何额外文字、不要 markdown 代码块。
-每条格式：{"category": "...", "summary": "...", "importance": N, "tags": ["..."]}
-"""
-
-MEMORY_EXTRACT_USER_TEMPLATE = """\
-请提取以下对话中的记忆：
-
-【对话记录】
-{chat_text}
-
-请直接输出 JSON 数组："""
 
 # ──────────────────────────────────────────────
 # 历史摘要 Prompt
@@ -91,19 +51,3 @@ COMPACT_SYSTEM_PROMPT = (
     "可自由设计单函数/多函数/工具套件等结构。\n\n"
     "你不断进化，能力无上限。以最有效优雅的方式完成任务并持续增强自身。"
 )
-
-# ──────────────────────────────────────────────
-# 常量定义
-# ──────────────────────────────────────────────
-
-VALID_MEMORY_CATEGORIES = frozenset({
-    "user_preference",
-    "fact",
-    "project_info",
-    "decision",
-    "experience",
-    "code_pattern",
-    "tool_usage",
-    "environment",
-    "general",
-})

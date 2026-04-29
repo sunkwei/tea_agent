@@ -75,6 +75,28 @@ class BaseChatSession(ABC):
         """获取最近的消息（排除系统消息）"""
         return [m for m in self.messages if m["role"] != "system"]
 
+    # NOTE: 2026-04-28, self-evolved by claude-agent ---
+    # 从加载的历史消息中清除 reasoning_content。
+    # reasoning_content 是 DeepSeek thinking 模式下的会话内状态，
+    # 只在一个 API 会话内有效。从数据库加载的历史消息中的
+    # reasoning_content 属于之前的 API 会话，传回新会话将导致
+    # DeepSeek API 返回 400 错误：
+    # "The reasoning_content in the thinking mode must be passed back to the API."
+    @staticmethod
+    def _strip_reasoning_content(messages: List[Dict]) -> None:
+        """
+        原地清除消息列表中的 reasoning_content 字段。
+        
+        注意：对于包含 tool_calls 的 assistant 消息，必须保留 reasoning_content，
+        否则 DeepSeek API 会返回 400 错误。
+        """
+        for msg in messages:
+            # 如果是助手消息且包含工具调用，则保留 reasoning_content
+            # if msg.get("role") == "assistant" and msg.get("tool_calls"):
+            if msg.get("role") == "assistant":
+                continue
+            msg.pop("reasoning_content", None)
+
     def load_history(self, conversations: List[Dict], summary: str = ""):
         """
         从数据库加载历史记录，含中间工具调用链。
@@ -110,6 +132,10 @@ class BaseChatSession(ABC):
             )
             rounds = conv.get("rounds_json_parsed")
             if rounds and conv.get("is_func_calling"):
+                # NOTE: 2026-04-28, self-evolved by claude-agent ---
+                # 清除历史 rounds 中的 reasoning_content，因为它属于之前的
+                # API 会话，传回新会话会导致 DeepSeek 400 错误。
+                self._strip_reasoning_content(rounds)
                 for rd in rounds:
                     self.messages.append(rd)
             else:

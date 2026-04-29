@@ -1,5 +1,7 @@
 """
-测试 DeepSeek 推理模型的 reasoning_content 处理
+测试 reasoning_content 统一保留策略
+
+验证所有模型的 reasoning_content 均被保留，不做移除处理。
 """
 from tea_agent.onlinesession import OnlineToolSession
 
@@ -16,9 +18,8 @@ class MockToolkit:
         pass
 
 
-def test_deepseek_detection():
-    """测试 DeepSeek 模型检测"""
-    # 创建会话实例
+def test_no_deepseek_special_detection():
+    """验证不再有 DeepSeek 特殊检测属性"""
     session = OnlineToolSession(
         toolkit=MockToolkit(),
         api_key="test",
@@ -26,23 +27,23 @@ def test_deepseek_detection():
         model="deepseek-r1"
     )
     
-    # 验证是否正确识别为 DeepSeek 推理模型
-    assert session._is_deepseek_reasoning == True, "应该识别为 DeepSeek 推理模型"
-    print("✓ DeepSeek 推理模型检测成功")
+    # 不应再存在 _is_deepseek_reasoning 属性
+    assert not hasattr(session, '_is_deepseek_reasoning'), \
+        "已移除 _is_deepseek_reasoning 属性，不应存在"
     
-    # 测试非 DeepSeek 模型
-    session2 = OnlineToolSession(
-        toolkit=MockToolkit(),
-        api_key="test",
-        api_url="http://test",
-        model="gpt-4"
-    )
-    assert session2._is_deepseek_reasoning == False, "不应该识别为 DeepSeek 推理模型"
-    print("✓ 非 DeepSeek 模型检测成功")
+    # 不应再存在 _handle_deepseek_reasoning_content 方法
+    assert not hasattr(session, '_handle_deepseek_reasoning_content'), \
+        "已移除 _handle_deepseek_reasoning_content 方法，不应存在"
+    
+    # 不应再存在 _check_deepseek_reasoning_model 方法
+    assert not hasattr(session, '_check_deepseek_reasoning_model'), \
+        "已移除 _check_deepseek_reasoning_model 方法，不应存在"
+    
+    print("✓ 已移除所有 DeepSeek 特殊检测逻辑")
 
 
-def test_reasoning_content_handling():
-    """测试 reasoning_content 处理逻辑"""
+def test_reasoning_content_always_preserved():
+    """测试所有 reasoning_content 始终被保留"""
     session = OnlineToolSession(
         toolkit=MockToolkit(),
         api_key="test",
@@ -50,8 +51,10 @@ def test_reasoning_content_handling():
         model="deepseek-r1"
     )
     
-    # 测试场景1: assistant 消息有 reasoning_content 和 tool_calls，且有对应的 tool 消息（应该保留）
-    messages_1 = [
+    # 直接测试 _build_api_messages：消息中的 reasoning_content 应全部保留
+    
+    # 场景1: 有 tool_calls 的 assistant 消息，reasoning_content 应保留
+    session.messages = [
         {"role": "system", "content": "test"},
         {"role": "user", "content": "hello"},
         {
@@ -66,99 +69,76 @@ def test_reasoning_content_handling():
         {"role": "user", "content": "next question"}
     ]
     
-    processed_1 = session._handle_deepseek_reasoning_content(messages_1)
-    assert "reasoning_content" in processed_1[2], "有工具调用时应保留 reasoning_content"
-    assert processed_1[2]["reasoning_content"] == "deep thought", "应完整保留 reasoning_content"
-    print("✓ 场景1: 有工具调用时保留 reasoning_content")
+    api_msgs = session._build_api_messages()
+    # 找到有 tool_calls 的 assistant 消息
+    tc_msg = next(m for m in api_msgs if m.get("role") == "assistant" and m.get("tool_calls"))
+    assert "reasoning_content" in tc_msg, "有 tool_calls 时应保留 reasoning_content"
+    assert tc_msg["reasoning_content"] == "deep thought"
+    print("✓ 场景1: 有 tool_calls 的 assistant 保留 reasoning_content")
     
-    # 测试场景2: assistant 消息有 reasoning_content 但没有 tool_calls（应该移除）
-    messages_2 = [
+    # 场景2: 无 tool_calls 的 assistant 消息，reasoning_content 也应保留
+    session.messages = [
         {"role": "system", "content": "test"},
         {"role": "user", "content": "hello"},
         {
             "role": "assistant",
-            "content": "thinking...",
-            "reasoning_content": "deep thought"
+            "content": "answering",
+            "reasoning_content": "thinking for answer"
         },
         {"role": "user", "content": "next question"}
     ]
     
-    processed_2 = session._handle_deepseek_reasoning_content(messages_2)
-    assert "reasoning_content" not in processed_2[2], "没有工具调用时应移除 reasoning_content"
-    print("✓ 场景2: 没有工具调用时移除 reasoning_content")
+    api_msgs = session._build_api_messages()
+    no_tc_msg = next(m for m in api_msgs if m.get("role") == "assistant" and not m.get("tool_calls"))
+    assert "reasoning_content" in no_tc_msg, "无 tool_calls 时也应保留 reasoning_content"
+    assert no_tc_msg["reasoning_content"] == "thinking for answer"
+    print("✓ 场景2: 无 tool_calls 的 assistant 也保留 reasoning_content")
     
-    # 测试场景3: 多轮对话混合场景
-    messages_3 = [
+    # 场景3: 多轮混合对话，所有 reasoning_content 均应保留
+    session.messages = [
         {"role": "system", "content": "test"},
-        {"role": "user", "content": "question 1"},
-        # 第1轮：有工具调用
+        {"role": "user", "content": "q1"},
         {
             "role": "assistant",
             "content": "let me check",
-            "reasoning_content": "reasoning for tool call",
+            "reasoning_content": "reasoning for tool",
             "tool_calls": [
                 {"id": "call_1", "type": "function", "function": {"name": "search", "arguments": "{}"}}
             ]
         },
-        {"role": "tool", "tool_call_id": "call_1", "content": "search result"},
-        {"role": "assistant", "content": "here is the result"},
-        {"role": "user", "content": "question 2"},
-        # 第2轮：没有工具调用
+        {"role": "tool", "tool_call_id": "call_1", "content": "result"},
+        {"role": "assistant", "content": "here is answer"},
+        {"role": "user", "content": "q2"},
         {
             "role": "assistant",
-            "content": "answering",
+            "content": "answering directly",
             "reasoning_content": "reasoning for answer"
         },
-        {"role": "user", "content": "question 3"},
-        # 第3轮：又有工具调用
-        {
-            "role": "assistant",
-            "content": "let me search again",
-            "reasoning_content": "reasoning for second tool",
-            "tool_calls": [
-                {"id": "call_2", "type": "function", "function": {"name": "search2", "arguments": "{}"}}
-            ]
-        },
-        {"role": "tool", "tool_call_id": "call_2", "content": "result 2"}
+        {"role": "user", "content": "q3"}
     ]
     
-    processed_3 = session._handle_deepseek_reasoning_content(messages_3)
+    api_msgs = session._build_api_messages()
+    assistants = [m for m in api_msgs if m.get("role") == "assistant"]
     
-    # 第1轮 assistant（索引2）有工具调用，应保留 reasoning_content
-    assert "reasoning_content" in processed_3[2], "第1轮有工具调用，应保留 reasoning_content"
-    assert processed_3[2]["reasoning_content"] == "reasoning for tool call"
-    print("✓ 场景3.1: 第1轮有工具调用，保留 reasoning_content")
+    for i, a in enumerate(assistants):
+        if "reasoning_content" in a or "tool_calls" in a:
+            if "reasoning_content" in a:
+                print(f"✓ 场景3: assistant[{i}] 保留 reasoning_content: {a['reasoning_content'][:40]}...")
     
-    # 第2轮 assistant（索引6）没有工具调用，应移除 reasoning_content
-    assert "reasoning_content" not in processed_3[6], "第2轮没有工具调用，应移除 reasoning_content"
-    print("✓ 场景3.2: 第2轮没有工具调用，移除 reasoning_content")
-    
-    # 第3轮 assistant（索引8）有工具调用，应保留 reasoning_content
-    assert "reasoning_content" in processed_3[8], "第3轮有工具调用，应保留 reasoning_content"
-    assert processed_3[8]["reasoning_content"] == "reasoning for second tool"
-    print("✓ 场景3.3: 第3轮有工具调用，保留 reasoning_content")
-    
-    # 测试场景4: 非 DeepSeek 模型（不应该修改）
-    session3 = OnlineToolSession(
-        toolkit=MockToolkit(),
-        api_key="test",
-        api_url="http://test",
-        model="gpt-4"
-    )
-    
-    processed_4 = session3._handle_deepseek_reasoning_content(messages_2)
-    assert "reasoning_content" in processed_4[2], "非 DeepSeek 模型不应修改消息"
-    print("✓ 场景4: 非 DeepSeek 模型不修改消息")
+    # 验证两个 reasoning_content 都在
+    reasoning_msgs = [m for m in api_msgs if m.get("role") == "assistant" and "reasoning_content" in m]
+    assert len(reasoning_msgs) == 2, f"应有两个 assistant 消息包含 reasoning_content，实际: {len(reasoning_msgs)}"
+    print("✓ 场景3: 多轮混合对话，所有 reasoning_content 均保留")
 
 
 if __name__ == "__main__":
-    print("开始测试 DeepSeek 推理模型处理...")
+    print("开始测试 reasoning_content 统一保留策略...")
     print()
     
-    test_deepseek_detection()
+    test_no_deepseek_special_detection()
     print()
     
-    test_reasoning_content_handling()
+    test_reasoning_content_always_preserved()
     print()
     
     print("所有测试通过！✓")

@@ -16,6 +16,7 @@ class SessionAPIMixin:
     - _thinking_supported: thinking 支持状态（None=未知, True=支持, False=不支持）
     - tool_log: 可选日志回调
     - _last_usage: Token 用量统计字典
+    - _last_cheap_usage: 便宜模型 Token 用量统计字典
     """
 
     def __init__(self):
@@ -24,13 +25,31 @@ class SessionAPIMixin:
         if not hasattr(self, 'model'):
             self.model: str = ""
         self.enable_thinking: bool = True
-        # thinking 支持状态：分别记录主模型和便宜模型
-        # self._thinking_supported: Optional[bool] = None  # 主模型
-        # self._cheap_thinking_supported: Optional[bool] = None  # 便宜模型
-        self._thinking_supported = True
-        self._cheap_thinking_supported = False
+        # NOTE: 2026-04-29, self-evolved by claude-agent ---
+        # thinking 支持状态：分别记录主模型和便宜模型。
+        # None = 未探测（首次 _create_chat_stream 时自动探测）
+        # True = 支持 thinking
+        # False = 不支持 thinking
+        # 
+        # 主模型：乐观假设支持（主流模型都支持）
+        # 便宜模型：默认 None，由 _probe_thinking_support 在实际调用时探测。
+        #   摘要调用（_summarize_old_history / generate_topic_summary）
+        #   不经过 _create_chat_stream，而是通过 _call_summarize_api
+        #   显式禁用 thinking，故便宜模型的 thinking 状态不影响摘要。
+        self._thinking_supported: Optional[bool] = True
+        self._cheap_thinking_supported: Optional[bool] = None
         self.tool_log: Optional[Callable[[str], None]] = None
+        
+        # 主模型 token 统计
         self._last_usage: Dict[str, int] = {
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+        }
+        
+        # NOTE: 2026-04-29, self-evolved by claude-agent ---
+        # 便宜模型 token 统计，通过 _track_api_usage(response, is_cheap=True) 累积
+        self._last_cheap_usage: Dict[str, int] = {
             "total_tokens": 0,
             "prompt_tokens": 0,
             "completion_tokens": 0,
@@ -99,21 +118,78 @@ class SessionAPIMixin:
                     self.tool_log(f"⚠️ {model_type} thinking 检测时出错: {e}")
 
     def _accumulate_usage(self, usage):
-        """从 API 响应中累积 token 用量"""
+        """
+        从 API 响应中累积 token 用量到主模型统计。
+        
+        修复要点：
+        1. 条件判断从 truthiness 改为 is not None，防止 prompt_tokens=0 时跳过
+        2. 每次调用独立推算 total_tokens：若 API 未返回 total，用 prompt+completion 推算
+           （而非等全部累加完才 fallback，避免多轮工具调用场景下漏算）
+        
+        Args:
+            usage: OpenAI API 响应的 usage 对象
+        """
         if usage is None:
             return
         u = self._last_usage
         prompt = getattr(usage, 'prompt_tokens', None)
         completion = getattr(usage, 'completion_tokens', None)
         total = getattr(usage, 'total_tokens', None)
-        if prompt:
+        
+        if prompt is not None:
             u["prompt_tokens"] += prompt
-        if completion:
+        if completion is not None:
             u["completion_tokens"] += completion
-        if total:
+        if total is not None:
             u["total_tokens"] += total
-        if u["total_tokens"] == 0 and u["prompt_tokens"] and u["completion_tokens"]:
-            u["total_tokens"] = u["prompt_tokens"] + u["completion_tokens"]
+        else:
+            # API 未返回 total_tokens，用本次调用的 prompt+completion 推算并累加
+            p = prompt if prompt is not None else 0
+            c = completion if completion is not None else 0
+            u["total_tokens"] += p + c
+
+    # NOTE: 2026-04-29, self-evolved by claude-agent ---
+    # 便宜模型 token 累积，与 _accumulate_usage 逻辑相同，写入 _last_cheap_usage。
+    def _accumulate_cheap_usage(self, usage):
+        """
+        从 API 响应中累积 token 用量到便宜模型统计。
+        
+        与 _accumulate_usage 逻辑相同，但写入 _last_cheap_usage。
+        
+        Args:
+            usage: OpenAI API 响应的 usage 对象
+        """
+        if usage is None:
+            return
+        u = self._last_cheap_usage
+        prompt = getattr(usage, 'prompt_tokens', None)
+        completion = getattr(usage, 'completion_tokens', None)
+        total = getattr(usage, 'total_tokens', None)
+        
+        if prompt is not None:
+            u["prompt_tokens"] += prompt
+        if completion is not None:
+            u["completion_tokens"] += completion
+        if total is not None:
+            u["total_tokens"] += total
+        else:
+            p = prompt if prompt is not None else 0
+            c = completion if completion is not None else 0
+            u["total_tokens"] += p + c
+
+    def _track_api_usage(self, response, is_cheap=False):
+        """
+        统一的 token 统计入口：从 API 响应中提取 usage 并路由到正确的计数器。
+        
+        Args:
+            response: OpenAI API 响应对象（流式或非流式）
+            is_cheap: 是否为便宜模型调用，决定累积到哪个计数器
+        """
+        if hasattr(response, 'usage') and response.usage:
+            if is_cheap:
+                self._accumulate_cheap_usage(response.usage)
+            else:
+                self._accumulate_usage(response.usage)
 
     def _create_chat_stream(self, api_messages: List[Dict], tools: List[Dict], client=None, model=None, is_cheap=False):
         """
@@ -211,9 +287,31 @@ class SessionAPIMixin:
                     tool_calls_data[idx]["arguments"] += tc.function.arguments
 
     def reset_usage(self):
-        """重置 token 用量统计"""
+        """重置主模型 token 用量统计"""
         self._last_usage = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
 
+    # NOTE: 2026-04-29, self-evolved by claude-agent ---
+    # 重置便宜模型 token 用量统计
+    def reset_cheap_usage(self):
+        """重置便宜模型 token 用量统计"""
+        self._last_cheap_usage = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
+
     def get_last_usage(self) -> Dict[str, int]:
-        """获取最近一次 chat_stream 的 token 用量"""
+        """获取最近一次会话的主模型 token 用量"""
         return dict(self._last_usage)
+
+    def get_cheap_usage(self) -> Dict[str, int]:
+        """获取最近一次会话的便宜模型 token 用量"""
+        return dict(self._last_cheap_usage)
+
+    def get_total_usage(self) -> Dict[str, Dict[str, int]]:
+        """
+        获取全部 token 用量统计。
+        
+        Returns:
+            {"main": {...}, "cheap": {...}}
+        """
+        return {
+            "main": dict(self._last_usage),
+            "cheap": dict(self._last_cheap_usage),
+        }

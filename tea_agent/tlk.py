@@ -150,140 +150,6 @@ def toolkit_list_versions_impl(name: str) -> str:
         return f"❌ {versions}"
 
 # ========== Memory 工具函数 ==========
-def meta_toolkit_memory_search():
-    return {
-        "type": "function",
-        "function": {
-            "name": "toolkit_memory_search",
-            "description": "在长期记忆中搜索信息。按关键词、分类、标签等条件检索 Agent 的历史记忆摘要。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "关键词搜索（在摘要中模糊匹配）"
-                    },
-                    "category": {
-                        "type": "string",
-                        "description": "按分类过滤，可选值：user_preference, fact, project_info, decision, experience, code_pattern, tool_usage, environment, general",
-                        "enum": ["user_preference", "fact", "project_info", "decision", "experience", "code_pattern", "tool_usage", "environment", "general"]
-                    },
-                    "tags": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "按标签过滤（包含任一标签即可）"
-                    },
-                    "min_importance": {
-                        "type": "integer",
-                        "description": "最低重要度（1-5），仅返回重要度大于等于此值的记忆"
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "返回数量限制，默认 20"
-                    }
-                },
-                "required": []
-            }
-        }
-    }
-
-
-def meta_toolkit_memory_recent():
-    return {
-        "type": "function",
-        "function": {
-            "name": "toolkit_memory_recent",
-            "description": "获取最近的记忆摘要。可以按分类过滤。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "limit": {
-                        "type": "integer",
-                        "description": "返回数量限制，默认 20"
-                    },
-                    "category": {
-                        "type": "string",
-                        "description": "可选分类过滤",
-                        "enum": ["user_preference", "fact", "project_info", "decision", "experience", "code_pattern", "tool_usage", "environment", "general"]
-                    }
-                },
-                "required": []
-            }
-        }
-    }
-
-
-def meta_toolkit_memory_stats():
-    return {
-        "type": "function",
-        "function": {
-            "name": "toolkit_memory_stats",
-            "description": "获取记忆统计信息，包括总记忆数和各分类的数量分布。",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
-    }
-
-
-def toolkit_memory_search(
-    query: str = "",
-    category: str = "",
-    tags: Optional[List[str]] = None,
-    min_importance: int = 3,
-    limit: int = 20
-) -> str:
-    """在长期记忆中搜索信息"""
-    from tea_agent.memory import get_memory
-    mem = get_memory()
-    results = mem.search_memories(
-        query=query,
-        category=category,
-        tags=tags,
-        min_importance=min_importance,
-        limit=limit
-    )
-    if not results:
-        return "没有找到相关记忆。"
-    lines = []
-    for r in results:
-        tags_str = ", ".join(r["tags"]) if r["tags"] else "无标签"
-        lines.append(
-            f"[ID:{r['id']}] ({r['category']}, 重要度:{r['importance']}) "
-            f"标签: {tags_str}\n  摘要: {r['summary']}\n  时间: {r['created_at']}"
-        )
-    return "\n\n".join(lines)
-
-
-def toolkit_memory_recent(limit: int = 20, category: str = "") -> str:
-    """获取最近的记忆摘要"""
-    from tea_agent.memory import get_memory
-    mem = get_memory()
-    results = mem.get_recent_memories(limit=limit, category=category)
-    if not results:
-        return "没有记忆记录。"
-    lines = []
-    for r in results:
-        tags_str = ", ".join(r["tags"]) if r["tags"] else "无标签"
-        lines.append(
-            f"[ID:{r['id']}] ({r['category']}, 重要度:{r['importance']}) "
-            f"标签: {tags_str}\n  摘要: {r['summary']}\n  时间: {r['created_at']}"
-        )
-    return "\n\n".join(lines)
-
-
-def toolkit_memory_stats() -> str:
-    """获取记忆统计信息"""
-    from tea_agent.memory import get_memory
-    mem = get_memory()
-    stats = mem.get_stats()
-    lines = [f"总记忆数: {stats['total']}", f"数据库路径: {stats['db_path']}", ""]
-    lines.append("分类分布:")
-    for cat, cnt in stats["by_category"].items():
-        lines.append(f"  {cat}: {cnt} 条")
-    return "\n".join(lines)
 
 class Toolkit:
     def __init__(self, tool_dir=None):
@@ -394,17 +260,8 @@ class Toolkit:
         self.func_map["toolkit_list_versions"] = toolkit_list_versions_impl
         self.meta_map["toolkit_list_versions"] = meta_toolkit_list_versions()
 
-        self.func_map["toolkit_memory_search"] = toolkit_memory_search
-        self.meta_map["toolkit_memory_search"] = meta_toolkit_memory_search()
-
-        self.func_map["toolkit_memory_recent"] = toolkit_memory_recent
-        self.meta_map["toolkit_memory_recent"] = meta_toolkit_memory_recent()
-
-        self.func_map["toolkit_memory_stats"] = toolkit_memory_stats
-        self.meta_map["toolkit_memory_stats"] = meta_toolkit_memory_stats()
-
         result["valid_tool"] = {k: {"func": v, "meta": self.meta_map[k]} for k, v in self.func_map.items() if k not in (
-            "toolkit_reload", "toolkit_save", "toolkit_rollback", "toolkit_list_versions", "toolkit_memory_search", "toolkit_memory_recent", "toolkit_memory_stats")}
+            "toolkit_reload", "toolkit_save", "toolkit_rollback", "toolkit_list_versions")}
 
         return result
 

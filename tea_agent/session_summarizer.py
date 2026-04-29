@@ -25,7 +25,7 @@ class SessionSummarizerMixin:
 
     依赖属性 (由使用者提供):
         messages: 消息列表，当前会话的完整对话历史
-        keep_turns: 保留最近 N 轮对话 (默认 3)
+        keep_turns: 保留最近 N 轮对话 (默认 5)
         max_tool_output: 工具输出最大字符数 (默认 128KB)
         max_assistant_content: 助手回复最大字符数 (默认 128KB)
         tool_log: 可选的日志回调函数
@@ -39,7 +39,7 @@ class SessionSummarizerMixin:
         self.messages: List[Dict] = []
 
         # 摘要配置
-        self.keep_turns: int = 2
+        self.keep_turns: int = 5
         self.max_tool_output: int = 128 * 1024
         self.max_assistant_content: int = 128 * 1024
 
@@ -53,95 +53,166 @@ class SessionSummarizerMixin:
     def count_user_msg(self) -> int:
         return sum([m.get("role") == "user" for m in self.messages])
 
+    # NOTE: 2026-04-29, self-evolved by claude-agent ---
+    # 统一摘要 API 调用入口：显式禁用 thinking 以节省 reasoning tokens。
+    # 摘要任务不需要推理链，thinking tokens 纯属浪费。
+    # 若模型不支持 extra_body 参数（非 DeepSeek），自动回退重试。
+    def _call_summarize_api(self, cli, mdl, messages, temperature=0.1, max_tokens=500):
+        """
+        调用 LLM 生成摘要，显式禁用 thinking。
+
+        Args:
+            cli: OpenAI 客户端实例
+            mdl: 模型名称
+            messages: API 消息列表
+            temperature: 温度参数
+            max_tokens: 最大输出 token
+
+        Returns:
+            API 响应对象
+        """
+        try:
+            return cli.chat.completions.create(
+                model=mdl,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                extra_body={"thinking": {"type": "disabled"}},
+            )
+        except Exception as e:
+            err_str = str(e).lower()
+            if 'thinking' in err_str or 'extra_body' in err_str:
+                # 模型不支持 thinking 参数，回退到不带 extra_body 的调用
+                return cli.chat.completions.create(
+                    model=mdl,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            raise
+
     def _summarize_old_history(self) -> None:
         """
         持久化摘要逻辑：
-            总是将 _history_summary 与当前 self.messages 中的倒数第 self.keep_turns 轮对话压缩为摘要
-            并存储
+            1. 获取当前 topic 下所有未摘要的对话记录 (is_summarized=0)
+            2. 如果数量超过 keep_turns，则将多出的部分 (最早的 N 条) 提取出来
+            3. 将这些对话内容与现有摘要合并，调用 LLM 生成新摘要
+            4. 更新数据库：更新摘要文本，并将这些对话标记为已摘要
+            5. 同步内存：更新 self._history_summary 并裁剪 self.messages
         """
-        ## 如果 user count 超过 keep_turns，触发摘要更新
-        old_text = ""
         topic_id = getattr(self, "current_topic_id", None)
         storage = getattr(self, "storage", None)
+        if not (topic_id and storage):
+            return
 
-        old_summary = storage.get_topic_summary(topic_id) if topic_id and storage else ""
+        # 1. 获取未摘要的对话
+        unsummarized = storage.get_unsummarized_conversations(topic_id)
+        if len(unsummarized) <= self.keep_turns:
+            return
 
-        count = self.count_user_msg()
-        if count > self.keep_turns:
-            ## 提取倒数 self.keep_turns 轮对话（user + assistant) 与 _history_summary 合并
-            begin_idx, end_idx = self._find_last_need_summary_pair()
-            if 0 <= begin_idx < end_idx < len(self.messages):
-                ## 需要提取更新摘要
-                messages = self.messages[begin_idx:end_idx]
-                old_text = self._messages_to_text(messages, max_per_msg=300)
+        # 2. 确定需要摘要的范围 (除了最近的 keep_turns 条，其余全部摘要)
+        num_to_summarize = len(unsummarized) - self.keep_turns
+        convs_to_summarize = unsummarized[:num_to_summarize]
+        
+        # 3. 提取对话文本
+        old_text = self._conversations_to_text(convs_to_summarize)
+        if not old_text:
+            return
 
-        if old_text:
-            ## 调用 LLM 更新摘要
-            # 构建 Prompt
-            existing = (
-                f"已有摘要：{old_summary}\n\n"
-                if old_summary
-                else ""
+        # 获取旧摘要
+        old_summary = storage.get_topic_summary(topic_id) or ""
+        
+        # 构建 Prompt
+        existing = (
+            f"已有摘要：{old_summary}\n\n"
+            if old_summary
+            else ""
+        )
+
+        try:
+            cli, mdl = self._get_summarize_client()
+            # NOTE: 2026-04-29, self-evolved by claude-agent ---
+            # 判断是否使用便宜模型，以便正确路由 token 统计
+            is_cheap = (
+                hasattr(self, '_cheap_client')
+                and self._cheap_client is not None
+                and cli is self._cheap_client
             )
+            # NOTE: 2026-04-29, self-evolved by claude-agent ---
+            # 使用统一入口 _call_summarize_api，显式禁用 thinking 节省 token
+            response = self._call_summarize_api(
+                cli, mdl,
+                messages=[
+                    {"role": "system", "content": HISTORY_SUMMARIZE_SYSTEM},
+                    {
+                        "role": "user",
+                        "content": HISTORY_SUMMARIZE_USER.format(
+                            existing=existing, old_text=old_text
+                        ),
+                    },
+                ],
+                temperature=0.1,
+                max_tokens=500,
+            )
+            # NOTE: 2026-04-29, self-evolved by claude-agent ---
+            # 统计便宜模型 token 用量
+            if hasattr(self, '_track_api_usage'):
+                self._track_api_usage(response, is_cheap=is_cheap)
+                
+            content = response.choices[0].message.content
+            if isinstance(content, str):
+                new_summary = content.strip()
+                
+                # 4. 更新数据库
+                last_conv_id = convs_to_summarize[-1]['id']
+                storage.update_topic_summary(topic_id, new_summary, last_summarized_id=last_conv_id)
+                for conv in convs_to_summarize:
+                    storage.mark_as_summarized(conv['id'])
+                
+                # 5. 同步内存
+                self._history_summary = new_summary
+                
+                # 裁剪 self.messages，保持与数据库同步
+                boundary = self._find_recent_boundary()
+                if boundary > 1:
+                    self.messages = [self.messages[0]] + self.messages[boundary:]
 
-            try:
-                cli, mdl = self._get_summarize_client()
-                response = cli.chat.completions.create(
-                    model=mdl,
-                    messages=[
-                        {"role": "system", "content": HISTORY_SUMMARIZE_SYSTEM},
-                        {
-                            "role": "user",
-                            "content": HISTORY_SUMMARIZE_USER.format(
-                                existing=existing, old_text=old_text
-                            ),
-                        },
-                    ],
-                    temperature=0.1,
-                    max_tokens=500,
-                )
-                content = response.choices[0].message.content
-                if isinstance(content, str):
-                    new_summary = content.strip()
-                    
-                    # 同步到内存和数据库
-                    self._history_summary = new_summary
-
-                    if topic_id and storage:
-                        storage.update_topic_summary(topic_id, new_summary)
-
-                    if self.tool_log:
-                        self.tool_log(f"📝 历史摘要更新：{new_summary}")
-
-            except Exception as e:
                 if self.tool_log:
-                    self.tool_log(f"⚠️ 摘要生成失败: {e}")
+                    self.tool_log(f"📝 历史摘要更新：{new_summary}")
+
+        except Exception as e:
+            if self.tool_log:
+                self.tool_log(f"⚠️ 摘要生成失败: {e}")
         return None
 
-    def _get_memory_priority_for_compression(self) -> str:
-        """
-        根据记忆优先级决定压缩策略。
-        
-        Returns:
-            压缩策略描述字符串
-        """
-        if not hasattr(self, 'memory') or not self.memory:
-            return ""
-        
-        try:
-            # 获取高优先级记忆（重要性 >= 4）
-            important_memories = self.memory.get_important_memories(limit=5)
+    def _conversations_to_text(self, conversations: List[Dict], max_per_msg: int = 500) -> str:
+        """将对话记录列表转为文本，用于摘要生成"""
+        lines = []
+        for conv in conversations:
+            # 用户消息
+            u_msg = conv.get("user_msg", "")
+            lines.append(f"[USER]: {u_msg[:max_per_msg]}")
             
-            if not important_memories:
-                return "标准压缩，无高优先级记忆"
-            
-            # 统计高优先级记忆的数量和类别
-            high_priority_count = len(important_memories)
-            categories = set(m.get('category', 'unknown') for m in important_memories)
-            
-            return f"保留 {high_priority_count} 条高优先级记忆相关的细节，类别: {', '.join(categories)}"
-        except Exception:
-            return ""
+            # AI 消息（含工具调用链）
+            rounds = conv.get("rounds_json_parsed")
+            if rounds and conv.get("is_func_calling"):
+                for rd in rounds:
+                    role = rd.get("role", "")
+                    content = rd.get("content", "")
+                    if role == "assistant" and rd.get("tool_calls"):
+                        tc_names = [tc["function"]["name"] for tc in rd["tool_calls"]]
+                        lines.append(f"[ASSISTANT 调用工具]: {', '.join(tc_names)}")
+                        if content:
+                            lines.append(f"[ASSISTANT]: {content[:max_per_msg]}")
+                    elif role == "tool":
+                        lines.append(f"[工具结果]: {content[:max_per_msg]}")
+                    elif role == "assistant" and content:
+                        lines.append(f"[ASSISTANT]: {content[:max_per_msg]}")
+            else:
+                ai_msg = conv.get("ai_msg", "")
+                lines.append(f"[ASSISTANT]: {ai_msg[:max_per_msg]}")
+                
+        return "\n".join(lines)
 
     # ──────────────────────────────────────────────
     # Topic 摘要 (Topic Summary)
@@ -176,9 +247,18 @@ class SessionSummarizerMixin:
 
         # 调用 LLM
         cli, mdl = self._get_summarize_client()
+        # NOTE: 2026-04-29, self-evolved by claude-agent ---
+        # 判断是否使用便宜模型，以便正确路由 token 统计
+        is_cheap = (
+            hasattr(self, '_cheap_client')
+            and self._cheap_client is not None
+            and cli is self._cheap_client
+        )
         try:
-            response = cli.chat.completions.create(
-                model=mdl,
+            # NOTE: 2026-04-29, self-evolved by claude-agent ---
+            # 使用统一入口 _call_summarize_api，显式禁用 thinking 节省 token
+            response = self._call_summarize_api(
+                cli, mdl,
                 messages=[
                     {"role": "system", "content": TOPIC_SUMMARY_SYSTEM},
                     {"role": "user", "content": user_content},
@@ -186,6 +266,11 @@ class SessionSummarizerMixin:
                 temperature=0.3,
                 max_tokens=50,
             )
+
+            # NOTE: 2026-04-29, self-evolved by claude-agent ---
+            # 统计便宜模型 token 用量
+            if hasattr(self, '_track_api_usage'):
+                self._track_api_usage(response, is_cheap=is_cheap)
 
             # 安全检查返回值
             if not response.choices or len(response.choices) == 0:
@@ -294,15 +379,18 @@ class SessionSummarizerMixin:
             })
             result.append({
                 "role": "assistant",
-                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"
+                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？",
+                "reasoning_content": "",
             })
 
         # 4. 最新 N 轮完整对话 (不压缩)
         boundary = self._find_recent_boundary()
-        # 注意：如果 boundary 刚好指向了摘要消息，我们需要跳过它，因为它已经在上面添加过了
         for i in range(boundary, len(self.messages)):
             msg = self.messages[i]
-            result.append(msg)
+            msg_copy = dict(msg)
+            if msg_copy.get("role") == "assistant" and "reasoning_content" not in msg_copy:
+                msg_copy["reasoning_content"] = ""
+            result.append(msg_copy)
 
         return result
     

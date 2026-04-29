@@ -88,7 +88,10 @@ class SessionToolMixin:
             "tool_call_id": call_id,
         })
 
-    def _collect_assistant_tool_calls_round(self, content: str, tool_calls: list):
+    # NOTE: 2026-04-28, self-evolved by claude-agent ---
+    # 增加 reasoning_content 参数，确保 DeepSeek 推理模型的思维链内容
+    # 在持久化到 rounds_json 时不会丢失。
+    def _collect_assistant_tool_calls_round(self, content: str, tool_calls: list, reasoning_content: str = ""):
         """收集 assistant tool_calls 到 rounds 收集器"""
         tc_list_for_collector = [{
             "id": tc.id,
@@ -99,18 +102,27 @@ class SessionToolMixin:
             }
         } for tc in tool_calls]
 
-        self._rounds_collector.append({
+        entry = {
             "role": "assistant",
             "content": content if content else "",
             "tool_calls": tc_list_for_collector,
-        })
+        }
+        if reasoning_content:
+            entry["reasoning_content"] = reasoning_content
+        self._rounds_collector.append(entry)
 
-    def _collect_assistant_text_round(self, content: str):
+    # NOTE: 2026-04-28, self-evolved by claude-agent ---
+    # 增加 reasoning_content 参数，确保 DeepSeek 推理模型的思维链内容
+    # 在持久化时不丢失。
+    def _collect_assistant_text_round(self, content: str, reasoning_content: str = ""):
         """收集最终 assistant 文本回答到 rounds 收集器"""
-        self._rounds_collector.append({
+        entry = {
             "role": "assistant",
             "content": content,
-        })
+        }
+        if reasoning_content:
+            entry["reasoning_content"] = reasoning_content
+        self._rounds_collector.append(entry)
 
     def _collect_api_error_round(self, content: str):
         """收集 API 错误到 rounds 收集器"""

@@ -51,14 +51,9 @@ class AgentConfig:
     enable_thinking: bool = True  # 是否启用 thinking 功能
     
     # Token 优化参数
-    keep_turns: int = 2  # 保留最近N轮完整对话，更早的对话自动摘要
+    keep_turns: int = 5  # 保留最近N轮完整对话，更早的对话自动摘要
     max_tool_output: int = 128 * 1024  # 工具输出截断字符数
     max_assistant_content: int = 128 * 1024  # 助手回复截断字符数
-    
-    # 记忆参数
-    memory_inject_limit: int = 8  # 记忆注入条数上限
-    memory_extract_rounds: int = 6  # 记忆提取窗口轮数
-    memory_extract_threshold: int = 4  # 记忆提取消息数阈值
 
 
 def load_config(config_path: Optional[str] = None) -> AgentConfig:
@@ -111,11 +106,6 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
             cfg.keep_turns = int(data.get("keep_turns", cfg.keep_turns))
             cfg.max_tool_output = int(data.get("max_tool_output", cfg.max_tool_output))
             cfg.max_assistant_content = int(data.get("max_assistant_content", cfg.max_assistant_content))
-            
-            # 加载记忆参数
-            cfg.memory_inject_limit = int(data.get("memory_inject_limit", cfg.memory_inject_limit))
-            cfg.memory_extract_rounds = int(data.get("memory_extract_rounds", cfg.memory_extract_rounds))
-            cfg.memory_extract_threshold = int(data.get("memory_extract_threshold", cfg.memory_extract_threshold))
             
         except Exception:
             pass  # 加载失败时使用默认空配置
@@ -172,11 +162,6 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     data["max_tool_output"] = cfg.max_tool_output
     data["max_assistant_content"] = cfg.max_assistant_content
     
-    # 保存记忆参数
-    data["memory_inject_limit"] = cfg.memory_inject_limit
-    data["memory_extract_rounds"] = cfg.memory_extract_rounds
-    data["memory_extract_threshold"] = cfg.memory_extract_threshold
-
     with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
@@ -198,7 +183,7 @@ def create_default_config(config_path: Optional[str] = None) -> str:
 
     template = (
         "# Tea Agent 配置文件\n\n"
-        "# 主模型配置（用于核心对话、代码生成、记忆提取等）\n"
+        "# 主模型配置（用于核心对话、代码生成等）\n"
         "main_model:\n"
         "  api_key: \"\"\n"
         "  api_url: \"\"\n"
@@ -220,18 +205,11 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "enable_thinking: true\n\n"
         "# ==================== Token 优化参数 ====================\n"
         "# 保留最近 N 轮完整对话，更早的对话自动摘要（使用 cheap_model）\n"
-        "keep_turns: 3\n\n"
+        "keep_turns: 5\n\n"
         "# 工具输出截断字符数（超过此长度的工具结果会被截断）\n"
         "max_tool_output: 131072  # 128KB\n\n"
         "# 助手回复截断字符数（超过此长度的助手回复会被截断）\n"
-        "max_assistant_content: 131072  # 128KB\n\n"
-        "# ==================== 记忆参数 ====================\n"
-        "# 记忆注入条数上限（会话开始时注入的记忆数量）\n"
-        "memory_inject_limit: 8\n\n"
-        "# 记忆提取窗口轮数（从此数量的最近对话中提取记忆）\n"
-        "memory_extract_rounds: 6\n\n"
-        "# 记忆提取消息数阈值（达到此数量才触发记忆提取）\n"
-        "memory_extract_threshold: 4\n"
+        "max_assistant_content: 131072  # 128KB\n"
     )
 
     with open(yaml_path, "w", encoding="utf-8") as f:

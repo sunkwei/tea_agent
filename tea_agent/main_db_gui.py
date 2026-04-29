@@ -54,16 +54,67 @@ CHEAP_MODEL = _cfg.cheap_model
 _storage_ = None
 _toolkit_ = None
 
+
+# ====================== 跨平台字体检测 ======================
+# @2026-04-29 gen by deepseek-v4-pro, 跨平台字体自动检测(Windows/Linux)
+import platform as _platform
+
+_IS_WINDOWS = _platform.system() == "Windows"
+
+SYSTEM_FONT = "TkDefaultFont"
+MONO_FONT = "TkFixedFont"
+_FONTS_DETECTED = False
+
+
+def _init_fonts():
+    """延迟检测系统可用字体（需 Tk root 创建后调用）。"""
+    global SYSTEM_FONT, MONO_FONT, _FONTS_DETECTED
+    if _FONTS_DETECTED:
+        return
+    try:
+        from tkinter import font as _tkfont
+        available = set(_tkfont.families())
+
+        def _detect(candidates):
+            for f in candidates:
+                if f in available:
+                    return f
+            return candidates[-1]
+
+        if _IS_WINDOWS:
+            SYSTEM_FONT = _detect([
+                "Microsoft YaHei", "Microsoft YaHei UI",
+                "DengXian", "SimHei", "SimSun",
+                "Noto Sans SC", "Microsoft JhengHei", "Microsoft Sans Serif",
+            ])
+            MONO_FONT = _detect([
+                "Cascadia Code", "Cascadia Mono",
+                "Consolas", "Courier New", "Lucida Console",
+            ])
+        else:
+            SYSTEM_FONT = _detect([
+                "Noto Sans CJK SC", "Noto Sans SC",
+                "WenQuanYi Micro Hei", "Source Han Sans SC",
+                "DejaVu Sans", "sans-serif",
+            ])
+            MONO_FONT = _detect([
+                "Noto Sans Mono CJK SC", "DejaVu Sans Mono",
+                "Source Han Mono SC", "Courier New",
+            ])
+    except Exception:
+        pass
+    _FONTS_DETECTED = True
+
 # ====================== Markdown → HTML 渲染 ======================
 
 _MD_CSS_TEMPLATE = string.Template("""
 <style>
-body { font-family: "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", sans-serif; font-size: ${font_size}px; line-height: 1.6; color: #333; padding: 8px; }
+body { font-family: "Microsoft YaHei", "Microsoft YaHei UI", "DengXian", "SimHei", "SimSun", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", "DejaVu Sans", sans-serif; font-size: ${font_size}px; line-height: 1.6; color: #333; padding: 8px; }
 h1, h2, h3, h4, h5, h6 { margin: 0.8em 0 0.4em; color: #1a73e8; }
 h1 { font-size: 1.5em; border-bottom: 2px solid #eee; padding-bottom: 0.3em; }
 h2 { font-size: 1.3em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
 p { margin: 0.5em 0; }
-code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: "Noto Sans Mono CJK SC", "Source Han Mono SC", "WenQuanYi Micro Hei Mono", "Consolas", "Courier New", monospace; font-size: 0.9em; }
+code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: "Cascadia Code", "Consolas", "Courier New", "Noto Sans Mono CJK SC", "DejaVu Sans Mono", "Source Han Mono SC", monospace; font-size: 0.9em; }
 pre { background: #f6f8fa; border: 1px solid #ddd; border-radius: 5px; padding: 12px; overflow-x: auto; }
 pre code { background: none; padding: 0; }
 ul, ol { padding-left: 1.5em; }
@@ -220,6 +271,7 @@ class MemoryDialog(tk.Toplevel):
         self.transient(parent)
         self.grab_set()
 
+        _init_fonts()  # 延迟检测系统字体
         self._create_ui()
         self._refresh()
 
@@ -229,7 +281,7 @@ class MemoryDialog(tk.Toplevel):
         top.pack(fill=tk.X, padx=10, pady=8)
 
         self.stats_var = tk.StringVar(value="加载中...")
-        ttk.Label(top, textvariable=self.stats_var, font=("Noto Sans CJK SC", 10)).pack(side=tk.LEFT)
+        ttk.Label(top, textvariable=self.stats_var, font=(SYSTEM_FONT, 10)).pack(side=tk.LEFT)
 
         ttk.Separator(self, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10)
 
@@ -363,7 +415,7 @@ class MemoryDialog(tk.Toplevel):
         ]
 
         ttk.Label(dlg, text="内容 (必填):").place(x=10, y=10)
-        content_text = tk.Text(dlg, height=3, width=55, font=("Noto Sans CJK SC", 10))
+        content_text = tk.Text(dlg, height=3, width=55, font=(SYSTEM_FONT, 10))
         content_text.place(x=10, y=32)
 
         ttk.Label(dlg, text="分类:").place(x=10, y=100)
@@ -454,7 +506,7 @@ class MemoryDialog(tk.Toplevel):
         dlg.transient(self)
         dlg.geometry("500x300")
 
-        text = tk.Text(dlg, font=("Noto Sans CJK SC", 11), wrap=tk.WORD)
+        text = tk.Text(dlg, font=(SYSTEM_FONT, 11), wrap=tk.WORD)
         text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         text.insert("1.0", content)
         text.config(state=tk.DISABLED)
@@ -551,8 +603,8 @@ class TkGUI:
         left = Frame(main_split, width=220)
         main_split.add(left, weight=1)
 
-        ttk.Label(left, text="聊天主题", font=("Noto Sans CJK SC", 12, "bold")).pack(pady=5)
-        self.topic_list = Listbox(left, font=("Noto Sans CJK SC", 10))
+        ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, 12, "bold")).pack(pady=5)
+        self.topic_list = Listbox(left, font=(SYSTEM_FONT, 10))
         self.topic_list.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
         self.topic_list.bind("<<ListboxSelect>>", self.on_topic_select)
         ttk.Button(left, text="➕ 新建主题", command=self.new_topic).pack(
@@ -578,7 +630,7 @@ class TkGUI:
         chat_split.add(chat_frame, weight=4)
 
         self.console = scrolledtext.ScrolledText(
-            chat_frame, font=("Noto Sans CJK SC", 11), bg="white", fg="black", wrap=tk.WORD
+            chat_frame, font=(SYSTEM_FONT, 11), bg="white", fg="black", wrap=tk.WORD
         )
         self.console.config(state=tk.DISABLED)
 
@@ -586,7 +638,7 @@ class TkGUI:
             self.chat_view = HtmlFrame(chat_frame, messages_enabled=False)
         else:
             self.chat_view = scrolledtext.ScrolledText(
-                chat_frame, font=("Noto Sans CJK SC", 11), bg="#fafafa", fg="black", wrap=tk.WORD
+                chat_frame, font=(SYSTEM_FONT, 11), bg="#fafafa", fg="black", wrap=tk.WORD
             )
             self.chat_view.config(state=tk.DISABLED)
 
@@ -597,7 +649,7 @@ class TkGUI:
         input_frame = Frame(chat_split)
         chat_split.add(input_frame, weight=1)
         self.input_box = scrolledtext.ScrolledText(
-            input_frame, font=("Noto Sans CJK SC", 14), height=4, bg="#f8f8f8"
+            input_frame, font=(SYSTEM_FONT, 14), height=4, bg="#f8f8f8"
         )
         self.input_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
@@ -617,7 +669,7 @@ class TkGUI:
         self.console.tag_configure("ai", foreground="black")
         self.console.tag_configure("tool", foreground="#d68000")
         self.console.tag_configure(
-            "title", foreground="#0066cc", font=("Noto Sans CJK SC", 12, "bold"))
+            "title", foreground="#0066cc", font=(SYSTEM_FONT, 12, "bold"))
         self.console.tag_configure("notice", foreground="#008800")
         self.console.tag_configure("error", foreground="#cc0000")
 

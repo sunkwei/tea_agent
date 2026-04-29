@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [0.3.2] - 2026-04-29
 
+### Improvements
+- improve: 跨平台字体自动检测，Windows 优先使用 Microsoft YaHei UI + Cascadia Code
+  - 懒加载检测（`_init_fonts()`），避免 import 时无 Tk root 报错
+  - CSS font-family 完整回退链覆盖 Windows/Linux 常见中文字体
+  - tkinter UI 控件字体动态匹配系统可用字体
+
 ### New Features
 - feat: 重新实现长期记忆系统（全新设计，不同于 0.3.0 版本）
   - `store.py` 新增 `memories` 表（id/content/category/priority/importance/expires_at/tags/is_active）

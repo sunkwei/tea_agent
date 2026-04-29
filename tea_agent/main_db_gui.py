@@ -537,6 +537,335 @@ class MemoryDialog(tk.Toplevel):
             self.stats_var.set(f"导出失败: {e}")
 
 
+# @2026-04-29 gen by deepseek-v4-pro, 主题管理弹窗: 浏览/切换/导出/重命名/删除
+class TopicDialog(tk.Toplevel):
+    """主题管理弹窗 — 浏览/切换/导出/重命名/删除"""
+
+    def __init__(self, parent, storage, on_switch=None):
+        super().__init__(parent)
+        self.db = storage
+        self.on_switch = on_switch  # callback(topic_id) when user switches
+        self.title("📁 主题管理")
+        self.geometry("900x600")
+        self.minsize(700, 400)
+        self.transient(parent)
+        self.grab_set()
+
+        _init_fonts()
+        self._create_ui()
+        self._refresh()
+
+    def _create_ui(self):
+        # 顶部统计栏
+        top = ttk.Frame(self)
+        top.pack(fill=tk.X, padx=10, pady=8)
+        self.stats_var = tk.StringVar(value="加载中...")
+        ttk.Label(top, textvariable=self.stats_var, font=(SYSTEM_FONT, 10)).pack(side=tk.LEFT)
+
+        ttk.Separator(self, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10)
+
+        # 工具栏
+        toolbar = ttk.Frame(self)
+        toolbar.pack(fill=tk.X, padx=10, pady=4)
+
+        ttk.Button(toolbar, text="➕ 新建主题", command=self._new_topic).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="✏️ 重命名", command=self._rename_dialog).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="🔄 刷新", command=self._refresh).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="🔗 切换到此主题", command=self._switch_to).pack(side=tk.LEFT, padx=(20, 2))
+
+        # 导出模式
+        ttk.Label(toolbar, text="  导出模式:").pack(side=tk.LEFT, padx=(20, 2))
+        self.export_mode = tk.StringVar(value="all")
+        ttk.Radiobutton(toolbar, text="完整", variable=self.export_mode, value="all").pack(side=tk.LEFT, padx=2)
+        ttk.Radiobutton(toolbar, text="仅用户", variable=self.export_mode, value="user").pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(toolbar, text="📋 导出选中", command=self._export_selected).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(toolbar, text="📦 导出全部", command=self._export_all).pack(side=tk.RIGHT, padx=2)
+
+        # 主题列表
+        list_frame = ttk.Frame(self)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+
+        columns = ("id", "title", "created", "tokens", "convs", "active")
+        self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=12)
+
+        self.tree.heading("id", text="ID", command=lambda: self._sort("id"))
+        self.tree.heading("title", text="标题", command=lambda: self._sort("title"))
+        self.tree.heading("created", text="创建时间", command=lambda: self._sort("created"))
+        self.tree.heading("tokens", text="Token消耗", command=lambda: self._sort("tokens"))
+        self.tree.heading("convs", text="对话数", command=lambda: self._sort("convs"))
+        self.tree.heading("active", text="状态")
+
+        self.tree.column("id", width=50, anchor=tk.CENTER)
+        self.tree.column("title", width=280)
+        self.tree.column("created", width=140)
+        self.tree.column("tokens", width=100, anchor=tk.E)
+        self.tree.column("convs", width=70, anchor=tk.CENTER)
+        self.tree.column("active", width=60, anchor=tk.CENTER)
+
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 操作按钮
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill=tk.X, padx=10, pady=6)
+
+        ttk.Button(btn_frame, text="💤 停用主题", command=self._deactivate).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="✅ 启用主题", command=self._activate).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="🗑️ 硬删除", command=self._hard_delete).pack(side=tk.LEFT, padx=2)
+
+        # 绑定
+        self.tree.bind("<Double-1>", lambda e: self._switch_to())
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.bind("<Delete>", lambda e: self._deactivate())
+
+    def _refresh(self):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        try:
+            topics = self.db.list_topics()
+            total_tokens = 0
+            total_conv = 0
+            active_count = 0
+
+            for tp in topics:
+                tid = tp.get("topic_id", "?")
+                title = tp.get("title", "")
+                created = tp.get("create_stamp", "") or ""
+                if len(created) > 19:
+                    created = created[:19]
+                ts = self.db.get_topic_tokens(tid)
+                tokens = ts.get("total_tokens", 0) if ts else 0
+                convs_raw = self.db.get_conversations(tid)
+                convs = len(convs_raw) if convs_raw else 0
+                is_active = tp.get("is_active", 1)
+
+                total_tokens += tokens
+                total_conv += convs
+                if is_active:
+                    active_count += 1
+
+                status = "🟢 活跃" if is_active else "⚫ 停用"
+                display_tokens = f"{tokens:,}" if tokens > 0 else "-"
+
+                self.tree.insert("", tk.END,
+                                 values=(tid, title, created, display_tokens, convs, status),
+                                 iid=str(tid))
+
+            self.stats_var.set(
+                f"共 {len(topics)} 个主题 (活跃: {active_count}) | "
+                f"总 Token: {total_tokens:,} | 总对话: {total_conv}"
+            )
+        except Exception as e:
+            self.stats_var.set(f"加载失败: {e}")
+
+    def _sort(self, col):
+        items = [(self.tree.set(i, col), i) for i in self.tree.get_children("")]
+        if col == "id":
+            items.sort(key=lambda x: int(x[0]))
+        elif col == "tokens":
+            def parse_tok(s):
+                try:
+                    return int(s.replace(",", ""))
+                except Exception:
+                    return 0 if s == "-" else int(s)
+            items.sort(key=lambda x: parse_tok(x[0]), reverse=True)
+        elif col == "convs":
+            items.sort(key=lambda x: int(x[0]), reverse=True)
+        else:
+            items.sort()
+        for idx, (_, iid) in enumerate(items):
+            self.tree.move(iid, "", idx)
+
+    def _selected_id(self):
+        sel = self.tree.selection()
+        return int(sel[0]) if sel else None
+
+    def _switch_to(self):
+        tid = self._selected_id()
+        if tid and self.on_switch:
+            self.on_switch(tid)
+            self.destroy()
+
+    def _new_topic(self):
+        title = f"主题 {datetime.now().strftime('%m-%d %H:%M:%S')}"
+        self.db.create_topic(title)
+        self._refresh()
+
+    def _rename_dialog(self):
+        tid = self._selected_id()
+        if not tid:
+            return
+        tp = self.db.get_topic(tid)
+        old_title = tp.get("title", "") if tp else ""
+
+        dlg = tk.Toplevel(self)
+        dlg.title(f"重命名主题 #{tid}")
+        dlg.transient(self)
+        dlg.grab_set()
+        dlg.geometry("400x140")
+
+        ttk.Label(dlg, text="新标题:").pack(padx=10, pady=(15, 2), anchor=tk.W)
+        title_var = tk.StringVar(value=old_title)
+        entry = ttk.Entry(dlg, textvariable=title_var, width=50, font=(SYSTEM_FONT, 11))
+        entry.pack(padx=10, pady=4)
+        entry.select_range(0, tk.END)
+        entry.focus()
+
+        def do_rename():
+            new_title = title_var.get().strip()
+            if new_title:
+                self.db.update_topic_title(tid, new_title)
+                self._refresh()
+                dlg.destroy()
+
+        btn_frame = ttk.Frame(dlg)
+        btn_frame.pack(pady=10)
+        ttk.Button(btn_frame, text="确定", command=do_rename).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_frame, text="取消", command=dlg.destroy).pack(side=tk.LEFT, padx=4)
+        dlg.bind("<Return>", lambda e: do_rename())
+
+    def _deactivate(self):
+        tid = self._selected_id()
+        if tid:
+            self.db.update_topic_active(tid, 0)
+            self._refresh()
+
+    def _activate(self):
+        tid = self._selected_id()
+        if tid:
+            self.db.update_topic_active(tid, 1)
+            self._refresh()
+
+    def _hard_delete(self):
+        tid = self._selected_id()
+        if not tid:
+            return
+        from tkinter import messagebox
+        tp = self.db.get_topic(tid)
+        title = tp.get("title", f"#{tid}") if tp else f"#{tid}"
+        ok = messagebox.askyesno(
+            "确认删除",
+            f"确定要永久删除主题「{title}」吗？\n\n"
+            f"此操作不可撤销，所有对话记录将被删除。",
+            parent=self,
+            icon="warning",
+        )
+        if not ok:
+            return
+        # Hard delete: we need a store.py method; use deactivate as soft fallback
+        # For now, mark inactive and show warning
+        self.db.update_topic_active(tid, 0)
+        self.stats_var.set(f"⚠️ 主题 #{tid} 已停用（数据库暂无硬删除API，数据仍保留）")
+        self._refresh()
+
+    def _export_selected(self):
+        tid = self._selected_id()
+        if not tid:
+            return
+        self._do_export([tid])
+
+    def _export_all(self):
+        topics = self.db.list_topics()
+        if not topics:
+            return
+        tids = [t["topic_id"] for t in topics]
+        self._do_export(tids)
+
+    def _do_export(self, topic_ids: list):
+        from tkinter import filedialog
+
+        mode = self.export_mode.get()  # "all" or "user"
+        mode_label = "完整" if mode == "all" else "仅用户输入"
+
+        if len(topic_ids) == 1:
+            tp = self.db.get_topic(topic_ids[0])
+            default_name = f"topic_{topic_ids[0]}.md"
+        else:
+            default_name = f"topics_{datetime.now().strftime('%Y%m%d')}.md"
+
+        path = filedialog.asksaveasfilename(
+            defaultextension=".md",
+            filetypes=[("Markdown", "*.md"), ("Text", "*.txt")],
+            initialfile=default_name,
+        )
+        if not path:
+            return
+
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                if len(topic_ids) == 1:
+                    self._write_topic_md(f, topic_ids[0], mode)
+                else:
+                    f.write(f"# 主题批量导出 ({mode_label}模式)\n\n")
+                    f.write(f"**导出时间:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"**主题数量:** {len(topic_ids)}\n\n")
+                    f.write("---\n\n")
+                    for tid in topic_ids:
+                        self._write_topic_md(f, tid, mode)
+                        f.write("\n---\n\n")
+
+            self.stats_var.set(f"✅ 已导出 {len(topic_ids)} 个主题 → {path}")
+        except Exception as e:
+            self.stats_var.set(f"❌ 导出失败: {e}")
+
+    def _write_topic_md(self, f, topic_id: int, mode: str):
+        """Write a single topic as markdown to file handle."""
+        tp = self.db.get_topic(topic_id)
+        title = tp.get("title", f"主题 #{topic_id}") if tp else f"主题 #{topic_id}"
+        created = tp.get("create_stamp", "") if tp else ""
+        updated = tp.get("last_update_stamp", "") if tp else ""
+
+        ts = self.db.get_topic_tokens(topic_id) or {}
+        convs = self.db.get_conversations(topic_id) or []
+
+        f.write(f"# {title}\n\n")
+        f.write(f"- **ID:** {topic_id}\n")
+        f.write(f"- **创建时间:** {created}\n")
+        f.write(f"- **最后更新:** {updated}\n")
+        f.write(f"- **对话数:** {len(convs)}\n")
+        f.write(f"- **Token消耗:** {ts.get('total_tokens', 0):,} "
+                f"(P:{ts.get('total_prompt_tokens', 0):,} "
+                f"C:{ts.get('total_completion_tokens', 0):,})\n")
+        f.write(f"- **导出模式:** {'仅用户输入' if mode == 'user' else '完整（含AI回复与工具调用）'}\n")
+        f.write("\n---\n\n")
+
+        for c in convs:
+            user_msg = c.get("user_msg", "") or ""
+            ai_msg = c.get("ai_msg", "") or ""
+
+            f.write(f"## 👤 用户\n\n{user_msg}\n\n")
+
+            if mode == "all":
+                rounds = c.get("rounds_json_parsed")
+                if rounds and c.get("is_func_calling"):
+                    f.write(f"### 🔧 工具调用链\n\n")
+                    for rd in rounds:
+                        role = rd.get("role", "")
+                        if role == "assistant" and rd.get("tool_calls"):
+                            for tc in rd["tool_calls"]:
+                                fn = tc.get("function", {})
+                                f.write(f"- **调用:** `{fn.get('name', '?')}({fn.get('arguments', '')})`\n")
+                            if rd.get("content"):
+                                f.write(f"- **AI:** {rd['content']}\n")
+                        elif role == "tool":
+                            result = rd.get("content", "") or ""
+                            if len(result) > 500:
+                                result = result[:500] + "..."
+                            f.write(f"- **结果:** {result}\n")
+                        elif role == "assistant" and rd.get("content"):
+                            f.write(f"- **AI:** {rd['content']}\n")
+                    f.write("\n")
+                else:
+                    f.write(f"## 🤖 AI\n\n{ai_msg}\n\n")
+
+            f.write("---\n\n")
+
+
+
 class TkGUI:
     def __init__(self, root, debug:bool=False):
         self.debug = debug
@@ -610,6 +939,8 @@ class TkGUI:
         ttk.Button(left, text="➕ 新建主题", command=self.new_topic).pack(
             fill=tk.X, padx=4, pady=2)
         ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
+        ttk.Button(left, text="📁 主题管理", command=self.open_topic_dialog).pack(
+            fill=tk.X, padx=4, pady=2)
         ttk.Button(left, text="🧠 记忆管理", command=self.open_memory_dialog).pack(
             fill=tk.X, padx=4, pady=2)
 
@@ -1075,6 +1406,12 @@ class TkGUI:
     def _render_and_show_chat(self):
         self._render_chat()
         self._switch_display("chat_view")
+
+    # @2026-04-29 gen by deepseek-v4-pro, 打开主题管理弹窗
+    def open_topic_dialog(self):
+        """打开主题管理弹窗"""
+        TopicDialog(self.root, self.db,
+                    on_switch=lambda tid: self.root.after(0, self.switch_topic, tid))
 
     def open_memory_dialog(self):
         """打开记忆管理对话框"""

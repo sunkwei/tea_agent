@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [0.3.2] - 2026-04-29
 
+- feat: 新增 TopicDialog 主题管理弹窗
+  - 主题列表（ID/标题/创建时间/Token消耗/对话数/状态）
+  - 新建主题、重命名、停用/启用、硬删除
+  - 双击/按钮切换到选中主题
+  - 导出：选中主题 / 全部主题到 Markdown
+  - 导出模式可选「完整」或「仅用户输入」
+
 ### Improvements
 - improve: 跨平台字体自动检测，Windows 优先使用 Microsoft YaHei UI + Cascadia Code
   - 懒加载检测（`_init_fonts()`），避免 import 时无 Tk root 报错

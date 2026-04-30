@@ -1082,7 +1082,9 @@ class TkGUI:
             max_tool_output=cfg.max_tool_output,
             max_assistant_content=cfg.max_assistant_content,
             extra_iterations_on_continue=cfg.extra_iterations_on_continue,
+# NOTE: 2026-04-30 14:36:52, self-evolved by tea_agent --- main_db_gui传递memory_dedup_threshold给OnlineToolSession
             memory_extraction_threshold=cfg.memory_extraction_threshold,
+            memory_dedup_threshold=cfg.memory_dedup_threshold,
             storage=self.db,
             cheap_api_key=cast(str, CHEAP_MODEL.api_key),
             cheap_api_url=cast(str, CHEAP_MODEL.api_url),

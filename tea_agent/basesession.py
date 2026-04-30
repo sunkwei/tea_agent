@@ -97,13 +97,13 @@ class BaseChatSession(ABC):
                 continue
             msg.pop("reasoning_content", None)
 
+# NOTE: 2026-04-30 08:53:33, self-evolved by tea_agent --- 更新load_history docstring，去除过时的中间工具调用链描述
     def load_history(self, conversations: List[Dict], summary: str = ""):
         """
-        从数据库加载历史记录，含中间工具调用链。
+        从数据库加载历史记录（仅保留 user + 最终 ai_msg，丢弃中间工具调用链）。
 
         Args:
-            conversations: 对话记录列表，每条含 user_msg, ai_msg,
-                           is_func_calling, rounds_json_parsed 等字段
+            conversations: 对话记录列表，每条含 user_msg, ai_msg 等字段
             summary: 历史对话摘要（如有）
         """
         self.messages = [{"role": "system", "content": self.system_prompt}]
@@ -123,23 +123,18 @@ class BaseChatSession(ABC):
         self._history_summary = summary
 
         logger.info(f"加载历史 {len(conversations)}条, 摘要：{summary}")
+# NOTE: 2026-04-30 08:53:14, self-evolved by tea_agent --- 历史加载只保留最终ai_msg，丢弃中间工具调用链，减少token浪费和LLM干扰
         for conv in conversations:
             self.messages.append({"role": "user", "content": conv["user_msg"]})
-            
+
             logger.info(
                 f"==> user '{conv['user_msg']}'\n"
                 f"--> ai '{conv['ai_msg']}'\n"
             )
-            rounds = conv.get("rounds_json_parsed")
-            if rounds and conv.get("is_func_calling"):
-                # NOTE: 2026-04-28, self-evolved by claude-agent ---
-                # 清除历史 rounds 中的 reasoning_content，因为它属于之前的
-                # API 会话，传回新会话会导致 DeepSeek 400 错误。
-                self._strip_reasoning_content(rounds)
-                for rd in rounds:
-                    self.messages.append(rd)
-            else:
-                self.messages.append({"role": "assistant", "content": conv["ai_msg"]})
+            # 历史中只保留最终 ai_msg，丢弃中间工具调用链。
+            # 中间轮次（assistant tool_call + tool result）对后续对话无价值，
+            # 保留只会浪费 token 并干扰 LLM 判断。
+            self.messages.append({"role": "assistant", "content": conv["ai_msg"]})
 
     def interrupt(self):
         """打断当前生成"""

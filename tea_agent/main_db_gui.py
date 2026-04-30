@@ -1553,6 +1553,7 @@ class TkGUI:
             self._update_status("🛑 已打断")
 
 
+# NOTE: 2026-04-30 13:44:20, self-evolved by tea_agent --- 补上缺失的__main__入口块，使python -m tea_agent.main_db_gui可正常启动
 def main(debug:bool=False, no_gui:bool=False):
     if no_gui:
         raise NotImplementedError("No GUI mode is not implemented yet.")
@@ -1560,3 +1561,14 @@ def main(debug:bool=False, no_gui:bool=False):
     root = tk.Tk()
     app = TkGUI(root, debug=debug)
     root.mainloop()
+
+
+# NOTE: 2026-04-30 13:45:23, self-evolved by tea_agent --- 兼容python -m tea_agent.main_db_gui main的调用方式
+if __name__ == "__main__":
+    import sys
+    # 兼容 "python -m tea_agent.main_db_gui main [--debug] [--no-gui]" 调用
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    flags = [a for a in sys.argv[1:] if a.startswith("-")]
+    debug = "--debug" in flags or "-d" in flags
+    no_gui = "--no-gui" in flags
+    main(debug=debug, no_gui=no_gui)

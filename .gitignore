@@ -5,3 +5,4 @@ build/
 .vscode/
 test_session.py
 dump_*/
+*.bak

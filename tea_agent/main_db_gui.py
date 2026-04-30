@@ -63,7 +63,14 @@ _IS_WINDOWS = _platform.system() == "Windows"
 
 SYSTEM_FONT = "TkDefaultFont"
 MONO_FONT = "TkFixedFont"
+# NOTE: 2026-04-30 20:02:57, self-evolved by tea_agent --- 添加 Wayland/X11 显示缩放检测：全局 _SCALE_FACTOR + _fs() 辅助函数，_init_fonts() 中自动检测 tk scaling 并更新 _DEFAULT_FONT_SIZE
 _FONTS_DETECTED = False
+_SCALE_FACTOR = 1.0
+
+
+def _fs(size):
+    """返回按显示缩放因子调整后的字体大小（适配 Wayland/X11 高分屏）。"""
+    return max(1, int(size * _SCALE_FACTOR))
 
 
 def _init_fonts():
@@ -101,8 +108,22 @@ def _init_fonts():
                 "Noto Sans Mono CJK SC", "DejaVu Sans Mono",
                 "Source Han Mono SC", "Courier New",
             ])
+# NOTE: 2026-04-30 20:03:08, self-evolved by tea_agent --- _init_fonts() 中检测 Tk 缩放因子并更新全局 _SCALE_FACTOR 和 _DEFAULT_FONT_SIZE
     except Exception:
         pass
+
+    global _SCALE_FACTOR, _DEFAULT_FONT_SIZE
+    try:
+        import tkinter as _tk2
+        root = _tk2._default_root
+        if root:
+            sf = float(root.tk.call("tk", "scaling"))
+            if 1.0 < sf <= 4.0:
+                _SCALE_FACTOR = sf
+    except Exception:
+        pass
+    _DEFAULT_FONT_SIZE = max(12, int(16 * _SCALE_FACTOR))
+
     _FONTS_DETECTED = True
 
 # ====================== Markdown → HTML 渲染 ======================
@@ -282,7 +303,8 @@ class MemoryDialog(tk.Toplevel):
         top.pack(fill=tk.X, padx=10, pady=8)
 
         self.stats_var = tk.StringVar(value="加载中...")
-        ttk.Label(top, textvariable=self.stats_var, font=(SYSTEM_FONT, 10)).pack(side=tk.LEFT)
+# NOTE: 2026-04-30 20:04:00, self-evolved by tea_agent --- MemoryDialog 统计栏、添加对话框、查看对话框字体适配缩放
+        ttk.Label(top, textvariable=self.stats_var, font=(SYSTEM_FONT, _fs(10))).pack(side=tk.LEFT)
 
         ttk.Separator(self, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10)
 
@@ -416,7 +438,8 @@ class MemoryDialog(tk.Toplevel):
         ]
 
         ttk.Label(dlg, text="内容 (必填):").place(x=10, y=10)
-        content_text = tk.Text(dlg, height=3, width=55, font=(SYSTEM_FONT, 10))
+# NOTE: 2026-04-30 20:04:07, self-evolved by tea_agent --- MemoryDialog 添加对话框的 content_text 字体 _fs(10) 和提示标签 _fs(8)
+        content_text = tk.Text(dlg, height=3, width=55, font=(SYSTEM_FONT, _fs(10)))
         content_text.place(x=10, y=32)
 
         ttk.Label(dlg, text="分类:").place(x=10, y=100)
@@ -428,8 +451,9 @@ class MemoryDialog(tk.Toplevel):
         ttk.Label(dlg, text="优先级 (0-3):").place(x=10, y=132)
         pri_var = tk.IntVar(value=2)
         ttk.Spinbox(dlg, from_=0, to=3, textvariable=pri_var, width=4).place(x=100, y=130)
+# NOTE: 2026-04-30 20:04:15, self-evolved by tea_agent --- MemoryDialog 添加对话框中的提示标签字体 _fs(8) 适配缩放
         ttk.Label(dlg, text="0=CRITICAL  1=HIGH  2=MEDIUM  3=LOW",
-                  font=("", 8), foreground="#666").place(x=150, y=133)
+                  font=("", _fs(8)), foreground="#666").place(x=150, y=133)
 
         ttk.Label(dlg, text="重要度 (1-5):").place(x=10, y=164)
         imp_var = tk.IntVar(value=3)
@@ -442,8 +466,9 @@ class MemoryDialog(tk.Toplevel):
         ttk.Label(dlg, text="过期时间 (ISO):").place(x=10, y=228)
         expires_var = tk.StringVar()
         ttk.Entry(dlg, textvariable=expires_var, width=30).place(x=130, y=226)
+# NOTE: 2026-04-30 20:04:24, self-evolved by tea_agent --- MemoryDialog 过期时间提示标签和查看对话框字体适配缩放
         ttk.Label(dlg, text="留空=永不过期  格式: 2026-05-01T08:00:00",
-                  font=("", 8), foreground="#666").place(x=130, y=252)
+                  font=("", _fs(8)), foreground="#666").place(x=130, y=252)
 
         result_label = ttk.Label(dlg, text="", foreground="#cc0000")
         result_label.place(x=10, y=290)
@@ -507,7 +532,8 @@ class MemoryDialog(tk.Toplevel):
         dlg.transient(self)
         dlg.geometry("500x300")
 
-        text = tk.Text(dlg, font=(SYSTEM_FONT, 11), wrap=tk.WORD)
+# NOTE: 2026-04-30 20:04:31, self-evolved by tea_agent --- MemoryDialog 查看对话框字体 _fs(11)
+        text = tk.Text(dlg, font=(SYSTEM_FONT, _fs(11)), wrap=tk.WORD)
         text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         text.insert("1.0", content)
         text.config(state=tk.DISABLED)
@@ -561,7 +587,8 @@ class TopicDialog(tk.Toplevel):
         top = ttk.Frame(self)
         top.pack(fill=tk.X, padx=10, pady=8)
         self.stats_var = tk.StringVar(value="加载中...")
-        ttk.Label(top, textvariable=self.stats_var, font=(SYSTEM_FONT, 10)).pack(side=tk.LEFT)
+# NOTE: 2026-04-30 20:04:37, self-evolved by tea_agent --- TopicDialog 统计栏字体 _fs(10)
+        ttk.Label(top, textvariable=self.stats_var, font=(SYSTEM_FONT, _fs(10))).pack(side=tk.LEFT)
 
         ttk.Separator(self, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10)
 
@@ -712,7 +739,8 @@ class TopicDialog(tk.Toplevel):
 
         ttk.Label(dlg, text="新标题:").pack(padx=10, pady=(15, 2), anchor=tk.W)
         title_var = tk.StringVar(value=old_title)
-        entry = ttk.Entry(dlg, textvariable=title_var, width=50, font=(SYSTEM_FONT, 11))
+# NOTE: 2026-04-30 20:04:45, self-evolved by tea_agent --- TopicDialog 重命名输入框字体 _fs(11)
+        entry = ttk.Entry(dlg, textvariable=title_var, width=50, font=(SYSTEM_FONT, _fs(11)))
         entry.pack(padx=10, pady=4)
         entry.select_range(0, tk.END)
         entry.focus()
@@ -933,8 +961,9 @@ class TkGUI:
         left = Frame(main_split, width=220)
         main_split.add(left, weight=1)
 
-        ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, 12, "bold")).pack(pady=5)
-        self.topic_list = Listbox(left, font=(SYSTEM_FONT, 10))
+# NOTE: 2026-04-30 20:03:32, self-evolved by tea_agent --- 主题标签(12→_fs(12))和主题列表(10→_fs(10))字体适配缩放
+        ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, _fs(12), "bold")).pack(pady=5)
+        self.topic_list = Listbox(left, font=(SYSTEM_FONT, _fs(10)))
         self.topic_list.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
         self.topic_list.bind("<<ListboxSelect>>", self.on_topic_select)
         ttk.Button(left, text="➕ 新建主题", command=self.new_topic).pack(
@@ -961,8 +990,9 @@ class TkGUI:
         chat_frame = Frame(chat_split)
         chat_split.add(chat_frame, weight=4)
 
+# NOTE: 2026-04-30 20:03:16, self-evolved by tea_agent --- 控制台字体使用 _fs(11) 适配缩放
         self.console = scrolledtext.ScrolledText(
-            chat_frame, font=(SYSTEM_FONT, 11), bg="white", fg="black", wrap=tk.WORD
+            chat_frame, font=(SYSTEM_FONT, _fs(11)), bg="white", fg="black", wrap=tk.WORD
         )
         self.console.config(state=tk.DISABLED)
 
@@ -980,8 +1010,9 @@ class TkGUI:
         # 输入区域
         input_frame = Frame(chat_split)
         chat_split.add(input_frame, weight=1)
+# NOTE: 2026-04-30 20:03:24, self-evolved by tea_agent --- 输入框字体使用 _fs(14)、输入提示使用 _fs(9) 适配缩放
         self.input_box = scrolledtext.ScrolledText(
-            input_frame, font=(SYSTEM_FONT, 14), height=4, bg="#f8f8f8"
+            input_frame, font=(SYSTEM_FONT, _fs(14)), height=4, bg="#f8f8f8"
         )
         self.input_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
@@ -993,8 +1024,9 @@ class TkGUI:
         self.console.tag_configure("user", foreground="#0055cc")
         self.console.tag_configure("ai", foreground="black")
         self.console.tag_configure("tool", foreground="#d68000")
+# NOTE: 2026-04-30 20:03:47, self-evolved by tea_agent --- title 标签字体使用 _fs(12) 适配缩放
         self.console.tag_configure(
-            "title", foreground="#0066cc", font=(SYSTEM_FONT, 12, "bold"))
+            "title", foreground="#0066cc", font=(SYSTEM_FONT, _fs(12), "bold"))
         self.console.tag_configure("notice", foreground="#008800")
         self.console.tag_configure("error", foreground="#cc0000")
 

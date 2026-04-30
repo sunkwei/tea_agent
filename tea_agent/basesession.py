@@ -97,44 +97,42 @@ class BaseChatSession(ABC):
                 continue
             msg.pop("reasoning_content", None)
 
-# NOTE: 2026-04-30 08:53:33, self-evolved by tea_agent --- 更新load_history docstring，去除过时的中间工具调用链描述
-    def load_history(self, conversations: List[Dict], summary: str = ""):
+# NOTE: 2026-04-30 10:02:24, self-evolved by tea_agent --- load_history支持recent_turns参数，旧轮次仅user+ai，最近N轮含完整工具链
+    def load_history(self, conversations: List[Dict], summary: str = "", recent_turns: int = 10):
         """
-        从数据库加载历史记录（仅保留 user + 最终 ai_msg，丢弃中间工具调用链）。
+        从数据库加载历史记录。
+
+        - 最近 recent_turns 轮：加载完整消息（user + 中间工具调用链 + 最终 ai）
+        - 超过 recent_turns 的旧轮次：仅保留 user + 最终 ai_msg
 
         Args:
-            conversations: 对话记录列表，每条含 user_msg, ai_msg 等字段
+            conversations: 对话记录列表（按时间正序），每条含 user_msg, ai_msg, rounds_json_parsed
             summary: 历史对话摘要（如有）
+            recent_turns: 保留完整消息的最近轮数，默认10
         """
         self.messages = [{"role": "system", "content": self.system_prompt}]
-
-        # # 如果有持久化摘要，作为 user + assistant 对注入，而非合并到 system prompt
-        # if summary:
-        #     self.messages.append({
-        #         "role": "user",
-        #         "content": f"这是我们之前对话的摘要：\n{summary}"
-        #     })
-        #     self.messages.append({
-        #         "role": "assistant",
-        #         "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"
-        #     })
-
-        ## 在 _build_api_messages() 时，合并到 messages 中
         self._history_summary = summary
 
-        logger.info(f"加载历史 {len(conversations)}条, 摘要：{summary}")
-# NOTE: 2026-04-30 08:53:14, self-evolved by tea_agent --- 历史加载只保留最终ai_msg，丢弃中间工具调用链，减少token浪费和LLM干扰
-        for conv in conversations:
+        total = len(conversations)
+        old_count = max(0, total - recent_turns)
+
+        logger.info(f"加载历史 {total}条 (完整:{min(total, recent_turns)} 简洁:{old_count}), 摘要：{summary}")
+
+        for i, conv in enumerate(conversations):
+            is_old = i < old_count
             self.messages.append({"role": "user", "content": conv["user_msg"]})
 
-            logger.info(
-                f"==> user '{conv['user_msg']}'\n"
-                f"--> ai '{conv['ai_msg']}'\n"
-            )
-            # 历史中只保留最终 ai_msg，丢弃中间工具调用链。
-            # 中间轮次（assistant tool_call + tool result）对后续对话无价值，
-            # 保留只会浪费 token 并干扰 LLM 判断。
-            self.messages.append({"role": "assistant", "content": conv["ai_msg"]})
+            if is_old:
+                # 旧轮次：仅保留最终 ai_msg，丢弃中间工具调用链
+                self.messages.append({"role": "assistant", "content": conv["ai_msg"]})
+            else:
+                # 最近N轮：加载完整工具调用链
+                rounds = conv.get("rounds_json_parsed")
+                if rounds and conv.get("is_func_calling"):
+                    for rd in rounds:
+                        self.messages.append(dict(rd))
+                else:
+                    self.messages.append({"role": "assistant", "content": conv["ai_msg"]})
 
     def interrupt(self):
         """打断当前生成"""

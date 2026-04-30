@@ -3,24 +3,37 @@
 使用 SQLite 存储聊天历史、主题、Agent 循环详情和长期记忆
 """
 
+# NOTE: 2026-04-30 11:42:17, self-evolved by tea_agent --- 添加 os 和 datetime 导入
+import os
 import sqlite3
 import json
+from datetime import datetime
 from typing import Dict, Optional, List, cast
 import logging
 
 logger = logging.getLogger("Storage")
 class Storage:
+# NOTE: 2026-04-30 11:42:27, self-evolved by tea_agent --- __init__ 增加周轮转检查和周标识写入
     def __init__(self, db_path="chat_history.db"):
-        logger.info(f"load database {db_path}")
         self.db_path = db_path
+        self._maybe_rotate_db()  # NOTE: 每周轮转检查，在连接前执行
+        logger.info(f"load database {db_path}")
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self._init_tables()
         self._migrate()
+        self._write_week_key()  # NOTE: 写入本周 ISO 周标识
 
         # @2026-04-29 gen by deepseek-v4-pro, 新增memories表及8个CRUD方法
+# NOTE: 2026-04-30 11:42:35, self-evolved by tea_agent --- _init_tables 新增 _meta 元数据表
     def _init_tables(self):
         c = self.conn.cursor()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS _meta (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
         c.execute('''
             CREATE TABLE IF NOT EXISTS topics (
                 topic_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,6 +148,64 @@ class Storage:
             except sqlite3.OperationalError:
                 pass
 
+# NOTE: 2026-04-30 11:42:58, self-evolved by tea_agent --- 新增 _get_week_key、_maybe_rotate_db、_write_week_key 三个方法
+        c.close()
+
+    # NOTE: 2026-04-30 11:42:44, self-evolved by tea_agent --- 每周db轮转：_get_week_key、_maybe_rotate_db、_write_week_key
+    @staticmethod
+    def _get_week_key():
+        """返回当前 ISO 周标识，如 '2026-W18'"""
+        return datetime.now().strftime("%G-W%V")
+
+    def _maybe_rotate_db(self):
+        """
+        如果 chat_history.db 属于上一周，则重命名为 chat_history_{yyyy-mm-dd}.db。
+        必须在数据库连接之前调用。
+        """
+        if not os.path.exists(self.db_path):
+            return  # 首次运行，无需轮转
+
+        # 读取旧 db 中存储的周标识
+        db_week = None
+        try:
+            tmp_conn = sqlite3.connect(self.db_path)
+            c = tmp_conn.cursor()
+            c.execute("SELECT value FROM _meta WHERE key = 'week_key'")
+            row = c.fetchone()
+            db_week = row[0] if row else None
+            tmp_conn.close()
+        except sqlite3.OperationalError:
+            pass  # _meta 表不存在（旧版 db），也视为需要轮转
+
+        current_week = self._get_week_key()
+        if db_week == current_week:
+            return  # 同一周，无需轮转
+
+# NOTE: 2026-04-30 11:44:29, self-evolved by tea_agent --- 修复归档文件名缺少目录路径的 bug
+# NOTE: 2026-04-30 11:46:46, self-evolved by tea_agent --- _maybe_rotate_db 增加锁竞争容错，失败时仅警告不崩溃
+        # 需要轮转：重命名旧 db（保持在同一目录）
+        db_dir = os.path.dirname(self.db_path) or "."
+        archive_name = os.path.join(db_dir, f"chat_history_{datetime.now().strftime('%Y-%m-%d')}.db")
+        # 如果归档文件已存在，追加时间戳避免覆盖
+        if os.path.exists(archive_name):
+            archive_name = os.path.join(db_dir, f"chat_history_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.db")
+        try:
+            os.rename(self.db_path, archive_name)
+            logger.info(f"归档旧数据库: {self.db_path} -> {archive_name}")
+        except OSError as e:
+            logger.warning(
+                f"无法归档旧数据库（文件可能被占用）: {e}。"
+                f"将继续使用当前 db，下次启动时重试轮转。"
+            )
+
+    def _write_week_key(self):
+        """在 _meta 表中记录本周标识"""
+        c = self.conn.cursor()
+        c.execute(
+            "INSERT OR REPLACE INTO _meta (key, value) VALUES ('week_key', ?)",
+            (self._get_week_key(),),
+        )
+        self.conn.commit()
         c.close()
 
     def create_topic(self, title: str) -> int:
@@ -324,29 +395,46 @@ class Storage:
         self.conn.commit()
         c.close()
 
-    def get_conversations(self, topic_id: int, limit: int = 5) -> List[Dict]:
+# NOTE: 2026-04-30 10:01:51, self-evolved by tea_agent --- get_conversations支持limit=-1返回全部记录
+# NOTE: 2026-04-30 10:25:19, self-evolved by tea_agent --- get_conversations增加include_rounds参数，False时跳过rounds_json加载和解析
+    def get_conversations(self, topic_id: int, limit: int = 5, include_rounds: bool = True) -> List[Dict]:
         '''
-        获取指定 topic 最近 N 轮对话（按时间倒序取最近 limit 条）
-        解析 rounds_json 字段为 Python 对象（如果有）
+        获取指定 topic 最近 N 轮对话（按时间正序）。
+        limit=-1 时返回全部记录。
+        include_rounds=False 时跳过 rounds_json 加载和解析（轻量模式，加速加载）。
+
+        Args:
+            topic_id: 主题ID
+            limit: 返回数量上限，-1=全部
+            include_rounds: 是否加载并解析 rounds_json 列
+
+        Returns:
+            对话记录列表，每项含 id, user_msg, ai_msg, is_func_calling, stamp
+            (include_rounds=True 时还含 rounds_json, rounds_json_parsed)
         '''
         c = self.conn.cursor()
-        c.execute(
-            'SELECT * FROM conversations WHERE topic_id = ? ORDER BY stamp ASC', (topic_id,))
+        if include_rounds:
+            c.execute(
+                'SELECT * FROM conversations WHERE topic_id = ? ORDER BY stamp ASC', (topic_id,))
+        else:
+            c.execute(
+                'SELECT id, topic_id, user_msg, ai_msg, is_func_calling, is_summarized, stamp '
+                'FROM conversations WHERE topic_id = ? ORDER BY stamp ASC', (topic_id,))
         rows = c.fetchall()
         c.close()
-        if len(rows) >= limit:
-            rows = rows[-limit:] ## 选择最新的 limit 条记录
+        if limit > 0 and len(rows) > limit:
+            rows = rows[-limit:]  ## 选择最新的 limit 条记录
         result = []
         for r in rows:
             d = dict(r)
-            # @2026-04-19 15:36:08 generated by Pro/zai-org/GLM-5.1, 解析rounds_json为Python对象
-            if d.get('rounds_json'):
-                try:
-                    d['rounds_json_parsed'] = json.loads(d['rounds_json'])
-                except (json.JSONDecodeError, TypeError):
+            if include_rounds:
+                if d.get('rounds_json'):
+                    try:
+                        d['rounds_json_parsed'] = json.loads(d['rounds_json'])
+                    except (json.JSONDecodeError, TypeError):
+                        d['rounds_json_parsed'] = None
+                else:
                     d['rounds_json_parsed'] = None
-            else:
-                d['rounds_json_parsed'] = None
             result.append(d)
         return result
 
@@ -425,7 +513,8 @@ class Storage:
         self.conn.commit()
         c.close()
 
-    def get_unsummarized_conversations(self, topic_id: int, limit:int=-1) -> List[Dict]:
+# NOTE: 2026-04-30 09:47:45, self-evolved by tea_agent --- get_unsummarized_conversations默认limit从-1(全部)改为50，防止无限制加载
+    def get_unsummarized_conversations(self, topic_id: int, limit:int=50) -> List[Dict]:
         """获取指定 topic 中尚未摘要的所有对话"""
         c = self.conn.cursor()
         if limit < 0:

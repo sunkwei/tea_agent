@@ -58,7 +58,8 @@ class AgentConfig:
     # 交互与控制参数
     extra_iterations_on_continue: int = 5  # 续命时追加的工具调用轮数
     memory_extraction_threshold: int = 2  # 触发记忆提取的最低未摘要消息数
-    chat_page_size: int = 30  # GUI 单页加载的对话轮数
+# NOTE: 2026-04-30 09:47:45, self-evolved by tea_agent --- GUI单页加载对话数默认从30改为50，防止加载过多导致卡顿
+    chat_page_size: int = 50  # GUI 单页加载的对话轮数（最多50条）
 
 
 def load_config(config_path: Optional[str] = None) -> AgentConfig:
@@ -230,8 +231,9 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "extra_iterations_on_continue: 5\n\n"
         "# 触发自动记忆提取的最少未摘要消息数\n"
         "memory_extraction_threshold: 2\n\n"
+# NOTE: 2026-04-30 09:47:45, self-evolved by tea_agent --- create_default_config模板同步更新chat_page_size默认值30→50
         "# GUI 单页加载的最大对话轮数（超过则省略更早的对话）\n"
-        "chat_page_size: 30\n"
+        "chat_page_size: 50\n"
     )
 
     with open(yaml_path, "w", encoding="utf-8") as f:

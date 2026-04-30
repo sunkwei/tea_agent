@@ -16,7 +16,8 @@
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Dict, Any
+# NOTE: 2026-04-30 16:22:42, self-evolved by tea_agent --- config.py添加List/Dict导入，修复NameError
+from typing import Optional, Dict, Any, List
 
 try:
     import yaml
@@ -39,6 +40,7 @@ class ModelConfig:
         return bool(self.api_key and self.api_url and self.model_name)
 
 
+# NOTE: 2026-04-30 16:17:53, self-evolved by tea_agent --- AgentConfig增加运行时get/set/apply/reload方法，支持自我配置调优
 @dataclass
 class AgentConfig:
     """Agent 全局配置"""
@@ -57,9 +59,96 @@ class AgentConfig:
 
     # 交互与控制参数
     extra_iterations_on_continue: int = 5  # 续命时追加的工具调用轮数
+# NOTE: 2026-04-30 14:36:14, self-evolved by tea_agent --- AppConfig增加memory_dedup_threshold字段
     memory_extraction_threshold: int = 2  # 触发记忆提取的最低未摘要消息数
+# NOTE: 2026-04-30 14:38:53, self-evolved by tea_agent --- 去重阈值默认从0.5降到0.3，适配中文bigram相似度特点
+    memory_dedup_threshold: float = 0.3  # 记忆去重相似度阈值 (0~1)，bigram Jaccard
 # NOTE: 2026-04-30 09:47:45, self-evolved by tea_agent --- GUI单页加载对话数默认从30改为50，防止加载过多导致卡顿
     chat_page_size: int = 50  # GUI 单页加载的对话轮数（最多50条）
+
+    # 2026-04-30 gen by deepseek-v4-pro, 运行时配置读写方法（支持自我调优）
+
+    # 可运行时修改的配置键白名单
+    _RUNTIME_CONFIG_KEYS = {
+        "max_history", "max_iterations", "enable_thinking",
+        "keep_turns", "max_tool_output", "max_assistant_content",
+        "extra_iterations_on_continue", "memory_extraction_threshold",
+        "memory_dedup_threshold", "chat_page_size",
+    }
+
+    # 类型映射
+    _CONFIG_TYPES = {
+        "max_history": int, "max_iterations": int, "enable_thinking": bool,
+        "keep_turns": int, "max_tool_output": int, "max_assistant_content": int,
+        "extra_iterations_on_continue": int, "memory_extraction_threshold": int,
+        "memory_dedup_threshold": float, "chat_page_size": int,
+    }
+
+    def get(self, key: str, default=None):
+        """读取配置值"""
+        if hasattr(self, key):
+            return getattr(self, key)
+        return default
+
+    def set(self, key: str, value) -> bool:
+        """
+        运行时修改配置值（仅白名单内的键可修改）。
+
+        Args:
+            key: 配置键
+            value: 新值（会自动转换类型）
+
+        Returns:
+            是否成功
+        """
+        if key not in self._RUNTIME_CONFIG_KEYS:
+            return False
+
+        expected_type = self._CONFIG_TYPES.get(key)
+        if expected_type:
+            try:
+                if expected_type == bool and isinstance(value, str):
+                    value = value.lower() in ("true", "1", "yes", "on")
+                else:
+                    value = expected_type(value)
+            except (ValueError, TypeError):
+                return False
+
+        setattr(self, key, value)
+        return True
+
+    def apply_changes(self, changes: List[Dict]) -> List[Dict]:
+        """
+        批量应用配置变更。
+
+        Args:
+            changes: [{"key": "max_iterations", "value": 60}, ...]
+
+        Returns:
+            每项变更的结果: [{"key": "...", "ok": bool, "error": ""}, ...]
+        """
+        results = []
+        for ch in changes:
+            key = ch.get("key", "")
+            value = ch.get("value")
+            ok = self.set(key, value)
+            results.append({
+                "key": key,
+                "ok": ok,
+                "new_value": str(getattr(self, key, "")) if ok else "",
+                "error": "" if ok else f"无效的配置键: {key}" if key not in self._RUNTIME_CONFIG_KEYS else f"值类型错误: {value}",
+            })
+        return results
+
+    def reload_from_dict(self, data: Dict):
+        """从字典重新加载配置"""
+        for key in self._RUNTIME_CONFIG_KEYS:
+            if key in data:
+                self.set(key, data[key])
+
+    def to_dict(self) -> Dict:
+        """导出运行时配置为字典"""
+        return {key: getattr(self, key) for key in self._RUNTIME_CONFIG_KEYS if hasattr(self, key)}
 
 
 def load_config(config_path: Optional[str] = None) -> AgentConfig:
@@ -115,7 +204,9 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
 
             # 加载交互与控制参数
             cfg.extra_iterations_on_continue = int(data.get("extra_iterations_on_continue", cfg.extra_iterations_on_continue))
+# NOTE: 2026-04-30 14:36:23, self-evolved by tea_agent --- load_config解析memory_dedup_threshold
             cfg.memory_extraction_threshold = int(data.get("memory_extraction_threshold", cfg.memory_extraction_threshold))
+            cfg.memory_dedup_threshold = float(data.get("memory_dedup_threshold", cfg.memory_dedup_threshold))
             cfg.chat_page_size = int(data.get("chat_page_size", cfg.chat_page_size))
             
         except Exception:
@@ -175,7 +266,9 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
 
     # 保存交互与控制参数
     data["extra_iterations_on_continue"] = cfg.extra_iterations_on_continue
+# NOTE: 2026-04-30 14:36:30, self-evolved by tea_agent --- save_config保存memory_dedup_threshold
     data["memory_extraction_threshold"] = cfg.memory_extraction_threshold
+    data["memory_dedup_threshold"] = cfg.memory_dedup_threshold
     data["chat_page_size"] = cfg.chat_page_size
     
     with open(yaml_path, "w", encoding="utf-8") as f:
@@ -230,7 +323,10 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "# 工具调用达到上限后续命时追加的轮数\n"
         "extra_iterations_on_continue: 5\n\n"
         "# 触发自动记忆提取的最少未摘要消息数\n"
+# NOTE: 2026-04-30 14:36:36, self-evolved by tea_agent --- create_default_config模板增加memory_dedup_threshold
         "memory_extraction_threshold: 2\n\n"
+        "# 记忆去重相似度阈值，超过此值视为重复并合并(0~1)\n"
+        "memory_dedup_threshold: 0.5\n\n"
 # NOTE: 2026-04-30 09:47:45, self-evolved by tea_agent --- create_default_config模板同步更新chat_page_size默认值30→50
         "# GUI 单页加载的最大对话轮数（超过则省略更早的对话）\n"
         "chat_page_size: 50\n"

@@ -31,15 +31,22 @@ class SessionMemoryMixin:
         self._injected_memories_text: str = ""
         self._injected_memories: List[Dict] = []
 
+# NOTE: 2026-04-30 14:35:20, self-evolved by tea_agent --- _setup_memory传递dedup_threshold给MemoryManager
     def _setup_memory(self):
         """初始化 Memory 管理器（需要 self.storage 已设置）"""
         if not self.storage:
             return
         from tea_agent.memory import MemoryManager
         threshold = getattr(self, 'memory_extraction_threshold', 2)
+# NOTE: 2026-04-30 14:39:06, self-evolved by tea_agent --- session_memory默认dedup改为0.3
+        dedup = getattr(self, 'memory_dedup_threshold', 0.3)
         try:
-            self.memory = MemoryManager(self.storage, extraction_threshold=threshold)
-            logger.info("MemoryManager 初始化成功")
+            self.memory = MemoryManager(
+                self.storage,
+                extraction_threshold=threshold,
+                dedup_threshold=dedup,
+            )
+            logger.info("MemoryManager 初始化成功 (dedup_threshold=%.2f)", dedup)
         except Exception as e:
             logger.warning(f"MemoryManager 初始化失败: {e}")
             self.memory = None

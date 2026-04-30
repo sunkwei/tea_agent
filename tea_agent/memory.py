@@ -29,14 +29,18 @@ MAX_INJECT = 5  # 每次会话注入上限
 class MemoryManager:
     """记忆管理器：选择、格式化、提取"""
 
-    def __init__(self, storage, extraction_threshold: int = 2):
+# NOTE: 2026-04-30 14:33:58, self-evolved by tea_agent --- MemoryManager增加dedup_threshold参数
+# NOTE: 2026-04-30 14:39:00, self-evolved by tea_agent --- MemoryManager默认dedup_threshold改为0.3与config一致
+    def __init__(self, storage, extraction_threshold: int = 2, dedup_threshold: float = 0.3):
         """
         Args:
             storage: Storage 实例，提供记忆 CRUD
             extraction_threshold: 触发记忆提取的最低未摘要消息数
+            dedup_threshold: 记忆去重相似度阈值 (0~1)，超过此值视为重复
         """
         self.storage = storage
         self._extraction_threshold = extraction_threshold
+        self._dedup_threshold = dedup_threshold
 
     # ------------------------------------------------------------------
     # 记忆选择
@@ -138,14 +142,16 @@ class MemoryManager:
         # 映射到 0.1 ~ 1.0 范围
         return max(0.1, min(1.0, rate * 2.0))
 
+# NOTE: 2026-04-30 14:37:56, self-evolved by tea_agent --- _extract_keywords增加中文bigram切分，避免整段中文只算一个关键词
     @staticmethod
     def _extract_keywords(text: str) -> set:
-        """从文本中提取关键词"""
+        """从文本中提取关键词（含中文 bigram 切分）"""
         keywords = set()
-        # 中文字符序列
-        chinese = re.findall(r'[\u4e00-\u9fff]{2,}', text)
-        keywords.update(chinese)
-        # 英文单词
+        # 中文 bigram 切分（连续汉字按2字滑动窗口）
+        chinese_chars = re.findall(r'[\u4e00-\u9fff]', text)
+        for i in range(len(chinese_chars) - 1):
+            keywords.add(chinese_chars[i] + chinese_chars[i+1])
+        # 英文单词（3字母以上）
         english = re.findall(r'[a-zA-Z]{3,}', text)
         keywords.update(w.lower() for w in english)
         return keywords
@@ -275,37 +281,191 @@ importance 评分：
             pass
         return []
 
+# NOTE: 2026-04-30 14:35:03, self-evolved by tea_agent --- 新增_compute_similarity/_find_duplicate/_merge_memory去重合并方法，改造ingest_extracted写入前查重
+    # ------------------------------------------------------------------
+    # 去重合并
+    # ------------------------------------------------------------------
+
+    def _compute_similarity(self, text_a: str, text_b: str) -> float:
+        """
+        计算两段文本的关键词 Jaccard 相似度。
+
+        返回值 0~1，越高越相似。
+        """
+        if not text_a or not text_b:
+            return 0.0
+        kw_a = self._extract_keywords(text_a.lower())
+        kw_b = self._extract_keywords(text_b.lower())
+        if not kw_a or not kw_b:
+            # 退化为字符级 Jaccard
+            set_a = set(text_a)
+            set_b = set(text_b)
+            if not set_a or not set_b:
+                return 0.0
+            return len(set_a & set_b) / len(set_a | set_b)
+        return len(kw_a & kw_b) / len(kw_a | kw_b)
+
+    def _find_duplicate(self, content: str, category: str = "") -> Optional[Dict]:
+        """
+        在活跃记忆中查找与 content 相似度超过阈值的记忆。
+
+        Args:
+            content: 待查重的记忆内容
+            category: 可选分类过滤（同分类优先匹配）
+
+        Returns:
+            找到的重复记忆 Dict；无重复返回 None
+        """
+        existing = self.storage.get_active_memories(limit=200)
+        best = None
+        best_score = 0.0
+
+        for mem in existing:
+            score = self._compute_similarity(content, mem.get("content", ""))
+            # 同分类加权 10%
+            if category and mem.get("category") == category:
+                score *= 1.1
+            if score > best_score:
+                best_score = score
+                best = mem
+
+        if best and best_score >= self._dedup_threshold:
+            logger.info(
+                f"发现重复记忆 #{best['id']} (相似度={best_score:.2f}>={self._dedup_threshold}): "
+                f"\"{content[:50]}...\""
+            )
+            return best
+        return None
+
+    def _merge_memory(self, existing: Dict, new_item: Dict) -> Dict:
+        """
+        合并新旧记忆，返回合并后的字段 dict。
+
+        合并策略：
+        - content: 保留更长的，或拼接（若两者都较长且不包含对方）
+        - importance: 取较高值
+        - priority: 取较小值（越关键）
+        - tags: 并集（去重）
+        - category: 保持不变（已有分类优先）
+        - expires_at: 保留更早的过期时间
+        """
+        old_content = existing.get("content", "")
+        new_content = new_item.get("content", "").strip()
+
+        # 内容合并：若新内容更长且不包含在旧内容中，拼接
+        if new_content and new_content not in old_content:
+            if len(new_content) > len(old_content):
+                merged_content = new_content
+            elif len(old_content) < 200 and len(new_content) > 10:
+                merged_content = f"{old_content}；{new_content}"
+            else:
+                merged_content = old_content
+        else:
+            merged_content = old_content
+
+        # 标签合并
+        old_tags = set(t.strip() for t in (existing.get("tags") or "").split(",") if t.strip())
+        new_tags_raw = new_item.get("tags", "")
+        if isinstance(new_tags_raw, list):
+            new_tags = set(t.strip() for t in new_tags_raw if t.strip())
+        else:
+            new_tags = set(t.strip() for t in str(new_tags_raw).split(",") if t.strip())
+        merged_tags = ", ".join(sorted(old_tags | new_tags))
+
+        # 优先级取更关键（数字更小）
+        old_priority = existing.get("priority", 2)
+        new_priority = new_item.get("priority", 2)
+        merged_priority = min(old_priority, new_priority)
+
+        # 重要度取更高
+        merged_importance = max(
+            existing.get("importance", 3),
+            new_item.get("importance", 3)
+        )
+
+        # 过期时间取更早
+        old_expires = existing.get("expires_at")
+        new_expires = new_item.get("expires_at")
+        if old_expires and new_expires:
+            merged_expires = min(str(old_expires), str(new_expires))
+        else:
+            merged_expires = old_expires or new_expires
+
+        merged = {
+            "content": merged_content,
+            "category": existing.get("category", new_item.get("category", "general")),
+            "priority": merged_priority,
+            "importance": merged_importance,
+            "tags": merged_tags,
+            "expires_at": merged_expires,
+        }
+
+        logger.info(
+            f"合并记忆 #{existing['id']}: "
+            f"priority {old_priority}→{merged_priority}, "
+            f"importance {existing.get('importance')}→{merged_importance}, "
+            f"tags \"{existing.get('tags','')}\"→\"{merged_tags}\""
+        )
+        return merged
+
     def ingest_extracted(self, results: List[Dict], topic_id: Optional[int] = None) -> int:
         """
-        将提取结果写入存储。
+        将提取结果写入存储（带去重合并）。
+
+        对每条提取结果：
+        1. 查找是否已有相似记忆
+        2. 有 → 合并更新
+        3. 无 → 新增
 
         Args:
             results: parse_extraction_result 的输出
             topic_id: 来源会话 ID
 
         Returns:
-            新增记忆数量
+            新增/更新的记忆数量
         """
-        count = 0
+        new_count = 0
+        merged_count = 0
+
         for item in results:
             try:
-# NOTE: 2026-04-29 11:29:55, self-evolved by tea_agent --- 修复 ingest_extracted: tags 为 list 时转为逗号分隔字符串
                 tags = item.get("tags", "")
                 if isinstance(tags, list):
                     tags = ", ".join(tags)
-                self.storage.add_memory(
-                    content=item.get("content", "").strip(),
-                    category=item.get("category", "general"),
-                    priority=item.get("priority", 2),
-                    importance=item.get("importance", 3),
-                    expires_at=item.get("expires_at"),
-                    tags=tags,
-                    source_topic_id=topic_id,
-                )
-                count += 1
+                content = item.get("content", "").strip()
+                category = item.get("category", "general")
+
+                if not content:
+                    continue
+
+                # 查重
+                duplicate = self._find_duplicate(content, category)
+
+                if duplicate:
+                    # 合并更新
+                    merged = self._merge_memory(duplicate, item)
+                    self.storage.update_memory(duplicate["id"], **merged)
+                    self.storage.touch_memory(duplicate["id"])
+                    merged_count += 1
+                else:
+                    # 新增
+                    self.storage.add_memory(
+                        content=content,
+                        category=category,
+                        priority=item.get("priority", 2),
+                        importance=item.get("importance", 3),
+                        expires_at=item.get("expires_at"),
+                        tags=tags,
+                        source_topic_id=topic_id,
+                    )
+                    new_count += 1
+
             except Exception as e:
                 logger.warning(f"Failed to ingest memory '{item.get('content', '')}': {e}")
-        return count
+
+        if merged_count > 0:
+            logger.info(f"记忆提取完成: 新增 {new_count} 条, 合并更新 {merged_count} 条")
+        return new_count + merged_count
 
     def is_extraction_needed(self, unsummarized_count: int) -> bool:
         """判断是否需要触发记忆提取"""

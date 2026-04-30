@@ -640,7 +640,8 @@ class TopicDialog(tk.Toplevel):
                     created = created[:19]
                 ts = self.db.get_topic_tokens(tid)
                 tokens = ts.get("total_tokens", 0) if ts else 0
-                convs_raw = self.db.get_conversations(tid)
+# NOTE: 2026-04-30 12:02:19, self-evolved by tea_agent --- 修复对话数统计错误：get_conversations默认limit=5导致所有主题显示5
+                convs_raw = self.db.get_conversations(tid, limit=-1, include_rounds=False)
                 convs = len(convs_raw) if convs_raw else 0
                 is_active = tp.get("is_active", 1)
 
@@ -819,7 +820,12 @@ class TopicDialog(tk.Toplevel):
         updated = tp.get("last_update_stamp", "") if tp else ""
 
         ts = self.db.get_topic_tokens(topic_id) or {}
-        convs = self.db.get_conversations(topic_id) or []
+# NOTE: 2026-04-30 12:02:39, self-evolved by tea_agent --- 修复导出功能中对话数同样被limit=5截断的问题
+# NOTE: 2026-04-30 12:07:44, self-evolved by tea_agent --- 修复完整导出缺少tool calling中间数据：all模式需include_rounds=True
+        if mode == "all":
+            convs = self.db.get_conversations(topic_id, limit=-1, include_rounds=True) or []
+        else:
+            convs = self.db.get_conversations(topic_id, limit=-1, include_rounds=False) or []
 
         f.write(f"# {title}\n\n")
         f.write(f"- **ID:** {topic_id}\n")
@@ -850,10 +856,9 @@ class TopicDialog(tk.Toplevel):
                                 f.write(f"- **调用:** `{fn.get('name', '?')}({fn.get('arguments', '')})`\n")
                             if rd.get("content"):
                                 f.write(f"- **AI:** {rd['content']}\n")
+# NOTE: 2026-04-30 12:08:14, self-evolved by tea_agent --- 移除完整导出中工具结果的500字符截断，保持完整性
                         elif role == "tool":
                             result = rd.get("content", "") or ""
-                            if len(result) > 500:
-                                result = result[:500] + "..."
                             f.write(f"- **结果:** {result}\n")
                         elif role == "assistant" and rd.get("content"):
                             f.write(f"- **AI:** {rd['content']}\n")

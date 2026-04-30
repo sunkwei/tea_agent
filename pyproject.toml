@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tea_agent"
-version = "0.3.3"
-description = "A self-evolving AI agent with dynamic toolkit management"
+version = "0.4.0"
+description = "A self-evolving AI agent with dynamic toolkit management, OCR vision, and GUI automation"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -23,6 +23,10 @@ dependencies = [
     "openai>=1.0.0",
     "markdown>=3.4.0",
     "tkinterweb>=3.10",
+    "pyautogui>=0.9.0",
+    "easyocr>=1.7.0",
+    "mss>=9.0.0",
+    "Pillow>=10.0.0",
 ]
 
 [project.urls]

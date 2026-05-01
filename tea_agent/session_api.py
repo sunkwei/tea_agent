@@ -227,7 +227,8 @@ class SessionAPIMixin:
             kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
         
         if not thinking_supported:
-            kwargs["extra_body"] = {"thinking": {"type": "disable"}}
+# NOTE: 2026-05-01 14:24:09, self-evolved by tea_agent --- 修复 thinking.type 从 disable 改为 disabled
+            kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
 
         return target_client.chat.completions.create(**kwargs)
 

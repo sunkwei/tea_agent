@@ -135,7 +135,8 @@ class SessionMemoryMixin:
                 model=model,
                 messages=messages,
                 stream=False,
-                extra_body={"thinking": {"type": "disable"}},
+# NOTE: 2026-05-01 14:24:09, self-evolved by tea_agent --- 修复 thinking.type 从 disable 改为 disabled
+                extra_body={"thinking": {"type": "disabled"}},
                 temperature=0.3,
                 max_tokens=1000,
             )

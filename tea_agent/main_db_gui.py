@@ -191,18 +191,21 @@ def _chat_to_markdown(messages: List[Dict]) -> str:
 # ====================== Topic 摘要 Prompt ======================
 
 # NOTE: 2026-05-01 08:17:23, self-evolved by tea_agent --- _generate_topic_summary: min_length从2提高到5，提示词强化中文自然表达
+# NOTE: 2026-05-01 20:12:32, self-evolved by tea_agent --- 更新 system prompt：强调基于用户输入概括，不基于 AI 回复
 _TOPIC_SUMMARY_SYSTEM = (
-    "你是一个摘要生成器。根据对话内容，生成不超过20字的自然中文摘要标题。"
+    "你是一个摘要生成器。根据最近几轮的用户输入，生成不超过20字的自然中文摘要标题。"
     "要求："
-    "1. 用日常口语概括对话主题，像人聊天时随口说的标题那样。"
-    "2. 至少6个字以上，禁止输出残缺句子或单字。"
-    "3. 不使用书名号、引号、多余修饰词。"
+    "1. 根据用户的发言概括对话主题，不要基于 AI 的回复来概括。"
+    "2. 用日常口语表达，像人聊天时随口说的标题那样。"
+    "3. 至少6个字以上，禁止输出残缺句子或单字。"
+    "4. 不使用书名号、引号、多余修饰词。"
     "直接输出摘要文本，不要任何额外说明。"
 )
 
+# NOTE: 2026-05-01 20:12:10, self-evolved by tea_agent --- 摘要生成只用 user input（去除 AI 回复），基于最近多轮而非最后一轮
 _TOPIC_SUMMARY_USER_TEMPLATE = (
-    "以下是最近3轮对话的用户消息：\n\n{user_msgs}\n\n"
-    "请生成不超过20字的摘要标题："
+    "以下是最近几轮对话的用户输入：\n\n{user_msgs}\n\n"
+    "请根据这些用户输入，生成不超过20字的摘要标题："
 )
 
 
@@ -221,21 +224,14 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
     if not conversations:
         return None
         
+# NOTE: 2026-05-01 20:12:20, self-evolved by tea_agent --- _generate_topic_summary 只收集 user_msg，不混入 AI 回复
     user_msgs = []
     for conv in conversations:
         um = conv.get("user_msg", "").strip()
-        ai = conv.get("ai_msg", "").strip()
-        
         if um:
             if len(um) > 200:
                 um = um[:200] + "..."
             user_msgs.append(f"用户：{um}")
-        
-        # 同时提取 AI 回复，提供更完整的上下文
-        if ai:
-            if len(ai) > 200:
-                ai = ai[:200] + "..."
-            user_msgs.append(f"AI：{ai}")
 
     if not user_msgs:
         return None

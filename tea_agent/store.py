@@ -18,8 +18,11 @@ class Storage:
         self.db_path = db_path
         self._maybe_rotate_db()  # NOTE: 每周轮转检查，在连接前执行
         logger.info(f"load database {db_path}")
+# NOTE: 2026-05-01 11:43:23, self-evolved by tea_agent --- 启用WAL模式，确保跨线程写入后主线程立即可读
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        # 启用 WAL 模式，跨线程写入立即可见
+        self.conn.execute("PRAGMA journal_mode=WAL")
         self._init_tables()
         self._migrate()
         self._write_week_key()  # NOTE: 写入本周 ISO 周标识

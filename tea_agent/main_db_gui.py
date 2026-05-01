@@ -1431,8 +1431,9 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         self.input_box.insert(tk.INSERT, "\n")
         return "break"
 
+# NOTE: 2026-05-01 11:43:46, self-evolved by tea_agent --- _update_topic_summary: 状态栏可见反馈 + LLM失败时用首条用户消息兜底 + 主线程刷新
     def _update_topic_summary(self):
-        """使用 cheap_model 生成 topic 摘要标题"""
+        """使用 cheap_model 生成 topic 摘要标题。失败时用首条用户消息兜底。"""
         if not self.current_topic_id or self.current_topic_id < 0:
             return
 
@@ -1440,6 +1441,12 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         if not recent:
             return
 
+        # 兜底方案：取第一条用户消息的前 20 字
+        fallback = recent[0].get("user_msg", "").strip()
+        if fallback:
+            fallback = fallback[:20]
+
+        summary = None
         try:
             # 优先使用 cheap_model 降低成本
             cli, mdl = self.sess._get_summarize_client()
@@ -1448,20 +1455,21 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 model=mdl,
                 conversations=recent,
             )
-            if summary:
-                try:
-                    self.db.update_topic_title(self.current_topic_id, summary)
-                    self.root.after(0, self._refresh_topics_preserve_selection)
-                    if self.sess.tool_log:
-                        self.sess.tool_log(f"📝 Topic摘要已更新: {summary}")
-                except Exception as db_e:
-                    if self.sess and self.sess.tool_log:
-                        self.sess.tool_log(f"⚠️ Topic摘要数据库更新失败: {db_e}")
-                        self.sess.tool_log(traceback.format_exc())
         except Exception as e:
-            if self.sess and self.sess.tool_log:
-                self.sess.tool_log(f"⚠️ Topic摘要生成失败: {e}")
-                self.sess.tool_log(traceback.format_exc())
+            logger.warning(f"Topic摘要LLM生成失败: {e}")
+
+        # LLM 失败时使用兜底
+        if not summary and fallback:
+            summary = fallback
+
+        if summary:
+            try:
+                self.db.update_topic_title(self.current_topic_id, summary)
+                # 延迟刷新保证 WAL 写入已刷盘
+                self.root.after(200, self._refresh_topics_preserve_selection)
+                self.root.after(100, lambda s=summary: self._update_status(f"📝 摘要: {s}"))
+            except Exception as db_e:
+                logger.warning(f"Topic摘要DB更新失败: {db_e}")
 
     def _refresh_topics_preserve_selection(self):
         current_idx = self.topic_list.curselection()

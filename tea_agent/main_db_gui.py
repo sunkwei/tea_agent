@@ -1432,44 +1432,65 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         return "break"
 
 # NOTE: 2026-05-01 11:43:46, self-evolved by tea_agent --- _update_topic_summary: 状态栏可见反馈 + LLM失败时用首条用户消息兜底 + 主线程刷新
+# NOTE: 2026-05-01 11:49:01, self-evolved by tea_agent --- _update_topic_summary 加控台可见调试日志，追踪每一步执行
+# NOTE: 2026-05-01 11:49:45, self-evolved by tea_agent --- _update_topic_summary 日志调用改用 root.after 调度到主线程，避免 tk 线程安全问题
     def _update_topic_summary(self):
         """使用 cheap_model 生成 topic 摘要标题。失败时用首条用户消息兜底。"""
         if not self.current_topic_id or self.current_topic_id < 0:
+            self.root.after(0, self.log, "⚠️ [_update_topic_summary] 跳过: current_topic_id 无效", "tool")
             return
 
         recent = self.db.get_recent_conversations(self.current_topic_id, limit=3)
         if not recent:
+            self.root.after(0, self.log,
+                f"⚠️ [_update_topic_summary] 跳过: topic #{self.current_topic_id} 无对话", "tool")
             return
+
+        self.root.after(0, self.log,
+            f"🔍 [_update_topic_summary] topic=#{self.current_topic_id} 获取到 {len(recent)} 条对话", "tool")
 
         # 兜底方案：取第一条用户消息的前 20 字
         fallback = recent[0].get("user_msg", "").strip()
         if fallback:
             fallback = fallback[:20]
+            self.root.after(0, self.log,
+                f"🔍 [_update_topic_summary] 兜底文本: '{fallback}'", "tool")
 
         summary = None
         try:
-            # 优先使用 cheap_model 降低成本
             cli, mdl = self.sess._get_summarize_client()
+            self.root.after(0, self.log,
+                f"🔍 [_update_topic_summary] 调用 LLM: model={mdl}", "tool")
             summary = _generate_topic_summary(
                 client=cli,
                 model=mdl,
                 conversations=recent,
             )
+            self.root.after(0, self.log,
+                f"🔍 [_update_topic_summary] LLM 返回: '{summary}'", "tool")
         except Exception as e:
-            logger.warning(f"Topic摘要LLM生成失败: {e}")
+            self.root.after(0, self.log,
+                f"❌ [_update_topic_summary] LLM 异常: {e}", "error")
 
-        # LLM 失败时使用兜底
         if not summary and fallback:
             summary = fallback
+            self.root.after(0, self.log,
+                f"🔍 [_update_topic_summary] 使用兜底: '{summary}'", "tool")
 
         if summary:
             try:
                 self.db.update_topic_title(self.current_topic_id, summary)
+                self.root.after(0, self.log,
+                    f"✅ [_update_topic_summary] DB 已更新 title='{summary}'", "tool")
                 # 延迟刷新保证 WAL 写入已刷盘
                 self.root.after(200, self._refresh_topics_preserve_selection)
                 self.root.after(100, lambda s=summary: self._update_status(f"📝 摘要: {s}"))
             except Exception as db_e:
-                logger.warning(f"Topic摘要DB更新失败: {db_e}")
+                self.root.after(0, self.log,
+                    f"❌ [_update_topic_summary] DB 更新失败: {db_e}", "error")
+        else:
+            self.root.after(0, self.log,
+                "❌ [_update_topic_summary] 无可用摘要（LLM失败且无兜底）", "error")
 
     def _refresh_topics_preserve_selection(self):
         current_idx = self.topic_list.curselection()

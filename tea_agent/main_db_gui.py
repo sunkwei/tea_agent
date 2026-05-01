@@ -30,12 +30,14 @@ if __name__ == "__main__":
     from tea_agent.onlinesession import OnlineToolSession
     from tea_agent.store import Storage
     from tea_agent import tlk
-    from tea_agent.config import load_config, get_config, ModelConfig
+# NOTE: 2026-05-01 15:30:42, self-evolved by tea_agent --- 为 GUI 添加 ConfigDialog 配置编辑弹窗 + 左侧"⚙️ 配置"按钮
+    from tea_agent.config import load_config, get_config, save_config, ModelConfig
 else:
     from .onlinesession import OnlineToolSession
     from .store import Storage
     from . import tlk
-    from .config import load_config, get_config, ModelConfig
+# NOTE: 2026-05-01 15:30:48, self-evolved by tea_agent --- 给 GUI 加 ConfigDialog 弹窗：import save_config（第二处）
+    from .config import load_config, get_config, save_config, ModelConfig
 
 # ====================== 配置加载 ======================
 # 优先使用 $HOME/.tea_agent/config.yaml，不存在时使用 tea_agent/config.yaml
@@ -912,6 +914,177 @@ class TopicDialog(tk.Toplevel):
 
 
 
+# NOTE: 2026-05-01 15:33:03, self-evolved by tea_agent --- 插入 ConfigDialog 类（在 TkGUI 之前）
+# NOTE: 2026-05-01, self-evolved by tea_agent --- ConfigDialog: 用户级 config.yaml GUI 配置编辑弹窗
+class ConfigDialog(tk.Toplevel):
+    """配置编辑弹窗 — 编辑 main/cheap 模型及运行时参数"""
+
+    def __init__(self, parent, on_save=None):
+        super().__init__(parent)
+        self.on_save = on_save
+        self.title("⚙️ 配置编辑")
+        self.geometry("620x540")
+        self.minsize(500, 400)
+        self.transient(parent)
+        self.grab_set()
+
+        _init_fonts()
+        self._cfg = get_config()
+        self._create_ui()
+        self._load_values()
+
+    def _create_ui(self):
+        nb = ttk.Notebook(self)
+        nb.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        self._model_tab(nb, "主模型", "main")
+        self._model_tab(nb, "便宜模型", "cheap")
+        self._runtime_tab(nb)
+
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill=tk.X, padx=10, pady=10)
+        self._status_var = tk.StringVar(value="")
+        ttk.Label(btn_frame, textvariable=self._status_var, foreground="#666").pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_frame, text="💾 保存", command=self._do_save).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(btn_frame, text="取消", command=self.destroy).pack(side=tk.RIGHT, padx=2)
+
+    def _model_tab(self, nb, label, prefix):
+        f = ttk.Frame(nb)
+        nb.add(f, text=label)
+        fields = [
+            ("API Key", "api_key", 40),
+            ("API URL", "api_url", 50),
+            ("模型名称", "model_name", 50),
+        ]
+        vars_map = {}
+        for i, (title, key, width) in enumerate(fields):
+            ttk.Label(f, text=title + ":", font=(SYSTEM_FONT, _fs(11))).grid(
+                row=i, column=0, sticky=tk.W, padx=(10, 4), pady=8)
+            var = tk.StringVar()
+            ttk.Entry(f, textvariable=var, width=width, font=(SYSTEM_FONT, _fs(11))).grid(
+                row=i, column=1, sticky=tk.EW, padx=(4, 10), pady=8)
+            vars_map[key] = var
+        f.columnconfigure(1, weight=1)
+        setattr(self, f"_{prefix}_vars", vars_map)
+
+    def _runtime_tab(self, nb):
+        f = ttk.Frame(nb)
+        nb.add(f, text="运行时参数")
+
+        canvas = tk.Canvas(f, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(f, orient=tk.VERTICAL, command=canvas.yview)
+        scroll_frame = ttk.Frame(canvas)
+        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scroll_frame, anchor=tk.NW)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        self._mw_binding = _on_mousewheel
+
+        fields = [
+            ("max_history", "最大历史消息数", int, 1, 100),
+            ("max_iterations", "最大工具调用迭代数", int, 1, 200),
+            ("enable_thinking", "启用 Thinking", bool, None, None),
+            ("keep_turns", "保留最近 N 轮完整对话", int, 1, 50),
+            ("max_tool_output", "工具输出截断字符数", int, 1024, 1048576),
+            ("max_assistant_content", "助手回复截断字符数", int, 1024, 1048576),
+            ("extra_iterations_on_continue", "续命时追加轮数", int, 1, 50),
+            ("memory_extraction_threshold", "记忆提取阈值（消息数）", int, 1, 50),
+            ("memory_dedup_threshold", "记忆去重相似度阈值", float, 0.0, 1.0),
+            ("chat_page_size", "GUI 单页对话数", int, 5, 200),
+        ]
+
+        self._runtime_vars = {}
+        for i, (key, label, typ, vmin, vmax) in enumerate(fields):
+            ttk.Label(scroll_frame, text=label + ":", font=(SYSTEM_FONT, _fs(11))).grid(
+                row=i, column=0, sticky=tk.W, padx=(10, 4), pady=6)
+
+            if typ == bool:
+                var = tk.BooleanVar()
+                ttk.Checkbutton(scroll_frame, variable=var).grid(
+                    row=i, column=1, sticky=tk.W, padx=(4, 10), pady=6)
+            else:
+                var = tk.StringVar()
+                ttk.Entry(scroll_frame, textvariable=var, width=20, font=(SYSTEM_FONT, _fs(11))).grid(
+                    row=i, column=1, sticky=tk.W, padx=(4, 10), pady=6)
+                var._range = (vmin, vmax)
+                var._typ = typ
+
+            self._runtime_vars[key] = var
+
+    def _load_values(self):
+        cfg = self._cfg
+        for prefix, model_cfg in [("main", cfg.main_model), ("cheap", cfg.cheap_model)]:
+            vars_map = getattr(self, f"_{prefix}_vars")
+            vars_map["api_key"].set(model_cfg.api_key)
+            vars_map["api_url"].set(model_cfg.api_url)
+            vars_map["model_name"].set(model_cfg.model_name)
+
+        for key, var in self._runtime_vars.items():
+            val = getattr(cfg, key, None)
+            if val is not None:
+                if isinstance(var, tk.BooleanVar):
+                    var.set(bool(val))
+                else:
+                    var.set(str(val))
+
+    def _do_save(self):
+        cfg = self._cfg
+        errors = []
+
+        for prefix, model_cfg in [("main", cfg.main_model), ("cheap", cfg.cheap_model)]:
+            vars_map = getattr(self, f"_{prefix}_vars")
+            model_cfg.api_key = vars_map["api_key"].get().strip()
+            model_cfg.api_url = vars_map["api_url"].get().strip()
+            model_cfg.model_name = vars_map["model_name"].get().strip()
+
+        for key, var in self._runtime_vars.items():
+            try:
+                if isinstance(var, tk.BooleanVar):
+                    cfg.set(key, var.get())
+                else:
+                    raw = var.get().strip()
+                    if not raw:
+                        continue
+                    typ = getattr(var, '_typ', str)
+                    val = typ(raw)
+                    vmin, vmax = getattr(var, '_range', (None, None))
+                    if vmin is not None and val < vmin:
+                        errors.append(f"{key}: 最小 {vmin}")
+                        continue
+                    if vmax is not None and val > vmax:
+                        errors.append(f"{key}: 最大 {vmax}")
+                        continue
+                    cfg.set(key, val)
+            except (ValueError, TypeError) as e:
+                errors.append(f"{key}: 格式错误 ({e})")
+
+        if errors:
+            self._status_var.set(f"❌ {'; '.join(errors)}")
+            return
+
+        try:
+            save_config(cfg)
+            self._status_var.set(f"✅ 已保存到 {Path.home() / '.tea_agent' / 'config.yaml'}")
+            if self.on_save:
+                self.on_save(cfg)
+            self.after(1500, self.destroy)
+        except Exception as e:
+            self._status_var.set(f"❌ 保存失败: {e}")
+
+    def destroy(self):
+        if hasattr(self, '_mw_binding'):
+            try:
+                self.unbind_all("<MouseWheel>")
+            except Exception:
+                pass
+        super().destroy()
+
+
 class TkGUI:
     def __init__(self, root, debug:bool=False):
         self.debug = debug
@@ -985,7 +1158,10 @@ class TkGUI:
         ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
         ttk.Button(left, text="📁 主题管理", command=self.open_topic_dialog).pack(
             fill=tk.X, padx=4, pady=2)
+# NOTE: 2026-05-01 15:33:14, self-evolved by tea_agent --- 左侧面板加"⚙️ 配置"按钮 + TkGUI.open_config_dialog 方法
         ttk.Button(left, text="🧠 记忆管理", command=self.open_memory_dialog).pack(
+            fill=tk.X, padx=4, pady=2)
+        ttk.Button(left, text="⚙️ 配置", command=self.open_config_dialog).pack(
             fill=tk.X, padx=4, pady=2)
 
         # ===== 右侧面板 =====
@@ -1629,9 +1805,27 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         TopicDialog(self.root, self.db,
                     on_switch=lambda tid: self.root.after(0, self.switch_topic, tid))
 
+# NOTE: 2026-05-01 15:33:25, self-evolved by tea_agent --- 添加 TkGUI.open_config_dialog 方法（紧挨 open_memory_dialog）
     def open_memory_dialog(self):
         """打开记忆管理对话框"""
         MemoryDialog(self.root, self.db)
+
+    def open_config_dialog(self):
+        """打开配置编辑对话框"""
+
+        def on_save(cfg):
+            # 同步到当前 session
+            if hasattr(self, 'sess') and self.sess:
+                for key in cfg._RUNTIME_CONFIG_KEYS:
+                    val = getattr(cfg, key, None)
+                    if val is not None and hasattr(self.sess, key):
+                        try:
+                            setattr(self.sess, key, val)
+                        except Exception:
+                            pass
+            self._update_status("⚙️ 配置已更新")
+
+        ConfigDialog(self.root, on_save=on_save)
 
     def interrupt(self, e=None):
         if self.generating:

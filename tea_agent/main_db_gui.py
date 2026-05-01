@@ -188,9 +188,13 @@ def _chat_to_markdown(messages: List[Dict]) -> str:
 
 # ====================== Topic 摘要 Prompt ======================
 
+# NOTE: 2026-05-01 08:17:23, self-evolved by tea_agent --- _generate_topic_summary: min_length从2提高到5，提示词强化中文自然表达
 _TOPIC_SUMMARY_SYSTEM = (
-    "你是一个极简摘要生成器。根据对话内容，生成不超过20字的摘要标题。"
-    "要求：精准概括对话核心主题，不使用书名号，不加引号，不加多余修饰。"
+    "你是一个摘要生成器。根据对话内容，生成不超过20字的自然中文摘要标题。"
+    "要求："
+    "1. 用日常口语概括对话主题，像人聊天时随口说的标题那样。"
+    "2. 至少6个字以上，禁止输出残缺句子或单字。"
+    "3. 不使用书名号、引号、多余修饰词。"
     "直接输出摘要文本，不要任何额外说明。"
 )
 
@@ -267,8 +271,10 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
         if not raw:
             return None
         
-        # 拒绝过短的摘要（<2个字符，如 LLM 返回的"为"）
-        if len(raw) < 2:
+# NOTE: 2026-05-01 08:17:32, self-evolved by tea_agent --- _generate_topic_summary min_length从2提高到5，拒绝"KB与"这种3字残句
+# NOTE: 2026-05-01 08:18:13, self-evolved by tea_agent --- min_length调整为4：拒绝"为"(1)、"KB与"(3)，放行"你好世界"(4)
+        # 拒绝过短的摘要（<4个字符，如"为"(1)、"KB与"(3)等LLM残句）
+        if len(raw) < 4:
             return None
             
         if len(raw) > 20:

@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.5.0] - 2026-05-01
 
 ### New Features
 - feat: HtmlFrame spinner 加载动画 (`_show_loading`)

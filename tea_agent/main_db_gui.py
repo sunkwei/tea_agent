@@ -1081,6 +1081,7 @@ class TkGUI:
         self.chat_view.load_html(html)
         self.root.after(200, self.scroll_to_bottom)
 
+# NOTE: 2026-05-01 10:38:17, self-evolved by tea_agent --- 在 _switch_display 之后添加 _show_loading 方法（简单 spinner + 三点动画）
     def _switch_display(self, mode: str):
         if mode == self._show_mode:
             return
@@ -1092,6 +1093,39 @@ class TkGUI:
             self.console.pack_forget()
             self.chat_view.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
             self.root.after(400, self.scroll_to_bottom)
+
+    # NOTE: 2026-05-01, self-evolved by tea_agent --- _show_loading: HtmlFrame spinner动画，异步加载历史时不再长时间空白
+    def _show_loading(self, text: str = "正在加载历史记录"):
+        """在 HtmlFrame 中显示加载动画（spinner + 文字），用于异步加载期间的过渡"""
+        if not HAS_TKINTERWEB:
+            self._switch_display("console")
+            self.log(f"⏳ {text}...", "notice")
+            return
+
+        loading_html = f'''<html><head>
+<style>
+body {{ display:flex; align-items:center; justify-content:center; height:100vh;
+       margin:0; background:#fafafa; font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif; }}
+.loader {{ text-align:center; }}
+.spinner {{ width:48px; height:48px; border:4px solid #e0e0e0; border-top-color:#1a73e8;
+           border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 20px; }}
+@keyframes spin {{ to {{ transform:rotate(360deg); }} }}
+.text {{ color:#888; font-size:{_DEFAULT_FONT_SIZE}px; }}
+.dots::after {{ content:''; animation:d 1.5s steps(4,end) infinite; }}
+@keyframes d {{ 0% {{ content:'' }} 25% {{ content:'.' }} 50% {{ content:'..' }} 75% {{ content:'...' }} 100% {{ content:'' }} }}
+</style></head>
+<body><div class="loader">
+<div class="spinner"></div>
+<div class="text">{text}<span class="dots"></span></div>
+</div></body></html>'''
+
+        # 切换到 chat_view 但不修改 chat_messages
+        if self._show_mode != "chat_view":
+            self.console.pack_forget()
+            self.chat_view.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+            self._show_mode = "chat_view"
+        self.chat_view.load_html(loading_html)
+        self.root.update()
 
     def scroll_to_bottom(self):
         self.chat_view.yview_moveto(1.0)
@@ -1260,8 +1294,9 @@ class TkGUI:
     def switch_topic(self, topic_id):
         self.current_topic_id = topic_id
         self.clear_chat()
+# NOTE: 2026-05-01 10:38:25, self-evolved by tea_agent --- switch_topic: log → _show_loading + after(60) 延迟启动线程
         self.generating = True  # 加载期间阻塞输入
-        self.log("⏳ 正在加载历史记录...", "notice")
+        self._show_loading("正在加载历史记录")
         self._update_status("⏳ 加载中...")
 
         recent_turns = 10
@@ -1361,7 +1396,8 @@ class TkGUI:
             except Exception as e:
                 self.root.after(0, self._render_topic_error, str(e))
 
-        threading.Thread(target=load_worker, daemon=True).start()
+# NOTE: 2026-05-01 10:38:31, self-evolved by tea_agent --- switch_topic: after(60) 延迟启动后台线程，确保 spinner 先渲染
+        self.root.after(60, lambda: threading.Thread(target=load_worker, daemon=True).start())
 
     def _render_loaded_topic(self, render_items):
         """主线程：清屏 + 逐条渲染准备好的数据"""

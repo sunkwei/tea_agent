@@ -1,4 +1,3 @@
-# NOTE: 2026-05-01 10:49:25, self-evolved by tea_agent --- CHANGELOG 新增 Unreleased 版本条目，涵盖 spinner/工具整合/潜意识/Token表格/缩放等变更
 # Changelog
 
 All notable changes to this project will be documented in this file.

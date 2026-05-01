@@ -30,9 +30,11 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     if old_code not in content:
         return {"ok": False, "error": "old_code 在文件中未找到（精确匹配失败）"}
 
-    # 生成演化注释
+# NOTE: 2026-05-01 11:10:43, self-evolved by tea_agent --- 仅对.py源码文件添加NOTE注释，.md等非源码文件不加
+    # 生成演化注释（仅 .py 源码文件，README/CHANGELOG 等不加）
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    comment = f"# NOTE: {now}, self-evolved by tea_agent --- {description}\n"
+    is_py = file_path.endswith(".py")
+    comment = f"# NOTE: {now}, self-evolved by tea_agent --- {description}\n" if is_py else ""
 
     # 始终创建临时备份用于回滚
     tmp_bak = full_path + ".tmp_bak"
@@ -45,8 +47,8 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     else:
         bak_path = None
 
-    # 应用修改（在 new_code 前加注释）
-    annotated_new = comment + new_code
+    # 应用修改（.py 文件在 new_code 前加注释）
+    annotated_new = (comment + new_code) if comment else new_code
     new_content = content.replace(old_code, annotated_new, 1)
 
     # 写入

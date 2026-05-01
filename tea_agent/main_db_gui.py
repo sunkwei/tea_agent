@@ -257,10 +257,18 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
         if not content or not isinstance(content, str):
             return None
             
+# NOTE: 2026-05-01 08:10:00, self-evolved by tea_agent --- _generate_topic_summary 增加最小长度≥2的校验，防止LLM返回如"为"的单字摘要
         raw = content.strip()
-        raw = re.sub(r'^["""\'""\']+|["""\'""\']+$', '', raw).strip()
+        # 去掉各种引号包裹（中英文全角半角）
+        raw = re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
+        raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
+        raw = raw.strip()
         
         if not raw:
+            return None
+        
+        # 拒绝过短的摘要（<2个字符，如 LLM 返回的"为"）
+        if len(raw) < 2:
             return None
             
         if len(raw) > 20:

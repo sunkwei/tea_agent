@@ -1,6 +1,54 @@
+# NOTE: 2026-05-01 10:49:25, self-evolved by tea_agent --- CHANGELOG 新增 Unreleased 版本条目，涵盖 spinner/工具整合/潜意识/Token表格/缩放等变更
 # Changelog
 
 All notable changes to this project will be documented in this file.
+
+## [Unreleased]
+
+### New Features
+- feat: HtmlFrame spinner 加载动画 (`_show_loading`)
+  - 切换主题异步加载时，HtmlFrame 中显示蓝色旋转环 + "正在加载历史记录" 三点动画
+  - 无 tkinterweb 时自动回退到 console 文字提示
+  - `after(60ms)` 延迟启动后台线程，确保 spinner 先于数据渲染
+  - `root.update()` 强制同步重绘，避免 spinner 被覆盖
+
+- feat: 工具目录整合
+  - 将 `$HOME/.tea_agent/toolkit/` 下 4 个工具移至内置 `tea_agent/toolkit/`
+  - `toolkit_kb` (知识库)、`toolkit_pkg` (包管理)、`toolkit_screenshot` (截屏)、`toolkit_subconscious` (潜意识引擎)
+  - 用户目录仅保留 `.bak` 版本历史，避免内置/用户工具冲突
+
+- feat: 潜意识引擎 v2.1
+  - 场景自适应 Dream：修 bug → 收敛务实分析，做创意 → 发散联想
+  - `dream` 支持 `focus` 参数手动指定模式（pragmatic/creative/mixed）
+  - 后台进程管理（start/stop/status/goals/insights）
+
+- feat: Token 消耗 Markdown 表格显示
+  - `_add_token_notice_and_render`: 主模型 + 便宜模型，本轮 + 主题累积
+  - Markdown 表格格式，清晰展示 P(rompt)/C(ompletion) 分解
+
+### Improvements
+- improve: Wayland/X11 高分屏字体缩放适配
+  - 全局 `_SCALE_FACTOR` + `_fs()` 辅助函数
+  - `_init_fonts()` 自动检测 `tk scaling` 并更新 `_DEFAULT_FONT_SIZE`
+  - GUI 所有控件的字体大小均按缩放因子自适应
+
+- improve: Topic 摘要质量增强
+  - 最小长度校验从 2 → 5 → 4（拒绝单字/残句如"为"、"KB与"）
+  - 强化中文自然表达 Prompt 约束
+  - 自动去引号（中英文全角半角）
+
+- improve: `switch_topic` 两阶段异步加载优化
+  - 旧轮次轻量查询（无 `rounds_json`），最近 10 轮完整查询
+  - 后台线程 DB 查询 + JSON 解析，主线程仅渲染
+  - `render_items` 模式，解耦数据获取和 GUI 操作
+
+### Bug Fixes
+- fix: 主题列表对话数统计错误（`get_conversations` 默认 `limit=5` 导致所有主题显示 5）
+- fix: 导出功能中对话数同样被 `limit=5` 截断，完整导出需 `include_rounds=True`
+- fix: 完整导出中工具结果 500 字符截断问题，改为保持完整性
+- fix: `_create_ui` 中 `chat_frame` 改为 `self.chat_frame` 实例变量
+
+---
 
 ## [0.3.3] - 2026-04-29
 

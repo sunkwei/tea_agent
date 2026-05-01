@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tea_agent"
-version = "0.4.2"
+version = "0.4.3"
 description = "A self-evolving AI agent with dynamic toolkit management, OCR vision, and GUI automation"
 readme = "README.md"
 license = "MIT"
@@ -27,6 +27,8 @@ dependencies = [
     "easyocr>=1.7.0",
     "mss>=9.0.0",
     "Pillow>=10.0.0",
+    "requests>=2.30.0",
+    "beautifulsoup4>=4.12.0",
 ]
 
 [project.urls]

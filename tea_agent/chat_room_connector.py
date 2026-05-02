@@ -65,31 +65,57 @@ class ChatRoomConnector:
 
     # ── 内部 ──────────────────────────────────────────
 
-    def _run(self):
+# NOTE: 2026-05-02 18:45:31, self-evolved by tea_agent --- _run() 连接失败后等待 30 秒无限重试，stop_event 可控中断
+    def _connect_client(self):
+        """创建并尝试连接 MQTT client，失败返回 None"""
         client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         client.on_connect = self._on_connect
         client.on_message = self._on_message
         client.on_disconnect = self._on_disconnect
-
-        # LWT 遗嘱
         client.will_set(f"{TOPIC_PRESENCE_PFX}{self.username}", "offline", retain=False)
-
         try:
             client.connect(self.broker_host, self.broker_port, keepalive=30)
+            return client
         except Exception as e:
-            logger.error(f"chat_room 连接 broker 失败: {e}")
-            self._ready_event.set()  # 不阻塞主线程
-            return
+            logger.warning(f"chat_room 连接 broker 失败 ({self.broker_host}:{self.broker_port}): {e}")
+            return None
 
-        client.loop_start()
-        self._ready_event.set()
+    def _run(self):
+        RETRY_INTERVAL = 30  # 秒
 
-        # 等待停止信号
-        self._stop_event.wait()
+        while not self._stop_event.is_set():
+            client = self._connect_client()
+            if client is None:
+                # 连接失败，等 30 秒再试（除非被 stop）
+                logger.info(f"chat_room 将在 {RETRY_INTERVAL}s 后重试连接...")
+                self._stop_event.wait(RETRY_INTERVAL)
+                continue
 
-        client.loop_stop()
-        client.disconnect()
-        logger.info("chat_room 连接器已关闭")
+            client.loop_start()
+            self._ready_event.set()
+            logger.info(f"chat_room 连接器已就绪 — 身份: {self.username}")
+
+            # 等待断开或停止
+            while not self._stop_event.is_set():
+                if not client.is_connected():
+                    logger.warning("chat_room 连接断开，将重试...")
+                    break
+                self._stop_event.wait(2)
+
+            client.loop_stop()
+            try:
+                client.disconnect()
+            except Exception:
+                pass
+
+            if self._stop_event.is_set():
+                break
+
+            # 断开后等待再重试
+            logger.info(f"chat_room 将在 {RETRY_INTERVAL}s 后重试连接...")
+            self._stop_event.wait(RETRY_INTERVAL)
+
+        logger.info("chat_room 连接器线程退出")
 
     def _on_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code == 0:

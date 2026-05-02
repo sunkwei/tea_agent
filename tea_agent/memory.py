@@ -142,15 +142,25 @@ class MemoryManager:
         # 映射到 0.1 ~ 1.0 范围
         return max(0.1, min(1.0, rate * 2.0))
 
-# NOTE: 2026-04-30 14:37:56, self-evolved by tea_agent --- _extract_keywords增加中文bigram切分，避免整段中文只算一个关键词
+# NOTE: 2026-05-02 10:11:31, self-evolved by tea_agent --- _extract_keywords 升级为 jieba 分词，替换简陋的 bigram 滑动窗口
+# NOTE: 2026-05-02 10:20:00, self-evolved by tea_agent --- _extract_keywords升级为jieba分词，替换简陋bigram滑动窗口
     @staticmethod
     def _extract_keywords(text: str) -> set:
-        """从文本中提取关键词（含中文 bigram 切分）"""
+        """从文本中提取关键词（jieba 中文分词 + 英文单词）"""
         keywords = set()
-        # 中文 bigram 切分（连续汉字按2字滑动窗口）
-        chinese_chars = re.findall(r'[\u4e00-\u9fff]', text)
-        for i in range(len(chinese_chars) - 1):
-            keywords.add(chinese_chars[i] + chinese_chars[i+1])
+        try:
+            import jieba
+            # jieba 精确模式分词，过滤单字和纯空白
+            words = jieba.lcut(text)
+            for w in words:
+                w = w.strip()
+                if len(w) >= 2 and not w.isspace():
+                    keywords.add(w)
+        except ImportError:
+            # 降级：bigram 滑动窗口
+            chinese_chars = re.findall(r'[\u4e00-\u9fff]', text)
+            for i in range(len(chinese_chars) - 1):
+                keywords.add(chinese_chars[i] + chinese_chars[i+1])
         # 英文单词（3字母以上）
         english = re.findall(r'[a-zA-Z]{3,}', text)
         keywords.update(w.lower() for w in english)

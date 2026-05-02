@@ -281,15 +281,19 @@ class OnlineToolSession(
                 "content": self._injected_memories_text
             })
 
+# NOTE: 2026-05-02 11:46:43, self-evolved by tea_agent --- 修复打断后继续会话400错误：摘要路径的合成assistant消息缺少reasoning_content字段
+# NOTE: 2026-05-02 11:46:56, self-evolved by tea_agent --- 修复打断后继续会话400错误：摘要路径的合成assistant消息缺少reasoning_content字段
         # 3. 历史摘要
         if self._history_summary:
             result.append({
                 "role": "user",
                 "content": f"这是我们之前对话的摘要：\n{self._history_summary}"
             })
+            # NOTE: 2026-05-02, self-evolved by tea_agent --- DeepSeek API 要求 assistant 消息必须有 reasoning_content，否则 400
             result.append({
                 "role": "assistant",
-                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"
+                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？",
+                "reasoning_content": ""
             })
 
         # 4. 最新 N 轮完整对话

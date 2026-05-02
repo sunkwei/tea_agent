@@ -1654,68 +1654,22 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 pass
 
 # NOTE: 2026-05-02 09:16:03, self-evolved by tea_agent --- _notify_completion 多级回退：GI Notify→notify-send→kdialog→zenity→wall，确保在各种Linux桌面环境下都能通知
+# NOTE: 2026-05-02 09:19:40, self-evolved by tea_agent --- _notify_completion 委托给 toolkit_notify，消除重复并兼容 Windows/macOS
     def _notify_completion(self, ai_msg: Optional[str] = None):
-        """LLM 任务完成后发送系统桌面通知。多级回退：GI→notify-send→kdialog→zenity→wall。"""
-        import subprocess
-
+        """LLM 任务完成后发送桌面通知。委托给 toolkit_notify（跨平台兼容）。"""
         if ai_msg:
             preview = ai_msg.strip()[:60]
             if len(ai_msg.strip()) > 60:
                 preview += "..."
         else:
-            preview = "任务已完成"
+            preview = "AI 任务已完成"
 
-        title = "Tea Agent"
-
-        # 1) GI Notify（最原生）
         try:
-            import gi
-            gi.require_version('Notify', '0.7')
-            from gi.repository import Notify
-            if not Notify.is_initted():
-                Notify.init("TeaAgent")
-            n = Notify.Notification.new(title, preview)
-            n.set_timeout(5000)
-            n.show()
-            return
+            # 直接导入 toolkit_notify 以复用其跨平台实现
+            from tea_agent.toolkit.toolkit_notify import toolkit_notify
+            toolkit_notify("Tea Agent", preview, urgency="normal", duration=5000)
         except Exception:
-            pass
-
-        # 2) notify-send
-        try:
-            subprocess.run(
-                ["notify-send", "-u", "normal", "-t", "5000", title, preview],
-                timeout=3, capture_output=True,
-            )
-            return
-        except Exception:
-            pass
-
-        # 3) kdialog (KDE)
-        try:
-            subprocess.run(
-                ["kdialog", "--passivepopup", preview, "5", "--title", title],
-                timeout=3, capture_output=True,
-            )
-            return
-        except Exception:
-            pass
-
-        # 4) zenity (GNOME/通用)
-        try:
-            subprocess.run(
-                ["zenity", "--notification", "--text", f"{title}\n{preview}", "--timeout=5"],
-                timeout=3, capture_output=True,
-            )
-            return
-        except Exception:
-            pass
-
-        # 5) wall 广播（最后手段）
-        try:
-            subprocess.run(["wall", f"[{title}] {preview}"], timeout=3)
-        except Exception:
-            pass
+            pass  # 通知失败不影响主流程
 
     def send(self, e=None):
         if self.generating or not self.current_topic_id:

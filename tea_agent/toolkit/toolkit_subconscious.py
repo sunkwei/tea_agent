@@ -233,6 +233,7 @@ def toolkit_subconscious(action: str, focus: str = None):
         return finds
 
     # === 阶段4: 洞察 ===
+# NOTE: 2026-05-02 10:23:38, self-evolved by tea_agent --- 潜意识引擎在产生重要洞察时发送桌面通知
     def _generate_insights(digest, links, conv_digest, kb_dir, state):
         ins = []
         if not digest: return ins
@@ -257,6 +258,10 @@ def toolkit_subconscious(action: str, focus: str = None):
         if conv_digest.get("extracted"):
             n = len(conv_digest["extracted"])
             ins.append({"level":"info","content":f"从{n}条新对话中自动提取了记忆","action":"review_auto_memories"})
+        # NOTE: 2026-05-02, self-evolved by tea_agent --- 重要洞察主动发送桌面通知
+        for insight in ins:
+            if insight["level"] == "important":
+                _send_notification("🧠 潜意识洞察", insight["content"][:80])
         if ins:
             _ensure_dir(kb_dir)
             fpath = os.path.join(kb_dir,"潜意识洞察.md")

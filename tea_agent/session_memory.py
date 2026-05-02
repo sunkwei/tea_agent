@@ -71,7 +71,8 @@ class SessionMemoryMixin:
         user_msg = context.get("user_msg", "") or context.get("msg", "")
 
         try:
-            memories = self.memory.select_memories(user_msg, limit=5)
+# NOTE: 2026-05-02 12:06:18, self-evolved by tea_agent --- select_memories 调用移除 limit=5 硬编码，改用 MAX_INJECT=30 默认
+            memories = self.memory.select_memories(user_msg)
         except Exception as e:
             logger.warning(f"记忆选择失败: {e}")
             memories = []

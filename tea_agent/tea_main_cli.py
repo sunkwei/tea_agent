@@ -20,9 +20,11 @@ _parent_dir = str(Path(__file__).resolve().parent.parent)
 if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
 
+# NOTE: 2026-05-02 18:31:59, self-evolved by tea_agent --- tea_main_cli.py 导入 chat_room_connector 并在初始化后启动
 from tea_agent.onlinesession import OnlineToolSession
 from tea_agent.store import Storage
 from tea_agent import tlk
+from tea_agent import chat_room_connector
 from tea_agent.config import load_config, get_config
 
 # ====================== 配置加载 ======================
@@ -57,7 +59,14 @@ class TeaCLI:
         self.db = Storage(db_path=str(db_path))
         self.toolkit = tlk.Toolkit(str(tool_dir))
         tlk._toolkit_ = self.toolkit
+# NOTE: 2026-05-02 18:32:13, self-evolved by tea_agent --- TeaCLI.__init__ 中 toolkit reload 后启动 chat_room 连接器
         tlk.toolkit_reload()
+
+        # 启动 chat_room 连接器（非阻塞守护线程）
+        try:
+            chat_room_connector.start(self.db)
+        except Exception as e:
+            logger.warning(f"chat_room 连接器启动失败: {e}")
 
         # 初始化会话
         self.current_topic_id: int = -1

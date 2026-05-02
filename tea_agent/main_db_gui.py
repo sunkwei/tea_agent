@@ -23,6 +23,7 @@ except ImportError:
 logger = logging.getLogger("main_db_gui")
 
 # ====================== 包导入兼容处理 ======================
+# NOTE: 2026-05-02 18:31:44, self-evolved by tea_agent --- main_db_gui.py：导入 chat_room_connector 并在初始化后启动连接器
 if __name__ == "__main__":
     parent_dir = str(Path(__file__).resolve().parent.parent)
     if parent_dir not in sys.path:
@@ -30,12 +31,14 @@ if __name__ == "__main__":
     from tea_agent.onlinesession import OnlineToolSession
     from tea_agent.store import Storage
     from tea_agent import tlk
+    from tea_agent import chat_room_connector
 # NOTE: 2026-05-01 15:30:42, self-evolved by tea_agent --- 为 GUI 添加 ConfigDialog 配置编辑弹窗 + 左侧"⚙️ 配置"按钮
     from tea_agent.config import load_config, get_config, save_config, ModelConfig
 else:
     from .onlinesession import OnlineToolSession
     from .store import Storage
     from . import tlk
+    from . import chat_room_connector
 # NOTE: 2026-05-01 15:30:48, self-evolved by tea_agent --- 给 GUI 加 ConfigDialog 弹窗：import save_config（第二处）
     from .config import load_config, get_config, save_config, ModelConfig
 
@@ -1106,7 +1109,14 @@ class TkGUI:
         globals()["_storage_"] = self.db
         globals()["tlk"]._toolkit_ = self.toolkit
 
+# NOTE: 2026-05-02 18:31:52, self-evolved by tea_agent --- TeaApp.__init__ 中 toolbox reload 后启动 chat_room 连接器
         tlk.toolkit_reload()
+
+        # 启动 chat_room 连接器（非阻塞守护线程）
+        try:
+            chat_room_connector.start(self.db)
+        except Exception as e:
+            logger.warning(f"chat_room 连接器启动失败: {e}")
 
         # 会话相关
         self.current_topic_id = -1

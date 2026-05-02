@@ -258,8 +258,15 @@ class Storage:
         c.close()
         return tid
 
+# NOTE: 2026-05-02 18:31:06, self-evolved by tea_agent --- store.py update_topic_title 保护 chat_room_* 主题标题不可被修改
+# NOTE: 2026-05-02 18:31:24, self-evolved by tea_agent --- 修复 update_topic_title：用 self.get_topic 替代不存在的 get_topic_title
     def update_topic_title(self, topic_id: int, new_title: str):
-        """更新指定 topic 的标题"""
+        """更新指定 topic 的标题（chat_room_* 前缀的主题受保护，不可修改）"""
+        # 保护 chat_room 主题
+        old = self.get_topic(topic_id)
+        if old and (old.get("title") or "").startswith("chat_room_"):
+            logger.debug(f"拒绝修改 chat_room 主题标题: {old['title']}")
+            return
         c = self.conn.cursor()
         c.execute(
             'UPDATE topics SET title = ? WHERE topic_id = ?',

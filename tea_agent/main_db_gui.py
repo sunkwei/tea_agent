@@ -1643,6 +1643,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             except Exception as db_e:
                 logger.warning(f"Topic摘要DB更新失败: {db_e}")
 
+# NOTE: 2026-05-02 09:06:48, self-evolved by tea_agent --- 添加 _notify_completion 方法：LLM完成后发送系统桌面通知
     def _refresh_topics_preserve_selection(self):
         current_idx = self.topic_list.curselection()
         self.refresh_topics()
@@ -1651,6 +1652,70 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 self.topic_list.select_set(current_idx[0])
             except Exception:
                 pass
+
+# NOTE: 2026-05-02 09:16:03, self-evolved by tea_agent --- _notify_completion 多级回退：GI Notify→notify-send→kdialog→zenity→wall，确保在各种Linux桌面环境下都能通知
+    def _notify_completion(self, ai_msg: Optional[str] = None):
+        """LLM 任务完成后发送系统桌面通知。多级回退：GI→notify-send→kdialog→zenity→wall。"""
+        import subprocess
+
+        if ai_msg:
+            preview = ai_msg.strip()[:60]
+            if len(ai_msg.strip()) > 60:
+                preview += "..."
+        else:
+            preview = "任务已完成"
+
+        title = "Tea Agent"
+
+        # 1) GI Notify（最原生）
+        try:
+            import gi
+            gi.require_version('Notify', '0.7')
+            from gi.repository import Notify
+            if not Notify.is_initted():
+                Notify.init("TeaAgent")
+            n = Notify.Notification.new(title, preview)
+            n.set_timeout(5000)
+            n.show()
+            return
+        except Exception:
+            pass
+
+        # 2) notify-send
+        try:
+            subprocess.run(
+                ["notify-send", "-u", "normal", "-t", "5000", title, preview],
+                timeout=3, capture_output=True,
+            )
+            return
+        except Exception:
+            pass
+
+        # 3) kdialog (KDE)
+        try:
+            subprocess.run(
+                ["kdialog", "--passivepopup", preview, "5", "--title", title],
+                timeout=3, capture_output=True,
+            )
+            return
+        except Exception:
+            pass
+
+        # 4) zenity (GNOME/通用)
+        try:
+            subprocess.run(
+                ["zenity", "--notification", "--text", f"{title}\n{preview}", "--timeout=5"],
+                timeout=3, capture_output=True,
+            )
+            return
+        except Exception:
+            pass
+
+        # 5) wall 广播（最后手段）
+        try:
+            subprocess.run(["wall", f"[{title}] {preview}"], timeout=3)
+        except Exception:
+            pass
 
     def send(self, e=None):
         if self.generating or not self.current_topic_id:
@@ -1737,9 +1802,12 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                         pass
                 self.root.after(0, self._render_and_show_chat)
                 self.root.after(0, lambda: self._update_status(f"❌ 错误: {ai_msg}"))
+# NOTE: 2026-05-02 09:06:17, self-evolved by tea_agent --- send() 完成后自动发送系统通知
             finally:
                 self.generating = False
                 self.safe_log("")
+                # 无论成功与否，都通过系统通知告知用户任务已完成
+                self._notify_completion(ai_msg if 'ai_msg' in dir() else None)
 
         threading.Thread(target=work, daemon=True).start()
         return "break"

@@ -1,45 +1,67 @@
 # @2026-05-01 gen by tea_agent, 跨平台桌面通知
 # version: 1.0.0
 
+# NOTE: 2026-05-02 09:16:55, self-evolved by tea_agent --- toolkit_notify 多级回退对齐 GUI：GI→notify-send→kdialog→zenity→wall
 def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: int = 5000):
     import sys
     import subprocess
 
     urgency_map = {"low": 0, "normal": 1, "critical": 2}
 
-    # ── Linux ──
     if sys.platform == 'linux':
+        # 1) GI Notify（最原生）
         try:
             import gi
             gi.require_version('Notify', '0.7')
-            from gi.repository import Notify, GLib
+            from gi.repository import Notify
             if not Notify.is_initted():
                 Notify.init("TeaAgent")
-            level = urgency_map.get(urgency, 1)
             n = Notify.Notification.new(title, message)
-            n.set_urgency(level)
+            n.set_urgency(urgency_map.get(urgency, 1))
             n.set_timeout(duration)
             n.show()
             return (0, f"通知已发送: {title}", "")
         except Exception:
             pass
 
+        # 2) notify-send
         try:
             subprocess.run(
                 ['notify-send', '-u', urgency, '-t', str(duration), title, message],
-                timeout=5
+                timeout=5, capture_output=True,
             )
             return (0, f"通知已发送: {title}", "")
         except Exception:
             pass
 
+        # 3) kdialog (KDE)
+        try:
+            subprocess.run(
+                ['kdialog', '--passivepopup', message, str(duration // 1000), '--title', title],
+                timeout=5, capture_output=True,
+            )
+            return (0, f"通知已发送: {title}", "")
+        except Exception:
+            pass
+
+        # 4) zenity (GNOME/通用)
+        try:
+            subprocess.run(
+                ['zenity', '--notification', '--text', f'{title}\n{message}',
+                 f'--timeout={duration // 1000}'],
+                timeout=5, capture_output=True,
+            )
+            return (0, f"通知已发送: {title}", "")
+        except Exception:
+            pass
+
+        # 5) wall 广播（最后手段）
         try:
             subprocess.run(['wall', f'[{title}] {message}'], timeout=3)
             return (0, f"通知已广播: {title}", "")
         except Exception as e:
             return (1, "", f"所有通知方式均失败: {e}")
 
-    # ── macOS ──
     elif sys.platform == 'darwin':
         try:
             script = f'display notification "{message}" with title "{title}"'
@@ -48,7 +70,6 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
         except Exception as e:
             return (1, "", f"macOS 通知失败: {e}")
 
-    # ── Windows ──
     elif sys.platform == 'win32':
         try:
             import ctypes

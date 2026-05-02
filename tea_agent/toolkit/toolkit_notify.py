@@ -24,10 +24,15 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
         except Exception:
             pass
 
-        # 2) notify-send
+# NOTE: 2026-05-02 09:42:08, self-evolved by tea_agent --- 修复 notify-send 参数格式：改用 --urgency= --expire-time= 长选项，兼容此版本
+# NOTE: 2026-05-02 09:43:22, self-evolved by tea_agent --- notify-send 添加 --app-name=TeaAgent 和 persistence hint，确保 KDE Plasma 通知中心收录
+        # 2) notify-send (D-Bus 标准通知，KDE Plasma 通知中心收录)
         try:
             subprocess.run(
-                ['notify-send', '-u', urgency, '-t', str(duration), title, message],
+                ['notify-send', '--app-name=TeaAgent',
+                 f'--urgency={urgency}', f'--expire-time={duration}',
+                 '--hint=int:transient:0',
+                 title, message],
                 timeout=5, capture_output=True,
             )
             return (0, f"通知已发送: {title}", "")

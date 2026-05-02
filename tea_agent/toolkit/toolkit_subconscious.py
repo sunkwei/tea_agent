@@ -294,10 +294,50 @@ def toolkit_subconscious(action: str, focus: str = None):
             if g["goal"] not in seen: seen.add(g["goal"]); uniq.append(g)
         return uniq[:7]
 
+# NOTE: 2026-05-02 10:58:26, self-evolved by tea_agent --- 添加 _send_cycle_summary 函数，每轮循环后发送综合摘要通知
     def _send_notification(title, msg):
         try:
             subprocess.run(["notify-send",title,msg,"--expire-time=5000"],capture_output=True,timeout=3)
         except: pass
+
+    def _send_cycle_summary(result, state, first_run=False):
+        """每轮循环后发送摘要通知，让用户感知后台运行结果"""
+        digest = result.get("digest") or {}
+        insights = result.get("insights") or []
+        goals = result.get("goals") or []
+        conv = result.get("conv_digest") or {}
+        n_insights = len(insights)
+        n_goals = len(goals)
+        n_auto = len(conv.get("extracted", []))
+        focus = digest.get("focus", "mixed") if digest else "mixed"
+        mode_label = {"pragmatic":"🔧务实", "creative":"🎨创意", "mixed":"🔀混合"}.get(focus, focus)
+        cycle_n = state.get("cycles_completed", 0)
+        prefix = "首轮" if first_run else f"第{cycle_n}轮"
+
+        lines = [f"🧠 潜意识 {prefix}完成 [{mode_label}]"]
+        if digest:
+            lines.append(f"记忆: {digest.get('total_memories',0)}条活跃")
+            kw = digest.get("top_keywords", [])[:3]
+            if kw:
+                lines.append(f"主题: {', '.join(w for w,_ in kw)}")
+        if n_auto:
+            lines.append(f"新提取: {n_auto}条记忆")
+        if n_insights:
+            lines.append(f"洞察: {n_insights}条")
+            # 列出 important 级洞察
+            for ins in insights:
+                if ins.get("level") == "important":
+                    lines.append(f"  ⚠️ {ins['content'][:60]}")
+        if n_goals:
+            lines.append(f"目标: {n_goals}个待办")
+        lines.append(f"📁 详情: ~/.tea_agent/kb/潜意识洞察.md")
+
+        msg = "\n".join(lines)
+        try:
+            subprocess.run(["notify-send", "🧠 潜意识引擎", msg, "--expire-time=8000"],
+                          capture_output=True, timeout=3)
+        except:
+            pass
 
     # === 执行一次完整循环 ===
     def _run_cycle(state):
@@ -333,8 +373,10 @@ def toolkit_subconscious(action: str, focus: str = None):
         _write_state(state)
         _send_notification("🧠 潜意识引擎 v2.1", "已启动！场景自适应：修bug收敛分析，做创意发散联想")
 
+# NOTE: 2026-05-02 10:58:03, self-evolved by tea_agent --- 潜意识引擎每轮循环后始终发送桌面通知摘要（洞察数、目标数、自动记忆、场景模式）
         try:
-            _run_cycle(state)
+            result = _run_cycle(state)
+            _send_cycle_summary(result, state, first_run=True)
         except Exception as e:
             state = _read_state()
             state["_last_error"] = str(e)[:200]
@@ -350,7 +392,8 @@ def toolkit_subconscious(action: str, focus: str = None):
                     _write_state(state)
                     return
             try:
-                _run_cycle(state)
+                result = _run_cycle(state)
+                _send_cycle_summary(result, state)
             except Exception as e:
                 state = _read_state()
                 state["_last_error"] = str(e)[:200]

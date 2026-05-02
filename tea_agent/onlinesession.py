@@ -491,7 +491,33 @@ class OnlineToolSession(
         # NOTE: 2026-04-28, self-evolved by claude-agent ---
         # 清除上一轮 API 会话遗留的 reasoning_content，
         # 避免跨 chat_stream 传递失效的 reasoning_content。
+# NOTE: 2026-05-02 10:59:41, self-evolved by tea_agent --- 添加 _notify_reflection_done 和 _notify_prompt_evolved 通知方法
         self._strip_reasoning_content(self.messages)
+
+    # NOTE: 2026-05-02, self-evolved by tea_agent --- 反思/提示词进化的桌面通知方法
+    def _notify_reflection_done(self, reflection_id: int):
+        """反思完成后发送桌面通知"""
+        try:
+            import subprocess
+            subprocess.run([
+                "notify-send", "🔍 元认知反思完成",
+                f"反思 #{reflection_id} 已生成\n建议已存储到数据库",
+                "--expire-time=5000"
+            ], capture_output=True, timeout=3)
+        except Exception:
+            pass
+
+    def _notify_prompt_evolved(self, version: int):
+        """提示词进化后发送桌面通知"""
+        try:
+            import subprocess
+            subprocess.run([
+                "notify-send", "📝 提示词进化",
+                f"系统提示词已进化到 v{version}\n优化已应用于下一轮对话",
+                "--expire-time=5000"
+            ], capture_output=True, timeout=3)
+        except Exception:
+            pass
 
 # NOTE: 2026-04-30 16:21:40, self-evolved by tea_agent --- chat_stream添加反思追踪：start_trace/finish_trace + 异步触发反思
     def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: int = -1, on_status: Optional[Callable[[str], None]] = None) -> Tuple[str, bool]:
@@ -566,19 +592,26 @@ class OnlineToolSession(
 # NOTE: 2026-04-30 16:23:38, self-evolved by tea_agent --- 异步反思触发增加reflection_manager/prompt_manager为None的保护
         # 2026-04-30 gen by deepseek-v4-pro, 异步触发反思（不阻塞主流程）
         if not result.get("interrupted", False) and self.reflection_manager is not None:
+# NOTE: 2026-05-02 10:59:14, self-evolved by tea_agent --- 反思完成后发送桌面通知，含建议数量和提示词进化信息
             def _auto_reflect():
                 try:
                     if self.reflection_manager.should_reflect():
                         rid = self.reflection_manager.generate_reflection()
-                        if rid and on_status:
-                            on_status(f"🔍 元认知反思完成 (id={rid})")
+                        if rid:
+                            if on_status:
+                                on_status(f"🔍 元认知反思完成 (id={rid})")
+                            # NOTE: 2026-05-02, self-evolved by tea_agent --- 反思完成后始终发送桌面通知
+                            self._notify_reflection_done(rid)
                         # 如果反思产生了提示词建议，触发提示词进化
                         if self.reflection_manager.last_prompt_suggestion and self.prompt_manager is not None:
                             new_pid = self.prompt_manager.evolve(
                                 reflection_suggestion=self.reflection_manager.last_prompt_suggestion
                             )
-                            if new_pid and on_status:
-                                on_status(f"📝 系统提示词进化到 v{self.prompt_manager.current_version}")
+                            if new_pid:
+                                if on_status:
+                                    on_status(f"📝 系统提示词进化到 v{self.prompt_manager.current_version}")
+                                # NOTE: 2026-05-02, self-evolved by tea_agent --- 提示词进化后发送桌面通知
+                                self._notify_prompt_evolved(self.prompt_manager.current_version)
                 except Exception:
                     pass
             threading.Thread(target=_auto_reflect, daemon=True).start()

@@ -1,0 +1,304 @@
+digraph TeaAgent_Architecture {
+    rankdir=TB;
+    bgcolor="#1a1a2e";
+    fontname="Fira Sans,Noto Sans CJK SC";
+    fontsize=14;
+    fontcolor="#e0e0e0";
+    compound=true;
+
+    // ── 全局样式 ──
+    node [shape=box, style="rounded,filled", fontname="Fira Sans,Noto Sans CJK SC", fontsize=11, margin="0.2,0.1"];
+    edge [fontname="Fira Sans,Noto Sans CJK SC", fontsize=9, color="#555555"];
+
+    // ═══════════════════════════════════════════
+    // 外部/用户
+    // ═══════════════════════════════════════════
+    user [label="👤 用户", fillcolor="#16213e", fontcolor="#e0e0e0", shape=ellipse, width=1.0];
+    gui    [label="🖥️ Tkinter GUI\n(HtmlFrame)", fillcolor="#16213e", fontcolor="#e0e0e0", shape=box3d];
+    cli    [label="⌨️ CLI\n(tea_main_cli.py)", fillcolor="#16213e", fontcolor="#e0e0e0", shape=box3d];
+    {rank=same; user; gui; cli}
+
+    user -> gui  [style=dashed, color="#666"];
+    user -> cli  [style=dashed, color="#666"];
+
+    // ═══════════════════════════════════════════
+    // 模式检测 (入口前置)
+    // ═══════════════════════════════════════════
+    subgraph cluster_mode {
+        label="🎭 人格模式检测";
+        fontsize=13;
+        fontcolor="#f0c040";
+        style="rounded,dashed";
+        color="#f0c040";
+        bgcolor="#1a1a2e88";
+        labeljust=l;
+
+        mode_detect [label="toolkit_mode.auto()\n\n关键词检测: pragmatic vs creative\n子串匹配 + 整词匹配 + 句式检测", fillcolor="#3d2a00", fontcolor="#f0c040", shape=box];
+        mode_mem    [label="CRITICAL 记忆注入\npriority=0\n🎯 严谨收敛 / 🎨 自由发散", fillcolor="#3d2a00", fontcolor="#f0c040", shape=note];
+    }
+
+    gui -> mode_detect [color="#f0c040", style=dashed];
+    cli -> mode_detect [color="#f0c040", style=dashed];
+    mode_detect -> mode_mem [color="#f0c040"];
+
+    // ═══════════════════════════════════════════
+    // OnlineToolSession (核心编排)
+    // ═══════════════════════════════════════════
+    subgraph cluster_session {
+        label="OnlineToolSession · chat_stream()";
+        fontsize=14;
+        fontcolor="#00d2ff";
+        style="rounded,filled";
+        color="#00d2ff";
+        bgcolor="#0a1628";
+        labeljust=l;
+
+        // Pipeline 4 步
+        subgraph cluster_pipeline {
+            label="🔁 SessionPipeline (4 步可配置)";
+            fontsize=12;
+            fontcolor="#4fc3f7";
+            style=dashed;
+            color="#4fc3f7";
+            bgcolor="#0a162888";
+
+            step1 [label="① inject_memories\n记忆注入\nCRITICAL 无条件\n其余按打分排序", fillcolor="#003c4d", fontcolor="#00d2ff"];
+            step2 [label="② add_user_message\n添加用户消息", fillcolor="#003c4d", fontcolor="#00d2ff"];
+            step3 [label="③ summarize_old_history\n超 keep_turns 轮\n→ cheap_model 压缩", fillcolor="#003c4d", fontcolor="#00d2ff"];
+            step4 [label="④ tool_loop\n工具调用循环\nAPI ↔ tool_exec", fillcolor="#003c4d", fontcolor="#00d2ff", shape=box, width=2.0];
+
+            step1 -> step2 -> step3 -> step4;
+        }
+
+        step4_output [label="输出\nfull_reply + used_tools", fillcolor="#004d40", fontcolor="#4db6ac", shape=ellipse];
+        step4 -> step4_output;
+    }
+
+    mode_mem -> step1 [color="#f0c040", style=dotted, ltail=cluster_mode];
+
+    // ═══════════════════════════════════════════
+    // API 层
+    // ═══════════════════════════════════════════
+    subgraph cluster_api {
+        label="☁️ API 层";
+        fontsize=13;
+        fontcolor="#e040fb";
+        style="rounded,filled";
+        color="#e040fb";
+        bgcolor="#1a0a28";
+        labeljust=l;
+
+        main_api [label="主模型 API\nDeepSeek / GLM / Qwen\nFunction Calling\nreasoning_content 思维链", fillcolor="#4a148c", fontcolor="#e040fb"];
+        cheap_api [label="便宜模型 API\n摘要 / 记忆提取 / 反思\nthinking=disabled", fillcolor="#4a148c", fontcolor="#e040fb"];
+    }
+
+    step4 -> main_api [color="#e040fb", label="chat.completions"];
+    main_api -> step4 [color="#e040fb", label="stream + tool_calls"];
+
+    // ═══════════════════════════════════════════
+    // 工具层
+    // ═══════════════════════════════════════════
+    subgraph cluster_tools {
+        label="🔧 工具层 (35 tools · 7 大类)";
+        fontsize=13;
+        fontcolor="#69f0ae";
+        style="rounded,filled";
+        color="#69f0ae";
+        bgcolor="#0a2816";
+        labeljust=l;
+
+        tools_sys   [label="系统操作\nexec / batch_exec / sudo_gui\ngettime / date_diff", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+        tools_file  [label="文件配置\nfile / list_dir / config\nbuild / release_version", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+        tools_screen [label="屏幕感知\nscreenshot / ocr / input", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+        tools_know  [label="知识管理\nmemory / kb / search\n(百度+DuckDuckGo)", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+        tools_evolve [label="自我进化\nsave / reload / self_evolve\nrollback / list_versions", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+        tools_cog   [label="认知人格\nreflection / prompt_evolve\nsubconscious / proactive / mode", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+        tools_voice [label="语音通知\nspeak / listen / notify\ncomment / self_report / dump", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+
+        {rank=same; tools_sys; tools_file;}
+        {rank=same; tools_screen; tools_know;}
+        {rank=same; tools_evolve; tools_cog; tools_voice;}
+    }
+
+    step4 -> tools_sys    [color="#69f0ae", style=dotted];
+    step4 -> tools_screen [color="#69f0ae", style=dotted];
+    step4 -> tools_evolve [color="#69f0ae", style=dotted];
+    step4 -> tools_know   [color="#69f0ae", style=dotted];
+    step4 -> tools_cog    [color="#69f0ae", style=dotted];
+    step4 -> tools_voice  [color="#69f0ae", style=dotted];
+
+    // ═══════════════════════════════════════════
+    // 存储层
+    // ═══════════════════════════════════════════
+    subgraph cluster_storage {
+        label="💾 持久化存储 (SQLite)";
+        fontsize=13;
+        fontcolor="#ffab40";
+        style="rounded,filled";
+        color="#ffab40";
+        bgcolor="#1a1408";
+        labeljust=l;
+
+        db [label="chat_history.db\n━━━━━━━━━━━━━\ntopics · conversations · memories\nreflections · prompt_versions\nconfig_history", fillcolor="#3e2723", fontcolor="#ffab40", shape=cylinder];
+    }
+
+    step4_output -> db [color="#ffab40", label="write rounds"];
+    step4_output -> gui [color="#4db6ac", label="render"];
+    step4_output -> cli [color="#4db6ac", label="print"];
+
+    // ═══════════════════════════════════════════
+    // 认知层 ①: 记忆系统
+    // ═══════════════════════════════════════════
+    subgraph cluster_memory {
+        label="🧠 记忆系统 MemoryManager";
+        fontsize=12;
+        fontcolor="#ff5252";
+        style="rounded,filled";
+        color="#ff5252";
+        bgcolor="#1a0a0a";
+        labeljust=l;
+
+        memory_extract [label="trigger_memory_extraction()\n异步线程\n对话 → cheap_model → JSON\n→ ingest_extracted (去重合并)", fillcolor="#7f0000", fontcolor="#ff5252"];
+        memory_select  [label="select_memories()\n关键词检索 (jieba 分词)\nJaccard 去重 0.3\nCRITICAL 无条件入选", fillcolor="#7f0000", fontcolor="#ff5252"];
+    }
+
+    db -> memory_extract [color="#ff5252", label="get_unsummarized"];
+    memory_extract -> cheap_api [color="#ff5252", label="提取请求"];
+    cheap_api -> memory_extract [color="#ff5252"];
+    memory_extract -> db [color="#ff5252", label="add_memory"];
+    db -> memory_select [color="#ff5252", label="get_active_memories"];
+    memory_select -> step1 [color="#ff5252", label="注入 5 条"];
+    memory_select -> mode_mem [color="#ff5252", style=dashed, label="CRITICAL 模式"];
+
+    // ═══════════════════════════════════════════
+    // 认知层 ②: 反思系统
+    // ═══════════════════════════════════════════
+    subgraph cluster_reflection {
+        label="🔍 反思系统 ReflectionManager";
+        fontsize=12;
+        fontcolor="#448aff";
+        style="rounded,filled";
+        color="#448aff";
+        bgcolor="#0a0a1a";
+        labeljust=l;
+
+        reflection_trace [label="SessionTrace\n追踪工具调用链\n收集: rounds, errors, iterations", fillcolor="#0d47a1", fontcolor="#448aff"];
+        reflection_trigger [label="should_reflect()\n触发: 3+ 条 / 有失败 / 10 条对话\n异步: generate_reflection()", fillcolor="#0d47a1", fontcolor="#448aff"];
+        reflection_output [label="cheap_model 分析\n→ summary + suggestions\n→ prompt_adjustment\n→ config_adjustments\n→ new_memories", fillcolor="#0d47a1", fontcolor="#448aff"];
+    }
+
+    step4 -> reflection_trace [color="#448aff", label="finish_trace()", style=dashed];
+    reflection_trace -> db [color="#448aff"];
+    db -> reflection_trigger [color="#448aff", style=dashed];
+    reflection_trigger -> cheap_api [color="#448aff", label="反思请求"];
+    cheap_api -> reflection_output [color="#448aff"];
+    reflection_output -> db [color="#448aff", label="write reflection"];
+
+    // 反思 → 提示词进化
+    subgraph cluster_prompt_evolve {
+        label="📝 提示词进化 PromptManager";
+        fontsize=11;
+        fontcolor="#ff80ab";
+        style="rounded,dashed";
+        color="#ff80ab";
+        bgcolor="#1a0a14";
+        labeljust=l;
+
+        prompt_v [label="SystemPromptManager\nprompt_adjustment\n→ evolve() → v23+", fillcolor="#880e4f", fontcolor="#ff80ab"];
+    }
+
+    reflection_output -> prompt_v [color="#ff80ab", label="prompt_suggestion", style=dashed];
+    prompt_v -> db [color="#ff80ab", style=dashed];
+
+    // ═══════════════════════════════════════════
+    // 认知层 ③: 潜意识引擎
+    // ═══════════════════════════════════════════
+    subgraph cluster_subconscious {
+        label="🧬 潜意识引擎 Subconscious v2.1\n后台守护进程 · 每 1 小时循环";
+        fontsize=13;
+        fontcolor="#ffd740";
+        style="rounded,filled";
+        color="#ffd740";
+        bgcolor="#1a1608";
+        labeljust=l;
+
+        sub_scene [label="① 场景检测\nmemory 关键词分析\nbug多→pragmatic\n创意多→creative", fillcolor="#5d4037", fontcolor="#ffd740"];
+        sub_digest [label="② 消化记忆\njieba 分词\n提取高频主题\n检测过期记忆", fillcolor="#5d4037", fontcolor="#ffd740"];
+        sub_conv [label="③ 消化对话\nregex 模式匹配\n自动提取候选记忆\n写入 memories 表", fillcolor="#5d4037", fontcolor="#ffd740"];
+        sub_link [label="④ 交叉关联\n未应用反思\n频繁配置变更\n过期 KB 文档", fillcolor="#5d4037", fontcolor="#ffd740"];
+        sub_insight [label="⑤ 生成洞察\n→ 潜意识洞察.md\nimportant 级 → notify-send", fillcolor="#5d4037", fontcolor="#ffd740"];
+        sub_goal [label="⑥ 设定目标\n→ 待办目标列表", fillcolor="#5d4037", fontcolor="#ffd740"];
+        sub_dream [label="⑦ Dream 创意火花\n跨域碰撞 · 反向思维\n极端假设 · 隐喻映射\n→ 创意火花.md", fillcolor="#5d4037", fontcolor="#ffd740", shape=box, width=1.8];
+
+        sub_scene -> sub_digest -> sub_conv -> sub_link -> sub_insight -> sub_goal -> sub_dream;
+    }
+
+    db -> sub_digest [color="#ffd740", style=dotted, label="active memories"];
+    db -> sub_conv [color="#ffd740", style=dotted, label="new conversations"];
+    sub_conv -> db [color="#ffd740", style=dotted, label="auto_memories"];
+    sub_insight -> db [color="#ffd740", style=dotted, label="write KB"];
+
+    // 潜意识 ↔ 模式检测 对齐
+    sub_scene -> mode_detect [color="#ffd740", style=dotted, dir=both, label="共享 focus\npragmatic/creative"];
+
+    // ═══════════════════════════════════════════
+    // 自主心跳
+    // ═══════════════════════════════════════════
+    subgraph cluster_proactive {
+        label="💓 自主心跳 Proactive";
+        fontsize=11;
+        fontcolor="#b0bec5";
+        style="rounded,dashed";
+        color="#b0bec5";
+        bgcolor="#101820";
+        labeljust=l;
+
+        proactive [label="toolkit_proactive\ncheck → goals/insights\ngoal → 设定新目标\ndone → 标记完成\ndream 产生的目标自动对接", fillcolor="#37474f", fontcolor="#b0bec5"];
+    }
+
+    sub_goal -> proactive [color="#b0bec5", style=dotted];
+    proactive -> db [color="#b0bec5", style=dotted];
+
+    // ═══════════════════════════════════════════
+    // 知识库
+    // ═══════════════════════════════════════════
+    subgraph cluster_kb {
+        label="📚 知识库 KB";
+        fontsize=11;
+        fontcolor="#80cbc4";
+        style="rounded,dashed";
+        color="#80cbc4";
+        bgcolor="#0a1a18";
+        labeljust=l;
+
+        kb_files [label="$HOME/.tea_agent/kb/\n\n潜意识洞察.md\n创意火花.md\nINDEX.md\n… (自定义文档)", fillcolor="#00695c", fontcolor="#80cbc4", shape=folder];
+    }
+
+    sub_insight -> kb_files [color="#ffd740", style=dotted];
+    sub_dream -> kb_files [color="#ffd740", style=dotted];
+    tools_know -> kb_files [color="#69f0ae", style=dotted];
+
+    // ═══════════════════════════════════════════
+    // 图例
+    // ═══════════════════════════════════════════
+    subgraph cluster_legend {
+        label="图例";
+        fontsize=11;
+        fontcolor="#9e9e9e";
+        style="rounded,dashed";
+        color="#9e9e9e";
+        bgcolor="#101010";
+        labeljust=l;
+
+        leg1 [label="实线 → 同步调用", fillcolor="#202020", fontcolor="#9e9e9e", shape=plaintext];
+        leg2 [label="虚线 → 异步/间接", fillcolor="#202020", fontcolor="#9e9e9e", shape=plaintext];
+        leg3 [label="粗框 → 核心组件", fillcolor="#202020", fontcolor="#9e9e9e", shape=plaintext];
+        leg4 [label="圆柱 → 持久化存储", fillcolor="#202020", fontcolor="#9e9e9e", shape=plaintext, width=1.5];
+        leg5 [label="粗框（实线） → 后台进程", fillcolor="#202020", fontcolor="#9e9e9e", shape=plaintext];
+    }
+
+    // ═══════════════════════════════════════════
+    // 版本戳
+    // ═══════════════════════════════════════════
+    footer [label="TeaAgent v0.5.0 · 35 tools · 3 层认知 · 双模式人格 · 潜意识引擎 v2.1\nGenerated 2026-05-02", shape=plaintext, fontcolor="#666666", fontsize=9];
+}

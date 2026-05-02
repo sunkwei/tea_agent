@@ -23,7 +23,9 @@ PRIORITY_LABELS = {
     3: "LOW",
 }
 
-MAX_INJECT = 5  # 每次会话注入上限
+# NOTE: 2026-05-02 12:04:27, self-evolved by tea_agent --- MAX_INJECT 从5上调至30，CRITICAL 选拔上限15，确保各优先级记忆都有机会注入
+MAX_INJECT = 30  # 每次会话注入上限
+MAX_CRITICAL_INJECT = 15  # CRITICAL 注入上限，超出留给其他优先级
 
 
 class MemoryManager:
@@ -75,8 +77,10 @@ class MemoryManager:
         critical = [m for m in all_memories if m["priority"] == PRIORITY_CRITICAL]
         others = [m for m in all_memories if m["priority"] != PRIORITY_CRITICAL]
 
-        # CRITICAL 全部入选（但不超过 limit）
-        selected = critical[:limit]
+# NOTE: 2026-05-02 12:04:34, self-evolved by tea_agent --- CRITICAL 选拔上限 15 条 (max(CRITICAL, MAX_CRITICAL_INJECT))，防止挤占其他优先级
+        # CRITICAL 入选不超过 MAX_CRITICAL_INJECT（新的优先，FIFO）
+        critical_slots = min(limit, MAX_CRITICAL_INJECT)
+        selected = critical[-critical_slots:] if len(critical) > critical_slots else critical
         remaining_slots = limit - len(selected)
 
         if remaining_slots <= 0:

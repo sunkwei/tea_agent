@@ -3,8 +3,10 @@
 使用 SQLite 存储聊天历史、主题、Agent 循环详情和长期记忆
 """
 
+# NOTE: 2026-05-04 07:44:42, self-evolved by tea_agent --- 修改周轮转逻辑：从 rename(移动) 改为 copy2(复制)，使得新数据库保留所有历史记录而非空库
 # NOTE: 2026-04-30 11:42:17, self-evolved by tea_agent --- 添加 os 和 datetime 导入
 import os
+import shutil
 import sqlite3
 import json
 from datetime import datetime
@@ -199,9 +201,11 @@ class Storage:
         """返回当前 ISO 周标识，如 '2026-W18'"""
         return datetime.now().strftime("%G-W%V")
 
+# NOTE: 2026-05-04 07:45:09, self-evolved by tea_agent --- 更新 _maybe_rotate_db 方法的 docstring：从"重命名"改为"复制"
     def _maybe_rotate_db(self):
         """
-        如果 chat_history.db 属于上一周，则重命名为 chat_history_{yyyy-mm-dd}.db。
+        如果 chat_history.db 属于上一周，则复制为 chat_history_{yyyy-mm-dd}.db 归档。
+        保留原 db 不变（含全部历史），只更新 week_key。
         必须在数据库连接之前调用。
         """
         if not os.path.exists(self.db_path):
@@ -225,15 +229,17 @@ class Storage:
 
 # NOTE: 2026-04-30 11:44:29, self-evolved by tea_agent --- 修复归档文件名缺少目录路径的 bug
 # NOTE: 2026-04-30 11:46:46, self-evolved by tea_agent --- _maybe_rotate_db 增加锁竞争容错，失败时仅警告不崩溃
-        # 需要轮转：重命名旧 db（保持在同一目录）
+# NOTE: 2026-05-04 07:45:16, self-evolved by tea_agent --- 更新方法内注释：从"重命名旧db"改为"复制旧db做归档"
+        # 需要轮转：复制旧 db 做归档（保持在同一目录），原 db 保留全部历史
         db_dir = os.path.dirname(self.db_path) or "."
         archive_name = os.path.join(db_dir, f"chat_history_{datetime.now().strftime('%Y-%m-%d')}.db")
         # 如果归档文件已存在，追加时间戳避免覆盖
         if os.path.exists(archive_name):
             archive_name = os.path.join(db_dir, f"chat_history_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.db")
+# NOTE: 2026-05-04 07:44:53, self-evolved by tea_agent --- _maybe_rotate_db 中 os.rename 改为 shutil.copy2：归档时复制而非移动，新db保留全部历史
         try:
-            os.rename(self.db_path, archive_name)
-            logger.info(f"归档旧数据库: {self.db_path} -> {archive_name}")
+            shutil.copy2(self.db_path, archive_name)
+            logger.info(f"归档旧数据库: {self.db_path} -> {archive_name} (保留历史记录)")
         except OSError as e:
             logger.warning(
                 f"无法归档旧数据库（文件可能被占用）: {e}。"

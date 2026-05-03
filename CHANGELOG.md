@@ -1,5 +1,16 @@
 # Changelog
 
+
+## [0.5.5] - 2026-05-04
+
+### Improvements & Changes
+- fix: 周轮转逻辑修复 — `os.rename` 改为 `shutil.copy2`，归档后新 db 保留全部历史记录而非空库
+- feat: 新增 `merge_db.py` 数据库合并工具
+  - 支持合并两个 chat_history.db（10 张表全覆盖）
+  - topics/conversations/agent_rounds 级联 ID 重映射
+  - memories 基于 jieba Jaccard 关键词去重合并
+  - system_prompts 跳过重复内容、追加新版本
+  - 合并前自动备份 target
 All notable changes to this project will be documented in this file.
 
 ## [0.5.0] - 2026-05-01

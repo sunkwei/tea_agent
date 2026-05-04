@@ -313,6 +313,15 @@ keep_turns: 8                       # 保留最近 N 轮完整对话
 max_tool_output: 131072             # 工具输出截断 (128KB)
 memory_extraction_threshold: 1      # 记忆提取触发阈值
 memory_dedup_threshold: 0.3         # 记忆去重相似度
+
+# MQTT 实时交互（可选）
+mqtt:
+  enabled: true                     # 启用 MQTT 连接器
+  broker_host: "localhost"          # MQTT broker 地址
+  broker_port: 1883                 # MQTT broker 端口
+  username: ""                      # broker 认证用户名（空=匿名）
+  password: ""                      # broker 认证口令
+  topic_prefix: "tea"               # Topic 前缀，生成 tea/chat/+
 ```
 
 ### 全局配置路径
@@ -338,6 +347,10 @@ memory_dedup_threshold: 0.3         # 记忆去重相似度
 8. **文档自更新**：「根据当前功能和修改，更新 README.md 和 CHANGELOG.md」
 9. **记忆规则说明**：「在 README 中增加记忆/反思生成规则」→ Agent 读取源码提炼规则
 10. **加载动画**：「切换主题时显示加载动画」→ HtmlFrame spinner + 60ms 延迟
+11. **MQTT 远程交互**：「启动 MQTT broker，配置 tea_agent 连接」→ 自动注册为 `tea_agent_{uuid}`，订阅 `tea/chat/+`
+12. **PC 客户端接入**：「python mqtt_client.py alice」→ 终端聊天客户端，发送消息触发 AI 全流水线
+13. **MQTT 双向通信**：「mqtt_client 发消息 → tea_agent chat_stream() 处理 → 仅 assistant 回复推送回 MQTT」
+14. **1:1 定向回复 vs 1:N 广播**：`mqtt_` 前缀 topic 自动解析发送者，定向回复；否则广播到 channel
 
 ---
 

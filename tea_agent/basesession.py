@@ -100,8 +100,98 @@ class BaseChatSession(ABC):
 
     # NOTE: 2026-05-02, self-evolved by tea_agent ---
     # 修复中断会话后 400 错误：assistant tool_calls 之后必须有对应的 tool 消息
+# NOTE: 2026-05-04 12:57:20, self-evolved by tea_agent --- load_history 压缩工具结果：短则保留原样，长则保持首尾+摘要，确保上下文连贯
     @staticmethod
-    def _repair_incomplete_tool_chains(rounds: List[Dict]) -> List[Dict]:
+    def _compress_tool_content(content: str, max_lines: int = 6, max_chars: int = 600) -> str:
+        """
+        智能压缩工具输出，保持上下文连贯。
+
+        策略：
+        - 短输出（≤max_chars 且 ≤10行）：原样保留
+        - 长输出：保留首3行 + 尾3行 + 摘要行
+        - 错误信息优先保留（stderr 内容前置）
+
+        Args:
+            content: 原始工具输出
+            max_lines: 最多保留行数
+            max_chars: 最多保留字符数
+
+        Returns:
+            压缩后的输出摘要
+        """
+        if not content:
+            return content
+
+        lines = content.split("\n")
+        total_lines = len(lines)
+        total_chars = len(content)
+
+        # 短输出直接保留
+        if total_chars <= max_chars and total_lines <= 10:
+            return content
+
+        # 长输出：首尾保留
+        head_lines = lines[:3]
+        tail_lines = lines[-3:]
+        skipped = total_lines - 6
+
+        # 检测关键信息模式
+        hints = []
+        
+        # 错误模式
+        error_lines = [l for l in lines if 'error' in l.lower() or 'FAIL' in l or 'failed' in l.lower()]
+        if error_lines:
+            hints.append(f"⚠ 含 {len(error_lines)} 条错误: {error_lines[0][:120]}")
+
+        # 成功模式
+        success_lines = [l for l in lines if 'SUCCESS' in l or 'BUILD SUCCESSFUL' in l]
+        if success_lines:
+            hints.append("✅ " + success_lines[0].strip())
+
+        # 包安装模式
+        pkg_lines = [l for l in lines if 'packages' in l.lower() and ('install' in l.lower() or 'upgrad' in l.lower())]
+        if pkg_lines:
+            hints.append("📦 " + pkg_lines[0].strip())
+
+        # 文件变更模式
+        changed_lines = [l for l in lines if 'file changed' in l.lower() or 'files changed' in l.lower()]
+        if changed_lines:
+            hints.append("📝 " + changed_lines[0].strip())
+
+        hint_text = "\n".join(hints) if hints else ""
+
+        compressed = (
+            f"[工具输出压缩: {total_lines}行 {total_chars}字符]\n"
+            + (f"{hint_text}\n" if hint_text else "")
+            + "\n".join(head_lines)
+            + f"\n... [{skipped} 行省略] ...\n"
+            + "\n".join(tail_lines)
+        )
+
+        return compressed
+
+    @staticmethod
+    def _compress_tool_rounds(rounds: List[Dict]) -> List[Dict]:
+        """
+        对 rounds 中的 tool 消息进行智能压缩。
+
+        参数:
+            rounds: 原始 rounds 列表
+            
+        返回:
+            压缩后的 rounds（非原地修改）
+        """
+        result = []
+        for rd in rounds:
+            if rd.get("role") == "tool":
+                compressed = dict(rd)
+                compressed["content"] = BaseChatSession._compress_tool_content(
+                    rd.get("content", "")
+                )
+                result.append(compressed)
+            else:
+                result.append(dict(rd))
+        return result
         """
         修复中断导致的不完整工具调用链。
 
@@ -224,17 +314,21 @@ class BaseChatSession(ABC):
                 # 旧轮次：仅保留最终 ai_msg，丢弃中间工具调用链
                 self.messages.append({"role": "assistant", "content": conv["ai_msg"]})
 # NOTE: 2026-05-03 06:37:54, self-evolved by tea_agent --- load_history 中加载 rounds_json_parsed 时调用 _repair_incomplete_tool_chains 修复中断链
+# NOTE: 2026-05-04 12:57:33, self-evolved by tea_agent --- load_history 最近N轮加载时调用 _compress_tool_rounds 压缩工具输出
             else:
-                # 最近N轮：加载完整工具调用链
+                # 最近N轮：加载完整工具调用链（工具输出已压缩）
                 rounds = conv.get("rounds_json_parsed")
                 if rounds and conv.get("is_func_calling"):
                     # 修复中断导致的不完整工具调用链
                     repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
+                    # 压缩工具输出，减少 token 消耗但保持上下文连贯
+                    compressed = BaseChatSession._compress_tool_rounds(repaired)
                     if len(repaired) != len(rounds):
                         logger.warning(
-                            f"load_history: 修复不完整工具调用链 ({len(rounds)}→{len(repaired)} 条)"
+                            f"load_history: 修复不完整链 ({len(rounds)}→{len(repaired)}), "
+                            f"工具输出已压缩"
                         )
-                    for rd in repaired:
+                    for rd in compressed:
                         self.messages.append(dict(rd))
                 else:
                     self.messages.append({"role": "assistant", "content": conv["ai_msg"]})

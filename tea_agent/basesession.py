@@ -191,7 +191,11 @@ class BaseChatSession(ABC):
                 result.append(compressed)
             else:
                 result.append(dict(rd))
+# NOTE: 2026-05-04 14:53:44, self-evolved by tea_agent --- 补回 _repair_incomplete_tool_chains 缺失的 @staticmethod 和 def 行，修复死代码导致的 400 错误
         return result
+
+    @staticmethod
+    def _repair_incomplete_tool_chains(rounds: List[Dict]) -> List[Dict]:
         """
         修复中断导致的不完整工具调用链。
 

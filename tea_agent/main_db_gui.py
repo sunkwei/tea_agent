@@ -1119,11 +1119,14 @@ class TkGUI(AgentCore):
         # 当前对话 ID
         self._current_conversation_id: Optional[int] = None
 
+# NOTE: 2026-05-04 18:59:23, self-evolved by tea_agent --- 移除冗余 _init_session 调用，在 UI 创建后加 status 显示
         # 创建界面
         self._create_ui()
 
-        # 初始化会话
-        self._init_session()
+        # 会话已由 AgentCore.__init__ 初始化，这里补状态显示
+        cheap_m = self._cfg.cheap_model
+        cheap_info = f" | 摘要模型: {cheap_m.model_name}" if cheap_m.model_name else ""
+        self._update_status(f"📡 已连接 | 模型: {self._cfg.main_model.model_name}{cheap_info}")
 
 # NOTE: 2026-05-04 17:16:04, self-evolved by tea_agent --- GUI on_closing: 退出时调用 storage.close() 完成 WAL checkpoint + 关闭连接
         # 加载主题
@@ -1337,12 +1340,12 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 
 # NOTE: 2026-05-04 09:27:57, self-evolved by tea_agent --- GUI 添加 _sess_lock 和 _setup_mqtt_reply_handler 调用
 # NOTE: 2026-05-04 18:48:10, self-evolved by tea_agent --- _init_session 继承 AgentCore，仅补 UI 回调
+# NOTE: 2026-05-04 18:58:17, self-evolved by tea_agent --- GUI _init_session 调用 super() 确保 sess 被创建
+# NOTE: 2026-05-04 18:58:47, self-evolved by tea_agent --- _init_session 只设 tool_log，status 移到 UI 创建后
     def _init_session(self):
-        """GUI 的会话初始化 — AgentCore 已创建 sess，这里补 UI 回调。"""
+        """GUI 的会话初始化 — 继承 AgentCore 创建 sess，这里只补 tool_log。"""
+        super()._init_session()
         self.sess.tool_log = self.safe_log_tool
-        cheap_m = self._cfg.cheap_model
-        cheap_info = f" | 摘要模型: {cheap_m.model_name}" if cheap_m.model_name else ""
-        self._update_status(f"📡 已连接 | 模型: {self._cfg.main_model.model_name}{cheap_info}")
 
     def toggle_reasoning(self, enable: Optional[bool] = None) -> dict:
         """切换或查询 reasoning/thinking 状态。供 toolkit 工具调用。"""

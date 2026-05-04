@@ -33,9 +33,11 @@ class AgentCore:
       - _on_init_done(): 初始化完成后的 UI 回调
     """
 
+# NOTE: 2026-05-04 19:33:59, self-evolved by tea_agent --- AgentCore.__init__ 增加 _shutting_down 标志位，用于安全重启前阻止新操作
     def __init__(self, debug: bool = False, config_path: Optional[str] = None):
         self.debug = debug
         self.generating = False
+        self._shutting_down = False  # 重启前安全闸门
         self._config_path = config_path
 
         # ── 1. 加载配置 ──
@@ -69,12 +71,112 @@ class AgentCore:
         self.current_topic_id: int = -1
         self._init_session()
 
+# NOTE: 2026-05-04 19:26:41, self-evolved by tea_agent --- AgentCore 添加 _start_file_watcher() — 监控非 toolkit 的 .py 变更并自动重启进程
         # ── 7. 串接 MQTT reply handler ──
         self._setup_mqtt_reply_handler()
 
+        # ── 8. 启动文件监控（代码变更自动重启）──
+        self._start_file_watcher()
+
+# NOTE: 2026-05-04 19:27:06, self-evolved by tea_agent --- 添加 _start_file_watcher 方法实现 — watchdog 监控 + os.execv 重启
     # ═══════════════════════════════════════════════
-    # 连接器启动
+    # 文件监控（非 toolkit .py 变更 → 自动重启）
     # ═══════════════════════════════════════════════
+    def _start_file_watcher(self):
+        """启动文件监控：非 toolkit/ 目录的 .py 文件变更时自动重启进程。
+
+        使用 watchdog 库递归监控 tea_agent 包目录。
+        排除 toolkit/ 子目录 — 工具文件用 toolkit_reload() 热加载即可。
+        检测到变更后防抖 2 秒，然后 os.execv 原地替换进程。
+        """
+        try:
+            import watchdog.events
+            import watchdog.observers
+        except ImportError:
+            logger.debug("watchdog 未安装，跳过文件监控")
+            return
+
+        tea_agent_dir = Path(__file__).parent  # tea_agent/ 包目录
+
+        class _RestartHandler(watchdog.events.FileSystemEventHandler):
+            def __init__(self, agent):
+                self._agent = agent
+                self._timer: Optional[threading.Timer] = None
+                self._lock = threading.Lock()
+
+            def on_modified(self, event):
+                if event.is_directory:
+                    return
+                src = event.src_path
+                if not src.endswith('.py'):
+                    return
+                # 排除 toolkit/ 子目录 — 工具用 toolkit_reload() 热更
+                if '/toolkit/' in src or '\\toolkit\\' in src:
+                    return
+                logger.info(f"🔄 检测到文件变更: {src}")
+                self._schedule_restart()
+
+            def _schedule_restart(self):
+                with self._lock:
+                    if self._timer:
+                        self._timer.cancel()
+                    self._timer = threading.Timer(2.0, self._do_restart)
+                    self._timer.daemon = True
+                    self._timer.start()
+
+# NOTE: 2026-05-04 19:28:47, self-evolved by tea_agent --- _do_restart 添加 Windows 支持 — subprocess.Popen + os._exit 替代 os.execv
+# NOTE: 2026-05-04 19:34:24, self-evolved by tea_agent --- _do_restart 数据安全加固：设闸门 → 等会话锁 → WAL checkpoint → 关DB → 重启
+            def _do_restart(self):
+                """数据安全重启：
+                1. 设 _shutting_down 闸门，阻止新操作
+                2. 等待 _sess_lock（最长 10s），确保当前 chat_stream 完成
+                3. WAL checkpoint(TRUNCATE) 刷盘 → close DB
+                4. 跨平台重启进程
+                """
+                import subprocess
+                import time as _time
+                agent = self._agent
+
+                # ── 1. 设闸门 ──
+                agent._shutting_down = True
+                logger.info("🔁 收到重启信号，等待活跃操作完成...")
+
+                # ── 2. 等待 _sess_lock（chat_stream 释放锁后 DB 写入已完成）──
+                if hasattr(agent, '_sess_lock'):
+                    deadline = _time.monotonic() + 10.0  # 最多等10秒
+                    acquired = False
+                    while _time.monotonic() < deadline:
+                        if agent._sess_lock.acquire(blocking=False):
+                            acquired = True
+                            agent._sess_lock.release()
+                            break
+                        _time.sleep(0.1)
+                    if not acquired:
+                        logger.warning("等待会话锁超时（10s），强制关闭")
+
+                # ── 3. 安全关闭数据库 ──
+                try:
+                    if hasattr(agent, 'db') and agent.db:
+                        agent.db.close()  # 内含 WAL checkpoint(TRUNCATE)
+                        logger.info("数据库已安全关闭")
+                except Exception as e:
+                    logger.warning(f"关闭数据库异常 (非致命): {e}")
+
+                # ── 4. 跨平台重启 ──
+                print("\n🔁 代码已变更，正在重启...\n", flush=True)
+                args = [sys.executable] + sys.argv
+                if sys.platform == 'win32':
+                    subprocess.Popen(args, close_fds=True)
+                    os._exit(0)
+                else:
+                    os.execv(sys.executable, args)
+
+        handler = _RestartHandler(self)
+        observer = watchdog.observers.Observer()
+        observer.schedule(handler, str(tea_agent_dir), recursive=True)
+        observer.daemon = True
+        observer.start()
+        logger.info("📁 文件监控已启动（非 toolkit .py 变更时自动重启）")
     def _start_connectors(self):
         """启动 chat_room 和 MQTT 连接器（非阻塞守护线程）。"""
         try:
@@ -203,12 +305,16 @@ class AgentCore:
         conn.set_reply_handler(handle_mqtt)
         logger.info("MQTT reply handler 已注册")
 
+# NOTE: 2026-05-04 19:35:00, self-evolved by tea_agent --- _process_mqtt_message 入口加 _shutting_down 闸门检查
     def _process_mqtt_message(self, sender: str, content: str):
         """处理单条 MQTT 消息：切换上下文 → chat_stream → 入库 → MQTT 回复。
 
         用户消息已由 connector._route_message() 存入 DB。
         这里取最后一条 conv_id，用 AI 回复更新之。
         """
+        if self._shutting_down:
+            logger.info(f"正在关闭中，拒绝处理 MQTT 消息 (sender={sender})")
+            return
         with self._sess_lock:
             # 1. 获取/创建 mqtt_{sender} topic
             tid = self._get_or_create_mqtt_topic(sender)
@@ -228,9 +334,11 @@ class AgentCore:
             try:
                 # 5. 调用 AI（静默，max_iter 时自动续命）
                 self.sess._continue_after_max = True
+# NOTE: 2026-05-04 19:38:19, self-evolved by tea_agent --- MQTT 续命也追加 10 轮，与 CLI 保持一致
                 def _on_status_mqtt(status_msg: str):
                     if status_msg.startswith("!MAX_ITER:"):
                         self.sess._continue_after_max = True
+                        self.sess._extra_iterations += 10
                         self.sess._max_iter_wait.set()
                 ai_msg, used_tools = self.sess.chat_stream(
                     content,

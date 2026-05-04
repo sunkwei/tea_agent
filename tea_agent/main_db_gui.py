@@ -1100,6 +1100,8 @@ class TkGUI(AgentCore):
         self.root.geometry("1100x750")
         self.root.minsize(900, 600)
 
+        self.sess = None  # 预设，AgentCore._init_session 会创建它
+
         # ── AgentCore 初始化：配置、目录、Storage/Toolkit、连接器、会话、MQTT ──
         super().__init__(debug=debug)
 
@@ -1122,6 +1124,8 @@ class TkGUI(AgentCore):
 # NOTE: 2026-05-04 18:59:23, self-evolved by tea_agent --- 移除冗余 _init_session 调用，在 UI 创建后加 status 显示
         # 创建界面
         self._create_ui()
+        if hasattr(self,"sess") and self.sess is not None:
+            self.sess.tool_log = self.safe_log_tool
 
         # 会话已由 AgentCore.__init__ 初始化，这里补状态显示
         cheap_m = self._cfg.cheap_model
@@ -1343,9 +1347,8 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 # NOTE: 2026-05-04 18:58:17, self-evolved by tea_agent --- GUI _init_session 调用 super() 确保 sess 被创建
 # NOTE: 2026-05-04 18:58:47, self-evolved by tea_agent --- _init_session 只设 tool_log，status 移到 UI 创建后
     def _init_session(self):
-        """GUI 的会话初始化 — 继承 AgentCore 创建 sess，这里只补 tool_log。"""
+        """GUI 的会话初始化 — 继承 AgentCore 创建 sess。"""
         super()._init_session()
-        self.sess.tool_log = self.safe_log_tool
 
     def toggle_reasoning(self, enable: Optional[bool] = None) -> dict:
         """切换或查询 reasoning/thinking 状态。供 toolkit 工具调用。"""
@@ -1379,18 +1382,20 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     # @2026-04-29 gen by deepseek-v4-pro, 工具调用达上限时弹框询问继续/终止
     def _handle_max_iter(self, msg: str):
         """弹出对话框询问用户是否继续工具调用。"""
+# NOTE: 2026-05-04 19:39:42, self-evolved by tea_agent --- GUI 续命弹窗：文案从 5 轮改为 10 轮，确认后追加 10 轮
         from tkinter import messagebox
         display = msg.replace("!MAX_ITER:", "")
         result = messagebox.askyesno(
             "达到工具调用上限",
-            f"{display}\n\n选择「是」再执行 5 轮\n选择「否」终止当前回答",
+            f"{display}\n\n选择「是」再执行 10 轮\n选择「否」终止当前回答",
             parent=self.root,
         )
         if hasattr(self, 'sess') and self.sess:
             self.sess._continue_after_max = result
             self.sess._max_iter_wait.set()
             if result:
-                self._update_status("⏳ 已续命 5 轮，继续生成... (ESC 打断)")
+                self.sess._extra_iterations += 10
+                self._update_status("⏳ 已续命 10 轮，继续生成... (ESC 打断)")
             else:
                 self._update_status("🛑 用户终止工具调用")
 
@@ -1647,7 +1652,11 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         except Exception:
             pass  # 通知失败不影响主流程
 
+# NOTE: 2026-05-04 19:35:31, self-evolved by tea_agent --- GUI send() 入口加 _shutting_down 闸门 — 重启中拒绝新消息
     def send(self, e=None):
+        if self._shutting_down:
+            self._update_status("🔄 代码已变更，等待重启...")
+            return "break"
         if self.generating or not self.current_topic_id:
             return "break"
         msg = self.input_box.get("1.0", tk.END).strip()

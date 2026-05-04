@@ -198,8 +198,9 @@ def _chat_to_markdown(messages: List[Dict]) -> str:
 
 # NOTE: 2026-05-01 08:17:23, self-evolved by tea_agent --- _generate_topic_summary: min_length从2提高到5，提示词强化中文自然表达
 # NOTE: 2026-05-01 20:12:32, self-evolved by tea_agent --- 更新 system prompt：强调基于用户输入概括，不基于 AI 回复
+# NOTE: 2026-05-04 14:58:14, self-evolved by tea_agent --- Prompt 模板更新：明确使用最近10条用户输入提取标题
 _TOPIC_SUMMARY_SYSTEM = (
-    "你是一个摘要生成器。根据最近几轮的用户输入，生成不超过20字的自然中文摘要标题。"
+    "你是一个摘要生成器。根据最近10条用户输入，生成不超过20字的自然中文摘要标题。"
     "要求："
     "1. 根据用户的发言概括对话主题，不要基于 AI 的回复来概括。"
     "2. 用日常口语表达，像人聊天时随口说的标题那样。"
@@ -210,7 +211,7 @@ _TOPIC_SUMMARY_SYSTEM = (
 
 # NOTE: 2026-05-01 20:12:10, self-evolved by tea_agent --- 摘要生成只用 user input（去除 AI 回复），基于最近多轮而非最后一轮
 _TOPIC_SUMMARY_USER_TEMPLATE = (
-    "以下是最近几轮对话的用户输入：\n\n{user_msgs}\n\n"
+    "以下是最近10条用户输入：\n\n{user_msgs}\n\n"
     "请根据这些用户输入，生成不超过20字的摘要标题："
 )
 
@@ -1775,7 +1776,8 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         if not self.current_topic_id or self.current_topic_id < 0:
             return
 
-        recent = self.db.get_recent_conversations(self.current_topic_id, limit=3)
+# NOTE: 2026-05-04 14:57:56, self-evolved by tea_agent --- _update_topic_summary: limit 3→10，确保摘要基于最新10条用户输入
+        recent = self.db.get_recent_conversations(self.current_topic_id, limit=10)
         if not recent:
             return
 

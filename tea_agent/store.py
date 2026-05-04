@@ -1068,6 +1068,38 @@ class Storage:
         c.close()
         return [dict(r) for r in rows]
 
+# NOTE: 2026-05-04 17:15:28, self-evolved by tea_agent --- 新增 Storage.close() 方法：wal_checkpoint(TRUNCATE) 合并 WAL + 关闭连接
+    # ============================================================
+    # 2026-05-05 gen by deepseek-v4-pro, 正常关闭：checkpoint WAL + close
+    # ============================================================
+
+    def close(self):
+        """
+        正常关闭数据库连接。
+        执行 WAL checkpoint (TRUNCATE) 将 WAL 文件合并回主 DB，
+        然后删除 .db-wal 和 .db-shm 文件，最后关闭连接。
+        """
+        try:
+            # TRUNCATE 模式：checkpoint 后删除 WAL 文件（而非 PASSIVE 仅截断）
+            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            logger.info("WAL checkpoint(TRUNCATE) 完成")
+        except Exception as e:
+            logger.warning(f"WAL checkpoint 失败 (非致命): {e}")
+        finally:
+            try:
+                self.conn.close()
+                logger.info(f"数据库连接已关闭: {self.db_path}")
+            except Exception:
+                pass
+
+    def __del__(self):
+        """析构函数：安全兜底关闭连接（不抛异常）"""
+        try:
+            self.close()
+        except Exception:
+            pass
+
+
 # ---- 模块级便捷方法，供 toolkit 工具使用 ----
 
 _storage_instance = None

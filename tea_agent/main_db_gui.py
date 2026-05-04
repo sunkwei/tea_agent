@@ -1152,9 +1152,32 @@ class TkGUI:
         # 初始化会话
         self._init_session()
 
+# NOTE: 2026-05-04 17:16:04, self-evolved by tea_agent --- GUI on_closing: 退出时调用 storage.close() 完成 WAL checkpoint + 关闭连接
         # 加载主题
         self.refresh_topics()
         self.auto_new_topic()
+
+        # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
+        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+
+    # NOTE: 2026-05-05, self-evolved by tea_agent --- 退出时正常关闭数据库：WAL checkpoint + MQTT 断开
+    def _on_closing(self):
+        """窗口关闭时的清理流程"""
+        self._update_status("⏳ 正在清理资源...")
+        try:
+            self.db.close()
+            self._update_status("✅ 数据库已正常关闭")
+        except Exception as e:
+            logger.warning(f"关闭数据库失败: {e}")
+        try:
+            mqtt_agent_connector.stop()
+        except Exception:
+            pass
+        try:
+            chat_room_connector.stop()
+        except Exception:
+            pass
+        self.root.destroy()
 
     def _create_ui(self):
         """创建界面"""

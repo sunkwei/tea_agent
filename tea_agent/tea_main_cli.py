@@ -33,30 +33,33 @@ from tea_agent import chat_room_connector
 from tea_agent import mqtt_agent_connector
 from tea_agent.config import load_config, get_config
 
-# ====================== 配置加载 ======================
-_cfg = load_config()
-
-if not _cfg.main_model.is_configured:
-    print("错误: 请配置主模型 (main_model)")
-    print("  编辑 $HOME/.tea_agent/config.yaml 或 tea_agent/config.yaml")
-    sys.exit(1)
-
-API_KEY = cast(str, _cfg.main_model.api_key)
-API_URL = cast(str, _cfg.main_model.api_url)
-MODEL = cast(str, _cfg.main_model.model_name)
-CHEAP_MODEL = _cfg.cheap_model
+# NOTE: 2026-05-04 18:38:05, self-evolved by tea_agent --- 移除模块级 _cfg/API_KEY 等全局变量，TeaCLI 接受 config_path 参数
+# ====================== 配置加载（延迟到 TeaCLI.__init__，支持 --config 多 agent） ======================
 
 
 class TeaCLI:
-    """Tea Agent 命令行界面 — 与 GUI 共享相同的核心逻辑，无 GUI 依赖。"""
+    """Tea Agent 命令行界面 — 与 GUI 共享相同的核心逻辑，无 GUI 依赖。
+    
+    支持 --config 参数指定配置文件，实现多 agent 隔离：
+        TeaCLI(config_path="/path/to/agent_a/config.yaml")
+    """
 
-    def __init__(self, debug: bool = False):
+    def __init__(self, debug: bool = False, config_path: Optional[str] = None):
         self.debug = debug
         self.generating = False
+        self._config_path = config_path
+
+        # 加载配置（支持 --config 参数指定不同配置文件）
+        self._cfg = load_config(config_path) if config_path else load_config()
+
+        if not self._cfg.main_model.is_configured:
+            print("错误: 请配置主模型 (main_model)")
+            print(f"  编辑 {config_path or '$HOME/.tea_agent/config.yaml 或 tea_agent/config.yaml'}")
+            sys.exit(1)
 
 # NOTE: 2026-05-04 17:53:53, self-evolved by tea_agent --- tea_main_cli 使用 config.paths 替代硬编码 ~/.tea_agent
         # 初始化目录（从 config 读取路径，支持多 agent 隔离）
-        cfg = get_config()
+        cfg = self._cfg
         root_path = Path(cfg.paths.data_dir_abs)
         root_path.mkdir(parents=True, exist_ok=True)
         tool_dir = Path(cfg.paths.toolkit_dir_abs)
@@ -100,13 +103,16 @@ class TeaCLI:
     # ------------------------------------------------------
     # 会话初始化
     # ------------------------------------------------------
+# NOTE: 2026-05-04 18:38:30, self-evolved by tea_agent --- _init_session 使用 self._cfg 替代模块级 API_KEY/API_URL/MODEL/CHEAP_MODEL
     def _init_session(self):
-        cfg = get_config()
+        cfg = self._cfg
+        main_m = cfg.main_model
+        cheap_m = cfg.cheap_model
         self.sess = OnlineToolSession(
             toolkit=self.toolkit,
-            api_key=API_KEY,
-            api_url=API_URL,
-            model=MODEL,
+            api_key=cast(str, main_m.api_key),
+            api_url=cast(str, main_m.api_url),
+            model=cast(str, main_m.model_name),
             max_history=cfg.max_history,
             max_iterations=cfg.max_iterations,
             keep_turns=cfg.keep_turns,
@@ -115,9 +121,9 @@ class TeaCLI:
             extra_iterations_on_continue=cfg.extra_iterations_on_continue,
             memory_extraction_threshold=cfg.memory_extraction_threshold,
             storage=self.db,
-            cheap_api_key=cast(str, CHEAP_MODEL.api_key),
-            cheap_api_url=cast(str, CHEAP_MODEL.api_url),
-            cheap_model=cast(str, CHEAP_MODEL.model_name),
+            cheap_api_key=cast(str, cheap_m.api_key),
+            cheap_api_url=cast(str, cheap_m.api_url),
+            cheap_model=cast(str, cheap_m.model_name),
             enable_thinking=cfg.enable_thinking,
         )
         self.sess.tool_log = self._on_tool_log
@@ -125,8 +131,8 @@ class TeaCLI:
         import tea_agent.session_ref as _sref
         _sref.set_session(self.sess)
 
-        cheap_info = f" | 摘要: {CHEAP_MODEL.model_name}" if CHEAP_MODEL.model_name else ""
-        print(f"📡 已连接 | 模型: {MODEL}{cheap_info}")
+        cheap_info = f" | 摘要: {cheap_m.model_name}" if cheap_m.model_name else ""
+        print(f"📡 已连接 | 模型: {main_m.model_name}{cheap_info}")
         print(f"🔧 工具: {len(self.toolkit.func_map)} 个已加载")
         print(f"💡 输入 /help 查看命令\n")
 
@@ -543,6 +549,7 @@ Ctrl+C 可打断当前生成。
         print(f"🧠 活跃记忆: {mem_count} 条")
 
 
+# NOTE: 2026-05-04 18:38:42, self-evolved by tea_agent --- main() 添加 --config 参数，支持多 agent 配置文件
 # ====================== 入口 ======================
 def main():
     import argparse
@@ -550,9 +557,11 @@ def main():
     ap = argparse.ArgumentParser(description="Tea Agent CLI")
     ap.add_argument("--debug", action="store_true", help="调试模式")
     ap.add_argument("--oneshot", type=str, default=None, help="单次对话（非交互）")
+    ap.add_argument("--config", type=str, default=None,
+                    help="配置文件路径（支持多 agent 隔离）")
     args = ap.parse_args()
 
-    cli = TeaCLI(debug=args.debug)
+    cli = TeaCLI(debug=args.debug, config_path=args.config)
 
     if args.oneshot:
         cli.run_oneshot(args.oneshot)

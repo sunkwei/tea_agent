@@ -65,18 +65,84 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         results.insert(0, {"summary": f"{success}/{len(commands)} 成功", "total": len(commands), "workers": workers})
         return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
 
+# NOTE: 2026-05-04 12:39:01, self-evolved by tea_agent --- toolkit_exec 检测 sudo 自动弹出 GUI 密码框，显示命令信息
     else:  # action == "single"
         if args is None:
             args = []
+
+        # ── sudo 命令 → 弹出 GUI 密码框 ──
+        if app == "sudo" or app.endswith("/sudo"):
+            return _sudo_with_gui(app, args)
+
         result = subprocess.run([app] + args, capture_output=True, text=True)
         return (result.returncode, result.stdout, result.stderr)
+
+
+def _sudo_with_gui(app: str, args: list):
+    """sudo 命令通过 GUI 对话框获取密码 — 显示完整命令信息"""
+    import shutil
+    import subprocess
+
+    cmd_text = " ".join(args) if args else "(无参数)"
+    title = "🔐 管理员权限请求"
+    prompt = f"Tea Agent 需要执行一条管理员命令：\n\n{cmd_text}\n\n请输入管理员密码："
+
+    # 尝试顺序: kdialog → zenity → pkexec → 回退到普通执行
+    dialog_cmd = None
+
+    if shutil.which("kdialog"):
+        dialog_cmd = ["kdialog", "--title", title, "--password", prompt]
+    elif shutil.which("zenity"):
+        dialog_cmd = [
+            "zenity", "--password", "--title", title,
+            "--text", prompt,
+        ]
+
+    if dialog_cmd:
+        pwd_result = subprocess.run(dialog_cmd, capture_output=True, text=True)
+        if pwd_result.returncode != 0:
+            return (126, "", "用户取消了密码输入")
+        password = pwd_result.stdout.strip()
+        if not password:
+            return (1, "", "密码不能为空")
+
+        result = subprocess.run(
+            ["sudo", "-S"] + args,
+            input=password + "\n",
+            capture_output=True, text=True,
+        )
+        # 清除密码
+        password = "\x00" * len(password)
+        del password
+        return (result.returncode, result.stdout, result.stderr)
+
+    # 无 GUI 工具 → 回退到 pkexec（自带弹框）或直接 sudo
+    if shutil.which("pkexec"):
+        try:
+            result = subprocess.run(
+                ["pkexec"] + args,
+                capture_output=True, text=True,
+                timeout=120,
+            )
+            return (result.returncode, result.stdout, result.stderr)
+        except subprocess.TimeoutExpired:
+            return (1, "", "pkexec 超时（120s）")
+
+    # 最后回退 — 可能失败（需要 tty）
+    result = subprocess.run(
+        [app] + args,
+        capture_output=True, text=True,
+        timeout=120,
+    )
+    return (result.returncode, result.stdout, result.stderr)
 
 
 def meta_toolkit_exec() -> dict:
     return {
         "type": "function",
         "function": {
-            "description": "执行系统命令。action='single' 执行单条；action='batch' 并行批量执行多条。",
+# NOTE: 2026-05-04 12:39:08, self-evolved by tea_agent --- 更新 toolkit_exec meta 描述：注明 sudo 自动弹框
+            "description": "执行系统命令。action='single' 执行单条；action='batch' 并行批量执行多条。执行 sudo 命令时自动弹出 GUI 密码框并显示完整命令信息。",
             "name": "toolkit_exec",
             "parameters": {
                 "type": "object",

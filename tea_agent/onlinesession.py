@@ -21,6 +21,7 @@ from tea_agent.session_api import SessionAPIMixin
 from tea_agent.session_prompts import COMPACT_SYSTEM_PROMPT
 from tea_agent.session_pipeline import SessionPipeline
 from tea_agent.session_memory import SessionMemoryMixin
+from tea_agent.skills import SkillManager
 
 logger = logging.getLogger("session")
 
@@ -138,6 +139,14 @@ class OnlineToolSession(
 # NOTE: 2026-04-30 16:20:54, self-evolved by tea_agent --- __init__集成ReflectionManager和SystemPromptManager，使用动态系统提示词
         # 工具定义
         self.tools: List[Dict] = []
+        
+        # 初始化 Skill 管理器（必须在 _build_tools 之前）
+        self.skill_manager = SkillManager.get_instance()
+        self.skill_manager.discover_skills()
+        # 默认激活 utility 和 file_system（最小可用集）
+        self.skill_manager.activate_skill("utility")
+        self.skill_manager.activate_skill("file_system")
+        
         self._build_tools()
         
         # 初始化 Memory 管理器（在 storage 设置之后）
@@ -271,8 +280,18 @@ class OnlineToolSession(
         """
         result: List[Dict] = []
 
-        # 1. 系统提示词 (始终第一)
-        result.append(self.messages[0])
+        # 1. 系统提示词 (始终第一) — 注入激活 Skill 的领域指令
+        sys_msg = dict(self.messages[0])
+        skill_prompt = self.skill_manager.get_active_prompt()
+        skill_summary = self.skill_manager.get_skill_summary()
+        if skill_prompt or skill_summary:
+            enhanced = sys_msg["content"]
+            if skill_summary:
+                enhanced = enhanced + "\n\n" + skill_summary
+            if skill_prompt:
+                enhanced = enhanced + "\n\n" + skill_prompt
+            sys_msg["content"] = enhanced
+        result.append(sys_msg)
 
         # 2. 长期记忆注入（紧接系统提示词）
         if self._injected_memories_text:
@@ -468,8 +487,15 @@ class OnlineToolSession(
         }
 
     def _build_tools(self):
-        """构建工具定义列表"""
-        self.tools = super()._build_tools()
+        """构建工具定义列表（通过 SkillManager 过滤，按需加载）"""
+        all_tools = super()._build_tools()
+        # 通过 SkillManager 过滤：仅返回激活 Skill 包含的工具
+        active_meta_map = self.skill_manager.get_active_tools_meta(self.toolkit.meta_map)
+        if active_meta_map:
+            self.tools = active_meta_map
+        else:
+            # 回退：如果没有任何工具被激活，使用全部
+            self.tools = all_tools
 
     def update_tools(self):
         """重新加载并刷新工具定义"""
@@ -544,6 +570,11 @@ class OnlineToolSession(
         self.current_topic_id = topic_id
         self.reset_interrupt()
         self.reset_session_state()
+        
+        # 自动激活匹配的 Skill（基于用户输入触发词）
+        self.skill_manager.auto_activate(msg)
+        # 刷新工具列表（反映最新的激活状态）
+        self._build_tools()
 
 # NOTE: 2026-04-30 16:23:12, self-evolved by tea_agent --- chat_stream中reflection_manager为None时安全跳过追踪和反思
         # 2026-04-30 gen by deepseek-v4-pro, 开始反思追踪

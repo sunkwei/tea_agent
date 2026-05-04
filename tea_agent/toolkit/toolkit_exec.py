@@ -23,6 +23,8 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
     """
     import subprocess
     import json
+    import os
+    import signal
 
     if action == "batch":
         if not commands:
@@ -74,9 +76,33 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         if app == "sudo" or app.endswith("/sudo"):
             return _sudo_with_gui(app, args)
 
-# NOTE: 2026-05-04 12:44:40, self-evolved by tea_agent --- toolkit_exec 输出自动截断，避免大日志撑爆 token
-        result = subprocess.run([app] + args, capture_output=True, text=True)
+        # 单次命令超时默认 120s，可通过 timeout 参数覆盖
+        effective_timeout = timeout if timeout else 120
+        
+        # Popen + communicate(timeout) + kill: 超时后强制终止进程
+        try:
+            process = subprocess.Popen(
+                [app] + list(args),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            stdout, stderr = process.communicate(timeout=effective_timeout)
+            result = (process.returncode, stdout, stderr)
+        except subprocess.TimeoutExpired:
+            # 强制终止并收割
+            try:
+                process.kill()
+                process.wait(timeout=5)
+            except Exception:
+                pass
+            cmd_preview = f"{app} {' '.join(args[:5])}"
+            if len(args) > 5:
+                cmd_preview += f" ... (+{len(args)-5} args)"
+            result = (-1, "", f"⏰ 命令超时被强制终止 (>{effective_timeout}s): {cmd_preview}")
+        
         return _truncate_result(result)
+
 
 
 def _sudo_with_gui(app: str, args: list):
@@ -100,7 +126,7 @@ def _sudo_with_gui(app: str, args: list):
         ]
 
     if dialog_cmd:
-        pwd_result = subprocess.run(dialog_cmd, capture_output=True, text=True)
+        pwd_result = subprocess.run(dialog_cmd, capture_output=True, text=True, timeout=30)
         if pwd_result.returncode != 0:
             return (126, "", "用户取消了密码输入")
         password = pwd_result.stdout.strip()
@@ -108,11 +134,26 @@ def _sudo_with_gui(app: str, args: list):
             return (1, "", "密码不能为空")
 
 # NOTE: 2026-05-04 12:45:05, self-evolved by tea_agent --- sudo 路径也使用 _truncate_result 截断输出
-        result = subprocess.run(
-            ["sudo", "-S"] + args,
-            input=password + "\n",
-            capture_output=True, text=True,
-        )
+        try:
+            process = subprocess.Popen(
+                ["sudo", "-S"] + list(args),
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            stdout, stderr = process.communicate(
+                input=password + "\n",
+                timeout=180,
+            )
+            result = (process.returncode, stdout, stderr)
+        except subprocess.TimeoutExpired:
+            try:
+                process.kill()
+                process.wait(timeout=5)
+            except Exception:
+                pass
+            result = (-1, "", f"⏰ sudo 命令超时被强制终止 (>180s)")
         # 清除密码
         password = "\x00" * len(password)
         del password
@@ -122,29 +163,54 @@ def _sudo_with_gui(app: str, args: list):
     if shutil.which("pkexec"):
 # NOTE: 2026-05-04 12:45:12, self-evolved by tea_agent --- pkexec 和回退路径也使用 _truncate_result
         try:
-            result = subprocess.run(
-                ["pkexec"] + args,
-                capture_output=True, text=True,
-                timeout=120,
+            process = subprocess.Popen(
+                ["pkexec"] + list(args),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
             )
-            return _truncate_result(result)
+            stdout, stderr = process.communicate(timeout=120)
+            result = (process.returncode, stdout, stderr)
         except subprocess.TimeoutExpired:
-            return (1, "", "pkexec 超时（120s）")
+            try:
+                process.kill()
+                process.wait(timeout=5)
+            except Exception:
+                pass
+            result = (-1, "", "⏰ pkexec 命令超时被强制终止 (>120s)")
+        return _truncate_result(result)
 
 # NOTE: 2026-05-04 12:44:57, self-evolved by tea_agent --- 添加 _truncate_result 函数，智能截断 stdout/stderr
     # 最后回退 — 可能失败（需要 tty）
-    result = subprocess.run(
-        [app] + args,
-        capture_output=True, text=True,
-        timeout=120,
-    )
+    try:
+        process = subprocess.Popen(
+            [app] + list(args),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        stdout, stderr = process.communicate(timeout=120)
+        result = (process.returncode, stdout, stderr)
+    except subprocess.TimeoutExpired:
+        try:
+            process.kill()
+            process.wait(timeout=5)
+        except Exception:
+            pass
+        result = (-1, "", f"⏰ 命令超时被强制终止 (>120s): {app}")
     return _truncate_result(result)
 
 
 def _truncate_result(result, max_lines: int = 80, max_chars: int = 4000):
-    """截断过大的输出，返回值同 subprocess 结果"""
-    stdout = result.stdout or ""
-    stderr = result.stderr or ""
+    """截断过大的输出。支持 subprocess.CompletedProcess 或 (rc, stdout, stderr) tuple"""
+    if isinstance(result, tuple):
+        rc, stdout, stderr = result
+        stdout = stdout or ""
+        stderr = stderr or ""
+    else:
+        rc = result.returncode
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
 
     # 截断 stdout
     if len(stdout) > max_chars:
@@ -155,13 +221,15 @@ def _truncate_result(result, max_lines: int = 80, max_chars: int = 4000):
             skipped = len(lines) - max_lines
             stdout = f"{head}\n... [跳过 {skipped} 行] ...\n{tail}"
         if len(stdout) > max_chars:
-            stdout = stdout[:max_chars] + f"\n... [截断，原长度 {len(result.stdout or '')} 字符]"
+            original_len = len(result.stdout) if not isinstance(result, tuple) else len(result[1] or '')
+            stdout = stdout[:max_chars] + f"\n... [截断，原长度 {original_len} 字符]"
 
     # stderr 只保留前 500 字符
     if len(stderr) > 500:
-        stderr = stderr[:500] + f"\n... [截断，原长度 {len(result.stderr or '')} 字符]"
+        original_len = len(result.stderr) if not isinstance(result, tuple) else len(result[2] or '')
+        stderr = stderr[:500] + f"\n... [截断，原长度 {original_len} 字符]"
 
-    return (result.returncode, stdout, stderr)
+    return (rc, stdout, stderr)
 
 
 def meta_toolkit_exec() -> dict:
@@ -202,7 +270,7 @@ def meta_toolkit_exec() -> dict:
                     },
                     "timeout": {
                         "type": "integer",
-                        "description": "[batch] 每个命令超时秒数，默认30",
+                        "description": "[single] 超时秒数(默认120), [batch] 每个命令超时秒数(默认30)。超时后进程强制终止",
                     },
                 },
                 "required": [],

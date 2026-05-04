@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.6.0] - 2026-05-05
+
+### New Features
+- feat: Skill 模块化系统 — 工具按场景分组，按需激活/停用
+  - 6 个内置 Skill：utility(2), file_system(4), interaction(3), desktop_automation(4), self_evolution(10), memory_knowledge(3)
+  - 5 个 CORE 工具始终激活：save, reload, rollback, list_versions, skill
+  - `toolkit_skill` 工具：list/activate/deactivate/status/auto 操作
+  - 默认激活 utility + file_system（11 个工具，vs 全量 35，节省 68% token）
+  - `chat_stream` 自动检测用户输入触发词，按需激活匹配的 Skill
+  - 系统提示词动态注入：仅注入激活 Skill 的领域指令（CRITICAL 优先）
+
+- feat: `toolkit_exec` 硬超时 + 强制终止
+  - single 模式默认 120s 超时（可配置），超时后 `process.kill()` + `wait()` 强制收割
+  - sudo 路径统一使用 Popen + communicate(timeout)，覆盖 kdialog/sudo -S/pkexec/fallback
+  - 杜绝命令卡死导致永久阻塞，无需手动 ESC 打断
+
+### Bug Fixes
+- fix: `SessionSummarizerMixin.__init__` 中 `self.messages = []` 覆盖基类已填充的 system message
+- fix: `SessionToolMixin.__init__` 中同样存在 `self.messages = []` 覆盖问题
+
+### Improvements
+- improve: `_truncate_result` 兼容 subprocess.CompletedProcess 和 (rc, stdout, stderr) tuple
+
+
 ## [0.5.6] - 2026-05-04
 
 ### Performance

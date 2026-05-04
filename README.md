@@ -1,4 +1,4 @@
-# TeaAgent v0.5.6
+# TeaAgent v0.6.0
 
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
 
@@ -44,6 +44,27 @@ TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Functio
   旧轮次 (>keep_turns)  → user + ai_msg (裁剪工具链)
   最近N轮                → 完整工具链 → 智能压缩 (首3+尾3行+模式摘要)
 ```
+
+### 工具模块化：Skill 系统
+
+35 个工具按场景分为 6 个 Skill，**按需激活**以节省 token：
+
+```
+Skill (激活条件)                    工具数   默认
+──────────────────────────────────────────────────
+🎛️  CORE (始终激活)                   5      ✅    save/reload/rollback/list_versions/skill
+📁  file_system (文件/命令操作)        4      ✅    file/exec/sudo_gui/pkg
+⏰  utility (时间日期)                 2      ✅    gettime/date_diff
+🖥️  desktop_automation (截图/OCR)      4            screenshot/ocr/input/notify
+📝  self_evolution (自我进化)         10            self_evolve/build/bump_version/...
+🔊  interaction (语音/搜索)            3            speak/listen/search
+🧠  memory_knowledge (记忆/知识库)     3            memory/kb/reflection
+```
+
+- **默认场景**（纯对话）：仅 11 工具，token 开销 -68%
+- **自动激活**：用户输入 "截图"/"OCR" → desktop_automation 自动激活 → 15 工具
+- **手动控制**：`toolkit_skill(action='activate', name='self_evolution')` 随时切换
+- **提示词注入**：仅激活 Skill 的领域指令注入 system prompt，不浪费 token
 
 ### Token 优化：双层压缩
 
@@ -185,7 +206,7 @@ toolkit_listen(lang="zh-CN", timeout=5)   # 录音转文字
 ### 系统操作
 | 工具 | 功能 |
 |------|------|
-| `toolkit_exec` | 执行系统命令 |
+| `toolkit_exec` | 执行系统命令（120s硬超时，超时强制kill） |
 | `toolkit_batch_exec` | **并行**批量执行（线程池，8 workers） |
 | `toolkit_sudo_gui` | 跨平台提权（GUI密码框/UAC） |
 | `toolkit_gettime` | 获取当前时间 |
@@ -388,6 +409,7 @@ mqtt:
 
 | 版本 | 关键变化 |
 |------|---------|
+| v0.6.0 | Skill 模块化系统 (按需激活 -68% token) + toolkit_exec 硬超时 + Mixin bug修复 |
 | v0.5.6 | Token 双层压缩 (exec截断 + history智能摘要，-95%) + sudo GUI密码框 |
 | v0.5.5 | 周轮转修复 (shutil.copy2) + 数据库合并工具 (merge_db.py) |
 | v0.5.0 | 科幻小说《点火纪元》+ SQLite WAL + 任务通知 + 百度搜索 |

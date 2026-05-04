@@ -18,11 +18,12 @@ class SessionToolMixin:
     - messages: 消息列表
     """
 
+# NOTE: 2026-05-04 16:44:39, self-evolved by tea_agent --- 修复 SessionToolMixin.__init__ 覆盖 self.messages 为空列表的 bug
     def __init__(self):
         self.toolkit = None
         self.tool_log: Optional[Callable[[str], None]] = None
         self._rounds_collector: List[Dict] = []
-        self.messages: List[Dict] = []
+        # NOTE: 不设置 self.messages，由 BaseChatSession.__init__ 负责初始化
 
     def _build_tools(self):
         """构建工具定义列表"""

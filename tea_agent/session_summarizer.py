@@ -35,8 +35,10 @@ class SessionSummarizerMixin:
         _history_summary: 累积的历史摘要文本
     """
 
+# NOTE: 2026-05-04 16:43:20, self-evolved by tea_agent --- 修复 SessionSummarizerMixin.__init__ 覆盖 self.messages 为空列表的 bug
     def __init__(self):
-        self.messages: List[Dict] = []
+        # NOTE: 不设置 self.messages，由 BaseChatSession.__init__ 负责初始化
+        # 否则会覆盖基类已填充的 system message
 
         # 摘要配置
         self.keep_turns: int = 5

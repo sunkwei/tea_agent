@@ -8,12 +8,16 @@ Tea Agent CLI — 无 GUI 的命令行交互入口，适用于自动化测试和
     python -m tea_agent.tea_main_cli --debug          # 调试模式
 """
 
+# NOTE: 2026-05-04 08:36:14, self-evolved by tea_agent --- tea_main_cli.py 添加 logging 和 logger 定义，修复 NameError
 import os
 import sys
+import logging
 import threading
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, List, cast
+
+logger = logging.getLogger("tea_cli")
 
 # ====================== 包导入 ======================
 _parent_dir = str(Path(__file__).resolve().parent.parent)
@@ -21,10 +25,12 @@ if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
 
 # NOTE: 2026-05-02 18:31:59, self-evolved by tea_agent --- tea_main_cli.py 导入 chat_room_connector 并在初始化后启动
+# NOTE: 2026-05-04 08:33:26, self-evolved by tea_agent --- tea_main_cli.py 导入并启动 mqtt_agent_connector
 from tea_agent.onlinesession import OnlineToolSession
 from tea_agent.store import Storage
 from tea_agent import tlk
 from tea_agent import chat_room_connector
+from tea_agent import mqtt_agent_connector
 from tea_agent.config import load_config, get_config
 
 # ====================== 配置加载 ======================
@@ -62,11 +68,18 @@ class TeaCLI:
 # NOTE: 2026-05-02 18:32:13, self-evolved by tea_agent --- TeaCLI.__init__ 中 toolkit reload 后启动 chat_room 连接器
         tlk.toolkit_reload()
 
+# NOTE: 2026-05-04 08:33:36, self-evolved by tea_agent --- TeaCLI.__init__ 中启动 mqtt_agent_connector
         # 启动 chat_room 连接器（非阻塞守护线程）
         try:
             chat_room_connector.start(self.db)
         except Exception as e:
             logger.warning(f"chat_room 连接器启动失败: {e}")
+
+        # 启动通用 MQTT 连接器（非阻塞守护线程，从 config.yaml 读取配置）
+        try:
+            mqtt_agent_connector.start(self.db)
+        except Exception as e:
+            logger.warning(f"MQTT 连接器启动失败: {e}")
 
         # 初始化会话
         self.current_topic_id: int = -1
@@ -233,6 +246,7 @@ class TeaCLI:
                 )
                 print()  # 换行
 
+# NOTE: 2026-05-04 09:07:11, self-evolved by tea_agent --- CLI chat() 中 AI 回复生成后发布到 MQTT
                 # 保存到数据库
                 conv_id = self.db.save_msg(self.current_topic_id, msg, "", False)
                 rounds = self.sess._rounds_collector
@@ -242,6 +256,9 @@ class TeaCLI:
                     is_func_calling=used_tools,
                     rounds=rounds if rounds else None,
                 )
+
+                # 发布 AI 回复到 MQTT（其他客户端可实时收到）
+                self._publish_to_mqtt(ai_msg)
 
                 # Token 统计
                 usage = self.sess._last_usage
@@ -271,7 +288,24 @@ class TeaCLI:
         self._work_thread.start()
         self._work_thread.join()  # CLI 模式下阻塞等待，便于测试
 
-    def _auto_summary(self):
+# NOTE: 2026-05-04 09:07:24, self-evolved by tea_agent --- TeaCLI 添加 _publish_to_mqtt 方法，将 AI 回复发布到 MQTT
+    def _publish_to_mqtt(self, ai_msg: str):
+        """将 AI 回复发布到 MQTT，让所有订阅客户端实时收到"""
+        try:
+            conn = mqtt_agent_connector.get_connector()
+            if conn and conn.is_ready and ai_msg:
+                # 判断是否回复 MQTT 客户端
+                tp = self.db.get_topic(self.current_topic_id)
+                title = tp.get("title", "") if tp else ""
+                if title.startswith("mqtt_"):
+                    # 定向回复给发送者
+                    sender = title[5:]  # 去掉 "mqtt_" 前缀
+                    conn.publish_reply(ai_msg, reply_to=sender)
+                else:
+                    # 广播到 agent 自己的 channel
+                    conn.publish_reply(ai_msg)
+        except Exception:
+            pass  # MQTT 发布失败不影响主流程
         """自动生成主题摘要。"""
         if self.current_topic_id <= 0:
             return

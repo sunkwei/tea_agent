@@ -6,9 +6,9 @@ Tea Agent CLI — 无 GUI 的命令行交互入口，适用于自动化测试和
     python -m tea_agent.tea_main_cli              # 交互模式
     python -m tea_agent.tea_main_cli --oneshot "你好"  # 单次对话
     python -m tea_agent.tea_main_cli --debug          # 调试模式
+    python -m tea_agent.tea_main_cli --config /path/to/config.yaml  # 多 agent
 """
 
-# NOTE: 2026-05-04 08:36:14, self-evolved by tea_agent --- tea_main_cli.py 添加 logging 和 logger 定义，修复 NameError
 import os
 import sys
 import logging
@@ -24,118 +24,30 @@ _parent_dir = str(Path(__file__).resolve().parent.parent)
 if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
 
-# NOTE: 2026-05-02 18:31:59, self-evolved by tea_agent --- tea_main_cli.py 导入 chat_room_connector 并在初始化后启动
-# NOTE: 2026-05-04 08:33:26, self-evolved by tea_agent --- tea_main_cli.py 导入并启动 mqtt_agent_connector
-from tea_agent.onlinesession import OnlineToolSession
-from tea_agent.store import Storage
-from tea_agent import tlk
-from tea_agent import chat_room_connector
-from tea_agent import mqtt_agent_connector
-from tea_agent.config import load_config, get_config
-
-# NOTE: 2026-05-04 18:38:05, self-evolved by tea_agent --- 移除模块级 _cfg/API_KEY 等全局变量，TeaCLI 接受 config_path 参数
-# ====================== 配置加载（延迟到 TeaCLI.__init__，支持 --config 多 agent） ======================
+from tea_agent.agent_core import AgentCore
+from tea_agent.config import load_config
 
 
-class TeaCLI:
-    """Tea Agent 命令行界面 — 与 GUI 共享相同的核心逻辑，无 GUI 依赖。
-    
-    支持 --config 参数指定配置文件，实现多 agent 隔离：
-        TeaCLI(config_path="/path/to/agent_a/config.yaml")
+class TeaCLI(AgentCore):
+    """Tea Agent 命令行界面 — 继承 AgentCore 共享核心逻辑。
+
+    支持 --config 参数指定配置文件，实现多 agent 隔离。
     """
 
     def __init__(self, debug: bool = False, config_path: Optional[str] = None):
-        self.debug = debug
-        self.generating = False
-        self._config_path = config_path
+        # ── AgentCore 初始化：配置、目录、Storage/Toolkit、连接器、会话、MQTT ──
+        super().__init__(debug=debug, config_path=config_path)
 
-        # 加载配置（支持 --config 参数指定不同配置文件）
-        self._cfg = load_config(config_path) if config_path else load_config()
+        # ── CLI 特定：显示状态信息 ──
+        print(self._init_session_info_str())
+        print("💡 输入 /help 查看命令\n")
 
-        if not self._cfg.main_model.is_configured:
-            print("错误: 请配置主模型 (main_model)")
-            print(f"  编辑 {config_path or '$HOME/.tea_agent/config.yaml 或 tea_agent/config.yaml'}")
-            sys.exit(1)
-
-# NOTE: 2026-05-04 17:53:53, self-evolved by tea_agent --- tea_main_cli 使用 config.paths 替代硬编码 ~/.tea_agent
-        # 初始化目录（从 config 读取路径，支持多 agent 隔离）
-        cfg = self._cfg
-        root_path = Path(cfg.paths.data_dir_abs)
-        root_path.mkdir(parents=True, exist_ok=True)
-        tool_dir = Path(cfg.paths.toolkit_dir_abs)
-        tool_dir.mkdir(parents=True, exist_ok=True)
-
-        # 初始化 Storage 和 Toolkit
-        db_path = Path(cfg.paths.db_path_abs)
-        self.db = Storage(db_path=str(db_path))
-        self.toolkit = tlk.Toolkit(str(tool_dir))
-        tlk._toolkit_ = self.toolkit
-# NOTE: 2026-05-02 18:32:13, self-evolved by tea_agent --- TeaCLI.__init__ 中 toolkit reload 后启动 chat_room 连接器
-        tlk.toolkit_reload()
-
-# NOTE: 2026-05-04 08:33:36, self-evolved by tea_agent --- TeaCLI.__init__ 中启动 mqtt_agent_connector
-        # 启动 chat_room 连接器（非阻塞守护线程）
-        try:
-            chat_room_connector.start(self.db)
-        except Exception as e:
-            logger.warning(f"chat_room 连接器启动失败: {e}")
-
-# NOTE: 2026-05-04 09:24:00, self-evolved by tea_agent --- 添加 MQTT reply handler，将 mqtt_client 消息串入 chat_stream() 全流水线
-        # 启动通用 MQTT 连接器（非阻塞守护线程，从 config.yaml 读取配置）
-        try:
-            mqtt_agent_connector.start(self.db)
-        except Exception as e:
-            logger.warning(f"MQTT 连接器启动失败: {e}")
-
-        # 会话锁（CLI 主线程与 MQTT handler 互斥访问 session）
-        self._sess_lock = threading.Lock()
-
-        # 串接 MQTT reply handler：mqtt_client 消息 → chat_stream() 全流水线
-        self._setup_mqtt_reply_handler()
-
-        # 初始化会话
-        self.current_topic_id: int = -1
-        self._init_session()
-
-        # 自动创建或加载主题
+        # ── 自动创建或加载主题 ──
         self._auto_init_topic()
 
     # ------------------------------------------------------
-    # 会话初始化
+    # 主题管理
     # ------------------------------------------------------
-# NOTE: 2026-05-04 18:38:30, self-evolved by tea_agent --- _init_session 使用 self._cfg 替代模块级 API_KEY/API_URL/MODEL/CHEAP_MODEL
-    def _init_session(self):
-        cfg = self._cfg
-        main_m = cfg.main_model
-        cheap_m = cfg.cheap_model
-        self.sess = OnlineToolSession(
-            toolkit=self.toolkit,
-            api_key=cast(str, main_m.api_key),
-            api_url=cast(str, main_m.api_url),
-            model=cast(str, main_m.model_name),
-            max_history=cfg.max_history,
-            max_iterations=cfg.max_iterations,
-            keep_turns=cfg.keep_turns,
-            max_tool_output=cfg.max_tool_output,
-            max_assistant_content=cfg.max_assistant_content,
-            extra_iterations_on_continue=cfg.extra_iterations_on_continue,
-            memory_extraction_threshold=cfg.memory_extraction_threshold,
-            storage=self.db,
-            cheap_api_key=cast(str, cheap_m.api_key),
-            cheap_api_url=cast(str, cheap_m.api_url),
-            cheap_model=cast(str, cheap_m.model_name),
-            enable_thinking=cfg.enable_thinking,
-        )
-        self.sess.tool_log = self._on_tool_log
-
-        import tea_agent.session_ref as _sref
-        _sref.set_session(self.sess)
-
-        cheap_info = f" | 摘要: {cheap_m.model_name}" if cheap_m.model_name else ""
-        print(f"📡 已连接 | 模型: {main_m.model_name}{cheap_info}")
-        print(f"🔧 工具: {len(self.toolkit.func_map)} 个已加载")
-        print(f"💡 输入 /help 查看命令\n")
-
     def _auto_init_topic(self):
         topics = self.db.list_topics()
         if topics:
@@ -145,9 +57,6 @@ class TeaCLI:
         else:
             self._new_topic()
 
-    # ------------------------------------------------------
-    # 主题管理
-    # ------------------------------------------------------
     def _new_topic(self) -> int:
         title = f"CLI {datetime.now().strftime('%m-%d %H:%M')}"
         tid = self.db.create_topic(title)
@@ -261,39 +170,15 @@ class TeaCLI:
                 )
                 print()  # 换行
 
-# NOTE: 2026-05-04 09:07:11, self-evolved by tea_agent --- CLI chat() 中 AI 回复生成后发布到 MQTT
-                # 保存到数据库
-                conv_id = self.db.save_msg(self.current_topic_id, msg, "", False)
-                rounds = self.sess._rounds_collector
-                self.db.update_msg_rounds(
-                    conversation_id=conv_id,
-                    ai_msg=ai_msg,
-                    is_func_calling=used_tools,
-                    rounds=rounds if rounds else None,
-                )
+                # 标准后处理流水线（入库 → MQTT → Token → 摘要）
+                self._post_chat_pipeline(ai_msg, used_tools, msg, self.current_topic_id)
 
-                # 发布 AI 回复到 MQTT（其他客户端可实时收到）
-                self._publish_to_mqtt(ai_msg)
-
-                # Token 统计
+                # Token 终端反馈
                 usage = self.sess._last_usage
-                cheap_usage = self.sess._last_cheap_usage
                 if usage and usage.get("total_tokens", 0) > 0:
-                    self.db.add_topic_tokens(
-                        self.current_topic_id,
-                        total_tokens=usage["total_tokens"],
-                        prompt_tokens=usage["prompt_tokens"],
-                        completion_tokens=usage["completion_tokens"],
-                        cheap_tokens=cheap_usage.get("total_tokens", 0),
-                        cheap_prompt_tokens=cheap_usage.get("prompt_tokens", 0),
-                        cheap_completion_tokens=cheap_usage.get("completion_tokens", 0),
-                    )
                     ts = self.db.get_topic_tokens(self.current_topic_id)
                     t_total = ts.get("total_tokens", 0) if ts else 0
                     print(f"📊 本轮: {usage['total_tokens']:,} tokens | 主题累计: {t_total:,}")
-
-                # 摘要
-                self._auto_summary()
             except Exception as ex:
                 print(f"\n❌ 错误: {ex}")
             finally:
@@ -301,172 +186,17 @@ class TeaCLI:
 
         self._work_thread = threading.Thread(target=work, daemon=True)
         self._work_thread.start()
-        self._work_thread.join()  # CLI 模式下阻塞等待，便于测试
-
-# NOTE: 2026-05-04 09:07:24, self-evolved by tea_agent --- TeaCLI 添加 _publish_to_mqtt 方法，将 AI 回复发布到 MQTT
-# NOTE: 2026-05-04 09:24:45, self-evolved by tea_agent --- 添加 _setup_mqtt_reply_handler 和 _process_mqtt_message 方法
-    def _publish_to_mqtt(self, ai_msg: str):
-        """将 AI 回复发布到 MQTT，让所有订阅客户端实时收到"""
-        try:
-            conn = mqtt_agent_connector.get_connector()
-            if conn and conn.is_ready and ai_msg:
-                # 判断是否回复 MQTT 客户端
-                tp = self.db.get_topic(self.current_topic_id)
-                title = tp.get("title", "") if tp else ""
-                if title.startswith("mqtt_"):
-                    # 定向回复给发送者
-                    sender = title[5:]  # 去掉 "mqtt_" 前缀
-                    conn.publish_reply(ai_msg, reply_to=sender)
-                else:
-                    # 广播到 agent 自己的 channel
-                    conn.publish_reply(ai_msg)
-        except Exception:
-            pass  # MQTT 发布失败不影响主流程
-
-    # ── MQTT 远程输入处理 ──────────────────────────
-
-    def _setup_mqtt_reply_handler(self):
-        """将 MQTT 消息串入 chat_stream() 全流水线。mqtt_client 即远程输入。"""
-        conn = mqtt_agent_connector.get_connector()
-        if not conn:
-            return
-
-        def handle_mqtt(sender: str, content: str, msg_id: str):
-            """MQTT 消息 → AI 处理（独立线程，不阻塞 MQTT 事件循环）"""
-            threading.Thread(
-                target=self._process_mqtt_message,
-                args=(sender, content),
-                daemon=True,
-                name=f"mqtt-reply-{sender}",
-            ).start()
-            return None  # 非阻塞
-
-        conn.set_reply_handler(handle_mqtt)
-        logger.info("MQTT reply handler 已注册 — mqtt_client 消息将触发 chat_stream() 全流水线")
-
-# NOTE: 2026-05-04 09:26:47, self-evolved by tea_agent --- 修正 _process_mqtt_message：复用 _route_message 已保存的 conv_id，避免重复保存用户消息
-    def _process_mqtt_message(self, sender: str, content: str):
-        """处理单条 MQTT 消息：切换上下文 → chat_stream → 入库 → MQTT 回复。
-        
-        注意：用户消息已由 connector._route_message() 存入了 DB。
-        这里取最后一条 conv_id，用 AI 回复更新之。
-        """
-        with self._sess_lock:
-            # 1. 获取/创建 mqtt_{sender} topic
-            tid = self._get_or_create_mqtt_topic(sender)
-
-            # 2. 取 _route_message 刚保存的用户消息 conv_id（最后一条）
-            recent = self.db.get_recent_conversations(tid, limit=1)
-            conv_id = recent[0]["id"] if recent else -1
-
-            # 3. 保存当前 session 状态
-            saved_topic_id = self.current_topic_id
-            saved_messages = list(self.sess.messages) if hasattr(self.sess, 'messages') else []
-            saved_summary = getattr(self.sess, '_history_summary', '')
-
-            # 4. 加载 MQTT topic 的对话历史到 session
-            self._load_topic_history_into_session(tid)
-
-            try:
-# NOTE: 2026-05-04 09:30:19, self-evolved by tea_agent --- MQTT handler 添加 on_status 回调自动续命，避免多次 max_iter 卡死
-                # 5. 调用 AI（静默，不输出到终端；max_iterations 超限时自动续命）
-                self.sess._continue_after_max = True
-                def _on_status_mqtt(status_msg: str):
-                    if status_msg.startswith("!MAX_ITER:"):
-                        self.sess._continue_after_max = True
-                        self.sess._max_iter_wait.set()
-                ai_msg, used_tools = self.sess.chat_stream(
-                    content,
-                    callback=lambda _: None,
-                    topic_id=tid,
-                    on_status=_on_status_mqtt,
-                )
-
-                # 6. AI 回复入库 + MQTT 推送
-                if ai_msg:
-                    try:
-                        if conv_id > 0:
-                            rounds = self.sess._rounds_collector
-                            self.db.update_msg_rounds(
-                                conversation_id=conv_id,
-                                ai_msg=ai_msg,
-                                is_func_calling=used_tools,
-                                rounds=rounds if rounds else None,
-                            )
-                        else:
-                            self.db.save_msg(tid, content, ai_msg, used_tools)
-                    except Exception as e:
-                        logger.error(f"MQTT 保存 AI 回复失败: {e}")
-
-                    # 推送 assistant 最后回复给 MQTT 发送者
-                    conn = mqtt_agent_connector.get_connector()
-                    if conn and conn.is_ready:
-                        conn.publish_reply(ai_msg, reply_to=sender)
-
-                    logger.info(
-                        f"MQTT → AI → MQTT 完成: sender={sender}, "
-                        f"topic=mqtt_{sender}, reply_len={len(ai_msg)}"
-                    )
-            except Exception as e:
-                logger.error(f"MQTT AI 处理失败 (sender={sender}): {e}")
-            finally:
-                # 7. 恢复 session 状态
-                if saved_topic_id > 0 and saved_topic_id != tid:
-                    self.sess.messages = saved_messages
-                    self.sess._history_summary = saved_summary
-                    self.current_topic_id = saved_topic_id
-
-    def _get_or_create_mqtt_topic(self, sender: str) -> int:
-        """获取或创建 mqtt_{sender} 主题"""
-        title = f"mqtt_{sender}"
-        try:
-            topics = self.db.list_topics()
-            for t in topics:
-                if t.get("title") == title:
-                    return t["topic_id"]
-        except Exception:
-            pass
-        return self.db.create_topic(title)
-
-    def _load_topic_history_into_session(self, tid: int):
-        """将指定 topic 的对话历史加载到 session"""
-        all_light = self.db.get_conversations(tid, limit=-1, include_rounds=False)
-        if all_light:
-            total = len(all_light)
-            recent = self.db.get_conversations(tid, limit=10, include_rounds=True)
-            offset = max(0, total - min(total, 10))
-            for i in range(offset, total):
-                j = i - offset
-                if j < len(recent):
-                    all_light[i] = recent[j]
-            summary = self.db.get_topic_summary(tid) or ""
-            self.sess.load_history(all_light, summary, recent_turns=10)
-        else:
-            self.sess.messages = [{"role": "system", "content": self.sess.system_prompt}]
-            self.sess._history_summary = ""
-        self.current_topic_id = tid
-
-    def _auto_summary(self):
-        if self.current_topic_id <= 0:
-            return
-        recent = self.db.get_recent_conversations(self.current_topic_id, limit=3)
-        if not recent:
-            return
-        try:
-            cli, mdl = self.sess._get_summarize_client()
-            from tea_agent.main_db_gui import _generate_topic_summary
-            summary = _generate_topic_summary(client=cli, model=mdl, conversations=recent)
-            if summary:
-                self.db.update_topic_title(self.current_topic_id, summary)
-        except Exception:
-            pass
+        self._work_thread.join()  # CLI 模式下阻塞等待
 
     # ------------------------------------------------------
     # 回调
     # ------------------------------------------------------
     def _on_tool_log(self, msg: str):
-        """工具日志回调。"""
         print(f"\n🔧 {msg}")
+
+    def _on_summary_updated(self, topic_id: int, summary: str):
+        """摘要更新后终端无额外动作（已在 _post_chat_pipeline 中处理）。"""
+        pass
 
     # ------------------------------------------------------
     # REPL
@@ -549,7 +279,6 @@ Ctrl+C 可打断当前生成。
         print(f"🧠 活跃记忆: {mem_count} 条")
 
 
-# NOTE: 2026-05-04 18:38:42, self-evolved by tea_agent --- main() 添加 --config 参数，支持多 agent 配置文件
 # ====================== 入口 ======================
 def main():
     import argparse

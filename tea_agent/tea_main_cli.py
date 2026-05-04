@@ -54,14 +54,16 @@ class TeaCLI:
         self.debug = debug
         self.generating = False
 
-        # 初始化目录
-        root_path = Path.home() / ".tea_agent"
+# NOTE: 2026-05-04 17:53:53, self-evolved by tea_agent --- tea_main_cli 使用 config.paths 替代硬编码 ~/.tea_agent
+        # 初始化目录（从 config 读取路径，支持多 agent 隔离）
+        cfg = get_config()
+        root_path = Path(cfg.paths.data_dir_abs)
         root_path.mkdir(parents=True, exist_ok=True)
-        tool_dir = root_path / "toolkit"
+        tool_dir = Path(cfg.paths.toolkit_dir_abs)
         tool_dir.mkdir(parents=True, exist_ok=True)
 
         # 初始化 Storage 和 Toolkit
-        db_path = root_path / "chat_history.db"
+        db_path = Path(cfg.paths.db_path_abs)
         self.db = Storage(db_path=str(db_path))
         self.toolkit = tlk.Toolkit(str(tool_dir))
         tlk._toolkit_ = self.toolkit

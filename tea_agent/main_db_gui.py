@@ -1071,8 +1071,9 @@ class ConfigDialog(tk.Toplevel):
             return
 
         try:
-            save_config(cfg)
-            self._status_var.set(f"✅ 已保存到 {Path.home() / '.tea_agent' / 'config.yaml'}")
+# NOTE: 2026-05-04 17:58:01, self-evolved by tea_agent --- GUI 配置保存状态提示使用实际保存路径
+            saved_path = save_config(cfg)
+            self._status_var.set(f"✅ 已保存到 {saved_path}")
             if self.on_save:
                 self.on_save(cfg)
             self.after(1500, self.destroy)
@@ -1096,13 +1097,15 @@ class TkGUI:
         self.root.geometry("1100x750")
         self.root.minsize(900, 600)
 
-        root_path = Path.home() / ".tea_agent"
+# NOTE: 2026-05-04 17:54:19, self-evolved by tea_agent --- main_db_gui 使用 config.paths 替代硬编码 ~/.tea_agent
+        cfg = get_config()
+        root_path = Path(cfg.paths.data_dir_abs)
         if not root_path.exists():
             logger.info(f"create user path: '{root_path}'")
             os.makedirs(root_path, exist_ok=True)
 
-        db_path = root_path / "chat_history.db"
-        tool_dir = root_path / "toolkit"
+        db_path = Path(cfg.paths.db_path_abs)
+        tool_dir = Path(cfg.paths.toolkit_dir_abs)
         if not tool_dir.exists():
             logger.info(f"create user toolkit path: '{tool_dir}'")
             os.makedirs(tool_dir, exist_ok=True)

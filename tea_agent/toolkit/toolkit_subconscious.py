@@ -8,8 +8,14 @@ def toolkit_subconscious(action: str, focus: str = None):
     from pathlib import Path
     from collections import Counter
 
-    STATE_FILE = os.path.expanduser("~/.tea_agent/subconscious_state.json")
-    KB_DIR = os.path.expanduser("~/.tea_agent/kb")
+# NOTE: 2026-05-04 17:57:17, self-evolved by tea_agent --- toolkit_subconscious STATE_FILE/KB_DIR 从 config.paths 读取
+    try:
+        from tea_agent.config import get_config
+        STATE_FILE = os.path.join(get_config().paths.data_dir_abs, "subconscious_state.json")
+        KB_DIR = get_config().paths.kb_dir_abs
+    except Exception:
+        STATE_FILE = os.path.expanduser("~/.tea_agent/subconscious_state.json")
+        KB_DIR = os.path.expanduser("~/.tea_agent/kb")
     DEFAULT_DB = "chat_history.db"
     CYCLE_INTERVAL = 3600      # 1小时
     CHECK_INTERVAL = 30        # 检查间隔

@@ -10,7 +10,12 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
     from pathlib import Path
     from datetime import datetime
 
-    KB_DIR = Path(os.environ.get("HOME", "/tmp")) / ".tea_agent" / "kb"
+# NOTE: 2026-05-04 17:54:53, self-evolved by tea_agent --- toolkit_kb KB_DIR 从 config.paths 读取
+    try:
+        from tea_agent.config import get_config
+        KB_DIR = Path(get_config().paths.kb_dir_abs)
+    except Exception:
+        KB_DIR = Path(os.environ.get("HOME", "/tmp")) / ".tea_agent" / "kb"
     INDEX_FILE = KB_DIR / "INDEX.md"
     KB_DIR.mkdir(parents=True, exist_ok=True)
 

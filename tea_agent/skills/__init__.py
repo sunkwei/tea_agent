@@ -97,8 +97,13 @@ class SkillManager:
 
         # 内置 Skill 目录
         self._builtin_dir = str(Path(__file__).parent)
-        # 用户 Skill 目录
-        self._user_dir = str(Path.home() / ".tea_agent" / "skills")
+# NOTE: 2026-05-04 17:55:07, self-evolved by tea_agent --- skills _user_dir 从 config.paths 读取
+        # 用户 Skill 目录（从 config 读取，支持多 agent 隔离）
+        try:
+            from tea_agent.config import get_config
+            self._user_dir = get_config().paths.skills_dir_abs
+        except Exception:
+            self._user_dir = str(Path.home() / ".tea_agent" / "skills")
 
     # ─── 发现与加载 ─────────────────────────────────
 

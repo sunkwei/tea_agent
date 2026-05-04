@@ -54,7 +54,12 @@ def toolkit_ocr(
         import time
         from pathlib import Path
 
-        tmp_dir = Path.home() / ".tea_agent" / "screenshots"
+# NOTE: 2026-05-04 17:56:50, self-evolved by tea_agent --- toolkit_ocr screenshots 路径从 config.paths 读取
+        try:
+            from tea_agent.config import get_config
+            tmp_dir = Path(get_config().paths.data_dir_abs) / "screenshots"
+        except Exception:
+            tmp_dir = Path.home() / ".tea_agent" / "screenshots"
         tmp_dir.mkdir(parents=True, exist_ok=True)
         ts = time.strftime("%Y%m%d_%H%M%S")
         fpath = str(tmp_dir / f"screenshot_{ts}.png")

@@ -1105,10 +1105,20 @@ class Storage:
 _storage_instance = None
 
 
+# NOTE: 2026-05-04 17:54:39, self-evolved by tea_agent --- get_storage() 默认从 config.paths 读取 db_path，支持多 agent
 # @2026-04-29 gen by deepseek-v4-pro, 模块级get_storage单例供工具使用
-def get_storage(db_path: str = "chat_history.db") -> "Storage":
-    """获取或创建 Storage 单例（供工具函数使用）"""
+def get_storage(db_path: str = "") -> "Storage":
+    """获取或创建 Storage 单例（供工具函数使用）。
+    
+    优先从 config.paths.db_path_abs 读取路径，否则回退到 chat_history.db。
+    """
     global _storage_instance
+    if not db_path:
+        try:
+            from tea_agent.config import get_config
+            db_path = get_config().paths.db_path_abs
+        except Exception:
+            db_path = "chat_history.db"
     if _storage_instance is None or _storage_instance.db_path != db_path:
         _storage_instance = Storage(db_path)
     return _storage_instance

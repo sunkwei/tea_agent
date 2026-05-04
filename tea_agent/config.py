@@ -42,6 +42,81 @@ class ModelConfig:
 
 # NOTE: 2026-04-30 16:17:53, self-evolved by tea_agent --- AgentConfig增加运行时get/set/apply/reload方法，支持自我配置调优
 # NOTE: 2026-05-04 08:30:13, self-evolved by tea_agent --- 添加 MqttConfig dataclass 并在 AgentConfig / load_config / save_config 中集成
+# NOTE: 2026-05-04 17:52:03, self-evolved by tea_agent --- 新增 PathsConfig dataclass + 路径解析逻辑，所有路径相对 config.yaml 所在目录解析
+@dataclass
+class PathsConfig:
+    """路径配置。所有相对路径均相对于 config.yaml 所在目录解析。
+    
+    以 / 或 ~ 开头的路径视为绝对路径（~ 展开为用户目录）。
+    未配置时回退到 ~/.tea_agent/<默认值>。
+    """
+    data_dir: str = ""        # 数据根目录，其他路径默认基于此
+    db_path: str = ""         # 数据库文件路径（相对或绝对）
+    toolkit_dir: str = ""     # 自定义工具目录
+    kb_dir: str = ""          # 知识库目录
+    skills_dir: str = ""      # 用户自定义 skills 目录
+
+    # 运行时解析后的绝对路径（由 load_config 填充）
+    _data_dir_abs: str = ""
+    _db_path_abs: str = ""
+    _toolkit_dir_abs: str = ""
+    _kb_dir_abs: str = ""
+    _skills_dir_abs: str = ""
+
+    def resolve(self, config_dir: str) -> None:
+        """根据 config.yaml 所在目录解析所有路径为绝对路径。
+        
+        Args:
+            config_dir: config.yaml 所在目录的绝对路径
+        """
+        import os
+        default_root = str(Path.home() / ".tea_agent")
+
+        def _resolve(value: str, default_rel: str) -> str:
+            if not value:
+                return os.path.join(default_root, default_rel)
+            # 展开 ~
+            expanded = os.path.expanduser(value)
+            if os.path.isabs(expanded):
+                return os.path.abspath(expanded)
+            # 相对路径：相对于 config.yaml 目录
+            return os.path.abspath(os.path.join(config_dir, expanded))
+
+        # 先解析 data_dir（如果配置了）
+        if self.data_dir:
+            self._data_dir_abs = os.path.abspath(os.path.expanduser(self.data_dir))
+        else:
+            self._data_dir_abs = default_root
+
+        # 其他路径：优先使用显式配置，否则基于 data_dir_abs
+        base = self._data_dir_abs
+
+        self._db_path_abs = _resolve(self.db_path, "chat_history.db") if self.db_path else os.path.join(base, "chat_history.db")
+        self._toolkit_dir_abs = _resolve(self.toolkit_dir, "toolkit") if self.toolkit_dir else os.path.join(base, "toolkit")
+        self._kb_dir_abs = _resolve(self.kb_dir, "kb") if self.kb_dir else os.path.join(base, "kb")
+        self._skills_dir_abs = _resolve(self.skills_dir, "skills") if self.skills_dir else os.path.join(base, "skills")
+
+    @property
+    def db_path_abs(self) -> str:
+        return self._db_path_abs
+
+    @property
+    def toolkit_dir_abs(self) -> str:
+        return self._toolkit_dir_abs
+
+    @property
+    def kb_dir_abs(self) -> str:
+        return self._kb_dir_abs
+
+    @property
+    def skills_dir_abs(self) -> str:
+        return self._skills_dir_abs
+
+    @property
+    def data_dir_abs(self) -> str:
+        return self._data_dir_abs
+
+
 @dataclass
 class MqttConfig:
     """MQTT 连接配置"""
@@ -61,9 +136,11 @@ class MqttConfig:
 @dataclass
 class AgentConfig:
     """Agent 全局配置"""
+# NOTE: 2026-05-04 17:52:12, self-evolved by tea_agent --- AgentConfig 增加 paths 字段，load_config 中解析 paths 配置块并调用 resolve
     main_model: ModelConfig = field(default_factory=ModelConfig)
     cheap_model: ModelConfig = field(default_factory=ModelConfig)
     mqtt: MqttConfig = field(default_factory=MqttConfig)
+    paths: PathsConfig = field(default_factory=PathsConfig)
     
     # 会话参数
     max_history: int = 10  # 最大历史消息数
@@ -211,6 +288,7 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
                     target.options = m_data.get("options", {})
 
 # NOTE: 2026-05-04 08:30:28, self-evolved by tea_agent --- load_config() 中解析 mqtt 配置块
+# NOTE: 2026-05-04 17:52:35, self-evolved by tea_agent --- load_config 中解析 paths 配置块 + 调用 resolve 解析路径
             # 加载 MQTT 配置
             mqtt_data = data.get("mqtt", {})
             if isinstance(mqtt_data, dict):
@@ -220,6 +298,19 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
                 cfg.mqtt.username = str(mqtt_data.get("username", cfg.mqtt.username))
                 cfg.mqtt.password = str(mqtt_data.get("password", cfg.mqtt.password))
                 cfg.mqtt.topic_prefix = str(mqtt_data.get("topic_prefix", cfg.mqtt.topic_prefix))
+
+            # 加载路径配置
+            paths_data = data.get("paths", {})
+            if isinstance(paths_data, dict):
+                cfg.paths.data_dir = str(paths_data.get("data_dir", cfg.paths.data_dir))
+                cfg.paths.db_path = str(paths_data.get("db_path", cfg.paths.db_path))
+                cfg.paths.toolkit_dir = str(paths_data.get("toolkit_dir", cfg.paths.toolkit_dir))
+                cfg.paths.kb_dir = str(paths_data.get("kb_dir", cfg.paths.kb_dir))
+                cfg.paths.skills_dir = str(paths_data.get("skills_dir", cfg.paths.skills_dir))
+
+            # 解析路径：相对于 config.yaml 所在目录
+            if yaml_path:
+                cfg.paths.resolve(os.path.dirname(os.path.abspath(yaml_path)))
 
             # 加载会话参数
             cfg.max_history = int(data.get("max_history", cfg.max_history))
@@ -244,9 +335,14 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
     return cfg
 
 
+# NOTE: 2026-05-04 17:57:48, self-evolved by tea_agent --- ensure_config_dir 使用 config.paths 路径
 def ensure_config_dir() -> Path:
-    """确保 $HOME/.tea_agent 目录存在，返回路径"""
-    cfg_dir = Path.home() / ".tea_agent"
+    """确保数据目录存在（从 config 读取，回退 ~/.tea_agent），返回路径"""
+    try:
+        cfg = get_config()
+        cfg_dir = Path(cfg.paths.data_dir_abs)
+    except Exception:
+        cfg_dir = Path.home() / ".tea_agent"
     cfg_dir.mkdir(parents=True, exist_ok=True)
     return cfg_dir
 
@@ -283,7 +379,7 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
                 m_data["options"] = target.options
             data[m_type] = m_data
     
-# NOTE: 2026-05-04 08:30:38, self-evolved by tea_agent --- save_config() 中保存 mqtt 配置
+# NOTE: 2026-05-04 17:52:50, self-evolved by tea_agent --- save_config 中保存 paths 配置
     # 保存 MQTT 配置
     data["mqtt"] = {
         "enabled": cfg.mqtt.enabled,
@@ -292,6 +388,15 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
         "username": cfg.mqtt.username,
         "password": cfg.mqtt.password,
         "topic_prefix": cfg.mqtt.topic_prefix,
+    }
+
+    # 保存路径配置（保存原始配置值，非解析后的绝对路径）
+    data["paths"] = {
+        "data_dir": cfg.paths.data_dir,
+        "db_path": cfg.paths.db_path,
+        "toolkit_dir": cfg.paths.toolkit_dir,
+        "kb_dir": cfg.paths.kb_dir,
+        "skills_dir": cfg.paths.skills_dir,
     }
 
     # 保存会话参数
@@ -346,6 +451,16 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "  api_url: \"\"\n"
         "  model_name: \"\"\n"
         "  options: {}\n\n"
+# NOTE: 2026-05-04 17:53:08, self-evolved by tea_agent --- create_default_config 模板增加 paths 配置块
+        "# ==================== 路径配置 ====================\n"
+        "# 所有路径支持相对路径（相对于本 config.yaml 所在目录）或绝对路径（以 / 开头）。\n"
+        "# 支持多 agent 隔离：每个 agent 使用独立的 config.yaml，指向独立的数据库和目录。\n"
+        "paths:\n"
+        "  data_dir: \"\"          # 数据根目录，默认 ~/.tea_agent\n"
+        "  db_path: \"\"           # 数据库文件，默认 data_dir/chat_history.db\n"
+        "  toolkit_dir: \"\"       # 自定义工具目录，默认 data_dir/toolkit\n"
+        "  kb_dir: \"\"            # 知识库目录，默认 data_dir/kb\n"
+        "  skills_dir: \"\"        # 用户 skills 目录，默认 data_dir/skills\n\n"
         "# ==================== MQTT 配置 ====================\n"
         "# tea_agent 可作为 MQTT client 注册到 broker，与外部客户端交互\n"
         "mqtt:\n"

@@ -74,8 +74,9 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         if app == "sudo" or app.endswith("/sudo"):
             return _sudo_with_gui(app, args)
 
+# NOTE: 2026-05-04 12:44:40, self-evolved by tea_agent --- toolkit_exec 输出自动截断，避免大日志撑爆 token
         result = subprocess.run([app] + args, capture_output=True, text=True)
-        return (result.returncode, result.stdout, result.stderr)
+        return _truncate_result(result)
 
 
 def _sudo_with_gui(app: str, args: list):
@@ -106,6 +107,7 @@ def _sudo_with_gui(app: str, args: list):
         if not password:
             return (1, "", "密码不能为空")
 
+# NOTE: 2026-05-04 12:45:05, self-evolved by tea_agent --- sudo 路径也使用 _truncate_result 截断输出
         result = subprocess.run(
             ["sudo", "-S"] + args,
             input=password + "\n",
@@ -114,27 +116,52 @@ def _sudo_with_gui(app: str, args: list):
         # 清除密码
         password = "\x00" * len(password)
         del password
-        return (result.returncode, result.stdout, result.stderr)
+        return _truncate_result(result)
 
     # 无 GUI 工具 → 回退到 pkexec（自带弹框）或直接 sudo
     if shutil.which("pkexec"):
+# NOTE: 2026-05-04 12:45:12, self-evolved by tea_agent --- pkexec 和回退路径也使用 _truncate_result
         try:
             result = subprocess.run(
                 ["pkexec"] + args,
                 capture_output=True, text=True,
                 timeout=120,
             )
-            return (result.returncode, result.stdout, result.stderr)
+            return _truncate_result(result)
         except subprocess.TimeoutExpired:
             return (1, "", "pkexec 超时（120s）")
 
+# NOTE: 2026-05-04 12:44:57, self-evolved by tea_agent --- 添加 _truncate_result 函数，智能截断 stdout/stderr
     # 最后回退 — 可能失败（需要 tty）
     result = subprocess.run(
         [app] + args,
         capture_output=True, text=True,
         timeout=120,
     )
-    return (result.returncode, result.stdout, result.stderr)
+    return _truncate_result(result)
+
+
+def _truncate_result(result, max_lines: int = 80, max_chars: int = 4000):
+    """截断过大的输出，返回值同 subprocess 结果"""
+    stdout = result.stdout or ""
+    stderr = result.stderr or ""
+
+    # 截断 stdout
+    if len(stdout) > max_chars:
+        lines = stdout.split("\n")
+        if len(lines) > max_lines:
+            head = "\n".join(lines[:max_lines//2])
+            tail = "\n".join(lines[-max_lines//2:])
+            skipped = len(lines) - max_lines
+            stdout = f"{head}\n... [跳过 {skipped} 行] ...\n{tail}"
+        if len(stdout) > max_chars:
+            stdout = stdout[:max_chars] + f"\n... [截断，原长度 {len(result.stdout or '')} 字符]"
+
+    # stderr 只保留前 500 字符
+    if len(stderr) > 500:
+        stderr = stderr[:500] + f"\n... [截断，原长度 {len(result.stderr or '')} 字符]"
+
+    return (result.returncode, stdout, stderr)
 
 
 def meta_toolkit_exec() -> dict:

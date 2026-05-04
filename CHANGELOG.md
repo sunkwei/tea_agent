@@ -1,6 +1,26 @@
 # Changelog
 
-## [0.6.0] - 2026-05-05
+## [0.6.1] - 2026-05-04
+
+### New Features
+- feat: GUI 自动重启（watchdog 文件监控）
+  - 监控 `tea_agent/**/*.py`（排除 toolkit/），变更后防抖 2 秒自动重启
+  - `os.execv` 原地替换进程（Unix），`subprocess.Popen + _exit`（Windows）
+  - watchdog 不可用时静默跳过，不影响正常使用
+
+- feat: 自动重启数据安全三道防线
+  - `_shutting_down` 闸门：GUI send() + MQTT _process_mqtt_message() 入口检查，重启中拒绝新操作
+  - 等待 `_sess_lock`（最长 10s）：确保当前 chat_stream 的 DB 写入完成
+  - `wal_checkpoint(TRUNCATE)` 刷盘 + close：WAL → 主 DB 零丢失
+
+### Improvements
+- improve: 续命 10 轮统一
+  - CLI：去除 `input()` 用户确认，自动续命 10 轮 + `⏳ 自动续命 10 轮...`
+  - GUI：弹窗文案「再执行 10 轮」→ 确认后 `_extra_iterations += 10`
+  - MQTT：追加 `_extra_iterations += 10`，与 CLI/GUI 保持一致
+
+
+## [0.6.0] - 2026-05-04
 
 ### New Features
 - feat: Skill 模块化系统 — 工具按场景分组，按需激活/停用

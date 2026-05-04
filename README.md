@@ -1,4 +1,4 @@
-# TeaAgent v0.6.0
+# TeaAgent v0.6.1
 
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
 
@@ -10,6 +10,19 @@ TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Functio
 ---
 
 ## 🏗️ 架构总览
+
+### 自动重启（watchdog 文件监控）
+
+非 toolkit 目录下的 `.py` 代码变更后，**防抖 2 秒自动重启** GUI，无需手动操作：
+
+```
+文件变更 → watchdog 检测 → 2s 防抖 → _shutting_down 闸门
+    → 等待 _sess_lock（最长10s，确保 DB 写入完成）
+    → WAL checkpoint + close DB
+    → os.execv() 原地重启
+```
+
+> toolkit/ 下的工具修改走 `toolkit_reload()` 热更，不触发重启。
 
 ### 对话流程（单次 chat_stream）
 
@@ -409,6 +422,7 @@ mqtt:
 
 | 版本 | 关键变化 |
 |------|---------|
+| v0.6.1 | GUI 自动重启 (watchdog) + 数据安全三道防线 + 续命 10 轮统一 |
 | v0.6.0 | Skill 模块化系统 (按需激活 -68% token) + toolkit_exec 硬超时 + Mixin bug修复 |
 | v0.5.6 | Token 双层压缩 (exec截断 + history智能摘要，-95%) + sudo GUI密码框 |
 | v0.5.5 | 周轮转修复 (shutil.copy2) + 数据库合并工具 (merge_db.py) |

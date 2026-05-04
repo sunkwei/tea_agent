@@ -41,11 +41,29 @@ class ModelConfig:
 
 
 # NOTE: 2026-04-30 16:17:53, self-evolved by tea_agent --- AgentConfig增加运行时get/set/apply/reload方法，支持自我配置调优
+# NOTE: 2026-05-04 08:30:13, self-evolved by tea_agent --- 添加 MqttConfig dataclass 并在 AgentConfig / load_config / save_config 中集成
+@dataclass
+class MqttConfig:
+    """MQTT 连接配置"""
+    enabled: bool = False
+    broker_host: str = "localhost"
+    broker_port: int = 1883
+    username: str = ""
+    password: str = ""
+    topic_prefix: str = "tea"
+
+    @property
+    def is_configured(self) -> bool:
+        """至少指定了 broker 地址才视为已配置"""
+        return self.enabled and bool(self.broker_host)
+
+
 @dataclass
 class AgentConfig:
     """Agent 全局配置"""
     main_model: ModelConfig = field(default_factory=ModelConfig)
     cheap_model: ModelConfig = field(default_factory=ModelConfig)
+    mqtt: MqttConfig = field(default_factory=MqttConfig)
     
     # 会话参数
     max_history: int = 10  # 最大历史消息数
@@ -192,6 +210,17 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
                     target.model_name = m_data.get("model_name", "")
                     target.options = m_data.get("options", {})
 
+# NOTE: 2026-05-04 08:30:28, self-evolved by tea_agent --- load_config() 中解析 mqtt 配置块
+            # 加载 MQTT 配置
+            mqtt_data = data.get("mqtt", {})
+            if isinstance(mqtt_data, dict):
+                cfg.mqtt.enabled = bool(mqtt_data.get("enabled", cfg.mqtt.enabled))
+                cfg.mqtt.broker_host = str(mqtt_data.get("broker_host", cfg.mqtt.broker_host))
+                cfg.mqtt.broker_port = int(mqtt_data.get("broker_port", cfg.mqtt.broker_port))
+                cfg.mqtt.username = str(mqtt_data.get("username", cfg.mqtt.username))
+                cfg.mqtt.password = str(mqtt_data.get("password", cfg.mqtt.password))
+                cfg.mqtt.topic_prefix = str(mqtt_data.get("topic_prefix", cfg.mqtt.topic_prefix))
+
             # 加载会话参数
             cfg.max_history = int(data.get("max_history", cfg.max_history))
             cfg.max_iterations = int(data.get("max_iterations", cfg.max_iterations))
@@ -254,6 +283,17 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
                 m_data["options"] = target.options
             data[m_type] = m_data
     
+# NOTE: 2026-05-04 08:30:38, self-evolved by tea_agent --- save_config() 中保存 mqtt 配置
+    # 保存 MQTT 配置
+    data["mqtt"] = {
+        "enabled": cfg.mqtt.enabled,
+        "broker_host": cfg.mqtt.broker_host,
+        "broker_port": cfg.mqtt.broker_port,
+        "username": cfg.mqtt.username,
+        "password": cfg.mqtt.password,
+        "topic_prefix": cfg.mqtt.topic_prefix,
+    }
+
     # 保存会话参数
     data["max_history"] = cfg.max_history
     data["max_iterations"] = cfg.max_iterations
@@ -299,12 +339,22 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "  model_name: \"\"\n"
         "  options:  # 可选参数，如 {extra_body: {thinking: {type: enabled}}}\n"
         "    key: value\n\n"
+# NOTE: 2026-05-04 08:30:52, self-evolved by tea_agent --- create_default_config() 模板中增加 mqtt 配置块
         "# 便宜模型配置（用于摘要生成、信息压缩等场景）\n"
         "cheap_model:\n"
         "  api_key: \"\"\n"
         "  api_url: \"\"\n"
         "  model_name: \"\"\n"
         "  options: {}\n\n"
+        "# ==================== MQTT 配置 ====================\n"
+        "# tea_agent 可作为 MQTT client 注册到 broker，与外部客户端交互\n"
+        "mqtt:\n"
+        "  enabled: false\n"
+        "  broker_host: \"localhost\"\n"
+        "  broker_port: 1883\n"
+        "  username: \"\"\n"
+        "  password: \"\"\n"
+        "  topic_prefix: \"tea\"\n\n"
         "# ==================== 会话参数 ====================\n"
         "# 最大历史消息数（保留的对话历史条数）\n"
         "max_history: 10\n\n"

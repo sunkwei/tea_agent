@@ -75,11 +75,18 @@ class TeaCLI:
         except Exception as e:
             logger.warning(f"chat_room 连接器启动失败: {e}")
 
+# NOTE: 2026-05-04 09:24:00, self-evolved by tea_agent --- 添加 MQTT reply handler，将 mqtt_client 消息串入 chat_stream() 全流水线
         # 启动通用 MQTT 连接器（非阻塞守护线程，从 config.yaml 读取配置）
         try:
             mqtt_agent_connector.start(self.db)
         except Exception as e:
             logger.warning(f"MQTT 连接器启动失败: {e}")
+
+        # 会话锁（CLI 主线程与 MQTT handler 互斥访问 session）
+        self._sess_lock = threading.Lock()
+
+        # 串接 MQTT reply handler：mqtt_client 消息 → chat_stream() 全流水线
+        self._setup_mqtt_reply_handler()
 
         # 初始化会话
         self.current_topic_id: int = -1
@@ -289,6 +296,7 @@ class TeaCLI:
         self._work_thread.join()  # CLI 模式下阻塞等待，便于测试
 
 # NOTE: 2026-05-04 09:07:24, self-evolved by tea_agent --- TeaCLI 添加 _publish_to_mqtt 方法，将 AI 回复发布到 MQTT
+# NOTE: 2026-05-04 09:24:45, self-evolved by tea_agent --- 添加 _setup_mqtt_reply_handler 和 _process_mqtt_message 方法
     def _publish_to_mqtt(self, ai_msg: str):
         """将 AI 回复发布到 MQTT，让所有订阅客户端实时收到"""
         try:
@@ -306,7 +314,131 @@ class TeaCLI:
                     conn.publish_reply(ai_msg)
         except Exception:
             pass  # MQTT 发布失败不影响主流程
-        """自动生成主题摘要。"""
+
+    # ── MQTT 远程输入处理 ──────────────────────────
+
+    def _setup_mqtt_reply_handler(self):
+        """将 MQTT 消息串入 chat_stream() 全流水线。mqtt_client 即远程输入。"""
+        conn = mqtt_agent_connector.get_connector()
+        if not conn:
+            return
+
+        def handle_mqtt(sender: str, content: str, msg_id: str):
+            """MQTT 消息 → AI 处理（独立线程，不阻塞 MQTT 事件循环）"""
+            threading.Thread(
+                target=self._process_mqtt_message,
+                args=(sender, content),
+                daemon=True,
+                name=f"mqtt-reply-{sender}",
+            ).start()
+            return None  # 非阻塞
+
+        conn.set_reply_handler(handle_mqtt)
+        logger.info("MQTT reply handler 已注册 — mqtt_client 消息将触发 chat_stream() 全流水线")
+
+# NOTE: 2026-05-04 09:26:47, self-evolved by tea_agent --- 修正 _process_mqtt_message：复用 _route_message 已保存的 conv_id，避免重复保存用户消息
+    def _process_mqtt_message(self, sender: str, content: str):
+        """处理单条 MQTT 消息：切换上下文 → chat_stream → 入库 → MQTT 回复。
+        
+        注意：用户消息已由 connector._route_message() 存入了 DB。
+        这里取最后一条 conv_id，用 AI 回复更新之。
+        """
+        with self._sess_lock:
+            # 1. 获取/创建 mqtt_{sender} topic
+            tid = self._get_or_create_mqtt_topic(sender)
+
+            # 2. 取 _route_message 刚保存的用户消息 conv_id（最后一条）
+            recent = self.db.get_recent_conversations(tid, limit=1)
+            conv_id = recent[0]["id"] if recent else -1
+
+            # 3. 保存当前 session 状态
+            saved_topic_id = self.current_topic_id
+            saved_messages = list(self.sess.messages) if hasattr(self.sess, 'messages') else []
+            saved_summary = getattr(self.sess, '_history_summary', '')
+
+            # 4. 加载 MQTT topic 的对话历史到 session
+            self._load_topic_history_into_session(tid)
+
+            try:
+# NOTE: 2026-05-04 09:30:19, self-evolved by tea_agent --- MQTT handler 添加 on_status 回调自动续命，避免多次 max_iter 卡死
+                # 5. 调用 AI（静默，不输出到终端；max_iterations 超限时自动续命）
+                self.sess._continue_after_max = True
+                def _on_status_mqtt(status_msg: str):
+                    if status_msg.startswith("!MAX_ITER:"):
+                        self.sess._continue_after_max = True
+                        self.sess._max_iter_wait.set()
+                ai_msg, used_tools = self.sess.chat_stream(
+                    content,
+                    callback=lambda _: None,
+                    topic_id=tid,
+                    on_status=_on_status_mqtt,
+                )
+
+                # 6. AI 回复入库 + MQTT 推送
+                if ai_msg:
+                    try:
+                        if conv_id > 0:
+                            rounds = self.sess._rounds_collector
+                            self.db.update_msg_rounds(
+                                conversation_id=conv_id,
+                                ai_msg=ai_msg,
+                                is_func_calling=used_tools,
+                                rounds=rounds if rounds else None,
+                            )
+                        else:
+                            self.db.save_msg(tid, content, ai_msg, used_tools)
+                    except Exception as e:
+                        logger.error(f"MQTT 保存 AI 回复失败: {e}")
+
+                    # 推送 assistant 最后回复给 MQTT 发送者
+                    conn = mqtt_agent_connector.get_connector()
+                    if conn and conn.is_ready:
+                        conn.publish_reply(ai_msg, reply_to=sender)
+
+                    logger.info(
+                        f"MQTT → AI → MQTT 完成: sender={sender}, "
+                        f"topic=mqtt_{sender}, reply_len={len(ai_msg)}"
+                    )
+            except Exception as e:
+                logger.error(f"MQTT AI 处理失败 (sender={sender}): {e}")
+            finally:
+                # 7. 恢复 session 状态
+                if saved_topic_id > 0 and saved_topic_id != tid:
+                    self.sess.messages = saved_messages
+                    self.sess._history_summary = saved_summary
+                    self.current_topic_id = saved_topic_id
+
+    def _get_or_create_mqtt_topic(self, sender: str) -> int:
+        """获取或创建 mqtt_{sender} 主题"""
+        title = f"mqtt_{sender}"
+        try:
+            topics = self.db.list_topics()
+            for t in topics:
+                if t.get("title") == title:
+                    return t["topic_id"]
+        except Exception:
+            pass
+        return self.db.create_topic(title)
+
+    def _load_topic_history_into_session(self, tid: int):
+        """将指定 topic 的对话历史加载到 session"""
+        all_light = self.db.get_conversations(tid, limit=-1, include_rounds=False)
+        if all_light:
+            total = len(all_light)
+            recent = self.db.get_conversations(tid, limit=10, include_rounds=True)
+            offset = max(0, total - min(total, 10))
+            for i in range(offset, total):
+                j = i - offset
+                if j < len(recent):
+                    all_light[i] = recent[j]
+            summary = self.db.get_topic_summary(tid) or ""
+            self.sess.load_history(all_light, summary, recent_turns=10)
+        else:
+            self.sess.messages = [{"role": "system", "content": self.sess.system_prompt}]
+            self.sess._history_summary = ""
+        self.current_topic_id = tid
+
+    def _auto_summary(self):
         if self.current_topic_id <= 0:
             return
         recent = self.db.get_recent_conversations(self.current_topic_id, limit=3)

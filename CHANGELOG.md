@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.6] - 2026-05-04
+
+### Performance
+- perf: 工具输出双层压缩，token 消耗 -95% 且上下文连贯
+  - 第一层：`toolkit_exec` 实时截断 stdout（≤4000字符/80行）+ stderr（≤500字符/20行）
+  - 第二层：`basesession.load_history` 加载历史时智能压缩
+    - 短输出（≤600字符/≤10行）：原样保留
+    - 长输出：保留首3行 + 尾3行 + 模式摘要（错误/成功/包变更/文件变更）
+    - 关键信号不丢：错误行、BUILD SUCCESSFUL、packages installed 等
+  - 单轮 145k token → 预计 <15k token
+
+### New Features
+- feat: `toolkit_exec` 检测 sudo 命令自动弹出 GUI 密码框
+  - 使用 kdialog 弹出 `🔐 管理员权限请求` 对话框
+  - 密码框显示完整命令信息（`sudo {command}`）
+  - 与 `toolkit_sudo_gui` 行为一致
 
 ## [0.5.5] - 2026-05-04
 

@@ -1,4 +1,4 @@
-# TeaAgent v0.5.0
+# TeaAgent v0.5.6
 
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
 
@@ -30,6 +30,7 @@ TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Functio
                    │   system_prompt → memory → summary → recent │
                    ├─ API stream (主模型)                         │
                    ├─ tool_calls? → 执行 → reload → 回到循环     │
+                   │   └─ 输出实时截断 (stdout≤4k/stderr≤500)   │
                    └─ 最终文本 → 结束                             │
                           │
                           ↓ (异步)
@@ -37,8 +38,28 @@ TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Functio
                    │ 记忆提取      │ 反思触发
                    │ (便宜模型)    │ (便宜模型)
                    │              │
-                   └──────────────┘
+                   └──────┴──────┘
+
+历史加载 (load_history):
+  旧轮次 (>keep_turns)  → user + ai_msg (裁剪工具链)
+  最近N轮                → 完整工具链 → 智能压缩 (首3+尾3行+模式摘要)
 ```
+
+### Token 优化：双层压缩
+
+单轮对话中，`apt install`、`gradle build`、`sdkmanager` 等工具输出动辄数千行日志，全部保留在上下文中会造成巨大 token 浪费。TeaAgent 通过双层压缩解决：
+
+```
+第一层 (toolkit_exec 实时截断)          第二层 (basesession.load_history)
+  stdout ≤ 4000字符 / 80行              加载历史时智能压缩
+  stderr ≤ 500字符 / 20行               短输出原样，长输出→首尾+摘要
+          ↓                                       ↓
+  当前轮 LLM 可见                       旧轮次上下文 ≤600字符
+          ↓                                       ↓
+    145k token/轮                        → 预计 <15k/轮 (-90%)
+```
+
+压缩保留关键信号：`✅ BUILD SUCCESSFUL`、`⚠ 错误行`、`📦 packages installed`、`📝 files changed`，上下文连贯不受影响。
 
 ### 类继承体系（Mixin 组合模式）
 
@@ -350,7 +371,7 @@ mqtt:
 11. **MQTT 远程交互**：「启动 MQTT broker，配置 tea_agent 连接」→ 自动注册为 `tea_agent_{uuid}`，订阅 `tea/chat/+`
 12. **PC 客户端接入**：「python mqtt_client.py alice」→ 终端聊天客户端，发送消息触发 AI 全流水线
 13. **MQTT 双向通信**：「mqtt_client 发消息 → tea_agent chat_stream() 处理 → 仅 assistant 回复推送回 MQTT」
-14. **1:1 定向回复 vs 1:N 广播**：`mqtt_` 前缀 topic 自动解析发送者，定向回复；否则广播到 channel
+14. **thinkpad wayland 下按键编码修正**：使用布局预览，发现按下左 alt, F6 同时点亮，查找原因 ....
 
 ---
 
@@ -367,6 +388,8 @@ mqtt:
 
 | 版本 | 关键变化 |
 |------|---------|
+| v0.5.6 | Token 双层压缩 (exec截断 + history智能摘要，-95%) + sudo GUI密码框 |
+| v0.5.5 | 周轮转修复 (shutil.copy2) + 数据库合并工具 (merge_db.py) |
 | v0.5.0 | 科幻小说《点火纪元》+ SQLite WAL + 任务通知 + 百度搜索 |
 | 自由奔放 v1 | 潜意识唤醒 + jieba 分词 + 语音 TTS/STT + 自主心跳 |
 | 自由奔放 v2 | 潜意识主动通知 + batch_exec 并行 + 提示词进化 v23 |

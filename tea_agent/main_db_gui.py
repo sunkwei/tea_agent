@@ -23,19 +23,30 @@ except ImportError:
 logger = logging.getLogger("main_db_gui")
 
 # ====================== 包导入兼容处理 ======================
+# NOTE: 2026-05-02 18:31:44, self-evolved by tea_agent --- main_db_gui.py：导入 chat_room_connector 并在初始化后启动连接器
 if __name__ == "__main__":
     parent_dir = str(Path(__file__).resolve().parent.parent)
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
+# NOTE: 2026-05-04 08:34:18, self-evolved by tea_agent --- main_db_gui.py 导入 mqtt_agent_connector（两处分支）
+# NOTE: 2026-05-04 18:47:48, self-evolved by tea_agent --- 添加 AgentCore 导入
     from tea_agent.onlinesession import OnlineToolSession
     from tea_agent.store import Storage
     from tea_agent import tlk
-    from tea_agent.config import load_config, get_config, ModelConfig
+    from tea_agent import chat_room_connector
+    from tea_agent import mqtt_agent_connector
+    from tea_agent.agent_core import AgentCore
+# NOTE: 2026-05-01 15:30:42, self-evolved by tea_agent --- 为 GUI 添加 ConfigDialog 配置编辑弹窗 + 左侧"⚙️ 配置"按钮
+    from tea_agent.config import load_config, get_config, save_config, ModelConfig
 else:
     from .onlinesession import OnlineToolSession
     from .store import Storage
     from . import tlk
-    from .config import load_config, get_config, ModelConfig
+    from . import chat_room_connector
+    from . import mqtt_agent_connector
+    from .agent_core import AgentCore
+# NOTE: 2026-05-01 15:30:48, self-evolved by tea_agent --- 给 GUI 加 ConfigDialog 弹窗：import save_config（第二处）
+    from .config import load_config, get_config, save_config, ModelConfig
 
 # ====================== 配置加载 ======================
 # 优先使用 $HOME/.tea_agent/config.yaml，不存在时使用 tea_agent/config.yaml
@@ -63,7 +74,14 @@ _IS_WINDOWS = _platform.system() == "Windows"
 
 SYSTEM_FONT = "TkDefaultFont"
 MONO_FONT = "TkFixedFont"
+# NOTE: 2026-04-30 20:02:57, self-evolved by tea_agent --- 添加 Wayland/X11 显示缩放检测：全局 _SCALE_FACTOR + _fs() 辅助函数，_init_fonts() 中自动检测 tk scaling 并更新 _DEFAULT_FONT_SIZE
 _FONTS_DETECTED = False
+_SCALE_FACTOR = 1.0
+
+
+def _fs(size):
+    """返回按显示缩放因子调整后的字体大小（适配 Wayland/X11 高分屏）。"""
+    return max(1, int(size * _SCALE_FACTOR))
 
 
 def _init_fonts():
@@ -101,8 +119,22 @@ def _init_fonts():
                 "Noto Sans Mono CJK SC", "DejaVu Sans Mono",
                 "Source Han Mono SC", "Courier New",
             ])
+# NOTE: 2026-04-30 20:03:08, self-evolved by tea_agent --- _init_fonts() 中检测 Tk 缩放因子并更新全局 _SCALE_FACTOR 和 _DEFAULT_FONT_SIZE
     except Exception:
         pass
+
+    global _SCALE_FACTOR, _DEFAULT_FONT_SIZE
+    try:
+        import tkinter as _tk2
+        root = _tk2._default_root
+        if root:
+            sf = float(root.tk.call("tk", "scaling"))
+            if 1.0 < sf <= 4.0:
+                _SCALE_FACTOR = sf
+    except Exception:
+        pass
+    _DEFAULT_FONT_SIZE = max(12, int(16 * _SCALE_FACTOR))
+
     _FONTS_DETECTED = True
 
 # ====================== Markdown → HTML 渲染 ======================
@@ -167,15 +199,23 @@ def _chat_to_markdown(messages: List[Dict]) -> str:
 
 # ====================== Topic 摘要 Prompt ======================
 
+# NOTE: 2026-05-01 08:17:23, self-evolved by tea_agent --- _generate_topic_summary: min_length从2提高到5，提示词强化中文自然表达
+# NOTE: 2026-05-01 20:12:32, self-evolved by tea_agent --- 更新 system prompt：强调基于用户输入概括，不基于 AI 回复
+# NOTE: 2026-05-04 14:58:14, self-evolved by tea_agent --- Prompt 模板更新：明确使用最近10条用户输入提取标题
 _TOPIC_SUMMARY_SYSTEM = (
-    "你是一个极简摘要生成器。根据对话内容，生成不超过20字的摘要标题。"
-    "要求：精准概括对话核心主题，不使用书名号，不加引号，不加多余修饰。"
+    "你是一个摘要生成器。根据最近10条用户输入，生成不超过20字的自然中文摘要标题。"
+    "要求："
+    "1. 根据用户的发言概括对话主题，不要基于 AI 的回复来概括。"
+    "2. 用日常口语表达，像人聊天时随口说的标题那样。"
+    "3. 至少6个字以上，禁止输出残缺句子或单字。"
+    "4. 不使用书名号、引号、多余修饰词。"
     "直接输出摘要文本，不要任何额外说明。"
 )
 
+# NOTE: 2026-05-01 20:12:10, self-evolved by tea_agent --- 摘要生成只用 user input（去除 AI 回复），基于最近多轮而非最后一轮
 _TOPIC_SUMMARY_USER_TEMPLATE = (
-    "以下是最近3轮对话的用户消息：\n\n{user_msgs}\n\n"
-    "请生成不超过20字的摘要标题："
+    "以下是最近10条用户输入：\n\n{user_msgs}\n\n"
+    "请根据这些用户输入，生成不超过20字的摘要标题："
 )
 
 
@@ -194,21 +234,14 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
     if not conversations:
         return None
         
+# NOTE: 2026-05-01 20:12:20, self-evolved by tea_agent --- _generate_topic_summary 只收集 user_msg，不混入 AI 回复
     user_msgs = []
     for conv in conversations:
         um = conv.get("user_msg", "").strip()
-        ai = conv.get("ai_msg", "").strip()
-        
         if um:
             if len(um) > 200:
                 um = um[:200] + "..."
             user_msgs.append(f"用户：{um}")
-        
-        # 同时提取 AI 回复，提供更完整的上下文
-        if ai:
-            if len(ai) > 200:
-                ai = ai[:200] + "..."
-            user_msgs.append(f"AI：{ai}")
 
     if not user_msgs:
         return None
@@ -236,10 +269,20 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
         if not content or not isinstance(content, str):
             return None
             
+# NOTE: 2026-05-01 08:10:00, self-evolved by tea_agent --- _generate_topic_summary 增加最小长度≥2的校验，防止LLM返回如"为"的单字摘要
         raw = content.strip()
-        raw = re.sub(r'^["""\'""\']+|["""\'""\']+$', '', raw).strip()
+        # 去掉各种引号包裹（中英文全角半角）
+        raw = re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
+        raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
+        raw = raw.strip()
         
         if not raw:
+            return None
+        
+# NOTE: 2026-05-01 08:17:32, self-evolved by tea_agent --- _generate_topic_summary min_length从2提高到5，拒绝"KB与"这种3字残句
+# NOTE: 2026-05-01 08:18:13, self-evolved by tea_agent --- min_length调整为4：拒绝"为"(1)、"KB与"(3)，放行"你好世界"(4)
+        # 拒绝过短的摘要（<4个字符，如"为"(1)、"KB与"(3)等LLM残句）
+        if len(raw) < 4:
             return None
             
         if len(raw) > 20:
@@ -282,7 +325,8 @@ class MemoryDialog(tk.Toplevel):
         top.pack(fill=tk.X, padx=10, pady=8)
 
         self.stats_var = tk.StringVar(value="加载中...")
-        ttk.Label(top, textvariable=self.stats_var, font=(SYSTEM_FONT, 10)).pack(side=tk.LEFT)
+# NOTE: 2026-04-30 20:04:00, self-evolved by tea_agent --- MemoryDialog 统计栏、添加对话框、查看对话框字体适配缩放
+        ttk.Label(top, textvariable=self.stats_var, font=(SYSTEM_FONT, _fs(10))).pack(side=tk.LEFT)
 
         ttk.Separator(self, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10)
 
@@ -416,7 +460,8 @@ class MemoryDialog(tk.Toplevel):
         ]
 
         ttk.Label(dlg, text="内容 (必填):").place(x=10, y=10)
-        content_text = tk.Text(dlg, height=3, width=55, font=(SYSTEM_FONT, 10))
+# NOTE: 2026-04-30 20:04:07, self-evolved by tea_agent --- MemoryDialog 添加对话框的 content_text 字体 _fs(10) 和提示标签 _fs(8)
+        content_text = tk.Text(dlg, height=3, width=55, font=(SYSTEM_FONT, _fs(10)))
         content_text.place(x=10, y=32)
 
         ttk.Label(dlg, text="分类:").place(x=10, y=100)
@@ -428,8 +473,9 @@ class MemoryDialog(tk.Toplevel):
         ttk.Label(dlg, text="优先级 (0-3):").place(x=10, y=132)
         pri_var = tk.IntVar(value=2)
         ttk.Spinbox(dlg, from_=0, to=3, textvariable=pri_var, width=4).place(x=100, y=130)
+# NOTE: 2026-04-30 20:04:15, self-evolved by tea_agent --- MemoryDialog 添加对话框中的提示标签字体 _fs(8) 适配缩放
         ttk.Label(dlg, text="0=CRITICAL  1=HIGH  2=MEDIUM  3=LOW",
-                  font=("", 8), foreground="#666").place(x=150, y=133)
+                  font=("", _fs(8)), foreground="#666").place(x=150, y=133)
 
         ttk.Label(dlg, text="重要度 (1-5):").place(x=10, y=164)
         imp_var = tk.IntVar(value=3)
@@ -442,8 +488,9 @@ class MemoryDialog(tk.Toplevel):
         ttk.Label(dlg, text="过期时间 (ISO):").place(x=10, y=228)
         expires_var = tk.StringVar()
         ttk.Entry(dlg, textvariable=expires_var, width=30).place(x=130, y=226)
+# NOTE: 2026-04-30 20:04:24, self-evolved by tea_agent --- MemoryDialog 过期时间提示标签和查看对话框字体适配缩放
         ttk.Label(dlg, text="留空=永不过期  格式: 2026-05-01T08:00:00",
-                  font=("", 8), foreground="#666").place(x=130, y=252)
+                  font=("", _fs(8)), foreground="#666").place(x=130, y=252)
 
         result_label = ttk.Label(dlg, text="", foreground="#cc0000")
         result_label.place(x=10, y=290)
@@ -507,7 +554,8 @@ class MemoryDialog(tk.Toplevel):
         dlg.transient(self)
         dlg.geometry("500x300")
 
-        text = tk.Text(dlg, font=(SYSTEM_FONT, 11), wrap=tk.WORD)
+# NOTE: 2026-04-30 20:04:31, self-evolved by tea_agent --- MemoryDialog 查看对话框字体 _fs(11)
+        text = tk.Text(dlg, font=(SYSTEM_FONT, _fs(11)), wrap=tk.WORD)
         text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         text.insert("1.0", content)
         text.config(state=tk.DISABLED)
@@ -561,7 +609,8 @@ class TopicDialog(tk.Toplevel):
         top = ttk.Frame(self)
         top.pack(fill=tk.X, padx=10, pady=8)
         self.stats_var = tk.StringVar(value="加载中...")
-        ttk.Label(top, textvariable=self.stats_var, font=(SYSTEM_FONT, 10)).pack(side=tk.LEFT)
+# NOTE: 2026-04-30 20:04:37, self-evolved by tea_agent --- TopicDialog 统计栏字体 _fs(10)
+        ttk.Label(top, textvariable=self.stats_var, font=(SYSTEM_FONT, _fs(10))).pack(side=tk.LEFT)
 
         ttk.Separator(self, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10)
 
@@ -712,7 +761,8 @@ class TopicDialog(tk.Toplevel):
 
         ttk.Label(dlg, text="新标题:").pack(padx=10, pady=(15, 2), anchor=tk.W)
         title_var = tk.StringVar(value=old_title)
-        entry = ttk.Entry(dlg, textvariable=title_var, width=50, font=(SYSTEM_FONT, 11))
+# NOTE: 2026-04-30 20:04:45, self-evolved by tea_agent --- TopicDialog 重命名输入框字体 _fs(11)
+        entry = ttk.Entry(dlg, textvariable=title_var, width=50, font=(SYSTEM_FONT, _fs(11)))
         entry.pack(padx=10, pady=4)
         entry.select_range(0, tk.END)
         entry.focus()
@@ -870,37 +920,194 @@ class TopicDialog(tk.Toplevel):
 
 
 
-class TkGUI:
+# NOTE: 2026-05-01 15:33:03, self-evolved by tea_agent --- 插入 ConfigDialog 类（在 TkGUI 之前）
+# NOTE: 2026-05-01, self-evolved by tea_agent --- ConfigDialog: 用户级 config.yaml GUI 配置编辑弹窗
+class ConfigDialog(tk.Toplevel):
+    """配置编辑弹窗 — 编辑 main/cheap 模型及运行时参数"""
+
+    def __init__(self, parent, on_save=None):
+        super().__init__(parent)
+        self.on_save = on_save
+        self.title("⚙️ 配置编辑")
+        self.geometry("620x540")
+        self.minsize(500, 400)
+        self.transient(parent)
+        self.grab_set()
+
+        _init_fonts()
+        self._cfg = get_config()
+        self._create_ui()
+        self._load_values()
+
+    def _create_ui(self):
+        nb = ttk.Notebook(self)
+        nb.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        self._model_tab(nb, "主模型", "main")
+        self._model_tab(nb, "便宜模型", "cheap")
+        self._runtime_tab(nb)
+
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill=tk.X, padx=10, pady=10)
+        self._status_var = tk.StringVar(value="")
+        ttk.Label(btn_frame, textvariable=self._status_var, foreground="#666").pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_frame, text="💾 保存", command=self._do_save).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(btn_frame, text="取消", command=self.destroy).pack(side=tk.RIGHT, padx=2)
+
+    def _model_tab(self, nb, label, prefix):
+        f = ttk.Frame(nb)
+        nb.add(f, text=label)
+        fields = [
+            ("API Key", "api_key", 40),
+            ("API URL", "api_url", 50),
+            ("模型名称", "model_name", 50),
+        ]
+        vars_map = {}
+        for i, (title, key, width) in enumerate(fields):
+            ttk.Label(f, text=title + ":", font=(SYSTEM_FONT, _fs(11))).grid(
+                row=i, column=0, sticky=tk.W, padx=(10, 4), pady=8)
+            var = tk.StringVar()
+            ttk.Entry(f, textvariable=var, width=width, font=(SYSTEM_FONT, _fs(11))).grid(
+                row=i, column=1, sticky=tk.EW, padx=(4, 10), pady=8)
+            vars_map[key] = var
+        f.columnconfigure(1, weight=1)
+        setattr(self, f"_{prefix}_vars", vars_map)
+
+    def _runtime_tab(self, nb):
+        f = ttk.Frame(nb)
+        nb.add(f, text="运行时参数")
+
+        canvas = tk.Canvas(f, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(f, orient=tk.VERTICAL, command=canvas.yview)
+        scroll_frame = ttk.Frame(canvas)
+        scroll_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scroll_frame, anchor=tk.NW)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        self._mw_binding = _on_mousewheel
+
+        fields = [
+            ("max_history", "最大历史消息数", int, 1, 100),
+            ("max_iterations", "最大工具调用迭代数", int, 1, 200),
+            ("enable_thinking", "启用 Thinking", bool, None, None),
+            ("keep_turns", "保留最近 N 轮完整对话", int, 1, 50),
+            ("max_tool_output", "工具输出截断字符数", int, 1024, 1048576),
+            ("max_assistant_content", "助手回复截断字符数", int, 1024, 1048576),
+            ("extra_iterations_on_continue", "续命时追加轮数", int, 1, 50),
+            ("memory_extraction_threshold", "记忆提取阈值（消息数）", int, 1, 50),
+            ("memory_dedup_threshold", "记忆去重相似度阈值", float, 0.0, 1.0),
+            ("chat_page_size", "GUI 单页对话数", int, 5, 200),
+        ]
+
+        self._runtime_vars = {}
+        for i, (key, label, typ, vmin, vmax) in enumerate(fields):
+            ttk.Label(scroll_frame, text=label + ":", font=(SYSTEM_FONT, _fs(11))).grid(
+                row=i, column=0, sticky=tk.W, padx=(10, 4), pady=6)
+
+            if typ == bool:
+                var = tk.BooleanVar()
+                ttk.Checkbutton(scroll_frame, variable=var).grid(
+                    row=i, column=1, sticky=tk.W, padx=(4, 10), pady=6)
+            else:
+                var = tk.StringVar()
+                ttk.Entry(scroll_frame, textvariable=var, width=20, font=(SYSTEM_FONT, _fs(11))).grid(
+                    row=i, column=1, sticky=tk.W, padx=(4, 10), pady=6)
+                var._range = (vmin, vmax)
+                var._typ = typ
+
+            self._runtime_vars[key] = var
+
+    def _load_values(self):
+        cfg = self._cfg
+        for prefix, model_cfg in [("main", cfg.main_model), ("cheap", cfg.cheap_model)]:
+            vars_map = getattr(self, f"_{prefix}_vars")
+            vars_map["api_key"].set(model_cfg.api_key)
+            vars_map["api_url"].set(model_cfg.api_url)
+            vars_map["model_name"].set(model_cfg.model_name)
+
+        for key, var in self._runtime_vars.items():
+            val = getattr(cfg, key, None)
+            if val is not None:
+                if isinstance(var, tk.BooleanVar):
+                    var.set(bool(val))
+                else:
+                    var.set(str(val))
+
+    def _do_save(self):
+        cfg = self._cfg
+        errors = []
+
+        for prefix, model_cfg in [("main", cfg.main_model), ("cheap", cfg.cheap_model)]:
+            vars_map = getattr(self, f"_{prefix}_vars")
+            model_cfg.api_key = vars_map["api_key"].get().strip()
+            model_cfg.api_url = vars_map["api_url"].get().strip()
+            model_cfg.model_name = vars_map["model_name"].get().strip()
+
+        for key, var in self._runtime_vars.items():
+            try:
+                if isinstance(var, tk.BooleanVar):
+                    cfg.set(key, var.get())
+                else:
+                    raw = var.get().strip()
+                    if not raw:
+                        continue
+                    typ = getattr(var, '_typ', str)
+                    val = typ(raw)
+                    vmin, vmax = getattr(var, '_range', (None, None))
+                    if vmin is not None and val < vmin:
+                        errors.append(f"{key}: 最小 {vmin}")
+                        continue
+                    if vmax is not None and val > vmax:
+                        errors.append(f"{key}: 最大 {vmax}")
+                        continue
+                    cfg.set(key, val)
+            except (ValueError, TypeError) as e:
+                errors.append(f"{key}: 格式错误 ({e})")
+
+        if errors:
+            self._status_var.set(f"❌ {'; '.join(errors)}")
+            return
+
+        try:
+# NOTE: 2026-05-04 17:58:01, self-evolved by tea_agent --- GUI 配置保存状态提示使用实际保存路径
+            saved_path = save_config(cfg)
+            self._status_var.set(f"✅ 已保存到 {saved_path}")
+            if self.on_save:
+                self.on_save(cfg)
+            self.after(1500, self.destroy)
+        except Exception as e:
+            self._status_var.set(f"❌ 保存失败: {e}")
+
+    def destroy(self):
+        if hasattr(self, '_mw_binding'):
+            try:
+                self.unbind_all("<MouseWheel>")
+            except Exception:
+                pass
+        super().destroy()
+
+
+# NOTE: 2026-05-04 18:47:26, self-evolved by tea_agent --- TkGUI 继承 AgentCore，消除重复代码
+class TkGUI(AgentCore):
     def __init__(self, root, debug:bool=False):
-        self.debug = debug
         self.root = root
         self.root.title("AI 工具调用助手")
         self.root.geometry("1100x750")
         self.root.minsize(900, 600)
 
-        root_path = Path.home() / ".tea_agent"
-        if not root_path.exists():
-            logger.info(f"create user path: '{root_path}'")
-            os.makedirs(root_path, exist_ok=True)
+        self.sess = None  # 预设，AgentCore._init_session 会创建它
 
-        db_path = root_path / "chat_history.db"
-        tool_dir = root_path / "toolkit"
-        if not tool_dir.exists():
-            logger.info(f"create user toolkit path: '{tool_dir}'")
-            os.makedirs(tool_dir, exist_ok=True)
+        # ── AgentCore 初始化：配置、目录、Storage/Toolkit、连接器、会话、MQTT ──
+        super().__init__(debug=debug)
 
-        self.db = Storage(db_path=str(db_path))
-        self.toolkit = tlk.Toolkit(str(tool_dir))
-
+        # 暴露给 toolkit 工具函数
         globals()["_storage_"] = self.db
         globals()["tlk"]._toolkit_ = self.toolkit
-
-        tlk.toolkit_reload()
-
-        # 会话相关
-        self.current_topic_id = -1
-        self.generating = False
-
 
         # HtmlFrame 缩放级别
         self._zoom_level = 100
@@ -914,15 +1121,43 @@ class TkGUI:
         # 当前对话 ID
         self._current_conversation_id: Optional[int] = None
 
+# NOTE: 2026-05-04 18:59:23, self-evolved by tea_agent --- 移除冗余 _init_session 调用，在 UI 创建后加 status 显示
         # 创建界面
         self._create_ui()
+        if hasattr(self,"sess") and self.sess is not None:
+            self.sess.tool_log = self.safe_log_tool
 
-        # 初始化会话
-        self._init_session()
+        # 会话已由 AgentCore.__init__ 初始化，这里补状态显示
+        cheap_m = self._cfg.cheap_model
+        cheap_info = f" | 摘要模型: {cheap_m.model_name}" if cheap_m.model_name else ""
+        self._update_status(f"📡 已连接 | 模型: {self._cfg.main_model.model_name}{cheap_info}")
 
+# NOTE: 2026-05-04 17:16:04, self-evolved by tea_agent --- GUI on_closing: 退出时调用 storage.close() 完成 WAL checkpoint + 关闭连接
         # 加载主题
         self.refresh_topics()
         self.auto_new_topic()
+
+        # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
+        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+
+    # NOTE: 2026-05-05, self-evolved by tea_agent --- 退出时正常关闭数据库：WAL checkpoint + MQTT 断开
+    def _on_closing(self):
+        """窗口关闭时的清理流程"""
+        self._update_status("⏳ 正在清理资源...")
+        try:
+            self.db.close()
+            self._update_status("✅ 数据库已正常关闭")
+        except Exception as e:
+            logger.warning(f"关闭数据库失败: {e}")
+        try:
+            mqtt_agent_connector.stop()
+        except Exception:
+            pass
+        try:
+            chat_room_connector.stop()
+        except Exception:
+            pass
+        self.root.destroy()
 
     def _create_ui(self):
         """创建界面"""
@@ -933,8 +1168,9 @@ class TkGUI:
         left = Frame(main_split, width=220)
         main_split.add(left, weight=1)
 
-        ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, 12, "bold")).pack(pady=5)
-        self.topic_list = Listbox(left, font=(SYSTEM_FONT, 10))
+# NOTE: 2026-04-30 20:03:32, self-evolved by tea_agent --- 主题标签(12→_fs(12))和主题列表(10→_fs(10))字体适配缩放
+        ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, _fs(12), "bold")).pack(pady=5)
+        self.topic_list = Listbox(left, font=(SYSTEM_FONT, _fs(10)))
         self.topic_list.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
         self.topic_list.bind("<<ListboxSelect>>", self.on_topic_select)
         ttk.Button(left, text="➕ 新建主题", command=self.new_topic).pack(
@@ -942,7 +1178,10 @@ class TkGUI:
         ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
         ttk.Button(left, text="📁 主题管理", command=self.open_topic_dialog).pack(
             fill=tk.X, padx=4, pady=2)
+# NOTE: 2026-05-01 15:33:14, self-evolved by tea_agent --- 左侧面板加"⚙️ 配置"按钮 + TkGUI.open_config_dialog 方法
         ttk.Button(left, text="🧠 记忆管理", command=self.open_memory_dialog).pack(
+            fill=tk.X, padx=4, pady=2)
+        ttk.Button(left, text="⚙️ 配置", command=self.open_config_dialog).pack(
             fill=tk.X, padx=4, pady=2)
 
         # ===== 右侧面板 =====
@@ -961,8 +1200,9 @@ class TkGUI:
         chat_frame = Frame(chat_split)
         chat_split.add(chat_frame, weight=4)
 
+# NOTE: 2026-04-30 20:03:16, self-evolved by tea_agent --- 控制台字体使用 _fs(11) 适配缩放
         self.console = scrolledtext.ScrolledText(
-            chat_frame, font=(SYSTEM_FONT, 11), bg="white", fg="black", wrap=tk.WORD
+            chat_frame, font=(SYSTEM_FONT, _fs(11)), bg="white", fg="black", wrap=tk.WORD
         )
         self.console.config(state=tk.DISABLED)
 
@@ -980,8 +1220,9 @@ class TkGUI:
         # 输入区域
         input_frame = Frame(chat_split)
         chat_split.add(input_frame, weight=1)
+# NOTE: 2026-04-30 20:03:24, self-evolved by tea_agent --- 输入框字体使用 _fs(14)、输入提示使用 _fs(9) 适配缩放
         self.input_box = scrolledtext.ScrolledText(
-            input_frame, font=(SYSTEM_FONT, 14), height=4, bg="#f8f8f8"
+            input_frame, font=(SYSTEM_FONT, _fs(14)), height=4, bg="#f8f8f8"
         )
         self.input_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
@@ -993,8 +1234,9 @@ class TkGUI:
         self.console.tag_configure("user", foreground="#0055cc")
         self.console.tag_configure("ai", foreground="black")
         self.console.tag_configure("tool", foreground="#d68000")
+# NOTE: 2026-04-30 20:03:47, self-evolved by tea_agent --- title 标签字体使用 _fs(12) 适配缩放
         self.console.tag_configure(
-            "title", foreground="#0066cc", font=(SYSTEM_FONT, 12, "bold"))
+            "title", foreground="#0066cc", font=(SYSTEM_FONT, _fs(12), "bold"))
         self.console.tag_configure("notice", foreground="#008800")
         self.console.tag_configure("error", foreground="#cc0000")
 
@@ -1035,6 +1277,7 @@ class TkGUI:
         self.chat_view.load_html(html)
         self.root.after(200, self.scroll_to_bottom)
 
+# NOTE: 2026-05-01 10:38:17, self-evolved by tea_agent --- 在 _switch_display 之后添加 _show_loading 方法（简单 spinner + 三点动画）
     def _switch_display(self, mode: str):
         if mode == self._show_mode:
             return
@@ -1046,6 +1289,39 @@ class TkGUI:
             self.console.pack_forget()
             self.chat_view.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
             self.root.after(400, self.scroll_to_bottom)
+
+    # NOTE: 2026-05-01, self-evolved by tea_agent --- _show_loading: HtmlFrame spinner动画，异步加载历史时不再长时间空白
+    def _show_loading(self, text: str = "正在加载历史记录"):
+        """在 HtmlFrame 中显示加载动画（spinner + 文字），用于异步加载期间的过渡"""
+        if not HAS_TKINTERWEB:
+            self._switch_display("console")
+            self.log(f"⏳ {text}...", "notice")
+            return
+
+        loading_html = f'''<html><head>
+<style>
+body {{ display:flex; align-items:center; justify-content:center; height:100vh;
+       margin:0; background:#fafafa; font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif; }}
+.loader {{ text-align:center; }}
+.spinner {{ width:48px; height:48px; border:4px solid #e0e0e0; border-top-color:#1a73e8;
+           border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 20px; }}
+@keyframes spin {{ to {{ transform:rotate(360deg); }} }}
+.text {{ color:#888; font-size:{_DEFAULT_FONT_SIZE}px; }}
+.dots::after {{ content:''; animation:d 1.5s steps(4,end) infinite; }}
+@keyframes d {{ 0% {{ content:'' }} 25% {{ content:'.' }} 50% {{ content:'..' }} 75% {{ content:'...' }} 100% {{ content:'' }} }}
+</style></head>
+<body><div class="loader">
+<div class="spinner"></div>
+<div class="text">{text}<span class="dots"></span></div>
+</div></body></html>'''
+
+        # 切换到 chat_view 但不修改 chat_messages
+        if self._show_mode != "chat_view":
+            self.console.pack_forget()
+            self.chat_view.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+            self._show_mode = "chat_view"
+        self.chat_view.load_html(loading_html)
+        self.root.update()
 
     def scroll_to_bottom(self):
         self.chat_view.yview_moveto(1.0)
@@ -1066,37 +1342,13 @@ class TkGUI:
     def _now_ts(self) -> str:
         return datetime.now().strftime("%H:%M:%S")
 
+# NOTE: 2026-05-04 09:27:57, self-evolved by tea_agent --- GUI 添加 _sess_lock 和 _setup_mqtt_reply_handler 调用
+# NOTE: 2026-05-04 18:48:10, self-evolved by tea_agent --- _init_session 继承 AgentCore，仅补 UI 回调
+# NOTE: 2026-05-04 18:58:17, self-evolved by tea_agent --- GUI _init_session 调用 super() 确保 sess 被创建
+# NOTE: 2026-05-04 18:58:47, self-evolved by tea_agent --- _init_session 只设 tool_log，status 移到 UI 创建后
     def _init_session(self):
-        """初始化会话"""
-        # 从配置中获取参数
-        cfg = get_config()
-        
-        self.sess = OnlineToolSession(
-            toolkit=self.toolkit,
-            api_key=cast(str, API_KEY),
-            api_url=cast(str, API_URL),
-            model=cast(str, MODEL),
-            max_history=cfg.max_history,
-            max_iterations=cfg.max_iterations,
-            keep_turns=cfg.keep_turns,
-            max_tool_output=cfg.max_tool_output,
-            max_assistant_content=cfg.max_assistant_content,
-            extra_iterations_on_continue=cfg.extra_iterations_on_continue,
-# NOTE: 2026-04-30 14:36:52, self-evolved by tea_agent --- main_db_gui传递memory_dedup_threshold给OnlineToolSession
-            memory_extraction_threshold=cfg.memory_extraction_threshold,
-            memory_dedup_threshold=cfg.memory_dedup_threshold,
-            storage=self.db,
-            cheap_api_key=cast(str, CHEAP_MODEL.api_key),
-            cheap_api_url=cast(str, CHEAP_MODEL.api_url),
-            cheap_model=cast(str, CHEAP_MODEL.model_name),
-            enable_thinking=cfg.enable_thinking,
-        )
-
-        self._cfg = cfg
-        self.sess.tool_log = self.safe_log_tool
-        import tea_agent.session_ref as _sref; _sref.set_session(self.sess)  # 供 toolkit 工具访问
-        cheap_info = f" | 摘要模型: {CHEAP_MODEL.model_name}" if CHEAP_MODEL.model_name else ""
-        self._update_status(f"📡 已连接 | 模型: {MODEL}{cheap_info}")
+        """GUI 的会话初始化 — 继承 AgentCore 创建 sess。"""
+        super()._init_session()
 
     def toggle_reasoning(self, enable: Optional[bool] = None) -> dict:
         """切换或查询 reasoning/thinking 状态。供 toolkit 工具调用。"""
@@ -1130,18 +1382,20 @@ class TkGUI:
     # @2026-04-29 gen by deepseek-v4-pro, 工具调用达上限时弹框询问继续/终止
     def _handle_max_iter(self, msg: str):
         """弹出对话框询问用户是否继续工具调用。"""
+# NOTE: 2026-05-04 19:39:42, self-evolved by tea_agent --- GUI 续命弹窗：文案从 5 轮改为 10 轮，确认后追加 10 轮
         from tkinter import messagebox
         display = msg.replace("!MAX_ITER:", "")
         result = messagebox.askyesno(
             "达到工具调用上限",
-            f"{display}\n\n选择「是」再执行 5 轮\n选择「否」终止当前回答",
+            f"{display}\n\n选择「是」再执行 10 轮\n选择「否」终止当前回答",
             parent=self.root,
         )
         if hasattr(self, 'sess') and self.sess:
             self.sess._continue_after_max = result
             self.sess._max_iter_wait.set()
             if result:
-                self._update_status("⏳ 已续命 5 轮，继续生成... (ESC 打断)")
+                self.sess._extra_iterations += 10
+                self._update_status("⏳ 已续命 10 轮，继续生成... (ESC 打断)")
             else:
                 self._update_status("🛑 用户终止工具调用")
 
@@ -1216,8 +1470,9 @@ class TkGUI:
     def switch_topic(self, topic_id):
         self.current_topic_id = topic_id
         self.clear_chat()
+# NOTE: 2026-05-01 10:38:25, self-evolved by tea_agent --- switch_topic: log → _show_loading + after(60) 延迟启动线程
         self.generating = True  # 加载期间阻塞输入
-        self.log("⏳ 正在加载历史记录...", "notice")
+        self._show_loading("正在加载历史记录")
         self._update_status("⏳ 加载中...")
 
         recent_turns = 10
@@ -1317,7 +1572,8 @@ class TkGUI:
             except Exception as e:
                 self.root.after(0, self._render_topic_error, str(e))
 
-        threading.Thread(target=load_worker, daemon=True).start()
+# NOTE: 2026-05-01 10:38:31, self-evolved by tea_agent --- switch_topic: after(60) 延迟启动后台线程，确保 spinner 先渲染
+        self.root.after(60, lambda: threading.Thread(target=load_worker, daemon=True).start())
 
     def _render_loaded_topic(self, render_items):
         """主线程：清屏 + 逐条渲染准备好的数据"""
@@ -1351,38 +1607,24 @@ class TkGUI:
         self.input_box.insert(tk.INSERT, "\n")
         return "break"
 
-    def _update_topic_summary(self):
-        """使用 cheap_model 生成 topic 摘要标题"""
-        if not self.current_topic_id or self.current_topic_id < 0:
-            return
+# NOTE: 2026-05-01 11:43:46, self-evolved by tea_agent --- _update_topic_summary: 状态栏可见反馈 + LLM失败时用首条用户消息兜底 + 主线程刷新
+# NOTE: 2026-05-01 11:49:01, self-evolved by tea_agent --- _update_topic_summary 加控台可见调试日志，追踪每一步执行
+# NOTE: 2026-05-01 11:49:45, self-evolved by tea_agent --- _update_topic_summary 日志调用改用 root.after 调度到主线程，避免 tk 线程安全问题
+# NOTE: 2026-05-01 11:57:59, self-evolved by tea_agent --- 移除 _update_topic_summary 调试日志，保留 WAL + 兜底 + 状态栏反馈等核心修复
+# NOTE: 2026-05-04 09:08:01, self-evolved by tea_agent --- GUI TeaApp 添加 _publish_to_mqtt 方法
+# NOTE: 2026-05-04 09:28:50, self-evolved by tea_agent --- GUI 添加 MQTT reply handler 三个方法
+    # ── AgentCore 回调覆盖 ──────────────────────────
 
-        recent = self.db.get_recent_conversations(self.current_topic_id, limit=3)
-        if not recent:
-            return
+    def _on_mqtt_session_restored(self):
+        """MQTT 消息处理后恢复 GUI 界面。"""
+        self.root.after(0, self.refresh_topics)
 
-        try:
-            # 优先使用 cheap_model 降低成本
-            cli, mdl = self.sess._get_summarize_client()
-            summary = _generate_topic_summary(
-                client=cli,
-                model=mdl,
-                conversations=recent,
-            )
-            if summary:
-                try:
-                    self.db.update_topic_title(self.current_topic_id, summary)
-                    self.root.after(0, self._refresh_topics_preserve_selection)
-                    if self.sess.tool_log:
-                        self.sess.tool_log(f"📝 Topic摘要已更新: {summary}")
-                except Exception as db_e:
-                    if self.sess and self.sess.tool_log:
-                        self.sess.tool_log(f"⚠️ Topic摘要数据库更新失败: {db_e}")
-                        self.sess.tool_log(traceback.format_exc())
-        except Exception as e:
-            if self.sess and self.sess.tool_log:
-                self.sess.tool_log(f"⚠️ Topic摘要生成失败: {e}")
-                self.sess.tool_log(traceback.format_exc())
+    def _on_summary_updated(self, topic_id: int, summary: str):
+        """摘要更新后刷新 GUI 主题列表和状态栏。"""
+        self.root.after(200, self._refresh_topics_preserve_selection)
+        self.root.after(100, lambda s=summary: self._update_status(f"📝 摘要: {s}"))
 
+# NOTE: 2026-05-02 09:06:48, self-evolved by tea_agent --- 添加 _notify_completion 方法：LLM完成后发送系统桌面通知
     def _refresh_topics_preserve_selection(self):
         current_idx = self.topic_list.curselection()
         self.refresh_topics()
@@ -1392,7 +1634,29 @@ class TkGUI:
             except Exception:
                 pass
 
+# NOTE: 2026-05-02 09:16:03, self-evolved by tea_agent --- _notify_completion 多级回退：GI Notify→notify-send→kdialog→zenity→wall，确保在各种Linux桌面环境下都能通知
+# NOTE: 2026-05-02 09:19:40, self-evolved by tea_agent --- _notify_completion 委托给 toolkit_notify，消除重复并兼容 Windows/macOS
+    def _notify_completion(self, ai_msg: Optional[str] = None):
+        """LLM 任务完成后发送桌面通知。委托给 toolkit_notify（跨平台兼容）。"""
+        if ai_msg:
+            preview = ai_msg.strip()[:60]
+            if len(ai_msg.strip()) > 60:
+                preview += "..."
+        else:
+            preview = "AI 任务已完成"
+
+        try:
+            # 直接导入 toolkit_notify 以复用其跨平台实现
+            from tea_agent.toolkit.toolkit_notify import toolkit_notify
+            toolkit_notify("Tea Agent", preview, urgency="normal", duration=5000)
+        except Exception:
+            pass  # 通知失败不影响主流程
+
+# NOTE: 2026-05-04 19:35:31, self-evolved by tea_agent --- GUI send() 入口加 _shutting_down 闸门 — 重启中拒绝新消息
     def send(self, e=None):
+        if self._shutting_down:
+            self._update_status("🔄 代码已变更，等待重启...")
+            return "break"
         if self.generating or not self.current_topic_id:
             return "break"
         msg = self.input_box.get("1.0", tk.END).strip()
@@ -1419,51 +1683,27 @@ class TkGUI:
                 )
                 self.root.after(0, self._flush_stream_to_messages)
 
-                ## 如果 chat_stream 成功，再存储到数据库
-                conv_id = self.db.save_msg(
-                    self.current_topic_id, msg, "", False)
-                self._current_conversation_id = conv_id
+                # ── 标准后处理流水线（入库 → MQTT → Token → 摘要）──
+                self._post_chat_pipeline(ai_msg, is_func, msg, self.current_topic_id)
 
-                rounds = self.sess._rounds_collector
-                self.db.update_msg_rounds(
-                    conversation_id=conv_id,
-                    ai_msg=ai_msg,
-                    is_func_calling=is_func,
-                    rounds=rounds if rounds else None,
-                )
-
-# NOTE: 2026-04-30 09:25:58, self-evolved by tea_agent --- send()中保存便宜模型token到DB，并传递给_add_token_notice_and_render
-                # @2026-04-23 generated by unknown_model, 保存 token 统计到数据库
+                # GUI 特定：token 渲染 + 通知
                 usage = self.sess._last_usage
                 cheap_usage = self.sess._last_cheap_usage
                 if usage and usage.get("total_tokens", 0) > 0:
-                    self.db.add_topic_tokens(
-                        self.current_topic_id,
-                        total_tokens=usage["total_tokens"],
-                        prompt_tokens=usage["prompt_tokens"],
-                        completion_tokens=usage["completion_tokens"],
-                        cheap_tokens=cheap_usage.get("total_tokens", 0),
-                        cheap_prompt_tokens=cheap_usage.get("prompt_tokens", 0),
-                        cheap_completion_tokens=cheap_usage.get("completion_tokens", 0),
-                    )
-# NOTE: 2026-04-30 09:12:34, self-evolved by tea_agent --- send()完成后调用_add_token_notice_and_render，在HtmlFrame显示本轮token消耗
-                    # 在聊天区域显示本轮 + 主题累积 token 消耗（含主模型+便宜模型），然后渲染
                     self.root.after(0, lambda u=usage, cu=cheap_usage: self._add_token_notice_and_render(u, cu))
-                    # 刷新状态栏显示 token 统计
                     status_msg = (f"✅ 完成 | Tokens: {usage['total_tokens']:,} "
                                   f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,})")
                     self.root.after(0, lambda m=status_msg: self._update_status(m))
                     self.root.after(0, self._refresh_topics_preserve_selection)
+                    self.root.after(600, lambda am=ai_msg: self._notify_completion(am))
                 else:
                     self.root.after(0, self._render_and_show_chat)
                     self.root.after(0, lambda: self._update_status("✅ 完成"))
-
-                self._update_topic_summary()
+                    self.root.after(600, lambda am=ai_msg: self._notify_completion(am))
             except Exception as ex:
                 ai_msg = f"异常：{ex}"
                 self.safe_stream(ai_msg)
                 self.root.after(0, self._flush_stream_to_messages)
-                # 异常时也尽量保存 rounds 数据
                 if self._current_conversation_id is not None:
                     rounds = self.sess._rounds_collector
                     try:
@@ -1477,6 +1717,7 @@ class TkGUI:
                         pass
                 self.root.after(0, self._render_and_show_chat)
                 self.root.after(0, lambda: self._update_status(f"❌ 错误: {ai_msg}"))
+                self.root.after(600, lambda am=ai_msg: self._notify_completion(am))
             finally:
                 self.generating = False
                 self.safe_log("")
@@ -1541,9 +1782,27 @@ class TkGUI:
         TopicDialog(self.root, self.db,
                     on_switch=lambda tid: self.root.after(0, self.switch_topic, tid))
 
+# NOTE: 2026-05-01 15:33:25, self-evolved by tea_agent --- 添加 TkGUI.open_config_dialog 方法（紧挨 open_memory_dialog）
     def open_memory_dialog(self):
         """打开记忆管理对话框"""
         MemoryDialog(self.root, self.db)
+
+    def open_config_dialog(self):
+        """打开配置编辑对话框"""
+
+        def on_save(cfg):
+            # 同步到当前 session
+            if hasattr(self, 'sess') and self.sess:
+                for key in cfg._RUNTIME_CONFIG_KEYS:
+                    val = getattr(cfg, key, None)
+                    if val is not None and hasattr(self.sess, key):
+                        try:
+                            setattr(self.sess, key, val)
+                        except Exception:
+                            pass
+            self._update_status("⚙️ 配置已更新")
+
+        ConfigDialog(self.root, on_save=on_save)
 
     def interrupt(self, e=None):
         if self.generating:
@@ -1555,7 +1814,7 @@ class TkGUI:
             self._update_status("🛑 已打断")
 
 
-# NOTE: 2026-04-30 13:44:20, self-evolved by tea_agent --- 补上缺失的__main__入口块，使python -m tea_agent.main_db_gui可正常启动
+# NOTE: 2026-04-30 19:36:28, self-evolved by tea_agent --- 补回缺失的 __main__ 入口，使 python -m tea_agent.main_db_gui 可正常启动 GUI
 def main(debug:bool=False, no_gui:bool=False):
     if no_gui:
         raise NotImplementedError("No GUI mode is not implemented yet.")
@@ -1565,12 +1824,5 @@ def main(debug:bool=False, no_gui:bool=False):
     root.mainloop()
 
 
-# NOTE: 2026-04-30 13:45:23, self-evolved by tea_agent --- 兼容python -m tea_agent.main_db_gui main的调用方式
 if __name__ == "__main__":
-    import sys
-    # 兼容 "python -m tea_agent.main_db_gui main [--debug] [--no-gui]" 调用
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
-    flags = [a for a in sys.argv[1:] if a.startswith("-")]
-    debug = "--debug" in flags or "-d" in flags
-    no_gui = "--no-gui" in flags
-    main(debug=debug, no_gui=no_gui)
+    main()

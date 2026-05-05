@@ -10,6 +10,6 @@ main_model:
 cheap_model:
   api_key: sk-283b0de643cd41cb9db6d4169cdcafd4
   api_url: http://localhost:11434/v1
-  model_name: zfujicute/OmniCoder-Qwen3.5-9B-Claude-4.6-Opus-Uncensored-v2-GGUF:latest
+  model_name: qwen3.6
 
 keep_turns: 5

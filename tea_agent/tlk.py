@@ -208,12 +208,16 @@ class Toolkit:
                     with open(filepath, encoding="utf-8") as f:
                         code = f.read()
 
+# NOTE: 2026-05-01 15:15:56, self-evolved by tea_agent --- 修复 toolkit 加载时 exec 导致函数 __globals__ 缺少 import 符号的问题
                     # 使用受限的 globals 避免污染
                     safe_globals = {
                         "__builtins__": __builtins__,
                     }
                     local_vars = {}
                     exec(code, safe_globals, local_vars)
+                    # merge local_vars into safe_globals so that function __globals__
+                    # can see imports (e.g. from tea_agent.config import get_config)
+                    safe_globals.update(local_vars)
 
                     func = local_vars.get(name)
                     func_meta = local_vars.get(f"meta_{name}")

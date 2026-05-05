@@ -18,11 +18,12 @@ class SessionToolMixin:
     - messages: 消息列表
     """
 
+# NOTE: 2026-05-04 16:44:39, self-evolved by tea_agent --- 修复 SessionToolMixin.__init__ 覆盖 self.messages 为空列表的 bug
     def __init__(self):
         self.toolkit = None
         self.tool_log: Optional[Callable[[str], None]] = None
         self._rounds_collector: List[Dict] = []
-        self.messages: List[Dict] = []
+        # NOTE: 不设置 self.messages，由 BaseChatSession.__init__ 负责初始化
 
     def _build_tools(self):
         """构建工具定义列表"""
@@ -31,6 +32,7 @@ class SessionToolMixin:
             tools.append(meta)
         return tools
 
+# NOTE: 2026-04-30 16:22:21, self-evolved by tea_agent --- _execute_tool_call增加反思追踪记录：计时、成功/失败状态
     def _execute_tool_call(self, call) -> Tuple[str, str, str]:
         """
         执行单个工具调用。
@@ -41,12 +43,15 @@ class SessionToolMixin:
         Returns:
             Tuple[str, str, str]: (call_id, func_name, result_string)
         """
+        import time
         func_name = call.function.name
         call_id = call.id
+        start_time = time.time()
 
         if func_name not in self.toolkit.func_map:
             err = f"错误：未知工具 {func_name}"
             self._add_tool_result(call_id, err)
+            self._record_tool_to_trace(func_name, False, err, start_time)
             return call_id, func_name, err
 
         try:
@@ -54,23 +59,42 @@ class SessionToolMixin:
         except json.JSONDecodeError:
             err = "错误：参数解析失败"
             self._add_tool_result(call_id, err)
+            self._record_tool_to_trace(func_name, False, err, start_time)
             return call_id, func_name, err
 
         if self.tool_log:
             self.tool_log(f"🔧 调用工具: {func_name}({args})")
 
+        success = True
+        error_msg = ""
         try:
             result = self.toolkit.func_map[func_name](**args)
             if self.tool_log:
                 self.tool_log(f"✅ 结果: {result}")
         except Exception as e:
             result = f"工具执行错误: {e}"
+            success = False
+            error_msg = str(e)
             if self.tool_log:
                 self.tool_log(f"❌ 错误: {e}")
 
         result_str = str(result)
         self._add_tool_result(call_id, result_str)
+        self._record_tool_to_trace(func_name, success, error_msg, start_time)
         return call_id, func_name, result_str
+
+    # 2026-04-30 gen by deepseek-v4-pro, 记录工具调用到反思追踪
+    def _record_tool_to_trace(self, func_name: str, success: bool, error_msg: str, start_time: float):
+        """记录工具调用到当前反思追踪"""
+        import time
+        trace = getattr(self, '_current_trace', None)
+        if trace is None:
+            return
+        reflection_mgr = getattr(self, 'reflection_manager', None)
+        if reflection_mgr is None:
+            return
+        duration_ms = (time.time() - start_time) * 1000
+        reflection_mgr.record_tool_call(trace, func_name, success, error_msg, duration_ms)
 
     def _add_tool_result(self, tool_call_id: str, content: str):
         """添加工具执行结果到消息列表"""

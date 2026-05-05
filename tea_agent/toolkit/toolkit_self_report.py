@@ -22,12 +22,22 @@ def toolkit_self_report() -> dict:
         if parent == temp: break
         temp = parent
 
-    # Fallback if not found by walking up
+# NOTE: 2026-05-04 17:57:38, self-evolved by tea_agent --- toolkit_self_report 使用 config.paths 查找 base_dir 和 toolkit_dir
+    # Fallback if not found by walking up：优先从 config 读取
     if not found:
-        base_dir = os.path.join(os.path.expanduser("~"), ".tea_agent")
-        if not os.path.exists(base_dir): base_dir = os.getcwd()
+        try:
+            from tea_agent.config import get_config
+            base_dir = get_config().paths.data_dir_abs
+        except Exception:
+            base_dir = os.path.join(os.path.expanduser("~"), ".tea_agent")
+        if not os.path.exists(base_dir):
+            base_dir = os.getcwd()
 
-    toolkit_dir = os.path.join(base_dir, "toolkit")
+    try:
+        from tea_agent.config import get_config
+        toolkit_dir = get_config().paths.toolkit_dir_abs
+    except Exception:
+        toolkit_dir = os.path.join(base_dir, "toolkit")
     
     # 2. Tool Count (File-based custom tools)
     tool_count = 0

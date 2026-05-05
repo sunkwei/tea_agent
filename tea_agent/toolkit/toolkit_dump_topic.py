@@ -11,9 +11,12 @@ def toolkit_dump_topic(role: str = "all") -> dict:
     from datetime import datetime
     from pathlib import Path
 
-    base_dir = os.getcwd()
-    # db_path = os.path.join(base_dir, "chat_history.db")
-    db_path = Path.home() / ".tea_agent" / "chat_history.db"
+# NOTE: 2026-05-04 17:57:03, self-evolved by tea_agent --- toolkit_dump_topic db_path 从 config.paths 读取
+    try:
+        from tea_agent.config import get_config
+        db_path = Path(get_config().paths.db_path_abs)
+    except Exception:
+        db_path = Path.home() / ".tea_agent" / "chat_history.db"
     if not os.path.exists(db_path):
         return {"status": "error", "message": f"数据库文件不存在: {db_path}"}
 

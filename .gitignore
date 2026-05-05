@@ -6,3 +6,5 @@ build/
 test_session.py
 dump_*/
 *.bak
+test_tmp/
+chat_history.db

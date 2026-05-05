@@ -21,6 +21,7 @@ from tea_agent.session_api import SessionAPIMixin
 from tea_agent.session_prompts import COMPACT_SYSTEM_PROMPT
 from tea_agent.session_pipeline import SessionPipeline
 from tea_agent.session_memory import SessionMemoryMixin
+from tea_agent.skills import SkillManager
 
 logger = logging.getLogger("session")
 
@@ -68,7 +69,10 @@ class OnlineToolSession(
         max_tool_output: int = 128 * 1024,
         max_assistant_content: int = 128 * 1024,
         extra_iterations_on_continue: int = 5,
+# NOTE: 2026-04-30 14:35:38, self-evolved by tea_agent --- OnlineToolSession增加memory_dedup_threshold参数
         memory_extraction_threshold: int = 2,
+# NOTE: 2026-04-30 14:39:12, self-evolved by tea_agent --- onlinesession默认dedup改为0.3
+        memory_dedup_threshold: float = 0.3,
     ):
         """
         初始化会话
@@ -90,7 +94,9 @@ class OnlineToolSession(
             max_tool_output: 工具输出截断字符数
             max_assistant_content: 助手回复截断字符数
             extra_iterations_on_continue: 续命时追加的工具调用轮数
+# NOTE: 2026-04-30 14:35:45, self-evolved by tea_agent --- memory_dedup_threshold文档+属性赋值
             memory_extraction_threshold: 触发记忆提取的最低未摘要消息数
+            memory_dedup_threshold: 记忆去重相似度阈值 (0~1)
         """
         sp = system_prompt or self._COMPACT_SYSTEM_PROMPT
         BaseChatSession.__init__(self, model, max_history, sp)
@@ -119,7 +125,9 @@ class OnlineToolSession(
         self.max_tool_output = max_tool_output
         self.max_assistant_content = max_assistant_content
         self.extra_iterations_on_continue = extra_iterations_on_continue
+# NOTE: 2026-04-30 14:35:54, self-evolved by tea_agent --- memory_dedup_threshold属性赋值
         self.memory_extraction_threshold = memory_extraction_threshold
+        self.memory_dedup_threshold = memory_dedup_threshold
 
         # @2026-04-29 gen by deepseek-v4-pro, max_iterations交互式续跑
         import threading
@@ -128,13 +136,49 @@ class OnlineToolSession(
         self._max_iter_wait = threading.Event()
 
 
+# NOTE: 2026-04-30 16:20:54, self-evolved by tea_agent --- __init__集成ReflectionManager和SystemPromptManager，使用动态系统提示词
         # 工具定义
         self.tools: List[Dict] = []
+        
+        # 初始化 Skill 管理器（必须在 _build_tools 之前）
+        self.skill_manager = SkillManager.get_instance()
+        self.skill_manager.discover_skills()
+        # 默认激活 utility 和 file_system（最小可用集）
+        self.skill_manager.activate_skill("utility")
+        self.skill_manager.activate_skill("file_system")
+        
         self._build_tools()
         
         # 初始化 Memory 管理器（在 storage 设置之后）
         self._setup_memory()
-        
+
+# NOTE: 2026-04-30 16:23:02, self-evolved by tea_agent --- storage=None时安全跳过ReflectionManager/PromptManager初始化
+        # 2026-04-30 gen by deepseek-v4-pro, 初始化反思管理器和提示词管理器
+        if self.storage is not None:
+            from tea_agent.reflection import ReflectionManager
+            from tea_agent.prompt_manager import SystemPromptManager
+            self.reflection_manager = ReflectionManager(
+                storage=self.storage,
+                cheap_client=self._cheap_client,
+                cheap_model=self._cheap_model_name,
+            )
+            self.prompt_manager = SystemPromptManager(
+                storage=self.storage,
+                cheap_client=self._cheap_client,
+                cheap_model=self._cheap_model_name,
+            )
+# NOTE: 2026-04-30 16:24:50, self-evolved by tea_agent --- 动态提示词只设置self.system_prompt，不操作self.messages[0]（会被load_history重建）
+            # 加载最新系统提示词（替换默认的）
+            dynamic_prompt = self.prompt_manager.initialize()
+            # 如果用户没有显式指定 system_prompt，使用动态版本
+            if not system_prompt:
+                self.system_prompt = dynamic_prompt
+            logger.info(f"系统提示词 v{self.prompt_manager.current_version} 已加载")
+        else:
+            self.reflection_manager = None
+            self.prompt_manager = None
+            logger.info("Storage 未设置，跳过 ReflectionManager/PromptManager 初始化")
+
         # 初始化 Pipeline
         self.pipeline = SessionPipeline()
         self._setup_default_pipeline()
@@ -236,8 +280,18 @@ class OnlineToolSession(
         """
         result: List[Dict] = []
 
-        # 1. 系统提示词 (始终第一)
-        result.append(self.messages[0])
+        # 1. 系统提示词 (始终第一) — 注入激活 Skill 的领域指令
+        sys_msg = dict(self.messages[0])
+        skill_prompt = self.skill_manager.get_active_prompt()
+        skill_summary = self.skill_manager.get_skill_summary()
+        if skill_prompt or skill_summary:
+            enhanced = sys_msg["content"]
+            if skill_summary:
+                enhanced = enhanced + "\n\n" + skill_summary
+            if skill_prompt:
+                enhanced = enhanced + "\n\n" + skill_prompt
+            sys_msg["content"] = enhanced
+        result.append(sys_msg)
 
         # 2. 长期记忆注入（紧接系统提示词）
         if self._injected_memories_text:
@@ -246,15 +300,19 @@ class OnlineToolSession(
                 "content": self._injected_memories_text
             })
 
+# NOTE: 2026-05-02 11:46:43, self-evolved by tea_agent --- 修复打断后继续会话400错误：摘要路径的合成assistant消息缺少reasoning_content字段
+# NOTE: 2026-05-02 11:46:56, self-evolved by tea_agent --- 修复打断后继续会话400错误：摘要路径的合成assistant消息缺少reasoning_content字段
         # 3. 历史摘要
         if self._history_summary:
             result.append({
                 "role": "user",
                 "content": f"这是我们之前对话的摘要：\n{self._history_summary}"
             })
+            # NOTE: 2026-05-02, self-evolved by tea_agent --- DeepSeek API 要求 assistant 消息必须有 reasoning_content，否则 400
             result.append({
                 "role": "assistant",
-                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"
+                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？",
+                "reasoning_content": ""
             })
 
         # 4. 最新 N 轮完整对话
@@ -429,8 +487,15 @@ class OnlineToolSession(
         }
 
     def _build_tools(self):
-        """构建工具定义列表"""
-        self.tools = super()._build_tools()
+        """构建工具定义列表（通过 SkillManager 过滤，按需加载）"""
+        all_tools = super()._build_tools()
+        # 通过 SkillManager 过滤：仅返回激活 Skill 包含的工具
+        active_meta_map = self.skill_manager.get_active_tools_meta(self.toolkit.meta_map)
+        if active_meta_map:
+            self.tools = active_meta_map
+        else:
+            # 回退：如果没有任何工具被激活，使用全部
+            self.tools = all_tools
 
     def update_tools(self):
         """重新加载并刷新工具定义"""
@@ -456,8 +521,35 @@ class OnlineToolSession(
         # NOTE: 2026-04-28, self-evolved by claude-agent ---
         # 清除上一轮 API 会话遗留的 reasoning_content，
         # 避免跨 chat_stream 传递失效的 reasoning_content。
+# NOTE: 2026-05-02 10:59:41, self-evolved by tea_agent --- 添加 _notify_reflection_done 和 _notify_prompt_evolved 通知方法
         self._strip_reasoning_content(self.messages)
 
+    # NOTE: 2026-05-02, self-evolved by tea_agent --- 反思/提示词进化的桌面通知方法
+    def _notify_reflection_done(self, reflection_id: int):
+        """反思完成后发送桌面通知"""
+        try:
+            import subprocess
+            subprocess.run([
+                "notify-send", "🔍 元认知反思完成",
+                f"反思 #{reflection_id} 已生成\n建议已存储到数据库",
+                "--expire-time=5000"
+            ], capture_output=True, timeout=3)
+        except Exception:
+            pass
+
+    def _notify_prompt_evolved(self, version: int):
+        """提示词进化后发送桌面通知"""
+        try:
+            import subprocess
+            subprocess.run([
+                "notify-send", "📝 提示词进化",
+                f"系统提示词已进化到 v{version}\n优化已应用于下一轮对话",
+                "--expire-time=5000"
+            ], capture_output=True, timeout=3)
+        except Exception:
+            pass
+
+# NOTE: 2026-04-30 16:21:40, self-evolved by tea_agent --- chat_stream添加反思追踪：start_trace/finish_trace + 异步触发反思
     def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: int = -1, on_status: Optional[Callable[[str], None]] = None) -> Tuple[str, bool]:
         """
         流式对话，支持工具调用。
@@ -478,6 +570,19 @@ class OnlineToolSession(
         self.current_topic_id = topic_id
         self.reset_interrupt()
         self.reset_session_state()
+        
+        # 自动激活匹配的 Skill（基于用户输入触发词）
+        self.skill_manager.auto_activate(msg)
+        # 刷新工具列表（反映最新的激活状态）
+        self._build_tools()
+
+# NOTE: 2026-04-30 16:23:12, self-evolved by tea_agent --- chat_stream中reflection_manager为None时安全跳过追踪和反思
+        # 2026-04-30 gen by deepseek-v4-pro, 开始反思追踪
+        if self.reflection_manager is not None:
+            trace = self.reflection_manager.start_trace(topic_id, msg)
+            self._current_trace = trace
+        else:
+            self._current_trace = None
 
         # 构建执行上下文
         context = {
@@ -493,7 +598,19 @@ class OnlineToolSession(
         # 提取结果
         full_reply = result.get("full_reply", "")
         used_tools = result.get("used_tools", False)
+        iterations = result.get("iterations", 0)
         
+# NOTE: 2026-04-30 16:23:23, self-evolved by tea_agent --- finish_trace和反思触发处增加None保护
+        # 2026-04-30 gen by deepseek-v4-pro, 完成追踪
+        if self.reflection_manager is not None and self._current_trace is not None:
+            self.reflection_manager.finish_trace(
+                self._current_trace,
+                total_iterations=iterations,
+                used_tools=used_tools,
+                interrupted=result.get("interrupted", False),
+                error=str(result.get("error", "")) if result.get("error") else None,
+            )
+
         # 自动提取记忆（真正异步，不阻塞）
         # 仅在有效 topic_id 且非打断时触发
         if topic_id > 0 and not result.get("interrupted", False):
@@ -502,10 +619,36 @@ class OnlineToolSession(
                 try:
                     count = self.trigger_memory_extraction(topic_id)
                     if count > 0 and on_status:
-                        # on_status 回调内部使用 root.after，线程安全
                         on_status(f"🧠 自动提取了 {count} 条新记忆")
                 except Exception:
-                    pass  # 提取失败不影响主流程
+                    pass
             threading.Thread(target=_auto_extract, daemon=True).start()
+
+# NOTE: 2026-04-30 16:23:38, self-evolved by tea_agent --- 异步反思触发增加reflection_manager/prompt_manager为None的保护
+        # 2026-04-30 gen by deepseek-v4-pro, 异步触发反思（不阻塞主流程）
+        if not result.get("interrupted", False) and self.reflection_manager is not None:
+# NOTE: 2026-05-02 10:59:14, self-evolved by tea_agent --- 反思完成后发送桌面通知，含建议数量和提示词进化信息
+            def _auto_reflect():
+                try:
+                    if self.reflection_manager.should_reflect():
+                        rid = self.reflection_manager.generate_reflection()
+                        if rid:
+                            if on_status:
+                                on_status(f"🔍 元认知反思完成 (id={rid})")
+                            # NOTE: 2026-05-02, self-evolved by tea_agent --- 反思完成后始终发送桌面通知
+                            self._notify_reflection_done(rid)
+                        # 如果反思产生了提示词建议，触发提示词进化
+                        if self.reflection_manager.last_prompt_suggestion and self.prompt_manager is not None:
+                            new_pid = self.prompt_manager.evolve(
+                                reflection_suggestion=self.reflection_manager.last_prompt_suggestion
+                            )
+                            if new_pid:
+                                if on_status:
+                                    on_status(f"📝 系统提示词进化到 v{self.prompt_manager.current_version}")
+                                # NOTE: 2026-05-02, self-evolved by tea_agent --- 提示词进化后发送桌面通知
+                                self._notify_prompt_evolved(self.prompt_manager.current_version)
+                except Exception:
+                    pass
+            threading.Thread(target=_auto_reflect, daemon=True).start()
         
         return full_reply, used_tools

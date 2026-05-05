@@ -327,33 +327,44 @@ toolkit_batch_exec(commands=[
 
 ## 📂 项目结构
 
+[`tea_agent/`](https://github.com/sunkwei/tea_agent/tree/master/tea_agent)
+
 ```
 tea_agent/
-├── main_db_gui.py          ← Tkinter GUI 主程序
-├── tea_main_cli.py         ← CLI 入口
-├── config.py               ← YAML 配置加载 (主/便宜模型)
-├── config.yaml             ← 默认配置 (ollama)
-├── basesession.py          ← 会话抽象基类
-├── onlinesession.py        ← OnlineToolSession (核心编排)
-├── session_pipeline.py     ← 插件化 Pipeline 步骤管理
-├── session_api.py          ← API 调用、流式处理、token 统计
-├── session_tool.py         ← 工具执行、rounds 收集
-├── session_summarizer.py   ← 历史摘要、Topic 摘要
-├── session_memory.py       ← 记忆注入、自动提取
-├── session_prompts.py      ← Prompt 模板
-├── session_ref.py          ← 反思相关
-├── memory.py               ← MemoryManager (选择/打分/去重)
-├── reflection.py           ← ReflectionManager
-├── prompt_manager.py       ← SystemPromptManager (v23)
-├── store.py                ← SQLite 持久化存储
-├── tlk.py                  ← 工具库加载/校验/保存
-└── toolkit/                ← 35 个工具 (含动态注册工具)
+├── main_db_gui.py              ← [Tkinter GUI 主程序](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/main_db_gui.py)
+├── tea_main_cli.py             ← [CLI 入口](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/tea_main_cli.py)
+├── agent_core.py               ← [GUI/CLI 共享基类](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/agent_core.py) (MQTT、重启、会话管理)
+├── config.py                   ← [YAML 配置加载](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/config.py) (主/便宜模型、MQTT、paths)
+│
+├── basesession.py              ← [会话抽象基类](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/basesession.py) (load_history 三级策略)
+├── onlinesession.py            ← [OnlineToolSession](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/onlinesession.py) (核心编排)
+├── session_pipeline.py         ← [插件化 Pipeline](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_pipeline.py) 步骤管理
+├── session_api.py              ← [API 调用](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_api.py)、流式处理、token 统计
+├── session_tool.py             ← [工具执行](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_tool.py)、rounds 收集
+├── session_summarizer.py       ← [历史摘要](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_summarizer.py)、Topic 摘要
+├── session_memory.py           ← [记忆注入](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_memory.py)、自动提取
+├── session_prompts.py          ← [Prompt 模板](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_prompts.py)
+├── session_ref.py              ← [反思相关](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_ref.py)
+│
+├── memory.py                   ← [MemoryManager](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/memory.py) (选择/打分/去重)
+├── reflection.py               ← [ReflectionManager](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/reflection.py)
+├── prompt_manager.py           ← [SystemPromptManager](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/prompt_manager.py) (v23)
+│
+├── store.py                    ← [SQLite 持久化存储](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/store.py)
+├── tlk.py                      ← [工具库加载/校验/保存](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/tlk.py)
+├── merge_db.py                 ← [数据库合并工具](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/merge_db.py)
+│
+├── mqtt_agent_connector.py     ← [MQTT 连接器](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/mqtt_agent_connector.py) (注册 broker + 订阅)
+├── mqtt_client.py              ← [PC 端 MQTT 客户端](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/mqtt_client.py) (pc client)
+├── chat_room_connector.py      ← [聊天室连接器](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/chat_room_connector.py)
+│
+└── toolkit/                    ← [35 个工具](https://github.com/sunkwei/tea_agent/tree/master/tea_agent/toolkit) (含动态注册工具)
     ├── toolkit_exec.py
     ├── toolkit_batch_exec.py
     ├── toolkit_mode.py
     ├── toolkit_speak.py
     ├── toolkit_listen.py
-    ├── ... (31 more)
+    ├── ... (30 more)
 ```
 
 ---

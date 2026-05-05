@@ -5,7 +5,7 @@ TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Functio
 核心仅 8 个轻量依赖（openai、markdown、tkinterweb、pyautogui、mss、Pillow、requests、beautifulsoup4），OCR/TTS/ASR 为可选扩展。仅依赖 Python tk 库，无需浏览器，极致轻量。绝大部分代码由 LLM 自行生成，是一个「AI 写 AI」的实验项目。
 
 ## ⚠️ 安全警告
-本项目**未作安全沙盒**——Agent 可执行任意系统命令、修改自身代码。建议在虚拟机中运行。
+本项目**未作安全沙盒**——Agent 可执行任意系统命令(sudo权限命令会弹出输入口令的对话框)、修改自身代码（做好 git 版本管理）。建议在虚拟机中运行。
 
 ---
 

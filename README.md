@@ -1,4 +1,4 @@
-# TeaAgent v0.6.1
+# TeaAgent v0.6.2
 
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
 
@@ -23,6 +23,31 @@ TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Functio
 ```
 
 > toolkit/ 下的工具修改走 `toolkit_reload()` 热更，不触发重启。
+
+### 历史加载三级策略
+
+`load_history()` 对对话历史按时间远近做**三级渐进式加载**，在上下文连贯与 token 节省间取得平衡：
+
+```
+conversations (全部)
+    │
+    ├─ 早期轮次 (>recent_turns)  ──→ user + ai_msg（纯文本，丢弃 tool calls）
+    │     └─ 仅保留最终回复结论，token 消耗极小
+    │
+    ├─ 近期轮次 (<recent_turns)  ──→ user + rounds → _compress_tool_rounds()
+    │   └─ 非最新                 └─ 首3+尾3行 + 模式摘要，保留关键信号
+    │
+    └─ 最新一轮 (is_last)       ──→ user + rounds → 完整保留（仅 repair，不压缩）
+          └─ 当前上下文需要完整工具调用链
+```
+
+| 轮次位置 | user 消息 | assistant | tool calls | 压缩？ |
+|---------|-----------|-----------|------------|--------|
+| 早期 | ✅ | 纯文本 `ai_msg` | ❌ 丢弃 | — |
+| 近期非最新 | ✅ | `rounds` | ✅ 智能压缩 | `_compress_tool_rounds` |
+| 最新一条 | ✅ | `rounds` | ✅ 完整 | 仅 repair |
+
+> 早期轮次只看结论，近期轮次保留关键信号，最新一轮完整上下文 — 三层渐进，token 开销动态平衡。
 
 ### 对话流程（单次 chat_stream）
 
@@ -422,6 +447,7 @@ mqtt:
 
 | 版本 | 关键变化 |
 |------|---------|
+| v0.6.2 | 历史加载三级渐进策略（早期纯文本 / 近期压缩 / 最新完整）|
 | v0.6.1 | GUI 自动重启 (watchdog) + 数据安全三道防线 + 续命 10 轮统一 |
 | v0.6.0 | Skill 模块化系统 (按需激活 -68% token) + toolkit_exec 硬超时 + Mixin bug修复 |
 | v0.5.6 | Token 双层压缩 (exec截断 + history智能摘要，-95%) + sudo GUI密码框 |

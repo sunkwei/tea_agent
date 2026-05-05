@@ -3,6 +3,7 @@
 
 
 # NOTE: 2026-04-30 16:56:08, self-evolved by tea_agent --- 新增monitor参数支持多显示器截图（mss按索引截屏）
+# NOTE: 2026-05-05, easyocr → optional, 缺失时提示 pip install tea_agent[ocr]
 def toolkit_ocr(
     action: str = "ocr_screen",
     region: str = "",
@@ -37,16 +38,25 @@ def toolkit_ocr(
 
     # --- 内部：懒加载 easyocr ---
     def _get_reader(langs):
-        # 使用闭包缓存
-        if not hasattr(_get_reader, '_reader'):
+        try:
             import easyocr
-            _get_reader._reader = easyocr.Reader(list(langs), gpu=False)
-            _get_reader._langs = langs
-        elif _get_reader._langs != langs:
-            import easyocr
-            _get_reader._reader = easyocr.Reader(list(langs), gpu=False)
-            _get_reader._langs = langs
-        return _get_reader._reader
+        except ImportError:
+            return None, (
+                "❌ easyocr 未安装。OCR 功能为可选依赖，请运行：\n"
+                "   pip install tea_agent[ocr]\n"
+                "   或手动：pip install easyocr"
+            )
+        try:
+            # 使用闭包缓存
+            if not hasattr(_get_reader, '_reader'):
+                _get_reader._reader = easyocr.Reader(list(langs), gpu=False)
+                _get_reader._langs = langs
+            elif _get_reader._langs != langs:
+                _get_reader._reader = easyocr.Reader(list(langs), gpu=False)
+                _get_reader._langs = langs
+            return _get_reader._reader, None
+        except Exception as e:
+            return None, f"❌ easyocr 初始化失败: {e}"
 
 # NOTE: 2026-04-30 16:56:31, self-evolved by tea_agent --- _screenshot支持monitor_idx参数，优先用mss按显示器索引截图
     # --- 内部：截屏（支持 region / monitor 两种模式）---
@@ -135,7 +145,10 @@ def toolkit_ocr(
 
     # --- OCR ---
     try:
-        reader = _get_reader(langs)
+        reader, err = _get_reader(langs)
+        if err:
+            return err
+
         results = reader.readtext(img_source, detail=1)
 
         if not results:

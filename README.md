@@ -1,8 +1,8 @@
-# TeaAgent v0.6.2
+# TeaAgent v0.6.3
 
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
 
-仅依赖 Python tk 库，无需浏览器，极致轻量。绝大部分代码由 LLM 自行生成，是一个「AI 写 AI」的实验项目。
+核心仅 8 个轻量依赖（openai、markdown、tkinterweb、pyautogui、mss、Pillow、requests、beautifulsoup4），OCR/TTS/ASR 为可选扩展。仅依赖 Python tk 库，无需浏览器，极致轻量。绝大部分代码由 LLM 自行生成，是一个「AI 写 AI」的实验项目。
 
 ## ⚠️ 安全警告
 本项目**未作安全沙盒**——Agent 可执行任意系统命令、修改自身代码。建议在虚拟机中运行。
@@ -377,7 +377,9 @@ tea_agent/
 - tkinter (通常自带)
 
 ```bash
-pip install -e .
+pip install -e .  # 核心依赖
+pip install -e ".[ocr]"     # + OCR (easyocr → torch 746MB)
+pip install -e ".[desktop]" # + 全部可选 (ocr+tts+asr)
 python -m tea_agent.main_db_gui
 ```
 
@@ -458,6 +460,7 @@ mqtt:
 
 | 版本 | 关键变化 |
 |------|---------|
+| v0.6.3 | 依赖瘦身：easyocr→可选, torch 746MB 不再必需 |
 | v0.6.2 | 历史加载三级渐进策略（早期纯文本 / 近期压缩 / 最新完整）|
 | v0.6.1 | GUI 自动重启 (watchdog) + 数据安全三道防线 + 续命 10 轮统一 |
 | v0.6.0 | Skill 模块化系统 (按需激活 -68% token) + toolkit_exec 硬超时 + Mixin bug修复 |

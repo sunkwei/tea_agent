@@ -14,12 +14,62 @@ digraph TeaAgent_Architecture {
     // 外部/用户
     // ═══════════════════════════════════════════
     user [label="👤 用户", fillcolor="#16213e", fontcolor="#e0e0e0", shape=ellipse, width=1.0];
-    gui    [label="🖥️ Tkinter GUI\n(HtmlFrame)", fillcolor="#16213e", fontcolor="#e0e0e0", shape=box3d];
-    cli    [label="⌨️ CLI\n(tea_main_cli.py)", fillcolor="#16213e", fontcolor="#e0e0e0", shape=box3d];
-    {rank=same; user; gui; cli}
+    gui    [label="🖥️ Tkinter GUI\n(main_db_gui.py)", fillcolor="#16213e", fontcolor="#e0e0e0", shape=box3d];
+    cli    [label="⌨️ CLI\n(tea_main_cli.py --config)", fillcolor="#16213e", fontcolor="#e0e0e0", shape=box3d];
+    mqtt_pc [label="📡 MQTT Client\n(mqtt_client.py)", fillcolor="#16213e", fontcolor="#e0e0e0", shape=box3d];
+    {rank=same; user; gui; cli; mqtt_pc}
 
     user -> gui  [style=dashed, color="#666"];
     user -> cli  [style=dashed, color="#666"];
+    user -> mqtt_pc [style=dashed, color="#666"];
+
+    // ═══════════════════════════════════════════
+    // AgentCore 共享基类 + MQTT 层
+    // ═══════════════════════════════════════════
+    subgraph cluster_core {
+        label="🧬 AgentCore 共享基类 + 连接器";
+        fontsize=13;
+        fontcolor="#4fc3f7";
+        style="rounded,filled";
+        color="#4fc3f7";
+        bgcolor="#0a1628";
+        labeljust=l;
+
+        agent_core [label="AgentCore\n(agent_core.py)\n\nGUI/CLI 共享:\n· MQTT 发布/订阅\n· _publish_to_mqtt()\n· 续命10轮统一\n· 会话锁 _sess_lock", fillcolor="#01579b", fontcolor="#4fc3f7", shape=box];
+
+        mqtt_conn [label="MQTT Agent Connector\n(mqtt_agent_connector.py)\n\n· 注册 broker\n· 订阅 tea/chat/+\n· 接收外部消息", fillcolor="#01579b", fontcolor="#4fc3f7"];
+
+        chat_room [label="Chat Room Connector\n(chat_room_connector.py)\n\n· chat_room_{who} 主题\n· 自动创建/回复\n· 保护不被摘要改名", fillcolor="#01579b", fontcolor="#4fc3f7"];
+
+        mqtt_broker [label="MQTT Broker\n(localhost:1883)\n\ntea/agent/in  ← 广播输入\ntea/agent/out → 广播输出\ntea/agent/{id}/in ← 单播", fillcolor="#263238", fontcolor="#80cbc4", shape=cylinder];
+    }
+
+    gui -> agent_core [color="#4fc3f7", style="bold"];
+    cli -> agent_core [color="#4fc3f7", style="bold"];
+    agent_core -> mqtt_conn [color="#4fc3f7"];
+    mqtt_pc -> mqtt_broker [color="#80cbc4", style=dashed];
+    mqtt_conn -> mqtt_broker [color="#80cbc4", dir=both];
+    chat_room -> mqtt_broker [color="#80cbc4", dir=both];
+
+    // ═══════════════════════════════════════════
+    // 自动重启 & 数据安全
+    // ═══════════════════════════════════════════
+    subgraph cluster_autorestart {
+        label="🔄 自动重启 & 数据安全";
+        fontsize=12;
+        fontcolor="#ff7043";
+        style="rounded,dashed";
+        color="#ff7043";
+        bgcolor="#1a0a04";
+        labeljust=l;
+
+        watchdog [label="watchdog 文件监控\n监控 tea_agent/**/*.py\n(排除 toolkit/)\n变更 → 防抖2s → 重启", fillcolor="#bf360c", fontcolor="#ffab91"];
+
+        safety [label="数据安全三道防线\n\n① _shutting_down 闸门\n   拒绝新操作\n② 等待 _sess_lock\n   (最长10s，DB写入完成)\n③ WAL checkpoint(TRUNCATE)\n   + close DB → 零丢失", fillcolor="#bf360c", fontcolor="#ffab91", shape=box];
+    }
+
+    watchdog -> safety [color="#ff7043", style=bold];
+    safety -> gui [color="#ff7043", label="os.execv()\n原地重启", style=bold, dir=both];
 
     // ═══════════════════════════════════════════
     // 模式检测 (入口前置)
@@ -37,8 +87,7 @@ digraph TeaAgent_Architecture {
         mode_mem    [label="CRITICAL 记忆注入\npriority=0\n🎯 严谨收敛 / 🎨 自由发散", fillcolor="#3d2a00", fontcolor="#f0c040", shape=note];
     }
 
-    gui -> mode_detect [color="#f0c040", style=dashed];
-    cli -> mode_detect [color="#f0c040", style=dashed];
+    agent_core -> mode_detect [color="#f0c040", style=dashed];
     mode_detect -> mode_mem [color="#f0c040"];
 
     // ═══════════════════════════════════════════
@@ -65,12 +114,12 @@ digraph TeaAgent_Architecture {
             step1 [label="① inject_memories\n记忆注入\nCRITICAL 无条件\n其余按打分排序", fillcolor="#003c4d", fontcolor="#00d2ff"];
             step2 [label="② add_user_message\n添加用户消息", fillcolor="#003c4d", fontcolor="#00d2ff"];
             step3 [label="③ summarize_old_history\n超 keep_turns 轮\n→ cheap_model 压缩", fillcolor="#003c4d", fontcolor="#00d2ff"];
-            step4 [label="④ tool_loop\n工具调用循环\nAPI ↔ tool_exec", fillcolor="#003c4d", fontcolor="#00d2ff", shape=box, width=2.0];
+            step4 [label="④ tool_loop\n工具调用循环\nAPI ↔ tool_exec\n续命10轮自动追加", fillcolor="#003c4d", fontcolor="#00d2ff", shape=box, width=2.2];
 
             step1 -> step2 -> step3 -> step4;
         }
 
-        step4_output [label="输出\nfull_reply + used_tools", fillcolor="#004d40", fontcolor="#4db6ac", shape=ellipse];
+        step4_output [label="输出\nfull_reply + used_tools\n→ _publish_to_mqtt()\n1:1 定向 / 1:N 广播", fillcolor="#004d40", fontcolor="#4db6ac", shape=ellipse];
         step4 -> step4_output;
     }
 
@@ -96,10 +145,10 @@ digraph TeaAgent_Architecture {
     main_api -> step4 [color="#e040fb", label="stream + tool_calls"];
 
     // ═══════════════════════════════════════════
-    // 工具层
+    // 工具层 (Skill 模块化)
     // ═══════════════════════════════════════════
     subgraph cluster_tools {
-        label="🔧 工具层 (35 tools · 7 大类)";
+        label="🔧 工具层 · Skill 模块化 (6 Skills, 35 tools, 默认激活 11)";
         fontsize=13;
         fontcolor="#69f0ae";
         style="rounded,filled";
@@ -107,25 +156,20 @@ digraph TeaAgent_Architecture {
         bgcolor="#0a2816";
         labeljust=l;
 
-        tools_sys   [label="系统操作\nexec / batch_exec / sudo_gui\ngettime / date_diff", fillcolor="#1b5e20", fontcolor="#69f0ae"];
-        tools_file  [label="文件配置\nfile / list_dir / config\nbuild / release_version", fillcolor="#1b5e20", fontcolor="#69f0ae"];
-        tools_screen [label="屏幕感知\nscreenshot / ocr / input", fillcolor="#1b5e20", fontcolor="#69f0ae"];
-        tools_know  [label="知识管理\nmemory / kb / search\n(百度+DuckDuckGo)", fillcolor="#1b5e20", fontcolor="#69f0ae"];
-        tools_evolve [label="自我进化\nsave / reload / self_evolve\nrollback / list_versions", fillcolor="#1b5e20", fontcolor="#69f0ae"];
-        tools_cog   [label="认知人格\nreflection / prompt_evolve\nsubconscious / proactive / mode", fillcolor="#1b5e20", fontcolor="#69f0ae"];
-        tools_voice [label="语音通知\nspeak / listen / notify\ncomment / self_report / dump", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+        tools_skill_core [label="🎛️ CORE (5) 始终激活\nsave/reload/rollback\nlist_versions/skill", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+        tools_skill_fs   [label="📁 file_system (4) 默认✓\nfile/exec/sudo_gui/pkg\n· exec 硬超时120s\n· sudo 自动 GUI 密码框\n· 实时截断压缩输出", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+        tools_skill_util [label="⏰ utility (2) 默认✓\ngettime/date_diff", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+        tools_skill_desk [label="🖥️ desktop (4)\nscreenshot/ocr\ninput/notify", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+        tools_skill_evo  [label="📝 self_evolution (10)\nself_evolve/build\nbump/release/run_tests\ncomment/config/toggle_reasoning\nprompt_evolve", fillcolor="#1b5e20", fontcolor="#69f0ae"];
+        tools_skill_mem  [label="🧠 memory_knowledge (3)\nmemory/kb/reflection", fillcolor="#1b5e20", fontcolor="#69f0ae"];
 
-        {rank=same; tools_sys; tools_file;}
-        {rank=same; tools_screen; tools_know;}
-        {rank=same; tools_evolve; tools_cog; tools_voice;}
+        {rank=same; tools_skill_core; tools_skill_fs; tools_skill_util;}
+        {rank=same; tools_skill_desk; tools_skill_evo; tools_skill_mem;}
     }
 
-    step4 -> tools_sys    [color="#69f0ae", style=dotted];
-    step4 -> tools_screen [color="#69f0ae", style=dotted];
-    step4 -> tools_evolve [color="#69f0ae", style=dotted];
-    step4 -> tools_know   [color="#69f0ae", style=dotted];
-    step4 -> tools_cog    [color="#69f0ae", style=dotted];
-    step4 -> tools_voice  [color="#69f0ae", style=dotted];
+    step4 -> tools_skill_fs   [color="#69f0ae", style=dotted];
+    step4 -> tools_skill_evo  [color="#69f0ae", style=dotted];
+    step4 -> tools_skill_mem  [color="#69f0ae", style=dotted];
 
     // ═══════════════════════════════════════════
     // 存储层
@@ -139,12 +183,36 @@ digraph TeaAgent_Architecture {
         bgcolor="#1a1408";
         labeljust=l;
 
-        db [label="chat_history.db\n━━━━━━━━━━━━━\ntopics · conversations · memories\nreflections · prompt_versions\nconfig_history", fillcolor="#3e2723", fontcolor="#ffab40", shape=cylinder];
+        db [label="chat_history.db\n━━━━━━━━━━━━━\ntopics · conversations · memories\nreflections · prompt_versions\nconfig_history\n\n路径可配置 (config.yaml paths)\n相对 config.yaml 目录", fillcolor="#3e2723", fontcolor="#ffab40", shape=cylinder];
     }
 
     step4_output -> db [color="#ffab40", label="write rounds"];
     step4_output -> gui [color="#4db6ac", label="render"];
     step4_output -> cli [color="#4db6ac", label="print"];
+    step4_output -> mqtt_conn [color="#80cbc4", label="MQTT push", style=dashed];
+
+    // ═══════════════════════════════════════════
+    // Token 优化：双层压缩 + 三级历史加载
+    // ═══════════════════════════════════════════
+    subgraph cluster_compress {
+        label="📉 Token 优化：双层压缩 + 三级历史加载";
+        fontsize=12;
+        fontcolor="#ffd740";
+        style="rounded,filled";
+        color="#ffd740";
+        bgcolor="#1a1608";
+        labeljust=l;
+
+        compress_l1 [label="第一层: toolkit_exec 实时截断\nstdout ≤ 4000字符/80行\nstderr ≤ 500字符/20行", fillcolor="#5d4037", fontcolor="#ffd740"];
+        compress_l2 [label="第二层: load_history 智能压缩\n长输出 → 首3+尾3+模式摘要\n短输出(≤600字符) 原样保留", fillcolor="#5d4037", fontcolor="#ffd740"];
+        compress_l3 [label="第三层: 三级渐进加载\n早期轮次 → user+ai_msg (纯文本)\n近期轮次 → user+rounds (压缩)\n最新一轮 → user+rounds (完整)", fillcolor="#5d4037", fontcolor="#ffd740"];
+
+        compress_l1 -> compress_l2 -> compress_l3;
+    }
+
+    step4 -> compress_l1 [color="#ffd740", style=dotted];
+    db -> compress_l2 [color="#ffd740", style=dotted, label="load_history"];
+    compress_l3 -> step3 [color="#ffd740", style=dashed, label="裁剪旧轮次"];
 
     // ═══════════════════════════════════════════
     // 认知层 ①: 记忆系统
@@ -276,7 +344,7 @@ digraph TeaAgent_Architecture {
 
     sub_insight -> kb_files [color="#ffd740", style=dotted];
     sub_dream -> kb_files [color="#ffd740", style=dotted];
-    tools_know -> kb_files [color="#69f0ae", style=dotted];
+    tools_skill_mem -> kb_files [color="#69f0ae", style=dotted];
 
     // ═══════════════════════════════════════════
     // 图例
@@ -300,5 +368,5 @@ digraph TeaAgent_Architecture {
     // ═══════════════════════════════════════════
     // 版本戳
     // ═══════════════════════════════════════════
-    footer [label="TeaAgent v0.5.0 · 35 tools · 3 层认知 · 双模式人格 · 潜意识引擎 v2.1\nGenerated 2026-05-02", shape=plaintext, fontcolor="#666666", fontsize=9];
+    footer [label="TeaAgent v0.6.2 · Skill模块化 6 Skills · 双层压缩 · 三级历史加载 · 自动重启(watchdog) · MQTT 双向通信\nGenerated 2026-05-04", shape=plaintext, fontcolor="#666666", fontsize=9];
 }

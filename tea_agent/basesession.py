@@ -102,7 +102,7 @@ class BaseChatSession(ABC):
     # 修复中断会话后 400 错误：assistant tool_calls 之后必须有对应的 tool 消息
 # NOTE: 2026-05-04 12:57:20, self-evolved by tea_agent --- load_history 压缩工具结果：短则保留原样，长则保持首尾+摘要，确保上下文连贯
     @staticmethod
-    def _compress_tool_content(content: str, max_lines: int = 6, max_chars: int = 600) -> str:
+    def _compress_tool_content(content: str, max_lines: int = 30, max_chars: int = 1024) -> str:
         """
         智能压缩工具输出，保持上下文连贯。
 
@@ -127,7 +127,7 @@ class BaseChatSession(ABC):
         total_chars = len(content)
 
         # 短输出直接保留
-        if total_chars <= max_chars and total_lines <= 10:
+        if total_chars <= max_chars and total_lines <= 100:
             return content
 
         # 长输出：首尾保留
@@ -312,21 +312,26 @@ class BaseChatSession(ABC):
 
         for i, conv in enumerate(conversations):
             is_old = i < old_count
+            is_last = i == total - 1
             self.messages.append({"role": "user", "content": conv["user_msg"]})
 
+            # NOTE: 2026-05-03 06:37:54, self-evolved by tea_agent --- load_history 中加载 rounds_json_parsed 时调用 _repair_incomplete_tool_chains 修复中断链
+            # NOTE: 2026-05-04 12:57:33, self-evolved by tea_agent --- load_history 最近N轮加载时调用 _compress_tool_rounds 压缩工具输出
             if is_old:
                 # 旧轮次：仅保留最终 ai_msg，丢弃中间工具调用链
                 self.messages.append({"role": "assistant", "content": conv["ai_msg"]})
-# NOTE: 2026-05-03 06:37:54, self-evolved by tea_agent --- load_history 中加载 rounds_json_parsed 时调用 _repair_incomplete_tool_chains 修复中断链
-# NOTE: 2026-05-04 12:57:33, self-evolved by tea_agent --- load_history 最近N轮加载时调用 _compress_tool_rounds 压缩工具输出
             else:
                 # 最近N轮：加载完整工具调用链（工具输出已压缩）
+                # 2026-05-05 最新一轮，不做任何压缩 by sunkw
                 rounds = conv.get("rounds_json_parsed")
                 if rounds and conv.get("is_func_calling"):
                     # 修复中断导致的不完整工具调用链
                     repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
                     # 压缩工具输出，减少 token 消耗但保持上下文连贯
-                    compressed = BaseChatSession._compress_tool_rounds(repaired)
+                    if is_last:
+                        compressed = repaired
+                    else:
+                        compressed = BaseChatSession._compress_tool_rounds(repaired)
                     if len(repaired) != len(rounds):
                         logger.warning(
                             f"load_history: 修复不完整链 ({len(rounds)}→{len(repaired)}), "

@@ -58,7 +58,8 @@ class AgentCore:
         db_path = Path(cfg.paths.db_path_abs)
         self.db = Storage(db_path=str(db_path))
         self.toolkit = tlk.Toolkit(str(tool_dir))
-        tlk._toolkit_ = self.toolkit
+        tlk._toolkit_ = self.toolkit   ## XXX: _toolkit_ 为 tlk 名字空间下的变量，这里初始化，被
+                                       ##   tlk.Toolkit 中的方法使用； 
         tlk.toolkit_reload()
 
         # ── 4. 启动连接器 ──
@@ -93,7 +94,7 @@ class AgentCore:
             import watchdog.events
             import watchdog.observers
         except ImportError:
-            logger.debug("watchdog 未安装，跳过文件监控")
+            logger.warning("watchdog 未安装，跳过文件监控，不支持自动重启")
             return
 
         tea_agent_dir = Path(__file__).parent  # tea_agent/ 包目录
@@ -177,6 +178,7 @@ class AgentCore:
         observer.daemon = True
         observer.start()
         logger.info("📁 文件监控已启动（非 toolkit .py 变更时自动重启）")
+
     def _start_connectors(self):
         """启动 chat_room 和 MQTT 连接器（非阻塞守护线程）。"""
         try:

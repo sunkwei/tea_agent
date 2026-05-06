@@ -173,11 +173,21 @@ class AgentCore:
                     os.execv(sys.executable, args)
 
         handler = _RestartHandler(self)
-        observer = watchdog.observers.Observer()
-        observer.schedule(handler, str(tea_agent_dir), recursive=True)
-        observer.daemon = True
-        observer.start()
+        self._observer = watchdog.observers.Observer()
+        self._observer.schedule(handler, str(tea_agent_dir), recursive=True)
+        self._observer.daemon = True
+        self._observer.start()
         logger.info("📁 文件监控已启动（非 toolkit .py 变更时自动重启）")
+# NOTE: 2026-05-05 gen by claude, 退出时停止 watchdog observer 避免线程残留
+    def _stop_file_watcher(self):
+        """停止文件监控(退出时调用)."""
+        if hasattr(self, '_observer') and self._observer and self._observer.is_alive():
+            try:
+                self._observer.stop()
+                self._observer.join(timeout=3)
+                logger.info("📁 文件监控已停止")
+            except Exception:
+                pass
 
     def _start_connectors(self):
         """启动 chat_room 和 MQTT 连接器（非阻塞守护线程）。"""

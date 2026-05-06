@@ -1,6 +1,8 @@
 # @2026-05-01 gen by tea_agent, 跨平台桌面通知
-# version: 1.0.0
+# version: 1.0.1
 
+# NOTE: 2026-05-05 gen by claude, 修复 Windows MessageBoxW 阻塞主线程导致无法退出 —
+#   优先使用 PowerShell Toast（非阻塞），MessageBoxW 仅作为最后兜底且在线程中执行
 # NOTE: 2026-05-02 09:16:55, self-evolved by tea_agent --- toolkit_notify 多级回退对齐 GUI：GI→notify-send→kdialog→zenity→wall
 def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: int = 5000):
     import sys
@@ -76,25 +78,35 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
             return (1, "", f"macOS 通知失败: {e}")
 
     elif sys.platform == 'win32':
+        # ── 优先：PowerShell Toast（非阻塞，不卡主线程）──
+        try:
+            ps = f'''
+            [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
+            $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+            $texts = $template.GetElementsByTagName("text")
+            $texts[0].AppendChild($template.CreateTextNode("{title}")) > $null
+            $texts[1].AppendChild($template.CreateTextNode("{message}")) > $null
+            $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
+            [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("TeaAgent").Show($toast)
+            '''
+            subprocess.run(['powershell', '-Command', ps], timeout=10)
+            return (0, f"通知已发送: {title}", "")
+        except Exception:
+            pass
+
+        # ── 兜底：MessageBoxW 在线程中执行，避免阻塞主线程 ──
         try:
             import ctypes
-            ctypes.windll.user32.MessageBoxW(0, message, title, 0x40)
+            import threading
+
+            def _msgbox():
+                ctypes.windll.user32.MessageBoxW(0, message, title, 0x40)
+
+            t = threading.Thread(target=_msgbox, daemon=True)
+            t.start()
             return (0, f"通知已弹出: {title}", "")
         except Exception:
-            try:
-                ps = f'''
-                [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
-                $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-                $texts = $template.GetElementsByTagName("text")
-                $texts[0].AppendChild($template.CreateTextNode("{title}")) > $null
-                $texts[1].AppendChild($template.CreateTextNode("{message}")) > $null
-                $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
-                [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("TeaAgent").Show($toast)
-                '''
-                subprocess.run(['powershell', '-Command', ps], timeout=10)
-                return (0, f"通知已发送: {title}", "")
-            except Exception as e:
-                return (1, "", f"Windows 通知失败: {e}")
+            return (1, "", f"Windows 通知失败")
 
     else:
         return (1, "", f"不支持的操作系统: {sys.platform}")

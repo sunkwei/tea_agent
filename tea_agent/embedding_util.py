@@ -257,13 +257,17 @@ class EmbeddingEngine:
         logger.debug(f"TF-IDF 词汇表: {self._tfidf._doc_count} 文档, "
                      f"{len(self._tfidf._doc_freq)} 特征")
 
+# NOTE: 2026-05-07 07:39:09, self-evolved by tea_agent --- cosine_similarity 改用 numpy 向量化计算
     def cosine_similarity(self, a: List[float], b: List[float]) -> float:
-        """计算两个向量的余弦相似度"""
+        """计算两个向量的余弦相似度（numpy 加速）"""
+        import numpy as np
         if len(a) != len(b):
             raise ValueError(f"向量维度不匹配: {len(a)} vs {len(b)}")
-        dot = sum(x * y for x, y in zip(a, b))
-        na = math.sqrt(sum(x * x for x in a))
-        nb = math.sqrt(sum(x * x for x in b))
+        aa = np.array(a, dtype=np.float32)
+        bb = np.array(b, dtype=np.float32)
+        dot = float(aa @ bb)
+        na = float(np.linalg.norm(aa))
+        nb = float(np.linalg.norm(bb))
         if na == 0 or nb == 0:
             return 0.0
         return dot / (na * nb)

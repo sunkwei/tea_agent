@@ -139,6 +139,7 @@ class Storage:
                 FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
             )
         ''')
+# NOTE: 2026-05-06 19:16:44, self-evolved by tea_agent --- _init_tables 新增 msg_vectors 表用于存储用户消息的文本向量
         # 2026-04-30 gen by deepseek-v4-pro, 配置变更历史表（自我调优追踪）
         c.execute('''
             CREATE TABLE IF NOT EXISTS config_history (
@@ -149,6 +150,17 @@ class Storage:
                 reason TEXT DEFAULT '',
                 source_reflection_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        # 2026-05-06 gen by claude, 消息文本向量表（用于语义搜索）
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS msg_vectors (
+                conversation_id INTEGER PRIMARY KEY,
+                embedding TEXT NOT NULL,
+                dimension INTEGER DEFAULT 0,
+                model_name TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
             )
         ''')
         self.conn.commit()
@@ -1069,6 +1081,228 @@ class Storage:
         rows = c.fetchall()
         c.close()
         return [dict(r) for r in rows]
+
+# NOTE: 2026-05-06 19:17:38, self-evolved by tea_agent --- Storage 类新增向量CRUD方法：store_embedding、get_msg_embedding、get_all_embeddings、search_by_vector
+    # ============================================================
+    # 2026-05-06 gen by claude, 文本向量存储与语义搜索
+    # ============================================================
+
+    def store_embedding(self, conversation_id: int, embedding: list, model_name: str = "", dimension: int = 0):
+        """为指定 conversation 存储其 user_msg 的文本向量"""
+        import json
+        emb_json = json.dumps(embedding, ensure_ascii=False)
+        dim = dimension or len(embedding)
+        c = self.conn.cursor()
+        c.execute('''
+            INSERT OR REPLACE INTO msg_vectors (conversation_id, embedding, dimension, model_name, created_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (conversation_id, emb_json, dim, model_name))
+        self.conn.commit()
+        c.close()
+
+    def get_msg_embedding(self, conversation_id: int) -> Optional[List[float]]:
+        """获取指定 conversation 的文本向量"""
+        import json
+        c = self.conn.cursor()
+        c.execute('SELECT embedding FROM msg_vectors WHERE conversation_id = ?', (conversation_id,))
+        row = c.fetchone()
+        c.close()
+        if row:
+            try:
+                return json.loads(row["embedding"])
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return None
+
+    def get_all_embeddings(self) -> List[Dict]:
+        """
+        获取所有已存储的向量及其关联信息。
+        
+        Returns:
+            [{"conversation_id": int, "embedding": [float,...], "user_msg": str,
+              "topic_id": int, "topic_title": str}, ...]
+        """
+        import json
+        c = self.conn.cursor()
+        c.execute('''
+            SELECT v.conversation_id, v.embedding, c.user_msg, c.topic_id, t.title as topic_title
+            FROM msg_vectors v
+            JOIN conversations c ON v.conversation_id = c.id
+            JOIN topics t ON c.topic_id = t.topic_id
+            ORDER BY v.created_at DESC
+        ''')
+        rows = c.fetchall()
+        c.close()
+        results = []
+        for row in rows:
+            d = dict(row)
+            try:
+                d["embedding"] = json.loads(d["embedding"])
+            except (json.JSONDecodeError, TypeError):
+                d["embedding"] = None
+            results.append(d)
+        return results
+
+    def search_by_vector(self, query_embedding: List[float], top_k: int = 10,
+                          min_similarity: float = 0.3) -> List[Dict]:
+        """
+        根据查询向量进行余弦相似度搜索，返回最匹配的消息。
+
+        Args:
+            query_embedding: 查询文本的向量
+            top_k: 返回结果数
+            min_similarity: 最低相似度阈值
+
+        Returns:
+            [{"conversation_id": int, "similarity": float, "user_msg": str,
+              "ai_msg": str, "topic_id": int, "topic_title": str}, ...]
+        """
+        import json
+        import math
+
+        all_embs = self.get_all_embeddings()
+        if not all_embs:
+            return []
+
+        # 预计算查询向量的模
+        q_norm = math.sqrt(sum(v * v for v in query_embedding))
+        if q_norm == 0:
+            return []
+
+        scored = []
+        for item in all_embs:
+            emb = item.get("embedding")
+            if not emb or len(emb) != len(query_embedding):
+                continue
+            # 余弦相似度
+            dot = sum(a * b for a, b in zip(query_embedding, emb))
+            e_norm = math.sqrt(sum(v * v for v in emb))
+            if e_norm == 0:
+                continue
+            sim = dot / (q_norm * e_norm)
+            if sim >= min_similarity:
+                scored.append({
+                    "conversation_id": item["conversation_id"],
+                    "similarity": round(sim, 4),
+                    "user_msg": item["user_msg"],
+                    "topic_id": item["topic_id"],
+                    "topic_title": item["topic_title"],
+                })
+
+        # 按相似度降序
+        scored.sort(key=lambda x: x["similarity"], reverse=True)
+        # 补充 ai_msg
+        for s in scored[:top_k]:
+            c = self.conn.cursor()
+            c.execute('SELECT ai_msg FROM conversations WHERE id = ?', (s["conversation_id"],))
+            row = c.fetchone()
+            c.close()
+            s["ai_msg"] = row["ai_msg"] if row else ""
+
+        return scored[:top_k]
+
+# NOTE: 2026-05-06 19:21:23, self-evolved by tea_agent --- 新增 search_by_keyword 方法作为向量搜索的关键词回退
+    def search_by_keyword(self, query: str, top_k: int = 50) -> List[Dict]:
+        """
+        关键词模糊搜索（LIKE 匹配），用于向量不可用时的回退。
+
+        Args:
+            query: 搜索关键词
+            top_k: 返回结果数
+
+        Returns:
+            [{"conversation_id": int, "similarity": float, "user_msg": str,
+              "ai_msg": str, "topic_id": int, "topic_title": str}, ...]
+        """
+        c = self.conn.cursor()
+        # 在所有 user_msg 中模糊搜索
+        c.execute('''
+            SELECT c.id as conversation_id, c.user_msg, c.ai_msg, c.topic_id, t.title as topic_title
+            FROM conversations c
+            JOIN topics t ON c.topic_id = t.topic_id
+            WHERE c.user_msg LIKE ?
+            ORDER BY c.stamp DESC
+            LIMIT ?
+        ''', (f"%{query}%", top_k))
+        rows = c.fetchall()
+        c.close()
+        # 简单的相似度分数：查询词在消息中的出现频率
+        results = []
+        qlen = len(query) if query else 1
+        for row in rows:
+            d = dict(row)
+            user_msg = d.get("user_msg", "") or ""
+            # 简单的包含度分数
+            score = user_msg.lower().count(query.lower()) * len(query) / max(len(user_msg), 1)
+            d["similarity"] = min(round(score * 10, 4), 1.0)  # scale to 0~1
+            results.append(d)
+        results.sort(key=lambda x: x["similarity"], reverse=True)
+        return results
+
+    def get_vector_count(self) -> int:
+        """已存储向量的消息数量"""
+        c = self.conn.cursor()
+        c.execute("SELECT COUNT(*) FROM msg_vectors")
+        count = c.fetchone()[0]
+        c.close()
+        return count
+
+    def get_unvectorized_conversations(self, limit: int = 100) -> List[Dict]:
+        """
+        获取尚未生成向量的 conversation（仅限有 user_msg 的）。
+        用于批量生成向量。
+        """
+        c = self.conn.cursor()
+        c.execute('''
+            SELECT c.id, c.user_msg, c.topic_id
+            FROM conversations c
+            LEFT JOIN msg_vectors v ON c.id = v.conversation_id
+            WHERE v.conversation_id IS NULL AND c.user_msg != ''
+            ORDER BY c.stamp DESC
+            LIMIT ?
+        ''', (limit,))
+        rows = c.fetchall()
+        c.close()
+        return [dict(r) for r in rows]
+
+# NOTE: 2026-05-06 19:22:03, self-evolved by tea_agent --- Storage 新增 vectorize_conversation 和 batch_vectorize 方法
+    def vectorize_conversation(self, conversation_id: int, user_msg: str,
+                                 model_name: str = "", embedding: Optional[List[float]] = None) -> bool:
+        """
+        为单个 conversation 生成并存储向量。若提供 embedding 则直接存储，
+        否则需要外部调用 embedding_util 生成后传入。
+
+        Returns:
+            是否成功存储
+        """
+        if not embedding:
+            return False
+        self.store_embedding(conversation_id, embedding, model_name, len(embedding))
+        return True
+
+    def batch_vectorize(self, conversation_data: List[Dict], model_name: str = "") -> int:
+        """
+        批量存储向量。conversation_data 每项需含:
+        {"conversation_id": int, "embedding": [float,...]}
+
+        Returns:
+            成功存储的数量
+        """
+        count = 0
+        for item in conversation_data:
+            cid = item.get("conversation_id")
+            emb = item.get("embedding")
+            if cid and emb:
+                self.store_embedding(cid, emb, model_name, len(emb))
+                count += 1
+        return count
+
+    def delete_vector(self, conversation_id: int):
+        """删除指定 conversation 的向量"""
+        c = self.conn.cursor()
+        c.execute('DELETE FROM msg_vectors WHERE conversation_id = ?', (conversation_id,))
+        self.conn.commit()
+        c.close()
 
 # NOTE: 2026-05-04 17:15:28, self-evolved by tea_agent --- 新增 Storage.close() 方法：wal_checkpoint(TRUNCATE) 合并 WAL + 关闭连接
     # ============================================================

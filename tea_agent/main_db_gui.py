@@ -592,6 +592,7 @@ class MemoryDialog(tk.Toplevel):
 class TopicDialog(tk.Toplevel):
     """主题管理弹窗 — 浏览/切换/导出/重命名/删除"""
 
+# NOTE: 2026-05-06 19:20:44, self-evolved by tea_agent --- TopicDialog.__init__ 初始化搜索状态变量
     def __init__(self, parent, storage, on_switch=None):
         super().__init__(parent)
         self.db = storage
@@ -601,6 +602,10 @@ class TopicDialog(tk.Toplevel):
         self.minsize(700, 400)
         self.transient(parent)
         self.grab_set()
+
+        # 搜索状态
+        self._is_search_mode = False
+        self._search_results = []
 
         _init_fonts()
         self._create_ui()
@@ -631,34 +636,73 @@ class TopicDialog(tk.Toplevel):
         ttk.Radiobutton(toolbar, text="完整", variable=self.export_mode, value="all").pack(side=tk.LEFT, padx=2)
         ttk.Radiobutton(toolbar, text="仅用户", variable=self.export_mode, value="user").pack(side=tk.LEFT, padx=2)
 
+# NOTE: 2026-05-06 19:19:28, self-evolved by tea_agent --- TopicDialog._create_ui 在树形列表上方添加语义搜索栏
+# NOTE: 2026-05-06 19:22:13, self-evolved by tea_agent --- TopicDialog 工具栏添加「生成向量」按钮用于批量向量化未处理消息
+        ttk.Button(toolbar, text="🔄 生成向量", command=self._generate_vectors).pack(side=tk.RIGHT, padx=2)
         ttk.Button(toolbar, text="📋 导出选中", command=self._export_selected).pack(side=tk.RIGHT, padx=2)
         ttk.Button(toolbar, text="📦 导出全部", command=self._export_all).pack(side=tk.RIGHT, padx=2)
 
-        # 主题列表
-        list_frame = ttk.Frame(self)
-        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+        # 语义搜索栏
+        search_frame = ttk.Frame(self)
+        search_frame.pack(fill=tk.X, padx=10, pady=(4, 0))
 
-        columns = ("id", "title", "created", "tokens", "convs", "active")
-        self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=12)
+        ttk.Label(search_frame, text="🔍 搜索消息:", font=(SYSTEM_FONT, _fs(10))).pack(side=tk.LEFT, padx=(0, 4))
+        self.search_var = tk.StringVar()
+        self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=40,
+                                       font=(SYSTEM_FONT, _fs(10)))
+        self.search_entry.pack(side=tk.LEFT, padx=2)
+        self.search_entry.bind("<Return>", lambda e: self._do_search())
 
-        self.tree.heading("id", text="ID", command=lambda: self._sort("id"))
-        self.tree.heading("title", text="标题", command=lambda: self._sort("title"))
-        self.tree.heading("created", text="创建时间", command=lambda: self._sort("created"))
-        self.tree.heading("tokens", text="Token消耗", command=lambda: self._sort("tokens"))
-        self.tree.heading("convs", text="对话数", command=lambda: self._sort("convs"))
-        self.tree.heading("active", text="状态")
+        ttk.Button(search_frame, text="搜索", command=self._do_search).pack(side=tk.LEFT, padx=2)
+        ttk.Button(search_frame, text="清除", command=self._clear_search).pack(side=tk.LEFT, padx=2)
+        self.search_mode_var = tk.StringVar(value="")
+        ttk.Label(search_frame, textvariable=self.search_mode_var,
+                  font=(SYSTEM_FONT, _fs(9)), foreground="gray").pack(side=tk.LEFT, padx=(10, 0))
 
-        self.tree.column("id", width=50, anchor=tk.CENTER)
-        self.tree.column("title", width=280)
-        self.tree.column("created", width=140)
-        self.tree.column("tokens", width=100, anchor=tk.E)
-        self.tree.column("convs", width=70, anchor=tk.CENTER)
-        self.tree.column("active", width=60, anchor=tk.CENTER)
+# NOTE: 2026-05-06 19:49:04, self-evolved by tea_agent --- TopicDialog 改用双 Treeview 模式（topic_tree + search_tree），避免列切换崩溃
+        # 主题列表区域（双 Treeview 按模式显隐，避免列切换崩溃）
+        self.list_frame = ttk.Frame(self)
+        self.list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
 
-        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
-        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # --- 主题列表 Treeview ---
+        topic_columns = ("id", "title", "created", "tokens", "convs", "active")
+        self.topic_tree = ttk.Treeview(self.list_frame, columns=topic_columns, show="headings", height=12)
+        self.topic_tree.heading("id", text="ID", command=lambda: self._sort("id"))
+        self.topic_tree.heading("title", text="标题", command=lambda: self._sort("title"))
+        self.topic_tree.heading("created", text="创建时间", command=lambda: self._sort("created"))
+        self.topic_tree.heading("tokens", text="Token消耗", command=lambda: self._sort("tokens"))
+        self.topic_tree.heading("convs", text="对话数", command=lambda: self._sort("convs"))
+        self.topic_tree.heading("active", text="状态")
+        self.topic_tree.column("id", width=50, anchor=tk.CENTER)
+        self.topic_tree.column("title", width=280)
+        self.topic_tree.column("created", width=140)
+        self.topic_tree.column("tokens", width=100, anchor=tk.E)
+        self.topic_tree.column("convs", width=70, anchor=tk.CENTER)
+        self.topic_tree.column("active", width=60, anchor=tk.CENTER)
+        self.topic_tree.bind("<Double-1>", lambda e: self._switch_to())
+
+        self.topic_scrollbar = ttk.Scrollbar(self.list_frame, orient=tk.VERTICAL, command=self.topic_tree.yview)
+        self.topic_tree.configure(yscrollcommand=self.topic_scrollbar.set)
+
+        # --- 搜索结果 Treeview ---
+        search_columns = ("sim", "user_msg", "topic", "ai_preview")
+        self.search_tree = ttk.Treeview(self.list_frame, columns=search_columns, show="headings", height=12)
+        self.search_tree.heading("sim", text="相似度")
+        self.search_tree.heading("user_msg", text="用户消息")
+        self.search_tree.heading("topic", text="所属主题")
+        self.search_tree.heading("ai_preview", text="AI 回复预览")
+        self.search_tree.column("sim", width=70, anchor=tk.CENTER)
+        self.search_tree.column("user_msg", width=350)
+        self.search_tree.column("topic", width=150)
+        self.search_tree.column("ai_preview", width=250)
+        self.search_tree.bind("<Double-1>", lambda e: self._switch_to())
+
+        self.search_scrollbar = ttk.Scrollbar(self.list_frame, orient=tk.VERTICAL, command=self.search_tree.yview)
+        self.search_tree.configure(yscrollcommand=self.search_scrollbar.set)
+
+        # 默认显示主题列表
+        self.topic_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.topic_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         # 操作按钮
         btn_frame = ttk.Frame(self)
@@ -668,14 +712,28 @@ class TopicDialog(tk.Toplevel):
         ttk.Button(btn_frame, text="✅ 启用主题", command=self._activate).pack(side=tk.LEFT, padx=2)
         ttk.Button(btn_frame, text="🗑️ 硬删除", command=self._hard_delete).pack(side=tk.LEFT, padx=2)
 
-        # 绑定
-        self.tree.bind("<Double-1>", lambda e: self._switch_to())
+# NOTE: 2026-05-06 19:51:22, self-evolved by tea_agent --- 移除残留的 self.tree.bind（双树各自已绑定）
+        # 绑定（双树各自绑定在 _create_ui 中已设置）
         self.bind("<Escape>", lambda e: self.destroy())
         self.bind("<Delete>", lambda e: self._deactivate())
 
+# NOTE: 2026-05-06 19:20:32, self-evolved by tea_agent --- TopicDialog._refresh 支持搜索模式：搜索时切换列和填充搜索结果
+# NOTE: 2026-05-06 19:49:19, self-evolved by tea_agent --- _refresh 改用 topic_tree + 显隐切换逻辑
     def _refresh(self):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
+        """刷新列表：搜索模式下显示搜索结果，否则显示主题列表"""
+        if self._is_search_mode:
+            self._show_search_results()
+            return
+
+        # ---- 正常主题列表模式 ----
+        # 显隐切换
+        self.search_tree.pack_forget()
+        self.search_scrollbar.pack_forget()
+        self.topic_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.topic_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for item in self.topic_tree.get_children():
+            self.topic_tree.delete(item)
 
         try:
             topics = self.db.list_topics()
@@ -704,9 +762,10 @@ class TopicDialog(tk.Toplevel):
                 status = "🟢 活跃" if is_active else "⚫ 停用"
                 display_tokens = f"{tokens:,}" if tokens > 0 else "-"
 
-                self.tree.insert("", tk.END,
-                                 values=(tid, title, created, display_tokens, convs, status),
-                                 iid=str(tid))
+# NOTE: 2026-05-06 19:49:26, self-evolved by tea_agent --- _refresh 中 self.tree → self.topic_tree
+                self.topic_tree.insert("", tk.END,
+                                        values=(tid, title, created, display_tokens, convs, status),
+                                        iid=str(tid))
 
             self.stats_var.set(
                 f"共 {len(topics)} 个主题 (活跃: {active_count}) | "
@@ -715,8 +774,162 @@ class TopicDialog(tk.Toplevel):
         except Exception as e:
             self.stats_var.set(f"加载失败: {e}")
 
+    # ── 搜索相关方法 ─────────────────────────────────────────────
+
+# NOTE: 2026-05-06 19:50:54, self-evolved by tea_agent --- 删除无用的 _setup_topic_columns / _setup_search_columns
+# NOTE: 2026-05-06 19:21:47, self-evolved by tea_agent --- _do_search 增加关键词回退：向量不可用时使用 LIKE 搜索
+# NOTE: 2026-05-06 19:45:29, self-evolved by tea_agent --- _do_search 改为按向量模型配置分流：已配置→向量搜索，未配置→仅LIKE
+    def _do_search(self):
+        """执行搜索：向量模型已配置→语义向量搜索，否则→SQL LIKE"""
+        query = self.search_var.get().strip()
+        if not query:
+            self._clear_search()
+            return
+
+        self._is_search_mode = True
+
+        try:
+            from tea_agent.config import get_config
+            cfg = get_config()
+
+            use_vector = cfg.embedding.is_configured
+            if use_vector:
+                # 向量模型已配置 → 语义向量搜索
+                from tea_agent.embedding_util import get_embedding_engine
+                engine = get_embedding_engine()
+                self.search_mode_var.set(f"模式: {engine.mode}(向量) | 搜索中...")
+                self.stats_var.set("正在向量语义搜索...")
+                query_vec = engine.embed(query)
+                results = self.db.search_by_vector(query_vec, top_k=50, min_similarity=0.15)
+            else:
+                # 未配置向量模型 → SQL LIKE 回退
+                self.search_mode_var.set("模式: 关键词(LIKE) | 搜索中...")
+                self.stats_var.set("正在关键词搜索...")
+                results = self.db.search_by_keyword(query, top_k=50)
+
+            self._search_results = results
+            self._show_search_results()
+
+            mode_str = "向量" if use_vector else "关键词"
+            self.search_mode_var.set(f"模式: {mode_str} | 找到 {len(results)} 条结果")
+        except Exception as e:
+            self.stats_var.set(f"搜索失败: {e}")
+            self.search_mode_var.set("搜索失败")
+            import logging
+            logging.getLogger("GUI").warning(f"搜索失败: {e}")
+
+# NOTE: 2026-05-06 19:49:44, self-evolved by tea_agent --- _show_search_results 改用 search_tree + 显隐切换
+    def _show_search_results(self):
+        """在搜索结果 Treeview 中显示搜索结果"""
+        # 显隐切换
+        self.topic_tree.pack_forget()
+        self.topic_scrollbar.pack_forget()
+        self.search_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.search_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for item in self.search_tree.get_children():
+            self.search_tree.delete(item)
+
+        results = getattr(self, "_search_results", [])
+        if not results:
+            self.stats_var.set("未找到匹配的消息，尝试更换关键词")
+            return
+
+        for r in results:
+            sim_pct = f"{r['similarity'] * 100:.0f}%"
+            user_msg = (r.get("user_msg", "") or "")[:80]
+            topic_label = f"#{r.get('topic_id','?')} {r.get('topic_title','')}"[:30]
+            ai_preview = (r.get("ai_msg", "") or "")[:60]
+            conv_id = r.get("conversation_id", 0)
+
+            self.search_tree.insert("", tk.END,
+                                    values=(sim_pct, user_msg, topic_label, ai_preview),
+                                    iid=str(conv_id))
+
+        self.stats_var.set(f"搜索结果: {len(results)} 条匹配消息")
+
+# NOTE: 2026-05-06 19:22:38, self-evolved by tea_agent --- TopicDialog 新增 _generate_vectors 批量向量化方法
+    def _clear_search(self):
+        """清除搜索，恢复主题列表"""
+        self._is_search_mode = False
+        self._search_results = []
+        self.search_var.set("")
+        self.search_mode_var.set("")
+        self._refresh()
+
+# NOTE: 2026-05-06 19:45:47, self-evolved by tea_agent --- _generate_vectors 先检查向量模型是否配置，未配置则提示
+    def _generate_vectors(self):
+        """批量生成未向量化消息的文本向量"""
+        from tea_agent.config import get_config
+        cfg = get_config()
+        if not cfg.embedding.is_configured:
+            self.stats_var.set("⚠️ 请先在「配置→向量模型」中设置 API URL 和模型名称")
+            return
+
+        from tea_agent.embedding_util import get_embedding_engine
+
+        # 获取未向量化的 conversation
+        unvec = self.db.get_unvectorized_conversations(limit=200)
+        if not unvec:
+            self.stats_var.set("✅ 所有消息已向量化，无需生成")
+            return
+
+        import threading
+
+        def _run():
+            try:
+                engine = get_embedding_engine()
+                self.stats_var.set(f"正在向量化 {len(unvec)} 条消息 (模式: {engine.mode})...")
+                self.search_mode_var.set("批量向量化进行中...")
+
+                # 先构建 TF-IDF 词汇表
+                texts = [item["user_msg"] for item in unvec if item.get("user_msg")]
+                if engine.mode == "tfidf":
+                    engine.build_tfidf_vocabulary(texts)
+
+                count = 0
+                batch_size = 20
+                for i in range(0, len(unvec), batch_size):
+                    batch = unvec[i:i + batch_size]
+                    batch_texts = [item["user_msg"] for item in batch if item.get("user_msg")]
+
+                    try:
+                        if engine.mode == "api":
+                            embeddings = engine.embed_batch(batch_texts)
+                        else:
+                            embeddings = [engine.embed(t) for t in batch_texts]
+
+                        # 存储
+                        batch_data = []
+                        for j, item in enumerate(batch):
+                            if j < len(embeddings):
+                                batch_data.append({
+                                    "conversation_id": item["id"],
+                                    "embedding": embeddings[j],
+                                })
+                        stored = self.db.batch_vectorize(batch_data, engine.model_name)
+                        count += stored
+
+                        self.stats_var.set(
+                            f"向量化进度: {min(i + batch_size, len(unvec))}/{len(unvec)} (已存 {count})"
+                        )
+                    except Exception as e:
+                        import logging
+                        logging.getLogger("GUI").warning(f"批量向量化出错: {e}")
+                        # 继续下一批
+                        continue
+
+                self.stats_var.set(f"✅ 向量化完成: {count}/{len(unvec)} 条消息")
+                self.search_mode_var.set(f"向量总数: {self.db.get_vector_count()}")
+            except Exception as e:
+                self.stats_var.set(f"向量化失败: {e}")
+                self.search_mode_var.set("向量化失败")
+
+        threading.Thread(target=_run, daemon=True).start()
+
+# NOTE: 2026-05-06 19:49:57, self-evolved by tea_agent --- _sort 改用 topic_tree
     def _sort(self, col):
-        items = [(self.tree.set(i, col), i) for i in self.tree.get_children("")]
+        items = [(self.topic_tree.set(i, col), i) for i in self.topic_tree.get_children("")]
         if col == "id":
             items.sort(key=lambda x: int(x[0]))
         elif col == "tokens":
@@ -729,16 +942,28 @@ class TopicDialog(tk.Toplevel):
         elif col == "convs":
             items.sort(key=lambda x: int(x[0]), reverse=True)
         else:
+# NOTE: 2026-05-06 19:51:49, self-evolved by tea_agent --- TopicDialog._sort 中 tree.move → topic_tree.move
             items.sort()
         for idx, (_, iid) in enumerate(items):
-            self.tree.move(iid, "", idx)
+            self.topic_tree.move(iid, "", idx)
 
+# NOTE: 2026-05-06 19:49:51, self-evolved by tea_agent --- _selected_id 自动选择当前可见的 treeview
     def _selected_id(self):
-        sel = self.tree.selection()
+        tree = self.search_tree if self._is_search_mode else self.topic_tree
+        sel = tree.selection()
         return int(sel[0]) if sel else None
 
+# NOTE: 2026-05-06 19:24:25, self-evolved by tea_agent --- TopicDialog._switch_to 搜索模式下使用 conversation 对应的 topic_id
     def _switch_to(self):
         tid = self._selected_id()
+        if not tid:
+            return
+        # 搜索模式下，selected_id 是 conversation_id，需转换为 topic_id
+        if self._is_search_mode:
+            for r in self._search_results:
+                if r.get("conversation_id") == tid:
+                    tid = r.get("topic_id")
+                    break
         if tid and self.on_switch:
             self.on_switch(tid)
             self.destroy()
@@ -782,19 +1007,27 @@ class TopicDialog(tk.Toplevel):
         ttk.Button(btn_frame, text="取消", command=dlg.destroy).pack(side=tk.LEFT, padx=4)
         dlg.bind("<Return>", lambda e: do_rename())
 
+# NOTE: 2026-05-06 19:24:56, self-evolved by tea_agent --- TopicDialog._deactivate/_activate/_hard_delete 搜索模式下保护
     def _deactivate(self):
+        if self._is_search_mode:
+            return  # 搜索模式下禁用以防止误操作
         tid = self._selected_id()
         if tid:
             self.db.update_topic_active(tid, 0)
             self._refresh()
 
     def _activate(self):
+        if self._is_search_mode:
+            return
         tid = self._selected_id()
         if tid:
             self.db.update_topic_active(tid, 1)
             self._refresh()
 
+# NOTE: 2026-05-06 19:25:02, self-evolved by tea_agent --- _hard_delete 和 _export_selected 搜索模式保护
     def _hard_delete(self):
+        if self._is_search_mode:
+            return
         tid = self._selected_id()
         if not tid:
             return
@@ -814,7 +1047,10 @@ class TopicDialog(tk.Toplevel):
         self.stats_var.set(f"✅ 主题 #{tid} 「{title}」已永久删除")
         self._refresh()
 
+# NOTE: 2026-05-06 19:25:09, self-evolved by tea_agent --- _export_selected 搜索模式保护
     def _export_selected(self):
+        if self._is_search_mode:
+            return
         tid = self._selected_id()
         if not tid:
             return
@@ -925,14 +1161,16 @@ class TopicDialog(tk.Toplevel):
 # NOTE: 2026-05-01 15:33:03, self-evolved by tea_agent --- 插入 ConfigDialog 类（在 TkGUI 之前）
 # NOTE: 2026-05-01, self-evolved by tea_agent --- ConfigDialog: 用户级 config.yaml GUI 配置编辑弹窗
 class ConfigDialog(tk.Toplevel):
-    """配置编辑弹窗 — 编辑 main/cheap 模型及运行时参数"""
+# NOTE: 2026-05-06 19:32:03, self-evolved by tea_agent --- ConfigDialog 文档字符串更新，反映新增向量模型配置
+    """配置编辑弹窗 — 编辑主模型/便宜模型/向量模型及运行时参数"""
 
     def __init__(self, parent, on_save=None):
         super().__init__(parent)
         self.on_save = on_save
+# NOTE: 2026-05-06 19:31:57, self-evolved by tea_agent --- ConfigDialog 窗口尺寸微调适配新增 Tab
         self.title("⚙️ 配置编辑")
-        self.geometry("620x540")
-        self.minsize(500, 400)
+        self.geometry("650x560")
+        self.minsize(500, 420)
         self.transient(parent)
         self.grab_set()
 
@@ -941,12 +1179,17 @@ class ConfigDialog(tk.Toplevel):
         self._create_ui()
         self._load_values()
 
+# NOTE: 2026-05-06 19:30:48, self-evolved by tea_agent --- ConfigDialog._create_ui 增加「向量模型」Tab
     def _create_ui(self):
         nb = ttk.Notebook(self)
         nb.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
+# NOTE: 2026-05-06 19:31:49, self-evolved by tea_agent --- _create_ui 中向量模型 Tab 增加 dimension 字段
         self._model_tab(nb, "主模型", "main")
         self._model_tab(nb, "便宜模型", "cheap")
+        self._model_tab(nb, "向量模型", "embedding", extra_fields=[
+            ("向量维度", "dimension", 10),
+        ])
         self._runtime_tab(nb)
 
         btn_frame = ttk.Frame(self)
@@ -956,7 +1199,8 @@ class ConfigDialog(tk.Toplevel):
         ttk.Button(btn_frame, text="💾 保存", command=self._do_save).pack(side=tk.RIGHT, padx=2)
         ttk.Button(btn_frame, text="取消", command=self.destroy).pack(side=tk.RIGHT, padx=2)
 
-    def _model_tab(self, nb, label, prefix):
+# NOTE: 2026-05-06 19:31:41, self-evolved by tea_agent --- _model_tab 支持 extra_fields 参数，向量模型增加 dimension 输入
+    def _model_tab(self, nb, label, prefix, extra_fields=None):
         f = ttk.Frame(nb)
         nb.add(f, text=label)
         fields = [
@@ -964,6 +1208,8 @@ class ConfigDialog(tk.Toplevel):
             ("API URL", "api_url", 50),
             ("模型名称", "model_name", 50),
         ]
+        if extra_fields:
+            fields.extend(extra_fields)
         vars_map = {}
         for i, (title, key, width) in enumerate(fields):
             ttk.Label(f, text=title + ":", font=(SYSTEM_FONT, _fs(11))).grid(
@@ -1024,6 +1270,7 @@ class ConfigDialog(tk.Toplevel):
 
             self._runtime_vars[key] = var
 
+# NOTE: 2026-05-06 19:31:02, self-evolved by tea_agent --- ConfigDialog._load_values 加载 embedding 模型字段
     def _load_values(self):
         cfg = self._cfg
         for prefix, model_cfg in [("main", cfg.main_model), ("cheap", cfg.cheap_model)]:
@@ -1031,6 +1278,13 @@ class ConfigDialog(tk.Toplevel):
             vars_map["api_key"].set(model_cfg.api_key)
             vars_map["api_url"].set(model_cfg.api_url)
             vars_map["model_name"].set(model_cfg.model_name)
+
+        # 加载向量模型配置
+        emb_vars = getattr(self, "_embedding_vars")
+        emb_vars["api_key"].set(cfg.embedding.api_key)
+        emb_vars["api_url"].set(cfg.embedding.api_url)
+        emb_vars["model_name"].set(cfg.embedding.model_name)
+        emb_vars["dimension"].set(str(cfg.embedding.dimension or ""))
 
         for key, var in self._runtime_vars.items():
             val = getattr(cfg, key, None)
@@ -1044,11 +1298,22 @@ class ConfigDialog(tk.Toplevel):
         cfg = self._cfg
         errors = []
 
+# NOTE: 2026-05-06 19:31:16, self-evolved by tea_agent --- ConfigDialog._do_save 保存 embedding 模型配置
         for prefix, model_cfg in [("main", cfg.main_model), ("cheap", cfg.cheap_model)]:
             vars_map = getattr(self, f"_{prefix}_vars")
             model_cfg.api_key = vars_map["api_key"].get().strip()
             model_cfg.api_url = vars_map["api_url"].get().strip()
             model_cfg.model_name = vars_map["model_name"].get().strip()
+
+        # 保存向量模型配置
+        ev = self._embedding_vars
+        cfg.embedding.api_key = ev["api_key"].get().strip()
+        cfg.embedding.api_url = ev["api_url"].get().strip()
+        cfg.embedding.model_name = ev["model_name"].get().strip()
+        try:
+            cfg.embedding.dimension = int(ev["dimension"].get().strip() or "0")
+        except ValueError:
+            cfg.embedding.dimension = 0
 
         for key, var in self._runtime_vars.items():
             try:

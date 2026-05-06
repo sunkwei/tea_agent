@@ -117,6 +117,28 @@ class PathsConfig:
         return self._data_dir_abs
 
 
+# NOTE: 2026-05-06 19:15:20, self-evolved by tea_agent --- 添加 EmbeddingConfig 配置类，支持向量模型设置
+@dataclass
+class EmbeddingConfig:
+    """文本向量模型配置。用于消息语义搜索。
+    
+    支持两种模式：
+    1. API 模式：通过 api_url/embeddings 端点获取向量
+    2. 本地 TF-IDF 回退：当 api_url 为空时自动使用
+    
+    api_key 为空时复用 main_model 的 api_key。
+    """
+    api_url: str = ""       # Embedding API 地址，如 http://localhost:11434/v1
+    model_name: str = ""    # 嵌入模型名称，如 text-embedding-3-small
+    api_key: str = ""       # API Key，为空则使用 main_model.api_key
+    dimension: int = 0      # 向量维度，0=自动检测
+
+    @property
+    def is_configured(self) -> bool:
+        """至少配置了 api_url 和 model_name 才视为有效"""
+        return bool(self.api_url and self.model_name)
+
+
 @dataclass
 class MqttConfig:
     """MQTT 连接配置"""
@@ -133,13 +155,16 @@ class MqttConfig:
         return self.enabled and bool(self.broker_host)
 
 
+# NOTE: 2026-05-06 19:15:35, self-evolved by tea_agent --- AgentConfig 增加 embedding 字段
 @dataclass
 class AgentConfig:
     """Agent 全局配置"""
 # NOTE: 2026-05-04 17:52:12, self-evolved by tea_agent --- AgentConfig 增加 paths 字段，load_config 中解析 paths 配置块并调用 resolve
+# NOTE: 2026-05-06 19:15:39, self-evolved by tea_agent --- AgentConfig 增加 embedding 字段
     main_model: ModelConfig = field(default_factory=ModelConfig)
     cheap_model: ModelConfig = field(default_factory=ModelConfig)
     mqtt: MqttConfig = field(default_factory=MqttConfig)
+    embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
     
     # 会话参数
@@ -289,6 +314,7 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
 
 # NOTE: 2026-05-04 08:30:28, self-evolved by tea_agent --- load_config() 中解析 mqtt 配置块
 # NOTE: 2026-05-04 17:52:35, self-evolved by tea_agent --- load_config 中解析 paths 配置块 + 调用 resolve 解析路径
+# NOTE: 2026-05-06 19:15:56, self-evolved by tea_agent --- load_config 解析 embedding 配置块
             # 加载 MQTT 配置
             mqtt_data = data.get("mqtt", {})
             if isinstance(mqtt_data, dict):
@@ -298,6 +324,14 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
                 cfg.mqtt.username = str(mqtt_data.get("username", cfg.mqtt.username))
                 cfg.mqtt.password = str(mqtt_data.get("password", cfg.mqtt.password))
                 cfg.mqtt.topic_prefix = str(mqtt_data.get("topic_prefix", cfg.mqtt.topic_prefix))
+
+            # 加载 Embedding 配置
+            emb_data = data.get("embedding_model", {})
+            if isinstance(emb_data, dict):
+                cfg.embedding.api_url = str(emb_data.get("api_url", cfg.embedding.api_url))
+                cfg.embedding.model_name = str(emb_data.get("model_name", cfg.embedding.model_name))
+                cfg.embedding.api_key = str(emb_data.get("api_key", cfg.embedding.api_key))
+                cfg.embedding.dimension = int(emb_data.get("dimension", cfg.embedding.dimension))
 
             # 加载路径配置
             paths_data = data.get("paths", {})
@@ -380,6 +414,15 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
             data[m_type] = m_data
     
 # NOTE: 2026-05-04 17:52:50, self-evolved by tea_agent --- save_config 中保存 paths 配置
+# NOTE: 2026-05-06 19:16:13, self-evolved by tea_agent --- save_config 保存 embedding 配置块
+    # 保存 Embedding 配置
+    data["embedding_model"] = {
+        "api_url": cfg.embedding.api_url,
+        "model_name": cfg.embedding.model_name,
+        "api_key": cfg.embedding.api_key,
+        "dimension": cfg.embedding.dimension,
+    }
+
     # 保存 MQTT 配置
     data["mqtt"] = {
         "enabled": cfg.mqtt.enabled,
@@ -461,6 +504,14 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "  toolkit_dir: \"\"       # 自定义工具目录，默认 data_dir/toolkit\n"
         "  kb_dir: \"\"            # 知识库目录，默认 data_dir/kb\n"
         "  skills_dir: \"\"        # 用户 skills 目录，默认 data_dir/skills\n\n"
+# NOTE: 2026-05-06 19:16:28, self-evolved by tea_agent --- create_default_config 模板增加 embedding_model 配置块
+        "# ==================== 向量模型配置 ====================\n"
+        "# 用于主题搜索的文本向量生成。api_url 为空时自动使用本地 TF-IDF 回退。\n"
+        "embedding_model:\n"
+        "  api_url: \"\"          # Embedding API 地址，如 http://localhost:11434/v1\n"
+        "  model_name: \"\"       # 嵌入模型，如 text-embedding-3-small / bge-m3\n"
+        "  api_key: \"\"          # 为空则复用 main_model.api_key\n"
+        "  dimension: 0          # 向量维度，0=自动检测\n\n"
         "# ==================== MQTT 配置 ====================\n"
         "# tea_agent 可作为 MQTT client 注册到 broker，与外部客户端交互\n"
         "mqtt:\n"

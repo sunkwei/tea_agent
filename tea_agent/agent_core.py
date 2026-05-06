@@ -393,6 +393,13 @@ class AgentCore:
                         f"MQTT → AI → MQTT 完成: sender={sender}, "
                         f"topic=mqtt_{sender}, reply_len={len(ai_msg)}"
                     )
+
+                    # 2026-05-06 gen by tea_agent, MQTT 消息处理后生成主题摘要
+                    try:
+                        self._auto_summary(tid)
+                    except Exception as e:
+                        logger.warning(f"MQTT 主题摘要失败 (sender={sender}): {e}")
+
             except Exception as e:
                 logger.error(f"MQTT AI 处理失败 (sender={sender}): {e}")
 # NOTE: 2026-05-06 09:58:33, self-evolved by tea_agent --- _process_mqtt_message末尾添加_check_pending_restart调用
@@ -456,6 +463,7 @@ class AgentCore:
             return
         try:
             cli, mdl = self.sess._get_summarize_client()
+            # 2026-05-06 gen by tea_agent, debug: check what client/model is being used
             from tea_agent.main_db_gui import _generate_topic_summary
             summary = _generate_topic_summary(client=cli, model=mdl, conversations=recent)
 # NOTE: 2026-05-06 10:35:56, self-evolved by tea_agent --- _auto_summary 添加异常日志，不再静默吞错
@@ -464,9 +472,9 @@ class AgentCore:
                 logger.info(f"📝 主题摘要更新: topic={topic_id} → {summary}")
                 self._on_summary_updated(topic_id, summary)
             else:
-                logger.debug(f"摘要生成返回空: topic={topic_id}")
+                logger.warning(f"摘要生成返回空: topic={topic_id}, model={mdl}, msgs={len(recent)}")
         except Exception as e:
-            logger.warning(f"自动摘要失败 (topic={topic_id}): {e}")
+            logger.warning(f"自动摘要失败 (topic={topic_id}): {type(e).__name__}: {e}")
 
     def _on_summary_updated(self, topic_id: int, summary: str):
         """摘要更新后的 UI 回调（子类覆盖）。"""

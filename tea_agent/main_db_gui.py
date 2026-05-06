@@ -289,7 +289,9 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
             raw = raw[:20]
             
         return raw if raw else None
-    except Exception:
+    except Exception as e:
+        # 2026-05-06 gen by tea_agent, log summary failure reason for debugging
+        logger.warning(f"_generate_topic_summary 失败: {type(e).__name__}: {e}, model={model}")
         return None
 
 

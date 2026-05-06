@@ -450,7 +450,8 @@ class AgentCore:
             topic_id = self.current_topic_id
         if topic_id <= 0:
             return
-        recent = self.db.get_recent_conversations(topic_id, limit=3)
+# NOTE: 2026-05-06 10:23:01, self-evolved by tea_agent --- _auto_summary 摘要输入从3条改为10条对话，确保足够上下文
+        recent = self.db.get_recent_conversations(topic_id, limit=10)
         if not recent:
             return
         try:

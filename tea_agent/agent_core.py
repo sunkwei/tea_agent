@@ -458,11 +458,15 @@ class AgentCore:
             cli, mdl = self.sess._get_summarize_client()
             from tea_agent.main_db_gui import _generate_topic_summary
             summary = _generate_topic_summary(client=cli, model=mdl, conversations=recent)
+# NOTE: 2026-05-06 10:35:56, self-evolved by tea_agent --- _auto_summary 添加异常日志，不再静默吞错
             if summary:
                 self.db.update_topic_title(topic_id, summary)
+                logger.info(f"📝 主题摘要更新: topic={topic_id} → {summary}")
                 self._on_summary_updated(topic_id, summary)
-        except Exception:
-            pass
+            else:
+                logger.debug(f"摘要生成返回空: topic={topic_id}")
+        except Exception as e:
+            logger.warning(f"自动摘要失败 (topic={topic_id}): {e}")
 
     def _on_summary_updated(self, topic_id: int, summary: str):
         """摘要更新后的 UI 回调（子类覆盖）。"""

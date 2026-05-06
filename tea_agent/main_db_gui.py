@@ -48,20 +48,8 @@ else:
 # NOTE: 2026-05-01 15:30:48, self-evolved by tea_agent --- 给 GUI 加 ConfigDialog 弹窗：import save_config（第二处）
     from .config import load_config, get_config, save_config, ModelConfig
 
-# ====================== 配置加载 ======================
-# 优先使用 $HOME/.tea_agent/config.yaml，不存在时使用 tea_agent/config.yaml
-_cfg = load_config()
-
-if not _cfg.main_model.is_configured:
-    print("错误: 请配置主模型 (main_model)")
-    print("  编辑 $HOME/.tea_agent/config.yaml 或 tea_agent/config.yaml")
-    sys.exit(1)
-
-API_KEY = _cfg.main_model.api_key
-API_URL = _cfg.main_model.api_url
-MODEL = _cfg.main_model.model_name
-CHEAP_MODEL = _cfg.cheap_model
-
+# NOTE: 2026-05-06 gen by claude, C3: 移除模块级 load_config()，配置由 AgentCore.__init__ 统一加载
+# _storage_ 和 _toolkit_ 保留为模块级变量，供 toolkit 工具函数使用
 _storage_ = None
 _toolkit_ = None
 
@@ -1636,19 +1624,32 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 
 # NOTE: 2026-05-02 09:16:03, self-evolved by tea_agent --- _notify_completion 多级回退：GI Notify→notify-send→kdialog→zenity→wall，确保在各种Linux桌面环境下都能通知
 # NOTE: 2026-05-02 09:19:40, self-evolved by tea_agent --- _notify_completion 委托给 toolkit_notify，消除重复并兼容 Windows/macOS
-    def _notify_completion(self, ai_msg: Optional[str] = None):
-        """LLM 任务完成后发送桌面通知。委托给 toolkit_notify（跨平台兼容）。"""
+# @2026-05-06 gen by claude, 通知内容展示 user+ai 双上下文，标题含任务完成标识
+    def _notify_completion(self, ai_msg: Optional[str] = None, user_msg: Optional[str] = None):
+        """LLM 任务完成后发送桌面通知。委托给 toolkit_notify（跨平台兼容）。
+        通知内容包含用户消息摘要 + AI 回复摘要，方便多任务场景下快速定位上下文。"""
+        # ── 构建 AI 回复预览 ──
         if ai_msg:
-            preview = ai_msg.strip()[:60]
-            if len(ai_msg.strip()) > 60:
-                preview += "..."
+            ai_preview = ai_msg.strip()[:80]
+            if len(ai_msg.strip()) > 80:
+                ai_preview += "..."
         else:
-            preview = "AI 任务已完成"
+            ai_preview = "AI 任务已完成"
+
+        # ── 构建用户消息预览 ──
+        if user_msg:
+            user_preview = user_msg.strip()[:50]
+            if len(user_msg.strip()) > 50:
+                user_preview += "..."
+            # 组合：Q: {user} → A: {ai}
+            combined = f"Q: {user_preview}  →  A: {ai_preview}"
+        else:
+            combined = ai_preview
 
         try:
             # 直接导入 toolkit_notify 以复用其跨平台实现
             from tea_agent.toolkit.toolkit_notify import toolkit_notify
-            toolkit_notify("Tea Agent", preview, urgency="normal", duration=5000)
+            toolkit_notify("Tea Agent — 任务完成", combined, urgency="normal", duration=5000)
         except Exception:
             pass  # 通知失败不影响主流程
 

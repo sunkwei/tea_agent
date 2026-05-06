@@ -490,8 +490,9 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "# 触发自动记忆提取的最少未摘要消息数\n"
 # NOTE: 2026-04-30 14:36:36, self-evolved by tea_agent --- create_default_config模板增加memory_dedup_threshold
         "memory_extraction_threshold: 2\n\n"
+# NOTE: 2026-05-06 08:47:24, self-evolved by tea_agent --- M1: 修复模板 memory_dedup_threshold 默认值与代码一致 (0.5→0.3)
         "# 记忆去重相似度阈值，超过此值视为重复并合并(0~1)\n"
-        "memory_dedup_threshold: 0.5\n\n"
+        "memory_dedup_threshold: 0.3\n\n"
 # NOTE: 2026-04-30 09:47:45, self-evolved by tea_agent --- create_default_config模板同步更新chat_page_size默认值30→50
         "# GUI 单页加载的最大对话轮数（超过则省略更早的对话）\n"
         "chat_page_size: 50\n"

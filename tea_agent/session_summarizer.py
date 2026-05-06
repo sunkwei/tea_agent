@@ -1,3 +1,4 @@
+# NOTE: 2026-05-06 09:01:04, self-evolved by tea_agent --- C2: 将 _generate_topic_summary 从 main_db_gui.py 提取到 session_summarizer.py 消除循环依赖
 """
 会话摘要模块
 负责历史摘要、Topic 摘要、消息压缩等功能
@@ -17,6 +18,96 @@ from tea_agent.session_prompts import (
     TOPIC_SUMMARY_SYSTEM,
     TOPIC_SUMMARY_USER_TEMPLATE,
 )
+
+# NOTE: 2026-05-06 gen by claude, 从 main_db_gui.py 提取，消除 agent_core → main_db_gui 循环依赖
+# ── Topic 摘要 Prompt（与 GUI 共用）──────────────────
+
+# NOTE: 2026-05-01 08:17:23, self-evolved by tea_agent --- _generate_topic_summary: min_length从2提高到5，提示词强化中文自然表达
+# NOTE: 2026-05-01 20:12:32, self-evolved by tea_agent --- 更新 system prompt：强调基于用户输入概括，不基于 AI 回复
+# NOTE: 2026-05-04 14:58:14, self-evolved by tea_agent --- Prompt 模板更新：明确使用最近10条用户输入提取标题
+_SHARED_TOPIC_SUMMARY_SYSTEM = (
+    "你是一个摘要生成器。根据最近10条用户输入，生成不超过20字的自然中文摘要标题。"
+    "要求："
+    "1. 根据用户的发言概括对话主题，不要基于 AI 的回复来概括。"
+    "2. 用日常口语表达，像人聊天时随口说的标题那样。"
+    "3. 至少6个字以上，禁止输出残缺句子或单字。"
+    "4. 不使用书名号、引号、多余修饰词。"
+    "直接输出摘要文本，不要任何额外说明。"
+)
+
+# NOTE: 2026-05-01 20:12:10, self-evolved by tea_agent --- 摘要生成只用 user input（去除 AI 回复），基于最近多轮而非最后一轮
+_SHARED_TOPIC_SUMMARY_USER_TEMPLATE = (
+    "以下是最近10条用户输入：\n\n{user_msgs}\n\n"
+    "请根据这些用户输入，生成不超过20字的摘要标题："
+)
+
+
+# NOTE: 2026-05-06 gen by claude, 提取自 main_db_gui.py，agent_core 和 main_db_gui 共用
+def generate_topic_summary_shared(client, model: str, conversations: List[Dict]) -> Optional[str]:
+    """
+    根据最近对话通过 LLM 生成不超过20字的摘要。
+
+    Args:
+        client: OpenAI 客户端实例
+        model: 模型名称
+        conversations: 最近的对话列表（按时间正序），包含 user_msg 和 ai_msg
+
+    Returns:
+        不超过20字的摘要字符串；若生成失败则返回 None
+    """
+    if not conversations:
+        return None
+
+    user_msgs = []
+    for conv in conversations:
+        um = conv.get("user_msg", "").strip()
+        if um:
+            if len(um) > 200:
+                um = um[:200] + "..."
+            user_msgs.append(f"用户：{um}")
+
+    if not user_msgs:
+        return None
+
+    user_content = _SHARED_TOPIC_SUMMARY_USER_TEMPLATE.format(
+        user_msgs="\n".join(user_msgs)
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": _SHARED_TOPIC_SUMMARY_SYSTEM},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.3,
+            max_tokens=50,
+        )
+
+        if not response.choices or len(response.choices) == 0:
+            return None
+
+        content = response.choices[0].message.content
+        if not content or not isinstance(content, str):
+            return None
+
+        raw = content.strip()
+        raw = re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
+        raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
+        raw = raw.strip()
+
+        if not raw:
+            return None
+
+        if len(raw) < 4:
+            return None
+
+        if len(raw) > 20:
+            raw = raw[:20]
+
+        return raw if raw else None
+    except Exception:
+        return None
 
 
 class SessionSummarizerMixin:
@@ -527,6 +618,7 @@ class SessionSummarizerMixin:
     # 状态重置
     # ──────────────────────────────────────────────
 
+# NOTE: 2026-05-06 09:06:01, self-evolved by tea_agent --- C2: 将_generate_topic_summary从main_db_gui.py提取到session_summarizer.py，消除循环依赖
     def reset_summary_state(self) -> None:
         """
         重置摘要状态（用于新会话开始前）。
@@ -534,3 +626,94 @@ class SessionSummarizerMixin:
         清空历史摘要，但不影响 messages 中的原始消息。
         """
         self._history_summary = ""
+
+
+# ============================================================
+# @2026-05-06 gen by claude, 从 main_db_gui.py 提取到共享模块，消除循环依赖
+# 模块级 Topic 摘要生成函数（独立于类，供 AgentCore/GUI/CLI 共用）
+# ============================================================
+
+import re as _re
+from typing import Optional as _Optional, List as _List, Dict as _Dict
+
+_TOPIC_SUMMARY_SYSTEM = (
+    "你是一个摘要生成器。根据最近10条用户输入，生成不超过20字的自然中文摘要标题。"
+    "要求："
+    "1. 根据用户的发言概括对话主题，不要基于 AI 的回复来概括。"
+    "2. 用日常口语表达，像人聊天时随口说的标题那样。"
+    "3. 至少6个字以上，禁止输出残缺句子或单字。"
+    "4. 不使用书名号、引号、多余修饰词。"
+    "直接输出摘要文本，不要任何额外说明。"
+)
+
+_TOPIC_SUMMARY_USER_TEMPLATE = (
+    "以下是最近10条用户输入：\n\n{user_msgs}\n\n"
+    "请根据这些用户输入，生成不超过20字的摘要标题："
+)
+
+
+def generate_topic_summary(client, model: str, conversations: _List[_Dict]) -> _Optional[str]:
+    """
+    根据最近对话通过 LLM 生成不超过20字的摘要标题。
+
+    Args:
+        client: OpenAI 客户端实例
+        model: 模型名称
+        conversations: 最近的对话列表（按时间正序），包含 user_msg
+
+    Returns:
+        不超过20字的摘要字符串；若生成失败则返回 None
+    """
+    if not conversations:
+        return None
+
+    user_msgs = []
+    for conv in conversations:
+        um = conv.get("user_msg", "").strip()
+        if um:
+            if len(um) > 200:
+                um = um[:200] + "..."
+            user_msgs.append(f"用户：{um}")
+
+    if not user_msgs:
+        return None
+
+    user_content = _TOPIC_SUMMARY_USER_TEMPLATE.format(
+        user_msgs="\n".join(user_msgs)
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": _TOPIC_SUMMARY_SYSTEM},
+                {"role": "user", "content": user_content},
+            ],
+            temperature=0.3,
+            max_tokens=50,
+        )
+
+        if not response.choices or len(response.choices) == 0:
+            return None
+
+        content = response.choices[0].message.content
+        if not content or not isinstance(content, str):
+            return None
+
+        raw = content.strip()
+        raw = _re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
+        raw = _re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
+        raw = raw.strip()
+
+        if not raw:
+            return None
+
+        if len(raw) < 4:
+            return None
+
+        if len(raw) > 20:
+            raw = raw[:20]
+
+        return raw if raw else None
+    except Exception:
+        return None

@@ -441,8 +441,9 @@ class AgentCore:
             return
         try:
             cli, mdl = self.sess._get_summarize_client()
-            from tea_agent.main_db_gui import _generate_topic_summary
-            summary = _generate_topic_summary(client=cli, model=mdl, conversations=recent)
+            # NOTE: 2026-05-06 gen by claude, C2: 消除循环依赖，从 session_summarizer 导入
+            from tea_agent.session_summarizer import generate_topic_summary
+            summary = generate_topic_summary(client=cli, model=mdl, conversations=recent)
             if summary:
                 self.db.update_topic_title(topic_id, summary)
                 self._on_summary_updated(topic_id, summary)

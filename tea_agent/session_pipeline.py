@@ -128,6 +128,7 @@ class SessionPipeline:
             if self._steps[name].enabled
         ]
     
+# NOTE: 2026-05-06 08:47:24, self-evolved by tea_agent --- m5: 澄清 stop_at 文档 — 执行完该步骤后停止
     def execute(
         self,
         context: Dict[str, Any],
@@ -139,7 +140,7 @@ class SessionPipeline:
         
         Args:
             context: 上下文数据字典，传递给每个步骤
-            stop_at: 在此步骤后停止（包含该步骤）
+            stop_at: 执行完该步骤后停止（该步骤本身会执行，后续步骤跳过）
             skip_steps: 要跳过的步骤列表（临时禁用）
             
         Returns:

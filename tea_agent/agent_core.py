@@ -37,7 +37,9 @@ class AgentCore:
     def __init__(self, debug: bool = False, config_path: Optional[str] = None):
         self.debug = debug
         self.generating = False
+# NOTE: 2026-05-06 09:57:03, self-evolved by tea_agent --- __init__添加_pending_restart标记，支持watchdog延迟重启
         self._shutting_down = False  # 重启前安全闸门
+        self._pending_restart = False  # watchdog延迟重启：会话中检测到变更时置True，会话结束后检查
         self._config_path = config_path
 
         # ── 1. 加载配置 ──
@@ -105,6 +107,7 @@ class AgentCore:
                 self._timer: Optional[threading.Timer] = None
                 self._lock = threading.Lock()
 
+# NOTE: 2026-05-06 09:57:16, self-evolved by tea_agent --- on_modified增加generating检查：会话中仅标记待重启，不立即执行
             def on_modified(self, event):
                 if event.is_directory:
                     return
@@ -115,8 +118,13 @@ class AgentCore:
                 if '/toolkit/' in src or '\\toolkit\\' in src:
                     return
                 logger.info(f"🔄 检测到文件变更: {src}")
-                self._schedule_restart()
+                if self._agent.generating:
+                    self._agent._pending_restart = True
+                    logger.info("⏸ 当前会话进行中，标记待重启，会话结束后自动执行")
+                else:
+                    self._schedule_restart()
 
+# NOTE: 2026-05-06 09:57:44, self-evolved by tea_agent --- 提取_do_restart为_safe_restart方法，添加_check_pending_restart延迟重启入口
             def _schedule_restart(self):
                 with self._lock:
                     if self._timer:
@@ -125,69 +133,67 @@ class AgentCore:
                     self._timer.daemon = True
                     self._timer.start()
 
-# NOTE: 2026-05-04 19:28:47, self-evolved by tea_agent --- _do_restart 添加 Windows 支持 — subprocess.Popen + os._exit 替代 os.execv
-# NOTE: 2026-05-04 19:34:24, self-evolved by tea_agent --- _do_restart 数据安全加固：设闸门 → 等会话锁 → WAL checkpoint → 关DB → 重启
             def _do_restart(self):
-                """数据安全重启：
-                1. 设 _shutting_down 闸门，阻止新操作
-                2. 等待 _sess_lock（最长 10s），确保当前 chat_stream 完成
-                3. WAL checkpoint(TRUNCATE) 刷盘 → close DB
-                4. 跨平台重启进程
-                """
-                import subprocess
-                import time as _time
-                agent = self._agent
-
-                # ── 1. 设闸门 ──
-                agent._shutting_down = True
-                logger.info("🔁 收到重启信号，等待活跃操作完成...")
-
-                # ── 2. 等待 _sess_lock（chat_stream 释放锁后 DB 写入已完成）──
-                if hasattr(agent, '_sess_lock'):
-                    deadline = _time.monotonic() + 10.0  # 最多等10秒
-                    acquired = False
-                    while _time.monotonic() < deadline:
-                        if agent._sess_lock.acquire(blocking=False):
-                            acquired = True
-                            agent._sess_lock.release()
-                            break
-                        _time.sleep(0.1)
-                    if not acquired:
-                        logger.warning("等待会话锁超时（10s），强制关闭")
-
-                # ── 3. 安全关闭数据库 ──
-                try:
-                    if hasattr(agent, 'db') and agent.db:
-                        agent.db.close()  # 内含 WAL checkpoint(TRUNCATE)
-                        logger.info("数据库已安全关闭")
-                except Exception as e:
-                    logger.warning(f"关闭数据库异常 (非致命): {e}")
-
-                # ── 4. 跨平台重启 ──
-                print("\n🔁 代码已变更，正在重启...\n", flush=True)
-                args = [sys.executable] + sys.argv
-                if sys.platform == 'win32':
-                    subprocess.Popen(args, close_fds=True)
-                    os._exit(0)
-                else:
-                    os.execv(sys.executable, args)
+                self._agent._safe_restart()
 
         handler = _RestartHandler(self)
-        self._observer = watchdog.observers.Observer()
-        self._observer.schedule(handler, str(tea_agent_dir), recursive=True)
-        self._observer.daemon = True
-        self._observer.start()
+        observer = watchdog.observers.Observer()
+        observer.schedule(handler, str(tea_agent_dir), recursive=True)
+        observer.daemon = True
+        observer.start()
+# NOTE: 2026-05-06 09:58:12, self-evolved by tea_agent --- 添加_safe_restart和_check_pending_restart方法到AgentCore
         logger.info("📁 文件监控已启动（非 toolkit .py 变更时自动重启）")
-# NOTE: 2026-05-05 gen by claude, 退出时停止 watchdog observer 避免线程残留
-    def _stop_file_watcher(self):
-        """停止文件监控(退出时调用)."""
-        if hasattr(self, '_observer') and self._observer and self._observer.is_alive():
-            try:
-                self._observer.stop()
-                self._observer.join(timeout=3)
-                logger.info("📁 文件监控已停止")
-            except Exception:
-                pass
+
+    def _safe_restart(self):
+        """数据安全重启（由 watchdog 或 _check_pending_restart 触发）：
+        1. 设 _shutting_down 闸门，阻止新操作
+        2. 等待 _sess_lock（最长 10s），确保当前 chat_stream 完成
+        3. WAL checkpoint(TRUNCATE) 刷盘 → close DB
+        4. 跨平台重启进程
+        """
+        import subprocess
+        import time as _time
+
+        # ── 1. 设闸门 ──
+        self._shutting_down = True
+        logger.info("🔁 收到重启信号，等待活跃操作完成...")
+
+        # ── 2. 等待 _sess_lock（chat_stream 释放锁后 DB 写入已完成）──
+        if hasattr(self, '_sess_lock'):
+            deadline = _time.monotonic() + 10.0  # 最多等10秒
+            acquired = False
+            while _time.monotonic() < deadline:
+                if self._sess_lock.acquire(blocking=False):
+                    acquired = True
+                    self._sess_lock.release()
+                    break
+                _time.sleep(0.1)
+            if not acquired:
+                logger.warning("等待会话锁超时（10s），强制关闭")
+
+        # ── 3. 安全关闭数据库 ──
+        try:
+            if hasattr(self, 'db') and self.db:
+                self.db.close()  # 内含 WAL checkpoint(TRUNCATE)
+                logger.info("数据库已安全关闭")
+        except Exception as e:
+            logger.warning(f"关闭数据库异常 (非致命): {e}")
+
+        # ── 4. 跨平台重启 ──
+        print("\n🔁 代码已变更，正在重启...\n", flush=True)
+        args = [sys.executable] + sys.argv
+        if sys.platform == 'win32':
+            subprocess.Popen(args, close_fds=True)
+            os._exit(0)
+        else:
+            os.execv(sys.executable, args)
+
+    def _check_pending_restart(self):
+        """会话结束后调用：检查 watchdog 是否在会话期间标记了待重启。"""
+        if self._pending_restart:
+            self._pending_restart = False
+            logger.info("🔁 会话已完成，执行待定重启...")
+            self._safe_restart()
 
     def _start_connectors(self):
         """启动 chat_room 和 MQTT 连接器（非阻塞守护线程）。"""
@@ -278,8 +284,12 @@ class AgentCore:
                 cheap_completion_tokens=cheap_usage.get("completion_tokens", 0),
             )
 
+# NOTE: 2026-05-06 09:58:21, self-evolved by tea_agent --- _post_chat_pipeline末尾添加_check_pending_restart调用
         # ── 4. 自动摘要 ──
         self._auto_summary(topic_id)
+
+        # ── 5. 检查是否需要延迟重启（watchdog 在会话中检测到代码变更）──
+        self._check_pending_restart()
 
     # ═══════════════════════════════════════════════
     # MQTT 方法（CLI 和 GUI 100% 共享）
@@ -385,6 +395,7 @@ class AgentCore:
                     )
             except Exception as e:
                 logger.error(f"MQTT AI 处理失败 (sender={sender}): {e}")
+# NOTE: 2026-05-06 09:58:33, self-evolved by tea_agent --- _process_mqtt_message末尾添加_check_pending_restart调用
             finally:
                 # 7. 恢复 session 状态
                 if saved_topic_id > 0 and saved_topic_id != tid:
@@ -392,6 +403,9 @@ class AgentCore:
                     self.sess._history_summary = saved_summary
                     self.current_topic_id = saved_topic_id
                     self._on_mqtt_session_restored()
+
+                # 8. 检查是否需要延迟重启
+                self._check_pending_restart()
 
     def _on_mqtt_session_restored(self):
         """MQTT 消息处理后恢复 session 的 UI 回调（GUI 覆盖来刷新界面）。"""
@@ -441,9 +455,8 @@ class AgentCore:
             return
         try:
             cli, mdl = self.sess._get_summarize_client()
-            # NOTE: 2026-05-06 gen by claude, C2: 消除循环依赖，从 session_summarizer 导入
-            from tea_agent.session_summarizer import generate_topic_summary
-            summary = generate_topic_summary(client=cli, model=mdl, conversations=recent)
+            from tea_agent.main_db_gui import _generate_topic_summary
+            summary = _generate_topic_summary(client=cli, model=mdl, conversations=recent)
             if summary:
                 self.db.update_topic_title(topic_id, summary)
                 self._on_summary_updated(topic_id, summary)

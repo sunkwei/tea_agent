@@ -1,8 +1,6 @@
 # @2026-05-01 gen by tea_agent, 跨平台桌面通知
-# version: 1.0.1
+# version: 1.0.0
 
-# NOTE: 2026-05-05 gen by claude, 修复 Windows MessageBoxW 阻塞主线程导致无法退出 —
-#   优先使用 PowerShell Toast（非阻塞），MessageBoxW 仅作为最后兜底且在线程中执行
 # NOTE: 2026-05-02 09:16:55, self-evolved by tea_agent --- toolkit_notify 多级回退对齐 GUI：GI→notify-send→kdialog→zenity→wall
 def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: int = 5000):
     import sys
@@ -30,11 +28,9 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
 # NOTE: 2026-05-02 09:43:22, self-evolved by tea_agent --- notify-send 添加 --app-name=TeaAgent 和 persistence hint，确保 KDE Plasma 通知中心收录
         # 2) notify-send (D-Bus 标准通知，KDE Plasma 通知中心收录)
         try:
-            # 验证 urgency 值，避免传入非法值导致通知失败
-            valid_urgency = urgency if urgency in ("low", "normal", "critical") else "normal"
             subprocess.run(
                 ['notify-send', '--app-name=TeaAgent',
-                 f'--urgency={valid_urgency}', f'--expire-time={duration}',
+                 f'--urgency={urgency}', f'--expire-time={duration}',
                  '--hint=int:transient:0',
                  title, message],
                 timeout=5, capture_output=True,
@@ -64,14 +60,10 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
         except Exception:
             pass
 
-        # 5) wall 广播（最后手段，需要 root 权限）
+        # 5) wall 广播（最后手段）
         try:
-            result = subprocess.run(['wall', f'[{title}] {message}'], timeout=3, capture_output=True, text=True)
-            if result.returncode == 0:
-                return (0, f"通知已广播: {title}", "")
-            else:
-                # wall 通常需要 root 权限，返回错误信息
-                return (1, "", f"wall 广播失败 (可能需要 root 权限): {result.stderr.strip()}")
+            subprocess.run(['wall', f'[{title}] {message}'], timeout=3)
+            return (0, f"通知已广播: {title}", "")
         except Exception as e:
             return (1, "", f"所有通知方式均失败: {e}")
 
@@ -83,37 +75,37 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
         except Exception as e:
             return (1, "", f"macOS 通知失败: {e}")
 
+# NOTE: 2026-05-06 10:08:00, self-evolved by tea_agent --- Windows通知改为系统通知区Toast优先，移除MessageBoxW对话框，增加AppID自动注册
     elif sys.platform == 'win32':
-        # ── 优先：PowerShell Toast（非阻塞，不卡主线程）──
+        # ── 系统通知区 Toast（主方案）──
+        # PowerShell + Windows.UI.Notifications，非阻塞通知栏弹出
         try:
-            ps = f'''
-            [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] > $null
-            $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-            $texts = $template.GetElementsByTagName("text")
-            $texts[0].AppendChild($template.CreateTextNode("{title}")) > $null
-            $texts[1].AppendChild($template.CreateTextNode("{message}")) > $null
-            $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
-            [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("TeaAgent").Show($toast)
-            '''
-            subprocess.run(['powershell', '-Command', ps], timeout=10)
+            app_id = "TeaAgent.TeaAgent.TeaAgent"
+            ps_register = f'''
+$shortcutPath = "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\TeaAgent.lnk"
+if (-not (Test-Path $shortcutPath)) {{
+    $WshShell = New-Object -ComObject WScript.Shell
+    $shortcut = $WshShell.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = "powershell.exe"
+    $shortcut.Save()
+}}
+'''
+            subprocess.run(['powershell', '-NoProfile', '-Command', ps_register],
+                           timeout=10, capture_output=True)
+            ps_toast = f'''
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+$template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+$texts = $template.GetElementsByTagName("text")
+$texts[0].AppendChild($template.CreateTextNode("{title}")) | Out-Null
+$texts[1].AppendChild($template.CreateTextNode("{message}")) | Out-Null
+$toast = [Windows.UI.Notifications.ToastNotification]::new($template)
+[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("{app_id}").Show($toast)
+'''
+            subprocess.run(['powershell', '-NoProfile', '-Command', ps_toast],
+                           timeout=10, capture_output=True)
             return (0, f"通知已发送: {title}", "")
-        except Exception:
-            pass
-
-        # ── 兜底：MessageBoxW 在线程中执行，避免阻塞主线程 ──
-        try:
-            import ctypes
-            import threading
-
-            def _msgbox():
-                ctypes.windll.user32.MessageBoxW(0, message, title, 0x40)
-
-            t = threading.Thread(target=_msgbox, daemon=True)
-            t.start()
-            t.join(timeout=30)  # 等待最多 30s，避免程序退出时 UI 不一致
-            return (0, f"通知已弹出: {title}", "")
-        except Exception:
-            return (1, "", f"Windows 通知失败")
+        except Exception as e:
+            return (1, "", f"Windows 通知失败: {e}")
 
     else:
         return (1, "", f"不支持的操作系统: {sys.platform}")

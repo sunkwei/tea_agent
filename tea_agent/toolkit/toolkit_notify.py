@@ -30,9 +30,11 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
 # NOTE: 2026-05-02 09:43:22, self-evolved by tea_agent --- notify-send 添加 --app-name=TeaAgent 和 persistence hint，确保 KDE Plasma 通知中心收录
         # 2) notify-send (D-Bus 标准通知，KDE Plasma 通知中心收录)
         try:
+            # 验证 urgency 值，避免传入非法值导致通知失败
+            valid_urgency = urgency if urgency in ("low", "normal", "critical") else "normal"
             subprocess.run(
                 ['notify-send', '--app-name=TeaAgent',
-                 f'--urgency={urgency}', f'--expire-time={duration}',
+                 f'--urgency={valid_urgency}', f'--expire-time={duration}',
                  '--hint=int:transient:0',
                  title, message],
                 timeout=5, capture_output=True,
@@ -62,10 +64,14 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
         except Exception:
             pass
 
-        # 5) wall 广播（最后手段）
+        # 5) wall 广播（最后手段，需要 root 权限）
         try:
-            subprocess.run(['wall', f'[{title}] {message}'], timeout=3)
-            return (0, f"通知已广播: {title}", "")
+            result = subprocess.run(['wall', f'[{title}] {message}'], timeout=3, capture_output=True, text=True)
+            if result.returncode == 0:
+                return (0, f"通知已广播: {title}", "")
+            else:
+                # wall 通常需要 root 权限，返回错误信息
+                return (1, "", f"wall 广播失败 (可能需要 root 权限): {result.stderr.strip()}")
         except Exception as e:
             return (1, "", f"所有通知方式均失败: {e}")
 
@@ -104,6 +110,7 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
 
             t = threading.Thread(target=_msgbox, daemon=True)
             t.start()
+            t.join(timeout=30)  # 等待最多 30s，避免程序退出时 UI 不一致
             return (0, f"通知已弹出: {title}", "")
         except Exception:
             return (1, "", f"Windows 通知失败")

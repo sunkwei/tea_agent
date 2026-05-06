@@ -397,6 +397,8 @@ def toolkit_subconscious(action: str, focus: str = None):
                     state["running"] = False
                     _write_state(state)
                     return
+            # 重新读取最新 state，避免使用旧值
+            state = _read_state()
             try:
                 result = _run_cycle(state)
                 _send_cycle_summary(result, state)

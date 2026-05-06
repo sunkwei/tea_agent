@@ -477,6 +477,8 @@ class Storage:
                 'FROM conversations WHERE topic_id = ? ORDER BY stamp ASC', (topic_id,))
         rows = c.fetchall()
         c.close()
+        if limit == 0:
+            return []  # limit=0 语义：返回 0 条
         if limit > 0 and len(rows) > limit:
             rows = rows[-limit:]  ## 选择最新的 limit 条记录
         result = []

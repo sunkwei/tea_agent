@@ -232,9 +232,11 @@ class SessionAPIMixin:
 
         return target_client.chat.completions.create(**kwargs)
 
+    # NOTE: process_stream_response 已被 onlinesession._process_stream_with_reasoning 取代，
+    # 保留此方法仅为向后兼容，不建议在新代码中使用。
     def process_stream_response(self, response, callback: Callable[[str], None]) -> Tuple[str, List[Dict]]:
         """
-        处理流式响应，收集内容和工具调用数据。
+        [已弃用] 处理流式响应。请使用 _process_stream_with_reasoning 替代。
 
         Args:
             response: 流式响应迭代器

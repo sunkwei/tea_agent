@@ -471,6 +471,7 @@ class OnlineToolSession(
 
             elif content:
                 # 最终文本回答（包含 reasoning_content）
+                iterations += 1  # 计数最后一轮
                 assistant_msg = {"role": "assistant", "content": content}
                 if reasoning_content:
                     assistant_msg["reasoning_content"] = reasoning_content

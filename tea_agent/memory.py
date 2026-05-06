@@ -319,18 +319,18 @@ importance 评分：
             return len(set_a & set_b) / len(set_a | set_b)
         return len(kw_a & kw_b) / len(kw_a | kw_b)
 
-    def _find_duplicate(self, content: str, category: str = "") -> Optional[Dict]:
+    def _find_duplicate(self, content: str, category: str, existing: List[Dict]) -> Optional[Dict]:
         """
         在活跃记忆中查找与 content 相似度超过阈值的记忆。
 
         Args:
             content: 待查重的记忆内容
             category: 可选分类过滤（同分类优先匹配）
+            existing: 已加载的活跃记忆列表（由调用方缓存）
 
         Returns:
             找到的重复记忆 Dict；无重复返回 None
         """
-        existing = self.storage.get_active_memories(limit=200)
         best = None
         best_score = 0.0
 
@@ -441,6 +441,9 @@ importance 评分：
         new_count = 0
         merged_count = 0
 
+        # 一次性加载活跃记忆，避免每条提取都重复查询
+        existing_memories = self.storage.get_active_memories(limit=200)
+
         for item in results:
             try:
                 tags = item.get("tags", "")
@@ -452,8 +455,8 @@ importance 评分：
                 if not content:
                     continue
 
-                # 查重
-                duplicate = self._find_duplicate(content, category)
+                # 查重（使用缓存的记忆列表）
+                duplicate = self._find_duplicate(content, category, existing_memories)
 
                 if duplicate:
                     # 合并更新

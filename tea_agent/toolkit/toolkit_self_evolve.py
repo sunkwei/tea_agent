@@ -30,6 +30,10 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     if old_code not in content:
         return {"ok": False, "error": "old_code 在文件中未找到（精确匹配失败）"}
 
+    # 检查 old_code 出现次数，避免多次出现时修改错误位置
+    if content.count(old_code) > 1:
+        return {"ok": False, "error": f"old_code 在文件中出现 {content.count(old_code)} 次，无法确定修改位置，请提供更多上下文"}
+
 # NOTE: 2026-05-01 11:10:43, self-evolved by tea_agent --- 仅对.py源码文件添加NOTE注释，.md等非源码文件不加
     # 生成演化注释（仅 .py 源码文件，README/CHANGELOG 等不加）
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

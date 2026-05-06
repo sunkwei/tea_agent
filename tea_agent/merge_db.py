@@ -91,6 +91,10 @@ class DbMerger:
     def _get_max_ids(self, conn: sqlite3.Connection) -> Dict[str, int]:
         """获取各表当前最大 ID"""
         max_ids = {}
+        # NOTE: 表名和列名来自内部硬编码常量，不受用户输入影响。
+        # 为防御性编程，仍然做白名单校验。
+        _ALLOWED_TABLES = {"topics", "conversations", "agent_rounds", "memories",
+                           "system_prompts", "reflections", "config_history"}
         for table, col in [
             ("topics", "topic_id"),
             ("conversations", "id"),
@@ -100,6 +104,8 @@ class DbMerger:
             ("reflections", "id"),
             ("config_history", "id"),
         ]:
+            if table not in _ALLOWED_TABLES:
+                raise ValueError(f"不允许的表名: {table}")
             try:
                 cur = conn.execute(f"SELECT COALESCE(MAX({col}), 0) FROM {table}")
                 max_ids[table] = cur.fetchone()[0]
@@ -109,6 +115,12 @@ class DbMerger:
 
     def _get_table_columns(self, conn: sqlite3.Connection, table: str) -> List[str]:
         """获取表的所有列名"""
+        # NOTE: table 来自内部循环，但为防御性编程做白名单校验
+        _ALLOWED_TABLES = {"topics", "conversations", "agent_rounds", "memories",
+                           "system_prompts", "reflections", "config_history",
+                           "topic_token_stats", "t_conv_summary", "_meta"}
+        if table not in _ALLOWED_TABLES:
+            raise ValueError(f"不允许的表名: {table}")
         cur = conn.execute(f"PRAGMA table_info({table})")
         return [row[1] for row in cur.fetchall()]
 

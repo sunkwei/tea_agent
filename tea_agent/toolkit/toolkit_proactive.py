@@ -83,6 +83,8 @@ def _add_goal(content: str, priority: int = 2):
     import json
     if not content or not content.strip():
         return (1, "", "目标内容不能为空")
+    # 钳位 priority 到 0-3 范围
+    priority = max(0, min(3, priority))
     try:
         mm = _get_memory_manager()
         mm.storage.add_memory(

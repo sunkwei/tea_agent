@@ -177,8 +177,10 @@ class MqttAgentConnector:
             if not self._ready_event.wait(timeout=10):
                 logger.warning("MQTT on_connect 超时，断开重试")
                 client.loop_stop()
-                try: client.disconnect()
-                except: pass
+                try:
+                    client.disconnect()
+                except Exception as e:
+                    logger.debug(f"MQTT 断开连接异常: {e}")
                 continue
             logger.info(f"MQTT 连接就绪 — 身份: {self.username}")
 

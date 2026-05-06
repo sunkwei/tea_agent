@@ -86,14 +86,22 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                start_new_session=True,  # 创建新进程组，便于超时后统一杀死
             )
             stdout, stderr = process.communicate(timeout=effective_timeout)
             result = (process.returncode, stdout, stderr)
         except subprocess.TimeoutExpired:
-            # 强制终止并收割
+            # 强制终止整个进程组，避免子进程孤儿化
             try:
-                process.kill()
+                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
                 process.wait(timeout=5)
+            except (ProcessLookupError, OSError):
+                # 进程组已退出或无权限，回退到 kill
+                try:
+                    process.kill()
+                    process.wait(timeout=5)
+                except Exception:
+                    pass
             except Exception:
                 pass
             cmd_preview = f"{app} {' '.join(args[:5])}"
@@ -212,6 +220,10 @@ def _truncate_result(result, max_lines: int = 80, max_chars: int = 4000):
         stdout = result.stdout or ""
         stderr = result.stderr or ""
 
+    # 保存原始长度（在截断前）
+    original_stdout_len = len(stdout)
+    original_stderr_len = len(stderr)
+
     # 截断 stdout
     if len(stdout) > max_chars:
         lines = stdout.split("\n")
@@ -221,13 +233,11 @@ def _truncate_result(result, max_lines: int = 80, max_chars: int = 4000):
             skipped = len(lines) - max_lines
             stdout = f"{head}\n... [跳过 {skipped} 行] ...\n{tail}"
         if len(stdout) > max_chars:
-            original_len = len(result.stdout) if not isinstance(result, tuple) else len(result[1] or '')
-            stdout = stdout[:max_chars] + f"\n... [截断，原长度 {original_len} 字符]"
+            stdout = stdout[:max_chars] + f"\n... [截断，原长度 {original_stdout_len} 字符]"
 
     # stderr 只保留前 500 字符
     if len(stderr) > 500:
-        original_len = len(result.stderr) if not isinstance(result, tuple) else len(result[2] or '')
-        stderr = stderr[:500] + f"\n... [截断，原长度 {original_len} 字符]"
+        stderr = stderr[:500] + f"\n... [截断，原长度 {original_stderr_len} 字符]"
 
     return (rc, stdout, stderr)
 

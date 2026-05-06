@@ -1187,9 +1187,11 @@ class ConfigDialog(tk.Toplevel):
 # NOTE: 2026-05-06 19:31:49, self-evolved by tea_agent --- _create_ui 中向量模型 Tab 增加 dimension 字段
         self._model_tab(nb, "主模型", "main")
         self._model_tab(nb, "便宜模型", "cheap")
+# NOTE: 2026-05-07 07:29:28, self-evolved by tea_agent --- 向量模型 Tab 增加 URL 格式提示
+# NOTE: 2026-05-07 07:29:42, self-evolved by tea_agent --- 回退 hint 字段，改用 _model_tab 的 hint 参数渲染标签
         self._model_tab(nb, "向量模型", "embedding", extra_fields=[
             ("向量维度", "dimension", 10),
-        ])
+        ], hint="API URL 示例: https://api.siliconflow.cn/v1")
         self._runtime_tab(nb)
 
         btn_frame = ttk.Frame(self)
@@ -1200,7 +1202,8 @@ class ConfigDialog(tk.Toplevel):
         ttk.Button(btn_frame, text="取消", command=self.destroy).pack(side=tk.RIGHT, padx=2)
 
 # NOTE: 2026-05-06 19:31:41, self-evolved by tea_agent --- _model_tab 支持 extra_fields 参数，向量模型增加 dimension 输入
-    def _model_tab(self, nb, label, prefix, extra_fields=None):
+# NOTE: 2026-05-07 07:30:04, self-evolved by tea_agent --- _model_tab 支持 hint 参数，在字段下方渲染灰色提示
+    def _model_tab(self, nb, label, prefix, extra_fields=None, hint=None):
         f = ttk.Frame(nb)
         nb.add(f, text=label)
         fields = [
@@ -1210,14 +1213,19 @@ class ConfigDialog(tk.Toplevel):
         ]
         if extra_fields:
             fields.extend(extra_fields)
+# NOTE: 2026-05-07 07:30:10, self-evolved by tea_agent --- 初始化 row_idx 避免空 fields 时 NameError
         vars_map = {}
-        for i, (title, key, width) in enumerate(fields):
+        for row_idx, (title, key, width) in enumerate(fields):
             ttk.Label(f, text=title + ":", font=(SYSTEM_FONT, _fs(11))).grid(
-                row=i, column=0, sticky=tk.W, padx=(10, 4), pady=8)
+                row=row_idx, column=0, sticky=tk.W, padx=(10, 4), pady=8)
             var = tk.StringVar()
             ttk.Entry(f, textvariable=var, width=width, font=(SYSTEM_FONT, _fs(11))).grid(
-                row=i, column=1, sticky=tk.EW, padx=(4, 10), pady=8)
+                row=row_idx, column=1, sticky=tk.EW, padx=(4, 10), pady=8)
             vars_map[key] = var
+        if hint:
+            ttk.Label(f, text="ℹ️ " + hint, font=(SYSTEM_FONT, _fs(10)),
+                      foreground="#888").grid(row=row_idx + 1, column=0, columnspan=2,
+                                              sticky=tk.W, padx=(10, 4), pady=(0, 8))
         f.columnconfigure(1, weight=1)
         setattr(self, f"_{prefix}_vars", vars_map)
 

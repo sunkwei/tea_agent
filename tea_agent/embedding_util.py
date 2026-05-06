@@ -178,9 +178,22 @@ class EmbeddingEngine:
                 logger.warning(f"API 批量嵌入失败，逐个 TF-IDF: {e}")
         return [self._embed_tfidf(t) for t in texts]
 
+# NOTE: 2026-05-07 07:28:42, self-evolved by tea_agent --- 修复 embedding API URL 拼接：自动补全 /v1 路径前缀
+    def _build_url(self) -> str:
+        """构建 embeddings API URL，自动处理 /v1 前缀"""
+        base = self.api_url.rstrip("/")
+        # 如果已经指向 /embeddings 则直接返回
+        if base.endswith("/embeddings"):
+            return base
+        # 如果末尾是 /v1，追加 /embeddings
+        if base.endswith("/v1"):
+            return base + "/embeddings"
+        # 否则补全 /v1/embeddings
+        return base + "/v1/embeddings"
+
     def _embed_api(self, text: str) -> List[float]:
         """通过 API 获取单个文本的嵌入"""
-        url = self.api_url.rstrip("/") + "/embeddings"
+        url = self._build_url()
         headers = {
             "Content-Type": "application/json",
         }
@@ -206,9 +219,10 @@ class EmbeddingEngine:
 
         raise RuntimeError(f"API 返回格式异常: {json.dumps(data)[:200]}")
 
+# NOTE: 2026-05-07 07:28:51, self-evolved by tea_agent --- _embed_api_batch 改用 _build_url() 统一 URL 构建
     def _embed_api_batch(self, texts: List[str]) -> List[List[float]]:
         """通过 API 批量获取嵌入"""
-        url = self.api_url.rstrip("/") + "/embeddings"
+        url = self._build_url()
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"

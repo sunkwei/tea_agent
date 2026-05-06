@@ -356,7 +356,14 @@ class OnlineToolSession(
                     "interrupted": True,
                 }
 
+# NOTE: 2026-05-07 07:57:11, self-evolved by tea_agent --- 首次模型调用时 print 到控制台：时间 + 模型名 + 用户消息，工具循环轮次不打印
             api_messages = self._build_api_messages()
+
+            # 首次调用打印到控制台（工具调用循环的后续轮次不打印）
+            if iterations == 0:
+                import time
+                asctime = time.strftime("%Y-%m-%d %H:%M:%S")
+                print(f"{asctime}: call model: {self.model}, {msg}")
 
             try:
                 response = self._create_chat_stream(api_messages, self.tools)

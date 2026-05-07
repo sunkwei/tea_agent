@@ -1584,13 +1584,23 @@ class TkGUI(AgentCore):
             self.chat_view.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
             self.root.after(400, self.scroll_to_bottom)
 
+# NOTE: 2026-05-07 14:25:13, self-evolved by tea_agent --- _show_loading 支持动态进度文本 + switch_topic 中后台线程上报加载进度，GUI 不卡死
     # NOTE: 2026-05-01, self-evolved by tea_agent --- _show_loading: HtmlFrame spinner动画，异步加载历史时不再长时间空白
-    def _show_loading(self, text: str = "正在加载历史记录"):
-        """在 HtmlFrame 中显示加载动画（spinner + 文字），用于异步加载期间的过渡"""
+    # NOTE: 2026-05-07 gen by tea_agent, _show_loading 支持 progress 参数动态更新进度文本
+    def _show_loading(self, text: str = "正在加载历史记录", progress: str = None):
+        """在 HtmlFrame 中显示加载动画（spinner + 文字），用于异步加载期间的过渡。
+        progress 非空时显示为进度文本（如 '第 5 / 20 条'），常用于后台线程实时更新。"""
         if not HAS_TKINTERWEB:
             self._switch_display("console")
-            self.log(f"⏳ {text}...", "notice")
+            msg = f"⏳ {text}..."
+            if progress:
+                msg = f"⏳ {text}: {progress}"
+            self.log(msg, "notice")
             return
+
+        display_text = text
+        if progress:
+            display_text = f"{text}（{progress}）"
 
         loading_html = f'''<html><head>
 <style>
@@ -1606,7 +1616,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 </style></head>
 <body><div class="loader">
 <div class="spinner"></div>
-<div class="text">{text}<span class="dots"></span></div>
+<div class="text">{html_mod.escape(display_text)}<span class="dots"></span></div>
 </div></body></html>'''
 
         # 切换到 chat_view 但不修改 chat_messages
@@ -1615,7 +1625,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self.chat_view.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
             self._show_mode = "chat_view"
         self.chat_view.load_html(loading_html)
-        self.root.update()
+        # 不调用 root.update()：让 CSS animation 自己跑，GUI 主循环保持响应
 
     def scroll_to_bottom(self):
         self.chat_view.yview_moveto(1.0)
@@ -1761,11 +1771,12 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 # NOTE: 2026-04-30 10:03:19, self-evolved by tea_agent --- switch_topic加载全部历史，旧轮次仅显示问答，最近10轮显示完整工具链
 # NOTE: 2026-04-30 10:26:10, self-evolved by tea_agent --- switch_topic两阶段加载：旧轮次轻量查询(无rounds_json)，最近10轮完整查询
 # NOTE: 2026-04-30 10:31:53, self-evolved by tea_agent --- switch_topic改为后台线程加载DB+解析，主线程仅渲染；新增_render_loaded_topic和_render_topic_error
+# NOTE: 2026-05-07 14:26:37, self-evolved by tea_agent --- switch_topic load_worker 增加实时进度上报：_show_loading(progress=第n/N条)
     def switch_topic(self, topic_id):
         self.current_topic_id = topic_id
         self.clear_chat()
-# NOTE: 2026-05-01 10:38:25, self-evolved by tea_agent --- switch_topic: log → _show_loading + after(60) 延迟启动线程
-        self.generating = True  # 加载期间阻塞输入
+        # 加载期间阻塞输入（send() 检查 generating），但 GUI 主循环不受影响
+        self.generating = True
         self._show_loading("正在加载历史记录")
         self._update_status("⏳ 加载中...")
 
@@ -1778,6 +1789,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 topic = cast(dict, self.db.get_topic(topic_id))
                 ts = self.db.get_topic_tokens(topic_id)
 
+# NOTE: 2026-05-07 14:27:35, self-evolved by tea_agent --- 移除 load_worker 中多余的 _show_loading(progress) 调用，进度已改由状态栏展示
                 # 轻量查询所有对话（不含 rounds_json）
                 all_light = self.db.get_conversations(topic_id, limit=-1, include_rounds=False)
                 total_convs = len(all_light)
@@ -1820,16 +1832,20 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                         f"📖 最近 {recent_turns} 轮显示完整对话，更早的 {old_count} 轮仅显示问答"))
                     render_items.append(("notice", ""))
 
-                # 遍历对话，构建渲染项
+# NOTE: 2026-05-07 14:27:20, self-evolved by tea_agent --- 进度文本改为更新状态栏（轻量），HtmlFrame 仅初始渲染一次 spinner
+                # 遍历对话，构建渲染项 + 进度上报（状态栏，轻量更新）
                 for i, c in enumerate(all_light):
+                    # 每 10 条或最后一条上报进度到状态栏
+                    if (i + 1) % 10 == 0 or i == total_convs - 1:
+                        progress_text = f"⏳ 正在加载 {total_convs} 条历史中的第 {i+1} 条..."
+                        self.root.after(0, self._update_status, progress_text)
+
                     is_old = i < old_count
                     render_items.append(("user", f"你：{c['user_msg']}"))
 
                     if is_old:
-                        # 旧轮次：仅显示最终 ai_msg
                         render_items.append(("ai", f"AI：{c['ai_msg']}"))
                     else:
-                        # 最近N轮：显示完整工具调用链
                         rounds = c.get("rounds_json_parsed")
                         tool_names = []
                         if rounds and c.get("is_func_calling"):
@@ -1866,7 +1882,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             except Exception as e:
                 self.root.after(0, self._render_topic_error, str(e))
 
-# NOTE: 2026-05-01 10:38:31, self-evolved by tea_agent --- switch_topic: after(60) 延迟启动后台线程，确保 spinner 先渲染
+        # 延迟 60ms 启动后台线程，让 spinner HTML 先渲染
         self.root.after(60, lambda: threading.Thread(target=load_worker, daemon=True).start())
 
     def _render_loaded_topic(self, render_items):

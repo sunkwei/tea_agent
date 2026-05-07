@@ -276,10 +276,22 @@ class AgentCore:
         # ── 2. 发布到 MQTT ──
         self._publish_to_mqtt(ai_msg)
 
+# NOTE: 2026-05-07 13:13:37, self-evolved by tea_agent --- _post_chat_pipeline Token 统计增加嵌入模型用量（从 EmbeddingEngine.get_embedding_usage 获取）
         # ── 3. Token 统计 ──
         usage = self.sess._last_usage
         cheap_usage = self.sess._last_cheap_usage
         if usage and usage.get("total_tokens", 0) > 0:
+            # 嵌入模型 token 用量
+            try:
+                from tea_agent.embedding_util import get_embedding_engine
+                emb_engine = get_embedding_engine()
+                emb_usage = emb_engine.get_embedding_usage(reset=True)
+                emb_tokens = emb_usage.get("total_tokens", 0)
+                emb_prompt = emb_usage.get("prompt_tokens", 0)
+            except Exception:
+                emb_tokens = 0
+                emb_prompt = 0
+
             self.db.add_topic_tokens(
                 topic_id,
                 total_tokens=usage["total_tokens"],
@@ -288,6 +300,8 @@ class AgentCore:
                 cheap_tokens=cheap_usage.get("total_tokens", 0),
                 cheap_prompt_tokens=cheap_usage.get("prompt_tokens", 0),
                 cheap_completion_tokens=cheap_usage.get("completion_tokens", 0),
+                embedding_tokens=emb_tokens,
+                embedding_prompt_tokens=emb_prompt,
             )
 
 # NOTE: 2026-05-06 09:58:21, self-evolved by tea_agent --- _post_chat_pipeline末尾添加_check_pending_restart调用

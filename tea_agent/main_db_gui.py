@@ -1133,9 +1133,15 @@ class TopicDialog(tk.Toplevel):
         f.write(f"- **创建时间:** {created}\n")
         f.write(f"- **最后更新:** {updated}\n")
         f.write(f"- **对话数:** {len(convs)}\n")
+# NOTE: 2026-05-07 13:14:32, self-evolved by tea_agent --- 主题导出文件增加嵌入模型 token 行
         f.write(f"- **Token消耗:** {ts.get('total_tokens', 0):,} "
                 f"(P:{ts.get('total_prompt_tokens', 0):,} "
                 f"C:{ts.get('total_completion_tokens', 0):,})\n")
+        f.write(f"- **便宜模型:** {ts.get('total_cheap_tokens', 0):,} "
+                f"(P:{ts.get('total_cheap_prompt_tokens', 0):,} "
+                f"C:{ts.get('total_cheap_completion_tokens', 0):,})\n")
+        f.write(f"- **嵌入模型:** {ts.get('total_embedding_tokens', 0):,} "
+                f"(P:{ts.get('total_embedding_prompt_tokens', 0):,})\n")
         f.write(f"- **导出模式:** {'仅用户输入' if mode == 'user' else '完整（含AI回复与工具调用）'}\n")
         f.write("\n---\n\n")
 
@@ -1988,10 +1994,20 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 # GUI 特定：token 渲染 + 通知
                 usage = self.sess._last_usage
                 cheap_usage = self.sess._last_cheap_usage
+# NOTE: 2026-05-07 13:14:48, self-evolved by tea_agent --- 完成状态栏消息增加嵌入模型 token (Emb:xxx)
                 if usage and usage.get("total_tokens", 0) > 0:
                     self.root.after(0, lambda u=usage, cu=cheap_usage: self._add_token_notice_and_render(u, cu))
+                    # 读取嵌入模型用量
+                    emb_str = ""
+                    try:
+                        from tea_agent.embedding_util import get_embedding_engine
+                        euse = get_embedding_engine().get_embedding_usage(reset=False)
+                        if euse.get("total_tokens", 0) > 0:
+                            emb_str = f" | Emb:{euse['total_tokens']:,}"
+                    except Exception:
+                        pass
                     status_msg = (f"✅ 完成 | Tokens: {usage['total_tokens']:,} "
-                                  f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,})")
+                                  f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,}){emb_str}")
                     self.root.after(0, lambda m=status_msg: self._update_status(m))
                     self.root.after(0, self._refresh_topics_preserve_selection)
 # NOTE: 2026-05-06 09:31, self-evolved by tea_agent --- 通知传入 user_msg，显示用户消息+AI回复
@@ -2031,8 +2047,9 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 # NOTE: 2026-04-30 09:13:24, self-evolved by tea_agent --- 简化token显示格式，修复括号配对问题
 # NOTE: 2026-04-30 09:15:53, self-evolved by tea_agent --- token通知增加当前主题累积消耗显示
 # NOTE: 2026-04-30 09:26:32, self-evolved by tea_agent --- _add_token_notice_and_render改为Markdown表格(主模型+便宜模型，本轮+主题累积)
+# NOTE: 2026-05-07 13:14:07, self-evolved by tea_agent --- _add_token_notice_and_render 表格新增嵌入模型列：本轮 reading + 主题累积 te_total/te_p
     def _add_token_notice_and_render(self, usage: dict, cheap_usage: dict = None):
-        """在聊天消息中追加 Markdown 表格：本轮/主题累积 × 主模型/便宜模型 token 消耗"""
+        """在聊天消息中追加 Markdown 表格：本轮/主题累积 × 主模型/便宜模型/嵌入模型 token 消耗"""
         if cheap_usage is None:
             cheap_usage = {}
         # 本轮：主模型
@@ -2043,6 +2060,17 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         c_total = cheap_usage.get("total_tokens", 0)
         c_p = cheap_usage.get("prompt_tokens", 0)
         c_c = cheap_usage.get("completion_tokens", 0)
+        # 嵌入模型 token 用量（从 EmbeddingEngine 读取本轮）
+        e_total = 0
+        e_p = 0
+        try:
+            from tea_agent.embedding_util import get_embedding_engine
+            emb_engine = get_embedding_engine()
+            emb_usage = emb_engine.get_embedding_usage(reset=False)  # 已在 _post_chat_pipeline reset
+            e_total = emb_usage.get("total_tokens", 0)
+            e_p = emb_usage.get("prompt_tokens", 0)
+        except Exception:
+            pass
         # 主题累积
         try:
             ts = self.db.get_topic_tokens(self.current_topic_id)
@@ -2052,8 +2080,10 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             tc_total = ts.get("total_cheap_tokens", 0)
             tc_p = ts.get("total_cheap_prompt_tokens", 0)
             tc_c = ts.get("total_cheap_completion_tokens", 0)
+            te_total = ts.get("total_embedding_tokens", 0)
+            te_p = ts.get("total_embedding_prompt_tokens", 0)
         except Exception:
-            tm_total = tm_p = tm_c = tc_total = tc_p = tc_c = 0
+            tm_total = tm_p = tm_c = tc_total = tc_p = tc_c = te_total = te_p = 0
 
 # NOTE: 2026-04-30 09:27:37, self-evolved by tea_agent --- _cell()中去掉<br>改用空格，保证Markdown表格兼容性
         def _cell(val, detail_p=None, detail_c=None):
@@ -2064,11 +2094,12 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 return f"{val:,} (P:{detail_p:,} C:{detail_c:,})"
             return f"{val:,}"
 
+# NOTE: 2026-05-07 13:14:18, self-evolved by tea_agent --- Token 表格新增嵌入模型列
         lines = [
-            "| | 主模型 | 便宜模型 |",
-            "|-------|--------|----------|",
-            f"| 本轮 | {_cell(m_total, m_p, m_c)} | {_cell(c_total, c_p, c_c)} |",
-            f"| 主题 | {_cell(tm_total, tm_p, tm_c)} | {_cell(tc_total, tc_p, tc_c)} |",
+            "| | 主模型 | 便宜模型 | 嵌入模型 |",
+            "|-------|--------|----------|----------|",
+            f"| 本轮 | {_cell(m_total, m_p, m_c)} | {_cell(c_total, c_p, c_c)} | {_cell(e_total, e_p)} |",
+            f"| 主题 | {_cell(tm_total, tm_p, tm_c)} | {_cell(tc_total, tc_p, tc_c)} | {_cell(te_total, te_p)} |",
         ]
         token_msg = "\n".join(lines)
         self.chat_messages.append({"role": "notice", "content": token_msg, "timestamp": self._now_ts()})

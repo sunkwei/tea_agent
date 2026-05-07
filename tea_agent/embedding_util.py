@@ -91,6 +91,7 @@ class _SimpleTFIDF:
 
 # ── EmbeddingEngine ─────────────────────────────────────────────
 
+# NOTE: 2026-05-07 13:11:58, self-evolved by tea_agent --- EmbeddingEngine 跟踪嵌入 API 的 token 用量，解析 usage 并累积
 class EmbeddingEngine:
     """文本向量引擎：API 优先，自动回退 TF-IDF"""
 
@@ -105,6 +106,12 @@ class EmbeddingEngine:
         self.dimension = 0
         self._use_api = False
         self._tfidf = _SimpleTFIDF()
+
+        # Token 用量跟踪
+        self._total_embedding_tokens = 0       # 全局累计
+        self._total_embedding_prompt_tokens = 0
+        self._session_embedding_tokens = 0     # 单次会话累计（get_and_reset 后归零）
+        self._session_embedding_prompt_tokens = 0
 
         if config is not None:
             self._init_from_config(config)
@@ -212,9 +219,20 @@ class EmbeddingEngine:
         print(f"{asctime}: call embedding: {self.model_name}, {text[:80]}")
         logger.info(f"embedding request: model={self.model_name}, text_len={len(text)}, text:{text[:80]}, url={url}")
 
+# NOTE: 2026-05-07 13:12:07, self-evolved by tea_agent --- _embed_api 解析 API 返回的 usage，累积到 session/global token 计数器
         resp = requests.post(url, json=payload, headers=headers, timeout=30)
         resp.raise_for_status()
         data = resp.json()
+
+        # 提取 token 用量
+        usage = data.get("usage", {})
+        if usage:
+            pt = usage.get("prompt_tokens", 0) or 0
+            tt = usage.get("total_tokens", 0) or pt
+            self._total_embedding_tokens += tt
+            self._total_embedding_prompt_tokens += pt
+            self._session_embedding_tokens += tt
+            self._session_embedding_prompt_tokens += pt
 
         # OpenAI 兼容格式: {"data": [{"embedding": [...]}]}
         if "data" in data and len(data["data"]) > 0:
@@ -267,6 +285,7 @@ class EmbeddingEngine:
                      f"{len(self._tfidf._doc_freq)} 特征")
 
 # NOTE: 2026-05-07 07:39:09, self-evolved by tea_agent --- cosine_similarity 改用 numpy 向量化计算
+# NOTE: 2026-05-07 13:12:26, self-evolved by tea_agent --- 新增 get_embedding_usage() 方法，返回并可选重置会话嵌入 token 计数
     def cosine_similarity(self, a: List[float], b: List[float]) -> float:
         """计算两个向量的余弦相似度（numpy 加速）"""
         import numpy as np
@@ -280,6 +299,24 @@ class EmbeddingEngine:
         if na == 0 or nb == 0:
             return 0.0
         return dot / (na * nb)
+
+    def get_embedding_usage(self, reset: bool = True) -> dict:
+        """获取并可选重置本次会话的嵌入 token 用量。
+
+        Args:
+            reset: True=归零会话计数器（用于会话结束时读取本轮用量）
+
+        Returns:
+            {"total_tokens": int, "prompt_tokens": int}
+        """
+        usage = {
+            "total_tokens": self._session_embedding_tokens,
+            "prompt_tokens": self._session_embedding_prompt_tokens,
+        }
+        if reset:
+            self._session_embedding_tokens = 0
+            self._session_embedding_prompt_tokens = 0
+        return usage
 
     def search(self, query: str, top_k: int = 10, min_similarity: float = 0.3) -> List[Dict]:
         """

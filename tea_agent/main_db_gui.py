@@ -1625,7 +1625,19 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self.chat_view.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
             self._show_mode = "chat_view"
         self.chat_view.load_html(loading_html)
+# NOTE: 2026-05-07 14:45:26, self-evolved by tea_agent --- 新增 _poll_loading_progress 方法：50ms 轮询共享变量，仅变化时 load_html
         # 不调用 root.update()：让 CSS animation 自己跑，GUI 主循环保持响应
+
+    def _poll_loading_progress(self):
+        """定时器（50ms）：读取后台线程写入的 _loading_progress，仅在变化时更新 HtmlFrame。
+        self.generating 变 False 时自动停止轮询。"""
+        if not self.generating or not HAS_TKINTERWEB:
+            return
+        progress = getattr(self, '_loading_progress', None)
+        if progress and progress != self._last_progress_shown:
+            self._last_progress_shown = progress
+            self._show_loading("正在加载历史记录", f"{progress[0]}/{progress[1]}")
+        self.root.after(50, self._poll_loading_progress)
 
     def scroll_to_bottom(self):
         self.chat_view.yview_moveto(1.0)
@@ -1775,10 +1787,13 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     def switch_topic(self, topic_id):
         self.current_topic_id = topic_id
         self.clear_chat()
+# NOTE: 2026-05-07 14:45:13, self-evolved by tea_agent --- 启动进度轮询定时器，50ms 读共享变量更新 HtmlFrame
         # 加载期间阻塞输入（send() 检查 generating），但 GUI 主循环不受影响
         self.generating = True
         self._show_loading("正在加载历史记录")
         self._update_status("⏳ 加载中...")
+        self._last_progress_shown = None  # 防重复 load_html
+        self._poll_loading_progress()     # 启动 50ms 轮询定时器，实时刷新 HtmlFrame 进度
 
         recent_turns = 10
 
@@ -1834,13 +1849,12 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 
 # NOTE: 2026-05-07 14:27:20, self-evolved by tea_agent --- 进度文本改为更新状态栏（轻量），HtmlFrame 仅初始渲染一次 spinner
 # NOTE: 2026-05-07 14:40:37, self-evolved by tea_agent --- 进度文本从状态栏改回 HtmlFrame 显示「正在加载 N 条记录中的第 n 条」
-                # 遍历对话，构建渲染项 + 进度上报到 HtmlFrame
+# NOTE: 2026-05-07 14:43:26, self-evolved by tea_agent --- 进度更新粒度从每20条改为每条，确保加载动画流畅
+# NOTE: 2026-05-07 14:43:47, self-evolved by tea_agent --- 避免 root.after 堆积：后台线程写共享变量，主线程 50ms 定时器轮询更新 HtmlFrame
+                # 遍历对话，构建渲染项 + 进度上报（后台线程写变量，主线程定时器读）
                 for i, c in enumerate(all_light):
-                    # 每 20 条或最后一条更新 HtmlFrame 进度（避免频繁 load_html）
-                    if (i + 1) % 20 == 0 or i == total_convs - 1:
-                        progress_str = f"{i+1}/{total_convs}"
-                        self.root.after(0, self._show_loading,
-                                        "正在加载历史记录", progress_str)
+                    # 写入共享进度变量（原子赋值），主线程定时器 50ms 轮询读取并更新 HtmlFrame
+                    self._loading_progress = (i + 1, total_convs)
 
                     is_old = i < old_count
                     render_items.append(("user", f"你：{c['user_msg']}"))

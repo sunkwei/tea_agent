@@ -73,11 +73,12 @@ class ChatRoomConnector:
         client.on_message = self._on_message
         client.on_disconnect = self._on_disconnect
         client.will_set(f"{TOPIC_PRESENCE_PFX}{self.username}", "offline", retain=False)
+# NOTE: 2026-05-07 08:01:44, self-evolved by tea_agent --- chat_room broker 连接失败日志从 warning 降为 debug，减少控制台噪音
         try:
             client.connect(self.broker_host, self.broker_port, keepalive=30)
             return client
         except Exception as e:
-            logger.warning(f"chat_room 连接 broker 失败 ({self.broker_host}:{self.broker_port}): {e}")
+            logger.debug(f"chat_room 连接 broker 失败 ({self.broker_host}:{self.broker_port}): {e}")
             return None
 
     def _run(self):
@@ -127,7 +128,8 @@ class ChatRoomConnector:
             client.publish(f"{TOPIC_PRESENCE_PFX}{self.username}", "online")
             logger.info(f"chat_room 已连接 broker，订阅 {TOPIC_CHAT_WILD}")
         else:
-            logger.warning(f"chat_room broker 连接失败 rc={reason_code}")
+# NOTE: 2026-05-07 08:01:50, self-evolved by tea_agent --- chat_room broker on_connect 失败日志从 warning 降为 debug
+            logger.debug(f"chat_room broker 连接失败 rc={reason_code}")
 
     def _on_disconnect(self, client, userdata, flags, reason_code, properties):
         logger.warning(f"chat_room 与 broker 断开 (rc={reason_code})")

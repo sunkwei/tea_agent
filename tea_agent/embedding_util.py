@@ -191,6 +191,7 @@ class EmbeddingEngine:
         # 否则补全 /v1/embeddings
         return base + "/v1/embeddings"
 
+# NOTE: 2026-05-07 08:01:36, self-evolved by tea_agent --- _embed_api 调用前 print 到控制台：时间 + 嵌入模型名 + 文本前80字
     def _embed_api(self, text: str) -> List[float]:
         """通过 API 获取单个文本的嵌入"""
         url = self._build_url()
@@ -204,6 +205,10 @@ class EmbeddingEngine:
             "model": self.model_name,
             "input": text,
         }
+
+        import time
+        asctime = time.strftime("%Y-%m-%d %H:%M:%S")
+        print(f"{asctime}: call embedding: {self.model_name}, {text[:80]}")
 
         resp = requests.post(url, json=payload, headers=headers, timeout=30)
         resp.raise_for_status()

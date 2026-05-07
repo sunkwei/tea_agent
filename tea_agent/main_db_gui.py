@@ -2086,12 +2086,15 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             tm_total = tm_p = tm_c = tc_total = tc_p = tc_c = te_total = te_p = 0
 
 # NOTE: 2026-04-30 09:27:37, self-evolved by tea_agent --- _cell()中去掉<br>改用空格，保证Markdown表格兼容性
+# NOTE: 2026-05-07 13:18:26, self-evolved by tea_agent --- _cell 支持只有 P 无 C 的场景（嵌入模型），显示 total (P:xxx)
         def _cell(val, detail_p=None, detail_c=None):
-            """格式化为 'total (P:x C:y)' 或 '—'"""
+            """格式化为 'total (P:x C:y)' 或 'total (P:x)' 或 '—'"""
             if val <= 0:
                 return "—"
             if detail_p is not None and detail_c is not None:
                 return f"{val:,} (P:{detail_p:,} C:{detail_c:,})"
+            if detail_p is not None:
+                return f"{val:,} (P:{detail_p:,})"
             return f"{val:,}"
 
 # NOTE: 2026-05-07 13:14:18, self-evolved by tea_agent --- Token 表格新增嵌入模型列

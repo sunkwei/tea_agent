@@ -36,9 +36,10 @@ class AgentCore:
 # NOTE: 2026-05-04 19:33:59, self-evolved by tea_agent --- AgentCore.__init__ 增加 _shutting_down 标志位，用于安全重启前阻止新操作
 # NOTE: 2026-05-07 11:26:49, self-evolved by tea_agent --- AgentCore.__init__ 中集成 setup_logging，并添加模型调用/失败的 DEBUG/WARNING 日志
     def __init__(self, debug: bool = False, config_path: Optional[str] = None):
+# NOTE: 2026-05-07 11:35:37, self-evolved by tea_agent --- setup_logging 调用传入 debug=self.debug，默认 INFO，debug=True 时 DEBUG
         # ── 尽早初始化文件日志，确保后续所有 logger 都有文件 handler ──
         from tea_agent.logging_setup import setup_logging
-        setup_logging()
+        setup_logging(debug=self.debug)
         self.debug = debug
         self.generating = False
 # NOTE: 2026-05-06 09:57:03, self-evolved by tea_agent --- __init__添加_pending_restart标记，支持watchdog延迟重启

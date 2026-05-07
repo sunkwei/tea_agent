@@ -1628,15 +1628,30 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 # NOTE: 2026-05-07 14:45:26, self-evolved by tea_agent --- 新增 _poll_loading_progress 方法：50ms 轮询共享变量，仅变化时 load_html
         # 不调用 root.update()：让 CSS animation 自己跑，GUI 主循环保持响应
 
+# NOTE: 2026-05-07 14:48:15, self-evolved by tea_agent --- _poll_loading_progress 改为从队列逐条出队，确保每个进度都被渲染
+# NOTE: 2026-05-07 14:49:37, self-evolved by tea_agent --- 轮询器：队列排空且 _loading_done 时触发 _render_loaded_topic 或 _render_topic_error
     def _poll_loading_progress(self):
-        """定时器（50ms）：读取后台线程写入的 _loading_progress，仅在变化时更新 HtmlFrame。
-        self.generating 变 False 时自动停止轮询。"""
-        if not self.generating or not HAS_TKINTERWEB:
+        """定时器（50ms）：从 _progress_queue 逐条出队更新 HtmlFrame 进度；
+        队列排空后若后台线程已完成，触发最终渲染。"""
+        if not HAS_TKINTERWEB:
             return
-        progress = getattr(self, '_loading_progress', None)
-        if progress and progress != self._last_progress_shown:
-            self._last_progress_shown = progress
+        if self._progress_queue:
+            progress = self._progress_queue.pop(0)  # FIFO
             self._show_loading("正在加载历史记录", f"{progress[0]}/{progress[1]}")
+            self.root.after(50, self._poll_loading_progress)
+            return
+        # 队列已空，检查后台线程是否完成
+        if getattr(self, '_loading_done', False):
+            # 最终渲染
+            if hasattr(self, '_pending_error'):
+                self._render_topic_error(self._pending_error)
+                delattr(self, '_pending_error')
+            elif hasattr(self, '_pending_render'):
+                self._render_loaded_topic(self._pending_render)
+                delattr(self, '_pending_render')
+            self._loading_done = False
+            return
+        # 线程还在跑，继续等待
         self.root.after(50, self._poll_loading_progress)
 
     def scroll_to_bottom(self):
@@ -1790,10 +1805,11 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 # NOTE: 2026-05-07 14:45:13, self-evolved by tea_agent --- 启动进度轮询定时器，50ms 读共享变量更新 HtmlFrame
         # 加载期间阻塞输入（send() 检查 generating），但 GUI 主循环不受影响
         self.generating = True
+# NOTE: 2026-05-07 14:48:24, self-evolved by tea_agent --- switch_topic 初始化 _progress_queue 替代 _last_progress_shown
         self._show_loading("正在加载历史记录")
         self._update_status("⏳ 加载中...")
-        self._last_progress_shown = None  # 防重复 load_html
-        self._poll_loading_progress()     # 启动 50ms 轮询定时器，实时刷新 HtmlFrame 进度
+        self._progress_queue = []  # 进度队列，后台线程入队，主线程定时器出队
+        self._poll_loading_progress()  # 启动 50ms 轮询定时器，实时刷新 HtmlFrame 进度
 
         recent_turns = 10
 
@@ -1851,10 +1867,11 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 # NOTE: 2026-05-07 14:40:37, self-evolved by tea_agent --- 进度文本从状态栏改回 HtmlFrame 显示「正在加载 N 条记录中的第 n 条」
 # NOTE: 2026-05-07 14:43:26, self-evolved by tea_agent --- 进度更新粒度从每20条改为每条，确保加载动画流畅
 # NOTE: 2026-05-07 14:43:47, self-evolved by tea_agent --- 避免 root.after 堆积：后台线程写共享变量，主线程 50ms 定时器轮询更新 HtmlFrame
-                # 遍历对话，构建渲染项 + 进度上报（后台线程写变量，主线程定时器读）
+# NOTE: 2026-05-07 14:48:00, self-evolved by tea_agent --- 修复进度丢失：共享变量改为队列，后台线程入队，主线程逐条出队渲染，不丢任何进度
+                # 遍历对话，构建渲染项 + 进度入队（后台线程入队，主线程定时器出队渲染）
                 for i, c in enumerate(all_light):
-                    # 写入共享进度变量（原子赋值），主线程定时器 50ms 轮询读取并更新 HtmlFrame
-                    self._loading_progress = (i + 1, total_convs)
+                    # 每条进度写入队列，主线程 _poll_loading_progress 逐条出队更新 HtmlFrame
+                    self._progress_queue.append((i + 1, total_convs))
 
                     is_old = i < old_count
                     render_items.append(("user", f"你：{c['user_msg']}"))
@@ -1893,10 +1910,13 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                                 render_items.append(("tool", "ℹ️ 本条使用了工具调用"))
                     render_items.append(("notice", ""))
 
-                # === 第三阶段：回到主线程渲染 ===
-                self.root.after(0, self._render_loaded_topic, render_items)
+# NOTE: 2026-05-07 14:49:21, self-evolved by tea_agent --- load_worker 不直接调度渲染，存 _pending_render/_pending_error，由轮询器触发
+                # === 第三阶段：存入待渲染数据，由轮询器在进度队列排空后触发渲染 ===
+                self._pending_render = render_items
+                self._loading_done = True
             except Exception as e:
-                self.root.after(0, self._render_topic_error, str(e))
+                self._pending_error = str(e)
+                self._loading_done = True
 
         # 延迟 60ms 启动后台线程，让 spinner HTML 先渲染
         self.root.after(60, lambda: threading.Thread(target=load_worker, daemon=True).start())

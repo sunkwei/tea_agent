@@ -1,4 +1,9 @@
 # @2026-04-30 gen by deepseek-v4-pro, toolkit_prompt_evolve: Agent 自主进化系统提示词
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 """toolkit_prompt_evolve — 允许 Agent 管理自己的系统提示词版本"""
 
 from tea_agent.session_ref import get_session
@@ -20,6 +25,8 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
         version: [rollback] 目标版本号（如 "1", "2"）
         content: [set] 新的完整系统提示词文本
     """
+    logger.info(f"toolkit_prompt_evolve called: action={action!r}, version={version!r}, content={content[:80]!r}")
+
     session = get_session()
     if not session:
         return "❌ 无活跃会话"

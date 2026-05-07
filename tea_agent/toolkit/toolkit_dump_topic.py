@@ -1,3 +1,8 @@
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_dump_topic(role: str = "all") -> dict:
     """
     将当前所有会话内容从数据库导出到 dump_{date} 子目录。
@@ -6,6 +11,8 @@ def toolkit_dump_topic(role: str = "all") -> dict:
     Args:
         role: 导出范围。"user" 仅导出用户输入，"all" 导出所有内容（含 AI 回复和工具调用链）。
     """
+    logger.info(f"toolkit_dump_topic called: role={role!r}")
+
     import os
     import json
     from datetime import datetime

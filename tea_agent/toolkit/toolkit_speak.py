@@ -4,6 +4,11 @@
 # @2026-05-02 gen by tea_agent, TTS语音合成：pyttsx3本地引擎 + gTTS在线回退
 # version: 1.0.0
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_speak(text: str, lang: str = "zh", rate: int = 180):
     """
     文本转语音。优先使用 pyttsx3 本地引擎（离线，快速），失败则回退 gTTS。
@@ -13,6 +18,8 @@ def toolkit_speak(text: str, lang: str = "zh", rate: int = 180):
         lang: 语言，zh=中文, en=英文。用于选择音色
         rate: 语速（词/分钟），默认180。仅 pyttsx3 有效
     """
+    logger.info(f"toolkit_speak called: text={text[:80]!r}, lang={lang!r}, rate={rate!r}")
+
     import tempfile
     import os
     import subprocess

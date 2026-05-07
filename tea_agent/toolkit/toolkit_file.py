@@ -3,6 +3,11 @@
 # version: 1.1.0
 # NOTE: 2026-05-02, self-evolved by tea_agent --- 合并 toolkit_list_dir: 新增 action='list'
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_file(action: str, filename: str = "", content: str = "", path: str = ".", recursive: bool = False, show_hidden: bool = False):
     """
     统一文件操作。
@@ -10,6 +15,8 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
     - action="write": 将 content 写入 filename。需 filename + content。
     - action="list": 列出目录内容 (跨平台 dir/ls)。可选 path/recursive/show_hidden。
     """
+    logger.info(f"toolkit_file called: action={action!r}, filename={filename!r}, content={content[:80]!r}, path={path!r}, recursive={recursive!r}, show_hidden={show_hidden!r}")
+
     if action == "read":
         try:
             with open(filename, 'r', encoding='utf-8') as f:

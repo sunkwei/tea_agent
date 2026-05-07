@@ -2,10 +2,17 @@
 # version: 1.0.4
 
 #!/usr/bin/env python3
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 """toolkit_kb -- Markdown 知识库管理工具。"""
 
 
 def toolkit_kb(action, title="", content="", tags="", category="", query="", brief="", sort="time"):
+    logger.info(f"toolkit_kb called: action={action!r}, title={title[:80]!r}, content={content[:80]!r}, tags={tags!r}, category={category!r}, query={query[:80]!r}, brief={brief[:80]!r}, sort={sort!r}")
+
     import os, re, subprocess
     from pathlib import Path
     from datetime import datetime

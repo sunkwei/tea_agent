@@ -4,6 +4,11 @@
 # @2026-05-02 gen by tea_agent, STT语音识别：Google Speech Recognition + 本地回退
 # version: 1.0.0
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_listen(lang: str = "zh-CN", timeout: int = 5, phrase_limit: int = 10):
     """
     从麦克风录音并识别为文字。
@@ -16,6 +21,8 @@ def toolkit_listen(lang: str = "zh-CN", timeout: int = 5, phrase_limit: int = 10
     Returns:
         (0, 识别的文字, "")
     """
+    logger.info(f"toolkit_listen called: lang={lang!r}, timeout={timeout!r}, phrase_limit={phrase_limit!r}")
+
     import json
     
     try:

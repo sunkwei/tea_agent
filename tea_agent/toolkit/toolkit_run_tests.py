@@ -1,4 +1,9 @@
 # @2026-04-29 gen by deepseek-v4-pro, 内置工具: 运行项目测试套件
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_run_tests(pattern: str = "test_*.py") -> dict:
     """
     运行项目中的测试文件。
@@ -6,6 +11,8 @@ def toolkit_run_tests(pattern: str = "test_*.py") -> dict:
     Args:
         pattern: 测试文件匹配模式，默认 'test_*.py' 运行所有测试
     """
+    logger.info(f"toolkit_run_tests called: pattern={pattern!r}")
+
     import subprocess
     import sys
     from pathlib import Path

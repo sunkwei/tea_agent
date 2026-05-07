@@ -2,7 +2,14 @@
 # version: 1.0.4
 
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_subconscious(action: str, focus: str = None):
+    logger.info(f"toolkit_subconscious called: action={action!r}, focus={focus!r}")
+
     import os, json, time, sqlite3, threading, random, re, subprocess
     from datetime import datetime
     from pathlib import Path

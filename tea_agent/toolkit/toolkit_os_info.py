@@ -2,6 +2,11 @@
 import platform
 import functools
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 @functools.lru_cache(maxsize=1)
 def _cached_os_info():
     return {
@@ -15,6 +20,8 @@ def _cached_os_info():
 
 def toolkit_os_info(refresh: bool = False):
     """获取当前操作系统信息（进程级缓存）。agent 启动时调用一次即可。"""
+    logger.info(f"toolkit_os_info called: refresh={refresh!r}")
+
     if refresh:
         _cached_os_info.cache_clear()
     return _cached_os_info()

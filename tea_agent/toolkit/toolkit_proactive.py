@@ -4,8 +4,15 @@
 # @2026-05-02 gen by tea_agent, 自主心跳：Agent自我目标管理系统
 # version: 1.0.1
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_proactive(action: str, content: str = "", priority: int = 2, goal_id: int = None):
     """Agent 自主心跳系统"""
+    logger.info(f"toolkit_proactive called: action={action!r}, content={content[:80]!r}, priority={priority!r}, goal_id={goal_id!r}")
+
     import json
     
     try:

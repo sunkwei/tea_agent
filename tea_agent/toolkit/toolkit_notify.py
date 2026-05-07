@@ -2,7 +2,14 @@
 # version: 1.0.0
 
 # NOTE: 2026-05-02 09:16:55, self-evolved by tea_agent --- toolkit_notify 多级回退对齐 GUI：GI→notify-send→kdialog→zenity→wall
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: int = 5000):
+    logger.info(f"toolkit_notify called: title={title[:80]!r}, message={message[:80]!r}, urgency={urgency!r}, duration={duration!r}")
+
     import sys
     import subprocess
 

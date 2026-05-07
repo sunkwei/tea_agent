@@ -1,6 +1,11 @@
 # @2026-04-29 gen by deepseek-v4-pro, 合并build_package+fix_pyproject
 # version: 1.0.0
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_build(action: str, directory: str = "."):
     """
     统一构建/修复工具。
@@ -9,6 +14,8 @@ def toolkit_build(action: str, directory: str = "."):
     - action="fix": 修复 pyproject.toml 常见问题（BOM、license格式、classifier、缺失README）。
       需 directory（默认当前目录）。返回修改摘要。
     """
+    logger.info(f"toolkit_build called: action={action!r}, directory={directory!r}")
+
     import os
 
     if action == "package":

@@ -1,9 +1,16 @@
 ## llm generated tool func, created Thu Apr 16 10:51:32 2026
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_self_report() -> dict:
     """
     Generates a comprehensive status report of the Agent.
     """
+    logger.info(f"toolkit_self_report called")
+
     import os
     import json
     import sqlite3

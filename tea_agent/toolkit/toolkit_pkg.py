@@ -2,11 +2,18 @@
 # version: 1.0.0
 
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_pkg(action: str, packages: str = None, module: str = None):
     """
     智能 Python 包管理工具。
     自动检测缺失模块并安装，支持批量操作。
     """
+    logger.info(f"toolkit_pkg called: action={action!r}, packages={packages!r}, module={module!r}")
+
     import subprocess, sys, importlib, os
 
     def _pip_install(pkgs):

@@ -1,4 +1,9 @@
 # @2026-04-30 gen by deepseek-v4-pro, toolkit_ocr: "眼睛" — 截屏 + OCR 文字识别，让 Agent 能"看到"屏幕
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 """toolkit_ocr — 屏幕视觉能力：截屏 + OCR 文字识别"""
 
 
@@ -31,6 +36,8 @@ def toolkit_ocr(
     Returns:
         结构化识别结果
     """
+    logger.info(f"toolkit_ocr called: action={action!r}, region={region!r}, monitor={monitor!r}, image_path={image_path!r}, lang={lang!r}, detail={detail!r}, timeout={timeout!r}")
+
     import json
     import os
     import time

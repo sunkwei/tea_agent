@@ -2,11 +2,18 @@
 # version: 1.0.1
 
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_screenshot(action: str, region: str = None, monitor: int = None, output: str = None, quality: int = 90):
     """
     跨平台智能截屏 — 自动适配 Wayland/X11/macOS/Windows
     Wayland 区域截屏策略：先全屏截取，再用 PIL 裁剪（绕开各工具的交互限制）
     """
+    logger.info(f"toolkit_screenshot called: action={action!r}, region={region!r}, monitor={monitor!r}, output={output[:80]!r}, quality={quality!r}")
+
     import os, subprocess, tempfile, shutil
     from datetime import datetime
     from pathlib import Path

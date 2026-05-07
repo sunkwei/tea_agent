@@ -1,3 +1,8 @@
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_bump_version(version: str, file: str = "pyproject.toml", dry_run: bool = False):
     """
     跨平台版本号更新 — 纯 Python，零外部依赖。
@@ -7,6 +12,8 @@ def toolkit_bump_version(version: str, file: str = "pyproject.toml", dry_run: bo
         toolkit_bump_version("1.0.0", "setup.cfg")         # 更新其他文件
         toolkit_bump_version("0.5.3", dry_run=True)        # 预览不改写
     """
+    logger.info(f"toolkit_bump_version called: version={version!r}, file={file!r}, dry_run={dry_run!r}")
+
     import re
     from pathlib import Path
 

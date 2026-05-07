@@ -5,6 +5,11 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_release_version(version: str, changes: list, changelog_section: str = "Improvements & Changes", 
                            build: bool = True, git_commit: bool = True) -> dict:
     """
@@ -20,6 +25,8 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
     Returns:
         dict: 包含操作结果的字典
     """
+    logger.info(f"toolkit_release_version called: version={version!r}, changes={changes[:80]!r}, changelog_section={changelog_section!r}, build={build!r}, git_commit={git_commit!r}")
+
     results = {
         "version": version,
         "status": "success",

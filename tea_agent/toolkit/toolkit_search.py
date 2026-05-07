@@ -2,6 +2,11 @@
 # @2026-05-01 gen by tea_agent, 互联网搜索（DuckDuckGo + 百度）
 # version: 1.1.0
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: str = "duckduckgo"):
     """互联网搜索，支持 DuckDuckGo 和百度两个搜索引擎。
     
@@ -11,6 +16,8 @@ def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: st
         lang: 语言偏好，如 zh-cn, en，空=不限
         engine: 搜索引擎，duckduckgo（默认）或 baidu
     """
+    logger.info(f"toolkit_search called: query={query[:80]!r}, max_results={max_results!r}, lang={lang!r}, engine={engine!r}")
+
     import json
     
     max_results = min(max(max_results, 1), 20)

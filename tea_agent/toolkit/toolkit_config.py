@@ -1,4 +1,9 @@
 # @2026-04-30 gen by deepseek-v4-pro, toolkit_config: Agent 读取/修改运行时配置
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 """toolkit_config — 允许 Agent 读取和修改自身运行时配置"""
 
 import json
@@ -21,6 +26,8 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
         extra_iterations_on_continue, memory_extraction_threshold,
         memory_dedup_threshold, chat_page_size
     """
+    logger.info(f"toolkit_config called: action={action!r}, key={key!r}, value={value!r}")
+
     cfg = get_config()
     session = get_session()
     storage = getattr(session, 'storage', None) if session else None

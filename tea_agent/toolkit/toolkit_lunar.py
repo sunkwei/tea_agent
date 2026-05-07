@@ -1,4 +1,9 @@
 # @2026-05-05 gen by tea_agent, toolkit_lunar: 公历 ↔ 农历转换，零外部依赖
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 """toolkit_lunar — 公历/农历互转，含天干地支、生肖、节气"""
 
 # ============================================================
@@ -179,6 +184,8 @@ def toolkit_lunar(date_str: str = "", action: str = "solar_to_lunar") -> str:
     Returns:
         JSON: {solar_date, lunar_date, lunar_year/month/day, is_leap_month, tiangan_dizhi, zodiac, nearest_jieqi...}
     """
+    logger.info(f"toolkit_lunar called: date_str={date_str!r}, action={action!r}")
+
     import json, datetime
 
     if action in ("solar_to_lunar", "today"):

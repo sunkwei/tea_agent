@@ -1,4 +1,9 @@
 # @2026-04-30 gen by deepseek-v4-pro, toolkit_reflection: Agent主动触发元认知反思
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 """toolkit_reflection — 允许 Agent 主动触发自我反思"""
 
 import json
@@ -16,6 +21,8 @@ def toolkit_reflection(action: str = "trigger", limit: int = 5) -> str:
     Returns:
         格式化的结果字符串
     """
+    logger.info(f"toolkit_reflection called: action={action!r}, limit={limit!r}")
+
     session = get_session()
     if not session:
         return "❌ 无活跃会话，无法执行反思操作"

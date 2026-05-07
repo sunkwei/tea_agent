@@ -3,6 +3,11 @@
 # version: 1.1.0
 # NOTE: 2026-05-02, self-evolved by tea_agent --- 合并 toolkit_batch_exec: 新增 action='batch'
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_exec(app: str = "", args: list = None, action: str = "single", commands: list = None, timeout: int = 30):
     """
     执行系统命令（单条或批量并行）。
@@ -21,6 +26,8 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         single: (returncode, stdout, stderr)
         batch: (0, json结果数组, "")
     """
+    logger.info(f"toolkit_exec called: app={app!r}, args={args[:80]!r}, action={action!r}, commands={commands[:80]!r}, timeout={timeout!r}")
+
     import subprocess
     import json
     import os

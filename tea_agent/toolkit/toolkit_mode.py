@@ -4,6 +4,11 @@
 # @2026-05-02 gen by tea_agent, Agent人格模式管理：严谨收敛 vs 自由发散
 # version: 1.0.1
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_mode(action: str, text: str = "", mode: str = ""):
     """
     Agent 人格模式管理。两种核心模式：
@@ -20,6 +25,8 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
     
     模式以 CRITICAL 优先级注入记忆，确保后续所有回复遵循。
     """
+    logger.info(f"toolkit_mode called: action={action!r}, text={text[:80]!r}, mode={mode!r}")
+
     import json
     import re
     

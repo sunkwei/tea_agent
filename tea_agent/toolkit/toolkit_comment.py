@@ -1,6 +1,11 @@
 # @2026-04-29 gen by deepseek-v4-pro, 合并2个comment工具（code_comment + evolve_comment）
 # version: 1.0.0
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_comment(mode: str, description: str = "", model_name: str = ""):
     """
     生成代码注释前缀，两种模式：
@@ -9,6 +14,8 @@ def toolkit_comment(mode: str, description: str = "", model_name: str = ""):
     - mode="evolve": 自进化注释，格式 '# NOTE: {date}, self-evolved by {model} ---'
       需 model_name
     """
+    logger.info(f"toolkit_comment called: mode={mode!r}, description={description[:80]!r}, model_name={model_name!r}")
+
     from datetime import datetime
     import os
 

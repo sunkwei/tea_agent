@@ -1,6 +1,11 @@
 # @2026-04-29 gen by deepseek-v4-pro, 合并5个memory工具为一个统一入口
 # version: 1.0.0
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_memory(action: str, content: str = "", category: str = "general", priority: int = 2, importance: int = 3, expires_at: str = None, tags: str = "", id: int = 0, hard: bool = False, query: str = "", min_importance: int = 0, limit: int = 10, topic_id: int = -1, max_chars: int = 4000):
     """
     统一长期记忆管理入口。根据 action 执行不同操作：
@@ -13,6 +18,8 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
     - "forget": 删除/失效记忆。需 id。可选 hard（true=硬删除, false=软删除）。
     - "extract": 从对话中提取待分析文本。可选 topic_id/max_chars。
     """
+    logger.info(f"toolkit_memory called: action={action!r}, content={content[:80]!r}, category={category!r}, priority={priority!r}, importance={importance!r}, expires_at={expires_at!r}, tags={tags!r}, id={id!r}, hard={hard!r}, query={query[:80]!r}, min_importance={min_importance!r}, limit={limit!r}, topic_id={topic_id!r}, max_chars={max_chars!r}")
+
     try:
         from tea_agent.store import get_storage
         storage = get_storage()

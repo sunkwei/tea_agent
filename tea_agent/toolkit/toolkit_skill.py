@@ -1,3 +1,8 @@
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 """toolkit_skill — Skill 管理：查看、激活、停用技能"""
 # @2026-05-04 gen by tea_agent, Skill系统 — 动态管理Agent的能力模块
 
@@ -18,6 +23,8 @@ def toolkit_skill(action: str = "list", name: str = ""):
     Returns:
         操作结果描述
     """
+    logger.info(f"toolkit_skill called: action={action!r}, name={name!r}")
+
     import json
     from tea_agent.skills import SkillManager
 

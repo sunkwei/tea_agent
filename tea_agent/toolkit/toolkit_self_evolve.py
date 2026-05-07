@@ -1,4 +1,9 @@
 # @2026-04-29 gen by deepseek-v4-pro, 内置工具: 自进化——修改项目代码并带注释/备份/验证
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_code: str, verify: bool = True, backup: bool = True) -> dict:
     """
     自进化：修改项目源文件，自动生成演化注释、备份原文件、验证编译。
@@ -12,6 +17,8 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         verify: 是否验证编译通过
         backup: 是否备份原文件到 .bak
     """
+    logger.info(f"toolkit_self_evolve called: file_path={file_path!r}, description={description[:80]!r}, old_code={old_code[:80]!r}, new_code={new_code[:80]!r}, verify={verify!r}, backup={backup!r}")
+
     import os
     import shutil
     import py_compile

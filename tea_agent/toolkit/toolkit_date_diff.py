@@ -1,5 +1,10 @@
 ## llm generated tool func, created Thu Apr 16 20:30:30 2026
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_date_diff(start_date: str, end_date: str = None) -> dict:
     """
     计算两个日期之间的天数差。
@@ -11,6 +16,8 @@ def toolkit_date_diff(start_date: str, end_date: str = None) -> dict:
     返回:
         dict: 包含天数差和详细信息的字典
     """
+    logger.info(f"toolkit_date_diff called: start_date={start_date!r}, end_date={end_date!r}")
+
     from datetime import datetime, date
     
     try:

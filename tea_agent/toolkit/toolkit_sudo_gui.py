@@ -7,8 +7,15 @@ import os
 import sys
 import ctypes
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_sudo_gui(app: str, args: list, prompt: str = "请输入管理员密码"):
     """跨平台提权执行命令"""
+    logger.info(f"toolkit_sudo_gui called: app={app!r}, args={args[:80]!r}, prompt={prompt!r}")
+
 
     # ── Windows: UAC 弹窗 ──
     if sys.platform == 'win32':

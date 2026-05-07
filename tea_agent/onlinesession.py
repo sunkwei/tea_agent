@@ -94,9 +94,10 @@ class OnlineToolSession(
             max_tool_output: 工具输出截断字符数
             max_assistant_content: 助手回复截断字符数
             extra_iterations_on_continue: 续命时追加的工具调用轮数
-# NOTE: 2026-04-30 14:35:45, self-evolved by tea_agent --- memory_dedup_threshold文档+属性赋值
             memory_extraction_threshold: 触发记忆提取的最低未摘要消息数
             memory_dedup_threshold: 记忆去重相似度阈值 (0~1)
+            
+            # NOTE: 2026-04-30 14:35:45, self-evolved by tea_agent --- memory_dedup_threshold文档+属性赋值
         """
         sp = system_prompt or self._COMPACT_SYSTEM_PROMPT
         BaseChatSession.__init__(self, model, max_history, sp)

@@ -39,8 +39,8 @@ class AgentCore:
 # NOTE: 2026-05-07 11:35:37, self-evolved by tea_agent --- setup_logging 调用传入 debug=self.debug，默认 INFO，debug=True 时 DEBUG
         # ── 尽早初始化文件日志，确保后续所有 logger 都有文件 handler ──
         from tea_agent.logging_setup import setup_logging
-        setup_logging(debug=self.debug)
         self.debug = debug
+        setup_logging(debug=self.debug)
         self.generating = False
 # NOTE: 2026-05-06 09:57:03, self-evolved by tea_agent --- __init__添加_pending_restart标记，支持watchdog延迟重启
         self._shutting_down = False  # 重启前安全闸门

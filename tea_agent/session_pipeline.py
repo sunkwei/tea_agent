@@ -148,24 +148,23 @@ class SessionPipeline:
         """
         skip_steps = skip_steps or []
         
-        logger.info(f"Executing session pipe with context:\n{context}")
+        logger.debug(f"Executing session pipe with context:\n{context}")
         for i, (name, step) in enumerate(self.get_enabled_steps()):
             # 检查是否要跳过
-            logger.info(f"  Step {i}: {name}")
+            logger.debug(f"  Step {i}: {name}")
             if name in skip_steps:
-                logger.info(f"    Skipping step {name}")
                 continue
             
             # 执行步骤
             try:
-                logger.info(f"    Running step {name}, context: {context}")
+                logger.debug(f"    Running step {name}, context: {context}")
                 result = step.func(context)
                 if isinstance(result, list):
-                    logger.info(f"    Result: {len(result)} items")
+                    logger.debug(f"    Result: {len(result)} items")
                     for item in result:
-                        logger.info(f"    {item}")
+                        logger.debug(f"    {item}")
                 elif isinstance(result, dict):
-                    logger.info(f"    Result: keys: {result.keys()}")
+                    logger.debug(f"    Result: keys: {result.keys()}")
                 # 合并结果到上下文
                 if isinstance(result, dict):
                     context.update(result)
@@ -179,7 +178,7 @@ class SessionPipeline:
             # 检查是否要停止
             if stop_at and name == stop_at:
                 break
-        logger.info(f"Execution complete, with content\n{context}\n")
+        logger.debug(f"Execution complete, with content\n{context}\n")
         return context
     
     def list_steps(self) -> List[Dict[str, Any]]:

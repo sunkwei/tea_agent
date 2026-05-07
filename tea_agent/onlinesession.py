@@ -366,6 +366,7 @@ class OnlineToolSession(
                 import time
                 asctime = time.strftime("%Y-%m-%d %H:%M:%S")
                 print(f"{asctime}: call model: {self.model}, {msg}")
+                logger.info(f"call model: {self.model}, {msg}")
 
             logger.debug(f"model request: model={self.model}, msgs={len(api_messages)}, tools={len(self.tools)}, iteration={iterations}")
             sys_msg_preview = api_messages[0]['content'][:100] if api_messages else ""
@@ -435,7 +436,7 @@ class OnlineToolSession(
                     import time as _time
                     _asctime = _time.strftime("%Y-%m-%d %H:%M:%S")
                     print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name}")
-                    logger.debug(f"tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
+                    logger.info(f"    tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
                     call_id, func_name, result_str = self._execute_tool_call(call)
                     logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")
                     self._collect_tool_call_round(call_id, result_str)

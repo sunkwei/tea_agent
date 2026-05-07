@@ -210,7 +210,7 @@ class EmbeddingEngine:
         import time
         asctime = time.strftime("%Y-%m-%d %H:%M:%S")
         print(f"{asctime}: call embedding: {self.model_name}, {text[:80]}")
-        logger.debug(f"embedding request: model={self.model_name}, text_len={len(text)}, url={url}")
+        logger.info(f"embedding request: model={self.model_name}, text_len={len(text)}, text:{text[:80]}, url={url}")
 
         resp = requests.post(url, json=payload, headers=headers, timeout=30)
         resp.raise_for_status()

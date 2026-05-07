@@ -186,6 +186,7 @@ class AgentCore:
 
         # ── 4. 跨平台重启 ──
         print("\n🔁 代码已变更，正在重启...\n", flush=True)
+        logger.warning("🔁 代码已变更，正在重启...")
         args = [sys.executable] + sys.argv
         if sys.platform == 'win32':
             subprocess.Popen(args, close_fds=True)

@@ -75,9 +75,13 @@ class AgentCore:
         # ── 5. 会话锁 ──
         self._sess_lock = threading.Lock()
 
+# NOTE: 2026-05-07 13:25:46, self-evolved by tea_agent --- AgentCore.__init__ 增加自动启动潜意识引擎，app 启动后后台每小时循环
         # ── 6. 初始化会话 ──
         self.current_topic_id: int = -1
         self._init_session()
+
+        # ── 7. 启动潜意识引擎（后台每小时：总结/反思/创意/头脑风暴）──
+        self._start_subconscious()
 
 # NOTE: 2026-05-04 19:26:41, self-evolved by tea_agent --- AgentCore 添加 _start_file_watcher() — 监控非 toolkit 的 .py 变更并自动重启进程
         # ── 7. 串接 MQTT reply handler ──
@@ -194,12 +198,44 @@ class AgentCore:
         else:
             os.execv(sys.executable, args)
 
+# NOTE: 2026-05-07 13:26:33, self-evolved by tea_agent --- 新增 _start_subconscious 方法：启动潜意识引擎 daemon 线程（每小时总结/反思）
     def _check_pending_restart(self):
         """会话结束后调用：检查 watchdog 是否在会话期间标记了待重启。"""
         if self._pending_restart:
             self._pending_restart = False
             logger.info("🔁 会话已完成，执行待定重启...")
             self._safe_restart()
+
+    def _start_subconscious(self):
+        """自动启动潜意识引擎 daemon 线程。
+
+        每小时一次后台循环：消化记忆 → 对话提取 → 交叉关联 → 生成洞察 → 设定目标。
+        场景自适应：bug期收敛务实分析，创意期发散联想。
+        启动失败不阻塞主流程。
+        """
+        try:
+            # 在 toolkit 目录找 toolkit_subconscious.py
+            import importlib.util
+            fpath = os.path.join(self.toolkit.root_dir, "toolkit_subconscious.py")
+            if not os.path.exists(fpath):
+                logger.debug(f"潜意识引擎文件不存在: {fpath}")
+                return
+            spec = importlib.util.spec_from_file_location("_subconscious_startup", fpath)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            result = mod.toolkit_subconscious("start")
+            if result.get("status") == "started":
+                logger.info("🧠 潜意识引擎已自动启动 | 间隔1小时 | 场景自适应")
+            elif result.get("status") == "already_running":
+                logger.info(
+                    f"🧠 潜意识引擎已在运行中 "
+                    f"| 周期: {result.get('cycles_completed', 0)}"
+                )
+            else:
+                logger.debug(f"潜意识引擎状态: {result.get('status')}")
+        except Exception as e:
+            # 启动失败不影响主体功能
+            logger.debug(f"潜意识引擎自动启动跳过: {e}")
 
     def _start_connectors(self):
         """启动 chat_room 和 MQTT 连接器（非阻塞守护线程）。"""

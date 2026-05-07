@@ -421,7 +421,11 @@ class OnlineToolSession(
                     for tc in valid_tool_calls
                 )
 
+# NOTE: 2026-05-07 08:15:01, self-evolved by tea_agent --- 工具调用循环中打印轮次和工具名：print(f\"\\t#{轮次}: 调用工具:{tool name}\")
                 for call in valid_tool_calls:
+                    import time as _time
+                    _asctime = _time.strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name}")
                     call_id, func_name, result_str = self._execute_tool_call(call)
                     self._collect_tool_call_round(call_id, result_str)
 

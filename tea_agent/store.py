@@ -442,6 +442,7 @@ class Storage:
         """后台线程自动生成并存储文本向量（fire-and-forget，不阻塞主流程）"""
         import threading
 
+# NOTE: 2026-05-07 08:05:56, self-evolved by tea_agent --- _auto_embed_async except Exception: pass 改为 logger.warning，打印嵌入失败原因
         def _run():
             try:
                 from tea_agent.embedding_util import get_embedding_engine
@@ -449,9 +450,10 @@ class Storage:
                 vec = engine.embed(text)
                 if vec:
                     self.store_embedding(conv_id, vec, engine.model_name, len(vec))
-            except Exception:
-                # 嵌入失败不影响对话流程，静默忽略
-                pass
+            except Exception as e:
+                # 嵌入失败不影响对话流程，记录原因
+                import logging
+                logging.getLogger("store").warning(f"自动嵌入失败 (conv_id={conv_id}): {e}")
 
         t = threading.Thread(target=_run, daemon=True, name=f"auto-embed-{conv_id}")
         t.start()

@@ -250,7 +250,9 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
         user_msgs="\n".join(user_msgs)
     )
 
+# NOTE: 2026-05-07 11:27:55, self-evolved by tea_agent --- _generate_topic_summary 添加模型请求/响应的 DEBUG 日志
     try:
+        logger.debug(f"generate_topic_summary request: model={model}, conversations={len(conversations)}, user_msgs={len(user_msgs)}")
         response = client.chat.completions.create(
             model=model,
             messages=[

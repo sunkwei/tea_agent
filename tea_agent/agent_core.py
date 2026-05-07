@@ -34,7 +34,11 @@ class AgentCore:
     """
 
 # NOTE: 2026-05-04 19:33:59, self-evolved by tea_agent --- AgentCore.__init__ 增加 _shutting_down 标志位，用于安全重启前阻止新操作
+# NOTE: 2026-05-07 11:26:49, self-evolved by tea_agent --- AgentCore.__init__ 中集成 setup_logging，并添加模型调用/失败的 DEBUG/WARNING 日志
     def __init__(self, debug: bool = False, config_path: Optional[str] = None):
+        # ── 尽早初始化文件日志，确保后续所有 logger 都有文件 handler ──
+        from tea_agent.logging_setup import setup_logging
+        setup_logging()
         self.debug = debug
         self.generating = False
 # NOTE: 2026-05-06 09:57:03, self-evolved by tea_agent --- __init__添加_pending_restart标记，支持watchdog延迟重启
@@ -306,8 +310,9 @@ class AgentCore:
                     conn.publish_reply(ai_msg, reply_to=sender)
                 else:
                     conn.publish_reply(ai_msg)
+# NOTE: 2026-05-07 11:28:25, self-evolved by tea_agent --- _publish_to_mqtt 静默异常改为 WARNING 日志
         except Exception:
-            pass  # MQTT 发布失败不影响主流程
+            logger.debug(f"MQTT 发布失败 (非致命), topic={self.current_topic_id}")
 
     def _setup_mqtt_reply_handler(self):
         """将 MQTT 消息串入 chat_stream() 全流水线。"""
@@ -461,9 +466,11 @@ class AgentCore:
         recent = self.db.get_recent_conversations(topic_id, limit=10)
         if not recent:
             return
+# NOTE: 2026-05-07 11:27:01, self-evolved by tea_agent --- _auto_summary 添加模型调用 DEBUG 日志
         try:
             cli, mdl = self.sess._get_summarize_client()
             # 2026-05-06 gen by tea_agent, debug: check what client/model is being used
+            logger.debug(f"call summarize model: {mdl}, topic={topic_id}, msgs={len(recent)}")
             from tea_agent.main_db_gui import _generate_topic_summary
             summary = _generate_topic_summary(client=cli, model=mdl, conversations=recent)
 # NOTE: 2026-05-06 10:35:56, self-evolved by tea_agent --- _auto_summary 添加异常日志，不再静默吞错

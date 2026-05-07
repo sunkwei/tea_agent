@@ -9,7 +9,9 @@
 3. 消息压缩 (Message Compact)  - 截断超长消息，控制 Token 消耗
 """
 
+# NOTE: 2026-05-07 11:29:46, self-evolved by tea_agent --- session_summarizer.py 添加 logging import 和模型调用 DEBUG/WARNING 日志
 import re
+import logging
 from typing import List, Dict, Tuple, Any, Optional, Callable
 
 from tea_agent.session_prompts import (
@@ -18,6 +20,8 @@ from tea_agent.session_prompts import (
     TOPIC_SUMMARY_SYSTEM,
     TOPIC_SUMMARY_USER_TEMPLATE,
 )
+
+logger = logging.getLogger("session.summarizer")
 
 # NOTE: 2026-05-06 gen by claude, 从 main_db_gui.py 提取，消除 agent_core → main_db_gui 循环依赖
 # ── Topic 摘要 Prompt（与 GUI 共用）──────────────────
@@ -102,11 +106,13 @@ def generate_topic_summary_shared(client, model: str, conversations: List[Dict])
         if len(raw) < 4:
             return None
 
+# NOTE: 2026-05-07 11:30:43, self-evolved by tea_agent --- 模块级 generate_topic_summary 末尾 except 添加 WARNING 日志（含更多上下文）
         if len(raw) > 20:
             raw = raw[:20]
 
         return raw if raw else None
-    except Exception:
+    except Exception as e:
+        logger.warning(f"generate_topic_summary 失败: {type(e).__name__}: {e}, model={model}")
         return None
 
 
@@ -164,7 +170,9 @@ class SessionSummarizerMixin:
         Returns:
             API 响应对象
         """
+# NOTE: 2026-05-07 11:30:01, self-evolved by tea_agent --- _call_summarize_api 添加模型请求 DEBUG 日志和失败 WARNING 日志
         try:
+            logger.debug(f"summarize API request: model={mdl}, msgs={len(messages)}, temperature={temperature}, max_tokens={max_tokens}")
             return cli.chat.completions.create(
                 model=mdl,
                 messages=messages,
@@ -176,12 +184,14 @@ class SessionSummarizerMixin:
             err_str = str(e).lower()
             if 'thinking' in err_str or 'extra_body' in err_str:
                 # 模型不支持 thinking 参数，回退到不带 extra_body 的调用
+                logger.debug(f"summarize API: thinking disabled not supported, retrying without extra_body")
                 return cli.chat.completions.create(
                     model=mdl,
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
+            logger.warning(f"summarize API call failed: model={mdl}, error={e}")
             raise
 
     def _summarize_old_history(self) -> None:
@@ -273,7 +283,9 @@ class SessionSummarizerMixin:
                 if self.tool_log:
                     self.tool_log(f"📝 历史摘要更新：{new_summary}")
 
+# NOTE: 2026-05-07 11:30:07, self-evolved by tea_agent --- _summarize_old_history 异常改为 WARNING 日志
         except Exception as e:
+            logger.warning(f"历史摘要生成失败: model={mdl}, error={e}")
             if self.tool_log:
                 self.tool_log(f"⚠️ 摘要生成失败: {e}")
         return None
@@ -678,11 +690,13 @@ def generate_topic_summary(client, model: str, conversations: _List[_Dict]) -> _
     if not user_msgs:
         return None
 
+# NOTE: 2026-05-07 11:30:29, self-evolved by tea_agent --- 模块级 generate_topic_summary 添加 DEBUG 日志（含更多上下文区分）
     user_content = _TOPIC_SUMMARY_USER_TEMPLATE.format(
         user_msgs="\n".join(user_msgs)
     )
 
     try:
+        logger.debug(f"generate_topic_summary request: model={model}, conversations={len(conversations)}, user_msgs={len(user_msgs)}")
         response = client.chat.completions.create(
             model=model,
             messages=[
@@ -694,6 +708,7 @@ def generate_topic_summary(client, model: str, conversations: _List[_Dict]) -> _
         )
 
         if not response.choices or len(response.choices) == 0:
+            logger.warning(f"generate_topic_summary: API 返回空 choices, model={model}")
             return None
 
         content = response.choices[0].message.content

@@ -206,9 +206,11 @@ class EmbeddingEngine:
             "input": text,
         }
 
+# NOTE: 2026-05-07 11:28:02, self-evolved by tea_agent --- _embed_api 和 _embed_api_batch 添加 DEBUG 日志
         import time
         asctime = time.strftime("%Y-%m-%d %H:%M:%S")
         print(f"{asctime}: call embedding: {self.model_name}, {text[:80]}")
+        logger.debug(f"embedding request: model={self.model_name}, text_len={len(text)}, url={url}")
 
         resp = requests.post(url, json=payload, headers=headers, timeout=30)
         resp.raise_for_status()
@@ -225,9 +227,11 @@ class EmbeddingEngine:
         raise RuntimeError(f"API 返回格式异常: {json.dumps(data)[:200]}")
 
 # NOTE: 2026-05-07 07:28:51, self-evolved by tea_agent --- _embed_api_batch 改用 _build_url() 统一 URL 构建
+# NOTE: 2026-05-07 11:28:09, self-evolved by tea_agent --- _embed_api_batch 添加 DEBUG 日志
     def _embed_api_batch(self, texts: List[str]) -> List[List[float]]:
         """通过 API 批量获取嵌入"""
         url = self._build_url()
+        logger.debug(f"embedding batch request: model={self.model_name}, batch_size={len(texts)}, url={url}")
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"

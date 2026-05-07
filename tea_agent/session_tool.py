@@ -1,11 +1,15 @@
+# NOTE: 2026-05-07 11:28:37, self-evolved by tea_agent --- _execute_tool_call 添加工具执行的 DEBUG/WARNING 日志
 """
 会话工具执行模块
 负责工具调用执行、结果收集等功能
 """
 
 import json
+import logging
 from typing import List, Dict, Tuple, Any, Optional, Callable
 from types import SimpleNamespace
+
+logger = logging.getLogger("session.tool")
 
 
 class SessionToolMixin:
@@ -48,8 +52,10 @@ class SessionToolMixin:
         call_id = call.id
         start_time = time.time()
 
+# NOTE: 2026-05-07 11:28:52, self-evolved by tea_agent --- _execute_tool_call 中工具失败时添加 WARNING 日志，执行成功添加 DEBUG 日志
         if func_name not in self.toolkit.func_map:
             err = f"错误：未知工具 {func_name}"
+            logger.warning(f"tool call failed: unknown function '{func_name}'")
             self._add_tool_result(call_id, err)
             self._record_tool_to_trace(func_name, False, err, start_time)
             return call_id, func_name, err
@@ -58,6 +64,7 @@ class SessionToolMixin:
             args = json.loads(call.function.arguments)
         except json.JSONDecodeError:
             err = "错误：参数解析失败"
+            logger.warning(f"tool call failed: JSON decode error, func={func_name}, raw_args={call.function.arguments[:200]}")
             self._add_tool_result(call_id, err)
             self._record_tool_to_trace(func_name, False, err, start_time)
             return call_id, func_name, err
@@ -67,12 +74,14 @@ class SessionToolMixin:
 
         success = True
         error_msg = ""
+# NOTE: 2026-05-07 11:29:02, self-evolved by tea_agent --- 工具执行 try/except 添加 WARNING 日志
         try:
             result = self.toolkit.func_map[func_name](**args)
             if self.tool_log:
                 self.tool_log(f"✅ 结果: {result}")
         except Exception as e:
             result = f"工具执行错误: {e}"
+            logger.warning(f"tool execution failed: {func_name}, error={e}")
             success = False
             error_msg = str(e)
             if self.tool_log:

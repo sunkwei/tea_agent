@@ -357,6 +357,7 @@ class OnlineToolSession(
                 }
 
 # NOTE: 2026-05-07 07:57:11, self-evolved by tea_agent --- 首次模型调用时 print 到控制台：时间 + 模型名 + 用户消息，工具循环轮次不打印
+# NOTE: 2026-05-07 11:27:27, self-evolved by tea_agent --- _execute_tool_loop 添加模型请求/响应和工具调用的 DEBUG 日志，API 错误 WARNING 日志
             api_messages = self._build_api_messages()
 
             # 首次调用打印到控制台（工具调用循环的后续轮次不打印）
@@ -365,10 +366,15 @@ class OnlineToolSession(
                 asctime = time.strftime("%Y-%m-%d %H:%M:%S")
                 print(f"{asctime}: call model: {self.model}, {msg}")
 
+            logger.debug(f"model request: model={self.model}, msgs={len(api_messages)}, tools={len(self.tools)}, iteration={iterations}")
+            sys_msg_preview = api_messages[0]['content'][:100] if api_messages else ""
+            logger.debug(f"system_prompt preview: {sys_msg_preview}")
+
             try:
                 response = self._create_chat_stream(api_messages, self.tools)
             except Exception as e:
                 error_msg = f"API调用错误: {e}"
+                logger.warning(f"API调用失败: model={self.model}, error={e}, iteration={iterations}")
                 callback(error_msg)
                 self.add_assistant_message(full_reply + error_msg)
                 self._collect_api_error_round(full_reply + error_msg)
@@ -381,6 +387,7 @@ class OnlineToolSession(
             # 处理流式响应
             content, tool_calls_data, reasoning_content = self._process_stream_with_reasoning(response, callback)
             full_reply += content
+            logger.debug(f"model response: content_len={len(content)}, reasoning_len={len(reasoning_content)}, tool_calls_data={len(tool_calls_data)}, usage={self._last_usage}")
 
             # 解析工具调用
             valid_tool_calls = self._parse_tool_calls_from_stream(tool_calls_data)
@@ -422,11 +429,14 @@ class OnlineToolSession(
                 )
 
 # NOTE: 2026-05-07 08:15:01, self-evolved by tea_agent --- 工具调用循环中打印轮次和工具名：print(f\"\\t#{轮次}: 调用工具:{tool name}\")
+# NOTE: 2026-05-07 11:27:40, self-evolved by tea_agent --- 工具调用执行添加 DEBUG 日志：调用名+参数和返回结果
                 for call in valid_tool_calls:
                     import time as _time
                     _asctime = _time.strftime("%Y-%m-%d %H:%M:%S")
                     print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name}")
+                    logger.debug(f"tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
                     call_id, func_name, result_str = self._execute_tool_call(call)
+                    logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")
                     self._collect_tool_call_round(call_id, result_str)
 
                 # 如果调用了 reload，刷新本地工具定义
@@ -577,7 +587,9 @@ class OnlineToolSession(
             Tuple[str, bool]: (助手完整回复, 是否使用了工具调用)
         """
 
-        logger.debug(f"chat_stream: user message: {msg}")
+# NOTE: 2026-05-07 11:27:48, self-evolved by tea_agent --- chat_stream 入口添加 DEBUG 日志
+        logger.debug(f"chat_stream start: msg_len={len(msg)}, topic_id={topic_id}, model={self.model}, enable_thinking={self.enable_thinking}")
+        logger.debug(f"chat_stream user message: {msg}")
 
         self.current_topic_id = topic_id
         self.reset_interrupt()

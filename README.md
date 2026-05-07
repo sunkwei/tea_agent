@@ -1,4 +1,4 @@
-# TeaAgent v0.6.3
+# TeaAgent v0.7.3
 
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
 
@@ -146,6 +146,34 @@ SQLite (chat_history.db)
 ├── reflections        ← 反思记录 (suggestions, prompt_adjustment)
 ├── prompt_versions    ← 提示词版本 (content, version, created_at)
 └── config_history     ← 配置变更记录
+
+### 嵌入向量 (Embedding)
+
+每条用户消息自动生成向量并存入 SQLite，支持语义搜索。采用 **numpy float32 BLOB** 格式，1024 维向量仅 4KB（比 JSON 字符串格式节省 **69%**）。
+
+```
+save_msg(text) → _auto_embed_async() ── 后台线程 ──→ embed()
+                                                        │
+                                                   向量存入 conversations.embedding (BLOB)
+```
+
+| 特性 | 说明 |
+|------|------|
+| **自动嵌入** | `save_msg()` 内嵌钩子，消息存入后自动触发，daemon 线程非阻塞 |
+| **API 引擎** | OpenAI 兼容 `/v1/embeddings`，`_build_url()` 自动补全 `/v1` 前缀 |
+| **本地回退** | TF-IDF 256 维，API 不可用时自动降级 |
+| **存储格式** | `numpy.float32` → BLOB，4KB/条（JSON 格式 ~13KB → 节省 69%） |
+| **语义搜索** | 查询词自动向量化 → 余弦相似度 → Top-K 匹配结果 |
+| **调用日志** | 控制台 `call embedding: {model}, {text[:80]}`，与主模型打印格式对齐 |
+
+**配置**：
+
+```yaml
+embedding:
+  api_key: "sk-xxx"                # 可选，不配置则 TF-IDF 回退
+  api_url: "https://api.siliconflow.cn/v1"
+  model_name: "Qwen/Qwen3-Embedding-4B"
+  dimension: 1024                  # 向量维度（自动检测）
 ```
 
 ---
@@ -460,6 +488,7 @@ mqtt:
 
 | 版本 | 关键变化 |
 |------|---------|
+| v0.7.3 | 嵌入向量：自动嵌入/语义搜索/numpy BLOB 存储/打印调用日志 |
 | v0.6.3 | 依赖瘦身：easyocr→可选, torch 746MB 不再必需 |
 | v0.6.2 | 历史加载三级渐进策略（早期纯文本 / 近期压缩 / 最新完整）|
 | v0.6.1 | GUI 自动重启 (watchdog) + 数据安全三道防线 + 续命 10 轮统一 |

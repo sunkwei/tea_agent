@@ -42,7 +42,7 @@ def toolkit_input(
         操作结果描述
 # NOTE: 2026-04-30 16:40:00, self-evolved by tea_agent --- 函数体内添加import json，解决exec沙箱问题
     """
-    logger.info(f"toolkit_input called: action={action!r}, x={x!r}, y={y!r}, text={text[:80]!r}, button={button!r}, duration={duration!r}, dx={dx!r}, dy={dy!r}, keys={keys!r}, amount={amount!r}")
+    logger.info(f"toolkit_input called: action={action!r}, x={x!r}, y={y!r}, text={repr(text)[:80]}, button={button!r}, duration={duration!r}, dx={dx!r}, dy={dy!r}, keys={keys!r}, amount={amount!r}")
 
     import json
     import pyautogui as pg

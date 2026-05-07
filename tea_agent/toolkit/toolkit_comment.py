@@ -14,7 +14,7 @@ def toolkit_comment(mode: str, description: str = "", model_name: str = ""):
     - mode="evolve": 自进化注释，格式 '# NOTE: {date}, self-evolved by {model} ---'
       需 model_name
     """
-    logger.info(f"toolkit_comment called: mode={mode!r}, description={description[:80]!r}, model_name={model_name!r}")
+    logger.info(f"toolkit_comment called: mode={mode!r}, description={repr(description)[:80]}, model_name={model_name!r}")
 
     from datetime import datetime
     import os

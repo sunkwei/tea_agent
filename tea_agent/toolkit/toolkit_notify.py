@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: int = 5000):
-    logger.info(f"toolkit_notify called: title={title[:80]!r}, message={message[:80]!r}, urgency={urgency!r}, duration={duration!r}")
+    logger.info(f"toolkit_notify called: title={repr(title)[:80]}, message={repr(message)[:80]}, urgency={urgency!r}, duration={duration!r}")
 
     import sys
     import subprocess

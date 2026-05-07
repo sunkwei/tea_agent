@@ -11,7 +11,7 @@ logger = logging.getLogger("toolkit")
 
 def toolkit_proactive(action: str, content: str = "", priority: int = 2, goal_id: int = None):
     """Agent 自主心跳系统"""
-    logger.info(f"toolkit_proactive called: action={action!r}, content={content[:80]!r}, priority={priority!r}, goal_id={goal_id!r}")
+    logger.info(f"toolkit_proactive called: action={action!r}, content={repr(content)[:80]}, priority={priority!r}, goal_id={goal_id!r}")
 
     import json
     

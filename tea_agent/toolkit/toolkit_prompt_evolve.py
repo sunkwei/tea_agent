@@ -25,7 +25,7 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
         version: [rollback] 目标版本号（如 "1", "2"）
         content: [set] 新的完整系统提示词文本
     """
-    logger.info(f"toolkit_prompt_evolve called: action={action!r}, version={version!r}, content={content[:80]!r}")
+    logger.info(f"toolkit_prompt_evolve called: action={action!r}, version={version!r}, content={repr(content)[:80]}")
 
     session = get_session()
     if not session:

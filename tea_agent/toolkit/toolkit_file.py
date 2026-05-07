@@ -15,7 +15,7 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
     - action="write": 将 content 写入 filename。需 filename + content。
     - action="list": 列出目录内容 (跨平台 dir/ls)。可选 path/recursive/show_hidden。
     """
-    logger.info(f"toolkit_file called: action={action!r}, filename={filename!r}, content={content[:80]!r}, path={path!r}, recursive={recursive!r}, show_hidden={show_hidden!r}")
+    logger.info(f"toolkit_file called: action={action!r}, filename={filename!r}, content={repr(content)[:80]}, path={path!r}, recursive={recursive!r}, show_hidden={show_hidden!r}")
 
     if action == "read":
         try:

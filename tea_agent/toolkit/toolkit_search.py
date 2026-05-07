@@ -16,7 +16,7 @@ def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: st
         lang: 语言偏好，如 zh-cn, en，空=不限
         engine: 搜索引擎，duckduckgo（默认）或 baidu
     """
-    logger.info(f"toolkit_search called: query={query[:80]!r}, max_results={max_results!r}, lang={lang!r}, engine={engine!r}")
+    logger.info(f"toolkit_search called: query={repr(query)[:80]}, max_results={max_results!r}, lang={lang!r}, engine={engine!r}")
 
     import json
     

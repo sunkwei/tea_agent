@@ -18,7 +18,7 @@ def toolkit_speak(text: str, lang: str = "zh", rate: int = 180):
         lang: 语言，zh=中文, en=英文。用于选择音色
         rate: 语速（词/分钟），默认180。仅 pyttsx3 有效
     """
-    logger.info(f"toolkit_speak called: text={text[:80]!r}, lang={lang!r}, rate={rate!r}")
+    logger.info(f"toolkit_speak called: text={repr(text)[:80]}, lang={lang!r}, rate={rate!r}")
 
     import tempfile
     import os

@@ -25,7 +25,7 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
     Returns:
         dict: 包含操作结果的字典
     """
-    logger.info(f"toolkit_release_version called: version={version!r}, changes={changes[:80]!r}, changelog_section={changelog_section!r}, build={build!r}, git_commit={git_commit!r}")
+    logger.info(f"toolkit_release_version called: version={version!r}, changes={repr(changes)[:80]}, changelog_section={changelog_section!r}, build={build!r}, git_commit={git_commit!r}")
 
     results = {
         "version": version,

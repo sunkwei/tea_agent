@@ -25,7 +25,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
     
     模式以 CRITICAL 优先级注入记忆，确保后续所有回复遵循。
     """
-    logger.info(f"toolkit_mode called: action={action!r}, text={text[:80]!r}, mode={mode!r}")
+    logger.info(f"toolkit_mode called: action={action!r}, text={repr(text)[:80]}, mode={mode!r}")
 
     import json
     import re

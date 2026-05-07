@@ -18,7 +18,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
     - "forget": 删除/失效记忆。需 id。可选 hard（true=硬删除, false=软删除）。
     - "extract": 从对话中提取待分析文本。可选 topic_id/max_chars。
     """
-    logger.info(f"toolkit_memory called: action={action!r}, content={content[:80]!r}, category={category!r}, priority={priority!r}, importance={importance!r}, expires_at={expires_at!r}, tags={tags!r}, id={id!r}, hard={hard!r}, query={query[:80]!r}, min_importance={min_importance!r}, limit={limit!r}, topic_id={topic_id!r}, max_chars={max_chars!r}")
+    logger.info(f"toolkit_memory called: action={action!r}, content={repr(content)[:80]}, category={category!r}, priority={priority!r}, importance={importance!r}, expires_at={expires_at!r}, tags={tags!r}, id={id!r}, hard={hard!r}, query={repr(query)[:80]}, min_importance={min_importance!r}, limit={limit!r}, topic_id={topic_id!r}, max_chars={max_chars!r}")
 
     try:
         from tea_agent.store import get_storage

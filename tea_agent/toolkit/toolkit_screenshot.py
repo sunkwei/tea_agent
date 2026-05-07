@@ -12,7 +12,7 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
     跨平台智能截屏 — 自动适配 Wayland/X11/macOS/Windows
     Wayland 区域截屏策略：先全屏截取，再用 PIL 裁剪（绕开各工具的交互限制）
     """
-    logger.info(f"toolkit_screenshot called: action={action!r}, region={region!r}, monitor={monitor!r}, output={output[:80]!r}, quality={quality!r}")
+    logger.info(f"toolkit_screenshot called: action={action!r}, region={region!r}, monitor={monitor!r}, output={repr(output)[:80]}, quality={quality!r}")
 
     import os, subprocess, tempfile, shutil
     from datetime import datetime

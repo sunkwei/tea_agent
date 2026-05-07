@@ -17,7 +17,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         verify: 是否验证编译通过
         backup: 是否备份原文件到 .bak
     """
-    logger.info(f"toolkit_self_evolve called: file_path={file_path!r}, description={description[:80]!r}, old_code={old_code[:80]!r}, new_code={new_code[:80]!r}, verify={verify!r}, backup={backup!r}")
+    logger.info(f"toolkit_self_evolve called: file_path={file_path!r}, description={repr(description)[:80]}, old_code={repr(old_code)[:80]}, new_code={repr(new_code)[:80]}, verify={verify!r}, backup={backup!r}")
 
     import os
     import shutil

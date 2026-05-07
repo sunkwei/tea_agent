@@ -11,7 +11,7 @@ logger = logging.getLogger("toolkit")
 
 
 def toolkit_kb(action, title="", content="", tags="", category="", query="", brief="", sort="time"):
-    logger.info(f"toolkit_kb called: action={action!r}, title={title[:80]!r}, content={content[:80]!r}, tags={tags!r}, category={category!r}, query={query[:80]!r}, brief={brief[:80]!r}, sort={sort!r}")
+    logger.info(f"toolkit_kb called: action={action!r}, title={repr(title)[:80]}, content={repr(content)[:80]}, tags={tags!r}, category={category!r}, query={repr(query)[:80]}, brief={repr(brief)[:80]}, sort={sort!r}")
 
     import os, re, subprocess
     from pathlib import Path

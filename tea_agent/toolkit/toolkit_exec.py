@@ -26,7 +26,8 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         single: (returncode, stdout, stderr)
         batch: (0, json结果数组, "")
     """
-    logger.info(f"toolkit_exec called: app={app!r}, args={args[:80]!r}, action={action!r}, commands={commands[:80]!r}, timeout={timeout!r}")
+# NOTE: 2026-05-07 13:38:51, self-evolved by tea_agent --- 修复 logger.info 中 args[:80]/commands[:80] 在 None 时崩溃，改用 repr() 包裹
+    logger.info(f"toolkit_exec called: app={app!r}, args={repr(args)[:80]}, action={action!r}, commands={repr(commands)[:80]}, timeout={timeout!r}")
 
     import subprocess
     import json

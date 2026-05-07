@@ -1833,12 +1833,14 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                     render_items.append(("notice", ""))
 
 # NOTE: 2026-05-07 14:27:20, self-evolved by tea_agent --- 进度文本改为更新状态栏（轻量），HtmlFrame 仅初始渲染一次 spinner
-                # 遍历对话，构建渲染项 + 进度上报（状态栏，轻量更新）
+# NOTE: 2026-05-07 14:40:37, self-evolved by tea_agent --- 进度文本从状态栏改回 HtmlFrame 显示「正在加载 N 条记录中的第 n 条」
+                # 遍历对话，构建渲染项 + 进度上报到 HtmlFrame
                 for i, c in enumerate(all_light):
-                    # 每 10 条或最后一条上报进度到状态栏
-                    if (i + 1) % 10 == 0 or i == total_convs - 1:
-                        progress_text = f"⏳ 正在加载 {total_convs} 条历史中的第 {i+1} 条..."
-                        self.root.after(0, self._update_status, progress_text)
+                    # 每 20 条或最后一条更新 HtmlFrame 进度（避免频繁 load_html）
+                    if (i + 1) % 20 == 0 or i == total_convs - 1:
+                        progress_str = f"{i+1}/{total_convs}"
+                        self.root.after(0, self._show_loading,
+                                        "正在加载历史记录", progress_str)
 
                     is_old = i < old_count
                     render_items.append(("user", f"你：{c['user_msg']}"))

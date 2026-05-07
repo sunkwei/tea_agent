@@ -265,24 +265,35 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
         if not response.choices or len(response.choices) == 0:
             return None
             
+# NOTE: 2026-05-07 11:12:16, self-evolved by tea_agent --- 在 _generate_topic_summary 中添加原始返回调试日志，定位 LLM 返回被过滤的原因
+# NOTE: 2026-05-07 11:14:38, self-evolved by tea_agent --- _generate_topic_summary 处理 reasoning_content：deepseek 推理模型的 content 可能为空，fallback 读 reasoning_content
         content = response.choices[0].message.content
+        # DeepSeek 等推理模型可能把回复放到 reasoning_content 中，content 为空
+        if not content:
+            content = getattr(response.choices[0].message, 'reasoning_content', None)
         if not content or not isinstance(content, str):
+            logger.warning(f"_generate_topic_summary: API 返回空 content, model={model}")
             return None
             
 # NOTE: 2026-05-01 08:10:00, self-evolved by tea_agent --- _generate_topic_summary 增加最小长度≥2的校验，防止LLM返回如"为"的单字摘要
         raw = content.strip()
+        # 调试日志：记录 LLM 原始返回，便于排查过滤原因
+        logger.info(f"_generate_topic_summary 原始返回: model={model}, raw_len={len(raw)}, raw={repr(raw[:80])}")
         # 去掉各种引号包裹（中英文全角半角）
         raw = re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
         raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
         raw = raw.strip()
         
+# NOTE: 2026-05-07 11:12:33, self-evolved by tea_agent --- 在 _generate_topic_summary 过滤链各环节添加具体日志，区分"空 raw"和"过短被拒"
         if not raw:
+            logger.warning(f"_generate_topic_summary: 清洗后 raw 为空, content={repr(content[:80])}")
             return None
         
 # NOTE: 2026-05-01 08:17:32, self-evolved by tea_agent --- _generate_topic_summary min_length从2提高到5，拒绝"KB与"这种3字残句
 # NOTE: 2026-05-01 08:18:13, self-evolved by tea_agent --- min_length调整为4：拒绝"为"(1)、"KB与"(3)，放行"你好世界"(4)
         # 拒绝过短的摘要（<4个字符，如"为"(1)、"KB与"(3)等LLM残句）
         if len(raw) < 4:
+            logger.warning(f"_generate_topic_summary: 摘要过短被拒, len={len(raw)}, raw={repr(raw)}")
             return None
             
         if len(raw) > 20:

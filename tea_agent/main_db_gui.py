@@ -1532,7 +1532,9 @@ class TkGUI(AgentCore):
         self.console.tag_configure(
             "title", foreground="#0066cc", font=(SYSTEM_FONT, _fs(12), "bold"))
         self.console.tag_configure("notice", foreground="#008800")
+# NOTE: 2026-05-07 17:33:59, self-evolved by tea_agent --- 添加 think 标签（灰色斜体）用于控制台思考过程显示
         self.console.tag_configure("error", foreground="#cc0000")
+        self.console.tag_configure("think", foreground="#888888", font=(SYSTEM_FONT, _fs(10), "italic"))
 
         # 快捷键绑定
         self.input_box.bind("<Return>", self.send)
@@ -1657,8 +1659,19 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     def scroll_to_bottom(self):
         self.chat_view.yview_moveto(1.0)
 
-    def _render_chat(self):
-        md = _chat_to_markdown(self.chat_messages)
+# NOTE: 2026-05-07 17:33:05, self-evolved by tea_agent --- _render_chat 支持可选的流式缓冲区参数，_stream_render_tick 传递当前 think/stream 内容
+    def _render_chat(self, streaming_think: str = "", streaming_text: str = ""):
+        """渲染 HtmlFrame。可选 streaming_think/streaming_text 用于流式输出期间实时显示。"""
+        msgs = list(self.chat_messages)
+        # 流式内容临时追加到最后一条 AI 消息
+        streaming = streaming_think + streaming_text
+        if streaming:
+            if msgs and msgs[-1]["role"] == "ai":
+                msgs[-1] = dict(msgs[-1])
+                msgs[-1]["content"] = msgs[-1]["content"] + streaming
+            else:
+                msgs.append({"role": "ai", "content": streaming, "timestamp": self._now_ts()})
+        md = _chat_to_markdown(msgs)
         if HAS_TKINTERWEB:
             font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
             html = _render_markdown(md, font_size=font_size)
@@ -1746,31 +1759,81 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         if tag in ("user", "ai", "tool", "notice"):
             self.chat_messages.append({"role": tag, "content": msg, "timestamp": self._now_ts()})
 
+# NOTE: 2026-05-07 17:32:01, self-evolved by tea_agent --- stream() 识别 [THINK] 前缀分别缓冲，控制台灰色显示，触发 HtmlFrame 定期渲染
     def stream(self, text):
+        # 检测 thinking/reasoning 内容（[THINK] 前缀标记）
+        is_think = text.startswith("[THINK]")
+        display_text = text[7:] if is_think else text  # 去掉 7 字符标记
+
+        # 控台台实时输出（think 用灰色斜体标签区分）
         self.console.config(state=tk.NORMAL)
-        self.console.insert(tk.END, text)
+        if is_think:
+            self.console.insert(tk.END, display_text, "think")
+        else:
+            self.console.insert(tk.END, display_text)
         self.console.see(tk.END)
         self.console.config(state=tk.DISABLED)
 
-        self._stream_buffer += text
+        # 分别缓冲：think 内容单独存
+        if is_think:
+            self._think_buffer += display_text
+        else:
+            self._stream_buffer += display_text
+
+        # HtmlFrame 定期渲染（~150ms 一次，避免过频）
+        if HAS_TKINTERWEB and not self._stream_render_pending:
+            self._stream_render_pending = True
+            self.root.after(150, self._stream_render_tick)
 
     def log_tool(self, msg: str):
         self.log(msg, "tool")
 
-    def _flush_stream_to_messages(self):
-        if self._stream_buffer:
-            if self.chat_messages and self.chat_messages[-1]["role"] == "ai":
-                self.chat_messages[-1]["content"] += self._stream_buffer
-            else:
-                self.chat_messages.append({"role": "ai", "content": self._stream_buffer, "timestamp": self._now_ts()})
-            self._stream_buffer = ""
+# NOTE: 2026-05-07 17:32:19, self-evolved by tea_agent --- 新增 _stream_render_tick：150ms 定时器更新 HtmlFrame 流式内容，generating=False 时停止
+# NOTE: 2026-05-07 17:33:17, self-evolved by tea_agent --- _stream_render_tick 传递 _think_buffer 和 _stream_buffer 给 _render_chat
+# NOTE: 2026-05-07 17:35:55, self-evolved by tea_agent --- _stream_render_tick 加 blockquote think 格式 + 滚动到底部；_flush 重置 _stream_render_pending
+    def _stream_render_tick(self):
+        """150ms 定时器：流式输出期间定期更新 HtmlFrame，让 think/content 实时可见。
+        self.generating 变 False 时自动停止。"""
+        self._stream_render_pending = False
+        if not self.generating or not HAS_TKINTERWEB:
+            return
+        # think 加 blockquote 格式用于实时渲染
+        s_think = ""
+        if self._think_buffer:
+            s_think = f"\n> 💭 **思考中**: {self._think_buffer}\n\n"
+        self._render_chat(streaming_think=s_think, streaming_text=self._stream_buffer)
+        self.scroll_to_bottom()
+        # 继续下一次定期渲染
+        self.root.after(150, self._stream_render_tick)
+        self._stream_render_pending = True
 
+# NOTE: 2026-05-07 17:34:14, self-evolved by tea_agent --- think 内容用 markdown blockquote 格式 > 💭 思考过程 渲染
+    def _flush_stream_to_messages(self):
+        if self._think_buffer or self._stream_buffer:
+            # 拼接 think（blockquote）+ content
+            full = ""
+            if self._think_buffer:
+                # 用 markdown blockquote 包裹，HtmlFrame 渲染为缩进灰色引用块
+                think_text = self._think_buffer.strip()
+                full += f"\n> 💭 **思考过程**: {think_text}\n\n"
+            full += self._stream_buffer
+            if self.chat_messages and self.chat_messages[-1]["role"] == "ai":
+                self.chat_messages[-1]["content"] += full
+            else:
+                self.chat_messages.append({"role": "ai", "content": full, "timestamp": self._now_ts()})
+            self._stream_buffer = ""
+            self._think_buffer = ""
+            self._stream_render_pending = False  # 流结束，停止定时器
+
+# NOTE: 2026-05-07 17:33:40, self-evolved by tea_agent --- clear_chat 初始化 _think_buffer 和 _stream_render_pending
     def clear_chat(self):
         self.console.config(state=tk.NORMAL)
         self.console.delete("1.0", tk.END)
         self.console.config(state=tk.DISABLED)
         self.chat_messages.clear()
         self._stream_buffer = ""
+        self._think_buffer = ""
+        self._stream_render_pending = False
 
     def auto_new_topic(self):
         topics = self.db.list_topics()

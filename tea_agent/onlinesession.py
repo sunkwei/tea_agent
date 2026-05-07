@@ -209,9 +209,12 @@ class OnlineToolSession(
             
             delta = chunk.choices[0].delta
             
-            # 处理 reasoning_content
+# NOTE: 2026-05-07 17:31:36, self-evolved by tea_agent --- _process_stream_with_reasoning: reasoning_content 也回调给 GUI（[THINK]前缀标记）
+            # 处理 reasoning_content（流式回调，让用户看到模型正在思考）
             if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
                 reasoning_parts.append(delta.reasoning_content)
+                # 带 [THINK] 前缀标记，供 GUI 识别并渲染为思考块
+                callback(f"[THINK]{delta.reasoning_content}")
             
             # 处理内容
             if delta.content:

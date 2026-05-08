@@ -28,6 +28,7 @@ class Storage:
         self._init_tables()
         self._migrate()
         self._write_week_key()  # NOTE: 写入本周 ISO 周标识
+        self._auto_backup()     # NOTE: 启动时自动备份数据库
 
         # @2026-04-29 gen by deepseek-v4-pro, 新增memories表及8个CRUD方法
 # NOTE: 2026-04-30 11:42:35, self-evolved by tea_agent --- _init_tables 新增 _meta 元数据表
@@ -1423,6 +1424,79 @@ class Storage:
                 logger.info(f"数据库连接已关闭: {self.db_path}")
             except Exception:
                 pass
+
+    # ── 自动备份 ──
+    # NOTE: 2026-05-08 gen by tea_agent, 定时备份数据库防止损坏
+    def _auto_backup(self):
+        """启动时检查并备份数据库（距离上次备份 > 1 小时才执行）"""
+        import time
+        try:
+            now = time.time()
+            last = self._meta_get("last_backup_ts")
+            if last:
+                try:
+                    if now - float(last) < 3600:  # 1 小时内备份过，跳过
+                        return
+                except ValueError:
+                    pass
+
+            backup_dir = os.path.join(os.path.dirname(os.path.abspath(self.db_path)), "backup")
+            os.makedirs(backup_dir, exist_ok=True)
+            ts = time.strftime("%Y-%m-%d_%H%M%S")
+            backup_path = os.path.join(backup_dir, f"chat_history_{ts}.db")
+
+            # 使用 sqlite3 内置 backup API，在线热备不阻塞
+            backup_conn = sqlite3.connect(backup_path)
+            self.conn.backup(backup_conn)
+            backup_conn.close()
+
+            self._meta_set("last_backup_ts", str(now))
+            self._cleanup_backups(backup_dir, keep=7)
+
+            size_mb = os.path.getsize(backup_path) / 1024 / 1024
+            logger.info(f"数据库已备份: {backup_path} ({size_mb:.1f}MB)")
+        except Exception as e:
+            logger.debug(f"自动备份跳过: {e}")
+
+    def _cleanup_backups(self, backup_dir: str, keep: int = 7):
+        """清理旧备份，只保留最近 keep 个"""
+        try:
+            files = sorted(
+                [f for f in os.listdir(backup_dir) if f.startswith("chat_history_") and f.endswith(".db")],
+                reverse=True
+            )
+            for old in files[keep:]:
+                p = os.path.join(backup_dir, old)
+                os.remove(p)
+                logger.debug(f"清理旧备份: {p}")
+        except Exception:
+            pass
+
+    # ── 元数据读写 ──
+    def _meta_get(self, key: str) -> Optional[str]:
+        try:
+            c = self.conn.execute("SELECT value FROM _meta WHERE key=?", (key,))
+            row = c.fetchone()
+            return row[0] if row else None
+        except Exception:
+            return None
+
+    def _meta_set(self, key: str, value: str):
+        try:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO _meta (key, value) VALUES (?, ?)",
+                (key, value)
+            )
+            self.conn.commit()
+        except Exception:
+            pass
+
+    def backup_now(self):
+        """手动触发备份（跳过时间检查）"""
+        self._meta_set("last_backup_ts", "0")
+        self._auto_backup()
+
+    # ── 析构 ──
 
     def __del__(self):
         """析构函数：安全兜底关闭连接（不抛异常）"""

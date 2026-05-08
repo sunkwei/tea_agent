@@ -986,7 +986,10 @@ class TopicDialog(tk.Toplevel):
         self.db.create_topic(title)
         self._refresh()
 
+    # NOTE: 2026-05-08 gen by tea_agent, 搜索模式下禁止重命名（防止误用 conversation_id）
     def _rename_dialog(self):
+        if self._is_search_mode:
+            return
         tid = self._selected_id()
         if not tid:
             return
@@ -1411,6 +1414,9 @@ class TkGUI(AgentCore):
 
         # 当前 stream 累积 buffer
         self._stream_buffer = ""
+        self._think_buffer = ""  # think/reasoning 内容缓冲区
+        # NOTE: 2026-05-08 08:50:00, self-evolved by tea_agent --- 初始化 _pending_console_text 缓冲队列，供 500ms 定时器批量刷新
+        self._pending_console_text = []  # (text, tag) 列表
 
         # 当前对话 ID
         self._current_conversation_id: Optional[int] = None
@@ -1464,9 +1470,16 @@ class TkGUI(AgentCore):
 
 # NOTE: 2026-04-30 20:03:32, self-evolved by tea_agent --- 主题标签(12→_fs(12))和主题列表(10→_fs(10))字体适配缩放
         ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, _fs(12), "bold")).pack(pady=5)
-        self.topic_list = Listbox(left, font=(SYSTEM_FONT, _fs(10)))
+        # NOTE: 2026-05-08 gen by tea_agent, 主题列表字体从 _fs(10) 调大到 _fs(15)，减少密集感
+        self.topic_list = Listbox(left, font=(SYSTEM_FONT, _fs(15)))
         self.topic_list.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
         self.topic_list.bind("<<ListboxSelect>>", self.on_topic_select)
+        # NOTE: 2026-05-08 gen by tea_agent, 鼠标悬停显示主题日期tooltip
+        self.topic_list.bind("<Motion>", self._on_topic_hover, add="+")
+        self.topic_list.bind("<Leave>", self._on_topic_leave, add="+")
+        self._topic_cache = []           # 缓存 list_topics 原始数据
+        self._topic_tooltip = None       # tooltip Toplevel
+        self._topic_hover_after = None   # debounce after_id
         ttk.Button(left, text="➕ 新建主题", command=self.new_topic).pack(
             fill=tk.X, padx=4, pady=2)
         ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
@@ -1760,55 +1773,58 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self.chat_messages.append({"role": tag, "content": msg, "timestamp": self._now_ts()})
 
 # NOTE: 2026-05-07 17:32:01, self-evolved by tea_agent --- stream() 识别 [THINK] 前缀分别缓冲，控制台灰色显示，触发 HtmlFrame 定期渲染
+# NOTE: 2026-05-08 08:26:53, self-evolved by tea_agent --- 流式输出期间仅更新ScrolledText控制台，移除HtmlFrame的150ms定时渲染，会话完成后统一渲染HtmlFrame，降低GUI阻塞感
     def stream(self, text):
         # 检测 thinking/reasoning 内容（[THINK] 前缀标记）
         is_think = text.startswith("[THINK]")
         display_text = text[7:] if is_think else text  # 去掉 7 字符标记
 
-        # 控台台实时输出（think 用灰色斜体标签区分）
-        self.console.config(state=tk.NORMAL)
-        if is_think:
-            self.console.insert(tk.END, display_text, "think")
-        else:
-            self.console.insert(tk.END, display_text)
-        self.console.see(tk.END)
-        self.console.config(state=tk.DISABLED)
-
-        # 分别缓冲：think 内容单独存
+        # 分别缓冲：think + content 都入队，由 500ms 定时器批量刷新
+        # # NOTE: 2026-05-08 09:04:24, self-evolved by tea_agent --- think 也入 pending 队列，500ms 批量刷新，既实时又不碎片化
         if is_think:
             self._think_buffer += display_text
+            self._pending_console_text.append((display_text, "think"))
         else:
             self._stream_buffer += display_text
+            self._pending_console_text.append((display_text, None))
 
-        # HtmlFrame 定期渲染（~150ms 一次，避免过频）
-        if HAS_TKINTERWEB and not self._stream_render_pending:
-            self._stream_render_pending = True
-            self.root.after(150, self._stream_render_tick)
+        # 流式过程中不渲染 HtmlFrame（load_html 是重型操作），会话完成后 _render_and_show_chat 统一渲染
 
     def log_tool(self, msg: str):
         self.log(msg, "tool")
+    def _stream_flush_tick(self):
+        """500ms 定时器：批量将累积文本刷新到 ScrolledText 控制台。
+        # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- 用 500ms 定时器替代每 token 的 GUI 操作，降低高速输出时的阻塞感
+        相比每个 token 都 config(ENABLE/DISABLE) + insert + see(END)，
+        合并为 500ms 批量操作可大幅降低 GUI 阻塞感。"""
+        if self._pending_console_text:
+            self.console.config(state=tk.NORMAL)
+            for text, tag in self._pending_console_text:
+                if tag == "think":
+                    self.console.insert(tk.END, text, "think")
+                else:
+                    self.console.insert(tk.END, text)
+            self.console.see(tk.END)
+            self.console.config(state=tk.DISABLED)
+            self._pending_console_text.clear()
+        if self.generating:
+            self.root.after(500, self._stream_flush_tick)
 
-# NOTE: 2026-05-07 17:32:19, self-evolved by tea_agent --- 新增 _stream_render_tick：150ms 定时器更新 HtmlFrame 流式内容，generating=False 时停止
-# NOTE: 2026-05-07 17:33:17, self-evolved by tea_agent --- _stream_render_tick 传递 _think_buffer 和 _stream_buffer 给 _render_chat
-# NOTE: 2026-05-07 17:35:55, self-evolved by tea_agent --- _stream_render_tick 加 blockquote think 格式 + 滚动到底部；_flush 重置 _stream_render_pending
-    def _stream_render_tick(self):
-        """150ms 定时器：流式输出期间定期更新 HtmlFrame，让 think/content 实时可见。
-        self.generating 变 False 时自动停止。"""
-        self._stream_render_pending = False
-        if not self.generating or not HAS_TKINTERWEB:
-            return
-        # think 加 blockquote 格式用于实时渲染
-        s_think = ""
-        if self._think_buffer:
-            s_think = f"\n> 💭 **思考中**: {self._think_buffer}\n\n"
-        self._render_chat(streaming_think=s_think, streaming_text=self._stream_buffer)
-        self.scroll_to_bottom()
-        # 继续下一次定期渲染
-        self.root.after(150, self._stream_render_tick)
-        self._stream_render_pending = True
 
-# NOTE: 2026-05-07 17:34:14, self-evolved by tea_agent --- think 内容用 markdown blockquote 格式 > 💭 思考过程 渲染
     def _flush_stream_to_messages(self):
+        # 先刷新控制台剩余内容（确保最后一批 pending 文本显示完毕）
+        # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- flush 前先清空 _pending_console_text 到 ScrolledText
+        if self._pending_console_text:
+            self.console.config(state=tk.NORMAL)
+            for text, tag in self._pending_console_text:
+                if tag == "think":
+                    self.console.insert(tk.END, text, "think")
+                else:
+                    self.console.insert(tk.END, text)
+            self.console.see(tk.END)
+            self.console.config(state=tk.DISABLED)
+            self._pending_console_text.clear()
+
         if self._think_buffer or self._stream_buffer:
             # 拼接 think（blockquote）+ content
             full = ""
@@ -1823,7 +1839,6 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 self.chat_messages.append({"role": "ai", "content": full, "timestamp": self._now_ts()})
             self._stream_buffer = ""
             self._think_buffer = ""
-            self._stream_render_pending = False  # 流结束，停止定时器
 
 # NOTE: 2026-05-07 17:33:40, self-evolved by tea_agent --- clear_chat 初始化 _think_buffer 和 _stream_render_pending
     def clear_chat(self):
@@ -1833,7 +1848,8 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         self.chat_messages.clear()
         self._stream_buffer = ""
         self._think_buffer = ""
-        self._stream_render_pending = False
+        self._pending_console_text.clear()
+        # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- 清理 _pending_console_text，移除废弃的 _stream_render_pending
 
     def auto_new_topic(self):
         topics = self.db.list_topics()
@@ -1850,18 +1866,26 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         self.switch_topic(tid)
 
 # NOTE: 2026-04-30 09:37:55, self-evolved by tea_agent --- 左侧主题列表移除token前缀，直接显示摘要标题（不超过20字）
+    # NOTE: 2026-05-08 gen by tea_agent, refresh_topics 刷新后自动高亮当前主题（第一条匹配）
+        # NOTE: 2026-04-30 09:37:55, self-evolved by tea_agent --- 左侧主题列表移除token前缀，直接显示摘要标题（不超过20字）
+    # NOTE: 2026-05-08 gen by tea_agent, refresh_topics 刷新后自动高亮当前主题（第一条匹配）
     def refresh_topics(self):
         self.topic_list.delete(0, tk.END)
-        for tp in self.db.list_topics():
+        topics = self.db.list_topics()
+        self._topic_cache = topics       # 缓存供 tooltip 使用
+        current_tid = getattr(self, 'current_topic_id', None)
+        highlight_idx = 0
+        for i, tp in enumerate(topics):
             title = tp.get("title", "")
             # 直接显示摘要标题，不超过20字
             display = title[:20] if len(title) > 20 else title
             self.topic_list.insert(tk.END, display)
-
-# NOTE: 2026-04-30 10:03:19, self-evolved by tea_agent --- switch_topic加载全部历史，旧轮次仅显示问答，最近10轮显示完整工具链
-# NOTE: 2026-04-30 10:26:10, self-evolved by tea_agent --- switch_topic两阶段加载：旧轮次轻量查询(无rounds_json)，最近10轮完整查询
-# NOTE: 2026-04-30 10:31:53, self-evolved by tea_agent --- switch_topic改为后台线程加载DB+解析，主线程仅渲染；新增_render_loaded_topic和_render_topic_error
-# NOTE: 2026-05-07 14:26:37, self-evolved by tea_agent --- switch_topic load_worker 增加实时进度上报：_show_loading(progress=第n/N条)
+            if tp.get("topic_id") == current_tid:
+                highlight_idx = i
+        # 刷新后自动高亮当前主题
+        if topics:
+            self.topic_list.select_set(highlight_idx)
+            self.topic_list.see(highlight_idx)
     def switch_topic(self, topic_id):
         self.current_topic_id = topic_id
         self.clear_chat()
@@ -2043,6 +2067,81 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             except Exception:
                 pass
 
+    # ── 主题列表 Tooltip ──
+    # NOTE: 2026-05-08 gen by tea_agent, 鼠标悬停显示创建日期和最后使用日期
+    def _on_topic_hover(self, event):
+        """鼠标在主题列表上移动时，延迟显示 tooltip"""
+        idx = self.topic_list.nearest(event.y)
+        if idx < 0 or idx >= len(self._topic_cache):
+            self._hide_tooltip()
+            return
+
+        # 取消之前的延迟任务
+        if self._topic_hover_after:
+            self.root.after_cancel(self._topic_hover_after)
+            self._topic_hover_after = None
+
+        # 300ms 后显示
+        self._topic_hover_after = self.root.after(
+            300, lambda: self._show_tooltip(event, idx)
+        )
+
+    def _on_topic_leave(self, event):
+        """鼠标离开列表时隐藏 tooltip"""
+        if self._topic_hover_after:
+            self.root.after_cancel(self._topic_hover_after)
+            self._topic_hover_after = None
+        self._hide_tooltip()
+
+    def _show_tooltip(self, event, idx):
+        """在鼠标位置显示主题日期 tooltip"""
+        if idx < 0 or idx >= len(self._topic_cache):
+            return
+        tp = self._topic_cache[idx]
+        create_ts = tp.get("create_stamp", "")
+        update_ts = tp.get("last_update_stamp", "")
+
+        # 格式化时间戳（截断秒）
+        def fmt(ts):
+            if not ts:
+                return "未知"
+            s = str(ts)
+            return s[:16] if len(s) >= 16 else s
+
+        self._hide_tooltip()
+
+        tip = tk.Toplevel(self.root)
+        tip.overrideredirect(True)
+        tip.attributes("-topmost", True)
+        tip.configure(bg="#ffffcc")
+
+        lines = [f"📅 创建: {fmt(create_ts)}", f"🕐 最后使用: {fmt(update_ts)}"]
+        tip_text = "\n".join(lines)
+        label = tk.Label(
+            tip, text=tip_text,
+            bg="#ffffcc", fg="#333333",
+            font=(SYSTEM_FONT, _fs(10)),
+            padx=8, pady=4,
+            relief=tk.SOLID, borderwidth=1,
+        )
+        label.pack()
+
+        # 定位：鼠标右下偏移
+        x = self.root.winfo_pointerx() + 12
+        y = self.root.winfo_pointery() + 8
+        tip.geometry(f"+{x}+{y}")
+
+        self._topic_tooltip = tip
+
+    def _hide_tooltip(self):
+        """隐藏 tooltip"""
+        if self._topic_tooltip:
+            try:
+                self._topic_tooltip.destroy()
+            except Exception:
+                pass
+            self._topic_tooltip = None
+
 # NOTE: 2026-05-06 09:50:18, self-evolved by tea_agent --- 修正 _notify_completion 通知格式：标题 TeaAgent，内容 TeaAgent: {user} + {ai_msg}
 # NOTE: 2026-05-06 09:49, self-evolved by tea_agent --- _notify_completion 通知格式修正：TeaAgent: {user} + {ai_msg}
     def _notify_completion(self, ai_msg: Optional[str] = None, user_msg: Optional[str] = None):
@@ -2088,6 +2187,9 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 
         self.log(f"你：{msg}", "user")
         self.generating = True
+        # 启动 500ms 定时器，批量刷新流式内容到 ScrolledText（不渲染 HtmlFrame）
+        # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- 流式输出启动 _stream_flush_tick 500ms 定时器
+        self.root.after(500, self._stream_flush_tick)
         self.log("AI：", "ai")
 
         mem_count = len(self.db.get_active_memories(50))
@@ -2224,8 +2326,33 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         self._render_and_show_chat()
 
     def _render_and_show_chat(self):
-        self._render_chat()
-        self._switch_display("chat_view")
+        # # NOTE: 2026-05-08 09:08:29, self-evolved by tea_agent --- 将 markdown→HTML 转换放到后台线程，主线程仅做 load_html，减少卡顿
+        msgs = list(self.chat_messages)
+        font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
+        def _prepare():
+            md = _chat_to_markdown(msgs)
+            if HAS_TKINTERWEB:
+                return _render_markdown(md, font_size=font_size)
+            return md
+        def _on_done(html):
+            if HAS_TKINTERWEB:
+                self.chat_view.load_html(html)
+            else:
+                self.chat_view.config(state=tk.NORMAL)
+                self.chat_view.delete("1.0", tk.END)
+                self.chat_view.insert("1.0", html)
+                self.chat_view.config(state=tk.DISABLED)
+                self.chat_view.see(tk.END)
+            self._switch_display("chat_view")
+        # 在后台线程中执行 markdown 转换，完成后切回主线程 load_html
+        import threading
+        def _worker():
+            try:
+                result = _prepare()
+                self.root.after(0, lambda r=result: _on_done(r))
+            except Exception:
+                self.root.after(0, lambda: _on_done("<p>渲染错误</p>"))
+        threading.Thread(target=_worker, daemon=True).start()
 
     # @2026-04-29 gen by deepseek-v4-pro, 打开主题管理弹窗
     def open_topic_dialog(self):
@@ -2260,6 +2387,18 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self.sess.interrupt()
             self.safe_log("\n🛑 已打断", "tool")
             self.generating = False
+            # 先刷新控制台剩余内容，再 flush 到 messages
+            # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- interrupt 时也刷新 pending 控制台内容
+            if self._pending_console_text:
+                self.console.config(state=tk.NORMAL)
+                for text, tag in self._pending_console_text:
+                    if tag == "think":
+                        self.console.insert(tk.END, text, "think")
+                    else:
+                        self.console.insert(tk.END, text)
+                self.console.see(tk.END)
+                self.console.config(state=tk.DISABLED)
+                self._pending_console_text.clear()
             self.root.after(0, self._flush_stream_to_messages)
             self.root.after(0, self._render_and_show_chat)
             self._update_status("🛑 已打断")

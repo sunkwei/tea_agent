@@ -6,6 +6,12 @@ import os.path as osp
 import time
 import logging
 
+# # NOTE: 2026-05-08 09:32:07, self-evolved by tea_agent --- 内置工具: 手动设置主题标题
+from tea_agent.toolkit.toolkit_set_topic_title import (
+    toolkit_set_topic_title,
+    meta_toolkit_set_topic_title,
+)
+
 logger = logging.getLogger("tookit")
 
 def meta_toolkit_reload():
@@ -264,8 +270,11 @@ class Toolkit:
         self.func_map["toolkit_list_versions"] = toolkit_list_versions_impl
         self.meta_map["toolkit_list_versions"] = meta_toolkit_list_versions()
 
+        self.func_map["toolkit_set_topic_title"] = toolkit_set_topic_title
+        self.meta_map["toolkit_set_topic_title"] = meta_toolkit_set_topic_title()
+
         result["valid_tool"] = {k: {"func": v, "meta": self.meta_map[k]} for k, v in self.func_map.items() if k not in (
-            "toolkit_reload", "toolkit_save", "toolkit_rollback", "toolkit_list_versions")}
+            "toolkit_reload", "toolkit_save", "toolkit_rollback", "toolkit_list_versions", "toolkit_set_topic_title")}
 
         return result
 

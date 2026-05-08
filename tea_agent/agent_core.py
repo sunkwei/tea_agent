@@ -278,6 +278,7 @@ class AgentCore:
 
         import tea_agent.session_ref as _sref
         _sref.set_session(self.sess)
+        _sref.set_agent(self)  # NOTE: 2026-05-08 09:20:09, self-evolved by tea_agent --- 供 toolkit 函数访问 current_topic_id / db
 
     def _init_session_info_str(self) -> str:
         """返回会话初始化信息字符串（子类用于显示）。"""
@@ -513,6 +514,11 @@ class AgentCore:
         if topic_id is None:
             topic_id = self.current_topic_id
         if topic_id <= 0:
+            return
+        # NOTE: 2026-05-08 09:20:53, self-evolved by tea_agent --- 手动设置标题（※前缀）时跳过自动摘要
+        tp = self.db.get_topic(topic_id)
+        if tp and (tp.get("title") or "").startswith("※"):
+            logger.debug(f"跳过自动摘要: topic={topic_id} 标题为手动设置 (※前缀)")
             return
 # NOTE: 2026-05-06 10:23:01, self-evolved by tea_agent --- _auto_summary 摘要输入从3条改为10条对话，确保足够上下文
         recent = self.db.get_recent_conversations(topic_id, limit=10)

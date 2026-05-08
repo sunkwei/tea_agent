@@ -144,7 +144,10 @@ class TeaCLI(AgentCore):
         print(f"\n👤 {msg}")
         print("🤖 ", end="", flush=True)
 
+        # NOTE: 2026-05-08 gen by tea_agent, 控制台不输出 [THINK] 标签，直接去掉前缀
         def stream_cb(text: str):
+            if text.startswith("[THINK]"):
+                text = text[7:]
             print(text, end="", flush=True)
 
 # NOTE: 2026-05-04 19:37:48, self-evolved by tea_agent --- CLI 续命模式：去除用户确认，自动续命 10 轮并打印提示

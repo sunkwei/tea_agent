@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import font as tkFont
 from tkinter import ttk, scrolledtext, Listbox, Frame
 import threading
 import os
@@ -97,13 +98,13 @@ def _init_fonts():
             for f in candidates:
                 if f in available:
                     return f
-            return candidates[-1]
+            return "TkDefaultFont"  # 最终回退：系统默认字体
 
         if _IS_WINDOWS:
             SYSTEM_FONT = _detect([
                 "Microsoft YaHei", "Microsoft YaHei UI",
                 "DengXian", "SimHei", "SimSun",
-                "Noto Sans SC", "Microsoft JhengHei", "Microsoft Sans Serif",
+                "Noto Sans SC", "Microsoft JhengHei",
             ])
             MONO_FONT = _detect([
                 "Cascadia Code", "Cascadia Mono",
@@ -113,15 +114,22 @@ def _init_fonts():
             SYSTEM_FONT = _detect([
                 "Noto Sans CJK SC", "Noto Sans SC",
                 "WenQuanYi Micro Hei", "Source Han Sans SC",
-                "DejaVu Sans", "sans-serif",
+                "DejaVu Sans",
             ])
             MONO_FONT = _detect([
                 "Noto Sans Mono CJK SC", "DejaVu Sans Mono",
                 "Source Han Mono SC", "Courier New",
             ])
-# NOTE: 2026-04-30 20:03:08, self-evolved by tea_agent --- _init_fonts() 中检测 Tk 缩放因子并更新全局 _SCALE_FACTOR 和 _DEFAULT_FONT_SIZE
-    except Exception:
-        pass
+        # DEBUG: 打印检测结果，方便排查字体问题
+        import logging
+        logging.getLogger("tea_agent").debug(
+            f"字体检测: SYSTEM={SYSTEM_FONT}, MONO={MONO_FONT}"
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger("tea_agent").warning(
+            f"字体检测失败: {e}，使用默认字体"
+        )
 
     global _SCALE_FACTOR, _DEFAULT_FONT_SIZE
     try:
@@ -137,6 +145,7 @@ def _init_fonts():
 
     _FONTS_DETECTED = True
 
+_DEFAULT_FONT_SIZE = 16  # 模块级默认
 # ====================== Markdown → HTML 渲染 ======================
 
 _MD_CSS_TEMPLATE = string.Template("""
@@ -164,10 +173,6 @@ em { font-style: italic; }
 .msg-divider { border: none; border-top: 2px solid #e8e8e8; margin: 1.2em 0; }
 </style>
 """)
-
-_DEFAULT_FONT_SIZE = 16
-
-
 def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
     """将 markdown 文本转换为带样式的 HTML 片段"""
     if not HAS_TKINTERWEB:
@@ -1564,11 +1569,18 @@ class TkGUI(AgentCore):
         main_split.add(left, weight=1)
 
 # NOTE: 2026-04-30 20:03:32, self-evolved by tea_agent --- 主题标签(12→_fs(12))和主题列表(10→_fs(10))字体适配缩放
-        ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, _fs(12), "bold")).pack(pady=5)
+        ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, _fs(14), "bold")).pack(pady=5)
         # NOTE: 2026-05-08 gen by tea_agent, 主题列表字体从 _fs(10) 调大到 _fs(15)，减少密集感
-        self.topic_list = Listbox(left, font=(SYSTEM_FONT, _fs(15)))
+        # NOTE: 2026-05-08 gen by tea_agent, 显式构造字体对象确保正确渲染
+        _topic_font = tkFont.Font(family=SYSTEM_FONT, size=_fs(12))
+        # NOTE: 2026-06-18 gen by tea_agent, Listbox→Treeview：字体渲染更好
+        _topic_style = ttk.Style()
+        _topic_style.configure("Topic.Treeview", rowheight=_fs(30))
+        self.topic_list = ttk.Treeview(left, show="tree", style="Topic.Treeview",
+                                       selectmode="browse", height=12)
+        self.topic_list.tag_configure("topic_item", font=_topic_font)
         self.topic_list.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
-        self.topic_list.bind("<<ListboxSelect>>", self.on_topic_select)
+        self.topic_list.bind("<<TreeviewSelect>>", self.on_topic_select)
         # NOTE: 2026-05-08 gen by tea_agent, 鼠标悬停显示主题日期tooltip
         self.topic_list.bind("<Motion>", self._on_topic_hover, add="+")
         self.topic_list.bind("<Leave>", self._on_topic_leave, add="+")
@@ -1609,7 +1621,7 @@ class TkGUI(AgentCore):
 
 # NOTE: 2026-04-30 20:03:16, self-evolved by tea_agent --- 控制台字体使用 _fs(11) 适配缩放
         self.console = scrolledtext.ScrolledText(
-            chat_frame, font=(SYSTEM_FONT, _fs(11)), bg="white", fg="black", wrap=tk.WORD
+            chat_frame, font=(SYSTEM_FONT, _fs(15)), bg="white", fg="black", wrap=tk.WORD
         )
         self.console.config(state=tk.DISABLED)
 
@@ -1617,7 +1629,7 @@ class TkGUI(AgentCore):
             self.chat_view = HtmlFrame(chat_frame, messages_enabled=False)
         else:
             self.chat_view = scrolledtext.ScrolledText(
-                chat_frame, font=(SYSTEM_FONT, 11), bg="#fafafa", fg="black", wrap=tk.WORD
+                chat_frame, font=(SYSTEM_FONT, _fs(15)), bg="#fafafa", fg="black", wrap=tk.WORD
             )
             self.chat_view.config(state=tk.DISABLED)
 
@@ -1629,7 +1641,7 @@ class TkGUI(AgentCore):
         chat_split.add(input_frame, weight=1)
 # NOTE: 2026-04-30 20:03:24, self-evolved by tea_agent --- 输入框字体使用 _fs(14)、输入提示使用 _fs(9) 适配缩放
         self.input_box = scrolledtext.ScrolledText(
-            input_frame, font=(SYSTEM_FONT, _fs(14)), height=4, bg="#f8f8f8"
+            input_frame, font=(SYSTEM_FONT, _fs(16)), height=4, bg="#f8f8f8"
         )
         self.input_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
@@ -1643,11 +1655,11 @@ class TkGUI(AgentCore):
         self.console.tag_configure("tool", foreground="#d68000")
 # NOTE: 2026-04-30 20:03:47, self-evolved by tea_agent --- title 标签字体使用 _fs(12) 适配缩放
         self.console.tag_configure(
-            "title", foreground="#0066cc", font=(SYSTEM_FONT, _fs(12), "bold"))
+            "title", foreground="#0066cc", font=(SYSTEM_FONT, _fs(14), "bold"))
         self.console.tag_configure("notice", foreground="#008800")
 # NOTE: 2026-05-07 17:33:59, self-evolved by tea_agent --- 添加 think 标签（灰色斜体）用于控制台思考过程显示
         self.console.tag_configure("error", foreground="#cc0000")
-        self.console.tag_configure("think", foreground="#888888", font=(SYSTEM_FONT, _fs(10), "italic"))
+        self.console.tag_configure("think", foreground="#888888", font=(SYSTEM_FONT, _fs(13), "italic"))
 
         # 快捷键绑定
         self.input_box.bind("<Return>", self.send)
@@ -1954,7 +1966,10 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     def auto_new_topic(self):
         topics = self.db.list_topics()
         if topics:
-            self.topic_list.select_set(0)
+            # Treeview: 选中第一项
+            children = self.topic_list.get_children()
+            if children:
+                self.topic_list.selection_set(children[0])
             self.on_topic_select(None)
         else:
             self.new_topic()
@@ -1970,22 +1985,25 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         # NOTE: 2026-04-30 09:37:55, self-evolved by tea_agent --- 左侧主题列表移除token前缀，直接显示摘要标题（不超过20字）
     # NOTE: 2026-05-08 gen by tea_agent, refresh_topics 刷新后自动高亮当前主题（第一条匹配）
     def refresh_topics(self):
-        self.topic_list.delete(0, tk.END)
+        # Treeview: 先清空再填充
+        for item in self.topic_list.get_children():
+            self.topic_list.delete(item)
         topics = self.db.list_topics()
         self._topic_cache = topics       # 缓存供 tooltip 使用
         current_tid = getattr(self, 'current_topic_id', None)
-        highlight_idx = 0
+        highlight_iid = ""
         for i, tp in enumerate(topics):
             title = tp.get("title", "")
             # 直接显示摘要标题，不超过20字
             display = title[:20] if len(title) > 20 else title
-            self.topic_list.insert(tk.END, display)
+            iid = str(i)
+            self.topic_list.insert("", tk.END, iid=iid, text=display, tags=("topic_item",))
             if tp.get("topic_id") == current_tid:
-                highlight_idx = i
+                highlight_iid = iid
         # 刷新后自动高亮当前主题
         if topics:
-            self.topic_list.select_set(highlight_idx)
-            self.topic_list.see(highlight_idx)
+            self.topic_list.selection_set(highlight_iid)
+            self.topic_list.see(highlight_iid)
     def switch_topic(self, topic_id):
         self.current_topic_id = topic_id
         self.clear_chat()
@@ -2130,7 +2148,9 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         self._update_status("❌ 加载失败")
 
     def on_topic_select(self, e):
-        idx = self.topic_list.curselection()
+        # Treeview: 获取选中项的索引
+        sel = self.topic_list.selection()
+        idx = (self.topic_list.index(sel[0]),) if sel else ()
         if not idx:
             return
         tp = self.db.list_topics()[idx[0]]
@@ -2159,11 +2179,15 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 
 # NOTE: 2026-05-02 09:06:48, self-evolved by tea_agent --- 添加 _notify_completion 方法：LLM完成后发送系统桌面通知
     def _refresh_topics_preserve_selection(self):
-        current_idx = self.topic_list.curselection()
+        # Treeview: 用 selection() + index() 获取当前项
+        sel = self.topic_list.selection()
+        current_idx_val = self.topic_list.index(sel[0]) if sel else None
         self.refresh_topics()
-        if current_idx:
+        if current_idx_val is not None:
             try:
-                self.topic_list.select_set(current_idx[0])
+                children = self.topic_list.get_children()
+                if 0 <= current_idx_val < len(children):
+                    self.topic_list.selection_set(children[current_idx_val])
             except Exception:
                 pass
 
@@ -2171,7 +2195,9 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     # NOTE: 2026-05-08 gen by tea_agent, 鼠标悬停显示创建日期和最后使用日期
     def _on_topic_hover(self, event):
         """鼠标在主题列表上移动时，延迟显示 tooltip"""
-        idx = self.topic_list.nearest(event.y)
+        # Treeview: identify_row → find index
+        item_id = self.topic_list.identify_row(event.y)
+        idx = self.topic_list.index(item_id) if item_id else -1
         if idx < 0 or idx >= len(self._topic_cache):
             self._hide_tooltip()
             return

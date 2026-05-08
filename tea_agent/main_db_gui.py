@@ -177,10 +177,128 @@ def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
     return f"<html><head>{css}</head><body>{html_body}</body></html>"
 
 
-def _chat_to_markdown(messages: List[Dict]) -> str:
+# NOTE: 2026-05-08 gen by tea_agent, 工具轮分组渲染：合并连续tool消息，生成带轮次编号的蓝色标题块
+
+def _build_tool_blocks(messages):
+
+    """扫描消息列表，将连续 tool 消息合并为分组 markdown 字符串。
+
+    返回与原始消息列表等长的字符串列表，非 tool 位置为空字符串，tool 组只在组首输出。"""
+
+    n = len(messages)
+
+    result = [""] * n
+
+    i = 0
+
+    while i < n:
+
+        if messages[i].get("role") != "tool":
+
+            i += 1
+
+            continue
+
+        start = i
+
+        while i < n and messages[i].get("role") == "tool":
+
+            i += 1
+
+        group = messages[start:i]
+
+        ts = group[0].get("timestamp", "")
+
+        ts_display = f'<span class="msg-timestamp">{ts}</span>' if ts else ""
+
+        block = _render_tool_group(group, ts_display)
+
+        result[start] = block
+
+    return result
+
+
+
+
+
+def _render_tool_group(group, ts_display):
+
+    """将一组连续的 tool 消息渲染为 markdown，带轮次编号"""
+
+    lines_out = [f"{ts_display}\n### 🔧 工具"]
+
+    round_num = 0
+
+    for msg in group:
+
+        text = msg.get("content", "").strip()
+
+        m = re.match(r'🔧 调用工具：(\w+)\((.+)\)', text)
+
+        if m:
+
+            round_num += 1
+
+            tool_name = m.group(1)
+
+            args = m.group(2)
+
+            if len(args) > 160:
+
+                args = args[:160] + "..."
+
+            lines_out.append(f"\n#### 第 {round_num} 轮")
+
+            lines_out.append(f"- **调用**: `{tool_name}`")
+
+            lines_out.append(f"- **参数**: `{args}`")
+
+            continue
+
+        if text.startswith("📋 结果："):
+
+            result = text[6:]
+
+            if len(result) > 200:
+
+                result = result[:200] + "..."
+
+            lines_out.append(f"- **结果**: {result}")
+
+            continue
+
+        if text.startswith("ℹ️ "):
+
+            info = text[3:]
+
+            if len(info) > 200:
+
+                info = info[:200] + "..."
+
+            lines_out.append(f"\nℹ️ {info}")
+
+            continue
+
+        display = text
+
+        if len(display) > 200:
+
+            display = display[:200] + "..."
+
+        lines_out.append(f"🔧 {display}")
+
+    lines_out.append("")
+
+    return "\n".join(lines_out)
+
+
+
+def _chat_to_markdown(messages):
     """将聊天消息列表转换为 markdown 格式，包含时间戳和分割线"""
+    # 预计算工具轮分组块
+    tool_blocks = _build_tool_blocks(messages)
     parts = []
-    for msg in messages:
+    for i, msg in enumerate(messages):
         role = msg.get("role", "")
         content = msg.get("content", "")
         ts = msg.get("timestamp", "")
@@ -190,34 +308,11 @@ def _chat_to_markdown(messages: List[Dict]) -> str:
         elif role == "ai":
             parts.append(f"{ts_display}\n\n### 🤖 AI\n\n{content.strip()}\n\n---\n")
         elif role == "tool":
-            parts.append(f"{ts_display}\n> 🔧 **工具**: {content.strip()}\n")
-# NOTE: 2026-04-30 09:26:49, self-evolved by tea_agent --- _chat_to_markdown中notice角色直接输出内容(支持Markdown表格)，不再用*斜体*包裹
+            if tool_blocks[i]:
+                parts.append(tool_blocks[i])
         elif role == "notice":
             parts.append(f"\n---\n{content.strip()}\n---\n")
     return "\n".join(parts)
-
-
-# ====================== Topic 摘要 Prompt ======================
-
-# NOTE: 2026-05-01 08:17:23, self-evolved by tea_agent --- _generate_topic_summary: min_length从2提高到5，提示词强化中文自然表达
-# NOTE: 2026-05-01 20:12:32, self-evolved by tea_agent --- 更新 system prompt：强调基于用户输入概括，不基于 AI 回复
-# NOTE: 2026-05-04 14:58:14, self-evolved by tea_agent --- Prompt 模板更新：明确使用最近10条用户输入提取标题
-_TOPIC_SUMMARY_SYSTEM = (
-    "你是一个摘要生成器。根据最近10条用户输入，生成不超过20字的自然中文摘要标题。"
-    "要求："
-    "1. 根据用户的发言概括对话主题，不要基于 AI 的回复来概括。"
-    "2. 用日常口语表达，像人聊天时随口说的标题那样。"
-    "3. 至少6个字以上，禁止输出残缺句子或单字。"
-    "4. 不使用书名号、引号、多余修饰词。"
-    "直接输出摘要文本，不要任何额外说明。"
-)
-
-# NOTE: 2026-05-01 20:12:10, self-evolved by tea_agent --- 摘要生成只用 user input（去除 AI 回复），基于最近多轮而非最后一轮
-_TOPIC_SUMMARY_USER_TEMPLATE = (
-    "以下是最近10条用户输入：\n\n{user_msgs}\n\n"
-    "请根据这些用户输入，生成不超过20字的摘要标题："
-)
-
 
 def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Optional[str]:
     """
@@ -1497,8 +1592,13 @@ class TkGUI(AgentCore):
 
         # 状态栏
         self.status_var = tk.StringVar(value="就绪")
-        ttk.Label(right, textvariable=self.status_var,
-                  foreground="#666").pack(anchor=tk.E, padx=6)
+        status_frame = ttk.Frame(right)
+        status_frame.pack(anchor=tk.E, padx=6, fill=tk.X)
+        ttk.Label(status_frame, textvariable=self.status_var,
+                  foreground="#666").pack(side=tk.LEFT, padx=(0, 20))
+        self._show_tool_rounds_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(status_frame, text="工具轮",
+                        variable=self._show_tool_rounds_var).pack(side=tk.RIGHT)
 
         # 聊天区域
         chat_split = ttk.PanedWindow(right, orient=tk.VERTICAL)
@@ -1578,7 +1678,7 @@ class TkGUI(AgentCore):
         return "break"
 
     def _apply_zoom(self):
-        if not HAS_TKINTERWEB or not self.chat_messages:
+        if not HAS_TKINTERWEB or not self._filtered_messages():
             return
         md = _chat_to_markdown(self.chat_messages)
         font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
@@ -1675,7 +1775,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 # NOTE: 2026-05-07 17:33:05, self-evolved by tea_agent --- _render_chat 支持可选的流式缓冲区参数，_stream_render_tick 传递当前 think/stream 内容
     def _render_chat(self, streaming_think: str = "", streaming_text: str = ""):
         """渲染 HtmlFrame。可选 streaming_think/streaming_text 用于流式输出期间实时显示。"""
-        msgs = list(self.chat_messages)
+        msgs = self._filtered_messages()
         # 流式内容临时追加到最后一条 AI 消息
         streaming = streaming_think + streaming_text
         if streaming:
@@ -2325,9 +2425,19 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         self.chat_messages.append({"role": "notice", "content": token_msg, "timestamp": self._now_ts()})
         self._render_and_show_chat()
 
+    # NOTE: 2026-05-08 gen by tea_agent, HtmlFrame工具轮过滤：默认关闭，勾选后显示
+    def _filtered_messages(self):
+        """返回用于 HtmlFrame 渲染的消息列表。
+        当 _show_tool_rounds_var 为 False 时过滤掉工具轮内容(role='tool')。
+        ScrolledText 不受影响。"""
+        if getattr(self, '_show_tool_rounds_var', None):
+            if self._show_tool_rounds_var.get():
+                return list(self.chat_messages)
+        return [m for m in self.chat_messages if m.get("role") != "tool"]
+
     def _render_and_show_chat(self):
         # # NOTE: 2026-05-08 09:08:29, self-evolved by tea_agent --- 将 markdown→HTML 转换放到后台线程，主线程仅做 load_html，减少卡顿
-        msgs = list(self.chat_messages)
+        msgs = self._filtered_messages()
         font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
         def _prepare():
             md = _chat_to_markdown(msgs)

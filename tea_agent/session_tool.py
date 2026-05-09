@@ -75,8 +75,9 @@ class SessionToolMixin:
         success = True
         error_msg = ""
 # NOTE: 2026-05-07 11:29:02, self-evolved by tea_agent --- 工具执行 try/except 添加 WARNING 日志
+# NOTE: 2026-05-09 19:34:47, self-evolved by tea_agent --- _execute_tool_call 用 toolkit.call_tool() 替代直接 func_map 调用，启用缓存
         try:
-            result = self.toolkit.func_map[func_name](**args)
+            result = self.toolkit.call_tool(func_name, **args)
             if self.tool_log:
                 self.tool_log(f"✅ 结果: {result}")
         except Exception as e:

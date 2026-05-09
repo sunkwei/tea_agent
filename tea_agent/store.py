@@ -24,11 +24,13 @@ class Storage:
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         # 启用 WAL 模式，跨线程写入立即可见
+# NOTE: 2026-05-09 19:59:07, self-evolved by tea_agent --- Storage.__init__: 创建 .protected 标记文件，防止 Agent 误删数据库
         self.conn.execute("PRAGMA journal_mode=WAL")
         self._init_tables()
         self._migrate()
         self._write_week_key()  # NOTE: 写入本周 ISO 周标识
         self._auto_backup()     # NOTE: 启动时自动备份数据库
+        self._protect_db()      # NOTE: 创建保护标记，防止误删
 
         # @2026-04-29 gen by deepseek-v4-pro, 新增memories表及8个CRUD方法
 # NOTE: 2026-04-30 11:42:35, self-evolved by tea_agent --- _init_tables 新增 _meta 元数据表
@@ -1490,6 +1492,26 @@ class Storage:
             self.conn.commit()
         except Exception:
             pass
+
+# NOTE: 2026-05-09 19:59:45, self-evolved by tea_agent --- 添加 _protect_db() 方法：在数据库目录创建保护标记文件
+    def _protect_db(self):
+        """在数据库同目录创建 .chat_history_protected 标记文件，防止 Agent 误删。
+
+        标记文件不影响数据库正常运行，仅作为保护提醒。
+        toolkit_file 写入操作会检查此标记并拒绝覆盖受保护文件。
+        """
+        import os as _os
+        db_abs = _os.path.abspath(self.db_path)
+        db_dir = _os.path.dirname(db_abs)
+        marker = _os.path.join(db_dir, ".chat_history_protected")
+        try:
+            if not _os.path.exists(marker):
+                with open(marker, "w") as f:
+                    f.write(f"# 此标记文件保护数据库不被意外删除\n")
+                    f.write(f"# 数据库路径: {db_abs}\n")
+                    f.write(f"# 创建时间: {__import__('datetime').datetime.now().isoformat()}\n")
+        except Exception:
+            pass  # 标记文件创建失败不影响数据库正常运行
 
     def backup_now(self):
         """手动触发备份（跳过时间检查）"""

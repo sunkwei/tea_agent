@@ -63,8 +63,11 @@ class PathsConfig:
     _kb_dir_abs: str = ""
     _skills_dir_abs: str = ""
 
+# NOTE: 2026-05-09 19:44:19, self-evolved by tea_agent --- PathsConfig.resolve: 子路径相对 data_dir_abs 解析，data_dir 相对 config_dir 解析
     def resolve(self, config_dir: str) -> None:
         """根据 config.yaml 所在目录解析所有路径为绝对路径。
+        
+        子路径（db/toolkit/kb/skills）的相对路径相对于 data_dir_abs 解析。
         
         Args:
             config_dir: config.yaml 所在目录的绝对路径
@@ -72,29 +75,29 @@ class PathsConfig:
         import os
         default_root = str(Path.home() / ".tea_agent")
 
-        def _resolve(value: str, default_rel: str) -> str:
-            if not value:
-                return os.path.join(default_root, default_rel)
-            # 展开 ~
-            expanded = os.path.expanduser(value)
-            if os.path.isabs(expanded):
-                return os.path.abspath(expanded)
-            # 相对路径：相对于 config.yaml 目录
-            return os.path.abspath(os.path.join(config_dir, expanded))
-
-        # 先解析 data_dir（如果配置了）
+        # 先解析 data_dir（相对路径相对于 config_dir）
         if self.data_dir:
-            self._data_dir_abs = os.path.abspath(os.path.expanduser(self.data_dir))
+            expanded_data = os.path.expanduser(self.data_dir)
+            if os.path.isabs(expanded_data):
+                self._data_dir_abs = os.path.abspath(expanded_data)
+            else:
+                self._data_dir_abs = os.path.abspath(os.path.join(config_dir, expanded_data))
         else:
             self._data_dir_abs = default_root
 
-        # 其他路径：优先使用显式配置，否则基于 data_dir_abs
-        base = self._data_dir_abs
+        # 子路径解析：相对路径相对于 data_dir_abs
+        def _resolve(value: str, default_rel: str) -> str:
+            if not value:
+                return os.path.join(self._data_dir_abs, default_rel)
+            expanded = os.path.expanduser(value)
+            if os.path.isabs(expanded):
+                return os.path.abspath(expanded)
+            return os.path.abspath(os.path.join(self._data_dir_abs, expanded))
 
-        self._db_path_abs = _resolve(self.db_path, "chat_history.db") if self.db_path else os.path.join(base, "chat_history.db")
-        self._toolkit_dir_abs = _resolve(self.toolkit_dir, "toolkit") if self.toolkit_dir else os.path.join(base, "toolkit")
-        self._kb_dir_abs = _resolve(self.kb_dir, "kb") if self.kb_dir else os.path.join(base, "kb")
-        self._skills_dir_abs = _resolve(self.skills_dir, "skills") if self.skills_dir else os.path.join(base, "skills")
+        self._db_path_abs = _resolve(self.db_path, "chat_history.db") if self.db_path else os.path.join(self._data_dir_abs, "chat_history.db")
+        self._toolkit_dir_abs = _resolve(self.toolkit_dir, "toolkit") if self.toolkit_dir else os.path.join(self._data_dir_abs, "toolkit")
+        self._kb_dir_abs = _resolve(self.kb_dir, "kb") if self.kb_dir else os.path.join(self._data_dir_abs, "kb")
+        self._skills_dir_abs = _resolve(self.skills_dir, "skills") if self.skills_dir else os.path.join(self._data_dir_abs, "skills")
 
     @property
     def db_path_abs(self) -> str:

@@ -237,6 +237,7 @@ class AgentCore:
             # 启动失败不影响主体功能
             logger.debug(f"潜意识引擎自动启动跳过: {e}")
 
+# NOTE: 2026-05-09 20:10:37, self-evolved by tea_agent --- _start_connectors: 暂时禁用 MQTT 启动，保留代码
     def _start_connectors(self):
         """启动 chat_room 和 MQTT 连接器（非阻塞守护线程）。"""
         try:
@@ -244,10 +245,11 @@ class AgentCore:
         except Exception as e:
             logger.warning(f"chat_room 连接器启动失败: {e}")
 
-        try:
-            mqtt_agent_connector.start(self.db)
-        except Exception as e:
-            logger.warning(f"MQTT 连接器启动失败: {e}")
+        # NOTE: MQTT 暂不启动，保留代码以备后用
+        # try:
+        #     mqtt_agent_connector.start(self.db)
+        # except Exception as e:
+        #     logger.warning(f"MQTT 连接器启动失败: {e}")
 
     # ═══════════════════════════════════════════════
     # 会话初始化

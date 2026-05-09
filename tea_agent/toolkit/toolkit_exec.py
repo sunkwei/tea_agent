@@ -43,7 +43,9 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         results = [None] * len(commands)
         lock = threading.Lock()
 
+# NOTE: 2026-05-09 19:56:17, self-evolved by tea_agent --- batch 模式改用 Popen+communicate(timeout)+killpg：超时后强制杀死进程组，避免孤儿子进程
         def _run(idx, cmd):
+            import signal as _sig
             try:
                 a = cmd.get("app", "")
                 ar = cmd.get("args", [])
@@ -51,16 +53,36 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                     with lock:
                         results[idx] = {"index": idx, "returncode": -1, "stdout": "", "stderr": "app为空", "error": True}
                     return
-                p = subprocess.run([a] + list(ar), capture_output=True, text=True, timeout=timeout)
-                with lock:
-                    results[idx] = {
-                        "index": idx, "returncode": p.returncode,
-                        "stdout": p.stdout[:5000], "stderr": p.stderr[:1000],
-                        "error": p.returncode != 0,
-                    }
-            except subprocess.TimeoutExpired:
-                with lock:
-                    results[idx] = {"index": idx, "returncode": -1, "stdout": "", "stderr": f"超时({timeout}s)", "error": True}
+                # Popen + communicate(timeout) + killpg: 超时后强制杀死进程组
+                p = subprocess.Popen(
+                    [a] + list(ar),
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    text=True, start_new_session=True,
+                )
+                try:
+                    stdout, stderr = p.communicate(timeout=timeout)
+                    with lock:
+                        results[idx] = {
+                            "index": idx, "returncode": p.returncode,
+                            "stdout": stdout[:5000], "stderr": stderr[:1000],
+                            "error": p.returncode != 0,
+                        }
+                except subprocess.TimeoutExpired:
+                    # 强制杀死进程组
+                    try:
+                        os.killpg(os.getpgid(p.pid), _sig.SIGKILL)
+                        p.wait(timeout=3)
+                    except Exception:
+                        try:
+                            p.kill()
+                            p.wait(timeout=3)
+                        except Exception:
+                            pass
+                    cmd_preview = f"{a} {' '.join(ar[:3])}"
+                    if len(ar) > 3:
+                        cmd_preview += f" ... (+{len(ar)-3} args)"
+                    with lock:
+                        results[idx] = {"index": idx, "returncode": -1, "stdout": "", "stderr": f"⏰ 超时({timeout}s): {cmd_preview}", "error": True}
             except Exception as e:
                 with lock:
                     results[idx] = {"index": idx, "returncode": -1, "stdout": "", "stderr": str(e)[:500], "error": True}

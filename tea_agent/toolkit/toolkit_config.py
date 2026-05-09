@@ -4,11 +4,10 @@ import logging
 # NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
+# NOTE: 2026-05-09 19:26:15, self-evolved by tea_agent --- 修复 toolkit_config：懒加载 import 防止工具热加载时 get_config 未定义
 """toolkit_config — 允许 Agent 读取和修改自身运行时配置"""
 
 import json
-from tea_agent.config import get_config
-from tea_agent.session_ref import get_session
 
 
 def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
@@ -26,10 +25,15 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
         extra_iterations_on_continue, memory_extraction_threshold,
         memory_dedup_threshold, chat_page_size
     """
+# NOTE: 2026-05-09 19:26:25, self-evolved by tea_agent --- toolkit_config 函数体内添加懒加载 get_config/get_session，规避模块级 import 失败
     logger.info(f"toolkit_config called: action={action!r}, key={key!r}, value={value!r}")
 
-    cfg = get_config()
-    session = get_session()
+    # 懒加载 import — 工具热加载时模块级 import 可能失败
+    from tea_agent.config import get_config as _get_config
+    from tea_agent.session_ref import get_session as _get_session
+
+    cfg = _get_config()
+    session = _get_session()
     storage = getattr(session, 'storage', None) if session else None
 
     if action == "list":

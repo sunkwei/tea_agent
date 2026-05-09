@@ -1,4 +1,4 @@
-# @2026-05-06 gen by claude, 清理真实API密钥，替换为占位符
+# @2026-05-09 gen by tea_agent, 数据目录指向项目本地 .tea_agent_run
 main_model:
   api_key: YOUR_API_KEY_HERE
   api_url: http://localhost:11434/v1
@@ -11,13 +11,6 @@ main_model:
 cheap_model:
   api_key: YOUR_API_KEY_HERE
   api_url: http://localhost:11434/v1
-  model_name: qwen3.6
-
-# 2026-05-06 gen by claude, 文本向量模型配置（用于主题搜索）
-embedding_model:
-  api_url: ""          # Embedding API 地址，如 http://localhost:11434/v1
-  model_name: ""       # 嵌入模型，如 text-embedding-3-small / bge-m3
-  api_key: ""          # 为空则复用 main_model.api_key
-  dimension: 0         # 向量维度，0=自动检测
+  model_name: zfujicute/OmniCoder-Qwen3.5-9B-Claude-4.6-Opus-Uncensored-v2-GGUF:latest
 
 keep_turns: 5

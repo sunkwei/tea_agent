@@ -26,8 +26,18 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
         except Exception as e:
             return f"Error: {str(e)}"
 
+# NOTE: 2026-05-09 20:00:09, self-evolved by tea_agent --- toolkit_file write 操作：检查父目录 .chat_history_protected 标记，拒绝覆盖受保护文件
     elif action == "write":
         try:
+            # 检查数据库保护标记：若目标文件所在目录有 .chat_history_protected，拒绝覆盖
+            import os as _os
+            target_abs = _os.path.abspath(filename)
+            target_dir = _os.path.dirname(target_abs)
+            marker = _os.path.join(target_dir, ".chat_history_protected")
+            if _os.path.exists(marker):
+                logger.warning(f"toolkit_file write BLOCKED: 目标目录受保护 ({marker}), 拒绝写入 {filename}")
+                return f"🛡️ 保护拒绝: '{filename}' 所在目录存在数据库保护标记，禁止覆盖。如需修改请先确认。"
+            
             with open(filename, 'w', encoding='utf-8') as f:
                 f.write(content)
             return 0

@@ -529,6 +529,24 @@ class OnlineToolSession(
         self.toolkit.reload()
         self._build_tools()
 
+# NOTE: 2026-05-09 20:07:40, self-evolved by tea_agent --- 添加 _auto_detect_mode 方法：每次对话前根据用户输入自动切换 Agent 模式
+    def _auto_detect_mode(self, user_text: str):
+        """根据用户输入自动检测并切换 Agent 模式。
+        
+        在每次 chat_stream 入口调用，无感切换。
+        模式切换以 CRITICAL 记忆注入，影响后续所有回复风格。
+        检测失败不阻塞对话。
+        """
+        try:
+            result = self.toolkit.call_tool('toolkit_mode', action='auto', text=user_text)
+            if isinstance(result, dict) and result.get('switched'):
+                logger.info(
+                    f"🤖 自动切换模式: {result.get('from_mode')} → {result.get('to_mode')} "
+                    f"(原因: {result.get('reason', 'N/A')})"
+                )
+        except Exception:
+            pass  # 模式检测失败不影响对话
+
     def _get_summarize_client(self) -> Tuple[Any, str]:
         """获取用于摘要/提取任务的客户端和模型名。"""
         if self._cheap_client and self._cheap_model_name:
@@ -600,8 +618,11 @@ class OnlineToolSession(
         self.reset_interrupt()
         self.reset_session_state()
         
+# NOTE: 2026-05-09 20:07:25, self-evolved by tea_agent --- chat_stream 在 skill auto_activate 后自动检测并切换模式（基于用户输入）
         # 自动激活匹配的 Skill（基于用户输入触发词）
         self.skill_manager.auto_activate(msg)
+        # 自动检测并切换 Agent 模式（基于用户输入）
+        self._auto_detect_mode(msg)
         # 刷新工具列表（反映最新的激活状态）
         self._build_tools()
 

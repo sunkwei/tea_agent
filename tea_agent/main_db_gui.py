@@ -2005,7 +2005,15 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self.topic_list.selection_set(highlight_iid)
             self.topic_list.see(highlight_iid)
     def switch_topic(self, topic_id):
+# NOTE: 2026-05-09 18:59:41, self-evolved by tea_agent --- switch_topic 时更新窗口标题栏为 {topic_title} — AI 工具调用助手
         self.current_topic_id = topic_id
+        # 更新窗口标题栏为当前主题标题
+        try:
+            tp = self.db.get_topic(topic_id)
+            title = (tp or {}).get("title", "")
+            self.root.title(f"{title} — AI 工具调用助手" if title else "AI 工具调用助手")
+        except Exception:
+            self.root.title("AI 工具调用助手")
         self.clear_chat()
 # NOTE: 2026-05-07 14:45:13, self-evolved by tea_agent --- 启动进度轮询定时器，50ms 读共享变量更新 HtmlFrame
         # 加载期间阻塞输入（send() 检查 generating），但 GUI 主循环不受影响

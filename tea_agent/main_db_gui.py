@@ -2470,9 +2470,12 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             if HAS_TKINTERWEB:
                 return _render_markdown(md, font_size=font_size)
             return md
+# NOTE: 2026-05-09 17:41:28, self-evolved by tea_agent --- _on_done HtmlFrame路径添加scroll_to_bottom，修复不显示工具轮时不滚动到底的bug
         def _on_done(html):
             if HAS_TKINTERWEB:
                 self.chat_view.load_html(html)
+                # load_html 后 HtmlFrame 可能异步解析，延迟滚动到底
+                self.root.after(300, self.scroll_to_bottom)
             else:
                 self.chat_view.config(state=tk.NORMAL)
                 self.chat_view.delete("1.0", tk.END)

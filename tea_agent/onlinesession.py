@@ -145,8 +145,10 @@ class OnlineToolSession(
         self.skill_manager = SkillManager.get_instance()
         self.skill_manager.discover_skills()
         # 默认激活 utility 和 file_system（最小可用集）
+# NOTE: 2026-05-10 09:00:13, self-evolved by tea_agent --- 永久激活 memory_knowledge skill，确保记忆/模式/反思基础设施始终可用
         self.skill_manager.activate_skill("utility")
         self.skill_manager.activate_skill("file_system")
+        self.skill_manager.activate_skill("memory_knowledge")
         
         self._build_tools()
         

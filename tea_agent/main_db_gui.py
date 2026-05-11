@@ -436,6 +436,9 @@ class TkGUI(AgentCore):
 
         # 聊天消息列表
         self.chat_messages: List[Dict] = []
+        # NOTE: 2026-05-15 gen by tea_agent, 当前查看的历史轮次索引，None=最新轮
+        self._current_round_view: Optional[int] = None
+        self._chat_rounds: List[List[Dict]] = []
 
         # 当前 stream 累积 buffer
         self._stream_buffer = ""
@@ -551,7 +554,8 @@ class TkGUI(AgentCore):
         self.console.config(state=tk.DISABLED)
 
         if HAS_TKINTERWEB:
-            self.chat_view = HtmlFrame(chat_frame, messages_enabled=False)
+            # NOTE: 2026-05-15 gen by tea_agent, 添加 on_link_click 回调支持历史轮次链接
+            self.chat_view = HtmlFrame(chat_frame, messages_enabled=False, on_link_click=self._on_history_link_click)
         else:
             self.chat_view = scrolledtext.ScrolledText(
                 chat_frame, font=(SYSTEM_FONT, _fs(15)), bg="#fafafa", fg="black", wrap=tk.WORD
@@ -1082,9 +1086,10 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self.log(text, tag)
 
         if HAS_TKINTERWEB and self.chat_messages:
-            self._render_chat()
+            # NOTE: 2026-05-15 gen by tea_agent, 主题加载后也使用轮次视图（最新轮+历史链接表）
+            self._render_and_show_chat()
+        else:
             self._switch_display("chat_view")
-            self.root.after(400, self.scroll_to_bottom)
 
         self.generating = False
         self._update_status("✅ 就绪")
@@ -1413,36 +1418,153 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 return list(self.chat_messages)
         return [m for m in self.chat_messages if m.get("role") != "tool"]
 
-    def _render_and_show_chat(self):
-        # # NOTE: 2026-05-08 09:08:29, self-evolved by tea_agent --- 将 markdown→HTML 转换放到后台线程，主线程仅做 load_html，减少卡顿
-        msgs = self._filtered_messages()
-        # NOTE: 2026-05-15 gen by tea_agent, 每次只渲染最新消息，不渲染全量历史
-        # 若最后一条是 notice（如 token 表格），则连同前一条 AI 消息一起渲染
-        print(f"[DIAG] _render_and_show_chat: total filtered msgs={len(msgs)}, roles={[m.get('role','') for m in msgs[-5:]]}")
-        if len(msgs) > 1:
-            if msgs[-1].get("role") == "notice":
-                msgs = msgs[-2:]
-                print(f"[DIAG] rendering last 2 (notice at end)")
+
+# new_code_for_rounds
+
+    # NOTE: 2026-05-15 gen by tea_agent, 历史轮次分组：按 user 消息切分轮次
+    def _group_into_rounds(self, msgs):
+        """将消息列表按 user 角色切分为轮次列表。每轮从 user 开始。"""
+        rounds = []
+        current = []
+        for msg in msgs:
+            if msg["role"] == "user":
+                if current:
+                    rounds.append(current)
+                current = [msg]
             else:
-                msgs = msgs[-1:]
-                print(f"[DIAG] rendering last 1")
+                current.append(msg)
+        if current:
+            rounds.append(current)
+        return rounds
+
+    # NOTE: 2026-05-15 gen by tea_agent, HtmlFrame 历史链接点击回调
+    def _on_history_link_click(self, url):
+        """处理 tea://round/N 或 tea://latest 链接点击"""
+        try:
+            if url.startswith("tea://round/"):
+                idx = int(url.rsplit("/", 1)[-1])
+                self._current_round_view = idx
+                self._render_round_view(idx)
+            elif url == "tea://latest":
+                self._current_round_view = None
+                self._render_and_show_chat()
+        except Exception:
+            pass
+
+    # NOTE: 2026-05-15 gen by tea_agent, 构建轮次视图完整 HTML
+    def _build_round_view_html(self, rounds, active_idx, font_size):
+        """构建包含历史轮次链接表 + 当前轮内容的完整 HTML。"""
+        import markdown as _md_lib
+        total = len(rounds)
+        is_latest = (self._current_round_view is None)
+        
+        # -- 状态指示行 --
+        if is_latest:
+            status_line = '<p style="margin:0 0 6px; color:#1a73e8; font-weight:bold;">\U0001f4cc 当前：最新轮（第' + str(total) + '轮 / 共' + str(total) + '轮）</p>'
+        else:
+            status_line = '<p style="margin:0 0 6px; color:#e67e22; font-weight:bold;">\U0001f4cc 当前查看：第' + str(active_idx + 1) + '轮 / 共' + str(total) + '轮 | <a href="tea://latest">\u2190 返回最新轮</a></p>'
+        
+        # -- 历史轮次表格 --
+        max_rows = 12
+        shown = []
+        if total <= max_rows:
+            shown = list(range(total))
+        else:
+            shown = list(range(3))
+            if active_idx > 3:
+                shown.append(-1)
+            start = max(3, active_idx - 1)
+            end = min(total - 3, active_idx + 2)
+            for i in range(start, end):
+                if i not in shown:
+                    shown.append(i)
+            if active_idx < total - 4:
+                shown.append(-2)
+            for i in range(total - 3, total):
+                if i not in shown:
+                    shown.append(i)
+        
+        rows_html = []
+        for i in shown:
+            if i < 0:
+                rows_html.append('<tr><td colspan="2" style="text-align:center;color:#999;padding:4px;">\u00b7\u00b7\u00b7</td></tr>')
+            elif i == active_idx:
+                rows_html.append('<tr style="background:#e8f0fe;"><td style="padding:4px 10px;">第' + str(i+1) + '轮</td><td style="padding:4px 10px;"><strong>\u2190 当前</strong></td></tr>')
+            else:
+                rows_html.append('<tr><td style="padding:4px 10px;">第' + str(i+1) + '轮</td><td style="padding:4px 10px;"><a href="tea://round/' + str(i) + '">查看</a></td></tr>')
+        
+        table_html = '<div style="background:#f8f9ff; border:1px solid #d0d5e0; border-radius:6px; padding:8px 12px; margin-bottom:14px;">\n' + status_line + '\n<p style="margin:4px 0 8px; color:#666; font-size:0.9em;">\U0001f4cb 历史轮次（共' + str(total) + '轮）</p>\n<table style="margin:0; font-size:0.9em;">\n<thead><tr><th style="width:70px;">轮次</th><th>操作</th></tr></thead>\n<tbody>\n' + '\n'.join(rows_html) + '\n</tbody>\n</table></div>'
+        
+        # -- 当前轮内容 --
+        round_msgs = rounds[active_idx]
+        round_md = _chat_to_markdown(round_msgs)
+        if HAS_TKINTERWEB:
+            round_body = _md_lib.markdown(round_md, extensions=["fenced_code", "tables", "codehilite"])
+            css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
+            full_html = "<html><head>" + css + "</head><body>" + table_html + round_body + "</body></html>"
+        else:
+            full_html = round_md
+        return full_html
+
+    # NOTE: 2026-05-15 gen by tea_agent, 渲染指定历史轮次（用户点击链接时调用）
+    def _render_round_view(self, round_idx):
+        """渲染指定轮次：后台线程生成 HTML，主线程加载"""
+        rounds = self._chat_rounds
+        if not rounds or round_idx < 0 or round_idx >= len(rounds):
+            return
         font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
+        
         def _prepare():
-            md = _chat_to_markdown(msgs)
-            if HAS_TKINTERWEB:
-                return _render_markdown(md, font_size=font_size)
-            return md
-# NOTE: 2026-05-09 17:41:28, self-evolved by tea_agent --- _on_done HtmlFrame路径添加scroll_to_bottom，修复不显示工具轮时不滚动到底的bug
+            return self._build_round_view_html(rounds, round_idx, font_size)
+        
         def _on_done(html):
             if HAS_TKINTERWEB:
-                # NOTE: 2026-05-15 gen by tea_agent, 终端打印最新轮 HTML 方便调试
-                marker = f"<!-- RENDER_TS={self._now_ts()} -->"
-                marked_html = marker + html
-                print(f"[RENDER] {marked_html}")
-                self._html_render(marked_html)
-                # NOTE: 2026-05-15 gen by tea_agent, 切回 chat_view，修复发送时 switch_display("console") 后未切回导致用户看到 ScrolledText
+                print("[RENDER ROUND " + str(round_idx) + "] " + str(len(html)) + " chars")
+                self._html_render(html)
                 self._switch_display("chat_view")
-                # load_html 后 HtmlFrame 可能异步解析，延迟滚动到底
+                self.root.after(200, self.scroll_to_bottom)
+            else:
+                self.chat_view.config(state=tk.NORMAL)
+                self.chat_view.delete("1.0", tk.END)
+                self.chat_view.insert("1.0", html)
+                self.chat_view.config(state=tk.DISABLED)
+                self.chat_view.see(tk.END)
+                self._switch_display("chat_view")
+        
+        import threading
+        def _worker():
+            try:
+                result = _prepare()
+                self.root.after(0, lambda r=result: _on_done(r))
+            except Exception:
+                self.root.after(0, lambda: _on_done("<p>渲染错误</p>"))
+        threading.Thread(target=_worker, daemon=True).start()
+
+    # NOTE: 2026-05-15 gen by tea_agent, 重构：渲染最新轮 + 历史轮次链接表
+    def _render_and_show_chat(self):
+        """会话完成后渲染：历史轮次链接表 + 最新轮内容"""
+        msgs = self._filtered_messages()
+        print("[DIAG] _render_and_show_chat: total filtered msgs=" + str(len(msgs)))
+        
+        # 分组为轮次
+        rounds = self._group_into_rounds(msgs)
+        self._chat_rounds = rounds
+        self._current_round_view = None
+        
+        if not rounds:
+            return
+        
+        active_idx = len(rounds) - 1  # 最新轮
+        font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
+        
+        def _prepare():
+            return self._build_round_view_html(rounds, active_idx, font_size)
+        
+        def _on_done(html):
+            if HAS_TKINTERWEB:
+                print("[RENDER] " + str(len(html)) + " chars")
+                self._html_render(html)
+                self._switch_display("chat_view")
                 self.root.after(300, self.scroll_to_bottom)
             else:
                 self.chat_view.config(state=tk.NORMAL)
@@ -1451,7 +1573,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 self.chat_view.config(state=tk.DISABLED)
                 self.chat_view.see(tk.END)
                 self._switch_display("chat_view")
-        # 在后台线程中执行 markdown 转换，完成后切回主线程 load_html
+        
         import threading
         def _worker():
             try:
@@ -1459,6 +1581,8 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 self.root.after(0, lambda r=result: _on_done(r))
             except Exception:
                 self.root.after(0, lambda: _on_done("<p>渲染错误</p>"))
+        threading.Thread(target=_worker, daemon=True).start()
+
         threading.Thread(target=_worker, daemon=True).start()
 
     # @2026-04-29 gen by deepseek-v4-pro, 打开主题管理弹窗

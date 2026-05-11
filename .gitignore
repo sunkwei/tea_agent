@@ -5,3 +5,7 @@ build/
 .vscode/
 test_session.py
 dump_*/
+*.bak
+test_tmp/
+chat_history.db
+.tea_agent_run/

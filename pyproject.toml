@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tea_agent"
-version = "0.3.3"
-description = "A self-evolving AI agent with dynamic toolkit management"
+version = "0.7.17"
+description = "A self-evolving AI agent with dynamic toolkit management. Optional: OCR/TTS/ASR."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
@@ -21,9 +21,22 @@ classifiers = [
 
 dependencies = [
     "openai>=1.0.0",
+    "numpy>=1.24.0",
     "markdown>=3.4.0",
     "tkinterweb>=3.10",
+    "pyautogui>=0.9.0",
+    "mss>=9.0.0",
+    "Pillow>=10.0.0",
+    "requests>=2.30.0",
+    "beautifulsoup4>=4.12.0",
+    "paho-mqtt>=2.0.0",
 ]
+
+[project.optional-dependencies]
+ocr = ["easyocr>=1.7.0"]
+tts = ["pyttsx3", "gTTS"]
+asr = ["SpeechRecognition"]
+desktop = ["tea_agent[ocr,tts,asr]"]
 
 [project.urls]
 Homepage = "https://github.com/sunkwei/tea_agent"

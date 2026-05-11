@@ -128,6 +128,7 @@ class SessionPipeline:
             if self._steps[name].enabled
         ]
     
+# NOTE: 2026-05-06 08:47:24, self-evolved by tea_agent --- m5: 澄清 stop_at 文档 — 执行完该步骤后停止
     def execute(
         self,
         context: Dict[str, Any],
@@ -139,7 +140,7 @@ class SessionPipeline:
         
         Args:
             context: 上下文数据字典，传递给每个步骤
-            stop_at: 在此步骤后停止（包含该步骤）
+            stop_at: 执行完该步骤后停止（该步骤本身会执行，后续步骤跳过）
             skip_steps: 要跳过的步骤列表（临时禁用）
             
         Returns:
@@ -147,24 +148,23 @@ class SessionPipeline:
         """
         skip_steps = skip_steps or []
         
-        logger.info(f"Executing session pipe with context:\n{context}")
+        logger.debug(f"Executing session pipe with context:\n{context}")
         for i, (name, step) in enumerate(self.get_enabled_steps()):
             # 检查是否要跳过
-            logger.info(f"  Step {i}: {name}")
+            logger.debug(f"  Step {i}: {name}")
             if name in skip_steps:
-                logger.info(f"    Skipping step {name}")
                 continue
             
             # 执行步骤
             try:
-                logger.info(f"    Running step {name}, context: {context}")
+                logger.debug(f"    Running step {name}, context: {context}")
                 result = step.func(context)
                 if isinstance(result, list):
-                    logger.info(f"    Result: {len(result)} items")
+                    logger.debug(f"    Result: {len(result)} items")
                     for item in result:
-                        logger.info(f"    {item}")
+                        logger.debug(f"    {item}")
                 elif isinstance(result, dict):
-                    logger.info(f"    Result: keys: {result.keys()}")
+                    logger.debug(f"    Result: keys: {result.keys()}")
                 # 合并结果到上下文
                 if isinstance(result, dict):
                     context.update(result)
@@ -178,7 +178,7 @@ class SessionPipeline:
             # 检查是否要停止
             if stop_at and name == stop_at:
                 break
-        logger.info(f"Execution complete, with content\n{context}\n")
+        logger.debug(f"Execution complete, with content\n{context}\n")
         return context
     
     def list_steps(self) -> List[Dict[str, Any]]:

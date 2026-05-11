@@ -1,6 +1,13 @@
 # llm generated tool func, created Wed Apr 15 13:08:10 2026
 
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_gettime() -> dict:
+    logger.info(f"toolkit_gettime called")
+
     import datetime
     now = datetime.datetime.now()
     return {

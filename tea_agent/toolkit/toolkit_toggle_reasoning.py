@@ -1,4 +1,9 @@
 # @2026-04-29 gen by deepseek-v4-pro, 内置工具: 切换/查询 reasoning/thinking 状态
+import logging
+
+# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
+logger = logging.getLogger("toolkit")
+
 def toolkit_toggle_reasoning(enable: bool = None) -> dict:
     """
     切换或查询推理（thinking/reasoning）状态。
@@ -7,6 +12,8 @@ def toolkit_toggle_reasoning(enable: bool = None) -> dict:
     Args:
         enable: True=开启, False=关闭, None=仅查询
     """
+    logger.info(f"toolkit_toggle_reasoning called: enable={enable!r}")
+
     try:
         from tea_agent.session_ref import get_session
     except ImportError:

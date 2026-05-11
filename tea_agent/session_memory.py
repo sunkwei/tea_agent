@@ -31,14 +31,22 @@ class SessionMemoryMixin:
         self._injected_memories_text: str = ""
         self._injected_memories: List[Dict] = []
 
+# NOTE: 2026-04-30 14:35:20, self-evolved by tea_agent --- _setup_memory传递dedup_threshold给MemoryManager
     def _setup_memory(self):
         """初始化 Memory 管理器（需要 self.storage 已设置）"""
         if not self.storage:
             return
         from tea_agent.memory import MemoryManager
+        threshold = getattr(self, 'memory_extraction_threshold', 2)
+# NOTE: 2026-04-30 14:39:06, self-evolved by tea_agent --- session_memory默认dedup改为0.3
+        dedup = getattr(self, 'memory_dedup_threshold', 0.3)
         try:
-            self.memory = MemoryManager(self.storage)
-            logger.info("MemoryManager 初始化成功")
+            self.memory = MemoryManager(
+                self.storage,
+                extraction_threshold=threshold,
+                dedup_threshold=dedup,
+            )
+            logger.info("MemoryManager 初始化成功 (dedup_threshold=%.2f)", dedup)
         except Exception as e:
             logger.warning(f"MemoryManager 初始化失败: {e}")
             self.memory = None
@@ -63,7 +71,8 @@ class SessionMemoryMixin:
         user_msg = context.get("user_msg", "") or context.get("msg", "")
 
         try:
-            memories = self.memory.select_memories(user_msg, limit=5)
+# NOTE: 2026-05-02 12:06:18, self-evolved by tea_agent --- select_memories 调用移除 limit=5 硬编码，改用 MAX_INJECT=30 默认
+            memories = self.memory.select_memories(user_msg)
         except Exception as e:
             logger.warning(f"记忆选择失败: {e}")
             memories = []
@@ -127,7 +136,8 @@ class SessionMemoryMixin:
                 model=model,
                 messages=messages,
                 stream=False,
-                extra_body={"thinking": {"type": "disable"}},
+# NOTE: 2026-05-01 14:24:09, self-evolved by tea_agent --- 修复 thinking.type 从 disable 改为 disabled
+                extra_body={"thinking": {"type": "disabled"}},
                 temperature=0.3,
                 max_tokens=1000,
             )

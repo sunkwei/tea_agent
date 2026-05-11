@@ -27,7 +27,7 @@ def toolkit_subconscious(action: str, focus: str = None):
     CYCLE_INTERVAL = 3600      # 1小时
     CHECK_INTERVAL = 30        # 检查间隔
 
-    # 2026-05-10 gen by tea_agent, 检查当前目录是否为 tea_agent 项目
+    # 2026-05-09 gen by tea_agent, 检查当前目录是否为 tea_agent 项目
     def _is_tea_agent_cwd():
         cwd = os.getcwd()
         pyproj = os.path.join(cwd, "pyproject.toml")
@@ -630,7 +630,7 @@ def toolkit_subconscious(action: str, focus: str = None):
     state = _read_state()
 
     if action == "start":
-        # 2026-05-10 gen by tea_agent, 非 tea_agent 项目目录拒绝启动
+        # 2026-05-09 gen by tea_agent, 非 tea_agent 项目目录拒绝启动
         if not _is_tea_agent_cwd():
             return {"status":"rejected", "reason":"当前目录非 tea_agent 项目，为防止意外修改拒绝启动",
                     "cwd": os.getcwd(), "hint": "请在 tea_agent 项目根目录下启动 Dream 线程"}
@@ -645,7 +645,7 @@ def toolkit_subconscious(action: str, focus: str = None):
         state = _read_state()
         return {"status":"started","pid":os.getpid(),"started_at":state.get("started_at"),
                 "version":"v2.2","cycle_interval":"1小时","first_run_immediate":True,
-                "adaptive_focus":True,
+                "adaptive_focus":True,"cwd_mode":"full",
                 "message":"🧠 潜意识引擎 v2.1 — 场景自适应 Dream。修bug→收敛分析，做创意→发散联想"}
 
     elif action == "stop":

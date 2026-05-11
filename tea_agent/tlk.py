@@ -6,6 +6,12 @@ import os.path as osp
 import time
 import logging
 
+# # NOTE: 2026-05-08 09:32:07, self-evolved by tea_agent --- 内置工具: 手动设置主题标题
+from tea_agent.toolkit.toolkit_set_topic_title import (
+    toolkit_set_topic_title,
+    meta_toolkit_set_topic_title,
+)
+
 logger = logging.getLogger("tookit")
 
 def meta_toolkit_reload():
@@ -151,11 +157,31 @@ def toolkit_list_versions_impl(name: str) -> str:
 
 # ========== Memory 工具函数 ==========
 
+# NOTE: 2026-05-09 19:34:13, self-evolved by tea_agent --- Toolkit 类添加工具调用缓存：缓存字典 + TTL + call_tool() 方法
 class Toolkit:
+    # 工具调用缓存：对只读/幂等工具缓存结果，减少重复调用
+    # key = (func_name, json.dumps(args, sort_keys=True))
+    # value = (result, timestamp)
+    _CACHE_TTL = 30  # 默认缓存 30 秒
+    _CACHE_BLACKLIST = {
+        # 有外部副作用的工具不缓存
+        'toolkit_exec', 'toolkit_self_evolve', 'toolkit_save',
+        'toolkit_build', 'toolkit_bump_version', 'toolkit_release_version',
+        'toolkit_pkg', 'toolkit_memory', 'toolkit_kb', 'toolkit_reflection',
+        'toolkit_proactive', 'toolkit_subconscious', 'toolkit_dump_topic',
+        'toolkit_mode', 'toolkit_prompt_evolve', 'toolkit_input',
+        'toolkit_notify', 'toolkit_speak', 'toolkit_listen',
+        'toolkit_ocr', 'toolkit_screenshot', 'toolkit_rollback',
+        'toolkit_run_tests', 'toolkit_toggle_reasoning', 'toolkit_skill',
+        'toolkit_set_topic_title', 'toolkit_sudo_gui',
+        'toolkit_git_push_all_remotes',
+    }
+
     def __init__(self, tool_dir=None):
         
         self.func_map: Dict[str, Callable] = {}
         self.meta_map: Dict[str, dict] = {}
+        self._cache: Dict[tuple, tuple] = {}  # (key, ttl) → (result, expire_time)
 
         # User directory for saving and overriding tools
         self.user_dir = osp.join(
@@ -171,6 +197,68 @@ class Toolkit:
 
         self.reload()
         logger.info(f"Loaded {len(self.func_map)} toolkit functions from {self.tool_dir}")
+
+# NOTE: 2026-05-09 19:34:37, self-evolved by tea_agent --- Toolkit 类添加 call_tool() 缓存代理方法，在 reload 之后
+    def call_tool(self, func_name: str, **kwargs):
+        """带缓存的工具调用代理。
+        
+        对非黑名单工具缓存结果，TTL 默认 30 秒。
+        相同工具+相同参数在 TTL 内重复调用直接返回缓存结果。
+
+        Args:
+            func_name: 工具函数名
+            **kwargs: 工具参数
+
+        Returns:
+            工具函数返回值
+        """
+        import json as _json
+
+        # 黑名单工具不走缓存
+        if func_name in self._CACHE_BLACKLIST:
+            if func_name not in self.func_map:
+                raise KeyError(f"Unknown tool: {func_name}")
+            return self.func_map[func_name](**kwargs)
+
+        # toolkit_file write 操作不走缓存
+        if func_name == 'toolkit_file' and kwargs.get('action') == 'write':
+            return self.func_map[func_name](**kwargs)
+
+        now = time.time()
+        cache_key = (func_name, _json.dumps(kwargs, sort_keys=True, default=str))
+
+        # 检查缓存
+        if cache_key in self._cache:
+            result, expire_at = self._cache[cache_key]
+            if now < expire_at:
+                logger.debug(f"Cache HIT: {func_name} (TTL {expire_at - now:.0f}s)")
+                return result
+            else:
+                del self._cache[cache_key]
+
+        # 执行工具
+        if func_name not in self.func_map:
+            raise KeyError(f"Unknown tool: {func_name}")
+        result = self.func_map[func_name](**kwargs)
+
+        # 存入缓存
+        expire_at = now + self._CACHE_TTL
+        self._cache[cache_key] = (result, expire_at)
+
+        # 定期清理过期缓存（概率触发，避免每次都清理）
+        if len(self._cache) > 500 or (self._cache and hash(cache_key) % 20 == 0):
+            self._purge_cache()
+
+        return result
+
+    def _purge_cache(self):
+        """清理过期缓存条目"""
+        now = time.time()
+        expired = [k for k, (_, exp) in self._cache.items() if now >= exp]
+        for k in expired:
+            del self._cache[k]
+        if expired:
+            logger.debug(f"Cache purge: removed {len(expired)} expired entries, {len(self._cache)} remaining")
 
     def reload(self) -> Dict:
         result = {
@@ -208,12 +296,16 @@ class Toolkit:
                     with open(filepath, encoding="utf-8") as f:
                         code = f.read()
 
+# NOTE: 2026-05-01 15:15:56, self-evolved by tea_agent --- 修复 toolkit 加载时 exec 导致函数 __globals__ 缺少 import 符号的问题
                     # 使用受限的 globals 避免污染
                     safe_globals = {
                         "__builtins__": __builtins__,
                     }
                     local_vars = {}
                     exec(code, safe_globals, local_vars)
+                    # merge local_vars into safe_globals so that function __globals__
+                    # can see imports (e.g. from tea_agent.config import get_config)
+                    safe_globals.update(local_vars)
 
                     func = local_vars.get(name)
                     func_meta = local_vars.get(f"meta_{name}")
@@ -260,8 +352,11 @@ class Toolkit:
         self.func_map["toolkit_list_versions"] = toolkit_list_versions_impl
         self.meta_map["toolkit_list_versions"] = meta_toolkit_list_versions()
 
+        self.func_map["toolkit_set_topic_title"] = toolkit_set_topic_title
+        self.meta_map["toolkit_set_topic_title"] = meta_toolkit_set_topic_title()
+
         result["valid_tool"] = {k: {"func": v, "meta": self.meta_map[k]} for k, v in self.func_map.items() if k not in (
-            "toolkit_reload", "toolkit_save", "toolkit_rollback", "toolkit_list_versions")}
+            "toolkit_reload", "toolkit_save", "toolkit_rollback", "toolkit_list_versions", "toolkit_set_topic_title")}
 
         return result
 

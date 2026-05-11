@@ -227,13 +227,16 @@ class SessionAPIMixin:
             kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
         
         if not thinking_supported:
-            kwargs["extra_body"] = {"thinking": {"type": "disable"}}
+# NOTE: 2026-05-01 14:24:09, self-evolved by tea_agent --- 修复 thinking.type 从 disable 改为 disabled
+            kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
 
         return target_client.chat.completions.create(**kwargs)
 
+    # NOTE: process_stream_response 已被 onlinesession._process_stream_with_reasoning 取代，
+    # 保留此方法仅为向后兼容，不建议在新代码中使用。
     def process_stream_response(self, response, callback: Callable[[str], None]) -> Tuple[str, List[Dict]]:
         """
-        处理流式响应，收集内容和工具调用数据。
+        [已弃用] 处理流式响应。请使用 _process_stream_with_reasoning 替代。
 
         Args:
             response: 流式响应迭代器

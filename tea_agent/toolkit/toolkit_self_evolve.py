@@ -1,13 +1,10 @@
 # @2026-04-29 gen by deepseek-v4-pro, 内置工具: 自进化——修改项目代码并带注释/备份/验证
-# @2026-05-10 gen by tea_agent, 四层安全进化：git快照 + 时间戳备份 + 编译验证 + 测试回滚
 import logging
 
 # NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
-def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_code: str,
-                        verify: bool = True, backup: bool = True,
-                        git_snapshot: bool = True, run_tests: bool = True) -> dict:
+def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_code: str, verify: bool = True, backup: bool = True) -> dict:
     """
     四层安全自进化：修改项目源文件，自动生成演化注释、备份原文件、验证编译、测试回滚。
 
@@ -27,8 +24,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         git_snapshot: 是否创建 git 快照（Layer 0）。仅在 git 工作区干净时生效
         run_tests: 编译通过后是否运行测试（Layer 3）。测试失败自动 git reset
     """
-    logger.info(f"toolkit_self_evolve called: file_path={file_path!r}, "
-                f"description={repr(description)[:80]}, git_snapshot={git_snapshot}, run_tests={run_tests}")
+    logger.info(f"toolkit_self_evolve called: file_path={file_path!r}, description={repr(description)[:80]}, old_code={repr(old_code)[:80]}, new_code={repr(new_code)[:80]}, verify={verify!r}, backup={backup!r}")
 
     import os
     import shutil
@@ -113,9 +109,15 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     if old_code not in content:
         return {"ok": False, "error": "old_code 在文件中未找到（精确匹配失败）"}
 
+    # 检查 old_code 出现次数，避免多次出现时修改错误位置
     if content.count(old_code) > 1:
-        return {"ok": False,
-                "error": f"old_code 在文件中出现 {content.count(old_code)} 次，无法确定修改位置，请提供更多上下文"}
+        return {"ok": False, "error": f"old_code 在文件中出现 {content.count(old_code)} 次，无法确定修改位置，请提供更多上下文"}
+
+# NOTE: 2026-05-01 11:10:43, self-evolved by tea_agent --- 仅对.py源码文件添加NOTE注释，.md等非源码文件不加
+    # 生成演化注释（仅 .py 源码文件，README/CHANGELOG 等不加）
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    is_py = file_path.endswith(".py")
+    comment = f"# NOTE: {now}, self-evolved by tea_agent --- {description}\n" if is_py else ""
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     is_py = file_path.endswith(".py")
@@ -142,7 +144,14 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     tmp_bak = full_path + ".tmp_bak"
     shutil.copy2(full_path, tmp_bak)
 
-    # ── 应用修改 ──
+    # 持久备份（如果用户要求）
+    if backup:
+        bak_path = full_path + ".bak"
+        shutil.copy2(full_path, bak_path)
+    else:
+        bak_path = None
+
+    # 应用修改（.py 文件在 new_code 前加注释）
     annotated_new = (comment + new_code) if comment else new_code
     new_content = content.replace(old_code, annotated_new, 1)
     with open(full_path, "w", encoding="utf-8") as f:

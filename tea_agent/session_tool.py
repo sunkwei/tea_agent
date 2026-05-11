@@ -1,11 +1,15 @@
+# NOTE: 2026-05-07 11:28:37, self-evolved by tea_agent --- _execute_tool_call 添加工具执行的 DEBUG/WARNING 日志
 """
 会话工具执行模块
 负责工具调用执行、结果收集等功能
 """
 
 import json
+import logging
 from typing import List, Dict, Tuple, Any, Optional, Callable
 from types import SimpleNamespace
+
+logger = logging.getLogger("session.tool")
 
 
 class SessionToolMixin:
@@ -18,11 +22,12 @@ class SessionToolMixin:
     - messages: 消息列表
     """
 
+# NOTE: 2026-05-04 16:44:39, self-evolved by tea_agent --- 修复 SessionToolMixin.__init__ 覆盖 self.messages 为空列表的 bug
     def __init__(self):
         self.toolkit = None
         self.tool_log: Optional[Callable[[str], None]] = None
         self._rounds_collector: List[Dict] = []
-        self.messages: List[Dict] = []
+        # NOTE: 不设置 self.messages，由 BaseChatSession.__init__ 负责初始化
 
     def _build_tools(self):
         """构建工具定义列表"""
@@ -31,6 +36,7 @@ class SessionToolMixin:
             tools.append(meta)
         return tools
 
+# NOTE: 2026-04-30 16:22:21, self-evolved by tea_agent --- _execute_tool_call增加反思追踪记录：计时、成功/失败状态
     def _execute_tool_call(self, call) -> Tuple[str, str, str]:
         """
         执行单个工具调用。
@@ -41,36 +47,64 @@ class SessionToolMixin:
         Returns:
             Tuple[str, str, str]: (call_id, func_name, result_string)
         """
+        import time
         func_name = call.function.name
         call_id = call.id
+        start_time = time.time()
 
+# NOTE: 2026-05-07 11:28:52, self-evolved by tea_agent --- _execute_tool_call 中工具失败时添加 WARNING 日志，执行成功添加 DEBUG 日志
         if func_name not in self.toolkit.func_map:
             err = f"错误：未知工具 {func_name}"
+            logger.warning(f"tool call failed: unknown function '{func_name}'")
             self._add_tool_result(call_id, err)
+            self._record_tool_to_trace(func_name, False, err, start_time)
             return call_id, func_name, err
 
         try:
             args = json.loads(call.function.arguments)
         except json.JSONDecodeError:
             err = "错误：参数解析失败"
+            logger.warning(f"tool call failed: JSON decode error, func={func_name}, raw_args={call.function.arguments[:200]}")
             self._add_tool_result(call_id, err)
+            self._record_tool_to_trace(func_name, False, err, start_time)
             return call_id, func_name, err
 
         if self.tool_log:
             self.tool_log(f"🔧 调用工具: {func_name}({args})")
 
+        success = True
+        error_msg = ""
+# NOTE: 2026-05-07 11:29:02, self-evolved by tea_agent --- 工具执行 try/except 添加 WARNING 日志
+# NOTE: 2026-05-09 19:34:47, self-evolved by tea_agent --- _execute_tool_call 用 toolkit.call_tool() 替代直接 func_map 调用，启用缓存
         try:
-            result = self.toolkit.func_map[func_name](**args)
+            result = self.toolkit.call_tool(func_name, **args)
             if self.tool_log:
                 self.tool_log(f"✅ 结果: {result}")
         except Exception as e:
             result = f"工具执行错误: {e}"
+            logger.warning(f"tool execution failed: {func_name}, error={e}")
+            success = False
+            error_msg = str(e)
             if self.tool_log:
                 self.tool_log(f"❌ 错误: {e}")
 
         result_str = str(result)
         self._add_tool_result(call_id, result_str)
+        self._record_tool_to_trace(func_name, success, error_msg, start_time)
         return call_id, func_name, result_str
+
+    # 2026-04-30 gen by deepseek-v4-pro, 记录工具调用到反思追踪
+    def _record_tool_to_trace(self, func_name: str, success: bool, error_msg: str, start_time: float):
+        """记录工具调用到当前反思追踪"""
+        import time
+        trace = getattr(self, '_current_trace', None)
+        if trace is None:
+            return
+        reflection_mgr = getattr(self, 'reflection_manager', None)
+        if reflection_mgr is None:
+            return
+        duration_ms = (time.time() - start_time) * 1000
+        reflection_mgr.record_tool_call(trace, func_name, success, error_msg, duration_ms)
 
     def _add_tool_result(self, tool_call_id: str, content: str):
         """添加工具执行结果到消息列表"""

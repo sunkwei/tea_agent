@@ -316,7 +316,8 @@ def _chat_to_markdown(messages):
             if tool_blocks[i]:
                 parts.append(tool_blocks[i])
         elif role == "notice":
-            parts.append(f"\n---\n{content.strip()}\n---\n")
+            # NOTE: 2026-05-15 gen by tea_agent, 去掉 --- 包裹避免与 AI 末尾的 --- 连成三条水平线
+            parts.append(f"\n{content.strip()}\n")
     return "\n".join(parts)
 
 def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Optional[str]:
@@ -616,10 +617,10 @@ class TkGUI(AgentCore):
     def _apply_zoom(self):
         if not HAS_TKINTERWEB or not self._filtered_messages():
             return
-        md = _chat_to_markdown(self.chat_messages)
+        md = _chat_to_markdown(self._filtered_messages())
         font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
         html = _render_markdown(md, font_size=font_size)
-        self.chat_view.load_html(html)
+        self._html_render(html)
         self.root.after(200, self.scroll_to_bottom)
 
 # NOTE: 2026-05-01 10:38:17, self-evolved by tea_agent --- 在 _switch_display 之后添加 _show_loading 方法（简单 spinner + 三点动画）
@@ -675,7 +676,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self.console.pack_forget()
             self.chat_view.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
             self._show_mode = "chat_view"
-        self.chat_view.load_html(loading_html)
+        self._html_render(loading_html)
 # NOTE: 2026-05-07 14:45:26, self-evolved by tea_agent --- 新增 _poll_loading_progress 方法：50ms 轮询共享变量，仅变化时 load_html
         # 不调用 root.update()：让 CSS animation 自己跑，GUI 主循环保持响应
 
@@ -708,6 +709,22 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     def scroll_to_bottom(self):
         self.chat_view.yview_moveto(1.0)
 
+    # 2026-05-11 gen by tea_agent, 将 render 到 HtmlFrame 的 HTML 同时 print 到终端
+    def _html_render(self, html: str):
+        # NOTE: 2026-05-15 gen by tea_agent, 注释掉终端打印避免刷屏，调试时可取消注释
+        # print(f"\n{'='*60}")
+        # print(f"[HtmlFrame render] {len(html)} chars")
+        # print(f"{'='*60}")
+        # print(html)
+        # print(f"{'='*60}\n")
+        try:
+            self.chat_view.load_html(html)
+            print(f"[_html_render OK] {len(html)} chars loaded")
+        except Exception as e:
+            print(f"[_html_render ERROR] {e}")
+            import traceback
+            traceback.print_exc()
+
 # NOTE: 2026-05-07 17:33:05, self-evolved by tea_agent --- _render_chat 支持可选的流式缓冲区参数，_stream_render_tick 传递当前 think/stream 内容
     def _render_chat(self, streaming_think: str = "", streaming_text: str = ""):
         """渲染 HtmlFrame。可选 streaming_think/streaming_text 用于流式输出期间实时显示。"""
@@ -724,7 +741,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         if HAS_TKINTERWEB:
             font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
             html = _render_markdown(md, font_size=font_size)
-            self.chat_view.load_html(html)
+            self._html_render(html)
         else:
             self.chat_view.config(state=tk.NORMAL)
             self.chat_view.delete("1.0", tk.END)
@@ -1082,10 +1099,13 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     def on_topic_select(self, e):
         # Treeview: 获取选中项的索引
         sel = self.topic_list.selection()
-        idx = (self.topic_list.index(sel[0]),) if sel else ()
-        if not idx:
+        if not sel:
             return
-        tp = self.db.list_topics()[idx[0]]
+        idx = self.topic_list.index(sel[0])
+        tp = self.db.list_topics()[idx]
+        # NOTE: 2026-05-15 gen by tea_agent, 同主题跳过，避免 refresh_topics 触发全量覆盖
+        if tp["topic_id"] == self.current_topic_id:
+            return
         self.switch_topic(tp["topic_id"])
 
     def newline(self, e=None):
@@ -1396,6 +1416,16 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     def _render_and_show_chat(self):
         # # NOTE: 2026-05-08 09:08:29, self-evolved by tea_agent --- 将 markdown→HTML 转换放到后台线程，主线程仅做 load_html，减少卡顿
         msgs = self._filtered_messages()
+        # NOTE: 2026-05-15 gen by tea_agent, 每次只渲染最新消息，不渲染全量历史
+        # 若最后一条是 notice（如 token 表格），则连同前一条 AI 消息一起渲染
+        print(f"[DIAG] _render_and_show_chat: total filtered msgs={len(msgs)}, roles={[m.get('role','') for m in msgs[-5:]]}")
+        if len(msgs) > 1:
+            if msgs[-1].get("role") == "notice":
+                msgs = msgs[-2:]
+                print(f"[DIAG] rendering last 2 (notice at end)")
+            else:
+                msgs = msgs[-1:]
+                print(f"[DIAG] rendering last 1")
         font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
         def _prepare():
             md = _chat_to_markdown(msgs)
@@ -1405,7 +1435,13 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 # NOTE: 2026-05-09 17:41:28, self-evolved by tea_agent --- _on_done HtmlFrame路径添加scroll_to_bottom，修复不显示工具轮时不滚动到底的bug
         def _on_done(html):
             if HAS_TKINTERWEB:
-                self.chat_view.load_html(html)
+                # NOTE: 2026-05-15 gen by tea_agent, 终端打印最新轮 HTML 方便调试
+                marker = f"<!-- RENDER_TS={self._now_ts()} -->"
+                marked_html = marker + html
+                print(f"[RENDER] {marked_html}")
+                self._html_render(marked_html)
+                # NOTE: 2026-05-15 gen by tea_agent, 切回 chat_view，修复发送时 switch_display("console") 后未切回导致用户看到 ScrolledText
+                self._switch_display("chat_view")
                 # load_html 后 HtmlFrame 可能异步解析，延迟滚动到底
                 self.root.after(300, self.scroll_to_bottom)
             else:
@@ -1414,7 +1450,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 self.chat_view.insert("1.0", html)
                 self.chat_view.config(state=tk.DISABLED)
                 self.chat_view.see(tk.END)
-            self._switch_display("chat_view")
+                self._switch_display("chat_view")
         # 在后台线程中执行 markdown 转换，完成后切回主线程 load_html
         import threading
         def _worker():

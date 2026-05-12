@@ -168,6 +168,19 @@ a { color: #1a73e8; text-decoration: none; }
 a:hover { text-decoration: underline; }
 hr { border: none; border-top: 1px solid #ddd; margin: 1em 0; }
 strong { font-weight: bold; color: #222; }
+/* NOTE: 2026-05-15 gen by tea_agent, 不同角色背景色区分 */
+.msg-user { background: #dbeafe; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #3b82f6; }
+.msg-user h3 { color: #1e40af; margin-top: 0; }
+.msg-ai { background: #f3f4f6; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #6b7280; }
+.msg-ai h3 { color: #374151; margin-top: 0; }
+/* AI thinking blockquote */
+.msg-ai blockquote { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 6px 12px; border-radius: 4px; margin: 8px 0; color: #92400e; font-style: italic; }
+/* code blocks = tool calls/results */
+.msg-ai pre { background: #ecfdf5; border-left: 4px solid #10b981; padding: 8px 12px; border-radius: 4px; margin: 6px 0; font-size: 0.9em; }
+.msg-ai code { background: #d1fae5; color: #065f46; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
+/* notice / system */
+.msg-notice { background: #fce7f3; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #ec4899; }
+.msg-notice h3 { color: #9d174d; margin-top: 0; }
 em { font-style: italic; }
 .msg-timestamp { font-size: 0.8em; color: #999; margin-bottom: 0.3em; }
 .msg-divider { border: none; border-top: 2px solid #e8e8e8; margin: 1.2em 0; }
@@ -177,7 +190,7 @@ def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
     """将 markdown 文本转换为带样式的 HTML 片段"""
     if not HAS_TKINTERWEB:
         return text
-    html_body = markdown.markdown(text, extensions=["fenced_code", "tables", "codehilite"])
+    html_body = markdown.markdown(text, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
     css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
     return f"<html><head>{css}</head><body>{html_body}</body></html>"
 
@@ -309,9 +322,9 @@ def _chat_to_markdown(messages):
         ts = msg.get("timestamp", "")
         ts_display = f'<span class="msg-timestamp">{ts}</span>' if ts else ""
         if role == "user":
-            parts.append(f"{ts_display}\n\n### 👤 你\n\n{content.strip()}\n")
+            parts.append(f'{ts_display}\n\n<div class="msg-user" markdown="1">\n\n### 👤 你\n\n{content.strip()}\n</div>\n')
         elif role == "ai":
-            parts.append(f"{ts_display}\n\n### 🤖 AI\n\n{content.strip()}\n\n---\n")
+            parts.append(f'{ts_display}\n\n<div class="msg-ai" markdown="1">\n\n### 🤖 AI\n\n{content.strip()}\n</div>\n\n---\n')
         elif role == "tool":
             if tool_blocks[i]:
                 parts.append(tool_blocks[i])
@@ -418,7 +431,7 @@ from tea_agent.gui_dialogs import MemoryDialog, TopicDialog, ConfigDialog
 class TkGUI(AgentCore):
     def __init__(self, root, debug:bool=False):
         self.root = root
-        self.root.title("AI 工具调用助手")
+        self._update_title()  # NOTE: 2026-05-15 gen by tea_agent, 标题含当前目录
         self.root.geometry("1100x750")
         self.root.minsize(900, 600)
 
@@ -949,6 +962,16 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         if topics:
             self.topic_list.selection_set(highlight_iid)
             self.topic_list.see(highlight_iid)
+    # NOTE: 2026-05-15 gen by tea_agent, 统一标题栏更新，附加当前目录
+    def _update_title(self, topic_title=""):
+        """设置窗口标题栏：{主题} - AI 工具调用助手 - {当前目录}"""
+        import os
+        cwd = os.path.basename(os.getcwd()) or os.getcwd()
+        if topic_title:
+            self.root.title(f"{topic_title} - AI 工具调用助手 - {cwd}")
+        else:
+            self.root.title(f"AI 工具调用助手 - {cwd}")
+
     def switch_topic(self, topic_id):
 # NOTE: 2026-05-09 18:59:41, self-evolved by tea_agent --- switch_topic 时更新窗口标题栏为 {topic_title} — AI 工具调用助手
         self.current_topic_id = topic_id
@@ -956,9 +979,9 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         try:
             tp = self.db.get_topic(topic_id)
             title = (tp or {}).get("title", "")
-            self.root.title(f"{title} — AI 工具调用助手" if title else "AI 工具调用助手")
+            self._update_title(title)
         except Exception:
-            self.root.title("AI 工具调用助手")
+            self._update_title()  # NOTE: 2026-05-15 gen by tea_agent, 标题含当前目录
         self.clear_chat()
 # NOTE: 2026-05-07 14:45:13, self-evolved by tea_agent --- 启动进度轮询定时器，50ms 读共享变量更新 HtmlFrame
         # 加载期间阻塞输入（send() 检查 generating），但 GUI 主循环不受影响
@@ -1086,7 +1109,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self.log(text, tag)
 
         if HAS_TKINTERWEB and self.chat_messages:
-            # NOTE: 2026-05-15 gen by tea_agent, 主题加载后也使用轮次视图（最新轮+历史链接表）
+            # NOTE: 2026-05-15 gen by tea_agent, 主题加载后也使用轮次视图
             self._render_and_show_chat()
         else:
             self._switch_display("chat_view")
@@ -1419,8 +1442,6 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         return [m for m in self.chat_messages if m.get("role") != "tool"]
 
 
-# new_code_for_rounds
-
     # NOTE: 2026-05-15 gen by tea_agent, 历史轮次分组：按 user 消息切分轮次
     def _group_into_rounds(self, msgs):
         """将消息列表按 user 角色切分为轮次列表。每轮从 user 开始。"""
@@ -1493,13 +1514,13 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             else:
                 rows_html.append('<tr><td style="padding:4px 10px;">第' + str(i+1) + '轮</td><td style="padding:4px 10px;"><a href="tea://round/' + str(i) + '">查看</a></td></tr>')
         
-        table_html = '<div style="background:#f8f9ff; border:1px solid #d0d5e0; border-radius:6px; padding:8px 12px; margin-bottom:14px;">\n' + status_line + '\n<p style="margin:4px 0 8px; color:#666; font-size:0.9em;">\U0001f4cb 历史轮次（共' + str(total) + '轮）</p>\n<table style="margin:0; font-size:0.9em;">\n<thead><tr><th style="width:70px;">轮次</th><th>操作</th></tr></thead>\n<tbody>\n' + '\n'.join(rows_html) + '\n</tbody>\n</table></div>'
+        table_html = '<div style="background:#eff6ff; border:2px solid #93c5fd; border-radius:6px; padding:8px 12px; margin-bottom:14px;">\n' + status_line + '\n<p style="margin:4px 0 8px; color:#666; font-size:0.9em;">\U0001f4cb 历史轮次（共' + str(total) + '轮）</p>\n<table style="margin:0; font-size:0.9em;">\n<thead><tr><th style="width:70px;">轮次</th><th>操作</th></tr></thead>\n<tbody>\n' + '\n'.join(rows_html) + '\n</tbody>\n</table></div>'
         
         # -- 当前轮内容 --
         round_msgs = rounds[active_idx]
         round_md = _chat_to_markdown(round_msgs)
         if HAS_TKINTERWEB:
-            round_body = _md_lib.markdown(round_md, extensions=["fenced_code", "tables", "codehilite"])
+            round_body = _md_lib.markdown(round_md, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
             css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
             full_html = "<html><head>" + css + "</head><body>" + table_html + round_body + "</body></html>"
         else:
@@ -1583,7 +1604,6 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 self.root.after(0, lambda: _on_done("<p>渲染错误</p>"))
         threading.Thread(target=_worker, daemon=True).start()
 
-        threading.Thread(target=_worker, daemon=True).start()
 
     # @2026-04-29 gen by deepseek-v4-pro, 打开主题管理弹窗
     def open_topic_dialog(self):

@@ -102,9 +102,9 @@ if (-not (Test-Path $shortcutPath)) {{
             ps_toast = f'''
 [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
 $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-$texts = $template.GetElementsByTagName("text")
-$texts[0].AppendChild($template.CreateTextNode("{title}")) | Out-Null
-$texts[1].AppendChild($template.CreateTextNode("{message}")) | Out-Null
+$texts = @($template.GetElementsByTagName("text"))
+$null = $texts[0].AppendChild($template.CreateTextNode("{title}"))
+$null = $texts[1].AppendChild($template.CreateTextNode("{message}"))
 $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
 [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("{app_id}").Show($toast)
 '''

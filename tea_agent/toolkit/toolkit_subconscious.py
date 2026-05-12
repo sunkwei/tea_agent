@@ -323,10 +323,39 @@ def toolkit_subconscious(action: str, focus: str = None):
 
 # NOTE: 2026-05-02 10:58:26, self-evolved by tea_agent --- 添加 _send_cycle_summary 函数，每轮循环后发送综合摘要通知
     def _send_notification(title, msg):
+        """跨平台桌面通知：Windows/macOS/Linux"""
+        import sys as _sys
         try:
-            subprocess.run(["notify-send",title,msg,"--expire-time=5000"],capture_output=True,timeout=3)
+            if _sys.platform == 'win32':
+                import tempfile, os as _os
+                ps_script = f'''
+Add-Type -AssemblyName System.Windows.Forms
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+$tpl = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+$texts = @($tpl.GetElementsByTagName("text"))
+$null = $texts[0].AppendChild($tpl.CreateTextNode("{title}"))
+$null = $texts[1].AppendChild($tpl.CreateTextNode("{msg}"))
+$toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
+[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("TeaAgent.TeaAgent.TeaAgent").Show($toast)
+'''
+                tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False, encoding='utf-8')
+                try:
+                    tmp.write(ps_script)
+                    tmp.close()
+                    subprocess.run(['powershell', '-NoProfile', '-File', tmp.name],
+                        capture_output=True, timeout=10)
+                finally:
+                    try: _os.unlink(tmp.name)
+                    except: pass
+            elif _sys.platform == 'darwin':
+                subprocess.run(['osascript', '-e',
+                    f'display notification "{msg}" with title "{title}"'],
+                    capture_output=True, timeout=5)
+            else:
+                subprocess.run(['notify-send', '--app-name=TeaAgent',
+                    title, msg, '--expire-time=5000'],
+                    capture_output=True, timeout=3)
         except: pass
-
     def _send_cycle_summary(result, state, first_run=False):
         """每轮循环后发送摘要通知，让用户感知后台运行结果"""
         digest = result.get("digest") or {}
@@ -665,6 +694,8 @@ def toolkit_subconscious(action: str, focus: str = None):
     elif action == "dream":
         result = _run_cycle(state)
         dream_result = _dream(focus_override=focus)
+        # NOTE: gen by tea_agent, dream 完成后发送桌面通知
+        _send_cycle_summary(result, state)
         state = _read_state()
         state["insights"]=[i["content"] for i in result["insights"][-5:]]
         state["goals"]=[g["goal"] for g in result["goals"][:7]]

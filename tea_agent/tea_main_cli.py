@@ -88,7 +88,7 @@ class TeaCLI(AgentCore):
 
     def _load_history(self):
         """加载当前主题的历史到会话。"""
-        if self.current_topic_id <= 0:
+        if not self.current_topic_id:
             return
         all_light = self.db.get_conversations(self.current_topic_id, limit=-1, include_rounds=False)
         if not all_light:

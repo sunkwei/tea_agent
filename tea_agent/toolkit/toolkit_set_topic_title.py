@@ -34,11 +34,11 @@ def toolkit_set_topic_title(title: str) -> dict:
             from tea_agent.store import get_storage
             s = get_storage()
             topics = s.list_topics()
-            topic_id = topics[0]["topic_id"] if topics else 0
+            topic_id = topics[0]["topic_id"] if topics else ""
         except Exception:
-            topic_id = 0
+            topic_id = ""
 
-    if topic_id <= 0:
+    if not topic_id:
         return {"error": "当前无活跃主题"}
 
     new_title = f"※{title}"

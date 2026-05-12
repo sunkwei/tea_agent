@@ -671,7 +671,7 @@ class OnlineToolSession(
 
         # 自动提取记忆（真正异步，不阻塞）
         # 仅在有效 topic_id 且非打断时触发
-        if topic_id > 0 and not result.get("interrupted", False):
+        if isinstance(topic_id, str) and topic_id and not result.get("interrupted", False):
             import threading
             def _auto_extract():
                 try:

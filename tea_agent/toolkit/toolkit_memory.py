@@ -104,7 +104,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
     # ── action: extract ──
     elif action == "extract":
         try:
-            unsummarized = storage.get_unsummarized_conversations(topic_id) if topic_id > 0 else []
+            unsummarized = storage.get_unsummarized_conversations(topic_id) if isinstance(topic_id, str) and topic_id else []
             if not unsummarized:
                 return "📭 没有未摘要的对话可提取。可以手动使用 toolkit_memory(action='add', ...) 添加记忆。"
             lines = [f"📄 从 topic #{topic_id} 的 {len(unsummarized)} 条未摘要对话中提取:", ""]

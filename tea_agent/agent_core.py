@@ -433,7 +433,7 @@ class AgentCore:
                 # 6. AI 回复入库 + MQTT 推送
                 if ai_msg:
                     try:
-                        if conv_id > 0:
+                        if conv_id:
                             rounds = self.sess._rounds_collector
                             self.db.update_msg_rounds(
                                 conversation_id=conv_id,
@@ -466,7 +466,7 @@ class AgentCore:
 # NOTE: 2026-05-06 09:58:33, self-evolved by tea_agent --- _process_mqtt_message末尾添加_check_pending_restart调用
             finally:
                 # 7. 恢复 session 状态
-                if saved_topic_id > 0 and saved_topic_id != tid:
+                if saved_isinstance(topic_id, str) and topic_id and saved_topic_id != tid:
                     self.sess.messages = saved_messages
                     self.sess._history_summary = saved_summary
                     self.current_topic_id = saved_topic_id
@@ -516,7 +516,7 @@ class AgentCore:
         """自动生成主题摘要。CLI/GUI 共用核心逻辑，子类加 UI 回调。"""
         if topic_id is None:
             topic_id = self.current_topic_id
-        if topic_id <= 0:
+        if not topic_id:
             return
         # NOTE: 2026-05-08 09:20:53, self-evolved by tea_agent --- 手动设置标题（※前缀）时跳过自动摘要
         tp = self.db.get_topic(topic_id)

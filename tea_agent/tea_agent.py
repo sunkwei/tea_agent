@@ -274,7 +274,7 @@ class TeaAgent:
         ai_msg, used_tools = self._sess.chat_stream(
             user_input,
             callback=stream_cb,
-            topic_id=-1,  # -1 = 不入库
+            topic_id="",  # 空字符串 = 不入库
             on_status=status_cb,
         )
 

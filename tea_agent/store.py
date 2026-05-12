@@ -173,6 +173,197 @@ class Storage:
         self.conn.commit()
         c.close()
 
+
+    # NOTE: 2026-05-12 gen by tea_agent, INTEGER→TEXT UUID 主键在线迁移，支持数据库合并
+    def _migrate_int_to_uuid(self, c):
+        """检查并迁移所有 INTEGER 主键/外键为 TEXT，使其兼容 UUID。
+        
+        仅对旧库执行一次（通过 PRAGMA table_info 检测），已迁移的库跳过。
+        全程在事务中执行，失败时回滚不影响原有数据。
+        """
+        # 检测：topics.topic_id 是否为 INTEGER
+        c.execute("PRAGMA table_info(topics)")
+        topic_cols = {row[1]: row[2].upper() for row in c.fetchall()}
+        if topic_cols.get('topic_id', '') != 'INTEGER':
+            return  # 已是 TEXT，无需迁移
+
+        import logging
+        log = logging.getLogger("Store")
+        log.warning("检测到旧版 INTEGER 主键，开始迁移为 TEXT UUID 格式...")
+
+        # 关闭外键检查（迁移过程中表名会变）
+        self.conn.execute("PRAGMA foreign_keys = OFF")
+        self.conn.execute("PRAGMA legacy_alter_table = ON")  # 允许 RENAME 后保留引用
+
+        # 迁移辅助函数
+        def _drop_if_exists(table):
+            c.execute(f"DROP TABLE IF EXISTS {table}")
+
+        def _table_columns(table):
+            c.execute(f"PRAGMA table_info({table})")
+            return [(row[1], row[2].upper()) for row in c.fetchall()]
+
+        def _migrate_table(old_name, new_columns_def, cast_cols=None):
+            """重建表：CREATE new, INSERT CAST, DROP old, RENAME new
+            
+            Args:
+                old_name: 原表名
+                new_columns_def: 新列定义列表，如 ['id TEXT PRIMARY KEY', 'title TEXT']
+                cast_cols: 需要 CAST(col AS TEXT) 的列名集合（PK/FK）
+            """
+            new_name = f"{old_name}_new"
+            cols_sql = ", ".join(new_columns_def)
+            
+            # 创建新表
+            c.execute(f"CREATE TABLE {new_name} ({cols_sql})")
+            
+            # 获取原表列名
+            old_cols = [col[0] for col in _table_columns(old_name)]
+            
+            # 构建 SELECT：对需要转换的列做 CAST
+            if cast_cols:
+                select_parts = []
+                for col in old_cols:
+                    if col in cast_cols:
+                        select_parts.append(f"CAST({col} AS TEXT) as {col}")
+                    else:
+                        select_parts.append(col)
+                select_sql = ", ".join(select_parts)
+            else:
+                select_sql = ", ".join(old_cols)
+            
+            c.execute(f"INSERT INTO {new_name} SELECT {select_sql} FROM {old_name}")
+            c.execute(f"DROP TABLE {old_name}")
+            c.execute(f"ALTER TABLE {new_name} RENAME TO {old_name}")
+            log.info(f"  迁移表 {old_name}: {c.rowcount if hasattr(c,'rowcount') else '?'} 行")
+
+        try:
+            # 1) topics — 根表，无 FK 依赖
+            _migrate_table('topics', [
+                'topic_id TEXT PRIMARY KEY',
+                'title TEXT NOT NULL',
+                'create_stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+                'last_update_stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+            ], cast_cols={'topic_id'})
+
+            # 2) conversations — 依赖 topics
+            _migrate_table('conversations', [
+                'id TEXT PRIMARY KEY',
+                'topic_id TEXT NOT NULL',
+                'user_msg TEXT NOT NULL',
+                'ai_msg TEXT NOT NULL',
+                'is_func_calling INTEGER DEFAULT 0',
+                'is_summarized INTEGER DEFAULT 0',
+                'stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+                'rounds_json TEXT',
+            ], cast_cols={'id', 'topic_id'})
+
+            # 3) topic_token_stats — 依赖 topics
+            _migrate_table('topic_token_stats', [
+                'topic_id TEXT PRIMARY KEY',
+                'total_tokens INTEGER DEFAULT 0',
+                'total_prompt_tokens INTEGER DEFAULT 0',
+                'total_completion_tokens INTEGER DEFAULT 0',
+                'conversation_count INTEGER DEFAULT 0',
+                'last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+                'total_cheap_tokens INTEGER DEFAULT 0',
+                'total_cheap_prompt_tokens INTEGER DEFAULT 0',
+                'total_cheap_completion_tokens INTEGER DEFAULT 0',
+                'total_embedding_tokens INTEGER DEFAULT 0',
+                'total_embedding_prompt_tokens INTEGER DEFAULT 0',
+            ], cast_cols={'topic_id'})
+
+            # 4) t_conv_summary — 依赖 topics
+            _migrate_table('t_conv_summary', [
+                'topic_id TEXT PRIMARY KEY',
+                'summary TEXT NOT NULL',
+                'last_summarized_id TEXT',
+                'last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+            ], cast_cols={'topic_id', 'last_summarized_id'})
+
+            # 5) memories — 依赖 topics(source_topic_id)
+            _migrate_table('memories', [
+                'id TEXT PRIMARY KEY',
+                'content TEXT NOT NULL',
+                'category TEXT NOT NULL DEFAULT \'general\'',
+                'priority INTEGER NOT NULL DEFAULT 2',
+                'importance INTEGER NOT NULL DEFAULT 3',
+                'expires_at TEXT',
+                'is_active INTEGER NOT NULL DEFAULT 1',
+                'tags TEXT DEFAULT \'\'',
+                'source_topic_id TEXT',
+                'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+                'updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+                'last_accessed_at TIMESTAMP',
+            ], cast_cols={'id', 'source_topic_id'})
+
+            # 6) agent_rounds — 依赖 conversations
+            _migrate_table('agent_rounds', [
+                'id TEXT PRIMARY KEY',
+                'conversation_id TEXT NOT NULL',
+                'round_num INTEGER NOT NULL',
+                'role TEXT NOT NULL',
+                'content TEXT',
+                'tool_calls TEXT',
+                'tool_call_id TEXT',
+                'stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+            ], cast_cols={'id', 'conversation_id'})
+
+            # 7) msg_vectors — 依赖 conversations
+            _migrate_table('msg_vectors', [
+                'conversation_id TEXT PRIMARY KEY',
+                'embedding BLOB NOT NULL',
+                'dimension INTEGER DEFAULT 0',
+                'model_name TEXT DEFAULT \'\'',
+                'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+            ], cast_cols={'conversation_id'})
+
+            # 8) system_prompts — 独立表
+            _migrate_table('system_prompts', [
+                'id TEXT PRIMARY KEY',
+                'version TEXT NOT NULL',
+                'content TEXT NOT NULL',
+                'reason TEXT DEFAULT \'\'',
+                'source_reflection_id TEXT',
+                'is_active INTEGER DEFAULT 1',
+                'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+            ], cast_cols={'id', 'source_reflection_id'})
+
+            # 9) reflections — 依赖 topics
+            _migrate_table('reflections', [
+                'id TEXT PRIMARY KEY',
+                'topic_id TEXT',
+                'summary TEXT NOT NULL',
+                'details TEXT DEFAULT \'\'',
+                'tool_stats TEXT DEFAULT \'{}\'',
+                'suggestions TEXT DEFAULT \'[]\'',
+                'is_applied INTEGER DEFAULT 0',
+                'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+            ], cast_cols={'id', 'topic_id'})
+
+            # 10) config_history — 独立表
+            _migrate_table('config_history', [
+                'id TEXT PRIMARY KEY',
+                'key TEXT NOT NULL',
+                'old_value TEXT',
+                'new_value TEXT NOT NULL',
+                'reason TEXT DEFAULT \'\'',
+                'source_reflection_id TEXT',
+                'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+            ], cast_cols={'id', 'source_reflection_id'})
+
+            self.conn.commit()
+            log.warning("INTEGER→TEXT UUID 主键迁移完成！")
+
+        except Exception as e:
+            log.error(f"UUID 迁移失败，回滚: {e}")
+            self.conn.rollback()
+            raise
+        finally:
+            self.conn.execute("PRAGMA foreign_keys = ON")
+            self.conn.execute("PRAGMA legacy_alter_table = OFF")
+
+
     def _migrate_msg_vectors(self, c):
         """迁移 msg_vectors 表：TEXT→BLOB（若已存在旧格式则重建）"""
         import logging
@@ -193,6 +384,10 @@ class Storage:
     def _migrate(self):
         """数据库迁移：为新增字段做兼容处理"""
         c = self.conn.cursor()
+
+        # ── INTEGER→TEXT UUID 主键迁移 ──
+        self._migrate_int_to_uuid(c)
+
         # 添加 rounds_json 列（如果不存在）
         try:
             c.execute("ALTER TABLE conversations ADD COLUMN rounds_json TEXT")

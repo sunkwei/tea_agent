@@ -736,7 +736,6 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         # print(f"{'='*60}\n")
         try:
             self.chat_view.load_html(html)
-            print(f"[_html_render OK] {len(html)} chars loaded")
         except Exception as e:
             print(f"[_html_render ERROR] {e}")
             import traceback
@@ -945,6 +944,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     def new_topic(self):
         title = f"主题 {datetime.now().strftime('%m-%d %H:%M:%S')}"
         tid = self.db.create_topic(title)
+        self.current_topic_id = tid  # NOTE: 2026-06-18 gen by tea_agent, 先设置 current_topic_id 再 refresh_topics，确保新主题高亮
         self.refresh_topics()
         self.switch_topic(tid)
 
@@ -1162,7 +1162,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         """MQTT 消息处理后恢复 GUI 界面。"""
         self.root.after(0, self.refresh_topics)
 
-    def _on_summary_updated(self, topic_id: int, summary: str):
+    def _on_summary_updated(self, topic_id: str, summary: str):
         """摘要更新后刷新 GUI 主题列表和状态栏。"""
         self.root.after(200, self._refresh_topics_preserve_selection)
         self.root.after(100, lambda s=summary: self._update_status(f"📝 摘要: {s}"))

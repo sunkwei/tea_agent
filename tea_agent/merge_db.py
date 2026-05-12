@@ -21,6 +21,7 @@ import sqlite3
 import sys
 import os
 import re
+import uuid
 import logging
 from typing import Dict, List, Optional, Tuple
 
@@ -151,7 +152,7 @@ class DbMerger:
     # 步骤 2: 合并 topics
     # ------------------------------------------------------------------
 
-    def _merge_topics(self, next_topic_id: int):
+    def _merge_topics(self):
         """将 source 的 topics 全部插入 target，分配新 topic_id"""
         logger.info("  合并 topics ...")
         src_topics = self.source.execute(
@@ -163,13 +164,13 @@ class DbMerger:
             return
 
         for old_id, title, create_stamp, last_update_stamp in src_topics:
-            new_id = next_topic_id
+            new_id = str(uuid.uuid4())
             self.topic_map[old_id] = new_id
             self.target.execute(
                 "INSERT INTO topics (topic_id, title, create_stamp, last_update_stamp) VALUES (?, ?, ?, ?)",
                 (new_id, title, create_stamp, last_update_stamp),
             )
-            next_topic_id += 1
+            pass  # UUID
 
         self.target.commit()
         logger.info(f"    topics: 合并 {len(src_topics)} 条, ID 映射 {min(self.topic_map.keys())}→{min(self.topic_map.values())} ... {max(self.topic_map.keys())}→{max(self.topic_map.values())}")
@@ -178,7 +179,7 @@ class DbMerger:
     # 步骤 3: 合并 conversations
     # ------------------------------------------------------------------
 
-    def _merge_conversations(self, next_conv_id: int):
+    def _merge_conversations(self):
         """合并 conversations，映射 topic_id → 新 topic_id"""
         logger.info("  合并 conversations ...")
         cols = self._get_table_columns(self.source, "conversations")
@@ -200,7 +201,7 @@ class DbMerger:
                 logger.warning(f"    跳过 conversation {old_conv_id}: topic_id={old_topic_id} 无映射")
                 continue
 
-            new_conv_id = next_conv_id
+            new_conv_id = str(uuid.uuid4())
             self.conv_map[old_conv_id] = new_conv_id
 
             # 构建插入数据
@@ -213,7 +214,6 @@ class DbMerger:
                 f"INSERT INTO conversations ({', '.join(cols)}) VALUES ({placeholders})",
                 values,
             )
-            next_conv_id += 1
 
         self.target.commit()
         logger.info(f"    conversations: 合并 {len(self.conv_map)} 条")
@@ -222,7 +222,7 @@ class DbMerger:
     # 步骤 4: 合并 agent_rounds
     # ------------------------------------------------------------------
 
-    def _merge_agent_rounds(self, next_round_id: int):
+    def _merge_agent_rounds(self):
         """合并 agent_rounds，映射 conversation_id"""
         logger.info("  合并 agent_rounds ...")
         cols = self._get_table_columns(self.source, "agent_rounds")
@@ -244,7 +244,7 @@ class DbMerger:
                 continue  # conversation 已被跳过
 
             values = list(row)
-            values[col_idx["id"]] = next_round_id
+            values[col_idx["id"]] = str(uuid.uuid4())
             values[col_idx["conversation_id"]] = new_conv_id
 
             placeholders = ", ".join("?" for _ in cols)
@@ -252,7 +252,6 @@ class DbMerger:
                 f"INSERT INTO agent_rounds ({', '.join(cols)}) VALUES ({placeholders})",
                 values,
             )
-            next_round_id += 1
             count += 1
 
         self.target.commit()
@@ -304,7 +303,7 @@ class DbMerger:
         self.target.commit()
         logger.info(f"    topic_token_stats: 合并 {merged} 条")
 
-    def _accumulate_token_stats(self, topic_id: int, src_row: tuple, col_idx: dict):
+    def _accumulate_token_stats(self, topic_id: str, src_row: tuple, col_idx: dict):
         """将 source 的 token 统计累加到 target 已有记录"""
         token_fields = [
             "total_tokens", "total_prompt_tokens", "total_completion_tokens",
@@ -374,7 +373,7 @@ class DbMerger:
     # 步骤 7: 合并 memories（带去重）
     # ------------------------------------------------------------------
 
-    def _merge_memories(self, next_mem_id: int):
+    def _merge_memories(self):
         """合并 memories，去重 + 映射 source_topic_id"""
         logger.info("  合并 memories (带去重, threshold=%.2f) ...", self.dedup_threshold)
         try:
@@ -415,7 +414,7 @@ class DbMerger:
                 merged_count += 1
             else:
                 values = list(src_row)
-                values[col_idx["id"]] = next_mem_id
+                values[col_idx["id"]] = str(uuid.uuid4())
                 # 映射 source_topic_id
                 if "source_topic_id" in col_idx:
                     old_stid = values[col_idx["source_topic_id"]]
@@ -438,7 +437,7 @@ class DbMerger:
                     new_dict.get("tags", ""),
                     new_dict.get("expires_at", None),
                 ))
-                next_mem_id += 1
+                pass  # UUID already generated
                 new_count += 1
 
         self.target.commit()
@@ -559,7 +558,7 @@ class DbMerger:
     # 步骤 9: 合并 reflections
     # ------------------------------------------------------------------
 
-    def _merge_reflections(self, next_ref_id: int):
+    def _merge_reflections(self):
         """合并 reflections，映射 topic_id"""
         logger.info("  合并 reflections ...")
         try:
@@ -578,7 +577,7 @@ class DbMerger:
         count = 0
         for row in src_refs:
             values = list(row)
-            values[col_idx["id"]] = next_ref_id
+            values[col_idx["id"]] = str(uuid.uuid4())
 
             if "topic_id" in col_idx:
                 old_tid = values[col_idx["topic_id"]]
@@ -590,7 +589,7 @@ class DbMerger:
                 f"INSERT INTO reflections ({', '.join(cols)}) VALUES ({placeholders})",
                 values,
             )
-            next_ref_id += 1
+            pass
             count += 1
 
         self.target.commit()
@@ -600,7 +599,7 @@ class DbMerger:
     # 步骤 10: 合并 config_history
     # ------------------------------------------------------------------
 
-    def _merge_config_history(self, next_cfg_id: int):
+    def _merge_config_history(self):
         """合并 config_history（无外键，直接追加）"""
         logger.info("  合并 config_history ...")
         try:
@@ -619,13 +618,13 @@ class DbMerger:
         count = 0
         for row in src_cfgs:
             values = list(row)
-            values[col_idx["id"]] = next_cfg_id
+            values[col_idx["id"]] = str(uuid.uuid4())
             placeholders = ", ".join("?" for _ in cols)
             self.target.execute(
                 f"INSERT INTO config_history ({', '.join(cols)}) VALUES ({placeholders})",
                 values,
             )
-            next_cfg_id += 1
+            pass
             count += 1
 
         self.target.commit()
@@ -649,15 +648,15 @@ class DbMerger:
 
         # 按依赖顺序执行
         self._merge_meta()
-        self._merge_topics(next_topic_id=max_target["topics"] + 1)
-        self._merge_conversations(next_conv_id=max_target["conversations"] + 1)
-        self._merge_agent_rounds(next_round_id=max_target["agent_rounds"] + 1)
+        self._merge_topics()
+        self._merge_conversations()
+        self._merge_agent_rounds()
         self._merge_topic_token_stats()
         self._merge_t_conv_summary()
-        self._merge_memories(next_mem_id=max_target["memories"] + 1)
+        self._merge_memories()
         self._merge_system_prompts()
-        self._merge_reflections(next_ref_id=max_target["reflections"] + 1)
-        self._merge_config_history(next_cfg_id=max_target["config_history"] + 1)
+        self._merge_reflections()
+        self._merge_config_history()
 
         logger.info("=" * 60)
         logger.info("合并完成！")

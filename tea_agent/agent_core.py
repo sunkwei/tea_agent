@@ -77,7 +77,7 @@ class AgentCore:
 
 # NOTE: 2026-05-07 13:25:46, self-evolved by tea_agent --- AgentCore.__init__ 增加自动启动潜意识引擎，app 启动后后台每小时循环
         # ── 6. 初始化会话 ──
-        self.current_topic_id: int = -1
+        self.current_topic_id: str = ""
         self._init_session()
 
         # ── 7. 启动潜意识引擎（后台每小时：总结/反思/创意/头脑风暴）──
@@ -294,7 +294,7 @@ class AgentCore:
     # 对话后处理流水线（入库 → MQTT → Token → 摘要）
     # ═══════════════════════════════════════════════
     def _post_chat_pipeline(self, ai_msg: str, used_tools: bool,
-                            user_msg: str, topic_id: int) -> None:
+                            user_msg: str, topic_id: str) -> None:
         """AI 回复后的标准处理流水线。CLI 和 GUI 共用。
 
         1. 保存到数据库
@@ -478,7 +478,7 @@ class AgentCore:
         """MQTT 消息处理后恢复 session 的 UI 回调（GUI 覆盖来刷新界面）。"""
         pass
 
-    def _get_or_create_mqtt_topic(self, sender: str) -> int:
+    def _get_or_create_mqtt_topic(self, sender: str) -> str:
         """获取或创建 mqtt_{sender} 主题"""
         title = f"mqtt_{sender}"
         try:
@@ -511,7 +511,7 @@ class AgentCore:
     # ═══════════════════════════════════════════════
     # 摘要
     # ═══════════════════════════════════════════════
-    def _auto_summary(self, topic_id: int = None):
+    def _auto_summary(self, topic_id: str = None):
         """自动生成主题摘要。CLI/GUI 共用核心逻辑，子类加 UI 回调。"""
         if topic_id is None:
             topic_id = self.current_topic_id
@@ -543,6 +543,6 @@ class AgentCore:
         except Exception as e:
             logger.warning(f"自动摘要失败 (topic={topic_id}): {type(e).__name__}: {e}")
 
-    def _on_summary_updated(self, topic_id: int, summary: str):
+    def _on_summary_updated(self, topic_id: str, summary: str):
         """摘要更新后的 UI 回调（子类覆盖）。"""
         pass

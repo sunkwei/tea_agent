@@ -815,7 +815,7 @@ class TopicDialog(tk.Toplevel):
         except Exception as e:
             self.stats_var.set(f"❌ 导出失败: {e}")
 
-    def _write_topic_md(self, f, topic_id: int, mode: str):
+    def _write_topic_md(self, f, topic_id: str, mode: str):
         """Write a single topic as markdown to file handle."""
         tp = self.db.get_topic(topic_id)
         title = tp.get("title", f"主题 #{topic_id}") if tp else f"主题 #{topic_id}"

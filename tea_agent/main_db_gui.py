@@ -1351,7 +1351,9 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 # NOTE: 2026-05-06 09:31, self-evolved by tea_agent --- 通知传入 user_msg，显示用户消息+AI回复
                     self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
             except Exception as ex:
-                ai_msg = f"异常：{ex}"
+                import traceback
+                tb = traceback.format_exc()
+                ai_msg = f"异常：{type(ex).__name__}: {ex}\n\n```\n{tb[-2000:]}\n```"
                 self.safe_stream(ai_msg)
                 self.root.after(0, self._flush_stream_to_messages)
                 if self._current_conversation_id is not None:

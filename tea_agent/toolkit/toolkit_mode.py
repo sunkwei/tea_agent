@@ -105,6 +105,14 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
     def _get_memory_manager():
         from tea_agent.memory import MemoryManager
         from tea_agent.store import Storage
+        # NOTE: 2026-05-10 gen by tea_agent, 优先复用 session 的 Storage，避免多连接冲突
+        try:
+            from tea_agent.session_ref import get_agent
+            agent = get_agent()
+            if agent and hasattr(agent, 'db'):
+                return MemoryManager(agent.db, extraction_threshold=1, dedup_threshold=0.3)
+        except Exception:
+            pass
         return MemoryManager(Storage(), extraction_threshold=1, dedup_threshold=0.3)
     
     def _get_existing_mode_memory(mm):

@@ -91,8 +91,8 @@ class TestTopicCRUD:
         """创建主题返回递增 ID"""
         tid1 = storage.create_topic("主题1")
         tid2 = storage.create_topic("主题2")
-        assert tid1 == 1
-        assert tid2 == 2
+        assert isinstance(tid1, str) and len(tid1) > 0
+        assert isinstance(tid2, str) and tid2 != tid1
 
     def test_get_topic(self, storage):
         """获取主题返回完整信息"""
@@ -127,9 +127,9 @@ class TestTopicCRUD:
         """chat_room_ 前缀主题标题不可修改"""
         # 直接用 SQL 插入一个 chat_room 主题（因为 create_topic 不走保护逻辑）
         c = storage.conn.cursor()
-        c.execute("INSERT INTO topics (title) VALUES ('chat_room_test')")
+        tid = storage._generate_id()
+        c.execute("INSERT INTO topics (topic_id, title) VALUES (?, 'chat_room_test')", (tid,))
         storage.conn.commit()
-        tid = c.lastrowid
         c.close()
 
         storage.update_topic_title(tid, "修改后的标题")
@@ -173,10 +173,10 @@ class TestMessageCRUD:
         """保存消息返回递增 ID"""
         tid = storage.create_topic("消息测试")
         cid = storage.save_msg(tid, "你好", "", False)
-        assert cid == 1
+        assert isinstance(cid, str) and len(cid) > 0
 
         cid2 = storage.save_msg(tid, "再见", "拜拜", True)
-        assert cid2 == 2
+        assert isinstance(cid2, str) and cid2 != cid
 
 # NOTE: 2026-05-10 09:09:34, self-evolved by tea_agent --- 修复 test_save_msg_updates_topic_active: sleep 0.1→1.1 秒
     def test_save_msg_updates_topic_active(self, storage):
@@ -274,12 +274,12 @@ class TestMemoryCRUD:
     def test_add_memory(self, storage):
         """添加记忆返回递增 ID"""
         mid = storage.add_memory("测试记忆内容", category="fact", importance=3)
-        assert mid == 1
+        assert isinstance(mid, str) and len(mid) > 0
 
     def test_add_critical_memory(self, storage):
         """添加 CRITICAL 记忆"""
         mid = storage.add_memory("重要规则", category="instruction", priority=0, importance=5)
-        assert mid == 1
+        assert isinstance(mid, str) and len(mid) > 0
 
         memories = storage.get_active_memories()
         assert len(memories) == 1

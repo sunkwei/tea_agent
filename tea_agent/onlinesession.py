@@ -615,8 +615,7 @@ class OnlineToolSession(
             Tuple[str, bool]: (助手完整回复, 是否使用了工具调用)
         """
 
-        # NOTE: 2026-05-10 gen by tea_agent, 防御性 int() 防止调用方传字符串
-        topic_id = int(topic_id)
+        # NOTE: 2026-06-18 gen by tea_agent, UUID migration: topic_id 已是 str，无需 int 转换
 
 # NOTE: 2026-05-07 11:27:48, self-evolved by tea_agent --- chat_stream 入口添加 DEBUG 日志
         logger.debug(f"chat_stream start: msg_len={len(msg)}, topic_id={topic_id}, model={self.model}, enable_thinking={self.enable_thinking}")
@@ -671,8 +670,9 @@ class OnlineToolSession(
 
         # 自动提取记忆（真正异步，不阻塞）
         # 仅在有效 topic_id 且非打断时触发
+        import threading
+
         if isinstance(topic_id, str) and topic_id and not result.get("interrupted", False):
-            import threading
             def _auto_extract():
                 try:
                     count = self.trigger_memory_extraction(topic_id)

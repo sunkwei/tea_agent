@@ -615,6 +615,9 @@ class OnlineToolSession(
             Tuple[str, bool]: (助手完整回复, 是否使用了工具调用)
         """
 
+        # NOTE: 2026-05-10 gen by tea_agent, 防御性 int() 防止调用方传字符串
+        topic_id = int(topic_id)
+
 # NOTE: 2026-05-07 11:27:48, self-evolved by tea_agent --- chat_stream 入口添加 DEBUG 日志
         logger.debug(f"chat_stream start: msg_len={len(msg)}, topic_id={topic_id}, model={self.model}, enable_thinking={self.enable_thinking}")
         logger.debug(f"chat_stream user message: {msg}")

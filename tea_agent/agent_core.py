@@ -77,7 +77,8 @@ class AgentCore:
 
 # NOTE: 2026-05-07 13:25:46, self-evolved by tea_agent --- AgentCore.__init__ 增加自动启动潜意识引擎，app 启动后后台每小时循环
         # ── 6. 初始化会话 ──
-        self.current_topic_id: str = ""
+        # NOTE: 2026-05-10 gen by tea_agent, 修复类型：str→int，防止 chat_stream TypeError
+        self.current_topic_id: int = 0
         self._init_session()
 
         # ── 7. 启动潜意识引擎（后台每小时：总结/反思/创意/头脑风暴）──

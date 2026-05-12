@@ -52,20 +52,35 @@ class TestPathsConfig:
     def test_resolve_relative_data_dir(self):
         """相对 data_dir 解析"""
         from tea_agent.config import PathsConfig
-        pc = PathsConfig(data_dir="my_agent_data")
-        pc.resolve("/home/user/.tea_agent")
+        import os as _os
+        import tempfile, shutil as _shutil
+        # 使用临时目录的绝对路径作为 config_dir，确保跨平台
+        tmpd = tempfile.mkdtemp(prefix="tea_test_")
+        config_dir = _os.path.join(tmpd, "config")
+        _os.makedirs(config_dir, exist_ok=True)
+        try:
+            pc = PathsConfig(data_dir="my_agent_data")
+            pc.resolve(config_dir)
 
-        assert pc.data_dir_abs == "/home/user/.tea_agent/my_agent_data"
-        assert pc.db_path_abs == "/home/user/.tea_agent/my_agent_data/chat_history.db"
+            exp_data = _os.path.join(config_dir, "my_agent_data")
+            assert pc.data_dir_abs == _os.path.abspath(exp_data)
+            exp_db = _os.path.join(exp_data, "chat_history.db")
+            assert pc.db_path_abs == _os.path.abspath(exp_db)
+        finally:
+            _shutil.rmtree(tmpd, ignore_errors=True)
 
     def test_resolve_absolute_data_dir(self):
         """绝对 data_dir 解析"""
         from tea_agent.config import PathsConfig
-        pc = PathsConfig(data_dir="/var/lib/tea_agent")
-        pc.resolve("/tmp")
+        import os as _os
+        # 使用平台无关的绝对路径
+        abs_dir = _os.path.abspath("/var/lib/tea_agent")
+        pc = PathsConfig(data_dir=abs_dir)
+        pc.resolve(_os.path.abspath("/tmp"))
 
-        assert pc.data_dir_abs == "/var/lib/tea_agent"
-        assert pc.db_path_abs == "/var/lib/tea_agent/chat_history.db"
+        assert pc.data_dir_abs == abs_dir
+        exp_db = _os.path.join(abs_dir, "chat_history.db")
+        assert pc.db_path_abs == exp_db
 
     def test_resolve_tilde_expansion(self):
         """~ 展开为用户目录"""
@@ -79,20 +94,23 @@ class TestPathsConfig:
     def test_resolve_explicit_paths(self):
         """显式指定子路径"""
         from tea_agent.config import PathsConfig
+        import os as _os
         pc = PathsConfig(
             db_path="my_db/agent.db",
             toolkit_dir="/opt/tools",
             kb_dir="~/.kb",
         )
-        pc.resolve("/tmp")
+        pc.resolve(_os.path.abspath("/tmp"))
 
         # db_path 相对于 data_dir（默认 ~/.tea_agent）
         home = str(Path.home())
-        assert pc.db_path_abs == os.path.join(home, ".tea_agent", "my_db/agent.db")
+        expected_db = _os.path.join(home, ".tea_agent", "my_db", "agent.db")
+        assert pc.db_path_abs == expected_db
         # toolkit_dir 绝对路径
-        assert pc.toolkit_dir_abs == "/opt/tools"
+        assert pc.toolkit_dir_abs == _os.path.abspath("/opt/tools")
         # kb_dir 展开 ~
-        assert pc.kb_dir_abs == os.path.join(home, ".kb")
+        expected_kb = _os.path.join(home, ".kb")
+        assert pc.kb_dir_abs == expected_kb
 
     def test_property_accessors(self):
         """属性访问器可用"""

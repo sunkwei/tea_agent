@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tea_agent"
-version = "0.7.18"
+version = "0.7.19"
 description = "A self-evolving AI agent with dynamic toolkit management. Optional: OCR/TTS/ASR."
 readme = "README.md"
 license = "MIT"

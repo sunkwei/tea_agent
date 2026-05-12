@@ -223,12 +223,13 @@ class SessionAPIMixin:
         else:
             thinking_supported = self._thinking_supported
             
-        if self.enable_thinking and thinking_supported:
-            kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
-        
-        if not thinking_supported:
-# NOTE: 2026-05-01 14:24:09, self-evolved by tea_agent --- 修复 thinking.type 从 disable 改为 disabled
-            kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+        if thinking_supported:
+            # @2026-05-16 gen by tea_agent, 修复 thinking 禁用不生效：enable_thinking=False 时显式传 disabled
+            kwargs["extra_body"] = {
+                "thinking": {
+                    "type": "enabled" if self.enable_thinking else "disabled"
+                }
+            }
 
         return target_client.chat.completions.create(**kwargs)
 

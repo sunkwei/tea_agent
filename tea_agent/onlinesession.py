@@ -402,6 +402,9 @@ class OnlineToolSession(
             if valid_tool_calls:
                 used_tools = True
 
+                # @2026-05-16 gen by tea_agent, 通知 GUI 本轮思考结束，单独存为思考消息
+                callback("[THINK_DONE]")
+
                 if on_status:
                     on_status(f"⏳ 生成中... 调用工具第{iterations+1}轮 (ESC 打断)")
 

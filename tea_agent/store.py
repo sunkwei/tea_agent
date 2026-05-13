@@ -51,6 +51,16 @@ class Storage:
                 last_update_stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        # NOTE: 2025-07-16 gen by tea_agent, 三级历史管理 → topics 新增列
+        for col, col_def in [
+            ("semantic_summary", "TEXT DEFAULT ''"),
+            ("tool_chain_summary", "TEXT DEFAULT ''"),
+            ("level2_json", "TEXT DEFAULT '[]'"),
+        ]:
+            try:
+                c.execute(f"ALTER TABLE topics ADD COLUMN {col} {col_def}")
+            except Exception:
+                pass  # 列已存在
         c.execute('''
             CREATE TABLE IF NOT EXISTS conversations (
                 id TEXT PRIMARY KEY,
@@ -847,6 +857,68 @@ class Storage:
             ''', (topic_id, summary))
         self.conn.commit()
         c.close()
+
+
+    # NOTE: 2025-07-16 gen by tea_agent, 三级历史管理 — Level 2/3 读写
+    def get_level2(self, topic_id: str) -> list:
+        """获取 Level 2（近期语义相关 user+assistant 对）"""
+        import json
+        c = self.conn.cursor()
+        c.execute("SELECT level2_json FROM topics WHERE topic_id = ?", (topic_id,))
+        row = c.fetchone()
+        if row and row[0]:
+            try:
+                return json.loads(row[0])
+            except json.JSONDecodeError:
+                return []
+        return []
+
+    def set_level2(self, topic_id: str, level2: list):
+        """写入 Level 2"""
+        import json
+        c = self.conn.cursor()
+        c.execute("UPDATE topics SET level2_json = ? WHERE topic_id = ?",
+                  (json.dumps(level2, ensure_ascii=False), topic_id))
+        self.conn.commit()
+
+    def get_semantic_summary(self, topic_id: str) -> str:
+        """获取 Level 3: 语义摘要（长期偏好、任务背景、关键结论）"""
+        c = self.conn.cursor()
+        c.execute("SELECT semantic_summary FROM topics WHERE topic_id = ?", (topic_id,))
+        row = c.fetchone()
+        return row[0] if row and row[0] else ""
+
+    def get_tool_chain_summary(self, topic_id: str) -> str:
+        """获取 Level 3: 工具链摘要（旧任务的工具调用链、关键输入输出、结论）"""
+        c = self.conn.cursor()
+        c.execute("SELECT tool_chain_summary FROM topics WHERE topic_id = ?", (topic_id,))
+        row = c.fetchone()
+        return row[0] if row and row[0] else ""
+
+    def set_semantic_summary(self, topic_id: str, summary: str):
+        """写入语义摘要"""
+        c = self.conn.cursor()
+        c.execute("UPDATE topics SET semantic_summary = ? WHERE topic_id = ?",
+                  (summary, topic_id))
+        self.conn.commit()
+
+    def set_tool_chain_summary(self, topic_id: str, summary: str):
+        """写入工具链摘要"""
+        c = self.conn.cursor()
+        c.execute("UPDATE topics SET tool_chain_summary = ? WHERE topic_id = ?",
+                  (summary, topic_id))
+        self.conn.commit()
+
+    def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str):
+        """将一轮对话推入 Level 2（仅保留 user+assistant 自然语言）"""
+        import json
+        level2 = self.get_level2(topic_id)
+        level2.append({"user": user_msg, "assistant": ai_msg})
+        # 最多保留 5 轮在 Level 2
+        overflow = level2[:-5] if len(level2) > 5 else []
+        level2 = level2[-5:]
+        self.set_level2(topic_id, level2)
+        return overflow  # 返回溢出的旧条目，供 Level 3 摘要使用
 
     def mark_as_summarized(self, conversation_id: str):
         """将指定对话标记为已摘要"""

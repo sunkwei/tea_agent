@@ -270,28 +270,27 @@ class AgentCore:
     # ═══════════════════════════════════════════════
     def _post_chat_pipeline(self, ai_msg: str, used_tools: bool,
                             user_msg: str, topic_id: str) -> None:
-        """AI 回复后的标准处理流水线。CLI 和 GUI 共用。
-
-        1. 保存到数据库
-        3. Token 统计
-        4. 自动摘要
-        """
-        # ── 1. 保存到数据库 ──
+        """AI 回复后流水线。1.入库 2.三级推送 3.Token 4.摘要"""
         conv_id = self.db.save_msg(topic_id, user_msg, "", False)
         rounds = self.sess._rounds_collector
         self.db.update_msg_rounds(
-            conversation_id=conv_id,
-            ai_msg=ai_msg,
-            is_func_calling=used_tools,
-            rounds=rounds if rounds else None,
+            conversation_id=conv_id, ai_msg=ai_msg,
+            is_func_calling=used_tools, rounds=rounds if rounds else None,
         )
-
-# NOTE: 2026-05-07 13:13:37, self-evolved by tea_agent --- _post_chat_pipeline Token 统计增加嵌入模型用量（从 EmbeddingEngine.get_embedding_usage 获取）
-        # ── 3. Token 统计 ──
+        # Level 2 push: 获取上一轮（旧 Level 1）推入 Level 2
+        prev_convs = self.db.get_conversations(topic_id, limit=2, include_rounds=False)
+        if len(prev_convs) >= 2:
+            old_l1 = prev_convs[-2]
+            overflow = self.db.push_to_level2(
+                topic_id, old_l1["user_msg"], old_l1["ai_msg"]
+            )
+            if overflow:
+                logger.info(f"Level 2 overflow {len(overflow)} -> L3 (topic={topic_id})")
+                self._update_level3_summary(topic_id, overflow)
+        # Token stats
         usage = self.sess._last_usage
         cheap_usage = self.sess._last_cheap_usage
         if usage and usage.get("total_tokens", 0) > 0:
-            # 嵌入模型 token 用量
             try:
                 from tea_agent.embedding_util import get_embedding_engine
                 emb_engine = get_embedding_engine()
@@ -299,44 +298,83 @@ class AgentCore:
                 emb_tokens = emb_usage.get("total_tokens", 0)
                 emb_prompt = emb_usage.get("prompt_tokens", 0)
             except Exception:
-                emb_tokens = 0
-                emb_prompt = 0
-
+                emb_tokens = 0; emb_prompt = 0
             self.db.add_topic_tokens(
-                topic_id,
-                total_tokens=usage["total_tokens"],
+                topic_id, total_tokens=usage["total_tokens"],
                 prompt_tokens=usage["prompt_tokens"],
                 completion_tokens=usage["completion_tokens"],
                 cheap_tokens=cheap_usage.get("total_tokens", 0),
                 cheap_prompt_tokens=cheap_usage.get("prompt_tokens", 0),
                 cheap_completion_tokens=cheap_usage.get("completion_tokens", 0),
-                embedding_tokens=emb_tokens,
-                embedding_prompt_tokens=emb_prompt,
+                embedding_tokens=emb_tokens, embedding_prompt_tokens=emb_prompt,
             )
-
-# NOTE: 2026-05-06 09:58:21, self-evolved by tea_agent --- _post_chat_pipeline末尾添加_check_pending_restart调用
-        # ── 4. 自动摘要 ──
         self._auto_summary(topic_id)
-
-        # ── 5. 检查是否需要延迟重启（watchdog 在会话中检测到代码变更）──
         self._check_pending_restart()
 
+    def _update_level3_summary(self, topic_id: str, overflow: list):
+        if not overflow:
+            return
+        try:
+            cli, mdl = self.sess._get_summarize_client()
+            old_text = ""
+            for pair in overflow:
+                old_text += f"User: {pair.get('user', '')}\nAssistant: {pair.get('assistant', '')}\n\n"
+            old_sem = self.db.get_semantic_summary(topic_id)
+            sem_prompt = (
+                "更新此前对话摘要（长期偏好/任务背景/关键结论，<=300字，中文）："
+                f"\n[已有]\n{old_sem if old_sem else '(无)'}"
+                f"\n[新对话]\n{old_text}"
+            )
+            r = cli.chat.completions.create(
+                model=mdl, messages=[{"role": "user", "content": sem_prompt}],
+                temperature=0.3, max_tokens=512,
+            )
+            new_sem = r.choices[0].message.content.strip() if r.choices else old_sem or ""
+            self.db.set_semantic_summary(topic_id, new_sem)
+            logger.info(f"L3 semantic: {len(new_sem)} chars")
+            has_tools = any("tool" in pair.get("assistant", "").lower() for pair in overflow)
+            if has_tools:
+                old_tc = self.db.get_tool_chain_summary(topic_id)
+                tc_prompt = (
+                    "更新工具调用链摘要（工具名/关键I/O/结论，<=200字，中文，无工具则说无）："
+                    f"\n[已有]\n{old_tc if old_tc else '(无)'}"
+                    f"\n[新对话]\n{old_text}"
+                )
+                r2 = cli.chat.completions.create(
+                    model=mdl, messages=[{"role": "user", "content": tc_prompt}],
+                    temperature=0.3, max_tokens=384,
+                )
+                new_tc = r2.choices[0].message.content.strip() if r2.choices else old_tc or ""
+                if new_tc and new_tc != "\u65e0":
+                    self.db.set_tool_chain_summary(topic_id, new_tc)
+                    logger.info(f"L3 toolchain: {len(new_tc)} chars")
+        except Exception as e:
+            logger.warning(f"L3 summary fail: {type(e).__name__}: {e}")
+
     def _load_topic_history_into_session(self, tid: str):
-        """将指定 topic 的对话历史加载到 session"""
+        """将指定 topic 的对话历史按三级结构加载到 session"""
+        # Level 1: 最新一条完整对话（含工具链）
         all_light = self.db.get_conversations(tid, limit=-1, include_rounds=False)
         if all_light:
             total = len(all_light)
-            recent = self.db.get_conversations(tid, limit=10, include_rounds=True)
-            offset = max(0, total - min(total, 10))
-            for i in range(offset, total):
-                j = i - offset
-                if j < len(recent):
-                    all_light[i] = recent[j]
-            summary = self.db.get_topic_summary(tid) or ""
-            self.sess.load_history(all_light, summary, recent_turns=10)
+            recent = self.db.get_conversations(tid, limit=1, include_rounds=True)
+            if recent:
+                all_light[-1] = recent[-1]
+            level2 = self.db.get_level2(tid)
+            semantic = self.db.get_semantic_summary(tid)
+            tool_chain = self.db.get_tool_chain_summary(tid)
+            old_summary = self.db.get_topic_summary(tid) or ""
+            self.sess.load_history(
+                all_light, summary=old_summary,
+                level2=level2, semantic_summary=semantic,
+                tool_chain_summary=tool_chain,
+            )
         else:
             self.sess.messages = [{"role": "system", "content": self.sess.system_prompt}]
             self.sess._history_summary = ""
+            self.sess._semantic_summary = ""
+            self.sess._tool_chain_summary = ""
+            self.sess._level2 = []
         self.current_topic_id = tid
 
     # ═══════════════════════════════════════════════

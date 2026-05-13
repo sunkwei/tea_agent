@@ -276,17 +276,15 @@ class OnlineToolSession(
         # @2026-04-29 gen by deepseek-v4-pro, on_status回调+记忆注入至_build_api_messages
     def _build_api_messages(self) -> List[Dict]:
         """
-        构建发送给 API 的消息列表。
-
-        压缩策略:
-            1. 系统提示词 (始终第一条)
-            2. 长期记忆 (如有，紧接系统提示词)
-            3. 历史摘要 (如有，替代旧消息)
-            4. 最新 n 轮完整对话
+        三级历史拼接：
+            Level 0: 系统提示词 + 长期记忆注入
+            Level 3: 语义摘要 + 工具链摘要
+            Level 2: 近期语义相关 user+assistant 自然语言对
+            Level 1: 最新一轮完整对话（含工具调用链）
         """
         result: List[Dict] = []
 
-        # 1. 系统提示词 (始终第一) — 注入激活 Skill 的领域指令
+        # ── Level 0: 系统提示词 + Skill 注入 ──
         sys_msg = dict(self.messages[0])
         skill_prompt = self.skill_manager.get_active_prompt()
         skill_summary = self.skill_manager.get_skill_summary()
@@ -299,34 +297,58 @@ class OnlineToolSession(
             sys_msg["content"] = enhanced
         result.append(sys_msg)
 
-        # 2. 长期记忆注入（紧接系统提示词）
+        # ── 长期记忆注入 ──
         if self._injected_memories_text:
             result.append({
                 "role": "user",
                 "content": self._injected_memories_text
             })
 
-# NOTE: 2026-05-02 11:46:43, self-evolved by tea_agent --- 修复打断后继续会话400错误：摘要路径的合成assistant消息缺少reasoning_content字段
-# NOTE: 2026-05-02 11:46:56, self-evolved by tea_agent --- 修复打断后继续会话400错误：摘要路径的合成assistant消息缺少reasoning_content字段
-        # 3. 历史摘要
-        if self._history_summary:
+        # ── Level 3: 摘要 ──
+        has_level3 = False
+        parts = []
+        sem = getattr(self, '_semantic_summary', '')
+        tc = getattr(self, '_tool_chain_summary', '')
+        if sem:
+            parts.append(f"## 长期背景/偏好/关键结论\n{sem}")
+            has_level3 = True
+        if tc:
+            parts.append(f"## 历史工具调用链回顾\n{tc}")
+            has_level3 = True
+        if has_level3:
             result.append({
                 "role": "user",
-                "content": f"这是我们之前对话的摘要：\n{self._history_summary}"
+                "content": "[系统记忆 — 以下为需要遵循的有效信息和规则]\n\n" + "\n\n---\n\n".join(parts)
             })
-            # NOTE: 2026-05-02, self-evolved by tea_agent --- DeepSeek API 要求 assistant 消息必须有 reasoning_content，否则 400
             result.append({
                 "role": "assistant",
                 "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？",
                 "reasoning_content": ""
             })
 
-        # 4. 最新 N 轮完整对话
-        boundary = self._find_recent_boundary()
-        for i in range(boundary, len(self.messages)):
+        # ── 兼容旧 _history_summary（没有三级字段时使用）──
+        if not has_level3 and self._history_summary:
+            result.append({
+                "role": "user",
+                "content": f"这是我们之前对话的摘要：\n{self._history_summary}"
+            })
+            result.append({
+                "role": "assistant",
+                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？",
+                "reasoning_content": ""
+            })
+
+        # ── Level 2: 近期语义相关 user+assistant 对 ──
+        level2 = getattr(self, '_level2', [])
+        for pair in level2:
+            result.append({"role": "user", "content": pair.get("user", "")})
+            result.append({"role": "assistant", "content": pair.get("assistant", ""),
+                          "reasoning_content": ""})
+
+        # ── Level 1: 最新一轮完整对话（从 self.messages 索引1开始，跳过系统提示词）──
+        for i in range(1, len(self.messages)):
             msg = self.messages[i]
             msg_copy = dict(msg)
-            ## XXX: 貌似 deepseek 需要这个字段，否则会报错 400
             if msg_copy["role"] == "assistant" and "reasoning_content" not in msg_copy:
                 msg_copy["reasoning_content"] = ""
             result.append(msg_copy)

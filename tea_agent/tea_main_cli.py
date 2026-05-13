@@ -87,21 +87,10 @@ class TeaCLI(AgentCore):
         self._show_topic_info()
 
     def _load_history(self):
-        """加载当前主题的历史到会话。"""
+        """加载当前主题的历史到会话（三级结构）。"""
         if not self.current_topic_id:
             return
-        all_light = self.db.get_conversations(self.current_topic_id, limit=-1, include_rounds=False)
-        if not all_light:
-            return
-        total = len(all_light)
-        recent = self.db.get_conversations(self.current_topic_id, limit=10, include_rounds=True)
-        offset = max(0, total - min(total, 10))
-        for i in range(offset, total):
-            j = i - offset
-            if j < len(recent):
-                all_light[i] = recent[j]
-        summary = self.db.get_topic_summary(self.current_topic_id) or ""
-        self.sess.load_history(all_light, summary, recent_turns=10)
+        self._load_topic_history_into_session(self.current_topic_id)
 
     def _show_topic_info(self):
         tp = self.db.get_topic(self.current_topic_id)

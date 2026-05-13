@@ -290,57 +290,60 @@ class BaseChatSession(ABC):
         return result
 
 # NOTE: 2026-04-30 10:02:24, self-evolved by tea_agent --- load_history支持recent_turns参数，旧轮次仅user+ai，最近N轮含完整工具链
-    def load_history(self, conversations: List[Dict], summary: str = "", recent_turns: int = 10):
+    def load_history(self, conversations: List[Dict], summary: str = "", recent_turns: int = 10,
+                     level2: list = None, semantic_summary: str = "", tool_chain_summary: str = ""):
         """
-        从数据库加载历史记录。
+        三级历史加载：
 
-        - 最近 recent_turns 轮：加载完整消息（user + 中间工具调用链 + 最终 ai）
-        - 超过 recent_turns 的旧轮次：仅保留 user + 最终 ai_msg
+        Level 1: 最新一轮完整对话（user + 工具调用链 + assistant(final)）
+        Level 2: 近期语义相关的 user+assistant 自然语言对
+        Level 3: 压缩摘要 — semantic_summary + tool_chain_summary
 
         Args:
-            conversations: 对话记录列表（按时间正序），每条含 user_msg, ai_msg, rounds_json_parsed
-            summary: 历史对话摘要（如有）
-            recent_turns: 保留完整消息的最近轮数，默认10
+            conversations: 对话记录列表（时间正序）
+            summary: 兼容旧字段的摘要
+            recent_turns: 兼容旧参数（不再强制使用）
+            level2: Level 2 条目列表 [{"user": ..., "assistant": ...}, ...]
+            semantic_summary: 语义摘要（长期偏好、任务背景、关键结论）
+            tool_chain_summary: 工具链摘要（旧任务工具调用链、关键I/O、结论）
         """
         self.messages = [{"role": "system", "content": self.system_prompt}]
-        self._history_summary = summary
 
+        # ── Level 3 摘要存储 ──
+        self._semantic_summary = semantic_summary or summary  # 兼容旧 summary
+        self._tool_chain_summary = tool_chain_summary
+
+        # ── Level 2 存储（用于 prompt 构建时直接拼入）──
+        self._level2 = level2 or []
+
+        # ── Level 1: 最新一轮完整加载 ──
         total = len(conversations)
-        old_count = max(0, total - recent_turns)
+        if total == 0:
+            self._history_summary = ""  # 兼容旧代码
+            logger.info("加载历史 0条 (新主题)")
+            return
 
-        logger.info(f"加载历史 {total}条 (完整:{min(total, recent_turns)} 简洁:{old_count}), 摘要：{summary}")
+        # 最新一条作为 Level 1（完整工具链）
+        last_conv = conversations[-1]
+        self.messages.append({"role": "user", "content": last_conv["user_msg"]})
 
-        for i, conv in enumerate(conversations):
-            is_old = i < old_count
-            is_last = i == total - 1
-            self.messages.append({"role": "user", "content": conv["user_msg"]})
+        rounds = last_conv.get("rounds_json_parsed")
+        if rounds and last_conv.get("is_func_calling"):
+            repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
+            # Level 1 不压缩，保留完整工具输出
+            for rd in repaired:
+                self.messages.append(dict(rd))
+        else:
+            self.messages.append({"role": "assistant", "content": last_conv["ai_msg"]})
 
-            # NOTE: 2026-05-03 06:37:54, self-evolved by tea_agent --- load_history 中加载 rounds_json_parsed 时调用 _repair_incomplete_tool_chains 修复中断链
-            # NOTE: 2026-05-04 12:57:33, self-evolved by tea_agent --- load_history 最近N轮加载时调用 _compress_tool_rounds 压缩工具输出
-            if is_old:
-                # 旧轮次：仅保留最终 ai_msg，丢弃中间工具调用链
-                self.messages.append({"role": "assistant", "content": conv["ai_msg"]})
-            else:
-                # 最近N轮：加载完整工具调用链（工具输出已压缩）
-                # 2026-05-05 最新一轮，不做任何压缩 by sunkw
-                rounds = conv.get("rounds_json_parsed")
-                if rounds and conv.get("is_func_calling"):
-                    # 修复中断导致的不完整工具调用链
-                    repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
-                    # 压缩工具输出，减少 token 消耗但保持上下文连贯
-                    if is_last:
-                        compressed = repaired
-                    else:
-                        compressed = BaseChatSession._compress_tool_rounds(repaired)
-                    if len(repaired) != len(rounds):
-                        logger.warning(
-                            f"load_history: 修复不完整链 ({len(rounds)}→{len(repaired)}), "
-                            f"工具输出已压缩"
-                        )
-                    for rd in compressed:
-                        self.messages.append(dict(rd))
-                else:
-                    self.messages.append({"role": "assistant", "content": conv["ai_msg"]})
+        # ── 旧轮次不再直接加载到 self.messages ──
+        # Level 2 + Level 3 由 _build_api_messages 拼接
+        self._history_summary = ""  # 旧字段，不再使用
+        logger.info(
+            f"三级加载: L1=1轮完整 , L2={len(self._level2)}对 , "
+            f"L3_semantic={len(self._semantic_summary)}chars , L3_tool={len(self._tool_chain_summary)}chars"
+        )
+
 
     def interrupt(self):
         """打断当前生成"""

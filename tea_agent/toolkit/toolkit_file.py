@@ -8,18 +8,26 @@ import logging
 # NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
-def toolkit_file(action: str, filename: str = "", content: str = "", path: str = ".", recursive: bool = False, show_hidden: bool = False):
+# NOTE: 2026-05-14 07:51:30, self-evolved by tea_agent --- read 操作添加 offset/limit 参数，替代 toolkit_read_lines
+# NOTE: 2026-05-16 gen by tea_agent, read 操作新增 offset/limit 支持行范围读取
+def toolkit_file(action: str, filename: str = "", content: str = "", path: str = ".", recursive: bool = False, show_hidden: bool = False, offset: int = 0, limit: int = 0):
     """
     统一文件操作。
-    - action="read": 读取文件全部内容。需 filename。
+    - action="read": 读取文件内容。offset=起始行号(1-based), limit=行数上限。均为0则读全文。需 filename。
     - action="write": 将 content 写入 filename。需 filename + content。
     - action="list": 列出目录内容 (跨平台 dir/ls)。可选 path/recursive/show_hidden。
     """
-    logger.info(f"toolkit_file called: action={action!r}, filename={filename!r}, content={repr(content)[:80]}, path={path!r}, recursive={recursive!r}, show_hidden={show_hidden!r}")
+    logger.info(f"toolkit_file called: action={action!r}, filename={filename!r}, content={repr(content)[:80]}, path={path!r}, offset={offset!r}, limit={limit!r}")
 
+# NOTE: 2026-05-14 07:51:43, self-evolved by tea_agent --- read 实现行范围读取，支持 offset+limit
     if action == "read":
         try:
             with open(filename, 'r', encoding='utf-8') as f:
+                if offset > 0 or limit > 0:
+                    lines = f.readlines()
+                    start = max(0, offset - 1) if offset > 0 else 0
+                    end = min(len(lines), start + limit) if limit > 0 else len(lines)
+                    return ''.join(f"{i+1}: {lines[i]}" for i in range(start, end))
                 return f.read()
         except FileNotFoundError:
             return f"Error: File '{filename}' not found."
@@ -106,9 +114,18 @@ def meta_toolkit_file() -> dict:
                         "type": "boolean",
                         "description": "[list] 是否递归列出子目录",
                     },
+# NOTE: 2026-05-14 07:51:56, self-evolved by tea_agent --- meta 声明增加 offset/limit 参数
                     "show_hidden": {
                         "type": "boolean",
                         "description": "[list] 是否显示隐藏文件",
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "[read] 起始行号(1-based)，0=从头开始",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "[read] 返回行数上限，0=不限",
                     },
                 },
                 "required": ["action"],

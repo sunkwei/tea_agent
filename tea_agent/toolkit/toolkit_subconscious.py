@@ -1,5 +1,5 @@
 ## llm generated tool func, created Fri May  1 09:58:16 2026
-# version: 1.0.4
+# version: 1.0.5
 
 
 import logging
@@ -322,8 +322,10 @@ def toolkit_subconscious(action: str, focus: str = None):
         return uniq[:7]
 
 # NOTE: 2026-05-02 10:58:26, self-evolved by tea_agent --- 添加 _send_cycle_summary 函数，每轮循环后发送综合摘要通知
-    def _send_notification(title, msg):
-        """跨平台桌面通知：Windows/macOS/Linux"""
+    def _send_notification(title, msg, expire_ms=5000):
+        """跨平台桌面通知：Windows/macOS/Linux。
+        Linux 级联回退：notify-send → kdialog → DBus gdbus。
+        NOTE: 2026-06-19 gen by tea_agent, 增加 kdialog/DBus 回退解决 Plasma6 无 notify-send 问题"""
         import sys as _sys
         try:
             if _sys.platform == 'win32':
@@ -352,10 +354,43 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                     f'display notification "{msg}" with title "{title}"'],
                     capture_output=True, timeout=5)
             else:
-                subprocess.run(['notify-send', '--app-name=TeaAgent',
-                    title, msg, '--expire-time=5000'],
-                    capture_output=True, timeout=3)
+                _linux_notify_fallback(title, msg, expire_ms)
         except: pass
+
+    def _linux_notify_fallback(title, msg, expire_ms=5000):
+        """Linux 通知级联回退：notify-send → kdialog → DBus gdbus。
+        NOTE: 2026-06-19 gen by tea_agent, Plasma6 无 notify-send 时自动回退"""
+        import shutil as _sh
+
+        # 方法1: notify-send (libnotify-tools)
+        if _sh.which('notify-send'):
+            subprocess.run(['notify-send', '--app-name=TeaAgent',
+                title, msg, '--expire-time=' + str(expire_ms)],
+                capture_output=True, timeout=3)
+            return
+
+        # 方法2: kdialog --passivepopup (KDE/Plasma)
+        if _sh.which('kdialog'):
+            subprocess.run(['kdialog', '--passivepopup', msg,
+                '--title', title, str(expire_ms // 1000)],
+                capture_output=True, timeout=5)
+            return
+
+        # 方法3: DBus gdbus (Freedesktop Notification spec)
+        if _sh.which('gdbus'):
+            import shlex
+            safe_body = msg.replace('\n', '\\n')
+            subprocess.run([
+                'gdbus', 'call', '--session',
+                '--dest', 'org.freedesktop.Notifications',
+                '--object-path', '/org/freedesktop/Notifications',
+                '--method', 'org.freedesktop.Notifications.Notify',
+                'TeaAgent', '0', '',
+                title, safe_body,
+                '[]', '{}', str(expire_ms)
+            ], capture_output=True, timeout=5)
+            return
+
     def _send_cycle_summary(result, state, first_run=False):
         """每轮循环后发送摘要通知，让用户感知后台运行结果"""
         digest = result.get("digest") or {}
@@ -389,11 +424,9 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         lines.append(f"📁 详情: ~/.tea_agent/kb/潜意识洞察.md")
 
         msg = "\n".join(lines)
-        try:
-            subprocess.run(["notify-send", "🧠 潜意识引擎", msg, "--expire-time=8000"],
-                          capture_output=True, timeout=3)
-        except:
-            pass
+        # NOTE: 2026-06-19 gen by tea_agent, 改用 _send_notification 统一通知（自动回退 kdialog/DBus）
+        _send_notification("🧠 潜意识引擎", msg, expire_ms=8000)
+
 
     # === 执行一次完整循环 ===
     def _run_cycle(state):

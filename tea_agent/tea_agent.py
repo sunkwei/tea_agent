@@ -2,7 +2,7 @@
 @2026-05-16 gen by tea_agent, TeaAgent — 轻量对外接口类
 
 封装与 LLM 对话（含工具调用）的完整流程为单一接口。
-无 Storage（不写数据库）、不启动后台线程（Dream/MQTT 等），
+无 Storage（不写数据库）、不启动后台线程（Dream 等），
 适合创建大量 instances 跑孤立任务，互不影响。
 
 用法:
@@ -33,7 +33,7 @@ class TeaAgent:
 
     特性:
       - 默认使用 $HOME/.tea_agent/config.yaml
-      - 仅加载 Toolkit + KB 路径，不启动 Storage / Dream / MQTT
+      - 仅加载 Toolkit + KB 路径，不启动 Storage / Dream
       - 回调通知中间轮次（流式 token、工具调用、状态变更）
       - 阻塞式 chat()，返回完整轮次列表
       - 支持上下文管理器，自动释放资源

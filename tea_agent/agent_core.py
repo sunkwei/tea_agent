@@ -4,8 +4,7 @@ AgentCore — Tea Agent 共享核心基类。
 CLI (tea_main_cli.TeaCLI) 和 GUI (main_db_gui.TkGUI) 均继承此类，
 消除重复代码。包含：
   - 配置加载、目录初始化、Storage/Toolkit 初始化
-  - MQTT 连接器启动与消息处理
-  - 对话后处理流水线（入库、MQTT 发布、Token 统计、摘要）
+  - 对话后处理流水线（入库、Token 统计、摘要）
 """
 
 import os
@@ -20,8 +19,6 @@ logger = logging.getLogger("agent_core")
 from tea_agent.onlinesession import OnlineToolSession
 from tea_agent.store import Storage
 from tea_agent import tlk
-from tea_agent import chat_room_connector
-from tea_agent import mqtt_agent_connector
 from tea_agent.config import load_config, get_config
 
 
@@ -69,9 +66,6 @@ class AgentCore:
                                        ##   tlk.Toolkit 中的方法使用； 
         tlk.toolkit_reload()
 
-        # ── 4. 启动连接器 ──
-        self._start_connectors()
-
         # ── 5. 会话锁 ──
         self._sess_lock = threading.Lock()
 
@@ -85,9 +79,6 @@ class AgentCore:
         self._start_subconscious()
 
 # NOTE: 2026-05-04 19:26:41, self-evolved by tea_agent --- AgentCore 添加 _start_file_watcher() — 监控非 toolkit 的 .py 变更并自动重启进程
-        # ── 7. 串接 MQTT reply handler ──
-        self._setup_mqtt_reply_handler()
-
         # ── 8. 启动文件监控（代码变更自动重启）──
         self._start_file_watcher()
 
@@ -238,23 +229,6 @@ class AgentCore:
             # 启动失败不影响主体功能
             logger.debug(f"潜意识引擎自动启动跳过: {e}")
 
-# NOTE: 2026-05-09 20:10:37, self-evolved by tea_agent --- _start_connectors: 暂时禁用 MQTT 启动，保留代码
-    def _start_connectors(self):
-        """启动 chat_room 和 MQTT 连接器（非阻塞守护线程）。"""
-        try:
-            chat_room_connector.start(self.db)
-        except Exception as e:
-            logger.warning(f"chat_room 连接器启动失败: {e}")
-
-        # NOTE: MQTT 暂不启动，保留代码以备后用
-        # try:
-        #     mqtt_agent_connector.start(self.db)
-        # except Exception as e:
-        #     logger.warning(f"MQTT 连接器启动失败: {e}")
-
-    # ═══════════════════════════════════════════════
-    # 会话初始化
-    # ═══════════════════════════════════════════════
     def _init_session(self):
         """初始化 OnlineToolSession。子类可覆盖以添加 UI 回调。"""
         cfg = self._cfg
@@ -292,14 +266,13 @@ class AgentCore:
         return f"📡 已连接 | 模型: {main_m.model_name}{cheap_info}\n🔧 工具: {len(self.toolkit.func_map)} 个已加载"
 
     # ═══════════════════════════════════════════════
-    # 对话后处理流水线（入库 → MQTT → Token → 摘要）
+    # 对话后处理流水线（入库 → Token → 摘要）
     # ═══════════════════════════════════════════════
     def _post_chat_pipeline(self, ai_msg: str, used_tools: bool,
                             user_msg: str, topic_id: str) -> None:
         """AI 回复后的标准处理流水线。CLI 和 GUI 共用。
 
         1. 保存到数据库
-        2. 发布到 MQTT
         3. Token 统计
         4. 自动摘要
         """
@@ -312,9 +285,6 @@ class AgentCore:
             is_func_calling=used_tools,
             rounds=rounds if rounds else None,
         )
-
-        # ── 2. 发布到 MQTT ──
-        self._publish_to_mqtt(ai_msg)
 
 # NOTE: 2026-05-07 13:13:37, self-evolved by tea_agent --- _post_chat_pipeline Token 统计增加嵌入模型用量（从 EmbeddingEngine.get_embedding_usage 获取）
         # ── 3. Token 统计 ──
@@ -351,147 +321,7 @@ class AgentCore:
         # ── 5. 检查是否需要延迟重启（watchdog 在会话中检测到代码变更）──
         self._check_pending_restart()
 
-    # ═══════════════════════════════════════════════
-    # MQTT 方法（CLI 和 GUI 100% 共享）
-    # ═══════════════════════════════════════════════
-    def _publish_to_mqtt(self, ai_msg: str):
-        """将 AI 回复发布到 MQTT，让所有订阅客户端实时收到"""
-        try:
-            conn = mqtt_agent_connector.get_connector()
-            if conn and conn.is_ready and ai_msg:
-                tp = self.db.get_topic(self.current_topic_id)
-                title = tp.get("title", "") if tp else ""
-                if title.startswith("mqtt_"):
-                    sender = title[5:]  # 去掉 "mqtt_" 前缀
-                    conn.publish_reply(ai_msg, reply_to=sender)
-                else:
-                    conn.publish_reply(ai_msg)
-# NOTE: 2026-05-07 11:28:25, self-evolved by tea_agent --- _publish_to_mqtt 静默异常改为 WARNING 日志
-        except Exception:
-            logger.debug(f"MQTT 发布失败 (非致命), topic={self.current_topic_id}")
-
-    def _setup_mqtt_reply_handler(self):
-        """将 MQTT 消息串入 chat_stream() 全流水线。"""
-        conn = mqtt_agent_connector.get_connector()
-        if not conn:
-            return
-
-        def handle_mqtt(sender: str, content: str, msg_id: str):
-            threading.Thread(
-                target=self._process_mqtt_message,
-                args=(sender, content),
-                daemon=True,
-                name=f"mqtt-reply-{sender}",
-            ).start()
-            return None
-
-        conn.set_reply_handler(handle_mqtt)
-        logger.info("MQTT reply handler 已注册")
-
-# NOTE: 2026-05-04 19:35:00, self-evolved by tea_agent --- _process_mqtt_message 入口加 _shutting_down 闸门检查
-    def _process_mqtt_message(self, sender: str, content: str):
-        """处理单条 MQTT 消息：切换上下文 → chat_stream → 入库 → MQTT 回复。
-
-        用户消息已由 connector._route_message() 存入 DB。
-        这里取最后一条 conv_id，用 AI 回复更新之。
-        """
-        if self._shutting_down:
-            logger.info(f"正在关闭中，拒绝处理 MQTT 消息 (sender={sender})")
-            return
-        with self._sess_lock:
-            # 1. 获取/创建 mqtt_{sender} topic
-            tid = self._get_or_create_mqtt_topic(sender)
-
-            # 2. 取 _route_message 刚保存的用户消息 conv_id
-            recent = self.db.get_recent_conversations(tid, limit=1)
-            conv_id = recent[0]["id"] if recent else -1
-
-            # 3. 保存当前 session 状态
-            saved_topic_id = self.current_topic_id
-            saved_messages = list(self.sess.messages) if hasattr(self.sess, 'messages') else []
-            saved_summary = getattr(self.sess, '_history_summary', '')
-
-            # 4. 加载 MQTT topic 的对话历史
-            self._load_topic_history_into_session(tid)
-
-            try:
-                # 5. 调用 AI（静默，max_iter 时自动续命）
-                self.sess._continue_after_max = True
-# NOTE: 2026-05-04 19:38:19, self-evolved by tea_agent --- MQTT 续命也追加 10 轮，与 CLI 保持一致
-                def _on_status_mqtt(status_msg: str):
-                    if status_msg.startswith("!MAX_ITER:"):
-                        self.sess._continue_after_max = True
-                        self.sess._extra_iterations += 10
-                        self.sess._max_iter_wait.set()
-                ai_msg, used_tools = self.sess.chat_stream(
-                    content,
-                    callback=lambda _: None,
-                    topic_id=tid,
-                    on_status=_on_status_mqtt,
-                )
-
-                # 6. AI 回复入库 + MQTT 推送
-                if ai_msg:
-                    try:
-                        if conv_id:
-                            rounds = self.sess._rounds_collector
-                            self.db.update_msg_rounds(
-                                conversation_id=conv_id,
-                                ai_msg=ai_msg,
-                                is_func_calling=used_tools,
-                                rounds=rounds if rounds else None,
-                            )
-                        else:
-                            self.db.save_msg(tid, content, ai_msg, used_tools)
-                    except Exception as e:
-                        logger.error(f"MQTT 保存 AI 回复失败: {e}")
-
-                    conn = mqtt_agent_connector.get_connector()
-                    if conn and conn.is_ready:
-                        conn.publish_reply(ai_msg, reply_to=sender)
-
-                    logger.info(
-                        f"MQTT → AI → MQTT 完成: sender={sender}, "
-                        f"topic=mqtt_{sender}, reply_len={len(ai_msg)}"
-                    )
-
-                    # 2026-05-06 gen by tea_agent, MQTT 消息处理后生成主题摘要
-                    try:
-                        self._auto_summary(tid)
-                    except Exception as e:
-                        logger.warning(f"MQTT 主题摘要失败 (sender={sender}): {e}")
-
-            except Exception as e:
-                logger.error(f"MQTT AI 处理失败 (sender={sender}): {e}")
-# NOTE: 2026-05-06 09:58:33, self-evolved by tea_agent --- _process_mqtt_message末尾添加_check_pending_restart调用
-            finally:
-                # 7. 恢复 session 状态
-                if saved_isinstance(topic_id, str) and topic_id and saved_topic_id != tid:
-                    self.sess.messages = saved_messages
-                    self.sess._history_summary = saved_summary
-                    self.current_topic_id = saved_topic_id
-                    self._on_mqtt_session_restored()
-
-                # 8. 检查是否需要延迟重启
-                self._check_pending_restart()
-
-    def _on_mqtt_session_restored(self):
-        """MQTT 消息处理后恢复 session 的 UI 回调（GUI 覆盖来刷新界面）。"""
-        pass
-
-    def _get_or_create_mqtt_topic(self, sender: str) -> str:
-        """获取或创建 mqtt_{sender} 主题"""
-        title = f"mqtt_{sender}"
-        try:
-            topics = self.db.list_topics()
-            for t in topics:
-                if t.get("title") == title:
-                    return t["topic_id"]
-        except Exception:
-            pass
-        return self.db.create_topic(title)
-
-    def _load_topic_history_into_session(self, tid: int):
+    def _load_topic_history_into_session(self, tid: str):
         """将指定 topic 的对话历史加载到 session"""
         all_light = self.db.get_conversations(tid, limit=-1, include_rounds=False)
         if all_light:

@@ -24,18 +24,14 @@ except ImportError:
 logger = logging.getLogger("main_db_gui")
 
 # ====================== 包导入兼容处理 ======================
-# NOTE: 2026-05-02 18:31:44, self-evolved by tea_agent --- main_db_gui.py：导入 chat_room_connector 并在初始化后启动连接器
 if __name__ == "__main__":
     parent_dir = str(Path(__file__).resolve().parent.parent)
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
-# NOTE: 2026-05-04 08:34:18, self-evolved by tea_agent --- main_db_gui.py 导入 mqtt_agent_connector（两处分支）
 # NOTE: 2026-05-04 18:47:48, self-evolved by tea_agent --- 添加 AgentCore 导入
     from tea_agent.onlinesession import OnlineToolSession
     from tea_agent.store import Storage
     from tea_agent import tlk
-    from tea_agent import chat_room_connector
-    from tea_agent import mqtt_agent_connector
     from tea_agent.agent_core import AgentCore
 # NOTE: 2026-05-01 15:30:42, self-evolved by tea_agent --- 为 GUI 添加 ConfigDialog 配置编辑弹窗 + 左侧"⚙️ 配置"按钮
     from tea_agent.config import load_config, get_config, save_config, ModelConfig
@@ -43,8 +39,6 @@ else:
     from .onlinesession import OnlineToolSession
     from .store import Storage
     from . import tlk
-    from . import chat_room_connector
-    from . import mqtt_agent_connector
     from .agent_core import AgentCore
 # NOTE: 2026-05-01 15:30:48, self-evolved by tea_agent --- 给 GUI 加 ConfigDialog 弹窗：import save_config（第二处）
     from .config import load_config, get_config, save_config, ModelConfig
@@ -440,7 +434,7 @@ class TkGUI(AgentCore):
 
         self.sess = None  # 预设，AgentCore._init_session 会创建它
 
-        # ── AgentCore 初始化：配置、目录、Storage/Toolkit、连接器、会话、MQTT ──
+        # ── AgentCore 初始化：配置、目录、Storage/Toolkit、会话 ──
         super().__init__(debug=debug)
 
         # 暴露给 toolkit 工具函数
@@ -484,24 +478,10 @@ class TkGUI(AgentCore):
         # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
-    # NOTE: 2026-05-05, self-evolved by tea_agent --- 退出时正常关闭数据库：WAL checkpoint + MQTT 断开
+    # NOTE: 2026-05-05, self-evolved by tea_agent --- 退出时正常关闭数据库：WAL checkpoint
     def _on_closing(self):
         """窗口关闭时的清理流程"""
         self._update_status("⏳ 正在清理资源...")
-        try:
-            self.db.close()
-            self._update_status("✅ 数据库已正常关闭")
-        except Exception as e:
-            logger.warning(f"关闭数据库失败: {e}")
-        try:
-            mqtt_agent_connector.stop()
-        except Exception:
-            pass
-        try:
-            chat_room_connector.stop()
-        except Exception:
-            pass
-        self.root.destroy()
 
     def _create_ui(self):
         """创建界面"""
@@ -768,7 +748,6 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     def _now_ts(self) -> str:
         return datetime.now().strftime("%H:%M:%S")
 
-# NOTE: 2026-05-04 09:27:57, self-evolved by tea_agent --- GUI 添加 _sess_lock 和 _setup_mqtt_reply_handler 调用
 # NOTE: 2026-05-04 18:48:10, self-evolved by tea_agent --- _init_session 继承 AgentCore，仅补 UI 回调
 # NOTE: 2026-05-04 18:58:17, self-evolved by tea_agent --- GUI _init_session 调用 super() 确保 sess 被创建
 # NOTE: 2026-05-04 18:58:47, self-evolved by tea_agent --- _init_session 只设 tool_log，status 移到 UI 创建后
@@ -1154,14 +1133,9 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 # NOTE: 2026-05-01 11:49:01, self-evolved by tea_agent --- _update_topic_summary 加控台可见调试日志，追踪每一步执行
 # NOTE: 2026-05-01 11:49:45, self-evolved by tea_agent --- _update_topic_summary 日志调用改用 root.after 调度到主线程，避免 tk 线程安全问题
 # NOTE: 2026-05-01 11:57:59, self-evolved by tea_agent --- 移除 _update_topic_summary 调试日志，保留 WAL + 兜底 + 状态栏反馈等核心修复
-# NOTE: 2026-05-04 09:08:01, self-evolved by tea_agent --- GUI TeaApp 添加 _publish_to_mqtt 方法
-# NOTE: 2026-05-04 09:28:50, self-evolved by tea_agent --- GUI 添加 MQTT reply handler 三个方法
     # ── AgentCore 回调覆盖 ──────────────────────────
 
-    def _on_mqtt_session_restored(self):
-        """MQTT 消息处理后恢复 GUI 界面。"""
-        self.root.after(0, self.refresh_topics)
-
+    
     def _on_summary_updated(self, topic_id: str, summary: str):
         """摘要更新后刷新 GUI 主题列表和状态栏。"""
         self.root.after(200, self._refresh_topics_preserve_selection)
@@ -1321,7 +1295,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 )
                 self.root.after(0, self._flush_stream_to_messages)
 
-                # ── 标准后处理流水线（入库 → MQTT → Token → 摘要）──
+                # ── 标准后处理流水线（入库 → Token → 摘要）──
                 self._post_chat_pipeline(ai_msg, is_func, msg, self.current_topic_id)
 
                 # GUI 特定：token 渲染 + 通知

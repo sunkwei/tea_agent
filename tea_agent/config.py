@@ -41,7 +41,6 @@ class ModelConfig:
 
 
 # NOTE: 2026-04-30 16:17:53, self-evolved by tea_agent --- AgentConfig增加运行时get/set/apply/reload方法，支持自我配置调优
-# NOTE: 2026-05-04 08:30:13, self-evolved by tea_agent --- 添加 MqttConfig dataclass 并在 AgentConfig / load_config / save_config 中集成
 # NOTE: 2026-05-04 17:52:03, self-evolved by tea_agent --- 新增 PathsConfig dataclass + 路径解析逻辑，所有路径相对 config.yaml 所在目录解析
 @dataclass
 class PathsConfig:
@@ -139,26 +138,6 @@ class EmbeddingConfig:
     @property
     def is_configured(self) -> bool:
         """至少配置了 api_url 和 model_name 才视为有效"""
-        return bool(self.api_url and self.model_name)
-
-
-@dataclass
-class MqttConfig:
-    """MQTT 连接配置"""
-    enabled: bool = False
-    broker_host: str = "localhost"
-    broker_port: int = 1883
-    username: str = ""
-    password: str = ""
-    topic_prefix: str = "tea"
-
-    @property
-    def is_configured(self) -> bool:
-        """至少指定了 broker 地址才视为已配置"""
-        return self.enabled and bool(self.broker_host)
-
-
-# NOTE: 2026-05-06 19:15:35, self-evolved by tea_agent --- AgentConfig 增加 embedding 字段
 @dataclass
 class AgentConfig:
     """Agent 全局配置"""
@@ -166,7 +145,6 @@ class AgentConfig:
 # NOTE: 2026-05-06 19:15:39, self-evolved by tea_agent --- AgentConfig 增加 embedding 字段
     main_model: ModelConfig = field(default_factory=ModelConfig)
     cheap_model: ModelConfig = field(default_factory=ModelConfig)
-    mqtt: MqttConfig = field(default_factory=MqttConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
     
@@ -315,19 +293,8 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
                     target.model_name = m_data.get("model_name", "")
                     target.options = m_data.get("options", {})
 
-# NOTE: 2026-05-04 08:30:28, self-evolved by tea_agent --- load_config() 中解析 mqtt 配置块
 # NOTE: 2026-05-04 17:52:35, self-evolved by tea_agent --- load_config 中解析 paths 配置块 + 调用 resolve 解析路径
 # NOTE: 2026-05-06 19:15:56, self-evolved by tea_agent --- load_config 解析 embedding 配置块
-            # 加载 MQTT 配置
-            mqtt_data = data.get("mqtt", {})
-            if isinstance(mqtt_data, dict):
-                cfg.mqtt.enabled = bool(mqtt_data.get("enabled", cfg.mqtt.enabled))
-                cfg.mqtt.broker_host = str(mqtt_data.get("broker_host", cfg.mqtt.broker_host))
-                cfg.mqtt.broker_port = int(mqtt_data.get("broker_port", cfg.mqtt.broker_port))
-                cfg.mqtt.username = str(mqtt_data.get("username", cfg.mqtt.username))
-                cfg.mqtt.password = str(mqtt_data.get("password", cfg.mqtt.password))
-                cfg.mqtt.topic_prefix = str(mqtt_data.get("topic_prefix", cfg.mqtt.topic_prefix))
-
             # 加载 Embedding 配置
             emb_data = data.get("embedding_model", {})
             if isinstance(emb_data, dict):
@@ -426,16 +393,6 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
         "dimension": cfg.embedding.dimension,
     }
 
-    # 保存 MQTT 配置
-    data["mqtt"] = {
-        "enabled": cfg.mqtt.enabled,
-        "broker_host": cfg.mqtt.broker_host,
-        "broker_port": cfg.mqtt.broker_port,
-        "username": cfg.mqtt.username,
-        "password": cfg.mqtt.password,
-        "topic_prefix": cfg.mqtt.topic_prefix,
-    }
-
     # 保存路径配置（保存原始配置值，非解析后的绝对路径）
     data["paths"] = {
         "data_dir": cfg.paths.data_dir,
@@ -490,7 +447,6 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "  model_name: \"\"\n"
         "  options:  # 可选参数，如 {extra_body: {thinking: {type: enabled}}}\n"
         "    key: value\n\n"
-# NOTE: 2026-05-04 08:30:52, self-evolved by tea_agent --- create_default_config() 模板中增加 mqtt 配置块
         "# 便宜模型配置（用于摘要生成、信息压缩等场景）\n"
         "cheap_model:\n"
         "  api_key: \"\"\n"
@@ -515,16 +471,7 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "  model_name: \"\"       # 嵌入模型，如 text-embedding-3-small / bge-m3\n"
         "  api_key: \"\"          # 为空则复用 main_model.api_key\n"
         "  dimension: 0          # 向量维度，0=自动检测\n\n"
-        "# ==================== MQTT 配置 ====================\n"
-        "# tea_agent 可作为 MQTT client 注册到 broker，与外部客户端交互\n"
-        "mqtt:\n"
-        "  enabled: false\n"
-        "  broker_host: \"localhost\"\n"
-        "  broker_port: 1883\n"
-        "  username: \"\"\n"
-        "  password: \"\"\n"
-        "  topic_prefix: \"tea\"\n\n"
-        "# ==================== 会话参数 ====================\n"
+"# ==================== 会话参数 ====================\n"
         "# 最大历史消息数（保留的对话历史条数）\n"
         "max_history: 10\n\n"
         "# 最大工具调用迭代次数（单次对话中最多允许的工具调用循环数）\n"

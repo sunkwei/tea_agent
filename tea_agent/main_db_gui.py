@@ -167,8 +167,10 @@ strong { font-weight: bold; color: #222; }
 .msg-user h3 { color: #1e40af; margin-top: 0; }
 .msg-ai { background: #f3f4f6; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #6b7280; }
 .msg-ai h3 { color: #374151; margin-top: 0; }
-/* AI thinking blockquote */
-.msg-ai blockquote { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 6px 12px; border-radius: 4px; margin: 8px 0; color: #92400e; font-style: italic; }
+/* Think/reasoning message (独立角色) */
+.msg-think { background: #fef3c7; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #f59e0b; }
+.msg-think h3 { color: #92400e; margin-top: 0; }
+.msg-think p { color: #92400e; font-style: italic; }
 /* code blocks = tool calls/results */
 .msg-ai pre { background: #ecfdf5; border-left: 4px solid #10b981; padding: 8px 12px; border-radius: 4px; margin: 6px 0; font-size: 0.9em; }
 .msg-ai code { background: #d1fae5; color: #065f46; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
@@ -320,6 +322,8 @@ def _chat_to_markdown(messages):
         ts_display = f'<span class="msg-timestamp">{ts}</span>' if ts else ""
         if role == "user":
             parts.append(f'{ts_display}\n\n<div class="msg-user" markdown="1">\n\n### 👤 你\n\n{content.strip()}\n</div>\n')
+        elif role == "think":
+            parts.append(f'{ts_display}\n\n<div class="msg-think" markdown="1">\n\n### 💭 思考过程\n\n{content.strip()}\n</div>\n\n---\n')
         elif role == "ai":
             parts.append(f'{ts_display}\n\n<div class="msg-ai" markdown="1">\n\n### 🤖 AI\n\n{content.strip()}\n</div>\n\n---\n')
         elif role == "tool":
@@ -893,13 +897,13 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self._stream_buffer = ""
     # @2026-05-16 gen by tea_agent, 工具轮思考过程独立存储
     def _flush_think_buffer_to_messages(self):
-        """将当前 think 缓冲刷新为独立的 AI 思考消息。
+        """将当前 think 缓冲刷新为独立的思考消息。
         工具调用每轮结束后调用，确保思考过程与工具轮对应。"""
         if self._think_buffer:
             think_text = self._think_buffer.strip()
             self.chat_messages.append({
-                "role": "ai",
-                "content": f"> 💭 **思考过程**: {think_text}",
+                "role": "think",
+                "content": think_text,
                 "timestamp": self._now_ts()
             })
             self._think_buffer = ""

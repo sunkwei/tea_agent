@@ -238,7 +238,6 @@ def _build_tool_blocks(messages):
 
 
 
-# NOTE: 2026-05-16 gen by tea_agent, 支持多行参数格式
 def _render_tool_group(group, ts_display):
 
     """将一组连续的 tool 消息渲染为 markdown，带轮次编号"""
@@ -251,33 +250,15 @@ def _render_tool_group(group, ts_display):
 
         text = msg.get("content", "").strip()
 
-        # @2026-05-16 gen by tea_agent, 支持新旧两种工具调用格式
-        m_new = re.match(r'🔧 调用工具：(\w+)\n参数：\n(.+)', text, re.DOTALL)
-        m_old = re.match(r'🔧 调用工具：(\w+)\((.+)\)', text)
-        if m_new:
+        m = re.match(r'🔧 调用工具：(\w+)\((.+)\)', text)
+
+        if m:
+
             round_num += 1
 
-            tool_name = m_new.group(1)
+            tool_name = m.group(1)
 
-            args = m_new.group(2).strip()
-
-            if len(args) > 200:
-
-                args = args[:200] + "..."
-
-            lines_out.append(f"\n**第 {round_num} 轮**")
-
-            lines_out.append(f"- **调用**: `{tool_name}`")
-
-            lines_out.append(f"- **参数**: \n```\n{args}\n```")
-
-            continue
-        if m_old:
-            round_num += 1
-
-            tool_name = m_old.group(1)
-
-            args = m_old.group(2)
+            args = m.group(2)
 
             if len(args) > 160:
 
@@ -1123,21 +1104,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                                         fn_args = tc.get("function", {}).get("arguments", "")
                                         if fn_name not in tool_names:
                                             tool_names.append(fn_name)
-# NOTE: 2026-05-14 07:22:12, self-evolved by tea_agent --- 优化工具调用显示：参数多行展开（JSON解析），替换单行括号格式
-                                        # @2026-05-16 gen by tea_agent, 工具调用参数多行展开显示
-                                        import json as _json_tc2
-                                        try:
-                                            args_dict = _json_tc2.loads(fn_args) if fn_args else {}
-                                            args_lines = []
-                                            for k, v in args_dict.items():
-                                                v_str = _json_tc2.dumps(v, ensure_ascii=False)
-                                                if len(v_str) > 160:
-                                                    v_str = v_str[:160] + "..."
-                                                args_lines.append(f"    {k}: {v_str}")
-                                            args_block = "\n".join(args_lines)
-                                            render_items.append(("tool", f"🔧 调用工具：{fn_name}\n参数：\n{args_block}"))
-                                        except Exception:
-                                            render_items.append(("tool", f"🔧 调用工具：{fn_name}\n参数：\n    {fn_args[:200]}"))
+                                        render_items.append(("tool", f"🔧 调用工具：{fn_name}({fn_args})"))
                                     if rd.get("content"):
                                         render_items.append(("ai", f"AI：{rd['content']}"))
                                 elif rd_role == "tool":

@@ -4,7 +4,8 @@ import logging
 # NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
-def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_code: str, verify: bool = True, backup: bool = True) -> dict:
+# NOTE: 2026-05-16 gen by tea_agent, 补充 git_snapshot 和 run_tests 参数到函数签名
+def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_code: str, verify: bool = True, backup: bool = True, git_snapshot: bool = True, run_tests: bool = True) -> dict:
     """
     四层安全自进化：修改项目源文件，自动生成演化注释、备份原文件、验证编译、测试回滚。
 
@@ -119,10 +120,6 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     is_py = file_path.endswith(".py")
     comment = f"# NOTE: {now}, self-evolved by tea_agent --- {description}\n" if is_py else ""
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    is_py = file_path.endswith(".py")
-    comment = f"# NOTE: {now}, self-evolved by tea_agent --- {description}\n" if is_py else ""
-
     # ── Layer 0: Git 快照 ──
     git_snapped = False
     git_snap_error = None
@@ -143,13 +140,6 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     # 临时备份（用于快速回滚）
     tmp_bak = full_path + ".tmp_bak"
     shutil.copy2(full_path, tmp_bak)
-
-    # 持久备份（如果用户要求）
-    if backup:
-        bak_path = full_path + ".bak"
-        shutil.copy2(full_path, bak_path)
-    else:
-        bak_path = None
 
     # 应用修改（.py 文件在 new_code 前加注释）
     annotated_new = (comment + new_code) if comment else new_code

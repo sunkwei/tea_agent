@@ -449,8 +449,8 @@ toolkit_batch_exec(commands=[
 tea_agent/
 ├── main_db_gui.py              ← [Tkinter GUI 主程序](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/main_db_gui.py)
 ├── tea_main_cli.py             ← [CLI 入口](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/tea_main_cli.py)
-├── agent_core.py               ← [GUI/CLI 共享基类](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/agent_core.py) (MQTT、重启、会话管理)
-├── config.py                   ← [YAML 配置加载](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/config.py) (主/便宜模型、MQTT、paths)
+├── agent_core.py               ← [GUI/CLI 共享基类](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/agent_core.py) (重启、会话管理)
+├── config.py                   ← [YAML 配置加载](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/config.py) (主/便宜模型、paths)
 │
 ├── basesession.py              ← [会话抽象基类](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/basesession.py) (load_history 三级策略)
 ├── onlinesession.py            ← [OnlineToolSession](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/onlinesession.py) (核心编排)
@@ -523,14 +523,6 @@ max_tool_output: 131072             # 工具输出截断 (128KB)
 memory_extraction_threshold: 1      # 记忆提取触发阈值
 memory_dedup_threshold: 0.3         # 记忆去重相似度
 
-# MQTT 实时交互（可选）
-mqtt:
-  enabled: true                     # 启用 MQTT 连接器
-  broker_host: "localhost"          # MQTT broker 地址
-  broker_port: 1883                 # MQTT broker 端口
-  username: ""                      # broker 认证用户名（空=匿名）
-  password: ""                      # broker 认证口令
-  topic_prefix: "tea"               # Topic 前缀，生成 tea/chat/+
 ```
 
 ### 全局配置路径
@@ -556,10 +548,7 @@ mqtt:
 8. **文档自更新**：「根据当前功能和修改，更新 README.md 和 CHANGELOG.md」
 9. **记忆规则说明**：「在 README 中增加记忆/反思生成规则」→ Agent 读取源码提炼规则
 10. **加载动画**：「切换主题时显示加载动画」→ HtmlFrame spinner + 60ms 延迟
-11. **MQTT 远程交互**：「启动 MQTT broker，配置 tea_agent 连接」→ 自动注册为 `tea_agent_{uuid}`，订阅 `tea/chat/+`
-12. **PC 客户端接入**：「python mqtt_client.py alice」→ 终端聊天客户端，发送消息触发 AI 全流水线
-13. **MQTT 双向通信**：「mqtt_client 发消息 → tea_agent chat_stream() 处理 → 仅 assistant 回复推送回 MQTT」
-14. **thinkpad wayland 下按键编码修正**：使用布局预览，发现按下左 alt, F6 同时点亮，查找原因 ....
+11. **thinkpad wayland 下按键编码修正**：使用布局预览，发现按下左 alt, F6 同时点亮，查找原因 ....
 
 ---
 

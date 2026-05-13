@@ -482,6 +482,12 @@ class TkGUI(AgentCore):
     def _on_closing(self):
         """窗口关闭时的清理流程"""
         self._update_status("⏳ 正在清理资源...")
+        try:
+            self.db.close()
+            self._update_status("✅ 数据库已正常关闭")
+        except Exception as e:
+            logger.warning(f"关闭数据库失败: {e}")
+        self.root.destroy()
 
     def _create_ui(self):
         """创建界面"""

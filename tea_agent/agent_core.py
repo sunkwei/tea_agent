@@ -277,7 +277,7 @@ class AgentCore:
             conversation_id=conv_id, ai_msg=ai_msg,
             is_func_calling=used_tools, rounds=rounds if rounds else None,
         )
-        # Level 2 push: 获取上一轮（旧 Level 1）推入 Level 2
+        # Level 2 push: push OLD L1 (previous conversation) to Level 2
         prev_convs = self.db.get_conversations(topic_id, limit=2, include_rounds=False)
         if len(prev_convs) >= 2:
             old_l1 = prev_convs[-2]
@@ -310,6 +310,68 @@ class AgentCore:
             )
         self._auto_summary(topic_id)
         self._check_pending_restart()
+
+    def _update_level3_summary(self, topic_id: str, overflow: list):
+        """L3 incremental summary: semantic + tool-chain."""
+        if not overflow:
+            return
+        try:
+            cli, mdl = self.sess._get_summarize_client()
+            old_text = ""
+            for pair in overflow:
+                old_text += "User: " + pair.get("user", "") + "\n"
+                old_text += "Assistant: " + pair.get("assistant", "") + "\n\n"
+
+            # A. Semantic Summary
+            old_sem = self.db.get_semantic_summary(topic_id)
+            sem_prompt = (
+                "Update the semantic summary of past conversations. "
+                "Focus on: user preferences, long-term task background, key conclusions, "
+                "domain knowledge mentioned. "
+                "Format using bullet points in Chinese:\n"
+                "- 用户偏好：...\n"
+                "- 长期任务背景：...\n"
+                "- 已完成的关键步骤：...\n"
+                "- 关键结论：...\n\n"
+                "Existing summary:\n" + (old_sem if old_sem else "(none)") + "\n\n"
+                "New conversations:\n" + old_text + "\n"
+                "Output the updated semantic summary (max 400 chars, Chinese only):"
+            )
+            r = cli.chat.completions.create(
+                model=mdl, messages=[{"role": "user", "content": sem_prompt}],
+                temperature=0.3, max_tokens=512,
+            )
+            new_sem = r.choices[0].message.content.strip() if r.choices else old_sem or ""
+            if new_sem:
+                self.db.set_semantic_summary(topic_id, new_sem)
+                logger.info("L3 semantic: {} chars".format(len(new_sem)))
+
+            # B. Tool-Chain Summary
+            old_tc = self.db.get_tool_chain_summary(topic_id)
+            tc_prompt = (
+                "Update the tool-call-chain summary of past conversations. "
+                "Focus on: task name, tools used (A->B->C), key I/O, final conclusion. "
+                "Discard detailed logs and parameters, keep only core logic. "
+                "If no tool calls in the new conversations, output NONE. "
+                "Format in Chinese:\n"
+                "- 任务：...\n"
+                "- 使用工具：A -> B -> C\n"
+                "- 关键I/O：...\n"
+                "- 最终结论：...\n\n"
+                "Existing summary:\n" + (old_tc if old_tc else "(none)") + "\n\n"
+                "New conversations:\n" + old_text + "\n"
+                "Output updated tool-chain summary (max 300 chars, or NONE):"
+            )
+            r2 = cli.chat.completions.create(
+                model=mdl, messages=[{"role": "user", "content": tc_prompt}],
+                temperature=0.3, max_tokens=384,
+            )
+            new_tc = r2.choices[0].message.content.strip() if r2.choices else old_tc or ""
+            if new_tc and new_tc != "NONE" and new_tc != "无":
+                self.db.set_tool_chain_summary(topic_id, new_tc)
+                logger.info("L3 toolchain: {} chars".format(len(new_tc)))
+        except Exception as e:
+            logger.warning("L3 summary fail: {}: {}".format(type(e).__name__, e))
 
     def _update_level3_summary(self, topic_id: str, overflow: list):
         if not overflow:

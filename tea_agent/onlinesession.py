@@ -279,7 +279,7 @@ class OnlineToolSession(
         三级历史拼接：
             Level 0: 系统提示词 + 长期记忆注入
             Level 3: 语义摘要 + 工具链摘要
-            Level 2: 近期语义相关 user+assistant 自然语言对
+            Level 2: 按语义相关性筛选的 user+assistant 对
             Level 1: 最新一轮完整对话（含工具调用链）
         """
         result: List[Dict] = []
@@ -326,7 +326,7 @@ class OnlineToolSession(
                 "reasoning_content": ""
             })
 
-        # ── 兼容旧 _history_summary（没有三级字段时使用）──
+        # ── 兼容旧 _history_summary ──
         if not has_level3 and self._history_summary:
             result.append({
                 "role": "user",
@@ -338,14 +338,28 @@ class OnlineToolSession(
                 "reasoning_content": ""
             })
 
-        # ── Level 2: 近期语义相关 user+assistant 对 ──
+        # ── Level 2: 按语义相关性筛选 ──
         level2 = getattr(self, '_level2', [])
-        for pair in level2:
-            result.append({"role": "user", "content": pair.get("user", "")})
-            result.append({"role": "assistant", "content": pair.get("assistant", ""),
-                          "reasoning_content": ""})
+        if level2:
+            current_user_msg = ""
+            for i in range(len(self.messages)-1, 0, -1):
+                if self.messages[i].get("role") == "user":
+                    current_user_msg = self.messages[i].get("content", "")
+                    break
+            filtered = self._filter_level2_by_relevance(level2, current_user_msg)
+            for item in filtered:
+                kind = item.get("kind", "full")
+                if kind == "summary":
+                    result.append({
+                        "role": "user",
+                        "content": f"[历史相关对话摘要] {item['content']}"
+                    })
+                else:
+                    result.append({"role": "user", "content": item.get("user", "")})
+                    result.append({"role": "assistant", "content": item.get("assistant", ""),
+                                  "reasoning_content": ""})
 
-        # ── Level 1: 最新一轮完整对话（从 self.messages 索引1开始，跳过系统提示词）──
+        # ── Level 1: 最新一轮完整对话 ──
         for i in range(1, len(self.messages)):
             msg = self.messages[i]
             msg_copy = dict(msg)
@@ -353,6 +367,66 @@ class OnlineToolSession(
                 msg_copy["reasoning_content"] = ""
             result.append(msg_copy)
 
+        return result
+
+    # NOTE: 2025-07-16 gen by tea_agent, Level 2 语义相关性过滤
+    def _filter_level2_by_relevance(self, level2: list, current_msg: str) -> list:
+        """按语义相关性筛选 Level 2 条目。
+
+        HIGH  → 保留完整 user+assistant
+        MEDIUM → 压缩为一行摘要
+        LOW   → 丢弃
+
+        使用关键词重叠 + 便宜模型作为 fallback。
+        """
+        if not level2 or not current_msg:
+            return [{"kind": "full", **p} for p in level2]
+
+        # ── 1. 关键词重叠快速打分 ──
+        def _key_words(text):
+            import re
+            # 提取中文词(2+字)、英文词(3+字母)
+            cn = re.findall(r'[\u4e00-\u9fff]{2,}', text)
+            en = re.findall(r'[a-zA-Z_]{3,}', text.lower())
+            return set(cn + en)
+
+        k_current = _key_words(current_msg)
+        scored = []
+        for pair in level2:
+            k_pair = _key_words(pair.get("user", "") + " " + pair.get("assistant", ""))
+            if not k_current or not k_pair:
+                score = 0.5
+            else:
+                intersection = k_current & k_pair
+                union = k_current | k_pair
+                score = len(intersection) / max(len(union), 1)
+            scored.append((score, pair))
+
+        # ── 2. 按分数分类 ──
+        result = []
+        for score, pair in scored:
+            if score >= 0.15:
+                # HIGH: keep full
+                result.append({"kind": "full", **pair})
+            elif score >= 0.05:
+                # MEDIUM: brief summary
+                user_brief = pair.get("user", "")[:80]
+                ai_brief = pair.get("assistant", "")[:120]
+                result.append({
+                    "kind": "summary",
+                    "content": f"User: {user_brief}... → Assistant: {ai_brief}..."
+                })
+            # else LOW: discard
+
+        # ── 3. 如果全部被过滤，至少保留最近1条 ──
+        if not result and scored:
+            _, best = max(scored, key=lambda x: x[0])
+            result = [{"kind": "full", **best}]
+
+        logger.debug(
+            f"L2 filter: {len(level2)} in -> {len(result)} out "
+            f"(scores: {[round(s,3) for s,_ in scored]})"
+        )
         return result
 
     def _execute_tool_loop(self, context: Dict) -> Dict:

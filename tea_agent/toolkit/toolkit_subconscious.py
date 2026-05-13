@@ -1,5 +1,5 @@
 ## llm generated tool func, created Fri May  1 09:58:16 2026
-# version: 1.0.5
+# version: 1.0.6
 
 
 import logging
@@ -358,38 +358,41 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         except: pass
 
     def _linux_notify_fallback(title, msg, expire_ms=5000):
-        """Linux 通知级联回退：notify-send → kdialog → DBus gdbus。
-        NOTE: 2026-06-19 gen by tea_agent, Plasma6 无 notify-send 时自动回退"""
+        """Linux 通知级联回退：GI Notify → notify-send → kdialog。
+        GI Notify 和 notify-send 走 Freedesktop DBus，自动进入 Plasma 通知中心。
+        kdialog --passivepopup 仅作最后回退（临时浮窗，不进通知中心）。
+        NOTE: 2026-06-19 gen by tea_agent, GI Notify 优先以进入 Plasma 通知中心"""
         import shutil as _sh
 
-        # 方法1: notify-send (libnotify-tools)
+        # 方法1: GI Notify (Python libnotify via GObject Introspection)
+        # 纯 Python 方案，走 DBus 原生通知，自动进入通知中心
+        try:
+            import gi
+            gi.require_version('Notify', '0.7')
+            from gi.repository import Notify, GLib
+            if not Notify.is_initted():
+                Notify.init('TeaAgent')
+            notification = Notify.Notification.new(title, msg, '')
+            notification.set_timeout(expire_ms)
+            notification.show()
+            return
+        except Exception:
+            pass
+
+        # 方法2: notify-send 命令行 (libnotify-tools)
         if _sh.which('notify-send'):
             subprocess.run(['notify-send', '--app-name=TeaAgent',
                 title, msg, '--expire-time=' + str(expire_ms)],
                 capture_output=True, timeout=3)
             return
 
-        # 方法2: kdialog --passivepopup (KDE/Plasma)
+        # 方法3: kdialog --passivepopup (KDE 临时弹窗，不进通知中心，最后回退)
         if _sh.which('kdialog'):
             subprocess.run(['kdialog', '--passivepopup', msg,
                 '--title', title, str(expire_ms // 1000)],
                 capture_output=True, timeout=5)
             return
 
-        # 方法3: DBus gdbus (Freedesktop Notification spec)
-        if _sh.which('gdbus'):
-            import shlex
-            safe_body = msg.replace('\n', '\\n')
-            subprocess.run([
-                'gdbus', 'call', '--session',
-                '--dest', 'org.freedesktop.Notifications',
-                '--object-path', '/org/freedesktop/Notifications',
-                '--method', 'org.freedesktop.Notifications.Notify',
-                'TeaAgent', '0', '',
-                title, safe_body,
-                '[]', '{}', str(expire_ms)
-            ], capture_output=True, timeout=5)
-            return
 
     def _send_cycle_summary(result, state, first_run=False):
         """每轮循环后发送摘要通知，让用户感知后台运行结果"""

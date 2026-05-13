@@ -1149,17 +1149,8 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 
 # NOTE: 2026-05-02 09:06:48, self-evolved by tea_agent --- 添加 _notify_completion 方法：LLM完成后发送系统桌面通知
     def _refresh_topics_preserve_selection(self):
-        # Treeview: 用 selection() + index() 获取当前项
-        sel = self.topic_list.selection()
-        current_idx_val = self.topic_list.index(sel[0]) if sel else None
+        """刷新主题列表，refresh_topics() 已按 current_topic_id 自动高亮。"""
         self.refresh_topics()
-        if current_idx_val is not None:
-            try:
-                children = self.topic_list.get_children()
-                if 0 <= current_idx_val < len(children):
-                    self.topic_list.selection_set(children[current_idx_val])
-            except Exception:
-                pass
 
     # ── 主题列表 Tooltip ──
     # NOTE: 2026-05-08 gen by tea_agent, 鼠标悬停显示创建日期和最后使用日期

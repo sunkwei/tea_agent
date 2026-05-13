@@ -432,6 +432,8 @@ from tea_agent.gui_dialogs import MemoryDialog, TopicDialog, ConfigDialog
 class TkGUI(AgentCore):
     def __init__(self, root, debug:bool=False):
         self.root = root
+        import os
+        self._initial_cwd = os.path.abspath(os.getcwd())  # NOTE: 2026-05-16 gen by tea_agent, 启动时固化完整路径
         self._update_title()  # NOTE: 2026-05-15 gen by tea_agent, 标题含当前目录
         self.root.geometry("1100x750")
         self.root.minsize(900, 600)
@@ -962,14 +964,14 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self.topic_list.selection_set(highlight_iid)
             self.topic_list.see(highlight_iid)
     # NOTE: 2026-05-15 gen by tea_agent, 统一标题栏更新，附加当前目录
+    # NOTE: 2026-05-16 gen by tea_agent, 格式改为 AI助手-{主题}-cwd{完整路径}, 启动时固化cwd不随后续chdir变化
     def _update_title(self, topic_title=""):
-        """设置窗口标题栏：{主题} - AI 工具调用助手 - {当前目录}"""
-        import os
-        cwd = os.path.basename(os.getcwd()) or os.getcwd()
+        """设置窗口标题栏：AI助手 - {当前主题} - cwd {当前目录完整路径}"""
+        cwd = getattr(self, "_initial_cwd", "")
         if topic_title:
-            self.root.title(f"{topic_title} - AI 工具调用助手 - {cwd}")
+            self.root.title(f"AI助手 - {topic_title} - cwd {cwd}")
         else:
-            self.root.title(f"AI 工具调用助手 - {cwd}")
+            self.root.title(f"AI助手 - cwd {cwd}")
 
     def switch_topic(self, topic_id):
 # NOTE: 2026-05-09 18:59:41, self-evolved by tea_agent --- switch_topic 时更新窗口标题栏为 {topic_title} — AI 工具调用助手

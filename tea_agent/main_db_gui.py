@@ -484,16 +484,48 @@ class TkGUI(AgentCore):
         # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
+        # NOTE: 2026-06-19 gen by tea_agent, App启动时自动启动Dream潜意识引擎
+        self._start_dream()
+
     # NOTE: 2026-05-05, self-evolved by tea_agent --- 退出时正常关闭数据库：WAL checkpoint
     def _on_closing(self):
         """窗口关闭时的清理流程"""
         self._update_status("⏳ 正在清理资源...")
+        # NOTE: 2026-06-19 gen by tea_agent, 退出时停止Dream线程
+        try:
+            from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
+            toolkit_subconscious("stop")
+            logger.info("Dream 已停止")
+        except Exception as e:
+            logger.warning(f"停止 Dream 失败: {e}")
         try:
             self.db.close()
             self._update_status("✅ 数据库已正常关闭")
         except Exception as e:
             logger.warning(f"关闭数据库失败: {e}")
         self.root.destroy()
+
+    # NOTE: 2026-06-19 gen by tea_agent, App启动自动启动Dream潜意识引擎
+    def _start_dream(self):
+        """启动Dream潜意识引擎后台线程，每小时循环一次"""
+        # 确保 cwd 为项目根目录，使 _is_tea_agent_cwd() 检查通过
+        _proj_root = str(Path(__file__).resolve().parent.parent)
+        try:
+            os.chdir(_proj_root)
+        except Exception:
+            pass
+        try:
+            from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
+            result = toolkit_subconscious("start")
+            status = result.get("status", "unknown")
+            if status == "rejected":
+                logger.warning(f"Dream 未自动启动: {result.get('reason')}, cwd={os.getcwd()}")
+            elif status == "already_running":
+                logger.info(f"Dream 已在运行中 (pid={result.get('pid')})")
+            else:
+                logger.info(f"Dream 自动启动成功: {status}")
+        except Exception as e:
+            logger.warning(f"Dream 自动启动失败: {e}")
 
     def _create_ui(self):
         """创建界面"""

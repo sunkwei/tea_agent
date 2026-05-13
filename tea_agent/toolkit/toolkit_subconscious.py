@@ -1,5 +1,5 @@
 ## llm generated tool func, created Fri May  1 09:58:16 2026
-# version: 1.0.6
+# version: 1.1.0
 
 
 import logging
@@ -324,8 +324,8 @@ def toolkit_subconscious(action: str, focus: str = None):
 # NOTE: 2026-05-02 10:58:26, self-evolved by tea_agent --- 添加 _send_cycle_summary 函数，每轮循环后发送综合摘要通知
     def _send_notification(title, msg, expire_ms=5000):
         """跨平台桌面通知：Windows/macOS/Linux。
-        Linux 级联回退：notify-send → kdialog → DBus gdbus。
-        NOTE: 2026-06-19 gen by tea_agent, 增加 kdialog/DBus 回退解决 Plasma6 无 notify-send 问题"""
+        Linux 使用 DBus 直连 + transient=false + desktop-entry → Plasma 通知中心。
+        NOTE: 2026-06-20 gen by tea_agent, DBus 直连确保通知进 Plasma 通知中心"""
         import sys as _sys
         try:
             if _sys.platform == 'win32':
@@ -358,14 +358,39 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         except: pass
 
     def _linux_notify_fallback(title, msg, expire_ms=5000):
-        """Linux 通知级联回退：GI Notify → notify-send → kdialog。
-        GI Notify 和 notify-send 走 Freedesktop DBus，自动进入 Plasma 通知中心。
-        kdialog --passivepopup 仅作最后回退（临时浮窗，不进通知中心）。
-        NOTE: 2026-06-19 gen by tea_agent, GI Notify 优先以进入 Plasma 通知中心"""
+        """Linux 通知级联回退：DBus 直连 → GI Notify → notify-send → kdialog。
+        DBus + transient=false + desktop-entry → Plasma 通知中心历史。
+        kdialog 仅作最后回退（临时浮窗，不进通知中心）。
+        NOTE: 2026-06-20 gen by tea_agent, DBus 直连优先确保进 Plasma 通知中心"""
         import shutil as _sh
 
-        # 方法1: GI Notify (Python libnotify via GObject Introspection)
-        # 纯 Python 方案，走 DBus 原生通知，自动进入通知中心
+        # 方法1: DBus 直连 — transient=false 确保进入通知历史
+        try:
+            import dbus
+            from dbus.mainloop.glib import DBusGMainLoop
+            DBusGMainLoop(set_as_default=True)
+            bus = dbus.SessionBus()
+            proxy = bus.get_object('org.freedesktop.Notifications', '/org/freedesktop/Notifications')
+            iface = dbus.Interface(proxy, 'org.freedesktop.Notifications')
+            iface.Notify(
+                'TeaAgent',
+                dbus.UInt32(0),
+                '',
+                title,
+                msg,
+                [],
+                {
+                    'urgency': dbus.Byte(2),
+                    'transient': dbus.Boolean(False),
+                    'desktop-entry': dbus.String('teaagent'),
+                },
+                dbus.Int32(expire_ms)
+            )
+            return
+        except Exception:
+            pass
+
+        # 方法2: GI Notify 回退
         try:
             import gi
             gi.require_version('Notify', '0.7')
@@ -373,20 +398,24 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
             if not Notify.is_initted():
                 Notify.init('TeaAgent')
             notification = Notify.Notification.new(title, msg, '')
+            notification.set_urgency(Notify.Urgency.CRITICAL)
             notification.set_timeout(expire_ms)
+            notification.set_hint('transient', GLib.Variant('b', False))
+            notification.set_hint('desktop-entry', GLib.Variant('s', 'teaagent'))
             notification.show()
             return
         except Exception:
             pass
 
-        # 方法2: notify-send 命令行 (libnotify-tools)
+        # 方法3: notify-send
         if _sh.which('notify-send'):
             subprocess.run(['notify-send', '--app-name=TeaAgent',
+                '--hint=boolean:transient:false',
                 title, msg, '--expire-time=' + str(expire_ms)],
                 capture_output=True, timeout=3)
             return
 
-        # 方法3: kdialog --passivepopup (KDE 临时弹窗，不进通知中心，最后回退)
+        # 方法4: kdialog (KDE 临时弹窗，不进通知中心，最后回退)
         if _sh.which('kdialog'):
             subprocess.run(['kdialog', '--passivepopup', msg,
                 '--title', title, str(expire_ms // 1000)],

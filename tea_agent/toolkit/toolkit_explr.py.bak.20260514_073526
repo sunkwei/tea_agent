@@ -323,20 +323,8 @@ def _action_build(directory, force):
     _log(f"🏗 构建项目知识库: {directory}")
     t0 = time.time()
 
-# NOTE: 2026-05-14 07:35:26, self-evolved by tea_agent --- ctags不可用时用AST defs填充symbol_index，解决symbol查询空结果问题
     _, index = _build_ctags(directory, run_dir)
     calls, defs, classes = _build_call_graph(directory)
-
-    # @2026-05-16 gen by tea_agent, ctags 不可用时用 AST defs 填充 symbol_index
-    if not index and defs:
-        for name, info in defs.items():
-            index[name] = [{'kind': 'function', 'path': info['file'], 'line': info['line']}]
-        for name, info in classes.items():
-            if name not in index:
-                index[name] = [{'kind': 'class', 'path': info['file'], 'line': info['line']}]
-            else:
-                index[name].append({'kind': 'class', 'path': info['file'], 'line': info['line']})
-        _log(f"ctags 回退: AST {len(index)} 符号作为索引")
 
     cg_path = os.path.join(run_dir, "call_graph.json")
     with open(cg_path, 'w', encoding='utf-8') as f:

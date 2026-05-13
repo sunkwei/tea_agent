@@ -13,7 +13,6 @@
 
 查询接口: symbol(符号定位), callers(谁调此函数), callees(此函数调谁), module(模块概览)
 """
-# NOTE: 2026-05-14 07:34:30, self-evolved by tea_agent --- callees/callers过滤Python内置函数，ctags不可用时AST构建symbol_index回退，支持模糊搜索
 import ast
 import json
 import os
@@ -21,32 +20,6 @@ import subprocess
 import shutil
 import time
 from collections import defaultdict
-
-# @2026-05-16 gen by tea_agent, Python 内置函数集合，callees/callers 查询时自动过滤
-_PYTHON_BUILTINS = frozenset({
-    'abs', 'all', 'any', 'ascii', 'bin', 'bool', 'breakpoint', 'bytearray', 'bytes',
-    'callable', 'chr', 'classmethod', 'compile', 'complex', 'copyright', 'credits',
-    'delattr', 'dict', 'dir', 'divmod', 'enumerate', 'eval', 'exec', 'exit', 'filter',
-    'float', 'format', 'frozenset', 'getattr', 'globals', 'hasattr', 'hash', 'help',
-    'hex', 'id', 'input', 'int', 'isinstance', 'issubclass', 'iter', 'len', 'license',
-    'list', 'locals', 'map', 'max', 'memoryview', 'min', 'next', 'object', 'oct',
-    'open', 'ord', 'pow', 'print', 'property', 'quit', 'range', 'repr', 'reversed',
-    'round', 'set', 'setattr', 'slice', 'sorted', 'staticmethod', 'str', 'sum',
-    'super', 'tuple', 'type', 'vars', 'zip', '__import__',
-    # 常见方法名（ast.Attribute 产生的 .append .strip .join 等）
-    'append', 'strip', 'join', 'split', 'replace', 'format', 'startswith',
-    'endswith', 'get', 'items', 'keys', 'values', 'update', 'pop', 'clear',
-    'copy', 'read', 'write', 'close', 'seek', 'find', 'index', 'count',
-    'remove', 'insert', 'sort', 'reverse', 'extend', 'upper', 'lower',
-    'encode', 'decode', 'search', 'match', 'sub', 'group', 'groups',
-    'add', 'difference', 'intersection', 'union', 'discard',
-    '__init__', '__str__', '__repr__', '__call__', '__len__', '__getitem__',
-    '__setitem__', '__delitem__', '__iter__', '__next__', '__enter__', '__exit__',
-    '__contains__', '__eq__', '__ne__', '__lt__', '__gt__', '__hash__',
-    # Logging 和 traceback 等标准库常用方法
-    'info', 'debug', 'warning', 'error', 'critical', 'exception', 'log',
-    'print_exc', 'format_exc', 'getLogger', 'basicConfig',
-})
 
 # NOTE: 2026-05-15 gen by tea_agent, toolkit logging
 import logging
@@ -323,20 +296,8 @@ def _action_build(directory, force):
     _log(f"🏗 构建项目知识库: {directory}")
     t0 = time.time()
 
-# NOTE: 2026-05-14 07:35:26, self-evolved by tea_agent --- ctags不可用时用AST defs填充symbol_index，解决symbol查询空结果问题
     _, index = _build_ctags(directory, run_dir)
     calls, defs, classes = _build_call_graph(directory)
-
-    # @2026-05-16 gen by tea_agent, ctags 不可用时用 AST defs 填充 symbol_index
-    if not index and defs:
-        for name, info in defs.items():
-            index[name] = [{'kind': 'function', 'path': info['file'], 'line': info['line']}]
-        for name, info in classes.items():
-            if name not in index:
-                index[name] = [{'kind': 'class', 'path': info['file'], 'line': info['line']}]
-            else:
-                index[name].append({'kind': 'class', 'path': info['file'], 'line': info['line']})
-        _log(f"ctags 回退: AST {len(index)} 符号作为索引")
 
     cg_path = os.path.join(run_dir, "call_graph.json")
     with open(cg_path, 'w', encoding='utf-8') as f:
@@ -416,41 +377,28 @@ def _action_query(directory, symbol, query_type):
     calls = cg.get('calls', {})
     defs = cg.get('functions', {})
 
-# NOTE: 2026-05-14 07:35:01, self-evolved by tea_agent --- callees/callers 查询过滤 Python 内置函数，只展示项目内符号
     if query_type == 'callers':
         callers = defaultdict(list)
         for caller, callees in calls.items():
             for callee in callees:
                 callers[callee].append(caller)
         if symbol in callers:
-            # @2026-05-16 gen by tea_agent, 过滤内置函数，只展示项目函数
-            project_callers = [c for c in callers[symbol] if c not in _PYTHON_BUILTINS]
-            builtin_count = len(callers[symbol]) - len(project_callers)
-            parts = [f"## `{symbol}` 被 {len(project_callers)} 个项目函数调用" +
-                     (f" (+{builtin_count} 内置)" if builtin_count > 0 else "") + ":"]
-            if not project_callers:
-                parts.append("_(无项目内调用者)_")
-            for c in sorted(project_callers)[:30]:
+            parts = [f"## `{symbol}` 被 {len(callers[symbol])} 个函数调用:"]
+            for c in sorted(callers[symbol]):
                 loc = defs.get(c, {}).get('file', '?')
                 ln = defs.get(c, {}).get('line', '?')
                 parts.append(f"- `{c}` ({loc}:{ln})")
-            return '\n'.join(parts)
+            return '\n'.join(parts[:30])
         return f"❌ `{symbol}` 无调用者记录"
 
     if query_type == 'callees':
         if symbol in calls:
-            # @2026-05-16 gen by tea_agent, 过滤内置函数，只展示项目函数
-            project_callees = [c for c in calls[symbol] if c not in _PYTHON_BUILTINS]
-            builtin_count = len(calls[symbol]) - len(project_callees)
-            parts = [f"## `{symbol}` 调用 {len(project_callees)} 个项目函数" +
-                     (f" (+{builtin_count} 内置)" if builtin_count > 0 else "") + ":"]
-            if not project_callees:
-                parts.append("_(无项目内调用)_")
-            for c in sorted(project_callees)[:30]:
+            parts = [f"## `{symbol}` 调用 {len(calls[symbol])} 个函数:"]
+            for c in sorted(calls[symbol]):
                 loc = defs.get(c, {}).get('file', '?')
                 ln = defs.get(c, {}).get('line', '?')
                 parts.append(f"- `{c}` ({loc}:{ln})")
-            return '\n'.join(parts)
+            return '\n'.join(parts[:30])
         return f"❌ `{symbol}` 无被调用记录"
 
     return "❌ 未知 query_type"

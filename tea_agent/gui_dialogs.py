@@ -8,10 +8,56 @@ import re
 import threading
 import logging
 from pathlib import Path
+from datetime import datetime
+import platform as _platform
 
 # ====================== 记忆管理对话框 ======================
 
 # @2026-04-29 gen by deepseek-v4-pro, MemoryDialog记忆管理弹窗+on_status状态回调
+# ====================== 字体检测（与 main_db_gui 独立副本） ======================
+_IS_WINDOWS = _platform.system() == "Windows"
+SYSTEM_FONT = "TkDefaultFont"
+MONO_FONT = "TkFixedFont"
+_FONTS_DETECTED = False
+_SCALE_FACTOR = 1.0
+_DEFAULT_FONT_SIZE = 16
+
+def _fs(size):
+    return max(1, int(size * _SCALE_FACTOR))
+
+def _init_fonts():
+    global SYSTEM_FONT, MONO_FONT, _FONTS_DETECTED, _SCALE_FACTOR, _DEFAULT_FONT_SIZE
+    if _FONTS_DETECTED:
+        return
+    try:
+        from tkinter import font as _tkfont
+        available = set(_tkfont.families())
+        def _detect(candidates):
+            for f in candidates:
+                if f in available:
+                    return f
+            return "TkDefaultFont"
+        if _IS_WINDOWS:
+            SYSTEM_FONT = _detect(["Microsoft YaHei", "Microsoft YaHei UI", "DengXian", "SimHei", "SimSun", "Noto Sans SC", "Microsoft JhengHei"])
+            MONO_FONT = _detect(["Cascadia Code", "Cascadia Mono", "Consolas", "Courier New", "Lucida Console"])
+        else:
+            SYSTEM_FONT = _detect(["Noto Sans CJK SC", "Noto Sans SC", "WenQuanYi Micro Hei", "Source Han Sans SC", "DejaVu Sans"])
+            MONO_FONT = _detect(["Noto Sans Mono CJK SC", "DejaVu Sans Mono", "Source Han Mono SC", "Courier New"])
+    except Exception:
+        pass
+    try:
+        import tkinter as _tk2
+        root = _tk2._default_root
+        if root:
+            sf = float(root.tk.call("tk", "scaling"))
+            if 1.0 < sf <= 4.0:
+                _SCALE_FACTOR = sf
+    except Exception:
+        pass
+    _DEFAULT_FONT_SIZE = max(12, int(16 * _SCALE_FACTOR))
+    _FONTS_DETECTED = True
+
+
 class MemoryDialog(tk.Toplevel):
     """记忆管理弹窗"""
     PRIORITY_LABELS = {0: "CRITICAL", 1: "HIGH", 2: "MEDIUM", 3: "LOW"}

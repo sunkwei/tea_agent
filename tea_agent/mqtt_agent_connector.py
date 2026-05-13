@@ -22,7 +22,10 @@ import uuid
 import os
 from typing import Optional, Dict, Callable
 
-import paho.mqtt.client as mqtt
+try:
+    import paho.mqtt.client as mqtt
+except ImportError:
+    mqtt = None
 
 logger = logging.getLogger("mqtt_agent_connector")
 

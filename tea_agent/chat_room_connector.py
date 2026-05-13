@@ -14,7 +14,10 @@ import uuid
 import os
 from typing import Optional, Dict
 
-import paho.mqtt.client as mqtt
+try:
+    import paho.mqtt.client as mqtt
+except ImportError:
+    mqtt = None
 
 logger = logging.getLogger("chat_room_connector")
 

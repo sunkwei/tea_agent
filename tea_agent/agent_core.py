@@ -268,6 +268,63 @@ class AgentCore:
     # ═══════════════════════════════════════════════
     # 对话后处理流水线（入库 → Token → 摘要）
     # ═══════════════════════════════════════════════
+    @staticmethod
+    def _extract_files_from_rounds(rounds: list) -> list:
+        """从工具调用轮次中提取触碰的文件路径列表。
+
+        扫描 tool_calls 中的参数，提取文件路径。
+        覆盖 toolkit_file(filename=), toolkit_self_evolve(file_path=), 
+        toolkit_exec(args containing paths) 等。
+        """
+        import re, json as _json
+        files = []
+        seen = set()
+        # 工具参数名 → 文件路径模式的映射
+        FILE_ARG_NAMES = {'filename', 'file_path', 'path', 'file', 'directory'}
+        # 排除非文件路径的参数值
+        SKIP_VALUES = {'.', '..', '/', 'true', 'false'}
+
+        if not rounds:
+            return files
+
+        for rd in rounds:
+            # 从 assistant tool_calls 中提取
+            tool_calls = rd.get('tool_calls', [])
+            if not tool_calls:
+                continue
+            for tc in tool_calls:
+                fn = tc.get('function', {})
+                fn_name = fn.get('name', '')
+                args_str = fn.get('arguments', '{}')
+                try:
+                    args = _json.loads(args_str) if isinstance(args_str, str) else args_str
+                except _json.JSONDecodeError:
+                    continue
+                if not isinstance(args, dict):
+                    continue
+
+                # 从已知参数名提取路径
+                for key in FILE_ARG_NAMES:
+                    val = args.get(key)
+                    if isinstance(val, str) and val not in SKIP_VALUES and len(val) > 1:
+                        # 检查是否像文件路径（含扩展名或目录分隔符）
+                        if '.' in val or '/' in val or '\\' in val:
+                            if val not in seen:
+                                files.append(val)
+                                seen.add(val)
+
+                # 从 cmd/args 中额外提取路径（toolkit_exec）
+                cmd = args.get('cmd', '') or args.get('command', '')
+                if cmd and isinstance(cmd, str):
+                    # 匹配常见的文件路径模式
+                    for m in re.finditer(r'[a-zA-Z0-9_./\\-]+\.py\b', cmd):
+                        fp = m.group()
+                        if fp not in seen:
+                            files.append(fp)
+                            seen.add(fp)
+
+        return files
+
     def _post_chat_pipeline(self, ai_msg: str, used_tools: bool,
                             user_msg: str, topic_id: str) -> None:
         """AI 回复后流水线。1.入库 2.三级推送 3.Token 4.摘要"""
@@ -278,11 +335,14 @@ class AgentCore:
             is_func_calling=used_tools, rounds=rounds if rounds else None,
         )
         # Level 2 push: push OLD L1 (previous conversation) to Level 2
-        prev_convs = self.db.get_conversations(topic_id, limit=2, include_rounds=False)
+        prev_convs = self.db.get_conversations(topic_id, limit=2, include_rounds=True)
         if len(prev_convs) >= 2:
             old_l1 = prev_convs[-2]
+            # 从旧 L1 的 tool calls 中提取触碰文件，用于文件级语义匹配
+            old_rounds = old_l1.get('rounds_json_parsed') or []
+            old_files = self._extract_files_from_rounds(old_rounds)
             overflow = self.db.push_to_level2(
-                topic_id, old_l1["user_msg"], old_l1["ai_msg"]
+                topic_id, old_l1["user_msg"], old_l1["ai_msg"], files=old_files
             )
             if overflow:
                 logger.info(f"Level 2 overflow {len(overflow)} -> L3 (topic={topic_id})")

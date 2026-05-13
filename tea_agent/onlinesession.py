@@ -377,7 +377,8 @@ class OnlineToolSession(
         MEDIUM → 压缩为一行摘要
         LOW   → 丢弃
 
-        使用关键词重叠 + 便宜模型作为 fallback。
+        评分 = 关键词重叠(Jaccard) + 文件重叠加成。
+        文件重叠：从 current_msg 提取路径 → 匹配 Level 2 条目的 files 字段。
         """
         if not level2 or not current_msg:
             return [{"kind": "full", **p} for p in level2]
@@ -386,11 +387,39 @@ class OnlineToolSession(
         def _key_words(text):
             import re
             # 提取中文词(2+字)、英文词(3+字母)
-            cn = re.findall(r'[\u4e00-\u9fff]{2,}', text)
+            cn = re.findall(r'[一-鿿]{2,}', text)
             en = re.findall(r'[a-zA-Z_]{3,}', text.lower())
             return set(cn + en)
 
+        # ── 1b. 从当前消息提取文件路径 ──
+        def _extract_files_from_text(text):
+            import re
+            files = set()
+            # 匹配显式文件路径: foo/bar.py, tea_agent/store.py 等
+            for m in re.finditer(r'[\w.-]+/[\w.-]+(?:/[\w.-]+)*\.\w+', text):
+                files.add(m.group())
+            # 尝试 explr 符号索引：提取可能为函数/类名的标识符，反查文件
+            symbols = set(re.findall(r'[a-zA-Z_]\w{2,}', text))
+            if symbols:
+                try:
+                    import os, json as _json
+                    idx_path = os.path.join('.tea_agent_run', 'symbol_index.json')
+                    if os.path.exists(idx_path):
+                        with open(idx_path, 'r', encoding='utf-8') as _f:
+                            sym_index = _json.load(_f)
+                        for sym in symbols:
+                            if sym in sym_index:
+                                for entry in sym_index[sym]:
+                                    fp = entry.get('path', '')
+                                    if fp:
+                                        files.add(fp)
+                except Exception:
+                    pass  # explr 不可用时静默跳过
+            return files
+
         k_current = _key_words(current_msg)
+        current_files = _extract_files_from_text(current_msg)
+
         scored = []
         for pair in level2:
             k_pair = _key_words(pair.get("user", "") + " " + pair.get("assistant", ""))
@@ -400,6 +429,15 @@ class OnlineToolSession(
                 intersection = k_current & k_pair
                 union = k_current | k_pair
                 score = len(intersection) / max(len(union), 1)
+
+            # ── 文件重叠加成 ──
+            pair_files = set(pair.get("files", []))
+            if current_files and pair_files:
+                file_overlap = len(current_files & pair_files)
+                if file_overlap > 0:
+                    # 文件匹配直接拉至 HIGH，最小 0.4 + 每个匹配文件 +0.1
+                    score = max(score, 0.4 + file_overlap * 0.1)
+
             scored.append((score, pair))
 
         # ── 2. 按分数分类 ──

@@ -909,11 +909,17 @@ class Storage:
                   (summary, topic_id))
         self.conn.commit()
 
-    def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str):
-        """将一轮对话推入 Level 2（仅保留 user+assistant 自然语言）"""
+    def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str, files: list = None):
+        """将一轮对话推入 Level 2（保留 user+assistant 自然语言 + 触碰文件列表）。
+
+        files 列表从本轮 tool calls 中提取，用于精确的文件级语义匹配。
+        """
         import json
         level2 = self.get_level2(topic_id)
-        level2.append({"user": user_msg, "assistant": ai_msg})
+        entry = {"user": user_msg, "assistant": ai_msg}
+        if files:
+            entry["files"] = files
+        level2.append(entry)
         # 最多保留 5 轮在 Level 2
         overflow = level2[:-5] if len(level2) > 5 else []
         level2 = level2[-5:]

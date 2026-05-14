@@ -351,7 +351,72 @@ def _chat_to_markdown(messages):
         elif role == "notice":
             # NOTE: 2026-05-15 gen by tea_agent, 去掉 --- 包裹避免与 AI 末尾的 --- 连成三条水平线
             parts.append(f"\n{content.strip()}\n")
+# NOTE: 2026-05-14 16:00:09, self-evolved by tea_agent --- HtmlFrame render 前增加 HTML 校验：控制字符清洗 + 标签配对检查
     return "\n".join(parts)
+
+
+# NOTE: 2026-05-16 gen by tea_agent, HTML 校验：过滤控制字符，防止畸形字节流导致 HtmlFrame 渲染残缺
+def _sanitize_html_control_chars(html: str) -> str:
+    """移除 HTML 中的控制字符（保留 \\n 0x0a 和 \\t 0x09）。"""
+    return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', html)
+
+
+def _validate_html_structure(html: str) -> tuple:
+    """快速校验 HTML 基本结构：长度、html 标签、标签配对。
+    返回 (ok: bool, 诊断信息: str)。"""
+    if len(html) < 10:
+        return False, f"HTML 过短 ({len(html)} 字节)"
+    lower = html.lower()
+    if '<html>' not in lower and '<html ' not in lower:
+        return False, "缺少 <html> 标签"
+    # 用 HTMLParser 检查标签配对
+    from html.parser import HTMLParser
+
+    class _TagChecker(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.stack = []
+            self.errors = []
+            self.void_elements = {'br', 'hr', 'img', 'input', 'meta', 'link',
+                                  'area', 'base', 'col', 'embed', 'source', 'track', 'wbr'}
+
+        def handle_starttag(self, tag, attrs):
+            if tag not in self.void_elements:
+                self.stack.append(tag)
+
+        def handle_endtag(self, tag):
+            if tag in self.void_elements:
+                return
+            if not self.stack:
+                self.errors.append(f"多余的闭合标签 </{tag}>")
+            elif self.stack[-1] == tag:
+                self.stack.pop()
+            else:
+                if tag in self.stack:
+                    while self.stack and self.stack[-1] != tag:
+                        unclosed = self.stack.pop()
+                        self.errors.append(f"未闭合 <{unclosed}>")
+                    if self.stack:
+                        self.stack.pop()
+                else:
+                    self.errors.append(f"未预期的闭合标签 </{tag}>")
+
+        def get_result(self):
+            for tag in reversed(self.stack):
+                self.errors.append(f"未闭合 <{tag}>")
+            return len(self.errors) == 0, self.errors
+
+    try:
+        checker = _TagChecker()
+        checker.feed(html)
+        ok, errors = checker.get_result()
+        if ok:
+            return True, "OK"
+        else:
+            return False, "; ".join(errors[:3])
+    except Exception as e:
+        return False, f"HTML 解析异常: {e}"
+
 
 def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Optional[str]:
     """
@@ -770,15 +835,38 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         self.chat_view.yview_moveto(1.0)
 
     # 2026-05-11 gen by tea_agent, 将 render 到 HtmlFrame 的 HTML 同时 print 到终端
+# NOTE: 2026-05-14 16:00:34, self-evolved by tea_agent --- _html_render 增加渲染前校验：控制字符清洗 + 结构检查 + 自动修复缺失闭合标签
+    # NOTE: 2026-05-15 gen by tea_agent, 注释掉终端打印避免刷屏，调试时可取消注释
+    # NOTE: 2026-05-16 gen by tea_agent, 渲染前增加 HTML 校验与清洗：控制字符过滤 + 标签配对检查 + 自动修复
     def _html_render(self, html: str):
-        # NOTE: 2026-05-15 gen by tea_agent, 注释掉终端打印避免刷屏，调试时可取消注释
-        # print(f"\n{'='*60}")
-        # print(f"[HtmlFrame render] {len(html)} chars")
-        # print(f"{'='*60}")
-        # print(html)
-        # print(f"{'='*60}\n")
+        # 0. 基础校验
+        if not html or not isinstance(html, str):
+            print("[_html_render WARN] HTML 为空或非字符串，跳过渲染")
+            return
+        # 1. 清洗控制字符（保留 \n \t）
+        cleaned = _sanitize_html_control_chars(html)
+        if cleaned != html:
+            print(f"[_html_render WARN] 移除了 {len(html) - len(cleaned)} 个控制字符")
+        # 2. 结构校验
+        ok, diag = _validate_html_structure(cleaned)
+        if not ok:
+            print(f"[_html_render WARN] HTML 结构异常: {diag}")
+            # 尝试自动修复
+            fixed = cleaned.rstrip()
+            if not fixed.endswith('</html>'):
+                fixed += '\n</html>'
+                print(f"[_html_render] 已自动补全 </html>")
+            # 修复后二次校验
+            ok2, diag2 = _validate_html_structure(fixed)
+            if ok2:
+                cleaned = fixed
+                print(f"[_html_render] 修复后校验通过")
+            else:
+                print(f"[_html_render WARN] 修复后仍有问题: {diag2}，尝试继续渲染")
+                cleaned = fixed
+        # 3. 渲染
         try:
-            self.chat_view.load_html(html)
+            self.chat_view.load_html(cleaned)
         except Exception as e:
             print(f"[_html_render ERROR] {e}")
             import traceback

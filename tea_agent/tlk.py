@@ -396,7 +396,14 @@ class Toolkit:
         }
 
         meta_exam_str = json.dumps(meta_exam, ensure_ascii=False)
-        toolkit_path = self.tool_dir
+# NOTE: 2026-05-14 08:01:17, self-evolved by tea_agent --- _my工具强制保存到user_dir且标记永久
+        # @2026-05-16 gen by tea_agent, _my 后缀工具永久保存在用户目录
+        is_my_tool = name.endswith("_my")
+        if is_my_tool:
+            toolkit_path = self.user_dir
+            os.makedirs(toolkit_path, exist_ok=True)
+        else:
+            toolkit_path = self.tool_dir
         filename = osp.join(toolkit_path, f"{name}.py")
 
         # 1. 校验 meta 有效性
@@ -456,11 +463,10 @@ class Toolkit:
                 else:
                     version = "1.0.0"
             
-            # 创建备份
-            backup_name = f"{name}.v{version}.bak.py"
-            backup_path = osp.join(toolkit_path, backup_name)
-            import shutil
-            shutil.copy2(filename, backup_path)
+# NOTE: 2026-05-14 08:01:07, self-evolved by tea_agent --- save移除.bak备份，添加_my后缀永久用户工具路由
+            # @2026-05-16 gen by tea_agent, 不再创建 .bak 备份文件（规则4）
+            # 版本历史通过 git (内置) 或手动备份 (用户) 管理
+            pass
         
         # 如果没有提供版本号，使用默认的 "1.0.0"
         if not version:

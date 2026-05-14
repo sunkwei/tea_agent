@@ -723,11 +723,6 @@ class TkGUI(AgentCore):
             self.root.bind("<Control-minus>", self.zoom_out)
             self.root.bind("<Control-underscore>", self.zoom_out)
 
-        # HtmlFrame 历史轮次快捷键
-        if HAS_TKINTERWEB:
-            self.root.bind("<Alt-Up>", self._history_prev_round)
-            self.root.bind("<Alt-Down>", self._history_next_round)
-
     def zoom_in(self, e=None):
         if not HAS_TKINTERWEB or self._show_mode != "chat_view":
             return "break"
@@ -754,46 +749,6 @@ class TkGUI(AgentCore):
         self.root.after(200, self.scroll_to_bottom)
 
 # NOTE: 2026-05-01 10:38:17, self-evolved by tea_agent --- 在 _switch_display 之后添加 _show_loading 方法（简单 spinner + 三点动画）
-    # NOTE: 2026-05-17 gen by tea_agent, Alt+Up/Down 切换历史轮次
-    def _history_prev_round(self, e=None):
-        """Alt+Up: 切换到上一条历史轮次，若无则忽略"""
-        if not HAS_TKINTERWEB or self._show_mode != "chat_view":
-            return "break"
-        rounds = self._chat_rounds
-        if not rounds:
-            return "break"
-        curr = self._current_round_view
-        if curr is None:
-            # 当前在最新轮，跳到最后一轮
-            self._current_round_view = len(rounds) - 1
-        elif curr <= 0:
-            # 已在第一轮，忽略
-            return "break"
-        else:
-            self._current_round_view = curr - 1
-        self._render_round_view(self._current_round_view)
-        return "break"
-
-    def _history_next_round(self, e=None):
-        """Alt+Down: 切换到下一条历史轮次，若无则忽略"""
-        if not HAS_TKINTERWEB or self._show_mode != "chat_view":
-            return "break"
-        rounds = self._chat_rounds
-        if not rounds:
-            return "break"
-        curr = self._current_round_view
-        if curr is None:
-            # 当前在最新轮，忽略（已是最新，无"下一条"）
-            return "break"
-        if curr >= len(rounds) - 1:
-            # 已在最后一轮，回到最新轮
-            self._current_round_view = None
-            self._render_and_show_chat()
-        else:
-            self._current_round_view = curr + 1
-            self._render_round_view(self._current_round_view)
-        return "break"
-
     def _switch_display(self, mode: str):
         if mode == self._show_mode:
             return
@@ -880,38 +835,15 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         self.chat_view.yview_moveto(1.0)
 
     # 2026-05-11 gen by tea_agent, 将 render 到 HtmlFrame 的 HTML 同时 print 到终端
-# NOTE: 2026-05-14 16:00:34, self-evolved by tea_agent --- _html_render 增加渲染前校验：控制字符清洗 + 结构检查 + 自动修复缺失闭合标签
-    # NOTE: 2026-05-15 gen by tea_agent, 注释掉终端打印避免刷屏，调试时可取消注释
-    # NOTE: 2026-05-16 gen by tea_agent, 渲染前增加 HTML 校验与清洗：控制字符过滤 + 标签配对检查 + 自动修复
     def _html_render(self, html: str):
-        # 0. 基础校验
-        if not html or not isinstance(html, str):
-            print("[_html_render WARN] HTML 为空或非字符串，跳过渲染")
-            return
-        # 1. 清洗控制字符（保留 \n \t）
-        cleaned = _sanitize_html_control_chars(html)
-        if cleaned != html:
-            print(f"[_html_render WARN] 移除了 {len(html) - len(cleaned)} 个控制字符")
-        # 2. 结构校验
-        ok, diag = _validate_html_structure(cleaned)
-        if not ok:
-            print(f"[_html_render WARN] HTML 结构异常: {diag}")
-            # 尝试自动修复
-            fixed = cleaned.rstrip()
-            if not fixed.endswith('</html>'):
-                fixed += '\n</html>'
-                print(f"[_html_render] 已自动补全 </html>")
-            # 修复后二次校验
-            ok2, diag2 = _validate_html_structure(fixed)
-            if ok2:
-                cleaned = fixed
-                print(f"[_html_render] 修复后校验通过")
-            else:
-                print(f"[_html_render WARN] 修复后仍有问题: {diag2}，尝试继续渲染")
-                cleaned = fixed
-        # 3. 渲染
+        # NOTE: 2026-05-15 gen by tea_agent, 注释掉终端打印避免刷屏，调试时可取消注释
+        # print(f"\n{'='*60}")
+        # print(f"[HtmlFrame render] {len(html)} chars")
+        # print(f"{'='*60}")
+        # print(html)
+        # print(f"{'='*60}\n")
         try:
-            self.chat_view.load_html(cleaned)
+            self.chat_view.load_html(html)
         except Exception as e:
             print(f"[_html_render ERROR] {e}")
             import traceback

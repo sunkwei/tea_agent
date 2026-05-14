@@ -212,6 +212,7 @@ class SkillManager:
 
     # ─── 工具过滤 ──────────────────────────────────
 
+# NOTE: 2026-05-14 08:50:29, self-evolved by tea_agent --- is_tool_active 同时检查孤儿工具（用户工具始终视为激活）
     def is_tool_active(self, tool_name: str) -> bool:
         """检查工具是否当前激活"""
         # 核心工具始终激活
@@ -222,7 +223,12 @@ class SkillManager:
         for skill in self.skills.values():
             if skill.active and tool_name in skill.tools:
                 return True
-        return False
+
+        # 孤儿工具（未在任何 Skill 中定义，如用户工具箱 _my 工具）始终激活
+        for skill in self.skills.values():
+            if tool_name in skill.tools:
+                return False  # 在某个 Skill 中但该 Skill 未激活 → 不激活
+        return True  # 不在任何 Skill 中 → 孤儿工具，始终激活
 
     def get_active_tool_names(self) -> Set[str]:
         """获取当前激活的所有工具名称"""
@@ -232,6 +238,7 @@ class SkillManager:
                 active.update(skill.tools)
         return active
 
+# NOTE: 2026-05-14 08:50:13, self-evolved by tea_agent --- get_active_tools_meta 自动纳入孤儿工具（用户工具箱 _my 工具），修复用户工具被 Skill 过滤问题
     def get_active_tools_meta(self, all_meta_map: Dict[str, dict]) -> List[dict]:
         """
         从所有工具的元数据中，筛选出当前激活的工具元数据。
@@ -243,10 +250,27 @@ class SkillManager:
             当前激活的工具元数据列表（API 格式）
         """
         active_names = self.get_active_tool_names()
+
+        # 收集所有 Skill 管理的工具名称（用于识别孤儿工具）
+        all_skill_tools: Set[str] = set()
+        for skill in self.skills.values():
+            all_skill_tools.update(skill.tools)
+
         result = []
         for name in sorted(active_names):
             if name in all_meta_map:
                 result.append(all_meta_map[name])
+
+        # 自动纳入未被任何 Skill 管理的"孤儿工具"：
+        # 用户工具箱工具（如 toolkit_xxx_my）不属于任何 Skill，但应始终可用
+        orphan_count = 0
+        for name in sorted(all_meta_map.keys()):
+            if name not in active_names and name not in all_skill_tools:
+                result.append(all_meta_map[name])
+                orphan_count += 1
+        if orphan_count:
+            logger.debug(f"孤儿工具已纳入: {orphan_count} 个")
+
         return result
 
     # ─── Prompt 构建 ───────────────────────────────

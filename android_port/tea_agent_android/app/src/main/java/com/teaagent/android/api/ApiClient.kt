@@ -69,10 +69,10 @@ class ApiClient(
                 val modelCfg = config.mainModel
                 val systemPrompt = buildSystemPrompt(config)
 
-                // 构建初始 messages
+                // 构建初始 messages（MutableList，后续追加工具调用结果）
                 var messages = historyCompressor.buildMessages(
                     topicId, userMessage, config.keepTurns, systemPrompt
-                )
+                ).toMutableList()
 
                 // 保存用户消息
                 val userMsgId = UUID.randomUUID().toString()
@@ -91,6 +91,7 @@ class ApiClient(
                 while (iteration < config.maxIterations) {
                     iteration++
 
+                    Log.d(TAG, "[iter " + iteration + "/" + config.maxIterations + "] msgs=" + messages.size + " lastRole=" + (messages.lastOrNull()?.get("role") ?: "?"))
                     val result = callLLM(modelCfg, messages, callbacks)
 
                     if (result.error != null) {
@@ -104,7 +105,8 @@ class ApiClient(
 
                     if (result.toolCalls.isNotEmpty()) {
                         // 处理工具调用
-                        val assistantMsg = buildAssistantToolCallMsg(result.toolCalls, result.content)
+                        val assistantMsg = buildAssistantToolCallMsg(result.toolCalls, result.content, result.reasoningContent)
+                        Log.d(TAG, "[iter " + iteration + "] toolCalls=" + result.toolCalls.size + " names=" + result.toolCalls.map { it.optJSONObject("function")?.optString("name") })
                         messages.add(assistantMsg)
 
                         // 保存 assistant 消息（含 tool_calls）
@@ -135,6 +137,7 @@ class ApiClient(
                             }
 
                             val toolResult = toolManager.execute(fnName, fnArgs)
+                                Log.d(TAG, "[iter " + iteration + "] exec " + fnName + " → " + (toolResult.take(100)))
 
                             withContext(Dispatchers.Main) {
                                 callbacks.onToolCall(JSONObject().apply {
@@ -222,7 +225,8 @@ class ApiClient(
         val tokenCount: Int,
         val promptTokens: Int,
         val completionTokens: Int,
-        val error: String?
+        val error: String?,
+        val reasoningContent: String? = null  // DeepSeek 等 thinking 模式的 reasoning_content，不回传则 400
     )
 
     private suspend fun callLLM(
@@ -233,6 +237,7 @@ class ApiClient(
         return withContext(Dispatchers.IO) {
             try {
                 val url = "${config.apiUrl.trimEnd('/')}/chat/completions"
+                Log.d(TAG, "→ callLLM url=$url msgs=${messages.size} tools=${toolManager.getToolSchemas().size}")
 
                 val requestBody = JSONObject().apply {
                     put("model", config.modelName)
@@ -274,6 +279,7 @@ class ApiClient(
                 val response = currentCall!!.execute()
 
                 if (!response.isSuccessful) {
+                    Log.e(TAG, "X HTTP " + response.code + " body=" + (response.body?.string()?.take(500) ?: "null"))
                     return@withContext LLMResult(
                         null, emptyList(), 0, 0, 0,
                         "HTTP ${response.code}: ${response.message}"
@@ -313,8 +319,8 @@ class ApiClient(
 
                             val delta = choices.optJSONObject(0)?.optJSONObject("delta") ?: continue
 
-                            // 文本内容
-                            val content = delta.optString("content", "")
+                            // 文本内容（注意：optString 对 JSON null 返回 "null" 字符串！）
+                            val content = if (delta.isNull("content")) "" else delta.optString("content", "")
                             if (content.isNotEmpty()) {
                                 contentBuilder.append(content)
                                 withContext(Dispatchers.Main) {
@@ -323,7 +329,7 @@ class ApiClient(
                             }
 
                             // 思考过程（DeepSeek/Claude 等模型的 reasoning_content）
-                            val reasoning = delta.optString("reasoning_content", "")
+                            val reasoning = if (delta.isNull("reasoning_content")) "" else delta.optString("reasoning_content", "")
                             if (reasoning.isNotEmpty()) {
                                 thinkingBuilder.append(reasoning)
                                 withContext(Dispatchers.Main) {
@@ -373,6 +379,10 @@ class ApiClient(
                     if (tc.has("function")) {
                         tc.getJSONObject("function").put("arguments", argsStr)
                     }
+                    // 确保有 id（某些 API 不在 delta 中返回 id，导致后续 tool_call_id 为空 HTTP 400）
+                    if (!tc.has("id") || tc.optString("id", "").isEmpty()) {
+                        tc.put("id", "call_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12))
+                    }
                     toolCalls.add(tc)
                 }
 
@@ -382,7 +392,8 @@ class ApiClient(
                     tokenCount = tokenCount,
                     promptTokens = promptTokens,
                     completionTokens = completionTokens,
-                    error = null
+                    error = null,
+                    reasoningContent = thinkingBuilder.toString().ifBlank { null }
                 )
 
             } catch (e: Exception) {
@@ -412,11 +423,11 @@ class ApiClient(
 
     private fun buildAssistantToolCallMsg(
         toolCalls: List<JSONObject>,
-        content: String?
+        content: String?,
+        reasoningContent: String? = null
     ): Map<String, Any?> {
-        return mapOf(
+        val msg = mutableMapOf<String, Any?>(
             "role" to "assistant",
-            "content" to (content ?: ""),
             "tool_calls" to toolCalls.map { tc ->
                 mapOf(
                     "id" to tc.optString("id"),
@@ -428,5 +439,14 @@ class ApiClient(
                 )
             }
         )
+        // 只有有实际文本内容时才加 content，避免 content=""+tool_calls 导致部分 API 返回 400
+        if (!content.isNullOrBlank()) {
+            msg["content"] = content
+        }
+        // DeepSeek 等 thinking 模式：必须回传 reasoning_content，否则 400
+        if (!reasoningContent.isNullOrBlank()) {
+            msg["reasoning_content"] = reasoningContent
+        }
+        return msg
     }
 }

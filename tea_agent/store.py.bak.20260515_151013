@@ -661,50 +661,18 @@ class Storage:
         return [dict(r) for r in rows]
 
 # NOTE: 2026-05-07 07:45:00, self-evolved by tea_agent --- save_msg 新增自动嵌入钩子：每条 user_msg 保存后后台线程自动生成向量
-# NOTE: 2026-05-15 15:10:13, self-evolved by tea_agent --- 修改 save_msg 方法，读取图片文件存入 images 表并转换为 Base64 嵌入 JSON
-    # NOTE: 2026-05-20 gen by tea_agent, save_msg 支持图片持久化：读取文件存入 images 表并转为 Base64
+    # NOTE: 2026-05-15 gen by tea_agent, 支持图片消息：user_msg 可为 str 或 {"text": ..., "images": [...]}
     def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool) -> int:
         '''
-        新增一条，返回conversation_id。
-        若 user_msg 含图片，自动读取文件存入 images 表，并将 images 字段替换为 Base64 数据以便直接显示。
+        新增一条，返回conversation_id，会话完成后，调用 update_msg_rounds() 更新。
+
+        若 user_msg 非空且嵌入引擎已配置，自动后台生成文本向量存入 msg_vectors。
+        user_msg 可为 str 或 {"text": str, "images": [str]}。
         '''
         import json
-        import base64
         c = self.conn.cursor()
         conv_id = self._generate_id()
-        
-        # 处理图片：存入 images 表 + 转换为 Base64
-        if isinstance(user_msg, dict) and 'images' in user_msg:
-            raw_imgs = user_msg['images']
-            processed_imgs = []
-            c_img = self.conn.cursor()
-            for img_item in raw_imgs:
-                if os.path.isfile(img_item):
-                    try:
-                        with open(img_item, 'rb') as f:
-                            blob = f.read()
-                        ext = os.path.splitext(img_item)[1].lower()
-                        mime_map = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', 
-                                    '.gif': 'image/gif', '.webp': 'image/webp'}
-                        mime = mime_map.get(ext, 'image/png')
-                        
-                        # 存入 images 表
-                        c_img.execute('INSERT INTO images (conversation_id, image_blob, mime_type) VALUES (?, ?, ?)',
-                                      (conv_id, blob, mime))
-                        
-                        # 转 Base64
-                        b64 = base64.b64encode(blob).decode('utf-8')
-                        processed_imgs.append(f"data:{mime};base64,{b64}")
-                    except Exception as e:
-                        import logging
-                        logging.getLogger("store").error(f"Failed to process image {img_item}: {e}")
-                        processed_imgs.append(img_item)
-                else:
-                    processed_imgs.append(img_item)
-            user_msg['images'] = processed_imgs
-            c_img.close()
-
-        # 将 user_msg 序列化为 JSON 字符串存储
+        # 将 user_msg 序列化为 JSON 字符串存储（兼容纯文本和图片消息）
         if isinstance(user_msg, dict):
             user_msg_json = json.dumps(user_msg, ensure_ascii=False)
             user_msg_text = user_msg.get("text", "")

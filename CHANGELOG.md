@@ -1,7 +1,14 @@
 # Changelog
 
 
-## [0.8.1] - 2026-05-15
+## [0.8.2] - 2026-05-15
+### New Features
+- feat: 图片消息持久化到 Storage（新增 `images` 表存储图片二进制数据）
+
+### Improvements
+- improve: `save_msg` 自动将本地图片转为 Base64 存入数据库，不再依赖外部 `tmp/images` 文件
+- improve: 聊天记录查看直接渲染 Base64 图片数据，重启后即使清理临时文件图片依然可见
+
 ### Improvements & Changes
 - 添加系统托盘图标支持（Windows 和 KDE Plasma 6），右键菜单提供退出选项，保持原有窗口关闭按钮行为不变
 ## [0.8.0] - 2026-05-15

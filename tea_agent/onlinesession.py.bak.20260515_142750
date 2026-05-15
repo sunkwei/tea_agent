@@ -818,27 +818,16 @@ class OnlineToolSession(
             "iterations": iterations,
         }
 
-# NOTE: 2026-05-15 14:27:49, self-evolved by tea_agent --- 修改 _build_tools 支持 tool_filter 参数
-    def _build_tools(self, tool_filter: list = None):
+    def _build_tools(self):
         """构建工具定义列表（通过 SkillManager 过滤，按需加载）"""
         all_tools = super()._build_tools()
         # 通过 SkillManager 过滤：仅返回激活 Skill 包含的工具
         active_meta_map = self.skill_manager.get_active_tools_meta(self.toolkit.meta_map)
         if active_meta_map:
-            tools = active_meta_map
+            self.tools = active_meta_map
         else:
             # 回退：如果没有任何工具被激活，使用全部
-            tools = all_tools
-            
-        # Level 2: 动态工具注入
-        if tool_filter:
-            # 强制保留基础 introspection 工具
-            essential = {'toolkit_memory', 'toolkit_kb'} 
-            allowed = set(tool_filter) | essential
-            self.tools = [t for t in tools if t['function']['name'] in allowed]
-            logger.info(f"[Pipe Dynamic] Tool Injection: enabled {len(self.tools)} tools based on intent")
-        else:
-            self.tools = tools
+            self.tools = all_tools
 
     def update_tools(self):
         """重新加载并刷新工具定义"""
@@ -942,26 +931,11 @@ class OnlineToolSession(
         
 # NOTE: 2026-05-09 20:07:25, self-evolved by tea_agent --- chat_stream 在 skill auto_activate 后自动检测并切换模式（基于用户输入）
         # 自动激活匹配的 Skill（基于用户输入触发词）
-# NOTE: 2026-05-15 14:28:07, self-evolved by tea_agent --- 修改 chat_stream 集成意图分析与动态工具注入
         self.skill_manager.auto_activate(_msg_text)
         # 自动检测并切换 Agent 模式（基于用户输入）
         self._auto_detect_mode(_msg_text)
-        
-        # Level 1 & 2: 动态意图分析与流水线调整
-        intent = self._analyze_intent(_msg_text)
-        
-        # Level 2: 按需注入工具
-        if intent.get('required_tools'):
-            self._build_tools(tool_filter=intent['required_tools'])
-        else:
-            self._build_tools() # 重置为默认
-
-        # Level 1: 动态跳过控制
-        if intent.get('skip_tool_loop'):
-            context['skip_tool_loop'] = True
-
-        # 刷新工具列表（反映最新的激活状态） - 已在上面由 intent 控制
-        # self._build_tools() 
+        # 刷新工具列表（反映最新的激活状态）
+        self._build_tools()
 
 # NOTE: 2026-04-30 16:23:12, self-evolved by tea_agent --- chat_stream中reflection_manager为None时安全跳过追踪和反思
         # 2026-04-30 gen by deepseek-v4-pro, 开始反思追踪

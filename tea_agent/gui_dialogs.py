@@ -7,8 +7,11 @@ import os
 import re
 import threading
 import logging
+# NOTE: 2026-05-15 07:53:34, self-evolved by tea_agent --- ConfigDialog.__init__ 调用 get_config 但未导入，在顶部添加 import
 from pathlib import Path
 from datetime import datetime
+# NOTE: 2026-05-15 07:55:51, self-evolved by tea_agent --- 保存配置时 save_config 未导入，追加到顶部 import
+from tea_agent.config import get_config, save_config
 import platform as _platform
 
 # ====================== 记忆管理对话框 ======================

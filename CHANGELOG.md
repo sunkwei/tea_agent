@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.8.0] - 2026-05-15
+
+### New Features
+- feat: 聊天图片附件支持 — GUI 选择图片复制到 tmp/images/，支持多选
+- feat: HtmlFrame 图片 base64 内嵌渲染（最大400x300，圆角边框，hover 高亮）
+- feat: 点击聊天图片弹出放大查看窗口（PIL 解码，自适应屏幕90%，点击/Esc关闭）
+- feat: GUI 窗口标题含当前目录完整路径
+- feat: 工具轮始终显示（不再过滤），思维链与工具轮对应存储
+
+### Improvements
+- improve: 图片+文本消息支持 JSON 序列化存储（兼容纯文本回退）
+- improve: 加载历史时解析 JSON 格式恢复图片附件
+- improve: 流式输出控制台批量刷新（500ms定时器），降低 GUI 阻塞感
+- improve: Alt+Up/Down 切换历史轮次视图
+- improve: HTML 渲染前控制字符清洗 + 标签配对校验
+
 ## [0.6.3] - 2026-05-05
 
 ### Breaking Changes

@@ -70,9 +70,12 @@ class OnlineToolSession(
         max_assistant_content: int = 128 * 1024,
         extra_iterations_on_continue: int = 5,
 # NOTE: 2026-04-30 14:35:38, self-evolved by tea_agent --- OnlineToolSession增加memory_dedup_threshold参数
+# NOTE: 2026-05-15 08:10:48, self-evolved by tea_agent --- 添加 supports_vision 参数，默认 False，避免非视觉模型发送 image_url 报错
         memory_extraction_threshold: int = 2,
 # NOTE: 2026-04-30 14:39:12, self-evolved by tea_agent --- onlinesession默认dedup改为0.3
         memory_dedup_threshold: float = 0.3,
+        # NOTE: 2026-05-18 gen by tea_agent, 视觉支持开关，默认关闭避免非视觉模型报 image_url 错误
+        supports_vision: bool = False,
     ):
         """
         初始化会话
@@ -128,7 +131,10 @@ class OnlineToolSession(
         self.extra_iterations_on_continue = extra_iterations_on_continue
 # NOTE: 2026-04-30 14:35:54, self-evolved by tea_agent --- memory_dedup_threshold属性赋值
         self.memory_extraction_threshold = memory_extraction_threshold
+# NOTE: 2026-05-15 08:10:57, self-evolved by tea_agent --- 存储 supports_vision 到实例属性 self._supports_vision
         self.memory_dedup_threshold = memory_dedup_threshold
+        # NOTE: 2026-05-18 gen by tea_agent, 视觉支持开关
+        self._supports_vision = supports_vision
 
         # @2026-04-29 gen by deepseek-v4-pro, max_iterations交互式续跑
         import threading
@@ -344,7 +350,14 @@ class OnlineToolSession(
             current_user_msg = ""
             for i in range(len(self.messages)-1, 0, -1):
                 if self.messages[i].get("role") == "user":
-                    current_user_msg = self.messages[i].get("content", "")
+                    cur_content = self.messages[i].get("content", "")
+                    # NOTE: 2026-05-15 gen by tea_agent, 处理多模态 content（list 格式）
+                    if isinstance(cur_content, list):
+                        current_user_msg = "".join(
+                            p.get("text", "") for p in cur_content if p.get("type") == "text"
+                        )
+                    else:
+                        current_user_msg = str(cur_content)
                     break
             filtered = self._filter_level2_by_relevance(level2, current_user_msg)
             for item in filtered:
@@ -365,9 +378,56 @@ class OnlineToolSession(
             msg_copy = dict(msg)
             if msg_copy["role"] == "assistant" and "reasoning_content" not in msg_copy:
                 msg_copy["reasoning_content"] = ""
+            # NOTE: 2026-05-15 gen by tea_agent, 将含 images 的消息转为多模态格式
+            msg_copy = self._to_multimodal(msg_copy)
             result.append(msg_copy)
 
         return result
+
+    # NOTE: 2026-05-15 gen by tea_agent, 将消息中的 images 字段转换为 OpenAI 多模态 content 格式
+# NOTE: 2026-05-15 08:11:10, self-evolved by tea_agent --- _to_multimodal 检查 supports_vision，不支持则跳过图片并记录警告
+    def _to_multimodal(self, msg: Dict) -> Dict:
+        """如果消息包含 images 字段，将 content 转换为多模态格式。"""
+        images = msg.pop("images", None)
+        if not images:
+            return msg
+        # NOTE: 2026-05-18 gen by tea_agent, 检查模型是否支持视觉，不支持则跳过图片
+        if not getattr(self, '_supports_vision', False):
+            skipped = len(images)
+            logger.warning(f"模型 {self.model} 不支持视觉，跳过 {skipped} 张图片")
+            text = msg.get("content", "")
+            if not text:
+                msg["content"] = "[图片]（当前模型不支持视觉，图片已跳过）"
+            return msg
+        import base64, os
+        text = msg.get("content", "")
+        parts = []
+        if text:
+            parts.append({"type": "text", "text": text})
+        for img_path in images:
+            if not os.path.isfile(img_path):
+                continue
+            try:
+                with open(img_path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("utf-8")
+                ext = os.path.splitext(img_path)[1].lower()
+                mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                           ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}
+                mime = mime_map.get(ext, "image/png")
+                parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{b64}"}
+                })
+            except Exception as e:
+                logger.warning(f"图片编码失败 {img_path}: {e}")
+        if not parts:
+            msg["content"] = ""
+            return msg
+        if len(parts) == 1 and parts[0]["type"] == "text":
+            msg["content"] = text
+            return msg
+        msg["content"] = parts
+        return msg
 
     # NOTE: 2025-07-16 gen by tea_agent, Level 2 语义相关性过滤
     def _filter_level2_by_relevance(self, level2: list, current_msg: str) -> list:
@@ -751,9 +811,13 @@ class OnlineToolSession(
 
         # NOTE: 2026-06-18 gen by tea_agent, UUID migration: topic_id 已是 str，无需 int 转换
 
+# NOTE: 2026-05-15 gen by tea_agent, 支持图片输入：msg 可以是 str 或 {"text": str, "images": [str]}
+        _msg_text = msg if isinstance(msg, str) else msg.get("text", "")
+        _msg_images = None if isinstance(msg, str) else msg.get("images", [])
+
 # NOTE: 2026-05-07 11:27:48, self-evolved by tea_agent --- chat_stream 入口添加 DEBUG 日志
-        logger.debug(f"chat_stream start: msg_len={len(msg)}, topic_id={topic_id}, model={self.model}, enable_thinking={self.enable_thinking}")
-        logger.debug(f"chat_stream user message: {msg}")
+        logger.debug(f"chat_stream start: msg_len={len(str(msg))}, topic_id={topic_id}, model={self.model}, enable_thinking={self.enable_thinking}")
+        logger.debug(f"chat_stream user message: {_msg_text[:200]}..." if len(_msg_text) > 200 else f"chat_stream user message: {_msg_text}")
 
         self.current_topic_id = topic_id
         self.reset_interrupt()
@@ -761,24 +825,25 @@ class OnlineToolSession(
         
 # NOTE: 2026-05-09 20:07:25, self-evolved by tea_agent --- chat_stream 在 skill auto_activate 后自动检测并切换模式（基于用户输入）
         # 自动激活匹配的 Skill（基于用户输入触发词）
-        self.skill_manager.auto_activate(msg)
+        self.skill_manager.auto_activate(_msg_text)
         # 自动检测并切换 Agent 模式（基于用户输入）
-        self._auto_detect_mode(msg)
+        self._auto_detect_mode(_msg_text)
         # 刷新工具列表（反映最新的激活状态）
         self._build_tools()
 
 # NOTE: 2026-04-30 16:23:12, self-evolved by tea_agent --- chat_stream中reflection_manager为None时安全跳过追踪和反思
         # 2026-04-30 gen by deepseek-v4-pro, 开始反思追踪
         if self.reflection_manager is not None:
-            trace = self.reflection_manager.start_trace(topic_id, msg)
+            trace = self.reflection_manager.start_trace(topic_id, _msg_text)
             self._current_trace = trace
         else:
             self._current_trace = None
 
         # 构建执行上下文
+        # NOTE: 2026-05-15 gen by tea_agent, user_msg 传递原始 msg（可能是包含 images 的 dict）
         context = {
             "user_msg": msg,
-            "msg": msg,
+            "msg": _msg_text,
             "callback": callback,
             "on_status": on_status,
         }

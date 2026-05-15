@@ -650,25 +650,35 @@ class Storage:
         return [dict(r) for r in rows]
 
 # NOTE: 2026-05-07 07:45:00, self-evolved by tea_agent --- save_msg 新增自动嵌入钩子：每条 user_msg 保存后后台线程自动生成向量
-    def save_msg(self, topic_id: str, user_msg: str, ai_msg: str, is_func: bool) -> int:
+    # NOTE: 2026-05-15 gen by tea_agent, 支持图片消息：user_msg 可为 str 或 {"text": ..., "images": [...]}
+    def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool) -> int:
         '''
         新增一条，返回conversation_id，会话完成后，调用 update_msg_rounds() 更新。
 
         若 user_msg 非空且嵌入引擎已配置，自动后台生成文本向量存入 msg_vectors。
+        user_msg 可为 str 或 {"text": str, "images": [str]}。
         '''
+        import json
         c = self.conn.cursor()
         conv_id = self._generate_id()
+        # 将 user_msg 序列化为 JSON 字符串存储（兼容纯文本和图片消息）
+        if isinstance(user_msg, dict):
+            user_msg_json = json.dumps(user_msg, ensure_ascii=False)
+            user_msg_text = user_msg.get("text", "")
+        else:
+            user_msg_json = str(user_msg)
+            user_msg_text = str(user_msg)
         c.execute('''
             INSERT INTO conversations (id, topic_id, user_msg, ai_msg, is_func_calling)
             VALUES (?, ?, ?, ?, ?)
-        ''', (conv_id, topic_id, user_msg, ai_msg, 1 if is_func else 0))
+        ''', (conv_id, topic_id, user_msg_json, ai_msg, 1 if is_func else 0))
         self.conn.commit()
         c.close()
         self.update_topic_active(topic_id)
 
         # 自动嵌入：后台线程非阻塞生成 user_msg 向量
-        if user_msg and user_msg.strip():
-            self._auto_embed_async(conv_id, user_msg.strip())
+        if user_msg_text and user_msg_text.strip():
+            self._auto_embed_async(conv_id, user_msg_text.strip())
 
         return conv_id
 

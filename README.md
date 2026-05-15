@@ -1,4 +1,4 @@
-# TeaAgent v0.7.23
+# TeaAgent v0.8.0
 
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**系统提示词自我进化**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
 
@@ -549,6 +549,7 @@ memory_dedup_threshold: 0.3         # 记忆去重相似度
 
 | 版本 | 关键变化 |
 |------|---------|
+| v0.8.0 | 聊天图片附件支持、HtmlFrame 图片 base64 渲染、点击图片放大弹窗、GUI 标题含当前目录、工具轮始终显示 |
 | v0.7.23 | 工具箱分层规则（内置/用户）、`_my` 工具路由、README 全面整理 |
 | v0.7.22 | gui_dialogs 导入修复 |
 | v0.7.20-21 | toolkit_set_topic_title、CLI --config 多agent、知识库重建 |

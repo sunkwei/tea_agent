@@ -55,9 +55,19 @@ class BaseChatSession(ABC):
         """
         pass
 
-    def add_user_message(self, msg: str):
-        """添加用户消息"""
-        self.messages.append({"role": "user", "content": msg})
+    # NOTE: 2026-05-15 gen by tea_agent, 支持图片附件：msg 可为 str 或 {"text": str, "images": [str]}
+    def add_user_message(self, msg):
+        """添加用户消息，支持纯文本或含图片的结构化输入"""
+        if isinstance(msg, str):
+            self.messages.append({"role": "user", "content": msg})
+        elif isinstance(msg, dict):
+            entry = {"role": "user", "content": msg.get("text", "")}
+            images = msg.get("images", [])
+            if images:
+                entry["images"] = images
+            self.messages.append(entry)
+        else:
+            self.messages.append({"role": "user", "content": str(msg)})
 
     def add_assistant_message(self, msg: str):
         """添加助手消息"""

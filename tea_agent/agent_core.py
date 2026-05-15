@@ -229,11 +229,14 @@ class AgentCore:
             # 启动失败不影响主体功能
             logger.debug(f"潜意识引擎自动启动跳过: {e}")
 
+# NOTE: 2026-05-15 08:11:30, self-evolved by tea_agent --- _init_session 从 main_model.options 读取 supports_vision 传递给 OnlineToolSession
     def _init_session(self):
         """初始化 OnlineToolSession。子类可覆盖以添加 UI 回调。"""
         cfg = self._cfg
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
+        # NOTE: 2026-05-18 gen by tea_agent, 从 options 读取 supports_vision
+        supports_vision = main_m.options.get("supports_vision", False) if main_m.options else False
         self.sess = OnlineToolSession(
             toolkit=self.toolkit,
             api_key=cast(str, main_m.api_key),
@@ -251,6 +254,7 @@ class AgentCore:
             cheap_api_url=cast(str, cheap_m.api_url),
             cheap_model=cast(str, cheap_m.model_name),
             enable_thinking=cfg.enable_thinking,
+            supports_vision=supports_vision,
         )
 
         import tea_agent.session_ref as _sref
@@ -326,8 +330,11 @@ class AgentCore:
         return files
 
     def _post_chat_pipeline(self, ai_msg: str, used_tools: bool,
-                            user_msg: str, topic_id: str) -> None:
-        """AI 回复后流水线。1.入库 2.三级推送 3.Token 4.摘要"""
+                            user_msg, topic_id: str) -> None:
+        """AI 回复后流水线。1.入库 2.三级推送 3.Token 4.摘要
+        user_msg 可为 str 或 {"text": str, "images": [str]}（图片附件）。
+        """
+        # NOTE: 2026-05-15 gen by tea_agent, 支持图片消息入库
         conv_id = self.db.save_msg(topic_id, user_msg, "", False)
         rounds = self.sess._rounds_collector
         self.db.update_msg_rounds(

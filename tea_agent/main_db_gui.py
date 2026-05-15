@@ -183,6 +183,13 @@ strong { font-weight: bold; color: #222; }
 em { font-style: italic; }
 .msg-timestamp { font-size: 0.8em; color: #999; margin-bottom: 0.3em; }
 .msg-divider { border: none; border-top: 2px solid #e8e8e8; margin: 1.2em 0; }
+/* NOTE: 2026-05-15 gen by tea_agent, 聊天图片样式 */
+.chat-images { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.chat-image { max-width: 400px; max-height: 300px; border-radius: 8px; border: 1px solid #ddd; object-fit: contain; cursor: pointer; }
+.chat-image:hover { border-color: #3b82f6; box-shadow: 0 2px 8px rgba(59,130,246,0.3); }
+/* @2026-05-15 gen by tea_agent, 图片点击放大弹窗 */
+a.chat-image-link { text-decoration: none; display: inline-block; }
+a.chat-image-link:hover { text-decoration: none; }
 </style>
 """)
 def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
@@ -329,7 +336,8 @@ def _render_tool_group(group, ts_display):
 
 
 
-def _chat_to_markdown(messages):
+# @2026-05-15 gen by tea_agent, 图片点击放大弹窗
+def _chat_to_markdown(messages, image_cache=None):
     """将聊天消息列表转换为 markdown 格式，包含时间戳和分割线"""
     # 预计算工具轮分组块
     tool_blocks = _build_tool_blocks(messages)
@@ -340,7 +348,34 @@ def _chat_to_markdown(messages):
         ts = msg.get("timestamp", "")
         ts_display = f'<span class="msg-timestamp">{ts}</span>' if ts else ""
         if role == "user":
-            parts.append(f'{ts_display}\n\n<div class="msg-user" markdown="1">\n\n### 👤 你\n\n{content.strip()}\n</div>\n')
+            # NOTE: 2026-05-15 gen by tea_agent, 支持图片附件渲染
+            img_html = ""
+            imgs = msg.get("images", [])
+            if imgs:
+                img_tags = []
+                import os, base64
+                for img_path in imgs:
+                    try:
+                        if os.path.isfile(img_path):
+                            with open(img_path, "rb") as f:
+                                b64 = base64.b64encode(f.read()).decode("utf-8")
+                            ext = os.path.splitext(img_path)[1].lower()
+                            mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                                       ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}
+                            mime = mime_map.get(ext, "image/png")
+                            if image_cache is not None:
+                                cache_idx = len(image_cache)
+                                image_cache.append((b64, mime))
+                                img_tags.append(f'<a href="tea://image/{cache_idx}" class="chat-image-link"><img src="data:{mime};base64,{b64}" class="chat-image" alt="用户上传图片" /></a>')
+                            else:
+                                img_tags.append(f'<img src="data:{mime};base64,{b64}" class="chat-image" alt="用户上传图片" />')
+                        else:
+                            img_tags.append(f'<p class="img-error">⚠️ 找不到图片: {os.path.basename(img_path)}</p>')
+                    except Exception:
+                        img_tags.append(f'<p class="img-error">⚠️ 无法加载图片: {os.path.basename(img_path)}</p>')
+                if img_tags:
+                    img_html = '<div class="chat-images">' + "".join(img_tags) + '</div>'
+            parts.append(f'{ts_display}\n\n<div class="msg-user" markdown="1">\n\n### 👤 你\n\n{img_html}\n\n{content.strip()}\n</div>\n')
         elif role == "think":
             parts.append(f'{ts_display}\n\n<div class="msg-think" markdown="1">\n\n### 💭 思考过程\n\n{content.strip()}\n</div>\n\n---\n')
         elif role == "ai":
@@ -438,6 +473,15 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
     for conv in conversations:
         um = conv.get("user_msg", "").strip()
         if um:
+            # NOTE: 2026-05-15 gen by tea_agent, 处理 JSON 格式 user_msg（含图片）
+            if um.startswith('{'):
+                try:
+                    import json as _json_gs
+                    parsed = _json_gs.loads(um)
+                    if isinstance(parsed, dict):
+                        um = parsed.get("text", um)
+                except Exception:
+                    pass
             if len(um) > 200:
                 um = um[:200] + "..."
             user_msgs.append(f"用户：{um}")
@@ -534,8 +578,13 @@ class TkGUI(AgentCore):
         # HtmlFrame 缩放级别
         self._zoom_level = 100
 
+        # @2026-05-15 gen by tea_agent, 图片点击放大弹窗
+        self._image_cache = []  # list of (base64_data, mime_type)
+
         # 聊天消息列表
         self.chat_messages: List[Dict] = []
+        # NOTE: 2026-05-15 gen by tea_agent, 待发送图片列表（用户附带的图片路径）
+        self._pending_images: List[str] = []
         # NOTE: 2026-05-15 gen by tea_agent, 当前查看的历史轮次索引，None=最新轮
         self._current_round_view: Optional[int] = None
         self._chat_rounds: List[List[Dict]] = []
@@ -695,6 +744,15 @@ class TkGUI(AgentCore):
         )
         self.input_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
+        # NOTE: 2026-05-15 gen by tea_agent, 图片附件按钮行
+        attach_row = tk.Frame(input_frame)
+        attach_row.pack(fill=tk.X, padx=4, pady=(0, 2))
+        self._img_btn = ttk.Button(attach_row, text="📎 图片", command=self._attach_image)
+        self._img_btn.pack(side=tk.LEFT)
+        self._img_label = ttk.Label(attach_row, text="", foreground="#888")
+        self._img_label.pack(side=tk.LEFT, padx=8)
+        self._clear_img_btn = ttk.Button(attach_row, text="✕ 清除", command=self._clear_images)
+        # 初始隐藏清除按钮
 
         ttk.Label(input_frame, text="Enter 发送 | Shift+Enter 换行 | ESC 打断",
                   foreground="#666").pack(anchor=tk.E, padx=6)
@@ -747,7 +805,8 @@ class TkGUI(AgentCore):
     def _apply_zoom(self):
         if not HAS_TKINTERWEB or not self._filtered_messages():
             return
-        md = _chat_to_markdown(self._filtered_messages())
+        self._image_cache.clear()
+        md = _chat_to_markdown(self._filtered_messages(), image_cache=self._image_cache)
         font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
         html = _render_markdown(md, font_size=font_size)
         self._html_render(html)
@@ -929,7 +988,8 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 msgs[-1]["content"] = msgs[-1]["content"] + streaming
             else:
                 msgs.append({"role": "ai", "content": streaming, "timestamp": self._now_ts()})
-        md = _chat_to_markdown(msgs)
+        self._image_cache.clear()
+        md = _chat_to_markdown(msgs, image_cache=self._image_cache)
         if HAS_TKINTERWEB:
             font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
             html = _render_markdown(md, font_size=font_size)
@@ -1007,14 +1067,18 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         self.log("=" * 50, "title")
         self.log("")
 
-    def log(self, msg, tag="ai"):
+    def log(self, msg, tag="ai", images=None):
         self.console.config(state=tk.NORMAL)
         self.console.insert(tk.END, msg + "\n", tag)
         self.console.see(tk.END)
         self.console.config(state=tk.DISABLED)
 
         if tag in ("user", "ai", "tool", "notice"):
-            self.chat_messages.append({"role": tag, "content": msg, "timestamp": self._now_ts()})
+            entry = {"role": tag, "content": msg, "timestamp": self._now_ts()}
+            # NOTE: 2026-05-15 gen by tea_agent, 支持图片附件
+            if images:
+                entry["images"] = images
+            self.chat_messages.append(entry)
 
 # NOTE: 2026-05-07 17:32:01, self-evolved by tea_agent --- stream() 识别 [THINK] 前缀分别缓冲，控制台灰色显示，触发 HtmlFrame 定期渲染
 # NOTE: 2026-05-08 08:26:53, self-evolved by tea_agent --- 流式输出期间仅更新ScrolledText控制台，移除HtmlFrame的150ms定时渲染，会话完成后统一渲染HtmlFrame，降低GUI阻塞感
@@ -1103,6 +1167,9 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         self._stream_buffer = ""
         self._think_buffer = ""
         self._pending_console_text.clear()
+        self._pending_images.clear()  # NOTE: 2026-05-15 gen by tea_agent, 清理待发送图片
+        self._img_label.config(text="")
+        self._clear_img_btn.pack_forget()
         # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- 清理 _pending_console_text，移除废弃的 _stream_render_pending
 
     def auto_new_topic(self):
@@ -1240,7 +1307,20 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                     self._progress_queue.append((i + 1, total_convs))
 
                     is_old = i < old_count
-                    render_items.append(("user", f"你：{c['user_msg']}"))
+                    # NOTE: 2026-05-15 gen by tea_agent, 支持 JSON 格式 user_msg（含图片）
+                    raw_user_msg = c['user_msg']
+                    user_images = []
+                    user_text = raw_user_msg
+                    if raw_user_msg and raw_user_msg.startswith('{'):
+                        try:
+                            import json as _json_um
+                            parsed = _json_um.loads(raw_user_msg)
+                            if isinstance(parsed, dict):
+                                user_text = parsed.get("text", raw_user_msg)
+                                user_images = parsed.get("images", [])
+                        except Exception:
+                            pass
+                    render_items.append(("user", f"你：{user_text}", user_images))
 
                     if is_old:
                         render_items.append(("ai", f"AI：{c['ai_msg']}"))
@@ -1304,8 +1384,14 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     def _render_loaded_topic(self, render_items):
         """主线程：清屏 + 逐条渲染准备好的数据"""
         self.clear_chat()
-        for tag, text in render_items:
-            self.log(text, tag)
+        # NOTE: 2026-05-15 gen by tea_agent, 支持 (tag, text, images) 三元组
+        for item in render_items:
+            if len(item) == 3:
+                tag, text, images = item
+                self.log(text, tag, images=images if images else None)
+            else:
+                tag, text = item
+                self.log(text, tag)
 
         if HAS_TKINTERWEB and self.chat_messages:
             # NOTE: 2026-05-15 gen by tea_agent, 主题加载后也使用轮次视图
@@ -1463,6 +1549,48 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             pass  # 通知失败不影响主流程
 
 # NOTE: 2026-05-04 19:35:31, self-evolved by tea_agent --- GUI send() 入口加 _shutting_down 闸门 — 重启中拒绝新消息
+    # NOTE: 2026-05-15 gen by tea_agent, 图片附件支持：选择图片文件并暂存
+    def _attach_image(self):
+        """打开文件对话框选择图片，存入 _pending_images"""
+        from tkinter import filedialog
+        import shutil, os
+        files = filedialog.askopenfilenames(
+            title="选择图片",
+            filetypes=[
+                ("图片文件", "*.png *.jpg *.jpeg *.gif *.bmp *.webp"),
+                ("所有文件", "*.*"),
+            ]
+        )
+        if not files:
+            return
+        # 确保 tmp/images 目录存在
+        img_dir = os.path.join(self._initial_cwd, "tmp", "images")
+        os.makedirs(img_dir, exist_ok=True)
+        for f in files:
+            # 复制到 tmp/images 目录（避免原始文件被移动/删除）
+            basename = os.path.basename(f)
+            dest = os.path.join(img_dir, basename)
+            # 如果同名文件存在，添加序号
+            if os.path.exists(dest):
+                name, ext = os.path.splitext(basename)
+                counter = 1
+                while os.path.exists(os.path.join(img_dir, f"{name}_{counter}{ext}")):
+                    counter += 1
+                dest = os.path.join(img_dir, f"{name}_{counter}{ext}")
+            shutil.copy2(f, dest)
+            self._pending_images.append(dest)
+        # 更新标签显示
+        count = len(self._pending_images)
+        self._img_label.config(text=f"已选 {count} 张图片")
+        self._clear_img_btn.pack(side=tk.LEFT, padx=4)
+
+    # NOTE: 2026-05-15 gen by tea_agent, 清除已选图片
+    def _clear_images(self):
+        """清空待发送图片列表"""
+        self._pending_images.clear()
+        self._img_label.config(text="")
+        self._clear_img_btn.pack_forget()
+
     def send(self, e=None):
         if self._shutting_down:
             self._update_status("🔄 代码已变更，等待重启...")
@@ -1470,13 +1598,18 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         if self.generating or not self.current_topic_id:
             return "break"
         msg = self.input_box.get("1.0", tk.END).strip()
-        if not msg:
+        # 允许仅有图片无文本的情况
+        images = list(self._pending_images)
+        self._clear_images()  # 发送后清空
+        if not msg and not images:
             return "break"
         self.input_box.delete("1.0", tk.END)
 
         self._switch_display("console")
 
-        self.log(f"你：{msg}", "user")
+        # NOTE: 2026-05-15 gen by tea_agent, 支持图片附件
+        display_msg = f"你：{msg}" if msg else "你：[图片]"
+        self.log(display_msg, "user", images=images if images else None)
         self.generating = True
         # 启动 500ms 定时器，批量刷新流式内容到 ScrolledText（不渲染 HtmlFrame）
         # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- 流式输出启动 _stream_flush_tick 500ms 定时器
@@ -1486,10 +1619,13 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         mem_count = len(self.db.get_active_memories(50))
         self._update_status(f"⏳ 生成中... (ESC 打断) | 🧠 {mem_count}")
 
+        # NOTE: 2026-05-15 gen by tea_agent, 构建含图片的消息传给 chat_stream
+        chat_input = {"text": msg} if not images else {"text": msg, "images": images}
+
         def work():
             try:
                 ai_msg, is_func = self.sess.chat_stream(
-                    msg, 
+                    chat_input, 
                     callback=self.safe_stream,
                     topic_id=self.current_topic_id,
                     on_status=self.safe_update_status,
@@ -1497,7 +1633,9 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 self.root.after(0, self._flush_stream_to_messages)
 
                 # ── 标准后处理流水线（入库 → Token → 摘要）──
-                self._post_chat_pipeline(ai_msg, is_func, msg, self.current_topic_id)
+                # NOTE: 2026-05-15 gen by tea_agent, 传入图片信息用于入库
+                user_msg_for_db = msg if not images else {"text": msg, "images": images}
+                self._post_chat_pipeline(ai_msg, is_func, user_msg_for_db, self.current_topic_id)
 
                 # GUI 特定：token 渲染 + 通知
                 usage = self.sess._last_usage
@@ -1640,10 +1778,14 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             rounds.append(current)
         return rounds
 
-    # NOTE: 2026-05-15 gen by tea_agent, HtmlFrame 历史链接点击回调
+    # NOTE: 2026-05-15 gen by tea_agent, HtmlFrame 历史链接 + 图片点击回调
     def _on_history_link_click(self, url):
-        """处理 tea://round/N 或 tea://latest 链接点击"""
+        """处理 tea://round/N 或 tea://latest 或 tea://image/N 链接点击"""
         try:
+            if url.startswith("tea://image/"):
+                idx = int(url.rsplit("/", 1)[-1])
+                self._show_image_popup(idx)
+                return
             if url.startswith("tea://round/"):
                 idx = int(url.rsplit("/", 1)[-1])
                 self._current_round_view = idx
@@ -1653,6 +1795,59 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 self._render_and_show_chat()
         except Exception:
             pass
+
+    # @2026-05-15 gen by tea_agent, 图片点击放大弹窗
+    def _show_image_popup(self, idx):
+        """点击聊天图片时弹出放大查看窗口。点击图片或按 Esc 关闭。"""
+        if idx < 0 or idx >= len(self._image_cache):
+            return
+        b64_data, mime = self._image_cache[idx]
+
+        import base64, io
+        try:
+            from PIL import Image, ImageTk
+        except ImportError:
+            self._update_status("需要安装 Pillow 库: pip install Pillow")
+            return
+
+        try:
+            img_bytes = base64.b64decode(b64_data)
+            img = Image.open(io.BytesIO(img_bytes))
+        except Exception as exc:
+            self._update_status("图片解码失败: " + str(exc))
+            return
+
+        popup = tk.Toplevel(self.root)
+        popup.title("图片查看 - 点击图片或按 Esc 关闭")
+        popup.configure(bg="#1a1a1a")
+
+        screen_w = self.root.winfo_screenwidth()
+        screen_h = self.root.winfo_screenheight()
+        max_w = int(screen_w * 0.9)
+        max_h = int(screen_h * 0.85)
+
+        img_w, img_h = img.size
+        if img_w > max_w or img_h > max_h:
+            ratio = min(max_w / img_w, max_h / img_h)
+            new_w, new_h = int(img_w * ratio), int(img_h * ratio)
+            img = img.resize((new_w, new_h), Image.LANCZOS)
+
+        photo = ImageTk.PhotoImage(img)
+        label = tk.Label(popup, image=photo, bg="#1a1a1a", cursor="hand2")
+        label.image = photo
+        label.pack(padx=4, pady=4)
+
+        label.bind("<Button-1>", lambda e: popup.destroy())
+        popup.bind("<Escape>", lambda e: popup.destroy())
+
+        popup.update_idletasks()
+        pw = popup.winfo_reqwidth()
+        ph = popup.winfo_reqheight()
+        x = (screen_w - pw) // 2
+        y = (screen_h - ph) // 2
+        popup.geometry("+{}+{}".format(x, y))
+
+        popup.focus_set()
 
     # NOTE: 2026-05-15 gen by tea_agent, 构建轮次视图完整 HTML
     def _build_round_view_html(self, rounds, active_idx, font_size):
@@ -1700,7 +1895,8 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         
         # -- 当前轮内容 --
         round_msgs = rounds[active_idx]
-        round_md = _chat_to_markdown(round_msgs)
+        self._image_cache.clear()
+        round_md = _chat_to_markdown(round_msgs, image_cache=self._image_cache)
         if HAS_TKINTERWEB:
             round_body = _md_lib.markdown(round_md, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
             css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)

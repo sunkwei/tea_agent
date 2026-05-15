@@ -392,6 +392,16 @@ class OnlineToolSession(
                 msg_copy["reasoning_content"] = ""
             # NOTE: 2026-05-15 gen by tea_agent, 将含 images 的消息转为多模态格式
             msg_copy = self._to_multimodal(msg_copy)
+            # NOTE: 2026-05-19 gen by tea_agent, 清理历史中残留的 image_url 格式 content，避免非视觉模型 API 400 错误
+            if isinstance(msg_copy.get("content"), list) and not getattr(self, '_supports_vision', False):
+                text_parts = []
+                for p in msg_copy["content"]:
+                    if isinstance(p, dict):
+                        if p.get("type") == "text":
+                            text_parts.append(p.get("text", ""))
+                        elif p.get("type") == "image_url":
+                            text_parts.append("[图片]")
+                msg_copy["content"] = "\n".join(text_parts) if text_parts else "[图片]"
             result.append(msg_copy)
 
         return result
@@ -929,8 +939,16 @@ class OnlineToolSession(
         # NOTE: 2026-06-18 gen by tea_agent, UUID migration: topic_id 已是 str，无需 int 转换
 
 # NOTE: 2026-05-15 gen by tea_agent, 支持图片输入：msg 可以是 str 或 {"text": str, "images": [str]}
+# NOTE: 2026-05-15 15:46:09, self-evolved by tea_agent --- 在 chat_stream 入口添加视觉支持检查，不支持时提前提示用户
         _msg_text = msg if isinstance(msg, str) else msg.get("text", "")
         _msg_images = None if isinstance(msg, str) else msg.get("images", [])
+
+        # NOTE: 2026-05-18 gen by tea_agent, 视觉支持检查：不支持时提前提示用户，避免发送到 API 后报错
+        if _msg_images and not getattr(self, '_supports_vision', False):
+            error_msg = f"⚠️ 当前模型 {self.model} 不支持图片输入，请更换支持视觉的模型或移除图片后重试。"
+            logger.warning(error_msg)
+            callback(error_msg)
+            return error_msg, False
 
 # NOTE: 2026-05-07 11:27:48, self-evolved by tea_agent --- chat_stream 入口添加 DEBUG 日志
         logger.debug(f"chat_stream start: msg_len={len(str(msg))}, topic_id={topic_id}, model={self.model}, enable_thinking={self.enable_thinking}")

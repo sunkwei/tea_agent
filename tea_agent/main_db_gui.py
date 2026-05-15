@@ -14,6 +14,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, cast, Callable, Optional, List, Tuple
 import logging
+import webbrowser
 
 try:
     from tkinterweb import HtmlFrame
@@ -1858,8 +1859,12 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 
     # NOTE: 2026-05-15 gen by tea_agent, HtmlFrame 历史链接 + 图片点击回调
     def _on_history_link_click(self, url):
-        """处理 tea://round/N 或 tea://latest 或 tea://image/N 链接点击"""
+        """处理 tea://round/N 或 tea://latest 或 tea://image/N 链接点击，外部链接用系统浏览器打开"""
         try:
+            # NOTE: 2026-05-18 gen by tea_agent, 外部链接用系统默认浏览器打开
+            if url.startswith("http://") or url.startswith("https://"):
+                webbrowser.open(url)
+                return
             if url.startswith("tea://image/"):
                 idx = int(url.rsplit("/", 1)[-1])
                 self._show_image_popup(idx)

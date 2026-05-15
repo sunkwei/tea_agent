@@ -495,6 +495,16 @@ class SessionSummarizerMixin:
             msg_copy = dict(msg)
             if msg_copy.get("role") == "assistant" and "reasoning_content" not in msg_copy:
                 msg_copy["reasoning_content"] = ""
+            # NOTE: 2026-05-19 gen by tea_agent, 清理历史中残留的 image_url 格式 content，避免 API 400
+            if isinstance(msg_copy.get("content"), list) and not getattr(self, '_supports_vision', False):
+                text_parts = []
+                for p in msg_copy["content"]:
+                    if isinstance(p, dict):
+                        if p.get("type") == "text":
+                            text_parts.append(p.get("text", ""))
+                        elif p.get("type") == "image_url":
+                            text_parts.append("[图片]")
+                msg_copy["content"] = "\n".join(text_parts) if text_parts else "[图片]"
             result.append(msg_copy)
 
         return result

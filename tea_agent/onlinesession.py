@@ -112,7 +112,10 @@ class OnlineToolSession(
         logger.info(f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}")
 
         self.toolkit = toolkit
-        self.client = OpenAI(api_key=api_key, base_url=api_url)
+        # NOTE: 2026-05-18 gen by tea_agent, 禁用代理避免 localhost 请求被拦截
+        import httpx
+        _http_client = httpx.Client(proxy=None)
+        self.client = OpenAI(api_key=api_key, base_url=api_url, http_client=_http_client)
         self.max_iterations = max_iterations
         self.enable_thinking = enable_thinking
         self.storage = storage
@@ -121,7 +124,7 @@ class OnlineToolSession(
         self._cheap_client: Optional[OpenAI] = None
         self._cheap_model_name: str = ""
         if cheap_api_key and cheap_api_url and cheap_model:
-            self._cheap_client = OpenAI(api_key=cheap_api_key, base_url=cheap_api_url)
+            self._cheap_client = OpenAI(api_key=cheap_api_key, base_url=cheap_api_url, http_client=httpx.Client(proxy=None))
             self._cheap_model_name = cheap_model
 
         # Token 优化参数

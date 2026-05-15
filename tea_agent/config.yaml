@@ -7,6 +7,7 @@ main_model:
     max_tokens: 1024
     num_gpu: 15
     temperature: 0.7
+    supports_vision: false
 
 cheap_model:
   api_key: YOUR_API_KEY_HERE

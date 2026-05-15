@@ -508,6 +508,8 @@ main_model:
   api_key: "sk-xxx"
   api_url: "https://api.deepseek.com/v1"
   model_name: "deepseek-chat"
+  options:
+    supports_vision: false      # 多模态图片理解，默认关闭
 
 cheap_model:
   api_key: "sk-xxx"
@@ -540,8 +542,23 @@ memory_dedup_threshold: 0.3         # 记忆去重相似度
 
 - ✅ **DeepSeek** (reasoning_content/thinking)
 - ✅ **GLM-5** (智谱)
-- ✅ **Qwen3.6** (通义千问)
+- ✅ **Qwen3.6** / **Qwen3.6-plus** (通义千问，支持图片理解)
 - ✅ **Ollama 本地** (gemma4:26b 等)
+
+### 多模态支持
+
+在 `config.yaml` 中设置 `supports_vision: true` 即可启用图片理解能力：
+
+```yaml
+main_model:
+  api_key: "sk-xxx"
+  api_url: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+  model_name: "qwen3.6-plus"
+  options:
+    supports_vision: true      # ← 启用多模态，默认 false
+```
+
+启用后，GUI 聊天中的图片附件会自动转为 base64 并通过 `image_url` 格式发送给 API。
 
 ---
 

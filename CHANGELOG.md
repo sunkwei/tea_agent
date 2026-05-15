@@ -15,6 +15,7 @@
 - improve: 流式输出控制台批量刷新（500ms定时器），降低 GUI 阻塞感
 - improve: Alt+Up/Down 切换历史轮次视图
 - improve: HTML 渲染前控制字符清洗 + 标签配对校验
+- improve: **多模态图片理解支持** — `supports_vision` 配置项，从 `options` 读取并传入 `OnlineToolSession`，启用后自动将图片转为 base64 通过 `image_url` 格式发送
 
 ## [0.6.3] - 2026-05-05
 

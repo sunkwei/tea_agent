@@ -164,6 +164,14 @@ class TeaAgent:
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
 
+# NOTE: 2026-05-15 09:06:37, self-evolved by tea_agent --- 从配置读取 supports_vision 并传入 OnlineToolSession
+        # NOTE: 2026-05-18 gen by tea_agent, 支持从配置读取 supports_vision
+        _options = getattr(main_m, 'options', {}) or {}
+        if isinstance(_options, dict):
+            _supports_vision = _options.get('supports_vision', False)
+        else:
+            _supports_vision = False
+
         self._sess = OnlineToolSession(
             toolkit=self._toolkit,
             api_key=cast(str, main_m.api_key),
@@ -181,6 +189,7 @@ class TeaAgent:
             cheap_api_url=cast(str, cheap_m.api_url),
             cheap_model=cast(str, cheap_m.model_name),
             enable_thinking=self._enable_thinking,
+            supports_vision=_supports_vision,
         )
 
         _sref.set_session(self._sess)

@@ -335,7 +335,25 @@ class BaseChatSession(ABC):
 
         # 最新一条作为 Level 1（完整工具链）
         last_conv = conversations[-1]
-        self.messages.append({"role": "user", "content": last_conv["user_msg"]})
+        # NOTE: 2026-05-18 gen by tea_agent, 修复 JSON 格式 user_msg（含图片）的解析
+        raw_user_msg = last_conv["user_msg"]
+        user_entry = {"role": "user"}
+        if isinstance(raw_user_msg, str) and raw_user_msg.startswith('{'):
+            try:
+                import json as _json_lh
+                parsed = _json_lh.loads(raw_user_msg)
+                if isinstance(parsed, dict):
+                    user_entry["content"] = parsed.get("text", "")
+                    imgs = parsed.get("images", [])
+                    if imgs:
+                        user_entry["images"] = imgs
+                else:
+                    user_entry["content"] = raw_user_msg
+            except Exception:
+                user_entry["content"] = raw_user_msg
+        else:
+            user_entry["content"] = str(raw_user_msg) if raw_user_msg else ""
+        self.messages.append(user_entry)
 
         rounds = last_conv.get("rounds_json_parsed")
         if rounds and last_conv.get("is_func_calling"):

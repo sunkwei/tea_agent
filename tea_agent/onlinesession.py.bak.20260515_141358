@@ -398,52 +398,6 @@ class OnlineToolSession(
 
     # NOTE: 2026-05-15 gen by tea_agent, 将消息中的 images 字段转换为 OpenAI 多模态 content 格式
 # NOTE: 2026-05-15 08:11:10, self-evolved by tea_agent --- _to_multimodal 检查 supports_vision，不支持则跳过图片并记录警告
-# NOTE: 2026-05-15 14:13:58, self-evolved by tea_agent --- 添加 _get_subconscious_context 辅助方法
-    def _get_subconscious_context(self):
-        """读取潜意识引擎状态并格式化为上下文，注入到每一轮对话中"""
-        import os, json
-        try:
-            # 1. 获取状态文件路径
-            try:
-                from tea_agent.config import get_config
-                cfg = get_config()
-                data_dir = cfg.paths.data_dir_abs
-            except:
-                data_dir = os.path.expanduser("~/.tea_agent")
-            
-            state_file = os.path.join(data_dir, "subconscious_state.json")
-            if not os.path.exists(state_file):
-                return None
-
-            # 2. 读取状态
-            with open(state_file, 'r') as f:
-                state = json.load(f)
-
-            # 3. 提取目标和洞察
-            goals = state.get("goals", [])
-            insights = state.get("insights", [])
-            focus = state.get("last_focus", "mixed")
-            
-            if not goals and not insights:
-                return None
-
-            # 4. 格式化
-            lines = [f"## 潜意识引擎状态 (场景: {focus})"]
-            
-            if goals:
-                lines.append("### 🎯 当前目标 (Goals)")
-                for g in goals[:3]:  # 限制数量，避免占用过多 token
-                    lines.append(f"- {g}")
-            
-            if insights:
-                lines.append("### 💡 最新洞察 (Insights)")
-                for i in insights[:3]:
-                    lines.append(f"- {i}")
-            
-            return "\n".join(lines)
-        except Exception:
-            return None
-
     def _to_multimodal(self, msg: Dict) -> Dict:
         """如果消息包含 images 字段，将 content 转换为多模态格式。"""
         images = msg.pop("images", None)

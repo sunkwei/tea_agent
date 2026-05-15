@@ -487,64 +487,12 @@ def _action_status(directory):
     return '\n'.join(lines)
 
 
-# NOTE: 2026-05-15 13:52:57, self-evolved by tea_agent --- 增强 toolkit_explr: 添加 _extract_arch_context 和 arch_context 查询
-def _extract_arch_context(directory, symbol=None):
-    """提取项目或符号的架构上下文，辅助自进化决策"""
-    directory = os.path.abspath(directory)
-    run_dir = os.path.join(directory, _RUN_DIR)
-    cg_path = os.path.join(run_dir, "call_graph.json")
-    
-    if not os.path.exists(cg_path):
-        return "❌ 无调用图索引，请先 build"
-        
-    with open(cg_path, 'r', encoding='utf-8') as f:
-        cg = json.load(f)
-        
-    calls = cg.get('calls', {})
-    defs = cg.get('functions', {})
-    classes = cg.get('classes', {})
-    
-    # 1. 项目级上下文
-    if not symbol:
-        lines = ["## 项目架构概览"]
-        lines.append(f"- **函数定义**: {len(defs)} | **类定义**: {len(classes)} | **调用边**: {sum(len(v) for v in calls.values())}")
-        
-        entry_points = [c for c in calls if len(calls[c]) > 3 and c not in {callee for callees in calls.values() for callee in callees}]
-        if entry_points:
-            lines.append(f"\n### 🚪 疑似入口函数 (调用多且少被调用)")
-            for ep in sorted(entry_points)[:5]:
-                lines.append(f"- `{ep}`")
-        return "\n".join(lines)
-
-    # 2. 符号级上下文
-    info = defs.get(symbol, classes.get(symbol))
-    if not info:
-        return f"❌ 未找到符号 `{symbol}` 的架构信息"
-        
-    lines = [f"## 🏛️ 架构上下文: `{symbol}`"]
-    lines.append(f"- **类型**: {'📦 Class' if symbol in classes else '⚡ Function'}")
-    lines.append(f"- **位置**: `{info['file']}:{info['line']}`")
-    
-    if symbol in calls:
-        callees = [c for c in calls[symbol] if c not in _PYTHON_BUILTINS]
-        if callees:
-            lines.append(f"- **👇 依赖内部组件 ({len(callees)})**: `{', '.join(callees[:8])}`")
-    
-    callers = [c for c, callees in calls.items() if symbol in callees]
-    if callers:
-        lines.append(f"- **👆 被外部调用 ({len(callers)})**: `{', '.join(sorted(callers)[:8])}`")
-        
-    return "\n".join(lines)
-
-
 def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol", force="false"):
     logger.info(f"toolkit_explr called: action={action!r}, directory={repr(directory)[:80]}, symbol={symbol!r}, query_type={query_type!r}, force={force!r}")
     force_bool = force in ("true", "True", "1")
     if action == "build":
         return _action_build(directory, force_bool)
     elif action == "query":
-        if query_type == "arch_context":
-            return _extract_arch_context(directory, symbol)
         return _action_query(directory, symbol, query_type)
     elif action == "status":
         return _action_status(directory)
@@ -552,6 +500,5 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
         return f"❌ 未知 action: {action}"
 
 
-# NOTE: 2026-05-15 13:54:22, self-evolved by tea_agent --- 更新 toolkit_explr 的 meta_toolkit_explr 添加 arch_context
 def meta_toolkit_explr() -> dict:
-    return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=query 查询符号位置/调用者/被调用者；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "query", "status"], "description": "build=构建项目知识库, query=查询符号/调用关系, status=查看知识库状态"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "[query] 要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "arch_context"], "description": "[query] 查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, arch_context=架构上下文", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "[build] true=强制重建，忽略已有索引", "default": "false"}}, "required": ["action"]}}}
+    return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=query 查询符号位置/调用者/被调用者；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "query", "status"], "description": "build=构建项目知识库, query=查询符号/调用关系, status=查看知识库状态"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "[query] 要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module"], "description": "[query] 查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "[build] true=强制重建，忽略已有索引", "default": "false"}}, "required": ["action"]}}}

@@ -260,67 +260,6 @@ class Toolkit:
         if expired:
             logger.debug(f"Cache purge: removed {len(expired)} expired entries, {len(self._cache)} remaining")
 
-# NOTE: 2026-05-15 13:51:19, self-evolved by tea_agent --- 添加 _check_dependencies 方法到 Toolkit 类
-    def _check_dependencies(self, pycode: str) -> str:
-        """自动检测 pycode 中的 import 并安装缺失依赖"""
-        import ast as _ast
-        import importlib.util as _importlib
-        import subprocess
-        import sys
-        
-        MODULE_MAP = {
-            'PIL': 'Pillow', 'cv2': 'opencv-python', 'sklearn': 'scikit-learn',
-            'yaml': 'PyYAML', 'bs4': 'beautifulsoup4', 'dateutil': 'python-dateutil',
-            'jwt': 'PyJWT', 'Crypto': 'pycryptodome', 'Image': 'Pillow'
-        }
-        
-        try:
-            tree = _ast.parse(pycode)
-        except SyntaxError:
-            return ""
-
-        imports = set()
-        for node in _ast.walk(tree):
-            if isinstance(node, _ast.Import):
-                for alias in node.names:
-                    imports.add(alias.name.split('.')[0])
-            elif isinstance(node, _ast.ImportFrom):
-                if node.module:
-                    imports.add(node.module.split('.')[0])
-        
-        std_libs = getattr(sys, 'stdlib_module_names', set())
-        
-        missing = []
-        for mod in imports:
-            if mod in std_libs:
-                continue
-            if _importlib.find_spec(mod) is None:
-                pkg_name = MODULE_MAP.get(mod, mod)
-                missing.append(pkg_name)
-        
-        if not missing:
-            return "✅ 依赖已就绪"
-
-        installed = []
-        errors = []
-        for pkg in missing:
-            try:
-                result = subprocess.run(
-                    [sys.executable, "-m", "pip", "install", pkg],
-                    capture_output=True, text=True, timeout=120
-                )
-                if result.returncode == 0:
-                    installed.append(pkg)
-                else:
-                    errors.append(f"{pkg}: {result.stderr[:100]}")
-            except Exception as e:
-                errors.append(f"{pkg}: {str(e)}")
-        
-        msg = f"📦 自动安装依赖: {', '.join(installed)}"
-        if errors:
-            msg += f" | ❌ 安装失败: {', '.join(errors)}"
-        return msg
-
     def reload(self) -> Dict:
         result = {
             "valid_tool": {},
@@ -488,19 +427,11 @@ class Toolkit:
         if not name.startswith("toolkit_"):
             return (2, "tool name must start with 'toolkit_' prefix for security")
 
-# NOTE: 2026-05-15 13:51:39, self-evolved by tea_agent --- 在 save 方法中调用 _check_dependencies 实现自动安装依赖
         # 2. 校验 pycode 可执行性
         try:
             tree = ast.parse(pycode)
         except SyntaxError as e:
             return (3, f"Syntax error in pycode: {e}")
-
-        # @2026-05-16 gen by tea_agent, 自动检测并安装缺失依赖
-        dep_msg = self._check_dependencies(pycode)
-        if dep_msg and "❌" in dep_msg:
-            logger.warning(f"Dependency check warning: {dep_msg}")
-        elif dep_msg:
-            logger.info(f"Dependency check: {dep_msg}")
 
         # 检查是否定义了同名函数
         func_def = None

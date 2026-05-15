@@ -488,19 +488,11 @@ class Toolkit:
         if not name.startswith("toolkit_"):
             return (2, "tool name must start with 'toolkit_' prefix for security")
 
-# NOTE: 2026-05-15 13:51:39, self-evolved by tea_agent --- 在 save 方法中调用 _check_dependencies 实现自动安装依赖
         # 2. 校验 pycode 可执行性
         try:
             tree = ast.parse(pycode)
         except SyntaxError as e:
             return (3, f"Syntax error in pycode: {e}")
-
-        # @2026-05-16 gen by tea_agent, 自动检测并安装缺失依赖
-        dep_msg = self._check_dependencies(pycode)
-        if dep_msg and "❌" in dep_msg:
-            logger.warning(f"Dependency check warning: {dep_msg}")
-        elif dep_msg:
-            logger.info(f"Dependency check: {dep_msg}")
 
         # 检查是否定义了同名函数
         func_def = None

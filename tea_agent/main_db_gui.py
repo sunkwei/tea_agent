@@ -1,3 +1,4 @@
+# NOTE: 2026-05-15 13:05:19, self-evolved by tea_agent --- 添加托盘图标支持：Windows 和 KDE Plasma 6，右键菜单包含退出
 import tkinter as tk
 from tkinter import font as tkFont
 from tkinter import ttk, scrolledtext, Listbox, Frame
@@ -20,6 +21,14 @@ try:
     HAS_TKINTERWEB = True
 except ImportError:
     HAS_TKINTERWEB = False
+
+# NOTE: 2026-05-18 gen by tea_agent, 托盘图标支持（Windows + KDE Plasma 6）
+try:
+    import pystray
+    from PIL import Image, ImageDraw
+    HAS_TRAY = True
+except ImportError:
+    HAS_TRAY = False
 
 logger = logging.getLogger("main_db_gui")
 
@@ -614,16 +623,75 @@ class TkGUI(AgentCore):
         self.refresh_topics()
         self.auto_new_topic()
 
+# NOTE: 2026-05-15 13:06:43, self-evolved by tea_agent --- 补充托盘初始化代码到 __init__ 结尾
         # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
 
-        # NOTE: 2026-06-19 gen by tea_agent, App启动时自动启动Dream潜意识引擎
-        self._start_dream()
+        # NOTE: 2026-05-18 gen by tea_agent, 初始化托盘图标
+        self._tray_icon = None
+        if HAS_TRAY:
+            self._init_tray()
+    # NOTE: 2026-05-18 gen by tea_agent, 托盘图标支持（仅显示状态+退出入口，不改变关闭按钮行为）
+    def _create_tray_icon(self):
+        """动态生成托盘图标图像（32x32 蓝色圆角方块 + TA 字母）"""
+        size = 32
+        img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        # 绘制蓝色圆角背景
+        draw.rounded_rectangle([2, 2, size-2, size-2], radius=6, fill=(59, 130, 246, 255))
+        # 绘制 "TA" 字母
+        try:
+            from PIL import ImageFont
+            font = ImageFont.truetype("arial.ttf", 14)
+        except:
+            font = ImageFont.load_default()
+        draw.text((6, 6), "TA", fill=(255, 255, 255, 255), font=font)
+        return img
 
+    def _init_tray(self):
+        """初始化系统托盘图标"""
+        if not HAS_TRAY:
+            return
+        icon = self._create_tray_icon()
+        menu = pystray.Menu(
+            pystray.MenuItem("退出", self._exit_from_tray),
+        )
+        self._tray_icon = pystray.Icon(
+            "tea_agent",
+            icon,
+            "TeaAgent",
+            menu
+        )
+        # 在后台线程启动托盘（pystray 有自己的事件循环）
+        self._tray_thread = threading.Thread(
+            target=self._tray_icon.run, daemon=True, name="tray-icon"
+        )
+        self._tray_thread.start()
+        logger.info("托盘图标已启动")
+
+    def _exit_from_tray(self, icon=None, item=None):
+        """从托盘菜单退出"""
+        # 调用 root.after 确保在主线程执行清理
+        self.root.after(0, self._on_closing)
+
+        # NOTE: 2026-05-18 gen by tea_agent, 初始化托盘图标
+        self._tray_icon = None
+        self._window_hidden_to_tray = False
+        if HAS_TRAY:
+            self._init_tray()
+
+# NOTE: 2026-05-15 13:07:16, self-evolved by tea_agent --- _on_closing 添加托盘图标清理逻辑
     # NOTE: 2026-05-05, self-evolved by tea_agent --- 退出时正常关闭数据库：WAL checkpoint
     def _on_closing(self):
         """窗口关闭时的清理流程"""
         self._update_status("⏳ 正在清理资源...")
+        # NOTE: 2026-05-18 gen by tea_agent, 退出时停止托盘图标
+        if HAS_TRAY and self._tray_icon:
+            try:
+                self._tray_icon.stop()
+                logger.info("托盘图标已停止")
+            except Exception as e:
+                logger.warning(f"停止托盘图标失败: {e}")
         # NOTE: 2026-06-19 gen by tea_agent, 退出时停止Dream线程
         try:
             from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious

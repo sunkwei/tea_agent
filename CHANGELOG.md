@@ -1,5 +1,9 @@
 # Changelog
 
+
+## [0.8.1] - 2026-05-15
+### Improvements & Changes
+- 添加系统托盘图标支持（Windows 和 KDE Plasma 6），右键菜单提供退出选项，保持原有窗口关闭按钮行为不变
 ## [0.8.0] - 2026-05-15
 
 ### New Features

@@ -418,6 +418,8 @@ def _sanitize_html_control_chars(html: str) -> str:
     return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', html)
 
 
+_KNOWN_HTML_TAGS = {'textarea', 'script', 'section', 'details', 'img', 'ul', 'h2', 'article', 'source', 'link', 'audio', 'h3', 'select', 'th', 'tr', 'tfoot', 'h1', 'h6', 'label', 'html', 'dt', 's', 'ol', 'colgroup', 'ins', 'code', 'summary', 'body', 'blockquote', 'abbr', 'tt', 'b', 'dd', 'input', 'nav', 'button', 'option', 'title', 'data', 'fieldset', 'head', 'iframe', 'sup', 'style', 'td', 'a', 'h5', 'dl', 'hr', 'main', 'figcaption', 'tbody', 'col', 'del', 'video', 'meta', 'sub', 'header', 'wbr', 'span', 'template', 'li', 'pre', 'caption', 'figure', 'strike', 'thead', 'form', 'footer', 'table', 'u', 'mark', 'canvas', 'legend', 'time', 'center', 'small', 'h4', 'strong', 'br', 'aside', 'div', 'big', 'p', 'em', 'font', 'i'}
+
 def _validate_html_structure(html: str) -> tuple:
     """快速校验 HTML 基本结构：长度、html 标签、标签配对。
     返回 (ok: bool, 诊断信息: str)。"""
@@ -434,15 +436,16 @@ def _validate_html_structure(html: str) -> tuple:
             super().__init__()
             self.stack = []
             self.errors = []
+            self.known_tags = _KNOWN_HTML_TAGS
             self.void_elements = {'br', 'hr', 'img', 'input', 'meta', 'link',
                                   'area', 'base', 'col', 'embed', 'source', 'track', 'wbr'}
 
         def handle_starttag(self, tag, attrs):
-            if tag not in self.void_elements:
+            if tag in self.known_tags and tag not in self.void_elements:
                 self.stack.append(tag)
 
         def handle_endtag(self, tag):
-            if tag in self.void_elements:
+            if tag not in self.known_tags or tag in self.void_elements:
                 return
             if not self.stack:
                 self.errors.append(f"多余的闭合标签 </{tag}>")

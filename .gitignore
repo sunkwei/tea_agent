@@ -3,7 +3,7 @@ tea_agent.egg-info/
 __pycache__
 build/
 .vscode/
-test_session.py
+
 dump_*/
 *.bak
 test_tmp/

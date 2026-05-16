@@ -46,6 +46,11 @@ if __name__ == "__main__":
     from tea_agent.store import Storage
     from tea_agent import tlk
     from tea_agent.agent_core import AgentCore
+
+# @2026-05-15 gen by tea_agent, Composition: GUI 组件
+    from tea_agent.gui._tray import TrayManager
+    from tea_agent.gui._images import ImageHandler
+    from tea_agent.gui._renderer import ChatRenderer  # @2026-05-15 gen by tea_agent, Composition: 渲染组件
 # NOTE: 2026-05-01 15:30:42, self-evolved by tea_agent --- 为 GUI 添加 ConfigDialog 配置编辑弹窗 + 左侧"⚙️ 配置"按钮
     from tea_agent.config import load_config, get_config, save_config, ModelConfig
 else:
@@ -53,6 +58,10 @@ else:
     from .store import Storage
     from . import tlk
     from .agent_core import AgentCore
+    # @2026-05-15 gen by tea_agent, Composition: GUI 组件
+    from .gui._tray import TrayManager
+    from .gui._images import ImageHandler
+    from .gui._renderer import ChatRenderer  # @2026-05-15 gen by tea_agent, Composition: 渲染组件
 # NOTE: 2026-05-01 15:30:48, self-evolved by tea_agent --- 给 GUI 加 ConfigDialog 弹窗：import save_config（第二处）
     from .config import load_config, get_config, save_config, ModelConfig
 
@@ -705,6 +714,8 @@ class TkGUI(AgentCore):
 
         # @2026-05-15 gen by tea_agent, 图片点击放大弹窗
         self._image_cache = []  # list of (base64_data, mime_type)
+        # NOTE: 2026-05-20 gen by tea_agent, 原始/渲染视图切换
+        self._raw_view = tk.BooleanVar(value=False)  # False=HtmlFrame, True=ScrolledText
 
         # 聊天消息列表
         self.chat_messages: List[Dict] = []
@@ -741,12 +752,17 @@ class TkGUI(AgentCore):
 
 # NOTE: 2026-05-15 13:06:43, self-evolved by tea_agent --- 补充托盘初始化代码到 __init__ 结尾
         # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
-        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+        self.root.protocol("WM_DELETE_WINDOW", self.tray._on_closing)
 
-        # NOTE: 2026-05-18 gen by tea_agent, 初始化托盘图标
-        self._sni = None
-        if HAS_SNI:
-            self._init_tray()
+        # @2026-05-15 gen by tea_agent, Composition: 托盘管理器
+        self.tray = TrayManager(self)
+        self.tray.start()
+
+        # @2026-05-15 gen by tea_agent, Composition: 图片管理器
+        self.images = ImageHandler(self)
+
+        # @2026-05-15 gen by tea_agent, Composition: 消息渲染器
+        self.renderer = ChatRenderer(self)
     # NOTE: 2026-05-18 gen by tea_agent, 托盘图标支持（仅显示状态+退出入口，不改变关闭按钮行为）
     def _create_tray_icon(self):
         """动态生成托盘图标图像（32x32 蓝色圆角方块 + TA 字母），返回 PIL Image"""
@@ -862,6 +878,65 @@ class TkGUI(AgentCore):
         except Exception as e:
             logger.warning(f"Dream 自动启动失败: {e}")
 
+
+    # ═══ @2026-05-15 gen by tea_agent, Composition 委派包装器 ═══
+    # 以下方法委托给 self.renderer 组件，旧方法保持签名兼容
+
+    def _switch_display(self, mode: str):
+        return self.renderer._switch_display(mode)
+
+    def _show_loading(self, text: str = "正在加载历史记录", progress: str = None):
+        return self.renderer._show_loading(text, progress)
+
+    def _poll_loading_progress(self):
+        return self.renderer._poll_loading_progress()
+
+    def scroll_to_bottom(self):
+        return self.renderer.scroll_to_bottom()
+
+    def _html_render(self, html: str):
+        return self.renderer._html_render(html)
+
+    def _render_chat(self, streaming_think: str = "", streaming_text: str = ""):
+        return self.renderer._render_chat(streaming_think, streaming_text)
+
+    def _render_and_show_chat(self):
+        return self.renderer._render_and_show_chat()
+
+    def _render_loaded_topic(self, conversations):
+        return self.renderer._render_loaded_topic(conversations)
+
+    def _render_round_view(self, round_idx: int):
+        return self.renderer._render_round_view(round_idx)
+
+    def _render_topic_error(self, error_msg: str):
+        return self.renderer._render_topic_error(error_msg)
+
+    def _build_round_view_html(self, round_idx: int):
+        return self.renderer._build_round_view_html(round_idx)
+
+    def _filtered_messages(self):
+        return self.renderer._filtered_messages()
+
+    def _group_into_rounds(self):
+        return self.renderer._group_into_rounds()
+
+    def _flush_stream_to_messages(self):
+        return self.renderer._flush_stream_to_messages()
+
+    def _flush_think_buffer_to_messages(self, flush_all: bool = False):
+        return self.renderer._flush_think_buffer_to_messages(flush_all)
+
+    def _toggle_raw_view(self):
+        return self.renderer._toggle_raw_view()
+
+    def _show_raw_check_btn(self):
+        return self.renderer._show_raw_check_btn()
+
+    def _hide_raw_check_btn(self):
+        return self.renderer._hide_raw_check_btn()
+
+
     def _create_ui(self):
         """创建界面"""
         main_split = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
@@ -949,12 +1024,17 @@ class TkGUI(AgentCore):
         # NOTE: 2026-05-15 gen by tea_agent, 图片附件按钮行
         attach_row = tk.Frame(input_frame)
         attach_row.pack(fill=tk.X, padx=4, pady=(0, 2))
-        self._img_btn = ttk.Button(attach_row, text="📎 图片", command=self._attach_image)
+        self._img_btn = ttk.Button(attach_row, text="📎 图片", command=self.images.attach)
         self._img_btn.pack(side=tk.LEFT)
         self._img_label = ttk.Label(attach_row, text="", foreground="#888")
         self._img_label.pack(side=tk.LEFT, padx=8)
-        self._clear_img_btn = ttk.Button(attach_row, text="✕ 清除", command=self._clear_images)
+        self._clear_img_btn = ttk.Button(attach_row, text="✕ 清除", command=self.images.clear)
         # 初始隐藏清除按钮
+        # NOTE: 2026-05-20 gen by tea_agent, 原始/渲染视图切换（仅会话完成后显示）
+        self._raw_check_btn = ttk.Checkbutton(
+            attach_row, text="📋 纯文本视图", variable=self._raw_view,
+            command=self._toggle_raw_view
+        )
 
         ttk.Label(input_frame, text="Enter 发送 | Shift+Enter 换行 | ESC 打断",
                   foreground="#666").pack(anchor=tk.E, padx=6)
@@ -1791,7 +1871,24 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         """清空待发送图片列表"""
         self._pending_images.clear()
         self._img_label.config(text="")
-        self._clear_img_btn.pack_forget()
+
+
+    # NOTE: 2026-05-20 gen by tea_agent, 切换 HtmlFrame / ScrolledText 视图
+    def _toggle_raw_view(self):
+        """Check 按钮回调：选中→ScrolledText 原始视图，取消→HtmlFrame 渲染视图"""
+        if self._raw_view.get():
+            self._switch_display("console")
+        else:
+            self._switch_display("chat_view")
+            self.root.after(100, self.scroll_to_bottom)
+
+    def _show_raw_check_btn(self):
+        """显示纯文本视图切换按钮（仅会话完成后）"""
+        self._raw_check_btn.pack(side=tk.LEFT, padx=8)
+
+    def _hide_raw_check_btn(self):
+        """隐藏纯文本视图切换按钮（会话进行中）"""
+        self._raw_check_btn.pack_forget()
 
     def send(self, e=None):
         if self._shutting_down:
@@ -1802,7 +1899,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         msg = self.input_box.get("1.0", tk.END).strip()
         # 允许仅有图片无文本的情况
         images = list(self._pending_images)
-        self._clear_images()  # 发送后清空
+        self.images.clear()  # 发送后清空
         if not msg and not images:
             return "break"
         self.input_box.delete("1.0", tk.END)
@@ -1812,6 +1909,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         # NOTE: 2026-05-15 gen by tea_agent, 支持图片附件
         display_msg = f"你：{msg}" if msg else "你：[图片]"
         self.log(display_msg, "user", images=images if images else None)
+        self._hide_raw_check_btn()  # 会话中隐藏切换按钮
         self.generating = True
         # 启动 500ms 定时器，批量刷新流式内容到 ScrolledText（不渲染 HtmlFrame）
         # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- 流式输出启动 _stream_flush_tick 500ms 定时器
@@ -1862,6 +1960,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                     self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
                 else:
                     self.root.after(0, self._render_and_show_chat)
+                    self.root.after(0, self._show_raw_check_btn)
                     self.root.after(0, lambda: self._update_status("✅ 完成"))
 # NOTE: 2026-05-06 09:31, self-evolved by tea_agent --- 通知传入 user_msg，显示用户消息+AI回复
                     self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
@@ -1883,6 +1982,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                     except Exception:
                         pass
                 self.root.after(0, self._render_and_show_chat)
+                self.root.after(0, self._show_raw_check_btn)
                 self.root.after(0, lambda: self._update_status(f"❌ 错误: {ai_msg}"))
 # NOTE: 2026-05-06 09:31, self-evolved by tea_agent --- 异常时通知也传入 user_msg
                 self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
@@ -1957,6 +2057,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         token_msg = "\n".join(lines)
         self.chat_messages.append({"role": "notice", "content": token_msg, "timestamp": self._now_ts()})
         self._render_and_show_chat()
+        self._show_raw_check_btn()
 
     # NOTE: 2026-05-16 gen by tea_agent, 工具轮始终显示：移除过滤逻辑，每次render显示全部消息
     def _filtered_messages(self):
@@ -1990,7 +2091,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 return
             if url.startswith("tea://image/"):
                 idx = int(url.rsplit("/", 1)[-1])
-                self._show_image_popup(idx)
+                self.images.show_popup(idx)
                 return
             if url.startswith("tea://round/"):
                 idx = int(url.rsplit("/", 1)[-1])
@@ -2236,11 +2337,69 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 self._pending_console_text.clear()
             self.root.after(0, self._flush_stream_to_messages)
             self.root.after(0, self._render_and_show_chat)
+            self.root.after(0, self._show_raw_check_btn)
             self._update_status("🛑 已打断")
 
 
 # NOTE: 2026-04-30 19:36:28, self-evolved by tea_agent --- 补回缺失的 __main__ 入口，使 python -m tea_agent.main_db_gui 可正常启动 GUI
 # NOTE: 2026-05-09 19:26:36, self-evolved by tea_agent --- 修复 main() no_gui 模式：用 CLI 回退替代 NotImplementedError 崩溃
+    # ═══ @2026-05-15 gen by tea_agent, Composition 委派包装器 ═══
+
+    def _switch_display(self, mode: str):
+        return self.renderer._switch_display(mode)
+
+    def _show_loading(self, text: str = "正在加载历史记录", progress: str = None):
+        return self.renderer._show_loading(text, progress)
+
+    def _poll_loading_progress(self):
+        return self.renderer._poll_loading_progress()
+
+    def scroll_to_bottom(self):
+        return self.renderer.scroll_to_bottom()
+
+    def _html_render(self, html: str):
+        return self.renderer._html_render(html)
+
+    def _render_chat(self, streaming_think: str = "", streaming_text: str = ""):
+        return self.renderer._render_chat(streaming_think, streaming_text)
+
+    def _render_and_show_chat(self):
+        return self.renderer._render_and_show_chat()
+
+    def _render_loaded_topic(self, conversations):
+        return self.renderer._render_loaded_topic(conversations)
+
+    def _render_round_view(self, round_idx: int):
+        return self.renderer._render_round_view(round_idx)
+
+    def _render_topic_error(self, error_msg: str):
+        return self.renderer._render_topic_error(error_msg)
+
+    def _build_round_view_html(self, round_idx: int):
+        return self.renderer._build_round_view_html(round_idx)
+
+    def _filtered_messages(self):
+        return self.renderer._filtered_messages()
+
+    def _group_into_rounds(self):
+        return self.renderer._group_into_rounds()
+
+    def _flush_stream_to_messages(self):
+        return self.renderer._flush_stream_to_messages()
+
+    def _flush_think_buffer_to_messages(self, flush_all: bool = False):
+        return self.renderer._flush_think_buffer_to_messages(flush_all)
+
+    def _toggle_raw_view(self):
+        return self.renderer._toggle_raw_view()
+
+    def _show_raw_check_btn(self):
+        return self.renderer._show_raw_check_btn()
+
+    def _hide_raw_check_btn(self):
+        return self.renderer._hide_raw_check_btn()
+
+
 def main(debug:bool=False, no_gui:bool=False):
     if no_gui:
         # 回退到 CLI 模式

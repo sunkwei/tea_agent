@@ -295,22 +295,23 @@ class ChatRenderer:
         if progress:
             display_text = f"{text}（{progress}）"
 
+# NOTE: 2026-05-16 10:04:37, self-evolved by tea_agent --- 修复 _show_loading 中损坏的 loading_html（<style>→<st+yle>，<body>→<bod+y>）
         loading_html = f'''<html><head>
-    le>
-     {{ display:flex; align-items:center; justify-content:center; height:100vh;
+<style>
+body {{ display:flex; align-items:center; justify-content:center; height:100vh;
        margin:0; background:#fafafa; font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif; }}
-    der {{ text-align:center; }}
-    nner {{ width:48px; height:48px; border:4px solid #e0e0e0; border-top-color:#1a73e8;
+.loader {{ text-align:center; }}
+.spinner {{ width:48px; height:48px; border:4px solid #e0e0e0; border-top-color:#1a73e8;
            border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 20px; }}
-    frames spin {{ to {{ transform:rotate(360deg); }} }}
-    t {{ color:#888; font-size:{_DEFAULT_FONT_SIZE}px; }}
-    s::after {{ content:''; animation:d 1.5s steps(4,end) infinite; }}
-    frames d {{ 0% {{ content:'' }} 25% {{ content:'.' }} 50% {{ content:'..' }} 75% {{ content:'...' }} 100% {{ content:'' }} }}
-    yle></head>
-    y><div class="loader">
-     class="spinner"></div>
-     class="text">{html_mod.escape(display_text)}<span class="dots"></span></div>
-    v></body></html>'''
+@keyframes spin {{ to {{ transform:rotate(360deg); }} }}
+.text {{ color:#888; font-size:{_DEFAULT_FONT_SIZE}px; }}
+.dots::after {{ content:''; animation:d 1.5s steps(4,end) infinite; }}
+@keyframes d {{ 0% {{ content:'' }} 25% {{ content:'.' }} 50% {{ content:'..' }} 75% {{ content:'...' }} 100% {{ content:'' }} }}
+</style></head>
+<body><div class="loader">
+<div class="spinner"></div>
+<div class="text">{html_mod.escape(display_text)}<span class="dots"></span></div>
+</div></body></html>'''
 
         # 切换到 chat_view 但不修改 chat_messages
         if self.gui._show_mode != "chat_view":
@@ -331,15 +332,16 @@ class ChatRenderer:
             self.gui.root.after(50, self._poll_loading_progress)
             return
         # 队列已空，检查后台线程是否完成
-        if getattr(self, '_loading_done', False):
+        if getattr(self.gui, '_loading_done', False):
             # 最终渲染
-            if hasattr(self, '_pending_error'):
+            if hasattr(self.gui, '_pending_error'):
                 self._render_topic_error(self.gui._pending_error)
-                delattr(self, '_pending_error')
-            elif hasattr(self, '_pending_render'):
+                delattr(self.gui, '_pending_error')
+            elif hasattr(self.gui, '_pending_render'):
                 self._render_loaded_topic(self.gui._pending_render)
-                delattr(self, '_pending_render')
+                delattr(self.gui, '_pending_render')
             self.gui._loading_done = False
+            self.gui.generating = False  # loading完成，释放send()锁
             return
         # 线程还在跑，继续等待
         self.gui.root.after(50, self._poll_loading_progress)

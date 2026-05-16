@@ -23,9 +23,22 @@ PRIORITY_LABELS = {
     3: "LOW",
 }
 
+# NOTE: 2026-05-16 12:43:53, self-evolved by tea_agent --- 新增年龄衰减阈值、分层保底常量、LLM精调上限；CRITICAL上限从15降至10
 # NOTE: 2026-05-02 12:04:27, self-evolved by tea_agent --- MAX_INJECT 从5上调至30，CRITICAL 选拔上限15，确保各优先级记忆都有机会注入
+# NOTE: 2026-05-16 gen by tea_agent, 分层保底 + 年龄衰减: CRITICAL上限降至10, 新增HIGH/MEDIUM/LOW保底, 年龄阈值30/60/90天
 MAX_INJECT = 30  # 每次会话注入上限
-MAX_CRITICAL_INJECT = 15  # CRITICAL 注入上限，超出留给其他优先级
+MAX_CRITICAL_INJECT = 10  # CRITICAL 注入上限，超出留给其他优先级
+MIN_HIGH_INJECT = 3   # HIGH 保底
+MIN_MEDIUM_INJECT = 2  # MEDIUM 保底
+MIN_LOW_INJECT = 1    # LOW 保底（至少1条）
+
+# 年龄衰减阈值（天）
+CRITICAL_DEGRADE_DAYS = 30   # CRITICAL → HIGH
+HIGH_DEGRADE_DAYS = 60       # HIGH → MEDIUM
+MEDIUM_DEGRADE_DAYS = 90     # MEDIUM → LOW
+
+# LLM 精调上限
+MAX_LLM_ADJUSTMENTS = 3  # 每次最多调整条数
 
 
 class MemoryManager:
@@ -48,6 +61,7 @@ class MemoryManager:
     # 记忆选择
     # ------------------------------------------------------------------
 
+# NOTE: 2026-05-16 12:44:45, self-evolved by tea_agent --- select_memories改造：先执行年龄衰减；CRITICAL上限10；HIGH/MEDIUM/LOW分层保底(3/2/1)；剩余自由竞争
     def select_memories(
         self,
         topic_text: str = "",
@@ -57,9 +71,11 @@ class MemoryManager:
         从活跃记忆中选出最相关的若干条（上限 limit）。
 
         选择逻辑：
-          1. CRITICAL 指令优先入选（不受 limit 限制，但通常不超过 limit）
-          2. 剩余名额按 相关性 × 重要度 × 最近访问 排序填充
-          3. 更新入选记忆的 last_accessed_at
+          1. 先执行年龄衰减（优先级降级）
+          2. CRITICAL 指令优先入选（上限 MAX_CRITICAL_INJECT）
+          3. 按优先级分层保底：HIGH ≥3, MEDIUM ≥2, LOW ≥1
+          4. 剩余名额按 相关性×重要度×时效×优先级 排序填充
+          5. 更新入选记忆的 last_accessed_at
 
         Args:
             topic_text: 当前对话上下文（用于相关性打分）
@@ -68,36 +84,65 @@ class MemoryManager:
         Returns:
             入选的记忆列表，优先级高的排在前面
         """
+        # 先执行年龄衰减
+        self.degrade_by_age()
+
         all_memories = self.storage.get_active_memories(limit=100)
 
         if not all_memories:
             return []
 
-        # 分离 CRITICAL 和非 CRITICAL
+        # 按优先级分组
         critical = [m for m in all_memories if m["priority"] == PRIORITY_CRITICAL]
-        others = [m for m in all_memories if m["priority"] != PRIORITY_CRITICAL]
+        high = [m for m in all_memories if m["priority"] == PRIORITY_HIGH]
+        medium = [m for m in all_memories if m["priority"] == PRIORITY_MEDIUM]
+        low = [m for m in all_memories if m["priority"] == PRIORITY_LOW]
 
-# NOTE: 2026-05-02 12:04:34, self-evolved by tea_agent --- CRITICAL 选拔上限 15 条 (max(CRITICAL, MAX_CRITICAL_INJECT))，防止挤占其他优先级
-        # CRITICAL 入选不超过 MAX_CRITICAL_INJECT（新的优先，FIFO）
+        # 1. CRITICAL 入选（上限 MAX_CRITICAL_INJECT, FIFO取最新）
         critical_slots = min(limit, MAX_CRITICAL_INJECT)
-        selected = critical[-critical_slots:] if len(critical) > critical_slots else critical
-        remaining_slots = limit - len(selected)
-
-        if remaining_slots <= 0:
+        selected = critical[-critical_slots:] if len(critical) > critical_slots else list(critical)
+        used = len(selected)
+        if used >= limit:
             self._touch_selected(selected)
             return selected
 
-        # 对非 CRITICAL 打分排序
+        # 2. 非 CRITICAL 打分排序
+        others = high + medium + low
         scored = []
         for m in others:
             score = self._score_memory(m, topic_text)
             scored.append((score, m))
-
         scored.sort(key=lambda x: x[0], reverse=True)
 
-        # 取 top N 填充剩余名额
-        for _, m in scored[:remaining_slots]:
-            selected.append(m)
+        # 辅助函数：从已打分列表中按优先级取 top N
+        def _pick_top_by_priority(scored_list, priority, count):
+            """从 scored_list 中取出指定优先级的 top count 条，返回 (picked, remaining)"""
+            candidates = [(s, m) for s, m in scored_list if m["priority"] == priority]
+            picked = candidates[:count]
+            picked_ids = {m["id"] for _, m in picked}
+            remaining = [(s, m) for s, m in scored_list if m["id"] not in picked_ids]
+            return [m for _, m in picked], remaining
+
+        # 3. 分层保底
+        remaining_slots = limit - used
+        # 保底按优先级从高到低分配，但不超过剩余名额
+        high_quota = min(MIN_HIGH_INJECT, remaining_slots)
+        medium_quota = min(MIN_MEDIUM_INJECT, max(0, remaining_slots - high_quota))
+        low_quota = min(MIN_LOW_INJECT, max(0, remaining_slots - high_quota - medium_quota))
+
+        picked_high, scored = _pick_top_by_priority(scored, PRIORITY_HIGH, high_quota)
+        picked_medium, scored = _pick_top_by_priority(scored, PRIORITY_MEDIUM, medium_quota)
+        picked_low, scored = _pick_top_by_priority(scored, PRIORITY_LOW, low_quota)
+
+        selected.extend(picked_high)
+        selected.extend(picked_medium)
+        selected.extend(picked_low)
+
+        # 4. 剩余名额自由竞争（从还没选的里面取 top N）
+        free_slots = limit - len(selected)
+        if free_slots > 0:
+            for _, m in scored[:free_slots]:
+                selected.append(m)
 
         self._touch_selected(selected)
         return selected
@@ -188,6 +233,195 @@ class MemoryManager:
                 self.storage.touch_memory(m["id"])
             except Exception:
                 pass
+
+# NOTE: 2026-05-16 12:46:09, self-evolved by tea_agent --- 新增 degrade_by_age() 年龄衰减 + llm_adjust_priorities() LLM精调方法
+    # ------------------------------------------------------------------
+    # 优先级自动调整
+    # ------------------------------------------------------------------
+
+    def degrade_by_age(self) -> int:
+        """
+        基于创建时间的年龄衰减。pinned=true 的记忆豁免。
+
+        衰减规则：
+        - CRITICAL → HIGH    (创建 >30 天)
+        - HIGH     → MEDIUM  (创建 >60 天)
+        - MEDIUM   → LOW     (创建 >90 天)
+
+        Returns:
+            调整的记忆条数
+        """
+        from datetime import datetime
+        now = datetime.now()
+        all_memories = self.storage.get_active_memories(limit=500)
+        adjusted = 0
+
+        for m in all_memories:
+            if m.get("pinned"):
+                continue
+            created = m.get("created_at")
+            if not created:
+                continue
+            try:
+                # SQLite 时间戳兼容 ISO 和 SQLite 格式
+                if "T" in str(created):
+                    age = now - datetime.fromisoformat(str(created).replace("Z", "+00:00").split("+")[0].split(".")[0])
+                else:
+                    age = now - datetime.strptime(str(created), "%Y-%m-%d %H:%M:%S")
+            except (ValueError, TypeError):
+                continue
+
+            days = age.days
+            old_priority = m["priority"]
+            new_priority = None
+
+            if old_priority == PRIORITY_CRITICAL and days >= CRITICAL_DEGRADE_DAYS:
+                new_priority = PRIORITY_HIGH
+            elif old_priority == PRIORITY_HIGH and days >= HIGH_DEGRADE_DAYS:
+                new_priority = PRIORITY_MEDIUM
+            elif old_priority == PRIORITY_MEDIUM and days >= MEDIUM_DEGRADE_DAYS:
+                new_priority = PRIORITY_LOW
+
+            if new_priority is not None:
+                self.storage.update_memory(m["id"], priority=new_priority)
+                adjusted += 1
+                logger.info(
+                    f"年龄衰减: #{m['id']} priority "
+                    f"{PRIORITY_LABELS[old_priority]}→{PRIORITY_LABELS[new_priority]} "
+                    f"(年龄={days}天)"
+                )
+
+        if adjusted:
+            logger.info(f"年龄衰减完成: {adjusted} 条记忆降级")
+        return adjusted
+
+    LLM_ADJUST_SYSTEM_PROMPT = """你是一个记忆优先级评估器。根据近期对话主题，判断哪些长期记忆的优先级需要调整。
+
+调整规则（非常重要）：
+1. 只提供与近期对话主题直接相关的调整
+2. 每次最多输出 {max_adjustments} 条调整建议
+3. 只能将优先级上下调整 1 级（如 CRITICAL⇄HIGH, HIGH⇄MEDIUM, MEDIUM⇄LOW）
+4. 优先级的含义：0=CRITICAL(必须遵循的指令), 1=HIGH(偏好/关键决策), 2=MEDIUM(经验教训), 3=LOW(一般参考)
+5. 近期对话中反复涉及的主题 → 相关记忆可升级
+6. 近期对话中完全未涉及 → 不操作（让年龄衰减处理）
+
+输出纯 JSON 数组：
+[{"memory_id": "xxx", "new_priority": 1, "reason": "近期大量讨论该主题，建议提升"}, ...]
+
+如果不需要调整，输出空数组 []。"""
+
+# NOTE: 2026-05-16 12:48:20, self-evolved by tea_agent --- llm_adjust_priorities 改为接受 client 参数，移除不存在的 llm_client 导入
+    def llm_adjust_priorities(
+        self,
+        recent_topics: str,
+        client=None,
+        model: str = "deepseek-v4-flash",
+    ) -> int:
+        """
+        使用便宜 LLM 评估近期对话主题，微调记忆优先级。
+
+        Args:
+            recent_topics: 近期对话主题摘要文本
+            client: OpenAI 客户端实例（由调用方注入，如 session.client）
+            model: 使用的模型名称
+
+        Returns:
+            调整的记忆条数。client 为 None 时返回 0。
+        """
+        if client is None:
+            logger.warning("llm_adjust_priorities: 未提供 client，跳过精调")
+            return 0
+        if not recent_topics or not recent_topics.strip():
+            return 0
+
+        all_memories = self.storage.get_active_memories(limit=200)
+        if len(all_memories) < 3:
+            return 0  # 太少不值得调
+
+        # 构建记忆摘要（不含内容细节，防 token 爆炸）
+        memory_summary_lines = []
+        for m in all_memories:
+            content_preview = (m.get("content") or "")[:80].replace("\n", " ")
+            memory_summary_lines.append(
+                f"  [{m['id']}] P{PRIORITY_LABELS.get(m['priority'], '?')}/I{m.get('importance',0)} "
+                f"cat={m.get('category','?')} tags={m.get('tags','')} | {content_preview}"
+            )
+        memory_summary = "\n".join(memory_summary_lines[:100])  # 最多100条
+
+        system_prompt = self.LLM_ADJUST_SYSTEM_PROMPT.format(
+            max_adjustments=MAX_LLM_ADJUSTMENTS
+        )
+        user_prompt = (
+            f"近期对话主题摘要：\n{recent_topics[:2000]}\n\n"
+            f"当前活跃记忆列表：\n{memory_summary}\n\n"
+            f"请判断哪些记忆的优先级需要调整（最多{MAX_LLM_ADJUSTMENTS}条）。"
+        )
+
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                stream=False,
+                extra_body={"thinking": {"type": "disabled"}},
+                temperature=0.3,
+                max_tokens=500,
+            )
+            result_text = response.choices[0].message.content or ""
+            adjustments = self.parse_extraction_result(result_text)
+        except Exception as e:
+            logger.warning(f"LLM 优先级精调失败: {e}")
+            return 0
+
+        adjusted = 0
+        for adj in adjustments:
+            try:
+                mid = adj.get("memory_id", "")
+                new_priority = adj.get("new_priority")
+                reason = adj.get("reason", "无说明")
+
+                if new_priority is None or not mid:
+                    continue
+                if new_priority not in (0, 1, 2, 3):
+                    continue
+
+                # 找到原始记忆
+                orig = next((m for m in all_memories if m["id"] == mid), None)
+                if not orig:
+                    continue
+                old_priority = orig["priority"]
+
+                # 只允许 ±1 级调整
+                if abs(new_priority - old_priority) > 1:
+                    logger.warning(
+                        f"LLM 建议跳级调整 #{mid}: {old_priority}→{new_priority}, 已忽略"
+                    )
+                    continue
+
+                if new_priority == old_priority:
+                    continue
+
+                # 升级时重置 created_at（重新计时年龄衰减）
+                updates = {"priority": new_priority}
+                if new_priority < old_priority:
+                    updates["created_at"] = "CURRENT_TIMESTAMP"
+
+                self.storage.update_memory(mid, **updates)
+                adjusted += 1
+                logger.info(
+                    f"LLM 精调: #{mid} priority "
+                    f"{PRIORITY_LABELS[old_priority]}→{PRIORITY_LABELS[new_priority]} "
+                    f"原因: {reason}"
+                )
+
+            except Exception as e:
+                logger.warning(f"LLM 精调单条失败: {e}")
+
+        if adjusted:
+            logger.info(f"LLM 优先级精调完成: {adjusted} 条调整")
+        return adjusted
 
     # ------------------------------------------------------------------
     # 格式化注入

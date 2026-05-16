@@ -13,10 +13,11 @@ class MemoryStore(StoreComponent):
 
     # ── CRUD ──
 
+# NOTE: 2026-05-16 12:43:19, self-evolved by tea_agent --- add_memory 新增 pinned 参数，INSERT 时写入 pinned 列
     def add_memory(
         self, content: str, category: str = "general", priority: int = 2,
         importance: int = 3, expires_at: Optional[str] = None, tags: str = "",
-        source_topic_id: Optional[str] = None,
+        source_topic_id: Optional[str] = None, pinned: int = 0,
     ) -> str:
         if priority == 0:
             self._enforce_critical_limit(max_critical=15)
@@ -24,8 +25,9 @@ class MemoryStore(StoreComponent):
         mid = self._new_id()
         c.execute(
             "INSERT INTO memories (id, content, category, priority, importance, "
-            "expires_at, tags, source_topic_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (mid, content, category, priority, importance, expires_at, tags, source_topic_id),
+            "expires_at, tags, source_topic_id, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (mid, content, category, priority, importance, expires_at, tags,
+             source_topic_id, pinned),
         )
         self.conn.commit()
         c.close()
@@ -52,9 +54,10 @@ class MemoryStore(StoreComponent):
         c.close()
 
     def update_memory(self, memory_id: str, **fields) -> bool:
+# NOTE: 2026-05-16 12:43:29, self-evolved by tea_agent --- update_memory allowed字段加入 pinned，支持固定/取消固定
         allowed = {
             "content", "category", "priority", "importance",
-            "expires_at", "is_active", "tags", "last_accessed_at",
+            "expires_at", "is_active", "tags", "last_accessed_at", "pinned",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:

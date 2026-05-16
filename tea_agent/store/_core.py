@@ -175,6 +175,7 @@ class Storage:
             )
         ''')
 
+# NOTE: 2026-05-16 12:42:59, self-evolved by tea_agent --- memories表新增 pinned 列（0=正常, 1=固定），用于豁免年龄衰减
         # memories 表
         c.execute('''
             CREATE TABLE IF NOT EXISTS memories (
@@ -190,9 +191,15 @@ class Storage:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_accessed_at TIMESTAMP,
+                pinned INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (source_topic_id) REFERENCES topics(topic_id)
             )
         ''')
+        # 兼容旧表：尝试新增 pinned 列
+        try:
+            c.execute("ALTER TABLE memories ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass
 
         # system_prompts 表
         c.execute('''

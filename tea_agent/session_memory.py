@@ -55,9 +55,10 @@ class SessionMemoryMixin:
     # Pipeline 步骤：记忆注入
     # ------------------------------------------------------------------
 
+# NOTE: 2026-05-16 12:49:38, self-evolved by tea_agent --- _pipeline_inject_memories 合并项目记忆注入（用户≤30 + 项目≤30）
     def _pipeline_inject_memories(self, context: Dict) -> List:
         """
-        Pipeline 步骤：选择并格式化相关记忆。
+        Pipeline 步骤：选择并格式化用户记忆 + 项目记忆。
 
         Args:
             context: 包含 user_msg, msg 等字段
@@ -69,29 +70,45 @@ class SessionMemoryMixin:
             return self.messages
 
         user_msg = context.get("user_msg", "") or context.get("msg", "")
+        all_memory_texts = []
 
+        # ── 用户记忆 ──
         try:
-# NOTE: 2026-05-02 12:06:18, self-evolved by tea_agent --- select_memories 调用移除 limit=5 硬编码，改用 MAX_INJECT=30 默认
+            # NOTE: 2026-05-02 12:06:18, self-evolved by tea_agent --- select_memories 调用移除 limit=5 硬编码，改用 MAX_INJECT=30 默认
             memories = self.memory.select_memories(user_msg)
         except Exception as e:
             logger.warning(f"记忆选择失败: {e}")
             memories = []
 
-        if not memories:
+        if memories:
+            try:
+                formatted = self.memory.format_memories(memories)
+                if formatted:
+                    all_memory_texts.append(formatted)
+                    logger.info(f"注入了 {len(memories)} 条用户记忆")
+            except Exception:
+                pass
+
+        # ── 项目记忆 ──
+        try:
+            from tea_agent.project_memory import ProjectMemoryManager
+            pm = ProjectMemoryManager()
+            pm_memories = pm.get_all(limit=30)
+            if pm_memories:
+                pm_formatted = pm.format_memories(pm_memories)
+                if pm_formatted:
+                    all_memory_texts.append(pm_formatted)
+                    logger.info(f"注入了 {len(pm_memories)} 条项目记忆")
+        except Exception as e:
+            logger.debug(f"项目记忆加载跳过: {e}")
+
+        # ── 合并 ──
+        if all_memory_texts:
+            self._injected_memories_text = "\n\n".join(all_memory_texts)
+            self._injected_memories = memories
+        else:
             self._injected_memories_text = ""
             self._injected_memories = []
-            return self.messages
-
-        try:
-            formatted = self.memory.format_memories(memories)
-        except Exception:
-            formatted = ""
-
-        self._injected_memories_text = formatted
-        self._injected_memories = memories
-
-        if formatted:
-            logger.info(f"注入了 {len(memories)} 条记忆")
 
         return self.messages
 

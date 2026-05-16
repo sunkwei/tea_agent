@@ -59,9 +59,11 @@ def toolkit_subconscious(action: str, focus: str = None):
                 with open(STATE_FILE, 'r') as f:
                     return json.load(f)
             except: pass
+# NOTE: 2026-05-16 12:51:11, self-evolved by tea_agent --- state 初始化 stats 中加入 llm_adjustments 字段
         return {"running":False,"pid":os.getpid(),"started_at":None,"last_cycle_at":None,
                 "cycles_completed":0,"insights":[],"goals":[],"last_focus":"mixed",
-                "stats":{"memories_digested":0,"conversations_digested":0,"insights_generated":0,"goals_set":0,"auto_memories":0}}
+                "stats":{"memories_digested":0,"conversations_digested":0,"insights_generated":0,
+                         "goals_set":0,"auto_memories":0,"llm_adjustments":0}}
 
     def _write_state(state):
         _ensure_dir(os.path.dirname(STATE_FILE))
@@ -460,12 +462,40 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         _send_notification("🧠 潜意识引擎", msg, expire_ms=8000)
 
 
+# NOTE: 2026-05-16 12:50:51, self-evolved by tea_agent --- _run_cycle 中加入 LLM 优先级精调（使用便宜模型）
     # === 执行一次完整循环 ===
     def _run_cycle(state):
         db_path = _get_db_path()
         kb_dir = KB_DIR
         digest = _digest_memories(db_path)
         conv_digest = _digest_conversations(db_path, state)
+
+        # LLM 优先级精调（使用便宜模型，独立客户端）
+        try:
+            from tea_agent.memory import MemoryManager
+            from tea_agent.store import Storage
+            from tea_agent.config import get_config
+            from openai import OpenAI
+
+            cfg = get_config()
+            cheap = cfg.cheap_model
+            if cheap.api_key and cheap.api_url and cheap.model_name:
+                client = OpenAI(api_key=cheap.api_key, base_url=cheap.api_url)
+                storage = Storage()
+                mm = MemoryManager(storage)
+
+                topics_text = conv_digest.get("topics_summary", "")
+                if not topics_text:
+                    kw = digest.get("top_keywords", [])
+                    topics_text = ", ".join(w for w, _ in kw[:10]) if kw else ""
+
+                if topics_text:
+                    n = mm.llm_adjust_priorities(topics_text, client=client, model=cheap.model_name)
+                    if n:
+                        state["stats"]["llm_adjustments"] = state["stats"].get("llm_adjustments", 0) + n
+        except Exception:
+            pass  # 静默失败，不影响主流程
+
         links = _cross_link(db_path, kb_dir, state)
         insights = _generate_insights(digest, links, conv_digest, kb_dir, state)
         goals = _set_goals(digest, links, insights, conv_digest, state, db_path)

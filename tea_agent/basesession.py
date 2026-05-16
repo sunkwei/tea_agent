@@ -108,15 +108,15 @@ class BaseChatSession(ABC):
                 continue
             msg.pop("reasoning_content", None)
 
-    # NOTE: 2026-05-20 gen by tea_agent, L1压缩：首尾各512字节按换行对齐，替代首尾3行策略
+    # NOTE: 2026-05-20 gen by tea_agent, L1压缩：首尾各1024字节按换行对齐，替代首尾3行策略
     @staticmethod
-    def _compress_tool_content(content: str, max_chars: int = 1024) -> str:
+    def _compress_tool_content(content: str, max_chars: int = 2048) -> str:
         """
-        L1 工具输出压缩：首尾各 512 字节，按换行对齐。
+        L1 工具输出压缩：首尾各 1024 字节，按换行对齐。
 
         策略：
         - 短输出（≤max_chars 字节）：原样保留
-        - 长输出：保留首 512 字节 + 尾 512 字节，按换行边界对齐避免截断半行
+        - 长输出：保留首 1024 字节 + 尾 1024 字节，按换行边界对齐避免截断半行
 
         Args:
             content: 原始工具输出
@@ -135,7 +135,7 @@ class BaseChatSession(ABC):
         if total_bytes <= max_chars:
             return content
 
-        half = max_chars // 2  # 各保留 512 字节
+        half = max_chars // 2  # 各保留 1024 字节
 
         # 前半部分：从 half 位置向前找最近换行
         head_end = half
@@ -185,7 +185,7 @@ class BaseChatSession(ABC):
         规则：
         - user 消息：完整保留
         - assistant 含 tool_calls（中间步骤）：保留 reasoning_content，
-          对每个 tool_call 的 function.arguments 若 >1024 字节则截断
+          对每个 tool_call 的 function.arguments 若 >2048 字节则截断
         - tool 消息：调用 _compress_tool_content 压缩输出
         - 最终 assistant 消息（末尾无 tool_calls）：完整保留，不压缩
 
@@ -223,11 +223,11 @@ class BaseChatSession(ABC):
                             args_str = func.get("arguments", "")
                             if isinstance(args_str, str):
                                 args_bytes = len(args_str.encode("utf-8"))
-                                if args_bytes > 1024:
+                                if args_bytes > 2048:
                                     func["arguments"] = (
-                                        args_str[:512] +
-                                        f"\n... [L1截断: {args_bytes}B 参数, 保留首512B] ...\n" +
-                                        args_str[-512:]
+                                        args_str[:1024] +
+                                        f"\n... [L1截断: {args_bytes}B 参数, 保留首1024B] ...\n" +
+                                        args_str[-1024:]
                                     )
                             tc_copy["function"] = func
                         new_tc.append(tc_copy)
@@ -406,7 +406,7 @@ class BaseChatSession(ABC):
         rounds = last_conv.get("rounds_json_parsed")
         if rounds and last_conv.get("is_func_calling"):
             repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
-            # NOTE: 2026-05-20 gen by tea_agent, L1压缩：工具参数>1024B截断，工具输出首尾各512B
+            # NOTE: 2026-05-20 gen by tea_agent, L1压缩：工具参数>2048B截断，工具输出首尾各1024B
             compressed = BaseChatSession._compress_tool_rounds(repaired)
             for rd in compressed:
                 self.messages.append(rd)

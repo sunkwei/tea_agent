@@ -47,9 +47,9 @@ if __name__ == "__main__":
     from tea_agent.agent_core import AgentCore
 
 # @2026-05-15 gen by tea_agent, Composition: GUI 组件
-    from tea_agent.gui._tray import TrayManager
-    from tea_agent.gui._images import ImageHandler
-    from tea_agent.gui._renderer import ChatRenderer  # @2026-05-15 gen by tea_agent, Composition: 渲染组件
+    from tea_agent._gui._tray import TrayManager
+    from tea_agent._gui._images import ImageHandler
+    from tea_agent._gui._renderer import ChatRenderer  # @2026-05-15 gen by tea_agent, Composition: 渲染组件
 # NOTE: 2026-05-01 15:30:42, self-evolved by tea_agent --- 为 GUI 添加 ConfigDialog 配置编辑弹窗 + 左侧"⚙️ 配置"按钮
     from tea_agent.config import load_config, get_config, save_config, ModelConfig
 else:
@@ -58,9 +58,9 @@ else:
     from . import tlk
     from .agent_core import AgentCore
     # @2026-05-15 gen by tea_agent, Composition: GUI 组件
-    from .gui._tray import TrayManager
-    from .gui._images import ImageHandler
-    from .gui._renderer import ChatRenderer  # @2026-05-15 gen by tea_agent, Composition: 渲染组件
+    from ._gui._tray import TrayManager
+    from ._gui._images import ImageHandler
+    from ._gui._renderer import ChatRenderer  # @2026-05-15 gen by tea_agent, Composition: 渲染组件
 # NOTE: 2026-05-01 15:30:48, self-evolved by tea_agent --- 给 GUI 加 ConfigDialog 弹窗：import save_config（第二处）
     from .config import load_config, get_config, save_config, ModelConfig
 

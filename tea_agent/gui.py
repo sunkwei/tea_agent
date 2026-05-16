@@ -684,7 +684,7 @@ class TkGUI(AgentCore):
         import os
         self._initial_cwd = os.path.abspath(os.getcwd())  # NOTE: 2026-05-16 gen by tea_agent, 启动时固化完整路径
         self._update_title()  # NOTE: 2026-05-15 gen by tea_agent, 标题含当前目录
-        self.root.geometry("1100x750")
+        self.root.geometry("1100x850")
         self.root.minsize(900, 600)
 
         self.sess = None  # 预设，AgentCore._init_session 会创建它
@@ -734,6 +734,8 @@ class TkGUI(AgentCore):
 # NOTE: 2026-05-04 18:59:23, self-evolved by tea_agent --- 移除冗余 _init_session 调用，在 UI 创建后加 status 显示
         # 创建界面
         self._create_ui()
+        # NOTE: 2026-07-05 gen by tea_agent, 微调聊天/输入分隔栏位置，确保底部工具栏完整显示
+        # NOTE: 2026-07-05 gen by tea_agent, 权重比 3:1 确保底部工具栏完整显示，不再需要 after sash 调整
         if hasattr(self,"sess") and self.sess is not None:
             self.sess.tool_log = self.safe_log_tool
 
@@ -938,11 +940,11 @@ class TkGUI(AgentCore):
                   foreground="#666").pack(side=tk.LEFT, padx=(0, 20))
 
         # 聊天区域
-        chat_split = ttk.PanedWindow(right, orient=tk.VERTICAL)
-        chat_split.pack(fill=tk.BOTH, expand=True)
+        self.chat_split = ttk.PanedWindow(right, orient=tk.VERTICAL)
+        self.chat_split.pack(fill=tk.BOTH, expand=True)
 
-        chat_frame = Frame(chat_split)
-        chat_split.add(chat_frame, weight=4)
+        chat_frame = Frame(self.chat_split)
+        self.chat_split.add(chat_frame, weight=3)
 
 # NOTE: 2026-04-30 20:03:16, self-evolved by tea_agent --- 控制台字体使用 _fs(11) 适配缩放
         self.console = scrolledtext.ScrolledText(
@@ -963,8 +965,8 @@ class TkGUI(AgentCore):
         self._switch_display("console")
 
         # 输入区域
-        input_frame = Frame(chat_split)
-        chat_split.add(input_frame, weight=1)
+        input_frame = Frame(self.chat_split)
+        self.chat_split.add(input_frame, weight=1)
 # NOTE: 2026-04-30 20:03:24, self-evolved by tea_agent --- 输入框字体使用 _fs(14)、输入提示使用 _fs(9) 适配缩放
         self.input_box = scrolledtext.ScrolledText(
             input_frame, font=(SYSTEM_FONT, _fs(16)), height=4, bg="#f8f8f8"
@@ -973,7 +975,8 @@ class TkGUI(AgentCore):
 
 # NOTE: 2026-05-16 19:40:10, self-evolved by tea_agent --- 将图片/纯文本视图按钮与输入提示放在同一行
         # NOTE: 2026-05-20 gen by tea_agent, 底部工具栏（图片/视图/提示同一行）
-        toolbar = tk.Frame(input_frame, bg="#f8f8f8")
+        # NOTE: 2026-07-05 gen by tea_agent, 使用 ttk.Frame 确保工具栏背景与系统对话框一致
+        toolbar = ttk.Frame(input_frame)
         toolbar.pack(fill=tk.X, padx=4, pady=(0, 2))
 
         # 左侧：图片附件
@@ -1024,6 +1027,15 @@ class TkGUI(AgentCore):
         if HAS_TKINTERWEB:
             self.root.bind("<Alt-Up>", self._history_prev_round)
             self.root.bind("<Alt-Down>", self._history_next_round)
+
+
+    # NOTE: 2026-07-05 gen by tea_agent, 微调聊天/输入分隔栏位置，确保输入区底部工具栏完整显示
+
+    # NOTE: 2026-07-05 gen by tea_agent, 确保输入区底部工具栏（图片/视图/提示行）完整显示
+    # NOTE: 2026-07-05 gen by tea_agent, 权重比 3:1 已保证底部工具栏完整显示，此方法保留作兼容
+    def _adjust_chat_sash(self):
+        """权重比已调整，此方法保留作兼容"""
+        pass
 
     def zoom_in(self, e=None):
         if not HAS_TKINTERWEB or self._show_mode != "chat_view":

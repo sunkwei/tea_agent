@@ -956,9 +956,8 @@ class ConfigDialog(tk.Toplevel):
 
 # NOTE: 2026-05-06 19:31:49, self-evolved by tea_agent --- _create_ui 中向量模型 Tab 增加 dimension 字段
 # NOTE: 2026-05-16 19:36:47, self-evolved by tea_agent --- 主模型 Tab 添加能力选项（supports_vision, supports_reasoning）
-        self._model_tab(nb, "主模型", "main")
-        self._model_options_tab(nb)
-        self._model_tab(nb, "便宜模型", "cheap")
+        self._model_tab(nb, "主模型", "main", options_prefix="main")
+        self._model_tab(nb, "便宜模型", "cheap", options_prefix="cheap")
 # NOTE: 2026-05-07 07:29:28, self-evolved by tea_agent --- 向量模型 Tab 增加 URL 格式提示
 # NOTE: 2026-05-07 07:29:42, self-evolved by tea_agent --- 回退 hint 字段，改用 _model_tab 的 hint 参数渲染标签
         self._model_tab(nb, "向量模型", "embedding", extra_fields=[
@@ -975,7 +974,7 @@ class ConfigDialog(tk.Toplevel):
 
 # NOTE: 2026-05-06 19:31:41, self-evolved by tea_agent --- _model_tab 支持 extra_fields 参数，向量模型增加 dimension 输入
 # NOTE: 2026-05-07 07:30:04, self-evolved by tea_agent --- _model_tab 支持 hint 参数，在字段下方渲染灰色提示
-    def _model_tab(self, nb, label, prefix, extra_fields=None, hint=None):
+    def _model_tab(self, nb, label, prefix, extra_fields=None, hint=None, options_prefix=None):
         f = ttk.Frame(nb)
         nb.add(f, text=label)
         fields = [
@@ -998,34 +997,33 @@ class ConfigDialog(tk.Toplevel):
             ttk.Label(f, text="ℹ️ " + hint, font=(SYSTEM_FONT, _fs(10)),
                       foreground="#888").grid(row=row_idx + 1, column=0, columnspan=2,
                                               sticky=tk.W, padx=(10, 4), pady=(0, 8))
-# NOTE: 2026-05-16 19:37:13, self-evolved by tea_agent --- 添加 _model_options_tab 方法
         f.columnconfigure(1, weight=1)
         setattr(self, f"_{prefix}_vars", vars_map)
 
-    def _model_options_tab(self, nb):
-        """主模型能力选项卡 — supports_vision / supports_reasoning"""
-        f = ttk.Frame(nb)
-        nb.add(f, text="🔧 主模型能力")
-
-        desc = (
-            "控制 API 请求中携带的扩展字段。\n"
-            "如果你的模型返回 400 错误（如某些严格兼容 OpenAI 的服务），\n"
-            "可关闭对应选项来避免发送多余字段。"
-        )
-        ttk.Label(f, text=desc, font=(SYSTEM_FONT, _fs(10)),
-                  foreground="#666", justify=tk.LEFT).pack(
-            fill=tk.X, padx=10, pady=(10, 16))
-
-        self._model_opts = {}
-        for label, key, default in [
-            ("👁️ 支持视觉（发送 image_url 格式图片）", "supports_vision", False),
-            ("🧠 支持推理（发送 reasoning_content 字段）", "supports_reasoning", True),
-        ]:
-            var = tk.BooleanVar(value=default)
-            ttk.Checkbutton(f, text=label, variable=var,
-                            font=(SYSTEM_FONT, _fs(11))).pack(
-                fill=tk.X, padx=10, pady=4)
-            self._model_opts[key] = var
+        # 模型能力选项 (supports_vision / supports_reasoning)
+        if options_prefix:
+            opts_key = f"_{options_prefix}_opts"
+            opts_var = {}
+            # NOTE: 2026-07-05 gen by tea_agent, ttk.Checkbutton font 通过 style 设置
+            _cb_style = ttk.Style()
+            _cb_style.configure(f"{options_prefix}.TCheckbutton", font=(SYSTEM_FONT, _fs(11)))
+            # 在主模型能力之前加一行文字提示
+            row_idx += 2
+            ttk.Label(f, text="── 模型能力 ──", font=(SYSTEM_FONT, _fs(10)),
+                      foreground="#888").grid(row=row_idx, column=0, columnspan=2,
+                                              sticky=tk.W, padx=(10, 4), pady=(12, 4))
+            for cb_label, cb_key, cb_default in [
+                ("👁️ 支持视觉（发送 image_url 格式图片）", "supports_vision", False),
+                ("🧠 支持推理（发送 reasoning_content 字段）", "supports_reasoning", True),
+            ]:
+                row_idx += 1
+                var = tk.BooleanVar(value=cb_default)
+                ttk.Checkbutton(f, text=cb_label, variable=var,
+                                style=f"{options_prefix}.TCheckbutton").grid(
+                    row=row_idx, column=0, columnspan=2,
+                    sticky=tk.W, padx=(20, 10), pady=2)
+                opts_var[cb_key] = var
+            setattr(self, opts_key, opts_var)
 
     def _runtime_tab(self, nb):
         f = ttk.Frame(nb)
@@ -1090,13 +1088,16 @@ class ConfigDialog(tk.Toplevel):
         emb_vars["api_key"].set(cfg.embedding.api_key)
         emb_vars["api_url"].set(cfg.embedding.api_url)
         emb_vars["model_name"].set(cfg.embedding.model_name)
-# NOTE: 2026-05-16 19:37:19, self-evolved by tea_agent --- _load_values 加载主模型 options
         emb_vars["dimension"].set(str(cfg.embedding.dimension or ""))
 
-        # 加载主模型 options
-        main_opts = cfg.main_model.options or {}
-        for key, var in self._model_opts.items():
-            var.set(main_opts.get(key, var.get()))
+        # 加载各模型 options
+        for prefix in ("main", "cheap"):
+            model_cfg = getattr(cfg, f"{prefix}_model")
+            opts = model_cfg.options or {}
+            opts_key = f"_{prefix}_opts"
+            vars_map = getattr(self, opts_key, {})
+            for key, var in vars_map.items():
+                var.set(opts.get(key, var.get()))
 
         for key, var in self._runtime_vars.items():
             val = getattr(cfg, key, None)
@@ -1124,14 +1125,17 @@ class ConfigDialog(tk.Toplevel):
         cfg.embedding.model_name = ev["model_name"].get().strip()
         try:
             cfg.embedding.dimension = int(ev["dimension"].get().strip() or "0")
-# NOTE: 2026-05-16 19:37:38, self-evolved by tea_agent --- _do_save 保存主模型 options
         except ValueError:
             cfg.embedding.dimension = 0
 
-        # 保存主模型 options
-        cfg.main_model.options = {}
-        for key, var in self._model_opts.items():
-            cfg.main_model.options[key] = var.get()
+        # 保存各模型 options
+        for prefix in ("main", "cheap"):
+            model_cfg = getattr(cfg, f"{prefix}_model")
+            model_cfg.options = {}
+            opts_key = f"_{prefix}_opts"
+            vars_map = getattr(self, opts_key, {})
+            for key, var in vars_map.items():
+                model_cfg.options[key] = var.get()
 
         for key, var in self._runtime_vars.items():
             try:

@@ -7,7 +7,7 @@ test_session.py
 dump_*/
 *.bak
 test_tmp/
-.tea_agent_run/
+/.tea_agent_run/
 *.db
 .*
 *.example
@@ -17,3 +17,5 @@ tmp/
 
 # Android
 local.properties
+
+!tea_agent/.tea_agent_run/

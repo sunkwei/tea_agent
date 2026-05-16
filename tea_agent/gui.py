@@ -834,6 +834,13 @@ class TkGUI(AgentCore):
             logger.info("Dream 已停止")
         except Exception as e:
             logger.warning(f"停止 Dream 失败: {e}")
+        # NOTE: 2026-05-16 gen by tea_agent, 退出时停止定时任务调度器
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            toolkit_scheduler("stop")
+            logger.info("定时任务调度器已停止")
+        except Exception as e:
+            logger.warning(f"停止定时任务调度器失败: {e}")
         try:
             self.db.close()
             self._update_status("✅ 数据库已正常关闭")
@@ -862,6 +869,20 @@ class TkGUI(AgentCore):
                 logger.info(f"Dream 自动启动成功: {status}")
         except Exception as e:
             logger.warning(f"Dream 自动启动失败: {e}")
+
+    # NOTE: 2026-05-16 gen by tea_agent, App启动自动启动定时任务调度器
+    def _start_scheduler(self):
+        """启动定时任务调度器后台线程，每分钟检查一次"""
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            result = toolkit_scheduler("start")
+            status = result.get("status", "unknown")
+            if status == "already_running":
+                logger.info(f"定时任务调度器已在运行中 (pid={result.get('pid')})")
+            else:
+                logger.info(f"定时任务调度器自动启动成功: {status}")
+        except Exception as e:
+            logger.warning(f"定时任务调度器自动启动失败: {e}")
 
     def _create_ui(self):
         """创建界面"""

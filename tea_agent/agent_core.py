@@ -78,6 +78,9 @@ class AgentCore:
         # ── 7. 启动潜意识引擎（后台每小时：总结/反思/创意/头脑风暴）──
         self._start_subconscious()
 
+        # ── 7b. 启动定时任务调度器（后台每分钟检查执行）──
+        self._start_scheduler()
+
 # NOTE: 2026-05-04 19:26:41, self-evolved by tea_agent --- AgentCore 添加 _start_file_watcher() — 监控非 toolkit 的 .py 变更并自动重启进程
         # ── 8. 启动文件监控（代码变更自动重启）──
         self._start_file_watcher()
@@ -228,6 +231,20 @@ class AgentCore:
         except Exception as e:
             # 启动失败不影响主体功能
             logger.debug(f"潜意识引擎自动启动跳过: {e}")
+
+    # NOTE: 2026-05-16 gen by tea_agent, 定时任务调度器 auto-start
+    def _start_scheduler(self):
+        """启动定时任务调度器 daemon 线程，每分钟检查一次。"""
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            result = toolkit_scheduler("start")
+            status = result.get("status", "unknown")
+            if status == "already_running":
+                logger.info(f"⏰ 定时任务调度器已在运行中 (pid={result.get('pid')})")
+            else:
+                logger.info(f"⏰ 定时任务调度器已自动启动")
+        except Exception as e:
+            logger.debug(f"定时任务调度器自动启动跳过: {e}")
 
 # NOTE: 2026-05-15 08:11:30, self-evolved by tea_agent --- _init_session 从 main_model.options 读取 supports_vision 传递给 OnlineToolSession
     def _init_session(self):

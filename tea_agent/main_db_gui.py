@@ -832,6 +832,13 @@ class TkGUI(AgentCore):
             logger.info("Dream 已停止")
         except Exception as e:
             logger.warning(f"停止 Dream 失败: {e}")
+        # NOTE: 2026-05-16 gen by tea_agent, 退出时停止定时任务调度器
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            toolkit_scheduler("stop")
+            logger.info("定时任务调度器已停止")
+        except Exception as e:
+            logger.warning(f"停止定时任务调度器失败: {e}")
         try:
             self.db.close()
             self._update_status("✅ 数据库已正常关闭")

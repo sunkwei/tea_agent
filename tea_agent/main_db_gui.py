@@ -23,7 +23,6 @@ try:
 except ImportError:
     HAS_TKINTERWEB = False
 
-# NOTE: 2026-06-23 gen by tea_agent, 托盘图标支持（StatusNotifierItem/KDE Plasma 6 + 通用 Linux）
 try:
     import dbus
     import dbus.service

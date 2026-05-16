@@ -108,23 +108,19 @@ class BaseChatSession(ABC):
                 continue
             msg.pop("reasoning_content", None)
 
-    # NOTE: 2026-05-02, self-evolved by tea_agent ---
-    # 修复中断会话后 400 错误：assistant tool_calls 之后必须有对应的 tool 消息
-# NOTE: 2026-05-04 12:57:20, self-evolved by tea_agent --- load_history 压缩工具结果：短则保留原样，长则保持首尾+摘要，确保上下文连贯
+    # NOTE: 2026-05-20 gen by tea_agent, L1压缩：首尾各512字节按换行对齐，替代首尾3行策略
     @staticmethod
-    def _compress_tool_content(content: str, max_lines: int = 30, max_chars: int = 1024) -> str:
+    def _compress_tool_content(content: str, max_chars: int = 1024) -> str:
         """
-        智能压缩工具输出，保持上下文连贯。
+        L1 工具输出压缩：首尾各 512 字节，按换行对齐。
 
         策略：
-        - 短输出（≤max_chars 且 ≤10行）：原样保留
-        - 长输出：保留首3行 + 尾3行 + 摘要行
-        - 错误信息优先保留（stderr 内容前置）
+        - 短输出（≤max_chars 字节）：原样保留
+        - 长输出：保留首 512 字节 + 尾 512 字节，按换行边界对齐避免截断半行
 
         Args:
             content: 原始工具输出
-            max_lines: 最多保留行数
-            max_chars: 最多保留字符数
+            max_chars: 阈值字节数，超过则触发首尾截断
 
         Returns:
             压缩后的输出摘要
@@ -132,78 +128,130 @@ class BaseChatSession(ABC):
         if not content:
             return content
 
-        lines = content.split("\n")
-        total_lines = len(lines)
-        total_chars = len(content)
+        # 编码为字节以准确计算字节长度（与 API token 计数一致）
+        raw = content.encode("utf-8")
+        total_bytes = len(raw)
 
-        # 短输出直接保留
-        if total_chars <= max_chars and total_lines <= 100:
+        if total_bytes <= max_chars:
             return content
 
-        # 长输出：首尾保留
-        head_lines = lines[:3]
-        tail_lines = lines[-3:]
-        skipped = total_lines - 6
+        half = max_chars // 2  # 各保留 512 字节
 
-        # 检测关键信息模式
-        hints = []
-        
-        # 错误模式
-        error_lines = [l for l in lines if 'error' in l.lower() or 'FAIL' in l or 'failed' in l.lower()]
-        if error_lines:
-            hints.append(f"⚠ 含 {len(error_lines)} 条错误: {error_lines[0][:120]}")
+        # 前半部分：从 half 位置向前找最近换行
+        head_end = half
+        if head_end > 0:
+            # 向后找换行
+            nl = raw.find(b'\n', head_end)
+            if nl != -1 and nl < half + 256:
+                head_end = nl
+            else:
+                # 向前找换行
+                nl = raw.rfind(b'\n', 0, head_end)
+                if nl != -1 and nl > half - 256:
+                    head_end = nl
 
-        # 成功模式
-        success_lines = [l for l in lines if 'SUCCESS' in l or 'BUILD SUCCESSFUL' in l]
-        if success_lines:
-            hints.append("✅ " + success_lines[0].strip())
+        head_bytes = raw[:head_end]
 
-        # 包安装模式
-        pkg_lines = [l for l in lines if 'packages' in l.lower() and ('install' in l.lower() or 'upgrad' in l.lower())]
-        if pkg_lines:
-            hints.append("📦 " + pkg_lines[0].strip())
+        # 后半部分：从尾部 half 位置向后找最近换行
+        tail_start = total_bytes - half
+        if tail_start > 0:
+            nl = raw.rfind(b'\n', tail_start, total_bytes)
+            if nl != -1 and nl > tail_start - 256:
+                tail_start = nl + 1  # 从换行后开始
+            else:
+                nl = raw.find(b'\n', tail_start)
+                if nl != -1 and nl < tail_start + 256:
+                    tail_start = nl + 1
 
-        # 文件变更模式
-        changed_lines = [l for l in lines if 'file changed' in l.lower() or 'files changed' in l.lower()]
-        if changed_lines:
-            hints.append("📝 " + changed_lines[0].strip())
+        tail_bytes = raw[tail_start:]
 
-        hint_text = "\n".join(hints) if hints else ""
+        head_text = head_bytes.decode("utf-8", errors="replace")
+        tail_text = tail_bytes.decode("utf-8", errors="replace")
+        skipped_bytes = total_bytes - len(head_bytes) - len(tail_bytes)
 
-        compressed = (
-            f"[工具输出压缩: {total_lines}行 {total_chars}字符]\n"
-            + (f"{hint_text}\n" if hint_text else "")
-            + "\n".join(head_lines)
-            + f"\n... [{skipped} 行省略] ...\n"
-            + "\n".join(tail_lines)
+        return (
+            f"[工具输出压缩: {total_bytes}B 原始, 保留 {len(head_bytes) + len(tail_bytes)}B]\n"
+            f"{head_text}\n"
+            f"... [{skipped_bytes} 字节省略] ...\n"
+            f"{tail_text}"
         )
 
-        return compressed
-
+    # NOTE: 2026-05-20 gen by tea_agent, L1压缩：对 assistant tool_calls 参数截断 + 保留最终 assistant 消息完整
     @staticmethod
     def _compress_tool_rounds(rounds: List[Dict]) -> List[Dict]:
         """
-        对 rounds 中的 tool 消息进行智能压缩。
+        对 rounds 中的工具调用链进行 L1 智能压缩。
+
+        规则：
+        - user 消息：完整保留
+        - assistant 含 tool_calls（中间步骤）：保留 reasoning_content，
+          对每个 tool_call 的 function.arguments 若 >1024 字节则截断
+        - tool 消息：调用 _compress_tool_content 压缩输出
+        - 最终 assistant 消息（末尾无 tool_calls）：完整保留，不压缩
 
         参数:
             rounds: 原始 rounds 列表
-            
+
         返回:
             压缩后的 rounds（非原地修改）
         """
+        if not rounds:
+            return rounds
+
+        n = len(rounds)
         result = []
-        for rd in rounds:
-            if rd.get("role") == "tool":
+
+        for i, rd in enumerate(rounds):
+            role = rd.get("role", "")
+            is_last = (i == n - 1)
+
+            if role == "user":
+                # user 消息完整保留
+                result.append(dict(rd))
+
+            elif role == "assistant":
+                if rd.get("tool_calls") and not is_last:
+                    # 中间 assistant 消息（含工具调用）：压缩参数
+                    compressed = dict(rd)
+                    # 保留 reasoning_content
+                    tc_list = compressed.get("tool_calls", [])
+                    new_tc = []
+                    for tc in tc_list:
+                        tc_copy = dict(tc)
+                        func = tc_copy.get("function", {})
+                        if isinstance(func, dict):
+                            args_str = func.get("arguments", "")
+                            if isinstance(args_str, str):
+                                args_bytes = len(args_str.encode("utf-8"))
+                                if args_bytes > 1024:
+                                    func["arguments"] = (
+                                        args_str[:512] +
+                                        f"\n... [L1截断: {args_bytes}B 参数, 保留首512B] ...\n" +
+                                        args_str[-512:]
+                                    )
+                            tc_copy["function"] = func
+                        new_tc.append(tc_copy)
+                    compressed["tool_calls"] = new_tc
+                    result.append(compressed)
+                else:
+                    # 最终 assistant 消息（末尾，无 tool_calls 或恰好是最后一个）：完整保留
+                    result.append(dict(rd))
+
+            elif role == "tool":
+                # tool 消息：压缩输出
                 compressed = dict(rd)
                 compressed["content"] = BaseChatSession._compress_tool_content(
                     rd.get("content", "")
                 )
                 result.append(compressed)
+
             else:
+                # system 等其他角色
                 result.append(dict(rd))
-# NOTE: 2026-05-04 14:53:44, self-evolved by tea_agent --- 补回 _repair_incomplete_tool_chains 缺失的 @staticmethod 和 def 行，修复死代码导致的 400 错误
+
         return result
 
+# NOTE: 2026-05-04 14:53:44, self-evolved by tea_agent --- 补回 _repair_incomplete_tool_chains 缺失的 @staticmethod 和 def 行，修复死代码导致的 400 错误
     @staticmethod
     def _repair_incomplete_tool_chains(rounds: List[Dict]) -> List[Dict]:
         """
@@ -305,7 +353,7 @@ class BaseChatSession(ABC):
         """
         三级历史加载：
 
-        Level 1: 最新一轮完整对话（user + 工具调用链 + assistant(final)）
+        Level 1: 最新一轮压缩对话（user + 工具调用链[参数/输出截断] + assistant(final)完整）
         Level 2: 近期语义相关的 user+assistant 自然语言对
         Level 3: 压缩摘要 — semantic_summary + tool_chain_summary
 
@@ -326,14 +374,14 @@ class BaseChatSession(ABC):
         # ── Level 2 存储（用于 prompt 构建时直接拼入）──
         self._level2 = level2 or []
 
-        # ── Level 1: 最新一轮完整加载 ──
+        # ── Level 1: 最新一轮压缩加载 ──
         total = len(conversations)
         if total == 0:
             self._history_summary = ""  # 兼容旧代码
             logger.info("加载历史 0条 (新主题)")
             return
 
-        # 最新一条作为 Level 1（完整工具链）
+        # 最新一条作为 Level 1（压缩工具链）
         last_conv = conversations[-1]
         # NOTE: 2026-05-18 gen by tea_agent, 修复 JSON 格式 user_msg（含图片）的解析
         raw_user_msg = last_conv["user_msg"]
@@ -358,9 +406,10 @@ class BaseChatSession(ABC):
         rounds = last_conv.get("rounds_json_parsed")
         if rounds and last_conv.get("is_func_calling"):
             repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
-            # Level 1 不压缩，保留完整工具输出
-            for rd in repaired:
-                self.messages.append(dict(rd))
+            # NOTE: 2026-05-20 gen by tea_agent, L1压缩：工具参数>1024B截断，工具输出首尾各512B
+            compressed = BaseChatSession._compress_tool_rounds(repaired)
+            for rd in compressed:
+                self.messages.append(rd)
         else:
             self.messages.append({"role": "assistant", "content": last_conv["ai_msg"]})
 
@@ -368,7 +417,7 @@ class BaseChatSession(ABC):
         # Level 2 + Level 3 由 _build_api_messages 拼接
         self._history_summary = ""  # 旧字段，不再使用
         logger.info(
-            f"三级加载: L1=1轮完整 , L2={len(self._level2)}对 , "
+            f"三级加载: L1=1轮压缩 , L2={len(self._level2)}对 , "
             f"L3_semantic={len(self._semantic_summary)}chars , L3_tool={len(self._tool_chain_summary)}chars"
         )
 

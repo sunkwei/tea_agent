@@ -289,7 +289,7 @@ class OnlineToolSession(
             Level 0: 系统提示词 + 长期记忆注入
             Level 3: 语义摘要 + 工具链摘要
             Level 2: 按语义相关性筛选的 user+assistant 对
-            Level 1: 最新一轮完整对话（含工具调用链）
+            Level 1: 最新一轮压缩对话（含工具调用链，参数>1024B截断，输出首尾各512B）
         """
         result: List[Dict] = []
 
@@ -384,7 +384,7 @@ class OnlineToolSession(
                     result.append({"role": "assistant", "content": item.get("assistant", ""),
                                   "reasoning_content": ""})
 
-        # ── Level 1: 最新一轮完整对话 ──
+        # ── Level 1: 最新一轮压缩对话 ──
         for i in range(1, len(self.messages)):
             msg = self.messages[i]
             msg_copy = dict(msg)

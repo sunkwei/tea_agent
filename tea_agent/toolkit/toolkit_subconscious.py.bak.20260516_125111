@@ -59,11 +59,9 @@ def toolkit_subconscious(action: str, focus: str = None):
                 with open(STATE_FILE, 'r') as f:
                     return json.load(f)
             except: pass
-# NOTE: 2026-05-16 12:51:11, self-evolved by tea_agent --- state 初始化 stats 中加入 llm_adjustments 字段
         return {"running":False,"pid":os.getpid(),"started_at":None,"last_cycle_at":None,
                 "cycles_completed":0,"insights":[],"goals":[],"last_focus":"mixed",
-                "stats":{"memories_digested":0,"conversations_digested":0,"insights_generated":0,
-                         "goals_set":0,"auto_memories":0,"llm_adjustments":0}}
+                "stats":{"memories_digested":0,"conversations_digested":0,"insights_generated":0,"goals_set":0,"auto_memories":0}}
 
     def _write_state(state):
         _ensure_dir(os.path.dirname(STATE_FILE))
@@ -155,8 +153,7 @@ def toolkit_subconscious(action: str, focus: str = None):
             return "mixed"
 
     # === 阶段2: 消化对话 ===
-# NOTE: 2026-05-16 14:14:51, self-evolved by tea_agent --- 统一记忆提取路径，复用MemoryManager去重合并逻辑
-    def _digest_conversations(db_path, state, mm=None):
+    def _digest_conversations(db_path, state):
         if not os.path.exists(db_path): return {"processed":0,"extracted":[]}
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
@@ -169,28 +166,17 @@ def toolkit_subconscious(action: str, focus: str = None):
         convs = [dict(r) for r in cur.fetchall()]
         extracted = []
         max_id = last_id
-        candidates_list = []
         for conv in convs:
             max_id = max(max_id, conv["id"])
             user_msg = str(conv.get("user_msg",""))
             ai_msg = str(conv.get("ai_msg",""))
             candidates = _extract_memory_candidates(user_msg, ai_msg)
-            for c in candidates:
-                c.setdefault("tags", "auto-extracted")
-                candidates_list.append(c)
-        
-        # 如果有 MemoryManager，使用其去重合并逻辑 (P3修复)
-        if mm and candidates_list:
-            count = mm.ingest_extracted(candidates_list)
-            extracted = [c["content"][:60] for c in candidates_list if c.get("content")][:20]
-        else:
-            # 回退到旧逻辑
-            for cand in candidates_list:
-                if not _is_duplicate_memory(cur, cand.get("content","")):
+            for cand in candidates:
+                if not _is_duplicate_memory(cur, cand["content"]):
                     try:
                         cur.execute(
                             "INSERT INTO memories (content, category, priority, importance, tags, source_topic_id) VALUES (?,?,?,?,?,?)",
-                            (cand.get("content",""), cand.get("category","general"),
+                            (cand["content"], cand.get("category","general"),
                              cand.get("priority",3), cand.get("importance",2),
                              cand.get("tags","auto-extracted"), conv.get("topic_id"))
                         )
@@ -475,66 +461,57 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
 
 
 # NOTE: 2026-05-16 12:50:51, self-evolved by tea_agent --- _run_cycle 中加入 LLM 优先级精调（使用便宜模型）
-# NOTE: 2026-05-16 14:15:28, self-evolved by tea_agent --- 修复Storage连接泄漏，复用单例并安全关闭
     # === 执行一次完整循环 ===
     def _run_cycle(state):
-        # @2026-05-16 gen by tea_agent, 修复Storage连接泄漏(P1)与统一记忆去重(P3)
-        from tea_agent.memory import MemoryManager
-        from tea_agent.store import Storage
-        
         db_path = _get_db_path()
         kb_dir = KB_DIR
-        storage = None
+        digest = _digest_memories(db_path)
+        conv_digest = _digest_conversations(db_path, state)
+
+        # LLM 优先级精调（使用便宜模型，独立客户端）
         try:
-            storage = Storage(db_path)
-            mm = MemoryManager(storage)
+            from tea_agent.memory import MemoryManager
+            from tea_agent.store import Storage
+            from tea_agent.config import get_config
+            from openai import OpenAI
 
-            digest = _digest_memories(db_path)
-            conv_digest = _digest_conversations(db_path, state, mm=mm)
+            cfg = get_config()
+            cheap = cfg.cheap_model
+            if cheap.api_key and cheap.api_url and cheap.model_name:
+                client = OpenAI(api_key=cheap.api_key, base_url=cheap.api_url)
+                storage = Storage()
+                mm = MemoryManager(storage)
 
-            # LLM 优先级精调（使用便宜模型，独立客户端）
-            try:
-                from tea_agent.config import get_config
-                from openai import OpenAI
+                topics_text = conv_digest.get("topics_summary", "")
+                if not topics_text:
+                    kw = digest.get("top_keywords", [])
+                    topics_text = ", ".join(w for w, _ in kw[:10]) if kw else ""
 
-                cfg = get_config()
-                cheap = cfg.cheap_model
-                if cheap.api_key and cheap.api_url and cheap.model_name:
-                    client = OpenAI(api_key=cheap.api_key, base_url=cheap.api_url)
-                    topics_text = conv_digest.get("topics_summary", "")
-                    if not topics_text:
-                        kw = digest.get("top_keywords", [])
-                        topics_text = ", ".join(w for w, _ in kw[:10]) if kw else ""
+                if topics_text:
+                    n = mm.llm_adjust_priorities(topics_text, client=client, model=cheap.model_name)
+                    if n:
+                        state["stats"]["llm_adjustments"] = state["stats"].get("llm_adjustments", 0) + n
+        except Exception:
+            pass  # 静默失败，不影响主流程
 
-                    if topics_text:
-                        n = mm.llm_adjust_priorities(topics_text, client=client, model=cheap.model_name)
-                        if n:
-                            state["stats"]["llm_adjustments"] = state["stats"].get("llm_adjustments", 0) + n
-            except Exception:
-                pass  # 静默失败，不影响主流程
-
-            links = _cross_link(db_path, kb_dir, state)
-            insights = _generate_insights(digest, links, conv_digest, kb_dir, state)
-            goals = _set_goals(digest, links, insights, conv_digest, state, db_path)
-            state["last_cycle_at"] = datetime.now().isoformat()
-            state["cycles_completed"] = state.get("cycles_completed", 0) + 1
-            state["insights"] = [i["content"] for i in insights[-5:]]
-            state["goals"] = [g["goal"] for g in goals[:7]]
-            state["last_focus"] = digest.get("focus", "mixed") if digest else "mixed"
-            if conv_digest.get("last_id", 0) > state.get("last_conversation_id", 0):
-                state["last_conversation_id"] = conv_digest["last_id"]
-            if digest:
-                state["stats"]["memories_digested"] = state["stats"].get("memories_digested", 0) + digest["total_memories"]
-            state["stats"]["conversations_digested"] = state["stats"].get("conversations_digested", 0) + conv_digest.get("processed", 0)
-            state["stats"]["insights_generated"] = state["stats"].get("insights_generated", 0) + len(insights)
-            state["stats"]["goals_set"] = state["stats"].get("goals_set", 0) + len(goals)
-            state["stats"]["auto_memories"] = state["stats"].get("auto_memories", 0) + len(conv_digest.get("extracted", []))
-            _write_state(state)
-            return {"digest": digest, "insights": insights, "goals": goals, "conv_digest": conv_digest}
-        finally:
-            if storage:
-                try: storage.close()
-                except: pass
+        links = _cross_link(db_path, kb_dir, state)
+        insights = _generate_insights(digest, links, conv_digest, kb_dir, state)
+        goals = _set_goals(digest, links, insights, conv_digest, state, db_path)
+        state["last_cycle_at"] = datetime.now().isoformat()
+        state["cycles_completed"] = state.get("cycles_completed", 0) + 1
+        state["insights"] = [i["content"] for i in insights[-5:]]
+        state["goals"] = [g["goal"] for g in goals[:7]]
+        state["last_focus"] = digest.get("focus", "mixed") if digest else "mixed"
+        if conv_digest.get("last_id", 0) > state.get("last_conversation_id", 0):
+            state["last_conversation_id"] = conv_digest["last_id"]
+        if digest:
+            state["stats"]["memories_digested"] = state["stats"].get("memories_digested", 0) + digest["total_memories"]
+        state["stats"]["conversations_digested"] = state["stats"].get("conversations_digested", 0) + conv_digest.get("processed", 0)
+        state["stats"]["insights_generated"] = state["stats"].get("insights_generated", 0) + len(insights)
+        state["stats"]["goals_set"] = state["stats"].get("goals_set", 0) + len(goals)
+        state["stats"]["auto_memories"] = state["stats"].get("auto_memories", 0) + len(conv_digest.get("extracted", []))
+        _write_state(state)
+        return {"digest": digest, "insights": insights, "goals": goals, "conv_digest": conv_digest}
 
     def _subconscious_loop():
         state = _read_state()

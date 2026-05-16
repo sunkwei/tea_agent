@@ -53,13 +53,10 @@ class MemoryStore(StoreComponent):
             )
         c.close()
 
-# NOTE: 2026-05-16 14:14:30, self-evolved by tea_agent --- 修复CURRENT_TIMESTAMP字面量问题，支持任意字段动态SQL注入
-    # @2026-05-16 gen by tea_agent, 修复CURRENT_TIMESTAMP字面量问题，支持任意字段动态SQL注入
     def update_memory(self, memory_id: str, **fields) -> bool:
         allowed = {
             "content", "category", "priority", "importance",
-            "expires_at", "is_active", "tags", "last_accessed_at", "pinned",
-            "created_at",  # 允许更新创建时间（用于LLM升级重置年龄）
+            "expires_at", "is_active", "tags", "last_accessed_at",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -67,20 +64,14 @@ class MemoryStore(StoreComponent):
         if updates.get("priority") == 0:
             self._enforce_critical_limit(max_critical=15)
         updates["updated_at"] = "CURRENT_TIMESTAMP"
-        
-        # 动态构建 SET 子句：值为 CURRENT_TIMESTAMP 时直接拼接 SQL 函数，否则参数化
-        set_parts = []
-        values = []
-        for k, v in updates.items():
-            if v == "CURRENT_TIMESTAMP":
-                set_parts.append(f"{k} = CURRENT_TIMESTAMP")
-            else:
-                set_parts.append(f"{k} = ?")
-                values.append(v)
-                
+        set_clause = ", ".join(
+            f"{k} = ?" if k != "updated_at" else f"{k} = CURRENT_TIMESTAMP"
+            for k in updates
+        )
+        values = [v for k, v in updates.items() if k != "updated_at"]
         c = self.conn.cursor()
         c.execute(
-            f"UPDATE memories SET {', '.join(set_parts)} WHERE id = ?", values + [memory_id]
+            f"UPDATE memories SET {set_clause} WHERE id = ?", values + [memory_id]
         )
         self.conn.commit()
         affected = c.rowcount

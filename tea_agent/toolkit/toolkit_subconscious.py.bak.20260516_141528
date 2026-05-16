@@ -475,66 +475,57 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
 
 
 # NOTE: 2026-05-16 12:50:51, self-evolved by tea_agent --- _run_cycle 中加入 LLM 优先级精调（使用便宜模型）
-# NOTE: 2026-05-16 14:15:28, self-evolved by tea_agent --- 修复Storage连接泄漏，复用单例并安全关闭
     # === 执行一次完整循环 ===
     def _run_cycle(state):
-        # @2026-05-16 gen by tea_agent, 修复Storage连接泄漏(P1)与统一记忆去重(P3)
-        from tea_agent.memory import MemoryManager
-        from tea_agent.store import Storage
-        
         db_path = _get_db_path()
         kb_dir = KB_DIR
-        storage = None
+        digest = _digest_memories(db_path)
+        conv_digest = _digest_conversations(db_path, state)
+
+        # LLM 优先级精调（使用便宜模型，独立客户端）
         try:
-            storage = Storage(db_path)
-            mm = MemoryManager(storage)
+            from tea_agent.memory import MemoryManager
+            from tea_agent.store import Storage
+            from tea_agent.config import get_config
+            from openai import OpenAI
 
-            digest = _digest_memories(db_path)
-            conv_digest = _digest_conversations(db_path, state, mm=mm)
+            cfg = get_config()
+            cheap = cfg.cheap_model
+            if cheap.api_key and cheap.api_url and cheap.model_name:
+                client = OpenAI(api_key=cheap.api_key, base_url=cheap.api_url)
+                storage = Storage()
+                mm = MemoryManager(storage)
 
-            # LLM 优先级精调（使用便宜模型，独立客户端）
-            try:
-                from tea_agent.config import get_config
-                from openai import OpenAI
+                topics_text = conv_digest.get("topics_summary", "")
+                if not topics_text:
+                    kw = digest.get("top_keywords", [])
+                    topics_text = ", ".join(w for w, _ in kw[:10]) if kw else ""
 
-                cfg = get_config()
-                cheap = cfg.cheap_model
-                if cheap.api_key and cheap.api_url and cheap.model_name:
-                    client = OpenAI(api_key=cheap.api_key, base_url=cheap.api_url)
-                    topics_text = conv_digest.get("topics_summary", "")
-                    if not topics_text:
-                        kw = digest.get("top_keywords", [])
-                        topics_text = ", ".join(w for w, _ in kw[:10]) if kw else ""
+                if topics_text:
+                    n = mm.llm_adjust_priorities(topics_text, client=client, model=cheap.model_name)
+                    if n:
+                        state["stats"]["llm_adjustments"] = state["stats"].get("llm_adjustments", 0) + n
+        except Exception:
+            pass  # 静默失败，不影响主流程
 
-                    if topics_text:
-                        n = mm.llm_adjust_priorities(topics_text, client=client, model=cheap.model_name)
-                        if n:
-                            state["stats"]["llm_adjustments"] = state["stats"].get("llm_adjustments", 0) + n
-            except Exception:
-                pass  # 静默失败，不影响主流程
-
-            links = _cross_link(db_path, kb_dir, state)
-            insights = _generate_insights(digest, links, conv_digest, kb_dir, state)
-            goals = _set_goals(digest, links, insights, conv_digest, state, db_path)
-            state["last_cycle_at"] = datetime.now().isoformat()
-            state["cycles_completed"] = state.get("cycles_completed", 0) + 1
-            state["insights"] = [i["content"] for i in insights[-5:]]
-            state["goals"] = [g["goal"] for g in goals[:7]]
-            state["last_focus"] = digest.get("focus", "mixed") if digest else "mixed"
-            if conv_digest.get("last_id", 0) > state.get("last_conversation_id", 0):
-                state["last_conversation_id"] = conv_digest["last_id"]
-            if digest:
-                state["stats"]["memories_digested"] = state["stats"].get("memories_digested", 0) + digest["total_memories"]
-            state["stats"]["conversations_digested"] = state["stats"].get("conversations_digested", 0) + conv_digest.get("processed", 0)
-            state["stats"]["insights_generated"] = state["stats"].get("insights_generated", 0) + len(insights)
-            state["stats"]["goals_set"] = state["stats"].get("goals_set", 0) + len(goals)
-            state["stats"]["auto_memories"] = state["stats"].get("auto_memories", 0) + len(conv_digest.get("extracted", []))
-            _write_state(state)
-            return {"digest": digest, "insights": insights, "goals": goals, "conv_digest": conv_digest}
-        finally:
-            if storage:
-                try: storage.close()
-                except: pass
+        links = _cross_link(db_path, kb_dir, state)
+        insights = _generate_insights(digest, links, conv_digest, kb_dir, state)
+        goals = _set_goals(digest, links, insights, conv_digest, state, db_path)
+        state["last_cycle_at"] = datetime.now().isoformat()
+        state["cycles_completed"] = state.get("cycles_completed", 0) + 1
+        state["insights"] = [i["content"] for i in insights[-5:]]
+        state["goals"] = [g["goal"] for g in goals[:7]]
+        state["last_focus"] = digest.get("focus", "mixed") if digest else "mixed"
+        if conv_digest.get("last_id", 0) > state.get("last_conversation_id", 0):
+            state["last_conversation_id"] = conv_digest["last_id"]
+        if digest:
+            state["stats"]["memories_digested"] = state["stats"].get("memories_digested", 0) + digest["total_memories"]
+        state["stats"]["conversations_digested"] = state["stats"].get("conversations_digested", 0) + conv_digest.get("processed", 0)
+        state["stats"]["insights_generated"] = state["stats"].get("insights_generated", 0) + len(insights)
+        state["stats"]["goals_set"] = state["stats"].get("goals_set", 0) + len(goals)
+        state["stats"]["auto_memories"] = state["stats"].get("auto_memories", 0) + len(conv_digest.get("extracted", []))
+        _write_state(state)
+        return {"digest": digest, "insights": insights, "goals": goals, "conv_digest": conv_digest}
 
     def _subconscious_loop():
         state = _read_state()

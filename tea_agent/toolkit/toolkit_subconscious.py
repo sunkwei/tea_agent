@@ -98,16 +98,13 @@ def toolkit_subconscious(action: str, focus: str = None):
         return _jieba is not None
 
     # === 阶段1: 消化记忆 ===
-    def _digest_memories(db_path):
-        if not os.path.exists(db_path): return None
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
+    def _digest_memories(storage):
+        if not storage or not storage.conn: return None
+        cur = storage.conn.cursor()
         cur.execute("SELECT * FROM memories WHERE is_active=1 ORDER BY priority ASC, updated_at DESC LIMIT 200")
         mems = [dict(r) for r in cur.fetchall()]
         cur.execute("SELECT * FROM reflections WHERE is_applied=0 ORDER BY created_at DESC LIMIT 20")
         refs = [dict(r) for r in cur.fetchall()]
-        conn.close()
         if not mems: return None
         r = {"total_memories":len(mems),"by_category":dict(Counter(m["category"] for m in mems)),
              "by_priority":dict(Counter(m["priority"] for m in mems)),
@@ -156,11 +153,9 @@ def toolkit_subconscious(action: str, focus: str = None):
 
     # === 阶段2: 消化对话 ===
 # NOTE: 2026-05-16 14:14:51, self-evolved by tea_agent --- 统一记忆提取路径，复用MemoryManager去重合并逻辑
-    def _digest_conversations(db_path, state, mm=None):
-        if not os.path.exists(db_path): return {"processed":0,"extracted":[]}
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
+    def _digest_conversations(storage, state, mm=None):
+        if not storage or not storage.conn: return {"processed":0,"extracted":[]}
+        cur = storage.conn.cursor()
         last_id = state.get("last_conversation_id", 0)
         cur.execute(
             "SELECT id, topic_id, user_msg, ai_msg, stamp FROM conversations WHERE id > ? ORDER BY id ASC LIMIT 50",
@@ -194,10 +189,9 @@ def toolkit_subconscious(action: str, focus: str = None):
                              cand.get("priority",3), cand.get("importance",2),
                              cand.get("tags","auto-extracted"), conv.get("topic_id"))
                         )
-                        conn.commit()
+                        storage.conn.commit()
                         extracted.append(cand["content"][:60])
                     except: pass
-        conn.close()
         return {"processed":len(convs),"extracted":extracted,"last_id":max_id}
 
     def _extract_memory_candidates(user_msg, ai_msg):
@@ -239,12 +233,10 @@ def toolkit_subconscious(action: str, focus: str = None):
         return False
 
     # === 阶段3: 交叉关联 ===
-    def _cross_link(db_path, kb_dir, state):
+    def _cross_link(storage, kb_dir, state):
         finds = []
-        if not os.path.exists(db_path): return finds
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
+        if not storage or not storage.conn: return finds
+        cur = storage.conn.cursor()
         cur.execute("SELECT * FROM reflections WHERE is_applied=0 ORDER BY created_at DESC LIMIT 10")
         refs = [dict(r) for r in cur.fetchall()]
         for ref in refs:
@@ -261,7 +253,6 @@ def toolkit_subconscious(action: str, focus: str = None):
             finds.append({"type":"frequent_config_changes",
                           "content":f"最近有{len(cfgs)}次配置变更，建议回顾是否需要固化某些配置",
                           "detail":[f"{c['key']}={c['new_value']}" for c in cfgs[:5]]})
-        conn.close()
         if os.path.exists(kb_dir):
             now = datetime.now()
             old = []
@@ -476,6 +467,7 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
 
 # NOTE: 2026-05-16 12:50:51, self-evolved by tea_agent --- _run_cycle 中加入 LLM 优先级精调（使用便宜模型）
 # NOTE: 2026-05-16 14:15:28, self-evolved by tea_agent --- 修复Storage连接泄漏，复用单例并安全关闭
+# NOTE: 2026-05-16 16:30:00, self-evolved by tea_agent --- 收敛连接：_digest_memories/_digest_conversations/_cross_link 复用 storage.conn
     # === 执行一次完整循环 ===
     def _run_cycle(state):
         # @2026-05-16 gen by tea_agent, 修复Storage连接泄漏(P1)与统一记忆去重(P3)
@@ -489,8 +481,8 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
             storage = Storage(db_path)
             mm = MemoryManager(storage)
 
-            digest = _digest_memories(db_path)
-            conv_digest = _digest_conversations(db_path, state, mm=mm)
+            digest = _digest_memories(storage)
+            conv_digest = _digest_conversations(storage, state, mm=mm)
 
             # LLM 优先级精调（使用便宜模型，独立客户端）
             try:
@@ -513,7 +505,7 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
             except Exception:
                 pass  # 静默失败，不影响主流程
 
-            links = _cross_link(db_path, kb_dir, state)
+            links = _cross_link(storage, kb_dir, state)
             insights = _generate_insights(digest, links, conv_digest, kb_dir, state)
             goals = _set_goals(digest, links, insights, conv_digest, state, db_path)
             state["last_cycle_at"] = datetime.now().isoformat()
@@ -585,12 +577,8 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         cur = conn.cursor()
         cur.execute("SELECT content, category, tags FROM memories WHERE is_active=1 ORDER BY RANDOM() LIMIT 30")
         mems = [dict(r) for r in cur.fetchall()]
-        conn.close()
-
+        
         # 读取对话中最近的错误/bug信息
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
         cur.execute("SELECT user_msg, ai_msg FROM conversations ORDER BY id DESC LIMIT 30")
         recent = [dict(r) for r in cur.fetchall()]
         conn.close()

@@ -212,9 +212,11 @@ def _render_tool_group(group, ts_display):
 
 
 
+# NOTE: 2026-05-16 15:30:11, self-evolved by tea_agent --- 修复HTML渲染：在_chat_to_markdown中对content进行HTML转义，防止未转义HTML标签导致HtmlFrame解析错误
 # @2026-05-15 gen by tea_agent, 图片点击放大弹窗
 def _chat_to_markdown(messages, image_cache=None):
     """将聊天消息列表转换为 markdown 格式，包含时间戳和分割线"""
+    import html as html_mod  # 2026-05-16 fix: HTML转义防止未转义标签导致HtmlFrame解析错误
     # 预计算工具轮分组块
     tool_blocks = _build_tool_blocks(messages)
     parts = []
@@ -261,11 +263,17 @@ def _chat_to_markdown(messages, image_cache=None):
                         img_tags.append(f'<p class="img-error">⚠️ 无法加载图片: {os.path.basename(img_path)}</p>')
                 if img_tags:
                     img_html = '<div class="chat-images">' + "".join(img_tags) + '</div>'
-            parts.append(f'{ts_display}\n\n<div class="msg-user" markdown="1">\n\n### 👤 你\n\n{img_html}\n\n{content.strip()}\n</div>\n')
+            # 2026-05-16 fix: 对content进行HTML转义，防止未转义标签导致HtmlFrame解析错误
+            safe_content = html_mod.escape(content.strip())
+            parts.append(f'{ts_display}\n\n<div class="msg-user" markdown="1">\n\n### 👤 你\n\n{img_html}\n\n{safe_content}\n</div>\n')
         elif role == "think":
-            parts.append(f'{ts_display}\n\n<div class="msg-think" markdown="1">\n\n### 💭 思考过程\n\n{content.strip()}\n</div>\n\n---\n')
+            # 2026-05-16 fix: 对content进行HTML转义
+            safe_content = html_mod.escape(content.strip())
+            parts.append(f'{ts_display}\n\n<div class="msg-think" markdown="1">\n\n### 💭 思考过程\n\n{safe_content}\n</div>\n\n---\n')
         elif role == "ai":
-            parts.append(f'{ts_display}\n\n<div class="msg-ai" markdown="1">\n\n### 🤖 AI\n\n{content.strip()}\n</div>\n\n---\n')
+            # 2026-05-16 fix: 对content进行HTML转义
+            safe_content = html_mod.escape(content.strip())
+            parts.append(f'{ts_display}\n\n<div class="msg-ai" markdown="1">\n\n### 🤖 AI\n\n{safe_content}\n</div>\n\n---\n')
         elif role == "tool":
             if tool_blocks[i]:
                 parts.append(tool_blocks[i])

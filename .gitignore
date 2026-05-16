@@ -10,7 +10,6 @@ test_tmp/
 .tea_agent_run/
 *.db
 .*
-_*
 *.example
 *.txt
 *.png

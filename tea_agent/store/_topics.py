@@ -1,0 +1,132 @@
+"""
+@2026-05-16 gen by tea_agent, TopicStore — 主题 CRUD + Token 统计
+"""
+import logging
+from typing import Dict, List, Optional
+from ._base import StoreComponent
+
+logger = logging.getLogger("Storage.Topics")
+
+
+class TopicStore(StoreComponent):
+    """主题管理：创建、更新、删除、列表，以及 Token 消耗统计。"""
+
+    # ── 主题 CRUD ──
+
+    def create_topic(self, title: str) -> str:
+        c = self.conn.cursor()
+        tid = self._new_id()
+        c.execute("INSERT INTO topics (topic_id, title) VALUES (?, ?)", (tid, title))
+        self.conn.commit()
+        c.close()
+        return tid
+
+    def update_topic_title(self, topic_id: str, new_title: str):
+        old = self.get_topic(topic_id)
+        if old and (old.get("title") or "").startswith("chat_room_"):
+            logger.debug(f"拒绝修改 chat_room 主题标题: {old['title']}")
+            return
+        c = self.conn.cursor()
+        c.execute(
+            "UPDATE topics SET title = ? WHERE topic_id = ?",
+            (new_title, topic_id),
+        )
+        self.conn.commit()
+        c.close()
+
+    def update_topic_active(self, topic_id: int):
+        c = self.conn.cursor()
+        c.execute(
+            "UPDATE topics SET last_update_stamp = CURRENT_TIMESTAMP WHERE topic_id = ?",
+            (topic_id,),
+        )
+        self.conn.commit()
+        c.close()
+
+    def delete_topic(self, topic_id: int):
+        c = self.conn.cursor()
+        c.execute(
+            "DELETE FROM agent_rounds WHERE conversation_id IN "
+            "(SELECT id FROM conversations WHERE topic_id = ?)",
+            (topic_id,),
+        )
+        c.execute("DELETE FROM conversations WHERE topic_id = ?", (topic_id,))
+        c.execute("DELETE FROM topic_token_stats WHERE topic_id = ?", (topic_id,))
+        c.execute("DELETE FROM t_conv_summary WHERE topic_id = ?", (topic_id,))
+        c.execute("DELETE FROM topics WHERE topic_id = ?", (topic_id,))
+        self.conn.commit()
+        c.close()
+
+    def get_topic(self, topic_id: str) -> Optional[Dict]:
+        c = self.conn.cursor()
+        c.execute("SELECT * FROM topics WHERE topic_id = ?", (topic_id,))
+        r = c.fetchone()
+        c.close()
+        return dict(r) if r else None
+
+    def list_topics(self) -> List[Dict]:
+        c = self.conn.cursor()
+        c.execute('''
+            SELECT t.*,
+                   COALESCE(s.total_tokens, 0) as total_tokens,
+                   COALESCE(s.conversation_count, 0) as conversation_count
+            FROM topics t
+            LEFT JOIN topic_token_stats s ON t.topic_id = s.topic_id
+            ORDER BY t.last_update_stamp DESC
+        ''')
+        rows = c.fetchall()
+        c.close()
+        return [dict(r) for r in rows]
+
+    # ── Token 统计 ──
+
+    def add_topic_tokens(
+        self, topic_id: str,
+        total_tokens: int = 0, prompt_tokens: int = 0, completion_tokens: int = 0,
+        cheap_tokens: int = 0, cheap_prompt_tokens: int = 0, cheap_completion_tokens: int = 0,
+        embedding_tokens: int = 0, embedding_prompt_tokens: int = 0,
+    ):
+        has_main = total_tokens > 0 or prompt_tokens > 0 or completion_tokens > 0
+        has_cheap = cheap_tokens > 0 or cheap_prompt_tokens > 0 or cheap_completion_tokens > 0
+        has_embedding = embedding_tokens > 0 or embedding_prompt_tokens > 0
+        if not has_main and not has_cheap and not has_embedding:
+            return
+        c = self.conn.cursor()
+        c.execute('''
+            INSERT INTO topic_token_stats (
+                topic_id, total_tokens, total_prompt_tokens, total_completion_tokens,
+                total_cheap_tokens, total_cheap_prompt_tokens, total_cheap_completion_tokens,
+                total_embedding_tokens, total_embedding_prompt_tokens,
+                conversation_count
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ON CONFLICT(topic_id) DO UPDATE SET
+                total_tokens = total_tokens + excluded.total_tokens,
+                total_prompt_tokens = total_prompt_tokens + excluded.total_prompt_tokens,
+                total_completion_tokens = total_completion_tokens + excluded.total_completion_tokens,
+                total_cheap_tokens = total_cheap_tokens + excluded.total_cheap_tokens,
+                total_cheap_prompt_tokens = total_cheap_prompt_tokens + excluded.total_cheap_prompt_tokens,
+                total_cheap_completion_tokens = total_cheap_completion_tokens + excluded.total_cheap_completion_tokens,
+                total_embedding_tokens = total_embedding_tokens + excluded.total_embedding_tokens,
+                total_embedding_prompt_tokens = total_embedding_prompt_tokens + excluded.total_embedding_prompt_tokens,
+                conversation_count = conversation_count + 1,
+                last_update = CURRENT_TIMESTAMP
+        ''', (topic_id, total_tokens, prompt_tokens, completion_tokens,
+              cheap_tokens, cheap_prompt_tokens, cheap_completion_tokens,
+              embedding_tokens, embedding_prompt_tokens))
+        self.conn.commit()
+        c.close()
+
+    def get_topic_tokens(self, topic_id: int) -> Dict:
+        c = self.conn.cursor()
+        c.execute("SELECT * FROM topic_token_stats WHERE topic_id = ?", (topic_id,))
+        row = c.fetchone()
+        c.close()
+        if row:
+            return dict(row)
+        return {
+            "topic_id": topic_id,
+            "total_tokens": 0, "total_prompt_tokens": 0, "total_completion_tokens": 0,
+            "total_cheap_tokens": 0, "total_cheap_prompt_tokens": 0, "total_cheap_completion_tokens": 0,
+            "total_embedding_tokens": 0, "total_embedding_prompt_tokens": 0,
+            "conversation_count": 0,
+        }

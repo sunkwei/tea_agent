@@ -252,8 +252,11 @@ class AgentCore:
         cfg = self._cfg
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
+# NOTE: 2026-05-16 19:33:10, self-evolved by tea_agent --- _init_session 从 options 读取 supports_reasoning 传给 OnlineToolSession
         # NOTE: 2026-05-18 gen by tea_agent, 从 options 读取 supports_vision
         supports_vision = main_m.options.get("supports_vision", False) if main_m.options else False
+        # NOTE: 2026-05-20 gen by tea_agent, 从 options 读取 supports_reasoning
+        supports_reasoning = main_m.options.get("supports_reasoning", True) if main_m.options else True
         self.sess = OnlineToolSession(
             toolkit=self.toolkit,
             api_key=cast(str, main_m.api_key),
@@ -270,8 +273,10 @@ class AgentCore:
             cheap_api_key=cast(str, cheap_m.api_key),
             cheap_api_url=cast(str, cheap_m.api_url),
             cheap_model=cast(str, cheap_m.model_name),
+# NOTE: 2026-05-16 19:33:14, self-evolved by tea_agent --- 传递 supports_reasoning 参数到 OnlineToolSession
             enable_thinking=cfg.enable_thinking,
             supports_vision=supports_vision,
+            supports_reasoning=supports_reasoning,
         )
 
         import tea_agent.session_ref as _sref

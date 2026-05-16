@@ -477,23 +477,24 @@ class SessionSummarizerMixin:
 
         ## 历史摘要内容：该内容总是
         # 2. 历史摘要：作为 user + assistant 对添加
+# NOTE: 2026-05-16 19:33:42, self-evolved by tea_agent --- _build_api_messages 根据 _supports_reasoning 条件注入 reasoning_content
         if self._history_summary:
             result.append({
                 "role": "user",
                 "content": f"这是我们之前对话的摘要：\n{self._history_summary}"
             })
-            result.append({
-                "role": "assistant",
-                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？",
-                "reasoning_content": "",
-            })
+            _asst = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
+            if getattr(self, '_supports_reasoning', True):
+                _asst["reasoning_content"] = ""
+            result.append(_asst)
 
         # 4. 最新 N 轮完整对话 (不压缩)
         boundary = self._find_recent_boundary()
+        _has_reasoning = getattr(self, '_supports_reasoning', True)
         for i in range(boundary, len(self.messages)):
             msg = self.messages[i]
             msg_copy = dict(msg)
-            if msg_copy.get("role") == "assistant" and "reasoning_content" not in msg_copy:
+            if msg_copy.get("role") == "assistant" and _has_reasoning and "reasoning_content" not in msg_copy:
                 msg_copy["reasoning_content"] = ""
             # NOTE: 2026-05-19 gen by tea_agent, 清理历史中残留的 image_url 格式 content，避免 API 400
             if isinstance(msg_copy.get("content"), list) and not getattr(self, '_supports_vision', False):

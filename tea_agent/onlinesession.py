@@ -74,8 +74,11 @@ class OnlineToolSession(
         memory_extraction_threshold: int = 2,
 # NOTE: 2026-04-30 14:39:12, self-evolved by tea_agent --- onlinesession默认dedup改为0.3
         memory_dedup_threshold: float = 0.3,
+# NOTE: 2026-05-16 19:32:10, self-evolved by tea_agent --- 添加 supports_reasoning 参数，_build_api_messages 根据模型能力动态注入字段
         # NOTE: 2026-05-18 gen by tea_agent, 视觉支持开关，默认关闭避免非视觉模型报 image_url 错误
         supports_vision: bool = False,
+        # NOTE: 2026-05-20 gen by tea_agent, reasoning 支持开关，默认开启，避免严格 API 拒收未知字段
+        supports_reasoning: bool = True,
     ):
         """
         初始化会话
@@ -136,8 +139,11 @@ class OnlineToolSession(
         self.memory_extraction_threshold = memory_extraction_threshold
 # NOTE: 2026-05-15 08:10:57, self-evolved by tea_agent --- 存储 supports_vision 到实例属性 self._supports_vision
         self.memory_dedup_threshold = memory_dedup_threshold
+# NOTE: 2026-05-16 19:32:17, self-evolved by tea_agent --- 存储 supports_reasoning 属性
         # NOTE: 2026-05-18 gen by tea_agent, 视觉支持开关
         self._supports_vision = supports_vision
+        # NOTE: 2026-05-20 gen by tea_agent, reasoning 支持开关
+        self._supports_reasoning = supports_reasoning
 
         # @2026-04-29 gen by deepseek-v4-pro, max_iterations交互式续跑
         import threading
@@ -333,16 +339,16 @@ class OnlineToolSession(
         if tc:
             parts.append(f"## 历史工具调用链回顾\n{tc}")
             has_level3 = True
+# NOTE: 2026-05-16 19:32:32, self-evolved by tea_agent --- _build_api_messages 根据 _supports_reasoning 动态注入 reasoning_content 字段
         if has_level3:
             result.append({
                 "role": "user",
                 "content": "[系统记忆 — 以下为需要遵循的有效信息和规则]\n\n" + "\n\n---\n\n".join(parts)
             })
-            result.append({
-                "role": "assistant",
-                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？",
-                "reasoning_content": ""
-            })
+            _asst = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
+            if getattr(self, '_supports_reasoning', True):
+                _asst["reasoning_content"] = ""
+            result.append(_asst)
 
         # ── 兼容旧 _history_summary ──
         if not has_level3 and self._history_summary:
@@ -350,11 +356,10 @@ class OnlineToolSession(
                 "role": "user",
                 "content": f"这是我们之前对话的摘要：\n{self._history_summary}"
             })
-            result.append({
-                "role": "assistant",
-                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？",
-                "reasoning_content": ""
-            })
+            _asst2 = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
+            if getattr(self, '_supports_reasoning', True):
+                _asst2["reasoning_content"] = ""
+            result.append(_asst2)
 
         # ── Level 2: 按语义相关性筛选 ──
         level2 = getattr(self, '_level2', [])
@@ -379,16 +384,21 @@ class OnlineToolSession(
                         "role": "user",
                         "content": f"[历史相关对话摘要] {item['content']}"
                     })
+# NOTE: 2026-05-16 19:32:43, self-evolved by tea_agent --- Level 2 历史回复根据 _supports_reasoning 条件注入 reasoning_content
                 else:
                     result.append({"role": "user", "content": item.get("user", "")})
-                    result.append({"role": "assistant", "content": item.get("assistant", ""),
-                                  "reasoning_content": ""})
+                    _msg = {"role": "assistant", "content": item.get("assistant", "")}
+                    if getattr(self, '_supports_reasoning', True):
+                        _msg["reasoning_content"] = ""
+                    result.append(_msg)
 
+# NOTE: 2026-05-16 19:32:55, self-evolved by tea_agent --- Level 1 最新消息根据 _supports_reasoning 条件注入 reasoning_content
         # ── Level 1: 最新一轮压缩对话 ──
+        _has_reasoning = getattr(self, '_supports_reasoning', True)
         for i in range(1, len(self.messages)):
             msg = self.messages[i]
             msg_copy = dict(msg)
-            if msg_copy["role"] == "assistant" and "reasoning_content" not in msg_copy:
+            if msg_copy["role"] == "assistant" and _has_reasoning and "reasoning_content" not in msg_copy:
                 msg_copy["reasoning_content"] = ""
             # NOTE: 2026-05-15 gen by tea_agent, 将含 images 的消息转为多模态格式
             msg_copy = self._to_multimodal(msg_copy)

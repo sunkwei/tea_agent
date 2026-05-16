@@ -208,14 +208,18 @@ class SessionAPIMixin:
         target_client = client or self.client
         target_model = model or self.model
         
+# NOTE: 2026-05-16 19:33:04, self-evolved by tea_agent --- _create_chat_stream 根据 _supports_reasoning 条件注入 stream_options
         kwargs = {
             "model": target_model,
             "messages": api_messages,
             "tools": tools,
             "tool_choice": "auto",
             "stream": True,
-            "stream_options": {"include_usage": True},
         }
+
+        # 根据模型能力决定是否传 stream_options（部分 API 不支持会报 400）
+        if getattr(self, '_supports_reasoning', True):
+            kwargs["stream_options"] = {"include_usage": True}
 
         # 根据对应的 thinking 状态决定是否启用
         if is_cheap:

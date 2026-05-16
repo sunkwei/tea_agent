@@ -971,23 +971,30 @@ class TkGUI(AgentCore):
         )
         self.input_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
-        # NOTE: 2026-05-15 gen by tea_agent, 图片附件按钮行
-        attach_row = tk.Frame(input_frame)
-        attach_row.pack(fill=tk.X, padx=4, pady=(0, 2))
-        self._img_btn = ttk.Button(attach_row, text="📎 图片", command=self.images.attach)
+# NOTE: 2026-05-16 19:40:10, self-evolved by tea_agent --- 将图片/纯文本视图按钮与输入提示放在同一行
+        # NOTE: 2026-05-20 gen by tea_agent, 底部工具栏（图片/视图/提示同一行）
+        toolbar = tk.Frame(input_frame, bg="#f8f8f8")
+        toolbar.pack(fill=tk.X, padx=4, pady=(0, 2))
+
+        # 左侧：图片附件
+        self._img_btn = ttk.Button(toolbar, text="📎 图片", command=self.images.attach)
         self._img_btn.pack(side=tk.LEFT)
-        self._img_label = ttk.Label(attach_row, text="", foreground="#888")
-        self._img_label.pack(side=tk.LEFT, padx=8)
-        self._clear_img_btn = ttk.Button(attach_row, text="✕ 清除", command=self.images.clear)
+        self._img_label = ttk.Label(toolbar, text="", foreground="#888")
+        self._img_label.pack(side=tk.LEFT, padx=(4, 2))
+        self._clear_img_btn = ttk.Button(toolbar, text="✕ 清除", command=self.images.clear)
         # 初始隐藏清除按钮
+
+        # 中间：视图切换
         # NOTE: 2026-05-20 gen by tea_agent, 原始/渲染视图切换（仅会话完成后显示）
         self._raw_check_btn = ttk.Checkbutton(
-            attach_row, text="📋 纯文本视图", variable=self._raw_view,
+            toolbar, text="📋 纯文本视图", variable=self._raw_view,
             command=self._toggle_raw_view
         )
 
-        ttk.Label(input_frame, text="Enter 发送 | Shift+Enter 换行 | ESC 打断",
-                  foreground="#666").pack(anchor=tk.E, padx=6)
+        # 右侧：提示文字（自动靠右）
+        ttk.Label(toolbar, text="Enter 发送  •  Shift+Enter 换行  •  ESC 打断",
+                  foreground="#888", font=(SYSTEM_FONT, _fs(10)))\
+            .pack(side=tk.RIGHT, padx=6)
 
         # 样式配置
         self.console.tag_configure("user", foreground="#0055cc")

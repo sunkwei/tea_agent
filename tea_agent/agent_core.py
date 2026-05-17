@@ -23,6 +23,8 @@ from tea_agent.config import load_config, get_config
 
 
 class AgentCore:
+    # 2026-05-17 gen by tea_agent, 主题漂移累计达到此阈值时建议用户开新主题
+    DRIFT_SUGGEST_THRESHOLD = 3
     """Tea Agent 共享核心 — CLI 和 GUI 的公共基类。
 
     子类需实现:
@@ -398,6 +400,8 @@ class AgentCore:
                 embedding_tokens=emb_tokens, embedding_prompt_tokens=emb_prompt,
             )
         self._auto_summary(topic_id)
+        # 2026-05-17 gen by tea_agent, 主题漂移累计达阈值时建议新主题
+        self._suggest_new_topic_if_needed(topic_id)
         self._check_pending_restart()
 
     def _update_level3_summary(self, topic_id: str, overflow: list):
@@ -436,6 +440,10 @@ class AgentCore:
                     if dr.upper().startswith("DRIFT"):
                         is_drift = True
                         drift_label = dr.replace("DRIFT:", "").replace("DRIFT", "").strip().lstrip(":").strip() or "新阶段"
+                        # 递增漂移计数
+                        new_count = self.db.increment_drift_count(topic_id)
+                        if new_count >= self.DRIFT_SUGGEST_THRESHOLD:
+                            self._pending_topic_suggestion = new_count
                     logger.info(f"L3 drift check: {dr[:60]}")
                 except Exception as de:
                     logger.warning(f"L3 drift check fail: {de}, assume SAME")
@@ -577,6 +585,17 @@ class AgentCore:
                 logger.warning(f"摘要生成返回空: topic={topic_id}, model={mdl}, msgs={len(recent)}")
         except Exception as e:
             logger.warning(f"自动摘要失败 (topic={topic_id}): {type(e).__name__}: {e}")
+
+    def _suggest_new_topic_if_needed(self, topic_id: str):
+        """2026-05-17 gen by tea_agent, 检查主题漂移计数，达阈值时建议用户开新主题。
+        子类可覆盖以自定义 UI 提示。"""
+        count = getattr(self, '_pending_topic_suggestion', 0)
+        if count > 0:
+            logger.info(
+                f"\n💡 本主题已切换 {count} 次讨论方向 (阈值={self.DRIFT_SUGGEST_THRESHOLD})，"
+                f"建议 /new 开新主题以保持上下文聚焦。"
+            )
+            self._pending_topic_suggestion = 0  # 重置，每个主题只提醒一次
 
     def _on_summary_updated(self, topic_id: str, summary: str):
         """摘要更新后的 UI 回调（子类覆盖）。"""

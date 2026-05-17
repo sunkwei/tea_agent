@@ -212,6 +212,14 @@ class TeaCLI(AgentCore):
     def _on_tool_log(self, msg: str):
         print(f"\n🔧 {msg}")
 
+    def _suggest_new_topic_if_needed(self, topic_id: str):
+        """2026-05-17 gen by tea_agent, CLI 覆盖：终端输出新主题建议"""
+        count = getattr(self, '_pending_topic_suggestion', 0)
+        if count > 0:
+            print(f"\n💡 本主题已切换 {count} 次讨论方向 (阈值={self.DRIFT_SUGGEST_THRESHOLD})，")
+            print(f"   建议 /new 开新主题以保持上下文聚焦。")
+            self._pending_topic_suggestion = 0
+
     def _on_summary_updated(self, topic_id: int, summary: str):
         """摘要更新后终端无额外动作（已在 _post_chat_pipeline 中处理）。"""
         pass

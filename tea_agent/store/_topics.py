@@ -43,6 +43,25 @@ class TopicStore(StoreComponent):
         self.conn.commit()
         c.close()
 
+    def get_drift_count(self, topic_id: str) -> int:
+        """2026-05-17 gen by tea_agent, 获取主题漂移计数"""
+        c = self.conn.cursor()
+        c.execute("SELECT drift_count FROM topics WHERE topic_id = ?", (topic_id,))
+        row = c.fetchone()
+        c.close()
+        return row["drift_count"] if row and row["drift_count"] is not None else 0
+
+    def increment_drift_count(self, topic_id: str) -> int:
+        """2026-05-17 gen by tea_agent, 递增并返回主题漂移计数"""
+        c = self.conn.cursor()
+        c.execute(
+            "UPDATE topics SET drift_count = COALESCE(drift_count, 0) + 1 WHERE topic_id = ?",
+            (topic_id,),
+        )
+        self.conn.commit()
+        c.close()
+        return self.get_drift_count(topic_id)
+
     def delete_topic(self, topic_id: int):
         c = self.conn.cursor()
         c.execute(

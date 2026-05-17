@@ -309,6 +309,13 @@ class Storage:
             except sqlite3.OperationalError:
                 pass
 
+        # 2026-05-17 gen by tea_agent, topics 添加 drift_count 用于主题漂移累计计数
+        try:
+            c.execute("ALTER TABLE topics ADD COLUMN drift_count INTEGER DEFAULT 0")
+            self.conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
         c.close()
 
     def _migrate_int_to_uuid(self, c):

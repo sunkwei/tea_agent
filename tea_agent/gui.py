@@ -1503,6 +1503,15 @@ class TkGUI(AgentCore):
 # NOTE: 2026-05-01 11:57:59, self-evolved by tea_agent --- 移除 _update_topic_summary 调试日志，保留 WAL + 兜底 + 状态栏反馈等核心修复
     # ── AgentCore 回调覆盖 ──────────────────────────
 
+    def _suggest_new_topic_if_needed(self, topic_id: str):
+        """2026-05-17 gen by tea_agent, GUI 覆盖：状态栏提示新主题建议"""
+        count = getattr(self, '_pending_topic_suggestion', 0)
+        if count > 0:
+            self.root.after(100, lambda c=count: self._update_status(
+                f"💡 已切换 {c} 次方向，建议「➕ 新建主题」保持聚焦"
+            ))
+            self._pending_topic_suggestion = 0
+
     def _on_summary_updated(self, topic_id: str, summary: str):
         """摘要更新后刷新 GUI 主题列表和状态栏。"""
         self.root.after(200, self._refresh_topics_preserve_selection)

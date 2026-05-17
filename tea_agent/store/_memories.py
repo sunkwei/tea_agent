@@ -25,7 +25,8 @@ class MemoryStore(StoreComponent):
         mid = self._new_id()
         c.execute(
             "INSERT INTO memories (id, content, category, priority, importance, "
-            "expires_at, tags, source_topic_id, pinned) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "expires_at, tags, source_topic_id, pinned, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))",
             (mid, content, category, priority, importance, expires_at, tags,
              source_topic_id, pinned),
         )
@@ -42,7 +43,7 @@ class MemoryStore(StoreComponent):
         if count >= max_critical:
             overflow = count - max_critical + 1
             c.execute(
-                "UPDATE memories SET is_active = 0, updated_at = CURRENT_TIMESTAMP "
+                "UPDATE memories SET is_active = 0, updated_at = datetime('now', 'localtime') "
                 "WHERE id IN (SELECT id FROM memories WHERE is_active = 1 AND priority = 0 "
                 "ORDER BY id ASC LIMIT ?)",
                 (overflow,),
@@ -53,8 +54,8 @@ class MemoryStore(StoreComponent):
             )
         c.close()
 
-# NOTE: 2026-05-16 14:14:30, self-evolved by tea_agent --- 修复CURRENT_TIMESTAMP字面量问题，支持任意字段动态SQL注入
-    # @2026-05-16 gen by tea_agent, 修复CURRENT_TIMESTAMP字面量问题，支持任意字段动态SQL注入
+# NOTE: 2026-05-16 14:14:30, self-evolved by tea_agent --- 修复datetime('now', 'localtime')字面量问题，支持任意字段动态SQL注入
+    # @2026-05-16 gen by tea_agent, 修复datetime('now', 'localtime')字面量问题，支持任意字段动态SQL注入
     def update_memory(self, memory_id: str, **fields) -> bool:
         allowed = {
             "content", "category", "priority", "importance",
@@ -66,14 +67,14 @@ class MemoryStore(StoreComponent):
             return False
         if updates.get("priority") == 0:
             self._enforce_critical_limit(max_critical=15)
-        updates["updated_at"] = "CURRENT_TIMESTAMP"
+        updates["updated_at"] = "datetime('now', 'localtime')"
         
-        # 动态构建 SET 子句：值为 CURRENT_TIMESTAMP 时直接拼接 SQL 函数，否则参数化
+        # 动态构建 SET 子句：值为 datetime('now', 'localtime') 时直接拼接 SQL 函数，否则参数化
         set_parts = []
         values = []
         for k, v in updates.items():
-            if v == "CURRENT_TIMESTAMP":
-                set_parts.append(f"{k} = CURRENT_TIMESTAMP")
+            if v == "datetime('now', 'localtime')":
+                set_parts.append(f"{k} = datetime('now', 'localtime')")
             else:
                 set_parts.append(f"{k} = ?")
                 values.append(v)
@@ -158,7 +159,7 @@ class MemoryStore(StoreComponent):
     def cleanup_expired_memories(self) -> int:
         c = self.conn.cursor()
         c.execute(
-            "UPDATE memories SET is_active = 0, updated_at = CURRENT_TIMESTAMP "
+            "UPDATE memories SET is_active = 0, updated_at = datetime('now', 'localtime') "
             "WHERE is_active = 1 AND expires_at IS NOT NULL AND expires_at < datetime('now')"
         )
         self.conn.commit()
@@ -169,7 +170,7 @@ class MemoryStore(StoreComponent):
     def touch_memory(self, memory_id: str):
         c = self.conn.cursor()
         c.execute(
-            "UPDATE memories SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?",
+            "UPDATE memories SET last_accessed_at = datetime('now', 'localtime') WHERE id = ?",
             (memory_id,),
         )
         self.conn.commit()

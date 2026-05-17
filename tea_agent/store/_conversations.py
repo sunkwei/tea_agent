@@ -63,8 +63,8 @@ class ConversationStore(StoreComponent):
 
         c = self.conn.cursor()
         c.execute(
-            "INSERT INTO conversations (id, topic_id, user_msg, ai_msg, is_func_calling) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO conversations (id, topic_id, user_msg, ai_msg, is_func_calling, stamp) "
+            "VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))",
             (conv_id, topic_id, user_msg_json, ai_msg, 1 if is_func else 0),
         )
         self.conn.commit()
@@ -101,8 +101,8 @@ class ConversationStore(StoreComponent):
         tc_json = json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None
         c = self.conn.cursor()
         c.execute(
-            "INSERT INTO agent_rounds (conversation_id, round_num, role, content, tool_calls, tool_call_id) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO agent_rounds (conversation_id, round_num, role, content, tool_calls, tool_call_id, stamp) "
+            "VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
             (conversation_id, round_num, role, content, tc_json, tool_call_id),
         )
         self.conn.commit()
@@ -194,7 +194,7 @@ class ConversationStore(StoreComponent):
         c = self.conn.cursor()
         c.execute(
             "INSERT OR REPLACE INTO msg_vectors (conversation_id, embedding, dimension, model_name, created_at) "
-            "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+            "VALUES (?, ?, ?, ?, datetime('now', 'localtime'))",
             (conversation_id, blob, dimension or len(embedding), model_name),
         )
         self.conn.commit()

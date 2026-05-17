@@ -27,19 +27,19 @@ class SummaryStore(StoreComponent):
         if last_summarized_id is not None:
             c.execute('''
                 INSERT INTO t_conv_summary (topic_id, summary, last_summarized_id, last_update)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES (?, ?, ?, datetime('now', 'localtime'))
                 ON CONFLICT(topic_id) DO UPDATE SET
                     summary = excluded.summary,
                     last_summarized_id = excluded.last_summarized_id,
-                    last_update = CURRENT_TIMESTAMP
+                    last_update = datetime('now', 'localtime')
             ''', (topic_id, summary, last_summarized_id))
         else:
             c.execute('''
                 INSERT INTO t_conv_summary (topic_id, summary, last_update)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
+                VALUES (?, ?, datetime('now', 'localtime'))
                 ON CONFLICT(topic_id) DO UPDATE SET
                     summary = excluded.summary,
-                    last_update = CURRENT_TIMESTAMP
+                    last_update = datetime('now', 'localtime')
             ''', (topic_id, summary))
         self.conn.commit()
         c.close()

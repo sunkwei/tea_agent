@@ -104,12 +104,13 @@ class Storage:
         ''')
 
         # topics 表
+# NOTE: 2026-05-17 10:48:55, self-evolved by tea_agent --- _core.py: replace datetime('now', 'localtime') in _init_tables topics table
         c.execute('''
             CREATE TABLE IF NOT EXISTS topics (
                 topic_id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
-                create_stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_update_stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                create_stamp TEXT DEFAULT (datetime('now', 'localtime')),
+                last_update_stamp TEXT DEFAULT (datetime('now', 'localtime'))
             )
         ''')
         for col, col_def in [
@@ -131,7 +132,7 @@ class Storage:
                 ai_msg TEXT NOT NULL,
                 is_func_calling INTEGER DEFAULT 0,
                 is_summarized INTEGER DEFAULT 0,
-                stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                stamp TIMESTAMP DEFAULT (datetime('now', 'localtime')),
                 FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
             )
         ''')
@@ -146,7 +147,7 @@ class Storage:
                 content TEXT,
                 tool_calls TEXT,
                 tool_call_id TEXT,
-                stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                stamp TIMESTAMP DEFAULT (datetime('now', 'localtime')),
                 FOREIGN KEY (conversation_id) REFERENCES conversations(id)
             )
         ''')
@@ -159,7 +160,7 @@ class Storage:
                 total_prompt_tokens INTEGER DEFAULT 0,
                 total_completion_tokens INTEGER DEFAULT 0,
                 conversation_count INTEGER DEFAULT 0,
-                last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_update TIMESTAMP DEFAULT (datetime('now', 'localtime')),
                 FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
             )
         ''')
@@ -170,7 +171,7 @@ class Storage:
                 topic_id TEXT PRIMARY KEY,
                 summary TEXT NOT NULL,
                 last_summarized_id TEXT,
-                last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_update TIMESTAMP DEFAULT (datetime('now', 'localtime')),
                 FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
             )
         ''')
@@ -188,8 +189,8 @@ class Storage:
                 is_active INTEGER NOT NULL DEFAULT 1,
                 tags TEXT DEFAULT '',
                 source_topic_id TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
+                updated_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
                 last_accessed_at TIMESTAMP,
                 pinned INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (source_topic_id) REFERENCES topics(topic_id)
@@ -210,7 +211,7 @@ class Storage:
                 reason TEXT DEFAULT '',
                 source_reflection_id TEXT,
                 is_active INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
             )
         ''')
 
@@ -224,7 +225,7 @@ class Storage:
                 tool_stats TEXT DEFAULT '{}',
                 suggestions TEXT DEFAULT '[]',
                 is_applied INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
                 FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
             )
         ''')
@@ -238,7 +239,7 @@ class Storage:
                 new_value TEXT NOT NULL,
                 reason TEXT DEFAULT '',
                 source_reflection_id TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
             )
         ''')
 
@@ -250,7 +251,7 @@ class Storage:
                 embedding BLOB NOT NULL,
                 dimension INTEGER DEFAULT 0,
                 model_name TEXT DEFAULT '',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
                 FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
             )
         ''')
@@ -345,25 +346,26 @@ class Storage:
             c.execute(f"ALTER TABLE {new_name} RENAME TO {old_name}")
             log.info(f"  迁移表 {old_name}")
 
+# NOTE: 2026-05-17 10:50:54, self-evolved by tea_agent --- _core.py _migrate_int_to_uuid: replace all 12 datetime('now', 'localtime') with datetime('now','localtime')
         try:
             _migrate_table("topics", [
                 "topic_id TEXT PRIMARY KEY",
                 "title TEXT NOT NULL",
-                "create_stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-                "last_update_stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "create_stamp TIMESTAMP DEFAULT datetime('now', 'localtime')",
+                "last_update_stamp TIMESTAMP DEFAULT datetime('now', 'localtime')",
             ], cast_cols={"topic_id"})
 
             _migrate_table("conversations", [
                 "id TEXT PRIMARY KEY", "topic_id TEXT NOT NULL",
                 "user_msg TEXT NOT NULL", "ai_msg TEXT NOT NULL",
                 "is_func_calling INTEGER DEFAULT 0", "is_summarized INTEGER DEFAULT 0",
-                "stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP", "rounds_json TEXT",
+                "stamp TIMESTAMP DEFAULT datetime('now', 'localtime')", "rounds_json TEXT",
             ], cast_cols={"id", "topic_id"})
 
             _migrate_table("topic_token_stats", [
                 "topic_id TEXT PRIMARY KEY", "total_tokens INTEGER DEFAULT 0",
                 "total_prompt_tokens INTEGER DEFAULT 0", "total_completion_tokens INTEGER DEFAULT 0",
-                "conversation_count INTEGER DEFAULT 0", "last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "conversation_count INTEGER DEFAULT 0", "last_update TIMESTAMP DEFAULT datetime('now', 'localtime')",
                 "total_cheap_tokens INTEGER DEFAULT 0", "total_cheap_prompt_tokens INTEGER DEFAULT 0",
                 "total_cheap_completion_tokens INTEGER DEFAULT 0",
                 "total_embedding_tokens INTEGER DEFAULT 0", "total_embedding_prompt_tokens INTEGER DEFAULT 0",
@@ -371,7 +373,7 @@ class Storage:
 
             _migrate_table("t_conv_summary", [
                 "topic_id TEXT PRIMARY KEY", "summary TEXT NOT NULL",
-                "last_summarized_id TEXT", "last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "last_summarized_id TEXT", "last_update TIMESTAMP DEFAULT datetime('now', 'localtime')",
             ], cast_cols={"topic_id", "last_summarized_id"})
 
             _migrate_table("memories", [
@@ -379,40 +381,40 @@ class Storage:
                 "category TEXT NOT NULL DEFAULT 'general'", "priority INTEGER NOT NULL DEFAULT 2",
                 "importance INTEGER NOT NULL DEFAULT 3", "expires_at TEXT",
                 "is_active INTEGER NOT NULL DEFAULT 1", "tags TEXT DEFAULT ''",
-                "source_topic_id TEXT", "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-                "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP", "last_accessed_at TIMESTAMP",
+                "source_topic_id TEXT", "created_at TIMESTAMP DEFAULT datetime('now', 'localtime')",
+                "updated_at TIMESTAMP DEFAULT datetime('now', 'localtime')", "last_accessed_at TIMESTAMP",
             ], cast_cols={"id", "source_topic_id"})
 
             _migrate_table("agent_rounds", [
                 "id TEXT PRIMARY KEY", "conversation_id TEXT NOT NULL",
                 "round_num INTEGER NOT NULL", "role TEXT NOT NULL",
                 "content TEXT", "tool_calls TEXT", "tool_call_id TEXT",
-                "stamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "stamp TIMESTAMP DEFAULT datetime('now', 'localtime')",
             ], cast_cols={"id", "conversation_id"})
 
             _migrate_table("msg_vectors", [
                 "conversation_id TEXT PRIMARY KEY", "embedding BLOB NOT NULL",
                 "dimension INTEGER DEFAULT 0", "model_name TEXT DEFAULT ''",
-                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "created_at TIMESTAMP DEFAULT datetime('now', 'localtime')",
             ], cast_cols={"conversation_id"})
 
             _migrate_table("system_prompts", [
                 "id TEXT PRIMARY KEY", "version TEXT NOT NULL", "content TEXT NOT NULL",
                 "reason TEXT DEFAULT ''", "source_reflection_id TEXT",
-                "is_active INTEGER DEFAULT 1", "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "is_active INTEGER DEFAULT 1", "created_at TIMESTAMP DEFAULT datetime('now', 'localtime')",
             ], cast_cols={"id", "source_reflection_id"})
 
             _migrate_table("reflections", [
                 "id TEXT PRIMARY KEY", "topic_id TEXT", "summary TEXT NOT NULL",
                 "details TEXT DEFAULT ''", "tool_stats TEXT DEFAULT '{}'",
                 "suggestions TEXT DEFAULT '[]'", "is_applied INTEGER DEFAULT 0",
-                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "created_at TIMESTAMP DEFAULT datetime('now', 'localtime')",
             ], cast_cols={"id", "topic_id"})
 
             _migrate_table("config_history", [
                 "id TEXT PRIMARY KEY", "key TEXT NOT NULL", "old_value TEXT",
                 "new_value TEXT NOT NULL", "reason TEXT DEFAULT ''",
-                "source_reflection_id TEXT", "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "source_reflection_id TEXT", "created_at TIMESTAMP DEFAULT datetime('now', 'localtime')",
             ], cast_cols={"id", "source_reflection_id"})
 
             self.conn.commit()

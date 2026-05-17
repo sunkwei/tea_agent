@@ -16,7 +16,7 @@ class VectorStore(StoreComponent):
         c = self.conn.cursor()
         c.execute(
             "INSERT OR REPLACE INTO msg_vectors (conversation_id, embedding, dimension, model_name, created_at) "
-            "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+            "VALUES (?, ?, ?, ?, datetime('now', 'localtime'))",
             (conversation_id, blob, dimension or len(embedding), model_name),
         )
         self.conn.commit()

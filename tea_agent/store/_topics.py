@@ -16,7 +16,7 @@ class TopicStore(StoreComponent):
     def create_topic(self, title: str) -> str:
         c = self.conn.cursor()
         tid = self._new_id()
-        c.execute("INSERT INTO topics (topic_id, title) VALUES (?, ?)", (tid, title))
+        c.execute("INSERT INTO topics (topic_id, title, create_stamp, last_update_stamp) VALUES (?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))", (tid, title))
         self.conn.commit()
         c.close()
         return tid
@@ -37,7 +37,7 @@ class TopicStore(StoreComponent):
     def update_topic_active(self, topic_id: int):
         c = self.conn.cursor()
         c.execute(
-            "UPDATE topics SET last_update_stamp = CURRENT_TIMESTAMP WHERE topic_id = ?",
+            "UPDATE topics SET last_update_stamp = datetime('now', 'localtime') WHERE topic_id = ?",
             (topic_id,),
         )
         self.conn.commit()
@@ -97,8 +97,8 @@ class TopicStore(StoreComponent):
                 topic_id, total_tokens, total_prompt_tokens, total_completion_tokens,
                 total_cheap_tokens, total_cheap_prompt_tokens, total_cheap_completion_tokens,
                 total_embedding_tokens, total_embedding_prompt_tokens,
-                conversation_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                conversation_count, last_update
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now', 'localtime'))
             ON CONFLICT(topic_id) DO UPDATE SET
                 total_tokens = total_tokens + excluded.total_tokens,
                 total_prompt_tokens = total_prompt_tokens + excluded.total_prompt_tokens,
@@ -109,7 +109,7 @@ class TopicStore(StoreComponent):
                 total_embedding_tokens = total_embedding_tokens + excluded.total_embedding_tokens,
                 total_embedding_prompt_tokens = total_embedding_prompt_tokens + excluded.total_embedding_prompt_tokens,
                 conversation_count = conversation_count + 1,
-                last_update = CURRENT_TIMESTAMP
+                last_update = datetime('now', 'localtime')
         ''', (topic_id, total_tokens, prompt_tokens, completion_tokens,
               cheap_tokens, cheap_prompt_tokens, cheap_completion_tokens,
               embedding_tokens, embedding_prompt_tokens))

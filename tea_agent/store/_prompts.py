@@ -17,8 +17,8 @@ class PromptStore(StoreComponent):
         new_ver = str(max_ver + 1)
         pid = self._new_id()
         c.execute(
-            "INSERT INTO system_prompts (id, version, content, reason, source_reflection_id) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO system_prompts (id, version, content, reason, source_reflection_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))",
             (pid, new_ver, content, reason, source_reflection_id),
         )
         self.conn.commit()

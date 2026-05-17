@@ -396,6 +396,7 @@ class OnlineToolSession(
                     result.append(_msg)
 
 # NOTE: 2026-05-16 19:32:55, self-evolved by tea_agent --- Level 1 最新消息根据 _supports_reasoning 条件注入 reasoning_content
+# NOTE: 2026-05-17 10:11:12, self-evolved by tea_agent --- _build_api_messages出口增加JSON完整性校验，防止压缩截断导致的非法JSON传给API
         # ── Level 1: 最新一轮压缩对话 ──
         _has_reasoning = getattr(self, '_supports_reasoning', True)
         for i in range(1, len(self.messages)):
@@ -417,7 +418,137 @@ class OnlineToolSession(
                 msg_copy["content"] = "\n".join(text_parts) if text_parts else "[图片]"
             result.append(msg_copy)
 
+        # NOTE: 2026-05-19 gen by tea_agent, JSON完整性校验：历史压缩可能截断function.arguments导致非法JSON
+        result = self._sanitize_api_messages(result)
+
+# NOTE: 2026-05-17 10:12:02, self-evolved by tea_agent --- 新增_sanitize_api_messages方法：校验tool_calls中function.arguments为合法JSON，非法则自动修复或移除
         return result
+
+    # NOTE: 2026-05-19 gen by tea_agent, JSON完整性校验：历史压缩可能截断function.arguments导致非法JSON
+    # 校验并修复 API 消息中的 tool_calls JSON，防止 "function.arguments must be JSON" 错误
+    def _sanitize_api_messages(self, messages: List[Dict]) -> List[Dict]:
+        """
+        遍历所有消息，检查 assistant 消息中的 tool_calls：
+        1. function.arguments 必须是合法 JSON → 非法则尝试修复（补全截断的括号/引号）
+        2. 修复失败则移除该 tool_call
+        3. 全部 tool_calls 被移除则降级该消息为纯文本
+        """
+        import json as _json
+        sanitized = []
+        removed_count = 0
+        for msg in messages:
+            if msg.get("role") != "assistant":
+                sanitized.append(msg)
+                continue
+            
+            tool_calls = msg.get("tool_calls")
+            if not tool_calls:
+                sanitized.append(msg)
+                continue
+            
+            valid_calls = []
+            for tc in tool_calls:
+                func = tc.get("function", {})
+                raw_args = func.get("arguments", "")
+                
+                # 已经是 dict → 正常（流式累积后序列化的）
+                if isinstance(raw_args, dict):
+                    valid_calls.append(tc)
+                    continue
+                
+                # 空字符串 → 保留（可能正在流式构建中）
+                if not raw_args or not raw_args.strip():
+                    valid_calls.append(tc)
+                    continue
+                
+                # 尝试直接解析
+                try:
+                    _json.loads(raw_args)
+                    valid_calls.append(tc)
+                    continue
+                except _json.JSONDecodeError:
+                    pass
+                
+                # 尝试修复：补全截断的 JSON
+                fixed = self._try_fix_truncated_json(raw_args)
+                if fixed is not None:
+                    tc_copy = dict(tc)
+                    tc_copy["function"] = dict(func)
+                    tc_copy["function"]["arguments"] = fixed
+                    valid_calls.append(tc_copy)
+                    logger.warning(f"_sanitize_api_messages: 修复截断JSON → {fixed[:80]}...")
+                else:
+                    removed_count += 1
+                    logger.warning(f"_sanitize_api_messages: 移除非法tool_call → func={func.get('name','?')}, args前80={raw_args[:80]}")
+            
+            if valid_calls:
+                msg_copy = dict(msg)
+                msg_copy["tool_calls"] = valid_calls
+                sanitized.append(msg_copy)
+            else:
+                # 全部 tool_calls 非法 → 降级为纯文本 assistant 消息
+                logger.warning("_sanitize_api_messages: 所有tool_calls非法，降级为纯文本")
+                sanitized.append({
+                    "role": "assistant",
+                    "content": msg.get("content", "") or "[工具调用参数损坏，已移除]"
+                })
+        
+        if removed_count > 0:
+            logger.info(f"_sanitize_api_messages: 共移除 {removed_count} 个非法 tool_call")
+        return sanitized
+    
+    def _try_fix_truncated_json(self, s: str) -> Optional[str]:
+        """尝试修复被截断的 JSON 字符串：补全括号/引号"""
+        import json as _json
+        if not s or not s.strip():
+            return None
+        
+        s = s.strip()
+        # 策略1: 补全末尾缺失的括号
+        # 统计未闭合的括号和引号
+        stack = []
+        in_str = False
+        escape = False
+        for ch in s:
+            if escape:
+                escape = False
+                continue
+            if ch == '\\':
+                escape = True
+                continue
+            if ch == '"' and not escape:
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if ch in '{[': 
+                stack.append(ch)
+            elif ch in '}]':
+                if stack and ((ch == '}' and stack[-1] == '{') or (ch == ']' and stack[-1] == '[')):
+                    stack.pop()
+        
+        if not stack:
+            # 可能只是引号未闭合
+            if in_str:
+                s = s + '"'
+            try:
+                _json.loads(s)
+                return s
+            except _json.JSONDecodeError:
+                return None
+        
+        # 补全缺失的闭合括号
+        close_map = {'{': '}', '[': ']'}
+        suffix = ''.join(close_map[c] for c in reversed(stack))
+        if in_str:
+            suffix = '"' + suffix
+        
+        fixed = s + suffix
+        try:
+            _json.loads(fixed)
+            return fixed
+        except _json.JSONDecodeError:
+            return None
 
     # NOTE: 2026-05-15 gen by tea_agent, 将消息中的 images 字段转换为 OpenAI 多模态 content 格式
 # NOTE: 2026-05-15 08:11:10, self-evolved by tea_agent --- _to_multimodal 检查 supports_vision，不支持则跳过图片并记录警告

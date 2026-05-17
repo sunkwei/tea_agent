@@ -27,12 +27,42 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         batch: (0, json结果数组, "")
     """
 # NOTE: 2026-05-07 13:38:51, self-evolved by tea_agent --- 修复 logger.info 中 args[:80]/commands[:80] 在 None 时崩溃，改用 repr() 包裹
+# NOTE: 2026-05-17 10:12:43, self-evolved by tea_agent --- toolkit_exec长python -c脚本自动写入临时文件执行，避免内联大段代码导致JSON参数非法
     logger.info(f"toolkit_exec called: app={app!r}, args={repr(args)[:80]}, action={action!r}, commands={repr(commands)[:80]}, timeout={timeout!r}")
 
     import subprocess
     import json
     import os
     import signal
+    import tempfile
+
+    # NOTE: 2026-05-19 gen by tea_agent, 长python -c脚本自动写入临时文件，避免内联大段代码导致JSON参数序列化非法
+    _PY_CMD_THRESHOLD = 500  # -c 脚本超过此字符数则写入临时文件
+    if action == "single" and app in ("python", "python3") and args:
+        # 检测 python -c "很长的代码" 模式
+        for i, arg in enumerate(args):
+            if arg == "-c" and i + 1 < len(args):
+                script = args[i + 1]
+                if isinstance(script, str) and len(script) > _PY_CMD_THRESHOLD:
+                    # 写入临时 .py 文件
+                    tmpfd, tmppath = tempfile.mkstemp(suffix=".py", prefix="tea_exec_")
+                    try:
+                        with os.fdopen(tmpfd, "w", encoding="utf-8") as f:
+                            f.write(script)
+                        # 重建 args：用临时文件路径替换 -c + script
+                        new_args = list(args[:i]) + [tmppath] + list(args[i+2:])
+                        logger.info(f"toolkit_exec: -c脚本{len(script)}字符→临时文件 {tmppath}")
+                        # 递归调用但跳过重检测（临时文件路径不含-c，不会再触发）
+                        result = toolkit_exec(app=app, args=new_args, action="single",
+                                             commands=None, timeout=timeout)
+                    finally:
+                        # 清理临时文件
+                        try:
+                            os.unlink(tmppath)
+                        except OSError:
+                            pass
+                    return result
+                break  # 只处理第一个 -c
 
     if action == "batch":
         if not commands:

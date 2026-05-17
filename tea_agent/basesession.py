@@ -176,6 +176,117 @@ class BaseChatSession(ABC):
             f"{tail_text}"
         )
 
+# NOTE: 2026-05-17 10:19:56, self-evolved by tea_agent --- 新增_compress_json_args：JSON感知截断，解析→递归压缩超长string value→重新序列化，保证输出合法JSON
+    # NOTE: 2026-05-19 gen by tea_agent, JSON感知截断：解析arguments→递归压缩超长value→重新dumps，输出始终合法JSON
+    @staticmethod
+    def _compress_json_args(args_str: str, args_bytes: int, max_bytes: int = 2048) -> str:
+        """
+        JSON 感知截断 tool_calls 参数。
+        
+        策略：
+        1. 尝试 json.loads 解析 → 成功则递归压缩超长 string value
+        2. 解析失败 → 回退到字节截断（首尾各1024B，按换行对齐）
+        
+        递归压缩规则（对 dict 和 list 中的值）：
+        - string > 1024 字节：截为首512B+尾512B，标记 [截断]
+        - 其他类型（number/bool/null）：原样保留
+        - 嵌套 dict/list：递归处理
+        
+        Args:
+            args_str: 原始 arguments JSON 字符串
+            args_bytes: 原始字节数（用于截断标记）
+            max_bytes: 触发压缩的阈值
+        
+        Returns:
+            压缩后的合法 JSON 字符串
+        """
+        import json as _json
+        
+        # Step 1: 尝试解析
+        try:
+            obj = _json.loads(args_str)
+        except (_json.JSONDecodeError, ValueError):
+            # 解析失败 → 回退到字节截断
+            half = max_bytes // 2
+            raw = args_str.encode("utf-8")
+            # 按换行对齐首尾
+            head_end = half
+            nl = raw.find(b'\n', head_end)
+            if nl != -1 and nl < half + 256:
+                head_end = nl
+            else:
+                nl = raw.rfind(b'\n', 0, head_end)
+                if nl != -1 and nl > half - 256:
+                    head_end = nl
+            tail_start = len(raw) - half
+            nl = raw.rfind(b'\n', tail_start, len(raw))
+            if nl != -1 and nl > tail_start - 256:
+                tail_start = nl + 1
+            
+            head_text = raw[:head_end].decode("utf-8", errors="replace")
+            tail_text = raw[tail_start:].decode("utf-8", errors="replace")
+            return (
+                head_text +
+                f"\n... [L1截断: {args_bytes}B 参数] ...\n" +
+                tail_text
+            )
+        
+        # Step 2: 递归压缩超长 string value
+        HALF = 512  # 每个 value 的首尾保留字节数
+        
+        def _compress_value(val, path=""):
+            """递归压缩值，返回 (compressed_val, truncated_count)"""
+            if isinstance(val, str):
+                vbytes = len(val.encode("utf-8"))
+                if vbytes > 1024:
+                    raw = val.encode("utf-8")
+                    # 按换行对齐
+                    head_end = HALF
+                    nl = raw.find(b'\n', head_end)
+                    if nl != -1 and nl < head_end + 128:
+                        head_end = nl
+                    tail_start = len(raw) - HALF
+                    nl = raw.rfind(b'\n', tail_start, len(raw))
+                    if nl != -1 and nl > tail_start - 128:
+                        tail_start = nl + 1
+                    head_t = raw[:head_end].decode("utf-8", errors="replace")
+                    tail_t = raw[tail_start:].decode("utf-8", errors="replace")
+                    return (
+                        head_t +
+                        f"\n... [截断 {vbytes}B→{len(head_t.encode('utf-8')) + len(tail_t.encode('utf-8'))}B] ...\n" +
+                        tail_t,
+                        1
+                    )
+                return (val, 0)
+            elif isinstance(val, dict):
+                new_d = {}
+                total_trunc = 0
+                for k, v in val.items():
+                    cv, ct = _compress_value(v, f"{path}.{k}" if path else k)
+                    new_d[k] = cv
+                    total_trunc += ct
+                return (new_d, total_trunc)
+            elif isinstance(val, list):
+                new_l = []
+                total_trunc = 0
+                for i, v in enumerate(val):
+                    cv, ct = _compress_value(v, f"{path}[{i}]")
+                    new_l.append(cv)
+                    total_trunc += ct
+                return (new_l, total_trunc)
+            else:
+                # number, bool, null
+                return (val, 0)
+        
+        compressed_obj, truncated = _compress_value(obj)
+        
+        if truncated == 0:
+            # 没有需要截断的 value，返回原字符串（避免 re-serialize 格式变化）
+            return args_str
+        
+        result = _json.dumps(compressed_obj, ensure_ascii=False)
+        return result
+
     # NOTE: 2026-05-20 gen by tea_agent, L1压缩：对 assistant tool_calls 参数截断 + 保留最终 assistant 消息完整
     @staticmethod
     def _compress_tool_rounds(rounds: List[Dict]) -> List[Dict]:
@@ -209,9 +320,10 @@ class BaseChatSession(ABC):
                 # user 消息完整保留
                 result.append(dict(rd))
 
+# NOTE: 2026-05-17 10:19:10, self-evolved by tea_agent --- _compress_tool_rounds中arguments截断改为JSON感知：解析→递归压缩超长value→重新序列化，确保输出始终合法JSON
             elif role == "assistant":
                 if rd.get("tool_calls") and not is_last:
-                    # 中间 assistant 消息（含工具调用）：压缩参数
+                    # 中间 assistant 消息（含工具调用）：JSON感知压缩参数
                     compressed = dict(rd)
                     # 保留 reasoning_content
                     tc_list = compressed.get("tool_calls", [])
@@ -224,10 +336,8 @@ class BaseChatSession(ABC):
                             if isinstance(args_str, str):
                                 args_bytes = len(args_str.encode("utf-8"))
                                 if args_bytes > 2048:
-                                    func["arguments"] = (
-                                        args_str[:1024] +
-                                        f"\n... [L1截断: {args_bytes}B 参数, 保留首1024B] ...\n" +
-                                        args_str[-1024:]
+                                    func["arguments"] = BaseChatSession._compress_json_args(
+                                        args_str, args_bytes
                                     )
                             tc_copy["function"] = func
                         new_tc.append(tc_copy)

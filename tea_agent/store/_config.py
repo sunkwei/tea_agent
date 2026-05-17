@@ -15,8 +15,8 @@ class ConfigHistoryStore(StoreComponent):
         c = self.conn.cursor()
         cid = self._new_id()
         c.execute(
-            "INSERT INTO config_history (id, key, old_value, new_value, reason, source_reflection_id) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO config_history (id, key, old_value, new_value, reason, source_reflection_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
             (
                 cid, key,
                 str(old_value) if old_value is not None else None,

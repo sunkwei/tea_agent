@@ -17,8 +17,8 @@ class ReflectionStore(StoreComponent):
         c = self.conn.cursor()
         rid = self._new_id()
         c.execute(
-            "INSERT INTO reflections (id, topic_id, summary, details, tool_stats, suggestions) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO reflections (id, topic_id, summary, details, tool_stats, suggestions, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
             (
                 rid, topic_id, summary, details,
                 json.dumps(tool_stats or {}, ensure_ascii=False),

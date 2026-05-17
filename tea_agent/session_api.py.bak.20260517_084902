@@ -191,8 +191,7 @@ class SessionAPIMixin:
             else:
                 self._accumulate_usage(response.usage)
 
-# NOTE: 2026-05-17 08:49:40, self-evolved by tea_agent --- _create_chat_stream 方法签名增加 temperature/max_tokens/top_p 参数
-    def _create_chat_stream(self, api_messages: List[Dict], tools: List[Dict], client=None, model=None, is_cheap=False, temperature=None, max_tokens=None, top_p=None):
+    def _create_chat_stream(self, api_messages: List[Dict], tools: List[Dict], client=None, model=None, is_cheap=False):
         """
         创建流式聊天请求。
 
@@ -211,7 +210,6 @@ class SessionAPIMixin:
         
 # NOTE: 2026-05-16 19:33:04, self-evolved by tea_agent --- _create_chat_stream 根据 _supports_reasoning 条件注入 stream_options
 # NOTE: 2026-05-17 08:48:41, self-evolved by tea_agent --- _create_chat_stream 支持传入 temperature/max_tokens/top_p 参数
-# NOTE: 2026-05-17 08:49:02, self-evolved by tea_agent --- _create_chat_stream 改为接受 temperature/max_tokens/top_p 可选参数
         kwargs = {
             "model": target_model,
             "messages": api_messages,
@@ -219,11 +217,13 @@ class SessionAPIMixin:
             "tool_choice": "auto",
             "stream": True,
         }
-        # @2026-05-17 gen by tea_agent, 传入推理参数（仅在非 None 时设置）
-        for param_name in ("temperature", "max_tokens", "top_p"):
-            val = locals().get(param_name)
-            if val is not None:
-                kwargs[param_name] = val
+        # @2026-05-17 gen by tea_agent, 模型推理参数（从 config 的 get_effective_params 传入）
+        if "temperature" in kwargs:
+            kwargs.setdefault("temperature", kwargs.pop("temperature"))
+        if "max_tokens" in kwargs:
+            kwargs.setdefault("max_tokens", kwargs.pop("max_tokens"))
+        if "top_p" in kwargs:
+            kwargs.setdefault("top_p", kwargs.pop("top_p"))
 
         # 根据模型能力决定是否传 stream_options（部分 API 不支持会报 400）
         if getattr(self, '_supports_reasoning', True):

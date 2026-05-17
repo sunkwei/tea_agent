@@ -2213,7 +2213,6 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         """打开配置编辑对话框"""
 
 # NOTE: 2026-05-17 08:55:47, self-evolved by tea_agent --- on_save 同步模式参数和模型推理参数到当前 session
-# NOTE: 2026-05-17 08:56:15, self-evolved by tea_agent --- 回退 on_save — 模型参数走全局单例无需手动同步
         def on_save(cfg):
             # 同步到当前 session
             if hasattr(self, 'sess') and self.sess:
@@ -2224,6 +2223,12 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                             setattr(self.sess, key, val)
                         except Exception:
                             pass
+                # @2026-05-17 gen by tea_agent, 同步模型推理参数 + 模式
+                try:
+                    self.sess._current_mode = cfg.mode_params  # 触发下次调用时重新 get_effective_params
+                    # 同步 enable_thinking（已在 _RUNTIME_CONFIG_KEYS 中）
+                except Exception:
+                    pass
             self._update_status("⚙️ 配置已更新")
 
         ConfigDialog(self.root, on_save=on_save)

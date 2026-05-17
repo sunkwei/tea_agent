@@ -451,11 +451,6 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
         "dimension": cfg.embedding.dimension,
     }
 
-# NOTE: 2026-05-17 08:47:32, self-evolved by tea_agent --- save_config 写入 mode_params 配置块
-    # @2026-05-17 gen by tea_agent, 保存模式参数覆盖
-    if cfg.mode_params:
-        data["mode_params"] = cfg.mode_params
-
     # 保存路径配置（保存原始配置值，非解析后的绝对路径）
     data["paths"] = {
         "data_dir": cfg.paths.data_dir,
@@ -503,38 +498,19 @@ def create_default_config(config_path: Optional[str] = None) -> str:
 
     template = (
         "# Tea Agent 配置文件\n\n"
-# NOTE: 2026-05-17 08:48:03, self-evolved by tea_agent --- create_default_config 模板增加模型参数和 mode_params 配置
         "# 主模型配置（用于核心对话、代码生成等）\n"
         "main_model:\n"
         "  api_key: \"\"\n"
         "  api_url: \"\"\n"
         "  model_name: \"\"\n"
-        "  temperature: 0.7      # 温度 0~2，越高越随机发散\n"
-        "  max_tokens: 4096      # 最大输出 token 数\n"
-        "  top_p: 0.9            # 核采样阈值\n"
         "  options:  # 可选参数，如 {extra_body: {thinking: {type: enabled}}}\n"
         "    key: value\n\n"
-        "# 便宜模型配置（用于摘要生成、信息压缩等场景，建议低 temperature）\n"
+        "# 便宜模型配置（用于摘要生成、信息压缩等场景）\n"
         "cheap_model:\n"
         "  api_key: \"\"\n"
         "  api_url: \"\"\n"
         "  model_name: \"\"\n"
-        "  temperature: 0.3      # 摘要/反思需要确定性，建议 0.2~0.5\n"
-        "  max_tokens: 1024      # 摘要通常较短\n"
-        "  top_p: 0.9\n"
         "  options: {}\n\n"
-        "# ==================== 模式参数覆盖 ====================\n"
-        "# 不同人格模式下可覆盖 temperature/top_p，未配置则使用模型默认值。\n"
-        "mode_params:\n"
-        "  pragmatic:             # 严谨模式 — 代码/排bug，需要精确\n"
-        "    temperature: 0.3\n"
-        "    top_p: 0.9\n"
-        "  creative:              # 创意模式 — 头脑风暴，需要发散\n"
-        "    temperature: 0.8\n"
-        "    top_p: 0.95\n"
-        "  mixed:                 # 混合模式 — 均衡\n"
-        "    temperature: 0.6\n"
-        "    top_p: 0.9\n\n"
 # NOTE: 2026-05-04 17:53:08, self-evolved by tea_agent --- create_default_config 模板增加 paths 配置块
         "# ==================== 路径配置 ====================\n"
         "# 所有路径支持相对路径（相对于本 config.yaml 所在目录）或绝对路径（以 / 开头）。\n"

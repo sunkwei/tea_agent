@@ -663,13 +663,11 @@ class OnlineToolSession(
                 api_messages = self._build_api_messages()
                 # 不传 tools，强制模型直接回答
 # NOTE: 2026-05-17 08:51:24, self-evolved by tea_agent --- skip_tool_loop 也传入推理参数
-# NOTE: 2026-05-17 08:52:02, self-evolved by tea_agent --- skip_tool_loop 使用 _get_effective_params helper
-                eff = self._get_effective_params("main")
                 response = self._create_chat_stream(
                     api_messages, tools=[],
-                    temperature=eff.get("temperature"),
-                    max_tokens=eff.get("max_tokens"),
-                    top_p=eff.get("top_p"),
+                    temperature=eff.get("temperature") if 'eff' in dir() else None,
+                    max_tokens=eff.get("max_tokens") if 'eff' in dir() else None,
+                    top_p=eff.get("top_p") if 'eff' in dir() else None,
                 )
                 content, _, reasoning = self._process_stream_with_reasoning(response, callback)
                 self.add_assistant_message(content, reasoning)
@@ -709,9 +707,13 @@ class OnlineToolSession(
             logger.debug(f"system_prompt preview: {sys_msg_preview}")
 
 # NOTE: 2026-05-17 08:50:58, self-evolved by tea_agent --- tool_loop 根据模式传入差异化推理参数
-# NOTE: 2026-05-17 08:51:52, self-evolved by tea_agent --- tool_loop 使用 _get_effective_params helper
             try:
-                eff = self._get_effective_params("main")
+                # @2026-05-17 gen by tea_agent, 根据当前模式计算生效的推理参数
+                try:
+                    from .config import get_config
+                    eff = get_config().get_effective_params("main", self._current_mode)
+                except Exception:
+                    eff = {}
                 response = self._create_chat_stream(
                     api_messages, self.tools,
                     temperature=eff.get("temperature"),
@@ -885,16 +887,6 @@ class OnlineToolSession(
         self._build_tools()
 
 # NOTE: 2026-05-09 20:07:40, self-evolved by tea_agent --- 添加 _auto_detect_mode 方法：每次对话前根据用户输入自动切换 Agent 模式
-# NOTE: 2026-05-17 08:51:38, self-evolved by tea_agent --- 添加 _get_effective_params helper 统一获取推理参数
-    # @2026-05-17 gen by tea_agent, 获取当前有效的模型推理参数（含模式覆盖）
-    def _get_effective_params(self, model_type: str = "main") -> Dict[str, Any]:
-        """返回 {temperature, max_tokens, top_p}，失败时返回空 dict（用 API 默认值）。"""
-        try:
-            from .config import get_config
-            return get_config().get_effective_params(model_type, self._current_mode)
-        except Exception:
-            return {}
-
     def _auto_detect_mode(self, user_text: str):
         """根据用户输入自动检测并切换 Agent 模式。
         

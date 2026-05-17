@@ -14,21 +14,6 @@ import logging
 logger = logging.getLogger("session_memory")
 
 
-# NOTE: 2026-05-17 08:58:58, self-evolved by tea_agent --- 添加 _get_cheap_params helper 函数
-# @2026-05-17 gen by tea_agent, 获取 cheap 模型有效推理参数
-def _get_cheap_params():
-    """返回 cheap 模型 {temperature, max_tokens}，失败时使用保守默认值。"""
-    try:
-        from .config import get_config
-        eff = get_config().get_effective_params("cheap", "mixed")
-        return {
-            "temperature": eff.get("temperature", 0.3),
-            "max_tokens": eff.get("max_tokens", 1000),
-        }
-    except Exception:
-        return {"temperature": 0.3, "max_tokens": 1000}
-
-
 class SessionMemoryMixin:
     """
     记忆注入 Mixin。

@@ -258,10 +258,17 @@ class SessionSummarizerMixin:
                 and cli is self._cheap_client
             )
 # NOTE: 2026-05-17 08:57:54, self-evolved by tea_agent --- 摘要调用改用 cheap 模型 config 参数
-# NOTE: 2026-05-17 08:59:29, self-evolved by tea_agent --- 简化摘要调用 — 使用 _get_cheap_params helper
             # NOTE: 2026-04-29, self-evolved by claude-agent ---
             # 使用统一入口 _call_summarize_api，显式禁用 thinking 节省 token
-            cheap_params = _get_cheap_params({"temperature": 0.1, "max_tokens": 500})
+            # @2026-05-17 gen by tea_agent, 从 config 读取 cheap 模型参数
+            cheap_params = {"temperature": 0.1, "max_tokens": 500}
+            try:
+                from .config import get_config
+                eff = get_config().get_effective_params("cheap", "mixed")
+                cheap_params["temperature"] = eff.get("temperature", 0.1)
+                cheap_params["max_tokens"] = eff.get("max_tokens", 500)
+            except Exception:
+                pass
             response = self._call_summarize_api(
                 cli, mdl,
                 messages=[
@@ -380,10 +387,16 @@ class SessionSummarizerMixin:
         )
         try:
 # NOTE: 2026-05-17 08:58:10, self-evolved by tea_agent --- Topic 摘要也改用 cheap 模型 config 参数
-# NOTE: 2026-05-17 08:59:43, self-evolved by tea_agent --- 简化 Topic 摘要调用 — 使用 _get_cheap_params helper
             # NOTE: 2026-04-29, self-evolved by claude-agent ---
             # 使用统一入口 _call_summarize_api，显式禁用 thinking 节省 token
-            cheap_params = _get_cheap_params({"temperature": 0.3, "max_tokens": 50})
+            # @2026-05-17 gen by tea_agent, 保留较低的 max_tokens（topic 标题很短）
+            cheap_params = {"temperature": 0.3, "max_tokens": 50}
+            try:
+                from .config import get_config
+                eff = get_config().get_effective_params("cheap", "mixed")
+                cheap_params["temperature"] = eff.get("temperature", 0.3)
+            except Exception:
+                pass
             response = self._call_summarize_api(
                 cli, mdl,
                 messages=[

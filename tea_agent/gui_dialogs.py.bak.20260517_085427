@@ -939,9 +939,8 @@ class ConfigDialog(tk.Toplevel):
         self.on_save = on_save
 # NOTE: 2026-05-06 19:31:57, self-evolved by tea_agent --- ConfigDialog 窗口尺寸微调适配新增 Tab
         self.title("⚙️ 配置编辑")
-# NOTE: 2026-05-17 08:55:29, self-evolved by tea_agent --- 增大 ConfigDialog 窗口以适应新增 Tab
-        self.geometry("650x680")
-        self.minsize(550, 500)
+        self.geometry("650x560")
+        self.minsize(500, 420)
         self.transient(parent)
         self.grab_set()
 
@@ -961,12 +960,9 @@ class ConfigDialog(tk.Toplevel):
         self._model_tab(nb, "便宜模型", "cheap", options_prefix="cheap")
 # NOTE: 2026-05-07 07:29:28, self-evolved by tea_agent --- 向量模型 Tab 增加 URL 格式提示
 # NOTE: 2026-05-07 07:29:42, self-evolved by tea_agent --- 回退 hint 字段，改用 _model_tab 的 hint 参数渲染标签
-# NOTE: 2026-05-17 08:54:27, self-evolved by tea_agent --- _create_ui 增加「模式参数」Tab
         self._model_tab(nb, "向量模型", "embedding", extra_fields=[
             ("向量维度", "dimension", 10),
         ], hint="API URL 示例: https://api.siliconflow.cn/v1")
-        # @2026-05-17 gen by tea_agent, 模式参数 Tab
-        self._mode_params_tab(nb)
         self._runtime_tab(nb)
 
         btn_frame = ttk.Frame(self)
@@ -1051,42 +1047,6 @@ class ConfigDialog(tk.Toplevel):
                 params_var[p_key] = var
             setattr(self, f"_{options_prefix}_params", params_var)
 
-# NOTE: 2026-05-17 08:54:51, self-evolved by tea_agent --- 实现 _mode_params_tab 方法
-    # @2026-05-17 gen by tea_agent, 模式参数 Tab — 按人格模式覆盖 temperature/top_p
-    def _mode_params_tab(self, nb):
-        f = ttk.Frame(nb)
-        nb.add(f, text="模式参数")
-        ttk.Label(f, text="不同人格模式下可覆盖 Temperature / Top-P（留空则使用模型默认值）",
-                  font=(SYSTEM_FONT, _fs(10)), foreground="#888").pack(anchor=tk.W, padx=10, pady=(10, 4))
-
-        self._mode_params_vars = {}
-        modes = [
-            ("pragmatic", "🎯 严谨模式", "代码开发 / Bug 排查 / 需求遵从", "0.3", "0.9"),
-            ("creative", "🎨 创意模式", "头脑风暴 / 异想天开 / 发散联想", "0.8", "0.95"),
-            ("mixed", "⚖️ 混合模式", "自动均衡", "0.6", "0.9"),
-        ]
-        for m_key, m_label, m_desc, def_temp, def_topp in modes:
-            frame = ttk.LabelFrame(f, text=m_label, padding=8)
-            frame.pack(fill=tk.X, padx=10, pady=6)
-            ttk.Label(frame, text=m_desc, font=(SYSTEM_FONT, _fs(10)),
-                      foreground="#666").grid(row=0, column=0, columnspan=4, sticky=tk.W, pady=(0, 4))
-
-            ttk.Label(frame, text="Temperature:", font=(SYSTEM_FONT, _fs(11))).grid(
-                row=1, column=0, sticky=tk.W, padx=(0, 4))
-            temp_var = tk.StringVar(value=def_temp)
-            ttk.Entry(frame, textvariable=temp_var, width=8, font=(SYSTEM_FONT, _fs(11))).grid(
-                row=1, column=1, sticky=tk.W, padx=(0, 16))
-
-            ttk.Label(frame, text="Top-P:", font=(SYSTEM_FONT, _fs(11))).grid(
-                row=1, column=2, sticky=tk.W, padx=(0, 4))
-            topp_var = tk.StringVar(value=def_topp)
-            ttk.Entry(frame, textvariable=topp_var, width=8, font=(SYSTEM_FONT, _fs(11))).grid(
-                row=1, column=3, sticky=tk.W)
-
-# NOTE: 2026-05-17 09:13:14, self-evolved by tea_agent --- 修复：恢复 _runtime_tab 方法头（被 _mode_params_tab 覆盖吃掉）
-            self._mode_params_vars[m_key] = {"temperature": temp_var, "top_p": topp_var}
-
-    # @2026-05-17 gen by tea_agent, 运行时参数 Tab（原方法，修复被覆盖的方法头）
     def _runtime_tab(self, nb):
         f = ttk.Frame(nb)
         nb.add(f, text="运行时参数")
@@ -1161,7 +1121,6 @@ class ConfigDialog(tk.Toplevel):
         emb_vars["model_name"].set(cfg.embedding.model_name)
         emb_vars["dimension"].set(str(cfg.embedding.dimension or ""))
 
-# NOTE: 2026-05-17 08:55:04, self-evolved by tea_agent --- _load_values 加载 mode_params
         # 加载各模型 options
         for prefix in ("main", "cheap"):
             model_cfg = getattr(cfg, f"{prefix}_model")
@@ -1170,12 +1129,6 @@ class ConfigDialog(tk.Toplevel):
             vars_map = getattr(self, opts_key, {})
             for key, var in vars_map.items():
                 var.set(opts.get(key, var.get()))
-
-        # @2026-05-17 gen by tea_agent, 加载模式参数
-        for mode_name, vars_dict in self._mode_params_vars.items():
-            mode_cfg = cfg.mode_params.get(mode_name, {})
-            for k, var in vars_dict.items():
-                var.set(str(mode_cfg.get(k, var.get())))
 
         for key, var in self._runtime_vars.items():
             val = getattr(cfg, key, None)
@@ -1215,23 +1168,8 @@ class ConfigDialog(tk.Toplevel):
         cfg.embedding.model_name = ev["model_name"].get().strip()
         try:
             cfg.embedding.dimension = int(ev["dimension"].get().strip() or "0")
-# NOTE: 2026-05-17 08:55:20, self-evolved by tea_agent --- _do_save 保存 mode_params
         except ValueError:
             cfg.embedding.dimension = 0
-
-        # @2026-05-17 gen by tea_agent, 保存模式参数
-        cfg.mode_params = {}
-        for mode_name, vars_dict in self._mode_params_vars.items():
-            mode_cfg = {}
-            for k, var in vars_dict.items():
-                raw = var.get().strip()
-                if raw:
-                    try:
-                        mode_cfg[k] = float(raw)
-                    except ValueError:
-                        errors.append(f"mode_params.{mode_name}.{k}: 格式错误")
-            if mode_cfg:
-                cfg.mode_params[mode_name] = mode_cfg
 
         # 保存各模型 options
         for prefix in ("main", "cheap"):

@@ -191,8 +191,7 @@ class SessionAPIMixin:
             else:
                 self._accumulate_usage(response.usage)
 
-# NOTE: 2026-05-17 08:49:40, self-evolved by tea_agent --- _create_chat_stream 方法签名增加 temperature/max_tokens/top_p 参数
-    def _create_chat_stream(self, api_messages: List[Dict], tools: List[Dict], client=None, model=None, is_cheap=False, temperature=None, max_tokens=None, top_p=None):
+    def _create_chat_stream(self, api_messages: List[Dict], tools: List[Dict], client=None, model=None, is_cheap=False):
         """
         创建流式聊天请求。
 

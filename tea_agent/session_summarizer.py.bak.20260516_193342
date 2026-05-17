@@ -116,22 +116,6 @@ def generate_topic_summary_shared(client, model: str, conversations: List[Dict])
         return None
 
 
-# NOTE: 2026-05-17 08:59:14, self-evolved by tea_agent --- 添加 _get_cheap_params helper + 简化调用处
-# @2026-05-17 gen by tea_agent, 获取 cheap 模型有效推理参数
-def _get_cheap_params(defaults=None):
-    """返回 cheap 模型 {temperature, max_tokens}，失败时使用传入的 defaults 或保守值。"""
-    d = defaults or {"temperature": 0.3, "max_tokens": 500}
-    try:
-        from .config import get_config
-        eff = get_config().get_effective_params("cheap", "mixed")
-        return {
-            "temperature": eff.get("temperature", d["temperature"]),
-            "max_tokens": eff.get("max_tokens", d["max_tokens"]),
-        }
-    except Exception:
-        return d
-
-
 class SessionSummarizerMixin:
     """
     摘要管理 Mixin 类，提供历史摘要、Topic 摘要、消息压缩功能。
@@ -257,11 +241,8 @@ class SessionSummarizerMixin:
                 and self._cheap_client is not None
                 and cli is self._cheap_client
             )
-# NOTE: 2026-05-17 08:57:54, self-evolved by tea_agent --- 摘要调用改用 cheap 模型 config 参数
-# NOTE: 2026-05-17 08:59:29, self-evolved by tea_agent --- 简化摘要调用 — 使用 _get_cheap_params helper
             # NOTE: 2026-04-29, self-evolved by claude-agent ---
             # 使用统一入口 _call_summarize_api，显式禁用 thinking 节省 token
-            cheap_params = _get_cheap_params({"temperature": 0.1, "max_tokens": 500})
             response = self._call_summarize_api(
                 cli, mdl,
                 messages=[
@@ -273,8 +254,8 @@ class SessionSummarizerMixin:
                         ),
                     },
                 ],
-                temperature=cheap_params["temperature"],
-                max_tokens=cheap_params["max_tokens"],
+                temperature=0.1,
+                max_tokens=500,
             )
             # NOTE: 2026-04-29, self-evolved by claude-agent ---
             # 统计便宜模型 token 用量
@@ -379,19 +360,16 @@ class SessionSummarizerMixin:
             and cli is self._cheap_client
         )
         try:
-# NOTE: 2026-05-17 08:58:10, self-evolved by tea_agent --- Topic 摘要也改用 cheap 模型 config 参数
-# NOTE: 2026-05-17 08:59:43, self-evolved by tea_agent --- 简化 Topic 摘要调用 — 使用 _get_cheap_params helper
             # NOTE: 2026-04-29, self-evolved by claude-agent ---
             # 使用统一入口 _call_summarize_api，显式禁用 thinking 节省 token
-            cheap_params = _get_cheap_params({"temperature": 0.3, "max_tokens": 50})
             response = self._call_summarize_api(
                 cli, mdl,
                 messages=[
                     {"role": "system", "content": TOPIC_SUMMARY_SYSTEM},
                     {"role": "user", "content": user_content},
                 ],
-                temperature=cheap_params["temperature"],
-                max_tokens=cheap_params["max_tokens"],
+                temperature=0.3,
+                max_tokens=50,
             )
 
             # NOTE: 2026-04-29, self-evolved by claude-agent ---
@@ -499,24 +477,23 @@ class SessionSummarizerMixin:
 
         ## 历史摘要内容：该内容总是
         # 2. 历史摘要：作为 user + assistant 对添加
-# NOTE: 2026-05-16 19:33:42, self-evolved by tea_agent --- _build_api_messages 根据 _supports_reasoning 条件注入 reasoning_content
         if self._history_summary:
             result.append({
                 "role": "user",
                 "content": f"这是我们之前对话的摘要：\n{self._history_summary}"
             })
-            _asst = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
-            if getattr(self, '_supports_reasoning', True):
-                _asst["reasoning_content"] = ""
-            result.append(_asst)
+            result.append({
+                "role": "assistant",
+                "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？",
+                "reasoning_content": "",
+            })
 
         # 4. 最新 N 轮完整对话 (不压缩)
         boundary = self._find_recent_boundary()
-        _has_reasoning = getattr(self, '_supports_reasoning', True)
         for i in range(boundary, len(self.messages)):
             msg = self.messages[i]
             msg_copy = dict(msg)
-            if msg_copy.get("role") == "assistant" and _has_reasoning and "reasoning_content" not in msg_copy:
+            if msg_copy.get("role") == "assistant" and "reasoning_content" not in msg_copy:
                 msg_copy["reasoning_content"] = ""
             # NOTE: 2026-05-19 gen by tea_agent, 清理历史中残留的 image_url 格式 content，避免 API 400
             if isinstance(msg_copy.get("content"), list) and not getattr(self, '_supports_vision', False):

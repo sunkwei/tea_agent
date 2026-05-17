@@ -663,13 +663,11 @@ class OnlineToolSession(
                 api_messages = self._build_api_messages()
                 # 不传 tools，强制模型直接回答
 # NOTE: 2026-05-17 08:51:24, self-evolved by tea_agent --- skip_tool_loop 也传入推理参数
-# NOTE: 2026-05-17 08:52:02, self-evolved by tea_agent --- skip_tool_loop 使用 _get_effective_params helper
-                eff = self._get_effective_params("main")
                 response = self._create_chat_stream(
                     api_messages, tools=[],
-                    temperature=eff.get("temperature"),
-                    max_tokens=eff.get("max_tokens"),
-                    top_p=eff.get("top_p"),
+                    temperature=eff.get("temperature") if 'eff' in dir() else None,
+                    max_tokens=eff.get("max_tokens") if 'eff' in dir() else None,
+                    top_p=eff.get("top_p") if 'eff' in dir() else None,
                 )
                 content, _, reasoning = self._process_stream_with_reasoning(response, callback)
                 self.add_assistant_message(content, reasoning)

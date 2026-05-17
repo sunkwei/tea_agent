@@ -939,9 +939,8 @@ class ConfigDialog(tk.Toplevel):
         self.on_save = on_save
 # NOTE: 2026-05-06 19:31:57, self-evolved by tea_agent --- ConfigDialog 窗口尺寸微调适配新增 Tab
         self.title("⚙️ 配置编辑")
-# NOTE: 2026-05-17 08:55:29, self-evolved by tea_agent --- 增大 ConfigDialog 窗口以适应新增 Tab
-        self.geometry("650x680")
-        self.minsize(550, 500)
+        self.geometry("650x560")
+        self.minsize(500, 420)
         self.transient(parent)
         self.grab_set()
 
@@ -1083,11 +1082,7 @@ class ConfigDialog(tk.Toplevel):
             ttk.Entry(frame, textvariable=topp_var, width=8, font=(SYSTEM_FONT, _fs(11))).grid(
                 row=1, column=3, sticky=tk.W)
 
-# NOTE: 2026-05-17 09:13:14, self-evolved by tea_agent --- 修复：恢复 _runtime_tab 方法头（被 _mode_params_tab 覆盖吃掉）
             self._mode_params_vars[m_key] = {"temperature": temp_var, "top_p": topp_var}
-
-    # @2026-05-17 gen by tea_agent, 运行时参数 Tab（原方法，修复被覆盖的方法头）
-    def _runtime_tab(self, nb):
         f = ttk.Frame(nb)
         nb.add(f, text="运行时参数")
 
@@ -1215,23 +1210,8 @@ class ConfigDialog(tk.Toplevel):
         cfg.embedding.model_name = ev["model_name"].get().strip()
         try:
             cfg.embedding.dimension = int(ev["dimension"].get().strip() or "0")
-# NOTE: 2026-05-17 08:55:20, self-evolved by tea_agent --- _do_save 保存 mode_params
         except ValueError:
             cfg.embedding.dimension = 0
-
-        # @2026-05-17 gen by tea_agent, 保存模式参数
-        cfg.mode_params = {}
-        for mode_name, vars_dict in self._mode_params_vars.items():
-            mode_cfg = {}
-            for k, var in vars_dict.items():
-                raw = var.get().strip()
-                if raw:
-                    try:
-                        mode_cfg[k] = float(raw)
-                    except ValueError:
-                        errors.append(f"mode_params.{mode_name}.{k}: 格式错误")
-            if mode_cfg:
-                cfg.mode_params[mode_name] = mode_cfg
 
         # 保存各模型 options
         for prefix in ("main", "cheap"):

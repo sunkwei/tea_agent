@@ -2212,8 +2212,6 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     def open_config_dialog(self):
         """打开配置编辑对话框"""
 
-# NOTE: 2026-05-17 08:55:47, self-evolved by tea_agent --- on_save 同步模式参数和模型推理参数到当前 session
-# NOTE: 2026-05-17 08:56:15, self-evolved by tea_agent --- 回退 on_save — 模型参数走全局单例无需手动同步
         def on_save(cfg):
             # 同步到当前 session
             if hasattr(self, 'sess') and self.sess:

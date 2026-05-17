@@ -262,6 +262,42 @@ def toolkit_subconscious(action: str, focus: str = None):
             if old:
                 finds.append({"type":"stale_kb","content":f"{len(old)}个KB文档超过7天未更新",
                               "detail":[f"{n}({d}天)" for n,d in old[:5]]})
+        # 检测 Prompt 文件是否过时
+        try:
+            proj_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        except NameError:
+            proj_dir = os.getcwd()
+        prompt_files = [
+            os.path.join(proj_dir, "session_prompts.py"),
+            os.path.join(proj_dir, "session_summarizer.py"),
+        ]
+        now = datetime.now()
+        stale_prompts = []
+        for pf in prompt_files:
+            if os.path.exists(pf):
+                days = (now - datetime.fromtimestamp(os.path.getmtime(pf))).days
+                if days > 30:
+                    stale_prompts.append((os.path.basename(pf), days))
+        if stale_prompts:
+            finds.append({"type":"stale_prompts",
+                          "content":f"{len(stale_prompts)}个Prompt文件超过30天未更新",
+                          "detail":[f"{n}({d}天)" for n,d in stale_prompts]})
+        # 检测 system_prompts 表中最新的提示词版本是否过时
+        try:
+            cur.execute("SELECT created_at FROM system_prompts WHERE is_active=1 ORDER BY created_at DESC LIMIT 1")
+            row = cur.fetchone()
+            if row:
+                latest = row[0]
+                if latest:
+                    try:
+                        ld = datetime.fromisoformat(str(latest).replace("Z","+00:00").replace(" ","T")[:19])
+                        days = (now - ld).days
+                        if days > 30:
+                            finds.append({"type":"stale_system_prompt",
+                                          "content":f"系统提示词 {days} 天未更新",
+                                          "detail":[f"最后版本时间: {latest}"]})
+                    except: pass
+        except: pass
         return finds
 
     # === 阶段4: 洞察 ===
@@ -283,6 +319,10 @@ def toolkit_subconscious(action: str, focus: str = None):
         for lk in links:
             if lk["type"]=="stale_kb":
                 ins.append({"level":"info","content":lk["content"],"action":"update_kb"})
+            elif lk["type"]=="stale_prompts":
+                ins.append({"level":"warning","content":lk["content"],"action":"update_prompts"})
+            elif lk["type"]=="stale_system_prompt":
+                ins.append({"level":"warning","content":lk["content"],"action":"evolve_prompt"})
         top = digest.get("top_keywords",[])[:5]
         if top:
             kw = ", ".join(f"{w}({n})" for w,n in top)
@@ -315,6 +355,10 @@ def toolkit_subconscious(action: str, focus: str = None):
         for lk in links:
             if lk["type"]=="stale_kb":
                 goals.append({"priority":2,"goal":"更新过期KB文档","action":"toolkit_kb(action='list')"})
+            elif lk["type"]=="stale_prompts":
+                goals.append({"priority":2,"goal":"更新过时的Prompt文件","action":"检查 session_prompts.py 和 session_summarizer.py"})
+            elif lk["type"]=="stale_system_prompt":
+                goals.append({"priority":1,"goal":"进化系统提示词(超过30天未更新)","action":"toolkit_prompt_evolve(action='evolve')"})
         for ins in insights:
             if ins.get("action")=="cleanup_memories":
                 goals.append({"priority":3,"goal":"清理超过7天未访问的记忆","action":"toolkit_memory(action='search')"})

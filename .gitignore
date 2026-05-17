@@ -7,7 +7,6 @@ build/
 dump_*/
 *.bak*
 test_tmp/
-/.tea_agent_run/
 *.db
 .*
 *.example

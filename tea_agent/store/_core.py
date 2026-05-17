@@ -328,9 +328,21 @@ class Storage:
 
         def _migrate_table(old_name, new_columns_def, cast_cols=None):
             new_name = f"{old_name}_new"
-            cols_sql = ", ".join(new_columns_def)
+            # 动态补全列定义：new_columns_def 只定义需要改类型的列，其他列从旧表继承
+            new_defs = {}
+            for defn in new_columns_def:
+                col_name = defn.split()[0]
+                new_defs[col_name] = defn
+            old_full = _table_columns(old_name)  # [(name, type), ...]
+            full_defs = []
+            for col_name, col_type in old_full:
+                if col_name in new_defs:
+                    full_defs.append(new_defs[col_name])
+                else:
+                    full_defs.append(f"{col_name} {col_type}")
+            cols_sql = ", ".join(full_defs)
             c.execute(f"CREATE TABLE {new_name} ({cols_sql})")
-            old_cols = [col[0] for col in _table_columns(old_name)]
+            old_cols = [col[0] for col in old_full]
             if cast_cols:
                 select_parts = []
                 for col in old_cols:
@@ -346,26 +358,33 @@ class Storage:
             c.execute(f"ALTER TABLE {new_name} RENAME TO {old_name}")
             log.info(f"  迁移表 {old_name}")
 
-# NOTE: 2026-05-17 10:50:54, self-evolved by tea_agent --- _core.py _migrate_int_to_uuid: replace all 12 datetime('now', 'localtime') with datetime('now','localtime')
+# NOTE: 2026-05-17 10:50:54, self-evolved by tea_agent --- _core.py _migrate_int_to_uuid: replace all 12 (datetime('now','localtime')) with datetime('now','localtime')
         try:
+            # 清理之前失败迁移可能残留的 _new 表
+            for leftover in ["topics_new","conversations_new","topic_token_stats_new",
+                             "t_conv_summary_new","memories_new","agent_rounds_new",
+                             "msg_vectors_new","system_prompts_new","reflections_new",
+                             "config_history_new"]:
+                try: c.execute(f"DROP TABLE IF EXISTS {leftover}")
+                except: pass
             _migrate_table("topics", [
                 "topic_id TEXT PRIMARY KEY",
                 "title TEXT NOT NULL",
-                "create_stamp TIMESTAMP DEFAULT datetime('now', 'localtime')",
-                "last_update_stamp TIMESTAMP DEFAULT datetime('now', 'localtime')",
+                "create_stamp TIMESTAMP DEFAULT (datetime('now','localtime'))",
+                "last_update_stamp TIMESTAMP DEFAULT (datetime('now','localtime'))",
             ], cast_cols={"topic_id"})
 
             _migrate_table("conversations", [
                 "id TEXT PRIMARY KEY", "topic_id TEXT NOT NULL",
                 "user_msg TEXT NOT NULL", "ai_msg TEXT NOT NULL",
                 "is_func_calling INTEGER DEFAULT 0", "is_summarized INTEGER DEFAULT 0",
-                "stamp TIMESTAMP DEFAULT datetime('now', 'localtime')", "rounds_json TEXT",
+                "stamp TIMESTAMP DEFAULT (datetime('now','localtime'))", "rounds_json TEXT",
             ], cast_cols={"id", "topic_id"})
 
             _migrate_table("topic_token_stats", [
                 "topic_id TEXT PRIMARY KEY", "total_tokens INTEGER DEFAULT 0",
                 "total_prompt_tokens INTEGER DEFAULT 0", "total_completion_tokens INTEGER DEFAULT 0",
-                "conversation_count INTEGER DEFAULT 0", "last_update TIMESTAMP DEFAULT datetime('now', 'localtime')",
+                "conversation_count INTEGER DEFAULT 0", "last_update TIMESTAMP DEFAULT (datetime('now','localtime'))",
                 "total_cheap_tokens INTEGER DEFAULT 0", "total_cheap_prompt_tokens INTEGER DEFAULT 0",
                 "total_cheap_completion_tokens INTEGER DEFAULT 0",
                 "total_embedding_tokens INTEGER DEFAULT 0", "total_embedding_prompt_tokens INTEGER DEFAULT 0",
@@ -373,7 +392,7 @@ class Storage:
 
             _migrate_table("t_conv_summary", [
                 "topic_id TEXT PRIMARY KEY", "summary TEXT NOT NULL",
-                "last_summarized_id TEXT", "last_update TIMESTAMP DEFAULT datetime('now', 'localtime')",
+                "last_summarized_id TEXT", "last_update TIMESTAMP DEFAULT (datetime('now','localtime'))",
             ], cast_cols={"topic_id", "last_summarized_id"})
 
             _migrate_table("memories", [
@@ -381,40 +400,40 @@ class Storage:
                 "category TEXT NOT NULL DEFAULT 'general'", "priority INTEGER NOT NULL DEFAULT 2",
                 "importance INTEGER NOT NULL DEFAULT 3", "expires_at TEXT",
                 "is_active INTEGER NOT NULL DEFAULT 1", "tags TEXT DEFAULT ''",
-                "source_topic_id TEXT", "created_at TIMESTAMP DEFAULT datetime('now', 'localtime')",
-                "updated_at TIMESTAMP DEFAULT datetime('now', 'localtime')", "last_accessed_at TIMESTAMP",
+                "source_topic_id TEXT", "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
+                "updated_at TIMESTAMP DEFAULT (datetime('now','localtime'))", "last_accessed_at TIMESTAMP",
             ], cast_cols={"id", "source_topic_id"})
 
             _migrate_table("agent_rounds", [
                 "id TEXT PRIMARY KEY", "conversation_id TEXT NOT NULL",
                 "round_num INTEGER NOT NULL", "role TEXT NOT NULL",
                 "content TEXT", "tool_calls TEXT", "tool_call_id TEXT",
-                "stamp TIMESTAMP DEFAULT datetime('now', 'localtime')",
+                "stamp TIMESTAMP DEFAULT (datetime('now','localtime'))",
             ], cast_cols={"id", "conversation_id"})
 
             _migrate_table("msg_vectors", [
                 "conversation_id TEXT PRIMARY KEY", "embedding BLOB NOT NULL",
                 "dimension INTEGER DEFAULT 0", "model_name TEXT DEFAULT ''",
-                "created_at TIMESTAMP DEFAULT datetime('now', 'localtime')",
+                "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
             ], cast_cols={"conversation_id"})
 
             _migrate_table("system_prompts", [
                 "id TEXT PRIMARY KEY", "version TEXT NOT NULL", "content TEXT NOT NULL",
                 "reason TEXT DEFAULT ''", "source_reflection_id TEXT",
-                "is_active INTEGER DEFAULT 1", "created_at TIMESTAMP DEFAULT datetime('now', 'localtime')",
+                "is_active INTEGER DEFAULT 1", "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
             ], cast_cols={"id", "source_reflection_id"})
 
             _migrate_table("reflections", [
                 "id TEXT PRIMARY KEY", "topic_id TEXT", "summary TEXT NOT NULL",
                 "details TEXT DEFAULT ''", "tool_stats TEXT DEFAULT '{}'",
                 "suggestions TEXT DEFAULT '[]'", "is_applied INTEGER DEFAULT 0",
-                "created_at TIMESTAMP DEFAULT datetime('now', 'localtime')",
+                "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
             ], cast_cols={"id", "topic_id"})
 
             _migrate_table("config_history", [
                 "id TEXT PRIMARY KEY", "key TEXT NOT NULL", "old_value TEXT",
                 "new_value TEXT NOT NULL", "reason TEXT DEFAULT ''",
-                "source_reflection_id TEXT", "created_at TIMESTAMP DEFAULT datetime('now', 'localtime')",
+                "source_reflection_id TEXT", "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
             ], cast_cols={"id", "source_reflection_id"})
 
             self.conn.commit()

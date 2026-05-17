@@ -422,6 +422,26 @@ class OnlineToolSession(
         result = self._sanitize_api_messages(result)
 
 # NOTE: 2026-05-17 10:12:02, self-evolved by tea_agent --- 新增_sanitize_api_messages方法：校验tool_calls中function.arguments为合法JSON，非法则自动修复或移除
+        
+        # Safeguard: 移除没有对应 tool_calls 的孤立 tool 消息
+        # 防止 "Messages with role 'tool' must be a response to a preceding message with 'tool_calls'" 错误
+        valid_ids = set()
+        cleaned = []
+        for msg in result:
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                for tc in msg["tool_calls"]:
+                    if tc.get("id"):
+                        valid_ids.add(tc["id"])
+                cleaned.append(msg)
+            elif msg.get("role") == "tool":
+                if msg.get("tool_call_id") in valid_ids:
+                    cleaned.append(msg)
+                else:
+                    logger.warning(f"_build_api_messages: 移除孤立 tool 消息 (id={msg.get('tool_call_id')})")
+            else:
+                cleaned.append(msg)
+        result = cleaned
+
         return result
 
     # NOTE: 2026-05-19 gen by tea_agent, JSON完整性校验：历史压缩可能截断function.arguments导致非法JSON

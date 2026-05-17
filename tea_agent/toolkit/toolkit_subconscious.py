@@ -303,6 +303,7 @@ def toolkit_subconscious(action: str, focus: str = None):
     # === 阶段4: 洞察 ===
 # NOTE: 2026-05-02 10:23:38, self-evolved by tea_agent --- 潜意识引擎在产生重要洞察时发送桌面通知
     def _generate_insights(digest, links, conv_digest, kb_dir, state):
+        """2026-05-17 gen by tea_agent, 增强：规则洞察 + cheap LLM 深度分析"""
         ins = []
         if not digest: return ins
         unapp = digest.get("unapplied_reflections",0)
@@ -330,7 +331,64 @@ def toolkit_subconscious(action: str, focus: str = None):
         if conv_digest.get("extracted"):
             n = len(conv_digest["extracted"])
             ins.append({"level":"info","content":f"从{n}条新对话中自动提取了记忆","action":"review_auto_memories"})
-        # NOTE: 2026-05-02, self-evolved by tea_agent --- 重要洞察主动发送桌面通知
+
+        # ═══ 2026-05-17 gen by tea_agent, cheap LLM 深度洞察 ═══
+        try:
+            from tea_agent.config import get_config
+            from openai import OpenAI
+            import json as _json2
+
+            cfg = get_config()
+            cheap = cfg.cheap_model
+            if cheap.api_key and cheap.api_url and cheap.model_name:
+                client = OpenAI(api_key=cheap.api_key, base_url=cheap.api_url)
+
+                ctx = {
+                    "total_memories": digest.get("total_memories", 0),
+                    "by_category": {k: v for k, v in digest.get("by_category", {}).items()},
+                    "by_priority": {str(k): v for k, v in digest.get("by_priority", {}).items()},
+                    "top_keywords": [(w, n) for w, n in digest.get("top_keywords", [])[:10]],
+                    "focus": digest.get("focus", "mixed"),
+                    "stale_memories_count": len(digest.get("stale_memories", [])),
+                    "unapplied_reflections": digest.get("unapplied_reflections", 0),
+                    "rule_insights": [i["content"] for i in ins],
+                    "conversations_extracted": len(conv_digest.get("extracted", [])),
+                    "cross_link_count": len(links),
+                    "cycles_completed": state.get("cycles_completed", 0),
+                }
+
+                deep_prompt = (
+                    "你是 Tea Agent 的潜意识深度分析引擎。基于以下数据，生成 1-3 条深层洞察。\n"
+                    f"数据: {_json2.dumps(ctx, ensure_ascii=False)}\n\n"
+                    "规则（严格遵守）：\n"
+                    "1. 不要重复规则已发现的问题\n"
+                    "2. 寻找跨域关联（记忆分布→行为模式 / 关键词演变→兴趣漂移 / 场景切换频率→任务效率）\n"
+                    "3. 做反事实推演：如果某个模式不存在，系统会怎样？\n"
+                    "4. 输出 JSON 数组，每条含 content(≤60字中文)、action(1个具体工具调用建议)、level(info/warning)\n"
+                    "5. 如果数据不足以产生新洞察，输出空数组 []\n"
+                    "只输出 JSON 数组，不要额外文本："
+                )
+
+                r = client.chat.completions.create(
+                    model=cheap.model_name,
+                    messages=[{"role": "user", "content": deep_prompt}],
+                    temperature=0.5, max_tokens=512,
+                )
+                raw = (r.choices[0].message.content or "").strip() if r.choices else ""
+                if raw:
+                    # Extract JSON array
+                    json_start = raw.find("[")
+                    json_end = raw.rfind("]") + 1
+                    if json_start >= 0 and json_end > json_start:
+                        deep_insights = _json2.loads(raw[json_start:json_end])
+                        for di in deep_insights:
+                            if isinstance(di, dict) and di.get("content"):
+                                di["source"] = "deep_llm"
+                                ins.append(di)
+                                logger.info(f"Subconscious deep insight: {di['content'][:60]}")
+        except Exception as e:
+            logger.debug(f"Subconscious deep insight skipped: {e}")
+
         for insight in ins:
             if insight["level"] == "important":
                 _send_notification("🧠 潜意识洞察", insight["content"][:80])
@@ -341,7 +399,8 @@ def toolkit_subconscious(action: str, focus: str = None):
             txt = f"# 潜意识洞察\n\n> 更新: {ts} | 循环: {state.get('cycles_completed',0)} | 间隔: 1小时\n> 分词: {'jieba' if digest.get('jieba_available') else 'bigram'} | 场景: {digest.get('focus','mixed')}\n\n## 最新洞察\n\n"
             for i,insight in enumerate(ins[-10:],1):
                 icon = {"important":"🔴","warning":"🟡","info":"🔵"}.get(insight["level"],"⚪")
-                txt += f"{i}. {icon} **{insight['content']}**\n"
+                suffix = " 🤖" if insight.get("source") == "deep_llm" else ""
+                txt += f"{i}. {icon} **{insight['content']}**{suffix}\n"
                 if insight.get("action"): txt += f"   → 建议: `{insight['action']}`\n"
             txt += "\n---\n*由潜意识引擎自动生成*\n"
             with open(fpath,'w') as f: f.write(txt)

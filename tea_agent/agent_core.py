@@ -401,107 +401,122 @@ class AgentCore:
         self._check_pending_restart()
 
     def _update_level3_summary(self, topic_id: str, overflow: list):
-        """L3 incremental summary: semantic + tool-chain."""
+        """L3 增量摘要：语义 + 工具链。
+        2026-05-17 gen by tea_agent, 重构：(1)去除字数限制改用16K token上限 (2)主题漂移检测-匹配度低时追加新段落而非全量覆盖
+        """
         if not overflow:
             return
         try:
             cli, mdl = self.sess._get_summarize_client()
-            old_text = ""
-            for pair in overflow:
-                old_text += "User: " + pair.get("user", "") + "\n"
-                old_text += "Assistant: " + pair.get("assistant", "") + "\n\n"
 
-            # A. Semantic Summary
-            old_sem = self.db.get_semantic_summary(topic_id)
-            sem_prompt = (
-                "Update the semantic summary of past conversations. "
-                "Focus on: user preferences, long-term task background, key conclusions, "
-                "domain knowledge mentioned. "
-                "Format using bullet points in Chinese:\n"
-                "- 用户偏好：...\n"
-                "- 长期任务背景：...\n"
-                "- 已完成的关键步骤：...\n"
-                "- 关键结论：...\n\n"
-                "Existing summary:\n" + (old_sem if old_sem else "(none)") + "\n\n"
-                "New conversations:\n" + old_text + "\n"
-                "Output the updated semantic summary (max 400 chars, Chinese only):"
-            )
+            new_text = ""
+            for pair in overflow:
+                new_text += f"User: {pair.get('user', '')}\nAssistant: {pair.get('assistant', '')}\n\n"
+
+            old_sem = self.db.get_semantic_summary(topic_id) or ""
+
+            # ── 主题漂移检测 ──
+            is_drift = False
+            drift_label = ""
+            if old_sem.strip():
+                drift_prompt = (
+                    "对比「已有摘要」与「新对话片段」，判断新对话的主题是否发生本质变化。\n"
+                    "本质变化：讨论方向、任务类型、关注领域发生明显转移。\n"
+                    "如果显著变化，输出 DRIFT: <新阶段简短主题名>。否则输出 SAME。\n"
+                    f"[已有摘要末尾]\n{old_sem[-3000:]}\n\n"
+                    f"[新对话片段]\n{new_text[:3000]}\n\n"
+                    "请输出 DRIFT: <主题名> 或 SAME："
+                )
+                try:
+                    r_d = cli.chat.completions.create(
+                        model=mdl, messages=[{"role": "user", "content": drift_prompt}],
+                        temperature=0.1, max_tokens=50,
+                    )
+                    dr = (r_d.choices[0].message.content or "").strip() if r_d.choices else "SAME"
+                    if dr.upper().startswith("DRIFT"):
+                        is_drift = True
+                        drift_label = dr.replace("DRIFT:", "").replace("DRIFT", "").strip().lstrip(":").strip() or "新阶段"
+                    logger.info(f"L3 drift check: {dr[:60]}")
+                except Exception as de:
+                    logger.warning(f"L3 drift check fail: {de}, assume SAME")
+
+            # ── A. 语义摘要 ──
+            if is_drift:
+                sem_prompt = (
+                    "以下是一个长对话的历史摘要。由于新对话主题发生了显著变化，"
+                    "请在现有摘要基础上追加一个新段落（不要删除或修改历史段落）。"
+                    f"新段落标题为 '## 阶段：{drift_label}'。\n"
+                    "新段落格式：\n"
+                    "- 本阶段核心主题：...\n"
+                    "- 用户偏好/约束：...\n"
+                    "- 任务背景与目标：...\n"
+                    "- 关键步骤与进展：...\n"
+                    "- 重要结论/产出：...\n"
+                    "- 使用的关键文件/模块：...\n\n"
+                    f"[已有摘要——全部保留，不可删除]\n{old_sem}\n\n"
+                    f"[新对话片段]\n{new_text}\n\n"
+                    "请输出完整摘要（保留全部历史段落 + 追加新阶段段落）："
+                )
+            else:
+                sem_prompt = (
+                    "更新对话摘要。如果已有摘要包含多个 '## 阶段：' 段落，"
+                    "请保留所有历史段落不变，仅更新/补充最后一个段落的末尾。\n"
+                    "如果历史段落已完整覆盖新对话内容，仅追加新的进展点。\n"
+                    "聚焦：用户偏好、长期任务背景、关键结论、领域知识、涉及的文件/模块。\n"
+                    "使用 Markdown 格式，以 '## ' 开头的段落组织。\n"
+                    "不要删除或截断任何已有内容。\n"
+                    f"[已有摘要]\n{old_sem if old_sem else '(无)'}\n\n"
+                    f"[新对话]\n{new_text}\n\n"
+                    "请输出更新后的完整摘要："
+                )
+
             r = cli.chat.completions.create(
                 model=mdl, messages=[{"role": "user", "content": sem_prompt}],
-                temperature=0.3, max_tokens=512,
+                temperature=0.3, max_tokens=16384,
             )
             new_sem = r.choices[0].message.content.strip() if r.choices else old_sem or ""
             if new_sem:
                 self.db.set_semantic_summary(topic_id, new_sem)
-                logger.info("L3 semantic: {} chars".format(len(new_sem)))
+                logger.info(f"L3 semantic: {len(new_sem)} chars (drift={is_drift}, label={drift_label})")
 
-            # B. Tool-Chain Summary
-            old_tc = self.db.get_tool_chain_summary(topic_id)
-            tc_prompt = (
-                "Update the tool-call-chain summary of past conversations. "
-                "Focus on: task name, tools used (A->B->C), key I/O, final conclusion. "
-                "Discard detailed logs and parameters, keep only core logic. "
-                "If no tool calls in the new conversations, output NONE. "
-                "Format in Chinese:\n"
-                "- 任务：...\n"
-                "- 使用工具：A -> B -> C\n"
-                "- 关键I/O：...\n"
-                "- 最终结论：...\n\n"
-                "Existing summary:\n" + (old_tc if old_tc else "(none)") + "\n\n"
-                "New conversations:\n" + old_text + "\n"
-                "Output updated tool-chain summary (max 300 chars, or NONE):"
-            )
-            r2 = cli.chat.completions.create(
-                model=mdl, messages=[{"role": "user", "content": tc_prompt}],
-                temperature=0.3, max_tokens=384,
-            )
-            new_tc = r2.choices[0].message.content.strip() if r2.choices else old_tc or ""
-            if new_tc and new_tc != "NONE" and new_tc != "无":
-                self.db.set_tool_chain_summary(topic_id, new_tc)
-                logger.info("L3 toolchain: {} chars".format(len(new_tc)))
-        except Exception as e:
-            logger.warning("L3 summary fail: {}: {}".format(type(e).__name__, e))
-
-    def _update_level3_summary(self, topic_id: str, overflow: list):
-        if not overflow:
-            return
-        try:
-            cli, mdl = self.sess._get_summarize_client()
-            old_text = ""
-            for pair in overflow:
-                old_text += f"User: {pair.get('user', '')}\nAssistant: {pair.get('assistant', '')}\n\n"
-            old_sem = self.db.get_semantic_summary(topic_id)
-            sem_prompt = (
-                "更新此前对话摘要（长期偏好/任务背景/关键结论，<=300字，中文）："
-                f"\n[已有]\n{old_sem if old_sem else '(无)'}"
-                f"\n[新对话]\n{old_text}"
-            )
-            r = cli.chat.completions.create(
-                model=mdl, messages=[{"role": "user", "content": sem_prompt}],
-                temperature=0.3, max_tokens=512,
-            )
-            new_sem = r.choices[0].message.content.strip() if r.choices else old_sem or ""
-            self.db.set_semantic_summary(topic_id, new_sem)
-            logger.info(f"L3 semantic: {len(new_sem)} chars")
-            has_tools = any("tool" in pair.get("assistant", "").lower() for pair in overflow)
+            # ── B. 工具链摘要 ──
+            has_tools = any("tool" in (pair.get("assistant", "") or "").lower() for pair in overflow)
             if has_tools:
-                old_tc = self.db.get_tool_chain_summary(topic_id)
-                tc_prompt = (
-                    "更新工具调用链摘要（工具名/关键I/O/结论，<=200字，中文，无工具则说无）："
-                    f"\n[已有]\n{old_tc if old_tc else '(无)'}"
-                    f"\n[新对话]\n{old_text}"
-                )
+                old_tc = self.db.get_tool_chain_summary(topic_id) or ""
+
+                if is_drift:
+                    tc_prompt = (
+                        "追加新的工具调用链段落（保留全部历史段落）。"
+                        f"新段落标题为 '## 阶段工具链：{drift_label}'。\n"
+                        "格式：\n"
+                        "- 任务：...\n"
+                        "- 使用工具：A -> B -> C -> ...\n"
+                        "- 关键I/O：...\n"
+                        "- 最终结论：...\n\n"
+                        f"[已有工具链——全部保留]\n{old_tc}\n\n"
+                        f"[新对话]\n{new_text}\n\n"
+                        "请输出完整工具链摘要（保留全部历史段落 + 追加新段落）："
+                    )
+                else:
+                    tc_prompt = (
+                        "更新工具调用链摘要。保留所有历史段落，在最后补充新工具调用信息。\n"
+                        "如有新任务，追加新的段落。格式：每个段落以 '## ' 标题开头。\n"
+                        f"[已有]\n{old_tc if old_tc else '(无)'}\n\n"
+                        f"[新对话]\n{new_text}\n\n"
+                        "请输出更新后的完整工具链摘要："
+                    )
+
                 r2 = cli.chat.completions.create(
                     model=mdl, messages=[{"role": "user", "content": tc_prompt}],
-                    temperature=0.3, max_tokens=384,
+                    temperature=0.3, max_tokens=16384,
                 )
                 new_tc = r2.choices[0].message.content.strip() if r2.choices else old_tc or ""
-                if new_tc and new_tc != "\u65e0":
+                if new_tc and new_tc != "\u65e0" and new_tc != "NONE":
                     self.db.set_tool_chain_summary(topic_id, new_tc)
                     logger.info(f"L3 toolchain: {len(new_tc)} chars")
+
         except Exception as e:
             logger.warning(f"L3 summary fail: {type(e).__name__}: {e}")
-
     def _load_topic_history_into_session(self, tid: str):
         """将指定 topic 的对话历史按三级结构加载到 session"""
         # Level 1: 最新一条完整对话（含工具链）

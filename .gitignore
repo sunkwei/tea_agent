@@ -5,7 +5,7 @@ build/
 .vscode/
 
 dump_*/
-*.bak
+*.bak*
 test_tmp/
 /.tea_agent_run/
 *.db

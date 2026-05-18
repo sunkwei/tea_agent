@@ -58,12 +58,12 @@ class StreamManager:
     def log_tool(self, msg: str):
         self.gui.log(msg, tag="tool")
 
+# NOTE: 2026-05-18 13:08:02, self-evolved by tea_agent --- Remove _render_and_show_chat from stream_flush_tick (render only at turn end)
     def stream_flush_tick(self):
-        """定时刷新流式缓冲"""
+        """定时刷新流式缓冲（仅累积到 chat_messages，不渲染 HtmlFrame；渲染由 turn 结束时统一触发）"""
         if self.gui._stream_buffer:
             self.gui.chat_messages.append({"role": "assistant", "content": self.gui._stream_buffer, "streaming": True})
             self.gui._stream_buffer = ""
-            self.gui.renderer._render_and_show_chat()
         self._stream_flush_scheduled = False
 
     def flush_stream_to_messages(self):

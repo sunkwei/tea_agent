@@ -107,7 +107,8 @@ class ChatRenderer:
     def _render_and_show_chat(self):
         """会话完成后渲染：历史轮次链接表 + 最新轮内容"""
         msgs = self._filtered_messages()
-        print("[DIAG] _render_and_show_chat: total filtered msgs=" + str(len(msgs)))
+# NOTE: 2026-05-18 13:08:25, self-evolved by tea_agent --- Remove debug print spam in _render_and_show_chat
+        # [DIAG] removed: was printing len(msgs) on every render
 
         # 分组为轮次
         rounds = self._group_into_rounds(msgs)
@@ -125,7 +126,8 @@ class ChatRenderer:
 
         def _on_done(html):
             if HAS_TKINTERWEB:
-                print("[RENDER] " + str(len(html)) + " chars")
+# NOTE: 2026-05-18 13:08:31, self-evolved by tea_agent --- Remove RENDER chars debug print
+                # [RENDER] removed: was printing html char count on every render
                 self._html_render(html)
                 self._switch_display("chat_view")
                 self.gui.root.after(300, self.scroll_to_bottom)
@@ -181,7 +183,8 @@ class ChatRenderer:
 
         def _on_done(html):
             if HAS_TKINTERWEB:
-                print("[RENDER ROUND " + str(round_idx) + "] " + str(len(html)) + " chars")
+    # NOTE: 2026-05-18 13:08:44, self-evolved by tea_agent --- Remove RENDER ROUND debug print
+            # [RENDER ROUND] removed: debug print
                 self._html_render(html)
                 self._switch_display("chat_view")
                 self.gui.root.after(200, self.scroll_to_bottom)

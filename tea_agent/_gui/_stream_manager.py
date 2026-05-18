@@ -63,7 +63,7 @@ class StreamManager:
         if self.gui._stream_buffer:
             self.gui.chat_messages.append({"role": "assistant", "content": self.gui._stream_buffer, "streaming": True})
             self.gui._stream_buffer = ""
-            self.gui.render_manager.render_chat()
+            self.gui.renderer._render_and_show_chat()
         self._stream_flush_scheduled = False
 
     def flush_stream_to_messages(self):

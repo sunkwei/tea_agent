@@ -147,7 +147,7 @@ class UIManager:
         elif self.gui._current_round_view > 0:
             self.gui._current_round_view -= 1
         if self.gui._current_round_view is not None and self.gui._current_round_view >= 0:
-            self.gui.render_manager.render_round_view(self.gui._current_round_view)
+            self.gui.renderer._render_round_view(self.gui._current_round_view)
 
     def history_next_round(self, e=None):
         if self.gui._current_round_view is None:
@@ -157,7 +157,7 @@ class UIManager:
         if self.gui._current_round_view is not None:
             if self.gui._current_round_view == len(self.gui._chat_rounds) - 1:
                 self.gui._current_round_view = None
-            self.gui.render_manager.render_round_view(self.gui._current_round_view)
+            self.gui.renderer._render_round_view(self.gui._current_round_view)
 
     def show_tooltip(self, event, idx):
         item = self.gui._topic_tree.identify_row(event.y)

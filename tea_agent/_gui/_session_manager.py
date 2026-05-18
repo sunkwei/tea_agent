@@ -43,7 +43,7 @@ class SessionManager:
         self.gui._clear_img_btn.config(state=tk.DISABLED)
         self.gui._current_round_view = None
         self.gui._chat_rounds.clear()
-        self.gui.render_manager.render_chat()
+        self.gui.renderer._render_and_show_chat()
 
     def new_topic(self):
         """新建主题"""

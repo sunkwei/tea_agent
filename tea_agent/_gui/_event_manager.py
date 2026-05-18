@@ -24,7 +24,7 @@ class EventManager:
         
         self.gui.chat_messages.append({"role": "user", "content": text})
         self.gui._current_round_view = None
-        self.gui.render_manager.render_chat()
+        self.gui.renderer._render_and_show_chat()
         
         self.gui._interrupt_btn.config(state=tk.NORMAL)
         self.gui.stream_manager.update_status("正在思考...")

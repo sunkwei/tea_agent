@@ -58,9 +58,9 @@ else:
     from . import tlk
     from .agent_core import AgentCore
     # @2026-05-15 gen by tea_agent, Composition: GUI 组件
-    from ._gui._tray import TrayManager
-    from ._gui._images import ImageHandler
-    from ._gui._renderer import ChatRenderer  # @2026-05-15 gen by tea_agent, Composition: 渲染组件
+    from tea_agent._gui._tray import TrayManager
+    from tea_agent._gui._images import ImageHandler
+    from tea_agent._gui._renderer import ChatRenderer  # @2026-05-15 gen by tea_agent, Composition: 渲染组件
 # NOTE: 2026-05-01 15:30:48, self-evolved by tea_agent --- 给 GUI 加 ConfigDialog 弹窗：import save_config（第二处）
     from .config import load_config, get_config, save_config, ModelConfig
 
@@ -81,508 +81,50 @@ CHEAP_MODEL = _cfg.cheap_model
 _storage_ = None
 _toolkit_ = None
 
-# ====================== 跨平台字体检测 ======================
-# @2026-04-29 gen by deepseek-v4-pro, 跨平台字体自动检测(Windows/Linux)
-import platform as _platform
-
-_IS_WINDOWS = _platform.system() == "Windows"
-
-SYSTEM_FONT = "TkDefaultFont"
-MONO_FONT = "TkFixedFont"
-# NOTE: 2026-04-30 20:02:57, self-evolved by tea_agent --- 添加 Wayland/X11 显示缩放检测：全局 _SCALE_FACTOR + _fs() 辅助函数，_init_fonts() 中自动检测 tk scaling 并更新 _DEFAULT_FONT_SIZE
-_FONTS_DETECTED = False
-_SCALE_FACTOR = 1.0
-
-def _fs(size):
-    """返回按显示缩放因子调整后的字体大小（适配 Wayland/X11 高分屏）。"""
-    return max(1, int(size * _SCALE_FACTOR))
-
-def _init_fonts():
-    """延迟检测系统可用字体（需 Tk root 创建后调用）。"""
-    global SYSTEM_FONT, MONO_FONT, _FONTS_DETECTED
-    if _FONTS_DETECTED:
-        return
-    try:
-        from tkinter import font as _tkfont
-        available = set(_tkfont.families())
-
-        def _detect(candidates):
-            for f in candidates:
-                if f in available:
-                    return f
-            return "TkDefaultFont"  # 最终回退：系统默认字体
-
-        if _IS_WINDOWS:
-            SYSTEM_FONT = _detect([
-                "Microsoft YaHei", "Microsoft YaHei UI",
-                "DengXian", "SimHei", "SimSun",
-                "Noto Sans SC", "Microsoft JhengHei",
-            ])
-            MONO_FONT = _detect([
-                "Cascadia Code", "Cascadia Mono",
-                "Consolas", "Courier New", "Lucida Console",
-            ])
-        else:
-            SYSTEM_FONT = _detect([
-                "Noto Sans CJK SC", "Noto Sans SC",
-                "WenQuanYi Micro Hei", "Source Han Sans SC",
-                "DejaVu Sans",
-            ])
-            MONO_FONT = _detect([
-                "Noto Sans Mono CJK SC", "DejaVu Sans Mono",
-                "Source Han Mono SC", "Courier New",
-            ])
-        # DEBUG: 打印检测结果，方便排查字体问题
-        import logging
-        logging.getLogger("tea_agent").debug(
-            f"字体检测: SYSTEM={SYSTEM_FONT}, MONO={MONO_FONT}"
-        )
-    except Exception as e:
-        import logging
-        logging.getLogger("tea_agent").warning(
-            f"字体检测失败: {e}，使用默认字体"
-        )
-
-    global _SCALE_FACTOR, _DEFAULT_FONT_SIZE
-    try:
-        import tkinter as _tk2
-        root = _tk2._default_root
-        if root:
-            sf = float(root.tk.call("tk", "scaling"))
-            if 1.0 < sf <= 4.0:
-                _SCALE_FACTOR = sf
-    except Exception:
-        pass
-    _DEFAULT_FONT_SIZE = max(12, int(16 * _SCALE_FACTOR))
-
-    _FONTS_DETECTED = True
-
-_DEFAULT_FONT_SIZE = 16  # 模块级默认
-# ====================== Markdown → HTML 渲染 ======================
-
-_MD_CSS_TEMPLATE = string.Template("""
-<style>
-body { font-family: "Microsoft YaHei", "Microsoft YaHei UI", "DengXian", "SimHei", "SimSun", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", "DejaVu Sans", sans-serif; font-size: ${font_size}px; line-height: 1.6; color: #333; padding: 8px; }
-h1, h2, h3, h4, h5, h6 { margin: 0.8em 0 0.4em; color: #1a73e8; }
-h1 { font-size: 1.5em; border-bottom: 2px solid #eee; padding-bottom: 0.3em; }
-h2 { font-size: 1.3em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
-p { margin: 0.5em 0; }
-code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; font-family: "Cascadia Code", "Consolas", "Courier New", "Noto Sans Mono CJK SC", "DejaVu Sans Mono", "Source Han Mono SC", monospace; font-size: 0.9em; }
-pre { background: #f6f8fa; border: 1px solid #ddd; border-radius: 5px; padding: 12px; overflow-x: auto; }
-pre code { background: none; padding: 0; }
-ul, ol { padding-left: 1.5em; }
-li { margin: 0.3em 0; }
-blockquote { border-left: 4px solid #ddd; margin: 0.5em 0; padding: 0.5em 1em; color: #666; background: #f9f9f9; }
-table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
-th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-th { background: #f2f2f2; font-weight: bold; }
-a { color: #1a73e8; text-decoration: none; }
-a:hover { text-decoration: underline; }
-hr { border: none; border-top: 1px solid #ddd; margin: 1em 0; }
-strong { font-weight: bold; color: #222; }
-/* NOTE: 2026-05-15 gen by tea_agent, 不同角色背景色区分 */
-.msg-user { background: #dbeafe; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #3b82f6; }
-.msg-user h3 { color: #1e40af; margin-top: 0; }
-.msg-ai { background: #f3f4f6; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #6b7280; }
-.msg-ai h3 { color: #374151; margin-top: 0; }
-/* Think/reasoning message (独立角色) */
-.msg-think { background: #fef3c7; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #f59e0b; }
-.msg-think h3 { color: #92400e; margin-top: 0; }
-.msg-think p { color: #92400e; font-style: italic; }
-/* code blocks = tool calls/results */
-.msg-ai pre { background: #ecfdf5; border-left: 4px solid #10b981; padding: 8px 12px; border-radius: 4px; margin: 6px 0; font-size: 0.9em; }
-.msg-ai code { background: #d1fae5; color: #065f46; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
-/* notice / system */
-.msg-notice { background: #fce7f3; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #ec4899; }
-.msg-notice h3 { color: #9d174d; margin-top: 0; }
-/* tool rounds */
-.msg-tool { background: #ecfdf5; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #10b981; }
-.msg-tool h5 { color: #065f46; margin-top: 0; font-size: 1em; }
-em { font-style: italic; }
-.msg-timestamp { font-size: 0.8em; color: #999; margin-bottom: 0.3em; }
-.msg-divider { border: none; border-top: 2px solid #e8e8e8; margin: 1.2em 0; }
-/* NOTE: 2026-05-15 gen by tea_agent, 聊天图片样式 */
-.chat-images { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
-.chat-image { max-width: 400px; max-height: 300px; border-radius: 8px; border: 1px solid #ddd; object-fit: contain; cursor: pointer; }
-.chat-image:hover { border-color: #3b82f6; box-shadow: 0 2px 8px rgba(59,130,246,0.3); }
-/* @2026-05-15 gen by tea_agent, 图片点击放大弹窗 */
-a.chat-image-link { text-decoration: none; display: inline-block; }
-a.chat-image-link:hover { text-decoration: none; }
-</style>
-""")
-def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
-    """将 markdown 文本转换为带样式的 HTML 片段"""
-    if not HAS_TKINTERWEB:
-        return text
-    html_body = markdown.markdown(text, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
-    css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
-    return f"<html><head>{css}</head><body>{html_body}</body></html>"
-
-# NOTE: 2026-05-08 gen by tea_agent, 工具轮分组渲染：合并连续tool消息，生成带轮次编号的蓝色标题块
-
-def _build_tool_blocks(messages):
-
-    """扫描消息列表，将连续 tool 消息合并为分组 markdown 字符串。
-
-    返回与原始消息列表等长的字符串列表，非 tool 位置为空字符串，tool 组只在组首输出。"""
-
-    n = len(messages)
-
-    result = [""] * n
-
-    i = 0
-
-    while i < n:
-
-        if messages[i].get("role") != "tool":
-
-            i += 1
-
-            continue
-
-        start = i
-
-        while i < n and messages[i].get("role") == "tool":
-
-            i += 1
-
-        group = messages[start:i]
-
-        ts = group[0].get("timestamp", "")
-
-        ts_display = f'<span class="msg-timestamp">{ts}</span>' if ts else ""
-
-        block = _render_tool_group(group, ts_display)
-
-        result[start] = f'<div class="msg-tool" markdown="1">\n\n{block}\n</div>'
-
-    return result
-
-# NOTE: 2026-05-16 gen by tea_agent, 支持多行参数格式
-def _render_tool_group(group, ts_display):
-
-    """将一组连续的 tool 消息渲染为 markdown，带轮次编号"""
-
-    lines_out = [f"{ts_display}\n##### 🔧 工具"]
-
-    round_num = 0
-
-    for msg in group:
-
-        text = msg.get("content", "").strip()
-
-        # @2026-05-16 gen by tea_agent, 支持新旧两种工具调用格式
-        m_new = re.match(r'🔧 调用工具：(\w+)\n参数：\n(.+)', text, re.DOTALL)
-        m_old = re.match(r'🔧 调用工具：(\w+)\((.+)\)', text)
-        if m_new:
-            round_num += 1
-
-            tool_name = m_new.group(1)
-
-            args = m_new.group(2).strip()
-
-            if len(args) > 200:
-
-                args = args[:200] + "..."
-
-            lines_out.append(f"\n**第 {round_num} 轮**")
-
-            lines_out.append(f"- **调用**: `{tool_name}`")
-
-            lines_out.append(f"- **参数**: \n```\n{args}\n```")
-
-            continue
-        if m_old:
-            round_num += 1
-
-            tool_name = m_old.group(1)
-
-            args = m_old.group(2)
-
-            if len(args) > 160:
-
-                args = args[:160] + "..."
-
-            lines_out.append(f"\n**第 {round_num} 轮**")
-
-            lines_out.append(f"- **调用**: `{tool_name}`")
-
-            lines_out.append(f"- **参数**: `{args}`")
-
-            continue
-
-        if text.startswith("📋 结果："):
-
-            result = text[6:]
-
-            if len(result) > 200:
-
-                result = result[:200] + "..."
-
-            lines_out.append(f"- **结果**: {result}")
-
-            continue
-
-        if text.startswith("ℹ️ "):
-
-            info = text[3:]
-
-            if len(info) > 200:
-
-                info = info[:200] + "..."
-
-            lines_out.append(f"\nℹ️ {info}")
-
-            continue
-
-        display = text
-
-        if len(display) > 200:
-
-            display = display[:200] + "..."
-
-        lines_out.append(f"🔧 {display}")
-
-    lines_out.append("")
-
-    return "\n".join(lines_out)
-
-# @2026-05-15 gen by tea_agent, 图片点击放大弹窗
-def _chat_to_markdown(messages, image_cache=None):
-    """将聊天消息列表转换为 markdown 格式，包含时间戳和分割线"""
-    # 预计算工具轮分组块
-    tool_blocks = _build_tool_blocks(messages)
-    parts = []
-    for i, msg in enumerate(messages):
-        role = msg.get("role", "")
-        content = msg.get("content", "")
-        ts = msg.get("timestamp", "")
-        ts_display = f'<span class="msg-timestamp">{ts}</span>' if ts else ""
-        if role == "user":
-            # NOTE: 2026-05-15 gen by tea_agent, 支持图片附件渲染
-            img_html = ""
-# NOTE: 2026-05-15 15:11:05, self-evolved by tea_agent --- 修改 _chat_to_markdown 支持直接渲染 Base64 格式的图片数据
-            imgs = msg.get("images", [])
-            if imgs:
-                img_tags = []
-                import os, base64
-                for img_path in imgs:
-                    try:
-                        # 支持直接渲染 Base64 数据（由 Storage 持久化后返回）
-                        if img_path.startswith("data:image/"):
-                            if image_cache is not None:
-                                mime, b64_data = img_path.split(",", 1)
-                                cache_idx = len(image_cache)
-                                image_cache.append((b64_data, mime.split(";")[0]))
-                                img_tags.append(f'<a href="tea://image/{cache_idx}" class="chat-image-link"><img src="{img_path}" class="chat-image" alt="用户上传图片" /></a>')
-                            else:
-                                img_tags.append(f'<img src="{img_path}" class="chat-image" alt="用户上传图片" />')
-                        elif os.path.isfile(img_path):
-                            with open(img_path, "rb") as f:
-                                b64 = base64.b64encode(f.read()).decode("utf-8")
-                            ext = os.path.splitext(img_path)[1].lower()
-                            mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-                                       ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}
-                            mime = mime_map.get(ext, "image/png")
-                            if image_cache is not None:
-                                cache_idx = len(image_cache)
-                                image_cache.append((b64, mime))
-                                img_tags.append(f'<a href="tea://image/{cache_idx}" class="chat-image-link"><img src="data:{mime};base64,{b64}" class="chat-image" alt="用户上传图片" /></a>')
-                            else:
-                                img_tags.append(f'<img src="data:{mime};base64,{b64}" class="chat-image" alt="用户上传图片" />')
-                        else:
-                            img_tags.append(f'<p class="img-error">⚠️ 找不到图片: {os.path.basename(img_path)}</p>')
-                    except Exception:
-                        img_tags.append(f'<p class="img-error">⚠️ 无法加载图片: {os.path.basename(img_path)}</p>')
-                if img_tags:
-                    img_html = '<div class="chat-images">' + "".join(img_tags) + '</div>'
-            parts.append(f'{ts_display}\n\n<div class="msg-user" markdown="1">\n\n### 👤 你\n\n{img_html}\n\n{content.strip()}\n</div>\n')
-        elif role == "think":
-            parts.append(f'{ts_display}\n\n<div class="msg-think" markdown="1">\n\n### 💭 思考过程\n\n{content.strip()}\n</div>\n\n---\n')
-        elif role == "ai":
-            parts.append(f'{ts_display}\n\n<div class="msg-ai" markdown="1">\n\n### 🤖 AI\n\n{content.strip()}\n</div>\n\n---\n')
-        elif role == "tool":
-            if tool_blocks[i]:
-                parts.append(tool_blocks[i])
-        elif role == "notice":
-            # NOTE: 2026-05-15 gen by tea_agent, 去掉 --- 包裹避免与 AI 末尾的 --- 连成三条水平线
-            parts.append(f"\n{content.strip()}\n")
-# NOTE: 2026-05-14 16:00:09, self-evolved by tea_agent --- HtmlFrame render 前增加 HTML 校验：控制字符清洗 + 标签配对检查
-    return "\n".join(parts)
-
-# NOTE: 2026-05-16 gen by tea_agent, HTML 校验：过滤控制字符，防止畸形字节流导致 HtmlFrame 渲染残缺
-def _sanitize_html_control_chars(html: str) -> str:
-    """移除 HTML 中的控制字符（保留 \\n 0x0a 和 \\t 0x09）。"""
-    return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', html)
-
-_KNOWN_HTML_TAGS = {'textarea', 'script', 'section', 'details', 'img', 'ul', 'h2', 'article', 'source', 'link', 'audio', 'h3', 'select', 'th', 'tr', 'tfoot', 'h1', 'h6', 'label', 'html', 'dt', 's', 'ol', 'colgroup', 'ins', 'code', 'summary', 'body', 'blockquote', 'abbr', 'tt', 'b', 'dd', 'input', 'nav', 'button', 'option', 'title', 'data', 'fieldset', 'head', 'iframe', 'sup', 'style', 'td', 'a', 'h5', 'dl', 'hr', 'main', 'figcaption', 'tbody', 'col', 'del', 'video', 'meta', 'sub', 'header', 'wbr', 'span', 'template', 'li', 'pre', 'caption', 'figure', 'strike', 'thead', 'form', 'footer', 'table', 'u', 'mark', 'canvas', 'legend', 'time', 'center', 'small', 'h4', 'strong', 'br', 'aside', 'div', 'big', 'p', 'em', 'font', 'i'}
-
-def _validate_html_structure(html: str) -> tuple:
-    """快速校验 HTML 基本结构：长度、html 标签、标签配对。
-    返回 (ok: bool, 诊断信息: str)。"""
-    if len(html) < 10:
-        return False, f"HTML 过短 ({len(html)} 字节)"
-    lower = html.lower()
-    if '<html>' not in lower and '<html ' not in lower:
-        return False, "缺少 <html> 标签"
-    # 用 HTMLParser 检查标签配对
-    from html.parser import HTMLParser
-
-    class _TagChecker(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.stack = []
-            self.errors = []
-            self.known_tags = _KNOWN_HTML_TAGS
-            self.void_elements = {'br', 'hr', 'img', 'input', 'meta', 'link',
-                                  'area', 'base', 'col', 'embed', 'source', 'track', 'wbr'}
-
-        def handle_starttag(self, tag, attrs):
-            if tag in self.known_tags and tag not in self.void_elements:
-                self.stack.append(tag)
-
-        def handle_endtag(self, tag):
-            if tag not in self.known_tags or tag in self.void_elements:
-                return
-            if not self.stack:
-                self.errors.append(f"多余的闭合标签 </{tag}>")
-            elif self.stack[-1] == tag:
-                self.stack.pop()
-            else:
-                if tag in self.stack:
-                    while self.stack and self.stack[-1] != tag:
-                        unclosed = self.stack.pop()
-                        self.errors.append(f"未闭合 <{unclosed}>")
-                    if self.stack:
-                        self.stack.pop()
-                else:
-                    self.errors.append(f"未预期的闭合标签 </{tag}>")
-
-        def get_result(self):
-            for tag in reversed(self.stack):
-                self.errors.append(f"未闭合 <{tag}>")
-            return len(self.errors) == 0, self.errors
-
-    try:
-        checker = _TagChecker()
-        checker.feed(html)
-        ok, errors = checker.get_result()
-        if ok:
-            return True, "OK"
-        else:
-            return False, "; ".join(errors[:3])
-    except Exception as e:
-        return False, f"HTML 解析异常: {e}"
-
-def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Optional[str]:
-    """
-    根据最近3轮对话通过 LLM 生成不超过20字的摘要。
-
-    Args:
-        client: OpenAI 客户端实例
-        model: 模型名称
-        conversations: 最近的对话列表（按时间正序），包含 user_msg 和 ai_msg
-
-    Returns:
-        不超过20字的摘要字符串；若生成失败则返回 None
-    """
-    if not conversations:
-        return None
-        
-# NOTE: 2026-05-01 20:12:20, self-evolved by tea_agent --- _generate_topic_summary 只收集 user_msg，不混入 AI 回复
-    user_msgs = []
-    for conv in conversations:
-        um = conv.get("user_msg", "").strip()
-        if um:
-            # NOTE: 2026-05-15 gen by tea_agent, 处理 JSON 格式 user_msg（含图片）
-            if um.startswith('{'):
-                try:
-                    import json as _json_gs
-                    parsed = _json_gs.loads(um)
-                    if isinstance(parsed, dict):
-                        um = parsed.get("text", um)
-                except Exception:
-                    pass
-            if len(um) > 200:
-                um = um[:200] + "..."
-            user_msgs.append(f"用户：{um}")
-
-    if not user_msgs:
-        return None
-
-    user_content = _TOPIC_SUMMARY_USER_TEMPLATE.format(
-        user_msgs="\n".join(user_msgs)
-    )
-
-# NOTE: 2026-05-07 11:27:55, self-evolved by tea_agent --- _generate_topic_summary 添加模型请求/响应的 DEBUG 日志
-    try:
-        logger.debug(f"generate_topic_summary request: model={model}, conversations={len(conversations)}, user_msgs={len(user_msgs)}")
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": _TOPIC_SUMMARY_SYSTEM},
-                {"role": "user", "content": user_content},
-            ],
-            temperature=0.3,
-            max_tokens=50,
-        )
-        
-        # 安全检查返回值
-        if not response.choices or len(response.choices) == 0:
-            return None
-            
-# NOTE: 2026-05-07 11:12:16, self-evolved by tea_agent --- 在 _generate_topic_summary 中添加原始返回调试日志，定位 LLM 返回被过滤的原因
-# NOTE: 2026-05-07 11:14:38, self-evolved by tea_agent --- _generate_topic_summary 处理 reasoning_content：deepseek 推理模型的 content 可能为空，fallback 读 reasoning_content
-        content = response.choices[0].message.content
-        # DeepSeek 等推理模型可能把回复放到 reasoning_content 中，content 为空
-        if not content:
-            content = getattr(response.choices[0].message, 'reasoning_content', None)
-        if not content or not isinstance(content, str):
-            logger.warning(f"_generate_topic_summary: API 返回空 content, model={model}")
-            return None
-            
-# NOTE: 2026-05-01 08:10:00, self-evolved by tea_agent --- _generate_topic_summary 增加最小长度≥2的校验，防止LLM返回如"为"的单字摘要
-        raw = content.strip()
-        # 调试日志：记录 LLM 原始返回，便于排查过滤原因
-        logger.info(f"_generate_topic_summary 原始返回: model={model}, raw_len={len(raw)}, raw={repr(raw[:80])}")
-        # 去掉各种引号包裹（中英文全角半角）
-        raw = re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
-        raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
-        raw = raw.strip()
-        
-# NOTE: 2026-05-07 11:12:33, self-evolved by tea_agent --- 在 _generate_topic_summary 过滤链各环节添加具体日志，区分"空 raw"和"过短被拒"
-        if not raw:
-            logger.warning(f"_generate_topic_summary: 清洗后 raw 为空, content={repr(content[:80])}")
-            return None
-        
-# NOTE: 2026-05-01 08:17:32, self-evolved by tea_agent --- _generate_topic_summary min_length从2提高到5，拒绝"KB与"这种3字残句
-# NOTE: 2026-05-01 08:18:13, self-evolved by tea_agent --- min_length调整为4：拒绝"为"(1)、"KB与"(3)，放行"你好世界"(4)
-        # 拒绝过短的摘要（<4个字符，如"为"(1)、"KB与"(3)等LLM残句）
-        if len(raw) < 4:
-            logger.warning(f"_generate_topic_summary: 摘要过短被拒, len={len(raw)}, raw={repr(raw)}")
-            return None
-            
-        if len(raw) > 20:
-            raw = raw[:20]
-            
-        return raw if raw else None
-    except Exception as e:
-        # 2026-05-06 gen by tea_agent, log summary failure reason for debugging
-        logger.warning(f"_generate_topic_summary 失败: {type(e).__name__}: {e}, model={model}")
-        return None
-
-# ====================== GUI 主界面 ======================
-
-# 2026-05-09 gen by tea_agent, Dialog 类拆分至 gui_dialogs.py
+# ====================== 从 _gui 子包导入（组合模式） ======================
+# NOTE: 2026-05-20 gen by tea_agent, 字体/渲染/摘要从 _gui 子包导入，替代内联定义
+from tea_agent._gui._fonts import (
+    _fs, _init_fonts, SYSTEM_FONT, MONO_FONT,
+    _DEFAULT_FONT_SIZE, _SCALE_FACTOR, _FONTS_DETECTED,
+)
+# 平台检测（从 _fonts 重导出，保持兼容）
+_IS_WINDOWS = __import__('platform').system() == "Windows"
+
+from tea_agent._gui._markdown import (
+    _render_markdown, _build_tool_blocks, _render_tool_group,
+    _chat_to_markdown, _sanitize_html_control_chars,
+    _validate_html_structure, _MD_CSS_TEMPLATE, _KNOWN_HTML_TAGS,
+    HAS_TKINTERWEB,
+)
+from tea_agent._gui._topic_summary import _generate_topic_summary
+
+# 组件委托（composition）
+from tea_agent._gui._stream_manager import StreamManager
+from tea_agent._gui._topic_manager import TopicManager
+from tea_agent._gui._ui_builder import UIBuilder
+from tea_agent._gui._tray import TrayManager
+from tea_agent._gui._images import ImageHandler
+from tea_agent._gui._renderer import ChatRenderer
+
+# Dialogs
 from tea_agent.gui_dialogs import MemoryDialog, TopicDialog, ConfigDialog
 
 # NOTE: 2026-06-23 gen by tea_agent, StatusNotifierItem D-Bus 实现（兼容 KDE Plasma 6）
 import os as _os
 
+try:
+    import dbus
+    import dbus.service
+    import dbus.mainloop.glib
+    from gi.repository import GLib
+    HAS_SNI = True
+except ImportError:
+    HAS_SNI = False
+
 if HAS_SNI:
     class StatusNotifierItemDBus(dbus.service.Object):
         """StatusNotifierItem D-Bus 服务，替代 pystray，原生兼容 KDE Plasma 6"""
-        
+
         def __init__(self, app_id, title, icon_pixmap_ar32, on_activate, on_context_menu):
             self._app_id = app_id
             self._title = title
@@ -591,91 +133,64 @@ if HAS_SNI:
             self._on_context_menu = on_context_menu
             self._loop = None
             self._thread = None
-            
+
             # 初始化 D-Bus
             dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
             self._bus = dbus.SessionBus()
             bus_name = dbus.service.BusName(
-                f"org.kde.StatusNotifierItem-{_os.getpid()}-{app_id}",
-                bus=self._bus
+                f'org.kde.StatusNotifierItem-{app_id.replace(".", "_")}-{os.getpid()}',
+                self._bus,
             )
-            super().__init__(bus_name, "/StatusNotifierItem")
-            self._bus_name = bus_name
-            
-            # 注册到 StatusNotifierWatcher
-            self._register_to_watcher()
-        
-        def _register_to_watcher(self):
-            try:
-                watcher = self._bus.get_object(
-                    "org.kde.StatusNotifierWatcher",
-                    "/StatusNotifierWatcher"
-                )
-                watcher_iface = dbus.Interface(watcher, "org.kde.StatusNotifierWatcher")
-                watcher_iface.RegisterStatusNotifierItem(self._bus_name.get_name())
-            except Exception as e:
-                logger.warning(f"注册 StatusNotifierWatcher 失败: {e}")
-        
-        # ---- D-Bus 属性 ----
-        @dbus.service.method("org.freedesktop.DBus.Properties", in_signature="ss", out_signature="v")
-        def Get(self, iface, prop):
-            return self._get_property(iface, prop)
-        
-        @dbus.service.method("org.freedesktop.DBus.Properties", in_signature="s", out_signature="a{sv}")
-        def GetAll(self, iface):
-            return {p: self._get_property(iface, p) for p in [
-                "Category", "Id", "Title", "Status", "WindowId",
-                "IconName", "IconPixmap", "ItemIsMenu", "Menu"
-            ]}
-        
-        def _get_property(self, iface, prop):
-            if iface != "org.kde.StatusNotifierItem":
-                return None
-            props = {
-                "Category": "ApplicationStatus",
-                "Id": self._app_id,
-                "Title": self._title,
-                "Status": "Active",
-                "WindowId": 0,
-                "IconName": "",
-                "IconPixmap": dbus.Array([
-                    dbus.Struct((32, 32, dbus.ByteArray(self._icon_data)), signature="iiay")
-                ], signature="(iiay)"),
-                "ItemIsMenu": dbus.Boolean(False),
-                "Menu": dbus.ObjectPath("/NO_DBUSMENU"),
-            }
-            return props.get(prop)
-        
-        # ---- D-Bus 方法 ----
-        @dbus.service.method("org.kde.StatusNotifierItem", in_signature="ii", out_signature="")
+            super().__init__(bus_name, '/StatusNotifierItem')
+
+        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
+        def Title(self):
+            return self._title
+
+        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
+        def Id(self):
+            return self._app_id
+
+        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
+        def Status(self):
+            return 'Active'
+
+        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
+        def Category(self):
+            return 'ApplicationStatus'
+
+        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='ay')
+        def IconPixmap(self):
+            # 返回 ARGB32 像素数组
+            import struct
+            width = 32
+            height = 32
+            return struct.pack('<ii', width, height) + self._icon_data
+
+        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='')
         def Activate(self, x, y):
-            """左键单击 - 激活窗口"""
-            self._on_activate()
-        
-        @dbus.service.method("org.kde.StatusNotifierItem", in_signature="ii", out_signature="")
+            if callable(self._on_activate):
+                self._on_activate()
+
+        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='')
         def ContextMenu(self, x, y):
-            """右键菜单"""
-            self._on_context_menu(x, y)
-        
-        @dbus.service.method("org.kde.StatusNotifierItem", in_signature="ii", out_signature="")
-        def SecondaryActivate(self, x, y):
-            """中键点击 - 等同于左键"""
-            self._on_activate()
-        
-        @dbus.service.method("org.kde.StatusNotifierItem", in_signature="is", out_signature="")
-        def Scroll(self, delta, orientation):
-            pass
-        
-        def run(self):
-            """在后台线程启动 GLib 事件循环"""
+            if callable(self._on_context_menu):
+                self._on_context_menu(x, y)
+
+        def start(self):
+            """在后台线程启动 GLib main loop"""
+            import threading
             self._loop = GLib.MainLoop()
-            self._loop.run()
-        
+
+            def run():
+                self._loop.run()
+
+            self._thread = threading.Thread(target=run, daemon=True)
+            self._thread.start()
+
         def stop(self):
-            """停止托盘图标"""
             if self._loop:
                 self._loop.quit()
-                self._loop = None
 
 # NOTE: 2026-05-04 18:47:26, self-evolved by tea_agent --- TkGUI 继承 AgentCore，消除重复代码
 class TkGUI(AgentCore):
@@ -691,6 +206,11 @@ class TkGUI(AgentCore):
 
         # ── AgentCore 初始化：配置、目录、Storage/Toolkit、会话 ──
         super().__init__(debug=debug)
+
+        # NOTE: 2026-05-20 gen by tea_agent, 组件委托（composition）
+        self.stream_mgr = StreamManager(self)
+        self.topic_mgr = TopicManager(self)
+        self.ui_builder = UIBuilder(self)
 
         # @2026-05-15 gen by tea_agent, Composition: 消息渲染器
         self.renderer = ChatRenderer(self)
@@ -890,149 +410,9 @@ class TkGUI(AgentCore):
             logger.warning(f"定时任务调度器自动启动失败: {e}")
 
     def _create_ui(self):
-        """创建界面"""
-        main_split = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
-        main_split.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
+        """创建界面 — 委托给 UIBuilder"""
+        self.ui_builder.build()
 
-        # ===== 左侧面板 =====
-        left = Frame(main_split, width=220)
-        main_split.add(left, weight=1)
-
-# NOTE: 2026-04-30 20:03:32, self-evolved by tea_agent --- 主题标签(12→_fs(12))和主题列表(10→_fs(10))字体适配缩放
-        ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, _fs(14), "bold")).pack(pady=5)
-        # NOTE: 2026-05-08 gen by tea_agent, 主题列表字体从 _fs(10) 调大到 _fs(15)，减少密集感
-        # NOTE: 2026-05-08 gen by tea_agent, 显式构造字体对象确保正确渲染
-        _topic_font = tkFont.Font(family=SYSTEM_FONT, size=_fs(12))
-        # NOTE: 2026-06-18 gen by tea_agent, Listbox→Treeview：字体渲染更好
-        _topic_style = ttk.Style()
-        _topic_style.configure("Topic.Treeview", rowheight=_fs(30))
-        self.topic_list = ttk.Treeview(left, show="tree", style="Topic.Treeview",
-                                       selectmode="browse", height=12)
-        self.topic_list.tag_configure("topic_item", font=_topic_font)
-        self.topic_list.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
-        self.topic_list.bind("<<TreeviewSelect>>", self.on_topic_select)
-        # NOTE: 2026-05-08 gen by tea_agent, 鼠标悬停显示主题日期tooltip
-        self.topic_list.bind("<Motion>", self._on_topic_hover, add="+")
-        self.topic_list.bind("<Leave>", self._on_topic_leave, add="+")
-        self._topic_cache = []           # 缓存 list_topics 原始数据
-        self._topic_tooltip = None       # tooltip Toplevel
-        self._topic_hover_after = None   # debounce after_id
-        ttk.Button(left, text="➕ 新建主题", command=self.new_topic).pack(
-            fill=tk.X, padx=4, pady=2)
-        ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
-        ttk.Button(left, text="📁 主题管理", command=self.open_topic_dialog).pack(
-            fill=tk.X, padx=4, pady=2)
-# NOTE: 2026-05-01 15:33:14, self-evolved by tea_agent --- 左侧面板加"⚙️ 配置"按钮 + TkGUI.open_config_dialog 方法
-        ttk.Button(left, text="🧠 记忆管理", command=self.open_memory_dialog).pack(
-            fill=tk.X, padx=4, pady=2)
-        ttk.Button(left, text="⚙️ 配置", command=self.open_config_dialog).pack(
-            fill=tk.X, padx=4, pady=2)
-
-        # ===== 右侧面板 =====
-        right = Frame(main_split)
-        main_split.add(right, weight=5)
-
-        # 状态栏
-        self.status_var = tk.StringVar(value="就绪")
-        status_frame = ttk.Frame(right)
-        status_frame.pack(anchor=tk.E, padx=6, fill=tk.X)
-        ttk.Label(status_frame, textvariable=self.status_var,
-                  foreground="#666").pack(side=tk.LEFT, padx=(0, 20))
-
-        # 聊天区域
-        self.chat_split = ttk.PanedWindow(right, orient=tk.VERTICAL)
-        self.chat_split.pack(fill=tk.BOTH, expand=True)
-
-        chat_frame = Frame(self.chat_split)
-        self.chat_split.add(chat_frame, weight=3)
-
-# NOTE: 2026-04-30 20:03:16, self-evolved by tea_agent --- 控制台字体使用 _fs(11) 适配缩放
-        self.console = scrolledtext.ScrolledText(
-            chat_frame, font=(SYSTEM_FONT, _fs(15)), bg="white", fg="black", wrap=tk.WORD
-        )
-        self.console.config(state=tk.DISABLED)
-
-        if HAS_TKINTERWEB:
-            # NOTE: 2026-05-15 gen by tea_agent, 添加 on_link_click 回调支持历史轮次链接
-            self.chat_view = HtmlFrame(chat_frame, messages_enabled=False, on_link_click=self._on_history_link_click)
-        else:
-            self.chat_view = scrolledtext.ScrolledText(
-                chat_frame, font=(SYSTEM_FONT, _fs(15)), bg="#fafafa", fg="black", wrap=tk.WORD
-            )
-            self.chat_view.config(state=tk.DISABLED)
-
-        self._show_mode = "console"
-        self._switch_display("console")
-
-        # 输入区域
-        input_frame = Frame(self.chat_split)
-        self.chat_split.add(input_frame, weight=1)
-# NOTE: 2026-04-30 20:03:24, self-evolved by tea_agent --- 输入框字体使用 _fs(14)、输入提示使用 _fs(9) 适配缩放
-        self.input_box = scrolledtext.ScrolledText(
-            input_frame, font=(SYSTEM_FONT, _fs(16)), height=4, bg="#f8f8f8"
-        )
-        self.input_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
-
-# NOTE: 2026-05-16 19:40:10, self-evolved by tea_agent --- 将图片/纯文本视图按钮与输入提示放在同一行
-        # NOTE: 2026-05-20 gen by tea_agent, 底部工具栏（图片/视图/提示同一行）
-        # NOTE: 2026-07-05 gen by tea_agent, 使用 ttk.Frame 确保工具栏背景与系统对话框一致
-        toolbar = ttk.Frame(input_frame)
-        toolbar.pack(fill=tk.X, padx=4, pady=(0, 2))
-
-        # 左侧：图片附件
-        self._img_btn = ttk.Button(toolbar, text="📎 图片", command=self.images.attach)
-        self._img_btn.pack(side=tk.LEFT)
-        self._img_label = ttk.Label(toolbar, text="", foreground="#888")
-        self._img_label.pack(side=tk.LEFT, padx=(4, 2))
-        self._clear_img_btn = ttk.Button(toolbar, text="✕ 清除", command=self.images.clear)
-        # 初始隐藏清除按钮
-
-        # 中间：视图切换
-        # NOTE: 2026-05-20 gen by tea_agent, 原始/渲染视图切换（仅会话完成后显示）
-        self._raw_check_btn = ttk.Checkbutton(
-            toolbar, text="📋 纯文本视图", variable=self._raw_view,
-            command=self._toggle_raw_view
-        )
-
-        # 右侧：提示文字（自动靠右）
-        ttk.Label(toolbar, text="Enter 发送  •  Shift+Enter 换行  •  ESC 打断",
-                  foreground="#888", font=(SYSTEM_FONT, _fs(10)))\
-            .pack(side=tk.RIGHT, padx=6)
-
-        # 样式配置
-        self.console.tag_configure("user", foreground="#0055cc")
-        self.console.tag_configure("ai", foreground="black")
-        self.console.tag_configure("tool", foreground="#d68000")
-# NOTE: 2026-04-30 20:03:47, self-evolved by tea_agent --- title 标签字体使用 _fs(12) 适配缩放
-        self.console.tag_configure(
-            "title", foreground="#0066cc", font=(SYSTEM_FONT, _fs(14), "bold"))
-        self.console.tag_configure("notice", foreground="#008800")
-# NOTE: 2026-05-07 17:33:59, self-evolved by tea_agent --- 添加 think 标签（灰色斜体）用于控制台思考过程显示
-        self.console.tag_configure("error", foreground="#cc0000")
-        self.console.tag_configure("think", foreground="#888888", font=(SYSTEM_FONT, _fs(13), "italic"))
-
-        # 快捷键绑定
-        self.input_box.bind("<Return>", self.send)
-        self.input_box.bind("<Shift-Return>", self.newline)
-        self.root.bind("<Escape>", self.interrupt)
-
-        # HtmlFrame 缩放快捷键
-        if HAS_TKINTERWEB:
-            self.root.bind("<Control-equal>", self.zoom_in)
-            self.root.bind("<Control-plus>", self.zoom_in)
-            self.root.bind("<Control-minus>", self.zoom_out)
-            self.root.bind("<Control-underscore>", self.zoom_out)
-
-        # HtmlFrame 历史轮次快捷键
-        if HAS_TKINTERWEB:
-            self.root.bind("<Alt-Up>", self._history_prev_round)
-            self.root.bind("<Alt-Down>", self._history_next_round)
-
-
-    # NOTE: 2026-07-05 gen by tea_agent, 微调聊天/输入分隔栏位置，确保输入区底部工具栏完整显示
-
-    # NOTE: 2026-07-05 gen by tea_agent, 确保输入区底部工具栏（图片/视图/提示行）完整显示
-    # NOTE: 2026-07-05 gen by tea_agent, 权重比 3:1 已保证底部工具栏完整显示，此方法保留作兼容
     def _adjust_chat_sash(self):
         """权重比已调整，此方法保留作兼容"""
         pass
@@ -1150,112 +530,49 @@ class TkGUI(AgentCore):
         return {"enable_thinking": self.sess.enable_thinking, "changed": True}
 
     def _update_status(self, msg: str):
-        self.status_var.set(msg)
+        """更新状态栏"""
+        if hasattr(self, 'status_var'):
+            self.status_var.set(msg)
 
     def safe_stream(self, text):
-        self.root.after(0, self.stream, text)
+        """线程安全的流式输出 — 委托 StreamManager"""
+        self.stream_mgr.safe_stream(text)
 
     def safe_log(self, msg, tag="ai"):
-        self.root.after(0, self.log, msg, tag)
+        """线程安全的日志输出 — 委托 StreamManager"""
+        self.stream_mgr.safe_log(msg, tag)
 
     def safe_log_tool(self, msg: str):
-        self.root.after(0, self.log_tool, msg)
+        """线程安全的工具日志 — 委托 StreamManager"""
+        self.stream_mgr.safe_log_tool(msg)
 
     def safe_update_status(self, msg: str):
-        if msg.startswith("!MAX_ITER:"):
-            self.root.after(0, self._handle_max_iter, msg)
-        else:
-            self.root.after(0, self._update_status, msg)
+        """线程安全的状态更新 — 委托 StreamManager"""
+        self.stream_mgr.safe_update_status(msg)
 
-    # @2026-04-29 gen by deepseek-v4-pro, 工具调用达上限时弹框询问继续/终止
     def _handle_max_iter(self, msg: str):
-        """弹出对话框询问用户是否继续工具调用。"""
-# NOTE: 2026-05-04 19:39:42, self-evolved by tea_agent --- GUI 续命弹窗：文案从 5 轮改为 10 轮，确认后追加 10 轮
-        from tkinter import messagebox
-        display = msg.replace("!MAX_ITER:", "")
-        result = messagebox.askyesno(
-            "达到工具调用上限",
-            f"{display}\n\n选择「是」再执行 10 轮\n选择「否」终止当前回答",
-            parent=self.root,
-        )
-        if hasattr(self, 'sess') and self.sess:
-            self.sess._continue_after_max = result
-            self.sess._max_iter_wait.set()
-            if result:
-                self.sess._extra_iterations += 10
-                self._update_status("⏳ 已续命 10 轮，继续生成... (ESC 打断)")
-            else:
-                self._update_status("🛑 用户终止工具调用")
-
-        self.log("=" * 50, "title")
-        self.log(f"📦 已加载工具函数（共 {len(self.toolkit.func_map)} 个）", "title")
-        for name in self.toolkit.func_map.keys():
-            self.log(f"✅ {name}", "notice")
-        self.log("=" * 50, "title")
-        self.log("")
+        """处理最大迭代次数 — 委托 StreamManager"""
+        self.stream_mgr.handle_max_iter(msg)
 
     def log(self, msg, tag="ai", images=None):
-        self.console.config(state=tk.NORMAL)
-        self.console.insert(tk.END, msg + "\n", tag)
-        self.console.see(tk.END)
-        self.console.config(state=tk.DISABLED)
+        """输出日志到控制台 — 委托 StreamManager"""
+        self.stream_mgr.log(msg, tag, images)
 
-        if tag in ("user", "ai", "tool", "notice"):
-            entry = {"role": tag, "content": msg, "timestamp": self._now_ts()}
-            # NOTE: 2026-05-15 gen by tea_agent, 支持图片附件
-            if images:
-                entry["images"] = images
-            self.chat_messages.append(entry)
-
-# NOTE: 2026-05-07 17:32:01, self-evolved by tea_agent --- stream() 识别 [THINK] 前缀分别缓冲，控制台灰色显示，触发 HtmlFrame 定期渲染
-# NOTE: 2026-05-08 08:26:53, self-evolved by tea_agent --- 流式输出期间仅更新ScrolledText控制台，移除HtmlFrame的150ms定时渲染，会话完成后统一渲染HtmlFrame，降低GUI阻塞感
     def stream(self, text):
-        # 检测 [THINK_DONE] 信号：本轮思考结束，刷新思考缓冲为独立消息
-        if text == "[THINK_DONE]":
-            self._flush_think_buffer_to_messages()
-            return
-
-        # 检测 thinking/reasoning 内容（[THINK] 前缀标记）
-        is_think = text.startswith("[THINK]")
-        display_text = text[7:] if is_think else text  # 去掉 7 字符标记
-
-        # 分别缓冲：think + content 都入队，由 500ms 定时器批量刷新
-        # # NOTE: 2026-05-08 09:04:24, self-evolved by tea_agent --- think 也入 pending 队列，500ms 批量刷新，既实时又不碎片化
-        if is_think:
-            self._think_buffer += display_text
-            self._pending_console_text.append((display_text, "think"))
-        else:
-            self._stream_buffer += display_text
-            self._pending_console_text.append((display_text, None))
-
-        # 流式过程中不渲染 HtmlFrame（load_html 是重型操作），会话完成后 _render_and_show_chat 统一渲染
+        """流式输出 — 委托 StreamManager"""
+        self.stream_mgr.stream(text)
 
     def log_tool(self, msg: str):
-        self.log(msg, "tool")
+        """工具日志 — 委托 StreamManager"""
+        self.stream_mgr.log_tool(msg)
+
     def _stream_flush_tick(self):
-        """500ms 定时器：批量将累积文本刷新到 ScrolledText 控制台。
-        # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- 用 500ms 定时器替代每 token 的 GUI 操作，降低高速输出时的阻塞感
-        相比每个 token 都 config(ENABLE/DISABLE) + insert + see(END)，
-        合并为 500ms 批量操作可大幅降低 GUI 阻塞感。"""
-        if self._pending_console_text:
-            self.console.config(state=tk.NORMAL)
-            for text, tag in self._pending_console_text:
-                if tag == "think":
-                    self.console.insert(tk.END, text, "think")
-                else:
-                    self.console.insert(tk.END, text)
-            self.console.see(tk.END)
-            self.console.config(state=tk.DISABLED)
-            self._pending_console_text.clear()
-        if self.generating:
-            self.root.after(500, self._stream_flush_tick)
+        """流式刷新 — 委托 StreamManager"""
+        self.stream_mgr.stream_flush_tick()
 
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _flush_stream_to_messages(self):
-    # @2026-05-16 gen by tea_agent, 工具轮思考过程独立存储
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _flush_think_buffer_to_messages(self):
-
-# NOTE: 2026-05-07 17:33:40, self-evolved by tea_agent --- clear_chat 初始化 _think_buffer 和 _stream_render_pending
     def clear_chat(self):
+        """清空聊天"""
+        import tkinter as tk
         self.console.config(state=tk.NORMAL)
         self.console.delete("1.0", tk.END)
         self.console.config(state=tk.DISABLED)
@@ -1263,344 +580,81 @@ class TkGUI(AgentCore):
         self._stream_buffer = ""
         self._think_buffer = ""
         self._pending_console_text.clear()
-        self._pending_images.clear()  # NOTE: 2026-05-15 gen by tea_agent, 清理待发送图片
+        self._pending_images.clear()
         self._img_label.config(text="")
         self._clear_img_btn.pack_forget()
-        # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- 清理 _pending_console_text，移除废弃的 _stream_render_pending
 
     def auto_new_topic(self):
-        topics = self.db.list_topics()
-        if topics:
-            # Treeview: 选中第一项
-            children = self.topic_list.get_children()
-            if children:
-                self.topic_list.selection_set(children[0])
-            self.on_topic_select(None)
-        else:
-            self.new_topic()
+        """自动创建主题 — 委托 TopicManager"""
+        self.topic_mgr.auto_new_topic()
 
     def new_topic(self):
-        title = f"主题 {datetime.now().strftime('%m-%d %H:%M:%S')}"
-        tid = self.db.create_topic(title)
-        self.current_topic_id = tid  # NOTE: 2026-06-18 gen by tea_agent, 先设置 current_topic_id 再 refresh_topics，确保新主题高亮
-        self.refresh_topics()
-        self.switch_topic(tid)
+        """新建主题 — 委托 TopicManager"""
+        self.topic_mgr.new_topic()
 
-# NOTE: 2026-04-30 09:37:55, self-evolved by tea_agent --- 左侧主题列表移除token前缀，直接显示摘要标题（不超过20字）
-    # NOTE: 2026-05-08 gen by tea_agent, refresh_topics 刷新后自动高亮当前主题（第一条匹配）
-        # NOTE: 2026-04-30 09:37:55, self-evolved by tea_agent --- 左侧主题列表移除token前缀，直接显示摘要标题（不超过20字）
-    # NOTE: 2026-05-08 gen by tea_agent, refresh_topics 刷新后自动高亮当前主题（第一条匹配）
     def refresh_topics(self):
-        # Treeview: 先清空再填充
-        for item in self.topic_list.get_children():
-            self.topic_list.delete(item)
-        topics = self.db.list_topics()
-        self._topic_cache = topics       # 缓存供 tooltip 使用
-        current_tid = getattr(self, 'current_topic_id', None)
-        highlight_iid = ""
-        for i, tp in enumerate(topics):
-            title = tp.get("title", "")
-            # 直接显示摘要标题，不超过20字
-            display = title[:20] if len(title) > 20 else title
-            iid = str(i)
-            self.topic_list.insert("", tk.END, iid=iid, text=display, tags=("topic_item",))
-            if tp.get("topic_id") == current_tid:
-                highlight_iid = iid
-        # 刷新后自动高亮当前主题
-        if topics:
-            self.topic_list.selection_set(highlight_iid)
-            self.topic_list.see(highlight_iid)
-    # NOTE: 2026-05-15 gen by tea_agent, 统一标题栏更新，附加当前目录
-    # NOTE: 2026-05-16 gen by tea_agent, 格式改为 AI助手-{主题}-cwd{完整路径}, 启动时固化cwd不随后续chdir变化
+        """刷新主题列表 — 委托 TopicManager"""
+        self.topic_mgr.refresh_topics()
+
     def _update_title(self, topic_title=""):
-        """设置窗口标题栏：AI助手 - {当前主题} - cwd {当前目录完整路径}"""
-        cwd = getattr(self, "_initial_cwd", "")
+        """更新窗口标题"""
+        title = "Tea Agent"
+        if hasattr(self, 'current_topic_id') and self.current_topic_id and self.current_topic_id != -1:
+            try:
+                tp = self.db.get_topic(self.current_topic_id)
+            except Exception:
+                tp = None
+            if tp and tp.get('summary'):
+                title = f"{tp['summary']} - Tea Agent"
         if topic_title:
-            self.root.title(f"AI助手 - {topic_title} - cwd {cwd}")
-        else:
-            self.root.title(f"AI助手 - cwd {cwd}")
+            title = f"{topic_title} - Tea Agent"
+        try:
+            dir_name = os.path.basename(self._initial_cwd or os.getcwd())
+            title = f"{title}  [{dir_name}]"
+        except Exception:
+            pass
+        self.root.title(title)
 
     def switch_topic(self, topic_id):
-# NOTE: 2026-05-09 18:59:41, self-evolved by tea_agent --- switch_topic 时更新窗口标题栏为 {topic_title} — AI 工具调用助手
-        self.current_topic_id = topic_id
-        # 更新窗口标题栏为当前主题标题
-        try:
-            tp = self.db.get_topic(topic_id)
-            title = (tp or {}).get("title", "")
-            self._update_title(title)
-        except Exception:
-            self._update_title()  # NOTE: 2026-05-15 gen by tea_agent, 标题含当前目录
-        self.clear_chat()
-# NOTE: 2026-05-07 14:45:13, self-evolved by tea_agent --- 启动进度轮询定时器，50ms 读共享变量更新 HtmlFrame
-        # 加载期间阻塞输入（send() 检查 generating），但 GUI 主循环不受影响
-        self.generating = True
-# NOTE: 2026-05-07 14:48:24, self-evolved by tea_agent --- switch_topic 初始化 _progress_queue 替代 _last_progress_shown
-        self._show_loading("正在加载历史记录")
-        self._update_status("⏳ 加载中...")
-        self._progress_queue = []  # 进度队列，后台线程入队，主线程定时器出队
-        self._poll_loading_progress()  # 启动 50ms 轮询定时器，实时刷新 HtmlFrame 进度
-
-        recent_turns = 10
-
-        def load_worker():
-            """后台线程：DB 查询 + JSON 解析 + 构建渲染列表（不阻塞 GUI）"""
-            try:
-                # === 第一阶段：DB 查询（后台线程） ===
-                topic = cast(dict, self.db.get_topic(topic_id))
-                ts = self.db.get_topic_tokens(topic_id)
-
-# NOTE: 2026-05-07 14:27:35, self-evolved by tea_agent --- 移除 load_worker 中多余的 _show_loading(progress) 调用，进度已改由状态栏展示
-                # 轻量查询所有对话（不含 rounds_json）
-                all_light = self.db.get_conversations(topic_id, limit=-1, include_rounds=False)
-                total_convs = len(all_light)
-                old_count = max(0, total_convs - recent_turns)
-
-                # 最近 N 轮完整查询（含工具调用链）
-                if total_convs > 0:
-                    recent_full = self.db.get_conversations(topic_id, limit=recent_turns, include_rounds=True)
-                    offset = total_convs - min(total_convs, recent_turns)
-                    for i in range(offset, total_convs):
-                        j = i - offset
-                        if j < len(recent_full):
-                            all_light[i] = recent_full[j]
-
-                summary = self.db.get_topic_summary(topic_id) or ""
-
-                # 更新 session 消息列表
-                self.sess.load_history(all_light, summary, recent_turns=recent_turns)
-
-                # === 第二阶段：构建渲染列表（纯数据，无 GUI 操作） ===
-                render_items = []  # list of (tag, text)
-
-                render_items.append(("title", f"📌 当前主题：{topic['title']}"))
-                render_items.append(("notice", "-" * 50))
-
-                total_tokens = ts.get("total_tokens", 0)
-                if total_tokens > 0:
-                    render_items.append(("notice",
-                        f"📊 Token 消耗: {total_tokens:,} "
-                        f"(prompt: {ts.get('total_prompt_tokens', 0):,}, "
-                        f"completion: {ts.get('total_completion_tokens', 0):,})"))
-                    render_items.append(("notice", ""))
-
-                if summary:
-                    render_items.append(("notice", f"📖 历史摘要：{summary}"))
-                    render_items.append(("notice", "-" * 50))
-
-                if old_count > 0:
-                    render_items.append(("notice",
-                        f"📖 最近 {recent_turns} 轮显示完整对话，更早的 {old_count} 轮仅显示问答"))
-                    render_items.append(("notice", ""))
-
-# NOTE: 2026-05-07 14:27:20, self-evolved by tea_agent --- 进度文本改为更新状态栏（轻量），HtmlFrame 仅初始渲染一次 spinner
-# NOTE: 2026-05-07 14:40:37, self-evolved by tea_agent --- 进度文本从状态栏改回 HtmlFrame 显示「正在加载 N 条记录中的第 n 条」
-# NOTE: 2026-05-07 14:43:26, self-evolved by tea_agent --- 进度更新粒度从每20条改为每条，确保加载动画流畅
-# NOTE: 2026-05-07 14:43:47, self-evolved by tea_agent --- 避免 root.after 堆积：后台线程写共享变量，主线程 50ms 定时器轮询更新 HtmlFrame
-# NOTE: 2026-05-07 14:48:00, self-evolved by tea_agent --- 修复进度丢失：共享变量改为队列，后台线程入队，主线程逐条出队渲染，不丢任何进度
-                # 遍历对话，构建渲染项 + 进度入队（后台线程入队，主线程定时器出队渲染）
-                for i, c in enumerate(all_light):
-                    # 每条进度写入队列，主线程 _poll_loading_progress 逐条出队更新 HtmlFrame
-                    self._progress_queue.append((i + 1, total_convs))
-
-                    is_old = i < old_count
-                    # NOTE: 2026-05-15 gen by tea_agent, 支持 JSON 格式 user_msg（含图片）
-                    raw_user_msg = c['user_msg']
-                    user_images = []
-                    user_text = raw_user_msg
-                    if raw_user_msg and raw_user_msg.startswith('{'):
-                        try:
-                            import json as _json_um
-                            parsed = _json_um.loads(raw_user_msg)
-                            if isinstance(parsed, dict):
-                                user_text = parsed.get("text", raw_user_msg)
-                                user_images = parsed.get("images", [])
-                        except Exception:
-                            pass
-                    render_items.append(("user", f"你：{user_text}", user_images))
-
-                    if is_old:
-                        render_items.append(("ai", f"AI：{c['ai_msg']}"))
-                    else:
-                        rounds = c.get("rounds_json_parsed")
-                        tool_names = []
-                        if rounds and c.get("is_func_calling"):
-                            for rd in rounds:
-                                rd_role = rd.get("role", "")
-                                if rd_role == "assistant" and rd.get("tool_calls"):
-                                    for tc in rd["tool_calls"]:
-                                        fn_name = tc.get("function", {}).get("name", "unknown")
-                                        fn_args = tc.get("function", {}).get("arguments", "")
-                                        if fn_name not in tool_names:
-                                            tool_names.append(fn_name)
-# NOTE: 2026-05-14 07:22:12, self-evolved by tea_agent --- 优化工具调用显示：参数多行展开（JSON解析），替换单行括号格式
-                                        # @2026-05-16 gen by tea_agent, 工具调用参数多行展开显示
-                                        import json as _json_tc2
-                                        try:
-                                            args_dict = _json_tc2.loads(fn_args) if fn_args else {}
-                                            args_lines = []
-                                            for k, v in args_dict.items():
-                                                v_str = _json_tc2.dumps(v, ensure_ascii=False)
-                                                if len(v_str) > 160:
-                                                    v_str = v_str[:160] + "..."
-                                                args_lines.append(f"    {k}: {v_str}")
-                                            args_block = "\n".join(args_lines)
-                                            render_items.append(("tool", f"🔧 调用工具：{fn_name}\n参数：\n{args_block}"))
-                                        except Exception:
-                                            render_items.append(("tool", f"🔧 调用工具：{fn_name}\n参数：\n    {fn_args[:200]}"))
-                                    if rd.get("content"):
-                                        render_items.append(("ai", f"AI：{rd['content']}"))
-                                elif rd_role == "tool":
-                                    result_preview = rd.get("content", "")
-                                    if len(result_preview) > 200:
-                                        result_preview = result_preview[:200] + "..."
-                                    render_items.append(("tool", f"📋 结果：{result_preview}"))
-                                elif rd_role == "assistant" and rd.get("content"):
-                                    render_items.append(("ai", f"AI：{rd['content']}"))
-                        else:
-                            render_items.append(("ai", f"AI：{c['ai_msg']}"))
-
-                        if c["is_func_calling"]:
-                            if tool_names:
-                                render_items.append(("tool", f"ℹ️ 工具：{', '.join(tool_names)}"))
-                            else:
-                                render_items.append(("tool", "ℹ️ 本条使用了工具调用"))
-                    render_items.append(("notice", ""))
-
-# NOTE: 2026-05-07 14:49:21, self-evolved by tea_agent --- load_worker 不直接调度渲染，存 _pending_render/_pending_error，由轮询器触发
-                # === 第三阶段：存入待渲染数据，由轮询器在进度队列排空后触发渲染 ===
-                self._pending_render = render_items
-                self._loading_done = True
-            except Exception as e:
-                self._pending_error = str(e)
-                self._loading_done = True
-
-        # 延迟 60ms 启动后台线程，让 spinner HTML 先渲染
-        self.root.after(60, lambda: threading.Thread(target=load_worker, daemon=True).start())
-
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _render_loaded_topic(self, render_items):
-
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _render_topic_error(self, error_msg):
+        """切换主题 — 委托 TopicManager"""
+        self.topic_mgr.switch_topic(topic_id)
 
     def on_topic_select(self, e):
-        # Treeview: 获取选中项的索引
-        sel = self.topic_list.selection()
-        if not sel:
-            return
-        idx = self.topic_list.index(sel[0])
-        tp = self.db.list_topics()[idx]
-        # NOTE: 2026-05-15 gen by tea_agent, 同主题跳过，避免 refresh_topics 触发全量覆盖
-        if tp["topic_id"] == self.current_topic_id:
-            return
-        self.switch_topic(tp["topic_id"])
+        """主题选择回调 — 委托 TopicManager"""
+        self.topic_mgr.on_topic_select(e)
 
     def newline(self, e=None):
-        self.input_box.insert(tk.INSERT, "\n")
-        return "break"
-
-# NOTE: 2026-05-01 11:43:46, self-evolved by tea_agent --- _update_topic_summary: 状态栏可见反馈 + LLM失败时用首条用户消息兜底 + 主线程刷新
-# NOTE: 2026-05-01 11:49:01, self-evolved by tea_agent --- _update_topic_summary 加控台可见调试日志，追踪每一步执行
-# NOTE: 2026-05-01 11:49:45, self-evolved by tea_agent --- _update_topic_summary 日志调用改用 root.after 调度到主线程，避免 tk 线程安全问题
-# NOTE: 2026-05-01 11:57:59, self-evolved by tea_agent --- 移除 _update_topic_summary 调试日志，保留 WAL + 兜底 + 状态栏反馈等核心修复
-    # ── AgentCore 回调覆盖 ──────────────────────────
+        """插入换行 — 委托 TopicManager"""
+        return self.topic_mgr.newline(e)
 
     def _suggest_new_topic_if_needed(self, topic_id: str):
-        """2026-05-17 gen by tea_agent, GUI 覆盖：状态栏提示新主题建议"""
-        count = getattr(self, '_pending_topic_suggestion', 0)
-        if count > 0:
-            self.root.after(100, lambda c=count: self._update_status(
-                f"💡 已切换 {c} 次方向，建议「➕ 新建主题」保持聚焦"
-            ))
-            self._pending_topic_suggestion = 0
+        """建议新建主题 — 委托 TopicManager"""
+        self.topic_mgr._suggest_new_topic_if_needed(topic_id)
 
     def _on_summary_updated(self, topic_id: str, summary: str):
-        """摘要更新后刷新 GUI 主题列表和状态栏。"""
-        self.root.after(200, self._refresh_topics_preserve_selection)
-        self.root.after(100, lambda s=summary: self._update_status(f"📝 摘要: {s}"))
+        """摘要更新回调 — 委托 TopicManager"""
+        self.topic_mgr._on_summary_updated(topic_id, summary)
 
-# NOTE: 2026-05-02 09:06:48, self-evolved by tea_agent --- 添加 _notify_completion 方法：LLM完成后发送系统桌面通知
     def _refresh_topics_preserve_selection(self):
-        """刷新主题列表，refresh_topics() 已按 current_topic_id 自动高亮。"""
-        self.refresh_topics()
+        """刷新主题列表保持选择 — 委托 TopicManager"""
+        self.topic_mgr._refresh_topics_preserve_selection()
 
-    # ── 主题列表 Tooltip ──
-    # NOTE: 2026-05-08 gen by tea_agent, 鼠标悬停显示创建日期和最后使用日期
     def _on_topic_hover(self, event):
-        """鼠标在主题列表上移动时，延迟显示 tooltip"""
-        # Treeview: identify_row → find index
-        item_id = self.topic_list.identify_row(event.y)
-        idx = self.topic_list.index(item_id) if item_id else -1
-        if idx < 0 or idx >= len(self._topic_cache):
-            self._hide_tooltip()
-            return
-
-        # 取消之前的延迟任务
-        if self._topic_hover_after:
-            self.root.after_cancel(self._topic_hover_after)
-            self._topic_hover_after = None
-
-        # 300ms 后显示
-        self._topic_hover_after = self.root.after(
-            300, lambda: self._show_tooltip(event, idx)
-        )
+        """主题悬停 — 委托 TopicManager"""
+        self.topic_mgr._on_topic_hover(event)
 
     def _on_topic_leave(self, event):
-        """鼠标离开列表时隐藏 tooltip"""
-        if self._topic_hover_after:
-            self.root.after_cancel(self._topic_hover_after)
-            self._topic_hover_after = None
-        self._hide_tooltip()
+        """主题离开 — 委托 TopicManager"""
+        self.topic_mgr._on_topic_leave(event)
 
     def _show_tooltip(self, event, idx):
-        """在鼠标位置显示主题日期 tooltip"""
-        if idx < 0 or idx >= len(self._topic_cache):
-            return
-        tp = self._topic_cache[idx]
-        create_ts = tp.get("create_stamp", "")
-        update_ts = tp.get("last_update_stamp", "")
-
-        # 格式化时间戳（截断秒）
-        def fmt(ts):
-            if not ts:
-                return "未知"
-            s = str(ts)
-            return s[:16] if len(s) >= 16 else s
-
-        self._hide_tooltip()
-
-        tip = tk.Toplevel(self.root)
-        tip.overrideredirect(True)
-        tip.attributes("-topmost", True)
-        tip.configure(bg="#ffffcc")
-
-        lines = [f"📅 创建: {fmt(create_ts)}", f"🕐 最后使用: {fmt(update_ts)}"]
-        tip_text = "\n".join(lines)
-        label = tk.Label(
-            tip, text=tip_text,
-            bg="#ffffcc", fg="#333333",
-            font=(SYSTEM_FONT, _fs(10)),
-            padx=8, pady=4,
-            relief=tk.SOLID, borderwidth=1,
-        )
-        label.pack()
-
-        # 定位：鼠标右下偏移
-        x = self.root.winfo_pointerx() + 12
-        y = self.root.winfo_pointery() + 8
-        tip.geometry(f"+{x}+{y}")
-
-        self._topic_tooltip = tip
+        """显示工具提示 — 委托 TopicManager"""
+        self.topic_mgr._show_tooltip(event, idx)
 
     def _hide_tooltip(self):
-        """隐藏 tooltip"""
-        if self._topic_tooltip:
-            try:
-                self._topic_tooltip.destroy()
-            except Exception:
-                pass
-            self._topic_tooltip = None
+        """隐藏工具提示 — 委托 TopicManager"""
+        self.topic_mgr._hide_tooltip()
 
-# NOTE: 2026-05-06 09:50:18, self-evolved by tea_agent --- 修正 _notify_completion 通知格式：标题 TeaAgent，内容 TeaAgent: {user} + {ai_msg}
-# NOTE: 2026-05-06 09:49, self-evolved by tea_agent --- _notify_completion 通知格式修正：TeaAgent: {user} + {ai_msg}
     def _notify_completion(self, ai_msg: Optional[str] = None, user_msg: Optional[str] = None):
         """LLM 任务完成后发送桌面通知。通知内容: TeaAgent: {user_msg} + {ai_msg}。
         委托给 toolkit_notify（跨平台兼容：Windows/macOS/Linux）。"""
@@ -2044,7 +1098,15 @@ class TkGUI(AgentCore):
     def _hide_raw_check_btn(self):
         return self.renderer._hide_raw_check_btn()
 
-def main(debug:bool=False, no_gui:bool=False):
+# NOTE: 2026-05-20 gen by tea_agent, 添加 timeout 参数支持 debug 模式超时自动退出
+def main(debug:bool=False, no_gui:bool=False, timeout:int=0):
+    """启动 GUI 主界面。
+    
+    Args:
+        debug: 调试模式
+        no_gui: 回退到 CLI 模式
+        timeout: 超时秒数，超时后自动关闭窗口（0=不超时，用于自动化测试）
+    """
     if no_gui:
         # 回退到 CLI 模式
         from tea_agent.tea_main_cli import main as cli_main
@@ -2053,7 +1115,28 @@ def main(debug:bool=False, no_gui:bool=False):
     
     root = tk.Tk()
     app = TkGUI(root, debug=debug)
+    
+    if timeout > 0:
+        logger.info(f"GUI debug timeout set: {timeout}s, will auto-close")
+        root.after(timeout * 1000, lambda: _safe_destroy(root))
+    
     root.mainloop()
 
+def _safe_destroy(root):
+    """安全销毁 Tk 窗口，捕获可能的异常。"""
+    try:
+        if root.winfo_exists():
+            root.destroy()
+            logger.info("GUI auto-closed by timeout")
+    except Exception as e:
+        logger.warning(f"GUI safe destroy failed: {e}")
+
 if __name__ == "__main__":
-    main()
+    import argparse
+    ap = argparse.ArgumentParser(description="Tea Agent GUI")
+    ap.add_argument("--debug", action="store_true", help="调试模式")
+    ap.add_argument("--no-gui", action="store_true", help="回退到 CLI 模式")
+    ap.add_argument("--timeout", type=int, default=0,
+                    help="超时秒数，超时后自动关闭（用于自动化测试）")
+    args = ap.parse_args()
+    main(debug=args.debug, no_gui=args.no_gui, timeout=args.timeout)

@@ -73,8 +73,26 @@ def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
     if not HAS_TKINTERWEB:
         return text
     html_body = markdown.markdown(text, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
+    html_body = _fix_double_escape_in_code(html_body)
     css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
     return f"<html><head>{css}</head><body>{html_body}</body></html>"
+
+
+# NOTE: 2026-05-20 gen by tea_agent, 修复双重转义：html_mod.escape + markdown.codehilite
+# 导致 <code> 块内 &amp; → &amp;amp;，显示为 &amp; 字面量而非正确渲染
+# 此函数在最终 HTML 中，将 <code>...</code> 内部的 &amp; 还原为 &
+def _fix_double_escape_in_code(html: str) -> str:
+    """修复 <code> 块内的双重 HTML 转义。
+    
+    由于 _chat_to_markdown 先做了 html_mod.escape，markdown.codehilite
+    又对代码块内容再次转义，导致 <code> 内 &amp; 变成 &amp;amp;。
+    此函数将 <code>...</code> 内的 &amp; 还原为 &。"""
+    def _fix_code_block(m):
+        inner = m.group(1)
+        # 仅替换 &amp; → & (不影响其他已正确转义的实体如 &lt; &gt;)
+        inner = inner.replace('&amp;', '&')
+        return '<code>' + inner + '</code>'
+    return re.sub(r'<code>(.*?)</code>', _fix_code_block, html, flags=re.DOTALL)
 
 
 # NOTE: 2026-05-08 gen by tea_agent, 工具轮分组渲染：合并连续tool消息，生成带轮次编号的蓝色标题块

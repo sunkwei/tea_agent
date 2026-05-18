@@ -771,7 +771,13 @@ class TkGUI(AgentCore):
                     topic_id=self.current_topic_id,
                     on_status=self.safe_update_status,
                 )
+# NOTE: 2026-05-18 14:05:48, self-evolved by tea_agent --- 修复HTML渲染延迟15s+：将_render_and_show_chat提前到_post_chat_pipeline之前
                 self.root.after(0, self._flush_stream_to_messages)
+
+                # NOTE: 2026-05-18 gen by tea_agent, 修复渲染延迟15s+：提前调度 HTML 渲染
+                # 原逻辑在 _post_chat_pipeline 之后才渲染，_auto_summary 等 API 调用阻塞渲染调度
+                self.root.after(0, self._render_and_show_chat)
+                self.root.after(0, self._show_raw_check_btn)
 
                 # ── 标准后处理流水线（入库 → Token → 摘要）──
                 # NOTE: 2026-05-15 gen by tea_agent, 传入图片信息用于入库
@@ -799,9 +805,9 @@ class TkGUI(AgentCore):
                     self.root.after(0, self._refresh_topics_preserve_selection)
 # NOTE: 2026-05-06 09:31, self-evolved by tea_agent --- 通知传入 user_msg，显示用户消息+AI回复
                     self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
+# NOTE: 2026-05-18 14:06:01, self-evolved by tea_agent --- 移除else分支中重复的_render_and_show_chat调用（已提前调度）
                 else:
-                    self.root.after(0, self._render_and_show_chat)
-                    self.root.after(0, self._show_raw_check_btn)
+                    # NOTE: 2026-05-18 gen by tea_agent, 渲染已提前调度，此处仅更新状态
                     self.root.after(0, lambda: self._update_status("✅ 完成"))
 # NOTE: 2026-05-06 09:31, self-evolved by tea_agent --- 通知传入 user_msg，显示用户消息+AI回复
                     self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))

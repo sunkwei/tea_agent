@@ -52,17 +52,18 @@ class SessionManager:
             self.refresh_topics()
 
     def refresh_topics(self):
-        """刷新主题列表"""
+        """刷新主题列表 — @2026-05-19 gen by claude, 仅显示活跃主题"""
         if not self.gui.sess:
             return
         self.gui._topic_tree.delete(*self.gui._topic_tree.get_children())
-        topics = self.gui.db.list_topics()
-        for t in topics:
+        all_topics = self.gui.db.list_topics()
+        for t in all_topics:
+            if not t.get("is_active", 1):
+                continue  # 跳过停用主题
             title = t.get("title", "无标题") or "无标题"
             ts = t.get("updated_at", "")
             self.gui._topic_tree.insert("", "end", text=title, values=(title, ts, t.get("id", "")))
             self.gui._topic_tree.item(self.gui._topic_tree.get_children()[-1], tags=(t.get("id", ""),))
-
     def switch_topic(self, topic_id):
         """切换主题"""
         if not self.gui.sess:

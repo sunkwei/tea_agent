@@ -1161,6 +1161,20 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         if not html or not isinstance(html, str):
             print("[_html_render WARN] HTML 为空或非字符串，跳过渲染")
             return
+        # NOTE: 2026-05-20 gen by tea_agent, 诊断：保存 HTML 到临时文件供排查
+        try:
+            import tempfile, os as _os
+            _diag_path = _os.path.join(tempfile.gettempdir(), 'tea_html_diag.html')
+            with open(_diag_path, 'w', encoding='utf-8') as _f:
+                _f.write(html)
+            print(f"[_html_render DIAG] HTML saved to {_diag_path} ({len(html)} chars)")
+            # 统计关键标签
+            for tag in ['<table', '<thead', '<tbody', '<hr', '<h2', '<h3', '<ol', '<li', '<p>', '<code>', '</html>']:
+                count = html.count(tag)
+                if count > 0:
+                    print(f"[_html_render DIAG]   {tag}: {count}")
+        except Exception as _e:
+            print(f"[_html_render DIAG] save failed: {_e}")
         # 1. 清洗控制字符（保留 \n \t）
         cleaned = _sanitize_html_control_chars(html)
         if cleaned != html:
@@ -2117,9 +2131,9 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         round_md = _chat_to_markdown(round_msgs, image_cache=self._image_cache)
         if HAS_TKINTERWEB:
             round_body = _md_lib.markdown(round_md, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
-            # NOTE: 2026-05-20 gen by tea_agent, 修复双重转义 (html_mod.escape + codehilite)
-            from tea_agent._gui._markdown import _fix_double_escape_in_code
-            round_body = _fix_double_escape_in_code(round_body)
+            # NOTE: 2026-05-20 gen by tea_agent, 临时禁用 _fix_double_escape_in_code 排查渲染问题
+            # from tea_agent._gui._markdown import _fix_double_escape_in_code
+            # round_body = _fix_double_escape_in_code(round_body)
             css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
             full_html = "<html><head>" + css + "</head><body>" + table_html + round_body + "</body></html>"
         else:

@@ -64,24 +64,16 @@ class ConsoleIO:
         display = msg.replace("!MAX_ITER:", "")
         result = messagebox.askyesno(
             "达到工具调用上限",
-            f"{display}\n\n选择「是」再执行 10 轮\n选择「否」终止当前回答",
+            display + "\n\n选择「是」续命 " + str(getattr(self.gui.sess, "extra_iterations_on_continue", 5) if hasattr(self.gui, "sess") and self.gui.sess else 5) + " 轮\n选择「否」终止当前回答",
             parent=self.gui.root,
         )
         if hasattr(self.gui, 'sess') and self.gui.sess:
             self.gui.sess._continue_after_max = result
             self.gui.sess._max_iter_wait.set()
             if result:
-                self.gui.sess._extra_iterations += 10
-                self._update_status("⏳ 已续命 10 轮，继续生成... (ESC 打断)")
+                self._update_status("⏳ 已续命，继续生成... (ESC 打断)")
             else:
                 self._update_status("🛑 用户终止工具调用")
-
-        self.gui.log("=" * 50, "title")
-        self.gui.log(f"📦 已加载工具函数（共 {len(self.gui.toolkit.func_map)} 个）", "title")
-        for name in self.gui.toolkit.func_map.keys():
-            self.gui.log(f"✅ {name}", "notice")
-        self.gui.log("=" * 50, "title")
-        self.gui.log("")
 
     def log(self, msg, tag="ai", images=None):
         self.gui.console.config(state=tk.NORMAL)

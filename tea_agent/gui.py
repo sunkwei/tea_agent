@@ -755,7 +755,7 @@ class TkGUI(AgentCore):
         # 启动 500ms 定时器，批量刷新流式内容到 ScrolledText（不渲染 HtmlFrame）
         # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- 流式输出启动 _stream_flush_tick 500ms 定时器
         self.root.after(500, self._stream_flush_tick)
-        self.log("AI：", "ai")
+        self.log("AI：", "title")  # NOTE: 2026-06-28 gen by tea_agent, fix: 改用 title 标签避免在 chat_messages 产生空 AI 条目
 
         mem_count = len(self.db.get_active_memories(50))
         self._update_status(f"⏳ 生成中... (ESC 打断) | 🧠 {mem_count}")

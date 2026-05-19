@@ -12,6 +12,7 @@ Handles streaming output, logging, status updates, buffer flushing.
 """
 
 import tkinter as tk
+from tkinter import messagebox
 from typing import Optional, List
 
 class StreamManager:
@@ -31,16 +32,34 @@ class StreamManager:
         self.gui.root.after(0, self.gui.log_tool, msg)
 
     def safe_update_status(self, msg: str):
-        self.gui.root.after(0, self.update_status, msg)
+        # NOTE: 2026-05-20 gen by tea_agent, detect !MAX_ITER: signal for renew dialog
+        if msg.startswith("!MAX_ITER:"):
+            self.gui.root.after(0, self.handle_max_iter, msg)
+        else:
+            self.gui.root.after(0, self.update_status, msg)
 
     def update_status(self, msg: str):
         """更新状态栏"""
         self.gui.status_var.set(msg)
 
     def handle_max_iter(self, msg: str):
-        """处理最大迭代次数提示"""
+        """处理最大迭代次数 - 弹框询问是否续命，设置 _max_iter_wait 信号"""
+        display = msg.replace("!MAX_ITER:", "")
+        extra = getattr(self.gui.sess, "extra_iterations_on_continue", 5) if hasattr(self.gui, "sess") and self.gui.sess else 5
+        result = messagebox.askyesno(
+            "达到工具调用上限",
+            display + "\n\n选择「是」续命 " + str(extra) + " 轮\n选择「否」终止当前回答",
+            parent=self.gui.root,
+        )
+        if hasattr(self.gui, "sess") and self.gui.sess:
+            sess = self.gui.sess
+            sess._continue_after_max = result
+            sess._max_iter_wait.set()
+            if result:
+                self.update_status("续命成功，继续生成... (ESC 打断)")
+            else:
+                self.update_status("用户终止工具调用")
         self.gui.log(msg, tag="system")
-        self.update_status("⚠️ 达到最大迭代次数")
 
     def log(self, msg, tag="ai", images=None):
         """输出日志到控制台区域，并追加到 chat_messages"""
@@ -112,10 +131,9 @@ class StreamManager:
             self.gui.console.update_idletasks()
             self.gui._pending_console_text.clear()
 
-        # 2. 同步到 chat_messages（为 HtmlFrame 渲染准备）
-        if self.gui._stream_buffer:
-            self.gui.chat_messages.append({"role": "assistant", "content": self.gui._stream_buffer, "streaming": True})
-            self.gui._stream_buffer = ""
+        # 2. 不再同步到 chat_messages（流式期间不渲染 HtmlFrame，避免产生多个不完整 AI 块）
+        # NOTE: 2026-06-28 gen by tea_agent, 修复：移除中间 flush，由 renderer._flush_stream_to_messages 统一在会话结束时处理
+        # _stream_buffer 保持累积，最终一次性 flush 为完整 AI 消息
 
         # 3. 自调度：如果仍在生成中，继续 500ms 后刷新
         if self.gui.generating:
@@ -124,5 +142,5 @@ class StreamManager:
     def flush_stream_to_messages(self):
         """刷新流式缓冲到消息列表"""
         if self.gui._stream_buffer:
-            self.gui.chat_messages.append({"role": "assistant", "content": self.gui._stream_buffer})
+            self.gui.chat_messages.append({"role": "ai", "content": self.gui._stream_buffer})
             self.gui._stream_buffer = ""

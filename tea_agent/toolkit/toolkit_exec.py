@@ -280,24 +280,27 @@ def _truncate_result(result, max_lines: int = 80, max_chars: int = 4000):
         stdout = result.stdout or ""
         stderr = result.stderr or ""
 
-    # 保存原始长度（在截断前）
-    original_stdout_len = len(stdout)
-    original_stderr_len = len(stderr)
 
-    # 截断 stdout
-    if len(stdout) > max_chars:
-        lines = stdout.split("\n")
-        if len(lines) > max_lines:
-            head = "\n".join(lines[:max_lines//2])
-            tail = "\n".join(lines[-max_lines//2:])
-            skipped = len(lines) - max_lines
-            stdout = f"{head}\n... [跳过 {skipped} 行] ...\n{tail}"
+    if False:
+        ## by sunkw: 不截断，会严重影响模型判断 ...
+        # 保存原始长度（在截断前）
+        original_stdout_len = len(stdout)
+        original_stderr_len = len(stderr)
+
+        # 截断 stdout
         if len(stdout) > max_chars:
-            stdout = stdout[:max_chars] + f"\n... [截断，原长度 {original_stdout_len} 字符]"
+            lines = stdout.split("\n")
+            if len(lines) > max_lines:
+                head = "\n".join(lines[:max_lines//2])
+                tail = "\n".join(lines[-max_lines//2:])
+                skipped = len(lines) - max_lines
+                stdout = f"{head}\n... [跳过 {skipped} 行] ...\n{tail}"
+            if len(stdout) > max_chars:
+                stdout = stdout[:max_chars] + f"\n... [截断，原长度 {original_stdout_len} 字符]"
 
-    # stderr 只保留前 500 字符
-    if len(stderr) > 500:
-        stderr = stderr[:500] + f"\n... [截断，原长度 {original_stderr_len} 字符]"
+        # stderr 只保留前 500 字符
+        if len(stderr) > 500:
+            stderr = stderr[:500] + f"\n... [截断，原长度 {original_stderr_len} 字符]"
 
     return (rc, stdout, stderr)
 

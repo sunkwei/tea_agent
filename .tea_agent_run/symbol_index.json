@@ -1,1 +1,5389 @@
-{}
+{
+  "tea_agent/agent_core.py": {
+    "classes": [
+      {
+        "name": "AgentCore",
+        "line": 23
+      },
+      {
+        "name": "_RestartHandler",
+        "line": 109
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 37
+      },
+      {
+        "name": "_start_file_watcher",
+        "line": 94
+      },
+      {
+        "name": "__init__",
+        "line": 111
+      },
+      {
+        "name": "on_modified",
+        "line": 117
+      },
+      {
+        "name": "_schedule_restart",
+        "line": 134
+      },
+      {
+        "name": "_do_restart",
+        "line": 141
+      },
+      {
+        "name": "_safe_restart",
+        "line": 152
+      },
+      {
+        "name": "_check_pending_restart",
+        "line": 199
+      },
+      {
+        "name": "_start_subconscious",
+        "line": 205
+      },
+      {
+        "name": "_start_scheduler",
+        "line": 238
+      },
+      {
+        "name": "_init_session",
+        "line": 252
+      },
+      {
+        "name": "_init_session_info_str",
+        "line": 287
+      },
+      {
+        "name": "_extract_files_from_rounds",
+        "line": 300
+      },
+      {
+        "name": "_post_chat_pipeline",
+        "line": 355
+      },
+      {
+        "name": "_update_level3_summary",
+        "line": 415
+      },
+      {
+        "name": "_load_topic_history_into_session",
+        "line": 537
+      },
+      {
+        "name": "_do_async_summaries",
+        "line": 567
+      },
+      {
+        "name": "_auto_summary",
+        "line": 577
+      },
+      {
+        "name": "_suggest_new_topic_if_needed",
+        "line": 609
+      },
+      {
+        "name": "_on_summary_updated",
+        "line": 620
+      }
+    ]
+  },
+  "tea_agent/basesession.py": {
+    "classes": [
+      {
+        "name": "BaseChatSession",
+        "line": 13
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 34
+      },
+      {
+        "name": "chat_stream",
+        "line": 62
+      },
+      {
+        "name": "add_user_message",
+        "line": 76
+      },
+      {
+        "name": "add_assistant_message",
+        "line": 88
+      },
+      {
+        "name": "add_tool_result",
+        "line": 92
+      },
+      {
+        "name": "get_recent_messages",
+        "line": 100
+      },
+      {
+        "name": "_strip_reasoning_content",
+        "line": 114
+      },
+      {
+        "name": "_compress_tool_content",
+        "line": 130
+      },
+      {
+        "name": "_compress_json_args",
+        "line": 204
+      },
+      {
+        "name": "_compress_value",
+        "line": 258
+      },
+      {
+        "name": "_guess_tool_threshold",
+        "line": 314
+      },
+      {
+        "name": "_compress_tool_rounds",
+        "line": 365
+      },
+      {
+        "name": "_repair_incomplete_tool_chains",
+        "line": 457
+      },
+      {
+        "name": "load_history",
+        "line": 552
+      },
+      {
+        "name": "interrupt",
+        "line": 624
+      },
+      {
+        "name": "reset_interrupt",
+        "line": 629
+      },
+      {
+        "name": "_trim_messages",
+        "line": 633
+      }
+    ]
+  },
+  "tea_agent/cli.py": {
+    "classes": [
+      {
+        "name": "TeaCLI",
+        "line": 31
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 35
+      },
+      {
+        "name": "_on_post_reply",
+        "line": 48
+      },
+      {
+        "name": "_on_init_done",
+        "line": 50
+      },
+      {
+        "name": "run",
+        "line": 53
+      },
+      {
+        "name": "_read_multiline",
+        "line": 82
+      },
+      {
+        "name": "_read_multiline_unix",
+        "line": 94
+      },
+      {
+        "name": "_read_multiline_win32",
+        "line": 146
+      },
+      {
+        "name": "_handle_command",
+        "line": 165
+      },
+      {
+        "name": "_cmd_set",
+        "line": 199
+      },
+      {
+        "name": "_toggle_think",
+        "line": 218
+      },
+      {
+        "name": "_toggle_verbose",
+        "line": 224
+      },
+      {
+        "name": "_new_topic",
+        "line": 228
+      },
+      {
+        "name": "_list_topics",
+        "line": 236
+      },
+      {
+        "name": "_switch_topic",
+        "line": 247
+      },
+      {
+        "name": "_chat",
+        "line": 268
+      },
+      {
+        "name": "on_stream",
+        "line": 279
+      },
+      {
+        "name": "on_status",
+        "line": 313
+      },
+      {
+        "name": "_auto_init_topic",
+        "line": 344
+      },
+      {
+        "name": "_print_welcome",
+        "line": 355
+      },
+      {
+        "name": "_print_help",
+        "line": 365
+      },
+      {
+        "name": "main",
+        "line": 385
+      }
+    ]
+  },
+  "tea_agent/config.py": {
+    "classes": [
+      {
+        "name": "ModelConfig",
+        "line": 30
+      },
+      {
+        "name": "PathsConfig",
+        "line": 51
+      },
+      {
+        "name": "EmbeddingConfig",
+        "line": 129
+      },
+      {
+        "name": "AgentConfig",
+        "line": 147
+      }
+    ],
+    "functions": [
+      {
+        "name": "is_configured",
+        "line": 43
+      },
+      {
+        "name": "resolve",
+        "line": 71
+      },
+      {
+        "name": "_resolve",
+        "line": 93
+      },
+      {
+        "name": "db_path_abs",
+        "line": 107
+      },
+      {
+        "name": "toolkit_dir_abs",
+        "line": 111
+      },
+      {
+        "name": "kb_dir_abs",
+        "line": 115
+      },
+      {
+        "name": "skills_dir_abs",
+        "line": 119
+      },
+      {
+        "name": "data_dir_abs",
+        "line": 123
+      },
+      {
+        "name": "is_configured",
+        "line": 144
+      },
+      {
+        "name": "get_effective_params",
+        "line": 159
+      },
+      {
+        "name": "get",
+        "line": 220
+      },
+      {
+        "name": "set",
+        "line": 226
+      },
+      {
+        "name": "apply_changes",
+        "line": 253
+      },
+      {
+        "name": "reload_from_dict",
+        "line": 276
+      },
+      {
+        "name": "to_dict",
+        "line": 282
+      },
+      {
+        "name": "load_config",
+        "line": 286
+      },
+      {
+        "name": "ensure_config_dir",
+        "line": 393
+      },
+      {
+        "name": "save_config",
+        "line": 402
+      },
+      {
+        "name": "create_default_config",
+        "line": 489
+      },
+      {
+        "name": "get_config",
+        "line": 592
+      }
+    ]
+  },
+  "tea_agent/embedding_util.py": {
+    "classes": [
+      {
+        "name": "_SimpleTFIDF",
+        "line": 35
+      },
+      {
+        "name": "EmbeddingEngine",
+        "line": 95
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 38
+      },
+      {
+        "name": "_tokenize",
+        "line": 43
+      },
+      {
+        "name": "_hash_token",
+        "line": 53
+      },
+      {
+        "name": "add_document",
+        "line": 58
+      },
+      {
+        "name": "vectorize",
+        "line": 65
+      },
+      {
+        "name": "__init__",
+        "line": 97
+      },
+      {
+        "name": "_init_from_config",
+        "line": 118
+      },
+      {
+        "name": "mode",
+        "line": 145
+      },
+      {
+        "name": "configured",
+        "line": 150
+      },
+      {
+        "name": "embed",
+        "line": 153
+      },
+      {
+        "name": "embed_batch",
+        "line": 178
+      },
+      {
+        "name": "_build_url",
+        "line": 189
+      },
+      {
+        "name": "_embed_api",
+        "line": 202
+      },
+      {
+        "name": "_embed_api_batch",
+        "line": 249
+      },
+      {
+        "name": "_embed_tfidf",
+        "line": 274
+      },
+      {
+        "name": "build_tfidf_vocabulary",
+        "line": 278
+      },
+      {
+        "name": "cosine_similarity",
+        "line": 289
+      },
+      {
+        "name": "get_embedding_usage",
+        "line": 302
+      },
+      {
+        "name": "search",
+        "line": 320
+      },
+      {
+        "name": "get_embedding_engine",
+        "line": 340
+      }
+    ]
+  },
+  "tea_agent/gui.py": {
+    "classes": [
+      {
+        "name": "StatusNotifierItemDBus",
+        "line": 125
+      },
+      {
+        "name": "TkGUI",
+        "line": 196
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 127
+      },
+      {
+        "name": "Title",
+        "line": 147
+      },
+      {
+        "name": "Id",
+        "line": 151
+      },
+      {
+        "name": "Status",
+        "line": 155
+      },
+      {
+        "name": "Category",
+        "line": 159
+      },
+      {
+        "name": "IconPixmap",
+        "line": 163
+      },
+      {
+        "name": "Activate",
+        "line": 171
+      },
+      {
+        "name": "ContextMenu",
+        "line": 176
+      },
+      {
+        "name": "start",
+        "line": 179
+      },
+      {
+        "name": "run",
+        "line": 184
+      },
+      {
+        "name": "stop",
+        "line": 190
+      },
+      {
+        "name": "__init__",
+        "line": 197
+      },
+      {
+        "name": "_create_tray_icon",
+        "line": 277
+      },
+      {
+        "name": "_pil_to_argb32",
+        "line": 294
+      },
+      {
+        "name": "_init_tray",
+        "line": 302
+      },
+      {
+        "name": "_on_tray_activate",
+        "line": 327
+      },
+      {
+        "name": "_on_tray_context_menu",
+        "line": 334
+      },
+      {
+        "name": "_on_closing",
+        "line": 345
+      },
+      {
+        "name": "_start_dream",
+        "line": 377
+      },
+      {
+        "name": "_start_scheduler",
+        "line": 399
+      },
+      {
+        "name": "_create_ui",
+        "line": 411
+      },
+      {
+        "name": "_adjust_chat_sash",
+        "line": 415
+      },
+      {
+        "name": "zoom_in",
+        "line": 419
+      },
+      {
+        "name": "zoom_out",
+        "line": 427
+      },
+      {
+        "name": "_apply_zoom",
+        "line": 435
+      },
+      {
+        "name": "_history_prev_round",
+        "line": 448
+      },
+      {
+        "name": "_history_next_round",
+        "line": 466
+      },
+      {
+        "name": "_now_ts",
+        "line": 510
+      },
+      {
+        "name": "_init_session",
+        "line": 517
+      },
+      {
+        "name": "toggle_reasoning",
+        "line": 520
+      },
+      {
+        "name": "_update_status",
+        "line": 531
+      },
+      {
+        "name": "safe_stream",
+        "line": 536
+      },
+      {
+        "name": "safe_log",
+        "line": 540
+      },
+      {
+        "name": "safe_log_tool",
+        "line": 544
+      },
+      {
+        "name": "safe_update_status",
+        "line": 548
+      },
+      {
+        "name": "_handle_max_iter",
+        "line": 552
+      },
+      {
+        "name": "log",
+        "line": 556
+      },
+      {
+        "name": "stream",
+        "line": 560
+      },
+      {
+        "name": "log_tool",
+        "line": 564
+      },
+      {
+        "name": "_stream_flush_tick",
+        "line": 568
+      },
+      {
+        "name": "clear_chat",
+        "line": 572
+      },
+      {
+        "name": "auto_new_topic",
+        "line": 586
+      },
+      {
+        "name": "new_topic",
+        "line": 590
+      },
+      {
+        "name": "refresh_topics",
+        "line": 594
+      },
+      {
+        "name": "_update_title",
+        "line": 598
+      },
+      {
+        "name": "switch_topic",
+        "line": 617
+      },
+      {
+        "name": "on_topic_select",
+        "line": 621
+      },
+      {
+        "name": "newline",
+        "line": 625
+      },
+      {
+        "name": "_suggest_new_topic_if_needed",
+        "line": 629
+      },
+      {
+        "name": "_on_summary_updated",
+        "line": 633
+      },
+      {
+        "name": "_refresh_topics_preserve_selection",
+        "line": 637
+      },
+      {
+        "name": "_on_topic_hover",
+        "line": 641
+      },
+      {
+        "name": "_on_topic_leave",
+        "line": 645
+      },
+      {
+        "name": "_show_tooltip",
+        "line": 649
+      },
+      {
+        "name": "_hide_tooltip",
+        "line": 653
+      },
+      {
+        "name": "_notify_completion",
+        "line": 657
+      },
+      {
+        "name": "_attach_image",
+        "line": 687
+      },
+      {
+        "name": "_clear_images",
+        "line": 722
+      },
+      {
+        "name": "send",
+        "line": 733
+      },
+      {
+        "name": "work",
+        "line": 765
+      },
+      {
+        "name": "_add_token_notice_and_render",
+        "line": 848
+      },
+      {
+        "name": "_cell",
+        "line": 887
+      },
+      {
+        "name": "_on_history_link_click",
+        "line": 916
+      },
+      {
+        "name": "_show_image_popup",
+        "line": 938
+      },
+      {
+        "name": "open_topic_dialog",
+        "line": 1000
+      },
+      {
+        "name": "open_memory_dialog",
+        "line": 1006
+      },
+      {
+        "name": "open_config_dialog",
+        "line": 1009
+      },
+      {
+        "name": "on_save",
+        "line": 1012
+      },
+      {
+        "name": "interrupt",
+        "line": 1026
+      },
+      {
+        "name": "_switch_display",
+        "line": 1052
+      },
+      {
+        "name": "_show_loading",
+        "line": 1055
+      },
+      {
+        "name": "_poll_loading_progress",
+        "line": 1058
+      },
+      {
+        "name": "scroll_to_bottom",
+        "line": 1061
+      },
+      {
+        "name": "_html_render",
+        "line": 1064
+      },
+      {
+        "name": "_render_chat",
+        "line": 1067
+      },
+      {
+        "name": "_render_and_show_chat",
+        "line": 1070
+      },
+      {
+        "name": "_render_loaded_topic",
+        "line": 1073
+      },
+      {
+        "name": "_render_round_view",
+        "line": 1076
+      },
+      {
+        "name": "_render_topic_error",
+        "line": 1079
+      },
+      {
+        "name": "_build_round_view_html",
+        "line": 1082
+      },
+      {
+        "name": "_filtered_messages",
+        "line": 1085
+      },
+      {
+        "name": "_group_into_rounds",
+        "line": 1088
+      },
+      {
+        "name": "_flush_stream_to_messages",
+        "line": 1091
+      },
+      {
+        "name": "_flush_think_buffer_to_messages",
+        "line": 1094
+      },
+      {
+        "name": "_toggle_raw_view",
+        "line": 1097
+      },
+      {
+        "name": "_show_raw_check_btn",
+        "line": 1100
+      },
+      {
+        "name": "_hide_raw_check_btn",
+        "line": 1103
+      },
+      {
+        "name": "main",
+        "line": 1108
+      },
+      {
+        "name": "_safe_destroy",
+        "line": 1130
+      }
+    ]
+  },
+  "tea_agent/gui_dialogs.py": {
+    "classes": [
+      {
+        "name": "MemoryDialog",
+        "line": 62
+      },
+      {
+        "name": "TopicDialog",
+        "line": 353
+      },
+      {
+        "name": "ConfigDialog",
+        "line": 933
+      }
+    ],
+    "functions": [
+      {
+        "name": "_fs",
+        "line": 27
+      },
+      {
+        "name": "_init_fonts",
+        "line": 30
+      },
+      {
+        "name": "_detect",
+        "line": 38
+      },
+      {
+        "name": "__init__",
+        "line": 71
+      },
+      {
+        "name": "_create_ui",
+        "line": 84
+      },
+      {
+        "name": "_refresh",
+        "line": 160
+      },
+      {
+        "name": "_sort",
+        "line": 201
+      },
+      {
+        "name": "_add_dialog",
+        "line": 213
+      },
+      {
+        "name": "do_add",
+        "line": 260
+      },
+      {
+        "name": "_soft_delete",
+        "line": 283
+      },
+      {
+        "name": "_hard_delete",
+        "line": 294
+      },
+      {
+        "name": "_on_double_click",
+        "line": 305
+      },
+      {
+        "name": "_export",
+        "line": 328
+      },
+      {
+        "name": "__init__",
+        "line": 357
+      },
+      {
+        "name": "_create_ui",
+        "line": 374
+      },
+      {
+        "name": "_refresh",
+        "line": 483
+      },
+      {
+        "name": "_do_search",
+        "line": 543
+      },
+      {
+        "name": "_show_search_results",
+        "line": 583
+      },
+      {
+        "name": "_clear_search",
+        "line": 613
+      },
+      {
+        "name": "_generate_vectors",
+        "line": 622
+      },
+      {
+        "name": "_run",
+        "line": 639
+      },
+      {
+        "name": "_sort",
+        "line": 692
+      },
+      {
+        "name": "parse_tok",
+        "line": 697
+      },
+      {
+        "name": "_selected_id",
+        "line": 712
+      },
+      {
+        "name": "_switch_to",
+        "line": 718
+      },
+      {
+        "name": "_new_topic",
+        "line": 731
+      },
+      {
+        "name": "_rename_dialog",
+        "line": 738
+      },
+      {
+        "name": "do_rename",
+        "line": 760
+      },
+      {
+        "name": "_deactivate",
+        "line": 775
+      },
+      {
+        "name": "_activate",
+        "line": 782
+      },
+      {
+        "name": "_hard_delete",
+        "line": 792
+      },
+      {
+        "name": "_export_selected",
+        "line": 815
+      },
+      {
+        "name": "_export_all",
+        "line": 822
+      },
+      {
+        "name": "_do_export",
+        "line": 829
+      },
+      {
+        "name": "_write_topic_md",
+        "line": 866
+      },
+      {
+        "name": "__init__",
+        "line": 936
+      },
+      {
+        "name": "_create_ui",
+        "line": 954
+      },
+      {
+        "name": "_model_tab",
+        "line": 981
+      },
+      {
+        "name": "_mode_params_tab",
+        "line": 1056
+      },
+      {
+        "name": "_runtime_tab",
+        "line": 1090
+      },
+      {
+        "name": "_on_mousewheel",
+        "line": 1102
+      },
+      {
+        "name": "_load_values",
+        "line": 1140
+      },
+      {
+        "name": "_do_save",
+        "line": 1187
+      },
+      {
+        "name": "destroy",
+        "line": 1279
+      }
+    ]
+  },
+  "tea_agent/logging_setup.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "setup_logging",
+        "line": 19
+      },
+      {
+        "name": "_set_root_level",
+        "line": 78
+      },
+      {
+        "name": "set_debug",
+        "line": 85
+      }
+    ]
+  },
+  "tea_agent/main_db_gui.py": {
+    "classes": [
+      {
+        "name": "_TagChecker",
+        "line": 436
+      },
+      {
+        "name": "StatusNotifierItemDBus",
+        "line": 592
+      },
+      {
+        "name": "TkGUI",
+        "line": 690
+      }
+    ],
+    "functions": [
+      {
+        "name": "_fs",
+        "line": 87
+      },
+      {
+        "name": "_init_fonts",
+        "line": 92
+      },
+      {
+        "name": "_detect",
+        "line": 102
+      },
+      {
+        "name": "_render_markdown",
+        "line": 207
+      },
+      {
+        "name": "_build_tool_blocks",
+        "line": 217
+      },
+      {
+        "name": "_render_tool_group",
+        "line": 261
+      },
+      {
+        "name": "_chat_to_markdown",
+        "line": 352
+      },
+      {
+        "name": "_sanitize_html_control_chars",
+        "line": 419
+      },
+      {
+        "name": "_validate_html_structure",
+        "line": 425
+      },
+      {
+        "name": "__init__",
+        "line": 438
+      },
+      {
+        "name": "handle_starttag",
+        "line": 445
+      },
+      {
+        "name": "handle_endtag",
+        "line": 449
+      },
+      {
+        "name": "get_result",
+        "line": 466
+      },
+      {
+        "name": "_generate_topic_summary",
+        "line": 482
+      },
+      {
+        "name": "__init__",
+        "line": 594
+      },
+      {
+        "name": "_register_to_watcher",
+        "line": 616
+      },
+      {
+        "name": "Get",
+        "line": 630
+      },
+      {
+        "name": "GetAll",
+        "line": 634
+      },
+      {
+        "name": "_get_property",
+        "line": 639
+      },
+      {
+        "name": "Activate",
+        "line": 660
+      },
+      {
+        "name": "ContextMenu",
+        "line": 665
+      },
+      {
+        "name": "SecondaryActivate",
+        "line": 670
+      },
+      {
+        "name": "Scroll",
+        "line": 675
+      },
+      {
+        "name": "run",
+        "line": 677
+      },
+      {
+        "name": "stop",
+        "line": 682
+      },
+      {
+        "name": "__init__",
+        "line": 691
+      },
+      {
+        "name": "_create_tray_icon",
+        "line": 756
+      },
+      {
+        "name": "_pil_to_argb32",
+        "line": 773
+      },
+      {
+        "name": "_init_tray",
+        "line": 781
+      },
+      {
+        "name": "_on_tray_activate",
+        "line": 806
+      },
+      {
+        "name": "_on_tray_context_menu",
+        "line": 813
+      },
+      {
+        "name": "_on_closing",
+        "line": 824
+      },
+      {
+        "name": "_start_dream",
+        "line": 856
+      },
+      {
+        "name": "_create_ui",
+        "line": 876
+      },
+      {
+        "name": "zoom_in",
+        "line": 1002
+      },
+      {
+        "name": "zoom_out",
+        "line": 1010
+      },
+      {
+        "name": "_apply_zoom",
+        "line": 1018
+      },
+      {
+        "name": "_history_prev_round",
+        "line": 1031
+      },
+      {
+        "name": "_history_next_round",
+        "line": 1049
+      },
+      {
+        "name": "_switch_display",
+        "line": 1069
+      },
+      {
+        "name": "_show_loading",
+        "line": 1085
+      },
+      {
+        "name": "_poll_loading_progress",
+        "line": 1128
+      },
+      {
+        "name": "scroll_to_bottom",
+        "line": 1151
+      },
+      {
+        "name": "_html_render",
+        "line": 1159
+      },
+      {
+        "name": "_render_chat",
+        "line": 1194
+      },
+      {
+        "name": "_now_ts",
+        "line": 1217
+      },
+      {
+        "name": "_init_session",
+        "line": 1224
+      },
+      {
+        "name": "toggle_reasoning",
+        "line": 1227
+      },
+      {
+        "name": "_update_status",
+        "line": 1238
+      },
+      {
+        "name": "safe_stream",
+        "line": 1241
+      },
+      {
+        "name": "safe_log",
+        "line": 1244
+      },
+      {
+        "name": "safe_log_tool",
+        "line": 1247
+      },
+      {
+        "name": "safe_update_status",
+        "line": 1250
+      },
+      {
+        "name": "_handle_max_iter",
+        "line": 1258
+      },
+      {
+        "name": "log",
+        "line": 1283
+      },
+      {
+        "name": "stream",
+        "line": 1299
+      },
+      {
+        "name": "log_tool",
+        "line": 1319
+      },
+      {
+        "name": "_stream_flush_tick",
+        "line": 1322
+      },
+      {
+        "name": "_flush_stream_to_messages",
+        "line": 1339
+      },
+      {
+        "name": "_flush_think_buffer_to_messages",
+        "line": 1363
+      },
+      {
+        "name": "clear_chat",
+        "line": 1376
+      },
+      {
+        "name": "auto_new_topic",
+        "line": 1388
+      },
+      {
+        "name": "new_topic",
+        "line": 1399
+      },
+      {
+        "name": "refresh_topics",
+        "line": 1411
+      },
+      {
+        "name": "_update_title",
+        "line": 1433
+      },
+      {
+        "name": "switch_topic",
+        "line": 1440
+      },
+      {
+        "name": "load_worker",
+        "line": 1462
+      },
+      {
+        "name": "_render_loaded_topic",
+        "line": 1597
+      },
+      {
+        "name": "_render_topic_error",
+        "line": 1618
+      },
+      {
+        "name": "on_topic_select",
+        "line": 1625
+      },
+      {
+        "name": "newline",
+        "line": 1637
+      },
+      {
+        "name": "_on_summary_updated",
+        "line": 1647
+      },
+      {
+        "name": "_refresh_topics_preserve_selection",
+        "line": 1655
+      },
+      {
+        "name": "_on_topic_hover",
+        "line": 1661
+      },
+      {
+        "name": "_on_topic_leave",
+        "line": 1679
+      },
+      {
+        "name": "_show_tooltip",
+        "line": 1686
+      },
+      {
+        "name": "fmt",
+        "line": 1696
+      },
+      {
+        "name": "_hide_tooltip",
+        "line": 1726
+      },
+      {
+        "name": "_notify_completion",
+        "line": 1738
+      },
+      {
+        "name": "_attach_image",
+        "line": 1767
+      },
+      {
+        "name": "_clear_images",
+        "line": 1802
+      },
+      {
+        "name": "send",
+        "line": 1807
+      },
+      {
+        "name": "work",
+        "line": 1838
+      },
+      {
+        "name": "_add_token_notice_and_render",
+        "line": 1913
+      },
+      {
+        "name": "_cell",
+        "line": 1952
+      },
+      {
+        "name": "_filtered_messages",
+        "line": 1974
+      },
+      {
+        "name": "_group_into_rounds",
+        "line": 1980
+      },
+      {
+        "name": "_on_history_link_click",
+        "line": 1996
+      },
+      {
+        "name": "_show_image_popup",
+        "line": 2018
+      },
+      {
+        "name": "_build_round_view_html",
+        "line": 2071
+      },
+      {
+        "name": "_render_round_view",
+        "line": 2130
+      },
+      {
+        "name": "_prepare",
+        "line": 2136
+      },
+      {
+        "name": "_on_done",
+        "line": 2139
+      },
+      {
+        "name": "_worker",
+        "line": 2155
+      },
+      {
+        "name": "_render_and_show_chat",
+        "line": 2164
+      },
+      {
+        "name": "_prepare",
+        "line": 2179
+      },
+      {
+        "name": "_on_done",
+        "line": 2182
+      },
+      {
+        "name": "_worker",
+        "line": 2198
+      },
+      {
+        "name": "open_topic_dialog",
+        "line": 2208
+      },
+      {
+        "name": "open_memory_dialog",
+        "line": 2214
+      },
+      {
+        "name": "open_config_dialog",
+        "line": 2217
+      },
+      {
+        "name": "on_save",
+        "line": 2223
+      },
+      {
+        "name": "interrupt",
+        "line": 2236
+      },
+      {
+        "name": "main",
+        "line": 2261
+      }
+    ]
+  },
+  "tea_agent/memory.py": {
+    "classes": [
+      {
+        "name": "MemoryManager",
+        "line": 42
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 49
+      },
+      {
+        "name": "select_memories",
+        "line": 65
+      },
+      {
+        "name": "_pick_top_by_priority",
+        "line": 118
+      },
+      {
+        "name": "_score_memory",
+        "line": 149
+      },
+      {
+        "name": "_compute_relevance",
+        "line": 167
+      },
+      {
+        "name": "_extract_keywords",
+        "line": 197
+      },
+      {
+        "name": "_compute_recency",
+        "line": 219
+      },
+      {
+        "name": "_touch_selected",
+        "line": 228
+      },
+      {
+        "name": "degrade_by_age",
+        "line": 241
+      },
+      {
+        "name": "llm_adjust_priorities",
+        "line": 314
+      },
+      {
+        "name": "format_memories",
+        "line": 431
+      },
+      {
+        "name": "_prefix_for",
+        "line": 461
+      },
+      {
+        "name": "build_extraction_prompt",
+        "line": 506
+      },
+      {
+        "name": "parse_extraction_result",
+        "line": 515
+      },
+      {
+        "name": "_compute_similarity",
+        "line": 536
+      },
+      {
+        "name": "_find_duplicate",
+        "line": 555
+      },
+      {
+        "name": "_merge_memory",
+        "line": 587
+      },
+      {
+        "name": "ingest_extracted",
+        "line": 658
+      },
+      {
+        "name": "is_extraction_needed",
+        "line": 720
+      }
+    ]
+  },
+  "tea_agent/merge_db.py": {
+    "classes": [
+      {
+        "name": "DbMerger",
+        "line": 73
+      }
+    ],
+    "functions": [
+      {
+        "name": "_extract_keywords",
+        "line": 35
+      },
+      {
+        "name": "_jaccard_similarity",
+        "line": 53
+      },
+      {
+        "name": "__init__",
+        "line": 75
+      },
+      {
+        "name": "_get_max_ids",
+        "line": 91
+      },
+      {
+        "name": "_get_table_columns",
+        "line": 116
+      },
+      {
+        "name": "_merge_meta",
+        "line": 131
+      },
+      {
+        "name": "_merge_topics",
+        "line": 154
+      },
+      {
+        "name": "_merge_conversations",
+        "line": 181
+      },
+      {
+        "name": "_merge_agent_rounds",
+        "line": 224
+      },
+      {
+        "name": "_merge_topic_token_stats",
+        "line": 263
+      },
+      {
+        "name": "_accumulate_token_stats",
+        "line": 305
+      },
+      {
+        "name": "_merge_t_conv_summary",
+        "line": 334
+      },
+      {
+        "name": "_merge_memories",
+        "line": 375
+      },
+      {
+        "name": "_find_duplicate",
+        "line": 445
+      },
+      {
+        "name": "_merge_memory_record",
+        "line": 463
+      },
+      {
+        "name": "_merge_system_prompts",
+        "line": 499
+      },
+      {
+        "name": "_merge_reflections",
+        "line": 560
+      },
+      {
+        "name": "_merge_config_history",
+        "line": 601
+      },
+      {
+        "name": "merge",
+        "line": 636
+      },
+      {
+        "name": "close",
+        "line": 666
+      },
+      {
+        "name": "main",
+        "line": 675
+      }
+    ]
+  },
+  "tea_agent/onlinesession.py": {
+    "classes": [
+      {
+        "name": "OnlineToolSession",
+        "line": 27
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 53
+      },
+      {
+        "name": "_process_stream_with_reasoning",
+        "line": 209
+      },
+      {
+        "name": "_setup_default_pipeline",
+        "line": 254
+      },
+      {
+        "name": "_build_api_messages",
+        "line": 298
+      },
+      {
+        "name": "_sanitize_api_messages",
+        "line": 452
+      },
+      {
+        "name": "_try_fix_truncated_json",
+        "line": 522
+      },
+      {
+        "name": "_get_subconscious_context",
+        "line": 579
+      },
+      {
+        "name": "_to_multimodal",
+        "line": 623
+      },
+      {
+        "name": "_filter_level2_by_relevance",
+        "line": 668
+      },
+      {
+        "name": "_key_words",
+        "line": 682
+      },
+      {
+        "name": "_extract_files_from_text",
+        "line": 690
+      },
+      {
+        "name": "_analyze_intent",
+        "line": 766
+      },
+      {
+        "name": "_execute_tool_loop",
+        "line": 798
+      },
+      {
+        "name": "_build_tools",
+        "line": 1009
+      },
+      {
+        "name": "update_tools",
+        "line": 1029
+      },
+      {
+        "name": "_get_effective_params",
+        "line": 1038
+      },
+      {
+        "name": "_auto_detect_mode",
+        "line": 1045
+      },
+      {
+        "name": "_get_summarize_client",
+        "line": 1068
+      },
+      {
+        "name": "reset_session_state",
+        "line": 1074
+      },
+      {
+        "name": "_notify_reflection_done",
+        "line": 1092
+      },
+      {
+        "name": "_notify_prompt_evolved",
+        "line": 1103
+      },
+      {
+        "name": "chat_stream",
+        "line": 1117
+      },
+      {
+        "name": "_auto_extract",
+        "line": 1218
+      },
+      {
+        "name": "_auto_reflect",
+        "line": 1231
+      }
+    ]
+  },
+  "tea_agent/project_memory.py": {
+    "classes": [
+      {
+        "name": "ProjectMemoryManager",
+        "line": 15
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 22
+      },
+      {
+        "name": "_ensure_store",
+        "line": 27
+      },
+      {
+        "name": "_read",
+        "line": 33
+      },
+      {
+        "name": "_write",
+        "line": 44
+      },
+      {
+        "name": "add",
+        "line": 49
+      },
+      {
+        "name": "get_all",
+        "line": 78
+      },
+      {
+        "name": "search",
+        "line": 83
+      },
+      {
+        "name": "_new_id",
+        "line": 101
+      },
+      {
+        "name": "format_memories",
+        "line": 113
+      }
+    ]
+  },
+  "tea_agent/prompt_manager.py": {
+    "classes": [
+      {
+        "name": "SystemPromptManager",
+        "line": 29
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 49
+      },
+      {
+        "name": "initialize",
+        "line": 64
+      },
+      {
+        "name": "current_prompt",
+        "line": 93
+      },
+      {
+        "name": "current_version",
+        "line": 100
+      },
+      {
+        "name": "current_prompt_id",
+        "line": 104
+      },
+      {
+        "name": "reload",
+        "line": 106
+      },
+      {
+        "name": "build_evolve_prompt",
+        "line": 115
+      },
+      {
+        "name": "evolve",
+        "line": 167
+      },
+      {
+        "name": "rollback",
+        "line": 232
+      },
+      {
+        "name": "list_versions",
+        "line": 262
+      },
+      {
+        "name": "get_stats",
+        "line": 266
+      },
+      {
+        "name": "manual_set",
+        "line": 275
+      }
+    ]
+  },
+  "tea_agent/reflection.py": {
+    "classes": [
+      {
+        "name": "ToolCallRecord",
+        "line": 23
+      },
+      {
+        "name": "SessionTrace",
+        "line": 32
+      },
+      {
+        "name": "ReflectionManager",
+        "line": 54
+      }
+    ],
+    "functions": [
+      {
+        "name": "success_rate",
+        "line": 45
+      },
+      {
+        "name": "duration_seconds",
+        "line": 52
+      },
+      {
+        "name": "__init__",
+        "line": 81
+      },
+      {
+        "name": "start_trace",
+        "line": 93
+      },
+      {
+        "name": "record_tool_call",
+        "line": 103
+      },
+      {
+        "name": "finish_trace",
+        "line": 112
+      },
+      {
+        "name": "should_reflect",
+        "line": 121
+      },
+      {
+        "name": "build_reflection_prompt",
+        "line": 144
+      },
+      {
+        "name": "parse_reflection_result",
+        "line": 173
+      },
+      {
+        "name": "generate_reflection",
+        "line": 184
+      },
+      {
+        "name": "_build_tool_stats",
+        "line": 268
+      },
+      {
+        "name": "last_prompt_suggestion",
+        "line": 286
+      },
+      {
+        "name": "get_stats",
+        "line": 289
+      }
+    ]
+  },
+  "tea_agent/session_api.py": {
+    "classes": [
+      {
+        "name": "SessionAPIMixin",
+        "line": 7
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 21
+      },
+      {
+        "name": "_probe_thinking_support",
+        "line": 57
+      },
+      {
+        "name": "_accumulate_usage",
+        "line": 119
+      },
+      {
+        "name": "_accumulate_cheap_usage",
+        "line": 153
+      },
+      {
+        "name": "_track_api_usage",
+        "line": 179
+      },
+      {
+        "name": "_create_chat_stream",
+        "line": 195
+      },
+      {
+        "name": "process_stream_response",
+        "line": 250
+      },
+      {
+        "name": "_accumulate_tool_calls_from_delta",
+        "line": 285
+      },
+      {
+        "name": "reset_usage",
+        "line": 304
+      },
+      {
+        "name": "reset_cheap_usage",
+        "line": 311
+      },
+      {
+        "name": "get_last_usage",
+        "line": 314
+      },
+      {
+        "name": "get_cheap_usage",
+        "line": 318
+      },
+      {
+        "name": "get_total_usage",
+        "line": 322
+      }
+    ]
+  },
+  "tea_agent/session_memory.py": {
+    "classes": [
+      {
+        "name": "SessionMemoryMixin",
+        "line": 30
+      }
+    ],
+    "functions": [
+      {
+        "name": "_get_cheap_params",
+        "line": 19
+      },
+      {
+        "name": "__init__",
+        "line": 43
+      },
+      {
+        "name": "_setup_memory",
+        "line": 50
+      },
+      {
+        "name": "_pipeline_inject_memories",
+        "line": 74
+      },
+      {
+        "name": "trigger_memory_extraction",
+        "line": 133
+      },
+      {
+        "name": "_build_conversation_text",
+        "line": 196
+      },
+      {
+        "name": "get_injected_memories",
+        "line": 208
+      },
+      {
+        "name": "get_memory_stats",
+        "line": 212
+      }
+    ]
+  },
+  "tea_agent/session_pipeline.py": {
+    "classes": [
+      {
+        "name": "PipelineStep",
+        "line": 19
+      },
+      {
+        "name": "SessionPipeline",
+        "line": 26
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 38
+      },
+      {
+        "name": "register_step",
+        "line": 42
+      },
+      {
+        "name": "enable_step",
+        "line": 96
+      },
+      {
+        "name": "disable_step",
+        "line": 101
+      },
+      {
+        "name": "toggle_step",
+        "line": 106
+      },
+      {
+        "name": "set_step_position",
+        "line": 111
+      },
+      {
+        "name": "remove_step",
+        "line": 117
+      },
+      {
+        "name": "get_enabled_steps",
+        "line": 123
+      },
+      {
+        "name": "execute",
+        "line": 132
+      },
+      {
+        "name": "list_steps",
+        "line": 183
+      }
+    ]
+  },
+  "tea_agent/session_ref.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "get_session",
+        "line": 8
+      },
+      {
+        "name": "set_session",
+        "line": 12
+      },
+      {
+        "name": "get_agent",
+        "line": 18
+      },
+      {
+        "name": "set_agent",
+        "line": 23
+      }
+    ]
+  },
+  "tea_agent/session_summarizer.py": {
+    "classes": [
+      {
+        "name": "SessionSummarizerMixin",
+        "line": 133
+      }
+    ],
+    "functions": [
+      {
+        "name": "generate_topic_summary_shared",
+        "line": 50
+      },
+      {
+        "name": "_get_cheap_params",
+        "line": 121
+      },
+      {
+        "name": "__init__",
+        "line": 152
+      },
+      {
+        "name": "count_user_msg",
+        "line": 167
+      },
+      {
+        "name": "_call_summarize_api",
+        "line": 175
+      },
+      {
+        "name": "_summarize_old_history",
+        "line": 212
+      },
+      {
+        "name": "_conversations_to_text",
+        "line": 311
+      },
+      {
+        "name": "generate_topic_summary",
+        "line": 344
+      },
+      {
+        "name": "_extract_user_messages",
+        "line": 419
+      },
+      {
+        "name": "_clean_topic_summary",
+        "line": 452
+      },
+      {
+        "name": "_build_api_messages",
+        "line": 480
+      },
+      {
+        "name": "_compact_message",
+        "line": 534
+      },
+      {
+        "name": "_messages_to_text",
+        "line": 567
+      },
+      {
+        "name": "_find_recent_boundary",
+        "line": 610
+      },
+      {
+        "name": "_find_last_need_summary_pair",
+        "line": 632
+      },
+      {
+        "name": "reset_summary_state",
+        "line": 667
+      },
+      {
+        "name": "generate_topic_summary",
+        "line": 698
+      }
+    ]
+  },
+  "tea_agent/session_tool.py": {
+    "classes": [
+      {
+        "name": "SessionToolMixin",
+        "line": 13
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 26
+      },
+      {
+        "name": "_build_tools",
+        "line": 31
+      },
+      {
+        "name": "_execute_tool_call",
+        "line": 40
+      },
+      {
+        "name": "_record_tool_to_trace",
+        "line": 97
+      },
+      {
+        "name": "_add_tool_result",
+        "line": 108
+      },
+      {
+        "name": "_collect_tool_call_round",
+        "line": 116
+      },
+      {
+        "name": "_collect_assistant_tool_calls_round",
+        "line": 128
+      },
+      {
+        "name": "_collect_assistant_text_round",
+        "line": 151
+      },
+      {
+        "name": "_collect_api_error_round",
+        "line": 160
+      },
+      {
+        "name": "_collect_max_iterations_round",
+        "line": 167
+      },
+      {
+        "name": "_collect_interruption_round",
+        "line": 174
+      },
+      {
+        "name": "_parse_tool_calls_from_stream",
+        "line": 181
+      },
+      {
+        "name": "_accumulate_tool_calls_from_delta",
+        "line": 203
+      }
+    ]
+  },
+  "tea_agent/tea_agent.py": {
+    "classes": [
+      {
+        "name": "TeaAgent",
+        "line": 29
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 41
+      },
+      {
+        "name": "_load_config",
+        "line": 90
+      },
+      {
+        "name": "_init_toolkit",
+        "line": 131
+      },
+      {
+        "name": "_init_session",
+        "line": 158
+      },
+      {
+        "name": "_no_tools_chat",
+        "line": 201
+      },
+      {
+        "name": "toolkit_save",
+        "line": 213
+      },
+      {
+        "name": "toolkit_reload",
+        "line": 217
+      },
+      {
+        "name": "_notify",
+        "line": 228
+      },
+      {
+        "name": "chat",
+        "line": 239
+      },
+      {
+        "name": "_chat_impl",
+        "line": 262
+      },
+      {
+        "name": "stream_cb",
+        "line": 267
+      },
+      {
+        "name": "status_cb",
+        "line": 272
+      },
+      {
+        "name": "close",
+        "line": 302
+      },
+      {
+        "name": "__enter__",
+        "line": 311
+      },
+      {
+        "name": "__exit__",
+        "line": 314
+      },
+      {
+        "name": "config",
+        "line": 323
+      },
+      {
+        "name": "toolkit",
+        "line": 328
+      }
+    ]
+  },
+  "tea_agent/tea_main_cli.py": {
+    "classes": [
+      {
+        "name": "TeaCLI",
+        "line": 30
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 37
+      },
+      {
+        "name": "_auto_start_subconscious",
+        "line": 55
+      },
+      {
+        "name": "_stop_dream",
+        "line": 72
+      },
+      {
+        "name": "_auto_init_topic",
+        "line": 79
+      },
+      {
+        "name": "_new_topic",
+        "line": 88
+      },
+      {
+        "name": "_list_topics",
+        "line": 95
+      },
+      {
+        "name": "_switch_topic",
+        "line": 107
+      },
+      {
+        "name": "_load_history",
+        "line": 117
+      },
+      {
+        "name": "_show_topic_info",
+        "line": 123
+      },
+      {
+        "name": "_show_memories",
+        "line": 138
+      },
+      {
+        "name": "chat",
+        "line": 155
+      },
+      {
+        "name": "stream_cb",
+        "line": 166
+      },
+      {
+        "name": "status_cb",
+        "line": 172
+      },
+      {
+        "name": "work",
+        "line": 180
+      },
+      {
+        "name": "_on_tool_log",
+        "line": 212
+      },
+      {
+        "name": "_suggest_new_topic_if_needed",
+        "line": 214
+      },
+      {
+        "name": "_on_summary_updated",
+        "line": 222
+      },
+      {
+        "name": "run",
+        "line": 230
+      },
+      {
+        "name": "run_oneshot",
+        "line": 247
+      },
+      {
+        "name": "_handle_command",
+        "line": 255
+      },
+      {
+        "name": "_cmd_help",
+        "line": 280
+      },
+      {
+        "name": "_cmd_status",
+        "line": 295
+      },
+      {
+        "name": "main",
+        "line": 309
+      }
+    ]
+  },
+  "tea_agent/tlk.py": {
+    "classes": [
+      {
+        "name": "Toolkit",
+        "line": 161
+      }
+    ],
+    "functions": [
+      {
+        "name": "meta_toolkit_reload",
+        "line": 16
+      },
+      {
+        "name": "meta_toolkit_save",
+        "line": 30
+      },
+      {
+        "name": "toolkit_reload",
+        "line": 57
+      },
+      {
+        "name": "toolkit_save",
+        "line": 62
+      },
+      {
+        "name": "toolkit_rollback",
+        "line": 79
+      },
+      {
+        "name": "toolkit_list_versions",
+        "line": 85
+      },
+      {
+        "name": "meta_toolkit_rollback",
+        "line": 91
+      },
+      {
+        "name": "meta_toolkit_list_versions",
+        "line": 115
+      },
+      {
+        "name": "toolkit_rollback_impl",
+        "line": 135
+      },
+      {
+        "name": "toolkit_list_versions_impl",
+        "line": 145
+      },
+      {
+        "name": "__init__",
+        "line": 179
+      },
+      {
+        "name": "call_tool",
+        "line": 202
+      },
+      {
+        "name": "_purge_cache",
+        "line": 253
+      },
+      {
+        "name": "_check_dependencies",
+        "line": 264
+      },
+      {
+        "name": "reload",
+        "line": 323
+      },
+      {
+        "name": "check_meta",
+        "line": 329
+      },
+      {
+        "name": "save",
+        "line": 423
+      },
+      {
+        "name": "rollback",
+        "line": 556
+      },
+      {
+        "name": "list_versions",
+        "line": 587
+      }
+    ]
+  },
+  "tea_agent/gui/dialogs/memory_dialog.py": {
+    "classes": [
+      {
+        "name": "MemoryDialog",
+        "line": 9
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 18
+      },
+      {
+        "name": "_create_ui",
+        "line": 31
+      },
+      {
+        "name": "_refresh",
+        "line": 90
+      },
+      {
+        "name": "_sort",
+        "line": 126
+      },
+      {
+        "name": "_add_dialog",
+        "line": 138
+      },
+      {
+        "name": "do_add",
+        "line": 178
+      },
+      {
+        "name": "_soft_delete",
+        "line": 197
+      },
+      {
+        "name": "_hard_delete",
+        "line": 205
+      },
+      {
+        "name": "_on_double_click",
+        "line": 213
+      },
+      {
+        "name": "_export",
+        "line": 230
+      }
+    ]
+  },
+  "tea_agent/gui/dialogs/_common.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "_fs",
+        "line": 13
+      },
+      {
+        "name": "_init_fonts",
+        "line": 18
+      },
+      {
+        "name": "_detect",
+        "line": 28
+      }
+    ]
+  },
+  "tea_agent/skills/__init__.py": {
+    "classes": [
+      {
+        "name": "Skill",
+        "line": 36
+      },
+      {
+        "name": "SkillManager",
+        "line": 64
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 40
+      },
+      {
+        "name": "to_dict",
+        "line": 52
+      },
+      {
+        "name": "get_instance",
+        "line": 81
+      },
+      {
+        "name": "reset_instance",
+        "line": 87
+      },
+      {
+        "name": "__init__",
+        "line": 90
+      },
+      {
+        "name": "discover_skills",
+        "line": 110
+      },
+      {
+        "name": "_scan_directory",
+        "line": 136
+      },
+      {
+        "name": "_load_manifest",
+        "line": 165
+      },
+      {
+        "name": "activate_skill",
+        "line": 176
+      },
+      {
+        "name": "deactivate_skill",
+        "line": 185
+      },
+      {
+        "name": "toggle_skill",
+        "line": 193
+      },
+      {
+        "name": "activate_all",
+        "line": 200
+      },
+      {
+        "name": "deactivate_all",
+        "line": 206
+      },
+      {
+        "name": "is_tool_active",
+        "line": 216
+      },
+      {
+        "name": "get_active_tool_names",
+        "line": 232
+      },
+      {
+        "name": "get_active_tools_meta",
+        "line": 242
+      },
+      {
+        "name": "get_active_prompt",
+        "line": 277
+      },
+      {
+        "name": "get_skill_summary",
+        "line": 294
+      },
+      {
+        "name": "auto_activate",
+        "line": 312
+      },
+      {
+        "name": "list_skills",
+        "line": 350
+      },
+      {
+        "name": "get_skill",
+        "line": 354
+      },
+      {
+        "name": "get_active_skill_names",
+        "line": 357
+      },
+      {
+        "name": "get_status",
+        "line": 360
+      }
+    ]
+  },
+  "tea_agent/store/fix_history_timezone.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "fix",
+        "line": 25
+      }
+    ]
+  },
+  "tea_agent/store/fix_timezone.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "backup",
+        "line": 16
+      },
+      {
+        "name": "fix_file",
+        "line": 23
+      }
+    ]
+  },
+  "tea_agent/store/_base.py": {
+    "classes": [
+      {
+        "name": "StoreComponent",
+        "line": 6
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 10
+      },
+      {
+        "name": "_new_id",
+        "line": 15
+      }
+    ]
+  },
+  "tea_agent/store/_config.py": {
+    "classes": [
+      {
+        "name": "ConfigHistoryStore",
+        "line": 6
+      }
+    ],
+    "functions": [
+      {
+        "name": "add_config_change",
+        "line": 10
+      },
+      {
+        "name": "get_config_history",
+        "line": 29
+      },
+      {
+        "name": "get_config_changes_since",
+        "line": 45
+      }
+    ]
+  },
+  "tea_agent/store/_conversations.py": {
+    "classes": [
+      {
+        "name": "ConversationStore",
+        "line": 13
+      }
+    ],
+    "functions": [
+      {
+        "name": "save_msg",
+        "line": 17
+      },
+      {
+        "name": "update_msg_rounds",
+        "line": 83
+      },
+      {
+        "name": "save_agent_round",
+        "line": 96
+      },
+      {
+        "name": "get_conversations",
+        "line": 110
+      },
+      {
+        "name": "get_recent_conversations",
+        "line": 143
+      },
+      {
+        "name": "get_agent_rounds",
+        "line": 153
+      },
+      {
+        "name": "_auto_embed_async",
+        "line": 171
+      },
+      {
+        "name": "_run",
+        "line": 174
+      },
+      {
+        "name": "_store_embedding_inline",
+        "line": 187
+      }
+    ]
+  },
+  "tea_agent/store/_core.py": {
+    "classes": [
+      {
+        "name": "Storage",
+        "line": 27
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 37
+      },
+      {
+        "name": "__getattr__",
+        "line": 62
+      },
+      {
+        "name": "save_msg",
+        "line": 78
+      },
+      {
+        "name": "_init_tables",
+        "line": 88
+      },
+      {
+        "name": "_migrate",
+        "line": 263
+      },
+      {
+        "name": "_migrate_int_to_uuid",
+        "line": 320
+      },
+      {
+        "name": "_table_columns",
+        "line": 331
+      },
+      {
+        "name": "_migrate_table",
+        "line": 335
+      },
+      {
+        "name": "_migrate_msg_vectors",
+        "line": 455
+      },
+      {
+        "name": "_get_week_key",
+        "line": 473
+      },
+      {
+        "name": "_maybe_rotate_db",
+        "line": 475
+      },
+      {
+        "name": "_write_week_key",
+        "line": 507
+      },
+      {
+        "name": "_auto_backup",
+        "line": 518
+      },
+      {
+        "name": "_cleanup_backups",
+        "line": 545
+      },
+      {
+        "name": "backup_now",
+        "line": 561
+      },
+      {
+        "name": "_meta_get",
+        "line": 567
+      },
+      {
+        "name": "_meta_set",
+        "line": 575
+      },
+      {
+        "name": "_protect_db",
+        "line": 586
+      },
+      {
+        "name": "close",
+        "line": 601
+      },
+      {
+        "name": "__del__",
+        "line": 614
+      }
+    ]
+  },
+  "tea_agent/store/_memories.py": {
+    "classes": [
+      {
+        "name": "MemoryStore",
+        "line": 9
+      }
+    ],
+    "functions": [
+      {
+        "name": "add_memory",
+        "line": 17
+      },
+      {
+        "name": "_enforce_critical_limit",
+        "line": 36
+      },
+      {
+        "name": "update_memory",
+        "line": 59
+      },
+      {
+        "name": "deactivate_memory",
+        "line": 90
+      },
+      {
+        "name": "delete_memory",
+        "line": 93
+      },
+      {
+        "name": "get_active_memories",
+        "line": 101
+      },
+      {
+        "name": "get_instructions",
+        "line": 113
+      },
+      {
+        "name": "search_memories",
+        "line": 124
+      },
+      {
+        "name": "cleanup_expired_memories",
+        "line": 158
+      },
+      {
+        "name": "touch_memory",
+        "line": 169
+      },
+      {
+        "name": "get_memory_stats",
+        "line": 178
+      }
+    ]
+  },
+  "tea_agent/store/_prompts.py": {
+    "classes": [
+      {
+        "name": "PromptStore",
+        "line": 6
+      }
+    ],
+    "functions": [
+      {
+        "name": "add_system_prompt",
+        "line": 10
+      },
+      {
+        "name": "get_latest_system_prompt",
+        "line": 27
+      },
+      {
+        "name": "get_system_prompt_history",
+        "line": 37
+      },
+      {
+        "name": "deactivate_system_prompt",
+        "line": 47
+      },
+      {
+        "name": "rollback_system_prompt",
+        "line": 55
+      },
+      {
+        "name": "get_system_prompt_count",
+        "line": 64
+      }
+    ]
+  },
+  "tea_agent/store/_reflections.py": {
+    "classes": [
+      {
+        "name": "ReflectionStore",
+        "line": 7
+      }
+    ],
+    "functions": [
+      {
+        "name": "add_reflection",
+        "line": 11
+      },
+      {
+        "name": "get_recent_reflections",
+        "line": 31
+      },
+      {
+        "name": "mark_reflection_applied",
+        "line": 41
+      },
+      {
+        "name": "get_reflection_stats",
+        "line": 49
+      }
+    ]
+  },
+  "tea_agent/store/_scheduled_tasks.py": {
+    "classes": [
+      {
+        "name": "ScheduledTaskStore",
+        "line": 13
+      }
+    ],
+    "functions": [
+      {
+        "name": "parse_schedule",
+        "line": 21
+      },
+      {
+        "name": "add_task",
+        "line": 92
+      },
+      {
+        "name": "update_task",
+        "line": 111
+      },
+      {
+        "name": "delete_task",
+        "line": 133
+      },
+      {
+        "name": "get_task",
+        "line": 140
+      },
+      {
+        "name": "list_tasks",
+        "line": 147
+      },
+      {
+        "name": "get_due_tasks",
+        "line": 156
+      },
+      {
+        "name": "mark_run",
+        "line": 166
+      },
+      {
+        "name": "_parse_cron",
+        "line": 178
+      },
+      {
+        "name": "_match_cron_field",
+        "line": 200
+      }
+    ]
+  },
+  "tea_agent/store/_summaries.py": {
+    "classes": [
+      {
+        "name": "SummaryStore",
+        "line": 10
+      }
+    ],
+    "functions": [
+      {
+        "name": "get_topic_summary",
+        "line": 16
+      },
+      {
+        "name": "update_topic_summary",
+        "line": 23
+      },
+      {
+        "name": "get_level2",
+        "line": 48
+      },
+      {
+        "name": "set_level2",
+        "line": 60
+      },
+      {
+        "name": "get_semantic_summary",
+        "line": 71
+      },
+      {
+        "name": "set_semantic_summary",
+        "line": 78
+      },
+      {
+        "name": "get_tool_chain_summary",
+        "line": 87
+      },
+      {
+        "name": "set_tool_chain_summary",
+        "line": 94
+      },
+      {
+        "name": "push_to_level2",
+        "line": 103
+      },
+      {
+        "name": "mark_as_summarized",
+        "line": 118
+      },
+      {
+        "name": "get_unsummarized_conversations",
+        "line": 127
+      }
+    ]
+  },
+  "tea_agent/store/_topics.py": {
+    "classes": [
+      {
+        "name": "TopicStore",
+        "line": 9
+      }
+    ],
+    "functions": [
+      {
+        "name": "create_topic",
+        "line": 15
+      },
+      {
+        "name": "update_topic_title",
+        "line": 23
+      },
+      {
+        "name": "update_topic_active",
+        "line": 36
+      },
+      {
+        "name": "get_drift_count",
+        "line": 45
+      },
+      {
+        "name": "increment_drift_count",
+        "line": 53
+      },
+      {
+        "name": "delete_topic",
+        "line": 64
+      },
+      {
+        "name": "get_topic",
+        "line": 78
+      },
+      {
+        "name": "list_topics",
+        "line": 85
+      },
+      {
+        "name": "add_topic_tokens",
+        "line": 101
+      },
+      {
+        "name": "get_topic_tokens",
+        "line": 137
+      }
+    ]
+  },
+  "tea_agent/store/_vectors.py": {
+    "classes": [
+      {
+        "name": "VectorStore",
+        "line": 7
+      }
+    ],
+    "functions": [
+      {
+        "name": "store_embedding",
+        "line": 11
+      },
+      {
+        "name": "get_msg_embedding",
+        "line": 24
+      },
+      {
+        "name": "get_all_embeddings",
+        "line": 40
+      },
+      {
+        "name": "search_by_vector",
+        "line": 65
+      },
+      {
+        "name": "search_by_keyword",
+        "line": 121
+      },
+      {
+        "name": "get_vector_count",
+        "line": 144
+      },
+      {
+        "name": "get_unvectorized_conversations",
+        "line": 151
+      },
+      {
+        "name": "vectorize_conversation",
+        "line": 165
+      },
+      {
+        "name": "batch_vectorize",
+        "line": 172
+      },
+      {
+        "name": "delete_vector",
+        "line": 182
+      }
+    ]
+  },
+  "tea_agent/store/__init__.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "get_storage",
+        "line": 24
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_build.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_build",
+        "line": 8
+      },
+      {
+        "name": "meta_toolkit_build",
+        "line": 112
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_bump_version.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_bump_version",
+        "line": 5
+      },
+      {
+        "name": "meta_toolkit_bump_version",
+        "line": 92
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_comment.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_comment",
+        "line": 8
+      },
+      {
+        "name": "meta_toolkit_comment",
+        "line": 36
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_config.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_config",
+        "line": 11
+      },
+      {
+        "name": "meta_toolkit_config",
+        "line": 104
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_date_diff.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_date_diff",
+        "line": 7
+      },
+      {
+        "name": "meta_toolkit_date_diff",
+        "line": 61
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_dump_topic.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_dump_topic",
+        "line": 5
+      },
+      {
+        "name": "meta_toolkit_dump_topic",
+        "line": 112
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_evolution_exp.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "_get_exp_path",
+        "line": 20
+      },
+      {
+        "name": "_load_exp_db",
+        "line": 23
+      },
+      {
+        "name": "_save_exp_db",
+        "line": 30
+      },
+      {
+        "name": "toolkit_evolution_exp",
+        "line": 36
+      },
+      {
+        "name": "meta_toolkit_evolution_exp",
+        "line": 98
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_exec.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_exec",
+        "line": 10
+      },
+      {
+        "name": "_run",
+        "line": 77
+      },
+      {
+        "name": "_sudo_with_gui",
+        "line": 173
+      },
+      {
+        "name": "_truncate_result",
+        "line": 270
+      },
+      {
+        "name": "meta_toolkit_exec",
+        "line": 303
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_explr.py": {
+    "classes": [
+      {
+        "name": "CallVisitor",
+        "line": 140
+      }
+    ],
+    "functions": [
+      {
+        "name": "_log",
+        "line": 56
+      },
+      {
+        "name": "_build_ctags",
+        "line": 59
+      },
+      {
+        "name": "_build_call_graph",
+        "line": 118
+      },
+      {
+        "name": "visit_FunctionDef",
+        "line": 142
+      },
+      {
+        "name": "visit_AsyncFunctionDef",
+        "line": 154
+      },
+      {
+        "name": "visit_ClassDef",
+        "line": 157
+      },
+      {
+        "name": "_build_dot_flow",
+        "line": 166
+      },
+      {
+        "name": "_build_kb_md",
+        "line": 206
+      },
+      {
+        "name": "_action_build",
+        "line": 306
+      },
+      {
+        "name": "_action_query",
+        "line": 361
+      },
+      {
+        "name": "_action_status",
+        "line": 457
+      },
+      {
+        "name": "_extract_arch_context",
+        "line": 491
+      },
+      {
+        "name": "toolkit_explr",
+        "line": 538
+      },
+      {
+        "name": "meta_toolkit_explr",
+        "line": 556
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_file.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_file",
+        "line": 13
+      },
+      {
+        "name": "scan_dir",
+        "line": 62
+      },
+      {
+        "name": "meta_toolkit_file",
+        "line": 85
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_gettime.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_gettime",
+        "line": 7
+      },
+      {
+        "name": "meta_toolkit_gettime",
+        "line": 20
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_git_push_all_remotes.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_git_push_all_remotes",
+        "line": 7
+      },
+      {
+        "name": "meta_toolkit_git_push_all_remotes",
+        "line": 31
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_input.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_input",
+        "line": 9
+      },
+      {
+        "name": "meta_toolkit_input",
+        "line": 135
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_kb.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_kb",
+        "line": 11
+      },
+      {
+        "name": "sanitize",
+        "line": 28
+      },
+      {
+        "name": "_meta",
+        "line": 33
+      },
+      {
+        "name": "rebuild_index",
+        "line": 37
+      },
+      {
+        "name": "meta_toolkit_kb",
+        "line": 171
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_listen.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_listen",
+        "line": 11
+      },
+      {
+        "name": "meta_toolkit_listen",
+        "line": 78
+      },
+      {
+        "name": "meta_toolkit_listen",
+        "line": 82
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_lunar.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "_solar_days_in_year",
+        "line": 64
+      },
+      {
+        "name": "_solar_days_in_month",
+        "line": 68
+      },
+      {
+        "name": "_offset_from_base",
+        "line": 74
+      },
+      {
+        "name": "_lunar_year_info",
+        "line": 84
+      },
+      {
+        "name": "_leap_month",
+        "line": 88
+      },
+      {
+        "name": "_leap_days",
+        "line": 92
+      },
+      {
+        "name": "_month_days",
+        "line": 96
+      },
+      {
+        "name": "_lunar_year_total_days",
+        "line": 101
+      },
+      {
+        "name": "_solar_to_lunar",
+        "line": 112
+      },
+      {
+        "name": "toolkit_lunar",
+        "line": 173
+      },
+      {
+        "name": "_solar_terms",
+        "line": 277
+      },
+      {
+        "name": "meta_toolkit_lunar",
+        "line": 299
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_memory.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_memory",
+        "line": 8
+      },
+      {
+        "name": "meta_toolkit_memory",
+        "line": 132
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_mode.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_mode",
+        "line": 11
+      },
+      {
+        "name": "_detect_mode",
+        "line": 81
+      },
+      {
+        "name": "_get_memory_manager",
+        "line": 104
+      },
+      {
+        "name": "_get_existing_mode_memory",
+        "line": 117
+      },
+      {
+        "name": "_set_mode",
+        "line": 125
+      },
+      {
+        "name": "_current_mode",
+        "line": 138
+      },
+      {
+        "name": "meta_toolkit_mode",
+        "line": 205
+      },
+      {
+        "name": "meta_toolkit_mode",
+        "line": 209
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_notify.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_notify",
+        "line": 9
+      },
+      {
+        "name": "meta_toolkit_notify",
+        "line": 119
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_ocr.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_ocr",
+        "line": 12
+      },
+      {
+        "name": "_get_reader",
+        "line": 47
+      },
+      {
+        "name": "_screenshot",
+        "line": 70
+      },
+      {
+        "name": "meta_toolkit_ocr",
+        "line": 206
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_os_info.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "_cached_os_info",
+        "line": 11
+      },
+      {
+        "name": "toolkit_os_info",
+        "line": 20
+      },
+      {
+        "name": "meta_toolkit_os_info",
+        "line": 28
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_pkg.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_pkg",
+        "line": 9
+      },
+      {
+        "name": "_pip_install",
+        "line": 18
+      },
+      {
+        "name": "_check_module",
+        "line": 26
+      },
+      {
+        "name": "_get_version",
+        "line": 34
+      },
+      {
+        "name": "_list_installed",
+        "line": 52
+      },
+      {
+        "name": "meta_toolkit_pkg",
+        "line": 149
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_proactive.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_proactive",
+        "line": 11
+      },
+      {
+        "name": "_get_memory_manager",
+        "line": 31
+      },
+      {
+        "name": "_check_proactive",
+        "line": 38
+      },
+      {
+        "name": "_add_goal",
+        "line": 87
+      },
+      {
+        "name": "_complete_goal",
+        "line": 110
+      },
+      {
+        "name": "_list_goals",
+        "line": 120
+      },
+      {
+        "name": "meta_toolkit_proactive",
+        "line": 143
+      },
+      {
+        "name": "meta_toolkit_proactive",
+        "line": 147
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_prompt_evolve.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_prompt_evolve",
+        "line": 10
+      },
+      {
+        "name": "meta_toolkit_prompt_evolve",
+        "line": 98
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_read_pyproject.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_read_pyproject",
+        "line": 8
+      },
+      {
+        "name": "meta_toolkit_read_pyproject",
+        "line": 61
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_reflection.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_reflection",
+        "line": 11
+      },
+      {
+        "name": "meta_toolkit_reflection",
+        "line": 76
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_release_version.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_release_version",
+        "line": 12
+      },
+      {
+        "name": "meta_toolkit_release_version",
+        "line": 114
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_run_tests.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_run_tests",
+        "line": 6
+      },
+      {
+        "name": "meta_toolkit_run_tests",
+        "line": 61
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_scheduler.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_scheduler",
+        "line": 6
+      },
+      {
+        "name": "_get_conn",
+        "line": 46
+      },
+      {
+        "name": "parse_schedule",
+        "line": 70
+      },
+      {
+        "name": "_match_cron",
+        "line": 106
+      },
+      {
+        "name": "_parse_cron",
+        "line": 125
+      },
+      {
+        "name": "_notify",
+        "line": 138
+      },
+      {
+        "name": "_execute_task",
+        "line": 159
+      },
+      {
+        "name": "_scheduler_loop",
+        "line": 177
+      },
+      {
+        "name": "_format_next",
+        "line": 382
+      },
+      {
+        "name": "meta_toolkit_scheduler",
+        "line": 408
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_screenshot.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_screenshot",
+        "line": 9
+      },
+      {
+        "name": "_detect_env",
+        "line": 20
+      },
+      {
+        "name": "_find_tool",
+        "line": 27
+      },
+      {
+        "name": "_crop_image",
+        "line": 33
+      },
+      {
+        "name": "_wayland_fullscreen",
+        "line": 52
+      },
+      {
+        "name": "_x11_screenshot",
+        "line": 81
+      },
+      {
+        "name": "_list_monitors",
+        "line": 126
+      },
+      {
+        "name": "meta_toolkit_screenshot",
+        "line": 231
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_search.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_search",
+        "line": 9
+      },
+      {
+        "name": "_search_duckduckgo",
+        "line": 29
+      },
+      {
+        "name": "_search_baidu",
+        "line": 103
+      },
+      {
+        "name": "meta_toolkit_search",
+        "line": 203
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_self_evolve.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_self_evolve",
+        "line": 8
+      },
+      {
+        "name": "_git_clean",
+        "line": 45
+      },
+      {
+        "name": "_git_snap",
+        "line": 57
+      },
+      {
+        "name": "_git_revert",
+        "line": 71
+      },
+      {
+        "name": "_run_tests",
+        "line": 80
+      },
+      {
+        "name": "meta_toolkit_self_evolve",
+        "line": 213
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_self_report.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_self_report",
+        "line": 7
+      },
+      {
+        "name": "meta_toolkit_self_report",
+        "line": 74
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_set_topic_title.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_set_topic_title",
+        "line": 5
+      },
+      {
+        "name": "meta_toolkit_set_topic_title",
+        "line": 64
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_skill.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_skill",
+        "line": 8
+      },
+      {
+        "name": "meta_toolkit_skill",
+        "line": 83
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_speak.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_speak",
+        "line": 11
+      },
+      {
+        "name": "meta_toolkit_speak",
+        "line": 85
+      },
+      {
+        "name": "meta_toolkit_speak",
+        "line": 89
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_subconscious.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_subconscious",
+        "line": 9
+      },
+      {
+        "name": "_is_tea_agent_cwd",
+        "line": 31
+      },
+      {
+        "name": "_ensure_dir",
+        "line": 52
+      },
+      {
+        "name": "_read_state",
+        "line": 55
+      },
+      {
+        "name": "_write_state",
+        "line": 67
+      },
+      {
+        "name": "_get_db_path",
+        "line": 73
+      },
+      {
+        "name": "_extract_keywords",
+        "line": 81
+      },
+      {
+        "name": "_is_jieba_available",
+        "line": 96
+      },
+      {
+        "name": "_digest_memories",
+        "line": 101
+      },
+      {
+        "name": "_detect_focus",
+        "line": 129
+      },
+      {
+        "name": "_digest_conversations",
+        "line": 156
+      },
+      {
+        "name": "_extract_memory_candidates",
+        "line": 196
+      },
+      {
+        "name": "_is_duplicate_memory",
+        "line": 225
+      },
+      {
+        "name": "_cross_link",
+        "line": 236
+      },
+      {
+        "name": "_generate_insights",
+        "line": 305
+      },
+      {
+        "name": "_set_goals",
+        "line": 408
+      },
+      {
+        "name": "_send_notification",
+        "line": 433
+      },
+      {
+        "name": "_linux_notify_fallback",
+        "line": 467
+      },
+      {
+        "name": "_send_cycle_summary",
+        "line": 532
+      },
+      {
+        "name": "_run_cycle",
+        "line": 575
+      },
+      {
+        "name": "_subconscious_loop",
+        "line": 633
+      },
+      {
+        "name": "_dream",
+        "line": 674
+      },
+      {
+        "name": "_pragmatic_analysis",
+        "line": 729
+      },
+      {
+        "name": "_creative_dream",
+        "line": 804
+      },
+      {
+        "name": "_reverse_thinking",
+        "line": 844
+      },
+      {
+        "name": "_extreme_scenario",
+        "line": 855
+      },
+      {
+        "name": "meta_toolkit_subconscious",
+        "line": 931
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_sudo_gui.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_sudo_gui",
+        "line": 14
+      },
+      {
+        "name": "meta_toolkit_sudo_gui",
+        "line": 82
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_test_gui.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_test_gui",
+        "line": 14
+      },
+      {
+        "name": "meta_toolkit_test_gui",
+        "line": 126
+      }
+    ]
+  },
+  "tea_agent/toolkit/toolkit_toggle_reasoning.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "toolkit_toggle_reasoning",
+        "line": 6
+      },
+      {
+        "name": "meta_toolkit_toggle_reasoning",
+        "line": 32
+      }
+    ]
+  },
+  "tea_agent/_gui/_console.py": {
+    "classes": [
+      {
+        "name": "ConsoleIO",
+        "line": 16
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 20
+      },
+      {
+        "name": "_now_ts",
+        "line": 23
+      },
+      {
+        "name": "_init_session",
+        "line": 28
+      },
+      {
+        "name": "toggle_reasoning",
+        "line": 31
+      },
+      {
+        "name": "_update_status",
+        "line": 42
+      },
+      {
+        "name": "safe_stream",
+        "line": 45
+      },
+      {
+        "name": "safe_log",
+        "line": 48
+      },
+      {
+        "name": "safe_log_tool",
+        "line": 51
+      },
+      {
+        "name": "safe_update_status",
+        "line": 54
+      },
+      {
+        "name": "_handle_max_iter",
+        "line": 62
+      },
+      {
+        "name": "log",
+        "line": 77
+      },
+      {
+        "name": "stream",
+        "line": 91
+      },
+      {
+        "name": "log_tool",
+        "line": 106
+      },
+      {
+        "name": "_stream_flush_tick",
+        "line": 111
+      }
+    ]
+  },
+  "tea_agent/_gui/_event_manager.py": {
+    "classes": [
+      {
+        "name": "EventManager",
+        "line": 11
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 14
+      },
+      {
+        "name": "send",
+        "line": 17
+      },
+      {
+        "name": "work",
+        "line": 34
+      },
+      {
+        "name": "interrupt",
+        "line": 46
+      },
+      {
+        "name": "newline",
+        "line": 53
+      },
+      {
+        "name": "on_topic_select",
+        "line": 58
+      },
+      {
+        "name": "attach_image",
+        "line": 68
+      },
+      {
+        "name": "clear_images",
+        "line": 76
+      },
+      {
+        "name": "open_topic_dialog",
+        "line": 82
+      },
+      {
+        "name": "open_memory_dialog",
+        "line": 89
+      },
+      {
+        "name": "open_config_dialog",
+        "line": 96
+      },
+      {
+        "name": "on_save",
+        "line": 103
+      }
+    ]
+  },
+  "tea_agent/_gui/_fonts.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "_fs",
+        "line": 19
+      },
+      {
+        "name": "_init_fonts",
+        "line": 24
+      },
+      {
+        "name": "_detect",
+        "line": 35
+      }
+    ]
+  },
+  "tea_agent/_gui/_helpers.py": {
+    "classes": [
+      {
+        "name": "_TagChecker",
+        "line": 9
+      },
+      {
+        "name": "StatusNotifierItemDBus",
+        "line": 32
+      },
+      {
+        "name": "StatusNotifierItemDBus",
+        "line": 75
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 11
+      },
+      {
+        "name": "handle_starttag",
+        "line": 14
+      },
+      {
+        "name": "handle_endtag",
+        "line": 17
+      },
+      {
+        "name": "get_result",
+        "line": 20
+      },
+      {
+        "name": "__init__",
+        "line": 34
+      },
+      {
+        "name": "_register_to_watcher",
+        "line": 44
+      },
+      {
+        "name": "Get",
+        "line": 49
+      },
+      {
+        "name": "GetAll",
+        "line": 53
+      },
+      {
+        "name": "_get_property",
+        "line": 55
+      },
+      {
+        "name": "Activate",
+        "line": 60
+      },
+      {
+        "name": "ContextMenu",
+        "line": 64
+      },
+      {
+        "name": "SecondaryActivate",
+        "line": 68
+      },
+      {
+        "name": "Scroll",
+        "line": 72
+      }
+    ]
+  },
+  "tea_agent/_gui/_images.py": {
+    "classes": [
+      {
+        "name": "ImageHandler",
+        "line": 18
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 22
+      },
+      {
+        "name": "_pending_images",
+        "line": 27
+      },
+      {
+        "name": "_image_cache",
+        "line": 31
+      },
+      {
+        "name": "attach",
+        "line": 35
+      },
+      {
+        "name": "clear",
+        "line": 68
+      },
+      {
+        "name": "show_popup",
+        "line": 75
+      }
+    ]
+  },
+  "tea_agent/_gui/_interfaces.py": {
+    "classes": [
+      {
+        "name": "HtmlDisplay",
+        "line": 9
+      },
+      {
+        "name": "TextDisplay",
+        "line": 23
+      },
+      {
+        "name": "StatusDisplay",
+        "line": 52
+      },
+      {
+        "name": "ImagePicker",
+        "line": 61
+      }
+    ],
+    "functions": [
+      {
+        "name": "show_html",
+        "line": 15
+      },
+      {
+        "name": "clear",
+        "line": 20
+      },
+      {
+        "name": "append",
+        "line": 29
+      },
+      {
+        "name": "append_tagged",
+        "line": 34
+      },
+      {
+        "name": "scroll_to_end",
+        "line": 39
+      },
+      {
+        "name": "set_state",
+        "line": 44
+      },
+      {
+        "name": "get_all_text",
+        "line": 49
+      },
+      {
+        "name": "show",
+        "line": 58
+      },
+      {
+        "name": "pick_images",
+        "line": 67
+      },
+      {
+        "name": "show_popup",
+        "line": 72
+      }
+    ]
+  },
+  "tea_agent/_gui/_markdown.py": {
+    "classes": [
+      {
+        "name": "_TagChecker",
+        "line": 387
+      }
+    ],
+    "functions": [
+      {
+        "name": "_render_markdown",
+        "line": 71
+      },
+      {
+        "name": "_fix_double_escape_in_code",
+        "line": 84
+      },
+      {
+        "name": "_fix_code_block",
+        "line": 92
+      },
+      {
+        "name": "_build_tool_blocks",
+        "line": 106
+      },
+      {
+        "name": "_render_tool_group",
+        "line": 150
+      },
+      {
+        "name": "_chat_to_markdown",
+        "line": 242
+      },
+      {
+        "name": "_sanitize_html_control_chars",
+        "line": 316
+      },
+      {
+        "name": "_escape_orphan_brackets",
+        "line": 334
+      },
+      {
+        "name": "_validate_html_structure",
+        "line": 376
+      },
+      {
+        "name": "__init__",
+        "line": 389
+      },
+      {
+        "name": "handle_starttag",
+        "line": 396
+      },
+      {
+        "name": "handle_endtag",
+        "line": 400
+      },
+      {
+        "name": "get_result",
+        "line": 417
+      }
+    ]
+  },
+  "tea_agent/_gui/_renderer.py": {
+    "classes": [
+      {
+        "name": "ChatRenderer",
+        "line": 30
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 34
+      },
+      {
+        "name": "_show_mode",
+        "line": 40
+      },
+      {
+        "name": "_show_mode",
+        "line": 43
+      },
+      {
+        "name": "_html_render",
+        "line": 47
+      },
+      {
+        "name": "_render_chat",
+        "line": 82
+      },
+      {
+        "name": "_render_and_show_chat",
+        "line": 107
+      },
+      {
+        "name": "_prepare",
+        "line": 123
+      },
+      {
+        "name": "_on_done",
+        "line": 126
+      },
+      {
+        "name": "_worker",
+        "line": 143
+      },
+      {
+        "name": "_render_loaded_topic",
+        "line": 152
+      },
+      {
+        "name": "_render_round_view",
+        "line": 174
+      },
+      {
+        "name": "_prepare",
+        "line": 180
+      },
+      {
+        "name": "_on_done",
+        "line": 183
+      },
+      {
+        "name": "_worker",
+        "line": 200
+      },
+      {
+        "name": "_render_topic_error",
+        "line": 209
+      },
+      {
+        "name": "_build_round_view_html",
+        "line": 217
+      },
+      {
+        "name": "_switch_display",
+        "line": 276
+      },
+      {
+        "name": "_show_loading",
+        "line": 289
+      },
+      {
+        "name": "_poll_loading_progress",
+        "line": 330
+      },
+      {
+        "name": "scroll_to_bottom",
+        "line": 356
+      },
+      {
+        "name": "_filtered_messages",
+        "line": 360
+      },
+      {
+        "name": "_group_into_rounds",
+        "line": 365
+      },
+      {
+        "name": "_toggle_raw_view",
+        "line": 381
+      },
+      {
+        "name": "_show_raw_check_btn",
+        "line": 390
+      },
+      {
+        "name": "_hide_raw_check_btn",
+        "line": 395
+      },
+      {
+        "name": "_flush_stream_to_messages",
+        "line": 400
+      },
+      {
+        "name": "_flush_think_buffer_to_messages",
+        "line": 423
+      }
+    ]
+  },
+  "tea_agent/_gui/_render_manager.py": {
+    "classes": [
+      {
+        "name": "RenderManager",
+        "line": 10
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 13
+      },
+      {
+        "name": "now_ts",
+        "line": 16
+      },
+      {
+        "name": "render_chat",
+        "line": 19
+      },
+      {
+        "name": "render_and_show_chat",
+        "line": 51
+      },
+      {
+        "name": "render_loaded_topic",
+        "line": 55
+      },
+      {
+        "name": "render_round_view",
+        "line": 61
+      },
+      {
+        "name": "render_topic_error",
+        "line": 67
+      },
+      {
+        "name": "build_round_view_html",
+        "line": 73
+      },
+      {
+        "name": "filtered_messages",
+        "line": 85
+      },
+      {
+        "name": "group_into_rounds",
+        "line": 88
+      },
+      {
+        "name": "add_token_notice_and_render",
+        "line": 100
+      },
+      {
+        "name": "cell",
+        "line": 105
+      },
+      {
+        "name": "on_history_link_click",
+        "line": 108
+      },
+      {
+        "name": "show_image_popup",
+        "line": 112
+      },
+      {
+        "name": "scroll_to_bottom",
+        "line": 127
+      },
+      {
+        "name": "html_render",
+        "line": 130
+      },
+      {
+        "name": "toggle_raw_view",
+        "line": 140
+      },
+      {
+        "name": "show_raw_check_btn",
+        "line": 144
+      },
+      {
+        "name": "hide_raw_check_btn",
+        "line": 147
+      },
+      {
+        "name": "switch_display",
+        "line": 150
+      },
+      {
+        "name": "show_loading",
+        "line": 153
+      },
+      {
+        "name": "poll_loading_progress",
+        "line": 156
+      }
+    ]
+  },
+  "tea_agent/_gui/_services.py": {
+    "classes": [
+      {
+        "name": "ServiceManager",
+        "line": 13
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 17
+      },
+      {
+        "name": "start_dream",
+        "line": 23
+      },
+      {
+        "name": "start_scheduler",
+        "line": 47
+      },
+      {
+        "name": "on_closing",
+        "line": 63
+      },
+      {
+        "name": "notify_completion",
+        "line": 96
+      }
+    ]
+  },
+  "tea_agent/_gui/_session_controller.py": {
+    "classes": [
+      {
+        "name": "SessionController",
+        "line": 11
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 15
+      },
+      {
+        "name": "_start_dream",
+        "line": 18
+      },
+      {
+        "name": "_start_scheduler",
+        "line": 41
+      },
+      {
+        "name": "_history_prev_round",
+        "line": 54
+      },
+      {
+        "name": "_history_next_round",
+        "line": 74
+      },
+      {
+        "name": "_init_session",
+        "line": 119
+      },
+      {
+        "name": "toggle_reasoning",
+        "line": 124
+      },
+      {
+        "name": "clear_chat",
+        "line": 136
+      },
+      {
+        "name": "auto_new_topic",
+        "line": 150
+      },
+      {
+        "name": "new_topic",
+        "line": 162
+      },
+      {
+        "name": "refresh_topics",
+        "line": 175
+      },
+      {
+        "name": "_update_title",
+        "line": 198
+      },
+      {
+        "name": "switch_topic",
+        "line": 206
+      },
+      {
+        "name": "load_worker",
+        "line": 229
+      },
+      {
+        "name": "load_worker",
+        "line": 368
+      },
+      {
+        "name": "on_topic_select",
+        "line": 508
+      },
+      {
+        "name": "_suggest_new_topic_if_needed",
+        "line": 521
+      },
+      {
+        "name": "_on_summary_updated",
+        "line": 531
+      },
+      {
+        "name": "_refresh_topics_preserve_selection",
+        "line": 539
+      },
+      {
+        "name": "_on_topic_hover",
+        "line": 546
+      },
+      {
+        "name": "_on_topic_leave",
+        "line": 565
+      },
+      {
+        "name": "_on_history_link_click",
+        "line": 573
+      },
+      {
+        "name": "open_topic_dialog",
+        "line": 597
+      },
+      {
+        "name": "open_memory_dialog",
+        "line": 604
+      },
+      {
+        "name": "open_config_dialog",
+        "line": 608
+      },
+      {
+        "name": "on_save",
+        "line": 612
+      },
+      {
+        "name": "on_save",
+        "line": 626
+      },
+      {
+        "name": "interrupt",
+        "line": 641
+      }
+    ]
+  },
+  "tea_agent/_gui/_session_manager.py": {
+    "classes": [
+      {
+        "name": "SessionManager",
+        "line": 9
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 12
+      },
+      {
+        "name": "init_session",
+        "line": 15
+      },
+      {
+        "name": "toggle_reasoning",
+        "line": 20
+      },
+      {
+        "name": "clear_chat",
+        "line": 31
+      },
+      {
+        "name": "new_topic",
+        "line": 47
+      },
+      {
+        "name": "refresh_topics",
+        "line": 53
+      },
+      {
+        "name": "switch_topic",
+        "line": 65
+      },
+      {
+        "name": "auto_new_topic",
+        "line": 74
+      },
+      {
+        "name": "suggest_new_topic_if_needed",
+        "line": 79
+      },
+      {
+        "name": "on_summary_updated",
+        "line": 83
+      },
+      {
+        "name": "refresh_topics_preserve_selection",
+        "line": 87
+      }
+    ]
+  },
+  "tea_agent/_gui/_sni_dbus.py": {
+    "classes": [
+      {
+        "name": "StatusNotifierItemDBus",
+        "line": 22
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 24
+      },
+      {
+        "name": "_register_to_watcher",
+        "line": 46
+      },
+      {
+        "name": "Get",
+        "line": 60
+      },
+      {
+        "name": "GetAll",
+        "line": 64
+      },
+      {
+        "name": "_get_property",
+        "line": 69
+      },
+      {
+        "name": "Activate",
+        "line": 90
+      },
+      {
+        "name": "ContextMenu",
+        "line": 95
+      },
+      {
+        "name": "SecondaryActivate",
+        "line": 100
+      },
+      {
+        "name": "Scroll",
+        "line": 105
+      },
+      {
+        "name": "run",
+        "line": 107
+      },
+      {
+        "name": "stop",
+        "line": 112
+      }
+    ]
+  },
+  "tea_agent/_gui/_stream_manager.py": {
+    "classes": [
+      {
+        "name": "StreamManager",
+        "line": 17
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 20
+      },
+      {
+        "name": "safe_stream",
+        "line": 23
+      },
+      {
+        "name": "safe_log",
+        "line": 27
+      },
+      {
+        "name": "safe_log_tool",
+        "line": 30
+      },
+      {
+        "name": "safe_update_status",
+        "line": 33
+      },
+      {
+        "name": "update_status",
+        "line": 40
+      },
+      {
+        "name": "handle_max_iter",
+        "line": 44
+      },
+      {
+        "name": "log",
+        "line": 63
+      },
+      {
+        "name": "log_tool",
+        "line": 93
+      },
+      {
+        "name": "stream",
+        "line": 99
+      },
+      {
+        "name": "stream_flush_tick",
+        "line": 118
+      },
+      {
+        "name": "flush_stream_to_messages",
+        "line": 142
+      }
+    ]
+  },
+  "tea_agent/_gui/_tk_impl.py": {
+    "classes": [
+      {
+        "name": "HtmlFrameDisplay",
+        "line": 10
+      },
+      {
+        "name": "ScrolledTextDisplay",
+        "line": 23
+      },
+      {
+        "name": "LabelStatusDisplay",
+        "line": 50
+      },
+      {
+        "name": "TkImagePicker",
+        "line": 61
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 14
+      },
+      {
+        "name": "show_html",
+        "line": 17
+      },
+      {
+        "name": "clear",
+        "line": 20
+      },
+      {
+        "name": "__init__",
+        "line": 27
+      },
+      {
+        "name": "append",
+        "line": 30
+      },
+      {
+        "name": "append_tagged",
+        "line": 38
+      },
+      {
+        "name": "scroll_to_end",
+        "line": 41
+      },
+      {
+        "name": "set_state",
+        "line": 44
+      },
+      {
+        "name": "get_all_text",
+        "line": 47
+      },
+      {
+        "name": "__init__",
+        "line": 54
+      },
+      {
+        "name": "show",
+        "line": 58
+      },
+      {
+        "name": "pick_images",
+        "line": 65
+      },
+      {
+        "name": "show_popup",
+        "line": 75
+      }
+    ]
+  },
+  "tea_agent/_gui/_token_display.py": {
+    "classes": [
+      {
+        "name": "TokenDisplay",
+        "line": 12
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 16
+      },
+      {
+        "name": "add_token_notice_and_render",
+        "line": 19
+      },
+      {
+        "name": "_cell",
+        "line": 57
+      }
+    ]
+  },
+  "tea_agent/_gui/_tooltip.py": {
+    "classes": [
+      {
+        "name": "TooltipManager",
+        "line": 15
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 19
+      },
+      {
+        "name": "_on_topic_hover",
+        "line": 22
+      },
+      {
+        "name": "_on_topic_leave",
+        "line": 39
+      },
+      {
+        "name": "_show_tooltip",
+        "line": 47
+      },
+      {
+        "name": "fmt",
+        "line": 56
+      },
+      {
+        "name": "_hide_tooltip",
+        "line": 86
+      }
+    ]
+  },
+  "tea_agent/_gui/_topic_manager.py": {
+    "classes": [
+      {
+        "name": "TopicManager",
+        "line": 17
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 21
+      },
+      {
+        "name": "clear_chat",
+        "line": 26
+      },
+      {
+        "name": "auto_new_topic",
+        "line": 38
+      },
+      {
+        "name": "new_topic",
+        "line": 49
+      },
+      {
+        "name": "refresh_topics",
+        "line": 59
+      },
+      {
+        "name": "_update_title",
+        "line": 79
+      },
+      {
+        "name": "switch_topic",
+        "line": 86
+      },
+      {
+        "name": "load_worker",
+        "line": 105
+      },
+      {
+        "name": "on_topic_select",
+        "line": 219
+      },
+      {
+        "name": "newline",
+        "line": 230
+      },
+      {
+        "name": "_suggest_new_topic_if_needed",
+        "line": 236
+      },
+      {
+        "name": "_on_summary_updated",
+        "line": 244
+      },
+      {
+        "name": "_refresh_topics_preserve_selection",
+        "line": 250
+      },
+      {
+        "name": "_on_topic_hover",
+        "line": 254
+      },
+      {
+        "name": "_on_topic_leave",
+        "line": 269
+      },
+      {
+        "name": "_show_tooltip",
+        "line": 277
+      },
+      {
+        "name": "fmt",
+        "line": 287
+      },
+      {
+        "name": "_hide_tooltip",
+        "line": 311
+      }
+    ]
+  },
+  "tea_agent/_gui/_topic_summary.py": {
+    "classes": [],
+    "functions": [
+      {
+        "name": "_generate_topic_summary",
+        "line": 15
+      }
+    ]
+  },
+  "tea_agent/_gui/_tray.py": {
+    "classes": [
+      {
+        "name": "TrayManager",
+        "line": 21
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 25
+      },
+      {
+        "name": "start",
+        "line": 32
+      },
+      {
+        "name": "stop",
+        "line": 36
+      },
+      {
+        "name": "_init_tray",
+        "line": 47
+      },
+      {
+        "name": "_create_tray_icon",
+        "line": 69
+      },
+      {
+        "name": "_pil_to_argb32",
+        "line": 83
+      },
+      {
+        "name": "_on_tray_activate",
+        "line": 93
+      },
+      {
+        "name": "_on_tray_context_menu",
+        "line": 99
+      },
+      {
+        "name": "_on_closing",
+        "line": 108
+      }
+    ]
+  },
+  "tea_agent/_gui/_ui_builder.py": {
+    "classes": [
+      {
+        "name": "UIBuilder",
+        "line": 22
+      }
+    ],
+    "functions": [
+      {
+        "name": "__init__",
+        "line": 26
+      },
+      {
+        "name": "build",
+        "line": 29
+      }
+    ]
+  },
+  "tea_agent/_gui/_ui_manager.py": {
+    "classes": [
+      {
+        "name": "UIManager",
+        "line": 18
+      }
+    ],
+    "functions": [
+      {
+        "name": "_fs",
+        "line": 16
+      },
+      {
+        "name": "__init__",
+        "line": 21
+      },
+      {
+        "name": "create_ui",
+        "line": 24
+      },
+      {
+        "name": "adjust_chat_sash",
+        "line": 123
+      },
+      {
+        "name": "zoom_in",
+        "line": 127
+      },
+      {
+        "name": "zoom_out",
+        "line": 132
+      },
+      {
+        "name": "_apply_zoom",
+        "line": 137
+      },
+      {
+        "name": "history_prev_round",
+        "line": 143
+      },
+      {
+        "name": "history_next_round",
+        "line": 151
+      },
+      {
+        "name": "show_tooltip",
+        "line": 161
+      },
+      {
+        "name": "hide_tooltip",
+        "line": 172
+      },
+      {
+        "name": "update_title",
+        "line": 177
+      },
+      {
+        "name": "notify_completion",
+        "line": 186
+      }
+    ]
+  }
+}

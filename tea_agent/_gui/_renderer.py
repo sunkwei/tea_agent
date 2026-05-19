@@ -71,6 +71,12 @@ class ChatRenderer:
                 print(f"[_html_render WARN] 修复后仍有问题: {diag2}，尝试继续渲染")
                 cleaned = fixed
         # 3. 渲染
+        # NOTE: 2026-05-20 gen by tea_agent, 调试：渲染前打印完整 HTML 到终端，便于排错
+        print("=" * 60)
+        print("HTML_BYTES_BEGIN")
+        print(cleaned)
+        print("HTML_BYTES_END")
+        print("=" * 60)
         try:
             self.gui.chat_view.load_html(cleaned)
         except Exception as e:
@@ -263,6 +269,9 @@ class ChatRenderer:
         round_md = _chat_to_markdown(round_msgs, image_cache=self.gui._image_cache)
         if HAS_TKINTERWEB:
             round_body = _md_lib.markdown(round_md, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
+            # NOTE: 2026-05-20 gen by tea_agent, 修复双重转义 (html_mod.escape + codehilite)
+            from tea_agent._gui._markdown import _fix_double_escape_in_code
+            round_body = _fix_double_escape_in_code(round_body)
             css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
             full_html = "<html><head>" + css + "</head><body>" + table_html + round_body + "</body></html>"
         else:

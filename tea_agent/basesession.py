@@ -6,6 +6,8 @@
 from abc import ABC, abstractmethod
 from typing import List, Dict, Callable, Tuple
 import logging
+import os
+import sys
 
 logger = logging.getLogger("basesession")
 
@@ -14,6 +16,21 @@ class BaseChatSession(ABC):
     聊天会话抽象基类
     定义公共接口和共享功能
     """
+
+
+    # NOTE: 2026-05-20 gen by tea_agent, 自适应阈值常量：源码不截断，文本/日志16KB
+    _KB_THRESHOLD: int = 65536          # toolkit_kb 输出阈值: 64KB
+    _DEFAULT_TOOL_THRESHOLD: int = 2048  # 默认工具输出阈值: 2KB
+    _TEXT_FILE_THRESHOLD: int = 16384    # 文本/日志文件阈值: 16KB
+    _SOURCE_EXTENSIONS = {'.py', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.go',
+                          '.ts', '.js', '.jsx', '.tsx', '.vue', '.swift', '.kt',
+                          '.scala', '.rb', '.php', '.cs', '.sql', '.sh', '.bash',
+                          '.ps1', '.bat', '.cmd', '.xml', '.yaml', '.yml', '.toml',
+                          '.json', '.cfg', '.ini', '.conf', '.cmake', '.mk',
+                          '.r', '.jl', '.lua', '.ex', '.exs', '.erl', '.hrl',
+                          '.elm', '.dart', '.nim', '.zig', '.v', '.sv', '.vhdl'}
+    _TEXT_EXTENSIONS = {'.txt', '.log', '.md', '.rst', '.csv', '.tsv', '.text',
+                        '.out', '.err', '.stdout', '.stderr', '.nohup'}
 
     def __init__(
         self,

@@ -43,7 +43,12 @@ class TopicManager:
             children = gui.topic_list.get_children()
             if children:
                 gui.topic_list.selection_set(children[0])
-            gui.on_topic_select(None)
+            # NOTE: 2026-07-07 gen by tea_agent, 修复启动时不加载历史的问题
+            # 直接 switch_topic，不依赖 on_topic_select。
+            # 原因：refresh_topics() 已将 current_topic_id 设为第一个活跃主题的 ID，
+            # 若走 on_topic_select 会因为 ID 相同被短路跳过，导致 HtmlFrame 不显示、历史不加载。
+            first_topic_id = topics[0]["topic_id"]
+            gui.switch_topic(first_topic_id)
         else:
             gui.new_topic()
 

@@ -56,13 +56,20 @@ class TopicManager:
         gui.switch_topic(tid)
 
     # NOTE: 2026-05-08 gen by tea_agent, refresh_topics 刷新后自动高亮当前主题
+    # @2026-05-19 gen by claude, 仅显示活跃主题(is_active=1)，停用主题从列表中隐藏
     def refresh_topics(self):
         gui = self.gui
         for item in gui.topic_list.get_children():
             gui.topic_list.delete(item)
-        topics = gui.db.list_topics()
-        gui._topic_cache = topics
+        all_topics = gui.db.list_topics()
+        topics = [tp for tp in all_topics if tp.get("is_active", 1)]
+        gui._topic_cache = all_topics  # 缓存全部供 tooltip 使用
         current_tid = getattr(gui, 'current_topic_id', None)
+        # 如果当前主题被停用，自动切到第一个活跃主题
+        if not any(tp.get("topic_id") == current_tid for tp in topics):
+            if topics:
+                current_tid = topics[0].get("topic_id")
+                gui.current_topic_id = current_tid
         highlight_iid = ""
         for i, tp in enumerate(topics):
             title = tp.get("title", "")
@@ -74,7 +81,6 @@ class TopicManager:
         if topics:
             gui.topic_list.selection_set(highlight_iid)
             gui.topic_list.see(highlight_iid)
-
     # NOTE: 2026-05-15 gen by tea_agent, 标题含当前目录
     def _update_title(self, topic_title=""):
         gui = self.gui

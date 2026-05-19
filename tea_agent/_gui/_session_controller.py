@@ -174,11 +174,13 @@ def new_topic(self):
 # NOTE: 2026-05-08 gen by tea_agent, refresh_topics 刷新后自动高亮当前主题（第一条匹配）
 
 def refresh_topics(self):
-    # Treeview: 先清空再填充
+    # Treeview: 先清空再填充（仅显示活跃主题）
     for item in self.topic_list.get_children():
         self.topic_list.delete(item)
-    topics = self.db.list_topics()
-    self._topic_cache = topics       # 缓存供 tooltip 使用
+    all_topics = self.db.list_topics()
+    # @2026-05-19 gen by claude, 过滤停用主题，仅活跃主题显示在聊天主题列表中
+    topics = [tp for tp in all_topics if tp.get("is_active", 1)]
+    self._topic_cache = all_topics  # 缓存全部主题供 tooltip 使用
     current_tid = getattr(self, 'current_topic_id', None)
     highlight_iid = ""
     for i, tp in enumerate(topics):
@@ -192,8 +194,7 @@ def refresh_topics(self):
     # 刷新后自动高亮当前主题
     if topics:
         self.topic_list.selection_set(highlight_iid)
-        self.topic_list.see(highlight_iid)
-# NOTE: 2026-05-15 gen by tea_agent, 统一标题栏更新，附加当前目录
+        self.topic_list.see(highlight_iid)# NOTE: 2026-05-15 gen by tea_agent, 统一标题栏更新，附加当前目录
 # NOTE: 2026-05-16 gen by tea_agent, 格式改为 AI助手-{主题}-cwd{完整路径}, 启动时固化cwd不随后续chdir变化
 
 def _update_title(self, topic_title=""):

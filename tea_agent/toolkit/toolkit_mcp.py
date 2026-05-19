@@ -49,13 +49,57 @@ def toolkit_mcp(action: str = "connect", server_name: str = "", command: str = "
         return (1, "", f"未知 action: {action}，支持: connect/list_tools/call_tool/disconnect/status")
 
 
+# NOTE: 2026-05-19 10:33:54, self-evolved by tea_agent --- 修复 MCP 异步事件循环生命周期问题：connect/list_tools/call_tool 各自独立 asyncio.run()，导致 session 在事件循环销毁后无法使用。改为后台线程持久运行事件循环，通过 run_coroutine_threadsafe 提交所有操作。
+# NOTE: 2026-05-19 10:36:27, self-evolved by tea_agent --- 修复 anyio.BrokenResourceError：stdio_client 的 async context manager 退出后内存流关闭。改用 async with 保持 context manager 活跃 + keepalive Event 阻塞直到 disconnect。
 # MCP 客户端全局状态
-_MCP_SERVERS = {}  # server_name → Client 实例
+_MCP_SERVERS = {}  # server_name → {"session": ..., "stdio": ..., "transport": ..., "keepalive": ...}
+_MCP_LOOP = None  # 持久事件循环（后台线程）
+_MCP_THREAD = None  # 后台线程
+
+
+def _mcp_get_or_create_loop():
+    """获取或创建持久事件循环（后台线程）"""
+    import asyncio
+    import threading
+
+    global _MCP_LOOP, _MCP_THREAD
+
+    if _MCP_LOOP is not None and _MCP_LOOP.is_running():
+        return _MCP_LOOP
+
+    # 创建新的事件循环在后台线程中运行
+    _MCP_LOOP = asyncio.new_event_loop()
+
+    def _run_loop():
+        asyncio.set_event_loop(_MCP_LOOP)
+        _MCP_LOOP.run_forever()
+
+    _MCP_THREAD = threading.Thread(target=_run_loop, daemon=True, name="mcp-loop")
+    _MCP_THREAD.start()
+    return _MCP_LOOP
+
+
+def _mcp_run_async(coro, timeout: float = 30.0):
+    """在持久事件循环中运行协程，同步等待结果。返回 (rc, stdout, stderr)。"""
+    import asyncio
+
+    loop = _mcp_get_or_create_loop()
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+
+    try:
+        result = future.result(timeout=timeout)
+        return result
+    except asyncio.TimeoutError:
+        return (1, "", "⏰ MCP 操作超时")
+    except Exception as e:
+        import traceback
+        return (1, "", f"❌ MCP 操作异常: {e.__class__.__name__}: {str(e)}")
 
 
 def _mcp_connect(server_name: str, command: str, args: list, transport: str, url: str):
-    """连接 MCP Server"""
+    """连接 MCP Server（在持久事件循环中，保持 stdio context manager 活跃）"""
     import json
+    import asyncio
 
     if not server_name:
         return (1, "", "server_name 不能为空")
@@ -67,9 +111,9 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
         from mcp import ClientSession, StdioServerParameters
         from mcp.client.stdio import stdio_client
         from mcp.client.sse import sse_client
-        import asyncio
 
-        async def _connect():
+        async def _connect_and_keepalive():
+            """连接并创建一个永不退出的 keepalive 任务来保持 context manager 活跃"""
             if transport == "stdio":
                 if not command:
                     return (1, "", "stdio 传输方式需要 command 参数")
@@ -79,42 +123,79 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
                     args=args,
                 )
 
-                # 创建客户端连接
-                stdio_transport = await stdio_client(server_params).__aenter__()
-                read_stream, write_stream = stdio_transport
-
-                session = await ClientSession(read_stream, write_stream).__aenter__()
+                # 使用 async with 保持 context manager 活跃
+                ctx = stdio_client(server_params)
+                read_stream, write_stream = await ctx.__aenter__()
+                session_ctx = ClientSession(read_stream, write_stream)
+                session = await session_ctx.__aenter__()
                 await session.initialize()
+
+                # 创建一个 keepalive 事件，永远不会 set（除非断开连接）
+                keepalive = asyncio.Event()
 
                 _MCP_SERVERS[server_name] = {
                     "session": session,
-                    "stdio": stdio_transport,
+                    "transport_ctx": ctx,
+                    "session_ctx": session_ctx,
                     "transport": "stdio",
+                    "keepalive": keepalive,
                 }
 
             elif transport == "sse":
                 if not url:
                     return (1, "", "sse 传输方式需要 url 参数")
 
-                sse_transport = await sse_client(url).__aenter__()
-                read_stream, write_stream = sse_transport
-
-                session = await ClientSession(read_stream, write_stream).__aenter__()
+                ctx = sse_client(url)
+                read_stream, write_stream = await ctx.__aenter__()
+                session_ctx = ClientSession(read_stream, write_stream)
+                session = await session_ctx.__aenter__()
                 await session.initialize()
+
+                keepalive = asyncio.Event()
 
                 _MCP_SERVERS[server_name] = {
                     "session": session,
-                    "stdio": sse_transport,
+                    "transport_ctx": ctx,
+                    "session_ctx": session_ctx,
                     "transport": "sse",
                     "url": url,
+                    "keepalive": keepalive,
                 }
             else:
                 return (1, "", f"不支持的传输方式: {transport}，支持: stdio/sse")
 
-            return (0, f"✅ 已连接到 MCP Server: {server_name} (transport={transport})", "")
+            # 阻塞直到 keepalive 事件被 set（disconnect 时）
+            await keepalive.wait()
 
-        result = asyncio.run(_connect())
-        return result
+            # 清理
+            try:
+                await session_ctx.__aexit__(None, None, None)
+            except Exception:
+                pass
+            try:
+                await ctx.__aexit__(None, None, None)
+            except Exception:
+                pass
+
+            return (0, "disconnected", "")
+
+        # 在后台提交 keepalive 任务，不等待完成
+        loop = _mcp_get_or_create_loop()
+        # 使用 run_coroutine_threadsafe 提交连接任务
+        future = asyncio.run_coroutine_threadsafe(_connect_and_keepalive(), loop)
+
+        # 等待连接完成（或用短超时）
+        try:
+            # 轮询直到 server 被注册
+            import time
+            deadline = time.time() + 15
+            while time.time() < deadline:
+                if server_name in _MCP_SERVERS:
+                    return (0, f"✅ 已连接到 MCP Server: {server_name} (transport={transport})", "")
+                time.sleep(0.05)
+            return (1, "", f"❌ 连接超时: {server_name}")
+        except Exception as e:
+            return (1, "", f"❌ 连接失败: {str(e)}")
 
     except ImportError:
         return (1, "", "❌ 缺少 mcp 库，请运行: pip install mcp")
@@ -123,7 +204,7 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
 
 
 def _mcp_list_tools(server_name: str):
-    """列出 MCP Server 可用工具"""
+    """列出 MCP Server 可用工具（在持久事件循环中）"""
     import json
 
     if not server_name:
@@ -133,8 +214,6 @@ def _mcp_list_tools(server_name: str):
         return (1, "", f"Server '{server_name}' 未连接，请先调用 action='connect'")
 
     try:
-        import asyncio
-
         async def _list():
             server_info = _MCP_SERVERS[server_name]
             session = server_info["session"]
@@ -156,14 +235,14 @@ def _mcp_list_tools(server_name: str):
                 "tools": tools_info,
             }, ensure_ascii=False, indent=2), "")
 
-        return asyncio.run(_list())
+        return _mcp_run_async(_list(), timeout=15.0)
 
     except Exception as e:
         return (1, "", f"❌ 列出工具失败: {str(e)}")
 
 
 def _mcp_call(server_name: str, tool_name: str, tool_args: dict):
-    """调用 MCP 工具"""
+    """调用 MCP 工具（在持久事件循环中）"""
     import json
 
     if not server_name:
@@ -176,8 +255,6 @@ def _mcp_call(server_name: str, tool_name: str, tool_args: dict):
         return (1, "", f"Server '{server_name}' 未连接")
 
     try:
-        import asyncio
-
         async def _call():
             server_info = _MCP_SERVERS[server_name]
             session = server_info["session"]
@@ -201,15 +278,18 @@ def _mcp_call(server_name: str, tool_name: str, tool_args: dict):
                 "is_error": result.isError if hasattr(result, 'isError') else False,
             }, ensure_ascii=False, indent=2), "")
 
-        return asyncio.run(_call())
+        return _mcp_run_async(_call(), timeout=120.0)
 
     except Exception as e:
         return (1, "", f"❌ 调用工具失败: {str(e)}")
 
 
+# NOTE: 2026-05-19 10:36:58, self-evolved by tea_agent --- 更新 disconnect 通过 set keepalive Event 触发 context manager 退出清理（而非直接调用 __aexit__）
+# NOTE: 2026-05-19 10:40:38, self-evolved by tea_agent --- 修复 _mcp_disconnect 中 asyncio 未导入
 def _mcp_disconnect(server_name: str):
-    """断开 MCP Server 连接"""
+    """断开 MCP Server 连接（设置 keepalive event 触发清理）"""
     import json
+    import asyncio
 
     if not server_name:
         return (1, "", "server_name 不能为空")
@@ -218,26 +298,27 @@ def _mcp_disconnect(server_name: str):
         return (0, json.dumps({"status": "not_connected", "server": server_name}), "")
 
     try:
-        import asyncio
+        server_info = _MCP_SERVERS[server_name]
+        keepalive = server_info.get("keepalive")
 
-        async def _disconnect():
-            server_info = _MCP_SERVERS[server_name]
-            session = server_info["session"]
-            stdio_transport = server_info["stdio"]
+        if keepalive is not None:
+            # 设置 keepalive event，让后台协程退出 context manager 并清理
+            loop = _mcp_get_or_create_loop()
+            asyncio.run_coroutine_threadsafe(_set_and_del(server_name, keepalive), loop)
 
-            try:
-                await session.__aexit__(None, None, None)
-                await stdio_transport.__aexit__(None, None, None)
-            except Exception:
-                pass  # 忽略关闭时的错误
-
-            del _MCP_SERVERS[server_name]
-            return (0, f"✅ 已断开连接: {server_name}", "")
-
-        return asyncio.run(_disconnect())
+        del _MCP_SERVERS[server_name]
+        return (0, f"✅ 已断开连接: {server_name}", "")
 
     except Exception as e:
         return (1, "", f"❌ 断开连接失败: {str(e)}")
+
+
+async def _set_and_del(server_name: str, keepalive):
+    """设置 keepalive event 并清理 MCP_SERVERS 条目"""
+    keepalive.set()
+    # 给一点时间让 keepalive 协程退出 context manager
+    import asyncio as _asyncio
+    await _asyncio.sleep(0.1)
 
 
 def _mcp_status():

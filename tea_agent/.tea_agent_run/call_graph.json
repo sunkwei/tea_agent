@@ -1,0 +1,6870 @@
+{
+  "functions": {
+    "__init__": {
+      "file": "skills\\__init__.py",
+      "line": 91
+    },
+    "_start_file_watcher": {
+      "file": "agent_core.py",
+      "line": 89
+    },
+    "on_modified": {
+      "file": "agent_core.py",
+      "line": 112
+    },
+    "_schedule_restart": {
+      "file": "agent_core.py",
+      "line": 129
+    },
+    "_do_restart": {
+      "file": "agent_core.py",
+      "line": 137
+    },
+    "_safe_restart": {
+      "file": "agent_core.py",
+      "line": 148
+    },
+    "_check_pending_restart": {
+      "file": "agent_core.py",
+      "line": 194
+    },
+    "_start_subconscious": {
+      "file": "agent_core.py",
+      "line": 201
+    },
+    "_init_session": {
+      "file": "tea_agent.py",
+      "line": 158
+    },
+    "_init_session_info_str": {
+      "file": "agent_core.py",
+      "line": 260
+    },
+    "_extract_files_from_rounds": {
+      "file": "agent_core.py",
+      "line": 272
+    },
+    "_post_chat_pipeline": {
+      "file": "agent_core.py",
+      "line": 328
+    },
+    "_update_level3_summary": {
+      "file": "agent_core.py",
+      "line": 436
+    },
+    "_load_topic_history_into_session": {
+      "file": "agent_core.py",
+      "line": 476
+    },
+    "_auto_summary": {
+      "file": "agent_core.py",
+      "line": 505
+    },
+    "_on_summary_updated": {
+      "file": "tea_main_cli.py",
+      "line": 186
+    },
+    "chat_stream": {
+      "file": "onlinesession.py",
+      "line": 737
+    },
+    "add_user_message": {
+      "file": "basesession.py",
+      "line": 58
+    },
+    "add_assistant_message": {
+      "file": "basesession.py",
+      "line": 62
+    },
+    "add_tool_result": {
+      "file": "basesession.py",
+      "line": 66
+    },
+    "get_recent_messages": {
+      "file": "basesession.py",
+      "line": 74
+    },
+    "_strip_reasoning_content": {
+      "file": "basesession.py",
+      "line": 87
+    },
+    "_compress_tool_content": {
+      "file": "basesession.py",
+      "line": 105
+    },
+    "_compress_tool_rounds": {
+      "file": "basesession.py",
+      "line": 174
+    },
+    "_repair_incomplete_tool_chains": {
+      "file": "basesession.py",
+      "line": 198
+    },
+    "load_history": {
+      "file": "basesession.py",
+      "line": 293
+    },
+    "interrupt": {
+      "file": "main_db_gui.py",
+      "line": 1614
+    },
+    "reset_interrupt": {
+      "file": "basesession.py",
+      "line": 352
+    },
+    "_trim_messages": {
+      "file": "basesession.py",
+      "line": 356
+    },
+    "_on_post_reply": {
+      "file": "cli.py",
+      "line": 48
+    },
+    "_on_init_done": {
+      "file": "cli.py",
+      "line": 51
+    },
+    "run": {
+      "file": "tea_main_cli.py",
+      "line": 193
+    },
+    "_read_multiline": {
+      "file": "cli.py",
+      "line": 82
+    },
+    "_read_multiline_unix": {
+      "file": "cli.py",
+      "line": 95
+    },
+    "_read_multiline_win32": {
+      "file": "cli.py",
+      "line": 147
+    },
+    "_handle_command": {
+      "file": "tea_main_cli.py",
+      "line": 218
+    },
+    "_cmd_set": {
+      "file": "cli.py",
+      "line": 200
+    },
+    "_toggle_think": {
+      "file": "cli.py",
+      "line": 219
+    },
+    "_toggle_verbose": {
+      "file": "cli.py",
+      "line": 225
+    },
+    "_new_topic": {
+      "file": "tea_main_cli.py",
+      "line": 60
+    },
+    "_list_topics": {
+      "file": "tea_main_cli.py",
+      "line": 67
+    },
+    "_switch_topic": {
+      "file": "tea_main_cli.py",
+      "line": 79
+    },
+    "_chat": {
+      "file": "cli.py",
+      "line": 268
+    },
+    "on_stream": {
+      "file": "cli.py",
+      "line": 280
+    },
+    "on_status": {
+      "file": "cli.py",
+      "line": 314
+    },
+    "_auto_init_topic": {
+      "file": "tea_main_cli.py",
+      "line": 51
+    },
+    "_print_welcome": {
+      "file": "cli.py",
+      "line": 356
+    },
+    "_print_help": {
+      "file": "cli.py",
+      "line": 366
+    },
+    "main": {
+      "file": "tea_main_cli.py",
+      "line": 272
+    },
+    "is_configured": {
+      "file": "config.py",
+      "line": 139
+    },
+    "resolve": {
+      "file": "config.py",
+      "line": 66
+    },
+    "_resolve": {
+      "file": "config.py",
+      "line": 88
+    },
+    "db_path_abs": {
+      "file": "config.py",
+      "line": 102
+    },
+    "toolkit_dir_abs": {
+      "file": "config.py",
+      "line": 106
+    },
+    "kb_dir_abs": {
+      "file": "config.py",
+      "line": 110
+    },
+    "skills_dir_abs": {
+      "file": "config.py",
+      "line": 114
+    },
+    "data_dir_abs": {
+      "file": "config.py",
+      "line": 118
+    },
+    "get": {
+      "file": "config.py",
+      "line": 188
+    },
+    "set": {
+      "file": "config.py",
+      "line": 194
+    },
+    "apply_changes": {
+      "file": "config.py",
+      "line": 221
+    },
+    "reload_from_dict": {
+      "file": "config.py",
+      "line": 244
+    },
+    "to_dict": {
+      "file": "skills\\__init__.py",
+      "line": 53
+    },
+    "load_config": {
+      "file": "config.py",
+      "line": 255
+    },
+    "ensure_config_dir": {
+      "file": "config.py",
+      "line": 343
+    },
+    "save_config": {
+      "file": "config.py",
+      "line": 354
+    },
+    "create_default_config": {
+      "file": "config.py",
+      "line": 428
+    },
+    "get_config": {
+      "file": "config.py",
+      "line": 512
+    },
+    "_tokenize": {
+      "file": "embedding_util.py",
+      "line": 44
+    },
+    "_hash_token": {
+      "file": "embedding_util.py",
+      "line": 54
+    },
+    "add_document": {
+      "file": "embedding_util.py",
+      "line": 59
+    },
+    "vectorize": {
+      "file": "embedding_util.py",
+      "line": 66
+    },
+    "_init_from_config": {
+      "file": "embedding_util.py",
+      "line": 119
+    },
+    "mode": {
+      "file": "embedding_util.py",
+      "line": 145
+    },
+    "configured": {
+      "file": "embedding_util.py",
+      "line": 150
+    },
+    "embed": {
+      "file": "embedding_util.py",
+      "line": 154
+    },
+    "embed_batch": {
+      "file": "embedding_util.py",
+      "line": 179
+    },
+    "_build_url": {
+      "file": "embedding_util.py",
+      "line": 189
+    },
+    "_embed_api": {
+      "file": "embedding_util.py",
+      "line": 202
+    },
+    "_embed_api_batch": {
+      "file": "embedding_util.py",
+      "line": 249
+    },
+    "_embed_tfidf": {
+      "file": "embedding_util.py",
+      "line": 275
+    },
+    "build_tfidf_vocabulary": {
+      "file": "embedding_util.py",
+      "line": 279
+    },
+    "cosine_similarity": {
+      "file": "embedding_util.py",
+      "line": 289
+    },
+    "get_embedding_usage": {
+      "file": "embedding_util.py",
+      "line": 303
+    },
+    "search": {
+      "file": "embedding_util.py",
+      "line": 321
+    },
+    "get_embedding_engine": {
+      "file": "embedding_util.py",
+      "line": 341
+    },
+    "_create_ui": {
+      "file": "main_db_gui.py",
+      "line": 492
+    },
+    "_refresh": {
+      "file": "gui_dialogs.py",
+      "line": 434
+    },
+    "_sort": {
+      "file": "gui_dialogs.py",
+      "line": 643
+    },
+    "_add_dialog": {
+      "file": "gui_dialogs.py",
+      "line": 165
+    },
+    "do_add": {
+      "file": "gui_dialogs.py",
+      "line": 212
+    },
+    "_soft_delete": {
+      "file": "gui_dialogs.py",
+      "line": 235
+    },
+    "_hard_delete": {
+      "file": "gui_dialogs.py",
+      "line": 743
+    },
+    "_on_double_click": {
+      "file": "gui_dialogs.py",
+      "line": 257
+    },
+    "_export": {
+      "file": "gui_dialogs.py",
+      "line": 280
+    },
+    "_do_search": {
+      "file": "gui_dialogs.py",
+      "line": 494
+    },
+    "_show_search_results": {
+      "file": "gui_dialogs.py",
+      "line": 534
+    },
+    "_clear_search": {
+      "file": "gui_dialogs.py",
+      "line": 564
+    },
+    "_generate_vectors": {
+      "file": "gui_dialogs.py",
+      "line": 573
+    },
+    "_run": {
+      "file": "toolkit\\toolkit_exec.py",
+      "line": 47
+    },
+    "parse_tok": {
+      "file": "gui_dialogs.py",
+      "line": 648
+    },
+    "_selected_id": {
+      "file": "gui_dialogs.py",
+      "line": 663
+    },
+    "_switch_to": {
+      "file": "gui_dialogs.py",
+      "line": 669
+    },
+    "_rename_dialog": {
+      "file": "gui_dialogs.py",
+      "line": 689
+    },
+    "do_rename": {
+      "file": "gui_dialogs.py",
+      "line": 712
+    },
+    "_deactivate": {
+      "file": "gui_dialogs.py",
+      "line": 726
+    },
+    "_activate": {
+      "file": "gui_dialogs.py",
+      "line": 734
+    },
+    "_export_selected": {
+      "file": "gui_dialogs.py",
+      "line": 766
+    },
+    "_export_all": {
+      "file": "gui_dialogs.py",
+      "line": 774
+    },
+    "_do_export": {
+      "file": "gui_dialogs.py",
+      "line": 781
+    },
+    "_write_topic_md": {
+      "file": "gui_dialogs.py",
+      "line": 818
+    },
+    "_model_tab": {
+      "file": "gui_dialogs.py",
+      "line": 927
+    },
+    "_runtime_tab": {
+      "file": "gui_dialogs.py",
+      "line": 953
+    },
+    "_on_mousewheel": {
+      "file": "gui_dialogs.py",
+      "line": 966
+    },
+    "_load_values": {
+      "file": "gui_dialogs.py",
+      "line": 1003
+    },
+    "_do_save": {
+      "file": "gui_dialogs.py",
+      "line": 1026
+    },
+    "destroy": {
+      "file": "gui_dialogs.py",
+      "line": 1082
+    },
+    "setup_logging": {
+      "file": "logging_setup.py",
+      "line": 21
+    },
+    "_set_root_level": {
+      "file": "logging_setup.py",
+      "line": 80
+    },
+    "set_debug": {
+      "file": "logging_setup.py",
+      "line": 87
+    },
+    "_fs": {
+      "file": "main_db_gui.py",
+      "line": 77
+    },
+    "_init_fonts": {
+      "file": "main_db_gui.py",
+      "line": 82
+    },
+    "_detect": {
+      "file": "main_db_gui.py",
+      "line": 91
+    },
+    "_render_markdown": {
+      "file": "main_db_gui.py",
+      "line": 186
+    },
+    "_build_tool_blocks": {
+      "file": "main_db_gui.py",
+      "line": 197
+    },
+    "_render_tool_group": {
+      "file": "main_db_gui.py",
+      "line": 239
+    },
+    "_chat_to_markdown": {
+      "file": "main_db_gui.py",
+      "line": 311
+    },
+    "_generate_topic_summary": {
+      "file": "main_db_gui.py",
+      "line": 333
+    },
+    "_on_closing": {
+      "file": "main_db_gui.py",
+      "line": 482
+    },
+    "zoom_in": {
+      "file": "main_db_gui.py",
+      "line": 604
+    },
+    "zoom_out": {
+      "file": "main_db_gui.py",
+      "line": 612
+    },
+    "_apply_zoom": {
+      "file": "main_db_gui.py",
+      "line": 620
+    },
+    "_switch_display": {
+      "file": "main_db_gui.py",
+      "line": 630
+    },
+    "_show_loading": {
+      "file": "main_db_gui.py",
+      "line": 645
+    },
+    "_poll_loading_progress": {
+      "file": "main_db_gui.py",
+      "line": 688
+    },
+    "scroll_to_bottom": {
+      "file": "main_db_gui.py",
+      "line": 712
+    },
+    "_html_render": {
+      "file": "main_db_gui.py",
+      "line": 716
+    },
+    "_render_chat": {
+      "file": "main_db_gui.py",
+      "line": 731
+    },
+    "_now_ts": {
+      "file": "main_db_gui.py",
+      "line": 754
+    },
+    "toggle_reasoning": {
+      "file": "main_db_gui.py",
+      "line": 764
+    },
+    "_update_status": {
+      "file": "main_db_gui.py",
+      "line": 775
+    },
+    "safe_stream": {
+      "file": "main_db_gui.py",
+      "line": 778
+    },
+    "safe_log": {
+      "file": "main_db_gui.py",
+      "line": 781
+    },
+    "safe_log_tool": {
+      "file": "main_db_gui.py",
+      "line": 784
+    },
+    "safe_update_status": {
+      "file": "main_db_gui.py",
+      "line": 787
+    },
+    "_handle_max_iter": {
+      "file": "main_db_gui.py",
+      "line": 794
+    },
+    "log": {
+      "file": "main_db_gui.py",
+      "line": 820
+    },
+    "stream": {
+      "file": "main_db_gui.py",
+      "line": 831
+    },
+    "log_tool": {
+      "file": "main_db_gui.py",
+      "line": 852
+    },
+    "_stream_flush_tick": {
+      "file": "main_db_gui.py",
+      "line": 854
+    },
+    "_flush_stream_to_messages": {
+      "file": "main_db_gui.py",
+      "line": 873
+    },
+    "_flush_think_buffer_to_messages": {
+      "file": "main_db_gui.py",
+      "line": 895
+    },
+    "clear_chat": {
+      "file": "main_db_gui.py",
+      "line": 908
+    },
+    "auto_new_topic": {
+      "file": "main_db_gui.py",
+      "line": 918
+    },
+    "new_topic": {
+      "file": "main_db_gui.py",
+      "line": 929
+    },
+    "refresh_topics": {
+      "file": "main_db_gui.py",
+      "line": 940
+    },
+    "_update_title": {
+      "file": "main_db_gui.py",
+      "line": 961
+    },
+    "switch_topic": {
+      "file": "main_db_gui.py",
+      "line": 970
+    },
+    "load_worker": {
+      "file": "main_db_gui.py",
+      "line": 992
+    },
+    "_render_loaded_topic": {
+      "file": "main_db_gui.py",
+      "line": 1100
+    },
+    "_render_topic_error": {
+      "file": "main_db_gui.py",
+      "line": 1115
+    },
+    "on_topic_select": {
+      "file": "main_db_gui.py",
+      "line": 1122
+    },
+    "newline": {
+      "file": "main_db_gui.py",
+      "line": 1134
+    },
+    "_refresh_topics_preserve_selection": {
+      "file": "main_db_gui.py",
+      "line": 1151
+    },
+    "_on_topic_hover": {
+      "file": "main_db_gui.py",
+      "line": 1157
+    },
+    "_on_topic_leave": {
+      "file": "main_db_gui.py",
+      "line": 1176
+    },
+    "_show_tooltip": {
+      "file": "main_db_gui.py",
+      "line": 1183
+    },
+    "fmt": {
+      "file": "main_db_gui.py",
+      "line": 1192
+    },
+    "_hide_tooltip": {
+      "file": "main_db_gui.py",
+      "line": 1223
+    },
+    "_notify_completion": {
+      "file": "main_db_gui.py",
+      "line": 1234
+    },
+    "send": {
+      "file": "main_db_gui.py",
+      "line": 1262
+    },
+    "work": {
+      "file": "tea_main_cli.py",
+      "line": 152
+    },
+    "_add_token_notice_and_render": {
+      "file": "main_db_gui.py",
+      "line": 1357
+    },
+    "_cell": {
+      "file": "main_db_gui.py",
+      "line": 1396
+    },
+    "_filtered_messages": {
+      "file": "main_db_gui.py",
+      "line": 1418
+    },
+    "_group_into_rounds": {
+      "file": "main_db_gui.py",
+      "line": 1424
+    },
+    "_on_history_link_click": {
+      "file": "main_db_gui.py",
+      "line": 1440
+    },
+    "_build_round_view_html": {
+      "file": "main_db_gui.py",
+      "line": 1454
+    },
+    "_render_round_view": {
+      "file": "main_db_gui.py",
+      "line": 1509
+    },
+    "_prepare": {
+      "file": "main_db_gui.py",
+      "line": 1559
+    },
+    "_on_done": {
+      "file": "main_db_gui.py",
+      "line": 1562
+    },
+    "_worker": {
+      "file": "main_db_gui.py",
+      "line": 1577
+    },
+    "_render_and_show_chat": {
+      "file": "main_db_gui.py",
+      "line": 1543
+    },
+    "open_topic_dialog": {
+      "file": "main_db_gui.py",
+      "line": 1587
+    },
+    "open_memory_dialog": {
+      "file": "main_db_gui.py",
+      "line": 1593
+    },
+    "open_config_dialog": {
+      "file": "main_db_gui.py",
+      "line": 1597
+    },
+    "on_save": {
+      "file": "main_db_gui.py",
+      "line": 1600
+    },
+    "select_memories": {
+      "file": "memory.py",
+      "line": 51
+    },
+    "_score_memory": {
+      "file": "memory.py",
+      "line": 105
+    },
+    "_compute_relevance": {
+      "file": "memory.py",
+      "line": 123
+    },
+    "_extract_keywords": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 80
+    },
+    "_compute_recency": {
+      "file": "memory.py",
+      "line": 174
+    },
+    "_touch_selected": {
+      "file": "memory.py",
+      "line": 184
+    },
+    "format_memories": {
+      "file": "memory.py",
+      "line": 197
+    },
+    "_prefix_for": {
+      "file": "memory.py",
+      "line": 227
+    },
+    "build_extraction_prompt": {
+      "file": "memory.py",
+      "line": 273
+    },
+    "parse_extraction_result": {
+      "file": "memory.py",
+      "line": 281
+    },
+    "_compute_similarity": {
+      "file": "memory.py",
+      "line": 303
+    },
+    "_find_duplicate": {
+      "file": "merge_db.py",
+      "line": 446
+    },
+    "_merge_memory": {
+      "file": "memory.py",
+      "line": 354
+    },
+    "ingest_extracted": {
+      "file": "memory.py",
+      "line": 425
+    },
+    "is_extraction_needed": {
+      "file": "memory.py",
+      "line": 487
+    },
+    "_jaccard_similarity": {
+      "file": "merge_db.py",
+      "line": 55
+    },
+    "_get_max_ids": {
+      "file": "merge_db.py",
+      "line": 92
+    },
+    "_get_table_columns": {
+      "file": "merge_db.py",
+      "line": 117
+    },
+    "_merge_meta": {
+      "file": "merge_db.py",
+      "line": 132
+    },
+    "_merge_topics": {
+      "file": "merge_db.py",
+      "line": 155
+    },
+    "_merge_conversations": {
+      "file": "merge_db.py",
+      "line": 182
+    },
+    "_merge_agent_rounds": {
+      "file": "merge_db.py",
+      "line": 225
+    },
+    "_merge_topic_token_stats": {
+      "file": "merge_db.py",
+      "line": 264
+    },
+    "_accumulate_token_stats": {
+      "file": "merge_db.py",
+      "line": 306
+    },
+    "_merge_t_conv_summary": {
+      "file": "merge_db.py",
+      "line": 335
+    },
+    "_merge_memories": {
+      "file": "merge_db.py",
+      "line": 376
+    },
+    "_merge_memory_record": {
+      "file": "merge_db.py",
+      "line": 464
+    },
+    "_merge_system_prompts": {
+      "file": "merge_db.py",
+      "line": 500
+    },
+    "_merge_reflections": {
+      "file": "merge_db.py",
+      "line": 561
+    },
+    "_merge_config_history": {
+      "file": "merge_db.py",
+      "line": 602
+    },
+    "merge": {
+      "file": "merge_db.py",
+      "line": 637
+    },
+    "close": {
+      "file": "tea_agent.py",
+      "line": 293
+    },
+    "_process_stream_with_reasoning": {
+      "file": "onlinesession.py",
+      "line": 189
+    },
+    "_setup_default_pipeline": {
+      "file": "onlinesession.py",
+      "line": 234
+    },
+    "_build_api_messages": {
+      "file": "session_summarizer.py",
+      "line": 459
+    },
+    "_filter_level2_by_relevance": {
+      "file": "onlinesession.py",
+      "line": 373
+    },
+    "_key_words": {
+      "file": "onlinesession.py",
+      "line": 387
+    },
+    "_extract_files_from_text": {
+      "file": "onlinesession.py",
+      "line": 395
+    },
+    "_execute_tool_loop": {
+      "file": "onlinesession.py",
+      "line": 470
+    },
+    "_build_tools": {
+      "file": "session_tool.py",
+      "line": 32
+    },
+    "update_tools": {
+      "file": "onlinesession.py",
+      "line": 666
+    },
+    "_auto_detect_mode": {
+      "file": "onlinesession.py",
+      "line": 672
+    },
+    "_get_summarize_client": {
+      "file": "onlinesession.py",
+      "line": 689
+    },
+    "reset_session_state": {
+      "file": "onlinesession.py",
+      "line": 695
+    },
+    "_notify_reflection_done": {
+      "file": "onlinesession.py",
+      "line": 712
+    },
+    "_notify_prompt_evolved": {
+      "file": "onlinesession.py",
+      "line": 724
+    },
+    "_auto_extract": {
+      "file": "onlinesession.py",
+      "line": 810
+    },
+    "_auto_reflect": {
+      "file": "onlinesession.py",
+      "line": 823
+    },
+    "initialize": {
+      "file": "prompt_manager.py",
+      "line": 65
+    },
+    "current_prompt": {
+      "file": "prompt_manager.py",
+      "line": 93
+    },
+    "current_version": {
+      "file": "prompt_manager.py",
+      "line": 100
+    },
+    "current_prompt_id": {
+      "file": "prompt_manager.py",
+      "line": 104
+    },
+    "reload": {
+      "file": "tlk.py",
+      "line": 263
+    },
+    "build_evolve_prompt": {
+      "file": "prompt_manager.py",
+      "line": 116
+    },
+    "evolve": {
+      "file": "prompt_manager.py",
+      "line": 168
+    },
+    "rollback": {
+      "file": "tlk.py",
+      "line": 482
+    },
+    "list_versions": {
+      "file": "tlk.py",
+      "line": 513
+    },
+    "get_stats": {
+      "file": "reflection.py",
+      "line": 290
+    },
+    "manual_set": {
+      "file": "prompt_manager.py",
+      "line": 276
+    },
+    "success_rate": {
+      "file": "reflection.py",
+      "line": 45
+    },
+    "duration_seconds": {
+      "file": "reflection.py",
+      "line": 52
+    },
+    "start_trace": {
+      "file": "reflection.py",
+      "line": 94
+    },
+    "record_tool_call": {
+      "file": "reflection.py",
+      "line": 104
+    },
+    "finish_trace": {
+      "file": "reflection.py",
+      "line": 113
+    },
+    "should_reflect": {
+      "file": "reflection.py",
+      "line": 122
+    },
+    "build_reflection_prompt": {
+      "file": "reflection.py",
+      "line": 145
+    },
+    "parse_reflection_result": {
+      "file": "reflection.py",
+      "line": 174
+    },
+    "generate_reflection": {
+      "file": "reflection.py",
+      "line": 185
+    },
+    "_build_tool_stats": {
+      "file": "reflection.py",
+      "line": 269
+    },
+    "last_prompt_suggestion": {
+      "file": "reflection.py",
+      "line": 286
+    },
+    "_probe_thinking_support": {
+      "file": "session_api.py",
+      "line": 58
+    },
+    "_accumulate_usage": {
+      "file": "session_api.py",
+      "line": 120
+    },
+    "_accumulate_cheap_usage": {
+      "file": "session_api.py",
+      "line": 153
+    },
+    "_track_api_usage": {
+      "file": "session_api.py",
+      "line": 180
+    },
+    "_create_chat_stream": {
+      "file": "session_api.py",
+      "line": 194
+    },
+    "process_stream_response": {
+      "file": "session_api.py",
+      "line": 238
+    },
+    "_accumulate_tool_calls_from_delta": {
+      "file": "session_tool.py",
+      "line": 204
+    },
+    "reset_usage": {
+      "file": "session_api.py",
+      "line": 293
+    },
+    "reset_cheap_usage": {
+      "file": "session_api.py",
+      "line": 299
+    },
+    "get_last_usage": {
+      "file": "session_api.py",
+      "line": 303
+    },
+    "get_cheap_usage": {
+      "file": "session_api.py",
+      "line": 307
+    },
+    "get_total_usage": {
+      "file": "session_api.py",
+      "line": 311
+    },
+    "_setup_memory": {
+      "file": "session_memory.py",
+      "line": 35
+    },
+    "_pipeline_inject_memories": {
+      "file": "session_memory.py",
+      "line": 58
+    },
+    "trigger_memory_extraction": {
+      "file": "session_memory.py",
+      "line": 102
+    },
+    "_build_conversation_text": {
+      "file": "session_memory.py",
+      "line": 163
+    },
+    "get_injected_memories": {
+      "file": "session_memory.py",
+      "line": 176
+    },
+    "get_memory_stats": {
+      "file": "store.py",
+      "line": 1224
+    },
+    "register_step": {
+      "file": "session_pipeline.py",
+      "line": 43
+    },
+    "enable_step": {
+      "file": "session_pipeline.py",
+      "line": 97
+    },
+    "disable_step": {
+      "file": "session_pipeline.py",
+      "line": 102
+    },
+    "toggle_step": {
+      "file": "session_pipeline.py",
+      "line": 107
+    },
+    "set_step_position": {
+      "file": "session_pipeline.py",
+      "line": 112
+    },
+    "remove_step": {
+      "file": "session_pipeline.py",
+      "line": 118
+    },
+    "get_enabled_steps": {
+      "file": "session_pipeline.py",
+      "line": 124
+    },
+    "execute": {
+      "file": "session_pipeline.py",
+      "line": 132
+    },
+    "list_steps": {
+      "file": "session_pipeline.py",
+      "line": 184
+    },
+    "get_session": {
+      "file": "session_ref.py",
+      "line": 9
+    },
+    "set_session": {
+      "file": "session_ref.py",
+      "line": 14
+    },
+    "get_agent": {
+      "file": "session_ref.py",
+      "line": 20
+    },
+    "set_agent": {
+      "file": "session_ref.py",
+      "line": 25
+    },
+    "generate_topic_summary_shared": {
+      "file": "session_summarizer.py",
+      "line": 50
+    },
+    "count_user_msg": {
+      "file": "session_summarizer.py",
+      "line": 152
+    },
+    "_call_summarize_api": {
+      "file": "session_summarizer.py",
+      "line": 159
+    },
+    "_summarize_old_history": {
+      "file": "session_summarizer.py",
+      "line": 197
+    },
+    "_conversations_to_text": {
+      "file": "session_summarizer.py",
+      "line": 293
+    },
+    "generate_topic_summary": {
+      "file": "session_summarizer.py",
+      "line": 667
+    },
+    "_extract_user_messages": {
+      "file": "session_summarizer.py",
+      "line": 398
+    },
+    "_clean_topic_summary": {
+      "file": "session_summarizer.py",
+      "line": 431
+    },
+    "_compact_message": {
+      "file": "session_summarizer.py",
+      "line": 502
+    },
+    "_messages_to_text": {
+      "file": "session_summarizer.py",
+      "line": 535
+    },
+    "_find_recent_boundary": {
+      "file": "session_summarizer.py",
+      "line": 578
+    },
+    "_find_last_need_summary_pair": {
+      "file": "session_summarizer.py",
+      "line": 600
+    },
+    "reset_summary_state": {
+      "file": "session_summarizer.py",
+      "line": 634
+    },
+    "_execute_tool_call": {
+      "file": "session_tool.py",
+      "line": 40
+    },
+    "_record_tool_to_trace": {
+      "file": "session_tool.py",
+      "line": 97
+    },
+    "_add_tool_result": {
+      "file": "session_tool.py",
+      "line": 109
+    },
+    "_collect_tool_call_round": {
+      "file": "session_tool.py",
+      "line": 117
+    },
+    "_collect_assistant_tool_calls_round": {
+      "file": "session_tool.py",
+      "line": 128
+    },
+    "_collect_assistant_text_round": {
+      "file": "session_tool.py",
+      "line": 151
+    },
+    "_collect_api_error_round": {
+      "file": "session_tool.py",
+      "line": 161
+    },
+    "_collect_max_iterations_round": {
+      "file": "session_tool.py",
+      "line": 168
+    },
+    "_collect_interruption_round": {
+      "file": "session_tool.py",
+      "line": 175
+    },
+    "_parse_tool_calls_from_stream": {
+      "file": "session_tool.py",
+      "line": 182
+    },
+    "_init_tables": {
+      "file": "store.py",
+      "line": 38
+    },
+    "_migrate_int_to_uuid": {
+      "file": "store.py",
+      "line": 188
+    },
+    "_drop_if_exists": {
+      "file": "store.py",
+      "line": 209
+    },
+    "_table_columns": {
+      "file": "store.py",
+      "line": 212
+    },
+    "_migrate_table": {
+      "file": "store.py",
+      "line": 216
+    },
+    "_migrate_msg_vectors": {
+      "file": "store.py",
+      "line": 377
+    },
+    "_migrate": {
+      "file": "store.py",
+      "line": 394
+    },
+    "_get_week_key": {
+      "file": "store.py",
+      "line": 452
+    },
+    "_maybe_rotate_db": {
+      "file": "store.py",
+      "line": 457
+    },
+    "_write_week_key": {
+      "file": "store.py",
+      "line": 501
+    },
+    "_generate_id": {
+      "file": "store.py",
+      "line": 512
+    },
+    "create_topic": {
+      "file": "store.py",
+      "line": 515
+    },
+    "update_topic_title": {
+      "file": "store.py",
+      "line": 525
+    },
+    "update_topic_active": {
+      "file": "store.py",
+      "line": 540
+    },
+    "delete_topic": {
+      "file": "store.py",
+      "line": 550
+    },
+    "add_topic_tokens": {
+      "file": "store.py",
+      "line": 577
+    },
+    "get_topic_tokens": {
+      "file": "store.py",
+      "line": 615
+    },
+    "list_topics": {
+      "file": "store.py",
+      "line": 638
+    },
+    "save_msg": {
+      "file": "store.py",
+      "line": 653
+    },
+    "_auto_embed_async": {
+      "file": "store.py",
+      "line": 676
+    },
+    "update_msg_rounds": {
+      "file": "store.py",
+      "line": 697
+    },
+    "save_agent_round": {
+      "file": "store.py",
+      "line": 728
+    },
+    "get_conversations": {
+      "file": "store.py",
+      "line": 750
+    },
+    "get_recent_conversations": {
+      "file": "store.py",
+      "line": 794
+    },
+    "get_topic": {
+      "file": "store.py",
+      "line": 805
+    },
+    "get_agent_rounds": {
+      "file": "store.py",
+      "line": 812
+    },
+    "get_topic_summary": {
+      "file": "store.py",
+      "line": 830
+    },
+    "update_topic_summary": {
+      "file": "store.py",
+      "line": 838
+    },
+    "get_level2": {
+      "file": "store.py",
+      "line": 863
+    },
+    "set_level2": {
+      "file": "store.py",
+      "line": 876
+    },
+    "get_semantic_summary": {
+      "file": "store.py",
+      "line": 884
+    },
+    "get_tool_chain_summary": {
+      "file": "store.py",
+      "line": 891
+    },
+    "set_semantic_summary": {
+      "file": "store.py",
+      "line": 898
+    },
+    "set_tool_chain_summary": {
+      "file": "store.py",
+      "line": 905
+    },
+    "push_to_level2": {
+      "file": "store.py",
+      "line": 912
+    },
+    "mark_as_summarized": {
+      "file": "store.py",
+      "line": 929
+    },
+    "get_unsummarized_conversations": {
+      "file": "store.py",
+      "line": 937
+    },
+    "add_memory": {
+      "file": "store.py",
+      "line": 973
+    },
+    "_enforce_critical_limit": {
+      "file": "store.py",
+      "line": 1014
+    },
+    "update_memory": {
+      "file": "store.py",
+      "line": 1041
+    },
+    "deactivate_memory": {
+      "file": "store.py",
+      "line": 1083
+    },
+    "delete_memory": {
+      "file": "store.py",
+      "line": 1087
+    },
+    "get_active_memories": {
+      "file": "store.py",
+      "line": 1096
+    },
+    "get_instructions": {
+      "file": "store.py",
+      "line": 1118
+    },
+    "search_memories": {
+      "file": "store.py",
+      "line": 1135
+    },
+    "cleanup_expired_memories": {
+      "file": "store.py",
+      "line": 1194
+    },
+    "touch_memory": {
+      "file": "store.py",
+      "line": 1214
+    },
+    "add_system_prompt": {
+      "file": "store.py",
+      "line": 1259
+    },
+    "get_latest_system_prompt": {
+      "file": "store.py",
+      "line": 1277
+    },
+    "get_system_prompt_history": {
+      "file": "store.py",
+      "line": 1287
+    },
+    "deactivate_system_prompt": {
+      "file": "store.py",
+      "line": 1298
+    },
+    "rollback_system_prompt": {
+      "file": "store.py",
+      "line": 1307
+    },
+    "get_system_prompt_count": {
+      "file": "store.py",
+      "line": 1319
+    },
+    "add_reflection": {
+      "file": "store.py",
+      "line": 1331
+    },
+    "get_recent_reflections": {
+      "file": "store.py",
+      "line": 1358
+    },
+    "mark_reflection_applied": {
+      "file": "store.py",
+      "line": 1369
+    },
+    "get_reflection_stats": {
+      "file": "store.py",
+      "line": 1376
+    },
+    "add_config_change": {
+      "file": "store.py",
+      "line": 1390
+    },
+    "get_config_history": {
+      "file": "store.py",
+      "line": 1409
+    },
+    "get_config_changes_since": {
+      "file": "store.py",
+      "line": 1426
+    },
+    "store_embedding": {
+      "file": "store.py",
+      "line": 1443
+    },
+    "get_msg_embedding": {
+      "file": "store.py",
+      "line": 1458
+    },
+    "get_all_embeddings": {
+      "file": "store.py",
+      "line": 1474
+    },
+    "search_by_vector": {
+      "file": "store.py",
+      "line": 1508
+    },
+    "search_by_keyword": {
+      "file": "store.py",
+      "line": 1583
+    },
+    "get_vector_count": {
+      "file": "store.py",
+      "line": 1620
+    },
+    "get_unvectorized_conversations": {
+      "file": "store.py",
+      "line": 1628
+    },
+    "vectorize_conversation": {
+      "file": "store.py",
+      "line": 1647
+    },
+    "batch_vectorize": {
+      "file": "store.py",
+      "line": 1661
+    },
+    "delete_vector": {
+      "file": "store.py",
+      "line": 1678
+    },
+    "_auto_backup": {
+      "file": "store.py",
+      "line": 1711
+    },
+    "_cleanup_backups": {
+      "file": "store.py",
+      "line": 1742
+    },
+    "_meta_get": {
+      "file": "store.py",
+      "line": 1757
+    },
+    "_meta_set": {
+      "file": "store.py",
+      "line": 1765
+    },
+    "_protect_db": {
+      "file": "store.py",
+      "line": 1776
+    },
+    "backup_now": {
+      "file": "store.py",
+      "line": 1795
+    },
+    "__del__": {
+      "file": "store.py",
+      "line": 1802
+    },
+    "get_storage": {
+      "file": "store.py",
+      "line": 1817
+    },
+    "_load_config": {
+      "file": "tea_agent.py",
+      "line": 90
+    },
+    "_init_toolkit": {
+      "file": "tea_agent.py",
+      "line": 131
+    },
+    "_no_tools_chat": {
+      "file": "tea_agent.py",
+      "line": 192
+    },
+    "toolkit_save": {
+      "file": "tlk.py",
+      "line": 64
+    },
+    "toolkit_reload": {
+      "file": "tlk.py",
+      "line": 59
+    },
+    "_notify": {
+      "file": "tea_agent.py",
+      "line": 219
+    },
+    "chat": {
+      "file": "tea_main_cli.py",
+      "line": 126
+    },
+    "_chat_impl": {
+      "file": "tea_agent.py",
+      "line": 254
+    },
+    "stream_cb": {
+      "file": "tea_main_cli.py",
+      "line": 137
+    },
+    "status_cb": {
+      "file": "tea_main_cli.py",
+      "line": 143
+    },
+    "__enter__": {
+      "file": "tea_agent.py",
+      "line": 303
+    },
+    "__exit__": {
+      "file": "tea_agent.py",
+      "line": 306
+    },
+    "config": {
+      "file": "tea_agent.py",
+      "line": 314
+    },
+    "toolkit": {
+      "file": "tea_agent.py",
+      "line": 319
+    },
+    "_load_history": {
+      "file": "tea_main_cli.py",
+      "line": 89
+    },
+    "_show_topic_info": {
+      "file": "tea_main_cli.py",
+      "line": 95
+    },
+    "_show_memories": {
+      "file": "tea_main_cli.py",
+      "line": 109
+    },
+    "_on_tool_log": {
+      "file": "tea_main_cli.py",
+      "line": 183
+    },
+    "run_oneshot": {
+      "file": "tea_main_cli.py",
+      "line": 211
+    },
+    "_cmd_help": {
+      "file": "tea_main_cli.py",
+      "line": 244
+    },
+    "_cmd_status": {
+      "file": "tea_main_cli.py",
+      "line": 259
+    },
+    "meta_toolkit_reload": {
+      "file": "tlk.py",
+      "line": 17
+    },
+    "meta_toolkit_save": {
+      "file": "tlk.py",
+      "line": 32
+    },
+    "toolkit_rollback": {
+      "file": "tlk.py",
+      "line": 81
+    },
+    "toolkit_list_versions": {
+      "file": "tlk.py",
+      "line": 87
+    },
+    "meta_toolkit_rollback": {
+      "file": "tlk.py",
+      "line": 93
+    },
+    "meta_toolkit_list_versions": {
+      "file": "tlk.py",
+      "line": 117
+    },
+    "toolkit_rollback_impl": {
+      "file": "tlk.py",
+      "line": 137
+    },
+    "toolkit_list_versions_impl": {
+      "file": "tlk.py",
+      "line": 147
+    },
+    "call_tool": {
+      "file": "tlk.py",
+      "line": 202
+    },
+    "_purge_cache": {
+      "file": "tlk.py",
+      "line": 254
+    },
+    "check_meta": {
+      "file": "tlk.py",
+      "line": 269
+    },
+    "save": {
+      "file": "tlk.py",
+      "line": 363
+    },
+    "get_instance": {
+      "file": "skills\\__init__.py",
+      "line": 81
+    },
+    "reset_instance": {
+      "file": "skills\\__init__.py",
+      "line": 87
+    },
+    "discover_skills": {
+      "file": "skills\\__init__.py",
+      "line": 111
+    },
+    "_scan_directory": {
+      "file": "skills\\__init__.py",
+      "line": 137
+    },
+    "_load_manifest": {
+      "file": "skills\\__init__.py",
+      "line": 165
+    },
+    "activate_skill": {
+      "file": "skills\\__init__.py",
+      "line": 177
+    },
+    "deactivate_skill": {
+      "file": "skills\\__init__.py",
+      "line": 186
+    },
+    "toggle_skill": {
+      "file": "skills\\__init__.py",
+      "line": 194
+    },
+    "activate_all": {
+      "file": "skills\\__init__.py",
+      "line": 201
+    },
+    "deactivate_all": {
+      "file": "skills\\__init__.py",
+      "line": 207
+    },
+    "is_tool_active": {
+      "file": "skills\\__init__.py",
+      "line": 215
+    },
+    "get_active_tool_names": {
+      "file": "skills\\__init__.py",
+      "line": 227
+    },
+    "get_active_tools_meta": {
+      "file": "skills\\__init__.py",
+      "line": 235
+    },
+    "get_active_prompt": {
+      "file": "skills\\__init__.py",
+      "line": 254
+    },
+    "get_skill_summary": {
+      "file": "skills\\__init__.py",
+      "line": 271
+    },
+    "auto_activate": {
+      "file": "skills\\__init__.py",
+      "line": 289
+    },
+    "list_skills": {
+      "file": "skills\\__init__.py",
+      "line": 327
+    },
+    "get_skill": {
+      "file": "skills\\__init__.py",
+      "line": 331
+    },
+    "get_active_skill_names": {
+      "file": "skills\\__init__.py",
+      "line": 334
+    },
+    "get_status": {
+      "file": "skills\\__init__.py",
+      "line": 337
+    },
+    "toolkit_build": {
+      "file": "toolkit\\toolkit_build.py",
+      "line": 9
+    },
+    "meta_toolkit_build": {
+      "file": "toolkit\\toolkit_build.py",
+      "line": 114
+    },
+    "toolkit_bump_version": {
+      "file": "toolkit\\toolkit_bump_version.py",
+      "line": 6
+    },
+    "meta_toolkit_bump_version": {
+      "file": "toolkit\\toolkit_bump_version.py",
+      "line": 94
+    },
+    "toolkit_comment": {
+      "file": "toolkit\\toolkit_comment.py",
+      "line": 9
+    },
+    "meta_toolkit_comment": {
+      "file": "toolkit\\toolkit_comment.py",
+      "line": 38
+    },
+    "toolkit_config": {
+      "file": "toolkit\\toolkit_config.py",
+      "line": 13
+    },
+    "meta_toolkit_config": {
+      "file": "toolkit\\toolkit_config.py",
+      "line": 106
+    },
+    "toolkit_date_diff": {
+      "file": "toolkit\\toolkit_date_diff.py",
+      "line": 8
+    },
+    "meta_toolkit_date_diff": {
+      "file": "toolkit\\toolkit_date_diff.py",
+      "line": 62
+    },
+    "toolkit_dump_topic": {
+      "file": "toolkit\\toolkit_dump_topic.py",
+      "line": 6
+    },
+    "meta_toolkit_dump_topic": {
+      "file": "toolkit\\toolkit_dump_topic.py",
+      "line": 113
+    },
+    "toolkit_exec": {
+      "file": "toolkit\\toolkit_exec.py",
+      "line": 11
+    },
+    "_sudo_with_gui": {
+      "file": "toolkit\\toolkit_exec.py",
+      "line": 146
+    },
+    "_truncate_result": {
+      "file": "toolkit\\toolkit_exec.py",
+      "line": 242
+    },
+    "meta_toolkit_exec": {
+      "file": "toolkit\\toolkit_exec.py",
+      "line": 275
+    },
+    "_log": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 30
+    },
+    "_build_ctags": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 34
+    },
+    "_build_call_graph": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 93
+    },
+    "visit_FunctionDef": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 115
+    },
+    "visit_AsyncFunctionDef": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 128
+    },
+    "visit_ClassDef": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 131
+    },
+    "_build_dot_flow": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 141
+    },
+    "_build_kb_md": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 181
+    },
+    "_action_build": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 281
+    },
+    "_action_query": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 324
+    },
+    "_action_status": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 407
+    },
+    "toolkit_explr": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 438
+    },
+    "meta_toolkit_explr": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 451
+    },
+    "toolkit_file": {
+      "file": "toolkit\\toolkit_file.py",
+      "line": 11
+    },
+    "scan_dir": {
+      "file": "toolkit\\toolkit_file.py",
+      "line": 55
+    },
+    "meta_toolkit_file": {
+      "file": "toolkit\\toolkit_file.py",
+      "line": 79
+    },
+    "toolkit_gettime": {
+      "file": "toolkit\\toolkit_gettime.py",
+      "line": 8
+    },
+    "meta_toolkit_gettime": {
+      "file": "toolkit\\toolkit_gettime.py",
+      "line": 22
+    },
+    "toolkit_input": {
+      "file": "toolkit\\toolkit_input.py",
+      "line": 11
+    },
+    "meta_toolkit_input": {
+      "file": "toolkit\\toolkit_input.py",
+      "line": 137
+    },
+    "toolkit_kb": {
+      "file": "toolkit\\toolkit_kb.py",
+      "line": 13
+    },
+    "sanitize": {
+      "file": "toolkit\\toolkit_kb.py",
+      "line": 29
+    },
+    "_meta": {
+      "file": "toolkit\\toolkit_kb.py",
+      "line": 34
+    },
+    "rebuild_index": {
+      "file": "toolkit\\toolkit_kb.py",
+      "line": 38
+    },
+    "meta_toolkit_kb": {
+      "file": "toolkit\\toolkit_kb.py",
+      "line": 173
+    },
+    "toolkit_listen": {
+      "file": "toolkit\\toolkit_listen.py",
+      "line": 12
+    },
+    "meta_toolkit_listen": {
+      "file": "toolkit\\toolkit_listen.py",
+      "line": 84
+    },
+    "_solar_days_in_year": {
+      "file": "toolkit\\toolkit_lunar.py",
+      "line": 66
+    },
+    "_solar_days_in_month": {
+      "file": "toolkit\\toolkit_lunar.py",
+      "line": 70
+    },
+    "_offset_from_base": {
+      "file": "toolkit\\toolkit_lunar.py",
+      "line": 76
+    },
+    "_lunar_year_info": {
+      "file": "toolkit\\toolkit_lunar.py",
+      "line": 86
+    },
+    "_leap_month": {
+      "file": "toolkit\\toolkit_lunar.py",
+      "line": 90
+    },
+    "_leap_days": {
+      "file": "toolkit\\toolkit_lunar.py",
+      "line": 94
+    },
+    "_month_days": {
+      "file": "toolkit\\toolkit_lunar.py",
+      "line": 98
+    },
+    "_lunar_year_total_days": {
+      "file": "toolkit\\toolkit_lunar.py",
+      "line": 103
+    },
+    "_solar_to_lunar": {
+      "file": "toolkit\\toolkit_lunar.py",
+      "line": 114
+    },
+    "toolkit_lunar": {
+      "file": "toolkit\\toolkit_lunar.py",
+      "line": 174
+    },
+    "_solar_terms": {
+      "file": "toolkit\\toolkit_lunar.py",
+      "line": 279
+    },
+    "meta_toolkit_lunar": {
+      "file": "toolkit\\toolkit_lunar.py",
+      "line": 301
+    },
+    "toolkit_memory": {
+      "file": "toolkit\\toolkit_memory.py",
+      "line": 9
+    },
+    "meta_toolkit_memory": {
+      "file": "toolkit\\toolkit_memory.py",
+      "line": 134
+    },
+    "toolkit_mode": {
+      "file": "toolkit\\toolkit_mode.py",
+      "line": 12
+    },
+    "_detect_mode": {
+      "file": "toolkit\\toolkit_mode.py",
+      "line": 82
+    },
+    "_get_memory_manager": {
+      "file": "toolkit\\toolkit_proactive.py",
+      "line": 33
+    },
+    "_get_existing_mode_memory": {
+      "file": "toolkit\\toolkit_mode.py",
+      "line": 118
+    },
+    "_set_mode": {
+      "file": "toolkit\\toolkit_mode.py",
+      "line": 126
+    },
+    "_current_mode": {
+      "file": "toolkit\\toolkit_mode.py",
+      "line": 139
+    },
+    "meta_toolkit_mode": {
+      "file": "toolkit\\toolkit_mode.py",
+      "line": 211
+    },
+    "toolkit_notify": {
+      "file": "toolkit\\toolkit_notify.py",
+      "line": 10
+    },
+    "meta_toolkit_notify": {
+      "file": "toolkit\\toolkit_notify.py",
+      "line": 121
+    },
+    "toolkit_ocr": {
+      "file": "toolkit\\toolkit_ocr.py",
+      "line": 12
+    },
+    "_get_reader": {
+      "file": "toolkit\\toolkit_ocr.py",
+      "line": 47
+    },
+    "_screenshot": {
+      "file": "toolkit\\toolkit_ocr.py",
+      "line": 70
+    },
+    "meta_toolkit_ocr": {
+      "file": "toolkit\\toolkit_ocr.py",
+      "line": 208
+    },
+    "_cached_os_info": {
+      "file": "toolkit\\toolkit_os_info.py",
+      "line": 11
+    },
+    "toolkit_os_info": {
+      "file": "toolkit\\toolkit_os_info.py",
+      "line": 21
+    },
+    "meta_toolkit_os_info": {
+      "file": "toolkit\\toolkit_os_info.py",
+      "line": 30
+    },
+    "toolkit_pkg": {
+      "file": "toolkit\\toolkit_pkg.py",
+      "line": 10
+    },
+    "_pip_install": {
+      "file": "toolkit\\toolkit_pkg.py",
+      "line": 19
+    },
+    "_check_module": {
+      "file": "toolkit\\toolkit_pkg.py",
+      "line": 27
+    },
+    "_get_version": {
+      "file": "toolkit\\toolkit_pkg.py",
+      "line": 35
+    },
+    "_list_installed": {
+      "file": "toolkit\\toolkit_pkg.py",
+      "line": 53
+    },
+    "meta_toolkit_pkg": {
+      "file": "toolkit\\toolkit_pkg.py",
+      "line": 151
+    },
+    "toolkit_proactive": {
+      "file": "toolkit\\toolkit_proactive.py",
+      "line": 12
+    },
+    "_check_proactive": {
+      "file": "toolkit\\toolkit_proactive.py",
+      "line": 40
+    },
+    "_add_goal": {
+      "file": "toolkit\\toolkit_proactive.py",
+      "line": 89
+    },
+    "_complete_goal": {
+      "file": "toolkit\\toolkit_proactive.py",
+      "line": 110
+    },
+    "_list_goals": {
+      "file": "toolkit\\toolkit_proactive.py",
+      "line": 122
+    },
+    "meta_toolkit_proactive": {
+      "file": "toolkit\\toolkit_proactive.py",
+      "line": 149
+    },
+    "toolkit_prompt_evolve": {
+      "file": "toolkit\\toolkit_prompt_evolve.py",
+      "line": 12
+    },
+    "meta_toolkit_prompt_evolve": {
+      "file": "toolkit\\toolkit_prompt_evolve.py",
+      "line": 100
+    },
+    "toolkit_reflection": {
+      "file": "toolkit\\toolkit_reflection.py",
+      "line": 13
+    },
+    "meta_toolkit_reflection": {
+      "file": "toolkit\\toolkit_reflection.py",
+      "line": 78
+    },
+    "toolkit_release_version": {
+      "file": "toolkit\\toolkit_release_version.py",
+      "line": 13
+    },
+    "meta_toolkit_release_version": {
+      "file": "toolkit\\toolkit_release_version.py",
+      "line": 115
+    },
+    "toolkit_run_tests": {
+      "file": "toolkit\\toolkit_run_tests.py",
+      "line": 7
+    },
+    "meta_toolkit_run_tests": {
+      "file": "toolkit\\toolkit_run_tests.py",
+      "line": 63
+    },
+    "toolkit_screenshot": {
+      "file": "toolkit\\toolkit_screenshot.py",
+      "line": 10
+    },
+    "_detect_env": {
+      "file": "toolkit\\toolkit_screenshot.py",
+      "line": 21
+    },
+    "_find_tool": {
+      "file": "toolkit\\toolkit_screenshot.py",
+      "line": 28
+    },
+    "_crop_image": {
+      "file": "toolkit\\toolkit_screenshot.py",
+      "line": 34
+    },
+    "_wayland_fullscreen": {
+      "file": "toolkit\\toolkit_screenshot.py",
+      "line": 53
+    },
+    "_x11_screenshot": {
+      "file": "toolkit\\toolkit_screenshot.py",
+      "line": 82
+    },
+    "_list_monitors": {
+      "file": "toolkit\\toolkit_screenshot.py",
+      "line": 127
+    },
+    "meta_toolkit_screenshot": {
+      "file": "toolkit\\toolkit_screenshot.py",
+      "line": 233
+    },
+    "toolkit_search": {
+      "file": "toolkit\\toolkit_search.py",
+      "line": 10
+    },
+    "_search_duckduckgo": {
+      "file": "toolkit\\toolkit_search.py",
+      "line": 31
+    },
+    "_search_baidu": {
+      "file": "toolkit\\toolkit_search.py",
+      "line": 103
+    },
+    "meta_toolkit_search": {
+      "file": "toolkit\\toolkit_search.py",
+      "line": 205
+    },
+    "toolkit_self_evolve": {
+      "file": "toolkit\\toolkit_self_evolve.py",
+      "line": 7
+    },
+    "_git_clean": {
+      "file": "toolkit\\toolkit_self_evolve.py",
+      "line": 44
+    },
+    "_git_snap": {
+      "file": "toolkit\\toolkit_self_evolve.py",
+      "line": 57
+    },
+    "_git_revert": {
+      "file": "toolkit\\toolkit_self_evolve.py",
+      "line": 71
+    },
+    "_run_tests": {
+      "file": "toolkit\\toolkit_self_evolve.py",
+      "line": 80
+    },
+    "meta_toolkit_self_evolve": {
+      "file": "toolkit\\toolkit_self_evolve.py",
+      "line": 225
+    },
+    "toolkit_self_report": {
+      "file": "toolkit\\toolkit_self_report.py",
+      "line": 8
+    },
+    "meta_toolkit_self_report": {
+      "file": "toolkit\\toolkit_self_report.py",
+      "line": 75
+    },
+    "toolkit_set_topic_title": {
+      "file": "toolkit\\toolkit_set_topic_title.py",
+      "line": 7
+    },
+    "meta_toolkit_set_topic_title": {
+      "file": "toolkit\\toolkit_set_topic_title.py",
+      "line": 66
+    },
+    "toolkit_skill": {
+      "file": "toolkit\\toolkit_skill.py",
+      "line": 10
+    },
+    "meta_toolkit_skill": {
+      "file": "toolkit\\toolkit_skill.py",
+      "line": 85
+    },
+    "toolkit_speak": {
+      "file": "toolkit\\toolkit_speak.py",
+      "line": 12
+    },
+    "meta_toolkit_speak": {
+      "file": "toolkit\\toolkit_speak.py",
+      "line": 91
+    },
+    "toolkit_subconscious": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 10
+    },
+    "_is_tea_agent_cwd": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 31
+    },
+    "_ensure_dir": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 53
+    },
+    "_read_state": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 56
+    },
+    "_write_state": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 66
+    },
+    "_get_db_path": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 72
+    },
+    "_is_jieba_available": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 95
+    },
+    "_digest_memories": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 99
+    },
+    "_detect_focus": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 130
+    },
+    "_digest_conversations": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 156
+    },
+    "_extract_memory_candidates": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 189
+    },
+    "_is_duplicate_memory": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 218
+    },
+    "_cross_link": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 228
+    },
+    "_generate_insights": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 264
+    },
+    "_set_goals": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 305
+    },
+    "_send_notification": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 325
+    },
+    "_send_cycle_summary": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 359
+    },
+    "_run_cycle": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 399
+    },
+    "_subconscious_loop": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 423
+    },
+    "_dream": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 463
+    },
+    "_pragmatic_analysis": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 523
+    },
+    "_creative_dream": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 598
+    },
+    "_reverse_thinking": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 638
+    },
+    "_extreme_scenario": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 649
+    },
+    "meta_toolkit_subconscious": {
+      "file": "toolkit\\toolkit_subconscious.py",
+      "line": 726
+    },
+    "toolkit_sudo_gui": {
+      "file": "toolkit\\toolkit_sudo_gui.py",
+      "line": 15
+    },
+    "meta_toolkit_sudo_gui": {
+      "file": "toolkit\\toolkit_sudo_gui.py",
+      "line": 84
+    },
+    "toolkit_toggle_reasoning": {
+      "file": "toolkit\\toolkit_toggle_reasoning.py",
+      "line": 7
+    },
+    "meta_toolkit_toggle_reasoning": {
+      "file": "toolkit\\toolkit_toggle_reasoning.py",
+      "line": 34
+    }
+  },
+  "classes": {
+    "AgentCore": {
+      "file": "agent_core.py",
+      "line": 25
+    },
+    "_RestartHandler": {
+      "file": "agent_core.py",
+      "line": 105
+    },
+    "BaseChatSession": {
+      "file": "basesession.py",
+      "line": 12
+    },
+    "TeaCLI": {
+      "file": "tea_main_cli.py",
+      "line": 31
+    },
+    "ModelConfig": {
+      "file": "config.py",
+      "line": 30
+    },
+    "PathsConfig": {
+      "file": "config.py",
+      "line": 46
+    },
+    "EmbeddingConfig": {
+      "file": "config.py",
+      "line": 124
+    },
+    "AgentConfig": {
+      "file": "config.py",
+      "line": 142
+    },
+    "_SimpleTFIDF": {
+      "file": "embedding_util.py",
+      "line": 36
+    },
+    "EmbeddingEngine": {
+      "file": "embedding_util.py",
+      "line": 95
+    },
+    "MemoryDialog": {
+      "file": "gui_dialogs.py",
+      "line": 15
+    },
+    "TopicDialog": {
+      "file": "gui_dialogs.py",
+      "line": 304
+    },
+    "ConfigDialog": {
+      "file": "gui_dialogs.py",
+      "line": 884
+    },
+    "TkGUI": {
+      "file": "main_db_gui.py",
+      "line": 428
+    },
+    "MemoryManager": {
+      "file": "memory.py",
+      "line": 31
+    },
+    "DbMerger": {
+      "file": "merge_db.py",
+      "line": 74
+    },
+    "OnlineToolSession": {
+      "file": "onlinesession.py",
+      "line": 28
+    },
+    "SystemPromptManager": {
+      "file": "prompt_manager.py",
+      "line": 31
+    },
+    "ToolCallRecord": {
+      "file": "reflection.py",
+      "line": 23
+    },
+    "SessionTrace": {
+      "file": "reflection.py",
+      "line": 32
+    },
+    "ReflectionManager": {
+      "file": "reflection.py",
+      "line": 56
+    },
+    "SessionAPIMixin": {
+      "file": "session_api.py",
+      "line": 9
+    },
+    "SessionMemoryMixin": {
+      "file": "session_memory.py",
+      "line": 17
+    },
+    "PipelineStep": {
+      "file": "session_pipeline.py",
+      "line": 19
+    },
+    "SessionPipeline": {
+      "file": "session_pipeline.py",
+      "line": 28
+    },
+    "SessionSummarizerMixin": {
+      "file": "session_summarizer.py",
+      "line": 119
+    },
+    "SessionToolMixin": {
+      "file": "session_tool.py",
+      "line": 15
+    },
+    "Storage": {
+      "file": "store.py",
+      "line": 18
+    },
+    "TeaAgent": {
+      "file": "tea_agent.py",
+      "line": 31
+    },
+    "Toolkit": {
+      "file": "tlk.py",
+      "line": 161
+    },
+    "Skill": {
+      "file": "skills\\__init__.py",
+      "line": 38
+    },
+    "SkillManager": {
+      "file": "skills\\__init__.py",
+      "line": 66
+    },
+    "CallVisitor": {
+      "file": "toolkit\\toolkit_explr.py",
+      "line": 114
+    }
+  },
+  "calls": {
+    "__init__": [
+      "Path",
+      "get_config",
+      "home",
+      "str"
+    ],
+    "_start_file_watcher": [
+      "Lock",
+      "Observer",
+      "Path",
+      "Timer",
+      "_RestartHandler",
+      "_safe_restart",
+      "_schedule_restart",
+      "cancel",
+      "endswith",
+      "info",
+      "schedule",
+      "start",
+      "str",
+      "warning"
+    ],
+    "on_modified": [
+      "_schedule_restart",
+      "endswith",
+      "info"
+    ],
+    "_schedule_restart": [
+      "Timer",
+      "cancel",
+      "start"
+    ],
+    "_do_restart": [
+      "_safe_restart"
+    ],
+    "_safe_restart": [
+      "Popen",
+      "_exit",
+      "acquire",
+      "close",
+      "execv",
+      "hasattr",
+      "info",
+      "monotonic",
+      "print",
+      "release",
+      "sleep",
+      "warning"
+    ],
+    "_check_pending_restart": [
+      "_safe_restart",
+      "info"
+    ],
+    "_start_subconscious": [
+      "debug",
+      "exec_module",
+      "exists",
+      "get",
+      "info",
+      "join",
+      "module_from_spec",
+      "spec_from_file_location",
+      "toolkit_subconscious"
+    ],
+    "_init_session": [
+      "OnlineToolSession",
+      "_real_create_chat_stream",
+      "cast",
+      "info",
+      "set_agent",
+      "set_session"
+    ],
+    "_init_session_info_str": [
+      "len"
+    ],
+    "_extract_files_from_rounds": [
+      "add",
+      "append",
+      "finditer",
+      "get",
+      "group",
+      "isinstance",
+      "len",
+      "loads",
+      "set"
+    ],
+    "_post_chat_pipeline": [
+      "_auto_summary",
+      "_check_pending_restart",
+      "_extract_files_from_rounds",
+      "_update_level3_summary",
+      "add_topic_tokens",
+      "get",
+      "get_conversations",
+      "get_embedding_engine",
+      "get_embedding_usage",
+      "info",
+      "len",
+      "push_to_level2",
+      "save_msg",
+      "update_msg_rounds"
+    ],
+    "_update_level3_summary": [
+      "_get_summarize_client",
+      "any",
+      "create",
+      "get",
+      "get_semantic_summary",
+      "get_tool_chain_summary",
+      "info",
+      "len",
+      "lower",
+      "set_semantic_summary",
+      "set_tool_chain_summary",
+      "strip",
+      "type",
+      "warning"
+    ],
+    "_load_topic_history_into_session": [
+      "get_conversations",
+      "get_level2",
+      "get_semantic_summary",
+      "get_tool_chain_summary",
+      "get_topic_summary",
+      "len",
+      "load_history"
+    ],
+    "_auto_summary": [
+      "_generate_topic_summary",
+      "_get_summarize_client",
+      "_on_summary_updated",
+      "debug",
+      "get",
+      "get_recent_conversations",
+      "get_topic",
+      "info",
+      "len",
+      "startswith",
+      "type",
+      "update_topic_title",
+      "warning"
+    ],
+    "add_user_message": [
+      "append"
+    ],
+    "add_assistant_message": [
+      "append"
+    ],
+    "add_tool_result": [
+      "append"
+    ],
+    "_strip_reasoning_content": [
+      "get",
+      "pop"
+    ],
+    "_compress_tool_content": [
+      "append",
+      "join",
+      "len",
+      "lower",
+      "split",
+      "strip"
+    ],
+    "_compress_tool_rounds": [
+      "_compress_tool_content",
+      "append",
+      "dict",
+      "get"
+    ],
+    "_repair_incomplete_tool_chains": [
+      "_strip_reasoning_content",
+      "append",
+      "clear",
+      "debug",
+      "dict",
+      "enumerate",
+      "get",
+      "isinstance",
+      "keys",
+      "len",
+      "list",
+      "warning"
+    ],
+    "load_history": [
+      "_repair_incomplete_tool_chains",
+      "append",
+      "dict",
+      "get",
+      "info",
+      "len"
+    ],
+    "_trim_messages": [
+      "len"
+    ],
+    "run": [
+      "_handle_command",
+      "chat",
+      "input",
+      "print",
+      "startswith",
+      "strip"
+    ],
+    "_read_multiline": [
+      "_read_multiline_unix",
+      "_read_multiline_win32"
+    ],
+    "_read_multiline_unix": [
+      "append",
+      "fileno",
+      "flush",
+      "isprintable",
+      "join",
+      "pop",
+      "read",
+      "setraw",
+      "tcgetattr",
+      "tcsetattr",
+      "write"
+    ],
+    "_read_multiline_win32": [
+      "append",
+      "endswith",
+      "input",
+      "join",
+      "rstrip"
+    ],
+    "_handle_command": [
+      "_cmd_help",
+      "_cmd_status",
+      "_list_topics",
+      "_new_topic",
+      "_show_memories",
+      "_switch_topic",
+      "exit",
+      "int",
+      "len",
+      "lower",
+      "print",
+      "split"
+    ],
+    "_cmd_set": [
+      "lower",
+      "print",
+      "split",
+      "strip"
+    ],
+    "_toggle_think": [
+      "print"
+    ],
+    "_toggle_verbose": [
+      "print"
+    ],
+    "_new_topic": [
+      "create_topic",
+      "now",
+      "print",
+      "strftime"
+    ],
+    "_list_topics": [
+      "get",
+      "list_topics",
+      "print"
+    ],
+    "_switch_topic": [
+      "_load_history",
+      "_show_topic_info",
+      "clear_history",
+      "get_topic",
+      "print"
+    ],
+    "_chat": [
+      "_auto_init_topic",
+      "_post_chat_pipeline",
+      "append",
+      "chat_stream",
+      "print",
+      "rstrip",
+      "split",
+      "startswith"
+    ],
+    "on_stream": [
+      "append",
+      "print",
+      "rstrip",
+      "split",
+      "startswith"
+    ],
+    "on_status": [
+      "print",
+      "split",
+      "startswith"
+    ],
+    "_auto_init_topic": [
+      "_load_history",
+      "_new_topic",
+      "_show_topic_info",
+      "list_topics"
+    ],
+    "_print_welcome": [
+      "len",
+      "print"
+    ],
+    "_print_help": [
+      "print"
+    ],
+    "main": [
+      "ArgumentParser",
+      "TeaCLI",
+      "add_argument",
+      "parse_args",
+      "run",
+      "run_oneshot"
+    ],
+    "is_configured": [
+      "bool"
+    ],
+    "resolve": [
+      "_resolve",
+      "abspath",
+      "expanduser",
+      "home",
+      "isabs",
+      "join",
+      "str"
+    ],
+    "_resolve": [
+      "abspath",
+      "expanduser",
+      "isabs",
+      "join"
+    ],
+    "get": [
+      "getattr",
+      "hasattr"
+    ],
+    "set": [
+      "expected_type",
+      "get",
+      "isinstance",
+      "lower",
+      "setattr"
+    ],
+    "apply_changes": [
+      "append",
+      "get",
+      "getattr",
+      "set",
+      "str"
+    ],
+    "reload_from_dict": [
+      "set"
+    ],
+    "to_dict": [
+      "len"
+    ],
+    "load_config": [
+      "AgentConfig",
+      "Path",
+      "abspath",
+      "bool",
+      "dirname",
+      "float",
+      "get",
+      "home",
+      "int",
+      "isfile",
+      "isinstance",
+      "open",
+      "resolve",
+      "safe_load",
+      "str"
+    ],
+    "ensure_config_dir": [
+      "Path",
+      "get_config",
+      "home",
+      "mkdir"
+    ],
+    "save_config": [
+      "RuntimeError",
+      "dump",
+      "ensure_config_dir",
+      "home",
+      "open",
+      "str"
+    ],
+    "create_default_config": [
+      "ensure_config_dir",
+      "home",
+      "open",
+      "str",
+      "write"
+    ],
+    "get_config": [
+      "load_config"
+    ],
+    "_tokenize": [
+      "append",
+      "len",
+      "lower",
+      "range",
+      "strip"
+    ],
+    "_hash_token": [
+      "encode",
+      "hexdigest",
+      "int",
+      "md5"
+    ],
+    "add_document": [
+      "_tokenize",
+      "set"
+    ],
+    "vectorize": [
+      "Counter",
+      "_hash_token",
+      "_tokenize",
+      "get",
+      "items",
+      "len",
+      "log",
+      "sqrt",
+      "sum"
+    ],
+    "_init_from_config": [
+      "bool",
+      "get",
+      "get_config",
+      "hasattr",
+      "isinstance"
+    ],
+    "embed": [
+      "_embed_api",
+      "_embed_tfidf",
+      "strip",
+      "warning"
+    ],
+    "embed_batch": [
+      "_embed_api_batch",
+      "_embed_tfidf",
+      "warning"
+    ],
+    "_build_url": [
+      "endswith",
+      "rstrip"
+    ],
+    "_embed_api": [
+      "RuntimeError",
+      "_build_url",
+      "dumps",
+      "get",
+      "info",
+      "json",
+      "len",
+      "post",
+      "print",
+      "raise_for_status",
+      "strftime"
+    ],
+    "_embed_api_batch": [
+      "RuntimeError",
+      "_build_url",
+      "debug",
+      "get",
+      "json",
+      "len",
+      "post",
+      "raise_for_status",
+      "sorted"
+    ],
+    "_embed_tfidf": [
+      "vectorize"
+    ],
+    "build_tfidf_vocabulary": [
+      "add_document",
+      "debug",
+      "len",
+      "strip"
+    ],
+    "cosine_similarity": [
+      "ValueError",
+      "array",
+      "float",
+      "len",
+      "norm"
+    ],
+    "search": [
+      "embed"
+    ],
+    "get_embedding_engine": [
+      "EmbeddingEngine",
+      "get_config"
+    ],
+    "_create_ui": [
+      "Button",
+      "Font",
+      "Frame",
+      "HtmlFrame",
+      "Label",
+      "PanedWindow",
+      "ScrolledText",
+      "Separator",
+      "StringVar",
+      "Style",
+      "Treeview",
+      "_fs",
+      "_switch_display",
+      "add",
+      "bind",
+      "config",
+      "configure",
+      "pack",
+      "tag_configure"
+    ],
+    "_refresh": [
+      "_show_search_results",
+      "delete",
+      "get",
+      "get_children",
+      "get_conversations",
+      "get_topic_tokens",
+      "insert",
+      "len",
+      "list_topics",
+      "pack",
+      "pack_forget",
+      "set",
+      "str"
+    ],
+    "_sort": [
+      "enumerate",
+      "get_children",
+      "int",
+      "move",
+      "parse_tok",
+      "replace",
+      "set",
+      "sort"
+    ],
+    "_add_dialog": [
+      "Button",
+      "Combobox",
+      "Entry",
+      "IntVar",
+      "Label",
+      "Spinbox",
+      "StringVar",
+      "Text",
+      "Toplevel",
+      "_fs",
+      "_refresh",
+      "add_memory",
+      "after",
+      "config",
+      "geometry",
+      "get",
+      "grab_set",
+      "place",
+      "strip",
+      "title",
+      "transient"
+    ],
+    "do_add": [
+      "_refresh",
+      "add_memory",
+      "after",
+      "config",
+      "get",
+      "strip"
+    ],
+    "_soft_delete": [
+      "_refresh",
+      "deactivate_memory",
+      "int",
+      "selection"
+    ],
+    "_hard_delete": [
+      "_refresh",
+      "_selected_id",
+      "askyesno",
+      "delete_topic",
+      "get",
+      "get_topic",
+      "set"
+    ],
+    "_on_double_click": [
+      "Label",
+      "Text",
+      "Toplevel",
+      "_fs",
+      "config",
+      "geometry",
+      "insert",
+      "item",
+      "pack",
+      "selection",
+      "title",
+      "transient"
+    ],
+    "_export": [
+      "asksaveasfilename",
+      "get",
+      "get_active_memories",
+      "len",
+      "open",
+      "set",
+      "str",
+      "write"
+    ],
+    "_do_search": [
+      "_clear_search",
+      "_show_search_results",
+      "embed",
+      "get",
+      "getLogger",
+      "get_config",
+      "get_embedding_engine",
+      "len",
+      "search_by_keyword",
+      "search_by_vector",
+      "set",
+      "strip",
+      "warning"
+    ],
+    "_show_search_results": [
+      "delete",
+      "get",
+      "get_children",
+      "getattr",
+      "insert",
+      "len",
+      "pack",
+      "pack_forget",
+      "set",
+      "str"
+    ],
+    "_clear_search": [
+      "_refresh",
+      "set"
+    ],
+    "_generate_vectors": [
+      "Thread",
+      "append",
+      "batch_vectorize",
+      "build_tfidf_vocabulary",
+      "embed",
+      "embed_batch",
+      "enumerate",
+      "get",
+      "getLogger",
+      "get_config",
+      "get_embedding_engine",
+      "get_unvectorized_conversations",
+      "get_vector_count",
+      "len",
+      "min",
+      "range",
+      "set",
+      "start",
+      "warning"
+    ],
+    "_run": [
+      "Popen",
+      "communicate",
+      "get",
+      "getpgid",
+      "join",
+      "kill",
+      "killpg",
+      "len",
+      "list",
+      "str",
+      "wait"
+    ],
+    "parse_tok": [
+      "int",
+      "replace"
+    ],
+    "_selected_id": [
+      "int",
+      "selection"
+    ],
+    "_switch_to": [
+      "_selected_id",
+      "destroy",
+      "get",
+      "on_switch"
+    ],
+    "_rename_dialog": [
+      "Button",
+      "Entry",
+      "Frame",
+      "Label",
+      "StringVar",
+      "Toplevel",
+      "_fs",
+      "_refresh",
+      "_selected_id",
+      "bind",
+      "destroy",
+      "do_rename",
+      "focus",
+      "geometry",
+      "get",
+      "get_topic",
+      "grab_set",
+      "pack",
+      "select_range",
+      "strip",
+      "title",
+      "transient",
+      "update_topic_title"
+    ],
+    "do_rename": [
+      "_refresh",
+      "destroy",
+      "get",
+      "strip",
+      "update_topic_title"
+    ],
+    "_deactivate": [
+      "_refresh",
+      "_selected_id",
+      "update_topic_active"
+    ],
+    "_activate": [
+      "_refresh",
+      "_selected_id",
+      "update_topic_active"
+    ],
+    "_export_selected": [
+      "_do_export",
+      "_selected_id"
+    ],
+    "_export_all": [
+      "_do_export",
+      "list_topics"
+    ],
+    "_do_export": [
+      "_write_topic_md",
+      "asksaveasfilename",
+      "get",
+      "get_topic",
+      "len",
+      "now",
+      "open",
+      "set",
+      "strftime",
+      "write"
+    ],
+    "_write_topic_md": [
+      "get",
+      "get_conversations",
+      "get_topic",
+      "get_topic_tokens",
+      "len",
+      "write"
+    ],
+    "_model_tab": [
+      "Entry",
+      "Frame",
+      "Label",
+      "StringVar",
+      "_fs",
+      "add",
+      "columnconfigure",
+      "enumerate",
+      "extend",
+      "grid",
+      "setattr"
+    ],
+    "_runtime_tab": [
+      "BooleanVar",
+      "Canvas",
+      "Checkbutton",
+      "Entry",
+      "Frame",
+      "Label",
+      "Scrollbar",
+      "StringVar",
+      "_fs",
+      "add",
+      "bbox",
+      "bind",
+      "bind_all",
+      "configure",
+      "create_window",
+      "enumerate",
+      "grid",
+      "int",
+      "pack",
+      "yview_scroll"
+    ],
+    "_on_mousewheel": [
+      "int",
+      "yview_scroll"
+    ],
+    "_load_values": [
+      "bool",
+      "getattr",
+      "isinstance",
+      "items",
+      "set",
+      "str"
+    ],
+    "_do_save": [
+      "after",
+      "append",
+      "get",
+      "getattr",
+      "int",
+      "isinstance",
+      "items",
+      "join",
+      "on_save",
+      "save_config",
+      "set",
+      "strip",
+      "typ"
+    ],
+    "destroy": [
+      "destroy",
+      "hasattr",
+      "super",
+      "unbind_all"
+    ],
+    "setup_logging": [
+      "Formatter",
+      "TimedRotatingFileHandler",
+      "_set_root_level",
+      "abspath",
+      "addHandler",
+      "getLogger",
+      "home",
+      "isinstance",
+      "mkdir",
+      "setFormatter",
+      "setLevel",
+      "str"
+    ],
+    "_set_root_level": [
+      "getLogger",
+      "setLevel"
+    ],
+    "set_debug": [
+      "_set_root_level",
+      "setup_logging"
+    ],
+    "_fs": [
+      "int",
+      "max"
+    ],
+    "_init_fonts": [
+      "_detect",
+      "call",
+      "debug",
+      "families",
+      "float",
+      "getLogger",
+      "int",
+      "max",
+      "set",
+      "warning"
+    ],
+    "_render_markdown": [
+      "markdown",
+      "safe_substitute"
+    ],
+    "_build_tool_blocks": [
+      "_render_tool_group",
+      "get",
+      "len"
+    ],
+    "_render_tool_group": [
+      "append",
+      "get",
+      "group",
+      "join",
+      "len",
+      "match",
+      "startswith",
+      "strip"
+    ],
+    "_chat_to_markdown": [
+      "_build_tool_blocks",
+      "append",
+      "enumerate",
+      "get",
+      "join",
+      "strip"
+    ],
+    "_generate_topic_summary": [
+      "append",
+      "create",
+      "debug",
+      "format",
+      "get",
+      "getattr",
+      "info",
+      "isinstance",
+      "join",
+      "len",
+      "repr",
+      "strip",
+      "sub",
+      "type",
+      "warning"
+    ],
+    "_on_closing": [
+      "_update_status",
+      "close",
+      "destroy",
+      "warning"
+    ],
+    "zoom_in": [
+      "_apply_zoom",
+      "_update_status",
+      "min"
+    ],
+    "zoom_out": [
+      "_apply_zoom",
+      "_update_status",
+      "max"
+    ],
+    "_apply_zoom": [
+      "_chat_to_markdown",
+      "_filtered_messages",
+      "_html_render",
+      "_render_markdown",
+      "after",
+      "int"
+    ],
+    "_switch_display": [
+      "after",
+      "pack",
+      "pack_forget"
+    ],
+    "_show_loading": [
+      "_html_render",
+      "_switch_display",
+      "escape",
+      "log",
+      "pack",
+      "pack_forget"
+    ],
+    "_poll_loading_progress": [
+      "_render_loaded_topic",
+      "_render_topic_error",
+      "_show_loading",
+      "after",
+      "delattr",
+      "getattr",
+      "hasattr",
+      "pop"
+    ],
+    "scroll_to_bottom": [
+      "yview_moveto"
+    ],
+    "_html_render": [
+      "load_html",
+      "print",
+      "print_exc"
+    ],
+    "_render_chat": [
+      "_chat_to_markdown",
+      "_filtered_messages",
+      "_html_render",
+      "_now_ts",
+      "_render_markdown",
+      "append",
+      "config",
+      "delete",
+      "dict",
+      "insert",
+      "int",
+      "see"
+    ],
+    "_now_ts": [
+      "now",
+      "strftime"
+    ],
+    "toggle_reasoning": [
+      "_update_status",
+      "bool"
+    ],
+    "_update_status": [
+      "set"
+    ],
+    "safe_stream": [
+      "after"
+    ],
+    "safe_log": [
+      "after"
+    ],
+    "safe_log_tool": [
+      "after"
+    ],
+    "safe_update_status": [
+      "after",
+      "startswith"
+    ],
+    "_handle_max_iter": [
+      "_update_status",
+      "askyesno",
+      "hasattr",
+      "keys",
+      "len",
+      "log",
+      "replace",
+      "set"
+    ],
+    "log": [
+      "_now_ts",
+      "append",
+      "config",
+      "insert",
+      "see"
+    ],
+    "stream": [
+      "_flush_think_buffer_to_messages",
+      "append",
+      "startswith"
+    ],
+    "log_tool": [
+      "log"
+    ],
+    "_stream_flush_tick": [
+      "after",
+      "clear",
+      "config",
+      "insert",
+      "see"
+    ],
+    "_flush_stream_to_messages": [
+      "_flush_think_buffer_to_messages",
+      "_now_ts",
+      "append",
+      "clear",
+      "config",
+      "insert",
+      "see"
+    ],
+    "_flush_think_buffer_to_messages": [
+      "_now_ts",
+      "append",
+      "strip"
+    ],
+    "clear_chat": [
+      "clear",
+      "config",
+      "delete"
+    ],
+    "auto_new_topic": [
+      "get_children",
+      "list_topics",
+      "new_topic",
+      "on_topic_select",
+      "selection_set"
+    ],
+    "new_topic": [
+      "create_topic",
+      "now",
+      "refresh_topics",
+      "strftime",
+      "switch_topic"
+    ],
+    "refresh_topics": [
+      "delete",
+      "enumerate",
+      "get",
+      "get_children",
+      "getattr",
+      "insert",
+      "len",
+      "list_topics",
+      "see",
+      "selection_set",
+      "str"
+    ],
+    "_update_title": [
+      "basename",
+      "getcwd",
+      "title"
+    ],
+    "switch_topic": [
+      "Thread",
+      "_poll_loading_progress",
+      "_show_loading",
+      "_update_status",
+      "_update_title",
+      "after",
+      "append",
+      "cast",
+      "clear_chat",
+      "enumerate",
+      "get",
+      "get_conversations",
+      "get_topic",
+      "get_topic_summary",
+      "get_topic_tokens",
+      "join",
+      "len",
+      "load_history",
+      "max",
+      "min",
+      "range",
+      "start",
+      "str"
+    ],
+    "load_worker": [
+      "append",
+      "cast",
+      "enumerate",
+      "get",
+      "get_conversations",
+      "get_topic",
+      "get_topic_summary",
+      "get_topic_tokens",
+      "join",
+      "len",
+      "load_history",
+      "max",
+      "min",
+      "range",
+      "str"
+    ],
+    "_render_loaded_topic": [
+      "_render_and_show_chat",
+      "_switch_display",
+      "_update_status",
+      "clear_chat",
+      "log"
+    ],
+    "_render_topic_error": [
+      "_update_status",
+      "clear_chat",
+      "log"
+    ],
+    "on_topic_select": [
+      "index",
+      "list_topics",
+      "selection",
+      "switch_topic"
+    ],
+    "newline": [
+      "insert"
+    ],
+    "_on_summary_updated": [
+      "_update_status",
+      "after"
+    ],
+    "_refresh_topics_preserve_selection": [
+      "refresh_topics"
+    ],
+    "_on_topic_hover": [
+      "_hide_tooltip",
+      "_show_tooltip",
+      "after",
+      "after_cancel",
+      "identify_row",
+      "index",
+      "len"
+    ],
+    "_on_topic_leave": [
+      "_hide_tooltip",
+      "after_cancel"
+    ],
+    "_show_tooltip": [
+      "Label",
+      "Toplevel",
+      "_fs",
+      "_hide_tooltip",
+      "attributes",
+      "configure",
+      "fmt",
+      "geometry",
+      "get",
+      "join",
+      "len",
+      "overrideredirect",
+      "pack",
+      "str",
+      "winfo_pointerx",
+      "winfo_pointery"
+    ],
+    "fmt": [
+      "len",
+      "str"
+    ],
+    "_hide_tooltip": [
+      "destroy"
+    ],
+    "_notify_completion": [
+      "len",
+      "strip",
+      "toolkit_notify"
+    ],
+    "send": [
+      "Thread",
+      "_add_token_notice_and_render",
+      "_notify_completion",
+      "_post_chat_pipeline",
+      "_switch_display",
+      "_update_status",
+      "after",
+      "chat_stream",
+      "delete",
+      "format_exc",
+      "get",
+      "get_active_memories",
+      "get_embedding_engine",
+      "get_embedding_usage",
+      "len",
+      "log",
+      "safe_log",
+      "safe_stream",
+      "start",
+      "strip",
+      "type",
+      "update_msg_rounds"
+    ],
+    "work": [
+      "_post_chat_pipeline",
+      "chat_stream",
+      "get",
+      "get_topic_tokens",
+      "print"
+    ],
+    "_add_token_notice_and_render": [
+      "_cell",
+      "_now_ts",
+      "_render_and_show_chat",
+      "append",
+      "get",
+      "get_embedding_engine",
+      "get_embedding_usage",
+      "get_topic_tokens",
+      "join"
+    ],
+    "_filtered_messages": [
+      "list"
+    ],
+    "_group_into_rounds": [
+      "append"
+    ],
+    "_on_history_link_click": [
+      "_render_and_show_chat",
+      "_render_round_view",
+      "int",
+      "rsplit",
+      "startswith"
+    ],
+    "_build_round_view_html": [
+      "_chat_to_markdown",
+      "append",
+      "join",
+      "len",
+      "list",
+      "markdown",
+      "max",
+      "min",
+      "range",
+      "safe_substitute",
+      "str"
+    ],
+    "_render_round_view": [
+      "Thread",
+      "_build_round_view_html",
+      "_html_render",
+      "_on_done",
+      "_prepare",
+      "_switch_display",
+      "after",
+      "config",
+      "delete",
+      "insert",
+      "int",
+      "len",
+      "print",
+      "see",
+      "start",
+      "str"
+    ],
+    "_prepare": [
+      "_build_round_view_html"
+    ],
+    "_on_done": [
+      "_html_render",
+      "_switch_display",
+      "after",
+      "config",
+      "delete",
+      "insert",
+      "len",
+      "print",
+      "see",
+      "str"
+    ],
+    "_worker": [
+      "_on_done",
+      "_prepare",
+      "after"
+    ],
+    "_render_and_show_chat": [
+      "Thread",
+      "_build_round_view_html",
+      "_filtered_messages",
+      "_group_into_rounds",
+      "_html_render",
+      "_on_done",
+      "_prepare",
+      "_switch_display",
+      "after",
+      "config",
+      "delete",
+      "insert",
+      "int",
+      "len",
+      "print",
+      "see",
+      "start",
+      "str"
+    ],
+    "open_topic_dialog": [
+      "TopicDialog",
+      "after"
+    ],
+    "open_memory_dialog": [
+      "MemoryDialog"
+    ],
+    "open_config_dialog": [
+      "ConfigDialog",
+      "_update_status",
+      "getattr",
+      "hasattr",
+      "setattr"
+    ],
+    "on_save": [
+      "_update_status",
+      "getattr",
+      "hasattr",
+      "setattr"
+    ],
+    "interrupt": [
+      "_update_status",
+      "after",
+      "clear",
+      "config",
+      "insert",
+      "interrupt",
+      "safe_log",
+      "see"
+    ],
+    "select_memories": [
+      "_score_memory",
+      "_touch_selected",
+      "append",
+      "get_active_memories",
+      "len",
+      "min",
+      "sort"
+    ],
+    "_score_memory": [
+      "_compute_recency",
+      "_compute_relevance",
+      "get",
+      "max"
+    ],
+    "_compute_relevance": [
+      "_extract_keywords",
+      "get",
+      "len",
+      "lower",
+      "max",
+      "min",
+      "set",
+      "split",
+      "strip",
+      "sum",
+      "update"
+    ],
+    "_extract_keywords": [
+      "Counter",
+      "extract_tags",
+      "findall",
+      "len",
+      "lower",
+      "most_common",
+      "round"
+    ],
+    "_compute_recency": [
+      "get"
+    ],
+    "_touch_selected": [
+      "touch_memory"
+    ],
+    "format_memories": [
+      "_prefix_for",
+      "append",
+      "format",
+      "join",
+      "len"
+    ],
+    "_prefix_for": [
+      "get"
+    ],
+    "parse_extraction_result": [
+      "isinstance",
+      "join",
+      "loads",
+      "split",
+      "startswith",
+      "strip"
+    ],
+    "_compute_similarity": [
+      "_extract_keywords",
+      "len",
+      "lower",
+      "set"
+    ],
+    "_find_duplicate": [
+      "_jaccard_similarity",
+      "info"
+    ],
+    "_merge_memory": [
+      "get",
+      "info",
+      "isinstance",
+      "join",
+      "len",
+      "max",
+      "min",
+      "set",
+      "sorted",
+      "split",
+      "str",
+      "strip"
+    ],
+    "ingest_extracted": [
+      "_find_duplicate",
+      "_merge_memory",
+      "add_memory",
+      "get",
+      "get_active_memories",
+      "info",
+      "isinstance",
+      "join",
+      "strip",
+      "touch_memory",
+      "update_memory",
+      "warning"
+    ],
+    "_jaccard_similarity": [
+      "_extract_keywords",
+      "len",
+      "lower",
+      "set"
+    ],
+    "_get_max_ids": [
+      "ValueError",
+      "execute",
+      "fetchone"
+    ],
+    "_get_table_columns": [
+      "ValueError",
+      "execute",
+      "fetchall"
+    ],
+    "_merge_meta": [
+      "add",
+      "commit",
+      "execute",
+      "fetchall",
+      "info",
+      "len"
+    ],
+    "_merge_topics": [
+      "commit",
+      "execute",
+      "fetchall",
+      "info",
+      "keys",
+      "len",
+      "max",
+      "min",
+      "str",
+      "uuid4",
+      "values"
+    ],
+    "_merge_conversations": [
+      "_get_table_columns",
+      "commit",
+      "enumerate",
+      "execute",
+      "fetchall",
+      "get",
+      "info",
+      "join",
+      "len",
+      "list",
+      "str",
+      "uuid4",
+      "warning"
+    ],
+    "_merge_agent_rounds": [
+      "_get_table_columns",
+      "commit",
+      "enumerate",
+      "execute",
+      "fetchall",
+      "get",
+      "info",
+      "join",
+      "list",
+      "str",
+      "uuid4"
+    ],
+    "_merge_topic_token_stats": [
+      "_accumulate_token_stats",
+      "_get_table_columns",
+      "add",
+      "commit",
+      "enumerate",
+      "execute",
+      "fetchall",
+      "get",
+      "info",
+      "join",
+      "list"
+    ],
+    "_accumulate_token_stats": [
+      "append",
+      "execute",
+      "join"
+    ],
+    "_merge_t_conv_summary": [
+      "_get_table_columns",
+      "add",
+      "commit",
+      "enumerate",
+      "execute",
+      "fetchall",
+      "get",
+      "info",
+      "join",
+      "list"
+    ],
+    "_merge_memories": [
+      "_find_duplicate",
+      "_get_table_columns",
+      "_merge_memory_record",
+      "append",
+      "commit",
+      "dict",
+      "enumerate",
+      "execute",
+      "fetchall",
+      "get",
+      "info",
+      "join",
+      "list",
+      "str",
+      "strip",
+      "uuid4",
+      "zip"
+    ],
+    "_merge_memory_record": [
+      "execute",
+      "join",
+      "max",
+      "min",
+      "set",
+      "sorted",
+      "split",
+      "str",
+      "strip"
+    ],
+    "_merge_system_prompts": [
+      "_get_table_columns",
+      "add",
+      "commit",
+      "enumerate",
+      "execute",
+      "fetchall",
+      "fetchone",
+      "info",
+      "join",
+      "list",
+      "str"
+    ],
+    "_merge_reflections": [
+      "_get_table_columns",
+      "commit",
+      "enumerate",
+      "execute",
+      "fetchall",
+      "get",
+      "info",
+      "join",
+      "list",
+      "str",
+      "uuid4"
+    ],
+    "_merge_config_history": [
+      "_get_table_columns",
+      "commit",
+      "enumerate",
+      "execute",
+      "fetchall",
+      "info",
+      "join",
+      "list",
+      "str",
+      "uuid4"
+    ],
+    "merge": [
+      "_get_max_ids",
+      "_merge_agent_rounds",
+      "_merge_config_history",
+      "_merge_conversations",
+      "_merge_memories",
+      "_merge_meta",
+      "_merge_reflections",
+      "_merge_system_prompts",
+      "_merge_t_conv_summary",
+      "_merge_topic_token_stats",
+      "_merge_topics",
+      "info",
+      "len"
+    ],
+    "close": [
+      "info",
+      "set_agent",
+      "set_session"
+    ],
+    "_process_stream_with_reasoning": [
+      "_accumulate_tool_calls_from_delta",
+      "_accumulate_usage",
+      "append",
+      "callback",
+      "hasattr",
+      "join"
+    ],
+    "_setup_default_pipeline": [
+      "_summarize_old_history",
+      "add_user_message",
+      "get",
+      "register_step"
+    ],
+    "_build_api_messages": [
+      "_find_recent_boundary",
+      "append",
+      "dict",
+      "get",
+      "len",
+      "range"
+    ],
+    "_filter_level2_by_relevance": [
+      "_extract_files_from_text",
+      "_key_words",
+      "add",
+      "append",
+      "debug",
+      "exists",
+      "findall",
+      "finditer",
+      "get",
+      "group",
+      "join",
+      "len",
+      "load",
+      "lower",
+      "max",
+      "open",
+      "round",
+      "set"
+    ],
+    "_key_words": [
+      "findall",
+      "lower",
+      "set"
+    ],
+    "_extract_files_from_text": [
+      "add",
+      "exists",
+      "findall",
+      "finditer",
+      "get",
+      "group",
+      "join",
+      "load",
+      "open",
+      "set"
+    ],
+    "_execute_tool_loop": [
+      "_build_api_messages",
+      "_build_tools",
+      "_collect_api_error_round",
+      "_collect_assistant_text_round",
+      "_collect_assistant_tool_calls_round",
+      "_collect_interruption_round",
+      "_collect_max_iterations_round",
+      "_collect_tool_call_round",
+      "_create_chat_stream",
+      "_execute_tool_call",
+      "_parse_tool_calls_from_stream",
+      "_process_stream_with_reasoning",
+      "add_assistant_message",
+      "any",
+      "append",
+      "callback",
+      "clear",
+      "debug",
+      "get",
+      "info",
+      "len",
+      "on_status",
+      "print",
+      "strftime",
+      "wait",
+      "warning"
+    ],
+    "_build_tools": [
+      "append",
+      "items"
+    ],
+    "update_tools": [
+      "_build_tools",
+      "reload"
+    ],
+    "_auto_detect_mode": [
+      "call_tool",
+      "get",
+      "info",
+      "isinstance"
+    ],
+    "reset_session_state": [
+      "_strip_reasoning_content",
+      "clear",
+      "reset_cheap_usage",
+      "reset_usage"
+    ],
+    "_notify_reflection_done": [
+      "run"
+    ],
+    "_notify_prompt_evolved": [
+      "run"
+    ],
+    "chat_stream": [
+      "Thread",
+      "_auto_detect_mode",
+      "_build_tools",
+      "_notify_prompt_evolved",
+      "_notify_reflection_done",
+      "auto_activate",
+      "debug",
+      "evolve",
+      "execute",
+      "finish_trace",
+      "generate_reflection",
+      "get",
+      "isinstance",
+      "len",
+      "on_status",
+      "reset_interrupt",
+      "reset_session_state",
+      "should_reflect",
+      "start",
+      "start_trace",
+      "str",
+      "trigger_memory_extraction"
+    ],
+    "_auto_extract": [
+      "on_status",
+      "trigger_memory_extraction"
+    ],
+    "_auto_reflect": [
+      "_notify_prompt_evolved",
+      "_notify_reflection_done",
+      "evolve",
+      "generate_reflection",
+      "on_status",
+      "should_reflect"
+    ],
+    "initialize": [
+      "add_system_prompt",
+      "get_latest_system_prompt",
+      "info"
+    ],
+    "current_prompt": [
+      "initialize"
+    ],
+    "reload": [
+      "append",
+      "callable",
+      "check_meta",
+      "clear",
+      "endswith",
+      "exec",
+      "exists",
+      "func_meta",
+      "get",
+      "items",
+      "join",
+      "listdir",
+      "meta_toolkit_list_versions",
+      "meta_toolkit_reload",
+      "meta_toolkit_rollback",
+      "meta_toolkit_save",
+      "meta_toolkit_set_topic_title",
+      "open",
+      "read",
+      "startswith",
+      "update"
+    ],
+    "build_evolve_prompt": [
+      "append",
+      "chr",
+      "get",
+      "get_instructions",
+      "get_recent_reflections",
+      "isinstance",
+      "join",
+      "loads"
+    ],
+    "evolve": [
+      "add_system_prompt",
+      "append",
+      "build_evolve_prompt",
+      "create",
+      "get_recent_reflections",
+      "info",
+      "int",
+      "join",
+      "len",
+      "mark_reflection_applied",
+      "str",
+      "strip",
+      "warning"
+    ],
+    "rollback": [
+      "copy2",
+      "exists",
+      "join"
+    ],
+    "list_versions": [
+      "append",
+      "endswith",
+      "int",
+      "len",
+      "listdir",
+      "sort",
+      "split",
+      "startswith"
+    ],
+    "get_stats": [
+      "get_reflection_stats"
+    ],
+    "manual_set": [
+      "add_system_prompt",
+      "int",
+      "str"
+    ],
+    "success_rate": [
+      "len",
+      "sum"
+    ],
+    "start_trace": [
+      "SessionTrace",
+      "append",
+      "time"
+    ],
+    "record_tool_call": [
+      "ToolCallRecord",
+      "append"
+    ],
+    "finish_trace": [
+      "time"
+    ],
+    "should_reflect": [
+      "any",
+      "len"
+    ],
+    "build_reflection_prompt": [
+      "append",
+      "enumerate",
+      "join"
+    ],
+    "parse_reflection_result": [
+      "join",
+      "loads",
+      "split",
+      "startswith",
+      "strip"
+    ],
+    "generate_reflection": [
+      "_build_tool_stats",
+      "add_config_change",
+      "add_memory",
+      "add_reflection",
+      "build_reflection_prompt",
+      "clear",
+      "create",
+      "get",
+      "info",
+      "isinstance",
+      "len",
+      "parse_reflection_result",
+      "str",
+      "warning"
+    ],
+    "_build_tool_stats": [
+      "append"
+    ],
+    "last_prompt_suggestion": [
+      "getattr"
+    ],
+    "_probe_thinking_support": [
+      "create",
+      "lower",
+      "str",
+      "tool_log"
+    ],
+    "_accumulate_usage": [
+      "getattr"
+    ],
+    "_accumulate_cheap_usage": [
+      "getattr"
+    ],
+    "_track_api_usage": [
+      "_accumulate_cheap_usage",
+      "_accumulate_usage",
+      "hasattr"
+    ],
+    "_create_chat_stream": [
+      "create"
+    ],
+    "process_stream_response": [
+      "_accumulate_tool_calls_from_delta",
+      "_accumulate_usage",
+      "append",
+      "callback",
+      "hasattr",
+      "join"
+    ],
+    "_accumulate_tool_calls_from_delta": [
+      "append",
+      "len"
+    ],
+    "get_last_usage": [
+      "dict"
+    ],
+    "get_cheap_usage": [
+      "dict"
+    ],
+    "get_total_usage": [
+      "dict"
+    ],
+    "_setup_memory": [
+      "MemoryManager",
+      "getattr",
+      "info",
+      "warning"
+    ],
+    "_pipeline_inject_memories": [
+      "format_memories",
+      "get",
+      "info",
+      "len",
+      "select_memories",
+      "warning"
+    ],
+    "trigger_memory_extraction": [
+      "_build_conversation_text",
+      "_get_summarize_client",
+      "_track_api_usage",
+      "build_extraction_prompt",
+      "create",
+      "get_unsummarized_conversations",
+      "hasattr",
+      "info",
+      "ingest_extracted",
+      "is_extraction_needed",
+      "len",
+      "parse_extraction_result",
+      "strip",
+      "warning"
+    ],
+    "_build_conversation_text": [
+      "append",
+      "get",
+      "join"
+    ],
+    "get_injected_memories": [
+      "list"
+    ],
+    "get_memory_stats": [
+      "close",
+      "cursor",
+      "execute",
+      "fetchall",
+      "fetchone"
+    ],
+    "register_step": [
+      "PipelineStep",
+      "ValueError",
+      "append",
+      "index",
+      "insert",
+      "sort"
+    ],
+    "set_step_position": [
+      "sort"
+    ],
+    "remove_step": [
+      "remove"
+    ],
+    "execute": [
+      "append",
+      "debug",
+      "enumerate",
+      "func",
+      "get_enabled_steps",
+      "isinstance",
+      "keys",
+      "len",
+      "setdefault",
+      "str",
+      "update",
+      "warning"
+    ],
+    "list_steps": [
+      "get_enabled_steps",
+      "items"
+    ],
+    "generate_topic_summary_shared": [
+      "append",
+      "create",
+      "format",
+      "get",
+      "isinstance",
+      "join",
+      "len",
+      "strip",
+      "sub",
+      "type",
+      "warning"
+    ],
+    "count_user_msg": [
+      "get",
+      "sum"
+    ],
+    "_call_summarize_api": [
+      "create",
+      "debug",
+      "len",
+      "lower",
+      "str",
+      "warning"
+    ],
+    "_summarize_old_history": [
+      "_call_summarize_api",
+      "_conversations_to_text",
+      "_find_recent_boundary",
+      "_get_summarize_client",
+      "_track_api_usage",
+      "format",
+      "get_topic_summary",
+      "get_unsummarized_conversations",
+      "getattr",
+      "hasattr",
+      "isinstance",
+      "len",
+      "mark_as_summarized",
+      "strip",
+      "tool_log",
+      "update_topic_summary",
+      "warning"
+    ],
+    "_conversations_to_text": [
+      "append",
+      "get",
+      "join"
+    ],
+    "generate_topic_summary": [
+      "append",
+      "create",
+      "debug",
+      "format",
+      "get",
+      "isinstance",
+      "join",
+      "len",
+      "strip",
+      "sub",
+      "warning"
+    ],
+    "_extract_user_messages": [
+      "append",
+      "get",
+      "len",
+      "strip"
+    ],
+    "_clean_topic_summary": [
+      "len",
+      "strip",
+      "sub"
+    ],
+    "_compact_message": [
+      "dict",
+      "get",
+      "len"
+    ],
+    "_messages_to_text": [
+      "append",
+      "get",
+      "join",
+      "len",
+      "upper"
+    ],
+    "_find_recent_boundary": [
+      "get",
+      "len",
+      "range"
+    ],
+    "_find_last_need_summary_pair": [
+      "get",
+      "len",
+      "range"
+    ],
+    "_execute_tool_call": [
+      "_add_tool_result",
+      "_record_tool_to_trace",
+      "call_tool",
+      "loads",
+      "str",
+      "time",
+      "tool_log",
+      "warning"
+    ],
+    "_record_tool_to_trace": [
+      "getattr",
+      "record_tool_call",
+      "time"
+    ],
+    "_add_tool_result": [
+      "append"
+    ],
+    "_collect_tool_call_round": [
+      "append"
+    ],
+    "_collect_assistant_tool_calls_round": [
+      "append"
+    ],
+    "_collect_assistant_text_round": [
+      "append"
+    ],
+    "_collect_api_error_round": [
+      "append"
+    ],
+    "_collect_max_iterations_round": [
+      "append"
+    ],
+    "_collect_interruption_round": [
+      "append"
+    ],
+    "_parse_tool_calls_from_stream": [
+      "SimpleNamespace",
+      "append"
+    ],
+    "_init_tables": [
+      "_migrate_msg_vectors",
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "_migrate_int_to_uuid": [
+      "_migrate_table",
+      "_table_columns",
+      "append",
+      "commit",
+      "error",
+      "execute",
+      "fetchall",
+      "get",
+      "getLogger",
+      "hasattr",
+      "info",
+      "join",
+      "rollback",
+      "upper",
+      "warning"
+    ],
+    "_drop_if_exists": [
+      "execute"
+    ],
+    "_table_columns": [
+      "execute",
+      "fetchall",
+      "upper"
+    ],
+    "_migrate_table": [
+      "_table_columns",
+      "append",
+      "execute",
+      "hasattr",
+      "info",
+      "join"
+    ],
+    "_migrate_msg_vectors": [
+      "commit",
+      "execute",
+      "fetchall",
+      "fetchone",
+      "get",
+      "getLogger",
+      "info",
+      "upper"
+    ],
+    "_migrate": [
+      "_migrate_int_to_uuid",
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "_get_week_key": [
+      "now",
+      "strftime"
+    ],
+    "_maybe_rotate_db": [
+      "_get_week_key",
+      "close",
+      "connect",
+      "copy2",
+      "cursor",
+      "dirname",
+      "execute",
+      "exists",
+      "fetchone",
+      "info",
+      "join",
+      "now",
+      "strftime",
+      "warning"
+    ],
+    "_write_week_key": [
+      "_get_week_key",
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "_generate_id": [
+      "str",
+      "uuid4"
+    ],
+    "create_topic": [
+      "_generate_id",
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "update_topic_title": [
+      "close",
+      "commit",
+      "cursor",
+      "debug",
+      "execute",
+      "get",
+      "get_topic",
+      "startswith"
+    ],
+    "update_topic_active": [
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "delete_topic": [
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "add_topic_tokens": [
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "get_topic_tokens": [
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchone"
+    ],
+    "list_topics": [
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall"
+    ],
+    "save_msg": [
+      "_auto_embed_async",
+      "_generate_id",
+      "close",
+      "commit",
+      "cursor",
+      "execute",
+      "strip",
+      "update_topic_active"
+    ],
+    "_auto_embed_async": [
+      "Thread",
+      "embed",
+      "getLogger",
+      "get_embedding_engine",
+      "len",
+      "start",
+      "store_embedding",
+      "warning"
+    ],
+    "update_msg_rounds": [
+      "close",
+      "commit",
+      "cursor",
+      "dumps",
+      "execute"
+    ],
+    "save_agent_round": [
+      "close",
+      "commit",
+      "cursor",
+      "dumps",
+      "execute"
+    ],
+    "get_conversations": [
+      "append",
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall",
+      "get",
+      "len",
+      "loads"
+    ],
+    "get_recent_conversations": [
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall",
+      "reversed"
+    ],
+    "get_topic": [
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchone"
+    ],
+    "get_agent_rounds": [
+      "append",
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall",
+      "get",
+      "loads"
+    ],
+    "get_topic_summary": [
+      "close",
+      "cursor",
+      "execute",
+      "fetchone"
+    ],
+    "update_topic_summary": [
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "get_level2": [
+      "cursor",
+      "execute",
+      "fetchone",
+      "loads"
+    ],
+    "set_level2": [
+      "commit",
+      "cursor",
+      "dumps",
+      "execute"
+    ],
+    "get_semantic_summary": [
+      "cursor",
+      "execute",
+      "fetchone"
+    ],
+    "get_tool_chain_summary": [
+      "cursor",
+      "execute",
+      "fetchone"
+    ],
+    "set_semantic_summary": [
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "set_tool_chain_summary": [
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "push_to_level2": [
+      "append",
+      "get_level2",
+      "len",
+      "set_level2"
+    ],
+    "mark_as_summarized": [
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "get_unsummarized_conversations": [
+      "append",
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall",
+      "get",
+      "loads"
+    ],
+    "add_memory": [
+      "_enforce_critical_limit",
+      "_generate_id",
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "_enforce_critical_limit": [
+      "close",
+      "commit",
+      "cursor",
+      "execute",
+      "fetchone",
+      "info"
+    ],
+    "update_memory": [
+      "_enforce_critical_limit",
+      "close",
+      "commit",
+      "cursor",
+      "execute",
+      "get",
+      "items",
+      "join"
+    ],
+    "deactivate_memory": [
+      "update_memory"
+    ],
+    "delete_memory": [
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "get_active_memories": [
+      "cleanup_expired_memories",
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall"
+    ],
+    "get_instructions": [
+      "cleanup_expired_memories",
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall"
+    ],
+    "search_memories": [
+      "append",
+      "cleanup_expired_memories",
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall",
+      "get",
+      "join",
+      "lower",
+      "set",
+      "split",
+      "strip"
+    ],
+    "cleanup_expired_memories": [
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "touch_memory": [
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "add_system_prompt": [
+      "_generate_id",
+      "close",
+      "commit",
+      "cursor",
+      "execute",
+      "fetchone",
+      "str"
+    ],
+    "get_latest_system_prompt": [
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchone"
+    ],
+    "get_system_prompt_history": [
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall"
+    ],
+    "deactivate_system_prompt": [
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "rollback_system_prompt": [
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "get_system_prompt_count": [
+      "close",
+      "cursor",
+      "execute",
+      "fetchone"
+    ],
+    "add_reflection": [
+      "_generate_id",
+      "close",
+      "commit",
+      "cursor",
+      "dumps",
+      "execute"
+    ],
+    "get_recent_reflections": [
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall"
+    ],
+    "mark_reflection_applied": [
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "get_reflection_stats": [
+      "close",
+      "cursor",
+      "execute",
+      "fetchone"
+    ],
+    "add_config_change": [
+      "_generate_id",
+      "close",
+      "commit",
+      "cursor",
+      "execute",
+      "str"
+    ],
+    "get_config_history": [
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall"
+    ],
+    "get_config_changes_since": [
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall"
+    ],
+    "store_embedding": [
+      "array",
+      "close",
+      "commit",
+      "cursor",
+      "execute",
+      "len",
+      "tobytes"
+    ],
+    "get_msg_embedding": [
+      "close",
+      "cursor",
+      "execute",
+      "fetchone",
+      "frombuffer",
+      "tolist"
+    ],
+    "get_all_embeddings": [
+      "append",
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall",
+      "frombuffer",
+      "pop",
+      "tolist"
+    ],
+    "search_by_vector": [
+      "append",
+      "array",
+      "close",
+      "cursor",
+      "enumerate",
+      "execute",
+      "fetchall",
+      "float",
+      "get",
+      "get_all_embeddings",
+      "join",
+      "len",
+      "norm",
+      "round",
+      "sort",
+      "tuple"
+    ],
+    "search_by_keyword": [
+      "append",
+      "close",
+      "count",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall",
+      "get",
+      "len",
+      "lower",
+      "max",
+      "min",
+      "round",
+      "sort"
+    ],
+    "get_vector_count": [
+      "close",
+      "cursor",
+      "execute",
+      "fetchone"
+    ],
+    "get_unvectorized_conversations": [
+      "close",
+      "cursor",
+      "dict",
+      "execute",
+      "fetchall"
+    ],
+    "vectorize_conversation": [
+      "len",
+      "store_embedding"
+    ],
+    "batch_vectorize": [
+      "get",
+      "len",
+      "store_embedding"
+    ],
+    "delete_vector": [
+      "close",
+      "commit",
+      "cursor",
+      "execute"
+    ],
+    "_auto_backup": [
+      "_cleanup_backups",
+      "_meta_get",
+      "_meta_set",
+      "abspath",
+      "backup",
+      "close",
+      "connect",
+      "debug",
+      "dirname",
+      "float",
+      "getsize",
+      "info",
+      "join",
+      "makedirs",
+      "str",
+      "strftime",
+      "time"
+    ],
+    "_cleanup_backups": [
+      "debug",
+      "endswith",
+      "join",
+      "listdir",
+      "remove",
+      "sorted",
+      "startswith"
+    ],
+    "_meta_get": [
+      "execute",
+      "fetchone"
+    ],
+    "_meta_set": [
+      "commit",
+      "execute"
+    ],
+    "_protect_db": [
+      "__import__",
+      "abspath",
+      "dirname",
+      "exists",
+      "isoformat",
+      "join",
+      "now",
+      "open",
+      "write"
+    ],
+    "backup_now": [
+      "_auto_backup",
+      "_meta_set"
+    ],
+    "__del__": [
+      "close"
+    ],
+    "get_storage": [
+      "Storage",
+      "get_config"
+    ],
+    "_load_config": [
+      "FileNotFoundError",
+      "Path",
+      "ValueError",
+      "home",
+      "info",
+      "isfile",
+      "load_config",
+      "str"
+    ],
+    "_init_toolkit": [
+      "Path",
+      "Toolkit",
+      "info",
+      "len",
+      "mkdir",
+      "str",
+      "toolkit_reload"
+    ],
+    "_no_tools_chat": [
+      "_real_create_chat_stream"
+    ],
+    "toolkit_save": [
+      "cast",
+      "get",
+      "globals",
+      "save"
+    ],
+    "toolkit_reload": [
+      "cast",
+      "get",
+      "globals",
+      "reload"
+    ],
+    "_notify": [
+      "_callback",
+      "warning"
+    ],
+    "chat": [
+      "Thread",
+      "_post_chat_pipeline",
+      "chat_stream",
+      "get",
+      "get_topic_tokens",
+      "join",
+      "print",
+      "replace",
+      "set",
+      "start",
+      "startswith"
+    ],
+    "_chat_impl": [
+      "_notify",
+      "chat_stream",
+      "extend",
+      "set",
+      "startswith"
+    ],
+    "stream_cb": [
+      "print",
+      "startswith"
+    ],
+    "status_cb": [
+      "print",
+      "replace",
+      "set",
+      "startswith"
+    ],
+    "__exit__": [
+      "close"
+    ],
+    "_load_history": [
+      "_load_topic_history_into_session"
+    ],
+    "_show_topic_info": [
+      "get",
+      "get_topic",
+      "get_topic_tokens",
+      "print"
+    ],
+    "_show_memories": [
+      "get",
+      "get_active_memories",
+      "get_memory_stats",
+      "print"
+    ],
+    "_on_tool_log": [
+      "print"
+    ],
+    "run_oneshot": [
+      "chat"
+    ],
+    "_cmd_help": [
+      "print"
+    ],
+    "_cmd_status": [
+      "get",
+      "get_active_memories",
+      "get_topic",
+      "get_topic_tokens",
+      "len",
+      "print"
+    ],
+    "toolkit_rollback": [
+      "cast",
+      "get",
+      "globals",
+      "rollback"
+    ],
+    "toolkit_list_versions": [
+      "cast",
+      "get",
+      "globals",
+      "list_versions"
+    ],
+    "toolkit_rollback_impl": [
+      "cast",
+      "get",
+      "globals",
+      "rollback"
+    ],
+    "toolkit_list_versions_impl": [
+      "cast",
+      "get",
+      "globals",
+      "join",
+      "list_versions"
+    ],
+    "call_tool": [
+      "KeyError",
+      "_purge_cache",
+      "debug",
+      "dumps",
+      "get",
+      "hash",
+      "len",
+      "time"
+    ],
+    "_purge_cache": [
+      "debug",
+      "items",
+      "len",
+      "time"
+    ],
+    "check_meta": [
+      "get"
+    ],
+    "save": [
+      "asctime",
+      "copy2",
+      "dumps",
+      "exists",
+      "get",
+      "group",
+      "int",
+      "isinstance",
+      "join",
+      "open",
+      "parse",
+      "read",
+      "search",
+      "split",
+      "startswith",
+      "str",
+      "walk",
+      "warning",
+      "write"
+    ],
+    "get_instance": [
+      "cls"
+    ],
+    "discover_skills": [
+      "_scan_directory",
+      "clear",
+      "info",
+      "isdir",
+      "keys",
+      "len",
+      "list"
+    ],
+    "_scan_directory": [
+      "Skill",
+      "_load_manifest",
+      "debug",
+      "get",
+      "info",
+      "isdir",
+      "isfile",
+      "join",
+      "len",
+      "listdir",
+      "sorted",
+      "warning"
+    ],
+    "_load_manifest": [
+      "exec_module",
+      "getattr",
+      "module_from_spec",
+      "spec_from_file_location"
+    ],
+    "activate_skill": [
+      "info",
+      "len",
+      "warning"
+    ],
+    "deactivate_skill": [
+      "info"
+    ],
+    "activate_all": [
+      "info",
+      "values"
+    ],
+    "deactivate_all": [
+      "info",
+      "values"
+    ],
+    "is_tool_active": [
+      "values"
+    ],
+    "get_active_tool_names": [
+      "set",
+      "update",
+      "values"
+    ],
+    "get_active_tools_meta": [
+      "append",
+      "get_active_tool_names",
+      "sorted"
+    ],
+    "get_active_prompt": [
+      "append",
+      "join",
+      "strip",
+      "values"
+    ],
+    "get_skill_summary": [
+      "append",
+      "join",
+      "len",
+      "values"
+    ],
+    "auto_activate": [
+      "append",
+      "info",
+      "len",
+      "lower",
+      "values"
+    ],
+    "list_skills": [
+      "to_dict",
+      "values"
+    ],
+    "get_skill": [
+      "get"
+    ],
+    "get_active_skill_names": [
+      "values"
+    ],
+    "get_status": [
+      "get_active_skill_names",
+      "get_active_tool_names",
+      "len",
+      "list_skills"
+    ],
+    "toolkit_build": [
+      "append",
+      "basename",
+      "decode",
+      "exists",
+      "getcwd",
+      "group",
+      "info",
+      "isdir",
+      "join",
+      "len",
+      "open",
+      "read",
+      "rename",
+      "rmtree",
+      "run",
+      "search",
+      "split",
+      "startswith",
+      "str",
+      "sub",
+      "write"
+    ],
+    "toolkit_bump_version": [
+      "Path",
+      "absolute",
+      "append",
+      "compile",
+      "exists",
+      "group",
+      "info",
+      "join",
+      "match",
+      "read_text",
+      "split",
+      "str",
+      "write_text"
+    ],
+    "toolkit_comment": [
+      "get",
+      "info",
+      "now",
+      "repr",
+      "strftime"
+    ],
+    "toolkit_config": [
+      "_get_config",
+      "_get_session",
+      "add_config_change",
+      "append",
+      "get",
+      "get_config_history",
+      "getattr",
+      "hasattr",
+      "info",
+      "items",
+      "join",
+      "set",
+      "setattr",
+      "str",
+      "to_dict"
+    ],
+    "toolkit_date_diff": [
+      "abs",
+      "date",
+      "info",
+      "str",
+      "strftime",
+      "strptime",
+      "today"
+    ],
+    "toolkit_dump_topic": [
+      "Path",
+      "Storage",
+      "append",
+      "exists",
+      "get",
+      "get_config",
+      "get_conversations",
+      "get_topic_tokens",
+      "home",
+      "info",
+      "isalnum",
+      "join",
+      "len",
+      "list_topics",
+      "makedirs",
+      "now",
+      "open",
+      "str",
+      "strftime",
+      "write"
+    ],
+    "toolkit_exec": [
+      "Lock",
+      "Popen",
+      "ThreadPoolExecutor",
+      "_sudo_with_gui",
+      "_truncate_result",
+      "as_completed",
+      "communicate",
+      "dumps",
+      "endswith",
+      "enumerate",
+      "get",
+      "getpgid",
+      "info",
+      "insert",
+      "join",
+      "kill",
+      "killpg",
+      "len",
+      "list",
+      "min",
+      "repr",
+      "result",
+      "str",
+      "submit",
+      "sum",
+      "wait"
+    ],
+    "_sudo_with_gui": [
+      "Popen",
+      "_truncate_result",
+      "communicate",
+      "join",
+      "kill",
+      "len",
+      "list",
+      "run",
+      "strip",
+      "wait",
+      "which"
+    ],
+    "_truncate_result": [
+      "isinstance",
+      "join",
+      "len",
+      "split"
+    ],
+    "_log": [
+      "print"
+    ],
+    "_build_ctags": [
+      "_log",
+      "any",
+      "append",
+      "endswith",
+      "get",
+      "isabs",
+      "isdir",
+      "join",
+      "len",
+      "listdir",
+      "loads",
+      "open",
+      "relpath",
+      "run",
+      "sorted",
+      "split",
+      "startswith",
+      "strip",
+      "walk",
+      "which",
+      "write"
+    ],
+    "_build_call_graph": [
+      "CallVisitor",
+      "_log",
+      "add",
+      "endswith",
+      "generic_visit",
+      "isinstance",
+      "join",
+      "len",
+      "open",
+      "parse",
+      "read",
+      "relpath",
+      "set",
+      "sorted",
+      "sum",
+      "values",
+      "visit",
+      "visit_FunctionDef",
+      "walk"
+    ],
+    "visit_FunctionDef": [
+      "add",
+      "generic_visit",
+      "isinstance",
+      "set",
+      "sorted",
+      "walk"
+    ],
+    "visit_AsyncFunctionDef": [
+      "visit_FunctionDef"
+    ],
+    "visit_ClassDef": [
+      "generic_visit"
+    ],
+    "_build_dot_flow": [
+      "_log",
+      "append",
+      "defaultdict",
+      "enumerate",
+      "items",
+      "join",
+      "len",
+      "open",
+      "run",
+      "sorted",
+      "which",
+      "write"
+    ],
+    "_build_kb_md": [
+      "_log",
+      "abspath",
+      "append",
+      "basename",
+      "defaultdict",
+      "endswith",
+      "get",
+      "items",
+      "join",
+      "keys",
+      "len",
+      "open",
+      "readlines",
+      "relpath",
+      "replace",
+      "rstrip",
+      "sorted",
+      "split",
+      "startswith",
+      "strftime",
+      "strip",
+      "sum",
+      "values",
+      "walk",
+      "write"
+    ],
+    "_action_build": [
+      "_build_call_graph",
+      "_build_ctags",
+      "_build_dot_flow",
+      "_build_kb_md",
+      "_log",
+      "abspath",
+      "dump",
+      "exists",
+      "getmtime",
+      "isdir",
+      "join",
+      "len",
+      "makedirs",
+      "open",
+      "sum",
+      "time",
+      "values"
+    ],
+    "_action_query": [
+      "_action_query",
+      "abspath",
+      "append",
+      "defaultdict",
+      "exists",
+      "get",
+      "items",
+      "join",
+      "len",
+      "load",
+      "lower",
+      "open",
+      "read",
+      "sorted",
+      "split",
+      "startswith"
+    ],
+    "_action_status": [
+      "abspath",
+      "append",
+      "exists",
+      "get",
+      "getmtime",
+      "getsize",
+      "isdir",
+      "join",
+      "len",
+      "listdir",
+      "load",
+      "localtime",
+      "open",
+      "sorted",
+      "strftime",
+      "sum",
+      "values"
+    ],
+    "toolkit_explr": [
+      "_action_build",
+      "_action_query",
+      "_action_status",
+      "info",
+      "repr"
+    ],
+    "toolkit_file": [
+      "Path",
+      "abspath",
+      "append",
+      "dirname",
+      "exists",
+      "info",
+      "is_dir",
+      "iterdir",
+      "join",
+      "lower",
+      "open",
+      "read",
+      "repr",
+      "resolve",
+      "scan_dir",
+      "sorted",
+      "startswith",
+      "str",
+      "warning",
+      "write"
+    ],
+    "scan_dir": [
+      "append",
+      "is_dir",
+      "iterdir",
+      "lower",
+      "scan_dir",
+      "sorted",
+      "startswith"
+    ],
+    "toolkit_gettime": [
+      "info",
+      "now",
+      "strftime"
+    ],
+    "toolkit_input": [
+      "click",
+      "doubleClick",
+      "drag",
+      "dumps",
+      "hotkey",
+      "info",
+      "len",
+      "moveTo",
+      "position",
+      "press",
+      "repr",
+      "rightClick",
+      "scroll",
+      "size",
+      "split",
+      "strip",
+      "typewrite"
+    ],
+    "toolkit_kb": [
+      "Path",
+      "_meta",
+      "any",
+      "append",
+      "exists",
+      "fromtimestamp",
+      "get",
+      "get_config",
+      "glob",
+      "group",
+      "info",
+      "join",
+      "len",
+      "list",
+      "lstrip",
+      "mkdir",
+      "now",
+      "open",
+      "read_text",
+      "rebuild_index",
+      "repr",
+      "run",
+      "sanitize",
+      "search",
+      "sort",
+      "sorted",
+      "split",
+      "stat",
+      "str",
+      "strftime",
+      "strip",
+      "sub",
+      "sum",
+      "toolkit_kb",
+      "unlink",
+      "write",
+      "write_text"
+    ],
+    "sanitize": [
+      "sub"
+    ],
+    "_meta": [
+      "group",
+      "search"
+    ],
+    "rebuild_index": [
+      "_meta",
+      "append",
+      "fromtimestamp",
+      "glob",
+      "join",
+      "len",
+      "lstrip",
+      "now",
+      "read_text",
+      "sorted",
+      "split",
+      "stat",
+      "strftime",
+      "strip",
+      "write_text"
+    ],
+    "toolkit_listen": [
+      "Microphone",
+      "Recognizer",
+      "adjust_for_ambient_noise",
+      "append",
+      "info",
+      "join",
+      "listen",
+      "recognize_google",
+      "recognize_sphinx",
+      "strip"
+    ],
+    "_offset_from_base": [
+      "_solar_days_in_month",
+      "_solar_days_in_year",
+      "range"
+    ],
+    "_lunar_year_total_days": [
+      "_leap_days",
+      "_leap_month",
+      "range"
+    ],
+    "_solar_to_lunar": [
+      "_leap_days",
+      "_leap_month",
+      "_lunar_year_total_days",
+      "_month_days",
+      "_offset_from_base",
+      "len",
+      "range"
+    ],
+    "toolkit_lunar": [
+      "_solar_terms",
+      "_solar_to_lunar",
+      "date",
+      "dumps",
+      "enumerate",
+      "get",
+      "info",
+      "int",
+      "len",
+      "range",
+      "split",
+      "str",
+      "strip",
+      "today"
+    ],
+    "_solar_terms": [
+      "_solar_days_in_month",
+      "_solar_days_in_year",
+      "append",
+      "int",
+      "range"
+    ],
+    "toolkit_memory": [
+      "add_memory",
+      "append",
+      "deactivate_memory",
+      "delete_memory",
+      "enumerate",
+      "get",
+      "get_active_memories",
+      "get_memory_stats",
+      "get_storage",
+      "get_unsummarized_conversations",
+      "info",
+      "isinstance",
+      "join",
+      "len",
+      "repr",
+      "search_memories",
+      "split",
+      "str",
+      "strip"
+    ],
+    "toolkit_mode": [
+      "MemoryManager",
+      "Storage",
+      "_current_mode",
+      "_detect_mode",
+      "_get_existing_mode_memory",
+      "_get_memory_manager",
+      "_set_mode",
+      "add_memory",
+      "delete_memory",
+      "dumps",
+      "get",
+      "get_active_memories",
+      "get_agent",
+      "hasattr",
+      "info",
+      "lower",
+      "repr",
+      "search",
+      "split",
+      "strip"
+    ],
+    "_detect_mode": [
+      "lower",
+      "search",
+      "split",
+      "strip"
+    ],
+    "_get_memory_manager": [
+      "MemoryManager",
+      "Storage"
+    ],
+    "_get_existing_mode_memory": [
+      "get",
+      "get_active_memories"
+    ],
+    "_set_mode": [
+      "add_memory",
+      "delete_memory",
+      "get"
+    ],
+    "_current_mode": [
+      "_get_existing_mode_memory",
+      "get"
+    ],
+    "toolkit_notify": [
+      "get",
+      "info",
+      "init",
+      "is_initted",
+      "new",
+      "repr",
+      "require_version",
+      "run",
+      "set_timeout",
+      "set_urgency",
+      "show",
+      "str"
+    ],
+    "toolkit_ocr": [
+      "MSS",
+      "Path",
+      "Reader",
+      "_get_reader",
+      "_screenshot",
+      "append",
+      "dumps",
+      "exists",
+      "get_config",
+      "hasattr",
+      "home",
+      "info",
+      "int",
+      "join",
+      "len",
+      "list",
+      "max",
+      "min",
+      "mkdir",
+      "open",
+      "readtext",
+      "round",
+      "save",
+      "screenshot",
+      "shot",
+      "split",
+      "str",
+      "strftime",
+      "strip",
+      "tuple"
+    ],
+    "_get_reader": [
+      "Reader",
+      "hasattr",
+      "list"
+    ],
+    "_screenshot": [
+      "MSS",
+      "Path",
+      "get_config",
+      "home",
+      "len",
+      "mkdir",
+      "save",
+      "screenshot",
+      "shot",
+      "str",
+      "strftime"
+    ],
+    "_cached_os_info": [
+      "lru_cache",
+      "machine",
+      "release",
+      "system",
+      "version"
+    ],
+    "toolkit_os_info": [
+      "_cached_os_info",
+      "cache_clear",
+      "info"
+    ],
+    "toolkit_pkg": [
+      "_check_module",
+      "_get_version",
+      "_list_installed",
+      "_pip_install",
+      "all",
+      "append",
+      "get",
+      "get_distribution",
+      "getattr",
+      "import_module",
+      "info",
+      "isinstance",
+      "items",
+      "len",
+      "lower",
+      "replace",
+      "run",
+      "split",
+      "strip",
+      "values"
+    ],
+    "_pip_install": [
+      "isinstance",
+      "run",
+      "split",
+      "strip"
+    ],
+    "_check_module": [
+      "import_module"
+    ],
+    "_get_version": [
+      "get_distribution",
+      "getattr",
+      "import_module",
+      "isinstance"
+    ],
+    "_list_installed": [
+      "_check_module",
+      "_get_version",
+      "append",
+      "items"
+    ],
+    "toolkit_proactive": [
+      "_add_goal",
+      "_check_proactive",
+      "_complete_goal",
+      "_list_goals",
+      "info",
+      "repr",
+      "str"
+    ],
+    "_check_proactive": [
+      "_get_memory_manager",
+      "append",
+      "dumps",
+      "get",
+      "get_active_memories",
+      "len",
+      "lower",
+      "sorted",
+      "str"
+    ],
+    "_add_goal": [
+      "_get_memory_manager",
+      "add_memory",
+      "dumps",
+      "max",
+      "min",
+      "str",
+      "strip"
+    ],
+    "_complete_goal": [
+      "_get_memory_manager",
+      "delete_memory",
+      "dumps",
+      "str"
+    ],
+    "_list_goals": [
+      "_get_memory_manager",
+      "append",
+      "dumps",
+      "get",
+      "get_active_memories",
+      "lower",
+      "sort",
+      "str"
+    ],
+    "toolkit_prompt_evolve": [
+      "append",
+      "evolve",
+      "get",
+      "get_session",
+      "get_stats",
+      "getattr",
+      "info",
+      "join",
+      "len",
+      "list_versions",
+      "manual_set",
+      "repr",
+      "rollback"
+    ],
+    "toolkit_reflection": [
+      "append",
+      "generate_reflection",
+      "get",
+      "get_recent_reflections",
+      "get_session",
+      "get_stats",
+      "getattr",
+      "info",
+      "isinstance",
+      "join",
+      "loads"
+    ],
+    "toolkit_release_version": [
+      "Path",
+      "append",
+      "exists",
+      "get",
+      "info",
+      "join",
+      "len",
+      "now",
+      "read_text",
+      "repr",
+      "search",
+      "start",
+      "strftime",
+      "sub",
+      "toolkit_exec",
+      "write_text"
+    ],
+    "toolkit_run_tests": [
+      "cwd",
+      "glob",
+      "info",
+      "len",
+      "run",
+      "sorted",
+      "str"
+    ],
+    "toolkit_screenshot": [
+      "_crop_image",
+      "_detect_env",
+      "_find_tool",
+      "_list_monitors",
+      "_wayland_fullscreen",
+      "_x11_screenshot",
+      "append",
+      "crop",
+      "exists",
+      "findall",
+      "get",
+      "getsize",
+      "gettempdir",
+      "grab",
+      "info",
+      "isdigit",
+      "join",
+      "len",
+      "lower",
+      "map",
+      "mss",
+      "now",
+      "open",
+      "remove",
+      "rename",
+      "repr",
+      "round",
+      "run",
+      "save",
+      "shot",
+      "split",
+      "startswith",
+      "strftime",
+      "strip",
+      "which"
+    ],
+    "_detect_env": [
+      "get",
+      "lower"
+    ],
+    "_find_tool": [
+      "which"
+    ],
+    "_crop_image": [
+      "_find_tool",
+      "crop",
+      "exists",
+      "getsize",
+      "map",
+      "open",
+      "run",
+      "save",
+      "split"
+    ],
+    "_wayland_fullscreen": [
+      "_detect_env",
+      "_find_tool",
+      "exists",
+      "getsize",
+      "run"
+    ],
+    "_x11_screenshot": [
+      "_crop_image",
+      "_find_tool",
+      "crop",
+      "exists",
+      "getsize",
+      "grab",
+      "map",
+      "mss",
+      "remove",
+      "rename",
+      "run",
+      "save",
+      "shot",
+      "split"
+    ],
+    "_list_monitors": [
+      "_detect_env",
+      "_find_tool",
+      "append",
+      "isdigit",
+      "run",
+      "split",
+      "startswith",
+      "strip"
+    ],
+    "toolkit_search": [
+      "_search_baidu",
+      "_search_duckduckgo",
+      "info",
+      "max",
+      "min",
+      "repr"
+    ],
+    "_search_duckduckgo": [
+      "BeautifulSoup",
+      "Session",
+      "append",
+      "dumps",
+      "enumerate",
+      "find_all",
+      "get",
+      "get_text",
+      "len",
+      "parse_qs",
+      "post",
+      "str",
+      "strip",
+      "sub",
+      "unquote",
+      "update",
+      "urlparse"
+    ],
+    "_search_baidu": [
+      "BeautifulSoup",
+      "Session",
+      "append",
+      "dumps",
+      "find",
+      "get",
+      "get_text",
+      "head",
+      "len",
+      "parse_qs",
+      "quote",
+      "select",
+      "startswith",
+      "str",
+      "update",
+      "urlparse"
+    ],
+    "toolkit_self_evolve": [
+      "_git_clean",
+      "_git_revert",
+      "_git_snap",
+      "_run_tests",
+      "compile",
+      "copy2",
+      "count",
+      "endswith",
+      "exists",
+      "getcwd",
+      "group",
+      "info",
+      "int",
+      "isinstance",
+      "join",
+      "len",
+      "lower",
+      "now",
+      "open",
+      "read",
+      "remove",
+      "replace",
+      "repr",
+      "run",
+      "search",
+      "splitlines",
+      "startswith",
+      "str",
+      "strftime",
+      "strip",
+      "warning",
+      "write"
+    ],
+    "_git_clean": [
+      "len",
+      "run",
+      "splitlines",
+      "startswith",
+      "strip"
+    ],
+    "_git_snap": [
+      "run",
+      "str"
+    ],
+    "_git_revert": [
+      "run"
+    ],
+    "_run_tests": [
+      "group",
+      "int",
+      "lower",
+      "run",
+      "search",
+      "str"
+    ],
+    "toolkit_self_report": [
+      "dirname",
+      "endswith",
+      "exists",
+      "expanduser",
+      "get",
+      "get_config",
+      "getcwd",
+      "info",
+      "isdir",
+      "join",
+      "listdir",
+      "load",
+      "open",
+      "range",
+      "startswith"
+    ],
+    "toolkit_set_topic_title": [
+      "_on_summary_updated",
+      "get_agent",
+      "get_storage",
+      "hasattr",
+      "info",
+      "list_topics",
+      "update_topic_title",
+      "warning"
+    ],
+    "toolkit_skill": [
+      "activate_skill",
+      "append",
+      "auto_activate",
+      "deactivate_skill",
+      "discover_skills",
+      "dumps",
+      "get_instance",
+      "get_skill",
+      "get_status",
+      "info",
+      "join",
+      "keys",
+      "len",
+      "list_skills"
+    ],
+    "toolkit_speak": [
+      "NamedTemporaryFile",
+      "gTTS",
+      "getProperty",
+      "info",
+      "init",
+      "lower",
+      "repr",
+      "run",
+      "runAndWait",
+      "save",
+      "say",
+      "setProperty",
+      "stop",
+      "strip",
+      "unlink"
+    ],
+    "toolkit_subconscious": [
+      "Counter",
+      "NamedTemporaryFile",
+      "Path",
+      "Thread",
+      "_creative_dream",
+      "_cross_link",
+      "_detect_focus",
+      "_digest_conversations",
+      "_digest_memories",
+      "_dream",
+      "_ensure_dir",
+      "_extract_keywords",
+      "_extract_memory_candidates",
+      "_extreme_scenario",
+      "_generate_insights",
+      "_get_db_path",
+      "_is_duplicate_memory",
+      "_is_jieba_available",
+      "_is_tea_agent_cwd",
+      "_pragmatic_analysis",
+      "_read_state",
+      "_reverse_thinking",
+      "_run_cycle",
+      "_send_cycle_summary",
+      "_send_notification",
+      "_set_goals",
+      "_write_state",
+      "abspath",
+      "add",
+      "any",
+      "append",
+      "choice",
+      "close",
+      "commit",
+      "connect",
+      "count",
+      "cursor",
+      "dict",
+      "dirname",
+      "dump",
+      "enumerate",
+      "execute",
+      "exists",
+      "expanduser",
+      "extend",
+      "extract_tags",
+      "fetchall",
+      "findall",
+      "finditer",
+      "fromisoformat",
+      "fromtimestamp",
+      "get",
+      "get_config",
+      "getcwd",
+      "getpid",
+      "glob",
+      "group",
+      "info",
+      "isdir",
+      "isinstance",
+      "isoformat",
+      "join",
+      "len",
+      "load",
+      "loads",
+      "lower",
+      "makedirs",
+      "max",
+      "most_common",
+      "now",
+      "open",
+      "range",
+      "read",
+      "replace",
+      "round",
+      "run",
+      "search",
+      "set",
+      "setLogLevel",
+      "shuffle",
+      "sleep",
+      "sorted",
+      "split",
+      "start",
+      "stat",
+      "str",
+      "strftime",
+      "strip",
+      "sum",
+      "unlink",
+      "write"
+    ],
+    "_is_tea_agent_cwd": [
+      "exists",
+      "getcwd",
+      "isdir",
+      "join",
+      "open",
+      "read"
+    ],
+    "_ensure_dir": [
+      "makedirs"
+    ],
+    "_read_state": [
+      "exists",
+      "getpid",
+      "load",
+      "open"
+    ],
+    "_write_state": [
+      "_ensure_dir",
+      "dirname",
+      "dump",
+      "isoformat",
+      "now",
+      "open"
+    ],
+    "_get_db_path": [
+      "abspath",
+      "dirname",
+      "exists",
+      "expanduser",
+      "join"
+    ],
+    "_digest_memories": [
+      "Counter",
+      "_detect_focus",
+      "_extract_keywords",
+      "_is_jieba_available",
+      "append",
+      "close",
+      "connect",
+      "cursor",
+      "dict",
+      "execute",
+      "exists",
+      "fetchall",
+      "fromisoformat",
+      "get",
+      "join",
+      "len",
+      "now",
+      "replace",
+      "str",
+      "strip",
+      "sum"
+    ],
+    "_detect_focus": [
+      "any",
+      "count",
+      "get",
+      "join",
+      "lower",
+      "str",
+      "sum"
+    ],
+    "_digest_conversations": [
+      "_extract_memory_candidates",
+      "_is_duplicate_memory",
+      "append",
+      "close",
+      "commit",
+      "connect",
+      "cursor",
+      "dict",
+      "execute",
+      "exists",
+      "fetchall",
+      "get",
+      "len",
+      "max",
+      "str"
+    ],
+    "_extract_memory_candidates": [
+      "any",
+      "append",
+      "finditer",
+      "group",
+      "len",
+      "lower",
+      "search",
+      "split",
+      "strip"
+    ],
+    "_is_duplicate_memory": [
+      "execute",
+      "fetchall",
+      "len",
+      "set"
+    ],
+    "_cross_link": [
+      "Path",
+      "append",
+      "close",
+      "connect",
+      "cursor",
+      "dict",
+      "execute",
+      "exists",
+      "fetchall",
+      "fromtimestamp",
+      "get",
+      "glob",
+      "isinstance",
+      "len",
+      "loads",
+      "now",
+      "stat",
+      "str"
+    ],
+    "_generate_insights": [
+      "_ensure_dir",
+      "_send_notification",
+      "append",
+      "enumerate",
+      "get",
+      "join",
+      "len",
+      "now",
+      "open",
+      "strftime",
+      "write"
+    ],
+    "_set_goals": [
+      "add",
+      "append",
+      "get",
+      "set",
+      "sorted"
+    ],
+    "_send_notification": [
+      "NamedTemporaryFile",
+      "close",
+      "run",
+      "unlink",
+      "write"
+    ],
+    "_send_cycle_summary": [
+      "append",
+      "get",
+      "join",
+      "len",
+      "run"
+    ],
+    "_run_cycle": [
+      "_cross_link",
+      "_digest_conversations",
+      "_digest_memories",
+      "_generate_insights",
+      "_get_db_path",
+      "_set_goals",
+      "_write_state",
+      "get",
+      "isoformat",
+      "len",
+      "now"
+    ],
+    "_subconscious_loop": [
+      "_ensure_dir",
+      "_read_state",
+      "_run_cycle",
+      "_send_cycle_summary",
+      "_send_notification",
+      "_write_state",
+      "dirname",
+      "get",
+      "getpid",
+      "isoformat",
+      "now",
+      "range",
+      "sleep",
+      "str"
+    ],
+    "_dream": [
+      "_creative_dream",
+      "_detect_focus",
+      "_ensure_dir",
+      "_extract_keywords",
+      "_get_db_path",
+      "_pragmatic_analysis",
+      "close",
+      "connect",
+      "cursor",
+      "dict",
+      "enumerate",
+      "execute",
+      "exists",
+      "extend",
+      "fetchall",
+      "get",
+      "join",
+      "len",
+      "now",
+      "open",
+      "shuffle",
+      "str",
+      "strftime",
+      "write"
+    ],
+    "_pragmatic_analysis": [
+      "Counter",
+      "any",
+      "append",
+      "get",
+      "join",
+      "len",
+      "lower",
+      "most_common",
+      "str"
+    ],
+    "_creative_dream": [
+      "_extreme_scenario",
+      "_reverse_thinking",
+      "append",
+      "enumerate",
+      "len",
+      "range",
+      "shuffle",
+      "str"
+    ],
+    "_extreme_scenario": [
+      "choice"
+    ],
+    "toolkit_sudo_gui": [
+      "ShellExecuteW",
+      "get",
+      "info",
+      "join",
+      "len",
+      "repr",
+      "run",
+      "strip",
+      "which"
+    ],
+    "toolkit_toggle_reasoning": [
+      "bool",
+      "get_session",
+      "info"
+    ]
+  }
+}

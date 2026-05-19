@@ -4,10 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tea_agent"
-version = "0.9.0"
-description = "A self-evolving AI agent with dynamic toolkit management. Optional: OCR/TTS/ASR."
-readme = "README.md"
-license = "MIT"
+version = "0.9.1"
+description = "A self-evolving AI agent with dynamic toolkit management. Optional: OCR/TTS/ASR."license = "MIT"
 requires-python = ">=3.10"
 authors = [
     {name = "sunkw", email = "sunkwei@gmail.com" }
@@ -33,14 +31,13 @@ dependencies = [
     "jieba>=0.42.0",
 ]
 
-[project.optional-dependencies]
 ocr = ["easyocr>=1.7.0"]
 tts = ["pyttsx3", "gTTS"]
 asr = ["SpeechRecognition"]
 mcp = ["mcp>=1.0.0"]
+js_fetch = ["playwright>=1.40.0"]
 desktop = ["tea_agent[ocr,tts,asr]"]
-all = ["tea_agent[desktop,mcp]"]
-
+all = ["tea_agent[desktop,mcp,js_fetch]"]
 [project.urls]
 Homepage = "https://github.com/sunkwei/tea_agent"
 

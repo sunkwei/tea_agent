@@ -1,5 +1,4 @@
-# TeaAgent v0.8.2
-
+# TeaAgent v0.9.1
 [📖 English Version](README_EN.md)
 
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**系统提示词自我进化**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
@@ -351,8 +350,7 @@ toolkit_listen(lang="zh-CN", timeout=5)   # 录音转文字
 
 ---
 
-## 🔧 工具库 (38 内置 + 用户工具箱)
-
+## 🔧 工具库 (39 内置 + 用户工具箱)
 ### 系统操作
 | 工具 | 功能 |
 |------|------|
@@ -363,6 +361,7 @@ toolkit_listen(lang="zh-CN", timeout=5)   # 录音转文字
 | `toolkit_lunar` | 公历农历转换（1900-2100） |
 | `toolkit_notify` | 跨平台桌面通知 |
 
+| `toolkit_js_fetch` | JS 页面抓取（Playwright 无头浏览器，跨平台自动选 Edge/Chromium/Firefox） |
 ### 文件与项目
 | 工具 | 功能 |
 |------|------|
@@ -568,8 +567,8 @@ main_model:
 
 | 版本 | 关键变化 |
 |------|---------|
-| v0.8.2 | 版本号一致性修复，以 pyproject.toml 为准同步 |
-| v0.7.15 | 双层记忆体系（用户记忆优先级衰减+LLM精调/项目记忆FIFO）、Store Composition拆分9模块、GUI MVC+Tk重构、分层保底+年龄衰减 |
+| v0.9.1 | `toolkit_js_fetch` Playwright 无头浏览器抓取（跨平台）、pyproject.toml 增加 js_fetch 可选依赖 |
+| v0.8.2 | 版本号一致性修复，以 pyproject.toml 为准同步 || v0.7.15 | 双层记忆体系（用户记忆优先级衰减+LLM精调/项目记忆FIFO）、Store Composition拆分9模块、GUI MVC+Tk重构、分层保底+年龄衰减 |
 | v0.8.0 | 聊天图片附件支持、HtmlFrame 图片 base64 渲染、点击图片放大弹窗、GUI 标题含当前目录、工具轮始终显示 |
 | v0.7.23 | 工具箱分层规则（内置/用户）、`_my` 工具路由、README 全面整理 |
 | v0.7.22 | gui_dialogs 导入修复 |

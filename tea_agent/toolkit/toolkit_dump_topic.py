@@ -95,7 +95,7 @@ def toolkit_dump_topic(role: str = "all") -> dict:
                                 lines.append(f"- 回复: {content}")
                         elif role_rd == "tool":
                             content = rd.get("content", "")
-                            lines.append(f"- 📋 工具结果: {content[:200]}..." if len(content) > 200 else f"- 📋 工具结果: {content}")
+                            lines.append(f"- 📋 工具结果: {content}")
                     lines.append("")
             lines.append("---\n")
 

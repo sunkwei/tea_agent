@@ -94,7 +94,7 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                     with lock:
                         results[idx] = {
                             "index": idx, "returncode": p.returncode,
-                            "stdout": stdout[:5000], "stderr": stderr[:1000],
+                            "stdout": stdout, "stderr": stderr,
                             "error": p.returncode != 0,
                         }
                 except subprocess.TimeoutExpired:
@@ -115,7 +115,7 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                         results[idx] = {"index": idx, "returncode": -1, "stdout": "", "stderr": f"⏰ 超时({timeout}s): {cmd_preview}", "error": True}
             except Exception as e:
                 with lock:
-                    results[idx] = {"index": idx, "returncode": -1, "stdout": "", "stderr": str(e)[:500], "error": True}
+                    results[idx] = {"index": idx, "returncode": -1, "stdout": "", "stderr": str(e), "error": True}
 
         workers = min(len(commands), 8)
         with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -169,7 +169,7 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                 cmd_preview += f" ... (+{len(args)-5} args)"
             result = (-1, "", f"⏰ 命令超时被强制终止 (>{effective_timeout}s): {cmd_preview}")
         
-        return _truncate_result(result)
+        return result
 
 
 
@@ -201,7 +201,6 @@ def _sudo_with_gui(app: str, args: list):
         if not password:
             return (1, "", "密码不能为空")
 
-# NOTE: 2026-05-04 12:45:05, self-evolved by tea_agent --- sudo 路径也使用 _truncate_result 截断输出
         try:
             process = subprocess.Popen(
                 ["sudo", "-S"] + list(args),
@@ -221,15 +220,13 @@ def _sudo_with_gui(app: str, args: list):
                 process.wait(timeout=5)
             except Exception:
                 pass
-            result = (-1, "", f"⏰ sudo 命令超时被强制终止 (>180s)")
-        # 清除密码
+            result = (-1, "", "⏰ sudo 命令超时被强制终止 (>180s)")        # 清除密码
         password = "\x00" * len(password)
         del password
-        return _truncate_result(result)
+        return result
 
     # 无 GUI 工具 → 回退到 pkexec（自带弹框）或直接 sudo
     if shutil.which("pkexec"):
-# NOTE: 2026-05-04 12:45:12, self-evolved by tea_agent --- pkexec 和回退路径也使用 _truncate_result
         try:
             process = subprocess.Popen(
                 ["pkexec"] + list(args),
@@ -246,9 +243,8 @@ def _sudo_with_gui(app: str, args: list):
             except Exception:
                 pass
             result = (-1, "", "⏰ pkexec 命令超时被强制终止 (>120s)")
-        return _truncate_result(result)
+        return result
 
-# NOTE: 2026-05-04 12:44:57, self-evolved by tea_agent --- 添加 _truncate_result 函数，智能截断 stdout/stderr
     # 最后回退 — 可能失败（需要 tty）
     try:
         process = subprocess.Popen(
@@ -266,43 +262,7 @@ def _sudo_with_gui(app: str, args: list):
         except Exception:
             pass
         result = (-1, "", f"⏰ 命令超时被强制终止 (>120s): {app}")
-    return _truncate_result(result)
-
-
-def _truncate_result(result, max_lines: int = 80, max_chars: int = 4000):
-    """截断过大的输出。支持 subprocess.CompletedProcess 或 (rc, stdout, stderr) tuple"""
-    if isinstance(result, tuple):
-        rc, stdout, stderr = result
-        stdout = stdout or ""
-        stderr = stderr or ""
-    else:
-        rc = result.returncode
-        stdout = result.stdout or ""
-        stderr = result.stderr or ""
-
-
-    if False:
-        ## by sunkw: 不截断，会严重影响模型判断 ...
-        # 保存原始长度（在截断前）
-        original_stdout_len = len(stdout)
-        original_stderr_len = len(stderr)
-
-        # 截断 stdout
-        if len(stdout) > max_chars:
-            lines = stdout.split("\n")
-            if len(lines) > max_lines:
-                head = "\n".join(lines[:max_lines//2])
-                tail = "\n".join(lines[-max_lines//2:])
-                skipped = len(lines) - max_lines
-                stdout = f"{head}\n... [跳过 {skipped} 行] ...\n{tail}"
-            if len(stdout) > max_chars:
-                stdout = stdout[:max_chars] + f"\n... [截断，原长度 {original_stdout_len} 字符]"
-
-        # stderr 只保留前 500 字符
-        if len(stderr) > 500:
-            stderr = stderr[:500] + f"\n... [截断，原长度 {original_stderr_len} 字符]"
-
-    return (rc, stdout, stderr)
+    return result
 
 
 def meta_toolkit_exec() -> dict:
@@ -347,7 +307,5 @@ def meta_toolkit_exec() -> dict:
                     },
                 },
                 "required": [],
-                "type": "object",
-            },
-        },
+            },        },
     }

@@ -311,8 +311,7 @@ def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
             import subprocess
             r = subprocess.run(params.get("cmd", []), capture_output=True,
                                text=True, timeout=120, cwd=cwd)
-            result = {"ok": r.returncode == 0, "stdout": r.stdout[:500], "stderr": r.stderr[:500]}
-
+            result = {"ok": r.returncode == 0, "stdout": r.stdout, "stderr": r.stderr}
         elif action == "verify_only":
             result = _verify_step(step, cwd)
 

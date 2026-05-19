@@ -537,7 +537,126 @@ def _extract_arch_context(directory, symbol=None):
     return "\n".join(lines)
 
 
-def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol", force="false"):
+# @2026-05-19 gen by claude, 影响分析 — 基于 tree-sitter 的仓库级上下文
+def _action_impact(directory, symbol, filepath=None):
+    """影响分析：修改 symbol 会影响哪些代码？"""
+    from tea_agent.lsp.ts_analyzer import impact_analysis
+    directory = os.path.abspath(directory)
+
+    # 如果没提供 filepath，尝试从索引中查找
+    if not filepath:
+        run_dir = os.path.join(directory, _RUN_DIR)
+        idx_path = os.path.join(run_dir, "symbol_index.json")
+        if os.path.exists(idx_path):
+            with open(idx_path, 'r', encoding='utf-8') as f:
+                index = json.load(f)
+            if symbol in index:
+                entries = index[symbol]
+                filepath = os.path.join(directory, entries[0]['path'])
+            else:
+                # 模糊匹配
+                matches = [k for k in index if symbol.lower() in k.lower()]
+                if len(matches) == 1:
+                    symbol = matches[0]
+                    filepath = os.path.join(directory, index[symbol][0]['path'])
+
+    if not filepath or not os.path.isfile(filepath):
+        return f"❌ 无法定位符号 `{symbol}` 的文件，请提供 filepath 参数"
+
+    result = impact_analysis(directory, filepath, symbol)
+    if not result.get("ok"):
+        return f"❌ {result.get('error', '分析失败')}"
+
+    lines = [f"## 💥 影响分析: `{symbol}`"]
+    lines.append(f"- **定义位置**: `{result['definition']['file']}:{result['definition']['line']}`")
+    lines.append(f"- **类型**: `{result['definition']['type']}`")
+    lines.append(f"- **风险等级**: **{result['risk_level'].upper()}**")
+    lines.append(f"")
+
+    # 同文件其他符号
+    same_file = result.get("same_file_symbols", [])
+    if same_file:
+        lines.append(f"### 📄 同文件其他符号 ({len(same_file)})")
+        for s in same_file[:8]:
+            lines.append(f"- `{s['name']}` ({s['kind']}:{s['line']})")
+        lines.append(f"")
+
+    # 直接调用者
+    callers = result.get("direct_callers", [])
+    if callers:
+        lines.append(f"### 👆 直接调用者 ({len(callers)})")
+        for c in callers[:15]:
+            fname = os.path.relpath(c['file'], directory) if c.get('file') else '?'
+            lines.append(f"- `{c.get('name', '?')}` → `{fname}:{c.get('line', '?')}`")
+        lines.append(f"")
+
+    # 间接调用者
+    indirect = result.get("indirect_callers", [])
+    if indirect:
+        lines.append(f"### 🔄 间接影响 ({len(indirect)})")
+        for c in indirect[:10]:
+            fname = os.path.relpath(c['file'], directory) if c.get('file') else '?'
+            lines.append(f"- `{c.get('name', '?')}` → `{fname}:{c.get('line', '?')}`")
+        lines.append(f"")
+
+    # 它调用了谁
+    callees = result.get("callees", [])
+    if callees:
+        lines.append(f"### 👇 它依赖 ({len(callees)})")
+        lines.append(f"`{', '.join(callees[:12])}`")
+        lines.append(f"")
+
+    lines.append(f"---\n> {result.get('hint', '')}")
+    return '\n'.join(lines)
+
+
+# @2026-05-19 gen by claude, 模块依赖图分析
+def _action_deps(directory):
+    """构建项目模块依赖图，检测循环依赖和孤立模块"""
+    from tea_agent.lsp.ts_analyzer import build_dependency_graph
+    directory = os.path.abspath(directory)
+    result = build_dependency_graph(directory)
+
+    if not result.get("ok"):
+        return f"❌ 依赖分析失败"
+
+    lines = [f"## 📊 模块依赖图"]
+    lines.append(f"- **模块数**: {len(result['modules'])}")
+    lines.append(f"")
+
+    circular = result.get("circular", [])
+    if circular:
+        lines.append(f"### ⚠️ 循环依赖 ({len(circular)})")
+        for cycle in circular[:5]:
+            lines.append(f"- {' → '.join(cycle)}")
+        lines.append(f"")
+
+    orphans = result.get("orphans", [])
+    if orphans:
+        lines.append(f"### 🏝️ 孤立模块 ({len(orphans)})")
+        for o in orphans[:10]:
+            lines.append(f"- `{o}`")
+        lines.append(f"")
+
+    # Top importers
+    top = sorted(result["modules"].items(),
+                 key=lambda x: len(x[1].get("imported_by", [])),
+                 reverse=True)[:10]
+    if top:
+        lines.append(f"### 📌 最被依赖的模块 (Top 10)")
+        for mod, info in top:
+            importers = info.get("imported_by", [])
+            if importers:
+                lines.append(f"- `{mod}` ← {len(importers)} 处引用: `{', '.join(importers[:3])}`")
+        lines.append(f"")
+
+    lines.append(f"---\n> {result.get('hint', '')}")
+    return '\n'.join(lines)
+
+
+def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol", force="false", filepath=None):
+    logger.info(f"toolkit_explr called: action={action!r}, directory={repr(directory)[:80]}, symbol={symbol!r}, query_type={query_type!r}, force={force!r}")
+def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol", force="false", filepath=None):
     logger.info(f"toolkit_explr called: action={action!r}, directory={repr(directory)[:80]}, symbol={symbol!r}, query_type={query_type!r}, force={force!r}")
     force_bool = force in ("true", "True", "1")
     if action == "build":
@@ -545,6 +664,10 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
     elif action == "query":
         if query_type == "arch_context":
             return _extract_arch_context(directory, symbol)
+        if query_type == "impact":
+            return _action_impact(directory, symbol, filepath)
+        if query_type == "deps":
+            return _action_deps(directory)
         return _action_query(directory, symbol, query_type)
     elif action == "status":
         return _action_status(directory)
@@ -553,5 +676,6 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
 
 
 # NOTE: 2026-05-15 13:54:22, self-evolved by tea_agent --- 更新 toolkit_explr 的 meta_toolkit_explr 添加 arch_context
+# @2026-05-19 gen by claude, 新增 impact(影响分析) / deps(依赖图) 查询类型 + filepath 参数
 def meta_toolkit_explr() -> dict:
-    return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=query 查询符号位置/调用者/被调用者；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "query", "status"], "description": "build=构建项目知识库, query=查询符号/调用关系, status=查看知识库状态"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "[query] 要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "arch_context"], "description": "[query] 查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, arch_context=架构上下文", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "[build] true=强制重建，忽略已有索引", "default": "false"}}, "required": ["action"]}}}
+    return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=query 查询符号位置/调用者/被调用者/影响分析/依赖图；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "query", "status"], "description": "build=构建项目知识库, query=查询符号/调用关系/影响/依赖, status=查看知识库状态"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "[query] 要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "arch_context", "impact", "deps"], "description": "[query] 查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, arch_context=架构上下文, impact=影响分析, deps=模块依赖图", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "[build] true=强制重建，忽略已有索引", "default": "false"}, "filepath": {"type": "string", "description": "[impact] 符号所在的文件路径"}}, "required": ["action"]}}}

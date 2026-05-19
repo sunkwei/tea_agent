@@ -1,31 +1,51 @@
+# NOTE: 2026-05-19 10:00:00, self-evolved by tea_agent --- 增强代码搜索：集成项目内全文搜索（ripgrep/grep）和符号搜索
 # NOTE: 2026-05-02 09:58:03, self-evolved by tea_agent --- toolkit_search 增加百度搜索引擎支持，通过 engine 参数切换
 # @2026-05-01 gen by tea_agent, 互联网搜索（DuckDuckGo + 百度）
-# version: 1.1.0
+# version: 1.2.0
 
 import logging
 
 # NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
-def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: str = "duckduckgo"):
-    """互联网搜索，支持 DuckDuckGo 和百度两个搜索引擎。
-    
+def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: str = "duckduckgo",
+                   search_type: str = "web", root_path: str = "", glob_pattern: str = ""):
+    """
+    搜索工具，支持互联网搜索和项目内代码搜索。
+
+    search_type='web' (默认): 互联网搜索
+        toolkit_search(query='Python tutorial', engine='duckduckgo')
+
+    search_type='code': 项目内全文搜索（类似 grep/ripgrep）
+        toolkit_search(query='def login', search_type='code', root_path='/path/to/project', glob_pattern='*.py')
+
+    search_type='symbol': 符号搜索（查找函数/类定义）
+        toolkit_search(query='MyClass', search_type='symbol', root_path='/path/to/project')
+
     Args:
         query: 搜索关键词
-        max_results: 返回结果数量上限，默认10，最大20
-        lang: 语言偏好，如 zh-cn, en，空=不限
-        engine: 搜索引擎，duckduckgo（默认）或 baidu
+        max_results: 返回结果数量上限，默认10，最大50
+        lang: 语言偏好，如 zh-cn, en，空=不限（仅 web 搜索）
+        engine: 搜索引擎，duckduckgo（默认）或 baidu（仅 web 搜索）
+        search_type: 搜索类型，web/code/symbol，默认 web
+        root_path: 搜索根目录（code/symbol 搜索需要）
+        glob_pattern: 文件过滤模式，如 '*.py'（仅 code 搜索）
     """
-    logger.info(f"toolkit_search called: query={repr(query)[:80]}, max_results={max_results!r}, lang={lang!r}, engine={engine!r}")
+    logger.info(f"toolkit_search called: query={repr(query)[:80]}, search_type={search_type!r}")
 
     import json
-    
-    max_results = min(max(max_results, 1), 20)
-    
-    if engine == "baidu":
-        return _search_baidu(query, max_results)
+
+    max_results = min(max(max_results, 1), 50)
+
+    if search_type == "code":
+        return _search_codebase(query, root_path, glob_pattern, max_results)
+    elif search_type == "symbol":
+        return _search_symbol(query, root_path, max_results)
     else:
-        return _search_duckduckgo(query, max_results, lang)
+        if engine == "baidu":
+            return _search_baidu(query, max_results)
+        else:
+            return _search_duckduckgo(query, max_results, lang)
 
 
 def _search_duckduckgo(query: str, max_results: int, lang: str):
@@ -203,4 +223,200 @@ def _search_baidu(query: str, max_results: int):
 
 
 def meta_toolkit_search() -> dict:
-    return {"type": "function", "function": {"name": "toolkit_search", "description": "互联网搜索工具，通过DuckDuckGo或百度搜索引擎搜索网页。返回结果包含标题、URL和摘要。无需API key。", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "搜索关键词，如 'Python async tutorial'"}, "max_results": {"type": "integer", "description": "返回结果数量上限，默认10，最大20", "default": 10}, "lang": {"type": "string", "description": "语言偏好，如 zh-cn, en, 空=不限。仅 DuckDuckGo 引擎支持", "default": ""}, "engine": {"type": "string", "enum": ["duckduckgo", "baidu"], "description": "搜索引擎，默认 duckduckgo", "default": "duckduckgo"}}, "required": ["query"]}}}
+    return {"type": "function", "function": {"name": "toolkit_search", "description": "搜索工具，支持互联网搜索（DuckDuckGo/百度）和项目内代码搜索（全文搜索/符号搜索）。", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "搜索关键词，如 'Python async tutorial' 或 'def login'"}, "max_results": {"type": "integer", "description": "返回结果数量上限，默认10，最大50", "default": 10}, "lang": {"type": "string", "description": "语言偏好，如 zh-cn, en, 空=不限。仅 web 搜索支持", "default": ""}, "engine": {"type": "string", "enum": ["duckduckgo", "baidu"], "description": "搜索引擎，默认 duckduckgo。仅 web 搜索", "default": "duckduckgo"}, "search_type": {"type": "string", "enum": ["web", "code", "symbol"], "description": "搜索类型: web=互联网搜索, code=代码全文搜索, symbol=符号搜索", "default": "web"}, "root_path": {"type": "string", "description": "搜索根目录路径。code/symbol 搜索需要"}, "glob_pattern": {"type": "string", "description": "文件过滤模式，如 '*.py'。仅 code 搜索"}}, "required": ["query"]}}}
+
+
+def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results: int):
+    """项目内全文搜索（优先使用 ripgrep，回退到 Python 实现）"""
+    import json
+    import os
+    import re
+    import subprocess
+
+    if not root_path:
+        return (1, "", "root_path 不能为空（代码搜索需要）")
+
+    if not os.path.isdir(root_path):
+        return (1, "", f"目录不存在: {root_path}")
+
+    results = []
+
+    # 尝试使用 ripgrep (rg)
+    rg_cmd = None
+    for cmd in ["rg", "grep"]:
+        import shutil
+        if shutil.which(cmd):
+            rg_cmd = cmd
+            break
+
+    if rg_cmd == "rg":
+        # 使用 ripgrep
+        rg_args = ["--no-heading", "--line-number", "--color=never", "-C", "2",  # 上下文 2 行
+                   "--max-count", str(max_results), "--json", query, root_path]
+
+        if glob_pattern:
+            rg_args.insert(-2, "--glob")
+            rg_args.insert(-2, glob_pattern)
+
+        try:
+            result = subprocess.run(rg_args, capture_output=True, text=True, timeout=30)
+            for line in result.stdout.strip().split('\n'):
+                if not line:
+                    continue
+                try:
+                    parsed = json.loads(line)
+                    if parsed.get('type') == 'match':
+                        data = parsed['data']
+                        path = data['path']['text']
+                        for match in data.get('submatches', []):
+                            line_text = data['lines']['text']
+                            line_num = data['line_number']
+                            results.append({
+                                "file": os.path.relpath(path, root_path),
+                                "line": line_num,
+                                "content": line_text.strip(),
+                                "match": match.get('match', {}).get('text', ''),
+                            })
+                            if len(results) >= max_results:
+                                break
+                except json.JSONDecodeError:
+                    continue
+        except subprocess.TimeoutExpired:
+            return (1, "", "代码搜索超时")
+        except Exception as e:
+            # ripgrep 失败，回退到 Python 实现
+            logger.info(f"ripgrep 失败，回退到 Python 实现: {e}")
+            return _search_codebase_python(query, root_path, glob_pattern, max_results)
+
+    else:
+        # 直接使用 Python 实现
+        return _search_codebase_python(query, root_path, glob_pattern, max_results)
+
+    if not results:
+        return (0, "[]", "未找到匹配的代码")
+
+    return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+
+
+def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_results: int):
+    """Python 实现的代码全文搜索（ripgrep 不可用时的回退方案）"""
+    import json
+    import os
+    import re
+    import fnmatch
+
+    results = []
+    pattern = re.compile(re.escape(query), re.IGNORECASE)
+
+    for root, dirs, files in os.walk(root_path):
+        # 跳过隐藏目录和常见忽略目录
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in 
+                   ('node_modules', '__pycache__', '.git', 'venv', 'env', 'dist', 'build')]
+
+        for filename in files:
+            if glob_pattern and not fnmatch.fnmatch(filename, glob_pattern):
+                continue
+
+            if not filename.endswith(('.py', '.js', '.ts', '.jsx', '.tsx', '.java', '.cpp', '.c', '.h', '.go', '.rs', '.rb', '.md', '.txt', '.yaml', '.yml', '.json', '.xml', '.html', '.css')):
+                continue
+
+            filepath = os.path.join(root, filename)
+            try:
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    lines = f.readlines()
+
+                for line_num, line in enumerate(lines, 1):
+                    if pattern.search(line):
+                        results.append({
+                            "file": os.path.relpath(filepath, root_path),
+                            "line": line_num,
+                            "content": line.strip(),
+                            "match": query,
+                        })
+                        if len(results) >= max_results:
+                            return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+            except Exception:
+                continue
+
+    if not results:
+        return (0, "[]", "未找到匹配的代码")
+
+    return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+
+
+def _search_symbol(query: str, root_path: str, max_results: int):
+    """符号搜索（查找函数/类定义）"""
+    import json
+    import os
+    import ast
+
+    if not root_path:
+        return (1, "", "root_path 不能为空（符号搜索需要）")
+
+    if not os.path.isdir(root_path):
+        return (1, "", f"目录不存在: {root_path}")
+
+    results = []
+    abs_root_path = os.path.abspath(root_path)
+
+    # 搜索的目录列表
+    search_dirs = [abs_root_path]
+    # 如果 root_path 是 toolkit 目录，也搜索其父目录（tlk.py 等在上层）
+    if 'toolkit' in abs_root_path.replace('\\', '/'):
+        parent_dir = os.path.dirname(abs_root_path)
+        if os.path.isdir(parent_dir) and parent_dir not in search_dirs:
+            search_dirs.append(parent_dir)
+
+    for search_dir in search_dirs:
+        if not os.path.isdir(search_dir):
+            continue
+            
+        for root, dirs, files in os.walk(search_dir):
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in 
+                       ('node_modules', '__pycache__', '.git', 'venv', 'env', 'dist', 'build')]
+
+            for filename in files:
+                if not filename.endswith('.py'):
+                    continue
+
+                filepath = os.path.join(root, filename)
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        source = f.read()
+
+                    tree = ast.parse(source, filename=filepath)
+
+                    for node in ast.walk(tree):
+                        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                            if node.name == query or query in node.name:
+                                # 相对于 abs_root_path 计算相对路径
+                                rel_path = os.path.relpath(filepath, abs_root_path)
+                                results.append({
+                                    "file": rel_path,
+                                    "line": node.lineno,
+                                    "type": "class" if isinstance(node, ast.ClassDef) else "function",
+                                    "name": node.name,
+                                    "args": _extract_args(node),
+                                })
+                                if len(results) >= max_results:
+                                    return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+
+                except Exception as e:
+                    continue
+
+    if not results:
+        return (0, "[]", f"未找到符号: {query}")
+
+    return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+
+
+def _extract_args(node):
+    """从 AST 节点提取函数参数"""
+    args = []
+    for arg in node.args.args:
+        args.append(arg.arg)
+    if node.args.vararg:
+        args.append(f"*{node.args.vararg.arg}")
+    if node.args.kwarg:
+        args.append(f"**{node.args.kwarg.arg}")
+    return args

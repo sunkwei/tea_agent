@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tea_agent"
-version = "0.8.5"
+version = "0.9.0"
 description = "A self-evolving AI agent with dynamic toolkit management. Optional: OCR/TTS/ASR."
 readme = "README.md"
 license = "MIT"
@@ -30,13 +30,16 @@ dependencies = [
     "requests>=2.30.0",
     "beautifulsoup4>=4.12.0",
     "tkhtmlview",
+    "jieba>=0.42.0",
 ]
 
 [project.optional-dependencies]
 ocr = ["easyocr>=1.7.0"]
 tts = ["pyttsx3", "gTTS"]
 asr = ["SpeechRecognition"]
+mcp = ["mcp>=1.0.0"]
 desktop = ["tea_agent[ocr,tts,asr]"]
+all = ["tea_agent[desktop,mcp]"]
 
 [project.urls]
 Homepage = "https://github.com/sunkwei/tea_agent"

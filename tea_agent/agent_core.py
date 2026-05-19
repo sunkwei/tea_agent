@@ -365,7 +365,9 @@ class AgentCore:
             conversation_id=conv_id, ai_msg=ai_msg,
             is_func_calling=used_tools, rounds=rounds if rounds else None,
         )
+# NOTE: 2026-05-18 14:38:16, self-evolved by tea_agent --- 修复 overflow 变量作用域：提前初始化 overflow=None
         # Level 2 push: push OLD L1 (previous conversation) to Level 2
+        overflow = None
         prev_convs = self.db.get_conversations(topic_id, limit=2, include_rounds=True)
         if len(prev_convs) >= 2:
             old_l1 = prev_convs[-2]
@@ -375,9 +377,9 @@ class AgentCore:
             overflow = self.db.push_to_level2(
                 topic_id, old_l1["user_msg"], old_l1["ai_msg"], files=old_files
             )
+# NOTE: 2026-05-18 14:37:39, self-evolved by tea_agent --- 将 auto_summary 和 L3 摘要异步化，避免阻塞 generating 状态恢复
             if overflow:
                 logger.info(f"Level 2 overflow {len(overflow)} -> L3 (topic={topic_id})")
-                self._update_level3_summary(topic_id, overflow)
         # Token stats
         usage = self.sess._last_usage
         cheap_usage = self.sess._last_cheap_usage
@@ -399,7 +401,14 @@ class AgentCore:
                 cheap_completion_tokens=cheap_usage.get("completion_tokens", 0),
                 embedding_tokens=emb_tokens, embedding_prompt_tokens=emb_prompt,
             )
-        self._auto_summary(topic_id)
+        # NOTE: 2026-05-18 gen by tea_agent, 摘要异步化：L3压缩+auto_summary 放到后台线程
+        # 避免阻塞 generating 状态恢复，用户可立即发送新消息
+# NOTE: 2026-05-18 14:38:28, self-evolved by tea_agent --- 修复异步线程参数中的hack表达式
+        threading.Thread(
+            target=self._do_async_summaries,
+            args=(topic_id, overflow),
+            daemon=True
+        ).start()
         # 2026-05-17 gen by tea_agent, 主题漂移累计达阈值时建议新主题
         self._suggest_new_topic_if_needed(topic_id)
         self._check_pending_restart()
@@ -551,9 +560,21 @@ class AgentCore:
             self.sess._level2 = []
         self.current_topic_id = tid
 
+# NOTE: 2026-05-18 14:38:45, self-evolved by tea_agent --- 新增 _do_async_summaries 方法：后台线程中执行 L3 压缩和 auto_summary
     # ═══════════════════════════════════════════════
     # 摘要
     # ═══════════════════════════════════════════════
+    def _do_async_summaries(self, topic_id: str, overflow: list):
+        """后台线程：执行 L3 增量摘要 + auto_summary，完成后触发 UI 回调。
+        NOTE: 2026-05-18 gen by tea_agent, 摘要异步化，避免阻塞 generating 恢复。
+        """
+        try:
+            if overflow:
+                self._update_level3_summary(topic_id, overflow)
+            self._auto_summary(topic_id)
+        except Exception as e:
+            logger.warning(f"异步摘要失败 (topic={topic_id}): {type(e).__name__}: {e}")
+
     def _auto_summary(self, topic_id: str = None):
         """自动生成主题摘要。CLI/GUI 共用核心逻辑，子类加 UI 回调。"""
         if topic_id is None:

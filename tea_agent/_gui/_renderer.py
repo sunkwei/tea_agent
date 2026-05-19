@@ -71,6 +71,12 @@ class ChatRenderer:
                 print(f"[_html_render WARN] 修复后仍有问题: {diag2}，尝试继续渲染")
                 cleaned = fixed
         # 3. 渲染
+        # NOTE: 2026-05-20 gen by tea_agent, 调试：渲染前打印完整 HTML 到终端，便于排错
+        print("=" * 60)
+        print("HTML_BYTES_BEGIN")
+        print(cleaned)
+        print("HTML_BYTES_END")
+        print("=" * 60)
         try:
             self.gui.chat_view.load_html(cleaned)
         except Exception as e:
@@ -107,7 +113,8 @@ class ChatRenderer:
     def _render_and_show_chat(self):
         """会话完成后渲染：历史轮次链接表 + 最新轮内容"""
         msgs = self._filtered_messages()
-        print("[DIAG] _render_and_show_chat: total filtered msgs=" + str(len(msgs)))
+# NOTE: 2026-05-18 13:08:25, self-evolved by tea_agent --- Remove debug print spam in _render_and_show_chat
+        # [DIAG] removed: was printing len(msgs) on every render
 
         # 分组为轮次
         rounds = self._group_into_rounds(msgs)
@@ -125,7 +132,8 @@ class ChatRenderer:
 
         def _on_done(html):
             if HAS_TKINTERWEB:
-                print("[RENDER] " + str(len(html)) + " chars")
+# NOTE: 2026-05-18 13:08:31, self-evolved by tea_agent --- Remove RENDER chars debug print
+                # [RENDER] removed: was printing html char count on every render
                 self._html_render(html)
                 self._switch_display("chat_view")
                 self.gui.root.after(300, self.scroll_to_bottom)
@@ -181,7 +189,8 @@ class ChatRenderer:
 
         def _on_done(html):
             if HAS_TKINTERWEB:
-                print("[RENDER ROUND " + str(round_idx) + "] " + str(len(html)) + " chars")
+    # NOTE: 2026-05-18 13:08:44, self-evolved by tea_agent --- Remove RENDER ROUND debug print
+            # [RENDER ROUND] removed: debug print
                 self._html_render(html)
                 self._switch_display("chat_view")
                 self.gui.root.after(200, self.scroll_to_bottom)
@@ -260,6 +269,9 @@ class ChatRenderer:
         round_md = _chat_to_markdown(round_msgs, image_cache=self.gui._image_cache)
         if HAS_TKINTERWEB:
             round_body = _md_lib.markdown(round_md, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
+            # NOTE: 2026-05-20 gen by tea_agent, 修复双重转义 (html_mod.escape + codehilite)
+            from tea_agent._gui._markdown import _fix_double_escape_in_code
+            round_body = _fix_double_escape_in_code(round_body)
             css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
             full_html = "<html><head>" + css + "</head><body>" + table_html + round_body + "</body></html>"
         else:

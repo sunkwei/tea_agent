@@ -6,6 +6,8 @@
 from abc import ABC, abstractmethod
 from typing import List, Dict, Callable, Tuple
 import logging
+import os
+import sys
 
 logger = logging.getLogger("basesession")
 
@@ -14,6 +16,21 @@ class BaseChatSession(ABC):
     聊天会话抽象基类
     定义公共接口和共享功能
     """
+
+
+    # NOTE: 2026-05-20 gen by tea_agent, 自适应阈值常量：源码不截断，文本/日志16KB
+    _KB_THRESHOLD: int = 65536          # toolkit_kb 输出阈值: 64KB
+    _DEFAULT_TOOL_THRESHOLD: int = 2048  # 默认工具输出阈值: 2KB
+    _TEXT_FILE_THRESHOLD: int = 16384    # 文本/日志文件阈值: 16KB
+    _SOURCE_EXTENSIONS = {'.py', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.go',
+                          '.ts', '.js', '.jsx', '.tsx', '.vue', '.swift', '.kt',
+                          '.scala', '.rb', '.php', '.cs', '.sql', '.sh', '.bash',
+                          '.ps1', '.bat', '.cmd', '.xml', '.yaml', '.yml', '.toml',
+                          '.json', '.cfg', '.ini', '.conf', '.cmake', '.mk',
+                          '.r', '.jl', '.lua', '.ex', '.exs', '.erl', '.hrl',
+                          '.elm', '.dart', '.nim', '.zig', '.v', '.sv', '.vhdl'}
+    _TEXT_EXTENSIONS = {'.txt', '.log', '.md', '.rst', '.csv', '.tsv', '.text',
+                        '.out', '.err', '.stdout', '.stderr', '.nohup'}
 
     def __init__(
         self,
@@ -112,11 +129,12 @@ class BaseChatSession(ABC):
     @staticmethod
     def _compress_tool_content(content: str, max_chars: int = 2048) -> str:
         """
-        L1 工具输出压缩：首尾各 1024 字节，按换行对齐。
+        L1 工具输出压缩：首尾各 max_chars//2 字节，按换行对齐。
 
         策略：
         - 短输出（≤max_chars 字节）：原样保留
-        - 长输出：保留首 1024 字节 + 尾 1024 字节，按换行边界对齐避免截断半行
+        - max_chars >= sys.maxsize：不截断，完整返回
+        - 长输出：保留首尾各 half 字节，按换行边界对齐避免截断半行
 
         Args:
             content: 原始工具输出
@@ -128,6 +146,10 @@ class BaseChatSession(ABC):
         if not content:
             return content
 
+        # 不限长：完整返回
+        if max_chars >= sys.maxsize:
+            return content
+
         # 编码为字节以准确计算字节长度（与 API token 计数一致）
         raw = content.encode("utf-8")
         total_bytes = len(raw)
@@ -135,7 +157,7 @@ class BaseChatSession(ABC):
         if total_bytes <= max_chars:
             return content
 
-        half = max_chars // 2  # 各保留 1024 字节
+        half = max_chars // 2
 
         # 前半部分：从 half 位置向前找最近换行
         head_end = half
@@ -287,6 +309,57 @@ class BaseChatSession(ABC):
         result = _json.dumps(compressed_obj, ensure_ascii=False)
         return result
 
+    # NOTE: 2026-05-20 gen by tea_agent, 根据工具名和参数中的文件路径自适应确定输出截断阈值
+    @staticmethod
+    def _guess_tool_threshold(tool_name: str, arguments: str) -> int:
+        """
+        根据工具名称和参数推断合适的输出截断阈值。
+        
+        策略：
+        - toolkit_kb → 64KB
+        - toolkit_file read 源码文件 → 不截断 (sys.maxsize)
+        - toolkit_file read 文本/日志 → 16KB
+        - 其他 → 2KB 默认
+        """
+        import json as _json_gt
+        
+        if tool_name == 'toolkit_kb':
+            return BaseChatSession._KB_THRESHOLD
+        
+        # 尝试从参数中提取文件路径/扩展名
+        try:
+            args = _json_gt.loads(arguments) if isinstance(arguments, str) else (arguments or {})
+        except Exception:
+            return BaseChatSession._DEFAULT_TOOL_THRESHOLD
+        
+        if not isinstance(args, dict):
+            return BaseChatSession._DEFAULT_TOOL_THRESHOLD
+        
+        # 查找可能的文件路径参数
+        filepath = None
+        for key in ('filename', 'path', 'file', 'file_path', 'target'):
+            val = args.get(key, '')
+            if isinstance(val, str) and val:
+                filepath = val
+                break
+        
+        if not filepath:
+            return BaseChatSession._DEFAULT_TOOL_THRESHOLD
+        
+        # 提取扩展名并匹配
+        ext = os.path.splitext(filepath)[1].lower()
+        basename = os.path.basename(filepath).lower()
+        
+        if ext in BaseChatSession._SOURCE_EXTENSIONS:
+            return sys.maxsize  # 源码文件：不截断
+        if ext in BaseChatSession._TEXT_EXTENSIONS:
+            return BaseChatSession._TEXT_FILE_THRESHOLD  # 文本/日志：16KB
+        # 无扩展名的常见文本文件
+        if basename in ('makefile', 'dockerfile', 'license', 'changelog', 'readme', 'authors'):
+            return BaseChatSession._TEXT_FILE_THRESHOLD
+        
+        return BaseChatSession._DEFAULT_TOOL_THRESHOLD
+
     # NOTE: 2026-05-20 gen by tea_agent, L1压缩：对 assistant tool_calls 参数截断 + 保留最终 assistant 消息完整
     @staticmethod
     def _compress_tool_rounds(rounds: List[Dict]) -> List[Dict]:
@@ -308,6 +381,21 @@ class BaseChatSession(ABC):
         """
         if not rounds:
             return rounds
+
+        import json as _json_cr
+
+        # ── 首遍扫描：收集 tool_call_id → (tool_name, arguments) ──
+        tc_map: Dict[str, tuple] = {}  # tool_call_id → (tool_name, arguments_str)
+        for rd in rounds:
+            if rd.get("role") == "assistant" and rd.get("tool_calls"):
+                for tc in rd["tool_calls"]:
+                    tc_id = tc.get("id", "")
+                    func = tc.get("function", {})
+                    if tc_id and isinstance(func, dict):
+                        tc_map[tc_id] = (
+                            func.get("name", ""),
+                            func.get("arguments", "")
+                        )
 
         n = len(rounds)
         result = []
@@ -348,10 +436,13 @@ class BaseChatSession(ABC):
                     result.append(dict(rd))
 
             elif role == "tool":
-                # tool 消息：压缩输出
+                # tool 消息：根据工具名和参数自适应压缩输出
                 compressed = dict(rd)
+                tc_id = rd.get("tool_call_id", "")
+                tool_name, args_str = tc_map.get(tc_id, ("", ""))
+                threshold = BaseChatSession._guess_tool_threshold(tool_name, args_str)
                 compressed["content"] = BaseChatSession._compress_tool_content(
-                    rd.get("content", "")
+                    rd.get("content", ""), max_chars=threshold
                 )
                 result.append(compressed)
 

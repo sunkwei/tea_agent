@@ -1,0 +1,155 @@
+"""
+@2026-07-07 gen by tea_agent, UI 创建模块
+从 gui.py L892-1030 提取：TkGUI._create_ui() 界面构建逻辑
+"""
+
+import tkinter as tk
+from tkinter import font as tkFont, ttk, scrolledtext, Frame
+import logging
+
+if __import__('typing').TYPE_CHECKING:
+    from tea_agent.gui import TkGUI
+
+from ._fonts import SYSTEM_FONT, MONO_FONT, _fs, _DEFAULT_FONT_SIZE
+
+try:
+    from tkinterweb import HtmlFrame
+    HAS_TKINTERWEB = True
+except ImportError:
+    HAS_TKINTERWEB = False
+
+logger = logging.getLogger("main_db_gui")
+
+
+class UIBuilder:
+    """界面构建器：创建所有 Tk widgets、布局、样式、快捷键"""
+
+    def __init__(self, gui):
+        self.gui = gui
+
+    def build(self):
+        """创建界面 — 从 gui.py _create_ui 提取"""
+        gui = self.gui
+        main_split = ttk.PanedWindow(gui.root, orient=tk.HORIZONTAL)
+        main_split.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
+
+        # ===== 左侧面板 =====
+        left = Frame(main_split, width=220)
+        main_split.add(left, weight=1)
+
+        # NOTE: 2026-05-08 gen by tea_agent, 主题列表字体调整
+        ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, _fs(14), "bold")).pack(pady=5)
+        _topic_font = tkFont.Font(family=SYSTEM_FONT, size=_fs(12))
+        _topic_style = ttk.Style()
+        _topic_style.configure("Topic.Treeview", rowheight=_fs(30))
+        gui.topic_list = ttk.Treeview(left, show="tree", style="Topic.Treeview",
+                                       selectmode="browse", height=12)
+        gui.topic_list.tag_configure("topic_item", font=_topic_font)
+        gui.topic_list.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        gui.topic_list.bind("<<TreeviewSelect>>", gui.on_topic_select)
+        # NOTE: 2026-05-08 gen by tea_agent, 鼠标悬停显示主题日期tooltip
+        gui.topic_list.bind("<Motion>", gui._on_topic_hover, add="+")
+        gui.topic_list.bind("<Leave>", gui._on_topic_leave, add="+")
+        gui._topic_cache = []           # 缓存 list_topics 原始数据
+        gui._topic_tooltip = None       # tooltip Toplevel
+        gui._topic_hover_after = None   # debounce after_id
+        ttk.Button(left, text="➕ 新建主题", command=gui.new_topic).pack(
+            fill=tk.X, padx=4, pady=2)
+        ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
+        ttk.Button(left, text="📁 主题管理", command=gui.open_topic_dialog).pack(
+            fill=tk.X, padx=4, pady=2)
+        ttk.Button(left, text="🧠 记忆管理", command=gui.open_memory_dialog).pack(
+            fill=tk.X, padx=4, pady=2)
+        ttk.Button(left, text="⚙️ 配置", command=gui.open_config_dialog).pack(
+            fill=tk.X, padx=4, pady=2)
+
+        # ===== 右侧面板 =====
+        right = Frame(main_split)
+        main_split.add(right, weight=5)
+
+        # 状态栏
+        gui.status_var = tk.StringVar(value="就绪")
+        status_frame = ttk.Frame(right)
+        status_frame.pack(anchor=tk.E, padx=6, fill=tk.X)
+        ttk.Label(status_frame, textvariable=gui.status_var,
+                  foreground="#666").pack(side=tk.LEFT, padx=(0, 20))
+
+        # 聊天区域
+        gui.chat_split = ttk.PanedWindow(right, orient=tk.VERTICAL)
+        gui.chat_split.pack(fill=tk.BOTH, expand=True)
+
+        chat_frame = Frame(gui.chat_split)
+        gui.chat_split.add(chat_frame, weight=3)
+
+        gui.console = scrolledtext.ScrolledText(
+            chat_frame, font=(SYSTEM_FONT, _fs(15)), bg="white", fg="black", wrap=tk.WORD
+        )
+        gui.console.config(state=tk.DISABLED)
+
+        if HAS_TKINTERWEB:
+            gui.chat_view = HtmlFrame(chat_frame, messages_enabled=False, on_link_click=gui._on_history_link_click)
+        else:
+            gui.chat_view = scrolledtext.ScrolledText(
+                chat_frame, font=(SYSTEM_FONT, _fs(15)), bg="#fafafa", fg="black", wrap=tk.WORD
+            )
+            gui.chat_view.config(state=tk.DISABLED)
+
+        gui._show_mode = "console"
+        gui._switch_display("console")
+
+        # 输入区域
+        input_frame = Frame(gui.chat_split)
+        gui.chat_split.add(input_frame, weight=1)
+        gui.input_box = scrolledtext.ScrolledText(
+            input_frame, font=(SYSTEM_FONT, _fs(16)), height=4, bg="#f8f8f8"
+        )
+        gui.input_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+        # NOTE: 2026-05-20 gen by tea_agent, 底部工具栏
+        toolbar = ttk.Frame(input_frame)
+        toolbar.pack(fill=tk.X, padx=4, pady=(0, 2))
+
+        # 左侧：图片附件
+        gui._img_btn = ttk.Button(toolbar, text="📎 图片", command=gui.images.attach)
+        gui._img_btn.pack(side=tk.LEFT)
+        gui._img_label = ttk.Label(toolbar, text="", foreground="#888")
+        gui._img_label.pack(side=tk.LEFT, padx=(4, 2))
+        gui._clear_img_btn = ttk.Button(toolbar, text="✕ 清除", command=gui.images.clear)
+
+        # 中间：视图切换
+        gui._raw_check_btn = ttk.Checkbutton(
+            toolbar, text="📋 纯文本视图", variable=gui._raw_view,
+            command=gui._toggle_raw_view
+        )
+
+        # 右侧：提示文字
+        ttk.Label(toolbar, text="Enter 发送  •  Shift+Enter 换行  •  ESC 打断",
+                  foreground="#888", font=(SYSTEM_FONT, _fs(10)))\
+            .pack(side=tk.RIGHT, padx=6)
+
+        # 样式配置
+        gui.console.tag_configure("user", foreground="#0055cc")
+        gui.console.tag_configure("ai", foreground="black")
+        gui.console.tag_configure("tool", foreground="#d68000")
+        gui.console.tag_configure(
+            "title", foreground="#0066cc", font=(SYSTEM_FONT, _fs(14), "bold"))
+        gui.console.tag_configure("notice", foreground="#008800")
+        gui.console.tag_configure("error", foreground="#cc0000")
+        gui.console.tag_configure("think", foreground="#888888", font=(SYSTEM_FONT, _fs(13), "italic"))
+
+        # 快捷键绑定
+        gui.input_box.bind("<Return>", gui.send)
+        gui.input_box.bind("<Shift-Return>", gui.newline)
+        gui.root.bind("<Escape>", gui.interrupt)
+
+        # HtmlFrame 缩放快捷键
+        if HAS_TKINTERWEB:
+            gui.root.bind("<Control-equal>", gui.zoom_in)
+            gui.root.bind("<Control-plus>", gui.zoom_in)
+            gui.root.bind("<Control-minus>", gui.zoom_out)
+            gui.root.bind("<Control-underscore>", gui.zoom_out)
+
+        # HtmlFrame 历史轮次快捷键
+        if HAS_TKINTERWEB:
+            gui.root.bind("<Alt-Up>", gui._history_prev_round)
+            gui.root.bind("<Alt-Down>", gui._history_next_round)

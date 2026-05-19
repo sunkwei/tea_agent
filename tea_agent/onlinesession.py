@@ -112,6 +112,9 @@ class OnlineToolSession(
         SessionAPIMixin.__init__(self)
         SessionMemoryMixin.__init__(self)
 
+        max_iterations = 50
+
+
         logger.info(f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}")
 
         self.toolkit = toolkit
@@ -844,8 +847,6 @@ class OnlineToolSession(
                     "interrupted": True,
                 }
 
-# NOTE: 2026-05-07 07:57:11, self-evolved by tea_agent --- 首次模型调用时 print 到控制台：时间 + 模型名 + 用户消息，工具循环轮次不打印
-# NOTE: 2026-05-07 11:27:27, self-evolved by tea_agent --- _execute_tool_loop 添加模型请求/响应和工具调用的 DEBUG 日志，API 错误 WARNING 日志
             api_messages = self._build_api_messages()
 
             # 首次调用打印到控制台（工具调用循环的后续轮次不打印）
@@ -859,8 +860,6 @@ class OnlineToolSession(
             sys_msg_preview = api_messages[0]['content'][:100] if api_messages else ""
             logger.debug(f"system_prompt preview: {sys_msg_preview}")
 
-# NOTE: 2026-05-17 08:50:58, self-evolved by tea_agent --- tool_loop 根据模式传入差异化推理参数
-# NOTE: 2026-05-17 08:51:52, self-evolved by tea_agent --- tool_loop 使用 _get_effective_params helper
             try:
                 eff = self._get_effective_params("main")
                 response = self._create_chat_stream(
@@ -928,8 +927,6 @@ class OnlineToolSession(
                     for tc in valid_tool_calls
                 )
 
-# NOTE: 2026-05-07 08:15:01, self-evolved by tea_agent --- 工具调用循环中打印轮次和工具名：print(f\"\\t#{轮次}: 调用工具:{tool name}\")
-# NOTE: 2026-05-07 11:27:40, self-evolved by tea_agent --- 工具调用执行添加 DEBUG 日志：调用名+参数和返回结果
                 for call in valid_tool_calls:
                     import time as _time
                     _asctime = _time.strftime("%Y-%m-%d %H:%M:%S")
@@ -1170,6 +1167,16 @@ class OnlineToolSession(
         else:
             self._build_tools() # 重置为默认
 
+        # 构建执行上下文
+        # NOTE: 2026-05-15 gen by tea_agent, user_msg 传递原始 msg（可能是包含 images 的 dict）
+        # NOTE: 2026-06-28 gen by tea_agent, 修复：context 提前创建，避免 skip_tool_loop 访问未定义变量
+        context = {
+            "user_msg": msg,
+            "msg": _msg_text,
+            "callback": callback,
+            "on_status": on_status,
+        }
+
         # Level 1: 动态跳过控制
         if intent.get('skip_tool_loop'):
             context['skip_tool_loop'] = True
@@ -1184,15 +1191,6 @@ class OnlineToolSession(
             self._current_trace = trace
         else:
             self._current_trace = None
-
-        # 构建执行上下文
-        # NOTE: 2026-05-15 gen by tea_agent, user_msg 传递原始 msg（可能是包含 images 的 dict）
-        context = {
-            "user_msg": msg,
-            "msg": _msg_text,
-            "callback": callback,
-            "on_status": on_status,
-        }
 
         # 执行 Pipeline
         result = self.pipeline.execute(context)

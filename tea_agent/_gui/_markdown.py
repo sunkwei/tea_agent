@@ -73,8 +73,33 @@ def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
     if not HAS_TKINTERWEB:
         return text
     html_body = markdown.markdown(text, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
+    html_body = _fix_double_escape_in_code(html_body)
     css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
     return f"<html><head>{css}</head><body>{html_body}</body></html>"
+
+
+# NOTE: 2026-05-20 gen by tea_agent, 修复双重转义：html_mod.escape + markdown.codehilite
+# 导致 <code> 块内 &amp; → &amp;amp;，显示为 &amp; 字面量而非正确渲染
+# 此函数在最终 HTML 中，将 <code>...</code> 内部的 &amp; 还原为 &
+def _fix_double_escape_in_code(html: str) -> str:
+    """修复 <code> 块内的双重 HTML 转义。
+    
+    由于 _chat_to_markdown 先做了 html_mod.escape，markdown.codehilite
+    又对代码块内容再次转义，导致 <code> 内 &amp; 变成 &amp;amp;。
+    此函数仅还原明确的双重转义 pattern（&amp;amp; → &amp; 等），
+    避免破坏内联代码中的单次转义。
+    NOTE: 2026-05-20 gen by tea_agent, 修复：仅替换双重转义，保护内联代码的单次转义。"""
+    def _fix_code_block(m):
+        inner = m.group(1)
+        # 仅替换已知的双重转义 pattern，不影响单次转义
+        inner = inner.replace('&amp;amp;', '&amp;')
+        inner = inner.replace('&amp;lt;', '&lt;')
+        inner = inner.replace('&amp;gt;', '&gt;')
+        inner = inner.replace('&amp;quot;', '&quot;')
+        inner = inner.replace('&amp;#39;', '&#39;')
+        inner = inner.replace('&amp;#x27;', '&#x27;')
+        return '<code>' + inner + '</code>'
+    return re.sub(r'<code>(.*?)</code>', _fix_code_block, html, flags=re.DOTALL)
 
 
 # NOTE: 2026-05-08 gen by tea_agent, 工具轮分组渲染：合并连续tool消息，生成带轮次编号的蓝色标题块
@@ -273,6 +298,8 @@ def _chat_to_markdown(messages, image_cache=None):
         elif role == "ai":
             # 2026-05-16 fix: 对content进行HTML转义
             safe_content = html_mod.escape(content.strip())
+            # NOTE: 2026-05-18 fix: 转义孤立的 [ ] 方括号，防止被 Markdown 解析器误认为链接语法导致 HTML 结构损坏
+            safe_content = _escape_orphan_brackets(safe_content)
             parts.append(f'{ts_display}\n\n<div class="msg-ai" markdown="1">\n\n### 🤖 AI\n\n{safe_content}\n</div>\n\n---\n')
         elif role == "tool":
             if tool_blocks[i]:
@@ -285,9 +312,64 @@ def _chat_to_markdown(messages, image_cache=None):
 
 
 # NOTE: 2026-05-16 gen by tea_agent, HTML 校验：过滤控制字符，防止畸形字节流导致 HtmlFrame 渲染残缺
+# NOTE: 2026-05-18 fix: 扩展控制字符过滤范围，包含 \x7f(DEL)、Unicode C0/C1 控制字符、零宽字符等
 def _sanitize_html_control_chars(html: str) -> str:
-    """移除 HTML 中的控制字符（保留 \\n 0x0a 和 \\t 0x09）。"""
-    return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', html)
+    """移除 HTML 中的控制字符（保留 \\n 0x0a 和 \\t 0x09）。
+    
+    过滤范围：
+    - ASCII 0x00-0x08, 0x0b-0x0c, 0x0e-0x1f (C0 控制字符，除 \n \t)
+    - 0x7f (DEL)
+    - 0x80-0x9f (C1 控制字符)
+    - 零宽字符：U+200B-U+200F, U+2028-U+202E, U+2060-U+206F
+    - BOM：U+FEFF
+    """
+    # 第一层：ASCII 控制字符
+    html = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f]', '', html)
+    # 第二层：Unicode 零宽字符和特殊控制字符
+    html = re.sub(r'[\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]', '', html)
+    return html
+
+
+# NOTE: 2026-05-18 fix: 转义孤立的方括号，防止被 Markdown 解析器误认为链接/引用语法
+def _escape_orphan_brackets(text: str) -> str:
+    """转义孤立的 [ 或 ] 方括号。
+    
+    Markdown 中 [text](url) 是链接语法，如果 AI 输出中包含未配对的 [，
+    解析器可能生成损坏的 HTML 结构。此函数将孤立的 [ 和 ] 转义为 HTML 实体。
+    """
+    # 先处理已配对的 [text](url) 形式的链接，保护它们不被转义
+    # 匹配 [xxx](yyy) 或 [xxx] 形式
+    protected_ranges = []
+    for m in re.finditer(r'\[([^\]]*)\](?:\([^)]*\))?', text):
+        protected_ranges.append((m.start(), m.end()))
+    
+    # 逐字符扫描，转义不在保护范围内的 [ 和 ]
+    result = []
+    i = 0
+    while i < len(text):
+        # 检查当前位置是否在保护范围内
+        in_protected = False
+        for start, end in protected_ranges:
+            if start <= i < end:
+                in_protected = True
+                # 直接复制整个保护范围
+                result.append(text[start:end])
+                i = end
+                break
+        
+        if in_protected:
+            continue
+        
+        char = text[i]
+        if char == '[':
+            result.append('&#91;')  # [ 的 HTML 实体
+        elif char == ']':
+            result.append('&#93;')  # ] 的 HTML 实体
+        else:
+            result.append(char)
+        i += 1
+    
+    return ''.join(result)
 
 
 _KNOWN_HTML_TAGS = {'textarea', 'script', 'section', 'details', 'img', 'ul', 'h2', 'article', 'source', 'link', 'audio', 'h3', 'select', 'th', 'tr', 'tfoot', 'h1', 'h6', 'label', 'html', 'dt', 's', 'ol', 'colgroup', 'ins', 'code', 'summary', 'body', 'blockquote', 'abbr', 'tt', 'b', 'dd', 'input', 'nav', 'button', 'option', 'title', 'data', 'fieldset', 'head', 'iframe', 'sup', 'style', 'td', 'a', 'h5', 'dl', 'hr', 'main', 'figcaption', 'tbody', 'col', 'del', 'video', 'meta', 'sub', 'header', 'wbr', 'span', 'template', 'li', 'pre', 'caption', 'figure', 'strike', 'thead', 'form', 'footer', 'table', 'u', 'mark', 'canvas', 'legend', 'time', 'center', 'small', 'h4', 'strong', 'br', 'aside', 'div', 'big', 'p', 'em', 'font', 'i'}

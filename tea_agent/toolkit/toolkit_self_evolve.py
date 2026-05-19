@@ -5,15 +5,15 @@ import logging
 logger = logging.getLogger("toolkit")
 
 # NOTE: 2026-05-16 gen by tea_agent, 补充 git_snapshot 和 run_tests 参数到函数签名
-def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_code: str, verify: bool = True, backup: bool = True, git_snapshot: bool = True, run_tests: bool = True) -> dict:
-    """
-    四层安全自进化：修改项目源文件，自动生成演化注释、备份原文件、验证编译、测试回滚。
+def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_code: str, verify: bool = True, backup: bool = True, git_snapshot: bool = True, run_tests: bool = True, symbol: str = None, lsp_checks: bool = True) -> dict:
+    """@2026-05-19 gen by claude, 集成LSP检查层(Layer2.5: 影响分析+lint+签名对比)    五层安全自进化 + LSP 智能增强。
 
     安全层次:
-        Layer 0: git auto-commit 快照（进化前，可 git reset --hard HEAD~1 恢复）
-        Layer 1: 时间戳 .bak 文件（不覆盖，保留所有历史版本）
+        Layer 0: git auto-commit 快照
+        Layer 1: 时间戳 .bak 文件
         Layer 2: py_compile 编译验证（失败自动回滚）
-        Layer 3: 运行测试套件（失败自动 git reset --hard 回到快照）
+        Layer 2.5: LSP 检查 — 影响分析 + ruff lint + 签名对比（非阻塞警告）
+        Layer 3: 运行测试套件（失败自动 git reset --hard）
 
     Args:
         file_path: 要修改的文件路径（相对于项目根目录）
@@ -22,11 +22,11 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         new_code: 替换后的新代码片段
         verify: 是否验证编译通过（Layer 2）
         backup: 是否创建时间戳 .bak 备份（Layer 1）
-        git_snapshot: 是否创建 git 快照（Layer 0）。仅在 git 工作区干净时生效
-        run_tests: 编译通过后是否运行测试（Layer 3）。测试失败自动 git reset
+        git_snapshot: 是否创建 git 快照（Layer 0）
+        run_tests: 编译通过后是否运行测试（Layer 3）
+        symbol: [LSP] 被修改的函数/类名，用于影响分析和签名对比
+        lsp_checks: [LSP] 是否启用 LSP 检查，默认 True
     """
-    logger.info(f"toolkit_self_evolve called: file_path={file_path!r}, description={repr(description)[:80]}, old_code={repr(old_code)[:80]}, new_code={repr(new_code)[:80]}, verify={verify!r}, backup={backup!r}")
-
     import os
     import shutil
     import py_compile
@@ -99,10 +99,86 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
             return 0, 0, "test timeout (>120s)"
         except Exception as e:
             return 0, 0, str(e)[:200]
+        except Exception as e:
+            return 0, 0, str(e)[:200]
+
+# NOTE: 2026-05-19 14:32:06, self-evolved by tea_agent --- LSP增强self_evolve测试
+# NOTE: 2026-05-19 14:32:56, self-evolved by tea_agent --- 还原LSP注释
+# NOTE: 2026-05-19 14:32:56, self-evolved by tea_agent --- 测试LSP检查层
+    # ── LSP 辅助函数 ── @2026-05-19 gen by claude
+    def _run_lsp_checks(full_path, symbol, old_code, new_code, content):
+        """Layer 2.5: 影响分析 + ruff lint + 签名对比。非阻塞。"""
+        result = {"impact": None, "lint_before": 0, "lint_after": 0, "lint_new": 0,
+                  "sig_changed": False, "old_sig": None, "new_sig": None}
+        try:
+            # 1. 影响分析
+            if symbol:
+                try:
+                    from tea_agent.lsp.ts_analyzer import impact_analysis
+                    imp = impact_analysis(cwd, full_path, symbol)
+                    if imp and imp.get("ok"):
+                        result["impact"] = {"callers": len(imp.get("direct_callers", [])),
+                                            "deps": imp.get("dependencies", []),
+                                            "risk": imp.get("risk", "unknown"),
+                                            "hint": imp.get("hint", "")}
+                except Exception:
+                    pass
+
+            # 2. Ruff lint: before
+            import tempfile
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as tf:
+                    tf.write(content)
+                    tmp_b = tf.name
+                r = subprocess.run(["ruff", "check", "--output-format", "json", tmp_b],
+                                   capture_output=True, text=True, timeout=15, cwd=cwd)
+                if r.stdout.strip():
+                    import json
+                    result["lint_before"] = len(json.loads(r.stdout))
+            except Exception:
+                pass
+            finally:
+                try: os.unlink(tmp_b)
+                except: pass
+
+            # 3. Ruff lint: after
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as tf:
+                    tf.write(open(full_path, encoding='utf-8').read())
+                    tmp_a = tf.name
+                r = subprocess.run(["ruff", "check", "--output-format", "json", tmp_a],
+                                   capture_output=True, text=True, timeout=15, cwd=cwd)
+                if r.stdout.strip():
+                    import json
+                    result["lint_after"] = len(json.loads(r.stdout))
+                result["lint_new"] = max(0, result["lint_after"] - result["lint_before"])
+            except Exception:
+                pass
+            finally:
+                try: os.unlink(tmp_a)
+                except: pass
+
+            # 4. 签名对比
+            if symbol:
+                try:
+                    import re
+                    pat = rf'def\s+{re.escape(symbol)}\s*\([^)]*\)'
+                    m = re.search(pat, old_code)
+                    result["old_sig"] = m.group(0).strip() if m else None
+                    m = re.search(pat, new_code)
+                    result["new_sig"] = m.group(0).strip() if m else None
+                    if result["old_sig"] and result["new_sig"] and result["old_sig"] != result["new_sig"]:
+                        result["sig_changed"] = True
+                except Exception:
+                    pass
+
+        except Exception as e:
+            logger.debug(f"LSP checks: {e}")
+        return result
 
     # ──────────────────────────────────────
     # 主逻辑
-    # ──────────────────────────────────────
+    # ──────────────────────────────────────    # ──────────────────────────────────────
 
     with open(full_path, "r", encoding="utf-8") as f:
         content = f.read()
@@ -169,8 +245,16 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                            "compile_verify": False, "tests": "skipped"}
             }
 
-    # ── Layer 3: 测试验证 ──
-    test_passed = None
+    # ── Layer 2.5: LSP 智能检查 ── @2026-05-19 gen by claude
+    lsp_result = None
+    if lsp_checks and verify_ok and file_path.endswith(".py"):
+        lsp_result = _run_lsp_checks(full_path, symbol, old_code, new_code, content)
+        if lsp_result.get("lint_new", 0) > 0:
+            logger.warning(f"LSP: 引入 {lsp_result['lint_new']} 个新 lint 问题")
+        if lsp_result.get("sig_changed"):
+            logger.warning(f"LSP: 签名变更: {lsp_result.get('old_sig')} → {lsp_result.get('new_sig')}")
+
+    # ── Layer 3: 测试验证 ──    test_passed = None
     test_total = None
     test_error = None
     if run_tests and verify_ok:
@@ -207,52 +291,30 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
             "git_snapshot": git_snapped,
             "bak": bak_path,
             "compile_verify": verify_ok,
+            "lsp": lsp_result,
             "tests": f"{test_passed}/{test_total}" if test_total is not None else "skipped"
         }
     }
-
 
 def meta_toolkit_self_evolve():
     return {
         "type": "function",
         "function": {
             "name": "toolkit_self_evolve",
-            "description": "四层安全自进化：修改项目源文件，自动添加演化注释。Layer0=git快照, Layer1=时间戳.bak, Layer2=编译验证, Layer3=测试回滚。",
+            "description": "五层安全自进化：修改项目源文件，自动添加演化注释。Layer0=git快照, Layer1=时间戳.bak, Layer2=编译验证, Layer2.5=LSP检查(影响分析+lint+签名), Layer3=测试回滚。",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "要修改的文件路径（相对于项目根目录，如 tea_agent/store.py）",
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "修改的简短描述，会写入注释",
-                    },
-                    "old_code": {
-                        "type": "string",
-                        "description": "要替换的旧代码片段（必须精确匹配）",
-                    },
-                    "new_code": {
-                        "type": "string",
-                        "description": "替换后的新代码片段",
-                    },
-                    "verify": {
-                        "type": "boolean",
-                        "description": "[Layer2] 是否验证编译通过，默认 true。失败自动回滚",
-                    },
-                    "backup": {
-                        "type": "boolean",
-                        "description": "[Layer1] 是否创建时间戳 .bak 备份，默认 true。不覆盖历史备份",
-                    },
-                    "git_snapshot": {
-                        "type": "boolean",
-                        "description": "[Layer0] 是否创建 git 快照，默认 true。仅在 git 工作区干净时生效",
-                    },
-                    "run_tests": {
-                        "type": "boolean",
-                        "description": "[Layer3] 编译通过后是否运行测试，默认 true。测试失败自动 git reset --hard 回滚",
-                    },
+                    "file_path": {"type": "string", "description": "要修改的文件路径（相对于项目根目录，如 tea_agent/store.py）"},
+                    "description": {"type": "string", "description": "修改的简短描述，会写入注释"},
+                    "old_code": {"type": "string", "description": "要替换的旧代码片段（必须精确匹配）"},
+                    "new_code": {"type": "string", "description": "替换后的新代码片段"},
+                    "verify": {"type": "boolean", "description": "[Layer2] 是否验证编译通过，默认 true。失败自动回滚"},
+                    "backup": {"type": "boolean", "description": "[Layer1] 是否创建时间戳 .bak 备份，默认 true。不覆盖历史备份"},
+                    "git_snapshot": {"type": "boolean", "description": "[Layer0] 是否创建 git 快照，默认 true。仅在 git 工作区干净时生效"},
+                    "run_tests": {"type": "boolean", "description": "[Layer3] 编译通过后是否运行测试，默认 true。测试失败自动 git reset --hard 回滚"},
+                    "symbol": {"type": "string", "description": "[Layer2.5] 被修改的函数/类名，用于影响分析和签名对比"},
+                    "lsp_checks": {"type": "boolean", "description": "[Layer2.5] 是否启用 LSP 检查，默认 true"},
                 },
                 "required": ["file_path", "description", "old_code", "new_code"],
             },

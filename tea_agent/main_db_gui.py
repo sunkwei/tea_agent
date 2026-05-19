@@ -752,6 +752,10 @@ class TkGUI(AgentCore):
         self._sni = None
         if HAS_SNI:
             self._init_tray()
+
+        # @2026-05-19 gen by claude, GUI启动后自动启动潜意识和调度器后台线程
+        self.root.after(800, self._start_dream)
+        self.root.after(1200, self._start_scheduler)
     # NOTE: 2026-05-18 gen by tea_agent, 托盘图标支持（仅显示状态+退出入口，不改变关闭按钮行为）
     def _create_tray_icon(self):
         """动态生成托盘图标图像（32x32 蓝色圆角方块 + TA 字母），返回 PIL Image"""
@@ -874,6 +878,20 @@ class TkGUI(AgentCore):
         except Exception as e:
             logger.warning(f"Dream 自动启动失败: {e}")
 
+
+    # NOTE: 2026-05-16 gen by tea_agent, App启动自动启动定时任务调度器
+    def _start_scheduler(self):
+        """启动定时任务调度器后台线程，每分钟检查一次"""
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            result = toolkit_scheduler("start")
+            status = result.get("status", "unknown")
+            if status == "already_running":
+                logger.info(f"定时任务调度器已在运行中 (pid={result.get('pid')})")
+            else:
+                logger.info(f"定时任务调度器自动启动成功: {status}")
+        except Exception as e:
+            logger.warning(f"定时任务调度器自动启动失败: {e}")
     def _create_ui(self):
         """创建界面"""
         main_split = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)

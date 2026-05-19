@@ -70,12 +70,23 @@ def meta_toolkit_lsp():
         "name": "toolkit_lsp",
         "description": "实时代码智能: diagnose/completion/definition/hover/references/context。基于 jedi + ruff。",
         "parameters": {
-            "action": {"type": "string", "enum": ["diagnose", "completion", "definition", "hover", "references", "context"]},
-            "filepath": {"type": "string"},
-            "line": {"type": "integer", "default": 1},
-            "col": {"type": "integer", "default": 0},
-            "project_root": {"type": "string"},
-            "symbol": {"type": "string"},
+def meta_toolkit_lsp():
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_lsp",
+            "description": "实时代码智能: diagnose/completion/definition/hover/references/context。基于 jedi + ruff。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["diagnose", "completion", "definition", "hover", "references", "context"]},
+                    "filepath": {"type": "string"},
+                    "line": {"type": "integer", "default": 1},
+                    "col": {"type": "integer", "default": 0},
+                    "project_root": {"type": "string"},
+                    "symbol": {"type": "string"},
+                },
+                "required": ["action", "filepath"],
+            },
         },
-        "required": ["action", "filepath"],
-    }
+    }    }

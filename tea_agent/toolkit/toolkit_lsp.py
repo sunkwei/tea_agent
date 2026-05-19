@@ -67,11 +67,6 @@ def toolkit_lsp(
 
 def meta_toolkit_lsp():
     return {
-        "name": "toolkit_lsp",
-        "description": "实时代码智能: diagnose/completion/definition/hover/references/context。基于 jedi + ruff。",
-        "parameters": {
-def meta_toolkit_lsp():
-    return {
         "type": "function",
         "function": {
             "name": "toolkit_lsp",
@@ -89,4 +84,4 @@ def meta_toolkit_lsp():
                 "required": ["action", "filepath"],
             },
         },
-    }    }
+    }

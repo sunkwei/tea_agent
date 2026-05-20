@@ -34,9 +34,6 @@ dependencies = [
     "playwright>=1.40.0",
 ]
 
-[project.urls]
-Homepage = "https://github.com/sunkwei/tea_agent"
-
 [project.scripts]
 tea_agent = "tea_agent.main_db_gui:main"
 
@@ -45,4 +42,4 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["tea_agent*"]
+include = ["tea_agent*", "demo*"]

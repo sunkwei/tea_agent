@@ -48,76 +48,9 @@ _SHARED_TOPIC_SUMMARY_USER_TEMPLATE = (
 
 # NOTE: 2026-05-06 gen by claude, 提取自 main_db_gui.py，agent_core 和 main_db_gui 共用
 def generate_topic_summary_shared(client, model: str, conversations: List[Dict]) -> Optional[str]:
-    """
-    根据最近对话通过 LLM 生成不超过20字的摘要。
+    """[DISABLED: 2026-05-20] not imported"""
+    pass  # DISABLED
 
-    Args:
-        client: OpenAI 客户端实例
-        model: 模型名称
-        conversations: 最近的对话列表（按时间正序），包含 user_msg 和 ai_msg
-
-    Returns:
-        不超过20字的摘要字符串；若生成失败则返回 None
-    """
-    if not conversations:
-        return None
-
-    user_msgs = []
-    for conv in conversations:
-        um = conv.get("user_msg", "").strip()
-        if um:
-            if len(um) > 200:
-                um = um[:200] + "..."
-            user_msgs.append(f"用户：{um}")
-
-    if not user_msgs:
-        return None
-
-    user_content = _SHARED_TOPIC_SUMMARY_USER_TEMPLATE.format(
-        user_msgs="\n".join(user_msgs)
-    )
-
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": _SHARED_TOPIC_SUMMARY_SYSTEM},
-                {"role": "user", "content": user_content},
-            ],
-            temperature=0.3,
-            max_tokens=50,
-        )
-
-        if not response.choices or len(response.choices) == 0:
-            return None
-
-        content = response.choices[0].message.content
-        if not content or not isinstance(content, str):
-            return None
-
-        raw = content.strip()
-        raw = re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
-        raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
-        raw = raw.strip()
-
-        if not raw:
-            return None
-
-        if len(raw) < 4:
-            return None
-
-# NOTE: 2026-05-07 11:30:43, self-evolved by tea_agent --- 模块级 generate_topic_summary 末尾 except 添加 WARNING 日志（含更多上下文）
-        if len(raw) > 20:
-            raw = raw[:20]
-
-        return raw if raw else None
-    except Exception as e:
-        logger.warning(f"generate_topic_summary 失败: {type(e).__name__}: {e}, model={model}")
-        return None
-
-
-# NOTE: 2026-05-17 08:59:14, self-evolved by tea_agent --- 添加 _get_cheap_params helper + 简化调用处
-# @2026-05-17 gen by tea_agent, 获取 cheap 模型有效推理参数
 def _get_cheap_params(defaults=None):
     """返回 cheap 模型 {temperature, max_tokens}，失败时使用传入的 defaults 或保守值。"""
     d = defaults or {"temperature": 0.3, "max_tokens": 500}
@@ -166,12 +99,9 @@ class SessionSummarizerMixin:
     # ──────────────────────────────────────────────
 
     def count_user_msg(self) -> int:
-        return sum([m.get("role") == "user" for m in self.messages])
+        """[DISABLED: 2026-05-20] no callers"""
+        pass  # DISABLED
 
-    # NOTE: 2026-04-29, self-evolved by claude-agent ---
-    # 统一摘要 API 调用入口：显式禁用 thinking 以节省 reasoning tokens。
-    # 摘要任务不需要推理链，thinking tokens 纯属浪费。
-    # 若模型不支持 extra_body 参数（非 DeepSeek），自动回退重试。
     def _call_summarize_api(self, cli, mdl, messages, temperature=0.1, max_tokens=500):
         """
         调用 LLM 生成摘要，显式禁用 thinking。
@@ -342,271 +272,33 @@ class SessionSummarizerMixin:
     # Topic 摘要 (Topic Summary)
     # ──────────────────────────────────────────────
 
-    def generate_topic_summary(
-        self, conversations: List[Dict]
-    ) -> Optional[str]:
-        """
-        根据最近对话通过 LLM 生成不超过 20 字的摘要标题。
+    def generate_topic_summary(self, conversations):
+        """[DISABLED: 2026-05-20] class method — no callers"""
+        pass  # DISABLED
 
-        Args:
-            conversations: 最近的对话列表（按时间正序），
-                          每项包含 user_msg 和 ai_msg 字段
-
-        Returns:
-            不超过 20 字的摘要字符串；若生成失败则返回 None
-        """
-        if not conversations:
-            return None
-            
-        # 提取用户消息和 AI 回复
-        user_msgs = self._extract_user_messages(conversations, max_len=200)
-
-        if not user_msgs:
-            return None
-
-        # 构建 Prompt
-        user_content = TOPIC_SUMMARY_USER_TEMPLATE.format(
-            user_msgs="\n".join(user_msgs)
-        )
-
-        # 调用 LLM
-        cli, mdl = self._get_summarize_client()
-        # NOTE: 2026-04-29, self-evolved by claude-agent ---
-        # 判断是否使用便宜模型，以便正确路由 token 统计
-        is_cheap = (
-            hasattr(self, '_cheap_client')
-            and self._cheap_client is not None
-            and cli is self._cheap_client
-        )
-        try:
-# NOTE: 2026-05-17 08:58:10, self-evolved by tea_agent --- Topic 摘要也改用 cheap 模型 config 参数
-# NOTE: 2026-05-17 08:59:43, self-evolved by tea_agent --- 简化 Topic 摘要调用 — 使用 _get_cheap_params helper
-            # NOTE: 2026-04-29, self-evolved by claude-agent ---
-            # 使用统一入口 _call_summarize_api，显式禁用 thinking 节省 token
-            cheap_params = _get_cheap_params({"temperature": 0.3, "max_tokens": 50})
-            response = self._call_summarize_api(
-                cli, mdl,
-                messages=[
-                    {"role": "system", "content": TOPIC_SUMMARY_SYSTEM},
-                    {"role": "user", "content": user_content},
-                ],
-                temperature=cheap_params["temperature"],
-                max_tokens=cheap_params["max_tokens"],
-            )
-
-            # NOTE: 2026-04-29, self-evolved by claude-agent ---
-            # 统计便宜模型 token 用量
-            if hasattr(self, '_track_api_usage'):
-                self._track_api_usage(response, is_cheap=is_cheap)
-
-            # 安全检查返回值
-            if not response.choices or len(response.choices) == 0:
-                return None
-                
-            content = response.choices[0].message.content
-            if not content or not isinstance(content, str):
-                return None
-                
-            raw = content.strip()
-
-            # 清洗和截断
-            cleaned = self._clean_topic_summary(raw)
-
-            return cleaned if cleaned else None
-
-        except Exception:
-            return None
-
-    def _extract_user_messages(
-        self, conversations: List[Dict], max_len: int = 200
-    ) -> List[str]:
-        """
-        从对话列表中提取用户消息和 AI 回复。
-
-        Args:
-            conversations: 对话列表
-            max_len: 单条消息最大长度
-
-        Returns:
-            格式化的用户消息列表
-        """
-        user_msgs: List[str] = []
-
-        for conv in conversations:
-            um = conv.get("user_msg", "").strip()
-            ai = conv.get("ai_msg", "").strip()
-            
-            if um:
-                # 截断超长消息
-                if len(um) > max_len:
-                    um = um[:max_len] + "..."
-                user_msgs.append(f"用户：{um}")
-            
-            # 同时提取 AI 回复，提供更完整的上下文
-            if ai:
-                if len(ai) > max_len:
-                    ai = ai[:max_len] + "..."
-                user_msgs.append(f"AI：{ai}")
-
-        return user_msgs
+    def _extract_user_messages(self, conversations, max_len=200):
+        """[DISABLED: 2026-05-20] only used by dead generate_topic_summary"""
+        pass  # DISABLED
 
     def _clean_topic_summary(self, raw: str) -> Optional[str]:
-        """
-        清洗 Topic 摘要文本。
-
-        去除引号、截断超长文本。
-
-        Args:
-            raw: 原始摘要文本
-
-        Returns:
-            清洗后的摘要 (不超过 20 字)
-        """
-        if not raw or not raw.strip():
-            return None
-        
-        # 去除首尾引号（支持中英文引号）
-        cleaned = re.sub(r'^["""\'""\']+|["""\'""\']+$', '', raw).strip()
-
-        # 截断超长文本（20个字符，中文字符也算1个）
-        if len(cleaned) > 20:
-            cleaned = cleaned[:20]
-
-        return cleaned if cleaned else None
-
-    # ──────────────────────────────────────────────
-    # 消息压缩 (Message Compact)
-    # ──────────────────────────────────────────────
+        """[DISABLED: 2026-05-20] only used by dead generate_topic_summary"""
+        pass  # DISABLED
 
     def _build_api_messages(self) -> List[Dict]:
-        """
-        构建发送给 API 的消息列表。
+        """[DISABLED: 2026-05-20] raises Exception — real impl in onlinesession.py"""
+        pass  # DISABLED
 
-        压缩策略:
-            1. 系统提示词 (始终第一条)  self.messages[0]
-            2. 历史摘要 (如有，替代旧消息)  self._history_summary
-            3. 最新 n 轮完整对话 (不压缩，保留原始内容)
-        
-        工具循环内部不调用任何压缩逻辑，仅对输入和返回的历史做压缩。
-
-        Returns:
-            消息列表
-        """
-        result: List[Dict] = []
-
-        # 1. 系统提示词 (始终第一)
-        result.append(self.messages[0])
-
-        ## 历史摘要内容：该内容总是
-        # 2. 历史摘要：作为 user + assistant 对添加
-# NOTE: 2026-05-16 19:33:42, self-evolved by tea_agent --- _build_api_messages 根据 _supports_reasoning 条件注入 reasoning_content
-        if self._history_summary:
-            result.append({
-                "role": "user",
-                "content": f"这是我们之前对话的摘要：\n{self._history_summary}"
-            })
-            _asst = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
-            if getattr(self, '_supports_reasoning', True):
-                _asst["reasoning_content"] = ""
-            result.append(_asst)
-
-        # 4. 最新 N 轮完整对话 (不压缩)
-        boundary = self._find_recent_boundary()
-        _has_reasoning = getattr(self, '_supports_reasoning', True)
-        for i in range(boundary, len(self.messages)):
-            msg = self.messages[i]
-            msg_copy = dict(msg)
-            if msg_copy.get("role") == "assistant" and _has_reasoning and "reasoning_content" not in msg_copy:
-                msg_copy["reasoning_content"] = ""
-            # NOTE: 2026-05-19 gen by tea_agent, 清理历史中残留的 image_url 格式 content，避免 API 400
-            if isinstance(msg_copy.get("content"), list) and not getattr(self, '_supports_vision', False):
-                text_parts = []
-                for p in msg_copy["content"]:
-                    if isinstance(p, dict):
-                        if p.get("type") == "text":
-                            text_parts.append(p.get("text", ""))
-                        elif p.get("type") == "image_url":
-                            text_parts.append("[图片]")
-                msg_copy["content"] = "\n".join(text_parts) if text_parts else "[图片]"
-            result.append(msg_copy)
-
-        return result
-    
     def _compact_message(self, msg: Dict) -> Dict:
-        """
-        创建消息的紧凑副本，截断超长内容。
-
-        Args:
-            msg: 原始消息字典
-
-        Returns:
-            紧凑版消息字典 (浅拷贝，超长内容被截断)
-        """
-        compact = dict(msg)  # 浅拷贝
-        role = msg.get("role", "")
-        content = msg.get("content")
-
-        # 截断工具输出
-        if role == "tool" and content and len(content) > self.max_tool_output:
-            compact["content"] = (
-                content[: self.max_tool_output] + "\n...[已截断]"
-            )
-        # 截断助手回复
-        elif (
-            role == "assistant"
-            and content
-            and len(content) > self.max_assistant_content
-        ):
-            compact["content"] = content[: self.max_assistant_content] + "...[已截断]"
-
-        return compact
+        """[DISABLED: 2026-05-20] no references"""
+        pass  # DISABLED
 
     # ──────────────────────────────────────────────
     # 辅助方法
     # ──────────────────────────────────────────────
 
-    def _messages_to_text(
-        self, messages: List[Dict], max_per_msg: int = 500
-    ) -> str:
-        """
-        将消息列表转为文本，用于摘要生成。
-
-        Args:
-            messages: 消息列表
-            max_per_msg: 单条消息最大长度
-
-        Returns:
-            格式化的文本，每行格式: [ROLE]: content
-        """
-        lines: List[str] = []
-
-        for msg in messages:
-            role = msg.get("role", "")
-            content = msg.get("content", "")
-
-            if role == "tool":
-                truncated = (
-                    content[:max_per_msg] + "..."
-                    if len(content) > max_per_msg
-                    else content
-                )
-                lines.append(f"[工具结果]: {truncated}")
-
-            elif role in ("user", "assistant") and content:
-                truncated = (
-                    content[:max_per_msg] + "..."
-                    if len(content) > max_per_msg
-                    else content
-                )
-                lines.append(f"[{role.upper()}]: {truncated}")
-
-            elif role == "assistant" and msg.get("tool_calls"):
-                tc_names = [
-                    tc["function"]["name"] for tc in msg["tool_calls"]
-                ]
-                lines.append(f"[ASSISTANT 调用工具]: {', '.join(tc_names)}")
-
-        return "\n".join(lines)
+    def _messages_to_text(self, messages, max_per_msg=500):
+        """[DISABLED: 2026-05-20] no references"""
+        pass  # DISABLED
 
     def _find_recent_boundary(self) -> int:
         """
@@ -631,137 +323,11 @@ class SessionSummarizerMixin:
         return 1
     
     def _find_last_need_summary_pair(self) -> Tuple[int, int]:
-        """
-        找到需要提取摘要的最后一个对话对，可能包含 user, assistant, tool 的消息
-        """
-        end_index = -1
-        begin_index = -1
+        """[DISABLED: 2026-05-20] no references"""
+        pass  # DISABLED
 
-        skip_count = self.keep_turns
-
-        ## 往前找，跳过 keep_turns 个 user，找到后，往后找到第一个 user 之前的 assistant
-        for i in range(len(self.messages) - 1, 0, -1):
-            ## 先跳过 skip_count 轮 assistant
-            role = self.messages[i].get("role")
-            if role == "user":
-                if skip_count > 0:
-                    skip_count -= 1
-                else:
-                    begin_index = i
-                    break
-
-        if begin_index >= 0:
-            for j in range(begin_index + 1, len(self.messages)):
-                role = self.messages[j].get("role")
-                if role == "user":
-                    end_index = j
-                    break
-
-        return begin_index, end_index
-
-    # ──────────────────────────────────────────────
-    # 状态重置
-    # ──────────────────────────────────────────────
-
-# NOTE: 2026-05-06 09:06:01, self-evolved by tea_agent --- C2: 将_generate_topic_summary从main_db_gui.py提取到session_summarizer.py，消除循环依赖
     def reset_summary_state(self) -> None:
-        """
-        重置摘要状态（用于新会话开始前）。
-
-        清空历史摘要，但不影响 messages 中的原始消息。
-        """
-        self._history_summary = ""
+        """[DISABLED: 2026-05-20] no callers"""
+        pass  # DISABLED
 
 
-# ============================================================
-# @2026-05-06 gen by claude, 从 main_db_gui.py 提取到共享模块，消除循环依赖
-# 模块级 Topic 摘要生成函数（独立于类，供 AgentCore/GUI/CLI 共用）
-# ============================================================
-
-import re as _re
-from typing import Optional as _Optional, List as _List, Dict as _Dict
-
-_TOPIC_SUMMARY_SYSTEM = (
-    "你是一个摘要生成器。根据最近10条用户输入，生成不超过20字的自然中文摘要标题。"
-    "要求："
-    "1. 根据用户的发言概括对话主题，不要基于 AI 的回复来概括。"
-    "2. 用日常口语表达，像人聊天时随口说的标题那样。"
-    "3. 至少6个字以上，禁止输出残缺句子或单字。"
-    "4. 不使用书名号、引号、多余修饰词。"
-    "直接输出摘要文本，不要任何额外说明。"
-)
-
-_TOPIC_SUMMARY_USER_TEMPLATE = (
-    "以下是最近10条用户输入：\n\n{user_msgs}\n\n"
-    "请根据这些用户输入，生成不超过20字的摘要标题："
-)
-
-
-def generate_topic_summary(client, model: str, conversations: _List[_Dict]) -> _Optional[str]:
-    """
-    根据最近对话通过 LLM 生成不超过20字的摘要标题。
-
-    Args:
-        client: OpenAI 客户端实例
-        model: 模型名称
-        conversations: 最近的对话列表（按时间正序），包含 user_msg
-
-    Returns:
-        不超过20字的摘要字符串；若生成失败则返回 None
-    """
-    if not conversations:
-        return None
-
-    user_msgs = []
-    for conv in conversations:
-        um = conv.get("user_msg", "").strip()
-        if um:
-            if len(um) > 200:
-                um = um[:200] + "..."
-            user_msgs.append(f"用户：{um}")
-
-    if not user_msgs:
-        return None
-
-# NOTE: 2026-05-07 11:30:29, self-evolved by tea_agent --- 模块级 generate_topic_summary 添加 DEBUG 日志（含更多上下文区分）
-    user_content = _TOPIC_SUMMARY_USER_TEMPLATE.format(
-        user_msgs="\n".join(user_msgs)
-    )
-
-    try:
-        logger.debug(f"generate_topic_summary request: model={model}, conversations={len(conversations)}, user_msgs={len(user_msgs)}")
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": _TOPIC_SUMMARY_SYSTEM},
-                {"role": "user", "content": user_content},
-            ],
-            temperature=0.3,
-            max_tokens=50,
-        )
-
-        if not response.choices or len(response.choices) == 0:
-            logger.warning(f"generate_topic_summary: API 返回空 choices, model={model}")
-            return None
-
-        content = response.choices[0].message.content
-        if not content or not isinstance(content, str):
-            return None
-
-        raw = content.strip()
-        raw = _re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
-        raw = _re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
-        raw = raw.strip()
-
-        if not raw:
-            return None
-
-        if len(raw) < 4:
-            return None
-
-        if len(raw) > 20:
-            raw = raw[:20]
-
-        return raw if raw else None
-    except Exception:
-        return None

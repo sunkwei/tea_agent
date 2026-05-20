@@ -368,6 +368,9 @@ class AgentCore:
 # NOTE: 2026-05-18 14:38:16, self-evolved by tea_agent --- 修复 overflow 变量作用域：提前初始化 overflow=None
         # Level 2 push: push OLD L1 (previous conversation) to Level 2
         overflow = None
+        need_l3_summary = False
+        l2_max = getattr(self._cfg, 'history_l2_max', 30)
+        l3_batch = getattr(self._cfg, 'history_l3_batch', 10)
         prev_convs = self.db.get_conversations(topic_id, limit=2, include_rounds=True)
         if len(prev_convs) >= 2:
             old_l1 = prev_convs[-2]
@@ -375,11 +378,18 @@ class AgentCore:
             old_rounds = old_l1.get('rounds_json_parsed') or []
             old_files = self._extract_files_from_rounds(old_rounds)
             overflow = self.db.push_to_level2(
-                topic_id, old_l1["user_msg"], old_l1["ai_msg"], files=old_files
+                topic_id, old_l1["user_msg"], old_l1["ai_msg"], files=old_files,
+                max_level2=l2_max,
             )
-# NOTE: 2026-05-18 14:37:39, self-evolved by tea_agent --- 将 auto_summary 和 L3 摘要异步化，避免阻塞 generating 状态恢复
+            # 2026-05-20 gen by Tea Agent, L3批处理：溢出条目先进入pending缓冲
             if overflow:
-                logger.info(f"Level 2 overflow {len(overflow)} -> L3 (topic={topic_id})")
+                self.db.push_l3_pending(topic_id, overflow)
+                pending_count = len(self.db.get_l3_pending(topic_id))
+                need_l3_summary = pending_count >= l3_batch
+                logger.info(
+                    f"Level 2 overflow {len(overflow)} -> L3 pending "
+                    f"(total pending={pending_count}, batch={l3_batch}, trigger={need_l3_summary})"
+                )
         # Token stats
         usage = self.sess._last_usage
         cheap_usage = self.sess._last_cheap_usage
@@ -404,136 +414,70 @@ class AgentCore:
         # NOTE: 2026-05-18 gen by tea_agent, 摘要异步化：L3压缩+auto_summary 放到后台线程
         # 避免阻塞 generating 状态恢复，用户可立即发送新消息
 # NOTE: 2026-05-18 14:38:28, self-evolved by tea_agent --- 修复异步线程参数中的hack表达式
+        # 2026-05-20 gen by Tea Agent, L3批处理：仅攒够时触发摘要
         threading.Thread(
             target=self._do_async_summaries,
-            args=(topic_id, overflow),
+            args=(topic_id, need_l3_summary),
             daemon=True
         ).start()
         # 2026-05-17 gen by tea_agent, 主题漂移累计达阈值时建议新主题
         self._suggest_new_topic_if_needed(topic_id)
         self._check_pending_restart()
 
-    def _update_level3_summary(self, topic_id: str, overflow: list):
-        """L3 增量摘要：语义 + 工具链。
-        2026-05-17 gen by tea_agent, 重构：(1)去除字数限制改用16K token上限 (2)主题漂移检测-匹配度低时追加新段落而非全量覆盖
+    def _update_level3_summary(self, topic_id: str):
+        """L3 批处理摘要：取 L3 pending 缓冲，用便宜模型生成摘要，合并到 semantic_summary。
+        2026-05-20 gen by Tea Agent, 改为批处理模式：攒够 history_l3_batch 条后触发。
+        仅对 user + ai final msg 做摘要，不涉及工具轮次。
         """
-        if not overflow:
+        pending = self.db.get_l3_pending(topic_id)
+        if not pending:
             return
+
+        l3_batch = getattr(self._cfg, 'history_l3_batch', 10)
+        logger.info(f"L3 summary triggered: {len(pending)} pending items (batch={l3_batch})")
+
         try:
             cli, mdl = self.sess._get_summarize_client()
 
+            # 提取 user+assistant 文本
             new_text = ""
-            for pair in overflow:
-                new_text += f"User: {pair.get('user', '')}\nAssistant: {pair.get('assistant', '')}\n\n"
+            for pair in pending:
+                u = (pair.get('user', '') or '')[:500]
+                a = (pair.get('assistant', '') or '')[:500]
+                new_text += f"User: {u}\nAssistant: {a}\n\n"
 
             old_sem = self.db.get_semantic_summary(topic_id) or ""
 
-            # ── 主题漂移检测 ──
-            is_drift = False
-            drift_label = ""
-            if old_sem.strip():
-                drift_prompt = (
-                    "对比「已有摘要」与「新对话片段」，判断新对话的主题是否发生本质变化。\n"
-                    "本质变化：讨论方向、任务类型、关注领域发生明显转移。\n"
-                    "如果显著变化，输出 DRIFT: <新阶段简短主题名>。否则输出 SAME。\n"
-                    f"[已有摘要末尾]\n{old_sem[-3000:]}\n\n"
-                    f"[新对话片段]\n{new_text[:3000]}\n\n"
-                    "请输出 DRIFT: <主题名> 或 SAME："
-                )
-                try:
-                    r_d = cli.chat.completions.create(
-                        model=mdl, messages=[{"role": "user", "content": drift_prompt}],
-                        temperature=0.1, max_tokens=50,
-                    )
-                    dr = (r_d.choices[0].message.content or "").strip() if r_d.choices else "SAME"
-                    if dr.upper().startswith("DRIFT"):
-                        is_drift = True
-                        drift_label = dr.replace("DRIFT:", "").replace("DRIFT", "").strip().lstrip(":").strip() or "新阶段"
-                        # 递增漂移计数
-                        new_count = self.db.increment_drift_count(topic_id)
-                        if new_count >= self.DRIFT_SUGGEST_THRESHOLD:
-                            self._pending_topic_suggestion = new_count
-                    logger.info(f"L3 drift check: {dr[:60]}")
-                except Exception as de:
-                    logger.warning(f"L3 drift check fail: {de}, assume SAME")
-
-            # ── A. 语义摘要 ──
-            if is_drift:
-                sem_prompt = (
-                    "以下是一个长对话的历史摘要。由于新对话主题发生了显著变化，"
-                    "请在现有摘要基础上追加一个新段落（不要删除或修改历史段落）。"
-                    f"新段落标题为 '## 阶段：{drift_label}'。\n"
-                    "新段落格式：\n"
-                    "- 本阶段核心主题：...\n"
-                    "- 用户偏好/约束：...\n"
-                    "- 任务背景与目标：...\n"
-                    "- 关键步骤与进展：...\n"
-                    "- 重要结论/产出：...\n"
-                    "- 使用的关键文件/模块：...\n\n"
-                    f"[已有摘要——全部保留，不可删除]\n{old_sem}\n\n"
-                    f"[新对话片段]\n{new_text}\n\n"
-                    "请输出完整摘要（保留全部历史段落 + 追加新阶段段落）："
-                )
-            else:
-                sem_prompt = (
-                    "更新对话摘要。如果已有摘要包含多个 '## 阶段：' 段落，"
-                    "请保留所有历史段落不变，仅更新/补充最后一个段落的末尾。\n"
-                    "如果历史段落已完整覆盖新对话内容，仅追加新的进展点。\n"
-                    "聚焦：用户偏好、长期任务背景、关键结论、领域知识、涉及的文件/模块。\n"
-                    "使用 Markdown 格式，以 '## ' 开头的段落组织。\n"
-                    "不要删除或截断任何已有内容。\n"
-                    f"[已有摘要]\n{old_sem if old_sem else '(无)'}\n\n"
-                    f"[新对话]\n{new_text}\n\n"
-                    "请输出更新后的完整摘要："
-                )
+            # 简洁摘要 Prompt（便宜模型，小 max_tokens）
+            sem_prompt = (
+                "你是对话摘要器。将以下新对话片段合并到已有摘要中。\n"
+                "规则：\n"
+                "1. 保留已有摘要的全部内容不变\n"
+                "2. 追加新段落的摘要（格式：'## 阶段N'），包含：核心主题、关键操作/决定、用户偏好\n"
+                "3. 语言简洁，每阶段不超过5句话\n"
+                "4. 如新对话无实质内容，仅输出已有摘要\n\n"
+                f"[已有摘要]\n{old_sem if old_sem else '(无)'}\n\n"
+                f"[新对话片段（{len(pending)}轮）]\n{new_text[:8000]}\n\n"
+                "请输出更新后的完整摘要："
+            )
 
             r = cli.chat.completions.create(
                 model=mdl, messages=[{"role": "user", "content": sem_prompt}],
-                temperature=0.3, max_tokens=16384,
+                temperature=0.3, max_tokens=2048,
             )
             new_sem = r.choices[0].message.content.strip() if r.choices else old_sem or ""
+
             if new_sem:
                 self.db.set_semantic_summary(topic_id, new_sem)
-                logger.info(f"L3 semantic: {len(new_sem)} chars (drift={is_drift}, label={drift_label})")
+                self.sess._semantic_summary = new_sem
+                logger.info(f"L3 summary: {len(old_sem)}->{len(new_sem)} chars")
 
-            # ── B. 工具链摘要 ──
-            has_tools = any("tool" in (pair.get("assistant", "") or "").lower() for pair in overflow)
-            if has_tools:
-                old_tc = self.db.get_tool_chain_summary(topic_id) or ""
-
-                if is_drift:
-                    tc_prompt = (
-                        "追加新的工具调用链段落（保留全部历史段落）。"
-                        f"新段落标题为 '## 阶段工具链：{drift_label}'。\n"
-                        "格式：\n"
-                        "- 任务：...\n"
-                        "- 使用工具：A -> B -> C -> ...\n"
-                        "- 关键I/O：...\n"
-                        "- 最终结论：...\n\n"
-                        f"[已有工具链——全部保留]\n{old_tc}\n\n"
-                        f"[新对话]\n{new_text}\n\n"
-                        "请输出完整工具链摘要（保留全部历史段落 + 追加新段落）："
-                    )
-                else:
-                    tc_prompt = (
-                        "更新工具调用链摘要。保留所有历史段落，在最后补充新工具调用信息。\n"
-                        "如有新任务，追加新的段落。格式：每个段落以 '## ' 标题开头。\n"
-                        f"[已有]\n{old_tc if old_tc else '(无)'}\n\n"
-                        f"[新对话]\n{new_text}\n\n"
-                        "请输出更新后的完整工具链摘要："
-                    )
-
-                r2 = cli.chat.completions.create(
-                    model=mdl, messages=[{"role": "user", "content": tc_prompt}],
-                    temperature=0.3, max_tokens=16384,
-                )
-                new_tc = r2.choices[0].message.content.strip() if r2.choices else old_tc or ""
-                if new_tc and new_tc != "\u65e0" and new_tc != "NONE":
-                    self.db.set_tool_chain_summary(topic_id, new_tc)
-                    logger.info(f"L3 toolchain: {len(new_tc)} chars")
+            # 清空 L3 pending
+            self.db.clear_l3_pending(topic_id)
 
         except Exception as e:
             logger.warning(f"L3 summary fail: {type(e).__name__}: {e}")
+
     def _load_topic_history_into_session(self, tid: str):
         """将指定 topic 的对话历史按三级结构加载到 session"""
         # Level 1: 最新一条完整对话（含工具链）
@@ -564,13 +508,13 @@ class AgentCore:
     # ═══════════════════════════════════════════════
     # 摘要
     # ═══════════════════════════════════════════════
-    def _do_async_summaries(self, topic_id: str, overflow: list):
-        """后台线程：执行 L3 增量摘要 + auto_summary，完成后触发 UI 回调。
-        NOTE: 2026-05-18 gen by tea_agent, 摘要异步化，避免阻塞 generating 恢复。
+    def _do_async_summaries(self, topic_id: str, need_l3: bool):
+        """后台线程：执行 L3 批处理摘要 + auto_summary，完成后触发 UI 回调。
+        2026-05-20 gen by Tea Agent, L3批处理：仅攒够N条时触发便宜模型摘要。
         """
         try:
-            if overflow:
-                self._update_level3_summary(topic_id, overflow)
+            if need_l3:
+                self._update_level3_summary(topic_id)
             self._auto_summary(topic_id)
         except Exception as e:
             logger.warning(f"异步摘要失败 (topic={topic_id}): {type(e).__name__}: {e}")

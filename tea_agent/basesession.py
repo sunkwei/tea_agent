@@ -632,10 +632,5 @@ class BaseChatSession(ABC):
         self.interrupted = False
 
     def _trim_messages(self):
-        """裁剪消息，保持最近N条"""
-        if len(self.messages) <= self.max_history * 2 + 1:
-            return
-
-        system_msg = self.messages[0]
-        recent = self.messages[-(self.max_history * 2):]
-        self.messages = [system_msg] + recent
+        """[DISABLED: 2026-05-20] no references — trimming now via L3 summary"""
+        pass  # DISABLED

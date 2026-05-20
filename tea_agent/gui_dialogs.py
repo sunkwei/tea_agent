@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 # NOTE: 2026-05-15 07:55:51, self-evolved by tea_agent --- 保存配置时 save_config 未导入，追加到顶部 import
-from tea_agent.config import get_config, save_config
+from tea_agent.config import get_config, save_config, load_config
 import platform as _platform
 
 # ====================== 记忆管理对话框 ======================
@@ -934,9 +934,10 @@ class ConfigDialog(tk.Toplevel):
 # NOTE: 2026-05-06 19:32:03, self-evolved by tea_agent --- ConfigDialog 文档字符串更新，反映新增向量模型配置
     """配置编辑弹窗 — 编辑主模型/便宜模型/向量模型及运行时参数"""
 
-    def __init__(self, parent, on_save=None):
+    def __init__(self, parent, on_save=None, config_path=None):
         super().__init__(parent)
         self.on_save = on_save
+        self._config_path = config_path
 # NOTE: 2026-05-06 19:31:57, self-evolved by tea_agent --- ConfigDialog 窗口尺寸微调适配新增 Tab
         self.title("⚙️ 配置编辑")
 # NOTE: 2026-05-17 08:55:29, self-evolved by tea_agent --- 增大 ConfigDialog 窗口以适应新增 Tab
@@ -946,7 +947,7 @@ class ConfigDialog(tk.Toplevel):
         self.grab_set()
 
         _init_fonts()
-        self._cfg = get_config()
+        self._cfg = load_config(self._config_path) if self._config_path else get_config()
         self._create_ui()
         self._load_values()
 
@@ -1269,7 +1270,8 @@ class ConfigDialog(tk.Toplevel):
 
         try:
 # NOTE: 2026-05-04 17:58:01, self-evolved by tea_agent --- GUI 配置保存状态提示使用实际保存路径
-            saved_path = save_config(cfg)
+# NOTE: 2026-05-20 gen by tea_agent, 保存到当前配置对应的文件，而非默认路径
+            saved_path = save_config(cfg, config_path=self._config_path)
             self._status_var.set(f"✅ 已保存到 {saved_path}")
             if self.on_save:
                 self.on_save(cfg)

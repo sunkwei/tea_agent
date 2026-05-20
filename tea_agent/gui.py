@@ -194,7 +194,7 @@ if HAS_SNI:
 
 # NOTE: 2026-05-04 18:47:26, self-evolved by tea_agent --- TkGUI 继承 AgentCore，消除重复代码
 class TkGUI(AgentCore):
-    def __init__(self, root, debug:bool=False):
+    def __init__(self, root, debug:bool=False, config_fname:str=""):
         self.root = root
         import os
         self._initial_cwd = os.path.abspath(os.getcwd())  # NOTE: 2026-05-16 gen by tea_agent, 启动时固化完整路径
@@ -205,7 +205,7 @@ class TkGUI(AgentCore):
         self.sess = None  # 预设，AgentCore._init_session 会创建它
 
         # ── AgentCore 初始化：配置、目录、Storage/Toolkit、会话 ──
-        super().__init__(debug=debug)
+        super().__init__(debug=debug, config_path=config_fname)
 
         # NOTE: 2026-05-20 gen by tea_agent, 组件委托（composition）
         self.stream_mgr = StreamManager(self)
@@ -1002,7 +1002,6 @@ class TkGUI(AgentCore):
         TopicDialog(self.root, self.db,
                     on_switch=lambda tid: self.root.after(0, self.switch_topic, tid))
 
-# NOTE: 2026-05-01 15:33:25, self-evolved by tea_agent --- 添加 TkGUI.open_config_dialog 方法（紧挨 open_memory_dialog）
     def open_memory_dialog(self):
         """打开记忆管理对话框"""
         MemoryDialog(self.root, self.db)
@@ -1022,7 +1021,7 @@ class TkGUI(AgentCore):
                             pass
             self._update_status("⚙️ 配置已更新")
 
-        ConfigDialog(self.root, on_save=on_save)
+        ConfigDialog(self.root, on_save=on_save, config_path=self._config_path)
 
     def interrupt(self, e=None):
         if self.generating:
@@ -1105,22 +1104,15 @@ class TkGUI(AgentCore):
         return self.renderer._hide_raw_check_btn()
 
 # NOTE: 2026-05-20 gen by tea_agent, 添加 timeout 参数支持 debug 模式超时自动退出
-def main(debug:bool=False, no_gui:bool=False, timeout:int=0):
+def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str=""):
     """启动 GUI 主界面。
     
     Args:
         debug: 调试模式
-        no_gui: 回退到 CLI 模式
         timeout: 超时秒数，超时后自动关闭窗口（0=不超时，用于自动化测试）
     """
-    if no_gui:
-        # 回退到 CLI 模式
-        from tea_agent.tea_main_cli import main as cli_main
-        cli_main()
-        return
-    
     root = tk.Tk()
-    app = TkGUI(root, debug=debug)
+    app = TkGUI(root, debug=debug, config_fname=config_fname)
     
     if timeout > 0:
         logger.info(f"GUI debug timeout set: {timeout}s, will auto-close")
@@ -1141,8 +1133,10 @@ if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser(description="Tea Agent GUI")
     ap.add_argument("--debug", action="store_true", help="调试模式")
-    ap.add_argument("--no-gui", action="store_true", help="回退到 CLI 模式")
-    ap.add_argument("--timeout", type=int, default=0,
-                    help="超时秒数，超时后自动关闭（用于自动化测试）")
+    ap.add_argument(
+        "--timeout", type=int, default=0,
+        help="超时秒数，超时后自动关闭（用于自动化测试）"
+    )
+    ap.add_argument("--config", type=str, help="配置文件路径")
     args = ap.parse_args()
-    main(debug=args.debug, no_gui=args.no_gui, timeout=args.timeout)
+    main(debug=args.debug, timeout=args.timeout, config_fname=args.config)

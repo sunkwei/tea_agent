@@ -199,7 +199,9 @@ class AgentConfig:
     memory_dedup_threshold: float = 0.3  # 记忆去重相似度阈值 (0~1)，bigram Jaccard
 # NOTE: 2026-04-30 09:47:45, self-evolved by tea_agent --- GUI单页加载对话数默认从30改为50，防止加载过多导致卡顿
     chat_page_size: int = 50  # GUI 单页加载的对话轮数（最多50条）
-
+    # 2026-05-20 gen by Tea Agent, L2/L3分层压缩参数
+    history_l2_max: int = 30    # L2最多保留轮数（含user+assistant，不含工具轮）
+    history_l3_batch: int = 10  # L3摘要批处理大小（攒够N条触发便宜模型摘要）
     # 2026-04-30 gen by deepseek-v4-pro, 运行时配置读写方法（支持自我调优）
 
     # 可运行时修改的配置键白名单
@@ -208,8 +210,17 @@ class AgentConfig:
         "keep_turns", "max_tool_output", "max_assistant_content",
         "extra_iterations_on_continue", "memory_extraction_threshold",
         "memory_dedup_threshold", "chat_page_size",
+        "history_l2_max", "history_l3_batch",  # 2026-05-20 gen by Tea Agent, L2/L3分层压缩
     }
 
+    # 类型映射
+    _CONFIG_TYPES = {
+        "max_history": int, "max_iterations": int, "enable_thinking": bool,
+        "keep_turns": int, "max_tool_output": int, "max_assistant_content": int,
+        "extra_iterations_on_continue": int, "memory_extraction_threshold": int,
+        "memory_dedup_threshold": float, "chat_page_size": int,
+        "history_l2_max": int, "history_l3_batch": int,
+    }
     # 类型映射
     _CONFIG_TYPES = {
         "max_history": int, "max_iterations": int, "enable_thinking": bool,
@@ -382,7 +393,9 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
             cfg.memory_extraction_threshold = int(data.get("memory_extraction_threshold", cfg.memory_extraction_threshold))
             cfg.memory_dedup_threshold = float(data.get("memory_dedup_threshold", cfg.memory_dedup_threshold))
             cfg.chat_page_size = int(data.get("chat_page_size", cfg.chat_page_size))
-            
+            # 2026-05-20 gen by Tea Agent, L2/L3分层压缩
+            cfg.history_l2_max = int(data.get("history_l2_max", cfg.history_l2_max))
+            cfg.history_l3_batch = int(data.get("history_l3_batch", cfg.history_l3_batch))            
         except Exception:
             pass  # 加载失败时使用默认空配置
 
@@ -481,7 +494,9 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     data["memory_extraction_threshold"] = cfg.memory_extraction_threshold
     data["memory_dedup_threshold"] = cfg.memory_dedup_threshold
     data["chat_page_size"] = cfg.chat_page_size
-    
+    # 2026-05-20 gen by Tea Agent, L2/L3分层压缩
+    data["history_l2_max"] = cfg.history_l2_max
+    data["history_l3_batch"] = cfg.history_l3_batch    
     with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
@@ -578,8 +593,13 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "memory_dedup_threshold: 0.3\n\n"
 # NOTE: 2026-04-30 09:47:45, self-evolved by tea_agent --- create_default_config模板同步更新chat_page_size默认值30→50
         "# GUI 单页加载的最大对话轮数（超过则省略更早的对话）\n"
-        "chat_page_size: 50\n"
-    )
+        "# GUI 单页加载的最大对话轮数（超过则省略更早的对话）\n"
+        "chat_page_size: 50\n\n"
+        "# 2026-05-20 gen by Tea Agent, L2/L3分层压缩参数\n"
+        "# L2 最大保留轮数（用户+助手对，不含工具轮次）\n"
+        "history_l2_max: 30\n\n"
+        "# L3 摘要批处理：每攒够 N 条L2溢出，触发便宜模型摘要合并\n"
+        "history_l3_batch: 10\n"    )
 
     with open(yaml_path, "w", encoding="utf-8") as f:
         f.write(template)

@@ -72,11 +72,11 @@ class ChatRenderer:
                 cleaned = fixed
         # 3. 渲染
         # NOTE: 2026-05-20 gen by tea_agent, 调试：渲染前打印完整 HTML 到终端，便于排错
-        print("=" * 60)
-        print("HTML_BYTES_BEGIN")
-        print(cleaned)
-        print("HTML_BYTES_END")
-        print("=" * 60)
+        # print("=" * 60)
+        # print("HTML_BYTES_BEGIN")
+        # print(cleaned)
+        # print("HTML_BYTES_END")
+        # print("=" * 60)
         try:
             self.gui.chat_view.load_html(cleaned)
         except Exception as e:

@@ -25,7 +25,7 @@ def test_storage_init():
         assert s is not None
         # 验证基本操作
         tid = s.create_topic("测试主题")
-# NOTE: 2026-05-16 12:56:55, self-evolved by tea_agent --- 修复 test_storage_init: topic_id 是 UUID 字符串，用 isinstance+len 替代 int 比较
+        # NOTE: 2026-05-16 12:56:55, self-evolved by tea_agent --- 修复 test_storage_init: topic_id 是 UUID 字符串，用 isinstance+len 替代 int 比较
         assert isinstance(tid, str) and len(tid) > 0, f"topic_id should be non-empty str, got {tid!r}"
         topics = s.list_topics()
         assert any(t["topic_id"] == tid for t in topics)

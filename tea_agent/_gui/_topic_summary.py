@@ -10,8 +10,8 @@ from typing import Optional, List, Dict
 
 logger = logging.getLogger("main_db_gui")
 
-# 从 session_summarizer 导入共享 prompt 模板
-from tea_agent.session_summarizer import _TOPIC_SUMMARY_SYSTEM, _TOPIC_SUMMARY_USER_TEMPLATE
+# 从 session_prompts 导入共享 prompt 模板
+from tea_agent.session_prompts import TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_TEMPLATE
 
 
 def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Optional[str]:
@@ -49,7 +49,7 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
     if not user_msgs:
         return None
 
-    user_content = _TOPIC_SUMMARY_USER_TEMPLATE.format(
+    user_content = TOPIC_SUMMARY_USER_TEMPLATE.format(
         user_msgs="\n".join(user_msgs)
     )
 
@@ -59,7 +59,7 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
         response = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": _TOPIC_SUMMARY_SYSTEM},
+                {"role": "system", "content": TOPIC_SUMMARY_SYSTEM},
                 {"role": "user", "content": user_content},
             ],
             temperature=0.3,

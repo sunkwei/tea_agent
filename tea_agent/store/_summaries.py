@@ -102,18 +102,54 @@ class SummaryStore(StoreComponent):
         c.close()
 
     def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str,
-                        files: list = None) -> list:
-        """将一轮对话推入 Level 2，最多保留 5 轮，返回溢出条目。"""
+                        files: list = None, max_level2: int = 30) -> list:
+        """
+        2026-05-20 gen by Tea Agent, L2扩容+分层压缩
+        将一轮对话推入 Level 2，最多保留 max_level2 轮，返回溢出条目（进入L3待处理）。
+        """
         level2 = self.get_level2(topic_id)
         entry = {"user": user_msg, "assistant": ai_msg}
         if files:
             entry["files"] = files
         level2.append(entry)
-        overflow = level2[:-5] if len(level2) > 5 else []
-        level2 = level2[-5:]
+        overflow = level2[:-max_level2] if len(level2) > max_level2 else []
+        level2 = level2[-max_level2:]
         self.set_level2(topic_id, level2)
         return overflow
 
+    # ── L3 待处理缓冲（批处理：攒够 N 条再触发摘要）──
+
+    def get_l3_pending(self, topic_id: str) -> list:
+        """获取该 topic 的 L3 待处理缓冲。"""
+        c = self.conn.cursor()
+        c.execute("SELECT l3_pending_json FROM topics WHERE topic_id = ?", (topic_id,))
+        row = c.fetchone()
+        c.close()
+        if row and row[0]:
+            try:
+                return json.loads(row[0])
+            except json.JSONDecodeError:
+                return []
+        return []
+
+    def push_l3_pending(self, topic_id: str, items: list):
+        """将溢出条目追加到 L3 待处理缓冲。"""
+        existing = self.get_l3_pending(topic_id)
+        existing.extend(items)
+        c = self.conn.cursor()
+        c.execute(
+            "UPDATE topics SET l3_pending_json = ? WHERE topic_id = ?",
+            (json.dumps(existing, ensure_ascii=False), topic_id),
+        )
+        self.conn.commit()
+        c.close()
+
+    def clear_l3_pending(self, topic_id: str):
+        """清空 L3 待处理缓冲（摘要完成后调用）。"""
+        c = self.conn.cursor()
+        c.execute("UPDATE topics SET l3_pending_json = '' WHERE topic_id = ?", (topic_id,))
+        self.conn.commit()
+        c.close()
     # ── 摘要标记 ──
 
     def mark_as_summarized(self, conversation_id: str):

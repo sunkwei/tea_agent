@@ -30,6 +30,7 @@ MAX_NEWS_PER_CHANNEL = 20
 INDEX_INTERVAL_MIN = 10
 NEWS_H, NEWS_M = 9, 0
 IDX_START_H, IDX_START_M = 9, 0
+IDX_END_H, IDX_END_M = 15, 0
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

@@ -487,6 +487,28 @@ tea_agent/
 
 ---
 
+## 📱 DEMO 应用
+
+TeaAgent 可用于构建各类定时/自动化 Demo 应用，以下为示例：
+
+### news_CSI300 — 新华网新闻 + 沪深300指数定时抓取
+
+`demo/news_CSI300.py` 是一个完整的定时数据采集应用：
+
+- **9:00** 从新华网（时政/国际/财经）各抓取 ≤20 条新闻，存入 SQLite
+- **9:00-15:00** 每 10 分钟从新浪抓取沪深300指数，存入 SQLite
+- 启动时根据当前时间自动判断行为（盘前等待 / 盘中采集 / 盘后仅新闻）
+
+```bash
+cd demo
+pip install requests beautifulsoup4
+python news_CSI300.py
+```
+
+数据存储在 `demo/news_csi300.db`，日志输出到 `demo/news_CSI300.log`。
+
+> 更多 Demo 应用持续添加中，欢迎贡献。
+
 ## 🚀 快速开始
 
 ### 环境

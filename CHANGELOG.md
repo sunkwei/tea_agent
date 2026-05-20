@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.2] - 2026-05-20
+### Bug Fixes
+- fix: `_post_chat_pipeline` 中 `self.config` → `self._cfg`，修复 AttributeError: 'TkGUI' object has no attribute 'config'
+
+### Improvements
+- improve: 版本号同步 — `__init__.py` 从 0.8.2 对齐 pyproject.toml 到 0.9.2
+
+
+
 
 ## [0.8.2] - 2026-05-15
 ### New Features

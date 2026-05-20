@@ -508,6 +508,62 @@ python news_CSI300.py
 数据存储在 `demo/news_csi300.db`，日志输出到 `demo/news_CSI300.log`。
 
 > 更多 Demo 应用持续添加中，欢迎贡献。
+
+#### 计划任务自动运行
+
+`demo/setup_scheduled_task.bat` — 以管理员身份运行，创建 Windows 计划任务：
+- **周一至周五 15:10** 自动执行 `python csi300_predictor.py --task`
+- 自动预测当日走势 + 回填昨日实际结果 + 保存模型快照
+- 日志输出到 `demo/logs/task_YYYY-MM-DD.log`
+
+```bash
+# 手动安装计划任务（管理员权限）
+setup_scheduled_task.bat
+
+# 管理命令
+schtasks /query /tn "CSI300_Predictor_Daily" /v   # 查看任务
+schtasks /run   /tn "CSI300_Predictor_Daily"       # 手动运行
+schtasks /delete /tn "CSI300_Predictor_Daily" /f   # 删除任务
+```
+
+#### 数据库扩展结构
+
+`--task` 模式会在 `news_csi300.db` 中自动创建两张新表：
+
+```sql
+-- 每日预测记录
+CREATE TABLE predictions (
+    date TEXT PRIMARY KEY,        -- 预测日期
+    pred_up_prob REAL,            -- 上涨概率
+    pred_flat_prob REAL,          -- 持平概率
+    pred_down_prob REAL,          -- 下跌概率
+    pred_direction TEXT,          -- 预测方向 (up/flat/down)
+    pred_curve_a/b/c/r2 REAL,     -- 预测二次曲线参数
+    pred_shape_desc TEXT,         -- 形态描述
+    sentiment_score REAL,         -- 情感得分
+    actual_direction TEXT,        -- 实际方向（15:10后回填）
+    actual_change_pct REAL,       -- 实际涨跌幅
+    prediction_correct INTEGER,   -- 预测是否正确 (1/0/NULL)
+    sample_count INTEGER,         -- 训练样本数
+    k_value INTEGER               -- KNN 参数
+);
+
+-- 模型快照（每天一份）
+CREATE TABLE model_snapshots (
+    date TEXT,                    -- 快照日期
+    vectorizer_type TEXT,         -- embedding/tfidf
+    vector_dim INTEGER,           -- 向量维度
+    k_value INTEGER,              -- KNN 参数
+    training_samples INTEGER,     -- 训练样本数
+    up/flat/down_count INTEGER,   -- 标签分布
+    loocv_accuracy REAL,          -- 留一法准确率
+    curve_shape_accuracy REAL,    -- 曲线形态准确率
+    curve_a/b_mae REAL,           -- 曲线参数 MAE
+    vectorizer_params TEXT        -- 向量器参数 (JSON)
+);
+```
+
+
 ### csi300_predictor — 基于新闻预测沪深300日内走势
 
 `demo/csi300_predictor.py` 基于历史新闻与指数数据，预测当日 CSI300 收盘涨跌：

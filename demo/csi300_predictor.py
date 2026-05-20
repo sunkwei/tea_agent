@@ -21,7 +21,7 @@
 
 import os, re, sys, json, time, sqlite3, logging, argparse, math
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 from typing import Optional, List, Tuple
 
@@ -57,6 +57,227 @@ logging.basicConfig(
     handlers=[logging.FileHandler(LOG_PATH, encoding="utf-8"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
+
+
+# ============================================================
+# 数据库扩展: 预测结果 + 模型快照
+# ============================================================
+def init_db(db_path: Path = DB_PATH):
+    """初始化/迁移数据库，创建 predictions 和 model_snapshots 表"""
+    conn = sqlite3.connect(str(db_path))
+    c = conn.cursor()
+    c.execute("""CREATE TABLE IF NOT EXISTS predictions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL UNIQUE,
+        pred_up_prob REAL,
+        pred_flat_prob REAL,
+        pred_down_prob REAL,
+        pred_direction TEXT,
+        pred_curve_a REAL,
+        pred_curve_b REAL,
+        pred_curve_c REAL,
+        pred_curve_r2 REAL,
+        pred_shape_desc TEXT,
+        sentiment_score REAL,
+        positive_keyword_count INTEGER,
+        negative_keyword_count INTEGER,
+        actual_direction TEXT,
+        actual_change_pct REAL,
+        prediction_correct INTEGER,
+        news_count INTEGER,
+        sample_count INTEGER,
+        k_value INTEGER,
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+    )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS model_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        vectorizer_type TEXT,
+        vector_dim INTEGER,
+        k_value INTEGER,
+        training_samples INTEGER,
+        up_count INTEGER,
+        flat_count INTEGER,
+        down_count INTEGER,
+        loocv_accuracy REAL,
+        curve_shape_accuracy REAL,
+        curve_a_mae REAL,
+        curve_b_mae REAL,
+        vectorizer_params TEXT,
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+    )""")
+    conn.commit()
+    conn.close()
+
+
+def save_prediction(db_path: Path, date: str, pred: dict, curve_pred: dict,
+                    strat: dict, news_count: int, sample_count: int, k: int):
+    """保存单日预测结果到 DB"""
+    conn = sqlite3.connect(str(db_path))
+    c = conn.cursor()
+    c.execute("""INSERT OR REPLACE INTO predictions
+        (date, pred_up_prob, pred_flat_prob, pred_down_prob, pred_direction,
+         pred_curve_a, pred_curve_b, pred_curve_c, pred_curve_r2, pred_shape_desc,
+         sentiment_score, positive_keyword_count, negative_keyword_count,
+         news_count, sample_count, k_value)
+        VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?, ?,?,?)""",
+        (date, float(pred['up']), float(pred['flat']), float(pred['down']), max(pred, key=pred.get),
+         float(curve_pred['a']), float(curve_pred['b']), float(curve_pred['c']), float(curve_pred.get('r2',0)),
+         curve_pred.get('shape_desc',''),
+         strat['sentiment'], strat['positive_count'], strat['negative_count'],
+         news_count, sample_count, k))
+    conn.commit()
+    conn.close()
+    logger.info(f"预测已保存: {date}")
+
+
+def update_actual_outcome(db_path: Path, date: str):
+    """回填实际结果到已有预测记录"""
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+
+    # 获取该日 index_data
+    c.execute("SELECT time, price FROM index_data WHERE date=? ORDER BY time", (date,))
+    rows = c.fetchall()
+    if len(rows) < 2:
+        conn.close()
+        return
+
+    idx_dict = {r['time']: r['price'] for r in rows}
+    price_9 = _find_closest(idx_dict, "09:00")
+    price_15 = _find_closest(idx_dict, "15:00")
+    if price_9 is None or price_15 is None:
+        conn.close()
+        return
+
+    change_pct = round((price_15 - price_9) / price_9 * 100, 2)
+    if change_pct > UP_THRESHOLD * 100:
+        actual_dir = "up"
+    elif change_pct < DOWN_THRESHOLD * 100:
+        actual_dir = "down"
+    else:
+        actual_dir = "flat"
+
+    # 更新预测记录
+    c.execute("SELECT pred_direction FROM predictions WHERE date=?", (date,))
+    pred_row = c.fetchone()
+    if pred_row:
+        correct = 1 if pred_row['pred_direction'] == actual_dir else 0
+        c.execute("""UPDATE predictions SET
+            actual_direction=?, actual_change_pct=?, prediction_correct=?
+            WHERE date=?""", (actual_dir, change_pct, correct, date))
+        conn.commit()
+        logger.info(f"实际结果已回填: {date} {actual_dir} {change_pct:+.2f}% {'✓' if correct else '✗'}")
+    conn.close()
+
+
+def save_model_snapshot(db_path: Path, predictor, date: str):
+    """保存模型快照（参数、分布、性能）"""
+    conn = sqlite3.connect(str(db_path))
+    c = conn.cursor()
+
+    counter = Counter(predictor.labels)
+
+    # 评估性能（如果有足够样本）
+    loocv_acc = None
+    shape_acc = None
+    a_mae = None
+    b_mae = None
+
+    if len(predictor.samples) >= 2:
+        result = predictor.evaluate(predictor.samples)
+        if result:
+            loocv_acc = round(result['accuracy'], 4)
+
+        # 曲线评估
+        curve_result = _eval_curve_silent(predictor, predictor.samples)
+        if curve_result:
+            shape_acc = round(curve_result['shape_acc'], 4)
+            a_mae = round(curve_result['a_mae'], 4)
+            b_mae = round(curve_result['b_mae'], 4)
+
+    # vectorizer 参数
+    viz_params = None
+    if predictor.vectorizer._tfidf_vocab is not None:
+        import json
+        viz_params = json.dumps({
+            "type": "tfidf",
+            "dim": predictor.vectorizer.dim,
+            "vocab_size": len(predictor.vectorizer._tfidf_vocab),
+        }, ensure_ascii=False)
+    else:
+        viz_params = '{"type": "embedding", "dim": ' + str(predictor.vectorizer.dim) + '}'
+
+    c.execute("""INSERT INTO model_snapshots
+        (date, vectorizer_type, vector_dim, k_value, training_samples,
+         up_count, flat_count, down_count,
+         loocv_accuracy, curve_shape_accuracy, curve_a_mae, curve_b_mae,
+         vectorizer_params)
+        VALUES (?,?,?,?,?, ?,?,?, ?,?,?,?, ?)""",
+        (date,
+         "embedding" if predictor.vectorizer._tfidf_vocab is None else "tfidf",
+         predictor.vectorizer.dim, predictor.k, len(predictor.samples),
+         counter.get('up', 0), counter.get('flat', 0), counter.get('down', 0),
+         loocv_acc, shape_acc, a_mae, b_mae,
+         viz_params))
+    conn.commit()
+    conn.close()
+    logger.info(f"模型快照已保存: {date}")
+
+
+
+def _describe_curve(a: float, b: float) -> str:
+    """用自然语言描述曲线形态"""
+    parts = []
+    if b > 0.01:
+        parts.append("整体上行")
+    elif b < -0.01:
+        parts.append("整体下行")
+    else:
+        parts.append("横盘震荡")
+
+    if a > 0.005:
+        parts.append("加速" + ("上涨" if b > 0 else "下跌"))
+    elif a < -0.005:
+        parts.append(("涨势" if b > 0 else "跌势") + "趋缓")
+    else:
+        parts.append("匀速变动")
+
+    return "，".join(parts)
+
+def _eval_curve_silent(predictor, samples):
+    """静默版曲线评估，返回指标字典"""
+    import numpy as np
+    n = len(samples)
+    if n < 2:
+        return None
+
+    errors_a, errors_b = [], []
+    shape_correct = 0
+
+    for s in samples:
+        other = [o for o in samples if o["date"] != s["date"]]
+        if len(other) < 1:
+            continue
+        tmp = CSIPredictor(k=predictor.k)
+        tmp.fit(other)
+        curve_pred = tmp.predict_curve(s["text"])
+        actual = s["curve_feat"]
+        errors_a.append(abs(curve_pred["a"] - actual["a"]))
+        errors_b.append(abs(curve_pred["b"] - actual["b"]))
+        shape_ok = (
+            curve_pred["convexity"].startswith(actual["convexity"])
+            and curve_pred["trend"] == actual["trend"]
+        )
+        if shape_ok:
+            shape_correct += 1
+
+    return {
+        "shape_acc": shape_correct / n,
+        "a_mae": float(np.mean(errors_a)),
+        "b_mae": float(np.mean(errors_b)),
+    }
 
 # ============================================================
 # 数据加载
@@ -601,25 +822,6 @@ class CSIPredictor:
 
 
 
-def _describe_curve(a: float, b: float) -> str:
-    """用自然语言描述曲线形态"""
-    parts = []
-    if b > 0.01:
-        parts.append("整体上行")
-    elif b < -0.01:
-        parts.append("整体下行")
-    else:
-        parts.append("横盘震荡")
-
-    if a > 0.005:
-        parts.append("加速" + ("上涨" if b > 0 else "下跌"))
-    elif a < -0.005:
-        parts.append(("涨势" if b > 0 else "跌势") + "趋缓")
-    else:
-        parts.append("匀速变动")
-
-    return "，".join(parts)
-
     def evaluate(self, samples: list = None):
         """回测评估: 留一法交叉验证"""
         if samples is None:
@@ -747,6 +949,8 @@ def main():
     parser.add_argument("--eval", action="store_true", help="仅回测评估")
     parser.add_argument("--curve", action="store_true", help="回测并对比预测曲线 vs 真实曲线")
     parser.add_argument("--predict", type=str, default=None, help="预测指定日期的走势 (格式: YYYY-MM-DD)")
+    parser.add_argument("--save-db", action="store_true", help="预测今日并保存到 DB（适合计划任务调用）")
+    parser.add_argument("--task", action="store_true", help="计划任务模式: 预测今日 + 回填昨日 + 保存快照")
     parser.add_argument("--list", action="store_true", help="列出所有样本日期")
     args = parser.parse_args()
 
@@ -754,6 +958,9 @@ def main():
     if not db_path.exists():
         logger.error(f"数据库不存在: {db_path}")
         sys.exit(1)
+
+    # 初始化扩展表
+    init_db(db_path)
 
     news_by_date, idx_series_by_date = load_data(db_path)
     samples = build_samples(news_by_date, idx_series_by_date)
@@ -775,6 +982,52 @@ def main():
     # 训练
     predictor = CSIPredictor(k=args.k)
     predictor.fit(samples)
+
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    if args.task or args.save_db:
+        # 计划任务模式: 预测今日 + 保存快照
+        logger.info("=" * 60)
+        logger.info(f"计划任务模式: 预测 {today_str}")
+        logger.info("=" * 60)
+
+        predictor = CSIPredictor(k=args.k)
+        if samples:
+            predictor.fit(samples)
+        else:
+            logger.warning("无历史样本，跳过训练")
+            return
+
+        # 回填昨日实际结果
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        update_actual_outcome(db_path, yesterday)
+
+        # 预测今日
+        news_list = news_by_date.get(today_str, [])
+        if news_list:
+            text = " ".join(
+                n["title"] + ("。" + n["summary"] if n["summary"] else "")
+                for n in news_list
+            )
+            pred = predictor.predict(text)
+            curve_pred = predictor.predict_curve(text)
+            strat = extract_strategy_features(text)
+
+            print(f"\n{today_str} 预测结果:")
+            print(f"  涨: {pred['up']:.2%}  平: {pred['flat']:.2%}  跌: {pred['down']:.2%}")
+            print(f"  方向: {max(pred, key=pred.get)}")
+            print(f"  曲线: {curve_pred['shape_desc']}")
+
+            save_prediction(db_path, today_str, pred, curve_pred, strat,
+                          len(news_list), len(samples), args.k)
+        else:
+            logger.warning(f"{today_str} 无新闻数据，跳过预测")
+
+        # 保存模型快照
+        if samples:
+            save_model_snapshot(db_path, predictor, today_str)
+
+        return
 
     if args.predict:
         date = args.predict

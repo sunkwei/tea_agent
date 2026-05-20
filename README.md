@@ -548,6 +548,13 @@ CREATE TABLE predictions (
     k_value INTEGER               -- KNN 参数
 );
 
+-- 日内走势图（JPG blob）
+CREATE TABLE fig (
+    date TEXT,                    -- 日期
+    fig_jpg BLOB,                 -- 走势图 JPG (37采样点+5关键点+拟合曲线)
+    created_at TEXT               -- 创建时间
+);
+
 -- 模型快照（每天一份）
 CREATE TABLE model_snapshots (
     date TEXT,                    -- 快照日期
@@ -585,6 +592,14 @@ python demo/csi300_predictor.py --predict 2026-05-20
 
 # 调整 KNN 近邻数
 python demo/csi300_predictor.py --k 7 --eval
+
+# 从 DB 导出某日走势图
+python -c "from demo.csi300_predictor import export_fig_from_db, DB_PATH; export_fig_from_db(DB_PATH, '2026-05-20', 'fig_0520.jpg')"
+```
+
+> 绘图需要 `matplotlib`，可选安装: `pip install matplotlib`
+
+
 ```
 
 

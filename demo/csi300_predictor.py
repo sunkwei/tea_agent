@@ -24,6 +24,18 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 from typing import Optional, List, Tuple
+import io
+
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    # 设置中文字体
+    plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'WenQuanYi Micro Hei', 'DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False
+    HAS_MPL = True
+except ImportError:
+    HAS_MPL = False
 
 import numpy as np
 
@@ -87,6 +99,12 @@ def init_db(db_path: Path = DB_PATH):
         news_count INTEGER,
         sample_count INTEGER,
         k_value INTEGER,
+        created_at TEXT DEFAULT (datetime('now','localtime'))
+    )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS fig (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        fig_jpg BLOB,
         created_at TEXT DEFAULT (datetime('now','localtime'))
     )""")
     c.execute("""CREATE TABLE IF NOT EXISTS model_snapshots (
@@ -279,6 +297,111 @@ def _eval_curve_silent(predictor, samples):
         "b_mae": float(np.mean(errors_b)),
     }
 
+def plot_and_save_fig(db_path: Path, date: str, series: List[Tuple[str, float]],
+                      keypoints: List[Tuple[float, float]],
+                      curve: Tuple[float, float, float, float],
+                      curve_feat: dict, label: str) -> bool:
+    """绘制日内走势图并存入 DB 的 fig 表。"""
+    if not HAS_MPL:
+        logger.warning("matplotlib 未安装，跳过绘图")
+        return False
+
+    import numpy as np
+
+    # 解析全部采样点
+    all_pts = []
+    for t_str, price in series:
+        try:
+            h, m = map(int, t_str.split(":"))
+            all_pts.append((h * 60 + m, price))
+        except ValueError:
+            continue
+    if not all_pts:
+        return False
+
+    all_pts.sort(key=lambda x: x[0])
+    xs_all = [p[0] for p in all_pts]
+    ys_all = [p[1] for p in all_pts]
+
+    # 关键点
+    kp_sorted = sorted(keypoints, key=lambda x: x[0])
+    xs_kp = [p[0] for p in kp_sorted]
+    ys_kp = [p[1] for p in kp_sorted]
+
+    # 拟合曲线: 在全部采样点 x 范围上画
+    a, b, c, r2 = curve
+    x_min, x_max = xs_all[0], xs_all[-1]
+    x_fit = np.linspace(x_min, x_max, 100)
+    x_norm = (x_fit - x_min) / (x_max - x_min) if x_max > x_min else np.zeros_like(x_fit)
+    y_fit = a * x_norm**2 + b * x_norm + c
+
+    # 绘图
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    # 所有采样点 (蓝圈)
+    ax.scatter(xs_all, ys_all, c='#4A90D9', s=30, zorder=2, label=f'全部采样点 ({len(all_pts)})')
+    # 连线
+    ax.plot(xs_all, ys_all, c='#A0C4E8', linewidth=0.8, alpha=0.5, zorder=1)
+
+    # 5个关键点 (红星)
+    ax.scatter(xs_kp, ys_kp, c='#E74C3C', s=80, marker='*', zorder=4,
+               edgecolors='darkred', linewidths=1, label=f'关键转折点 ({len(kp_sorted)})')
+
+    # 拟合曲线 (绿线)
+    ax.plot(x_fit, y_fit, c='#27AE60', linewidth=2.5, zorder=3,
+            label=f'二次拟合 (a={a:.1f}, b={b:.1f}, R\u00b2={r2:.3f})')
+
+    # 标签
+    ax.set_xlabel('时间 (分钟, 9:00=540)', fontsize=10)
+    ax.set_ylabel('沪深300 指数', fontsize=10)
+    ax.set_title(f'{date}  CSI300 日内走势  [{label.upper()}]  {curve_feat["shape_desc"]}',
+                 fontsize=12, fontweight='bold')
+    ax.legend(loc='best', fontsize=8)
+    ax.grid(True, alpha=0.3, linestyle='--')
+
+    # x 轴刻度: 转为时间格式
+    tick_positions = range(540, 901, 30)  # 9:00 ~ 15:00 每30分钟
+    tick_labels = [f'{t//60}:{t%60:02d}' for t in tick_positions]
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels, rotation=45, fontsize=8)
+
+    plt.tight_layout()
+
+    # 保存为 JPG 到 BytesIO
+    buf = io.BytesIO()
+    fig.savefig(buf, format='jpg', dpi=120, pil_kwargs={'quality': 90})
+    plt.close(fig)
+    buf.seek(0)
+    jpg_data = buf.read()
+
+    # 存入 DB
+    conn = sqlite3.connect(str(db_path))
+    c = conn.cursor()
+    c.execute("INSERT OR REPLACE INTO fig(date, fig_jpg) VALUES(?, ?)",
+              (date, jpg_data))
+    conn.commit()
+    conn.close()
+
+    logger.info(f"走势图已保存: {date} ({len(jpg_data)} bytes)")
+    return True
+
+
+def export_fig_from_db(db_path: Path, date: str, output_path: str):
+    """从 DB 导出指定日期的走势图为 JPG 文件"""
+    conn = sqlite3.connect(str(db_path))
+    c = conn.cursor()
+    c.execute("SELECT fig_jpg FROM fig WHERE date=? ORDER BY id DESC LIMIT 1", (date,))
+    row = c.fetchone()
+    conn.close()
+    if row and row[0]:
+        with open(output_path, 'wb') as f:
+            f.write(row[0])
+        logger.info(f"走势图已导出: {output_path} ({len(row[0])} bytes)")
+        return True
+    logger.warning(f"日期 {date} 无走势图")
+    return False
+
+
 # ============================================================
 # 数据加载
 # ============================================================
@@ -365,6 +488,7 @@ def build_samples(news_by_date, idx_series_by_date):
             "curve": curve,           # (a, b, c, r2)
             "curve_feat": curve_feat, # {a, b, c, r2, convexity, trend}
             "keypoints": keypoints,   # [(t_min, price), ...]
+            "series": series,         # 原始日内序列 [(time_str, price), ...]
         })
 
     logger.info(
@@ -508,6 +632,7 @@ class CurveFitter:
     def curve_to_features(curve: Tuple[float, float, float, float]) -> dict:
         """将曲线参数转为可解释的特征字典"""
         a, b, c, r2 = curve
+        shape = _describe_curve(a, b)
         return {
             "a": round(a, 6),       # 曲率
             "b": round(b, 6),       # 整体斜率
@@ -515,6 +640,7 @@ class CurveFitter:
             "r2": round(r2, 4),     # 拟合优度
             "convexity": "convex" if a > 0 else "concave",  # 凸/凹
             "trend": "rising" if b > 0 else "falling",       # 升/降
+            "shape_desc": shape,
         }
 
 # ============================================================
@@ -1020,6 +1146,19 @@ def main():
 
             save_prediction(db_path, today_str, pred, curve_pred, strat,
                           len(news_list), len(samples), args.k)
+
+            # 绘制并保存走势图
+            today_series = idx_series_by_date.get(today_str, [])
+            if today_series and len(today_series) >= 3:
+                today_kp = CurveFitter.extract_keypoints(today_series, n=5)
+                today_curve_pred = predictor.predict_curve(text)
+                today_curve_tuple = (today_curve_pred['a'], today_curve_pred['b'],
+                                    today_curve_pred['c'], today_curve_pred.get('r2', 0))
+                today_curve_feat = CurveFitter.curve_to_features(today_curve_tuple)
+                plot_and_save_fig(db_path, today_str, today_series,
+                                today_kp, today_curve_tuple,
+                                today_curve_feat,
+                                max(pred, key=pred.get))
         else:
             logger.warning(f"{today_str} 无新闻数据，跳过预测")
 
@@ -1072,6 +1211,10 @@ def main():
         logger.info("曲线拟合回测 (LOOCV + 曲线参数对比)")
         logger.info("=" * 60)
         _eval_curve(predictor, samples)
+        # 为每个样本日绘制走势图
+        for s in samples:
+            plot_and_save_fig(db_path, s["date"], s.get("series", []),
+                            s["keypoints"], s["curve"], s["curve_feat"], s["label"])
     elif args.eval or True:
         logger.info("=" * 60)
         logger.info("留一法交叉验证 (Leave-One-Out CV)")

@@ -4,10 +4,13 @@ REM 为 csi300_predictor.py 创建 Windows 计划任务（周一到周五 15:10 
 REM 需要以管理员身份运行
 
 set "SCRIPT_DIR=%~dp0"
-set "PYTHON_EXE=python"
+set "PYTHON_EXE=%SCRIPT_DIR%..\..\venv_work\Scripts\python.exe"
 set "PREDICTOR=%SCRIPT_DIR%csi300_predictor.py"
 set "TASK_NAME=CSI300_Predictor_Daily"
 set "LOG_DIR=%SCRIPT_DIR%logs"
+
+REM 如果 venv 不存在，回退到系统 python
+if not exist "%PYTHON_EXE%" set "PYTHON_EXE=python"
 
 REM 创建日志目录
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
@@ -16,6 +19,7 @@ echo ========================================
 echo   CSI300 Predictor 计划任务安装
 echo ========================================
 echo.
+echo Python: %PYTHON_EXE%
 echo 任务名称: %TASK_NAME%
 echo 执行时间: 周一到周五 15:10
 echo 脚本路径: %PREDICTOR%
@@ -28,7 +32,7 @@ schtasks /delete /tn "%TASK_NAME%" /f 2>nul
 REM 创建新任务
 schtasks /create ^
     /tn "%TASK_NAME%" ^
-    /tr "cmd /c \"cd /d %SCRIPT_DIR% && %PYTHON_EXE% %PREDICTOR% --task >> %LOG_DIR%\task_%%date:~0,4%%%-%%date:~5,2%%%-%%date:~8,2%%%.log 2>&1\"" ^
+    /tr "cmd /c \"cd /d %SCRIPT_DIR% && \"%PYTHON_EXE%\" %PREDICTOR% --task >> %LOG_DIR%\task_%%date:~0,4%%%-%%date:~5,2%%%-%%date:~8,2%%%.log 2>&1\"" ^
     /sc weekly ^
     /d MON,TUE,WED,THU,FRI ^
     /st 15:10 ^

@@ -508,6 +508,30 @@ python news_CSI300.py
 数据存储在 `demo/news_csi300.db`，日志输出到 `demo/news_CSI300.log`。
 
 > 更多 Demo 应用持续添加中，欢迎贡献。
+### csi300_predictor — 基于新闻预测沪深300日内走势
+
+`demo/csi300_predictor.py` 基于历史新闻与指数数据，预测当日 CSI300 收盘涨跌：
+
+- **向量化**: 优先使用配置的 Embedding API，自动回退到 TF-IDF（256维）
+- **策略分类器**: KNN 余弦相似度加权投票 + 情感关键词微调
+- **回测评估**: 留一法交叉验证，输出准确率、混淆矩阵、逐日详情
+- **预测输出**: 上涨/持平/下跌 三项概率值
+
+```bash
+# 回测评估（需要 news_CSI300.py 先采集足够数据）
+python demo/csi300_predictor.py --eval
+
+# 列出所有样本日期
+python demo/csi300_predictor.py --list
+
+# 预测指定日期
+python demo/csi300_predictor.py --predict 2026-05-20
+
+# 调整 KNN 近邻数
+python demo/csi300_predictor.py --k 7 --eval
+```
+
+
 
 ## 🚀 快速开始
 

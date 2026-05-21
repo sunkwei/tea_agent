@@ -35,9 +35,9 @@ class TeaCLI(AgentCore):
     支持 --config 参数指定配置文件，实现多 agent 隔离。
     """
 
-    def __init__(self, debug: bool = False, config_path: Optional[str] = None):
+    def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False):
         # ── AgentCore 初始化：配置、目录、Storage/Toolkit、连接器、会话、MQTT ──
-        super().__init__(debug=debug, config_path=config_path)
+        super().__init__(debug=debug, config_path=config_path, disable_summary=disable_summary)
 
         # ── CLI 特定：显示状态信息 ──
         print(self._init_session_info_str())
@@ -314,9 +314,11 @@ def main():
     ap.add_argument("--oneshot", type=str, default=None, help="单次对话（非交互）")
     ap.add_argument("--config", type=str, default=None,
                     help="配置文件路径（支持多 agent 隔离）")
+    ap.add_argument("--disable_summary", action="store_true", default=False,
+                    help="禁用历史压缩和摘要，超过30轮直接丢弃")
     args = ap.parse_args()
 
-    cli = TeaCLI(debug=args.debug, config_path=args.config)
+    cli = TeaCLI(debug=args.debug, config_path=args.config, disable_summary=args.disable_summary)
 
     if args.oneshot:
         cli.run_oneshot(args.oneshot)

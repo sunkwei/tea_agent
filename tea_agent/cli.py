@@ -34,10 +34,10 @@ class TeaCLI(AgentCore):
     """Tea Agent 命令行客户端。"""
 
     def __init__(self, config_path: str = None, enable_think: bool = False,
-                 verbose: bool = False):
+                 verbose: bool = False, disable_summary: bool = False):
         self._cli_think = enable_think
         self._cli_verbose = verbose
-        super().__init__(config_path=config_path)
+        super().__init__(config_path=config_path, disable_summary=disable_summary)
 
         # 应用 CLI 参数覆盖 config 的 think 设置
         self._cfg.enable_thinking = self._cli_think
@@ -401,6 +401,8 @@ def main():
                         help="启用 thinking 模式")
     parser.add_argument("--verbose", action="store_true", default=False,
                         help="显示工具调用中间轮次")
+    parser.add_argument("--disable_summary", action="store_true", default=False,
+                        help="禁用历史压缩和摘要，超过30轮直接丢弃")
 
     args = parser.parse_args()
 
@@ -408,6 +410,7 @@ def main():
         config_path=args.config,
         enable_think=args.think,
         verbose=args.verbose,
+        disable_summary=args.disable_summary,
     )
     cli.run()
 

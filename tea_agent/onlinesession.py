@@ -79,6 +79,8 @@ class OnlineToolSession(
         supports_vision: bool = False,
         # NOTE: 2026-05-20 gen by tea_agent, reasoning 支持开关，默认开启，避免严格 API 拒收未知字段
         supports_reasoning: bool = True,
+        # NOTE: 2026-05-21 gen by tea_agent, 禁用历史压缩和摘要，超过30轮直接丢弃
+        disable_summary: bool = False,
     ):
         """
         初始化会话
@@ -150,6 +152,8 @@ class OnlineToolSession(
         self._supports_vision = supports_vision
         # NOTE: 2026-05-20 gen by tea_agent, reasoning 支持开关
         self._supports_reasoning = supports_reasoning
+        # NOTE: 2026-05-21 gen by tea_agent, 禁用历史压缩和摘要
+        self._disable_summary = disable_summary
 
         # @2026-04-29 gen by deepseek-v4-pro, max_iterations交互式续跑
         import threading
@@ -334,75 +338,96 @@ class OnlineToolSession(
                 "content": self._injected_memories_text
             })
 
-        # ── Level 3: 摘要 ──
-        has_level3 = False
-        parts = []
-        sem = getattr(self, '_semantic_summary', '')
-        tc = getattr(self, '_tool_chain_summary', '')
-        if sem:
-            parts.append(f"## 长期背景/偏好/关键结论\n{sem}")
-            has_level3 = True
-        if tc:
-            parts.append(f"## 历史工具调用链回顾\n{tc}")
-            has_level3 = True
-# NOTE: 2026-05-16 19:32:32, self-evolved by tea_agent --- _build_api_messages 根据 _supports_reasoning 动态注入 reasoning_content 字段
-        if has_level3:
-            result.append({
-                "role": "user",
-                "content": "[系统记忆 — 以下为需要遵循的有效信息和规则]\n\n" + "\n\n---\n\n".join(parts)
-            })
-            _asst = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
-            if getattr(self, '_supports_reasoning', True):
-                _asst["reasoning_content"] = ""
-            result.append(_asst)
+        # NOTE: 2026-05-21 gen by tea_agent, disable_summary 启用时跳过 L3/L2 历史构造
+        if not getattr(self, '_disable_summary', False):
+            # ── Level 3: 摘要 ──
+            has_level3 = False
+            parts = []
+            sem = getattr(self, '_semantic_summary', '')
+            tc = getattr(self, '_tool_chain_summary', '')
+            if sem:
+                parts.append(f"## 长期背景/偏好/关键结论\n{sem}")
+                has_level3 = True
+            if tc:
+                parts.append(f"## 历史工具调用链回顾\n{tc}")
+                has_level3 = True
+    # NOTE: 2026-05-16 19:32:32, self-evolved by tea_agent --- _build_api_messages 根据 _supports_reasoning 动态注入 reasoning_content 字段
+            if has_level3:
+                result.append({
+                    "role": "user",
+                    "content": "[系统记忆 — 以下为需要遵循的有效信息和规则]\n\n" + "\n\n---\n\n".join(parts)
+                })
+                _asst = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
+                if getattr(self, '_supports_reasoning', True):
+                    _asst["reasoning_content"] = ""
+                result.append(_asst)
 
-        # ── 兼容旧 _history_summary ──
-        if not has_level3 and self._history_summary:
-            result.append({
-                "role": "user",
-                "content": f"这是我们之前对话的摘要：\n{self._history_summary}"
-            })
-            _asst2 = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
-            if getattr(self, '_supports_reasoning', True):
-                _asst2["reasoning_content"] = ""
-            result.append(_asst2)
+            # ── 兼容旧 _history_summary ──
+            if not has_level3 and self._history_summary:
+                result.append({
+                    "role": "user",
+                    "content": f"这是我们之前对话的摘要：\n{self._history_summary}"
+                })
+                _asst2 = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
+                if getattr(self, '_supports_reasoning', True):
+                    _asst2["reasoning_content"] = ""
+                result.append(_asst2)
 
-        # ── Level 2: 按语义相关性筛选 ──
-        level2 = getattr(self, '_level2', [])
-        if level2:
-            current_user_msg = ""
-            for i in range(len(self.messages)-1, 0, -1):
-                if self.messages[i].get("role") == "user":
-                    cur_content = self.messages[i].get("content", "")
-                    # NOTE: 2026-05-15 gen by tea_agent, 处理多模态 content（list 格式）
-                    if isinstance(cur_content, list):
-                        current_user_msg = "".join(
-                            p.get("text", "") for p in cur_content if p.get("type") == "text"
-                        )
+            # ── Level 2: 按语义相关性筛选 ──
+            level2 = getattr(self, '_level2', [])
+            if level2:
+                current_user_msg = ""
+                for i in range(len(self.messages)-1, 0, -1):
+                    if self.messages[i].get("role") == "user":
+                        cur_content = self.messages[i].get("content", "")
+                        # NOTE: 2026-05-15 gen by tea_agent, 处理多模态 content（list 格式）
+                        if isinstance(cur_content, list):
+                            current_user_msg = "".join(
+                                p.get("text", "") for p in cur_content if p.get("type") == "text"
+                            )
+                        else:
+                            current_user_msg = str(cur_content)
+                        break
+                filtered = self._filter_level2_by_relevance(level2, current_user_msg)
+                for item in filtered:
+                    kind = item.get("kind", "full")
+                    if kind == "summary":
+                        result.append({
+                            "role": "user",
+                            "content": f"[历史相关对话摘要] {item['content']}"
+                        })
+    # NOTE: 2026-05-16 19:32:43, self-evolved by tea_agent --- Level 2 历史回复根据 _supports_reasoning 条件注入 reasoning_content
                     else:
-                        current_user_msg = str(cur_content)
-                    break
-            filtered = self._filter_level2_by_relevance(level2, current_user_msg)
-            for item in filtered:
-                kind = item.get("kind", "full")
-                if kind == "summary":
-                    result.append({
-                        "role": "user",
-                        "content": f"[历史相关对话摘要] {item['content']}"
-                    })
-# NOTE: 2026-05-16 19:32:43, self-evolved by tea_agent --- Level 2 历史回复根据 _supports_reasoning 条件注入 reasoning_content
-                else:
-                    result.append({"role": "user", "content": item.get("user", "")})
-                    _msg = {"role": "assistant", "content": item.get("assistant", "")}
-                    if getattr(self, '_supports_reasoning', True):
-                        _msg["reasoning_content"] = ""
-                    result.append(_msg)
+                        result.append({"role": "user", "content": item.get("user", "")})
+                        _msg = {"role": "assistant", "content": item.get("assistant", "")}
+                        if getattr(self, '_supports_reasoning', True):
+                            _msg["reasoning_content"] = ""
+                        result.append(_msg)
 
 # NOTE: 2026-05-16 19:32:55, self-evolved by tea_agent --- Level 1 最新消息根据 _supports_reasoning 条件注入 reasoning_content
 # NOTE: 2026-05-17 10:11:12, self-evolved by tea_agent --- _build_api_messages出口增加JSON完整性校验，防止压缩截断导致的非法JSON传给API
         # ── Level 1: 最新一轮压缩对话 ──
         _has_reasoning = getattr(self, '_supports_reasoning', True)
-        for i in range(1, len(self.messages)):
+        
+        # NOTE: 2026-05-21 gen by tea_agent, disable_summary 启用时，超过30轮的历史直接丢弃
+        disable_summary = getattr(self, '_disable_summary', False)
+        max_turns_limit = 30  # 最大保留30轮对话
+        
+        # 计算消息范围：如果 disable_summary 启用，只保留最近的消息
+        start_idx = 1  # 默认从索引1开始（跳过系统消息）
+        if disable_summary:
+            # 统计用户消息数量，超过30轮则丢弃最早的
+            user_msg_indices = []
+            for i in range(1, len(self.messages)):
+                if self.messages[i].get("role") == "user":
+                    user_msg_indices.append(i)
+            
+            if len(user_msg_indices) > max_turns_limit:
+                # 保留最近 max_turns_limit 轮用户消息的起始位置
+                start_idx = user_msg_indices[-max_turns_limit]
+                logger.info(f"disable_summary 启用: 丢弃早期历史，保留最近 {max_turns_limit} 轮 (共 {len(user_msg_indices)} 轮)")
+        
+        for i in range(start_idx, len(self.messages)):
             msg = self.messages[i]
             msg_copy = dict(msg)
             if msg_copy["role"] == "assistant" and _has_reasoning and "reasoning_content" not in msg_copy:

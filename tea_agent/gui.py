@@ -194,7 +194,7 @@ if HAS_SNI:
 
 # NOTE: 2026-05-04 18:47:26, self-evolved by tea_agent --- TkGUI 继承 AgentCore，消除重复代码
 class TkGUI(AgentCore):
-    def __init__(self, root, debug:bool=False, config_fname:str=""):
+    def __init__(self, root, debug:bool=False, config_fname:str="", disable_summary:bool=False):
         self.root = root
         import os
         self._initial_cwd = os.path.abspath(os.getcwd())  # NOTE: 2026-05-16 gen by tea_agent, 启动时固化完整路径
@@ -205,7 +205,7 @@ class TkGUI(AgentCore):
         self.sess = None  # 预设，AgentCore._init_session 会创建它
 
         # ── AgentCore 初始化：配置、目录、Storage/Toolkit、会话 ──
-        super().__init__(debug=debug, config_path=config_fname)
+        super().__init__(debug=debug, config_path=config_fname, disable_summary=disable_summary)
 
         # NOTE: 2026-05-20 gen by tea_agent, 组件委托（composition）
         self.stream_mgr = StreamManager(self)
@@ -1104,15 +1104,16 @@ class TkGUI(AgentCore):
         return self.renderer._hide_raw_check_btn()
 
 # NOTE: 2026-05-20 gen by tea_agent, 添加 timeout 参数支持 debug 模式超时自动退出
-def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str=""):
+def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str="", disable_summary:bool=False):
     """启动 GUI 主界面。
-    
+
     Args:
         debug: 调试模式
         timeout: 超时秒数，超时后自动关闭窗口（0=不超时，用于自动化测试）
+        disable_summary: 禁用历史压缩和摘要
     """
     root = tk.Tk()
-    app = TkGUI(root, debug=debug, config_fname=config_fname)
+    app = TkGUI(root, debug=debug, config_fname=config_fname, disable_summary=disable_summary)
     
     if timeout > 0:
         logger.info(f"GUI debug timeout set: {timeout}s, will auto-close")
@@ -1138,5 +1139,7 @@ if __name__ == "__main__":
         help="超时秒数，超时后自动关闭（用于自动化测试）"
     )
     ap.add_argument("--config", type=str, help="配置文件路径")
+    ap.add_argument("--disable_summary", action="store_true", default=False,
+                    help="禁用历史压缩和摘要，超过30轮直接丢弃")
     args = ap.parse_args()
-    main(debug=args.debug, timeout=args.timeout, config_fname=args.config)
+    main(debug=args.debug, timeout=args.timeout, config_fname=args.config, disable_summary=args.disable_summary)

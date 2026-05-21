@@ -2301,17 +2301,23 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 
 # NOTE: 2026-04-30 19:36:28, self-evolved by tea_agent --- 补回缺失的 __main__ 入口，使 python -m tea_agent.main_db_gui 可正常启动 GUI
 # NOTE: 2026-05-09 19:26:36, self-evolved by tea_agent --- 修复 main() no_gui 模式：用 CLI 回退替代 NotImplementedError 崩溃
-def main(debug:bool=False, no_gui:bool=False):
+def main(debug:bool=False, no_gui:bool=False, disable_summary:bool=False):
     if no_gui:
         # 回退到 CLI 模式
         from tea_agent.tea_main_cli import main as cli_main
         cli_main()
         return
-    
+
     root = tk.Tk()
-    app = TkGUI(root, debug=debug)
+    app = TkGUI(root, debug=debug, disable_summary=disable_summary)
     root.mainloop()
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    ap = argparse.ArgumentParser(description="Tea Agent GUI (main_db_gui)")
+    ap.add_argument("--debug", action="store_true", help="调试模式")
+    ap.add_argument("--disable_summary", action="store_true", default=False,
+                    help="禁用历史压缩和摘要，超过30轮直接丢弃")
+    args = ap.parse_args()
+    main(debug=args.debug, disable_summary=args.disable_summary)

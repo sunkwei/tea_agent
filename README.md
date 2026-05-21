@@ -1,4 +1,4 @@
-# TeaAgent v0.9.2
+# TeaAgent v0.9.3
 [📖 English Version](README_EN.md)
 
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**系统提示词自我进化**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
@@ -77,7 +77,7 @@ conversations (全部)
 
 ### 工具模块化：Skill 系统
 
-45 个工具按场景分为 7 个 Skill，**按需激活**以节省 token：
+46 个工具按场景分为 8 个 Skill，**按需激活**以节省 token：
 
 ```
 Skill (激活条件)                    工具数   默认
@@ -86,7 +86,8 @@ Skill (激活条件)                    工具数   默认
 📁  file_system (文件/命令操作)        4      ✅    file/exec/sudo_gui/pkg
 ⏰  utility (时间日期)                 3      ✅    gettime/date_diff/lunar
 🧠  memory_knowledge (记忆/知识库)    7      ✅    memory/kb/reflection/proactive/subconscious/explr/mode
-🔧  self_evolution (自我进化)         12            self_evolve/build/bump_version/edit/diff/lsp/...
+📋  todo_workflow (TODO工作流)          1             toolkit_todo
+🔧  self_evolution (自我进化)         10            self_evolve/build/bump_version/edit/diff/lsp/...
 🖥️  desktop_automation (截图/OCR)      4            screenshot/ocr/input/notify
 🔊  interaction (语音/搜索/知识)        3            speak/listen/search
 ```
@@ -767,6 +768,7 @@ main_model:
 |------|---------|
 | v0.9.3 | Store 拆分为 10 模块子包、GUI 重构为 `_gui/` 23模块子包、新增 LSP 代码智能引擎、新增 7 个工具（edit/diff/lsp/mcp/plan/scheduler/evolution_exp）、mode_params 模式参数覆盖、L2/L3 分层压缩参数 |
 | v0.9.1 | `toolkit_js_fetch` Playwright 无头浏览器抓取（跨平台）、pyproject.toml 增加 js_fetch 可选依赖 |
+| v0.9.3 | Skill 重组：todo_workflow 独立为单独 Skill，从 self_evolution 解耦 |
 | v0.9.2 | `_post_chat_pipeline` config→_cfg 修复、版本号同步 |
 | v0.8.2 | 版本号一致性修复，以 pyproject.toml 为准同步 || v0.7.15 | 双层记忆体系（用户记忆优先级衰减+LLM精调/项目记忆FIFO）、Store Composition拆分9模块、GUI MVC+Tk重构、分层保底+年龄衰减 |
 | v0.8.0 | 聊天图片附件支持、HtmlFrame 图片 base64 渲染、点击图片放大弹窗、GUI 标题含当前目录、工具轮始终显示 |

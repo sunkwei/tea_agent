@@ -34,6 +34,14 @@ class TeaCLI(AgentCore):
 
     def __init__(self, config_path: str = None, enable_think: bool = False,
                  verbose: bool = False, disable_summary: bool = False):
+        """Initialize  .
+        
+        Args:
+            config_path: Description.
+            enable_think: Description.
+            verbose: Description.
+            disable_summary: Description.
+        """
         self._cli_think = enable_think
         self._cli_verbose = verbose
         super().__init__(config_path=config_path, disable_summary=disable_summary)
@@ -45,9 +53,17 @@ class TeaCLI(AgentCore):
 
     # ——— AgentCore 要求的回调 ———
     def _on_post_reply(self, ai_msg, used_tools, topic_id):
+        """Internal: handle post reply event.
+        
+        Args:
+            ai_msg: Description.
+            used_tools: Description.
+            topic_id: Description.
+        """
         pass  # CLI 无需 UI 回调
 
     def _on_init_done(self):
+        """Internal: handle init done event."""
         pass
 
     def run(self):
@@ -197,6 +213,11 @@ class TeaCLI(AgentCore):
         return True
 
     def _cmd_set(self, arg: str):
+        """Internal: cmd set.
+        
+        Args:
+            arg: Description.
+        """
         if "=" not in arg:
             print("用法: /set think=on|off  或  /set verbose=on|off")
             return
@@ -216,16 +237,19 @@ class TeaCLI(AgentCore):
             print(f"❓ 未知设置: {k}（支持: think, verbose）")
 
     def _toggle_think(self):
+        """Internal: toggle think."""
         self._cli_think = not self._cli_think
         self._cfg.enable_thinking = self._cli_think
         self.sess.enable_thinking = self._cli_think
         print(f"🧠 think = {'ON' if self._cli_think else 'OFF'}")
 
     def _toggle_verbose(self):
+        """Internal: toggle verbose."""
         self._cli_verbose = not self._cli_verbose
         print(f"📢 verbose = {'ON' if self._cli_verbose else 'OFF'}")
 
     def _new_topic(self):
+        """Internal: new topic."""
         title = input("主题名称（留空自动生成）: ").strip()
         tid = self.db.create_topic(title or f"CLI 会话")
         self.current_topic_id = tid
@@ -234,6 +258,7 @@ class TeaCLI(AgentCore):
         print(f"📌 已切换到新主题: {title or tid[:8]}...")
 
     def _list_topics(self):
+        """Internal: list topics."""
         topics = self.db.list_topics()
         print(f"\n{'ID':<10} {'标题':<30} {'更新时间'}")
         print("-" * 60)
@@ -245,6 +270,11 @@ class TeaCLI(AgentCore):
             print(f"{tid:<10} {title:<30} {stamp}{mark}")
 
     def _switch_topic(self, arg: str):
+        """Internal: switch topic.
+        
+        Args:
+            arg: Description.
+        """
         tid = arg.strip()
         tp = self.db.get_topic(tid)
         if not tp:
@@ -353,6 +383,7 @@ class TeaCLI(AgentCore):
             self.sess._history_summary = ""
 
     def _print_welcome(self):
+        """Internal: print welcome."""
         cfg = self._cfg
         print(f"🤖 Tea Agent CLI")
         print(f"   模型: {cfg.main_model.model_name}")
@@ -363,6 +394,7 @@ class TeaCLI(AgentCore):
         print()
 
     def _print_help(self):
+        """Internal: print help."""
         print("""
 ┌─────────────────────────────────────────────┐
 │            Tea Agent CLI 帮助                │
@@ -383,6 +415,7 @@ class TeaCLI(AgentCore):
 """)
 
 def main():
+    """Main."""
     parser = argparse.ArgumentParser(
         description="Tea Agent CLI — 命令行 AI 助手",
         formatter_class=argparse.RawDescriptionHelpFormatter,

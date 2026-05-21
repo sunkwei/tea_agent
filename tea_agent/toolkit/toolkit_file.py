@@ -54,6 +54,12 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
         output_lines = [f"📂 Directory Listing: {target}"]
 
         def scan_dir(current_dir, indent=""):
+            """Scan dir.
+            
+            Args:
+                current_dir: Description.
+                indent: Description.
+            """
             try:
                 items = sorted(current_dir.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
             except PermissionError:
@@ -77,6 +83,7 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
         return f"❌ 未知 action: '{action}'，可选: read / write / list"
 
 def meta_toolkit_file() -> dict:
+    """Meta toolkit file."""
     return {
         "type": "function",
         "function": {

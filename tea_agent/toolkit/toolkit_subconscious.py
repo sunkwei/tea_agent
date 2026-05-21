@@ -6,6 +6,12 @@ import logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_subconscious(action: str, focus: str = None):
+    """Toolkit subconscious.
+    
+    Args:
+        action: Description.
+        focus: Description.
+    """
     logger.info(f"toolkit_subconscious called: action={action!r}, focus={focus!r}")
 
     import os, json, time, sqlite3, threading, random, re, subprocess
@@ -25,6 +31,7 @@ def toolkit_subconscious(action: str, focus: str = None):
     CHECK_INTERVAL = 30        # 检查间隔
 
     def _is_tea_agent_cwd():
+        """Internal: check if tea agent cwd."""
         cwd = os.getcwd()
         pyproj = os.path.join(cwd, "pyproject.toml")
         if os.path.exists(pyproj):
@@ -47,9 +54,15 @@ def toolkit_subconscious(action: str, focus: str = None):
         pass
 
     def _ensure_dir(path):
+        """Internal: ensure dir.
+        
+        Args:
+            path: Description.
+        """
         os.makedirs(path, exist_ok=True)
 
     def _read_state():
+        """Internal: read state."""
         if os.path.exists(STATE_FILE):
             try:
                 with open(STATE_FILE, 'r') as f:
@@ -61,12 +74,18 @@ def toolkit_subconscious(action: str, focus: str = None):
                          "goals_set":0,"auto_memories":0,"llm_adjustments":0}}
 
     def _write_state(state):
+        """Internal: write state.
+        
+        Args:
+            state: Description.
+        """
         _ensure_dir(os.path.dirname(STATE_FILE))
         state["_updated"] = datetime.now().isoformat()
         with open(STATE_FILE, 'w') as f:
             json.dump(state, f, indent=2, ensure_ascii=False)
 
     def _get_db_path():
+        """Internal: get the db path."""
         if os.path.exists(DEFAULT_DB):
             return os.path.abspath(DEFAULT_DB)
         for c in [os.path.join(os.path.dirname(os.path.abspath(__file__)),"..","..","chat_history.db"),
@@ -75,6 +94,12 @@ def toolkit_subconscious(action: str, focus: str = None):
         return os.path.abspath(DEFAULT_DB)
 
     def _extract_keywords(text, topn=20):
+        """Internal: extract keywords.
+        
+        Args:
+            text: Description.
+            topn: Description.
+        """
         sw = {'the','and','for','with','this','that','from','have','are','was','has','been','not','but',
               '的','了','是','在','和','也','就','都','而','及','与','或','一个','可以','这个',
               '如果','因为','所以','但是','然后','之后','之前','已经','还是','没有','什么','怎么',
@@ -90,10 +115,16 @@ def toolkit_subconscious(action: str, focus: str = None):
         return [(w,n) for w,n in c.most_common(topn*2) if w.lower() not in sw and n>=2][:topn]
 
     def _is_jieba_available():
+        """Internal: check if jieba available."""
         return _jieba is not None
 
     # === 阶段1: 消化记忆 ===
     def _digest_memories(storage):
+        """Internal: digest memories.
+        
+        Args:
+            storage: Description.
+        """
         if not storage or not storage.conn: return None
         cur = storage.conn.cursor()
         cur.execute("SELECT * FROM memories WHERE is_active=1 ORDER BY priority ASC, updated_at DESC LIMIT 200")
@@ -148,6 +179,13 @@ def toolkit_subconscious(action: str, focus: str = None):
 
     # === 阶段2: 消化对话 ===
     def _digest_conversations(storage, state, mm=None):
+        """Internal: digest conversations.
+        
+        Args:
+            storage: Description.
+            state: Description.
+            mm: Description.
+        """
         if not storage or not storage.conn: return {"processed":0,"extracted":[]}
         cur = storage.conn.cursor()
         last_id = state.get("last_conversation_id", 0)
@@ -189,6 +227,12 @@ def toolkit_subconscious(action: str, focus: str = None):
         return {"processed":len(convs),"extracted":extracted,"last_id":max_id}
 
     def _extract_memory_candidates(user_msg, ai_msg):
+        """Internal: extract memory candidates.
+        
+        Args:
+            user_msg: Description.
+            ai_msg: Description.
+        """
         candidates = []
         text = user_msg
         for pat in [r'记住[：:]\s*(.+?)(?:[。！\n]|$)',
@@ -218,6 +262,12 @@ def toolkit_subconscious(action: str, focus: str = None):
         return candidates[:10]
 
     def _is_duplicate_memory(cur, content):
+        """Internal: check if duplicate memory.
+        
+        Args:
+            cur: Description.
+            content: Description.
+        """
         cur.execute("SELECT content FROM memories WHERE is_active=1")
         for (existing,) in cur.fetchall():
             if existing and content:
@@ -228,6 +278,13 @@ def toolkit_subconscious(action: str, focus: str = None):
 
     # === 阶段3: 交叉关联 ===
     def _cross_link(storage, kb_dir, state):
+        """Internal: cross link.
+        
+        Args:
+            storage: Description.
+            kb_dir: Description.
+            state: Description.
+        """
         finds = []
         if not storage or not storage.conn: return finds
         cur = storage.conn.cursor()
@@ -399,6 +456,16 @@ def toolkit_subconscious(action: str, focus: str = None):
         return ins
 
     def _set_goals(digest, links, insights, conv_digest, state, db_path):
+        """Internal: set the goals.
+        
+        Args:
+            digest: Description.
+            links: Description.
+            insights: Description.
+            conv_digest: Description.
+            state: Description.
+            db_path: Description.
+        """
         goals = []
         unapp = digest.get("unapplied_reflections",0) if digest else 0
         if unapp>=3:
@@ -558,6 +625,11 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
 
     # === 执行一次完整循环 ===
     def _run_cycle(state):
+        """Internal: run cycle.
+        
+        Args:
+            state: Description.
+        """
         from tea_agent.memory import MemoryManager
         from tea_agent.store import Storage
         
@@ -616,6 +688,7 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                 except: pass
 
     def _subconscious_loop():
+        """Internal: subconscious loop."""
         state = _read_state()
         _ensure_dir(os.path.dirname(STATE_FILE))
         state["running"] = True
@@ -655,6 +728,11 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
     # 强化 Dream：创意 + 务实双模式
     # ========================
     def _dream(focus_override=None):
+        """Internal: dream.
+        
+        Args:
+            focus_override: Description.
+        """
         db_path = _get_db_path()
         kb_dir = KB_DIR
         if not os.path.exists(db_path): return {"error":"数据库不存在"}
@@ -826,6 +904,11 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         return sparks
 
     def _reverse_thinking(text):
+        """Internal: reverse thinking.
+        
+        Args:
+            text: Description.
+        """
         reversals = [("删除","创建"),("启动","停止"),("增加","减少"),("加速","减慢"),
                      ("自动","手动"),("集中","分散"),("保存","丢弃"),("优化","简化"),
                      ("记住","遗忘"),("优先","延后"),("公开","隐藏"),("永久","临时")]
@@ -837,6 +920,11 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         return f"如果完全忽略'{text[:40]}'这个约束，会释放什么新的可能性？"
 
     def _extreme_scenario(text):
+        """Internal: extreme scenario.
+        
+        Args:
+            text: Description.
+        """
         scenarios = [
             f"假设'{text[:40]}'放大100倍——如果有100倍的数据量/规模/频率，会发生什么？",
             f"假设'{text[:40]}'完全归零——如果这个条件突然消失，系统如何应对？",
@@ -911,4 +999,5 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                 "dream_focus":"dream支持focus参数: pragmatic(务实)/creative(创意)/mixed(混合)"}
 
 def meta_toolkit_subconscious() -> dict:
+    """Meta toolkit subconscious."""
     return {"type": "function", "function": {"name": "toolkit_subconscious", "description": "潜意识引擎 v2.1 — 场景自适应Dream。自动检测场景（修bug→收敛务实分析/做创意→发散联想），dream支持focus参数手动指定。start启动后每1小时循环。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop", "status", "dream", "goals", "insights"], "description": "start=启动, stop=停止, status=状态, dream=深度消化(支持focus参数: pragmatic/creative/mixed), goals=目标, insights=洞察"}, "focus": {"type": "string", "enum": ["pragmatic", "creative", "mixed"], "description": "[dream] 手动指定Dream模式: pragmatic=务实分析(bug模式识别/根因分析), creative=创意发散(跨域/反向/极端/隐喻), mixed=混合(自动)"}}, "required": ["action"]}}}

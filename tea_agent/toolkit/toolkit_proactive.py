@@ -28,12 +28,14 @@ def toolkit_proactive(action: str, content: str = "", priority: int = 2, goal_id
         return (1, "", f"自主心跳出错: {str(e)}")
 
 def _get_memory_manager():
+    """Internal: get the memory manager."""
     from tea_agent.memory import MemoryManager
     from tea_agent.store import Storage
     storage = Storage()
     return MemoryManager(storage, extraction_threshold=1, dedup_threshold=0.3)
 
 def _check_proactive():
+    """Internal: check proactive."""
     import json
     try:
         mm = _get_memory_manager()
@@ -82,6 +84,12 @@ def _check_proactive():
         return (1, "", f"检查失败: {str(e)}")
 
 def _add_goal(content: str, priority: int = 2):
+    """Internal: add goal.
+    
+    Args:
+        content: Description.
+        priority: Description.
+    """
     import json
     if not content or not content.strip():
         return (1, "", "目标内容不能为空")
@@ -101,6 +109,11 @@ def _add_goal(content: str, priority: int = 2):
         return (1, "", f"设定目标失败: {str(e)}")
 
 def _complete_goal(goal_id: int):
+    """Internal: complete goal.
+    
+    Args:
+        goal_id: Description.
+    """
     import json
     if not goal_id:
         return (1, "", "需要提供 goal_id")
@@ -112,6 +125,7 @@ def _complete_goal(goal_id: int):
         return (1, "", f"完成目标失败: {str(e)}")
 
 def _list_goals():
+    """Internal: list goals."""
     import json
     try:
         mm = _get_memory_manager()
@@ -134,7 +148,9 @@ def _list_goals():
         return (1, "", f"列出目标失败: {str(e)}")
 
 def meta_toolkit_proactive() -> dict:
+    """Meta toolkit proactive."""
     return {"type": "function", "function": {"name": "toolkit_proactive", "description": "自主心跳：Agent 的自我目标管理系统。action=check 检查待办目标/洞察，action=goal 设置目标，action=done 完成目标。实现 Agent 跨会话的自主行动能力。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["check", "goal", "done", "list_goals"], "description": "check=检查待办并返回建议, goal=设定新目标, done=标记目标完成, list_goals=列出所有目标"}, "content": {"type": "string", "description": "[goal] 目标内容"}, "priority": {"type": "integer", "description": "[goal] 优先级 0-3，默认 2", "default": 2}, "goal_id": {"type": "integer", "description": "[done] 目标ID"}}, "required": ["action"]}}}
 
 def meta_toolkit_proactive() -> dict:
+    """Meta toolkit proactive."""
     return {"type": "function", "function": {"name": "toolkit_proactive", "description": "自主心跳：Agent 的自我目标管理系统。action=check 检查待办目标/洞察，action=goal 设置目标，action=done 完成目标。实现 Agent 跨会话的自主行动能力。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["check", "goal", "done", "list_goals"], "description": "check=检查待办并返回建议, goal=设定新目标, done=标记目标完成, list_goals=列出所有目标"}, "content": {"type": "string", "description": "[goal] 目标内容"}, "priority": {"type": "integer", "description": "[goal] 优先级 0-3，默认 2", "default": 2}, "goal_id": {"type": "integer", "description": "[done] 目标ID"}}, "required": ["action"]}}}

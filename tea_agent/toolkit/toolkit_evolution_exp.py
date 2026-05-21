@@ -19,9 +19,11 @@ import time
 from datetime import datetime
 
 def _get_exp_path():
+    """Internal: get the exp path."""
     return os.path.join(os.path.expanduser("~"), ".tea_agent", "evolution_exp.json")
 
 def _load_exp_db():
+    """Internal: load exp db."""
     path = _get_exp_path()
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
@@ -29,6 +31,11 @@ def _load_exp_db():
     return []
 
 def _save_exp_db(data):
+    """Internal: save exp db.
+    
+    Args:
+        data: Description.
+    """
     path = _get_exp_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
@@ -97,6 +104,7 @@ def toolkit_evolution_exp(action="list", description="", category="", tags="", o
         return f"❌ 未知 action: {action}"
 
 def meta_toolkit_evolution_exp() -> dict:
+    """Meta toolkit evolution exp."""
     return {
         "type": "function",
         "function": {

@@ -36,6 +36,11 @@ class _SimpleTFIDF:
     """极简 TF-IDF：字符 bigram 特征 + 余弦相似度"""
 
     def __init__(self, vector_dim: int = 256):
+        """Initialize  .
+        
+        Args:
+            vector_dim: Description.
+        """
         self.vector_dim = vector_dim
         self._doc_freq: Counter = Counter()  # bigram → 出现过该 bigram 的文档数
         self._doc_count: int = 0

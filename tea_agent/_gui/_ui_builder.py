@@ -23,6 +23,11 @@ class UIBuilder:
     """界面构建器：创建所有 Tk widgets、布局、样式、快捷键"""
 
     def __init__(self, gui):
+        """Initialize  .
+        
+        Args:
+            gui: Description.
+        """
         self.gui = gui
 
     def build(self):

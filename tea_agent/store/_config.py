@@ -10,6 +10,15 @@ class ConfigHistoryStore(StoreComponent):
         self, key: str, new_value: str, old_value: Optional[str] = None,
         reason: str = "", source_reflection_id: Optional[str] = None,
     ) -> str:
+        """Add config change.
+        
+        Args:
+            key: Description.
+            new_value: Description.
+            old_value: Description.
+            reason: Description.
+            source_reflection_id: Description.
+        """
         c = self.conn.cursor()
         cid = self._new_id()
         c.execute(
@@ -26,6 +35,12 @@ class ConfigHistoryStore(StoreComponent):
         return cid
 
     def get_config_history(self, key: str = "", limit: int = 20) -> List[Dict]:
+        """Get the config history.
+        
+        Args:
+            key: Description.
+            limit: Description.
+        """
         c = self.conn.cursor()
         if key:
             c.execute(
@@ -42,6 +57,11 @@ class ConfigHistoryStore(StoreComponent):
         return [dict(r) for r in rows]
 
     def get_config_changes_since(self, since_id: str = "0") -> List[Dict]:
+        """Get the config changes since.
+        
+        Args:
+            since_id: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "SELECT * FROM config_history WHERE id > ? ORDER BY created_at ASC",

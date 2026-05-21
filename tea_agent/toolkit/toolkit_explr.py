@@ -52,6 +52,11 @@ logger = logging.getLogger("toolkit")
 _RUN_DIR = ".tea_agent_run"
 
 def _log(msg):
+    """Internal: log.
+    
+    Args:
+        msg: Description.
+    """
     print(f"[explr] {msg}")
 
 def _build_ctags(directory, run_dir):
@@ -134,7 +139,13 @@ def _build_call_graph(directory):
                 continue
 
             class CallVisitor(ast.NodeVisitor):
+                """CallVisitor class."""
                 def visit_FunctionDef(self, node):
+                    """Visit FunctionDef.
+                    
+                    Args:
+                        node: Description.
+                    """
                     defs[node.name] = {'file': relpath, 'line': node.lineno}
                     called = set()
                     for child in ast.walk(node):
@@ -148,9 +159,19 @@ def _build_call_graph(directory):
                     self.generic_visit(node)
 
                 def visit_AsyncFunctionDef(self, node):
+                    """Visit AsyncFunctionDef.
+                    
+                    Args:
+                        node: Description.
+                    """
                     self.visit_FunctionDef(node)
 
                 def visit_ClassDef(self, node):
+                    """Visit ClassDef.
+                    
+                    Args:
+                        node: Description.
+                    """
                     classes[node.name] = {'file': relpath, 'line': node.lineno}
                     self.generic_visit(node)
 
@@ -298,6 +319,12 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
     _log(f"KB: {kb_path} ({len(md):,} chars)")
 
 def _action_build(directory, force):
+    """Internal: action build.
+    
+    Args:
+        directory: Description.
+        force: Description.
+    """
     directory = os.path.abspath(directory)
     if not os.path.isdir(directory):
         return f"❌ 目录不存在: {directory}"
@@ -350,6 +377,13 @@ def _action_build(directory, force):
     return summary
 
 def _action_query(directory, symbol, query_type):
+    """Internal: action query.
+    
+    Args:
+        directory: Description.
+        symbol: Description.
+        query_type: Description.
+    """
     directory = os.path.abspath(directory)
     run_dir = os.path.join(directory, _RUN_DIR)
 
@@ -442,6 +476,11 @@ def _action_query(directory, symbol, query_type):
     return "❌ 未知 query_type"
 
 def _action_status(directory):
+    """Internal: action status.
+    
+    Args:
+        directory: Description.
+    """
     directory = os.path.abspath(directory)
     run_dir = os.path.join(directory, _RUN_DIR)
     if not os.path.isdir(run_dir):
@@ -635,8 +674,28 @@ def _action_deps(directory):
     return '\n'.join(lines)
 
 def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol", force="false", filepath=None):
+    """Toolkit explr.
+    
+    Args:
+        action: Description.
+        directory: Description.
+        symbol: Description.
+        query_type: Description.
+        force: Description.
+        filepath: Description.
+    """
     logger.info(f"toolkit_explr called: action={action!r}, directory={repr(directory)[:80]}, symbol={symbol!r}, query_type={query_type!r}, force={force!r}")
 def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol", force="false", filepath=None):
+    """Toolkit explr.
+    
+    Args:
+        action: Description.
+        directory: Description.
+        symbol: Description.
+        query_type: Description.
+        force: Description.
+        filepath: Description.
+    """
     logger.info(f"toolkit_explr called: action={action!r}, directory={repr(directory)[:80]}, symbol={symbol!r}, query_type={query_type!r}, force={force!r}")
     force_bool = force in ("true", "True", "1")
     if action == "build":
@@ -656,4 +715,5 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
 
 # @2026-05-19 gen by claude, 新增 impact(影响分析) / deps(依赖图) 查询类型 + filepath 参数
 def meta_toolkit_explr() -> dict:
+    """Meta toolkit explr."""
     return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=query 查询符号位置/调用者/被调用者/影响分析/依赖图；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "query", "status"], "description": "build=构建项目知识库, query=查询符号/调用关系/影响/依赖, status=查看知识库状态"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "[query] 要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "arch_context", "impact", "deps"], "description": "[query] 查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, arch_context=架构上下文, impact=影响分析, deps=模块依赖图", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "[build] true=强制重建，忽略已有索引", "default": "false"}, "filepath": {"type": "string", "description": "[impact] 符号所在的文件路径"}}, "required": ["action"]}}}

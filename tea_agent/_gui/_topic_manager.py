@@ -18,10 +18,16 @@ class TopicManager:
     """主题列表管理：创建、切换、加载、刷新"""
 
     def __init__(self, gui):
+        """Initialize  .
+        
+        Args:
+            gui: Description.
+        """
         self.gui = gui
 
     # NOTE: 2026-05-07 17:33:40, clear_chat 初始化缓冲区
     def clear_chat(self):
+        """Clear chat."""
         gui = self.gui
         gui.console.config(state=tk.NORMAL)
         gui.console.delete("1.0", tk.END)
@@ -35,6 +41,7 @@ class TopicManager:
         gui._clear_img_btn.pack_forget()
 
     def auto_new_topic(self):
+        """Auto new topic."""
         gui = self.gui
         topics = gui.db.list_topics()
         if topics:
@@ -50,6 +57,7 @@ class TopicManager:
             gui.new_topic()
 
     def new_topic(self):
+        """New topic."""
         gui = self.gui
         title = f"主题 {datetime.now().strftime('%m-%d %H:%M:%S')}"
         tid = gui.db.create_topic(title)
@@ -59,6 +67,7 @@ class TopicManager:
 
     # @2026-05-19 gen by claude, 仅显示活跃主题(is_active=1)，停用主题从列表中隐藏
     def refresh_topics(self):
+        """Refresh topics."""
         gui = self.gui
         for item in gui.topic_list.get_children():
             gui.topic_list.delete(item)
@@ -83,6 +92,11 @@ class TopicManager:
             gui.topic_list.selection_set(highlight_iid)
             gui.topic_list.see(highlight_iid)
     def _update_title(self, topic_title=""):
+        """Internal: update title.
+        
+        Args:
+            topic_title: Description.
+        """
         gui = self.gui
         cwd = getattr(gui, "_initial_cwd", "")
         if topic_title:
@@ -91,6 +105,11 @@ class TopicManager:
             gui.root.title(f"AI助手 - cwd {cwd}")
 
     def switch_topic(self, topic_id):
+        """Switch topic.
+        
+        Args:
+            topic_id: Description.
+        """
         gui = self.gui
         gui.current_topic_id = topic_id
         try:
@@ -224,6 +243,11 @@ class TopicManager:
         gui.root.after(60, lambda: threading.Thread(target=load_worker, daemon=True).start())
 
     def on_topic_select(self, e):
+        """Handle topic select event.
+        
+        Args:
+            e: Description.
+        """
         gui = self.gui
         sel = gui.topic_list.selection()
         if not sel:
@@ -235,10 +259,20 @@ class TopicManager:
         gui.switch_topic(tp["topic_id"])
 
     def newline(self, e=None):
+        """Newline.
+        
+        Args:
+            e: Description.
+        """
         self.gui.input_box.insert(tk.INSERT, "\n")
         return "break"
 
     def _suggest_new_topic_if_needed(self, topic_id: str):
+        """Internal: suggest new topic if needed.
+        
+        Args:
+            topic_id: Description.
+        """
         gui = self.gui
         count = getattr(gui, '_pending_topic_suggestion', 0)
         if count > 0:
@@ -290,6 +324,11 @@ class TopicManager:
         create_ts = tp.get("create_stamp", "")
         update_ts = tp.get("last_update_stamp", "")
         def fmt(ts):
+            """Fmt.
+            
+            Args:
+                ts: Description.
+            """
             if not ts:
                 return "未知"
             s = str(ts)

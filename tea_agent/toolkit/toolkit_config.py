@@ -99,6 +99,7 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
         return f"❌ 未知操作: {action}。支持: list, get, set, history"
 
 def meta_toolkit_config() -> dict:
+    """Meta toolkit config."""
     return {
         "type": "function",
         "function": {

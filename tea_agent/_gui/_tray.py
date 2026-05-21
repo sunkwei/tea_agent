@@ -22,6 +22,11 @@ class TrayManager:
     """系统托盘图标管理器（委托给 TkGUI）"""
 
     def __init__(self, gui: 'TkGUI'):
+        """Initialize  .
+        
+        Args:
+            gui: Description.
+        """
         self.gui = gui
         self._sni = None
         self._tray_thread: Optional[threading.Thread] = None
@@ -44,6 +49,7 @@ class TrayManager:
     # ── 内部方法 ────────────────────────
 
     def _init_tray(self):
+        """Internal: initialize tray."""
         if not HAS_SNI:
             return
         try:
@@ -66,6 +72,7 @@ class TrayManager:
             logger.warning(f"初始化托盘图标失败: {e}")
 
     def _create_tray_icon(self):
+        """Internal: create tray icon."""
         from PIL import Image, ImageDraw
         size = 32
         img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
@@ -80,6 +87,11 @@ class TrayManager:
         return img
 
     def _pil_to_argb32(self, img):
+        """Internal: pil to argb32.
+        
+        Args:
+            img: Description.
+        """
         rgba = img.tobytes()
         argb = bytearray(len(rgba))
         for i in range(0, len(rgba), 4):

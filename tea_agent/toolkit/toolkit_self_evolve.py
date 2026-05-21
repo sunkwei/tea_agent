@@ -291,6 +291,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     }
 
 def meta_toolkit_self_evolve():
+    """Meta toolkit self evolve."""
     return {
         "type": "function",
         "function": {

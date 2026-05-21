@@ -30,6 +30,7 @@ class APIComponent(SessionComponent):
     
     @property
     def name(self) -> str:
+        """Name."""
         return "api"
     
     def initialize(self) -> None:

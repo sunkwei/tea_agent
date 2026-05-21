@@ -95,6 +95,7 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
         return f"❌ 未知操作: {action}。支持: current, evolve, list, rollback, set, stats"
 
 def meta_toolkit_prompt_evolve() -> dict:
+    """Meta toolkit prompt evolve."""
     return {
         "type": "function",
         "function": {

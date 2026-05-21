@@ -24,12 +24,23 @@ PLANS_DIR = ".tea_agent_run/plans"
 # ── 数据结构 ────────────────────────────────────────────
 
 def _ensure_plans_dir():
+    """Internal: ensure plans dir."""
     os.makedirs(PLANS_DIR, exist_ok=True)
 
 def _plan_path(plan_id: str) -> str:
+    """Internal: plan path.
+    
+    Args:
+        plan_id: Description.
+    """
     return os.path.join(PLANS_DIR, f"{plan_id}.json")
 
 def _load_plan(plan_id: str) -> Optional[dict]:
+    """Internal: load plan.
+    
+    Args:
+        plan_id: Description.
+    """
     path = _plan_path(plan_id)
     if not os.path.exists(path):
         return None
@@ -37,6 +48,11 @@ def _load_plan(plan_id: str) -> Optional[dict]:
         return json.load(f)
 
 def _save_plan(plan: dict):
+    """Internal: save plan.
+    
+    Args:
+        plan: Description.
+    """
     _ensure_plans_dir()
     plan["updated_at"] = datetime.now().isoformat()
     with open(_plan_path(plan["id"]), "w", encoding="utf-8") as f:
@@ -45,6 +61,12 @@ def _save_plan(plan: dict):
 _KNOWN_STEP_META = {"id", "desc", "action", "depends_on", "verify", "params"}
 
 def _new_plan(goal: str, steps: List[dict]) -> dict:
+    """Internal: new plan.
+    
+    Args:
+        goal: Description.
+        steps: Description.
+    """
     now = datetime.now().isoformat()
     normalized = []
     for i, s in enumerate(steps):
@@ -79,6 +101,12 @@ def _new_plan(goal: str, steps: List[dict]) -> dict:
 # ── 核心逻辑 ────────────────────────────────────────────
 
 def _deps_satisfied(step: dict, all_steps: List[dict]) -> bool:
+    """Internal: deps satisfied.
+    
+    Args:
+        step: Description.
+        all_steps: Description.
+    """
     for dep_id in step.get("depends_on", []):
         dep = next((s for s in all_steps if s["id"] == dep_id), None)
         if not dep or dep["status"] != "done":
@@ -86,12 +114,23 @@ def _deps_satisfied(step: dict, all_steps: List[dict]) -> bool:
     return True
 
 def _next_pending(plan: dict) -> Optional[dict]:
+    """Internal: next pending.
+    
+    Args:
+        plan: Description.
+    """
     for step in plan["steps"]:
         if step["status"] == "pending" and _deps_satisfied(step, plan["steps"]):
             return step
     return None
 
 def _count_status(plan: dict, status: str) -> int:
+    """Internal: count status.
+    
+    Args:
+        plan: Description.
+        status: Description.
+    """
     return sum(1 for s in plan["steps"] if s["status"] == status)
 
 # ── 工具入口 ────────────────────────────────────────────
@@ -175,6 +214,13 @@ def toolkit_plan(
 # ── Action 实现 ──────────────────────────────────────────
 
 def _do_step(plan_id, step_id, cwd):
+    """Internal: do step.
+    
+    Args:
+        plan_id: Description.
+        step_id: Description.
+        cwd: Description.
+    """
     if not plan_id:
         return {"ok": False, "error": "step 需要 plan_id"}
     plan = _load_plan(plan_id)
@@ -200,6 +246,13 @@ def _do_step(plan_id, step_id, cwd):
     return _execute_step(plan, step, cwd)
 
 def _do_verify(plan_id, step_id, cwd):
+    """Internal: do verify.
+    
+    Args:
+        plan_id: Description.
+        step_id: Description.
+        cwd: Description.
+    """
     if not plan_id:
         return {"ok": False, "error": "verify 需要 plan_id"}
     plan = _load_plan(plan_id)
@@ -214,6 +267,12 @@ def _do_verify(plan_id, step_id, cwd):
     return {"ok": True, "verified": len(results), "results": results}
 
 def _do_run(plan_id, cwd):
+    """Internal: do run.
+    
+    Args:
+        plan_id: Description.
+        cwd: Description.
+    """
     if not plan_id:
         return {"ok": False, "error": "run 需要 plan_id"}
     plan = _load_plan(plan_id)
@@ -238,6 +297,12 @@ def _do_run(plan_id, cwd):
     return {"ok": True, "executed": executed, "plan_id": plan_id, "summary": _step_summary(plan)}
 
 def _do_resume(plan_id, cwd):
+    """Internal: do resume.
+    
+    Args:
+        plan_id: Description.
+        cwd: Description.
+    """
     if not plan_id:
         return {"ok": False, "error": "resume 需要 plan_id"}
     plan = _load_plan(plan_id)
@@ -253,10 +318,22 @@ def _do_resume(plan_id, cwd):
 # ── 内部辅助 ────────────────────────────────────────────
 
 def _step_summary(plan: dict) -> str:
+    """Internal: step summary.
+    
+    Args:
+        plan: Description.
+    """
     icons = {"done": "✓", "failed": "✗", "running": "▶", "pending": "○", "skipped": "−"}
     return "\n".join(f"  {icons.get(s['status'],'?')} [{s['id']}] {s['desc']}" for s in plan["steps"])
 
 def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
+    """Internal: execute step.
+    
+    Args:
+        plan: Description.
+        step: Description.
+        cwd: Description.
+    """
     step["status"] = "running"
     step["started_at"] = datetime.now().isoformat()
     plan["current_step"] = step["id"]
@@ -314,6 +391,12 @@ def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
             "plan_progress": f"{_count_status(plan, 'done')}/{len(plan['steps'])}"}
 
 def _verify_step(step: dict, cwd: str) -> dict:
+    """Internal: verify step.
+    
+    Args:
+        step: Description.
+        cwd: Description.
+    """
     verify_type = step.get("verify", "py_compile")
     results = {}
     try:
@@ -351,6 +434,7 @@ def _verify_step(step: dict, cwd: str) -> dict:
 # ── Meta ────────────────────────────────────────────────
 
 def meta_toolkit_plan():
+    """Meta toolkit plan."""
     return {
         "type": "function",
         "function": {

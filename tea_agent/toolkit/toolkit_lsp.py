@@ -63,6 +63,7 @@ def toolkit_lsp(
         return {"ok": False, "error": str(e)}
 
 def meta_toolkit_lsp():
+    """Meta toolkit lsp."""
     return {
         "type": "function",
         "function": {

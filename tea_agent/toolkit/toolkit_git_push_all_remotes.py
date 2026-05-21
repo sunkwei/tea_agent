@@ -29,6 +29,7 @@ def toolkit_git_push_all_remotes() -> dict:
         return {"ok": False, "error": str(e), "results": []}
 
 def meta_toolkit_git_push_all_remotes() -> dict:
+    """Meta toolkit git push all remotes."""
     return {
         "type": "function",
         "function": {

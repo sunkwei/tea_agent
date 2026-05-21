@@ -109,6 +109,7 @@ def toolkit_dump_topic(role: str = "all") -> dict:
     }
 
 def meta_toolkit_dump_topic() -> dict:
+    """Meta toolkit dump topic."""
     return {"type": "function", "function": {"name": "toolkit_dump_topic", "description": "将当前所有会话内容从数据库导出到 dump_{date} 子目录，每个 topic 对应一个 markdown 文件。", "parameters": {"type": "object", "properties": {"role": {"type": "string", "enum": ["user", "all"], "description": "导出范围：user 仅导出用户输入，all 导出完整内容"}}, "required": []}}}
 
 if __name__ == "__main__":

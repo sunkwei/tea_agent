@@ -59,6 +59,7 @@ def toolkit_read_pyproject(path: str = ".") -> dict:
         return {"ok": False, "error": str(e)}
 
 def meta_toolkit_read_pyproject() -> dict:
+    """Meta toolkit read pyproject."""
     return {
         "type": "function",
         "function": {

@@ -84,6 +84,11 @@ def _fix_double_escape_in_code(html: str) -> str:
     避免破坏内联代码中的单次转义。
     """
     def _fix_code_block(m):
+        """Internal: fix code block.
+        
+        Args:
+            m: Description.
+        """
         inner = m.group(1)
         # 仅替换已知的双重转义 pattern，不影响单次转义
         inner = inner.replace('&amp;amp;', '&amp;')
@@ -359,7 +364,9 @@ def _validate_html_structure(html: str) -> tuple:
     from html.parser import HTMLParser
 
     class _TagChecker(HTMLParser):
+        """_TagChecker class."""
         def __init__(self):
+            """Initialize  ."""
             super().__init__()
             self.stack = []
             self.errors = []
@@ -368,10 +375,21 @@ def _validate_html_structure(html: str) -> tuple:
                                   'area', 'base', 'col', 'embed', 'source', 'track', 'wbr'}
 
         def handle_starttag(self, tag, attrs):
+            """Handle starttag.
+            
+            Args:
+                tag: Description.
+                attrs: Description.
+            """
             if tag in self.known_tags and tag not in self.void_elements:
                 self.stack.append(tag)
 
         def handle_endtag(self, tag):
+            """Handle endtag.
+            
+            Args:
+                tag: Description.
+            """
             if tag not in self.known_tags or tag in self.void_elements:
                 return
             if not self.stack:
@@ -389,6 +407,7 @@ def _validate_html_structure(html: str) -> tuple:
                     self.errors.append(f"未预期的闭合标签 </{tag}>")
 
         def get_result(self):
+            """Get the result."""
             for tag in reversed(self.stack):
                 self.errors.append(f"未闭合 <{tag}>")
             return len(self.errors) == 0, self.errors

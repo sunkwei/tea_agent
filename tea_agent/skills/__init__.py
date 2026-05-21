@@ -38,6 +38,12 @@ class Skill:
     """单个 Skill 的数据结构"""
 
     def __init__(self, manifest: dict, source_dir: str):
+        """Initialize  .
+        
+        Args:
+            manifest: Description.
+            source_dir: Description.
+        """
         self.name: str = manifest.get("name", "")
         self.version: str = manifest.get("version", "1.0.0")
         self.description: str = manifest.get("description", "")
@@ -50,6 +56,7 @@ class Skill:
         self.active: bool = False
 
     def to_dict(self) -> dict:
+        """To dict."""
         return {
             "name": self.name,
             "version": self.version,
@@ -77,6 +84,7 @@ class SkillManager:
 
     @classmethod
     def get_instance(cls) -> "SkillManager":
+        """Get the instance."""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
@@ -87,6 +95,7 @@ class SkillManager:
         cls._instance = None
 
     def __init__(self):
+        """Initialize  ."""
         if SkillManager._instance is not None:
             return  # 单例
         SkillManager._instance = self
@@ -348,9 +357,15 @@ class SkillManager:
         return [s.to_dict() for s in self.skills.values()]
 
     def get_skill(self, name: str) -> Optional[Skill]:
+        """Get the skill.
+        
+        Args:
+            name: Description.
+        """
         return self.skills.get(name)
 
     def get_active_skill_names(self) -> List[str]:
+        """Get the active skill names."""
         return [s.name for s in self.skills.values() if s.active]
 
     def get_status(self) -> dict:

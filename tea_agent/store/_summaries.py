@@ -13,6 +13,11 @@ class SummaryStore(StoreComponent):
     # ── 话题摘要 (t_conv_summary) ──
 
     def get_topic_summary(self, topic_id: str) -> Optional[str]:
+        """Get the topic summary.
+        
+        Args:
+            topic_id: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT summary FROM t_conv_summary WHERE topic_id = ?", (topic_id,))
         row = c.fetchone()
@@ -21,6 +26,13 @@ class SummaryStore(StoreComponent):
 
     def update_topic_summary(self, topic_id: str, summary: str,
                               last_summarized_id: Optional[int] = None):
+        """Update topic summary.
+        
+        Args:
+            topic_id: Description.
+            summary: Description.
+            last_summarized_id: Description.
+        """
         c = self.conn.cursor()
         if last_summarized_id is not None:
             c.execute('''
@@ -45,6 +57,11 @@ class SummaryStore(StoreComponent):
     # ── 三级历史 Level 2 ──
 
     def get_level2(self, topic_id: str) -> list:
+        """Get the level2.
+        
+        Args:
+            topic_id: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT level2_json FROM topics WHERE topic_id = ?", (topic_id,))
         row = c.fetchone()
@@ -57,6 +74,12 @@ class SummaryStore(StoreComponent):
         return []
 
     def set_level2(self, topic_id: str, level2: list):
+        """Set the level2.
+        
+        Args:
+            topic_id: Description.
+            level2: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "UPDATE topics SET level2_json = ? WHERE topic_id = ?",
@@ -68,6 +91,11 @@ class SummaryStore(StoreComponent):
     # ── 三级历史 Level 3: 语义摘要 ──
 
     def get_semantic_summary(self, topic_id: str) -> str:
+        """Get the semantic summary.
+        
+        Args:
+            topic_id: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT semantic_summary FROM topics WHERE topic_id = ?", (topic_id,))
         row = c.fetchone()
@@ -75,6 +103,12 @@ class SummaryStore(StoreComponent):
         return row[0] if row and row[0] else ""
 
     def set_semantic_summary(self, topic_id: str, summary: str):
+        """Set the semantic summary.
+        
+        Args:
+            topic_id: Description.
+            summary: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "UPDATE topics SET semantic_summary = ? WHERE topic_id = ?",
@@ -84,6 +118,11 @@ class SummaryStore(StoreComponent):
         c.close()
 
     def get_tool_chain_summary(self, topic_id: str) -> str:
+        """Get the tool chain summary.
+        
+        Args:
+            topic_id: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT tool_chain_summary FROM topics WHERE topic_id = ?", (topic_id,))
         row = c.fetchone()
@@ -91,6 +130,12 @@ class SummaryStore(StoreComponent):
         return row[0] if row and row[0] else ""
 
     def set_tool_chain_summary(self, topic_id: str, summary: str):
+        """Set the tool chain summary.
+        
+        Args:
+            topic_id: Description.
+            summary: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "UPDATE topics SET tool_chain_summary = ? WHERE topic_id = ?",
@@ -151,6 +196,11 @@ class SummaryStore(StoreComponent):
     # ── 摘要标记 ──
 
     def mark_as_summarized(self, conversation_id: str):
+        """Mark as summarized.
+        
+        Args:
+            conversation_id: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "UPDATE conversations SET is_summarized = 1 WHERE id = ?",
@@ -160,6 +210,12 @@ class SummaryStore(StoreComponent):
         c.close()
 
     def get_unsummarized_conversations(self, topic_id: str, limit: int = 50) -> List[Dict]:
+        """Get the unsummarized conversations.
+        
+        Args:
+            topic_id: Description.
+            limit: Description.
+        """
         c = self.conn.cursor()
         if limit < 0:
             c.execute(

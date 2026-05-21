@@ -19,6 +19,11 @@ class ProjectMemoryManager:
     STORE_FILE = ".tea_agent_run/project_memories.json"
 
     def __init__(self, project_root: str = "."):
+        """Initialize  .
+        
+        Args:
+            project_root: Description.
+        """
         self.project_root = os.path.abspath(project_root)
         self.store_path = os.path.join(self.project_root, self.STORE_FILE)
         self._ensure_store()

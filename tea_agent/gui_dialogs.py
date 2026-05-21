@@ -23,9 +23,15 @@ _SCALE_FACTOR = 1.0
 _DEFAULT_FONT_SIZE = 16
 
 def _fs(size):
+    """Internal: fs.
+    
+    Args:
+        size: Description.
+    """
     return max(1, int(size * _SCALE_FACTOR))
 
 def _init_fonts():
+    """Internal: initialize fonts."""
     global SYSTEM_FONT, MONO_FONT, _FONTS_DETECTED, _SCALE_FACTOR, _DEFAULT_FONT_SIZE
     if _FONTS_DETECTED:
         return
@@ -33,6 +39,11 @@ def _init_fonts():
         from tkinter import font as _tkfont
         available = set(_tkfont.families())
         def _detect(candidates):
+            """Internal: detect.
+            
+            Args:
+                candidates: Description.
+            """
             for f in candidates:
                 if f in available:
                     return f
@@ -66,6 +77,12 @@ class MemoryDialog(tk.Toplevel):
     }
 
     def __init__(self, parent, storage):
+        """Initialize  .
+        
+        Args:
+            parent: Description.
+            storage: Description.
+        """
         super().__init__(parent)
         self.db = storage
         self.title("🧠 长期记忆管理")
@@ -80,6 +97,7 @@ class MemoryDialog(tk.Toplevel):
 
     def _create_ui(self):
         # 顶部统计栏
+        """Internal: create ui."""
         top = ttk.Frame(self)
         top.pack(fill=tk.X, padx=10, pady=8)
 
@@ -154,6 +172,7 @@ class MemoryDialog(tk.Toplevel):
         self.bind("<Delete>", lambda e: self._soft_delete())
 
     def _refresh(self):
+        """Internal: refresh."""
         for item in self.tree.get_children():
             self.tree.delete(item)
 
@@ -195,6 +214,11 @@ class MemoryDialog(tk.Toplevel):
             self.stats_var.set(f"加载失败: {e}")
 
     def _sort(self, col):
+        """Internal: sort.
+        
+        Args:
+            col: Description.
+        """
         items = [(str(self.tree.set(i, col)), i) for i in self.tree.get_children("")]
         if col == "priority":
             order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
@@ -207,6 +231,7 @@ class MemoryDialog(tk.Toplevel):
             self.tree.move(iid, "", idx)
 
     def _add_dialog(self):
+        """Internal: add dialog."""
         dlg = tk.Toplevel(self)
         dlg.title("添加记忆")
         dlg.transient(self)
@@ -251,6 +276,7 @@ class MemoryDialog(tk.Toplevel):
         result_label.place(x=10, y=290)
 
         def do_add():
+            """Do add."""
             content = content_text.get("1.0", tk.END).strip()
             if not content:
                 result_label.config(text="内容不能为空")
@@ -274,6 +300,7 @@ class MemoryDialog(tk.Toplevel):
         ttk.Button(dlg, text="取消", command=dlg.destroy).place(x=100, y=330, width=80)
 
     def _soft_delete(self):
+        """Internal: soft delete."""
         selection = self.tree.selection()
         if not selection:
             return
@@ -285,6 +312,7 @@ class MemoryDialog(tk.Toplevel):
         self._refresh()
 
     def _hard_delete(self):
+        """Internal: hard delete."""
         selection = self.tree.selection()
         if not selection:
             return
@@ -296,6 +324,11 @@ class MemoryDialog(tk.Toplevel):
         self._refresh()
 
     def _on_double_click(self, event):
+        """Internal: handle double click event.
+        
+        Args:
+            event: Description.
+        """
         selection = self.tree.selection()
         if not selection:
             return
@@ -318,6 +351,7 @@ class MemoryDialog(tk.Toplevel):
         ttk.Label(dlg, text=info).pack(pady=(0, 10))
 
     def _export(self):
+        """Internal: export."""
         from tkinter import filedialog
         memories = self.db.get_active_memories(limit=200)
         if not memories:
@@ -344,6 +378,13 @@ class TopicDialog(tk.Toplevel):
     """主题管理弹窗 — 浏览/切换/导出/重命名/删除"""
 
     def __init__(self, parent, storage, on_switch=None):
+        """Initialize  .
+        
+        Args:
+            parent: Description.
+            storage: Description.
+            on_switch: Description.
+        """
         super().__init__(parent)
         self.db = storage
         self.on_switch = on_switch  # callback(topic_id) when user switches
@@ -363,6 +404,7 @@ class TopicDialog(tk.Toplevel):
 
     def _create_ui(self):
         # 顶部统计栏
+        """Internal: create ui."""
         top = ttk.Frame(self)
         top.pack(fill=tk.X, padx=10, pady=8)
         self.stats_var = tk.StringVar(value="加载中...")
@@ -612,6 +654,7 @@ class TopicDialog(tk.Toplevel):
         import threading
 
         def _run():
+            """Internal: run."""
             try:
                 engine = get_embedding_engine()
                 self.stats_var.set(f"正在向量化 {len(unvec)} 条消息 (模式: {engine.mode})...")
@@ -663,11 +706,21 @@ class TopicDialog(tk.Toplevel):
         threading.Thread(target=_run, daemon=True).start()
 
     def _sort(self, col):
+        """Internal: sort.
+        
+        Args:
+            col: Description.
+        """
         items = [(self.topic_tree.set(i, col), i) for i in self.topic_tree.get_children("")]
         if col == "id":
             items.sort(key=lambda x: int(x[0]))
         elif col == "tokens":
             def parse_tok(s):
+                """Parse tok.
+                
+                Args:
+                    s: Description.
+                """
                 try:
                     return int(s.replace(",", ""))
                 except Exception:
@@ -681,11 +734,13 @@ class TopicDialog(tk.Toplevel):
             self.topic_tree.move(iid, "", idx)
 
     def _selected_id(self):
+        """Internal: selected id."""
         tree = self.search_tree if self._is_search_mode else self.topic_tree
         sel = tree.selection()
         return int(sel[0]) if sel else None
 
     def _switch_to(self):
+        """Internal: switch to."""
         tid = self._selected_id()
         if not tid:
             return
@@ -700,11 +755,13 @@ class TopicDialog(tk.Toplevel):
             self.destroy()
 
     def _new_topic(self):
+        """Internal: new topic."""
         title = f"主题 {datetime.now().strftime('%m-%d %H:%M:%S')}"
         self.db.create_topic(title)
         self._refresh()
 
     def _rename_dialog(self):
+        """Internal: rename dialog."""
         if self._is_search_mode:
             return
         tid = self._selected_id()
@@ -727,6 +784,7 @@ class TopicDialog(tk.Toplevel):
         entry.focus()
 
         def do_rename():
+            """Do rename."""
             new_title = title_var.get().strip()
             if new_title:
                 self.db.update_topic_title(tid, new_title)
@@ -740,6 +798,7 @@ class TopicDialog(tk.Toplevel):
         dlg.bind("<Return>", lambda e: do_rename())
 
     def _deactivate(self):
+        """Internal: deactivate."""
         if self._is_search_mode:
             return  # 搜索模式下禁用以防止误操作
         tid = self._selected_id()
@@ -748,6 +807,7 @@ class TopicDialog(tk.Toplevel):
             self._refresh()
 
     def _activate(self):
+        """Internal: activate."""
         if self._is_search_mode:
             return
         tid = self._selected_id()
@@ -756,6 +816,7 @@ class TopicDialog(tk.Toplevel):
             self._refresh()
 
     def _hard_delete(self):
+        """Internal: hard delete."""
         if self._is_search_mode:
             return
         tid = self._selected_id()
@@ -778,6 +839,7 @@ class TopicDialog(tk.Toplevel):
         self._refresh()
 
     def _export_selected(self):
+        """Internal: export selected."""
         if self._is_search_mode:
             return
         tid = self._selected_id()
@@ -786,6 +848,7 @@ class TopicDialog(tk.Toplevel):
         self._do_export([tid])
 
     def _export_all(self):
+        """Internal: export all."""
         topics = self.db.list_topics()
         if not topics:
             return
@@ -793,6 +856,11 @@ class TopicDialog(tk.Toplevel):
         self._do_export(tids)
 
     def _do_export(self, topic_ids: list):
+        """Internal: do export.
+        
+        Args:
+            topic_ids: Description.
+        """
         from tkinter import filedialog
 
         mode = self.export_mode.get()  # "all" or "user"
@@ -891,6 +959,13 @@ class ConfigDialog(tk.Toplevel):
     """配置编辑弹窗 — 编辑主模型/便宜模型/向量模型及运行时参数"""
 
     def __init__(self, parent, on_save=None, config_path=None):
+        """Initialize  .
+        
+        Args:
+            parent: Description.
+            on_save: Description.
+            config_path: Description.
+        """
         super().__init__(parent)
         self.on_save = on_save
         self._config_path = config_path
@@ -906,6 +981,7 @@ class ConfigDialog(tk.Toplevel):
         self._load_values()
 
     def _create_ui(self):
+        """Internal: create ui."""
         nb = ttk.Notebook(self)
         nb.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
@@ -925,6 +1001,16 @@ class ConfigDialog(tk.Toplevel):
         ttk.Button(btn_frame, text="取消", command=self.destroy).pack(side=tk.RIGHT, padx=2)
 
     def _model_tab(self, nb, label, prefix, extra_fields=None, hint=None, options_prefix=None):
+        """Internal: model tab.
+        
+        Args:
+            nb: Description.
+            label: Description.
+            prefix: Description.
+            extra_fields: Description.
+            hint: Description.
+            options_prefix: Description.
+        """
         f = ttk.Frame(nb)
         nb.add(f, text=label)
         fields = [
@@ -994,6 +1080,11 @@ class ConfigDialog(tk.Toplevel):
             setattr(self, f"_{options_prefix}_params", params_var)
 
     def _mode_params_tab(self, nb):
+        """Internal: mode params tab.
+        
+        Args:
+            nb: Description.
+        """
         f = ttk.Frame(nb)
         nb.add(f, text="模式参数")
         ttk.Label(f, text="不同人格模式下可覆盖 Temperature / Top-P（留空则使用模型默认值）",
@@ -1026,6 +1117,11 @@ class ConfigDialog(tk.Toplevel):
             self._mode_params_vars[m_key] = {"temperature": temp_var, "top_p": topp_var}
 
     def _runtime_tab(self, nb):
+        """Internal: runtime tab.
+        
+        Args:
+            nb: Description.
+        """
         f = ttk.Frame(nb)
         nb.add(f, text="运行时参数")
 
@@ -1039,6 +1135,11 @@ class ConfigDialog(tk.Toplevel):
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         def _on_mousewheel(event):
+            """Internal: handle mousewheel event.
+            
+            Args:
+                event: Description.
+            """
             canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
         canvas.bind_all("<MouseWheel>", _on_mousewheel)
         self._mw_binding = _on_mousewheel
@@ -1075,6 +1176,7 @@ class ConfigDialog(tk.Toplevel):
             self._runtime_vars[key] = var
 
     def _load_values(self):
+        """Internal: load values."""
         cfg = self._cfg
         for prefix, model_cfg in [("main", cfg.main_model), ("cheap", cfg.cheap_model)]:
             vars_map = getattr(self, f"_{prefix}_vars")
@@ -1119,6 +1221,7 @@ class ConfigDialog(tk.Toplevel):
                     var.set(str(val))
 
     def _do_save(self):
+        """Internal: do save."""
         cfg = self._cfg
         errors = []
 
@@ -1205,6 +1308,7 @@ class ConfigDialog(tk.Toplevel):
             self._status_var.set(f"❌ 保存失败: {e}")
 
     def destroy(self):
+        """Destroy."""
         if hasattr(self, '_mw_binding'):
             try:
                 self.unbind_all("<MouseWheel>")

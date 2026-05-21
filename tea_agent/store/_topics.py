@@ -12,6 +12,11 @@ class TopicStore(StoreComponent):
     # ── 主题 CRUD ──
 
     def create_topic(self, title: str) -> str:
+        """Create topic.
+        
+        Args:
+            title: Description.
+        """
         c = self.conn.cursor()
         tid = self._new_id()
         c.execute("INSERT INTO topics (topic_id, title, create_stamp, last_update_stamp) VALUES (?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))", (tid, title))
@@ -20,6 +25,12 @@ class TopicStore(StoreComponent):
         return tid
 
     def update_topic_title(self, topic_id: str, new_title: str):
+        """Update topic title.
+        
+        Args:
+            topic_id: Description.
+            new_title: Description.
+        """
         old = self.get_topic(topic_id)
         if old and (old.get("title") or "").startswith("chat_room_"):
             logger.debug(f"拒绝修改 chat_room 主题标题: {old['title']}")
@@ -33,6 +44,11 @@ class TopicStore(StoreComponent):
         c.close()
 
     def update_topic_active(self, topic_id: int):
+        """Update topic active.
+        
+        Args:
+            topic_id: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "UPDATE topics SET last_update_stamp = datetime('now', 'localtime') WHERE topic_id = ?",
@@ -61,6 +77,11 @@ class TopicStore(StoreComponent):
         return self.get_drift_count(topic_id)
 
     def delete_topic(self, topic_id: int):
+        """Delete topic.
+        
+        Args:
+            topic_id: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "DELETE FROM agent_rounds WHERE conversation_id IN "
@@ -75,6 +96,11 @@ class TopicStore(StoreComponent):
         c.close()
 
     def get_topic(self, topic_id: str) -> Optional[Dict]:
+        """Get the topic.
+        
+        Args:
+            topic_id: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT * FROM topics WHERE topic_id = ?", (topic_id,))
         r = c.fetchone()
@@ -82,6 +108,7 @@ class TopicStore(StoreComponent):
         return dict(r) if r else None
 
     def list_topics(self) -> List[Dict]:
+        """List topics."""
         c = self.conn.cursor()
         c.execute('''
             SELECT t.*,
@@ -103,6 +130,19 @@ class TopicStore(StoreComponent):
         cheap_tokens: int = 0, cheap_prompt_tokens: int = 0, cheap_completion_tokens: int = 0,
         embedding_tokens: int = 0, embedding_prompt_tokens: int = 0,
     ):
+        """Add topic tokens.
+        
+        Args:
+            topic_id: Description.
+            total_tokens: Description.
+            prompt_tokens: Description.
+            completion_tokens: Description.
+            cheap_tokens: Description.
+            cheap_prompt_tokens: Description.
+            cheap_completion_tokens: Description.
+            embedding_tokens: Description.
+            embedding_prompt_tokens: Description.
+        """
         has_main = total_tokens > 0 or prompt_tokens > 0 or completion_tokens > 0
         has_cheap = cheap_tokens > 0 or cheap_prompt_tokens > 0 or cheap_completion_tokens > 0
         has_embedding = embedding_tokens > 0 or embedding_prompt_tokens > 0
@@ -134,6 +174,11 @@ class TopicStore(StoreComponent):
         c.close()
 
     def get_topic_tokens(self, topic_id: int) -> Dict:
+        """Get the topic tokens.
+        
+        Args:
+            topic_id: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT * FROM topic_token_stats WHERE topic_id = ?", (topic_id,))
         row = c.fetchone()

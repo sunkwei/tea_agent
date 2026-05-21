@@ -83,6 +83,11 @@ class SessionComponent(ABC):
     """
     
     def __init__(self, context: SessionContext):
+        """Initialize  .
+        
+        Args:
+            context: Description.
+        """
         self.ctx = context
     
     @abstractmethod

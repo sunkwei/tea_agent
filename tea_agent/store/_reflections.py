@@ -12,6 +12,15 @@ class ReflectionStore(StoreComponent):
         tool_stats: Optional[Dict] = None, suggestions: Optional[List[str]] = None,
         topic_id: Optional[str] = None,
     ) -> str:
+        """Add reflection.
+        
+        Args:
+            summary: Description.
+            details: Description.
+            tool_stats: Description.
+            suggestions: Description.
+            topic_id: Description.
+        """
         c = self.conn.cursor()
         rid = self._new_id()
         c.execute(
@@ -28,6 +37,11 @@ class ReflectionStore(StoreComponent):
         return rid
 
     def get_recent_reflections(self, limit: int = 10) -> List[Dict]:
+        """Get the recent reflections.
+        
+        Args:
+            limit: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "SELECT * FROM reflections WHERE is_applied = 0 ORDER BY created_at DESC LIMIT ?",
@@ -38,6 +52,11 @@ class ReflectionStore(StoreComponent):
         return [dict(r) for r in rows]
 
     def mark_reflection_applied(self, reflection_id: str):
+        """Mark reflection applied.
+        
+        Args:
+            reflection_id: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "UPDATE reflections SET is_applied = 1 WHERE id = ?", (reflection_id,)
@@ -46,6 +65,7 @@ class ReflectionStore(StoreComponent):
         c.close()
 
     def get_reflection_stats(self) -> Dict:
+        """Get the reflection stats."""
         c = self.conn.cursor()
         c.execute("SELECT COUNT(*) as total FROM reflections")
         total = c.fetchone()["total"]

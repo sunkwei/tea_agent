@@ -59,4 +59,5 @@ def toolkit_date_diff(start_date: str, end_date: str = None) -> dict:
         return {"error": f"日期计算错误: {str(e)}"}
 
 def meta_toolkit_date_diff() -> dict:
+    """Meta toolkit date diff."""
     return {"type": "function", "function": {"description": "计算两个日期之间的天数差。返回天数、周数等详细信息。", "name": "toolkit_date_diff", "parameters": {"properties": {"end_date": {"description": "结束日期，格式YYYY-MM-DD，不填则默认为今天", "type": "string"}, "start_date": {"description": "开始日期，格式YYYY-MM-DD", "type": "string"}}, "required": ["start_date"], "type": "object"}}}

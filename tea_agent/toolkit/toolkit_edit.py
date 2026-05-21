@@ -382,6 +382,7 @@ def _generate_diff(old_content: str, new_content: str) -> str:
     return ''.join(diff)
 
 def meta_toolkit_edit() -> dict:
+    """Meta toolkit edit."""
     return {
         "type": "function",
         "function": {

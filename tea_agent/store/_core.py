@@ -34,6 +34,11 @@ class Storage:
     )
 
     def __init__(self, db_path="chat_history.db"):
+        """Initialize  .
+        
+        Args:
+            db_path: Description.
+        """
         self.db_path = db_path
         self._maybe_rotate_db()
         logger.info(f"load database {db_path}")
@@ -85,6 +90,7 @@ class Storage:
     # ── 表初始化 ──
 
     def _init_tables(self):
+        """Internal: initialize tables."""
         c = self.conn.cursor()
 
         # 元数据表
@@ -257,6 +263,7 @@ class Storage:
     # ── 数据库迁移 ──
 
     def _migrate(self):
+        """Internal: migrate."""
         c = self.conn.cursor()
         self._migrate_int_to_uuid(c)
 
@@ -324,6 +331,11 @@ class Storage:
         c.close()
 
     def _migrate_int_to_uuid(self, c):
+        """Internal: migrate int to uuid.
+        
+        Args:
+            c: Description.
+        """
         c.execute("PRAGMA table_info(topics)")
         topic_cols = {row[1]: row[2].upper() for row in c.fetchall()}
         if topic_cols.get("topic_id", "") != "INTEGER":
@@ -335,10 +347,22 @@ class Storage:
         self.conn.execute("PRAGMA legacy_alter_table = ON")
 
         def _table_columns(table):
+            """Internal: table columns.
+            
+            Args:
+                table: Description.
+            """
             c.execute(f"PRAGMA table_info({table})")
             return [(row[1], row[2].upper()) for row in c.fetchall()]
 
         def _migrate_table(old_name, new_columns_def, cast_cols=None):
+            """Internal: migrate table.
+            
+            Args:
+                old_name: Description.
+                new_columns_def: Description.
+                cast_cols: Description.
+            """
             new_name = f"{old_name}_new"
             # 动态补全列定义：new_columns_def 只定义需要改类型的列，其他列从旧表继承
             new_defs = {}
@@ -458,6 +482,11 @@ class Storage:
             self.conn.execute("PRAGMA legacy_alter_table = OFF")
 
     def _migrate_msg_vectors(self, c):
+        """Internal: migrate msg vectors.
+        
+        Args:
+            c: Description.
+        """
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='msg_vectors'")
         if not c.fetchone():
             return
@@ -475,9 +504,11 @@ class Storage:
 
     @staticmethod
     def _get_week_key():
+        """Internal: get the week key."""
         return datetime.now().strftime("%G-W%V")
 
     def _maybe_rotate_db(self):
+        """Internal: maybe rotate db."""
         if not os.path.exists(self.db_path):
             return
         db_week = None
@@ -510,6 +541,7 @@ class Storage:
             )
 
     def _write_week_key(self):
+        """Internal: write week key."""
         c = self.conn.cursor()
         c.execute(
             "INSERT OR REPLACE INTO _meta (key, value) VALUES ('week_key', ?)",
@@ -521,6 +553,7 @@ class Storage:
     # ── 自动备份 ──
 
     def _auto_backup(self):
+        """Internal: auto backup."""
         import time
         try:
             now = time.time()
@@ -548,6 +581,12 @@ class Storage:
             logger.debug(f"自动备份跳过: {e}")
 
     def _cleanup_backups(self, backup_dir: str, keep: int = 7):
+        """Internal: cleanup backups.
+        
+        Args:
+            backup_dir: Description.
+            keep: Description.
+        """
         try:
             files = sorted(
                 [
@@ -564,12 +603,18 @@ class Storage:
             pass
 
     def backup_now(self):
+        """Backup now."""
         self._meta_set("last_backup_ts", "0")
         self._auto_backup()
 
     # ── 元数据 ──
 
     def _meta_get(self, key: str):
+        """Internal: meta get.
+        
+        Args:
+            key: Description.
+        """
         try:
             c = self.conn.execute("SELECT value FROM _meta WHERE key=?", (key,))
             row = c.fetchone()
@@ -578,6 +623,12 @@ class Storage:
             return None
 
     def _meta_set(self, key: str, value: str):
+        """Internal: meta set.
+        
+        Args:
+            key: Description.
+            value: Description.
+        """
         try:
             self.conn.execute(
                 "INSERT OR REPLACE INTO _meta (key, value) VALUES (?, ?)", (key, value)
@@ -589,6 +640,7 @@ class Storage:
     # ── 保护标记 ──
 
     def _protect_db(self):
+        """Internal: protect db."""
         db_abs = os.path.abspath(self.db_path)
         db_dir = os.path.dirname(db_abs)
         marker = os.path.join(db_dir, ".chat_history_protected")
@@ -604,6 +656,7 @@ class Storage:
     # ── 生命周期 ──
 
     def close(self):
+        """Close."""
         try:
             self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             logger.info("WAL checkpoint(TRUNCATE) 完成")

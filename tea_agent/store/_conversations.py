@@ -83,6 +83,14 @@ class ConversationStore(StoreComponent):
         self, conversation_id: int, ai_msg: str, is_func_calling: bool,
         rounds: Optional[List[Dict]] = None,
     ):
+        """Update msg rounds.
+        
+        Args:
+            conversation_id: Description.
+            ai_msg: Description.
+            is_func_calling: Description.
+            rounds: Description.
+        """
         rounds_json = json.dumps(rounds, ensure_ascii=False) if rounds else None
         c = self.conn.cursor()
         c.execute(
@@ -96,6 +104,16 @@ class ConversationStore(StoreComponent):
         self, conversation_id: int, round_num: int, role: str, content: str,
         tool_calls: Optional[List[Dict]] = None, tool_call_id: Optional[str] = None,
     ):
+        """Save agent round.
+        
+        Args:
+            conversation_id: Description.
+            round_num: Description.
+            role: Description.
+            content: Description.
+            tool_calls: Description.
+            tool_call_id: Description.
+        """
         tc_json = json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None
         c = self.conn.cursor()
         c.execute(
@@ -107,6 +125,13 @@ class ConversationStore(StoreComponent):
         c.close()
 
     def get_conversations(self, topic_id: str, limit: int = 5, include_rounds: bool = True) -> List[Dict]:
+        """Get the conversations.
+        
+        Args:
+            topic_id: Description.
+            limit: Description.
+            include_rounds: Description.
+        """
         c = self.conn.cursor()
         if include_rounds:
             c.execute(
@@ -140,6 +165,12 @@ class ConversationStore(StoreComponent):
         return result
 
     def get_recent_conversations(self, topic_id: str, limit: int = 3) -> List[Dict]:
+        """Get the recent conversations.
+        
+        Args:
+            topic_id: Description.
+            limit: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "SELECT * FROM conversations WHERE topic_id = ? ORDER BY stamp DESC LIMIT ?",
@@ -150,6 +181,11 @@ class ConversationStore(StoreComponent):
         return [dict(r) for r in reversed(rows)]
 
     def get_agent_rounds(self, conversation_id: str) -> List[Dict]:
+        """Get the agent rounds.
+        
+        Args:
+            conversation_id: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "SELECT * FROM agent_rounds WHERE conversation_id = ? ORDER BY id ASC",
@@ -171,6 +207,7 @@ class ConversationStore(StoreComponent):
         """后台线程自动生成并存储文本向量。"""
 
         def _run():
+            """Internal: run."""
             try:
                 from tea_agent.embedding_util import get_embedding_engine
                 engine = get_embedding_engine()

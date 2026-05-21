@@ -34,6 +34,7 @@ def toolkit_comment(mode: str, description: str = "", model_name: str = ""):
         return f"❌ 未知 mode: '{mode}'，可选: code / evolve"
 
 def meta_toolkit_comment() -> dict:
+    """Meta toolkit comment."""
     return {
         "type": "function",
         "function": {

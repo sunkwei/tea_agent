@@ -16,6 +16,11 @@ class StreamManager:
     """流式输出管理组件"""
     
     def __init__(self, gui):
+        """Initialize  .
+        
+        Args:
+            gui: Description.
+        """
         self.gui = gui
     
     def safe_stream(self, text):
@@ -23,12 +28,28 @@ class StreamManager:
         self.gui.root.after(0, self.gui.stream, text)
 
     def safe_log(self, msg, tag="ai"):
+        """Safe log.
+        
+        Args:
+            msg: Description.
+            tag: Description.
+        """
         self.gui.root.after(0, self.gui.log, msg, tag)
 
     def safe_log_tool(self, msg: str):
+        """Safe log tool.
+        
+        Args:
+            msg: Description.
+        """
         self.gui.root.after(0, self.gui.log_tool, msg)
 
     def safe_update_status(self, msg: str):
+        """Safe update status.
+        
+        Args:
+            msg: Description.
+        """
         if msg.startswith("!MAX_ITER:"):
             self.gui.root.after(0, self.handle_max_iter, msg)
         else:

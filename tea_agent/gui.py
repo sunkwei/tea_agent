@@ -118,6 +118,15 @@ if HAS_SNI:
         """StatusNotifierItem D-Bus 服务，替代 pystray，原生兼容 KDE Plasma 6"""
 
         def __init__(self, app_id, title, icon_pixmap_ar32, on_activate, on_context_menu):
+            """Initialize  .
+            
+            Args:
+                app_id: Description.
+                title: Description.
+                icon_pixmap_ar32: Description.
+                on_activate: Description.
+                on_context_menu: Description.
+            """
             self._app_id = app_id
             self._title = title
             self._icon_data = icon_pixmap_ar32  # ARGB32 bytes
@@ -137,23 +146,28 @@ if HAS_SNI:
 
         @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
         def Title(self):
+            """Title."""
             return self._title
 
         @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
         def Id(self):
+            """Id."""
             return self._app_id
 
         @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
         def Status(self):
+            """Status."""
             return 'Active'
 
         @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
         def Category(self):
+            """Category."""
             return 'ApplicationStatus'
 
         @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='ay')
         def IconPixmap(self):
             # 返回 ARGB32 像素数组
+            """IconPixmap."""
             import struct
             width = 32
             height = 32
@@ -161,11 +175,23 @@ if HAS_SNI:
 
         @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='')
         def Activate(self, x, y):
+            """Activate.
+            
+            Args:
+                x: Description.
+                y: Description.
+            """
             if callable(self._on_activate):
                 self._on_activate()
 
         @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='')
         def ContextMenu(self, x, y):
+            """ContextMenu.
+            
+            Args:
+                x: Description.
+                y: Description.
+            """
             if callable(self._on_context_menu):
                 self._on_context_menu(x, y)
 
@@ -175,17 +201,28 @@ if HAS_SNI:
             self._loop = GLib.MainLoop()
 
             def run():
+                """Run."""
                 self._loop.run()
 
             self._thread = threading.Thread(target=run, daemon=True)
             self._thread.start()
 
         def stop(self):
+            """Stop."""
             if self._loop:
                 self._loop.quit()
 
 class TkGUI(AgentCore):
+    """TkGUI class."""
     def __init__(self, root, debug:bool=False, config_fname:str="", disable_summary:bool=False):
+        """Initialize  .
+        
+        Args:
+            root: Description.
+            debug: Description.
+            config_fname: Description.
+            disable_summary: Description.
+        """
         self.root = root
         import os
         self._initial_cwd = os.path.abspath(os.getcwd())
@@ -384,6 +421,11 @@ class TkGUI(AgentCore):
         pass
 
     def zoom_in(self, e=None):
+        """Zoom in.
+        
+        Args:
+            e: Description.
+        """
         if not HAS_TKINTERWEB or self._show_mode != "chat_view":
             return "break"
         self._zoom_level = min(self._zoom_level + 10, 200)
@@ -392,6 +434,11 @@ class TkGUI(AgentCore):
         return "break"
 
     def zoom_out(self, e=None):
+        """Zoom out.
+        
+        Args:
+            e: Description.
+        """
         if not HAS_TKINTERWEB or self._show_mode != "chat_view":
             return "break"
         self._zoom_level = max(self._zoom_level - 10, 50)
@@ -400,6 +447,7 @@ class TkGUI(AgentCore):
         return "break"
 
     def _apply_zoom(self):
+        """Internal: apply zoom."""
         if not HAS_TKINTERWEB or not self._filtered_messages():
             return
         self._image_cache.clear()
@@ -451,6 +499,7 @@ class TkGUI(AgentCore):
         # 不调用 root.update()：让 CSS animation 自己跑，GUI 主循环保持响应
 
     def _now_ts(self) -> str:
+        """Internal: now ts."""
         return datetime.now().strftime("%H:%M:%S")
 
     def _init_session(self):
@@ -661,6 +710,11 @@ class TkGUI(AgentCore):
         self._img_label.config(text="")
 
     def send(self, e=None):
+        """Send.
+        
+        Args:
+            e: Description.
+        """
         if self._shutting_down:
             self._update_status("🔄 代码已变更，等待重启...")
             return "break"
@@ -690,6 +744,7 @@ class TkGUI(AgentCore):
         chat_input = {"text": msg} if not images else {"text": msg, "images": images}
 
         def work():
+            """Work."""
             try:
                 ai_msg, is_func = self.sess.chat_stream(
                     chat_input, 
@@ -902,6 +957,11 @@ class TkGUI(AgentCore):
 
         def on_save(cfg):
             # 同步到当前 session
+            """Handle save event.
+            
+            Args:
+                cfg: Description.
+            """
             if hasattr(self, 'sess') and self.sess:
                 for key in cfg._RUNTIME_CONFIG_KEYS:
                     val = getattr(cfg, key, None)
@@ -915,6 +975,11 @@ class TkGUI(AgentCore):
         ConfigDialog(self.root, on_save=on_save, config_path=self._config_path)
 
     def interrupt(self, e=None):
+        """Interrupt.
+        
+        Args:
+            e: Description.
+        """
         if self.generating:
             self.sess.interrupt()
             self.safe_log("\n🛑 已打断", "tool")
@@ -935,59 +1000,116 @@ class TkGUI(AgentCore):
             self.root.after(0, self._show_raw_check_btn)
             self._update_status("🛑 已打断")
 
-
     def _switch_display(self, mode: str):
+        """Internal: switch display.
+        
+        Args:
+            mode: Description.
+        """
         return self.renderer._switch_display(mode)
 
     def _show_loading(self, text: str = "正在加载历史记录", progress: str = None):
+        """Internal: show loading.
+        
+        Args:
+            text: Description.
+            progress: Description.
+        """
         return self.renderer._show_loading(text, progress)
 
     def _poll_loading_progress(self):
+        """Internal: poll loading progress."""
         return self.renderer._poll_loading_progress()
 
     def scroll_to_bottom(self):
+        """Scroll to bottom."""
         return self.renderer.scroll_to_bottom()
 
     def _html_render(self, html: str):
+        """Internal: html render.
+        
+        Args:
+            html: Description.
+        """
         return self.renderer._html_render(html)
 
     def _render_chat(self, streaming_think: str = "", streaming_text: str = ""):
+        """Internal: render chat.
+        
+        Args:
+            streaming_think: Description.
+            streaming_text: Description.
+        """
         return self.renderer._render_chat(streaming_think, streaming_text)
 
     def _render_and_show_chat(self):
+        """Internal: render and show chat."""
         return self.renderer._render_and_show_chat()
 
     def _render_loaded_topic(self, render_items):
+        """Internal: render loaded topic.
+        
+        Args:
+            render_items: Description.
+        """
         return self.renderer._render_loaded_topic(render_items)
 
     def _render_round_view(self, round_idx: int):
+        """Internal: render round view.
+        
+        Args:
+            round_idx: Description.
+        """
         return self.renderer._render_round_view(round_idx)
 
     def _render_topic_error(self, error_msg: str):
+        """Internal: render topic error.
+        
+        Args:
+            error_msg: Description.
+        """
         return self.renderer._render_topic_error(error_msg)
 
     def _build_round_view_html(self, rounds, active_idx, font_size):
+        """Internal: build round view html.
+        
+        Args:
+            rounds: Description.
+            active_idx: Description.
+            font_size: Description.
+        """
         return self.renderer._build_round_view_html(rounds, active_idx, font_size)
 
     def _filtered_messages(self):
+        """Internal: filtered messages."""
         return self.renderer._filtered_messages()
 
     def _group_into_rounds(self, msgs):
+        """Internal: group into rounds.
+        
+        Args:
+            msgs: Description.
+        """
         return self.renderer._group_into_rounds(msgs)
 
     def _flush_stream_to_messages(self):
+        """Internal: flush stream to messages."""
         return self.renderer._flush_stream_to_messages()
 
     def _flush_think_buffer_to_messages(self):
+        """Internal: flush think buffer to messages."""
         return self.renderer._flush_think_buffer_to_messages()
 
     def _toggle_raw_view(self):
+        """Internal: toggle raw view."""
         return self.renderer._toggle_raw_view()
 
     def _show_raw_check_btn(self):
+        """Internal: show raw check btn."""
         return self.renderer._show_raw_check_btn()
 
     def _hide_raw_check_btn(self):
+        """Internal: hide raw check btn."""
         return self.renderer._hide_raw_check_btn()
 
 def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str="", disable_summary:bool=False):

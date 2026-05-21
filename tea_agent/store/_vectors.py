@@ -9,6 +9,14 @@ class VectorStore(StoreComponent):
 
     def store_embedding(self, conversation_id: str, embedding: list,
                          model_name: str = "", dimension: int = 0):
+        """Store embedding.
+        
+        Args:
+            conversation_id: Description.
+            embedding: Description.
+            model_name: Description.
+            dimension: Description.
+        """
         arr = np.array(embedding, dtype=np.float32)
         blob = arr.tobytes()
         c = self.conn.cursor()
@@ -21,6 +29,11 @@ class VectorStore(StoreComponent):
         c.close()
 
     def get_msg_embedding(self, conversation_id: str) -> Optional[List[float]]:
+        """Get the msg embedding.
+        
+        Args:
+            conversation_id: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "SELECT embedding, dimension FROM msg_vectors WHERE conversation_id = ?",
@@ -37,6 +50,7 @@ class VectorStore(StoreComponent):
         return None
 
     def get_all_embeddings(self) -> List[Dict]:
+        """Get the all embeddings."""
         c = self.conn.cursor()
         c.execute('''
             SELECT v.conversation_id, v.embedding, c.user_msg, c.topic_id, t.title as topic_title
@@ -63,6 +77,13 @@ class VectorStore(StoreComponent):
 
     def search_by_vector(self, query_embedding: List[float], top_k: int = 10,
                           min_similarity: float = 0.3) -> List[Dict]:
+        """Search by vector.
+        
+        Args:
+            query_embedding: Description.
+            top_k: Description.
+            min_similarity: Description.
+        """
         all_embs = self.get_all_embeddings()
         if not all_embs:
             return []
@@ -118,6 +139,12 @@ class VectorStore(StoreComponent):
         return top
 
     def search_by_keyword(self, query: str, top_k: int = 50) -> List[Dict]:
+        """Search by keyword.
+        
+        Args:
+            query: Description.
+            top_k: Description.
+        """
         c = self.conn.cursor()
         c.execute('''
             SELECT c.id as conversation_id, c.user_msg, c.ai_msg, c.topic_id, t.title as topic_title
@@ -141,6 +168,7 @@ class VectorStore(StoreComponent):
         return results
 
     def get_vector_count(self) -> int:
+        """Get the vector count."""
         c = self.conn.cursor()
         c.execute("SELECT COUNT(*) FROM msg_vectors")
         count = c.fetchone()[0]
@@ -148,6 +176,11 @@ class VectorStore(StoreComponent):
         return count
 
     def get_unvectorized_conversations(self, limit: int = 100) -> List[Dict]:
+        """Get the unvectorized conversations.
+        
+        Args:
+            limit: Description.
+        """
         c = self.conn.cursor()
         c.execute('''
             SELECT c.id, c.user_msg, c.topic_id
@@ -163,12 +196,26 @@ class VectorStore(StoreComponent):
 
     def vectorize_conversation(self, conversation_id: int, user_msg: str,
                                  model_name: str = "", embedding: Optional[List[float]] = None) -> bool:
+        """Vectorize conversation.
+        
+        Args:
+            conversation_id: Description.
+            user_msg: Description.
+            model_name: Description.
+            embedding: Description.
+        """
         if not embedding:
             return False
         self.store_embedding(conversation_id, embedding, model_name, len(embedding))
         return True
 
     def batch_vectorize(self, conversation_data: List[Dict], model_name: str = "") -> int:
+        """Batch vectorize.
+        
+        Args:
+            conversation_data: Description.
+            model_name: Description.
+        """
         count = 0
         for item in conversation_data:
             cid = item.get("conversation_id")
@@ -179,6 +226,11 @@ class VectorStore(StoreComponent):
         return count
 
     def delete_vector(self, conversation_id: str):
+        """Delete vector.
+        
+        Args:
+            conversation_id: Description.
+        """
         c = self.conn.cursor()
         c.execute("DELETE FROM msg_vectors WHERE conversation_id = ?", (conversation_id,))
         self.conn.commit()

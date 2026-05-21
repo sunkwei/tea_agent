@@ -7,6 +7,7 @@ logger = logging.getLogger("toolkit")
 
 @functools.lru_cache(maxsize=1)
 def _cached_os_info():
+    """Internal: cached os info."""
     return {
         "system": platform.system(),
         "release": platform.release(),
@@ -25,6 +26,7 @@ def toolkit_os_info(refresh: bool = False):
     return _cached_os_info()
 
 def meta_toolkit_os_info() -> dict:
+    """Meta toolkit os info."""
     return {
         "type": "function",
         "function": {

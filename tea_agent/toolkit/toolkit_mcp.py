@@ -66,6 +66,7 @@ def _mcp_get_or_create_loop():
     _MCP_LOOP = asyncio.new_event_loop()
 
     def _run_loop():
+        """Internal: run loop."""
         asyncio.set_event_loop(_MCP_LOOP)
         _MCP_LOOP.run_forever()
 
@@ -207,6 +208,7 @@ def _mcp_list_tools(server_name: str):
 
     try:
         async def _list():
+            """Internal: list."""
             server_info = _MCP_SERVERS[server_name]
             session = server_info["session"]
 
@@ -247,6 +249,7 @@ def _mcp_call(server_name: str, tool_name: str, tool_args: dict):
 
     try:
         async def _call():
+            """Internal: call."""
             server_info = _MCP_SERVERS[server_name]
             session = server_info["session"]
 
@@ -329,6 +332,7 @@ def _mcp_status():
     }, ensure_ascii=False, indent=2), "")
 
 def meta_toolkit_mcp() -> dict:
+    """Meta toolkit mcp."""
     return {
         "type": "function",
         "function": {

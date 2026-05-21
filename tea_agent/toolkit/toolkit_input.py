@@ -130,6 +130,7 @@ def toolkit_input(
         return f"❌ 操作失败: {e}"
 
 def meta_toolkit_input() -> dict:
+    """Meta toolkit input."""
     return {
         "type": "function",
         "function": {

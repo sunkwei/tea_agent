@@ -5,6 +5,14 @@ import logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: int = 5000):
+    """Toolkit notify.
+    
+    Args:
+        title: Description.
+        message: Description.
+        urgency: Description.
+        duration: Description.
+    """
     logger.info(f"toolkit_notify called: title={repr(title)[:80]}, message={repr(message)[:80]}, urgency={urgency!r}, duration={duration!r}")
 
     import sys
@@ -112,4 +120,5 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
         return (1, "", f"不支持的操作系统: {sys.platform}")
 
 def meta_toolkit_notify() -> dict:
+    """Meta toolkit notify."""
     return {"type": "function", "function": {"name": "toolkit_notify", "description": "发送桌面系统通知。支持 Linux（GI Notify/notify-send）、macOS（osascript）、Windows（PowerShell Toast）。长时间任务完成后使用。", "parameters": {"type": "object", "properties": {"title": {"type": "string", "description": "通知标题，如 '任务完成'"}, "message": {"type": "string", "description": "通知正文，如 '截图已保存到 screenshot.png'"}, "urgency": {"type": "string", "enum": ["low", "normal", "critical"], "description": "紧急程度，默认 normal", "default": "normal"}, "duration": {"type": "integer", "description": "显示时长（毫秒），默认 5000", "default": 5000}}, "required": ["title", "message"]}}}

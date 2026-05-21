@@ -17,6 +17,7 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
     from pathlib import Path
 
     def _detect_env():
+        """Internal: detect env."""
         ds = os.environ.get("XDG_SESSION_TYPE", "").lower()
         de = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
         if not ds and os.environ.get("WAYLAND_DISPLAY"):
@@ -24,6 +25,7 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
         return ds, de
 
     def _find_tool(*names):
+        """Internal: find tool."""
         for name in names:
             path = shutil.which(name)
             if path: return path
@@ -78,6 +80,12 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
         return None
 
     def _x11_screenshot(out_path, geo=None):
+        """Internal: x11 screenshot.
+        
+        Args:
+            out_path: Description.
+            geo: Description.
+        """
         try:
             import mss
             with mss.mss() as sct:
@@ -123,6 +131,7 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
         return None
 
     def _list_monitors():
+        """Internal: list monitors."""
         ds, de = _detect_env()
         monitors = []
         xr = _find_tool("xrandr")
@@ -228,4 +237,5 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
                 "tried": method, "tip": "Wayland用户请安装 spectacle、gnome-screenshot 或 grim"}
 
 def meta_toolkit_screenshot() -> dict:
+    """Meta toolkit screenshot."""
     return {"type": "function", "function": {"name": "toolkit_screenshot", "description": "跨平台智能截屏工具。自动检测 Wayland/X11/macOS/Windows 并选择最佳截屏方式。Wayland 下自动使用系统自带工具（spectacle/gnome-screenshot/grim），彻底解决 Python 截屏库黑屏问题。支持全屏、区域、指定显示器。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["full", "region", "monitor", "list_monitors"], "description": "full=全屏, region=指定区域(x,y,w,h), monitor=指定显示器, list_monitors=列出显示器"}, "region": {"type": "string", "description": "[region] 截取区域，格式 'x,y,w,h'（如 '100,200,800,600'）"}, "monitor": {"type": "integer", "description": "[monitor] 显示器索引，1=主屏, 2=第二屏..."}, "output": {"type": "string", "description": "输出文件路径，默认自动生成临时文件"}, "quality": {"type": "integer", "description": "JPEG 质量 1-100，默认 90。仅对 JPEG 有效"}}, "required": ["action"]}}}

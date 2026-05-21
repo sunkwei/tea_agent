@@ -42,6 +42,11 @@ def toolkit_ocr(
 
     # --- 内部：懒加载 easyocr ---
     def _get_reader(langs):
+        """Internal: get the reader.
+        
+        Args:
+            langs: Description.
+        """
         try:
             import easyocr
         except ImportError:
@@ -64,6 +69,12 @@ def toolkit_ocr(
 
     # --- 内部：截屏（支持 region / monitor 两种模式）---
     def _screenshot(reg, mon_idx=-1):
+        """Internal: screenshot.
+        
+        Args:
+            reg: Description.
+            mon_idx: Description.
+        """
         import time
         from pathlib import Path
 
@@ -198,6 +209,7 @@ def toolkit_ocr(
         return f"❌ OCR 失败: {e}"
 
 def meta_toolkit_ocr() -> dict:
+    """Meta toolkit ocr."""
     return {
         "type": "function",
         "function": {

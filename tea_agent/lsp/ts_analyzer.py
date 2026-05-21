@@ -14,6 +14,7 @@ _TS_LANG = None
 _TS_LANG_LOADED = False
 
 def _ensure_ts():
+    """Internal: ensure ts."""
     global _TS_LANG, _TS_LANG_LOADED
     if _TS_LANG_LOADED:
         return _TS_LANG
@@ -31,9 +32,21 @@ def _ensure_ts():
         return None
 
 def _get_text(source_bytes, node):
+    """Internal: get the text.
+    
+    Args:
+        source_bytes: Description.
+        node: Description.
+    """
     return source_bytes[node.start_byte:node.end_byte].decode("utf-8")
 
 def _extract_docstring(source_bytes, body_node):
+    """Internal: extract docstring.
+    
+    Args:
+        source_bytes: Description.
+        body_node: Description.
+    """
     for child in body_node.named_children:
         if child.type == "expression_statement":
             expr = child.children[0] if child.children else None
@@ -44,6 +57,12 @@ def _extract_docstring(source_bytes, body_node):
     return ""
 
 def _extract_calls(source_bytes, body_node):
+    """Internal: extract calls.
+    
+    Args:
+        source_bytes: Description.
+        body_node: Description.
+    """
     calls = set()
     stack = [body_node]
     while stack:
@@ -62,6 +81,12 @@ def _extract_calls(source_bytes, body_node):
     return sorted(calls)
 
 def _extract_params(source_bytes, func_node):
+    """Internal: extract params.
+    
+    Args:
+        source_bytes: Description.
+        func_node: Description.
+    """
     params_node = func_node.child_by_field_name("parameters")
     if not params_node:
         return []
@@ -77,6 +102,11 @@ def _extract_params(source_bytes, func_node):
     return params
 
 def parse_file(filepath: str) -> Optional[Dict]:
+    """Parse file.
+    
+    Args:
+        filepath: Description.
+    """
     lang = _ensure_ts()
     if lang is None:
         return _parse_file_ast_fallback(filepath)
@@ -97,6 +127,12 @@ def parse_file(filepath: str) -> Optional[Dict]:
     result = {"file": filepath, "functions": [], "classes": [], "imports": [], "top_level": []}
 
     def _walk(node, depth=0):
+        """Internal: walk.
+        
+        Args:
+            node: Description.
+            depth: Description.
+        """
         for child in node.named_children:
             if child.type == "function_definition":
                 name_node = child.child_by_field_name("name")
@@ -173,6 +209,11 @@ def parse_file(filepath: str) -> Optional[Dict]:
     return result
 
 def _parse_file_ast_fallback(filepath: str) -> Optional[Dict]:
+    """Internal: parse file ast fallback.
+    
+    Args:
+        filepath: Description.
+    """
     try:
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:
             source = f.read()
@@ -238,6 +279,13 @@ def _parse_file_ast_fallback(filepath: str) -> Optional[Dict]:
     return result
 
 def impact_analysis(project_root: str, filepath: str, symbol: str) -> Dict:
+    """Impact analysis.
+    
+    Args:
+        project_root: Description.
+        filepath: Description.
+        symbol: Description.
+    """
     parsed = parse_file(filepath)
     if not parsed:
         return {"ok": False, "error": f"无法解析: {filepath}"}
@@ -324,6 +372,11 @@ def impact_analysis(project_root: str, filepath: str, symbol: str) -> Dict:
     }
 
 def build_dependency_graph(project_root: str) -> Dict:
+    """Build dependency graph.
+    
+    Args:
+        project_root: Description.
+    """
     graph = defaultdict(lambda: {"imports": [], "imported_by": [], "symbols": []})
     py_files = list(Path(project_root).rglob("*.py"))
 
@@ -351,6 +404,11 @@ def build_dependency_graph(project_root: str) -> Dict:
     visited = set()
     path = []
     def _dfs(m):
+        """Internal: dfs.
+        
+        Args:
+            m: Description.
+        """
         if m in path:
             cycle_start = path.index(m)
             circular.append(path[cycle_start:] + [m])

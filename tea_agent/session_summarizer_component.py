@@ -37,6 +37,7 @@ class SummarizerComponent(SessionComponent):
     
     @property
     def name(self) -> str:
+        """Name."""
         return "summarizer"
     
     def initialize(self) -> None:

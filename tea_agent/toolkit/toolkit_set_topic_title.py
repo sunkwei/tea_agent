@@ -58,6 +58,7 @@ def toolkit_set_topic_title(title: str) -> dict:
     return {"ok": True, "title": new_title, "topic_id": topic_id}
 
 def meta_toolkit_set_topic_title():
+    """Meta toolkit set topic title."""
     return {
         "type": "function",
         "function": {

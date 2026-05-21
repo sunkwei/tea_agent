@@ -41,6 +41,7 @@ class SessionTrace:
 
     @property
     def success_rate(self) -> float:
+        """Success rate."""
         if not self.tool_calls:
             return 1.0
         successes = sum(1 for tc in self.tool_calls if tc.success)
@@ -48,6 +49,7 @@ class SessionTrace:
 
     @property
     def duration_seconds(self) -> float:
+        """Duration seconds."""
         return self.end_time - self.start_time if self.end_time > 0 else 0
 
 class ReflectionManager:

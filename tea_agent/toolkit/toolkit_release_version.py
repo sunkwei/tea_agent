@@ -112,4 +112,5 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
     return results
 
 def meta_toolkit_release_version() -> dict:
+    """Meta toolkit release version."""
     return {"type": "function", "function": {"name": "toolkit_release_version", "description": "自动化版本发布工具。更新版本号、CHANGELOG，并构建项目。", "parameters": {"type": "object", "properties": {"version": {"type": "string", "description": "新版本号，如 '0.2.4'"}, "changes": {"type": "array", "items": {"type": "string"}, "description": "变更说明列表"}, "changelog_section": {"type": "string", "description": "变更章节类型：Features, Improvements & Changes, Bug Fixes, Documentation 等", "default": "Improvements & Changes"}, "build": {"type": "boolean", "description": "是否执行构建（python -m build）", "default": True}, "git_commit": {"type": "boolean", "description": "是否创建 git commit", "default": True}}, "required": ["version", "changes"]}}}

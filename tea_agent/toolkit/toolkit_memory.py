@@ -130,6 +130,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
         return f"❌ 未知 action: '{action}'，可选: add/list/search/forget/extract"
 
 def meta_toolkit_memory() -> dict:
+    """Meta toolkit memory."""
     return {
         "type": "function",
         "function": {

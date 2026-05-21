@@ -328,6 +328,7 @@ def toolkit_diff(
 # ── Meta ────────────────────────────────────────────────
 
 def meta_toolkit_diff():
+    """Meta toolkit diff."""
     return {
         "type": "function",
         "function": {

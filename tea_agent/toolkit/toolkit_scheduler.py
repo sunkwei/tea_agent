@@ -44,6 +44,7 @@ def toolkit_scheduler(action: str, **kwargs):
 
     # ── DB 初始化 ──
     def _get_conn():
+        """Internal: get the conn."""
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -68,6 +69,12 @@ def toolkit_scheduler(action: str, **kwargs):
 
     # ── 调度解析 ──
     def parse_schedule(schedule: str, from_time: datetime = None):
+        """Parse schedule.
+        
+        Args:
+            schedule: Description.
+            from_time: Description.
+        """
         if not schedule:
             return None
         now = from_time or datetime.now()
@@ -105,6 +112,12 @@ def toolkit_scheduler(action: str, **kwargs):
         return None
 
     def _match_cron(pattern: str, value: int) -> bool:
+        """Internal: match cron.
+        
+        Args:
+            pattern: Description.
+            value: Description.
+        """
         if pattern == "*":
             return True
         for part in pattern.split(","):
@@ -124,6 +137,12 @@ def toolkit_scheduler(action: str, **kwargs):
         return False
 
     def _parse_cron(expr: str, now: datetime):
+        """Internal: parse cron.
+        
+        Args:
+            expr: Description.
+            now: Description.
+        """
         parts = expr.strip().split()
         if len(parts) != 5:
             return None
@@ -176,6 +195,7 @@ def toolkit_scheduler(action: str, **kwargs):
     _scheduler_pid = None
 
     def _scheduler_loop():
+        """Internal: scheduler loop."""
         nonlocal _scheduler_running, _scheduler_pid
         _scheduler_running = True
         _scheduler_pid = os.getpid()
@@ -406,6 +426,7 @@ def _format_next(task: dict) -> str:
         return str(nr)[:16]
 
 def meta_toolkit_scheduler() -> dict:
+    """Meta toolkit scheduler."""
     return {
         "type": "function",
         "function": {

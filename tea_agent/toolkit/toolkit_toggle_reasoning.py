@@ -30,6 +30,7 @@ def toolkit_toggle_reasoning(enable: bool = None) -> dict:
     return {"enable_thinking": sess.enable_thinking, "changed": True, "message": f"Reasoning 已{state}"}
 
 def meta_toolkit_toggle_reasoning():
+    """Meta toolkit toggle reasoning."""
     return {
         "type": "function",
         "function": {

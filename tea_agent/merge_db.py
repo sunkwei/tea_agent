@@ -69,7 +69,15 @@ def _jaccard_similarity(text_a: str, text_b: str) -> float:
 # ============================================================
 
 class DbMerger:
+    """DbMerger class."""
     def __init__(self, target_path: str, source_path: str, dedup_threshold: float = 0.35):
+        """Initialize  .
+        
+        Args:
+            target_path: Description.
+            source_path: Description.
+            dedup_threshold: Description.
+        """
         self.target_path = target_path
         self.source_path = source_path
         self.dedup_threshold = dedup_threshold
@@ -662,6 +670,7 @@ class DbMerger:
         logger.info("=" * 60)
 
     def close(self):
+        """Close."""
         self.target.close()
         self.source.close()
 
@@ -670,6 +679,7 @@ class DbMerger:
 # ============================================================
 
 def main():
+    """Main."""
     if len(sys.argv) < 3:
         print(__doc__)
         print("示例: python merge_db.py chat_history.db old_backup.db")

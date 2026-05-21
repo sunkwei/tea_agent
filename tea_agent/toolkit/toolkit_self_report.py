@@ -71,4 +71,5 @@ def toolkit_self_report() -> dict:
     }
 
 def meta_toolkit_self_report() -> dict:
+    """Meta toolkit self report."""
     return {"type": "function", "function": {"name": "toolkit_self_report", "description": "生成当前 Agent 的状态报告，包括工具数量。", "parameters": {"type": "object", "properties": {}, "required": []}}}

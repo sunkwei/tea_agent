@@ -124,6 +124,7 @@ def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
     return result
 
 def meta_toolkit_test_gui() -> dict:
+    """Meta toolkit test gui."""
     return {
         "type": "function",
         "function": {

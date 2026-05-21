@@ -90,6 +90,7 @@ def toolkit_bump_version(version: str, file: str = "pyproject.toml", dry_run: bo
     }
 
 def meta_toolkit_bump_version() -> dict:
+    """Meta toolkit bump version."""
     return {
         "type": "function",
         "function": {

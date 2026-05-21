@@ -16,6 +16,18 @@ class MemoryStore(StoreComponent):
         importance: int = 3, expires_at: Optional[str] = None, tags: str = "",
         source_topic_id: Optional[str] = None, pinned: int = 0,
     ) -> str:
+        """Add memory.
+        
+        Args:
+            content: Description.
+            category: Description.
+            priority: Description.
+            importance: Description.
+            expires_at: Description.
+            tags: Description.
+            source_topic_id: Description.
+            pinned: Description.
+        """
         if priority == 0:
             self._enforce_critical_limit(max_critical=15)
         c = self.conn.cursor()
@@ -32,6 +44,11 @@ class MemoryStore(StoreComponent):
         return mid
 
     def _enforce_critical_limit(self, max_critical: int = 15):
+        """Internal: enforce critical limit.
+        
+        Args:
+            max_critical: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "SELECT COUNT(*) FROM memories WHERE is_active = 1 AND priority = 0"
@@ -52,6 +69,11 @@ class MemoryStore(StoreComponent):
         c.close()
 
     def update_memory(self, memory_id: str, **fields) -> bool:
+        """Update memory.
+        
+        Args:
+            memory_id: Description.
+        """
         allowed = {
             "content", "category", "priority", "importance",
             "expires_at", "is_active", "tags", "last_accessed_at", "pinned",
@@ -84,9 +106,19 @@ class MemoryStore(StoreComponent):
         return affected > 0
 
     def deactivate_memory(self, memory_id: str) -> bool:
+        """Deactivate memory.
+        
+        Args:
+            memory_id: Description.
+        """
         return self.update_memory(memory_id, is_active=0)
 
     def delete_memory(self, memory_id: str) -> bool:
+        """Delete memory.
+        
+        Args:
+            memory_id: Description.
+        """
         c = self.conn.cursor()
         c.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
         self.conn.commit()
@@ -95,6 +127,11 @@ class MemoryStore(StoreComponent):
         return affected > 0
 
     def get_active_memories(self, limit: int = 50) -> List[Dict]:
+        """Get the active memories.
+        
+        Args:
+            limit: Description.
+        """
         self.cleanup_expired_memories()
         c = self.conn.cursor()
         c.execute(
@@ -107,6 +144,7 @@ class MemoryStore(StoreComponent):
         return [dict(r) for r in rows]
 
     def get_instructions(self) -> List[Dict]:
+        """Get the instructions."""
         self.cleanup_expired_memories()
         c = self.conn.cursor()
         c.execute(
@@ -121,6 +159,15 @@ class MemoryStore(StoreComponent):
         self, query: str = "", category: str = "",
         tags: Optional[List[str]] = None, min_importance: int = 0, limit: int = 20,
     ) -> List[Dict]:
+        """Search memories.
+        
+        Args:
+            query: Description.
+            category: Description.
+            tags: Description.
+            min_importance: Description.
+            limit: Description.
+        """
         self.cleanup_expired_memories()
         conditions = ["is_active = 1"]
         params: list = []
@@ -152,6 +199,7 @@ class MemoryStore(StoreComponent):
         return results[:limit]
 
     def cleanup_expired_memories(self) -> int:
+        """Cleanup expired memories."""
         c = self.conn.cursor()
         c.execute(
             "UPDATE memories SET is_active = 0, updated_at = datetime('now', 'localtime') "
@@ -163,6 +211,11 @@ class MemoryStore(StoreComponent):
         return affected
 
     def touch_memory(self, memory_id: str):
+        """Touch memory.
+        
+        Args:
+            memory_id: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "UPDATE memories SET last_accessed_at = datetime('now', 'localtime') WHERE id = ?",
@@ -172,6 +225,7 @@ class MemoryStore(StoreComponent):
         c.close()
 
     def get_memory_stats(self) -> Dict:
+        """Get the memory stats."""
         c = self.conn.cursor()
         c.execute("SELECT COUNT(*) as total FROM memories WHERE is_active = 1")
         total = c.fetchone()["total"]

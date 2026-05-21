@@ -19,14 +19,21 @@ class ImageHandler:
     """图片附件选择、清除、放大查看（委托给 TkGUI）"""
 
     def __init__(self, gui: 'TkGUI'):
+        """Initialize  .
+        
+        Args:
+            gui: Description.
+        """
         self.gui = gui
 
     @property
     def _pending_images(self) -> list:
+        """Internal: pending images."""
         return self.gui._pending_images
 
     @property
     def _image_cache(self) -> list:
+        """Internal: image cache."""
         return self.gui._image_cache
 
     # ── 选择图片 ────────────────────────

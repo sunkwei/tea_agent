@@ -31,19 +31,35 @@ class ChatRenderer:
     """消息渲染器：HtmlFrame 渲染、加载动画、轮次视图、显示模式切换"""
 
     def __init__(self, gui: 'TkGUI'):
+        """Initialize  .
+        
+        Args:
+            gui: Description.
+        """
         self.gui = gui
 
     # ── 便捷属性 ────────────────────────
     @property
     def _show_mode(self):
+        """Internal: show mode."""
         return self.gui._show_mode
     @_show_mode.setter
     def _show_mode(self, v):
+        """Internal: show mode.
+        
+        Args:
+            v: Description.
+        """
         self.gui._show_mode = v
 
     # ── _html_render ──
     def _html_render(self, html: str):
         # 0. 基础校验
+        """Internal: html render.
+        
+        Args:
+            html: Description.
+        """
         if not html or not isinstance(html, str):
             print("[_html_render WARN] HTML 为空或非字符串，跳过渲染")
             return
@@ -124,9 +140,15 @@ class ChatRenderer:
         font_size = int(_DEFAULT_FONT_SIZE * self.gui._zoom_level / 100)
 
         def _prepare():
+            """Internal: prepare."""
             return self._build_round_view_html(rounds, active_idx, font_size)
 
         def _on_done(html):
+            """Internal: handle done event.
+            
+            Args:
+                html: Description.
+            """
             if HAS_TKINTERWEB:
                 # [RENDER] removed: was printing html char count on every render
                 self._html_render(html)
@@ -142,6 +164,7 @@ class ChatRenderer:
 
         import threading
         def _worker():
+            """Internal: worker."""
             try:
                 result = _prepare()
                 self.gui.root.after(0, lambda r=result: _on_done(r))
@@ -178,9 +201,15 @@ class ChatRenderer:
         font_size = int(_DEFAULT_FONT_SIZE * self.gui._zoom_level / 100)
 
         def _prepare():
+            """Internal: prepare."""
             return self._build_round_view_html(rounds, round_idx, font_size)
 
         def _on_done(html):
+            """Internal: handle done event.
+            
+            Args:
+                html: Description.
+            """
             if HAS_TKINTERWEB:
             # [RENDER ROUND] removed: debug print
                 self._html_render(html)
@@ -196,6 +225,7 @@ class ChatRenderer:
 
         import threading
         def _worker():
+            """Internal: worker."""
             try:
                 result = _prepare()
                 self.gui.root.after(0, lambda r=result: _on_done(r))
@@ -271,6 +301,11 @@ class ChatRenderer:
 
     # ── _switch_display ──
     def _switch_display(self, mode: str):
+        """Internal: switch display.
+        
+        Args:
+            mode: Description.
+        """
         if mode == self.gui._show_mode:
             return
         self.gui._show_mode = mode
@@ -350,6 +385,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 
     # ── scroll_to_bottom ──
     def scroll_to_bottom(self):
+        """Scroll to bottom."""
         self.gui.chat_view.yview_moveto(1.0)
 
     # ── _filtered_messages ──
@@ -395,6 +431,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     # ── _flush_stream_to_messages ──
     def _flush_stream_to_messages(self):
         # 先刷新控制台剩余内容（确保最后一批 pending 文本显示完毕）
+        """Internal: flush stream to messages."""
         if self.gui._pending_console_text:
             self.gui.console.config(state=tk.NORMAL)
             for text, tag in self.gui._pending_console_text:

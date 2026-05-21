@@ -195,6 +195,15 @@ class TeaAgent:
         if not self._use_tools:
             self._sess._real_create_chat_stream = self._sess._create_chat_stream
             def _no_tools_chat(api_messages, tools, client=None, model=None, is_cheap=False):
+                """Internal: no tools chat.
+                
+                Args:
+                    api_messages: Description.
+                    tools: Description.
+                    client: Description.
+                    model: Description.
+                    is_cheap: Description.
+                """
                 return self._sess._real_create_chat_stream(
                     api_messages, [], client=client, model=model, is_cheap=is_cheap
                 )
@@ -261,12 +270,22 @@ class TeaAgent:
 
         # ── 流式回调 ──
         def stream_cb(text: str):
+            """Stream cb.
+            
+            Args:
+                text: Description.
+            """
             if text.startswith("[THINK]"):
                 self._notify({"type": "thinking", "text": text[7:]})
             else:
                 self._notify({"type": "token", "text": text})
 
         def status_cb(status_msg: str):
+            """Status cb.
+            
+            Args:
+                status_msg: Description.
+            """
             if status_msg.startswith("!MAX_ITER:"):
                 self._sess._continue_after_max = True
                 self._sess._extra_iterations += 10

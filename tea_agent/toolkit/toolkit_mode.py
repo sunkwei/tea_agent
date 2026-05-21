@@ -78,6 +78,11 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
     }
     
     def _detect_mode(input_text: str) -> str:
+        """Internal: detect mode.
+        
+        Args:
+            input_text: Description.
+        """
         if not input_text or not input_text.strip():
             return "mixed"
         text_lower = input_text.lower()
@@ -101,6 +106,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             return "mixed"
     
     def _get_memory_manager():
+        """Internal: get the memory manager."""
         from tea_agent.memory import MemoryManager
         from tea_agent.store import Storage
         try:
@@ -113,6 +119,11 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         return MemoryManager(Storage(), extraction_threshold=1, dedup_threshold=0.3)
     
     def _get_existing_mode_memory(mm):
+        """Internal: get the existing mode memory.
+        
+        Args:
+            mm: Description.
+        """
         all_mems = mm.storage.get_active_memories(limit=100)
         for m in all_mems:
             c = m.get("content") or ""
@@ -121,6 +132,13 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         return None
     
     def _set_mode(mm, target_mode: str, old_mem=None):
+        """Internal: set the mode.
+        
+        Args:
+            mm: Description.
+            target_mode: Description.
+            old_mem: Description.
+        """
         if old_mem:
             mm.storage.delete_memory(old_mem["id"])
         instruction = MODE_INSTRUCTIONS.get(target_mode, MODE_INSTRUCTIONS["mixed"])
@@ -134,6 +152,11 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         return target_mode
     
     def _current_mode(mm):
+        """Internal: current mode.
+        
+        Args:
+            mm: Description.
+        """
         m = _get_existing_mode_memory(mm)
         if not m:
             return "mixed"
@@ -201,7 +224,9 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         return (1, "", f"未知 action: {action}")
 
 def meta_toolkit_mode() -> dict:
+    """Meta toolkit mode."""
     return {"type": "function", "function": {"name": "toolkit_mode", "description": "Agent 人格模式管理。detect=基于用户输入自动检测模式, switch=手动切换, status=查看当前。严谨(pragmatic)=代码开发/排bug/遵从需求；自由(creative)=异想天开/发散创意/打破边界。模式以CRITICAL记忆注入，影响后续所有回复。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["detect", "switch", "status", "auto"], "description": "detect=根据text自动检测, switch=手动切换, status=查看当前, auto=检测+切换"}, "text": {"type": "string", "description": "[detect/auto] 用户输入文本，用于自动检测模式"}, "mode": {"type": "string", "enum": ["pragmatic", "creative", "mixed"], "description": "[switch] 目标模式: pragmatic=严谨收敛, creative=自由发散, mixed=自动"}}, "required": ["action"]}}}
 
 def meta_toolkit_mode() -> dict:
+    """Meta toolkit mode."""
     return {"type": "function", "function": {"name": "toolkit_mode", "description": "Agent 人格模式管理。detect=基于用户输入自动检测模式, switch=手动切换, status=查看当前。严谨(pragmatic)=代码开发/排bug/遵从需求；自由(creative)=异想天开/发散创意/打破边界。模式以CRITICAL记忆注入，影响后续所有回复。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["detect", "switch", "status", "auto"], "description": "detect=根据text自动检测, switch=手动切换, status=查看当前, auto=检测+切换"}, "text": {"type": "string", "description": "[detect/auto] 用户输入文本，用于自动检测模式"}, "mode": {"type": "string", "enum": ["pragmatic", "creative", "mixed"], "description": "[switch] 目标模式: pragmatic=严谨收敛, creative=自由发散, mixed=自动"}}, "required": ["action"]}}}

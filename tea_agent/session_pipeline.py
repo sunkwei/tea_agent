@@ -36,6 +36,7 @@ class SessionPipeline:
     """
     
     def __init__(self):
+        """Initialize  ."""
         self._steps: Dict[str, PipelineStep] = {}
         self._step_order: List[str] = []  # 步骤执行顺序
         

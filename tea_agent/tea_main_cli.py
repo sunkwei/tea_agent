@@ -36,6 +36,13 @@ class TeaCLI(AgentCore):
 
     def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False):
         # ── AgentCore 初始化：配置、目录、Storage/Toolkit、连接器、会话、MQTT ──
+        """Initialize  .
+        
+        Args:
+            debug: Description.
+            config_path: Description.
+            disable_summary: Description.
+        """
         super().__init__(debug=debug, config_path=config_path, disable_summary=disable_summary)
 
         # ── CLI 特定：显示状态信息 ──
@@ -69,6 +76,7 @@ class TeaCLI(AgentCore):
             logger.debug(f"Dream 启动失败: {e}")
         # 退出时自动停止
         def _stop_dream():
+            """Internal: stop dream."""
             try:
                 from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
                 toolkit_subconscious("stop")
@@ -77,6 +85,7 @@ class TeaCLI(AgentCore):
         atexit.register(_stop_dream)
 
     def _auto_init_topic(self):
+        """Internal: auto init topic."""
         topics = self.db.list_topics()
         if topics:
             self.current_topic_id = topics[0]["topic_id"]
@@ -86,6 +95,7 @@ class TeaCLI(AgentCore):
             self._new_topic()
 
     def _new_topic(self) -> int:
+        """Internal: new topic."""
         title = f"CLI {datetime.now().strftime('%m-%d %H:%M')}"
         tid = self.db.create_topic(title)
         self.current_topic_id = tid
@@ -93,6 +103,7 @@ class TeaCLI(AgentCore):
         return tid
 
     def _list_topics(self):
+        """Internal: list topics."""
         topics = self.db.list_topics()
         if not topics:
             print("(无主题)")
@@ -105,6 +116,11 @@ class TeaCLI(AgentCore):
             print(f"  {active} [{tid}] {title}{mark}")
 
     def _switch_topic(self, tid: int):
+        """Internal: switch topic.
+        
+        Args:
+            tid: Description.
+        """
         tp = self.db.get_topic(tid)
         if not tp:
             print(f"❌ 主题 [{tid}] 不存在")
@@ -121,6 +137,7 @@ class TeaCLI(AgentCore):
         self._load_topic_history_into_session(self.current_topic_id)
 
     def _show_topic_info(self):
+        """Internal: show topic info."""
         tp = self.db.get_topic(self.current_topic_id)
         ts = self.db.get_topic_tokens(self.current_topic_id)
         if tp:
@@ -135,6 +152,7 @@ class TeaCLI(AgentCore):
     # 记忆管理
     # ------------------------------------------------------
     def _show_memories(self):
+        """Internal: show memories."""
         memories = self.db.get_active_memories(limit=20)
         if not memories:
             print("(无活跃记忆)")
@@ -162,11 +180,21 @@ class TeaCLI(AgentCore):
         print("🤖 ", end="", flush=True)
 
         def stream_cb(text: str):
+            """Stream cb.
+            
+            Args:
+                text: Description.
+            """
             if text.startswith("[THINK]"):
                 text = text[7:]
             print(text, end="", flush=True)
 
         def status_cb(status_msg: str):
+            """Status cb.
+            
+            Args:
+                status_msg: Description.
+            """
             if status_msg.startswith("!MAX_ITER:"):
                 display = status_msg.replace("!MAX_ITER:", "")
                 print(f"\n⚠️  {display}")
@@ -176,6 +204,7 @@ class TeaCLI(AgentCore):
                 self.sess._max_iter_wait.set()
 
         def work():
+            """Work."""
             try:
                 ai_msg, used_tools = self.sess.chat_stream(
                     msg,
@@ -207,6 +236,11 @@ class TeaCLI(AgentCore):
     # 回调
     # ------------------------------------------------------
     def _on_tool_log(self, msg: str):
+        """Internal: handle tool log event.
+        
+        Args:
+            msg: Description.
+        """
         print(f"\n🔧 {msg}")
 
     def _suggest_new_topic_if_needed(self, topic_id: str):
@@ -250,6 +284,11 @@ class TeaCLI(AgentCore):
     # 命令处理
     # ------------------------------------------------------
     def _handle_command(self, raw: str):
+        """Internal: handle command.
+        
+        Args:
+            raw: Description.
+        """
         parts = raw.split(maxsplit=1)
         cmd = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
@@ -276,6 +315,7 @@ class TeaCLI(AgentCore):
             print(f"未知命令: {cmd}，输入 /help 查看帮助")
 
     def _cmd_help(self):
+        """Internal: cmd help."""
         print("""
 命令列表:
   /new          新建主题
@@ -291,6 +331,7 @@ Ctrl+C 可打断当前生成。
 """)
 
     def _cmd_status(self):
+        """Internal: cmd status."""
         tp = self.db.get_topic(self.current_topic_id)
         ts = self.db.get_topic_tokens(self.current_topic_id)
         print(f"📌 当前主题: [{self.current_topic_id}] {tp.get('title', '') if tp else '?'}")
@@ -303,6 +344,7 @@ Ctrl+C 可打断当前生成。
 
 # ====================== 入口 ======================
 def main():
+    """Main."""
     import argparse
 
     ap = argparse.ArgumentParser(description="Tea Agent CLI")

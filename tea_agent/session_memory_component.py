@@ -36,6 +36,7 @@ class MemoryComponent(SessionComponent):
     
     @property
     def name(self) -> str:
+        """Name."""
         return "memory"
     
     def initialize(self) -> None:

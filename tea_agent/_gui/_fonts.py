@@ -31,6 +31,11 @@ def _init_fonts():
         available = set(_tkfont.families())
 
         def _detect(candidates):
+            """Internal: detect.
+            
+            Args:
+                candidates: Description.
+            """
             for f in candidates:
                 if f in available:
                     return f

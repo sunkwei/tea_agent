@@ -22,6 +22,7 @@ from tea_agent import tlk
 from tea_agent.config import load_config, get_config
 
 class AgentCore:
+    """AgentCore class."""
     DRIFT_SUGGEST_THRESHOLD = 3
     """Tea Agent 共享核心 — CLI 和 GUI 的公共基类。
 
@@ -32,6 +33,13 @@ class AgentCore:
 
     def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False):
         # ── 尽早初始化文件日志，确保后续所有 logger 都有文件 handler ──
+        """Initialize  .
+        
+        Args:
+            debug: Description.
+            config_path: Description.
+            disable_summary: Description.
+        """
         from tea_agent.logging_setup import setup_logging
         self.debug = debug
         self.disable_summary = disable_summary
@@ -99,12 +107,23 @@ class AgentCore:
         tea_agent_dir = Path(__file__).parent  # tea_agent/ 包目录
 
         class _RestartHandler(watchdog.events.FileSystemEventHandler):
+            """_RestartHandler class."""
             def __init__(self, agent):
+                """Initialize  .
+                
+                Args:
+                    agent: Description.
+                """
                 self._agent = agent
                 self._timer: Optional[threading.Timer] = None
                 self._lock = threading.Lock()
 
             def on_modified(self, event):
+                """Handle modified event.
+                
+                Args:
+                    event: Description.
+                """
                 if event.is_directory:
                     return
                 src = event.src_path
@@ -121,6 +140,7 @@ class AgentCore:
                     self._schedule_restart()
 
             def _schedule_restart(self):
+                """Internal: schedule restart."""
                 with self._lock:
                     if self._timer:
                         self._timer.cancel()
@@ -129,6 +149,7 @@ class AgentCore:
                     self._timer.start()
 
             def _do_restart(self):
+                """Internal: do restart."""
                 self._agent._safe_restart()
 
         handler = _RestartHandler(self)

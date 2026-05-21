@@ -110,6 +110,7 @@ def toolkit_build(action: str, directory: str = "."):
         return f"❌ 未知 action: '{action}'，可选: package / fix"
 
 def meta_toolkit_build() -> dict:
+    """Meta toolkit build."""
     return {
         "type": "function",
         "function": {

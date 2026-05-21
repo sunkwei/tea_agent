@@ -97,10 +97,12 @@ class SystemPromptManager:
 
     @property
     def current_version(self) -> str:
+        """Current version."""
         return self._current_version
 
     @property
     def current_prompt_id(self) -> int:
+        """Current prompt id."""
         return self._current_prompt_id
 
     def reload(self) -> str:

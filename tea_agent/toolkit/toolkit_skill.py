@@ -79,6 +79,7 @@ def toolkit_skill(action: str = "list", name: str = ""):
         return f"❌ 未知操作: {action}。支持: list, activate, deactivate, status, auto"
 
 def meta_toolkit_skill():
+    """Meta toolkit skill."""
     return {
         "type": "function",
         "function": {

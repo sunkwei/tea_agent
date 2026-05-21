@@ -210,74 +210,128 @@ class OnlineToolSession(BaseChatSession):
     # 重构后数据存储在 self.context 中，通过 property 桥接访问
     @property
     def messages(self):
+        """Messages."""
         return self.context.messages
 
     @messages.setter
     def messages(self, value):
+        """Messages.
+        
+        Args:
+            value: Description.
+        """
         self.context.messages = value
 
     @property
     def model(self):
+        """Model."""
         return self.context.model
 
     @model.setter
     def model(self, value):
+        """Model.
+        
+        Args:
+            value: Description.
+        """
         self.context.model = value
 
     @property
     def _rounds_collector(self):
+        """Internal: rounds collector."""
         return self.context._rounds_collector
 
     @_rounds_collector.setter
     def _rounds_collector(self, value):
+        """Internal: rounds collector.
+        
+        Args:
+            value: Description.
+        """
         self.context._rounds_collector = value
 
     @property
     def _last_usage(self):
+        """Internal: last usage."""
         return self.context._last_usage
 
     @_last_usage.setter
     def _last_usage(self, value):
+        """Internal: last usage.
+        
+        Args:
+            value: Description.
+        """
         self.context._last_usage = value
 
     @property
     def _last_cheap_usage(self):
+        """Internal: last cheap usage."""
         return self.context._last_cheap_usage
 
     @_last_cheap_usage.setter
     def _last_cheap_usage(self, value):
+        """Internal: last cheap usage.
+        
+        Args:
+            value: Description.
+        """
         self.context._last_cheap_usage = value
 
     @property
     def _history_summary(self):
+        """Internal: history summary."""
         return self.context._history_summary
 
     @_history_summary.setter
     def _history_summary(self, value):
+        """Internal: history summary.
+        
+        Args:
+            value: Description.
+        """
         self.context._history_summary = value
 
     @property
     def _semantic_summary(self):
+        """Internal: semantic summary."""
         return self.context._semantic_summary
 
     @_semantic_summary.setter
     def _semantic_summary(self, value):
+        """Internal: semantic summary.
+        
+        Args:
+            value: Description.
+        """
         self.context._semantic_summary = value
 
     @property
     def _tool_chain_summary(self):
+        """Internal: tool chain summary."""
         return self.context._tool_chain_summary
 
     @_tool_chain_summary.setter
     def _tool_chain_summary(self, value):
+        """Internal: tool chain summary.
+        
+        Args:
+            value: Description.
+        """
         self.context._tool_chain_summary = value
 
     @property
     def _level2(self):
+        """Internal: level2."""
         return self.context._level2
 
     @_level2.setter
     def _level2(self, value):
+        """Internal: level2.
+        
+        Args:
+            value: Description.
+        """
         self.context._level2 = value
 
     # ──────────────────────────────────────────────
@@ -747,12 +801,22 @@ class OnlineToolSession(BaseChatSession):
             return [{"kind": "full", **p} for p in level2]
 
         def _key_words(text):
+            """Internal: key words.
+            
+            Args:
+                text: Description.
+            """
             import re
             cn = re.findall(r'[一-鿿]{2,}', text)
             en = re.findall(r'[a-zA-Z_]{3,}', text.lower())
             return set(cn + en)
 
         def _extract_files_from_text(text):
+            """Internal: extract files from text.
+            
+            Args:
+                text: Description.
+            """
             import re
             files = set()
             for m in re.finditer(r'[\w.-]+/[\w.-]+(?:/[\w.-]+)*\.\w+', text):
@@ -1180,6 +1244,7 @@ class OnlineToolSession(BaseChatSession):
         import threading
         if isinstance(topic_id, str) and topic_id and not result.get("interrupted", False):
             def _auto_extract():
+                """Internal: auto extract."""
                 try:
                     count = self.memory_comp.trigger_memory_extraction(topic_id)
                     if count > 0 and on_status:
@@ -1191,6 +1256,7 @@ class OnlineToolSession(BaseChatSession):
         # 异步触发反思
         if not result.get("interrupted", False) and self.reflection_manager is not None:
             def _auto_reflect():
+                """Internal: auto reflect."""
                 try:
                     if self.reflection_manager.should_reflect():
                         rid = self.reflection_manager.generate_reflection()

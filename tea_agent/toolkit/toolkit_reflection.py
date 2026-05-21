@@ -73,6 +73,7 @@ def toolkit_reflection(action: str = "trigger", limit: int = 5) -> str:
         return f"❌ 未知操作: {action}。支持: trigger, list, stats"
 
 def meta_toolkit_reflection() -> dict:
+    """Meta toolkit reflection."""
     return {
         "type": "function",
         "function": {

@@ -61,9 +61,20 @@ _JIEQI_NAMES = [
 ]
 
 def _solar_days_in_year(y):
+    """Internal: solar days in year.
+    
+    Args:
+        y: Description.
+    """
     return 366 if (y % 400 == 0 or (y % 4 == 0 and y % 100 != 0)) else 365
 
 def _solar_days_in_month(y, m):
+    """Internal: solar days in month.
+    
+    Args:
+        y: Description.
+        m: Description.
+    """
     if m == 2:
         return 29 if (y % 400 == 0 or (y % 4 == 0 and y % 100 != 0)) else 28
     return 31 if m in (1,3,5,7,8,10,12) else 30
@@ -78,12 +89,27 @@ def _offset_from_base(y, m, d):
     return days + d - 31
 
 def _lunar_year_info(idx):
+    """Internal: lunar year info.
+    
+    Args:
+        idx: Description.
+    """
     return _LUNAR_INFO[idx]
 
 def _leap_month(info):
+    """Internal: leap month.
+    
+    Args:
+        info: Description.
+    """
     return info & _LEAP_MONTH_MASK
 
 def _leap_days(info):
+    """Internal: leap days.
+    
+    Args:
+        info: Description.
+    """
     return 30 if (info & (1 << _LEAP_DAYS_BIT)) else 29
 
 def _month_days(info, mi):
@@ -285,6 +311,7 @@ def _solar_terms(y):
     return terms
 
 def meta_toolkit_lunar() -> dict:
+    """Meta toolkit lunar."""
     return {
         "type": "function",
         "function": {

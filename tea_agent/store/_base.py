@@ -7,8 +7,14 @@ class StoreComponent:
     """所有 Store 委派组件的基类，提供 conn 访问和 ID 生成。"""
 
     def __init__(self, conn):
+        """Initialize  .
+        
+        Args:
+            conn: Description.
+        """
         self.conn = conn
 
     @staticmethod
     def _new_id() -> str:
+        """Internal: new id."""
         return str(uuid.uuid4())

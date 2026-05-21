@@ -15,6 +15,7 @@ from tea_agent.toolkit.toolkit_set_topic_title import (
 logger = logging.getLogger("tookit")
 
 def meta_toolkit_reload():
+    """Meta toolkit reload."""
     return {
         "type": "function",
         "function": {
@@ -29,6 +30,7 @@ def meta_toolkit_reload():
     }
 
 def meta_toolkit_save() -> dict:
+    """Meta toolkit save."""
     return {
         "type": "function",
         "function": {
@@ -55,6 +57,7 @@ def meta_toolkit_save() -> dict:
     }
 
 def toolkit_reload() -> Dict:
+    """Toolkit reload."""
     tlk = cast(Toolkit, globals().get("_toolkit_", None))
     return tlk.reload()
 
@@ -85,6 +88,7 @@ def toolkit_list_versions(name: str) -> Tuple[int, List[str]]:
     return tlk.list_versions(name)
 
 def meta_toolkit_rollback():
+    """Meta toolkit rollback."""
     return {
         "type": "function",
         "function": {
@@ -108,6 +112,7 @@ def meta_toolkit_rollback():
     }
 
 def meta_toolkit_list_versions():
+    """Meta toolkit list versions."""
     return {
         "type": "function",
         "function": {
@@ -152,6 +157,7 @@ class Toolkit:
     # 工具调用缓存：对只读/幂等工具缓存结果，减少重复调用
     # key = (func_name, json.dumps(args, sort_keys=True))
     # value = (result, timestamp)
+    """Toolkit class."""
     _CACHE_TTL = 30  # 默认缓存 30 秒
     _CACHE_BLACKLIST = {
         # 有外部副作用的工具不缓存
@@ -169,6 +175,11 @@ class Toolkit:
 
     def __init__(self, tool_dir=None):
         
+        """Initialize  .
+        
+        Args:
+            tool_dir: Description.
+        """
         self.func_map: Dict[str, Callable] = {}
         self.meta_map: Dict[str, dict] = {}
         self._cache: Dict[tuple, tuple] = {}  # (key, ttl) → (result, expire_time)
@@ -310,12 +321,18 @@ class Toolkit:
         return msg
 
     def reload(self) -> Dict:
+        """Reload."""
         result = {
             "valid_tool": {},
             "invalid_tool": [],
         }
 
         def check_meta(meta) -> bool:
+            """Check meta.
+            
+            Args:
+                meta: Description.
+            """
             if "type" not in meta or meta["type"] != "function":
                 return False
             func = meta.get("function", {})

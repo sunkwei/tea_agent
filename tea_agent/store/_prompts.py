@@ -8,6 +8,13 @@ class PromptStore(StoreComponent):
 
     def add_system_prompt(self, content: str, reason: str = "",
                            source_reflection_id: Optional[str] = None) -> str:
+        """Add system prompt.
+        
+        Args:
+            content: Description.
+            reason: Description.
+            source_reflection_id: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT MAX(CAST(version AS INTEGER)) FROM system_prompts")
         row = c.fetchone()
@@ -24,6 +31,7 @@ class PromptStore(StoreComponent):
         return pid
 
     def get_latest_system_prompt(self) -> Optional[Dict]:
+        """Get the latest system prompt."""
         c = self.conn.cursor()
         c.execute(
             "SELECT * FROM system_prompts WHERE is_active = 1 "
@@ -34,6 +42,11 @@ class PromptStore(StoreComponent):
         return dict(row) if row else None
 
     def get_system_prompt_history(self, limit: int = 20) -> List[Dict]:
+        """Get the system prompt history.
+        
+        Args:
+            limit: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "SELECT * FROM system_prompts ORDER BY CAST(version AS INTEGER) DESC LIMIT ?",
@@ -44,6 +57,11 @@ class PromptStore(StoreComponent):
         return [dict(r) for r in rows]
 
     def deactivate_system_prompt(self, prompt_id: str) -> bool:
+        """Deactivate system prompt.
+        
+        Args:
+            prompt_id: Description.
+        """
         c = self.conn.cursor()
         c.execute("UPDATE system_prompts SET is_active = 0 WHERE id = ?", (prompt_id,))
         self.conn.commit()
@@ -52,6 +70,11 @@ class PromptStore(StoreComponent):
         return affected > 0
 
     def rollback_system_prompt(self, prompt_id: str) -> bool:
+        """Rollback system prompt.
+        
+        Args:
+            prompt_id: Description.
+        """
         c = self.conn.cursor()
         c.execute("UPDATE system_prompts SET is_active = 0 WHERE is_active = 1")
         c.execute("UPDATE system_prompts SET is_active = 1 WHERE id = ?", (prompt_id,))
@@ -61,6 +84,7 @@ class PromptStore(StoreComponent):
         return affected > 0
 
     def get_system_prompt_count(self) -> int:
+        """Get the system prompt count."""
         c = self.conn.cursor()
         c.execute("SELECT COUNT(*) FROM system_prompts")
         count = c.fetchone()[0]

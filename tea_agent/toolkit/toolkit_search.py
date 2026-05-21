@@ -44,6 +44,13 @@ def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: st
             return _search_duckduckgo(query, max_results, lang)
 
 def _search_duckduckgo(query: str, max_results: int, lang: str):
+    """Internal: search duckduckgo.
+    
+    Args:
+        query: Description.
+        max_results: Description.
+        lang: Description.
+    """
     import requests
     from bs4 import BeautifulSoup
     from urllib.parse import urlparse, parse_qs, unquote
@@ -114,6 +121,12 @@ def _search_duckduckgo(query: str, max_results: int, lang: str):
     return (0, json.dumps(results, ensure_ascii=False, indent=2), '')
 
 def _search_baidu(query: str, max_results: int):
+    """Internal: search baidu.
+    
+    Args:
+        query: Description.
+        max_results: Description.
+    """
     import requests
     from bs4 import BeautifulSoup
     from urllib.parse import urlparse, parse_qs
@@ -215,6 +228,7 @@ def _search_baidu(query: str, max_results: int):
         return (1, '', f'百度搜索出错: {str(e)}')
 
 def meta_toolkit_search() -> dict:
+    """Meta toolkit search."""
     return {"type": "function", "function": {"name": "toolkit_search", "description": "搜索工具，支持互联网搜索（DuckDuckGo/百度）和项目内代码搜索（全文搜索/符号搜索）。", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "搜索关键词，如 'Python async tutorial' 或 'def login'"}, "max_results": {"type": "integer", "description": "返回结果数量上限，默认10，最大50", "default": 10}, "lang": {"type": "string", "description": "语言偏好，如 zh-cn, en, 空=不限。仅 web 搜索支持", "default": ""}, "engine": {"type": "string", "enum": ["duckduckgo", "baidu"], "description": "搜索引擎，默认 duckduckgo。仅 web 搜索", "default": "duckduckgo"}, "search_type": {"type": "string", "enum": ["web", "code", "symbol"], "description": "搜索类型: web=互联网搜索, code=代码全文搜索, symbol=符号搜索", "default": "web"}, "root_path": {"type": "string", "description": "搜索根目录路径。code/symbol 搜索需要"}, "glob_pattern": {"type": "string", "description": "文件过滤模式，如 '*.py'。仅 code 搜索"}}, "required": ["query"]}}}
 
 def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results: int):

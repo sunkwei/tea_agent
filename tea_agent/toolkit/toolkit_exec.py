@@ -68,6 +68,12 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         lock = threading.Lock()
 
         def _run(idx, cmd):
+            """Internal: run.
+            
+            Args:
+                idx: Description.
+                cmd: Description.
+            """
             import signal as _sig
             try:
                 a = cmd.get("app", "")
@@ -255,6 +261,7 @@ def _sudo_with_gui(app: str, args: list):
     return result
 
 def meta_toolkit_exec() -> dict:
+    """Meta toolkit exec."""
     return {
         "type": "function",
         "function": {

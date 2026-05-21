@@ -22,6 +22,7 @@ class ToolComponent(SessionComponent):
     
     @property
     def name(self) -> str:
+        """Name."""
         return "tool"
     
     def initialize(self) -> None:

@@ -83,6 +83,12 @@ class PathsConfig:
 
         # 子路径解析：相对路径相对于 data_dir_abs
         def _resolve(value: str, default_rel: str) -> str:
+            """Internal: resolve.
+            
+            Args:
+                value: Description.
+                default_rel: Description.
+            """
             if not value:
                 return os.path.join(self._data_dir_abs, default_rel)
             expanded = os.path.expanduser(value)
@@ -97,22 +103,27 @@ class PathsConfig:
 
     @property
     def db_path_abs(self) -> str:
+        """Db path abs."""
         return self._db_path_abs
 
     @property
     def toolkit_dir_abs(self) -> str:
+        """Toolkit dir abs."""
         return self._toolkit_dir_abs
 
     @property
     def kb_dir_abs(self) -> str:
+        """Kb dir abs."""
         return self._kb_dir_abs
 
     @property
     def skills_dir_abs(self) -> str:
+        """Skills dir abs."""
         return self._skills_dir_abs
 
     @property
     def data_dir_abs(self) -> str:
+        """Data dir abs."""
         return self._data_dir_abs
 
 @dataclass

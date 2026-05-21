@@ -219,9 +219,11 @@ def toolkit_todo(action: str, items: list = None, index: int = None) -> dict:
         return {"ok": False, "error": str(e)[:300]}
 
 def _done():
+    """Internal: done."""
     return sum(1 for t in _todos if t["done"])
 
 def _fmt():
+    """Internal: fmt."""
     lines = []
     for t in _todos:
         icon = "DONE" if t["done"] else "TODO"
@@ -229,6 +231,7 @@ def _fmt():
     return "\n".join(lines)
 
 def meta_toolkit_todo():
+    """Meta toolkit todo."""
     return {
         "type": "function",
         "function": {

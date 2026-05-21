@@ -195,11 +195,11 @@ def fetch_index():
             "volume": float(parts[8]) if len(parts) > 8 and parts[8] else None,
             "amount": float(parts[9]) if len(parts) > 9 and parts[9] else None,
         }
-        logger.info(f"CSI300: price={data['price']}, chg={data['change_pct']}%")        return data
+        logger.info(f"CSI300: price={data['price']}, chg={data['change_pct']}%")
+        return data
     except Exception as e:
         logger.error(f"fetch index error: {e}")
         return None
-
 def fetch_all_news():
     today = datetime.now().strftime("%Y-%m-%d")
     if news_fetched_today(today):

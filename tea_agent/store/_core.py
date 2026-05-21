@@ -315,6 +315,19 @@ class Storage:
         except sqlite3.OperationalError:
             pass
 
+        # 2026-05-20 gen by tea_agent, todo_items 持久化 TODO 清单（per-topic）
+        c.execute('''CREATE TABLE IF NOT EXISTS todo_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic_id TEXT NOT NULL,
+            idx INTEGER NOT NULL,
+            desc TEXT NOT NULL,
+            done INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
+        )''')
+        self.conn.commit()
+
+
         c.close()
 
     def _migrate_int_to_uuid(self, c):

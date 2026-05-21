@@ -182,18 +182,20 @@ def fetch_index():
             logger.error("index parse fail: no quoted data")
             return None
         parts = m.group(1).split(",")
-        if len(parts) < 4:
+        if len(parts) < 6:
             logger.error(f"index parse fail: only {len(parts)} fields")
             return None
+        # Sina CSI300 format: [0]名称 [1]昨收 [2]今开 [3]当前价 [4]最高 [5]最低 ...
+        prev_close = float(parts[1]) if parts[1] else None
+        cur_price  = float(parts[3]) if parts[3] else None
         data = {
-            "price": float(parts[1]) if parts[1] else None,
-            "change_amt": float(parts[2]) if parts[2] else None,
-            "change_pct": float(parts[3]) if parts[3] else None,
-            "volume": float(parts[4]) if len(parts) > 4 and parts[4] else None,
-            "amount": float(parts[5]) if len(parts) > 5 and parts[5] else None,
+            "price": cur_price,
+            "change_amt": round(cur_price - prev_close, 4) if cur_price and prev_close else None,
+            "change_pct": round((cur_price - prev_close) / prev_close * 100, 4) if cur_price and prev_close else None,
+            "volume": float(parts[8]) if len(parts) > 8 and parts[8] else None,
+            "amount": float(parts[9]) if len(parts) > 9 and parts[9] else None,
         }
-        logger.info(f"CSI300: price={data['price']}, chg={data['change_pct']}%")
-        return data
+        logger.info(f"CSI300: price={data['price']}, chg={data['change_pct']}%")        return data
     except Exception as e:
         logger.error(f"fetch index error: {e}")
         return None

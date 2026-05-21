@@ -12,7 +12,7 @@ import logging
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from tea_agent.main_db_gui import TkGUI
+    from tea_agent.gui import TkGUI
 
 logger = logging.getLogger(__name__)
 

@@ -2,7 +2,7 @@
 import traceback, sys
 sys.path.insert(0, "/home/sunkw/work/git/tea_agent")
 try:
-    from tea_agent.main_db_gui import main
+    from tea_agent.gui import main
     main()
 except Exception:
     tb = traceback.format_exc()

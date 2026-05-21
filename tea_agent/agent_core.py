@@ -1,7 +1,7 @@
 """
 AgentCore — Tea Agent 共享核心基类。
 
-CLI (tea_main_cli.TeaCLI) 和 GUI (main_db_gui.TkGUI) 均继承此类，
+CLI (tea_main_cli.TeaCLI) 和 GUI (gui.TkGUI) 均继承此类，
 消除重复代码。包含：
   - 配置加载、目录初始化、Storage/Toolkit 初始化
   - 对话后处理流水线（入库、Token 统计、摘要）
@@ -541,7 +541,7 @@ class AgentCore:
             cli, mdl = self.sess._get_summarize_client()
             # 2026-05-06 gen by tea_agent, debug: check what client/model is being used
             logger.debug(f"call summarize model: {mdl}, topic={topic_id}, msgs={len(recent)}")
-            from tea_agent.main_db_gui import _generate_topic_summary
+            from tea_agent._gui._topic_summary import _generate_topic_summary
             summary = _generate_topic_summary(client=cli, model=mdl, conversations=recent)
 # NOTE: 2026-05-06 10:35:56, self-evolved by tea_agent --- _auto_summary 添加异常日志，不再静默吞错
             if summary:

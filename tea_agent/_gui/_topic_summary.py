@@ -8,7 +8,7 @@ import json as _json_gs
 import logging
 from typing import Optional, List, Dict
 
-logger = logging.getLogger("main_db_gui")
+logger = logging.getLogger(__name__)
 
 # 从 session_prompts 导入共享 prompt 模板
 from tea_agent.session_prompts import TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_TEMPLATE

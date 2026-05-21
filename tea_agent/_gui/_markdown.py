@@ -1,6 +1,6 @@
 """
 @2026-05-15 gen by tea_agent, Markdown → HTML 渲染工具函数
-从 main_db_gui.py 提取，供 ChatRenderer 等组件使用。
+从 gui.py 提取，供 ChatRenderer 等组件使用。
 """
 
 import string

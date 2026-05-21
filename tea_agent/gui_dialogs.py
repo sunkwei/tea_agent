@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 2026-05-09 gen by tea_agent, 从 main_db_gui.py 拆分出的独立对话框模块
+# 2026-05-09 gen by tea_agent, 从 gui.py 拆分出的独立对话框模块
 """GUI 对话框：MemoryDialog / TopicDialog / ConfigDialog"""
 import tkinter as tk
 from tkinter import ttk, scrolledtext
@@ -17,7 +17,7 @@ import platform as _platform
 # ====================== 记忆管理对话框 ======================
 
 # @2026-04-29 gen by deepseek-v4-pro, MemoryDialog记忆管理弹窗+on_status状态回调
-# ====================== 字体检测（与 main_db_gui 独立副本） ======================
+# ====================== 字体检测（与 _gui/_fonts 独立副本） ======================
 _IS_WINDOWS = _platform.system() == "Windows"
 SYSTEM_FONT = "TkDefaultFont"
 MONO_FONT = "TkFixedFont"

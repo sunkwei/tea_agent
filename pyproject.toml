@@ -35,7 +35,7 @@ dependencies = [
 ]
 
 [project.scripts]
-tea_agent = "tea_agent.main_db_gui:main"
+tea_agent = "tea_agent.gui:main"
 
 [tool.setuptools]
 include-package-data = true

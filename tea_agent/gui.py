@@ -1045,7 +1045,7 @@ class TkGUI(AgentCore):
             self.root.after(0, self._show_raw_check_btn)
             self._update_status("🛑 已打断")
 
-# NOTE: 2026-04-30 19:36:28, self-evolved by tea_agent --- 补回缺失的 __main__ 入口，使 python -m tea_agent.main_db_gui 可正常启动 GUI
+# NOTE: 2026-04-30 19:36:28, self-evolved by tea_agent --- 补回缺失的 __main__ 入口，使 python -m tea_agent.gui 可正常启动 GUI
 # NOTE: 2026-05-09 19:26:36, self-evolved by tea_agent --- 修复 main() no_gui 模式：用 CLI 回退替代 NotImplementedError 崩溃
     # ═══ @2026-05-15 gen by tea_agent, Composition 委派包装器 ═══
 

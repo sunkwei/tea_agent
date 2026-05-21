@@ -14,7 +14,7 @@ import threading
 from typing import List, Dict, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from tea_agent.main_db_gui import TkGUI
+    from tea_agent.gui import TkGUI
 
 from ._markdown import (
     HAS_TKINTERWEB,

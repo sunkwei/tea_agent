@@ -1,4 +1,4 @@
-## @2026-05-16 gen by tea_agent, 定时任务管理器 — 独立 scheduler.db，支持增删改查/启停/调度执行/通知
+#
 # version: 1.0.0
 
 import logging
@@ -380,7 +380,6 @@ def toolkit_scheduler(action: str, **kwargs):
         return {"error": f"未知 action: {action}",
                 "supported": ["list","add","update","delete","enable","disable","run","start","stop","status","test_schedule"]}
 
-
 def _format_next(task: dict) -> str:
     """格式化下次执行时间为人可读"""
     nr = task.get("next_run")
@@ -405,7 +404,6 @@ def _format_next(task: dict) -> str:
         return f"{' '.join(parts)}后 ({dt.strftime('%m-%d %H:%M')})"
     except Exception:
         return str(nr)[:16]
-
 
 def meta_toolkit_scheduler() -> dict:
     return {

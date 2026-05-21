@@ -1,9 +1,7 @@
 """
-@2026-05-16 gen by tea_agent, ConfigHistoryStore — 配置变更历史
 """
 from typing import Dict, List, Optional
 from ._base import StoreComponent
-
 
 class ConfigHistoryStore(StoreComponent):
     """配置变更追踪：记录每次配置修改的历史。"""

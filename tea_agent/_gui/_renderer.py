@@ -1,5 +1,4 @@
 """
-@2026-05-15 gen by tea_agent, ChatRenderer 组件 — 消息渲染与显示
 将对话消息渲染为 HTML，管理 HtmlFrame / ScrolledText 切换，
 处理流式缓冲刷新、轮次视图、加载动画。
 Usage: self.renderer = ChatRenderer(self)  # self = TkGUI instance
@@ -27,7 +26,6 @@ from ._markdown import (
 )
 
 logger = logging.getLogger(__name__)
-
 
 class ChatRenderer:
     """消息渲染器：HtmlFrame 渲染、加载动画、轮次视图、显示模式切换"""
@@ -71,7 +69,6 @@ class ChatRenderer:
                 print(f"[_html_render WARN] 修复后仍有问题: {diag2}，尝试继续渲染")
                 cleaned = fixed
         # 3. 渲染
-        # NOTE: 2026-05-20 gen by tea_agent, 调试：渲染前打印完整 HTML 到终端，便于排错
         # print("=" * 60)
         # print("HTML_BYTES_BEGIN")
         # print(cleaned)
@@ -113,7 +110,6 @@ class ChatRenderer:
     def _render_and_show_chat(self):
         """会话完成后渲染：历史轮次链接表 + 最新轮内容"""
         msgs = self._filtered_messages()
-# NOTE: 2026-05-18 13:08:25, self-evolved by tea_agent --- Remove debug print spam in _render_and_show_chat
         # [DIAG] removed: was printing len(msgs) on every render
 
         # 分组为轮次
@@ -132,7 +128,6 @@ class ChatRenderer:
 
         def _on_done(html):
             if HAS_TKINTERWEB:
-# NOTE: 2026-05-18 13:08:31, self-evolved by tea_agent --- Remove RENDER chars debug print
                 # [RENDER] removed: was printing html char count on every render
                 self._html_render(html)
                 self._switch_display("chat_view")
@@ -158,7 +153,6 @@ class ChatRenderer:
     def _render_loaded_topic(self, render_items):
         """主线程：清屏 + 逐条渲染准备好的数据"""
         self.gui.clear_chat()
-        # NOTE: 2026-05-15 gen by tea_agent, 支持 (tag, text, images) 三元组
         for item in render_items:
             if len(item) == 3:
                 tag, text, images = item
@@ -168,7 +162,6 @@ class ChatRenderer:
                 self.gui.log(text, tag)
 
         if HAS_TKINTERWEB and self.gui.chat_messages:
-            # NOTE: 2026-05-15 gen by tea_agent, 主题加载后也使用轮次视图
             self._render_and_show_chat()
         else:
             self._switch_display("chat_view")
@@ -189,7 +182,6 @@ class ChatRenderer:
 
         def _on_done(html):
             if HAS_TKINTERWEB:
-    # NOTE: 2026-05-18 13:08:44, self-evolved by tea_agent --- Remove RENDER ROUND debug print
             # [RENDER ROUND] removed: debug print
                 self._html_render(html)
                 self._switch_display("chat_view")
@@ -269,7 +261,6 @@ class ChatRenderer:
         round_md = _chat_to_markdown(round_msgs, image_cache=self.gui._image_cache)
         if HAS_TKINTERWEB:
             round_body = _md_lib.markdown(round_md, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
-            # NOTE: 2026-05-20 gen by tea_agent, 修复双重转义 (html_mod.escape + codehilite)
             from tea_agent._gui._markdown import _fix_double_escape_in_code
             round_body = _fix_double_escape_in_code(round_body)
             css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
@@ -307,7 +298,6 @@ class ChatRenderer:
         if progress:
             display_text = f"{text}（{progress}）"
 
-# NOTE: 2026-05-16 10:04:37, self-evolved by tea_agent --- 修复 _show_loading 中损坏的 loading_html（<style>→<st+yle>，<body>→<bod+y>）
         loading_html = f'''<html><head>
 <style>
 body {{ display:flex; align-items:center; justify-content:center; height:100vh;
@@ -405,7 +395,6 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     # ── _flush_stream_to_messages ──
     def _flush_stream_to_messages(self):
         # 先刷新控制台剩余内容（确保最后一批 pending 文本显示完毕）
-        # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- flush 前先清空 _pending_console_text 到 ScrolledText
         if self.gui._pending_console_text:
             self.gui.console.config(state=tk.NORMAL)
             for text, tag in self.gui._pending_console_text:
@@ -417,9 +406,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self.gui.console.config(state=tk.DISABLED)
             self.gui._pending_console_text.clear()
 
-
         if self.gui._think_buffer or self.gui._stream_buffer:
-            # @2026-05-16 gen by tea_agent, 最终 flush：先存思考消息，再存文本
             self._flush_think_buffer_to_messages()
             if self.gui._stream_buffer:
                 self.gui.chat_messages.append({"role": "ai", "content": self.gui._stream_buffer, "timestamp": self.gui._now_ts()})

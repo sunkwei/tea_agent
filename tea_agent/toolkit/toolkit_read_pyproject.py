@@ -1,4 +1,3 @@
-# @2026-05-16 gen by tea_agent, 从用户工具箱迁移，添加日志
 """读取并解析 pyproject.toml，提取项目元数据"""
 import logging
 import sys

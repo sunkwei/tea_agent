@@ -1,10 +1,8 @@
 ## llm generated tool func, created Fri May  1 09:58:16 2026
 # version: 1.1.0
 
-
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_subconscious(action: str, focus: str = None):
@@ -15,7 +13,6 @@ def toolkit_subconscious(action: str, focus: str = None):
     from pathlib import Path
     from collections import Counter
 
-# NOTE: 2026-05-04 17:57:17, self-evolved by tea_agent --- toolkit_subconscious STATE_FILE/KB_DIR 从 config.paths 读取
     try:
         from tea_agent.config import get_config
         STATE_FILE = os.path.join(get_config().paths.data_dir_abs, "subconscious_state.json")
@@ -27,7 +24,6 @@ def toolkit_subconscious(action: str, focus: str = None):
     CYCLE_INTERVAL = 3600      # 1小时
     CHECK_INTERVAL = 30        # 检查间隔
 
-    # 2026-05-09 gen by tea_agent, 检查当前目录是否为 tea_agent 项目
     def _is_tea_agent_cwd():
         cwd = os.getcwd()
         pyproj = os.path.join(cwd, "pyproject.toml")
@@ -59,7 +55,6 @@ def toolkit_subconscious(action: str, focus: str = None):
                 with open(STATE_FILE, 'r') as f:
                     return json.load(f)
             except: pass
-# NOTE: 2026-05-16 12:51:11, self-evolved by tea_agent --- state 初始化 stats 中加入 llm_adjustments 字段
         return {"running":False,"pid":os.getpid(),"started_at":None,"last_cycle_at":None,
                 "cycles_completed":0,"insights":[],"goals":[],"last_focus":"mixed",
                 "stats":{"memories_digested":0,"conversations_digested":0,"insights_generated":0,
@@ -152,7 +147,6 @@ def toolkit_subconscious(action: str, focus: str = None):
             return "mixed"
 
     # === 阶段2: 消化对话 ===
-# NOTE: 2026-05-16 14:14:51, self-evolved by tea_agent --- 统一记忆提取路径，复用MemoryManager去重合并逻辑
     def _digest_conversations(storage, state, mm=None):
         if not storage or not storage.conn: return {"processed":0,"extracted":[]}
         cur = storage.conn.cursor()
@@ -301,9 +295,8 @@ def toolkit_subconscious(action: str, focus: str = None):
         return finds
 
     # === 阶段4: 洞察 ===
-# NOTE: 2026-05-02 10:23:38, self-evolved by tea_agent --- 潜意识引擎在产生重要洞察时发送桌面通知
     def _generate_insights(digest, links, conv_digest, kb_dir, state):
-        """2026-05-17 gen by tea_agent, 增强：规则洞察 + cheap LLM 深度分析"""
+        """增强：规则洞察 + cheap LLM 深度分析"""
         ins = []
         if not digest: return ins
         unapp = digest.get("unapplied_reflections",0)
@@ -332,7 +325,6 @@ def toolkit_subconscious(action: str, focus: str = None):
             n = len(conv_digest["extracted"])
             ins.append({"level":"info","content":f"从{n}条新对话中自动提取了记忆","action":"review_auto_memories"})
 
-        # ═══ 2026-05-17 gen by tea_agent, cheap LLM 深度洞察 ═══
         try:
             from tea_agent.config import get_config
             from openai import OpenAI
@@ -429,11 +421,10 @@ def toolkit_subconscious(action: str, focus: str = None):
             if g["goal"] not in seen: seen.add(g["goal"]); uniq.append(g)
         return uniq[:7]
 
-# NOTE: 2026-05-02 10:58:26, self-evolved by tea_agent --- 添加 _send_cycle_summary 函数，每轮循环后发送综合摘要通知
     def _send_notification(title, msg, expire_ms=5000):
         """跨平台桌面通知：Windows/macOS/Linux。
         Linux 使用 DBus 直连 + transient=false + desktop-entry → Plasma 通知中心。
-        NOTE: 2026-06-20 gen by tea_agent, DBus 直连确保通知进 Plasma 通知中心"""
+        """
         import sys as _sys
         try:
             if _sys.platform == 'win32':
@@ -469,7 +460,7 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         """Linux 通知级联回退：DBus 直连 → GI Notify → notify-send → kdialog。
         DBus + transient=false + desktop-entry → Plasma 通知中心历史。
         kdialog 仅作最后回退（临时浮窗，不进通知中心）。
-        NOTE: 2026-06-20 gen by tea_agent, DBus 直连优先确保进 Plasma 通知中心"""
+        """
         import shutil as _sh
 
         # 方法1: DBus 直连 — transient=false 确保进入通知历史
@@ -530,7 +521,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                 capture_output=True, timeout=5)
             return
 
-
     def _send_cycle_summary(result, state, first_run=False):
         """每轮循环后发送摘要通知，让用户感知后台运行结果"""
         digest = result.get("digest") or {}
@@ -564,16 +554,10 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         lines.append(f"📁 详情: ~/.tea_agent/kb/潜意识洞察.md")
 
         msg = "\n".join(lines)
-        # NOTE: 2026-06-19 gen by tea_agent, 改用 _send_notification 统一通知（自动回退 kdialog/DBus）
         _send_notification("🧠 潜意识引擎", msg, expire_ms=8000)
 
-
-# NOTE: 2026-05-16 12:50:51, self-evolved by tea_agent --- _run_cycle 中加入 LLM 优先级精调（使用便宜模型）
-# NOTE: 2026-05-16 14:15:28, self-evolved by tea_agent --- 修复Storage连接泄漏，复用单例并安全关闭
-# NOTE: 2026-05-16 16:30:00, self-evolved by tea_agent --- 收敛连接：_digest_memories/_digest_conversations/_cross_link 复用 storage.conn
     # === 执行一次完整循环 ===
     def _run_cycle(state):
-        # @2026-05-16 gen by tea_agent, 修复Storage连接泄漏(P1)与统一记忆去重(P3)
         from tea_agent.memory import MemoryManager
         from tea_agent.store import Storage
         
@@ -640,7 +624,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         _write_state(state)
         _send_notification("🧠 潜意识引擎 v2.1", "已启动！场景自适应：修bug收敛分析，做创意发散联想")
 
-# NOTE: 2026-05-02 10:58:03, self-evolved by tea_agent --- 潜意识引擎每轮循环后始终发送桌面通知摘要（洞察数、目标数、自动记忆、场景模式）
         try:
             result = _run_cycle(state)
             _send_cycle_summary(result, state, first_run=True)
@@ -866,7 +849,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
     state = _read_state()
 
     if action == "start":
-        # 2026-05-09 gen by tea_agent, 非 tea_agent 项目目录拒绝启动
         if not _is_tea_agent_cwd():
             return {"status":"rejected", "reason":"当前目录非 tea_agent 项目，为防止意外修改拒绝启动",
                     "cwd": os.getcwd(), "hint": "请在 tea_agent 项目根目录下启动 Dream 线程"}
@@ -901,7 +883,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
     elif action == "dream":
         result = _run_cycle(state)
         dream_result = _dream(focus_override=focus)
-        # NOTE: gen by tea_agent, dream 完成后发送桌面通知
         _send_cycle_summary(result, state)
         state = _read_state()
         state["insights"]=[i["content"] for i in result["insights"][-5:]]
@@ -928,7 +909,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
     else:
         return {"error":f"未知action: {action}","supported":["start","stop","status","dream","goals","insights"],
                 "dream_focus":"dream支持focus参数: pragmatic(务实)/creative(创意)/mixed(混合)"}
-
 
 def meta_toolkit_subconscious() -> dict:
     return {"type": "function", "function": {"name": "toolkit_subconscious", "description": "潜意识引擎 v2.1 — 场景自适应Dream。自动检测场景（修bug→收敛务实分析/做创意→发散联想），dream支持focus参数手动指定。start启动后每1小时循环。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop", "status", "dream", "goals", "insights"], "description": "start=启动, stop=停止, status=状态, dream=深度消化(支持focus参数: pragmatic/creative/mixed), goals=目标, insights=洞察"}, "focus": {"type": "string", "enum": ["pragmatic", "creative", "mixed"], "description": "[dream] 手动指定Dream模式: pragmatic=务实分析(bug模式识别/根因分析), creative=创意发散(跨域/反向/极端/隐喻), mixed=混合(自动)"}}, "required": ["action"]}}}

@@ -1,5 +1,4 @@
 """
-@2026-07-07 gen by tea_agent, 主题摘要生成模块
 从 gui.py L477-572 提取：LLM 生成不超过20字的主题摘要标题
 """
 
@@ -12,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 # 从 session_prompts 导入共享 prompt 模板
 from tea_agent.session_prompts import TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_TEMPLATE
-
 
 def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Optional[str]:
     """
@@ -29,12 +27,10 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
     if not conversations:
         return None
 
-    # NOTE: 2026-05-01 20:12:20, self-evolved by tea_agent --- _generate_topic_summary 只收集 user_msg，不混入 AI 回复
     user_msgs = []
     for conv in conversations:
         um = conv.get("user_msg", "").strip()
         if um:
-            # NOTE: 2026-05-15 gen by tea_agent, 处理 JSON 格式 user_msg（含图片）
             if um.startswith('{'):
                 try:
                     parsed = _json_gs.loads(um)
@@ -53,7 +49,6 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
         user_msgs="\n".join(user_msgs)
     )
 
-    # NOTE: 2026-05-07 11:27:55, self-evolved by tea_agent --- _generate_topic_summary 添加模型请求/响应的 DEBUG 日志
     try:
         logger.debug(f"generate_topic_summary request: model={model}, conversations={len(conversations)}, user_msgs={len(user_msgs)}")
         response = client.chat.completions.create(
@@ -70,7 +65,6 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
         if not response.choices or len(response.choices) == 0:
             return None
 
-        # NOTE: 2026-05-07 11:14:38, self-evolved by tea_agent --- _generate_topic_summary 处理 reasoning_content
         content = response.choices[0].message.content
         # DeepSeek 等推理模型可能把回复放到 reasoning_content 中，content 为空
         if not content:
@@ -79,7 +73,6 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
             logger.warning(f"_generate_topic_summary: API 返回空 content, model={model}")
             return None
 
-        # NOTE: 2026-05-01 08:10:00, self-evolved by tea_agent --- 增加最小长度校验
         raw = content.strip()
         # 调试日志：记录 LLM 原始返回
         logger.info(f"_generate_topic_summary 原始返回: model={model}, raw_len={len(raw)}, raw={repr(raw[:80])}")
@@ -88,7 +81,6 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
         raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
         raw = raw.strip()
 
-        # NOTE: 2026-05-07 11:12:33, self-evolved by tea_agent --- 过滤链各环节添加具体日志
         if not raw:
             logger.warning(f"_generate_topic_summary: 清洗后 raw 为空, content={repr(content[:80])}")
             return None

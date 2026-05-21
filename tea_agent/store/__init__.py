@@ -1,5 +1,4 @@
 """
-@2026-05-16 gen by tea_agent, Store 包 — Composition 模式拆分 Storage
 
 向后兼容导出：from tea_agent.store import Storage, get_storage 保持不变。
 内部结构：
@@ -21,7 +20,6 @@ __all__ = ["Storage"]
 # ── 模块级单例 ──
 
 _storage_instance = None
-
 
 def get_storage(db_path: str = "") -> Storage:
     """获取或创建 Storage 单例（供工具函数使用）。

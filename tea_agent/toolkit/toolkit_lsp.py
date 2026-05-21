@@ -1,4 +1,3 @@
-
 """
 @2026-05-19 gen by claude, LSP 工具 — 实时代码智能诊断/补全/跳转/悬停/引用
 依赖: jedi (代码智能), ruff (诊断)
@@ -9,7 +8,6 @@ import os
 import logging
 
 logger = logging.getLogger("toolkit_lsp")
-
 
 def toolkit_lsp(
     action: str,
@@ -63,7 +61,6 @@ def toolkit_lsp(
     except Exception as e:
         logger.exception(f"LSP {action} 失败")
         return {"ok": False, "error": str(e)}
-
 
 def meta_toolkit_lsp():
     return {

@@ -22,7 +22,6 @@ try:
 except ImportError:
     HAS_TKINTERWEB = False
 
-# NOTE: 2026-06-23 gen by tea_agent, 托盘图标支持（StatusNotifierItem/KDE Plasma 6 + 通用 Linux）
 try:
     import dbus
     import dbus.service
@@ -40,28 +39,23 @@ if __name__ == "__main__":
     parent_dir = str(Path(__file__).resolve().parent.parent)
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
-# NOTE: 2026-05-04 18:47:48, self-evolved by tea_agent --- 添加 AgentCore 导入
     from tea_agent.onlinesession import OnlineToolSession
     from tea_agent.store import Storage
     from tea_agent import tlk
     from tea_agent.agent_core import AgentCore
 
-# @2026-05-15 gen by tea_agent, Composition: GUI 组件
     from tea_agent._gui._tray import TrayManager
     from tea_agent._gui._images import ImageHandler
-    from tea_agent._gui._renderer import ChatRenderer  # @2026-05-15 gen by tea_agent, Composition: 渲染组件
-# NOTE: 2026-05-01 15:30:42, self-evolved by tea_agent --- 为 GUI 添加 ConfigDialog 配置编辑弹窗 + 左侧"⚙️ 配置"按钮
+    from tea_agent._gui._renderer import ChatRenderer
     from tea_agent.config import load_config, get_config, save_config, ModelConfig
 else:
     from .onlinesession import OnlineToolSession
     from .store import Storage
     from . import tlk
     from .agent_core import AgentCore
-    # @2026-05-15 gen by tea_agent, Composition: GUI 组件
     from tea_agent._gui._tray import TrayManager
     from tea_agent._gui._images import ImageHandler
-    from tea_agent._gui._renderer import ChatRenderer  # @2026-05-15 gen by tea_agent, Composition: 渲染组件
-# NOTE: 2026-05-01 15:30:48, self-evolved by tea_agent --- 给 GUI 加 ConfigDialog 弹窗：import save_config（第二处）
+    from tea_agent._gui._renderer import ChatRenderer
     from .config import load_config, get_config, save_config, ModelConfig
 
 # ====================== 配置加载 ======================
@@ -82,7 +76,6 @@ _storage_ = None
 _toolkit_ = None
 
 # ====================== 从 _gui 子包导入（组合模式） ======================
-# NOTE: 2026-05-20 gen by tea_agent, 字体/渲染/摘要从 _gui 子包导入，替代内联定义
 from tea_agent._gui._fonts import (
     _fs, _init_fonts, SYSTEM_FONT, MONO_FONT,
     _DEFAULT_FONT_SIZE, _SCALE_FACTOR, _FONTS_DETECTED,
@@ -109,7 +102,6 @@ from tea_agent._gui._renderer import ChatRenderer
 # Dialogs
 from tea_agent.gui_dialogs import MemoryDialog, TopicDialog, ConfigDialog
 
-# NOTE: 2026-06-23 gen by tea_agent, StatusNotifierItem D-Bus 实现（兼容 KDE Plasma 6）
 import os as _os
 
 try:
@@ -192,13 +184,12 @@ if HAS_SNI:
             if self._loop:
                 self._loop.quit()
 
-# NOTE: 2026-05-04 18:47:26, self-evolved by tea_agent --- TkGUI 继承 AgentCore，消除重复代码
 class TkGUI(AgentCore):
     def __init__(self, root, debug:bool=False, config_fname:str="", disable_summary:bool=False):
         self.root = root
         import os
-        self._initial_cwd = os.path.abspath(os.getcwd())  # NOTE: 2026-05-16 gen by tea_agent, 启动时固化完整路径
-        self._update_title()  # NOTE: 2026-05-15 gen by tea_agent, 标题含当前目录
+        self._initial_cwd = os.path.abspath(os.getcwd())
+        self._update_title()
         self.root.geometry("1100x850")
         self.root.minsize(900, 600)
 
@@ -207,18 +198,14 @@ class TkGUI(AgentCore):
         # ── AgentCore 初始化：配置、目录、Storage/Toolkit、会话 ──
         super().__init__(debug=debug, config_path=config_fname, disable_summary=disable_summary)
 
-        # NOTE: 2026-05-20 gen by tea_agent, 组件委托（composition）
         self.stream_mgr = StreamManager(self)
         self.topic_mgr = TopicManager(self)
         self.ui_builder = UIBuilder(self)
 
-        # @2026-05-15 gen by tea_agent, Composition: 消息渲染器
         self.renderer = ChatRenderer(self)
 
-        # @2026-05-15 gen by tea_agent, Composition: 图片管理器
         self.images = ImageHandler(self)
 
-        # @2026-05-15 gen by tea_agent, Composition: 托盘管理器
         self.tray = TrayManager(self)
         self.tray.start()
 
@@ -229,33 +216,25 @@ class TkGUI(AgentCore):
         # HtmlFrame 缩放级别
         self._zoom_level = 100
 
-        # @2026-05-15 gen by tea_agent, 图片点击放大弹窗
         self._image_cache = []  # list of (base64_data, mime_type)
-        # NOTE: 2026-05-20 gen by tea_agent, 原始/渲染视图切换
         self._raw_view = tk.BooleanVar(value=False)  # False=HtmlFrame, True=ScrolledText
 
         # 聊天消息列表
         self.chat_messages: List[Dict] = []
-        # NOTE: 2026-05-15 gen by tea_agent, 待发送图片列表（用户附带的图片路径）
         self._pending_images: List[str] = []
-        # NOTE: 2026-05-15 gen by tea_agent, 当前查看的历史轮次索引，None=最新轮
         self._current_round_view: Optional[int] = None
         self._chat_rounds: List[List[Dict]] = []
 
         # 当前 stream 累积 buffer
         self._stream_buffer = ""
         self._think_buffer = ""  # think/reasoning 内容缓冲区
-        # NOTE: 2026-05-08 08:50:00, self-evolved by tea_agent --- 初始化 _pending_console_text 缓冲队列，供 500ms 定时器批量刷新
         self._pending_console_text = []  # (text, tag) 列表
 
         # 当前对话 ID
         self._current_conversation_id: Optional[int] = None
 
-# NOTE: 2026-05-04 18:59:23, self-evolved by tea_agent --- 移除冗余 _init_session 调用，在 UI 创建后加 status 显示
         # 创建界面
         self._create_ui()
-        # NOTE: 2026-07-05 gen by tea_agent, 微调聊天/输入分隔栏位置，确保底部工具栏完整显示
-        # NOTE: 2026-07-05 gen by tea_agent, 权重比 3:1 确保底部工具栏完整显示，不再需要 after sash 调整
         if hasattr(self,"sess") and self.sess is not None:
             self.sess.tool_log = self.safe_log_tool
 
@@ -264,16 +243,13 @@ class TkGUI(AgentCore):
         cheap_info = f" | 摘要模型: {cheap_m.model_name}" if cheap_m.model_name else ""
         self._update_status(f"📡 已连接 | 模型: {self._cfg.main_model.model_name}{cheap_info}")
 
-# NOTE: 2026-05-04 17:16:04, self-evolved by tea_agent --- GUI on_closing: 退出时调用 storage.close() 完成 WAL checkpoint + 关闭连接
         # 加载主题
         self.refresh_topics()
         self.auto_new_topic()
 
-# NOTE: 2026-05-15 13:06:43, self-evolved by tea_agent --- 补充托盘初始化代码到 __init__ 结尾
         # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
         self.root.protocol("WM_DELETE_WINDOW", self.tray._on_closing)
 
-    # NOTE: 2026-05-18 gen by tea_agent, 托盘图标支持（仅显示状态+退出入口，不改变关闭按钮行为）
     def _create_tray_icon(self):
         """动态生成托盘图标图像（32x32 蓝色圆角方块 + TA 字母），返回 PIL Image"""
         size = 32
@@ -290,7 +266,6 @@ class TkGUI(AgentCore):
         draw.text((6, 6), "TA", fill=(255, 255, 255, 255), font=font)
         return img
 
-    # NOTE: 2026-06-23 gen by tea_agent, 将 RGBA PIL Image 转换为 ARGB32 字节
     def _pil_to_argb32(self, img):
         """PIL RGBA Image -> ARGB32 bytes (用于 StatusNotifierItem IconPixmap)"""
         rgba = img.tobytes()  # R,G,B,A, R,G,B,A, ...
@@ -323,14 +298,12 @@ class TkGUI(AgentCore):
         except Exception as e:
             logger.warning(f"初始化托盘图标失败: {e}")
 
-    # NOTE: 2026-06-23 gen by tea_agent, 托盘左键激活：显示/恢复窗口
     def _on_tray_activate(self):
         """托盘图标左键点击：显示/恢复主窗口"""
         self.root.deiconify()
         self.root.lift()
         self.root.focus_force()
 
-    # NOTE: 2026-06-23 gen by tea_agent, 托盘右键弹出菜单
     def _on_tray_context_menu(self, x, y):
         """托盘图标右键：弹出菜单（含退出选项）"""
         menu = tk.Menu(self.root, tearoff=0)
@@ -340,26 +313,21 @@ class TkGUI(AgentCore):
         finally:
             menu.grab_release()
 
-# NOTE: 2026-05-15 13:07:16, self-evolved by tea_agent --- _on_closing 添加托盘图标清理逻辑
-    # NOTE: 2026-05-05, self-evolved by tea_agent --- 退出时正常关闭数据库：WAL checkpoint
     def _on_closing(self):
         """窗口关闭时的清理流程"""
         self._update_status("⏳ 正在清理资源...")
-        # NOTE: 2026-05-18 gen by tea_agent, 退出时停止托盘图标
         if HAS_SNI and self._sni:
             try:
                 self._sni.stop()
                 logger.info("托盘图标已停止")
             except Exception as e:
                 logger.warning(f"停止托盘图标失败: {e}")
-        # NOTE: 2026-06-19 gen by tea_agent, 退出时停止Dream线程
         try:
             from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
             toolkit_subconscious("stop")
             logger.info("Dream 已停止")
         except Exception as e:
             logger.warning(f"停止 Dream 失败: {e}")
-        # NOTE: 2026-05-16 gen by tea_agent, 退出时停止定时任务调度器
         try:
             from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
             toolkit_scheduler("stop")
@@ -373,7 +341,6 @@ class TkGUI(AgentCore):
             logger.warning(f"关闭数据库失败: {e}")
         self.root.destroy()
 
-    # NOTE: 2026-06-19 gen by tea_agent, App启动自动启动Dream潜意识引擎
     def _start_dream(self):
         """启动Dream潜意识引擎后台线程，每小时循环一次"""
         # 确保 cwd 为项目根目录，使 _is_tea_agent_cwd() 检查通过
@@ -395,7 +362,6 @@ class TkGUI(AgentCore):
         except Exception as e:
             logger.warning(f"Dream 自动启动失败: {e}")
 
-    # NOTE: 2026-05-16 gen by tea_agent, App启动自动启动定时任务调度器
     def _start_scheduler(self):
         """启动定时任务调度器后台线程，每分钟检查一次"""
         try:
@@ -443,8 +409,6 @@ class TkGUI(AgentCore):
         self._html_render(html)
         self.root.after(200, self.scroll_to_bottom)
 
-# NOTE: 2026-05-01 10:38:17, self-evolved by tea_agent --- 在 _switch_display 之后添加 _show_loading 方法（简单 spinner + 三点动画）
-    # NOTE: 2026-05-17 gen by tea_agent, Alt+Up/Down 切换历史轮次
     def _history_prev_round(self, e=None):
         """Alt+Up: 切换到上一条历史轮次，若无则忽略"""
         if not HAS_TKINTERWEB or self._show_mode != "chat_view":
@@ -484,36 +448,11 @@ class TkGUI(AgentCore):
             self._render_round_view(self._current_round_view)
         return "break"
 
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _switch_display(self, mode: str):
-
-# NOTE: 2026-05-07 14:25:13, self-evolved by tea_agent --- _show_loading 支持动态进度文本 + switch_topic 中后台线程上报加载进度，GUI 不卡死
-    # NOTE: 2026-05-01, self-evolved by tea_agent --- _show_loading: HtmlFrame spinner动画，异步加载历史时不再长时间空白
-    # NOTE: 2026-05-07 gen by tea_agent, _show_loading 支持 progress 参数动态更新进度文本
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _show_loading(self, text: str = "正在加载历史记录", progress: str = None):
-# NOTE: 2026-05-07 14:45:26, self-evolved by tea_agent --- 新增 _poll_loading_progress 方法：50ms 轮询共享变量，仅变化时 load_html
         # 不调用 root.update()：让 CSS animation 自己跑，GUI 主循环保持响应
-
-# NOTE: 2026-05-07 14:48:15, self-evolved by tea_agent --- _poll_loading_progress 改为从队列逐条出队，确保每个进度都被渲染
-# NOTE: 2026-05-07 14:49:37, self-evolved by tea_agent --- 轮询器：队列排空且 _loading_done 时触发 _render_loaded_topic 或 _render_topic_error
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _poll_loading_progress(self):
-
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def scroll_to_bottom(self):
-
-    # 2026-05-11 gen by tea_agent, 将 render 到 HtmlFrame 的 HTML 同时 print 到终端
-# NOTE: 2026-05-14 16:00:34, self-evolved by tea_agent --- _html_render 增加渲染前校验：控制字符清洗 + 结构检查 + 自动修复缺失闭合标签
-    # NOTE: 2026-05-15 gen by tea_agent, 注释掉终端打印避免刷屏，调试时可取消注释
-    # NOTE: 2026-05-16 gen by tea_agent, 渲染前增加 HTML 校验与清洗：控制字符过滤 + 标签配对检查 + 自动修复
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _html_render(self, html: str):
-
-# NOTE: 2026-05-07 17:33:05, self-evolved by tea_agent --- _render_chat 支持可选的流式缓冲区参数，_stream_render_tick 传递当前 think/stream 内容
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _render_chat(self, streaming_think: str = "", streaming_text: str = ""):
 
     def _now_ts(self) -> str:
         return datetime.now().strftime("%H:%M:%S")
 
-# NOTE: 2026-05-04 18:48:10, self-evolved by tea_agent --- _init_session 继承 AgentCore，仅补 UI 回调
-# NOTE: 2026-05-04 18:58:17, self-evolved by tea_agent --- GUI _init_session 调用 super() 确保 sess 被创建
-# NOTE: 2026-05-04 18:58:47, self-evolved by tea_agent --- _init_session 只设 tool_log，status 移到 UI 创建后
     def _init_session(self):
         """GUI 的会话初始化 — 继承 AgentCore 创建 sess。"""
         super()._init_session()
@@ -682,8 +621,6 @@ class TkGUI(AgentCore):
         except Exception:
             pass  # 通知失败不影响主流程
 
-# NOTE: 2026-05-04 19:35:31, self-evolved by tea_agent --- GUI send() 入口加 _shutting_down 闸门 — 重启中拒绝新消息
-    # NOTE: 2026-05-15 gen by tea_agent, 图片附件支持：选择图片文件并暂存
     def _attach_image(self):
         """打开文件对话框选择图片，存入 _pending_images"""
         from tkinter import filedialog
@@ -718,18 +655,10 @@ class TkGUI(AgentCore):
         self._img_label.config(text=f"已选 {count} 张图片")
         self._clear_img_btn.pack(side=tk.LEFT, padx=4)
 
-    # NOTE: 2026-05-15 gen by tea_agent, 清除已选图片
     def _clear_images(self):
         """清空待发送图片列表"""
         self._pending_images.clear()
         self._img_label.config(text="")
-
-    # NOTE: 2026-05-20 gen by tea_agent, 切换 HtmlFrame / ScrolledText 视图
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _toggle_raw_view(self):
-
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _show_raw_check_btn(self):
-
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _hide_raw_check_btn(self):
 
     def send(self, e=None):
         if self._shutting_down:
@@ -747,20 +676,17 @@ class TkGUI(AgentCore):
 
         self._switch_display("console")
 
-        # NOTE: 2026-05-15 gen by tea_agent, 支持图片附件
         display_msg = f"你：{msg}" if msg else "你：[图片]"
         self.log(display_msg, "user", images=images if images else None)
         self._hide_raw_check_btn()  # 会话中隐藏切换按钮
         self.generating = True
         # 启动 500ms 定时器，批量刷新流式内容到 ScrolledText（不渲染 HtmlFrame）
-        # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- 流式输出启动 _stream_flush_tick 500ms 定时器
         self.root.after(500, self._stream_flush_tick)
-        self.log("AI：", "title")  # NOTE: 2026-06-28 gen by tea_agent, fix: 改用 title 标签避免在 chat_messages 产生空 AI 条目
+        self.log("AI：", "title")
 
         mem_count = len(self.db.get_active_memories(50))
         self._update_status(f"⏳ 生成中... (ESC 打断) | 🧠 {mem_count}")
 
-        # NOTE: 2026-05-15 gen by tea_agent, 构建含图片的消息传给 chat_stream
         chat_input = {"text": msg} if not images else {"text": msg, "images": images}
 
         def work():
@@ -771,23 +697,19 @@ class TkGUI(AgentCore):
                     topic_id=self.current_topic_id,
                     on_status=self.safe_update_status,
                 )
-# NOTE: 2026-05-18 14:05:48, self-evolved by tea_agent --- 修复HTML渲染延迟15s+：将_render_and_show_chat提前到_post_chat_pipeline之前
                 self.root.after(0, self._flush_stream_to_messages)
 
-                # NOTE: 2026-05-18 gen by tea_agent, 修复渲染延迟15s+：提前调度 HTML 渲染
                 # 原逻辑在 _post_chat_pipeline 之后才渲染，_auto_summary 等 API 调用阻塞渲染调度
                 self.root.after(0, self._render_and_show_chat)
                 self.root.after(0, self._show_raw_check_btn)
 
                 # ── 标准后处理流水线（入库 → Token → 摘要）──
-                # NOTE: 2026-05-15 gen by tea_agent, 传入图片信息用于入库
                 user_msg_for_db = msg if not images else {"text": msg, "images": images}
                 self._post_chat_pipeline(ai_msg, is_func, user_msg_for_db, self.current_topic_id)
 
                 # GUI 特定：token 渲染 + 通知
                 usage = self.sess._last_usage
                 cheap_usage = self.sess._last_cheap_usage
-# NOTE: 2026-05-07 13:14:48, self-evolved by tea_agent --- 完成状态栏消息增加嵌入模型 token (Emb:xxx)
                 if usage and usage.get("total_tokens", 0) > 0:
                     self.root.after(0, lambda u=usage, cu=cheap_usage: self._add_token_notice_and_render(u, cu))
                     # 读取嵌入模型用量
@@ -803,13 +725,9 @@ class TkGUI(AgentCore):
                                   f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,}){emb_str}")
                     self.root.after(0, lambda m=status_msg: self._update_status(m))
                     self.root.after(0, self._refresh_topics_preserve_selection)
-# NOTE: 2026-05-06 09:31, self-evolved by tea_agent --- 通知传入 user_msg，显示用户消息+AI回复
                     self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
-# NOTE: 2026-05-18 14:06:01, self-evolved by tea_agent --- 移除else分支中重复的_render_and_show_chat调用（已提前调度）
                 else:
-                    # NOTE: 2026-05-18 gen by tea_agent, 渲染已提前调度，此处仅更新状态
                     self.root.after(0, lambda: self._update_status("✅ 完成"))
-# NOTE: 2026-05-06 09:31, self-evolved by tea_agent --- 通知传入 user_msg，显示用户消息+AI回复
                     self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
             except Exception as ex:
                 import traceback
@@ -831,7 +749,6 @@ class TkGUI(AgentCore):
                 self.root.after(0, self._render_and_show_chat)
                 self.root.after(0, self._show_raw_check_btn)
                 self.root.after(0, lambda: self._update_status(f"❌ 错误: {ai_msg}"))
-# NOTE: 2026-05-06 09:31, self-evolved by tea_agent --- 异常时通知也传入 user_msg
                 self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
             finally:
                 self.generating = False
@@ -840,11 +757,6 @@ class TkGUI(AgentCore):
         threading.Thread(target=work, daemon=True).start()
         return "break"
 
-# NOTE: 2026-04-30 09:12:24, self-evolved by tea_agent --- 新增 _add_token_notice_and_render 方法，在聊天区域显示本轮token消耗
-# NOTE: 2026-04-30 09:13:24, self-evolved by tea_agent --- 简化token显示格式，修复括号配对问题
-# NOTE: 2026-04-30 09:15:53, self-evolved by tea_agent --- token通知增加当前主题累积消耗显示
-# NOTE: 2026-04-30 09:26:32, self-evolved by tea_agent --- _add_token_notice_and_render改为Markdown表格(主模型+便宜模型，本轮+主题累积)
-# NOTE: 2026-05-07 13:14:07, self-evolved by tea_agent --- _add_token_notice_and_render 表格新增嵌入模型列：本轮 reading + 主题累积 te_total/te_p
     def _add_token_notice_and_render(self, usage: dict, cheap_usage: dict = None):
         """在聊天消息中追加 Markdown 表格：本轮/主题累积 × 主模型/便宜模型/嵌入模型 token 消耗"""
         if cheap_usage is None:
@@ -882,8 +794,6 @@ class TkGUI(AgentCore):
         except Exception:
             tm_total = tm_p = tm_c = tc_total = tc_p = tc_c = te_total = te_p = 0
 
-# NOTE: 2026-04-30 09:27:37, self-evolved by tea_agent --- _cell()中去掉<br>改用空格，保证Markdown表格兼容性
-# NOTE: 2026-05-07 13:18:26, self-evolved by tea_agent --- _cell 支持只有 P 无 C 的场景（嵌入模型），显示 total (P:xxx)
         def _cell(val, detail_p=None, detail_c=None):
             """格式化为 'total (P:x C:y)' 或 'total (P:x)' 或 '—'"""
             if val <= 0:
@@ -894,7 +804,6 @@ class TkGUI(AgentCore):
                 return f"{val:,} (P:{detail_p:,})"
             return f"{val:,}"
 
-# NOTE: 2026-05-07 13:14:18, self-evolved by tea_agent --- Token 表格新增嵌入模型列
         lines = [
             "| | 主模型 | 便宜模型 | 嵌入模型 |",
             "|-------|--------|----------|----------|",
@@ -906,17 +815,9 @@ class TkGUI(AgentCore):
         self._render_and_show_chat()
         self._show_raw_check_btn()
 
-    # NOTE: 2026-05-16 gen by tea_agent, 工具轮始终显示：移除过滤逻辑，每次render显示全部消息
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _filtered_messages(self):
-
-    # NOTE: 2026-05-15 gen by tea_agent, 历史轮次分组：按 user 消息切分轮次
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _group_into_rounds(self, msgs):
-
-    # NOTE: 2026-05-15 gen by tea_agent, HtmlFrame 历史链接 + 图片点击回调
     def _on_history_link_click(self, url):
         """处理 tea://round/N 或 tea://latest 或 tea://image/N 链接点击，外部链接用系统浏览器打开"""
         try:
-            # NOTE: 2026-05-18 gen by tea_agent, 外部链接用系统默认浏览器打开
             if url.startswith("http://") or url.startswith("https://"):
                 webbrowser.open(url)
                 return
@@ -934,7 +835,6 @@ class TkGUI(AgentCore):
         except Exception:
             pass
 
-    # @2026-05-15 gen by tea_agent, 图片点击放大弹窗
     def _show_image_popup(self, idx):
         """点击聊天图片时弹出放大查看窗口。点击图片或按 Esc 关闭。"""
         if idx < 0 or idx >= len(self._image_cache):
@@ -987,15 +887,6 @@ class TkGUI(AgentCore):
 
         popup.focus_set()
 
-    # NOTE: 2026-05-15 gen by tea_agent, 构建轮次视图完整 HTML
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _build_round_view_html(self, rounds, active_idx, font_size):
-
-    # NOTE: 2026-05-15 gen by tea_agent, 渲染指定历史轮次（用户点击链接时调用）
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _render_round_view(self, round_idx):
-
-    # NOTE: 2026-05-15 gen by tea_agent, 重构：渲染最新轮 + 历史轮次链接表
-# @2026-05-15 gen by tea_agent, Composition: moved to ChatRenderer → def _render_and_show_chat(self):
-
     # @2026-04-29 gen by deepseek-v4-pro, 打开主题管理弹窗
     def open_topic_dialog(self):
         """打开主题管理弹窗"""
@@ -1029,7 +920,6 @@ class TkGUI(AgentCore):
             self.safe_log("\n🛑 已打断", "tool")
             self.generating = False
             # 先刷新控制台剩余内容，再 flush 到 messages
-            # NOTE: 2026-05-08 08:46:00, self-evolved by tea_agent --- interrupt 时也刷新 pending 控制台内容
             if self._pending_console_text:
                 self.console.config(state=tk.NORMAL)
                 for text, tag in self._pending_console_text:
@@ -1045,9 +935,6 @@ class TkGUI(AgentCore):
             self.root.after(0, self._show_raw_check_btn)
             self._update_status("🛑 已打断")
 
-# NOTE: 2026-04-30 19:36:28, self-evolved by tea_agent --- 补回缺失的 __main__ 入口，使 python -m tea_agent.gui 可正常启动 GUI
-# NOTE: 2026-05-09 19:26:36, self-evolved by tea_agent --- 修复 main() no_gui 模式：用 CLI 回退替代 NotImplementedError 崩溃
-    # ═══ @2026-05-15 gen by tea_agent, Composition 委派包装器 ═══
 
     def _switch_display(self, mode: str):
         return self.renderer._switch_display(mode)
@@ -1103,7 +990,6 @@ class TkGUI(AgentCore):
     def _hide_raw_check_btn(self):
         return self.renderer._hide_raw_check_btn()
 
-# NOTE: 2026-05-20 gen by tea_agent, 添加 timeout 参数支持 debug 模式超时自动退出
 def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str="", disable_summary:bool=False):
     """启动 GUI 主界面。
 

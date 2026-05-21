@@ -1,5 +1,4 @@
 """
-@2026-05-16 gen by tea_agent, TeaAgent — 轻量对外接口类
 
 封装与 LLM 对话（含工具调用）的完整流程为单一接口。
 无 Storage（不写数据库）、不启动后台线程（Dream 等），
@@ -26,7 +25,6 @@ from pathlib import Path
 from typing import Optional, List, Dict, Callable, cast
 
 logger = logging.getLogger("tea_agent")
-
 
 class TeaAgent:
     """Tea Agent 对外接口 — 轻量、隔离、无状态持久化。
@@ -164,8 +162,6 @@ class TeaAgent:
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
 
-# NOTE: 2026-05-15 09:06:37, self-evolved by tea_agent --- 从配置读取 supports_vision 并传入 OnlineToolSession
-        # NOTE: 2026-05-18 gen by tea_agent, 支持从配置读取 supports_vision
         _options = getattr(main_m, 'options', {}) or {}
         if isinstance(_options, dict):
             _supports_vision = _options.get('supports_vision', False)

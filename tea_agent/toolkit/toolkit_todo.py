@@ -1,5 +1,3 @@
-# @2026-05-20 gen by tea_agent, TODO checklist — DB 持久化 per-topic，跨进程/重启不丢
-# @2026-05-20 gen by tea_agent, v2: SQLite 持久化 + restore 自动恢复 + topic 隔离
 import logging
 
 logger = logging.getLogger("toolkit")
@@ -8,7 +6,6 @@ logger = logging.getLogger("toolkit")
 _todos = []          # [{"desc":str, "done":bool, "idx":int}, ...]
 _restored = False    # 是否已从 DB 恢复
 _last_topic = None   # 上次操作的 topic_id, 用于检测主题切换
-
 
 def _get_db():
     """获取当前 DB 连接（通过 session_ref → agent → db）"""
@@ -21,7 +18,6 @@ def _get_db():
         pass
     return None
 
-
 def _get_topic_id():
     """获取当前 topic_id"""
     try:
@@ -32,7 +28,6 @@ def _get_topic_id():
     except Exception:
         pass
     return None
-
 
 def _ensure_table(db):
     """确保 todo_items 表存在（兼容旧 DB 未迁移的情况）"""
@@ -53,7 +48,6 @@ def _ensure_table(db):
         c.close()
     except Exception as e:
         logger.warning(f"todo ensure_table failed: {e}")
-
 
 def _sync_to_db():
     """将内存 _todos 全量写入 DB (DELETE + INSERT)"""
@@ -79,7 +73,6 @@ def _sync_to_db():
     except Exception as e:
         logger.warning(f"todo sync to db failed: {e}")
 
-
 def _sync_item(idx, done):
     """单条更新 DB"""
     topic_id = _get_topic_id()
@@ -99,7 +92,6 @@ def _sync_item(idx, done):
         c.close()
     except Exception as e:
         logger.warning(f"todo sync item failed: {e}")
-
 
 def _restore_from_db():
     """从 DB 恢复当前 topic 的 TODO"""
@@ -136,14 +128,12 @@ def _restore_from_db():
     finally:
         _restored = True
 
-
 def _auto_restore():
     """自动恢复（首次调用 + 主题切换时）"""
     global _restored, _last_topic, _todos
     topic_id = _get_topic_id()
     if not _restored or (topic_id and topic_id != _last_topic):
         _restore_from_db()
-
 
 def toolkit_todo(action: str, items: list = None, index: int = None) -> dict:
     """TODO checklist: create before modifying code, check off step by step.
@@ -228,10 +218,8 @@ def toolkit_todo(action: str, items: list = None, index: int = None) -> dict:
         logger.exception("toolkit_todo")
         return {"ok": False, "error": str(e)[:300]}
 
-
 def _done():
     return sum(1 for t in _todos if t["done"])
-
 
 def _fmt():
     lines = []
@@ -239,7 +227,6 @@ def _fmt():
         icon = "DONE" if t["done"] else "TODO"
         lines.append(f"[{icon}] [{t['idx']}] {t['desc']}")
     return "\n".join(lines)
-
 
 def meta_toolkit_todo():
     return {

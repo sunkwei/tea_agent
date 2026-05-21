@@ -33,7 +33,6 @@ from tea_agent.session_summarizer_component import SummarizerComponent
 
 logger = logging.getLogger("session")
 
-
 class OnlineToolSession(BaseChatSession):
     """
     在线工具调用会话 - Token 优化版

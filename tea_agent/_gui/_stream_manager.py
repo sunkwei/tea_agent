@@ -1,12 +1,9 @@
 """
-@2026-07-05 gen by tea_agent, Stream Manager Component (组合模式)
 Handles streaming output, logging, status updates, buffer flushing.
 
-@2026-07-21 gen by tea_agent, 修复: stream() 和 stream_flush_tick() 丢失 ScrolledText 更新逻辑
   - stream(): 恢复 [THINK] 前缀识别 + _pending_console_text 写入
   - stream_flush_tick(): 恢复 ScrolledText 批量刷新 + 自调度 + chat_messages 同步
 
-@2026-07-21 gen by tea_agent, 修复: log() 遗漏 chat_messages.append（从 gui.py 提取时丢失）
   - log(): 恢复 chat_messages 追加（user/ai/tool/notice 角色），支持 _render_loaded_topic 正常渲染
   - log_tool(): 统一使用 "tool" 标签，确保工具日志也写入 chat_messages
 """
@@ -32,7 +29,6 @@ class StreamManager:
         self.gui.root.after(0, self.gui.log_tool, msg)
 
     def safe_update_status(self, msg: str):
-        # NOTE: 2026-05-20 gen by tea_agent, detect !MAX_ITER: signal for renew dialog
         if msg.startswith("!MAX_ITER:"):
             self.gui.root.after(0, self.handle_max_iter, msg)
         else:
@@ -84,7 +80,6 @@ class StreamManager:
         self.gui.console.config(state=tk.DISABLED)
         self.gui.console.update_idletasks()
 
-        # @2026-07-21 gen by tea_agent, 修复：恢复 chat_messages 追加（提取时丢失）
         if tag in ("user", "ai", "tool", "notice"):
             entry = {"role": tag, "content": msg, "timestamp": self.gui._now_ts()}
             if images:
@@ -132,7 +127,6 @@ class StreamManager:
             self.gui._pending_console_text.clear()
 
         # 2. 不再同步到 chat_messages（流式期间不渲染 HtmlFrame，避免产生多个不完整 AI 块）
-        # NOTE: 2026-06-28 gen by tea_agent, 修复：移除中间 flush，由 renderer._flush_stream_to_messages 统一在会话结束时处理
         # _stream_buffer 保持累积，最终一次性 flush 为完整 AI 消息
 
         # 3. 自调度：如果仍在生成中，继续 500ms 后刷新

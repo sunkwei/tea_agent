@@ -7,7 +7,6 @@ from datetime import datetime
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_release_version(version: str, changes: list, changelog_section: str = "Improvements & Changes", 

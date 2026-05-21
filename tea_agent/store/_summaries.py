@@ -1,5 +1,4 @@
 """
-@2026-05-16 gen by tea_agent, SummaryStore — 对话摘要 & 三级历史管理
 """
 import json
 import logging
@@ -7,7 +6,6 @@ from typing import Dict, List, Optional
 from ._base import StoreComponent
 
 logger = logging.getLogger("Storage.Summaries")
-
 
 class SummaryStore(StoreComponent):
     """摘要管理：话题摘要、三级历史（Level1/2/3）、语义摘要、工具链摘要。"""

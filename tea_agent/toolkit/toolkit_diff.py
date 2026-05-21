@@ -25,7 +25,6 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
-
 # ── Diff 生成 ────────────────────────────────────────────
 
 def _generate_unified_diff(old: str, new: str, filename: str = "file", context_lines: int = 3) -> str:
@@ -35,7 +34,6 @@ def _generate_unified_diff(old: str, new: str, filename: str = "file", context_l
     new_lines = new.splitlines(keepends=True)
     diff = difflib.unified_diff(old_lines, new_lines, fromfile=filename, tofile=filename, n=context_lines)
     return ''.join(diff)
-
 
 # ── Git Stash 集成 ──────────────────────────────────────
 
@@ -49,7 +47,6 @@ def _git_stash_push(cwd: str) -> Tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-
 def _git_stash_pop(cwd: str) -> Tuple[bool, str]:
     """恢复最近一次 stash"""
     try:
@@ -58,7 +55,6 @@ def _git_stash_pop(cwd: str) -> Tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-
 def _git_stash_drop(cwd: str) -> bool:
     """丢弃最近一次 stash（确认成功）"""
     try:
@@ -66,7 +62,6 @@ def _git_stash_drop(cwd: str) -> bool:
         return True
     except Exception:
         return False
-
 
 # ── 冲突检测 ────────────────────────────────────────────
 
@@ -82,7 +77,6 @@ def _check_conflict(file_path: str, old_code: str, cwd: str) -> Optional[str]:
     if content.count(old_code) > 1:
         return f"冲突: old_code 在 {file_path} 中出现 {content.count(old_code)} 次（无法唯一确定）"
     return None
-
 
 # ── 验证 ────────────────────────────────────────────────
 
@@ -134,7 +128,6 @@ def _verify_all(files: List[str], cwd: str, run_tests: bool = True) -> dict:
     )
     return results
 
-
 # ── 单文件应用 ──────────────────────────────────────────
 
 def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, description: str = "") -> dict:
@@ -170,7 +163,6 @@ def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, descripti
         if os.path.exists(bak):
             shutil.copy2(bak, full)
         return {"ok": False, "file": file_path, "error": f"写入失败: {e}"}
-
 
 # ── 主入口 ──────────────────────────────────────────────
 
@@ -332,7 +324,6 @@ def toolkit_diff(
     except Exception as e:
         logger.exception(f"toolkit_diff: {e}")
         return {"ok": False, "error": str(e)[:300]}
-
 
 # ── Meta ────────────────────────────────────────────────
 

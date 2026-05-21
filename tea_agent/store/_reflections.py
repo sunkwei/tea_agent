@@ -1,10 +1,8 @@
 """
-@2026-05-16 gen by tea_agent, ReflectionStore — 反思记录 CRUD
 """
 import json
 from typing import Dict, List, Optional
 from ._base import StoreComponent
-
 
 class ReflectionStore(StoreComponent):
     """反思记录：元认知反思的增删查改。"""

@@ -6,7 +6,7 @@ import os.path as osp
 import time
 import logging
 
-# # NOTE: 2026-05-08 09:32:07, self-evolved by tea_agent --- 内置工具: 手动设置主题标题
+#
 from tea_agent.toolkit.toolkit_set_topic_title import (
     toolkit_set_topic_title,
     meta_toolkit_set_topic_title,
@@ -27,7 +27,6 @@ def meta_toolkit_reload():
             }
         }
     }
-
 
 def meta_toolkit_save() -> dict:
     return {
@@ -55,11 +54,9 @@ def meta_toolkit_save() -> dict:
         }
     }
 
-
 def toolkit_reload() -> Dict:
     tlk = cast(Toolkit, globals().get("_toolkit_", None))
     return tlk.reload()
-
 
 def toolkit_save(name: str, meta: dict, pycode: str, version: str = "") -> Tuple[int, str]:
     """
@@ -77,18 +74,15 @@ def toolkit_save(name: str, meta: dict, pycode: str, version: str = "") -> Tuple
     tlk = cast(Toolkit, globals().get("_toolkit_", None))
     return tlk.save(name, meta, pycode, version)
 
-
 def toolkit_rollback(name: str, version: str) -> Tuple[int, str]:
     """回滚工具到指定版本"""
     tlk = cast(Toolkit, globals().get("_toolkit_", None))
     return tlk.rollback(name, version)
 
-
 def toolkit_list_versions(name: str) -> Tuple[int, List[str]]:
     """列出工具的所有可用版本"""
     tlk = cast(Toolkit, globals().get("_toolkit_", None))
     return tlk.list_versions(name)
-
 
 def meta_toolkit_rollback():
     return {
@@ -113,7 +107,6 @@ def meta_toolkit_rollback():
         }
     }
 
-
 def meta_toolkit_list_versions():
     return {
         "type": "function",
@@ -133,7 +126,6 @@ def meta_toolkit_list_versions():
         }
     }
 
-
 def toolkit_rollback_impl(name: str, version: str) -> str:
     """回滚工具到指定版本"""
     tlk = cast(Toolkit, globals().get("_toolkit_", None))
@@ -142,7 +134,6 @@ def toolkit_rollback_impl(name: str, version: str) -> str:
         return f"✅ {msg}"
     else:
         return f"❌ {msg}"
-
 
 def toolkit_list_versions_impl(name: str) -> str:
     """列出工具的所有可用版本"""
@@ -157,7 +148,6 @@ def toolkit_list_versions_impl(name: str) -> str:
 
 # ========== Memory 工具函数 ==========
 
-# NOTE: 2026-05-09 19:34:13, self-evolved by tea_agent --- Toolkit 类添加工具调用缓存：缓存字典 + TTL + call_tool() 方法
 class Toolkit:
     # 工具调用缓存：对只读/幂等工具缓存结果，减少重复调用
     # key = (func_name, json.dumps(args, sort_keys=True))
@@ -198,7 +188,6 @@ class Toolkit:
         self.reload()
         logger.info(f"Loaded {len(self.func_map)} toolkit functions from {self.tool_dir}")
 
-# NOTE: 2026-05-09 19:34:37, self-evolved by tea_agent --- Toolkit 类添加 call_tool() 缓存代理方法，在 reload 之后
     def call_tool(self, func_name: str, **kwargs):
         """带缓存的工具调用代理。
         
@@ -260,7 +249,6 @@ class Toolkit:
         if expired:
             logger.debug(f"Cache purge: removed {len(expired)} expired entries, {len(self._cache)} remaining")
 
-# NOTE: 2026-05-15 13:51:19, self-evolved by tea_agent --- 添加 _check_dependencies 方法到 Toolkit 类
     def _check_dependencies(self, pycode: str) -> str:
         """自动检测 pycode 中的 import 并安装缺失依赖"""
         import ast as _ast
@@ -357,7 +345,6 @@ class Toolkit:
                     with open(filepath, encoding="utf-8") as f:
                         code = f.read()
 
-# NOTE: 2026-05-01 15:15:56, self-evolved by tea_agent --- 修复 toolkit 加载时 exec 导致函数 __globals__ 缺少 import 符号的问题
                     # 使用受限的 globals 避免污染
                     safe_globals = {
                         "__builtins__": __builtins__,
@@ -457,8 +444,6 @@ class Toolkit:
         }
 
         meta_exam_str = json.dumps(meta_exam, ensure_ascii=False)
-# NOTE: 2026-05-14 08:01:17, self-evolved by tea_agent --- _my工具强制保存到user_dir且标记永久
-        # @2026-05-16 gen by tea_agent, _my 后缀工具永久保存在用户目录
         is_my_tool = name.endswith("_my")
         if is_my_tool:
             toolkit_path = self.user_dir
@@ -488,14 +473,12 @@ class Toolkit:
         if not name.startswith("toolkit_"):
             return (2, "tool name must start with 'toolkit_' prefix for security")
 
-# NOTE: 2026-05-15 13:51:39, self-evolved by tea_agent --- 在 save 方法中调用 _check_dependencies 实现自动安装依赖
         # 2. 校验 pycode 可执行性
         try:
             tree = ast.parse(pycode)
         except SyntaxError as e:
             return (3, f"Syntax error in pycode: {e}")
 
-        # @2026-05-16 gen by tea_agent, 自动检测并安装缺失依赖
         dep_msg = self._check_dependencies(pycode)
         if dep_msg and "❌" in dep_msg:
             logger.warning(f"Dependency check warning: {dep_msg}")
@@ -532,8 +515,6 @@ class Toolkit:
                 else:
                     version = "1.0.0"
             
-# NOTE: 2026-05-14 08:01:07, self-evolved by tea_agent --- save移除.bak备份，添加_my后缀永久用户工具路由
-            # @2026-05-16 gen by tea_agent, 不再创建 .bak 备份文件（规则4）
             # 版本历史通过 git (内置) 或手动备份 (用户) 管理
             pass
         

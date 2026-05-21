@@ -1,4 +1,3 @@
-# @2026-05-16 gen by tea_agent, 项目记忆管理器：纯 FIFO，最多30条，无优先级
 """
 项目记忆管理器
 存储到项目目录 .tea_agent_run/project_memories.json，纯 FIFO。
@@ -12,7 +11,6 @@ from typing import Dict, List, Optional
 from datetime import datetime
 
 logger = logging.getLogger("ProjectMemory")
-
 
 class ProjectMemoryManager:
     """项目记忆：纯 FIFO，最多 30 条。"""

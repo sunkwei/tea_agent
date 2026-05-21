@@ -2,7 +2,6 @@
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_self_report() -> dict:
@@ -29,7 +28,6 @@ def toolkit_self_report() -> dict:
         if parent == temp: break
         temp = parent
 
-# NOTE: 2026-05-04 17:57:38, self-evolved by tea_agent --- toolkit_self_report 使用 config.paths 查找 base_dir 和 toolkit_dir
     # Fallback if not found by walking up：优先从 config 读取
     if not found:
         try:

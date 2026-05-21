@@ -1,5 +1,4 @@
 """
-@2026-07-07 gen by tea_agent, 字体检测与缩放配置模块
 从 gui.py L84-160 提取：跨平台字体自动检测 + Wayland/X11 显示缩放
 """
 
@@ -17,11 +16,9 @@ _FONTS_DETECTED = False
 _SCALE_FACTOR = 1.0
 _DEFAULT_FONT_SIZE = 16  # 模块级默认（_init_fonts 后会更新）
 
-
 def _fs(size):
     """返回按显示缩放因子调整后的字体大小（适配 Wayland/X11 高分屏）。"""
     return max(1, int(size * _SCALE_FACTOR))
-
 
 def _init_fonts():
     """延迟检测系统可用字体（需 Tk root 创建后调用）。"""

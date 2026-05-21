@@ -3,7 +3,6 @@
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_build(action: str, directory: str = "."):
@@ -109,7 +108,6 @@ def toolkit_build(action: str, directory: str = "."):
 
     else:
         return f"❌ 未知 action: '{action}'，可选: package / fix"
-
 
 def meta_toolkit_build() -> dict:
     return {

@@ -23,9 +23,6 @@ PRIORITY_LABELS = {
     3: "LOW",
 }
 
-# NOTE: 2026-05-16 12:43:53, self-evolved by tea_agent --- 新增年龄衰减阈值、分层保底常量、LLM精调上限；CRITICAL上限从15降至10
-# NOTE: 2026-05-02 12:04:27, self-evolved by tea_agent --- MAX_INJECT 从5上调至30，CRITICAL 选拔上限15，确保各优先级记忆都有机会注入
-# NOTE: 2026-05-16 gen by tea_agent, 分层保底 + 年龄衰减: CRITICAL上限降至10, 新增HIGH/MEDIUM/LOW保底, 年龄阈值30/60/90天
 MAX_INJECT = 30  # 每次会话注入上限
 MAX_CRITICAL_INJECT = 10  # CRITICAL 注入上限，超出留给其他优先级
 MIN_HIGH_INJECT = 3   # HIGH 保底
@@ -40,12 +37,9 @@ MEDIUM_DEGRADE_DAYS = 90     # MEDIUM → LOW
 # LLM 精调上限
 MAX_LLM_ADJUSTMENTS = 3  # 每次最多调整条数
 
-
 class MemoryManager:
     """记忆管理器：选择、格式化、提取"""
 
-# NOTE: 2026-04-30 14:33:58, self-evolved by tea_agent --- MemoryManager增加dedup_threshold参数
-# NOTE: 2026-04-30 14:39:00, self-evolved by tea_agent --- MemoryManager默认dedup_threshold改为0.3与config一致
     def __init__(self, storage, extraction_threshold: int = 2, dedup_threshold: float = 0.3):
         """
         Args:
@@ -61,7 +55,6 @@ class MemoryManager:
     # 记忆选择
     # ------------------------------------------------------------------
 
-# NOTE: 2026-05-16 12:44:45, self-evolved by tea_agent --- select_memories改造：先执行年龄衰减；CRITICAL上限10；HIGH/MEDIUM/LOW分层保底(3/2/1)；剩余自由竞争
     def select_memories(
         self,
         topic_text: str = "",
@@ -191,8 +184,6 @@ class MemoryManager:
         # 映射到 0.1 ~ 1.0 范围
         return max(0.1, min(1.0, rate * 2.0))
 
-# NOTE: 2026-05-02 10:11:31, self-evolved by tea_agent --- _extract_keywords 升级为 jieba 分词，替换简陋的 bigram 滑动窗口
-# NOTE: 2026-05-02 10:20:00, self-evolved by tea_agent --- _extract_keywords升级为jieba分词，替换简陋bigram滑动窗口
     @staticmethod
     def _extract_keywords(text: str) -> set:
         """从文本中提取关键词（jieba 中文分词 + 英文单词）"""
@@ -234,7 +225,6 @@ class MemoryManager:
             except Exception:
                 pass
 
-# NOTE: 2026-05-16 12:46:09, self-evolved by tea_agent --- 新增 degrade_by_age() 年龄衰减 + llm_adjust_priorities() LLM精调方法
     # ------------------------------------------------------------------
     # 优先级自动调整
     # ------------------------------------------------------------------
@@ -310,7 +300,6 @@ class MemoryManager:
 
 如果不需要调整，输出空数组 []。"""
 
-# NOTE: 2026-05-16 12:48:20, self-evolved by tea_agent --- llm_adjust_priorities 改为接受 client 参数，移除不存在的 llm_client 导入
     def llm_adjust_priorities(
         self,
         recent_topics: str,
@@ -529,7 +518,6 @@ importance 评分：
             pass
         return []
 
-# NOTE: 2026-04-30 14:35:03, self-evolved by tea_agent --- 新增_compute_similarity/_find_duplicate/_merge_memory去重合并方法，改造ingest_extracted写入前查重
     # ------------------------------------------------------------------
     # 去重合并
     # ------------------------------------------------------------------

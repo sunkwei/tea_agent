@@ -1,4 +1,3 @@
-
 """
 @2026-05-19 gen by claude, tree-sitter 代码分析器 — 仓库级上下文增强
 提供：精确 AST 解析 / 影响分析 / 依赖图 / 跨文件引用
@@ -31,10 +30,8 @@ def _ensure_ts():
         logger.warning(f"tree-sitter 加载失败: {e}")
         return None
 
-
 def _get_text(source_bytes, node):
     return source_bytes[node.start_byte:node.end_byte].decode("utf-8")
-
 
 def _extract_docstring(source_bytes, body_node):
     for child in body_node.named_children:
@@ -45,7 +42,6 @@ def _extract_docstring(source_bytes, body_node):
                 return text[:200]
         break
     return ""
-
 
 def _extract_calls(source_bytes, body_node):
     calls = set()
@@ -65,7 +61,6 @@ def _extract_calls(source_bytes, body_node):
             stack.append(child)
     return sorted(calls)
 
-
 def _extract_params(source_bytes, func_node):
     params_node = func_node.child_by_field_name("parameters")
     if not params_node:
@@ -80,7 +75,6 @@ def _extract_params(source_bytes, func_node):
                     params.append(_get_text(source_bytes, c))
                     break
     return params
-
 
 def parse_file(filepath: str) -> Optional[Dict]:
     lang = _ensure_ts()
@@ -178,7 +172,6 @@ def parse_file(filepath: str) -> Optional[Dict]:
     _walk(root)
     return result
 
-
 def _parse_file_ast_fallback(filepath: str) -> Optional[Dict]:
     try:
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:
@@ -243,7 +236,6 @@ def _parse_file_ast_fallback(filepath: str) -> Optional[Dict]:
             })
 
     return result
-
 
 def impact_analysis(project_root: str, filepath: str, symbol: str) -> Dict:
     parsed = parse_file(filepath)
@@ -330,7 +322,6 @@ def impact_analysis(project_root: str, filepath: str, symbol: str) -> Dict:
         "callees": target_def.get("calls", []), "same_file_symbols": same_file,
         "risk_level": risk, "hint": " | ".join(hint_parts),
     }
-
 
 def build_dependency_graph(project_root: str) -> Dict:
     graph = defaultdict(lambda: {"imports": [], "imported_by": [], "symbols": []})

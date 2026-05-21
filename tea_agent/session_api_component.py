@@ -8,7 +8,6 @@ API 调用组件
 from typing import List, Dict, Tuple, Any, Optional, Callable
 from .session_context import SessionComponent, SessionContext
 
-
 def _get_cheap_params(defaults=None):
     """返回 cheap 模型 {temperature, max_tokens}，失败时使用传入的 defaults 或保守值。"""
     d = defaults or {"temperature": 0.3, "max_tokens": 1000}
@@ -21,7 +20,6 @@ def _get_cheap_params(defaults=None):
         }
     except Exception:
         return d
-
 
 class APIComponent(SessionComponent):
     """

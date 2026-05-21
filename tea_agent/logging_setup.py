@@ -17,7 +17,6 @@ from pathlib import Path
 _logging_initialized = False
 _logging_debug = False
 
-
 def setup_logging(debug: bool = False, force: bool = False) -> None:
     """初始化文件日志系统（幂等，多次调用安全）。
 
@@ -76,13 +75,11 @@ def setup_logging(debug: bool = False, force: bool = False) -> None:
 
     _logging_initialized = True
 
-
 def _set_root_level(debug: bool) -> None:
     """运行时切换 root logger 级别，不重启进程。"""
     global _logging_debug
     _logging_debug = debug
     logging.getLogger().setLevel(logging.DEBUG if debug else logging.INFO)
-
 
 def set_debug(enabled: bool = True) -> None:
     """运行时开关 DEBUG 日志（已初始化后调用）。

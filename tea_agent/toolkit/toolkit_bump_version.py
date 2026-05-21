@@ -1,6 +1,5 @@
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_bump_version(version: str, file: str = "pyproject.toml", dry_run: bool = False):
@@ -89,7 +88,6 @@ def toolkit_bump_version(version: str, file: str = "pyproject.toml", dry_run: bo
         "new_version": version,
         "message": f"版本号已更新: {old_version} → {version}"
     }
-
 
 def meta_toolkit_bump_version() -> dict:
     return {

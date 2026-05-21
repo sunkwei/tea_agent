@@ -1,13 +1,10 @@
 # @2026-04-30 gen by deepseek-v4-pro, toolkit_ocr: "眼睛" — 截屏 + OCR 文字识别，让 Agent 能"看到"屏幕
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 """toolkit_ocr — 屏幕视觉能力：截屏 + OCR 文字识别"""
 
-
-# NOTE: 2026-04-30 16:56:08, self-evolved by tea_agent --- 新增monitor参数支持多显示器截图（mss按索引截屏）
 # NOTE: 2026-05-05, easyocr → optional, 缺失时提示 pip install tea_agent[ocr]
 def toolkit_ocr(
     action: str = "ocr_screen",
@@ -65,13 +62,11 @@ def toolkit_ocr(
         except Exception as e:
             return None, f"❌ easyocr 初始化失败: {e}"
 
-# NOTE: 2026-04-30 16:56:31, self-evolved by tea_agent --- _screenshot支持monitor_idx参数，优先用mss按显示器索引截图
     # --- 内部：截屏（支持 region / monitor 两种模式）---
     def _screenshot(reg, mon_idx=-1):
         import time
         from pathlib import Path
 
-# NOTE: 2026-05-04 17:56:50, self-evolved by tea_agent --- toolkit_ocr screenshots 路径从 config.paths 读取
         try:
             from tea_agent.config import get_config
             tmp_dir = Path(get_config().paths.data_dir_abs) / "screenshots"
@@ -115,7 +110,6 @@ def toolkit_ocr(
                     reg = tuple(parts)
             except ValueError:
                 return "❌ region 格式错误，应为 'x,y,w,h'（如 '100,200,800,600'）"
-# NOTE: 2026-04-30 16:56:39, self-evolved by tea_agent --- _screenshot调用点传入monitor参数
         fpath = _screenshot(reg, monitor)
         try:
             from PIL import Image
@@ -147,7 +141,6 @@ def toolkit_ocr(
                     reg = tuple(parts)
             except ValueError:
                 return "❌ region 格式错误，应为 'x,y,w,h'"
-# NOTE: 2026-04-30 16:56:51, self-evolved by tea_agent --- ocr_screen分支的_screenshot调用也传入monitor
         img_source = _screenshot(reg, monitor)
 
     # --- OCR ---
@@ -204,13 +197,11 @@ def toolkit_ocr(
     except Exception as e:
         return f"❌ OCR 失败: {e}"
 
-
 def meta_toolkit_ocr() -> dict:
     return {
         "type": "function",
         "function": {
             "name": "toolkit_ocr",
-# NOTE: 2026-04-30 16:57:08, self-evolved by tea_agent --- 描述增加monitor多屏说明
             "description": "屏幕文字识别（OCR）— Agent 的'眼睛'。可截屏并识别屏幕上的文字，返回文字内容和位置坐标。支持全屏、区域、多显示器（monitor参数）。",
             "parameters": {
                 "type": "object",
@@ -220,7 +211,6 @@ def meta_toolkit_ocr() -> dict:
                         "enum": ["screenshot", "ocr_screen", "ocr_file"],
                         "description": "screenshot=仅截图, ocr_screen=截图+OCR, ocr_file=识别文件"
                     },
-# NOTE: 2026-04-30 16:57:00, self-evolved by tea_agent --- meta_toolkit_ocr增加monitor参数定义
                     "region": {
                         "type": "string",
                         "description": "截取区域 'x,y,w,h'（如 '100,200,800,600'），空=全屏"

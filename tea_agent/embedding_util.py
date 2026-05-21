@@ -28,7 +28,6 @@ except ImportError:
     HAS_REQUESTS = False
     requests = None  # type: ignore
 
-
 # ── 本地 TF-IDF 回退 ────────────────────────────────────────────
 # 一个极简的 TF-IDF 实现，用于在没有 embedding API 时提供基本语义搜索。
 # 使用字符级 bigram 作为特征（对中文友好），全局使用固定维度的稀疏向量。
@@ -88,10 +87,8 @@ class _SimpleTFIDF:
             vec = [v / norm for v in vec]
         return vec
 
-
 # ── EmbeddingEngine ─────────────────────────────────────────────
 
-# NOTE: 2026-05-07 13:11:58, self-evolved by tea_agent --- EmbeddingEngine 跟踪嵌入 API 的 token 用量，解析 usage 并累积
 class EmbeddingEngine:
     """文本向量引擎：API 优先，自动回退 TF-IDF"""
 
@@ -185,7 +182,6 @@ class EmbeddingEngine:
                 logger.warning(f"API 批量嵌入失败，逐个 TF-IDF: {e}")
         return [self._embed_tfidf(t) for t in texts]
 
-# NOTE: 2026-05-07 07:28:42, self-evolved by tea_agent --- 修复 embedding API URL 拼接：自动补全 /v1 路径前缀
     def _build_url(self) -> str:
         """构建 embeddings API URL，自动处理 /v1 前缀"""
         base = self.api_url.rstrip("/")
@@ -198,7 +194,6 @@ class EmbeddingEngine:
         # 否则补全 /v1/embeddings
         return base + "/v1/embeddings"
 
-# NOTE: 2026-05-07 08:01:36, self-evolved by tea_agent --- _embed_api 调用前 print 到控制台：时间 + 嵌入模型名 + 文本前80字
     def _embed_api(self, text: str) -> List[float]:
         """通过 API 获取单个文本的嵌入"""
         url = self._build_url()
@@ -213,13 +208,11 @@ class EmbeddingEngine:
             "input": text,
         }
 
-# NOTE: 2026-05-07 11:28:02, self-evolved by tea_agent --- _embed_api 和 _embed_api_batch 添加 DEBUG 日志
         import time
         asctime = time.strftime("%Y-%m-%d %H:%M:%S")
         print(f"{asctime}: call embedding: {self.model_name}, {text[:80]}")
         logger.info(f"embedding request: model={self.model_name}, text_len={len(text)}, text:{text[:80]}, url={url}")
 
-# NOTE: 2026-05-07 13:12:07, self-evolved by tea_agent --- _embed_api 解析 API 返回的 usage，累积到 session/global token 计数器
         resp = requests.post(url, json=payload, headers=headers, timeout=30)
         resp.raise_for_status()
         data = resp.json()
@@ -244,8 +237,6 @@ class EmbeddingEngine:
 
         raise RuntimeError(f"API 返回格式异常: {json.dumps(data)[:200]}")
 
-# NOTE: 2026-05-07 07:28:51, self-evolved by tea_agent --- _embed_api_batch 改用 _build_url() 统一 URL 构建
-# NOTE: 2026-05-07 11:28:09, self-evolved by tea_agent --- _embed_api_batch 添加 DEBUG 日志
     def _embed_api_batch(self, texts: List[str]) -> List[List[float]]:
         """通过 API 批量获取嵌入"""
         url = self._build_url()
@@ -284,8 +275,6 @@ class EmbeddingEngine:
         logger.debug(f"TF-IDF 词汇表: {self._tfidf._doc_count} 文档, "
                      f"{len(self._tfidf._doc_freq)} 特征")
 
-# NOTE: 2026-05-07 07:39:09, self-evolved by tea_agent --- cosine_similarity 改用 numpy 向量化计算
-# NOTE: 2026-05-07 13:12:26, self-evolved by tea_agent --- 新增 get_embedding_usage() 方法，返回并可选重置会话嵌入 token 计数
     def cosine_similarity(self, a: List[float], b: List[float]) -> float:
         """计算两个向量的余弦相似度（numpy 加速）"""
         import numpy as np
@@ -335,7 +324,6 @@ class EmbeddingEngine:
         """
         return self.embed(query)
 
-
 # ── 便捷函数 ────────────────────────────────────────────────────
 
 def get_embedding_engine(reload: bool = False) -> EmbeddingEngine:
@@ -349,6 +337,5 @@ def get_embedding_engine(reload: bool = False) -> EmbeddingEngine:
         except Exception:
             _engine_singleton = EmbeddingEngine()
     return _engine_singleton
-
 
 _engine_singleton: Optional[EmbeddingEngine] = None

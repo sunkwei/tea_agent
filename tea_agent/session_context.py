@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Callable
 from openai import OpenAI
 
-
 @dataclass
 class SessionContext:
     """
@@ -74,7 +73,6 @@ class SessionContext:
     
     # ── 额外迭代 ──
     extra_iterations_on_continue: int = 5
-
 
 class SessionComponent(ABC):
     """

@@ -1,11 +1,7 @@
-# NOTE: 2026-05-19 10:00:00, self-evolved by tea_agent --- 增强代码搜索：集成项目内全文搜索（ripgrep/grep）和符号搜索
-# NOTE: 2026-05-02 09:58:03, self-evolved by tea_agent --- toolkit_search 增加百度搜索引擎支持，通过 engine 参数切换
-# @2026-05-01 gen by tea_agent, 互联网搜索（DuckDuckGo + 百度）
 # version: 1.2.0
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: str = "duckduckgo",
@@ -46,7 +42,6 @@ def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: st
             return _search_baidu(query, max_results)
         else:
             return _search_duckduckgo(query, max_results, lang)
-
 
 def _search_duckduckgo(query: str, max_results: int, lang: str):
     import requests
@@ -118,8 +113,6 @@ def _search_duckduckgo(query: str, max_results: int, lang: str):
     
     return (0, json.dumps(results, ensure_ascii=False, indent=2), '')
 
-
-# NOTE: 2026-05-02 09:50:00, self-evolved by tea_agent --- 新增百度搜索，先访问首页获取cookie，再解析搜索结果
 def _search_baidu(query: str, max_results: int):
     import requests
     from bs4 import BeautifulSoup
@@ -221,10 +214,8 @@ def _search_baidu(query: str, max_results: int):
     except Exception as e:
         return (1, '', f'百度搜索出错: {str(e)}')
 
-
 def meta_toolkit_search() -> dict:
     return {"type": "function", "function": {"name": "toolkit_search", "description": "搜索工具，支持互联网搜索（DuckDuckGo/百度）和项目内代码搜索（全文搜索/符号搜索）。", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "搜索关键词，如 'Python async tutorial' 或 'def login'"}, "max_results": {"type": "integer", "description": "返回结果数量上限，默认10，最大50", "default": 10}, "lang": {"type": "string", "description": "语言偏好，如 zh-cn, en, 空=不限。仅 web 搜索支持", "default": ""}, "engine": {"type": "string", "enum": ["duckduckgo", "baidu"], "description": "搜索引擎，默认 duckduckgo。仅 web 搜索", "default": "duckduckgo"}, "search_type": {"type": "string", "enum": ["web", "code", "symbol"], "description": "搜索类型: web=互联网搜索, code=代码全文搜索, symbol=符号搜索", "default": "web"}, "root_path": {"type": "string", "description": "搜索根目录路径。code/symbol 搜索需要"}, "glob_pattern": {"type": "string", "description": "文件过滤模式，如 '*.py'。仅 code 搜索"}}, "required": ["query"]}}}
-
 
 def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results: int):
     """项目内全文搜索（优先使用 ripgrep，回退到 Python 实现）"""
@@ -297,7 +288,6 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
 
     return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
 
-
 def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_results: int):
     """Python 实现的代码全文搜索（ripgrep 不可用时的回退方案）"""
     import json
@@ -342,7 +332,6 @@ def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_r
         return (0, "[]", "未找到匹配的代码")
 
     return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
-
 
 def _search_symbol(query: str, root_path: str, max_results: int):
     """符号搜索（查找函数/类定义）"""
@@ -408,7 +397,6 @@ def _search_symbol(query: str, root_path: str, max_results: int):
         return (0, "[]", f"未找到符号: {query}")
 
     return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
-
 
 def _extract_args(node):
     """从 AST 节点提取函数参数"""

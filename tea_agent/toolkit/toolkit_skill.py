@@ -1,11 +1,8 @@
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 """toolkit_skill — Skill 管理：查看、激活、停用技能"""
-# @2026-05-04 gen by tea_agent, Skill系统 — 动态管理Agent的能力模块
-
 
 def toolkit_skill(action: str = "list", name: str = ""):
     """
@@ -80,7 +77,6 @@ def toolkit_skill(action: str = "list", name: str = ""):
 
     else:
         return f"❌ 未知操作: {action}。支持: list, activate, deactivate, status, auto"
-
 
 def meta_toolkit_skill():
     return {

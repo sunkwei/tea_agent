@@ -3,7 +3,6 @@
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_memory(action: str, content: str = "", category: str = "general", priority: int = 2, importance: int = 3, expires_at: str = None, tags: str = "", id: int = 0, hard: bool = False, query: str = "", min_importance: int = 0, limit: int = 10, topic_id: int = -1, max_chars: int = 4000):
@@ -129,7 +128,6 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
 
     else:
         return f"❌ 未知 action: '{action}'，可选: add/list/search/forget/extract"
-
 
 def meta_toolkit_memory() -> dict:
     return {

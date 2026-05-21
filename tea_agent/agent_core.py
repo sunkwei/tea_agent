@@ -21,9 +21,7 @@ from tea_agent.store import Storage
 from tea_agent import tlk
 from tea_agent.config import load_config, get_config
 
-
 class AgentCore:
-    # 2026-05-17 gen by tea_agent, 主题漂移累计达到此阈值时建议用户开新主题
     DRIFT_SUGGEST_THRESHOLD = 3
     """Tea Agent 共享核心 — CLI 和 GUI 的公共基类。
 
@@ -32,17 +30,13 @@ class AgentCore:
       - _on_init_done(): 初始化完成后的 UI 回调
     """
 
-# NOTE: 2026-05-04 19:33:59, self-evolved by tea_agent --- AgentCore.__init__ 增加 _shutting_down 标志位，用于安全重启前阻止新操作
-# NOTE: 2026-05-07 11:26:49, self-evolved by tea_agent --- AgentCore.__init__ 中集成 setup_logging，并添加模型调用/失败的 DEBUG/WARNING 日志
     def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False):
-# NOTE: 2026-05-07 11:35:37, self-evolved by tea_agent --- setup_logging 调用传入 debug=self.debug，默认 INFO，debug=True 时 DEBUG
         # ── 尽早初始化文件日志，确保后续所有 logger 都有文件 handler ──
         from tea_agent.logging_setup import setup_logging
         self.debug = debug
         self.disable_summary = disable_summary
         setup_logging(debug=self.debug)
         self.generating = False
-# NOTE: 2026-05-06 09:57:03, self-evolved by tea_agent --- __init__添加_pending_restart标记，支持watchdog延迟重启
         self._shutting_down = False  # 重启前安全闸门
         self._pending_restart = False  # watchdog延迟重启：会话中检测到变更时置True，会话结束后检查
         self._config_path = config_path
@@ -72,9 +66,7 @@ class AgentCore:
         # ── 5. 会话锁 ──
         self._sess_lock = threading.Lock()
 
-# NOTE: 2026-05-07 13:25:46, self-evolved by tea_agent --- AgentCore.__init__ 增加自动启动潜意识引擎，app 启动后后台每小时循环
         # ── 6. 初始化会话 ──
-        # NOTE: 2026-05-10 gen by tea_agent, 修复类型：str→int，防止 chat_stream TypeError
         self.current_topic_id: int = 0
         self._init_session()
 
@@ -84,11 +76,9 @@ class AgentCore:
         # ── 7b. 启动定时任务调度器（后台每分钟检查执行）──
         self._start_scheduler()
 
-# NOTE: 2026-05-04 19:26:41, self-evolved by tea_agent --- AgentCore 添加 _start_file_watcher() — 监控非 toolkit 的 .py 变更并自动重启进程
         # ── 8. 启动文件监控（代码变更自动重启）──
         self._start_file_watcher()
 
-# NOTE: 2026-05-04 19:27:06, self-evolved by tea_agent --- 添加 _start_file_watcher 方法实现 — watchdog 监控 + os.execv 重启
     # ═══════════════════════════════════════════════
     # 文件监控（非 toolkit .py 变更 → 自动重启）
     # ═══════════════════════════════════════════════
@@ -114,7 +104,6 @@ class AgentCore:
                 self._timer: Optional[threading.Timer] = None
                 self._lock = threading.Lock()
 
-# NOTE: 2026-05-06 09:57:16, self-evolved by tea_agent --- on_modified增加generating检查：会话中仅标记待重启，不立即执行
             def on_modified(self, event):
                 if event.is_directory:
                     return
@@ -131,7 +120,6 @@ class AgentCore:
                 else:
                     self._schedule_restart()
 
-# NOTE: 2026-05-06 09:57:44, self-evolved by tea_agent --- 提取_do_restart为_safe_restart方法，添加_check_pending_restart延迟重启入口
             def _schedule_restart(self):
                 with self._lock:
                     if self._timer:
@@ -148,7 +136,6 @@ class AgentCore:
         observer.schedule(handler, str(tea_agent_dir), recursive=True)
         observer.daemon = True
         observer.start()
-# NOTE: 2026-05-06 09:58:12, self-evolved by tea_agent --- 添加_safe_restart和_check_pending_restart方法到AgentCore
         logger.info("📁 文件监控已启动（非 toolkit .py 变更时自动重启）")
 
     def _safe_restart(self):
@@ -196,7 +183,6 @@ class AgentCore:
         else:
             os.execv(sys.executable, args)
 
-# NOTE: 2026-05-07 13:26:33, self-evolved by tea_agent --- 新增 _start_subconscious 方法：启动潜意识引擎 daemon 线程（每小时总结/反思）
     def _check_pending_restart(self):
         """会话结束后调用：检查 watchdog 是否在会话期间标记了待重启。"""
         if self._pending_restart:
@@ -235,7 +221,6 @@ class AgentCore:
             # 启动失败不影响主体功能
             logger.debug(f"潜意识引擎自动启动跳过: {e}")
 
-    # NOTE: 2026-05-16 gen by tea_agent, 定时任务调度器 auto-start
     def _start_scheduler(self):
         """启动定时任务调度器 daemon 线程，每分钟检查一次。"""
         try:
@@ -249,16 +234,12 @@ class AgentCore:
         except Exception as e:
             logger.debug(f"定时任务调度器自动启动跳过: {e}")
 
-# NOTE: 2026-05-15 08:11:30, self-evolved by tea_agent --- _init_session 从 main_model.options 读取 supports_vision 传递给 OnlineToolSession
     def _init_session(self):
         """初始化 OnlineToolSession。子类可覆盖以添加 UI 回调。"""
         cfg = self._cfg
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
-# NOTE: 2026-05-16 19:33:10, self-evolved by tea_agent --- _init_session 从 options 读取 supports_reasoning 传给 OnlineToolSession
-        # NOTE: 2026-05-18 gen by tea_agent, 从 options 读取 supports_vision
         supports_vision = main_m.options.get("supports_vision", False) if main_m.options else False
-        # NOTE: 2026-05-20 gen by tea_agent, 从 options 读取 supports_reasoning
         supports_reasoning = main_m.options.get("supports_reasoning", True) if main_m.options else True
         self.sess = OnlineToolSession(
             toolkit=self.toolkit,
@@ -276,7 +257,6 @@ class AgentCore:
             cheap_api_key=cast(str, cheap_m.api_key),
             cheap_api_url=cast(str, cheap_m.api_url),
             cheap_model=cast(str, cheap_m.model_name),
-# NOTE: 2026-05-16 19:33:14, self-evolved by tea_agent --- 传递 supports_reasoning 参数到 OnlineToolSession
             enable_thinking=cfg.enable_thinking,
             supports_vision=supports_vision,
             supports_reasoning=supports_reasoning,
@@ -285,7 +265,7 @@ class AgentCore:
 
         import tea_agent.session_ref as _sref
         _sref.set_session(self.sess)
-        _sref.set_agent(self)  # NOTE: 2026-05-08 09:20:09, self-evolved by tea_agent --- 供 toolkit 函数访问 current_topic_id / db
+        _sref.set_agent(self)
 
     def _init_session_info_str(self) -> str:
         """返回会话初始化信息字符串（子类用于显示）。"""
@@ -360,14 +340,12 @@ class AgentCore:
         """AI 回复后流水线。1.入库 2.三级推送 3.Token 4.摘要
         user_msg 可为 str 或 {"text": str, "images": [str]}（图片附件）。
         """
-        # NOTE: 2026-05-15 gen by tea_agent, 支持图片消息入库
         conv_id = self.db.save_msg(topic_id, user_msg, "", False)
         rounds = self.sess._rounds_collector
         self.db.update_msg_rounds(
             conversation_id=conv_id, ai_msg=ai_msg,
             is_func_calling=used_tools, rounds=rounds if rounds else None,
         )
-# NOTE: 2026-05-18 14:38:16, self-evolved by tea_agent --- 修复 overflow 变量作用域：提前初始化 overflow=None
         # Level 2 push: push OLD L1 (previous conversation) to Level 2
         overflow = None
         need_l3_summary = False
@@ -413,16 +391,13 @@ class AgentCore:
                 cheap_completion_tokens=cheap_usage.get("completion_tokens", 0),
                 embedding_tokens=emb_tokens, embedding_prompt_tokens=emb_prompt,
             )
-        # NOTE: 2026-05-18 gen by tea_agent, 摘要异步化：L3压缩+auto_summary 放到后台线程
         # 避免阻塞 generating 状态恢复，用户可立即发送新消息
-# NOTE: 2026-05-18 14:38:28, self-evolved by tea_agent --- 修复异步线程参数中的hack表达式
         # 2026-05-20 gen by Tea Agent, L3批处理：仅攒够时触发摘要
         threading.Thread(
             target=self._do_async_summaries,
             args=(topic_id, need_l3_summary),
             daemon=True
         ).start()
-        # 2026-05-17 gen by tea_agent, 主题漂移累计达阈值时建议新主题
         self._suggest_new_topic_if_needed(topic_id)
         self._check_pending_restart()
 
@@ -506,7 +481,6 @@ class AgentCore:
             self.sess._level2 = []
         self.current_topic_id = tid
 
-# NOTE: 2026-05-18 14:38:45, self-evolved by tea_agent --- 新增 _do_async_summaries 方法：后台线程中执行 L3 压缩和 auto_summary
     # ═══════════════════════════════════════════════
     # 摘要
     # ═══════════════════════════════════════════════
@@ -527,23 +501,18 @@ class AgentCore:
             topic_id = self.current_topic_id
         if not topic_id:
             return
-        # NOTE: 2026-05-08 09:20:53, self-evolved by tea_agent --- 手动设置标题（※前缀）时跳过自动摘要
         tp = self.db.get_topic(topic_id)
         if tp and (tp.get("title") or "").startswith("※"):
             logger.debug(f"跳过自动摘要: topic={topic_id} 标题为手动设置 (※前缀)")
             return
-# NOTE: 2026-05-06 10:23:01, self-evolved by tea_agent --- _auto_summary 摘要输入从3条改为10条对话，确保足够上下文
         recent = self.db.get_recent_conversations(topic_id, limit=10)
         if not recent:
             return
-# NOTE: 2026-05-07 11:27:01, self-evolved by tea_agent --- _auto_summary 添加模型调用 DEBUG 日志
         try:
             cli, mdl = self.sess._get_summarize_client()
-            # 2026-05-06 gen by tea_agent, debug: check what client/model is being used
             logger.debug(f"call summarize model: {mdl}, topic={topic_id}, msgs={len(recent)}")
             from tea_agent._gui._topic_summary import _generate_topic_summary
             summary = _generate_topic_summary(client=cli, model=mdl, conversations=recent)
-# NOTE: 2026-05-06 10:35:56, self-evolved by tea_agent --- _auto_summary 添加异常日志，不再静默吞错
             if summary:
                 self.db.update_topic_title(topic_id, summary)
                 logger.info(f"📝 主题摘要更新: topic={topic_id} → {summary}")
@@ -554,7 +523,7 @@ class AgentCore:
             logger.warning(f"自动摘要失败 (topic={topic_id}): {type(e).__name__}: {e}")
 
     def _suggest_new_topic_if_needed(self, topic_id: str):
-        """2026-05-17 gen by tea_agent, 检查主题漂移计数，达阈值时建议用户开新主题。
+        """检查主题漂移计数，达阈值时建议用户开新主题。
         子类可覆盖以自定义 UI 提示。"""
         count = getattr(self, '_pending_topic_suggestion', 0)
         if count > 0:

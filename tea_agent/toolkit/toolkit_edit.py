@@ -1,4 +1,3 @@
-# @2026-05-19 gen by tea_agent, 高级代码编辑工具（diff/patch/精准编辑）
 # version: 1.0.0
 
 import logging
@@ -62,7 +61,6 @@ def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
     else:
         return (1, "", f"未知 action: {action}，支持: apply_patch/insert_lines/delete_lines/replace_lines/preview_patch")
 
-
 def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool):
     """应用 diff/patch"""
     import json
@@ -118,7 +116,6 @@ def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool
 
     except Exception as e:
         return (1, "", f"❌ 应用 patch 失败: {str(e)}")
-
 
 def _apply_patch_python(file_path: str, original_content: str, patch_content: str, preview: bool, backup: bool):
     """Python 实现的简易 patch 应用（统一 diff 格式）"""
@@ -226,7 +223,6 @@ def _apply_patch_python(file_path: str, original_content: str, patch_content: st
     except Exception as e:
         return (1, "", f"❌ 应用 patch 失败: {str(e)}")
 
-
 def _insert_lines(file_path: str, start_line: int, new_content: str, preview: bool, backup: bool):
     """在指定行插入内容"""
     import json
@@ -284,7 +280,6 @@ def _insert_lines(file_path: str, start_line: int, new_content: str, preview: bo
     except Exception as e:
         return (1, "", f"❌ 插入失败: {str(e)}")
 
-
 def _delete_lines(file_path: str, start_line: int, end_line: int, preview: bool, backup: bool):
     """删除指定行范围"""
     import json
@@ -326,7 +321,6 @@ def _delete_lines(file_path: str, start_line: int, end_line: int, preview: bool,
 
     except Exception as e:
         return (1, "", f"❌ 删除失败: {str(e)}")
-
 
 def _replace_lines(file_path: str, start_line: int, end_line: int, new_content: str, preview: bool, backup: bool):
     """替换指定行范围"""
@@ -373,11 +367,9 @@ def _replace_lines(file_path: str, start_line: int, end_line: int, new_content: 
     except Exception as e:
         return (1, "", f"❌ 替换失败: {str(e)}")
 
-
 def _preview_patch(file_path: str, patch_content: str):
     """预览 patch 应用后的结果"""
     return _apply_patch(file_path, patch_content, preview=True, backup=False)
-
 
 def _generate_diff(old_content: str, new_content: str) -> str:
     """生成 unified diff"""
@@ -388,7 +380,6 @@ def _generate_diff(old_content: str, new_content: str) -> str:
 
     diff = difflib.unified_diff(old_lines, new_lines, fromfile='original', tofile='modified', n=3)
     return ''.join(diff)
-
 
 def meta_toolkit_edit() -> dict:
     return {

@@ -1,15 +1,10 @@
-# NOTE: 2026-05-02 11:59:14, self-evolved by tea_agent --- 合并 toolkit_list_dir 进入 toolkit_file（新增 action='list'），消除文件操作工具重叠
 # @2026-04-29 gen by deepseek-v4-pro, 合并load_file+save_file为一个统一入口
 # version: 1.1.0
-# NOTE: 2026-05-02, self-evolved by tea_agent --- 合并 toolkit_list_dir: 新增 action='list'
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
-# NOTE: 2026-05-14 07:51:30, self-evolved by tea_agent --- read 操作添加 offset/limit 参数，替代 toolkit_read_lines
-# NOTE: 2026-05-16 gen by tea_agent, read 操作新增 offset/limit 支持行范围读取
 def toolkit_file(action: str, filename: str = "", content: str = "", path: str = ".", recursive: bool = False, show_hidden: bool = False, offset: int = 0, limit: int = 0):
     """
     统一文件操作。
@@ -19,7 +14,6 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
     """
     logger.info(f"toolkit_file called: action={action!r}, filename={filename!r}, content={repr(content)[:80]}, path={path!r}, offset={offset!r}, limit={limit!r}")
 
-# NOTE: 2026-05-14 07:51:43, self-evolved by tea_agent --- read 实现行范围读取，支持 offset+limit
     if action == "read":
         try:
             with open(filename, 'r', encoding='utf-8') as f:
@@ -34,7 +28,6 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
         except Exception as e:
             return f"Error: {str(e)}"
 
-# NOTE: 2026-05-09 20:00:09, self-evolved by tea_agent --- toolkit_file write 操作：检查父目录 .chat_history_protected 标记，拒绝覆盖受保护文件
     elif action == "write":
         try:
             # 检查数据库保护标记：若目标文件所在目录有 .chat_history_protected，拒绝覆盖
@@ -83,7 +76,6 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
     else:
         return f"❌ 未知 action: '{action}'，可选: read / write / list"
 
-
 def meta_toolkit_file() -> dict:
     return {
         "type": "function",
@@ -114,7 +106,6 @@ def meta_toolkit_file() -> dict:
                         "type": "boolean",
                         "description": "[list] 是否递归列出子目录",
                     },
-# NOTE: 2026-05-14 07:51:56, self-evolved by tea_agent --- meta 声明增加 offset/limit 参数
                     "show_hidden": {
                         "type": "boolean",
                         "description": "[list] 是否显示隐藏文件",

@@ -1,5 +1,4 @@
 """
-@2026-05-15 gen by tea_agent, ImageHandler 组件 — 图片附件管理
 Usage: self.images = ImageHandler(self)  # self = TkGUI instance
 """
 
@@ -15,7 +14,6 @@ if TYPE_CHECKING:
     from tea_agent.gui import TkGUI
 
 logger = logging.getLogger(__name__)
-
 
 class ImageHandler:
     """图片附件选择、清除、放大查看（委托给 TkGUI）"""

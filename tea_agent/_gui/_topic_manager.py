@@ -1,5 +1,4 @@
 """
-@2026-07-07 gen by tea_agent, 主题管理模块
 从 gui.py L1258-1519 提取：主题列表、切换、加载、回调
 """
 
@@ -14,7 +13,6 @@ if __import__('typing').TYPE_CHECKING:
     from tea_agent.gui import TkGUI
 
 logger = logging.getLogger("main_db_gui")
-
 
 class TopicManager:
     """主题列表管理：创建、切换、加载、刷新"""
@@ -43,7 +41,6 @@ class TopicManager:
             children = gui.topic_list.get_children()
             if children:
                 gui.topic_list.selection_set(children[0])
-            # NOTE: 2026-07-07 gen by tea_agent, 修复启动时不加载历史的问题
             # 直接 switch_topic，不依赖 on_topic_select。
             # 原因：refresh_topics() 已将 current_topic_id 设为第一个活跃主题的 ID，
             # 若走 on_topic_select 会因为 ID 相同被短路跳过，导致 HtmlFrame 不显示、历史不加载。
@@ -60,7 +57,6 @@ class TopicManager:
         gui.refresh_topics()
         gui.switch_topic(tid)
 
-    # NOTE: 2026-05-08 gen by tea_agent, refresh_topics 刷新后自动高亮当前主题
     # @2026-05-19 gen by claude, 仅显示活跃主题(is_active=1)，停用主题从列表中隐藏
     def refresh_topics(self):
         gui = self.gui
@@ -86,7 +82,6 @@ class TopicManager:
         if topics:
             gui.topic_list.selection_set(highlight_iid)
             gui.topic_list.see(highlight_iid)
-    # NOTE: 2026-05-15 gen by tea_agent, 标题含当前目录
     def _update_title(self, topic_title=""):
         gui = self.gui
         cwd = getattr(gui, "_initial_cwd", "")
@@ -243,7 +238,6 @@ class TopicManager:
         self.gui.input_box.insert(tk.INSERT, "\n")
         return "break"
 
-    # NOTE: 2026-05-17 gen by tea_agent, GUI 覆盖：状态栏提示新主题建议
     def _suggest_new_topic_if_needed(self, topic_id: str):
         gui = self.gui
         count = getattr(gui, '_pending_topic_suggestion', 0)

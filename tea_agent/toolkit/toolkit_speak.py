@@ -1,12 +1,10 @@
 ## llm generated tool func, created Sat May  2 10:18:06 2026
 # version: 1.0.0
 
-# @2026-05-02 gen by tea_agent, TTS语音合成：pyttsx3本地引擎 + gTTS在线回退
 # version: 1.0.0
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_speak(text: str, lang: str = "zh", rate: int = 180):
@@ -83,10 +81,8 @@ def toolkit_speak(text: str, lang: str = "zh", rate: int = 180):
     except Exception as e2:
         return (1, "", f"TTS失败: pyttsx3={e1}, gTTS={e2}")
 
-
 def meta_toolkit_speak() -> dict:
     return {"type": "function", "function": {"name": "toolkit_speak", "description": "文本转语音 TTS。将文字朗读出来。优先级：pyttsx3本地引擎（离线141种音色）→ gTTS在线回退。", "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "要朗读的文本"}, "lang": {"type": "string", "description": "语言：zh=中文, en=英文。默认 zh", "default": "zh"}, "rate": {"type": "integer", "description": "语速（词/分钟），180=正常。仅pyttsx3", "default": 180}}, "required": ["text"]}}}
-
 
 def meta_toolkit_speak() -> dict:
     return {"type": "function", "function": {"name": "toolkit_speak", "description": "文本转语音 TTS。将文字朗读出来。优先级：pyttsx3本地引擎（离线141种音色）→ gTTS在线回退。", "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "要朗读的文本"}, "lang": {"type": "string", "description": "语言：zh=中文, en=英文。默认 zh", "default": "zh"}, "rate": {"type": "integer", "description": "语速（词/分钟），180=正常。仅pyttsx3", "default": 180}}, "required": ["text"]}}}

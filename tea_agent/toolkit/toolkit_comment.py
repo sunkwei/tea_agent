@@ -3,7 +3,6 @@
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_comment(mode: str, description: str = "", model_name: str = ""):
@@ -33,7 +32,6 @@ def toolkit_comment(mode: str, description: str = "", model_name: str = ""):
 
     else:
         return f"❌ 未知 mode: '{mode}'，可选: code / evolve"
-
 
 def meta_toolkit_comment() -> dict:
     return {

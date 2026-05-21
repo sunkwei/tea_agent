@@ -1,7 +1,5 @@
-# @2026-05-05 gen by tea_agent, toolkit_lunar: 公历 ↔ 农历转换，零外部依赖
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 """toolkit_lunar — 公历/农历互转，含天干地支、生肖、节气"""
@@ -62,16 +60,13 @@ _JIEQI_NAMES = [
     "白露","秋分","寒露","霜降","立冬","小雪","大雪","冬至",
 ]
 
-
 def _solar_days_in_year(y):
     return 366 if (y % 400 == 0 or (y % 4 == 0 and y % 100 != 0)) else 365
-
 
 def _solar_days_in_month(y, m):
     if m == 2:
         return 29 if (y % 400 == 0 or (y % 4 == 0 and y % 100 != 0)) else 28
     return 31 if m in (1,3,5,7,8,10,12) else 30
-
 
 def _offset_from_base(y, m, d):
     """从 1900-01-31 起的天数偏移 (农历基准日 = 1900 年春节)"""
@@ -82,23 +77,18 @@ def _offset_from_base(y, m, d):
         days += _solar_days_in_month(y, mo)
     return days + d - 31
 
-
 def _lunar_year_info(idx):
     return _LUNAR_INFO[idx]
-
 
 def _leap_month(info):
     return info & _LEAP_MONTH_MASK
 
-
 def _leap_days(info):
     return 30 if (info & (1 << _LEAP_DAYS_BIT)) else 29
-
 
 def _month_days(info, mi):
     """农历月天数, mi=0..11 对应正月~腊月"""
     return 30 if (info & (1 << (_MONTH_BIT_BASE + mi))) else 29
-
 
 def _lunar_year_total_days(info):
     """农历年总天数"""
@@ -109,7 +99,6 @@ def _lunar_year_total_days(info):
     if _leap_month(info):
         days += _leap_days(info)
     return days
-
 
 def _solar_to_lunar(y, m, d):
     """公历 → 农历 核心算法"""
@@ -165,7 +154,6 @@ def _solar_to_lunar(y, m, d):
     zodiac = _SHENGXIAO[dz_idx]
 
     return (lunar_year, lm, ld, is_leap, tgdz, zodiac)
-
 
 # ============================================================
 # 公开 API
@@ -275,7 +263,6 @@ def toolkit_lunar(date_str: str = "", action: str = "solar_to_lunar") -> str:
 
     return json.dumps({"error": f"未知 action: {action}"}, ensure_ascii=False)
 
-
 def _solar_terms(y):
     """简化节气计算 (1900-01-06 小寒起，每 15.2184 天一个节气)"""
     base_days = 5  # 1900-01-06 → Jan 1 + 5
@@ -296,7 +283,6 @@ def _solar_terms(y):
             mth += 1
         terms.append((mth, d + 1))
     return terms
-
 
 def meta_toolkit_lunar() -> dict:
     return {

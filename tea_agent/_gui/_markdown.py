@@ -1,5 +1,4 @@
 """
-@2026-05-15 gen by tea_agent, Markdown → HTML 渲染工具函数
 从 gui.py 提取，供 ChatRenderer 等组件使用。
 """
 
@@ -38,7 +37,6 @@ a { color: #1a73e8; text-decoration: none; }
 a:hover { text-decoration: underline; }
 hr { border: none; border-top: 1px solid #ddd; margin: 1em 0; }
 strong { font-weight: bold; color: #222; }
-/* NOTE: 2026-05-15 gen by tea_agent, 不同角色背景色区分 */
 .msg-user { background: #dbeafe; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #3b82f6; }
 .msg-user h3 { color: #1e40af; margin-top: 0; }
 .msg-ai { background: #f3f4f6; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #6b7280; }
@@ -59,11 +57,9 @@ strong { font-weight: bold; color: #222; }
 em { font-style: italic; }
 .msg-timestamp { font-size: 0.8em; color: #999; margin-bottom: 0.3em; }
 .msg-divider { border: none; border-top: 2px solid #e8e8e8; margin: 1.2em 0; }
-/* NOTE: 2026-05-15 gen by tea_agent, 聊天图片样式 */
 .chat-images { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .chat-image { max-width: 400px; max-height: 300px; border-radius: 8px; border: 1px solid #ddd; object-fit: contain; cursor: pointer; }
 .chat-image:hover { border-color: #3b82f6; box-shadow: 0 2px 8px rgba(59,130,246,0.3); }
-/* @2026-05-15 gen by tea_agent, 图片点击放大弹窗 */
 a.chat-image-link { text-decoration: none; display: inline-block; }
 a.chat-image-link:hover { text-decoration: none; }
 </style>
@@ -77,8 +73,6 @@ def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
     css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
     return f"<html><head>{css}</head><body>{html_body}</body></html>"
 
-
-# NOTE: 2026-05-20 gen by tea_agent, 修复双重转义：html_mod.escape + markdown.codehilite
 # 导致 <code> 块内 &amp; → &amp;amp;，显示为 &amp; 字面量而非正确渲染
 # 此函数在最终 HTML 中，将 <code>...</code> 内部的 &amp; 还原为 &
 def _fix_double_escape_in_code(html: str) -> str:
@@ -88,7 +82,7 @@ def _fix_double_escape_in_code(html: str) -> str:
     又对代码块内容再次转义，导致 <code> 内 &amp; 变成 &amp;amp;。
     此函数仅还原明确的双重转义 pattern（&amp;amp; → &amp; 等），
     避免破坏内联代码中的单次转义。
-    NOTE: 2026-05-20 gen by tea_agent, 修复：仅替换双重转义，保护内联代码的单次转义。"""
+    """
     def _fix_code_block(m):
         inner = m.group(1)
         # 仅替换已知的双重转义 pattern，不影响单次转义
@@ -100,9 +94,6 @@ def _fix_double_escape_in_code(html: str) -> str:
         inner = inner.replace('&amp;#x27;', '&#x27;')
         return '<code>' + inner + '</code>'
     return re.sub(r'<code>(.*?)</code>', _fix_code_block, html, flags=re.DOTALL)
-
-
-# NOTE: 2026-05-08 gen by tea_agent, 工具轮分组渲染：合并连续tool消息，生成带轮次编号的蓝色标题块
 
 def _build_tool_blocks(messages):
 
@@ -142,11 +133,6 @@ def _build_tool_blocks(messages):
 
     return result
 
-
-
-
-
-# NOTE: 2026-05-16 gen by tea_agent, 支持多行参数格式
 def _render_tool_group(group, ts_display):
 
     """将一组连续的 tool 消息渲染为 markdown，带轮次编号"""
@@ -159,7 +145,6 @@ def _render_tool_group(group, ts_display):
 
         text = msg.get("content", "").strip()
 
-        # @2026-05-16 gen by tea_agent, 支持新旧两种工具调用格式
         m_new = re.match(r'🔧 调用工具：(\w+)\n参数：\n(.+)', text, re.DOTALL)
         m_old = re.match(r'🔧 调用工具：(\w+)\((.+)\)', text)
         if m_new:
@@ -235,10 +220,6 @@ def _render_tool_group(group, ts_display):
 
     return "\n".join(lines_out)
 
-
-
-# NOTE: 2026-05-16 15:30:11, self-evolved by tea_agent --- 修复HTML渲染：在_chat_to_markdown中对content进行HTML转义，防止未转义HTML标签导致HtmlFrame解析错误
-# @2026-05-15 gen by tea_agent, 图片点击放大弹窗
 def _chat_to_markdown(messages, image_cache=None):
     """将聊天消息列表转换为 markdown 格式，包含时间戳和分割线"""
     import html as html_mod  # 2026-05-16 fix: HTML转义防止未转义标签导致HtmlFrame解析错误
@@ -251,9 +232,7 @@ def _chat_to_markdown(messages, image_cache=None):
         ts = msg.get("timestamp", "")
         ts_display = f'<span class="msg-timestamp">{ts}</span>' if ts else ""
         if role == "user":
-            # NOTE: 2026-05-15 gen by tea_agent, 支持图片附件渲染
             img_html = ""
-# NOTE: 2026-05-15 15:11:05, self-evolved by tea_agent --- 修改 _chat_to_markdown 支持直接渲染 Base64 格式的图片数据
             imgs = msg.get("images", [])
             if imgs:
                 img_tags = []
@@ -305,13 +284,9 @@ def _chat_to_markdown(messages, image_cache=None):
             if tool_blocks[i]:
                 parts.append(tool_blocks[i])
         elif role == "notice":
-            # NOTE: 2026-05-15 gen by tea_agent, 去掉 --- 包裹避免与 AI 末尾的 --- 连成三条水平线
             parts.append(f"\n{content.strip()}\n")
-# NOTE: 2026-05-14 16:00:09, self-evolved by tea_agent --- HtmlFrame render 前增加 HTML 校验：控制字符清洗 + 标签配对检查
     return "\n".join(parts)
 
-
-# NOTE: 2026-05-16 gen by tea_agent, HTML 校验：过滤控制字符，防止畸形字节流导致 HtmlFrame 渲染残缺
 # NOTE: 2026-05-18 fix: 扩展控制字符过滤范围，包含 \x7f(DEL)、Unicode C0/C1 控制字符、零宽字符等
 def _sanitize_html_control_chars(html: str) -> str:
     """移除 HTML 中的控制字符（保留 \\n 0x0a 和 \\t 0x09）。
@@ -328,7 +303,6 @@ def _sanitize_html_control_chars(html: str) -> str:
     # 第二层：Unicode 零宽字符和特殊控制字符
     html = re.sub(r'[\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]', '', html)
     return html
-
 
 # NOTE: 2026-05-18 fix: 转义孤立的方括号，防止被 Markdown 解析器误认为链接/引用语法
 def _escape_orphan_brackets(text: str) -> str:
@@ -370,7 +344,6 @@ def _escape_orphan_brackets(text: str) -> str:
         i += 1
     
     return ''.join(result)
-
 
 _KNOWN_HTML_TAGS = {'textarea', 'script', 'section', 'details', 'img', 'ul', 'h2', 'article', 'source', 'link', 'audio', 'h3', 'select', 'th', 'tr', 'tfoot', 'h1', 'h6', 'label', 'html', 'dt', 's', 'ol', 'colgroup', 'ins', 'code', 'summary', 'body', 'blockquote', 'abbr', 'tt', 'b', 'dd', 'input', 'nav', 'button', 'option', 'title', 'data', 'fieldset', 'head', 'iframe', 'sup', 'style', 'td', 'a', 'h5', 'dl', 'hr', 'main', 'figcaption', 'tbody', 'col', 'del', 'video', 'meta', 'sub', 'header', 'wbr', 'span', 'template', 'li', 'pre', 'caption', 'figure', 'strike', 'thead', 'form', 'footer', 'table', 'u', 'mark', 'canvas', 'legend', 'time', 'center', 'small', 'h4', 'strong', 'br', 'aside', 'div', 'big', 'p', 'em', 'font', 'i'}
 

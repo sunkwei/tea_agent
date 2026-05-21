@@ -21,7 +21,6 @@ def _get_jedi_project(project_root: str):
     import jedi
     return jedi.Project(project_root)
 
-
 def _read_file_safe(filepath: str) -> Optional[str]:
     """安全读取文件"""
     try:
@@ -29,7 +28,6 @@ def _read_file_safe(filepath: str) -> Optional[str]:
             return f.read()
     except Exception:
         return None
-
 
 def diagnose(project_root: str, filepath: str = None) -> Dict:
     """运行 ruff 诊断，返回 (ok, diagnostics, error)"""
@@ -75,7 +73,6 @@ def diagnose(project_root: str, filepath: str = None) -> Dict:
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-
 def _fmt_diagnostic(d: Dict) -> str:
     """格式化单条诊断为可读字符串"""
     loc = f"{d.get('filename', '')}:{d.get('location', {}).get('row', '?')}:{d.get('location', {}).get('column', '?')}"
@@ -84,7 +81,6 @@ def _fmt_diagnostic(d: Dict) -> str:
     fix = d.get("fix", {})
     fix_hint = f" (可自动修复: {fix.get('message', '')})" if fix else ""
     return f"[{code}] {loc}\n  {msg}{fix_hint}"
-
 
 def completion(project_root: str, filepath: str, line: int, col: int) -> Dict:
     """代码补全 — 基于 jedi"""
@@ -116,7 +112,6 @@ def completion(project_root: str, filepath: str, line: int, col: int) -> Dict:
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-
 def goto_definition(project_root: str, filepath: str, line: int, col: int) -> Dict:
     """跳转到定义 — 基于 jedi"""
     try:
@@ -147,7 +142,6 @@ def goto_definition(project_root: str, filepath: str, line: int, col: int) -> Di
         }
     except Exception as e:
         return {"ok": False, "error": str(e)}
-
 
 def hover(project_root: str, filepath: str, line: int, col: int) -> Dict:
     """悬停信息 — 类型 + docstring"""
@@ -189,7 +183,6 @@ def hover(project_root: str, filepath: str, line: int, col: int) -> Dict:
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-
 def references(project_root: str, filepath: str, line: int, col: int) -> Dict:
     """查找引用 — 基于 jedi"""
     try:
@@ -220,7 +213,6 @@ def references(project_root: str, filepath: str, line: int, col: int) -> Dict:
         }
     except Exception as e:
         return {"ok": False, "error": str(e)}
-
 
 def collect_context(project_root: str, filepath: str, symbol: str = None, max_files: int = 5) -> Dict:
     """仓库级上下文收集：给定文件/符号，自动拉取相关代码片段。

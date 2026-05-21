@@ -1,5 +1,4 @@
 """
-@2026-05-16 gen by tea_agent, ConversationStore — 对话 & Agent 轮次 CRUD
 """
 import json
 import base64
@@ -10,7 +9,6 @@ from typing import Dict, List, Optional
 from ._base import StoreComponent
 
 logger = logging.getLogger("Storage.Conversations")
-
 
 class ConversationStore(StoreComponent):
     """对话管理：保存消息、更新轮次、查询对话历史、Agent 轮次记录。"""

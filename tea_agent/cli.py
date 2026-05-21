@@ -29,7 +29,6 @@ if _project_root not in sys.path:
 from tea_agent.agent_core import AgentCore
 from tea_agent.config import load_config
 
-
 class TeaCLI(AgentCore):
     """Tea Agent 命令行客户端。"""
 
@@ -383,7 +382,6 @@ class TeaCLI(AgentCore):
 └─────────────────────────────────────────────┘
 """)
 
-
 def main():
     parser = argparse.ArgumentParser(
         description="Tea Agent CLI — 命令行 AI 助手",
@@ -413,7 +411,6 @@ def main():
         disable_summary=args.disable_summary,
     )
     cli.run()
-
 
 if __name__ == "__main__":
     main()

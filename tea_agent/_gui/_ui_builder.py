@@ -1,5 +1,4 @@
 """
-@2026-07-07 gen by tea_agent, UI 创建模块
 从 gui.py L892-1030 提取：TkGUI._create_ui() 界面构建逻辑
 """
 
@@ -20,7 +19,6 @@ except ImportError:
 
 logger = logging.getLogger("main_db_gui")
 
-
 class UIBuilder:
     """界面构建器：创建所有 Tk widgets、布局、样式、快捷键"""
 
@@ -37,7 +35,6 @@ class UIBuilder:
         left = Frame(main_split, width=220)
         main_split.add(left, weight=1)
 
-        # NOTE: 2026-05-08 gen by tea_agent, 主题列表字体调整
         ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, _fs(14), "bold")).pack(pady=5)
         _topic_font = tkFont.Font(family=SYSTEM_FONT, size=_fs(12))
         _topic_style = ttk.Style()
@@ -47,7 +44,6 @@ class UIBuilder:
         gui.topic_list.tag_configure("topic_item", font=_topic_font)
         gui.topic_list.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
         gui.topic_list.bind("<<TreeviewSelect>>", gui.on_topic_select)
-        # NOTE: 2026-05-08 gen by tea_agent, 鼠标悬停显示主题日期tooltip
         gui.topic_list.bind("<Motion>", gui._on_topic_hover, add="+")
         gui.topic_list.bind("<Leave>", gui._on_topic_leave, add="+")
         gui._topic_cache = []           # 缓存 list_topics 原始数据
@@ -105,7 +101,6 @@ class UIBuilder:
         )
         gui.input_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
-        # NOTE: 2026-05-20 gen by tea_agent, 底部工具栏
         toolbar = ttk.Frame(input_frame)
         toolbar.pack(fill=tk.X, padx=4, pady=(0, 2))
 

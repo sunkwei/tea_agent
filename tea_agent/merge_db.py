@@ -28,7 +28,6 @@ from typing import Dict, List, Optional, Tuple
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("merge_db")
 
-
 # ============================================================
 # 工具函数
 # ============================================================
@@ -51,7 +50,6 @@ def _extract_keywords(text: str) -> set:
     keywords.update(w.lower() for w in english)
     return keywords
 
-
 def _jaccard_similarity(text_a: str, text_b: str) -> float:
     """计算两段文本的关键词 Jaccard 相似度 (0~1)"""
     if not text_a or not text_b:
@@ -65,7 +63,6 @@ def _jaccard_similarity(text_a: str, text_b: str) -> float:
             return 0.0
         return len(set_a & set_b) / len(set_a | set_b)
     return len(kw_a & kw_b) / len(kw_a | kw_b)
-
 
 # ============================================================
 # 核心合并逻辑
@@ -668,7 +665,6 @@ class DbMerger:
         self.target.close()
         self.source.close()
 
-
 # ============================================================
 # CLI 入口
 # ============================================================
@@ -712,7 +708,6 @@ def main():
         sys.exit(1)
     finally:
         merger.close()
-
 
 if __name__ == "__main__":
     main()

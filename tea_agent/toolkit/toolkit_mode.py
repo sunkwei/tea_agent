@@ -1,12 +1,10 @@
 ## llm generated tool func, created Sat May  2 10:33:15 2026
 # version: 1.0.1
 
-# @2026-05-02 gen by tea_agent, Agent人格模式管理：严谨收敛 vs 自由发散
 # version: 1.0.1
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_mode(action: str, text: str = "", mode: str = ""):
@@ -105,7 +103,6 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
     def _get_memory_manager():
         from tea_agent.memory import MemoryManager
         from tea_agent.store import Storage
-        # NOTE: 2026-05-10 gen by tea_agent, 优先复用 session 的 Storage，避免多连接冲突
         try:
             from tea_agent.session_ref import get_agent
             agent = get_agent()
@@ -203,10 +200,8 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
     else:
         return (1, "", f"未知 action: {action}")
 
-
 def meta_toolkit_mode() -> dict:
     return {"type": "function", "function": {"name": "toolkit_mode", "description": "Agent 人格模式管理。detect=基于用户输入自动检测模式, switch=手动切换, status=查看当前。严谨(pragmatic)=代码开发/排bug/遵从需求；自由(creative)=异想天开/发散创意/打破边界。模式以CRITICAL记忆注入，影响后续所有回复。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["detect", "switch", "status", "auto"], "description": "detect=根据text自动检测, switch=手动切换, status=查看当前, auto=检测+切换"}, "text": {"type": "string", "description": "[detect/auto] 用户输入文本，用于自动检测模式"}, "mode": {"type": "string", "enum": ["pragmatic", "creative", "mixed"], "description": "[switch] 目标模式: pragmatic=严谨收敛, creative=自由发散, mixed=自动"}}, "required": ["action"]}}}
-
 
 def meta_toolkit_mode() -> dict:
     return {"type": "function", "function": {"name": "toolkit_mode", "description": "Agent 人格模式管理。detect=基于用户输入自动检测模式, switch=手动切换, status=查看当前。严谨(pragmatic)=代码开发/排bug/遵从需求；自由(creative)=异想天开/发散创意/打破边界。模式以CRITICAL记忆注入，影响后续所有回复。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["detect", "switch", "status", "auto"], "description": "detect=根据text自动检测, switch=手动切换, status=查看当前, auto=检测+切换"}, "text": {"type": "string", "description": "[detect/auto] 用户输入文本，用于自动检测模式"}, "mode": {"type": "string", "enum": ["pragmatic", "creative", "mixed"], "description": "[switch] 目标模式: pragmatic=严谨收敛, creative=自由发散, mixed=自动"}}, "required": ["action"]}}}

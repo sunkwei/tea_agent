@@ -13,7 +13,6 @@ from .session_context import SessionComponent, SessionContext
 
 logger = logging.getLogger("session.tool")
 
-
 class ToolComponent(SessionComponent):
     """
     工具执行组件。

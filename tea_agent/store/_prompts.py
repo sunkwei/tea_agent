@@ -1,9 +1,7 @@
 """
-@2026-05-16 gen by tea_agent, PromptStore — 系统提示词版本管理
 """
 from typing import Dict, List, Optional
 from ._base import StoreComponent
-
 
 class PromptStore(StoreComponent):
     """系统提示词版本管理：添加、查询、停用、回滚。"""

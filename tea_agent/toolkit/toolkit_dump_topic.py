@@ -1,6 +1,5 @@
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_dump_topic(role: str = "all") -> dict:
@@ -18,7 +17,6 @@ def toolkit_dump_topic(role: str = "all") -> dict:
     from datetime import datetime
     from pathlib import Path
 
-# NOTE: 2026-05-04 17:57:03, self-evolved by tea_agent --- toolkit_dump_topic db_path 从 config.paths 读取
     try:
         from tea_agent.config import get_config
         db_path = Path(get_config().paths.db_path_abs)

@@ -15,7 +15,6 @@ from .session_prompts import (
 
 logger = logging.getLogger("session.summarizer")
 
-
 def _get_cheap_params(defaults=None):
     """返回 cheap 模型 {temperature, max_tokens}，失败时使用传入的 defaults 或保守值。"""
     d = defaults or {"temperature": 0.1, "max_tokens": 500}
@@ -28,7 +27,6 @@ def _get_cheap_params(defaults=None):
         }
     except Exception:
         return d
-
 
 class SummarizerComponent(SessionComponent):
     """

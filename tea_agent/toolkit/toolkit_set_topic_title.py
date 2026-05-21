@@ -1,8 +1,6 @@
-# 2026-05-08 gen by tea_agent, 手动设置主题标题的工具函数
 import logging
 
 logger = logging.getLogger("toolkit")
-
 
 def toolkit_set_topic_title(title: str) -> dict:
     """
@@ -22,9 +20,6 @@ def toolkit_set_topic_title(title: str) -> dict:
     except ImportError:
         return {"error": "session_ref 模块不可用"}
 
-# NOTE: 2026-05-08 10:30:00, self-evolved by tea_agent --- CLI模式下回退用最新topic_id，避免创建新主题
-# NOTE: 2026-05-08 10:30:40, self-evolved by tea_agent --- 修复list_topics无参数调用
-# NOTE: 2026-05-08 10:31:02, self-evolved by tea_agent --- CLI fallback直接使用storage而非agent.db
     agent = get_agent()
     if agent is not None:
         topic_id = agent.current_topic_id
@@ -61,7 +56,6 @@ def toolkit_set_topic_title(title: str) -> dict:
 
     logger.info(f"主题标题已手动设置: topic={topic_id} → {new_title}")
     return {"ok": True, "title": new_title, "topic_id": topic_id}
-
 
 def meta_toolkit_set_topic_title():
     return {

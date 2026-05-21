@@ -10,7 +10,6 @@ from pathlib import Path
 
 logger = logging.getLogger("toolkit")
 
-# NOTE: 2026-05-20 gen by tea_agent, 测试 GUI 模块是否可正常启动和退出
 def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
     """测试 python -m tea_agent.gui 能否正常执行。
 
@@ -123,7 +122,6 @@ def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
                 f"exit_code={result['exit_code']}, duration={result['duration']}s")
 
     return result
-
 
 def meta_toolkit_test_gui() -> dict:
     return {

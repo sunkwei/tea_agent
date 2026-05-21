@@ -1,10 +1,8 @@
 # @2026-04-29 gen by deepseek-v4-pro, 内置工具: 自进化——修改项目代码并带注释/备份/验证
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
-# NOTE: 2026-05-16 gen by tea_agent, 补充 git_snapshot 和 run_tests 参数到函数签名
 def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_code: str, verify: bool = True, backup: bool = True, git_snapshot: bool = True, run_tests: bool = True, symbol: str = None, lsp_checks: bool = True) -> dict:
     """@2026-05-19 gen by claude, 集成LSP检查层(Layer2.5: 影响分析+lint+签名对比)    五层安全自进化 + LSP 智能增强。
 
@@ -102,9 +100,6 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         except Exception as e:
             return 0, 0, str(e)[:200]
 
-# NOTE: 2026-05-19 14:32:06, self-evolved by tea_agent --- LSP增强self_evolve测试
-# NOTE: 2026-05-19 14:32:56, self-evolved by tea_agent --- 还原LSP注释
-# NOTE: 2026-05-19 14:32:56, self-evolved by tea_agent --- 测试LSP检查层
     # ── LSP 辅助函数 ── @2026-05-19 gen by claude
     def _run_lsp_checks(full_path, symbol, old_code, new_code, content):
         """Layer 2.5: 影响分析 + ruff lint + 签名对比。非阻塞。"""
@@ -190,7 +185,6 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     if content.count(old_code) > 1:
         return {"ok": False, "error": f"old_code 在文件中出现 {content.count(old_code)} 次，无法确定修改位置，请提供更多上下文"}
 
-# NOTE: 2026-05-01 11:10:43, self-evolved by tea_agent --- 仅对.py源码文件添加NOTE注释，.md等非源码文件不加
     # 生成演化注释（仅 .py 源码文件，README/CHANGELOG 等不加）
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     is_py = file_path.endswith(".py")

@@ -1,4 +1,3 @@
-# @2026-05-16 gen by tea_agent, 从用户工具箱迁移，增强返回结构+日志
 """git 全远程推送工具 — 向所有配置的远程仓库推送当前分支"""
 import logging
 import subprocess

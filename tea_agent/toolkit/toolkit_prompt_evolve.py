@@ -1,13 +1,11 @@
 # @2026-04-30 gen by deepseek-v4-pro, toolkit_prompt_evolve: Agent 自主进化系统提示词
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 """toolkit_prompt_evolve — 允许 Agent 管理自己的系统提示词版本"""
 
 from tea_agent.session_ref import get_session
-
 
 def toolkit_prompt_evolve(action: str = "current", version: str = "", content: str = "") -> str:
     """
@@ -95,7 +93,6 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
 
     else:
         return f"❌ 未知操作: {action}。支持: current, evolve, list, rollback, set, stats"
-
 
 def meta_toolkit_prompt_evolve() -> dict:
     return {

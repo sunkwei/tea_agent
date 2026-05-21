@@ -1,10 +1,8 @@
 ## llm generated tool func, created Fri May  1 09:48:55 2026
 # version: 1.0.1
 
-
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_screenshot(action: str, region: str = None, monitor: int = None, output: str = None, quality: int = 90):
@@ -228,7 +226,6 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
     else:
         return {"success": False, "error": f"所有截屏方式均失败 (ds={ds}, de={de})",
                 "tried": method, "tip": "Wayland用户请安装 spectacle、gnome-screenshot 或 grim"}
-
 
 def meta_toolkit_screenshot() -> dict:
     return {"type": "function", "function": {"name": "toolkit_screenshot", "description": "跨平台智能截屏工具。自动检测 Wayland/X11/macOS/Windows 并选择最佳截屏方式。Wayland 下自动使用系统自带工具（spectacle/gnome-screenshot/grim），彻底解决 Python 截屏库黑屏问题。支持全屏、区域、指定显示器。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["full", "region", "monitor", "list_monitors"], "description": "full=全屏, region=指定区域(x,y,w,h), monitor=指定显示器, list_monitors=列出显示器"}, "region": {"type": "string", "description": "[region] 截取区域，格式 'x,y,w,h'（如 '100,200,800,600'）"}, "monitor": {"type": "integer", "description": "[monitor] 显示器索引，1=主屏, 2=第二屏..."}, "output": {"type": "string", "description": "输出文件路径，默认自动生成临时文件"}, "quality": {"type": "integer", "description": "JPEG 质量 1-100，默认 90。仅对 JPEG 有效"}}, "required": ["action"]}}}

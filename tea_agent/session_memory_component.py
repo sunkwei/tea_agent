@@ -15,7 +15,6 @@ import logging
 
 logger = logging.getLogger("session.memory")
 
-
 def _get_cheap_params():
     """返回 cheap 模型 {temperature, max_tokens}，失败时使用保守默认值。"""
     try:
@@ -27,7 +26,6 @@ def _get_cheap_params():
         }
     except Exception:
         return {"temperature": 0.3, "max_tokens": 1000}
-
 
 class MemoryComponent(SessionComponent):
     """

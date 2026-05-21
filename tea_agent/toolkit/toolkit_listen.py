@@ -1,12 +1,10 @@
 ## llm generated tool func, created Sat May  2 10:18:29 2026
 # version: 1.0.0
 
-# @2026-05-02 gen by tea_agent, STT语音识别：Google Speech Recognition + 本地回退
 # version: 1.0.0
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_listen(lang: str = "zh-CN", timeout: int = 5, phrase_limit: int = 10):
@@ -76,10 +74,8 @@ def toolkit_listen(lang: str = "zh-CN", timeout: int = 5, phrase_limit: int = 10
     
     return (1, "", "; ".join(errors))
 
-
 def meta_toolkit_listen() -> dict:
     return {"type": "function", "function": {"name": "toolkit_listen", "description": "语音输入 STT。从麦克风录制并转文字。支持 Google Speech Recognition（在线）和本地引擎。", "parameters": {"type": "object", "properties": {"lang": {"type": "string", "description": "识别语言，zh-CN=中文, en-US=英文。默认 zh-CN", "default": "zh-CN"}, "timeout": {"type": "integer", "description": "录音超时秒数，默认5", "default": 5}, "phrase_limit": {"type": "integer", "description": "最长识别秒数，默认10", "default": 10}}, "required": []}}}
-
 
 def meta_toolkit_listen() -> dict:
     return {"type": "function", "function": {"name": "toolkit_listen", "description": "语音输入 STT。从麦克风录制并转文字。支持 Google Speech Recognition（在线）和本地引擎。", "parameters": {"type": "object", "properties": {"lang": {"type": "string", "description": "识别语言，zh-CN=中文, en-US=英文。默认 zh-CN", "default": "zh-CN"}, "timeout": {"type": "integer", "description": "录音超时秒数，默认5", "default": 5}, "phrase_limit": {"type": "integer", "description": "最长识别秒数，默认10", "default": 10}}, "required": []}}}

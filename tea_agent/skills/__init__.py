@@ -34,7 +34,6 @@ CORE_TOOLS = {
     "toolkit_list_versions",
 }
 
-
 class Skill:
     """单个 Skill 的数据结构"""
 
@@ -61,7 +60,6 @@ class Skill:
             "active": self.active,
             "trigger_words": self.trigger_words,
         }
-
 
 class SkillManager:
     """
@@ -98,7 +96,6 @@ class SkillManager:
 
         # 内置 Skill 目录
         self._builtin_dir = str(Path(__file__).parent)
-# NOTE: 2026-05-04 17:55:07, self-evolved by tea_agent --- skills _user_dir 从 config.paths 读取
         # 用户 Skill 目录（从 config 读取，支持多 agent 隔离）
         try:
             from tea_agent.config import get_config
@@ -212,7 +209,6 @@ class SkillManager:
 
     # ─── 工具过滤 ──────────────────────────────────
 
-# NOTE: 2026-05-14 08:50:29, self-evolved by tea_agent --- is_tool_active 同时检查孤儿工具（用户工具始终视为激活）
     def is_tool_active(self, tool_name: str) -> bool:
         """检查工具是否当前激活"""
         # 核心工具始终激活
@@ -238,7 +234,6 @@ class SkillManager:
                 active.update(skill.tools)
         return active
 
-# NOTE: 2026-05-14 08:50:13, self-evolved by tea_agent --- get_active_tools_meta 自动纳入孤儿工具（用户工具箱 _my 工具），修复用户工具被 Skill 过滤问题
     def get_active_tools_meta(self, all_meta_map: Dict[str, dict]) -> List[dict]:
         """
         从所有工具的元数据中，筛选出当前激活的工具元数据。

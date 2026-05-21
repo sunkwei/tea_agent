@@ -13,7 +13,6 @@
 
 查询接口: symbol(符号定位), callers(谁调此函数), callees(此函数调谁), module(模块概览)
 """
-# NOTE: 2026-05-14 07:34:30, self-evolved by tea_agent --- callees/callers过滤Python内置函数，ctags不可用时AST构建symbol_index回退，支持模糊搜索
 import ast
 import json
 import os
@@ -22,7 +21,6 @@ import shutil
 import time
 from collections import defaultdict
 
-# @2026-05-16 gen by tea_agent, Python 内置函数集合，callees/callers 查询时自动过滤
 _PYTHON_BUILTINS = frozenset({
     'abs', 'all', 'any', 'ascii', 'bin', 'bool', 'breakpoint', 'bytearray', 'bytes',
     'callable', 'chr', 'classmethod', 'compile', 'complex', 'copyright', 'credits',
@@ -48,7 +46,6 @@ _PYTHON_BUILTINS = frozenset({
     'print_exc', 'format_exc', 'getLogger', 'basicConfig',
 })
 
-# NOTE: 2026-05-15 gen by tea_agent, toolkit logging
 import logging
 logger = logging.getLogger("toolkit")
 
@@ -56,7 +53,6 @@ _RUN_DIR = ".tea_agent_run"
 
 def _log(msg):
     print(f"[explr] {msg}")
-
 
 def _build_ctags(directory, run_dir):
     """生成 ctags JSON 索引"""
@@ -116,7 +112,6 @@ def _build_ctags(directory, run_dir):
 
     return ctags_path, index
 
-
 def _build_call_graph(directory):
     """用 AST 分析函数调用图"""
     calls = {}
@@ -164,7 +159,6 @@ def _build_call_graph(directory):
     _log(f"AST: {len(defs)} 函数, {len(classes)} 类, {sum(len(v) for v in calls.values())} 调用边")
     return calls, defs, classes
 
-
 def _build_dot_flow(calls, defs, run_dir):
     """生成关键调用流程 DOT 图"""
     dot_bin = shutil.which("dot")
@@ -203,7 +197,6 @@ def _build_dot_flow(calls, defs, run_dir):
     subprocess.run([dot_bin, '-Tsvg', dot_path, '-o', svg_path],
                    capture_output=True, timeout=15)
     _log(f"DOT: {dot_path}, {svg_path}")
-
 
 def _build_kb_md(directory, index, calls, defs, classes, run_dir):
     """生成人类可读知识库 Markdown"""
@@ -304,7 +297,6 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
         f.write(md)
     _log(f"KB: {kb_path} ({len(md):,} chars)")
 
-
 def _action_build(directory, force):
     directory = os.path.abspath(directory)
     if not os.path.isdir(directory):
@@ -323,11 +315,9 @@ def _action_build(directory, force):
     _log(f"🏗 构建项目知识库: {directory}")
     t0 = time.time()
 
-# NOTE: 2026-05-14 07:35:26, self-evolved by tea_agent --- ctags不可用时用AST defs填充symbol_index，解决symbol查询空结果问题
     _, index = _build_ctags(directory, run_dir)
     calls, defs, classes = _build_call_graph(directory)
 
-    # @2026-05-16 gen by tea_agent, ctags 不可用时用 AST defs 填充 symbol_index
     if not index and defs:
         for name, info in defs.items():
             index[name] = [{'kind': 'function', 'path': info['file'], 'line': info['line']}]
@@ -358,7 +348,6 @@ def _action_build(directory, force):
         f"  📄 kb.md / symbol_index.json / call_graph.json"
     )
     return summary
-
 
 def _action_query(directory, symbol, query_type):
     directory = os.path.abspath(directory)
@@ -416,14 +405,12 @@ def _action_query(directory, symbol, query_type):
     calls = cg.get('calls', {})
     defs = cg.get('functions', {})
 
-# NOTE: 2026-05-14 07:35:01, self-evolved by tea_agent --- callees/callers 查询过滤 Python 内置函数，只展示项目内符号
     if query_type == 'callers':
         callers = defaultdict(list)
         for caller, callees in calls.items():
             for callee in callees:
                 callers[callee].append(caller)
         if symbol in callers:
-            # @2026-05-16 gen by tea_agent, 过滤内置函数，只展示项目函数
             project_callers = [c for c in callers[symbol] if c not in _PYTHON_BUILTINS]
             builtin_count = len(callers[symbol]) - len(project_callers)
             parts = [f"## `{symbol}` 被 {len(project_callers)} 个项目函数调用" +
@@ -439,7 +426,6 @@ def _action_query(directory, symbol, query_type):
 
     if query_type == 'callees':
         if symbol in calls:
-            # @2026-05-16 gen by tea_agent, 过滤内置函数，只展示项目函数
             project_callees = [c for c in calls[symbol] if c not in _PYTHON_BUILTINS]
             builtin_count = len(calls[symbol]) - len(project_callees)
             parts = [f"## `{symbol}` 调用 {len(project_callees)} 个项目函数" +
@@ -454,7 +440,6 @@ def _action_query(directory, symbol, query_type):
         return f"❌ `{symbol}` 无被调用记录"
 
     return "❌ 未知 query_type"
-
 
 def _action_status(directory):
     directory = os.path.abspath(directory)
@@ -486,8 +471,6 @@ def _action_status(directory):
     lines.append(f"\n💾 总计 {total:,} bytes")
     return '\n'.join(lines)
 
-
-# NOTE: 2026-05-15 13:52:57, self-evolved by tea_agent --- 增强 toolkit_explr: 添加 _extract_arch_context 和 arch_context 查询
 def _extract_arch_context(directory, symbol=None):
     """提取项目或符号的架构上下文，辅助自进化决策"""
     directory = os.path.abspath(directory)
@@ -535,7 +518,6 @@ def _extract_arch_context(directory, symbol=None):
         lines.append(f"- **👆 被外部调用 ({len(callers)})**: `{', '.join(sorted(callers)[:8])}`")
         
     return "\n".join(lines)
-
 
 # @2026-05-19 gen by claude, 影响分析 — 基于 tree-sitter 的仓库级上下文
 def _action_impact(directory, symbol, filepath=None):
@@ -609,7 +591,6 @@ def _action_impact(directory, symbol, filepath=None):
     lines.append(f"---\n> {result.get('hint', '')}")
     return '\n'.join(lines)
 
-
 # @2026-05-19 gen by claude, 模块依赖图分析
 def _action_deps(directory):
     """构建项目模块依赖图，检测循环依赖和孤立模块"""
@@ -653,7 +634,6 @@ def _action_deps(directory):
     lines.append(f"---\n> {result.get('hint', '')}")
     return '\n'.join(lines)
 
-
 def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol", force="false", filepath=None):
     logger.info(f"toolkit_explr called: action={action!r}, directory={repr(directory)[:80]}, symbol={symbol!r}, query_type={query_type!r}, force={force!r}")
 def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol", force="false", filepath=None):
@@ -674,8 +654,6 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
     else:
         return f"❌ 未知 action: {action}"
 
-
-# NOTE: 2026-05-15 13:54:22, self-evolved by tea_agent --- 更新 toolkit_explr 的 meta_toolkit_explr 添加 arch_context
 # @2026-05-19 gen by claude, 新增 impact(影响分析) / deps(依赖图) 查询类型 + filepath 参数
 def meta_toolkit_explr() -> dict:
     return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=query 查询符号位置/调用者/被调用者/影响分析/依赖图；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "query", "status"], "description": "build=构建项目知识库, query=查询符号/调用关系/影响/依赖, status=查看知识库状态"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "[query] 要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "arch_context", "impact", "deps"], "description": "[query] 查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, arch_context=架构上下文, impact=影响分析, deps=模块依赖图", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "[build] true=强制重建，忽略已有索引", "default": "false"}, "filepath": {"type": "string", "description": "[impact] 符号所在的文件路径"}}, "required": ["action"]}}}

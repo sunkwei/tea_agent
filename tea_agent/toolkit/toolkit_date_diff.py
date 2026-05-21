@@ -2,7 +2,6 @@
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_date_diff(start_date: str, end_date: str = None) -> dict:

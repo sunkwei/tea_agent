@@ -1,4 +1,3 @@
-# @2026-05-19 gen by tea_agent, MCP Client 支持
 # version: 1.0.0
 
 import logging
@@ -48,14 +47,10 @@ def toolkit_mcp(action: str = "connect", server_name: str = "", command: str = "
     else:
         return (1, "", f"未知 action: {action}，支持: connect/list_tools/call_tool/disconnect/status")
 
-
-# NOTE: 2026-05-19 10:33:54, self-evolved by tea_agent --- 修复 MCP 异步事件循环生命周期问题：connect/list_tools/call_tool 各自独立 asyncio.run()，导致 session 在事件循环销毁后无法使用。改为后台线程持久运行事件循环，通过 run_coroutine_threadsafe 提交所有操作。
-# NOTE: 2026-05-19 10:36:27, self-evolved by tea_agent --- 修复 anyio.BrokenResourceError：stdio_client 的 async context manager 退出后内存流关闭。改用 async with 保持 context manager 活跃 + keepalive Event 阻塞直到 disconnect。
 # MCP 客户端全局状态
 _MCP_SERVERS = {}  # server_name → {"session": ..., "stdio": ..., "transport": ..., "keepalive": ...}
 _MCP_LOOP = None  # 持久事件循环（后台线程）
 _MCP_THREAD = None  # 后台线程
-
 
 def _mcp_get_or_create_loop():
     """获取或创建持久事件循环（后台线程）"""
@@ -78,7 +73,6 @@ def _mcp_get_or_create_loop():
     _MCP_THREAD.start()
     return _MCP_LOOP
 
-
 def _mcp_run_async(coro, timeout: float = 30.0):
     """在持久事件循环中运行协程，同步等待结果。返回 (rc, stdout, stderr)。"""
     import asyncio
@@ -94,7 +88,6 @@ def _mcp_run_async(coro, timeout: float = 30.0):
     except Exception as e:
         import traceback
         return (1, "", f"❌ MCP 操作异常: {e.__class__.__name__}: {str(e)}")
-
 
 def _mcp_connect(server_name: str, command: str, args: list, transport: str, url: str):
     """连接 MCP Server（在持久事件循环中，保持 stdio context manager 活跃）"""
@@ -202,7 +195,6 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
     except Exception as e:
         return (1, "", f"❌ 连接失败: {str(e)}")
 
-
 def _mcp_list_tools(server_name: str):
     """列出 MCP Server 可用工具（在持久事件循环中）"""
     import json
@@ -239,7 +231,6 @@ def _mcp_list_tools(server_name: str):
 
     except Exception as e:
         return (1, "", f"❌ 列出工具失败: {str(e)}")
-
 
 def _mcp_call(server_name: str, tool_name: str, tool_args: dict):
     """调用 MCP 工具（在持久事件循环中）"""
@@ -283,9 +274,6 @@ def _mcp_call(server_name: str, tool_name: str, tool_args: dict):
     except Exception as e:
         return (1, "", f"❌ 调用工具失败: {str(e)}")
 
-
-# NOTE: 2026-05-19 10:36:58, self-evolved by tea_agent --- 更新 disconnect 通过 set keepalive Event 触发 context manager 退出清理（而非直接调用 __aexit__）
-# NOTE: 2026-05-19 10:40:38, self-evolved by tea_agent --- 修复 _mcp_disconnect 中 asyncio 未导入
 def _mcp_disconnect(server_name: str):
     """断开 MCP Server 连接（设置 keepalive event 触发清理）"""
     import json
@@ -312,14 +300,12 @@ def _mcp_disconnect(server_name: str):
     except Exception as e:
         return (1, "", f"❌ 断开连接失败: {str(e)}")
 
-
 async def _set_and_del(server_name: str, keepalive):
     """设置 keepalive event 并清理 MCP_SERVERS 条目"""
     keepalive.set()
     # 给一点时间让 keepalive 协程退出 context manager
     import asyncio as _asyncio
     await _asyncio.sleep(0.1)
-
 
 def _mcp_status():
     """查看已连接服务器状态"""
@@ -341,7 +327,6 @@ def _mcp_status():
         "servers_count": len(servers_info),
         "servers": servers_info,
     }, ensure_ascii=False, indent=2), "")
-
 
 def meta_toolkit_mcp() -> dict:
     return {

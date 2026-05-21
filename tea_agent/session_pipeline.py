@@ -24,7 +24,6 @@ class PipelineStep:
     description: str = ""  # 步骤描述
     position: int = 0  # 执行顺序（越小越先执行）
 
-
 class SessionPipeline:
     """
     会话 Pipeline 管理器
@@ -128,7 +127,6 @@ class SessionPipeline:
             if self._steps[name].enabled
         ]
     
-# NOTE: 2026-05-06 08:47:24, self-evolved by tea_agent --- m5: 澄清 stop_at 文档 — 执行完该步骤后停止
     def execute(
         self,
         context: Dict[str, Any],

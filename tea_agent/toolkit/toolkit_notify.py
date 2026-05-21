@@ -1,10 +1,7 @@
-# @2026-05-01 gen by tea_agent, 跨平台桌面通知
 # version: 1.0.0
 
-# NOTE: 2026-05-02 09:16:55, self-evolved by tea_agent --- toolkit_notify 多级回退对齐 GUI：GI→notify-send→kdialog→zenity→wall
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: int = 5000):
@@ -31,8 +28,6 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
         except Exception:
             pass
 
-# NOTE: 2026-05-02 09:42:08, self-evolved by tea_agent --- 修复 notify-send 参数格式：改用 --urgency= --expire-time= 长选项，兼容此版本
-# NOTE: 2026-05-02 09:43:22, self-evolved by tea_agent --- notify-send 添加 --app-name=TeaAgent 和 persistence hint，确保 KDE Plasma 通知中心收录
         # 2) notify-send (D-Bus 标准通知，KDE Plasma 通知中心收录)
         try:
             subprocess.run(
@@ -82,7 +77,6 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
         except Exception as e:
             return (1, "", f"macOS 通知失败: {e}")
 
-# NOTE: 2026-05-06 10:08:00, self-evolved by tea_agent --- Windows通知改为系统通知区Toast优先，移除MessageBoxW对话框，增加AppID自动注册
     elif sys.platform == 'win32':
         # ── 系统通知区 Toast（主方案）──
         # PowerShell + Windows.UI.Notifications，非阻塞通知栏弹出
@@ -116,7 +110,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
 
     else:
         return (1, "", f"不支持的操作系统: {sys.platform}")
-
 
 def meta_toolkit_notify() -> dict:
     return {"type": "function", "function": {"name": "toolkit_notify", "description": "发送桌面系统通知。支持 Linux（GI Notify/notify-send）、macOS（osascript）、Windows（PowerShell Toast）。长时间任务完成后使用。", "parameters": {"type": "object", "properties": {"title": {"type": "string", "description": "通知标题，如 '任务完成'"}, "message": {"type": "string", "description": "通知正文，如 '截图已保存到 screenshot.png'"}, "urgency": {"type": "string", "enum": ["low", "normal", "critical"], "description": "紧急程度，默认 normal", "default": "normal"}, "duration": {"type": "integer", "description": "显示时长（毫秒），默认 5000", "default": 5000}}, "required": ["title", "message"]}}}

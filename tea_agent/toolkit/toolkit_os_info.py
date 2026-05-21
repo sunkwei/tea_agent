@@ -1,10 +1,8 @@
-# NOTE: 2026-05-07, self-evolved by tea_agent --- toolkit_os_info: 进程级 OS 信息缓存，避免跨平台命令误用
 import platform
 import functools
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 @functools.lru_cache(maxsize=1)
@@ -25,7 +23,6 @@ def toolkit_os_info(refresh: bool = False):
     if refresh:
         _cached_os_info.cache_clear()
     return _cached_os_info()
-
 
 def meta_toolkit_os_info() -> dict:
     return {

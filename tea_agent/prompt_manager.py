@@ -27,7 +27,6 @@ DEFAULT_SYSTEM_PROMPT = (
     "你不断进化，能力无上限。以最有效优雅的方式完成任务并持续增强自身。"
 )
 
-
 class SystemPromptManager:
     """系统提示词版本管理器"""
 

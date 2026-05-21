@@ -1,5 +1,4 @@
 """
-@2026-05-15 gen by tea_agent, TrayManager 组件 — 管理系统托盘图标
 Usage: self.tray = TrayManager(self)  # self = TkGUI instance
 """
 
@@ -18,7 +17,6 @@ try:
     HAS_SNI = True
 except ImportError:
     HAS_SNI = False
-
 
 class TrayManager:
     """系统托盘图标管理器（委托给 TkGUI）"""

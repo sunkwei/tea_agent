@@ -1,5 +1,4 @@
 """
-@2026-05-16 gen by tea_agent, Storage 核心类 — Composition 模式组装所有委派组件
 
 Storage 类自身管理：连接生命周期、数据库迁移/备份/轮转、表初始化。
 业务逻辑委派给 8 个子组件：topics, conversations, summaries, memories,
@@ -24,7 +23,6 @@ from ._vectors import VectorStore
 from ._base import StoreComponent
 
 logger = logging.getLogger("Storage")
-
 
 class Storage:
     """主存储类 — 组合 8 个委派组件，管理数据库连接与生命周期。"""
@@ -104,7 +102,6 @@ class Storage:
         ''')
 
         # topics 表
-# NOTE: 2026-05-17 10:48:55, self-evolved by tea_agent --- _core.py: replace datetime('now', 'localtime') in _init_tables topics table
         c.execute('''
             CREATE TABLE IF NOT EXISTS topics (
                 topic_id TEXT PRIMARY KEY,
@@ -175,7 +172,6 @@ class Storage:
             )
         ''')
 
-# NOTE: 2026-05-16 12:42:59, self-evolved by tea_agent --- memories表新增 pinned 列（0=正常, 1=固定），用于豁免年龄衰减
         # memories 表
         c.execute('''
             CREATE TABLE IF NOT EXISTS memories (
@@ -308,14 +304,12 @@ class Storage:
             except sqlite3.OperationalError:
                 pass
 
-        # 2026-05-17 gen by tea_agent, topics 添加 drift_count 用于主题漂移累计计数
         try:
             c.execute("ALTER TABLE topics ADD COLUMN drift_count INTEGER DEFAULT 0")
             self.conn.commit()
         except sqlite3.OperationalError:
             pass
 
-        # 2026-05-20 gen by tea_agent, todo_items 持久化 TODO 清单（per-topic）
         c.execute('''CREATE TABLE IF NOT EXISTS todo_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             topic_id TEXT NOT NULL,
@@ -326,7 +320,6 @@ class Storage:
             FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
         )''')
         self.conn.commit()
-
 
         c.close()
 
@@ -377,7 +370,6 @@ class Storage:
             c.execute(f"ALTER TABLE {new_name} RENAME TO {old_name}")
             log.info(f"  迁移表 {old_name}")
 
-# NOTE: 2026-05-17 10:50:54, self-evolved by tea_agent --- _core.py _migrate_int_to_uuid: replace all 12 (datetime('now','localtime')) with datetime('now','localtime')
         try:
             # 清理之前失败迁移可能残留的 _new 表
             for leftover in ["topics_new","conversations_new","topic_token_stats_new",

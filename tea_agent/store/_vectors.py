@@ -1,10 +1,8 @@
 """
-@2026-05-16 gen by tea_agent, VectorStore — 文本向量存储 & 语义搜索
 """
 import numpy as np
 from typing import Dict, List, Optional
 from ._base import StoreComponent
-
 
 class VectorStore(StoreComponent):
     """向量管理：存储、检索、批量向量化、语义搜索（余弦相似度）。"""

@@ -17,8 +17,6 @@ class BaseChatSession(ABC):
     定义公共接口和共享功能
     """
 
-
-    # NOTE: 2026-05-20 gen by tea_agent, 自适应阈值常量：源码不截断，文本/日志16KB
     _KB_THRESHOLD: int = 65536          # toolkit_kb 输出阈值: 64KB
     _DEFAULT_TOOL_THRESHOLD: int = 2048  # 默认工具输出阈值: 2KB
     _TEXT_FILE_THRESHOLD: int = 16384    # 文本/日志文件阈值: 16KB
@@ -72,7 +70,6 @@ class BaseChatSession(ABC):
         """
         pass
 
-    # NOTE: 2026-05-15 gen by tea_agent, 支持图片附件：msg 可为 str 或 {"text": str, "images": [str]}
     def add_user_message(self, msg):
         """添加用户消息，支持纯文本或含图片的结构化输入"""
         if isinstance(msg, str):
@@ -102,7 +99,6 @@ class BaseChatSession(ABC):
         """获取最近的消息（排除系统消息）"""
         return [m for m in self.messages if m["role"] != "system"]
 
-    # NOTE: 2026-05-03 06:37:41, self-evolved by tea_agent --- basesession.py: 添加 _repair_incomplete_tool_chains 修复中断导致的残缺工具调用链
 # NOTE: 2026-04-28, self-evolved by claude-agent ---
     # 从加载的历史消息中清除 reasoning_content。
     # reasoning_content 是 DeepSeek thinking 模式下的会话内状态，
@@ -125,7 +121,6 @@ class BaseChatSession(ABC):
                 continue
             msg.pop("reasoning_content", None)
 
-    # NOTE: 2026-05-20 gen by tea_agent, L1压缩：首尾各1024字节按换行对齐，替代首尾3行策略
     @staticmethod
     def _compress_tool_content(content: str, max_chars: int = 2048) -> str:
         """
@@ -198,8 +193,6 @@ class BaseChatSession(ABC):
             f"{tail_text}"
         )
 
-# NOTE: 2026-05-17 10:19:56, self-evolved by tea_agent --- 新增_compress_json_args：JSON感知截断，解析→递归压缩超长string value→重新序列化，保证输出合法JSON
-    # NOTE: 2026-05-19 gen by tea_agent, JSON感知截断：解析arguments→递归压缩超长value→重新dumps，输出始终合法JSON
     @staticmethod
     def _compress_json_args(args_str: str, args_bytes: int, max_bytes: int = 2048) -> str:
         """
@@ -309,7 +302,6 @@ class BaseChatSession(ABC):
         result = _json.dumps(compressed_obj, ensure_ascii=False)
         return result
 
-    # NOTE: 2026-05-20 gen by tea_agent, 根据工具名和参数中的文件路径自适应确定输出截断阈值
     @staticmethod
     def _guess_tool_threshold(tool_name: str, arguments: str) -> int:
         """
@@ -360,7 +352,6 @@ class BaseChatSession(ABC):
         
         return BaseChatSession._DEFAULT_TOOL_THRESHOLD
 
-    # NOTE: 2026-05-20 gen by tea_agent, L1压缩：对 assistant tool_calls 参数截断 + 保留最终 assistant 消息完整
     @staticmethod
     def _compress_tool_rounds(rounds: List[Dict]) -> List[Dict]:
         """
@@ -408,7 +399,6 @@ class BaseChatSession(ABC):
                 # user 消息完整保留
                 result.append(dict(rd))
 
-# NOTE: 2026-05-17 10:19:10, self-evolved by tea_agent --- _compress_tool_rounds中arguments截断改为JSON感知：解析→递归压缩超长value→重新序列化，确保输出始终合法JSON
             elif role == "assistant":
                 if rd.get("tool_calls") and not is_last:
                     # 中间 assistant 消息（含工具调用）：JSON感知压缩参数
@@ -452,7 +442,6 @@ class BaseChatSession(ABC):
 
         return result
 
-# NOTE: 2026-05-04 14:53:44, self-evolved by tea_agent --- 补回 _repair_incomplete_tool_chains 缺失的 @staticmethod 和 def 行，修复死代码导致的 400 错误
     @staticmethod
     def _repair_incomplete_tool_chains(rounds: List[Dict]) -> List[Dict]:
         """
@@ -548,7 +537,6 @@ class BaseChatSession(ABC):
 
         return result
 
-# NOTE: 2026-04-30 10:02:24, self-evolved by tea_agent --- load_history支持recent_turns参数，旧轮次仅user+ai，最近N轮含完整工具链
     def load_history(self, conversations: List[Dict], summary: str = "", recent_turns: int = 10,
                      level2: list = None, semantic_summary: str = "", tool_chain_summary: str = ""):
         """
@@ -584,7 +572,6 @@ class BaseChatSession(ABC):
 
         # 最新一条作为 Level 1（压缩工具链）
         last_conv = conversations[-1]
-        # NOTE: 2026-05-18 gen by tea_agent, 修复 JSON 格式 user_msg（含图片）的解析
         raw_user_msg = last_conv["user_msg"]
         user_entry = {"role": "user"}
         if isinstance(raw_user_msg, str) and raw_user_msg.startswith('{'):
@@ -607,7 +594,6 @@ class BaseChatSession(ABC):
         rounds = last_conv.get("rounds_json_parsed")
         if rounds and last_conv.get("is_func_calling"):
             repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
-            # NOTE: 2026-05-20 gen by tea_agent, L1压缩：工具参数>2048B截断，工具输出首尾各1024B
             compressed = BaseChatSession._compress_tool_rounds(repaired)
             for rd in compressed:
                 self.messages.append(rd)
@@ -621,7 +607,6 @@ class BaseChatSession(ABC):
             f"三级加载: L1=1轮压缩 , L2={len(self._level2)}对 , "
             f"L3_semantic={len(self._semantic_summary)}chars , L3_tool={len(self._tool_chain_summary)}chars"
         )
-
 
     def interrupt(self):
         """打断当前生成"""

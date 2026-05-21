@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger("ReflectionManager")
 
-
 @dataclass
 class ToolCallRecord:
     """单次工具调用记录"""
@@ -26,7 +25,6 @@ class ToolCallRecord:
     success: bool
     error: str = ""
     duration_ms: float = 0.0
-
 
 @dataclass
 class SessionTrace:
@@ -51,7 +49,6 @@ class SessionTrace:
     @property
     def duration_seconds(self) -> float:
         return self.end_time - self.start_time if self.end_time > 0 else 0
-
 
 class ReflectionManager:
     """反思管理器"""

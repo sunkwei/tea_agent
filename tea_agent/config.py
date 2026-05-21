@@ -16,7 +16,6 @@
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-# NOTE: 2026-04-30 16:22:42, self-evolved by tea_agent --- config.py添加List/Dict导入，修复NameError
 from typing import Optional, Dict, Any, List
 
 try:
@@ -25,16 +24,13 @@ try:
 except ImportError:
     HAS_YAML = False
 
-
 @dataclass
 class ModelConfig:
     """单个 LLM 模型配置"""
     api_key: str = ""
     api_url: str = ""
     model_name: str = ""
-# NOTE: 2026-05-17 08:46:29, self-evolved by tea_agent --- ModelConfig 添加 temperature/max_tokens/top_p 参数字段
     options: Dict[str, Any] = field(default_factory=dict)
-    # @2026-05-17 gen by tea_agent, 模型推理参数（支持按模型+模式差异化配置）
     temperature: float = 0.7       # 温度 0~2，越高越随机
     max_tokens: int = 4096         # 最大输出 token 数
     top_p: float = 0.9             # 核采样阈值
@@ -44,9 +40,6 @@ class ModelConfig:
         """检查配置是否完整"""
         return bool(self.api_key and self.api_url and self.model_name)
 
-
-# NOTE: 2026-04-30 16:17:53, self-evolved by tea_agent --- AgentConfig增加运行时get/set/apply/reload方法，支持自我配置调优
-# NOTE: 2026-05-04 17:52:03, self-evolved by tea_agent --- 新增 PathsConfig dataclass + 路径解析逻辑，所有路径相对 config.yaml 所在目录解析
 @dataclass
 class PathsConfig:
     """路径配置。所有相对路径均相对于 config.yaml 所在目录解析。
@@ -67,7 +60,6 @@ class PathsConfig:
     _kb_dir_abs: str = ""
     _skills_dir_abs: str = ""
 
-# NOTE: 2026-05-09 19:44:19, self-evolved by tea_agent --- PathsConfig.resolve: 子路径相对 data_dir_abs 解析，data_dir 相对 config_dir 解析
     def resolve(self, config_dir: str) -> None:
         """根据 config.yaml 所在目录解析所有路径为绝对路径。
         
@@ -123,8 +115,6 @@ class PathsConfig:
     def data_dir_abs(self) -> str:
         return self._data_dir_abs
 
-
-# NOTE: 2026-05-06 19:15:20, self-evolved by tea_agent --- 添加 EmbeddingConfig 配置类，支持向量模型设置
 @dataclass
 class EmbeddingConfig:
     """文本向量模型配置。用于消息语义搜索。
@@ -146,14 +136,10 @@ class EmbeddingConfig:
 @dataclass
 class AgentConfig:
     """Agent 全局配置"""
-# NOTE: 2026-05-04 17:52:12, self-evolved by tea_agent --- AgentConfig 增加 paths 字段，load_config 中解析 paths 配置块并调用 resolve
-# NOTE: 2026-05-06 19:15:39, self-evolved by tea_agent --- AgentConfig 增加 embedding 字段
     main_model: ModelConfig = field(default_factory=ModelConfig)
     cheap_model: ModelConfig = field(default_factory=ModelConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
-# NOTE: 2026-05-17 08:46:46, self-evolved by tea_agent --- AgentConfig 添加 mode_params 模式参数覆盖 + get_effective_params 方法
     paths: PathsConfig = field(default_factory=PathsConfig)
-    # @2026-05-17 gen by tea_agent, 按模式覆盖模型参数
     # 格式: {"pragmatic": {"temperature": 0.3}, "creative": {"temperature": 0.8}, "mixed": {"temperature": 0.6}}
     mode_params: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     
@@ -193,11 +179,8 @@ class AgentConfig:
 
     # 交互与控制参数
     extra_iterations_on_continue: int = 5  # 续命时追加的工具调用轮数
-# NOTE: 2026-04-30 14:36:14, self-evolved by tea_agent --- AppConfig增加memory_dedup_threshold字段
     memory_extraction_threshold: int = 2  # 触发记忆提取的最低未摘要消息数
-# NOTE: 2026-04-30 14:38:53, self-evolved by tea_agent --- 去重阈值默认从0.5降到0.3，适配中文bigram相似度特点
     memory_dedup_threshold: float = 0.3  # 记忆去重相似度阈值 (0~1)，bigram Jaccard
-# NOTE: 2026-04-30 09:47:45, self-evolved by tea_agent --- GUI单页加载对话数默认从30改为50，防止加载过多导致卡顿
     chat_page_size: int = 50  # GUI 单页加载的对话轮数（最多50条）
     # 2026-05-20 gen by Tea Agent, L2/L3分层压缩参数
     history_l2_max: int = 30    # L2最多保留轮数（含user+assistant，不含工具轮）
@@ -295,7 +278,6 @@ class AgentConfig:
         """导出运行时配置为字典"""
         return {key: getattr(self, key) for key in self._RUNTIME_CONFIG_KEYS if hasattr(self, key)}
 
-
 def load_config(config_path: Optional[str] = None) -> AgentConfig:
     """
     加载配置。优先读取 $HOME/.tea_agent/config.yaml，不存在时回退到 tea_agent/config.yaml。
@@ -332,18 +314,14 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
                 m_data = data.get(m_type, {})
                 if isinstance(m_data, dict):
                     target = cfg.main_model if m_type == "main_model" else cfg.cheap_model
-# NOTE: 2026-05-17 08:46:57, self-evolved by tea_agent --- load_config 解析模型参数 + mode_params 配置块
                     target.api_key = m_data.get("api_key", "")
                     target.api_url = m_data.get("api_url", "")
                     target.model_name = m_data.get("model_name", "")
                     target.options = m_data.get("options", {})
-                    # @2026-05-17 gen by tea_agent, 解析模型推理参数
                     target.temperature = float(m_data.get("temperature", target.temperature))
                     target.max_tokens = int(m_data.get("max_tokens", target.max_tokens))
                     target.top_p = float(m_data.get("top_p", target.top_p))
 
-# NOTE: 2026-05-04 17:52:35, self-evolved by tea_agent --- load_config 中解析 paths 配置块 + 调用 resolve 解析路径
-# NOTE: 2026-05-06 19:15:56, self-evolved by tea_agent --- load_config 解析 embedding 配置块
             # 加载 Embedding 配置
             emb_data = data.get("embedding_model", {})
             if isinstance(emb_data, dict):
@@ -352,8 +330,6 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
                 cfg.embedding.api_key = str(emb_data.get("api_key", cfg.embedding.api_key))
                 cfg.embedding.dimension = int(emb_data.get("dimension", cfg.embedding.dimension))
 
-# NOTE: 2026-05-17 08:47:08, self-evolved by tea_agent --- load_config 解析 mode_params 配置块
-            # @2026-05-17 gen by tea_agent, 加载模式参数覆盖
             mp_data = data.get("mode_params", {})
             if isinstance(mp_data, dict):
                 for mode_name in ("pragmatic", "creative", "mixed"):
@@ -389,7 +365,6 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
 
             # 加载交互与控制参数
             cfg.extra_iterations_on_continue = int(data.get("extra_iterations_on_continue", cfg.extra_iterations_on_continue))
-# NOTE: 2026-04-30 14:36:23, self-evolved by tea_agent --- load_config解析memory_dedup_threshold
             cfg.memory_extraction_threshold = int(data.get("memory_extraction_threshold", cfg.memory_extraction_threshold))
             cfg.memory_dedup_threshold = float(data.get("memory_dedup_threshold", cfg.memory_dedup_threshold))
             cfg.chat_page_size = int(data.get("chat_page_size", cfg.chat_page_size))
@@ -401,8 +376,6 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
 
     return cfg
 
-
-# NOTE: 2026-05-04 17:57:48, self-evolved by tea_agent --- ensure_config_dir 使用 config.paths 路径
 def ensure_config_dir() -> Path:
     """确保数据目录存在（从 config 读取，回退 ~/.tea_agent），返回路径"""
     try:
@@ -412,7 +385,6 @@ def ensure_config_dir() -> Path:
         cfg_dir = Path.home() / ".tea_agent"
     cfg_dir.mkdir(parents=True, exist_ok=True)
     return cfg_dir
-
 
 def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     """
@@ -437,13 +409,11 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     for m_type in ["main_model", "cheap_model"]:
         target = cfg.main_model if m_type == "main_model" else cfg.cheap_model
         if target.is_configured:
-# NOTE: 2026-05-17 08:47:22, self-evolved by tea_agent --- save_config 保存模型推理参数和 mode_params
             m_data = {
                 "api_key": target.api_key,
                 "api_url": target.api_url,
                 "model_name": target.model_name,
             }
-            # @2026-05-17 gen by tea_agent, 保存模型推理参数
             if target.temperature != 0.7:
                 m_data["temperature"] = target.temperature
             if target.max_tokens != 4096:
@@ -454,8 +424,6 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
                 m_data["options"] = target.options
             data[m_type] = m_data
     
-# NOTE: 2026-05-04 17:52:50, self-evolved by tea_agent --- save_config 中保存 paths 配置
-# NOTE: 2026-05-06 19:16:13, self-evolved by tea_agent --- save_config 保存 embedding 配置块
     # 保存 Embedding 配置
     data["embedding_model"] = {
         "api_url": cfg.embedding.api_url,
@@ -464,8 +432,6 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
         "dimension": cfg.embedding.dimension,
     }
 
-# NOTE: 2026-05-17 08:47:32, self-evolved by tea_agent --- save_config 写入 mode_params 配置块
-    # @2026-05-17 gen by tea_agent, 保存模式参数覆盖
     if cfg.mode_params:
         data["mode_params"] = cfg.mode_params
 
@@ -490,7 +456,6 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
 
     # 保存交互与控制参数
     data["extra_iterations_on_continue"] = cfg.extra_iterations_on_continue
-# NOTE: 2026-04-30 14:36:30, self-evolved by tea_agent --- save_config保存memory_dedup_threshold
     data["memory_extraction_threshold"] = cfg.memory_extraction_threshold
     data["memory_dedup_threshold"] = cfg.memory_dedup_threshold
     data["chat_page_size"] = cfg.chat_page_size
@@ -501,7 +466,6 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
     return yaml_path
-
 
 def create_default_config(config_path: Optional[str] = None) -> str:
     """
@@ -518,7 +482,6 @@ def create_default_config(config_path: Optional[str] = None) -> str:
 
     template = (
         "# Tea Agent 配置文件\n\n"
-# NOTE: 2026-05-17 08:48:03, self-evolved by tea_agent --- create_default_config 模板增加模型参数和 mode_params 配置
         "# 主模型配置（用于核心对话、代码生成等）\n"
         "main_model:\n"
         "  api_key: \"\"\n"
@@ -550,7 +513,6 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "  mixed:                 # 混合模式 — 均衡\n"
         "    temperature: 0.6\n"
         "    top_p: 0.9\n\n"
-# NOTE: 2026-05-04 17:53:08, self-evolved by tea_agent --- create_default_config 模板增加 paths 配置块
         "# ==================== 路径配置 ====================\n"
         "# 所有路径支持相对路径（相对于本 config.yaml 所在目录）或绝对路径（以 / 开头）。\n"
         "# 支持多 agent 隔离：每个 agent 使用独立的 config.yaml，指向独立的数据库和目录。\n"
@@ -560,7 +522,6 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "  toolkit_dir: \"\"       # 自定义工具目录，默认 data_dir/toolkit\n"
         "  kb_dir: \"\"            # 知识库目录，默认 data_dir/kb\n"
         "  skills_dir: \"\"        # 用户 skills 目录，默认 data_dir/skills\n\n"
-# NOTE: 2026-05-06 19:16:28, self-evolved by tea_agent --- create_default_config 模板增加 embedding_model 配置块
         "# ==================== 向量模型配置 ====================\n"
         "# 用于主题搜索的文本向量生成。api_url 为空时自动使用本地 TF-IDF 回退。\n"
         "embedding_model:\n"
@@ -586,12 +547,9 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "# 工具调用达到上限后续命时追加的轮数\n"
         "extra_iterations_on_continue: 5\n\n"
         "# 触发自动记忆提取的最少未摘要消息数\n"
-# NOTE: 2026-04-30 14:36:36, self-evolved by tea_agent --- create_default_config模板增加memory_dedup_threshold
         "memory_extraction_threshold: 2\n\n"
-# NOTE: 2026-05-06 08:47:24, self-evolved by tea_agent --- M1: 修复模板 memory_dedup_threshold 默认值与代码一致 (0.5→0.3)
         "# 记忆去重相似度阈值，超过此值视为重复并合并(0~1)\n"
         "memory_dedup_threshold: 0.3\n\n"
-# NOTE: 2026-04-30 09:47:45, self-evolved by tea_agent --- create_default_config模板同步更新chat_page_size默认值30→50
         "# GUI 单页加载的最大对话轮数（超过则省略更早的对话）\n"
         "# GUI 单页加载的最大对话轮数（超过则省略更早的对话）\n"
         "chat_page_size: 50\n\n"
@@ -606,10 +564,8 @@ def create_default_config(config_path: Optional[str] = None) -> str:
 
     return yaml_path
 
-
 # 全局单例缓存
 _config_cache: Optional[AgentConfig] = None
-
 
 def get_config(reload: bool = False) -> AgentConfig:
     """

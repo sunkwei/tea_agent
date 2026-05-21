@@ -1,7 +1,6 @@
 # @2026-04-29 gen by deepseek-v4-pro, 内置工具: 运行项目测试套件
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_run_tests(pattern: str = "test_*.py") -> dict:
@@ -58,7 +57,6 @@ def toolkit_run_tests(pattern: str = "test_*.py") -> dict:
         "failed": failed,
         "files": results,
     }
-
 
 def meta_toolkit_run_tests():
     return {

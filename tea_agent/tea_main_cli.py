@@ -28,7 +28,6 @@ if _parent_dir not in sys.path:
 from tea_agent.agent_core import AgentCore
 from tea_agent.config import load_config
 
-
 class TeaCLI(AgentCore):
     """Tea Agent 命令行界面 — 继承 AgentCore 共享核心逻辑。
 
@@ -162,13 +161,11 @@ class TeaCLI(AgentCore):
         print(f"\n👤 {msg}")
         print("🤖 ", end="", flush=True)
 
-        # NOTE: 2026-05-08 gen by tea_agent, 控制台不输出 [THINK] 标签，直接去掉前缀
         def stream_cb(text: str):
             if text.startswith("[THINK]"):
                 text = text[7:]
             print(text, end="", flush=True)
 
-# NOTE: 2026-05-04 19:37:48, self-evolved by tea_agent --- CLI 续命模式：去除用户确认，自动续命 10 轮并打印提示
         def status_cb(status_msg: str):
             if status_msg.startswith("!MAX_ITER:"):
                 display = status_msg.replace("!MAX_ITER:", "")
@@ -213,7 +210,7 @@ class TeaCLI(AgentCore):
         print(f"\n🔧 {msg}")
 
     def _suggest_new_topic_if_needed(self, topic_id: str):
-        """2026-05-17 gen by tea_agent, CLI 覆盖：终端输出新主题建议"""
+        """CLI 覆盖：终端输出新主题建议"""
         count = getattr(self, '_pending_topic_suggestion', 0)
         if count > 0:
             print(f"\n💡 本主题已切换 {count} 次讨论方向 (阈值={self.DRIFT_SUGGEST_THRESHOLD})，")
@@ -304,7 +301,6 @@ Ctrl+C 可打断当前生成。
         mem_count = len(self.db.get_active_memories(50))
         print(f"🧠 活跃记忆: {mem_count} 条")
 
-
 # ====================== 入口 ======================
 def main():
     import argparse
@@ -324,7 +320,6 @@ def main():
         cli.run_oneshot(args.oneshot)
     else:
         cli.run()
-
 
 if __name__ == "__main__":
     main()

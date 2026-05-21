@@ -1,5 +1,4 @@
 """
-@2026-05-16 gen by tea_agent, MemoryStore — 长期记忆 CRUD + FIFO 淘汰
 """
 import logging
 from typing import Dict, List, Optional
@@ -7,13 +6,11 @@ from ._base import StoreComponent
 
 logger = logging.getLogger("Storage.Memories")
 
-
 class MemoryStore(StoreComponent):
     """长期记忆管理：增删改查、过期清理、CRITICAL FIFO 淘汰。"""
 
     # ── CRUD ──
 
-# NOTE: 2026-05-16 12:43:19, self-evolved by tea_agent --- add_memory 新增 pinned 参数，INSERT 时写入 pinned 列
     def add_memory(
         self, content: str, category: str = "general", priority: int = 2,
         importance: int = 3, expires_at: Optional[str] = None, tags: str = "",
@@ -54,8 +51,6 @@ class MemoryStore(StoreComponent):
             )
         c.close()
 
-# NOTE: 2026-05-16 14:14:30, self-evolved by tea_agent --- 修复datetime('now', 'localtime')字面量问题，支持任意字段动态SQL注入
-    # @2026-05-16 gen by tea_agent, 修复datetime('now', 'localtime')字面量问题，支持任意字段动态SQL注入
     def update_memory(self, memory_id: str, **fields) -> bool:
         allowed = {
             "content", "category", "priority", "importance",

@@ -1,5 +1,4 @@
 """
-@2026-05-16 gen by tea_agent, ScheduledTaskStore — 定时任务 CRUD + 下次执行时间计算
 """
 import logging
 from datetime import datetime, timedelta
@@ -10,7 +9,6 @@ logger = logging.getLogger("Storage.ScheduledTasks")
 
 # cron 表达式解析 (简易: 分 时 日 月 周)
 _CRON_MAP_WEEKDAY = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
-
 
 class ScheduledTaskStore(StoreComponent):
     """定时任务管理：增删改查、下次执行时间计算。"""
@@ -176,7 +174,6 @@ class ScheduledTaskStore(StoreComponent):
         )
         self.conn.commit()
 
-
 def _parse_cron(expr: str, now: datetime) -> Optional[datetime]:
     """简易 5 字段 cron 解析，返回下次匹配时间 (精度到分钟)。"""
     try:
@@ -197,7 +194,6 @@ def _parse_cron(expr: str, now: datetime) -> Optional[datetime]:
         return None
     except Exception:
         return None
-
 
 def _match_cron_field(pattern: str, value: int) -> bool:
     """匹配单个 cron 字段: * / 步长 , 列表 - 范围"""

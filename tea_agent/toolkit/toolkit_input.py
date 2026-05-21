@@ -1,12 +1,9 @@
-# NOTE: 2026-04-30 16:39:52, self-evolved by tea_agent --- json/time导入移到函数体内，解决exec沙箱环境模块不可见问题
 # @2026-04-30 gen by deepseek-v4-pro, toolkit_input: "手" — 模拟鼠标/键盘操作，让 Agent 能操作电脑
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 """toolkit_input — 操作能力：鼠标移动/点击/拖拽 + 键盘输入/快捷键"""
-
 
 def toolkit_input(
     action: str,
@@ -40,7 +37,6 @@ def toolkit_input(
 
     Returns:
         操作结果描述
-# NOTE: 2026-04-30 16:40:00, self-evolved by tea_agent --- 函数体内添加import json，解决exec沙箱问题
     """
     logger.info(f"toolkit_input called: action={action!r}, x={x!r}, y={y!r}, text={repr(text)[:80]}, button={button!r}, duration={duration!r}, dx={dx!r}, dy={dy!r}, keys={keys!r}, amount={amount!r}")
 
@@ -132,7 +128,6 @@ def toolkit_input(
         return "⚠️ 触发 FailSafe：鼠标移到了左上角 (0,0)，操作已取消。"
     except Exception as e:
         return f"❌ 操作失败: {e}"
-
 
 def meta_toolkit_input() -> dict:
     return {

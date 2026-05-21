@@ -1,11 +1,8 @@
-# NOTE: 2026-05-02 12:00:00, self-evolved by tea_agent --- 合并 toolkit_batch_exec 进入 toolkit_exec（action='batch'），消除命令执行工具重叠
 # llm generated tool func, created Wed Apr 15 13:13:26 2026
 # version: 1.1.0
-# NOTE: 2026-05-02, self-evolved by tea_agent --- 合并 toolkit_batch_exec: 新增 action='batch'
 
 import logging
 
-# NOTE: 2026-05-07 gen by tea_agent, toolkit logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_exec(app: str = "", args: list = None, action: str = "single", commands: list = None, timeout: int = 30):
@@ -26,8 +23,6 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         single: (returncode, stdout, stderr)
         batch: (0, json结果数组, "")
     """
-# NOTE: 2026-05-07 13:38:51, self-evolved by tea_agent --- 修复 logger.info 中 args[:80]/commands[:80] 在 None 时崩溃，改用 repr() 包裹
-# NOTE: 2026-05-17 10:12:43, self-evolved by tea_agent --- toolkit_exec长python -c脚本自动写入临时文件执行，避免内联大段代码导致JSON参数非法
     logger.info(f"toolkit_exec called: app={app!r}, args={repr(args)[:80]}, action={action!r}, commands={repr(commands)[:80]}, timeout={timeout!r}")
 
     import subprocess
@@ -36,7 +31,6 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
     import signal
     import tempfile
 
-    # NOTE: 2026-05-19 gen by tea_agent, 长python -c脚本自动写入临时文件，避免内联大段代码导致JSON参数序列化非法
     _PY_CMD_THRESHOLD = 500  # -c 脚本超过此字符数则写入临时文件
     if action == "single" and app in ("python", "python3") and args:
         # 检测 python -c "很长的代码" 模式
@@ -73,7 +67,6 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         results = [None] * len(commands)
         lock = threading.Lock()
 
-# NOTE: 2026-05-09 19:56:17, self-evolved by tea_agent --- batch 模式改用 Popen+communicate(timeout)+killpg：超时后强制杀死进程组，避免孤儿子进程
         def _run(idx, cmd):
             import signal as _sig
             try:
@@ -127,7 +120,6 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         results.insert(0, {"summary": f"{success}/{len(commands)} 成功", "total": len(commands), "workers": workers})
         return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
 
-# NOTE: 2026-05-04 12:39:01, self-evolved by tea_agent --- toolkit_exec 检测 sudo 自动弹出 GUI 密码框，显示命令信息
     else:  # action == "single"
         if args is None:
             args = []
@@ -170,8 +162,6 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
             result = (-1, "", f"⏰ 命令超时被强制终止 (>{effective_timeout}s): {cmd_preview}")
         
         return result
-
-
 
 def _sudo_with_gui(app: str, args: list):
     """sudo 命令通过 GUI 对话框获取密码 — 显示完整命令信息"""
@@ -264,12 +254,10 @@ def _sudo_with_gui(app: str, args: list):
         result = (-1, "", f"⏰ 命令超时被强制终止 (>120s): {app}")
     return result
 
-
 def meta_toolkit_exec() -> dict:
     return {
         "type": "function",
         "function": {
-# NOTE: 2026-05-04 12:39:08, self-evolved by tea_agent --- 更新 toolkit_exec meta 描述：注明 sudo 自动弹框
             "description": "执行系统命令。action='single' 执行单条；action='batch' 并行批量执行多条。执行 sudo 命令时自动弹出 GUI 密码框并显示完整命令信息。",
             "name": "toolkit_exec",
             "parameters": {

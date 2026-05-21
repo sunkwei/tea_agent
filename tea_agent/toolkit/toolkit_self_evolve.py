@@ -1,10 +1,9 @@
-# @2026-04-29 gen by deepseek-v4-pro, 内置工具: 自进化——修改项目代码并带注释/备份/验证
 import logging
 
 logger = logging.getLogger("toolkit")
 
 def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_code: str, verify: bool = True, backup: bool = True, git_snapshot: bool = True, run_tests: bool = True, symbol: str = None, lsp_checks: bool = True) -> dict:
-    """@2026-05-19 gen by claude, 集成LSP检查层(Layer2.5: 影响分析+lint+签名对比)    五层安全自进化 + LSP 智能增强。
+    """五层安全自进化 + LSP 智能增强。
 
     安全层次:
         Layer 0: git auto-commit 快照
@@ -100,7 +99,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         except Exception as e:
             return 0, 0, str(e)[:200]
 
-    # ── LSP 辅助函数 ── @2026-05-19 gen by claude
+    # ── LSP 辅助函数 ──
     def _run_lsp_checks(full_path, symbol, old_code, new_code, content):
         """Layer 2.5: 影响分析 + ruff lint + 签名对比。非阻塞。"""
         result = {"impact": None, "lint_before": 0, "lint_after": 0, "lint_new": 0,
@@ -185,11 +184,6 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     if content.count(old_code) > 1:
         return {"ok": False, "error": f"old_code 在文件中出现 {content.count(old_code)} 次，无法确定修改位置，请提供更多上下文"}
 
-    # 生成演化注释（仅 .py 源码文件，README/CHANGELOG 等不加）
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    is_py = file_path.endswith(".py")
-    comment = f"# NOTE: {now}, self-evolved by tea_agent --- {description}\n" if is_py else ""
-
     # ── Layer 0: Git 快照 ──
     git_snapped = False
     git_snap_error = None
@@ -212,7 +206,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     shutil.copy2(full_path, tmp_bak)
 
     # 应用修改（.py 文件在 new_code 前加注释）
-    annotated_new = (comment + new_code) if comment else new_code
+    annotated_new = new_code
     new_content = content.replace(old_code, annotated_new, 1)
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(new_content)
@@ -239,7 +233,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                            "compile_verify": False, "tests": "skipped"}
             }
 
-    # ── Layer 2.5: LSP 智能检查 ── @2026-05-19 gen by claude
+    # ── Layer 2.5: LSP 智能检查 ──
     lsp_result = None
     if lsp_checks and verify_ok and file_path.endswith(".py"):
         lsp_result = _run_lsp_checks(full_path, symbol, old_code, new_code, content)
@@ -278,7 +272,6 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     return {
         "ok": True,
         "file": file_path,
-        "comment": comment.strip(),
         "bak_path": bak_path,
         "verified": verify_ok,
         "layers": {
@@ -291,7 +284,6 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     }
 
 def meta_toolkit_self_evolve():
-    """Meta toolkit self evolve."""
     return {
         "type": "function",
         "function": {
@@ -301,7 +293,7 @@ def meta_toolkit_self_evolve():
                 "type": "object",
                 "properties": {
                     "file_path": {"type": "string", "description": "要修改的文件路径（相对于项目根目录，如 tea_agent/store.py）"},
-                    "description": {"type": "string", "description": "修改的简短描述，会写入注释"},
+                    "description": {"type": "string", "description": "修改的简短描述"},
                     "old_code": {"type": "string", "description": "要替换的旧代码片段（必须精确匹配）"},
                     "new_code": {"type": "string", "description": "替换后的新代码片段"},
                     "verify": {"type": "boolean", "description": "[Layer2] 是否验证编译通过，默认 true。失败自动回滚"},

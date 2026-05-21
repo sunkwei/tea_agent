@@ -1,21 +1,21 @@
-# @2026-04-29 gen by deepseek-v4-pro, SessionMemoryMixin: 会话记忆注入与自动提取
 """
-会话记忆注入 Mixin
-在每次对话中注入相关长期记忆，并支持自动提取新记忆。
+会话记忆组件
+
+负责会话记忆注入与自动提取。
+从 SessionMemoryMixin 重构而来，使用组合模式替代 Mixin。
 """
 
 from typing import List, Dict, Optional, TYPE_CHECKING
+from .session_context import SessionComponent, SessionContext
 
 if TYPE_CHECKING:
     from tea_agent.memory import MemoryManager
 
 import logging
 
-logger = logging.getLogger("session_memory")
+logger = logging.getLogger("session.memory")
 
 
-# NOTE: 2026-05-17 08:58:58, self-evolved by tea_agent --- 添加 _get_cheap_params helper 函数
-# @2026-05-17 gen by tea_agent, 获取 cheap 模型有效推理参数
 def _get_cheap_params():
     """返回 cheap 模型 {temperature, max_tokens}，失败时使用保守默认值。"""
     try:
@@ -29,51 +29,39 @@ def _get_cheap_params():
         return {"temperature": 0.3, "max_tokens": 1000}
 
 
-class SessionMemoryMixin:
+class MemoryComponent(SessionComponent):
     """
-    记忆注入 Mixin。
-
-    期望使用者提供：
-    - self.memory: MemoryManager 实例
-    - self.messages: 消息列表
-    - self.storage: Storage 实例
-    - self._build_api_messages(): 构建 API 消息的方法
-    - self.pipeline: SessionPipeline 实例
+    会话记忆组件。
+    
+    通过 self.ctx 访问共享状态（memory, storage, messages, pipeline, _injected_memories 等）。
     """
-
-    def __init__(self):
-        self.memory: Optional["MemoryManager"] = None
-        self._injected_memories_text: str = ""
-        self._injected_memories: List[Dict] = []
-
-# NOTE: 2026-04-30 14:35:20, self-evolved by tea_agent --- _setup_memory传递dedup_threshold给MemoryManager
-    def _setup_memory(self):
-        """初始化 Memory 管理器（需要 self.storage 已设置）"""
-        if not self.storage:
+    
+    @property
+    def name(self) -> str:
+        return "memory"
+    
+    def initialize(self) -> None:
+        """初始化 Memory 管理器（需要 storage 已设置）"""
+        if not self.ctx.storage:
             return
+        
         from tea_agent.memory import MemoryManager
-        threshold = getattr(self, 'memory_extraction_threshold', 2)
-# NOTE: 2026-04-30 14:39:06, self-evolved by tea_agent --- session_memory默认dedup改为0.3
-        dedup = getattr(self, 'memory_dedup_threshold', 0.3)
+        threshold = self.ctx.memory_extraction_threshold
+        dedup = self.ctx.memory_dedup_threshold
         try:
-            self.memory = MemoryManager(
-                self.storage,
+            self.ctx.memory = MemoryManager(
+                self.ctx.storage,
                 extraction_threshold=threshold,
                 dedup_threshold=dedup,
             )
             logger.info("MemoryManager 初始化成功 (dedup_threshold=%.2f)", dedup)
         except Exception as e:
             logger.warning(f"MemoryManager 初始化失败: {e}")
-            self.memory = None
+            self.ctx.memory = None
 
-    # ------------------------------------------------------------------
-    # Pipeline 步骤：记忆注入
-    # ------------------------------------------------------------------
-
-# NOTE: 2026-05-16 12:49:38, self-evolved by tea_agent --- _pipeline_inject_memories 合并项目记忆注入（用户≤30 + 项目≤30）
-    def _pipeline_inject_memories(self, context: Dict) -> List:
+    def inject_memories(self, context: Dict) -> List:
         """
-        Pipeline 步骤：选择并格式化用户记忆 + 项目记忆。
+        从长期记忆（用户+项目）中注入相关记忆。
 
         Args:
             context: 包含 user_msg, msg 等字段
@@ -81,23 +69,22 @@ class SessionMemoryMixin:
         Returns:
             更新后的消息列表
         """
-        if not self.memory:
-            return self.messages
+        if not self.ctx.memory:
+            return self.ctx.messages
 
         user_msg = context.get("user_msg", "") or context.get("msg", "")
         all_memory_texts = []
 
         # ── 用户记忆 ──
         try:
-            # NOTE: 2026-05-02 12:06:18, self-evolved by tea_agent --- select_memories 调用移除 limit=5 硬编码，改用 MAX_INJECT=30 默认
-            memories = self.memory.select_memories(user_msg)
+            memories = self.ctx.memory.select_memories(user_msg)
         except Exception as e:
             logger.warning(f"记忆选择失败: {e}")
             memories = []
 
         if memories:
             try:
-                formatted = self.memory.format_memories(memories)
+                formatted = self.ctx.memory.format_memories(memories)
                 if formatted:
                     all_memory_texts.append(formatted)
                     logger.info(f"注入了 {len(memories)} 条用户记忆")
@@ -119,17 +106,13 @@ class SessionMemoryMixin:
 
         # ── 合并 ──
         if all_memory_texts:
-            self._injected_memories_text = "\n\n".join(all_memory_texts)
-            self._injected_memories = memories
+            self.ctx._injected_memories_text = "\n\n".join(all_memory_texts)
+            self.ctx._injected_memories = memories
         else:
-            self._injected_memories_text = ""
-            self._injected_memories = []
+            self.ctx._injected_memories_text = ""
+            self.ctx._injected_memories = []
 
-        return self.messages
-
-    # ------------------------------------------------------------------
-    # 记忆自动提取
-    # ------------------------------------------------------------------
+        return self.ctx.messages
 
     def trigger_memory_extraction(self, topic_id: int) -> int:
         """
@@ -141,17 +124,17 @@ class SessionMemoryMixin:
         Returns:
             新增记忆数量，出错返回 -1
         """
-        if not self.memory or not self.storage:
+        if not self.ctx.memory or not self.ctx.storage:
             return -1
 
         # 获取未摘要的对话
         try:
-            unsummarized = self.storage.get_unsummarized_conversations(topic_id)
+            unsummarized = self.ctx.storage.get_unsummarized_conversations(topic_id)
         except Exception as e:
             logger.warning(f"获取未摘要对话失败: {e}")
             return -1
 
-        if not self.memory.is_extraction_needed(len(unsummarized)):
+        if not self.ctx.memory.is_extraction_needed(len(unsummarized)):
             return 0
 
         # 构建对话文本
@@ -162,28 +145,26 @@ class SessionMemoryMixin:
         # 调用 LLM 提取
         try:
             client, model = self._get_summarize_client()
-            messages = self.memory.build_extraction_prompt(conv_text)
+            messages = self.ctx.memory.build_extraction_prompt(conv_text)
 
-# NOTE: 2026-05-17 08:58:45, self-evolved by tea_agent --- 记忆提取改用 cheap 模型 config 参数
             response = client.chat.completions.create(
                 model=model,
                 messages=messages,
                 stream=False,
-# NOTE: 2026-05-01 14:24:09, self-evolved by tea_agent --- 修复 thinking.type 从 disable 改为 disabled
                 extra_body={"thinking": {"type": "disabled"}},
-                # @2026-05-17 gen by tea_agent, 从 config 读取 cheap 模型参数
                 **_get_cheap_params(),
             )
 
             # 追踪 token
+            # 通过 context 上的 api 组件追踪（如果存在）
             if hasattr(self, '_track_api_usage'):
                 self._track_api_usage(response, is_cheap=True)
 
             result_text = response.choices[0].message.content or ""
-            extracted = self.memory.parse_extraction_result(result_text)
+            extracted = self.ctx.memory.parse_extraction_result(result_text)
 
             if extracted:
-                count = self.memory.ingest_extracted(extracted, topic_id)
+                count = self.ctx.memory.ingest_extracted(extracted, topic_id)
                 logger.info(f"自动提取了 {count} 条新记忆")
                 return count
 
@@ -191,6 +172,12 @@ class SessionMemoryMixin:
             logger.warning(f"记忆提取失败: {e}")
 
         return 0
+
+    def _get_summarize_client(self):
+        """获取摘要使用的客户端和模型（便宜模型或主模型）"""
+        if self.ctx.cheap_client and self.ctx.cheap_model:
+            return self.ctx.cheap_client, self.ctx.cheap_model
+        return self.ctx.client, self.ctx.model
 
     @staticmethod
     def _build_conversation_text(conversations: List[Dict]) -> str:
@@ -202,19 +189,15 @@ class SessionMemoryMixin:
             lines.append("")
         return "\n".join(lines)
 
-    # ------------------------------------------------------------------
-    # 暴露给 API / GUI
-    # ------------------------------------------------------------------
-
     def get_injected_memories(self) -> List[Dict]:
         """获取当前会话注入的记忆列表"""
-        return list(self._injected_memories)
+        return list(self.ctx._injected_memories)
 
     def get_memory_stats(self) -> Dict:
         """获取记忆统计"""
-        if not self.memory or not self.storage:
+        if not self.ctx.memory or not self.ctx.storage:
             return {"total": 0, "by_category": {}, "by_priority": {}}
         try:
-            return self.storage.get_memory_stats()
+            return self.ctx.storage.get_memory_stats()
         except Exception:
             return {"total": 0, "by_category": {}, "by_priority": {}}

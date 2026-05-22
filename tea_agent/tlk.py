@@ -518,3 +518,12 @@ class Toolkit:
         versions.sort(key=lambda v: [int(x) for x in v.split('.')])
         
         return (0, versions)
+
+
+def toolkit_reload():
+    """桥接方法：调用全局 Toolkit 实例的 reload。"""
+    tlk = cast(Toolkit, globals().get("_toolkit_", None))
+    if tlk:
+        return tlk.reload()
+    return "❌ _toolkit_ 未初始化"
+

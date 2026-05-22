@@ -144,6 +144,7 @@ class MemoryComponent(SessionComponent):
         # 调用 LLM 提取
         try:
             client, model = self._get_summarize_client()
+            is_cheap = (client is self.ctx.cheap_client and self.ctx.cheap_client is not None)
             messages = self.ctx.memory.build_extraction_prompt(conv_text)
 
             response = client.chat.completions.create(
@@ -154,10 +155,37 @@ class MemoryComponent(SessionComponent):
                 **_get_cheap_params(),
             )
 
-            # 追踪 token
-            # 通过 context 上的 api 组件追踪（如果存在）
-            if hasattr(self, '_track_api_usage'):
-                self._track_api_usage(response, is_cheap=True)
+            # 追踪 token（通过 context 上的 api 组件）
+            if self.ctx.api_comp and hasattr(self.ctx.api_comp, '_track_api_usage'):
+                self.ctx.api_comp._track_api_usage(response, is_cheap=is_cheap)
+
+            # 2026-05-21 gen by Tea Agent, 修复: 便宜 token 在后台线程累加，
+            # 但 _post_chat_pipeline 在此之前已读取并入库（值为 0），
+            # 且下一轮 reset_session_state 会清零，导致便宜 token 从未持久化。
+            # 此处直接在记忆提取完成后将便宜 token 写入 DB，独立于主流程时序。
+            if is_cheap and hasattr(response, 'usage') and response.usage:
+                try:
+                    usage = response.usage
+                    c_total = getattr(usage, 'total_tokens', 0) or 0
+                    c_prompt = getattr(usage, 'prompt_tokens', 0) or 0
+                    c_completion = getattr(usage, 'completion_tokens', 0) or 0
+                    if c_total > 0:
+                        # 用直接 UPDATE 避免 add_topic_tokens 的 conversation_count+1
+                        conn = self.ctx.storage.conn
+                        conn.execute('''
+                            INSERT INTO topic_token_stats (
+                                topic_id, total_cheap_tokens, total_cheap_prompt_tokens,
+                                total_cheap_completion_tokens, last_update
+                            ) VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
+                            ON CONFLICT(topic_id) DO UPDATE SET
+                                total_cheap_tokens = total_cheap_tokens + excluded.total_cheap_tokens,
+                                total_cheap_prompt_tokens = total_cheap_prompt_tokens + excluded.total_cheap_prompt_tokens,
+                                total_cheap_completion_tokens = total_cheap_completion_tokens + excluded.total_cheap_completion_tokens,
+                                last_update = datetime('now', 'localtime')
+                        ''', (topic_id, c_total, c_prompt, c_completion))
+                        conn.commit()
+                except Exception:
+                    pass
 
             result_text = response.choices[0].message.content or ""
             extracted = self.ctx.memory.parse_extraction_result(result_text)
@@ -171,7 +199,6 @@ class MemoryComponent(SessionComponent):
             logger.warning(f"记忆提取失败: {e}")
 
         return 0
-
     def _get_summarize_client(self):
         """获取摘要使用的客户端和模型（便宜模型或主模型）"""
         if self.ctx.cheap_client and self.ctx.cheap_model:

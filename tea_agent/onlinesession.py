@@ -137,6 +137,7 @@ class OnlineToolSession(BaseChatSession):
 
         # ── 3. 创建并初始化组件 ──
         self.api = APIComponent(self.context)
+        self.context.api_comp = self.api  # 供 Memory/Summarizer 组件追踪 token
         self.tools_comp = ToolComponent(self.context)
         self.memory_comp = MemoryComponent(self.context)
         self.summarizer_comp = SummarizerComponent(self.context)
@@ -150,6 +151,9 @@ class OnlineToolSession(BaseChatSession):
         self.storage = storage
         self._cheap_client = cheap_client
         self._cheap_model_name = cheap_model
+        # BUGFIX: 同步到 context，让 Memory/Summarizer 组件能访问便宜模型
+        self.context.cheap_client = cheap_client
+        self.context.cheap_model = cheap_model
         self._current_mode = "mixed"
         self._supports_vision = supports_vision
         self._supports_reasoning = supports_reasoning
@@ -1408,7 +1412,7 @@ class OnlineToolSession(BaseChatSession):
 
         # 自动提取记忆
         import threading
-        if isinstance(topic_id, str) and topic_id and not result.get("interrupted", False):
+        if topic_id and topic_id != -1 and not result.get("interrupted", False):
             def _auto_extract():
                 """Internal: auto extract."""
                 try:

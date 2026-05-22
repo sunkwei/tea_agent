@@ -764,17 +764,12 @@ class TkGUI(AgentCore):
                 cheap_usage = self.sess._last_cheap_usage
                 if usage and usage.get("total_tokens", 0) > 0:
                     self.root.after(0, lambda u=usage, cu=cheap_usage: self._add_token_notice_and_render(u, cu))
+                    # 2026-05-21 gen by Tea Agent: 记忆提取在后台线程用便宜模型，
+                    # 此时 cheap_usage 还是 0，等提取完成后延迟刷新便宜 token 显示
+                    self.root.after(3000, self._refresh_cheap_token_notice)
                     # 读取嵌入模型用量
                     emb_str = ""
-                    try:
-                        from tea_agent.embedding_util import get_embedding_engine
-                        euse = get_embedding_engine().get_embedding_usage(reset=False)
-                        if euse.get("total_tokens", 0) > 0:
-                            emb_str = f" | Emb:{euse['total_tokens']:,}"
-                    except Exception:
-                        pass
-                    status_msg = (f"✅ 完成 | Tokens: {usage['total_tokens']:,} "
-                                  f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,}){emb_str}")
+                    status_msg = (f"✅ 完成 | Tokens: {usage['total_tokens']:,} "                                  f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,}){emb_str}")
                     self.root.after(0, lambda m=status_msg: self._update_status(m))
                     self.root.after(0, self._refresh_topics_preserve_selection)
                     self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
@@ -865,6 +860,28 @@ class TkGUI(AgentCore):
         token_msg = "\n".join(lines)
         self.chat_messages.append({"role": "notice", "content": token_msg, "timestamp": self._now_ts()})
         self._render_and_show_chat()
+
+    # 2026-05-21 gen by Tea Agent, 修复: 延迟刷新便宜模型 token 显示，
+    # 因为记忆提取在后台线程中运行，主线程渲染时 cheap_usage 还是 0。
+    # 最多重试 3 次，每次间隔 4 秒，确保覆盖 API 调用耗时。
+    def _refresh_cheap_token_notice(self, attempt: int = 1):
+        """在记忆提取完成后重新读取便宜 token 并追加显示"""
+        try:
+            cu = self.sess._last_cheap_usage
+            if cu and cu.get("total_tokens", 0) > 0:
+                c_total = cu.get("total_tokens", 0)
+                c_p = cu.get("prompt_tokens", 0)
+                c_c = cu.get("completion_tokens", 0)
+                line = f"🔢 便宜模型本轮: {c_total:,} tokens (P:{c_p:,} C:{c_c:,})"
+                self.chat_messages.append({"role": "notice", "content": line, "timestamp": self._now_ts()})
+                self._render_and_show_chat()
+                return
+            # 还没有数据，4 秒后重试（最多 3 次）
+            if attempt < 3:
+                self.root.after(4000, lambda: self._refresh_cheap_token_notice(attempt + 1))
+        except Exception:
+            pass
+    def _on_history_link_click(self, url):
         self._show_raw_check_btn()
 
     def _on_history_link_click(self, url):

@@ -30,9 +30,9 @@ class SessionContext:
     
     # ── 工具相关 ──
     toolkit: Any = None  # Toolkit 实例
+    api_comp: Any = None  # APIComponent 引用 (用于各组件追踪 token)
     tool_log: Optional[Callable[[str], None]] = None
-    _rounds_collector: List[Dict] = field(default_factory=list)
-    
+    _rounds_collector: List[Dict] = field(default_factory=list)    
     # ── 存储与记忆 ──
     storage: Any = None  # Storage 实例
     memory: Any = None   # MemoryManager 实例

@@ -24,6 +24,7 @@ import os
 import threading
 from datetime import datetime
 from typing import Optional
+import re
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
@@ -77,28 +78,43 @@ class _TUIAgentCore(AgentCore):
         reply_chunks = []
         tool_round = [0]
 
+        think_started = False
+
         def on_stream(chunk: str):
-            # [THINK]reasoning_content — 始终显示思考过程（dim italic 风格）
+            nonlocal think_started
+            # [THINK]reasoning_content — 用【】包裹以区别于正文
             if chunk.startswith("[THINK]"):
                 text = chunk[7:]
                 if text:
-                    tui.call_from_thread(tui._append_chat_inline, f"[dim italic]{text}[/]")
+                    if not think_started:
+                        tui.call_from_thread(tui._append_chat_inline, "【")
+                        think_started = True
+                    tui.call_from_thread(tui._append_chat_inline, text)
                 return
             if chunk.startswith("[THINK_DONE]"):
-                return  # 思考结束，不额外输出标记
+                if think_started:
+                    tui.call_from_thread(tui._append_chat_inline, "】")
+                    tui.call_from_thread(tui._flush_stream_buffer)
+                    think_started = False
+                return
 
-            if self._tui_verbose:
-                if chunk.startswith("[TOOL_START:"):
-                    tool_round[0] += 1
-                    rn = tool_round[0]
-                    tool_name = chunk.split(":", 1)[1].rstrip("]")
+            # ── 工具调用始终显示工具名 ──
+            if chunk.startswith("[TOOL_START:"):
+                tool_round[0] += 1
+                tool_name = chunk.split(":", 1)[1].rstrip("]")
+                if self._tui_verbose:
                     tui.call_from_thread(
                         tui._append_chat,
-                        f"[bold yellow]Tool [{rn}]: {tool_name}[/]"
+                        f"Tool [{tool_round[0]}]: {tool_name}"
                     )
-                elif chunk.startswith("[TOOL_DONE]"):
-                    tui.call_from_thread(tui._append_chat, "[yellow]Tool done[/]")
-                elif chunk.startswith("[REPLY]"):
+                else:
+                    tui.call_from_thread(tui._append_chat, f"🔧 {tool_name}")
+                return
+            if chunk.startswith("[TOOL_DONE]"):
+                return
+
+            if self._tui_verbose:
+                if chunk.startswith("[REPLY]"):
                     text = chunk[7:]
                     reply_chunks.append(text)
                     tui.call_from_thread(tui._append_chat_inline, text)
@@ -280,7 +296,7 @@ class TeaTUI(App):
             yield Label("Tea Agent TUI", id="header-title")
             yield Label("", id="header-model")
         with ScrollableContainer(id="chat-container"):
-            yield RichLog(id="chat-area", highlight=True, markup=True, wrap=True)
+            yield TextArea(id="chat-area", read_only=True, language=None, show_line_numbers=False)
         with Container(id="input-container"):
             yield self._SendTextArea(id="input-area", language=None, show_line_numbers=False)
         with Container(id="status-bar"):
@@ -320,21 +336,19 @@ class TeaTUI(App):
         )
         info = self.agent._init_session_info_str()
         self._update_status(info.replace("\\n", " | "))
-        chat = self.query_one("#chat-area", RichLog)
-        chat.write("[bold cyan]Tea Agent TUI[/]")
-        chat.write(f"   Model: {model_name}")
-        chat.write(f"   Think: [bold]{'ON' if self._cli_think else 'OFF'}[/]  "
+        self._chat_write("[bold cyan]Tea Agent TUI[/]")
+        self._chat_write(f"   Model: {model_name}")
+        self._chat_write(f"   Think: [bold]{'ON' if self._cli_think else 'OFF'}[/]  "
                     f"Verbose: [bold]{'ON' if self._cli_verbose else 'OFF'}[/]")
-        chat.write(f"   Tools: {tool_count} loaded")
-        chat.write("   Ctrl+C quit | Esc interrupt | Ctrl+T Think | Ctrl+V Verbose")
-        chat.write("")
+        self._chat_write(f"   Tools: {tool_count} loaded")
+        self._chat_write("   Ctrl+C quit | Esc interrupt | Ctrl+T Think | Ctrl+V Verbose")
+        self._chat_write("")
         self._update_status_right()
         self.agent._auto_init_topic()
 
     def _show_error(self, msg: str):
         try:
-            chat = self.query_one("#chat-area", RichLog)
-            chat.write(f"[bold red]ERROR: {msg}[/]")
+            self._chat_write(f"[bold red]ERROR: {msg}[/]")
         except NoMatches:
             pass
         self._update_status(f"ERROR: {msg}")
@@ -383,8 +397,7 @@ class TeaTUI(App):
         if not text:
             return
         input_widget.clear()
-        chat = self.query_one("#chat-area", RichLog)
-        chat.write(f"\\n[bold green]You:[/] {text}")
+        self._chat_write(f"\\n[bold green]You:[/] {text}")
 
         if text.startswith("/"):
             self._handle_command(text)
@@ -429,10 +442,30 @@ class TeaTUI(App):
     def _append_chat(self, text: str):
         """Append a complete line to chat area (thread-safe via call_from_thread)."""
         try:
-            chat = self.query_one("#chat-area", RichLog)
-            chat.write(text)
+            self._chat_write(text)
         except NoMatches:
             pass
+
+
+    # ---- Stream buffer operations ----
+
+    @staticmethod
+    def _strip_markup(text: str) -> str:
+        """Remove Rich markup tags like [bold], [dim italic], etc."""
+        return re.sub(r'\[/?[^\]]*\]', '', text)
+
+    def _chat_write(self, text: str) -> None:
+        """Write plain text to chat TextArea, auto-scroll to bottom.
+
+        Strips Rich markup tags. Think content uses 【】delimiters instead.
+        """
+        chat = self.query_one("#chat-area", TextArea)
+        plain = self._strip_markup(text)
+        if chat.text:
+            chat.text += "\n" + plain
+        else:
+            chat.text = plain
+        chat.move_cursor((chat.text.count('\n'), 0))
 
     def _append_chat_inline(self, text: str):
         """Accumulate text into streaming buffer; timer flushes it every 500ms."""
@@ -442,8 +475,7 @@ class TeaTUI(App):
         """Flush accumulated streaming buffer to chat (called by timer every 500ms)."""
         if self._stream_buffer:
             try:
-                chat = self.query_one("#chat-area", RichLog)
-                chat.write(self._stream_buffer)
+                self._chat_write(self._stream_buffer)
             except NoMatches:
                 pass
             self._stream_buffer = ""
@@ -453,7 +485,7 @@ class TeaTUI(App):
         parts = cmd.split(None, 1)
         cmd_name = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
-        chat = self.query_one("#chat-area", RichLog)
+        chat = self.query_one("#chat-area", TextArea)
 
         if cmd_name in ("/bye", "/quit", "/exit"):
             self.exit()
@@ -472,11 +504,10 @@ class TeaTUI(App):
         elif cmd_name == "/switch":
             self._switch_topic(arg)
         else:
-            chat.write(f"[bold yellow]Unknown: {cmd_name} (/help for help)[/]")
+            self._chat_write(f"[bold yellow]Unknown: {cmd_name} (/help for help)[/]")
 
     def _show_help(self):
-        chat = self.query_one("#chat-area", RichLog)
-        chat.write("""
+        self._chat_write("""
 [bold]Tea Agent TUI Help[/]
   /help              Show this help
   /bye, /quit, /exit Quit
@@ -495,9 +526,9 @@ class TeaTUI(App):
 """)
 
     def _cmd_set(self, arg: str):
-        chat = self.query_one("#chat-area", RichLog)
+        chat = self.query_one("#chat-area", TextArea)
         if "=" not in arg:
-            chat.write("[bold yellow]Usage: /set think=on|off or /set verbose=on|off[/]")
+            self._chat_write("[bold yellow]Usage: /set think=on|off or /set verbose=on|off[/]")
             return
         k, v = arg.split("=", 1)
         k, v = k.strip().lower(), v.strip().lower()
@@ -509,21 +540,21 @@ class TeaTUI(App):
                 self.agent._cfg.enable_thinking = val
                 self.agent.sess.enable_thinking = val
             self._update_status_right()
-            chat.write(f"[bold]Think = {'ON' if val else 'OFF'}[/]")
+            self._chat_write(f"[bold]Think = {'ON' if val else 'OFF'}[/]")
         elif k == "verbose":
             val = v in ("on", "true", "1", "yes")
             self._cli_verbose = val
             if self.agent:
                 self.agent._tui_verbose = val
             self._update_status_right()
-            chat.write(f"[bold]Verbose = {'ON' if val else 'OFF'}[/]")
+            self._chat_write(f"[bold]Verbose = {'ON' if val else 'OFF'}[/]")
         else:
-            chat.write(f"[bold yellow]Unknown setting: {k} (think, verbose)[/]")
+            self._chat_write(f"[bold yellow]Unknown setting: {k} (think, verbose)[/]")
     def _switch_topic(self, arg: str):
-        chat = self.query_one("#chat-area", RichLog)
+        chat = self.query_one("#chat-area", TextArea)
         tid = arg.strip()
         if not self.agent:
-            chat.write("[bold red]Agent not ready[/]")
+            self._chat_write("[bold red]Agent not ready[/]")
             return
         tp = self.agent.db.get_topic(tid)
         if not tp:
@@ -532,14 +563,14 @@ class TeaTUI(App):
             if len(matched) == 1:
                 tp = matched[0]
             elif len(matched) > 1:
-                chat.write("[bold yellow]Multiple matches, be more specific[/]")
+                self._chat_write("[bold yellow]Multiple matches, be more specific[/]")
                 return
             else:
-                chat.write(f"[bold yellow]Topic not found: {tid}[/]")
+                self._chat_write(f"[bold yellow]Topic not found: {tid}[/]")
                 return
         self.agent.current_topic_id = tp["topic_id"]
         self.agent._load_topic_history_into_session(tp["topic_id"])
-        chat.write(f"[bold]Switched to: {tp.get('title', tp['topic_id'][:8])}[/]")
+        self._chat_write(f"[bold]Switched to: {tp.get('title', tp['topic_id'][:8])}[/]")
 
     # ---- Actions (bindings) ----
     def action_interrupt(self):
@@ -579,15 +610,15 @@ class TeaTUI(App):
     def action_list_topics(self):
         if not self.agent:
             return
-        chat = self.query_one("#chat-area", RichLog)
+        chat = self.query_one("#chat-area", TextArea)
         topics = self.agent.db.list_topics()
-        chat.write("\\n[bold]Recent Topics:[/]")
+        self._chat_write("\\n[bold]Recent Topics:[/]")
         for i, t in enumerate(topics[:20]):
             tid = t["topic_id"][:10]
             title = t.get("title", "")[:35]
             stamp = str(t.get("last_update_stamp", ""))[:19]
             mark = " <--" if t["topic_id"] == self.agent.current_topic_id else ""
-            chat.write(f"  {i+1}. `{tid}` {title} {stamp}{mark}")
+            self._chat_write(f"  {i+1}. `{tid}` {title} {stamp}{mark}")
 
 
 def main():

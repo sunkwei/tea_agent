@@ -1,9 +1,9 @@
-# TeaAgent v0.9.3
+# TeaAgent v0.9.4
 [📖 English Version](README_EN.md)
 
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**系统提示词自我进化**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
 
-核心 13 个依赖（openai、numpy、markdown、tkinterweb、pyautogui、mss、Pillow、requests、beautifulsoup4、tkhtmlview、jieba、mcp、playwright），OCR/TTS/ASR 为可选扩展。仅依赖 Python tk 库，无需浏览器，极致轻量。绝大部分代码由 LLM 自行生成，是一个「AI 写 AI」的实验项目。（目前主要使用 deepseek v4 pro 模型自主进化，便宜啊）
+核心 11 个依赖（openai、numpy、markdown、tkinterweb、Pillow、requests、beautifulsoup4、tkhtmlview、jieba、mcp、playwright），仅依赖 Python tk 库，无需浏览器，极致轻量。绝大部分代码由 LLM 自行生成，是一个「AI 写 AI」的实验项目。（目前主要使用 deepseek v4 pro 模型自主进化，便宜啊）
 
 ## ⚠️ 安全警告
 
@@ -77,22 +77,21 @@ conversations (全部)
 
 ### 工具模块化：Skill 系统
 
-46 个工具按场景分为 8 个 Skill，**按需激活**以节省 token：
+47 个工具按场景分为 7 个 Skill，**按需激活**以节省 token：
 
 ```
 Skill (激活条件)                    工具数   默认
 ──────────────────────────────────────────────────
 🎛️  CORE (始终激活)                   5      ✅    save/reload/rollback/list_versions/skill
-📁  file_system (文件/命令操作)        4      ✅    file/exec/sudo_gui/pkg
+📁  file_system (文件/命令操作)        4      ✅    file/exec/edit/pkg
 ⏰  utility (时间日期)                 3      ✅    gettime/date_diff/lunar
 🧠  memory_knowledge (记忆/知识库)    7      ✅    memory/kb/reflection/proactive/subconscious/explr/mode
 📋  todo_workflow (TODO工作流)          1             toolkit_todo
 🔧  self_evolution (自我进化)         10            self_evolve/build/bump_version/edit/diff/lsp/...
-🖥️  desktop_automation (截图/OCR)      4            screenshot/ocr/input/notify
-🔊  interaction (语音/搜索/知识)        3            speak/listen/search
+🔊  interaction (搜索/MCP)              3            search/mcp/js_fetch
 ```
 
-- **默认场景**（纯对话）：约 19 工具激活
+- **默认场景**（纯对话）：约 17 工具激活
 - **自动激活**：用户输入触发词 → 对应 Skill 自动激活
 - **手动控制**：`toolkit_skill(action='activate', name='self_evolution')`
 
@@ -134,7 +133,7 @@ BaseChatSession          ← 消息管理、中断、基础工具构建
 
 ```
 内置工具箱 (tea_agent/toolkit/)  ← git 管理
-  ├─ 45 工具，编译验证 + 测试保护
+  ├─ 35 工具，编译验证 + 测试保护
   └─ 版本通过 git 追踪，支持回滚
 
 用户工具箱 (~/.tea_agent/toolkit/)  ← 手动备份
@@ -201,7 +200,7 @@ Agent 支持两种思考风格，**基于用户输入关键词自动检测并瞬
 | **关键词** | bug, 修复, 代码, 测试, 实现, 验证 | 创意, 想象, 如果, 故事, 科幻, 灵感 |
 | **思维** | 结构化·逐步验证·边界条件 | 跨域联想·反向思维·极端假设 |
 | **输出** | 表格·代码块·精确指令 | 隐喻·类比·画面感 |
-| **工具倾向** | exec, self_evolve, run_tests | search, kb, speak, subconscious |
+| **工具倾向** | exec, self_evolve, run_tests | search, kb, subconscious |
 
 **工作原理**：
 1. 每次对话开始时（或手动调用 `toolkit_mode`），文本通过两级打分（子串匹配 + 整词匹配 + 句式检测）
@@ -366,22 +365,18 @@ toolkit_lsp(action='completion', file='tea_agent/onlinesession.py', line=850, co
 
 | 功能 | 引擎 | 说明 |
 |------|------|------|
-| **TTS 输出** | pyttsx3（本地）→ gTTS（在线） | 141种音色离线朗读，中文自动匹配 |
 | **STT 输入** | Google Speech API → PocketSphinx | 麦克风录音→文字，5秒超时 |
 
 ```python
-toolkit_speak(text="你好，进化完成")       # TTS 朗读
-toolkit_listen(lang="zh-CN", timeout=5)   # 录音转文字
 ```
 
 ---
 
-## 🔧 工具库 (45 内置 + 用户工具箱)
+## 🔧 工具库 (35 内置 + 用户工具箱)
 ### 系统操作
 | 工具 | 功能 |
 |------|------|
 | `toolkit_exec` | 执行系统命令（支持 batch 并行模式，120s硬超时） |
-| `toolkit_sudo_gui` | 跨平台提权（GUI密码框/UAC） |
 | `toolkit_gettime` | 获取当前时间 |
 | `toolkit_date_diff` | 日期差计算 |
 | `toolkit_lunar` | 公历农历转换（1900-2100） |
@@ -402,8 +397,6 @@ toolkit_listen(lang="zh-CN", timeout=5)   # 录音转文字
 ### 屏幕感知
 | 工具 | 功能 |
 |------|------|
-| `toolkit_screenshot` | 跨平台截屏（Wayland/X11/macOS/Windows） |
-| `toolkit_ocr` | 屏幕文字识别 + 坐标 |
 | `toolkit_input` | 鼠标键盘模拟 |
 
 ### 知识管理
@@ -449,8 +442,6 @@ toolkit_listen(lang="zh-CN", timeout=5)   # 录音转文字
 ### 语音与通知
 | 工具 | 功能 |
 |------|------|
-| `toolkit_speak` | TTS 文本朗读 |
-| `toolkit_listen` | STT 语音输入 |
 | `toolkit_os_info` | 操作系统信息（进程缓存） |
 
 ### 安装与管理
@@ -526,7 +517,7 @@ tea_agent/
 ├── mqtt_agent_connector.py     ← [MQTT 连接器](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/mqtt_agent_connector.py) (注册 broker + 订阅)
 ├── chat_room_connector.py      ← [聊天室连接器](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/chat_room_connector.py)
 │
-└── toolkit/                    ← [45 个内置工具](https://github.com/sunkwei/tea_agent/tree/master/tea_agent/toolkit)
+└── toolkit/                    ← [35 个内置工具](https://github.com/sunkwei/tea_agent/tree/master/tea_agent/toolkit)
     ├── toolkit_exec.py         ← 系统命令执行（含 batch 并行）
     ├── toolkit_file.py         ← 文件读写 + 目录列表
     ├── toolkit_explr.py        ← 项目知识库 + AST调用图

@@ -1,21 +1,21 @@
-"""Skill: 交互 — 语音合成、语音识别、网络搜索"""
+"""Skill: 交互 — 网络搜索、MCP"""
 SKILL_MANIFEST = {
     "name": "interaction",
-    "version": "1.0.0",
-    "description": "外部交互：文本转语音(TTS)、语音识别(STT)、互联网搜索",
+    "version": "1.1.0",
+    "description": "外部交互：互联网搜索、MCP 外部工具连接、JS 动态页面抓取",
     "tools": [
-        "toolkit_speak",
-        "toolkit_listen",
         "toolkit_search",
+        "toolkit_mcp",
+        "toolkit_js_fetch",
     ],
     "prompt_inject": """交互准则：
-1. 需要朗读内容时用 speak，支持中英文
-2. 需要语音输入时用 listen（Google STT 或本地引擎）
-3. 需要查互联网信息时用 search（DuckDuckGo/百度）""",
+1. 需要查互联网信息时用 search（DuckDuckGo/百度），支持 web/code/symbol 三种搜索类型
+2. 需要抓取 JS 动态渲染页面时用 js_fetch（Playwright 无头浏览器）
+3. 需要连接外部 MCP Server 时用 mcp（stdio/SSE）""",
     "activation": "auto",
-    "dependencies": ["pyttsx3", "gtts", "speechrecognition"],
+    "dependencies": ["duckduckgo_search", "playwright"],
     "trigger_words": [
-        "朗读", "说出来", "语音", "听听", "搜索",
-        "查一下", "搜一下", "网上", "百度", "google",
+        "搜索", "查一下", "搜一下", "网上", "百度", "google",
+        "网页", "fetch", "爬取", "抓取", "mcp",
     ],
 }

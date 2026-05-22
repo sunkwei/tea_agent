@@ -1068,6 +1068,7 @@ class ConfigDialog(tk.Toplevel):
             for p_key, p_label, p_default in [
                 ("temperature", "Temperature", "0.7"),
                 ("max_tokens", "Max Tokens", "4096"),
+                ("context_window", "Context Window", "131072"),
                 ("top_p", "Top-P", "0.9"),
             ]:
                 row_idx += 1
@@ -1190,6 +1191,8 @@ class ConfigDialog(tk.Toplevel):
                 params_map["max_tokens"].set(str(model_cfg.max_tokens))
             if "top_p" in params_map:
                 params_map["top_p"].set(str(model_cfg.top_p))
+            if "context_window" in params_map:
+                params_map["context_window"].set(str(model_cfg.context_window))
 
         # 加载向量模型配置
         emb_vars = getattr(self, "_embedding_vars")
@@ -1231,12 +1234,12 @@ class ConfigDialog(tk.Toplevel):
             model_cfg.api_url = vars_map["api_url"].get().strip()
             model_cfg.model_name = vars_map["model_name"].get().strip()
             params_map = getattr(self, f"_{prefix}_params", {})
-            for p_key, p_attr in [("temperature", "temperature"), ("max_tokens", "max_tokens"), ("top_p", "top_p")]:
+            for p_key, p_attr in [("temperature", "temperature"), ("max_tokens", "max_tokens"), ("context_window", "context_window"), ("top_p", "top_p")]:
                 if p_key in params_map:
                     try:
                         raw = params_map[p_key].get().strip()
                         if raw:
-                            setattr(model_cfg, p_attr, float(raw) if p_attr != "max_tokens" else int(raw))
+                            setattr(model_cfg, p_attr, float(raw) if p_attr not in ("max_tokens", "context_window") else int(raw))
                     except (ValueError, TypeError):
                         errors.append(f"{prefix}_model.{p_key}: 格式错误")
             setattr(self, f"_{prefix}_params", params_map)  # ensure it exists

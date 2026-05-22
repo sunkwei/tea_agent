@@ -33,8 +33,9 @@ class ModelConfig:
     options: Dict[str, Any] = field(default_factory=dict)
     temperature: float = 0.7       # 温度 0~2，越高越随机
     max_tokens: int = 4096         # 最大输出 token 数
+    context_window: int = 131072   # 模型上下文窗口 token 数（输入+输出上限），默认 128K
     top_p: float = 0.9             # 核采样阈值
-
+    reasoning_effort: str = "max"  # 2026-05-22 gen by claude-agent, DeepSeek thinking 推理力度 (high/max)
     @property
     def is_configured(self) -> bool:
         """检查配置是否完整"""
@@ -163,17 +164,19 @@ class AgentConfig:
             mode: "pragmatic" / "creative" / "mixed"
 
         Returns:
-            包含 temperature, max_tokens, top_p 的 dict
+        Returns:
+            包含 temperature, max_tokens, top_p, reasoning_effort 的 dict
         """
         model_cfg = self.main_model if model_type == "main" else self.cheap_model
         params = {
             "temperature": model_cfg.temperature,
             "max_tokens": model_cfg.max_tokens,
             "top_p": model_cfg.top_p,
+            "reasoning_effort": model_cfg.reasoning_effort,
         }
         # 模式覆盖
         overrides = self.mode_params.get(mode, {})
-        for k in ("temperature", "max_tokens", "top_p"):
+        for k in ("temperature", "max_tokens", "top_p", "reasoning_effort"):
             if k in overrides:
                 params[k] = overrides[k]
         return params
@@ -182,7 +185,7 @@ class AgentConfig:
     max_history: int = 10  # 最大历史消息数
     max_iterations: int = 50  # 最大工具调用迭代次数
     enable_thinking: bool = True  # 是否启用 thinking 功能
-    
+    reasoning_effort: str = "max"  # 2026-05-22 gen by claude-agent, DeepSeek thinking 推理力度 (high/max)    
     # Token 优化参数
     keep_turns: int = 5  # 保留最近N轮完整对话，更早的对话自动摘要
     max_tool_output: int = 128 * 1024  # 工具输出截断字符数
@@ -201,6 +204,7 @@ class AgentConfig:
     # 可运行时修改的配置键白名单
     _RUNTIME_CONFIG_KEYS = {
         "max_history", "max_iterations", "enable_thinking",
+        "reasoning_effort",  # 2026-05-22 gen by claude-agent
         "keep_turns", "max_tool_output", "max_assistant_content",
         "extra_iterations_on_continue", "memory_extraction_threshold",
         "memory_dedup_threshold", "chat_page_size",
@@ -210,12 +214,12 @@ class AgentConfig:
     # 类型映射
     _CONFIG_TYPES = {
         "max_history": int, "max_iterations": int, "enable_thinking": bool,
+        "reasoning_effort": str,  # 2026-05-22 gen by claude-agent
         "keep_turns": int, "max_tool_output": int, "max_assistant_content": int,
         "extra_iterations_on_continue": int, "memory_extraction_threshold": int,
         "memory_dedup_threshold": float, "chat_page_size": int,
         "history_l2_max": int, "history_l3_batch": int,
-    }
-    # 类型映射
+    }    # 类型映射
     _CONFIG_TYPES = {
         "max_history": int, "max_iterations": int, "enable_thinking": bool,
         "keep_turns": int, "max_tool_output": int, "max_assistant_content": int,
@@ -331,6 +335,7 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
                     target.options = m_data.get("options", {})
                     target.temperature = float(m_data.get("temperature", target.temperature))
                     target.max_tokens = int(m_data.get("max_tokens", target.max_tokens))
+                    target.context_window = int(m_data.get("context_window", target.context_window))
                     target.top_p = float(m_data.get("top_p", target.top_p))
 
             # 加载 Embedding 配置
@@ -368,7 +373,7 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
             cfg.max_history = int(data.get("max_history", cfg.max_history))
             cfg.max_iterations = int(data.get("max_iterations", cfg.max_iterations))
             cfg.enable_thinking = bool(data.get("enable_thinking", cfg.enable_thinking))
-            
+            cfg.reasoning_effort = str(data.get("reasoning_effort", cfg.reasoning_effort))            
             # 加载 Token 优化参数
             cfg.keep_turns = int(data.get("keep_turns", cfg.keep_turns))
             cfg.max_tool_output = int(data.get("max_tool_output", cfg.max_tool_output))
@@ -429,6 +434,8 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
                 m_data["temperature"] = target.temperature
             if target.max_tokens != 4096:
                 m_data["max_tokens"] = target.max_tokens
+            if target.context_window != 131072:
+                m_data["context_window"] = target.context_window
             if target.top_p != 0.9:
                 m_data["top_p"] = target.top_p
             if target.options:
@@ -459,7 +466,7 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     data["max_history"] = cfg.max_history
     data["max_iterations"] = cfg.max_iterations
     data["enable_thinking"] = cfg.enable_thinking
-    
+    data["reasoning_effort"] = cfg.reasoning_effort    
     # 保存 Token 优化参数
     data["keep_turns"] = cfg.keep_turns
     data["max_tool_output"] = cfg.max_tool_output
@@ -500,16 +507,18 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "  model_name: \"\"\n"
         "  temperature: 0.7      # 温度 0~2，越高越随机发散\n"
         "  max_tokens: 4096      # 最大输出 token 数\n"
+        "  context_window: 131072  # 模型上下文窗口总 token 数（输入+输出），默认 128K\n"
         "  top_p: 0.9            # 核采样阈值\n"
+        "  reasoning_effort: max # 2026-05-22 gen by claude-agent, DeepSeek thinking 推理力度: high/max\n"
         "  options:  # 可选参数，如 {extra_body: {thinking: {type: enabled}}}\n"
-        "    key: value\n\n"
-        "# 便宜模型配置（用于摘要生成、信息压缩等场景，建议低 temperature）\n"
+        "    key: value\n\n"        "# 便宜模型配置（用于摘要生成、信息压缩等场景，建议低 temperature）\n"
         "cheap_model:\n"
         "  api_key: \"\"\n"
         "  api_url: \"\"\n"
         "  model_name: \"\"\n"
         "  temperature: 0.3      # 摘要/反思需要确定性，建议 0.2~0.5\n"
         "  max_tokens: 1024      # 摘要通常较短\n"
+        "  context_window: 131072  # 模型上下文窗口\n"
         "  top_p: 0.9\n"
         "  options: {}\n\n"
         "# ==================== 模式参数覆盖 ====================\n"

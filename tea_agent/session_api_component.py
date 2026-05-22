@@ -151,9 +151,15 @@ class APIComponent(SessionComponent):
 
     def create_chat_stream(self, api_messages: List[Dict], tools: List[Dict], 
                           client=None, model=None, is_cheap=False, 
-                          temperature=None, max_tokens=None, top_p=None):
+                          temperature=None, max_tokens=None, top_p=None,
+                          reasoning_effort=None, json_mode=False):
         """
         创建流式聊天请求。
+
+        Args:
+            reasoning_effort: DeepSeek thinking 推理力度 (high/max)，
+                              None 时取 self.ctx.reasoning_effort。
+            json_mode: 是否启用 JSON 输出模式。
         """
         target_client = client or self.ctx.client
         target_model = model or self.ctx.model
@@ -165,11 +171,6 @@ class APIComponent(SessionComponent):
             "tool_choice": "auto",
             "stream": True,
         }
-        # 传入推理参数（仅在非 None 时设置）
-        for param_name in ("temperature", "max_tokens", "top_p"):
-            val = locals().get(param_name)
-            if val is not None:
-                kwargs[param_name] = val
 
         # 根据模型能力决定是否传 stream_options
         if self.ctx.supports_reasoning:
@@ -181,6 +182,8 @@ class APIComponent(SessionComponent):
         else:
             thinking_supported = self.ctx._thinking_supported
 
+        thinking_active = thinking_supported and self.ctx.enable_thinking
+
         if thinking_supported:
             kwargs["extra_body"] = {
                 "thinking": {
@@ -188,8 +191,30 @@ class APIComponent(SessionComponent):
                 }
             }
 
-        return target_client.chat.completions.create(**kwargs)
+        # reasoning_effort: DeepSeek 特有，控制推理深度（high/max）
+        # 文档: agent 场景默认 max，thinking 模式下才生效
+        if thinking_active:
+            eff = reasoning_effort if reasoning_effort is not None else self.ctx.reasoning_effort
+            if eff:
+                kwargs["reasoning_effort"] = eff
 
+        # thinking 模式下 temperature/top_p 无效（文档明确），
+        # 仅 max_tokens 仍然生效。非 thinking 模式正常传递。
+        if thinking_active:
+            if max_tokens is not None:
+                kwargs["max_tokens"] = max_tokens
+            # temperature/top_p 在 thinking 模式下不传
+        else:
+            for param_name in ("temperature", "max_tokens", "top_p"):
+                val = locals().get(param_name)
+                if val is not None:
+                    kwargs[param_name] = val
+
+        # JSON 输出模式（需要显式在系统提示词中要求返回 JSON）
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+
+        return target_client.chat.completions.create(**kwargs)
     def call_summarize_api(self, cli, mdl, messages, temperature=0.1, max_tokens=500):
         """
         调用 LLM 生成摘要，显式禁用 thinking。

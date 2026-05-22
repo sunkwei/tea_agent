@@ -27,11 +27,8 @@ logger = logging.getLogger("SkillManager")
 # 始终激活的核心工具（不归属于任何 Skill，永远可用）。save+reload+exec = 自助进化最小完备基
 CORE_TOOLS = {
     "toolkit_skill",  # Skill 管理工具必须始终可用
-    "toolkit_save",
-    "toolkit_reload",
-    "toolkit_exec",    # 自助进化必需：save 创建工具需 exec 执行 Python
-    "toolkit_rollback",
-    "toolkit_list_versions",
+    "toolkit_save",   # 统一版本管理(save/reload/rollback/versions)
+    "toolkit_exec",   # 自助进化必需：save 创建工具需 exec 执行 Python
 }
 
 class Skill:

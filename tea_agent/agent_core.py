@@ -45,8 +45,6 @@ class AgentCore:
         self.disable_summary = disable_summary
         setup_logging(debug=self.debug)
         self.generating = False
-        self._shutting_down = False  # 重启前安全闸门
-        self._pending_restart = False  # watchdog延迟重启：会话中检测到变更时置True，会话结束后检查
         self._config_path = config_path
 
         # ── 1. 加载配置 ──
@@ -83,133 +81,6 @@ class AgentCore:
 
         # ── 7b. 启动定时任务调度器（后台每分钟检查执行）──
         self._start_scheduler()
-
-        # ── 8. 启动文件监控（代码变更自动重启）──
-        self._start_file_watcher()
-
-    # ═══════════════════════════════════════════════
-    # 文件监控（非 toolkit .py 变更 → 自动重启）
-    # ═══════════════════════════════════════════════
-    def _start_file_watcher(self):
-        """启动文件监控：非 toolkit/ 目录的 .py 文件变更时自动重启进程。
-
-        使用 watchdog 库递归监控 tea_agent 包目录。
-        排除 toolkit/ 子目录 — 工具文件用 toolkit_reload() 热加载即可。
-        检测到变更后防抖 2 秒，然后 os.execv 原地替换进程。
-        """
-        try:
-            import watchdog.events
-            import watchdog.observers
-        except ImportError:
-            logger.warning("watchdog 未安装，跳过文件监控，不支持自动重启")
-            return
-
-        tea_agent_dir = Path(__file__).parent  # tea_agent/ 包目录
-
-        class _RestartHandler(watchdog.events.FileSystemEventHandler):
-            """_RestartHandler class."""
-            def __init__(self, agent):
-                """Initialize  .
-                
-                Args:
-                    agent: Description.
-                """
-                self._agent = agent
-                self._timer: Optional[threading.Timer] = None
-                self._lock = threading.Lock()
-
-            def on_modified(self, event):
-                """Handle modified event.
-                
-                Args:
-                    event: Description.
-                """
-                if event.is_directory:
-                    return
-                src = event.src_path
-                if not src.endswith('.py'):
-                    return
-                # 排除 toolkit/ 子目录 — 工具用 toolkit_reload() 热更
-                if '/toolkit/' in src or '\\toolkit\\' in src:
-                    return
-                logger.info(f"🔄 检测到文件变更: {src}")
-                if self._agent.generating:
-                    self._agent._pending_restart = True
-                    logger.info("⏸ 当前会话进行中，标记待重启，会话结束后自动执行")
-                else:
-                    self._schedule_restart()
-
-            def _schedule_restart(self):
-                """Internal: schedule restart."""
-                with self._lock:
-                    if self._timer:
-                        self._timer.cancel()
-                    self._timer = threading.Timer(2.0, self._do_restart)
-                    self._timer.daemon = True
-                    self._timer.start()
-
-            def _do_restart(self):
-                """Internal: do restart."""
-                self._agent._safe_restart()
-
-        handler = _RestartHandler(self)
-        observer = watchdog.observers.Observer()
-        observer.schedule(handler, str(tea_agent_dir), recursive=True)
-        observer.daemon = True
-        observer.start()
-        logger.info("📁 文件监控已启动（非 toolkit .py 变更时自动重启）")
-
-    def _safe_restart(self):
-        """数据安全重启（由 watchdog 或 _check_pending_restart 触发）：
-        1. 设 _shutting_down 闸门，阻止新操作
-        2. 等待 _sess_lock（最长 10s），确保当前 chat_stream 完成
-        3. WAL checkpoint(TRUNCATE) 刷盘 → close DB
-        4. 跨平台重启进程
-        """
-        import subprocess
-        import time as _time
-
-        # ── 1. 设闸门 ──
-        self._shutting_down = True
-        logger.info("🔁 收到重启信号，等待活跃操作完成...")
-
-        # ── 2. 等待 _sess_lock（chat_stream 释放锁后 DB 写入已完成）──
-        if hasattr(self, '_sess_lock'):
-            deadline = _time.monotonic() + 10.0  # 最多等10秒
-            acquired = False
-            while _time.monotonic() < deadline:
-                if self._sess_lock.acquire(blocking=False):
-                    acquired = True
-                    self._sess_lock.release()
-                    break
-                _time.sleep(0.1)
-            if not acquired:
-                logger.warning("等待会话锁超时（10s），强制关闭")
-
-        # ── 3. 安全关闭数据库 ──
-        try:
-            if hasattr(self, 'db') and self.db:
-                self.db.close()  # 内含 WAL checkpoint(TRUNCATE)
-                logger.info("数据库已安全关闭")
-        except Exception as e:
-            logger.warning(f"关闭数据库异常 (非致命): {e}")
-
-        # ── 4. 跨平台重启 ──
-        print("\n🔁 代码已变更，正在重启...\n", flush=True)
-        logger.warning("🔁 代码已变更，正在重启...")
-        args = [sys.executable] + sys.argv
-        if sys.platform == 'win32':
-            subprocess.Popen(args, close_fds=True)
-            os._exit(0)
-        else:
-            os.execv(sys.executable, args)
-
-    def _check_pending_restart(self):
-        """会话结束后调用：检查 watchdog 是否在会话期间标记了待重启。"""
-        if self._pending_restart:
-            self._pending_restart = False
-            logger.info("🔁 会话已完成，执行待定重启...")
-            self._safe_restart()
 
     def _start_subconscious(self):
         """自动启动潜意识引擎 daemon 线程。
@@ -420,8 +291,6 @@ class AgentCore:
             daemon=True
         ).start()
         self._suggest_new_topic_if_needed(topic_id)
-        self._check_pending_restart()
-
     def _update_level3_summary(self, topic_id: str):
         """L3 批处理摘要：取 L3 pending 缓冲，用便宜模型生成摘要，合并到 semantic_summary。
         2026-05-20 gen by Tea Agent, 改为批处理模式：攒够 history_l3_batch 条后触发。

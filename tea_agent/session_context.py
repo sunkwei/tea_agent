@@ -42,10 +42,12 @@ class SessionContext:
     keep_turns: int = 5
     max_tool_output: int = 128 * 1024
     max_assistant_content: int = 128 * 1024
+    context_window: int = 131072  # 模型上下文窗口大小
     memory_extraction_threshold: int = 2
     memory_dedup_threshold: float = 0.3
     supports_vision: bool = False
     supports_reasoning: bool = True
+    reasoning_effort: str = "max"  # DeepSeek: high/max, agent 场景默认 max
     disable_summary: bool = False
     
     # ── 运行时状态 ──

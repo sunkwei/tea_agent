@@ -87,7 +87,7 @@ Skill (activation condition)            Tools   Default
 ⏰  utility (time/date)                    3      ✅    gettime/date_diff/lunar
 🧠  memory_knowledge (memory/knowledge)    7      ✅    memory/kb/reflection/proactive/subconscious/explr/mode
 🔧  self_evolution (self-evolution)       10            self_evolve/build/bump_version/...
-🖥️  desktop_automation (screenshot/OCR)    4            screenshot/ocr/input/notify
+🖥️  interaction (screenshot/OCR)    4            screenshot/ocr/input/notify
 🔊  interaction (voice/search/knowledge)   3            speak/listen/search
 ```
 

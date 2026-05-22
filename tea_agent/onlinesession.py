@@ -21,6 +21,7 @@ import logging
 
 from tea_agent.basesession import BaseChatSession
 from tea_agent.session_prompts import COMPACT_SYSTEM_PROMPT
+from tea_agent.token_utils import estimate_tokens, compute_safe_budget  # 2026-05-22 gen by Tea Agent, token 预算
 from tea_agent.session_pipeline import SessionPipeline
 from tea_agent.skills import SkillManager
 
@@ -69,14 +70,14 @@ class OnlineToolSession(BaseChatSession):
         memory_dedup_threshold: float = 0.3,
         supports_vision: bool = False,
         supports_reasoning: bool = True,
+        reasoning_effort: str = "max",
         disable_summary: bool = False,
     ):
         """
         初始化会话
 
         Args:
-            toolkit: Toolkit 工具库实例
-            api_key: API密钥
+            toolkit: Toolkit 工具库实例            api_key: API密钥
             api_url: API地址
             model: 模型名称
             max_history: 最大历史消息数
@@ -95,8 +96,8 @@ class OnlineToolSession(BaseChatSession):
             memory_dedup_threshold: 记忆去重相似度阈值 (0~1)
             supports_vision: 是否支持视觉输入
             supports_reasoning: 是否支持 reasoning
-            disable_summary: 禁用历史压缩和摘要
-        """
+            reasoning_effort: DeepSeek thinking 推理力度 (high/max)，默认 max
+            disable_summary: 禁用历史压缩和摘要        """
         sp = system_prompt or self._COMPACT_SYSTEM_PROMPT
 
         # ── 1. 创建共享上下文 ──
@@ -124,10 +125,11 @@ class OnlineToolSession(BaseChatSession):
             memory_dedup_threshold=memory_dedup_threshold,
             supports_vision=supports_vision,
             supports_reasoning=supports_reasoning,
+            reasoning_effort=reasoning_effort,
             disable_summary=disable_summary,
             extra_iterations_on_continue=extra_iterations_on_continue,
+            context_window=131072,  # 2026-05-22 gen by Tea Agent, 由 _refresh_from_config() 在首次 chat_stream 前更新
         )
-
         # ── 2. 调用基类初始化（会触发属性桥接） ──
         BaseChatSession.__init__(self, model, max_history, sp)
 
@@ -144,7 +146,7 @@ class OnlineToolSession(BaseChatSession):
 
         # ── 兼容属性（指向 context）──
         # 这些属性保持与旧代码的兼容性，但实际数据存储在 context 中
-        self.max_iterations = 50
+        self.max_iterations = max_iterations  # 由 _refresh_from_config() 在每次 chat_stream 前更新
         self.storage = storage
         self._cheap_client = cheap_client
         self._cheap_model_name = cheap_model
@@ -396,6 +398,23 @@ class OnlineToolSession(BaseChatSession):
     # Pipeline 设置（委派给组件）
     # ──────────────────────────────────────────────
 
+
+    def _refresh_from_config(self):
+        """每次 chat_stream 前重新读取配置文件，使运行时参数修改即时生效。
+        
+        从 $HOME/.tea_agent/config.yaml 或 tea_agent/config.yaml 加载配置，
+        更新 self.max_iterations 和 context 中的相关参数。
+        """
+        try:
+            from tea_agent.config import load_config
+            cfg = load_config()
+            self.max_iterations = cfg.max_iterations
+            self.context.extra_iterations_on_continue = cfg.extra_iterations_on_continue
+            self.context.context_window = cfg.main_model.context_window  # 2026-05-22 gen by Tea Agent, token 预算
+            logger.debug(f"运行时参数已刷新: max_iterations={cfg.max_iterations}, extra={cfg.extra_iterations_on_continue}, ctx_win={cfg.main_model.context_window}")
+        except Exception as e:
+            logger.warning(f"刷新运行时配置失败 (使用旧值继续): {e}")
+
     def _setup_default_pipeline(self):
         """设置默认的 Pipeline 步骤"""
         # 1. 记忆注入（委派给 Memory 组件）
@@ -438,6 +457,142 @@ class OnlineToolSession(BaseChatSession):
     # 构建 API 消息（使用 context 状态）
     # ──────────────────────────────────────────────
 
+
+    def _enforce_token_budget(self, result: list, safe_budget: int, l1_start: int) -> list:
+        """
+        如果 API 消息超过 token 预算，迭代折叠 L1 中最旧的工具调用轮次。
+        
+        策略：先估算超出量，批量折叠最早的工具轮（assistant+tool_calls → tool_result），
+        用一条简短摘要替换。每批折叠最多 min(overage_rounds, 50) 轮，重复至预算内。
+        """
+        import json as _json
+        MAX_PASSES = 10  # 最多 10 轮批量折叠
+
+        for _pass in range(MAX_PASSES):
+            est = estimate_tokens(result)
+            if est <= safe_budget:
+                break
+
+            overage = est - safe_budget
+            logger.warning(
+                f"Token 预算超限: {est}/{safe_budget} (超出 {overage})，"
+                f"开始批量折叠 L1 工具轮..."
+            )
+
+            # 收集 L1 中所有 assistant(tool_calls) 的位置
+            tc_positions = []
+            for i in range(l1_start, len(result)):
+                msg = result[i]
+                if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                    tc_positions.append(i)
+
+            if not tc_positions:
+                logger.warning("L1 中无可折叠的工具轮")
+                break
+
+            # 估算每折叠一轮大概节省多少 token
+            # 取前 3 个位置估算平均节省
+            sample_savings = []
+            for pos in tc_positions[:3]:
+                before = estimate_tokens(result[pos:pos + 3])
+                sample_savings.append(max(1, before))
+            avg_saving = sum(sample_savings) / len(sample_savings) if sample_savings else 1000
+
+            # 计算需要折叠多少轮
+            rounds_to_fold = min(
+                len(tc_positions),
+                max(5, int(overage / max(1, avg_saving)) + 3),  # +3 安全余量
+                50  # 单批上限
+            )
+
+            if rounds_to_fold <= 0:
+                break
+
+            logger.info(f"批量折叠: 折叠前 {len(tc_positions)} 个工具轮中的前 {rounds_to_fold} 个")
+
+            # 从前往后折叠 rounds_to_fold 个工具轮
+            folded_count = 0
+            for fold_idx in range(rounds_to_fold):
+                if fold_idx >= len(tc_positions):
+                    break
+
+                # 由于之前的折叠可能改变了索引，重新获取位置
+                # 简化：每次只折叠当前第一个工具轮
+                # 重新扫描第一个 tool_calls 位置
+                first_tc = -1
+                for i in range(l1_start, len(result)):
+                    if result[i].get("role") == "assistant" and result[i].get("tool_calls"):
+                        first_tc = i
+                        break
+
+                if first_tc < 0:
+                    break
+
+                # 收集 tool_call_ids
+                tc_ids = {tc.get("id") for tc in result[first_tc].get("tool_calls", []) if tc.get("id")}
+
+                # 收集工具名和简要参数
+                tc_names = []
+                for tc in result[first_tc].get("tool_calls", []):
+                    f = tc.get("function", {})
+                    name = f.get("name", "?")
+                    args = f.get("arguments", "{}")
+                    try:
+                        args_obj = _json.loads(args) if isinstance(args, str) else args
+                        args_brief = _json.dumps(args_obj, ensure_ascii=False)
+                    except Exception:
+                        args_brief = str(args)
+                    if len(args_brief) > 80:
+                        args_brief = args_brief[:77] + "..."
+                    tc_names.append(f"{name}({args_brief})")
+
+                # 查找匹配的 tool 消息并收集简短结果
+                tool_briefs = []
+                j = first_tc + 1
+                remaining_ids = set(tc_ids)
+                while j < len(result) and remaining_ids:
+                    msg_j = result[j]
+                    if msg_j.get("role") == "tool" and msg_j.get("tool_call_id") in remaining_ids:
+                        tc_id = msg_j["tool_call_id"]
+                        remaining_ids.discard(tc_id)
+                        content = msg_j.get("content", "")
+                        brief = content[:100].replace("\n", " ")
+                        if len(content) > 100:
+                            brief += "..."
+                        tool_briefs.append(f"[{tc_id[:8]}]:{brief}")
+                        j += 1
+                    elif msg_j.get("role") == "tool":
+                        j += 1
+                    else:
+                        break
+
+                # 构建紧凑摘要
+                calls_str = "; ".join(tc_names)
+                results_str = " | ".join(tool_briefs[:3])  # 最多 3 个结果
+                if len(tool_briefs) > 3:
+                    results_str += f" | ...(+{len(tool_briefs) - 3})"
+                summary = (
+                    f"[早期工具调用已折叠] "
+                    f"调用: {calls_str} | "
+                    f"返回: {results_str}"
+                )
+
+                # 删除 assistant + 匹配的 tool 消息
+                del_end = j
+                replacement = {"role": "user", "content": summary}
+                result = result[:first_tc] + [replacement] + result[del_end:]
+                folded_count += 1
+
+            logger.info(
+                f"批量折叠完成: 本轮折叠 {folded_count} 轮，"
+                f"结果消息数 {len(result)}，估计 token {estimate_tokens(result)}"
+            )
+
+            if folded_count == 0:
+                break
+
+        return result
+
     def _build_api_messages(self) -> List[Dict]:
         """
         三级历史拼接：
@@ -446,6 +601,12 @@ class OnlineToolSession(BaseChatSession):
             Level 2: 按语义相关性筛选的 user+assistant 对
             Level 1: 最新一轮压缩对话
         """
+        # ── Token 预算保护 ──
+        safe_budget = compute_safe_budget(
+            self.context.context_window,
+            self._get_effective_params("main").get("max_tokens", 4096)
+        )
+        _l1_start = None  # 记录 L1 起始位置，供后续裁剪 (在 Level 1 段赋值)
         result: List[Dict] = []
 
         # ── Level 0: 系统提示词 + Skill 注入 ──
@@ -541,6 +702,7 @@ class OnlineToolSession(BaseChatSession):
                         result.append(_msg)
 
         # ── Level 1: 最新一轮压缩对话 ──
+        _l1_start = len(result)  # 记录 L1 段起点
         disable_summary = self.context.disable_summary
         max_turns_limit = 30
 
@@ -593,6 +755,9 @@ class OnlineToolSession(BaseChatSession):
                 cleaned.append(msg)
         result = cleaned
 
+        # ── Token 预算校验 ──
+        if _l1_start is not None and _l1_start < len(result) and safe_budget > 0:
+            result = self._enforce_token_budget(result, safe_budget, _l1_start)
         return result
 
     # ──────────────────────────────────────────────
@@ -1195,6 +1360,7 @@ class OnlineToolSession(BaseChatSession):
         self.current_topic_id = topic_id
         self.reset_interrupt()
         self.reset_session_state()
+        self._refresh_from_config()  # 每次对话前重读配置文件
 
         self.skill_manager.auto_activate(_msg_text)
         self._auto_detect_mode(_msg_text)

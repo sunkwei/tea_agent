@@ -1,12 +1,18 @@
 # version: 1.0.0
 
 import logging
+from typing import Optional, Tuple, List, Dict
+
+logger = logging.getLogger("toolkit")
+
+
 
 logger = logging.getLogger("toolkit")
 
 def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
                  start_line: int = 0, end_line: int = 0, new_content: str = "",
-                 preview: bool = False, backup: bool = True):
+                 preview: bool = False, backup: bool = True,
+                 files: list = None, run_tests: bool = True, description: str = ""):
     """
     高级代码编辑工具，支持 diff/patch 应用和精准编辑。
 
@@ -58,12 +64,21 @@ def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
         return _replace_lines(file_path, start_line, end_line, new_content, preview, backup)
     elif action == "preview_patch":
         return _preview_patch(file_path, content)
+    # ── Diff engine actions (return dict) ──
+    elif action in ("diff_generate", "diff_preview", "diff_apply", "diff_undo", "diff_verify"):
+        import os as _os_diff
+        cwd = _os_diff.getcwd()
+        diff_action = action[5:]  # strip "diff_"
+        result = _toolkit_diff_impl(diff_action, files=files, cwd=cwd, run_tests=run_tests, description=description)
+        return (0 if result.get("ok") else 1, str(result), "")
     else:
-        return (1, "", f"未知 action: {action}，支持: apply_patch/insert_lines/delete_lines/replace_lines/preview_patch")
+        return (1, "", f"未知 action: {action}，支持: apply_patch/insert_lines/delete_lines/replace_lines/preview_patch/diff_*")
+
 
 def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool):
     """应用 diff/patch"""
     import json
+
     import os
     import tempfile
     import subprocess
@@ -381,13 +396,315 @@ def _generate_diff(old_content: str, new_content: str) -> str:
     diff = difflib.unified_diff(old_lines, new_lines, fromfile='original', tofile='modified', n=3)
     return ''.join(diff)
 
+
+# ═══ Diff engine (merged from toolkit_diff) ═══
+def _generate_unified_diff(old: str, new: str, filename: str = "file", context_lines: int = 3) -> str:
+    """生成 unified diff 格式的差异"""
+    import difflib
+    old_lines = old.splitlines(keepends=True)
+    new_lines = new.splitlines(keepends=True)
+    diff = difflib.unified_diff(old_lines, new_lines, fromfile=filename, tofile=filename, n=context_lines)
+    return ''.join(diff)
+
+# ── Git Stash 集成 ──────────────────────────────────────
+
+def _git_stash_push(cwd: str) -> Tuple[bool, str]:
+    """保存当前工作区到 stash，返回 (ok, stash_ref)"""
+    try:
+        r = subprocess.run(["git", "stash", "push", "-m", "toolkit_diff auto-save"],
+                           capture_output=True, text=True, timeout=15, cwd=cwd)
+        ok = r.returncode == 0 and "No local changes" not in r.stdout
+        return True, r.stdout.strip() if ok else "no changes"
+    except Exception as e:
+        return False, str(e)
+
+def _git_stash_pop(cwd: str) -> Tuple[bool, str]:
+    """恢复最近一次 stash"""
+    try:
+        r = subprocess.run(["git", "stash", "pop"], capture_output=True, text=True, timeout=15, cwd=cwd)
+        return r.returncode == 0, r.stderr or r.stdout
+    except Exception as e:
+        return False, str(e)
+
+def _git_stash_drop(cwd: str) -> bool:
+    """丢弃最近一次 stash（确认成功）"""
+    try:
+        subprocess.run(["git", "stash", "drop"], capture_output=True, text=True, timeout=10, cwd=cwd)
+        return True
+    except Exception:
+        return False
+
+# ── 冲突检测 ────────────────────────────────────────────
+
+def _check_conflict(file_path: str, old_code: str, cwd: str) -> Optional[str]:
+    """检查 old_code 是否仍存在于文件。返回 None=无冲突, 否则返回错误信息"""
+    full = os.path.join(cwd, file_path)
+    if not os.path.exists(full):
+        return f"文件不存在: {file_path}"
+    with open(full, "r", encoding="utf-8", errors="replace") as f:
+        content = f.read()
+    if old_code not in content:
+        return f"冲突: old_code 在 {file_path} 中未找到（文件可能已被修改）"
+    if content.count(old_code) > 1:
+        return f"冲突: old_code 在 {file_path} 中出现 {content.count(old_code)} 次（无法唯一确定）"
+    return None
+
+# ── 验证 ────────────────────────────────────────────────
+
+def _verify_all(files: List[str], cwd: str, run_tests: bool = True) -> dict:
+    """批量编译+lint 验证，可选测试"""
+    results = {"compile": {}, "lint": {}, "test": None}
+
+    # py_compile
+    import py_compile
+    for fp in files:
+        full = os.path.join(cwd, fp)
+        if fp.endswith(".py") and os.path.exists(full):
+            try:
+                py_compile.compile(full, doraise=True)
+                results["compile"][fp] = "ok"
+            except py_compile.PyCompileError as e:
+                results["compile"][fp] = f"FAIL: {e}"
+
+    # ruff lint
+    for fp in files:
+        full = os.path.join(cwd, fp)
+        if os.path.exists(full):
+            r = subprocess.run(["ruff", "check", "--output-format", "json", full],
+                               capture_output=True, text=True, timeout=20, cwd=cwd)
+            diags = json.loads(r.stdout) if r.stdout.strip() else []
+            results["lint"][fp] = len(diags) if diags else 0
+
+    # pytest
+    if run_tests:
+        try:
+            r = subprocess.run(
+                [os.sys.executable, "-m", "pytest", "test_*.py", "-q", "--tb=short"],
+                capture_output=True, text=True, timeout=60, cwd=cwd,
+            )
+            output = r.stdout + r.stderr
+            results["test"] = {
+                "returncode": r.returncode,
+                "output": output[-500:],
+            }
+        except subprocess.TimeoutExpired:
+            results["test"] = {"returncode": -1, "output": "timeout (>60s)"}
+        except Exception as e:
+            results["test"] = {"returncode": -1, "output": str(e)[:200]}
+
+    results["all_ok"] = (
+        all(not str(v).startswith("FAIL") for v in results["compile"].values())
+        and all(v == 0 for v in results["lint"].values())
+        and (results["test"] is None or results["test"].get("returncode") == 0)
+    )
+    return results
+
+# ── 单文件应用 ──────────────────────────────────────────
+
+def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, description: str = "") -> dict:
+    """应用单个修改，返回 {ok, file, error, bak_path}"""
+    import shutil
+    from datetime import datetime
+
+    full = os.path.join(cwd, file_path)
+
+    # 冲突检测
+    conflict = _check_conflict(file_path, old_code, cwd)
+    if conflict:
+        return {"ok": False, "file": file_path, "error": conflict}
+
+    # 备份
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    bak = f"{full}.bak.{ts}"
+    try:
+        shutil.copy2(full, bak)
+    except Exception as e:
+        return {"ok": False, "file": file_path, "error": f"备份失败: {e}"}
+
+    # 应用
+    try:
+        with open(full, "r", encoding="utf-8") as f:
+            content = f.read()
+        new_content = content.replace(old_code, new_code, 1)
+        with open(full, "w", encoding="utf-8") as f:
+            f.write(new_content)
+        return {"ok": True, "file": file_path, "bak_path": bak}
+    except Exception as e:
+        # 恢复备份
+        if os.path.exists(bak):
+            shutil.copy2(bak, full)
+        return {"ok": False, "file": file_path, "error": f"写入失败: {e}"}
+
+# ── 主入口 ──────────────────────────────────────────────
+
+def _toolkit_diff_impl(
+    action: str,
+    files: List[dict] = None,
+    cwd: str = None,
+    run_tests: bool = True,
+    description: str = "",
+    stash_ref: str = None,
+) -> dict:
+    """Diff-first 代码编辑引擎。
+
+    action:
+      generate — 生成 unified diff（不修改文件）
+      preview  — 生成 diff + 冲突检测（不修改文件）
+      apply    — git stash → 多文件原子应用 → 编译+lint+test 验证
+      undo     — 恢复到 git stash
+      verify   — 运行编译+lint+test（不修改文件）
+
+    files: [{"file_path": "...", "old_code": "...", "new_code": "..."}, ...]
+    """
+    import os as _os
+    cwd = cwd or _os.getcwd()
+
+    try:
+        if action == "generate":
+            if not files:
+                return {"ok": False, "error": "generate 需要 files 参数"}
+            diffs = []
+            for f in files:
+                d = _generate_unified_diff(f["old_code"], f["new_code"], f["file_path"])
+                diffs.append({"file": f["file_path"], "diff": d})
+            combined = "\n".join(d["diff"] for d in diffs)
+            return {"ok": True, "diffs": diffs, "combined": combined,
+                    "file_count": len(diffs)}
+
+        elif action == "preview":
+            if not files:
+                return {"ok": False, "error": "preview 需要 files 参数"}
+            previews = []
+            conflicts = []
+            for f in files:
+                diff = _generate_unified_diff(f["old_code"], f["new_code"], f["file_path"])
+                conflict = _check_conflict(f["file_path"], f["old_code"], cwd)
+                previews.append({
+                    "file": f["file_path"],
+                    "diff": diff,
+                    "conflict": conflict,
+                    "safe": conflict is None,
+                    "change_lines": diff.count('\n') if diff else 0,
+                })
+                if conflict:
+                    conflicts.append(f["file_path"])
+            all_safe = len(conflicts) == 0
+            return {
+                "ok": all_safe,
+                "safe": all_safe,
+                "files": previews,
+                "conflicts": conflicts,
+                "total_changes": sum(p["change_lines"] for p in previews),
+                "hint": "所有文件无冲突 ✓" if all_safe else f"{len(conflicts)} 个文件有冲突，请解决后再 apply",
+            }
+
+        elif action == "apply":
+            if not files:
+                return {"ok": False, "error": "apply 需要 files 参数"}
+            if not description:
+                description = f"toolkit_diff: {len(files)} files"
+
+            # Step 0: 冲突检测
+            for f in files:
+                conflict = _check_conflict(f["file_path"], f["old_code"], cwd)
+                if conflict:
+                    return {"ok": False, "error": f"pre-check 失败: {conflict}", "phase": "conflict_check"}
+
+            # Step 1: git stash
+            stashed, stash_msg = _git_stash_push(cwd)
+            stash_applied = False
+            try:
+                # Step 2: 逐个应用
+                results = []
+                all_ok = True
+                for f in files:
+                    r = _apply_one(f["file_path"], f["old_code"], f["new_code"], cwd, description)
+                    results.append(r)
+                    if not r["ok"]:
+                        all_ok = False
+                        break
+
+                if not all_ok:
+                    # 回滚：恢复已修改的文件
+                    for r in results:
+                        if r.get("bak_path") and os.path.exists(r["bak_path"]):
+                            import shutil
+                            shutil.copy2(r["bak_path"], os.path.join(cwd, r["file"]))
+                    if stashed:
+                        _git_stash_pop(cwd)
+                        stash_applied = True
+                    return {
+                        "ok": False,
+                        "error": f"应用失败: {next((r['error'] for r in results if not r['ok']), 'unknown')}",
+                        "phase": "apply",
+                        "results": results,
+                    }
+
+                # Step 3: 验证
+                modified_files = [f["file_path"] for f in files]
+                verify = _verify_all(modified_files, cwd, run_tests=run_tests)
+
+                if not verify["all_ok"]:
+                    # 回滚
+                    for r in results:
+                        if r.get("bak_path") and os.path.exists(r["bak_path"]):
+                            import shutil
+                            shutil.copy2(r["bak_path"], os.path.join(cwd, r["file"]))
+                    if stashed:
+                        _git_stash_pop(cwd)
+                        stash_applied = True
+                    return {
+                        "ok": False,
+                        "error": "验证失败，已回滚",
+                        "phase": "verify",
+                        "verify": verify,
+                        "results": results,
+                    }
+
+                # Step 4: 成功，丢弃 stash
+                if stashed:
+                    _git_stash_drop(cwd)
+
+                return {
+                    "ok": True,
+                    "files_modified": len(results),
+                    "results": results,
+                    "verify": verify,
+                    "stashed": stashed,
+                }
+
+            except Exception as e:
+                if stashed and not stash_applied:
+                    _git_stash_pop(cwd)
+                return {"ok": False, "error": str(e)[:300], "phase": "exception"}
+
+        elif action == "undo":
+            ok, msg = _git_stash_pop(cwd)
+            return {"ok": ok, "message": msg, "hint": "git stash pop 完成" if ok else "stash 恢复失败"}
+
+        elif action == "verify":
+            if not files:
+                return {"ok": False, "error": "verify 需要 files 参数"}
+            modified = [f["file_path"] for f in files]
+            verify = _verify_all(modified, cwd, run_tests=run_tests)
+            return {"ok": verify["all_ok"], "verify": verify}
+
+        else:
+            return {"ok": False, "error": f"未知 action: {action}。支持: generate/preview/apply/undo/verify"}
+
+    except Exception as e:
+        logger.exception(f"toolkit_diff: {e}")
+        return {"ok": False, "error": str(e)[:300]}
+
+# ── Meta ────────────────────────────────────────────────
+
 def meta_toolkit_edit() -> dict:
     """Meta toolkit edit."""
     return {
         "type": "function",
         "function": {
             "name": "toolkit_edit",
-            "description": "高级代码编辑工具，支持 diff/patch 应用、行级插入/删除/替换。比 toolkit_file 的 write 操作更精准，适合代码修改。",
+            "description": "高级代码编辑 + Diff 引擎。行级编辑: apply_patch/insert_lines/delete_lines/replace_lines/preview_patch。多文件原子编辑: diff_generate/diff_preview/diff_apply/diff_undo/diff_verify（git stash + lint/test 验证）。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -397,8 +714,9 @@ def meta_toolkit_edit() -> dict:
                     },
                     "action": {
                         "type": "string",
-                        "enum": ["apply_patch", "insert_lines", "delete_lines", "replace_lines", "preview_patch"],
-                        "description": "编辑操作类型",
+                        "enum": ["apply_patch", "insert_lines", "delete_lines", "replace_lines", "preview_patch",
+                                 "diff_generate", "diff_preview", "diff_apply", "diff_undo", "diff_verify"],
+                        "description": "编辑操作类型。diff_*=多文件原子编辑(git stash→apply→lint/test→回滚)",
                     },
                     "content": {
                         "type": "string",

@@ -14,143 +14,65 @@ from tea_agent.toolkit.toolkit_set_topic_title import (
 
 logger = logging.getLogger("tookit")
 
-def meta_toolkit_reload():
-    """Meta toolkit reload."""
-    return {
-        "type": "function",
-        "function": {
-            "name": "toolkit_reload",
-            "description": "重新加载所有工具函数，并注册为全局可用的方法，所有方法使用 toolkit_ 为前缀",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
-            }
-        }
-    }
+# ═══════════════════════════════════════════════════════════
+# 统一版本管理工具 — 合并 save/reload/rollback/list_versions
+# ═══════════════════════════════════════════════════════════
 
 def meta_toolkit_save() -> dict:
-    """Meta toolkit save."""
+    """Meta toolkit save — 统一版本管理."""
     return {
         "type": "function",
         "function": {
             "name": "toolkit_save",
-            "description": "存储工具函数，以便以后使用该工具函数，使用 toolkit_reload() 重新加载",
+            "description": (
+                "统一工具版本管理。action=save 保存新工具, reload 重载所有工具, "
+                "rollback 回滚到指定版本, versions 列出历史版本。"
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "name": {
+                    "action": {
                         "type": "string",
-                        "description": "工具函数名，全局唯一，总是 toolkit_ 作为前缀",
+                        "enum": ["save", "reload", "rollback", "versions"],
+                        "description": "save=保存工具, reload=重载, rollback=回滚, versions=列出版本"
                     },
-                    "meta": {
-                        "type": "object",
-                        "description": "工具函数的元描述，符合 OpenAI tool func schema",
-                    },
-                    "pycode": {
-                        "type": "string",
-                        "description": "工具函数的 python 实现代码"
-                    }
-                }
-            }
-        }
-    }
-
-def toolkit_reload() -> Dict:
-    """Toolkit reload."""
-    tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    return tlk.reload()
-
-def toolkit_save(name: str, meta: dict, pycode: str, version: str = "") -> Tuple[int, str]:
-    """
-    保存工具函数，支持版本管理。
-    
-    Args:
-        name: 工具函数名
-        meta: 工具元数据
-        pycode: 工具函数代码
-        version: 版本号（可选），不提供则自动递增
-        
-    Returns:
-        Tuple[int, str]: (状态码, 消息)
-    """
-    tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    return tlk.save(name, meta, pycode, version)
-
-def toolkit_rollback(name: str, version: str) -> Tuple[int, str]:
-    """回滚工具到指定版本"""
-    tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    return tlk.rollback(name, version)
-
-def toolkit_list_versions(name: str) -> Tuple[int, List[str]]:
-    """列出工具的所有可用版本"""
-    tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    return tlk.list_versions(name)
-
-def meta_toolkit_rollback():
-    """Meta toolkit rollback."""
-    return {
-        "type": "function",
-        "function": {
-            "name": "toolkit_rollback",
-            "description": "回滚工具到指定版本。用于撤销有问题的工具更新。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "工具函数名，如 toolkit_my_tool"
-                    },
-                    "version": {
-                        "type": "string",
-                        "description": "要回滚到的版本号，如 1.0.0"
-                    }
+                    "name": {"type": "string", "description": "[save/rollback/versions] 工具函数名"},
+                    "meta": {"type": "object", "description": "[save] 工具元描述，符合 OpenAI tool func schema"},
+                    "pycode": {"type": "string", "description": "[save] 工具函数的 Python 实现代码"},
+                    "version": {"type": "string", "description": "[save/rollback] 版本号，save时可选自动递增"},
                 },
-                "required": ["name", "version"]
-            }
-        }
+                "required": ["action"],
+            },
+        },
     }
 
-def meta_toolkit_list_versions():
-    """Meta toolkit list versions."""
-    return {
-        "type": "function",
-        "function": {
-            "name": "toolkit_list_versions",
-            "description": "列出工具的所有可用版本。用于查看工具的历史版本。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "工具函数名，如 toolkit_my_tool"
-                    }
-                },
-                "required": ["name"]
-            }
-        }
-    }
-
-def toolkit_rollback_impl(name: str, version: str) -> str:
-    """回滚工具到指定版本"""
+def toolkit_save_impl(action: str, name: str = "", meta: dict = None, pycode: str = "", version: str = "") -> str:
+    """统一工具版本管理入口。"""
     tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    status, msg = tlk.rollback(name, version)
-    if status == 0:
-        return f"✅ {msg}"
-    else:
-        return f"❌ {msg}"
+    try:
+        if action == "save":
+            status, msg = tlk.save(name, meta, pycode, version)
+            return f"✅ {msg}" if status == 0 else f"❌ {msg}"
+        elif action == "reload":
+            result = tlk.reload()
+            return f"✅ 已重载 {len(result)} 个工具" if isinstance(result, dict) else str(result)
+        elif action == "rollback":
+            status, msg = tlk.rollback(name, version)
+            return f"✅ {msg}" if status == 0 else f"❌ {msg}"
+        elif action == "versions":
+            status, versions = tlk.list_versions(name)
+            if status == 0:
+                if not versions:
+                    return f"工具 {name} 没有历史版本。"
+                return f"工具 {name} 的版本：\n" + "\n".join(f"  - v{v}" for v in versions)
+            return f"❌ {versions}"
+        else:
+            return f"❌ 未知 action: {action}，可选: save/reload/rollback/versions"
+    except Exception as e:
+        return f"❌ {e}"
 
-def toolkit_list_versions_impl(name: str) -> str:
-    """列出工具的所有可用版本"""
-    tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    status, versions = tlk.list_versions(name)
-    if status == 0:
-        if not versions:
-            return f"工具 {name} 没有历史版本。"
-        return f"工具 {name} 的版本：\n" + "\n".join(f"  - v{v}" for v in versions)
-    else:
-        return f"❌ {versions}"
 
+# ========== Memory 工具函数 ==========
 # ========== Memory 工具函数 ==========
 
 class Toolkit:
@@ -162,14 +84,12 @@ class Toolkit:
     _CACHE_BLACKLIST = {
         # 有外部副作用的工具不缓存
         'toolkit_exec', 'toolkit_self_evolve', 'toolkit_save',
-        'toolkit_build', 'toolkit_bump_version', 'toolkit_release_version',
+        'toolkit_release_version',
         'toolkit_pkg', 'toolkit_memory', 'toolkit_kb', 'toolkit_reflection',
         'toolkit_proactive', 'toolkit_subconscious', 'toolkit_dump_topic',
-        'toolkit_mode', 'toolkit_prompt_evolve', 'toolkit_input',
-        'toolkit_notify', 'toolkit_speak', 'toolkit_listen',
-        'toolkit_ocr', 'toolkit_screenshot', 'toolkit_rollback',
-        'toolkit_run_tests', 'toolkit_toggle_reasoning', 'toolkit_skill',
-        'toolkit_set_topic_title', 'toolkit_sudo_gui',
+        'toolkit_mode', 'toolkit_prompt_evolve',
+        'toolkit_notify',        'toolkit_run_tests', 'toolkit_toggle_reasoning', 'toolkit_skill',
+        'toolkit_set_topic_title',
         'toolkit_git_push_all_remotes',
     }
 
@@ -404,25 +324,15 @@ class Toolkit:
             self.func_map[k] = v
             self.meta_map[k] = temp_metas[k]
 
-        # 这几个永远有效
-        self.func_map["toolkit_reload"] = toolkit_reload
-        self.meta_map["toolkit_reload"] = meta_toolkit_reload()
-
-        self.func_map["toolkit_save"] = toolkit_save
+        # 统一版本管理（合并 save/reload/rollback/versions）
+        self.func_map["toolkit_save"] = toolkit_save_impl
         self.meta_map["toolkit_save"] = meta_toolkit_save()
-
-        self.func_map["toolkit_rollback"] = toolkit_rollback_impl
-        self.meta_map["toolkit_rollback"] = meta_toolkit_rollback()
-
-        self.func_map["toolkit_list_versions"] = toolkit_list_versions_impl
-        self.meta_map["toolkit_list_versions"] = meta_toolkit_list_versions()
 
         self.func_map["toolkit_set_topic_title"] = toolkit_set_topic_title
         self.meta_map["toolkit_set_topic_title"] = meta_toolkit_set_topic_title()
 
         result["valid_tool"] = {k: {"func": v, "meta": self.meta_map[k]} for k, v in self.func_map.items() if k not in (
-            "toolkit_reload", "toolkit_save", "toolkit_rollback", "toolkit_list_versions", "toolkit_set_topic_title")}
-
+            "toolkit_save", "toolkit_set_topic_title")}
         return result
 
     def save(self, name: str, meta: dict, pycode: str, version: str = "") -> Tuple[int, str]:

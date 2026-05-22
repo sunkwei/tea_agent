@@ -282,11 +282,21 @@ class TkGUI(AgentCore):
 
         # 加载主题
         self.refresh_topics()
+        # 加载主题
+        self.refresh_topics()
         self.auto_new_topic()
-
+        # NOTE: 2026-05-22 gen by deepseek-v4-pro, 随GUI启动潜意识引擎
+        try:
+            from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
+            result = toolkit_subconscious("start")
+            if result.get("status") == "started":
+                logger.info(f"潜意识引擎已随GUI启动, PID={result.get('pid')}")
+            else:
+                logger.info(f"潜意识引擎: {result.get('status', result)}")
+        except Exception as e:
+            logger.warning(f"潜意识引擎启动失败(非致命): {e}")
         # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
         self.root.protocol("WM_DELETE_WINDOW", self.tray._on_closing)
-
     def _create_tray_icon(self):
         """动态生成托盘图标图像（32x32 蓝色圆角方块 + TA 字母），返回 PIL Image"""
         size = 32

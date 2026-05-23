@@ -137,12 +137,19 @@ class StreamManager:
         # 1. 批量刷新 ScrolledText
         if self.gui._pending_console_text:
             self.gui.console.config(state=tk.NORMAL)
+
+            # 2026-05-22 gen by deepseek-v4-pro: 检测用户是否在底部，仅当在底部时自动滚动
+            at_bottom = self._is_scrolled_to_bottom()
+
             for text, tag in self.gui._pending_console_text:
                 if tag == "think":
                     self.gui.console.insert(tk.END, text, "think")
                 else:
                     self.gui.console.insert(tk.END, text)
-            self.gui.console.see(tk.END)
+
+            if at_bottom:
+                self.gui.console.see(tk.END)
+
             self.gui.console.config(state=tk.DISABLED)
             self.gui.console.update_idletasks()
             self.gui._pending_console_text.clear()
@@ -154,6 +161,16 @@ class StreamManager:
         if self.gui.generating:
             self.gui.root.after(500, self.gui._stream_flush_tick)
 
+    def _is_scrolled_to_bottom(self, tolerance: float = 0.02) -> bool:
+        """2026-05-22 gen by deepseek-v4-pro: 检测 ScrolledText 是否滚动到底部附近"""
+        try:
+            yv = self.gui.console.yview()
+            if len(yv) >= 2:
+                # yv[1] 是底部可见位置 (0.0~1.0)，接近 1.0 表示在底部
+                return yv[1] >= (1.0 - tolerance)
+        except Exception:
+            pass
+        return True  # 异常时默认滚动（安全策略）
     def flush_stream_to_messages(self):
         """刷新流式缓冲到消息列表"""
         if self.gui._stream_buffer:

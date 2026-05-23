@@ -144,13 +144,11 @@ class ChatRenderer:
             return self._build_round_view_html(rounds, active_idx, font_size)
 
         def _on_done(html):
-            """Internal: handle done event.
-            
-            Args:
-                html: Description.
-            """
+            """会话完成后无条件切换到 HtmlFrame 渲染视图"""
+            # 2026-05-22 gen by deepseek-v4-pro: 会话完成无条件切换到 HtmlFrame
+            self.gui._raw_view.set(False)  # 重置 raw view 勾选状态
+            self.gui._show_mode = None     # 绕过 _switch_display 的相等检查，强制切换
             if HAS_TKINTERWEB:
-                # [RENDER] removed: was printing html char count on every render
                 self._html_render(html)
                 self._switch_display("chat_view")
                 self.gui.root.after(300, self.scroll_to_bottom)
@@ -161,7 +159,6 @@ class ChatRenderer:
                 self.gui.chat_view.config(state=tk.DISABLED)
                 self.gui.chat_view.see(tk.END)
                 self._switch_display("chat_view")
-
         import threading
         def _worker():
             """Internal: worker."""

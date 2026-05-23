@@ -22,7 +22,11 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
                     start = max(0, offset - 1) if offset > 0 else 0
                     end = min(len(lines), start + limit) if limit > 0 else len(lines)
                     return ''.join(f"{i+1}: {lines[i]}" for i in range(start, end))
-                return f.read()
+                content = f.read()
+                # 标准化换行符（跨平台兼容）
+                if '\r\n' in content or '\r' in content:
+                    content = content.replace('\r\n', '\n').replace('\r', '\n')
+                return content
         except FileNotFoundError:
             return f"Error: File '{filename}' not found."
         except Exception as e:
@@ -30,17 +34,12 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
 
     elif action == "write":
         try:
-            # 检查数据库保护标记：若目标文件所在目录有 .chat_history_protected，拒绝覆盖
-            # import os as _os
-            # target_abs = _os.path.abspath(filename)
-            # target_dir = _os.path.dirname(target_abs)
-            # marker = _os.path.join(target_dir, ".chat_history_protected")
-            # if _os.path.exists(marker):
-            #     logger.warning(f"toolkit_file write BLOCKED: 目标目录受保护 ({marker}), 拒绝写入 {filename}")
-            #     return f"🛡️ 保护拒绝: '{filename}' 所在目录存在数据库保护标记，禁止覆盖。如需修改请先确认。"
-            
+            # 标准化换行符后再写入
+            normalized = content
+            if '\r\n' in normalized or '\r' in normalized:
+                normalized = normalized.replace('\r\n', '\n').replace('\r', '\n')
             with open(filename, 'w', encoding='utf-8') as f:
-                f.write(content)
+                f.write(normalized)
             return 0
         except Exception as e:
             return f"Error: {str(e)}"

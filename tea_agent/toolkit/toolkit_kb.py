@@ -88,7 +88,9 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
         filepath = KB_DIR / filename
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         header = f"# {title}\n<!-- created:{now} category:{category} tags:{tags} brief:{brief} -->\n\n"
-        filepath.write_text(header + content, encoding="utf-8")
+        # 标准化换行符
+        safe_content = content.replace('\r\n', '\n').replace('\r', '\n') if '\r\n' in content or '\r' in content else content
+        filepath.write_text(header + safe_content, encoding="utf-8")
         rebuild_index()
         return f"✅ 已保存: {filepath} ({len(content)} chars)"
 
@@ -96,8 +98,9 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
         filename = sanitize(title) + ".md"
         filepath = KB_DIR / filename
         if filepath.exists():
+            safe_content = content.replace('\r\n', '\n').replace('\r', '\n') if '\r\n' in content or '\r' in content else content
             with filepath.open("a", encoding="utf-8") as f:
-                f.write("\n" + content)
+                f.write("\n" + safe_content)
             rebuild_index()
             return f"✅ 已追加: {filepath} (+{len(content)} chars)"
         else:
@@ -108,6 +111,9 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
         filepath = KB_DIR / filename
         if filepath.exists():
             text = filepath.read_text(encoding="utf-8")
+            # 标准化换行符
+            if '\r\n' in text or '\r' in text:
+                text = text.replace('\r\n', '\n').replace('\r', '\n')
             clean = re.sub(r"<!--.*?-->\n?", "", text)
             return clean
         return f"❌ 未找到: {filename}"

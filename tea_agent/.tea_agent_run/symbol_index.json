@@ -1,1 +1,4207 @@
-{}
+{
+  "CORE_TOOLS": [
+    {
+      "kind": "variable",
+      "path": "skills/__init__.py",
+      "line": 28
+    }
+  ],
+  "CallVisitor": [
+    {
+      "kind": "class",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 141
+    }
+  ],
+  "ChatRenderer": [
+    {
+      "kind": "class",
+      "path": "_gui/_renderer.py",
+      "line": 30
+    }
+  ],
+  "ConfigHistoryStore": [
+    {
+      "kind": "class",
+      "path": "store/_config.py",
+      "line": 6
+    }
+  ],
+  "ConversationStore": [
+    {
+      "kind": "class",
+      "path": "store/_conversations.py",
+      "line": 13
+    }
+  ],
+  "HAS_SNI": [
+    {
+      "kind": "variable",
+      "path": "_gui/_tray.py",
+      "line": 19
+    },
+    {
+      "kind": "variable",
+      "path": "_gui/_tray.py",
+      "line": 17
+    }
+  ],
+  "HAS_TKINTERWEB": [
+    {
+      "kind": "variable",
+      "path": "_gui/_markdown.py",
+      "line": 13
+    },
+    {
+      "kind": "variable",
+      "path": "_gui/_markdown.py",
+      "line": 11
+    },
+    {
+      "kind": "variable",
+      "path": "_gui/_ui_builder.py",
+      "line": 18
+    },
+    {
+      "kind": "variable",
+      "path": "_gui/_ui_builder.py",
+      "line": 16
+    }
+  ],
+  "ImageHandler": [
+    {
+      "kind": "class",
+      "path": "_gui/_images.py",
+      "line": 18
+    }
+  ],
+  "MONO_FONT": [
+    {
+      "kind": "variable",
+      "path": "_gui/_fonts.py",
+      "line": 13
+    }
+  ],
+  "MemoryStore": [
+    {
+      "kind": "class",
+      "path": "store/_memories.py",
+      "line": 9
+    }
+  ],
+  "PromptStore": [
+    {
+      "kind": "class",
+      "path": "store/_prompts.py",
+      "line": 6
+    }
+  ],
+  "ReflectionStore": [
+    {
+      "kind": "class",
+      "path": "store/_reflections.py",
+      "line": 7
+    }
+  ],
+  "SKILL_MANIFEST": [
+    {
+      "kind": "variable",
+      "path": "skills/file_system/__init__.py",
+      "line": 2
+    },
+    {
+      "kind": "variable",
+      "path": "skills/interaction/__init__.py",
+      "line": 2
+    },
+    {
+      "kind": "variable",
+      "path": "skills/memory_knowledge/__init__.py",
+      "line": 2
+    },
+    {
+      "kind": "variable",
+      "path": "skills/self_evolution/__init__.py",
+      "line": 2
+    },
+    {
+      "kind": "variable",
+      "path": "skills/todo_workflow/__init__.py",
+      "line": 2
+    },
+    {
+      "kind": "variable",
+      "path": "skills/utility/__init__.py",
+      "line": 2
+    }
+  ],
+  "SYSTEM_FONT": [
+    {
+      "kind": "variable",
+      "path": "_gui/_fonts.py",
+      "line": 12
+    }
+  ],
+  "ScheduledTaskStore": [
+    {
+      "kind": "class",
+      "path": "store/_scheduled_tasks.py",
+      "line": 13
+    }
+  ],
+  "Skill": [
+    {
+      "kind": "class",
+      "path": "skills/__init__.py",
+      "line": 34
+    }
+  ],
+  "SkillManager": [
+    {
+      "kind": "class",
+      "path": "skills/__init__.py",
+      "line": 68
+    }
+  ],
+  "Storage": [
+    {
+      "kind": "class",
+      "path": "store/_core.py",
+      "line": 27
+    }
+  ],
+  "StoreComponent": [
+    {
+      "kind": "class",
+      "path": "store/_base.py",
+      "line": 6
+    }
+  ],
+  "StreamManager": [
+    {
+      "kind": "class",
+      "path": "_gui/_stream_manager.py",
+      "line": 15
+    }
+  ],
+  "SummaryStore": [
+    {
+      "kind": "class",
+      "path": "store/_summaries.py",
+      "line": 10
+    }
+  ],
+  "TopicManager": [
+    {
+      "kind": "class",
+      "path": "_gui/_topic_manager.py",
+      "line": 17
+    }
+  ],
+  "TopicStore": [
+    {
+      "kind": "class",
+      "path": "store/_topics.py",
+      "line": 9
+    }
+  ],
+  "TrayManager": [
+    {
+      "kind": "class",
+      "path": "_gui/_tray.py",
+      "line": 21
+    }
+  ],
+  "UIBuilder": [
+    {
+      "kind": "class",
+      "path": "_gui/_ui_builder.py",
+      "line": 22
+    }
+  ],
+  "VectorStore": [
+    {
+      "kind": "class",
+      "path": "store/_vectors.py",
+      "line": 7
+    }
+  ],
+  "_BASE_MONTH_DAYS": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 43
+    }
+  ],
+  "_BASE_YEAR": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 42
+    }
+  ],
+  "_CRON_MAP_WEEKDAY": [
+    {
+      "kind": "variable",
+      "path": "store/_scheduled_tasks.py",
+      "line": 11
+    }
+  ],
+  "_DEFAULT_FONT_SIZE": [
+    {
+      "kind": "variable",
+      "path": "_gui/_fonts.py",
+      "line": 17
+    },
+    {
+      "kind": "variable",
+      "path": "_gui/_markdown.py",
+      "line": 15
+    },
+    {
+      "kind": "variable",
+      "path": "_gui/_markdown.py",
+      "line": 17
+    }
+  ],
+  "_DIZHI": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 47
+    }
+  ],
+  "_FONTS_DETECTED": [
+    {
+      "kind": "variable",
+      "path": "_gui/_fonts.py",
+      "line": 15
+    }
+  ],
+  "_IS_WINDOWS": [
+    {
+      "kind": "variable",
+      "path": "_gui/_fonts.py",
+      "line": 10
+    }
+  ],
+  "_JIEQI_NAMES": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 57
+    }
+  ],
+  "_KNOWN_HTML_TAGS": [
+    {
+      "kind": "variable",
+      "path": "_gui/_markdown.py",
+      "line": 353
+    }
+  ],
+  "_KNOWN_STEP_META": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 429
+    }
+  ],
+  "_LEAP_DAYS_BIT": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 41
+    }
+  ],
+  "_LEAP_MONTH_MASK": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 39
+    }
+  ],
+  "_LUNAR_DAYS": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 50
+    }
+  ],
+  "_LUNAR_INFO": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 15
+    }
+  ],
+  "_LUNAR_MONTHS": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 49
+    }
+  ],
+  "_MCP_LOOP": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 52
+    }
+  ],
+  "_MCP_SERVERS": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 51
+    }
+  ],
+  "_MCP_THREAD": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 53
+    }
+  ],
+  "_MD_CSS_TEMPLATE": [
+    {
+      "kind": "variable",
+      "path": "_gui/_markdown.py",
+      "line": 20
+    }
+  ],
+  "_MONTH_BIT_BASE": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 40
+    }
+  ],
+  "_PYTHON_BUILTINS": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 24
+    }
+  ],
+  "_RUN_DIR": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 52
+    }
+  ],
+  "_SCALE_FACTOR": [
+    {
+      "kind": "variable",
+      "path": "_gui/_fonts.py",
+      "line": 16
+    }
+  ],
+  "_SHENGXIAO": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 48
+    }
+  ],
+  "_TIANGAN": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 46
+    }
+  ],
+  "_TS_LANG": [
+    {
+      "kind": "variable",
+      "path": "lsp/ts_analyzer.py",
+      "line": 13
+    }
+  ],
+  "_TS_LANG_LOADED": [
+    {
+      "kind": "variable",
+      "path": "lsp/ts_analyzer.py",
+      "line": 14
+    }
+  ],
+  "_TagChecker": [
+    {
+      "kind": "class",
+      "path": "_gui/_markdown.py",
+      "line": 366
+    }
+  ],
+  "__all__": [
+    {
+      "kind": "variable",
+      "path": "store/__init__.py",
+      "line": 18
+    }
+  ],
+  "__del__": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 672
+    }
+  ],
+  "__getattr__": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 66
+    }
+  ],
+  "__init__": [
+    {
+      "kind": "member",
+      "path": "_gui/_images.py",
+      "line": 21
+    },
+    {
+      "kind": "member",
+      "path": "_gui/_markdown.py",
+      "line": 368
+    },
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 33
+    },
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 18
+    },
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 20
+    },
+    {
+      "kind": "member",
+      "path": "_gui/_tray.py",
+      "line": 24
+    },
+    {
+      "kind": "member",
+      "path": "_gui/_ui_builder.py",
+      "line": 25
+    },
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 94
+    },
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 37
+    },
+    {
+      "kind": "member",
+      "path": "store/_base.py",
+      "line": 9
+    },
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 36
+    }
+  ],
+  "_action_build": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 321
+    }
+  ],
+  "_action_deps": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 634
+    }
+  ],
+  "_action_impact": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 562
+    }
+  ],
+  "_action_query": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 379
+    }
+  ],
+  "_action_status": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 478
+    }
+  ],
+  "_add_goal": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_proactive.py",
+      "line": 86
+    }
+  ],
+  "_apply_one": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 504
+    }
+  ],
+  "_apply_patch": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 78
+    }
+  ],
+  "_apply_patch_python": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 135
+    }
+  ],
+  "_asyncio": [
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 310
+    }
+  ],
+  "_auto_backup": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 555
+    }
+  ],
+  "_auto_embed_async": [
+    {
+      "kind": "member",
+      "path": "store/_conversations.py",
+      "line": 206
+    }
+  ],
+  "_auto_restore": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 133
+    }
+  ],
+  "_build_call_graph": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 120
+    }
+  ],
+  "_build_ctags": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 62
+    }
+  ],
+  "_build_dot_flow": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 183
+    }
+  ],
+  "_build_kb_md": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 222
+    }
+  ],
+  "_build_round_view_html": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 242
+    }
+  ],
+  "_build_tool_blocks": [
+    {
+      "kind": "function",
+      "path": "_gui/_markdown.py",
+      "line": 103
+    }
+  ],
+  "_cached_os_info": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_os_info.py",
+      "line": 9
+    }
+  ],
+  "_call": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 251
+    }
+  ],
+  "_chat_to_markdown": [
+    {
+      "kind": "function",
+      "path": "_gui/_markdown.py",
+      "line": 228
+    }
+  ],
+  "_check_conflict": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 439
+    }
+  ],
+  "_check_module": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_pkg.py",
+      "line": 25
+    }
+  ],
+  "_check_proactive": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_proactive.py",
+      "line": 37
+    }
+  ],
+  "_cleanup_backups": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 583
+    }
+  ],
+  "_complete_goal": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_proactive.py",
+      "line": 111
+    }
+  ],
+  "_connect_and_keepalive": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 109
+    }
+  ],
+  "_count_status": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 495
+    }
+  ],
+  "_create_tray_icon": [
+    {
+      "kind": "member",
+      "path": "_gui/_tray.py",
+      "line": 74
+    }
+  ],
+  "_creative_dream": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 866
+    }
+  ],
+  "_cross_link": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 280
+    }
+  ],
+  "_current_mode": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mode.py",
+      "line": 154
+    }
+  ],
+  "_delegate_attrs": [
+    {
+      "kind": "variable",
+      "path": "store/_core.py",
+      "line": 31
+    }
+  ],
+  "_delete_lines": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 298
+    }
+  ],
+  "_deps_satisfied": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 471
+    }
+  ],
+  "_detect": [
+    {
+      "kind": "function",
+      "path": "_gui/_fonts.py",
+      "line": 33
+    }
+  ],
+  "_detect_focus": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 155
+    }
+  ],
+  "_detect_mode": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mode.py",
+      "line": 80
+    }
+  ],
+  "_dfs": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 406
+    }
+  ],
+  "_digest_conversations": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 181
+    }
+  ],
+  "_digest_memories": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 122
+    }
+  ],
+  "_do_build": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_release.py",
+      "line": 93
+    }
+  ],
+  "_do_bump": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_release.py",
+      "line": 53
+    }
+  ],
+  "_do_fix": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_release.py",
+      "line": 122
+    }
+  ],
+  "_do_release": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_release.py",
+      "line": 163
+    }
+  ],
+  "_do_resume": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 667
+    }
+  ],
+  "_do_run": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 637
+    }
+  ],
+  "_do_step": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 584
+    }
+  ],
+  "_do_verify": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 616
+    }
+  ],
+  "_done": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 251
+    }
+  ],
+  "_dream": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 730
+    }
+  ],
+  "_enforce_critical_limit": [
+    {
+      "kind": "member",
+      "path": "store/_memories.py",
+      "line": 46
+    }
+  ],
+  "_ensure_dir": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 56
+    }
+  ],
+  "_ensure_plans_dir": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 394
+    }
+  ],
+  "_ensure_table": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 34
+    }
+  ],
+  "_ensure_ts": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 16
+    }
+  ],
+  "_escape_orphan_brackets": [
+    {
+      "kind": "function",
+      "path": "_gui/_markdown.py",
+      "line": 313
+    }
+  ],
+  "_execute_step": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 697
+    }
+  ],
+  "_execute_task": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_scheduler.py",
+      "line": 178
+    }
+  ],
+  "_extract_arch_context": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 513
+    }
+  ],
+  "_extract_args": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_search.py",
+      "line": 415
+    }
+  ],
+  "_extract_calls": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 59
+    }
+  ],
+  "_extract_docstring": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 43
+    }
+  ],
+  "_extract_keywords": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 96
+    }
+  ],
+  "_extract_memory_candidates": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 229
+    }
+  ],
+  "_extract_params": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 83
+    }
+  ],
+  "_extreme_scenario": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 922
+    }
+  ],
+  "_filtered_messages": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 389
+    }
+  ],
+  "_fix_code_block": [
+    {
+      "kind": "function",
+      "path": "_gui/_markdown.py",
+      "line": 86
+    }
+  ],
+  "_fix_double_escape_in_code": [
+    {
+      "kind": "function",
+      "path": "_gui/_markdown.py",
+      "line": 78
+    }
+  ],
+  "_flush_stream_to_messages": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 429
+    }
+  ],
+  "_flush_think_buffer_to_messages": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 450
+    }
+  ],
+  "_fmt": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 255
+    }
+  ],
+  "_fmt_diagnostic": [
+    {
+      "kind": "function",
+      "path": "lsp/lsp_engine.py",
+      "line": 76
+    }
+  ],
+  "_format_next": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_scheduler.py",
+      "line": 403
+    }
+  ],
+  "_fs": [
+    {
+      "kind": "function",
+      "path": "_gui/_fonts.py",
+      "line": 19
+    }
+  ],
+  "_generate_diff": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 389
+    }
+  ],
+  "_generate_insights": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 355
+    }
+  ],
+  "_generate_topic_summary": [
+    {
+      "kind": "function",
+      "path": "_gui/_topic_summary.py",
+      "line": 15
+    }
+  ],
+  "_generate_unified_diff": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 401
+    }
+  ],
+  "_get_config": [
+    {
+      "kind": "unknown",
+      "path": "toolkit/toolkit_config.py",
+      "line": 28
+    }
+  ],
+  "_get_conn": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_scheduler.py",
+      "line": 46
+    }
+  ],
+  "_get_db": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 12
+    }
+  ],
+  "_get_db_path": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 87
+    }
+  ],
+  "_get_existing_mode_memory": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mode.py",
+      "line": 121
+    }
+  ],
+  "_get_exp_path": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_evolution_exp.py",
+      "line": 21
+    }
+  ],
+  "_get_jedi_project": [
+    {
+      "kind": "function",
+      "path": "lsp/lsp_engine.py",
+      "line": 19
+    }
+  ],
+  "_get_memory_manager": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mode.py",
+      "line": 108
+    },
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_proactive.py",
+      "line": 30
+    }
+  ],
+  "_get_session": [
+    {
+      "kind": "unknown",
+      "path": "toolkit/toolkit_config.py",
+      "line": 29
+    }
+  ],
+  "_get_text": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 34
+    }
+  ],
+  "_get_topic_id": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 23
+    }
+  ],
+  "_get_version": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_pkg.py",
+      "line": 33
+    }
+  ],
+  "_get_week_key": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 506
+    }
+  ],
+  "_git_clean": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_self_evolve.py",
+      "line": 54
+    }
+  ],
+  "_git_revert": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_self_evolve.py",
+      "line": 81
+    }
+  ],
+  "_git_snap": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_self_evolve.py",
+      "line": 67
+    }
+  ],
+  "_git_stash_drop": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 429
+    }
+  ],
+  "_git_stash_pop": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 421
+    }
+  ],
+  "_git_stash_push": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 411
+    }
+  ],
+  "_group_into_rounds": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 394
+    }
+  ],
+  "_hide_raw_check_btn": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 424
+    }
+  ],
+  "_hide_tooltip": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 356
+    }
+  ],
+  "_html_render": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 56
+    }
+  ],
+  "_image_cache": [
+    {
+      "kind": "member",
+      "path": "_gui/_images.py",
+      "line": 35
+    }
+  ],
+  "_init_fonts": [
+    {
+      "kind": "function",
+      "path": "_gui/_fonts.py",
+      "line": 23
+    }
+  ],
+  "_init_tables": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 92
+    }
+  ],
+  "_init_tray": [
+    {
+      "kind": "member",
+      "path": "_gui/_tray.py",
+      "line": 51
+    }
+  ],
+  "_insert_lines": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 241
+    }
+  ],
+  "_instance": [
+    {
+      "kind": "variable",
+      "path": "skills/__init__.py",
+      "line": 80
+    }
+  ],
+  "_is_duplicate_memory": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 264
+    }
+  ],
+  "_is_jieba_available": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 117
+    }
+  ],
+  "_is_scrolled_to_bottom": [
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 164
+    }
+  ],
+  "_is_tea_agent_cwd": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 33
+    }
+  ],
+  "_json2": [
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 388
+    }
+  ],
+  "_json_gs": [
+    {
+      "kind": "namespace",
+      "path": "_gui/_topic_summary.py",
+      "line": 6
+    }
+  ],
+  "_json_tc2": [
+    {
+      "kind": "namespace",
+      "path": "_gui/_topic_manager.py",
+      "line": 205
+    }
+  ],
+  "_json_um": [
+    {
+      "kind": "namespace",
+      "path": "_gui/_topic_manager.py",
+      "line": 7
+    }
+  ],
+  "_last_topic": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 10
+    }
+  ],
+  "_leap_days": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 107
+    }
+  ],
+  "_leap_month": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 99
+    }
+  ],
+  "_linux_notify_fallback": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 526
+    }
+  ],
+  "_list": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 210
+    }
+  ],
+  "_list_goals": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_proactive.py",
+      "line": 127
+    }
+  ],
+  "_list_installed": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_pkg.py",
+      "line": 51
+    }
+  ],
+  "_load_exp_db": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_evolution_exp.py",
+      "line": 25
+    }
+  ],
+  "_load_manifest": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 168
+    }
+  ],
+  "_load_plan": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 406
+    }
+  ],
+  "_log": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 54
+    }
+  ],
+  "_lunar_year_info": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 91
+    }
+  ],
+  "_lunar_year_total_days": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 119
+    }
+  ],
+  "_match_cron": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_scheduler.py",
+      "line": 114
+    }
+  ],
+  "_match_cron_field": [
+    {
+      "kind": "function",
+      "path": "store/_scheduled_tasks.py",
+      "line": 198
+    }
+  ],
+  "_maybe_rotate_db": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 510
+    }
+  ],
+  "_mcp_call": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 237
+    }
+  ],
+  "_mcp_connect": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 93
+    }
+  ],
+  "_mcp_disconnect": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 280
+    }
+  ],
+  "_mcp_get_or_create_loop": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 55
+    }
+  ],
+  "_mcp_list_tools": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 199
+    }
+  ],
+  "_mcp_run_async": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 77
+    }
+  ],
+  "_mcp_status": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 313
+    }
+  ],
+  "_md_lib": [
+    {
+      "kind": "namespace",
+      "path": "_gui/_renderer.py",
+      "line": 244
+    }
+  ],
+  "_meta": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_kb.py",
+      "line": 48
+    }
+  ],
+  "_meta_get": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 612
+    }
+  ],
+  "_meta_set": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 625
+    }
+  ],
+  "_migrate": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 265
+    }
+  ],
+  "_migrate_int_to_uuid": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 333
+    }
+  ],
+  "_migrate_msg_vectors": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 484
+    }
+  ],
+  "_migrate_table": [
+    {
+      "kind": "function",
+      "path": "store/_core.py",
+      "line": 358
+    }
+  ],
+  "_month_days": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 115
+    }
+  ],
+  "_new_id": [
+    {
+      "kind": "member",
+      "path": "store/_base.py",
+      "line": 18
+    }
+  ],
+  "_new_plan": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 431
+    }
+  ],
+  "_next_pending": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 484
+    }
+  ],
+  "_notify": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_scheduler.py",
+      "line": 157
+    }
+  ],
+  "_offset_from_base": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 82
+    }
+  ],
+  "_on_closing": [
+    {
+      "kind": "member",
+      "path": "_gui/_tray.py",
+      "line": 119
+    }
+  ],
+  "_on_done": [
+    {
+      "kind": "function",
+      "path": "_gui/_renderer.py",
+      "line": 146
+    },
+    {
+      "kind": "function",
+      "path": "_gui/_renderer.py",
+      "line": 204
+    }
+  ],
+  "_on_summary_updated": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 284
+    }
+  ],
+  "_on_topic_hover": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 294
+    }
+  ],
+  "_on_topic_leave": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 309
+    }
+  ],
+  "_on_tray_activate": [
+    {
+      "kind": "member",
+      "path": "_gui/_tray.py",
+      "line": 104
+    }
+  ],
+  "_on_tray_context_menu": [
+    {
+      "kind": "member",
+      "path": "_gui/_tray.py",
+      "line": 110
+    }
+  ],
+  "_os": [
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 559
+    },
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 498
+    },
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 515
+    }
+  ],
+  "_os_diff": [
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 69
+    }
+  ],
+  "_os_plan": [
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 269
+    }
+  ],
+  "_parse_cron": [
+    {
+      "kind": "function",
+      "path": "store/_scheduled_tasks.py",
+      "line": 177
+    },
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_scheduler.py",
+      "line": 139
+    }
+  ],
+  "_parse_file_ast_fallback": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 211
+    }
+  ],
+  "_pending_images": [
+    {
+      "kind": "member",
+      "path": "_gui/_images.py",
+      "line": 30
+    }
+  ],
+  "_pil_to_argb32": [
+    {
+      "kind": "member",
+      "path": "_gui/_tray.py",
+      "line": 89
+    }
+  ],
+  "_pip_install": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_pkg.py",
+      "line": 17
+    }
+  ],
+  "_plan_create": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 271
+    }
+  ],
+  "_plan_create_inner": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 325
+    }
+  ],
+  "_plan_delete": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 320
+    }
+  ],
+  "_plan_list": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 317
+    }
+  ],
+  "_plan_list_inner": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 331
+    }
+  ],
+  "_plan_path": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 398
+    }
+  ],
+  "_plan_resume": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 298
+    }
+  ],
+  "_plan_run": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 292
+    }
+  ],
+  "_plan_show": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 281
+    }
+  ],
+  "_plan_show_inner": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 328
+    }
+  ],
+  "_plan_step": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 286
+    }
+  ],
+  "_plan_verify": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 304
+    }
+  ],
+  "_platform": [
+    {
+      "kind": "namespace",
+      "path": "_gui/_fonts.py",
+      "line": 5
+    }
+  ],
+  "_poll_loading_progress": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 358
+    }
+  ],
+  "_pragmatic_analysis": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 791
+    }
+  ],
+  "_prepare": [
+    {
+      "kind": "function",
+      "path": "_gui/_renderer.py",
+      "line": 142
+    },
+    {
+      "kind": "function",
+      "path": "_gui/_renderer.py",
+      "line": 200
+    }
+  ],
+  "_preview_patch": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 385
+    }
+  ],
+  "_protect_db": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 642
+    }
+  ],
+  "_read_file_safe": [
+    {
+      "kind": "function",
+      "path": "lsp/lsp_engine.py",
+      "line": 24
+    }
+  ],
+  "_read_state": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 64
+    }
+  ],
+  "_refresh_topics_preserve_selection": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 290
+    }
+  ],
+  "_render_and_show_chat": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 126
+    }
+  ],
+  "_render_chat": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 101
+    }
+  ],
+  "_render_loaded_topic": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 173
+    }
+  ],
+  "_render_markdown": [
+    {
+      "kind": "function",
+      "path": "_gui/_markdown.py",
+      "line": 67
+    }
+  ],
+  "_render_round_view": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 193
+    }
+  ],
+  "_render_tool_group": [
+    {
+      "kind": "function",
+      "path": "_gui/_markdown.py",
+      "line": 141
+    }
+  ],
+  "_render_topic_error": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 234
+    }
+  ],
+  "_replace_lines": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 340
+    }
+  ],
+  "_restore_from_db": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 98
+    }
+  ],
+  "_restored": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 9
+    }
+  ],
+  "_reverse_thinking": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 906
+    }
+  ],
+  "_run": [
+    {
+      "kind": "function",
+      "path": "store/_conversations.py",
+      "line": 209
+    },
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_exec.py",
+      "line": 70
+    }
+  ],
+  "_run_cycle": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 627
+    }
+  ],
+  "_run_loop": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 68
+    }
+  ],
+  "_run_lsp_checks": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_self_evolve.py",
+      "line": 115
+    }
+  ],
+  "_run_tests": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_self_evolve.py",
+      "line": 90
+    }
+  ],
+  "_sanitize_html_control_chars": [
+    {
+      "kind": "function",
+      "path": "_gui/_markdown.py",
+      "line": 296
+    }
+  ],
+  "_save_exp_db": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_evolution_exp.py",
+      "line": 33
+    }
+  ],
+  "_save_plan": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 418
+    }
+  ],
+  "_scan_directory": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 140
+    }
+  ],
+  "_scheduler_loop": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_scheduler.py",
+      "line": 197
+    }
+  ],
+  "_search_baidu": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_search.py",
+      "line": 123
+    }
+  ],
+  "_search_codebase": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_search.py",
+      "line": 234
+    }
+  ],
+  "_search_codebase_python": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_search.py",
+      "line": 305
+    }
+  ],
+  "_search_duckduckgo": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_search.py",
+      "line": 46
+    }
+  ],
+  "_search_symbol": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_search.py",
+      "line": 350
+    }
+  ],
+  "_send_cycle_summary": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 591
+    }
+  ],
+  "_send_notification": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 491
+    }
+  ],
+  "_set_and_del": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 306
+    }
+  ],
+  "_set_goals": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 458
+    }
+  ],
+  "_set_mode": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mode.py",
+      "line": 134
+    }
+  ],
+  "_sh": [
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 531
+    }
+  ],
+  "_show_loading": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 318
+    }
+  ],
+  "_show_mode": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 43
+    },
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 47
+    }
+  ],
+  "_show_raw_check_btn": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 419
+    }
+  ],
+  "_show_tooltip": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 317
+    }
+  ],
+  "_sig": [
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_exec.py",
+      "line": 77
+    }
+  ],
+  "_solar_days_in_month": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 71
+    }
+  ],
+  "_solar_days_in_year": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 63
+    }
+  ],
+  "_solar_terms": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 292
+    }
+  ],
+  "_solar_to_lunar": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 129
+    }
+  ],
+  "_step_summary": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 688
+    }
+  ],
+  "_storage_instance": [
+    {
+      "kind": "variable",
+      "path": "store/__init__.py",
+      "line": 22
+    }
+  ],
+  "_store_embedding_inline": [
+    {
+      "kind": "member",
+      "path": "store/_conversations.py",
+      "line": 223
+    }
+  ],
+  "_subconscious_loop": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 690
+    }
+  ],
+  "_sudo_with_gui": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_exec.py",
+      "line": 172
+    }
+  ],
+  "_suggest_new_topic_if_needed": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 270
+    }
+  ],
+  "_switch_display": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 300
+    }
+  ],
+  "_sync_item": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 78
+    }
+  ],
+  "_sync_to_db": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 54
+    }
+  ],
+  "_sys": [
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 495
+    }
+  ],
+  "_table_columns": [
+    {
+      "kind": "function",
+      "path": "store/_core.py",
+      "line": 349
+    }
+  ],
+  "_tk2": [
+    {
+      "kind": "namespace",
+      "path": "_gui/_fonts.py",
+      "line": 75
+    }
+  ],
+  "_tkfont": [
+    {
+      "kind": "unknown",
+      "path": "_gui/_fonts.py",
+      "line": 30
+    }
+  ],
+  "_todos": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 8
+    }
+  ],
+  "_toggle_raw_view": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 410
+    }
+  ],
+  "_toolkit_diff_impl": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 540
+    }
+  ],
+  "_ts": [
+    {
+      "kind": "unknown",
+      "path": "toolkit/toolkit_scheduler.py",
+      "line": 160
+    }
+  ],
+  "_update_title": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 94
+    }
+  ],
+  "_validate_html_structure": [
+    {
+      "kind": "function",
+      "path": "_gui/_markdown.py",
+      "line": 355
+    }
+  ],
+  "_verify_all": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 454
+    }
+  ],
+  "_verify_step": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 761
+    }
+  ],
+  "_walk": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 129
+    }
+  ],
+  "_worker": [
+    {
+      "kind": "function",
+      "path": "_gui/_renderer.py",
+      "line": 163
+    },
+    {
+      "kind": "function",
+      "path": "_gui/_renderer.py",
+      "line": 224
+    }
+  ],
+  "_write_state": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 76
+    }
+  ],
+  "_write_week_key": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 543
+    }
+  ],
+  "activate_all": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 204
+    }
+  ],
+  "activate_skill": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 180
+    }
+  ],
+  "add_config_change": [
+    {
+      "kind": "member",
+      "path": "store/_config.py",
+      "line": 9
+    }
+  ],
+  "add_memory": [
+    {
+      "kind": "member",
+      "path": "store/_memories.py",
+      "line": 14
+    }
+  ],
+  "add_reflection": [
+    {
+      "kind": "member",
+      "path": "store/_reflections.py",
+      "line": 10
+    }
+  ],
+  "add_system_prompt": [
+    {
+      "kind": "member",
+      "path": "store/_prompts.py",
+      "line": 9
+    }
+  ],
+  "add_task": [
+    {
+      "kind": "member",
+      "path": "store/_scheduled_tasks.py",
+      "line": 91
+    }
+  ],
+  "add_topic_tokens": [
+    {
+      "kind": "member",
+      "path": "store/_topics.py",
+      "line": 127
+    }
+  ],
+  "attach": [
+    {
+      "kind": "member",
+      "path": "_gui/_images.py",
+      "line": 41
+    }
+  ],
+  "auto_activate": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 314
+    }
+  ],
+  "auto_new_topic": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 43
+    }
+  ],
+  "backup_now": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 605
+    }
+  ],
+  "batch_vectorize": [
+    {
+      "kind": "member",
+      "path": "store/_vectors.py",
+      "line": 212
+    }
+  ],
+  "build": [
+    {
+      "kind": "member",
+      "path": "_gui/_ui_builder.py",
+      "line": 33
+    }
+  ],
+  "build_dependency_graph": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 374
+    }
+  ],
+  "cleanup_expired_memories": [
+    {
+      "kind": "member",
+      "path": "store/_memories.py",
+      "line": 201
+    }
+  ],
+  "clear": [
+    {
+      "kind": "member",
+      "path": "_gui/_images.py",
+      "line": 74
+    }
+  ],
+  "clear_chat": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 29
+    }
+  ],
+  "clear_l3_pending": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 190
+    }
+  ],
+  "close": [
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 658
+    }
+  ],
+  "collect_context": [
+    {
+      "kind": "function",
+      "path": "lsp/lsp_engine.py",
+      "line": 217
+    }
+  ],
+  "completion": [
+    {
+      "kind": "function",
+      "path": "lsp/lsp_engine.py",
+      "line": 85
+    }
+  ],
+  "create_topic": [
+    {
+      "kind": "member",
+      "path": "store/_topics.py",
+      "line": 14
+    }
+  ],
+  "deactivate_all": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 210
+    }
+  ],
+  "deactivate_memory": [
+    {
+      "kind": "member",
+      "path": "store/_memories.py",
+      "line": 108
+    }
+  ],
+  "deactivate_skill": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 189
+    }
+  ],
+  "deactivate_system_prompt": [
+    {
+      "kind": "member",
+      "path": "store/_prompts.py",
+      "line": 59
+    }
+  ],
+  "delete_memory": [
+    {
+      "kind": "member",
+      "path": "store/_memories.py",
+      "line": 116
+    }
+  ],
+  "delete_task": [
+    {
+      "kind": "member",
+      "path": "store/_scheduled_tasks.py",
+      "line": 132
+    }
+  ],
+  "delete_topic": [
+    {
+      "kind": "member",
+      "path": "store/_topics.py",
+      "line": 79
+    }
+  ],
+  "delete_vector": [
+    {
+      "kind": "member",
+      "path": "store/_vectors.py",
+      "line": 228
+    }
+  ],
+  "diagnose": [
+    {
+      "kind": "function",
+      "path": "lsp/lsp_engine.py",
+      "line": 32
+    }
+  ],
+  "discover_skills": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 114
+    }
+  ],
+  "flush_stream_to_messages": [
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 174
+    }
+  ],
+  "fmt": [
+    {
+      "kind": "function",
+      "path": "_gui/_topic_manager.py",
+      "line": 326
+    }
+  ],
+  "get_active_memories": [
+    {
+      "kind": "member",
+      "path": "store/_memories.py",
+      "line": 129
+    }
+  ],
+  "get_active_prompt": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 279
+    }
+  ],
+  "get_active_skill_names": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 364
+    }
+  ],
+  "get_active_tool_names": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 235
+    }
+  ],
+  "get_active_tools_meta": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 243
+    }
+  ],
+  "get_agent_rounds": [
+    {
+      "kind": "member",
+      "path": "store/_conversations.py",
+      "line": 183
+    }
+  ],
+  "get_all_embeddings": [
+    {
+      "kind": "member",
+      "path": "store/_vectors.py",
+      "line": 52
+    }
+  ],
+  "get_config_changes_since": [
+    {
+      "kind": "member",
+      "path": "store/_config.py",
+      "line": 59
+    }
+  ],
+  "get_config_history": [
+    {
+      "kind": "member",
+      "path": "store/_config.py",
+      "line": 37
+    }
+  ],
+  "get_conversations": [
+    {
+      "kind": "member",
+      "path": "store/_conversations.py",
+      "line": 127
+    }
+  ],
+  "get_drift_count": [
+    {
+      "kind": "member",
+      "path": "store/_topics.py",
+      "line": 60
+    }
+  ],
+  "get_due_tasks": [
+    {
+      "kind": "member",
+      "path": "store/_scheduled_tasks.py",
+      "line": 155
+    }
+  ],
+  "get_instance": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 83
+    }
+  ],
+  "get_instructions": [
+    {
+      "kind": "member",
+      "path": "store/_memories.py",
+      "line": 146
+    }
+  ],
+  "get_l3_pending": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 165
+    }
+  ],
+  "get_latest_system_prompt": [
+    {
+      "kind": "member",
+      "path": "store/_prompts.py",
+      "line": 33
+    }
+  ],
+  "get_level2": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 59
+    }
+  ],
+  "get_memory_stats": [
+    {
+      "kind": "member",
+      "path": "store/_memories.py",
+      "line": 227
+    }
+  ],
+  "get_msg_embedding": [
+    {
+      "kind": "member",
+      "path": "store/_vectors.py",
+      "line": 31
+    }
+  ],
+  "get_recent_conversations": [
+    {
+      "kind": "member",
+      "path": "store/_conversations.py",
+      "line": 167
+    }
+  ],
+  "get_recent_reflections": [
+    {
+      "kind": "member",
+      "path": "store/_reflections.py",
+      "line": 39
+    }
+  ],
+  "get_reflection_stats": [
+    {
+      "kind": "member",
+      "path": "store/_reflections.py",
+      "line": 67
+    }
+  ],
+  "get_result": [
+    {
+      "kind": "member",
+      "path": "_gui/_markdown.py",
+      "line": 409
+    }
+  ],
+  "get_semantic_summary": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 93
+    }
+  ],
+  "get_skill": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 356
+    }
+  ],
+  "get_skill_summary": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 296
+    }
+  ],
+  "get_status": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 368
+    }
+  ],
+  "get_storage": [
+    {
+      "kind": "function",
+      "path": "store/__init__.py",
+      "line": 24
+    }
+  ],
+  "get_system_prompt_count": [
+    {
+      "kind": "member",
+      "path": "store/_prompts.py",
+      "line": 86
+    }
+  ],
+  "get_system_prompt_history": [
+    {
+      "kind": "member",
+      "path": "store/_prompts.py",
+      "line": 44
+    }
+  ],
+  "get_task": [
+    {
+      "kind": "member",
+      "path": "store/_scheduled_tasks.py",
+      "line": 139
+    }
+  ],
+  "get_tool_chain_summary": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 120
+    }
+  ],
+  "get_topic": [
+    {
+      "kind": "member",
+      "path": "store/_topics.py",
+      "line": 98
+    }
+  ],
+  "get_topic_summary": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 15
+    }
+  ],
+  "get_topic_tokens": [
+    {
+      "kind": "member",
+      "path": "store/_topics.py",
+      "line": 176
+    }
+  ],
+  "get_unsummarized_conversations": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 212
+    }
+  ],
+  "get_unvectorized_conversations": [
+    {
+      "kind": "member",
+      "path": "store/_vectors.py",
+      "line": 178
+    }
+  ],
+  "get_vector_count": [
+    {
+      "kind": "member",
+      "path": "store/_vectors.py",
+      "line": 170
+    }
+  ],
+  "goto_definition": [
+    {
+      "kind": "function",
+      "path": "lsp/lsp_engine.py",
+      "line": 115
+    }
+  ],
+  "handle_endtag": [
+    {
+      "kind": "member",
+      "path": "_gui/_markdown.py",
+      "line": 387
+    }
+  ],
+  "handle_max_iter": [
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 62
+    }
+  ],
+  "handle_starttag": [
+    {
+      "kind": "member",
+      "path": "_gui/_markdown.py",
+      "line": 377
+    }
+  ],
+  "hover": [
+    {
+      "kind": "function",
+      "path": "lsp/lsp_engine.py",
+      "line": 146
+    }
+  ],
+  "html_mod": [
+    {
+      "kind": "namespace",
+      "path": "_gui/_markdown.py",
+      "line": 230
+    },
+    {
+      "kind": "namespace",
+      "path": "_gui/_renderer.py",
+      "line": 8
+    }
+  ],
+  "impact_analysis": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 281
+    }
+  ],
+  "increment_drift_count": [
+    {
+      "kind": "member",
+      "path": "store/_topics.py",
+      "line": 68
+    }
+  ],
+  "is_tool_active": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 218
+    }
+  ],
+  "list_skills": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 352
+    }
+  ],
+  "list_tasks": [
+    {
+      "kind": "member",
+      "path": "store/_scheduled_tasks.py",
+      "line": 146
+    }
+  ],
+  "list_topics": [
+    {
+      "kind": "member",
+      "path": "store/_topics.py",
+      "line": 110
+    }
+  ],
+  "load_worker": [
+    {
+      "kind": "function",
+      "path": "_gui/_topic_manager.py",
+      "line": 131
+    }
+  ],
+  "log": [
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 81
+    }
+  ],
+  "log_tool": [
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 110
+    }
+  ],
+  "logger": [
+    {
+      "kind": "variable",
+      "path": "_gui/_fonts.py",
+      "line": 8
+    },
+    {
+      "kind": "variable",
+      "path": "_gui/_images.py",
+      "line": 16
+    },
+    {
+      "kind": "variable",
+      "path": "_gui/_renderer.py",
+      "line": 28
+    },
+    {
+      "kind": "variable",
+      "path": "_gui/_topic_manager.py",
+      "line": 15
+    },
+    {
+      "kind": "variable",
+      "path": "_gui/_topic_summary.py",
+      "line": 10
+    },
+    {
+      "kind": "variable",
+      "path": "_gui/_tray.py",
+      "line": 13
+    },
+    {
+      "kind": "variable",
+      "path": "_gui/_ui_builder.py",
+      "line": 20
+    },
+    {
+      "kind": "variable",
+      "path": "lsp/lsp_engine.py",
+      "line": 15
+    },
+    {
+      "kind": "variable",
+      "path": "lsp/ts_analyzer.py",
+      "line": 11
+    },
+    {
+      "kind": "variable",
+      "path": "skills/__init__.py",
+      "line": 25
+    },
+    {
+      "kind": "variable",
+      "path": "store/_conversations.py",
+      "line": 11
+    },
+    {
+      "kind": "variable",
+      "path": "store/_core.py",
+      "line": 25
+    },
+    {
+      "kind": "variable",
+      "path": "store/_memories.py",
+      "line": 7
+    },
+    {
+      "kind": "variable",
+      "path": "store/_scheduled_tasks.py",
+      "line": 8
+    },
+    {
+      "kind": "variable",
+      "path": "store/_summaries.py",
+      "line": 8
+    },
+    {
+      "kind": "variable",
+      "path": "store/_topics.py",
+      "line": 7
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_config.py",
+      "line": 4
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_date_diff.py",
+      "line": 5
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_dump_topic.py",
+      "line": 3
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 10
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 6
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_exec.py",
+      "line": 6
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 50
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_file.py",
+      "line": 6
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_gettime.py",
+      "line": 5
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_git_push_all_remotes.py",
+      "line": 5
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_kb.py",
+      "line": 7
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lsp.py",
+      "line": 10
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 3
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 5
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_memory.py",
+      "line": 6
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_mode.py",
+      "line": 8
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_notify.py",
+      "line": 5
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_os_info.py",
+      "line": 6
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_pkg.py",
+      "line": 6
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_proactive.py",
+      "line": 8
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_prompt_evolve.py",
+      "line": 4
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_read_pyproject.py",
+      "line": 6
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_reflection.py",
+      "line": 4
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_release.py",
+      "line": 20
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_run_tests.py",
+      "line": 4
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_scheduler.py",
+      "line": 5
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_search.py",
+      "line": 5
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_self_evolve.py",
+      "line": 3
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_self_report.py",
+      "line": 5
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_set_topic_title.py",
+      "line": 3
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_skill.py",
+      "line": 3
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 6
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_test_gui.py",
+      "line": 11
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 4
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_toggle_reasoning.py",
+      "line": 4
+    }
+  ],
+  "mark_as_summarized": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 198
+    }
+  ],
+  "mark_reflection_applied": [
+    {
+      "kind": "member",
+      "path": "store/_reflections.py",
+      "line": 54
+    }
+  ],
+  "mark_run": [
+    {
+      "kind": "member",
+      "path": "store/_scheduled_tasks.py",
+      "line": 165
+    }
+  ],
+  "meta_toolkit_config": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_config.py",
+      "line": 101
+    }
+  ],
+  "meta_toolkit_date_diff": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_date_diff.py",
+      "line": 61
+    }
+  ],
+  "meta_toolkit_dump_topic": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_dump_topic.py",
+      "line": 111
+    }
+  ],
+  "meta_toolkit_edit": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 701
+    }
+  ],
+  "meta_toolkit_evolution_exp": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_evolution_exp.py",
+      "line": 106
+    }
+  ],
+  "meta_toolkit_exec": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_exec.py",
+      "line": 263
+    }
+  ],
+  "meta_toolkit_explr": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 717
+    }
+  ],
+  "meta_toolkit_file": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_file.py",
+      "line": 85
+    }
+  ],
+  "meta_toolkit_gettime": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_gettime.py",
+      "line": 21
+    }
+  ],
+  "meta_toolkit_git_push_all_remotes": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_git_push_all_remotes.py",
+      "line": 31
+    }
+  ],
+  "meta_toolkit_kb": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_kb.py",
+      "line": 193
+    }
+  ],
+  "meta_toolkit_lsp": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lsp.py",
+      "line": 65
+    }
+  ],
+  "meta_toolkit_lunar": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 313
+    }
+  ],
+  "meta_toolkit_mcp": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 334
+    }
+  ],
+  "meta_toolkit_memory": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_memory.py",
+      "line": 132
+    }
+  ],
+  "meta_toolkit_mode": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mode.py",
+      "line": 226
+    },
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mode.py",
+      "line": 230
+    }
+  ],
+  "meta_toolkit_notify": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_notify.py",
+      "line": 122
+    }
+  ],
+  "meta_toolkit_os_info": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_os_info.py",
+      "line": 28
+    }
+  ],
+  "meta_toolkit_pkg": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_pkg.py",
+      "line": 148
+    }
+  ],
+  "meta_toolkit_proactive": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_proactive.py",
+      "line": 150
+    },
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_proactive.py",
+      "line": 154
+    }
+  ],
+  "meta_toolkit_prompt_evolve": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_prompt_evolve.py",
+      "line": 97
+    }
+  ],
+  "meta_toolkit_read_pyproject": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_read_pyproject.py",
+      "line": 61
+    }
+  ],
+  "meta_toolkit_reflection": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_reflection.py",
+      "line": 75
+    }
+  ],
+  "meta_toolkit_release": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_release.py",
+      "line": 220
+    }
+  ],
+  "meta_toolkit_run_tests": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_run_tests.py",
+      "line": 61
+    }
+  ],
+  "meta_toolkit_scheduler": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_scheduler.py",
+      "line": 428
+    }
+  ],
+  "meta_toolkit_search": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_search.py",
+      "line": 230
+    }
+  ],
+  "meta_toolkit_self_evolve": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_self_evolve.py",
+      "line": 298
+    }
+  ],
+  "meta_toolkit_self_report": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_self_report.py",
+      "line": 73
+    }
+  ],
+  "meta_toolkit_set_topic_title": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_set_topic_title.py",
+      "line": 60
+    }
+  ],
+  "meta_toolkit_skill": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_skill.py",
+      "line": 81
+    }
+  ],
+  "meta_toolkit_subconscious": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 1001
+    }
+  ],
+  "meta_toolkit_test_gui": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_test_gui.py",
+      "line": 126
+    }
+  ],
+  "meta_toolkit_todo": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 338
+    }
+  ],
+  "meta_toolkit_toggle_reasoning": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_toggle_reasoning.py",
+      "line": 32
+    }
+  ],
+  "new_topic": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 59
+    }
+  ],
+  "newline": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 261
+    }
+  ],
+  "np": [
+    {
+      "kind": "namespace",
+      "path": "store/_conversations.py",
+      "line": 226
+    },
+    {
+      "kind": "namespace",
+      "path": "store/_vectors.py",
+      "line": 3
+    }
+  ],
+  "on_topic_select": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 245
+    }
+  ],
+  "parse_file": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 104
+    }
+  ],
+  "parse_schedule": [
+    {
+      "kind": "member",
+      "path": "store/_scheduled_tasks.py",
+      "line": 19
+    },
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_scheduler.py",
+      "line": 71
+    }
+  ],
+  "push_l3_pending": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 178
+    }
+  ],
+  "push_to_level2": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 147
+    }
+  ],
+  "py_ast": [
+    {
+      "kind": "namespace",
+      "path": "lsp/ts_analyzer.py",
+      "line": 6
+    }
+  ],
+  "rebuild_index": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_kb.py",
+      "line": 58
+    }
+  ],
+  "references": [
+    {
+      "kind": "function",
+      "path": "lsp/lsp_engine.py",
+      "line": 186
+    }
+  ],
+  "refresh_topics": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 69
+    }
+  ],
+  "res": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_dump_topic.py",
+      "line": 123
+    }
+  ],
+  "reset_instance": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 90
+    }
+  ],
+  "rollback_system_prompt": [
+    {
+      "kind": "member",
+      "path": "store/_prompts.py",
+      "line": 72
+    }
+  ],
+  "root_dir": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_dump_topic.py",
+      "line": 118
+    }
+  ],
+  "safe_log": [
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 30
+    }
+  ],
+  "safe_log_tool": [
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 39
+    }
+  ],
+  "safe_stream": [
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 26
+    }
+  ],
+  "safe_update_status": [
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 47
+    }
+  ],
+  "sanitize": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_kb.py",
+      "line": 38
+    }
+  ],
+  "save_agent_round": [
+    {
+      "kind": "member",
+      "path": "store/_conversations.py",
+      "line": 103
+    }
+  ],
+  "save_msg": [
+    {
+      "kind": "member",
+      "path": "store/_conversations.py",
+      "line": 16
+    },
+    {
+      "kind": "member",
+      "path": "store/_core.py",
+      "line": 82
+    }
+  ],
+  "scan_dir": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_file.py",
+      "line": 56
+    }
+  ],
+  "scroll_to_bottom": [
+    {
+      "kind": "member",
+      "path": "_gui/_renderer.py",
+      "line": 384
+    }
+  ],
+  "search_by_keyword": [
+    {
+      "kind": "member",
+      "path": "store/_vectors.py",
+      "line": 141
+    }
+  ],
+  "search_by_vector": [
+    {
+      "kind": "member",
+      "path": "store/_vectors.py",
+      "line": 78
+    }
+  ],
+  "search_memories": [
+    {
+      "kind": "member",
+      "path": "store/_memories.py",
+      "line": 158
+    }
+  ],
+  "set_level2": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 76
+    }
+  ],
+  "set_semantic_summary": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 105
+    }
+  ],
+  "set_tool_chain_summary": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 132
+    }
+  ],
+  "sh": [
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 107
+    }
+  ],
+  "show_popup": [
+    {
+      "kind": "member",
+      "path": "_gui/_images.py",
+      "line": 81
+    }
+  ],
+  "sp": [
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 772
+    }
+  ],
+  "start": [
+    {
+      "kind": "member",
+      "path": "_gui/_tray.py",
+      "line": 36
+    }
+  ],
+  "stop": [
+    {
+      "kind": "member",
+      "path": "_gui/_tray.py",
+      "line": 40
+    }
+  ],
+  "store_embedding": [
+    {
+      "kind": "member",
+      "path": "store/_vectors.py",
+      "line": 10
+    }
+  ],
+  "stream": [
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 116
+    }
+  ],
+  "stream_flush_tick": [
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 135
+    }
+  ],
+  "switch_topic": [
+    {
+      "kind": "member",
+      "path": "_gui/_topic_manager.py",
+      "line": 107
+    }
+  ],
+  "tk": [
+    {
+      "kind": "namespace",
+      "path": "_gui/_images.py",
+      "line": 5
+    },
+    {
+      "kind": "namespace",
+      "path": "_gui/_renderer.py",
+      "line": 7
+    },
+    {
+      "kind": "namespace",
+      "path": "_gui/_stream_manager.py",
+      "line": 11
+    },
+    {
+      "kind": "namespace",
+      "path": "_gui/_topic_manager.py",
+      "line": 5
+    },
+    {
+      "kind": "namespace",
+      "path": "_gui/_tray.py",
+      "line": 5
+    },
+    {
+      "kind": "namespace",
+      "path": "_gui/_ui_builder.py",
+      "line": 5
+    }
+  ],
+  "tkFont": [
+    {
+      "kind": "unknown",
+      "path": "_gui/_ui_builder.py",
+      "line": 6
+    }
+  ],
+  "to_dict": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 55
+    }
+  ],
+  "toggle_skill": [
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 197
+    }
+  ],
+  "toolkit_config": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_config.py",
+      "line": 10
+    }
+  ],
+  "toolkit_date_diff": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_date_diff.py",
+      "line": 7
+    }
+  ],
+  "toolkit_dump_topic": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_dump_topic.py",
+      "line": 5
+    }
+  ],
+  "toolkit_edit": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_edit.py",
+      "line": 12
+    }
+  ],
+  "toolkit_evolution_exp": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_evolution_exp.py",
+      "line": 44
+    }
+  ],
+  "toolkit_exec": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_exec.py",
+      "line": 8
+    }
+  ],
+  "toolkit_explr": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 676
+    },
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 688
+    }
+  ],
+  "toolkit_file": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_file.py",
+      "line": 8
+    }
+  ],
+  "toolkit_gettime": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_gettime.py",
+      "line": 7
+    }
+  ],
+  "toolkit_git_push_all_remotes": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_git_push_all_remotes.py",
+      "line": 7
+    }
+  ],
+  "toolkit_kb": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_kb.py",
+      "line": 11
+    }
+  ],
+  "toolkit_lsp": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lsp.py",
+      "line": 12
+    }
+  ],
+  "toolkit_lunar": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_lunar.py",
+      "line": 188
+    }
+  ],
+  "toolkit_mcp": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mcp.py",
+      "line": 7
+    }
+  ],
+  "toolkit_memory": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_memory.py",
+      "line": 8
+    }
+  ],
+  "toolkit_mode": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_mode.py",
+      "line": 10
+    }
+  ],
+  "toolkit_notify": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_notify.py",
+      "line": 7
+    }
+  ],
+  "toolkit_os_info": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_os_info.py",
+      "line": 20
+    }
+  ],
+  "toolkit_pkg": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_pkg.py",
+      "line": 8
+    }
+  ],
+  "toolkit_plan": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 506
+    }
+  ],
+  "toolkit_proactive": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_proactive.py",
+      "line": 10
+    }
+  ],
+  "toolkit_prompt_evolve": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_prompt_evolve.py",
+      "line": 10
+    }
+  ],
+  "toolkit_read_pyproject": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_read_pyproject.py",
+      "line": 8
+    }
+  ],
+  "toolkit_reflection": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_reflection.py",
+      "line": 11
+    }
+  ],
+  "toolkit_release": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_release.py",
+      "line": 23
+    }
+  ],
+  "toolkit_run_tests": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_run_tests.py",
+      "line": 6
+    }
+  ],
+  "toolkit_scheduler": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_scheduler.py",
+      "line": 7
+    }
+  ],
+  "toolkit_search": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_search.py",
+      "line": 7
+    }
+  ],
+  "toolkit_self_evolve": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_self_evolve.py",
+      "line": 5
+    }
+  ],
+  "toolkit_self_report": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_self_report.py",
+      "line": 7
+    }
+  ],
+  "toolkit_set_topic_title": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_set_topic_title.py",
+      "line": 5
+    }
+  ],
+  "toolkit_skill": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_skill.py",
+      "line": 7
+    }
+  ],
+  "toolkit_subconscious": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 8
+    }
+  ],
+  "toolkit_test_gui": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_test_gui.py",
+      "line": 13
+    }
+  ],
+  "toolkit_todo": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 140
+    }
+  ],
+  "toolkit_toggle_reasoning": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_toggle_reasoning.py",
+      "line": 6
+    }
+  ],
+  "touch_memory": [
+    {
+      "kind": "member",
+      "path": "store/_memories.py",
+      "line": 213
+    }
+  ],
+  "tsp": [
+    {
+      "kind": "namespace",
+      "path": "lsp/ts_analyzer.py",
+      "line": 24
+    }
+  ],
+  "update_memory": [
+    {
+      "kind": "member",
+      "path": "store/_memories.py",
+      "line": 71
+    }
+  ],
+  "update_msg_rounds": [
+    {
+      "kind": "member",
+      "path": "store/_conversations.py",
+      "line": 82
+    }
+  ],
+  "update_status": [
+    {
+      "kind": "member",
+      "path": "_gui/_stream_manager.py",
+      "line": 58
+    }
+  ],
+  "update_task": [
+    {
+      "kind": "member",
+      "path": "store/_scheduled_tasks.py",
+      "line": 110
+    }
+  ],
+  "update_topic_active": [
+    {
+      "kind": "member",
+      "path": "store/_topics.py",
+      "line": 46
+    }
+  ],
+  "update_topic_summary": [
+    {
+      "kind": "member",
+      "path": "store/_summaries.py",
+      "line": 27
+    }
+  ],
+  "update_topic_title": [
+    {
+      "kind": "member",
+      "path": "store/_topics.py",
+      "line": 27
+    }
+  ],
+  "vectorize_conversation": [
+    {
+      "kind": "member",
+      "path": "store/_vectors.py",
+      "line": 197
+    }
+  ],
+  "visit_AsyncFunctionDef": [
+    {
+      "kind": "member",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 161
+    }
+  ],
+  "visit_ClassDef": [
+    {
+      "kind": "member",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 169
+    }
+  ],
+  "visit_FunctionDef": [
+    {
+      "kind": "member",
+      "path": "toolkit/toolkit_explr.py",
+      "line": 143
+    }
+  ]
+}

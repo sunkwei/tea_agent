@@ -626,6 +626,15 @@ class OnlineToolSession(BaseChatSession):
             sys_msg["content"] = enhanced
         result.append(sys_msg)
 
+        # ── 当前操作系统信息注入 ──
+        # 2026-05-22 gen by Tea Agent, 跨OS记忆共享需要注入当前操作系统信息
+        os_info = self._get_os_context()
+        if os_info:
+            result.append({
+                "role": "user",
+                "content": os_info
+            })
+
         # ── 潜意识引擎状态注入 ──
         sub_ctx = self._get_subconscious_context()
         if sub_ctx:
@@ -880,6 +889,31 @@ class OnlineToolSession(BaseChatSession):
     # ──────────────────────────────────────────────
     # 辅助方法（潜意识、多模态、L2 过滤）
     # ──────────────────────────────────────────────
+
+    def _get_os_context(self):
+        """获取当前操作系统信息并格式化为上下文。
+        
+        记忆在不同操作系统间共享（如 Windows/Linux），
+        必须注入当前 OS 信息以确保工具调用使用正确的命令。
+        2026-05-23 gen by Tea Agent, 跨OS记忆共享
+        """
+        try:
+            os_info = self.context.toolkit.call_tool('toolkit_os_info')
+            if not os_info:
+                return None
+            system = os_info.get('system', 'Unknown')
+            release = os_info.get('release', '')
+            machine = os_info.get('machine', '')
+            is_windows = os_info.get('is_windows', False)
+            
+            lines = ["[系统信息] 当前运行环境:"]
+            if is_windows:
+                lines.append(f"Windows ({machine})，请使用 Windows 兼容命令（如 dir、type、find 等）。")
+            else:
+                lines.append(f"{system} {release} ({machine})，请使用 Linux 兼容命令。")
+            return "\n".join(lines)
+        except Exception:
+            return None
 
     def _get_subconscious_context(self):
         """读取潜意识引擎状态并格式化为上下文"""

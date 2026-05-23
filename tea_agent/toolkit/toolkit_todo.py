@@ -1,5 +1,11 @@
 import logging
+import os
+import json
+import uuid
 from typing import Optional, List
+from datetime import datetime
+from datetime import datetime
+from tea_agent.toolkit.toolkit_plan import toolkit_plan
 
 logger = logging.getLogger("toolkit")
 
@@ -137,6 +143,69 @@ def _auto_restore():
     if not _restored or (topic_id and topic_id != _last_topic):
         _restore_from_db()
 
+# ── TODO action handlers (extracted from toolkit_todo) ──────────
+
+def _todo_create(items):
+    if not items:
+        return {"ok": False, "error": "create needs items"}
+    _todos.clear()
+    _todos.extend([{"desc": d, "done": False, "idx": i} for i, d in enumerate(items)])
+    _sync_to_db()
+    return {
+        "ok": True, "total": len(_todos), "todo": _fmt(),
+        "persisted": _get_topic_id() is not None,
+    }
+
+
+def _todo_check(index):
+    if index is None:
+        return {"ok": False, "error": "check needs index"}
+    if 0 <= index < len(_todos):
+        _todos[index]["done"] = True
+        _sync_item(index, True)
+        return {
+            "ok": True, "checked": _todos[index]["desc"],
+            "progress": f"{_done()}/{len(_todos)}", "todo": _fmt(),
+        }
+    return {"ok": False, "error": f"index {index} out of range (0..{len(_todos)-1})"}
+
+
+def _todo_show():
+    if not _todos:
+        topic_id = _get_topic_id()
+        return {"ok": True, "todo": "(empty)", "progress": "0/0",
+                "topic_id": topic_id[:8] + "..." if topic_id else None}
+    return {
+        "ok": True, "todo": _fmt(),
+        "progress": f"{_done()}/{len(_todos)}",
+        "all_done": _done() == len(_todos),
+        "topic_id": (_get_topic_id() or "")[:8] + "...",
+    }
+
+
+def _todo_clear():
+    n = len(_todos)
+    _todos.clear()
+    topic_id = _get_topic_id()
+    if topic_id:
+        db = _get_db()
+        if db:
+            _ensure_table(db)
+            try:
+                c = db.conn.cursor()
+                c.execute("DELETE FROM todo_items WHERE topic_id=?", (topic_id,))
+                db.conn.commit()
+                c.close()
+            except Exception as e:
+                logger.warning(f"todo clear db failed: {e}")
+    return {"ok": True, "msg": f"cleared {n} items"}
+
+
+def _todo_restore():
+    _restore_from_db()
+    return {"ok": True, "todo": _fmt(), "progress": f"{_done()}/{len(_todos)}"}
+
+
 def toolkit_todo(
     action: str,
     items: list = None,
@@ -155,94 +224,25 @@ def toolkit_todo(
     _auto_restore()
 
     try:
-        if action == "create":
-            if not items:
-                return {"ok": False, "error": "create needs items"}
-            _todos.clear()
-            _todos.extend([{"desc": d, "done": False, "idx": i} for i, d in enumerate(items)])
-            _sync_to_db()
-            return {
-                "ok": True,
-                "total": len(_todos),
-                "todo": _fmt(),
-                "persisted": _get_topic_id() is not None,
-            }
-
-        elif action == "check":
-            if index is None:
-                return {"ok": False, "error": "check needs index"}
-            if 0 <= index < len(_todos):
-                _todos[index]["done"] = True
-                _sync_item(index, True)
-                return {
-                    "ok": True,
-                    "checked": _todos[index]["desc"],
-                    "progress": f"{_done()}/{len(_todos)}",
-                    "todo": _fmt(),
-                }
-            return {"ok": False, "error": f"index {index} out of range (0..{len(_todos)-1})"}
-
-        elif action == "show":
-            if not _todos:
-                topic_id = _get_topic_id()
-                return {
-                    "ok": True,
-                    "todo": "(empty)",
-                    "progress": "0/0",
-                    "topic_id": topic_id[:8] + "..." if topic_id else None,
-                }
-            all_done = _done() == len(_todos)
-            topic_id = _get_topic_id()
-            return {
-                "ok": True,
-                "todo": _fmt(),
-                "progress": f"{_done()}/{len(_todos)}",
-                "all_done": all_done,
-                "topic_id": topic_id[:8] + "..." if topic_id else None,
-            }
-
-        elif action == "clear":
-            n = len(_todos)
-            _todos.clear()
-            # 清除 DB 中当前 topic 的记录
-            topic_id = _get_topic_id()
-            if topic_id:
-                db = _get_db()
-                if db:
-                    _ensure_table(db)
-                    try:
-                        c = db.conn.cursor()
-                        c.execute("DELETE FROM todo_items WHERE topic_id=?", (topic_id,))
-                        db.conn.commit()
-                        c.close()
-                    except Exception as e:
-                        logger.warning(f"todo clear db failed: {e}")
-            return {"ok": True, "msg": f"cleared {n} items"}
-
-        elif action == "restore":
-            _restore_from_db()
-            return {"ok": True, "todo": _fmt(), "progress": f"{_done()}/{len(_todos)}"}
-
-        # ── Plan 工作流 actions ──
-        elif action == "plan_create":
-            return _plan_create(items)
-        elif action == "plan_show":
-            return _plan_show(index)
-        elif action == "plan_step":
-            return _plan_step(index)
-        elif action == "plan_run":
-            return _plan_run(index)
-        elif action == "plan_resume":
-            return _plan_resume(index)
-        elif action == "plan_verify":
-            return _plan_verify(index)
-        elif action == "plan_list":
-            return _plan_list()
-        elif action == "plan_delete":
-            return _plan_delete(index)
-
-        else:
+        handlers = {
+            "create":       lambda: _todo_create(items),
+            "check":        lambda: _todo_check(index),
+            "show":         _todo_show,
+            "clear":        _todo_clear,
+            "restore":      _todo_restore,
+            "plan_create":  lambda: _plan_create(items),
+            "plan_show":    lambda: _plan_show(index),
+            "plan_step":    lambda: _plan_step(index),
+            "plan_run":     lambda: _plan_run(index),
+            "plan_resume":  lambda: _plan_resume(index),
+            "plan_verify":  lambda: _plan_verify(index),
+            "plan_list":    _plan_list,
+            "plan_delete":  lambda: _plan_delete(index),
+        }
+        handler = handlers.get(action)
+        if handler is None:
             return {"ok": False, "error": f"unknown action: {action}"}
+        return handler()
 
     except Exception as e:
         logger.exception("toolkit_todo")
@@ -266,7 +266,6 @@ def _fmt():
 # Plan 工作流 wrapper — 复用 toolkit_plan 的核心逻辑
 # ═══════════════════════════════════════════════════════════
 
-import os as _os_plan
 
 def _plan_create(steps_list):
     """从 steps 列表创建计划。steps_list[0] 为 goal，其余为步骤描述。"""
@@ -286,23 +285,23 @@ def _plan_show(plan_id):
 def _plan_step(plan_id):
     if plan_id is None:
         return {"ok": False, "error": "plan_step needs index (plan_id string)"}
-    cwd = _os_plan.getcwd()
+    cwd = os.getcwd()
     return toolkit_plan("step", plan_id=str(plan_id), cwd=cwd)
 
 def _plan_run(plan_id):
     if plan_id is None:
         return {"ok": False, "error": "plan_run needs index (plan_id string)"}
-    cwd = _os_plan.getcwd()
+    cwd = os.getcwd()
     return toolkit_plan("run", plan_id=str(plan_id), cwd=cwd)
 
 def _plan_resume(plan_id):
     if plan_id is None:
         return {"ok": False, "error": "plan_resume needs index (plan_id string)"}
-    cwd = _os_plan.getcwd()
+    cwd = os.getcwd()
     return toolkit_plan("resume", plan_id=str(plan_id), cwd=cwd)
 
 def _plan_verify(plan_id):
-    cwd = _os_plan.getcwd()
+    cwd = os.getcwd()
     pid = str(plan_id) if plan_id else None
     if pid:
         return toolkit_plan("verify", plan_id=pid, cwd=cwd)
@@ -389,412 +388,3 @@ def meta_toolkit_todo():
     }
 
 
-# ── 数据结构 ────────────────────────────────────────────
-
-def _ensure_plans_dir():
-    """Internal: ensure plans dir."""
-    os.makedirs(PLANS_DIR, exist_ok=True)
-
-def _plan_path(plan_id: str) -> str:
-    """Internal: plan path.
-    
-    Args:
-        plan_id: Description.
-    """
-    return os.path.join(PLANS_DIR, f"{plan_id}.json")
-
-def _load_plan(plan_id: str) -> Optional[dict]:
-    """Internal: load plan.
-    
-    Args:
-        plan_id: Description.
-    """
-    path = _plan_path(plan_id)
-    if not os.path.exists(path):
-        return None
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-def _save_plan(plan: dict):
-    """Internal: save plan.
-    
-    Args:
-        plan: Description.
-    """
-    _ensure_plans_dir()
-    plan["updated_at"] = datetime.now().isoformat()
-    with open(_plan_path(plan["id"]), "w", encoding="utf-8") as f:
-        json.dump(plan, f, indent=2, ensure_ascii=False)
-
-_KNOWN_STEP_META = {"id", "desc", "action", "depends_on", "verify", "params"}
-
-def _new_plan(goal: str, steps: List[dict]) -> dict:
-    """Internal: new plan.
-    
-    Args:
-        goal: Description.
-        steps: Description.
-    """
-    now = datetime.now().isoformat()
-    normalized = []
-    for i, s in enumerate(steps):
-        meta_keys = _KNOWN_STEP_META & set(s.keys())
-        # 显式 params 优先，否则所有非 meta 键自动归入 params
-        if "params" in s:
-            params = {**s["params"]}
-        else:
-            params = {k: v for k, v in s.items() if k not in _KNOWN_STEP_META}
-        normalized.append({
-            "id": s.get("id", str(i + 1)),
-            "desc": s["desc"],
-            "action": s.get("action", "self_evolve"),
-            "params": params,
-            "depends_on": s.get("depends_on", []),
-            "verify": s.get("verify", "py_compile"),
-            "status": "pending",
-            "result": None,
-            "started_at": None,
-            "finished_at": None,
-        })
-    return {
-        "id": uuid.uuid4().hex[:8],
-        "goal": goal,
-        "status": "created",
-        "created_at": now,
-        "updated_at": now,
-        "current_step": None,
-        "steps": normalized,
-    }
-
-# ── 核心逻辑 ────────────────────────────────────────────
-
-def _deps_satisfied(step: dict, all_steps: List[dict]) -> bool:
-    """Internal: deps satisfied.
-    
-    Args:
-        step: Description.
-        all_steps: Description.
-    """
-    for dep_id in step.get("depends_on", []):
-        dep = next((s for s in all_steps if s["id"] == dep_id), None)
-        if not dep or dep["status"] != "done":
-            return False
-    return True
-
-def _next_pending(plan: dict) -> Optional[dict]:
-    """Internal: next pending.
-    
-    Args:
-        plan: Description.
-    """
-    for step in plan["steps"]:
-        if step["status"] == "pending" and _deps_satisfied(step, plan["steps"]):
-            return step
-    return None
-
-def _count_status(plan: dict, status: str) -> int:
-    """Internal: count status.
-    
-    Args:
-        plan: Description.
-        status: Description.
-    """
-    return sum(1 for s in plan["steps"] if s["status"] == status)
-
-# ── 工具入口 ────────────────────────────────────────────
-
-def toolkit_plan(
-    action: str,
-    goal: str = None,
-    steps: List[dict] = None,
-    plan_id: str = None,
-    step_id: str = None,
-    cwd: str = None,
-) -> dict:
-    """Plandex 风格 Plan→Execute→Verify 工作流。"""
-    import os as _os
-    cwd = cwd or _os.getcwd()
-
-    try:
-        if action == "create":
-            if not goal or not steps:
-                return {"ok": False, "error": "create 需要 goal 和 steps 参数"}
-            plan = _new_plan(goal, steps)
-            _save_plan(plan)
-            return {
-                "ok": True, "plan_id": plan["id"], "goal": goal,
-                "total_steps": len(plan["steps"]),
-                "hint": f"action='run' plan_id='{plan['id']}' 执行全部",
-            }
-
-        elif action == "show":
-            if not plan_id:
-                return {"ok": False, "error": "show 需要 plan_id"}
-            plan = _load_plan(plan_id)
-            if not plan:
-                return {"ok": False, "error": f"计划不存在: {plan_id}"}
-            return {
-                "ok": True, "plan": plan,
-                "progress": f"{_count_status(plan, 'done')}/{len(plan['steps'])} done",
-            }
-
-        elif action == "step":
-            return _do_step(plan_id, step_id, cwd)
-
-        elif action == "verify":
-            return _do_verify(plan_id, step_id, cwd)
-
-        elif action == "run":
-            return _do_run(plan_id, cwd)
-
-        elif action == "resume":
-            return _do_resume(plan_id, cwd)
-
-        elif action == "list":
-            _ensure_plans_dir()
-            plans = []
-            for fname in sorted(os.listdir(PLANS_DIR), reverse=True):
-                if fname.endswith(".json"):
-                    p = json.load(open(os.path.join(PLANS_DIR, fname), encoding="utf-8"))
-                    plans.append({
-                        "id": p["id"], "goal": p["goal"][:80], "status": p["status"],
-                        "progress": f"{_count_status(p, 'done')}/{len(p['steps'])}",
-                        "updated": p.get("updated_at", "")[:19],
-                    })
-            return {"ok": True, "plans": plans}
-
-        elif action == "delete":
-            if not plan_id:
-                return {"ok": False, "error": "delete 需要 plan_id"}
-            path = _plan_path(plan_id)
-            if os.path.exists(path):
-                os.remove(path)
-                return {"ok": True, "deleted": plan_id}
-            return {"ok": False, "error": f"计划不存在: {plan_id}"}
-
-        else:
-            return {"ok": False, "error": f"未知 action: {action}"}
-
-    except Exception as e:
-        logger.exception(f"toolkit_plan: {e}")
-        return {"ok": False, "error": str(e)[:300]}
-
-# ── Action 实现 ──────────────────────────────────────────
-
-def _do_step(plan_id, step_id, cwd):
-    """Internal: do step.
-    
-    Args:
-        plan_id: Description.
-        step_id: Description.
-        cwd: Description.
-    """
-    if not plan_id:
-        return {"ok": False, "error": "step 需要 plan_id"}
-    plan = _load_plan(plan_id)
-    if not plan:
-        return {"ok": False, "error": f"计划不存在: {plan_id}"}
-
-    if step_id:
-        step = next((s for s in plan["steps"] if s["id"] == step_id), None)
-        if not step:
-            return {"ok": False, "error": f"步骤不存在: {step_id}"}
-    else:
-        step = _next_pending(plan)
-        if not step:
-            all_done = all(s["status"] in ("done", "skipped") for s in plan["steps"])
-            plan["status"] = "done" if all_done else "failed"
-            _save_plan(plan)
-            return {"ok": True, "done": all_done, "plan_status": plan["status"],
-                    "summary": _step_summary(plan)}
-
-    if not _deps_satisfied(step, plan["steps"]):
-        return {"ok": False, "error": f"步骤 {step['id']} 依赖未满足: {step['depends_on']}"}
-
-    return _execute_step(plan, step, cwd)
-
-def _do_verify(plan_id, step_id, cwd):
-    """Internal: do verify.
-    
-    Args:
-        plan_id: Description.
-        step_id: Description.
-        cwd: Description.
-    """
-    if not plan_id:
-        return {"ok": False, "error": "verify 需要 plan_id"}
-    plan = _load_plan(plan_id)
-    if not plan:
-        return {"ok": False, "error": f"计划不存在: {plan_id}"}
-    if step_id:
-        step = next((s for s in plan["steps"] if s["id"] == step_id), None)
-        if not step:
-            return {"ok": False, "error": f"步骤不存在: {step_id}"}
-        return _verify_step(step, cwd)
-    results = [_verify_step(s, cwd) for s in plan["steps"] if s["status"] == "done"]
-    return {"ok": True, "verified": len(results), "results": results}
-
-def _do_run(plan_id, cwd):
-    """Internal: do run.
-    
-    Args:
-        plan_id: Description.
-        cwd: Description.
-    """
-    if not plan_id:
-        return {"ok": False, "error": "run 需要 plan_id"}
-    plan = _load_plan(plan_id)
-    if not plan:
-        return {"ok": False, "error": f"计划不存在: {plan_id}"}
-    plan["status"] = "running"
-    _save_plan(plan)
-    executed = []
-    while True:
-        step = _next_pending(plan)
-        if not step:
-            break
-        result = _execute_step(plan, step, cwd)
-        executed.append({"step": step["id"], "ok": result.get("ok"), "desc": step["desc"]})
-        if not result.get("ok"):
-            plan["status"] = "failed"
-            _save_plan(plan)
-            return {"ok": False, "error": f"步骤 {step['id']} 失败: {result.get('error','')}",
-                    "executed": executed, "plan_id": plan_id}
-    plan["status"] = "done"
-    _save_plan(plan)
-    return {"ok": True, "executed": executed, "plan_id": plan_id, "summary": _step_summary(plan)}
-
-def _do_resume(plan_id, cwd):
-    """Internal: do resume.
-    
-    Args:
-        plan_id: Description.
-        cwd: Description.
-    """
-    if not plan_id:
-        return {"ok": False, "error": "resume 需要 plan_id"}
-    plan = _load_plan(plan_id)
-    if not plan:
-        return {"ok": False, "error": f"计划不存在: {plan_id}"}
-    for s in plan["steps"]:
-        if s["status"] == "running":
-            s["status"] = "pending"
-    plan["status"] = "running"
-    _save_plan(plan)
-    return _do_run(plan_id, cwd)
-
-# ── 内部辅助 ────────────────────────────────────────────
-
-def _step_summary(plan: dict) -> str:
-    """Internal: step summary.
-    
-    Args:
-        plan: Description.
-    """
-    icons = {"done": "✓", "failed": "✗", "running": "▶", "pending": "○", "skipped": "−"}
-    return "\n".join(f"  {icons.get(s['status'],'?')} [{s['id']}] {s['desc']}" for s in plan["steps"])
-
-def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
-    """Internal: execute step.
-    
-    Args:
-        plan: Description.
-        step: Description.
-        cwd: Description.
-    """
-    step["status"] = "running"
-    step["started_at"] = datetime.now().isoformat()
-    plan["current_step"] = step["id"]
-    _save_plan(plan)
-
-    result = {"ok": False, "error": "未执行"}
-    try:
-        action = step.get("action", "self_evolve")
-        params = step.get("params", {})
-
-        if action == "self_evolve":
-            from tea_agent.toolkit.toolkit_self_evolve import toolkit_self_evolve
-            result = toolkit_self_evolve(
-                file_path=params["file_path"],
-                description=step["desc"],
-                old_code=params["old_code"],
-                new_code=params["new_code"],
-                verify=params.get("verify", True),
-                backup=params.get("backup", True),
-                git_snapshot=params.get("git_snapshot", False),
-                run_tests=params.get("run_tests", False),
-                symbol=params.get("symbol"),
-                lsp_checks=params.get("lsp_checks", True),
-            )
-
-        elif action == "create_file":
-            path = params["file_path"]
-            full = os.path.join(cwd, path)
-            os.makedirs(os.path.dirname(full), exist_ok=True)
-            with open(full, "w", encoding="utf-8") as f:
-                f.write(params["content"])
-            result = {"ok": True, "file": path}
-
-        elif action == "exec":
-            import subprocess
-            r = subprocess.run(params.get("cmd", []), capture_output=True,
-                               text=True, timeout=120, cwd=cwd)
-            result = {"ok": r.returncode == 0, "stdout": r.stdout, "stderr": r.stderr}
-        elif action == "verify_only":
-            result = _verify_step(step, cwd)
-
-        else:
-            result = {"ok": False, "error": f"未知 action: {action}"}
-
-    except Exception as e:
-        result = {"ok": False, "error": str(e)[:300]}
-
-    step["result"] = result
-    step["status"] = "done" if result.get("ok") else "failed"
-    step["finished_at"] = datetime.now().isoformat()
-    _save_plan(plan)
-
-    return {"ok": result.get("ok", False), "step_id": step["id"],
-            "desc": step["desc"], "result": result,
-            "plan_progress": f"{_count_status(plan, 'done')}/{len(plan['steps'])}"}
-
-def _verify_step(step: dict, cwd: str) -> dict:
-    """Internal: verify step.
-    
-    Args:
-        step: Description.
-        cwd: Description.
-    """
-    verify_type = step.get("verify", "py_compile")
-    results = {}
-    try:
-        import py_compile
-        import subprocess as sp
-        params = step.get("params", {})
-        fp = params.get("file_path", "")
-
-        if any(k in verify_type for k in ("py_compile", "compile")):
-            if fp and fp.endswith(".py"):
-                try:
-                    py_compile.compile(os.path.join(cwd, fp), doraise=True)
-                    results["compile"] = "ok"
-                except py_compile.PyCompileError as e:
-                    results["compile"] = f"FAIL: {e}"
-
-        if any(k in verify_type for k in ("lint", "ruff")):
-            if fp:
-                r = sp.run(["ruff", "check", "--output-format", "json", os.path.join(cwd, fp)],
-                           capture_output=True, text=True, timeout=15, cwd=cwd)
-                diags = json.loads(r.stdout) if r.stdout.strip() else []
-                results["lint"] = "ok" if not diags else f"{len(diags)} issues"
-
-        if any(k in verify_type for k in ("test", "pytest")):
-            r = sp.run([os.sys.executable, "-m", "pytest", "test_*.py", "-q", "--tb=short"],
-                       capture_output=True, text=True, timeout=60, cwd=cwd)
-            results["test"] = (r.stdout + r.stderr)[-300:]
-
-    except Exception as e:
-        results["error"] = str(e)[:200]
-
-    all_ok = all(not str(v).startswith("FAIL") for v in results.values())
-    return {"ok": all_ok, "step_id": step.get("id"), "verify": results}

@@ -90,6 +90,7 @@ class Toolkit:
         'toolkit_mode', 'toolkit_prompt_evolve',
         'toolkit_notify',        'toolkit_run_tests', 'toolkit_toggle_reasoning', 'toolkit_skill',
         'toolkit_set_topic_title',
+        'toolkit_plan',
         'toolkit_git_push_all_remotes',
     }
 
@@ -241,88 +242,22 @@ class Toolkit:
         return msg
 
     def reload(self) -> Dict:
-        """Reload."""
+        """扫描 builtin/ + user/ 目录，动态加载所有 toolkit_*.py 工具。"""
+        from tea_agent.toolkit.tool_loader import ToolLoader
+
+        loader = ToolLoader(self.builtin_dir, self.user_dir)
+        loaded = loader.reload_all()
+
         result = {
             "valid_tool": {},
-            "invalid_tool": [],
+            "invalid_tool": loaded["invalid"],
         }
-
-        def check_meta(meta) -> bool:
-            """Check meta.
-            
-            Args:
-                meta: Description.
-            """
-            if "type" not in meta or meta["type"] != "function":
-                return False
-            func = meta.get("function", {})
-            if "description" not in func or "name" not in func:
-                return False
-            return True
-
-        # Load from builtin first, then user dir (user overrides builtin)
-        dirs_to_load = []
-        if osp.exists(self.builtin_dir):
-            dirs_to_load.append(("builtin", self.builtin_dir))
-        if osp.exists(self.user_dir):
-            dirs_to_load.append(("user", self.user_dir))
-
-        temp_funcs = {}
-        temp_metas = {}
-
-        for source, d in dirs_to_load:
-            for filename in os.listdir(d):
-                if not (filename.endswith(".py") and filename.startswith("toolkit_")):
-                    continue
-
-                name = filename[:-3]
-                filepath = osp.join(d, filename)
-
-                try:
-                    with open(filepath, encoding="utf-8") as f:
-                        code = f.read()
-
-                    # 使用受限的 globals 避免污染
-                    safe_globals = {
-                        "__builtins__": __builtins__,
-                    }
-                    local_vars = {}
-                    exec(code, safe_globals, local_vars)
-                    # merge local_vars into safe_globals so that function __globals__
-                    # can see imports (e.g. from tea_agent.config import get_config)
-                    safe_globals.update(local_vars)
-
-                    func = local_vars.get(name)
-                    func_meta = local_vars.get(f"meta_{name}")
-
-                    if not callable(func):
-                        result["invalid_tool"].append(
-                            {"name": name, "reason": f"{name} is NOT callable"})
-                        continue
-                    if not callable(func_meta):
-                        result["invalid_tool"].append(
-                            {"name": name, "reason": f"meta_{name} not callable"})
-                        continue
-
-                    meta = func_meta()
-                    if not check_meta(meta):
-                        result["invalid_tool"].append(
-                            {"name": name, "reason": "meta invalid"})
-                        continue
-
-                    # Override logic: later dirs win
-                    temp_funcs[name] = func
-                    temp_metas[name] = meta
-
-                except Exception as e:
-                    result["invalid_tool"].append(
-                        {"name": name, "reason": f"{e} ({source}: {filename})"})
 
         self.func_map.clear()
         self.meta_map.clear()
-        for k, v in temp_funcs.items():
-            self.func_map[k] = v
-            self.meta_map[k] = temp_metas[k]
+        for name, func in loaded["funcs"].items():
+            self.func_map[name] = func
+            self.meta_map[name] = loaded["metas"][name]
 
         # 统一版本管理（合并 save/reload/rollback/versions）
         self.func_map["toolkit_save"] = toolkit_save_impl
@@ -331,8 +266,11 @@ class Toolkit:
         self.func_map["toolkit_set_topic_title"] = toolkit_set_topic_title
         self.meta_map["toolkit_set_topic_title"] = meta_toolkit_set_topic_title()
 
-        result["valid_tool"] = {k: {"func": v, "meta": self.meta_map[k]} for k, v in self.func_map.items() if k not in (
-            "toolkit_save", "toolkit_set_topic_title")}
+        result["valid_tool"] = {
+            k: {"func": v, "meta": self.meta_map[k]}
+            for k, v in self.func_map.items()
+            if k not in ("toolkit_save", "toolkit_set_topic_title")
+        }
         return result
 
     def save(self, name: str, meta: dict, pycode: str, version: str = "") -> Tuple[int, str]:

@@ -112,82 +112,16 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
             return 0, 0, str(e)[:200]
 
     # ── LSP 辅助函数 ──
-    def _run_lsp_checks(full_path, symbol, old_code, new_code, content):
-        """Layer 2.5: 影响分析 + ruff lint + 签名对比。非阻塞。"""
-        result = {"impact": None, "lint_before": 0, "lint_after": 0, "lint_new": 0,
-                  "sig_changed": False, "old_sig": None, "new_sig": None}
-        try:
-            # 1. 影响分析
-            if symbol:
-                try:
-                    from tea_agent.lsp.ts_analyzer import impact_analysis
-                    imp = impact_analysis(cwd, full_path, symbol)
-                    if imp and imp.get("ok"):
-                        result["impact"] = {"callers": len(imp.get("direct_callers", [])),
-                                            "deps": imp.get("dependencies", []),
-                                            "risk": imp.get("risk", "unknown"),
-                                            "hint": imp.get("hint", "")}
-                except Exception:
-                    pass
-
-            # 2. Ruff lint: before
-            import tempfile
-            try:
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as tf:
-                    tf.write(content)
-                    tmp_b = tf.name
-                r = subprocess.run(["ruff", "check", "--output-format", "json", tmp_b],
-                                   capture_output=True, text=True, timeout=15, cwd=cwd)
-                if r.stdout.strip():
-                    import json
-                    result["lint_before"] = len(json.loads(r.stdout))
-            except Exception:
-                pass
-            finally:
-                try: os.unlink(tmp_b)
-                except: pass
-
-            # 3. Ruff lint: after
-            try:
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as tf:
-                    tf.write(open(full_path, encoding='utf-8').read())
-                    tmp_a = tf.name
-                r = subprocess.run(["ruff", "check", "--output-format", "json", tmp_a],
-                                   capture_output=True, text=True, timeout=15, cwd=cwd)
-                if r.stdout.strip():
-                    import json
-                    result["lint_after"] = len(json.loads(r.stdout))
-                result["lint_new"] = max(0, result["lint_after"] - result["lint_before"])
-            except Exception:
-                pass
-            finally:
-                try: os.unlink(tmp_a)
-                except: pass
-
-            # 4. 签名对比
-            if symbol:
-                try:
-                    import re
-                    pat = rf'def\s+{re.escape(symbol)}\s*\([^)]*\)'
-                    m = re.search(pat, old_code)
-                    result["old_sig"] = m.group(0).strip() if m else None
-                    m = re.search(pat, new_code)
-                    result["new_sig"] = m.group(0).strip() if m else None
-                    if result["old_sig"] and result["new_sig"] and result["old_sig"] != result["new_sig"]:
-                        result["sig_changed"] = True
-                except Exception:
-                    pass
-
-        except Exception as e:
-            logger.debug(f"LSP checks: {e}")
-        return result
-
-    # ──────────────────────────────────────
-    # 主逻辑
     # ──────────────────────────────────────    # ──────────────────────────────────────
 
     with open(full_path, "r", encoding="utf-8") as f:
         content = f.read()
+
+    # 标准化换行符（跨平台兼容）
+    if '\r\n' in content or '\r' in content:
+        content = content.replace('\r\n', '\n').replace('\r', '\n')
+    if '\r\n' in old_code or '\r' in old_code:
+        old_code = old_code.replace('\r\n', '\n').replace('\r', '\n')
 
     if old_code not in content:
         return {"ok": False, "error": "old_code 在文件中未找到（精确匹配失败）"}
@@ -219,6 +153,9 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
 
     # 应用修改（.py 文件在 new_code 前加注释）
     annotated_new = new_code
+    # 标准化 new_code 换行符
+    if '\r\n' in annotated_new or '\r' in annotated_new:
+        annotated_new = annotated_new.replace('\r\n', '\n').replace('\r', '\n')
     new_content = content.replace(old_code, annotated_new, 1)
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(new_content)
@@ -248,7 +185,11 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
     # ── Layer 2.5: LSP 智能检查 ──
     lsp_result = None
     if lsp_checks and verify_ok and file_path.endswith(".py"):
-        lsp_result = _run_lsp_checks(full_path, symbol, old_code, new_code, content)
+        from tea_agent.lsp.lsp_check import run_lsp_check
+        lsp_result = run_lsp_check(
+            file_path=full_path, symbol=symbol,
+            old_code=old_code, new_code=new_code, cwd=cwd,
+        )
         if lsp_result.get("lint_new", 0) > 0:
             logger.warning(f"LSP: 引入 {lsp_result['lint_new']} 个新 lint 问题")
         if lsp_result.get("sig_changed"):

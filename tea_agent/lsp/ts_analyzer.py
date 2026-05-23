@@ -126,83 +126,94 @@ def parse_file(filepath: str) -> Optional[Dict]:
 
     result = {"file": filepath, "functions": [], "classes": [], "imports": [], "top_level": []}
 
+    def _handle_function_def(child, depth):
+        """Extract function definition info."""
+        name_node = child.child_by_field_name("name")
+        body_node = child.child_by_field_name("body")
+        name = _get_text(source_bytes, name_node) if name_node else "?"
+        params = _extract_params(source_bytes, child)
+        calls = _extract_calls(source_bytes, child) if body_node else []
+        doc = _extract_docstring(source_bytes, body_node) if body_node else ""
+        body_span = (child.start_point[0] + 1, child.end_point[0] + 1)
+        result["functions"].append({
+            "name": name, "line": child.start_point[0] + 1,
+            "body_span": body_span,
+            "params": params, "docstring": doc, "calls": calls,
+        })
+        if depth == 0:
+            result["top_level"].append({
+                "name": name, "kind": "function",
+                "line": child.start_point[0] + 1,
+            })
+
+    def _handle_class_def(child, depth):
+        """Extract class definition info."""
+        name_node = child.child_by_field_name("name")
+        body_node = child.child_by_field_name("body")
+        name = _get_text(source_bytes, name_node) if name_node else "?"
+        bases = []
+        for s in child.children:
+            if s.type == "argument_list":
+                for arg in s.named_children:
+                    bases.append(_get_text(source_bytes, arg))
+        doc = _extract_docstring(source_bytes, body_node) if body_node else ""
+        methods = []
+        if body_node:
+            for sub in body_node.named_children:
+                if sub.type == "function_definition":
+                    mn = sub.child_by_field_name("name")
+                    mb = sub.child_by_field_name("body")
+                    mn_name = _get_text(source_bytes, mn) if mn else "?"
+                    mparams = _extract_params(source_bytes, sub)
+                    mcalls = _extract_calls(source_bytes, sub) if mb else []
+                    mdoc = _extract_docstring(source_bytes, mb) if mb else ""
+                    mbody_span = (sub.start_point[0] + 1, sub.end_point[0] + 1)
+                    methods.append({
+                        "name": mn_name, "line": sub.start_point[0] + 1,
+                        "body_span": mbody_span,
+                        "params": mparams, "docstring": mdoc, "calls": mcalls,
+                    })
+        result["classes"].append({
+            "name": name, "line": child.start_point[0] + 1,
+            "methods": methods, "bases": bases,
+        })
+        if depth == 0:
+            result["top_level"].append({
+                "name": name, "kind": "class",
+                "line": child.start_point[0] + 1,
+            })
+
+    def _handle_import(child):
+        """Extract import statement info."""
+        module = ""
+        names = []
+        for c in child.named_children:
+            if c.type == "dotted_name":
+                if not module:
+                    module = _get_text(source_bytes, c)
+                else:
+                    names.append(_get_text(source_bytes, c))
+            elif c.type == "aliased_import":
+                for ac in c.named_children:
+                    if ac.type == "dotted_name":
+                        if not module:
+                            module = _get_text(source_bytes, ac)
+                        else:
+                            names.append(_get_text(source_bytes, ac))
+        result["imports"].append({
+            "module": module, "names": names,
+            "line": child.start_point[0] + 1,
+        })
+
     def _walk(node, depth=0):
-        """Internal: walk.
-        
-        Args:
-            node: Description.
-            depth: Description.
-        """
+        """Walk AST recursively, dispatching to typed handlers."""
         for child in node.named_children:
             if child.type == "function_definition":
-                name_node = child.child_by_field_name("name")
-                body_node = child.child_by_field_name("body")
-                name = _get_text(source_bytes, name_node) if name_node else "?"
-                params = _extract_params(source_bytes, child)
-                calls = _extract_calls(source_bytes, child) if body_node else []
-                doc = _extract_docstring(source_bytes, body_node) if body_node else ""
-                result["functions"].append({
-                    "name": name, "line": child.start_point[0] + 1,
-                    "params": params, "docstring": doc, "calls": calls,
-                })
-                if depth == 0:
-                    result["top_level"].append({
-                        "name": name, "kind": "function",
-                        "line": child.start_point[0] + 1,
-                    })
+                _handle_function_def(child, depth)
             elif child.type == "class_definition":
-                name_node = child.child_by_field_name("name")
-                body_node = child.child_by_field_name("body")
-                name = _get_text(source_bytes, name_node) if name_node else "?"
-                bases = []
-                for s in child.children:
-                    if s.type == "argument_list":
-                        for arg in s.named_children:
-                            bases.append(_get_text(source_bytes, arg))
-                doc = _extract_docstring(source_bytes, body_node) if body_node else ""
-                methods = []
-                if body_node:
-                    for sub in body_node.named_children:
-                        if sub.type == "function_definition":
-                            mn = sub.child_by_field_name("name")
-                            mb = sub.child_by_field_name("body")
-                            mn_name = _get_text(source_bytes, mn) if mn else "?"
-                            mparams = _extract_params(source_bytes, sub)
-                            mcalls = _extract_calls(source_bytes, sub) if mb else []
-                            mdoc = _extract_docstring(source_bytes, mb) if mb else ""
-                            methods.append({
-                                "name": mn_name, "line": sub.start_point[0] + 1,
-                                "params": mparams, "docstring": mdoc, "calls": mcalls,
-                            })
-                result["classes"].append({
-                    "name": name, "line": child.start_point[0] + 1,
-                    "methods": methods, "bases": bases,
-                })
-                if depth == 0:
-                    result["top_level"].append({
-                        "name": name, "kind": "class",
-                        "line": child.start_point[0] + 1,
-                    })
+                _handle_class_def(child, depth)
             elif child.type in ("import_statement", "import_from_statement"):
-                module = ""
-                names = []
-                for c in child.named_children:
-                    if c.type == "dotted_name":
-                        if not module:
-                            module = _get_text(source_bytes, c)
-                        else:
-                            names.append(_get_text(source_bytes, c))
-                    elif c.type == "aliased_import":
-                        for ac in c.named_children:
-                            if ac.type == "dotted_name":
-                                if not module:
-                                    module = _get_text(source_bytes, ac)
-                                else:
-                                    names.append(_get_text(source_bytes, ac))
-                result["imports"].append({
-                    "module": module, "names": names,
-                    "line": child.start_point[0] + 1,
-                })
+                _handle_import(child)
             _walk(child, depth + 1)
 
     _walk(root)
@@ -438,4 +449,430 @@ def build_dependency_graph(project_root: str) -> Dict:
         "ok": True, "modules": limited,
         "circular": circular[:10], "orphans": orphans[:20],
         "hint": f"{len(graph)} 模块, {len(circular)} 循环依赖, {len(orphans)} 孤立模块",
+    }
+
+# ── Metrics Engine ────────────────────────────────────────────────
+
+# ── Metrics Engine ────────────────────────────────────────────────
+
+def _count_branches(node, source_bytes) -> int:
+    """统计子树中的分支节点（用于圈复杂度）"""
+    branch_types = {
+        "if_statement", "elif_clause", "else_clause",
+        "for_statement", "while_statement",
+        "try_statement", "except_clause", "finally_clause",
+        "match_statement", "case_clause",
+        "conditional_expression", "boolean_operator",
+    }
+    count = 0
+    for child in node.children:
+        if child.type in branch_types:
+            count += 1
+        count += _count_branches(child, source_bytes)
+    return count
+
+
+def _cyclomatic_for_body(body_node, source_bytes) -> int:
+    """计算函数体的圈复杂度：1 + 分支数"""
+    if body_node is None:
+        return 1
+    return 1 + _count_branches(body_node, source_bytes)
+
+
+def _compute_fn_metrics(fn_info: dict, source_bytes, body_node) -> dict:
+    """计算单个函数的度量"""
+    loc = 0
+    body_span = fn_info.get("body_span")
+    if body_span:
+        loc = body_span[1] - body_span[0] + 1
+    fan_out = len(fn_info.get("calls", []))
+    return {
+        "cyclomatic": _cyclomatic_for_body(body_node, source_bytes),
+        "loc": loc,
+        "fan_out": fan_out,
+        "fan_in": 0,  # filled later via cross-reference
+        "has_docstring": bool(fn_info.get("docstring")),
+    }
+
+
+def _compute_metrics_ast_fallback(filepath: str) -> dict:
+    """AST fallback: compute cyclomatic complexity from Python AST."""
+    import ast as _ast, os as _os
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            source = f.read()
+        tree = _ast.parse(source, filename=filepath)
+    except Exception as e:
+        return {"ok": False, "error": str(e), "file": filepath}
+
+    class _MetricsVisitor(_ast.NodeVisitor):
+        def __init__(self):
+            self.items = []
+            self._current = None
+            self._branches = 0
+            self._calls = set()
+
+        def _end_func(self, node):
+            if self._current is None:
+                return
+            loc = node.end_lineno - node.lineno + 1 if hasattr(node, "end_lineno") else 0
+            self.items.append({
+                "name": self._current,
+                "kind": self._current_kind,
+                "line": node.lineno,
+                "docstring": self._doc,
+                "metrics": {
+                    "cyclomatic": 1 + self._branches,
+                    "loc": loc,
+                    "fan_out": len(self._calls),
+                    "fan_in": 0,
+                    "has_docstring": bool(self._doc),
+                },
+            })
+            self._current = None
+            self._branches = 0
+            self._calls = set()
+            self._doc = ""
+
+        def visit_FunctionDef(self, node):
+            self._current = node.name
+            self._current_kind = "function"
+            self._branches = 0
+            self._calls = set()
+            self._doc = _ast.get_docstring(node) or ""
+            self.generic_visit(node)
+            self._end_func(node)
+
+        def visit_AsyncFunctionDef(self, node):
+            self.visit_FunctionDef(node)
+
+        def visit_If(self, node):
+            if self._current:
+                self._branches += 1
+                if node.orelse:
+                    self._branches += 1  # else counts too
+            self.generic_visit(node)
+
+        def visit_For(self, node):
+            if self._current: self._branches += 1
+            self.generic_visit(node)
+
+        def visit_AsyncFor(self, node):
+            if self._current: self._branches += 1
+            self.generic_visit(node)
+
+        def visit_While(self, node):
+            if self._current: self._branches += 1
+            self.generic_visit(node)
+
+        def visit_Try(self, node):
+            if self._current:
+                self._branches += 1
+                self._branches += len(node.handlers)
+            self.generic_visit(node)
+
+        def visit_Match(self, node):
+            if self._current:
+                self._branches += len(node.cases)
+            self.generic_visit(node)
+
+        def visit_IfExp(self, node):
+            if self._current: self._branches += 1
+            self.generic_visit(node)
+
+        def visit_BoolOp(self, node):
+            if self._current: self._branches += len(node.values) - 1
+            self.generic_visit(node)
+
+        def visit_Call(self, node):
+            if self._current:
+                if isinstance(node.func, _ast.Name):
+                    self._calls.add(node.func.id)
+                elif isinstance(node.func, _ast.Attribute):
+                    self._calls.add(node.func.attr)
+            self.generic_visit(node)
+
+    v = _MetricsVisitor()
+    v.visit(tree)
+
+    all_cyclo = [i["metrics"]["cyclomatic"] for i in v.items]
+    complexity_dist = {"low": 0, "medium": 0, "high": 0, "critical": 0}
+    for c in all_cyclo:
+        if c <= 5: complexity_dist["low"] += 1
+        elif c <= 10: complexity_dist["medium"] += 1
+        elif c <= 20: complexity_dist["high"] += 1
+        else: complexity_dist["critical"] += 1
+
+    # Fan-in
+    all_calls = {}
+    for item in v.items:
+        all_calls[item["name"]] = set()
+        for item2 in v.items:
+            if item2 is not item:
+                pass  # we need call sets per function...
+    # Recompute fan-in from call sets
+    for item in v.items:
+        name = item["name"]
+        item["metrics"]["fan_in"] = sum(
+            1 for other in v.items if other is not item and name in other["metrics"].get("_call_set", set())
+        )
+
+    # Build call sets properly
+    # Actually, let's re-visit to collect calls per function
+    class _CallCollector(_ast.NodeVisitor):
+        def __init__(self):
+            self.calls = {}  # func_name -> set of called names
+
+        def visit_FunctionDef(self, node):
+            name = node.name
+            calls = set()
+
+            class _Inner(_ast.NodeVisitor):
+                def visit_Call(self, n):
+                    if isinstance(n.func, _ast.Name):
+                        calls.add(n.func.id)
+                    elif isinstance(n.func, _ast.Attribute):
+                        calls.add(n.func.attr)
+                    self.generic_visit(n)
+            _Inner().visit(node)
+            self.calls[name] = calls
+            self.generic_visit(node)
+
+    cc = _CallCollector()
+    try:
+        cc.visit(tree)
+    except Exception:
+        cc.calls = {}
+
+    for item in v.items:
+        name = item["name"]
+        item["metrics"]["_call_set"] = cc.calls.get(name, set())
+        item["metrics"]["fan_in"] = sum(
+            1 for other in v.items
+            if other is not item and name in cc.calls.get(other["name"], set())
+        )
+        # Clean internal field
+        item["metrics"].pop("_call_set", None)
+
+    total_loc = source.count("\n") + 1
+    total_fns = sum(1 for i in v.items if i["kind"] == "function")
+    total_methods = sum(1 for i in v.items if i["kind"] == "method")
+    has_doc = sum(1 for i in v.items if i.get("docstring"))
+
+    return {
+        "ok": True,
+        "file": filepath,
+        "total_loc": total_loc,
+        "functions": total_fns,
+        "methods": total_methods,
+        "docstring_coverage": f"{has_doc}/{total_fns + total_methods}" if (total_fns + total_methods) else "N/A",
+        "complexity_dist": complexity_dist,
+        "avg_cyclomatic": round(sum(all_cyclo) / len(all_cyclo), 1) if all_cyclo else 0,
+        "max_cyclomatic": max(all_cyclo) if all_cyclo else 0,
+        "items": sorted(v.items, key=lambda x: x["metrics"]["cyclomatic"], reverse=True),
+        "_fallback": "ast",
+    }
+
+def compute_metrics(project_root: str, filepath: str) -> dict:
+    """计算单个文件的代码度量：圈复杂度、LOC、扇入扇出、注释覆盖等。
+
+    Returns:
+        dict with per-function metrics + module summary
+    """
+    import os as _os
+    full_path = filepath if _os.path.isabs(filepath) else _os.path.join(project_root, filepath)
+    lang = _ensure_ts()
+    if lang is None:
+        return _compute_metrics_ast_fallback(full_path)
+    try:
+        with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+            source = f.read()
+    except Exception as e:
+        return {"ok": False, "error": str(e), "file": filepath}
+
+    source_bytes = source.encode("utf-8")
+    from tree_sitter import Parser
+    parser = Parser()
+    parser.language = lang
+    tree = parser.parse(source_bytes)
+    root = tree.root_node
+
+    fns = []       # standalone functions
+    methods = []   # class methods
+    fn_metrics = []  # all callable metrics
+    call_map = {}    # name -> fn_metrics entry
+
+    def _walk(node, depth=0):
+        for child in node.named_children:
+            if child.type == "function_definition":
+                name_node = child.child_by_field_name("name")
+                body_node = child.child_by_field_name("body")
+                name = _get_text(source_bytes, name_node) if name_node else "?"
+                calls = _extract_calls(source_bytes, body_node) if body_node else []
+                doc = _extract_docstring(source_bytes, body_node) if body_node else ""
+                span = (child.start_point[0] + 1, child.end_point[0] + 1)
+                info = {"name": name, "line": span[0], "body_span": span,
+                        "params": _extract_params(source_bytes, child),
+                        "docstring": doc, "calls": calls}
+                m = _compute_fn_metrics(info, source_bytes, body_node)
+                if depth == 0:
+                    fns.append({"name": name, "metrics": m, "line": span[0],
+                                "kind": "function", "docstring": doc})
+                else:
+                    methods.append({"name": name, "metrics": m, "line": span[0],
+                                    "kind": "method", "docstring": doc})
+                fn_metrics.append((name, m))
+                call_map[name] = m
+            elif child.type == "class_definition":
+                body_node = child.child_by_field_name("body")
+                if body_node:
+                    for sub in body_node.named_children:
+                        if sub.type == "function_definition":
+                            mn = sub.child_by_field_name("name")
+                            mb = sub.child_by_field_name("body")
+                            mn_name = _get_text(source_bytes, mn) if mn else "?"
+                            mcalls = _extract_calls(source_bytes, mb) if mb else []
+                            mdoc = _extract_docstring(source_bytes, mb) if mb else ""
+                            mspan = (sub.start_point[0] + 1, sub.end_point[0] + 1)
+                            minfo = {"name": mn_name, "line": mspan[0], "body_span": mspan,
+                                     "params": _extract_params(source_bytes, sub),
+                                     "docstring": mdoc, "calls": mcalls}
+                            mm = _compute_fn_metrics(minfo, source_bytes, mb)
+                            methods.append({"name": mn_name, "metrics": mm, "line": mspan[0],
+                                            "kind": "method", "docstring": mdoc})
+                            fn_metrics.append((mn_name, mm))
+                            call_map[mn_name] = mm
+            _walk(child, depth + 1)
+
+    _walk(root)
+
+    # Fan-in: count how many other functions call this one
+    all_callables = fns + methods
+    for entry in all_callables:
+        name = entry["name"]
+        # count callers within this file
+        fan_in = sum(1 for _, m in fn_metrics if m is not entry["metrics"]
+                     and name in call_map.get(name, {}).get("calls", set()))
+        # better: iterate all_callables and check their metrics' calls
+        fan_in = 0
+        for other in all_callables:
+            if other is entry:
+                continue
+            # find other's calls from parse
+            pass
+
+    # Re-do fan-in: from the parsed data directly
+    # We need to rebuild the calls-per-function map
+    fn_calls = {}
+    # Re-walk to get accurate calls
+    def _walk2(node, depth=0):
+        for child in node.named_children:
+            if child.type == "function_definition":
+                name_node = child.child_by_field_name("name")
+                body_node = child.child_by_field_name("body")
+                name = _get_text(source_bytes, name_node) if name_node else "?"
+                calls = _extract_calls(source_bytes, body_node) if body_node else []
+                fn_calls[name] = set(calls)
+            elif child.type == "class_definition":
+                body_node = child.child_by_field_name("body")
+                if body_node:
+                    for sub in body_node.named_children:
+                        if sub.type == "function_definition":
+                            mn = sub.child_by_field_name("name")
+                            mb = sub.child_by_field_name("body")
+                            mn_name = _get_text(source_bytes, mn) if mn else "?"
+                            mcalls = _extract_calls(source_bytes, mb) if mb else []
+                            fn_calls[mn_name] = set(mcalls)
+            _walk2(child, depth + 1)
+    _walk2(root)
+
+    for entry in all_callables:
+        name = entry["name"]
+        entry["metrics"]["fan_in"] = sum(1 for cn, calls in fn_calls.items()
+                                         if cn != name and name in calls)
+
+    # Module-level summary
+    all_cyclo = [e["metrics"]["cyclomatic"] for e in all_callables]
+    complexity_dist = {"low": 0, "medium": 0, "high": 0, "critical": 0}
+    for c in all_cyclo:
+        if c <= 5:
+            complexity_dist["low"] += 1
+        elif c <= 10:
+            complexity_dist["medium"] += 1
+        elif c <= 20:
+            complexity_dist["high"] += 1
+        else:
+            complexity_dist["critical"] += 1
+
+    total_loc = source.count("\n") + 1
+    total_fns = len(fns)
+    total_methods = len(methods)
+    has_doc = sum(1 for e in all_callables if e.get("docstring"))
+
+    return {
+        "ok": True,
+        "file": filepath,
+        "total_loc": total_loc,
+        "functions": total_fns,
+        "methods": total_methods,
+        "docstring_coverage": f"{has_doc}/{total_fns + total_methods}" if (total_fns + total_methods) else "N/A",
+        "complexity_dist": complexity_dist,
+        "avg_cyclomatic": round(sum(all_cyclo) / len(all_cyclo), 1) if all_cyclo else 0,
+        "max_cyclomatic": max(all_cyclo) if all_cyclo else 0,
+        "items": sorted(all_callables, key=lambda x: x["metrics"]["cyclomatic"], reverse=True),
+    }
+
+
+def find_dead_code(project_root: str, filepath: str) -> dict:
+    """检测文件中的未使用代码：函数/方法/导入。
+
+    Returns:
+        dict with dead_functions, dead_methods, unused_imports
+    """
+    import os as _os
+    full_path = filepath if _os.path.isabs(filepath) else _os.path.join(project_root, filepath)
+    result = parse_file(full_path)
+    if not result:
+        return {"ok": False, "error": f"Cannot parse {filepath}", "file": filepath}
+
+    # Build: all defined symbols, all called symbols
+    defined = set()
+    calls_all = set()
+    for fn in result.get("functions", []):
+        defined.add(fn["name"])
+        calls_all.update(fn.get("calls", []))
+    for cls in result.get("classes", []):
+        defined.add(cls["name"])
+        for m in cls.get("methods", []):
+            defined.add(m["name"])
+            calls_all.update(m.get("calls", []))
+
+    # Dead = defined but never called (and not __init__ or special names)
+    special = {"__init__", "__str__", "__repr__", "__len__", "__call__", "__iter__",
+               "__next__", "__enter__", "__exit__", "__getitem__", "__setitem__"}
+    dead = [d for d in defined if d not in calls_all and d not in special
+            and not d.startswith("_")]  # _private may be external API
+
+    # Unused imports
+    unused_imports = []
+    # Build set of all referenced names in source
+    all_refs = calls_all | defined
+    for imp in result.get("imports", []):
+        names = imp.get("names", [])
+        module = imp.get("module", "")
+        used = [n for n in names if n in all_refs]
+        if not used and not module.startswith("_"):
+            unused_imports.append({
+                "module": module, "names": names, "line": imp.get("line"),
+                "hint": "No references found to imported names",
+            })
+
+    return {
+        "ok": True,
+        "file": filepath,
+        "total_defined": len(defined),
+        "dead_functions": dead,
+        "dead_count": len(dead),
+        "unused_imports": unused_imports,
     }

@@ -14,6 +14,104 @@ if __import__('typing').TYPE_CHECKING:
 
 logger = logging.getLogger("main_db_gui")
 
+
+# ── Module-level helpers (extracted from load_worker) ───────────
+
+def _parse_user_msg(raw_msg):
+    """解析用户消息，分离文本和图片."""
+    if not raw_msg or not raw_msg.startswith('{'):
+        return raw_msg, []
+    try:
+        parsed = _json_um.loads(raw_msg)
+        if isinstance(parsed, dict):
+            return parsed.get("text", raw_msg), parsed.get("images", [])
+    except Exception:
+        pass
+    return raw_msg, []
+
+
+def _build_header_items(topic, ts, summary, recent_turns, old_count):
+    """构建主题头部渲染项."""
+    items = [
+        ("title", f"📌 当前主题：{topic['title']}"),
+        ("notice", "-" * 50),
+    ]
+    total_tokens = ts.get("total_tokens", 0)
+    if total_tokens > 0:
+        items.append(("notice",
+            f"📊 Token 消耗: {total_tokens:,} "
+            f"(prompt: {ts.get('total_prompt_tokens', 0):,}, "
+            f"completion: {ts.get('total_completion_tokens', 0):,})"))
+        items.append(("notice", ""))
+    if summary:
+        items.append(("notice", f"📖 历史摘要：{summary}"))
+        items.append(("notice", "-" * 50))
+    if old_count > 0:
+        items.append(("notice",
+            f"📖 最近 {recent_turns} 轮显示完整对话，更早的 {old_count} 轮仅显示问答"))
+        items.append(("notice", ""))
+    return items
+
+
+def _build_tool_rounds(rounds, is_func_calling, ai_msg):
+    """构建工具调用轮次的渲染项列表."""
+    items = []
+    tool_names = []
+
+    if rounds and is_func_calling:
+        for rd in rounds:
+            _process_round(rd, items, tool_names)
+    else:
+        items.append(("ai", f"AI：{ai_msg}"))
+
+    if is_func_calling:
+        if tool_names:
+            items.append(("tool", f"ℹ️ 工具：{', '.join(tool_names)}"))
+        else:
+            items.append(("tool", "ℹ️ 本条使用了工具调用"))
+    return items
+
+
+def _process_round(rd, items, tool_names):
+    """处理单个 round，追加到 items."""
+    import json as _json_pr
+    rd_role = rd.get("role", "")
+    if rd_role == "assistant" and rd.get("tool_calls"):
+        for tc in rd["tool_calls"]:
+            _process_tool_call(tc, items, tool_names)
+        if rd.get("content"):
+            items.append(("ai", f"AI：{rd['content']}"))
+    elif rd_role == "tool":
+        result_preview = rd.get("content", "")
+        if len(result_preview) > 200:
+            result_preview = result_preview[:200] + "..."
+        items.append(("tool", f"📋 结果：{result_preview}"))
+    elif rd_role == "assistant" and rd.get("content"):
+        items.append(("ai", f"AI：{rd['content']}"))
+
+
+def _process_tool_call(tc, items, tool_names):
+    """处理单个 tool_call，追加到 items 和 tool_names."""
+    import json as _json_ptc
+    fn_name = tc.get("function", {}).get("name", "unknown")
+    fn_args = tc.get("function", {}).get("arguments", "")
+    if fn_name not in tool_names:
+        tool_names.append(fn_name)
+    try:
+        args_dict = _json_ptc.loads(fn_args) if fn_args else {}
+        args_lines = []
+        for k, v in args_dict.items():
+            v_str = _json_ptc.dumps(v, ensure_ascii=False)
+            if len(v_str) > 160:
+                v_str = v_str[:160] + "..."
+            args_lines.append(f"    {k}: {v_str}")
+        args_block = "\n".join(args_lines)
+        items.append(("tool", f"🔧 调用工具：{fn_name}\n参数：\n{args_block}"))
+    except Exception:
+        items.append(("tool", f"🔧 调用工具：{fn_name}\n参数：\n    {fn_args[:200]}"))
+
+
+
 class TopicManager:
     """主题列表管理：创建、切换、加载、刷新"""
 
@@ -147,91 +245,21 @@ class TopicManager:
                             all_light[i] = recent_full[j]
 
                 summary = gui.db.get_topic_summary(topic_id) or ""
-
                 gui.sess.load_history(all_light, summary, recent_turns=recent_turns)
 
-                render_items = []
-                render_items.append(("title", f"📌 当前主题：{topic['title']}"))
-                render_items.append(("notice", "-" * 50))
-
-                total_tokens = ts.get("total_tokens", 0)
-                if total_tokens > 0:
-                    render_items.append(("notice",
-                        f"📊 Token 消耗: {total_tokens:,} "
-                        f"(prompt: {ts.get('total_prompt_tokens', 0):,}, "
-                        f"completion: {ts.get('total_completion_tokens', 0):,})"))
-                    render_items.append(("notice", ""))
-
-                if summary:
-                    render_items.append(("notice", f"📖 历史摘要：{summary}"))
-                    render_items.append(("notice", "-" * 50))
-
-                if old_count > 0:
-                    render_items.append(("notice",
-                        f"📖 最近 {recent_turns} 轮显示完整对话，更早的 {old_count} 轮仅显示问答"))
-                    render_items.append(("notice", ""))
+                render_items = _build_header_items(topic, ts, summary, recent_turns, old_count)
 
                 for i, c in enumerate(all_light):
                     gui._progress_queue.append((i + 1, total_convs))
-
                     is_old = i < old_count
-                    raw_user_msg = c['user_msg']
-                    user_images = []
-                    user_text = raw_user_msg
-                    if raw_user_msg and raw_user_msg.startswith('{'):
-                        try:
-                            parsed = _json_um.loads(raw_user_msg)
-                            if isinstance(parsed, dict):
-                                user_text = parsed.get("text", raw_user_msg)
-                                user_images = parsed.get("images", [])
-                        except Exception:
-                            pass
+                    user_text, user_images = _parse_user_msg(c['user_msg'])
                     render_items.append(("user", f"你：{user_text}", user_images))
 
                     if is_old:
                         render_items.append(("ai", f"AI：{c['ai_msg']}"))
                     else:
-                        rounds = c.get("rounds_json_parsed")
-                        tool_names = []
-                        if rounds and c.get("is_func_calling"):
-                            for rd in rounds:
-                                rd_role = rd.get("role", "")
-                                if rd_role == "assistant" and rd.get("tool_calls"):
-                                    for tc in rd["tool_calls"]:
-                                        fn_name = tc.get("function", {}).get("name", "unknown")
-                                        fn_args = tc.get("function", {}).get("arguments", "")
-                                        if fn_name not in tool_names:
-                                            tool_names.append(fn_name)
-                                        import json as _json_tc2
-                                        try:
-                                            args_dict = _json_tc2.loads(fn_args) if fn_args else {}
-                                            args_lines = []
-                                            for k, v in args_dict.items():
-                                                v_str = _json_tc2.dumps(v, ensure_ascii=False)
-                                                if len(v_str) > 160:
-                                                    v_str = v_str[:160] + "..."
-                                                args_lines.append(f"    {k}: {v_str}")
-                                            args_block = "\n".join(args_lines)
-                                            render_items.append(("tool", f"🔧 调用工具：{fn_name}\n参数：\n{args_block}"))
-                                        except Exception:
-                                            render_items.append(("tool", f"🔧 调用工具：{fn_name}\n参数：\n    {fn_args[:200]}"))
-                                    if rd.get("content"):
-                                        render_items.append(("ai", f"AI：{rd['content']}"))
-                                elif rd_role == "tool":
-                                    result_preview = rd.get("content", "")
-                                    if len(result_preview) > 200:
-                                        result_preview = result_preview[:200] + "..."
-                                    render_items.append(("tool", f"📋 结果：{result_preview}"))
-                                elif rd_role == "assistant" and rd.get("content"):
-                                    render_items.append(("ai", f"AI：{rd['content']}"))
-                        else:
-                            render_items.append(("ai", f"AI：{c['ai_msg']}"))
-
-                        if c["is_func_calling"]:
-                            if tool_names:
-                                render_items.append(("tool", f"ℹ️ 工具：{', '.join(tool_names)}"))
-                            else:
-                                render_items.append(("tool", "ℹ️ 本条使用了工具调用"))
+                        render_items.extend(_build_tool_rounds(
+                            c.get("rounds_json_parsed"), c.get("is_func_calling", False), c['ai_msg']))
                     render_items.append(("notice", ""))
 
                 gui._pending_render = render_items

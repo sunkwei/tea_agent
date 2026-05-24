@@ -2842,31 +2842,31 @@
     },
     "update_msg_rounds": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 91
+      "line": 103
     },
     "save_agent_round": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 112
+      "line": 124
     },
     "get_conversations": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 136
+      "line": 148
     },
     "get_recent_conversations": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 176
+      "line": 188
     },
     "get_agent_rounds": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 192
+      "line": 204
     },
     "_auto_embed_async": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 214
+      "line": 226
     },
     "_store_embedding_inline": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 237
+      "line": 260
     },
     "add_memory": {
       "file": "tea_agent/store/_memories.py",
@@ -4960,7 +4960,7 @@
     },
     "ConversationStore": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 13
+      "line": 14
     },
     "StoreComponent": {
       "file": "tea_agent/store/_base.py",
@@ -9786,6 +9786,8 @@
     "_auto_embed_async": [
       "Thread",
       "_store_embedding_inline",
+      "close",
+      "connect",
       "embed",
       "getLogger",
       "get_embedding_engine",

@@ -31,7 +31,8 @@ class AgentCore:
       - _on_init_done(): 初始化完成后的 UI 回调
     """
 
-    def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False):
+    def __init__(self, debug: bool = False, config_path: Optional[str] = None,
+                 disable_summary: bool = False, disable_background_tasks: bool = False):
         """Initialize  .
         
         Args:
@@ -42,6 +43,7 @@ class AgentCore:
         from tea_agent.logging_setup import setup_logging
         self.debug = debug
         self.disable_summary = disable_summary
+        self.disable_background_tasks = disable_background_tasks
         setup_logging(debug=self.debug)
         self.generating = False
         self._config_path = config_path
@@ -69,9 +71,11 @@ class AgentCore:
         self.current_topic_id: int = 0
         self._init_session()
 
-        self._start_subconscious()
-
-        self._start_scheduler()
+        if not self.disable_background_tasks:
+            self._start_subconscious()
+            self._start_scheduler()
+        else:
+            logger.info("BG tasks disabled (subconscious/scheduler)")
 
     def _start_subconscious(self):
         """自动启动潜意识引擎 daemon 线程。"""
@@ -137,6 +141,8 @@ class AgentCore:
             supports_vision=supports_vision,
             supports_reasoning=supports_reasoning,
             disable_summary=self.disable_summary,
+            disable_background_tasks=self.disable_background_tasks,
+            debug=self.debug,
         )
 
         import tea_agent.session_ref as _sref
@@ -270,11 +276,12 @@ class AgentCore:
                 cheap_completion_tokens=cheap_usage.get("completion_tokens", 0),
                 embedding_tokens=emb_tokens, embedding_prompt_tokens=emb_prompt,
             )
-        threading.Thread(
-            target=self._do_async_summaries,
-            args=(topic_id, need_l3_summary),
-            daemon=True
-        ).start()
+        if not self.disable_background_tasks:
+            threading.Thread(
+                target=self._do_async_summaries,
+                args=(topic_id, need_l3_summary),
+                daemon=True
+            ).start()
         self._suggest_new_topic_if_needed(topic_id)
     def _update_level3_summary(self, topic_id: str):
         """

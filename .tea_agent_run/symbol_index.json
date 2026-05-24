@@ -27172,7 +27172,7 @@
     {
       "kind": "class",
       "path": "tea_agent/store/_conversations.py",
-      "line": 13
+      "line": 14
     }
   ],
   "CurveFitter": [
@@ -29678,6 +29678,11 @@
     },
     {
       "kind": "member",
+      "path": "tea_agent/store/_conversations.py",
+      "line": 17
+    },
+    {
+      "kind": "member",
       "path": "tea_agent/store/_core.py",
       "line": 35
     },
@@ -30240,7 +30245,7 @@
     {
       "kind": "member",
       "path": "tea_agent/store/_conversations.py",
-      "line": 214
+      "line": 226
     }
   ],
   "_auto_extract": [
@@ -37432,7 +37437,7 @@
     {
       "kind": "function",
       "path": "tea_agent/store/_conversations.py",
-      "line": 223
+      "line": 236
     },
     {
       "kind": "function",
@@ -38574,7 +38579,7 @@
     {
       "kind": "member",
       "path": "tea_agent/store/_conversations.py",
-      "line": 237
+      "line": 260
     }
   ],
   "_stream_flush_tick": [
@@ -48333,7 +48338,7 @@
     {
       "kind": "member",
       "path": "tea_agent/store/_conversations.py",
-      "line": 192
+      "line": 204
     }
   ],
   "get_all": [
@@ -48472,7 +48477,7 @@
     {
       "kind": "member",
       "path": "tea_agent/store/_conversations.py",
-      "line": 136
+      "line": 148
     }
   ],
   "get_drift_count": [
@@ -48843,7 +48848,7 @@
     {
       "kind": "member",
       "path": "tea_agent/store/_conversations.py",
-      "line": 176
+      "line": 188
     }
   ],
   "get_recent_messages": [
@@ -63896,7 +63901,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/store/_conversations.py",
-      "line": 11
+      "line": 12
     },
     {
       "kind": "variable",
@@ -67245,7 +67250,7 @@
     {
       "kind": "namespace",
       "path": "tea_agent/store/_conversations.py",
-      "line": 248
+      "line": 273
     },
     {
       "kind": "namespace",
@@ -74714,7 +74719,7 @@
     {
       "kind": "member",
       "path": "tea_agent/store/_conversations.py",
-      "line": 112
+      "line": 124
     }
   ],
   "save_config": [
@@ -74767,7 +74772,7 @@
     {
       "kind": "member",
       "path": "tea_agent/store/_conversations.py",
-      "line": 16
+      "line": 28
     },
     {
       "kind": "member",
@@ -81155,7 +81160,7 @@
     {
       "kind": "member",
       "path": "tea_agent/store/_conversations.py",
-      "line": 91
+      "line": 103
     }
   ],
   "update_status": [

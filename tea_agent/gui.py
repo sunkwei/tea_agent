@@ -223,7 +223,7 @@ class TkGUI(AgentCore):
 
         self.sess = None
 
-        super().__init__(debug=debug, config_path=config_fname, disable_summary=disable_summary)
+        super().__init__(debug=debug, config_path=config_fname, disable_summary=disable_summary, disable_background_tasks=True)
 
         self.stream_mgr = StreamManager(self)
         self.topic_mgr = TopicManager(self)

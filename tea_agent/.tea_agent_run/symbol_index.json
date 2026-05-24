@@ -1,16 +1,37 @@
 {
+  "AGGREGATE_PROMPT": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/result_aggregator.py",
+      "line": 38
+    }
+  ],
+  "AgentPool": [
+    {
+      "kind": "class",
+      "path": "multi_agent/agent_pool.py",
+      "line": 24
+    }
+  ],
+  "BodyFinder": [
+    {
+      "kind": "class",
+      "path": "tools/refactor_comments.py",
+      "line": 37
+    }
+  ],
   "CORE_TOOLS": [
     {
       "kind": "variable",
       "path": "skills/__init__.py",
-      "line": 28
+      "line": 27
     }
   ],
   "CallVisitor": [
     {
       "kind": "class",
       "path": "toolkit/toolkit_explr.py",
-      "line": 141
+      "line": 148
     }
   ],
   "ChatRenderer": [
@@ -31,7 +52,52 @@
     {
       "kind": "class",
       "path": "store/_conversations.py",
-      "line": 13
+      "line": 14
+    }
+  ],
+  "DECOMPOSE_PROMPT": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 91
+    }
+  ],
+  "DEFAULT_SYSTEM_PROMPT": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 168
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 69
+    }
+  ],
+  "DQ3": [
+    {
+      "kind": "variable",
+      "path": "tools/refactor_comments.py",
+      "line": 17
+    }
+  ],
+  "DocProcessor": [
+    {
+      "kind": "class",
+      "path": "tools/refactor_comments.py",
+      "line": 279
+    }
+  ],
+  "HAS_OPENAI": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 40
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 38
     }
   ],
   "HAS_SNI": [
@@ -75,6 +141,46 @@
       "line": 18
     }
   ],
+  "LiteAgent": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/agent_pool.py",
+      "line": 597
+    },
+    {
+      "kind": "class",
+      "path": "multi_agent/lite_agent.py",
+      "line": 152
+    }
+  ],
+  "LiteAgentConfig": [
+    {
+      "kind": "class",
+      "path": "multi_agent/lite_agent.py",
+      "line": 64
+    }
+  ],
+  "LiteAgentModelConfig": [
+    {
+      "kind": "class",
+      "path": "multi_agent/lite_agent.py",
+      "line": 48
+    }
+  ],
+  "LiteAgentPool": [
+    {
+      "kind": "class",
+      "path": "multi_agent/agent_pool.py",
+      "line": 317
+    }
+  ],
+  "LiteOrchestrator": [
+    {
+      "kind": "class",
+      "path": "multi_agent/orchestrator.py",
+      "line": 427
+    }
+  ],
   "MONO_FONT": [
     {
       "kind": "variable",
@@ -89,6 +195,41 @@
       "line": 9
     }
   ],
+  "MultiAgentOrchestrator": [
+    {
+      "kind": "class",
+      "path": "multi_agent/orchestrator.py",
+      "line": 28
+    }
+  ],
+  "ORCHESTRATOR_PROMPT": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/orchestrator.py",
+      "line": 58
+    }
+  ],
+  "PLANS_DIR": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_plan.py",
+      "line": 11
+    }
+  ],
+  "PRI": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_memory.py",
+      "line": 6
+    }
+  ],
+  "PROJECT_ROOT": [
+    {
+      "kind": "variable",
+      "path": "tools/refactor_comments.py",
+      "line": 16
+    }
+  ],
   "PromptStore": [
     {
       "kind": "class",
@@ -101,6 +242,13 @@
       "kind": "class",
       "path": "store/_reflections.py",
       "line": 7
+    }
+  ],
+  "ResultAggregator": [
+    {
+      "kind": "class",
+      "path": "multi_agent/result_aggregator.py",
+      "line": 23
     }
   ],
   "SKILL_MANIFEST": [
@@ -135,6 +283,13 @@
       "line": 2
     }
   ],
+  "SUMMARY_PROMPT": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/result_aggregator.py",
+      "line": 52
+    }
+  ],
   "SYSTEM_FONT": [
     {
       "kind": "variable",
@@ -146,21 +301,21 @@
     {
       "kind": "class",
       "path": "store/_scheduled_tasks.py",
-      "line": 13
+      "line": 12
     }
   ],
   "Skill": [
     {
       "kind": "class",
       "path": "skills/__init__.py",
-      "line": 34
+      "line": 33
     }
   ],
   "SkillManager": [
     {
       "kind": "class",
       "path": "skills/__init__.py",
-      "line": 68
+      "line": 72
     }
   ],
   "Storage": [
@@ -184,6 +339,27 @@
       "line": 15
     }
   ],
+  "SubAgentConfig": [
+    {
+      "kind": "class",
+      "path": "multi_agent/sub_agent.py",
+      "line": 27
+    }
+  ],
+  "SubAgentWrapper": [
+    {
+      "kind": "class",
+      "path": "multi_agent/sub_agent.py",
+      "line": 57
+    }
+  ],
+  "SubTask": [
+    {
+      "kind": "class",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 28
+    }
+  ],
   "SummaryStore": [
     {
       "kind": "class",
@@ -191,11 +367,32 @@
       "line": 10
     }
   ],
+  "TaskDecomposer": [
+    {
+      "kind": "class",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 80
+    }
+  ],
+  "ToolLoader": [
+    {
+      "kind": "class",
+      "path": "toolkit/tool_loader.py",
+      "line": 10
+    }
+  ],
+  "ToolRegistry": [
+    {
+      "kind": "class",
+      "path": "multi_agent/lite_agent.py",
+      "line": 95
+    }
+  ],
   "TopicManager": [
     {
       "kind": "class",
       "path": "_gui/_topic_manager.py",
-      "line": 17
+      "line": 149
     }
   ],
   "TopicStore": [
@@ -219,6 +416,13 @@
       "line": 22
     }
   ],
+  "VALID_CATEGORIES": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_memory.py",
+      "line": 7
+    }
+  ],
   "VectorStore": [
     {
       "kind": "class",
@@ -230,21 +434,28 @@
     {
       "kind": "variable",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 43
+      "line": 35
     }
   ],
   "_BASE_YEAR": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 42
+      "line": 34
     }
   ],
   "_CRON_MAP_WEEKDAY": [
     {
       "kind": "variable",
       "path": "store/_scheduled_tasks.py",
-      "line": 11
+      "line": 10
+    }
+  ],
+  "_CallCollector": [
+    {
+      "kind": "class",
+      "path": "lsp/ts_analyzer.py",
+      "line": 750
     }
   ],
   "_DEFAULT_FONT_SIZE": [
@@ -268,7 +479,7 @@
     {
       "kind": "variable",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 47
+      "line": 38
     }
   ],
   "_FONTS_DETECTED": [
@@ -285,109 +496,135 @@
       "line": 10
     }
   ],
+  "_Inner": [
+    {
+      "kind": "class",
+      "path": "lsp/ts_analyzer.py",
+      "line": 766
+    }
+  ],
   "_JIEQI_NAMES": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 57
+      "line": 47
     }
   ],
   "_KNOWN_HTML_TAGS": [
     {
       "kind": "variable",
       "path": "_gui/_markdown.py",
-      "line": 353
+      "line": 369
     }
   ],
   "_KNOWN_STEP_META": [
     {
       "kind": "variable",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 429
+      "path": "toolkit/toolkit_plan.py",
+      "line": 13
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_plan.py",
+      "line": 74
+    }
+  ],
+  "_LA": [
+    {
+      "kind": "unknown",
+      "path": "multi_agent/agent_pool.py",
+      "line": 593
     }
   ],
   "_LEAP_DAYS_BIT": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 41
+      "line": 33
     }
   ],
   "_LEAP_MONTH_MASK": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 39
+      "line": 31
     }
   ],
   "_LUNAR_DAYS": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 50
+      "line": 41
     }
   ],
   "_LUNAR_INFO": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 15
+      "line": 7
     }
   ],
   "_LUNAR_MONTHS": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 49
+      "line": 40
     }
   ],
   "_MCP_LOOP": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 52
+      "line": 40
     }
   ],
   "_MCP_SERVERS": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 51
+      "line": 39
     }
   ],
   "_MCP_THREAD": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 53
+      "line": 41
     }
   ],
   "_MD_CSS_TEMPLATE": [
     {
       "kind": "variable",
       "path": "_gui/_markdown.py",
-      "line": 20
+      "line": 19
     }
   ],
   "_MONTH_BIT_BASE": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 40
+      "line": 32
+    }
+  ],
+  "_MetricsVisitor": [
+    {
+      "kind": "class",
+      "path": "lsp/ts_analyzer.py",
+      "line": 566
     }
   ],
   "_PYTHON_BUILTINS": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_explr.py",
-      "line": 24
+      "line": 22
     }
   ],
   "_RUN_DIR": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_explr.py",
-      "line": 52
+      "line": 48
     }
   ],
   "_SCALE_FACTOR": [
@@ -401,14 +638,14 @@
     {
       "kind": "variable",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 48
+      "line": 39
     }
   ],
   "_TIANGAN": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 46
+      "line": 37
     }
   ],
   "_TS_LANG": [
@@ -429,10 +666,15 @@
     {
       "kind": "class",
       "path": "_gui/_markdown.py",
-      "line": 366
+      "line": 388
     }
   ],
   "__all__": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/__init__.py",
+      "line": 28
+    },
     {
       "kind": "variable",
       "path": "store/__init__.py",
@@ -443,14 +685,14 @@
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 672
+      "line": 658
     }
   ],
   "__getattr__": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 66
+      "line": 63
     }
   ],
   "__init__": [
@@ -462,7 +704,7 @@
     {
       "kind": "member",
       "path": "_gui/_markdown.py",
-      "line": 368
+      "line": 390
     },
     {
       "kind": "member",
@@ -477,7 +719,7 @@
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 20
+      "line": 152
     },
     {
       "kind": "member",
@@ -491,13 +733,68 @@
     },
     {
       "kind": "member",
-      "path": "skills/__init__.py",
-      "line": 94
+      "path": "lsp/ts_analyzer.py",
+      "line": 568
+    },
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 752
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 53
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 347
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 174
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 98
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 463
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 70
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/result_aggregator.py",
+      "line": 57
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 80
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 116
     },
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 37
+      "line": 103
+    },
+    {
+      "kind": "member",
+      "path": "skills/__init__.py",
+      "line": 36
     },
     {
       "kind": "member",
@@ -506,141 +803,226 @@
     },
     {
       "kind": "member",
+      "path": "store/_conversations.py",
+      "line": 17
+    },
+    {
+      "kind": "member",
       "path": "store/_core.py",
-      "line": 36
+      "line": 35
+    },
+    {
+      "kind": "member",
+      "path": "toolkit/tool_loader.py",
+      "line": 19
+    }
+  ],
+  "__len__": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 144
     }
   ],
   "_action_build": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 321
+      "line": 345
     }
   ],
   "_action_deps": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 634
+      "line": 661
     }
   ],
   "_action_impact": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 562
+      "line": 589
     }
   ],
   "_action_query": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 379
+      "line": 403
     }
   ],
   "_action_status": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 478
+      "line": 502
     }
   ],
   "_add_goal": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_proactive.py",
-      "line": 86
+      "line": 91
+    }
+  ],
+  "_aggregate_simple": [
+    {
+      "kind": "member",
+      "path": "multi_agent/result_aggregator.py",
+      "line": 146
+    }
+  ],
+  "_aggregate_with_llm": [
+    {
+      "kind": "member",
+      "path": "multi_agent/result_aggregator.py",
+      "line": 103
+    }
+  ],
+  "_append_to_history": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 647
     }
   ],
   "_apply_one": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 504
+      "path": "toolkit/toolkit_diff.py",
+      "line": 161
     }
   ],
   "_apply_patch": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_edit.py",
-      "line": 78
+      "line": 79
     }
   ],
   "_apply_patch_python": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_edit.py",
-      "line": 135
+      "line": 129
+    }
+  ],
+  "_assign_agents": [
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 301
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 679
+    }
+  ],
+  "_ast": [
+    {
+      "kind": "namespace",
+      "path": "lsp/ts_analyzer.py",
+      "line": 557
     }
   ],
   "_asyncio": [
     {
       "kind": "namespace",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 310
+      "line": 318
     }
   ],
   "_auto_backup": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 555
+      "line": 544
     }
   ],
   "_auto_embed_async": [
     {
       "kind": "member",
       "path": "store/_conversations.py",
-      "line": 206
+      "line": 226
     }
   ],
   "_auto_restore": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 133
+      "line": 149
     }
   ],
   "_build_call_graph": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 120
+      "line": 122
     }
   ],
   "_build_ctags": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 62
+      "line": 58
     }
   ],
   "_build_dot_flow": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 183
+      "line": 190
+    }
+  ],
+  "_build_header_items": [
+    {
+      "kind": "function",
+      "path": "_gui/_topic_manager.py",
+      "line": 37
     }
   ],
   "_build_kb_md": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 222
+      "line": 236
+    }
+  ],
+  "_build_messages": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 631
     }
   ],
   "_build_round_view_html": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 242
+      "line": 244
     }
   ],
   "_build_tool_blocks": [
     {
       "kind": "function",
       "path": "_gui/_markdown.py",
-      "line": 103
+      "line": 110
+    }
+  ],
+  "_build_tool_list": [
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 224
+    }
+  ],
+  "_build_tool_rounds": [
+    {
+      "kind": "function",
+      "path": "_gui/_topic_manager.py",
+      "line": 69
     }
   ],
   "_cached_os_info": [
@@ -654,252 +1036,336 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 251
+      "line": 257
+    }
+  ],
+  "_call_llm": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 506
+    }
+  ],
+  "_chat_loop": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 418
     }
   ],
   "_chat_to_markdown": [
     {
       "kind": "function",
       "path": "_gui/_markdown.py",
-      "line": 228
+      "line": 244
     }
   ],
   "_check_conflict": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 439
+      "path": "toolkit/toolkit_diff.py",
+      "line": 82
+    }
+  ],
+  "_check_item_rules": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_quality_gate.py",
+      "line": 114
     }
   ],
   "_check_module": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_pkg.py",
-      "line": 25
+      "line": 32
     }
   ],
   "_check_proactive": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_proactive.py",
-      "line": 37
+      "line": 42
     }
   ],
   "_cleanup_backups": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 583
+      "line": 572
     }
   ],
   "_complete_goal": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_proactive.py",
-      "line": 111
+      "line": 115
+    }
+  ],
+  "_compute_fn_metrics": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 521
+    }
+  ],
+  "_compute_metrics_ast_fallback": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 547
     }
   ],
   "_connect_and_keepalive": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 109
+      "line": 111
+    }
+  ],
+  "_count_branches": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 479
     }
   ],
   "_count_status": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 495
+      "path": "toolkit/toolkit_plan.py",
+      "line": 138
     }
   ],
   "_create_tray_icon": [
     {
       "kind": "member",
       "path": "_gui/_tray.py",
-      "line": 74
+      "line": 72
     }
   ],
   "_creative_dream": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 866
+      "line": 1099
     }
   ],
   "_cross_link": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 280
+      "line": 463
     }
   ],
   "_current_mode": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mode.py",
-      "line": 154
+      "line": 144
+    }
+  ],
+  "_cyclomatic_for_body": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 505
+    }
+  ],
+  "_decompose_with_lite_agent": [
+    {
+      "kind": "member",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 202
+    }
+  ],
+  "_decompose_with_llm": [
+    {
+      "kind": "member",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 168
+    }
+  ],
+  "_decompose_with_rules": [
+    {
+      "kind": "member",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 233
     }
   ],
   "_delegate_attrs": [
     {
       "kind": "variable",
       "path": "store/_core.py",
-      "line": 31
+      "line": 30
     }
   ],
   "_delete_lines": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_edit.py",
-      "line": 298
+      "line": 299
     }
   ],
   "_deps_satisfied": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 471
+      "path": "toolkit/toolkit_plan.py",
+      "line": 114
     }
   ],
   "_detect": [
     {
       "kind": "function",
       "path": "_gui/_fonts.py",
-      "line": 33
+      "line": 38
     }
   ],
   "_detect_focus": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 155
+      "line": 168
     }
   ],
   "_detect_mode": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mode.py",
-      "line": 80
+      "line": 70
+    }
+  ],
+  "_detect_stagnation": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 337
     }
   ],
   "_dfs": [
     {
       "kind": "function",
       "path": "lsp/ts_analyzer.py",
-      "line": 406
+      "line": 440
     }
   ],
   "_digest_conversations": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 181
+      "line": 196
     }
   ],
   "_digest_memories": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 122
+      "line": 137
     }
   ],
   "_do_build": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_release.py",
-      "line": 93
+      "line": 115
     }
   ],
   "_do_bump": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_release.py",
-      "line": 53
+      "line": 68
     }
   ],
   "_do_fix": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_release.py",
-      "line": 122
+      "line": 149
     }
   ],
   "_do_release": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_release.py",
-      "line": 163
+      "line": 195
     }
   ],
   "_do_resume": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 667
+      "path": "toolkit/toolkit_plan.py",
+      "line": 320
     }
   ],
   "_do_run": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 637
+      "path": "toolkit/toolkit_plan.py",
+      "line": 290
     }
   ],
   "_do_step": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 584
+      "path": "toolkit/toolkit_plan.py",
+      "line": 237
     }
   ],
   "_do_verify": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 616
+      "path": "toolkit/toolkit_plan.py",
+      "line": 269
     }
   ],
   "_done": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 251
+      "line": 286
     }
   ],
   "_dream": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 730
+      "line": 968
+    }
+  ],
+  "_end_func": [
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 575
     }
   ],
   "_enforce_critical_limit": [
     {
       "kind": "member",
       "path": "store/_memories.py",
-      "line": 46
+      "line": 45
     }
   ],
   "_ensure_dir": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 56
+      "line": 54
     }
   ],
   "_ensure_plans_dir": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 394
+      "path": "toolkit/toolkit_plan.py",
+      "line": 39
     }
   ],
   "_ensure_table": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 34
+      "line": 39
     }
   ],
   "_ensure_ts": [
@@ -913,35 +1379,42 @@
     {
       "kind": "function",
       "path": "_gui/_markdown.py",
-      "line": 313
+      "line": 330
     }
   ],
   "_execute_step": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 697
+      "path": "toolkit/toolkit_plan.py",
+      "line": 349
     }
   ],
   "_execute_task": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_scheduler.py",
-      "line": 178
+      "line": 163
+    }
+  ],
+  "_execute_tool": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 603
     }
   ],
   "_extract_arch_context": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 513
+      "line": 537
     }
   ],
   "_extract_args": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_search.py",
-      "line": 415
+      "line": 426
     }
   ],
   "_extract_calls": [
@@ -958,18 +1431,25 @@
       "line": 43
     }
   ],
+  "_extract_json_array": [
+    {
+      "kind": "member",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 333
+    }
+  ],
   "_extract_keywords": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 96
+      "line": 112
     }
   ],
   "_extract_memory_candidates": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 229
+      "line": 246
     }
   ],
   "_extract_params": [
@@ -983,63 +1463,63 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 922
+      "line": 1160
     }
   ],
   "_filtered_messages": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 389
+      "line": 390
     }
   ],
   "_fix_code_block": [
     {
       "kind": "function",
       "path": "_gui/_markdown.py",
-      "line": 86
+      "line": 94
     }
   ],
   "_fix_double_escape_in_code": [
     {
       "kind": "function",
       "path": "_gui/_markdown.py",
-      "line": 78
+      "line": 84
     }
   ],
   "_flush_stream_to_messages": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 429
+      "line": 430
     }
   ],
   "_flush_think_buffer_to_messages": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 450
+      "line": 449
     }
   ],
   "_fmt": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 255
+      "line": 290
     }
   ],
   "_fmt_diagnostic": [
     {
       "kind": "function",
       "path": "lsp/lsp_engine.py",
-      "line": 76
+      "line": 95
     }
   ],
   "_format_next": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_scheduler.py",
-      "line": 403
+      "line": 386
     }
   ],
   "_fs": [
@@ -1049,100 +1529,100 @@
       "line": 19
     }
   ],
-  "_generate_diff": [
-    {
-      "kind": "function",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 389
-    }
-  ],
   "_generate_insights": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 355
+      "line": 535
     }
   ],
   "_generate_topic_summary": [
     {
       "kind": "function",
       "path": "_gui/_topic_summary.py",
-      "line": 15
+      "line": 14
     }
   ],
   "_generate_unified_diff": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 401
+      "path": "toolkit/toolkit_diff.py",
+      "line": 12
     }
   ],
   "_get_config": [
     {
       "kind": "unknown",
       "path": "toolkit/toolkit_config.py",
-      "line": 28
+      "line": 26
     }
   ],
   "_get_conn": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_scheduler.py",
-      "line": 46
+      "line": 29
     }
   ],
   "_get_db": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 12
+      "line": 17
     }
   ],
   "_get_db_path": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 87
+      "line": 103
     }
   ],
   "_get_existing_mode_memory": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mode.py",
-      "line": 121
+      "line": 111
     }
   ],
   "_get_exp_path": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_evolution_exp.py",
-      "line": 21
+      "line": 19
+    }
+  ],
+  "_get_filtered_tools": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 361
     }
   ],
   "_get_jedi_project": [
     {
       "kind": "function",
       "path": "lsp/lsp_engine.py",
-      "line": 19
+      "line": 18
     }
   ],
   "_get_memory_manager": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mode.py",
-      "line": 108
+      "line": 98
     },
     {
       "kind": "function",
       "path": "toolkit/toolkit_proactive.py",
-      "line": 30
+      "line": 35
     }
   ],
   "_get_session": [
     {
       "kind": "unknown",
       "path": "toolkit/toolkit_config.py",
-      "line": 29
+      "line": 27
     }
   ],
   "_get_text": [
@@ -1156,28 +1636,28 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 23
+      "line": 28
     }
   ],
   "_get_version": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_pkg.py",
-      "line": 33
+      "line": 45
     }
   ],
   "_get_week_key": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 506
+      "line": 496
     }
   ],
   "_git_clean": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_self_evolve.py",
-      "line": 54
+      "line": 50
     }
   ],
   "_git_revert": [
@@ -1191,28 +1671,35 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_self_evolve.py",
-      "line": 67
+      "line": 62
     }
   ],
   "_git_stash_drop": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 429
+      "path": "toolkit/toolkit_diff.py",
+      "line": 65
     }
   ],
   "_git_stash_pop": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 421
+      "path": "toolkit/toolkit_diff.py",
+      "line": 49
     }
   ],
   "_git_stash_push": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 411
+      "path": "toolkit/toolkit_diff.py",
+      "line": 31
+    }
+  ],
+  "_glob": [
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_quality_gate.py",
+      "line": 183
     }
   ],
   "_group_into_rounds": [
@@ -1222,102 +1709,142 @@
       "line": 394
     }
   ],
+  "_handle_class_def": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 155
+    }
+  ],
+  "_handle_function_def": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 129
+    }
+  ],
+  "_handle_import": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 198
+    }
+  ],
+  "_has_conversations": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 85
+    }
+  ],
   "_hide_raw_check_btn": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 424
+      "line": 426
     }
   ],
   "_hide_tooltip": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 356
+      "line": 433
     }
   ],
   "_html_render": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 56
+      "line": 54
     }
   ],
   "_image_cache": [
     {
       "kind": "member",
       "path": "_gui/_images.py",
-      "line": 35
+      "line": 40
+    }
+  ],
+  "_import_lite_agent": [
+    {
+      "kind": "function",
+      "path": "multi_agent/agent_pool.py",
+      "line": 592
     }
   ],
   "_init_fonts": [
     {
       "kind": "function",
       "path": "_gui/_fonts.py",
-      "line": 23
+      "line": 28
     }
   ],
   "_init_tables": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 92
+      "line": 103
     }
   ],
   "_init_tray": [
     {
       "kind": "member",
       "path": "_gui/_tray.py",
-      "line": 51
+      "line": 49
     }
   ],
   "_insert_lines": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_edit.py",
-      "line": 241
+      "line": 243
     }
   ],
   "_instance": [
     {
       "kind": "variable",
       "path": "skills/__init__.py",
-      "line": 80
+      "line": 84
     }
   ],
   "_is_duplicate_memory": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 264
+      "line": 322
     }
   ],
   "_is_jieba_available": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 117
+      "line": 133
     }
   ],
   "_is_scrolled_to_bottom": [
     {
       "kind": "member",
       "path": "_gui/_stream_manager.py",
-      "line": 164
+      "line": 186
     }
   ],
   "_is_tea_agent_cwd": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 33
+      "line": 31
     }
   ],
   "_json2": [
     {
       "kind": "namespace",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 388
+      "line": 430
+    },
+    {
+      "kind": "namespace",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 582
     }
   ],
   "_json_gs": [
@@ -1327,11 +1854,18 @@
       "line": 6
     }
   ],
-  "_json_tc2": [
+  "_json_pr": [
     {
       "kind": "namespace",
       "path": "_gui/_topic_manager.py",
-      "line": 205
+      "line": 104
+    }
+  ],
+  "_json_ptc": [
+    {
+      "kind": "namespace",
+      "path": "_gui/_topic_manager.py",
+      "line": 129
     }
   ],
   "_json_um": [
@@ -1345,224 +1879,280 @@
     {
       "kind": "variable",
       "path": "toolkit/toolkit_todo.py",
-      "line": 10
+      "line": 15
     }
   ],
   "_leap_days": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 107
+      "line": 104
     }
   ],
   "_leap_month": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 99
+      "line": 96
     }
   ],
   "_linux_notify_fallback": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 526
+      "line": 733
     }
   ],
   "_list": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 210
+      "line": 209
     }
   ],
   "_list_goals": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_proactive.py",
-      "line": 127
+      "line": 131
     }
   ],
   "_list_installed": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_pkg.py",
-      "line": 51
+      "line": 67
+    }
+  ],
+  "_load_config_yaml": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 256
     }
   ],
   "_load_exp_db": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_evolution_exp.py",
-      "line": 25
+      "line": 23
     }
   ],
   "_load_manifest": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 168
+      "line": 177
     }
   ],
   "_load_plan": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 406
+      "path": "toolkit/toolkit_plan.py",
+      "line": 51
+    }
+  ],
+  "_lock": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_delegate.py",
+      "line": 18
     }
   ],
   "_log": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 54
+      "line": 50
     }
   ],
   "_lunar_year_info": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 91
+      "line": 88
     }
   ],
   "_lunar_year_total_days": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 119
+      "line": 122
+    }
+  ],
+  "_m_add": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_memory.py",
+      "line": 11
+    }
+  ],
+  "_m_extract": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_memory.py",
+      "line": 122
+    }
+  ],
+  "_m_forget": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_memory.py",
+      "line": 100
+    }
+  ],
+  "_m_list": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_memory.py",
+      "line": 43
+    }
+  ],
+  "_m_search": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_memory.py",
+      "line": 71
+    }
+  ],
+  "_make_global_violation": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_quality_gate.py",
+      "line": 144
     }
   ],
   "_match_cron": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_scheduler.py",
-      "line": 114
+      "line": 96
     }
   ],
   "_match_cron_field": [
     {
       "kind": "function",
       "path": "store/_scheduled_tasks.py",
-      "line": 198
+      "line": 254
     }
   ],
   "_maybe_rotate_db": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 510
+      "line": 500
     }
   ],
   "_mcp_call": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 237
+      "line": 236
     }
   ],
   "_mcp_connect": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 93
+      "line": 86
     }
   ],
   "_mcp_disconnect": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 280
+      "line": 285
     }
   ],
   "_mcp_get_or_create_loop": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 55
+      "line": 43
     }
   ],
   "_mcp_list_tools": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 199
+      "line": 193
     }
   ],
   "_mcp_run_async": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 77
+      "line": 64
     }
   ],
   "_mcp_status": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 313
+      "line": 321
     }
   ],
   "_md_lib": [
     {
       "kind": "namespace",
       "path": "_gui/_renderer.py",
-      "line": 244
+      "line": 253
     }
   ],
   "_meta": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_kb.py",
-      "line": 48
+      "line": 45
     }
   ],
   "_meta_get": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 612
+      "line": 600
     }
   ],
   "_meta_set": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 625
+      "line": 613
     }
   ],
   "_migrate": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 265
+      "line": 263
     }
   ],
   "_migrate_int_to_uuid": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 333
+      "line": 326
     }
   ],
   "_migrate_msg_vectors": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 484
+      "line": 475
     }
   ],
   "_migrate_table": [
     {
       "kind": "function",
       "path": "store/_core.py",
-      "line": 358
+      "line": 351
     }
   ],
   "_month_days": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 115
+      "line": 112
     }
   ],
   "_new_id": [
@@ -1575,43 +2165,50 @@
   "_new_plan": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 431
+      "path": "toolkit/toolkit_plan.py",
+      "line": 76
+    }
+  ],
+  "_next_id": [
+    {
+      "kind": "function",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 249
     }
   ],
   "_next_pending": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 484
+      "path": "toolkit/toolkit_plan.py",
+      "line": 127
     }
   ],
   "_notify": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_scheduler.py",
-      "line": 157
+      "line": 138
     }
   ],
   "_offset_from_base": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 82
+      "line": 72
     }
   ],
   "_on_closing": [
     {
       "kind": "member",
       "path": "_gui/_tray.py",
-      "line": 119
+      "line": 122
     }
   ],
   "_on_done": [
     {
       "kind": "function",
       "path": "_gui/_renderer.py",
-      "line": 146
+      "line": 134
     },
     {
       "kind": "function",
@@ -1623,85 +2220,104 @@
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 284
+      "line": 339
     }
   ],
   "_on_topic_hover": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 294
+      "line": 355
     }
   ],
   "_on_topic_leave": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 309
+      "line": 375
     }
   ],
   "_on_tray_activate": [
     {
       "kind": "member",
       "path": "_gui/_tray.py",
-      "line": 104
+      "line": 101
     }
   ],
   "_on_tray_context_menu": [
     {
       "kind": "member",
       "path": "_gui/_tray.py",
-      "line": 110
+      "line": 107
+    }
+  ],
+  "_orchestrator": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_delegate.py",
+      "line": 17
+    }
+  ],
+  "_order_by_deps": [
+    {
+      "kind": "member",
+      "path": "multi_agent/result_aggregator.py",
+      "line": 182
     }
   ],
   "_os": [
     {
       "kind": "namespace",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 559
+      "path": "lsp/ts_analyzer.py",
+      "line": 557
+    },
+    {
+      "kind": "namespace",
+      "path": "lsp/ts_analyzer.py",
+      "line": 824
+    },
+    {
+      "kind": "namespace",
+      "path": "lsp/ts_analyzer.py",
+      "line": 980
     },
     {
       "kind": "namespace",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 498
-    },
-    {
-      "kind": "namespace",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 515
+      "line": 705
     }
   ],
-  "_os_diff": [
+  "_parse_config_dict": [
     {
-      "kind": "namespace",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 69
-    }
-  ],
-  "_os_plan": [
-    {
-      "kind": "namespace",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 269
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 273
     }
   ],
   "_parse_cron": [
     {
       "kind": "function",
       "path": "store/_scheduled_tasks.py",
-      "line": 177
+      "line": 225
     },
     {
       "kind": "function",
       "path": "toolkit/toolkit_scheduler.py",
-      "line": 139
+      "line": 121
     }
   ],
   "_parse_file_ast_fallback": [
     {
       "kind": "function",
       "path": "lsp/ts_analyzer.py",
-      "line": 211
+      "line": 245
+    }
+  ],
+  "_parse_user_msg": [
+    {
+      "kind": "function",
+      "path": "_gui/_topic_manager.py",
+      "line": 19
     }
   ],
   "_pending_images": [
@@ -1715,98 +2331,105 @@
     {
       "kind": "member",
       "path": "_gui/_tray.py",
-      "line": 89
+      "line": 87
     }
   ],
   "_pip_install": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_pkg.py",
-      "line": 17
+      "line": 19
     }
   ],
   "_plan_create": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 271
+      "line": 302
     }
   ],
   "_plan_create_inner": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 325
+      "line": 397
     }
   ],
   "_plan_delete": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 320
+      "line": 386
+    }
+  ],
+  "_plan_dir": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_plan.py",
+      "line": 10
     }
   ],
   "_plan_list": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 317
+      "line": 382
     }
   ],
   "_plan_list_inner": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 331
+      "line": 416
     }
   ],
   "_plan_path": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 398
+      "path": "toolkit/toolkit_plan.py",
+      "line": 43
     }
   ],
   "_plan_resume": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 298
+      "line": 352
     }
   ],
   "_plan_run": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 292
+      "line": 340
     }
   ],
   "_plan_show": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 281
+      "line": 317
     }
   ],
   "_plan_show_inner": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 328
+      "line": 407
     }
   ],
   "_plan_step": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 286
+      "line": 328
     }
   ],
   "_plan_verify": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 304
+      "line": 364
     }
   ],
   "_platform": [
@@ -1820,21 +2443,21 @@
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 358
+      "line": 365
     }
   ],
   "_pragmatic_analysis": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 791
+      "line": 1023
     }
   ],
   "_prepare": [
     {
       "kind": "function",
       "path": "_gui/_renderer.py",
-      "line": 142
+      "line": 130
     },
     {
       "kind": "function",
@@ -1846,145 +2469,180 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_edit.py",
-      "line": 385
+      "line": 400
+    }
+  ],
+  "_process_round": [
+    {
+      "kind": "function",
+      "path": "_gui/_topic_manager.py",
+      "line": 95
+    }
+  ],
+  "_process_tool_call": [
+    {
+      "kind": "function",
+      "path": "_gui/_topic_manager.py",
+      "line": 120
     }
   ],
   "_protect_db": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 642
+      "line": 629
     }
   ],
   "_read_file_safe": [
     {
       "kind": "function",
       "path": "lsp/lsp_engine.py",
-      "line": 24
+      "line": 28
     }
   ],
   "_read_state": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 64
+      "line": 62
     }
   ],
   "_refresh_topics_preserve_selection": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 290
+      "line": 351
+    }
+  ],
+  "_register_default_types": [
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 120
     }
   ],
   "_render_and_show_chat": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 126
+      "line": 116
     }
   ],
   "_render_chat": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 101
+      "line": 87
     }
   ],
   "_render_loaded_topic": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 173
+      "line": 164
     }
   ],
   "_render_markdown": [
     {
       "kind": "function",
       "path": "_gui/_markdown.py",
-      "line": 67
+      "line": 66
     }
   ],
   "_render_round_view": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 193
+      "line": 188
     }
   ],
   "_render_tool_group": [
     {
       "kind": "function",
       "path": "_gui/_markdown.py",
-      "line": 141
+      "line": 151
     }
   ],
   "_render_topic_error": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 234
+      "line": 232
     }
   ],
   "_replace_lines": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_edit.py",
-      "line": 340
+      "line": 345
+    }
+  ],
+  "_resolve_effective_params": [
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 111
     }
   ],
   "_restore_from_db": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 98
+      "line": 114
     }
   ],
   "_restored": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_todo.py",
-      "line": 9
+      "line": 14
     }
   ],
   "_reverse_thinking": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 906
+      "line": 1144
     }
   ],
   "_run": [
     {
       "kind": "function",
       "path": "store/_conversations.py",
-      "line": 209
+      "line": 236
     },
     {
       "kind": "function",
       "path": "toolkit/toolkit_exec.py",
-      "line": 70
+      "line": 56
     }
   ],
   "_run_cycle": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 627
+      "line": 839
+    }
+  ],
+  "_run_gating": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_quality_gate.py",
+      "line": 51
     }
   ],
   "_run_loop": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 68
+      "line": 55
     }
   ],
-  "_run_lsp_checks": [
+  "_run_report": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_self_evolve.py",
-      "line": 115
+      "path": "toolkit/toolkit_quality_gate.py",
+      "line": 162
     }
   ],
   "_run_tests": [
@@ -1998,49 +2656,54 @@
     {
       "kind": "function",
       "path": "_gui/_markdown.py",
-      "line": 296
+      "line": 316
     }
   ],
   "_save_exp_db": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_evolution_exp.py",
-      "line": 33
+      "line": 31
     }
   ],
   "_save_plan": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 418
+      "path": "toolkit/toolkit_plan.py",
+      "line": 63
     }
   ],
   "_scan_directory": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 140
+      "line": 144
+    },
+    {
+      "kind": "member",
+      "path": "toolkit/tool_loader.py",
+      "line": 71
     }
   ],
   "_scheduler_loop": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_scheduler.py",
-      "line": 197
+      "line": 186
     }
   ],
   "_search_baidu": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_search.py",
-      "line": 123
+      "line": 122
     }
   ],
   "_search_codebase": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_search.py",
-      "line": 234
+      "line": 230
     }
   ],
   "_search_codebase_python": [
@@ -2054,318 +2717,419 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_search.py",
-      "line": 46
+      "line": 45
     }
   ],
   "_search_symbol": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_search.py",
-      "line": 350
+      "line": 357
     }
   ],
   "_send_cycle_summary": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 591
+      "line": 798
     }
   ],
   "_send_notification": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 491
+      "line": 693
     }
   ],
   "_set_and_del": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 306
+      "line": 315
     }
   ],
   "_set_goals": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 458
+      "line": 651
     }
   ],
   "_set_mode": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mode.py",
-      "line": 134
+      "line": 124
     }
   ],
   "_sh": [
     {
       "kind": "namespace",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 531
+      "line": 742
     }
   ],
   "_show_loading": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 318
+      "line": 322
     }
   ],
   "_show_mode": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 43
+      "line": 42
     },
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 47
+      "line": 46
     }
   ],
   "_show_raw_check_btn": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 419
+      "line": 422
     }
   ],
   "_show_tooltip": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 317
+      "line": 388
     }
   ],
   "_sig": [
     {
       "kind": "namespace",
       "path": "toolkit/toolkit_exec.py",
-      "line": 77
+      "line": 63
     }
   ],
   "_solar_days_in_month": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 71
+      "line": 61
     }
   ],
   "_solar_days_in_year": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 63
+      "line": 53
     }
   ],
   "_solar_terms": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 292
+      "line": 299
     }
   ],
   "_solar_to_lunar": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 129
+      "line": 137
     }
   ],
   "_step_summary": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 688
+      "path": "toolkit/toolkit_plan.py",
+      "line": 340
     }
   ],
   "_storage_instance": [
     {
       "kind": "variable",
       "path": "store/__init__.py",
-      "line": 22
+      "line": 21
     }
   ],
   "_store_embedding_inline": [
     {
       "kind": "member",
       "path": "store/_conversations.py",
-      "line": 223
+      "line": 260
+    }
+  ],
+  "_sub_agent_reports": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_sub_agent.py",
+      "line": 15
+    }
+  ],
+  "_sub_agent_statuses": [
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_sub_agent.py",
+      "line": 16
     }
   ],
   "_subconscious_loop": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 690
+      "line": 932
     }
   ],
   "_sudo_with_gui": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_exec.py",
-      "line": 172
+      "line": 151
     }
   ],
   "_suggest_new_topic_if_needed": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 270
+      "line": 325
+    }
+  ],
+  "_summary": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_static.py",
+      "line": 104
     }
   ],
   "_switch_display": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 300
+      "line": 305
     }
   ],
   "_sync_item": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 78
+      "line": 88
     }
   ],
   "_sync_to_db": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 54
+      "line": 64
+    }
+  ],
+  "_synthesize_memories": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_subconscious.py",
+      "line": 367
     }
   ],
   "_sys": [
     {
       "kind": "namespace",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 495
+      "line": 702
     }
   ],
   "_table_columns": [
     {
       "kind": "function",
       "path": "store/_core.py",
-      "line": 349
+      "line": 342
     }
   ],
   "_tk2": [
     {
       "kind": "namespace",
       "path": "_gui/_fonts.py",
-      "line": 75
+      "line": 79
     }
   ],
   "_tkfont": [
     {
       "kind": "unknown",
       "path": "_gui/_fonts.py",
-      "line": 30
+      "line": 35
+    }
+  ],
+  "_todo_check": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 175
+    }
+  ],
+  "_todo_clear": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 208
+    }
+  ],
+  "_todo_create": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 157
+    }
+  ],
+  "_todo_restore": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 227
+    }
+  ],
+  "_todo_show": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_todo.py",
+      "line": 194
     }
   ],
   "_todos": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_todo.py",
-      "line": 8
+      "line": 13
     }
   ],
   "_toggle_raw_view": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 410
+      "line": 414
     }
   ],
   "_toolkit_diff_impl": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 540
+      "path": "toolkit/toolkit_diff.py",
+      "line": 202
+    }
+  ],
+  "_trim_history": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 652
     }
   ],
   "_ts": [
     {
       "kind": "unknown",
       "path": "toolkit/toolkit_scheduler.py",
-      "line": 160
+      "line": 147
     }
   ],
   "_update_title": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 94
+      "line": 220
     }
   ],
   "_validate_html_structure": [
     {
       "kind": "function",
       "path": "_gui/_markdown.py",
-      "line": 355
+      "line": 371
+    }
+  ],
+  "_value": [
+    {
+      "kind": "function",
+      "path": "multi_agent/sub_agent.py",
+      "line": 120
     }
   ],
   "_verify_all": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 454
+      "path": "toolkit/toolkit_diff.py",
+      "line": 106
     }
   ],
   "_verify_step": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 761
+      "path": "toolkit/toolkit_plan.py",
+      "line": 418
     }
   ],
   "_walk": [
     {
       "kind": "function",
       "path": "lsp/ts_analyzer.py",
-      "line": 129
+      "line": 225
+    },
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 847
+    }
+  ],
+  "_walk2": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 910
     }
   ],
   "_worker": [
     {
       "kind": "function",
       "path": "_gui/_renderer.py",
-      "line": 163
+      "line": 155
     },
     {
       "kind": "function",
       "path": "_gui/_renderer.py",
-      "line": 224
+      "line": 223
     }
   ],
   "_write_state": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 76
+      "line": 74
     }
   ],
   "_write_week_key": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 543
+      "line": 533
     }
   ],
   "activate_all": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 204
+      "line": 244
     }
   ],
   "activate_skill": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 180
+      "line": 196
+    }
+  ],
+  "active_agents": [
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 286
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 571
     }
   ],
   "add_config_change": [
@@ -2379,7 +3143,7 @@
     {
       "kind": "member",
       "path": "store/_memories.py",
-      "line": 14
+      "line": 13
     }
   ],
   "add_reflection": [
@@ -2400,49 +3164,111 @@
     {
       "kind": "member",
       "path": "store/_scheduled_tasks.py",
-      "line": 91
+      "line": 82
     }
   ],
   "add_topic_tokens": [
     {
       "kind": "member",
       "path": "store/_topics.py",
-      "line": 127
+      "line": 146
+    }
+  ],
+  "agent_role": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 34
+    }
+  ],
+  "agent_type": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 35
+    }
+  ],
+  "aggregate": [
+    {
+      "kind": "member",
+      "path": "multi_agent/result_aggregator.py",
+      "line": 72
+    }
+  ],
+  "api_key": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 51
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 86
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 36
+    }
+  ],
+  "api_url": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 52
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 87
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 37
+    }
+  ],
+  "apply_filter": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 129
     }
   ],
   "attach": [
     {
       "kind": "member",
       "path": "_gui/_images.py",
-      "line": 41
+      "line": 50
     }
   ],
   "auto_activate": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 314
+      "line": 363
     }
   ],
   "auto_new_topic": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 43
+      "line": 174
     }
   ],
   "backup_now": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 605
+      "line": 594
     }
   ],
   "batch_vectorize": [
     {
       "kind": "member",
       "path": "store/_vectors.py",
-      "line": 212
+      "line": 221
     }
   ],
   "build": [
@@ -2456,189 +3282,415 @@
     {
       "kind": "function",
       "path": "lsp/ts_analyzer.py",
-      "line": 374
+      "line": 408
+    }
+  ],
+  "cheap_api_key": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 39
+    }
+  ],
+  "cheap_api_url": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 40
+    }
+  ],
+  "cheap_model": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 41
+    }
+  ],
+  "check_meta": [
+    {
+      "kind": "member",
+      "path": "toolkit/tool_loader.py",
+      "line": 31
     }
   ],
   "cleanup_expired_memories": [
     {
       "kind": "member",
       "path": "store/_memories.py",
-      "line": 201
+      "line": 204
     }
   ],
   "clear": [
     {
       "kind": "member",
       "path": "_gui/_images.py",
-      "line": 74
+      "line": 83
     }
   ],
   "clear_chat": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 29
+      "line": 160
+    }
+  ],
+  "clear_history": [
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 397
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 750
     }
   ],
   "clear_l3_pending": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 190
+      "line": 209
+    }
+  ],
+  "clear_sub_agent_reports": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_sub_agent.py",
+      "line": 86
     }
   ],
   "close": [
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 658
+      "line": 644
     }
   ],
   "collect_context": [
     {
       "kind": "function",
       "path": "lsp/lsp_engine.py",
-      "line": 217
+      "line": 287
     }
   ],
   "completion": [
     {
       "kind": "function",
       "path": "lsp/lsp_engine.py",
-      "line": 85
+      "line": 112
+    }
+  ],
+  "compute_metrics": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 818
+    }
+  ],
+  "config": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 684
+    }
+  ],
+  "content": [
+    {
+      "kind": "unknown",
+      "path": "multi_agent/lite_agent.py",
+      "line": 593
+    }
+  ],
+  "context": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 39
+    }
+  ],
+  "create_agent": [
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 123
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 411
     }
   ],
   "create_topic": [
     {
       "kind": "member",
       "path": "store/_topics.py",
-      "line": 14
+      "line": 13
+    }
+  ],
+  "data_dir": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 53
+    }
+  ],
+  "db_path": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 54
     }
   ],
   "deactivate_all": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 210
+      "line": 250
     }
   ],
   "deactivate_memory": [
     {
       "kind": "member",
       "path": "store/_memories.py",
-      "line": 108
+      "line": 106
     }
   ],
   "deactivate_skill": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 189
+      "line": 213
     }
   ],
   "deactivate_system_prompt": [
     {
       "kind": "member",
       "path": "store/_prompts.py",
-      "line": 59
+      "line": 64
+    }
+  ],
+  "decompose": [
+    {
+      "kind": "member",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 138
     }
   ],
   "delete_memory": [
     {
       "kind": "member",
       "path": "store/_memories.py",
-      "line": 116
+      "line": 114
     }
   ],
   "delete_task": [
     {
       "kind": "member",
       "path": "store/_scheduled_tasks.py",
-      "line": 132
+      "line": 143
     }
   ],
   "delete_topic": [
     {
       "kind": "member",
       "path": "store/_topics.py",
-      "line": 79
+      "line": 94
     }
   ],
   "delete_vector": [
     {
       "kind": "member",
       "path": "store/_vectors.py",
-      "line": 228
+      "line": 237
+    }
+  ],
+  "dependencies": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 36
+    }
+  ],
+  "description": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 33
     }
   ],
   "diagnose": [
     {
       "kind": "function",
       "path": "lsp/lsp_engine.py",
-      "line": 32
+      "line": 44
     }
   ],
   "discover_skills": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 114
+      "line": 120
+    }
+  ],
+  "error": [
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 362
+    }
+  ],
+  "execute": [
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 178
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 564
+    }
+  ],
+  "execute_manual": [
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 363
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 734
+    }
+  ],
+  "execute_single": [
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 350
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 730
+    }
+  ],
+  "expected_output": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 38
+    }
+  ],
+  "extra_options": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 56
+    }
+  ],
+  "find_dead_code": [
+    {
+      "kind": "function",
+      "path": "lsp/ts_analyzer.py",
+      "line": 974
     }
   ],
   "flush_stream_to_messages": [
     {
       "kind": "member",
       "path": "_gui/_stream_manager.py",
-      "line": 174
+      "line": 203
     }
   ],
   "fmt": [
     {
       "kind": "function",
       "path": "_gui/_topic_manager.py",
-      "line": 326
+      "line": 403
+    }
+  ],
+  "format_docstring_block": [
+    {
+      "kind": "function",
+      "path": "tools/refactor_comments.py",
+      "line": 239
+    }
+  ],
+  "from_dict": [
+    {
+      "kind": "member",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 59
+    }
+  ],
+  "generate_class_docstring": [
+    {
+      "kind": "function",
+      "path": "tools/refactor_comments.py",
+      "line": 182
+    }
+  ],
+  "generate_function_docstring": [
+    {
+      "kind": "function",
+      "path": "tools/refactor_comments.py",
+      "line": 110
     }
   ],
   "get_active_memories": [
     {
       "kind": "member",
       "path": "store/_memories.py",
-      "line": 129
+      "line": 127
     }
   ],
   "get_active_prompt": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 279
+      "line": 324
     }
   ],
   "get_active_skill_names": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 364
+      "line": 416
     }
   ],
   "get_active_tool_names": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 235
+      "line": 279
     }
   ],
   "get_active_tools_meta": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 243
+      "line": 292
+    }
+  ],
+  "get_agent": [
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 180
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 485
     }
   ],
   "get_agent_rounds": [
     {
       "kind": "member",
       "path": "store/_conversations.py",
-      "line": 183
+      "line": 204
     }
   ],
   "get_all_embeddings": [
@@ -2666,42 +3718,82 @@
     {
       "kind": "member",
       "path": "store/_conversations.py",
-      "line": 127
+      "line": 148
     }
   ],
   "get_drift_count": [
     {
       "kind": "member",
       "path": "store/_topics.py",
-      "line": 60
+      "line": 59
     }
   ],
   "get_due_tasks": [
     {
       "kind": "member",
       "path": "store/_scheduled_tasks.py",
-      "line": 155
+      "line": 190
+    }
+  ],
+  "get_execution_history": [
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 387
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 746
+    }
+  ],
+  "get_execution_order": [
+    {
+      "kind": "member",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 363
+    }
+  ],
+  "get_existing_doc": [
+    {
+      "kind": "function",
+      "path": "tools/refactor_comments.py",
+      "line": 213
+    }
+  ],
+  "get_func": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 110
+    }
+  ],
+  "get_function_body_ranges": [
+    {
+      "kind": "function",
+      "path": "tools/refactor_comments.py",
+      "line": 21
     }
   ],
   "get_instance": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 83
+      "line": 87
     }
   ],
   "get_instructions": [
     {
       "kind": "member",
       "path": "store/_memories.py",
-      "line": 146
+      "line": 144
     }
   ],
   "get_l3_pending": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 165
+      "line": 170
     }
   ],
   "get_latest_system_prompt": [
@@ -2715,14 +3807,14 @@
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 59
+      "line": 57
     }
   ],
   "get_memory_stats": [
     {
       "kind": "member",
       "path": "store/_memories.py",
-      "line": 227
+      "line": 235
     }
   ],
   "get_msg_embedding": [
@@ -2732,11 +3824,25 @@
       "line": 31
     }
   ],
+  "get_openai_tools": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 114
+    }
+  ],
+  "get_orchestrator": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_delegate.py",
+      "line": 34
+    }
+  ],
   "get_recent_conversations": [
     {
       "kind": "member",
       "path": "store/_conversations.py",
-      "line": 167
+      "line": 188
     }
   ],
   "get_recent_reflections": [
@@ -2757,154 +3863,178 @@
     {
       "kind": "member",
       "path": "_gui/_markdown.py",
-      "line": 409
+      "line": 431
     }
   ],
   "get_semantic_summary": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 93
+      "line": 90
     }
   ],
   "get_skill": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 356
+      "line": 408
     }
   ],
   "get_skill_summary": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 296
+      "line": 341
     }
   ],
   "get_status": [
     {
       "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 407
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 754
+    },
+    {
+      "kind": "member",
       "path": "skills/__init__.py",
-      "line": 368
+      "line": 425
     }
   ],
   "get_storage": [
     {
       "kind": "function",
       "path": "store/__init__.py",
-      "line": 24
+      "line": 23
     }
   ],
   "get_system_prompt_count": [
     {
       "kind": "member",
       "path": "store/_prompts.py",
-      "line": 86
+      "line": 91
     }
   ],
   "get_system_prompt_history": [
     {
       "kind": "member",
       "path": "store/_prompts.py",
-      "line": 44
+      "line": 49
     }
   ],
   "get_task": [
     {
       "kind": "member",
       "path": "store/_scheduled_tasks.py",
-      "line": 139
+      "line": 158
     }
   ],
   "get_tool_chain_summary": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 120
+      "line": 117
     }
   ],
   "get_topic": [
     {
       "kind": "member",
       "path": "store/_topics.py",
-      "line": 98
+      "line": 113
     }
   ],
   "get_topic_summary": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 15
+      "line": 14
     }
   ],
   "get_topic_tokens": [
     {
       "kind": "member",
       "path": "store/_topics.py",
-      "line": 176
+      "line": 195
     }
   ],
   "get_unsummarized_conversations": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 212
+      "line": 235
     }
   ],
   "get_unvectorized_conversations": [
     {
       "kind": "member",
       "path": "store/_vectors.py",
-      "line": 178
+      "line": 187
     }
   ],
   "get_vector_count": [
     {
       "kind": "member",
       "path": "store/_vectors.py",
-      "line": 170
+      "line": 174
     }
   ],
   "goto_definition": [
     {
       "kind": "function",
       "path": "lsp/lsp_engine.py",
-      "line": 115
+      "line": 153
     }
   ],
   "handle_endtag": [
     {
       "kind": "member",
       "path": "_gui/_markdown.py",
-      "line": 387
+      "line": 409
     }
   ],
   "handle_max_iter": [
     {
       "kind": "member",
       "path": "_gui/_stream_manager.py",
-      "line": 62
+      "line": 72
     }
   ],
   "handle_starttag": [
     {
       "kind": "member",
       "path": "_gui/_markdown.py",
-      "line": 377
+      "line": 399
+    }
+  ],
+  "has_docstring_node": [
+    {
+      "kind": "function",
+      "path": "tools/refactor_comments.py",
+      "line": 196
+    }
+  ],
+  "history": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 676
     }
   ],
   "hover": [
     {
       "kind": "function",
       "path": "lsp/lsp_engine.py",
-      "line": 146
+      "line": 195
     }
   ],
   "html_mod": [
     {
       "kind": "namespace",
       "path": "_gui/_markdown.py",
-      "line": 230
+      "line": 252
     },
     {
       "kind": "namespace",
@@ -2912,67 +4042,128 @@
       "line": 8
     }
   ],
+  "id": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 32
+    }
+  ],
   "impact_analysis": [
     {
       "kind": "function",
       "path": "lsp/ts_analyzer.py",
-      "line": 281
+      "line": 315
     }
   ],
   "increment_drift_count": [
     {
       "kind": "member",
       "path": "store/_topics.py",
-      "line": 68
+      "line": 75
+    }
+  ],
+  "initialize": [
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 159
+    }
+  ],
+  "insert_docstrings": [
+    {
+      "kind": "function",
+      "path": "tools/refactor_comments.py",
+      "line": 263
+    }
+  ],
+  "interrupt": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 662
+    }
+  ],
+  "is_configured": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 59
+    }
+  ],
+  "is_done": [
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 342
+    }
+  ],
+  "is_running": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 672
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 332
     }
   ],
   "is_tool_active": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 218
+      "line": 257
+    }
+  ],
+  "keep_turns": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 78
     }
   ],
   "list_skills": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 352
+      "line": 399
     }
   ],
   "list_tasks": [
     {
       "kind": "member",
       "path": "store/_scheduled_tasks.py",
-      "line": 146
+      "line": 173
     }
   ],
   "list_topics": [
     {
       "kind": "member",
       "path": "store/_topics.py",
-      "line": 110
+      "line": 125
     }
   ],
   "load_worker": [
     {
       "kind": "function",
       "path": "_gui/_topic_manager.py",
-      "line": 131
+      "line": 256
     }
   ],
   "log": [
     {
       "kind": "member",
       "path": "_gui/_stream_manager.py",
-      "line": 81
+      "line": 96
     }
   ],
   "log_tool": [
     {
       "kind": "member",
       "path": "_gui/_stream_manager.py",
-      "line": 110
+      "line": 131
     }
   ],
   "logger": [
@@ -3013,6 +4204,11 @@
     },
     {
       "kind": "variable",
+      "path": "lsp/lsp_check.py",
+      "line": 13
+    },
+    {
+      "kind": "variable",
       "path": "lsp/lsp_engine.py",
       "line": 15
     },
@@ -3023,13 +4219,43 @@
     },
     {
       "kind": "variable",
+      "path": "multi_agent/agent_pool.py",
+      "line": 21
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 34
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/orchestrator.py",
+      "line": 25
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/result_aggregator.py",
+      "line": 20
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 23
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 24
+    },
+    {
+      "kind": "variable",
       "path": "skills/__init__.py",
       "line": 25
     },
     {
       "kind": "variable",
       "path": "store/_conversations.py",
-      "line": 11
+      "line": 12
     },
     {
       "kind": "variable",
@@ -3058,13 +4284,28 @@
     },
     {
       "kind": "variable",
+      "path": "toolkit/tool_loader.py",
+      "line": 7
+    },
+    {
+      "kind": "variable",
       "path": "toolkit/toolkit_config.py",
-      "line": 4
+      "line": 3
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_date_diff.py",
-      "line": 5
+      "line": 4
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_delegate.py",
+      "line": 15
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_diff.py",
+      "line": 10
     },
     {
       "kind": "variable",
@@ -3074,32 +4315,27 @@
     {
       "kind": "variable",
       "path": "toolkit/toolkit_edit.py",
-      "line": 10
-    },
-    {
-      "kind": "variable",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 6
+      "line": 14
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_exec.py",
-      "line": 6
+      "line": 4
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_explr.py",
-      "line": 50
+      "line": 46
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_file.py",
-      "line": 6
+      "line": 4
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_gettime.py",
-      "line": 5
+      "line": 4
     },
     {
       "kind": "variable",
@@ -3109,7 +4345,7 @@
     {
       "kind": "variable",
       "path": "toolkit/toolkit_kb.py",
-      "line": 7
+      "line": 4
     },
     {
       "kind": "variable",
@@ -3124,22 +4360,22 @@
     {
       "kind": "variable",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 5
+      "line": 4
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_memory.py",
-      "line": 6
+      "line": 4
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_mode.py",
-      "line": 8
+      "line": 5
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_notify.py",
-      "line": 5
+      "line": 4
     },
     {
       "kind": "variable",
@@ -3149,17 +4385,27 @@
     {
       "kind": "variable",
       "path": "toolkit/toolkit_pkg.py",
-      "line": 6
+      "line": 4
     },
     {
       "kind": "variable",
-      "path": "toolkit/toolkit_proactive.py",
+      "path": "toolkit/toolkit_plan.py",
       "line": 8
     },
     {
       "kind": "variable",
+      "path": "toolkit/toolkit_proactive.py",
+      "line": 5
+    },
+    {
+      "kind": "variable",
       "path": "toolkit/toolkit_prompt_evolve.py",
-      "line": 4
+      "line": 3
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_quality_gate.py",
+      "line": 11
     },
     {
       "kind": "variable",
@@ -3169,27 +4415,27 @@
     {
       "kind": "variable",
       "path": "toolkit/toolkit_reflection.py",
-      "line": 4
+      "line": 3
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_release.py",
-      "line": 20
+      "line": 19
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_run_tests.py",
-      "line": 4
+      "line": 3
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_scheduler.py",
-      "line": 5
+      "line": 3
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_search.py",
-      "line": 5
+      "line": 4
     },
     {
       "kind": "variable",
@@ -3199,7 +4445,7 @@
     {
       "kind": "variable",
       "path": "toolkit/toolkit_self_report.py",
-      "line": 5
+      "line": 4
     },
     {
       "kind": "variable",
@@ -3213,30 +4459,61 @@
     },
     {
       "kind": "variable",
+      "path": "toolkit/toolkit_static.py",
+      "line": 12
+    },
+    {
+      "kind": "variable",
+      "path": "toolkit/toolkit_sub_agent.py",
+      "line": 13
+    },
+    {
+      "kind": "variable",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 6
+      "line": 4
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_test_gui.py",
-      "line": 11
+      "line": 9
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_todo.py",
-      "line": 4
+      "line": 10
     },
     {
       "kind": "variable",
       "path": "toolkit/toolkit_toggle_reasoning.py",
-      "line": 4
+      "line": 3
+    }
+  ],
+  "looks_like_pydoc": [
+    {
+      "kind": "function",
+      "path": "tools/refactor_comments.py",
+      "line": 225
+    }
+  ],
+  "main": [
+    {
+      "kind": "function",
+      "path": "tools/refactor_comments.py",
+      "line": 387
+    }
+  ],
+  "main_model": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 73
     }
   ],
   "mark_as_summarized": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 198
+      "line": 221
     }
   ],
   "mark_reflection_applied": [
@@ -3250,84 +4527,150 @@
     {
       "kind": "member",
       "path": "store/_scheduled_tasks.py",
-      "line": 165
+      "line": 205
+    }
+  ],
+  "max_history": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 51
+    }
+  ],
+  "max_iterations": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 77
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 49
+    }
+  ],
+  "max_tokens": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 55
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 43
+    }
+  ],
+  "max_tool_output": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 79
+    }
+  ],
+  "merge_code_results": [
+    {
+      "kind": "member",
+      "path": "multi_agent/result_aggregator.py",
+      "line": 232
+    }
+  ],
+  "message": [
+    {
+      "kind": "unknown",
+      "path": "multi_agent/lite_agent.py",
+      "line": 596
     }
   ],
   "meta_toolkit_config": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_config.py",
-      "line": 101
+      "line": 97
     }
   ],
   "meta_toolkit_date_diff": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_date_diff.py",
-      "line": 61
+      "line": 55
+    }
+  ],
+  "meta_toolkit_delegate": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_delegate.py",
+      "line": 100
+    }
+  ],
+  "meta_toolkit_diff": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_diff.py",
+      "line": 405
     }
   ],
   "meta_toolkit_dump_topic": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_dump_topic.py",
-      "line": 111
+      "line": 109
     }
   ],
   "meta_toolkit_edit": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_edit.py",
-      "line": 701
+      "line": 410
     }
   ],
   "meta_toolkit_evolution_exp": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_evolution_exp.py",
-      "line": 106
+      "line": 109
     }
   ],
   "meta_toolkit_exec": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_exec.py",
-      "line": 263
+      "line": 245
     }
   ],
   "meta_toolkit_explr": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 717
+      "line": 747
     }
   ],
   "meta_toolkit_file": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_file.py",
-      "line": 85
+      "line": 87
     }
   ],
   "meta_toolkit_gettime": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_gettime.py",
-      "line": 21
+      "line": 25
     }
   ],
   "meta_toolkit_git_push_all_remotes": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_git_push_all_remotes.py",
-      "line": 31
+      "line": 36
     }
   ],
   "meta_toolkit_kb": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_kb.py",
-      "line": 193
+      "line": 194
     }
   ],
   "meta_toolkit_lsp": [
@@ -3341,136 +4684,150 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 313
+      "line": 325
     }
   ],
   "meta_toolkit_mcp": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 334
+      "line": 342
     }
   ],
   "meta_toolkit_memory": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_memory.py",
-      "line": 132
+      "line": 205
     }
   ],
   "meta_toolkit_mode": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mode.py",
-      "line": 226
+      "line": 215
     },
     {
       "kind": "function",
       "path": "toolkit/toolkit_mode.py",
-      "line": 230
+      "line": 224
     }
   ],
   "meta_toolkit_notify": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_notify.py",
-      "line": 122
+      "line": 114
     }
   ],
   "meta_toolkit_os_info": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_os_info.py",
-      "line": 28
+      "line": 33
     }
   ],
   "meta_toolkit_pkg": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_pkg.py",
-      "line": 148
+      "line": 161
+    }
+  ],
+  "meta_toolkit_plan": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_plan.py",
+      "line": 15
     }
   ],
   "meta_toolkit_proactive": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_proactive.py",
-      "line": 150
+      "line": 154
     },
     {
       "kind": "function",
       "path": "toolkit/toolkit_proactive.py",
-      "line": 154
+      "line": 163
     }
   ],
   "meta_toolkit_prompt_evolve": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_prompt_evolve.py",
-      "line": 97
+      "line": 95
+    }
+  ],
+  "meta_toolkit_quality_gate": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_quality_gate.py",
+      "line": 236
     }
   ],
   "meta_toolkit_read_pyproject": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_read_pyproject.py",
-      "line": 61
+      "line": 59
     }
   ],
   "meta_toolkit_reflection": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_reflection.py",
-      "line": 75
+      "line": 73
     }
   ],
   "meta_toolkit_release": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_release.py",
-      "line": 220
+      "line": 258
     }
   ],
   "meta_toolkit_run_tests": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_run_tests.py",
-      "line": 61
+      "line": 60
     }
   ],
   "meta_toolkit_scheduler": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_scheduler.py",
-      "line": 428
+      "line": 419
     }
   ],
   "meta_toolkit_search": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_search.py",
-      "line": 230
+      "line": 221
     }
   ],
   "meta_toolkit_self_evolve": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_self_evolve.py",
-      "line": 298
+      "line": 227
     }
   ],
   "meta_toolkit_self_report": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_self_report.py",
-      "line": 73
+      "line": 70
     }
   ],
   "meta_toolkit_set_topic_title": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_set_topic_title.py",
-      "line": 60
+      "line": 58
     }
   ],
   "meta_toolkit_skill": [
@@ -3480,53 +4837,98 @@
       "line": 81
     }
   ],
+  "meta_toolkit_static": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_static.py",
+      "line": 16
+    }
+  ],
+  "meta_toolkit_sub_agent_report": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_sub_agent.py",
+      "line": 102
+    }
+  ],
+  "meta_toolkit_sub_agent_status": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_sub_agent.py",
+      "line": 140
+    }
+  ],
   "meta_toolkit_subconscious": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 1001
+      "line": 1240
     }
   ],
   "meta_toolkit_test_gui": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_test_gui.py",
-      "line": 126
+      "line": 115
     }
   ],
   "meta_toolkit_todo": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 338
+      "line": 424
     }
   ],
   "meta_toolkit_toggle_reasoning": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_toggle_reasoning.py",
-      "line": 32
+      "line": 31
+    }
+  ],
+  "model_name": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 53
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 88
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 38
+    }
+  ],
+  "name": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 33
     }
   ],
   "new_topic": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 59
+      "line": 187
     }
   ],
   "newline": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 261
+      "line": 316
     }
   ],
   "np": [
     {
       "kind": "namespace",
       "path": "store/_conversations.py",
-      "line": 226
+      "line": 273
     },
     {
       "kind": "namespace",
@@ -3538,7 +4940,14 @@
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 245
+      "line": 300
+    }
+  ],
+  "osp": [
+    {
+      "kind": "namespace",
+      "path": "toolkit/tool_loader.py",
+      "line": 3
     }
   ],
   "parse_file": [
@@ -3552,26 +4961,40 @@
     {
       "kind": "member",
       "path": "store/_scheduled_tasks.py",
-      "line": 19
+      "line": 17
     },
     {
       "kind": "function",
       "path": "toolkit/toolkit_scheduler.py",
-      "line": 71
+      "line": 53
+    }
+  ],
+  "priority": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 37
+    }
+  ],
+  "process_file": [
+    {
+      "kind": "function",
+      "path": "tools/refactor_comments.py",
+      "line": 348
     }
   ],
   "push_l3_pending": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 178
+      "line": 191
     }
   ],
   "push_to_level2": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 147
+      "line": 144
     }
   ],
   "py_ast": [
@@ -3585,63 +5008,205 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_kb.py",
-      "line": 58
+      "line": 55
     }
   ],
   "references": [
     {
       "kind": "function",
       "path": "lsp/lsp_engine.py",
-      "line": 186
+      "line": 245
     }
   ],
   "refresh_topics": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 69
+      "line": 196
+    }
+  ],
+  "register": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 101
+    }
+  ],
+  "register_agent_type": [
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 82
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 142
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 526
+    }
+  ],
+  "register_template": [
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 371
+    }
+  ],
+  "register_tool": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 310
+    }
+  ],
+  "register_tools_from_module": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 321
+    }
+  ],
+  "reload_all": [
+    {
+      "kind": "member",
+      "path": "toolkit/tool_loader.py",
+      "line": 48
+    }
+  ],
+  "remove_agent": [
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 192
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 489
     }
   ],
   "res": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_dump_topic.py",
-      "line": 123
+      "line": 125
+    }
+  ],
+  "reset": [
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 371
+    }
+  ],
+  "reset_history": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 658
     }
   ],
   "reset_instance": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 90
+      "line": 99
+    }
+  ],
+  "result": [
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 352
+    }
+  ],
+  "role": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 34
     }
   ],
   "rollback_system_prompt": [
     {
       "kind": "member",
       "path": "store/_prompts.py",
-      "line": 72
+      "line": 77
     }
   ],
   "root_dir": [
     {
       "kind": "variable",
       "path": "toolkit/toolkit_dump_topic.py",
-      "line": 118
+      "line": 120
+    }
+  ],
+  "run": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 380
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 258
+    }
+  ],
+  "run_async": [
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 299
+    }
+  ],
+  "run_batch": [
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 265
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 554
+    }
+  ],
+  "run_lsp_check": [
+    {
+      "kind": "function",
+      "path": "lsp/lsp_check.py",
+      "line": 16
+    }
+  ],
+  "run_parallel": [
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 205
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 499
     }
   ],
   "safe_log": [
     {
       "kind": "member",
       "path": "_gui/_stream_manager.py",
-      "line": 30
+      "line": 35
     }
   ],
   "safe_log_tool": [
     {
       "kind": "member",
       "path": "_gui/_stream_manager.py",
-      "line": 39
+      "line": 44
     }
   ],
   "safe_stream": [
@@ -3655,124 +5220,160 @@
     {
       "kind": "member",
       "path": "_gui/_stream_manager.py",
-      "line": 47
+      "line": 52
     }
   ],
   "sanitize": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_kb.py",
-      "line": 38
+      "line": 35
     }
   ],
   "save_agent_round": [
     {
       "kind": "member",
       "path": "store/_conversations.py",
-      "line": 103
+      "line": 124
     }
   ],
   "save_msg": [
     {
       "kind": "member",
       "path": "store/_conversations.py",
-      "line": 16
+      "line": 28
     },
     {
       "kind": "member",
       "path": "store/_core.py",
-      "line": 82
+      "line": 83
     }
   ],
   "scan_dir": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_file.py",
-      "line": 56
+      "line": 58
     }
   ],
   "scroll_to_bottom": [
     {
       "kind": "member",
       "path": "_gui/_renderer.py",
-      "line": 384
+      "line": 386
     }
   ],
   "search_by_keyword": [
     {
       "kind": "member",
       "path": "store/_vectors.py",
-      "line": 141
+      "line": 145
     }
   ],
   "search_by_vector": [
     {
       "kind": "member",
       "path": "store/_vectors.py",
-      "line": 78
+      "line": 83
     }
   ],
   "search_memories": [
     {
       "kind": "member",
       "path": "store/_memories.py",
-      "line": 158
+      "line": 161
     }
   ],
   "set_level2": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 76
+      "line": 74
+    }
+  ],
+  "set_orchestrator": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_delegate.py",
+      "line": 21
     }
   ],
   "set_semantic_summary": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 105
+      "line": 102
     }
   ],
   "set_tool_chain_summary": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 132
+      "line": 129
     }
   ],
-  "sh": [
+  "shared_tools": [
     {
-      "kind": "namespace",
-      "path": "toolkit/toolkit_edit.py",
-      "line": 107
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 47
     }
   ],
   "show_popup": [
     {
       "kind": "member",
       "path": "_gui/_images.py",
-      "line": 81
+      "line": 89
+    }
+  ],
+  "shutdown": [
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 402
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/orchestrator.py",
+      "line": 762
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 381
+    }
+  ],
+  "shutdown_all": [
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 296
+    },
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 579
     }
   ],
   "sp": [
     {
       "kind": "namespace",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 772
+      "path": "toolkit/toolkit_plan.py",
+      "line": 429
     }
   ],
   "start": [
     {
       "kind": "member",
       "path": "_gui/_tray.py",
-      "line": 36
+      "line": 35
     }
   ],
   "stop": [
     {
       "kind": "member",
       "path": "_gui/_tray.py",
-      "line": 40
+      "line": 39
     }
   ],
   "store_embedding": [
@@ -3786,21 +5387,68 @@
     {
       "kind": "member",
       "path": "_gui/_stream_manager.py",
-      "line": 116
+      "line": 141
     }
   ],
   "stream_flush_tick": [
     {
       "kind": "member",
       "path": "_gui/_stream_manager.py",
-      "line": 135
+      "line": 162
+    }
+  ],
+  "strip_inline_comments": [
+    {
+      "kind": "function",
+      "path": "tools/refactor_comments.py",
+      "line": 56
+    }
+  ],
+  "summarize_result": [
+    {
+      "kind": "member",
+      "path": "multi_agent/result_aggregator.py",
+      "line": 202
     }
   ],
   "switch_topic": [
     {
       "kind": "member",
       "path": "_gui/_topic_manager.py",
-      "line": 107
+      "line": 233
+    }
+  ],
+  "system_prompt": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 76
+    }
+  ],
+  "system_prompt_extra": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 50
+    }
+  ],
+  "temperature": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 54
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 42
+    }
+  ],
+  "templates": [
+    {
+      "kind": "member",
+      "path": "multi_agent/agent_pool.py",
+      "line": 576
     }
   ],
   "tk": [
@@ -3845,29 +5493,86 @@
   "to_dict": [
     {
       "kind": "member",
+      "path": "multi_agent/task_decomposer.py",
+      "line": 41
+    },
+    {
+      "kind": "member",
       "path": "skills/__init__.py",
-      "line": 55
+      "line": 54
     }
   ],
   "toggle_skill": [
     {
       "kind": "member",
       "path": "skills/__init__.py",
-      "line": 197
+      "line": 229
+    }
+  ],
+  "tool_blacklist": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 83
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 46
+    }
+  ],
+  "tool_calls": [
+    {
+      "kind": "unknown",
+      "path": "multi_agent/lite_agent.py",
+      "line": 594
+    }
+  ],
+  "tool_names": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 141
+    }
+  ],
+  "tool_whitelist": [
+    {
+      "kind": "variable",
+      "path": "multi_agent/lite_agent.py",
+      "line": 82
+    },
+    {
+      "kind": "variable",
+      "path": "multi_agent/sub_agent.py",
+      "line": 45
     }
   ],
   "toolkit_config": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_config.py",
-      "line": 10
+      "line": 9
     }
   ],
   "toolkit_date_diff": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_date_diff.py",
-      "line": 7
+      "line": 6
+    }
+  ],
+  "toolkit_delegate": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_delegate.py",
+      "line": 44
+    }
+  ],
+  "toolkit_diff": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_diff.py",
+      "line": 379
     }
   ],
   "toolkit_dump_topic": [
@@ -3881,47 +5586,47 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_edit.py",
-      "line": 12
+      "line": 16
     }
   ],
   "toolkit_evolution_exp": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_evolution_exp.py",
-      "line": 44
+      "line": 42
     }
   ],
   "toolkit_exec": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_exec.py",
-      "line": 8
+      "line": 6
     }
   ],
   "toolkit_explr": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 676
+      "line": 707
     },
     {
       "kind": "function",
       "path": "toolkit/toolkit_explr.py",
-      "line": 688
+      "line": 719
     }
   ],
   "toolkit_file": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_file.py",
-      "line": 8
+      "line": 6
     }
   ],
   "toolkit_gettime": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_gettime.py",
-      "line": 7
+      "line": 6
     }
   ],
   "toolkit_git_push_all_remotes": [
@@ -3935,7 +5640,7 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_kb.py",
-      "line": 11
+      "line": 8
     }
   ],
   "toolkit_lsp": [
@@ -3949,35 +5654,35 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_lunar.py",
-      "line": 188
+      "line": 196
     }
   ],
   "toolkit_mcp": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mcp.py",
-      "line": 7
+      "line": 6
     }
   ],
   "toolkit_memory": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_memory.py",
-      "line": 8
+      "line": 157
     }
   ],
   "toolkit_mode": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_mode.py",
-      "line": 10
+      "line": 7
     }
   ],
   "toolkit_notify": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_notify.py",
-      "line": 7
+      "line": 6
     }
   ],
   "toolkit_os_info": [
@@ -3991,28 +5696,35 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_pkg.py",
-      "line": 8
+      "line": 6
     }
   ],
   "toolkit_plan": [
     {
       "kind": "function",
-      "path": "toolkit/toolkit_todo.py",
-      "line": 506
+      "path": "toolkit/toolkit_plan.py",
+      "line": 148
     }
   ],
   "toolkit_proactive": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_proactive.py",
-      "line": 10
+      "line": 7
     }
   ],
   "toolkit_prompt_evolve": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_prompt_evolve.py",
-      "line": 10
+      "line": 9
+    }
+  ],
+  "toolkit_quality_gate": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_quality_gate.py",
+      "line": 14
     }
   ],
   "toolkit_read_pyproject": [
@@ -4026,35 +5738,35 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_reflection.py",
-      "line": 11
+      "line": 10
     }
   ],
   "toolkit_release": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_release.py",
-      "line": 23
+      "line": 22
     }
   ],
   "toolkit_run_tests": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_run_tests.py",
-      "line": 6
+      "line": 5
     }
   ],
   "toolkit_scheduler": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_scheduler.py",
-      "line": 7
+      "line": 5
     }
   ],
   "toolkit_search": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_search.py",
-      "line": 7
+      "line": 6
     }
   ],
   "toolkit_self_evolve": [
@@ -4068,7 +5780,7 @@
     {
       "kind": "function",
       "path": "toolkit/toolkit_self_report.py",
-      "line": 7
+      "line": 6
     }
   ],
   "toolkit_set_topic_title": [
@@ -4085,39 +5797,67 @@
       "line": 7
     }
   ],
+  "toolkit_static": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_static.py",
+      "line": 63
+    }
+  ],
+  "toolkit_sub_agent_report": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_sub_agent.py",
+      "line": 19
+    }
+  ],
+  "toolkit_sub_agent_status": [
+    {
+      "kind": "function",
+      "path": "toolkit/toolkit_sub_agent.py",
+      "line": 53
+    }
+  ],
   "toolkit_subconscious": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_subconscious.py",
-      "line": 8
+      "line": 6
     }
   ],
   "toolkit_test_gui": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_test_gui.py",
-      "line": 13
+      "line": 11
     }
   ],
   "toolkit_todo": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_todo.py",
-      "line": 140
+      "line": 233
     }
   ],
   "toolkit_toggle_reasoning": [
     {
       "kind": "function",
       "path": "toolkit/toolkit_toggle_reasoning.py",
-      "line": 6
+      "line": 5
+    }
+  ],
+  "tools": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 680
     }
   ],
   "touch_memory": [
     {
       "kind": "member",
       "path": "store/_memories.py",
-      "line": 213
+      "line": 221
     }
   ],
   "tsp": [
@@ -4127,81 +5867,193 @@
       "line": 24
     }
   ],
+  "unregister": [
+    {
+      "kind": "member",
+      "path": "multi_agent/lite_agent.py",
+      "line": 106
+    }
+  ],
   "update_memory": [
     {
       "kind": "member",
       "path": "store/_memories.py",
-      "line": 71
+      "line": 70
     }
   ],
   "update_msg_rounds": [
     {
       "kind": "member",
       "path": "store/_conversations.py",
-      "line": 82
+      "line": 103
     }
   ],
   "update_status": [
     {
       "kind": "member",
       "path": "_gui/_stream_manager.py",
-      "line": 58
+      "line": 63
     }
   ],
   "update_task": [
     {
       "kind": "member",
       "path": "store/_scheduled_tasks.py",
-      "line": 110
+      "line": 112
     }
   ],
   "update_topic_active": [
     {
       "kind": "member",
       "path": "store/_topics.py",
-      "line": 46
+      "line": 45
     }
   ],
   "update_topic_summary": [
     {
       "kind": "member",
       "path": "store/_summaries.py",
-      "line": 27
+      "line": 26
     }
   ],
   "update_topic_title": [
     {
       "kind": "member",
       "path": "store/_topics.py",
-      "line": 27
+      "line": 26
     }
   ],
   "vectorize_conversation": [
     {
       "kind": "member",
       "path": "store/_vectors.py",
-      "line": 197
+      "line": 206
+    }
+  ],
+  "visit_AsyncFor": [
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 650
     }
   ],
   "visit_AsyncFunctionDef": [
     {
       "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 618
+    },
+    {
+      "kind": "member",
       "path": "toolkit/toolkit_explr.py",
-      "line": 161
+      "line": 168
+    }
+  ],
+  "visit_BoolOp": [
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 703
+    }
+  ],
+  "visit_Call": [
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 768
+    },
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 713
     }
   ],
   "visit_ClassDef": [
     {
       "kind": "member",
       "path": "toolkit/toolkit_explr.py",
-      "line": 169
+      "line": 176
+    },
+    {
+      "kind": "member",
+      "path": "tools/refactor_comments.py",
+      "line": 307
+    }
+  ],
+  "visit_For": [
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 640
     }
   ],
   "visit_FunctionDef": [
     {
       "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 603
+    },
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 756
+    },
+    {
+      "kind": "member",
       "path": "toolkit/toolkit_explr.py",
-      "line": 143
+      "line": 150
+    },
+    {
+      "kind": "member",
+      "path": "tools/refactor_comments.py",
+      "line": 281
+    },
+    {
+      "kind": "member",
+      "path": "tools/refactor_comments.py",
+      "line": 39
+    }
+  ],
+  "visit_If": [
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 627
+    }
+  ],
+  "visit_IfExp": [
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 693
+    }
+  ],
+  "visit_Match": [
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 682
+    }
+  ],
+  "visit_Try": [
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 670
+    }
+  ],
+  "visit_While": [
+    {
+      "kind": "member",
+      "path": "lsp/ts_analyzer.py",
+      "line": 660
+    }
+  ],
+  "wait": [
+    {
+      "kind": "member",
+      "path": "multi_agent/sub_agent.py",
+      "line": 319
     }
   ]
 }

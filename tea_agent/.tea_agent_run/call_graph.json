@@ -1,100 +1,100 @@
 {
   "functions": {
     "__init__": {
-      "file": "store/_core.py",
-      "line": 36
+      "file": "toolkit/tool_loader.py",
+      "line": 19
     },
     "_start_subconscious": {
       "file": "agent_core.py",
-      "line": 85
+      "line": 76
     },
     "_start_scheduler": {
       "file": "gui.py",
-      "line": 412
+      "line": 397
     },
     "_init_session": {
       "file": "gui.py",
-      "line": 515
+      "line": 510
     },
     "_init_session_info_str": {
       "file": "agent_core.py",
-      "line": 162
+      "line": 147
     },
     "_extract_files_from_rounds": {
       "file": "agent_core.py",
-      "line": 174
+      "line": 161
     },
     "_post_chat_pipeline": {
       "file": "agent_core.py",
-      "line": 230
+      "line": 213
     },
     "_update_level3_summary": {
       "file": "agent_core.py",
-      "line": 294
+      "line": 280
     },
     "_load_topic_history_into_session": {
       "file": "agent_core.py",
-      "line": 348
+      "line": 333
     },
     "_do_async_summaries": {
       "file": "agent_core.py",
-      "line": 377
+      "line": 355
     },
     "_auto_summary": {
       "file": "agent_core.py",
-      "line": 388
+      "line": 370
     },
     "_suggest_new_topic_if_needed": {
       "file": "_gui/_topic_manager.py",
-      "line": 270
+      "line": 325
     },
     "_on_summary_updated": {
       "file": "_gui/_topic_manager.py",
-      "line": 284
+      "line": 339
     },
     "initialize": {
-      "file": "prompt_manager.py",
-      "line": 64
+      "file": "multi_agent/sub_agent.py",
+      "line": 159
     },
     "name": {
       "file": "session_api_component.py",
-      "line": 32
+      "line": 37
     },
     "_auto_start_subconscious": {
       "file": "tea_main_cli.py",
-      "line": 61
+      "line": 52
     },
     "_stop_dream": {
       "file": "tea_main_cli.py",
-      "line": 78
+      "line": 68
     },
     "_auto_init_topic": {
       "file": "cli.py",
-      "line": 373
+      "line": 389
     },
     "_new_topic": {
       "file": "cli.py",
-      "line": 251
+      "line": 260
     },
     "_list_topics": {
       "file": "cli.py",
-      "line": 260
+      "line": 269
     },
     "_switch_topic": {
       "file": "cli.py",
-      "line": 272
+      "line": 281
     },
     "_load_history": {
       "file": "tea_main_cli.py",
-      "line": 133
+      "line": 128
     },
     "_show_topic_info": {
       "file": "tea_main_cli.py",
-      "line": 139
+      "line": 134
     },
     "_show_memories": {
       "file": "tea_main_cli.py",
-      "line": 154
+      "line": 146
     },
     "chat": {
       "file": "tea_agent.py",
@@ -102,111 +102,111 @@
     },
     "stream_cb": {
       "file": "tea_agent.py",
-      "line": 272
+      "line": 279
     },
     "status_cb": {
       "file": "tea_agent.py",
-      "line": 283
+      "line": 290
     },
     "work": {
       "file": "gui.py",
-      "line": 753
+      "line": 848
     },
     "_on_tool_log": {
       "file": "tea_main_cli.py",
-      "line": 238
+      "line": 227
     },
     "run": {
-      "file": "cli.py",
-      "line": 69
+      "file": "multi_agent/sub_agent.py",
+      "line": 258
     },
     "run_oneshot": {
       "file": "tea_main_cli.py",
-      "line": 279
+      "line": 276
     },
     "_handle_command": {
       "file": "cli.py",
-      "line": 180
+      "line": 181
     },
     "_cmd_help": {
       "file": "tea_main_cli.py",
-      "line": 317
+      "line": 316
     },
     "_cmd_status": {
       "file": "tea_main_cli.py",
-      "line": 333
+      "line": 332
     },
     "main": {
-      "file": "cli.py",
-      "line": 417
+      "file": "tools/refactor_comments.py",
+      "line": 387
     },
     "_extract_keywords": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 96
+      "line": 112
     },
     "_jaccard_similarity": {
       "file": "merge_db.py",
-      "line": 53
+      "line": 57
     },
     "_get_max_ids": {
       "file": "merge_db.py",
-      "line": 97
+      "line": 102
     },
     "_get_table_columns": {
       "file": "merge_db.py",
-      "line": 122
+      "line": 133
     },
     "_merge_meta": {
       "file": "merge_db.py",
-      "line": 137
+      "line": 153
     },
     "_merge_topics": {
       "file": "merge_db.py",
-      "line": 160
+      "line": 173
     },
     "_merge_conversations": {
       "file": "merge_db.py",
-      "line": 187
+      "line": 197
     },
     "_merge_agent_rounds": {
       "file": "merge_db.py",
-      "line": 230
+      "line": 236
     },
     "_merge_topic_token_stats": {
       "file": "merge_db.py",
-      "line": 269
+      "line": 272
     },
     "_accumulate_token_stats": {
       "file": "merge_db.py",
-      "line": 311
+      "line": 313
     },
     "_merge_t_conv_summary": {
       "file": "merge_db.py",
-      "line": 340
+      "line": 346
     },
     "_merge_memories": {
       "file": "merge_db.py",
-      "line": 381
+      "line": 384
     },
     "_find_duplicate": {
       "file": "memory.py",
-      "line": 544
+      "line": 565
     },
     "_merge_memory_record": {
       "file": "merge_db.py",
-      "line": 469
+      "line": 478
     },
     "_merge_system_prompts": {
       "file": "merge_db.py",
-      "line": 505
+      "line": 516
     },
     "_merge_reflections": {
       "file": "merge_db.py",
-      "line": 566
+      "line": 572
     },
     "_merge_config_history": {
       "file": "merge_db.py",
-      "line": 607
+      "line": 610
     },
     "merge": {
       "file": "merge_db.py",
@@ -214,7 +214,7 @@
     },
     "close": {
       "file": "store/_core.py",
-      "line": 658
+      "line": 644
     },
     "_fs": {
       "file": "_gui/_fonts.py",
@@ -222,503 +222,515 @@
     },
     "_init_fonts": {
       "file": "_gui/_fonts.py",
-      "line": 23
+      "line": 28
     },
     "_detect": {
       "file": "_gui/_fonts.py",
-      "line": 33
+      "line": 38
     },
     "_create_ui": {
       "file": "gui.py",
-      "line": 425
+      "line": 410
     },
     "_refresh": {
       "file": "gui_dialogs.py",
-      "line": 507
+      "line": 486
     },
     "_sort": {
       "file": "gui_dialogs.py",
-      "line": 708
+      "line": 677
     },
     "_add_dialog": {
       "file": "gui_dialogs.py",
-      "line": 233
+      "line": 224
     },
     "do_add": {
       "file": "gui_dialogs.py",
-      "line": 278
+      "line": 269
     },
     "_soft_delete": {
       "file": "gui_dialogs.py",
-      "line": 302
+      "line": 293
     },
     "_hard_delete": {
       "file": "gui_dialogs.py",
-      "line": 818
+      "line": 786
     },
     "_on_double_click": {
       "file": "gui_dialogs.py",
-      "line": 326
+      "line": 317
     },
     "_export": {
       "file": "gui_dialogs.py",
-      "line": 353
+      "line": 344
     },
     "_do_search": {
       "file": "gui_dialogs.py",
-      "line": 562
+      "line": 538
     },
     "_show_search_results": {
       "file": "gui_dialogs.py",
-      "line": 601
+      "line": 575
     },
     "_clear_search": {
       "file": "gui_dialogs.py",
-      "line": 630
+      "line": 603
     },
     "_generate_vectors": {
       "file": "gui_dialogs.py",
-      "line": 638
+      "line": 611
     },
     "_run": {
       "file": "toolkit/toolkit_exec.py",
-      "line": 70
+      "line": 56
     },
     "parse_tok": {
       "file": "gui_dialogs.py",
-      "line": 718
+      "line": 687
     },
     "_selected_id": {
       "file": "gui_dialogs.py",
-      "line": 736
+      "line": 705
     },
     "_switch_to": {
       "file": "gui_dialogs.py",
-      "line": 742
+      "line": 711
     },
     "_rename_dialog": {
       "file": "gui_dialogs.py",
-      "line": 763
+      "line": 731
     },
     "do_rename": {
       "file": "gui_dialogs.py",
-      "line": 786
+      "line": 754
     },
     "_deactivate": {
       "file": "gui_dialogs.py",
-      "line": 800
+      "line": 768
     },
     "_activate": {
       "file": "gui_dialogs.py",
-      "line": 809
+      "line": 777
     },
     "_export_selected": {
       "file": "gui_dialogs.py",
-      "line": 841
+      "line": 809
     },
     "_export_all": {
       "file": "gui_dialogs.py",
-      "line": 850
+      "line": 818
     },
     "_do_export": {
       "file": "gui_dialogs.py",
-      "line": 858
+      "line": 826
     },
     "_write_topic_md": {
       "file": "gui_dialogs.py",
-      "line": 900
+      "line": 868
     },
     "_model_tab": {
       "file": "gui_dialogs.py",
-      "line": 1003
+      "line": 978
     },
     "_mode_params_tab": {
       "file": "gui_dialogs.py",
-      "line": 1083
+      "line": 1056
     },
     "_runtime_tab": {
       "file": "gui_dialogs.py",
-      "line": 1120
+      "line": 1093
     },
     "_on_mousewheel": {
       "file": "gui_dialogs.py",
-      "line": 1138
+      "line": 1111
     },
     "_load_values": {
       "file": "gui_dialogs.py",
-      "line": 1179
+      "line": 1152
     },
     "_do_save": {
       "file": "gui_dialogs.py",
-      "line": 1226
+      "line": 1197
     },
     "destroy": {
       "file": "gui_dialogs.py",
-      "line": 1313
+      "line": 1282
     },
     "success_rate": {
       "file": "reflection.py",
-      "line": 43
+      "line": 42
     },
     "duration_seconds": {
       "file": "reflection.py",
-      "line": 51
+      "line": 55
     },
     "start_trace": {
       "file": "reflection.py",
-      "line": 93
+      "line": 102
     },
     "record_tool_call": {
       "file": "reflection.py",
-      "line": 103
+      "line": 121
     },
     "finish_trace": {
       "file": "reflection.py",
-      "line": 112
+      "line": 139
     },
     "should_reflect": {
       "file": "reflection.py",
-      "line": 121
+      "line": 157
     },
     "build_reflection_prompt": {
       "file": "reflection.py",
-      "line": 144
+      "line": 176
     },
     "parse_reflection_result": {
       "file": "reflection.py",
-      "line": 173
+      "line": 210
     },
     "generate_reflection": {
       "file": "reflection.py",
-      "line": 184
+      "line": 229
     },
     "_build_tool_stats": {
       "file": "reflection.py",
-      "line": 268
+      "line": 308
     },
     "last_prompt_suggestion": {
       "file": "reflection.py",
-      "line": 285
+      "line": 330
     },
     "get_stats": {
       "file": "prompt_manager.py",
-      "line": 268
+      "line": 283
     },
     "is_configured": {
-      "file": "config.py",
-      "line": 146
+      "file": "multi_agent/lite_agent.py",
+      "line": 59
     },
     "resolve": {
       "file": "config.py",
-      "line": 64
+      "line": 68
     },
     "_resolve": {
       "file": "config.py",
-      "line": 86
+      "line": 88
     },
     "db_path_abs": {
       "file": "config.py",
-      "line": 106
+      "line": 108
     },
     "toolkit_dir_abs": {
       "file": "config.py",
-      "line": 111
+      "line": 118
     },
     "kb_dir_abs": {
       "file": "config.py",
-      "line": 116
+      "line": 128
     },
     "skills_dir_abs": {
       "file": "config.py",
-      "line": 121
+      "line": 138
     },
     "data_dir_abs": {
       "file": "config.py",
-      "line": 126
+      "line": 148
+    },
+    "to_dict": {
+      "file": "multi_agent/task_decomposer.py",
+      "line": 41
+    },
+    "from_dict": {
+      "file": "multi_agent/task_decomposer.py",
+      "line": 59
     },
     "get_effective_params": {
       "file": "config.py",
-      "line": 158
+      "line": 283
     },
     "get": {
       "file": "config.py",
-      "line": 230
+      "line": 347
     },
     "set": {
       "file": "config.py",
-      "line": 236
+      "line": 359
     },
     "apply_changes": {
       "file": "config.py",
-      "line": 263
+      "line": 386
     },
     "reload_from_dict": {
       "file": "config.py",
-      "line": 286
-    },
-    "to_dict": {
-      "file": "skills/__init__.py",
-      "line": 55
+      "line": 409
     },
     "load_config": {
       "file": "config.py",
-      "line": 296
+      "line": 429
     },
     "ensure_config_dir": {
       "file": "config.py",
-      "line": 395
+      "line": 522
     },
     "save_config": {
       "file": "config.py",
-      "line": 405
+      "line": 537
     },
     "create_default_config": {
       "file": "config.py",
-      "line": 488
+      "line": 616
     },
     "get_config": {
       "file": "config.py",
-      "line": 590
+      "line": 717
     },
     "estimate_tokens": {
       "file": "token_utils.py",
-      "line": 34
+      "line": 32
     },
     "estimate_message_tokens": {
       "file": "token_utils.py",
-      "line": 51
+      "line": 54
     },
     "estimate_text_tokens": {
       "file": "token_utils.py",
-      "line": 61
+      "line": 72
     },
     "_estimate_tokens_tiktoken": {
       "file": "token_utils.py",
-      "line": 75
+      "line": 93
     },
     "_estimate_tokens_char": {
       "file": "token_utils.py",
-      "line": 117
+      "line": 140
     },
     "_estimate_tokens_char_single": {
       "file": "token_utils.py",
-      "line": 131
+      "line": 156
     },
     "_estimate_tokens_char_from_text": {
       "file": "token_utils.py",
-      "line": 165
+      "line": 195
     },
     "compute_safe_budget": {
       "file": "token_utils.py",
-      "line": 174
+      "line": 211
     },
     "messages": {
       "file": "onlinesession.py",
-      "line": 223
+      "line": 209
     },
     "model": {
       "file": "onlinesession.py",
-      "line": 237
+      "line": 223
     },
     "_rounds_collector": {
       "file": "onlinesession.py",
-      "line": 251
+      "line": 237
     },
     "_last_usage": {
       "file": "onlinesession.py",
-      "line": 265
+      "line": 251
     },
     "_last_cheap_usage": {
       "file": "onlinesession.py",
-      "line": 279
+      "line": 265
     },
     "_history_summary": {
       "file": "onlinesession.py",
-      "line": 293
+      "line": 279
     },
     "_semantic_summary": {
       "file": "onlinesession.py",
-      "line": 307
+      "line": 293
     },
     "_tool_chain_summary": {
       "file": "onlinesession.py",
-      "line": 321
+      "line": 307
     },
     "_level2": {
       "file": "onlinesession.py",
-      "line": 335
+      "line": 321
     },
     "_get_summarize_client": {
       "file": "session_memory_component.py",
-      "line": 202
+      "line": 200
     },
     "_get_effective_params": {
       "file": "onlinesession.py",
-      "line": 353
+      "line": 341
     },
     "_process_stream_with_reasoning": {
       "file": "onlinesession.py",
-      "line": 365
+      "line": 358
     },
     "_refresh_from_config": {
       "file": "onlinesession.py",
-      "line": 406
+      "line": 399
     },
     "_setup_default_pipeline": {
       "file": "onlinesession.py",
-      "line": 422
+      "line": 411
     },
     "_enforce_token_budget": {
       "file": "onlinesession.py",
-      "line": 465
+      "line": 447
     },
     "_build_api_messages": {
       "file": "onlinesession.py",
-      "line": 600
+      "line": 574
+    },
+    "_clean_orphan_tool_messages": {
+      "file": "onlinesession.py",
+      "line": 725
     },
     "_sanitize_api_messages": {
       "file": "onlinesession.py",
-      "line": 771
+      "line": 761
     },
     "_try_fix_truncated_json": {
       "file": "onlinesession.py",
-      "line": 831
+      "line": 829
+    },
+    "_get_os_context": {
+      "file": "onlinesession.py",
+      "line": 887
     },
     "_get_subconscious_context": {
       "file": "onlinesession.py",
-      "line": 884
+      "line": 907
     },
     "_to_multimodal": {
       "file": "onlinesession.py",
-      "line": 925
+      "line": 948
     },
     "_filter_level2_by_relevance": {
       "file": "onlinesession.py",
-      "line": 967
+      "line": 998
     },
     "_key_words": {
       "file": "onlinesession.py",
-      "line": 972
+      "line": 1012
     },
     "_extract_files_from_text": {
       "file": "onlinesession.py",
-      "line": 983
+      "line": 1023
     },
     "_analyze_intent": {
       "file": "onlinesession.py",
-      "line": 1058
+      "line": 1095
     },
     "_execute_tool_loop": {
       "file": "onlinesession.py",
-      "line": 1089
+      "line": 1134
     },
     "_build_tools": {
       "file": "onlinesession.py",
-      "line": 1274
+      "line": 1370
     },
     "update_tools": {
       "file": "onlinesession.py",
-      "line": 1293
+      "line": 1393
     },
     "_auto_detect_mode": {
       "file": "onlinesession.py",
-      "line": 1298
+      "line": 1398
     },
     "reset_session_state": {
       "file": "onlinesession.py",
-      "line": 1314
+      "line": 1419
     },
     "_notify_reflection_done": {
       "file": "onlinesession.py",
-      "line": 1323
+      "line": 1428
     },
     "_notify_prompt_evolved": {
       "file": "onlinesession.py",
-      "line": 1335
+      "line": 1445
     },
     "chat_stream": {
       "file": "basesession.py",
-      "line": 60
+      "line": 58
     },
     "_auto_extract": {
       "file": "onlinesession.py",
-      "line": 1416
+      "line": 1535
     },
     "_auto_reflect": {
       "file": "onlinesession.py",
-      "line": 1428
+      "line": 1546
     },
     "_tokenize": {
       "file": "embedding_util.py",
-      "line": 48
+      "line": 44
     },
     "_hash_token": {
       "file": "embedding_util.py",
-      "line": 58
+      "line": 62
     },
     "add_document": {
       "file": "embedding_util.py",
-      "line": 63
+      "line": 75
     },
     "vectorize": {
       "file": "embedding_util.py",
-      "line": 70
+      "line": 87
     },
     "_init_from_config": {
       "file": "embedding_util.py",
-      "line": 121
+      "line": 141
     },
     "mode": {
       "file": "embedding_util.py",
-      "line": 147
+      "line": 170
     },
     "configured": {
       "file": "embedding_util.py",
-      "line": 152
+      "line": 180
     },
     "embed": {
       "file": "embedding_util.py",
-      "line": 156
+      "line": 189
     },
     "embed_batch": {
       "file": "embedding_util.py",
-      "line": 181
+      "line": 213
     },
     "_build_url": {
       "file": "embedding_util.py",
-      "line": 190
+      "line": 230
     },
     "_embed_api": {
       "file": "embedding_util.py",
-      "line": 202
+      "line": 244
     },
     "_embed_api_batch": {
       "file": "embedding_util.py",
-      "line": 245
+      "line": 293
     },
     "_embed_tfidf": {
       "file": "embedding_util.py",
-      "line": 271
+      "line": 327
     },
     "build_tfidf_vocabulary": {
       "file": "embedding_util.py",
-      "line": 275
+      "line": 339
     },
     "cosine_similarity": {
       "file": "embedding_util.py",
-      "line": 283
+      "line": 352
     },
     "get_embedding_usage": {
       "file": "embedding_util.py",
-      "line": 297
+      "line": 375
     },
     "search": {
       "file": "project_memory.py",
-      "line": 87
+      "line": 104
     },
     "get_embedding_engine": {
       "file": "embedding_util.py",
-      "line": 334
+      "line": 411
     },
     "_get_cheap_params": {
       "file": "session_api_component.py",
@@ -726,207 +738,207 @@
     },
     "summarize_old_history": {
       "file": "session_summarizer_component.py",
-      "line": 47
+      "line": 62
     },
     "_conversations_to_text": {
       "file": "session_summarizer_component.py",
-      "line": 154
+      "line": 158
     },
     "_find_recent_boundary": {
       "file": "session_summarizer_component.py",
-      "line": 183
+      "line": 194
     },
     "add_user_message": {
       "file": "basesession.py",
-      "line": 73
+      "line": 71
     },
     "add_assistant_message": {
       "file": "basesession.py",
-      "line": 86
+      "line": 89
     },
     "add_tool_result": {
       "file": "session_tool_component.py",
-      "line": 115
+      "line": 138
     },
     "get_recent_messages": {
       "file": "basesession.py",
-      "line": 98
+      "line": 112
     },
     "_strip_reasoning_content": {
       "file": "basesession.py",
-      "line": 110
+      "line": 122
     },
     "_compress_tool_content": {
       "file": "basesession.py",
-      "line": 125
+      "line": 138
     },
     "_compress_json_args": {
       "file": "basesession.py",
-      "line": 197
+      "line": 204
     },
     "_compress_value": {
       "file": "basesession.py",
-      "line": 252
+      "line": 255
     },
     "_guess_tool_threshold": {
       "file": "basesession.py",
-      "line": 306
+      "line": 312
     },
     "_compress_tool_rounds": {
       "file": "basesession.py",
-      "line": 356
+      "line": 359
     },
     "_repair_incomplete_tool_chains": {
       "file": "basesession.py",
-      "line": 446
+      "line": 435
     },
     "load_history": {
       "file": "basesession.py",
-      "line": 540
+      "line": 513
     },
     "interrupt": {
-      "file": "gui.py",
-      "line": 1001
+      "file": "multi_agent/lite_agent.py",
+      "line": 662
     },
     "reset_interrupt": {
       "file": "basesession.py",
-      "line": 615
+      "line": 570
     },
     "_trim_messages": {
       "file": "basesession.py",
-      "line": 619
+      "line": 574
     },
     "_on_post_reply": {
       "file": "cli.py",
-      "line": 55
+      "line": 52
     },
     "_on_init_done": {
       "file": "cli.py",
-      "line": 65
+      "line": 62
     },
     "_chat": {
       "file": "cli.py",
-      "line": 297
+      "line": 304
     },
     "on_stream": {
       "file": "cli.py",
-      "line": 309
+      "line": 319
     },
     "on_status": {
       "file": "cli.py",
-      "line": 343
+      "line": 356
     },
     "action_send_from_input": {
       "file": "tui.py",
-      "line": 288
+      "line": 323
     },
     "action_insert_newline": {
       "file": "tui.py",
-      "line": 291
+      "line": 327
     },
     "compose": {
       "file": "tui.py",
-      "line": 294
+      "line": 330
     },
     "on_mount": {
       "file": "tui.py",
-      "line": 307
+      "line": 348
     },
     "_init_agent": {
       "file": "tui.py",
-      "line": 312
+      "line": 354
     },
     "_check_agent_ready": {
       "file": "tui.py",
-      "line": 325
+      "line": 368
     },
     "_show_welcome": {
       "file": "tui.py",
-      "line": 330
+      "line": 374
     },
     "_show_error": {
       "file": "tui.py",
-      "line": 349
+      "line": 394
     },
     "_update_status": {
       "file": "gui.py",
-      "line": 530
+      "line": 533
     },
     "_update_status_right": {
       "file": "tui.py",
-      "line": 363
+      "line": 419
     },
     "_start_stream_timer": {
       "file": "tui.py",
-      "line": 373
+      "line": 429
     },
     "_stop_stream_timer": {
       "file": "tui.py",
-      "line": 378
+      "line": 434
     },
     "on_key": {
       "file": "tui.py",
-      "line": 385
+      "line": 440
     },
     "_do_send": {
       "file": "tui.py",
-      "line": 389
+      "line": 449
     },
     "run_chat": {
       "file": "tui.py",
-      "line": 409
+      "line": 470
     },
     "_on_chat_done": {
       "file": "tui.py",
-      "line": 425
+      "line": 487
     },
     "_append_chat": {
       "file": "tui.py",
-      "line": 442
+      "line": 503
     },
     "_strip_markup": {
       "file": "tui.py",
-      "line": 453
+      "line": 518
     },
     "_chat_write": {
       "file": "tui.py",
-      "line": 457
+      "line": 530
     },
     "_append_chat_inline": {
       "file": "tui.py",
-      "line": 470
+      "line": 548
     },
     "_flush_stream_buffer": {
       "file": "tui.py",
-      "line": 474
+      "line": 557
     },
     "_show_help": {
       "file": "tui.py",
-      "line": 509
+      "line": 597
     },
     "_cmd_set": {
       "file": "cli.py",
-      "line": 215
+      "line": 224
     },
     "action_interrupt": {
       "file": "tui.py",
-      "line": 576
+      "line": 676
     },
     "action_toggle_think": {
       "file": "tui.py",
-      "line": 583
+      "line": 684
     },
     "action_toggle_verbose": {
       "file": "tui.py",
-      "line": 592
+      "line": 694
     },
     "action_new_topic": {
       "file": "tui.py",
-      "line": 599
+      "line": 702
     },
     "action_list_topics": {
       "file": "tui.py",
-      "line": 610
+      "line": 714
     },
     "register_step": {
       "file": "session_pipeline.py",
@@ -934,59 +946,59 @@
     },
     "enable_step": {
       "file": "session_pipeline.py",
-      "line": 97
+      "line": 95
     },
     "disable_step": {
       "file": "session_pipeline.py",
-      "line": 102
+      "line": 105
     },
     "toggle_step": {
       "file": "session_pipeline.py",
-      "line": 107
+      "line": 115
     },
     "set_step_position": {
       "file": "session_pipeline.py",
-      "line": 112
+      "line": 125
     },
     "remove_step": {
       "file": "session_pipeline.py",
-      "line": 118
+      "line": 137
     },
     "get_enabled_steps": {
       "file": "session_pipeline.py",
-      "line": 124
+      "line": 148
     },
     "execute": {
-      "file": "session_pipeline.py",
-      "line": 131
+      "file": "multi_agent/orchestrator.py",
+      "line": 564
     },
     "list_steps": {
       "file": "session_pipeline.py",
-      "line": 183
+      "line": 208
     },
     "_load_config": {
       "file": "tea_agent.py",
-      "line": 88
+      "line": 82
     },
     "_init_toolkit": {
       "file": "tea_agent.py",
-      "line": 129
+      "line": 125
     },
     "_no_tools_chat": {
       "file": "tea_agent.py",
-      "line": 197
+      "line": 186
     },
     "toolkit_save": {
       "file": "tea_agent.py",
-      "line": 218
+      "line": 204
     },
     "toolkit_reload": {
       "file": "tlk.py",
-      "line": 523
+      "line": 455
     },
     "_notify": {
       "file": "toolkit/toolkit_scheduler.py",
-      "line": 157
+      "line": 138
     },
     "_chat_impl": {
       "file": "tea_agent.py",
@@ -994,115 +1006,115 @@
     },
     "__enter__": {
       "file": "tea_agent.py",
-      "line": 327
+      "line": 328
     },
     "__exit__": {
       "file": "tea_agent.py",
-      "line": 330
+      "line": 332
     },
     "config": {
-      "file": "tea_agent.py",
-      "line": 338
+      "file": "multi_agent/lite_agent.py",
+      "line": 684
     },
     "toolkit": {
       "file": "tea_agent.py",
-      "line": 343
+      "line": 350
     },
     "Title": {
       "file": "gui.py",
-      "line": 148
+      "line": 140
     },
     "Id": {
       "file": "gui.py",
-      "line": 153
+      "line": 145
     },
     "Status": {
       "file": "gui.py",
-      "line": 158
+      "line": 150
     },
     "Category": {
       "file": "gui.py",
-      "line": 163
+      "line": 155
     },
     "IconPixmap": {
       "file": "gui.py",
-      "line": 168
+      "line": 160
     },
     "Activate": {
       "file": "gui.py",
-      "line": 177
+      "line": 168
     },
     "ContextMenu": {
       "file": "gui.py",
-      "line": 188
+      "line": 179
     },
     "start": {
       "file": "_gui/_tray.py",
-      "line": 36
+      "line": 35
     },
     "stop": {
       "file": "_gui/_tray.py",
-      "line": 40
+      "line": 39
     },
     "_create_tray_icon": {
       "file": "_gui/_tray.py",
-      "line": 74
+      "line": 72
     },
     "_pil_to_argb32": {
       "file": "_gui/_tray.py",
-      "line": 89
+      "line": 87
     },
     "_init_tray": {
       "file": "_gui/_tray.py",
-      "line": 51
+      "line": 49
     },
     "_on_tray_activate": {
       "file": "_gui/_tray.py",
-      "line": 104
+      "line": 101
     },
     "_on_tray_context_menu": {
       "file": "_gui/_tray.py",
-      "line": 110
+      "line": 107
     },
     "_on_closing": {
       "file": "_gui/_tray.py",
-      "line": 119
+      "line": 122
     },
     "_start_dream": {
       "file": "gui.py",
-      "line": 391
+      "line": 377
     },
     "_adjust_chat_sash": {
       "file": "gui.py",
-      "line": 429
+      "line": 414
     },
     "zoom_in": {
       "file": "gui.py",
-      "line": 433
+      "line": 418
     },
     "zoom_out": {
       "file": "gui.py",
-      "line": 446
+      "line": 431
     },
     "_apply_zoom": {
       "file": "gui.py",
-      "line": 459
+      "line": 444
     },
     "_history_prev_round": {
       "file": "gui.py",
-      "line": 470
+      "line": 455
     },
     "_history_next_round": {
       "file": "gui.py",
-      "line": 489
+      "line": 477
     },
     "_now_ts": {
       "file": "gui.py",
-      "line": 511
+      "line": 501
     },
     "toggle_reasoning": {
       "file": "gui.py",
-      "line": 519
+      "line": 514
     },
     "safe_stream": {
       "file": "_gui/_stream_manager.py",
@@ -1110,187 +1122,191 @@
     },
     "safe_log": {
       "file": "_gui/_stream_manager.py",
-      "line": 30
+      "line": 35
     },
     "safe_log_tool": {
       "file": "_gui/_stream_manager.py",
-      "line": 39
+      "line": 44
     },
     "safe_update_status": {
       "file": "_gui/_stream_manager.py",
-      "line": 47
+      "line": 52
     },
     "_handle_max_iter": {
       "file": "gui.py",
-      "line": 551
+      "line": 580
     },
     "log": {
       "file": "_gui/_stream_manager.py",
-      "line": 81
+      "line": 96
     },
     "stream": {
       "file": "_gui/_stream_manager.py",
-      "line": 116
+      "line": 141
     },
     "log_tool": {
       "file": "_gui/_stream_manager.py",
-      "line": 110
+      "line": 131
     },
     "_stream_flush_tick": {
       "file": "gui.py",
-      "line": 567
+      "line": 618
     },
     "clear_chat": {
       "file": "_gui/_topic_manager.py",
-      "line": 29
+      "line": 160
     },
     "auto_new_topic": {
       "file": "_gui/_topic_manager.py",
-      "line": 43
+      "line": 174
     },
     "new_topic": {
       "file": "_gui/_topic_manager.py",
-      "line": 59
+      "line": 187
     },
     "refresh_topics": {
       "file": "_gui/_topic_manager.py",
-      "line": 69
+      "line": 196
     },
     "_update_title": {
       "file": "_gui/_topic_manager.py",
-      "line": 94
+      "line": 220
     },
     "switch_topic": {
       "file": "_gui/_topic_manager.py",
-      "line": 107
+      "line": 233
     },
     "on_topic_select": {
       "file": "_gui/_topic_manager.py",
-      "line": 245
+      "line": 300
     },
     "newline": {
       "file": "_gui/_topic_manager.py",
-      "line": 261
+      "line": 316
     },
     "_refresh_topics_preserve_selection": {
       "file": "_gui/_topic_manager.py",
-      "line": 290
+      "line": 351
     },
     "_on_topic_hover": {
       "file": "_gui/_topic_manager.py",
-      "line": 294
+      "line": 355
     },
     "_on_topic_leave": {
       "file": "_gui/_topic_manager.py",
-      "line": 309
+      "line": 375
     },
     "_show_tooltip": {
       "file": "_gui/_topic_manager.py",
-      "line": 317
+      "line": 388
     },
     "_hide_tooltip": {
       "file": "_gui/_topic_manager.py",
-      "line": 356
+      "line": 433
     },
     "_notify_completion": {
       "file": "gui.py",
-      "line": 656
+      "line": 754
     },
     "_attach_image": {
       "file": "gui.py",
-      "line": 683
+      "line": 784
     },
     "_clear_images": {
       "file": "gui.py",
-      "line": 717
+      "line": 814
     },
     "send": {
       "file": "gui.py",
-      "line": 722
+      "line": 819
+    },
+    "_append_token_and_render": {
+      "file": "gui.py",
+      "line": 867
+    },
+    "_fmt_cell": {
+      "file": "gui.py",
+      "line": 913
+    },
+    "_build_token_table": {
+      "file": "gui.py",
+      "line": 923
     },
     "_add_token_notice_and_render": {
       "file": "gui.py",
-      "line": 817
-    },
-    "_cell": {
-      "file": "gui.py",
-      "line": 854
-    },
-    "_refresh_cheap_token_notice": {
-      "file": "gui.py",
-      "line": 877
+      "line": 977
     },
     "_on_history_link_click": {
       "file": "gui.py",
-      "line": 897
+      "line": 991
     },
     "_show_image_popup": {
       "file": "gui.py",
-      "line": 917
+      "line": 1016
     },
     "open_topic_dialog": {
       "file": "gui.py",
-      "line": 970
+      "line": 1073
     },
     "open_memory_dialog": {
       "file": "gui.py",
-      "line": 975
+      "line": 1078
     },
     "open_config_dialog": {
       "file": "gui.py",
-      "line": 979
+      "line": 1082
     },
     "on_save": {
       "file": "gui.py",
-      "line": 982
+      "line": 1085
     },
     "_switch_display": {
       "file": "_gui/_renderer.py",
-      "line": 300
+      "line": 305
     },
     "_show_loading": {
       "file": "_gui/_renderer.py",
-      "line": 318
+      "line": 322
     },
     "_poll_loading_progress": {
       "file": "_gui/_renderer.py",
-      "line": 358
+      "line": 365
     },
     "scroll_to_bottom": {
       "file": "_gui/_renderer.py",
-      "line": 384
+      "line": 386
     },
     "_html_render": {
       "file": "_gui/_renderer.py",
-      "line": 56
+      "line": 54
     },
     "_render_chat": {
       "file": "_gui/_renderer.py",
-      "line": 101
+      "line": 87
     },
     "_render_and_show_chat": {
       "file": "_gui/_renderer.py",
-      "line": 126
+      "line": 116
     },
     "_render_loaded_topic": {
       "file": "_gui/_renderer.py",
-      "line": 173
+      "line": 164
     },
     "_render_round_view": {
       "file": "_gui/_renderer.py",
-      "line": 193
+      "line": 188
     },
     "_render_topic_error": {
       "file": "_gui/_renderer.py",
-      "line": 234
+      "line": 232
     },
     "_build_round_view_html": {
       "file": "_gui/_renderer.py",
-      "line": 242
+      "line": 244
     },
     "_filtered_messages": {
       "file": "_gui/_renderer.py",
-      "line": 389
+      "line": 390
     },
     "_group_into_rounds": {
       "file": "_gui/_renderer.py",
@@ -1298,87 +1314,87 @@
     },
     "_flush_stream_to_messages": {
       "file": "_gui/_renderer.py",
-      "line": 429
+      "line": 430
     },
     "_flush_think_buffer_to_messages": {
       "file": "_gui/_renderer.py",
-      "line": 450
+      "line": 449
     },
     "_toggle_raw_view": {
       "file": "_gui/_renderer.py",
-      "line": 410
+      "line": 414
     },
     "_show_raw_check_btn": {
       "file": "_gui/_renderer.py",
-      "line": 419
+      "line": 422
     },
     "_hide_raw_check_btn": {
       "file": "_gui/_renderer.py",
-      "line": 424
+      "line": 426
     },
     "_safe_destroy": {
       "file": "gui.py",
-      "line": 1156
+      "line": 1257
     },
     "build_tools": {
       "file": "session_tool_component.py",
-      "line": 32
+      "line": 42
     },
     "execute_tool_call": {
       "file": "session_tool_component.py",
-      "line": 43
+      "line": 58
     },
     "_record_tool_to_trace": {
       "file": "session_tool_component.py",
-      "line": 103
+      "line": 118
     },
     "collect_tool_call_round": {
       "file": "session_tool_component.py",
-      "line": 123
+      "line": 152
     },
     "collect_assistant_tool_calls_round": {
       "file": "session_tool_component.py",
-      "line": 131
+      "line": 166
     },
     "collect_assistant_text_round": {
       "file": "session_tool_component.py",
-      "line": 151
+      "line": 193
     },
     "collect_api_error_round": {
       "file": "session_tool_component.py",
-      "line": 161
+      "line": 209
     },
     "collect_max_iterations_round": {
       "file": "session_tool_component.py",
-      "line": 168
+      "line": 221
     },
     "collect_interruption_round": {
       "file": "session_tool_component.py",
-      "line": 175
+      "line": 233
     },
     "parse_tool_calls_from_stream": {
       "file": "session_tool_component.py",
-      "line": 182
+      "line": 245
     },
     "inject_memories": {
       "file": "session_memory_component.py",
-      "line": 61
+      "line": 71
     },
     "trigger_memory_extraction": {
       "file": "session_memory_component.py",
-      "line": 116
+      "line": 123
     },
     "_build_conversation_text": {
       "file": "session_memory_component.py",
-      "line": 209
+      "line": 207
     },
     "get_injected_memories": {
       "file": "session_memory_component.py",
-      "line": 218
+      "line": 224
     },
     "get_memory_stats": {
       "file": "store/_memories.py",
-      "line": 227
+      "line": 235
     },
     "setup_logging": {
       "file": "logging_setup.py",
@@ -1386,59 +1402,59 @@
     },
     "_set_root_level": {
       "file": "logging_setup.py",
-      "line": 78
+      "line": 73
     },
     "set_debug": {
       "file": "logging_setup.py",
-      "line": 84
+      "line": 87
     },
     "_probe_thinking_support": {
       "file": "session_api_component.py",
-      "line": 40
+      "line": 55
     },
     "_accumulate_usage": {
       "file": "session_api_component.py",
-      "line": 97
+      "line": 111
     },
     "_accumulate_cheap_usage": {
       "file": "session_api_component.py",
-      "line": 120
+      "line": 136
     },
     "_track_api_usage": {
       "file": "session_api_component.py",
-      "line": 142
+      "line": 161
     },
     "create_chat_stream": {
       "file": "session_api_component.py",
-      "line": 152
+      "line": 175
     },
     "call_summarize_api": {
       "file": "session_api_component.py",
-      "line": 218
+      "line": 233
     },
     "accumulate_tool_calls_from_delta": {
       "file": "session_api_component.py",
-      "line": 248
+      "line": 269
     },
     "reset_usage": {
       "file": "session_api_component.py",
-      "line": 274
+      "line": 298
     },
     "reset_cheap_usage": {
       "file": "session_api_component.py",
-      "line": 278
+      "line": 302
     },
     "get_last_usage": {
       "file": "session_api_component.py",
-      "line": 282
+      "line": 306
     },
     "get_cheap_usage": {
       "file": "session_api_component.py",
-      "line": 286
+      "line": 315
     },
     "get_total_usage": {
       "file": "session_api_component.py",
-      "line": 290
+      "line": 324
     },
     "_ensure_store": {
       "file": "project_memory.py",
@@ -1450,15 +1466,15 @@
     },
     "_write": {
       "file": "project_memory.py",
-      "line": 48
+      "line": 53
     },
     "add": {
       "file": "project_memory.py",
-      "line": 53
+      "line": 63
     },
     "get_all": {
       "file": "project_memory.py",
-      "line": 82
+      "line": 91
     },
     "_new_id": {
       "file": "store/_base.py",
@@ -1466,179 +1482,175 @@
     },
     "format_memories": {
       "file": "memory.py",
-      "line": 420
+      "line": 421
     },
     "get_session": {
       "file": "session_ref.py",
-      "line": 7
+      "line": 6
     },
     "set_session": {
       "file": "session_ref.py",
-      "line": 11
+      "line": 10
     },
     "get_agent": {
-      "file": "session_ref.py",
-      "line": 16
+      "file": "multi_agent/agent_pool.py",
+      "line": 485
     },
     "set_agent": {
       "file": "session_ref.py",
-      "line": 20
+      "line": 24
     },
     "meta_toolkit_save": {
       "file": "tlk.py",
-      "line": 21
+      "line": 17
     },
     "toolkit_save_impl": {
       "file": "tlk.py",
-      "line": 49
+      "line": 50
     },
     "call_tool": {
       "file": "tlk.py",
-      "line": 122
+      "line": 127
     },
     "_purge_cache": {
       "file": "tlk.py",
-      "line": 174
+      "line": 173
     },
     "_check_dependencies": {
       "file": "tlk.py",
-      "line": 183
+      "line": 182
     },
     "reload": {
       "file": "prompt_manager.py",
-      "line": 108
-    },
-    "check_meta": {
-      "file": "tlk.py",
-      "line": 250
+      "line": 120
     },
     "save": {
       "file": "tlk.py",
-      "line": 338
+      "line": 286
     },
     "rollback": {
       "file": "prompt_manager.py",
-      "line": 234
+      "line": 244
     },
     "list_versions": {
       "file": "prompt_manager.py",
-      "line": 264
+      "line": 274
     },
     "current_prompt": {
       "file": "prompt_manager.py",
-      "line": 92
+      "line": 89
     },
     "current_version": {
       "file": "prompt_manager.py",
-      "line": 99
+      "line": 101
     },
     "current_prompt_id": {
       "file": "prompt_manager.py",
-      "line": 104
+      "line": 111
     },
     "build_evolve_prompt": {
       "file": "prompt_manager.py",
-      "line": 117
+      "line": 134
     },
     "evolve": {
       "file": "prompt_manager.py",
-      "line": 169
+      "line": 183
     },
     "manual_set": {
       "file": "prompt_manager.py",
-      "line": 277
+      "line": 297
     },
     "select_memories": {
       "file": "memory.py",
-      "line": 58
+      "line": 51
     },
     "_pick_top_by_priority": {
       "file": "memory.py",
-      "line": 111
+      "line": 99
     },
     "_score_memory": {
       "file": "memory.py",
-      "line": 143
+      "line": 135
     },
     "_compute_relevance": {
       "file": "memory.py",
-      "line": 161
+      "line": 153
     },
     "_compute_recency": {
       "file": "memory.py",
-      "line": 210
+      "line": 212
     },
     "_touch_selected": {
       "file": "memory.py",
-      "line": 220
+      "line": 227
     },
     "degrade_by_age": {
       "file": "memory.py",
-      "line": 232
+      "line": 241
     },
     "llm_adjust_priorities": {
       "file": "memory.py",
-      "line": 303
+      "line": 311
     },
     "_prefix_for": {
       "file": "memory.py",
-      "line": 450
+      "line": 451
     },
     "build_extraction_prompt": {
       "file": "memory.py",
-      "line": 496
+      "line": 502
     },
     "parse_extraction_result": {
       "file": "memory.py",
-      "line": 504
+      "line": 518
     },
     "_compute_similarity": {
       "file": "memory.py",
-      "line": 525
+      "line": 542
     },
     "_merge_memory": {
       "file": "memory.py",
-      "line": 576
+      "line": 596
     },
     "ingest_extracted": {
       "file": "memory.py",
-      "line": 647
+      "line": 661
     },
     "is_extraction_needed": {
       "file": "memory.py",
-      "line": 709
+      "line": 719
     },
     "_read_multiline": {
       "file": "cli.py",
-      "line": 97
+      "line": 91
     },
     "_read_multiline_unix": {
       "file": "cli.py",
-      "line": 110
+      "line": 103
     },
     "_read_multiline_win32": {
       "file": "cli.py",
-      "line": 162
+      "line": 159
     },
     "_toggle_think": {
       "file": "cli.py",
-      "line": 239
+      "line": 248
     },
     "_toggle_verbose": {
       "file": "cli.py",
-      "line": 246
+      "line": 255
     },
     "_print_welcome": {
       "file": "cli.py",
-      "line": 385
+      "line": 401
     },
     "_print_help": {
       "file": "cli.py",
-      "line": 396
+      "line": 412
     },
     "_show_mode": {
       "file": "_gui/_renderer.py",
-      "line": 47
+      "line": 46
     },
     "_prepare": {
       "file": "_gui/_renderer.py",
@@ -1650,83 +1662,103 @@
     },
     "_worker": {
       "file": "_gui/_renderer.py",
-      "line": 224
+      "line": 223
+    },
+    "_parse_user_msg": {
+      "file": "_gui/_topic_manager.py",
+      "line": 19
+    },
+    "_build_header_items": {
+      "file": "_gui/_topic_manager.py",
+      "line": 37
+    },
+    "_build_tool_rounds": {
+      "file": "_gui/_topic_manager.py",
+      "line": 69
+    },
+    "_process_round": {
+      "file": "_gui/_topic_manager.py",
+      "line": 95
+    },
+    "_process_tool_call": {
+      "file": "_gui/_topic_manager.py",
+      "line": 120
     },
     "load_worker": {
       "file": "_gui/_topic_manager.py",
-      "line": 131
+      "line": 256
     },
     "fmt": {
       "file": "_gui/_topic_manager.py",
-      "line": 326
+      "line": 403
     },
     "update_status": {
       "file": "_gui/_stream_manager.py",
-      "line": 58
+      "line": 63
     },
     "handle_max_iter": {
       "file": "_gui/_stream_manager.py",
-      "line": 62
+      "line": 72
     },
     "stream_flush_tick": {
       "file": "_gui/_stream_manager.py",
-      "line": 135
+      "line": 162
     },
     "_is_scrolled_to_bottom": {
       "file": "_gui/_stream_manager.py",
-      "line": 164
+      "line": 186
     },
     "flush_stream_to_messages": {
       "file": "_gui/_stream_manager.py",
-      "line": 174
+      "line": 203
     },
     "_render_markdown": {
       "file": "_gui/_markdown.py",
-      "line": 67
+      "line": 66
     },
     "_fix_double_escape_in_code": {
       "file": "_gui/_markdown.py",
-      "line": 78
+      "line": 84
     },
     "_fix_code_block": {
       "file": "_gui/_markdown.py",
-      "line": 86
+      "line": 94
     },
     "_build_tool_blocks": {
       "file": "_gui/_markdown.py",
-      "line": 103
+      "line": 110
     },
     "_render_tool_group": {
       "file": "_gui/_markdown.py",
-      "line": 141
+      "line": 151
     },
     "_chat_to_markdown": {
       "file": "_gui/_markdown.py",
-      "line": 228
+      "line": 244
     },
     "_sanitize_html_control_chars": {
       "file": "_gui/_markdown.py",
-      "line": 296
+      "line": 316
     },
     "_escape_orphan_brackets": {
       "file": "_gui/_markdown.py",
-      "line": 313
+      "line": 330
     },
     "_validate_html_structure": {
       "file": "_gui/_markdown.py",
-      "line": 355
+      "line": 371
     },
     "handle_starttag": {
       "file": "_gui/_markdown.py",
-      "line": 377
+      "line": 399
     },
     "handle_endtag": {
       "file": "_gui/_markdown.py",
-      "line": 387
+      "line": 409
     },
     "get_result": {
       "file": "_gui/_markdown.py",
-      "line": 409
+      "line": 431
     },
     "build": {
       "file": "_gui/_ui_builder.py",
@@ -1738,139 +1770,143 @@
     },
     "_image_cache": {
       "file": "_gui/_images.py",
-      "line": 35
+      "line": 40
     },
     "attach": {
       "file": "_gui/_images.py",
-      "line": 41
+      "line": 50
     },
     "clear": {
       "file": "_gui/_images.py",
-      "line": 74
+      "line": 83
     },
     "show_popup": {
       "file": "_gui/_images.py",
-      "line": 81
+      "line": 89
     },
     "_generate_topic_summary": {
       "file": "_gui/_topic_summary.py",
-      "line": 15
+      "line": 14
     },
     "get_instance": {
       "file": "skills/__init__.py",
-      "line": 83
+      "line": 87
     },
     "reset_instance": {
       "file": "skills/__init__.py",
-      "line": 90
+      "line": 99
     },
     "discover_skills": {
       "file": "skills/__init__.py",
-      "line": 114
+      "line": 120
     },
     "_scan_directory": {
-      "file": "skills/__init__.py",
-      "line": 140
+      "file": "toolkit/tool_loader.py",
+      "line": 71
     },
     "_load_manifest": {
       "file": "skills/__init__.py",
-      "line": 168
+      "line": 177
     },
     "activate_skill": {
       "file": "skills/__init__.py",
-      "line": 180
+      "line": 196
     },
     "deactivate_skill": {
       "file": "skills/__init__.py",
-      "line": 189
+      "line": 213
     },
     "toggle_skill": {
       "file": "skills/__init__.py",
-      "line": 197
+      "line": 229
     },
     "activate_all": {
       "file": "skills/__init__.py",
-      "line": 204
+      "line": 244
     },
     "deactivate_all": {
       "file": "skills/__init__.py",
-      "line": 210
+      "line": 250
     },
     "is_tool_active": {
       "file": "skills/__init__.py",
-      "line": 218
+      "line": 257
     },
     "get_active_tool_names": {
       "file": "skills/__init__.py",
-      "line": 235
+      "line": 279
     },
     "get_active_tools_meta": {
       "file": "skills/__init__.py",
-      "line": 243
+      "line": 292
     },
     "get_active_prompt": {
       "file": "skills/__init__.py",
-      "line": 279
+      "line": 324
     },
     "get_skill_summary": {
       "file": "skills/__init__.py",
-      "line": 296
+      "line": 341
     },
     "auto_activate": {
       "file": "skills/__init__.py",
-      "line": 314
+      "line": 363
     },
     "list_skills": {
       "file": "skills/__init__.py",
-      "line": 352
+      "line": 399
     },
     "get_skill": {
       "file": "skills/__init__.py",
-      "line": 356
+      "line": 408
     },
     "get_active_skill_names": {
       "file": "skills/__init__.py",
-      "line": 364
+      "line": 416
     },
     "get_status": {
-      "file": "skills/__init__.py",
-      "line": 368
+      "file": "multi_agent/orchestrator.py",
+      "line": 754
+    },
+    "run_lsp_check": {
+      "file": "lsp/lsp_check.py",
+      "line": 16
     },
     "_get_jedi_project": {
       "file": "lsp/lsp_engine.py",
-      "line": 19
+      "line": 18
     },
     "_read_file_safe": {
       "file": "lsp/lsp_engine.py",
-      "line": 24
+      "line": 28
     },
     "diagnose": {
       "file": "lsp/lsp_engine.py",
-      "line": 32
+      "line": 44
     },
     "_fmt_diagnostic": {
       "file": "lsp/lsp_engine.py",
-      "line": 76
+      "line": 95
     },
     "completion": {
       "file": "lsp/lsp_engine.py",
-      "line": 85
+      "line": 112
     },
     "goto_definition": {
       "file": "lsp/lsp_engine.py",
-      "line": 115
+      "line": 153
     },
     "hover": {
       "file": "lsp/lsp_engine.py",
-      "line": 146
+      "line": 195
     },
     "references": {
       "file": "lsp/lsp_engine.py",
-      "line": 186
+      "line": 245
     },
     "collect_context": {
       "file": "lsp/lsp_engine.py",
-      "line": 217
+      "line": 287
     },
     "_ensure_ts": {
       "file": "lsp/ts_analyzer.py",
@@ -1896,153 +1932,241 @@
       "file": "lsp/ts_analyzer.py",
       "line": 104
     },
-    "_walk": {
+    "_handle_function_def": {
       "file": "lsp/ts_analyzer.py",
       "line": 129
+    },
+    "_handle_class_def": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 155
+    },
+    "_handle_import": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 198
+    },
+    "_walk": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 847
     },
     "_parse_file_ast_fallback": {
       "file": "lsp/ts_analyzer.py",
-      "line": 211
+      "line": 245
     },
     "impact_analysis": {
       "file": "lsp/ts_analyzer.py",
-      "line": 281
+      "line": 315
     },
     "build_dependency_graph": {
       "file": "lsp/ts_analyzer.py",
-      "line": 374
+      "line": 408
     },
     "_dfs": {
       "file": "lsp/ts_analyzer.py",
-      "line": 406
+      "line": 440
+    },
+    "_count_branches": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 479
+    },
+    "_cyclomatic_for_body": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 505
+    },
+    "_compute_fn_metrics": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 521
+    },
+    "_compute_metrics_ast_fallback": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 547
+    },
+    "_end_func": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 575
+    },
+    "visit_FunctionDef": {
+      "file": "toolkit/toolkit_explr.py",
+      "line": 150
+    },
+    "visit_AsyncFunctionDef": {
+      "file": "toolkit/toolkit_explr.py",
+      "line": 168
+    },
+    "visit_If": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 627
+    },
+    "visit_For": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 640
+    },
+    "visit_AsyncFor": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 650
+    },
+    "visit_While": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 660
+    },
+    "visit_Try": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 670
+    },
+    "visit_Match": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 682
+    },
+    "visit_IfExp": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 693
+    },
+    "visit_BoolOp": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 703
+    },
+    "visit_Call": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 768
+    },
+    "compute_metrics": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 818
+    },
+    "_walk2": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 910
+    },
+    "find_dead_code": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 974
     },
     "get_topic_summary": {
       "file": "store/_summaries.py",
-      "line": 15
+      "line": 14
     },
     "update_topic_summary": {
       "file": "store/_summaries.py",
-      "line": 27
+      "line": 26
     },
     "get_level2": {
       "file": "store/_summaries.py",
-      "line": 59
+      "line": 57
     },
     "set_level2": {
       "file": "store/_summaries.py",
-      "line": 76
+      "line": 74
     },
     "get_semantic_summary": {
       "file": "store/_summaries.py",
-      "line": 93
+      "line": 90
     },
     "set_semantic_summary": {
       "file": "store/_summaries.py",
-      "line": 105
+      "line": 102
     },
     "get_tool_chain_summary": {
       "file": "store/_summaries.py",
-      "line": 120
+      "line": 117
     },
     "set_tool_chain_summary": {
       "file": "store/_summaries.py",
-      "line": 132
+      "line": 129
     },
     "push_to_level2": {
       "file": "store/_summaries.py",
-      "line": 147
+      "line": 144
     },
     "get_l3_pending": {
       "file": "store/_summaries.py",
-      "line": 165
+      "line": 170
     },
     "push_l3_pending": {
       "file": "store/_summaries.py",
-      "line": 178
+      "line": 191
     },
     "clear_l3_pending": {
       "file": "store/_summaries.py",
-      "line": 190
+      "line": 209
     },
     "mark_as_summarized": {
       "file": "store/_summaries.py",
-      "line": 198
+      "line": 221
     },
     "get_unsummarized_conversations": {
       "file": "store/_summaries.py",
-      "line": 212
+      "line": 235
     },
     "save_msg": {
       "file": "store/_core.py",
-      "line": 82
+      "line": 83
     },
     "update_msg_rounds": {
       "file": "store/_conversations.py",
-      "line": 82
+      "line": 103
     },
     "save_agent_round": {
       "file": "store/_conversations.py",
-      "line": 103
+      "line": 124
     },
     "get_conversations": {
       "file": "store/_conversations.py",
-      "line": 127
+      "line": 148
     },
     "get_recent_conversations": {
       "file": "store/_conversations.py",
-      "line": 167
+      "line": 188
     },
     "get_agent_rounds": {
       "file": "store/_conversations.py",
-      "line": 183
+      "line": 204
     },
     "_auto_embed_async": {
       "file": "store/_conversations.py",
-      "line": 206
+      "line": 226
     },
     "_store_embedding_inline": {
       "file": "store/_conversations.py",
-      "line": 223
+      "line": 260
     },
     "add_memory": {
       "file": "store/_memories.py",
-      "line": 14
+      "line": 13
     },
     "_enforce_critical_limit": {
       "file": "store/_memories.py",
-      "line": 46
+      "line": 45
     },
     "update_memory": {
       "file": "store/_memories.py",
-      "line": 71
+      "line": 70
     },
     "deactivate_memory": {
       "file": "store/_memories.py",
-      "line": 108
+      "line": 106
     },
     "delete_memory": {
       "file": "store/_memories.py",
-      "line": 116
+      "line": 114
     },
     "get_active_memories": {
       "file": "store/_memories.py",
-      "line": 129
+      "line": 127
     },
     "get_instructions": {
       "file": "store/_memories.py",
-      "line": 146
+      "line": 144
     },
     "search_memories": {
       "file": "store/_memories.py",
-      "line": 158
+      "line": 161
     },
     "cleanup_expired_memories": {
       "file": "store/_memories.py",
-      "line": 201
+      "line": 204
     },
     "touch_memory": {
       "file": "store/_memories.py",
-      "line": 213
+      "line": 221
     },
     "add_reflection": {
       "file": "store/_reflections.py",
@@ -2070,19 +2194,19 @@
     },
     "get_system_prompt_history": {
       "file": "store/_prompts.py",
-      "line": 44
+      "line": 49
     },
     "deactivate_system_prompt": {
       "file": "store/_prompts.py",
-      "line": 59
+      "line": 64
     },
     "rollback_system_prompt": {
       "file": "store/_prompts.py",
-      "line": 72
+      "line": 77
     },
     "get_system_prompt_count": {
       "file": "store/_prompts.py",
-      "line": 86
+      "line": 91
     },
     "store_embedding": {
       "file": "store/_vectors.py",
@@ -2098,139 +2222,139 @@
     },
     "search_by_vector": {
       "file": "store/_vectors.py",
-      "line": 78
+      "line": 83
     },
     "search_by_keyword": {
       "file": "store/_vectors.py",
-      "line": 141
+      "line": 145
     },
     "get_vector_count": {
       "file": "store/_vectors.py",
-      "line": 170
+      "line": 174
     },
     "get_unvectorized_conversations": {
       "file": "store/_vectors.py",
-      "line": 178
+      "line": 187
     },
     "vectorize_conversation": {
       "file": "store/_vectors.py",
-      "line": 197
+      "line": 206
     },
     "batch_vectorize": {
       "file": "store/_vectors.py",
-      "line": 212
+      "line": 221
     },
     "delete_vector": {
       "file": "store/_vectors.py",
-      "line": 228
+      "line": 237
     },
     "parse_schedule": {
       "file": "toolkit/toolkit_scheduler.py",
-      "line": 71
+      "line": 53
     },
     "add_task": {
       "file": "store/_scheduled_tasks.py",
-      "line": 91
+      "line": 82
     },
     "update_task": {
       "file": "store/_scheduled_tasks.py",
-      "line": 110
+      "line": 112
     },
     "delete_task": {
       "file": "store/_scheduled_tasks.py",
-      "line": 132
+      "line": 143
     },
     "get_task": {
       "file": "store/_scheduled_tasks.py",
-      "line": 139
+      "line": 158
     },
     "list_tasks": {
       "file": "store/_scheduled_tasks.py",
-      "line": 146
+      "line": 173
     },
     "get_due_tasks": {
       "file": "store/_scheduled_tasks.py",
-      "line": 155
+      "line": 190
     },
     "mark_run": {
       "file": "store/_scheduled_tasks.py",
-      "line": 165
+      "line": 205
     },
     "_parse_cron": {
       "file": "toolkit/toolkit_scheduler.py",
-      "line": 139
+      "line": 121
     },
     "_match_cron_field": {
       "file": "store/_scheduled_tasks.py",
-      "line": 198
+      "line": 254
     },
     "__getattr__": {
       "file": "store/_core.py",
-      "line": 66
+      "line": 63
     },
     "_init_tables": {
       "file": "store/_core.py",
-      "line": 92
+      "line": 103
     },
     "_migrate": {
       "file": "store/_core.py",
-      "line": 265
+      "line": 263
     },
     "_migrate_int_to_uuid": {
       "file": "store/_core.py",
-      "line": 333
+      "line": 326
     },
     "_table_columns": {
       "file": "store/_core.py",
-      "line": 349
+      "line": 342
     },
     "_migrate_table": {
       "file": "store/_core.py",
-      "line": 358
+      "line": 351
     },
     "_migrate_msg_vectors": {
       "file": "store/_core.py",
-      "line": 484
+      "line": 475
     },
     "_get_week_key": {
       "file": "store/_core.py",
-      "line": 506
+      "line": 496
     },
     "_maybe_rotate_db": {
       "file": "store/_core.py",
-      "line": 510
+      "line": 500
     },
     "_write_week_key": {
       "file": "store/_core.py",
-      "line": 543
+      "line": 533
     },
     "_auto_backup": {
       "file": "store/_core.py",
-      "line": 555
+      "line": 544
     },
     "_cleanup_backups": {
       "file": "store/_core.py",
-      "line": 583
+      "line": 572
     },
     "backup_now": {
       "file": "store/_core.py",
-      "line": 605
+      "line": 594
     },
     "_meta_get": {
       "file": "store/_core.py",
-      "line": 612
+      "line": 600
     },
     "_meta_set": {
       "file": "store/_core.py",
-      "line": 625
+      "line": 613
     },
     "_protect_db": {
       "file": "store/_core.py",
-      "line": 642
+      "line": 629
     },
     "__del__": {
       "file": "store/_core.py",
-      "line": 672
+      "line": 658
     },
     "add_config_change": {
       "file": "store/_config.py",
@@ -2246,59 +2370,355 @@
     },
     "get_storage": {
       "file": "store/__init__.py",
-      "line": 24
+      "line": 23
     },
     "create_topic": {
       "file": "store/_topics.py",
-      "line": 14
+      "line": 13
     },
     "update_topic_title": {
       "file": "store/_topics.py",
-      "line": 27
+      "line": 26
     },
     "update_topic_active": {
       "file": "store/_topics.py",
-      "line": 46
+      "line": 45
     },
     "get_drift_count": {
       "file": "store/_topics.py",
-      "line": 60
+      "line": 59
     },
     "increment_drift_count": {
       "file": "store/_topics.py",
-      "line": 68
+      "line": 75
     },
     "delete_topic": {
       "file": "store/_topics.py",
-      "line": 79
+      "line": 94
     },
     "get_topic": {
       "file": "store/_topics.py",
-      "line": 98
+      "line": 113
     },
     "list_topics": {
       "file": "store/_topics.py",
-      "line": 110
+      "line": 125
     },
     "add_topic_tokens": {
       "file": "store/_topics.py",
-      "line": 127
+      "line": 146
     },
     "get_topic_tokens": {
       "file": "store/_topics.py",
+      "line": 195
+    },
+    "get_function_body_ranges": {
+      "file": "tools/refactor_comments.py",
+      "line": 21
+    },
+    "strip_inline_comments": {
+      "file": "tools/refactor_comments.py",
+      "line": 56
+    },
+    "generate_function_docstring": {
+      "file": "tools/refactor_comments.py",
+      "line": 110
+    },
+    "generate_class_docstring": {
+      "file": "tools/refactor_comments.py",
+      "line": 182
+    },
+    "has_docstring_node": {
+      "file": "tools/refactor_comments.py",
+      "line": 196
+    },
+    "get_existing_doc": {
+      "file": "tools/refactor_comments.py",
+      "line": 213
+    },
+    "looks_like_pydoc": {
+      "file": "tools/refactor_comments.py",
+      "line": 225
+    },
+    "format_docstring_block": {
+      "file": "tools/refactor_comments.py",
+      "line": 239
+    },
+    "insert_docstrings": {
+      "file": "tools/refactor_comments.py",
+      "line": 263
+    },
+    "visit_ClassDef": {
+      "file": "toolkit/toolkit_explr.py",
       "line": 176
+    },
+    "process_file": {
+      "file": "tools/refactor_comments.py",
+      "line": 348
+    },
+    "register_agent_type": {
+      "file": "multi_agent/orchestrator.py",
+      "line": 526
+    },
+    "create_agent": {
+      "file": "multi_agent/agent_pool.py",
+      "line": 411
+    },
+    "remove_agent": {
+      "file": "multi_agent/agent_pool.py",
+      "line": 489
+    },
+    "run_parallel": {
+      "file": "multi_agent/agent_pool.py",
+      "line": 499
+    },
+    "run_batch": {
+      "file": "multi_agent/agent_pool.py",
+      "line": 554
+    },
+    "active_agents": {
+      "file": "multi_agent/agent_pool.py",
+      "line": 571
+    },
+    "shutdown_all": {
+      "file": "multi_agent/agent_pool.py",
+      "line": 579
+    },
+    "register_template": {
+      "file": "multi_agent/agent_pool.py",
+      "line": 371
+    },
+    "templates": {
+      "file": "multi_agent/agent_pool.py",
+      "line": 576
+    },
+    "_import_lite_agent": {
+      "file": "multi_agent/agent_pool.py",
+      "line": 592
+    },
+    "decompose": {
+      "file": "multi_agent/task_decomposer.py",
+      "line": 138
+    },
+    "_decompose_with_llm": {
+      "file": "multi_agent/task_decomposer.py",
+      "line": 168
+    },
+    "_decompose_with_lite_agent": {
+      "file": "multi_agent/task_decomposer.py",
+      "line": 202
+    },
+    "_decompose_with_rules": {
+      "file": "multi_agent/task_decomposer.py",
+      "line": 233
+    },
+    "_next_id": {
+      "file": "multi_agent/task_decomposer.py",
+      "line": 249
+    },
+    "_extract_json_array": {
+      "file": "multi_agent/task_decomposer.py",
+      "line": 333
+    },
+    "get_execution_order": {
+      "file": "multi_agent/task_decomposer.py",
+      "line": 363
+    },
+    "aggregate": {
+      "file": "multi_agent/result_aggregator.py",
+      "line": 72
+    },
+    "_aggregate_with_llm": {
+      "file": "multi_agent/result_aggregator.py",
+      "line": 103
+    },
+    "_aggregate_simple": {
+      "file": "multi_agent/result_aggregator.py",
+      "line": 146
+    },
+    "_order_by_deps": {
+      "file": "multi_agent/result_aggregator.py",
+      "line": 182
+    },
+    "summarize_result": {
+      "file": "multi_agent/result_aggregator.py",
+      "line": 202
+    },
+    "merge_code_results": {
+      "file": "multi_agent/result_aggregator.py",
+      "line": 232
+    },
+    "_register_default_types": {
+      "file": "multi_agent/orchestrator.py",
+      "line": 120
+    },
+    "_assign_agents": {
+      "file": "multi_agent/orchestrator.py",
+      "line": 679
+    },
+    "execute_single": {
+      "file": "multi_agent/orchestrator.py",
+      "line": 730
+    },
+    "execute_manual": {
+      "file": "multi_agent/orchestrator.py",
+      "line": 734
+    },
+    "get_execution_history": {
+      "file": "multi_agent/orchestrator.py",
+      "line": 746
+    },
+    "clear_history": {
+      "file": "multi_agent/orchestrator.py",
+      "line": 750
+    },
+    "shutdown": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 381
+    },
+    "register": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 101
+    },
+    "unregister": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 106
+    },
+    "get_func": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 110
+    },
+    "get_openai_tools": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 114
+    },
+    "apply_filter": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 129
+    },
+    "tool_names": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 141
+    },
+    "__len__": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 144
+    },
+    "_load_config_yaml": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 256
+    },
+    "_parse_config_dict": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 273
+    },
+    "register_tool": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 310
+    },
+    "register_tools_from_module": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 321
+    },
+    "_get_filtered_tools": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 361
+    },
+    "_chat_loop": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 418
+    },
+    "_call_llm": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 506
+    },
+    "_execute_tool": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 603
+    },
+    "_build_messages": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 631
+    },
+    "_append_to_history": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 647
+    },
+    "_trim_history": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 652
+    },
+    "reset_history": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 658
+    },
+    "is_running": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 332
+    },
+    "history": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 676
+    },
+    "tools": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 680
+    },
+    "_resolve_effective_params": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 111
+    },
+    "_value": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 120
+    },
+    "_build_tool_list": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 224
+    },
+    "run_async": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 299
+    },
+    "wait": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 319
+    },
+    "is_done": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 342
+    },
+    "result": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 352
+    },
+    "error": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 362
+    },
+    "reset": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 371
     },
     "toolkit_exec": {
       "file": "toolkit/toolkit_exec.py",
-      "line": 8
+      "line": 6
     },
     "_sudo_with_gui": {
       "file": "toolkit/toolkit_exec.py",
-      "line": 172
+      "line": 151
     },
     "meta_toolkit_exec": {
       "file": "toolkit/toolkit_exec.py",
-      "line": 263
+      "line": 245
+    },
+    "check_meta": {
+      "file": "toolkit/tool_loader.py",
+      "line": 31
+    },
+    "reload_all": {
+      "file": "toolkit/tool_loader.py",
+      "line": 48
     },
     "toolkit_skill": {
       "file": "toolkit/toolkit_skill.py",
@@ -2310,11 +2730,23 @@
     },
     "toolkit_reflection": {
       "file": "toolkit/toolkit_reflection.py",
-      "line": 11
+      "line": 10
     },
     "meta_toolkit_reflection": {
       "file": "toolkit/toolkit_reflection.py",
-      "line": 75
+      "line": 73
+    },
+    "meta_toolkit_static": {
+      "file": "toolkit/toolkit_static.py",
+      "line": 16
+    },
+    "toolkit_static": {
+      "file": "toolkit/toolkit_static.py",
+      "line": 63
+    },
+    "_summary": {
+      "file": "toolkit/toolkit_static.py",
+      "line": 104
     },
     "toolkit_set_topic_title": {
       "file": "toolkit/toolkit_set_topic_title.py",
@@ -2322,187 +2754,163 @@
     },
     "meta_toolkit_set_topic_title": {
       "file": "toolkit/toolkit_set_topic_title.py",
-      "line": 60
+      "line": 58
+    },
+    "toolkit_sub_agent_report": {
+      "file": "toolkit/toolkit_sub_agent.py",
+      "line": 19
+    },
+    "toolkit_sub_agent_status": {
+      "file": "toolkit/toolkit_sub_agent.py",
+      "line": 53
+    },
+    "clear_sub_agent_reports": {
+      "file": "toolkit/toolkit_sub_agent.py",
+      "line": 86
+    },
+    "meta_toolkit_sub_agent_report": {
+      "file": "toolkit/toolkit_sub_agent.py",
+      "line": 102
+    },
+    "meta_toolkit_sub_agent_status": {
+      "file": "toolkit/toolkit_sub_agent.py",
+      "line": 140
     },
     "_get_db": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 12
+      "line": 17
     },
     "_get_topic_id": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 23
+      "line": 28
     },
     "_ensure_table": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 34
+      "line": 39
     },
     "_sync_to_db": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 54
+      "line": 64
     },
     "_sync_item": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 78
+      "line": 88
     },
     "_restore_from_db": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 98
+      "line": 114
     },
     "_auto_restore": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 133
+      "line": 149
+    },
+    "_todo_create": {
+      "file": "toolkit/toolkit_todo.py",
+      "line": 157
+    },
+    "_todo_check": {
+      "file": "toolkit/toolkit_todo.py",
+      "line": 175
+    },
+    "_todo_show": {
+      "file": "toolkit/toolkit_todo.py",
+      "line": 194
+    },
+    "_todo_clear": {
+      "file": "toolkit/toolkit_todo.py",
+      "line": 208
+    },
+    "_todo_restore": {
+      "file": "toolkit/toolkit_todo.py",
+      "line": 227
     },
     "toolkit_todo": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 140
+      "line": 233
     },
     "_done": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 251
+      "line": 286
     },
     "_fmt": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 255
+      "line": 290
     },
     "_plan_create": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 271
+      "line": 302
     },
     "_plan_show": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 281
+      "line": 317
     },
     "_plan_step": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 286
+      "line": 328
     },
     "_plan_run": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 292
+      "line": 340
     },
     "_plan_resume": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 298
+      "line": 352
     },
     "_plan_verify": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 304
+      "line": 364
     },
     "_plan_list": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 317
+      "line": 382
     },
     "_plan_delete": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 320
+      "line": 386
     },
     "_plan_create_inner": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 325
+      "line": 397
     },
     "_plan_show_inner": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 328
+      "line": 407
     },
     "_plan_list_inner": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 331
+      "line": 416
     },
     "meta_toolkit_todo": {
       "file": "toolkit/toolkit_todo.py",
-      "line": 338
-    },
-    "_ensure_plans_dir": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 394
-    },
-    "_plan_path": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 398
-    },
-    "_load_plan": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 406
-    },
-    "_save_plan": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 418
-    },
-    "_new_plan": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 431
-    },
-    "_deps_satisfied": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 471
-    },
-    "_next_pending": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 484
-    },
-    "_count_status": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 495
-    },
-    "toolkit_plan": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 506
-    },
-    "_do_step": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 584
-    },
-    "_do_verify": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 616
-    },
-    "_do_run": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 637
-    },
-    "_do_resume": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 667
-    },
-    "_step_summary": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 688
-    },
-    "_execute_step": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 697
-    },
-    "_verify_step": {
-      "file": "toolkit/toolkit_todo.py",
-      "line": 761
+      "line": 424
     },
     "_get_exp_path": {
       "file": "toolkit/toolkit_evolution_exp.py",
-      "line": 21
+      "line": 19
     },
     "_load_exp_db": {
       "file": "toolkit/toolkit_evolution_exp.py",
-      "line": 25
+      "line": 23
     },
     "_save_exp_db": {
       "file": "toolkit/toolkit_evolution_exp.py",
-      "line": 33
+      "line": 31
     },
     "toolkit_evolution_exp": {
       "file": "toolkit/toolkit_evolution_exp.py",
-      "line": 44
+      "line": 42
     },
     "meta_toolkit_evolution_exp": {
       "file": "toolkit/toolkit_evolution_exp.py",
-      "line": 106
+      "line": 109
     },
     "toolkit_prompt_evolve": {
       "file": "toolkit/toolkit_prompt_evolve.py",
-      "line": 10
+      "line": 9
     },
     "meta_toolkit_prompt_evolve": {
       "file": "toolkit/toolkit_prompt_evolve.py",
-      "line": 97
+      "line": 95
     },
     "toolkit_self_evolve": {
       "file": "toolkit/toolkit_self_evolve.py",
@@ -2510,11 +2918,11 @@
     },
     "_git_clean": {
       "file": "toolkit/toolkit_self_evolve.py",
-      "line": 54
+      "line": 50
     },
     "_git_snap": {
       "file": "toolkit/toolkit_self_evolve.py",
-      "line": 67
+      "line": 62
     },
     "_git_revert": {
       "file": "toolkit/toolkit_self_evolve.py",
@@ -2524,105 +2932,209 @@
       "file": "toolkit/toolkit_self_evolve.py",
       "line": 90
     },
-    "_run_lsp_checks": {
-      "file": "toolkit/toolkit_self_evolve.py",
-      "line": 115
-    },
     "meta_toolkit_self_evolve": {
       "file": "toolkit/toolkit_self_evolve.py",
-      "line": 298
+      "line": 227
     },
     "toolkit_scheduler": {
       "file": "toolkit/toolkit_scheduler.py",
-      "line": 7
+      "line": 5
     },
     "_get_conn": {
       "file": "toolkit/toolkit_scheduler.py",
-      "line": 46
+      "line": 29
     },
     "_match_cron": {
       "file": "toolkit/toolkit_scheduler.py",
-      "line": 114
+      "line": 96
     },
     "_execute_task": {
       "file": "toolkit/toolkit_scheduler.py",
-      "line": 178
+      "line": 163
     },
     "_scheduler_loop": {
       "file": "toolkit/toolkit_scheduler.py",
-      "line": 197
+      "line": 186
     },
     "_format_next": {
       "file": "toolkit/toolkit_scheduler.py",
-      "line": 403
+      "line": 386
     },
     "meta_toolkit_scheduler": {
       "file": "toolkit/toolkit_scheduler.py",
-      "line": 428
+      "line": 419
+    },
+    "meta_toolkit_plan": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 15
+    },
+    "_ensure_plans_dir": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 39
+    },
+    "_plan_path": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 43
+    },
+    "_load_plan": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 51
+    },
+    "_save_plan": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 63
+    },
+    "_new_plan": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 76
+    },
+    "_deps_satisfied": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 114
+    },
+    "_next_pending": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 127
+    },
+    "_count_status": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 138
+    },
+    "toolkit_plan": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 148
+    },
+    "_do_step": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 237
+    },
+    "_do_verify": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 269
+    },
+    "_do_run": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 290
+    },
+    "_do_resume": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 320
+    },
+    "_step_summary": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 340
+    },
+    "_execute_step": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 349
+    },
+    "_verify_step": {
+      "file": "toolkit/toolkit_plan.py",
+      "line": 418
     },
     "toolkit_kb": {
       "file": "toolkit/toolkit_kb.py",
-      "line": 11
+      "line": 8
     },
     "sanitize": {
       "file": "toolkit/toolkit_kb.py",
-      "line": 38
+      "line": 35
     },
     "_meta": {
       "file": "toolkit/toolkit_kb.py",
-      "line": 48
+      "line": 45
     },
     "rebuild_index": {
       "file": "toolkit/toolkit_kb.py",
-      "line": 58
+      "line": 55
     },
     "meta_toolkit_kb": {
       "file": "toolkit/toolkit_kb.py",
-      "line": 193
+      "line": 194
     },
     "toolkit_pkg": {
       "file": "toolkit/toolkit_pkg.py",
-      "line": 8
+      "line": 6
     },
     "_pip_install": {
       "file": "toolkit/toolkit_pkg.py",
-      "line": 17
+      "line": 19
     },
     "_check_module": {
       "file": "toolkit/toolkit_pkg.py",
-      "line": 25
+      "line": 32
     },
     "_get_version": {
       "file": "toolkit/toolkit_pkg.py",
-      "line": 33
+      "line": 45
     },
     "_list_installed": {
       "file": "toolkit/toolkit_pkg.py",
-      "line": 51
+      "line": 67
     },
     "meta_toolkit_pkg": {
       "file": "toolkit/toolkit_pkg.py",
-      "line": 148
+      "line": 161
+    },
+    "_generate_unified_diff": {
+      "file": "toolkit/toolkit_diff.py",
+      "line": 12
+    },
+    "_git_stash_push": {
+      "file": "toolkit/toolkit_diff.py",
+      "line": 31
+    },
+    "_git_stash_pop": {
+      "file": "toolkit/toolkit_diff.py",
+      "line": 49
+    },
+    "_git_stash_drop": {
+      "file": "toolkit/toolkit_diff.py",
+      "line": 65
+    },
+    "_check_conflict": {
+      "file": "toolkit/toolkit_diff.py",
+      "line": 82
+    },
+    "_verify_all": {
+      "file": "toolkit/toolkit_diff.py",
+      "line": 106
+    },
+    "_apply_one": {
+      "file": "toolkit/toolkit_diff.py",
+      "line": 161
+    },
+    "_toolkit_diff_impl": {
+      "file": "toolkit/toolkit_diff.py",
+      "line": 202
+    },
+    "toolkit_diff": {
+      "file": "toolkit/toolkit_diff.py",
+      "line": 379
+    },
+    "meta_toolkit_diff": {
+      "file": "toolkit/toolkit_diff.py",
+      "line": 405
     },
     "toolkit_search": {
       "file": "toolkit/toolkit_search.py",
-      "line": 7
+      "line": 6
     },
     "_search_duckduckgo": {
       "file": "toolkit/toolkit_search.py",
-      "line": 46
+      "line": 45
     },
     "_search_baidu": {
       "file": "toolkit/toolkit_search.py",
-      "line": 123
+      "line": 122
     },
     "meta_toolkit_search": {
       "file": "toolkit/toolkit_search.py",
-      "line": 230
+      "line": 221
     },
     "_search_codebase": {
       "file": "toolkit/toolkit_search.py",
-      "line": 234
+      "line": 230
     },
     "_search_codebase_python": {
       "file": "toolkit/toolkit_search.py",
@@ -2630,11 +3142,11 @@
     },
     "_search_symbol": {
       "file": "toolkit/toolkit_search.py",
-      "line": 350
+      "line": 357
     },
     "_extract_args": {
       "file": "toolkit/toolkit_search.py",
-      "line": 415
+      "line": 426
     },
     "toolkit_git_push_all_remotes": {
       "file": "toolkit/toolkit_git_push_all_remotes.py",
@@ -2642,23 +3154,23 @@
     },
     "meta_toolkit_git_push_all_remotes": {
       "file": "toolkit/toolkit_git_push_all_remotes.py",
-      "line": 31
+      "line": 36
     },
     "toolkit_notify": {
       "file": "toolkit/toolkit_notify.py",
-      "line": 7
+      "line": 6
     },
     "meta_toolkit_notify": {
       "file": "toolkit/toolkit_notify.py",
-      "line": 122
+      "line": 114
     },
     "toolkit_date_diff": {
       "file": "toolkit/toolkit_date_diff.py",
-      "line": 7
+      "line": 6
     },
     "meta_toolkit_date_diff": {
       "file": "toolkit/toolkit_date_diff.py",
-      "line": 61
+      "line": 55
     },
     "_cached_os_info": {
       "file": "toolkit/toolkit_os_info.py",
@@ -2670,7 +3182,7 @@
     },
     "meta_toolkit_os_info": {
       "file": "toolkit/toolkit_os_info.py",
-      "line": 28
+      "line": 33
     },
     "toolkit_lsp": {
       "file": "toolkit/toolkit_lsp.py",
@@ -2682,195 +3194,179 @@
     },
     "_solar_days_in_year": {
       "file": "toolkit/toolkit_lunar.py",
-      "line": 63
+      "line": 53
     },
     "_solar_days_in_month": {
       "file": "toolkit/toolkit_lunar.py",
-      "line": 71
+      "line": 61
     },
     "_offset_from_base": {
       "file": "toolkit/toolkit_lunar.py",
-      "line": 82
+      "line": 72
     },
     "_lunar_year_info": {
       "file": "toolkit/toolkit_lunar.py",
-      "line": 91
+      "line": 88
     },
     "_leap_month": {
       "file": "toolkit/toolkit_lunar.py",
-      "line": 99
+      "line": 96
     },
     "_leap_days": {
       "file": "toolkit/toolkit_lunar.py",
-      "line": 107
+      "line": 104
     },
     "_month_days": {
       "file": "toolkit/toolkit_lunar.py",
-      "line": 115
+      "line": 112
     },
     "_lunar_year_total_days": {
       "file": "toolkit/toolkit_lunar.py",
-      "line": 119
+      "line": 122
     },
     "_solar_to_lunar": {
       "file": "toolkit/toolkit_lunar.py",
-      "line": 129
+      "line": 137
     },
     "toolkit_lunar": {
       "file": "toolkit/toolkit_lunar.py",
-      "line": 188
+      "line": 196
     },
     "_solar_terms": {
       "file": "toolkit/toolkit_lunar.py",
-      "line": 292
+      "line": 299
     },
     "meta_toolkit_lunar": {
       "file": "toolkit/toolkit_lunar.py",
-      "line": 313
+      "line": 325
     },
     "toolkit_toggle_reasoning": {
       "file": "toolkit/toolkit_toggle_reasoning.py",
-      "line": 6
+      "line": 5
     },
     "meta_toolkit_toggle_reasoning": {
       "file": "toolkit/toolkit_toggle_reasoning.py",
-      "line": 32
+      "line": 31
     },
     "toolkit_edit": {
       "file": "toolkit/toolkit_edit.py",
-      "line": 12
+      "line": 16
     },
     "_apply_patch": {
       "file": "toolkit/toolkit_edit.py",
-      "line": 78
+      "line": 79
     },
     "_apply_patch_python": {
       "file": "toolkit/toolkit_edit.py",
-      "line": 135
+      "line": 129
     },
     "_insert_lines": {
       "file": "toolkit/toolkit_edit.py",
-      "line": 241
+      "line": 243
     },
     "_delete_lines": {
       "file": "toolkit/toolkit_edit.py",
-      "line": 298
+      "line": 299
     },
     "_replace_lines": {
       "file": "toolkit/toolkit_edit.py",
-      "line": 340
+      "line": 345
     },
     "_preview_patch": {
       "file": "toolkit/toolkit_edit.py",
-      "line": 385
-    },
-    "_generate_diff": {
-      "file": "toolkit/toolkit_edit.py",
-      "line": 389
-    },
-    "_generate_unified_diff": {
-      "file": "toolkit/toolkit_edit.py",
-      "line": 401
-    },
-    "_git_stash_push": {
-      "file": "toolkit/toolkit_edit.py",
-      "line": 411
-    },
-    "_git_stash_pop": {
-      "file": "toolkit/toolkit_edit.py",
-      "line": 421
-    },
-    "_git_stash_drop": {
-      "file": "toolkit/toolkit_edit.py",
-      "line": 429
-    },
-    "_check_conflict": {
-      "file": "toolkit/toolkit_edit.py",
-      "line": 439
-    },
-    "_verify_all": {
-      "file": "toolkit/toolkit_edit.py",
-      "line": 454
-    },
-    "_apply_one": {
-      "file": "toolkit/toolkit_edit.py",
-      "line": 504
-    },
-    "_toolkit_diff_impl": {
-      "file": "toolkit/toolkit_edit.py",
-      "line": 540
+      "line": 400
     },
     "meta_toolkit_edit": {
       "file": "toolkit/toolkit_edit.py",
-      "line": 701
+      "line": 410
     },
     "toolkit_proactive": {
       "file": "toolkit/toolkit_proactive.py",
-      "line": 10
+      "line": 7
     },
     "_get_memory_manager": {
       "file": "toolkit/toolkit_mode.py",
-      "line": 108
+      "line": 98
     },
     "_check_proactive": {
       "file": "toolkit/toolkit_proactive.py",
-      "line": 37
+      "line": 42
     },
     "_add_goal": {
       "file": "toolkit/toolkit_proactive.py",
-      "line": 86
+      "line": 91
     },
     "_complete_goal": {
       "file": "toolkit/toolkit_proactive.py",
-      "line": 111
+      "line": 115
     },
     "_list_goals": {
       "file": "toolkit/toolkit_proactive.py",
-      "line": 127
+      "line": 131
     },
     "meta_toolkit_proactive": {
       "file": "toolkit/toolkit_proactive.py",
-      "line": 154
+      "line": 163
+    },
+    "_m_add": {
+      "file": "toolkit/toolkit_memory.py",
+      "line": 11
+    },
+    "_m_list": {
+      "file": "toolkit/toolkit_memory.py",
+      "line": 43
+    },
+    "_m_search": {
+      "file": "toolkit/toolkit_memory.py",
+      "line": 71
+    },
+    "_m_forget": {
+      "file": "toolkit/toolkit_memory.py",
+      "line": 100
+    },
+    "_m_extract": {
+      "file": "toolkit/toolkit_memory.py",
+      "line": 122
     },
     "toolkit_memory": {
       "file": "toolkit/toolkit_memory.py",
-      "line": 8
+      "line": 157
     },
     "meta_toolkit_memory": {
       "file": "toolkit/toolkit_memory.py",
-      "line": 132
+      "line": 205
     },
     "toolkit_release": {
       "file": "toolkit/toolkit_release.py",
-      "line": 23
+      "line": 22
     },
     "_do_bump": {
       "file": "toolkit/toolkit_release.py",
-      "line": 53
+      "line": 68
     },
     "_do_build": {
       "file": "toolkit/toolkit_release.py",
-      "line": 93
+      "line": 115
     },
     "_do_fix": {
       "file": "toolkit/toolkit_release.py",
-      "line": 122
+      "line": 149
     },
     "_do_release": {
       "file": "toolkit/toolkit_release.py",
-      "line": 163
+      "line": 195
     },
     "meta_toolkit_release": {
       "file": "toolkit/toolkit_release.py",
-      "line": 220
+      "line": 258
     },
     "toolkit_self_report": {
       "file": "toolkit/toolkit_self_report.py",
-      "line": 7
+      "line": 6
     },
     "meta_toolkit_self_report": {
       "file": "toolkit/toolkit_self_report.py",
-      "line": 73
+      "line": 70
     },
     "toolkit_read_pyproject": {
       "file": "toolkit/toolkit_read_pyproject.py",
@@ -2878,287 +3374,327 @@
     },
     "meta_toolkit_read_pyproject": {
       "file": "toolkit/toolkit_read_pyproject.py",
-      "line": 61
+      "line": 59
     },
     "toolkit_run_tests": {
       "file": "toolkit/toolkit_run_tests.py",
-      "line": 6
+      "line": 5
     },
     "meta_toolkit_run_tests": {
       "file": "toolkit/toolkit_run_tests.py",
-      "line": 61
+      "line": 60
     },
     "toolkit_test_gui": {
       "file": "toolkit/toolkit_test_gui.py",
-      "line": 13
+      "line": 11
     },
     "meta_toolkit_test_gui": {
       "file": "toolkit/toolkit_test_gui.py",
-      "line": 126
+      "line": 115
     },
     "toolkit_mcp": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 7
+      "line": 6
     },
     "_mcp_get_or_create_loop": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 55
+      "line": 43
     },
     "_run_loop": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 68
+      "line": 55
     },
     "_mcp_run_async": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 77
+      "line": 64
     },
     "_mcp_connect": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 93
+      "line": 86
     },
     "_connect_and_keepalive": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 109
+      "line": 111
     },
     "_mcp_list_tools": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 199
+      "line": 193
     },
     "_list": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 210
+      "line": 209
     },
     "_mcp_call": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 237
+      "line": 236
     },
     "_call": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 251
+      "line": 257
     },
     "_mcp_disconnect": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 280
+      "line": 285
     },
     "_set_and_del": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 306
+      "line": 315
     },
     "_mcp_status": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 313
+      "line": 321
     },
     "meta_toolkit_mcp": {
       "file": "toolkit/toolkit_mcp.py",
-      "line": 334
+      "line": 342
     },
     "toolkit_config": {
       "file": "toolkit/toolkit_config.py",
-      "line": 10
+      "line": 9
     },
     "meta_toolkit_config": {
       "file": "toolkit/toolkit_config.py",
-      "line": 101
+      "line": 97
     },
     "toolkit_subconscious": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 8
+      "line": 6
     },
     "_is_tea_agent_cwd": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 33
+      "line": 31
     },
     "_ensure_dir": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 56
+      "line": 54
     },
     "_read_state": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 64
+      "line": 62
     },
     "_write_state": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 76
+      "line": 74
+    },
+    "_has_conversations": {
+      "file": "toolkit/toolkit_subconscious.py",
+      "line": 85
     },
     "_get_db_path": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 87
+      "line": 103
     },
     "_is_jieba_available": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 117
+      "line": 133
     },
     "_digest_memories": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 122
+      "line": 137
     },
     "_detect_focus": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 155
+      "line": 168
     },
     "_digest_conversations": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 181
+      "line": 196
     },
     "_extract_memory_candidates": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 229
+      "line": 246
     },
     "_is_duplicate_memory": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 264
+      "line": 322
+    },
+    "_detect_stagnation": {
+      "file": "toolkit/toolkit_subconscious.py",
+      "line": 337
+    },
+    "_synthesize_memories": {
+      "file": "toolkit/toolkit_subconscious.py",
+      "line": 367
     },
     "_cross_link": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 280
+      "line": 463
     },
     "_generate_insights": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 355
+      "line": 535
     },
     "_set_goals": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 458
+      "line": 651
     },
     "_send_notification": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 491
+      "line": 693
     },
     "_linux_notify_fallback": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 526
+      "line": 733
     },
     "_send_cycle_summary": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 591
+      "line": 798
     },
     "_run_cycle": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 627
+      "line": 839
     },
     "_subconscious_loop": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 690
+      "line": 932
     },
     "_dream": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 730
+      "line": 968
     },
     "_pragmatic_analysis": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 791
+      "line": 1023
     },
     "_creative_dream": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 866
+      "line": 1099
     },
     "_reverse_thinking": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 906
+      "line": 1144
     },
     "_extreme_scenario": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 922
+      "line": 1160
     },
     "meta_toolkit_subconscious": {
       "file": "toolkit/toolkit_subconscious.py",
-      "line": 1001
+      "line": 1240
     },
     "toolkit_mode": {
       "file": "toolkit/toolkit_mode.py",
-      "line": 10
+      "line": 7
     },
     "_detect_mode": {
       "file": "toolkit/toolkit_mode.py",
-      "line": 80
+      "line": 70
     },
     "_get_existing_mode_memory": {
       "file": "toolkit/toolkit_mode.py",
-      "line": 121
+      "line": 111
     },
     "_set_mode": {
       "file": "toolkit/toolkit_mode.py",
-      "line": 134
+      "line": 124
     },
     "_current_mode": {
       "file": "toolkit/toolkit_mode.py",
-      "line": 154
+      "line": 144
     },
     "meta_toolkit_mode": {
       "file": "toolkit/toolkit_mode.py",
-      "line": 230
+      "line": 224
     },
     "toolkit_gettime": {
       "file": "toolkit/toolkit_gettime.py",
-      "line": 7
+      "line": 6
     },
     "meta_toolkit_gettime": {
       "file": "toolkit/toolkit_gettime.py",
+      "line": 25
+    },
+    "set_orchestrator": {
+      "file": "toolkit/toolkit_delegate.py",
       "line": 21
+    },
+    "get_orchestrator": {
+      "file": "toolkit/toolkit_delegate.py",
+      "line": 34
+    },
+    "toolkit_delegate": {
+      "file": "toolkit/toolkit_delegate.py",
+      "line": 44
+    },
+    "meta_toolkit_delegate": {
+      "file": "toolkit/toolkit_delegate.py",
+      "line": 100
     },
     "_log": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 54
+      "line": 50
     },
     "_build_ctags": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 62
+      "line": 58
     },
     "_build_call_graph": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 120
-    },
-    "visit_FunctionDef": {
-      "file": "toolkit/toolkit_explr.py",
-      "line": 143
-    },
-    "visit_AsyncFunctionDef": {
-      "file": "toolkit/toolkit_explr.py",
-      "line": 161
-    },
-    "visit_ClassDef": {
-      "file": "toolkit/toolkit_explr.py",
-      "line": 169
+      "line": 122
     },
     "_build_dot_flow": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 183
+      "line": 190
     },
     "_build_kb_md": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 222
+      "line": 236
     },
     "_action_build": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 321
+      "line": 345
     },
     "_action_query": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 379
+      "line": 403
     },
     "_action_status": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 478
+      "line": 502
     },
     "_extract_arch_context": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 513
+      "line": 537
     },
     "_action_impact": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 562
+      "line": 589
     },
     "_action_deps": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 634
+      "line": 661
     },
     "toolkit_explr": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 688
+      "line": 719
     },
     "meta_toolkit_explr": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 717
+      "line": 747
+    },
+    "toolkit_quality_gate": {
+      "file": "toolkit/toolkit_quality_gate.py",
+      "line": 14
+    },
+    "_run_gating": {
+      "file": "toolkit/toolkit_quality_gate.py",
+      "line": 51
+    },
+    "_check_item_rules": {
+      "file": "toolkit/toolkit_quality_gate.py",
+      "line": 114
+    },
+    "_make_global_violation": {
+      "file": "toolkit/toolkit_quality_gate.py",
+      "line": 144
+    },
+    "_run_report": {
+      "file": "toolkit/toolkit_quality_gate.py",
+      "line": 162
+    },
+    "meta_toolkit_quality_gate": {
+      "file": "toolkit/toolkit_quality_gate.py",
+      "line": 236
     },
     "toolkit_dump_topic": {
       "file": "toolkit/toolkit_dump_topic.py",
@@ -3166,19 +3702,19 @@
     },
     "meta_toolkit_dump_topic": {
       "file": "toolkit/toolkit_dump_topic.py",
-      "line": 111
+      "line": 109
     },
     "toolkit_file": {
       "file": "toolkit/toolkit_file.py",
-      "line": 8
+      "line": 6
     },
     "scan_dir": {
       "file": "toolkit/toolkit_file.py",
-      "line": 56
+      "line": 58
     },
     "meta_toolkit_file": {
       "file": "toolkit/toolkit_file.py",
-      "line": 85
+      "line": 87
     }
   },
   "classes": {
@@ -3192,39 +3728,39 @@
     },
     "SessionComponent": {
       "file": "session_context.py",
-      "line": 79
+      "line": 72
     },
     "TeaCLI": {
       "file": "cli.py",
-      "line": 32
+      "line": 30
     },
     "DbMerger": {
       "file": "merge_db.py",
-      "line": 71
+      "line": 81
     },
     "MemoryDialog": {
       "file": "gui_dialogs.py",
-      "line": 71
+      "line": 68
     },
     "TopicDialog": {
       "file": "gui_dialogs.py",
-      "line": 377
+      "line": 367
     },
     "ConfigDialog": {
       "file": "gui_dialogs.py",
-      "line": 958
+      "line": 933
     },
     "ToolCallRecord": {
       "file": "reflection.py",
-      "line": 22
+      "line": 21
     },
     "SessionTrace": {
       "file": "reflection.py",
-      "line": 30
+      "line": 29
     },
     "ReflectionManager": {
       "file": "reflection.py",
-      "line": 55
+      "line": 64
     },
     "ModelConfig": {
       "file": "config.py",
@@ -3232,31 +3768,39 @@
     },
     "PathsConfig": {
       "file": "config.py",
-      "line": 45
+      "line": 50
     },
     "EmbeddingConfig": {
       "file": "config.py",
-      "line": 131
+      "line": 158
+    },
+    "SubAgentDef": {
+      "file": "config.py",
+      "line": 181
+    },
+    "MultiAgentConfig": {
+      "file": "config.py",
+      "line": 231
     },
     "AgentConfig": {
       "file": "config.py",
-      "line": 149
+      "line": 274
     },
     "OnlineToolSession": {
       "file": "onlinesession.py",
-      "line": 37
+      "line": 36
     },
     "_SimpleTFIDF": {
       "file": "embedding_util.py",
-      "line": 35
+      "line": 31
     },
     "EmbeddingEngine": {
       "file": "embedding_util.py",
-      "line": 97
+      "line": 118
     },
     "SummarizerComponent": {
       "file": "session_summarizer_component.py",
-      "line": 31
+      "line": 36
     },
     "BaseChatSession": {
       "file": "basesession.py",
@@ -3264,15 +3808,15 @@
     },
     "_TUIAgentCore": {
       "file": "tui.py",
-      "line": 42
+      "line": 41
     },
     "TeaTUI": {
       "file": "tui.py",
-      "line": 188
+      "line": 215
     },
     "_SendTextArea": {
       "file": "tui.py",
-      "line": 281
+      "line": 316
     },
     "PipelineStep": {
       "file": "session_pipeline.py",
@@ -3288,11 +3832,11 @@
     },
     "StatusNotifierItemDBus": {
       "file": "gui.py",
-      "line": 117
+      "line": 110
     },
     "TkGUI": {
       "file": "gui.py",
-      "line": 215
+      "line": 206
     },
     "ToolComponent": {
       "file": "session_tool_component.py",
@@ -3304,7 +3848,7 @@
     },
     "APIComponent": {
       "file": "session_api_component.py",
-      "line": 24
+      "line": 29
     },
     "ProjectMemoryManager": {
       "file": "project_memory.py",
@@ -3312,15 +3856,15 @@
     },
     "Toolkit": {
       "file": "tlk.py",
-      "line": 78
+      "line": 89
     },
     "SystemPromptManager": {
       "file": "prompt_manager.py",
-      "line": 30
+      "line": 28
     },
     "MemoryManager": {
       "file": "memory.py",
-      "line": 40
+      "line": 36
     },
     "ChatRenderer": {
       "file": "_gui/_renderer.py",
@@ -3328,7 +3872,7 @@
     },
     "TopicManager": {
       "file": "_gui/_topic_manager.py",
-      "line": 17
+      "line": 149
     },
     "StreamManager": {
       "file": "_gui/_stream_manager.py",
@@ -3336,7 +3880,7 @@
     },
     "_TagChecker": {
       "file": "_gui/_markdown.py",
-      "line": 366
+      "line": 388
     },
     "UIBuilder": {
       "file": "_gui/_ui_builder.py",
@@ -3352,11 +3896,23 @@
     },
     "Skill": {
       "file": "skills/__init__.py",
-      "line": 34
+      "line": 33
     },
     "SkillManager": {
       "file": "skills/__init__.py",
-      "line": 68
+      "line": 72
+    },
+    "_MetricsVisitor": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 566
+    },
+    "_CallCollector": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 750
+    },
+    "_Inner": {
+      "file": "lsp/ts_analyzer.py",
+      "line": 766
     },
     "SummaryStore": {
       "file": "store/_summaries.py",
@@ -3364,7 +3920,7 @@
     },
     "ConversationStore": {
       "file": "store/_conversations.py",
-      "line": 13
+      "line": 14
     },
     "StoreComponent": {
       "file": "store/_base.py",
@@ -3388,7 +3944,7 @@
     },
     "ScheduledTaskStore": {
       "file": "store/_scheduled_tasks.py",
-      "line": 13
+      "line": 12
     },
     "Storage": {
       "file": "store/_core.py",
@@ -3402,30 +3958,79 @@
       "file": "store/_topics.py",
       "line": 9
     },
+    "BodyFinder": {
+      "file": "tools/refactor_comments.py",
+      "line": 37
+    },
+    "DocProcessor": {
+      "file": "tools/refactor_comments.py",
+      "line": 279
+    },
+    "AgentPool": {
+      "file": "multi_agent/agent_pool.py",
+      "line": 24
+    },
+    "LiteAgentPool": {
+      "file": "multi_agent/agent_pool.py",
+      "line": 317
+    },
+    "SubTask": {
+      "file": "multi_agent/task_decomposer.py",
+      "line": 28
+    },
+    "TaskDecomposer": {
+      "file": "multi_agent/task_decomposer.py",
+      "line": 80
+    },
+    "ResultAggregator": {
+      "file": "multi_agent/result_aggregator.py",
+      "line": 23
+    },
+    "MultiAgentOrchestrator": {
+      "file": "multi_agent/orchestrator.py",
+      "line": 28
+    },
+    "LiteOrchestrator": {
+      "file": "multi_agent/orchestrator.py",
+      "line": 427
+    },
+    "LiteAgentModelConfig": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 48
+    },
+    "LiteAgentConfig": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 64
+    },
+    "ToolRegistry": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 95
+    },
+    "LiteAgent": {
+      "file": "multi_agent/lite_agent.py",
+      "line": 152
+    },
+    "SubAgentConfig": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 27
+    },
+    "SubAgentWrapper": {
+      "file": "multi_agent/sub_agent.py",
+      "line": 57
+    },
+    "ToolLoader": {
+      "file": "toolkit/tool_loader.py",
+      "line": 10
+    },
     "CallVisitor": {
       "file": "toolkit/toolkit_explr.py",
-      "line": 141
+      "line": 148
     }
   },
   "calls": {
     "__init__": [
-      "ConfigHistoryStore",
-      "ConversationStore",
-      "MemoryStore",
-      "PromptStore",
-      "ReflectionStore",
-      "SummaryStore",
-      "TopicStore",
-      "VectorStore",
-      "_auto_backup",
-      "_init_tables",
-      "_maybe_rotate_db",
-      "_migrate",
-      "_protect_db",
-      "_write_week_key",
-      "connect",
-      "execute",
-      "info"
+      "Event",
+      "Lock"
     ],
     "_start_subconscious": [
       "debug",
@@ -3502,7 +4107,6 @@
       "get_semantic_summary",
       "get_tool_chain_summary",
       "get_topic_summary",
-      "len",
       "load_history"
     ],
     "_do_async_summaries": [
@@ -3597,11 +4201,14 @@
       "startswith"
     ],
     "work": [
-      "_add_token_notice_and_render",
+      "_build_token_table",
       "_notify_completion",
+      "_now_ts",
       "_post_chat_pipeline",
+      "_render_and_show_chat",
       "_update_status",
       "after",
+      "append",
       "chat_stream",
       "format_exc",
       "get",
@@ -3614,14 +4221,13 @@
       "print"
     ],
     "run": [
-      "_auto_init_topic",
-      "_chat",
-      "_handle_command",
-      "_print_welcome",
-      "_read_multiline",
-      "print",
-      "startswith",
-      "strip"
+      "chat_stream",
+      "clear",
+      "error",
+      "initialize",
+      "reset_interrupt",
+      "set",
+      "str"
     ],
     "run_oneshot": [
       "chat"
@@ -3652,10 +4258,15 @@
     ],
     "main": [
       "ArgumentParser",
-      "TeaCLI",
       "add_argument",
+      "append",
+      "endswith",
+      "join",
       "parse_args",
-      "run"
+      "print",
+      "process_file",
+      "sorted",
+      "walk"
     ],
     "_extract_keywords": [
       "Counter",
@@ -4279,6 +4890,13 @@
       "isabs",
       "join"
     ],
+    "from_dict": [
+      "cls",
+      "get"
+    ],
+    "to_dict": [
+      "len"
+    ],
     "get_effective_params": [
       "get"
     ],
@@ -4303,9 +4921,6 @@
     "reload_from_dict": [
       "set"
     ],
-    "to_dict": [
-      "len"
-    ],
     "load_config": [
       "AgentConfig",
       "Path",
@@ -4313,6 +4928,7 @@
       "bool",
       "dirname",
       "float",
+      "from_dict",
       "get",
       "home",
       "int",
@@ -4336,7 +4952,8 @@
       "ensure_config_dir",
       "home",
       "open",
-      "str"
+      "str",
+      "to_dict"
     ],
     "create_default_config": [
       "ensure_config_dir",
@@ -4434,13 +5051,14 @@
       "warning"
     ],
     "_build_api_messages": [
+      "_clean_orphan_tool_messages",
       "_enforce_token_budget",
       "_filter_level2_by_relevance",
       "_get_effective_params",
+      "_get_os_context",
       "_get_subconscious_context",
       "_sanitize_api_messages",
       "_to_multimodal",
-      "add",
       "append",
       "compute_safe_budget",
       "dict",
@@ -4452,8 +5070,14 @@
       "join",
       "len",
       "range",
+      "str"
+    ],
+    "_clean_orphan_tool_messages": [
+      "add",
+      "append",
+      "get",
+      "info",
       "set",
-      "str",
       "warning"
     ],
     "_sanitize_api_messages": [
@@ -4474,6 +5098,12 @@
       "pop",
       "reversed",
       "strip"
+    ],
+    "_get_os_context": [
+      "append",
+      "call_tool",
+      "get",
+      "join"
     ],
     "_get_subconscious_context": [
       "append",
@@ -4564,13 +5194,17 @@
       "collect_tool_call_round",
       "create_chat_stream",
       "debug",
+      "enumerate",
       "execute_tool_call",
       "get",
       "info",
+      "isinstance",
       "len",
       "on_status",
       "parse_tool_calls_from_stream",
       "print",
+      "replace",
+      "str",
       "strftime",
       "wait",
       "warning"
@@ -5046,18 +5680,22 @@
       "remove"
     ],
     "execute": [
+      "SubTask",
+      "_assign_agents",
+      "aggregate",
       "append",
-      "debug",
+      "decompose",
       "enumerate",
-      "func",
-      "get_enabled_steps",
-      "isinstance",
-      "keys",
+      "error",
+      "get",
+      "get_execution_order",
+      "items",
       "len",
-      "setdefault",
-      "str",
-      "update",
-      "warning"
+      "run_parallel",
+      "stream_callback",
+      "time",
+      "to_dict",
+      "update"
     ],
     "list_steps": [
       "get_enabled_steps",
@@ -5313,6 +5951,9 @@
     ],
     "switch_topic": [
       "Thread",
+      "_build_header_items",
+      "_build_tool_rounds",
+      "_parse_user_msg",
       "_poll_loading_progress",
       "_show_loading",
       "_update_status",
@@ -5321,24 +5962,19 @@
       "append",
       "cast",
       "clear_chat",
-      "dumps",
       "enumerate",
+      "extend",
       "get",
       "get_conversations",
       "get_topic",
       "get_topic_summary",
       "get_topic_tokens",
-      "isinstance",
-      "items",
-      "join",
       "len",
       "load_history",
-      "loads",
       "max",
       "min",
       "range",
       "start",
-      "startswith",
       "str"
     ],
     "on_topic_select": [
@@ -5415,13 +6051,16 @@
     ],
     "send": [
       "Thread",
-      "_add_token_notice_and_render",
+      "_build_token_table",
       "_hide_raw_check_btn",
       "_notify_completion",
+      "_now_ts",
       "_post_chat_pipeline",
+      "_render_and_show_chat",
       "_switch_display",
       "_update_status",
       "after",
+      "append",
       "chat_stream",
       "clear",
       "delete",
@@ -5438,24 +6077,19 @@
       "type",
       "update_msg_rounds"
     ],
-    "_add_token_notice_and_render": [
-      "_cell",
+    "_append_token_and_render": [
+      "_build_token_table",
       "_now_ts",
       "_render_and_show_chat",
-      "append",
+      "append"
+    ],
+    "_build_token_table": [
+      "_cell",
       "get",
       "get_embedding_engine",
       "get_embedding_usage",
       "get_topic_tokens",
       "join"
-    ],
-    "_refresh_cheap_token_notice": [
-      "_now_ts",
-      "_refresh_cheap_token_notice",
-      "_render_and_show_chat",
-      "after",
-      "append",
-      "get"
     ],
     "_on_history_link_click": [
       "_render_and_show_chat",
@@ -5718,9 +6352,13 @@
       "append"
     ],
     "initialize": [
-      "add_system_prompt",
-      "get_latest_system_prompt",
-      "info"
+      "OnlineToolSession",
+      "_build_tool_list",
+      "_resolve_effective_params",
+      "error",
+      "format",
+      "info",
+      "str"
     ],
     "inject_memories": [
       "ProjectMemoryManager",
@@ -5925,9 +6563,6 @@
     ],
     "reload": [
       "get_latest_system_prompt"
-    ],
-    "check_meta": [
-      "get"
     ],
     "save": [
       "_check_dependencies",
@@ -6162,26 +6797,54 @@
       "_prepare",
       "after"
     ],
+    "_parse_user_msg": [
+      "get",
+      "isinstance",
+      "loads",
+      "startswith"
+    ],
+    "_build_header_items": [
+      "append",
+      "get"
+    ],
+    "_build_tool_rounds": [
+      "_process_round",
+      "append",
+      "join"
+    ],
+    "_process_round": [
+      "_process_tool_call",
+      "append",
+      "get",
+      "len"
+    ],
+    "_process_tool_call": [
+      "append",
+      "dumps",
+      "get",
+      "items",
+      "join",
+      "len",
+      "loads"
+    ],
     "load_worker": [
+      "_build_header_items",
+      "_build_tool_rounds",
+      "_parse_user_msg",
       "append",
       "cast",
-      "dumps",
       "enumerate",
+      "extend",
       "get",
       "get_conversations",
       "get_topic",
       "get_topic_summary",
       "get_topic_tokens",
-      "isinstance",
-      "items",
-      "join",
       "len",
       "load_history",
-      "loads",
       "max",
       "min",
       "range",
-      "startswith",
       "str"
     ],
     "fmt": [
@@ -6401,18 +7064,20 @@
       "list"
     ],
     "_scan_directory": [
-      "Skill",
-      "_load_manifest",
-      "debug",
+      "__import__",
+      "append",
+      "callable",
+      "check_meta",
+      "endswith",
+      "exec",
+      "func_meta",
       "get",
-      "info",
-      "isdir",
-      "isfile",
       "join",
-      "len",
       "listdir",
-      "sorted",
-      "warning"
+      "open",
+      "read",
+      "startswith",
+      "update"
     ],
     "_load_manifest": [
       "exec_module",
@@ -6484,10 +7149,26 @@
       "values"
     ],
     "get_status": [
-      "get_active_skill_names",
-      "get_active_tool_names",
+      "len"
+    ],
+    "run_lsp_check": [
+      "NamedTemporaryFile",
+      "debug",
+      "escape",
+      "get",
+      "getcwd",
+      "group",
+      "impact_analysis",
       "len",
-      "list_skills"
+      "loads",
+      "max",
+      "open",
+      "read",
+      "run",
+      "search",
+      "strip",
+      "unlink",
+      "write"
     ],
     "_get_jedi_project": [
       "Project"
@@ -6602,6 +7283,9 @@
       "_extract_docstring",
       "_extract_params",
       "_get_text",
+      "_handle_class_def",
+      "_handle_function_def",
+      "_handle_import",
       "_parse_file_ast_fallback",
       "_walk",
       "append",
@@ -6611,7 +7295,28 @@
       "parse",
       "read"
     ],
+    "_handle_function_def": [
+      "_extract_calls",
+      "_extract_docstring",
+      "_extract_params",
+      "_get_text",
+      "append",
+      "child_by_field_name"
+    ],
+    "_handle_class_def": [
+      "_extract_calls",
+      "_extract_docstring",
+      "_extract_params",
+      "_get_text",
+      "append",
+      "child_by_field_name"
+    ],
+    "_handle_import": [
+      "_get_text",
+      "append"
+    ],
     "_walk": [
+      "_compute_fn_metrics",
       "_extract_calls",
       "_extract_docstring",
       "_extract_params",
@@ -6678,6 +7383,145 @@
       "append",
       "index",
       "pop"
+    ],
+    "_count_branches": [
+      "_count_branches"
+    ],
+    "_cyclomatic_for_body": [
+      "_count_branches"
+    ],
+    "_compute_fn_metrics": [
+      "_cyclomatic_for_body",
+      "bool",
+      "get",
+      "len"
+    ],
+    "_compute_metrics_ast_fallback": [
+      "_CallCollector",
+      "_Inner",
+      "_MetricsVisitor",
+      "_end_func",
+      "add",
+      "append",
+      "bool",
+      "count",
+      "generic_visit",
+      "get",
+      "get_docstring",
+      "hasattr",
+      "isinstance",
+      "len",
+      "max",
+      "open",
+      "parse",
+      "pop",
+      "read",
+      "round",
+      "set",
+      "sorted",
+      "str",
+      "sum",
+      "visit",
+      "visit_FunctionDef"
+    ],
+    "_end_func": [
+      "append",
+      "bool",
+      "hasattr",
+      "len",
+      "set"
+    ],
+    "visit_FunctionDef": [
+      "add",
+      "generic_visit",
+      "isinstance",
+      "set",
+      "sorted",
+      "walk"
+    ],
+    "visit_AsyncFunctionDef": [
+      "visit_FunctionDef"
+    ],
+    "visit_If": [
+      "generic_visit"
+    ],
+    "visit_For": [
+      "generic_visit"
+    ],
+    "visit_AsyncFor": [
+      "generic_visit"
+    ],
+    "visit_While": [
+      "generic_visit"
+    ],
+    "visit_Try": [
+      "generic_visit",
+      "len"
+    ],
+    "visit_Match": [
+      "generic_visit",
+      "len"
+    ],
+    "visit_IfExp": [
+      "generic_visit"
+    ],
+    "visit_BoolOp": [
+      "generic_visit",
+      "len"
+    ],
+    "visit_Call": [
+      "add",
+      "generic_visit",
+      "isinstance"
+    ],
+    "compute_metrics": [
+      "Parser",
+      "_compute_fn_metrics",
+      "_compute_metrics_ast_fallback",
+      "_ensure_ts",
+      "_extract_calls",
+      "_extract_docstring",
+      "_extract_params",
+      "_get_text",
+      "_walk",
+      "_walk2",
+      "append",
+      "child_by_field_name",
+      "count",
+      "encode",
+      "get",
+      "isabs",
+      "items",
+      "join",
+      "len",
+      "max",
+      "open",
+      "parse",
+      "read",
+      "round",
+      "set",
+      "sorted",
+      "str",
+      "sum"
+    ],
+    "_walk2": [
+      "_extract_calls",
+      "_get_text",
+      "_walk2",
+      "child_by_field_name",
+      "set"
+    ],
+    "find_dead_code": [
+      "add",
+      "append",
+      "get",
+      "isabs",
+      "join",
+      "len",
+      "parse_file",
+      "set",
+      "startswith",
+      "update"
     ],
     "get_topic_summary": [
       "close",
@@ -6822,6 +7666,8 @@
     "_auto_embed_async": [
       "Thread",
       "_store_embedding_inline",
+      "close",
+      "connect",
       "embed",
       "getLogger",
       "get_embedding_engine",
@@ -7394,6 +8240,392 @@
       "execute",
       "fetchone"
     ],
+    "get_function_body_ranges": [
+      "BodyFinder",
+      "append",
+      "generic_visit",
+      "parse",
+      "visit"
+    ],
+    "strip_inline_comments": [
+      "StringIO",
+      "add",
+      "append",
+      "enumerate",
+      "find",
+      "generate_tokens",
+      "join",
+      "len",
+      "list",
+      "lstrip",
+      "rstrip",
+      "set",
+      "split",
+      "startswith",
+      "strip"
+    ],
+    "generate_function_docstring": [
+      "append",
+      "bool",
+      "get",
+      "join",
+      "len",
+      "replace",
+      "rstrip",
+      "split",
+      "startswith",
+      "strip",
+      "unparse",
+      "upper"
+    ],
+    "has_docstring_node": [
+      "isinstance"
+    ],
+    "get_existing_doc": [
+      "has_docstring_node",
+      "strip"
+    ],
+    "looks_like_pydoc": [
+      "any"
+    ],
+    "format_docstring_block": [
+      "append",
+      "join",
+      "len",
+      "split",
+      "strip"
+    ],
+    "insert_docstrings": [
+      "DocProcessor",
+      "append",
+      "format_docstring_block",
+      "generate_class_docstring",
+      "generate_function_docstring",
+      "generic_visit",
+      "get_existing_doc",
+      "insert",
+      "join",
+      "looks_like_pydoc",
+      "parse",
+      "reversed",
+      "sort",
+      "split",
+      "visit"
+    ],
+    "visit_ClassDef": [
+      "generic_visit"
+    ],
+    "process_file": [
+      "insert_docstrings",
+      "len",
+      "open",
+      "read",
+      "split",
+      "strip_inline_comments",
+      "write"
+    ],
+    "register_agent_type": [
+      "append",
+      "info",
+      "register_template"
+    ],
+    "create_agent": [
+      "LiteAgent",
+      "ValueError",
+      "hasattr",
+      "info",
+      "items",
+      "setattr",
+      "warning"
+    ],
+    "get_agent": [
+      "get"
+    ],
+    "remove_agent": [
+      "info",
+      "pop"
+    ],
+    "run_parallel": [
+      "ThreadPoolExecutor",
+      "as_completed",
+      "cancel",
+      "error",
+      "get",
+      "items",
+      "len",
+      "result",
+      "submit"
+    ],
+    "run_batch": [
+      "run_parallel"
+    ],
+    "active_agents": [
+      "keys",
+      "list"
+    ],
+    "shutdown_all": [
+      "clear",
+      "info",
+      "shutdown"
+    ],
+    "register_template": [
+      "info",
+      "warning"
+    ],
+    "templates": [
+      "keys",
+      "list"
+    ],
+    "decompose": [
+      "_decompose_with_lite_agent",
+      "_decompose_with_llm",
+      "_decompose_with_rules",
+      "warning"
+    ],
+    "_decompose_with_llm": [
+      "_decompose_with_rules",
+      "_extract_json_array",
+      "create",
+      "format",
+      "from_dict",
+      "info",
+      "join",
+      "len",
+      "warning"
+    ],
+    "_decompose_with_lite_agent": [
+      "_decompose_with_rules",
+      "_extract_json_array",
+      "format",
+      "from_dict",
+      "info",
+      "join",
+      "len",
+      "run",
+      "warning"
+    ],
+    "_decompose_with_rules": [
+      "SubTask",
+      "_next_id",
+      "any",
+      "append",
+      "info",
+      "len",
+      "lower"
+    ],
+    "_extract_json_array": [
+      "find",
+      "group",
+      "loads",
+      "rfind",
+      "search",
+      "warning"
+    ],
+    "get_execution_order": [
+      "append",
+      "discard",
+      "get",
+      "len",
+      "max",
+      "set",
+      "warning"
+    ],
+    "aggregate": [
+      "_aggregate_simple",
+      "_aggregate_with_llm",
+      "len",
+      "list",
+      "values",
+      "warning"
+    ],
+    "_aggregate_with_llm": [
+      "append",
+      "create",
+      "format",
+      "get",
+      "join"
+    ],
+    "_aggregate_simple": [
+      "_order_by_deps",
+      "append",
+      "get",
+      "join",
+      "len",
+      "startswith",
+      "values"
+    ],
+    "_order_by_deps": [
+      "TaskDecomposer",
+      "extend",
+      "get_execution_order"
+    ],
+    "summarize_result": [
+      "create",
+      "format",
+      "len"
+    ],
+    "merge_code_results": [
+      "append",
+      "enumerate",
+      "findall",
+      "items",
+      "join",
+      "lower",
+      "strip",
+      "sub"
+    ],
+    "_register_default_types": [
+      "register_agent_type"
+    ],
+    "_assign_agents": [
+      "create_agent",
+      "get_agent",
+      "items",
+      "next",
+      "register_template"
+    ],
+    "execute_single": [
+      "execute"
+    ],
+    "execute_manual": [
+      "execute"
+    ],
+    "get_execution_history": [
+      "list"
+    ],
+    "clear_history": [
+      "clear"
+    ],
+    "shutdown": [
+      "info",
+      "set"
+    ],
+    "register": [
+      "debug"
+    ],
+    "unregister": [
+      "pop"
+    ],
+    "get_func": [
+      "get"
+    ],
+    "get_openai_tools": [
+      "append",
+      "get",
+      "items"
+    ],
+    "apply_filter": [
+      "pop"
+    ],
+    "tool_names": [
+      "keys",
+      "list"
+    ],
+    "__len__": [
+      "len"
+    ],
+    "_load_config_yaml": [
+      "FileNotFoundError",
+      "ImportError",
+      "_parse_config_dict",
+      "exists",
+      "expanduser",
+      "open",
+      "safe_load"
+    ],
+    "_parse_config_dict": [
+      "LiteAgentConfig",
+      "LiteAgentModelConfig",
+      "float",
+      "get",
+      "getattr",
+      "int",
+      "isinstance",
+      "setattr"
+    ],
+    "register_tool": [
+      "register"
+    ],
+    "register_tools_from_module": [
+      "callable",
+      "dir",
+      "get",
+      "getattr",
+      "meta_func",
+      "register",
+      "startswith"
+    ],
+    "_get_filtered_tools": [
+      "get_openai_tools"
+    ],
+    "_chat_loop": [
+      "_call_llm",
+      "_execute_tool",
+      "append",
+      "error",
+      "len",
+      "loads",
+      "range"
+    ],
+    "_call_llm": [
+      "SimpleNamespace",
+      "append",
+      "create",
+      "items",
+      "len",
+      "stream_callback"
+    ],
+    "_execute_tool": [
+      "dumps",
+      "error",
+      "func",
+      "get_func",
+      "isinstance"
+    ],
+    "_build_messages": [
+      "append",
+      "extend"
+    ],
+    "_append_to_history": [
+      "append"
+    ],
+    "_trim_history": [
+      "len"
+    ],
+    "reset_history": [
+      "clear"
+    ],
+    "history": [
+      "list"
+    ],
+    "_resolve_effective_params": [
+      "getattr",
+      "hasattr"
+    ],
+    "_value": [
+      "getattr"
+    ],
+    "_build_tool_list": [
+      "append",
+      "getattr",
+      "items",
+      "set",
+      "update"
+    ],
+    "run_async": [
+      "Thread",
+      "start"
+    ],
+    "wait": [
+      "wait"
+    ],
+    "is_done": [
+      "is_set"
+    ],
+    "reset": [
+      "clear",
+      "reset_interrupt"
+    ],
     "toolkit_exec": [
       "Lock",
       "Popen",
@@ -7439,6 +8671,16 @@
       "wait",
       "which"
     ],
+    "check_meta": [
+      "get"
+    ],
+    "reload_all": [
+      "_scan_directory",
+      "append",
+      "exists",
+      "extend",
+      "update"
+    ],
     "toolkit_skill": [
       "activate_skill",
       "append",
@@ -7468,6 +8710,26 @@
       "join",
       "loads"
     ],
+    "toolkit_static": [
+      "_summary",
+      "compute_metrics",
+      "find_dead_code",
+      "getcwd"
+    ],
+    "_summary": [
+      "Path",
+      "any",
+      "append",
+      "compute_metrics",
+      "get",
+      "len",
+      "relative_to",
+      "rglob",
+      "sort",
+      "sorted",
+      "startswith",
+      "str"
+    ],
     "toolkit_set_topic_title": [
       "_on_summary_updated",
       "get_agent",
@@ -7477,6 +8739,20 @@
       "list_topics",
       "update_topic_title",
       "warning"
+    ],
+    "toolkit_sub_agent_report": [
+      "append",
+      "info"
+    ],
+    "toolkit_sub_agent_status": [
+      "append",
+      "get",
+      "items",
+      "join"
+    ],
+    "clear_sub_agent_reports": [
+      "clear",
+      "pop"
     ],
     "_get_db": [
       "get_agent",
@@ -7531,35 +8807,60 @@
       "_get_topic_id",
       "_restore_from_db"
     ],
-    "toolkit_todo": [
-      "_auto_restore",
-      "_done",
-      "_ensure_table",
+    "_todo_create": [
       "_fmt",
+      "_get_topic_id",
+      "_sync_to_db",
+      "clear",
+      "enumerate",
+      "extend",
+      "len"
+    ],
+    "_todo_check": [
+      "_done",
+      "_fmt",
+      "_sync_item",
+      "len"
+    ],
+    "_todo_show": [
+      "_done",
+      "_fmt",
+      "_get_topic_id",
+      "len"
+    ],
+    "_todo_clear": [
+      "_ensure_table",
       "_get_db",
       "_get_topic_id",
+      "clear",
+      "close",
+      "commit",
+      "cursor",
+      "execute",
+      "len",
+      "warning"
+    ],
+    "_todo_restore": [
+      "_done",
+      "_fmt",
+      "_restore_from_db",
+      "len"
+    ],
+    "toolkit_todo": [
+      "_auto_restore",
       "_plan_create",
       "_plan_delete",
-      "_plan_list",
       "_plan_resume",
       "_plan_run",
       "_plan_show",
       "_plan_step",
       "_plan_verify",
-      "_restore_from_db",
-      "_sync_item",
-      "_sync_to_db",
-      "clear",
-      "close",
-      "commit",
-      "cursor",
-      "enumerate",
+      "_todo_check",
+      "_todo_create",
       "exception",
-      "execute",
-      "extend",
-      "len",
-      "str",
-      "warning"
+      "get",
+      "handler",
+      "str"
     ],
     "_done": [
       "sum"
@@ -7618,6 +8919,211 @@
     "_plan_list_inner": [
       "get",
       "toolkit_plan"
+    ],
+    "_get_exp_path": [
+      "expanduser",
+      "join"
+    ],
+    "_load_exp_db": [
+      "_get_exp_path",
+      "exists",
+      "load",
+      "open"
+    ],
+    "_save_exp_db": [
+      "_get_exp_path",
+      "dirname",
+      "dump",
+      "makedirs",
+      "open"
+    ],
+    "toolkit_evolution_exp": [
+      "_load_exp_db",
+      "_save_exp_db",
+      "append",
+      "dumps",
+      "get",
+      "isoformat",
+      "join",
+      "len",
+      "lower",
+      "min",
+      "now",
+      "split",
+      "strip"
+    ],
+    "toolkit_prompt_evolve": [
+      "append",
+      "evolve",
+      "get",
+      "get_session",
+      "get_stats",
+      "getattr",
+      "info",
+      "join",
+      "len",
+      "list_versions",
+      "manual_set",
+      "repr",
+      "rollback"
+    ],
+    "toolkit_self_evolve": [
+      "_git_clean",
+      "_git_revert",
+      "_git_snap",
+      "_run_tests",
+      "compile",
+      "copy2",
+      "count",
+      "endswith",
+      "exists",
+      "get",
+      "getcwd",
+      "group",
+      "int",
+      "isinstance",
+      "join",
+      "len",
+      "lower",
+      "now",
+      "open",
+      "read",
+      "remove",
+      "replace",
+      "run",
+      "run_lsp_check",
+      "search",
+      "splitlines",
+      "startswith",
+      "str",
+      "strftime",
+      "strip",
+      "warning",
+      "write"
+    ],
+    "_git_clean": [
+      "len",
+      "run",
+      "splitlines",
+      "startswith",
+      "strip"
+    ],
+    "_git_snap": [
+      "run",
+      "str"
+    ],
+    "_git_revert": [
+      "run"
+    ],
+    "_run_tests": [
+      "group",
+      "int",
+      "lower",
+      "run",
+      "search",
+      "str"
+    ],
+    "toolkit_scheduler": [
+      "Thread",
+      "__import__",
+      "_execute_task",
+      "_format_next",
+      "_get_conn",
+      "_match_cron",
+      "_notify",
+      "_parse_cron",
+      "all",
+      "append",
+      "close",
+      "commit",
+      "connect",
+      "dict",
+      "dirname",
+      "execute",
+      "expanduser",
+      "fetchall",
+      "fetchone",
+      "fromisoformat",
+      "get",
+      "get_config",
+      "getcwd",
+      "getpid",
+      "info",
+      "int",
+      "isoformat",
+      "join",
+      "len",
+      "list",
+      "lower",
+      "makedirs",
+      "map",
+      "now",
+      "parse_schedule",
+      "range",
+      "replace",
+      "run",
+      "sleep",
+      "split",
+      "start",
+      "startswith",
+      "str",
+      "strip",
+      "timedelta",
+      "uuid4",
+      "values",
+      "warning",
+      "weekday",
+      "zip"
+    ],
+    "_get_conn": [
+      "commit",
+      "connect",
+      "dirname",
+      "execute",
+      "makedirs"
+    ],
+    "_match_cron": [
+      "int",
+      "map",
+      "split",
+      "strip"
+    ],
+    "_execute_task": [
+      "getcwd",
+      "info",
+      "run",
+      "str"
+    ],
+    "_scheduler_loop": [
+      "_execute_task",
+      "_get_conn",
+      "_notify",
+      "close",
+      "commit",
+      "dict",
+      "execute",
+      "fetchall",
+      "getpid",
+      "info",
+      "isoformat",
+      "now",
+      "parse_schedule",
+      "sleep",
+      "startswith",
+      "warning"
+    ],
+    "_format_next": [
+      "append",
+      "divmod",
+      "fromisoformat",
+      "get",
+      "join",
+      "now",
+      "replace",
+      "startswith",
+      "str",
+      "strftime",
+      "total_seconds"
     ],
     "_ensure_plans_dir": [
       "makedirs"
@@ -7753,236 +9259,6 @@
       "strip",
       "values"
     ],
-    "_get_exp_path": [
-      "expanduser",
-      "join"
-    ],
-    "_load_exp_db": [
-      "_get_exp_path",
-      "exists",
-      "load",
-      "open"
-    ],
-    "_save_exp_db": [
-      "_get_exp_path",
-      "dirname",
-      "dump",
-      "makedirs",
-      "open"
-    ],
-    "toolkit_evolution_exp": [
-      "_load_exp_db",
-      "_save_exp_db",
-      "append",
-      "dumps",
-      "get",
-      "isoformat",
-      "join",
-      "len",
-      "lower",
-      "min",
-      "now",
-      "split",
-      "strip"
-    ],
-    "toolkit_prompt_evolve": [
-      "append",
-      "evolve",
-      "get",
-      "get_session",
-      "get_stats",
-      "getattr",
-      "info",
-      "join",
-      "len",
-      "list_versions",
-      "manual_set",
-      "repr",
-      "rollback"
-    ],
-    "toolkit_self_evolve": [
-      "NamedTemporaryFile",
-      "_git_clean",
-      "_git_revert",
-      "_git_snap",
-      "_run_lsp_checks",
-      "_run_tests",
-      "compile",
-      "copy2",
-      "count",
-      "debug",
-      "endswith",
-      "escape",
-      "exists",
-      "get",
-      "getcwd",
-      "group",
-      "impact_analysis",
-      "int",
-      "isinstance",
-      "join",
-      "len",
-      "loads",
-      "lower",
-      "max",
-      "now",
-      "open",
-      "read",
-      "remove",
-      "replace",
-      "run",
-      "search",
-      "splitlines",
-      "startswith",
-      "str",
-      "strftime",
-      "strip",
-      "unlink",
-      "warning",
-      "write"
-    ],
-    "_git_clean": [
-      "len",
-      "run",
-      "splitlines",
-      "startswith",
-      "strip"
-    ],
-    "_git_snap": [
-      "run",
-      "str"
-    ],
-    "_git_revert": [
-      "run"
-    ],
-    "_run_tests": [
-      "group",
-      "int",
-      "lower",
-      "run",
-      "search",
-      "str"
-    ],
-    "_run_lsp_checks": [
-      "NamedTemporaryFile",
-      "debug",
-      "escape",
-      "get",
-      "group",
-      "impact_analysis",
-      "len",
-      "loads",
-      "max",
-      "open",
-      "read",
-      "run",
-      "search",
-      "strip",
-      "unlink",
-      "write"
-    ],
-    "toolkit_scheduler": [
-      "Thread",
-      "__import__",
-      "_execute_task",
-      "_format_next",
-      "_get_conn",
-      "_match_cron",
-      "_notify",
-      "_parse_cron",
-      "all",
-      "append",
-      "close",
-      "commit",
-      "connect",
-      "dict",
-      "dirname",
-      "execute",
-      "expanduser",
-      "fetchall",
-      "fetchone",
-      "fromisoformat",
-      "get",
-      "get_config",
-      "getcwd",
-      "getpid",
-      "info",
-      "int",
-      "isoformat",
-      "join",
-      "len",
-      "list",
-      "lower",
-      "makedirs",
-      "map",
-      "now",
-      "parse_schedule",
-      "range",
-      "replace",
-      "run",
-      "sleep",
-      "split",
-      "start",
-      "startswith",
-      "str",
-      "strip",
-      "timedelta",
-      "uuid4",
-      "values",
-      "warning",
-      "weekday",
-      "zip"
-    ],
-    "_get_conn": [
-      "commit",
-      "connect",
-      "dirname",
-      "execute",
-      "makedirs"
-    ],
-    "_match_cron": [
-      "int",
-      "map",
-      "split",
-      "strip"
-    ],
-    "_execute_task": [
-      "getcwd",
-      "info",
-      "run",
-      "str"
-    ],
-    "_scheduler_loop": [
-      "_execute_task",
-      "_get_conn",
-      "_notify",
-      "close",
-      "commit",
-      "dict",
-      "execute",
-      "fetchall",
-      "getpid",
-      "info",
-      "isoformat",
-      "now",
-      "parse_schedule",
-      "sleep",
-      "startswith",
-      "warning"
-    ],
-    "_format_next": [
-      "append",
-      "divmod",
-      "fromisoformat",
-      "get",
-      "join",
-      "now",
-      "replace",
-      "startswith",
-      "str",
-      "strftime",
-      "total_seconds"
-    ],
     "toolkit_kb": [
       "Path",
       "_meta",
@@ -8004,6 +9280,7 @@
       "open",
       "read_text",
       "rebuild_index",
+      "replace",
       "repr",
       "run",
       "sanitize",
@@ -8088,6 +9365,84 @@
       "_get_version",
       "append",
       "items"
+    ],
+    "_generate_unified_diff": [
+      "join",
+      "splitlines",
+      "unified_diff"
+    ],
+    "_git_stash_push": [
+      "run",
+      "str",
+      "strip"
+    ],
+    "_git_stash_pop": [
+      "run",
+      "str"
+    ],
+    "_git_stash_drop": [
+      "run"
+    ],
+    "_check_conflict": [
+      "count",
+      "exists",
+      "join",
+      "open",
+      "read"
+    ],
+    "_verify_all": [
+      "all",
+      "compile",
+      "endswith",
+      "exists",
+      "get",
+      "join",
+      "len",
+      "loads",
+      "run",
+      "startswith",
+      "str",
+      "strip",
+      "values"
+    ],
+    "_apply_one": [
+      "_check_conflict",
+      "copy2",
+      "exists",
+      "join",
+      "now",
+      "open",
+      "read",
+      "replace",
+      "strftime",
+      "write"
+    ],
+    "_toolkit_diff_impl": [
+      "_apply_one",
+      "_check_conflict",
+      "_generate_unified_diff",
+      "_git_stash_drop",
+      "_git_stash_pop",
+      "_git_stash_push",
+      "_verify_all",
+      "append",
+      "copy2",
+      "count",
+      "endswith",
+      "exception",
+      "exists",
+      "get",
+      "getcwd",
+      "join",
+      "len",
+      "next",
+      "run_lsp_check",
+      "str",
+      "sum",
+      "warning"
+    ],
+    "toolkit_diff": [
+      "_toolkit_diff_impl"
     ],
     "toolkit_search": [
       "_search_baidu",
@@ -8328,7 +9683,7 @@
       "write"
     ],
     "_apply_patch_python": [
-      "_generate_diff",
+      "_generate_unified_diff",
       "append",
       "copy2",
       "dumps",
@@ -8339,17 +9694,19 @@
       "join",
       "len",
       "match",
+      "max",
+      "min",
       "open",
-      "pop",
+      "range",
       "reversed",
+      "rstrip",
       "split",
       "startswith",
       "str",
-      "strip",
       "write"
     ],
     "_insert_lines": [
-      "_generate_diff",
+      "_generate_unified_diff",
       "append",
       "copy2",
       "dumps",
@@ -8364,7 +9721,7 @@
       "write"
     ],
     "_delete_lines": [
-      "_generate_diff",
+      "_generate_unified_diff",
       "copy2",
       "dumps",
       "join",
@@ -8375,9 +9732,12 @@
       "write"
     ],
     "_replace_lines": [
-      "_generate_diff",
+      "_generate_unified_diff",
+      "append",
       "copy2",
       "dumps",
+      "endswith",
+      "enumerate",
       "join",
       "len",
       "open",
@@ -8388,83 +9748,6 @@
     ],
     "_preview_patch": [
       "_apply_patch"
-    ],
-    "_generate_diff": [
-      "join",
-      "splitlines",
-      "unified_diff"
-    ],
-    "_generate_unified_diff": [
-      "join",
-      "splitlines",
-      "unified_diff"
-    ],
-    "_git_stash_push": [
-      "run",
-      "str",
-      "strip"
-    ],
-    "_git_stash_pop": [
-      "run",
-      "str"
-    ],
-    "_git_stash_drop": [
-      "run"
-    ],
-    "_check_conflict": [
-      "count",
-      "exists",
-      "join",
-      "open",
-      "read"
-    ],
-    "_verify_all": [
-      "all",
-      "compile",
-      "endswith",
-      "exists",
-      "get",
-      "join",
-      "len",
-      "loads",
-      "run",
-      "startswith",
-      "str",
-      "strip",
-      "values"
-    ],
-    "_apply_one": [
-      "_check_conflict",
-      "copy2",
-      "exists",
-      "join",
-      "now",
-      "open",
-      "read",
-      "replace",
-      "strftime",
-      "write"
-    ],
-    "_toolkit_diff_impl": [
-      "_apply_one",
-      "_check_conflict",
-      "_generate_unified_diff",
-      "_git_stash_drop",
-      "_git_stash_pop",
-      "_git_stash_push",
-      "_verify_all",
-      "append",
-      "copy2",
-      "count",
-      "exception",
-      "exists",
-      "get",
-      "getcwd",
-      "join",
-      "len",
-      "next",
-      "str",
-      "sum"
     ],
     "toolkit_proactive": [
       "_add_goal",
@@ -8517,26 +9800,55 @@
       "sort",
       "str"
     ],
-    "toolkit_memory": [
+    "_m_add": [
       "add_memory",
+      "get",
+      "str",
+      "strip"
+    ],
+    "_m_list": [
       "append",
-      "deactivate_memory",
-      "delete_memory",
-      "enumerate",
       "get",
       "get_active_memories",
       "get_memory_stats",
-      "get_storage",
-      "get_unsummarized_conversations",
-      "info",
-      "isinstance",
       "join",
       "len",
-      "repr",
+      "str"
+    ],
+    "_m_search": [
+      "append",
+      "get",
+      "join",
+      "len",
       "search_memories",
       "split",
       "str",
       "strip"
+    ],
+    "_m_forget": [
+      "deactivate_memory",
+      "delete_memory"
+    ],
+    "_m_extract": [
+      "append",
+      "enumerate",
+      "get",
+      "get_unsummarized_conversations",
+      "isinstance",
+      "join",
+      "len"
+    ],
+    "toolkit_memory": [
+      "_m_add",
+      "_m_extract",
+      "_m_forget",
+      "_m_list",
+      "_m_search",
+      "get",
+      "get_storage",
+      "handler",
+      "info",
+      "repr"
     ],
     "toolkit_release": [
       "_do_build",
@@ -8801,6 +10113,7 @@
       "_creative_dream",
       "_cross_link",
       "_detect_focus",
+      "_detect_stagnation",
       "_digest_conversations",
       "_digest_memories",
       "_dream",
@@ -8810,6 +10123,7 @@
       "_extreme_scenario",
       "_generate_insights",
       "_get_db_path",
+      "_has_conversations",
       "_is_duplicate_memory",
       "_is_jieba_available",
       "_is_tea_agent_cwd",
@@ -8821,6 +10135,7 @@
       "_send_cycle_summary",
       "_send_notification",
       "_set_goals",
+      "_synthesize_memories",
       "_write_state",
       "abspath",
       "add",
@@ -8905,7 +10220,9 @@
       "strftime",
       "strip",
       "sum",
+      "total_seconds",
       "unlink",
+      "uuid4",
       "which",
       "write"
     ],
@@ -8933,6 +10250,15 @@
       "isoformat",
       "now",
       "open"
+    ],
+    "_has_conversations": [
+      "_get_db_path",
+      "close",
+      "connect",
+      "cursor",
+      "execute",
+      "exists",
+      "fetchone"
     ],
     "_get_db_path": [
       "abspath",
@@ -8976,6 +10302,7 @@
       "append",
       "commit",
       "cursor",
+      "debug",
       "dict",
       "execute",
       "fetchall",
@@ -8984,17 +10311,20 @@
       "len",
       "max",
       "setdefault",
-      "str"
+      "str",
+      "uuid4"
     ],
     "_extract_memory_candidates": [
       "any",
       "append",
       "finditer",
+      "get",
       "group",
       "len",
       "lower",
       "search",
       "split",
+      "str",
       "strip"
     ],
     "_is_duplicate_memory": [
@@ -9002,6 +10332,38 @@
       "fetchall",
       "len",
       "set"
+    ],
+    "_detect_stagnation": [
+      "get"
+    ],
+    "_synthesize_memories": [
+      "OpenAI",
+      "_is_duplicate_memory",
+      "append",
+      "commit",
+      "create",
+      "cursor",
+      "debug",
+      "dict",
+      "execute",
+      "fetchall",
+      "find",
+      "fromisoformat",
+      "get",
+      "get_config",
+      "info",
+      "isinstance",
+      "isoformat",
+      "join",
+      "len",
+      "loads",
+      "now",
+      "replace",
+      "rfind",
+      "str",
+      "strip",
+      "total_seconds",
+      "uuid4"
     ],
     "_cross_link": [
       "Path",
@@ -9107,12 +10469,16 @@
       "OpenAI",
       "Storage",
       "_cross_link",
+      "_detect_stagnation",
       "_digest_conversations",
       "_digest_memories",
       "_generate_insights",
       "_get_db_path",
+      "_has_conversations",
       "_set_goals",
+      "_synthesize_memories",
       "_write_state",
+      "append",
       "close",
       "get",
       "get_config",
@@ -9234,6 +10600,19 @@
       "now",
       "strftime"
     ],
+    "set_orchestrator": [
+      "info"
+    ],
+    "toolkit_delegate": [
+      "create_agent",
+      "error",
+      "get_agent",
+      "get_orchestrator",
+      "info",
+      "len",
+      "run",
+      "uuid4"
+    ],
     "_log": [
       "print"
     ],
@@ -9280,20 +10659,6 @@
       "visit",
       "visit_FunctionDef",
       "walk"
-    ],
-    "visit_FunctionDef": [
-      "add",
-      "generic_visit",
-      "isinstance",
-      "set",
-      "sorted",
-      "walk"
-    ],
-    "visit_AsyncFunctionDef": [
-      "visit_FunctionDef"
-    ],
-    "visit_ClassDef": [
-      "generic_visit"
     ],
     "_build_dot_flow": [
       "_log",
@@ -9443,6 +10808,41 @@
       "info",
       "repr"
     ],
+    "toolkit_quality_gate": [
+      "_run_gating",
+      "_run_report",
+      "getcwd"
+    ],
+    "_run_gating": [
+      "_check_item_rules",
+      "_make_global_violation",
+      "append",
+      "compute_metrics",
+      "find_dead_code",
+      "get",
+      "isabs",
+      "isfile",
+      "join",
+      "len",
+      "startswith"
+    ],
+    "_check_item_rules": [
+      "append"
+    ],
+    "_run_report": [
+      "any",
+      "append",
+      "compute_metrics",
+      "extend",
+      "get",
+      "glob",
+      "isabs",
+      "isdir",
+      "join",
+      "len",
+      "relpath",
+      "sort"
+    ],
     "toolkit_dump_topic": [
       "Path",
       "Storage",
@@ -9480,6 +10880,7 @@
       "range",
       "read",
       "readlines",
+      "replace",
       "repr",
       "resolve",
       "scan_dir",

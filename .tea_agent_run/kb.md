@@ -1,9 +1,9 @@
 # tea_agent 项目知识库
 
-> 自动生成: 2026-05-24 15:34
+> 自动生成: 2026-05-24 17:54
 > 工具: ctags + AST + graphviz
 >
-> 符号: 1743 唯一 · 函数: 1152 · 类: 117 · 调用边: 6261
+> 符号: 1743 唯一 · 函数: 1152 · 类: 117 · 调用边: 6263
 
 ## 符号种类分布
 
@@ -13,7 +13,7 @@
 | number | 1792 |
 | object | 1481 |
 | array | 1233 |
-| member | 950 |
+| member | 951 |
 | function | 443 |
 | variable | 420 |
 | class | 118 |
@@ -93,7 +93,7 @@
 | tea_agent/store/__init__.py | 42 | — | get_storage |
 | tea_agent/store/_base.py | 25 | StoreComponent | — |
 | tea_agent/store/_config.py | 72 | ConfigHistoryStore | add_config_change, get_config_history, get_config_changes_since |
-| tea_agent/store/_conversations.py | 258 | ConversationStore | save_msg, update_msg_rounds, save_agent_round |
+| tea_agent/store/_conversations.py | 284 | ConversationStore | save_msg, update_msg_rounds, save_agent_round |
 | tea_agent/store/_core.py | 663 | Storage | save_msg, backup_now, close |
 | tea_agent/store/_memories.py | 254 | MemoryStore | add_memory, update_memory, deactivate_memory |
 | tea_agent/store/_prompts.py | 102 | PromptStore | add_system_prompt, get_latest_system_prompt, get_system_prompt_history |
@@ -175,7 +175,7 @@
 | `str` | ?:? | 154 |
 | `execute` | tea_agent/multi_agent/orchestrator.py:564 | 128 |
 | `info` | ?:? | 125 |
-| `close` | tea_agent/store/_core.py:644 | 97 |
+| `close` | tea_agent/store/_core.py:644 | 98 |
 | `cursor` | ?:? | 95 |
 | `strip` | ?:? | 83 |
 | `set` | tea_agent/config.py:359 | 71 |

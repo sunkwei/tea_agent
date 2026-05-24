@@ -70,6 +70,8 @@ class OnlineToolSession(BaseChatSession):
         supports_reasoning: bool = True,
         reasoning_effort: str = "max",
         disable_summary: bool = False,
+        disable_background_tasks: bool = False,
+        debug: bool = False,
     ):
         """
         初始化会话
@@ -95,7 +97,8 @@ class OnlineToolSession(BaseChatSession):
             supports_vision: 是否支持视觉输入
             supports_reasoning: 是否支持 reasoning
             reasoning_effort: DeepSeek thinking 推理力度 (high/max)，默认 max
-            disable_summary: 禁用历史压缩和摘要        """
+            disable_summary: 禁用历史压缩和摘要
+            debug: 调试模式，启用后将 chat_stream 每轮收发消息打印到终端        """
         sp = system_prompt or self._COMPACT_SYSTEM_PROMPT
 
         import httpx
@@ -151,6 +154,8 @@ class OnlineToolSession(BaseChatSession):
         self._supports_vision = supports_vision
         self._supports_reasoning = supports_reasoning
         self._disable_summary = disable_summary
+        self._disable_background_tasks = disable_background_tasks
+        self.debug = debug
 
         import threading
         self._extra_iterations = 0
@@ -1183,6 +1188,35 @@ class OnlineToolSession(BaseChatSession):
                 print(f"{asctime}: call model: {self.context.model}, {msg}")
                 logger.info(f"call model: {self.context.model}, {msg}")
 
+            if self.debug:
+                import time as _time_dbg
+                _ts = _time_dbg.strftime("%H:%M:%S")
+                print(f"\n{'='*60}")
+                print(f"=== DEBUG [{_ts}] Iteration {iterations} — OUTGOING ({len(api_messages)} messages) ===")
+                for _i, _m in enumerate(api_messages):
+                    _role = _m.get("role", "?")
+                    _content = _m.get("content", "")
+                    if isinstance(_content, str):
+                        _preview = _content[:200].replace('\n', '\\n')
+                        _len_info = f" ({len(_content)} chars)"
+                    elif isinstance(_content, list):
+                        _preview = f"[vision content: {len(_content)} parts]"
+                        _len_info = ""
+                    else:
+                        _preview = str(_content)[:200]
+                        _len_info = ""
+                    _tc = _m.get("tool_calls")
+                    _tc_info = ""
+                    if _tc:
+                        _tc_names = [tc.get("function", {}).get("name", "?") for tc in _tc]
+                        _tc_info = f" | tool_calls: {_tc_names}"
+                    _reasoning = _m.get("reasoning_content", "")
+                    _r_info = f" | reasoning: {len(_reasoning)} chars" if _reasoning else ""
+                    print(f"  [{_role}]{_tc_info}{_r_info}{_len_info}: {_preview}")
+                _tool_names = [t['function']['name'] for t in self.tools] if self.tools else []
+                print(f"  tools: {_tool_names}")
+                print(f"{'='*60}")
+
             logger.debug(f"model request: model={self.context.model}, msgs={len(api_messages)}, tools={len(self.tools)}, iteration={iterations}")
             sys_msg_preview = api_messages[0]['content'][:100] if api_messages else ""
             logger.debug(f"system_prompt preview: {sys_msg_preview}")
@@ -1209,6 +1243,22 @@ class OnlineToolSession(BaseChatSession):
 
             content, tool_calls_data, reasoning_content = self._process_stream_with_reasoning(response, callback)
             full_reply += content
+
+            if self.debug:
+                _ts = _time_dbg.strftime("%H:%M:%S")
+                print(f"--- DEBUG [{_ts}] INCOMING ---")
+                if reasoning_content:
+                    _r_preview = reasoning_content[:300].replace('\n', '\\n')
+                    print(f"  reasoning: ({len(reasoning_content)} chars) {_r_preview}")
+                if content:
+                    _c_preview = content[:300].replace('\n', '\\n')
+                    print(f"  content: ({len(content)} chars) {_c_preview}")
+                if tool_calls_data:
+                    print(f"  raw_tool_calls: {len(tool_calls_data)} items")
+                    for _tci, _tc in enumerate(tool_calls_data):
+                        _tcn = _tc.get('function', {}).get('name', '?') if isinstance(_tc, dict) else str(_tc)[:100]
+                        print(f"    [{_tci}] {_tcn}")
+                print(f"{'='*60}\n")
             logger.debug(f"model response: content_len={len(content)}, reasoning_len={len(reasoning_content)}, tool_calls_data={len(tool_calls_data)}, usage={self.context._last_usage}")
 
             valid_tool_calls = self.tools_comp.parse_tool_calls_from_stream(tool_calls_data)
@@ -1249,7 +1299,13 @@ class OnlineToolSession(BaseChatSession):
                     _asctime = _time.strftime("%Y-%m-%d %H:%M:%S")
                     print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name}")
                     logger.info(f"    tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
+                    if self.debug:
+                        _args_preview = call.function.arguments[:500] if call.function.arguments else "(empty)"
+                        print(f"    DEBUG args: {_args_preview}")
                     call_id, func_name, result_str = self.tools_comp.execute_tool_call(call)
+                    if self.debug:
+                        _res_preview = (result_str or "")[:500].replace('\n', '\\n')
+                        print(f"    DEBUG result ({len(result_str) if result_str else 0} chars): {_res_preview}")
                     logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")
                     self.tools_comp.collect_tool_call_round(call_id, result_str)
 
@@ -1477,7 +1533,7 @@ class OnlineToolSession(BaseChatSession):
             )
 
         import threading
-        if topic_id and topic_id != -1 and not result.get("interrupted", False):
+        if not self._disable_background_tasks and topic_id and topic_id != -1 and not result.get("interrupted", False):
             def _auto_extract():
                 """Internal: auto extract"""
                 try:
@@ -1488,7 +1544,7 @@ class OnlineToolSession(BaseChatSession):
                     pass
             threading.Thread(target=_auto_extract, daemon=True).start()
 
-        if not result.get("interrupted", False) and self.reflection_manager is not None:
+        if not self._disable_background_tasks and not result.get("interrupted", False) and self.reflection_manager is not None:
             def _auto_reflect():
                 """Internal: auto reflect"""
                 try:

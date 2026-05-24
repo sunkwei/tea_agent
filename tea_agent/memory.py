@@ -36,7 +36,7 @@ MAX_LLM_ADJUSTMENTS = 3
 class MemoryManager:
     """记忆管理器：选择、格式化、提取"""
 
-    def __init__(self, storage, extraction_threshold: int = 2, dedup_threshold: float = 0.3):
+    def __init__(self, storage, extraction_threshold: int = 2, dedup_threshold: float = 0.6):
         """
         Args:
             storage: Storage 实例，提供记忆 CRUD

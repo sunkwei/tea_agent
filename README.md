@@ -3,7 +3,7 @@
 
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**系统提示词自我进化**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
 
-核心 11 个依赖（openai、numpy、markdown、tkinterweb、Pillow、requests、beautifulsoup4、tkhtmlview、jieba、mcp、playwright），仅依赖 Python tk 库，无需浏览器，极致轻量。绝大部分代码由 LLM 自行生成，是一个「AI 写 AI」的实验项目。（目前主要使用 deepseek v4 pro 模型自主进化，便宜啊）
+核心 11 个依赖（openai、numpy、markdown、tkinterweb、Pillow、requests、beautifulsoup4、tkhtmlview、jieba、mcp、playwright），仅需 Python tk 库，无需浏览器，极致轻量。绝大部分代码由 LLM 自行生成，是一个「AI 写 AI」的实验项目。（目前主要使用 deepseek v4 pro 模型自主进化，便宜啊）
 
 ## ⚠️ 安全警告
 
@@ -77,18 +77,18 @@ conversations (全部)
 
 ### 工具模块化：Skill 系统
 
-47 个工具按场景分为 7 个 Skill，**按需激活**以节省 token：
+41 个内置工具按场景分为 6 个 Skill，**按需激活**以节省 token：
 
 ```
 Skill (激活条件)                    工具数   默认
 ──────────────────────────────────────────────────
-🎛️  CORE (始终激活)                   5      ✅    save/reload/rollback/list_versions/skill
+🎛️  CORE (始终激活)                   3      ✅    skill/save/exec
 📁  file_system (文件/命令操作)        4      ✅    file/exec/edit/pkg
 ⏰  utility (时间日期)                 3      ✅    gettime/date_diff/lunar
-🧠  memory_knowledge (记忆/知识库)    7      ✅    memory/kb/reflection/proactive/subconscious/explr/mode
+🧠  memory_knowledge (记忆/知识库)    7      ✅    memory/kb/reflection/proactive/subconscious/dump_topic/mode
 📋  todo_workflow (TODO工作流)          1             toolkit_todo
-🔧  self_evolution (自我进化)         10            self_evolve/build/bump_version/edit/diff/lsp/...
-🔊  interaction (搜索/MCP)              3            search/mcp/js_fetch
+🔧  self_evolution (自我进化)          9            self_evolve/save/prompt_evolve/release/config/...
+🔊  interaction (搜索/MCP)              2            search/mcp（js_fetch 在用户工具箱）
 ```
 
 - **默认场景**（纯对话）：约 17 工具激活
@@ -133,7 +133,7 @@ BaseChatSession          ← 消息管理、中断、基础工具构建
 
 ```
 内置工具箱 (tea_agent/toolkit/)  ← git 管理
-  ├─ 35 工具，编译验证 + 测试保护
+  ├─ 41 工具，编译验证 + 测试保护
   └─ 版本通过 git 追踪，支持回滚
 
 用户工具箱 (~/.tea_agent/toolkit/)  ← 手动备份
@@ -363,16 +363,11 @@ toolkit_lsp(action='completion', file='tea_agent/onlinesession.py', line=850, co
 
 ## 🗣️ 语音系统
 
-| 功能 | 引擎 | 说明 |
-|------|------|------|
-| **STT 输入** | Google Speech API → PocketSphinx | 麦克风录音→文字，5秒超时 |
-
-```python
-```
+> v0.9.4 中语音组件（STT/TTS）已移除，可按需通过可选依赖安装旧版本。
 
 ---
 
-## 🔧 工具库 (35 内置 + 用户工具箱)
+## 🔧 工具库 (41 内置 + 用户工具箱)
 ### 系统操作
 | 工具 | 功能 |
 |------|------|
@@ -381,51 +376,50 @@ toolkit_lsp(action='completion', file='tea_agent/onlinesession.py', line=850, co
 | `toolkit_date_diff` | 日期差计算 |
 | `toolkit_lunar` | 公历农历转换（1900-2100） |
 | `toolkit_notify` | 跨平台桌面通知 |
+| `toolkit_os_info` | 操作系统信息查询 |
+| `toolkit_delegate` | 任务委派给子Agent |
 
 ### 文件与项目
 | 工具 | 功能 |
 |------|------|
 | `toolkit_file` | 统一文件读写 + 目录列表（read/write/list） |
 | `toolkit_explr` | 项目知识库构建与符号查询（AST调用图） |
-| `toolkit_config` | 运行时配置调优 |
-| `toolkit_build` | 构建/修复 pyproject.toml |
-| `toolkit_release_version` | 自动化版本发布 + CHANGELOG |
-| `toolkit_bump_version` | 跨平台版本号更新 |
-| `toolkit_read_pyproject` | 读取解析 pyproject.toml |
-| `toolkit_comment` | 生成代码注释前缀 |
+| `toolkit_edit` | 精确文件编辑（行级插入/删除/替换） |
+| `toolkit_diff` | unified diff 生成与预览 |
 
 ### 屏幕感知
 | 工具 | 功能 |
 |------|------|
-| `toolkit_input` | 鼠标键盘模拟 |
+| `toolkit_input` | 鼠标键盘模拟（可选，桌面自动化Skill已移除） |
 
 ### 知识管理
 | 工具 | 功能 |
 |------|------|
 | `toolkit_memory` | 长期记忆 CRUD（jieba 分词检索） |
 | `toolkit_kb` | Markdown 知识库 + 自动索引 |
-| `toolkit_search` | 互联网搜索（DuckDuckGo + 百度） |
+| `toolkit_explr` | 项目知识库构建与符号查询（AST调用图） |
 
 ### 自我进化
 | 工具 | 功能 |
 |------|------|
-| `toolkit_save` | 创建/更新工具函数（含 `_my` 路由） |
-| `toolkit_reload` | 热加载工具库 |
+| `toolkit_save` | 创建/更新工具函数（含 `_my` 路由），含reload/rollback/versions |
 | `toolkit_self_evolve` | 修改项目源码（四层安全：快照+备份+验证+测试） |
 | `toolkit_edit` | 高级代码编辑（diff/patch 精准修改） |
 | `toolkit_diff` | unified diff 生成与预览 |
 | `toolkit_lsp` | LSP 代码智能（诊断/补全/跳转/悬停/引用） |
 | `toolkit_plan` | 结构化任务规划与执行（Plan→Execute→Verify） |
 | `toolkit_evolution_exp` | 进化经验库管理 |
-| `toolkit_rollback` | 工具版本回滚 |
-| `toolkit_list_versions` | 工具版本历史 |
+| `toolkit_static` | 静态代码分析（圈复杂度/死代码/目录聚合） |
+| `toolkit_quality_gate` | 代码质量门禁 |
+| `toolkit_read_pyproject` | 读取解析 pyproject.toml |
 
 ### 外部集成
 | 工具 | 功能 |
 |------|------|
 | `toolkit_mcp` | MCP 协议（连接外部 MCP Server） |
 | `toolkit_scheduler` | 定时任务管理 |
-| `toolkit_js_fetch` | JS 页面抓取（Playwright 无头浏览器） |
+| `toolkit_js_fetch` | JS 页面抓取（Playwright 无头浏览器，用户工具箱） |
+| `toolkit_search` | 互联网搜索（DuckDuckGo + 百度） |
 
 ### 认知与人格
 | 工具 | 功能 |
@@ -438,6 +432,7 @@ toolkit_lsp(action='completion', file='tea_agent/onlinesession.py', line=850, co
 | `toolkit_toggle_reasoning` | 推理模式开关 |
 | `toolkit_dump_topic` | 会话导出 markdown |
 | `toolkit_set_topic_title` | 设置会话主题标题 |
+| `toolkit_sub_agent` | 子Agent管理 |
 
 ### 语音与通知
 | 工具 | 功能 |
@@ -452,6 +447,8 @@ toolkit_lsp(action='completion', file='tea_agent/onlinesession.py', line=850, co
 | `toolkit_self_report` | Agent 状态报告 |
 | `toolkit_skill` | Skill 模块管理 |
 | `toolkit_git_push_all_remotes` | 向所有远程仓库推送 |
+| `toolkit_release` | 自动化版本发布 + CHANGELOG |
+| `toolkit_config` | 运行时配置调优（白名单限制） |
 
 ---
 
@@ -491,18 +488,18 @@ toolkit_exec(action='batch', commands=[
 
 ```
 tea_agent/
-├── main_db_gui.py              ← [Tkinter GUI 主程序](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/main_db_gui.py)
-├── tea_main_cli.py             ← [CLI 入口](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/tea_main_cli.py) (--config 多agent)
+├── gui.py                      ← [Tkinter GUI 主程序](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/gui.py)
+├── cli.py                      ← [CLI 入口](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/cli.py) (--config 多agent)
 ├── agent_core.py               ← [GUI/CLI 共享基类](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/agent_core.py) (重启、会话管理)
 ├── config.py                   ← [YAML 配置加载](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/config.py) (主/便宜模型、paths)
 │
 ├── basesession.py              ← [会话抽象基类](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/basesession.py) (load_history 三级策略)
 ├── onlinesession.py            ← [OnlineToolSession](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/onlinesession.py) (核心编排)
 ├── session_pipeline.py         ← [插件化 Pipeline](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_pipeline.py) 步骤管理
-├── session_api.py              ← [API 调用](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_api.py)、流式处理、token 统计
-├── session_tool.py             ← [工具执行](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_tool.py)、rounds 收集
-├── session_summarizer.py       ← [历史摘要](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_summarizer.py)、Topic 摘要
-├── session_memory.py           ← [记忆注入](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_memory.py)、自动提取
+├── session_api_component.py    ← [API 调用](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_api_component.py)、流式处理、token 统计
+├── session_tool_component.py   ← [工具执行](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_tool_component.py)、rounds 收集
+├── session_summarizer_component.py ← [历史摘要](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_summarizer_component.py)、Topic 摘要
+├── session_memory_component.py ← [记忆注入](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_memory_component.py)、自动提取
 ├── session_prompts.py          ← [Prompt 模板](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_prompts.py)
 ├── session_ref.py              ← [反思相关](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_ref.py)
 │
@@ -510,44 +507,55 @@ tea_agent/
 ├── reflection.py               ← [ReflectionManager](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/reflection.py)
 ├── prompt_manager.py           ← [SystemPromptManager](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/prompt_manager.py)
 │
-├── store/                      ← [SQLite 持久化存储子包 (10模块)](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/store.py)
+├── store/                      ← [SQLite 持久化存储子包 (11模块)](https://github.com/sunkwei/tea_agent/tree/master/tea_agent/store)
+├── session_context.py           ← [会话上下文管理](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/session_context.py)
+├── embedding_util.py             ← [嵌入向量工具](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/embedding_util.py)
+├── token_utils.py                ← [Token 计算工具](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/token_utils.py)
+├── project_memory.py             ← [项目记忆管理](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/project_memory.py)
 ├── tlk.py                      ← [工具库加载/校验/保存/分层](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/tlk.py)
 ├── merge_db.py                 ← [数据库合并工具](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/merge_db.py)
 │
+├── multi_agent/                 ← [多Agent协作子包 (5模块)](https://github.com/sunkwei/tea_agent/tree/master/tea_agent/multi_agent)
+│   ├── orchestrator.py          ← 编排器
+│   ├── agent_pool.py            ← Agent池
+│   ├── sub_agent.py             ← 子Agent
+│   ├── task_decomposer.py       ← 任务分解器
+│   └── result_aggregator.py     ← 结果聚合器
+│
 ├── mqtt_agent_connector.py     ← [MQTT 连接器](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/mqtt_agent_connector.py) (注册 broker + 订阅)
 ├── chat_room_connector.py      ← [聊天室连接器](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/chat_room_connector.py)
+├── tui.py                       ← [终端TUI界面](https://github.com/sunkwei/tea_agent/blob/master/tea_agent/tui.py)
 │
-└── toolkit/                    ← [35 个内置工具](https://github.com/sunkwei/tea_agent/tree/master/tea_agent/toolkit)
+└── toolkit/                    ← [41 个内置工具](https://github.com/sunkwei/tea_agent/tree/master/tea_agent/toolkit)
     ├── toolkit_exec.py         ← 系统命令执行（含 batch 并行）
     ├── toolkit_file.py         ← 文件读写 + 目录列表
     ├── toolkit_explr.py        ← 项目知识库 + AST调用图
     ├── toolkit_mode.py         ← 双模式人格切换
     ├── toolkit_lunar.py        ← 公历农历转换
     ├── toolkit_self_evolve.py  ← 四层安全自进化
-    └── ... (39 more)
+    └── ... (35 more)
 │
-├── _gui/                       ← [GUI 模块化子包 (23模块)]
-│   ├── _tk_impl.py             ← Tk 实现层
+├── _gui/                       ← [GUI 模块化子包 (9模块)]
+│   ├── _ui_builder.py          ← UI 构建器
 │   ├── _renderer.py            ← 渲染引擎
 │   ├── _stream_manager.py      ← 流式输出管理
 │   ├── _topic_manager.py       ← 话题管理
-│   └── ... (19 more)
+│   ├── _topic_summary.py       ← 话题摘要
+│   ├── _markdown.py            ← Markdown 渲染
+│   ├── _fonts.py               ← 字体管理
+│   ├── _images.py              ← 图片处理
+│   └── _tray.py                ← 系统托盘
 │
 ├── lsp/                        ← [LSP 代码智能引擎]
 │   ├── lsp_engine.py           ← jedi + ruff 诊断/补全/跳转
+│   ├── lsp_check.py            ← 代码检查
 │   └── ts_analyzer.py          ← tree-sitter 语法分析
-│
-├── store/                      ← [存储层子包 (10模块)]
-│   ├── _core.py                ← Store 主类
-│   ├── _conversations.py       ← 对话 + 嵌入向量
-│   ├── _memories.py            ← 记忆去重
-│   └── ... (7 more)
-│
+
 ├── session/                    ← [会话子包]
 ├── skills/                     ← [Skill 定义子包]
 │   ├── file_system/
 │   ├── self_evolution/
-│   └── ... (5 more)
+│   └── ... (3 more)
 │
 ├── gui/dialogs/                ← [GUI 对话框子包]
 └── toolkit/subconscious/       ← [潜意识引擎子包]
@@ -681,7 +689,7 @@ python -c "from demo.csi300_predictor import export_fig_from_db, DB_PATH; export
 
 ```bash
 pip install .  # 核心依赖
-python -m tea_agent.main_db_gui # 启动 gui 版本
+python -m tea_agent.gui # 启动 gui 版本
 python -m tea_agent.cli  # 启动命令行版本
 ```
 
@@ -757,16 +765,17 @@ main_model:
 
 | 版本 | 关键变化 |
 |------|---------|
-| v0.9.3 | Store 拆分为 10 模块子包、GUI 重构为 `_gui/` 23模块子包、新增 LSP 代码智能引擎、新增 7 个工具（edit/diff/lsp/mcp/plan/scheduler/evolution_exp）、mode_params 模式参数覆盖、L2/L3 分层压缩参数 |
-| v0.9.1 | `toolkit_js_fetch` Playwright 无头浏览器抓取（跨平台）、pyproject.toml 增加 js_fetch 可选依赖 |
-| v0.9.3 | Skill 重组：todo_workflow 独立为单独 Skill，从 self_evolution 解耦 |
+| v0.9.4 | 工具合并精简: 49→41 工具, 删除OCR/TTS/ASR/桌面自动化, 6 Skill；TUI模式；潜意识引擎随GUI启动；ScrolledText智能滚动；清理432条子进化注释 |
+| v0.9.3 | Store 拆分为 10 模块子包、GUI 重构为 `_gui/` 9模块子包、新增 LSP 代码智能引擎、新增工具（edit/diff/lsp/mcp/plan/scheduler/evolution_exp）、mode_params 模式参数覆盖、L2/L3 分层压缩参数；Skill 重组：todo_workflow 独立 |
 | v0.9.2 | `_post_chat_pipeline` config→_cfg 修复、版本号同步 |
-| v0.8.2 | 版本号一致性修复，以 pyproject.toml 为准同步 || v0.7.15 | 双层记忆体系（用户记忆优先级衰减+LLM精调/项目记忆FIFO）、Store Composition拆分9模块、GUI MVC+Tk重构、分层保底+年龄衰减 |
+| v0.9.1 | `toolkit_js_fetch` Playwright 无头浏览器抓取（跨平台）、pyproject.toml 增加 js_fetch 可选依赖 |
+| v0.8.2 | 版本号一致性修复，以 pyproject.toml 为准同步 |
 | v0.8.0 | 聊天图片附件支持、HtmlFrame 图片 base64 渲染、点击图片放大弹窗、GUI 标题含当前目录、工具轮始终显示 |
 | v0.7.23 | 工具箱分层规则（内置/用户）、`_my` 工具路由、README 全面整理 |
 | v0.7.22 | gui_dialogs 导入修复 |
 | v0.7.20-21 | toolkit_set_topic_title、CLI --config 多agent、知识库重建 |
 | v0.7.18 | HtmlFrame 轮次视图：最新轮渲染+历史链接表 |
+| v0.7.15 | 双层记忆体系（用户记忆优先级衰减+LLM精调/项目记忆FIFO）、Store Composition拆分9模块、GUI MVC+Tk重构、分层保底+年龄衰减 |
 | v0.7.3 | 嵌入向量：自动嵌入/语义搜索/numpy BLOB 存储 |
 | v0.6.3 | 依赖瘦身：easyocr→可选, torch 746MB 不再必需 |
 | v0.6.2 | 历史加载三级渐进策略（Level 1/2/3） |

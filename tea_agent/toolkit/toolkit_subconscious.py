@@ -82,6 +82,24 @@ def toolkit_subconscious(action: str, focus: str = None):
         with open(STATE_FILE, 'w') as f:
             json.dump(state, f, indent=2, ensure_ascii=False)
 
+    def _has_conversations(db_path=None):
+        """Internal: check if there are any conversations in the database.
+        
+        Args:
+            db_path: Description.
+        """
+        try:
+            p = db_path or _get_db_path()
+            if os.path.exists(p):
+                conn = sqlite3.connect(p)
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM conversations")
+                cnt = cur.fetchone()[0]
+                conn.close()
+                return cnt > 0
+        except: pass
+        return False
+
     def _get_db_path():
         """Internal: get the db path"""
         if os.path.exists(DEFAULT_DB):
@@ -210,15 +228,19 @@ def toolkit_subconscious(action: str, focus: str = None):
             for cand in candidates_list:
                 if not _is_duplicate_memory(cur, cand.get("content","")):
                     try:
+                        import uuid
+                        mid = str(uuid.uuid4())[:8]
                         cur.execute(
-                            "INSERT INTO memories (content, category, priority, importance, tags, source_topic_id) VALUES (?,?,?,?,?,?)",
-                            (cand.get("content",""), cand.get("category","general"),
+                            "INSERT INTO memories (id, content, category, priority, importance, tags, source_topic_id, created_at, updated_at) "
+                            "VALUES (?,?,?,?,?,?,?,datetime('now','localtime'),datetime('now','localtime'))",
+                            (mid, cand.get("content",""), cand.get("category","general"),
                              cand.get("priority",3), cand.get("importance",2),
                              cand.get("tags","auto-extracted"), conv.get("topic_id"))
                         )
                         storage.conn.commit()
                         extracted.append(cand["content"][:60])
-                    except: pass
+                    except Exception as e:
+                        logger.debug(f"Failed to insert auto-extracted memory: {e}")
         return {"processed":len(convs),"extracted":extracted,"last_id":max_id}
 
     def _extract_memory_candidates(user_msg, ai_msg):
@@ -230,30 +252,71 @@ def toolkit_subconscious(action: str, focus: str = None):
         """
         candidates = []
         text = user_msg
+        
+        # Explicit memory commands
         for pat in [r'记住[：:]\s*(.+?)(?:[。！\n]|$)',
                      r'以后\s*(.+?)(?:[。！\n]|$)',
-                     r'偏好[：:]\s*(.+?)(?:[。！\n]|$)']:
+                     r'偏好[：:]\s*(.+?)(?:[。！\n]|$)',
+                     r'记录[：:]\s*(.+?)(?:[。！\n]|$)',
+                     r'备忘[：:]\s*(.+?)(?:[。！\n]|$)']:
             m = re.search(pat, text)
             if m and len(m.group(1))>5:
                 candidates.append({"content":m.group(1).strip(),"category":"preference","priority":1,"importance":4})
-        for pat in [r'(?:总是|一直|经常)\s*(.+?)(?:[。！\n]|$)',
-                     r'(?:不要|别|禁止)\s*(.+?)(?:[。！\n]|$)',
-                     r'(?:必须|一定要)\s*(.+?)(?:[。！\n]|$)']:
+        
+        # Behavioral patterns / instructions
+        for pat in [r'(?:总是|一直|经常|每次)\s*(.+?)(?:[。！\n]|$)',
+                     r'(?:不要|别|禁止|避免|千万别)\s*(.+?)(?:[。！\n]|$)',
+                     r'(?:必须|一定要|务必|确保)\s*(.+?)(?:[。！\n]|$)']:
             for m in re.finditer(pat, text):
                 if len(m.group(1).strip())>5:
                     candidates.append({"content":m.group(1).strip(),"category":"instruction","priority":0,"importance":5})
-        for pat in [r'(?:发现|注意到)\s*(.+?)(?:[。！\n]|$)',
-                     r'问题[：:]\s*(.+?)(?:[。！\n]|$)']:
+        
+        # Discoveries and facts
+        for pat in [r'(?:发现|注意到|观察到)\s*(.+?)(?:[。！\n]|$)',
+                     r'问题[：:]\s*(.+?)(?:[。！\n]|$)',
+                     r'(?:确认|验证了?|证实)\s*(.+?)(?:[。！\n]|$)',
+                     r'原因[：:是]\s*(.+?)(?:[。！\n]|$)',
+                     r'(?:结论|总结)[：:]\s*(.+?)(?:[。！\n]|$)']:
             m = re.search(pat, text)
             if m and len(m.group(1))>10:
                 candidates.append({"content":m.group(1).strip(),"category":"fact","priority":2,"importance":3})
+        
+        # Todos and reminders
+        for pat in [r'(?:需要|还得|还要|接下来)\s*(?:做|干|处理|弄)\s*(.+?)(?:[。！\n]|$)',
+                     r'(?:TODO|FIXME|HACK)[：:]\s*(.+?)(?:[。！\n]|$)',
+                     r'(?:待办|计划)[：:]\s*(.+?)(?:[。！\n]|$)']:
+            m = re.search(pat, text)
+            if m and len(m.group(1))>5:
+                candidates.append({"content":m.group(1).strip(),"category":"reminder","priority":1,"importance":3})
+        
+        # Technology-related facts extracted from longer sentences
         tech_kw = ['工具','toolkit','agent','python','sqlite','截屏','ocr','self_evolve',
-                    '记忆','memory','反思','reflection','配置','config','进化','evolve']
-        for sent in re.split(r'[。！\n]', text):
+                    '记忆','memory','反思','reflection','配置','config','进化','evolve',
+                    'skill','mixin','session','token','上下文','context','数据库','database',
+                    'API','cli','gui','桌面','通知','notification','截图','screenshot',
+                    '压缩','compress','stream','流式','chat','对话','模型','model',
+                    'LLM','GPT','Claude','DeepSeek','潜意识','subconscious','dream']
+        for sent in re.split(r'[。！\n;；]', text):
             sent = sent.strip()
-            if len(sent)>20 and any(kw in sent.lower() for kw in tech_kw):
+            if len(sent)>20 and any(kw.lower() in sent.lower() for kw in tech_kw):
                 if not any(c["content"]==sent for c in candidates):
                     candidates.append({"content":sent,"category":"fact","priority":2,"importance":2})
+        
+        # Also extract from AI responses for technical facts
+        if ai_msg:
+            ai_text = str(ai_msg)
+            # Extract important conclusions from AI responses
+            for pat in [r'(?:总结|结论|概括)[：:]\s*(.+?)(?:[。！\n]|$)',
+                         r'(?:关键|核心|重要)[：:是]\s*(.+?)(?:[。！\n]|$)',
+                         r'(?:注意|⚠️|⚡|🔴)[：:]\s*(.+?)(?:[。！\n]|$)']:
+                m = re.search(pat, ai_text)
+                if m and len(m.group(1))>15:
+                    # Avoid too many AI-generated memories; cap at 2
+                    ai_candidates = [c for c in candidates if c.get("_source") == "ai_response"]
+                    if len(ai_candidates) < 2:
+                        candidates.append({"content":m.group(1).strip(),"category":"fact",
+                                           "priority":2,"importance":2,"_source":"ai_response"})
+        
         return candidates[:10]
 
     def _is_duplicate_memory(cur, content):
@@ -267,9 +330,135 @@ def toolkit_subconscious(action: str, focus: str = None):
         for (existing,) in cur.fetchall():
             if existing and content:
                 sa, sb = set(existing), set(content)
-                if len(sa|sb)>0 and len(sa&sb)/len(sa|sb) > 0.6:
+                if len(sa|sb)>0 and len(sa&sb)/len(sa|sb) > 0.8:
                     return True
         return False
+
+    def _detect_stagnation(state):
+        """Internal: detect if the engine is stuck in a loop.
+        
+        Args:
+            state: Description.
+        """
+        stats = state.get("stats", {})
+        cycles = state.get("cycles_completed", 0)
+        auto_mem = stats.get("auto_memories", 0)
+        conv_dig = stats.get("conversations_digested", 0)
+        # If we've completed > 5 cycles but generated 0 auto memories and digested 0 conversations
+        if cycles >= 5 and auto_mem == 0 and conv_dig == 0:
+            return {"stagnant": True, "reason": f"{cycles}周期无新数据注入",
+                    "cycles_no_change": cycles, "action": "synthesize_or_deep_scan"}
+        # Track consecutive cycles with no changes
+        last_auto = state.get("_last_auto_memories", -1)
+        last_conv = state.get("_last_conversations_digested", -1)
+        if last_auto >= 0 and last_conv >= 0:
+            if auto_mem == last_auto and conv_dig == last_conv:
+                no_change_cycles = state.get("_no_change_cycles", 0) + 1
+                state["_no_change_cycles"] = no_change_cycles
+                if no_change_cycles >= 10:
+                    return {"stagnant": True, "reason": f"连续{no_change_cycles}轮无变化",
+                            "cycles_no_change": no_change_cycles, "action": "deep_analyze"}
+            else:
+                state["_no_change_cycles"] = 0
+        state["_last_auto_memories"] = auto_mem
+        state["_last_conversations_digested"] = conv_dig
+        return {"stagnant": False}
+
+    def _synthesize_memories(storage, state):
+        """Internal: use cheap LLM to synthesize new memories from existing ones.
+        Only called when the engine detects stagnation.
+        
+        Args:
+            storage: Description.
+            state: Description.
+        """
+        if not storage or not storage.conn: return 0
+        cur = storage.conn.cursor()
+        cur.execute("SELECT * FROM memories WHERE is_active=1 ORDER BY priority ASC, updated_at DESC LIMIT 30")
+        mems = [dict(r) for r in cur.fetchall()]
+        if len(mems) < 2: return 0
+
+        # Avoid synthesizing too frequently
+        last_synth = state.get("_last_synthesis_at")
+        if last_synth:
+            try:
+                lst = datetime.fromisoformat(str(last_synth).replace("Z","+00:00")[:19])
+                if (datetime.now() - lst).total_seconds() < CYCLE_INTERVAL * 2:
+                    return 0
+            except: pass
+
+        try:
+            from tea_agent.config import get_config
+            from openai import OpenAI
+            cfg = get_config()
+            cheap = cfg.cheap_model
+            if not (cheap.api_key and cheap.api_url and cheap.model_name):
+                return 0
+            client = OpenAI(api_key=cheap.api_key, base_url=cheap.api_url)
+
+            mem_summaries = []
+            for m in mems:
+                mem_summaries.append(
+                    f"[{m['id']}] P{m['priority']} [{m['category']}] {str(m['content'])[:120]}"
+                )
+            mem_text = "\n".join(mem_summaries)
+
+            prompt = (
+                "你是一个知识合成器。分析以下记忆列表，生成 2-4 条新的合成记忆。\n"
+                "规则：\n"
+                "1. 跨记忆关联：找出两条或多条记忆之间的隐含联系\n"
+                "2. 抽象提升：从具体事实中提炼出通用原则或模式\n"
+                "3. 矛盾发现：找出记忆之间可能的矛盾或紧张关系\n"
+                "4. 盲点推断：基于现有记忆，推断可能缺失的关键知识\n\n"
+                f"现有记忆：\n{mem_text}\n\n"
+                "输出 JSON 数组，每条含：content(≤100字)、category(fact/preference/general)、"
+                "priority(1-3)、importance(2-5)、tags(逗号分隔)。\n"
+                "不要重复现有记忆。如果无法生成有价值的合成记忆，输出空数组 []。\n"
+                "只输出 JSON 数组："
+            )
+
+            r = client.chat.completions.create(
+                model=cheap.model_name,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7, max_tokens=800,
+            )
+            raw = (r.choices[0].message.content or "").strip() if r.choices else ""
+            if raw:
+                json_start = raw.find("[")
+                json_end = raw.rfind("]") + 1
+                if json_start >= 0 and json_end > json_start:
+                    import json as _json2
+                    synthesized = _json2.loads(raw[json_start:json_end])
+                    added = 0
+                    for item in synthesized:
+                        if isinstance(item, dict) and item.get("content"):
+                            content = item["content"].strip()
+                            if not content or len(content) < 10:
+                                continue
+                            # Check for duplicates with existing memories
+                            if _is_duplicate_memory(cur, content):
+                                continue
+                            try:
+                                import uuid
+                                mid = str(uuid.uuid4())[:8]
+                                cur.execute(
+                                    "INSERT INTO memories (id, content, category, priority, importance, tags, created_at, updated_at) "
+                                    "VALUES (?,?,?,?,?,?,datetime('now','localtime'),datetime('now','localtime'))",
+                                    (mid, content, item.get("category", "fact"),
+                                     item.get("priority", 2), item.get("importance", 3),
+                                     item.get("tags", "synthesized"))
+                                )
+                                storage.conn.commit()
+                                added += 1
+                                logger.info(f"Subconscious synthesized memory: {content[:60]}")
+                            except Exception as e:
+                                logger.debug(f"Failed to insert synthesized memory: {e}")
+                    if added:
+                        state["_last_synthesis_at"] = datetime.now().isoformat()
+                    return added
+        except Exception as e:
+            logger.debug(f"Memory synthesis skipped: {e}")
+        return 0
 
     def _cross_link(storage, kb_dir, state):
         """Internal: cross link.
@@ -381,6 +570,11 @@ def toolkit_subconscious(action: str, focus: str = None):
         if conv_digest.get("extracted"):
             n = len(conv_digest["extracted"])
             ins.append({"level":"info","content":f"从{n}条新对话中自动提取了记忆","action":"review_auto_memories"})
+        if conv_digest.get("synthesized", 0):
+            n = conv_digest["synthesized"]
+            ins.append({"level":"info","content":f"系统停滞期间合成了{n}条新记忆","action":"review_synthesized_memories"})
+        if conv_digest.get("note") == "no_conversations_in_db":
+            ins.append({"level":"warning","content":"数据库中没有对话记录，引擎缺乏新数据来源","action":"synthesize_or_deep_scan"})
 
         try:
             from tea_agent.config import get_config
@@ -469,19 +663,28 @@ def toolkit_subconscious(action: str, focus: str = None):
         unapp = digest.get("unapplied_reflections",0) if digest else 0
         if unapp>=3:
             goals.append({"priority":1,"goal":f"回顾并应用{unapp}条未处理的反思建议","action":"toolkit_reflection(action='list')"})
+        elif unapp>0:
+            goals.append({"priority":2,"goal":f"回顾并应用{unapp}条未处理的反思建议","action":"toolkit_reflection(action='list')"})
         for lk in links:
             if lk["type"]=="stale_kb":
                 goals.append({"priority":2,"goal":"更新过期KB文档","action":"toolkit_kb(action='list')"})
+                break
             elif lk["type"]=="stale_prompts":
                 goals.append({"priority":2,"goal":"更新过时的Prompt文件","action":"检查 session_prompts.py 和 session_summarizer.py"})
+                break
             elif lk["type"]=="stale_system_prompt":
                 goals.append({"priority":1,"goal":"进化系统提示词(超过30天未更新)","action":"toolkit_prompt_evolve(action='evolve')"})
+                break
         for ins in insights:
             if ins.get("action")=="cleanup_memories":
                 goals.append({"priority":3,"goal":"清理超过7天未访问的记忆","action":"toolkit_memory(action='search')"})
             elif ins.get("action")=="review_auto_memories":
                 goals.append({"priority":2,"goal":"审查自动提取的记忆","action":"toolkit_memory(action='list')"})
-        goals.append({"priority":3,"goal":"运行自检: toolkit_self_report()","action":"toolkit_self_report()"})
+            elif ins.get("action")=="synthesize_or_deep_scan":
+                goals.append({"priority":1,"goal":"系统停滞：需要新数据注入或深度扫描","action":"手动进行对话或运行toolkit_subconscious(action='dream')"})
+        # Only add self-report every 10 cycles to avoid repetition
+        if state.get("cycles_completed", 0) % 10 == 0:
+            goals.append({"priority":3,"goal":"运行自检: toolkit_self_report()","action":"toolkit_self_report()"})
         seen=set(); uniq=[]
         for g in sorted(goals,key=lambda x:x["priority"]):
             if g["goal"] not in seen: seen.add(g["goal"]); uniq.append(g)
@@ -650,30 +853,58 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
             mm = MemoryManager(storage)
 
             digest = _digest_memories(storage)
-            conv_digest = _digest_conversations(storage, state, mm=mm)
+            has_conv = _has_conversations(db_path)
+            
+            # Check for stagnation before processing conversations
+            stagnation = _detect_stagnation(state) if not has_conv else {"stagnant": False}
+            
+            if has_conv:
+                conv_digest = _digest_conversations(storage, state, mm=mm)
+            else:
+                # No conversations at all - skip digestion and note the state
+                conv_digest = {"processed": 0, "extracted": [], "last_id": 0,
+                               "note": "no_conversations_in_db"}
+                # Trigger memory synthesis when stagnant to create new data
+                if stagnation.get("stagnant"):
+                    n = _synthesize_memories(storage, state)
+                    if n:
+                        conv_digest["synthesized"] = n
+                        stagnation = {"stagnant": False}  # Reset stagnation after synthesis
+                        # Re-digest memories after synthesis
+                        digest = _digest_memories(storage)
 
-            try:
-                from tea_agent.config import get_config
-                from openai import OpenAI
-
-                cfg = get_config()
-                cheap = cfg.cheap_model
-                if cheap.api_key and cheap.api_url and cheap.model_name:
-                    client = OpenAI(api_key=cheap.api_key, base_url=cheap.api_url)
-                    topics_text = conv_digest.get("topics_summary", "")
-                    if not topics_text:
-                        kw = digest.get("top_keywords", [])
-                        topics_text = ", ".join(w for w, _ in kw[:10]) if kw else ""
-
-                    if topics_text:
-                        n = mm.llm_adjust_priorities(topics_text, client=client, model=cheap.model_name)
-                        if n:
-                            state["stats"]["llm_adjustments"] = state["stats"].get("llm_adjustments", 0) + n
-            except Exception:
-                pass
+            # LLM priority adjustment (skip if no conversations)
+            if has_conv or state.get("cycles_completed", 0) % 10 == 0:
+                try:
+                    from tea_agent.config import get_config
+                    from openai import OpenAI
+                    cfg = get_config()
+                    cheap = cfg.cheap_model
+                    if cheap.api_key and cheap.api_url and cheap.model_name:
+                        client = OpenAI(api_key=cheap.api_key, base_url=cheap.api_url)
+                        topics_text = conv_digest.get("topics_summary", "")
+                        if not topics_text:
+                            kw = digest.get("top_keywords", []) if digest else []
+                            topics_text = ", ".join(w for w, _ in kw[:10]) if kw else ""
+                        if topics_text:
+                            n = mm.llm_adjust_priorities(topics_text, client=client, model=cheap.model_name)
+                            if n:
+                                state["stats"]["llm_adjustments"] = state["stats"].get("llm_adjustments", 0) + n
+                except Exception:
+                    pass
 
             links = _cross_link(storage, kb_dir, state)
             insights = _generate_insights(digest, links, conv_digest, kb_dir, state)
+            
+            # If stagnant, add a specific insight
+            if stagnation.get("stagnant"):
+                insights.append({
+                    "level": "warning",
+                    "content": stagnation.get("reason", "系统循环停滞"),
+                    "action": stagnation.get("action", "synthesize_or_deep_scan"),
+                    "source": "stagnation_detector"
+                })
+            
             goals = _set_goals(digest, links, insights, conv_digest, state, db_path)
             state["last_cycle_at"] = datetime.now().isoformat()
             state["cycles_completed"] = state.get("cycles_completed", 0) + 1
@@ -688,6 +919,9 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
             state["stats"]["insights_generated"] = state["stats"].get("insights_generated", 0) + len(insights)
             state["stats"]["goals_set"] = state["stats"].get("goals_set", 0) + len(goals)
             state["stats"]["auto_memories"] = state["stats"].get("auto_memories", 0) + len(conv_digest.get("extracted", []))
+            # Track synthesized memories
+            if conv_digest.get("synthesized", 0):
+                state["stats"]["auto_memories"] = state["stats"].get("auto_memories", 0) + conv_digest["synthesized"]
             _write_state(state)
             return {"digest": digest, "insights": insights, "goals": goals, "conv_digest": conv_digest}
         finally:
@@ -983,7 +1217,9 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         return {"digest":{"total_memories":result["digest"]["total_memories"] if result["digest"] else 0,
                           "focus":result["digest"].get("focus","mixed") if result["digest"] else "mixed"},
                 "conversations":{"processed":result["conv_digest"].get("processed",0),
-                                 "auto_extracted":len(result["conv_digest"].get("extracted",[]))},
+                                 "auto_extracted":len(result["conv_digest"].get("extracted",[])),
+                                 "synthesized":result["conv_digest"].get("synthesized",0),
+                                 "note":result["conv_digest"].get("note","")},
                 "insights":[i["content"] for i in result["insights"]],
                 "goals":[g["goal"] for g in result["goals"][:5]],
                 "dream":dream_result}

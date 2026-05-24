@@ -1337,7 +1337,7 @@ class OnlineToolSession(BaseChatSession):
                         self._extra_iterations += self.context.extra_iterations_on_continue
                         self._continue_after_max = False
                         self._max_iter_wait.clear()
-                        on_status("⏳ 已续命5轮，继续生成... (ESC 打断)")
+                        on_status(f"⏳ 已续命{self.context.extra_iterations_on_continue}轮，继续生成... (ESC 打断)")  # 2026-05-25 gen by Tea Agent, fix hardcoded续命轮数
                         continue
                     else:
                         warning = f"\n\n[警告：已达到最大迭代次数 {self.max_iterations}，对话终止]"

@@ -1,5 +1,46 @@
 
 import logging
+import sys
+
+# --- Windows 兼容层 ---
+_IS_WINDOWS = sys.platform == "win32"
+
+# Windows shell 内置命令，需要 cmd.exe /c 包装才能执行
+_WIN_SHELL_BUILTINS = {
+    "dir", "type", "find", "findstr", "copy", "del", "erase",
+    "ren", "rename", "md", "mkdir", "rd", "rmdir", "move",
+    "echo", "set", "cls", "date", "time", "ver", "vol",
+    "cd", "chdir", "pushd", "popd", "more", "color", "mklink",
+}
+
+def _resolve_command(app, args):
+    """跨平台命令解析：Windows 上对 shell 内置命令自动包装为 cmd.exe /c"""
+    if _IS_WINDOWS and app.lower() in _WIN_SHELL_BUILTINS:
+        cmd_line = app
+        if args:
+            cmd_line += " " + " ".join(args)
+        return "cmd.exe", ["/c", cmd_line]
+    return app, args
+
+def _kill_process(process):
+    """跨平台进程强制终止"""
+    import signal as _sig
+    if _IS_WINDOWS:
+        try:
+            process.kill()
+            process.wait(timeout=5)
+        except Exception:
+            pass
+    else:
+        try:
+            os.killpg(os.getpgid(process.pid), _sig.SIGKILL)
+            process.wait(timeout=5)
+        except (ProcessLookupError, OSError):
+            try:
+                process.kill()
+                process.wait(timeout=5)
+            except Exception:
+                pass
 
 logger = logging.getLogger("toolkit")
 
@@ -30,7 +71,8 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                 if isinstance(script, str) and len(script) > _PY_CMD_THRESHOLD:
                     tmpfd, tmppath = tempfile.mkstemp(suffix=".py", prefix="tea_exec_")
                     try:
-                        with os.fdopen(tmpfd, "w", encoding="utf-8") as f:
+                        os.close(tmpfd)
+                        with open(tmppath, "w", encoding="utf-8") as f:
                             f.write(script)
                         new_args = list(args[:i]) + [tmppath] + list(args[i+2:])
                         logger.info(f"toolkit_exec: -c脚本{len(script)}字符→临时文件 {tmppath}")
@@ -68,11 +110,22 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                     with lock:
                         results[idx] = {"index": idx, "returncode": -1, "stdout": "", "stderr": "app为空", "error": True}
                     return
-                p = subprocess.Popen(
-                    [a] + list(ar),
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    text=True, start_new_session=True,
-                )
+                resolved_app, resolved_args = _resolve_command(a, ar)
+                popen_kwargs = {
+                    "stdout": subprocess.PIPE, "stderr": subprocess.PIPE,
+                    "text": True,
+                }
+                if not _IS_WINDOWS:
+                    popen_kwargs["start_new_session"] = True
+                try:
+                    p = subprocess.Popen(
+                        [resolved_app] + list(resolved_args),
+                        **popen_kwargs,
+                    )
+                except FileNotFoundError:
+                    with lock:
+                        results[idx] = {"index": idx, "returncode": -1, "stdout": "", "stderr": f"❌ 命令未找到: {a}", "error": True}
+                    return
                 try:
                     stdout, stderr = p.communicate(timeout=timeout)
                     with lock:
@@ -82,15 +135,7 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                             "error": p.returncode != 0,
                         }
                 except subprocess.TimeoutExpired:
-                    try:
-                        os.killpg(os.getpgid(p.pid), _sig.SIGKILL)
-                        p.wait(timeout=3)
-                    except Exception:
-                        try:
-                            p.kill()
-                            p.wait(timeout=3)
-                        except Exception:
-                            pass
+                    _kill_process(p)
                     cmd_preview = f"{a} {' '.join(ar[:3])}"
                     if len(ar) > 3:
                         cmd_preview += f" ... (+{len(ar)-3} args)"
@@ -120,27 +165,23 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         effective_timeout = timeout if timeout else 120
         
         try:
+            resolved_app, resolved_args = _resolve_command(app, args)
+            popen_kwargs = {
+                "stdout": subprocess.PIPE, "stderr": subprocess.PIPE,
+                "text": True,
+            }
+            if not _IS_WINDOWS:
+                popen_kwargs["start_new_session"] = True
             process = subprocess.Popen(
-                [app] + list(args),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                start_new_session=True,
+                [resolved_app] + list(resolved_args),
+                **popen_kwargs,
             )
             stdout, stderr = process.communicate(timeout=effective_timeout)
             result = (process.returncode, stdout, stderr)
+        except FileNotFoundError:
+            result = (-1, "", f"❌ 命令未找到: {app}")
         except subprocess.TimeoutExpired:
-            try:
-                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                process.wait(timeout=5)
-            except (ProcessLookupError, OSError):
-                try:
-                    process.kill()
-                    process.wait(timeout=5)
-                except Exception:
-                    pass
-            except Exception:
-                pass
+            _kill_process(process)
             cmd_preview = f"{app} {' '.join(args[:5])}"
             if len(args) > 5:
                 cmd_preview += f" ... (+{len(args)-5} args)"

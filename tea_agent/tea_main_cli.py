@@ -192,9 +192,9 @@ class TeaCLI(AgentCore):
             if status_msg.startswith("!MAX_ITER:"):
                 display = status_msg.replace("!MAX_ITER:", "")
                 print(f"\n⚠️  {display}")
-                print("⏳ 自动续命 10 轮...")
+                print(f"⏳ 自动续命 {self.sess.context.extra_iterations_on_continue} 轮...")  # 2026-05-25 gen by Tea Agent, fix hardcoded
                 self.sess._continue_after_max = True
-                self.sess._extra_iterations += 10
+                self.sess._extra_iterations += self.sess.context.extra_iterations_on_continue  # 2026-05-25 gen by Tea Agent, fix hardcoded
                 self.sess._max_iter_wait.set()
 
         def work():

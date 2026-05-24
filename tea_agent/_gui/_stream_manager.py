@@ -77,7 +77,7 @@ class StreamManager:
             msg (str): Description.
         """
         display = msg.replace("!MAX_ITER:", "")
-        extra = getattr(self.gui.sess, "extra_iterations_on_continue", 5) if hasattr(self.gui, "sess") and self.gui.sess else 5
+        extra = self.gui.sess.context.extra_iterations_on_continue if hasattr(self.gui, "sess") and self.gui.sess and hasattr(self.gui.sess, "context") else 5
         result = messagebox.askyesno(
             "达到工具调用上限",
             display + "\n\n选择「是」续命 " + str(extra) + " 轮\n选择「否」终止当前回答",

@@ -18,7 +18,7 @@ import time
 from typing import Dict, List, Optional, Any, Callable
 
 from tea_agent.multi_agent.sub_agent import SubAgentWrapper, SubAgentConfig
-from tea_agent.multi_agent.agent_pool import AgentPool
+from tea_agent.multi_agent.agent_pool import AgentPool, LiteAgentPool
 from tea_agent.multi_agent.task_decomposer import TaskDecomposer, SubTask
 from tea_agent.multi_agent.result_aggregator import ResultAggregator
 
@@ -418,3 +418,347 @@ class MultiAgentOrchestrator:
             "execution_count": len(self._execution_history),
             "last_execution": self._execution_history[-1] if self._execution_history else None,
         }
+
+
+# ---------------------------------------------------------------------------
+# LiteOrchestrator — 轻量级编排器
+# ---------------------------------------------------------------------------
+
+class LiteOrchestrator:
+    """
+    轻量级多 Agent 编排器。
+
+    使用 LiteAgent + LiteAgentPool 替代厚重的 OnlineToolSession，
+    零数据库依赖，仅需 YAML 配置文件即可运行。
+
+    核心流程:
+        1. 接收用户任务
+        2. TaskDecomposer 分解为子任务（支持 LiteAgent 智能分解）
+        3. LiteAgentPool 并行执行子任务
+        4. ResultAggregator 合并结果
+
+    用法:
+        # 方式1: 单一配置（所有子Agent共享模型配置）
+        orch = LiteOrchestrator(
+            config_path="lite_agent_config.yaml",
+            max_workers=4,
+        )
+        orch.register_agent_type("coder", role="代码专家",
+                                 tool_whitelist=["toolkit_file", "toolkit_exec"])
+
+        result = orch.execute("审查项目中的所有 Python 文件")
+
+        # 方式2: 主Agent有自己的配置，子Agent使用独立配置
+        orch = LiteOrchestrator(
+            master_config_path="master_config.yaml",
+            max_workers=4,
+        )
+
+        # 方式3: 纯字典配置
+        orch = LiteOrchestrator(
+            config_dict={"main_model": {"api_key": "...", ...}},
+        )
+    """
+
+    def __init__(
+        self,
+        config_path: Optional[str] = None,
+        config_dict: Optional[Dict[str, Any]] = None,
+        master_config_path: Optional[str] = None,
+        master_config_dict: Optional[Dict[str, Any]] = None,
+        max_workers: int = 4,
+    ):
+        """
+        初始化轻量级编排器。
+
+        Args:
+            config_path: LiteAgent YAML 配置路径（主Agent和子Agent共用）
+            config_dict: LiteAgent 配置字典（主Agent和子Agent共用）
+            master_config_path: 主Agent专用 YAML 配置（用于任务分解/合并的 LLM）
+            master_config_dict: 主Agent专用配置字典
+            max_workers: 最大并行子Agent数
+        """
+        from tea_agent.multi_agent.lite_agent import LiteAgent, LiteAgentConfig
+
+        self._max_workers = max_workers
+
+        # ── 主 Agent（用于任务分解和结果合并） ──
+        master_path = master_config_path or config_path
+        master_dict = master_config_dict or config_dict
+
+        if master_path:
+            self._master = LiteAgent(config_path=master_path)
+        elif master_dict:
+            self._master = LiteAgent(config_dict=master_dict)
+        else:
+            raise ValueError("必须提供 config_path、config_dict、"
+                             "master_config_path 或 master_config_dict")
+
+        # ── 子Agent池 ──
+        self.pool = LiteAgentPool(max_workers=max_workers)
+
+        # ── 子Agent基础配置（从 config_path/config_dict 继承） ──
+        self._base_config_path = config_path
+        self._base_config_dict = config_dict
+
+        # ── 任务分解器（使用主Agent进行LLM分解） ──
+        self.decomposer = TaskDecomposer(
+            agent_types=[],
+            lite_agent=self._master,
+        )
+
+        # ── 结果合并器（无LLM时使用简单拼接） ──
+        self.aggregator = ResultAggregator()
+
+        # ── 状态 ──
+        self._lock = threading.Lock()
+        self._execution_history: List[Dict] = []
+
+        logger.info(
+            f"LiteOrchestrator 初始化完成 "
+            f"(master_model={self._master._model}, max_workers={max_workers})"
+        )
+
+    # ------------------------------------------------------------------
+    # Agent 类型注册
+    # ------------------------------------------------------------------
+
+    def register_agent_type(
+        self,
+        type_name: str,
+        role: str = "",
+        system_prompt: str = "",
+        tool_whitelist: Optional[List[str]] = None,
+        tool_blacklist: Optional[List[str]] = None,
+        config_path: Optional[str] = None,
+        config_dict: Optional[Dict[str, Any]] = None,
+    ):
+        """
+        注册子Agent类型模板。
+
+        Args:
+            type_name: 类型名（如 "coder", "reviewer"）
+            role: 角色描述
+            system_prompt: 系统提示词
+            tool_whitelist: 工具白名单
+            tool_blacklist: 工具黑名单
+            config_path: 独立的 YAML 配置（不提供则继承主Agent）
+            config_dict: 独立的配置字典
+        """
+        self.pool.register_template(
+            template_name=type_name,
+            config_path=config_path or self._base_config_path,
+            config_dict=config_dict or self._base_config_dict,
+            system_prompt=system_prompt,
+            role=role,
+            tool_whitelist=tool_whitelist,
+            tool_blacklist=tool_blacklist,
+        )
+        self.decomposer.agent_types.append(type_name)
+        logger.info(f"注册子Agent类型: '{type_name}' (role={role})")
+
+    # ------------------------------------------------------------------
+    # 主入口
+    # ------------------------------------------------------------------
+
+    def execute(
+        self,
+        task: str,
+        mode: str = "auto",
+        subtasks: Optional[List[SubTask]] = None,
+        agent_mapping: Optional[Dict[str, str]] = None,
+        stream_callback: Optional[Callable[[str], None]] = None,
+    ) -> str:
+        """
+        执行任务。
+
+        Args:
+            task: 用户任务描述
+            mode: "auto"=自动分解, "manual"=手动指定, "single"=单一Agent
+            subtasks: 手动指定的子任务（mode=manual）
+            agent_mapping: 手动映射 {task_id: agent_name}
+            stream_callback: 进度回调
+
+        Returns:
+            合并后的最终结果
+        """
+        exec_start = time.time()
+        record: Dict[str, Any] = {
+            "task": task, "mode": mode, "start_time": exec_start,
+            "subtasks": [], "results": {}, "final_result": "",
+        }
+
+        try:
+            if stream_callback:
+                stream_callback(f"[编排器] 处理任务 (mode={mode})...\n")
+
+            # ── 1. 分解任务 ──
+            if mode == "manual" and subtasks:
+                task_list = subtasks
+            elif mode == "single":
+                task_list = [SubTask(
+                    id="single", description=task,
+                    agent_type="general", agent_role="通用助手",
+                )]
+            else:
+                if stream_callback:
+                    stream_callback("[编排器] 分解任务...\n")
+                task_list = self.decomposer.decompose(task)
+
+            record["subtasks"] = [t.to_dict() for t in task_list]
+
+            if stream_callback:
+                stream_callback(f"[编排器] → {len(task_list)} 个子任务\n")
+
+            # ── 2. 分配并创建 Agent ──
+            assignments = self._assign_agents(task_list, agent_mapping, stream_callback)
+
+            if not assignments:
+                return "[编排器] 没有可执行的子任务"
+
+            # ── 3. 按依赖顺序执行 ──
+            batches = self.decomposer.get_execution_order(task_list)
+            all_results: Dict[str, str] = {}
+
+            for batch_idx, batch in enumerate(batches):
+                if stream_callback:
+                    stream_callback(
+                        f"\n[编排器] 第 {batch_idx + 1}/{len(batches)} 批 "
+                        f"({len(batch)} 个)...\n"
+                    )
+
+                batch_items = []
+                for t in batch:
+                    agent_name = assignments.get(t.id)
+                    if agent_name:
+                        batch_items.append((agent_name, t.description))
+
+                if not batch_items:
+                    continue
+
+                batch_results = self.pool.run_parallel(batch_items)
+                all_results.update(batch_results)
+                record["results"].update(batch_results)
+
+                if stream_callback:
+                    for name, res in batch_results.items():
+                        short = res[:80] + "..." if len(res) > 80 else res
+                        stream_callback(f"  [{name}] ✅ {short}\n")
+
+            # ── 4. 合并结果 ──
+            if stream_callback:
+                stream_callback("\n[编排器] 合并结果...\n")
+
+            final = self.aggregator.aggregate(task_list, all_results, task)
+            record["final_result"] = final
+            record["elapsed"] = time.time() - exec_start
+
+            with self._lock:
+                self._execution_history.append(record)
+
+            if stream_callback:
+                stream_callback(
+                    f"\n[编排器] 完成 (耗时 {record['elapsed']:.1f}s)\n"
+                )
+
+            return final
+
+        except Exception as e:
+            logger.error(f"编排失败: {e}", exc_info=True)
+            err = f"[编排器错误] {e}"
+            record["error"] = err
+            record["elapsed"] = time.time() - exec_start
+            with self._lock:
+                self._execution_history.append(record)
+            return err
+
+    # ------------------------------------------------------------------
+    # 内部方法
+    # ------------------------------------------------------------------
+
+    def _assign_agents(
+        self,
+        task_list: List[SubTask],
+        agent_mapping: Optional[Dict[str, str]],
+        stream_callback: Optional[Callable[[str], None]],
+    ) -> Dict[str, str]:
+        """为子任务分配 Agent。"""
+        if agent_mapping:
+            for task_id, agent_name in agent_mapping.items():
+                if self.pool.get_agent(agent_name) is None:
+                    task_def = next(
+                        (t for t in task_list if t.id == task_id), None
+                    )
+                    atype = task_def.agent_type if task_def else "general"
+                    if atype not in self.pool.templates:
+                        atype = "general"
+                    self.pool.create_agent(agent_name, template_name=atype)
+            return agent_mapping
+
+        assignments: Dict[str, str] = {}
+        for t in task_list:
+            agent_name = f"agent_{t.id}"
+            atype = (
+                t.agent_type
+                if t.agent_type in self.pool.templates
+                else "general"
+            )
+
+            if self.pool.get_agent(agent_name) is None:
+                # 确保 general 模板存在
+                if "general" not in self.pool.templates:
+                    self.pool.register_template(
+                        "general",
+                        config_path=self._base_config_path,
+                        config_dict=self._base_config_dict,
+                        role="通用助手",
+                    )
+                self.pool.create_agent(
+                    agent_name,
+                    template_name=atype,
+                    role=t.agent_role if t.agent_role else None,
+                )
+
+            assignments[t.id] = agent_name
+
+        return assignments
+
+    # ------------------------------------------------------------------
+    # 便捷方法
+    # ------------------------------------------------------------------
+
+    def execute_single(self, task: str, agent_type: str = "general") -> str:
+        """单一 Agent 执行（退化模式）。"""
+        return self.execute(task, mode="single")
+
+    def execute_manual(
+        self,
+        task: str,
+        subtasks: List[SubTask],
+        agent_mapping: Dict[str, str],
+    ) -> str:
+        """手动模式。"""
+        return self.execute(
+            task, mode="manual",
+            subtasks=subtasks, agent_mapping=agent_mapping,
+        )
+
+    def get_execution_history(self) -> List[Dict]:
+        with self._lock:
+            return list(self._execution_history)
+
+    def clear_history(self):
+        with self._lock:
+            self._execution_history.clear()
+
+    def get_status(self) -> Dict[str, Any]:
+        return {
+            "active_agents": self.pool.active_agents,
+            "agent_types": self.pool.templates,
+            "max_workers": self._max_workers,
+            "execution_count": len(self._execution_history),
+        }
+
+    def shutdown(self):
+        self.pool.shutdown_all()
+        logger.info("LiteOrchestrator 已关闭")

@@ -1,9 +1,9 @@
 # tea_agent 项目知识库
 
-> 自动生成: 2026-05-24 11:04
+> 自动生成: 2026-05-24 15:34
 > 工具: ctags + AST + graphviz
 >
-> 符号: 1646 唯一 · 函数: 1082 · 类: 99 · 调用边: 5988
+> 符号: 1743 唯一 · 函数: 1152 · 类: 117 · 调用边: 6261
 
 ## 符号种类分布
 
@@ -13,20 +13,20 @@
 | number | 1792 |
 | object | 1481 |
 | array | 1233 |
-| member | 847 |
-| function | 434 |
-| variable | 396 |
-| class | 100 |
-| namespace | 66 |
+| member | 950 |
+| function | 443 |
+| variable | 420 |
+| class | 118 |
+| namespace | 67 |
 | id | 47 |
 | boolean | 47 |
 | section | 19 |
-| unknown | 7 |
+| unknown | 14 |
 | chapter | 7 |
 | subsection | 5 |
 | nsprefix | 2 |
 
-## 模块索引 (131 文件)
+## 模块索引 (133 文件)
 
 | 模块 | 行数 | 类 | 公开函数 |
 |------|------|-----|----------|
@@ -42,7 +42,7 @@
 | tea_agent/_gui/__init__.py | 3 | — | — |
 | tea_agent/_gui/_fonts.py | 89 | — | — |
 | tea_agent/_gui/_images.py | 143 | ImageHandler | attach, clear, show_popup |
-| tea_agent/_gui/_markdown.py | 447 | _TagChecker | handle_starttag, handle_endtag, get_result |
+| tea_agent/_gui/_markdown.py | 446 | _TagChecker | handle_starttag, handle_endtag, get_result |
 | tea_agent/_gui/_renderer.py | 459 | ChatRenderer | scroll_to_bottom |
 | tea_agent/_gui/_stream_manager.py | 207 | StreamManager | safe_stream, safe_log, safe_log_tool |
 | tea_agent/_gui/_topic_manager.py | 441 | TopicManager | clear_chat, auto_new_topic, new_topic |
@@ -52,9 +52,9 @@
 | tea_agent/agent_core.py | 424 | AgentCore | — |
 | tea_agent/basesession.py | 576 | BaseChatSession | chat_stream, add_user_message, add_assistant_message |
 | tea_agent/cli.py | 467 | TeaCLI | run, on_stream, on_status |
-| tea_agent/config.py | 725 | ModelConfig, PathsConfig, EmbeddingConfig | is_configured, resolve, db_path_abs |
+| tea_agent/config.py | 730 | ModelConfig, PathsConfig, EmbeddingConfig | is_configured, resolve, db_path_abs |
 | tea_agent/embedding_util.py | 431 | _SimpleTFIDF, EmbeddingEngine | add_document, vectorize, mode |
-| tea_agent/gui.py | 1313 | StatusNotifierItemDBus, TkGUI | Title, Id, Status |
+| tea_agent/gui.py | 1283 | StatusNotifierItemDBus, TkGUI | Title, Id, Status |
 | tea_agent/gui_dialogs.py | 1290 | MemoryDialog, TopicDialog, ConfigDialog | do_add, parse_tok, do_rename |
 | tea_agent/logging_setup.py | 97 | — | setup_logging, set_debug |
 | tea_agent/lsp/__init__.py | 12 | — | — |
@@ -63,13 +63,14 @@
 | tea_agent/lsp/ts_analyzer.py | 1021 | _MetricsVisitor, _CallCollector, _Inner | parse_file, impact_analysis, build_dependency_graph |
 | tea_agent/memory.py | 729 | MemoryManager | select_memories, degrade_by_age, llm_adjust_priorities |
 | tea_agent/merge_db.py | 716 | DbMerger | merge, close, main |
-| tea_agent/multi_agent/__init__.py | 32 | — | — |
-| tea_agent/multi_agent/agent_pool.py | 310 | AgentPool | register_agent_type, create_agent, get_agent |
-| tea_agent/multi_agent/orchestrator.py | 420 | MultiAgentOrchestrator | register_agent_type, execute, execute_single |
+| tea_agent/multi_agent/__init__.py | 44 | — | — |
+| tea_agent/multi_agent/agent_pool.py | 597 | AgentPool, LiteAgentPool | register_agent_type, create_agent, get_agent |
+| tea_agent/multi_agent/lite_agent.py | 685 | LiteAgentModelConfig, LiteAgentConfig, ToolRegistry | is_configured, register, unregister |
+| tea_agent/multi_agent/orchestrator.py | 764 | MultiAgentOrchestrator, LiteOrchestrator | register_agent_type, execute, execute_single |
 | tea_agent/multi_agent/result_aggregator.py | 272 | ResultAggregator | aggregate, summarize_result, merge_code_results |
 | tea_agent/multi_agent/sub_agent.py | 387 | SubAgentConfig, SubAgentWrapper | initialize, run, run_async |
-| tea_agent/multi_agent/task_decomposer.py | 356 | SubTask, TaskDecomposer | to_dict, from_dict, decompose |
-| tea_agent/onlinesession.py | 1517 | OnlineToolSession | messages, messages, model |
+| tea_agent/multi_agent/task_decomposer.py | 401 | SubTask, TaskDecomposer | to_dict, from_dict, decompose |
+| tea_agent/onlinesession.py | 1513 | OnlineToolSession | messages, messages, model |
 | tea_agent/project_memory.py | 172 | ProjectMemoryManager | add, get_all, search |
 | tea_agent/prompt_manager.py | 312 | SystemPromptManager | initialize, current_prompt, current_version |
 | tea_agent/reflection.py | 346 | ToolCallRecord, SessionTrace, ReflectionManager | success_rate, duration_seconds, start_trace |
@@ -145,7 +146,7 @@
 | tea_agent/toolkit/toolkit_skill.py | 104 | — | toolkit_skill, meta_toolkit_skill |
 | tea_agent/toolkit/toolkit_static.py | 192 | — | meta_toolkit_static, toolkit_static |
 | tea_agent/toolkit/toolkit_sub_agent.py | 163 | — | toolkit_sub_agent_report, toolkit_sub_agent_status, clear_sub_agent_reports |
-| tea_agent/toolkit/toolkit_subconscious.py | 1011 | — | toolkit_subconscious, meta_toolkit_subconscious |
+| tea_agent/toolkit/toolkit_subconscious.py | 1247 | — | toolkit_subconscious, meta_toolkit_subconscious |
 | tea_agent/toolkit/toolkit_test_gui.py | 144 | — | toolkit_test_gui, meta_toolkit_test_gui |
 | tea_agent/toolkit/toolkit_todo.py | 477 | — | toolkit_todo, meta_toolkit_todo |
 | tea_agent/toolkit/toolkit_toggle_reasoning.py | 49 | — | toolkit_toggle_reasoning, meta_toolkit_toggle_reasoning |
@@ -157,7 +158,8 @@
 | tests/__init__.py | 1 | — | — |
 | tests/conftest.py | 61 | — | tmp_db_path, storage, tmp_yaml_config |
 | tests/test_config.py | 273 | TestModelConfig, TestPathsConfig, TestMqttConfig | test_default_not_configured, test_configured_when_all_set, test_not_configured_when_partial |
-| tests/test_multi_agent.py | 460 | TestSubAgentConfig, TestTaskDecomposer, TestSubTask | test_default_config, test_custom_config, setUp |
+| tests/test_lite_agent_e2e.py | 307 | TestLiteAgentE2E, TestOrchestratorE2E, TestTaskDecomposerIntegration | setUp, echo_tool, test_lite_agent_with_tool_call |
+| tests/test_multi_agent.py | 859 | TestSubAgentConfig, TestTaskDecomposer, TestSubTask | test_default_config, test_custom_config, setUp |
 | tests/test_render_timing.py | 148 | TestRenderTiming | setUpClass, test_render_before_pipeline, test_show_raw_check_btn_before_pipeline |
 | tests/test_store.py | 486 | TestStorageInit, TestTopicCRUD, TestMessageCRUD | test_init_creates_db_file, test_init_creates_all_tables, test_init_enables_wal_mode |
 | tests/test_tea_agent_dual.py | 86 | — | extract_final_reply, main |
@@ -166,26 +168,26 @@
 
 | 函数 | 文件:行号 | 调用者数 |
 |------|-----------|----------|
-| `len` | ?:? | 275 |
-| `append` | ?:? | 222 |
-| `get` | tea_agent/config.py:338 | 222 |
-| `join` | ?:? | 160 |
-| `str` | ?:? | 151 |
-| `execute` | tea_agent/multi_agent/orchestrator.py:178 | 124 |
-| `info` | ?:? | 121 |
-| `close` | tea_agent/store/_core.py:644 | 96 |
-| `cursor` | ?:? | 93 |
-| `strip` | ?:? | 82 |
-| `set` | tea_agent/config.py:350 | 70 |
-| `open` | ?:? | 69 |
-| `commit` | ?:? | 68 |
-| `warning` | ?:? | 65 |
-| `isinstance` | ?:? | 62 |
-| `startswith` | ?:? | 59 |
+| `len` | ?:? | 294 |
+| `append` | ?:? | 229 |
+| `get` | tea_agent/config.py:347 | 229 |
+| `join` | ?:? | 162 |
+| `str` | ?:? | 154 |
+| `execute` | tea_agent/multi_agent/orchestrator.py:564 | 128 |
+| `info` | ?:? | 125 |
+| `close` | tea_agent/store/_core.py:644 | 97 |
+| `cursor` | ?:? | 95 |
+| `strip` | ?:? | 83 |
+| `set` | tea_agent/config.py:359 | 71 |
+| `open` | ?:? | 70 |
+| `commit` | ?:? | 69 |
+| `warning` | ?:? | 67 |
+| `isinstance` | ?:? | 65 |
+| `startswith` | ?:? | 60 |
 | `split` | ?:? | 54 |
-| `exists` | ?:? | 49 |
+| `exists` | ?:? | 51 |
 | `enumerate` | ?:? | 46 |
-| `fetchall` | ?:? | 45 |
+| `fetchall` | ?:? | 46 |
 
 ## 生成文件
 

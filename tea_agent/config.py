@@ -183,6 +183,7 @@ class SubAgentDef:
     name: str = ""                          # 唯一标识
     config_file: str = ""                   # 独立配置文件路径（相对于主配置目录）
     agent_type: str = "general"             # 类型: general/coder/reviewer/analyst/researcher
+    role: str = ""                          # 角色描述
     tool_whitelist: List[str] = field(default_factory=list)   # 允许使用的工具
     tool_blacklist: List[str] = field(default_factory=list)   # 禁止使用的工具
     max_iterations: int = 20                # 子Agent最大迭代次数
@@ -196,6 +197,8 @@ class SubAgentDef:
             d["config_file"] = self.config_file
         if self.agent_type != "general":
             d["agent_type"] = self.agent_type
+        if self.role:
+            d["role"] = self.role
         if self.tool_whitelist:
             d["tool_whitelist"] = self.tool_whitelist
         if self.tool_blacklist:
@@ -215,6 +218,7 @@ class SubAgentDef:
             name=str(d.get("name", "")),
             config_file=str(d.get("config_file", "")),
             agent_type=str(d.get("agent_type", "general")),
+            role=str(d.get("role", "")),
             tool_whitelist=list(d.get("tool_whitelist", [])),
             tool_blacklist=list(d.get("tool_blacklist", [])),
             max_iterations=int(d.get("max_iterations", 20)),
@@ -227,7 +231,9 @@ class SubAgentDef:
 class MultiAgentConfig:
     """多 Agent 协作配置"""
     enabled: bool = False                   # 是否启用多Agent模式
-    max_parallel: int = 4                   # 最大并行子Agent数
+    max_workers: int = 4                    # 最大并行子Agent数（别名 max_parallel）
+    max_parallel: int = 4                   # 最大并行子Agent数（与 max_workers 同义）
+    auto_decompose: bool = True             # 是否自动分解任务
     agents: List[SubAgentDef] = field(default_factory=list)  # 子Agent定义列表
     default_timeout: int = 120              # 默认超时
     shared_tools: List[str] = field(default_factory=list)    # 所有子Agent共享的工具
@@ -235,8 +241,11 @@ class MultiAgentConfig:
     def to_dict(self) -> Dict:
         """导出为字典"""
         d: Dict = {"enabled": self.enabled}
-        if self.max_parallel != 4:
+        if self.max_workers != 4:
+            d["max_workers"] = self.max_workers
             d["max_parallel"] = self.max_parallel
+        if not self.auto_decompose:
+            d["auto_decompose"] = self.auto_decompose
         if self.default_timeout != 120:
             d["default_timeout"] = self.default_timeout
         if self.shared_tools:
@@ -252,7 +261,9 @@ class MultiAgentConfig:
         agents = [SubAgentDef.from_dict(a) for a in agents_data] if isinstance(agents_data, list) else []
         return cls(
             enabled=bool(d.get("enabled", False)),
-            max_parallel=int(d.get("max_parallel", 4)),
+            max_workers=int(d.get("max_workers", d.get("max_parallel", 4))),
+            max_parallel=int(d.get("max_parallel", d.get("max_workers", 4))),
+            auto_decompose=bool(d.get("auto_decompose", True)),
             agents=agents,
             default_timeout=int(d.get("default_timeout", 120)),
             shared_tools=list(d.get("shared_tools", [])),

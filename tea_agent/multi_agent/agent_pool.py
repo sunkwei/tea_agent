@@ -308,3 +308,290 @@ class AgentPool:
             self._executor = None
         
         logger.info("AgentPool 已完全关闭")
+
+
+# ---------------------------------------------------------------------------
+# LiteAgentPool — 轻量级 Agent 池
+# ---------------------------------------------------------------------------
+
+class LiteAgentPool:
+    """
+    轻量级 Agent 池，管理多个 LiteAgent 实例。
+
+    与 AgentPool 的区别：
+    - AgentPool 管理 SubAgentWrapper（依赖 OnlineToolSession / DB）
+    - LiteAgentPool 管理 LiteAgent（纯内存，零 DB 依赖）
+
+    支持：
+    - 从 YAML 模板批量创建 LiteAgent
+    - 并行执行任务
+    - 资源限制（最大并发数）
+
+    用法:
+        pool = LiteAgentPool(max_workers=4)
+
+        # 注册模板
+        pool.register_template("coder", config_path="coder_config.yaml")
+
+        # 从模板创建实例
+        pool.create_agent("coder_1", template_name="coder")
+        pool.create_agent("coder_2", template_name="coder")
+
+        # 并行执行
+        results = pool.run_parallel([
+            ("coder_1", "审查文件 A"),
+            ("coder_2", "审查文件 B"),
+        ])
+    """
+
+    def __init__(self, max_workers: int = 4):
+        """
+        初始化 LiteAgentPool。
+
+        Args:
+            max_workers: 最大并行工作线程数
+        """
+        self._max_workers = max_workers
+
+        # 模板: {template_name: LiteAgentConfig 或 config_dict}
+        self._templates: Dict[str, Any] = {}
+
+        # 实例: {agent_name: LiteAgent}
+        self._agents: Dict[str, Any] = {}
+
+        self._lock = threading.Lock()
+        self._executor: Optional[ThreadPoolExecutor] = None
+
+        logger.info(f"LiteAgentPool 初始化 (max_workers={max_workers})")
+
+    # ------------------------------------------------------------------
+    # 模板管理
+    # ------------------------------------------------------------------
+
+    def register_template(
+        self,
+        template_name: str,
+        config_path: Optional[str] = None,
+        config_dict: Optional[Dict[str, Any]] = None,
+        system_prompt: str = "",
+        role: str = "",
+        tool_whitelist: Optional[List[str]] = None,
+        tool_blacklist: Optional[List[str]] = None,
+    ):
+        """
+        注册一个 LiteAgent 模板。
+
+        Args:
+            template_name: 模板名称
+            config_path: YAML 配置文件路径
+            config_dict: 配置字典（与 config_path 二选一）
+            system_prompt: 系统提示词（覆盖配置文件中的）
+            role: 角色名（会追加到 system_prompt）
+            tool_whitelist: 工具白名单
+            tool_blacklist: 工具黑名单
+        """
+        if template_name in self._templates:
+            logger.warning(f"模板 '{template_name}' 已存在，将被覆盖")
+
+        template: Dict[str, Any] = {
+            "config_path": config_path,
+            "config_dict": config_dict,
+            "system_prompt": system_prompt,
+            "role": role,
+            "tool_whitelist": tool_whitelist,
+            "tool_blacklist": tool_blacklist,
+        }
+        self._templates[template_name] = template
+        logger.info(f"注册 LiteAgent 模板: '{template_name}'")
+
+    # ------------------------------------------------------------------
+    # Agent 生命周期
+    # ------------------------------------------------------------------
+
+    def create_agent(
+        self,
+        agent_name: str,
+        template_name: Optional[str] = None,
+        config_path: Optional[str] = None,
+        config_dict: Optional[Dict[str, Any]] = None,
+        **overrides,
+    ):
+        """
+        创建 LiteAgent 实例。
+
+        Args:
+            agent_name: 实例名称
+            template_name: 基于模板创建
+            config_path: 直接提供 YAML 路径
+            config_dict: 直接提供配置字典
+            **overrides: 覆盖模板字段（如 system_prompt, role 等）
+
+        Returns:
+            LiteAgent 实例
+
+        Raises:
+            ValueError: 配置不完整
+        """
+        with self._lock:
+            if agent_name in self._agents:
+                logger.warning(f"Agent '{agent_name}' 已存在，返回现有实例")
+                return self._agents[agent_name]
+
+            # 解析配置来源
+            if config_path:
+                agent = LiteAgent(config_path=config_path)
+            elif config_dict:
+                agent = LiteAgent(config_dict=config_dict)
+            elif template_name and template_name in self._templates:
+                tmpl = self._templates[template_name]
+                if tmpl["config_path"]:
+                    agent = LiteAgent(config_path=tmpl["config_path"])
+                elif tmpl["config_dict"]:
+                    agent = LiteAgent(config_dict=tmpl["config_dict"])
+                else:
+                    raise ValueError(
+                        f"模板 '{template_name}' 缺少 config_path 或 config_dict"
+                    )
+
+                # 模板覆盖
+                if tmpl["system_prompt"]:
+                    agent._system_prompt = tmpl["system_prompt"]
+                if tmpl["role"]:
+                    agent._system_prompt = (
+                        f"你的角色是: {tmpl['role']}\n\n" + agent._system_prompt
+                    )
+                if tmpl["tool_whitelist"]:
+                    agent._cfg.tool_whitelist = tmpl["tool_whitelist"]
+                if tmpl["tool_blacklist"]:
+                    agent._cfg.tool_blacklist = tmpl["tool_blacklist"]
+            else:
+                raise ValueError(
+                    "必须提供 config_path、config_dict 或 template_name"
+                )
+
+            # 应用 overrides
+            for key, value in overrides.items():
+                if key == "system_prompt":
+                    agent._system_prompt = value
+                elif key == "role":
+                    agent._system_prompt = f"你的角色是: {value}\n\n" + agent._system_prompt
+                elif hasattr(agent._cfg, key):
+                    setattr(agent._cfg, key, value)
+
+            self._agents[agent_name] = agent
+            logger.info(f"创建 LiteAgent 实例: '{agent_name}' (model={agent._model})")
+            return agent
+
+    def get_agent(self, agent_name: str):
+        """获取已创建的 Agent。"""
+        return self._agents.get(agent_name)
+
+    def remove_agent(self, agent_name: str):
+        """移除 Agent 实例。"""
+        with self._lock:
+            self._agents.pop(agent_name, None)
+            logger.info(f"移除 LiteAgent: '{agent_name}'")
+
+    # ------------------------------------------------------------------
+    # 并行执行
+    # ------------------------------------------------------------------
+
+    def run_parallel(
+        self,
+        tasks: List[tuple],
+        timeout_per_task: Optional[float] = None,
+    ) -> Dict[str, str]:
+        """
+        并行执行多个子任务。
+
+        Args:
+            tasks: [(agent_name, task_description), ...]
+            timeout_per_task: 超时秒数
+
+        Returns:
+            {agent_name: result} 字典
+        """
+        if not tasks:
+            return {}
+
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(max_workers=self._max_workers)
+
+        futures: Dict[Future, str] = {}
+
+        for task_item in tasks:
+            if len(task_item) == 2:
+                agent_name, task_desc = task_item
+            else:
+                continue
+
+            agent = self._agents.get(agent_name)
+            if agent is None:
+                logger.error(f"Agent '{agent_name}' 不存在，跳过: {task_desc}")
+                continue
+
+            future = self._executor.submit(agent.run, task_desc)
+            futures[future] = agent_name
+
+        results: Dict[str, str] = {}
+        try:
+            for future in as_completed(futures, timeout=timeout_per_task):
+                agent_name = futures[future]
+                try:
+                    result = future.result(timeout=timeout_per_task)
+                    results[agent_name] = result
+                except Exception as e:
+                    results[agent_name] = f"[执行异常: {e}]"
+                    logger.error(f"Agent '{agent_name}' 异常: {e}")
+        except TimeoutError:
+            for future, agent_name in futures.items():
+                if agent_name not in results:
+                    results[agent_name] = "[超时]"
+                    future.cancel()
+
+        return results
+
+    def run_batch(
+        self,
+        agent_names: List[str],
+        task: str,
+        timeout_per_task: Optional[float] = None,
+    ) -> Dict[str, str]:
+        """多个 Agent 执行同一任务。"""
+        return self.run_parallel(
+            [(name, task) for name in agent_names],
+            timeout_per_task=timeout_per_task,
+        )
+
+    # ------------------------------------------------------------------
+    # 状态 & 清理
+    # ------------------------------------------------------------------
+
+    @property
+    def active_agents(self) -> List[str]:
+        with self._lock:
+            return list(self._agents.keys())
+
+    @property
+    def templates(self) -> List[str]:
+        return list(self._templates.keys())
+
+    def shutdown_all(self):
+        """关闭所有 Agent 和线程池。"""
+        with self._lock:
+            self._agents.clear()
+
+        if self._executor:
+            self._executor.shutdown(wait=False)
+            self._executor = None
+
+        logger.info("LiteAgentPool 已完全关闭")
+
+
+# 延迟导入 LiteAgent（避免循环依赖）
+def _import_lite_agent():
+    from tea_agent.multi_agent.lite_agent import LiteAgent as _LA
+    return _LA
+
+
+LiteAgent = _import_lite_agent()

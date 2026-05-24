@@ -26947,7 +26947,7 @@
     {
       "kind": "class",
       "path": "tea_agent/config.py",
-      "line": 264
+      "line": 274
     }
   ],
   "AgentCore": [
@@ -27211,6 +27211,11 @@
   "DEFAULT_SYSTEM_PROMPT": [
     {
       "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 168
+    },
+    {
+      "kind": "variable",
       "path": "tea_agent/multi_agent/sub_agent.py",
       "line": 69
     },
@@ -27308,6 +27313,18 @@
       "kind": "variable",
       "path": "demo/csi300_predictor.py",
       "line": 36
+    }
+  ],
+  "HAS_OPENAI": [
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 40
+    },
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 38
     }
   ],
   "HAS_REQUESTS": [
@@ -27541,6 +27558,46 @@
       "line": 21
     }
   ],
+  "LiteAgent": [
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 597
+    },
+    {
+      "kind": "class",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 152
+    }
+  ],
+  "LiteAgentConfig": [
+    {
+      "kind": "class",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 64
+    }
+  ],
+  "LiteAgentModelConfig": [
+    {
+      "kind": "class",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 48
+    }
+  ],
+  "LiteAgentPool": [
+    {
+      "kind": "class",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 317
+    }
+  ],
+  "LiteOrchestrator": [
+    {
+      "kind": "class",
+      "path": "tea_agent/multi_agent/orchestrator.py",
+      "line": 427
+    }
+  ],
   "MAX_CRITICAL_INJECT": [
     {
       "kind": "variable",
@@ -27697,7 +27754,7 @@
     {
       "kind": "class",
       "path": "tea_agent/config.py",
-      "line": 228
+      "line": 231
     }
   ],
   "MultiAgentOrchestrator": [
@@ -28183,7 +28240,7 @@
     {
       "kind": "class",
       "path": "tea_agent/config.py",
-      "line": 182
+      "line": 181
     }
   ],
   "SubAgentWrapper": [
@@ -28314,7 +28371,7 @@
     {
       "kind": "class",
       "path": "tests/test_multi_agent.py",
-      "line": 270
+      "line": 268
     }
   ],
   "TestBackup": [
@@ -28328,7 +28385,14 @@
     {
       "kind": "class",
       "path": "tests/test_multi_agent.py",
-      "line": 346
+      "line": 344
+    }
+  ],
+  "TestConfigYAMLLoading": [
+    {
+      "kind": "class",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 268
     }
   ],
   "TestEmbeddingConfig": [
@@ -28336,6 +28400,48 @@
       "kind": "class",
       "path": "tests/test_config.py",
       "line": 146
+    }
+  ],
+  "TestLiteAgentConfig": [
+    {
+      "kind": "class",
+      "path": "tests/test_multi_agent.py",
+      "line": 457
+    }
+  ],
+  "TestLiteAgentE2E": [
+    {
+      "kind": "class",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 55
+    }
+  ],
+  "TestLiteAgentHistoryManagement": [
+    {
+      "kind": "class",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 234
+    }
+  ],
+  "TestLiteAgentInit": [
+    {
+      "kind": "class",
+      "path": "tests/test_multi_agent.py",
+      "line": 569
+    }
+  ],
+  "TestLiteAgentPool": [
+    {
+      "kind": "class",
+      "path": "tests/test_multi_agent.py",
+      "line": 662
+    }
+  ],
+  "TestLiteOrchestrator": [
+    {
+      "kind": "class",
+      "path": "tests/test_multi_agent.py",
+      "line": 732
     }
   ],
   "TestLoadSaveConfig": [
@@ -28384,7 +28490,14 @@
     {
       "kind": "class",
       "path": "tests/test_multi_agent.py",
-      "line": 303
+      "line": 301
+    }
+  ],
+  "TestOrchestratorE2E": [
+    {
+      "kind": "class",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 124
     }
   ],
   "TestPathsConfig": [
@@ -28406,6 +28519,13 @@
       "kind": "class",
       "path": "tests/test_multi_agent.py",
       "line": 143
+    }
+  ],
+  "TestResultAggregatorEdgeCases": [
+    {
+      "kind": "class",
+      "path": "tests/test_multi_agent.py",
+      "line": 829
     }
   ],
   "TestStorageInit": [
@@ -28450,6 +28570,20 @@
       "line": 57
     }
   ],
+  "TestTaskDecomposerIntegration": [
+    {
+      "kind": "class",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 201
+    }
+  ],
+  "TestTaskDecomposerWithLiteAgent": [
+    {
+      "kind": "class",
+      "path": "tests/test_multi_agent.py",
+      "line": 802
+    }
+  ],
   "TestTokenStats": [
     {
       "kind": "class",
@@ -28457,18 +28591,25 @@
       "line": 377
     }
   ],
+  "TestToolRegistry": [
+    {
+      "kind": "class",
+      "path": "tests/test_multi_agent.py",
+      "line": 512
+    }
+  ],
   "TestToolkitDelegate": [
     {
       "kind": "class",
       "path": "tests/test_multi_agent.py",
-      "line": 376
+      "line": 370
     }
   ],
   "TestToolkitSubAgent": [
     {
       "kind": "class",
       "path": "tests/test_multi_agent.py",
-      "line": 409
+      "line": 403
     }
   ],
   "TestTopicCRUD": [
@@ -28536,6 +28677,13 @@
       "kind": "class",
       "path": "tea_agent/toolkit/tool_loader.py",
       "line": 10
+    }
+  ],
+  "ToolRegistry": [
+    {
+      "kind": "class",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 95
     }
   ],
   "Toolkit": [
@@ -28724,12 +28872,12 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 323
+      "line": 332
     },
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 331
+      "line": 340
     }
   ],
   "_CRON_MAP_WEEKDAY": [
@@ -28871,7 +29019,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/_gui/_markdown.py",
-      "line": 370
+      "line": 369
     }
   ],
   "_KNOWN_STEP_META": [
@@ -28889,6 +29037,13 @@
       "kind": "variable",
       "path": "tea_agent/toolkit/toolkit_plan.py",
       "line": 74
+    }
+  ],
+  "_LA": [
+    {
+      "kind": "unknown",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 593
     }
   ],
   "_LEAP_DAYS_BIT": [
@@ -29034,7 +29189,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 314
+      "line": 323
     }
   ],
   "_RUN_DIR": [
@@ -29202,7 +29357,7 @@
     {
       "kind": "class",
       "path": "tea_agent/_gui/_markdown.py",
-      "line": 389
+      "line": 388
     }
   ],
   "__all__": [
@@ -29219,7 +29374,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/multi_agent/__init__.py",
-      "line": 24
+      "line": 28
     },
     {
       "kind": "variable",
@@ -29334,7 +29489,7 @@
     {
       "kind": "member",
       "path": "tea_agent/_gui/_markdown.py",
-      "line": 391
+      "line": 390
     },
     {
       "kind": "member",
@@ -29438,6 +29593,26 @@
     },
     {
       "kind": "member",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 347
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 174
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 98
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/orchestrator.py",
+      "line": 463
+    },
+    {
+      "kind": "member",
       "path": "tea_agent/multi_agent/orchestrator.py",
       "line": 70
     },
@@ -29535,6 +29710,13 @@
       "kind": "member",
       "path": "tea_agent/tui.py",
       "line": 48
+    }
+  ],
+  "__len__": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 144
     }
   ],
   "__version__": [
@@ -29775,7 +29957,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 975
+      "line": 977
     }
   ],
   "_adjust_chat_sash": [
@@ -29787,7 +29969,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 415
+      "line": 414
     }
   ],
   "_aggregate_simple": [
@@ -29818,7 +30000,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 1096
+      "line": 1092
     }
   ],
   "_append_chat": [
@@ -29848,6 +30030,20 @@
       "kind": "member",
       "path": "tea_agent/tui.py",
       "line": 548
+    }
+  ],
+  "_append_to_history": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 647
+    }
+  ],
+  "_append_token_and_render": [
+    {
+      "kind": "function",
+      "path": "tea_agent/gui.py",
+      "line": 867
     }
   ],
   "_apply_one": [
@@ -29930,7 +30126,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 445
+      "line": 444
     }
   ],
   "_assign_agents": [
@@ -29938,6 +30134,11 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/orchestrator.py",
       "line": 301
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/orchestrator.py",
+      "line": 679
     }
   ],
   "_ast": [
@@ -29978,7 +30179,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 785
+      "line": 784
     }
   ],
   "_auto_backup": [
@@ -30017,7 +30218,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 1348
+      "line": 1344
     }
   ],
   "_auto_embed_async": [
@@ -30056,7 +30257,7 @@
     {
       "kind": "function",
       "path": "tea_agent/onlinesession.py",
-      "line": 1485
+      "line": 1481
     }
   ],
   "_auto_init_topic": [
@@ -30100,7 +30301,7 @@
     {
       "kind": "function",
       "path": "tea_agent/onlinesession.py",
-      "line": 1496
+      "line": 1492
     }
   ],
   "_auto_restore": [
@@ -30173,7 +30374,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 570
+      "line": 571
     }
   ],
   "_build_call_graph": [
@@ -30288,6 +30489,13 @@
       "line": 236
     }
   ],
+  "_build_messages": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 631
+    }
+  ],
   "_build_round_view_html": [
     {
       "kind": "array",
@@ -30312,14 +30520,14 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1228
+      "line": 1198
     }
   ],
   "_build_token_table": [
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 921
+      "line": 923
     }
   ],
   "_build_tool_blocks": [
@@ -30389,7 +30597,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 1320
+      "line": 1316
     }
   ],
   "_build_url": [
@@ -30453,6 +30661,13 @@
       "line": 257
     }
   ],
+  "_call_llm": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 506
+    }
+  ],
   "_cell": [
     {
       "kind": "object",
@@ -30504,6 +30719,13 @@
       "kind": "member",
       "path": "tea_agent/tea_agent.py",
       "line": 268
+    }
+  ],
+  "_chat_loop": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 418
     }
   ],
   "_chat_to_markdown": [
@@ -30663,7 +30885,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 726
+      "line": 722
     }
   ],
   "_cleanup_backups": [
@@ -30702,7 +30924,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 815
+      "line": 814
     }
   ],
   "_clear_search": [
@@ -30937,7 +31159,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 710
+      "line": 715
     }
   ],
   "_connect_and_keepalive": [
@@ -31032,7 +31254,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 279
+      "line": 278
     }
   ],
   "_create_ui": [
@@ -31049,7 +31271,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 411
+      "line": 410
     },
     {
       "kind": "member",
@@ -31086,7 +31308,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 865
+      "line": 1099
     }
   ],
   "_cross_link": [
@@ -31108,7 +31330,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 274
+      "line": 463
     }
   ],
   "_current_agent": [
@@ -31197,18 +31419,25 @@
       "line": 768
     }
   ],
+  "_decompose_with_lite_agent": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/task_decomposer.py",
+      "line": 202
+    }
+  ],
   "_decompose_with_llm": [
     {
       "kind": "member",
       "path": "tea_agent/multi_agent/task_decomposer.py",
-      "line": 154
+      "line": 168
     }
   ],
   "_decompose_with_rules": [
     {
       "kind": "member",
       "path": "tea_agent/multi_agent/task_decomposer.py",
-      "line": 188
+      "line": 233
     }
   ],
   "_delegate_attrs": [
@@ -31315,7 +31544,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 150
+      "line": 168
     }
   ],
   "_detect_mode": [
@@ -31338,6 +31567,13 @@
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_mode.py",
       "line": 70
+    }
+  ],
+  "_detect_stagnation": [
+    {
+      "kind": "function",
+      "path": "tea_agent/toolkit/toolkit_subconscious.py",
+      "line": 337
     }
   ],
   "_dfs": [
@@ -31381,7 +31617,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 178
+      "line": 196
     }
   ],
   "_digest_memories": [
@@ -31403,7 +31639,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 119
+      "line": 137
     }
   ],
   "_do_async_summaries": [
@@ -31708,7 +31944,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 734
+      "line": 968
     }
   ],
   "_embed_api": [
@@ -31805,7 +32041,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 443
+      "line": 444
     }
   ],
   "_engine_singleton": [
@@ -31939,7 +32175,7 @@
     {
       "kind": "function",
       "path": "tea_agent/_gui/_markdown.py",
-      "line": 331
+      "line": 330
     }
   ],
   "_estimate_tokens_char": [
@@ -32068,6 +32304,13 @@
       "line": 163
     }
   ],
+  "_execute_tool": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 603
+    }
+  ],
   "_execute_tool_loop": [
     {
       "kind": "array",
@@ -32082,7 +32325,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 1135
+      "line": 1131
     }
   ],
   "_export": [
@@ -32255,14 +32498,14 @@
     {
       "kind": "function",
       "path": "tea_agent/onlinesession.py",
-      "line": 1024
+      "line": 1020
     }
   ],
   "_extract_json_array": [
     {
       "kind": "member",
       "path": "tea_agent/multi_agent/task_decomposer.py",
-      "line": 288
+      "line": 333
     }
   ],
   "_extract_keywords": [
@@ -32294,7 +32537,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 94
+      "line": 112
     }
   ],
   "_extract_memory_candidates": [
@@ -32316,7 +32559,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 224
+      "line": 246
     }
   ],
   "_extract_params": [
@@ -32374,7 +32617,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 926
+      "line": 1160
     }
   ],
   "_filter_level2_by_relevance": [
@@ -32391,7 +32634,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 999
+      "line": 995
     }
   ],
   "_filtered_messages": [
@@ -32418,7 +32661,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1238
+      "line": 1208
     }
   ],
   "_find_closest": [
@@ -32566,7 +32809,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1250
+      "line": 1220
     }
   ],
   "_flush_think_buffer_to_messages": [
@@ -32593,7 +32836,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1254
+      "line": 1224
     }
   ],
   "_fmt": [
@@ -32622,7 +32865,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 911
+      "line": 913
     }
   ],
   "_fmt_diagnostic": [
@@ -32739,7 +32982,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 346
+      "line": 535
     }
   ],
   "_generate_topic_summary": [
@@ -32905,7 +33148,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 85
+      "line": 103
     }
   ],
   "_get_effective_params": [
@@ -32922,7 +33165,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 337
+      "line": 338
     }
   ],
   "_get_existing_mode_memory": [
@@ -32967,6 +33210,13 @@
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_evolution_exp.py",
       "line": 19
+    }
+  ],
+  "_get_filtered_tools": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 361
     }
   ],
   "_get_jedi_project": [
@@ -33039,7 +33289,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 888
+      "line": 884
     }
   ],
   "_get_session": [
@@ -33068,7 +33318,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 908
+      "line": 904
     }
   ],
   "_get_summarize_client": [
@@ -33080,7 +33330,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 326
+      "line": 327
     },
     {
       "kind": "member",
@@ -33356,7 +33606,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1242
+      "line": 1212
     }
   ],
   "_guess_tool_threshold": [
@@ -33438,7 +33688,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 581
+      "line": 580
     }
   ],
   "_hard_delete": [
@@ -33461,6 +33711,13 @@
       "kind": "member",
       "path": "tea_agent/gui_dialogs.py",
       "line": 786
+    }
+  ],
+  "_has_conversations": [
+    {
+      "kind": "function",
+      "path": "tea_agent/toolkit/toolkit_subconscious.py",
+      "line": 85
     }
   ],
   "_hash_token": [
@@ -33504,7 +33761,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1266
+      "line": 1236
     }
   ],
   "_hide_tooltip": [
@@ -33531,7 +33788,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 751
+      "line": 750
     }
   ],
   "_history_next_round": [
@@ -33548,7 +33805,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 478
+      "line": 477
     }
   ],
   "_history_prev_round": [
@@ -33565,7 +33822,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 456
+      "line": 455
     }
   ],
   "_history_summary": [
@@ -33577,12 +33834,12 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 270
+      "line": 271
     },
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 275
+      "line": 276
     },
     {
       "kind": "variable",
@@ -33614,7 +33871,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1183
+      "line": 1153
     }
   ],
   "_image_cache": [
@@ -33632,6 +33889,13 @@
       "kind": "member",
       "path": "tea_agent/_gui/_images.py",
       "line": 40
+    }
+  ],
+  "_import_lite_agent": [
+    {
+      "kind": "function",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 592
     }
   ],
   "_importlib": [
@@ -33721,7 +33985,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 511
+      "line": 510
     },
     {
       "kind": "member",
@@ -33809,7 +34073,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 307
+      "line": 306
     }
   ],
   "_injected_memories": [
@@ -33879,7 +34143,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 259
+      "line": 322
     }
   ],
   "_is_jieba_available": [
@@ -33896,7 +34160,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 115
+      "line": 133
     }
   ],
   "_is_scrolled_to_bottom": [
@@ -33974,22 +34238,22 @@
     {
       "kind": "namespace",
       "path": "tea_agent/onlinesession.py",
-      "line": 1037
+      "line": 1033
     },
     {
       "kind": "namespace",
       "path": "tea_agent/onlinesession.py",
-      "line": 455
+      "line": 456
     },
     {
       "kind": "namespace",
       "path": "tea_agent/onlinesession.py",
-      "line": 772
+      "line": 768
     },
     {
       "kind": "namespace",
       "path": "tea_agent/onlinesession.py",
-      "line": 840
+      "line": 836
     },
     {
       "kind": "namespace",
@@ -34006,7 +34270,12 @@
     {
       "kind": "namespace",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 388
+      "line": 430
+    },
+    {
+      "kind": "namespace",
+      "path": "tea_agent/toolkit/toolkit_subconscious.py",
+      "line": 582
     }
   ],
   "_json_cr": [
@@ -34096,7 +34365,7 @@
     {
       "kind": "function",
       "path": "tea_agent/onlinesession.py",
-      "line": 1013
+      "line": 1009
     }
   ],
   "_last_cheap_usage": [
@@ -34108,12 +34377,12 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 256
+      "line": 257
     },
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 261
+      "line": 262
     },
     {
       "kind": "variable",
@@ -34142,12 +34411,12 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 242
+      "line": 243
     },
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 247
+      "line": 248
     },
     {
       "kind": "variable",
@@ -34198,12 +34467,12 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 312
+      "line": 313
     },
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 317
+      "line": 318
     },
     {
       "kind": "variable",
@@ -34230,7 +34499,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 530
+      "line": 733
     }
   ],
   "_list": [
@@ -34341,6 +34610,13 @@
       "kind": "member",
       "path": "tea_agent/tea_agent.py",
       "line": 82
+    }
+  ],
+  "_load_config_yaml": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 256
     }
   ],
   "_load_exp_db": [
@@ -34582,6 +34858,13 @@
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_quality_gate.py",
       "line": 144
+    }
+  ],
+  "_make_mock_response": [
+    {
+      "kind": "function",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 31
     }
   ],
   "_match_cron": [
@@ -35305,7 +35588,7 @@
     {
       "kind": "function",
       "path": "tea_agent/multi_agent/task_decomposer.py",
-      "line": 204
+      "line": 249
     }
   ],
   "_next_pending": [
@@ -35395,7 +35678,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 755
+      "line": 754
     }
   ],
   "_notify_prompt_evolved": [
@@ -35412,7 +35695,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 1395
+      "line": 1391
     }
   ],
   "_notify_reflection_done": [
@@ -35429,7 +35712,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 1378
+      "line": 1374
     }
   ],
   "_now_ts": [
@@ -35446,7 +35729,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 502
+      "line": 501
     }
   ],
   "_offset_from_base": [
@@ -35512,7 +35795,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 350
+      "line": 349
     }
   ],
   "_on_done": [
@@ -35573,7 +35856,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1021
+      "line": 991
     }
   ],
   "_on_init_done": [
@@ -35656,7 +35939,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 709
+      "line": 708
     },
     {
       "kind": "member",
@@ -35705,7 +35988,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 723
+      "line": 722
     }
   ],
   "_on_topic_leave": [
@@ -35732,7 +36015,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 732
+      "line": 731
     }
   ],
   "_on_tray_activate": [
@@ -35759,7 +36042,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 329
+      "line": 328
     }
   ],
   "_on_tray_context_menu": [
@@ -35786,7 +36069,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 335
+      "line": 334
     }
   ],
   "_orchestrator": [
@@ -35832,7 +36115,7 @@
     {
       "kind": "namespace",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 502
+      "line": 705
     },
     {
       "kind": "namespace",
@@ -35869,6 +36152,13 @@
       "kind": "variable",
       "path": "tea_agent/tea_main_cli.py",
       "line": 22
+    }
+  ],
+  "_parse_config_dict": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 273
     }
   ],
   "_parse_cron": [
@@ -35980,7 +36270,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 293
+      "line": 292
     }
   ],
   "_pip_install": [
@@ -36317,7 +36607,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1175
+      "line": 1145
     }
   ],
   "_post_chat_pipeline": [
@@ -36356,7 +36646,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 789
+      "line": 1023
     }
   ],
   "_predict_from_strategy": [
@@ -36511,7 +36801,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 354
+      "line": 355
     }
   ],
   "_process_tool_call": [
@@ -36733,11 +37023,6 @@
       "kind": "object",
       "path": "tea_agent/.tea_agent_run/call_graph.json",
       "line": 1219
-    },
-    {
-      "kind": "member",
-      "path": "tea_agent/gui.py",
-      "line": 988
     }
   ],
   "_refresh_from_config": [
@@ -36754,7 +37039,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 395
+      "line": 396
     }
   ],
   "_refresh_topics_preserve_selection": [
@@ -36781,7 +37066,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 719
+      "line": 718
     }
   ],
   "_register_default_types": [
@@ -36832,7 +37117,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1200
+      "line": 1170
     }
   ],
   "_render_chat": [
@@ -36859,7 +37144,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1191
+      "line": 1161
     }
   ],
   "_render_loaded_topic": [
@@ -36886,7 +37171,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1204
+      "line": 1174
     }
   ],
   "_render_markdown": [
@@ -36935,7 +37220,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1212
+      "line": 1182
     }
   ],
   "_render_tool_group": [
@@ -36984,7 +37269,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1220
+      "line": 1190
     }
   ],
   "_repair_incomplete_tool_chains": [
@@ -37098,7 +37383,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 910
+      "line": 1144
     }
   ],
   "_rounds_collector": [
@@ -37110,12 +37395,12 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 228
+      "line": 229
     },
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 233
+      "line": 234
     },
     {
       "kind": "variable",
@@ -37174,7 +37459,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 636
+      "line": 839
     }
   ],
   "_run_gating": [
@@ -37283,7 +37568,7 @@
     {
       "kind": "function",
       "path": "tea_agent/gui.py",
-      "line": 1287
+      "line": 1257
     }
   ],
   "_sanitize_api_messages": [
@@ -37300,7 +37585,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 762
+      "line": 758
     }
   ],
   "_sanitize_html_control_chars": [
@@ -37322,7 +37607,7 @@
     {
       "kind": "function",
       "path": "tea_agent/_gui/_markdown.py",
-      "line": 317
+      "line": 316
     }
   ],
   "_save_exp_db": [
@@ -37571,12 +37856,12 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 284
+      "line": 285
     },
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 289
+      "line": 290
     },
     {
       "kind": "variable",
@@ -37603,7 +37888,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 595
+      "line": 798
     }
   ],
   "_send_notification": [
@@ -37625,7 +37910,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 490
+      "line": 693
     }
   ],
   "_set_and_del": [
@@ -37669,7 +37954,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 457
+      "line": 651
     }
   ],
   "_set_mode": [
@@ -37725,7 +38010,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 407
+      "line": 408
     }
   ],
   "_sh": [
@@ -37737,7 +38022,7 @@
     {
       "kind": "namespace",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 539
+      "line": 742
     }
   ],
   "_show_error": [
@@ -37788,7 +38073,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1046
+      "line": 1016
     }
   ],
   "_show_loading": [
@@ -37815,7 +38100,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1166
+      "line": 1136
     }
   ],
   "_show_memories": [
@@ -37881,7 +38166,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1262
+      "line": 1232
     }
   ],
   "_show_search_results": [
@@ -37925,7 +38210,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 741
+      "line": 740
     }
   ],
   "_show_topic_info": [
@@ -38136,7 +38421,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 378
+      "line": 377
     }
   ],
   "_start_scheduler": [
@@ -38158,7 +38443,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 398
+      "line": 397
     }
   ],
   "_start_stream_timer": [
@@ -38306,7 +38591,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 619
+      "line": 618
     }
   ],
   "_strip_markup": [
@@ -38376,7 +38661,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 698
+      "line": 932
     }
   ],
   "_sudo_with_gui": [
@@ -38430,7 +38715,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 700
+      "line": 699
     },
     {
       "kind": "member",
@@ -38469,7 +38754,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1158
+      "line": 1128
     }
   ],
   "_switch_to": [
@@ -38560,6 +38845,13 @@
       "line": 64
     }
   ],
+  "_synthesize_memories": [
+    {
+      "kind": "function",
+      "path": "tea_agent/toolkit/toolkit_subconscious.py",
+      "line": 367
+    }
+  ],
   "_sys": [
     {
       "kind": "array",
@@ -38569,7 +38861,7 @@
     {
       "kind": "namespace",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 499
+      "line": 702
     }
   ],
   "_table_columns": [
@@ -38622,7 +38914,7 @@
     {
       "kind": "namespace",
       "path": "tea_agent/onlinesession.py",
-      "line": 1252
+      "line": 1248
     }
   ],
   "_tk2": [
@@ -38673,7 +38965,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 949
+      "line": 945
     }
   ],
   "_todo_check": [
@@ -38747,7 +39039,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1258
+      "line": 1228
     }
   ],
   "_toggle_think": [
@@ -38815,12 +39107,12 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 298
+      "line": 299
     },
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 303
+      "line": 304
     },
     {
       "kind": "variable",
@@ -38905,6 +39197,13 @@
       "line": 738
     }
   ],
+  "_trim_history": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 652
+    }
+  ],
   "_trim_messages": [
     {
       "kind": "object",
@@ -38938,7 +39237,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 830
+      "line": 826
     }
   ],
   "_ts": [
@@ -40556,7 +40855,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 534
+      "line": 533
     },
     {
       "kind": "member",
@@ -40605,7 +40904,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 649
+      "line": 648
     }
   ],
   "_validate_html_structure": [
@@ -40627,7 +40926,7 @@
     {
       "kind": "function",
       "path": "tea_agent/_gui/_markdown.py",
-      "line": 372
+      "line": 371
     }
   ],
   "_value": [
@@ -41005,6 +41304,11 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/agent_pool.py",
       "line": 286
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 571
     }
   ],
   "add": [
@@ -41240,7 +41544,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 186
+      "line": 185
     },
     {
       "kind": "variable",
@@ -41252,7 +41556,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 232
+      "line": 237
     }
   ],
   "aggregate": [
@@ -41266,7 +41570,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/gui.py",
-      "line": 1303
+      "line": 1273
     }
   ],
   "api_comp": [
@@ -41289,6 +41593,16 @@
     },
     {
       "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 51
+    },
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 86
+    },
+    {
+      "kind": "variable",
       "path": "tea_agent/multi_agent/sub_agent.py",
       "line": 36
     }
@@ -41303,6 +41617,16 @@
       "kind": "variable",
       "path": "tea_agent/config.py",
       "line": 31
+    },
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 52
+    },
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 87
     },
     {
       "kind": "variable",
@@ -41324,14 +41648,21 @@
     {
       "kind": "member",
       "path": "tea_agent/config.py",
-      "line": 377
+      "line": 386
+    }
+  ],
+  "apply_filter": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 129
     }
   ],
   "args": [
     {
       "kind": "variable",
       "path": "tea_agent/gui.py",
-      "line": 1312
+      "line": 1282
     }
   ],
   "attach": [
@@ -41378,6 +41709,13 @@
       "line": 363
     }
   ],
+  "auto_decompose": [
+    {
+      "kind": "variable",
+      "path": "tea_agent/config.py",
+      "line": 236
+    }
+  ],
   "auto_new_topic": [
     {
       "kind": "array",
@@ -41402,7 +41740,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 637
+      "line": 636
     }
   ],
   "backup_now": [
@@ -41647,7 +41985,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 310
+      "line": 319
     }
   ],
   "chat_stream": [
@@ -41669,7 +42007,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 1412
+      "line": 1408
     }
   ],
   "cheap_api_key": [
@@ -41697,7 +42035,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 267
+      "line": 277
     },
     {
       "kind": "variable",
@@ -41802,7 +42140,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 623
+      "line": 622
     }
   ],
   "clear_history": [
@@ -41810,6 +42148,11 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/orchestrator.py",
       "line": 397
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/orchestrator.py",
+      "line": 750
     }
   ],
   "clear_l3_pending": [
@@ -42075,6 +42418,11 @@
     },
     {
       "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 684
+    },
+    {
+      "kind": "member",
       "path": "tea_agent/tea_agent.py",
       "line": 345
     }
@@ -42083,7 +42431,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 185
+      "line": 184
     }
   ],
   "configured": [
@@ -42096,6 +42444,18 @@
       "kind": "member",
       "path": "tea_agent/embedding_util.py",
       "line": 180
+    }
+  ],
+  "content": [
+    {
+      "kind": "unknown",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 593
+    },
+    {
+      "kind": "unknown",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 48
     }
   ],
   "context": [
@@ -42139,6 +42499,11 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/agent_pool.py",
       "line": 123
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 411
     }
   ],
   "create_chat_stream": [
@@ -42172,7 +42537,7 @@
     {
       "kind": "function",
       "path": "tea_agent/config.py",
-      "line": 611
+      "line": 616
     }
   ],
   "create_topic": [
@@ -42385,7 +42750,7 @@
     {
       "kind": "member",
       "path": "tea_agent/multi_agent/task_decomposer.py",
-      "line": 134
+      "line": 138
     }
   ],
   "default_agent_config": [
@@ -42399,7 +42764,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 233
+      "line": 238
     }
   ],
   "degrade_by_age": [
@@ -42647,6 +43012,13 @@
       "line": 754
     }
   ],
+  "dummy_func": [
+    {
+      "kind": "function",
+      "path": "tests/test_multi_agent.py",
+      "line": 520
+    }
+  ],
   "duration_ms": [
     {
       "kind": "variable",
@@ -42664,6 +43036,20 @@
       "kind": "member",
       "path": "tea_agent/reflection.py",
       "line": 55
+    }
+  ],
+  "echo": [
+    {
+      "kind": "function",
+      "path": "tests/test_multi_agent.py",
+      "line": 612
+    }
+  ],
+  "echo_tool": [
+    {
+      "kind": "function",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 68
     }
   ],
   "edge1": [
@@ -42816,7 +43202,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 268
+      "line": 278
     }
   ],
   "enable_step": [
@@ -42835,7 +43221,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 301
+      "line": 310
     },
     {
       "kind": "variable",
@@ -42847,7 +43233,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 230
+      "line": 233
     },
     {
       "kind": "variable",
@@ -42876,7 +43262,7 @@
     {
       "kind": "function",
       "path": "tea_agent/config.py",
-      "line": 515
+      "line": 522
     }
   ],
   "error": [
@@ -42989,6 +43375,11 @@
     },
     {
       "kind": "member",
+      "path": "tea_agent/multi_agent/orchestrator.py",
+      "line": 564
+    },
+    {
+      "kind": "member",
       "path": "tea_agent/session_pipeline.py",
       "line": 160
     }
@@ -42998,6 +43389,11 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/orchestrator.py",
       "line": 363
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/orchestrator.py",
+      "line": 734
     }
   ],
   "execute_single": [
@@ -43005,6 +43401,11 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/orchestrator.py",
       "line": 350
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/orchestrator.py",
+      "line": 730
     }
   ],
   "execute_tool_call": [
@@ -43042,12 +43443,19 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 307
+      "line": 316
     },
     {
       "kind": "variable",
       "path": "tea_agent/session_context.py",
       "line": 70
+    }
+  ],
+  "extra_options": [
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 56
     }
   ],
   "extract_final_reply": [
@@ -47706,12 +48114,12 @@
     {
       "kind": "member",
       "path": "tea_agent/config.py",
-      "line": 250
+      "line": 258
     },
     {
       "kind": "member",
       "path": "tea_agent/config.py",
-      "line": 213
+      "line": 215
     },
     {
       "kind": "member",
@@ -47771,7 +48179,7 @@
     {
       "kind": "member",
       "path": "tea_agent/config.py",
-      "line": 338
+      "line": 347
     }
   ],
   "get_active_memories": [
@@ -47896,6 +48304,11 @@
       "line": 180
     },
     {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 485
+    },
+    {
       "kind": "function",
       "path": "tea_agent/session_ref.py",
       "line": 20
@@ -47993,7 +48406,7 @@
     {
       "kind": "function",
       "path": "tea_agent/config.py",
-      "line": 712
+      "line": 717
     }
   ],
   "get_config_changes_since": [
@@ -48120,7 +48533,7 @@
     {
       "kind": "member",
       "path": "tea_agent/config.py",
-      "line": 274
+      "line": 283
     }
   ],
   "get_embedding_engine": [
@@ -48169,13 +48582,18 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/orchestrator.py",
       "line": 387
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/orchestrator.py",
+      "line": 746
     }
   ],
   "get_execution_order": [
     {
       "kind": "member",
       "path": "tea_agent/multi_agent/task_decomposer.py",
-      "line": 318
+      "line": 363
     }
   ],
   "get_existing_doc": [
@@ -48183,6 +48601,13 @@
       "kind": "function",
       "path": "tea_agent/tools/refactor_comments.py",
       "line": 213
+    }
+  ],
+  "get_func": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 110
     }
   ],
   "get_function_body_ranges": [
@@ -48385,6 +48810,13 @@
       "line": 31
     }
   ],
+  "get_openai_tools": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 114
+    }
+  ],
   "get_orchestrator": [
     {
       "kind": "function",
@@ -48489,7 +48921,7 @@
     {
       "kind": "member",
       "path": "tea_agent/_gui/_markdown.py",
-      "line": 432
+      "line": 431
     }
   ],
   "get_semantic_summary": [
@@ -48612,6 +49044,11 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/orchestrator.py",
       "line": 407
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/orchestrator.py",
+      "line": 754
     },
     {
       "kind": "member",
@@ -48933,7 +49370,7 @@
     {
       "kind": "member",
       "path": "tea_agent/_gui/_markdown.py",
-      "line": 410
+      "line": 409
     }
   ],
   "handle_max_iter": [
@@ -48977,7 +49414,7 @@
     {
       "kind": "member",
       "path": "tea_agent/_gui/_markdown.py",
-      "line": 400
+      "line": 399
     }
   ],
   "has_docstring_node": [
@@ -48987,18 +49424,25 @@
       "line": 196
     }
   ],
+  "history": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 676
+    }
+  ],
   "history_l2_max": [
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 311
+      "line": 320
     }
   ],
   "history_l3_batch": [
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 312
+      "line": 321
     }
   ],
   "hover": [
@@ -49215,7 +49659,12 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1133
+      "line": 1103
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 662
     }
   ],
   "interrupted": [
@@ -49245,6 +49694,11 @@
       "kind": "member",
       "path": "tea_agent/config.py",
       "line": 40
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 59
     }
   ],
   "is_done": [
@@ -49274,6 +49728,11 @@
     }
   ],
   "is_running": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 672
+    },
     {
       "kind": "member",
       "path": "tea_agent/multi_agent/sub_agent.py",
@@ -49325,7 +49784,12 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 303
+      "line": 312
+    },
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 78
     },
     {
       "kind": "variable",
@@ -63155,7 +63619,7 @@
     {
       "kind": "function",
       "path": "tea_agent/config.py",
-      "line": 420
+      "line": 429
     }
   ],
   "load_data": [
@@ -63228,7 +63692,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 590
+      "line": 589
     }
   ],
   "log_tool": [
@@ -63255,7 +63719,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 610
+      "line": 609
     }
   ],
   "logger": [
@@ -63358,6 +63822,11 @@
       "kind": "variable",
       "path": "tea_agent/multi_agent/agent_pool.py",
       "line": 21
+    },
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 34
     },
     {
       "kind": "variable",
@@ -63716,7 +64185,7 @@
     {
       "kind": "function",
       "path": "tea_agent/gui.py",
-      "line": 1270
+      "line": 1240
     },
     {
       "kind": "function",
@@ -63755,7 +64224,12 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 266
+      "line": 276
+    },
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 73
     }
   ],
   "manual_set": [
@@ -63845,7 +64319,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 305
+      "line": 314
     },
     {
       "kind": "variable",
@@ -63857,7 +64331,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 299
+      "line": 308
     },
     {
       "kind": "variable",
@@ -63874,7 +64348,12 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 300
+      "line": 309
+    },
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 77
     },
     {
       "kind": "variable",
@@ -63886,7 +64365,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 231
+      "line": 235
     }
   ],
   "max_tokens": [
@@ -63894,6 +64373,11 @@
       "kind": "variable",
       "path": "tea_agent/config.py",
       "line": 35
+    },
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 55
     },
     {
       "kind": "variable",
@@ -63905,12 +64389,24 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 304
+      "line": 313
+    },
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 79
     },
     {
       "kind": "variable",
       "path": "tea_agent/session_context.py",
       "line": 38
+    }
+  ],
+  "max_workers": [
+    {
+      "kind": "variable",
+      "path": "tea_agent/config.py",
+      "line": 234
     }
   ],
   "memory": [
@@ -63924,7 +64420,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 309
+      "line": 318
     },
     {
       "kind": "variable",
@@ -63936,7 +64432,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 308
+      "line": 317
     },
     {
       "kind": "variable",
@@ -63968,6 +64464,18 @@
       "line": 232
     }
   ],
+  "message": [
+    {
+      "kind": "unknown",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 596
+    },
+    {
+      "kind": "unknown",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 51
+    }
+  ],
   "messages": [
     {
       "kind": "object",
@@ -63977,12 +64485,12 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 200
+      "line": 201
     },
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 205
+      "line": 206
     },
     {
       "kind": "variable",
@@ -64602,7 +65110,7 @@
     {
       "kind": "function",
       "path": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 1004
+      "line": 1240
     }
   ],
   "meta_toolkit_test_gui": [
@@ -64672,7 +65180,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 270
+      "line": 280
     }
   ],
   "model": [
@@ -64684,12 +65192,12 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 214
+      "line": 215
     },
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 219
+      "line": 220
     },
     {
       "kind": "variable",
@@ -64710,6 +65218,16 @@
     },
     {
       "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 53
+    },
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 88
+    },
+    {
+      "kind": "variable",
       "path": "tea_agent/multi_agent/sub_agent.py",
       "line": 38
     }
@@ -64718,7 +65236,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 272
+      "line": 281
     }
   ],
   "name": [
@@ -66300,7 +66818,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 184
+      "line": 183
     },
     {
       "kind": "variable",
@@ -66444,7 +66962,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 641
+      "line": 640
     }
   ],
   "newline": [
@@ -66471,7 +66989,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 691
+      "line": 690
     }
   ],
   "news_fetched_today": [
@@ -66785,7 +67303,7 @@
     {
       "kind": "function",
       "path": "tea_agent/gui.py",
-      "line": 1115
+      "line": 1085
     }
   ],
   "on_status": [
@@ -66856,7 +67374,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 682
+      "line": 681
     }
   ],
   "open_config_dialog": [
@@ -66873,7 +67391,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1112
+      "line": 1082
     }
   ],
   "open_memory_dialog": [
@@ -66890,7 +67408,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1108
+      "line": 1078
     }
   ],
   "open_topic_dialog": [
@@ -66907,7 +67425,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1103
+      "line": 1073
     }
   ],
   "options": [
@@ -71769,7 +72287,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 269
+      "line": 279
     }
   ],
   "pattern": [
@@ -73474,7 +73992,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 302
+      "line": 311
     },
     {
       "kind": "variable",
@@ -73579,7 +74097,14 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 645
+      "line": 644
+    }
+  ],
+  "register": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 101
     }
   ],
   "register_agent_type": [
@@ -73592,6 +74117,11 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/orchestrator.py",
       "line": 142
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/orchestrator.py",
+      "line": 526
     }
   ],
   "register_step": [
@@ -73609,6 +74139,27 @@
       "kind": "member",
       "path": "tea_agent/session_pipeline.py",
       "line": 43
+    }
+  ],
+  "register_template": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 371
+    }
+  ],
+  "register_tool": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 310
+    }
+  ],
+  "register_tools_from_module": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 321
     }
   ],
   "reload": [
@@ -73654,7 +74205,7 @@
     {
       "kind": "member",
       "path": "tea_agent/config.py",
-      "line": 400
+      "line": 409
     }
   ],
   "remove_agent": [
@@ -73662,6 +74213,11 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/agent_pool.py",
       "line": 192
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 489
     }
   ],
   "remove_step": [
@@ -73719,6 +74275,13 @@
       "line": 302
     }
   ],
+  "reset_history": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 658
+    }
+  ],
   "reset_instance": [
     {
       "kind": "object",
@@ -73762,7 +74325,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 1369
+      "line": 1365
     }
   ],
   "reset_usage": [
@@ -73802,6 +74365,11 @@
     }
   ],
   "role": [
+    {
+      "kind": "variable",
+      "path": "tea_agent/config.py",
+      "line": 186
+    },
     {
       "kind": "variable",
       "path": "tea_agent/multi_agent/sub_agent.py",
@@ -73887,6 +74455,11 @@
     },
     {
       "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 380
+    },
+    {
+      "kind": "member",
       "path": "tea_agent/multi_agent/sub_agent.py",
       "line": 258
     },
@@ -73908,6 +74481,11 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/agent_pool.py",
       "line": 265
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 554
     }
   ],
   "run_chat": [
@@ -73963,6 +74541,11 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/agent_pool.py",
       "line": 205
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 499
     }
   ],
   "safe_log": [
@@ -73989,7 +74572,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 553
+      "line": 552
     }
   ],
   "safe_log_tool": [
@@ -74016,7 +74599,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 563
+      "line": 562
     }
   ],
   "safe_stream": [
@@ -74043,7 +74626,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 544
+      "line": 543
     }
   ],
   "safe_update_status": [
@@ -74070,7 +74653,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 572
+      "line": 571
     }
   ],
   "sanitize": [
@@ -74148,7 +74731,7 @@
     {
       "kind": "function",
       "path": "tea_agent/config.py",
-      "line": 530
+      "line": 537
     }
   ],
   "save_index": [
@@ -75736,7 +76319,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 1179
+      "line": 1149
     }
   ],
   "search": [
@@ -75858,7 +76441,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 820
+      "line": 819
     }
   ],
   "sentiment_score": [
@@ -75882,10 +76465,30 @@
     {
       "kind": "member",
       "path": "tea_agent/config.py",
-      "line": 350
+      "line": 359
     }
   ],
   "setUp": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 127
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 237
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 271
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 58
+    },
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
@@ -75899,22 +76502,42 @@
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 273
+      "line": 271
     },
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 306
+      "line": 304
     },
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 412
+      "line": 406
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 515
     },
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
       "line": 60
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 665
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 735
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 832
     }
   ],
   "setUpClass": [
@@ -76083,7 +76706,7 @@
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
-      "line": 234
+      "line": 239
     },
     {
       "kind": "variable",
@@ -76138,6 +76761,11 @@
     },
     {
       "kind": "member",
+      "path": "tea_agent/multi_agent/orchestrator.py",
+      "line": 762
+    },
+    {
+      "kind": "member",
       "path": "tea_agent/multi_agent/sub_agent.py",
       "line": 381
     }
@@ -76147,6 +76775,11 @@
       "kind": "member",
       "path": "tea_agent/multi_agent/agent_pool.py",
       "line": 296
+    },
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 579
     }
   ],
   "signature": [
@@ -77505,7 +78138,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 601
+      "line": 600
     }
   ],
   "stream_cb": [
@@ -77638,7 +78271,14 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 673
+      "line": 672
+    }
+  ],
+  "system_prompt": [
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 76
     }
   ],
   "system_prompt_extra": [
@@ -77702,6 +78342,13 @@
       "line": 58
     }
   ],
+  "tearDown": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 291
+    }
+  ],
   "temperature": [
     {
       "kind": "variable",
@@ -77710,8 +78357,20 @@
     },
     {
       "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 54
+    },
+    {
+      "kind": "variable",
       "path": "tea_agent/multi_agent/sub_agent.py",
       "line": 42
+    }
+  ],
+  "templates": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/agent_pool.py",
+      "line": 576
     }
   ],
   "test_add_critical_memory": [
@@ -77770,11 +78429,32 @@
       "line": 149
     }
   ],
+  "test_aggregate_with_failed_subtasks": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 836
+    }
+  ],
+  "test_apply_blacklist": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 555
+    }
+  ],
   "test_apply_changes": [
     {
       "kind": "member",
       "path": "tests/test_config.py",
       "line": 198
+    }
+  ],
+  "test_apply_whitelist": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 548
     }
   ],
   "test_auto_backup_creates_file": [
@@ -77823,7 +78503,21 @@
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 281
+      "line": 279
+    }
+  ],
+  "test_create_agent_direct_config": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 691
+    }
+  ],
+  "test_create_agent_from_template": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 679
     }
   ],
   "test_create_default_config": [
@@ -77833,11 +78527,25 @@
       "line": 260
     }
   ],
+  "test_create_duplicate_returns_existing": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 701
+    }
+  ],
   "test_create_topic": [
     {
       "kind": "member",
       "path": "tests/test_store.py",
       "line": 90
+    }
+  ],
+  "test_create_without_config_raises": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 727
     }
   ],
   "test_critical_fifo_limit": [
@@ -77861,6 +78569,13 @@
       "line": 65
     }
   ],
+  "test_decompose_empty_task": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 821
+    }
+  ],
   "test_decompose_general_task": [
     {
       "kind": "member",
@@ -77875,11 +78590,18 @@
       "line": 72
     }
   ],
+  "test_decompose_with_rules_fallback": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 204
+    }
+  ],
   "test_default_agent_types": [
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 309
+      "line": 307
     }
   ],
   "test_default_config": [
@@ -77887,6 +78609,11 @@
       "kind": "member",
       "path": "tests/test_multi_agent.py",
       "line": 37
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 460
     }
   ],
   "test_default_disabled": [
@@ -77919,7 +78646,7 @@
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 392
+      "line": 386
     }
   ],
   "test_delete_topic_cascade": [
@@ -77947,14 +78674,31 @@
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 323
+      "line": 321
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 758
     }
   ],
   "test_execution_history": [
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 336
+      "line": 334
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 773
+    }
+  ],
+  "test_execution_order_complex": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 214
     }
   ],
   "test_execution_order_no_deps": [
@@ -77978,6 +78722,13 @@
       "line": 341
     }
   ],
+  "test_fallback_to_rules_when_no_lite_agent": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 811
+    }
+  ],
   "test_flush_before_render": [
     {
       "kind": "member",
@@ -77997,6 +78748,13 @@
       "kind": "member",
       "path": "tests/test_multi_agent.py",
       "line": 130
+    }
+  ],
+  "test_full_flow_with_mock_decompose": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 170
     }
   ],
   "test_get_active_memories_sorted": [
@@ -78041,6 +78799,13 @@
       "line": 106
     }
   ],
+  "test_get_openai_tools": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 538
+    }
+  ],
   "test_get_recent_conversations": [
     {
       "kind": "member",
@@ -78052,7 +78817,12 @@
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 329
+      "line": 327
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 764
     }
   ],
   "test_get_summary_none": [
@@ -78083,6 +78853,20 @@
       "line": 321
     }
   ],
+  "test_history_management": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 625
+    }
+  ],
+  "test_history_survives_multiple_runs": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 245
+    }
+  ],
   "test_init_creates_all_tables": [
     {
       "kind": "member",
@@ -78111,6 +78895,32 @@
       "line": 54
     }
   ],
+  "test_init_requires_config": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 572
+    }
+  ],
+  "test_init_with_config_object": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 588
+    }
+  ],
+  "test_init_with_dict": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 577
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 743
+    }
+  ],
   "test_init_writes_week_key": [
     {
       "kind": "member",
@@ -78118,11 +78928,46 @@
       "line": 60
     }
   ],
+  "test_interrupt": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 651
+    }
+  ],
   "test_list_topics": [
     {
       "kind": "member",
       "path": "tests/test_store.py",
       "line": 110
+    }
+  ],
+  "test_lite_agent_parameter_accepted": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 805
+    }
+  ],
+  "test_lite_agent_respects_max_iterations": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 109
+    }
+  ],
+  "test_lite_agent_simple_text": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 99
+    }
+  ],
+  "test_lite_agent_with_tool_call": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 80
     }
   ],
   "test_load_and_save_roundtrip": [
@@ -78139,6 +78984,13 @@
       "line": 229
     }
   ],
+  "test_load_from_yaml": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 295
+    }
+  ],
   "test_main.py 说明": [
     {
       "kind": "section",
@@ -78151,6 +79003,13 @@
       "kind": "member",
       "path": "tests/test_store.py",
       "line": 436
+    }
+  ],
+  "test_master_and_worker_separate_configs": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 786
     }
   ],
   "test_memory_stats": [
@@ -78167,6 +79026,13 @@
       "line": 185
     }
   ],
+  "test_merge_code_results_empty": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 851
+    }
+  ],
   "test_meta_get_nonexistent": [
     {
       "kind": "member",
@@ -78178,14 +79044,14 @@
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 379
+      "line": 373
     }
   ],
   "test_meta_schemas": [
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 446
+      "line": 440
     }
   ],
   "test_meta_set_and_get": [
@@ -78199,7 +79065,7 @@
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 350
+      "line": 346
     }
   ],
   "test_not_configured_when_partial": [
@@ -78223,6 +79089,41 @@
       "line": 30
     }
   ],
+  "test_orchestrator_manual_mode": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 146
+    }
+  ],
+  "test_orchestrator_single_mode": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 134
+    }
+  ],
+  "test_parse_dict_flat": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 467
+    }
+  ],
+  "test_parse_dict_nested": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 483
+    }
+  ],
+  "test_parse_dict_with_tool_filters": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 501
+    }
+  ],
   "test_property_accessors": [
     {
       "kind": "member",
@@ -78234,12 +79135,38 @@
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 276
+      "line": 274
     },
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 318
+      "line": 316
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 751
+    }
+  ],
+  "test_register_and_get": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 519
+    }
+  ],
+  "test_register_template": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 669
+    }
+  ],
+  "test_register_tool": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 606
     }
   ],
   "test_reload_from_dict": [
@@ -78253,7 +79180,12 @@
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 288
+      "line": 286
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 709
     }
   ],
   "test_render_before_pipeline": [
@@ -78281,7 +79213,14 @@
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 416
+      "line": 410
+    }
+  ],
+  "test_reset_history": [
+    {
+      "kind": "member",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 258
     }
   ],
   "test_resolve_absolute_data_dir": [
@@ -78400,28 +79339,38 @@
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 340
+      "line": 338
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 780
     }
   ],
   "test_shutdown_all": [
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 295
+      "line": 293
+    },
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 718
     }
   ],
   "test_status_all_agents": [
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 433
+      "line": 427
     }
   ],
   "test_sub_agent_def": [
     {
       "kind": "member",
       "path": "tests/test_multi_agent.py",
-      "line": 361
+      "line": 355
     }
   ],
   "test_summarize_long": [
@@ -78448,6 +79397,20 @@
       "kind": "member",
       "path": "tests/test_multi_agent.py",
       "line": 116
+    }
+  ],
+  "test_trim_history": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 637
+    }
+  ],
+  "test_unregister": [
+    {
+      "kind": "member",
+      "path": "tests/test_multi_agent.py",
+      "line": 562
     }
   ],
   "test_update_and_get_summary": [
@@ -78531,7 +79494,7 @@
     {
       "kind": "namespace",
       "path": "tea_agent/gui.py",
-      "line": 625
+      "line": 624
     },
     {
       "kind": "namespace",
@@ -78599,12 +79562,12 @@
     {
       "kind": "member",
       "path": "tea_agent/config.py",
-      "line": 236
+      "line": 241
     },
     {
       "kind": "member",
       "path": "tea_agent/config.py",
-      "line": 411
+      "line": 420
     },
     {
       "kind": "member",
@@ -78631,7 +79594,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 515
+      "line": 514
     }
   ],
   "toggle_skill": [
@@ -78671,15 +79634,30 @@
     },
     {
       "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 83
+    },
+    {
+      "kind": "variable",
       "path": "tea_agent/multi_agent/sub_agent.py",
       "line": 46
     }
   ],
   "tool_calls": [
     {
+      "kind": "unknown",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 594
+    },
+    {
       "kind": "variable",
       "path": "tea_agent/reflection.py",
       "line": 33
+    },
+    {
+      "kind": "unknown",
+      "path": "tests/test_lite_agent_e2e.py",
+      "line": 49
     }
   ],
   "tool_log": [
@@ -78689,11 +79667,23 @@
       "line": 31
     }
   ],
+  "tool_names": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 141
+    }
+  ],
   "tool_whitelist": [
     {
       "kind": "variable",
       "path": "tea_agent/config.py",
       "line": 187
+    },
+    {
+      "kind": "variable",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 82
     },
     {
       "kind": "variable",
@@ -79632,6 +80622,13 @@
       "line": 5
     }
   ],
+  "tools": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 680
+    }
+  ],
   "top_p": [
     {
       "kind": "variable",
@@ -80103,6 +81100,13 @@
       "line": 617
     }
   ],
+  "unregister": [
+    {
+      "kind": "member",
+      "path": "tea_agent/multi_agent/lite_agent.py",
+      "line": 106
+    }
+  ],
   "update_actual_outcome": [
     {
       "kind": "function",
@@ -80212,7 +81216,7 @@
     {
       "kind": "member",
       "path": "tea_agent/onlinesession.py",
-      "line": 1343
+      "line": 1339
     }
   ],
   "update_topic_active": [
@@ -80519,7 +81523,7 @@
     {
       "kind": "function",
       "path": "tea_agent/gui.py",
-      "line": 849
+      "line": 848
     },
     {
       "kind": "function",
@@ -80548,7 +81552,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 419
+      "line": 418
     }
   ],
   "zoom_out": [
@@ -80565,7 +81569,7 @@
     {
       "kind": "member",
       "path": "tea_agent/gui.py",
-      "line": 432
+      "line": 431
     }
   ],
   "与用户知识库的区别": [

@@ -78,9 +78,9 @@ def test_memory_integration(sess, storage):
     print("Test Memory Integration")
     print("=" * 50)
 
-    assert hasattr(sess, '_setup_memory'), "Should have _setup_memory"
-    assert hasattr(sess, '_pipeline_inject_memories'), "Should have memory injection"
-    print("✅ Session has memory mixin methods")
+    assert hasattr(sess, 'memory_comp'), "Should have memory_comp (MemoryComponent)"
+    assert hasattr(sess, 'summarizer_comp'), "Should have summarizer_comp"
+    print("✅ Session has memory components (composition pattern)")
 
 
 if __name__ == "__main__":

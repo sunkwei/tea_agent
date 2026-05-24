@@ -3,6 +3,7 @@
 import json
 import base64
 import os
+import sqlite3
 import threading
 import logging
 from typing import Dict, List, Optional
@@ -12,6 +13,17 @@ logger = logging.getLogger("Storage.Conversations")
 
 class ConversationStore(StoreComponent):
     """对话管理：保存消息、更新轮次、查询对话历史、Agent 轮次记录。"""
+
+    def __init__(self, conn, db_path: str = ""):
+        """Initialize.
+
+        Args:
+            conn: SQLite connection shared by main thread.
+            db_path: Path to the SQLite database file, used by background
+                     threads to open their own connections.
+        """
+        super().__init__(conn)
+        self._db_path = db_path
 
     def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool,
                  update_active_cb=None, auto_embed_cb=None) -> str:
@@ -213,29 +225,41 @@ class ConversationStore(StoreComponent):
 
     def _auto_embed_async(self, conv_id: str, text: str):
         """
-        后台线程自动生成并存储文本向量。
+        后台线程自动生成并存储文本向量。使用独立数据库连接避免与主线程事务冲突。
 
         Args:
             conv_id (str): Description.
             text (str): Description.
         """
+        db_path = self._db_path
 
         def _run():
             """Internal: run"""
+            conn = None
             try:
                 from tea_agent.embedding_util import get_embedding_engine
                 engine = get_embedding_engine()
                 vec = engine.embed(text)
                 if vec:
-                    self._store_embedding_inline(conv_id, vec, engine.model_name, len(vec))
+                    conn = sqlite3.connect(db_path)
+                    self._store_embedding_inline(
+                        conv_id, vec, engine.model_name, len(vec), conn=conn
+                    )
             except Exception as e:
                 logging.getLogger("store").warning(f"自动嵌入失败 (conv_id={conv_id}): {e}")
+            finally:
+                if conn:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
 
         t = threading.Thread(target=_run, daemon=True, name=f"auto-embed-{conv_id}")
         t.start()
 
     def _store_embedding_inline(self, conversation_id: str, embedding: list,
-                                 model_name: str = "", dimension: int = 0):
+                                 model_name: str = "", dimension: int = 0,
+                                 conn=None):
         """
         内联存储向量（避免循环导入，由 _auto_embed_async 调用）。
 
@@ -244,15 +268,17 @@ class ConversationStore(StoreComponent):
             embedding (list): Description.
             model_name (str): Description.
             dimension (int): Description.
+            conn: Optional SQLite connection. If None, uses self.conn (main thread).
         """
         import numpy as np
         arr = np.array(embedding, dtype=np.float32)
         blob = arr.tobytes()
-        c = self.conn.cursor()
+        db_conn = conn if conn is not None else self.conn
+        c = db_conn.cursor()
         c.execute(
             "INSERT OR REPLACE INTO msg_vectors (conversation_id, embedding, dimension, model_name, created_at) "
             "VALUES (?, ?, ?, ?, datetime('now', 'localtime'))",
             (conversation_id, blob, dimension or len(embedding), model_name),
         )
-        self.conn.commit()
+        db_conn.commit()
         c.close()

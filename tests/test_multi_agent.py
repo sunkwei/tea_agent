@@ -450,5 +450,410 @@ class TestToolkitSubAgent(unittest.TestCase):
         self.assertEqual(status_meta["function"]["name"], "toolkit_sub_agent_status")
 
 
+# ============================================================================
+# LiteAgent 轻量级组件测试
+# ============================================================================
+
+class TestLiteAgentConfig(unittest.TestCase):
+    """测试 LiteAgentConfig 配置解析"""
+
+    def test_default_config(self):
+        from tea_agent.multi_agent.lite_agent import LiteAgentConfig
+        cfg = LiteAgentConfig()
+        self.assertEqual(cfg.max_iterations, 15)
+        self.assertEqual(cfg.keep_turns, 5)
+        self.assertFalse(cfg.main_model.is_configured)
+
+    def test_parse_dict_flat(self):
+        from tea_agent.multi_agent.lite_agent import LiteAgent
+        cfg = LiteAgent._parse_config_dict({
+            "api_key": "sk-test",
+            "api_url": "http://localhost:8080/v1",
+            "model_name": "test-model",
+            "max_iterations": 10,
+            "keep_turns": 3,
+        })
+        self.assertEqual(cfg.main_model.api_key, "sk-test")
+        self.assertEqual(cfg.main_model.api_url, "http://localhost:8080/v1")
+        self.assertEqual(cfg.main_model.model_name, "test-model")
+        self.assertTrue(cfg.main_model.is_configured)
+        self.assertEqual(cfg.max_iterations, 10)
+        self.assertEqual(cfg.keep_turns, 3)
+
+    def test_parse_dict_nested(self):
+        from tea_agent.multi_agent.lite_agent import LiteAgent
+        cfg = LiteAgent._parse_config_dict({
+            "main_model": {
+                "api_key": "sk-nested",
+                "api_url": "http://nested:8080/v1",
+                "model_name": "nested-model",
+                "temperature": 0.5,
+                "max_tokens": 2048,
+            },
+            "system_prompt": "你是一个测试助手",
+        })
+        self.assertEqual(cfg.main_model.api_key, "sk-nested")
+        self.assertEqual(cfg.main_model.model_name, "nested-model")
+        self.assertEqual(cfg.main_model.temperature, 0.5)
+        self.assertEqual(cfg.main_model.max_tokens, 2048)
+        self.assertEqual(cfg.system_prompt, "你是一个测试助手")
+
+    def test_parse_dict_with_tool_filters(self):
+        from tea_agent.multi_agent.lite_agent import LiteAgent
+        cfg = LiteAgent._parse_config_dict({
+            "api_key": "sk", "api_url": "http://x", "model_name": "m",
+            "tool_whitelist": ["toolkit_file", "toolkit_exec"],
+            "tool_blacklist": ["toolkit_save"],
+        })
+        self.assertEqual(cfg.tool_whitelist, ["toolkit_file", "toolkit_exec"])
+        self.assertEqual(cfg.tool_blacklist, ["toolkit_save"])
+
+
+class TestToolRegistry(unittest.TestCase):
+    """测试 ToolRegistry"""
+
+    def setUp(self):
+        from tea_agent.multi_agent.lite_agent import ToolRegistry
+        self.reg = ToolRegistry()
+
+    def test_register_and_get(self):
+        def dummy_func(x: str) -> str:
+            return f"OK:{x}"
+
+        schema = {
+            "description": "测试工具",
+            "parameters": {
+                "type": "object",
+                "properties": {"x": {"type": "string"}},
+                "required": ["x"],
+            },
+        }
+        self.reg.register("test_tool", dummy_func, schema)
+        self.assertIn("test_tool", self.reg.tool_names)
+
+        func = self.reg.get_func("test_tool")
+        self.assertIsNotNone(func)
+        self.assertEqual(func("hello"), "OK:hello")
+
+    def test_get_openai_tools(self):
+        self.reg.register("tool_a", lambda: "a", {
+            "description": "Tool A",
+            "parameters": {"type": "object", "properties": {}},
+        })
+        tools = self.reg.get_openai_tools()
+        self.assertEqual(len(tools), 1)
+        self.assertEqual(tools[0]["type"], "function")
+        self.assertEqual(tools[0]["function"]["name"], "tool_a")
+
+    def test_apply_whitelist(self):
+        self.reg.register("keep", lambda: "", {"description": "", "parameters": {}})
+        self.reg.register("drop", lambda: "", {"description": "", "parameters": {}})
+        self.reg.apply_filter(whitelist=["keep"], blacklist=None)
+        self.assertIn("keep", self.reg.tool_names)
+        self.assertNotIn("drop", self.reg.tool_names)
+
+    def test_apply_blacklist(self):
+        self.reg.register("keep", lambda: "", {"description": "", "parameters": {}})
+        self.reg.register("drop", lambda: "", {"description": "", "parameters": {}})
+        self.reg.apply_filter(whitelist=None, blacklist=["drop"])
+        self.assertIn("keep", self.reg.tool_names)
+        self.assertNotIn("drop", self.reg.tool_names)
+
+    def test_unregister(self):
+        self.reg.register("temp", lambda: "", {"description": "", "parameters": {}})
+        self.assertIn("temp", self.reg.tool_names)
+        self.reg.unregister("temp")
+        self.assertNotIn("temp", self.reg.tool_names)
+
+
+class TestLiteAgentInit(unittest.TestCase):
+    """测试 LiteAgent 初始化"""
+
+    def test_init_requires_config(self):
+        from tea_agent.multi_agent.lite_agent import LiteAgent
+        with self.assertRaises(ValueError):
+            LiteAgent()  # 无配置应报错
+
+    def test_init_with_dict(self):
+        from tea_agent.multi_agent.lite_agent import LiteAgent
+        agent = LiteAgent(config_dict={
+            "api_key": "sk-test",
+            "api_url": "http://localhost:8080/v1",
+            "model_name": "test-model",
+        })
+        self.assertEqual(agent._model, "test-model")
+        self.assertIsNotNone(agent._client)
+        self.assertEqual(len(agent._history), 0)
+
+    def test_init_with_config_object(self):
+        from tea_agent.multi_agent.lite_agent import (
+            LiteAgent, LiteAgentConfig, LiteAgentModelConfig,
+        )
+        cfg = LiteAgentConfig(
+            main_model=LiteAgentModelConfig(
+                api_key="sk-obj",
+                api_url="http://obj:8080/v1",
+                model_name="obj-model",
+            ),
+            max_iterations=20,
+            keep_turns=8,
+        )
+        agent = LiteAgent(config=cfg)
+        self.assertEqual(agent._model, "obj-model")
+        self.assertEqual(agent._cfg.max_iterations, 20)
+        self.assertEqual(agent._cfg.keep_turns, 8)
+
+    def test_register_tool(self):
+        from tea_agent.multi_agent.lite_agent import LiteAgent
+        agent = LiteAgent(config_dict={
+            "api_key": "sk", "api_url": "http://x", "model_name": "m",
+        })
+
+        def echo(msg: str) -> str:
+            return msg
+
+        agent.register_tool("echo", echo, {
+            "description": "Echo back",
+            "parameters": {
+                "type": "object",
+                "properties": {"msg": {"type": "string"}},
+                "required": ["msg"],
+            },
+        })
+        self.assertIn("echo", agent.tools)
+
+    def test_history_management(self):
+        from tea_agent.multi_agent.lite_agent import LiteAgent
+        agent = LiteAgent(config_dict={
+            "api_key": "sk", "api_url": "http://x", "model_name": "m",
+        })
+        agent._append_to_history("user", "Hello")
+        agent._append_to_history("assistant", "Hi there")
+        self.assertEqual(len(agent._history), 2)
+
+        agent.reset_history()
+        self.assertEqual(len(agent._history), 0)
+
+    def test_trim_history(self):
+        from tea_agent.multi_agent.lite_agent import LiteAgent
+        agent = LiteAgent(config_dict={
+            "api_key": "sk", "api_url": "http://x", "model_name": "m",
+            "keep_turns": 2,
+        })
+        # 添加 6 条消息（3 轮），应裁剪为 4 条（2 轮）
+        for i in range(6):
+            agent._append_to_history("user" if i % 2 == 0 else "assistant", f"msg{i}")
+        self.assertEqual(len(agent._history), 6)
+        agent._trim_history()
+        self.assertEqual(len(agent._history), 4)  # keep_turns*2 = 4
+        self.assertEqual(agent._history[0]["content"], "msg2")  # 最旧的被裁剪
+
+    def test_interrupt(self):
+        from tea_agent.multi_agent.lite_agent import LiteAgent
+        agent = LiteAgent(config_dict={
+            "api_key": "sk", "api_url": "http://x", "model_name": "m",
+        })
+        self.assertFalse(agent._interrupted)
+        agent.interrupt()
+        self.assertTrue(agent._interrupted)
+        self.assertFalse(agent.is_running)
+
+
+class TestLiteAgentPool(unittest.TestCase):
+    """测试 LiteAgentPool"""
+
+    def setUp(self):
+        from tea_agent.multi_agent.agent_pool import LiteAgentPool
+        self.pool = LiteAgentPool(max_workers=2)
+
+    def test_register_template(self):
+        self.pool.register_template(
+            "test_type",
+            config_dict={
+                "api_key": "sk", "api_url": "http://x", "model_name": "m",
+            },
+            role="测试角色",
+        )
+        self.assertIn("test_type", self.pool.templates)
+
+    def test_create_agent_from_template(self):
+        self.pool.register_template(
+            "helper",
+            config_dict={
+                "api_key": "sk", "api_url": "http://x", "model_name": "m",
+            },
+            role="助手",
+        )
+        agent = self.pool.create_agent("a1", template_name="helper")
+        self.assertIsNotNone(agent)
+        self.assertIn("a1", self.pool.active_agents)
+
+    def test_create_agent_direct_config(self):
+        agent = self.pool.create_agent(
+            "direct",
+            config_dict={
+                "api_key": "sk", "api_url": "http://x", "model_name": "m",
+            },
+        )
+        self.assertIsNotNone(agent)
+        self.assertEqual(agent._model, "m")
+
+    def test_create_duplicate_returns_existing(self):
+        self.pool.register_template(
+            "t", config_dict={"api_key": "sk", "api_url": "http://x", "model_name": "m"}
+        )
+        a1 = self.pool.create_agent("dup", template_name="t")
+        a2 = self.pool.create_agent("dup", template_name="t")
+        self.assertIs(a1, a2)
+
+    def test_remove_agent(self):
+        self.pool.register_template(
+            "t", config_dict={"api_key": "sk", "api_url": "http://x", "model_name": "m"}
+        )
+        self.pool.create_agent("temp", template_name="t")
+        self.assertIn("temp", self.pool.active_agents)
+        self.pool.remove_agent("temp")
+        self.assertNotIn("temp", self.pool.active_agents)
+
+    def test_shutdown_all(self):
+        self.pool.register_template(
+            "t", config_dict={"api_key": "sk", "api_url": "http://x", "model_name": "m"}
+        )
+        self.pool.create_agent("a1", template_name="t")
+        self.pool.create_agent("a2", template_name="t")
+        self.pool.shutdown_all()
+        self.assertEqual(len(self.pool.active_agents), 0)
+
+    def test_create_without_config_raises(self):
+        with self.assertRaises(ValueError):
+            self.pool.create_agent("no_config")
+
+
+class TestLiteOrchestrator(unittest.TestCase):
+    """测试 LiteOrchestrator"""
+
+    def setUp(self):
+        from tea_agent.multi_agent.orchestrator import LiteOrchestrator
+        self.base_config = {
+            "api_key": "sk-test",
+            "api_url": "http://localhost:8080/v1",
+            "model_name": "test-model",
+        }
+
+    def test_init_with_dict(self):
+        from tea_agent.multi_agent.orchestrator import LiteOrchestrator
+        orch = LiteOrchestrator(config_dict=self.base_config, max_workers=2)
+        self.assertIsNotNone(orch._master)
+        self.assertEqual(orch._max_workers, 2)
+        self.assertIsNotNone(orch.decomposer)
+        self.assertIsNotNone(orch.aggregator)
+
+    def test_register_agent_type(self):
+        from tea_agent.multi_agent.orchestrator import LiteOrchestrator
+        orch = LiteOrchestrator(config_dict=self.base_config)
+        orch.register_agent_type("coder", role="代码专家")
+        self.assertIn("coder", orch.pool.templates)
+        self.assertIn("coder", orch.decomposer.agent_types)
+
+    def test_execute_single_mode(self):
+        from tea_agent.multi_agent.orchestrator import LiteOrchestrator
+        orch = LiteOrchestrator(config_dict=self.base_config)
+        self.assertTrue(hasattr(orch, "execute_single"))
+        self.assertTrue(hasattr(orch, "execute_manual"))
+
+    def test_get_status(self):
+        from tea_agent.multi_agent.orchestrator import LiteOrchestrator
+        orch = LiteOrchestrator(config_dict=self.base_config)
+        status = orch.get_status()
+        self.assertIn("active_agents", status)
+        self.assertIn("agent_types", status)
+        self.assertIn("max_workers", status)
+        self.assertIn("execution_count", status)
+
+    def test_execution_history(self):
+        from tea_agent.multi_agent.orchestrator import LiteOrchestrator
+        orch = LiteOrchestrator(config_dict=self.base_config)
+        history = orch.get_execution_history()
+        self.assertIsInstance(history, list)
+        self.assertEqual(len(history), 0)
+
+    def test_shutdown(self):
+        from tea_agent.multi_agent.orchestrator import LiteOrchestrator
+        orch = LiteOrchestrator(config_dict=self.base_config)
+        orch.shutdown()
+        self.assertEqual(len(orch.pool.active_agents), 0)
+
+    def test_master_and_worker_separate_configs(self):
+        """测试主Agent和子Agent使用不同配置"""
+        from tea_agent.multi_agent.orchestrator import LiteOrchestrator
+        orch = LiteOrchestrator(
+            master_config_dict=self.base_config,
+            config_dict={**self.base_config, "model_name": "worker-model"},
+            max_workers=2,
+        )
+        # 主Agent用 master 配置
+        self.assertEqual(orch._master._model, "test-model")
+        # 子Agent模板用 worker 配置
+        orch.register_agent_type("w", role="worker")
+        tmpl = orch.pool._templates["w"]
+        self.assertEqual(tmpl["config_dict"]["model_name"], "worker-model")
+
+
+class TestTaskDecomposerWithLiteAgent(unittest.TestCase):
+    """测试 TaskDecomposer 使用 LiteAgent 进行分解"""
+
+    def test_lite_agent_parameter_accepted(self):
+        from tea_agent.multi_agent.task_decomposer import TaskDecomposer
+        d = TaskDecomposer(agent_types=["general", "coder"], lite_agent=None)
+        self.assertIsNone(d._lite_agent)
+        self.assertEqual(len(d.agent_types), 2)
+
+    def test_fallback_to_rules_when_no_lite_agent(self):
+        """无 LiteAgent 时应回退到规则分解"""
+        from tea_agent.multi_agent.task_decomposer import TaskDecomposer
+        d = TaskDecomposer(agent_types=["general"])
+        subtasks = d.decompose("编写一个排序函数")
+        self.assertIsInstance(subtasks, list)
+        self.assertGreater(len(subtasks), 0)
+        # 规则分解至少产生 2 个子任务（分析+实现）
+        self.assertGreaterEqual(len(subtasks), 1)
+
+    def test_decompose_empty_task(self):
+        from tea_agent.multi_agent.task_decomposer import TaskDecomposer
+        d = TaskDecomposer()
+        subtasks = d.decompose("")
+        self.assertEqual(len(subtasks), 1)
+        self.assertEqual(subtasks[0].agent_type, "general")
+
+
+class TestResultAggregatorEdgeCases(unittest.TestCase):
+    """测试 ResultAggregator 边界情况"""
+
+    def setUp(self):
+        from tea_agent.multi_agent.result_aggregator import ResultAggregator
+        self.agg = ResultAggregator()
+
+    def test_aggregate_with_failed_subtasks(self):
+        from tea_agent.multi_agent.task_decomposer import SubTask
+        subtasks = [
+            SubTask(id="a", description="任务A"),
+            SubTask(id="b", description="任务B"),
+        ]
+        # 两个结果都存在 — 触发报告格式（len(results) > 1）
+        results = {"a": "结果A", "b": "[未完成]"}
+        result = self.agg.aggregate(subtasks, results, "原始")
+        self.assertIn("结果A", result)
+        self.assertIn("任务执行报告", result)
+        # 只有一个结果时返回单结果
+        single = self.agg.aggregate(subtasks, {"a": "OnlyA"}, "原始")
+        self.assertEqual(single, "OnlyA")
+
+    def test_merge_code_results_empty(self):
+        merged = self.agg.merge_code_results({})
+        self.assertEqual(merged["merged_code"], "")
+        self.assertEqual(merged["summary"], "")
+        self.assertEqual(len(merged["errors"]), 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

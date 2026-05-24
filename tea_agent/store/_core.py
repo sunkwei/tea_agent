@@ -51,7 +51,7 @@ class Storage:
         self._protect_db()
 
         self._topics = TopicStore(self.conn)
-        self._conversations = ConversationStore(self.conn)
+        self._conversations = ConversationStore(self.conn, self.db_path)
         self._summaries = SummaryStore(self.conn)
         self._memories = MemoryStore(self.conn)
         self._prompts = PromptStore(self.conn)

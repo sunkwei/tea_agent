@@ -118,6 +118,7 @@ class TaskDecomposer:
         agent_types: Optional[List[str]] = None,
         llm_client: Any = None,
         llm_model: str = "",
+        lite_agent: Any = None,
     ):
         """
         初始化任务分解器。
@@ -126,16 +127,20 @@ class TaskDecomposer:
             agent_types: 可用的Agent类型列表
             llm_client: LLM客户端（用于智能分解），None则使用规则分解
             llm_model: LLM模型名
+            lite_agent: LiteAgent 实例（推荐）。提供后优先使用 LiteAgent 进行分解，
+                        无需额外配置 LLM 客户端。
         """
         self.agent_types = agent_types or ["general"]
         self._llm_client = llm_client
         self._llm_model = llm_model
+        self._lite_agent = lite_agent
     
     def decompose(self, task: str) -> List[SubTask]:
         """
         分解任务为子任务列表。
 
-        优先使用LLM驱动分解，失败时回退到规则分解。
+        优先级: LiteAgent > LLM客户端 > 规则分解。
+        失败时自动回退到下一级。
 
         Args:
             task: 用户任务描述
@@ -143,12 +148,21 @@ class TaskDecomposer:
         Returns:
             子任务列表
         """
+        # 1) 优先使用 LiteAgent
+        if self._lite_agent:
+            try:
+                return self._decompose_with_lite_agent(task)
+            except Exception as e:
+                logger.warning(f"LiteAgent分解失败，尝试回退: {e}")
+
+        # 2) 旧版 LLM 客户端
         if self._llm_client:
             try:
                 return self._decompose_with_llm(task)
             except Exception as e:
                 logger.warning(f"LLM分解失败，回退到规则分解: {e}")
-        
+
+        # 3) 规则分解
         return self._decompose_with_rules(task)
     
     def _decompose_with_llm(self, task: str) -> List[SubTask]:
@@ -183,6 +197,37 @@ class TaskDecomposer:
             return self._decompose_with_rules(task)
         
         logger.info(f"LLM分解完成: {len(subtasks)} 个子任务")
+        return subtasks
+
+    def _decompose_with_lite_agent(self, task: str) -> List[SubTask]:
+        """
+        使用 LiteAgent 智能分解任务（推荐方式）。
+
+        LiteAgent 无需额外的 LLM 客户端配置，
+        直接使用已配置好的 LiteAgent 实例进行分解。
+
+        Args:
+            task: 任务描述
+
+        Returns:
+            子任务列表
+        """
+        prompt = self.DECOMPOSE_PROMPT.format(
+            agent_types=", ".join(self.agent_types),
+            task=task,
+        )
+
+        # LiteAgent.run() 直接返回文本结果
+        content = self._lite_agent.run(prompt)
+
+        subtasks_data = self._extract_json_array(content)
+        subtasks = [SubTask.from_dict(item) for item in subtasks_data]
+
+        if not subtasks:
+            logger.warning("LiteAgent分解返回空结果，回退到规则分解")
+            return self._decompose_with_rules(task)
+
+        logger.info(f"LiteAgent分解完成: {len(subtasks)} 个子任务")
         return subtasks
     
     def _decompose_with_rules(self, task: str) -> List[SubTask]:

@@ -140,6 +140,7 @@ class OnlineToolSession(BaseChatSession):
         for comp in [self.api, self.tools_comp, self.memory_comp, self.summarizer_comp]:
             comp.initialize()
 
+        self.enable_thinking = enable_thinking
         self.max_iterations = max_iterations
         self.storage = storage
         self._cheap_client = cheap_client

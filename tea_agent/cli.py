@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Tea Agent 轻量 CLI — 单文件实现。
 
@@ -21,7 +20,6 @@ import sys
 import os
 import threading
 
-# 将项目根目录加入 sys.path（支持 python -m tea_agent.cli）
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
@@ -33,7 +31,7 @@ class TeaCLI(AgentCore):
     """Tea Agent 命令行客户端。"""
 
     def __init__(self, config_path: str = None, enable_think: bool = False,
-                 verbose: bool = False, disable_summary: bool = False):
+                 verbose: bool = False, disable_summary: bool = False, debug: bool = False):
         """Initialize  .
         
         Args:
@@ -41,17 +39,16 @@ class TeaCLI(AgentCore):
             enable_think: Description.
             verbose: Description.
             disable_summary: Description.
+            debug: Description.
         """
         self._cli_think = enable_think
         self._cli_verbose = verbose
-        super().__init__(config_path=config_path, disable_summary=disable_summary)
+        self._cli_debug = debug
+        super().__init__(config_path=config_path, disable_summary=disable_summary, debug=debug)
 
-        # 应用 CLI 参数覆盖 config 的 think 设置
         self._cfg.enable_thinking = self._cli_think
-        self.sess.enable_thinking = self._cli_think
-        self._init_session()  # 用新 think 设置重建 session
+        self._init_session()
 
-    # ——— AgentCore 要求的回调 ———
     def _on_post_reply(self, ai_msg, used_tools, topic_id):
         """Internal: handle post reply event.
         
@@ -60,10 +57,10 @@ class TeaCLI(AgentCore):
             used_tools: Description.
             topic_id: Description.
         """
-        pass  # CLI 无需 UI 回调
+        pass
 
     def _on_init_done(self):
-        """Internal: handle init done event."""
+        """Internal: handle init done event"""
         pass
 
     def run(self):
@@ -81,26 +78,22 @@ class TeaCLI(AgentCore):
             if not user_input.strip():
                 continue
 
-            # 处理斜杠命令
             if user_input.startswith("/"):
                 if self._handle_command(user_input.strip()):
                     continue
                 else:
-                    break  # /bye
+                    break
 
-            # 发送到模型
             self._chat(user_input)
 
         print("\n👋 再见")
 
-    # ——— 多行输入（Enter 发送，Shift+Enter 换行）———
     def _read_multiline(self) -> str:
-        """读取多行输入。Enter 发送，Shift+Enter 换行（输入末尾加「换行不分隔符」）。
+        """
+        读取多行输入。Enter 发送，Shift+Enter 换行（输入末尾加「换行不分隔符」）。
 
-        实现策略：逐行读取，若行末以「换行符号」结尾则继续追加下一行。
-        由于终端无法直接检测 Shift+Enter，改用「\」续行符：
-        - 行末以「\」结尾 → 继续输入下一行
-        - 否则 → 发送
+        Returns:
+            str: Description.
         """
         if sys.platform == "win32":
             return self._read_multiline_win32()
@@ -108,7 +101,12 @@ class TeaCLI(AgentCore):
             return self._read_multiline_unix()
 
     def _read_multiline_unix(self) -> str:
-        """Unix 终端：使用 termios 检测 Shift+Enter（\x1b + 换行序列）。"""
+        """
+        Unix 终端：使用 termios 检测 Shift+Enter（ + 换行序列）。
+
+        Returns:
+            str: Description.
+        """
         import tty
         import termios
 
@@ -121,31 +119,30 @@ class TeaCLI(AgentCore):
             tty.setraw(fd)
             while True:
                 ch = sys.stdin.read(1)
-                if ch == "\r":  # Enter
+                if ch == "\r":
                     sys.stdout.write("\r\n")
                     sys.stdout.flush()
                     lines.append("".join(current))
                     break
-                elif ch == "\n":  # Shift+Enter 在某些终端产生 \n
+                elif ch == "\n":
                     sys.stdout.write("\n")
                     sys.stdout.flush()
                     lines.append("".join(current))
                     current = []
-                elif ch == "\x1b":  # ESC 序列
+                elif ch == "\x1b":
                     seq = sys.stdin.read(2)
-                    if seq == "[Z":  # Shift+Tab (部分终端 Shift+Enter)
+                    if seq == "[Z":
                         sys.stdout.write("\n")
                         sys.stdout.flush()
                         lines.append("".join(current))
                         current = []
                     else:
-                        # 忽略其他 ESC 序列
                         pass
-                elif ch in ("\x03", "\x04"):  # Ctrl+C / Ctrl+D
+                elif ch in ("\x03", "\x04"):
                     sys.stdout.write("\r\n")
                     sys.stdout.flush()
                     raise EOFError
-                elif ch == "\x7f":  # Backspace
+                elif ch == "\x7f":
                     if current:
                         current.pop()
                         sys.stdout.write("\b \b")
@@ -160,7 +157,12 @@ class TeaCLI(AgentCore):
         return "\n".join(lines)
 
     def _read_multiline_win32(self) -> str:
-        """Windows：使用「\\」续行符模拟多行输入。"""
+        """
+        Windows：使用「\」续行符模拟多行输入。
+
+        Returns:
+            str: Description.
+        """
         lines = []
         prompt = ">>> "
         while True:
@@ -176,9 +178,16 @@ class TeaCLI(AgentCore):
                 break
         return "\n".join(lines)
 
-    # ——— 斜杠命令 ———
     def _handle_command(self, cmd: str) -> bool:
-        """返回 False 表示退出。"""
+        """
+        返回 False 表示退出。
+
+        Args:
+            cmd (str): Description.
+
+        Returns:
+            bool: Description.
+        """
         parts = cmd.split(None, 1)
         cmd_name = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
@@ -237,19 +246,19 @@ class TeaCLI(AgentCore):
             print(f"❓ 未知设置: {k}（支持: think, verbose）")
 
     def _toggle_think(self):
-        """Internal: toggle think."""
+        """Internal: toggle think"""
         self._cli_think = not self._cli_think
         self._cfg.enable_thinking = self._cli_think
         self.sess.enable_thinking = self._cli_think
         print(f"🧠 think = {'ON' if self._cli_think else 'OFF'}")
 
     def _toggle_verbose(self):
-        """Internal: toggle verbose."""
+        """Internal: toggle verbose"""
         self._cli_verbose = not self._cli_verbose
         print(f"📢 verbose = {'ON' if self._cli_verbose else 'OFF'}")
 
     def _new_topic(self):
-        """Internal: new topic."""
+        """Internal: new topic"""
         title = input("主题名称（留空自动生成）: ").strip()
         tid = self.db.create_topic(title or f"CLI 会话")
         self.current_topic_id = tid
@@ -258,7 +267,7 @@ class TeaCLI(AgentCore):
         print(f"📌 已切换到新主题: {title or tid[:8]}...")
 
     def _list_topics(self):
-        """Internal: list topics."""
+        """Internal: list topics"""
         topics = self.db.list_topics()
         print(f"\n{'ID':<10} {'标题':<30} {'更新时间'}")
         print("-" * 60)
@@ -278,7 +287,6 @@ class TeaCLI(AgentCore):
         tid = arg.strip()
         tp = self.db.get_topic(tid)
         if not tp:
-            # 尝试前缀匹配
             topics = self.db.list_topics()
             matched = [t for t in topics if t["topic_id"].startswith(tid)]
             if len(matched) == 1:
@@ -293,23 +301,29 @@ class TeaCLI(AgentCore):
         self._load_topic_history_into_session(tp["topic_id"])
         print(f"📌 已切换到: {tp.get('title', tp['topic_id'][:8])}")
 
-    # ——— 对话 ———
     def _chat(self, user_msg: str):
-        """发送消息并流式输出回复。"""
-        # 确保 topic 存在
+        """
+        发送消息并流式输出回复。
+
+        Args:
+            user_msg (str): Description.
+        """
         if not self.current_topic_id:
             self._auto_init_topic()
 
-        print()  # 空行分隔
+        print()
 
-        # 流式回调
         final_reply = []
-        tool_round_count = [0]  # mutable counter
+        tool_round_count = [0]
 
         def on_stream(chunk: str):
-            """流式输出回调：处理 thinking/工具调用/最终回复。"""
+            """
+            流式输出回调：处理 thinking/工具调用/最终回复。
+
+            Args:
+                chunk (str): Description.
+            """
             if self._cli_verbose:
-                # verbose 模式：所有内容实时输出
                 if chunk.startswith("[THINK_START]"):
                     print("\n💭 思考中...")
                 elif chunk.startswith("[THINK_DONE]"):
@@ -331,7 +345,6 @@ class TeaCLI(AgentCore):
                     final_reply.append(chunk)
                     print(chunk, end="", flush=True)
             else:
-                # 非 verbose：只收集最终回复，忽略中间过程
                 if chunk.startswith("[REPLY]"):
                     text = chunk[7:]
                     final_reply.append(text)
@@ -341,7 +354,12 @@ class TeaCLI(AgentCore):
                     print(chunk, end="", flush=True)
 
         def on_status(status_msg: str):
-            """状态回调（Max Iter 续命等）。"""
+            """
+            状态回调（Max Iter 续命等）。
+
+            Args:
+                status_msg (str): Description.
+            """
             if status_msg.startswith("!MAX_ITER:"):
                 remaining = status_msg.split(":", 2)[1] if ":" in status_msg else "?"
                 print(f"\n⏳ 达到最大轮次，自动续命...（剩余 {remaining} 轮）")
@@ -358,9 +376,8 @@ class TeaCLI(AgentCore):
             print(f"\n❌ 错误: {e}")
             return
 
-        print()  # 换行
+        print()
 
-        # 后处理
         if ai_msg:
             self._post_chat_pipeline(
                 ai_msg=ai_msg,
@@ -369,7 +386,6 @@ class TeaCLI(AgentCore):
                 topic_id=self.current_topic_id,
             )
 
-    # ——— 工具方法 ———
     def _auto_init_topic(self):
         """自动创建或加载主题。"""
         topics = self.db.list_topics()
@@ -383,7 +399,7 @@ class TeaCLI(AgentCore):
             self.sess._history_summary = ""
 
     def _print_welcome(self):
-        """Internal: print welcome."""
+        """Internal: print welcome"""
         cfg = self._cfg
         print(f"🤖 Tea Agent CLI")
         print(f"   模型: {cfg.main_model.model_name}")
@@ -394,7 +410,7 @@ class TeaCLI(AgentCore):
         print()
 
     def _print_help(self):
-        """Internal: print help."""
+        """Internal: print help"""
         print("""
 ┌─────────────────────────────────────────────┐
 │            Tea Agent CLI 帮助                │
@@ -415,7 +431,7 @@ class TeaCLI(AgentCore):
 """)
 
 def main():
-    """Main."""
+    """Main"""
     parser = argparse.ArgumentParser(
         description="Tea Agent CLI — 命令行 AI 助手",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -434,6 +450,7 @@ def main():
                         help="显示工具调用中间轮次")
     parser.add_argument("--disable_summary", action="store_true", default=False,
                         help="禁用历史压缩和摘要，超过30轮直接丢弃")
+    parser.add_argument("--debug", action="store_true", default=False)
 
     args = parser.parse_args()
 
@@ -442,6 +459,7 @@ def main():
         enable_think=args.think,
         verbose=args.verbose,
         disable_summary=args.disable_summary,
+        debug=args.debug,
     )
     cli.run()
 

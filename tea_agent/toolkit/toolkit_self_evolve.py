@@ -25,7 +25,6 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
         lsp_checks: [LSP] 是否启用 LSP 检查，默认 True
     """
 
-    # ── Comment mode: 仅生成注释前缀，不修改文件 ──
     if action == "comment":
         now = datetime.now()
         if description:
@@ -48,9 +47,6 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
     if not os.path.exists(full_path):
         return {"ok": False, "error": f"文件不存在: {file_path}"}
 
-    # ──────────────────────────────────────
-    # 辅助函数
-    # ──────────────────────────────────────
     def _git_clean():
         """检查 git 工作区是否干净（忽略 untracked 文件）"""
         try:
@@ -58,14 +54,18 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
                                capture_output=True, text=True, timeout=10, cwd=cwd)
             if r.returncode != 0:
                 return False
-            # 忽略 untracked 文件（??），只检查已跟踪文件的改动
             lines = [l for l in r.stdout.splitlines() if l.strip() and not l.startswith("?")]
             return len(lines) == 0
         except Exception:
             return False
 
     def _git_snap(desc):
-        """创建 git 快照，返回 (ok, error)"""
+        """
+        创建 git 快照，返回 (ok, error)
+
+        Args:
+            desc: Description.
+        """
         try:
             subprocess.run(["git", "add", file_path],
                            capture_output=True, timeout=10, cwd=cwd, check=True)
@@ -111,13 +111,10 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
         except Exception as e:
             return 0, 0, str(e)[:200]
 
-    # ── LSP 辅助函数 ──
-    # ──────────────────────────────────────    # ──────────────────────────────────────
 
     with open(full_path, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 标准化换行符（跨平台兼容）
     if '\r\n' in content or '\r' in content:
         content = content.replace('\r\n', '\n').replace('\r', '\n')
     if '\r\n' in old_code or '\r' in old_code:
@@ -126,11 +123,9 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
     if old_code not in content:
         return {"ok": False, "error": "old_code 在文件中未找到（精确匹配失败）"}
 
-    # 检查 old_code 出现次数，避免多次出现时修改错误位置
     if content.count(old_code) > 1:
         return {"ok": False, "error": f"old_code 在文件中出现 {content.count(old_code)} 次，无法确定修改位置，请提供更多上下文"}
 
-    # ── Layer 0: Git 快照 ──
     git_snapped = False
     git_snap_error = None
     if git_snapshot and _git_clean():
@@ -140,27 +135,22 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
     elif git_snapshot:
         logger.warning("Git working directory not clean, skipping snapshot")
 
-    # ── Layer 1: 时间戳备份（不覆盖） ──
     bak_path = None
     if backup:
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         bak_path = f"{full_path}.bak.{ts}"
         shutil.copy2(full_path, bak_path)
 
-    # 临时备份（用于快速回滚）
     tmp_bak = full_path + ".tmp_bak"
     shutil.copy2(full_path, tmp_bak)
 
-    # 应用修改（.py 文件在 new_code 前加注释）
     annotated_new = new_code
-    # 标准化 new_code 换行符
     if '\r\n' in annotated_new or '\r' in annotated_new:
         annotated_new = annotated_new.replace('\r\n', '\n').replace('\r', '\n')
     new_content = content.replace(old_code, annotated_new, 1)
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(new_content)
 
-    # ── Layer 2: 编译验证 ──
     verify_ok = True
     verify_error = None
     if verify and file_path.endswith(".py"):
@@ -182,7 +172,6 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
                            "compile_verify": False, "tests": "skipped"}
             }
 
-    # ── Layer 2.5: LSP 智能检查 ──
     lsp_result = None
     if lsp_checks and verify_ok and file_path.endswith(".py"):
         from tea_agent.lsp.lsp_check import run_lsp_check
@@ -195,7 +184,6 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
         if lsp_result.get("sig_changed"):
             logger.warning(f"LSP: 签名变更: {lsp_result.get('old_sig')} → {lsp_result.get('new_sig')}")
 
-    # ── Layer 3: 测试验证 ──    test_passed = None
     test_total = None
     test_error = None
     if run_tests and verify_ok:
@@ -203,7 +191,7 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
         if test_error and not isinstance(test_error, str):
             test_error = str(test_error)
         if test_passed == -1:
-            pass  # no tests found, skip verification
+            pass
         elif isinstance(test_passed, int) and test_total is not None and test_passed < test_total:
             shutil.copy2(tmp_bak, full_path)
             if os.path.exists(tmp_bak):
@@ -237,6 +225,7 @@ def toolkit_self_evolve(action: str = "evolve", file_path: str = "", description
     }
 
 def meta_toolkit_self_evolve():
+    """Meta toolkit self evolve"""
     return {
         "type": "function",
         "function": {

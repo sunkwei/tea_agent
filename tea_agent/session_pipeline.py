@@ -18,11 +18,11 @@ logger = logging.getLogger("session_pipeline")
 @dataclass
 class PipelineStep:
     """Pipeline 步骤定义"""
-    name: str  # 步骤名称（唯一标识）
-    func: Callable  # 执行函数
-    enabled: bool = True  # 是否启用
-    description: str = ""  # 步骤描述
-    position: int = 0  # 执行顺序（越小越先执行）
+    name: str
+    func: Callable
+    enabled: bool = True
+    description: str = ""
+    position: int = 0
 
 class SessionPipeline:
     """
@@ -36,9 +36,9 @@ class SessionPipeline:
     """
     
     def __init__(self):
-        """Initialize  ."""
+        """Initialize"""
         self._steps: Dict[str, PipelineStep] = {}
-        self._step_order: List[str] = []  # 步骤执行顺序
+        self._step_order: List[str] = []
         
     def register_step(
         self,
@@ -75,7 +75,6 @@ class SessionPipeline:
         
         self._steps[name] = step
         
-        # 插入到正确的位置
         if before is not None:
             if before in self._step_order:
                 idx = self._step_order.index(before)
@@ -91,38 +90,68 @@ class SessionPipeline:
         else:
             self._step_order.append(name)
         
-        # 按 position 排序
         self._step_order.sort(key=lambda n: self._steps[n].position)
         
     def enable_step(self, name: str):
-        """启用指定步骤"""
+        """
+        启用指定步骤
+
+        Args:
+            name (str): Description.
+        """
         if name in self._steps:
             self._steps[name].enabled = True
     
     def disable_step(self, name: str):
-        """禁用指定步骤"""
+        """
+        禁用指定步骤
+
+        Args:
+            name (str): Description.
+        """
         if name in self._steps:
             self._steps[name].enabled = False
     
     def toggle_step(self, name: str):
-        """切换步骤的启用/禁用状态"""
+        """
+        切换步骤的启用/禁用状态
+
+        Args:
+            name (str): Description.
+        """
         if name in self._steps:
             self._steps[name].enabled = not self._steps[name].enabled
     
     def set_step_position(self, name: str, position: int):
-        """设置步骤的执行顺序"""
+        """
+        设置步骤的执行顺序
+
+        Args:
+            name (str): Description.
+            position (int): Description.
+        """
         if name in self._steps:
             self._steps[name].position = position
             self._step_order.sort(key=lambda n: self._steps[n].position)
     
     def remove_step(self, name: str):
-        """移除步骤"""
+        """
+        移除步骤
+
+        Args:
+            name (str): Description.
+        """
         if name in self._steps:
             del self._steps[name]
             self._step_order.remove(name)
     
     def get_enabled_steps(self) -> List[Tuple[str, PipelineStep]]:
-        """获取所有启用的步骤，按执行顺序排列"""
+        """
+        获取所有启用的步骤，按执行顺序排列
+
+        Returns:
+            List[Tuple[str, PipelineStep]]: Description.
+        """
         return [
             (name, self._steps[name]) for name in self._step_order
             if self._steps[name].enabled
@@ -149,12 +178,10 @@ class SessionPipeline:
         
         logger.debug(f"Executing session pipe with context:\n{context}")
         for i, (name, step) in enumerate(self.get_enabled_steps()):
-            # 检查是否要跳过
             logger.debug(f"  Step {i}: {name}")
             if name in skip_steps:
                 continue
             
-            # 执行步骤
             try:
                 logger.debug(f"    Running step {name}, context: {context}")
                 result = step.func(context)
@@ -164,7 +191,6 @@ class SessionPipeline:
                         logger.debug(f"    {item}")
                 elif isinstance(result, dict):
                     logger.debug(f"    Result: keys: {result.keys()}")
-                # 合并结果到上下文
                 if isinstance(result, dict):
                     context.update(result)
             except Exception as e:
@@ -174,14 +200,18 @@ class SessionPipeline:
                     "error": str(e),
                 })
             
-            # 检查是否要停止
             if stop_at and name == stop_at:
                 break
         logger.debug(f"Execution complete, with content\n{context}\n")
         return context
     
     def list_steps(self) -> List[Dict[str, Any]]:
-        """列出所有步骤及其状态"""
+        """
+        列出所有步骤及其状态
+
+        Returns:
+            List[Dict[str, Any]]: Description.
+        """
         return [
             {
                 "name": name,

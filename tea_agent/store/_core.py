@@ -27,7 +27,6 @@ logger = logging.getLogger("Storage")
 class Storage:
     """主存储类 — 组合 8 个委派组件，管理数据库连接与生命周期。"""
 
-    # 委派组件名列表，用于 __getattr__ 路由
     _delegate_attrs = (
         "_topics", "_conversations", "_summaries", "_memories",
         "_prompts", "_reflections", "_config_history", "_vectors",
@@ -51,7 +50,6 @@ class Storage:
         self._auto_backup()
         self._protect_db()
 
-        # ── 创建所有委派组件 ──
         self._topics = TopicStore(self.conn)
         self._conversations = ConversationStore(self.conn)
         self._summaries = SummaryStore(self.conn)
@@ -61,10 +59,14 @@ class Storage:
         self._config_history = ConfigHistoryStore(self.conn)
         self._vectors = VectorStore(self.conn)
 
-    # ── 自动委派：未匹配的方法路由到子组件 ──
 
     def __getattr__(self, name):
-        # 避免私有属性递归查找
+        """
+        Getattr.
+
+        Args:
+            name: Description.
+        """
         if name.startswith("_"):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute '{name}'"
@@ -77,26 +79,33 @@ class Storage:
             f"'{type(self).__name__}' object has no attribute '{name}'"
         )
 
-    # ── 特殊桥接：save_msg 需要回调其他组件的 update_active ──
 
     def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool) -> str:
-        """桥接方法：save_msg 需要 update_topic_active 回调。"""
+        """
+        桥接方法：save_msg 需要 update_topic_active 回调。
+
+        Args:
+            topic_id (str): Description.
+            user_msg: Description.
+            ai_msg (str): Description.
+            is_func (bool): Description.
+
+        Returns:
+            str: Description.
+        """
         return self._conversations.save_msg(
             topic_id, user_msg, ai_msg, is_func,
             update_active_cb=self._topics.update_topic_active,
-            auto_embed_cb=None,  # 使用 _conversations 内置的 _auto_embed_async
+            auto_embed_cb=None,
         )
 
-    # ── 表初始化 ──
 
     def _init_tables(self):
-        """Internal: initialize tables."""
+        """Internal: initialize tables"""
         c = self.conn.cursor()
 
-        # 元数据表
         c.execute("CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT)")
 
-        # images 表
         c.execute('''
             CREATE TABLE IF NOT EXISTS images (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,7 +116,6 @@ class Storage:
             )
         ''')
 
-        # topics 表
         c.execute('''
             CREATE TABLE IF NOT EXISTS topics (
                 topic_id TEXT PRIMARY KEY,
@@ -120,12 +128,12 @@ class Storage:
             ("semantic_summary", "TEXT DEFAULT ''"),
             ("tool_chain_summary", "TEXT DEFAULT ''"),
             ("level2_json", "TEXT DEFAULT '[]'"),
-            ("l3_pending_json", "TEXT DEFAULT ''"),  # 2026-05-20 gen by Tea Agent, L3批处理缓冲
+            ("l3_pending_json", "TEXT DEFAULT ''"),
         ]:
             try:
                 c.execute(f"ALTER TABLE topics ADD COLUMN {col} {col_def}")
             except Exception:
-                pass        # conversations 表
+                pass
         c.execute('''
             CREATE TABLE IF NOT EXISTS conversations (
                 id TEXT PRIMARY KEY,
@@ -139,7 +147,6 @@ class Storage:
             )
         ''')
 
-        # agent_rounds 表
         c.execute('''
             CREATE TABLE IF NOT EXISTS agent_rounds (
                 id TEXT PRIMARY KEY,
@@ -154,7 +161,6 @@ class Storage:
             )
         ''')
 
-        # topic_token_stats 表
         c.execute('''
             CREATE TABLE IF NOT EXISTS topic_token_stats (
                 topic_id TEXT PRIMARY KEY,
@@ -167,7 +173,6 @@ class Storage:
             )
         ''')
 
-        # t_conv_summary 表
         c.execute('''
             CREATE TABLE IF NOT EXISTS t_conv_summary (
                 topic_id TEXT PRIMARY KEY,
@@ -178,7 +183,6 @@ class Storage:
             )
         ''')
 
-        # memories 表
         c.execute('''
             CREATE TABLE IF NOT EXISTS memories (
                 id TEXT PRIMARY KEY,
@@ -197,13 +201,11 @@ class Storage:
                 FOREIGN KEY (source_topic_id) REFERENCES topics(topic_id)
             )
         ''')
-        # 兼容旧表：尝试新增 pinned 列
         try:
             c.execute("ALTER TABLE memories ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
         except Exception:
             pass
 
-        # system_prompts 表
         c.execute('''
             CREATE TABLE IF NOT EXISTS system_prompts (
                 id TEXT PRIMARY KEY,
@@ -216,7 +218,6 @@ class Storage:
             )
         ''')
 
-        # reflections 表
         c.execute('''
             CREATE TABLE IF NOT EXISTS reflections (
                 id TEXT PRIMARY KEY,
@@ -231,7 +232,6 @@ class Storage:
             )
         ''')
 
-        # config_history 表
         c.execute('''
             CREATE TABLE IF NOT EXISTS config_history (
                 id TEXT PRIMARY KEY,
@@ -244,7 +244,6 @@ class Storage:
             )
         ''')
 
-        # msg_vectors 表（先尝试迁移旧格式）
         self._migrate_msg_vectors(c)
         c.execute('''
             CREATE TABLE IF NOT EXISTS msg_vectors (
@@ -260,35 +259,30 @@ class Storage:
         self.conn.commit()
         c.close()
 
-    # ── 数据库迁移 ──
 
     def _migrate(self):
-        """Internal: migrate."""
+        """Internal: migrate"""
         c = self.conn.cursor()
         self._migrate_int_to_uuid(c)
 
-        # 添加 rounds_json 列
         try:
             c.execute("ALTER TABLE conversations ADD COLUMN rounds_json TEXT")
             self.conn.commit()
         except sqlite3.OperationalError:
             pass
 
-        # 添加 is_summarized 列
         try:
             c.execute("ALTER TABLE conversations ADD COLUMN is_summarized INTEGER DEFAULT 0")
             self.conn.commit()
         except sqlite3.OperationalError:
             pass
 
-        # t_conv_summary 添加 last_summarized_id
         try:
             c.execute("ALTER TABLE t_conv_summary ADD COLUMN last_summarized_id TEXT")
             self.conn.commit()
         except sqlite3.OperationalError:
             pass
 
-        # topic_token_stats 便宜模型列
         for col, col_type in [
             ("total_cheap_tokens", "INTEGER DEFAULT 0"),
             ("total_cheap_prompt_tokens", "INTEGER DEFAULT 0"),
@@ -300,7 +294,6 @@ class Storage:
             except sqlite3.OperationalError:
                 pass
 
-        # topic_token_stats 嵌入模型列
         for col, col_type in [
             ("total_embedding_tokens", "INTEGER DEFAULT 0"),
             ("total_embedding_prompt_tokens", "INTEGER DEFAULT 0"),
@@ -364,12 +357,11 @@ class Storage:
                 cast_cols: Description.
             """
             new_name = f"{old_name}_new"
-            # 动态补全列定义：new_columns_def 只定义需要改类型的列，其他列从旧表继承
             new_defs = {}
             for defn in new_columns_def:
                 col_name = defn.split()[0]
                 new_defs[col_name] = defn
-            old_full = _table_columns(old_name)  # [(name, type), ...]
+            old_full = _table_columns(old_name)
             full_defs = []
             for col_name, col_type in old_full:
                 if col_name in new_defs:
@@ -395,7 +387,6 @@ class Storage:
             log.info(f"  迁移表 {old_name}")
 
         try:
-            # 清理之前失败迁移可能残留的 _new 表
             for leftover in ["topics_new","conversations_new","topic_token_stats_new",
                              "t_conv_summary_new","memories_new","agent_rounds_new",
                              "msg_vectors_new","system_prompts_new","reflections_new",
@@ -500,15 +491,14 @@ class Storage:
         c.execute("DROP TABLE IF EXISTS msg_vectors")
         self.conn.commit()
 
-    # ── 周轮转 ──
 
     @staticmethod
     def _get_week_key():
-        """Internal: get the week key."""
+        """Internal: get the week key"""
         return datetime.now().strftime("%G-W%V")
 
     def _maybe_rotate_db(self):
-        """Internal: maybe rotate db."""
+        """Internal: maybe rotate db"""
         if not os.path.exists(self.db_path):
             return
         db_week = None
@@ -541,7 +531,7 @@ class Storage:
             )
 
     def _write_week_key(self):
-        """Internal: write week key."""
+        """Internal: write week key"""
         c = self.conn.cursor()
         c.execute(
             "INSERT OR REPLACE INTO _meta (key, value) VALUES ('week_key', ?)",
@@ -550,10 +540,9 @@ class Storage:
         self.conn.commit()
         c.close()
 
-    # ── 自动备份 ──
 
     def _auto_backup(self):
-        """Internal: auto backup."""
+        """Internal: auto backup"""
         import time
         try:
             now = time.time()
@@ -603,11 +592,10 @@ class Storage:
             pass
 
     def backup_now(self):
-        """Backup now."""
+        """Backup now"""
         self._meta_set("last_backup_ts", "0")
         self._auto_backup()
 
-    # ── 元数据 ──
 
     def _meta_get(self, key: str):
         """Internal: meta get.
@@ -637,10 +625,9 @@ class Storage:
         except Exception:
             pass
 
-    # ── 保护标记 ──
 
     def _protect_db(self):
-        """Internal: protect db."""
+        """Internal: protect db"""
         db_abs = os.path.abspath(self.db_path)
         db_dir = os.path.dirname(db_abs)
         marker = os.path.join(db_dir, ".chat_history_protected")
@@ -653,10 +640,9 @@ class Storage:
         except Exception:
             pass
 
-    # ── 生命周期 ──
 
     def close(self):
-        """Close."""
+        """Close"""
         try:
             self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             logger.info("WAL checkpoint(TRUNCATE) 完成")
@@ -670,6 +656,7 @@ class Storage:
                 pass
 
     def __del__(self):
+        """Del"""
         try:
             self.close()
         except Exception:

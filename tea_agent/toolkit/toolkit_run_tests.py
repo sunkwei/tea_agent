@@ -1,4 +1,3 @@
-# @2026-04-29 gen by deepseek-v4-pro, 内置工具: 运行项目测试套件
 import logging
 
 logger = logging.getLogger("toolkit")
@@ -59,7 +58,7 @@ def toolkit_run_tests(pattern: str = "test_*.py") -> dict:
     }
 
 def meta_toolkit_run_tests():
-    """Meta toolkit run tests."""
+    """Meta toolkit run tests"""
     return {
         "type": "function",
         "function": {

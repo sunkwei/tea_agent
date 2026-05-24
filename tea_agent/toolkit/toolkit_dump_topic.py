@@ -67,10 +67,8 @@ def toolkit_dump_topic(role: str = "all") -> dict:
             lines.append(f"### [{stamp}]\n")
 
             if role == "user":
-                # 仅导出用户输入
                 lines.append(f"**用户:** {conv.get('user_msg', '')}\n")
             else:
-                # 导出完整内容
                 lines.append(f"**用户:** {conv.get('user_msg', '')}\n")
                 lines.append(f"**AI:** {conv.get('ai_msg', '')}\n")
 
@@ -109,12 +107,16 @@ def toolkit_dump_topic(role: str = "all") -> dict:
     }
 
 def meta_toolkit_dump_topic() -> dict:
-    """Meta toolkit dump topic."""
+    """
+    Meta toolkit dump topic
+
+    Returns:
+        dict: Description.
+    """
     return {"type": "function", "function": {"name": "toolkit_dump_topic", "description": "将当前所有会话内容从数据库导出到 dump_{date} 子目录，每个 topic 对应一个 markdown 文件。", "parameters": {"type": "object", "properties": {"role": {"type": "string", "enum": ["user", "all"], "description": "导出范围：user 仅导出用户输入，all 导出完整内容"}}, "required": []}}}
 
 if __name__ == "__main__":
     import sys, os, json
-    # 将项目根目录添加到 sys.path 以支持直接运行
     root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     if root_dir not in sys.path:
         sys.path.append(root_dir)

@@ -34,7 +34,6 @@ from PIL import Image, ImageDraw
 
 logger = logging.getLogger("main_db_gui")
 
-# ====================== 包导入兼容处理 ======================
 if __name__ == "__main__":
     parent_dir = str(Path(__file__).resolve().parent.parent)
     if parent_dir not in sys.path:
@@ -58,8 +57,6 @@ else:
     from tea_agent._gui._renderer import ChatRenderer
     from .config import load_config, get_config, save_config, ModelConfig
 
-# ====================== 配置加载 ======================
-# 优先使用 $HOME/.tea_agent/config.yaml，不存在时使用 tea_agent/config.yaml
 _cfg = load_config()
 
 if not _cfg.main_model.is_configured:
@@ -75,12 +72,10 @@ CHEAP_MODEL = _cfg.cheap_model
 _storage_ = None
 _toolkit_ = None
 
-# ====================== 从 _gui 子包导入（组合模式） ======================
 from tea_agent._gui._fonts import (
     _fs, _init_fonts, SYSTEM_FONT, MONO_FONT,
     _DEFAULT_FONT_SIZE, _SCALE_FACTOR, _FONTS_DETECTED,
 )
-# 平台检测（从 _fonts 重导出，保持兼容）
 _IS_WINDOWS = __import__('platform').system() == "Windows"
 
 from tea_agent._gui._markdown import (
@@ -91,7 +86,6 @@ from tea_agent._gui._markdown import (
 )
 from tea_agent._gui._topic_summary import _generate_topic_summary
 
-# 组件委托（composition）
 from tea_agent._gui._stream_manager import StreamManager
 from tea_agent._gui._topic_manager import TopicManager
 from tea_agent._gui._ui_builder import UIBuilder
@@ -99,7 +93,6 @@ from tea_agent._gui._tray import TrayManager
 from tea_agent._gui._images import ImageHandler
 from tea_agent._gui._renderer import ChatRenderer
 
-# Dialogs
 from tea_agent.gui_dialogs import MemoryDialog, TopicDialog, ConfigDialog
 
 import os as _os
@@ -129,13 +122,12 @@ if HAS_SNI:
             """
             self._app_id = app_id
             self._title = title
-            self._icon_data = icon_pixmap_ar32  # ARGB32 bytes
+            self._icon_data = icon_pixmap_ar32
             self._on_activate = on_activate
             self._on_context_menu = on_context_menu
             self._loop = None
             self._thread = None
 
-            # 初始化 D-Bus
             dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
             self._bus = dbus.SessionBus()
             bus_name = dbus.service.BusName(
@@ -146,28 +138,27 @@ if HAS_SNI:
 
         @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
         def Title(self):
-            """Title."""
+            """Title"""
             return self._title
 
         @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
         def Id(self):
-            """Id."""
+            """Id"""
             return self._app_id
 
         @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
         def Status(self):
-            """Status."""
+            """Status"""
             return 'Active'
 
         @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
         def Category(self):
-            """Category."""
+            """Category"""
             return 'ApplicationStatus'
 
         @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='ay')
         def IconPixmap(self):
-            # 返回 ARGB32 像素数组
-            """IconPixmap."""
+            """IconPixmap"""
             import struct
             width = 32
             height = 32
@@ -201,14 +192,14 @@ if HAS_SNI:
             self._loop = GLib.MainLoop()
 
             def run():
-                """Run."""
+                """Run"""
                 self._loop.run()
 
             self._thread = threading.Thread(target=run, daemon=True)
             self._thread.start()
 
         def stop(self):
-            """Stop."""
+            """Stop"""
             if self._loop:
                 self._loop.quit()
 
@@ -230,9 +221,8 @@ class TkGUI(AgentCore):
         self.root.geometry("1100x850")
         self.root.minsize(900, 600)
 
-        self.sess = None  # 预设，AgentCore._init_session 会创建它
+        self.sess = None
 
-        # ── AgentCore 初始化：配置、目录、Storage/Toolkit、会话 ──
         super().__init__(debug=debug, config_path=config_fname, disable_summary=disable_summary)
 
         self.stream_mgr = StreamManager(self)
@@ -246,65 +236,51 @@ class TkGUI(AgentCore):
         self.tray = TrayManager(self)
         self.tray.start()
 
-        # 暴露给 toolkit 工具函数
         globals()["_storage_"] = self.db
         globals()["tlk"]._toolkit_ = self.toolkit
 
-        # HtmlFrame 缩放级别
         self._zoom_level = 100
 
-        self._image_cache = []  # list of (base64_data, mime_type)
-        self._raw_view = tk.BooleanVar(value=False)  # False=HtmlFrame, True=ScrolledText
+        self._image_cache = []
+        self._raw_view = tk.BooleanVar(value=False)
 
-        # 聊天消息列表
         self.chat_messages: List[Dict] = []
         self._pending_images: List[str] = []
         self._current_round_view: Optional[int] = None
         self._chat_rounds: List[List[Dict]] = []
 
-        # 当前 stream 累积 buffer
         self._stream_buffer = ""
-        self._think_buffer = ""  # think/reasoning 内容缓冲区
-        self._pending_console_text = []  # (text, tag) 列表
+        self._think_buffer = ""
+        self._pending_console_text = []
 
-        # 当前对话 ID
         self._current_conversation_id: Optional[int] = None
 
-        # 创建界面
         self._create_ui()
         if hasattr(self,"sess") and self.sess is not None:
             self.sess.tool_log = self.safe_log_tool
 
-        # 会话已由 AgentCore.__init__ 初始化，这里补状态显示
         cheap_m = self._cfg.cheap_model
         cheap_info = f" | 摘要模型: {cheap_m.model_name}" if cheap_m.model_name else ""
         self._update_status(f"📡 已连接 | 模型: {self._cfg.main_model.model_name}{cheap_info}")
 
-        # 加载主题
-        self.refresh_topics()
-        # 加载主题
         self.refresh_topics()
         self.auto_new_topic()
-        # NOTE: 2026-05-22 gen by deepseek-v4-pro, 随GUI启动潜意识引擎
-        try:
-            from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
-            result = toolkit_subconscious("start")
-            if result.get("status") == "started":
-                logger.info(f"潜意识引擎已随GUI启动, PID={result.get('pid')}")
-            else:
-                logger.info(f"潜意识引擎: {result.get('status', result)}")
-        except Exception as e:
-            logger.warning(f"潜意识引擎启动失败(非致命): {e}")
-        # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
+        # try:
+        #     from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
+        #     result = toolkit_subconscious("start")
+        #     if result.get("status") == "started":
+        #         logger.info(f"潜意识引擎已随GUI启动, PID={result.get('pid')}")
+        #     else:
+        #         logger.info(f"潜意识引擎: {result.get('status', result)}")
+        # except Exception as e:
+        #     logger.warning(f"潜意识引擎启动失败(非致命): {e}")
         self.root.protocol("WM_DELETE_WINDOW", self.tray._on_closing)
     def _create_tray_icon(self):
         """动态生成托盘图标图像（32x32 蓝色圆角方块 + TA 字母），返回 PIL Image"""
         size = 32
         img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        # 绘制蓝色圆角背景
         draw.rounded_rectangle([2, 2, size-2, size-2], radius=6, fill=(59, 130, 246, 255))
-        # 绘制 "TA" 字母
         try:
             from PIL import ImageFont
             font = ImageFont.truetype("arial.ttf", 14)
@@ -314,8 +290,13 @@ class TkGUI(AgentCore):
         return img
 
     def _pil_to_argb32(self, img):
-        """PIL RGBA Image -> ARGB32 bytes (用于 StatusNotifierItem IconPixmap)"""
-        rgba = img.tobytes()  # R,G,B,A, R,G,B,A, ...
+        """
+        PIL RGBA Image -> ARGB32 bytes (用于 StatusNotifierItem IconPixmap)
+
+        Args:
+            img: Description.
+        """
+        rgba = img.tobytes()
         argb = bytearray(len(rgba))
         for i in range(0, len(rgba), 4):
             r, g, b, a = rgba[i], rgba[i+1], rgba[i+2], rgba[i+3]
@@ -336,7 +317,6 @@ class TkGUI(AgentCore):
                 on_activate=lambda: self.root.after(0, self._on_tray_activate),
                 on_context_menu=lambda x, y: self.root.after(0, self._on_tray_context_menu, x, y),
             )
-            # 在后台线程启动 GLib 事件循环
             self._tray_thread = threading.Thread(
                 target=self._sni.run, daemon=True, name="tray-icon"
             )
@@ -352,7 +332,13 @@ class TkGUI(AgentCore):
         self.root.focus_force()
 
     def _on_tray_context_menu(self, x, y):
-        """托盘图标右键：弹出菜单（含退出选项）"""
+        """
+        托盘图标右键：弹出菜单（含退出选项）
+
+        Args:
+            x: Description.
+            y: Description.
+        """
         menu = tk.Menu(self.root, tearoff=0)
         menu.add_command(label="退出", command=self._on_closing)
         try:
@@ -390,7 +376,6 @@ class TkGUI(AgentCore):
 
     def _start_dream(self):
         """启动Dream潜意识引擎后台线程，每小时循环一次"""
-        # 确保 cwd 为项目根目录，使 _is_tea_agent_cwd() 检查通过
         _proj_root = str(Path(__file__).resolve().parent.parent)
         try:
             os.chdir(_proj_root)
@@ -457,7 +442,7 @@ class TkGUI(AgentCore):
         return "break"
 
     def _apply_zoom(self):
-        """Internal: apply zoom."""
+        """Internal: apply zoom"""
         if not HAS_TKINTERWEB or not self._filtered_messages():
             return
         self._image_cache.clear()
@@ -468,7 +453,12 @@ class TkGUI(AgentCore):
         self.root.after(200, self.scroll_to_bottom)
 
     def _history_prev_round(self, e=None):
-        """Alt+Up: 切换到上一条历史轮次，若无则忽略"""
+        """
+        Alt+Up: 切换到上一条历史轮次，若无则忽略
+
+        Args:
+            e: Description.
+        """
         if not HAS_TKINTERWEB or self._show_mode != "chat_view":
             return "break"
         rounds = self._chat_rounds
@@ -476,10 +466,8 @@ class TkGUI(AgentCore):
             return "break"
         curr = self._current_round_view
         if curr is None:
-            # 当前在最新轮，跳到最后一轮
             self._current_round_view = len(rounds) - 1
         elif curr <= 0:
-            # 已在第一轮，忽略
             return "break"
         else:
             self._current_round_view = curr - 1
@@ -487,7 +475,12 @@ class TkGUI(AgentCore):
         return "break"
 
     def _history_next_round(self, e=None):
-        """Alt+Down: 切换到下一条历史轮次，若无则忽略"""
+        """
+        Alt+Down: 切换到下一条历史轮次，若无则忽略
+
+        Args:
+            e: Description.
+        """
         if not HAS_TKINTERWEB or self._show_mode != "chat_view":
             return "break"
         rounds = self._chat_rounds
@@ -495,10 +488,8 @@ class TkGUI(AgentCore):
             return "break"
         curr = self._current_round_view
         if curr is None:
-            # 当前在最新轮，忽略（已是最新，无"下一条"）
             return "break"
         if curr >= len(rounds) - 1:
-            # 已在最后一轮，回到最新轮
             self._current_round_view = None
             self._render_and_show_chat()
         else:
@@ -506,10 +497,14 @@ class TkGUI(AgentCore):
             self._render_round_view(self._current_round_view)
         return "break"
 
-        # 不调用 root.update()：让 CSS animation 自己跑，GUI 主循环保持响应
 
     def _now_ts(self) -> str:
-        """Internal: now ts."""
+        """
+        Internal: now ts
+
+        Returns:
+            str: Description.
+        """
         return datetime.now().strftime("%H:%M:%S")
 
     def _init_session(self):
@@ -517,7 +512,15 @@ class TkGUI(AgentCore):
         super()._init_session()
 
     def toggle_reasoning(self, enable: Optional[bool] = None) -> dict:
-        """切换或查询 reasoning/thinking 状态。供 toolkit 工具调用。"""
+        """
+        切换或查询 reasoning/thinking 状态。供 toolkit 工具调用。
+
+        Args:
+            enable (Optional[bool]): Description.
+
+        Returns:
+            dict: Description.
+        """
         if self.sess is None:
             return {"error": "无活跃会话"}
         if enable is None:
@@ -528,40 +531,88 @@ class TkGUI(AgentCore):
         return {"enable_thinking": self.sess.enable_thinking, "changed": True}
 
     def _update_status(self, msg: str):
-        """更新状态栏"""
+        """
+        更新状态栏
+
+        Args:
+            msg (str): Description.
+        """
         if hasattr(self, 'status_var'):
             self.status_var.set(msg)
 
     def safe_stream(self, text):
-        """线程安全的流式输出 — 委托 StreamManager"""
+        """
+        线程安全的流式输出 — 委托 StreamManager
+
+        Args:
+            text: Description.
+        """
         self.stream_mgr.safe_stream(text)
 
     def safe_log(self, msg, tag="ai"):
-        """线程安全的日志输出 — 委托 StreamManager"""
+        """
+        线程安全的日志输出 — 委托 StreamManager
+
+        Args:
+            msg: Description.
+            tag: Description.
+        """
         self.stream_mgr.safe_log(msg, tag)
 
     def safe_log_tool(self, msg: str):
-        """线程安全的工具日志 — 委托 StreamManager"""
+        """
+        线程安全的工具日志 — 委托 StreamManager
+
+        Args:
+            msg (str): Description.
+        """
         self.stream_mgr.safe_log_tool(msg)
 
     def safe_update_status(self, msg: str):
-        """线程安全的状态更新 — 委托 StreamManager"""
+        """
+        线程安全的状态更新 — 委托 StreamManager
+
+        Args:
+            msg (str): Description.
+        """
         self.stream_mgr.safe_update_status(msg)
 
     def _handle_max_iter(self, msg: str):
-        """处理最大迭代次数 — 委托 StreamManager"""
+        """
+        处理最大迭代次数 — 委托 StreamManager
+
+        Args:
+            msg (str): Description.
+        """
         self.stream_mgr.handle_max_iter(msg)
 
     def log(self, msg, tag="ai", images=None):
-        """输出日志到控制台 — 委托 StreamManager"""
+        """
+        输出日志到控制台 — 委托 StreamManager
+
+        Args:
+            msg: Description.
+            tag: Description.
+            images: Description.
+        """
         self.stream_mgr.log(msg, tag, images)
 
     def stream(self, text):
-        """流式输出 — 委托 StreamManager"""
+        """
+        流式输出 — 委托 StreamManager
+
+        Args:
+            text: Description.
+        """
         self.stream_mgr.stream(text)
 
     def log_tool(self, msg: str):
-        """工具日志 — 委托 StreamManager"""
+        """
+        工具日志 — 委托 StreamManager
+
+        Args:
+            msg (str): Description.
+        """
         self.stream_mgr.log_tool(msg)
 
     def _stream_flush_tick(self):
@@ -595,7 +646,12 @@ class TkGUI(AgentCore):
         self.topic_mgr.refresh_topics()
 
     def _update_title(self, topic_title=""):
-        """更新窗口标题"""
+        """
+        更新窗口标题
+
+        Args:
+            topic_title: Description.
+        """
         title = "Tea Agent"
         if hasattr(self, 'current_topic_id') and self.current_topic_id and self.current_topic_id != -1:
             try:
@@ -614,23 +670,49 @@ class TkGUI(AgentCore):
         self.root.title(title)
 
     def switch_topic(self, topic_id):
-        """切换主题 — 委托 TopicManager"""
+        """
+        切换主题 — 委托 TopicManager
+
+        Args:
+            topic_id: Description.
+        """
         self.topic_mgr.switch_topic(topic_id)
 
     def on_topic_select(self, e):
-        """主题选择回调 — 委托 TopicManager"""
+        """
+        主题选择回调 — 委托 TopicManager
+
+        Args:
+            e: Description.
+        """
         self.topic_mgr.on_topic_select(e)
 
     def newline(self, e=None):
-        """插入换行 — 委托 TopicManager"""
+        """
+        插入换行 — 委托 TopicManager
+
+        Args:
+            e: Description.
+        """
         return self.topic_mgr.newline(e)
 
     def _suggest_new_topic_if_needed(self, topic_id: str):
-        """建议新建主题 — 委托 TopicManager"""
+        """
+        建议新建主题 — 委托 TopicManager
+
+        Args:
+            topic_id (str): Description.
+        """
         self.topic_mgr._suggest_new_topic_if_needed(topic_id)
 
     def _on_summary_updated(self, topic_id: str, summary: str):
-        """摘要更新回调 — 委托 TopicManager"""
+        """
+        摘要更新回调 — 委托 TopicManager
+
+        Args:
+            topic_id (str): Description.
+            summary (str): Description.
+        """
         self.topic_mgr._on_summary_updated(topic_id, summary)
 
     def _refresh_topics_preserve_selection(self):
@@ -638,15 +720,31 @@ class TkGUI(AgentCore):
         self.topic_mgr._refresh_topics_preserve_selection()
 
     def _on_topic_hover(self, event):
-        """主题悬停 — 委托 TopicManager"""
+        """
+        主题悬停 — 委托 TopicManager
+
+        Args:
+            event: Description.
+        """
         self.topic_mgr._on_topic_hover(event)
 
     def _on_topic_leave(self, event):
-        """主题离开 — 委托 TopicManager"""
+        """
+        主题离开 — 委托 TopicManager
+
+        Args:
+            event: Description.
+        """
         self.topic_mgr._on_topic_leave(event)
 
     def _show_tooltip(self, event, idx):
-        """显示工具提示 — 委托 TopicManager"""
+        """
+        显示工具提示 — 委托 TopicManager
+
+        Args:
+            event: Description.
+            idx: Description.
+        """
         self.topic_mgr._show_tooltip(event, idx)
 
     def _hide_tooltip(self):
@@ -654,9 +752,13 @@ class TkGUI(AgentCore):
         self.topic_mgr._hide_tooltip()
 
     def _notify_completion(self, ai_msg: Optional[str] = None, user_msg: Optional[str] = None):
-        """LLM 任务完成后发送桌面通知。通知内容: TeaAgent: {user_msg} + {ai_msg}。
-        委托给 toolkit_notify（跨平台兼容：Windows/macOS/Linux）。"""
-        # 构建通知消息：TeaAgent: {user_msg} + {ai_msg}
+        """
+        LLM 任务完成后发送桌面通知。通知内容: TeaAgent: {user_msg} + {ai_msg}。
+
+        Args:
+            ai_msg (Optional[str]): Description.
+            user_msg (Optional[str]): Description.
+        """
         if user_msg and ai_msg:
             u = user_msg.strip()
             a = ai_msg.strip()
@@ -674,11 +776,10 @@ class TkGUI(AgentCore):
             notification_msg = "TeaAgent: AI 任务已完成"
 
         try:
-            # 直接导入 toolkit_notify 以复用其跨平台实现
             from tea_agent.toolkit.toolkit_notify import toolkit_notify
             toolkit_notify("TeaAgent", notification_msg, urgency="normal", duration=5000)
         except Exception:
-            pass  # 通知失败不影响主流程
+            pass
 
     def _attach_image(self):
         """打开文件对话框选择图片，存入 _pending_images"""
@@ -693,14 +794,11 @@ class TkGUI(AgentCore):
         )
         if not files:
             return
-        # 确保 tmp/images 目录存在
         img_dir = os.path.join(self._initial_cwd, "tmp", "images")
         os.makedirs(img_dir, exist_ok=True)
         for f in files:
-            # 复制到 tmp/images 目录（避免原始文件被移动/删除）
             basename = os.path.basename(f)
             dest = os.path.join(img_dir, basename)
-            # 如果同名文件存在，添加序号
             if os.path.exists(dest):
                 name, ext = os.path.splitext(basename)
                 counter = 1
@@ -709,7 +807,6 @@ class TkGUI(AgentCore):
                 dest = os.path.join(img_dir, f"{name}_{counter}{ext}")
             shutil.copy2(f, dest)
             self._pending_images.append(dest)
-        # 更新标签显示
         count = len(self._pending_images)
         self._img_label.config(text=f"已选 {count} 张图片")
         self._clear_img_btn.pack(side=tk.LEFT, padx=4)
@@ -728,9 +825,8 @@ class TkGUI(AgentCore):
         if self.generating or not self.current_topic_id:
             return "break"
         msg = self.input_box.get("1.0", tk.END).strip()
-        # 允许仅有图片无文本的情况
         images = list(self._pending_images)
-        self.images.clear()  # 发送后清空
+        self.images.clear()
         if not msg and not images:
             return "break"
         self.input_box.delete("1.0", tk.END)
@@ -739,9 +835,8 @@ class TkGUI(AgentCore):
 
         display_msg = f"你：{msg}" if msg else "你：[图片]"
         self.log(display_msg, "user", images=images if images else None)
-        self._hide_raw_check_btn()  # 会话中隐藏切换按钮
+        self._hide_raw_check_btn()
         self.generating = True
-        # 启动 500ms 定时器，批量刷新流式内容到 ScrolledText（不渲染 HtmlFrame）
         self.root.after(500, self._stream_flush_tick)
         self.log("AI：", "title")
 
@@ -751,7 +846,7 @@ class TkGUI(AgentCore):
         chat_input = {"text": msg} if not images else {"text": msg, "images": images}
 
         def work():
-            """Work."""
+            """Work"""
             try:
                 ai_msg, is_func = self.sess.chat_stream(
                     chat_input, 
@@ -761,29 +856,29 @@ class TkGUI(AgentCore):
                 )
                 self.root.after(0, self._flush_stream_to_messages)
 
-                # 原逻辑在 _post_chat_pipeline 之后才渲染，_auto_summary 等 API 调用阻塞渲染调度
-                self.root.after(0, self._render_and_show_chat)
-                self.root.after(0, self._show_raw_check_btn)
-
-                # ── 标准后处理流水线（入库 → Token → 摘要）──
                 user_msg_for_db = msg if not images else {"text": msg, "images": images}
                 self._post_chat_pipeline(ai_msg, is_func, user_msg_for_db, self.current_topic_id)
 
-                # GUI 特定：token 渲染 + 通知
                 usage = self.sess._last_usage
                 cheap_usage = self.sess._last_cheap_usage
                 if usage and usage.get("total_tokens", 0) > 0:
-                    self.root.after(0, lambda u=usage, cu=cheap_usage: self._add_token_notice_and_render(u, cu))
-                    # 2026-05-21 gen by Tea Agent: 记忆提取在后台线程用便宜模型，
-                    # 此时 cheap_usage 还是 0，等提取完成后延迟刷新便宜 token 显示
-                    self.root.after(3000, self._refresh_cheap_token_notice)
-                    # 读取嵌入模型用量
-                    emb_str = ""
-                    status_msg = (f"✅ 完成 | Tokens: {usage['total_tokens']:,} "                                  f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,}){emb_str}")
+                    # 通过 after 调度 token 表格追加，确保排在 _flush_stream_to_messages 之后
+                    # 避免工作线程直接 append 导致 token 表格跑到 AI 消息前面
+                    def _append_token_and_render():
+                        token_msg = self._build_token_table(cheap_usage, usage=usage)
+                        self.chat_messages.append({"role": "notice", "content": token_msg, "timestamp": self._now_ts()})
+                        self._render_and_show_chat()
+                    self.root.after(0, _append_token_and_render)
+                    self.root.after(0, self._show_raw_check_btn)
+                    # self.root.after(3000, self._refresh_cheap_token_notice)
+                    status_msg = (f"✅ 完成 | Tokens: {usage['total_tokens']:,} "
+                                  f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,})")
                     self.root.after(0, lambda m=status_msg: self._update_status(m))
                     self.root.after(0, self._refresh_topics_preserve_selection)
                     self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
                 else:
+                    self.root.after(0, self._render_and_show_chat)
+                    self.root.after(0, self._show_raw_check_btn)
                     self.root.after(0, lambda: self._update_status("✅ 完成"))
                     self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
             except Exception as ex:
@@ -814,30 +909,48 @@ class TkGUI(AgentCore):
         threading.Thread(target=work, daemon=True).start()
         return "break"
 
-    def _add_token_notice_and_render(self, usage: dict, cheap_usage: dict = None):
-        """在聊天消息中追加 Markdown 表格：本轮/主题累积 × 主模型/便宜模型/嵌入模型 token 消耗"""
+    @staticmethod
+    def _fmt_cell(val, detail_p=None, detail_c=None):
+        """格式化为 'total (P:x C:y)' 或 'total (P:x)' 或 '—'"""
+        if val <= 0:
+            return "—"
+        if detail_p is not None and detail_c is not None:
+            return f"{val:,} (P:{detail_p:,} C:{detail_c:,})"
+        if detail_p is not None:
+            return f"{val:,} (P:{detail_p:,})"
+        return f"{val:,}"
+
+    def _build_token_table(self, cheap_usage: dict = None, usage: dict = None) -> str:
+        """
+        构建 token 统计 Markdown 表格：本轮/主题累积 × 主模型/便宜模型/嵌入模型。
+        cheap_usage 为 None 时自动从 session 读取最新值。
+
+        Args:
+            cheap_usage (dict): 便宜模型本轮用量，None 则从 sess._last_cheap_usage 读取
+            usage (dict): 主模型本轮用量，None 则从 sess._last_usage 读取
+        Returns:
+            str: Markdown 表格字符串
+        """
+        if usage is None:
+            usage = self.sess._last_usage or {}
         if cheap_usage is None:
-            cheap_usage = {}
-        # 本轮：主模型
+            cheap_usage = self.sess._last_cheap_usage or {}
         m_total = usage.get("total_tokens", 0)
         m_p = usage.get("prompt_tokens", 0)
         m_c = usage.get("completion_tokens", 0)
-        # 本轮：便宜模型
         c_total = cheap_usage.get("total_tokens", 0)
         c_p = cheap_usage.get("prompt_tokens", 0)
         c_c = cheap_usage.get("completion_tokens", 0)
-        # 嵌入模型 token 用量（从 EmbeddingEngine 读取本轮）
         e_total = 0
         e_p = 0
         try:
             from tea_agent.embedding_util import get_embedding_engine
             emb_engine = get_embedding_engine()
-            emb_usage = emb_engine.get_embedding_usage(reset=False)  # 已在 _post_chat_pipeline reset
+            emb_usage = emb_engine.get_embedding_usage(reset=False)
             e_total = emb_usage.get("total_tokens", 0)
             e_p = emb_usage.get("prompt_tokens", 0)
         except Exception:
             pass
-        # 主题累积
         try:
             ts = self.db.get_topic_tokens(self.current_topic_id)
             tm_total = ts.get("total_tokens", 0)
@@ -851,51 +964,37 @@ class TkGUI(AgentCore):
         except Exception:
             tm_total = tm_p = tm_c = tc_total = tc_p = tc_c = te_total = te_p = 0
 
-        def _cell(val, detail_p=None, detail_c=None):
-            """格式化为 'total (P:x C:y)' 或 'total (P:x)' 或 '—'"""
-            if val <= 0:
-                return "—"
-            if detail_p is not None and detail_c is not None:
-                return f"{val:,} (P:{detail_p:,} C:{detail_c:,})"
-            if detail_p is not None:
-                return f"{val:,} (P:{detail_p:,})"
-            return f"{val:,}"
-
+        _cell = self._fmt_cell
         lines = [
             "| | 主模型 | 便宜模型 | 嵌入模型 |",
             "|-------|--------|----------|----------|",
             f"| 本轮 | {_cell(m_total, m_p, m_c)} | {_cell(c_total, c_p, c_c)} | {_cell(e_total, e_p)} |",
             f"| 主题 | {_cell(tm_total, tm_p, tm_c)} | {_cell(tc_total, tc_p, tc_c)} | {_cell(te_total, te_p)} |",
         ]
-        token_msg = "\n".join(lines)
-        self.chat_messages.append({"role": "notice", "content": token_msg, "timestamp": self._now_ts()})
-        self._render_and_show_chat()
+        return "\n".join(lines)
 
-    # 2026-05-21 gen by Tea Agent, 修复: 延迟刷新便宜模型 token 显示，
-    # 因为记忆提取在后台线程中运行，主线程渲染时 cheap_usage 还是 0。
-    # 最多重试 3 次，每次间隔 4 秒，确保覆盖 API 调用耗时。
-    def _refresh_cheap_token_notice(self, attempt: int = 1):
-        """在记忆提取完成后重新读取便宜 token 并追加显示"""
-        try:
-            cu = self.sess._last_cheap_usage
-            if cu and cu.get("total_tokens", 0) > 0:
-                c_total = cu.get("total_tokens", 0)
-                c_p = cu.get("prompt_tokens", 0)
-                c_c = cu.get("completion_tokens", 0)
-                line = f"🔢 便宜模型本轮: {c_total:,} tokens (P:{c_p:,} C:{c_c:,})"
-                self.chat_messages.append({"role": "notice", "content": line, "timestamp": self._now_ts()})
-                self._render_and_show_chat()
-                return
-            # 还没有数据，4 秒后重试（最多 3 次）
-            if attempt < 3:
-                self.root.after(4000, lambda: self._refresh_cheap_token_notice(attempt + 1))
-        except Exception:
-            pass
-    def _on_history_link_click(self, url):
-        self._show_raw_check_btn()
+
+    def _add_token_notice_and_render(self, usage: dict, cheap_usage: dict = None):
+        """
+        在聊天消息中追加 Markdown 表格：本轮/主题累积 × 主模型/便宜模型/嵌入模型 token 消耗。
+        仅在 interrupt 等异常路径使用；正常流程由 work() 直接调用 _build_token_table 并一次性渲染。
+
+        Args:
+            usage (dict): 主模型本轮用量
+            cheap_usage (dict): 便宜模型本轮用量
+        """
+        # token_msg = self._build_token_table(cheap_usage, usage=usage)
+        # self.chat_messages.append({"role": "notice", "content": token_msg, "timestamp": self._now_ts()})
+        # self._render_and_show_chat()
+        pass
 
     def _on_history_link_click(self, url):
-        """处理 tea://round/N 或 tea://latest 或 tea://image/N 链接点击，外部链接用系统浏览器打开"""
+        """
+        处理 tea://round/N 或 tea://latest 或 tea://image/N 链接点击，外部链接用系统浏览器打开
+
+        Args:
+            url: Description.
+        """
         try:
             if url.startswith("http://") or url.startswith("https://"):
                 webbrowser.open(url)
@@ -915,7 +1014,12 @@ class TkGUI(AgentCore):
             pass
 
     def _show_image_popup(self, idx):
-        """点击聊天图片时弹出放大查看窗口。点击图片或按 Esc 关闭。"""
+        """
+        点击聊天图片时弹出放大查看窗口。点击图片或按 Esc 关闭。
+
+        Args:
+            idx: Description.
+        """
         if idx < 0 or idx >= len(self._image_cache):
             return
         b64_data, mime = self._image_cache[idx]
@@ -966,7 +1070,6 @@ class TkGUI(AgentCore):
 
         popup.focus_set()
 
-    # @2026-04-29 gen by deepseek-v4-pro, 打开主题管理弹窗
     def open_topic_dialog(self):
         """打开主题管理弹窗"""
         TopicDialog(self.root, self.db,
@@ -980,7 +1083,6 @@ class TkGUI(AgentCore):
         """打开配置编辑对话框"""
 
         def on_save(cfg):
-            # 同步到当前 session
             """Handle save event.
             
             Args:
@@ -1008,7 +1110,6 @@ class TkGUI(AgentCore):
             self.sess.interrupt()
             self.safe_log("\n🛑 已打断", "tool")
             self.generating = False
-            # 先刷新控制台剩余内容，再 flush 到 messages
             if self._pending_console_text:
                 self.console.config(state=tk.NORMAL)
                 for text, tag in self._pending_console_text:
@@ -1042,11 +1143,11 @@ class TkGUI(AgentCore):
         return self.renderer._show_loading(text, progress)
 
     def _poll_loading_progress(self):
-        """Internal: poll loading progress."""
+        """Internal: poll loading progress"""
         return self.renderer._poll_loading_progress()
 
     def scroll_to_bottom(self):
-        """Scroll to bottom."""
+        """Scroll to bottom"""
         return self.renderer.scroll_to_bottom()
 
     def _html_render(self, html: str):
@@ -1067,7 +1168,7 @@ class TkGUI(AgentCore):
         return self.renderer._render_chat(streaming_think, streaming_text)
 
     def _render_and_show_chat(self):
-        """Internal: render and show chat."""
+        """Internal: render and show chat"""
         return self.renderer._render_and_show_chat()
 
     def _render_loaded_topic(self, render_items):
@@ -1105,7 +1206,7 @@ class TkGUI(AgentCore):
         return self.renderer._build_round_view_html(rounds, active_idx, font_size)
 
     def _filtered_messages(self):
-        """Internal: filtered messages."""
+        """Internal: filtered messages"""
         return self.renderer._filtered_messages()
 
     def _group_into_rounds(self, msgs):
@@ -1117,23 +1218,23 @@ class TkGUI(AgentCore):
         return self.renderer._group_into_rounds(msgs)
 
     def _flush_stream_to_messages(self):
-        """Internal: flush stream to messages."""
+        """Internal: flush stream to messages"""
         return self.renderer._flush_stream_to_messages()
 
     def _flush_think_buffer_to_messages(self):
-        """Internal: flush think buffer to messages."""
+        """Internal: flush think buffer to messages"""
         return self.renderer._flush_think_buffer_to_messages()
 
     def _toggle_raw_view(self):
-        """Internal: toggle raw view."""
+        """Internal: toggle raw view"""
         return self.renderer._toggle_raw_view()
 
     def _show_raw_check_btn(self):
-        """Internal: show raw check btn."""
+        """Internal: show raw check btn"""
         return self.renderer._show_raw_check_btn()
 
     def _hide_raw_check_btn(self):
-        """Internal: hide raw check btn."""
+        """Internal: hide raw check btn"""
         return self.renderer._hide_raw_check_btn()
 
 def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str="", disable_summary:bool=False):
@@ -1154,7 +1255,12 @@ def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str=""
     root.mainloop()
 
 def _safe_destroy(root):
-    """安全销毁 Tk 窗口，捕获可能的异常。"""
+    """
+    安全销毁 Tk 窗口，捕获可能的异常。
+
+    Args:
+        root: Description.
+    """
     try:
         if root.winfo_exists():
             root.destroy()

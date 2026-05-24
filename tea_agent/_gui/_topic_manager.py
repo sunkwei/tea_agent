@@ -15,10 +15,14 @@ if __import__('typing').TYPE_CHECKING:
 logger = logging.getLogger("main_db_gui")
 
 
-# ── Module-level helpers (extracted from load_worker) ───────────
 
 def _parse_user_msg(raw_msg):
-    """解析用户消息，分离文本和图片."""
+    """
+    解析用户消息，分离文本和图片
+
+    Args:
+        raw_msg: Description.
+    """
     if not raw_msg or not raw_msg.startswith('{'):
         return raw_msg, []
     try:
@@ -31,7 +35,16 @@ def _parse_user_msg(raw_msg):
 
 
 def _build_header_items(topic, ts, summary, recent_turns, old_count):
-    """构建主题头部渲染项."""
+    """
+    构建主题头部渲染项
+
+    Args:
+        topic: Description.
+        ts: Description.
+        summary: Description.
+        recent_turns: Description.
+        old_count: Description.
+    """
     items = [
         ("title", f"📌 当前主题：{topic['title']}"),
         ("notice", "-" * 50),
@@ -54,7 +67,14 @@ def _build_header_items(topic, ts, summary, recent_turns, old_count):
 
 
 def _build_tool_rounds(rounds, is_func_calling, ai_msg):
-    """构建工具调用轮次的渲染项列表."""
+    """
+    构建工具调用轮次的渲染项列表
+
+    Args:
+        rounds: Description.
+        is_func_calling: Description.
+        ai_msg: Description.
+    """
     items = []
     tool_names = []
 
@@ -73,7 +93,14 @@ def _build_tool_rounds(rounds, is_func_calling, ai_msg):
 
 
 def _process_round(rd, items, tool_names):
-    """处理单个 round，追加到 items."""
+    """
+    处理单个 round，追加到 items
+
+    Args:
+        rd: Description.
+        items: Description.
+        tool_names: Description.
+    """
     import json as _json_pr
     rd_role = rd.get("role", "")
     if rd_role == "assistant" and rd.get("tool_calls"):
@@ -91,7 +118,14 @@ def _process_round(rd, items, tool_names):
 
 
 def _process_tool_call(tc, items, tool_names):
-    """处理单个 tool_call，追加到 items 和 tool_names."""
+    """
+    处理单个 tool_call，追加到 items 和 tool_names
+
+    Args:
+        tc: Description.
+        items: Description.
+        tool_names: Description.
+    """
     import json as _json_ptc
     fn_name = tc.get("function", {}).get("name", "unknown")
     fn_args = tc.get("function", {}).get("arguments", "")
@@ -123,9 +157,8 @@ class TopicManager:
         """
         self.gui = gui
 
-    # NOTE: 2026-05-07 17:33:40, clear_chat 初始化缓冲区
     def clear_chat(self):
-        """Clear chat."""
+        """Clear chat"""
         gui = self.gui
         gui.console.config(state=tk.NORMAL)
         gui.console.delete("1.0", tk.END)
@@ -139,23 +172,20 @@ class TopicManager:
         gui._clear_img_btn.pack_forget()
 
     def auto_new_topic(self):
-        """Auto new topic."""
+        """Auto new topic"""
         gui = self.gui
         topics = gui.db.list_topics()
         if topics:
             children = gui.topic_list.get_children()
             if children:
                 gui.topic_list.selection_set(children[0])
-            # 直接 switch_topic，不依赖 on_topic_select。
-            # 原因：refresh_topics() 已将 current_topic_id 设为第一个活跃主题的 ID，
-            # 若走 on_topic_select 会因为 ID 相同被短路跳过，导致 HtmlFrame 不显示、历史不加载。
             first_topic_id = topics[0]["topic_id"]
             gui.switch_topic(first_topic_id)
         else:
             gui.new_topic()
 
     def new_topic(self):
-        """New topic."""
+        """New topic"""
         gui = self.gui
         title = f"主题 {datetime.now().strftime('%m-%d %H:%M:%S')}"
         tid = gui.db.create_topic(title)
@@ -163,17 +193,15 @@ class TopicManager:
         gui.refresh_topics()
         gui.switch_topic(tid)
 
-    # @2026-05-19 gen by claude, 仅显示活跃主题(is_active=1)，停用主题从列表中隐藏
     def refresh_topics(self):
-        """Refresh topics."""
+        """Refresh topics"""
         gui = self.gui
         for item in gui.topic_list.get_children():
             gui.topic_list.delete(item)
         all_topics = gui.db.list_topics()
         topics = [tp for tp in all_topics if tp.get("is_active", 1)]
-        gui._topic_cache = all_topics  # 缓存全部供 tooltip 使用
+        gui._topic_cache = all_topics
         current_tid = getattr(gui, 'current_topic_id', None)
-        # 如果当前主题被停用，自动切到第一个活跃主题
         if not any(tp.get("topic_id") == current_tid for tp in topics):
             if topics:
                 current_tid = topics[0].get("topic_id")
@@ -217,7 +245,6 @@ class TopicManager:
         except Exception:
             self._update_title()
         self.clear_chat()
-        # 加载期间阻塞输入
         gui.generating = True
         gui._show_loading("正在加载历史记录")
         gui._update_status("⏳ 加载中...")
@@ -310,7 +337,13 @@ class TopicManager:
             gui._pending_topic_suggestion = 0
 
     def _on_summary_updated(self, topic_id: str, summary: str):
-        """摘要更新后刷新 GUI 主题列表和状态栏。"""
+        """
+        摘要更新后刷新 GUI 主题列表和状态栏。
+
+        Args:
+            topic_id (str): Description.
+            summary (str): Description.
+        """
         gui = self.gui
         gui.root.after(200, self._refresh_topics_preserve_selection)
         gui.root.after(100, lambda s=summary: gui._update_status(f"📝 摘要: {s}"))
@@ -320,7 +353,12 @@ class TopicManager:
         self.refresh_topics()
 
     def _on_topic_hover(self, event):
-        """鼠标在主题列表上移动时，延迟显示 tooltip"""
+        """
+        鼠标在主题列表上移动时，延迟显示 tooltip
+
+        Args:
+            event: Description.
+        """
         gui = self.gui
         item_id = gui.topic_list.identify_row(event.y)
         idx = gui.topic_list.index(item_id) if item_id else -1
@@ -335,7 +373,12 @@ class TopicManager:
         )
 
     def _on_topic_leave(self, event):
-        """鼠标离开列表时隐藏 tooltip"""
+        """
+        鼠标离开列表时隐藏 tooltip
+
+        Args:
+            event: Description.
+        """
         gui = self.gui
         if gui._topic_hover_after:
             gui.root.after_cancel(gui._topic_hover_after)
@@ -343,7 +386,13 @@ class TopicManager:
         self._hide_tooltip()
 
     def _show_tooltip(self, event, idx):
-        """在鼠标位置显示主题日期 tooltip"""
+        """
+        在鼠标位置显示主题日期 tooltip
+
+        Args:
+            event: Description.
+            idx: Description.
+        """
         gui = self.gui
         if idx < 0 or idx >= len(gui._topic_cache):
             return

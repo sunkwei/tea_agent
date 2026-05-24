@@ -1,4 +1,3 @@
-# @2026-05-19 gen by claude, 合并 build + bump_version + release_version → 统一发布工具
 """
 toolkit_release — 统一版本发布工具
 
@@ -31,7 +30,23 @@ def toolkit_release(
     do_build: bool = True,
     git_commit: bool = True,
 ) -> dict:
-    """统一版本发布工具。"""
+    """
+    统一版本发布工具。
+
+    Args:
+        action (str): Description.
+        version (str): Description.
+        file (str): Description.
+        dry_run (bool): Description.
+        directory (str): Description.
+        changes (list): Description.
+        changelog_section (str): Description.
+        do_build (bool): Description.
+        git_commit (bool): Description.
+
+    Returns:
+        dict: Description.
+    """
     logger.info(f"toolkit_release: action={action!r}, version={version!r}")
 
     try:
@@ -51,7 +66,14 @@ def toolkit_release(
 
 
 def _do_bump(version, file, dry_run):
-    """Bump version in pyproject.toml."""
+    """
+    Bump version in pyproject.toml
+
+    Args:
+        version: Description.
+        file: Description.
+        dry_run: Description.
+    """
     if not version:
         return {"ok": False, "error": "bump 需要 version 参数"}
     if not re.match(r'^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?(\+[a-zA-Z0-9.]+)?$', version):
@@ -91,7 +113,12 @@ def _do_bump(version, file, dry_run):
 
 
 def _do_build(directory):
-    """Build Python package."""
+    """
+    Build Python package
+
+    Args:
+        directory: Description.
+    """
     cwd = os.path.abspath(directory)
     build_dir = os.path.join(cwd, "build")
     bak_dir = os.path.join(cwd, "build.bak")
@@ -120,7 +147,12 @@ def _do_build(directory):
 
 
 def _do_fix(directory):
-    """Fix pyproject.toml issues."""
+    """
+    Fix pyproject.toml issues
+
+    Args:
+        directory: Description.
+    """
     filepath = os.path.join(directory, "pyproject.toml")
     if not os.path.exists(filepath):
         return {"ok": False, "error": "pyproject.toml not found"}
@@ -161,12 +193,21 @@ def _do_fix(directory):
 
 
 def _do_release(version, changes, section, do_build, git_commit, file):
-    """Full release workflow."""
+    """
+    Full release workflow
+
+    Args:
+        version: Description.
+        changes: Description.
+        section: Description.
+        do_build: Description.
+        git_commit: Description.
+        file: Description.
+    """
     if not version or not changes:
         return {"ok": False, "error": "release 需要 version 和 changes 参数"}
     results = {"version": version, "steps": []}
 
-    # 1. Bump version
     bump_result = _do_bump(version, file, dry_run=False)
     if bump_result.get("ok"):
         results["steps"].append(f"✓ bump: {bump_result.get('message', version)}")
@@ -174,7 +215,6 @@ def _do_release(version, changes, section, do_build, git_commit, file):
         results["steps"].append(f"✗ bump: {bump_result.get('error')}")
         return {"ok": False, "steps": results["steps"]}
 
-    # 2. Update CHANGELOG
     changelog_path = Path("CHANGELOG.md")
     if changelog_path.exists():
         cl_content = changelog_path.read_text(encoding='utf-8')
@@ -190,7 +230,6 @@ def _do_release(version, changes, section, do_build, git_commit, file):
         changelog_path.write_text(cl_content, encoding='utf-8')
         results["steps"].append("✓ 更新 CHANGELOG.md")
 
-    # 3. Build
     if do_build:
         build_result = _do_build(".")
         if build_result.get("ok"):
@@ -198,7 +237,6 @@ def _do_release(version, changes, section, do_build, git_commit, file):
         else:
             results["steps"].append(f"✗ 构建失败: {build_result.get('stderr', '')[:200]}")
 
-    # 4. Git commit
     if git_commit:
         try:
             subprocess.run(["git", "add", "-A"], capture_output=True, timeout=30)
@@ -218,7 +256,12 @@ def _do_release(version, changes, section, do_build, git_commit, file):
 
 
 def meta_toolkit_release() -> dict:
-    """Meta toolkit release."""
+    """
+    Meta toolkit release
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

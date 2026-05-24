@@ -1,4 +1,3 @@
-# @2026-05-23 gen by tea_agent, shared LSP check utility for all code-modifying tools
 """共享 LSP 检查：影响分析 + ruff lint 前后对比 + 签名变更检测。
 
 使用方: toolkit_self_evolve, toolkit_edit, toolkit_diff
@@ -47,7 +46,6 @@ def run_lsp_check(
     cwd = cwd or os.getcwd()
 
     try:
-        # 1. 影响分析
         if symbol:
             try:
                 from tea_agent.lsp.ts_analyzer import impact_analysis
@@ -62,7 +60,6 @@ def run_lsp_check(
             except Exception:
                 pass
 
-        # 2. Ruff lint: before（基于 old_code 写入临时文件）
         if old_code is not None:
             try:
                 with tempfile.NamedTemporaryFile(
@@ -87,7 +84,6 @@ def run_lsp_check(
                 except Exception:
                     pass
 
-        # 3. Ruff lint: after（读取当前文件内容）
         try:
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".py", delete=False
@@ -113,7 +109,6 @@ def run_lsp_check(
             except Exception:
                 pass
 
-        # 4. 签名对比
         if symbol and old_code is not None and new_code is not None:
             try:
                 pat = rf"def\s+{re.escape(symbol)}\s*\([^)]*\)"

@@ -14,15 +14,27 @@ import logging
 
 logger = logging.getLogger("lsp")
 
-# ── Jedi 智能后端 ────────────────────────────────────────────
 
 def _get_jedi_project(project_root: str):
-    """获取 jedi Project 实例"""
+    """
+    获取 jedi Project 实例
+
+    Args:
+        project_root (str): Description.
+    """
     import jedi
     return jedi.Project(project_root)
 
 def _read_file_safe(filepath: str) -> Optional[str]:
-    """安全读取文件"""
+    """
+    安全读取文件
+
+    Args:
+        filepath (str): Description.
+
+    Returns:
+        Optional[str]: Description.
+    """
     try:
         with open(filepath, "r", encoding="utf-8", errors="replace") as f:
             return f.read()
@@ -30,10 +42,18 @@ def _read_file_safe(filepath: str) -> Optional[str]:
         return None
 
 def diagnose(project_root: str, filepath: str = None) -> Dict:
-    """运行 ruff 诊断，返回 (ok, diagnostics, error)"""
+    """
+    运行 ruff 诊断，返回 (ok, diagnostics, error)
+
+    Args:
+        project_root (str): Description.
+        filepath (str): Description.
+
+    Returns:
+        Dict: Description.
+    """
     try:
         target = filepath or project_root
-        # 只检查 Python 文件
         if filepath and not filepath.endswith(".py"):
             target = project_root
 
@@ -49,7 +69,6 @@ def diagnose(project_root: str, filepath: str = None) -> Dict:
 
         import json
         diagnostics = json.loads(result.stdout) if result.stdout.strip() else []
-        # 按严重程度分组
         errors = [d for d in diagnostics if d.get("fix") is None or d.get("code", "").startswith("F")]
         warnings = [d for d in diagnostics if d.get("fix") is not None and not d.get("code", "").startswith("F")]
 
@@ -66,7 +85,7 @@ def diagnose(project_root: str, filepath: str = None) -> Dict:
             "errors": len(errors),
             "warnings": len(warnings),
             "hint": f"发现 {', '.join(summary)}" if summary else "无问题",
-            "items": [_fmt_diagnostic(d) for d in diagnostics[:20]],  # 最多20条
+            "items": [_fmt_diagnostic(d) for d in diagnostics[:20]],
         }
     except FileNotFoundError:
         return {"ok": False, "error": "ruff 未安装，请运行: pip install ruff"}
@@ -74,7 +93,15 @@ def diagnose(project_root: str, filepath: str = None) -> Dict:
         return {"ok": False, "error": str(e)}
 
 def _fmt_diagnostic(d: Dict) -> str:
-    """格式化单条诊断为可读字符串"""
+    """
+    格式化单条诊断为可读字符串
+
+    Args:
+        d (Dict): Description.
+
+    Returns:
+        str: Description.
+    """
     loc = f"{d.get('filename', '')}:{d.get('location', {}).get('row', '?')}:{d.get('location', {}).get('column', '?')}"
     code = d.get("code", "?")
     msg = d.get("message", "")
@@ -83,7 +110,18 @@ def _fmt_diagnostic(d: Dict) -> str:
     return f"[{code}] {loc}\n  {msg}{fix_hint}"
 
 def completion(project_root: str, filepath: str, line: int, col: int) -> Dict:
-    """代码补全 — 基于 jedi"""
+    """
+    代码补全 — 基于 jedi
+
+    Args:
+        project_root (str): Description.
+        filepath (str): Description.
+        line (int): Description.
+        col (int): Description.
+
+    Returns:
+        Dict: Description.
+    """
     try:
         source = _read_file_safe(filepath)
         if source is None:
@@ -94,7 +132,7 @@ def completion(project_root: str, filepath: str, line: int, col: int) -> Dict:
         completions = script.complete(line, col)
 
         items = []
-        for c in completions[:15]:  # 最多15条
+        for c in completions[:15]:
             items.append({
                 "name": c.name,
                 "complete": c.complete,
@@ -113,7 +151,18 @@ def completion(project_root: str, filepath: str, line: int, col: int) -> Dict:
         return {"ok": False, "error": str(e)}
 
 def goto_definition(project_root: str, filepath: str, line: int, col: int) -> Dict:
-    """跳转到定义 — 基于 jedi"""
+    """
+    跳转到定义 — 基于 jedi
+
+    Args:
+        project_root (str): Description.
+        filepath (str): Description.
+        line (int): Description.
+        col (int): Description.
+
+    Returns:
+        Dict: Description.
+    """
     try:
         source = _read_file_safe(filepath)
         if source is None:
@@ -144,7 +193,18 @@ def goto_definition(project_root: str, filepath: str, line: int, col: int) -> Di
         return {"ok": False, "error": str(e)}
 
 def hover(project_root: str, filepath: str, line: int, col: int) -> Dict:
-    """悬停信息 — 类型 + docstring"""
+    """
+    悬停信息 — 类型 + docstring
+
+    Args:
+        project_root (str): Description.
+        filepath (str): Description.
+        line (int): Description.
+        col (int): Description.
+
+    Returns:
+        Dict: Description.
+    """
     try:
         source = _read_file_safe(filepath)
         if source is None:
@@ -153,7 +213,6 @@ def hover(project_root: str, filepath: str, line: int, col: int) -> Dict:
         import jedi
         script = jedi.Script(source, path=filepath, project=_get_jedi_project(project_root))
 
-        # 获取当前位置的签名/帮助
         signatures = script.get_signatures(line, col)
         definitions = script.infer(line, col)
 
@@ -184,7 +243,18 @@ def hover(project_root: str, filepath: str, line: int, col: int) -> Dict:
         return {"ok": False, "error": str(e)}
 
 def references(project_root: str, filepath: str, line: int, col: int) -> Dict:
-    """查找引用 — 基于 jedi"""
+    """
+    查找引用 — 基于 jedi
+
+    Args:
+        project_root (str): Description.
+        filepath (str): Description.
+        line (int): Description.
+        col (int): Description.
+
+    Returns:
+        Dict: Description.
+    """
     try:
         source = _read_file_safe(filepath)
         if source is None:
@@ -215,12 +285,17 @@ def references(project_root: str, filepath: str, line: int, col: int) -> Dict:
         return {"ok": False, "error": str(e)}
 
 def collect_context(project_root: str, filepath: str, symbol: str = None, max_files: int = 5) -> Dict:
-    """仓库级上下文收集：给定文件/符号，自动拉取相关代码片段。
+    """
+    仓库级上下文收集：给定文件/符号，自动拉取相关代码片段。
 
-    策略:
-      1. 符号引用 → jedi 查找定义 + 调用者
-      2. 同目录 .py 文件 → 类/函数签名摘要
-      3. 返回结构化上下文供注入 prompt
+    Args:
+        project_root (str): Description.
+        filepath (str): Description.
+        symbol (str): Description.
+        max_files (int): Description.
+
+    Returns:
+        Dict: Description.
     """
     if filepath:
         source = _read_file_safe(filepath)
@@ -233,7 +308,6 @@ def collect_context(project_root: str, filepath: str, symbol: str = None, max_fi
     try:
         import jedi
 
-        # 1. 分析目标文件中的所有顶层符号
         if filepath and filepath.endswith(".py"):
             source = _read_file_safe(filepath)
             script = jedi.Script(source, path=filepath, project=_get_jedi_project(project_root))
@@ -254,11 +328,9 @@ def collect_context(project_root: str, filepath: str, symbol: str = None, max_fi
                     "symbols": module_symbols[:30],
                 })
 
-        # 2. 如果指定了符号，收集其定义和引用
         if symbol and filepath:
             source = _read_file_safe(filepath)
             script = jedi.Script(source, path=filepath, project=_get_jedi_project(project_root))
-            # 尝试按名称搜索
             for n in script.get_names(all_scopes=True, definitions=True, references=False):
                 if n.name == symbol:
                     refs = n.get_references()
@@ -274,7 +346,6 @@ def collect_context(project_root: str, filepath: str, symbol: str = None, max_fi
                             })
                     break
 
-        # 3. 补充同目录的关键文件
         if filepath:
             target_dir = os.path.dirname(filepath)
             py_files = sorted(Path(target_dir).glob("*.py"))

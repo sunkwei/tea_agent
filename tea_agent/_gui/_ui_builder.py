@@ -36,7 +36,6 @@ class UIBuilder:
         main_split = ttk.PanedWindow(gui.root, orient=tk.HORIZONTAL)
         main_split.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
 
-        # ===== 左侧面板 =====
         left = Frame(main_split, width=220)
         main_split.add(left, weight=1)
 
@@ -51,9 +50,9 @@ class UIBuilder:
         gui.topic_list.bind("<<TreeviewSelect>>", gui.on_topic_select)
         gui.topic_list.bind("<Motion>", gui._on_topic_hover, add="+")
         gui.topic_list.bind("<Leave>", gui._on_topic_leave, add="+")
-        gui._topic_cache = []           # 缓存 list_topics 原始数据
-        gui._topic_tooltip = None       # tooltip Toplevel
-        gui._topic_hover_after = None   # debounce after_id
+        gui._topic_cache = []
+        gui._topic_tooltip = None
+        gui._topic_hover_after = None
         ttk.Button(left, text="➕ 新建主题", command=gui.new_topic).pack(
             fill=tk.X, padx=4, pady=2)
         ttk.Separator(left, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=4, pady=6)
@@ -64,18 +63,15 @@ class UIBuilder:
         ttk.Button(left, text="⚙️ 配置", command=gui.open_config_dialog).pack(
             fill=tk.X, padx=4, pady=2)
 
-        # ===== 右侧面板 =====
         right = Frame(main_split)
         main_split.add(right, weight=5)
 
-        # 状态栏
         gui.status_var = tk.StringVar(value="就绪")
         status_frame = ttk.Frame(right)
         status_frame.pack(anchor=tk.E, padx=6, fill=tk.X)
         ttk.Label(status_frame, textvariable=gui.status_var,
                   foreground="#666").pack(side=tk.LEFT, padx=(0, 20))
 
-        # 聊天区域
         gui.chat_split = ttk.PanedWindow(right, orient=tk.VERTICAL)
         gui.chat_split.pack(fill=tk.BOTH, expand=True)
 
@@ -98,7 +94,6 @@ class UIBuilder:
         gui._show_mode = "console"
         gui._switch_display("console")
 
-        # 输入区域
         input_frame = Frame(gui.chat_split)
         gui.chat_split.add(input_frame, weight=1)
         gui.input_box = scrolledtext.ScrolledText(
@@ -109,25 +104,21 @@ class UIBuilder:
         toolbar = ttk.Frame(input_frame)
         toolbar.pack(fill=tk.X, padx=4, pady=(0, 2))
 
-        # 左侧：图片附件
         gui._img_btn = ttk.Button(toolbar, text="📎 图片", command=gui.images.attach)
         gui._img_btn.pack(side=tk.LEFT)
         gui._img_label = ttk.Label(toolbar, text="", foreground="#888")
         gui._img_label.pack(side=tk.LEFT, padx=(4, 2))
         gui._clear_img_btn = ttk.Button(toolbar, text="✕ 清除", command=gui.images.clear)
 
-        # 中间：视图切换
         gui._raw_check_btn = ttk.Checkbutton(
             toolbar, text="📋 纯文本视图", variable=gui._raw_view,
             command=gui._toggle_raw_view
         )
 
-        # 右侧：提示文字
         ttk.Label(toolbar, text="Enter 发送  •  Shift+Enter 换行  •  ESC 打断",
                   foreground="#888", font=(SYSTEM_FONT, _fs(10)))\
             .pack(side=tk.RIGHT, padx=6)
 
-        # 样式配置
         gui.console.tag_configure("user", foreground="#0055cc")
         gui.console.tag_configure("ai", foreground="black")
         gui.console.tag_configure("tool", foreground="#d68000")
@@ -137,19 +128,16 @@ class UIBuilder:
         gui.console.tag_configure("error", foreground="#cc0000")
         gui.console.tag_configure("think", foreground="#888888", font=(SYSTEM_FONT, _fs(13), "italic"))
 
-        # 快捷键绑定
         gui.input_box.bind("<Return>", gui.send)
         gui.input_box.bind("<Shift-Return>", gui.newline)
         gui.root.bind("<Escape>", gui.interrupt)
 
-        # HtmlFrame 缩放快捷键
         if HAS_TKINTERWEB:
             gui.root.bind("<Control-equal>", gui.zoom_in)
             gui.root.bind("<Control-plus>", gui.zoom_in)
             gui.root.bind("<Control-minus>", gui.zoom_out)
             gui.root.bind("<Control-underscore>", gui.zoom_out)
 
-        # HtmlFrame 历史轮次快捷键
         if HAS_TKINTERWEB:
             gui.root.bind("<Alt-Up>", gui._history_prev_round)
             gui.root.bind("<Alt-Down>", gui._history_next_round)

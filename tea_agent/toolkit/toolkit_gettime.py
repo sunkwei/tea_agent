@@ -1,11 +1,15 @@
-# llm generated tool func, created Wed Apr 15 13:08:10 2026
 
 import logging
 
 logger = logging.getLogger("toolkit")
 
 def toolkit_gettime() -> dict:
-    """Toolkit gettime."""
+    """
+    Toolkit gettime
+
+    Returns:
+        dict: Description.
+    """
     logger.info(f"toolkit_gettime called")
 
     import datetime
@@ -19,5 +23,10 @@ def toolkit_gettime() -> dict:
     }
 
 def meta_toolkit_gettime() -> dict:
-    """Meta toolkit gettime."""
+    """
+    Meta toolkit gettime
+
+    Returns:
+        dict: Description.
+    """
     return {"type": "function", "function": {"name": "toolkit_gettime", "description": "获取当前的日期和时间，返回包含年月日等信息的字典", "parameters": {"type": "object", "properties": {}, "required": []}}}

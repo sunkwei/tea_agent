@@ -73,20 +73,19 @@ class TeaAgent:
         self._use_tools = use_tools
         self._enable_thinking = enable_thinking
 
-        # ── 加载配置 ──
         self._cfg = self._load_config(config_path)
 
-        # ── 初始化 Toolkit ──
         self._init_toolkit()
 
-        # ── 初始化会话（无 Storage） ──
         self._init_session()
 
-    # ═══════════════════════════════════════════════
-    # 配置加载
-    # ═══════════════════════════════════════════════
     def _load_config(self, config_path: Optional[str]):
-        """加载并验证配置。无效时抛出异常。"""
+        """
+        加载并验证配置。无效时抛出异常。
+
+        Args:
+            config_path (Optional[str]): Description.
+        """
         from tea_agent.config import load_config
 
         actual_path = config_path or str(Path.home() / ".tea_agent" / "config.yaml")
@@ -123,24 +122,18 @@ class TeaAgent:
         logger.info(f"配置加载: {actual_path} | 模型: {main_m.model_name}")
         return cfg
 
-    # ═══════════════════════════════════════════════
-    # Toolkit 初始化
-    # ═══════════════════════════════════════════════
     def _init_toolkit(self):
         """仅初始化 Toolkit 和 KB 目录，不初始化 Storage。"""
         from tea_agent import tlk
 
         cfg = self._cfg
 
-        # 确保 toolkit 目录存在
         tool_dir = Path(cfg.paths.toolkit_dir_abs)
         tool_dir.mkdir(parents=True, exist_ok=True)
 
-        # 确保 kb 目录存在
         kb_dir = Path(cfg.paths.kb_dir_abs)
         kb_dir.mkdir(parents=True, exist_ok=True)
 
-        # Toolkit
         self._toolkit = tlk.Toolkit(str(tool_dir))
         tlk._toolkit_ = self._toolkit
         tlk.toolkit_reload()
@@ -150,9 +143,6 @@ class TeaAgent:
             f"toolkit_dir: {tool_dir} | kb_dir: {kb_dir}"
         )
 
-    # ═══════════════════════════════════════════════
-    # 会话初始化（无 Storage）
-    # ═══════════════════════════════════════════════
     def _init_session(self):
         """初始化 OnlineToolSession，不传 Storage。"""
         from tea_agent.onlinesession import OnlineToolSession
@@ -180,7 +170,7 @@ class TeaAgent:
             max_assistant_content=cfg.max_assistant_content,
             extra_iterations_on_continue=cfg.extra_iterations_on_continue,
             memory_extraction_threshold=cfg.memory_extraction_threshold,
-            storage=None,  # ← 不传入 Storage，避免 DB 写入
+            storage=None,
             cheap_api_key=cast(str, cheap_m.api_key),
             cheap_api_url=cast(str, cheap_m.api_url),
             cheap_model=cast(str, cheap_m.model_name),
@@ -191,7 +181,6 @@ class TeaAgent:
         _sref.set_session(self._sess)
         _sref.set_agent(self)
 
-        # 若不使用工具，在 API 层拦截：强制 tools=[] 且 tool_choice="none"
         if not self._use_tools:
             self._sess._real_create_chat_stream = self._sess._create_chat_stream
             def _no_tools_chat(api_messages, tools, client=None, model=None, is_cheap=False):
@@ -212,35 +201,46 @@ class TeaAgent:
 
         logger.info(f"会话初始化（无 Storage）| 主模型: {main_m.model_name} | 工具: {'开' if self._use_tools else '关'}")
 
-    # ═══════════════════════════════════════════════
-    # 工具管理
-    # ═══════════════════════════════════════════════
     def toolkit_save(self, name: str, meta: dict, pycode: str) -> bool:
-        """添加/更新工具。等价于 toolkit_save() 工具函数。"""
+        """
+        添加/更新工具。等价于 toolkit_save() 工具函数。
+
+        Args:
+            name (str): Description.
+            meta (dict): Description.
+            pycode (str): Description.
+
+        Returns:
+            bool: Description.
+        """
         result = self._toolkit.call_tool("toolkit_save", name=name, meta=meta, pycode=pycode)
         return bool(result and (isinstance(result, dict) and result.get("ok")))
 
     def toolkit_reload(self) -> dict:
-        """重新加载所有工具并刷新会话工具定义。"""
+        """
+        重新加载所有工具并刷新会话工具定义。
+
+        Returns:
+            dict: Description.
+        """
         result = self._toolkit.call_tool("toolkit_reload")
         if self._sess:
             self._sess._build_tools()
         return result or {"ok": False}
 
-    # ═══════════════════════════════════════════════
-    # 回调辅助
-    # ═══════════════════════════════════════════════
     def _notify(self, data: Dict):
-        """安全调用用户回调。"""
+        """
+        安全调用用户回调。
+
+        Args:
+            data (Dict): Description.
+        """
         if self._callback:
             try:
                 self._callback(data)
             except Exception as e:
                 logger.warning(f"回调执行异常: {e}")
 
-    # ═══════════════════════════════════════════════
-    # 对话接口
-    # ═══════════════════════════════════════════════
     def chat(self, user_input: str) -> List[Dict]:
         """
         发送用户消息，阻塞直到 AI 返回完整回复。
@@ -266,9 +266,16 @@ class TeaAgent:
                 self._generating = False
 
     def _chat_impl(self, user_input: str) -> List[Dict]:
-        """chat 的内部实现。"""
+        """
+        chat 的内部实现。
 
-        # ── 流式回调 ──
+        Args:
+            user_input (str): Description.
+
+        Returns:
+            List[Dict]: Description.
+        """
+
         def stream_cb(text: str):
             """Stream cb.
             
@@ -294,15 +301,13 @@ class TeaAgent:
             else:
                 self._notify({"type": "status", "text": status_msg})
 
-        # ── 执行对话 ──
         ai_msg, used_tools = self._sess.chat_stream(
             user_input,
             callback=stream_cb,
-            topic_id="",  # 空字符串 = 不入库
+            topic_id="",
             on_status=status_cb,
         )
 
-        # ── 构建返回结果 ──
         rounds = self._sess._rounds_collector
         result: List[Dict] = [{"role": "user", "content": user_input}]
         if rounds:
@@ -311,13 +316,9 @@ class TeaAgent:
         self._notify({"type": "done", "used_tools": used_tools})
         return result
 
-    # ═══════════════════════════════════════════════
-    # 生命周期
-    # ═══════════════════════════════════════════════
     def close(self):
         """安全关闭 TeaAgent，释放资源。"""
         import tea_agent.session_ref as _sref
-        # 清理全局引用，避免跨实例污染
         _sref.set_session(None)
         _sref.set_agent(None)
         self._sess = None
@@ -325,15 +326,21 @@ class TeaAgent:
         logger.info("TeaAgent 已关闭")
 
     def __enter__(self):
+        """Enter"""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Exit.
+
+        Args:
+            exc_type: Description.
+            exc_val: Description.
+            exc_tb: Description.
+        """
         self.close()
         return False
 
-    # ═══════════════════════════════════════════════
-    # 属性
-    # ═══════════════════════════════════════════════
     @property
     def config(self):
         """返回当前配置对象。"""

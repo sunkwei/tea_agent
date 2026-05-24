@@ -31,14 +31,19 @@ class ModelConfig:
     api_url: str = ""
     model_name: str = ""
     options: Dict[str, Any] = field(default_factory=dict)
-    temperature: float = 0.7       # 温度 0~2，越高越随机
-    max_tokens: int = 4096         # 最大输出 token 数
-    context_window: int = 131072   # 模型上下文窗口 token 数（输入+输出上限），默认 128K
-    top_p: float = 0.9             # 核采样阈值
-    reasoning_effort: str = "max"  # 2026-05-22 gen by claude-agent, DeepSeek thinking 推理力度 (high/max)
+    temperature: float = 0.7
+    max_tokens: int = 4096
+    context_window: int = 131072
+    top_p: float = 0.9
+    reasoning_effort: str = "max"
     @property
     def is_configured(self) -> bool:
-        """检查配置是否完整"""
+        """
+        检查配置是否完整
+
+        Returns:
+            bool: Description.
+        """
         return bool(self.api_key and self.api_url and self.model_name)
 
 @dataclass
@@ -48,13 +53,12 @@ class PathsConfig:
     以 / 或 ~ 开头的路径视为绝对路径（~ 展开为用户目录）。
     未配置时回退到 ~/.tea_agent/<默认值>。
     """
-    data_dir: str = ""        # 数据根目录，其他路径默认基于此
-    db_path: str = ""         # 数据库文件路径（相对或绝对）
-    toolkit_dir: str = ""     # 自定义工具目录
-    kb_dir: str = ""          # 知识库目录
-    skills_dir: str = ""      # 用户自定义 skills 目录
+    data_dir: str = ""
+    db_path: str = ""
+    toolkit_dir: str = ""
+    kb_dir: str = ""
+    skills_dir: str = ""
 
-    # 运行时解析后的绝对路径（由 load_config 填充）
     _data_dir_abs: str = ""
     _db_path_abs: str = ""
     _toolkit_dir_abs: str = ""
@@ -72,7 +76,6 @@ class PathsConfig:
         import os
         default_root = str(Path.home() / ".tea_agent")
 
-        # 先解析 data_dir（相对路径相对于 config_dir）
         if self.data_dir:
             expanded_data = os.path.expanduser(self.data_dir)
             if os.path.isabs(expanded_data):
@@ -82,7 +85,6 @@ class PathsConfig:
         else:
             self._data_dir_abs = default_root
 
-        # 子路径解析：相对路径相对于 data_dir_abs
         def _resolve(value: str, default_rel: str) -> str:
             """Internal: resolve.
             
@@ -104,27 +106,52 @@ class PathsConfig:
 
     @property
     def db_path_abs(self) -> str:
-        """Db path abs."""
+        """
+        Db path abs
+
+        Returns:
+            str: Description.
+        """
         return self._db_path_abs
 
     @property
     def toolkit_dir_abs(self) -> str:
-        """Toolkit dir abs."""
+        """
+        Toolkit dir abs
+
+        Returns:
+            str: Description.
+        """
         return self._toolkit_dir_abs
 
     @property
     def kb_dir_abs(self) -> str:
-        """Kb dir abs."""
+        """
+        Kb dir abs
+
+        Returns:
+            str: Description.
+        """
         return self._kb_dir_abs
 
     @property
     def skills_dir_abs(self) -> str:
-        """Skills dir abs."""
+        """
+        Skills dir abs
+
+        Returns:
+            str: Description.
+        """
         return self._skills_dir_abs
 
     @property
     def data_dir_abs(self) -> str:
-        """Data dir abs."""
+        """
+        Data dir abs
+
+        Returns:
+            str: Description.
+        """
         return self._data_dir_abs
 
 @dataclass
@@ -137,14 +164,101 @@ class EmbeddingConfig:
     
     api_key 为空时复用 main_model 的 api_key。
     """
-    api_url: str = ""       # Embedding API 地址，如 http://localhost:11434/v1
-    model_name: str = ""    # 嵌入模型名称，如 text-embedding-3-small
-    api_key: str = ""       # API Key，为空则使用 main_model.api_key
-    dimension: int = 0      # 向量维度，0=自动检测
+    api_url: str = ""
+    model_name: str = ""
+    api_key: str = ""
+    dimension: int = 0
 
     @property
     def is_configured(self) -> bool:
-        """至少配置了 api_url 和 model_name 才视为有效"""
+        """
+        至少配置了 api_url 和 model_name 才视为有效
+
+        Returns:
+            bool: Description.
+        """
+@dataclass
+class SubAgentDef:
+    """子 Agent 定义 — 对应 config.yaml 中 multi_agent.agents[] 的一项"""
+    name: str = ""                          # 唯一标识
+    config_file: str = ""                   # 独立配置文件路径（相对于主配置目录）
+    agent_type: str = "general"             # 类型: general/coder/reviewer/analyst/researcher
+    tool_whitelist: List[str] = field(default_factory=list)   # 允许使用的工具
+    tool_blacklist: List[str] = field(default_factory=list)   # 禁止使用的工具
+    max_iterations: int = 20                # 子Agent最大迭代次数
+    timeout: int = 120                      # 超时秒数
+    system_prompt_extra: str = ""           # 额外系统提示词
+
+    def to_dict(self) -> Dict:
+        """导出为字典"""
+        d = {"name": self.name}
+        if self.config_file:
+            d["config_file"] = self.config_file
+        if self.agent_type != "general":
+            d["agent_type"] = self.agent_type
+        if self.tool_whitelist:
+            d["tool_whitelist"] = self.tool_whitelist
+        if self.tool_blacklist:
+            d["tool_blacklist"] = self.tool_blacklist
+        if self.max_iterations != 20:
+            d["max_iterations"] = self.max_iterations
+        if self.timeout != 120:
+            d["timeout"] = self.timeout
+        if self.system_prompt_extra:
+            d["system_prompt_extra"] = self.system_prompt_extra
+        return d
+
+    @classmethod
+    def from_dict(cls, d: Dict) -> "SubAgentDef":
+        """从字典创建"""
+        return cls(
+            name=str(d.get("name", "")),
+            config_file=str(d.get("config_file", "")),
+            agent_type=str(d.get("agent_type", "general")),
+            tool_whitelist=list(d.get("tool_whitelist", [])),
+            tool_blacklist=list(d.get("tool_blacklist", [])),
+            max_iterations=int(d.get("max_iterations", 20)),
+            timeout=int(d.get("timeout", 120)),
+            system_prompt_extra=str(d.get("system_prompt_extra", "")),
+        )
+
+
+@dataclass
+class MultiAgentConfig:
+    """多 Agent 协作配置"""
+    enabled: bool = False                   # 是否启用多Agent模式
+    max_parallel: int = 4                   # 最大并行子Agent数
+    agents: List[SubAgentDef] = field(default_factory=list)  # 子Agent定义列表
+    default_timeout: int = 120              # 默认超时
+    shared_tools: List[str] = field(default_factory=list)    # 所有子Agent共享的工具
+
+    def to_dict(self) -> Dict:
+        """导出为字典"""
+        d: Dict = {"enabled": self.enabled}
+        if self.max_parallel != 4:
+            d["max_parallel"] = self.max_parallel
+        if self.default_timeout != 120:
+            d["default_timeout"] = self.default_timeout
+        if self.shared_tools:
+            d["shared_tools"] = self.shared_tools
+        if self.agents:
+            d["agents"] = [a.to_dict() for a in self.agents]
+        return d
+
+    @classmethod
+    def from_dict(cls, d: Dict) -> "MultiAgentConfig":
+        """从字典创建"""
+        agents_data = d.get("agents", [])
+        agents = [SubAgentDef.from_dict(a) for a in agents_data] if isinstance(agents_data, list) else []
+        return cls(
+            enabled=bool(d.get("enabled", False)),
+            max_parallel=int(d.get("max_parallel", 4)),
+            agents=agents,
+            default_timeout=int(d.get("default_timeout", 120)),
+            shared_tools=list(d.get("shared_tools", [])),
+        )
+
+
 @dataclass
 class AgentConfig:
     """Agent 全局配置"""
@@ -152,8 +266,8 @@ class AgentConfig:
     cheap_model: ModelConfig = field(default_factory=ModelConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
-    # 格式: {"pragmatic": {"temperature": 0.3}, "creative": {"temperature": 0.8}, "mixed": {"temperature": 0.6}}
     mode_params: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    multi_agent: MultiAgentConfig = field(default_factory=MultiAgentConfig)
     
     def get_effective_params(self, model_type: str = "main", mode: str = "mixed") -> Dict[str, Any]:
         """
@@ -174,52 +288,44 @@ class AgentConfig:
             "top_p": model_cfg.top_p,
             "reasoning_effort": model_cfg.reasoning_effort,
         }
-        # 模式覆盖
         overrides = self.mode_params.get(mode, {})
         for k in ("temperature", "max_tokens", "top_p", "reasoning_effort"):
             if k in overrides:
                 params[k] = overrides[k]
         return params
 
-    # 会话参数
-    max_history: int = 10  # 最大历史消息数
-    max_iterations: int = 50  # 最大工具调用迭代次数
-    enable_thinking: bool = True  # 是否启用 thinking 功能
-    reasoning_effort: str = "max"  # 2026-05-22 gen by claude-agent, DeepSeek thinking 推理力度 (high/max)    
-    # Token 优化参数
-    keep_turns: int = 5  # 保留最近N轮完整对话，更早的对话自动摘要
-    max_tool_output: int = 128 * 1024  # 工具输出截断字符数
-    max_assistant_content: int = 128 * 1024  # 助手回复截断字符数
+    max_history: int = 10
+    max_iterations: int = 50
+    enable_thinking: bool = True
+    reasoning_effort: str = "max"
+    keep_turns: int = 5
+    max_tool_output: int = 128 * 1024
+    max_assistant_content: int = 128 * 1024
 
-    # 交互与控制参数
-    extra_iterations_on_continue: int = 5  # 续命时追加的工具调用轮数
-    memory_extraction_threshold: int = 2  # 触发记忆提取的最低未摘要消息数
-    memory_dedup_threshold: float = 0.3  # 记忆去重相似度阈值 (0~1)，bigram Jaccard
-    chat_page_size: int = 50  # GUI 单页加载的对话轮数（最多50条）
-    # 2026-05-20 gen by Tea Agent, L2/L3分层压缩参数
-    history_l2_max: int = 30    # L2最多保留轮数（含user+assistant，不含工具轮）
-    history_l3_batch: int = 10  # L3摘要批处理大小（攒够N条触发便宜模型摘要）
-    # 2026-04-30 gen by deepseek-v4-pro, 运行时配置读写方法（支持自我调优）
+    extra_iterations_on_continue: int = 5
+    memory_extraction_threshold: int = 2
+    memory_dedup_threshold: float = 0.3
+    chat_page_size: int = 50
+    history_l2_max: int = 30
+    history_l3_batch: int = 10
 
-    # 可运行时修改的配置键白名单
     _RUNTIME_CONFIG_KEYS = {
         "max_history", "max_iterations", "enable_thinking",
-        "reasoning_effort",  # 2026-05-22 gen by claude-agent
+        "reasoning_effort",
         "keep_turns", "max_tool_output", "max_assistant_content",
         "extra_iterations_on_continue", "memory_extraction_threshold",
         "memory_dedup_threshold", "chat_page_size",
-        "history_l2_max", "history_l3_batch",  # 2026-05-20 gen by Tea Agent, L2/L3分层压缩
+        "history_l2_max", "history_l3_batch",
     }
 
-    # 类型映射
     _CONFIG_TYPES = {
         "max_history": int, "max_iterations": int, "enable_thinking": bool,
-        "reasoning_effort": str,  # 2026-05-22 gen by claude-agent
+        "reasoning_effort": str,
         "keep_turns": int, "max_tool_output": int, "max_assistant_content": int,
         "extra_iterations_on_continue": int, "memory_extraction_threshold": int,
         "memory_dedup_threshold": float, "chat_page_size": int,
         "history_l2_max": int, "history_l3_batch": int,
-    }    # 类型映射
+    }
     _CONFIG_TYPES = {
         "max_history": int, "max_iterations": int, "enable_thinking": bool,
         "keep_turns": int, "max_tool_output": int, "max_assistant_content": int,
@@ -228,7 +334,13 @@ class AgentConfig:
     }
 
     def get(self, key: str, default=None):
-        """读取配置值"""
+        """
+        读取配置值
+
+        Args:
+            key (str): Description.
+            default: Description.
+        """
         if hasattr(self, key):
             return getattr(self, key)
         return default
@@ -284,13 +396,23 @@ class AgentConfig:
         return results
 
     def reload_from_dict(self, data: Dict):
-        """从字典重新加载配置"""
+        """
+        从字典重新加载配置
+
+        Args:
+            data (Dict): Description.
+        """
         for key in self._RUNTIME_CONFIG_KEYS:
             if key in data:
                 self.set(key, data[key])
 
     def to_dict(self) -> Dict:
-        """导出运行时配置为字典"""
+        """
+        导出运行时配置为字典
+
+        Returns:
+            Dict: Description.
+        """
         return {key: getattr(self, key) for key in self._RUNTIME_CONFIG_KEYS if hasattr(self, key)}
 
 def load_config(config_path: Optional[str] = None) -> AgentConfig:
@@ -309,12 +431,10 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
     if config_path:
         yaml_path = config_path
     else:
-        # 优先级1: $HOME/.tea_agent/config.yaml
         default_path = str(Path.home() / ".tea_agent" / "config.yaml")
         if os.path.isfile(default_path):
             yaml_path = default_path
         else:
-            # 优先级2: tea_agent/config.yaml (相对于本文件所在目录)
             fallback_path = str(Path(__file__).parent / "config.yaml")
             if os.path.isfile(fallback_path):
                 yaml_path = fallback_path
@@ -324,7 +444,6 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
             with open(yaml_path, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
 
-            # 加载模型配置
             for m_type in ["main_model", "cheap_model"]:
                 m_data = data.get(m_type, {})
                 if isinstance(m_data, dict):
@@ -338,7 +457,6 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
                     target.context_window = int(m_data.get("context_window", target.context_window))
                     target.top_p = float(m_data.get("top_p", target.top_p))
 
-            # 加载 Embedding 配置
             emb_data = data.get("embedding_model", {})
             if isinstance(emb_data, dict):
                 cfg.embedding.api_url = str(emb_data.get("api_url", cfg.embedding.api_url))
@@ -356,7 +474,6 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
                             if k in ("temperature", "max_tokens", "top_p")
                         }
 
-            # 加载路径配置
             paths_data = data.get("paths", {})
             if isinstance(paths_data, dict):
                 cfg.paths.data_dir = str(paths_data.get("data_dir", cfg.paths.data_dir))
@@ -365,35 +482,39 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
                 cfg.paths.kb_dir = str(paths_data.get("kb_dir", cfg.paths.kb_dir))
                 cfg.paths.skills_dir = str(paths_data.get("skills_dir", cfg.paths.skills_dir))
 
-            # 解析路径：相对于 config.yaml 所在目录
             if yaml_path:
                 cfg.paths.resolve(os.path.dirname(os.path.abspath(yaml_path)))
 
-            # 加载会话参数
             cfg.max_history = int(data.get("max_history", cfg.max_history))
             cfg.max_iterations = int(data.get("max_iterations", cfg.max_iterations))
             cfg.enable_thinking = bool(data.get("enable_thinking", cfg.enable_thinking))
             cfg.reasoning_effort = str(data.get("reasoning_effort", cfg.reasoning_effort))            
-            # 加载 Token 优化参数
             cfg.keep_turns = int(data.get("keep_turns", cfg.keep_turns))
             cfg.max_tool_output = int(data.get("max_tool_output", cfg.max_tool_output))
             cfg.max_assistant_content = int(data.get("max_assistant_content", cfg.max_assistant_content))
 
-            # 加载交互与控制参数
             cfg.extra_iterations_on_continue = int(data.get("extra_iterations_on_continue", cfg.extra_iterations_on_continue))
             cfg.memory_extraction_threshold = int(data.get("memory_extraction_threshold", cfg.memory_extraction_threshold))
             cfg.memory_dedup_threshold = float(data.get("memory_dedup_threshold", cfg.memory_dedup_threshold))
             cfg.chat_page_size = int(data.get("chat_page_size", cfg.chat_page_size))
-            # 2026-05-20 gen by Tea Agent, L2/L3分层压缩
             cfg.history_l2_max = int(data.get("history_l2_max", cfg.history_l2_max))
-            cfg.history_l3_batch = int(data.get("history_l3_batch", cfg.history_l3_batch))            
+            cfg.history_l3_batch = int(data.get("history_l3_batch", cfg.history_l3_batch))
+            ma_data = data.get("multi_agent", {})
+            if isinstance(ma_data, dict):
+                cfg.multi_agent = MultiAgentConfig.from_dict(ma_data)
+
         except Exception:
-            pass  # 加载失败时使用默认空配置
+            pass
 
     return cfg
 
 def ensure_config_dir() -> Path:
-    """确保数据目录存在（从 config 读取，回退 ~/.tea_agent），返回路径"""
+    """
+    确保数据目录存在（从 config 读取，回退 ~/.tea_agent），返回路径
+
+    Returns:
+        Path: Description.
+    """
     try:
         cfg = get_config()
         cfg_dir = Path(cfg.paths.data_dir_abs)
@@ -421,7 +542,6 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
 
     data = {}
     
-    # 保存模型配置
     for m_type in ["main_model", "cheap_model"]:
         target = cfg.main_model if m_type == "main_model" else cfg.cheap_model
         if target.is_configured:
@@ -442,7 +562,6 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
                 m_data["options"] = target.options
             data[m_type] = m_data
     
-    # 保存 Embedding 配置
     data["embedding_model"] = {
         "api_url": cfg.embedding.api_url,
         "model_name": cfg.embedding.model_name,
@@ -453,7 +572,6 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     if cfg.mode_params:
         data["mode_params"] = cfg.mode_params
 
-    # 保存路径配置（保存原始配置值，非解析后的绝对路径）
     data["paths"] = {
         "data_dir": cfg.paths.data_dir,
         "db_path": cfg.paths.db_path,
@@ -462,24 +580,23 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
         "skills_dir": cfg.paths.skills_dir,
     }
 
-    # 保存会话参数
     data["max_history"] = cfg.max_history
     data["max_iterations"] = cfg.max_iterations
     data["enable_thinking"] = cfg.enable_thinking
     data["reasoning_effort"] = cfg.reasoning_effort    
-    # 保存 Token 优化参数
     data["keep_turns"] = cfg.keep_turns
     data["max_tool_output"] = cfg.max_tool_output
     data["max_assistant_content"] = cfg.max_assistant_content
 
-    # 保存交互与控制参数
     data["extra_iterations_on_continue"] = cfg.extra_iterations_on_continue
     data["memory_extraction_threshold"] = cfg.memory_extraction_threshold
     data["memory_dedup_threshold"] = cfg.memory_dedup_threshold
     data["chat_page_size"] = cfg.chat_page_size
-    # 2026-05-20 gen by Tea Agent, L2/L3分层压缩
     data["history_l2_max"] = cfg.history_l2_max
-    data["history_l3_batch"] = cfg.history_l3_batch    
+    data["history_l3_batch"] = cfg.history_l3_batch
+    if cfg.multi_agent.agents or cfg.multi_agent.enabled:
+        data["multi_agent"] = cfg.multi_agent.to_dict()
+
     with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
@@ -584,7 +701,6 @@ def create_default_config(config_path: Optional[str] = None) -> str:
 
     return yaml_path
 
-# 全局单例缓存
 _config_cache: Optional[AgentConfig] = None
 
 def get_config(reload: bool = False) -> AgentConfig:

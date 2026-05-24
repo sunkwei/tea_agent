@@ -1,5 +1,3 @@
-# @2026-04-29 gen by deepseek-v4-pro, 合并load_file+save_file为一个统一入口
-# version: 1.1.0
 
 import logging
 
@@ -8,9 +6,16 @@ logger = logging.getLogger("toolkit")
 def toolkit_file(action: str, filename: str = "", content: str = "", path: str = ".", recursive: bool = False, show_hidden: bool = False, offset: int = 0, limit: int = 0):
     """
     统一文件操作。
-    - action="read": 读取文件内容。offset=起始行号(1-based), limit=行数上限。均为0则读全文。需 filename。
-    - action="write": 将 content 写入 filename。需 filename + content。
-    - action="list": 列出目录内容 (跨平台 dir/ls)。可选 path/recursive/show_hidden。
+
+    Args:
+        action (str): Description.
+        filename (str): Description.
+        content (str): Description.
+        path (str): Description.
+        recursive (bool): Description.
+        show_hidden (bool): Description.
+        offset (int): Description.
+        limit (int): Description.
     """
     logger.info(f"toolkit_file called: action={action!r}, filename={filename!r}, content={repr(content)[:80]}, path={path!r}, offset={offset!r}, limit={limit!r}")
 
@@ -23,7 +28,6 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
                     end = min(len(lines), start + limit) if limit > 0 else len(lines)
                     return ''.join(f"{i+1}: {lines[i]}" for i in range(start, end))
                 content = f.read()
-                # 标准化换行符（跨平台兼容）
                 if '\r\n' in content or '\r' in content:
                     content = content.replace('\r\n', '\n').replace('\r', '\n')
                 return content
@@ -34,7 +38,6 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
 
     elif action == "write":
         try:
-            # 标准化换行符后再写入
             normalized = content
             if '\r\n' in normalized or '\r' in normalized:
                 normalized = normalized.replace('\r\n', '\n').replace('\r', '\n')
@@ -82,7 +85,12 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
         return f"❌ 未知 action: '{action}'，可选: read / write / list"
 
 def meta_toolkit_file() -> dict:
-    """Meta toolkit file."""
+    """
+    Meta toolkit file
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

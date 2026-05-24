@@ -1,4 +1,3 @@
-# @2026-04-29 gen by deepseek-v4-pro, 内置工具: 切换/查询 reasoning/thinking 状态
 import logging
 
 logger = logging.getLogger("toolkit")
@@ -30,7 +29,7 @@ def toolkit_toggle_reasoning(enable: bool = None) -> dict:
     return {"enable_thinking": sess.enable_thinking, "changed": True, "message": f"Reasoning 已{state}"}
 
 def meta_toolkit_toggle_reasoning():
-    """Meta toolkit toggle reasoning."""
+    """Meta toolkit toggle reasoning"""
     return {
         "type": "function",
         "function": {

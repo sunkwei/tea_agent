@@ -10,10 +10,9 @@ from tea_agent.toolkit.toolkit_plan import toolkit_plan
 logger = logging.getLogger("toolkit")
 
 
-# ── 模块级缓存：快速读写，DB 仅做持久化 ──
-_todos = []          # [{"desc":str, "done":bool, "idx":int}, ...]
-_restored = False    # 是否已从 DB 恢复
-_last_topic = None   # 上次操作的 topic_id, 用于检测主题切换
+_todos = []
+_restored = False
+_last_topic = None
 
 def _get_db():
     """获取当前 DB 连接（通过 session_ref → agent → db）"""
@@ -38,7 +37,12 @@ def _get_topic_id():
     return None
 
 def _ensure_table(db):
-    """确保 todo_items 表存在（兼容旧 DB 未迁移的情况）"""
+    """
+    确保 todo_items 表存在（兼容旧 DB 未迁移的情况）
+
+    Args:
+        db: Description.
+    """
     try:
         c = db.conn.cursor()
         c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='todo_items'")
@@ -82,7 +86,13 @@ def _sync_to_db():
         logger.warning(f"todo sync to db failed: {e}")
 
 def _sync_item(idx, done):
-    """单条更新 DB"""
+    """
+    单条更新 DB
+
+    Args:
+        idx: Description.
+        done: Description.
+    """
     topic_id = _get_topic_id()
     if not topic_id:
         return
@@ -143,9 +153,14 @@ def _auto_restore():
     if not _restored or (topic_id and topic_id != _last_topic):
         _restore_from_db()
 
-# ── TODO action handlers (extracted from toolkit_todo) ──────────
 
 def _todo_create(items):
+    """
+    Todo create.
+
+    Args:
+        items: Description.
+    """
     if not items:
         return {"ok": False, "error": "create needs items"}
     _todos.clear()
@@ -158,6 +173,12 @@ def _todo_create(items):
 
 
 def _todo_check(index):
+    """
+    Todo check.
+
+    Args:
+        index: Description.
+    """
     if index is None:
         return {"ok": False, "error": "check needs index"}
     if 0 <= index < len(_todos):
@@ -171,6 +192,7 @@ def _todo_check(index):
 
 
 def _todo_show():
+    """Todo show"""
     if not _todos:
         topic_id = _get_topic_id()
         return {"ok": True, "todo": "(empty)", "progress": "0/0",
@@ -184,6 +206,7 @@ def _todo_show():
 
 
 def _todo_clear():
+    """Todo clear"""
     n = len(_todos)
     _todos.clear()
     topic_id = _get_topic_id()
@@ -202,6 +225,7 @@ def _todo_clear():
 
 
 def _todo_restore():
+    """Todo restore"""
     _restore_from_db()
     return {"ok": True, "todo": _fmt(), "progress": f"{_done()}/{len(_todos)}"}
 
@@ -215,9 +239,20 @@ def toolkit_todo(
     plan_id: str = None,
     step_id: str = None,
 ) -> dict:
-    """TODO + Plan 统一规划工具。
-    Simple TODO: create/check/show/clear/restore (DB持久化 per-topic)。
-    Plan 工作流: plan_create/plan_step/plan_run/plan_resume/plan_verify/plan_show/plan_list/plan_delete。
+    """
+    TODO + Plan 统一规划工具。
+
+    Args:
+        action (str): Description.
+        items (list): Description.
+        index (int): Description.
+        goal (str): Description.
+        steps (list): Description.
+        plan_id (str): Description.
+        step_id (str): Description.
+
+    Returns:
+        dict: Description.
     """
     global _todos
 
@@ -249,11 +284,11 @@ def toolkit_todo(
         return {"ok": False, "error": str(e)[:300]}
 
 def _done():
-    """Internal: done."""
+    """Internal: done"""
     return sum(1 for t in _todos if t["done"])
 
 def _fmt():
-    """Internal: fmt."""
+    """Internal: fmt"""
     lines = []
     for t in _todos:
         icon = "DONE" if t["done"] else "TODO"
@@ -262,13 +297,15 @@ def _fmt():
 
 
 
-# ═══════════════════════════════════════════════════════════
-# Plan 工作流 wrapper — 复用 toolkit_plan 的核心逻辑
-# ═══════════════════════════════════════════════════════════
 
 
 def _plan_create(steps_list):
-    """从 steps 列表创建计划。steps_list[0] 为 goal，其余为步骤描述。"""
+    """
+    从 steps 列表创建计划。steps_list[0] 为 goal，其余为步骤描述。
+
+    Args:
+        steps_list: Description.
+    """
     if not steps_list or len(steps_list) < 2:
         return {"ok": False, "error": "plan_create: items[0]=goal, items[1:]=step descriptions"}
     goal = steps_list[0]
@@ -278,35 +315,64 @@ def _plan_create(steps_list):
     return _plan_create_inner(goal, step_dicts)
 
 def _plan_show(plan_id):
+    """
+    Plan show.
+
+    Args:
+        plan_id: Description.
+    """
     if plan_id is None:
         return {"ok": False, "error": "plan_show needs index (plan_id string)"}
     return _plan_show_inner(str(plan_id))
 
 def _plan_step(plan_id):
+    """
+    Plan step.
+
+    Args:
+        plan_id: Description.
+    """
     if plan_id is None:
         return {"ok": False, "error": "plan_step needs index (plan_id string)"}
     cwd = os.getcwd()
     return toolkit_plan("step", plan_id=str(plan_id), cwd=cwd)
 
 def _plan_run(plan_id):
+    """
+    Plan run.
+
+    Args:
+        plan_id: Description.
+    """
     if plan_id is None:
         return {"ok": False, "error": "plan_run needs index (plan_id string)"}
     cwd = os.getcwd()
     return toolkit_plan("run", plan_id=str(plan_id), cwd=cwd)
 
 def _plan_resume(plan_id):
+    """
+    Plan resume.
+
+    Args:
+        plan_id: Description.
+    """
     if plan_id is None:
         return {"ok": False, "error": "plan_resume needs index (plan_id string)"}
     cwd = os.getcwd()
     return toolkit_plan("resume", plan_id=str(plan_id), cwd=cwd)
 
 def _plan_verify(plan_id):
+    """
+    Plan verify.
+
+    Args:
+        plan_id: Description.
+    """
     cwd = os.getcwd()
     pid = str(plan_id) if plan_id else None
     if pid:
         return toolkit_plan("verify", plan_id=pid, cwd=cwd)
     else:
-        # verify all done plans
         results = []
         for p in _plan_list_inner():
             r = toolkit_plan("verify", plan_id=p["id"], cwd=cwd)
@@ -314,20 +380,41 @@ def _plan_verify(plan_id):
         return {"ok": True, "verified": len(results), "results": results}
 
 def _plan_list():
+    """Plan list"""
     return _plan_list_inner()
 
 def _plan_delete(plan_id):
+    """
+    Plan delete.
+
+    Args:
+        plan_id: Description.
+    """
     if plan_id is None:
         return {"ok": False, "error": "plan_delete needs index (plan_id string)"}
     return toolkit_plan("delete", plan_id=str(plan_id))
 
 def _plan_create_inner(goal, step_dicts):
+    """
+    Plan create inner.
+
+    Args:
+        goal: Description.
+        step_dicts: Description.
+    """
     return toolkit_plan("create", goal=goal, steps=step_dicts)
 
 def _plan_show_inner(plan_id):
+    """
+    Plan show inner.
+
+    Args:
+        plan_id: Description.
+    """
     return toolkit_plan("show", plan_id=plan_id)
 
 def _plan_list_inner():
+    """Plan list inner"""
     result = toolkit_plan("list")
     if result.get("ok"):
         return result.get("plans", [])
@@ -335,7 +422,7 @@ def _plan_list_inner():
 
 
 def meta_toolkit_todo():
-    """Meta toolkit todo."""
+    """Meta toolkit todo"""
     return {
         "type": "function",
         "function": {

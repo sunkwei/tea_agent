@@ -32,7 +32,6 @@ class AgentCore:
     """
 
     def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False):
-        # ── 尽早初始化文件日志，确保后续所有 logger 都有文件 handler ──
         """Initialize  .
         
         Args:
@@ -47,50 +46,36 @@ class AgentCore:
         self.generating = False
         self._config_path = config_path
 
-        # ── 1. 加载配置 ──
         self._cfg = load_config(config_path) if config_path else load_config()
         if not self._cfg.main_model.is_configured:
             print("错误: 请配置主模型 (main_model)")
             print(f"  编辑 {config_path or '$HOME/.tea_agent/config.yaml 或 tea_agent/config.yaml'}")
             sys.exit(1)
 
-        # ── 2. 初始化目录 ──
         cfg = self._cfg
         root_path = Path(cfg.paths.data_dir_abs)
         root_path.mkdir(parents=True, exist_ok=True)
         tool_dir = Path(cfg.paths.toolkit_dir_abs)
         tool_dir.mkdir(parents=True, exist_ok=True)
 
-        # ── 3. 初始化 Storage 和 Toolkit ──
         db_path = Path(cfg.paths.db_path_abs)
         self.db = Storage(db_path=str(db_path))
         self.toolkit = tlk.Toolkit(str(tool_dir))
-        tlk._toolkit_ = self.toolkit   ## XXX: _toolkit_ 为 tlk 名字空间下的变量，这里初始化，被
-                                       ##   tlk.Toolkit 中的方法使用； 
+        tlk._toolkit_ = self.toolkit
         tlk.toolkit_reload()
 
-        # ── 5. 会话锁 ──
         self._sess_lock = threading.Lock()
 
-        # ── 6. 初始化会话 ──
         self.current_topic_id: int = 0
         self._init_session()
 
-        # ── 7. 启动潜意识引擎（后台每小时：总结/反思/创意/头脑风暴）──
         self._start_subconscious()
 
-        # ── 7b. 启动定时任务调度器（后台每分钟检查执行）──
         self._start_scheduler()
 
     def _start_subconscious(self):
-        """自动启动潜意识引擎 daemon 线程。
-
-        每小时一次后台循环：消化记忆 → 对话提取 → 交叉关联 → 生成洞察 → 设定目标。
-        场景自适应：bug期收敛务实分析，创意期发散联想。
-        启动失败不阻塞主流程。
-        """
+        """自动启动潜意识引擎 daemon 线程。"""
         try:
-            # 在 toolkit 目录找 toolkit_subconscious.py
             import importlib.util
             fpath = os.path.join(self.toolkit.root_dir, "toolkit_subconscious.py")
             if not os.path.exists(fpath):
@@ -110,7 +95,6 @@ class AgentCore:
             else:
                 logger.debug(f"潜意识引擎状态: {result.get('status')}")
         except Exception as e:
-            # 启动失败不影响主体功能
             logger.debug(f"潜意识引擎自动启动跳过: {e}")
 
     def _start_scheduler(self):
@@ -160,37 +144,39 @@ class AgentCore:
         _sref.set_agent(self)
 
     def _init_session_info_str(self) -> str:
-        """返回会话初始化信息字符串（子类用于显示）。"""
+        """
+        返回会话初始化信息字符串（子类用于显示）。
+
+        Returns:
+            str: Description.
+        """
         cfg = self._cfg
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
         cheap_info = f" | 摘要: {cheap_m.model_name}" if cheap_m.model_name else ""
         return f"📡 已连接 | 模型: {main_m.model_name}{cheap_info}\n🔧 工具: {len(self.toolkit.func_map)} 个已加载"
 
-    # ═══════════════════════════════════════════════
-    # 对话后处理流水线（入库 → Token → 摘要）
-    # ═══════════════════════════════════════════════
     @staticmethod
     def _extract_files_from_rounds(rounds: list) -> list:
-        """从工具调用轮次中提取触碰的文件路径列表。
+        """
+        从工具调用轮次中提取触碰的文件路径列表。
 
-        扫描 tool_calls 中的参数，提取文件路径。
-        覆盖 toolkit_file(filename=), toolkit_self_evolve(file_path=), 
-        toolkit_exec(args containing paths) 等。
+        Args:
+            rounds (list): Description.
+
+        Returns:
+            list: Description.
         """
         import re, json as _json
         files = []
         seen = set()
-        # 工具参数名 → 文件路径模式的映射
         FILE_ARG_NAMES = {'filename', 'file_path', 'path', 'file', 'directory'}
-        # 排除非文件路径的参数值
         SKIP_VALUES = {'.', '..', '/', 'true', 'false'}
 
         if not rounds:
             return files
 
         for rd in rounds:
-            # 从 assistant tool_calls 中提取
             tool_calls = rd.get('tool_calls', [])
             if not tool_calls:
                 continue
@@ -205,20 +191,16 @@ class AgentCore:
                 if not isinstance(args, dict):
                     continue
 
-                # 从已知参数名提取路径
                 for key in FILE_ARG_NAMES:
                     val = args.get(key)
                     if isinstance(val, str) and val not in SKIP_VALUES and len(val) > 1:
-                        # 检查是否像文件路径（含扩展名或目录分隔符）
                         if '.' in val or '/' in val or '\\' in val:
                             if val not in seen:
                                 files.append(val)
                                 seen.add(val)
 
-                # 从 cmd/args 中额外提取路径（toolkit_exec）
                 cmd = args.get('cmd', '') or args.get('command', '')
                 if cmd and isinstance(cmd, str):
-                    # 匹配常见的文件路径模式
                     for m in re.finditer(r'[a-zA-Z0-9_./\\-]+\.py\b', cmd):
                         fp = m.group()
                         if fp not in seen:
@@ -229,8 +211,17 @@ class AgentCore:
 
     def _post_chat_pipeline(self, ai_msg: str, used_tools: bool,
                             user_msg, topic_id: str) -> None:
-        """AI 回复后流水线。1.入库 2.三级推送 3.Token 4.摘要
-        user_msg 可为 str 或 {"text": str, "images": [str]}（图片附件）。
+        """
+        AI 回复后流水线。1.入库 2.三级推送 3.Token 4.摘要
+
+        Args:
+            ai_msg (str): Description.
+            used_tools (bool): Description.
+            user_msg: Description.
+            topic_id (str): Description.
+
+        Returns:
+            None: Description.
         """
         conv_id = self.db.save_msg(topic_id, user_msg, "", False)
         rounds = self.sess._rounds_collector
@@ -238,7 +229,6 @@ class AgentCore:
             conversation_id=conv_id, ai_msg=ai_msg,
             is_func_calling=used_tools, rounds=rounds if rounds else None,
         )
-        # Level 2 push: push OLD L1 (previous conversation) to Level 2
         overflow = None
         need_l3_summary = False
         l2_max = getattr(self._cfg, 'history_l2_max', 30)
@@ -246,14 +236,12 @@ class AgentCore:
         prev_convs = self.db.get_conversations(topic_id, limit=2, include_rounds=True)
         if len(prev_convs) >= 2:
             old_l1 = prev_convs[-2]
-            # 从旧 L1 的 tool calls 中提取触碰文件，用于文件级语义匹配
             old_rounds = old_l1.get('rounds_json_parsed') or []
             old_files = self._extract_files_from_rounds(old_rounds)
             overflow = self.db.push_to_level2(
                 topic_id, old_l1["user_msg"], old_l1["ai_msg"], files=old_files,
                 max_level2=l2_max,
             )
-            # 2026-05-20 gen by Tea Agent, L3批处理：溢出条目先进入pending缓冲
             if overflow:
                 self.db.push_l3_pending(topic_id, overflow)
                 pending_count = len(self.db.get_l3_pending(topic_id))
@@ -262,7 +250,6 @@ class AgentCore:
                     f"Level 2 overflow {len(overflow)} -> L3 pending "
                     f"(total pending={pending_count}, batch={l3_batch}, trigger={need_l3_summary})"
                 )
-        # Token stats
         usage = self.sess._last_usage
         cheap_usage = self.sess._last_cheap_usage
         if usage and usage.get("total_tokens", 0) > 0:
@@ -283,8 +270,6 @@ class AgentCore:
                 cheap_completion_tokens=cheap_usage.get("completion_tokens", 0),
                 embedding_tokens=emb_tokens, embedding_prompt_tokens=emb_prompt,
             )
-        # 避免阻塞 generating 状态恢复，用户可立即发送新消息
-        # 2026-05-20 gen by Tea Agent, L3批处理：仅攒够时触发摘要
         threading.Thread(
             target=self._do_async_summaries,
             args=(topic_id, need_l3_summary),
@@ -292,9 +277,11 @@ class AgentCore:
         ).start()
         self._suggest_new_topic_if_needed(topic_id)
     def _update_level3_summary(self, topic_id: str):
-        """L3 批处理摘要：取 L3 pending 缓冲，用便宜模型生成摘要，合并到 semantic_summary。
-        2026-05-20 gen by Tea Agent, 改为批处理模式：攒够 history_l3_batch 条后触发。
-        仅对 user + ai final msg 做摘要，不涉及工具轮次。
+        """
+        L3 批处理摘要：取 L3 pending 缓冲，用便宜模型生成摘要，合并到 semantic_summary。
+
+        Args:
+            topic_id (str): Description.
         """
         pending = self.db.get_l3_pending(topic_id)
         if not pending:
@@ -306,7 +293,6 @@ class AgentCore:
         try:
             cli, mdl = self.sess._get_summarize_client()
 
-            # 提取 user+assistant 文本
             new_text = ""
             for pair in pending:
                 u = (pair.get('user', '') or '')[:500]
@@ -315,7 +301,6 @@ class AgentCore:
 
             old_sem = self.db.get_semantic_summary(topic_id) or ""
 
-            # 简洁摘要 Prompt（便宜模型，小 max_tokens）
             sem_prompt = (
                 "你是对话摘要器。将以下新对话片段合并到已有摘要中。\n"
                 "规则：\n"
@@ -339,30 +324,25 @@ class AgentCore:
                 self.sess._semantic_summary = new_sem
                 logger.info(f"L3 summary: {len(old_sem)}->{len(new_sem)} chars")
 
-            # 清空 L3 pending
             self.db.clear_l3_pending(topic_id)
 
         except Exception as e:
             logger.warning(f"L3 summary fail: {type(e).__name__}: {e}")
 
     def _load_topic_history_into_session(self, tid: str):
-        """将指定 topic 的对话历史按三级结构加载到 session"""
-        # Level 1: 最新一条完整对话（含工具链）
-        all_light = self.db.get_conversations(tid, limit=-1, include_rounds=False)
-        if all_light:
-            total = len(all_light)
-            recent = self.db.get_conversations(tid, limit=1, include_rounds=True)
-            if recent:
-                all_light[-1] = recent[-1]
-            level2 = self.db.get_level2(tid)
-            semantic = self.db.get_semantic_summary(tid)
-            tool_chain = self.db.get_tool_chain_summary(tid)
+        """
+        将指定 topic 的对话历史加载到 session。
+
+        Args:
+            tid (str): Description.
+        """
+        all_full = self.db.get_conversations(tid, limit=-1, include_rounds=True)
+        if all_full:
             old_summary = self.db.get_topic_summary(tid) or ""
-            self.sess.load_history(
-                all_light, summary=old_summary,
-                level2=level2, semantic_summary=semantic,
-                tool_chain_summary=tool_chain,
-            )
+            self.sess.load_history(all_full, summary=old_summary)
+            self.sess._level2 = self.db.get_level2(tid) or []
+            self.sess._semantic_summary = self.db.get_semantic_summary(tid) or ""
+            self.sess._tool_chain_summary = self.db.get_tool_chain_summary(tid) or ""
         else:
             self.sess.messages = [{"role": "system", "content": self.sess.system_prompt}]
             self.sess._history_summary = ""
@@ -371,12 +351,13 @@ class AgentCore:
             self.sess._level2 = []
         self.current_topic_id = tid
 
-    # ═══════════════════════════════════════════════
-    # 摘要
-    # ═══════════════════════════════════════════════
     def _do_async_summaries(self, topic_id: str, need_l3: bool):
-        """后台线程：执行 L3 批处理摘要 + auto_summary，完成后触发 UI 回调。
-        2026-05-20 gen by Tea Agent, L3批处理：仅攒够N条时触发便宜模型摘要。
+        """
+        后台线程：执行 L3 批处理摘要 + auto_summary，完成后触发 UI 回调。
+
+        Args:
+            topic_id (str): Description.
+            need_l3 (bool): Description.
         """
         try:
             if need_l3:
@@ -386,7 +367,12 @@ class AgentCore:
             logger.warning(f"异步摘要失败 (topic={topic_id}): {type(e).__name__}: {e}")
 
     def _auto_summary(self, topic_id: str = None):
-        """自动生成主题摘要。CLI/GUI 共用核心逻辑，子类加 UI 回调。"""
+        """
+        自动生成主题摘要。CLI/GUI 共用核心逻辑，子类加 UI 回调。
+
+        Args:
+            topic_id (str): Description.
+        """
         if topic_id is None:
             topic_id = self.current_topic_id
         if not topic_id:
@@ -413,16 +399,26 @@ class AgentCore:
             logger.warning(f"自动摘要失败 (topic={topic_id}): {type(e).__name__}: {e}")
 
     def _suggest_new_topic_if_needed(self, topic_id: str):
-        """检查主题漂移计数，达阈值时建议用户开新主题。
-        子类可覆盖以自定义 UI 提示。"""
+        """
+        检查主题漂移计数，达阈值时建议用户开新主题。
+
+        Args:
+            topic_id (str): Description.
+        """
         count = getattr(self, '_pending_topic_suggestion', 0)
         if count > 0:
             logger.info(
                 f"\n💡 本主题已切换 {count} 次讨论方向 (阈值={self.DRIFT_SUGGEST_THRESHOLD})，"
                 f"建议 /new 开新主题以保持上下文聚焦。"
             )
-            self._pending_topic_suggestion = 0  # 重置，每个主题只提醒一次
+            self._pending_topic_suggestion = 0
 
     def _on_summary_updated(self, topic_id: str, summary: str):
-        """摘要更新后的 UI 回调（子类覆盖）。"""
+        """
+        摘要更新后的 UI 回调（子类覆盖）。
+
+        Args:
+            topic_id (str): Description.
+            summary (str): Description.
+        """
         pass

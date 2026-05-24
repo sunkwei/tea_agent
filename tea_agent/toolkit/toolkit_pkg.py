@@ -1,5 +1,3 @@
-## llm generated tool func, created Fri May  1 09:50:24 2026
-# version: 1.0.0
 
 import logging
 
@@ -8,14 +6,23 @@ logger = logging.getLogger("toolkit")
 def toolkit_pkg(action: str, packages: str = None, module: str = None):
     """
     智能 Python 包管理工具。
-    自动检测缺失模块并安装，支持批量操作。
+
+    Args:
+        action (str): Description.
+        packages (str): Description.
+        module (str): Description.
     """
     logger.info(f"toolkit_pkg called: action={action!r}, packages={packages!r}, module={module!r}")
 
     import subprocess, sys, importlib, os
 
     def _pip_install(pkgs):
-        """安装包列表"""
+        """
+        安装包列表
+
+        Args:
+            pkgs: Description.
+        """
         if isinstance(pkgs, str):
             pkgs = [p.strip() for p in pkgs.split(",")]
         args = [sys.executable, "-m", "pip", "install", "--quiet"] + pkgs
@@ -23,7 +30,12 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
         return r.returncode == 0, r.stdout, r.stderr
 
     def _check_module(name):
-        """检查模块是否可导入"""
+        """
+        检查模块是否可导入
+
+        Args:
+            name: Description.
+        """
         try:
             importlib.import_module(name)
             return True
@@ -31,14 +43,18 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
             return False
 
     def _get_version(name):
-        """获取已安装包的版本"""
+        """
+        获取已安装包的版本
+
+        Args:
+            name: Description.
+        """
         try:
             mod = importlib.import_module(name)
             for attr in ["__version__", "version", "VERSION"]:
                 v = getattr(mod, attr, None)
                 if v and isinstance(v, str):
                     return v
-            # 尝试 pkg_resources
             try:
                 import pkg_resources
                 return pkg_resources.get_distribution(name).version
@@ -68,7 +84,6 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
             results.append({"module": imp_name, "package": pkg_name, "installed": ok, "version": ver})
         return results
 
-    # 常用包别名映射
     ALIASES = {
         "pillow": "Pillow",
         "pil": "Pillow",
@@ -103,10 +118,8 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
             pkg_list.append(ALIASES.get(p.lower(), p))
 
         ok, stdout, stderr = _pip_install(pkg_list)
-        # 验证
         verified = {}
         for p in pkg_list:
-            # 尝试找到对应的 import 名
             imp_name = p.replace("-", "_").lower()
             verified[p] = _check_module(imp_name)
 
@@ -146,5 +159,10 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
         }
 
 def meta_toolkit_pkg() -> dict:
-    """Meta toolkit pkg."""
+    """
+    Meta toolkit pkg
+
+    Returns:
+        dict: Description.
+    """
     return {"type": "function", "function": {"name": "toolkit_pkg", "description": "智能 Python 包管理工具。list=列出关键依赖状态, check=检查单个模块, install=安装包(支持别名如pil→Pillow), ensure=自动安装所有缺失依赖。支持批量逗号分隔。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["list", "check", "install", "ensure"], "description": "操作类型"}, "packages": {"type": "string", "description": "[install] 包名，逗号分隔。支持别名：pil/pillow→Pillow, yaml→PyYAML, cv2→opencv-python"}, "module": {"type": "string", "description": "[check] 模块名，如 jieba, PIL, requests"}}, "required": ["action"]}}}

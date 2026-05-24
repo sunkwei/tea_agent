@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Tea Agent TUI -- Textual-based Terminal User Interface.
 2026-05-06 gen by claude, TUI entry point alongside CLI/GUI.
@@ -49,28 +48,48 @@ class _TUIAgentCore(AgentCore):
     def __init__(self, tui: App, config_path: str = None,
                  enable_think: bool = False, verbose: bool = False,
                  disable_summary: bool = False):
+        """
+        Init.
+
+        Args:
+            tui (App): Description.
+            config_path (str): Description.
+            enable_think (bool): Description.
+            verbose (bool): Description.
+            disable_summary (bool): Description.
+        """
         self._tui = tui
         self._tui_think = enable_think
         self._tui_verbose = verbose
         super().__init__(config_path=config_path, disable_summary=disable_summary)
 
-        # Apply CLI-style overrides
         self._cfg.enable_thinking = self._tui_think
         self.sess.enable_thinking = self._tui_think
         self._init_session()
 
-        # TUI 版本工具调用上限 1000（GUI/CLI 保留 config 默认 50）
         self.sess.max_iterations = 1000
     def _on_post_reply(self, ai_msg, used_tools, topic_id):
-        """TUI no-op: post-processing handled in _chat."""
+        """
+        TUI no-op: post-processing handled in _chat
+
+        Args:
+            ai_msg: Description.
+            used_tools: Description.
+            topic_id: Description.
+        """
         pass
 
     def _on_init_done(self):
-        """TUI no-op: welcome shown by App.on_mount."""
+        """TUI no-op: welcome shown by App.on_mount"""
         pass
 
     def _chat(self, user_msg: str):
-        """Send message and stream reply to TUI chat area."""
+        """
+        Send message and stream reply to TUI chat area
+
+        Args:
+            user_msg (str): Description.
+        """
         if not self.current_topic_id:
             self._auto_init_topic()
 
@@ -81,8 +100,13 @@ class _TUIAgentCore(AgentCore):
         think_started = False
 
         def on_stream(chunk: str):
+            """
+            On stream.
+
+            Args:
+                chunk (str): Description.
+            """
             nonlocal think_started
-            # [THINK]reasoning_content — 用【】包裹以区别于正文
             if chunk.startswith("[THINK]"):
                 text = chunk[7:]
                 if text:
@@ -98,7 +122,6 @@ class _TUIAgentCore(AgentCore):
                     think_started = False
                 return
 
-            # ── 工具调用始终显示工具名 ──
             if chunk.startswith("[TOOL_START:"):
                 tool_round[0] += 1
                 tool_name = chunk.split(":", 1)[1].rstrip("]")
@@ -134,6 +157,12 @@ class _TUIAgentCore(AgentCore):
                     tui.call_from_thread(tui._append_chat_inline, chunk)
 
         def on_status(status_msg: str):
+            """
+            On status.
+
+            Args:
+                status_msg (str): Description.
+            """
             if status_msg.startswith("!MAX_ITER:"):
                 remaining = status_msg.split(":", 2)[1] if ":" in status_msg else "?"
                 tui.call_from_thread(
@@ -159,11 +188,9 @@ class _TUIAgentCore(AgentCore):
             )
             return
 
-        # Flush remaining buffer and add newline
         tui.call_from_thread(tui._flush_stream_buffer)
         tui.call_from_thread(tui._append_chat, "")
 
-        # Post-chat pipeline (DB insert, token stats, summary)
         if ai_msg:
             self._post_chat_pipeline(
                 ai_msg=ai_msg,
@@ -173,7 +200,7 @@ class _TUIAgentCore(AgentCore):
             )
 
     def _auto_init_topic(self):
-        """Auto-create or load topic."""
+        """Auto-create or load topic"""
         topics = self.db.list_topics()
         if topics:
             tp = topics[0]
@@ -265,6 +292,15 @@ class TeaTUI(App):
 
     def __init__(self, config_path: str = None, enable_think: bool = False,
                  verbose: bool = False, disable_summary: bool = False):
+        """
+        Init.
+
+        Args:
+            config_path (str): Description.
+            enable_think (bool): Description.
+            verbose (bool): Description.
+            disable_summary (bool): Description.
+        """
         super().__init__()
         self._config_path = config_path
         self._cli_think = enable_think
@@ -277,7 +313,6 @@ class TeaTUI(App):
         self._stream_timer = None
         self._welcome_shown = False
 
-    # ---- Widgets ----
     class _SendTextArea(TextArea):
         """TextArea with Enter=send, Shift+Enter=newline."""
         BINDINGS = [
@@ -286,12 +321,19 @@ class TeaTUI(App):
         ]
 
         def action_send_from_input(self):
+            """Action send from input"""
             self.app._do_send()
 
         def action_insert_newline(self):
+            """Action insert newline"""
             self.insert("\n")
-    # ---- Compose ----
     def compose(self) -> ComposeResult:
+        """
+        Compose.
+
+        Returns:
+            ComposeResult: Description.
+        """
         with Container(id="header-bar"):
             yield Label("Tea Agent TUI", id="header-title")
             yield Label("", id="header-model")
@@ -303,13 +345,14 @@ class TeaTUI(App):
             yield Label("Initializing...", id="status-left")
             yield Label("Think:OFF Verbose:OFF", id="status-right")
 
-    # ---- Lifecycle ----
     def on_mount(self):
+        """On mount"""
         self._update_status("Initializing Tea Agent...")
         threading.Thread(target=self._init_agent, daemon=True).start()
         self.set_interval(0.5, self._check_agent_ready)
 
     def _init_agent(self):
+        """Init agent"""
         try:
             self.agent = _TUIAgentCore(
                 tui=self,
@@ -323,11 +366,13 @@ class TeaTUI(App):
             self.call_from_thread(self._show_error, f"Init failed: {e}")
 
     def _check_agent_ready(self):
+        """Check agent ready"""
         if self._agent_ready.is_set() and not self._welcome_shown:
             self._welcome_shown = True
             self._show_welcome()
 
     def _show_welcome(self):
+        """Show welcome"""
         cfg = self.agent._cfg
         model_name = cfg.main_model.model_name
         tool_count = len(self.agent.toolkit.func_map)
@@ -347,20 +392,32 @@ class TeaTUI(App):
         self.agent._auto_init_topic()
 
     def _show_error(self, msg: str):
+        """
+        Show error.
+
+        Args:
+            msg (str): Description.
+        """
         try:
             self._chat_write(f"[bold red]ERROR: {msg}[/]")
         except NoMatches:
             pass
         self._update_status(f"ERROR: {msg}")
 
-    # ---- Status bar ----
     def _update_status(self, msg: str):
+        """
+        Update status.
+
+        Args:
+            msg (str): Description.
+        """
         try:
             self.query_one("#status-left", Label).update(msg[:80])
         except NoMatches:
             pass
 
     def _update_status_right(self):
+        """Update status right"""
         try:
             self.query_one("#status-right", Label).update(
                 f"Think:{'ON' if self._cli_think else 'OFF'} "
@@ -369,24 +426,28 @@ class TeaTUI(App):
         except NoMatches:
             pass
 
-    # ---- Stream timer (flush every 500ms) ----
     def _start_stream_timer(self):
-        """Start a 500ms interval timer that flushes streaming buffer to chat."""
+        """Start a 500ms interval timer that flushes streaming buffer to chat"""
         self._stop_stream_timer()
         self._stream_timer = self.set_interval(0.5, self._flush_stream_buffer)
 
     def _stop_stream_timer(self):
-        """Stop the stream timer if running."""
+        """Stop the stream timer if running"""
         if self._stream_timer:
             self._stream_timer.stop()
             self._stream_timer = None
 
-    # ---- Input handling ----
     def on_key(self, event):
-        """Global key handler. Enter=send is handled by _SendTextArea bindings."""
+        """
+        Global key handler. Enter=send is handled by _SendTextArea bindings
+
+        Args:
+            event: Description.
+        """
         pass
 
     def _do_send(self):
+        """Do send"""
         if self._generating:
             return
         try:
@@ -407,6 +468,7 @@ class TeaTUI(App):
         self._start_stream_timer()
         self._update_status("Generating...")
         def run_chat():
+            """Run chat"""
             try:
                 self.agent._chat(text)
             except Exception as e:
@@ -423,8 +485,8 @@ class TeaTUI(App):
         threading.Thread(target=run_chat, daemon=True).start()
 
     def _on_chat_done(self):
-        """Called after chat generation completes (in main thread)."""
-        self._flush_stream_buffer()  # final flush of any remaining buffer
+        """Called after chat generation completes (in main thread)"""
+        self._flush_stream_buffer()
         self._stop_stream_timer()
         try:
             usage = self.agent.sess._last_usage
@@ -438,26 +500,42 @@ class TeaTUI(App):
         except Exception:
             self._update_status("Done")
 
-    # ---- Stream buffer operations ----
     def _append_chat(self, text: str):
-        """Append a complete line to chat area (thread-safe via call_from_thread)."""
+        """
+        Append a complete line to chat area (thread-safe via call_from_thread)
+
+        Args:
+            text (str): Description.
+        """
         try:
             self._chat_write(text)
         except NoMatches:
             pass
 
 
-    # ---- Stream buffer operations ----
 
     @staticmethod
     def _strip_markup(text: str) -> str:
-        """Remove Rich markup tags like [bold], [dim italic], etc."""
+        """
+        Remove Rich markup tags like [bold], [dim italic], etc
+
+        Args:
+            text (str): Description.
+
+        Returns:
+            str: Description.
+        """
         return re.sub(r'\[/?[^\]]*\]', '', text)
 
     def _chat_write(self, text: str) -> None:
-        """Write plain text to chat TextArea, auto-scroll to bottom.
+        """
+        Write plain text to chat TextArea, auto-scroll to bottom
 
-        Strips Rich markup tags. Think content uses 【】delimiters instead.
+        Args:
+            text (str): Description.
+
+        Returns:
+            None: Description.
         """
         chat = self.query_one("#chat-area", TextArea)
         plain = self._strip_markup(text)
@@ -468,11 +546,16 @@ class TeaTUI(App):
         chat.move_cursor((chat.text.count('\n'), 0))
 
     def _append_chat_inline(self, text: str):
-        """Accumulate text into streaming buffer; timer flushes it every 500ms."""
+        """
+        Accumulate text into streaming buffer; timer flushes it every 500ms
+
+        Args:
+            text (str): Description.
+        """
         self._stream_buffer += text
 
     def _flush_stream_buffer(self):
-        """Flush accumulated streaming buffer to chat (called by timer every 500ms)."""
+        """Flush accumulated streaming buffer to chat (called by timer every 500ms)"""
         if self._stream_buffer:
             try:
                 self._chat_write(self._stream_buffer)
@@ -480,8 +563,13 @@ class TeaTUI(App):
                 pass
             self._stream_buffer = ""
 
-    # ---- Commands ----
     def _handle_command(self, cmd: str):
+        """
+        Handle command.
+
+        Args:
+            cmd (str): Description.
+        """
         parts = cmd.split(None, 1)
         cmd_name = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
@@ -507,6 +595,7 @@ class TeaTUI(App):
             self._chat_write(f"[bold yellow]Unknown: {cmd_name} (/help for help)[/]")
 
     def _show_help(self):
+        """Show help"""
         self._chat_write("""
 [bold]Tea Agent TUI Help[/]
   /help              Show this help
@@ -526,6 +615,12 @@ class TeaTUI(App):
 """)
 
     def _cmd_set(self, arg: str):
+        """
+        Cmd set.
+
+        Args:
+            arg (str): Description.
+        """
         chat = self.query_one("#chat-area", TextArea)
         if "=" not in arg:
             self._chat_write("[bold yellow]Usage: /set think=on|off or /set verbose=on|off[/]")
@@ -551,6 +646,12 @@ class TeaTUI(App):
         else:
             self._chat_write(f"[bold yellow]Unknown setting: {k} (think, verbose)[/]")
     def _switch_topic(self, arg: str):
+        """
+        Switch topic.
+
+        Args:
+            arg (str): Description.
+        """
         chat = self.query_one("#chat-area", TextArea)
         tid = arg.strip()
         if not self.agent:
@@ -572,8 +673,8 @@ class TeaTUI(App):
         self.agent._load_topic_history_into_session(tp["topic_id"])
         self._chat_write(f"[bold]Switched to: {tp.get('title', tp['topic_id'][:8])}[/]")
 
-    # ---- Actions (bindings) ----
     def action_interrupt(self):
+        """Action interrupt"""
         if self._generating and self.agent and self.agent.sess:
             self.agent.sess.interrupt()
             self._append_chat("[bold yellow]Interrupted[/]")
@@ -581,6 +682,7 @@ class TeaTUI(App):
             self._update_status("Interrupted")
 
     def action_toggle_think(self):
+        """Action toggle think"""
         self._cli_think = not self._cli_think
         if self.agent:
             self.agent._tui_think = self._cli_think
@@ -590,6 +692,7 @@ class TeaTUI(App):
         self._append_chat(f"[bold]Think = {'ON' if self._cli_think else 'OFF'}[/]")
 
     def action_toggle_verbose(self):
+        """Action toggle verbose"""
         self._cli_verbose = not self._cli_verbose
         if self.agent:
             self.agent._tui_verbose = self._cli_verbose
@@ -597,6 +700,7 @@ class TeaTUI(App):
         self._append_chat(f"[bold]Verbose = {'ON' if self._cli_verbose else 'OFF'}[/]")
 
     def action_new_topic(self):
+        """Action new topic"""
         if not self.agent:
             return
         tid = self.agent.db.create_topic("TUI Session")
@@ -608,6 +712,7 @@ class TeaTUI(App):
         self._append_chat(f"[bold]New topic: {tid[:10]}...[/]")
 
     def action_list_topics(self):
+        """Action list topics"""
         if not self.agent:
             return
         chat = self.query_one("#chat-area", TextArea)
@@ -622,7 +727,7 @@ class TeaTUI(App):
 
 
 def main():
-    """Entry point for python -m tea_agent.tui."""
+    """Entry point for python -m tea_agent.tui"""
     parser = argparse.ArgumentParser(
         description="Tea Agent TUI -- Terminal AI Assistant",
         formatter_class=argparse.RawDescriptionHelpFormatter,

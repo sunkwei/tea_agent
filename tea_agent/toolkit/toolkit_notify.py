@@ -1,4 +1,3 @@
-# version: 1.0.0
 
 import logging
 
@@ -21,7 +20,6 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
     urgency_map = {"low": 0, "normal": 1, "critical": 2}
 
     if sys.platform == 'linux':
-        # 1) GI Notify（最原生）
         try:
             import gi
             gi.require_version('Notify', '0.7')
@@ -36,7 +34,6 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
         except Exception:
             pass
 
-        # 2) notify-send (D-Bus 标准通知，KDE Plasma 通知中心收录)
         try:
             subprocess.run(
                 ['notify-send', '--app-name=TeaAgent',
@@ -49,7 +46,6 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
         except Exception:
             pass
 
-        # 3) kdialog (KDE)
         try:
             subprocess.run(
                 ['kdialog', '--passivepopup', message, str(duration // 1000), '--title', title],
@@ -59,7 +55,6 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
         except Exception:
             pass
 
-        # 4) zenity (GNOME/通用)
         try:
             subprocess.run(
                 ['zenity', '--notification', '--text', f'{title}\n{message}',
@@ -70,7 +65,6 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
         except Exception:
             pass
 
-        # 5) wall 广播（最后手段）
         try:
             subprocess.run(['wall', f'[{title}] {message}'], timeout=3)
             return (0, f"通知已广播: {title}", "")
@@ -86,8 +80,6 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
             return (1, "", f"macOS 通知失败: {e}")
 
     elif sys.platform == 'win32':
-        # ── 系统通知区 Toast（主方案）──
-        # PowerShell + Windows.UI.Notifications，非阻塞通知栏弹出
         try:
             app_id = "TeaAgent.TeaAgent.TeaAgent"
             ps_register = f'''
@@ -120,5 +112,10 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
         return (1, "", f"不支持的操作系统: {sys.platform}")
 
 def meta_toolkit_notify() -> dict:
-    """Meta toolkit notify."""
+    """
+    Meta toolkit notify
+
+    Returns:
+        dict: Description.
+    """
     return {"type": "function", "function": {"name": "toolkit_notify", "description": "发送桌面系统通知。支持 Linux（GI Notify/notify-send）、macOS（osascript）、Windows（PowerShell Toast）。长时间任务完成后使用。", "parameters": {"type": "object", "properties": {"title": {"type": "string", "description": "通知标题，如 '任务完成'"}, "message": {"type": "string", "description": "通知正文，如 '截图已保存到 screenshot.png'"}, "urgency": {"type": "string", "enum": ["low", "normal", "critical"], "description": "紧急程度，默认 normal", "default": "normal"}, "duration": {"type": "integer", "description": "显示时长（毫秒），默认 5000", "default": 5000}}, "required": ["title", "message"]}}}

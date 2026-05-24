@@ -4,14 +4,6 @@ logger = logging.getLogger("toolkit")
 
 """toolkit_lunar — 公历/农历互转，含天干地支、生肖、节气"""
 
-# ============================================================
-# 农历数据表 1900-2100 (经典编码)
-# 编码格式 (与 lunar.js / zhdate 一致):
-#   bits 0-3:   闰月 (0=无闰月, 1-12=闰几月)
-#   bits 4-15:  12个月的日数标志 (bit4=正月, bit15=腊月; 1=30天, 0=29天)
-#   bit 16:     闰月天数 (1=30天, 0=29天)
-# 每月天数: 29 + ((info >> (4+i)) & 1), i=0..11
-# ============================================================
 _LUNAR_INFO = [
     0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,
     0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,
@@ -36,13 +28,12 @@ _LUNAR_INFO = [
     0x0d520,
 ]
 
-_LEAP_MONTH_MASK = 0xf          # bits 0-3
-_MONTH_BIT_BASE = 4             # month bits start at bit 4
-_LEAP_DAYS_BIT = 16             # leap month: 1=30d, 0=29d
+_LEAP_MONTH_MASK = 0xf
+_MONTH_BIT_BASE = 4
+_LEAP_DAYS_BIT = 16
 _BASE_YEAR = 1900
-_BASE_MONTH_DAYS = 29 * 12      # 348
+_BASE_MONTH_DAYS = 29 * 12
 
-# 天干地支 / 生肖 / 农历月日名称
 _TIANGAN = "甲乙丙丁戊己庚辛壬癸"
 _DIZHI = "子丑寅卯辰巳午未申酉戌亥"
 _SHENGXIAO = "鼠牛虎兔龙蛇马羊猴鸡狗猪"
@@ -53,7 +44,6 @@ _LUNAR_DAYS = {
     21:"廿一",22:"廿二",23:"廿三",24:"廿四",25:"廿五",26:"廿六",27:"廿七",28:"廿八",29:"廿九",30:"三十",
 }
 
-# 节气名
 _JIEQI_NAMES = [
     "小寒","大寒","立春","雨水","惊蛰","春分","清明","谷雨",
     "立夏","小满","芒种","夏至","小暑","大暑","立秋","处暑",
@@ -80,7 +70,14 @@ def _solar_days_in_month(y, m):
     return 31 if m in (1,3,5,7,8,10,12) else 30
 
 def _offset_from_base(y, m, d):
-    """从 1900-01-31 起的天数偏移 (农历基准日 = 1900 年春节)"""
+    """
+    从 1900-01-31 起的天数偏移 (农历基准日 = 1900 年春节)
+
+    Args:
+        y: Description.
+        m: Description.
+        d: Description.
+    """
     days = 0
     for yr in range(_BASE_YEAR, y):
         days += _solar_days_in_year(yr)
@@ -113,11 +110,22 @@ def _leap_days(info):
     return 30 if (info & (1 << _LEAP_DAYS_BIT)) else 29
 
 def _month_days(info, mi):
-    """农历月天数, mi=0..11 对应正月~腊月"""
+    """
+    农历月天数, mi=0..11 对应正月~腊月
+
+    Args:
+        info: Description.
+        mi: Description.
+    """
     return 30 if (info & (1 << (_MONTH_BIT_BASE + mi))) else 29
 
 def _lunar_year_total_days(info):
-    """农历年总天数"""
+    """
+    农历年总天数
+
+    Args:
+        info: Description.
+    """
     days = _BASE_MONTH_DAYS
     for i in range(12):
         if info & (1 << (_MONTH_BIT_BASE + i)):
@@ -127,10 +135,16 @@ def _lunar_year_total_days(info):
     return days
 
 def _solar_to_lunar(y, m, d):
-    """公历 → 农历 核心算法"""
+    """
+    公历 → 农历 核心算法
+
+    Args:
+        y: Description.
+        m: Description.
+        d: Description.
+    """
     offset = _offset_from_base(y, m, d)
 
-    # 找农历年
     idx = 0
     cumulative = 0
     for i in range(len(_LUNAR_INFO)):
@@ -147,7 +161,6 @@ def _solar_to_lunar(y, m, d):
     leap = _leap_month(info)
     remaining = offset - cumulative
 
-    # 在该农历年内定位月日
     is_leap = False
     lm = 0
     ld = 0
@@ -160,7 +173,6 @@ def _solar_to_lunar(y, m, d):
             break
         remaining -= md
 
-        # 闰月
         if leap and mi + 1 == leap:
             leap_d = _leap_days(info)
             if remaining < leap_d:
@@ -173,7 +185,6 @@ def _solar_to_lunar(y, m, d):
         lm = 12
         ld = remaining + 1
 
-    # 天干地支纪年 (农历年起算: 以立春为界，简化用正月初一)
     tg_idx = (lunar_year - 4) % 10
     dz_idx = (lunar_year - 4) % 12
     tgdz = _TIANGAN[tg_idx] + _DIZHI[dz_idx]
@@ -181,9 +192,6 @@ def _solar_to_lunar(y, m, d):
 
     return (lunar_year, lm, ld, is_leap, tgdz, zodiac)
 
-# ============================================================
-# 公开 API
-# ============================================================
 
 def toolkit_lunar(date_str: str = "", action: str = "solar_to_lunar") -> str:
     """公历 ↔ 农历转换工具。零外部依赖，覆盖 1900-2100 年。
@@ -237,7 +245,6 @@ def toolkit_lunar(date_str: str = "", action: str = "solar_to_lunar") -> str:
         }
 
         if action == "today":
-            # 简化版节气
             terms = _solar_terms(y)
             for idx, (tm, td) in enumerate(terms):
                 tdate = datetime.date(y, tm, td)
@@ -290,8 +297,13 @@ def toolkit_lunar(date_str: str = "", action: str = "solar_to_lunar") -> str:
     return json.dumps({"error": f"未知 action: {action}"}, ensure_ascii=False)
 
 def _solar_terms(y):
-    """简化节气计算 (1900-01-06 小寒起，每 15.2184 天一个节气)"""
-    base_days = 5  # 1900-01-06 → Jan 1 + 5
+    """
+    简化节气计算 (1900-01-06 小寒起，每 15.2184 天一个节气)
+
+    Args:
+        y: Description.
+    """
+    base_days = 5
     total_days = 0
     for yr in range(1900, y):
         total_days += _solar_days_in_year(yr)
@@ -311,7 +323,12 @@ def _solar_terms(y):
     return terms
 
 def meta_toolkit_lunar() -> dict:
-    """Meta toolkit lunar."""
+    """
+    Meta toolkit lunar
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

@@ -7,7 +7,7 @@ logger = logging.getLogger("toolkit")
 
 @functools.lru_cache(maxsize=1)
 def _cached_os_info():
-    """Internal: cached os info."""
+    """Internal: cached os info"""
     return {
         "system": platform.system(),
         "release": platform.release(),
@@ -18,7 +18,12 @@ def _cached_os_info():
     }
 
 def toolkit_os_info(refresh: bool = False):
-    """获取当前操作系统信息（进程级缓存）。agent 启动时调用一次即可。"""
+    """
+    获取当前操作系统信息（进程级缓存）。agent 启动时调用一次即可。
+
+    Args:
+        refresh (bool): Description.
+    """
     logger.info(f"toolkit_os_info called: refresh={refresh!r}")
 
     if refresh:
@@ -26,7 +31,12 @@ def toolkit_os_info(refresh: bool = False):
     return _cached_os_info()
 
 def meta_toolkit_os_info() -> dict:
-    """Meta toolkit os info."""
+    """
+    Meta toolkit os info
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

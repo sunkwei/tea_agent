@@ -10,7 +10,6 @@ logger = logging.getLogger("Storage.Summaries")
 class SummaryStore(StoreComponent):
     """摘要管理：话题摘要、三级历史（Level1/2/3）、语义摘要、工具链摘要。"""
 
-    # ── 话题摘要 (t_conv_summary) ──
 
     def get_topic_summary(self, topic_id: str) -> Optional[str]:
         """Get the topic summary.
@@ -54,7 +53,6 @@ class SummaryStore(StoreComponent):
         self.conn.commit()
         c.close()
 
-    # ── 三级历史 Level 2 ──
 
     def get_level2(self, topic_id: str) -> list:
         """Get the level2.
@@ -88,7 +86,6 @@ class SummaryStore(StoreComponent):
         self.conn.commit()
         c.close()
 
-    # ── 三级历史 Level 3: 语义摘要 ──
 
     def get_semantic_summary(self, topic_id: str) -> str:
         """Get the semantic summary.
@@ -148,7 +145,16 @@ class SummaryStore(StoreComponent):
                         files: list = None, max_level2: int = 30) -> list:
         """
         2026-05-20 gen by Tea Agent, L2扩容+分层压缩
-        将一轮对话推入 Level 2，最多保留 max_level2 轮，返回溢出条目（进入L3待处理）。
+
+        Args:
+            topic_id (str): Description.
+            user_msg (str): Description.
+            ai_msg (str): Description.
+            files (list): Description.
+            max_level2 (int): Description.
+
+        Returns:
+            list: Description.
         """
         level2 = self.get_level2(topic_id)
         entry = {"user": user_msg, "assistant": ai_msg}
@@ -160,10 +166,17 @@ class SummaryStore(StoreComponent):
         self.set_level2(topic_id, level2)
         return overflow
 
-    # ── L3 待处理缓冲（批处理：攒够 N 条再触发摘要）──
 
     def get_l3_pending(self, topic_id: str) -> list:
-        """获取该 topic 的 L3 待处理缓冲。"""
+        """
+        获取该 topic 的 L3 待处理缓冲。
+
+        Args:
+            topic_id (str): Description.
+
+        Returns:
+            list: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT l3_pending_json FROM topics WHERE topic_id = ?", (topic_id,))
         row = c.fetchone()
@@ -176,7 +189,13 @@ class SummaryStore(StoreComponent):
         return []
 
     def push_l3_pending(self, topic_id: str, items: list):
-        """将溢出条目追加到 L3 待处理缓冲。"""
+        """
+        将溢出条目追加到 L3 待处理缓冲。
+
+        Args:
+            topic_id (str): Description.
+            items (list): Description.
+        """
         existing = self.get_l3_pending(topic_id)
         existing.extend(items)
         c = self.conn.cursor()
@@ -188,12 +207,16 @@ class SummaryStore(StoreComponent):
         c.close()
 
     def clear_l3_pending(self, topic_id: str):
-        """清空 L3 待处理缓冲（摘要完成后调用）。"""
+        """
+        清空 L3 待处理缓冲（摘要完成后调用）。
+
+        Args:
+            topic_id (str): Description.
+        """
         c = self.conn.cursor()
         c.execute("UPDATE topics SET l3_pending_json = '' WHERE topic_id = ?", (topic_id,))
         self.conn.commit()
         c.close()
-    # ── 摘要标记 ──
 
     def mark_as_summarized(self, conversation_id: str):
         """Mark as summarized.

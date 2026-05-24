@@ -28,15 +28,24 @@ class ImageHandler:
 
     @property
     def _pending_images(self) -> list:
-        """Internal: pending images."""
+        """
+        Internal: pending images
+
+        Returns:
+            list: Description.
+        """
         return self.gui._pending_images
 
     @property
     def _image_cache(self) -> list:
-        """Internal: image cache."""
+        """
+        Internal: image cache
+
+        Returns:
+            list: Description.
+        """
         return self.gui._image_cache
 
-    # ── 选择图片 ────────────────────────
 
     def attach(self):
         """打开文件对话框选择图片，复制到 tmp/images/，存入 _pending_images"""
@@ -76,10 +85,14 @@ class ImageHandler:
         self._pending_images.clear()
         self.gui._img_label.config(text="")
 
-    # ── 放大查看 ────────────────────────
 
     def show_popup(self, idx: int):
-        """点击聊天图片时弹出放大查看窗口"""
+        """
+        点击聊天图片时弹出放大查看窗口
+
+        Args:
+            idx (int): Description.
+        """
         if idx < 0 or idx >= len(self._image_cache):
             return
         b64_data, mime = self._image_cache[idx]

@@ -22,15 +22,30 @@ class ToolComponent(SessionComponent):
     
     @property
     def name(self) -> str:
-        """Name."""
+        """
+        Name
+
+        Returns:
+            str: Description.
+        """
         return "tool"
     
     def initialize(self) -> None:
-        """工具组件无需特殊初始化"""
+        """
+        工具组件无需特殊初始化
+
+        Returns:
+            None: Description.
+        """
         pass
     
     def build_tools(self) -> List[Dict]:
-        """构建工具定义列表"""
+        """
+        构建工具定义列表
+
+        Returns:
+            List[Dict]: Description.
+        """
         tools = []
         if self.ctx.toolkit is None:
             logger.warning("toolkit 未设置，无法构建工具列表")
@@ -101,7 +116,15 @@ class ToolComponent(SessionComponent):
         return call_id, func_name, result_str
 
     def _record_tool_to_trace(self, func_name: str, success: bool, error_msg: str, start_time: float):
-        """记录工具调用到当前反思追踪"""
+        """
+        记录工具调用到当前反思追踪
+
+        Args:
+            func_name (str): Description.
+            success (bool): Description.
+            error_msg (str): Description.
+            start_time (float): Description.
+        """
         import time
         trace = self.ctx._current_trace
         if trace is None:
@@ -113,7 +136,13 @@ class ToolComponent(SessionComponent):
         reflection_mgr.record_tool_call(trace, func_name, success, error_msg, duration_ms)
 
     def add_tool_result(self, tool_call_id: str, content: str):
-        """添加工具执行结果到消息列表"""
+        """
+        添加工具执行结果到消息列表
+
+        Args:
+            tool_call_id (str): Description.
+            content (str): Description.
+        """
         self.ctx.messages.append({
             "role": "tool",
             "tool_call_id": tool_call_id,
@@ -121,7 +150,13 @@ class ToolComponent(SessionComponent):
         })
 
     def collect_tool_call_round(self, call_id: str, result_str: str):
-        """收集 tool result 到 rounds 收集器"""
+        """
+        收集 tool result 到 rounds 收集器
+
+        Args:
+            call_id (str): Description.
+            result_str (str): Description.
+        """
         self.ctx._rounds_collector.append({
             "role": "tool",
             "content": result_str,
@@ -129,7 +164,14 @@ class ToolComponent(SessionComponent):
         })
 
     def collect_assistant_tool_calls_round(self, content: str, tool_calls: list, reasoning_content: str = ""):
-        """收集 assistant tool_calls 到 rounds 收集器"""
+        """
+        收集 assistant tool_calls 到 rounds 收集器
+
+        Args:
+            content (str): Description.
+            tool_calls (list): Description.
+            reasoning_content (str): Description.
+        """
         tc_list_for_collector = [{
             "id": tc.id,
             "type": "function",
@@ -149,7 +191,13 @@ class ToolComponent(SessionComponent):
         self.ctx._rounds_collector.append(entry)
 
     def collect_assistant_text_round(self, content: str, reasoning_content: str = ""):
-        """收集最终 assistant 文本回答到 rounds 收集器"""
+        """
+        收集最终 assistant 文本回答到 rounds 收集器
+
+        Args:
+            content (str): Description.
+            reasoning_content (str): Description.
+        """
         entry = {
             "role": "assistant",
             "content": content,
@@ -159,21 +207,36 @@ class ToolComponent(SessionComponent):
         self.ctx._rounds_collector.append(entry)
 
     def collect_api_error_round(self, content: str):
-        """收集 API 错误到 rounds 收集器"""
+        """
+        收集 API 错误到 rounds 收集器
+
+        Args:
+            content (str): Description.
+        """
         self.ctx._rounds_collector.append({
             "role": "assistant",
             "content": content,
         })
 
     def collect_max_iterations_round(self, content: str):
-        """收集迭代超限警告到 rounds 收集器"""
+        """
+        收集迭代超限警告到 rounds 收集器
+
+        Args:
+            content (str): Description.
+        """
         self.ctx._rounds_collector.append({
             "role": "assistant",
             "content": content,
         })
 
     def collect_interruption_round(self, content: str):
-        """收集打断消息到 rounds 收集器"""
+        """
+        收集打断消息到 rounds 收集器
+
+        Args:
+            content (str): Description.
+        """
         self.ctx._rounds_collector.append({
             "role": "assistant",
             "content": content,
@@ -182,6 +245,12 @@ class ToolComponent(SessionComponent):
     def parse_tool_calls_from_stream(self, tool_calls_data: List[Dict]) -> list:
         """
         将流式解析中的工具调用数据转为有效的工具调用对象列表。
+
+        Args:
+            tool_calls_data (List[Dict]): Description.
+
+        Returns:
+            list: Description.
         """
         valid_tool_calls = []
         for tc_data in tool_calls_data:

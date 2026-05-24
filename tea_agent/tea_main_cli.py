@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Tea Agent CLI — 无 GUI 的命令行交互入口，适用于自动化测试和终端使用。
 
@@ -20,7 +19,6 @@ from typing import Optional, Dict, List, cast
 
 logger = logging.getLogger("tea_cli")
 
-# ====================== 包导入 ======================
 _parent_dir = str(Path(__file__).resolve().parent.parent)
 if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
@@ -35,7 +33,6 @@ class TeaCLI(AgentCore):
     """
 
     def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False):
-        # ── AgentCore 初始化：配置、目录、Storage/Toolkit、连接器、会话、MQTT ──
         """Initialize  .
         
         Args:
@@ -45,19 +42,13 @@ class TeaCLI(AgentCore):
         """
         super().__init__(debug=debug, config_path=config_path, disable_summary=disable_summary)
 
-        # ── CLI 特定：显示状态信息 ──
         print(self._init_session_info_str())
         print("💡 输入 /help 查看命令\n")
 
-        # ── 自动创建或加载主题 ──
         self._auto_init_topic()
 
-        # 自动启动潜意识引擎
         self._auto_start_subconscious()
 
-    # ------------------------------------------------------
-    # 主题管理
-    # ------------------------------------------------------
     def _auto_start_subconscious(self):
         """自动启动潜意识引擎（与 GUI 行为一致）。"""
         import logging
@@ -74,9 +65,8 @@ class TeaCLI(AgentCore):
                 logger.debug(f"Dream 已启动: {status}")
         except Exception as e:
             logger.debug(f"Dream 启动失败: {e}")
-        # 退出时自动停止
         def _stop_dream():
-            """Internal: stop dream."""
+            """Internal: stop dream"""
             try:
                 from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
                 toolkit_subconscious("stop")
@@ -85,7 +75,7 @@ class TeaCLI(AgentCore):
         atexit.register(_stop_dream)
 
     def _auto_init_topic(self):
-        """Internal: auto init topic."""
+        """Internal: auto init topic"""
         topics = self.db.list_topics()
         if topics:
             self.current_topic_id = topics[0]["topic_id"]
@@ -95,7 +85,12 @@ class TeaCLI(AgentCore):
             self._new_topic()
 
     def _new_topic(self) -> int:
-        """Internal: new topic."""
+        """
+        Internal: new topic
+
+        Returns:
+            int: Description.
+        """
         title = f"CLI {datetime.now().strftime('%m-%d %H:%M')}"
         tid = self.db.create_topic(title)
         self.current_topic_id = tid
@@ -103,7 +98,7 @@ class TeaCLI(AgentCore):
         return tid
 
     def _list_topics(self):
-        """Internal: list topics."""
+        """Internal: list topics"""
         topics = self.db.list_topics()
         if not topics:
             print("(无主题)")
@@ -137,7 +132,7 @@ class TeaCLI(AgentCore):
         self._load_topic_history_into_session(self.current_topic_id)
 
     def _show_topic_info(self):
-        """Internal: show topic info."""
+        """Internal: show topic info"""
         tp = self.db.get_topic(self.current_topic_id)
         ts = self.db.get_topic_tokens(self.current_topic_id)
         if tp:
@@ -148,11 +143,8 @@ class TeaCLI(AgentCore):
                 print(f"📊 Token: {t:,} (P:{ts.get('total_prompt_tokens', 0):,} "
                       f"C:{ts.get('total_completion_tokens', 0):,})")
 
-    # ------------------------------------------------------
-    # 记忆管理
-    # ------------------------------------------------------
     def _show_memories(self):
-        """Internal: show memories."""
+        """Internal: show memories"""
         memories = self.db.get_active_memories(limit=20)
         if not memories:
             print("(无活跃记忆)")
@@ -166,11 +158,13 @@ class TeaCLI(AgentCore):
             content = m.get("content", "")[:80]
             print(f"  [{m['id']}] {pri} [{cat}] {content}")
 
-    # ------------------------------------------------------
-    # 对话
-    # ------------------------------------------------------
     def chat(self, msg: str):
-        """发送消息并流式输出回复。"""
+        """
+        发送消息并流式输出回复。
+
+        Args:
+            msg (str): Description.
+        """
         if self.generating:
             print("⏳ 正在生成中，请等待或按 Ctrl+C 打断...")
             return
@@ -200,11 +194,11 @@ class TeaCLI(AgentCore):
                 print(f"\n⚠️  {display}")
                 print("⏳ 自动续命 10 轮...")
                 self.sess._continue_after_max = True
-                self.sess._extra_iterations += 10  # 追加 10 轮
+                self.sess._extra_iterations += 10
                 self.sess._max_iter_wait.set()
 
         def work():
-            """Work."""
+            """Work"""
             try:
                 ai_msg, used_tools = self.sess.chat_stream(
                     msg,
@@ -212,12 +206,10 @@ class TeaCLI(AgentCore):
                     topic_id=self.current_topic_id,
                     on_status=status_cb,
                 )
-                print()  # 换行
+                print()
 
-                # 标准后处理流水线（入库 → MQTT → Token → 摘要）
                 self._post_chat_pipeline(ai_msg, used_tools, msg, self.current_topic_id)
 
-                # Token 终端反馈
                 usage = self.sess._last_usage
                 if usage and usage.get("total_tokens", 0) > 0:
                     ts = self.db.get_topic_tokens(self.current_topic_id)
@@ -230,11 +222,8 @@ class TeaCLI(AgentCore):
 
         self._work_thread = threading.Thread(target=work, daemon=True)
         self._work_thread.start()
-        self._work_thread.join()  # CLI 模式下阻塞等待
+        self._work_thread.join()
 
-    # ------------------------------------------------------
-    # 回调
-    # ------------------------------------------------------
     def _on_tool_log(self, msg: str):
         """Internal: handle tool log event.
         
@@ -244,7 +233,12 @@ class TeaCLI(AgentCore):
         print(f"\n🔧 {msg}")
 
     def _suggest_new_topic_if_needed(self, topic_id: str):
-        """CLI 覆盖：终端输出新主题建议"""
+        """
+        CLI 覆盖：终端输出新主题建议
+
+        Args:
+            topic_id (str): Description.
+        """
         count = getattr(self, '_pending_topic_suggestion', 0)
         if count > 0:
             print(f"\n💡 本主题已切换 {count} 次讨论方向 (阈值={self.DRIFT_SUGGEST_THRESHOLD})，")
@@ -252,12 +246,15 @@ class TeaCLI(AgentCore):
             self._pending_topic_suggestion = 0
 
     def _on_summary_updated(self, topic_id: int, summary: str):
-        """摘要更新后终端无额外动作（已在 _post_chat_pipeline 中处理）。"""
+        """
+        摘要更新后终端无额外动作（已在 _post_chat_pipeline 中处理）。
+
+        Args:
+            topic_id (int): Description.
+            summary (str): Description.
+        """
         pass
 
-    # ------------------------------------------------------
-    # REPL
-    # ------------------------------------------------------
     def run(self):
         """运行交互式 REPL。"""
         print("输入消息开始对话，或输入命令（/help 查看帮助）\n")
@@ -277,12 +274,14 @@ class TeaCLI(AgentCore):
                 self.chat(raw)
 
     def run_oneshot(self, msg: str):
-        """单次对话（非交互模式）。"""
+        """
+        单次对话（非交互模式）。
+
+        Args:
+            msg (str): Description.
+        """
         self.chat(msg)
 
-    # ------------------------------------------------------
-    # 命令处理
-    # ------------------------------------------------------
     def _handle_command(self, raw: str):
         """Internal: handle command.
         
@@ -315,7 +314,7 @@ class TeaCLI(AgentCore):
             print(f"未知命令: {cmd}，输入 /help 查看帮助")
 
     def _cmd_help(self):
-        """Internal: cmd help."""
+        """Internal: cmd help"""
         print("""
 命令列表:
   /new          新建主题
@@ -331,7 +330,7 @@ Ctrl+C 可打断当前生成。
 """)
 
     def _cmd_status(self):
-        """Internal: cmd status."""
+        """Internal: cmd status"""
         tp = self.db.get_topic(self.current_topic_id)
         ts = self.db.get_topic_tokens(self.current_topic_id)
         print(f"📌 当前主题: [{self.current_topic_id}] {tp.get('title', '') if tp else '?'}")
@@ -342,9 +341,8 @@ Ctrl+C 可打断当前生成。
         mem_count = len(self.db.get_active_memories(50))
         print(f"🧠 活跃记忆: {mem_count} 条")
 
-# ====================== 入口 ======================
 def main():
-    """Main."""
+    """Main"""
     import argparse
 
     ap = argparse.ArgumentParser(description="Tea Agent CLI")

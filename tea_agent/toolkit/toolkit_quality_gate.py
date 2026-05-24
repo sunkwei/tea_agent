@@ -1,4 +1,3 @@
-# @2026-05-23 gen by tea_agent, 代码质量门禁工具
 """代码质量门禁。
 
 支持两种模式:
@@ -22,7 +21,22 @@ def toolkit_quality_gate(
     fail_fast: bool = True,
     output_format: str = "summary",
 ) -> dict:
-    """代码质量门禁 — 复杂度/LOC/注释覆盖 三重检查."""
+    """
+    代码质量门禁 — 复杂度/LOC/注释覆盖 三重检查
+
+    Args:
+        action (str): Description.
+        file_path (str): Description.
+        directory (str): Description.
+        max_cyclomatic (int): Description.
+        max_loc (int): Description.
+        min_doc_coverage (float): Description.
+        fail_fast (bool): Description.
+        output_format (str): Description.
+
+    Returns:
+        dict: Description.
+    """
     cwd = os.getcwd()
     if action == "gating":
         return _run_gating(cwd, file_path, max_cyclomatic, max_loc,
@@ -33,11 +47,20 @@ def toolkit_quality_gate(
     else:
         return {"ok": False, "error": f"未知 action: {action}，可用: gating, report"}
 
-# ── Helper: single-file gating ────────────────────────────────────
 
 def _run_gating(cwd, file_path, max_cyclomatic, max_loc,
                 min_doc_coverage, fail_fast):
-    """运行单文件门禁检查."""
+    """
+    运行单文件门禁检查
+
+    Args:
+        cwd: Description.
+        file_path: Description.
+        max_cyclomatic: Description.
+        max_loc: Description.
+        min_doc_coverage: Description.
+        fail_fast: Description.
+    """
     from tea_agent.lsp.ts_analyzer import compute_metrics, find_dead_code
 
     full = file_path if os.path.isabs(file_path) else os.path.join(cwd, file_path)
@@ -62,7 +85,6 @@ def _run_gating(cwd, file_path, max_cyclomatic, max_loc,
             if fail_fast:
                 break
 
-    # docstring coverage gate
     total_defined = metrics.get("functions", 0)
     with_docs = metrics.get("with_docstrings", 0)
     doc_ratio = with_docs / total_defined if total_defined > 0 else 1.0
@@ -71,7 +93,6 @@ def _run_gating(cwd, file_path, max_cyclomatic, max_loc,
         violations.append(_make_global_violation("doc_coverage",
             f"{doc_ratio:.0%}", f"{min_doc_coverage:.0%}", "medium"))
 
-    # dead code check
     dead = find_dead_code(cwd, full)
     if dead.get("dead_count", 0) > 0:
         real_dead = [d for d in dead.get("dead_functions", [])
@@ -91,7 +112,15 @@ def _run_gating(cwd, file_path, max_cyclomatic, max_loc,
 
 
 def _check_item_rules(m, kind, max_cyclomatic, max_loc):
-    """检查单项指标是否违规."""
+    """
+    检查单项指标是否违规
+
+    Args:
+        m: Description.
+        kind: Description.
+        max_cyclomatic: Description.
+        max_loc: Description.
+    """
     item_violations = []
     if m["cyclomatic"] > max_cyclomatic:
         item_violations.append({
@@ -113,7 +142,15 @@ def _check_item_rules(m, kind, max_cyclomatic, max_loc):
 
 
 def _make_global_violation(rule, actual, limit, severity):
-    """创建模块级违规条目."""
+    """
+    创建模块级违规条目
+
+    Args:
+        rule: Description.
+        actual: Description.
+        limit: Description.
+        severity: Description.
+    """
     return {
         "name": "⚠全局", "kind": "module", "line": 0,
         "violations": [{"rule": rule, "actual": actual,
@@ -121,11 +158,20 @@ def _make_global_violation(rule, actual, limit, severity):
     }
 
 
-# ── Helper: directory report ──────────────────────────────────────
 
 def _run_report(cwd, directory, max_cyclomatic, max_loc,
                 min_doc_coverage, output_format):
-    """运行目录质量报告."""
+    """
+    运行目录质量报告
+
+    Args:
+        cwd: Description.
+        directory: Description.
+        max_cyclomatic: Description.
+        max_loc: Description.
+        min_doc_coverage: Description.
+        output_format: Description.
+    """
     from tea_agent.lsp.ts_analyzer import compute_metrics
 
     target = directory or cwd
@@ -187,8 +233,13 @@ def _run_report(cwd, directory, max_cyclomatic, max_loc,
     }
 
 
-# ── Meta ──────────────────────────────────────────────────────────
 def meta_toolkit_quality_gate() -> dict:
+    """
+    Meta toolkit quality gate.
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

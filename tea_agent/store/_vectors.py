@@ -50,7 +50,12 @@ class VectorStore(StoreComponent):
         return None
 
     def get_all_embeddings(self) -> List[Dict]:
-        """Get the all embeddings."""
+        """
+        Get the all embeddings
+
+        Returns:
+            List[Dict]: Description.
+        """
         c = self.conn.cursor()
         c.execute('''
             SELECT v.conversation_id, v.embedding, c.user_msg, c.topic_id, t.title as topic_title
@@ -125,7 +130,6 @@ class VectorStore(StoreComponent):
         if not top:
             return []
 
-        # 批量补充 ai_msg
         c = self.conn.cursor()
         cids = tuple(s["conversation_id"] for s in top)
         placeholders = ",".join("?" for _ in cids)
@@ -168,7 +172,12 @@ class VectorStore(StoreComponent):
         return results
 
     def get_vector_count(self) -> int:
-        """Get the vector count."""
+        """
+        Get the vector count
+
+        Returns:
+            int: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT COUNT(*) FROM msg_vectors")
         count = c.fetchone()[0]

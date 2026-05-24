@@ -38,10 +38,9 @@ class ChatRenderer:
         """
         self.gui = gui
 
-    # ── 便捷属性 ────────────────────────
     @property
     def _show_mode(self):
-        """Internal: show mode."""
+        """Internal: show mode"""
         return self.gui._show_mode
     @_show_mode.setter
     def _show_mode(self, v):
@@ -52,9 +51,7 @@ class ChatRenderer:
         """
         self.gui._show_mode = v
 
-    # ── _html_render ──
     def _html_render(self, html: str):
-        # 0. 基础校验
         """Internal: html render.
         
         Args:
@@ -63,20 +60,16 @@ class ChatRenderer:
         if not html or not isinstance(html, str):
             print("[_html_render WARN] HTML 为空或非字符串，跳过渲染")
             return
-        # 1. 清洗控制字符（保留 \n \t）
         cleaned = _sanitize_html_control_chars(html)
         if cleaned != html:
             print(f"[_html_render WARN] 移除了 {len(html) - len(cleaned)} 个控制字符")
-        # 2. 结构校验
         ok, diag = _validate_html_structure(cleaned)
         if not ok:
             print(f"[_html_render WARN] HTML 结构异常: {diag}")
-            # 尝试自动修复
             fixed = cleaned.rstrip()
             if not fixed.endswith('</html>'):
                 fixed += '\n</html>'
                 print(f"[_html_render] 已自动补全 </html>")
-            # 修复后二次校验
             ok2, diag2 = _validate_html_structure(fixed)
             if ok2:
                 cleaned = fixed
@@ -84,12 +77,6 @@ class ChatRenderer:
             else:
                 print(f"[_html_render WARN] 修复后仍有问题: {diag2}，尝试继续渲染")
                 cleaned = fixed
-        # 3. 渲染
-        # print("=" * 60)
-        # print("HTML_BYTES_BEGIN")
-        # print(cleaned)
-        # print("HTML_BYTES_END")
-        # print("=" * 60)
         try:
             self.gui.chat_view.load_html(cleaned)
         except Exception as e:
@@ -97,11 +84,15 @@ class ChatRenderer:
             import traceback
             traceback.print_exc()
 
-    # ── _render_chat ──
     def _render_chat(self, streaming_think: str = "", streaming_text: str = ""):
-        """渲染 HtmlFrame。可选 streaming_think/streaming_text 用于流式输出期间实时显示。"""
+        """
+        渲染 HtmlFrame。可选 streaming_think/streaming_text 用于流式输出期间实时显示。
+
+        Args:
+            streaming_think (str): Description.
+            streaming_text (str): Description.
+        """
         msgs = self._filtered_messages()
-        # 流式内容临时追加到最后一条 AI 消息
         streaming = streaming_think + streaming_text
         if streaming:
             if msgs and msgs[-1]["role"] == "ai":
@@ -122,13 +113,10 @@ class ChatRenderer:
             self.gui.chat_view.config(state=tk.DISABLED)
             self.gui.chat_view.see(tk.END)
 
-    # ── _render_and_show_chat ──
     def _render_and_show_chat(self):
         """会话完成后渲染：历史轮次链接表 + 最新轮内容"""
         msgs = self._filtered_messages()
-        # [DIAG] removed: was printing len(msgs) on every render
 
-        # 分组为轮次
         rounds = self._group_into_rounds(msgs)
         self.gui._chat_rounds = rounds
         self.gui._current_round_view = None
@@ -136,18 +124,22 @@ class ChatRenderer:
         if not rounds:
             return
 
-        active_idx = len(rounds) - 1  # 最新轮
+        active_idx = len(rounds) - 1
         font_size = int(_DEFAULT_FONT_SIZE * self.gui._zoom_level / 100)
 
         def _prepare():
-            """Internal: prepare."""
+            """Internal: prepare"""
             return self._build_round_view_html(rounds, active_idx, font_size)
 
         def _on_done(html):
-            """会话完成后无条件切换到 HtmlFrame 渲染视图"""
-            # 2026-05-22 gen by deepseek-v4-pro: 会话完成无条件切换到 HtmlFrame
-            self.gui._raw_view.set(False)  # 重置 raw view 勾选状态
-            self.gui._show_mode = None     # 绕过 _switch_display 的相等检查，强制切换
+            """
+            会话完成后无条件切换到 HtmlFrame 渲染视图
+
+            Args:
+                html: Description.
+            """
+            self.gui._raw_view.set(False)
+            self.gui._show_mode = None
             if HAS_TKINTERWEB:
                 self._html_render(html)
                 self._switch_display("chat_view")
@@ -161,7 +153,7 @@ class ChatRenderer:
                 self._switch_display("chat_view")
         import threading
         def _worker():
-            """Internal: worker."""
+            """Internal: worker"""
             try:
                 result = _prepare()
                 self.gui.root.after(0, lambda r=result: _on_done(r))
@@ -169,9 +161,13 @@ class ChatRenderer:
                 self.gui.root.after(0, lambda: _on_done("<p>渲染错误</p>"))
         threading.Thread(target=_worker, daemon=True).start()
 
-    # ── _render_loaded_topic ──
     def _render_loaded_topic(self, render_items):
-        """主线程：清屏 + 逐条渲染准备好的数据"""
+        """
+        主线程：清屏 + 逐条渲染准备好的数据
+
+        Args:
+            render_items: Description.
+        """
         self.gui.clear_chat()
         for item in render_items:
             if len(item) == 3:
@@ -189,16 +185,20 @@ class ChatRenderer:
         self.gui.generating = False
         self.gui._update_status("✅ 就绪")
 
-    # ── _render_round_view ──
     def _render_round_view(self, round_idx):
-        """渲染指定轮次：后台线程生成 HTML，主线程加载"""
+        """
+        渲染指定轮次：后台线程生成 HTML，主线程加载
+
+        Args:
+            round_idx: Description.
+        """
         rounds = self.gui._chat_rounds
         if not rounds or round_idx < 0 or round_idx >= len(rounds):
             return
         font_size = int(_DEFAULT_FONT_SIZE * self.gui._zoom_level / 100)
 
         def _prepare():
-            """Internal: prepare."""
+            """Internal: prepare"""
             return self._build_round_view_html(rounds, round_idx, font_size)
 
         def _on_done(html):
@@ -208,7 +208,6 @@ class ChatRenderer:
                 html: Description.
             """
             if HAS_TKINTERWEB:
-            # [RENDER ROUND] removed: debug print
                 self._html_render(html)
                 self._switch_display("chat_view")
                 self.gui.root.after(200, self.scroll_to_bottom)
@@ -222,7 +221,7 @@ class ChatRenderer:
 
         import threading
         def _worker():
-            """Internal: worker."""
+            """Internal: worker"""
             try:
                 result = _prepare()
                 self.gui.root.after(0, lambda r=result: _on_done(r))
@@ -230,28 +229,36 @@ class ChatRenderer:
                 self.gui.root.after(0, lambda: _on_done("<p>渲染错误</p>"))
         threading.Thread(target=_worker, daemon=True).start()
 
-    # ── _render_topic_error ──
     def _render_topic_error(self, error_msg):
-        """主线程：加载失败回调"""
+        """
+        主线程：加载失败回调
+
+        Args:
+            error_msg: Description.
+        """
         self.gui.clear_chat()
         self.gui.log(f"❌ 加载历史失败: {error_msg}", "error")
         self.gui.generating = False
         self.gui._update_status("❌ 加载失败")
 
-    # ── _build_round_view_html ──
     def _build_round_view_html(self, rounds, active_idx, font_size):
-        """构建包含历史轮次链接表 + 当前轮内容的完整 HTML。"""
+        """
+        构建包含历史轮次链接表 + 当前轮内容的完整 HTML。
+
+        Args:
+            rounds: Description.
+            active_idx: Description.
+            font_size: Description.
+        """
         import markdown as _md_lib
         total = len(rounds)
         is_latest = (self.gui._current_round_view is None)
 
-        # -- 状态指示行 --
         if is_latest:
             status_line = '<p style="margin:0 0 6px; color:#1a73e8; font-weight:bold;">\U0001f4cc 当前：最新轮（第' + str(total) + '轮 / 共' + str(total) + '轮）</p>'
         else:
             status_line = '<p style="margin:0 0 6px; color:#e67e22; font-weight:bold;">\U0001f4cc 当前查看：第' + str(active_idx + 1) + '轮 / 共' + str(total) + '轮 | <a href="tea://latest">\u2190 返回最新轮</a></p>'
 
-        # -- 历史轮次表格 --
         max_rows = 12
         shown = []
         if total <= max_rows:
@@ -282,7 +289,6 @@ class ChatRenderer:
 
         table_html = '<div style="background:#eff6ff; border:2px solid #93c5fd; border-radius:6px; padding:8px 12px; margin-bottom:14px;">\n' + status_line + '\n<p style="margin:4px 0 8px; color:#666; font-size:0.9em;">\U0001f4cb 历史轮次（共' + str(total) + '轮）</p>\n<table style="margin:0; font-size:0.9em;">\n<thead><tr><th style="width:70px;">轮次</th><th>操作</th></tr></thead>\n<tbody>\n' + '\n'.join(rows_html) + '\n</tbody>\n</table></div>'
 
-        # -- 当前轮内容 --
         round_msgs = rounds[active_idx]
         self.gui._image_cache.clear()
         round_md = _chat_to_markdown(round_msgs, image_cache=self.gui._image_cache)
@@ -296,7 +302,6 @@ class ChatRenderer:
             full_html = round_md
         return full_html
 
-    # ── _switch_display ──
     def _switch_display(self, mode: str):
         """Internal: switch display.
         
@@ -314,10 +319,14 @@ class ChatRenderer:
             self.gui.chat_view.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
             self.gui.root.after(400, self.scroll_to_bottom)
 
-    # ── _show_loading ──
     def _show_loading(self, text: str = "正在加载历史记录", progress: str = None):
-        """在 HtmlFrame 中显示加载动画（spinner + 文字），用于异步加载期间的过渡。
-        progress 非空时显示为进度文本（如 '第 5 / 20 条'），常用于后台线程实时更新。"""
+        """
+        在 HtmlFrame 中显示加载动画（spinner + 文字），用于异步加载期间的过渡。
+
+        Args:
+            text (str): Description.
+            progress (str): Description.
+        """
         if not HAS_TKINTERWEB:
             self._switch_display("console")
             msg = f"⏳ {text}..."
@@ -347,27 +356,22 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 <div class="text">{html_mod.escape(display_text)}<span class="dots"></span></div>
 </div></body></html>'''
 
-        # 切换到 chat_view 但不修改 chat_messages
         if self.gui._show_mode != "chat_view":
             self.gui.console.pack_forget()
             self.gui.chat_view.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
             self.gui._show_mode = "chat_view"
         self._html_render(loading_html)
 
-    # ── _poll_loading_progress ──
     def _poll_loading_progress(self):
-        """定时器（50ms）：从 _progress_queue 逐条出队更新 HtmlFrame 进度；
-        队列排空后若后台线程已完成，触发最终渲染。"""
+        """定时器（50ms）：从 _progress_queue 逐条出队更新 HtmlFrame 进度；"""
         if not HAS_TKINTERWEB:
             return
         if self.gui._progress_queue:
-            progress = self.gui._progress_queue.pop(0)  # FIFO
+            progress = self.gui._progress_queue.pop(0)
             self._show_loading("正在加载历史记录", f"{progress[0]}/{progress[1]}")
             self.gui.root.after(50, self._poll_loading_progress)
             return
-        # 队列已空，检查后台线程是否完成
         if getattr(self.gui, '_loading_done', False):
-            # 最终渲染
             if hasattr(self.gui, '_pending_error'):
                 self._render_topic_error(self.gui._pending_error)
                 delattr(self.gui, '_pending_error')
@@ -375,24 +379,25 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 self._render_loaded_topic(self.gui._pending_render)
                 delattr(self.gui, '_pending_render')
             self.gui._loading_done = False
-            self.gui.generating = False  # loading完成，释放send()锁
+            self.gui.generating = False
             return
-        # 线程还在跑，继续等待
         self.gui.root.after(50, self._poll_loading_progress)
 
-    # ── scroll_to_bottom ──
     def scroll_to_bottom(self):
-        """Scroll to bottom."""
+        """Scroll to bottom"""
         self.gui.chat_view.yview_moveto(1.0)
 
-    # ── _filtered_messages ──
     def _filtered_messages(self):
         """返回用于 HtmlFrame 渲染的消息列表（始终包含工具轮）。"""
         return list(self.gui.chat_messages)
 
-    # ── _group_into_rounds ──
     def _group_into_rounds(self, msgs):
-        """将消息列表按 user 角色切分为轮次列表。每轮从 user 开始。"""
+        """
+        将消息列表按 user 角色切分为轮次列表。每轮从 user 开始。
+
+        Args:
+            msgs: Description.
+        """
         rounds = []
         current = []
         for msg in msgs:
@@ -406,7 +411,6 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             rounds.append(current)
         return rounds
 
-    # ── _toggle_raw_view ──
     def _toggle_raw_view(self):
         """Check 按钮回调：选中→ScrolledText 原始视图，取消→HtmlFrame 渲染视图"""
         if self.gui._raw_view.get():
@@ -415,20 +419,16 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self._switch_display("chat_view")
             self.gui.root.after(100, self.scroll_to_bottom)
 
-    # ── _show_raw_check_btn ──
     def _show_raw_check_btn(self):
         """显示纯文本视图切换按钮（仅会话完成后）"""
         self.gui._raw_check_btn.pack(side=tk.LEFT, padx=8)
 
-    # ── _hide_raw_check_btn ──
     def _hide_raw_check_btn(self):
         """隐藏纯文本视图切换按钮（会话进行中）"""
         self.gui._raw_check_btn.pack_forget()
 
-    # ── _flush_stream_to_messages ──
     def _flush_stream_to_messages(self):
-        # 先刷新控制台剩余内容（确保最后一批 pending 文本显示完毕）
-        """Internal: flush stream to messages."""
+        """Internal: flush stream to messages"""
         if self.gui._pending_console_text:
             self.gui.console.config(state=tk.NORMAL)
             for text, tag in self.gui._pending_console_text:
@@ -446,10 +446,8 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 self.gui.chat_messages.append({"role": "ai", "content": self.gui._stream_buffer, "timestamp": self.gui._now_ts()})
             self.gui._stream_buffer = ""
 
-    # ── _flush_think_buffer_to_messages ──
     def _flush_think_buffer_to_messages(self):
-        """将当前 think 缓冲刷新为独立的思考消息。
-        工具调用每轮结束后调用，确保思考过程与工具轮对应。"""
+        """将当前 think 缓冲刷新为独立的思考消息。"""
         if self.gui._think_buffer:
             think_text = self.gui._think_buffer.strip()
             self.gui.chat_messages.append({

@@ -1,18 +1,26 @@
-# @2026-04-29 gen by deepseek-v4-pro, 合并5个memory工具为一个统一入口
-# version: 1.0.0
 
 import logging
 
 logger = logging.getLogger("toolkit")
 
-# ── Priority labels ─────────────────────────────────────────────
 PRI = {0: "CRITICAL", 1: "HIGH", 2: "MEDIUM", 3: "LOW"}
 VALID_CATEGORIES = ("instruction", "preference", "fact", "reminder", "general")
 
 
-# ── Action handlers ─────────────────────────────────────────────
 
 def _m_add(storage, content, category, priority, importance, expires_at, tags):
+    """
+    M add.
+
+    Args:
+        storage: Description.
+        content: Description.
+        category: Description.
+        priority: Description.
+        importance: Description.
+        expires_at: Description.
+        tags: Description.
+    """
     if not content:
         return "❌ add 操作需要 content 参数"
     if priority < 0 or priority > 3:
@@ -33,6 +41,13 @@ def _m_add(storage, content, category, priority, importance, expires_at, tags):
 
 
 def _m_list(storage, limit):
+    """
+    M list.
+
+    Args:
+        storage: Description.
+        limit: Description.
+    """
     try:
         memories = storage.get_active_memories(limit=limit)
         if not memories:
@@ -54,6 +69,17 @@ def _m_list(storage, limit):
 
 
 def _m_search(storage, query, category, tags, min_importance, limit):
+    """
+    M search.
+
+    Args:
+        storage: Description.
+        query: Description.
+        category: Description.
+        tags: Description.
+        min_importance: Description.
+        limit: Description.
+    """
     try:
         tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
         results = storage.search_memories(query=query, category=category, tags=tag_list,
@@ -72,6 +98,14 @@ def _m_search(storage, query, category, tags, min_importance, limit):
 
 
 def _m_forget(storage, mid, hard):
+    """
+    M forget.
+
+    Args:
+        storage: Description.
+        mid: Description.
+        hard: Description.
+    """
     if not mid:
         return "❌ forget 操作需要 id 参数"
     try:
@@ -86,6 +120,14 @@ def _m_forget(storage, mid, hard):
 
 
 def _m_extract(storage, topic_id, max_chars):
+    """
+    M extract.
+
+    Args:
+        storage: Description.
+        topic_id: Description.
+        max_chars: Description.
+    """
     try:
         unsummarized = storage.get_unsummarized_conversations(topic_id) if isinstance(topic_id, str) and topic_id else []
         if not unsummarized:
@@ -116,13 +158,21 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
     """
     统一长期记忆管理入口。根据 action 执行不同操作：
 
-    - "add": 添加一条记忆。需 content。可选 category/priority/importance/expires_at/tags。
-      分类: instruction(有效指令)/preference(用户偏好)/fact(技术事实)/reminder(提醒)/general(一般)
-      优先级: 0=CRITICAL, 1=HIGH, 2=MEDIUM, 3=LOW。重要度: 1-5。
-    - "list": 列出当前活跃记忆。可选 limit（默认20）。
-    - "search": 搜索记忆。可选 query/category/tags/min_importance/limit。
-    - "forget": 删除/失效记忆。需 id。可选 hard（true=硬删除, false=软删除）。
-    - "extract": 从对话中提取待分析文本。可选 topic_id/max_chars。
+    Args:
+        action (str): Description.
+        content (str): Description.
+        category (str): Description.
+        priority (int): Description.
+        importance (int): Description.
+        expires_at (str): Description.
+        tags (str): Description.
+        id (int): Description.
+        hard (bool): Description.
+        query (str): Description.
+        min_importance (int): Description.
+        limit (int): Description.
+        topic_id (int): Description.
+        max_chars (int): Description.
     """
     logger.info(f"toolkit_memory called: action={action!r}, content={repr(content)[:80]}, category={category!r}, priority={priority!r}, importance={importance!r}, expires_at={expires_at!r}, tags={tags!r}, id={id!r}, hard={hard!r}, query={repr(query)[:80]}, min_importance={min_importance!r}, limit={limit!r}, topic_id={topic_id!r}, max_chars={max_chars!r}")
 
@@ -153,7 +203,12 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
         return f"❌ 未知 action: '{action}'，可选: add/list/search/forget/extract"
     return handler()
 def meta_toolkit_memory() -> dict:
-    """Meta toolkit memory."""
+    """
+    Meta toolkit memory
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

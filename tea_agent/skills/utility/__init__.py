@@ -8,7 +8,7 @@ SKILL_MANIFEST = {
         "toolkit_date_diff",
         "toolkit_lunar",
     ],
-    "activation": "auto",  # 虽然标记 auto，但初始化时默认激活
+    "activation": "auto",
     "dependencies": [],
     "trigger_words": [
         "时间", "日期", "几号", "星期", "天数",

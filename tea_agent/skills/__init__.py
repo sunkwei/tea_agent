@@ -24,11 +24,10 @@ from typing import Dict, List, Set, Optional, Tuple
 
 logger = logging.getLogger("SkillManager")
 
-# 始终激活的核心工具（不归属于任何 Skill，永远可用）。save+reload+exec = 自助进化最小完备基
 CORE_TOOLS = {
-    "toolkit_skill",  # Skill 管理工具必须始终可用
-    "toolkit_save",   # 统一版本管理(save/reload/rollback/versions)
-    "toolkit_exec",   # 自助进化必需：save 创建工具需 exec 执行 Python
+    "toolkit_skill",
+    "toolkit_save",
+    "toolkit_exec",
 }
 
 class Skill:
@@ -46,14 +45,19 @@ class Skill:
         self.description: str = manifest.get("description", "")
         self.tools: List[str] = manifest.get("tools", [])
         self.prompt_inject: str = manifest.get("prompt_inject", "")
-        self.activation: str = manifest.get("activation", "auto")  # auto | manual
+        self.activation: str = manifest.get("activation", "auto")
         self.dependencies: List[str] = manifest.get("dependencies", [])
         self.trigger_words: List[str] = manifest.get("trigger_words", [])
         self.source_dir: str = source_dir
         self.active: bool = False
 
     def to_dict(self) -> dict:
-        """To dict."""
+        """
+        To dict
+
+        Returns:
+            dict: Description.
+        """
         return {
             "name": self.name,
             "version": self.version,
@@ -81,7 +85,12 @@ class SkillManager:
 
     @classmethod
     def get_instance(cls) -> "SkillManager":
-        """Get the instance."""
+        """
+        Get the instance
+
+        Returns:
+            'SkillManager': Description.
+        """
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
@@ -92,24 +101,21 @@ class SkillManager:
         cls._instance = None
 
     def __init__(self):
-        """Initialize  ."""
+        """Initialize"""
         if SkillManager._instance is not None:
-            return  # 单例
+            return
         SkillManager._instance = self
 
         self.skills: Dict[str, Skill] = {}
         self._discovered = False
 
-        # 内置 Skill 目录
         self._builtin_dir = str(Path(__file__).parent)
-        # 用户 Skill 目录（从 config 读取，支持多 agent 隔离）
         try:
             from tea_agent.config import get_config
             self._user_dir = get_config().paths.skills_dir_abs
         except Exception:
             self._user_dir = str(Path.home() / ".tea_agent" / "skills")
 
-    # ─── 发现与加载 ─────────────────────────────────
 
     def discover_skills(self, force: bool = False) -> List[str]:
         """
@@ -126,10 +132,8 @@ class SkillManager:
 
         self.skills.clear()
 
-        # 1. 内置 Skill
         self._scan_directory(self._builtin_dir, source="builtin")
 
-        # 2. 用户自定义 Skill
         if os.path.isdir(self._user_dir):
             self._scan_directory(self._user_dir, source="user")
 
@@ -138,7 +142,13 @@ class SkillManager:
         return list(self.skills.keys())
 
     def _scan_directory(self, dirpath: str, source: str):
-        """扫描目录下的所有 Skill 子目录"""
+        """
+        扫描目录下的所有 Skill 子目录
+
+        Args:
+            dirpath (str): Description.
+            source (str): Description.
+        """
         if not os.path.isdir(dirpath):
             return
 
@@ -156,7 +166,6 @@ class SkillManager:
                 if manifest and manifest.get("name"):
                     name = manifest["name"]
                     skill = Skill(manifest, full_path)
-                    # 用户 Skill 覆盖同名的内置 Skill
                     if name in self.skills and source == "user":
                         logger.info(f"用户 Skill '{name}' 覆盖内置版本")
                     self.skills[name] = skill
@@ -166,7 +175,15 @@ class SkillManager:
 
     @staticmethod
     def _load_manifest(init_file: str) -> Optional[dict]:
-        """从 __init__.py 中安全加载 SKILL_MANIFEST 字典"""
+        """
+        从 __init__.py 中安全加载 SKILL_MANIFEST 字典
+
+        Args:
+            init_file (str): Description.
+
+        Returns:
+            Optional[dict]: Description.
+        """
         import importlib.util
         spec = importlib.util.spec_from_file_location("skill_manifest", init_file)
         if spec is None or spec.loader is None:
@@ -175,10 +192,17 @@ class SkillManager:
         spec.loader.exec_module(mod)
         return getattr(mod, "SKILL_MANIFEST", None)
 
-    # ─── 激活/停用 ─────────────────────────────────
 
     def activate_skill(self, name: str) -> bool:
-        """激活指定 Skill"""
+        """
+        激活指定 Skill
+
+        Args:
+            name (str): Description.
+
+        Returns:
+            bool: Description.
+        """
         if name not in self.skills:
             logger.warning(f"Skill '{name}' 不存在")
             return False
@@ -187,7 +211,15 @@ class SkillManager:
         return True
 
     def deactivate_skill(self, name: str) -> bool:
-        """停用指定 Skill"""
+        """
+        停用指定 Skill
+
+        Args:
+            name (str): Description.
+
+        Returns:
+            bool: Description.
+        """
         if name not in self.skills:
             return False
         self.skills[name].active = False
@@ -195,7 +227,15 @@ class SkillManager:
         return True
 
     def toggle_skill(self, name: str) -> Optional[bool]:
-        """切换 Skill 激活状态，返回新状态"""
+        """
+        切换 Skill 激活状态，返回新状态
+
+        Args:
+            name (str): Description.
+
+        Returns:
+            Optional[bool]: Description.
+        """
         if name not in self.skills:
             return None
         self.skills[name].active = not self.skills[name].active
@@ -213,27 +253,36 @@ class SkillManager:
             s.active = False
         logger.info("所有 Skill 已停用")
 
-    # ─── 工具过滤 ──────────────────────────────────
 
     def is_tool_active(self, tool_name: str) -> bool:
-        """检查工具是否当前激活"""
-        # 核心工具始终激活
+        """
+        检查工具是否当前激活
+
+        Args:
+            tool_name (str): Description.
+
+        Returns:
+            bool: Description.
+        """
         if tool_name in CORE_TOOLS:
             return True
 
-        # 检查是否有激活的 Skill 包含此工具
         for skill in self.skills.values():
             if skill.active and tool_name in skill.tools:
                 return True
 
-        # 孤儿工具（未在任何 Skill 中定义，如用户工具箱 _my 工具）始终激活
         for skill in self.skills.values():
             if tool_name in skill.tools:
-                return False  # 在某个 Skill 中但该 Skill 未激活 → 不激活
-        return True  # 不在任何 Skill 中 → 孤儿工具，始终激活
+                return False
+        return True
 
     def get_active_tool_names(self) -> Set[str]:
-        """获取当前激活的所有工具名称"""
+        """
+        获取当前激活的所有工具名称
+
+        Returns:
+            Set[str]: Description.
+        """
         active = set(CORE_TOOLS)
         for skill in self.skills.values():
             if skill.active:
@@ -252,7 +301,6 @@ class SkillManager:
         """
         active_names = self.get_active_tool_names()
 
-        # 收集所有 Skill 管理的工具名称（用于识别孤儿工具）
         all_skill_tools: Set[str] = set()
         for skill in self.skills.values():
             all_skill_tools.update(skill.tools)
@@ -262,8 +310,6 @@ class SkillManager:
             if name in all_meta_map:
                 result.append(all_meta_map[name])
 
-        # 自动纳入未被任何 Skill 管理的"孤儿工具"：
-        # 用户工具箱工具（如 toolkit_xxx_my）不属于任何 Skill，但应始终可用
         orphan_count = 0
         for name in sorted(all_meta_map.keys()):
             if name not in active_names and name not in all_skill_tools:
@@ -274,7 +320,6 @@ class SkillManager:
 
         return result
 
-    # ─── Prompt 构建 ───────────────────────────────
 
     def get_active_prompt(self) -> str:
         """
@@ -294,7 +339,12 @@ class SkillManager:
         return "\n\n".join(fragments)
 
     def get_skill_summary(self) -> str:
-        """生成激活 Skill 的简短摘要（用于 system prompt 头部）"""
+        """
+        生成激活 Skill 的简短摘要（用于 system prompt 头部）
+
+        Returns:
+            str: Description.
+        """
         active_skills = [s for s in self.skills.values() if s.active]
         if not active_skills:
             return ""
@@ -309,7 +359,6 @@ class SkillManager:
         summary = "当前激活的技能 (Skill):\n" + "\n".join(lines)
         return summary
 
-    # ─── 自动激活 ──────────────────────────────────
 
     def auto_activate(self, user_input: str) -> List[str]:
         """
@@ -333,9 +382,8 @@ class SkillManager:
             if skill.activation != "auto":
                 continue
             if skill.active:
-                continue  # 已激活
+                continue
 
-            # 检查触发词
             for tw in skill.trigger_words:
                 if tw.lower() in user_lower:
                     skill.active = True
@@ -347,10 +395,14 @@ class SkillManager:
             logger.info(f"自动激活了 {len(activated)} 个 Skill: {activated}")
         return activated
 
-    # ─── 查询 ─────────────────────────────────────
 
     def list_skills(self) -> List[dict]:
-        """列出所有 Skill（含状态）"""
+        """
+        列出所有 Skill（含状态）
+
+        Returns:
+            List[dict]: Description.
+        """
         return [s.to_dict() for s in self.skills.values()]
 
     def get_skill(self, name: str) -> Optional[Skill]:
@@ -362,11 +414,21 @@ class SkillManager:
         return self.skills.get(name)
 
     def get_active_skill_names(self) -> List[str]:
-        """Get the active skill names."""
+        """
+        Get the active skill names
+
+        Returns:
+            List[str]: Description.
+        """
         return [s.name for s in self.skills.values() if s.active]
 
     def get_status(self) -> dict:
-        """获取当前 Skill 系统状态"""
+        """
+        获取当前 Skill 系统状态
+
+        Returns:
+            dict: Description.
+        """
         total = len(self.skills)
         active = len(self.get_active_skill_names())
         return {

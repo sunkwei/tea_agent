@@ -1,4 +1,3 @@
-# @2026-04-30 gen by deepseek-v4-pro, toolkit_prompt_evolve: Agent 自主进化系统提示词
 import logging
 
 logger = logging.getLogger("toolkit")
@@ -40,7 +39,6 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
         )
 
     elif action == "evolve":
-        # 获取最近的反思建议
         reflection_mgr = getattr(session, 'reflection_manager', None)
         suggestion = None
         if reflection_mgr:
@@ -95,7 +93,12 @@ def toolkit_prompt_evolve(action: str = "current", version: str = "", content: s
         return f"❌ 未知操作: {action}。支持: current, evolve, list, rollback, set, stats"
 
 def meta_toolkit_prompt_evolve() -> dict:
-    """Meta toolkit prompt evolve."""
+    """
+    Meta toolkit prompt evolve
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

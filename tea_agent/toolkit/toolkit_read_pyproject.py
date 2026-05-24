@@ -19,13 +19,11 @@ def toolkit_read_pyproject(path: str = ".") -> dict:
         return {"ok": False, "error": f"未找到 pyproject.toml: {pyproject_path}"}
     
     try:
-        # 1. 标准库 (Python 3.11+)
         if sys.version_info >= (3, 11):
             import tomllib
             with open(pyproject_path, "rb") as f:
                 data = tomllib.load(f)
         else:
-            # 2. 第三方回退
             loaded = False
             for lib_name in ["tomli", "toml"]:
                 try:
@@ -59,7 +57,12 @@ def toolkit_read_pyproject(path: str = ".") -> dict:
         return {"ok": False, "error": str(e)}
 
 def meta_toolkit_read_pyproject() -> dict:
-    """Meta toolkit read pyproject."""
+    """
+    Meta toolkit read pyproject
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

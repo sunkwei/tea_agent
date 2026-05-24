@@ -1,4 +1,3 @@
-# @2026-05-23 gen by tea_agent, 静态代码分析工具: metrics + dead_code + summary
 """静态代码分析工具。
 
 支持三种分析模式:
@@ -12,11 +11,15 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
-# ── Meta ──────────────────────────────────────────────────────────
 
 
 def meta_toolkit_static() -> dict:
-    """Meta for tool loader."""
+    """
+    Meta for tool loader
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {
@@ -55,7 +58,6 @@ def meta_toolkit_static() -> dict:
     }
 
 
-# ── Impl ──────────────────────────────────────────────────────────
 
 
 def toolkit_static(
@@ -100,12 +102,20 @@ def toolkit_static(
 
 
 def _summary(project_root: str, threshold: int = 10) -> dict:
-    """目录级聚合分析：扫描所有 .py 文件，汇总度量。"""
+    """
+    目录级聚合分析：扫描所有 .py 文件，汇总度量。
+
+    Args:
+        project_root (str): Description.
+        threshold (int): Description.
+
+    Returns:
+        dict: Description.
+    """
     from pathlib import Path
     from tea_agent.lsp.ts_analyzer import compute_metrics
 
     py_files = sorted(Path(project_root).rglob("*.py"))
-    # 排除常见非源码目录
     exclude_dirs = {"__pycache__", ".git", ".tea_agent_run", "build", "dist",
                     ".venv", "venv", "node_modules", ".tox", "egg-info"}
     py_files = [f for f in py_files
@@ -119,7 +129,7 @@ def _summary(project_root: str, threshold: int = 10) -> dict:
     total_loc = 0
     total_fns = 0
     total_methods = 0
-    high_complexity = []  # files with funcs above threshold
+    high_complexity = []
 
     for pf in py_files:
         rel = str(pf.relative_to(project_root))
@@ -137,7 +147,6 @@ def _summary(project_root: str, threshold: int = 10) -> dict:
         total_fns += m.get("functions", 0)
         total_methods += m.get("methods", 0)
 
-        # Find high-complexity items
         alerts = []
         for item in m.get("items", []):
             if item["metrics"]["cyclomatic"] > threshold:
@@ -165,7 +174,6 @@ def _summary(project_root: str, threshold: int = 10) -> dict:
             "doc_coverage": m.get("docstring_coverage", "N/A"),
         })
 
-    # Sort by max cyclomatic descending
     all_files.sort(key=lambda x: x.get("max_cyclomatic", 0), reverse=True)
 
     return {
@@ -177,8 +185,8 @@ def _summary(project_root: str, threshold: int = 10) -> dict:
         "total_methods": total_methods,
         "threshold": threshold,
         "high_complexity_count": len(high_complexity),
-        "high_complexity": high_complexity[:15],  # top 15
-        "all_files": all_files[:100],  # limit
+        "high_complexity": high_complexity[:15],
+        "all_files": all_files[:100],
         "hint": f"{len(py_files)} 文件, {total_fns + total_methods} 可调用项, "
                 f"{len(high_complexity)} 个文件有圈复杂度 > {threshold} 的函数",
     }

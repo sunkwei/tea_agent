@@ -1,7 +1,4 @@
-## llm generated tool func, created Fri May  1 07:47:45 2026
-# version: 1.0.4
 
-#!/usr/bin/env python3
 import logging
 
 logger = logging.getLogger("toolkit")
@@ -56,7 +53,7 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
         return m.group(1) if m else ""
 
     def rebuild_index():
-        """Rebuild index."""
+        """Rebuild index"""
         md_files = sorted(KB_DIR.glob("*.md"))
         lines = [
             "# 📚 Knowledge Base Index",
@@ -88,7 +85,6 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
         filepath = KB_DIR / filename
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         header = f"# {title}\n<!-- created:{now} category:{category} tags:{tags} brief:{brief} -->\n\n"
-        # 标准化换行符
         safe_content = content.replace('\r\n', '\n').replace('\r', '\n') if '\r\n' in content or '\r' in content else content
         filepath.write_text(header + safe_content, encoding="utf-8")
         rebuild_index()
@@ -111,7 +107,6 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
         filepath = KB_DIR / filename
         if filepath.exists():
             text = filepath.read_text(encoding="utf-8")
-            # 标准化换行符
             if '\r\n' in text or '\r' in text:
                 text = text.replace('\r\n', '\n').replace('\r', '\n')
             clean = re.sub(r"<!--.*?-->\n?", "", text)
@@ -197,5 +192,10 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
     return f"❌ 未知操作: {action}"
 
 def meta_toolkit_kb() -> dict:
-    """Meta toolkit kb."""
+    """
+    Meta toolkit kb
+
+    Returns:
+        dict: Description.
+    """
     return {"type": "function", "function": {"name": "toolkit_kb", "description": "Markdown 知识库管理。文档存储在 $HOME/.tea_agent/kb/，所有主题共享。支持 add/update/read/list/search/index/delete/status 操作。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["add", "update", "read", "list", "search", "index", "delete", "status"], "description": "操作类型"}, "title": {"type": "string", "description": "文档标题（用作文件名，add/update/read/delete 时使用）"}, "content": {"type": "string", "description": "[add/update] Markdown 内容，add 时覆盖写入，update 时追加"}, "tags": {"type": "string", "description": "[add/search] 逗号分隔标签。search 时多标签 OR 匹配"}, "category": {"type": "string", "description": "[add/list] 分类，如 memory/reflection/analysis/temp"}, "query": {"type": "string", "description": "[search] grep 搜索关键词"}, "brief": {"type": "string", "description": "[add] 简短摘要，用于索引显示"}, "sort": {"type": "string", "enum": ["time", "title", "size"], "description": "[list] 排序方式，默认 time"}}, "required": ["action"]}}}

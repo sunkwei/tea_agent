@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 合并两个 chat_history.db 数据库。
 
@@ -28,12 +27,17 @@ from typing import Dict, List, Optional, Tuple
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("merge_db")
 
-# ============================================================
-# 工具函数
-# ============================================================
 
 def _extract_keywords(text: str) -> set:
-    """从文本中提取关键词（与 memory.py 一致的 jieba/降级策略）"""
+    """
+    从文本中提取关键词（与 memory.py 一致的 jieba/降级策略）
+
+    Args:
+        text (str): Description.
+
+    Returns:
+        set: Description.
+    """
     keywords = set()
     try:
         import jieba
@@ -51,7 +55,16 @@ def _extract_keywords(text: str) -> set:
     return keywords
 
 def _jaccard_similarity(text_a: str, text_b: str) -> float:
-    """计算两段文本的关键词 Jaccard 相似度 (0~1)"""
+    """
+    计算两段文本的关键词 Jaccard 相似度 (0~1)
+
+    Args:
+        text_a (str): Description.
+        text_b (str): Description.
+
+    Returns:
+        float: Description.
+    """
     if not text_a or not text_b:
         return 0.0
     kw_a = _extract_keywords(text_a.lower())
@@ -64,9 +77,6 @@ def _jaccard_similarity(text_a: str, text_b: str) -> float:
         return len(set_a & set_b) / len(set_a | set_b)
     return len(kw_a & kw_b) / len(kw_a | kw_b)
 
-# ============================================================
-# 核心合并逻辑
-# ============================================================
 
 class DbMerger:
     """DbMerger class."""
@@ -82,23 +92,24 @@ class DbMerger:
         self.source_path = source_path
         self.dedup_threshold = dedup_threshold
 
-        # ID 映射表
-        self.topic_map: Dict[int, int] = {}        # old_topic_id → new_topic_id
-        self.conv_map: Dict[int, int] = {}          # old_conv_id → new_conv_id
+        self.topic_map: Dict[int, int] = {}
+        self.conv_map: Dict[int, int] = {}
 
-        # 连接
         self.target = sqlite3.connect(target_path)
         self.source = sqlite3.connect(source_path)
 
-    # ------------------------------------------------------------------
-    # 步骤 0: 预检 & 最大 ID 收集
-    # ------------------------------------------------------------------
 
     def _get_max_ids(self, conn: sqlite3.Connection) -> Dict[str, int]:
-        """获取各表当前最大 ID"""
+        """
+        获取各表当前最大 ID
+
+        Args:
+            conn (sqlite3.Connection): Description.
+
+        Returns:
+            Dict[str, int]: Description.
+        """
         max_ids = {}
-        # NOTE: 表名和列名来自内部硬编码常量，不受用户输入影响。
-        # 为防御性编程，仍然做白名单校验。
         _ALLOWED_TABLES = {"topics", "conversations", "agent_rounds", "memories",
                            "system_prompts", "reflections", "config_history"}
         for table, col in [
@@ -120,8 +131,16 @@ class DbMerger:
         return max_ids
 
     def _get_table_columns(self, conn: sqlite3.Connection, table: str) -> List[str]:
-        """获取表的所有列名"""
-        # NOTE: table 来自内部循环，但为防御性编程做白名单校验
+        """
+        获取表的所有列名
+
+        Args:
+            conn (sqlite3.Connection): Description.
+            table (str): Description.
+
+        Returns:
+            List[str]: Description.
+        """
         _ALLOWED_TABLES = {"topics", "conversations", "agent_rounds", "memories",
                            "system_prompts", "reflections", "config_history",
                            "topic_token_stats", "t_conv_summary", "_meta"}
@@ -130,9 +149,6 @@ class DbMerger:
         cur = conn.execute(f"PRAGMA table_info({table})")
         return [row[1] for row in cur.fetchall()]
 
-    # ------------------------------------------------------------------
-    # 步骤 1: 合并 _meta
-    # ------------------------------------------------------------------
 
     def _merge_meta(self):
         """合并 _meta 表：仅插入 target 不存在的 key"""
@@ -153,9 +169,6 @@ class DbMerger:
         self.target.commit()
         logger.info(f"    _meta: 新增 {inserted} 条 (跳过 {len(src_meta) - inserted} 条已存在)")
 
-    # ------------------------------------------------------------------
-    # 步骤 2: 合并 topics
-    # ------------------------------------------------------------------
 
     def _merge_topics(self):
         """将 source 的 topics 全部插入 target，分配新 topic_id"""
@@ -175,14 +188,11 @@ class DbMerger:
                 "INSERT INTO topics (topic_id, title, create_stamp, last_update_stamp) VALUES (?, ?, ?, ?)",
                 (new_id, title, create_stamp, last_update_stamp),
             )
-            pass  # UUID
+            pass
 
         self.target.commit()
         logger.info(f"    topics: 合并 {len(src_topics)} 条, ID 映射 {min(self.topic_map.keys())}→{min(self.topic_map.values())} ... {max(self.topic_map.keys())}→{max(self.topic_map.values())}")
 
-    # ------------------------------------------------------------------
-    # 步骤 3: 合并 conversations
-    # ------------------------------------------------------------------
 
     def _merge_conversations(self):
         """合并 conversations，映射 topic_id → 新 topic_id"""
@@ -209,7 +219,6 @@ class DbMerger:
             new_conv_id = str(uuid.uuid4())
             self.conv_map[old_conv_id] = new_conv_id
 
-            # 构建插入数据
             values = list(row)
             values[col_idx["id"]] = new_conv_id
             values[col_idx["topic_id"]] = new_topic_id
@@ -223,9 +232,6 @@ class DbMerger:
         self.target.commit()
         logger.info(f"    conversations: 合并 {len(self.conv_map)} 条")
 
-    # ------------------------------------------------------------------
-    # 步骤 4: 合并 agent_rounds
-    # ------------------------------------------------------------------
 
     def _merge_agent_rounds(self):
         """合并 agent_rounds，映射 conversation_id"""
@@ -246,7 +252,7 @@ class DbMerger:
             old_conv_id = row[col_idx["conversation_id"]]
             new_conv_id = self.conv_map.get(old_conv_id)
             if new_conv_id is None:
-                continue  # conversation 已被跳过
+                continue
 
             values = list(row)
             values[col_idx["id"]] = str(uuid.uuid4())
@@ -262,9 +268,6 @@ class DbMerger:
         self.target.commit()
         logger.info(f"    agent_rounds: 合并 {count} 条")
 
-    # ------------------------------------------------------------------
-    # 步骤 5: 合并 topic_token_stats
-    # ------------------------------------------------------------------
 
     def _merge_topic_token_stats(self):
         """合并 topic_token_stats，映射 topic_id（不存在才插入，避免冲突）"""
@@ -294,7 +297,6 @@ class DbMerger:
             values[col_idx["topic_id"]] = new_topic_id
 
             if new_topic_id in target_tids:
-                # 已存在 → 累加 token 统计
                 self._accumulate_token_stats(new_topic_id, row, col_idx)
             else:
                 placeholders = ", ".join("?" for _ in cols)
@@ -309,7 +311,14 @@ class DbMerger:
         logger.info(f"    topic_token_stats: 合并 {merged} 条")
 
     def _accumulate_token_stats(self, topic_id: str, src_row: tuple, col_idx: dict):
-        """将 source 的 token 统计累加到 target 已有记录"""
+        """
+        将 source 的 token 统计累加到 target 已有记录
+
+        Args:
+            topic_id (str): Description.
+            src_row (tuple): Description.
+            col_idx (dict): Description.
+        """
         token_fields = [
             "total_tokens", "total_prompt_tokens", "total_completion_tokens",
             "total_cheap_tokens", "total_cheap_prompt_tokens", "total_cheap_completion_tokens",
@@ -333,9 +342,6 @@ class DbMerger:
                 values + [topic_id],
             )
 
-    # ------------------------------------------------------------------
-    # 步骤 6: 合并 t_conv_summary
-    # ------------------------------------------------------------------
 
     def _merge_t_conv_summary(self):
         """合并 t_conv_summary，映射 topic_id"""
@@ -374,9 +380,6 @@ class DbMerger:
         self.target.commit()
         logger.info(f"    t_conv_summary: 合并 {inserted} 条")
 
-    # ------------------------------------------------------------------
-    # 步骤 7: 合并 memories（带去重）
-    # ------------------------------------------------------------------
 
     def _merge_memories(self):
         """合并 memories，去重 + 映射 source_topic_id"""
@@ -395,7 +398,6 @@ class DbMerger:
 
         col_idx = {name: i for i, name in enumerate(cols)}
 
-        # 加载 target 已有活跃记忆用于去重比对
         target_memories = self.target.execute(
             "SELECT id, content, category, priority, importance, tags, expires_at FROM memories WHERE is_active = 1"
         ).fetchall()
@@ -412,7 +414,6 @@ class DbMerger:
                 skipped_count += 1
                 continue
 
-            # 去重检测
             dup = self._find_duplicate(src_content, src_category, target_memories)
             if dup:
                 self._merge_memory_record(dup, src_row, col_idx)
@@ -420,7 +421,6 @@ class DbMerger:
             else:
                 values = list(src_row)
                 values[col_idx["id"]] = str(uuid.uuid4())
-                # 映射 source_topic_id
                 if "source_topic_id" in col_idx:
                     old_stid = values[col_idx["source_topic_id"]]
                     if old_stid is not None:
@@ -431,7 +431,6 @@ class DbMerger:
                     f"INSERT INTO memories ({', '.join(cols)}) VALUES ({placeholders})",
                     values,
                 )
-                # 同时更新内存中的列表用于后续去重
                 new_dict = dict(zip(cols, values))
                 target_memories.append((
                     next_mem_id,
@@ -442,19 +441,29 @@ class DbMerger:
                     new_dict.get("tags", ""),
                     new_dict.get("expires_at", None),
                 ))
-                pass  # UUID already generated
+                pass
                 new_count += 1
 
         self.target.commit()
         logger.info(f"    memories: 新增 {new_count}, 合并更新 {merged_count}, 跳过 {skipped_count}")
 
     def _find_duplicate(self, content: str, category: str, existing: List[tuple]) -> Optional[tuple]:
-        """在已有记忆中查找相似度超过阈值的记忆"""
+        """
+        在已有记忆中查找相似度超过阈值的记忆
+
+        Args:
+            content (str): Description.
+            category (str): Description.
+            existing (List[tuple]): Description.
+
+        Returns:
+            Optional[tuple]: Description.
+        """
         best = None
         best_score = 0.0
         for mem in existing:
-            mem_content = mem[1]  # content
-            mem_category = mem[2]  # category
+            mem_content = mem[1]
+            mem_category = mem[2]
             score = _jaccard_similarity(content, mem_content)
             if category and mem_category == category:
                 score *= 1.1
@@ -467,7 +476,14 @@ class DbMerger:
         return None
 
     def _merge_memory_record(self, existing: tuple, src_row: tuple, col_idx: dict):
-        """合并 source memory 到 target 已有记录"""
+        """
+        合并 source memory 到 target 已有记录
+
+        Args:
+            existing (tuple): Description.
+            src_row (tuple): Description.
+            col_idx (dict): Description.
+        """
         mem_id = existing[0]
         old_priority = existing[3] or 2
         old_importance = existing[4] or 3
@@ -479,13 +495,11 @@ class DbMerger:
         new_tags_str = src_row[col_idx["tags"]] if "tags" in col_idx else ""
         new_expires = src_row[col_idx["expires_at"]] if "expires_at" in col_idx else None
 
-        # 合并后取更关键的值
         merged_priority = min(old_priority, new_priority or 2)
         merged_importance = max(old_importance, new_importance or 3)
         new_tag_set = {t.strip() for t in (new_tags_str or "").split(",") if t.strip()}
         merged_tags = ", ".join(sorted(old_tags | new_tag_set))
 
-        # 过期时间取更早
         merged_expires = old_expires
         if old_expires and new_expires:
             merged_expires = min(str(old_expires), str(new_expires))
@@ -498,9 +512,6 @@ class DbMerger:
             (merged_priority, merged_importance, merged_tags, merged_expires, mem_id),
         )
 
-    # ------------------------------------------------------------------
-    # 步骤 8: 合并 system_prompts
-    # ------------------------------------------------------------------
 
     def _merge_system_prompts(self):
         """合并 system_prompts：跳过内容完全相同的，其余追加为新版本"""
@@ -519,13 +530,11 @@ class DbMerger:
 
         col_idx = {name: i for i, name in enumerate(cols)}
 
-        # 获取 target 已有内容用于去重
         existing_contents = {
             row[0] for row in
             self.target.execute("SELECT content FROM system_prompts").fetchall()
         }
 
-        # 获取 target 最大 version
         max_ver_row = self.target.execute(
             "SELECT MAX(CAST(version AS INTEGER)) FROM system_prompts"
         ).fetchone()
@@ -542,11 +551,11 @@ class DbMerger:
             max_ver += 1
             values = list(row)
             if "id" in col_idx:
-                values[col_idx["id"]] = None  # 自动分配
+                values[col_idx["id"]] = None
             if "version" in col_idx:
                 values[col_idx["version"]] = str(max_ver)
             if "is_active" in col_idx:
-                values[col_idx["is_active"]] = 0  # 合并来的默认为非活跃
+                values[col_idx["is_active"]] = 0
 
             placeholders = ", ".join("?" for _ in cols)
             self.target.execute(
@@ -559,9 +568,6 @@ class DbMerger:
         self.target.commit()
         logger.info(f"    system_prompts: 新增 {inserted}, 跳过重复 {skipped}")
 
-    # ------------------------------------------------------------------
-    # 步骤 9: 合并 reflections
-    # ------------------------------------------------------------------
 
     def _merge_reflections(self):
         """合并 reflections，映射 topic_id"""
@@ -600,9 +606,6 @@ class DbMerger:
         self.target.commit()
         logger.info(f"    reflections: 合并 {count} 条")
 
-    # ------------------------------------------------------------------
-    # 步骤 10: 合并 config_history
-    # ------------------------------------------------------------------
 
     def _merge_config_history(self):
         """合并 config_history（无外键，直接追加）"""
@@ -635,9 +638,6 @@ class DbMerger:
         self.target.commit()
         logger.info(f"    config_history: 合并 {count} 条")
 
-    # ------------------------------------------------------------------
-    # 主流程
-    # ------------------------------------------------------------------
 
     def merge(self):
         """执行完整合并流程"""
@@ -645,13 +645,11 @@ class DbMerger:
         logger.info(f"合并数据库: {self.source_path} → {self.target_path}")
         logger.info("=" * 60)
 
-        # 预检
         max_target = self._get_max_ids(self.target)
         max_source = self._get_max_ids(self.source)
         logger.info(f"  target 最大 ID: {max_target}")
         logger.info(f"  source 最大 ID: {max_source}")
 
-        # 按依赖顺序执行
         self._merge_meta()
         self._merge_topics()
         self._merge_conversations()
@@ -670,16 +668,13 @@ class DbMerger:
         logger.info("=" * 60)
 
     def close(self):
-        """Close."""
+        """Close"""
         self.target.close()
         self.source.close()
 
-# ============================================================
-# CLI 入口
-# ============================================================
 
 def main():
-    """Main."""
+    """Main"""
     if len(sys.argv) < 3:
         print(__doc__)
         print("示例: python merge_db.py chat_history.db old_backup.db")
@@ -695,7 +690,6 @@ def main():
         logger.error(f"源数据库不存在: {source_path}")
         sys.exit(1)
 
-    # 可选: dedup threshold
     threshold = 0.35
     if len(sys.argv) >= 4:
         try:
@@ -703,7 +697,6 @@ def main():
         except ValueError:
             logger.warning(f"无效的 threshold 参数 '{sys.argv[3]}'，使用默认值 0.35")
 
-    # 自动备份 target
     backup_path = target_path + ".bak_before_merge"
     import shutil
     shutil.copy2(target_path, backup_path)

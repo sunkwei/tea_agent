@@ -65,7 +65,12 @@ class ReflectionStore(StoreComponent):
         c.close()
 
     def get_reflection_stats(self) -> Dict:
-        """Get the reflection stats."""
+        """
+        Get the reflection stats
+
+        Returns:
+            Dict: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT COUNT(*) as total FROM reflections")
         total = c.fetchone()["total"]

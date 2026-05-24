@@ -17,9 +17,9 @@ class BaseChatSession(ABC):
     定义公共接口和共享功能
     """
 
-    _KB_THRESHOLD: int = 65536          # toolkit_kb 输出阈值: 64KB
-    _DEFAULT_TOOL_THRESHOLD: int = 2048  # 默认工具输出阈值: 2KB
-    _TEXT_FILE_THRESHOLD: int = 16384    # 文本/日志文件阈值: 16KB
+    _KB_THRESHOLD: int = 65536
+    _DEFAULT_TOOL_THRESHOLD: int = 2048
+    _TEXT_FILE_THRESHOLD: int = 16384
     _SOURCE_EXTENSIONS = {'.py', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.go',
                           '.ts', '.js', '.jsx', '.tsx', '.vue', '.swift', '.kt',
                           '.scala', '.rb', '.php', '.cs', '.sql', '.sh', '.bash',
@@ -49,11 +49,9 @@ class BaseChatSession(ABC):
         self.system_prompt = system_prompt
         self._history_summary = ""
 
-        # 消息列表
         self.messages: List[Dict] = []
         self.messages.append({"role": "system", "content": self.system_prompt})
 
-        # 打断标志
         self.interrupted = False
 
     @abstractmethod
@@ -71,7 +69,12 @@ class BaseChatSession(ABC):
         pass
 
     def add_user_message(self, msg):
-        """添加用户消息，支持纯文本或含图片的结构化输入"""
+        """
+        添加用户消息，支持纯文本或含图片的结构化输入
+
+        Args:
+            msg: Description.
+        """
         if isinstance(msg, str):
             self.messages.append({"role": "user", "content": msg})
         elif isinstance(msg, dict):
@@ -84,11 +87,22 @@ class BaseChatSession(ABC):
             self.messages.append({"role": "user", "content": str(msg)})
 
     def add_assistant_message(self, msg: str):
-        """添加助手消息"""
+        """
+        添加助手消息
+
+        Args:
+            msg (str): Description.
+        """
         self.messages.append({"role": "assistant", "content": msg})
 
     def add_tool_result(self, tool_call_id: str, content: str):
-        """添加工具执行结果"""
+        """
+        添加工具执行结果
+
+        Args:
+            tool_call_id (str): Description.
+            content (str): Description.
+        """
         self.messages.append({
             "role": "tool",
             "tool_call_id": tool_call_id,
@@ -96,27 +110,26 @@ class BaseChatSession(ABC):
         })
 
     def get_recent_messages(self) -> List[Dict]:
-        """获取最近的消息（排除系统消息）"""
+        """
+        获取最近的消息（排除系统消息）
+
+        Returns:
+            List[Dict]: Description.
+        """
         return [m for m in self.messages if m["role"] != "system"]
 
-# NOTE: 2026-04-28, self-evolved by claude-agent ---
-    # 从加载的历史消息中清除 reasoning_content。
-    # reasoning_content 是 DeepSeek thinking 模式下的会话内状态，
-    # 只在一个 API 会话内有效。从数据库加载的历史消息中的
-    # reasoning_content 属于之前的 API 会话，传回新会话将导致
-    # DeepSeek API 返回 400 错误：
-    # "The reasoning_content in the thinking mode must be passed back to the API."
     @staticmethod
     def _strip_reasoning_content(messages: List[Dict]) -> None:
         """
         原地清除消息列表中的 reasoning_content 字段。
-        
-        注意：对于包含 tool_calls 的 assistant 消息，必须保留 reasoning_content，
-        否则 DeepSeek API 会返回 400 错误。
+
+        Args:
+            messages (List[Dict]): Description.
+
+        Returns:
+            None: Description.
         """
         for msg in messages:
-            # 如果是助手消息且包含工具调用，则保留 reasoning_content
-            # if msg.get("role") == "assistant" and msg.get("tool_calls"):
             if msg.get("role") == "assistant":
                 continue
             msg.pop("reasoning_content", None)
@@ -141,11 +154,9 @@ class BaseChatSession(ABC):
         if not content:
             return content
 
-        # 不限长：完整返回
         if max_chars >= sys.maxsize:
             return content
 
-        # 编码为字节以准确计算字节长度（与 API token 计数一致）
         raw = content.encode("utf-8")
         total_bytes = len(raw)
 
@@ -154,27 +165,23 @@ class BaseChatSession(ABC):
 
         half = max_chars // 2
 
-        # 前半部分：从 half 位置向前找最近换行
         head_end = half
         if head_end > 0:
-            # 向后找换行
             nl = raw.find(b'\n', head_end)
             if nl != -1 and nl < half + 256:
                 head_end = nl
             else:
-                # 向前找换行
                 nl = raw.rfind(b'\n', 0, head_end)
                 if nl != -1 and nl > half - 256:
                     head_end = nl
 
         head_bytes = raw[:head_end]
 
-        # 后半部分：从尾部 half 位置向后找最近换行
         tail_start = total_bytes - half
         if tail_start > 0:
             nl = raw.rfind(b'\n', tail_start, total_bytes)
             if nl != -1 and nl > tail_start - 256:
-                tail_start = nl + 1  # 从换行后开始
+                tail_start = nl + 1
             else:
                 nl = raw.find(b'\n', tail_start)
                 if nl != -1 and nl < tail_start + 256:
@@ -217,14 +224,11 @@ class BaseChatSession(ABC):
         """
         import json as _json
         
-        # Step 1: 尝试解析
         try:
             obj = _json.loads(args_str)
         except (_json.JSONDecodeError, ValueError):
-            # 解析失败 → 回退到字节截断
             half = max_bytes // 2
             raw = args_str.encode("utf-8")
-            # 按换行对齐首尾
             head_end = half
             nl = raw.find(b'\n', head_end)
             if nl != -1 and nl < half + 256:
@@ -246,16 +250,20 @@ class BaseChatSession(ABC):
                 tail_text
             )
         
-        # Step 2: 递归压缩超长 string value
-        HALF = 512  # 每个 value 的首尾保留字节数
+        HALF = 512
         
         def _compress_value(val, path=""):
-            """递归压缩值，返回 (compressed_val, truncated_count)"""
+            """
+            递归压缩值，返回 (compressed_val, truncated_count)
+
+            Args:
+                val: Description.
+                path: Description.
+            """
             if isinstance(val, str):
                 vbytes = len(val.encode("utf-8"))
                 if vbytes > 1024:
                     raw = val.encode("utf-8")
-                    # 按换行对齐
                     head_end = HALF
                     nl = raw.find(b'\n', head_end)
                     if nl != -1 and nl < head_end + 128:
@@ -290,13 +298,11 @@ class BaseChatSession(ABC):
                     total_trunc += ct
                 return (new_l, total_trunc)
             else:
-                # number, bool, null
                 return (val, 0)
         
         compressed_obj, truncated = _compress_value(obj)
         
         if truncated == 0:
-            # 没有需要截断的 value，返回原字符串（避免 re-serialize 格式变化）
             return args_str
         
         result = _json.dumps(compressed_obj, ensure_ascii=False)
@@ -306,19 +312,19 @@ class BaseChatSession(ABC):
     def _guess_tool_threshold(tool_name: str, arguments: str) -> int:
         """
         根据工具名称和参数推断合适的输出截断阈值。
-        
-        策略：
-        - toolkit_kb → 64KB
-        - toolkit_file read 源码文件 → 不截断 (sys.maxsize)
-        - toolkit_file read 文本/日志 → 16KB
-        - 其他 → 2KB 默认
+
+        Args:
+            tool_name (str): Description.
+            arguments (str): Description.
+
+        Returns:
+            int: Description.
         """
         import json as _json_gt
         
         if tool_name == 'toolkit_kb':
             return BaseChatSession._KB_THRESHOLD
         
-        # 尝试从参数中提取文件路径/扩展名
         try:
             args = _json_gt.loads(arguments) if isinstance(arguments, str) else (arguments or {})
         except Exception:
@@ -327,7 +333,6 @@ class BaseChatSession(ABC):
         if not isinstance(args, dict):
             return BaseChatSession._DEFAULT_TOOL_THRESHOLD
         
-        # 查找可能的文件路径参数
         filepath = None
         for key in ('filename', 'path', 'file', 'file_path', 'target'):
             val = args.get(key, '')
@@ -338,15 +343,13 @@ class BaseChatSession(ABC):
         if not filepath:
             return BaseChatSession._DEFAULT_TOOL_THRESHOLD
         
-        # 提取扩展名并匹配
         ext = os.path.splitext(filepath)[1].lower()
         basename = os.path.basename(filepath).lower()
         
         if ext in BaseChatSession._SOURCE_EXTENSIONS:
-            return sys.maxsize  # 源码文件：不截断
+            return sys.maxsize
         if ext in BaseChatSession._TEXT_EXTENSIONS:
-            return BaseChatSession._TEXT_FILE_THRESHOLD  # 文本/日志：16KB
-        # 无扩展名的常见文本文件
+            return BaseChatSession._TEXT_FILE_THRESHOLD
         if basename in ('makefile', 'dockerfile', 'license', 'changelog', 'readme', 'authors'):
             return BaseChatSession._TEXT_FILE_THRESHOLD
         
@@ -357,26 +360,18 @@ class BaseChatSession(ABC):
         """
         对 rounds 中的工具调用链进行 L1 智能压缩。
 
-        规则：
-        - user 消息：完整保留
-        - assistant 含 tool_calls（中间步骤）：保留 reasoning_content，
-          对每个 tool_call 的 function.arguments 若 >2048 字节则截断
-        - tool 消息：调用 _compress_tool_content 压缩输出
-        - 最终 assistant 消息（末尾无 tool_calls）：完整保留，不压缩
+        Args:
+            rounds (List[Dict]): Description.
 
-        参数:
-            rounds: 原始 rounds 列表
-
-        返回:
-            压缩后的 rounds（非原地修改）
+        Returns:
+            List[Dict]: Description.
         """
         if not rounds:
             return rounds
 
         import json as _json_cr
 
-        # ── 首遍扫描：收集 tool_call_id → (tool_name, arguments) ──
-        tc_map: Dict[str, tuple] = {}  # tool_call_id → (tool_name, arguments_str)
+        tc_map: Dict[str, tuple] = {}
         for rd in rounds:
             if rd.get("role") == "assistant" and rd.get("tool_calls"):
                 for tc in rd["tool_calls"]:
@@ -396,14 +391,11 @@ class BaseChatSession(ABC):
             is_last = (i == n - 1)
 
             if role == "user":
-                # user 消息完整保留
                 result.append(dict(rd))
 
             elif role == "assistant":
                 if rd.get("tool_calls") and not is_last:
-                    # 中间 assistant 消息（含工具调用）：JSON感知压缩参数
                     compressed = dict(rd)
-                    # 保留 reasoning_content
                     tc_list = compressed.get("tool_calls", [])
                     new_tc = []
                     for tc in tc_list:
@@ -422,11 +414,9 @@ class BaseChatSession(ABC):
                     compressed["tool_calls"] = new_tc
                     result.append(compressed)
                 else:
-                    # 最终 assistant 消息（末尾，无 tool_calls 或恰好是最后一个）：完整保留
                     result.append(dict(rd))
 
             elif role == "tool":
-                # tool 消息：根据工具名和参数自适应压缩输出
                 compressed = dict(rd)
                 tc_id = rd.get("tool_call_id", "")
                 tool_name, args_str = tc_map.get(tc_id, ("", ""))
@@ -437,7 +427,6 @@ class BaseChatSession(ABC):
                 result.append(compressed)
 
             else:
-                # system 等其他角色
                 result.append(dict(rd))
 
         return result
@@ -462,22 +451,17 @@ class BaseChatSession(ABC):
             return rounds
 
         result: List[Dict] = []
-        # 追踪尚未匹配的 tool_call_id -> 在 result 中的起始索引
         pending: Dict[str, int] = {}
-        last_safe_len = 0  # 最后安全点：所有 pending 已清零时的 result 长度
+        last_safe_len = 0
 
         for i, rd in enumerate(rounds):
             role = rd.get("role", "")
 
             if role == "assistant" and rd.get("tool_calls"):
-                # 先检查当前是否有未清空的 pending（前一个 assistant 的 tool_calls 未完成）
-                # 这种情况：上一个 assistant 的 tool_calls 还没全匹配，又来了新 assistant
-                # → 放弃当前批次（上一个 assistant 之后的都是垃圾），回滚到上一个安全点
                 if pending:
                     result = result[:last_safe_len]
                     pending.clear()
 
-                # 记录新的 tool_call_ids
                 tc_list = rd["tool_calls"]
                 if isinstance(tc_list, list):
                     tc_ids = [tc.get("id", "") for tc in tc_list if tc.get("id")]
@@ -485,12 +469,10 @@ class BaseChatSession(ABC):
                     tc_ids = []
 
                 if not tc_ids:
-                    # 有 tool_calls 字段但没有有效 id，视为纯 assistant 消息
                     result.append(dict(rd))
                     last_safe_len = len(result)
                     continue
 
-                # 添加 assistant 消息
                 start_idx = len(result)
                 result.append(dict(rd))
                 for tid in tc_ids:
@@ -499,32 +481,24 @@ class BaseChatSession(ABC):
             elif role == "tool":
                 tid = rd.get("tool_call_id", "")
                 if tid and tid in pending:
-                    # 匹配到一个 tool_call_id
                     result.append(dict(rd))
                     del pending[tid]
                     if not pending:
-                        # 所有 tool_call_id 都已匹配 → 安全点
                         last_safe_len = len(result)
                 else:
-                    # 孤立的 tool 消息：跳过
                     logger.debug(f"_repair: 跳过孤立 tool 消息 tool_call_id={tid}")
                     continue
 
             elif role == "assistant":
-                # 纯 assistant 消息（无 tool_calls）
                 if pending:
-                    # 前一批 tool_calls 还没清空就来了新的 assistant 消息
-                    # → 回滚到上一个安全点，丢弃未完成的工具调用链
                     result = result[:last_safe_len]
                     pending.clear()
                 result.append(dict(rd))
                 last_safe_len = len(result)
 
             else:
-                # user/system 等其他角色：直接保留
                 result.append(dict(rd))
 
-        # 末尾检查：如果还有未清空的 pending，回滚到最后一个安全点
         if pending:
             result = result[:last_safe_len]
             logger.warning(
@@ -532,82 +506,63 @@ class BaseChatSession(ABC):
                 f"{list(pending.keys())}"
             )
 
-        # 最终清理：结果中不应再有 reasoning_content（非 assistant 消息）
         BaseChatSession._strip_reasoning_content(result)
 
         return result
 
-    def load_history(self, conversations: List[Dict], summary: str = "", recent_turns: int = 10,
-                     level2: list = None, semantic_summary: str = "", tool_chain_summary: str = ""):
+    def load_history(self, conversations: List[Dict], summary: str = "", recent_turns: int = 10):
         """
-        三级历史加载：
+        纯数据加载：将所有 conversations 加载到 self.messages，不做任何过滤/分级。
 
-        Level 1: 最新一轮压缩对话（user + 工具调用链[参数/输出截断] + assistant(final)完整）
-        Level 2: 近期语义相关的 user+assistant 自然语言对
-        Level 3: 压缩摘要 — semantic_summary + tool_chain_summary
+        2026-05-23 gen by Tea Agent, 职责分离：
+        - 本函数只做纯数据加载，不区分 L1/L2/L3，不对 conversation 做差异化处理
+        - L2/L3 数据（level2, semantic_summary, tool_chain_summary）由调用方直接设置到 session 属性
+        - L1/L2/L3 的分级筛选完全由 OnlineToolSession._build_api_messages() 负责
 
         Args:
-            conversations: 对话记录列表（时间正序）
-            summary: 兼容旧字段的摘要
+            conversations: 对话记录列表（时间正序），每条含 user_msg, ai_msg,
+                           rounds_json_parsed, is_func_calling 等
+            summary: 兼容旧字段的摘要（存入 _history_summary）
             recent_turns: 兼容旧参数（不再强制使用）
-            level2: Level 2 条目列表 [{"user": ..., "assistant": ...}, ...]
-            semantic_summary: 语义摘要（长期偏好、任务背景、关键结论）
-            tool_chain_summary: 工具链摘要（旧任务工具调用链、关键I/O、结论）
         """
         self.messages = [{"role": "system", "content": self.system_prompt}]
+        self._history_summary = summary or ""
 
-        # ── Level 3 摘要存储 ──
-        self._semantic_summary = semantic_summary or summary  # 兼容旧 summary
-        self._tool_chain_summary = tool_chain_summary
-
-        # ── Level 2 存储（用于 prompt 构建时直接拼入）──
-        self._level2 = level2 or []
-
-        # ── Level 1: 最新一轮压缩加载 ──
         total = len(conversations)
         if total == 0:
-            self._history_summary = ""  # 兼容旧代码
             logger.info("加载历史 0条 (新主题)")
             return
 
-        # 最新一条作为 Level 1（压缩工具链）
-        last_conv = conversations[-1]
-        raw_user_msg = last_conv["user_msg"]
-        user_entry = {"role": "user"}
-        if isinstance(raw_user_msg, str) and raw_user_msg.startswith('{'):
-            try:
-                import json as _json_lh
-                parsed = _json_lh.loads(raw_user_msg)
-                if isinstance(parsed, dict):
-                    user_entry["content"] = parsed.get("text", "")
-                    imgs = parsed.get("images", [])
-                    if imgs:
-                        user_entry["images"] = imgs
-                else:
+        for conv in conversations:
+            raw_user_msg = conv["user_msg"]
+            user_entry = {"role": "user"}
+            if isinstance(raw_user_msg, str) and raw_user_msg.startswith('{'):
+                try:
+                    import json as _json_lh
+                    parsed = _json_lh.loads(raw_user_msg)
+                    if isinstance(parsed, dict):
+                        user_entry["content"] = parsed.get("text", "")
+                        imgs = parsed.get("images", [])
+                        if imgs:
+                            user_entry["images"] = imgs
+                    else:
+                        user_entry["content"] = raw_user_msg
+                except Exception:
                     user_entry["content"] = raw_user_msg
-            except Exception:
-                user_entry["content"] = raw_user_msg
-        else:
-            user_entry["content"] = str(raw_user_msg) if raw_user_msg else ""
-        self.messages.append(user_entry)
+            else:
+                user_entry["content"] = str(raw_user_msg) if raw_user_msg else ""
+            self.messages.append(user_entry)
 
-        rounds = last_conv.get("rounds_json_parsed")
-        if rounds and last_conv.get("is_func_calling"):
-            repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
-            compressed = BaseChatSession._compress_tool_rounds(repaired)
-            for rd in compressed:
-                self.messages.append(rd)
-        else:
-            self.messages.append({"role": "assistant", "content": last_conv["ai_msg"]})
+            rounds = conv.get("rounds_json_parsed")
+            if rounds and conv.get("is_func_calling"):
+                repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
+                compressed = BaseChatSession._compress_tool_rounds(repaired)
+                for rd in compressed:
+                    self.messages.append(rd)
+            else:
+                self.messages.append({"role": "assistant", "content": conv.get("ai_msg", "")})
 
-        # ── 旧轮次不再直接加载到 self.messages ──
-        # Level 2 + Level 3 由 _build_api_messages 拼接
-        self._history_summary = ""  # 旧字段，不再使用
-        logger.info(
-            f"三级加载: L1=1轮压缩 , L2={len(self._level2)}对 , "
-            f"L3_semantic={len(self._semantic_summary)}chars , L3_tool={len(self._tool_chain_summary)}chars"
-        )
-
+        logger.info(f"加载历史: {total}轮对话, 共{len(self.messages)-1}条消息 (L1/L2/L3分级由_build_api_messages负责)")
     def interrupt(self):
         """打断当前生成"""
         self.interrupted = True
@@ -618,4 +573,4 @@ class BaseChatSession(ABC):
 
     def _trim_messages(self):
         """[DISABLED: 2026-05-20] no references — trimming now via L3 summary"""
-        pass  # DISABLED
+        pass

@@ -9,7 +9,6 @@ logger = logging.getLogger("Storage.Memories")
 class MemoryStore(StoreComponent):
     """长期记忆管理：增删改查、过期清理、CRITICAL FIFO 淘汰。"""
 
-    # ── CRUD ──
 
     def add_memory(
         self, content: str, category: str = "general", priority: int = 2,
@@ -77,7 +76,7 @@ class MemoryStore(StoreComponent):
         allowed = {
             "content", "category", "priority", "importance",
             "expires_at", "is_active", "tags", "last_accessed_at", "pinned",
-            "created_at",  # 允许更新创建时间（用于LLM升级重置年龄）
+            "created_at",
         }
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
@@ -86,7 +85,6 @@ class MemoryStore(StoreComponent):
             self._enforce_critical_limit(max_critical=15)
         updates["updated_at"] = "datetime('now', 'localtime')"
         
-        # 动态构建 SET 子句：值为 datetime('now', 'localtime') 时直接拼接 SQL 函数，否则参数化
         set_parts = []
         values = []
         for k, v in updates.items():
@@ -144,7 +142,12 @@ class MemoryStore(StoreComponent):
         return [dict(r) for r in rows]
 
     def get_instructions(self) -> List[Dict]:
-        """Get the instructions."""
+        """
+        Get the instructions
+
+        Returns:
+            List[Dict]: Description.
+        """
         self.cleanup_expired_memories()
         c = self.conn.cursor()
         c.execute(
@@ -199,7 +202,12 @@ class MemoryStore(StoreComponent):
         return results[:limit]
 
     def cleanup_expired_memories(self) -> int:
-        """Cleanup expired memories."""
+        """
+        Cleanup expired memories
+
+        Returns:
+            int: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "UPDATE memories SET is_active = 0, updated_at = datetime('now', 'localtime') "
@@ -225,7 +233,12 @@ class MemoryStore(StoreComponent):
         c.close()
 
     def get_memory_stats(self) -> Dict:
-        """Get the memory stats."""
+        """
+        Get the memory stats
+
+        Returns:
+            Dict: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT COUNT(*) as total FROM memories WHERE is_active = 1")
         total = c.fetchone()["total"]

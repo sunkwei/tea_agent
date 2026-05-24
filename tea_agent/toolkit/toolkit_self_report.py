@@ -1,4 +1,3 @@
-## llm generated tool func, created Thu Apr 16 10:51:32 2026
 
 import logging
 
@@ -6,7 +5,10 @@ logger = logging.getLogger("toolkit")
 
 def toolkit_self_report() -> dict:
     """
-    Generates a comprehensive status report of the Agent.
+    Generates a comprehensive status report of the Agent
+
+    Returns:
+        dict: Description.
     """
     logger.info(f"toolkit_self_report called")
 
@@ -14,8 +16,6 @@ def toolkit_self_report() -> dict:
     import json
     import sqlite3
 
-    # 1. Robustly find the base directory
-    # Start from cwd and walk up to find the root .tea_agent directory
     base_dir = os.getcwd()
     found = False
     temp = base_dir
@@ -28,7 +28,6 @@ def toolkit_self_report() -> dict:
         if parent == temp: break
         temp = parent
 
-    # Fallback if not found by walking up：优先从 config 读取
     if not found:
         try:
             from tea_agent.config import get_config
@@ -44,7 +43,6 @@ def toolkit_self_report() -> dict:
     except Exception:
         toolkit_dir = os.path.join(base_dir, "toolkit")
     
-    # 2. Tool Count (File-based custom tools)
     tool_count = 0
     if os.path.isdir(toolkit_dir):
         try:
@@ -54,7 +52,6 @@ def toolkit_self_report() -> dict:
         except Exception:
             pass
 
-    # 3. Strategy & Counter Info
     counter_file = os.path.join(toolkit_dir, ".chat_counter.json")
 
     counter_data = {}
@@ -71,5 +68,10 @@ def toolkit_self_report() -> dict:
     }
 
 def meta_toolkit_self_report() -> dict:
-    """Meta toolkit self report."""
+    """
+    Meta toolkit self report
+
+    Returns:
+        dict: Description.
+    """
     return {"type": "function", "function": {"name": "toolkit_self_report", "description": "生成当前 Agent 的状态报告，包括工具数量。", "parameters": {"type": "object", "properties": {}, "required": []}}}

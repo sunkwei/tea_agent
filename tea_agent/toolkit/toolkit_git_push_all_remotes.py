@@ -5,7 +5,12 @@ import subprocess
 logger = logging.getLogger("toolkit")
 
 def toolkit_git_push_all_remotes() -> dict:
-    """向当前 git repo 配置的所有远程仓库推送当前分支。返回每个 remote 的推送结果。"""
+    """
+    向当前 git repo 配置的所有远程仓库推送当前分支。返回每个 remote 的推送结果。
+
+    Returns:
+        dict: Description.
+    """
     logger.info("toolkit_git_push_all_remotes called")
     try:
         res = subprocess.run(['git', 'remote'], capture_output=True, text=True, timeout=10)
@@ -29,7 +34,12 @@ def toolkit_git_push_all_remotes() -> dict:
         return {"ok": False, "error": str(e), "results": []}
 
 def meta_toolkit_git_push_all_remotes() -> dict:
-    """Meta toolkit git push all remotes."""
+    """
+    Meta toolkit git push all remotes
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

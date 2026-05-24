@@ -35,7 +35,12 @@ class ProjectMemoryManager:
             self._write([])
 
     def _read(self) -> List[Dict]:
-        """读取所有项目记忆"""
+        """
+        读取所有项目记忆
+
+        Returns:
+            List[Dict]: Description.
+        """
         try:
             with open(self.store_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -46,7 +51,12 @@ class ProjectMemoryManager:
         return []
 
     def _write(self, data: List[Dict]):
-        """写入项目记忆"""
+        """
+        写入项目记忆
+
+        Args:
+            data (List[Dict]): Description.
+        """
         with open(self.store_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -70,7 +80,6 @@ class ProjectMemoryManager:
         }
         data.append(entry)
 
-        # FIFO 淘汰
         while len(data) > self.MAX_ENTRIES:
             removed = data.pop(0)
             logger.info(f"项目记忆 FIFO 淘汰: #{removed['id']} \"{removed['content'][:50]}...\"")
@@ -80,12 +89,29 @@ class ProjectMemoryManager:
         return len(data)
 
     def get_all(self, limit: int = MAX_ENTRIES) -> List[Dict]:
-        """获取所有项目记忆（最新在前）"""
+        """
+        获取所有项目记忆（最新在前）
+
+        Args:
+            limit (int): Description.
+
+        Returns:
+            List[Dict]: Description.
+        """
         data = self._read()
         return list(reversed(data[-limit:]))
 
     def search(self, query: str, limit: int = 10) -> List[Dict]:
-        """关键词搜索项目记忆"""
+        """
+        关键词搜索项目记忆
+
+        Args:
+            query (str): Description.
+            limit (int): Description.
+
+        Returns:
+            List[Dict]: Description.
+        """
         if not query:
             return self.get_all(limit)
         data = self._read()
@@ -102,7 +128,15 @@ class ProjectMemoryManager:
 
     @staticmethod
     def _new_id(data: List[Dict]) -> str:
-        """生成新的记忆 ID"""
+        """
+        生成新的记忆 ID
+
+        Args:
+            data (List[Dict]): Description.
+
+        Returns:
+            str: Description.
+        """
         max_id = 0
         for m in data:
             try:
@@ -114,7 +148,15 @@ class ProjectMemoryManager:
 
     @staticmethod
     def format_memories(memories: List[Dict]) -> str:
-        """格式化项目记忆为注入文本"""
+        """
+        格式化项目记忆为注入文本
+
+        Args:
+            memories (List[Dict]): Description.
+
+        Returns:
+            str: Description.
+        """
         if not memories:
             return ""
 

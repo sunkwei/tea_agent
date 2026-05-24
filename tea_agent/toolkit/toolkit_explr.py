@@ -1,5 +1,3 @@
-## llm generated tool func, created Mon May 11 20:34:01 2026
-# version: 1.0.1
 
 """
 项目知识库构建与查询工具 — toolkit_explr
@@ -31,7 +29,6 @@ _PYTHON_BUILTINS = frozenset({
     'open', 'ord', 'pow', 'print', 'property', 'quit', 'range', 'repr', 'reversed',
     'round', 'set', 'setattr', 'slice', 'sorted', 'staticmethod', 'str', 'sum',
     'super', 'tuple', 'type', 'vars', 'zip', '__import__',
-    # 常见方法名（ast.Attribute 产生的 .append .strip .join 等）
     'append', 'strip', 'join', 'split', 'replace', 'format', 'startswith',
     'endswith', 'get', 'items', 'keys', 'values', 'update', 'pop', 'clear',
     'copy', 'read', 'write', 'close', 'seek', 'find', 'index', 'count',
@@ -41,7 +38,6 @@ _PYTHON_BUILTINS = frozenset({
     '__init__', '__str__', '__repr__', '__call__', '__len__', '__getitem__',
     '__setitem__', '__delitem__', '__iter__', '__next__', '__enter__', '__exit__',
     '__contains__', '__eq__', '__ne__', '__lt__', '__gt__', '__hash__',
-    # Logging 和 traceback 等标准库常用方法
     'info', 'debug', 'warning', 'error', 'critical', 'exception', 'log',
     'print_exc', 'format_exc', 'getLogger', 'basicConfig',
 })
@@ -60,7 +56,13 @@ def _log(msg):
     print(f"[explr] {msg}")
 
 def _build_ctags(directory, run_dir):
-    """生成 ctags JSON 索引"""
+    """
+    生成 ctags JSON 索引
+
+    Args:
+        directory: Description.
+        run_dir: Description.
+    """
     ctags_bin = shutil.which("ctags") or shutil.which("ctags-universal")
     if not ctags_bin:
         _log("⚠ ctags 未安装，跳过 ctags 索引")
@@ -118,7 +120,12 @@ def _build_ctags(directory, run_dir):
     return ctags_path, index
 
 def _build_call_graph(directory):
-    """用 AST 分析函数调用图"""
+    """
+    用 AST 分析函数调用图
+
+    Args:
+        directory: Description.
+    """
     calls = {}
     defs = {}
     classes = {}
@@ -181,7 +188,14 @@ def _build_call_graph(directory):
     return calls, defs, classes
 
 def _build_dot_flow(calls, defs, run_dir):
-    """生成关键调用流程 DOT 图"""
+    """
+    生成关键调用流程 DOT 图
+
+    Args:
+        calls: Description.
+        defs: Description.
+        run_dir: Description.
+    """
     dot_bin = shutil.which("dot")
     if not dot_bin:
         return
@@ -220,7 +234,17 @@ def _build_dot_flow(calls, defs, run_dir):
     _log(f"DOT: {dot_path}, {svg_path}")
 
 def _build_kb_md(directory, index, calls, defs, classes, run_dir):
-    """生成人类可读知识库 Markdown"""
+    """
+    生成人类可读知识库 Markdown
+
+    Args:
+        directory: Description.
+        index: Description.
+        calls: Description.
+        defs: Description.
+        classes: Description.
+        run_dir: Description.
+    """
     now = time.strftime("%Y-%m-%d %H:%M")
     project_name = os.path.basename(os.path.abspath(directory))
 
@@ -511,7 +535,13 @@ def _action_status(directory):
     return '\n'.join(lines)
 
 def _extract_arch_context(directory, symbol=None):
-    """提取项目或符号的架构上下文，辅助自进化决策"""
+    """
+    提取项目或符号的架构上下文，辅助自进化决策
+
+    Args:
+        directory: Description.
+        symbol: Description.
+    """
     directory = os.path.abspath(directory)
     run_dir = os.path.join(directory, _RUN_DIR)
     cg_path = os.path.join(run_dir, "call_graph.json")
@@ -526,7 +556,6 @@ def _extract_arch_context(directory, symbol=None):
     defs = cg.get('functions', {})
     classes = cg.get('classes', {})
     
-    # 1. 项目级上下文
     if not symbol:
         lines = ["## 项目架构概览"]
         lines.append(f"- **函数定义**: {len(defs)} | **类定义**: {len(classes)} | **调用边**: {sum(len(v) for v in calls.values())}")
@@ -538,7 +567,6 @@ def _extract_arch_context(directory, symbol=None):
                 lines.append(f"- `{ep}`")
         return "\n".join(lines)
 
-    # 2. 符号级上下文
     info = defs.get(symbol, classes.get(symbol))
     if not info:
         return f"❌ 未找到符号 `{symbol}` 的架构信息"
@@ -558,13 +586,18 @@ def _extract_arch_context(directory, symbol=None):
         
     return "\n".join(lines)
 
-# @2026-05-19 gen by claude, 影响分析 — 基于 tree-sitter 的仓库级上下文
 def _action_impact(directory, symbol, filepath=None):
-    """影响分析：修改 symbol 会影响哪些代码？"""
+    """
+    影响分析：修改 symbol 会影响哪些代码？
+
+    Args:
+        directory: Description.
+        symbol: Description.
+        filepath: Description.
+    """
     from tea_agent.lsp.ts_analyzer import impact_analysis
     directory = os.path.abspath(directory)
 
-    # 如果没提供 filepath，尝试从索引中查找
     if not filepath:
         run_dir = os.path.join(directory, _RUN_DIR)
         idx_path = os.path.join(run_dir, "symbol_index.json")
@@ -575,7 +608,6 @@ def _action_impact(directory, symbol, filepath=None):
                 entries = index[symbol]
                 filepath = os.path.join(directory, entries[0]['path'])
             else:
-                # 模糊匹配
                 matches = [k for k in index if symbol.lower() in k.lower()]
                 if len(matches) == 1:
                     symbol = matches[0]
@@ -594,7 +626,6 @@ def _action_impact(directory, symbol, filepath=None):
     lines.append(f"- **风险等级**: **{result['risk_level'].upper()}**")
     lines.append(f"")
 
-    # 同文件其他符号
     same_file = result.get("same_file_symbols", [])
     if same_file:
         lines.append(f"### 📄 同文件其他符号 ({len(same_file)})")
@@ -602,7 +633,6 @@ def _action_impact(directory, symbol, filepath=None):
             lines.append(f"- `{s['name']}` ({s['kind']}:{s['line']})")
         lines.append(f"")
 
-    # 直接调用者
     callers = result.get("direct_callers", [])
     if callers:
         lines.append(f"### 👆 直接调用者 ({len(callers)})")
@@ -611,7 +641,6 @@ def _action_impact(directory, symbol, filepath=None):
             lines.append(f"- `{c.get('name', '?')}` → `{fname}:{c.get('line', '?')}`")
         lines.append(f"")
 
-    # 间接调用者
     indirect = result.get("indirect_callers", [])
     if indirect:
         lines.append(f"### 🔄 间接影响 ({len(indirect)})")
@@ -620,7 +649,6 @@ def _action_impact(directory, symbol, filepath=None):
             lines.append(f"- `{c.get('name', '?')}` → `{fname}:{c.get('line', '?')}`")
         lines.append(f"")
 
-    # 它调用了谁
     callees = result.get("callees", [])
     if callees:
         lines.append(f"### 👇 它依赖 ({len(callees)})")
@@ -630,9 +658,13 @@ def _action_impact(directory, symbol, filepath=None):
     lines.append(f"---\n> {result.get('hint', '')}")
     return '\n'.join(lines)
 
-# @2026-05-19 gen by claude, 模块依赖图分析
 def _action_deps(directory):
-    """构建项目模块依赖图，检测循环依赖和孤立模块"""
+    """
+    构建项目模块依赖图，检测循环依赖和孤立模块
+
+    Args:
+        directory: Description.
+    """
     from tea_agent.lsp.ts_analyzer import build_dependency_graph
     directory = os.path.abspath(directory)
     result = build_dependency_graph(directory)
@@ -658,7 +690,6 @@ def _action_deps(directory):
             lines.append(f"- `{o}`")
         lines.append(f"")
 
-    # Top importers
     top = sorted(result["modules"].items(),
                  key=lambda x: len(x[1].get("imported_by", [])),
                  reverse=True)[:10]
@@ -713,7 +744,11 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
     else:
         return f"❌ 未知 action: {action}"
 
-# @2026-05-19 gen by claude, 新增 impact(影响分析) / deps(依赖图) 查询类型 + filepath 参数
 def meta_toolkit_explr() -> dict:
-    """Meta toolkit explr."""
+    """
+    Meta toolkit explr
+
+    Returns:
+        dict: Description.
+    """
     return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=query 查询符号位置/调用者/被调用者/影响分析/依赖图；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "query", "status"], "description": "build=构建项目知识库, query=查询符号/调用关系/影响/依赖, status=查看知识库状态"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "[query] 要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "arch_context", "impact", "deps"], "description": "[query] 查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, arch_context=架构上下文, impact=影响分析, deps=模块依赖图", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "[build] true=强制重建，忽略已有索引", "default": "false"}, "filepath": {"type": "string", "description": "[impact] 符号所在的文件路径"}}, "required": ["action"]}}}

@@ -16,6 +16,50 @@
       "file": "test_session.py",
       "line": 75
     },
+    "test_imports": {
+      "file": "test_multi_agent.py",
+      "line": 9
+    },
+    "test_sub_agent_config": {
+      "file": "test_multi_agent.py",
+      "line": 38
+    },
+    "test_subtask": {
+      "file": "test_multi_agent.py",
+      "line": 64
+    },
+    "test_task_decomposer_rules": {
+      "file": "test_multi_agent.py",
+      "line": 89
+    },
+    "test_execution_order": {
+      "file": "test_multi_agent.py",
+      "line": 117
+    },
+    "test_result_aggregator": {
+      "file": "test_multi_agent.py",
+      "line": 138
+    },
+    "test_agent_pool": {
+      "file": "test_multi_agent.py",
+      "line": 177
+    },
+    "test_orchestrator": {
+      "file": "test_multi_agent.py",
+      "line": 207
+    },
+    "test_config_integration": {
+      "file": "test_multi_agent.py",
+      "line": 240
+    },
+    "test_toolkit_delegate": {
+      "file": "test_multi_agent.py",
+      "line": 267
+    },
+    "test_toolkit_sub_agent": {
+      "file": "test_multi_agent.py",
+      "line": 290
+    },
     "test_config_loads": {
       "file": "test_main.py",
       "line": 12
@@ -107,6 +151,146 @@
     "test_except_branch_still_has_render": {
       "file": "tests/test_render_timing.py",
       "line": 132
+    },
+    "test_default_config": {
+      "file": "tests/test_multi_agent.py",
+      "line": 37
+    },
+    "test_custom_config": {
+      "file": "tests/test_multi_agent.py",
+      "line": 43
+    },
+    "setUp": {
+      "file": "tests/test_multi_agent.py",
+      "line": 412
+    },
+    "test_decompose_code_task": {
+      "file": "tests/test_multi_agent.py",
+      "line": 65
+    },
+    "test_decompose_search_task": {
+      "file": "tests/test_multi_agent.py",
+      "line": 72
+    },
+    "test_decompose_general_task": {
+      "file": "tests/test_multi_agent.py",
+      "line": 78
+    },
+    "test_execution_order_no_deps": {
+      "file": "tests/test_multi_agent.py",
+      "line": 84
+    },
+    "test_execution_order_with_deps": {
+      "file": "tests/test_multi_agent.py",
+      "line": 95
+    },
+    "test_to_dict": {
+      "file": "tests/test_config.py",
+      "line": 212
+    },
+    "test_from_dict": {
+      "file": "tests/test_multi_agent.py",
+      "line": 130
+    },
+    "test_aggregate_single_result": {
+      "file": "tests/test_multi_agent.py",
+      "line": 149
+    },
+    "test_aggregate_multiple_results": {
+      "file": "tests/test_multi_agent.py",
+      "line": 156
+    },
+    "test_aggregate_empty": {
+      "file": "tests/test_multi_agent.py",
+      "line": 168
+    },
+    "test_summarize_short": {
+      "file": "tests/test_multi_agent.py",
+      "line": 173
+    },
+    "test_summarize_long": {
+      "file": "tests/test_multi_agent.py",
+      "line": 179
+    },
+    "test_merge_code_results": {
+      "file": "tests/test_multi_agent.py",
+      "line": 185
+    },
+    "test_resolve_params_without_parent": {
+      "file": "tests/test_multi_agent.py",
+      "line": 208
+    },
+    "test_resolve_params_with_parent": {
+      "file": "tests/test_multi_agent.py",
+      "line": 216
+    },
+    "test_build_tool_list": {
+      "file": "tests/test_multi_agent.py",
+      "line": 242
+    },
+    "test_register_agent_type": {
+      "file": "tests/test_multi_agent.py",
+      "line": 318
+    },
+    "test_create_agent": {
+      "file": "tests/test_multi_agent.py",
+      "line": 281
+    },
+    "test_remove_agent": {
+      "file": "tests/test_multi_agent.py",
+      "line": 288
+    },
+    "test_shutdown_all": {
+      "file": "tests/test_multi_agent.py",
+      "line": 295
+    },
+    "test_default_agent_types": {
+      "file": "tests/test_multi_agent.py",
+      "line": 309
+    },
+    "test_execute_single_mode": {
+      "file": "tests/test_multi_agent.py",
+      "line": 323
+    },
+    "test_get_status": {
+      "file": "tests/test_multi_agent.py",
+      "line": 329
+    },
+    "test_execution_history": {
+      "file": "tests/test_multi_agent.py",
+      "line": 336
+    },
+    "test_shutdown": {
+      "file": "tests/test_multi_agent.py",
+      "line": 340
+    },
+    "test_multi_agent_config_in_agent_config": {
+      "file": "tests/test_multi_agent.py",
+      "line": 350
+    },
+    "test_sub_agent_def": {
+      "file": "tests/test_multi_agent.py",
+      "line": 361
+    },
+    "test_meta_schema": {
+      "file": "tests/test_multi_agent.py",
+      "line": 379
+    },
+    "test_delegate_without_orchestrator": {
+      "file": "tests/test_multi_agent.py",
+      "line": 392
+    },
+    "test_report_and_status": {
+      "file": "tests/test_multi_agent.py",
+      "line": 416
+    },
+    "test_status_all_agents": {
+      "file": "tests/test_multi_agent.py",
+      "line": 433
+    },
+    "test_meta_schemas": {
+      "file": "tests/test_multi_agent.py",
+      "line": 446
     },
     "tmp_db_path": {
       "file": "tests/conftest.py",
@@ -376,10 +560,6 @@
       "file": "tests/test_config.py",
       "line": 198
     },
-    "test_to_dict": {
-      "file": "tests/test_config.py",
-      "line": 212
-    },
     "test_reload_from_dict": {
       "file": "tests/test_config.py",
       "line": 219
@@ -402,95 +582,95 @@
     },
     "_start_subconscious": {
       "file": "tea_agent/agent_core.py",
-      "line": 85
+      "line": 76
     },
     "_start_scheduler": {
       "file": "tea_agent/gui.py",
-      "line": 412
+      "line": 398
     },
     "_init_session": {
       "file": "tea_agent/gui.py",
-      "line": 515
+      "line": 511
     },
     "_init_session_info_str": {
       "file": "tea_agent/agent_core.py",
-      "line": 162
+      "line": 146
     },
     "_extract_files_from_rounds": {
       "file": "tea_agent/agent_core.py",
-      "line": 174
+      "line": 160
     },
     "_post_chat_pipeline": {
       "file": "tea_agent/agent_core.py",
-      "line": 230
+      "line": 212
     },
     "_update_level3_summary": {
       "file": "tea_agent/agent_core.py",
-      "line": 294
+      "line": 279
     },
     "_load_topic_history_into_session": {
       "file": "tea_agent/agent_core.py",
-      "line": 348
+      "line": 332
     },
     "_do_async_summaries": {
       "file": "tea_agent/agent_core.py",
-      "line": 377
+      "line": 354
     },
     "_auto_summary": {
       "file": "tea_agent/agent_core.py",
-      "line": 388
+      "line": 369
     },
     "_suggest_new_topic_if_needed": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 270
+      "line": 325
     },
     "_on_summary_updated": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 284
+      "line": 339
     },
     "initialize": {
-      "file": "tea_agent/prompt_manager.py",
-      "line": 64
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 159
     },
     "name": {
       "file": "tea_agent/session_api_component.py",
-      "line": 32
+      "line": 37
     },
     "_auto_start_subconscious": {
       "file": "tea_agent/tea_main_cli.py",
-      "line": 61
+      "line": 52
     },
     "_stop_dream": {
       "file": "tea_agent/tea_main_cli.py",
-      "line": 78
+      "line": 68
     },
     "_auto_init_topic": {
       "file": "tea_agent/cli.py",
-      "line": 373
+      "line": 389
     },
     "_new_topic": {
       "file": "tea_agent/cli.py",
-      "line": 251
+      "line": 260
     },
     "_list_topics": {
       "file": "tea_agent/cli.py",
-      "line": 260
+      "line": 269
     },
     "_switch_topic": {
       "file": "tea_agent/cli.py",
-      "line": 272
+      "line": 281
     },
     "_load_history": {
       "file": "tea_agent/tea_main_cli.py",
-      "line": 133
+      "line": 128
     },
     "_show_topic_info": {
       "file": "tea_agent/tea_main_cli.py",
-      "line": 139
+      "line": 134
     },
     "_show_memories": {
       "file": "tea_agent/tea_main_cli.py",
-      "line": 154
+      "line": 146
     },
     "chat": {
       "file": "tea_agent/tea_agent.py",
@@ -498,107 +678,107 @@
     },
     "stream_cb": {
       "file": "tea_agent/tea_agent.py",
-      "line": 272
+      "line": 279
     },
     "status_cb": {
       "file": "tea_agent/tea_agent.py",
-      "line": 283
+      "line": 290
     },
     "work": {
       "file": "tea_agent/gui.py",
-      "line": 753
+      "line": 849
     },
     "_on_tool_log": {
       "file": "tea_agent/tea_main_cli.py",
-      "line": 238
+      "line": 227
     },
     "run": {
-      "file": "tea_agent/cli.py",
-      "line": 69
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 258
     },
     "run_oneshot": {
       "file": "tea_agent/tea_main_cli.py",
-      "line": 279
+      "line": 276
     },
     "_handle_command": {
       "file": "tea_agent/cli.py",
-      "line": 180
+      "line": 181
     },
     "_cmd_help": {
       "file": "tea_agent/tea_main_cli.py",
-      "line": 317
+      "line": 316
     },
     "_cmd_status": {
       "file": "tea_agent/tea_main_cli.py",
-      "line": 333
+      "line": 332
     },
     "_extract_keywords": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 96
+      "line": 94
     },
     "_jaccard_similarity": {
       "file": "tea_agent/merge_db.py",
-      "line": 53
+      "line": 57
     },
     "_get_max_ids": {
       "file": "tea_agent/merge_db.py",
-      "line": 97
+      "line": 102
     },
     "_get_table_columns": {
       "file": "tea_agent/merge_db.py",
-      "line": 122
+      "line": 133
     },
     "_merge_meta": {
       "file": "tea_agent/merge_db.py",
-      "line": 137
+      "line": 153
     },
     "_merge_topics": {
       "file": "tea_agent/merge_db.py",
-      "line": 160
+      "line": 173
     },
     "_merge_conversations": {
       "file": "tea_agent/merge_db.py",
-      "line": 187
+      "line": 197
     },
     "_merge_agent_rounds": {
       "file": "tea_agent/merge_db.py",
-      "line": 230
+      "line": 236
     },
     "_merge_topic_token_stats": {
       "file": "tea_agent/merge_db.py",
-      "line": 269
+      "line": 272
     },
     "_accumulate_token_stats": {
       "file": "tea_agent/merge_db.py",
-      "line": 311
+      "line": 313
     },
     "_merge_t_conv_summary": {
       "file": "tea_agent/merge_db.py",
-      "line": 340
+      "line": 346
     },
     "_merge_memories": {
       "file": "tea_agent/merge_db.py",
-      "line": 381
+      "line": 384
     },
     "_find_duplicate": {
       "file": "tea_agent/memory.py",
-      "line": 544
+      "line": 565
     },
     "_merge_memory_record": {
       "file": "tea_agent/merge_db.py",
-      "line": 469
+      "line": 478
     },
     "_merge_system_prompts": {
       "file": "tea_agent/merge_db.py",
-      "line": 505
+      "line": 516
     },
     "_merge_reflections": {
       "file": "tea_agent/merge_db.py",
-      "line": 566
+      "line": 572
     },
     "_merge_config_history": {
       "file": "tea_agent/merge_db.py",
-      "line": 607
+      "line": 610
     },
     "merge": {
       "file": "tea_agent/merge_db.py",
@@ -606,7 +786,7 @@
     },
     "close": {
       "file": "tea_agent/store/_core.py",
-      "line": 658
+      "line": 644
     },
     "_fs": {
       "file": "tea_agent/_gui/_fonts.py",
@@ -614,435 +794,443 @@
     },
     "_init_fonts": {
       "file": "tea_agent/_gui/_fonts.py",
-      "line": 23
+      "line": 28
     },
     "_detect": {
       "file": "tea_agent/_gui/_fonts.py",
-      "line": 33
+      "line": 38
     },
     "_create_ui": {
       "file": "tea_agent/gui.py",
-      "line": 425
+      "line": 411
     },
     "_refresh": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 507
+      "line": 486
     },
     "_sort": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 708
+      "line": 677
     },
     "_add_dialog": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 233
+      "line": 224
     },
     "do_add": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 278
+      "line": 269
     },
     "_soft_delete": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 302
+      "line": 293
     },
     "_hard_delete": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 818
+      "line": 786
     },
     "_on_double_click": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 326
+      "line": 317
     },
     "_export": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 353
+      "line": 344
     },
     "_do_search": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 562
+      "line": 538
     },
     "_show_search_results": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 601
+      "line": 575
     },
     "_clear_search": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 630
+      "line": 603
     },
     "_generate_vectors": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 638
+      "line": 611
     },
     "_run": {
       "file": "tea_agent/toolkit/toolkit_exec.py",
-      "line": 70
+      "line": 56
     },
     "parse_tok": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 718
+      "line": 687
     },
     "_selected_id": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 736
+      "line": 705
     },
     "_switch_to": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 742
+      "line": 711
     },
     "_rename_dialog": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 763
+      "line": 731
     },
     "do_rename": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 786
+      "line": 754
     },
     "_deactivate": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 800
+      "line": 768
     },
     "_activate": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 809
+      "line": 777
     },
     "_export_selected": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 841
+      "line": 809
     },
     "_export_all": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 850
+      "line": 818
     },
     "_do_export": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 858
+      "line": 826
     },
     "_write_topic_md": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 900
+      "line": 868
     },
     "_model_tab": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 1003
+      "line": 978
     },
     "_mode_params_tab": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 1083
+      "line": 1056
     },
     "_runtime_tab": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 1120
+      "line": 1093
     },
     "_on_mousewheel": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 1138
+      "line": 1111
     },
     "_load_values": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 1179
+      "line": 1152
     },
     "_do_save": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 1226
+      "line": 1197
     },
     "destroy": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 1313
+      "line": 1282
     },
     "success_rate": {
       "file": "tea_agent/reflection.py",
-      "line": 43
+      "line": 42
     },
     "duration_seconds": {
       "file": "tea_agent/reflection.py",
-      "line": 51
+      "line": 55
     },
     "start_trace": {
       "file": "tea_agent/reflection.py",
-      "line": 93
+      "line": 102
     },
     "record_tool_call": {
       "file": "tea_agent/reflection.py",
-      "line": 103
+      "line": 121
     },
     "finish_trace": {
       "file": "tea_agent/reflection.py",
-      "line": 112
+      "line": 139
     },
     "should_reflect": {
       "file": "tea_agent/reflection.py",
-      "line": 121
+      "line": 157
     },
     "build_reflection_prompt": {
       "file": "tea_agent/reflection.py",
-      "line": 144
+      "line": 176
     },
     "parse_reflection_result": {
       "file": "tea_agent/reflection.py",
-      "line": 173
+      "line": 210
     },
     "generate_reflection": {
       "file": "tea_agent/reflection.py",
-      "line": 184
+      "line": 229
     },
     "_build_tool_stats": {
       "file": "tea_agent/reflection.py",
-      "line": 268
+      "line": 308
     },
     "last_prompt_suggestion": {
       "file": "tea_agent/reflection.py",
-      "line": 285
+      "line": 330
     },
     "get_stats": {
       "file": "tea_agent/prompt_manager.py",
-      "line": 268
+      "line": 283
     },
     "is_configured": {
       "file": "tea_agent/config.py",
-      "line": 146
+      "line": 173
     },
     "resolve": {
       "file": "tea_agent/config.py",
-      "line": 64
+      "line": 68
     },
     "_resolve": {
       "file": "tea_agent/config.py",
-      "line": 86
+      "line": 88
     },
     "db_path_abs": {
       "file": "tea_agent/config.py",
-      "line": 106
+      "line": 108
     },
     "toolkit_dir_abs": {
       "file": "tea_agent/config.py",
-      "line": 111
+      "line": 118
     },
     "kb_dir_abs": {
       "file": "tea_agent/config.py",
-      "line": 116
+      "line": 128
     },
     "skills_dir_abs": {
       "file": "tea_agent/config.py",
-      "line": 121
+      "line": 138
     },
     "data_dir_abs": {
       "file": "tea_agent/config.py",
-      "line": 126
+      "line": 148
+    },
+    "to_dict": {
+      "file": "tea_agent/multi_agent/task_decomposer.py",
+      "line": 41
+    },
+    "from_dict": {
+      "file": "tea_agent/multi_agent/task_decomposer.py",
+      "line": 59
     },
     "get_effective_params": {
       "file": "tea_agent/config.py",
-      "line": 158
+      "line": 274
     },
     "get": {
       "file": "tea_agent/config.py",
-      "line": 230
+      "line": 338
     },
     "set": {
       "file": "tea_agent/config.py",
-      "line": 236
+      "line": 350
     },
     "apply_changes": {
       "file": "tea_agent/config.py",
-      "line": 263
+      "line": 377
     },
     "reload_from_dict": {
       "file": "tea_agent/config.py",
-      "line": 286
-    },
-    "to_dict": {
-      "file": "tea_agent/skills/__init__.py",
-      "line": 55
+      "line": 400
     },
     "load_config": {
       "file": "tea_agent/config.py",
-      "line": 296
+      "line": 420
     },
     "ensure_config_dir": {
       "file": "tea_agent/config.py",
-      "line": 395
+      "line": 515
     },
     "save_config": {
       "file": "tea_agent/config.py",
-      "line": 405
+      "line": 530
     },
     "create_default_config": {
       "file": "tea_agent/config.py",
-      "line": 488
+      "line": 611
     },
     "get_config": {
       "file": "tea_agent/config.py",
-      "line": 590
+      "line": 712
     },
     "estimate_tokens": {
       "file": "tea_agent/token_utils.py",
-      "line": 34
+      "line": 32
     },
     "estimate_message_tokens": {
       "file": "tea_agent/token_utils.py",
-      "line": 51
+      "line": 54
     },
     "estimate_text_tokens": {
       "file": "tea_agent/token_utils.py",
-      "line": 61
+      "line": 72
     },
     "_estimate_tokens_tiktoken": {
       "file": "tea_agent/token_utils.py",
-      "line": 75
+      "line": 93
     },
     "_estimate_tokens_char": {
       "file": "tea_agent/token_utils.py",
-      "line": 117
+      "line": 140
     },
     "_estimate_tokens_char_single": {
       "file": "tea_agent/token_utils.py",
-      "line": 131
+      "line": 156
     },
     "_estimate_tokens_char_from_text": {
       "file": "tea_agent/token_utils.py",
-      "line": 165
+      "line": 195
     },
     "compute_safe_budget": {
       "file": "tea_agent/token_utils.py",
-      "line": 174
+      "line": 211
     },
     "messages": {
       "file": "tea_agent/onlinesession.py",
-      "line": 223
+      "line": 205
     },
     "model": {
       "file": "tea_agent/onlinesession.py",
-      "line": 237
+      "line": 219
     },
     "_rounds_collector": {
       "file": "tea_agent/onlinesession.py",
-      "line": 251
+      "line": 233
     },
     "_last_usage": {
       "file": "tea_agent/onlinesession.py",
-      "line": 265
+      "line": 247
     },
     "_last_cheap_usage": {
       "file": "tea_agent/onlinesession.py",
-      "line": 279
+      "line": 261
     },
     "_history_summary": {
       "file": "tea_agent/onlinesession.py",
-      "line": 293
+      "line": 275
     },
     "_semantic_summary": {
       "file": "tea_agent/onlinesession.py",
-      "line": 307
+      "line": 289
     },
     "_tool_chain_summary": {
       "file": "tea_agent/onlinesession.py",
-      "line": 321
+      "line": 303
     },
     "_level2": {
       "file": "tea_agent/onlinesession.py",
-      "line": 335
+      "line": 317
     },
     "_get_summarize_client": {
       "file": "tea_agent/session_memory_component.py",
-      "line": 202
+      "line": 200
     },
     "_get_effective_params": {
       "file": "tea_agent/onlinesession.py",
-      "line": 353
+      "line": 337
     },
     "_process_stream_with_reasoning": {
       "file": "tea_agent/onlinesession.py",
-      "line": 365
+      "line": 354
     },
     "_refresh_from_config": {
       "file": "tea_agent/onlinesession.py",
-      "line": 406
+      "line": 395
     },
     "_setup_default_pipeline": {
       "file": "tea_agent/onlinesession.py",
-      "line": 422
+      "line": 407
     },
     "_enforce_token_budget": {
       "file": "tea_agent/onlinesession.py",
-      "line": 465
+      "line": 443
     },
     "_build_api_messages": {
       "file": "tea_agent/onlinesession.py",
-      "line": 600
+      "line": 570
+    },
+    "_clean_orphan_tool_messages": {
+      "file": "tea_agent/onlinesession.py",
+      "line": 726
     },
     "_sanitize_api_messages": {
       "file": "tea_agent/onlinesession.py",
-      "line": 780
+      "line": 762
     },
     "_try_fix_truncated_json": {
       "file": "tea_agent/onlinesession.py",
-      "line": 840
+      "line": 830
     },
     "_get_os_context": {
       "file": "tea_agent/onlinesession.py",
-      "line": 893
+      "line": 888
     },
     "_get_subconscious_context": {
       "file": "tea_agent/onlinesession.py",
-      "line": 918
+      "line": 908
     },
     "_to_multimodal": {
       "file": "tea_agent/onlinesession.py",
-      "line": 959
+      "line": 949
     },
     "_filter_level2_by_relevance": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1001
+      "line": 999
     },
     "_key_words": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1006
+      "line": 1013
     },
     "_extract_files_from_text": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1017
+      "line": 1024
     },
     "_analyze_intent": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1092
+      "line": 1096
     },
     "_execute_tool_loop": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1123
+      "line": 1135
     },
     "_build_tools": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1308
+      "line": 1320
     },
     "update_tools": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1327
+      "line": 1343
     },
     "_auto_detect_mode": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1332
+      "line": 1348
     },
     "reset_session_state": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1348
+      "line": 1369
     },
     "_notify_reflection_done": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1357
+      "line": 1378
     },
     "_notify_prompt_evolved": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1369
+      "line": 1395
     },
     "chat_stream": {
       "file": "tea_agent/basesession.py",
-      "line": 60
+      "line": 58
     },
     "_auto_extract": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1450
+      "line": 1485
     },
     "_auto_reflect": {
       "file": "tea_agent/onlinesession.py",
-      "line": 1462
+      "line": 1496
     },
     "_tokenize": {
       "file": "demo/csi300_predictor.py",
@@ -1050,71 +1238,71 @@
     },
     "_hash_token": {
       "file": "tea_agent/embedding_util.py",
-      "line": 58
+      "line": 62
     },
     "add_document": {
       "file": "tea_agent/embedding_util.py",
-      "line": 63
+      "line": 75
     },
     "vectorize": {
       "file": "tea_agent/embedding_util.py",
-      "line": 70
+      "line": 87
     },
     "_init_from_config": {
       "file": "tea_agent/embedding_util.py",
-      "line": 121
+      "line": 141
     },
     "mode": {
       "file": "tea_agent/embedding_util.py",
-      "line": 147
+      "line": 170
     },
     "configured": {
       "file": "tea_agent/embedding_util.py",
-      "line": 152
+      "line": 180
     },
     "embed": {
       "file": "tea_agent/embedding_util.py",
-      "line": 156
+      "line": 189
     },
     "embed_batch": {
       "file": "tea_agent/embedding_util.py",
-      "line": 181
+      "line": 213
     },
     "_build_url": {
       "file": "tea_agent/embedding_util.py",
-      "line": 190
+      "line": 230
     },
     "_embed_api": {
       "file": "tea_agent/embedding_util.py",
-      "line": 202
+      "line": 244
     },
     "_embed_api_batch": {
       "file": "tea_agent/embedding_util.py",
-      "line": 245
+      "line": 293
     },
     "_embed_tfidf": {
       "file": "tea_agent/embedding_util.py",
-      "line": 271
+      "line": 327
     },
     "build_tfidf_vocabulary": {
       "file": "tea_agent/embedding_util.py",
-      "line": 275
+      "line": 339
     },
     "cosine_similarity": {
       "file": "tea_agent/embedding_util.py",
-      "line": 283
+      "line": 352
     },
     "get_embedding_usage": {
       "file": "tea_agent/embedding_util.py",
-      "line": 297
+      "line": 375
     },
     "search": {
       "file": "tea_agent/project_memory.py",
-      "line": 87
+      "line": 104
     },
     "get_embedding_engine": {
       "file": "tea_agent/embedding_util.py",
-      "line": 334
+      "line": 411
     },
     "_get_cheap_params": {
       "file": "tea_agent/session_api_component.py",
@@ -1122,207 +1310,207 @@
     },
     "summarize_old_history": {
       "file": "tea_agent/session_summarizer_component.py",
-      "line": 47
+      "line": 62
     },
     "_conversations_to_text": {
       "file": "tea_agent/session_summarizer_component.py",
-      "line": 154
+      "line": 158
     },
     "_find_recent_boundary": {
       "file": "tea_agent/session_summarizer_component.py",
-      "line": 183
+      "line": 194
     },
     "add_user_message": {
       "file": "tea_agent/basesession.py",
-      "line": 73
+      "line": 71
     },
     "add_assistant_message": {
       "file": "tea_agent/basesession.py",
-      "line": 86
+      "line": 89
     },
     "add_tool_result": {
       "file": "tea_agent/session_tool_component.py",
-      "line": 115
+      "line": 138
     },
     "get_recent_messages": {
       "file": "tea_agent/basesession.py",
-      "line": 98
+      "line": 112
     },
     "_strip_reasoning_content": {
       "file": "tea_agent/basesession.py",
-      "line": 110
+      "line": 122
     },
     "_compress_tool_content": {
       "file": "tea_agent/basesession.py",
-      "line": 125
+      "line": 138
     },
     "_compress_json_args": {
       "file": "tea_agent/basesession.py",
-      "line": 197
+      "line": 204
     },
     "_compress_value": {
       "file": "tea_agent/basesession.py",
-      "line": 252
+      "line": 255
     },
     "_guess_tool_threshold": {
       "file": "tea_agent/basesession.py",
-      "line": 306
+      "line": 312
     },
     "_compress_tool_rounds": {
       "file": "tea_agent/basesession.py",
-      "line": 356
+      "line": 359
     },
     "_repair_incomplete_tool_chains": {
       "file": "tea_agent/basesession.py",
-      "line": 446
+      "line": 435
     },
     "load_history": {
       "file": "tea_agent/basesession.py",
-      "line": 540
+      "line": 513
     },
     "interrupt": {
       "file": "tea_agent/gui.py",
-      "line": 1001
+      "line": 1133
     },
     "reset_interrupt": {
       "file": "tea_agent/basesession.py",
-      "line": 615
+      "line": 570
     },
     "_trim_messages": {
       "file": "tea_agent/basesession.py",
-      "line": 619
+      "line": 574
     },
     "_on_post_reply": {
       "file": "tea_agent/cli.py",
-      "line": 55
+      "line": 52
     },
     "_on_init_done": {
       "file": "tea_agent/cli.py",
-      "line": 65
+      "line": 62
     },
     "_chat": {
       "file": "tea_agent/cli.py",
-      "line": 297
+      "line": 304
     },
     "on_stream": {
       "file": "tea_agent/cli.py",
-      "line": 309
+      "line": 319
     },
     "on_status": {
       "file": "tea_agent/cli.py",
-      "line": 343
+      "line": 356
     },
     "action_send_from_input": {
       "file": "tea_agent/tui.py",
-      "line": 288
+      "line": 323
     },
     "action_insert_newline": {
       "file": "tea_agent/tui.py",
-      "line": 291
+      "line": 327
     },
     "compose": {
       "file": "tea_agent/tui.py",
-      "line": 294
+      "line": 330
     },
     "on_mount": {
       "file": "tea_agent/tui.py",
-      "line": 307
+      "line": 348
     },
     "_init_agent": {
       "file": "tea_agent/tui.py",
-      "line": 312
+      "line": 354
     },
     "_check_agent_ready": {
       "file": "tea_agent/tui.py",
-      "line": 325
+      "line": 368
     },
     "_show_welcome": {
       "file": "tea_agent/tui.py",
-      "line": 330
+      "line": 374
     },
     "_show_error": {
       "file": "tea_agent/tui.py",
-      "line": 349
+      "line": 394
     },
     "_update_status": {
       "file": "tea_agent/gui.py",
-      "line": 530
+      "line": 534
     },
     "_update_status_right": {
       "file": "tea_agent/tui.py",
-      "line": 363
+      "line": 419
     },
     "_start_stream_timer": {
       "file": "tea_agent/tui.py",
-      "line": 373
+      "line": 429
     },
     "_stop_stream_timer": {
       "file": "tea_agent/tui.py",
-      "line": 378
+      "line": 434
     },
     "on_key": {
       "file": "tea_agent/tui.py",
-      "line": 385
+      "line": 440
     },
     "_do_send": {
       "file": "tea_agent/tui.py",
-      "line": 389
+      "line": 449
     },
     "run_chat": {
       "file": "tea_agent/tui.py",
-      "line": 409
+      "line": 470
     },
     "_on_chat_done": {
       "file": "tea_agent/tui.py",
-      "line": 425
+      "line": 487
     },
     "_append_chat": {
       "file": "tea_agent/tui.py",
-      "line": 442
+      "line": 503
     },
     "_strip_markup": {
       "file": "tea_agent/tui.py",
-      "line": 453
+      "line": 518
     },
     "_chat_write": {
       "file": "tea_agent/tui.py",
-      "line": 457
+      "line": 530
     },
     "_append_chat_inline": {
       "file": "tea_agent/tui.py",
-      "line": 470
+      "line": 548
     },
     "_flush_stream_buffer": {
       "file": "tea_agent/tui.py",
-      "line": 474
+      "line": 557
     },
     "_show_help": {
       "file": "tea_agent/tui.py",
-      "line": 509
+      "line": 597
     },
     "_cmd_set": {
       "file": "tea_agent/cli.py",
-      "line": 215
+      "line": 224
     },
     "action_interrupt": {
       "file": "tea_agent/tui.py",
-      "line": 576
+      "line": 676
     },
     "action_toggle_think": {
       "file": "tea_agent/tui.py",
-      "line": 583
+      "line": 684
     },
     "action_toggle_verbose": {
       "file": "tea_agent/tui.py",
-      "line": 592
+      "line": 694
     },
     "action_new_topic": {
       "file": "tea_agent/tui.py",
-      "line": 599
+      "line": 702
     },
     "action_list_topics": {
       "file": "tea_agent/tui.py",
-      "line": 610
+      "line": 714
     },
     "register_step": {
       "file": "tea_agent/session_pipeline.py",
@@ -1330,35 +1518,35 @@
     },
     "enable_step": {
       "file": "tea_agent/session_pipeline.py",
-      "line": 97
+      "line": 95
     },
     "disable_step": {
       "file": "tea_agent/session_pipeline.py",
-      "line": 102
+      "line": 105
     },
     "toggle_step": {
       "file": "tea_agent/session_pipeline.py",
-      "line": 107
+      "line": 115
     },
     "set_step_position": {
       "file": "tea_agent/session_pipeline.py",
-      "line": 112
+      "line": 125
     },
     "remove_step": {
       "file": "tea_agent/session_pipeline.py",
-      "line": 118
+      "line": 137
     },
     "get_enabled_steps": {
       "file": "tea_agent/session_pipeline.py",
-      "line": 124
+      "line": 148
     },
     "execute": {
-      "file": "tea_agent/session_pipeline.py",
-      "line": 131
+      "file": "tea_agent/multi_agent/orchestrator.py",
+      "line": 178
     },
     "list_steps": {
       "file": "tea_agent/session_pipeline.py",
-      "line": 183
+      "line": 208
     },
     "_load_config": {
       "file": "demo/csi300_predictor.py",
@@ -1366,23 +1554,23 @@
     },
     "_init_toolkit": {
       "file": "tea_agent/tea_agent.py",
-      "line": 129
+      "line": 125
     },
     "_no_tools_chat": {
       "file": "tea_agent/tea_agent.py",
-      "line": 197
+      "line": 186
     },
     "toolkit_save": {
       "file": "tea_agent/tea_agent.py",
-      "line": 218
+      "line": 204
     },
     "toolkit_reload": {
       "file": "tea_agent/tlk.py",
-      "line": 524
+      "line": 455
     },
     "_notify": {
       "file": "tea_agent/toolkit/toolkit_scheduler.py",
-      "line": 157
+      "line": 138
     },
     "_chat_impl": {
       "file": "tea_agent/tea_agent.py",
@@ -1390,115 +1578,115 @@
     },
     "__enter__": {
       "file": "tea_agent/tea_agent.py",
-      "line": 327
+      "line": 328
     },
     "__exit__": {
       "file": "tea_agent/tea_agent.py",
-      "line": 330
+      "line": 332
     },
     "config": {
       "file": "tea_agent/tea_agent.py",
-      "line": 338
+      "line": 345
     },
     "toolkit": {
       "file": "tea_agent/tea_agent.py",
-      "line": 343
+      "line": 350
     },
     "Title": {
       "file": "tea_agent/gui.py",
-      "line": 148
+      "line": 140
     },
     "Id": {
       "file": "tea_agent/gui.py",
-      "line": 153
+      "line": 145
     },
     "Status": {
       "file": "tea_agent/gui.py",
-      "line": 158
+      "line": 150
     },
     "Category": {
       "file": "tea_agent/gui.py",
-      "line": 163
+      "line": 155
     },
     "IconPixmap": {
       "file": "tea_agent/gui.py",
-      "line": 168
+      "line": 160
     },
     "Activate": {
       "file": "tea_agent/gui.py",
-      "line": 177
+      "line": 168
     },
     "ContextMenu": {
       "file": "tea_agent/gui.py",
-      "line": 188
+      "line": 179
     },
     "start": {
       "file": "tea_agent/_gui/_tray.py",
-      "line": 36
+      "line": 35
     },
     "stop": {
       "file": "tea_agent/_gui/_tray.py",
-      "line": 40
+      "line": 39
     },
     "_create_tray_icon": {
       "file": "tea_agent/_gui/_tray.py",
-      "line": 74
+      "line": 72
     },
     "_pil_to_argb32": {
       "file": "tea_agent/_gui/_tray.py",
-      "line": 89
+      "line": 87
     },
     "_init_tray": {
       "file": "tea_agent/_gui/_tray.py",
-      "line": 51
+      "line": 49
     },
     "_on_tray_activate": {
       "file": "tea_agent/_gui/_tray.py",
-      "line": 104
+      "line": 101
     },
     "_on_tray_context_menu": {
       "file": "tea_agent/_gui/_tray.py",
-      "line": 110
+      "line": 107
     },
     "_on_closing": {
       "file": "tea_agent/_gui/_tray.py",
-      "line": 119
+      "line": 122
     },
     "_start_dream": {
       "file": "tea_agent/gui.py",
-      "line": 391
+      "line": 378
     },
     "_adjust_chat_sash": {
       "file": "tea_agent/gui.py",
-      "line": 429
+      "line": 415
     },
     "zoom_in": {
       "file": "tea_agent/gui.py",
-      "line": 433
+      "line": 419
     },
     "zoom_out": {
       "file": "tea_agent/gui.py",
-      "line": 446
+      "line": 432
     },
     "_apply_zoom": {
       "file": "tea_agent/gui.py",
-      "line": 459
+      "line": 445
     },
     "_history_prev_round": {
       "file": "tea_agent/gui.py",
-      "line": 470
+      "line": 456
     },
     "_history_next_round": {
       "file": "tea_agent/gui.py",
-      "line": 489
+      "line": 478
     },
     "_now_ts": {
       "file": "tea_agent/gui.py",
-      "line": 511
+      "line": 502
     },
     "toggle_reasoning": {
       "file": "tea_agent/gui.py",
-      "line": 519
+      "line": 515
     },
     "safe_stream": {
       "file": "tea_agent/_gui/_stream_manager.py",
@@ -1506,187 +1694,191 @@
     },
     "safe_log": {
       "file": "tea_agent/_gui/_stream_manager.py",
-      "line": 30
+      "line": 35
     },
     "safe_log_tool": {
       "file": "tea_agent/_gui/_stream_manager.py",
-      "line": 39
+      "line": 44
     },
     "safe_update_status": {
       "file": "tea_agent/_gui/_stream_manager.py",
-      "line": 47
+      "line": 52
     },
     "_handle_max_iter": {
       "file": "tea_agent/gui.py",
-      "line": 551
+      "line": 581
     },
     "log": {
       "file": "tea_agent/_gui/_stream_manager.py",
-      "line": 81
+      "line": 96
     },
     "stream": {
       "file": "tea_agent/_gui/_stream_manager.py",
-      "line": 116
+      "line": 141
     },
     "log_tool": {
       "file": "tea_agent/_gui/_stream_manager.py",
-      "line": 110
+      "line": 131
     },
     "_stream_flush_tick": {
       "file": "tea_agent/gui.py",
-      "line": 567
+      "line": 619
     },
     "clear_chat": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 29
+      "line": 160
     },
     "auto_new_topic": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 43
+      "line": 174
     },
     "new_topic": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 59
+      "line": 187
     },
     "refresh_topics": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 69
+      "line": 196
     },
     "_update_title": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 94
+      "line": 220
     },
     "switch_topic": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 107
+      "line": 233
     },
     "on_topic_select": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 245
+      "line": 300
     },
     "newline": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 261
+      "line": 316
     },
     "_refresh_topics_preserve_selection": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 290
+      "line": 351
     },
     "_on_topic_hover": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 294
+      "line": 355
     },
     "_on_topic_leave": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 309
+      "line": 375
     },
     "_show_tooltip": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 317
+      "line": 388
     },
     "_hide_tooltip": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 356
+      "line": 433
     },
     "_notify_completion": {
       "file": "tea_agent/gui.py",
-      "line": 656
+      "line": 755
     },
     "_attach_image": {
       "file": "tea_agent/gui.py",
-      "line": 683
+      "line": 785
     },
     "_clear_images": {
       "file": "tea_agent/gui.py",
-      "line": 717
+      "line": 815
     },
     "send": {
       "file": "tea_agent/gui.py",
-      "line": 722
+      "line": 820
+    },
+    "_fmt_cell": {
+      "file": "tea_agent/gui.py",
+      "line": 911
+    },
+    "_build_token_table": {
+      "file": "tea_agent/gui.py",
+      "line": 921
     },
     "_add_token_notice_and_render": {
       "file": "tea_agent/gui.py",
-      "line": 817
-    },
-    "_cell": {
-      "file": "tea_agent/gui.py",
-      "line": 854
+      "line": 975
     },
     "_refresh_cheap_token_notice": {
       "file": "tea_agent/gui.py",
-      "line": 877
+      "line": 988
     },
     "_on_history_link_click": {
       "file": "tea_agent/gui.py",
-      "line": 897
+      "line": 1021
     },
     "_show_image_popup": {
       "file": "tea_agent/gui.py",
-      "line": 917
+      "line": 1046
     },
     "open_topic_dialog": {
       "file": "tea_agent/gui.py",
-      "line": 970
+      "line": 1103
     },
     "open_memory_dialog": {
       "file": "tea_agent/gui.py",
-      "line": 975
+      "line": 1108
     },
     "open_config_dialog": {
       "file": "tea_agent/gui.py",
-      "line": 979
+      "line": 1112
     },
     "on_save": {
       "file": "tea_agent/gui.py",
-      "line": 982
+      "line": 1115
     },
     "_switch_display": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 300
+      "line": 305
     },
     "_show_loading": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 318
+      "line": 322
     },
     "_poll_loading_progress": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 358
+      "line": 365
     },
     "scroll_to_bottom": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 384
+      "line": 386
     },
     "_html_render": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 56
+      "line": 54
     },
     "_render_chat": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 101
+      "line": 87
     },
     "_render_and_show_chat": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 126
+      "line": 116
     },
     "_render_loaded_topic": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 173
+      "line": 164
     },
     "_render_round_view": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 193
+      "line": 188
     },
     "_render_topic_error": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 234
+      "line": 232
     },
     "_build_round_view_html": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 242
+      "line": 244
     },
     "_filtered_messages": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 389
+      "line": 390
     },
     "_group_into_rounds": {
       "file": "tea_agent/_gui/_renderer.py",
@@ -1694,87 +1886,87 @@
     },
     "_flush_stream_to_messages": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 429
+      "line": 430
     },
     "_flush_think_buffer_to_messages": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 450
+      "line": 449
     },
     "_toggle_raw_view": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 410
+      "line": 414
     },
     "_show_raw_check_btn": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 419
+      "line": 422
     },
     "_hide_raw_check_btn": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 424
+      "line": 426
     },
     "_safe_destroy": {
       "file": "tea_agent/gui.py",
-      "line": 1156
+      "line": 1287
     },
     "build_tools": {
       "file": "tea_agent/session_tool_component.py",
-      "line": 32
+      "line": 42
     },
     "execute_tool_call": {
       "file": "tea_agent/session_tool_component.py",
-      "line": 43
+      "line": 58
     },
     "_record_tool_to_trace": {
       "file": "tea_agent/session_tool_component.py",
-      "line": 103
+      "line": 118
     },
     "collect_tool_call_round": {
       "file": "tea_agent/session_tool_component.py",
-      "line": 123
+      "line": 152
     },
     "collect_assistant_tool_calls_round": {
       "file": "tea_agent/session_tool_component.py",
-      "line": 131
+      "line": 166
     },
     "collect_assistant_text_round": {
       "file": "tea_agent/session_tool_component.py",
-      "line": 151
+      "line": 193
     },
     "collect_api_error_round": {
       "file": "tea_agent/session_tool_component.py",
-      "line": 161
+      "line": 209
     },
     "collect_max_iterations_round": {
       "file": "tea_agent/session_tool_component.py",
-      "line": 168
+      "line": 221
     },
     "collect_interruption_round": {
       "file": "tea_agent/session_tool_component.py",
-      "line": 175
+      "line": 233
     },
     "parse_tool_calls_from_stream": {
       "file": "tea_agent/session_tool_component.py",
-      "line": 182
+      "line": 245
     },
     "inject_memories": {
       "file": "tea_agent/session_memory_component.py",
-      "line": 61
+      "line": 71
     },
     "trigger_memory_extraction": {
       "file": "tea_agent/session_memory_component.py",
-      "line": 116
+      "line": 123
     },
     "_build_conversation_text": {
       "file": "tea_agent/session_memory_component.py",
-      "line": 209
+      "line": 207
     },
     "get_injected_memories": {
       "file": "tea_agent/session_memory_component.py",
-      "line": 218
+      "line": 224
     },
     "get_memory_stats": {
       "file": "tea_agent/store/_memories.py",
-      "line": 227
+      "line": 235
     },
     "setup_logging": {
       "file": "tea_agent/logging_setup.py",
@@ -1782,59 +1974,59 @@
     },
     "_set_root_level": {
       "file": "tea_agent/logging_setup.py",
-      "line": 78
+      "line": 73
     },
     "set_debug": {
       "file": "tea_agent/logging_setup.py",
-      "line": 84
+      "line": 87
     },
     "_probe_thinking_support": {
       "file": "tea_agent/session_api_component.py",
-      "line": 40
+      "line": 55
     },
     "_accumulate_usage": {
       "file": "tea_agent/session_api_component.py",
-      "line": 97
+      "line": 111
     },
     "_accumulate_cheap_usage": {
       "file": "tea_agent/session_api_component.py",
-      "line": 120
+      "line": 136
     },
     "_track_api_usage": {
       "file": "tea_agent/session_api_component.py",
-      "line": 142
+      "line": 161
     },
     "create_chat_stream": {
       "file": "tea_agent/session_api_component.py",
-      "line": 152
+      "line": 175
     },
     "call_summarize_api": {
       "file": "tea_agent/session_api_component.py",
-      "line": 218
+      "line": 233
     },
     "accumulate_tool_calls_from_delta": {
       "file": "tea_agent/session_api_component.py",
-      "line": 248
+      "line": 269
     },
     "reset_usage": {
       "file": "tea_agent/session_api_component.py",
-      "line": 274
+      "line": 298
     },
     "reset_cheap_usage": {
       "file": "tea_agent/session_api_component.py",
-      "line": 278
+      "line": 302
     },
     "get_last_usage": {
       "file": "tea_agent/session_api_component.py",
-      "line": 282
+      "line": 306
     },
     "get_cheap_usage": {
       "file": "tea_agent/session_api_component.py",
-      "line": 286
+      "line": 315
     },
     "get_total_usage": {
       "file": "tea_agent/session_api_component.py",
-      "line": 290
+      "line": 324
     },
     "_ensure_store": {
       "file": "tea_agent/project_memory.py",
@@ -1846,15 +2038,15 @@
     },
     "_write": {
       "file": "tea_agent/project_memory.py",
-      "line": 48
+      "line": 53
     },
     "add": {
       "file": "tea_agent/project_memory.py",
-      "line": 53
+      "line": 63
     },
     "get_all": {
       "file": "tea_agent/project_memory.py",
-      "line": 82
+      "line": 91
     },
     "_new_id": {
       "file": "tea_agent/store/_base.py",
@@ -1862,179 +2054,175 @@
     },
     "format_memories": {
       "file": "tea_agent/memory.py",
-      "line": 420
+      "line": 421
     },
     "get_session": {
       "file": "tea_agent/session_ref.py",
-      "line": 7
+      "line": 6
     },
     "set_session": {
       "file": "tea_agent/session_ref.py",
-      "line": 11
+      "line": 10
     },
     "get_agent": {
-      "file": "tea_agent/session_ref.py",
-      "line": 16
+      "file": "tea_agent/multi_agent/agent_pool.py",
+      "line": 180
     },
     "set_agent": {
       "file": "tea_agent/session_ref.py",
-      "line": 20
+      "line": 24
     },
     "meta_toolkit_save": {
       "file": "tea_agent/tlk.py",
-      "line": 21
+      "line": 17
     },
     "toolkit_save_impl": {
       "file": "tea_agent/tlk.py",
-      "line": 49
+      "line": 50
     },
     "call_tool": {
       "file": "tea_agent/tlk.py",
-      "line": 123
+      "line": 127
     },
     "_purge_cache": {
       "file": "tea_agent/tlk.py",
-      "line": 175
+      "line": 173
     },
     "_check_dependencies": {
       "file": "tea_agent/tlk.py",
-      "line": 184
+      "line": 182
     },
     "reload": {
       "file": "tea_agent/prompt_manager.py",
-      "line": 108
-    },
-    "check_meta": {
-      "file": "tea_agent/tlk.py",
-      "line": 251
+      "line": 120
     },
     "save": {
       "file": "tea_agent/tlk.py",
-      "line": 339
+      "line": 286
     },
     "rollback": {
       "file": "tea_agent/prompt_manager.py",
-      "line": 234
+      "line": 244
     },
     "list_versions": {
       "file": "tea_agent/prompt_manager.py",
-      "line": 264
+      "line": 274
     },
     "current_prompt": {
       "file": "tea_agent/prompt_manager.py",
-      "line": 92
+      "line": 89
     },
     "current_version": {
       "file": "tea_agent/prompt_manager.py",
-      "line": 99
+      "line": 101
     },
     "current_prompt_id": {
       "file": "tea_agent/prompt_manager.py",
-      "line": 104
+      "line": 111
     },
     "build_evolve_prompt": {
       "file": "tea_agent/prompt_manager.py",
-      "line": 117
+      "line": 134
     },
     "evolve": {
       "file": "tea_agent/prompt_manager.py",
-      "line": 169
+      "line": 183
     },
     "manual_set": {
       "file": "tea_agent/prompt_manager.py",
-      "line": 277
+      "line": 297
     },
     "select_memories": {
       "file": "tea_agent/memory.py",
-      "line": 58
+      "line": 51
     },
     "_pick_top_by_priority": {
       "file": "tea_agent/memory.py",
-      "line": 111
+      "line": 99
     },
     "_score_memory": {
       "file": "tea_agent/memory.py",
-      "line": 143
+      "line": 135
     },
     "_compute_relevance": {
       "file": "tea_agent/memory.py",
-      "line": 161
+      "line": 153
     },
     "_compute_recency": {
       "file": "tea_agent/memory.py",
-      "line": 210
+      "line": 212
     },
     "_touch_selected": {
       "file": "tea_agent/memory.py",
-      "line": 220
+      "line": 227
     },
     "degrade_by_age": {
       "file": "tea_agent/memory.py",
-      "line": 232
+      "line": 241
     },
     "llm_adjust_priorities": {
       "file": "tea_agent/memory.py",
-      "line": 303
+      "line": 311
     },
     "_prefix_for": {
       "file": "tea_agent/memory.py",
-      "line": 450
+      "line": 451
     },
     "build_extraction_prompt": {
       "file": "tea_agent/memory.py",
-      "line": 496
+      "line": 502
     },
     "parse_extraction_result": {
       "file": "tea_agent/memory.py",
-      "line": 504
+      "line": 518
     },
     "_compute_similarity": {
       "file": "tea_agent/memory.py",
-      "line": 525
+      "line": 542
     },
     "_merge_memory": {
       "file": "tea_agent/memory.py",
-      "line": 576
+      "line": 596
     },
     "ingest_extracted": {
       "file": "tea_agent/memory.py",
-      "line": 647
+      "line": 661
     },
     "is_extraction_needed": {
       "file": "tea_agent/memory.py",
-      "line": 709
+      "line": 719
     },
     "_read_multiline": {
       "file": "tea_agent/cli.py",
-      "line": 97
+      "line": 91
     },
     "_read_multiline_unix": {
       "file": "tea_agent/cli.py",
-      "line": 110
+      "line": 103
     },
     "_read_multiline_win32": {
       "file": "tea_agent/cli.py",
-      "line": 162
+      "line": 159
     },
     "_toggle_think": {
       "file": "tea_agent/cli.py",
-      "line": 239
+      "line": 248
     },
     "_toggle_verbose": {
       "file": "tea_agent/cli.py",
-      "line": 246
+      "line": 255
     },
     "_print_welcome": {
       "file": "tea_agent/cli.py",
-      "line": 385
+      "line": 401
     },
     "_print_help": {
       "file": "tea_agent/cli.py",
-      "line": 396
+      "line": 412
     },
     "_show_mode": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 47
+      "line": 46
     },
     "_prepare": {
       "file": "tea_agent/_gui/_renderer.py",
@@ -2046,83 +2234,103 @@
     },
     "_worker": {
       "file": "tea_agent/_gui/_renderer.py",
-      "line": 224
+      "line": 223
+    },
+    "_parse_user_msg": {
+      "file": "tea_agent/_gui/_topic_manager.py",
+      "line": 19
+    },
+    "_build_header_items": {
+      "file": "tea_agent/_gui/_topic_manager.py",
+      "line": 37
+    },
+    "_build_tool_rounds": {
+      "file": "tea_agent/_gui/_topic_manager.py",
+      "line": 69
+    },
+    "_process_round": {
+      "file": "tea_agent/_gui/_topic_manager.py",
+      "line": 95
+    },
+    "_process_tool_call": {
+      "file": "tea_agent/_gui/_topic_manager.py",
+      "line": 120
     },
     "load_worker": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 131
+      "line": 256
     },
     "fmt": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 326
+      "line": 403
     },
     "update_status": {
       "file": "tea_agent/_gui/_stream_manager.py",
-      "line": 58
+      "line": 63
     },
     "handle_max_iter": {
       "file": "tea_agent/_gui/_stream_manager.py",
-      "line": 62
+      "line": 72
     },
     "stream_flush_tick": {
       "file": "tea_agent/_gui/_stream_manager.py",
-      "line": 135
+      "line": 162
     },
     "_is_scrolled_to_bottom": {
       "file": "tea_agent/_gui/_stream_manager.py",
-      "line": 164
+      "line": 186
     },
     "flush_stream_to_messages": {
       "file": "tea_agent/_gui/_stream_manager.py",
-      "line": 174
+      "line": 203
     },
     "_render_markdown": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 67
+      "line": 66
     },
     "_fix_double_escape_in_code": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 78
+      "line": 84
     },
     "_fix_code_block": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 86
+      "line": 94
     },
     "_build_tool_blocks": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 103
+      "line": 110
     },
     "_render_tool_group": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 141
+      "line": 151
     },
     "_chat_to_markdown": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 228
+      "line": 244
     },
     "_sanitize_html_control_chars": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 296
+      "line": 317
     },
     "_escape_orphan_brackets": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 313
+      "line": 331
     },
     "_validate_html_structure": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 355
+      "line": 372
     },
     "handle_starttag": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 377
+      "line": 400
     },
     "handle_endtag": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 387
+      "line": 410
     },
     "get_result": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 409
+      "line": 432
     },
     "build": {
       "file": "tea_agent/_gui/_ui_builder.py",
@@ -2134,139 +2342,143 @@
     },
     "_image_cache": {
       "file": "tea_agent/_gui/_images.py",
-      "line": 35
+      "line": 40
     },
     "attach": {
       "file": "tea_agent/_gui/_images.py",
-      "line": 41
+      "line": 50
     },
     "clear": {
       "file": "tea_agent/_gui/_images.py",
-      "line": 74
+      "line": 83
     },
     "show_popup": {
       "file": "tea_agent/_gui/_images.py",
-      "line": 81
+      "line": 89
     },
     "_generate_topic_summary": {
       "file": "tea_agent/_gui/_topic_summary.py",
-      "line": 15
+      "line": 14
     },
     "get_instance": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 83
+      "line": 87
     },
     "reset_instance": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 90
+      "line": 99
     },
     "discover_skills": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 114
+      "line": 120
     },
     "_scan_directory": {
-      "file": "tea_agent/skills/__init__.py",
-      "line": 140
+      "file": "tea_agent/toolkit/tool_loader.py",
+      "line": 71
     },
     "_load_manifest": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 168
+      "line": 177
     },
     "activate_skill": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 180
+      "line": 196
     },
     "deactivate_skill": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 189
+      "line": 213
     },
     "toggle_skill": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 197
+      "line": 229
     },
     "activate_all": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 204
+      "line": 244
     },
     "deactivate_all": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 210
+      "line": 250
     },
     "is_tool_active": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 218
+      "line": 257
     },
     "get_active_tool_names": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 235
+      "line": 279
     },
     "get_active_tools_meta": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 243
+      "line": 292
     },
     "get_active_prompt": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 279
+      "line": 324
     },
     "get_skill_summary": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 296
+      "line": 341
     },
     "auto_activate": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 314
+      "line": 363
     },
     "list_skills": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 352
+      "line": 399
     },
     "get_skill": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 356
+      "line": 408
     },
     "get_active_skill_names": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 364
+      "line": 416
     },
     "get_status": {
-      "file": "tea_agent/skills/__init__.py",
-      "line": 368
+      "file": "tea_agent/multi_agent/orchestrator.py",
+      "line": 407
+    },
+    "run_lsp_check": {
+      "file": "tea_agent/lsp/lsp_check.py",
+      "line": 16
     },
     "_get_jedi_project": {
       "file": "tea_agent/lsp/lsp_engine.py",
-      "line": 19
+      "line": 18
     },
     "_read_file_safe": {
       "file": "tea_agent/lsp/lsp_engine.py",
-      "line": 24
+      "line": 28
     },
     "diagnose": {
       "file": "tea_agent/lsp/lsp_engine.py",
-      "line": 32
+      "line": 44
     },
     "_fmt_diagnostic": {
       "file": "tea_agent/lsp/lsp_engine.py",
-      "line": 76
+      "line": 95
     },
     "completion": {
       "file": "tea_agent/lsp/lsp_engine.py",
-      "line": 85
+      "line": 112
     },
     "goto_definition": {
       "file": "tea_agent/lsp/lsp_engine.py",
-      "line": 115
+      "line": 153
     },
     "hover": {
       "file": "tea_agent/lsp/lsp_engine.py",
-      "line": 146
+      "line": 195
     },
     "references": {
       "file": "tea_agent/lsp/lsp_engine.py",
-      "line": 186
+      "line": 245
     },
     "collect_context": {
       "file": "tea_agent/lsp/lsp_engine.py",
-      "line": 217
+      "line": 287
     },
     "_ensure_ts": {
       "file": "tea_agent/lsp/ts_analyzer.py",
@@ -2292,153 +2504,241 @@
       "file": "tea_agent/lsp/ts_analyzer.py",
       "line": 104
     },
-    "_walk": {
+    "_handle_function_def": {
       "file": "tea_agent/lsp/ts_analyzer.py",
       "line": 129
+    },
+    "_handle_class_def": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 155
+    },
+    "_handle_import": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 198
+    },
+    "_walk": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 847
     },
     "_parse_file_ast_fallback": {
       "file": "tea_agent/lsp/ts_analyzer.py",
-      "line": 211
+      "line": 245
     },
     "impact_analysis": {
       "file": "tea_agent/lsp/ts_analyzer.py",
-      "line": 281
+      "line": 315
     },
     "build_dependency_graph": {
       "file": "tea_agent/lsp/ts_analyzer.py",
-      "line": 374
+      "line": 408
     },
     "_dfs": {
       "file": "tea_agent/lsp/ts_analyzer.py",
-      "line": 406
+      "line": 440
+    },
+    "_count_branches": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 479
+    },
+    "_cyclomatic_for_body": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 505
+    },
+    "_compute_fn_metrics": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 521
+    },
+    "_compute_metrics_ast_fallback": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 547
+    },
+    "_end_func": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 575
+    },
+    "visit_FunctionDef": {
+      "file": "tea_agent/toolkit/toolkit_explr.py",
+      "line": 150
+    },
+    "visit_AsyncFunctionDef": {
+      "file": "tea_agent/toolkit/toolkit_explr.py",
+      "line": 168
+    },
+    "visit_If": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 627
+    },
+    "visit_For": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 640
+    },
+    "visit_AsyncFor": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 650
+    },
+    "visit_While": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 660
+    },
+    "visit_Try": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 670
+    },
+    "visit_Match": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 682
+    },
+    "visit_IfExp": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 693
+    },
+    "visit_BoolOp": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 703
+    },
+    "visit_Call": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 768
+    },
+    "compute_metrics": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 818
+    },
+    "_walk2": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 910
+    },
+    "find_dead_code": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 974
     },
     "get_topic_summary": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 15
+      "line": 14
     },
     "update_topic_summary": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 27
+      "line": 26
     },
     "get_level2": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 59
+      "line": 57
     },
     "set_level2": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 76
+      "line": 74
     },
     "get_semantic_summary": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 93
+      "line": 90
     },
     "set_semantic_summary": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 105
+      "line": 102
     },
     "get_tool_chain_summary": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 120
+      "line": 117
     },
     "set_tool_chain_summary": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 132
+      "line": 129
     },
     "push_to_level2": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 147
+      "line": 144
     },
     "get_l3_pending": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 165
+      "line": 170
     },
     "push_l3_pending": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 178
+      "line": 191
     },
     "clear_l3_pending": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 190
+      "line": 209
     },
     "mark_as_summarized": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 198
+      "line": 221
     },
     "get_unsummarized_conversations": {
       "file": "tea_agent/store/_summaries.py",
-      "line": 212
+      "line": 235
     },
     "save_msg": {
       "file": "tea_agent/store/_core.py",
-      "line": 82
+      "line": 83
     },
     "update_msg_rounds": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 82
+      "line": 91
     },
     "save_agent_round": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 103
+      "line": 112
     },
     "get_conversations": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 127
+      "line": 136
     },
     "get_recent_conversations": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 167
+      "line": 176
     },
     "get_agent_rounds": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 183
+      "line": 192
     },
     "_auto_embed_async": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 206
+      "line": 214
     },
     "_store_embedding_inline": {
       "file": "tea_agent/store/_conversations.py",
-      "line": 223
+      "line": 237
     },
     "add_memory": {
       "file": "tea_agent/store/_memories.py",
-      "line": 14
+      "line": 13
     },
     "_enforce_critical_limit": {
       "file": "tea_agent/store/_memories.py",
-      "line": 46
+      "line": 45
     },
     "update_memory": {
       "file": "tea_agent/store/_memories.py",
-      "line": 71
+      "line": 70
     },
     "deactivate_memory": {
       "file": "tea_agent/store/_memories.py",
-      "line": 108
+      "line": 106
     },
     "delete_memory": {
       "file": "tea_agent/store/_memories.py",
-      "line": 116
+      "line": 114
     },
     "get_active_memories": {
       "file": "tea_agent/store/_memories.py",
-      "line": 129
+      "line": 127
     },
     "get_instructions": {
       "file": "tea_agent/store/_memories.py",
-      "line": 146
+      "line": 144
     },
     "search_memories": {
       "file": "tea_agent/store/_memories.py",
-      "line": 158
+      "line": 161
     },
     "cleanup_expired_memories": {
       "file": "tea_agent/store/_memories.py",
-      "line": 201
+      "line": 204
     },
     "touch_memory": {
       "file": "tea_agent/store/_memories.py",
-      "line": 213
+      "line": 221
     },
     "add_reflection": {
       "file": "tea_agent/store/_reflections.py",
@@ -2466,19 +2766,19 @@
     },
     "get_system_prompt_history": {
       "file": "tea_agent/store/_prompts.py",
-      "line": 44
+      "line": 49
     },
     "deactivate_system_prompt": {
       "file": "tea_agent/store/_prompts.py",
-      "line": 59
+      "line": 64
     },
     "rollback_system_prompt": {
       "file": "tea_agent/store/_prompts.py",
-      "line": 72
+      "line": 77
     },
     "get_system_prompt_count": {
       "file": "tea_agent/store/_prompts.py",
-      "line": 86
+      "line": 91
     },
     "store_embedding": {
       "file": "tea_agent/store/_vectors.py",
@@ -2494,139 +2794,139 @@
     },
     "search_by_vector": {
       "file": "tea_agent/store/_vectors.py",
-      "line": 78
+      "line": 83
     },
     "search_by_keyword": {
       "file": "tea_agent/store/_vectors.py",
-      "line": 141
+      "line": 145
     },
     "get_vector_count": {
       "file": "tea_agent/store/_vectors.py",
-      "line": 170
+      "line": 174
     },
     "get_unvectorized_conversations": {
       "file": "tea_agent/store/_vectors.py",
-      "line": 178
+      "line": 187
     },
     "vectorize_conversation": {
       "file": "tea_agent/store/_vectors.py",
-      "line": 197
+      "line": 206
     },
     "batch_vectorize": {
       "file": "tea_agent/store/_vectors.py",
-      "line": 212
+      "line": 221
     },
     "delete_vector": {
       "file": "tea_agent/store/_vectors.py",
-      "line": 228
+      "line": 237
     },
     "parse_schedule": {
       "file": "tea_agent/toolkit/toolkit_scheduler.py",
-      "line": 71
+      "line": 53
     },
     "add_task": {
       "file": "tea_agent/store/_scheduled_tasks.py",
-      "line": 91
+      "line": 82
     },
     "update_task": {
       "file": "tea_agent/store/_scheduled_tasks.py",
-      "line": 110
+      "line": 112
     },
     "delete_task": {
       "file": "tea_agent/store/_scheduled_tasks.py",
-      "line": 132
+      "line": 143
     },
     "get_task": {
       "file": "tea_agent/store/_scheduled_tasks.py",
-      "line": 139
+      "line": 158
     },
     "list_tasks": {
       "file": "tea_agent/store/_scheduled_tasks.py",
-      "line": 146
+      "line": 173
     },
     "get_due_tasks": {
       "file": "tea_agent/store/_scheduled_tasks.py",
-      "line": 155
+      "line": 190
     },
     "mark_run": {
       "file": "tea_agent/store/_scheduled_tasks.py",
-      "line": 165
+      "line": 205
     },
     "_parse_cron": {
       "file": "tea_agent/toolkit/toolkit_scheduler.py",
-      "line": 139
+      "line": 121
     },
     "_match_cron_field": {
       "file": "tea_agent/store/_scheduled_tasks.py",
-      "line": 198
+      "line": 254
     },
     "__getattr__": {
       "file": "tea_agent/store/_core.py",
-      "line": 66
+      "line": 63
     },
     "_init_tables": {
       "file": "tea_agent/store/_core.py",
-      "line": 92
+      "line": 103
     },
     "_migrate": {
       "file": "tea_agent/store/_core.py",
-      "line": 265
+      "line": 263
     },
     "_migrate_int_to_uuid": {
       "file": "tea_agent/store/_core.py",
-      "line": 333
+      "line": 326
     },
     "_table_columns": {
       "file": "tea_agent/store/_core.py",
-      "line": 349
+      "line": 342
     },
     "_migrate_table": {
       "file": "tea_agent/store/_core.py",
-      "line": 358
+      "line": 351
     },
     "_migrate_msg_vectors": {
       "file": "tea_agent/store/_core.py",
-      "line": 484
+      "line": 475
     },
     "_get_week_key": {
       "file": "tea_agent/store/_core.py",
-      "line": 506
+      "line": 496
     },
     "_maybe_rotate_db": {
       "file": "tea_agent/store/_core.py",
-      "line": 510
+      "line": 500
     },
     "_write_week_key": {
       "file": "tea_agent/store/_core.py",
-      "line": 543
+      "line": 533
     },
     "_auto_backup": {
       "file": "tea_agent/store/_core.py",
-      "line": 555
+      "line": 544
     },
     "_cleanup_backups": {
       "file": "tea_agent/store/_core.py",
-      "line": 583
+      "line": 572
     },
     "backup_now": {
       "file": "tea_agent/store/_core.py",
-      "line": 605
+      "line": 594
     },
     "_meta_get": {
       "file": "tea_agent/store/_core.py",
-      "line": 612
+      "line": 600
     },
     "_meta_set": {
       "file": "tea_agent/store/_core.py",
-      "line": 625
+      "line": 613
     },
     "_protect_db": {
       "file": "tea_agent/store/_core.py",
-      "line": 642
+      "line": 629
     },
     "__del__": {
       "file": "tea_agent/store/_core.py",
-      "line": 672
+      "line": 658
     },
     "add_config_change": {
       "file": "tea_agent/store/_config.py",
@@ -2642,59 +2942,255 @@
     },
     "get_storage": {
       "file": "tea_agent/store/__init__.py",
-      "line": 24
+      "line": 23
     },
     "create_topic": {
       "file": "tea_agent/store/_topics.py",
-      "line": 14
+      "line": 13
     },
     "update_topic_title": {
       "file": "tea_agent/store/_topics.py",
-      "line": 27
+      "line": 26
     },
     "update_topic_active": {
       "file": "tea_agent/store/_topics.py",
-      "line": 46
+      "line": 45
     },
     "get_drift_count": {
       "file": "tea_agent/store/_topics.py",
-      "line": 60
+      "line": 59
     },
     "increment_drift_count": {
       "file": "tea_agent/store/_topics.py",
-      "line": 68
+      "line": 75
     },
     "delete_topic": {
       "file": "tea_agent/store/_topics.py",
-      "line": 79
+      "line": 94
     },
     "get_topic": {
       "file": "tea_agent/store/_topics.py",
-      "line": 98
+      "line": 113
     },
     "list_topics": {
       "file": "tea_agent/store/_topics.py",
-      "line": 110
+      "line": 125
     },
     "add_topic_tokens": {
       "file": "tea_agent/store/_topics.py",
-      "line": 127
+      "line": 146
     },
     "get_topic_tokens": {
       "file": "tea_agent/store/_topics.py",
+      "line": 195
+    },
+    "get_function_body_ranges": {
+      "file": "tea_agent/tools/refactor_comments.py",
+      "line": 21
+    },
+    "strip_inline_comments": {
+      "file": "tea_agent/tools/refactor_comments.py",
+      "line": 56
+    },
+    "generate_function_docstring": {
+      "file": "tea_agent/tools/refactor_comments.py",
+      "line": 110
+    },
+    "generate_class_docstring": {
+      "file": "tea_agent/tools/refactor_comments.py",
+      "line": 182
+    },
+    "has_docstring_node": {
+      "file": "tea_agent/tools/refactor_comments.py",
+      "line": 196
+    },
+    "get_existing_doc": {
+      "file": "tea_agent/tools/refactor_comments.py",
+      "line": 213
+    },
+    "looks_like_pydoc": {
+      "file": "tea_agent/tools/refactor_comments.py",
+      "line": 225
+    },
+    "format_docstring_block": {
+      "file": "tea_agent/tools/refactor_comments.py",
+      "line": 239
+    },
+    "insert_docstrings": {
+      "file": "tea_agent/tools/refactor_comments.py",
+      "line": 263
+    },
+    "visit_ClassDef": {
+      "file": "tea_agent/toolkit/toolkit_explr.py",
       "line": 176
+    },
+    "process_file": {
+      "file": "tea_agent/tools/refactor_comments.py",
+      "line": 348
+    },
+    "register_agent_type": {
+      "file": "tea_agent/multi_agent/orchestrator.py",
+      "line": 142
+    },
+    "create_agent": {
+      "file": "tea_agent/multi_agent/agent_pool.py",
+      "line": 123
+    },
+    "remove_agent": {
+      "file": "tea_agent/multi_agent/agent_pool.py",
+      "line": 192
+    },
+    "run_parallel": {
+      "file": "tea_agent/multi_agent/agent_pool.py",
+      "line": 205
+    },
+    "run_batch": {
+      "file": "tea_agent/multi_agent/agent_pool.py",
+      "line": 265
+    },
+    "active_agents": {
+      "file": "tea_agent/multi_agent/agent_pool.py",
+      "line": 286
+    },
+    "shutdown_all": {
+      "file": "tea_agent/multi_agent/agent_pool.py",
+      "line": 296
+    },
+    "decompose": {
+      "file": "tea_agent/multi_agent/task_decomposer.py",
+      "line": 134
+    },
+    "_decompose_with_llm": {
+      "file": "tea_agent/multi_agent/task_decomposer.py",
+      "line": 154
+    },
+    "_decompose_with_rules": {
+      "file": "tea_agent/multi_agent/task_decomposer.py",
+      "line": 188
+    },
+    "_next_id": {
+      "file": "tea_agent/multi_agent/task_decomposer.py",
+      "line": 204
+    },
+    "_extract_json_array": {
+      "file": "tea_agent/multi_agent/task_decomposer.py",
+      "line": 288
+    },
+    "get_execution_order": {
+      "file": "tea_agent/multi_agent/task_decomposer.py",
+      "line": 318
+    },
+    "aggregate": {
+      "file": "tea_agent/multi_agent/result_aggregator.py",
+      "line": 72
+    },
+    "_aggregate_with_llm": {
+      "file": "tea_agent/multi_agent/result_aggregator.py",
+      "line": 103
+    },
+    "_aggregate_simple": {
+      "file": "tea_agent/multi_agent/result_aggregator.py",
+      "line": 146
+    },
+    "_order_by_deps": {
+      "file": "tea_agent/multi_agent/result_aggregator.py",
+      "line": 182
+    },
+    "summarize_result": {
+      "file": "tea_agent/multi_agent/result_aggregator.py",
+      "line": 202
+    },
+    "merge_code_results": {
+      "file": "tea_agent/multi_agent/result_aggregator.py",
+      "line": 232
+    },
+    "_register_default_types": {
+      "file": "tea_agent/multi_agent/orchestrator.py",
+      "line": 120
+    },
+    "_assign_agents": {
+      "file": "tea_agent/multi_agent/orchestrator.py",
+      "line": 301
+    },
+    "execute_single": {
+      "file": "tea_agent/multi_agent/orchestrator.py",
+      "line": 350
+    },
+    "execute_manual": {
+      "file": "tea_agent/multi_agent/orchestrator.py",
+      "line": 363
+    },
+    "get_execution_history": {
+      "file": "tea_agent/multi_agent/orchestrator.py",
+      "line": 387
+    },
+    "clear_history": {
+      "file": "tea_agent/multi_agent/orchestrator.py",
+      "line": 397
+    },
+    "shutdown": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 381
+    },
+    "_resolve_effective_params": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 111
+    },
+    "_value": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 120
+    },
+    "_build_tool_list": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 224
+    },
+    "run_async": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 299
+    },
+    "wait": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 319
+    },
+    "is_running": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 332
+    },
+    "is_done": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 342
+    },
+    "result": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 352
+    },
+    "error": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 362
+    },
+    "reset": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 371
     },
     "toolkit_exec": {
       "file": "tea_agent/toolkit/toolkit_exec.py",
-      "line": 8
+      "line": 6
     },
     "_sudo_with_gui": {
       "file": "tea_agent/toolkit/toolkit_exec.py",
-      "line": 172
+      "line": 151
     },
     "meta_toolkit_exec": {
       "file": "tea_agent/toolkit/toolkit_exec.py",
-      "line": 263
+      "line": 245
+    },
+    "check_meta": {
+      "file": "tea_agent/toolkit/tool_loader.py",
+      "line": 31
+    },
+    "reload_all": {
+      "file": "tea_agent/toolkit/tool_loader.py",
+      "line": 48
     },
     "toolkit_skill": {
       "file": "tea_agent/toolkit/toolkit_skill.py",
@@ -2706,11 +3202,23 @@
     },
     "toolkit_reflection": {
       "file": "tea_agent/toolkit/toolkit_reflection.py",
-      "line": 11
+      "line": 10
     },
     "meta_toolkit_reflection": {
       "file": "tea_agent/toolkit/toolkit_reflection.py",
-      "line": 75
+      "line": 73
+    },
+    "meta_toolkit_static": {
+      "file": "tea_agent/toolkit/toolkit_static.py",
+      "line": 16
+    },
+    "toolkit_static": {
+      "file": "tea_agent/toolkit/toolkit_static.py",
+      "line": 63
+    },
+    "_summary": {
+      "file": "tea_agent/toolkit/toolkit_static.py",
+      "line": 104
     },
     "toolkit_set_topic_title": {
       "file": "tea_agent/toolkit/toolkit_set_topic_title.py",
@@ -2718,123 +3226,163 @@
     },
     "meta_toolkit_set_topic_title": {
       "file": "tea_agent/toolkit/toolkit_set_topic_title.py",
-      "line": 60
+      "line": 58
+    },
+    "toolkit_sub_agent_report": {
+      "file": "tea_agent/toolkit/toolkit_sub_agent.py",
+      "line": 19
+    },
+    "toolkit_sub_agent_status": {
+      "file": "tea_agent/toolkit/toolkit_sub_agent.py",
+      "line": 53
+    },
+    "clear_sub_agent_reports": {
+      "file": "tea_agent/toolkit/toolkit_sub_agent.py",
+      "line": 86
+    },
+    "meta_toolkit_sub_agent_report": {
+      "file": "tea_agent/toolkit/toolkit_sub_agent.py",
+      "line": 102
+    },
+    "meta_toolkit_sub_agent_status": {
+      "file": "tea_agent/toolkit/toolkit_sub_agent.py",
+      "line": 140
     },
     "_get_db": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 18
+      "line": 17
     },
     "_get_topic_id": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 29
+      "line": 28
     },
     "_ensure_table": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 40
+      "line": 39
     },
     "_sync_to_db": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 60
+      "line": 64
     },
     "_sync_item": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 84
+      "line": 88
     },
     "_restore_from_db": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 104
+      "line": 114
     },
     "_auto_restore": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 139
+      "line": 149
+    },
+    "_todo_create": {
+      "file": "tea_agent/toolkit/toolkit_todo.py",
+      "line": 157
+    },
+    "_todo_check": {
+      "file": "tea_agent/toolkit/toolkit_todo.py",
+      "line": 175
+    },
+    "_todo_show": {
+      "file": "tea_agent/toolkit/toolkit_todo.py",
+      "line": 194
+    },
+    "_todo_clear": {
+      "file": "tea_agent/toolkit/toolkit_todo.py",
+      "line": 208
+    },
+    "_todo_restore": {
+      "file": "tea_agent/toolkit/toolkit_todo.py",
+      "line": 227
     },
     "toolkit_todo": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 146
+      "line": 233
     },
     "_done": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 257
+      "line": 286
     },
     "_fmt": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 261
+      "line": 290
     },
     "_plan_create": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 276
+      "line": 302
     },
     "_plan_show": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 286
+      "line": 317
     },
     "_plan_step": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 291
+      "line": 328
     },
     "_plan_run": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 297
+      "line": 340
     },
     "_plan_resume": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 303
+      "line": 352
     },
     "_plan_verify": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 309
+      "line": 364
     },
     "_plan_list": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 322
+      "line": 382
     },
     "_plan_delete": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 325
+      "line": 386
     },
     "_plan_create_inner": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 330
+      "line": 397
     },
     "_plan_show_inner": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 333
+      "line": 407
     },
     "_plan_list_inner": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 336
+      "line": 416
     },
     "meta_toolkit_todo": {
       "file": "tea_agent/toolkit/toolkit_todo.py",
-      "line": 343
+      "line": 424
     },
     "_get_exp_path": {
       "file": "tea_agent/toolkit/toolkit_evolution_exp.py",
-      "line": 21
+      "line": 19
     },
     "_load_exp_db": {
       "file": "tea_agent/toolkit/toolkit_evolution_exp.py",
-      "line": 25
+      "line": 23
     },
     "_save_exp_db": {
       "file": "tea_agent/toolkit/toolkit_evolution_exp.py",
-      "line": 33
+      "line": 31
     },
     "toolkit_evolution_exp": {
       "file": "tea_agent/toolkit/toolkit_evolution_exp.py",
-      "line": 44
+      "line": 42
     },
     "meta_toolkit_evolution_exp": {
       "file": "tea_agent/toolkit/toolkit_evolution_exp.py",
-      "line": 106
+      "line": 109
     },
     "toolkit_prompt_evolve": {
       "file": "tea_agent/toolkit/toolkit_prompt_evolve.py",
-      "line": 10
+      "line": 9
     },
     "meta_toolkit_prompt_evolve": {
       "file": "tea_agent/toolkit/toolkit_prompt_evolve.py",
-      "line": 97
+      "line": 95
     },
     "toolkit_self_evolve": {
       "file": "tea_agent/toolkit/toolkit_self_evolve.py",
@@ -2842,11 +3390,11 @@
     },
     "_git_clean": {
       "file": "tea_agent/toolkit/toolkit_self_evolve.py",
-      "line": 54
+      "line": 50
     },
     "_git_snap": {
       "file": "tea_agent/toolkit/toolkit_self_evolve.py",
-      "line": 67
+      "line": 62
     },
     "_git_revert": {
       "file": "tea_agent/toolkit/toolkit_self_evolve.py",
@@ -2856,173 +3404,209 @@
       "file": "tea_agent/toolkit/toolkit_self_evolve.py",
       "line": 90
     },
-    "_run_lsp_checks": {
-      "file": "tea_agent/toolkit/toolkit_self_evolve.py",
-      "line": 115
-    },
     "meta_toolkit_self_evolve": {
       "file": "tea_agent/toolkit/toolkit_self_evolve.py",
-      "line": 307
+      "line": 227
     },
     "toolkit_scheduler": {
       "file": "tea_agent/toolkit/toolkit_scheduler.py",
-      "line": 7
+      "line": 5
     },
     "_get_conn": {
       "file": "tea_agent/toolkit/toolkit_scheduler.py",
-      "line": 46
+      "line": 29
     },
     "_match_cron": {
       "file": "tea_agent/toolkit/toolkit_scheduler.py",
-      "line": 114
+      "line": 96
     },
     "_execute_task": {
       "file": "tea_agent/toolkit/toolkit_scheduler.py",
-      "line": 178
+      "line": 163
     },
     "_scheduler_loop": {
       "file": "tea_agent/toolkit/toolkit_scheduler.py",
-      "line": 197
+      "line": 186
     },
     "_format_next": {
       "file": "tea_agent/toolkit/toolkit_scheduler.py",
-      "line": 403
+      "line": 386
     },
     "meta_toolkit_scheduler": {
       "file": "tea_agent/toolkit/toolkit_scheduler.py",
-      "line": 428
+      "line": 419
     },
     "meta_toolkit_plan": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 18
+      "line": 15
     },
     "_ensure_plans_dir": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 43
+      "line": 39
     },
     "_plan_path": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 47
+      "line": 43
     },
     "_load_plan": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 55
+      "line": 51
     },
     "_save_plan": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 67
+      "line": 63
     },
     "_new_plan": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 80
+      "line": 76
     },
     "_deps_satisfied": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 120
+      "line": 114
     },
     "_next_pending": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 133
+      "line": 127
     },
     "_count_status": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 144
+      "line": 138
     },
     "toolkit_plan": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 155
+      "line": 148
     },
     "_do_step": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 232
+      "line": 237
     },
     "_do_verify": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 264
+      "line": 269
     },
     "_do_run": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 285
+      "line": 290
     },
     "_do_resume": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 315
+      "line": 320
     },
     "_step_summary": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 336
+      "line": 340
     },
     "_execute_step": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 345
+      "line": 349
     },
     "_verify_step": {
       "file": "tea_agent/toolkit/toolkit_plan.py",
-      "line": 409
+      "line": 418
     },
     "toolkit_kb": {
       "file": "tea_agent/toolkit/toolkit_kb.py",
-      "line": 11
+      "line": 8
     },
     "sanitize": {
       "file": "tea_agent/toolkit/toolkit_kb.py",
-      "line": 38
+      "line": 35
     },
     "_meta": {
       "file": "tea_agent/toolkit/toolkit_kb.py",
-      "line": 48
+      "line": 45
     },
     "rebuild_index": {
       "file": "tea_agent/toolkit/toolkit_kb.py",
-      "line": 58
+      "line": 55
     },
     "meta_toolkit_kb": {
       "file": "tea_agent/toolkit/toolkit_kb.py",
-      "line": 199
+      "line": 194
     },
     "toolkit_pkg": {
       "file": "tea_agent/toolkit/toolkit_pkg.py",
-      "line": 8
+      "line": 6
     },
     "_pip_install": {
       "file": "tea_agent/toolkit/toolkit_pkg.py",
-      "line": 17
+      "line": 19
     },
     "_check_module": {
       "file": "tea_agent/toolkit/toolkit_pkg.py",
-      "line": 25
+      "line": 32
     },
     "_get_version": {
       "file": "tea_agent/toolkit/toolkit_pkg.py",
-      "line": 33
+      "line": 45
     },
     "_list_installed": {
       "file": "tea_agent/toolkit/toolkit_pkg.py",
-      "line": 51
+      "line": 67
     },
     "meta_toolkit_pkg": {
       "file": "tea_agent/toolkit/toolkit_pkg.py",
-      "line": 148
+      "line": 161
+    },
+    "_generate_unified_diff": {
+      "file": "tea_agent/toolkit/toolkit_diff.py",
+      "line": 12
+    },
+    "_git_stash_push": {
+      "file": "tea_agent/toolkit/toolkit_diff.py",
+      "line": 31
+    },
+    "_git_stash_pop": {
+      "file": "tea_agent/toolkit/toolkit_diff.py",
+      "line": 49
+    },
+    "_git_stash_drop": {
+      "file": "tea_agent/toolkit/toolkit_diff.py",
+      "line": 65
+    },
+    "_check_conflict": {
+      "file": "tea_agent/toolkit/toolkit_diff.py",
+      "line": 82
+    },
+    "_verify_all": {
+      "file": "tea_agent/toolkit/toolkit_diff.py",
+      "line": 106
+    },
+    "_apply_one": {
+      "file": "tea_agent/toolkit/toolkit_diff.py",
+      "line": 161
+    },
+    "_toolkit_diff_impl": {
+      "file": "tea_agent/toolkit/toolkit_diff.py",
+      "line": 202
+    },
+    "toolkit_diff": {
+      "file": "tea_agent/toolkit/toolkit_diff.py",
+      "line": 379
+    },
+    "meta_toolkit_diff": {
+      "file": "tea_agent/toolkit/toolkit_diff.py",
+      "line": 405
     },
     "toolkit_search": {
       "file": "tea_agent/toolkit/toolkit_search.py",
-      "line": 7
+      "line": 6
     },
     "_search_duckduckgo": {
       "file": "tea_agent/toolkit/toolkit_search.py",
-      "line": 46
+      "line": 45
     },
     "_search_baidu": {
       "file": "tea_agent/toolkit/toolkit_search.py",
-      "line": 123
+      "line": 122
     },
     "meta_toolkit_search": {
       "file": "tea_agent/toolkit/toolkit_search.py",
-      "line": 230
+      "line": 221
     },
     "_search_codebase": {
       "file": "tea_agent/toolkit/toolkit_search.py",
-      "line": 234
+      "line": 230
     },
     "_search_codebase_python": {
       "file": "tea_agent/toolkit/toolkit_search.py",
@@ -3030,11 +3614,11 @@
     },
     "_search_symbol": {
       "file": "tea_agent/toolkit/toolkit_search.py",
-      "line": 350
+      "line": 357
     },
     "_extract_args": {
       "file": "tea_agent/toolkit/toolkit_search.py",
-      "line": 415
+      "line": 426
     },
     "toolkit_git_push_all_remotes": {
       "file": "tea_agent/toolkit/toolkit_git_push_all_remotes.py",
@@ -3042,23 +3626,23 @@
     },
     "meta_toolkit_git_push_all_remotes": {
       "file": "tea_agent/toolkit/toolkit_git_push_all_remotes.py",
-      "line": 31
+      "line": 36
     },
     "toolkit_notify": {
       "file": "tea_agent/toolkit/toolkit_notify.py",
-      "line": 7
+      "line": 6
     },
     "meta_toolkit_notify": {
       "file": "tea_agent/toolkit/toolkit_notify.py",
-      "line": 122
+      "line": 114
     },
     "toolkit_date_diff": {
       "file": "tea_agent/toolkit/toolkit_date_diff.py",
-      "line": 7
+      "line": 6
     },
     "meta_toolkit_date_diff": {
       "file": "tea_agent/toolkit/toolkit_date_diff.py",
-      "line": 61
+      "line": 55
     },
     "_cached_os_info": {
       "file": "tea_agent/toolkit/toolkit_os_info.py",
@@ -3070,7 +3654,7 @@
     },
     "meta_toolkit_os_info": {
       "file": "tea_agent/toolkit/toolkit_os_info.py",
-      "line": 28
+      "line": 33
     },
     "toolkit_lsp": {
       "file": "tea_agent/toolkit/toolkit_lsp.py",
@@ -3082,63 +3666,63 @@
     },
     "_solar_days_in_year": {
       "file": "tea_agent/toolkit/toolkit_lunar.py",
-      "line": 63
+      "line": 53
     },
     "_solar_days_in_month": {
       "file": "tea_agent/toolkit/toolkit_lunar.py",
-      "line": 71
+      "line": 61
     },
     "_offset_from_base": {
       "file": "tea_agent/toolkit/toolkit_lunar.py",
-      "line": 82
+      "line": 72
     },
     "_lunar_year_info": {
       "file": "tea_agent/toolkit/toolkit_lunar.py",
-      "line": 91
+      "line": 88
     },
     "_leap_month": {
       "file": "tea_agent/toolkit/toolkit_lunar.py",
-      "line": 99
+      "line": 96
     },
     "_leap_days": {
       "file": "tea_agent/toolkit/toolkit_lunar.py",
-      "line": 107
+      "line": 104
     },
     "_month_days": {
       "file": "tea_agent/toolkit/toolkit_lunar.py",
-      "line": 115
+      "line": 112
     },
     "_lunar_year_total_days": {
       "file": "tea_agent/toolkit/toolkit_lunar.py",
-      "line": 119
+      "line": 122
     },
     "_solar_to_lunar": {
       "file": "tea_agent/toolkit/toolkit_lunar.py",
-      "line": 129
+      "line": 137
     },
     "toolkit_lunar": {
       "file": "tea_agent/toolkit/toolkit_lunar.py",
-      "line": 188
+      "line": 196
     },
     "_solar_terms": {
       "file": "tea_agent/toolkit/toolkit_lunar.py",
-      "line": 292
+      "line": 299
     },
     "meta_toolkit_lunar": {
       "file": "tea_agent/toolkit/toolkit_lunar.py",
-      "line": 313
+      "line": 325
     },
     "toolkit_toggle_reasoning": {
       "file": "tea_agent/toolkit/toolkit_toggle_reasoning.py",
-      "line": 6
+      "line": 5
     },
     "meta_toolkit_toggle_reasoning": {
       "file": "tea_agent/toolkit/toolkit_toggle_reasoning.py",
-      "line": 32
+      "line": 31
     },
     "toolkit_edit": {
       "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 17
+      "line": 16
     },
     "_apply_patch": {
       "file": "tea_agent/toolkit/toolkit_edit.py",
@@ -3146,11 +3730,11 @@
     },
     "_apply_patch_python": {
       "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 128
+      "line": 129
     },
     "_insert_lines": {
       "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 246
+      "line": 243
     },
     "_delete_lines": {
       "file": "tea_agent/toolkit/toolkit_edit.py",
@@ -3158,115 +3742,103 @@
     },
     "_replace_lines": {
       "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 338
+      "line": 345
     },
     "_preview_patch": {
       "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 386
-    },
-    "_generate_unified_diff": {
-      "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 391
-    },
-    "_git_stash_push": {
-      "file": "tea_agent/toolkit/toolkit_edit.py",
       "line": 400
-    },
-    "_git_stash_pop": {
-      "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 410
-    },
-    "_git_stash_drop": {
-      "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 418
-    },
-    "_check_conflict": {
-      "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 428
-    },
-    "_verify_all": {
-      "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 443
-    },
-    "_apply_one": {
-      "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 492
-    },
-    "_toolkit_diff_impl": {
-      "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 526
     },
     "meta_toolkit_edit": {
       "file": "tea_agent/toolkit/toolkit_edit.py",
-      "line": 684
+      "line": 410
     },
     "toolkit_proactive": {
       "file": "tea_agent/toolkit/toolkit_proactive.py",
-      "line": 10
+      "line": 7
     },
     "_get_memory_manager": {
       "file": "tea_agent/toolkit/toolkit_mode.py",
-      "line": 108
+      "line": 98
     },
     "_check_proactive": {
       "file": "tea_agent/toolkit/toolkit_proactive.py",
-      "line": 37
+      "line": 42
     },
     "_add_goal": {
       "file": "tea_agent/toolkit/toolkit_proactive.py",
-      "line": 86
+      "line": 91
     },
     "_complete_goal": {
       "file": "tea_agent/toolkit/toolkit_proactive.py",
-      "line": 111
+      "line": 115
     },
     "_list_goals": {
       "file": "tea_agent/toolkit/toolkit_proactive.py",
-      "line": 127
+      "line": 131
     },
     "meta_toolkit_proactive": {
       "file": "tea_agent/toolkit/toolkit_proactive.py",
-      "line": 154
+      "line": 163
+    },
+    "_m_add": {
+      "file": "tea_agent/toolkit/toolkit_memory.py",
+      "line": 11
+    },
+    "_m_list": {
+      "file": "tea_agent/toolkit/toolkit_memory.py",
+      "line": 43
+    },
+    "_m_search": {
+      "file": "tea_agent/toolkit/toolkit_memory.py",
+      "line": 71
+    },
+    "_m_forget": {
+      "file": "tea_agent/toolkit/toolkit_memory.py",
+      "line": 100
+    },
+    "_m_extract": {
+      "file": "tea_agent/toolkit/toolkit_memory.py",
+      "line": 122
     },
     "toolkit_memory": {
       "file": "tea_agent/toolkit/toolkit_memory.py",
-      "line": 8
+      "line": 157
     },
     "meta_toolkit_memory": {
       "file": "tea_agent/toolkit/toolkit_memory.py",
-      "line": 132
+      "line": 205
     },
     "toolkit_release": {
       "file": "tea_agent/toolkit/toolkit_release.py",
-      "line": 23
+      "line": 22
     },
     "_do_bump": {
       "file": "tea_agent/toolkit/toolkit_release.py",
-      "line": 53
+      "line": 68
     },
     "_do_build": {
       "file": "tea_agent/toolkit/toolkit_release.py",
-      "line": 93
+      "line": 115
     },
     "_do_fix": {
       "file": "tea_agent/toolkit/toolkit_release.py",
-      "line": 122
+      "line": 149
     },
     "_do_release": {
       "file": "tea_agent/toolkit/toolkit_release.py",
-      "line": 163
+      "line": 195
     },
     "meta_toolkit_release": {
       "file": "tea_agent/toolkit/toolkit_release.py",
-      "line": 220
+      "line": 258
     },
     "toolkit_self_report": {
       "file": "tea_agent/toolkit/toolkit_self_report.py",
-      "line": 7
+      "line": 6
     },
     "meta_toolkit_self_report": {
       "file": "tea_agent/toolkit/toolkit_self_report.py",
-      "line": 73
+      "line": 70
     },
     "toolkit_read_pyproject": {
       "file": "tea_agent/toolkit/toolkit_read_pyproject.py",
@@ -3274,287 +3846,315 @@
     },
     "meta_toolkit_read_pyproject": {
       "file": "tea_agent/toolkit/toolkit_read_pyproject.py",
-      "line": 61
+      "line": 59
     },
     "toolkit_run_tests": {
       "file": "tea_agent/toolkit/toolkit_run_tests.py",
-      "line": 6
+      "line": 5
     },
     "meta_toolkit_run_tests": {
       "file": "tea_agent/toolkit/toolkit_run_tests.py",
-      "line": 61
+      "line": 60
     },
     "toolkit_test_gui": {
       "file": "tea_agent/toolkit/toolkit_test_gui.py",
-      "line": 13
+      "line": 11
     },
     "meta_toolkit_test_gui": {
       "file": "tea_agent/toolkit/toolkit_test_gui.py",
-      "line": 126
+      "line": 115
     },
     "toolkit_mcp": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 7
+      "line": 6
     },
     "_mcp_get_or_create_loop": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 55
+      "line": 43
     },
     "_run_loop": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 68
+      "line": 55
     },
     "_mcp_run_async": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 77
+      "line": 64
     },
     "_mcp_connect": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 93
+      "line": 86
     },
     "_connect_and_keepalive": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 109
+      "line": 111
     },
     "_mcp_list_tools": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 199
+      "line": 193
     },
     "_list": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 210
+      "line": 209
     },
     "_mcp_call": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 237
+      "line": 236
     },
     "_call": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 251
+      "line": 257
     },
     "_mcp_disconnect": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 280
+      "line": 285
     },
     "_set_and_del": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 306
+      "line": 315
     },
     "_mcp_status": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 313
+      "line": 321
     },
     "meta_toolkit_mcp": {
       "file": "tea_agent/toolkit/toolkit_mcp.py",
-      "line": 334
+      "line": 342
     },
     "toolkit_config": {
       "file": "tea_agent/toolkit/toolkit_config.py",
-      "line": 10
+      "line": 9
     },
     "meta_toolkit_config": {
       "file": "tea_agent/toolkit/toolkit_config.py",
-      "line": 101
+      "line": 97
     },
     "toolkit_subconscious": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 8
+      "line": 6
     },
     "_is_tea_agent_cwd": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 33
+      "line": 31
     },
     "_ensure_dir": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 56
+      "line": 54
     },
     "_read_state": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 64
+      "line": 62
     },
     "_write_state": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 76
+      "line": 74
     },
     "_get_db_path": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 87
+      "line": 85
     },
     "_is_jieba_available": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 117
+      "line": 115
     },
     "_digest_memories": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 122
+      "line": 119
     },
     "_detect_focus": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 155
+      "line": 150
     },
     "_digest_conversations": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 181
+      "line": 178
     },
     "_extract_memory_candidates": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 229
+      "line": 224
     },
     "_is_duplicate_memory": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 264
+      "line": 259
     },
     "_cross_link": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 280
+      "line": 274
     },
     "_generate_insights": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 355
+      "line": 346
     },
     "_set_goals": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 458
+      "line": 457
     },
     "_send_notification": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 491
+      "line": 490
     },
     "_linux_notify_fallback": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 526
+      "line": 530
     },
     "_send_cycle_summary": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 591
+      "line": 595
     },
     "_run_cycle": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 627
+      "line": 636
     },
     "_subconscious_loop": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 690
+      "line": 698
     },
     "_dream": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 730
+      "line": 734
     },
     "_pragmatic_analysis": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 791
+      "line": 789
     },
     "_creative_dream": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 866
+      "line": 865
     },
     "_reverse_thinking": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 906
+      "line": 910
     },
     "_extreme_scenario": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 922
+      "line": 926
     },
     "meta_toolkit_subconscious": {
       "file": "tea_agent/toolkit/toolkit_subconscious.py",
-      "line": 1001
+      "line": 1004
     },
     "toolkit_mode": {
       "file": "tea_agent/toolkit/toolkit_mode.py",
-      "line": 10
+      "line": 7
     },
     "_detect_mode": {
       "file": "tea_agent/toolkit/toolkit_mode.py",
-      "line": 80
+      "line": 70
     },
     "_get_existing_mode_memory": {
       "file": "tea_agent/toolkit/toolkit_mode.py",
-      "line": 121
+      "line": 111
     },
     "_set_mode": {
       "file": "tea_agent/toolkit/toolkit_mode.py",
-      "line": 134
+      "line": 124
     },
     "_current_mode": {
       "file": "tea_agent/toolkit/toolkit_mode.py",
-      "line": 154
+      "line": 144
     },
     "meta_toolkit_mode": {
       "file": "tea_agent/toolkit/toolkit_mode.py",
-      "line": 230
+      "line": 224
     },
     "toolkit_gettime": {
       "file": "tea_agent/toolkit/toolkit_gettime.py",
-      "line": 7
+      "line": 6
     },
     "meta_toolkit_gettime": {
       "file": "tea_agent/toolkit/toolkit_gettime.py",
+      "line": 25
+    },
+    "set_orchestrator": {
+      "file": "tea_agent/toolkit/toolkit_delegate.py",
       "line": 21
+    },
+    "get_orchestrator": {
+      "file": "tea_agent/toolkit/toolkit_delegate.py",
+      "line": 34
+    },
+    "toolkit_delegate": {
+      "file": "tea_agent/toolkit/toolkit_delegate.py",
+      "line": 44
+    },
+    "meta_toolkit_delegate": {
+      "file": "tea_agent/toolkit/toolkit_delegate.py",
+      "line": 100
     },
     "_log": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 54
+      "line": 50
     },
     "_build_ctags": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 62
+      "line": 58
     },
     "_build_call_graph": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 120
-    },
-    "visit_FunctionDef": {
-      "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 143
-    },
-    "visit_AsyncFunctionDef": {
-      "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 161
-    },
-    "visit_ClassDef": {
-      "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 169
+      "line": 122
     },
     "_build_dot_flow": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 183
+      "line": 190
     },
     "_build_kb_md": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 222
+      "line": 236
     },
     "_action_build": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 321
+      "line": 345
     },
     "_action_query": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 379
+      "line": 403
     },
     "_action_status": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 478
+      "line": 502
     },
     "_extract_arch_context": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 513
+      "line": 537
     },
     "_action_impact": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 562
+      "line": 589
     },
     "_action_deps": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 634
+      "line": 661
     },
     "toolkit_explr": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 688
+      "line": 719
     },
     "meta_toolkit_explr": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 717
+      "line": 747
+    },
+    "toolkit_quality_gate": {
+      "file": "tea_agent/toolkit/toolkit_quality_gate.py",
+      "line": 14
+    },
+    "_run_gating": {
+      "file": "tea_agent/toolkit/toolkit_quality_gate.py",
+      "line": 51
+    },
+    "_check_item_rules": {
+      "file": "tea_agent/toolkit/toolkit_quality_gate.py",
+      "line": 114
+    },
+    "_make_global_violation": {
+      "file": "tea_agent/toolkit/toolkit_quality_gate.py",
+      "line": 144
+    },
+    "_run_report": {
+      "file": "tea_agent/toolkit/toolkit_quality_gate.py",
+      "line": 162
+    },
+    "meta_toolkit_quality_gate": {
+      "file": "tea_agent/toolkit/toolkit_quality_gate.py",
+      "line": 236
     },
     "toolkit_dump_topic": {
       "file": "tea_agent/toolkit/toolkit_dump_topic.py",
@@ -3562,19 +4162,19 @@
     },
     "meta_toolkit_dump_topic": {
       "file": "tea_agent/toolkit/toolkit_dump_topic.py",
-      "line": 111
+      "line": 109
     },
     "toolkit_file": {
       "file": "tea_agent/toolkit/toolkit_file.py",
-      "line": 8
+      "line": 6
     },
     "scan_dir": {
       "file": "tea_agent/toolkit/toolkit_file.py",
-      "line": 55
+      "line": 58
     },
     "meta_toolkit_file": {
       "file": "tea_agent/toolkit/toolkit_file.py",
-      "line": 84
+      "line": 87
     },
     "init_db": {
       "file": "demo/csi300_predictor.py",
@@ -3734,6 +4334,46 @@
       "file": "tests/test_render_timing.py",
       "line": 14
     },
+    "TestSubAgentConfig": {
+      "file": "tests/test_multi_agent.py",
+      "line": 34
+    },
+    "TestTaskDecomposer": {
+      "file": "tests/test_multi_agent.py",
+      "line": 57
+    },
+    "TestSubTask": {
+      "file": "tests/test_multi_agent.py",
+      "line": 113
+    },
+    "TestResultAggregator": {
+      "file": "tests/test_multi_agent.py",
+      "line": 143
+    },
+    "TestSubAgentWrapper": {
+      "file": "tests/test_multi_agent.py",
+      "line": 197
+    },
+    "TestAgentPool": {
+      "file": "tests/test_multi_agent.py",
+      "line": 270
+    },
+    "TestMultiAgentOrchestrator": {
+      "file": "tests/test_multi_agent.py",
+      "line": 303
+    },
+    "TestConfigIntegration": {
+      "file": "tests/test_multi_agent.py",
+      "line": 346
+    },
+    "TestToolkitDelegate": {
+      "file": "tests/test_multi_agent.py",
+      "line": 376
+    },
+    "TestToolkitSubAgent": {
+      "file": "tests/test_multi_agent.py",
+      "line": 409
+    },
     "TestStorageInit": {
       "file": "tests/test_store.py",
       "line": 26
@@ -3800,39 +4440,39 @@
     },
     "SessionComponent": {
       "file": "tea_agent/session_context.py",
-      "line": 79
+      "line": 72
     },
     "TeaCLI": {
       "file": "tea_agent/cli.py",
-      "line": 32
+      "line": 30
     },
     "DbMerger": {
       "file": "tea_agent/merge_db.py",
-      "line": 71
+      "line": 81
     },
     "MemoryDialog": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 71
+      "line": 68
     },
     "TopicDialog": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 377
+      "line": 367
     },
     "ConfigDialog": {
       "file": "tea_agent/gui_dialogs.py",
-      "line": 958
+      "line": 933
     },
     "ToolCallRecord": {
       "file": "tea_agent/reflection.py",
-      "line": 22
+      "line": 21
     },
     "SessionTrace": {
       "file": "tea_agent/reflection.py",
-      "line": 30
+      "line": 29
     },
     "ReflectionManager": {
       "file": "tea_agent/reflection.py",
-      "line": 55
+      "line": 64
     },
     "ModelConfig": {
       "file": "tea_agent/config.py",
@@ -3840,31 +4480,39 @@
     },
     "PathsConfig": {
       "file": "tea_agent/config.py",
-      "line": 45
+      "line": 50
     },
     "EmbeddingConfig": {
       "file": "tea_agent/config.py",
-      "line": 131
+      "line": 158
+    },
+    "SubAgentDef": {
+      "file": "tea_agent/config.py",
+      "line": 182
+    },
+    "MultiAgentConfig": {
+      "file": "tea_agent/config.py",
+      "line": 228
     },
     "AgentConfig": {
       "file": "tea_agent/config.py",
-      "line": 149
+      "line": 264
     },
     "OnlineToolSession": {
       "file": "tea_agent/onlinesession.py",
-      "line": 37
+      "line": 36
     },
     "_SimpleTFIDF": {
       "file": "tea_agent/embedding_util.py",
-      "line": 35
+      "line": 31
     },
     "EmbeddingEngine": {
       "file": "tea_agent/embedding_util.py",
-      "line": 97
+      "line": 118
     },
     "SummarizerComponent": {
       "file": "tea_agent/session_summarizer_component.py",
-      "line": 31
+      "line": 36
     },
     "BaseChatSession": {
       "file": "tea_agent/basesession.py",
@@ -3872,15 +4520,15 @@
     },
     "_TUIAgentCore": {
       "file": "tea_agent/tui.py",
-      "line": 42
+      "line": 41
     },
     "TeaTUI": {
       "file": "tea_agent/tui.py",
-      "line": 188
+      "line": 215
     },
     "_SendTextArea": {
       "file": "tea_agent/tui.py",
-      "line": 281
+      "line": 316
     },
     "PipelineStep": {
       "file": "tea_agent/session_pipeline.py",
@@ -3896,11 +4544,11 @@
     },
     "StatusNotifierItemDBus": {
       "file": "tea_agent/gui.py",
-      "line": 117
+      "line": 110
     },
     "TkGUI": {
       "file": "tea_agent/gui.py",
-      "line": 215
+      "line": 206
     },
     "ToolComponent": {
       "file": "tea_agent/session_tool_component.py",
@@ -3912,7 +4560,7 @@
     },
     "APIComponent": {
       "file": "tea_agent/session_api_component.py",
-      "line": 24
+      "line": 29
     },
     "ProjectMemoryManager": {
       "file": "tea_agent/project_memory.py",
@@ -3920,15 +4568,15 @@
     },
     "Toolkit": {
       "file": "tea_agent/tlk.py",
-      "line": 78
+      "line": 89
     },
     "SystemPromptManager": {
       "file": "tea_agent/prompt_manager.py",
-      "line": 30
+      "line": 28
     },
     "MemoryManager": {
       "file": "tea_agent/memory.py",
-      "line": 40
+      "line": 36
     },
     "ChatRenderer": {
       "file": "tea_agent/_gui/_renderer.py",
@@ -3936,7 +4584,7 @@
     },
     "TopicManager": {
       "file": "tea_agent/_gui/_topic_manager.py",
-      "line": 17
+      "line": 149
     },
     "StreamManager": {
       "file": "tea_agent/_gui/_stream_manager.py",
@@ -3944,7 +4592,7 @@
     },
     "_TagChecker": {
       "file": "tea_agent/_gui/_markdown.py",
-      "line": 366
+      "line": 389
     },
     "UIBuilder": {
       "file": "tea_agent/_gui/_ui_builder.py",
@@ -3960,11 +4608,23 @@
     },
     "Skill": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 34
+      "line": 33
     },
     "SkillManager": {
       "file": "tea_agent/skills/__init__.py",
-      "line": 68
+      "line": 72
+    },
+    "_MetricsVisitor": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 566
+    },
+    "_CallCollector": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 750
+    },
+    "_Inner": {
+      "file": "tea_agent/lsp/ts_analyzer.py",
+      "line": 766
     },
     "SummaryStore": {
       "file": "tea_agent/store/_summaries.py",
@@ -3996,7 +4656,7 @@
     },
     "ScheduledTaskStore": {
       "file": "tea_agent/store/_scheduled_tasks.py",
-      "line": 13
+      "line": 12
     },
     "Storage": {
       "file": "tea_agent/store/_core.py",
@@ -4010,9 +4670,49 @@
       "file": "tea_agent/store/_topics.py",
       "line": 9
     },
+    "BodyFinder": {
+      "file": "tea_agent/tools/refactor_comments.py",
+      "line": 37
+    },
+    "DocProcessor": {
+      "file": "tea_agent/tools/refactor_comments.py",
+      "line": 279
+    },
+    "AgentPool": {
+      "file": "tea_agent/multi_agent/agent_pool.py",
+      "line": 24
+    },
+    "SubTask": {
+      "file": "tea_agent/multi_agent/task_decomposer.py",
+      "line": 28
+    },
+    "TaskDecomposer": {
+      "file": "tea_agent/multi_agent/task_decomposer.py",
+      "line": 80
+    },
+    "ResultAggregator": {
+      "file": "tea_agent/multi_agent/result_aggregator.py",
+      "line": 23
+    },
+    "MultiAgentOrchestrator": {
+      "file": "tea_agent/multi_agent/orchestrator.py",
+      "line": 28
+    },
+    "SubAgentConfig": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 27
+    },
+    "SubAgentWrapper": {
+      "file": "tea_agent/multi_agent/sub_agent.py",
+      "line": 57
+    },
+    "ToolLoader": {
+      "file": "tea_agent/toolkit/tool_loader.py",
+      "line": 10
+    },
     "CallVisitor": {
       "file": "tea_agent/toolkit/toolkit_explr.py",
-      "line": 141
+      "line": 148
     },
     "CurveFitter": {
       "file": "demo/csi300_predictor.py",
@@ -4051,6 +4751,77 @@
     "test_memory_integration": [
       "hasattr",
       "print"
+    ],
+    "test_imports": [
+      "print"
+    ],
+    "test_sub_agent_config": [
+      "SubAgentConfig",
+      "print"
+    ],
+    "test_subtask": [
+      "SubTask",
+      "from_dict",
+      "print",
+      "to_dict"
+    ],
+    "test_task_decomposer_rules": [
+      "TaskDecomposer",
+      "_decompose_with_rules",
+      "any",
+      "len",
+      "print"
+    ],
+    "test_execution_order": [
+      "SubTask",
+      "TaskDecomposer",
+      "get_execution_order",
+      "len",
+      "print"
+    ],
+    "test_result_aggregator": [
+      "ResultAggregator",
+      "SubTask",
+      "_aggregate_simple",
+      "aggregate",
+      "len",
+      "print",
+      "summarize_result"
+    ],
+    "test_agent_pool": [
+      "AgentPool",
+      "create_agent",
+      "print",
+      "register_agent_type",
+      "remove_agent",
+      "shutdown_all"
+    ],
+    "test_orchestrator": [
+      "MultiAgentOrchestrator",
+      "get_status",
+      "keys",
+      "list",
+      "print",
+      "register_agent_type",
+      "shutdown"
+    ],
+    "test_config_integration": [
+      "AgentConfig",
+      "MultiAgentConfig",
+      "SubAgentDef",
+      "isinstance",
+      "print"
+    ],
+    "test_toolkit_delegate": [
+      "meta_toolkit_delegate",
+      "print",
+      "toolkit_delegate"
+    ],
+    "test_toolkit_sub_agent": [
+      "clear_sub_agent_reports",
+      "print",
+      "toolkit_sub_agent_report",
+      "toolkit_sub_agent_status"
     ],
     "test_config_loads": [
       "hasattr",
@@ -4259,6 +5030,192 @@
       "assertTrue",
       "search",
       "start"
+    ],
+    "test_default_config": [
+      "SubAgentConfig",
+      "assertEqual",
+      "assertTrue"
+    ],
+    "test_custom_config": [
+      "SubAgentConfig",
+      "assertEqual"
+    ],
+    "setUp": [
+      "clear_sub_agent_reports"
+    ],
+    "test_decompose_code_task": [
+      "any",
+      "assertGreater",
+      "assertIsInstance",
+      "assertTrue",
+      "decompose",
+      "len"
+    ],
+    "test_decompose_search_task": [
+      "assertGreater",
+      "assertIsInstance",
+      "decompose",
+      "len"
+    ],
+    "test_decompose_general_task": [
+      "assertEqual",
+      "assertIsInstance",
+      "decompose",
+      "len"
+    ],
+    "test_execution_order_no_deps": [
+      "SubTask",
+      "assertEqual",
+      "get_execution_order",
+      "len"
+    ],
+    "test_execution_order_with_deps": [
+      "SubTask",
+      "assertEqual",
+      "assertIn",
+      "get_execution_order",
+      "len"
+    ],
+    "test_to_dict": [
+      "isinstance",
+      "to_dict"
+    ],
+    "test_from_dict": [
+      "assertEqual",
+      "from_dict"
+    ],
+    "test_aggregate_single_result": [
+      "SubTask",
+      "aggregate",
+      "assertEqual"
+    ],
+    "test_aggregate_multiple_results": [
+      "SubTask",
+      "aggregate",
+      "assertIn"
+    ],
+    "test_aggregate_empty": [
+      "aggregate",
+      "assertIn"
+    ],
+    "test_summarize_short": [
+      "assertEqual",
+      "summarize_result"
+    ],
+    "test_summarize_long": [
+      "assertLessEqual",
+      "len",
+      "summarize_result"
+    ],
+    "test_merge_code_results": [
+      "assertIn",
+      "merge_code_results"
+    ],
+    "test_resolve_params_without_parent": [
+      "SubAgentWrapper",
+      "_resolve_effective_params",
+      "assertEqual",
+      "assertTrue"
+    ],
+    "test_resolve_params_with_parent": [
+      "MagicMock",
+      "SubAgentWrapper",
+      "_resolve_effective_params",
+      "assertEqual"
+    ],
+    "test_build_tool_list": [
+      "MagicMock",
+      "SubAgentConfig",
+      "SubAgentWrapper",
+      "_build_tool_list",
+      "assertIn",
+      "assertNotIn"
+    ],
+    "test_register_agent_type": [
+      "assertIn",
+      "register_agent_type"
+    ],
+    "test_create_agent": [
+      "assertEqual",
+      "assertIn",
+      "assertIsNotNone",
+      "create_agent",
+      "register_agent_type"
+    ],
+    "test_remove_agent": [
+      "assertIn",
+      "assertNotIn",
+      "create_agent",
+      "register_agent_type",
+      "remove_agent"
+    ],
+    "test_shutdown_all": [
+      "assertEqual",
+      "create_agent",
+      "len",
+      "register_agent_type",
+      "shutdown_all"
+    ],
+    "test_default_agent_types": [
+      "assertIn",
+      "keys",
+      "list"
+    ],
+    "test_execute_single_mode": [
+      "assertTrue",
+      "hasattr"
+    ],
+    "test_get_status": [
+      "assertEqual",
+      "assertIn",
+      "get_status"
+    ],
+    "test_execution_history": [
+      "assertIsInstance",
+      "get_execution_history"
+    ],
+    "test_shutdown": [
+      "assertEqual",
+      "get_status",
+      "len",
+      "shutdown"
+    ],
+    "test_multi_agent_config_in_agent_config": [
+      "AgentConfig",
+      "assertEqual",
+      "assertFalse",
+      "assertIsInstance",
+      "assertIsNotNone"
+    ],
+    "test_sub_agent_def": [
+      "SubAgentDef",
+      "assertEqual"
+    ],
+    "test_meta_schema": [
+      "assertEqual",
+      "assertIn",
+      "meta_toolkit_delegate"
+    ],
+    "test_delegate_without_orchestrator": [
+      "assertIn",
+      "get_orchestrator",
+      "set_orchestrator",
+      "toolkit_delegate"
+    ],
+    "test_report_and_status": [
+      "assertIn",
+      "toolkit_sub_agent_report",
+      "toolkit_sub_agent_status"
+    ],
+    "test_status_all_agents": [
+      "assertIn",
+      "toolkit_sub_agent_report",
+      "toolkit_sub_agent_status"
+    ],
+    "test_meta_schemas": [
+      "assertEqual",
+      "meta_toolkit_sub_agent_report",
+      "meta_toolkit_sub_agent_status"
     ],
     "tmp_db_path": [
       "join",
@@ -4597,10 +5554,6 @@
     "test_apply_changes": [
       "apply_changes"
     ],
-    "test_to_dict": [
-      "isinstance",
-      "to_dict"
-    ],
     "test_reload_from_dict": [
       "reload_from_dict"
     ],
@@ -4699,7 +5652,6 @@
       "get_semantic_summary",
       "get_tool_chain_summary",
       "get_topic_summary",
-      "len",
       "load_history"
     ],
     "_do_async_summaries": [
@@ -4794,11 +5746,13 @@
       "startswith"
     ],
     "work": [
-      "_add_token_notice_and_render",
+      "_build_token_table",
       "_notify_completion",
+      "_now_ts",
       "_post_chat_pipeline",
       "_update_status",
       "after",
+      "append",
       "chat_stream",
       "format_exc",
       "get",
@@ -4811,14 +5765,13 @@
       "print"
     ],
     "run": [
-      "_auto_init_topic",
-      "_chat",
-      "_handle_command",
-      "_print_welcome",
-      "_read_multiline",
-      "print",
-      "startswith",
-      "strip"
+      "chat_stream",
+      "clear",
+      "error",
+      "initialize",
+      "reset_interrupt",
+      "set",
+      "str"
     ],
     "run_oneshot": [
       "chat"
@@ -5469,6 +6422,13 @@
       "isabs",
       "join"
     ],
+    "from_dict": [
+      "cls",
+      "get"
+    ],
+    "to_dict": [
+      "len"
+    ],
     "get_effective_params": [
       "get"
     ],
@@ -5493,9 +6453,6 @@
     "reload_from_dict": [
       "set"
     ],
-    "to_dict": [
-      "len"
-    ],
     "load_config": [
       "AgentConfig",
       "Path",
@@ -5503,6 +6460,7 @@
       "bool",
       "dirname",
       "float",
+      "from_dict",
       "get",
       "home",
       "int",
@@ -5526,7 +6484,8 @@
       "ensure_config_dir",
       "home",
       "open",
-      "str"
+      "str",
+      "to_dict"
     ],
     "create_default_config": [
       "ensure_config_dir",
@@ -5624,6 +6583,7 @@
       "warning"
     ],
     "_build_api_messages": [
+      "_clean_orphan_tool_messages",
       "_enforce_token_budget",
       "_filter_level2_by_relevance",
       "_get_effective_params",
@@ -5631,7 +6591,6 @@
       "_get_subconscious_context",
       "_sanitize_api_messages",
       "_to_multimodal",
-      "add",
       "append",
       "compute_safe_budget",
       "dict",
@@ -5643,8 +6602,14 @@
       "join",
       "len",
       "range",
+      "str"
+    ],
+    "_clean_orphan_tool_messages": [
+      "add",
+      "append",
+      "get",
+      "info",
       "set",
-      "str",
       "warning"
     ],
     "_sanitize_api_messages": [
@@ -6242,18 +7207,22 @@
       "remove"
     ],
     "execute": [
+      "SubTask",
+      "_assign_agents",
+      "aggregate",
       "append",
-      "debug",
+      "decompose",
       "enumerate",
-      "func",
-      "get_enabled_steps",
-      "isinstance",
-      "keys",
+      "error",
+      "get",
+      "get_execution_order",
+      "items",
       "len",
-      "setdefault",
-      "str",
-      "update",
-      "warning"
+      "run_parallel",
+      "stream_callback",
+      "time",
+      "to_dict",
+      "update"
     ],
     "list_steps": [
       "get_enabled_steps",
@@ -6505,6 +7474,9 @@
     ],
     "switch_topic": [
       "Thread",
+      "_build_header_items",
+      "_build_tool_rounds",
+      "_parse_user_msg",
       "_poll_loading_progress",
       "_show_loading",
       "_update_status",
@@ -6513,24 +7485,19 @@
       "append",
       "cast",
       "clear_chat",
-      "dumps",
       "enumerate",
+      "extend",
       "get",
       "get_conversations",
       "get_topic",
       "get_topic_summary",
       "get_topic_tokens",
-      "isinstance",
-      "items",
-      "join",
       "len",
       "load_history",
-      "loads",
       "max",
       "min",
       "range",
       "start",
-      "startswith",
       "str"
     ],
     "on_topic_select": [
@@ -6607,13 +7574,15 @@
     ],
     "send": [
       "Thread",
-      "_add_token_notice_and_render",
+      "_build_token_table",
       "_hide_raw_check_btn",
       "_notify_completion",
+      "_now_ts",
       "_post_chat_pipeline",
       "_switch_display",
       "_update_status",
       "after",
+      "append",
       "chat_stream",
       "clear",
       "delete",
@@ -6630,24 +7599,30 @@
       "type",
       "update_msg_rounds"
     ],
-    "_add_token_notice_and_render": [
+    "_build_token_table": [
       "_cell",
-      "_now_ts",
-      "_render_and_show_chat",
-      "append",
       "get",
       "get_embedding_engine",
       "get_embedding_usage",
       "get_topic_tokens",
       "join"
     ],
+    "_add_token_notice_and_render": [
+      "_build_token_table",
+      "_now_ts",
+      "_render_and_show_chat",
+      "append"
+    ],
     "_refresh_cheap_token_notice": [
+      "_build_token_table",
       "_now_ts",
       "_refresh_cheap_token_notice",
       "_render_and_show_chat",
       "after",
       "append",
-      "get"
+      "get",
+      "len",
+      "range"
     ],
     "_on_history_link_click": [
       "_render_and_show_chat",
@@ -6910,9 +7885,13 @@
       "append"
     ],
     "initialize": [
-      "add_system_prompt",
-      "get_latest_system_prompt",
-      "info"
+      "OnlineToolSession",
+      "_build_tool_list",
+      "_resolve_effective_params",
+      "error",
+      "format",
+      "info",
+      "str"
     ],
     "inject_memories": [
       "ProjectMemoryManager",
@@ -7117,9 +8096,6 @@
     ],
     "reload": [
       "get_latest_system_prompt"
-    ],
-    "check_meta": [
-      "get"
     ],
     "save": [
       "_check_dependencies",
@@ -7354,26 +8330,54 @@
       "_prepare",
       "after"
     ],
+    "_parse_user_msg": [
+      "get",
+      "isinstance",
+      "loads",
+      "startswith"
+    ],
+    "_build_header_items": [
+      "append",
+      "get"
+    ],
+    "_build_tool_rounds": [
+      "_process_round",
+      "append",
+      "join"
+    ],
+    "_process_round": [
+      "_process_tool_call",
+      "append",
+      "get",
+      "len"
+    ],
+    "_process_tool_call": [
+      "append",
+      "dumps",
+      "get",
+      "items",
+      "join",
+      "len",
+      "loads"
+    ],
     "load_worker": [
+      "_build_header_items",
+      "_build_tool_rounds",
+      "_parse_user_msg",
       "append",
       "cast",
-      "dumps",
       "enumerate",
+      "extend",
       "get",
       "get_conversations",
       "get_topic",
       "get_topic_summary",
       "get_topic_tokens",
-      "isinstance",
-      "items",
-      "join",
       "len",
       "load_history",
-      "loads",
       "max",
       "min",
       "range",
-      "startswith",
       "str"
     ],
     "fmt": [
@@ -7593,18 +8597,20 @@
       "list"
     ],
     "_scan_directory": [
-      "Skill",
-      "_load_manifest",
-      "debug",
+      "__import__",
+      "append",
+      "callable",
+      "check_meta",
+      "endswith",
+      "exec",
+      "func_meta",
       "get",
-      "info",
-      "isdir",
-      "isfile",
       "join",
-      "len",
       "listdir",
-      "sorted",
-      "warning"
+      "open",
+      "read",
+      "startswith",
+      "update"
     ],
     "_load_manifest": [
       "exec_module",
@@ -7676,10 +8682,28 @@
       "values"
     ],
     "get_status": [
-      "get_active_skill_names",
-      "get_active_tool_names",
+      "keys",
       "len",
-      "list_skills"
+      "list"
+    ],
+    "run_lsp_check": [
+      "NamedTemporaryFile",
+      "debug",
+      "escape",
+      "get",
+      "getcwd",
+      "group",
+      "impact_analysis",
+      "len",
+      "loads",
+      "max",
+      "open",
+      "read",
+      "run",
+      "search",
+      "strip",
+      "unlink",
+      "write"
     ],
     "_get_jedi_project": [
       "Project"
@@ -7794,6 +8818,9 @@
       "_extract_docstring",
       "_extract_params",
       "_get_text",
+      "_handle_class_def",
+      "_handle_function_def",
+      "_handle_import",
       "_parse_file_ast_fallback",
       "_walk",
       "append",
@@ -7803,7 +8830,28 @@
       "parse",
       "read"
     ],
+    "_handle_function_def": [
+      "_extract_calls",
+      "_extract_docstring",
+      "_extract_params",
+      "_get_text",
+      "append",
+      "child_by_field_name"
+    ],
+    "_handle_class_def": [
+      "_extract_calls",
+      "_extract_docstring",
+      "_extract_params",
+      "_get_text",
+      "append",
+      "child_by_field_name"
+    ],
+    "_handle_import": [
+      "_get_text",
+      "append"
+    ],
     "_walk": [
+      "_compute_fn_metrics",
       "_extract_calls",
       "_extract_docstring",
       "_extract_params",
@@ -7870,6 +8918,145 @@
       "append",
       "index",
       "pop"
+    ],
+    "_count_branches": [
+      "_count_branches"
+    ],
+    "_cyclomatic_for_body": [
+      "_count_branches"
+    ],
+    "_compute_fn_metrics": [
+      "_cyclomatic_for_body",
+      "bool",
+      "get",
+      "len"
+    ],
+    "_compute_metrics_ast_fallback": [
+      "_CallCollector",
+      "_Inner",
+      "_MetricsVisitor",
+      "_end_func",
+      "add",
+      "append",
+      "bool",
+      "count",
+      "generic_visit",
+      "get",
+      "get_docstring",
+      "hasattr",
+      "isinstance",
+      "len",
+      "max",
+      "open",
+      "parse",
+      "pop",
+      "read",
+      "round",
+      "set",
+      "sorted",
+      "str",
+      "sum",
+      "visit",
+      "visit_FunctionDef"
+    ],
+    "_end_func": [
+      "append",
+      "bool",
+      "hasattr",
+      "len",
+      "set"
+    ],
+    "visit_FunctionDef": [
+      "add",
+      "generic_visit",
+      "isinstance",
+      "set",
+      "sorted",
+      "walk"
+    ],
+    "visit_AsyncFunctionDef": [
+      "visit_FunctionDef"
+    ],
+    "visit_If": [
+      "generic_visit"
+    ],
+    "visit_For": [
+      "generic_visit"
+    ],
+    "visit_AsyncFor": [
+      "generic_visit"
+    ],
+    "visit_While": [
+      "generic_visit"
+    ],
+    "visit_Try": [
+      "generic_visit",
+      "len"
+    ],
+    "visit_Match": [
+      "generic_visit",
+      "len"
+    ],
+    "visit_IfExp": [
+      "generic_visit"
+    ],
+    "visit_BoolOp": [
+      "generic_visit",
+      "len"
+    ],
+    "visit_Call": [
+      "add",
+      "generic_visit",
+      "isinstance"
+    ],
+    "compute_metrics": [
+      "Parser",
+      "_compute_fn_metrics",
+      "_compute_metrics_ast_fallback",
+      "_ensure_ts",
+      "_extract_calls",
+      "_extract_docstring",
+      "_extract_params",
+      "_get_text",
+      "_walk",
+      "_walk2",
+      "append",
+      "child_by_field_name",
+      "count",
+      "encode",
+      "get",
+      "isabs",
+      "items",
+      "join",
+      "len",
+      "max",
+      "open",
+      "parse",
+      "read",
+      "round",
+      "set",
+      "sorted",
+      "str",
+      "sum"
+    ],
+    "_walk2": [
+      "_extract_calls",
+      "_get_text",
+      "_walk2",
+      "child_by_field_name",
+      "set"
+    ],
+    "find_dead_code": [
+      "add",
+      "append",
+      "get",
+      "isabs",
+      "join",
+      "len",
+      "parse_file",
+      "set",
+      "startswith",
+      "update"
     ],
     "get_topic_summary": [
       "close",
@@ -8586,6 +9773,278 @@
       "execute",
       "fetchone"
     ],
+    "get_function_body_ranges": [
+      "BodyFinder",
+      "append",
+      "generic_visit",
+      "parse",
+      "visit"
+    ],
+    "strip_inline_comments": [
+      "StringIO",
+      "add",
+      "append",
+      "enumerate",
+      "find",
+      "generate_tokens",
+      "join",
+      "len",
+      "list",
+      "lstrip",
+      "rstrip",
+      "set",
+      "split",
+      "startswith",
+      "strip"
+    ],
+    "generate_function_docstring": [
+      "append",
+      "bool",
+      "get",
+      "join",
+      "len",
+      "replace",
+      "rstrip",
+      "split",
+      "startswith",
+      "strip",
+      "unparse",
+      "upper"
+    ],
+    "has_docstring_node": [
+      "isinstance"
+    ],
+    "get_existing_doc": [
+      "has_docstring_node",
+      "strip"
+    ],
+    "looks_like_pydoc": [
+      "any"
+    ],
+    "format_docstring_block": [
+      "append",
+      "join",
+      "len",
+      "split",
+      "strip"
+    ],
+    "insert_docstrings": [
+      "DocProcessor",
+      "append",
+      "format_docstring_block",
+      "generate_class_docstring",
+      "generate_function_docstring",
+      "generic_visit",
+      "get_existing_doc",
+      "insert",
+      "join",
+      "looks_like_pydoc",
+      "parse",
+      "reversed",
+      "sort",
+      "split",
+      "visit"
+    ],
+    "visit_ClassDef": [
+      "generic_visit"
+    ],
+    "process_file": [
+      "insert_docstrings",
+      "len",
+      "open",
+      "read",
+      "split",
+      "strip_inline_comments",
+      "write"
+    ],
+    "register_agent_type": [
+      "append",
+      "register_agent_type"
+    ],
+    "create_agent": [
+      "SubAgentConfig",
+      "SubAgentWrapper",
+      "hasattr",
+      "info",
+      "initialize",
+      "items",
+      "setattr",
+      "warning"
+    ],
+    "get_agent": [
+      "get"
+    ],
+    "remove_agent": [
+      "info",
+      "pop",
+      "shutdown"
+    ],
+    "run_parallel": [
+      "ThreadPoolExecutor",
+      "as_completed",
+      "cancel",
+      "error",
+      "get",
+      "items",
+      "len",
+      "reset",
+      "result",
+      "submit"
+    ],
+    "run_batch": [
+      "run_parallel"
+    ],
+    "active_agents": [
+      "keys",
+      "list"
+    ],
+    "shutdown_all": [
+      "clear",
+      "error",
+      "info",
+      "items",
+      "list",
+      "shutdown"
+    ],
+    "decompose": [
+      "_decompose_with_llm",
+      "_decompose_with_rules",
+      "warning"
+    ],
+    "_decompose_with_llm": [
+      "_decompose_with_rules",
+      "_extract_json_array",
+      "create",
+      "format",
+      "from_dict",
+      "info",
+      "join",
+      "len",
+      "warning"
+    ],
+    "_decompose_with_rules": [
+      "SubTask",
+      "_next_id",
+      "any",
+      "append",
+      "info",
+      "len",
+      "lower"
+    ],
+    "_extract_json_array": [
+      "find",
+      "group",
+      "loads",
+      "rfind",
+      "search",
+      "warning"
+    ],
+    "get_execution_order": [
+      "append",
+      "discard",
+      "get",
+      "len",
+      "max",
+      "set",
+      "warning"
+    ],
+    "aggregate": [
+      "_aggregate_simple",
+      "_aggregate_with_llm",
+      "len",
+      "list",
+      "values",
+      "warning"
+    ],
+    "_aggregate_with_llm": [
+      "append",
+      "create",
+      "format",
+      "get",
+      "join"
+    ],
+    "_aggregate_simple": [
+      "_order_by_deps",
+      "append",
+      "get",
+      "join",
+      "len",
+      "startswith",
+      "values"
+    ],
+    "_order_by_deps": [
+      "TaskDecomposer",
+      "extend",
+      "get_execution_order"
+    ],
+    "summarize_result": [
+      "create",
+      "format",
+      "len"
+    ],
+    "merge_code_results": [
+      "append",
+      "enumerate",
+      "findall",
+      "items",
+      "join",
+      "lower",
+      "strip",
+      "sub"
+    ],
+    "_register_default_types": [
+      "register_agent_type"
+    ],
+    "_assign_agents": [
+      "create_agent",
+      "get_agent",
+      "items",
+      "next"
+    ],
+    "execute_single": [
+      "execute"
+    ],
+    "execute_manual": [
+      "execute"
+    ],
+    "get_execution_history": [
+      "list"
+    ],
+    "clear_history": [
+      "clear"
+    ],
+    "shutdown": [
+      "info",
+      "set"
+    ],
+    "_resolve_effective_params": [
+      "getattr",
+      "hasattr"
+    ],
+    "_value": [
+      "getattr"
+    ],
+    "_build_tool_list": [
+      "append",
+      "getattr",
+      "items",
+      "set",
+      "update"
+    ],
+    "run_async": [
+      "Thread",
+      "start"
+    ],
+    "wait": [
+      "wait"
+    ],
+    "is_done": [
+      "is_set"
+    ],
+    "reset": [
+      "clear",
+      "reset_interrupt"
+    ],
     "toolkit_exec": [
       "Lock",
       "Popen",
@@ -8631,6 +10090,16 @@
       "wait",
       "which"
     ],
+    "check_meta": [
+      "get"
+    ],
+    "reload_all": [
+      "_scan_directory",
+      "append",
+      "exists",
+      "extend",
+      "update"
+    ],
     "toolkit_skill": [
       "activate_skill",
       "append",
@@ -8660,6 +10129,26 @@
       "join",
       "loads"
     ],
+    "toolkit_static": [
+      "_summary",
+      "compute_metrics",
+      "find_dead_code",
+      "getcwd"
+    ],
+    "_summary": [
+      "Path",
+      "any",
+      "append",
+      "compute_metrics",
+      "get",
+      "len",
+      "relative_to",
+      "rglob",
+      "sort",
+      "sorted",
+      "startswith",
+      "str"
+    ],
     "toolkit_set_topic_title": [
       "_on_summary_updated",
       "get_agent",
@@ -8669,6 +10158,20 @@
       "list_topics",
       "update_topic_title",
       "warning"
+    ],
+    "toolkit_sub_agent_report": [
+      "append",
+      "info"
+    ],
+    "toolkit_sub_agent_status": [
+      "append",
+      "get",
+      "items",
+      "join"
+    ],
+    "clear_sub_agent_reports": [
+      "clear",
+      "pop"
     ],
     "_get_db": [
       "get_agent",
@@ -8723,35 +10226,60 @@
       "_get_topic_id",
       "_restore_from_db"
     ],
-    "toolkit_todo": [
-      "_auto_restore",
-      "_done",
-      "_ensure_table",
+    "_todo_create": [
       "_fmt",
+      "_get_topic_id",
+      "_sync_to_db",
+      "clear",
+      "enumerate",
+      "extend",
+      "len"
+    ],
+    "_todo_check": [
+      "_done",
+      "_fmt",
+      "_sync_item",
+      "len"
+    ],
+    "_todo_show": [
+      "_done",
+      "_fmt",
+      "_get_topic_id",
+      "len"
+    ],
+    "_todo_clear": [
+      "_ensure_table",
       "_get_db",
       "_get_topic_id",
+      "clear",
+      "close",
+      "commit",
+      "cursor",
+      "execute",
+      "len",
+      "warning"
+    ],
+    "_todo_restore": [
+      "_done",
+      "_fmt",
+      "_restore_from_db",
+      "len"
+    ],
+    "toolkit_todo": [
+      "_auto_restore",
       "_plan_create",
       "_plan_delete",
-      "_plan_list",
       "_plan_resume",
       "_plan_run",
       "_plan_show",
       "_plan_step",
       "_plan_verify",
-      "_restore_from_db",
-      "_sync_item",
-      "_sync_to_db",
-      "clear",
-      "close",
-      "commit",
-      "cursor",
-      "enumerate",
+      "_todo_check",
+      "_todo_create",
       "exception",
-      "execute",
-      "extend",
-      "len",
-      "str",
-      "warning"
+      "get",
+      "handler",
+      "str"
     ],
     "_done": [
       "sum"
@@ -8859,43 +10387,36 @@
       "rollback"
     ],
     "toolkit_self_evolve": [
-      "NamedTemporaryFile",
       "_git_clean",
       "_git_revert",
       "_git_snap",
-      "_run_lsp_checks",
       "_run_tests",
       "compile",
       "copy2",
       "count",
-      "debug",
       "endswith",
-      "escape",
       "exists",
       "get",
       "getcwd",
       "group",
-      "impact_analysis",
       "int",
       "isinstance",
       "join",
       "len",
-      "loads",
       "lower",
-      "max",
       "now",
       "open",
       "read",
       "remove",
       "replace",
       "run",
+      "run_lsp_check",
       "search",
       "splitlines",
       "startswith",
       "str",
       "strftime",
       "strip",
-      "unlink",
       "warning",
       "write"
     ],
@@ -8920,24 +10441,6 @@
       "run",
       "search",
       "str"
-    ],
-    "_run_lsp_checks": [
-      "NamedTemporaryFile",
-      "debug",
-      "escape",
-      "get",
-      "group",
-      "impact_analysis",
-      "len",
-      "loads",
-      "max",
-      "open",
-      "read",
-      "run",
-      "search",
-      "strip",
-      "unlink",
-      "write"
     ],
     "toolkit_scheduler": [
       "Thread",
@@ -9282,6 +10785,84 @@
       "append",
       "items"
     ],
+    "_generate_unified_diff": [
+      "join",
+      "splitlines",
+      "unified_diff"
+    ],
+    "_git_stash_push": [
+      "run",
+      "str",
+      "strip"
+    ],
+    "_git_stash_pop": [
+      "run",
+      "str"
+    ],
+    "_git_stash_drop": [
+      "run"
+    ],
+    "_check_conflict": [
+      "count",
+      "exists",
+      "join",
+      "open",
+      "read"
+    ],
+    "_verify_all": [
+      "all",
+      "compile",
+      "endswith",
+      "exists",
+      "get",
+      "join",
+      "len",
+      "loads",
+      "run",
+      "startswith",
+      "str",
+      "strip",
+      "values"
+    ],
+    "_apply_one": [
+      "_check_conflict",
+      "copy2",
+      "exists",
+      "join",
+      "now",
+      "open",
+      "read",
+      "replace",
+      "strftime",
+      "write"
+    ],
+    "_toolkit_diff_impl": [
+      "_apply_one",
+      "_check_conflict",
+      "_generate_unified_diff",
+      "_git_stash_drop",
+      "_git_stash_pop",
+      "_git_stash_push",
+      "_verify_all",
+      "append",
+      "copy2",
+      "count",
+      "endswith",
+      "exception",
+      "exists",
+      "get",
+      "getcwd",
+      "join",
+      "len",
+      "next",
+      "run_lsp_check",
+      "str",
+      "sum",
+      "warning"
+    ],
+    "toolkit_diff": [
+      "_toolkit_diff_impl"
+    ],
     "toolkit_search": [
       "_search_baidu",
       "_search_codebase",
@@ -9587,78 +11168,6 @@
     "_preview_patch": [
       "_apply_patch"
     ],
-    "_generate_unified_diff": [
-      "join",
-      "splitlines",
-      "unified_diff"
-    ],
-    "_git_stash_push": [
-      "run",
-      "str",
-      "strip"
-    ],
-    "_git_stash_pop": [
-      "run",
-      "str"
-    ],
-    "_git_stash_drop": [
-      "run"
-    ],
-    "_check_conflict": [
-      "count",
-      "exists",
-      "join",
-      "open",
-      "read"
-    ],
-    "_verify_all": [
-      "all",
-      "compile",
-      "endswith",
-      "exists",
-      "get",
-      "join",
-      "len",
-      "loads",
-      "run",
-      "startswith",
-      "str",
-      "strip",
-      "values"
-    ],
-    "_apply_one": [
-      "_check_conflict",
-      "copy2",
-      "exists",
-      "join",
-      "now",
-      "open",
-      "read",
-      "replace",
-      "strftime",
-      "write"
-    ],
-    "_toolkit_diff_impl": [
-      "_apply_one",
-      "_check_conflict",
-      "_generate_unified_diff",
-      "_git_stash_drop",
-      "_git_stash_pop",
-      "_git_stash_push",
-      "_verify_all",
-      "append",
-      "copy2",
-      "count",
-      "exception",
-      "exists",
-      "get",
-      "getcwd",
-      "join",
-      "len",
-      "next",
-      "str",
-      "sum"
-    ],
     "toolkit_proactive": [
       "_add_goal",
       "_check_proactive",
@@ -9710,26 +11219,55 @@
       "sort",
       "str"
     ],
-    "toolkit_memory": [
+    "_m_add": [
       "add_memory",
+      "get",
+      "str",
+      "strip"
+    ],
+    "_m_list": [
       "append",
-      "deactivate_memory",
-      "delete_memory",
-      "enumerate",
       "get",
       "get_active_memories",
       "get_memory_stats",
-      "get_storage",
-      "get_unsummarized_conversations",
-      "info",
-      "isinstance",
       "join",
       "len",
-      "repr",
+      "str"
+    ],
+    "_m_search": [
+      "append",
+      "get",
+      "join",
+      "len",
       "search_memories",
       "split",
       "str",
       "strip"
+    ],
+    "_m_forget": [
+      "deactivate_memory",
+      "delete_memory"
+    ],
+    "_m_extract": [
+      "append",
+      "enumerate",
+      "get",
+      "get_unsummarized_conversations",
+      "isinstance",
+      "join",
+      "len"
+    ],
+    "toolkit_memory": [
+      "_m_add",
+      "_m_extract",
+      "_m_forget",
+      "_m_list",
+      "_m_search",
+      "get",
+      "get_storage",
+      "handler",
+      "info",
+      "repr"
     ],
     "toolkit_release": [
       "_do_build",
@@ -10427,6 +11965,19 @@
       "now",
       "strftime"
     ],
+    "set_orchestrator": [
+      "info"
+    ],
+    "toolkit_delegate": [
+      "create_agent",
+      "error",
+      "get_agent",
+      "get_orchestrator",
+      "info",
+      "len",
+      "run",
+      "uuid4"
+    ],
     "_log": [
       "print"
     ],
@@ -10473,20 +12024,6 @@
       "visit",
       "visit_FunctionDef",
       "walk"
-    ],
-    "visit_FunctionDef": [
-      "add",
-      "generic_visit",
-      "isinstance",
-      "set",
-      "sorted",
-      "walk"
-    ],
-    "visit_AsyncFunctionDef": [
-      "visit_FunctionDef"
-    ],
-    "visit_ClassDef": [
-      "generic_visit"
     ],
     "_build_dot_flow": [
       "_log",
@@ -10635,6 +12172,41 @@
       "_extract_arch_context",
       "info",
       "repr"
+    ],
+    "toolkit_quality_gate": [
+      "_run_gating",
+      "_run_report",
+      "getcwd"
+    ],
+    "_run_gating": [
+      "_check_item_rules",
+      "_make_global_violation",
+      "append",
+      "compute_metrics",
+      "find_dead_code",
+      "get",
+      "isabs",
+      "isfile",
+      "join",
+      "len",
+      "startswith"
+    ],
+    "_check_item_rules": [
+      "append"
+    ],
+    "_run_report": [
+      "any",
+      "append",
+      "compute_metrics",
+      "extend",
+      "get",
+      "glob",
+      "isabs",
+      "isdir",
+      "join",
+      "len",
+      "relpath",
+      "sort"
     ],
     "toolkit_dump_topic": [
       "Path",

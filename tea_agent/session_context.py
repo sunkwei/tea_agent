@@ -18,39 +18,33 @@ class SessionContext:
     替代原来 Mixin 通过 self.xxx 隐式共享属性的方式，
     改为显式通过 context 访问，提高可维护性和可测试性。
     """
-    # ── 核心状态 ──
     messages: List[Dict] = field(default_factory=list)
     model: str = ""
     enable_thinking: bool = True
     
-    # ── 客户端 ──
     client: Optional[OpenAI] = None
     cheap_client: Optional[OpenAI] = None
     cheap_model: str = ""
     
-    # ── 工具相关 ──
-    toolkit: Any = None  # Toolkit 实例
-    api_comp: Any = None  # APIComponent 引用 (用于各组件追踪 token)
+    toolkit: Any = None
+    api_comp: Any = None
     tool_log: Optional[Callable[[str], None]] = None
     _rounds_collector: List[Dict] = field(default_factory=list)    
-    # ── 存储与记忆 ──
-    storage: Any = None  # Storage 实例
-    memory: Any = None   # MemoryManager 实例
-    pipeline: Any = None # SessionPipeline 实例
+    storage: Any = None
+    memory: Any = None
+    pipeline: Any = None
     
-    # ── 配置参数 ──
     keep_turns: int = 5
     max_tool_output: int = 128 * 1024
     max_assistant_content: int = 128 * 1024
-    context_window: int = 131072  # 模型上下文窗口大小
+    context_window: int = 131072
     memory_extraction_threshold: int = 2
     memory_dedup_threshold: float = 0.3
     supports_vision: bool = False
     supports_reasoning: bool = True
-    reasoning_effort: str = "max"  # DeepSeek: high/max, agent 场景默认 max
+    reasoning_effort: str = "max"
     disable_summary: bool = False
     
-    # ── 运行时状态 ──
     _thinking_supported: Optional[bool] = True
     _cheap_thinking_supported: Optional[bool] = None
     _last_usage: Dict[str, int] = field(default_factory=lambda: {
@@ -73,7 +67,6 @@ class SessionContext:
     reflection_manager: Any = None
     _current_mode: str = "mixed"
     
-    # ── 额外迭代 ──
     extra_iterations_on_continue: int = 5
 
 class SessionComponent(ABC):
@@ -94,11 +87,21 @@ class SessionComponent(ABC):
     
     @abstractmethod
     def initialize(self) -> None:
-        """组件初始化，设置内部状态"""
+        """
+        组件初始化，设置内部状态
+
+        Returns:
+            None: Description.
+        """
         pass
     
     @property
     @abstractmethod
     def name(self) -> str:
-        """组件名称"""
+        """
+        组件名称
+
+        Returns:
+            str: Description.
+        """
         pass

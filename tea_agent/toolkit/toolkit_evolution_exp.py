@@ -1,5 +1,3 @@
-## llm generated tool func, created Thu May 15 13:55:00 2026
-# version: 1.0.0
 
 """
 进化经验库管理工具 — toolkit_evolution_exp
@@ -19,11 +17,11 @@ import time
 from datetime import datetime
 
 def _get_exp_path():
-    """Internal: get the exp path."""
+    """Internal: get the exp path"""
     return os.path.join(os.path.expanduser("~"), ".tea_agent", "evolution_exp.json")
 
 def _load_exp_db():
-    """Internal: load exp db."""
+    """Internal: load exp db"""
     path = _get_exp_path()
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
@@ -44,11 +42,16 @@ def _save_exp_db(data):
 def toolkit_evolution_exp(action="list", description="", category="", tags="", outcome="success", notes="", query="", limit=10):
     """
     管理进化经验库。
-    
-    action:
-      - list: 列出最近经验
-      - record: 记录经验
-      - search: 搜索经验
+
+    Args:
+        action: Description.
+        description: Description.
+        category: Description.
+        tags: Description.
+        outcome: Description.
+        notes: Description.
+        query: Description.
+        limit: Description.
     """
     db = _load_exp_db()
 
@@ -104,7 +107,12 @@ def toolkit_evolution_exp(action="list", description="", category="", tags="", o
         return f"❌ 未知 action: {action}"
 
 def meta_toolkit_evolution_exp() -> dict:
-    """Meta toolkit evolution exp."""
+    """
+    Meta toolkit evolution exp
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

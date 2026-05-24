@@ -9,7 +9,6 @@ logger = logging.getLogger("Storage.Topics")
 class TopicStore(StoreComponent):
     """主题管理：创建、更新、删除、列表，以及 Token 消耗统计。"""
 
-    # ── 主题 CRUD ──
 
     def create_topic(self, title: str) -> str:
         """Create topic.
@@ -58,7 +57,15 @@ class TopicStore(StoreComponent):
         c.close()
 
     def get_drift_count(self, topic_id: str) -> int:
-        """获取主题漂移计数"""
+        """
+        获取主题漂移计数
+
+        Args:
+            topic_id (str): Description.
+
+        Returns:
+            int: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT drift_count FROM topics WHERE topic_id = ?", (topic_id,))
         row = c.fetchone()
@@ -66,7 +73,15 @@ class TopicStore(StoreComponent):
         return row["drift_count"] if row and row["drift_count"] is not None else 0
 
     def increment_drift_count(self, topic_id: str) -> int:
-        """递增并返回主题漂移计数"""
+        """
+        递增并返回主题漂移计数
+
+        Args:
+            topic_id (str): Description.
+
+        Returns:
+            int: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "UPDATE topics SET drift_count = COALESCE(drift_count, 0) + 1 WHERE topic_id = ?",
@@ -108,7 +123,12 @@ class TopicStore(StoreComponent):
         return dict(r) if r else None
 
     def list_topics(self) -> List[Dict]:
-        """List topics."""
+        """
+        List topics
+
+        Returns:
+            List[Dict]: Description.
+        """
         c = self.conn.cursor()
         c.execute('''
             SELECT t.*,
@@ -122,7 +142,6 @@ class TopicStore(StoreComponent):
         c.close()
         return [dict(r) for r in rows]
 
-    # ── Token 统计 ──
 
     def add_topic_tokens(
         self, topic_id: str,

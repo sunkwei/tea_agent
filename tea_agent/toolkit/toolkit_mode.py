@@ -1,7 +1,4 @@
-## llm generated tool func, created Sat May  2 10:33:15 2026
-# version: 1.0.1
 
-# version: 1.0.1
 
 import logging
 
@@ -10,18 +7,11 @@ logger = logging.getLogger("toolkit")
 def toolkit_mode(action: str, text: str = "", mode: str = ""):
     """
     Agent 人格模式管理。两种核心模式：
-    
-    🎯 pragmatic (严谨收敛):
-       - 代码开发、bug排查、需求遵从
-       - 结构化思维、逐步验证、精确输出
-       - 关键词: bug/修复/代码/错误/测试/debug/实现/需求/严谨
-    
-    🎨 creative (自由发散):
-       - 异想天开、创意发散、打破边界
-       - 自由联想、跨域碰撞、大胆假设
-       - 关键词: 创意/想象/如果/设计/梦想/探索/未来/故事
-    
-    模式以 CRITICAL 优先级注入记忆，确保后续所有回复遵循。
+
+    Args:
+        action (str): Description.
+        text (str): Description.
+        mode (str): Description.
     """
     logger.info(f"toolkit_mode called: action={action!r}, text={repr(text)[:80]}, mode={mode!r}")
 
@@ -106,7 +96,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             return "mixed"
     
     def _get_memory_manager():
-        """Internal: get the memory manager."""
+        """Internal: get the memory manager"""
         from tea_agent.memory import MemoryManager
         from tea_agent.store import Storage
         try:
@@ -165,7 +155,6 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         if "自由发散" in c: return "creative"
         return "mixed"
     
-    # === 主逻辑 ===
     if action == "detect":
         detected = _detect_mode(text)
         return (0, json.dumps({
@@ -224,9 +213,19 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         return (1, "", f"未知 action: {action}")
 
 def meta_toolkit_mode() -> dict:
-    """Meta toolkit mode."""
+    """
+    Meta toolkit mode
+
+    Returns:
+        dict: Description.
+    """
     return {"type": "function", "function": {"name": "toolkit_mode", "description": "Agent 人格模式管理。detect=基于用户输入自动检测模式, switch=手动切换, status=查看当前。严谨(pragmatic)=代码开发/排bug/遵从需求；自由(creative)=异想天开/发散创意/打破边界。模式以CRITICAL记忆注入，影响后续所有回复。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["detect", "switch", "status", "auto"], "description": "detect=根据text自动检测, switch=手动切换, status=查看当前, auto=检测+切换"}, "text": {"type": "string", "description": "[detect/auto] 用户输入文本，用于自动检测模式"}, "mode": {"type": "string", "enum": ["pragmatic", "creative", "mixed"], "description": "[switch] 目标模式: pragmatic=严谨收敛, creative=自由发散, mixed=自动"}}, "required": ["action"]}}}
 
 def meta_toolkit_mode() -> dict:
-    """Meta toolkit mode."""
+    """
+    Meta toolkit mode
+
+    Returns:
+        dict: Description.
+    """
     return {"type": "function", "function": {"name": "toolkit_mode", "description": "Agent 人格模式管理。detect=基于用户输入自动检测模式, switch=手动切换, status=查看当前。严谨(pragmatic)=代码开发/排bug/遵从需求；自由(creative)=异想天开/发散创意/打破边界。模式以CRITICAL记忆注入，影响后续所有回复。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["detect", "switch", "status", "auto"], "description": "detect=根据text自动检测, switch=手动切换, status=查看当前, auto=检测+切换"}, "text": {"type": "string", "description": "[detect/auto] 用户输入文本，用于自动检测模式"}, "mode": {"type": "string", "enum": ["pragmatic", "creative", "mixed"], "description": "[switch] 目标模式: pragmatic=严谨收敛, creative=自由发散, mixed=自动"}}, "required": ["action"]}}}

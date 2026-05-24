@@ -12,13 +12,11 @@ import logging
 
 logger = logging.getLogger("token_utils")
 
-# 尝试加载 tiktoken，失败则回退到 Char-based 估算
 _TIKTOKEN_AVAILABLE = False
 _tiktoken_encoding = None
 
 try:
     import tiktoken
-    # 尝试获取系统默认编码器；cl100k_base 是对地传信产生
     _TIKTOKEN_AVAILABLE = True
     _tiktoken_encoding = tiktoken.get_encoding("cl100k_base")
     logger.info("tiktoken (cl100k) 加载成功")
@@ -34,22 +32,35 @@ except Exception:
 def estimate_tokens(messages, model="") -> int:
     """
     估算一组消息（为构建请求之前做）的 token 总数。
-    优先使用 tiktoken (如果可用)，否则使用字符估算（Chars/3.0，中文）
-    Chars/2.5（英文）。
+
+    Args:
+        messages: Description.
+        model: Description.
+
+    Returns:
+        int: Description.
     """
     if _TIKTOKEN_AVAILABLE and _tiktoken_encoding:
         try:
             total = 0
             for msg in messages:
                 total += _estimate_tokens_tiktoken(msg)
-            return int(total * 1.05)  # 加 5% 冗余度，避免低估
+            return int(total * 1.05)
         except Exception:
             pass
     return _estimate_tokens_char(messages)
 
 
 def estimate_message_tokens(msg) -> int:
-    """单条消息的 token 估计。"""
+    """
+    单条消息的 token 估计。
+
+    Args:
+        msg: Description.
+
+    Returns:
+        int: Description.
+    """
     if _TIKTOKEN_AVAILABLE and _tiktoken_encoding:
         try:
             return int(_estimate_tokens_tiktoken(msg) * 1.05)
@@ -59,7 +70,15 @@ def estimate_message_tokens(msg) -> int:
 
 
 def estimate_text_tokens(text) -> int:
-    """纯文本的 token 估计。"""
+    """
+    纯文本的 token 估计。
+
+    Args:
+        text: Description.
+
+    Returns:
+        int: Description.
+    """
     if not text:
         return 0
     if _TIKTOKEN_AVAILABLE and _tiktoken_encoding:
@@ -70,10 +89,17 @@ def estimate_text_tokens(text) -> int:
     return _estimate_tokens_char_from_text(text)
 
 
-# --- 全局数后（第奖透向） ---
 
 def _estimate_tokens_tiktoken(msg) -> int:
-    """使用 tiktoken 编码器估算单条消息。"""
+    """
+    使用 tiktoken 编码器估算单条消息。
+
+    Args:
+        msg: Description.
+
+    Returns:
+        int: Description.
+    """
     text_parts = []
     
     content = msg.get("content", "")
@@ -88,7 +114,6 @@ def _estimate_tokens_tiktoken(msg) -> int:
     role = msg.get("role", "")
     text_parts.append(role)
     
-    # tool_calls
     tool_calls = msg.get("tool_calls", [])
     if tool_calls:
         import json
@@ -98,12 +123,10 @@ def _estimate_tokens_tiktoken(msg) -> int:
                 text_parts.append(f.get("name", ""))
                 text_parts.append(f.get("arguments", ""))
     
-    # tool_call_id
     tc_id = msg.get("tool_call_id", "")
     if tc_id:
         text_parts.append(tc_id)
     
-    # reasoning_content
     rc = msg.get("reasoning_content", "")
     if rc:
         text_parts.append(rc)
@@ -117,10 +140,12 @@ def _estimate_tokens_tiktoken(msg) -> int:
 def _estimate_tokens_char(messages) -> int:
     """
     存量业务与字符在 OCR 范式下，使用字符数作为估算范式。
-    Char/assistant 线略: 
-      - 纯文：2~3 不等，Char/token ≈ 2.5
-      - 英文：1.3~1.6 Char/token，并外由法不同台差距
-    用差都是估算，但用 Chars/3 可以捕获大部分中文加英文的情况。
+
+    Args:
+        messages: Description.
+
+    Returns:
+        int: Description.
     """
     total = 0
     for msg in messages:
@@ -129,7 +154,15 @@ def _estimate_tokens_char(messages) -> int:
 
 
 def _estimate_tokens_char_single(msg) -> int:
-    """单条消息的 Char-based token 估计（不使用 tiktoken的时候）。"""
+    """
+    单条消息的 Char-based token 估计（不使用 tiktoken的时候）。
+
+    Args:
+        msg: Description.
+
+    Returns:
+        int: Description.
+    """
     content = msg.get("content", "")
     total_chars = 0
     if isinstance(content, list):
@@ -139,7 +172,6 @@ def _estimate_tokens_char_single(msg) -> int:
     elif isinstance(content, str):
         total_chars += len(content)
     
-    # tool_calls（仅到name+args）
     tool_calls = msg.get("tool_calls", [])
     if tool_calls:
         import json
@@ -149,35 +181,43 @@ def _estimate_tokens_char_single(msg) -> int:
                 total_chars += len(f.get("name", ""))
                 total_chars += len(f.get("arguments", ""))
     
-    # reasoning_content
     rc = msg.get("reasoning_content", "")
     if rc:
         total_chars += len(rc)
     
-    # tool_call_id
     tcid = msg.get("tool_call_id", "")
     if tcid:
         total_chars += len(tcid)
     
-    return int(total_chars / 3)  # 英 1 Char ≈ 1 token的OpenAI系法，中文2.5
+    return int(total_chars / 3)
 
 
 def _estimate_tokens_char_from_text(text) -> int:
-    """从纯文本的 char-based token 估计。"""
+    """
+    从纯文本的 char-based token 估计。
+
+    Args:
+        text: Description.
+
+    Returns:
+        int: Description.
+    """
     if not text:
         return 0
     return int(len(text) / 3)
 
 
-# --- 发布声明，流部保护 ---
 
 def compute_safe_budget(context_window, max_output_tokens, margin=1024) -> int:
     """
     计算安全 token 预算：
-    
-        safe_budget = context_window - max_output_tokens - margin
-    
-    其中 margin 生抄自系按品 (回退消息内部实际追加)。
-    **使用不当成心说。当删除早盘成堆积时，需要使用。**
+
+    Args:
+        context_window: Description.
+        max_output_tokens: Description.
+        margin: Description.
+
+    Returns:
+        int: Description.
     """
     return max(0, context_window - max_output_tokens - margin)

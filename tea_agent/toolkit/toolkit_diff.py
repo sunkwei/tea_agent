@@ -1,4 +1,3 @@
-# @2026-05-23 gen by tea_agent, extracted from toolkit_edit.py for independent auto-discovery
 """Diff-first 代码编辑引擎。独立工具，支持 generate/preview/apply/undo/verify。"""
 import os
 import json
@@ -11,16 +10,34 @@ from typing import List, Dict, Optional, Tuple
 logger = logging.getLogger("toolkit")
 
 def _generate_unified_diff(old: str, new: str, filename: str = "file", context_lines: int = 3) -> str:
-    """生成 unified diff 格式的差异"""
+    """
+    生成 unified diff 格式的差异
+
+    Args:
+        old (str): Description.
+        new (str): Description.
+        filename (str): Description.
+        context_lines (int): Description.
+
+    Returns:
+        str: Description.
+    """
     old_lines = old.splitlines(keepends=True)
     new_lines = new.splitlines(keepends=True)
     diff = difflib.unified_diff(old_lines, new_lines, fromfile=filename, tofile=filename, n=context_lines)
     return ''.join(diff)
 
-# ── Git Stash 集成 ──────────────────────────────────────
 
 def _git_stash_push(cwd: str) -> Tuple[bool, str]:
-    """保存当前工作区到 stash，返回 (ok, stash_ref)"""
+    """
+    保存当前工作区到 stash，返回 (ok, stash_ref)
+
+    Args:
+        cwd (str): Description.
+
+    Returns:
+        Tuple[bool, str]: Description.
+    """
     try:
         r = subprocess.run(["git", "stash", "push", "-m", "toolkit_diff auto-save"],
                            capture_output=True, text=True, timeout=15, cwd=cwd)
@@ -30,7 +47,15 @@ def _git_stash_push(cwd: str) -> Tuple[bool, str]:
         return False, str(e)
 
 def _git_stash_pop(cwd: str) -> Tuple[bool, str]:
-    """恢复最近一次 stash"""
+    """
+    恢复最近一次 stash
+
+    Args:
+        cwd (str): Description.
+
+    Returns:
+        Tuple[bool, str]: Description.
+    """
     try:
         r = subprocess.run(["git", "stash", "pop"], capture_output=True, text=True, timeout=15, cwd=cwd)
         return r.returncode == 0, r.stderr or r.stdout
@@ -38,17 +63,34 @@ def _git_stash_pop(cwd: str) -> Tuple[bool, str]:
         return False, str(e)
 
 def _git_stash_drop(cwd: str) -> bool:
-    """丢弃最近一次 stash（确认成功）"""
+    """
+    丢弃最近一次 stash（确认成功）
+
+    Args:
+        cwd (str): Description.
+
+    Returns:
+        bool: Description.
+    """
     try:
         subprocess.run(["git", "stash", "drop"], capture_output=True, text=True, timeout=10, cwd=cwd)
         return True
     except Exception:
         return False
 
-# ── 冲突检测 ────────────────────────────────────────────
 
 def _check_conflict(file_path: str, old_code: str, cwd: str) -> Optional[str]:
-    """检查 old_code 是否仍存在于文件。返回 None=无冲突, 否则返回错误信息"""
+    """
+    检查 old_code 是否仍存在于文件。返回 None=无冲突, 否则返回错误信息
+
+    Args:
+        file_path (str): Description.
+        old_code (str): Description.
+        cwd (str): Description.
+
+    Returns:
+        Optional[str]: Description.
+    """
     full = os.path.join(cwd, file_path)
     if not os.path.exists(full):
         return f"文件不存在: {file_path}"
@@ -60,13 +102,21 @@ def _check_conflict(file_path: str, old_code: str, cwd: str) -> Optional[str]:
         return f"冲突: old_code 在 {file_path} 中出现 {content.count(old_code)} 次（无法唯一确定）"
     return None
 
-# ── 验证 ────────────────────────────────────────────────
 
 def _verify_all(files: List[str], cwd: str, run_tests: bool = True) -> dict:
-    """批量编译+lint 验证，可选测试"""
+    """
+    批量编译+lint 验证，可选测试
+
+    Args:
+        files (List[str]): Description.
+        cwd (str): Description.
+        run_tests (bool): Description.
+
+    Returns:
+        dict: Description.
+    """
     results = {"compile": {}, "lint": {}, "test": None}
 
-    # py_compile
     for fp in files:
         full = os.path.join(cwd, fp)
         if fp.endswith(".py") and os.path.exists(full):
@@ -76,7 +126,6 @@ def _verify_all(files: List[str], cwd: str, run_tests: bool = True) -> dict:
             except py_compile.PyCompileError as e:
                 results["compile"][fp] = f"FAIL: {e}"
 
-    # ruff lint
     for fp in files:
         full = os.path.join(cwd, fp)
         if os.path.exists(full):
@@ -85,7 +134,6 @@ def _verify_all(files: List[str], cwd: str, run_tests: bool = True) -> dict:
             diags = json.loads(r.stdout) if r.stdout.strip() else []
             results["lint"][fp] = len(diags) if diags else 0
 
-    # pytest
     if run_tests:
         try:
             r = subprocess.run(
@@ -109,19 +157,28 @@ def _verify_all(files: List[str], cwd: str, run_tests: bool = True) -> dict:
     )
     return results
 
-# ── 单文件应用 ──────────────────────────────────────────
 
 def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, description: str = "") -> dict:
-    """应用单个修改，返回 {ok, file, error, bak_path}"""
+    """
+    应用单个修改，返回 {ok, file, error, bak_path}
+
+    Args:
+        file_path (str): Description.
+        old_code (str): Description.
+        new_code (str): Description.
+        cwd (str): Description.
+        description (str): Description.
+
+    Returns:
+        dict: Description.
+    """
 
     full = os.path.join(cwd, file_path)
 
-    # 冲突检测
     conflict = _check_conflict(file_path, old_code, cwd)
     if conflict:
         return {"ok": False, "file": file_path, "error": conflict}
 
-    # 备份
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     bak = f"{full}.bak.{ts}"
     try:
@@ -129,7 +186,6 @@ def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, descripti
     except Exception as e:
         return {"ok": False, "file": file_path, "error": f"备份失败: {e}"}
 
-    # 应用
     try:
         with open(full, "r", encoding="utf-8") as f:
             content = f.read()
@@ -138,12 +194,10 @@ def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, descripti
             f.write(new_content)
         return {"ok": True, "file": file_path, "bak_path": bak}
     except Exception as e:
-        # 恢复备份
         if os.path.exists(bak):
             shutil.copy2(bak, full)
         return {"ok": False, "file": file_path, "error": f"写入失败: {e}"}
 
-# ── 主入口 ──────────────────────────────────────────────
 
 def _toolkit_diff_impl(
     action: str,
@@ -154,17 +208,20 @@ def _toolkit_diff_impl(
     stash_ref: str = None,
     lsp_checks: bool = True,
 ) -> dict:
-    """Diff-first 代码编辑引擎。
+    """
+    Diff-first 代码编辑引擎。
 
-    action:
-      generate — 生成 unified diff（不修改文件）
-      preview  — 生成 diff + 冲突检测（不修改文件）
-      apply    — git stash → 多文件原子应用 → 编译+lint+test+LSP 验证
-      undo     — 恢复到 git stash
-      verify   — 运行编译+lint+test（不修改文件）
+    Args:
+        action (str): Description.
+        files (List[dict]): Description.
+        cwd (str): Description.
+        run_tests (bool): Description.
+        description (str): Description.
+        stash_ref (str): Description.
+        lsp_checks (bool): Description.
 
-    files: [{"file_path": "...", "old_code": "...", "new_code": "...", "symbol": "..."}, ...]
-    lsp_checks: 应用成功后运行 LSP 检查（影响分析+lint增量+签名对比），默认 True
+    Returns:
+        dict: Description.
     """
     cwd = cwd or os.getcwd()
 
@@ -213,17 +270,14 @@ def _toolkit_diff_impl(
             if not description:
                 description = f"toolkit_diff: {len(files)} files"
 
-            # Step 0: 冲突检测
             for f in files:
                 conflict = _check_conflict(f["file_path"], f["old_code"], cwd)
                 if conflict:
                     return {"ok": False, "error": f"pre-check 失败: {conflict}", "phase": "conflict_check"}
 
-            # Step 1: git stash
             stashed, stash_msg = _git_stash_push(cwd)
             stash_applied = False
             try:
-                # Step 2: 逐个应用
                 results = []
                 all_ok = True
                 for f in files:
@@ -234,7 +288,6 @@ def _toolkit_diff_impl(
                         break
 
                 if not all_ok:
-                    # 回滚：恢复已修改的文件
                     for r in results:
                         if r.get("bak_path") and os.path.exists(r["bak_path"]):
                             shutil.copy2(r["bak_path"], os.path.join(cwd, r["file"]))
@@ -248,12 +301,10 @@ def _toolkit_diff_impl(
                         "results": results,
                     }
 
-                # Step 3: 验证
                 modified_files = [f["file_path"] for f in files]
                 verify = _verify_all(modified_files, cwd, run_tests=run_tests)
 
                 if not verify["all_ok"]:
-                    # 回滚
                     for r in results:
                         if r.get("bak_path") and os.path.exists(r["bak_path"]):
                             shutil.copy2(r["bak_path"], os.path.join(cwd, r["file"]))
@@ -268,7 +319,6 @@ def _toolkit_diff_impl(
                         "results": results,
                     }
 
-                # Step 3.5: LSP 检查（非阻塞，仅信息）
                 lsp_results = None
                 if lsp_checks:
                     from tea_agent.lsp.lsp_check import run_lsp_check
@@ -289,7 +339,6 @@ def _toolkit_diff_impl(
                             if lr.get("sig_changed"):
                                 logger.warning(f"LSP[{f['file_path']}]: sig changed {lr.get('old_sig')} → {lr.get('new_sig')}")
 
-                # Step 4: 成功，丢弃 stash
                 if stashed:
                     _git_stash_drop(cwd)
 
@@ -325,7 +374,6 @@ def _toolkit_diff_impl(
         logger.exception(f"toolkit_diff: {e}")
         return {"ok": False, "error": str(e)[:300]}
 
-# ── Meta ────────────────────────────────────────────────
 
 
 def toolkit_diff(
@@ -336,23 +384,31 @@ def toolkit_diff(
     description: str = "",
     lsp_checks: bool = True,
 ) -> dict:
-    """Diff-first 代码编辑引擎。
+    """
+    Diff-first 代码编辑引擎。
 
-    action:
-      generate — 生成 unified diff（不修改文件）
-      preview  — 生成 diff + 冲突检测（不修改文件）
-      apply    — git stash → 多文件原子应用 → 编译+lint+test+LSP 验证
-      undo     — 恢复到 git stash
-      verify   — 运行编译+lint+test（不修改文件）
+    Args:
+        action (str): Description.
+        files (List[dict]): Description.
+        cwd (str): Description.
+        run_tests (bool): Description.
+        description (str): Description.
+        lsp_checks (bool): Description.
 
-    files: [{"file_path": "...", "old_code": "...", "new_code": "..."}, ...]
+    Returns:
+        dict: Description.
     """
     return _toolkit_diff_impl(action, files=files, cwd=cwd, run_tests=run_tests,
                               description=description, lsp_checks=lsp_checks)
 
 
 def meta_toolkit_diff() -> dict:
-    """Meta: register toolkit_diff as Agent tool."""
+    """
+    Meta: register toolkit_diff as Agent tool
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

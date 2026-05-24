@@ -20,17 +20,13 @@ from collections import Counter
 
 logger = logging.getLogger("Embedding")
 
-# 尝试导入 requests（API 模式需要）
 try:
     import requests
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
-    requests = None  # type: ignore
+    requests = None
 
-# ── 本地 TF-IDF 回退 ────────────────────────────────────────────
-# 一个极简的 TF-IDF 实现，用于在没有 embedding API 时提供基本语义搜索。
-# 使用字符级 bigram 作为特征（对中文友好），全局使用固定维度的稀疏向量。
 
 class _SimpleTFIDF:
     """极简 TF-IDF：字符 bigram 特征 + 余弦相似度"""
@@ -42,11 +38,19 @@ class _SimpleTFIDF:
             vector_dim: Description.
         """
         self.vector_dim = vector_dim
-        self._doc_freq: Counter = Counter()  # bigram → 出现过该 bigram 的文档数
+        self._doc_freq: Counter = Counter()
         self._doc_count: int = 0
 
     def _tokenize(self, text: str) -> List[str]:
-        """字符 bigram 分词（对中文友好）"""
+        """
+        字符 bigram 分词（对中文友好）
+
+        Args:
+            text (str): Description.
+
+        Returns:
+            List[str]: Description.
+        """
         text = text.strip().lower()
         if len(text) < 2:
             return [text] if text else []
@@ -56,19 +60,40 @@ class _SimpleTFIDF:
         return tokens
 
     def _hash_token(self, token: str) -> int:
-        """将 token 哈希到 [0, vector_dim) 范围"""
+        """
+        将 token 哈希到 [0, vector_dim) 范围
+
+        Args:
+            token (str): Description.
+
+        Returns:
+            int: Description.
+        """
         h = int(hashlib.md5(token.encode('utf-8')).hexdigest(), 16)
         return h % self.vector_dim
 
     def add_document(self, text: str):
-        """向语料库添加文档（用于构建 IDF）"""
+        """
+        向语料库添加文档（用于构建 IDF）
+
+        Args:
+            text (str): Description.
+        """
         tokens = set(self._tokenize(text))
         for t in tokens:
             self._doc_freq[t] += 1
         self._doc_count += 1
 
     def vectorize(self, text: str) -> List[float]:
-        """将文本转为 TF-IDF 向量（稀疏向量 + 哈希降维）"""
+        """
+        将文本转为 TF-IDF 向量（稀疏向量 + 哈希降维）
+
+        Args:
+            text (str): Description.
+
+        Returns:
+            List[float]: Description.
+        """
         tokens = self._tokenize(text)
         if not tokens:
             return [0.0] * self.vector_dim
@@ -79,20 +104,16 @@ class _SimpleTFIDF:
 
         for token, count in tf.items():
             idx = self._hash_token(token)
-            # TF
             tf_val = count / total
-            # IDF: log((N+1)/(df+1)) + 1
             df = self._doc_freq.get(token, 0)
             idf = math.log((self._doc_count + 1) / (df + 1)) + 1
             vec[idx] += tf_val * idf
 
-        # L2 归一化
         norm = math.sqrt(sum(v * v for v in vec))
         if norm > 0:
             vec = [v / norm for v in vec]
         return vec
 
-# ── EmbeddingEngine ─────────────────────────────────────────────
 
 class EmbeddingEngine:
     """文本向量引擎：API 优先，自动回退 TF-IDF"""
@@ -109,18 +130,21 @@ class EmbeddingEngine:
         self._use_api = False
         self._tfidf = _SimpleTFIDF()
 
-        # Token 用量跟踪
-        self._total_embedding_tokens = 0       # 全局累计
+        self._total_embedding_tokens = 0
         self._total_embedding_prompt_tokens = 0
-        self._session_embedding_tokens = 0     # 单次会话累计（get_and_reset 后归零）
+        self._session_embedding_tokens = 0
         self._session_embedding_prompt_tokens = 0
 
         if config is not None:
             self._init_from_config(config)
 
     def _init_from_config(self, config):
-        """从配置初始化"""
-        # 兼容 dataclass 和 dict
+        """
+        从配置初始化
+
+        Args:
+            config: Description.
+        """
         if hasattr(config, 'api_url'):
             self.api_url = config.api_url or ""
             self.model_name = config.model_name or ""
@@ -132,7 +156,6 @@ class EmbeddingEngine:
             self.api_key = config.get("api_key", "")
             self.dimension = config.get("dimension", 0)
 
-        # 如果 api_key 为空，尝试从 main_model 获取
         if not self.api_key:
             try:
                 from tea_agent.config import get_config
@@ -145,13 +168,23 @@ class EmbeddingEngine:
 
     @property
     def mode(self) -> str:
-        """当前模式: 'api' | 'tfidf'"""
+        """
+        当前模式: 'api' | 'tfidf'
+
+        Returns:
+            str: Description.
+        """
         return "api" if self._use_api else "tfidf"
 
     @property
     def configured(self) -> bool:
-        """是否已配置（API 模式需要 URL + model，TF-IDF 始终可用）"""
-        return True  # TF-IDF 始终作为回退
+        """
+        是否已配置（API 模式需要 URL + model，TF-IDF 始终可用）
+
+        Returns:
+            bool: Description.
+        """
+        return True
 
     def embed(self, text: str) -> List[float]:
         """
@@ -173,13 +206,20 @@ class EmbeddingEngine:
                 return self._embed_api(text)
             except Exception as e:
                 logger.warning(f"API 嵌入失败，回退 TF-IDF: {e}")
-                # 回退到 TF-IDF
                 return self._embed_tfidf(text)
         else:
             return self._embed_tfidf(text)
 
     def embed_batch(self, texts: List[str]) -> List[List[float]]:
-        """批量嵌入（API 模式尝试批量请求，TF-IDF 逐个处理）"""
+        """
+        批量嵌入（API 模式尝试批量请求，TF-IDF 逐个处理）
+
+        Args:
+            texts (List[str]): Description.
+
+        Returns:
+            List[List[float]]: Description.
+        """
         if self._use_api:
             try:
                 return self._embed_api_batch(texts)
@@ -188,19 +228,29 @@ class EmbeddingEngine:
         return [self._embed_tfidf(t) for t in texts]
 
     def _build_url(self) -> str:
-        """构建 embeddings API URL，自动处理 /v1 前缀"""
+        """
+        构建 embeddings API URL，自动处理 /v1 前缀
+
+        Returns:
+            str: Description.
+        """
         base = self.api_url.rstrip("/")
-        # 如果已经指向 /embeddings 则直接返回
         if base.endswith("/embeddings"):
             return base
-        # 如果末尾是 /v1，追加 /embeddings
         if base.endswith("/v1"):
             return base + "/embeddings"
-        # 否则补全 /v1/embeddings
         return base + "/v1/embeddings"
 
     def _embed_api(self, text: str) -> List[float]:
-        """通过 API 获取单个文本的嵌入"""
+        """
+        通过 API 获取单个文本的嵌入
+
+        Args:
+            text (str): Description.
+
+        Returns:
+            List[float]: Description.
+        """
         url = self._build_url()
         headers = {
             "Content-Type": "application/json",
@@ -222,7 +272,6 @@ class EmbeddingEngine:
         resp.raise_for_status()
         data = resp.json()
 
-        # 提取 token 用量
         usage = data.get("usage", {})
         if usage:
             pt = usage.get("prompt_tokens", 0) or 0
@@ -232,7 +281,6 @@ class EmbeddingEngine:
             self._session_embedding_tokens += tt
             self._session_embedding_prompt_tokens += pt
 
-        # OpenAI 兼容格式: {"data": [{"embedding": [...]}]}
         if "data" in data and len(data["data"]) > 0:
             emb = data["data"][0].get("embedding", [])
             if emb:
@@ -243,7 +291,15 @@ class EmbeddingEngine:
         raise RuntimeError(f"API 返回格式异常: {json.dumps(data)[:200]}")
 
     def _embed_api_batch(self, texts: List[str]) -> List[List[float]]:
-        """通过 API 批量获取嵌入"""
+        """
+        通过 API 批量获取嵌入
+
+        Args:
+            texts (List[str]): Description.
+
+        Returns:
+            List[List[float]]: Description.
+        """
         url = self._build_url()
         logger.debug(f"embedding batch request: model={self.model_name}, batch_size={len(texts)}, url={url}")
         headers = {"Content-Type": "application/json"}
@@ -269,11 +325,24 @@ class EmbeddingEngine:
         raise RuntimeError("API 批量返回格式异常")
 
     def _embed_tfidf(self, text: str) -> List[float]:
-        """本地 TF-IDF 向量化"""
+        """
+        本地 TF-IDF 向量化
+
+        Args:
+            text (str): Description.
+
+        Returns:
+            List[float]: Description.
+        """
         return self._tfidf.vectorize(text)
 
     def build_tfidf_vocabulary(self, texts: List[str]):
-        """用一批文本构建 TF-IDF 语料库（提升本地搜索质量）"""
+        """
+        用一批文本构建 TF-IDF 语料库（提升本地搜索质量）
+
+        Args:
+            texts (List[str]): Description.
+        """
         for t in texts:
             if t and t.strip():
                 self._tfidf.add_document(t.strip())
@@ -281,7 +350,16 @@ class EmbeddingEngine:
                      f"{len(self._tfidf._doc_freq)} 特征")
 
     def cosine_similarity(self, a: List[float], b: List[float]) -> float:
-        """计算两个向量的余弦相似度（numpy 加速）"""
+        """
+        计算两个向量的余弦相似度（numpy 加速）
+
+        Args:
+            a (List[float]): Description.
+            b (List[float]): Description.
+
+        Returns:
+            float: Description.
+        """
         import numpy as np
         if len(a) != len(b):
             raise ValueError(f"向量维度不匹配: {len(a)} vs {len(b)}")
@@ -329,10 +407,17 @@ class EmbeddingEngine:
         """
         return self.embed(query)
 
-# ── 便捷函数 ────────────────────────────────────────────────────
 
 def get_embedding_engine(reload: bool = False) -> EmbeddingEngine:
-    """获取全局 EmbeddingEngine 单例"""
+    """
+    获取全局 EmbeddingEngine 单例
+
+    Args:
+        reload (bool): Description.
+
+    Returns:
+        EmbeddingEngine: Description.
+    """
     global _engine_singleton
     if _engine_singleton is None or reload:
         try:

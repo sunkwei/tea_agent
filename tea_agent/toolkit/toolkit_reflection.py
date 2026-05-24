@@ -1,4 +1,3 @@
-# @2026-04-30 gen by deepseek-v4-pro, toolkit_reflection: Agent主动触发元认知反思
 import logging
 
 logger = logging.getLogger("toolkit")
@@ -30,7 +29,6 @@ def toolkit_reflection(action: str = "trigger", limit: int = 5) -> str:
         return "❌ ReflectionManager 未初始化"
 
     if action == "trigger":
-        # 强制触发反思
         if not reflection_mgr._pending_traces:
             return "📝 没有待反思的会话追踪数据。反思需要先有对话记录。"
         rid = reflection_mgr.generate_reflection()
@@ -73,7 +71,12 @@ def toolkit_reflection(action: str = "trigger", limit: int = 5) -> str:
         return f"❌ 未知操作: {action}。支持: trigger, list, stats"
 
 def meta_toolkit_reflection() -> dict:
-    """Meta toolkit reflection."""
+    """
+    Meta toolkit reflection
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

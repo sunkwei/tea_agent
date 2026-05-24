@@ -1,5 +1,3 @@
-# version: 1.1.0
-# @2026-05-20 gen by tea_agent, P0 fixes: unified imports, merged _generate_diff, fixed nl, improved hunk parser
 import logging
 import os
 import json
@@ -69,10 +67,9 @@ def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
         return _replace_lines(file_path, start_line, end_line, new_content, preview, backup)
     elif action == "preview_patch":
         return _preview_patch(file_path, content)
-    # ── Diff engine actions (return dict) ──
     elif action in ("diff_generate", "diff_preview", "diff_apply", "diff_undo", "diff_verify"):
         cwd = os.getcwd()
-        diff_action = action[5:]  # strip "diff_"
+        diff_action = action[5:]
         result = _toolkit_diff_impl(diff_action, files=files, cwd=cwd, run_tests=run_tests,
                                      description=description, lsp_checks=lsp_checks)
         return (0 if result.get("ok") else 1, str(result), "")
@@ -80,30 +77,33 @@ def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
         return (1, "", f"未知 action: {action}，支持: apply_patch/insert_lines/delete_lines/replace_lines/preview_patch/diff_*")
 
 def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool):
-    """应用 diff/patch"""
+    """
+    应用 diff/patch
+
+    Args:
+        file_path (str): Description.
+        patch_content (str): Description.
+        preview (bool): Description.
+        backup (bool): Description.
+    """
     try:
-        # 读取原文件
         with open(file_path, 'r', encoding='utf-8') as f:
             original_content = f.read()
 
-        # 尝试使用 patch 命令
         patch_available = False
         if shutil.which('patch'):
             patch_available = True
 
         if patch_available and not preview:
-            # 使用系统 patch 命令
             with tempfile.NamedTemporaryFile(mode='w', suffix='.patch', delete=False, encoding='utf-8') as pf:
                 pf.write(patch_content)
                 patch_file = pf.name
 
             try:
-                # 备份原文件
                 if backup:
                     backup_path = file_path + '.bak'
                     shutil.copy2(file_path, backup_path)
 
-                # 应用 patch
                 result = subprocess.run(
                     ['patch', '--batch', '--forward', file_path, patch_file],
                     capture_output=True, text=True, timeout=30
@@ -112,7 +112,6 @@ def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool
                 if result.returncode == 0:
                     return (0, f"✅ 成功应用 patch 到 {file_path}", "")
                 else:
-                    # patch 失败，尝试恢复
                     if backup and os.path.exists(backup_path):
                         shutil.copy2(backup_path, file_path)
                     return (1, "", f"❌ patch 应用失败:\n{result.stderr}\n{result.stdout}")
@@ -122,23 +121,26 @@ def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool
                 except OSError:
                     pass
         else:
-            # Python 实现的简易 patch 应用
             return _apply_patch_python(file_path, original_content, patch_content, preview, backup)
 
     except Exception as e:
         return (1, "", f"❌ 应用 patch 失败: {str(e)}")
 
 def _apply_patch_python(file_path: str, original_content: str, patch_content: str, preview: bool, backup: bool):
-    """Python 实现的 patch 应用（统一 diff 格式）
+    """
+    Python 实现的 patch 应用（统一 diff 格式）
 
-    增强版: 正确处理 \\No newline 标记、模糊上下文匹配、行号越界保护。
-    从后往前应用 hunks 以保持行号正确。
+    Args:
+        file_path (str): Description.
+        original_content (str): Description.
+        patch_content (str): Description.
+        preview (bool): Description.
+        backup (bool): Description.
     """
     try:
         lines = original_content.split('\n')
         patch_lines = patch_content.split('\n')
 
-        # ── 解析 unified diff hunks ──
         hunks = []
         current_hunk = None
 
@@ -169,28 +171,24 @@ def _apply_patch_python(file_path: str, original_content: str, patch_content: st
         if not hunks:
             return (1, "", "❌ 无法解析 patch 内容，请确保是有效的 unified diff 格式")
 
-        # ── 应用 hunks（从后往前）──
         new_lines = lines[:]
         for hunk in reversed(hunks):
             old_start = hunk['old_start']
             hunk_lines = hunk['lines']
 
-            # 分类: (-)删除行 / (+)插入行
             delete_indices = [i for i, hl in enumerate(hunk_lines) if hl.startswith('-')]
             delete_lines = [hunk_lines[i][1:] for i in delete_indices]
             insert_lines = [hl[1:] for hl in hunk_lines if hl.startswith('+')]
 
-            start_idx = old_start - 1  # 0-indexed
+            start_idx = old_start - 1
             if start_idx < 0 or start_idx > len(new_lines):
                 return (1, "", f"❌ patch 行号超出范围: {old_start} (文件共 {len(new_lines)} 行)")
 
-            # ── 上下文匹配（严格 → 宽松 → 模糊扫描）──
             context_ok = True
             temp_idx = start_idx
             for dl in delete_lines:
                 if temp_idx < len(new_lines):
                     actual = new_lines[temp_idx]
-                    # 宽松匹配: 允许尾部空白差异
                     if actual.rstrip() != dl.rstrip():
                         context_ok = False
                         break
@@ -200,7 +198,6 @@ def _apply_patch_python(file_path: str, original_content: str, patch_content: st
                     break
 
             if not context_ok and delete_lines:
-                # 模糊匹配: 在 ±5 行范围内扫描
                 found = False
                 scan_range = range(max(0, old_start - 6), min(len(new_lines), old_start + 4))
                 for scan_offset in scan_range:
@@ -211,7 +208,6 @@ def _apply_patch_python(file_path: str, original_content: str, patch_content: st
                 if not found:
                     return (1, "", f"❌ 上下文不匹配: 行 {old_start} 附近找不到 '{delete_lines[0][:40]}...'")
 
-            # ── 执行替换 ──
             delete_count = len(delete_lines)
             if delete_count > 0 and start_idx + delete_count <= len(new_lines):
                 del new_lines[start_idx:start_idx + delete_count]
@@ -225,7 +221,6 @@ def _apply_patch_python(file_path: str, original_content: str, patch_content: st
         new_content = '\n'.join(new_lines)
 
         if preview:
-            # 返回预览
             diff_preview = _generate_unified_diff(original_content, new_content)
             return (0, json.dumps({
                 "status": "preview",
@@ -233,7 +228,6 @@ def _apply_patch_python(file_path: str, original_content: str, patch_content: st
                 "diff": diff_preview,
             }, ensure_ascii=False, indent=2), "")
 
-        # 写入文件
         if backup:
             backup_path = file_path + '.bak'
             shutil.copy2(file_path, backup_path)
@@ -247,7 +241,16 @@ def _apply_patch_python(file_path: str, original_content: str, patch_content: st
         return (1, "", f"❌ 应用 patch 失败: {str(e)}")
 
 def _insert_lines(file_path: str, start_line: int, new_content: str, preview: bool, backup: bool):
-    """在指定行插入内容"""
+    """
+    在指定行插入内容
+
+    Args:
+        file_path (str): Description.
+        start_line (int): Description.
+        new_content (str): Description.
+        preview (bool): Description.
+        backup (bool): Description.
+    """
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
@@ -255,25 +258,20 @@ def _insert_lines(file_path: str, start_line: int, new_content: str, preview: bo
         if start_line < 1 or start_line > len(lines) + 1:
             return (1, "", f"❌ 行号 {start_line} 超出范围 (1-{len(lines)+1})")
 
-        # 保存原始内容用于 diff 生成
         original_content = ''.join(lines)
 
-        # 插入新内容
         insert_lines = new_content.split('\n')
-        # 正确处理换行符
         insert_lines_with_newline = []
         for i, line in enumerate(insert_lines):
             if i < len(insert_lines) - 1:
                 insert_lines_with_newline.append(line + '\n')
             else:
-                # 最后一行：如果原文件该行有换行符，则也添加
                 if lines and lines[-1].endswith('\n'):
                     insert_lines_with_newline.append(line + '\n')
                 else:
                     insert_lines_with_newline.append(line)
 
-        insert_index = start_line - 1  # 转换为 0-indexed
-        # 在指定位置插入
+        insert_index = start_line - 1
         new_lines = lines[:insert_index] + insert_lines_with_newline + lines[insert_index:]
         new_content_joined = ''.join(new_lines)
 
@@ -287,7 +285,6 @@ def _insert_lines(file_path: str, start_line: int, new_content: str, preview: bo
                 "diff": diff_preview,
             }, ensure_ascii=False, indent=2), "")
 
-        # 备份并写入
         if backup:
             shutil.copy2(file_path, file_path + '.bak')
 
@@ -300,7 +297,16 @@ def _insert_lines(file_path: str, start_line: int, new_content: str, preview: bo
         return (1, "", f"❌ 插入失败: {str(e)}")
 
 def _delete_lines(file_path: str, start_line: int, end_line: int, preview: bool, backup: bool):
-    """删除指定行范围"""
+    """
+    删除指定行范围
+
+    Args:
+        file_path (str): Description.
+        start_line (int): Description.
+        end_line (int): Description.
+        preview (bool): Description.
+        backup (bool): Description.
+    """
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
@@ -311,7 +317,6 @@ def _delete_lines(file_path: str, start_line: int, end_line: int, preview: bool,
         if end_line < start_line or end_line > len(lines):
             return (1, "", f"❌ 结束行号 {end_line} 超出范围")
 
-        # 删除行
         deleted = lines[start_line-1:end_line]
         new_lines = lines[:start_line-1] + lines[end_line:]
         new_content = ''.join(new_lines)
@@ -326,7 +331,6 @@ def _delete_lines(file_path: str, start_line: int, end_line: int, preview: bool,
                 "diff": diff_preview,
             }, ensure_ascii=False, indent=2), "")
 
-        # 备份并写入
         if backup:
             shutil.copy2(file_path, file_path + '.bak')
 
@@ -339,7 +343,17 @@ def _delete_lines(file_path: str, start_line: int, end_line: int, preview: bool,
         return (1, "", f"❌ 删除失败: {str(e)}")
 
 def _replace_lines(file_path: str, start_line: int, end_line: int, new_content: str, preview: bool, backup: bool):
-    """替换指定行范围"""
+    """
+    替换指定行范围
+
+    Args:
+        file_path (str): Description.
+        start_line (int): Description.
+        end_line (int): Description.
+        new_content (str): Description.
+        preview (bool): Description.
+        backup (bool): Description.
+    """
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
@@ -350,10 +364,8 @@ def _replace_lines(file_path: str, start_line: int, end_line: int, new_content: 
         if end_line < start_line or end_line > len(lines):
             return (1, "", f"❌ 结束行号 {end_line} 超出范围")
 
-        # 替换行
         old_lines = lines[start_line-1:end_line]
         insert_lines = new_content.split('\n')
-        # 保留原始文件换行约定
         insert_lines_with_newline = []
         for i, il in enumerate(insert_lines):
             if i < len(insert_lines) - 1 or (lines and lines[-1].endswith('\n')):
@@ -374,7 +386,6 @@ def _replace_lines(file_path: str, start_line: int, end_line: int, new_content: 
                 "diff": diff_preview,
             }, ensure_ascii=False, indent=2), "")
 
-        # 备份并写入
         if backup:
             shutil.copy2(file_path, file_path + '.bak')
 
@@ -387,12 +398,22 @@ def _replace_lines(file_path: str, start_line: int, end_line: int, new_content: 
         return (1, "", f"❌ 替换失败: {str(e)}")
 
 def _preview_patch(file_path: str, patch_content: str):
-    """预览 patch 应用后的结果"""
+    """
+    预览 patch 应用后的结果
+
+    Args:
+        file_path (str): Description.
+        patch_content (str): Description.
+    """
     return _apply_patch(file_path, patch_content, preview=True, backup=False)
 
-# ═══ Diff engine (merged from toolkit_diff) ═══
 def meta_toolkit_edit() -> dict:
-    """Meta toolkit edit."""
+    """
+    Meta toolkit edit
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

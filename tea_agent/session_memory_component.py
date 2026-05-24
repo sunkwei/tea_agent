@@ -36,11 +36,21 @@ class MemoryComponent(SessionComponent):
     
     @property
     def name(self) -> str:
-        """Name."""
+        """
+        Name
+
+        Returns:
+            str: Description.
+        """
         return "memory"
     
     def initialize(self) -> None:
-        """初始化 Memory 管理器（需要 storage 已设置）"""
+        """
+        初始化 Memory 管理器（需要 storage 已设置）
+
+        Returns:
+            None: Description.
+        """
         if not self.ctx.storage:
             return
         
@@ -74,7 +84,6 @@ class MemoryComponent(SessionComponent):
         user_msg = context.get("user_msg", "") or context.get("msg", "")
         all_memory_texts = []
 
-        # ── 用户记忆 ──
         try:
             memories = self.ctx.memory.select_memories(user_msg)
         except Exception as e:
@@ -90,7 +99,6 @@ class MemoryComponent(SessionComponent):
             except Exception:
                 pass
 
-        # ── 项目记忆 ──
         try:
             from tea_agent.project_memory import ProjectMemoryManager
             pm = ProjectMemoryManager()
@@ -103,7 +111,6 @@ class MemoryComponent(SessionComponent):
         except Exception as e:
             logger.debug(f"项目记忆加载跳过: {e}")
 
-        # ── 合并 ──
         if all_memory_texts:
             self.ctx._injected_memories_text = "\n\n".join(all_memory_texts)
             self.ctx._injected_memories = memories
@@ -126,7 +133,6 @@ class MemoryComponent(SessionComponent):
         if not self.ctx.memory or not self.ctx.storage:
             return -1
 
-        # 获取未摘要的对话
         try:
             unsummarized = self.ctx.storage.get_unsummarized_conversations(topic_id)
         except Exception as e:
@@ -136,12 +142,10 @@ class MemoryComponent(SessionComponent):
         if not self.ctx.memory.is_extraction_needed(len(unsummarized)):
             return 0
 
-        # 构建对话文本
         conv_text = self._build_conversation_text(unsummarized)
         if not conv_text.strip():
             return 0
 
-        # 调用 LLM 提取
         try:
             client, model = self._get_summarize_client()
             is_cheap = (client is self.ctx.cheap_client and self.ctx.cheap_client is not None)
@@ -155,14 +159,9 @@ class MemoryComponent(SessionComponent):
                 **_get_cheap_params(),
             )
 
-            # 追踪 token（通过 context 上的 api 组件）
             if self.ctx.api_comp and hasattr(self.ctx.api_comp, '_track_api_usage'):
                 self.ctx.api_comp._track_api_usage(response, is_cheap=is_cheap)
 
-            # 2026-05-21 gen by Tea Agent, 修复: 便宜 token 在后台线程累加，
-            # 但 _post_chat_pipeline 在此之前已读取并入库（值为 0），
-            # 且下一轮 reset_session_state 会清零，导致便宜 token 从未持久化。
-            # 此处直接在记忆提取完成后将便宜 token 写入 DB，独立于主流程时序。
             if is_cheap and hasattr(response, 'usage') and response.usage:
                 try:
                     usage = response.usage
@@ -170,7 +169,6 @@ class MemoryComponent(SessionComponent):
                     c_prompt = getattr(usage, 'prompt_tokens', 0) or 0
                     c_completion = getattr(usage, 'completion_tokens', 0) or 0
                     if c_total > 0:
-                        # 用直接 UPDATE 避免 add_topic_tokens 的 conversation_count+1
                         conn = self.ctx.storage.conn
                         conn.execute('''
                             INSERT INTO topic_token_stats (
@@ -207,20 +205,38 @@ class MemoryComponent(SessionComponent):
 
     @staticmethod
     def _build_conversation_text(conversations: List[Dict]) -> str:
-        """将对话列表构建为纯文本"""
+        """
+        将对话列表构建为纯文本
+
+        Args:
+            conversations (List[Dict]): Description.
+
+        Returns:
+            str: Description.
+        """
         lines = []
         for conv in conversations:
             lines.append(f"用户: {conv.get('user_msg', '')}")
-            lines.append(f"助手: {conv.get('ai_msg', '')[:500]}")  # 截断长回复
+            lines.append(f"助手: {conv.get('ai_msg', '')[:500]}")
             lines.append("")
         return "\n".join(lines)
 
     def get_injected_memories(self) -> List[Dict]:
-        """获取当前会话注入的记忆列表"""
+        """
+        获取当前会话注入的记忆列表
+
+        Returns:
+            List[Dict]: Description.
+        """
         return list(self.ctx._injected_memories)
 
     def get_memory_stats(self) -> Dict:
-        """获取记忆统计"""
+        """
+        获取记忆统计
+
+        Returns:
+            Dict: Description.
+        """
         if not self.ctx.memory or not self.ctx.storage:
             return {"total": 0, "by_category": {}, "by_priority": {}}
         try:

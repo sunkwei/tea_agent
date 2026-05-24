@@ -1,5 +1,3 @@
-# version: 1.0.0
-# @2026-05-20 gen by tea_agent, extracted from toolkit_todo.py for auto-discovery by reload()
 import os
 import json
 import uuid
@@ -9,14 +7,13 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
-# Plan 持久化目录 (不使用 __file__ 以兼容 exec() 加载)
 _plan_dir = os.path.join(os.getcwd(), ".tea_agent_run", "plans")
 PLANS_DIR = os.environ.get("TEA_PLANS_DIR", _plan_dir)
 
 _KNOWN_STEP_META = {"id", "desc", "action", "depends_on", "verify", "params"}
 
 def meta_toolkit_plan():
-    """Meta: register toolkit_plan as Agent tool."""
+    """Meta: register toolkit_plan as Agent tool"""
     return {
         "type": "function",
         "function": {
@@ -38,10 +35,9 @@ def meta_toolkit_plan():
     }
 
 
-# ── 数据结构 ────────────────────────────────────────────
 
 def _ensure_plans_dir():
-    """Internal: ensure plans dir."""
+    """Internal: ensure plans dir"""
     os.makedirs(PLANS_DIR, exist_ok=True)
 
 def _plan_path(plan_id: str) -> str:
@@ -88,7 +84,6 @@ def _new_plan(goal: str, steps: List[dict]) -> dict:
     normalized = []
     for i, s in enumerate(steps):
         meta_keys = _KNOWN_STEP_META & set(s.keys())
-        # 显式 params 优先，否则所有非 meta 键自动归入 params
         if "params" in s:
             params = {**s["params"]}
         else:
@@ -96,10 +91,10 @@ def _new_plan(goal: str, steps: List[dict]) -> dict:
         normalized.append({
             "id": s.get("id", str(i + 1)),
             "desc": s["desc"],
-            "action": s.get("action"),          # None = checkpoint，不再默认 self_evolve
+            "action": s.get("action"),
             "params": params,
             "depends_on": s.get("depends_on", []),
-            "verify": s.get("verify"),           # None = 不验证，不再默认 py_compile
+            "verify": s.get("verify"),
             "status": "pending",
             "result": None,
             "started_at": None,
@@ -115,7 +110,6 @@ def _new_plan(goal: str, steps: List[dict]) -> dict:
         "steps": normalized,
     }
 
-# ── 核心逻辑 ────────────────────────────────────────────
 
 def _deps_satisfied(step: dict, all_steps: List[dict]) -> bool:
     """Internal: deps satisfied.
@@ -150,7 +144,6 @@ def _count_status(plan: dict, status: str) -> int:
     """
     return sum(1 for s in plan["steps"] if s["status"] == status)
 
-# ── 工具入口 ────────────────────────────────────────────
 
 def toolkit_plan(
     action: str,
@@ -160,7 +153,20 @@ def toolkit_plan(
     step_id: str = None,
     cwd: str = None,
 ) -> dict:
-    """Plandex 风格 Plan→Execute→Verify 工作流。"""
+    """
+    Plandex 风格 Plan→Execute→Verify 工作流。
+
+    Args:
+        action (str): Description.
+        goal (str): Description.
+        steps (List[dict]): Description.
+        plan_id (str): Description.
+        step_id (str): Description.
+        cwd (str): Description.
+
+    Returns:
+        dict: Description.
+    """
     cwd = cwd or os.getcwd()
 
     try:
@@ -227,7 +233,6 @@ def toolkit_plan(
         logger.exception(f"toolkit_plan: {e}")
         return {"ok": False, "error": str(e)[:300]}
 
-# ── Action 实现 ──────────────────────────────────────────
 
 def _do_step(plan_id, step_id, cwd):
     """Internal: do step.
@@ -331,7 +336,6 @@ def _do_resume(plan_id, cwd):
     _save_plan(plan)
     return _do_run(plan_id, cwd)
 
-# ── 内部辅助 ────────────────────────────────────────────
 
 def _step_summary(plan: dict) -> str:
     """Internal: step summary.
@@ -361,7 +365,6 @@ def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
         params = step.get("params", {})
 
         if not action:
-            # 无 action 的步骤：如果指定了 verify 则只验证，否则视为检查点自动完成
             if step.get("verify"):
                 result = _verify_step(step, cwd)
             else:

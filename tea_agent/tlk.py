@@ -6,7 +6,6 @@ import os.path as osp
 import time
 import logging
 
-#
 from tea_agent.toolkit.toolkit_set_topic_title import (
     toolkit_set_topic_title,
     meta_toolkit_set_topic_title,
@@ -14,12 +13,14 @@ from tea_agent.toolkit.toolkit_set_topic_title import (
 
 logger = logging.getLogger("tookit")
 
-# ═══════════════════════════════════════════════════════════
-# 统一版本管理工具 — 合并 save/reload/rollback/list_versions
-# ═══════════════════════════════════════════════════════════
 
 def meta_toolkit_save() -> dict:
-    """Meta toolkit save — 统一版本管理."""
+    """
+    Meta toolkit save — 统一版本管理
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {
@@ -47,7 +48,19 @@ def meta_toolkit_save() -> dict:
     }
 
 def toolkit_save_impl(action: str, name: str = "", meta: dict = None, pycode: str = "", version: str = "") -> str:
-    """统一工具版本管理入口。"""
+    """
+    统一工具版本管理入口。
+
+    Args:
+        action (str): Description.
+        name (str): Description.
+        meta (dict): Description.
+        pycode (str): Description.
+        version (str): Description.
+
+    Returns:
+        str: Description.
+    """
     tlk = cast(Toolkit, globals().get("_toolkit_", None))
     try:
         if action == "save":
@@ -72,17 +85,11 @@ def toolkit_save_impl(action: str, name: str = "", meta: dict = None, pycode: st
         return f"❌ {e}"
 
 
-# ========== Memory 工具函数 ==========
-# ========== Memory 工具函数 ==========
 
 class Toolkit:
-    # 工具调用缓存：对只读/幂等工具缓存结果，减少重复调用
-    # key = (func_name, json.dumps(args, sort_keys=True))
-    # value = (result, timestamp)
     """Toolkit class."""
-    _CACHE_TTL = 30  # 默认缓存 30 秒
+    _CACHE_TTL = 30
     _CACHE_BLACKLIST = {
-        # 有外部副作用的工具不缓存
         'toolkit_exec', 'toolkit_self_evolve', 'toolkit_save',
         'toolkit_release_version',
         'toolkit_pkg', 'toolkit_memory', 'toolkit_kb', 'toolkit_reflection',
@@ -103,17 +110,14 @@ class Toolkit:
         """
         self.func_map: Dict[str, Callable] = {}
         self.meta_map: Dict[str, dict] = {}
-        self._cache: Dict[tuple, tuple] = {}  # (key, ttl) → (result, expire_time)
+        self._cache: Dict[tuple, tuple] = {}
 
-        # User directory for saving and overriding tools
         self.user_dir = osp.join(
             os.path.expanduser("~"), ".tea_agent", "toolkit")
         os.makedirs(self.user_dir, exist_ok=True)
 
-        # Built-in directory (relative to this file)
         self.builtin_dir = osp.join(osp.dirname(__file__), "toolkit")
 
-        # Default save location is user_dir
         self.tool_dir = tool_dir if tool_dir else self.user_dir
         os.makedirs(self.tool_dir, exist_ok=True)
 
@@ -135,20 +139,17 @@ class Toolkit:
         """
         import json as _json
 
-        # 黑名单工具不走缓存
         if func_name in self._CACHE_BLACKLIST:
             if func_name not in self.func_map:
                 raise KeyError(f"Unknown tool: {func_name}")
             return self.func_map[func_name](**kwargs)
 
-        # toolkit_file write 操作不走缓存
         if func_name == 'toolkit_file' and kwargs.get('action') == 'write':
             return self.func_map[func_name](**kwargs)
 
         now = time.time()
         cache_key = (func_name, _json.dumps(kwargs, sort_keys=True, default=str))
 
-        # 检查缓存
         if cache_key in self._cache:
             result, expire_at = self._cache[cache_key]
             if now < expire_at:
@@ -157,16 +158,13 @@ class Toolkit:
             else:
                 del self._cache[cache_key]
 
-        # 执行工具
         if func_name not in self.func_map:
             raise KeyError(f"Unknown tool: {func_name}")
         result = self.func_map[func_name](**kwargs)
 
-        # 存入缓存
         expire_at = now + self._CACHE_TTL
         self._cache[cache_key] = (result, expire_at)
 
-        # 定期清理过期缓存（概率触发，避免每次都清理）
         if len(self._cache) > 500 or (self._cache and hash(cache_key) % 20 == 0):
             self._purge_cache()
 
@@ -182,7 +180,15 @@ class Toolkit:
             logger.debug(f"Cache purge: removed {len(expired)} expired entries, {len(self._cache)} remaining")
 
     def _check_dependencies(self, pycode: str) -> str:
-        """自动检测 pycode 中的 import 并安装缺失依赖"""
+        """
+        自动检测 pycode 中的 import 并安装缺失依赖
+
+        Args:
+            pycode (str): Description.
+
+        Returns:
+            str: Description.
+        """
         import ast as _ast
         import importlib.util as _importlib
         import subprocess
@@ -242,7 +248,12 @@ class Toolkit:
         return msg
 
     def reload(self) -> Dict:
-        """扫描 builtin/ + user/ 目录，动态加载所有 toolkit_*.py 工具。"""
+        """
+        扫描 builtin/ + user/ 目录，动态加载所有 toolkit_*.py 工具。
+
+        Returns:
+            Dict: Description.
+        """
         from tea_agent.toolkit.tool_loader import ToolLoader
 
         loader = ToolLoader(self.builtin_dir, self.user_dir)
@@ -259,7 +270,6 @@ class Toolkit:
             self.func_map[name] = func
             self.meta_map[name] = loaded["metas"][name]
 
-        # 统一版本管理（合并 save/reload/rollback/versions）
         self.func_map["toolkit_save"] = toolkit_save_impl
         self.meta_map["toolkit_save"] = meta_toolkit_save()
 
@@ -317,7 +327,6 @@ class Toolkit:
             toolkit_path = self.tool_dir
         filename = osp.join(toolkit_path, f"{name}.py")
 
-        # 1. 校验 meta 有效性
         if not isinstance(meta, dict):
             return (2, "meta must be a dict")
 
@@ -338,7 +347,6 @@ class Toolkit:
         if not name.startswith("toolkit_"):
             return (2, "tool name must start with 'toolkit_' prefix for security")
 
-        # 2. 校验 pycode 可执行性
         try:
             tree = ast.parse(pycode)
         except SyntaxError as e:
@@ -350,7 +358,6 @@ class Toolkit:
         elif dep_msg:
             logger.info(f"Dependency check: {dep_msg}")
 
-        # 检查是否定义了同名函数
         func_def = None
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name == name:
@@ -360,34 +367,26 @@ class Toolkit:
         if func_def is None:
             return (3, f"Function '{name}' not found in pycode")
 
-        # 3. 版本管理
-        # 如果文件已存在，备份旧版本
         if osp.exists(filename):
-            # 读取现有文件的版本号
             with open(filename, "r", encoding="utf-8") as f:
                 old_content = f.read()
             
-            # 自动提取版本号并递增
             if not version:
                 import re
                 version_match = re.search(r'# version:\s*([\d.]+)', old_content)
                 if version_match:
                     old_version = version_match.group(1)
-                    # 递增最后一位
                     parts = old_version.split('.')
                     parts[-1] = str(int(parts[-1]) + 1)
                     version = '.'.join(parts)
                 else:
                     version = "1.0.0"
             
-            # 版本历史通过 git (内置) 或手动备份 (用户) 管理
             pass
         
-        # 如果没有提供版本号，使用默认的 "1.0.0"
         if not version:
             version = "1.0.0"
 
-        # 4. 通过校验，写入文件（带版本注释）
         with open(filename, "w", encoding="utf-8") as f:
             f.write(f"## llm generated tool func, created {time.asctime()}\n")
             f.write(f"# version: {version}\n\n")
@@ -420,13 +419,11 @@ class Toolkit:
             return (1, f"Version {version} backup not found for {name}")
         
         import shutil
-        # 备份当前版本
         if osp.exists(filename):
             current_backup = f"{name}.current.bak.py"
             current_backup_path = osp.join(toolkit_path, current_backup)
             shutil.copy2(filename, current_backup_path)
         
-        # 恢复旧版本
         shutil.copy2(backup_path, filename)
         
         return (0, f"Rolled back {name} to v{version}")
@@ -444,15 +441,12 @@ class Toolkit:
         toolkit_path = self.tool_dir
         versions = []
         
-        # 查找所有备份文件
         pattern = f"{name}.v"
         for filename in os.listdir(toolkit_path):
             if filename.startswith(pattern) and filename.endswith(".bak.py"):
-                # 提取版本号
                 version = filename[len(pattern):-len(".bak.py")]
                 versions.append(version)
         
-        # 排序版本号
         versions.sort(key=lambda v: [int(x) for x in v.split('.')])
         
         return (0, versions)

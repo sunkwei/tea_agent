@@ -14,7 +14,7 @@ _TS_LANG = None
 _TS_LANG_LOADED = False
 
 def _ensure_ts():
-    """Internal: ensure ts."""
+    """Internal: ensure ts"""
     global _TS_LANG, _TS_LANG_LOADED
     if _TS_LANG_LOADED:
         return _TS_LANG
@@ -127,7 +127,13 @@ def parse_file(filepath: str) -> Optional[Dict]:
     result = {"file": filepath, "functions": [], "classes": [], "imports": [], "top_level": []}
 
     def _handle_function_def(child, depth):
-        """Extract function definition info."""
+        """
+        Extract function definition info
+
+        Args:
+            child: Description.
+            depth: Description.
+        """
         name_node = child.child_by_field_name("name")
         body_node = child.child_by_field_name("body")
         name = _get_text(source_bytes, name_node) if name_node else "?"
@@ -147,7 +153,13 @@ def parse_file(filepath: str) -> Optional[Dict]:
             })
 
     def _handle_class_def(child, depth):
-        """Extract class definition info."""
+        """
+        Extract class definition info
+
+        Args:
+            child: Description.
+            depth: Description.
+        """
         name_node = child.child_by_field_name("name")
         body_node = child.child_by_field_name("body")
         name = _get_text(source_bytes, name_node) if name_node else "?"
@@ -184,7 +196,12 @@ def parse_file(filepath: str) -> Optional[Dict]:
             })
 
     def _handle_import(child):
-        """Extract import statement info."""
+        """
+        Extract import statement info
+
+        Args:
+            child: Description.
+        """
         module = ""
         names = []
         for c in child.named_children:
@@ -206,7 +223,13 @@ def parse_file(filepath: str) -> Optional[Dict]:
         })
 
     def _walk(node, depth=0):
-        """Walk AST recursively, dispatching to typed handlers."""
+        """
+        Walk AST recursively, dispatching to typed handlers
+
+        Args:
+            node: Description.
+            depth: Description.
+        """
         for child in node.named_children:
             if child.type == "function_definition":
                 _handle_function_def(child, depth)
@@ -451,12 +474,19 @@ def build_dependency_graph(project_root: str) -> Dict:
         "hint": f"{len(graph)} 模块, {len(circular)} 循环依赖, {len(orphans)} 孤立模块",
     }
 
-# ── Metrics Engine ────────────────────────────────────────────────
 
-# ── Metrics Engine ────────────────────────────────────────────────
 
 def _count_branches(node, source_bytes) -> int:
-    """统计子树中的分支节点（用于圈复杂度）"""
+    """
+    统计子树中的分支节点（用于圈复杂度）
+
+    Args:
+        node: Description.
+        source_bytes: Description.
+
+    Returns:
+        int: Description.
+    """
     branch_types = {
         "if_statement", "elif_clause", "else_clause",
         "for_statement", "while_statement",
@@ -473,14 +503,33 @@ def _count_branches(node, source_bytes) -> int:
 
 
 def _cyclomatic_for_body(body_node, source_bytes) -> int:
-    """计算函数体的圈复杂度：1 + 分支数"""
+    """
+    计算函数体的圈复杂度：1 + 分支数
+
+    Args:
+        body_node: Description.
+        source_bytes: Description.
+
+    Returns:
+        int: Description.
+    """
     if body_node is None:
         return 1
     return 1 + _count_branches(body_node, source_bytes)
 
 
 def _compute_fn_metrics(fn_info: dict, source_bytes, body_node) -> dict:
-    """计算单个函数的度量"""
+    """
+    计算单个函数的度量
+
+    Args:
+        fn_info (dict): Description.
+        source_bytes: Description.
+        body_node: Description.
+
+    Returns:
+        dict: Description.
+    """
     loc = 0
     body_span = fn_info.get("body_span")
     if body_span:
@@ -490,13 +539,21 @@ def _compute_fn_metrics(fn_info: dict, source_bytes, body_node) -> dict:
         "cyclomatic": _cyclomatic_for_body(body_node, source_bytes),
         "loc": loc,
         "fan_out": fan_out,
-        "fan_in": 0,  # filled later via cross-reference
+        "fan_in": 0,
         "has_docstring": bool(fn_info.get("docstring")),
     }
 
 
 def _compute_metrics_ast_fallback(filepath: str) -> dict:
-    """AST fallback: compute cyclomatic complexity from Python AST."""
+    """
+    AST fallback: compute cyclomatic complexity from Python AST
+
+    Args:
+        filepath (str): Description.
+
+    Returns:
+        dict: Description.
+    """
     import ast as _ast, os as _os
 
     try:
@@ -507,13 +564,21 @@ def _compute_metrics_ast_fallback(filepath: str) -> dict:
         return {"ok": False, "error": str(e), "file": filepath}
 
     class _MetricsVisitor(_ast.NodeVisitor):
+        """_MetricsVisitor class."""
         def __init__(self):
+            """Init"""
             self.items = []
             self._current = None
             self._branches = 0
             self._calls = set()
 
         def _end_func(self, node):
+            """
+            End func.
+
+            Args:
+                node: Description.
+            """
             if self._current is None:
                 return
             loc = node.end_lineno - node.lineno + 1 if hasattr(node, "end_lineno") else 0
@@ -536,6 +601,12 @@ def _compute_metrics_ast_fallback(filepath: str) -> dict:
             self._doc = ""
 
         def visit_FunctionDef(self, node):
+            """
+            FunctionDef.
+
+            Args:
+                node: Description.
+            """
             self._current = node.name
             self._current_kind = "function"
             self._branches = 0
@@ -545,47 +616,107 @@ def _compute_metrics_ast_fallback(filepath: str) -> dict:
             self._end_func(node)
 
         def visit_AsyncFunctionDef(self, node):
+            """
+            AsyncFunctionDef.
+
+            Args:
+                node: Description.
+            """
             self.visit_FunctionDef(node)
 
         def visit_If(self, node):
+            """
+            If.
+
+            Args:
+                node: Description.
+            """
             if self._current:
                 self._branches += 1
                 if node.orelse:
-                    self._branches += 1  # else counts too
+                    self._branches += 1
             self.generic_visit(node)
 
         def visit_For(self, node):
+            """
+            For.
+
+            Args:
+                node: Description.
+            """
             if self._current: self._branches += 1
             self.generic_visit(node)
 
         def visit_AsyncFor(self, node):
+            """
+            AsyncFor.
+
+            Args:
+                node: Description.
+            """
             if self._current: self._branches += 1
             self.generic_visit(node)
 
         def visit_While(self, node):
+            """
+            While.
+
+            Args:
+                node: Description.
+            """
             if self._current: self._branches += 1
             self.generic_visit(node)
 
         def visit_Try(self, node):
+            """
+            Try.
+
+            Args:
+                node: Description.
+            """
             if self._current:
                 self._branches += 1
                 self._branches += len(node.handlers)
             self.generic_visit(node)
 
         def visit_Match(self, node):
+            """
+            Match.
+
+            Args:
+                node: Description.
+            """
             if self._current:
                 self._branches += len(node.cases)
             self.generic_visit(node)
 
         def visit_IfExp(self, node):
+            """
+            IfExp.
+
+            Args:
+                node: Description.
+            """
             if self._current: self._branches += 1
             self.generic_visit(node)
 
         def visit_BoolOp(self, node):
+            """
+            BoolOp.
+
+            Args:
+                node: Description.
+            """
             if self._current: self._branches += len(node.values) - 1
             self.generic_visit(node)
 
         def visit_Call(self, node):
+            """
+            Call.
+
+            Args:
+                node: Description.
+            """
             if self._current:
                 if isinstance(node.func, _ast.Name):
                     self._calls.add(node.func.id)
@@ -604,32 +735,43 @@ def _compute_metrics_ast_fallback(filepath: str) -> dict:
         elif c <= 20: complexity_dist["high"] += 1
         else: complexity_dist["critical"] += 1
 
-    # Fan-in
     all_calls = {}
     for item in v.items:
         all_calls[item["name"]] = set()
         for item2 in v.items:
             if item2 is not item:
-                pass  # we need call sets per function...
-    # Recompute fan-in from call sets
+                pass
     for item in v.items:
         name = item["name"]
         item["metrics"]["fan_in"] = sum(
             1 for other in v.items if other is not item and name in other["metrics"].get("_call_set", set())
         )
 
-    # Build call sets properly
-    # Actually, let's re-visit to collect calls per function
     class _CallCollector(_ast.NodeVisitor):
+        """_CallCollector class."""
         def __init__(self):
-            self.calls = {}  # func_name -> set of called names
+            """Init"""
+            self.calls = {}
 
         def visit_FunctionDef(self, node):
+            """
+            FunctionDef.
+
+            Args:
+                node: Description.
+            """
             name = node.name
             calls = set()
 
             class _Inner(_ast.NodeVisitor):
+                """_Inner class."""
                 def visit_Call(self, n):
+                    """
+                    Call.
+
+                    Args:
+                        n: Description.
+                    """
                     if isinstance(n.func, _ast.Name):
                         calls.add(n.func.id)
                     elif isinstance(n.func, _ast.Attribute):
@@ -652,7 +794,6 @@ def _compute_metrics_ast_fallback(filepath: str) -> dict:
             1 for other in v.items
             if other is not item and name in cc.calls.get(other["name"], set())
         )
-        # Clean internal field
         item["metrics"].pop("_call_set", None)
 
     total_loc = source.count("\n") + 1
@@ -698,12 +839,19 @@ def compute_metrics(project_root: str, filepath: str) -> dict:
     tree = parser.parse(source_bytes)
     root = tree.root_node
 
-    fns = []       # standalone functions
-    methods = []   # class methods
-    fn_metrics = []  # all callable metrics
-    call_map = {}    # name -> fn_metrics entry
+    fns = []
+    methods = []
+    fn_metrics = []
+    call_map = {}
 
     def _walk(node, depth=0):
+        """
+        Walk.
+
+        Args:
+            node: Description.
+            depth: Description.
+        """
         for child in node.named_children:
             if child.type == "function_definition":
                 name_node = child.child_by_field_name("name")
@@ -747,26 +895,26 @@ def compute_metrics(project_root: str, filepath: str) -> dict:
 
     _walk(root)
 
-    # Fan-in: count how many other functions call this one
     all_callables = fns + methods
     for entry in all_callables:
         name = entry["name"]
-        # count callers within this file
         fan_in = sum(1 for _, m in fn_metrics if m is not entry["metrics"]
                      and name in call_map.get(name, {}).get("calls", set()))
-        # better: iterate all_callables and check their metrics' calls
         fan_in = 0
         for other in all_callables:
             if other is entry:
                 continue
-            # find other's calls from parse
             pass
 
-    # Re-do fan-in: from the parsed data directly
-    # We need to rebuild the calls-per-function map
     fn_calls = {}
-    # Re-walk to get accurate calls
     def _walk2(node, depth=0):
+        """
+        Walk2.
+
+        Args:
+            node: Description.
+            depth: Description.
+        """
         for child in node.named_children:
             if child.type == "function_definition":
                 name_node = child.child_by_field_name("name")
@@ -792,7 +940,6 @@ def compute_metrics(project_root: str, filepath: str) -> dict:
         entry["metrics"]["fan_in"] = sum(1 for cn, calls in fn_calls.items()
                                          if cn != name and name in calls)
 
-    # Module-level summary
     all_cyclo = [e["metrics"]["cyclomatic"] for e in all_callables]
     complexity_dist = {"low": 0, "medium": 0, "high": 0, "critical": 0}
     for c in all_cyclo:
@@ -836,7 +983,6 @@ def find_dead_code(project_root: str, filepath: str) -> dict:
     if not result:
         return {"ok": False, "error": f"Cannot parse {filepath}", "file": filepath}
 
-    # Build: all defined symbols, all called symbols
     defined = set()
     calls_all = set()
     for fn in result.get("functions", []):
@@ -848,15 +994,12 @@ def find_dead_code(project_root: str, filepath: str) -> dict:
             defined.add(m["name"])
             calls_all.update(m.get("calls", []))
 
-    # Dead = defined but never called (and not __init__ or special names)
     special = {"__init__", "__str__", "__repr__", "__len__", "__call__", "__iter__",
                "__next__", "__enter__", "__exit__", "__getitem__", "__setitem__"}
     dead = [d for d in defined if d not in calls_all and d not in special
-            and not d.startswith("_")]  # _private may be external API
+            and not d.startswith("_")]
 
-    # Unused imports
     unused_imports = []
-    # Build set of all referenced names in source
     all_refs = calls_all | defined
     for imp in result.get("imports", []):
         names = imp.get("names", [])

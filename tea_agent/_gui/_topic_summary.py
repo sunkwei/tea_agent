@@ -9,7 +9,6 @@ from typing import Optional, List, Dict
 
 logger = logging.getLogger(__name__)
 
-# 从 session_prompts 导入共享 prompt 模板
 from tea_agent.session_prompts import TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_TEMPLATE
 
 def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Optional[str]:
@@ -61,12 +60,10 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
             max_tokens=50,
         )
 
-        # 安全检查返回值
         if not response.choices or len(response.choices) == 0:
             return None
 
         content = response.choices[0].message.content
-        # DeepSeek 等推理模型可能把回复放到 reasoning_content 中，content 为空
         if not content:
             content = getattr(response.choices[0].message, 'reasoning_content', None)
         if not content or not isinstance(content, str):
@@ -74,9 +71,7 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
             return None
 
         raw = content.strip()
-        # 调试日志：记录 LLM 原始返回
         logger.info(f"_generate_topic_summary 原始返回: model={model}, raw_len={len(raw)}, raw={repr(raw[:80])}")
-        # 去掉各种引号包裹（中英文全角半角）
         raw = re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
         raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
         raw = raw.strip()
@@ -85,8 +80,6 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
             logger.warning(f"_generate_topic_summary: 清洗后 raw 为空, content={repr(content[:80])}")
             return None
 
-        # NOTE: 2026-05-01 08:17:32, min_length调整为4
-        # 拒绝过短的摘要（<4个字符）
         if len(raw) < 4:
             logger.warning(f"_generate_topic_summary: 摘要过短被拒, len={len(raw)}, raw={repr(raw)}")
             return None

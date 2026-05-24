@@ -1,29 +1,14 @@
-#
-# version: 1.0.0
 
 import logging
 logger = logging.getLogger("toolkit")
 
 def toolkit_scheduler(action: str, **kwargs):
-    """定时任务管理工具。
+    """
+    定时任务管理工具。
 
-    action:
-      list              — 列出所有任务
-      add               — 新增任务 (需: name, command, schedule)
-      update            — 更新任务 (需: task_id, 可选: name/command/schedule/enabled)
-      delete            — 删除任务 (需: task_id)
-      enable/disable    — 启停任务 (需: task_id)
-      run               — 立即执行指定任务 (需: task_id)
-      start/stop/status — 调度线程管理
-      test_schedule     — 测试调度表达式 (需: schedule)
-
-    schedule 格式:
-      once:2026-05-17T09:00    单次
-      daily:09:00              每天
-      hourly:30                每小时第30分
-      interval:3600            间隔秒
-      weekly:mon:09:00         每周一
-      cron:0 9 * * *           cron表达式
+    Args:
+        action (str): Description.
+        **kwargs: Keyword arguments.
     """
     logger.info(f"toolkit_scheduler called: action={action!r}")
 
@@ -31,20 +16,18 @@ def toolkit_scheduler(action: str, **kwargs):
     from datetime import datetime, timedelta
     from pathlib import Path
 
-    # ── DB 路径 ──
     try:
         from tea_agent.config import get_config
         DB_PATH = os.path.join(get_config().paths.data_dir_abs, "scheduler.db")
     except Exception:
         DB_PATH = os.path.expanduser("~/.tea_agent/scheduler.db")
 
-    CHECK_INTERVAL = 60  # 每分钟检查一次
+    CHECK_INTERVAL = 60
 
     _CRON_WEEKDAY = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 
-    # ── DB 初始化 ──
     def _get_conn():
-        """Internal: get the conn."""
+        """Internal: get the conn"""
         os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -67,7 +50,6 @@ def toolkit_scheduler(action: str, **kwargs):
         conn.commit()
         return conn
 
-    # ── 调度解析 ──
     def parse_schedule(schedule: str, from_time: datetime = None):
         """Parse schedule.
         
@@ -153,12 +135,16 @@ def toolkit_scheduler(action: str, **kwargs):
             dt += timedelta(minutes=1)
         return None
 
-    # ── 通知 ──
     def _notify(title: str, msg: str):
-        """发送系统通知"""
+        """
+        发送系统通知
+
+        Args:
+            title (str): Description.
+            msg (str): Description.
+        """
         try:
             from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious as _ts
-            # 复用潜意识的通知基础设施
             pass
         except Exception:
             pass
@@ -174,9 +160,13 @@ def toolkit_scheduler(action: str, **kwargs):
         except Exception:
             pass
 
-    # ── 执行任务 ──
     def _execute_task(task: dict):
-        """执行命令行任务，返回 (exit_code, output)"""
+        """
+        执行命令行任务，返回 (exit_code, output)
+
+        Args:
+            task (dict): Description.
+        """
         cmd = task["command"]
         logger.info(f"执行定时任务: {task['name']} -> {cmd}")
         try:
@@ -190,12 +180,11 @@ def toolkit_scheduler(action: str, **kwargs):
         except Exception as e:
             return -2, str(e)[:500]
 
-    # ── 调度守护线程 ──
     _scheduler_running = False
     _scheduler_pid = None
 
     def _scheduler_loop():
-        """Internal: scheduler loop."""
+        """Internal: scheduler loop"""
         nonlocal _scheduler_running, _scheduler_pid
         _scheduler_running = True
         _scheduler_pid = os.getpid()
@@ -216,18 +205,15 @@ def toolkit_scheduler(action: str, **kwargs):
                     logger.info(f"触发任务: {task['name']}")
                     exit_code, output = _execute_task(task)
 
-                    # 更新执行结果
                     conn2 = _get_conn()
                     next_run = None
                     if task["schedule"].startswith("once:"):
-                        # 单次任务执行后禁用
                         conn2.execute(
                             "UPDATE scheduled_tasks SET enabled=0, last_run=CURRENT_TIMESTAMP, "
                             "last_exit_code=?, last_result=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
                             (exit_code, output, task["id"])
                         )
                     else:
-                        # 重复任务计算下次执行
                         next_dt = parse_schedule(task["schedule"])
                         next_run = next_dt.isoformat() if next_dt else None
                         conn2.execute(
@@ -238,7 +224,6 @@ def toolkit_scheduler(action: str, **kwargs):
                     conn2.commit()
                     conn2.close()
 
-                    # 通知执行结果
                     icon = "✅" if exit_code == 0 else "❌"
                     _notify(
                         f"{icon} 定时任务: {task['name']}",
@@ -252,7 +237,6 @@ def toolkit_scheduler(action: str, **kwargs):
 
         logger.info("定时任务调度器已停止")
 
-    # ── action 分发 ──
     if action == "list":
         conn = _get_conn()
         rows = conn.execute(
@@ -351,7 +335,6 @@ def toolkit_scheduler(action: str, **kwargs):
             return {"error": f"任务不存在: {tid}"}
         task = dict(task)
         exit_code, output = _execute_task(task)
-        # 更新
         conn2 = _get_conn()
         conn2.execute(
             "UPDATE scheduled_tasks SET last_run=CURRENT_TIMESTAMP, last_exit_code=?, last_result=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
@@ -401,7 +384,15 @@ def toolkit_scheduler(action: str, **kwargs):
                 "supported": ["list","add","update","delete","enable","disable","run","start","stop","status","test_schedule"]}
 
 def _format_next(task: dict) -> str:
-    """格式化下次执行时间为人可读"""
+    """
+    格式化下次执行时间为人可读
+
+    Args:
+        task (dict): Description.
+
+    Returns:
+        str: Description.
+    """
     nr = task.get("next_run")
     if not nr:
         if task.get("schedule", "").startswith("once:"):
@@ -426,7 +417,12 @@ def _format_next(task: dict) -> str:
         return str(nr)[:16]
 
 def meta_toolkit_scheduler() -> dict:
-    """Meta toolkit scheduler."""
+    """
+    Meta toolkit scheduler
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

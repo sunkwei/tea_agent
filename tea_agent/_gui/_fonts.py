@@ -14,10 +14,15 @@ MONO_FONT = "TkFixedFont"
 
 _FONTS_DETECTED = False
 _SCALE_FACTOR = 1.0
-_DEFAULT_FONT_SIZE = 16  # 模块级默认（_init_fonts 后会更新）
+_DEFAULT_FONT_SIZE = 16
 
 def _fs(size):
-    """返回按显示缩放因子调整后的字体大小（适配 Wayland/X11 高分屏）。"""
+    """
+    返回按显示缩放因子调整后的字体大小（适配 Wayland/X11 高分屏）。
+
+    Args:
+        size: Description.
+    """
     return max(1, int(size * _SCALE_FACTOR))
 
 def _init_fonts():
@@ -39,7 +44,7 @@ def _init_fonts():
             for f in candidates:
                 if f in available:
                     return f
-            return "TkDefaultFont"  # 最终回退：系统默认字体
+            return "TkDefaultFont"
 
         if _IS_WINDOWS:
             SYSTEM_FONT = _detect([
@@ -61,7 +66,6 @@ def _init_fonts():
                 "Noto Sans Mono CJK SC", "DejaVu Sans Mono",
                 "Source Han Mono SC", "Courier New",
             ])
-        # DEBUG: 打印检测结果，方便排查字体问题
         logging.getLogger("tea_agent").debug(
             f"字体检测: SYSTEM={SYSTEM_FONT}, MONO={MONO_FONT}"
         )

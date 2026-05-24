@@ -1,4 +1,3 @@
-# @2026-04-30 gen by deepseek-v4-pro, SystemPromptManager: 多版本系统提示词管理—基于反思/记忆自动进化，每次使用最新版本
 """
 系统提示词管理器 (SystemPromptManager)
 
@@ -15,7 +14,6 @@ from datetime import datetime
 
 logger = logging.getLogger("SystemPromptManager")
 
-# 默认系统提示词模板（当数据库无记录时使用）
 DEFAULT_SYSTEM_PROMPT = (
     "你是可自我扩展的智能Agent。"
     "拥有工具库toolkit，可通过toolkit_save(name,meta,pycode)保存新工具、"
@@ -76,7 +74,6 @@ class SystemPromptManager:
             self._current_prompt_id = latest["id"]
             logger.info(f"加载系统提示词 v{self._current_version} (id={self._current_prompt_id})")
         else:
-            # 首次运行，插入默认版本
             self._current_prompt = DEFAULT_SYSTEM_PROMPT
             self._current_version = "1"
             self._current_prompt_id = self.storage.add_system_prompt(
@@ -90,23 +87,43 @@ class SystemPromptManager:
 
     @property
     def current_prompt(self) -> str:
-        """获取当前生效的系统提示词"""
+        """
+        获取当前生效的系统提示词
+
+        Returns:
+            str: Description.
+        """
         if not self._initialized:
             return self.initialize()
         return self._current_prompt
 
     @property
     def current_version(self) -> str:
-        """Current version."""
+        """
+        Current version
+
+        Returns:
+            str: Description.
+        """
         return self._current_version
 
     @property
     def current_prompt_id(self) -> int:
-        """Current prompt id."""
+        """
+        Current prompt id
+
+        Returns:
+            int: Description.
+        """
         return self._current_prompt_id
 
     def reload(self) -> str:
-        """重新从数据库加载最新活跃版本"""
+        """
+        重新从数据库加载最新活跃版本
+
+        Returns:
+            str: Description.
+        """
         latest = self.storage.get_latest_system_prompt()
         if latest:
             self._current_prompt = latest["content"]
@@ -124,12 +141,10 @@ class SystemPromptManager:
         Returns:
             API 消息列表
         """
-        # 收集最近的反思建议
         suggestions = []
         if reflection_suggestion:
             suggestions.append(f"反思建议: {reflection_suggestion}")
 
-        # 收集最近的未应用反思
         recent_reflections = self.storage.get_recent_reflections(limit=5)
         for ref in recent_reflections:
             import json
@@ -142,7 +157,6 @@ class SystemPromptManager:
             for s in ref_suggestions:
                 suggestions.append(f"反思建议: {s}")
 
-        # 收集相关的长期记忆（指令类）
         instructions = self.storage.get_instructions()
         memory_text = ""
         if instructions:
@@ -198,12 +212,10 @@ class SystemPromptManager:
 
             new_prompt = new_prompt.strip()
 
-            # 如果和当前版本一模一样，跳过
             if new_prompt == self._current_prompt:
                 logger.info("新提示词与当前版本相同，跳过")
                 return None
 
-            # 存储新版本
             reason_parts = []
             if reflection_suggestion:
                 reason_parts.append(f"反思建议: {reflection_suggestion[:200]}")
@@ -214,12 +226,10 @@ class SystemPromptManager:
                 reason=reason,
             )
 
-            # 切换到新版本
             self._current_prompt = new_prompt
             self._current_version = str(int(self._current_version) + 1)
             self._current_prompt_id = new_id
 
-            # 标记相关反思为已应用
             recent_reflections = self.storage.get_recent_reflections(limit=5)
             for ref in recent_reflections:
                 self.storage.mark_reflection_applied(ref["id"])
@@ -262,11 +272,21 @@ class SystemPromptManager:
         return True
 
     def list_versions(self) -> List[Dict]:
-        """列出所有版本"""
+        """
+        列出所有版本
+
+        Returns:
+            List[Dict]: Description.
+        """
         return self.storage.get_system_prompt_history(limit=50)
 
     def get_stats(self) -> Dict:
-        """获取统计"""
+        """
+        获取统计
+
+        Returns:
+            Dict: Description.
+        """
         count = self.storage.get_system_prompt_count()
         return {
             "total_versions": count,
@@ -275,7 +295,16 @@ class SystemPromptManager:
         }
 
     def manual_set(self, content: str, reason: str = "手动设置") -> int:
-        """手动设置新提示词版本"""
+        """
+        手动设置新提示词版本
+
+        Args:
+            content (str): Description.
+            reason (str): Description.
+
+        Returns:
+            int: Description.
+        """
         new_id = self.storage.add_system_prompt(content=content, reason=reason)
         self._current_prompt = content
         self._current_version = str(int(self._current_version) + 1)

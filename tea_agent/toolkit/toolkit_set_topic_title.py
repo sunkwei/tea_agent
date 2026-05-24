@@ -24,7 +24,6 @@ def toolkit_set_topic_title(title: str) -> dict:
     if agent is not None:
         topic_id = agent.current_topic_id
     else:
-        # CLI 模式 fallback：取最新主题ID（list_topics 按 topic_id 降序）
         try:
             from tea_agent.store import get_storage
             s = get_storage()
@@ -47,7 +46,6 @@ def toolkit_set_topic_title(title: str) -> dict:
         logger.warning(f"更新主题标题失败: {e}")
         return {"error": f"数据库更新失败: {e}"}
 
-    # 触发 GUI 刷新（如果有）
     try:
         if hasattr(agent, '_on_summary_updated'):
             agent._on_summary_updated(topic_id, new_title)
@@ -58,7 +56,7 @@ def toolkit_set_topic_title(title: str) -> dict:
     return {"ok": True, "title": new_title, "topic_id": topic_id}
 
 def meta_toolkit_set_topic_title():
-    """Meta toolkit set topic title."""
+    """Meta toolkit set topic title"""
     return {
         "type": "function",
         "function": {

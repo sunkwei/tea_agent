@@ -31,7 +31,12 @@ class PromptStore(StoreComponent):
         return pid
 
     def get_latest_system_prompt(self) -> Optional[Dict]:
-        """Get the latest system prompt."""
+        """
+        Get the latest system prompt
+
+        Returns:
+            Optional[Dict]: Description.
+        """
         c = self.conn.cursor()
         c.execute(
             "SELECT * FROM system_prompts WHERE is_active = 1 "
@@ -84,7 +89,12 @@ class PromptStore(StoreComponent):
         return affected > 0
 
     def get_system_prompt_count(self) -> int:
-        """Get the system prompt count."""
+        """
+        Get the system prompt count
+
+        Returns:
+            int: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT COUNT(*) FROM system_prompts")
         count = c.fetchone()[0]

@@ -7,25 +7,23 @@ from ._base import StoreComponent
 
 logger = logging.getLogger("Storage.ScheduledTasks")
 
-# cron 表达式解析 (简易: 分 时 日 月 周)
 _CRON_MAP_WEEKDAY = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 
 class ScheduledTaskStore(StoreComponent):
     """定时任务管理：增删改查、下次执行时间计算。"""
 
-    # ── 调度格式解析 ──
 
     @staticmethod
     def parse_schedule(schedule: str, from_time: datetime = None) -> Optional[datetime]:
-        """解析 schedule 字符串，返回下次执行时间；None 表示单次已过期或无匹配。
+        """
+        解析 schedule 字符串，返回下次执行时间；None 表示单次已过期或无匹配。
 
-        支持格式:
-          once:2026-05-17T09:00          单次
-          daily:09:00                    每天
-          hourly:30                      每小时第30分
-          interval:3600                  间隔秒数
-          weekly:mon:09:00               每周一
-          cron:0 9 * * *                 标准cron(5字段)
+        Args:
+            schedule (str): Description.
+            from_time (datetime): Description.
+
+        Returns:
+            Optional[datetime]: Description.
         """
         if not schedule:
             return None
@@ -33,13 +31,11 @@ class ScheduledTaskStore(StoreComponent):
         s = schedule.strip()
 
         try:
-            # once:ISO
             if s.startswith("once:"):
                 ts = s[5:]
                 dt = datetime.fromisoformat(ts)
                 return dt if dt > now else None
 
-            # daily:HH:MM
             if s.startswith("daily:"):
                 hm = s[6:]
                 h, m = map(int, hm.split(":"))
@@ -48,7 +44,6 @@ class ScheduledTaskStore(StoreComponent):
                     dt += timedelta(days=1)
                 return dt
 
-            # hourly:MM
             if s.startswith("hourly:"):
                 mm = int(s[7:])
                 dt = now.replace(minute=mm, second=0, microsecond=0)
@@ -56,12 +51,10 @@ class ScheduledTaskStore(StoreComponent):
                     dt += timedelta(hours=1)
                 return dt
 
-            # interval:SECONDS
             if s.startswith("interval:"):
                 secs = int(s[9:])
                 return now + timedelta(seconds=secs)
 
-            # weekly:DAY:HH:MM
             if s.startswith("weekly:"):
                 parts = s[7:].split(":")
                 if len(parts) == 3:
@@ -78,7 +71,6 @@ class ScheduledTaskStore(StoreComponent):
                             dt = now.replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(days=days_ahead)
                             return dt
 
-            # cron: 5-field
             if s.startswith("cron:"):
                 return _parse_cron(s[5:].strip(), now)
 
@@ -86,12 +78,22 @@ class ScheduledTaskStore(StoreComponent):
             logger.warning(f"无法解析调度: {schedule}")
         return None
 
-    # ── CRUD ──
 
     def add_task(
         self, name: str, command: str, schedule: str, enabled: bool = True
     ) -> str:
-        """新增定时任务，返回 task_id。"""
+        """
+        新增定时任务，返回 task_id。
+
+        Args:
+            name (str): Description.
+            command (str): Description.
+            schedule (str): Description.
+            enabled (bool): Description.
+
+        Returns:
+            str: Description.
+        """
         tid = self._new_id()
         next_run = self.parse_schedule(schedule)
         c = self.conn.cursor()
@@ -108,7 +110,16 @@ class ScheduledTaskStore(StoreComponent):
         return tid
 
     def update_task(self, task_id: str, **kwargs) -> bool:
-        """更新任务字段: name, command, schedule, enabled, last_run, last_result, last_exit_code, next_run."""
+        """
+        更新任务字段: name, command, schedule, enabled, last_run, last_result, last_exit_code, next_run
+
+        Args:
+            task_id (str): Description.
+            **kwargs: Keyword arguments.
+
+        Returns:
+            bool: Description.
+        """
         allowed = {"name", "command", "schedule", "enabled", "last_run",
                    "last_result", "last_exit_code", "next_run"}
         updates = {k: v for k, v in kwargs.items() if k in allowed}
@@ -130,21 +141,45 @@ class ScheduledTaskStore(StoreComponent):
         return c.rowcount > 0
 
     def delete_task(self, task_id: str) -> bool:
-        """删除任务。"""
+        """
+        删除任务。
+
+        Args:
+            task_id (str): Description.
+
+        Returns:
+            bool: Description.
+        """
         c = self.conn.cursor()
         c.execute("DELETE FROM scheduled_tasks WHERE id=?", (task_id,))
         self.conn.commit()
         return c.rowcount > 0
 
     def get_task(self, task_id: str) -> Optional[Dict]:
-        """获取单个任务。"""
+        """
+        获取单个任务。
+
+        Args:
+            task_id (str): Description.
+
+        Returns:
+            Optional[Dict]: Description.
+        """
         c = self.conn.cursor()
         c.execute("SELECT * FROM scheduled_tasks WHERE id=?", (task_id,))
         row = c.fetchone()
         return dict(row) if row else None
 
     def list_tasks(self, enabled_only: bool = False) -> List[Dict]:
-        """列出所有任务。"""
+        """
+        列出所有任务。
+
+        Args:
+            enabled_only (bool): Description.
+
+        Returns:
+            List[Dict]: Description.
+        """
         c = self.conn.cursor()
         if enabled_only:
             c.execute("SELECT * FROM scheduled_tasks WHERE enabled=1 ORDER BY next_run ASC")
@@ -153,7 +188,12 @@ class ScheduledTaskStore(StoreComponent):
         return [dict(row) for row in c.fetchall()]
 
     def get_due_tasks(self) -> List[Dict]:
-        """获取所有到期需要执行的任务 (enabled=1 AND next_run <= now)。"""
+        """
+        获取所有到期需要执行的任务 (enabled=1 AND next_run <= now)。
+
+        Returns:
+            List[Dict]: Description.
+        """
         now = datetime.now().isoformat()
         c = self.conn.cursor()
         c.execute(
@@ -163,7 +203,15 @@ class ScheduledTaskStore(StoreComponent):
         return [dict(row) for row in c.fetchall()]
 
     def mark_run(self, task_id: str, exit_code: int, result: str, next_run: Optional[str] = None):
-        """标记任务执行完成，更新 last_run/result/exit_code/next_run."""
+        """
+        标记任务执行完成，更新 last_run/result/exit_code/next_run
+
+        Args:
+            task_id (str): Description.
+            exit_code (int): Description.
+            result (str): Description.
+            next_run (Optional[str]): Description.
+        """
         c = self.conn.cursor()
         c.execute(
             """UPDATE scheduled_tasks
@@ -175,13 +223,21 @@ class ScheduledTaskStore(StoreComponent):
         self.conn.commit()
 
 def _parse_cron(expr: str, now: datetime) -> Optional[datetime]:
-    """简易 5 字段 cron 解析，返回下次匹配时间 (精度到分钟)。"""
+    """
+    简易 5 字段 cron 解析，返回下次匹配时间 (精度到分钟)。
+
+    Args:
+        expr (str): Description.
+        now (datetime): Description.
+
+    Returns:
+        Optional[datetime]: Description.
+    """
     try:
         parts = expr.strip().split()
         if len(parts) != 5:
             return None
         minute, hour, day, month, weekday = parts
-        # 检查未来 7 天每分钟 (简单暴力但可靠)
         dt = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
         for _ in range(7 * 24 * 60):
             if _match_cron_field(minute, dt.minute) and \
@@ -196,7 +252,16 @@ def _parse_cron(expr: str, now: datetime) -> Optional[datetime]:
         return None
 
 def _match_cron_field(pattern: str, value: int) -> bool:
-    """匹配单个 cron 字段: * / 步长 , 列表 - 范围"""
+    """
+    匹配单个 cron 字段: * / 步长 , 列表 - 范围
+
+    Args:
+        pattern (str): Description.
+        value (int): Description.
+
+    Returns:
+        bool: Description.
+    """
     if pattern == "*":
         return True
     for part in pattern.split(","):

@@ -17,14 +17,18 @@ from ._core import Storage
 
 __all__ = ["Storage"]
 
-# ── 模块级单例 ──
 
 _storage_instance = None
 
 def get_storage(db_path: str = "") -> Storage:
-    """获取或创建 Storage 单例（供工具函数使用）。
+    """
+    获取或创建 Storage 单例（供工具函数使用）。
 
-    优先从 config.paths.db_path_abs 读取路径，否则回退到 chat_history.db。
+    Args:
+        db_path (str): Description.
+
+    Returns:
+        Storage: Description.
     """
     global _storage_instance
     if not db_path:

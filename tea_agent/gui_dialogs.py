@@ -11,10 +11,7 @@ from datetime import datetime
 from tea_agent.config import get_config, save_config, load_config
 import platform as _platform
 
-# ====================== 记忆管理对话框 ======================
 
-# @2026-04-29 gen by deepseek-v4-pro, MemoryDialog记忆管理弹窗+on_status状态回调
-# ====================== 字体检测（与 _gui/_fonts 独立副本） ======================
 _IS_WINDOWS = _platform.system() == "Windows"
 SYSTEM_FONT = "TkDefaultFont"
 MONO_FONT = "TkFixedFont"
@@ -31,7 +28,7 @@ def _fs(size):
     return max(1, int(size * _SCALE_FACTOR))
 
 def _init_fonts():
-    """Internal: initialize fonts."""
+    """Internal: initialize fonts"""
     global SYSTEM_FONT, MONO_FONT, _FONTS_DETECTED, _SCALE_FACTOR, _DEFAULT_FONT_SIZE
     if _FONTS_DETECTED:
         return
@@ -91,13 +88,12 @@ class MemoryDialog(tk.Toplevel):
         self.transient(parent)
         self.grab_set()
 
-        _init_fonts()  # 延迟检测系统字体
+        _init_fonts()
         self._create_ui()
         self._refresh()
 
     def _create_ui(self):
-        # 顶部统计栏
-        """Internal: create ui."""
+        """Internal: create ui"""
         top = ttk.Frame(self)
         top.pack(fill=tk.X, padx=10, pady=8)
 
@@ -106,7 +102,6 @@ class MemoryDialog(tk.Toplevel):
 
         ttk.Separator(self, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10)
 
-        # 工具栏
         toolbar = ttk.Frame(self)
         toolbar.pack(fill=tk.X, padx=10, pady=4)
 
@@ -127,7 +122,6 @@ class MemoryDialog(tk.Toplevel):
         ttk.Label(toolbar, text="分类").pack(side=tk.LEFT)
         cat_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh())
 
-        # 记忆列表
         list_frame = ttk.Frame(self)
         list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
 
@@ -156,7 +150,6 @@ class MemoryDialog(tk.Toplevel):
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # 操作按钮
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill=tk.X, padx=10, pady=6)
 
@@ -164,15 +157,13 @@ class MemoryDialog(tk.Toplevel):
         ttk.Button(btn_frame, text="🗑️ 硬删除", command=self._hard_delete).pack(side=tk.LEFT, padx=2)
         ttk.Button(btn_frame, text="📋 导出记忆...", command=self._export).pack(side=tk.RIGHT, padx=2)
 
-        # 绑定双击查看
         self.tree.bind("<Double-1>", self._on_double_click)
 
-        # 快捷键
         self.bind("<Escape>", lambda e: self.destroy())
         self.bind("<Delete>", lambda e: self._soft_delete())
 
     def _refresh(self):
-        """Internal: refresh."""
+        """Internal: refresh"""
         for item in self.tree.get_children():
             self.tree.delete(item)
 
@@ -231,7 +222,7 @@ class MemoryDialog(tk.Toplevel):
             self.tree.move(iid, "", idx)
 
     def _add_dialog(self):
-        """Internal: add dialog."""
+        """Internal: add dialog"""
         dlg = tk.Toplevel(self)
         dlg.title("添加记忆")
         dlg.transient(self)
@@ -276,7 +267,7 @@ class MemoryDialog(tk.Toplevel):
         result_label.place(x=10, y=290)
 
         def do_add():
-            """Do add."""
+            """Do add"""
             content = content_text.get("1.0", tk.END).strip()
             if not content:
                 result_label.config(text="内容不能为空")
@@ -300,7 +291,7 @@ class MemoryDialog(tk.Toplevel):
         ttk.Button(dlg, text="取消", command=dlg.destroy).place(x=100, y=330, width=80)
 
     def _soft_delete(self):
-        """Internal: soft delete."""
+        """Internal: soft delete"""
         selection = self.tree.selection()
         if not selection:
             return
@@ -312,7 +303,7 @@ class MemoryDialog(tk.Toplevel):
         self._refresh()
 
     def _hard_delete(self):
-        """Internal: hard delete."""
+        """Internal: hard delete"""
         selection = self.tree.selection()
         if not selection:
             return
@@ -351,7 +342,7 @@ class MemoryDialog(tk.Toplevel):
         ttk.Label(dlg, text=info).pack(pady=(0, 10))
 
     def _export(self):
-        """Internal: export."""
+        """Internal: export"""
         from tkinter import filedialog
         memories = self.db.get_active_memories(limit=200)
         if not memories:
@@ -373,7 +364,6 @@ class MemoryDialog(tk.Toplevel):
         except Exception as e:
             self.stats_var.set(f"导出失败: {e}")
 
-# @2026-04-29 gen by deepseek-v4-pro, 主题管理弹窗: 浏览/切换/导出/重命名/删除
 class TopicDialog(tk.Toplevel):
     """主题管理弹窗 — 浏览/切换/导出/重命名/删除"""
 
@@ -387,14 +377,13 @@ class TopicDialog(tk.Toplevel):
         """
         super().__init__(parent)
         self.db = storage
-        self.on_switch = on_switch  # callback(topic_id) when user switches
+        self.on_switch = on_switch
         self.title("📁 主题管理")
         self.geometry("900x600")
         self.minsize(700, 400)
         self.transient(parent)
         self.grab_set()
 
-        # 搜索状态
         self._is_search_mode = False
         self._search_results = []
 
@@ -403,8 +392,7 @@ class TopicDialog(tk.Toplevel):
         self._refresh()
 
     def _create_ui(self):
-        # 顶部统计栏
-        """Internal: create ui."""
+        """Internal: create ui"""
         top = ttk.Frame(self)
         top.pack(fill=tk.X, padx=10, pady=8)
         self.stats_var = tk.StringVar(value="加载中...")
@@ -412,7 +400,6 @@ class TopicDialog(tk.Toplevel):
 
         ttk.Separator(self, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10)
 
-        # 工具栏
         toolbar = ttk.Frame(self)
         toolbar.pack(fill=tk.X, padx=10, pady=4)
 
@@ -421,7 +408,6 @@ class TopicDialog(tk.Toplevel):
         ttk.Button(toolbar, text="🔄 刷新", command=self._refresh).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="🔗 切换到此主题", command=self._switch_to).pack(side=tk.LEFT, padx=(20, 2))
 
-        # 导出模式
         ttk.Label(toolbar, text="  导出模式:").pack(side=tk.LEFT, padx=(20, 2))
         self.export_mode = tk.StringVar(value="all")
         ttk.Radiobutton(toolbar, text="完整", variable=self.export_mode, value="all").pack(side=tk.LEFT, padx=2)
@@ -431,7 +417,6 @@ class TopicDialog(tk.Toplevel):
         ttk.Button(toolbar, text="📋 导出选中", command=self._export_selected).pack(side=tk.RIGHT, padx=2)
         ttk.Button(toolbar, text="📦 导出全部", command=self._export_all).pack(side=tk.RIGHT, padx=2)
 
-        # 语义搜索栏
         search_frame = ttk.Frame(self)
         search_frame.pack(fill=tk.X, padx=10, pady=(4, 0))
 
@@ -448,11 +433,9 @@ class TopicDialog(tk.Toplevel):
         ttk.Label(search_frame, textvariable=self.search_mode_var,
                   font=(SYSTEM_FONT, _fs(9)), foreground="gray").pack(side=tk.LEFT, padx=(10, 0))
 
-        # 主题列表区域（双 Treeview 按模式显隐，避免列切换崩溃）
         self.list_frame = ttk.Frame(self)
         self.list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
 
-        # --- 主题列表 Treeview ---
         topic_columns = ("id", "title", "created", "tokens", "convs", "active")
         self.topic_tree = ttk.Treeview(self.list_frame, columns=topic_columns, show="headings", height=12)
         self.topic_tree.heading("id", text="ID", command=lambda: self._sort("id"))
@@ -472,7 +455,6 @@ class TopicDialog(tk.Toplevel):
         self.topic_scrollbar = ttk.Scrollbar(self.list_frame, orient=tk.VERTICAL, command=self.topic_tree.yview)
         self.topic_tree.configure(yscrollcommand=self.topic_scrollbar.set)
 
-        # --- 搜索结果 Treeview ---
         search_columns = ("sim", "user_msg", "topic", "ai_preview")
         self.search_tree = ttk.Treeview(self.list_frame, columns=search_columns, show="headings", height=12)
         self.search_tree.heading("sim", text="相似度")
@@ -488,11 +470,9 @@ class TopicDialog(tk.Toplevel):
         self.search_scrollbar = ttk.Scrollbar(self.list_frame, orient=tk.VERTICAL, command=self.search_tree.yview)
         self.search_tree.configure(yscrollcommand=self.search_scrollbar.set)
 
-        # 默认显示主题列表
         self.topic_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.topic_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # 操作按钮
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill=tk.X, padx=10, pady=6)
 
@@ -500,7 +480,6 @@ class TopicDialog(tk.Toplevel):
         ttk.Button(btn_frame, text="✅ 启用主题", command=self._activate).pack(side=tk.LEFT, padx=2)
         ttk.Button(btn_frame, text="🗑️ 硬删除", command=self._hard_delete).pack(side=tk.LEFT, padx=2)
 
-        # 绑定（双树各自绑定在 _create_ui 中已设置）
         self.bind("<Escape>", lambda e: self.destroy())
         self.bind("<Delete>", lambda e: self._deactivate())
 
@@ -510,8 +489,6 @@ class TopicDialog(tk.Toplevel):
             self._show_search_results()
             return
 
-        # ---- 正常主题列表模式 ----
-        # 显隐切换
         self.search_tree.pack_forget()
         self.search_scrollbar.pack_forget()
         self.topic_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -557,7 +534,6 @@ class TopicDialog(tk.Toplevel):
         except Exception as e:
             self.stats_var.set(f"加载失败: {e}")
 
-    # ── 搜索相关方法 ─────────────────────────────────────────────
 
     def _do_search(self):
         """执行搜索：向量模型已配置→语义向量搜索，否则→SQL LIKE"""
@@ -574,7 +550,6 @@ class TopicDialog(tk.Toplevel):
 
             use_vector = cfg.embedding.is_configured
             if use_vector:
-                # 向量模型已配置 → 语义向量搜索
                 from tea_agent.embedding_util import get_embedding_engine
                 engine = get_embedding_engine()
                 self.search_mode_var.set(f"模式: {engine.mode}(向量) | 搜索中...")
@@ -582,7 +557,6 @@ class TopicDialog(tk.Toplevel):
                 query_vec = engine.embed(query)
                 results = self.db.search_by_vector(query_vec, top_k=50, min_similarity=0.15)
             else:
-                # 未配置向量模型 → SQL LIKE 回退
                 self.search_mode_var.set("模式: 关键词(LIKE) | 搜索中...")
                 self.stats_var.set("正在关键词搜索...")
                 results = self.db.search_by_keyword(query, top_k=50)
@@ -600,7 +574,6 @@ class TopicDialog(tk.Toplevel):
 
     def _show_search_results(self):
         """在搜索结果 Treeview 中显示搜索结果"""
-        # 显隐切换
         self.topic_tree.pack_forget()
         self.topic_scrollbar.pack_forget()
         self.search_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -645,7 +618,6 @@ class TopicDialog(tk.Toplevel):
 
         from tea_agent.embedding_util import get_embedding_engine
 
-        # 获取未向量化的 conversation
         unvec = self.db.get_unvectorized_conversations(limit=200)
         if not unvec:
             self.stats_var.set("✅ 所有消息已向量化，无需生成")
@@ -654,13 +626,12 @@ class TopicDialog(tk.Toplevel):
         import threading
 
         def _run():
-            """Internal: run."""
+            """Internal: run"""
             try:
                 engine = get_embedding_engine()
                 self.stats_var.set(f"正在向量化 {len(unvec)} 条消息 (模式: {engine.mode})...")
                 self.search_mode_var.set("批量向量化进行中...")
 
-                # 先构建 TF-IDF 词汇表
                 texts = [item["user_msg"] for item in unvec if item.get("user_msg")]
                 if engine.mode == "tfidf":
                     engine.build_tfidf_vocabulary(texts)
@@ -677,7 +648,6 @@ class TopicDialog(tk.Toplevel):
                         else:
                             embeddings = [engine.embed(t) for t in batch_texts]
 
-                        # 存储
                         batch_data = []
                         for j, item in enumerate(batch):
                             if j < len(embeddings):
@@ -694,7 +664,6 @@ class TopicDialog(tk.Toplevel):
                     except Exception as e:
                         import logging
                         logging.getLogger("GUI").warning(f"批量向量化出错: {e}")
-                        # 继续下一批
                         continue
 
                 self.stats_var.set(f"✅ 向量化完成: {count}/{len(unvec)} 条消息")
@@ -734,17 +703,16 @@ class TopicDialog(tk.Toplevel):
             self.topic_tree.move(iid, "", idx)
 
     def _selected_id(self):
-        """Internal: selected id."""
+        """Internal: selected id"""
         tree = self.search_tree if self._is_search_mode else self.topic_tree
         sel = tree.selection()
         return int(sel[0]) if sel else None
 
     def _switch_to(self):
-        """Internal: switch to."""
+        """Internal: switch to"""
         tid = self._selected_id()
         if not tid:
             return
-        # 搜索模式下，selected_id 是 conversation_id，需转换为 topic_id
         if self._is_search_mode:
             for r in self._search_results:
                 if r.get("conversation_id") == tid:
@@ -755,13 +723,13 @@ class TopicDialog(tk.Toplevel):
             self.destroy()
 
     def _new_topic(self):
-        """Internal: new topic."""
+        """Internal: new topic"""
         title = f"主题 {datetime.now().strftime('%m-%d %H:%M:%S')}"
         self.db.create_topic(title)
         self._refresh()
 
     def _rename_dialog(self):
-        """Internal: rename dialog."""
+        """Internal: rename dialog"""
         if self._is_search_mode:
             return
         tid = self._selected_id()
@@ -784,7 +752,7 @@ class TopicDialog(tk.Toplevel):
         entry.focus()
 
         def do_rename():
-            """Do rename."""
+            """Do rename"""
             new_title = title_var.get().strip()
             if new_title:
                 self.db.update_topic_title(tid, new_title)
@@ -798,16 +766,16 @@ class TopicDialog(tk.Toplevel):
         dlg.bind("<Return>", lambda e: do_rename())
 
     def _deactivate(self):
-        """Internal: deactivate."""
+        """Internal: deactivate"""
         if self._is_search_mode:
-            return  # 搜索模式下禁用以防止误操作
+            return
         tid = self._selected_id()
         if tid:
             self.db.update_topic_active(tid, 0)
             self._refresh()
 
     def _activate(self):
-        """Internal: activate."""
+        """Internal: activate"""
         if self._is_search_mode:
             return
         tid = self._selected_id()
@@ -816,7 +784,7 @@ class TopicDialog(tk.Toplevel):
             self._refresh()
 
     def _hard_delete(self):
-        """Internal: hard delete."""
+        """Internal: hard delete"""
         if self._is_search_mode:
             return
         tid = self._selected_id()
@@ -839,7 +807,7 @@ class TopicDialog(tk.Toplevel):
         self._refresh()
 
     def _export_selected(self):
-        """Internal: export selected."""
+        """Internal: export selected"""
         if self._is_search_mode:
             return
         tid = self._selected_id()
@@ -848,7 +816,7 @@ class TopicDialog(tk.Toplevel):
         self._do_export([tid])
 
     def _export_all(self):
-        """Internal: export all."""
+        """Internal: export all"""
         topics = self.db.list_topics()
         if not topics:
             return
@@ -863,7 +831,7 @@ class TopicDialog(tk.Toplevel):
         """
         from tkinter import filedialog
 
-        mode = self.export_mode.get()  # "all" or "user"
+        mode = self.export_mode.get()
         mode_label = "完整" if mode == "all" else "仅用户输入"
 
         if len(topic_ids) == 1:
@@ -898,7 +866,14 @@ class TopicDialog(tk.Toplevel):
             self.stats_var.set(f"❌ 导出失败: {e}")
 
     def _write_topic_md(self, f, topic_id: str, mode: str):
-        """Write a single topic as markdown to file handle."""
+        """
+        Write a single topic as markdown to file handle
+
+        Args:
+            f: Description.
+            topic_id (str): Description.
+            mode (str): Description.
+        """
         tp = self.db.get_topic(topic_id)
         title = tp.get("title", f"主题 #{topic_id}") if tp else f"主题 #{topic_id}"
         created = tp.get("create_stamp", "") if tp else ""
@@ -981,7 +956,7 @@ class ConfigDialog(tk.Toplevel):
         self._load_values()
 
     def _create_ui(self):
-        """Internal: create ui."""
+        """Internal: create ui"""
         nb = ttk.Notebook(self)
         nb.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
@@ -1035,13 +1010,11 @@ class ConfigDialog(tk.Toplevel):
         f.columnconfigure(1, weight=1)
         setattr(self, f"_{prefix}_vars", vars_map)
 
-        # 模型能力选项 (supports_vision / supports_reasoning)
         if options_prefix:
             opts_key = f"_{options_prefix}_opts"
             opts_var = {}
             _cb_style = ttk.Style()
             _cb_style.configure(f"{options_prefix}.TCheckbutton", font=(SYSTEM_FONT, _fs(11)))
-            # 在主模型能力之前加一行文字提示
             row_idx += 2
             ttk.Label(f, text="── 模型能力 ──", font=(SYSTEM_FONT, _fs(10)),
                       foreground="#888").grid(row=row_idx, column=0, columnspan=2,
@@ -1177,7 +1150,7 @@ class ConfigDialog(tk.Toplevel):
             self._runtime_vars[key] = var
 
     def _load_values(self):
-        """Internal: load values."""
+        """Internal: load values"""
         cfg = self._cfg
         for prefix, model_cfg in [("main", cfg.main_model), ("cheap", cfg.cheap_model)]:
             vars_map = getattr(self, f"_{prefix}_vars")
@@ -1194,14 +1167,12 @@ class ConfigDialog(tk.Toplevel):
             if "context_window" in params_map:
                 params_map["context_window"].set(str(model_cfg.context_window))
 
-        # 加载向量模型配置
         emb_vars = getattr(self, "_embedding_vars")
         emb_vars["api_key"].set(cfg.embedding.api_key)
         emb_vars["api_url"].set(cfg.embedding.api_url)
         emb_vars["model_name"].set(cfg.embedding.model_name)
         emb_vars["dimension"].set(str(cfg.embedding.dimension or ""))
 
-        # 加载各模型 options
         for prefix in ("main", "cheap"):
             model_cfg = getattr(cfg, f"{prefix}_model")
             opts = model_cfg.options or {}
@@ -1224,7 +1195,7 @@ class ConfigDialog(tk.Toplevel):
                     var.set(str(val))
 
     def _do_save(self):
-        """Internal: do save."""
+        """Internal: do save"""
         cfg = self._cfg
         errors = []
 
@@ -1242,9 +1213,8 @@ class ConfigDialog(tk.Toplevel):
                             setattr(model_cfg, p_attr, float(raw) if p_attr not in ("max_tokens", "context_window") else int(raw))
                     except (ValueError, TypeError):
                         errors.append(f"{prefix}_model.{p_key}: 格式错误")
-            setattr(self, f"_{prefix}_params", params_map)  # ensure it exists
+            setattr(self, f"_{prefix}_params", params_map)
 
-        # 保存向量模型配置
         ev = self._embedding_vars
         cfg.embedding.api_key = ev["api_key"].get().strip()
         cfg.embedding.api_url = ev["api_url"].get().strip()
@@ -1267,7 +1237,6 @@ class ConfigDialog(tk.Toplevel):
             if mode_cfg:
                 cfg.mode_params[mode_name] = mode_cfg
 
-        # 保存各模型 options
         for prefix in ("main", "cheap"):
             model_cfg = getattr(cfg, f"{prefix}_model")
             model_cfg.options = {}
@@ -1311,7 +1280,7 @@ class ConfigDialog(tk.Toplevel):
             self._status_var.set(f"❌ 保存失败: {e}")
 
     def destroy(self):
-        """Destroy."""
+        """Destroy"""
         if hasattr(self, '_mw_binding'):
             try:
                 self.unbind_all("<MouseWheel>")

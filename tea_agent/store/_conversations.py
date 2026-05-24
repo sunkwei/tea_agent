@@ -17,11 +17,20 @@ class ConversationStore(StoreComponent):
                  update_active_cb=None, auto_embed_cb=None) -> str:
         """
         新增一条对话，返回 conversation_id。
-        若 user_msg 含图片，自动读取文件存入 images 表并转为 Base64。
+
+        Args:
+            topic_id (str): Description.
+            user_msg: Description.
+            ai_msg (str): Description.
+            is_func (bool): Description.
+            update_active_cb: Description.
+            auto_embed_cb: Description.
+
+        Returns:
+            str: Description.
         """
         conv_id = self._new_id()
 
-        # 处理图片：存入 images 表 + 转换为 Base64
         if isinstance(user_msg, dict) and "images" in user_msg:
             raw_imgs = user_msg["images"]
             processed_imgs = []
@@ -201,13 +210,18 @@ class ConversationStore(StoreComponent):
             result.append(d)
         return result
 
-    # ── 自动嵌入 ──
 
     def _auto_embed_async(self, conv_id: str, text: str):
-        """后台线程自动生成并存储文本向量。"""
+        """
+        后台线程自动生成并存储文本向量。
+
+        Args:
+            conv_id (str): Description.
+            text (str): Description.
+        """
 
         def _run():
-            """Internal: run."""
+            """Internal: run"""
             try:
                 from tea_agent.embedding_util import get_embedding_engine
                 engine = get_embedding_engine()
@@ -222,7 +236,15 @@ class ConversationStore(StoreComponent):
 
     def _store_embedding_inline(self, conversation_id: str, embedding: list,
                                  model_name: str = "", dimension: int = 0):
-        """内联存储向量（避免循环导入，由 _auto_embed_async 调用）。"""
+        """
+        内联存储向量（避免循环导入，由 _auto_embed_async 调用）。
+
+        Args:
+            conversation_id (str): Description.
+            embedding (list): Description.
+            model_name (str): Description.
+            dimension (int): Description.
+        """
         import numpy as np
         arr = np.array(embedding, dtype=np.float32)
         blob = arr.tobytes()

@@ -1,4 +1,3 @@
-# version: 1.2.0
 
 import logging
 
@@ -140,10 +139,8 @@ def _search_baidu(query: str, max_results: int):
     })
     
     try:
-        # 先访问百度首页获取 cookie，否则可能被反爬
         session.get('https://www.baidu.com/', timeout=10)
         
-        # 搜索
         resp = session.get(
             f'https://www.baidu.com/s?wd={requests.utils.quote(query)}&rn={max_results}',
             timeout=15
@@ -172,18 +169,14 @@ def _search_baidu(query: str, max_results: int):
             href = a.get('href', '')
             real_url = href
             
-            # 尝试解析百度跳转链接获取真实URL
             try:
                 if 'baidu.com/link' in href:
-                    # 跟随跳转获取真实URL
                     try:
                         head_resp = session.head(href, allow_redirects=True, timeout=5)
                         real_url = head_resp.url
                     except Exception:
-                        # HEAD失败时保持原href
                         pass
                 elif 'baidu.php' in href:
-                    # 广告链接，尝试从url参数提取
                     qp = parse_qs(urlparse(href).query)
                     encoded = qp.get('url', [''])[0]
                     if encoded.startswith('http'):
@@ -191,7 +184,6 @@ def _search_baidu(query: str, max_results: int):
             except Exception:
                 pass
             
-            # 摘要
             snippet = ''
             for cls_name in ['c-abstract', 'c-span-last']:
                 span = r.find('span', class_=cls_name)
@@ -200,7 +192,6 @@ def _search_baidu(query: str, max_results: int):
                     if len(t) > len(snippet):
                         snippet = t
             
-            # 显示URL
             display_url = ''
             for cls_name in ['c-showurl', 'showurl']:
                 el = r.find(class_=cls_name)
@@ -228,11 +219,24 @@ def _search_baidu(query: str, max_results: int):
         return (1, '', f'百度搜索出错: {str(e)}')
 
 def meta_toolkit_search() -> dict:
-    """Meta toolkit search."""
+    """
+    Meta toolkit search
+
+    Returns:
+        dict: Description.
+    """
     return {"type": "function", "function": {"name": "toolkit_search", "description": "搜索工具，支持互联网搜索（DuckDuckGo/百度）和项目内代码搜索（全文搜索/符号搜索）。", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "搜索关键词，如 'Python async tutorial' 或 'def login'"}, "max_results": {"type": "integer", "description": "返回结果数量上限，默认10，最大50", "default": 10}, "lang": {"type": "string", "description": "语言偏好，如 zh-cn, en, 空=不限。仅 web 搜索支持", "default": ""}, "engine": {"type": "string", "enum": ["duckduckgo", "baidu"], "description": "搜索引擎，默认 duckduckgo。仅 web 搜索", "default": "duckduckgo"}, "search_type": {"type": "string", "enum": ["web", "code", "symbol"], "description": "搜索类型: web=互联网搜索, code=代码全文搜索, symbol=符号搜索", "default": "web"}, "root_path": {"type": "string", "description": "搜索根目录路径。code/symbol 搜索需要"}, "glob_pattern": {"type": "string", "description": "文件过滤模式，如 '*.py'。仅 code 搜索"}}, "required": ["query"]}}}
 
 def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results: int):
-    """项目内全文搜索（优先使用 ripgrep，回退到 Python 实现）"""
+    """
+    项目内全文搜索（优先使用 ripgrep，回退到 Python 实现）
+
+    Args:
+        query (str): Description.
+        root_path (str): Description.
+        glob_pattern (str): Description.
+        max_results (int): Description.
+    """
     import json
     import os
     import re
@@ -246,7 +250,6 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
 
     results = []
 
-    # 尝试使用 ripgrep (rg)
     rg_cmd = None
     for cmd in ["rg", "grep"]:
         import shutil
@@ -255,8 +258,7 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
             break
 
     if rg_cmd == "rg":
-        # 使用 ripgrep
-        rg_args = ["--no-heading", "--line-number", "--color=never", "-C", "2",  # 上下文 2 行
+        rg_args = ["--no-heading", "--line-number", "--color=never", "-C", "2",
                    "--max-count", str(max_results), "--json", query, root_path]
 
         if glob_pattern:
@@ -289,12 +291,10 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
         except subprocess.TimeoutExpired:
             return (1, "", "代码搜索超时")
         except Exception as e:
-            # ripgrep 失败，回退到 Python 实现
             logger.info(f"ripgrep 失败，回退到 Python 实现: {e}")
             return _search_codebase_python(query, root_path, glob_pattern, max_results)
 
     else:
-        # 直接使用 Python 实现
         return _search_codebase_python(query, root_path, glob_pattern, max_results)
 
     if not results:
@@ -303,7 +303,15 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
     return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
 
 def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_results: int):
-    """Python 实现的代码全文搜索（ripgrep 不可用时的回退方案）"""
+    """
+    Python 实现的代码全文搜索（ripgrep 不可用时的回退方案）
+
+    Args:
+        query (str): Description.
+        root_path (str): Description.
+        glob_pattern (str): Description.
+        max_results (int): Description.
+    """
     import json
     import os
     import re
@@ -313,7 +321,6 @@ def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_r
     pattern = re.compile(re.escape(query), re.IGNORECASE)
 
     for root, dirs, files in os.walk(root_path):
-        # 跳过隐藏目录和常见忽略目录
         dirs[:] = [d for d in dirs if not d.startswith('.') and d not in 
                    ('node_modules', '__pycache__', '.git', 'venv', 'env', 'dist', 'build')]
 
@@ -348,7 +355,14 @@ def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_r
     return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
 
 def _search_symbol(query: str, root_path: str, max_results: int):
-    """符号搜索（查找函数/类定义）"""
+    """
+    符号搜索（查找函数/类定义）
+
+    Args:
+        query (str): Description.
+        root_path (str): Description.
+        max_results (int): Description.
+    """
     import json
     import os
     import ast
@@ -362,9 +376,7 @@ def _search_symbol(query: str, root_path: str, max_results: int):
     results = []
     abs_root_path = os.path.abspath(root_path)
 
-    # 搜索的目录列表
     search_dirs = [abs_root_path]
-    # 如果 root_path 是 toolkit 目录，也搜索其父目录（tlk.py 等在上层）
     if 'toolkit' in abs_root_path.replace('\\', '/'):
         parent_dir = os.path.dirname(abs_root_path)
         if os.path.isdir(parent_dir) and parent_dir not in search_dirs:
@@ -392,7 +404,6 @@ def _search_symbol(query: str, root_path: str, max_results: int):
                     for node in ast.walk(tree):
                         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                             if node.name == query or query in node.name:
-                                # 相对于 abs_root_path 计算相对路径
                                 rel_path = os.path.relpath(filepath, abs_root_path)
                                 results.append({
                                     "file": rel_path,
@@ -413,7 +424,12 @@ def _search_symbol(query: str, root_path: str, max_results: int):
     return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
 
 def _extract_args(node):
-    """从 AST 节点提取函数参数"""
+    """
+    从 AST 节点提取函数参数
+
+    Args:
+        node: Description.
+    """
     args = []
     for arg in node.args.args:
         args.append(arg.arg)

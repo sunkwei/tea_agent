@@ -16,5 +16,10 @@ class StoreComponent:
 
     @staticmethod
     def _new_id() -> str:
-        """Internal: new id."""
+        """
+        Internal: new id
+
+        Returns:
+            str: Description.
+        """
         return str(uuid.uuid4())

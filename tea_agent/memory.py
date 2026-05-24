@@ -1,4 +1,3 @@
-# @2026-04-29 gen by deepseek-v4-pro, MemoryManager: 记忆选择/格式化/提取策略
 """
 Memory 管理器
 负责记忆的选择、格式化注入和从对话中提取新记忆。
@@ -10,11 +9,10 @@ from typing import Dict, List, Optional, Callable, Any
 
 logger = logging.getLogger("MemoryManager")
 
-# 优先级常量
-PRIORITY_CRITICAL = 0   # 有效指令，必须遵循
-PRIORITY_HIGH = 1       # 用户偏好、项目关键决策
-PRIORITY_MEDIUM = 2     # 经验教训、工具使用技巧
-PRIORITY_LOW = 3        # 一般参考信息
+PRIORITY_CRITICAL = 0
+PRIORITY_HIGH = 1
+PRIORITY_MEDIUM = 2
+PRIORITY_LOW = 3
 
 PRIORITY_LABELS = {
     0: "CRITICAL",
@@ -23,19 +21,17 @@ PRIORITY_LABELS = {
     3: "LOW",
 }
 
-MAX_INJECT = 30  # 每次会话注入上限
-MAX_CRITICAL_INJECT = 10  # CRITICAL 注入上限，超出留给其他优先级
-MIN_HIGH_INJECT = 3   # HIGH 保底
-MIN_MEDIUM_INJECT = 2  # MEDIUM 保底
-MIN_LOW_INJECT = 1    # LOW 保底（至少1条）
+MAX_INJECT = 30
+MAX_CRITICAL_INJECT = 10
+MIN_HIGH_INJECT = 3
+MIN_MEDIUM_INJECT = 2
+MIN_LOW_INJECT = 1
 
-# 年龄衰减阈值（天）
-CRITICAL_DEGRADE_DAYS = 30   # CRITICAL → HIGH
-HIGH_DEGRADE_DAYS = 60       # HIGH → MEDIUM
-MEDIUM_DEGRADE_DAYS = 90     # MEDIUM → LOW
+CRITICAL_DEGRADE_DAYS = 30
+HIGH_DEGRADE_DAYS = 60
+MEDIUM_DEGRADE_DAYS = 90
 
-# LLM 精调上限
-MAX_LLM_ADJUSTMENTS = 3  # 每次最多调整条数
+MAX_LLM_ADJUSTMENTS = 3
 
 class MemoryManager:
     """记忆管理器：选择、格式化、提取"""
@@ -51,9 +47,6 @@ class MemoryManager:
         self._extraction_threshold = extraction_threshold
         self._dedup_threshold = dedup_threshold
 
-    # ------------------------------------------------------------------
-    # 记忆选择
-    # ------------------------------------------------------------------
 
     def select_memories(
         self,
@@ -77,7 +70,6 @@ class MemoryManager:
         Returns:
             入选的记忆列表，优先级高的排在前面
         """
-        # 先执行年龄衰减
         self.degrade_by_age()
 
         all_memories = self.storage.get_active_memories(limit=100)
@@ -85,13 +77,11 @@ class MemoryManager:
         if not all_memories:
             return []
 
-        # 按优先级分组
         critical = [m for m in all_memories if m["priority"] == PRIORITY_CRITICAL]
         high = [m for m in all_memories if m["priority"] == PRIORITY_HIGH]
         medium = [m for m in all_memories if m["priority"] == PRIORITY_MEDIUM]
         low = [m for m in all_memories if m["priority"] == PRIORITY_LOW]
 
-        # 1. CRITICAL 入选（上限 MAX_CRITICAL_INJECT, FIFO取最新）
         critical_slots = min(limit, MAX_CRITICAL_INJECT)
         selected = critical[-critical_slots:] if len(critical) > critical_slots else list(critical)
         used = len(selected)
@@ -99,7 +89,6 @@ class MemoryManager:
             self._touch_selected(selected)
             return selected
 
-        # 2. 非 CRITICAL 打分排序
         others = high + medium + low
         scored = []
         for m in others:
@@ -107,18 +96,22 @@ class MemoryManager:
             scored.append((score, m))
         scored.sort(key=lambda x: x[0], reverse=True)
 
-        # 辅助函数：从已打分列表中按优先级取 top N
         def _pick_top_by_priority(scored_list, priority, count):
-            """从 scored_list 中取出指定优先级的 top count 条，返回 (picked, remaining)"""
+            """
+            从 scored_list 中取出指定优先级的 top count 条，返回 (picked, remaining)
+
+            Args:
+                scored_list: Description.
+                priority: Description.
+                count: Description.
+            """
             candidates = [(s, m) for s, m in scored_list if m["priority"] == priority]
             picked = candidates[:count]
             picked_ids = {m["id"] for _, m in picked}
             remaining = [(s, m) for s, m in scored_list if m["id"] not in picked_ids]
             return [m for _, m in picked], remaining
 
-        # 3. 分层保底
         remaining_slots = limit - used
-        # 保底按优先级从高到低分配，但不超过剩余名额
         high_quota = min(MIN_HIGH_INJECT, remaining_slots)
         medium_quota = min(MIN_MEDIUM_INJECT, max(0, remaining_slots - high_quota))
         low_quota = min(MIN_LOW_INJECT, max(0, remaining_slots - high_quota - medium_quota))
@@ -131,7 +124,6 @@ class MemoryManager:
         selected.extend(picked_medium)
         selected.extend(picked_low)
 
-        # 4. 剩余名额自由竞争（从还没选的里面取 top N）
         free_slots = limit - len(selected)
         if free_slots > 0:
             for _, m in scored[:free_slots]:
@@ -144,12 +136,12 @@ class MemoryManager:
         """
         计算记忆与当前对话的相关性分数。
 
-        分数 = 相关性 × 重要度 × 最近访问因子 × 优先级因子
+        Args:
+            memory (Dict): Description.
+            topic_text (str): Description.
 
-        - 相关性: 关键词匹配率 (0.1~1.0)
-        - 重要度: importance / 5
-        - 最近访问因子: 越近越高 (0.5~1.0)
-        - 优先级因子: (4 - priority) / 4
+        Returns:
+            float: Description.
         """
         relevance = self._compute_relevance(memory, topic_text)
         importance = max(memory.get("importance", 3), 1) / 5.0
@@ -159,75 +151,92 @@ class MemoryManager:
         return relevance * importance * recency * priority_factor
 
     def _compute_relevance(self, memory: Dict, topic_text: str) -> float:
-        """简单关键词匹配计算相关性"""
+        """
+        简单关键词匹配计算相关性
+
+        Args:
+            memory (Dict): Description.
+            topic_text (str): Description.
+
+        Returns:
+            float: Description.
+        """
         if not topic_text:
-            return 0.5  # 无上下文时给中等分
+            return 0.5
 
         text_lower = topic_text.lower()
 
-        # 从记忆 content 和 tags 中提取关键词
         keywords = set()
         content = memory.get("content", "").lower()
         tags = (memory.get("tags") or "").lower()
 
-        # 提取 content 中的中文词组和英文单词
         keywords.update(self._extract_keywords(content))
         keywords.update(t.strip() for t in tags.split(",") if t.strip())
 
         if not keywords:
             return 0.3
 
-        # 计算匹配率
         matched = sum(1 for kw in keywords if kw in text_lower)
         rate = matched / len(keywords)
 
-        # 映射到 0.1 ~ 1.0 范围
         return max(0.1, min(1.0, rate * 2.0))
 
     @staticmethod
     def _extract_keywords(text: str) -> set:
-        """从文本中提取关键词（jieba 中文分词 + 英文单词）"""
+        """
+        从文本中提取关键词（jieba 中文分词 + 英文单词）
+
+        Args:
+            text (str): Description.
+
+        Returns:
+            set: Description.
+        """
         keywords = set()
         try:
             import jieba
-            # jieba 精确模式分词，过滤单字和纯空白
             words = jieba.lcut(text)
             for w in words:
                 w = w.strip()
                 if len(w) >= 2 and not w.isspace():
                     keywords.add(w)
         except ImportError:
-            # 降级：bigram 滑动窗口
             chinese_chars = re.findall(r'[\u4e00-\u9fff]', text)
             for i in range(len(chinese_chars) - 1):
                 keywords.add(chinese_chars[i] + chinese_chars[i+1])
-        # 英文单词（3字母以上）
         english = re.findall(r'[a-zA-Z]{3,}', text)
         keywords.update(w.lower() for w in english)
         return keywords
 
     @staticmethod
     def _compute_recency(memory: Dict) -> float:
-        """计算最近访问因子。越近越高，从未访问过给中值。"""
+        """
+        计算最近访问因子。越近越高，从未访问过给中值。
+
+        Args:
+            memory (Dict): Description.
+
+        Returns:
+            float: Description.
+        """
         last = memory.get("last_accessed_at")
         if not last:
-            return 0.7  # 从未访问，给略高分数鼓励使用
-        # SQLite timestamp 格式可直接字符串比较
-        # 简化：有访问记录就给 0.85（实际应解析时间差）
-        # 精确实现留给后续优化
+            return 0.7
         return 0.85
 
     def _touch_selected(self, memories: List[Dict]):
-        """更新入选记忆的最后访问时间"""
+        """
+        更新入选记忆的最后访问时间
+
+        Args:
+            memories (List[Dict]): Description.
+        """
         for m in memories:
             try:
                 self.storage.touch_memory(m["id"])
             except Exception:
                 pass
 
-    # ------------------------------------------------------------------
-    # 优先级自动调整
-    # ------------------------------------------------------------------
 
     def degrade_by_age(self) -> int:
         """
@@ -253,7 +262,6 @@ class MemoryManager:
             if not created:
                 continue
             try:
-                # SQLite 时间戳兼容 ISO 和 SQLite 格式
                 if "T" in str(created):
                     age = now - datetime.fromisoformat(str(created).replace("Z", "+00:00").split("+")[0].split(".")[0])
                 else:
@@ -325,9 +333,8 @@ class MemoryManager:
 
         all_memories = self.storage.get_active_memories(limit=200)
         if len(all_memories) < 3:
-            return 0  # 太少不值得调
+            return 0
 
-        # 构建记忆摘要（不含内容细节，防 token 爆炸）
         memory_summary_lines = []
         for m in all_memories:
             content_preview = (m.get("content") or "")[:80].replace("\n", " ")
@@ -335,7 +342,7 @@ class MemoryManager:
                 f"  [{m['id']}] P{PRIORITY_LABELS.get(m['priority'], '?')}/I{m.get('importance',0)} "
                 f"cat={m.get('category','?')} tags={m.get('tags','')} | {content_preview}"
             )
-        memory_summary = "\n".join(memory_summary_lines[:100])  # 最多100条
+        memory_summary = "\n".join(memory_summary_lines[:100])
 
         system_prompt = self.LLM_ADJUST_SYSTEM_PROMPT.format(
             max_adjustments=MAX_LLM_ADJUSTMENTS
@@ -376,13 +383,11 @@ class MemoryManager:
                 if new_priority not in (0, 1, 2, 3):
                     continue
 
-                # 找到原始记忆
                 orig = next((m for m in all_memories if m["id"] == mid), None)
                 if not orig:
                     continue
                 old_priority = orig["priority"]
 
-                # 只允许 ±1 级调整
                 if abs(new_priority - old_priority) > 1:
                     logger.warning(
                         f"LLM 建议跳级调整 #{mid}: {old_priority}→{new_priority}, 已忽略"
@@ -392,7 +397,6 @@ class MemoryManager:
                 if new_priority == old_priority:
                     continue
 
-                # 升级时重置 created_at（重新计时年龄衰减）
                 updates = {"priority": new_priority}
                 if new_priority < old_priority:
                     updates["created_at"] = "CURRENT_TIMESTAMP"
@@ -412,20 +416,17 @@ class MemoryManager:
             logger.info(f"LLM 优先级精调完成: {adjusted} 条调整")
         return adjusted
 
-    # ------------------------------------------------------------------
-    # 格式化注入
-    # ------------------------------------------------------------------
 
     @staticmethod
     def format_memories(memories: List[Dict]) -> str:
         """
         将记忆列表格式化为可注入消息的文本。
 
-        格式示例:
-            [系统记忆]
-            !!! 必须遵循: 修改代码时标注前缀 ...
-            ⏰ 提醒 (有效期至 2026-04-30T08:00): 明天检查服务器
-            📌 本项目使用 SQLite 存储
+        Args:
+            memories (List[Dict]): Description.
+
+        Returns:
+            str: Description.
         """
         if not memories:
             return ""
@@ -448,7 +449,15 @@ class MemoryManager:
 
     @staticmethod
     def _prefix_for(memory: Dict) -> str:
-        """根据优先级和分类返回行前缀"""
+        """
+        根据优先级和分类返回行前缀
+
+        Args:
+            memory (Dict): Description.
+
+        Returns:
+            str: Description.
+        """
         priority = memory.get("priority", 2)
         category = memory.get("category", "general")
         expires = memory.get("expires_at")
@@ -468,9 +477,6 @@ class MemoryManager:
 
         return "📎"
 
-    # ------------------------------------------------------------------
-    # 记忆提取
-    # ------------------------------------------------------------------
 
     EXTRACTION_SYSTEM_PROMPT = """你是一个记忆提取器。从对话中识别值得长期保存的信息，输出 JSON 数组。
 
@@ -494,7 +500,15 @@ importance 评分：
 只输出对后续对话有价值的记忆。如果对话中无明显值得记忆的内容，输出空数组 []。"""
 
     def build_extraction_prompt(self, conversations_text: str) -> List[Dict[str, str]]:
-        """构建记忆提取的 API 消息列表"""
+        """
+        构建记忆提取的 API 消息列表
+
+        Args:
+            conversations_text (str): Description.
+
+        Returns:
+            List[Dict[str, str]]: Description.
+        """
         return [
             {"role": "system", "content": self.EXTRACTION_SYSTEM_PROMPT},
             {"role": "user", "content": f"请从以下对话中提取值得保留的记忆：\n\n{conversations_text}"}
@@ -502,12 +516,18 @@ importance 评分：
 
     @staticmethod
     def parse_extraction_result(result_text: str) -> List[Dict]:
-        """解析 LLM 提取结果"""
+        """
+        解析 LLM 提取结果
+
+        Args:
+            result_text (str): Description.
+
+        Returns:
+            List[Dict]: Description.
+        """
         import json
         try:
-            # 尝试提取 JSON 数组
             text = result_text.strip()
-            # 处理可能的 markdown 代码块包裹
             if text.startswith("```"):
                 lines = text.split("\n")
                 text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
@@ -518,22 +538,23 @@ importance 评分：
             pass
         return []
 
-    # ------------------------------------------------------------------
-    # 去重合并
-    # ------------------------------------------------------------------
 
     def _compute_similarity(self, text_a: str, text_b: str) -> float:
         """
         计算两段文本的关键词 Jaccard 相似度。
 
-        返回值 0~1，越高越相似。
+        Args:
+            text_a (str): Description.
+            text_b (str): Description.
+
+        Returns:
+            float: Description.
         """
         if not text_a or not text_b:
             return 0.0
         kw_a = self._extract_keywords(text_a.lower())
         kw_b = self._extract_keywords(text_b.lower())
         if not kw_a or not kw_b:
-            # 退化为字符级 Jaccard
             set_a = set(text_a)
             set_b = set(text_b)
             if not set_a or not set_b:
@@ -558,7 +579,6 @@ importance 评分：
 
         for mem in existing:
             score = self._compute_similarity(content, mem.get("content", ""))
-            # 同分类加权 10%
             if category and mem.get("category") == category:
                 score *= 1.1
             if score > best_score:
@@ -577,18 +597,16 @@ importance 评分：
         """
         合并新旧记忆，返回合并后的字段 dict。
 
-        合并策略：
-        - content: 保留更长的，或拼接（若两者都较长且不包含对方）
-        - importance: 取较高值
-        - priority: 取较小值（越关键）
-        - tags: 并集（去重）
-        - category: 保持不变（已有分类优先）
-        - expires_at: 保留更早的过期时间
+        Args:
+            existing (Dict): Description.
+            new_item (Dict): Description.
+
+        Returns:
+            Dict: Description.
         """
         old_content = existing.get("content", "")
         new_content = new_item.get("content", "").strip()
 
-        # 内容合并：若新内容更长且不包含在旧内容中，拼接
         if new_content and new_content not in old_content:
             if len(new_content) > len(old_content):
                 merged_content = new_content
@@ -599,7 +617,6 @@ importance 评分：
         else:
             merged_content = old_content
 
-        # 标签合并
         old_tags = set(t.strip() for t in (existing.get("tags") or "").split(",") if t.strip())
         new_tags_raw = new_item.get("tags", "")
         if isinstance(new_tags_raw, list):
@@ -608,18 +625,15 @@ importance 评分：
             new_tags = set(t.strip() for t in str(new_tags_raw).split(",") if t.strip())
         merged_tags = ", ".join(sorted(old_tags | new_tags))
 
-        # 优先级取更关键（数字更小）
         old_priority = existing.get("priority", 2)
         new_priority = new_item.get("priority", 2)
         merged_priority = min(old_priority, new_priority)
 
-        # 重要度取更高
         merged_importance = max(
             existing.get("importance", 3),
             new_item.get("importance", 3)
         )
 
-        # 过期时间取更早
         old_expires = existing.get("expires_at")
         new_expires = new_item.get("expires_at")
         if old_expires and new_expires:
@@ -663,7 +677,6 @@ importance 评分：
         new_count = 0
         merged_count = 0
 
-        # 一次性加载活跃记忆，避免每条提取都重复查询
         existing_memories = self.storage.get_active_memories(limit=200)
 
         for item in results:
@@ -677,17 +690,14 @@ importance 评分：
                 if not content:
                     continue
 
-                # 查重（使用缓存的记忆列表）
                 duplicate = self._find_duplicate(content, category, existing_memories)
 
                 if duplicate:
-                    # 合并更新
                     merged = self._merge_memory(duplicate, item)
                     self.storage.update_memory(duplicate["id"], **merged)
                     self.storage.touch_memory(duplicate["id"])
                     merged_count += 1
                 else:
-                    # 新增
                     self.storage.add_memory(
                         content=content,
                         category=category,
@@ -707,5 +717,13 @@ importance 评分：
         return new_count + merged_count
 
     def is_extraction_needed(self, unsummarized_count: int) -> bool:
-        """判断是否需要触发记忆提取"""
+        """
+        判断是否需要触发记忆提取
+
+        Args:
+            unsummarized_count (int): Description.
+
+        Returns:
+            bool: Description.
+        """
         return unsummarized_count >= self._extraction_threshold

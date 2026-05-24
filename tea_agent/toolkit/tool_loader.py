@@ -1,4 +1,3 @@
-# @2026-05-23 gen by tea_agent, extracted from tlk.py Toolkit.reload()
 """ToolLoader: 扫描目录、动态加载 toolkit_*.py，提取 func + meta。"""
 
 import os.path as osp
@@ -18,12 +17,27 @@ class ToolLoader:
     """
 
     def __init__(self, builtin_dir: str, user_dir: str = None):
+        """
+        Init.
+
+        Args:
+            builtin_dir (str): Description.
+            user_dir (str): Description.
+        """
         self.builtin_dir = builtin_dir
         self.user_dir = user_dir
 
     @staticmethod
     def check_meta(meta: dict) -> bool:
-        """验证 meta 结构合法性。"""
+        """
+        验证 meta 结构合法性。
+
+        Args:
+            meta (dict): Description.
+
+        Returns:
+            bool: Description.
+        """
         if "type" not in meta or meta["type"] != "function":
             return False
         func = meta.get("function", {})
@@ -32,7 +46,12 @@ class ToolLoader:
         return True
 
     def reload_all(self) -> dict:
-        """扫描所有目录，加载工具，返回 {funcs, metas, invalid}。"""
+        """
+        扫描所有目录，加载工具，返回 {funcs, metas, invalid}。
+
+        Returns:
+            dict: Description.
+        """
         result = {"funcs": {}, "metas": {}, "invalid": []}
 
         dirs_to_load = []
@@ -50,7 +69,16 @@ class ToolLoader:
         return result
 
     def _scan_directory(self, directory: str, source_name: str) -> dict:
-        """扫描单个目录，加载所有 toolkit_*.py 文件。"""
+        """
+        扫描单个目录，加载所有 toolkit_*.py 文件。
+
+        Args:
+            directory (str): Description.
+            source_name (str): Description.
+
+        Returns:
+            dict: Description.
+        """
         result = {"funcs": {}, "metas": {}, "invalid": []}
 
         try:

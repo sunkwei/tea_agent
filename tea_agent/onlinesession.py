@@ -21,11 +21,10 @@ import logging
 
 from tea_agent.basesession import BaseChatSession
 from tea_agent.session_prompts import COMPACT_SYSTEM_PROMPT
-from tea_agent.token_utils import estimate_tokens, compute_safe_budget  # 2026-05-22 gen by Tea Agent, token 预算
+from tea_agent.token_utils import estimate_tokens, compute_safe_budget
 from tea_agent.session_pipeline import SessionPipeline
 from tea_agent.skills import SkillManager
 
-# 组件导入（替代 Mixin）
 from tea_agent.session_context import SessionContext
 from tea_agent.session_api_component import APIComponent
 from tea_agent.session_tool_component import ToolComponent
@@ -45,7 +44,6 @@ class OnlineToolSession(BaseChatSession):
     - 功能委派给 self.api, self.tools, self.memory, self.summarizer 组件
     """
 
-    # 压缩后的系统提示词
     _COMPACT_SYSTEM_PROMPT = COMPACT_SYSTEM_PROMPT
 
     def __init__(
@@ -100,7 +98,6 @@ class OnlineToolSession(BaseChatSession):
             disable_summary: 禁用历史压缩和摘要        """
         sp = system_prompt or self._COMPACT_SYSTEM_PROMPT
 
-        # ── 1. 创建共享上下文 ──
         import httpx
         _http_client = httpx.Client(proxy=None)
         main_client = OpenAI(api_key=api_key, base_url=api_url, http_client=_http_client)
@@ -110,7 +107,7 @@ class OnlineToolSession(BaseChatSession):
             cheap_client = OpenAI(api_key=cheap_api_key, base_url=cheap_api_url, http_client=httpx.Client(proxy=None))
 
         self.context = SessionContext(
-            messages=[],  # 稍后由 BaseChatSession.__init__ 初始化
+            messages=[],
             model=model,
             enable_thinking=enable_thinking,
             client=main_client,
@@ -128,16 +125,14 @@ class OnlineToolSession(BaseChatSession):
             reasoning_effort=reasoning_effort,
             disable_summary=disable_summary,
             extra_iterations_on_continue=extra_iterations_on_continue,
-            context_window=131072,  # 2026-05-22 gen by Tea Agent, 由 _refresh_from_config() 在首次 chat_stream 前更新
+            context_window=131072,
         )
-        # ── 2. 调用基类初始化（会触发属性桥接） ──
         BaseChatSession.__init__(self, model, max_history, sp)
 
         logger.info(f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}")
 
-        # ── 3. 创建并初始化组件 ──
         self.api = APIComponent(self.context)
-        self.context.api_comp = self.api  # 供 Memory/Summarizer 组件追踪 token
+        self.context.api_comp = self.api
         self.tools_comp = ToolComponent(self.context)
         self.memory_comp = MemoryComponent(self.context)
         self.summarizer_comp = SummarizerComponent(self.context)
@@ -145,13 +140,10 @@ class OnlineToolSession(BaseChatSession):
         for comp in [self.api, self.tools_comp, self.memory_comp, self.summarizer_comp]:
             comp.initialize()
 
-        # ── 兼容属性（指向 context）──
-        # 这些属性保持与旧代码的兼容性，但实际数据存储在 context 中
-        self.max_iterations = max_iterations  # 由 _refresh_from_config() 在每次 chat_stream 前更新
+        self.max_iterations = max_iterations
         self.storage = storage
         self._cheap_client = cheap_client
         self._cheap_model_name = cheap_model
-        # BUGFIX: 同步到 context，让 Memory/Summarizer 组件能访问便宜模型
         self.context.cheap_client = cheap_client
         self.context.cheap_model = cheap_model
         self._current_mode = "mixed"
@@ -159,29 +151,23 @@ class OnlineToolSession(BaseChatSession):
         self._supports_reasoning = supports_reasoning
         self._disable_summary = disable_summary
 
-        # ── 续跑控制 ──
         import threading
         self._extra_iterations = 0
         self._continue_after_max = False
         self._max_iter_wait = threading.Event()
 
-        # ── 工具定义 ──
         self.tools: List[Dict] = []
 
-        # ── Skill 管理器 ──
         self.skill_manager = SkillManager.get_instance()
         self.skill_manager.discover_skills()
         self.skill_manager.activate_skill("utility")
         self.skill_manager.activate_skill("file_system")
         self.skill_manager.activate_skill("memory_knowledge")
 
-        # 构建工具列表（委派给组件）
         self.tools = self.tools_comp.build_tools()
 
-        # 初始化 Memory 管理器（委派给组件）
         self.memory_comp.initialize()
 
-        # ── 反思和提示词管理器 ──
         if self.storage is not None:
             from tea_agent.reflection import ReflectionManager
             from tea_agent.prompt_manager import SystemPromptManager
@@ -200,23 +186,19 @@ class OnlineToolSession(BaseChatSession):
                 self.system_prompt = dynamic_prompt
             logger.info(f"系统提示词 v{self.prompt_manager.current_version} 已加载")
             
-            # 同步到 context
             self.context.reflection_manager = self.reflection_manager
         else:
             self.reflection_manager = None
             self.prompt_manager = None
             logger.info("Storage 未设置，跳过 ReflectionManager/PromptManager 初始化")
 
-        # ── Pipeline ──
         self.pipeline = SessionPipeline()
         self.context.pipeline = self.pipeline
         self._setup_default_pipeline()
 
-    # ── 属性桥接（兼容旧代码直接访问 self._rounds_collector 等） ──
-    # 重构后数据存储在 self.context 中，通过 property 桥接访问
     @property
     def messages(self):
-        """Messages."""
+        """Messages"""
         return self.context.messages
 
     @messages.setter
@@ -230,7 +212,7 @@ class OnlineToolSession(BaseChatSession):
 
     @property
     def model(self):
-        """Model."""
+        """Model"""
         return self.context.model
 
     @model.setter
@@ -244,7 +226,7 @@ class OnlineToolSession(BaseChatSession):
 
     @property
     def _rounds_collector(self):
-        """Internal: rounds collector."""
+        """Internal: rounds collector"""
         return self.context._rounds_collector
 
     @_rounds_collector.setter
@@ -258,7 +240,7 @@ class OnlineToolSession(BaseChatSession):
 
     @property
     def _last_usage(self):
-        """Internal: last usage."""
+        """Internal: last usage"""
         return self.context._last_usage
 
     @_last_usage.setter
@@ -272,7 +254,7 @@ class OnlineToolSession(BaseChatSession):
 
     @property
     def _last_cheap_usage(self):
-        """Internal: last cheap usage."""
+        """Internal: last cheap usage"""
         return self.context._last_cheap_usage
 
     @_last_cheap_usage.setter
@@ -286,7 +268,7 @@ class OnlineToolSession(BaseChatSession):
 
     @property
     def _history_summary(self):
-        """Internal: history summary."""
+        """Internal: history summary"""
         return self.context._history_summary
 
     @_history_summary.setter
@@ -300,7 +282,7 @@ class OnlineToolSession(BaseChatSession):
 
     @property
     def _semantic_summary(self):
-        """Internal: semantic summary."""
+        """Internal: semantic summary"""
         return self.context._semantic_summary
 
     @_semantic_summary.setter
@@ -314,7 +296,7 @@ class OnlineToolSession(BaseChatSession):
 
     @property
     def _tool_chain_summary(self):
-        """Internal: tool chain summary."""
+        """Internal: tool chain summary"""
         return self.context._tool_chain_summary
 
     @_tool_chain_summary.setter
@@ -328,7 +310,7 @@ class OnlineToolSession(BaseChatSession):
 
     @property
     def _level2(self):
-        """Internal: level2."""
+        """Internal: level2"""
         return self.context._level2
 
     @_level2.setter
@@ -340,38 +322,51 @@ class OnlineToolSession(BaseChatSession):
         """
         self.context._level2 = value
 
-    # ──────────────────────────────────────────────
-    # 委派方法（保持向后兼容）
-    # ──────────────────────────────────────────────
 
     def _get_summarize_client(self) -> Tuple[Any, str]:
-        """获取用于摘要/提取任务的客户端和模型名。"""
+        """
+        获取用于摘要/提取任务的客户端和模型名。
+
+        Returns:
+            Tuple[Any, str]: Description.
+        """
         if self._cheap_client and self._cheap_model_name:
             return self._cheap_client, self._cheap_model_name
         return self.context.client, self.context.model
 
     def _get_effective_params(self, model_type: str = "main") -> Dict[str, Any]:
-        """返回 {temperature, max_tokens, top_p}，失败时返回空 dict。"""
+        """
+        返回 {temperature, max_tokens, top_p}，失败时返回空 dict。
+
+        Args:
+            model_type (str): Description.
+
+        Returns:
+            Dict[str, Any]: Description.
+        """
         try:
             from .config import get_config
             return get_config().get_effective_params(model_type, self._current_mode)
         except Exception:
             return {}
 
-    # ──────────────────────────────────────────────
-    # 流式处理（委派给 API 组件）
-    # ──────────────────────────────────────────────
 
     def _process_stream_with_reasoning(self, response, callback) -> Tuple[str, List[Dict], str]:
         """
         处理流式响应，收集内容、工具调用数据和 reasoning_content。
+
+        Args:
+            response: Description.
+            callback: Description.
+
+        Returns:
+            Tuple[str, List[Dict], str]: Description.
         """
         content_parts = []
         tool_calls_data = []
         reasoning_parts = []
 
         for chunk in response:
-            # 累积 usage 信息（委派给 API 组件）
             if hasattr(chunk, 'usage') and chunk.usage:
                 self.api._accumulate_usage(chunk.usage)
 
@@ -380,17 +375,14 @@ class OnlineToolSession(BaseChatSession):
 
             delta = chunk.choices[0].delta
 
-            # 处理 reasoning_content
             if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
                 reasoning_parts.append(delta.reasoning_content)
                 callback(f"[THINK]{delta.reasoning_content}")
 
-            # 处理内容
             if delta.content:
                 content_parts.append(delta.content)
                 callback(delta.content)
 
-            # 处理工具调用（委派给 API 组件）
             if delta.tool_calls:
                 self.api.accumulate_tool_calls_from_delta(delta, tool_calls_data)
 
@@ -398,30 +390,22 @@ class OnlineToolSession(BaseChatSession):
         reasoning_content = "".join(reasoning_parts)
         return content, tool_calls_data, reasoning_content
 
-    # ──────────────────────────────────────────────
-    # Pipeline 设置（委派给组件）
-    # ──────────────────────────────────────────────
 
 
     def _refresh_from_config(self):
-        """每次 chat_stream 前重新读取配置文件，使运行时参数修改即时生效。
-        
-        从 $HOME/.tea_agent/config.yaml 或 tea_agent/config.yaml 加载配置，
-        更新 self.max_iterations 和 context 中的相关参数。
-        """
+        """每次 chat_stream 前重新读取配置文件，使运行时参数修改即时生效。"""
         try:
             from tea_agent.config import load_config
             cfg = load_config()
             self.max_iterations = cfg.max_iterations
             self.context.extra_iterations_on_continue = cfg.extra_iterations_on_continue
-            self.context.context_window = cfg.main_model.context_window  # 2026-05-22 gen by Tea Agent, token 预算
+            self.context.context_window = cfg.main_model.context_window
             logger.debug(f"运行时参数已刷新: max_iterations={cfg.max_iterations}, extra={cfg.extra_iterations_on_continue}, ctx_win={cfg.main_model.context_window}")
         except Exception as e:
             logger.warning(f"刷新运行时配置失败 (使用旧值继续): {e}")
 
     def _setup_default_pipeline(self):
         """设置默认的 Pipeline 步骤"""
-        # 1. 记忆注入（委派给 Memory 组件）
         self.pipeline.register_step(
             name="inject_memories",
             func=self.memory_comp.inject_memories,
@@ -430,7 +414,6 @@ class OnlineToolSession(BaseChatSession):
             position=15,
         )
 
-        # 2. 添加用户消息
         self.pipeline.register_step(
             name="add_user_message",
             func=lambda ctx: (self.add_user_message(ctx.get("user_msg", "")), self.context.messages)[1],
@@ -439,7 +422,6 @@ class OnlineToolSession(BaseChatSession):
             position=20,
         )
 
-        # 3. 摘要旧历史（委派给 Summarizer 组件）
         self.pipeline.register_step(
             name="summarize_old_history",
             func=lambda ctx: (self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client), self.context.messages)[1],
@@ -448,7 +430,6 @@ class OnlineToolSession(BaseChatSession):
             position=30,
         )
 
-        # 4. 工具调用循环（核心）
         self.pipeline.register_step(
             name="tool_loop",
             func=self._execute_tool_loop,
@@ -457,20 +438,22 @@ class OnlineToolSession(BaseChatSession):
             position=40,
         )
 
-    # ──────────────────────────────────────────────
-    # 构建 API 消息（使用 context 状态）
-    # ──────────────────────────────────────────────
 
 
     def _enforce_token_budget(self, result: list, safe_budget: int, l1_start: int) -> list:
         """
         如果 API 消息超过 token 预算，迭代折叠 L1 中最旧的工具调用轮次。
-        
-        策略：先估算超出量，批量折叠最早的工具轮（assistant+tool_calls → tool_result），
-        用一条简短摘要替换。每批折叠最多 min(overage_rounds, 50) 轮，重复至预算内。
+
+        Args:
+            result (list): Description.
+            safe_budget (int): Description.
+            l1_start (int): Description.
+
+        Returns:
+            list: Description.
         """
         import json as _json
-        MAX_PASSES = 10  # 最多 10 轮批量折叠
+        MAX_PASSES = 10
 
         for _pass in range(MAX_PASSES):
             est = estimate_tokens(result)
@@ -483,7 +466,6 @@ class OnlineToolSession(BaseChatSession):
                 f"开始批量折叠 L1 工具轮..."
             )
 
-            # 收集 L1 中所有 assistant(tool_calls) 的位置
             tc_positions = []
             for i in range(l1_start, len(result)):
                 msg = result[i]
@@ -494,19 +476,16 @@ class OnlineToolSession(BaseChatSession):
                 logger.warning("L1 中无可折叠的工具轮")
                 break
 
-            # 估算每折叠一轮大概节省多少 token
-            # 取前 3 个位置估算平均节省
             sample_savings = []
             for pos in tc_positions[:3]:
                 before = estimate_tokens(result[pos:pos + 3])
                 sample_savings.append(max(1, before))
             avg_saving = sum(sample_savings) / len(sample_savings) if sample_savings else 1000
 
-            # 计算需要折叠多少轮
             rounds_to_fold = min(
                 len(tc_positions),
-                max(5, int(overage / max(1, avg_saving)) + 3),  # +3 安全余量
-                50  # 单批上限
+                max(5, int(overage / max(1, avg_saving)) + 3),
+                50
             )
 
             if rounds_to_fold <= 0:
@@ -514,15 +493,11 @@ class OnlineToolSession(BaseChatSession):
 
             logger.info(f"批量折叠: 折叠前 {len(tc_positions)} 个工具轮中的前 {rounds_to_fold} 个")
 
-            # 从前往后折叠 rounds_to_fold 个工具轮
             folded_count = 0
             for fold_idx in range(rounds_to_fold):
                 if fold_idx >= len(tc_positions):
                     break
 
-                # 由于之前的折叠可能改变了索引，重新获取位置
-                # 简化：每次只折叠当前第一个工具轮
-                # 重新扫描第一个 tool_calls 位置
                 first_tc = -1
                 for i in range(l1_start, len(result)):
                     if result[i].get("role") == "assistant" and result[i].get("tool_calls"):
@@ -532,10 +507,8 @@ class OnlineToolSession(BaseChatSession):
                 if first_tc < 0:
                     break
 
-                # 收集 tool_call_ids
                 tc_ids = {tc.get("id") for tc in result[first_tc].get("tool_calls", []) if tc.get("id")}
 
-                # 收集工具名和简要参数
                 tc_names = []
                 for tc in result[first_tc].get("tool_calls", []):
                     f = tc.get("function", {})
@@ -550,7 +523,6 @@ class OnlineToolSession(BaseChatSession):
                         args_brief = args_brief[:77] + "..."
                     tc_names.append(f"{name}({args_brief})")
 
-                # 查找匹配的 tool 消息并收集简短结果
                 tool_briefs = []
                 j = first_tc + 1
                 remaining_ids = set(tc_ids)
@@ -570,9 +542,8 @@ class OnlineToolSession(BaseChatSession):
                     else:
                         break
 
-                # 构建紧凑摘要
                 calls_str = "; ".join(tc_names)
-                results_str = " | ".join(tool_briefs[:3])  # 最多 3 个结果
+                results_str = " | ".join(tool_briefs[:3])
                 if len(tool_briefs) > 3:
                     results_str += f" | ...(+{len(tool_briefs) - 3})"
                 summary = (
@@ -581,7 +552,6 @@ class OnlineToolSession(BaseChatSession):
                     f"返回: {results_str}"
                 )
 
-                # 删除 assistant + 匹配的 tool 消息
                 del_end = j
                 replacement = {"role": "user", "content": summary}
                 result = result[:first_tc] + [replacement] + result[del_end:]
@@ -599,21 +569,18 @@ class OnlineToolSession(BaseChatSession):
 
     def _build_api_messages(self) -> List[Dict]:
         """
-        三级历史拼接：
-            Level 0: 系统提示词 + 长期记忆注入
-            Level 3: 语义摘要 + 工具链摘要
-            Level 2: 按语义相关性筛选的 user+assistant 对
-            Level 1: 最新一轮压缩对话
+        三级历史拼接（L1/L2/L3 分级筛选完全在此处完成）：
+
+        Returns:
+            List[Dict]: Description.
         """
-        # ── Token 预算保护 ──
         safe_budget = compute_safe_budget(
             self.context.context_window,
             self._get_effective_params("main").get("max_tokens", 4096)
         )
-        _l1_start = None  # 记录 L1 起始位置，供后续裁剪 (在 Level 1 段赋值)
+        _l1_start = None
         result: List[Dict] = []
 
-        # ── Level 0: 系统提示词 + Skill 注入 ──
         sys_msg = dict(self.context.messages[0])
         skill_prompt = self.skill_manager.get_active_prompt()
         skill_summary = self.skill_manager.get_skill_summary()
@@ -626,8 +593,6 @@ class OnlineToolSession(BaseChatSession):
             sys_msg["content"] = enhanced
         result.append(sys_msg)
 
-        # ── 当前操作系统信息注入 ──
-        # 2026-05-22 gen by Tea Agent, 跨OS记忆共享需要注入当前操作系统信息
         os_info = self._get_os_context()
         if os_info:
             result.append({
@@ -635,7 +600,6 @@ class OnlineToolSession(BaseChatSession):
                 "content": os_info
             })
 
-        # ── 潜意识引擎状态注入 ──
         sub_ctx = self._get_subconscious_context()
         if sub_ctx:
             result.append({
@@ -643,16 +607,13 @@ class OnlineToolSession(BaseChatSession):
                 "content": sub_ctx
             })
 
-        # ── 长期记忆注入 ──
         if self.context._injected_memories_text:
             result.append({
                 "role": "user",
                 "content": self.context._injected_memories_text
             })
 
-        # NOTE: disable_summary 启用时跳过 L3/L2 历史构造
         if not self.context.disable_summary:
-            # ── Level 3: 摘要 ──
             has_level3 = False
             parts = []
             sem = self.context._semantic_summary
@@ -674,7 +635,6 @@ class OnlineToolSession(BaseChatSession):
                     _asst["reasoning_content"] = ""
                 result.append(_asst)
 
-            # ── 兼容旧 _history_summary ──
             if not has_level3 and self.context._history_summary:
                 result.append({
                     "role": "user",
@@ -685,7 +645,6 @@ class OnlineToolSession(BaseChatSession):
                     _asst2["reasoning_content"] = ""
                 result.append(_asst2)
 
-            # ── Level 2: 按语义相关性筛选 ──
             level2 = self.context._level2
             if level2:
                 current_user_msg = ""
@@ -714,13 +673,12 @@ class OnlineToolSession(BaseChatSession):
                             _msg["reasoning_content"] = ""
                         result.append(_msg)
 
-        # ── Level 1: 最新一轮压缩对话 ──
-        _l1_start = len(result)  # 记录 L1 段起点
+        _l1_start = len(result)
         disable_summary = self.context.disable_summary
         max_turns_limit = 30
 
-        start_idx = 1
         if disable_summary:
+            start_idx = 1
             user_msg_indices = []
             for i in range(1, len(self.context.messages)):
                 if self.context.messages[i].get("role") == "user":
@@ -729,6 +687,12 @@ class OnlineToolSession(BaseChatSession):
             if len(user_msg_indices) > max_turns_limit:
                 start_idx = user_msg_indices[-max_turns_limit]
                 logger.info(f"disable_summary 启用: 丢弃早期历史，保留最近 {max_turns_limit} 轮 (共 {len(user_msg_indices)} 轮)")
+        else:
+            start_idx = 1
+            for i in range(len(self.context.messages) - 1, 0, -1):
+                if self.context.messages[i].get("role") == "user":
+                    start_idx = i
+                    break
 
         for i in range(start_idx, len(self.context.messages)):
             msg = self.context.messages[i]
@@ -746,39 +710,60 @@ class OnlineToolSession(BaseChatSession):
                             text_parts.append("[图片]")
                 msg_copy["content"] = "\n".join(text_parts) if text_parts else "[图片]"
             result.append(msg_copy)
-
-        # JSON完整性校验
+        # 然后再次清理——因为sanitize可能移除损坏的tool_calls导致新的孤儿
+        result = self._clean_orphan_tool_messages(result)
         result = self._sanitize_api_messages(result)
+        result = self._clean_orphan_tool_messages(result)
 
-        # Safeguard: 移除孤立 tool 消息
-        valid_ids = set()
-        cleaned = []
-        for msg in result:
+        if _l1_start is not None and _l1_start < len(result) and safe_budget > 0:
+            result = self._enforce_token_budget(result, safe_budget, _l1_start)
+        return result
+    def _clean_orphan_tool_messages(self, messages: List[Dict]) -> List[Dict]:
+        """
+        移除没有对应 tool_call_id 的孤立 tool 消息，防止 API 400 错误。
+
+        Args:
+            messages (List[Dict]): 消息列表。
+
+        Returns:
+            List[Dict]: 清理后的消息列表。
+        """
+        valid_ids: set = set()
+        for msg in messages:
             if msg.get("role") == "assistant" and msg.get("tool_calls"):
                 for tc in msg["tool_calls"]:
                     if tc.get("id"):
                         valid_ids.add(tc["id"])
-                cleaned.append(msg)
-            elif msg.get("role") == "tool":
+
+        cleaned: list = []
+        removed = 0
+        for msg in messages:
+            if msg.get("role") == "tool":
                 if msg.get("tool_call_id") in valid_ids:
                     cleaned.append(msg)
                 else:
-                    logger.warning(f"_build_api_messages: 移除孤立 tool 消息 (id={msg.get('tool_call_id')})")
+                    removed += 1
+                    logger.warning(
+                        f"_clean_orphan_tool_messages: 移除孤立 tool 消息 "
+                        f"(id={msg.get('tool_call_id')})"
+                    )
             else:
                 cleaned.append(msg)
-        result = cleaned
 
-        # ── Token 预算校验 ──
-        if _l1_start is not None and _l1_start < len(result) and safe_budget > 0:
-            result = self._enforce_token_budget(result, safe_budget, _l1_start)
-        return result
-
-    # ──────────────────────────────────────────────
-    # JSON 校验与修复（保持原有逻辑）
-    # ──────────────────────────────────────────────
+        if removed > 0:
+            logger.info(f"_clean_orphan_tool_messages: 共移除 {removed} 条孤立 tool 消息")
+        return cleaned
 
     def _sanitize_api_messages(self, messages: List[Dict]) -> List[Dict]:
-        """校验并修复 API 消息中的 tool_calls JSON"""
+        """
+        校验并修复 API 消息中的 tool_calls JSON
+
+        Args:
+            messages (List[Dict]): Description.
+
+        Returns:
+            List[Dict]: Description.
+        """
         import json as _json
         sanitized = []
         removed_count = 0
@@ -838,7 +823,15 @@ class OnlineToolSession(BaseChatSession):
         return sanitized
 
     def _try_fix_truncated_json(self, s: str) -> Optional[str]:
-        """尝试修复被截断的 JSON 字符串"""
+        """
+        尝试修复被截断的 JSON 字符串
+
+        Args:
+            s (str): Description.
+
+        Returns:
+            Optional[str]: Description.
+        """
         import json as _json
         if not s or not s.strip():
             return None
@@ -886,17 +879,9 @@ class OnlineToolSession(BaseChatSession):
         except _json.JSONDecodeError:
             return None
 
-    # ──────────────────────────────────────────────
-    # 辅助方法（潜意识、多模态、L2 过滤）
-    # ──────────────────────────────────────────────
 
     def _get_os_context(self):
-        """获取当前操作系统信息并格式化为上下文。
-        
-        记忆在不同操作系统间共享（如 Windows/Linux），
-        必须注入当前 OS 信息以确保工具调用使用正确的命令。
-        2026-05-23 gen by Tea Agent, 跨OS记忆共享
-        """
+        """获取当前操作系统信息并格式化为上下文。"""
         try:
             os_info = self.context.toolkit.call_tool('toolkit_os_info')
             if not os_info:
@@ -957,7 +942,15 @@ class OnlineToolSession(BaseChatSession):
             return None
 
     def _to_multimodal(self, msg: Dict) -> Dict:
-        """如果消息包含 images 字段，将 content 转换为多模态格式。"""
+        """
+        如果消息包含 images 字段，将 content 转换为多模态格式。
+
+        Args:
+            msg (Dict): Description.
+
+        Returns:
+            Dict: Description.
+        """
         images = msg.pop("images", None)
         if not images:
             return msg
@@ -999,7 +992,16 @@ class OnlineToolSession(BaseChatSession):
         return msg
 
     def _filter_level2_by_relevance(self, level2: list, current_msg: str) -> list:
-        """按语义相关性筛选 Level 2 条目。"""
+        """
+        按语义相关性筛选 Level 2 条目。
+
+        Args:
+            level2 (list): Description.
+            current_msg (str): Description.
+
+        Returns:
+            list: Description.
+        """
         if not level2 or not current_msg:
             return [{"kind": "full", **p} for p in level2]
 
@@ -1085,12 +1087,17 @@ class OnlineToolSession(BaseChatSession):
         )
         return result
 
-    # ──────────────────────────────────────────────
-    # 意图分析与工具循环
-    # ──────────────────────────────────────────────
 
     def _analyze_intent(self, text: str) -> dict:
-        """轻量级意图分析"""
+        """
+        轻量级意图分析
+
+        Args:
+            text (str): Description.
+
+        Returns:
+            dict: Description.
+        """
         import re
         text_lower = text.lower().strip()
 
@@ -1123,13 +1130,17 @@ class OnlineToolSession(BaseChatSession):
     def _execute_tool_loop(self, context: Dict) -> Dict:
         """
         执行工具调用循环。
-        委派给各个组件处理。
+
+        Args:
+            context (Dict): Description.
+
+        Returns:
+            Dict: Description.
         """
         msg = context.get("msg", "")
         callback = context.get("callback", lambda x: None)
         on_status = context.get("on_status", None)
 
-        # Level 1: 动态跳过
         if context.get("skip_tool_loop"):
             logger.info("[Pipe Dynamic] Skipping tool loop (chat intent)")
             try:
@@ -1195,12 +1206,10 @@ class OnlineToolSession(BaseChatSession):
                     "error": e,
                 }
 
-            # 处理流式响应
             content, tool_calls_data, reasoning_content = self._process_stream_with_reasoning(response, callback)
             full_reply += content
             logger.debug(f"model response: content_len={len(content)}, reasoning_len={len(reasoning_content)}, tool_calls_data={len(tool_calls_data)}, usage={self.context._last_usage}")
 
-            # 解析工具调用（委派给 Tool 组件）
             valid_tool_calls = self.tools_comp.parse_tool_calls_from_stream(tool_calls_data)
 
             if valid_tool_calls:
@@ -1210,7 +1219,6 @@ class OnlineToolSession(BaseChatSession):
                 if on_status:
                     on_status(f"⏳ 生成中... 调用工具第{iterations+1}轮 (ESC 打断)")
 
-                # 收集 assistant tool_calls（委派给 Tool 组件）
                 self.tools_comp.collect_assistant_tool_calls_round(content, valid_tool_calls, reasoning_content)
 
                 assistant_msg = {
@@ -1240,7 +1248,6 @@ class OnlineToolSession(BaseChatSession):
                     _asctime = _time.strftime("%Y-%m-%d %H:%M:%S")
                     print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name}")
                     logger.info(f"    tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
-                    # 委派给 Tool 组件执行
                     call_id, func_name, result_str = self.tools_comp.execute_tool_call(call)
                     logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")
                     self.tools_comp.collect_tool_call_round(call_id, result_str)
@@ -1306,10 +1313,14 @@ class OnlineToolSession(BaseChatSession):
         }
 
     def _build_tools(self, tool_filter: list = None):
-        """构建工具定义列表"""
+        """
+        构建工具定义列表
+
+        Args:
+            tool_filter (list): Description.
+        """
         tools = self.tools_comp.build_tools()
         
-        # 通过 SkillManager 过滤
         active_tools = self.skill_manager.get_active_tools_meta(self.context.toolkit.meta_map)
         if active_tools:
             tools = active_tools
@@ -1330,7 +1341,12 @@ class OnlineToolSession(BaseChatSession):
         self._build_tools()
 
     def _auto_detect_mode(self, user_text: str):
-        """根据用户输入自动检测并切换 Agent 模式。"""
+        """
+        根据用户输入自动检测并切换 Agent 模式。
+
+        Args:
+            user_text (str): Description.
+        """
         try:
             result = self.context.toolkit.call_tool('toolkit_mode', action='auto', text=user_text)
             if isinstance(result, dict):
@@ -1355,7 +1371,12 @@ class OnlineToolSession(BaseChatSession):
         self._strip_reasoning_content(self.context.messages)
 
     def _notify_reflection_done(self, reflection_id: int):
-        """反思完成后发送桌面通知"""
+        """
+        反思完成后发送桌面通知
+
+        Args:
+            reflection_id (int): Description.
+        """
         try:
             import subprocess
             subprocess.run([
@@ -1367,7 +1388,12 @@ class OnlineToolSession(BaseChatSession):
             pass
 
     def _notify_prompt_evolved(self, version: int):
-        """提示词进化后发送桌面通知"""
+        """
+        提示词进化后发送桌面通知
+
+        Args:
+            version (int): Description.
+        """
         try:
             import subprocess
             subprocess.run([
@@ -1381,7 +1407,15 @@ class OnlineToolSession(BaseChatSession):
     def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: int = -1, on_status: Optional[Callable[[str], None]] = None) -> Tuple[str, bool]:
         """
         流式对话，支持工具调用。
-        使用 Pipeline 执行可配置的步骤。
+
+        Args:
+            msg (str): Description.
+            callback (Callable[[str], None]): Description.
+            topic_id (int): Description.
+            on_status (Optional[Callable[[str], None]]): Description.
+
+        Returns:
+            Tuple[str, bool]: Description.
         """
         _msg_text = msg if isinstance(msg, str) else msg.get("text", "")
         _msg_images = None if isinstance(msg, str) else msg.get("images", [])
@@ -1398,7 +1432,7 @@ class OnlineToolSession(BaseChatSession):
         self.current_topic_id = topic_id
         self.reset_interrupt()
         self.reset_session_state()
-        self._refresh_from_config()  # 每次对话前重读配置文件
+        self._refresh_from_config()
 
         self.skill_manager.auto_activate(_msg_text)
         self._auto_detect_mode(_msg_text)
@@ -1420,21 +1454,18 @@ class OnlineToolSession(BaseChatSession):
         if intent.get('skip_tool_loop'):
             context['skip_tool_loop'] = True
 
-        # 开始反思追踪
         if self.reflection_manager is not None:
             trace = self.reflection_manager.start_trace(topic_id, _msg_text)
             self.context._current_trace = trace
         else:
             self.context._current_trace = None
 
-        # 执行 Pipeline
         result = self.pipeline.execute(context)
 
         full_reply = result.get("full_reply", "")
         used_tools = result.get("used_tools", False)
         iterations = result.get("iterations", 0)
 
-        # 完成追踪
         if self.reflection_manager is not None and self.context._current_trace is not None:
             self.reflection_manager.finish_trace(
                 self.context._current_trace,
@@ -1444,11 +1475,10 @@ class OnlineToolSession(BaseChatSession):
                 error=str(result.get("error", "")) if result.get("error") else None,
             )
 
-        # 自动提取记忆
         import threading
         if topic_id and topic_id != -1 and not result.get("interrupted", False):
             def _auto_extract():
-                """Internal: auto extract."""
+                """Internal: auto extract"""
                 try:
                     count = self.memory_comp.trigger_memory_extraction(topic_id)
                     if count > 0 and on_status:
@@ -1457,10 +1487,9 @@ class OnlineToolSession(BaseChatSession):
                     pass
             threading.Thread(target=_auto_extract, daemon=True).start()
 
-        # 异步触发反思
         if not result.get("interrupted", False) and self.reflection_manager is not None:
             def _auto_reflect():
-                """Internal: auto reflect."""
+                """Internal: auto reflect"""
                 try:
                     if self.reflection_manager.should_reflect():
                         rid = self.reflection_manager.generate_reflection()

@@ -1,5 +1,3 @@
-## llm generated tool func, created Fri May  1 09:58:16 2026
-# version: 1.1.0
 
 import logging
 
@@ -27,11 +25,11 @@ def toolkit_subconscious(action: str, focus: str = None):
         STATE_FILE = os.path.expanduser("~/.tea_agent/subconscious_state.json")
         KB_DIR = os.path.expanduser("~/.tea_agent/kb")
     DEFAULT_DB = "chat_history.db"
-    CYCLE_INTERVAL = 3600      # 1小时
-    CHECK_INTERVAL = 30        # 检查间隔
+    CYCLE_INTERVAL = 3600
+    CHECK_INTERVAL = 30
 
     def _is_tea_agent_cwd():
-        """Internal: check if tea agent cwd."""
+        """Internal: check if tea agent cwd"""
         cwd = os.getcwd()
         pyproj = os.path.join(cwd, "pyproject.toml")
         if os.path.exists(pyproj):
@@ -62,7 +60,7 @@ def toolkit_subconscious(action: str, focus: str = None):
         os.makedirs(path, exist_ok=True)
 
     def _read_state():
-        """Internal: read state."""
+        """Internal: read state"""
         if os.path.exists(STATE_FILE):
             try:
                 with open(STATE_FILE, 'r') as f:
@@ -85,7 +83,7 @@ def toolkit_subconscious(action: str, focus: str = None):
             json.dump(state, f, indent=2, ensure_ascii=False)
 
     def _get_db_path():
-        """Internal: get the db path."""
+        """Internal: get the db path"""
         if os.path.exists(DEFAULT_DB):
             return os.path.abspath(DEFAULT_DB)
         for c in [os.path.join(os.path.dirname(os.path.abspath(__file__)),"..","..","chat_history.db"),
@@ -115,10 +113,9 @@ def toolkit_subconscious(action: str, focus: str = None):
         return [(w,n) for w,n in c.most_common(topn*2) if w.lower() not in sw and n>=2][:topn]
 
     def _is_jieba_available():
-        """Internal: check if jieba available."""
+        """Internal: check if jieba available"""
         return _jieba is not None
 
-    # === 阶段1: 消化记忆 ===
     def _digest_memories(storage):
         """Internal: digest memories.
         
@@ -147,26 +144,27 @@ def toolkit_subconscious(action: str, focus: str = None):
                 except: pass
         all_txt = " ".join(str(m["content"]) for m in mems if m.get("content"))
         r["top_keywords"] = _extract_keywords(all_txt, 20)
-        # 场景检测
         r["focus"] = _detect_focus(mems, r["top_keywords"])
         return r
 
-    # === 场景检测 ===
     def _detect_focus(mems, keywords):
-        """自动检测当前场景是创意期还是修复期"""
+        """
+        自动检测当前场景是创意期还是修复期
+
+        Args:
+            mems: Description.
+            keywords: Description.
+        """
         all_text = " ".join(str(m["content"]) for m in mems if m.get("content"))
         kw_str = " ".join(w for w,_ in keywords)
 
-        # 修复期关键词
         bug_kw = ['bug','错误','修复','fix','问题','异常','crash','崩溃','超时','失败',
                    '不兼容','兼容','黑屏','报错','400','500','error','Exception','defect']
-        # 创意期关键词
         creative_kw = ['创意','设计','架构','想象','如果','进化','改进','新增','feat',
                         '优化','增强','梦想','未来','可能','探索','实验']
 
         bug_score = sum(all_text.lower().count(kw.lower()) for kw in bug_kw)
         creative_score = sum(all_text.lower().count(kw.lower()) for kw in creative_kw)
-        # 也检查关键词
         bug_score += sum(n for w,n in keywords if any(bk in w.lower() for bk in bug_kw))
         creative_score += sum(n for w,n in keywords if any(ck in w.lower() for ck in creative_kw))
 
@@ -177,7 +175,6 @@ def toolkit_subconscious(action: str, focus: str = None):
         else:
             return "mixed"
 
-    # === 阶段2: 消化对话 ===
     def _digest_conversations(storage, state, mm=None):
         """Internal: digest conversations.
         
@@ -206,12 +203,10 @@ def toolkit_subconscious(action: str, focus: str = None):
                 c.setdefault("tags", "auto-extracted")
                 candidates_list.append(c)
         
-        # 如果有 MemoryManager，使用其去重合并逻辑 (P3修复)
         if mm and candidates_list:
             count = mm.ingest_extracted(candidates_list)
             extracted = [c["content"][:60] for c in candidates_list if c.get("content")][:20]
         else:
-            # 回退到旧逻辑
             for cand in candidates_list:
                 if not _is_duplicate_memory(cur, cand.get("content","")):
                     try:
@@ -276,7 +271,6 @@ def toolkit_subconscious(action: str, focus: str = None):
                     return True
         return False
 
-    # === 阶段3: 交叉关联 ===
     def _cross_link(storage, kb_dir, state):
         """Internal: cross link.
         
@@ -313,7 +307,6 @@ def toolkit_subconscious(action: str, focus: str = None):
             if old:
                 finds.append({"type":"stale_kb","content":f"{len(old)}个KB文档超过7天未更新",
                               "detail":[f"{n}({d}天)" for n,d in old[:5]]})
-        # 检测 Prompt 文件是否过时
         try:
             proj_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         except NameError:
@@ -333,7 +326,6 @@ def toolkit_subconscious(action: str, focus: str = None):
             finds.append({"type":"stale_prompts",
                           "content":f"{len(stale_prompts)}个Prompt文件超过30天未更新",
                           "detail":[f"{n}({d}天)" for n,d in stale_prompts]})
-        # 检测 system_prompts 表中最新的提示词版本是否过时
         try:
             cur.execute("SELECT created_at FROM system_prompts WHERE is_active=1 ORDER BY created_at DESC LIMIT 1")
             row = cur.fetchone()
@@ -351,9 +343,17 @@ def toolkit_subconscious(action: str, focus: str = None):
         except: pass
         return finds
 
-    # === 阶段4: 洞察 ===
     def _generate_insights(digest, links, conv_digest, kb_dir, state):
-        """增强：规则洞察 + cheap LLM 深度分析"""
+        """
+        增强：规则洞察 + cheap LLM 深度分析
+
+        Args:
+            digest: Description.
+            links: Description.
+            conv_digest: Description.
+            kb_dir: Description.
+            state: Description.
+        """
         ins = []
         if not digest: return ins
         unapp = digest.get("unapplied_reflections",0)
@@ -425,7 +425,6 @@ def toolkit_subconscious(action: str, focus: str = None):
                 )
                 raw = (r.choices[0].message.content or "").strip() if r.choices else ""
                 if raw:
-                    # Extract JSON array
                     json_start = raw.find("[")
                     json_end = raw.rfind("]") + 1
                     if json_start >= 0 and json_end > json_start:
@@ -489,8 +488,13 @@ def toolkit_subconscious(action: str, focus: str = None):
         return uniq[:7]
 
     def _send_notification(title, msg, expire_ms=5000):
-        """跨平台桌面通知：Windows/macOS/Linux。
-        Linux 使用 DBus 直连 + transient=false + desktop-entry → Plasma 通知中心。
+        """
+        跨平台桌面通知：Windows/macOS/Linux。
+
+        Args:
+            title: Description.
+            msg: Description.
+            expire_ms: Description.
         """
         import sys as _sys
         try:
@@ -524,13 +528,16 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         except: pass
 
     def _linux_notify_fallback(title, msg, expire_ms=5000):
-        """Linux 通知级联回退：DBus 直连 → GI Notify → notify-send → kdialog。
-        DBus + transient=false + desktop-entry → Plasma 通知中心历史。
-        kdialog 仅作最后回退（临时浮窗，不进通知中心）。
+        """
+        Linux 通知级联回退：DBus 直连 → GI Notify → notify-send → kdialog。
+
+        Args:
+            title: Description.
+            msg: Description.
+            expire_ms: Description.
         """
         import shutil as _sh
 
-        # 方法1: DBus 直连 — transient=false 确保进入通知历史
         try:
             import dbus
             from dbus.mainloop.glib import DBusGMainLoop
@@ -556,7 +563,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         except Exception:
             pass
 
-        # 方法2: GI Notify 回退
         try:
             import gi
             gi.require_version('Notify', '0.7')
@@ -573,7 +579,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         except Exception:
             pass
 
-        # 方法3: notify-send
         if _sh.which('notify-send'):
             subprocess.run(['notify-send', '--app-name=TeaAgent',
                 '--hint=boolean:transient:false',
@@ -581,7 +586,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                 capture_output=True, timeout=3)
             return
 
-        # 方法4: kdialog (KDE 临时弹窗，不进通知中心，最后回退)
         if _sh.which('kdialog'):
             subprocess.run(['kdialog', '--passivepopup', msg,
                 '--title', title, str(expire_ms // 1000)],
@@ -589,7 +593,14 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
             return
 
     def _send_cycle_summary(result, state, first_run=False):
-        """每轮循环后发送摘要通知，让用户感知后台运行结果"""
+        """
+        每轮循环后发送摘要通知，让用户感知后台运行结果
+
+        Args:
+            result: Description.
+            state: Description.
+            first_run: Description.
+        """
         digest = result.get("digest") or {}
         insights = result.get("insights") or []
         goals = result.get("goals") or []
@@ -612,7 +623,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
             lines.append(f"新提取: {n_auto}条记忆")
         if n_insights:
             lines.append(f"洞察: {n_insights}条")
-            # 列出 important 级洞察
             for ins in insights:
                 if ins.get("level") == "important":
                     lines.append(f"  ⚠️ {ins['content'][:60]}")
@@ -623,7 +633,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         msg = "\n".join(lines)
         _send_notification("🧠 潜意识引擎", msg, expire_ms=8000)
 
-    # === 执行一次完整循环 ===
     def _run_cycle(state):
         """Internal: run cycle.
         
@@ -643,7 +652,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
             digest = _digest_memories(storage)
             conv_digest = _digest_conversations(storage, state, mm=mm)
 
-            # LLM 优先级精调（使用便宜模型，独立客户端）
             try:
                 from tea_agent.config import get_config
                 from openai import OpenAI
@@ -662,7 +670,7 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                         if n:
                             state["stats"]["llm_adjustments"] = state["stats"].get("llm_adjustments", 0) + n
             except Exception:
-                pass  # 静默失败，不影响主流程
+                pass
 
             links = _cross_link(storage, kb_dir, state)
             insights = _generate_insights(digest, links, conv_digest, kb_dir, state)
@@ -688,7 +696,7 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                 except: pass
 
     def _subconscious_loop():
-        """Internal: subconscious loop."""
+        """Internal: subconscious loop"""
         state = _read_state()
         _ensure_dir(os.path.dirname(STATE_FILE))
         state["running"] = True
@@ -714,7 +722,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                     state["running"] = False
                     _write_state(state)
                     return
-            # 重新读取最新 state，避免使用旧值
             state = _read_state()
             try:
                 result = _run_cycle(state)
@@ -724,9 +731,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                 state["_last_error"] = str(e)[:200]
                 _write_state(state)
 
-    # ========================
-    # 强化 Dream：创意 + 务实双模式
-    # ========================
     def _dream(focus_override=None):
         """Internal: dream.
         
@@ -742,14 +746,12 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         cur.execute("SELECT content, category, tags FROM memories WHERE is_active=1 ORDER BY RANDOM() LIMIT 30")
         mems = [dict(r) for r in cur.fetchall()]
         
-        # 读取对话中最近的错误/bug信息
         cur.execute("SELECT user_msg, ai_msg FROM conversations ORDER BY id DESC LIMIT 30")
         recent = [dict(r) for r in cur.fetchall()]
         conn.close()
 
         if len(mems) < 2: return {"dream":"记忆不足","sparks":[]}
 
-        # 场景检测
         all_text = " ".join(str(m["content"]) for m in mems)
         keywords = _extract_keywords(all_text, 20) if all_text else []
         detected_focus = _detect_focus(mems, keywords)
@@ -757,24 +759,20 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
 
         results = []
 
-        # === 务实分析模式 ===
         if effective_focus in ("pragmatic", "mixed"):
             prag = _pragmatic_analysis(mems, recent, keywords)
             results.extend(prag)
 
-        # === 创意发散模式 ===
         if effective_focus in ("creative", "mixed"):
             creative = _creative_dream(mems)
             results.extend(creative)
 
-        # 确保至少有一些产出
         if not results:
             creative = _creative_dream(mems)
             results = creative
 
         random.shuffle(results)
 
-        # 写入 KB
         _ensure_dir(kb_dir)
         fpath = os.path.join(kb_dir, "创意火花.md")
         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -789,11 +787,17 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                 "mode_label": mode_label, "sparks": results[:12], "saved_to": fpath}
 
     def _pragmatic_analysis(mems, recent_convs, keywords):
-        """务实分析：模式识别、根因分析、修复建议"""
+        """
+        务实分析：模式识别、根因分析、修复建议
+
+        Args:
+            mems: Description.
+            recent_convs: Description.
+            keywords: Description.
+        """
         sparks = []
         mem_texts = [str(m["content"]) for m in mems]
 
-        # 1. 错误模式识别 — 从记忆和对话中找重复问题
         error_patterns = []
         error_kw = ['超时','timeout','失败','fail','错误','error','异常','exception',
                      '不兼容','incompatible','黑屏','黑','崩溃','crash','400','401','403','404','500',
@@ -804,7 +808,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                     error_patterns.append((kw, mt))
                     break
 
-        # 统计重复出现的错误关键词
         err_counter = Counter(ep[0] for ep in error_patterns)
         if err_counter:
             top_errors = err_counter.most_common(3)
@@ -815,7 +818,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                 "creative_prompt": f"高频错误: {err_list}。建议逐一排查：① 检查是否有共同的底层原因 ② 优先修复出现次数最多的 ③ 考虑添加针对性的错误处理/重试机制"
             })
 
-        # 2. 兼容性问题链
         compat_issues = [mt for mt in mem_texts if any(k in mt.lower() for k in ['wayland','x11','kde','gnome','兼容','compatible'])]
         if len(compat_issues) >= 2:
             sparks.append({
@@ -824,7 +826,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                 "creative_prompt": f"这些兼容性问题可能共享同一个根因：环境检测不够全面。建议：创建统一的环境适配层（Adapter Pattern），集中管理平台差异，而不是在每个工具中各自处理。"
             })
 
-        # 3. 工具依赖链分析
         tool_issues = [mt for mt in mem_texts if any(k in mt.lower() for k in ['toolkit','工具','安装','install','import','缺失','module'])]
         if tool_issues:
             sparks.append({
@@ -833,7 +834,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                 "creative_prompt": f"建议运行 toolkit_pkg(action='ensure') 确保所有依赖就绪。考虑在启动时自动检查核心依赖，减少运行时发现缺失模块的绕路。"
             })
 
-        # 4. 从最近对话中检测修复意向
         fix_intents = []
         for conv in recent_convs:
             user = str(conv.get("user_msg", ""))
@@ -846,7 +846,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                 "creative_prompt": f"待修复问题预览: {'; '.join(fix_intents[:3])}。建议将这些修复任务添加到记忆系统并标记优先级。"
             })
 
-        # 5. 建议：当前最值得做的事
         priorities = []
         if err_counter:
             priorities.append(f"修复高频错误: {err_counter.most_common(1)[0][0]}")
@@ -864,7 +863,12 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         return sparks
 
     def _creative_dream(mems):
-        """创意发散：跨域碰撞、反向思维、极端假设、隐喻映射"""
+        """
+        创意发散：跨域碰撞、反向思维、极端假设、隐喻映射
+
+        Args:
+            mems: Description.
+        """
         random.shuffle(mems)
         sparks = []
 
@@ -933,7 +937,6 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
         ]
         return random.choice(scenarios)
 
-    # === 主逻辑 ===
     state = _read_state()
 
     if action == "start":
@@ -999,5 +1002,10 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($tpl)
                 "dream_focus":"dream支持focus参数: pragmatic(务实)/creative(创意)/mixed(混合)"}
 
 def meta_toolkit_subconscious() -> dict:
-    """Meta toolkit subconscious."""
+    """
+    Meta toolkit subconscious
+
+    Returns:
+        dict: Description.
+    """
     return {"type": "function", "function": {"name": "toolkit_subconscious", "description": "潜意识引擎 v2.1 — 场景自适应Dream。自动检测场景（修bug→收敛务实分析/做创意→发散联想），dream支持focus参数手动指定。start启动后每1小时循环。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["start", "stop", "status", "dream", "goals", "insights"], "description": "start=启动, stop=停止, status=状态, dream=深度消化(支持focus参数: pragmatic/creative/mixed), goals=目标, insights=洞察"}, "focus": {"type": "string", "enum": ["pragmatic", "creative", "mixed"], "description": "[dream] 手动指定Dream模式: pragmatic=务实分析(bug模式识别/根因分析), creative=创意发散(跨域/反向/极端/隐喻), mixed=混合(自动)"}}, "required": ["action"]}}}

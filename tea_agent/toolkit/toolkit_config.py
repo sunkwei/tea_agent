@@ -1,4 +1,3 @@
-# @2026-04-30 gen by deepseek-v4-pro, toolkit_config: Agent 读取/修改运行时配置
 import logging
 
 logger = logging.getLogger("toolkit")
@@ -24,7 +23,6 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
     """
     logger.info(f"toolkit_config called: action={action!r}, key={key!r}, value={value!r}")
 
-    # 懒加载 import — 工具热加载时模块级 import 可能失败
     from tea_agent.config import get_config as _get_config
     from tea_agent.session_ref import get_session as _get_session
 
@@ -60,7 +58,6 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
 
         new_val = str(cfg.get(key, ""))
 
-        # 记录到 config_history
         if storage:
             storage.add_config_change(
                 key=key,
@@ -69,7 +66,6 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
                 reason="Agent 自主调优",
             )
 
-        # 同步到活跃 session
         if session:
             if hasattr(session, key):
                 try:
@@ -99,7 +95,12 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
         return f"❌ 未知操作: {action}。支持: list, get, set, history"
 
 def meta_toolkit_config() -> dict:
-    """Meta toolkit config."""
+    """
+    Meta toolkit config
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

@@ -31,7 +31,6 @@ class TrayManager:
         self._sni = None
         self._tray_thread: Optional[threading.Thread] = None
 
-    # ── 初始化 ──────────────────────────
 
     def start(self):
         """启动托盘图标"""
@@ -46,10 +45,9 @@ class TrayManager:
             except Exception as e:
                 logger.warning(f"停止托盘图标失败: {e}")
 
-    # ── 内部方法 ────────────────────────
 
     def _init_tray(self):
-        """Internal: initialize tray."""
+        """Internal: initialize tray"""
         if not HAS_SNI:
             return
         try:
@@ -72,7 +70,7 @@ class TrayManager:
             logger.warning(f"初始化托盘图标失败: {e}")
 
     def _create_tray_icon(self):
-        """Internal: create tray icon."""
+        """Internal: create tray icon"""
         from PIL import Image, ImageDraw
         size = 32
         img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
@@ -99,7 +97,6 @@ class TrayManager:
             argb[i], argb[i + 1], argb[i + 2], argb[i + 3] = a, r, g, b
         return bytes(argb)
 
-    # ── 事件处理 ────────────────────────
 
     def _on_tray_activate(self):
         """左键点击：显示/恢复主窗口"""
@@ -108,7 +105,13 @@ class TrayManager:
         self.gui.root.focus_force()
 
     def _on_tray_context_menu(self, x, y):
-        """右键点击：弹出菜单"""
+        """
+        右键点击：弹出菜单
+
+        Args:
+            x: Description.
+            y: Description.
+        """
         menu = tk.Menu(self.gui.root, tearoff=0)
         menu.add_command(label="退出", command=self._on_closing)
         try:
@@ -120,14 +123,12 @@ class TrayManager:
         """窗口关闭：清理托盘 + DB + Dream，然后 destroy"""
         self.gui._update_status("⏳ 正在清理资源...")
         self.stop()
-        # 停止 Dream
         try:
             from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
             toolkit_subconscious("stop")
             logger.info("Dream 已停止")
         except Exception as e:
             logger.warning(f"停止 Dream 失败: {e}")
-        # 关闭数据库
         try:
             self.gui.db.close()
             self.gui._update_status("✅ 数据库已正常关闭")

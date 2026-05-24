@@ -1,5 +1,3 @@
-## llm generated tool func, created 2026-05-20 by tea_agent
-## toolkit_test_gui: 测试 python -m tea_agent.gui 能否正常加载 GUI 组件
 
 import logging
 import subprocess
@@ -25,7 +23,6 @@ def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
     """
     logger.info(f"toolkit_test_gui called: timeout={timeout}, debug={debug}")
 
-    # 构建命令
     cmd = [sys.executable, "-m", "tea_agent.gui"]
     if debug:
         cmd.append("--debug")
@@ -44,7 +41,6 @@ def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
     }
 
     try:
-        # 启动子进程，捕获输出
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -53,7 +49,6 @@ def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
             cwd=os.getcwd(),
         )
 
-        # 等待进程结束（timeout + 额外 margin）
         total_wait = timeout + 15
         try:
             stdout_data, stderr_data = proc.communicate(timeout=total_wait)
@@ -68,16 +63,13 @@ def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
         result["duration"] = duration
         result["exit_code"] = exit_code
 
-        # 截取尾部输出（最多 2000 字符）
         stdout_tail = (stdout_data or "")[-2000:]
         stderr_tail = (stderr_data or "")[-2000:]
         result["stdout_tail"] = stdout_tail
         result["stderr_tail"] = stderr_tail
 
-        # 诊断判断
         diagnoses = []
 
-        # 检查退出码
         if exit_code == 0:
             diagnoses.append("退出码为 0，进程正常结束")
             result["success"] = True
@@ -86,7 +78,6 @@ def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
         else:
             diagnoses.append(f"退出码异常: {exit_code}")
 
-        # 检查是否有 Tk 初始化错误
         combined = (stdout_data or "") + (stderr_data or "")
         error_keywords = ["TclError", "_tkinter.TclError", "no display",
                           "couldn't connect to display", "ImportError",
@@ -96,7 +87,6 @@ def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
             diagnoses.append(f"发现错误关键词: {', '.join(found_errors)}")
             result["success"] = False
 
-        # 检查是否有 GUI 成功初始化的标志
         success_indicators = ["TkGUI", "AgentCore", "Dream", "GUI"]
         found_success = [kw for kw in success_indicators if kw in combined]
         if found_success:
@@ -107,7 +97,6 @@ def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
 
         result["diagnosis"] = " | ".join(diagnoses)
 
-        # 额外检查：如果 duration 远小于 timeout，可能 Tk 立即失败了
         if duration < 5 and exit_code != 0:
             result["diagnosis"] += " | GUI 在 5 秒内异常退出，可能初始化失败"
             result["success"] = False
@@ -124,7 +113,12 @@ def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
     return result
 
 def meta_toolkit_test_gui() -> dict:
-    """Meta toolkit test gui."""
+    """
+    Meta toolkit test gui
+
+    Returns:
+        dict: Description.
+    """
     return {
         "type": "function",
         "function": {

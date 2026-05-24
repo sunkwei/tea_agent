@@ -1,4 +1,3 @@
-# @2026-04-30 gen by deepseek-v4-pro, ReflectionManager: 元认知反思—分析工具调用、生成改进建议、存储反思记录
 """
 反思管理器 (ReflectionManager)
 
@@ -41,7 +40,12 @@ class SessionTrace:
 
     @property
     def success_rate(self) -> float:
-        """Success rate."""
+        """
+        Success rate
+
+        Returns:
+            float: Description.
+        """
         if not self.tool_calls:
             return 1.0
         successes = sum(1 for tc in self.tool_calls if tc.success)
@@ -49,7 +53,12 @@ class SessionTrace:
 
     @property
     def duration_seconds(self) -> float:
-        """Duration seconds."""
+        """
+        Duration seconds
+
+        Returns:
+            float: Description.
+        """
         return self.end_time - self.start_time if self.end_time > 0 else 0
 
 class ReflectionManager:
@@ -91,7 +100,16 @@ class ReflectionManager:
         self._pending_traces: List[SessionTrace] = []
 
     def start_trace(self, topic_id: int, user_msg: str) -> SessionTrace:
-        """开始追踪一次会话"""
+        """
+        开始追踪一次会话
+
+        Args:
+            topic_id (int): Description.
+            user_msg (str): Description.
+
+        Returns:
+            SessionTrace: Description.
+        """
         trace = SessionTrace(
             topic_id=topic_id,
             user_msg=user_msg,
@@ -101,7 +119,16 @@ class ReflectionManager:
         return trace
 
     def record_tool_call(self, trace: SessionTrace, name: str, success: bool, error: str = "", duration_ms: float = 0.0):
-        """记录一次工具调用"""
+        """
+        记录一次工具调用
+
+        Args:
+            trace (SessionTrace): Description.
+            name (str): Description.
+            success (bool): Description.
+            error (str): Description.
+            duration_ms (float): Description.
+        """
         trace.tool_calls.append(ToolCallRecord(
             name=name,
             success=success,
@@ -111,7 +138,16 @@ class ReflectionManager:
 
     def finish_trace(self, trace: SessionTrace, total_iterations: int = 0, used_tools: bool = False,
                      interrupted: bool = False, error: Optional[str] = None):
-        """结束追踪"""
+        """
+        结束追踪
+
+        Args:
+            trace (SessionTrace): Description.
+            total_iterations (int): Description.
+            used_tools (bool): Description.
+            interrupted (bool): Description.
+            error (Optional[str]): Description.
+        """
         trace.end_time = time.time()
         trace.total_iterations = total_iterations
         trace.used_tools = used_tools
@@ -122,27 +158,28 @@ class ReflectionManager:
         """
         判断是否应该触发反思。
 
-        触发条件（满足任一）：
-        - 累积了 3+ 个待反思的 trace
-        - 有失败的 tool call
-        - 距离上次反思超过 10 条对话
+        Returns:
+            bool: Description.
         """
         if not self._pending_traces:
             return False
 
-        # 检查是否有失败的工具调用
         for trace in self._pending_traces:
             if any(not tc.success for tc in trace.tool_calls):
                 return True
 
-        # 累积 3+ 条
         if len(self._pending_traces) >= 3:
             return True
 
         return False
 
     def build_reflection_prompt(self) -> Tuple[str, List[Dict]]:
-        """构建反思 prompt，返回 (文本, API messages)"""
+        """
+        构建反思 prompt，返回 (文本, API messages)
+
+        Returns:
+            Tuple[str, List[Dict]]: Description.
+        """
         if not self._pending_traces:
             return "", []
 
@@ -171,7 +208,15 @@ class ReflectionManager:
         return prompt_text, messages
 
     def parse_reflection_result(self, result_text: str) -> Optional[Dict]:
-        """解析 LLM 反思结果"""
+        """
+        解析 LLM 反思结果
+
+        Args:
+            result_text (str): Description.
+
+        Returns:
+            Optional[Dict]: Description.
+        """
         try:
             text = result_text.strip()
             if text.startswith("```"):
@@ -214,7 +259,6 @@ class ReflectionManager:
                 logger.warning("反思结果解析失败")
                 return None
 
-            # 存储反思记录
             reflection_id = self.storage.add_reflection(
                 summary=parsed.get("summary", ""),
                 details=parsed.get("details", prompt_text),
@@ -223,7 +267,6 @@ class ReflectionManager:
                 topic_id=self._pending_traces[0].topic_id if self._pending_traces else None,
             )
 
-            # 处理建议：config_adjustments
             config_adjustments = parsed.get("config_adjustments", [])
             for adj in config_adjustments:
                 if isinstance(adj, dict):
@@ -234,7 +277,6 @@ class ReflectionManager:
                         source_reflection_id=reflection_id,
                     )
 
-            # 处理新记忆
             new_memories = parsed.get("new_memories", [])
             for mem in new_memories:
                 if isinstance(mem, dict) and mem.get("content"):
@@ -248,14 +290,12 @@ class ReflectionManager:
                     except Exception:
                         pass
 
-            # 返回 prompt_adjustment 供 SystemPromptManager 使用
             prompt_adjustment = parsed.get("prompt_adjustment")
             if prompt_adjustment and isinstance(prompt_adjustment, str) and len(prompt_adjustment) > 20:
                 self._last_prompt_suggestion = prompt_adjustment
             else:
                 self._last_prompt_suggestion = None
 
-            # 清空已处理的 traces
             self._pending_traces.clear()
 
             logger.info(f"反思完成: reflection_id={reflection_id}, summary={parsed.get('summary', '')[:50]}")
@@ -266,7 +306,12 @@ class ReflectionManager:
             return None
 
     def _build_tool_stats(self) -> Dict:
-        """构建工具统计"""
+        """
+        构建工具统计
+
+        Returns:
+            Dict: Description.
+        """
         stats: Dict[str, Dict] = {}
         for trace in self._pending_traces:
             for tc in trace.tool_calls:
@@ -283,9 +328,19 @@ class ReflectionManager:
 
     @property
     def last_prompt_suggestion(self) -> Optional[str]:
-        """获取最近一次反思生成的提示词建议"""
+        """
+        获取最近一次反思生成的提示词建议
+
+        Returns:
+            Optional[str]: Description.
+        """
         return getattr(self, '_last_prompt_suggestion', None)
 
     def get_stats(self) -> Dict:
-        """获取反思统计"""
+        """
+        获取反思统计
+
+        Returns:
+            Dict: Description.
+        """
         return self.storage.get_reflection_stats()

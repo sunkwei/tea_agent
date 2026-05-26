@@ -163,6 +163,25 @@ class AgentCore:
         return f"📡 已连接 | 模型: {main_m.model_name}{cheap_info}\n🔧 工具: {len(self.toolkit.func_map)} 个已加载"
 
     @staticmethod
+    def _extract_reasoning_from_rounds(rounds: list) -> str:
+        """
+        从工具调用轮次中提取 assistant 的 reasoning_content。
+
+        Args:
+            rounds (list): Description.
+
+        Returns:
+            str: 合并后的 reasoning_content，多条用换行分隔。
+        """
+        reasoning_parts = []
+        if not rounds:
+            return ""
+        for rd in rounds:
+            if rd.get("role") == "assistant" and rd.get("reasoning_content"):
+                reasoning_parts.append(rd["reasoning_content"])
+        return "\n".join(reasoning_parts)
+
+    @staticmethod
     def _extract_files_from_rounds(rounds: list) -> list:
         """
         从工具调用轮次中提取触碰的文件路径列表。
@@ -244,9 +263,10 @@ class AgentCore:
             old_l1 = prev_convs[-2]
             old_rounds = old_l1.get('rounds_json_parsed') or []
             old_files = self._extract_files_from_rounds(old_rounds)
+            old_reasoning = self._extract_reasoning_from_rounds(old_rounds)
             overflow = self.db.push_to_level2(
                 topic_id, old_l1["user_msg"], old_l1["ai_msg"], files=old_files,
-                max_level2=l2_max,
+                max_level2=l2_max, reasoning_content=old_reasoning,
             )
             if overflow:
                 self.db.push_l3_pending(topic_id, overflow)

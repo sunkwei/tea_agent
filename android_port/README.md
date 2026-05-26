@@ -7,7 +7,7 @@
 | 功能 | 实现 |
 |------|------|
 | 流式对话 | SSE (OkHttp) |
-| 工具调用 | JS 动态执行 (toolkit_save/reload) |
+| 工具调用 | JS 动态执行 (toolkit_mgrt/reload) |
 | 主题管理 | SQLite 持久化 |
 | Token 统计 | 实时显示 prompt/completion/total |
 | 历史压缩 | Level 1/2/3 三级策略 |

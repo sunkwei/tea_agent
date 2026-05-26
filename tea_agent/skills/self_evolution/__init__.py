@@ -5,7 +5,7 @@ SKILL_MANIFEST = {
     "description": "自我进化能力：修改项目源码、版本号管理、提示词进化、构建打包、运行测试、查看自身状态",
     "tools": [
         "toolkit_self_evolve",
-        "toolkit_save",
+        "toolkit_mgrt",
         "toolkit_prompt_evolve",
         "toolkit_release",
         "toolkit_comment",

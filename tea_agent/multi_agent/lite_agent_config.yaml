@@ -24,5 +24,5 @@ max_tool_output: 32768                # 单次工具输出最大字节数
 #   - toolkit_file
 #   - toolkit_exec
 # tool_blacklist:                     # 禁止这些工具
-#   - toolkit_save
+#   - toolkit_mgrt
 #   - toolkit_self_evolve

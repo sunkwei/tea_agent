@@ -8,7 +8,7 @@
  * - 三模型配置
  * - 主题切换
  * - 移动端滑动手势（左边缘右滑呼出侧边栏）
- * - 内置元工具：toolkit_save / toolkit_reload
+ * - 内置元工具：toolkit_mgrt / toolkit_reload
  */
 (function() {
     'use strict';
@@ -37,7 +37,7 @@
     // ============ 初始化 ============
     function init() {
         initSwipeBackdrop();
-        // 受保护工具(toolkit_save/reload)已由 Kotlin 侧 ToolManager.init() 管理
+        // 受保护工具(toolkit_mgrt/reload)已由 Kotlin 侧 ToolManager.init() 管理
         loadTopics();
         loadConfigToUI();
         applyTheme();

@@ -26,7 +26,7 @@ logger = logging.getLogger("SkillManager")
 
 CORE_TOOLS = {
     "toolkit_skill",
-    "toolkit_save",
+    "toolkit_mgrt",
     "toolkit_exec",
 }
 

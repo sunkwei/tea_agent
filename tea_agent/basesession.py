@@ -121,7 +121,7 @@ class BaseChatSession(ABC):
     @staticmethod
     def _strip_reasoning_content(messages: List[Dict]) -> None:
         """
-        原地清除消息列表中的 reasoning_content 字段。
+        原地清除消息列表中的 reasoning_content 字段，不处理 role = assistant 的消息
 
         Args:
             messages (List[Dict]): Description.
@@ -514,10 +514,11 @@ class BaseChatSession(ABC):
         """
         纯数据加载：将所有 conversations 加载到 self.messages，不做任何过滤/分级。
 
-        2026-05-23 gen by Tea Agent, 职责分离：
-        - 本函数只做纯数据加载，不区分 L1/L2/L3，不对 conversation 做差异化处理
-        - L2/L3 数据（level2, semantic_summary, tool_chain_summary）由调用方直接设置到 session 属性
-        - L1/L2/L3 的分级筛选完全由 OnlineToolSession._build_api_messages() 负责
+        by sunkw:
+            - 本函数只做纯数据加载，不区分 L1/L2/L3，不对 conversation 做差异化处理，不做任何压缩，将 conversation 直接加载到 self.messages 中
+
+            # - L2/L3 数据（level2, semantic_summary, tool_chain_summary）由调用方直接设置到 session 属性
+            # - L1/L2/L3 的分级筛选完全由 OnlineToolSession._build_api_messages() 负责
 
         Args:
             conversations: 对话记录列表（时间正序），每条含 user_msg, ai_msg,
@@ -556,13 +557,14 @@ class BaseChatSession(ABC):
             rounds = conv.get("rounds_json_parsed")
             if rounds and conv.get("is_func_calling"):
                 repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
-                compressed = BaseChatSession._compress_tool_rounds(repaired)
-                for rd in compressed:
+                # by sunkw: 不做压缩，直接加载
+                # compressed = BaseChatSession._compress_tool_rounds(repaired)
+                for rd in repaired:
                     self.messages.append(rd)
             else:
                 self.messages.append({"role": "assistant", "content": conv.get("ai_msg", "")})
-
         logger.info(f"加载历史: {total}轮对话, 共{len(self.messages)-1}条消息 (L1/L2/L3分级由_build_api_messages负责)")
+
     def interrupt(self):
         """打断当前生成"""
         self.interrupted = True

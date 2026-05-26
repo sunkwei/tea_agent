@@ -201,32 +201,32 @@ class TeaAgent:
 
         logger.info(f"会话初始化（无 Storage）| 主模型: {main_m.model_name} | 工具: {'开' if self._use_tools else '关'}")
 
-    def toolkit_save(self, name: str, meta: dict, pycode: str) -> bool:
-        """
-        添加/更新工具。等价于 toolkit_save() 工具函数。
+    # def toolkit_mgrt(self, name: str, meta: dict, pycode: str) -> bool:
+    #     """
+    #     添加/更新工具。等价于 toolkit_mgrt() 工具函数。
 
-        Args:
-            name (str): Description.
-            meta (dict): Description.
-            pycode (str): Description.
+    #     Args:
+    #         name (str): Description.
+    #         meta (dict): Description.
+    #         pycode (str): Description.
 
-        Returns:
-            bool: Description.
-        """
-        result = self._toolkit.call_tool("toolkit_save", name=name, meta=meta, pycode=pycode)
-        return bool(result and (isinstance(result, dict) and result.get("ok")))
+    #     Returns:
+    #         bool: Description.
+    #     """
+    #     result = self._toolkit.call_tool("toolkit_mgrt", name=name, meta=meta, pycode=pycode)
+    #     return bool(result and (isinstance(result, dict) and result.get("ok")))
 
-    def toolkit_reload(self) -> dict:
-        """
-        重新加载所有工具并刷新会话工具定义。
+    # def toolkit_reload(self) -> dict:
+    #     """
+    #     重新加载所有工具并刷新会话工具定义。
 
-        Returns:
-            dict: Description.
-        """
-        result = self._toolkit.call_tool("toolkit_reload")
-        if self._sess:
-            self._sess._build_tools()
-        return result or {"ok": False}
+    #     Returns:
+    #         dict: Description.
+    #     """
+    #     result = self._toolkit.call_tool("toolkit_reload")
+    #     if self._sess:
+    #         self._sess._build_tools()
+    #     return result or {"ok": False}
 
     def _notify(self, data: Dict):
         """

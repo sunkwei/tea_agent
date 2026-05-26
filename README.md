@@ -402,7 +402,7 @@ toolkit_lsp(action='completion', file='tea_agent/onlinesession.py', line=850, co
 ### 自我进化
 | 工具 | 功能 |
 |------|------|
-| `toolkit_save` | 创建/更新工具函数（含 `_my` 路由），含reload/rollback/versions |
+| `toolkit_mgrt` | 创建/更新工具函数（含 `_my` 路由），含reload/rollback/versions |
 | `toolkit_self_evolve` | 修改项目源码（四层安全：快照+备份+验证+测试） |
 | `toolkit_edit` | 高级代码编辑（diff/patch 精准修改） |
 | `toolkit_diff` | unified diff 生成与预览 |

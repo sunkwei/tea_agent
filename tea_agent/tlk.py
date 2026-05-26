@@ -14,7 +14,7 @@ from tea_agent.toolkit.toolkit_set_topic_title import (
 logger = logging.getLogger("tookit")
 
 
-def meta_toolkit_save() -> dict:
+def meta_toolkit_mgrt() -> dict:
     """
     Meta toolkit save — 统一版本管理
 
@@ -24,7 +24,7 @@ def meta_toolkit_save() -> dict:
     return {
         "type": "function",
         "function": {
-            "name": "toolkit_save",
+            "name": "toolkit_mgrt",
             "description": (
                 "统一工具版本管理。action=save 保存新工具, reload 重载所有工具, "
                 "rollback 回滚到指定版本, versions 列出历史版本。"
@@ -47,7 +47,7 @@ def meta_toolkit_save() -> dict:
         },
     }
 
-def toolkit_save_impl(action: str, name: str = "", meta: dict = None, pycode: str = "", version: str = "") -> str:
+def toolkit_mgrt_impl(action: str, name: str = "", meta: dict = None, pycode: str = "", version: str = "") -> str:
     """
     统一工具版本管理入口。
 
@@ -90,7 +90,7 @@ class Toolkit:
     """Toolkit class."""
     _CACHE_TTL = 30
     _CACHE_BLACKLIST = {
-        'toolkit_exec', 'toolkit_self_evolve', 'toolkit_save',
+        'toolkit_exec', 'toolkit_self_evolve', 'toolkit_mgrt',
         'toolkit_release_version',
         'toolkit_pkg', 'toolkit_memory', 'toolkit_kb', 'toolkit_reflection',
         'toolkit_proactive', 'toolkit_subconscious', 'toolkit_dump_topic',
@@ -270,8 +270,8 @@ class Toolkit:
             self.func_map[name] = func
             self.meta_map[name] = loaded["metas"][name]
 
-        self.func_map["toolkit_save"] = toolkit_save_impl
-        self.meta_map["toolkit_save"] = meta_toolkit_save()
+        self.func_map["toolkit_mgrt"] = toolkit_mgrt_impl
+        self.meta_map["toolkit_mgrt"] = meta_toolkit_mgrt()
 
         self.func_map["toolkit_set_topic_title"] = toolkit_set_topic_title
         self.meta_map["toolkit_set_topic_title"] = meta_toolkit_set_topic_title()
@@ -279,7 +279,7 @@ class Toolkit:
         result["valid_tool"] = {
             k: {"func": v, "meta": self.meta_map[k]}
             for k, v in self.func_map.items()
-            if k not in ("toolkit_save", "toolkit_set_topic_title")
+            if k not in ("toolkit_mgrt", "toolkit_set_topic_title")
         }
         return result
 

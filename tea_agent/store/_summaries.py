@@ -142,7 +142,8 @@ class SummaryStore(StoreComponent):
         c.close()
 
     def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str,
-                        files: list = None, max_level2: int = 30) -> list:
+                        files: list = None, max_level2: int = 30,
+                        reasoning_content: str = "") -> list:
         """
         2026-05-20 gen by Tea Agent, L2扩容+分层压缩
 
@@ -152,6 +153,7 @@ class SummaryStore(StoreComponent):
             ai_msg (str): Description.
             files (list): Description.
             max_level2 (int): Description.
+            reasoning_content (str): 推理内容，保留到L2中
 
         Returns:
             list: Description.
@@ -160,6 +162,8 @@ class SummaryStore(StoreComponent):
         entry = {"user": user_msg, "assistant": ai_msg}
         if files:
             entry["files"] = files
+        if reasoning_content:
+            entry["reasoning_content"] = reasoning_content
         level2.append(entry)
         overflow = level2[:-max_level2] if len(level2) > max_level2 else []
         level2 = level2[-max_level2:]

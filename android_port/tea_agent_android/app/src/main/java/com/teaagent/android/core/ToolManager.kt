@@ -1,13 +1,13 @@
 /*
  * @2026-05-16 gen by tea_agent, ToolManager — JS 工具动态加载与执行
- * @2026-05-14 gen by tea_agent, toolkit_save/reload 固化为受保护元工具，不存 SQLite
+ * @2026-05-14 gen by tea_agent, toolkit_mgrt/reload 固化为受保护元工具，不存 SQLite
  *
  * 核心能力:
- *   toolkit_save(name, meta, js_code) → 存入 SQLite（拒绝覆盖受保护工具）
+ *   toolkit_mgrt(name, meta, js_code) → 存入 SQLite（拒绝覆盖受保护工具）
  *   toolkit_reload() → 重新加载所有工具到 WebView JS 上下文
  *   执行任意已注册工具（通过 WebView.evaluateJavascript）
  *
- * 受保护工具：toolkit_save / toolkit_reload 硬编码在 Kotlin 侧，
+ * 受保护工具：toolkit_mgrt / toolkit_reload 硬编码在 Kotlin 侧，
  * 不存储到 SQLite，不经过 WebView JS 执行，确保不被 LLM 误修改。
  *
  * 工具代码规范：
@@ -32,8 +32,8 @@ class ToolManager(
     companion object {
         private const val TAG = "ToolManager"
 
-        // 受保护的工具名 — 不在 SQLite 中存储，不可被 toolkit_save 覆盖
-        val PROTECTED_TOOL_NAMES = setOf("toolkit_save", "toolkit_reload")
+        // 受保护的工具名 — 不在 SQLite 中存储，不可被 toolkit_mgrt 覆盖
+        val PROTECTED_TOOL_NAMES = setOf("toolkit_mgrt", "toolkit_reload")
     }
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -42,7 +42,7 @@ class ToolManager(
 
     private fun getProtectedToolSchemas(): List<JSONObject> = listOf(
         JSONObject(
-            """{"name":"toolkit_save","description":"保存一个新的工具函数到工具库。工具代码为 JavaScript，接收 args 对象参数，必须返回结果。保存后自动加载，下次对话即可调用。","parameters":{"type":"object","properties":{"name":{"type":"string","description":"工具名称，以 toolkit_ 为前缀"},"meta":{"type":"object","description":"OpenAI function calling schema，含 name/description/parameters"},"js_code":{"type":"string","description":"JavaScript 函数体，格式: function(args) { ... return result; }。args 是 LLM 传入的参数对象"}},"required":["name","meta","js_code"]}}"""
+            """{"name":"toolkit_mgrt","description":"保存一个新的工具函数到工具库。工具代码为 JavaScript，接收 args 对象参数，必须返回结果。保存后自动加载，下次对话即可调用。","parameters":{"type":"object","properties":{"name":{"type":"string","description":"工具名称，以 toolkit_ 为前缀"},"meta":{"type":"object","description":"OpenAI function calling schema，含 name/description/parameters"},"js_code":{"type":"string","description":"JavaScript 函数体，格式: function(args) { ... return result; }。args 是 LLM 传入的参数对象"}},"required":["name","meta","js_code"]}}"""
         ),
         JSONObject(
             """{"name":"toolkit_reload","description":"重新加载所有已保存的工具函数到执行环境。新注册/修改的工具需要 reload 后才能在下一次 tool_choice 中出现。","parameters":{"type":"object","properties":{},"required":[]}}"""
@@ -68,7 +68,7 @@ class ToolManager(
     }
 
     /**
-     * toolkit_save — 存储或更新用户工具（拒绝覆盖受保护工具）
+     * toolkit_mgrt — 存储或更新用户工具（拒绝覆盖受保护工具）
      */
     fun save(name: String, metaJson: String, jsCode: String): String {
         if (name in PROTECTED_TOOL_NAMES) {
@@ -118,7 +118,7 @@ class ToolManager(
     suspend fun execute(name: String, args: JSONObject): String {
         // --- 受保护工具：原生 Kotlin 执行 ---
         when (name) {
-            "toolkit_save" -> {
+            "toolkit_mgrt" -> {
                 val toolName = args.optString("name", "")
                 if (toolName.isBlank()) return """{"ok":false,"error":"缺少 name 参数"}"""
                 // meta 可能是 JSONObject（LLM 直接传）或 String

@@ -396,8 +396,6 @@ class OnlineToolSession(BaseChatSession):
         reasoning_content = "".join(reasoning_parts)
         return content, tool_calls_data, reasoning_content
 
-
-
     def _refresh_from_config(self):
         """每次 chat_stream 前重新读取配置文件，使运行时参数修改即时生效。"""
         try:
@@ -428,13 +426,13 @@ class OnlineToolSession(BaseChatSession):
             position=20,
         )
 
-        self.pipeline.register_step(
-            name="summarize_old_history",
-            func=lambda ctx: (self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client), self.context.messages)[1],
-            enabled=True,
-            description="将旧对话历史压缩为摘要",
-            position=30,
-        )
+        # self.pipeline.register_step(
+        #     name="summarize_old_history",
+        #     func=lambda ctx: (self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client), self.context.messages)[1],
+        #     enabled=True,
+        #     description="将旧对话历史压缩为摘要",
+        #     position=30,
+        # )
 
         self.pipeline.register_step(
             name="tool_loop",
@@ -443,8 +441,6 @@ class OnlineToolSession(BaseChatSession):
             description="执行工具调用循环",
             position=40,
         )
-
-
 
     def _enforce_token_budget(self, result: list, safe_budget: int, l1_start: int) -> list:
         """
@@ -573,9 +569,132 @@ class OnlineToolSession(BaseChatSession):
 
         return result
 
+    def _strip_tool_rounds(self, messages: list) -> list:
+        """
+        L1 工具轮剥离：删除所有工具调用轮次，仅保留 user、ai thinking、ai final msg。
+        与 L2 一致，不包含工具调用/返回细节。
+        """
+        result = []
+        for msg in messages:
+            role = msg.get("role", "")
+            if role == "user":
+                result.append(dict(msg))
+            elif role == "assistant":
+                if msg.get("tool_calls"):
+                    # 跳过含 tool_calls 的中间 assistant 消息
+                    continue
+                else:
+                    # 保留最终回复（含 reasoning_content）
+                    result.append(dict(msg))
+            elif role == "tool":
+                # 跳过所有 tool 结果消息
+                continue
+            else:
+                result.append(dict(msg))
+        return result
+
     def _build_api_messages(self) -> List[Dict]:
         """
-        三级历史拼接（L1/L2/L3 分级筛选完全在此处完成）：
+        by sunkw:
+            构造本来发送历史：
+                1. 加 system_prompt
+                2. 加 os_info
+                3. 加所有工具，不再使用 skills
+                4. 最新一轮历史加 user + [tool_calls] + ai_msg
+                5. 次新轮历史加 user + ai_msg
+
+        Returns:
+            List[Dict]: Description.
+        """
+
+        L2_NUM = 10
+        L1_NUM = 1
+
+        safe_budget = compute_safe_budget(
+            self.context.context_window,
+            self._get_effective_params("main").get("max_tokens", 4096)
+        )
+
+        result: List[Dict] = [self.context.messages[0]]     # step 1
+
+        os_info = self._get_os_context()                    # step 2
+        if os_info:
+            result.append({
+                "role": "user",
+                "content": os_info
+            })
+
+        user_idx = []
+        for idx in range(len(self.context.messages)):
+            if self.context.messages[idx].get("role") == "user":
+                user_idx.append(idx)
+
+        assert(len(user_idx) > 0)       # 必定有当前的 user 消息
+
+        def find_ai_final_msg_idx(user_idx:int) -> int:
+            # 从 self.context.messages 中找到 user_idx 对应的 ai_msg 索引，找不到返回 -1
+            for i in range(user_idx + 1, len(self.context.messages)):
+                if self.context.messages[i].get("role") == "assistant" and "tool_calls" not in self.context.messages[i]:
+                    return i
+            return -1
+
+        # L2
+        if len(user_idx) > L2_NUM + L1_NUM + 1:
+            user_idx = user_idx[-(L2_NUM + L1_NUM + 1):]
+        if len(user_idx) > 1 + L1_NUM:
+            for idx in user_idx[:- (1 + L1_NUM)]:
+                ai_msg_idx = find_ai_final_msg_idx(idx)
+                assert ai_msg_idx >= 0, f"找不到 ai_msg 索引，user_idx: {idx}"
+                result.append({
+                    "role": "user",
+                    "content": self.context.messages[idx]["content"],
+                })
+                result.append({
+                    "role": "assistant",
+                    "content": self.context.messages[ai_msg_idx]["content"],
+                    "reasoning_content": self.context.messages[ai_msg_idx].get("reasoning_content", ""),
+                })
+
+        # L1
+        if len(user_idx) > 1 + L1_NUM:
+            user_idx = user_idx[- (L1_NUM + 1):]
+        if len(user_idx) > 1:
+            for idx in user_idx[:-1]:
+                ai_msg_idx = find_ai_final_msg_idx(idx)
+                assert ai_msg_idx >= 0, f"找不到 ai_msg 索引，user_idx: {idx}"
+                result.append({
+                    "role": "user",
+                    "content": self.context.messages[idx]["content"],
+                })
+
+                result.append({
+                    "role": "assistant",
+                    "content": self.context.messages[ai_msg_idx]["content"],
+                    "reasoning_content": self.context.messages[ai_msg_idx].get("reasoning_content", ""),
+                })
+
+        # 当前输入
+        result.append({
+            "role": "user",
+            "content": self.context.messages[-1]["content"],
+        })
+
+        return result
+
+    def _build_api_messages0(self) -> List[Dict]:
+        """
+        # 三级历史拼接（L1/L2/L3 分级筛选完全在此处完成
+        #     L1: 最新一轮，包含完整的 user ai_msg 和中间的 tool_calls
+        #     L2: 次新轮到 20 - 30 轮，包含 user, ai_msg
+        #     L3: 当轮次超过 30 轮时，对历史摘要 + 20 到 30 轮的 msg, ai_msg 提取摘要，摘要完成后，L2 为 20轮, 当 L2 涨到 30 轮时，再次做摘要
+
+        by sunkw:
+            构造历史时：
+                1. 加 system_prompt
+                2. 加 os_info
+                3. 加所有工具，不再使用 skills
+                4. 最新一轮历史加 user + [tool_calls] + ai_msg
+                5. 次新轮历史加 user + ai_msg
 
         Returns:
             List[Dict]: Description.
@@ -588,15 +707,15 @@ class OnlineToolSession(BaseChatSession):
         result: List[Dict] = []
 
         sys_msg = dict(self.context.messages[0])
-        skill_prompt = self.skill_manager.get_active_prompt()
-        skill_summary = self.skill_manager.get_skill_summary()
-        if skill_prompt or skill_summary:
-            enhanced = sys_msg["content"]
-            if skill_summary:
-                enhanced = enhanced + "\n\n" + skill_summary
-            if skill_prompt:
-                enhanced = enhanced + "\n\n" + skill_prompt
-            sys_msg["content"] = enhanced
+        # skill_prompt = self.skill_manager.get_active_prompt()
+        # skill_summary = self.skill_manager.get_skill_summary()
+        # if skill_prompt or skill_summary:
+        #     enhanced = sys_msg["content"]
+        #     if skill_summary:
+        #         enhanced = enhanced + "\n\n" + skill_summary
+        #     if skill_prompt:
+        #         enhanced = enhanced + "\n\n" + skill_prompt
+        #     sys_msg["content"] = enhanced
         result.append(sys_msg)
 
         os_info = self._get_os_context()
@@ -606,18 +725,18 @@ class OnlineToolSession(BaseChatSession):
                 "content": os_info
             })
 
-        sub_ctx = self._get_subconscious_context()
-        if sub_ctx:
-            result.append({
-                "role": "user",
-                "content": sub_ctx
-            })
+        # sub_ctx = self._get_subconscious_context()
+        # if sub_ctx:
+        #     result.append({
+        #         "role": "user",
+        #         "content": sub_ctx
+        #     })
 
-        if self.context._injected_memories_text:
-            result.append({
-                "role": "user",
-                "content": self.context._injected_memories_text
-            })
+        # if self.context._injected_memories_text:
+        #     result.append({
+        #         "role": "user",
+        #         "content": self.context._injected_memories_text
+        #     })
 
         if not self.context.disable_summary:
             has_level3 = False
@@ -676,7 +795,7 @@ class OnlineToolSession(BaseChatSession):
                         result.append({"role": "user", "content": item.get("user", "")})
                         _msg = {"role": "assistant", "content": item.get("assistant", "")}
                         if self.context.supports_reasoning:
-                            _msg["reasoning_content"] = ""
+                            _msg["reasoning_content"] = item.get("reasoning_content", "")
                         result.append(_msg)
 
         _l1_start = len(result)
@@ -700,8 +819,9 @@ class OnlineToolSession(BaseChatSession):
                     start_idx = i
                     break
 
-        for i in range(start_idx, len(self.context.messages)):
-            msg = self.context.messages[i]
+        l1_raw = self.context.messages[start_idx:]
+        l1_stripped = self._strip_tool_rounds(l1_raw)
+        for msg in l1_stripped:
             msg_copy = dict(msg)
             if msg_copy["role"] == "assistant" and self.context.supports_reasoning and "reasoning_content" not in msg_copy:
                 msg_copy["reasoning_content"] = ""
@@ -716,6 +836,7 @@ class OnlineToolSession(BaseChatSession):
                             text_parts.append("[图片]")
                 msg_copy["content"] = "\n".join(text_parts) if text_parts else "[图片]"
             result.append(msg_copy)
+
         # 然后再次清理——因为sanitize可能移除损坏的tool_calls导致新的孤儿
         result = self._clean_orphan_tool_messages(result)
         result = self._sanitize_api_messages(result)
@@ -724,6 +845,7 @@ class OnlineToolSession(BaseChatSession):
         if _l1_start is not None and _l1_start < len(result) and safe_budget > 0:
             result = self._enforce_token_budget(result, safe_budget, _l1_start)
         return result
+    
     def _clean_orphan_tool_messages(self, messages: List[Dict]) -> List[Dict]:
         """
         移除没有对应 tool_call_id 的孤立 tool 消息，防止 API 400 错误。
@@ -1147,24 +1269,6 @@ class OnlineToolSession(BaseChatSession):
         callback = context.get("callback", lambda x: None)
         on_status = context.get("on_status", None)
 
-        if context.get("skip_tool_loop"):
-            logger.info("[Pipe Dynamic] Skipping tool loop (chat intent)")
-            try:
-                api_messages = self._build_api_messages()
-                eff = self._get_effective_params("main")
-                response = self.api.create_chat_stream(
-                    api_messages, tools=[],
-                    temperature=eff.get("temperature"),
-                    max_tokens=eff.get("max_tokens"),
-                    top_p=eff.get("top_p"),
-                )
-                content, _, reasoning = self._process_stream_with_reasoning(response, callback)
-                self.add_assistant_message(content, reasoning)
-                self.tools_comp.collect_assistant_text_round(content, reasoning)
-                return {"full_reply": content, "used_tools": False, "iterations": 1}
-            except Exception as e:
-                logger.warning(f"Direct answer failed, falling back: {e}")
-
         full_reply = ""
         used_tools = False
         iterations = 0
@@ -1298,6 +1402,7 @@ class OnlineToolSession(BaseChatSession):
                     import time as _time
                     _asctime = _time.strftime("%Y-%m-%d %H:%M:%S")
                     print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name}")
+                    callback(f"\n\n[正在执行 {call.function.name}，处理中...]\n\n")
                     logger.info(f"    tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
                     if self.debug:
                         _args_preview = call.function.arguments[:500] if call.function.arguments else "(empty)"
@@ -1347,8 +1452,8 @@ class OnlineToolSession(BaseChatSession):
                         self.tools_comp.collect_max_iterations_round(full_reply)
                         break
 
-                if content:
-                    callback("\n\n[正在执行工具，处理中...]\n\n")
+                # if content:
+                #     callback("\n\n[正在执行工具，处理中...]\n\n")
 
                 continue
 
@@ -1491,15 +1596,15 @@ class OnlineToolSession(BaseChatSession):
         self.reset_session_state()
         self._refresh_from_config()
 
-        self.skill_manager.auto_activate(_msg_text)
-        self._auto_detect_mode(_msg_text)
+        # self.skill_manager.auto_activate(_msg_text)
+        # self._auto_detect_mode(_msg_text)
 
-        intent = self._analyze_intent(_msg_text)
+        # intent = self._analyze_intent(_msg_text)
 
-        if intent.get('required_tools'):
-            self._build_tools(tool_filter=intent['required_tools'])
-        else:
-            self._build_tools()
+        # if intent.get('required_tools'):
+        #     self._build_tools(tool_filter=intent['required_tools'])
+        # else:
+        #     self._build_tools()
 
         context = {
             "user_msg": msg,
@@ -1508,14 +1613,14 @@ class OnlineToolSession(BaseChatSession):
             "on_status": on_status,
         }
 
-        if intent.get('skip_tool_loop'):
-            context['skip_tool_loop'] = True
+        # if intent.get('skip_tool_loop'):
+        #     context['skip_tool_loop'] = True
 
-        if self.reflection_manager is not None:
-            trace = self.reflection_manager.start_trace(topic_id, _msg_text)
-            self.context._current_trace = trace
-        else:
-            self.context._current_trace = None
+        # if self.reflection_manager is not None:
+        #     trace = self.reflection_manager.start_trace(topic_id, _msg_text)
+        #     self.context._current_trace = trace
+        # else:
+        #     self.context._current_trace = None
 
         result = self.pipeline.execute(context)
 
@@ -1533,37 +1638,37 @@ class OnlineToolSession(BaseChatSession):
             )
 
         import threading
-        if not self._disable_background_tasks and topic_id and topic_id != -1 and not result.get("interrupted", False):
-            def _auto_extract():
-                """Internal: auto extract"""
-                try:
-                    count = self.memory_comp.trigger_memory_extraction(topic_id)
-                    if count > 0 and on_status:
-                        on_status(f"🧠 自动提取了 {count} 条新记忆")
-                except Exception:
-                    pass
-            threading.Thread(target=_auto_extract, daemon=True).start()
+        # if not self._disable_background_tasks and topic_id and topic_id != -1 and not result.get("interrupted", False):
+        #     def _auto_extract():
+        #         """Internal: auto extract"""
+        #         try:
+        #             count = self.memory_comp.trigger_memory_extraction(topic_id)
+        #             if count > 0 and on_status:
+        #                 on_status(f"🧠 自动提取了 {count} 条新记忆")
+        #         except Exception:
+        #             pass
+        #     threading.Thread(target=_auto_extract, daemon=True).start()
 
-        if not self._disable_background_tasks and not result.get("interrupted", False) and self.reflection_manager is not None:
-            def _auto_reflect():
-                """Internal: auto reflect"""
-                try:
-                    if self.reflection_manager.should_reflect():
-                        rid = self.reflection_manager.generate_reflection()
-                        if rid:
-                            if on_status:
-                                on_status(f"🔍 元认知反思完成 (id={rid})")
-                            self._notify_reflection_done(rid)
-                        if self.reflection_manager.last_prompt_suggestion and self.prompt_manager is not None:
-                            new_pid = self.prompt_manager.evolve(
-                                reflection_suggestion=self.reflection_manager.last_prompt_suggestion
-                            )
-                            if new_pid:
-                                if on_status:
-                                    on_status(f"📝 系统提示词进化到 v{self.prompt_manager.current_version}")
-                                self._notify_prompt_evolved(self.prompt_manager.current_version)
-                except Exception:
-                    pass
-            threading.Thread(target=_auto_reflect, daemon=True).start()
+        # if not self._disable_background_tasks and not result.get("interrupted", False) and self.reflection_manager is not None:
+        #     def _auto_reflect():
+        #         """Internal: auto reflect"""
+        #         try:
+        #             if self.reflection_manager.should_reflect():
+        #                 rid = self.reflection_manager.generate_reflection()
+        #                 if rid:
+        #                     if on_status:
+        #                         on_status(f"🔍 元认知反思完成 (id={rid})")
+        #                     self._notify_reflection_done(rid)
+        #                 if self.reflection_manager.last_prompt_suggestion and self.prompt_manager is not None:
+        #                     new_pid = self.prompt_manager.evolve(
+        #                         reflection_suggestion=self.reflection_manager.last_prompt_suggestion
+        #                     )
+        #                     if new_pid:
+        #                         if on_status:
+        #                             on_status(f"📝 系统提示词进化到 v{self.prompt_manager.current_version}")
+        #                         self._notify_prompt_evolved(self.prompt_manager.current_version)
+        #         except Exception:
+        #             pass
+        #     threading.Thread(target=_auto_reflect, daemon=True).start()
 
         return full_reply, used_tools

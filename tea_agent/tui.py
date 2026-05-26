@@ -111,13 +111,13 @@ class _TUIAgentCore(AgentCore):
                 text = chunk[7:]
                 if text:
                     if not think_started:
-                        tui.call_from_thread(tui._append_chat_inline, "【")
+                        tui.call_from_thread(tui._append_chat_inline, "[italic]# ")
                         think_started = True
                     tui.call_from_thread(tui._append_chat_inline, text)
                 return
             if chunk.startswith("[THINK_DONE]"):
                 if think_started:
-                    tui.call_from_thread(tui._append_chat_inline, "】")
+                    tui.call_from_thread(tui._append_chat_inline, "[/italic]")
                     tui.call_from_thread(tui._flush_stream_buffer)
                     think_started = False
                 return
@@ -237,11 +237,13 @@ class TeaTUI(App):
         border-bottom: solid $primary-darken-2;
     }
 
-    #chat-area {
+    # NOTE: 2026-05-25 gen by Hetin, RichLog 替代 TextArea 作为聊天内容窗口
+    RichLog#chat-area {
         height: 100%;
         overflow-y: auto;
         padding: 0 1;
         background: $surface;
+        min-height: 10;
     }
 
     #input-container {
@@ -338,7 +340,8 @@ class TeaTUI(App):
             yield Label("Tea Agent TUI", id="header-title")
             yield Label("", id="header-model")
         with ScrollableContainer(id="chat-container"):
-            yield TextArea(id="chat-area", read_only=True, language=None, show_line_numbers=False)
+            # NOTE: 2026-05-25 gen by Hetin, RichLog 替代 TextArea，原生支持 Rich 标记
+            yield RichLog(id="chat-area", highlight=True, markup=True, wrap=True)
         with Container(id="input-container"):
             yield self._SendTextArea(id="input-area", language=None, show_line_numbers=False)
         with Container(id="status-bar"):
@@ -514,22 +517,13 @@ class TeaTUI(App):
 
 
 
-    @staticmethod
-    def _strip_markup(text: str) -> str:
-        """
-        Remove Rich markup tags like [bold], [dim italic], etc
-
-        Args:
-            text (str): Description.
-
-        Returns:
-            str: Description.
-        """
-        return re.sub(r'\[/?[^\]]*\]', '', text)
+    # NOTE: 2026-05-25 gen by Hetin, RichLog 原生支持 markup，_strip_markup 不再需要
+    # _strip_markup 方法已移除
 
     def _chat_write(self, text: str) -> None:
         """
-        Write plain text to chat TextArea, auto-scroll to bottom
+        Write Rich-markup text to chat RichLog, auto-scroll to bottom.
+        NOTE: 2026-05-25 gen by Hetin, 改用 RichLog.write 替代 TextArea.text 拼接
 
         Args:
             text (str): Description.
@@ -537,13 +531,8 @@ class TeaTUI(App):
         Returns:
             None: Description.
         """
-        chat = self.query_one("#chat-area", TextArea)
-        plain = self._strip_markup(text)
-        if chat.text:
-            chat.text += "\n" + plain
-        else:
-            chat.text = plain
-        chat.move_cursor((chat.text.count('\n'), 0))
+        chat = self.query_one("#chat-area", RichLog)
+        chat.write(text)
 
     def _append_chat_inline(self, text: str):
         """
@@ -573,7 +562,7 @@ class TeaTUI(App):
         parts = cmd.split(None, 1)
         cmd_name = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
-        chat = self.query_one("#chat-area", TextArea)
+        chat = self.query_one("#chat-area", RichLog)
 
         if cmd_name in ("/bye", "/quit", "/exit"):
             self.exit()
@@ -621,7 +610,7 @@ class TeaTUI(App):
         Args:
             arg (str): Description.
         """
-        chat = self.query_one("#chat-area", TextArea)
+        chat = self.query_one("#chat-area", RichLog)
         if "=" not in arg:
             self._chat_write("[bold yellow]Usage: /set think=on|off or /set verbose=on|off[/]")
             return
@@ -652,7 +641,7 @@ class TeaTUI(App):
         Args:
             arg (str): Description.
         """
-        chat = self.query_one("#chat-area", TextArea)
+        chat = self.query_one("#chat-area", RichLog)
         tid = arg.strip()
         if not self.agent:
             self._chat_write("[bold red]Agent not ready[/]")
@@ -715,7 +704,7 @@ class TeaTUI(App):
         """Action list topics"""
         if not self.agent:
             return
-        chat = self.query_one("#chat-area", TextArea)
+        chat = self.query_one("#chat-area", RichLog)
         topics = self.agent.db.list_topics()
         self._chat_write("\\n[bold]Recent Topics:[/]")
         for i, t in enumerate(topics[:20]):

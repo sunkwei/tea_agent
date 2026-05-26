@@ -245,23 +245,23 @@ class TestSubAgentWrapper(unittest.TestCase):
         mock_toolkit.meta_map = {
             "toolkit_file": {"type": "function", "function": {"name": "toolkit_file", "description": "文件操作"}},
             "toolkit_exec": {"type": "function", "function": {"name": "toolkit_exec", "description": "执行命令"}},
-            "toolkit_save": {"type": "function", "function": {"name": "toolkit_save", "description": "保存工具"}},
+            "toolkit_mgrt": {"type": "function", "function": {"name": "toolkit_mgrt", "description": "工具管理"}},
             "toolkit_memory": {"type": "function", "function": {"name": "toolkit_memory", "description": "记忆管理"}},
         }
         
         config = SubAgentConfig(
             name="test",
-            tool_whitelist=["toolkit_file", "toolkit_exec", "toolkit_save"],
+            tool_whitelist=["toolkit_file", "toolkit_exec", "toolkit_mgrt"],
         )
         agent = SubAgentWrapper(config, parent_toolkit=mock_toolkit)
         tools = agent._build_tool_list(mock_toolkit)
-        # toolkit_save 虽在白名单但也在黑名单中，应被过滤
+        # toolkit_mgrt 虽在白名单但也在黑名单中，应被过滤
         # toolkit_memory 不在白名单中，应被排除
         # 最终结果只有 toolkit_file 和 toolkit_exec
         tool_names = [t["function"]["name"] for t in tools]
         self.assertIn("toolkit_file", tool_names)
         self.assertIn("toolkit_exec", tool_names)
-        self.assertNotIn("toolkit_save", tool_names)
+        self.assertNotIn("toolkit_mgrt", tool_names)
         self.assertNotIn("toolkit_memory", tool_names)
 
 
@@ -503,10 +503,10 @@ class TestLiteAgentConfig(unittest.TestCase):
         cfg = LiteAgent._parse_config_dict({
             "api_key": "sk", "api_url": "http://x", "model_name": "m",
             "tool_whitelist": ["toolkit_file", "toolkit_exec"],
-            "tool_blacklist": ["toolkit_save"],
+            "tool_blacklist": ["toolkit_mgrt"],
         })
         self.assertEqual(cfg.tool_whitelist, ["toolkit_file", "toolkit_exec"])
-        self.assertEqual(cfg.tool_blacklist, ["toolkit_save"])
+        self.assertEqual(cfg.tool_blacklist, ["toolkit_mgrt"])
 
 
 class TestToolRegistry(unittest.TestCase):

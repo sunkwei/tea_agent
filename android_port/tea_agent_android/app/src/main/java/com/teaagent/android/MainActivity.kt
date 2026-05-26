@@ -44,7 +44,7 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webview)
         AgentWebView.setup(webView)
 
-        // Core — init 会清理 SQLite 中的 toolkit_save/reload，确保不被 LLM 修改
+        // Core — init 会清理 SQLite 中的 toolkit_mgrt/reload，确保不被 LLM 修改
         val toolManager = ToolManager(toolDao, webView)
         toolManager.init()
         val historyCompressor = HistoryCompressor(messageDao)

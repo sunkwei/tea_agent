@@ -47,7 +47,7 @@ class TeaCLI(AgentCore):
         super().__init__(config_path=config_path, disable_summary=disable_summary, debug=debug)
 
         self._cfg.enable_thinking = self._cli_think
-        self._init_session()
+        # self._init_session()
 
     def _on_post_reply(self, ai_msg, used_tools, topic_id):
         """Internal: handle post reply event.

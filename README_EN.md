@@ -395,8 +395,7 @@ toolkit_listen(lang="zh-CN", timeout=5)           # Record to text
 ### Self-Evolution
 | Tool | Function |
 |------|----------|
-| `toolkit_save` | Create/update tool functions (including `_my` routing) |
-| `toolkit_reload` | Hot-reload toolkit |
+| `toolkit_mgrt` | Create/update tool functions (including `_my` routing) |
 | `toolkit_self_evolve` | Modify project source code (4-layer safety: snapshot + backup + verify + test) |
 | `toolkit_rollback` | Tool version rollback |
 | `toolkit_list_versions` | Tool version history |

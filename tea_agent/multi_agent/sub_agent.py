@@ -234,7 +234,7 @@ class SubAgentWrapper:
         all_metas = getattr(toolkit, 'meta_map', {})
         
         default_blacklist = {
-            'toolkit_save', 'toolkit_self_evolve', 'toolkit_release',
+            'toolkit_mgrt', 'toolkit_self_evolve', 'toolkit_release',
             'toolkit_pkg', 'toolkit_mode', 'toolkit_prompt_evolve',
             'toolkit_config', 'toolkit_toggle_reasoning',
             'toolkit_set_topic_title',

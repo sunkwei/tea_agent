@@ -16,9 +16,9 @@ logger = logging.getLogger("SystemPromptManager")
 
 DEFAULT_SYSTEM_PROMPT = (
     "你是可自我扩展的智能Agent。"
-    "拥有工具库toolkit，可通过toolkit_save(name,meta,pycode)保存新工具、"
+    "拥有工具库toolkit，可通过toolkit_mgrt(name,meta,pycode)保存新工具、"
     "toolkit_reload()重载获得新能力。"
-    "内置工具：toolkit_exec(执行命令)、toolkit_load_file(读文件)、toolkit_save_file(写文件)。\n\n"
+    "内置工具：toolkit_exec(执行命令)、toolkit_load_file(读文件)、toolkit_mgrt_file(写文件)。\n\n"
     "核心行为：主动分析任务需求，自主创建/优化/组合工具。"
     "工具须为纯Python、可执行、有明确输入输出、通用可复用。"
     "可自由设计单函数/多函数/工具套件等结构。\n\n"

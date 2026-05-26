@@ -39,12 +39,13 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
             #     logger.warning(f"toolkit_file write BLOCKED: 目标目录受保护 ({marker}), 拒绝写入 {filename}")
             #     return f"🛡️ 保护拒绝: '{filename}' 所在目录存在数据库保护标记，禁止覆盖。如需修改请先确认。"
             
+            # 归一化换行符：\r\n → \n，确保始终使用 LF
+            normalized = content.replace('\r\n', '\n').replace('\r', '\n')
             with open(filename, 'w', encoding='utf-8') as f:
-                f.write(content)
+                f.write(normalized)
             return 0
         except Exception as e:
             return f"Error: {str(e)}"
-
     elif action == "list":
         from pathlib import Path
         target = Path(path).resolve()

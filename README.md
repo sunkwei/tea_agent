@@ -1,6 +1,5 @@
-# TeaAgent v0.9.2
+# TeaAgent v0.9.7
 [📖 English Version](README_EN.md)
-
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**系统提示词自我进化**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
 
 核心 13 个依赖（openai、numpy、markdown、tkinterweb、pyautogui、mss、Pillow、requests、beautifulsoup4、tkhtmlview、jieba、mcp、playwright），OCR/TTS/ASR 为可选扩展。仅依赖 Python tk 库，无需浏览器，极致轻量。绝大部分代码由 LLM 自行生成，是一个「AI 写 AI」的实验项目。（目前主要使用 deepseek v4 pro 模型自主进化，便宜啊）
@@ -766,6 +765,7 @@ main_model:
 | 版本 | 关键变化 |
 |------|---------|
 | v0.9.3 | Store 拆分为 10 模块子包、GUI 重构为 `_gui/` 23模块子包、新增 LSP 代码智能引擎、新增 7 个工具（edit/diff/lsp/mcp/plan/scheduler/evolution_exp）、mode_params 模式参数覆盖、L2/L3 分层压缩参数 |
+| v0.9.7 | master 分支替换（discarded 备份 + my→master 升级）、新增 `toolkit_my_public_ip` 公网IP工具、版本号同步 |
 | v0.9.1 | `toolkit_js_fetch` Playwright 无头浏览器抓取（跨平台）、pyproject.toml 增加 js_fetch 可选依赖 |
 | v0.9.2 | `_post_chat_pipeline` config→_cfg 修复、版本号同步 |
 | v0.8.2 | 版本号一致性修复，以 pyproject.toml 为准同步 || v0.7.15 | 双层记忆体系（用户记忆优先级衰减+LLM精调/项目记忆FIFO）、Store Composition拆分9模块、GUI MVC+Tk重构、分层保底+年龄衰减 |

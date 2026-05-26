@@ -22,7 +22,6 @@ import logging
 from tea_agent.basesession import BaseChatSession
 from tea_agent.session_prompts import COMPACT_SYSTEM_PROMPT
 from tea_agent.session_pipeline import SessionPipeline
-from tea_agent.skills import SkillManager
 
 # 组件导入（替代 Mixin）
 from tea_agent.session_context import SessionContext
@@ -162,12 +161,6 @@ class OnlineToolSession(BaseChatSession):
         # ── 工具定义 ──
         self.tools: List[Dict] = []
 
-        # ── Skill 管理器 ──
-        self.skill_manager = SkillManager.get_instance()
-        self.skill_manager.discover_skills()
-        self.skill_manager.activate_skill("utility")
-        self.skill_manager.activate_skill("file_system")
-        self.skill_manager.activate_skill("memory_knowledge")
 
         # 构建工具列表（委派给组件）
         self.tools = self.tools_comp.build_tools()
@@ -396,8 +389,142 @@ class OnlineToolSession(BaseChatSession):
     # Pipeline 设置（委派给组件）
     # ──────────────────────────────────────────────
 
+    def _inject_os_info(self, context: Dict) -> List:
+        """
+        注入操作系统环境信息轮次（放在用户消息之前）。
+        根据实际运行的 OS 注入差异化的工具使用提示，
+        指导 LLM 使用正确的命令、路径分隔符和工具策略。
+        """
+        import platform as _platform
+        import socket as _socket
+        import os as _os
+
+        os_name = _platform.system()
+        os_release = _platform.release()
+        os_version = _platform.version()
+        os_machine = _platform.machine()
+        os_processor = _platform.processor() or "unknown"
+        py_ver = _platform.python_version()
+        hostname = _socket.gethostname()
+        path_sep = _os.sep          # / 或 \
+        env_sep = _os.pathsep       # : 或 ;
+
+        is_windows = os_name == "Windows"
+        is_linux = os_name == "Linux"
+        is_macos = os_name == "Darwin"
+
+        # ── OS 概要 ──
+        lines = [
+            f"操作系统: {os_name} {os_release} ({os_version})",
+            f"架构: {os_machine}",
+            f"主机名: {hostname}",
+            f"Python: {py_ver}",
+        ]
+
+        # ── 路径约定 ──
+        lines.append("")
+        lines.append("═══ 路径与分隔符 ═══")
+        lines.append(f"路径分隔符: '{path_sep}'（Windows 使用 \\\\，Linux/macOS 使用 /）")
+        lines.append(f"环境变量分隔符: '{env_sep}'（Windows 使用 ;，Linux/macOS 使用 :）")
+        lines.append(f"当前工作目录: {_os.getcwd()}")
+
+        # ── OS 特有工具提示 ──
+        lines.append("")
+        lines.append("═══ 操作提示（请严格遵循当前 OS 的指令语法）═══")
+
+        if is_windows:
+            lines.extend([
+                "🪟 Windows 环境 — 请特别注意：",
+                "",
+                "【路径】使用反斜杠 \\（如 C:\\Users\\...），但在 Python 字符串中请用正斜杠 / 或双反斜杠 \\\\",
+                "【环境变量】用 %VAR% 引用（如 %USERPROFILE%），PowerShell 用 $env:VAR",
+                "",
+                "【文件搜索】使用 findstr（代替 grep）：",
+                "  toolkit_exec(app='findstr', args=['/i', '关键词', 'C:\\path\\file.txt'])",
+                "  或 dir /s /b | findstr /i 关键词",
+                "",
+                "【目录列表】使用 dir（代替 ls）：",
+                "  toolkit_exec(app='cmd', args=['/c', 'dir /b /s C:\\path'])",
+                "",
+                "【文件读取】使用 type（代替 cat）：",
+                "  toolkit_exec(app='cmd', args=['/c', 'type', 'C:\\path\\file.txt'])",
+                "  或在 Python 中直接用 open() 读取（推荐）",
+                "",
+                "【路径环境】可用环境变量：%USERPROFILE%, %APPDATA%, %LOCALAPPDATA%, %TEMP%, %PATH%",
+                "【Shell】默认 cmd.exe；如需 PowerShell 需显式指定 app='powershell'",
+            ])
+        elif is_linux:
+            lines.extend([
+                "🐧 Linux 环境 — 请特别注意：",
+                "",
+                "【路径】使用正斜杠 /（如 /home/user/...）",
+                "【环境变量】用 $VAR 引用（如 $HOME, $PATH）",
+                "",
+                "【文件搜索】使用 grep：",
+                "  toolkit_exec(app='grep', args=['-rn', '关键词', '/path'])",
+                "",
+                "【目录列表】使用 ls：",
+                "  toolkit_exec(app='ls', args=['-la', '/path'])",
+                "",
+                "【文件读取】使用 cat：",
+                "  toolkit_exec(app='cat', args=['/path/file.txt'])",
+                "  或在 Python 中直接用 open() 读取（推荐）",
+                "",
+                "【路径环境】可用环境变量：$HOME, $PWD, $SHELL, $PATH",
+                "【权限】部分操作需 sudo，将自动弹出 GUI 密码框",
+            ])
+        elif is_macos:
+            lines.extend([
+                "🍎 macOS 环境 — 请特别注意：",
+                "",
+                "【路径】使用正斜杠 /（如 /Users/username/...）",
+                "【环境变量】用 $VAR 引用（如 $HOME, $PATH）",
+                "",
+                "【文件搜索】使用 grep：",
+                "  toolkit_exec(app='grep', args=['-rn', '关键词', '/path'])",
+                "",
+                "【目录列表】使用 ls：",
+                "  toolkit_exec(app='ls', args=['-la', '/path'])",
+                "",
+                "【文件读取】使用 cat：",
+                "  toolkit_exec(app='cat', args=['/path/file.txt'])",
+                "",
+                "【路径环境】可用环境变量：$HOME, $PWD, $SHELL, $PATH",
+            ])
+
+        # ── 通用工具提示 ──
+        lines.append("")
+        lines.append("═══ 通用规则 ═══")
+        lines.append("• 文件读写优先使用 toolkit_file（跨平台兼容），避免执行 shell 命令")
+        lines.append("• 执行 shell 命令使用 toolkit_exec，注意不同 OS 下命令名和参数不同")
+        lines.append("• 路径字符串在 Python 中统一用正斜杠 /，Python 会自动适配底层 OS")
+        lines.append(f"• 当前 tool 目录: {self.toolkit.root_dir}")
+        lines.append("• 如需获取更详细的 OS 信息，可调用 toolkit_os_info() 工具")
+
+        info_text = "[系统环境信息]\n" + "\n".join(lines)
+
+        # 注入为用户轮次 + 助手确认
+        self.messages.append({"role": "user", "content": info_text})
+        ack = {
+            "role": "assistant",
+            "content": f"✅ 已识别当前环境为 {os_name} {os_machine}，将遵循对应的路径约定和命令语法。"
+        }
+        if self.context.supports_reasoning:
+            ack["reasoning_content"] = ""
+        self.messages.append(ack)
+
+        return self.messages
+
     def _setup_default_pipeline(self):
         """设置默认的 Pipeline 步骤"""
+        # 0. 操作系统信息注入（放在用户消息之前）
+        self.pipeline.register_step(
+            name="inject_os_info",            func=self._inject_os_info,
+            enabled=True,
+            description="注入操作系统环境信息轮次，放在用户消息之前",
+            position=17,
+        )
+
         # 1. 记忆注入（委派给 Memory 组件）
         self.pipeline.register_step(
             name="inject_memories",
@@ -433,11 +560,9 @@ class OnlineToolSession(BaseChatSession):
             description="执行工具调用循环",
             position=40,
         )
-
+    
     # ──────────────────────────────────────────────
     # 构建 API 消息（使用 context 状态）
-    # ──────────────────────────────────────────────
-
     def _build_api_messages(self) -> List[Dict]:
         """
         三级历史拼接：
@@ -448,19 +573,9 @@ class OnlineToolSession(BaseChatSession):
         """
         result: List[Dict] = []
 
-        # ── Level 0: 系统提示词 + Skill 注入 ──
+        # ── Level 0: 系统提示词 ──
         sys_msg = dict(self.context.messages[0])
-        skill_prompt = self.skill_manager.get_active_prompt()
-        skill_summary = self.skill_manager.get_skill_summary()
-        if skill_prompt or skill_summary:
-            enhanced = sys_msg["content"]
-            if skill_summary:
-                enhanced = enhanced + "\n\n" + skill_summary
-            if skill_prompt:
-                enhanced = enhanced + "\n\n" + skill_prompt
-            sys_msg["content"] = enhanced
         result.append(sys_msg)
-
         # ── 潜意识引擎状态注入 ──
         sub_ctx = self._get_subconscious_context()
         if sub_ctx:
@@ -589,6 +704,7 @@ class OnlineToolSession(BaseChatSession):
                     cleaned.append(msg)
                 else:
                     logger.warning(f"_build_api_messages: 移除孤立 tool 消息 (id={msg.get('tool_call_id')})")
+                    pass
             else:
                 cleaned.append(msg)
         result = cleaned
@@ -1070,7 +1186,8 @@ class OnlineToolSession(BaseChatSession):
                         self._extra_iterations += self.context.extra_iterations_on_continue
                         self._continue_after_max = False
                         self._max_iter_wait.clear()
-                        on_status("⏳ 已续命5轮，继续生成... (ESC 打断)")
+                        extra = self.context.extra_iterations_on_continue
+                        on_status(f"⏳ 已续命{extra}轮，继续生成... (ESC 打断)")
                         continue
                     else:
                         warning = f"\n\n[警告：已达到最大迭代次数 {self.max_iterations}，对话终止]"
@@ -1105,13 +1222,6 @@ class OnlineToolSession(BaseChatSession):
     def _build_tools(self, tool_filter: list = None):
         """构建工具定义列表"""
         tools = self.tools_comp.build_tools()
-        
-        # 通过 SkillManager 过滤
-        active_tools = self.skill_manager.get_active_tools_meta(self.context.toolkit.meta_map)
-        if active_tools:
-            tools = active_tools
-        else:
-            tools = tools
 
         if tool_filter:
             essential = {'toolkit_memory', 'toolkit_kb'}
@@ -1196,7 +1306,6 @@ class OnlineToolSession(BaseChatSession):
         self.reset_interrupt()
         self.reset_session_state()
 
-        self.skill_manager.auto_activate(_msg_text)
         self._auto_detect_mode(_msg_text)
 
         intent = self._analyze_intent(_msg_text)

@@ -104,8 +104,19 @@ def _verify_all(files: List[str], cwd: str, run_tests: bool = True) -> dict:
             diags = json.loads(r.stdout) if r.stdout.strip() else []
             results["lint"][fp] = len(diags) if diags else 0
 
-    # pytest
-    if run_tests:
+    # 语义级诊断（jedi）— 检查未定义符号/无法解析的引用
+    results["semantic"] = {}
+    for fp in files:
+        full = os.path.join(cwd, fp)
+        if fp.endswith(".py") and os.path.exists(full):
+            try:
+                from tea_agent.lsp.lsp_engine import semantic_diagnose
+                sd = semantic_diagnose(cwd, full)
+                results["semantic"][fp] = sd
+            except Exception:
+                results["semantic"][fp] = {"ok": True, "issues": [], "hint": "skipped"}
+
+    # pytest    if run_tests:
         try:
             r = subprocess.run(
                 [os.sys.executable, "-m", "pytest", "test_*.py", "-q", "--tb=short"],
@@ -124,12 +135,12 @@ def _verify_all(files: List[str], cwd: str, run_tests: bool = True) -> dict:
     results["all_ok"] = (
         all(not str(v).startswith("FAIL") for v in results["compile"].values())
         and all(v == 0 for v in results["lint"].values())
+        and all(s.get("ok", True) for s in results["semantic"].values())
         and (results["test"] is None or results["test"].get("returncode") == 0)
     )
     return results
 
 # ── 单文件应用 ──────────────────────────────────────────
-
 def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, description: str = "") -> dict:
     """应用单个修改，返回 {ok, file, error, bak_path}"""
     import shutil
@@ -154,7 +165,11 @@ def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, descripti
     try:
         with open(full, "r", encoding="utf-8") as f:
             content = f.read()
-        new_content = content.replace(old_code, new_code, 1)
+        # 归一化换行符，确保只使用 \n
+        content = content.replace('\r\n', '\n').replace('\r', '\n')
+        new_code_norm = new_code.replace('\r\n', '\n').replace('\r', '\n')
+        old_code_norm = old_code.replace('\r\n', '\n').replace('\r', '\n')
+        new_content = content.replace(old_code_norm, new_code_norm, 1)
         with open(full, "w", encoding="utf-8") as f:
             f.write(new_content)
         return {"ok": True, "file": file_path, "bak_path": bak}

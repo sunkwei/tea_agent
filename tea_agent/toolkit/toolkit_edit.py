@@ -124,6 +124,9 @@ def _apply_patch_python(file_path: str, original_content: str, patch_content: st
     import re
 
     try:
+        # 归一化原始内容和 patch 内容的换行符
+        original_content = original_content.replace('\r\n', '\n').replace('\r', '\n')
+        patch_content = patch_content.replace('\r\n', '\n').replace('\r', '\n')
         lines = original_content.split('\n')
         patch_lines = patch_content.split('\n')
 
@@ -239,7 +242,8 @@ def _insert_lines(file_path: str, start_line: int, new_content: str, preview: bo
         # 保存原始内容用于 diff 生成
         original_content = ''.join(lines)
 
-        # 插入新内容
+        # 插入新内容（归一化换行符，确保只使用 \n）
+        new_content = new_content.replace('\r\n', '\n').replace('\r', '\n')
         insert_lines = new_content.split('\n')
         # 正确处理换行符
         insert_lines_with_newline = []
@@ -337,8 +341,9 @@ def _replace_lines(file_path: str, start_line: int, end_line: int, new_content: 
         if end_line < start_line or end_line > len(lines):
             return (1, "", f"❌ 结束行号 {end_line} 超出范围")
 
-        # 替换行
+        # 替换行（归一化换行符，确保只使用 \n）
         old_lines = lines[start_line-1:end_line]
+        new_content = new_content.replace('\r\n', '\n').replace('\r', '\n')
         insert_lines = new_content.split('\n')
         insert_lines_with_newline = [l + '\n' for l in insert_lines[:-1]] + [insert_lines[-1]]
 

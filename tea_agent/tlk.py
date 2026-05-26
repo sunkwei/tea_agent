@@ -167,10 +167,8 @@ class Toolkit:
         'toolkit_proactive', 'toolkit_subconscious', 'toolkit_dump_topic',
         'toolkit_mode', 'toolkit_prompt_evolve', 'toolkit_input',
         'toolkit_notify', 'toolkit_speak', 'toolkit_listen',
-        'toolkit_ocr', 'toolkit_screenshot', 'toolkit_rollback',
-        'toolkit_run_tests', 'toolkit_toggle_reasoning', 'toolkit_skill',
-        'toolkit_set_topic_title', 'toolkit_sudo_gui',
-        'toolkit_git_push_all_remotes',
+        'toolkit_run_tests', 'toolkit_toggle_reasoning',
+        'toolkit_set_topic_title', 'toolkit_sudo_gui',        'toolkit_git_push_all_remotes',
     }
 
     def __init__(self, tool_dir=None):

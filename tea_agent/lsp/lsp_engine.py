@@ -14,7 +14,7 @@ import logging
 
 logger = logging.getLogger("lsp")
 
-# ── Jedi 智能后端 ────────────────────────────────────────────
+# ── Jedi 智能后端 ────────────────────────────────────────
 
 def _get_jedi_project(project_root: str):
     """获取 jedi Project 实例"""
@@ -82,6 +82,91 @@ def _fmt_diagnostic(d: Dict) -> str:
     fix_hint = f" (可自动修复: {fix.get('message', '')})" if fix else ""
     return f"[{code}] {loc}\n  {msg}{fix_hint}"
 
+def semantic_diagnose(project_root: str, filepath: str) -> Dict:
+    """基于 jedi 的语义级诊断 — 检查未定义符号、无法解析的引用等深局问题。
+
+    与 diagnose() 的 ruff lint 不同，此函数深入语义层：
+      - 检查引用是否能解析到定义
+      - 检查导入模块是否存在
+      - 检查函数/类名拼写错误
+    不检查代码风格/格式问题。
+
+    Args:
+        project_root: 项目根目录
+        filepath: 目标 .py 文件
+
+    Returns:
+        {"ok": bool, "issues": [...], "total": int, "hint": str}
+    """
+    if not filepath or not filepath.endswith(".py"):
+        return {"ok": True, "issues": [], "total": 0, "hint": "非 Python 文件，跳过"}
+
+    source = _read_file_safe(filepath)
+    if source is None:
+        return {"ok": False, "error": f"无法读取: {filepath}"}
+
+    try:
+        import jedi
+        script = jedi.Script(source, path=filepath,
+                             project=_get_jedi_project(project_root))
+
+        issues = []
+        seen_names = set()
+
+        # 1. 扫描所有引用，检查能否解析
+        all_names = script.get_names(all_scopes=True, definitions=True)
+        defined = {n.name for n in all_names if n.type in
+                   ('function', 'class', 'param', 'statement', 'import')}
+
+        all_refs = script.get_names(all_scopes=True, definitions=False)
+        for ref in all_refs:
+            name = ref.name
+            if name in seen_names or name.startswith('_') or name in defined:
+                continue
+            # 尝试推断
+            try:
+                inferred = ref.infer()
+                if not inferred:
+                    seen_names.add(name)
+                    issues.append({
+                        "type": "unresolved_reference",
+                        "name": name,
+                        "line": ref.line,
+                        "column": ref.column or 0,
+                        "message": f"符号 '{name}' 无法解析到定义，可能是拼写错误或缺少导入",
+                    })
+            except Exception:
+                pass
+
+        # 2. 检查导入
+        for name in script.get_names(all_scopes=True):
+            if name.type == 'import':
+                try:
+                    inferred = name.infer()
+                    if not inferred:
+                        issues.append({
+                            "type": "unresolved_import",
+                            "name": name.name,
+                            "line": name.line,
+                            "column": 0,
+                            "message": f"导入 '{name.name}' 无法解析",
+                        })
+                except Exception:
+                    pass
+
+        hint = f"发现 {len(issues)} 个语义问题" if issues else "语义检查通过 ✓"
+        return {
+            "ok": len(issues) == 0,
+            "issues": issues[:30],
+            "total": len(issues),
+            "hint": hint,
+        }
+
+    except ImportError:
+        return {"ok": False, "error": "jedi 未安装，请运行: pip install jedi"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
+
 def completion(project_root: str, filepath: str, line: int, col: int) -> Dict:
     """代码补全 — 基于 jedi"""
     try:
@@ -113,7 +198,7 @@ def completion(project_root: str, filepath: str, line: int, col: int) -> Dict:
         return {"ok": False, "error": str(e)}
 
 def goto_definition(project_root: str, filepath: str, line: int, col: int) -> Dict:
-    """跳转到定义 — 基于 jedi"""
+    """跳转微义 — 基于 jedi"""
     try:
         source = _read_file_safe(filepath)
         if source is None:
@@ -138,13 +223,13 @@ def goto_definition(project_root: str, filepath: str, line: int, col: int) -> Di
         return {
             "ok": True,
             "definitions": items,
-            "hint": f"找到 {len(items)} 个定义" if items else "未找到定义",
+            "hint": f"记录 {len(items)} 个定义" if items else "未拶到定义",
         }
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
 def hover(project_root: str, filepath: str, line: int, col: int) -> Dict:
-    """悬停信息 — 类型 + docstring"""
+    """悬停信情 — 系垈 + docstring"""
     try:
         source = _read_file_safe(filepath)
         if source is None:
@@ -153,7 +238,7 @@ def hover(project_root: str, filepath: str, line: int, col: int) -> Dict:
         import jedi
         script = jedi.Script(source, path=filepath, project=_get_jedi_project(project_root))
 
-        # 获取当前位置的签名/帮助
+        # 荷取当前位置的签名＜帮助
         signatures = script.get_signatures(line, col)
         definitions = script.infer(line, col)
 

@@ -103,8 +103,10 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     # ── LSP 辅助函数 ── @2026-05-19 gen by claude
     def _run_lsp_checks(full_path, symbol, old_code, new_code, content):
         """Layer 2.5: 影响分析 + ruff lint + 签名对比。非阻塞。"""
+        """Layer 2.5: 影响分析 + ruff lint + 签名对比 + 语义诊断。非阻塞。"""
         result = {"impact": None, "lint_before": 0, "lint_after": 0, "lint_new": 0,
-                  "sig_changed": False, "old_sig": None, "new_sig": None}
+                  "sig_changed": False, "old_sig": None, "new_sig": None,
+                  "semantic": None}
         try:
             # 1. 影响分析
             if symbol:
@@ -167,13 +169,24 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                 except Exception:
                     pass
 
+            # 5. 语义诊断（jedi）— 检查未定义符号/无法解析的引用
+            try:
+                from tea_agent.lsp.lsp_engine import semantic_diagnose
+                sd = semantic_diagnose(cwd, full_path)
+                result["semantic"] = {"ok": sd.get("ok", True), "issues": sd.get("issues", [])[:5],
+                                      "total": sd.get("total", 0), "hint": sd.get("hint", "")}
+                if not sd.get("ok", True):
+                    logger.warning(f"LSP 语义诊断: {sd.get('hint', '')}")
+            except Exception:
+                result["semantic"] = {"ok": True, "issues": [], "hint": "skipped"}
+
         except Exception as e:
             logger.debug(f"LSP checks: {e}")
         return result
 
     # ──────────────────────────────────────
     # 主逻辑
-    # ──────────────────────────────────────    # ──────────────────────────────────────
+    # ──────────────────────────────────────
 
     with open(full_path, "r", encoding="utf-8") as f:
         content = f.read()

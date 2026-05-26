@@ -51,19 +51,17 @@ class PathsConfig:
     db_path: str = ""         # 数据库文件路径（相对或绝对）
     toolkit_dir: str = ""     # 自定义工具目录
     kb_dir: str = ""          # 知识库目录
-    skills_dir: str = ""      # 用户自定义 skills 目录
-
+    skills_dir: str = ""      # <已废弃> 保留字段避免旧配置报错
     # 运行时解析后的绝对路径（由 load_config 填充）
     _data_dir_abs: str = ""
     _db_path_abs: str = ""
     _toolkit_dir_abs: str = ""
     _kb_dir_abs: str = ""
-    _skills_dir_abs: str = ""
 
     def resolve(self, config_dir: str) -> None:
         """根据 config.yaml 所在目录解析所有路径为绝对路径。
         
-        子路径（db/toolkit/kb/skills）的相对路径相对于 data_dir_abs 解析。
+        子路径（db/toolkit/kb）的相对路径相对于 data_dir_abs 解析。
         
         Args:
             config_dir: config.yaml 所在目录的绝对路径
@@ -83,12 +81,6 @@ class PathsConfig:
 
         # 子路径解析：相对路径相对于 data_dir_abs
         def _resolve(value: str, default_rel: str) -> str:
-            """Internal: resolve.
-            
-            Args:
-                value: Description.
-                default_rel: Description.
-            """
             if not value:
                 return os.path.join(self._data_dir_abs, default_rel)
             expanded = os.path.expanduser(value)
@@ -99,33 +91,26 @@ class PathsConfig:
         self._db_path_abs = _resolve(self.db_path, "chat_history.db") if self.db_path else os.path.join(self._data_dir_abs, "chat_history.db")
         self._toolkit_dir_abs = _resolve(self.toolkit_dir, "toolkit") if self.toolkit_dir else os.path.join(self._data_dir_abs, "toolkit")
         self._kb_dir_abs = _resolve(self.kb_dir, "kb") if self.kb_dir else os.path.join(self._data_dir_abs, "kb")
-        self._skills_dir_abs = _resolve(self.skills_dir, "skills") if self.skills_dir else os.path.join(self._data_dir_abs, "skills")
 
     @property
     def db_path_abs(self) -> str:
-        """Db path abs."""
+        """数据库文件绝对路径。"""
         return self._db_path_abs
 
     @property
     def toolkit_dir_abs(self) -> str:
-        """Toolkit dir abs."""
+        """自定义工具目录绝对路径。"""
         return self._toolkit_dir_abs
 
     @property
     def kb_dir_abs(self) -> str:
-        """Kb dir abs."""
+        """知识库目录绝对路径。"""
         return self._kb_dir_abs
 
     @property
-    def skills_dir_abs(self) -> str:
-        """Skills dir abs."""
-        return self._skills_dir_abs
-
-    @property
     def data_dir_abs(self) -> str:
-        """Data dir abs."""
+        """数据根目录绝对路径。"""
         return self._data_dir_abs
-
 @dataclass
 class EmbeddingConfig:
     """文本向量模型配置。用于消息语义搜索。
@@ -532,8 +517,7 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "  db_path: \"\"           # 数据库文件，默认 data_dir/chat_history.db\n"
         "  toolkit_dir: \"\"       # 自定义工具目录，默认 data_dir/toolkit\n"
         "  kb_dir: \"\"            # 知识库目录，默认 data_dir/kb\n"
-        "  skills_dir: \"\"        # 用户 skills 目录，默认 data_dir/skills\n\n"
-        "# ==================== 向量模型配置 ====================\n"
+        "  # skills_dir: \"\"     # <已废弃>\n"        "# ==================== 向量模型配置 ====================\n"
         "# 用于主题搜索的文本向量生成。api_url 为空时自动使用本地 TF-IDF 回退。\n"
         "embedding_model:\n"
         "  api_url: \"\"          # Embedding API 地址，如 http://localhost:11434/v1\n"

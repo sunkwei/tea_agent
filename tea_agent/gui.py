@@ -715,9 +715,6 @@ class TkGUI(AgentCore):
         Args:
             e: Description.
         """
-        if self._shutting_down:
-            self._update_status("🔄 代码已变更，等待重启...")
-            return "break"
         if self.generating or not self.current_topic_id:
             return "break"
         msg = self.input_box.get("1.0", tk.END).strip()

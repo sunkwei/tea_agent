@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tea_agent"
-version = "0.9.8"
-description = "A self-evolving AI agent with dynamic toolkit management. Optional: OCR/TTS/ASR."
+version = "0.9.9"
+description = "A self-evolving AI agent with dynamic toolkit management."
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
@@ -20,7 +20,9 @@ classifiers = [
 
 dependencies = [
     "openai>=1.0.0",
+    "httpx>=0.25.0",
     "numpy>=1.24.0",
+    "PyYAML>=6.0",
     "markdown>=3.4.0",
     "tkinterweb>=3.10",
     "pyautogui>=0.9.0",
@@ -28,10 +30,13 @@ dependencies = [
     "Pillow>=10.0.0",
     "requests>=2.30.0",
     "beautifulsoup4>=4.12.0",
-    "tkhtmlview",
     "jieba>=0.42.0",
     "mcp>=1.0.0",
     "playwright>=1.40.0",
+    "jedi>=0.19.0",
+    "tree-sitter>=0.21.0",
+    "tree-sitter-python>=0.21.0",
+    "textual>=0.50.0",
 ]
 
 [project.scripts]

@@ -1,8 +1,8 @@
 # 2026-05-06 gen by claude, 添加包版本号
 
-__version__ = "0.9.2"
-__all__ = [
-    "TeaAgent",
+__version__ = "0.9.9"
+
+__all__ = [    "TeaAgent",
     "AgentCore",
     "BaseChatSession",
     "OnlineToolSession",

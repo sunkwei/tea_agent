@@ -49,9 +49,8 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         '隐喻', '比喻', '类比', '跨界', '融合', '混搭', '颠覆性',
         '科幻', '奇幻', '魔法', '宇宙', '维度', '平行世界',
         '灵感', 'inspiration', '创造', 'create', '设想', '构想',
-        'toolkit_ocr', 'toolkit_screenshot', 'toolkit_search',
-        'toolkit_speak', 'toolkit_kb', 'toolkit_subconscious',
-    ]
+        'toolkit_screenshot', 'toolkit_search',
+        'toolkit_kb', 'toolkit_subconscious',    ]
     
     MODE_INSTRUCTIONS = {
         "pragmatic": (
@@ -68,10 +67,9 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             "2. 跨域联想：把不同领域的概念碰撞，创造新连接"
             "3. 反向思维：如果反过来会怎样？如果放大100倍？如果归零？"
             "4. 输出风格：诗意、画面感、故事性，用隐喻和类比"
-            "5. 优先使用：toolkit_search/toolkit_kb/toolkit_speak/toolkit_subconscious"
+            "5. 优先使用：toolkit_search/toolkit_kb/toolkit_subconscious"
         ),
-        "mixed": (
-            "🔀 当前处于【混合模式】。根据用户输入灵活切换风格："
+        "mixed": (            "🔀 当前处于【混合模式】。根据用户输入灵活切换风格："
             "技术问题用严谨收敛、创意话题用自由发散。"
             "自行判断最合适的回应方式。"
         ),

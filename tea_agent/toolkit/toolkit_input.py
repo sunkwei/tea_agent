@@ -135,8 +135,7 @@ def meta_toolkit_input() -> dict:
         "type": "function",
         "function": {
             "name": "toolkit_input",
-            "description": "模拟鼠标和键盘操作 — Agent 的'手'。可移动鼠标、点击、拖拽、滚动、输入文本、按快捷键。配合 toolkit_ocr 可实现「看→分析→操作」闭环。",
-            "parameters": {
+            "description": "模拟鼠标和键盘操作 — Agent 的'手'。可移动鼠标、点击、拖拽、滚动、输入文本、按快捷键。配合 toolkit_screenshot 可实现「看→分析→操作」闭环。",            "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {

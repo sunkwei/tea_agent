@@ -1,9 +1,10 @@
-# TeaAgent v0.9.7
+# TeaAgent v0.9.9
 [📖 English Version](README_EN.md)
 TeaAgent 是一个**自主进化型智能助手**，基于 OpenAI 兼容 Function Calling 接口。核心特色：**可自我扩展工具库**、**系统提示词自我进化**、**双模式人格切换**、**三层认知系统**（记忆/反思/潜意识）。
 
-核心 13 个依赖（openai、numpy、markdown、tkinterweb、pyautogui、mss、Pillow、requests、beautifulsoup4、tkhtmlview、jieba、mcp、playwright），OCR/TTS/ASR 为可选扩展。仅依赖 Python tk 库，无需浏览器，极致轻量。绝大部分代码由 LLM 自行生成，是一个「AI 写 AI」的实验项目。（目前主要使用 deepseek v4 pro 模型自主进化，便宜啊）
+核心 18 个依赖（openai、httpx、numpy、PyYAML、markdown、tkinterweb、pyautogui、mss、Pillow、requests、beautifulsoup4、jieba、mcp、playwright、jedi、tree-sitter、tree-sitter-python、textual），仅依赖 Python tk 库，无需浏览器，极致轻量。绝大部分代码由 LLM 自行生成，是一个「AI 写 AI」的实验项目。（目前主要使用 deepseek v4 pro 模型自主进化，便宜啊）
 
+> ℹ️ OCR/TTS/ASR 已移除，将来通过 **MCP 扩展**（`toolkit_mcp`）按需接入外部服务。
 ## ⚠️ 安全警告
 
 本项目**未作安全沙盒**——Agent 可执行任意系统命令(sudo权限命令会弹出输入口令的对话框)、修改自身代码（做好 git 版本管理）。建议在虚拟机中运行。
@@ -86,9 +87,7 @@ Skill (激活条件)                    工具数   默认
 ⏰  utility (时间日期)                 3      ✅    gettime/date_diff/lunar
 🧠  memory_knowledge (记忆/知识库)    7      ✅    memory/kb/reflection/proactive/subconscious/explr/mode
 🔧  self_evolution (自我进化)         12            self_evolve/build/bump_version/edit/diff/lsp/...
-🖥️  desktop_automation (截图/OCR)      4            screenshot/ocr/input/notify
-🔊  interaction (语音/搜索/知识)        3            speak/listen/search
-```
+🖥️  desktop_automation (截图/输入)      3            screenshot/input/notify🔊  interaction (搜索/知识)              2            search```
 
 - **默认场景**（纯对话）：约 19 工具激活
 - **自动激活**：用户输入触发词 → 对应 Skill 自动激活
@@ -360,20 +359,6 @@ toolkit_lsp(action='completion', file='tea_agent/onlinesession.py', line=850, co
 
 ---
 
-## 🗣️ 语音系统
-
-| 功能 | 引擎 | 说明 |
-|------|------|------|
-| **TTS 输出** | pyttsx3（本地）→ gTTS（在线） | 141种音色离线朗读，中文自动匹配 |
-| **STT 输入** | Google Speech API → PocketSphinx | 麦克风录音→文字，5秒超时 |
-
-```python
-toolkit_speak(text="你好，进化完成")       # TTS 朗读
-toolkit_listen(lang="zh-CN", timeout=5)   # 录音转文字
-```
-
----
-
 ## 🔧 工具库 (45 内置 + 用户工具箱)
 ### 系统操作
 | 工具 | 功能 |
@@ -401,7 +386,6 @@ toolkit_listen(lang="zh-CN", timeout=5)   # 录音转文字
 | 工具 | 功能 |
 |------|------|
 | `toolkit_screenshot` | 跨平台截屏（Wayland/X11/macOS/Windows） |
-| `toolkit_ocr` | 屏幕文字识别 + 坐标 |
 | `toolkit_input` | 鼠标键盘模拟 |
 
 ### 知识管理
@@ -444,13 +428,10 @@ toolkit_listen(lang="zh-CN", timeout=5)   # 录音转文字
 | `toolkit_dump_topic` | 会话导出 markdown |
 | `toolkit_set_topic_title` | 设置会话主题标题 |
 
-### 语音与通知
+### 系统信息
 | 工具 | 功能 |
 |------|------|
-| `toolkit_speak` | TTS 文本朗读 |
-| `toolkit_listen` | STT 语音输入 |
 | `toolkit_os_info` | 操作系统信息（进程缓存） |
-
 ### 安装与管理
 | 工具 | 功能 |
 |------|------|
@@ -766,8 +747,9 @@ main_model:
 |------|---------|
 | v0.9.3 | Store 拆分为 10 模块子包、GUI 重构为 `_gui/` 23模块子包、新增 LSP 代码智能引擎、新增 7 个工具（edit/diff/lsp/mcp/plan/scheduler/evolution_exp）、mode_params 模式参数覆盖、L2/L3 分层压缩参数 |
 | v0.9.7 | master 分支替换（discarded 备份 + my→master 升级）、新增 `toolkit_my_public_ip` 公网IP工具、版本号同步 |
-| v0.9.1 | `toolkit_js_fetch` Playwright 无头浏览器抓取（跨平台）、pyproject.toml 增加 js_fetch 可选依赖 |
-| v0.9.2 | `_post_chat_pipeline` config→_cfg 修复、版本号同步 |
+| v0.9.8 | TUI 模式（textual）、清理 432 条自演化注释、移除 main_db_gui.py→gui.py 迁移、toolkit_todo DB 持久化、L3 批处理摘要（便宜模型合并）、清除死代码（_gui/死模块/Mixin残留/store脚本）、PyDoc 全量文档（1001 类/函数）、移除 watchdog 自动重启、OS 信息注入 pipeline、工具执行多行参数显示 |
+| v0.9.9 | 依赖整理（新增 httpx/PyYAML/jedi/tree-sitter/tree-sitter-python，移除 tkhtmlview，移除所有可选依赖组 — OCR/ASR 不再内置支持，将来通过 MCP 扩展）、版本号同步 |
+| v0.9.1 | `toolkit_js_fetch` Playwright 无头浏览器抓取（跨平台） || v0.9.2 | `_post_chat_pipeline` config→_cfg 修复、版本号同步 |
 | v0.8.2 | 版本号一致性修复，以 pyproject.toml 为准同步 || v0.7.15 | 双层记忆体系（用户记忆优先级衰减+LLM精调/项目记忆FIFO）、Store Composition拆分9模块、GUI MVC+Tk重构、分层保底+年龄衰减 |
 | v0.8.0 | 聊天图片附件支持、HtmlFrame 图片 base64 渲染、点击图片放大弹窗、GUI 标题含当前目录、工具轮始终显示 |
 | v0.7.23 | 工具箱分层规则（内置/用户）、`_my` 工具路由、README 全面整理 |

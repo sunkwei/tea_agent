@@ -1,5 +1,55 @@
 # Changelog
 
+
+## [0.9.9] - 2026-05-27
+### Dependencies
+- add: `httpx>=0.25.0` — API HTTP 客户端（onlinesession.py 直接引用）
+- add: `PyYAML>=6.0` — YAML 配置解析（config.py）
+- add: `jedi>=0.19.0` — LSP 代码智能引擎（lsp/lsp_engine.py）
+- add: `tree-sitter>=0.21.0`, `tree-sitter-python>=0.21.0` — LSP 语法分析（lsp/ts_analyzer.py）
+- remove: `tkhtmlview` — 源码未使用，仅 build 残留
+- remove: 所有可选依赖组 `[ocr]` / `[tts]` / `[asr]` / `[desktop]` — OCR/ASR 不再内置支持，将来通过 MCP 扩展
+- remove: `toolkit_ocr.py` / `toolkit_speak.py` / `toolkit_listen.py` — 删除 OCR/TTS/STT 工具
+- clean: description 移除 "Optional: OCR/TTS/ASR"
+- clean: `tlk.py` / `toolkit_mode.py` / `toolkit_input.py` / README 移除 ocr/speak/listen 引用
+
+### Improvements
+- sync: `__init__.py` 版本号与 pyproject.toml 对齐## [0.9.8] - 2026-05-25
+### New Features
+- feat: TUI 模式 — 基于 textual 的终端 UI（`tea_agent/tui.py`）
+- feat: `toolkit_todo` DB 持久化 — per-topic，跨进程/重启不丢失
+- feat: L3 批处理摘要 — 攒够 N 条触发便宜模型合并，移除漂移检测
+- feat: demo 可随包打包（pyproject.toml include 新增 demo*）
+
+### Demo Applications
+- feat: `demo/news_CSI300.py` — 新华网新闻 + 沪深300 指数定时抓取
+- feat: `demo/csi300_predictor.py` — 基于新闻预测 CSI300 日内走势（KNN+策略分类器）
+- feat: CurveFitter — 日内关键点采样 + 二次曲线拟合
+- feat: matplotlib 图表 — 走势图 JPG blob 存入 SQLite
+- feat: `--task` 模式 + Windows 计划任务自动运行
+
+### Refactoring
+- refactor: 移除 `main_db_gui.py`，全部迁移到 `gui.py`
+- refactor: 移除意图分析中工具预加载逻辑，简化会话流程
+- refactor: 移除 watchdog 自动重启，新增 OS 信息注入 pipeline
+- refactor: 换行符归一化处理
+- refactor: 工具执行提示改为多行参数显示格式
+
+### Cleanup
+- cleanup: 清除 432 条自演化注释（# NOTE: ... self-evolved by...）
+- cleanup: 删除 `_gui/` 死模块 (13)、Mixin 残留 (5)、store 脚本 (6)、gui/dialogs 死代码 (2)
+- cleanup: 删除死测试文件
+
+### Documentation
+- docs: PyDoc docstrings — 86 文件、1001 类/函数全覆盖
+- docs: 同步 README 至当前项目状态
+
+### Improvements
+- feat: `disable_summary` flag — 跳过历史压缩和摘要生成
+- improve: L2 扩容 5→30，ConfigDialog 支持指定路径
+- fix: 新华网财经频道 URL 兼容修复
+- fix: Sina CSI300 行情解析修正
+
 ## [0.9.2] - 2026-05-20
 ### Bug Fixes
 - fix: `_post_chat_pipeline` 中 `self.config` → `self._cfg`，修复 AttributeError: 'TkGUI' object has no attribute 'config'

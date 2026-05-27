@@ -291,7 +291,7 @@ class TeaAgent:
                 extra = getattr(self._sess.context, "extra_iterations_on_continue", 10)
                 self._sess._extra_iterations += extra
                 self._sess._max_iter_wait.set()
-                self._notify({"type": "status", "text": f"已达最大轮次，自动续命{extra}轮..."})
+                self._notify({"type": "status", "text": f"已达最大轮次，自动续命 {extra} 轮..."})
             else:
                 self._notify({"type": "status", "text": status_msg})
 

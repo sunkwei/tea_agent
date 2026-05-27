@@ -1004,32 +1004,32 @@ class OnlineToolSession(BaseChatSession):
 
     def _analyze_intent(self, text: str) -> dict:
         """轻量级意图分析"""
-        import re
-        text_lower = text.lower().strip()
+        # import re
+        # text_lower = text.lower().strip()
 
-        if re.match(r'^(你好|谢谢|在吗|确认|好的|是的|不是|收到|ok|yes|no|bye|hello|hi)\W*$', text_lower):
-            return {'type': 'chat', 'skip_tool_loop': True, 'required_tools': []}
+        # if re.match(r'^(你好|谢谢|在吗|确认|好的|是的|不是|收到|ok|yes|no|bye|hello|hi)\W*$', text_lower):
+        #     return {'type': 'chat', 'skip_tool_loop': True, 'required_tools': []}
 
-        tools = []
-        if re.search(r'文件|目录|读取|写入|列表|file|dir|list|read|write', text_lower):
-            tools.extend(['toolkit_file', 'toolkit_exec'])
-        if re.search(r'天气|气温|forecast|weather|温度', text_lower):
-            tools.append('toolkit_weather_my')
-        if re.search(r'时间|日期|农历|几点了|time|date|星期', text_lower):
-            tools.extend(['toolkit_gettime', 'toolkit_date_diff', 'toolkit_lunar'])
-        if re.search(r'安装|包|依赖|pip|install|package|模块', text_lower):
-            tools.append('toolkit_pkg')
-        if re.search(r'命令|执行|运行|shell|cmd|run|execute|git|push', text_lower):
-            tools.append('toolkit_exec')
-        if re.search(r'记忆|搜索|记录|search|memory|remember|遗忘', text_lower):
-            tools.append('toolkit_memory')
-        if re.search(r'知识|文档|笔记|kb|note|knowledge', text_lower):
-            tools.append('toolkit_kb')
-        if re.search(r'模式|pragmatic|creative|切换', text_lower):
-            tools.append('toolkit_mode')
+        # tools = []
+        # if re.search(r'文件|目录|读取|写入|列表|file|dir|list|read|write', text_lower):
+        #     tools.extend(['toolkit_file', 'toolkit_exec'])
+        # if re.search(r'天气|气温|forecast|weather|温度', text_lower):
+        #     tools.append('toolkit_weather_my')
+        # if re.search(r'时间|日期|农历|几点了|time|date|星期', text_lower):
+        #     tools.extend(['toolkit_gettime', 'toolkit_date_diff', 'toolkit_lunar'])
+        # if re.search(r'安装|包|依赖|pip|install|package|模块', text_lower):
+        #     tools.append('toolkit_pkg')
+        # if re.search(r'命令|执行|运行|shell|cmd|run|execute|git|push', text_lower):
+        #     tools.append('toolkit_exec')
+        # if re.search(r'记忆|搜索|记录|search|memory|remember|遗忘', text_lower):
+        #     tools.append('toolkit_memory')
+        # if re.search(r'知识|文档|笔记|kb|note|knowledge', text_lower):
+        #     tools.append('toolkit_kb')
+        # if re.search(r'模式|pragmatic|creative|切换', text_lower):
+        #     tools.append('toolkit_mode')
 
-        if tools:
-            return {'type': 'task', 'skip_tool_loop': False, 'required_tools': list(set(tools))}
+        # if tools:
+        #     return {'type': 'task', 'skip_tool_loop': False, 'required_tools': list(set(tools))}
 
         return {'type': 'general', 'skip_tool_loop': False, 'required_tools': None}
 
@@ -1198,7 +1198,18 @@ class OnlineToolSession(BaseChatSession):
                         break
 
                 if content:
-                    callback("\n\n[正在执行工具，处理中...]\n\n")
+                    # 构造工具调用摘要
+                    tool_summaries = []
+                    for tc in valid_tool_calls:
+                        fn = tc.function.name
+                        args = tc.function.arguments or ""
+                        if len(args.encode("utf-8")) > 32:
+                            args = args[:32] + "…"
+                        tool_summaries.append(f"{fn}({args})" if args else fn)
+                    summary = ", ".join(tool_summaries[:3])
+                    if len(tool_summaries) > 3:
+                        summary += f"… +{len(tool_summaries)-3}"
+                    callback(f"\n\n -- 正在执行工具: {summary}]\n\n")
 
                 continue
 
@@ -1350,39 +1361,39 @@ class OnlineToolSession(BaseChatSession):
             )
 
         # 自动提取记忆
-        import threading
-        if isinstance(topic_id, str) and topic_id and not result.get("interrupted", False):
-            def _auto_extract():
-                """Internal: auto extract."""
-                try:
-                    count = self.memory_comp.trigger_memory_extraction(topic_id)
-                    if count > 0 and on_status:
-                        on_status(f"🧠 自动提取了 {count} 条新记忆")
-                except Exception:
-                    pass
-            threading.Thread(target=_auto_extract, daemon=True).start()
+        # import threading
+        # if isinstance(topic_id, str) and topic_id and not result.get("interrupted", False):
+        #     def _auto_extract():
+        #         """Internal: auto extract."""
+        #         try:
+        #             count = self.memory_comp.trigger_memory_extraction(topic_id)
+        #             if count > 0 and on_status:
+        #                 on_status(f"🧠 自动提取了 {count} 条新记忆")
+        #         except Exception:
+        #             pass
+        #     threading.Thread(target=_auto_extract, daemon=True).start()
 
-        # 异步触发反思
-        if not result.get("interrupted", False) and self.reflection_manager is not None:
-            def _auto_reflect():
-                """Internal: auto reflect."""
-                try:
-                    if self.reflection_manager.should_reflect():
-                        rid = self.reflection_manager.generate_reflection()
-                        if rid:
-                            if on_status:
-                                on_status(f"🔍 元认知反思完成 (id={rid})")
-                            self._notify_reflection_done(rid)
-                        if self.reflection_manager.last_prompt_suggestion and self.prompt_manager is not None:
-                            new_pid = self.prompt_manager.evolve(
-                                reflection_suggestion=self.reflection_manager.last_prompt_suggestion
-                            )
-                            if new_pid:
-                                if on_status:
-                                    on_status(f"📝 系统提示词进化到 v{self.prompt_manager.current_version}")
-                                self._notify_prompt_evolved(self.prompt_manager.current_version)
-                except Exception:
-                    pass
-            threading.Thread(target=_auto_reflect, daemon=True).start()
+        # # 异步触发反思
+        # if not result.get("interrupted", False) and self.reflection_manager is not None:
+        #     def _auto_reflect():
+        #         """Internal: auto reflect."""
+        #         try:
+        #             if self.reflection_manager.should_reflect():
+        #                 rid = self.reflection_manager.generate_reflection()
+        #                 if rid:
+        #                     if on_status:
+        #                         on_status(f"🔍 元认知反思完成 (id={rid})")
+        #                     self._notify_reflection_done(rid)
+        #                 if self.reflection_manager.last_prompt_suggestion and self.prompt_manager is not None:
+        #                     new_pid = self.prompt_manager.evolve(
+        #                         reflection_suggestion=self.reflection_manager.last_prompt_suggestion
+        #                     )
+        #                     if new_pid:
+        #                         if on_status:
+        #                             on_status(f"📝 系统提示词进化到 v{self.prompt_manager.current_version}")
+        #                         self._notify_prompt_evolved(self.prompt_manager.current_version)
+        #         except Exception:
+        #             pass
+        #     threading.Thread(target=_auto_reflect, daemon=True).start()
 
         return full_reply, used_tools

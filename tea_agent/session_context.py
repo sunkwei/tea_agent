@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Callable
 from openai import OpenAI
 
+
 @dataclass
 class SessionContext:
     """
@@ -63,6 +64,7 @@ class SessionContext:
     })
     _injected_memories_text: str = ""
     _injected_memories: List[Dict] = field(default_factory=list)
+    _injected_os_info_text: str = ""
     _history_summary: str = ""
     _semantic_summary: str = ""
     _tool_chain_summary: str = ""
@@ -74,19 +76,18 @@ class SessionContext:
     # ── 额外迭代 ──
     extra_iterations_on_continue: int = 5
 
+
 class SessionComponent(ABC):
     """
     所有会话组件的统一接口。
     
     每个组件通过 context 访问共享状态，避免隐式依赖。
-    组件之间通过 context 进行通信。
     """
-    
     def __init__(self, context: SessionContext):
-        """Initialize  .
+        """Initialize.
         
         Args:
-            context: Description.
+            context: SessionContext 实例
         """
         self.ctx = context
     

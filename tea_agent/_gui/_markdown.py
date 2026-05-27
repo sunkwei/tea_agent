@@ -83,20 +83,24 @@ def _fix_double_escape_in_code(html: str) -> str:
     此函数仅还原明确的双重转义 pattern（&amp;amp; → &amp; 等），
     避免破坏内联代码中的单次转义。
     """
+# NOTE: 2026-05-27 15:00:55, self-evolved by tea_agent --- _fix_double_escape_in_code: 彻底还原 code 块内 HTML 实体为原始字符（&lt;→<, &gt;→>, &amp;→&）
     def _fix_code_block(m):
-        """Internal: fix code block.
+        """Internal: fix code block — 彻底还原 HTML 实体为原始字符。
         
-        Args:
-            m: Description.
+        HtmlFrame(tkinterweb) 在 <code> 块内不解析实体，
+        &lt; &gt; &amp; 会显示为字面文本，所以需要完全 unescape。
         """
         inner = m.group(1)
-        # 仅替换已知的双重转义 pattern，不影响单次转义
+        # 先修复双重转义（markdown.codehilite 对已转义内容再次转义）
         inner = inner.replace('&amp;amp;', '&amp;')
         inner = inner.replace('&amp;lt;', '&lt;')
         inner = inner.replace('&amp;gt;', '&gt;')
         inner = inner.replace('&amp;quot;', '&quot;')
         inner = inner.replace('&amp;#39;', '&#39;')
         inner = inner.replace('&amp;#x27;', '&#x27;')
+        # 彻底还原所有 HTML 实体为原始字符
+        import html as _html
+        inner = _html.unescape(inner)
         return '<code>' + inner + '</code>'
     return re.sub(r'<code>(.*?)</code>', _fix_code_block, html, flags=re.DOTALL)
 

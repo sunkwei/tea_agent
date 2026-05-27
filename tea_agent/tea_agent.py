@@ -191,25 +191,9 @@ class TeaAgent:
         _sref.set_session(self._sess)
         _sref.set_agent(self)
 
-        # 若不使用工具，在 API 层拦截：强制 tools=[] 且 tool_choice="none"
+        # 不使用工具：清空工具列表，避免LLM调用
         if not self._use_tools:
-            self._sess._real_create_chat_stream = self._sess._create_chat_stream
-            def _no_tools_chat(api_messages, tools, client=None, model=None, is_cheap=False):
-                """Internal: no tools chat.
-                
-                Args:
-                    api_messages: Description.
-                    tools: Description.
-                    client: Description.
-                    model: Description.
-                    is_cheap: Description.
-                """
-                return self._sess._real_create_chat_stream(
-                    api_messages, [], client=client, model=model, is_cheap=is_cheap
-                )
-            self._sess._create_chat_stream = _no_tools_chat
             self._sess.tools = []
-
         logger.info(f"会话初始化（无 Storage）| 主模型: {main_m.model_name} | 工具: {'开' if self._use_tools else '关'}")
 
     # ═══════════════════════════════════════════════

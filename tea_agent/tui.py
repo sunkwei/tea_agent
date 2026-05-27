@@ -254,16 +254,17 @@ class TeaTUI(App):
 
     class _SendTextArea(TextArea):
         """TextArea with Enter=send, Shift+Enter=newline."""
-        BINDINGS = [
-            Binding("enter", "send_from_input", "Send", priority=True, show=False),
-            Binding("shift+enter", "insert_newline", "Newline", priority=True, show=False),
-        ]
 
-        def action_send_from_input(self):
-            self.app._do_send()
-
-        def action_insert_newline(self):
-            self.insert("\n")
+        async def _on_key(self, event):
+            """Enter=send, Shift+Enter=newline."""
+            if event.key in ("enter", "shift+enter"):
+                if event.key == "shift+enter":
+                    self.insert("\n")
+                else:
+                    self.app._do_send()
+                event.stop()
+                return
+            await super()._on_key(event)
 
     def compose(self) -> ComposeResult:
         with Container(id="header-bar"):
@@ -276,6 +277,7 @@ class TeaTUI(App):
         with Container(id="status-bar"):
             yield Label("Initializing...", id="status-left")
             yield Label("Think:OFF Verbose:OFF", id="status-right")
+
 
     def on_mount(self):
         """On mount — init agent daemon, start ready-check timer, focus input"""

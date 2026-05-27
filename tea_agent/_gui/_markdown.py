@@ -102,7 +102,8 @@ def _fix_double_escape_in_code(html: str) -> str:
         import html as _html
         inner = _html.unescape(inner)
         return '<code>' + inner + '</code>'
-    return re.sub(r'<code>(.*?)</code>', _fix_code_block, html, flags=re.DOTALL)
+# NOTE: 2026-05-28 07:07:40, self-evolved by tea_agent --- 修复 _fix_double_escape_in_code 正则，匹配带 class 属性的 code 标签（codehilite 生成 &lt;code class=&quot;language-python&quot;&gt;）
+    return re.sub(r'<code[^>]*>(.*?)</code>', _fix_code_block, html, flags=re.DOTALL)
 
 def _build_tool_blocks(messages):
 

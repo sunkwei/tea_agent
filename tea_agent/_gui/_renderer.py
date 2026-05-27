@@ -143,6 +143,7 @@ class ChatRenderer:
             """Internal: prepare."""
             return self._build_round_view_html(rounds, active_idx, font_size)
 
+# NOTE: 2026-05-27 17:18:39, self-evolved by tea_agent --- _render_and_show_chat _on_done: load_html 前显示渲染提示 + _loading_topic 标记处理
         def _on_done(html):
             """Internal: handle done event.
             
@@ -150,10 +151,20 @@ class ChatRenderer:
                 html: Description.
             """
             if HAS_TKINTERWEB:
-                # [RENDER] removed: was printing html char count on every render
+                # 主题加载模式下，先显示渲染提示避免 load_html 阻塞时用户以为卡死
+                if getattr(self.gui, '_loading_topic', False):
+                    self._html_render(
+                        '<html><body><div style="text-align:center;padding:60px 20px;color:#888;'
+                        'font-family:sans-serif;"><p style="font-size:18px;">🔄 正在渲染视图...</p>'
+                        '<p style="font-size:13px;">内容较多，请稍候</p></div></body></html>')
+                    self.gui.root.update_idletasks()
                 self._html_render(html)
                 self._switch_display("chat_view")
                 self.gui.root.after(300, self.scroll_to_bottom)
+                if getattr(self.gui, '_loading_topic', False):
+                    self.gui._loading_topic = False
+                    self.gui.generating = False
+                    self.gui._update_status("✅ 就绪")
             else:
                 self.gui.chat_view.config(state=tk.NORMAL)
                 self.gui.chat_view.delete("1.0", tk.END)
@@ -172,25 +183,36 @@ class ChatRenderer:
                 self.gui.root.after(0, lambda: _on_done("<p>渲染错误</p>"))
         threading.Thread(target=_worker, daemon=True).start()
 
+# NOTE: 2026-05-27 17:18:25, self-evolved by tea_agent --- _render_loaded_topic 跳过 ScrolledText 直接构建 chat_messages + 每50条 yield
     # ── _render_loaded_topic ──
     def _render_loaded_topic(self, render_items):
-        """主线程：清屏 + 逐条渲染准备好的数据"""
+        """主线程：批量加载历史，跳过 ScrolledText 直接构建 chat_messages"""
         self.gui.clear_chat()
-        for item in render_items:
+        total = len(render_items)
+        for i, item in enumerate(render_items):
             if len(item) == 3:
                 tag, text, images = item
-                self.gui.log(text, tag, images=images if images else None)
             else:
                 tag, text = item
-                self.gui.log(text, tag)
+                images = None
+            # 跳过 ScrolledText 写入（随后切到 HtmlFrame），直接追加到 chat_messages
+            if tag in ("user", "ai", "tool", "notice", "title"):
+                entry = {"role": tag, "content": text, "timestamp": self.gui._now_ts()}
+                if images:
+                    entry["images"] = images
+                self.gui.chat_messages.append(entry)
+            # 每 50 条让出主线程，保持 GUI 响应（可拖动窗口、ESC 取消等）
+            if i > 0 and i % 50 == 0:
+                self.gui._update_status(f"⏳ 加载中（{i}/{total}）...")
+                self.gui.root.update_idletasks()
 
         if HAS_TKINTERWEB and self.gui.chat_messages:
+            self.gui._loading_topic = True  # 标记：_on_done 中负责 generating=False
             self._render_and_show_chat()
         else:
             self._switch_display("chat_view")
-
-        self.gui.generating = False
-        self.gui._update_status("✅ 就绪")
+            self.gui.generating = False
+            self.gui._update_status("✅ 就绪")
 
     # ── _render_round_view ──
     def _render_round_view(self, round_idx):

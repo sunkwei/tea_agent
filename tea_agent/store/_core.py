@@ -116,11 +116,13 @@ class Storage:
                 last_update_stamp TEXT DEFAULT (datetime('now', 'localtime'))
             )
         ''')
+# NOTE: 2026-05-27 16:53:46, self-evolved by tea_agent --- topics 表添加 is_active 列 + update_topic_active 接受 active 参数
         for col, col_def in [
             ("semantic_summary", "TEXT DEFAULT ''"),
             ("tool_chain_summary", "TEXT DEFAULT ''"),
             ("level2_json", "TEXT DEFAULT '[]'"),
             ("l3_pending_json", "TEXT DEFAULT ''"),  # 2026-05-20 gen by Tea Agent, L3批处理缓冲
+            ("is_active", "INTEGER DEFAULT 1"),
         ]:
             try:
                 c.execute(f"ALTER TABLE topics ADD COLUMN {col} {col_def}")

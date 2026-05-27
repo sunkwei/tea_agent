@@ -44,16 +44,18 @@ class TopicStore(StoreComponent):
         c.close()
 
 # NOTE: 2026-05-27 15:44:29, self-evolved by tea_agent --- update_topic_active/delete_topic/get_topic_tokens：topic_id 类型 int→str
-    def update_topic_active(self, topic_id: str):
-        """Update topic active.
+# NOTE: 2026-05-27 16:53:52, self-evolved by tea_agent --- update_topic_active 增加 active 参数，实际设置 is_active 列
+    def update_topic_active(self, topic_id: str, active: int = 1):
+        """设置主题活跃状态。active=1 活跃，active=0 停用。
         
         Args:
-            topic_id: Description.
+            topic_id: 主题ID
+            active: 1=活跃, 0=停用
         """
         c = self.conn.cursor()
         c.execute(
-            "UPDATE topics SET last_update_stamp = datetime('now', 'localtime') WHERE topic_id = ?",
-            (topic_id,),
+            "UPDATE topics SET is_active = ?, last_update_stamp = datetime('now', 'localtime') WHERE topic_id = ?",
+            (active, topic_id),
         )
         self.conn.commit()
         c.close()

@@ -1065,11 +1065,29 @@ class TkGUI(AgentCore):
 
         popup.focus_set()
 
+# NOTE: 2026-05-27 17:04:34, self-evolved by tea_agent --- 主题管理对话框关闭后刷新主界面主题列表，当前主题被停用时自动切换
     # @2026-04-29 gen by deepseek-v4-pro, 打开主题管理弹窗
     def open_topic_dialog(self):
-        """打开主题管理弹窗"""
-        TopicDialog(self.root, self.db,
-                    on_switch=lambda tid: self.root.after(0, self.switch_topic, tid))
+        """打开主题管理弹窗，关闭后自动刷新主界面主题列表"""
+        old_topic_id = self.current_topic_id
+        dlg = TopicDialog(self.root, self.db,
+                          on_switch=lambda tid: self.root.after(0, self.switch_topic, tid))
+
+        def _on_dialog_destroy(e):
+            """对话框关闭后刷新主界面主题列表。
+            如果当前主题被停用，自动切换到下一条活跃主题；
+            如果当前主题未被停用，仅刷新列表，不重新加载。"""
+            if e.widget == dlg:
+                self.root.after(50, self._after_topic_dialog_close, old_topic_id)
+
+        dlg.bind("<Destroy>", _on_dialog_destroy)
+
+    def _after_topic_dialog_close(self, old_topic_id):
+        """主题管理对话框关闭后：刷新列表 + 条件切换"""
+        self.refresh_topics()
+        if self.current_topic_id != old_topic_id:
+            self.switch_topic(self.current_topic_id)
+        # 如果 current_topic_id 未变，仅刷新列表，不重新加载
 
     def open_memory_dialog(self):
         """打开记忆管理对话框"""

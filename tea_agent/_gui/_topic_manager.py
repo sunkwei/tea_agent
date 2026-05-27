@@ -242,6 +242,7 @@ class TopicManager:
 
         gui.root.after(60, lambda: threading.Thread(target=load_worker, daemon=True).start())
 
+# NOTE: 2026-05-27 17:04:42, self-evolved by tea_agent --- on_topic_select 使用活跃主题列表避免停用主题导致索引错位
     def on_topic_select(self, e):
         """Handle topic select event.
         
@@ -253,7 +254,11 @@ class TopicManager:
         if not sel:
             return
         idx = gui.topic_list.index(sel[0])
-        tp = gui.db.list_topics()[idx]
+        # 使用活跃主题列表（与 refresh_topics 过滤一致），避免停用主题导致索引错位
+        active_topics = [tp for tp in gui.db.list_topics() if tp.get("is_active", 1)]
+        if idx >= len(active_topics):
+            return
+        tp = active_topics[idx]
         if tp["topic_id"] == gui.current_topic_id:
             return
         gui.switch_topic(tp["topic_id"])

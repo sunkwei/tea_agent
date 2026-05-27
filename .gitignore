@@ -5,6 +5,7 @@ build/
 .vscode/
 
 dump_*/
+*.pdf
 *.bak*
 test_tmp/
 *.db

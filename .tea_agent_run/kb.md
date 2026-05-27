@@ -1,14 +1,29 @@
 # tea_agent 项目知识库
 
-> 自动生成: 2026-05-27 15:43
+> 自动生成: 2026-05-28 07:27
 > 工具: ctags + AST + graphviz
 >
-> 符号: 0 唯一 · 函数: 904 · 类: 72 · 调用边: 5344
+> 符号: 1611 唯一 · 函数: 908 · 类: 72 · 调用边: 5411
 
 ## 符号种类分布
 
 | 种类 | 数量 |
 |------|------|
+| string | 7040 |
+| object | 1078 |
+| number | 1069 |
+| array | 862 |
+| member | 700 |
+| function | 379 |
+| variable | 311 |
+| id | 126 |
+| class | 73 |
+| namespace | 66 |
+| section | 27 |
+| chapter | 9 |
+| unknown | 7 |
+| nsprefix | 6 |
+| subsection | 5 |
 
 ## 模块索引 (110 文件)
 
@@ -23,34 +38,34 @@
 | tea_agent\_gui\__init__.py | 4 | — | — |
 | tea_agent\_gui\_fonts.py | 85 | — | — |
 | tea_agent\_gui\_images.py | 130 | ImageHandler | attach, clear, show_popup |
-| tea_agent\_gui\_markdown.py | 428 | _TagChecker | handle_starttag, handle_endtag, get_result |
-| tea_agent\_gui\_renderer.py | 464 | ChatRenderer | scroll_to_bottom |
+| tea_agent\_gui\_markdown.py | 429 | _TagChecker | handle_starttag, handle_endtag, get_result |
+| tea_agent\_gui\_renderer.py | 486 | ChatRenderer | scroll_to_bottom |
 | tea_agent\_gui\_stream_manager.py | 161 | StreamManager | safe_stream, safe_log, safe_log_tool |
-| tea_agent\_gui\_topic_manager.py | 364 | TopicManager | clear_chat, auto_new_topic, new_topic |
+| tea_agent\_gui\_topic_manager.py | 369 | TopicManager | clear_chat, auto_new_topic, new_topic |
 | tea_agent\_gui\_topic_summary.py | 100 | — | — |
 | tea_agent\_gui\_tray.py | 136 | TrayManager | start, stop |
-| tea_agent\_gui\_ui_builder.py | 155 | UIBuilder | build |
-| tea_agent\agent_core.py | 429 | AgentCore | — |
+| tea_agent\_gui\_ui_builder.py | 157 | UIBuilder | build |
+| tea_agent\agent_core.py | 430 | AgentCore | — |
 | tea_agent\basesession.py | 621 | BaseChatSession | chat_stream, add_user_message, add_assistant_message |
 | tea_agent\cli.py | 449 | TeaCLI | run, on_stream, on_status |
-| tea_agent\config.py | 578 | ModelConfig, PathsConfig, EmbeddingConfig | is_configured, resolve, db_path_abs |
+| tea_agent\config.py | 581 | ModelConfig, PathsConfig, EmbeddingConfig | is_configured, resolve, db_path_abs |
 | tea_agent\embedding_util.py | 346 | _SimpleTFIDF, EmbeddingEngine | add_document, vectorize, mode |
-| tea_agent\gui.py | 1150 | StatusNotifierItemDBus, TkGUI | Title, Id, Status |
-| tea_agent\gui_dialogs.py | 1318 | MemoryDialog, TopicDialog, ConfigDialog | do_add, parse_tok, do_rename |
+| tea_agent\gui.py | 1294 | StatusNotifierItemDBus, TkGUI | Title, Id, Status |
+| tea_agent\gui_dialogs.py | 1320 | MemoryDialog, TopicDialog, ConfigDialog | do_add, parse_tok, do_rename |
 | tea_agent\logging_setup.py | 95 | — | setup_logging, set_debug |
 | tea_agent\lsp\__init__.py | 12 | — | — |
 | tea_agent\lsp\lsp_engine.py | 381 | — | diagnose, semantic_diagnose, completion |
 | tea_agent\lsp\ts_analyzer.py | 441 | — | parse_file, impact_analysis, build_dependency_graph |
 | tea_agent\memory.py | 711 | MemoryManager | select_memories, degrade_by_age, llm_adjust_priorities |
 | tea_agent\merge_db.py | 723 | DbMerger | merge, close, main |
-| tea_agent\onlinesession.py | 1403 | OnlineToolSession | messages, messages, model |
+| tea_agent\onlinesession.py | 1404 | OnlineToolSession | messages, messages, model |
 | tea_agent\project_memory.py | 130 | ProjectMemoryManager | add, get_all, search |
 | tea_agent\prompt_manager.py | 283 | SystemPromptManager | initialize, current_prompt, current_version |
-| tea_agent\reflection.py | 291 | ToolCallRecord, SessionTrace, ReflectionManager | success_rate, duration_seconds, start_trace |
+| tea_agent\reflection.py | 293 | ToolCallRecord, SessionTrace, ReflectionManager | success_rate, duration_seconds, start_trace |
 | tea_agent\session\__init__.py | 1 | — | — |
 | tea_agent\session_api_component.py | 270 | APIComponent | name, initialize, create_chat_stream |
 | tea_agent\session_context.py | 103 | SessionContext, SessionComponent | initialize, name |
-| tea_agent\session_memory_component.py | 202 | MemoryComponent | name, initialize, inject_memories |
+| tea_agent\session_memory_component.py | 203 | MemoryComponent | name, initialize, inject_memories |
 | tea_agent\session_pipeline.py | 203 | PipelineStep, SessionPipeline | register_step, enable_step, disable_step |
 | tea_agent\session_prompts.py | 53 | — | — |
 | tea_agent\session_ref.py | 23 | — | get_session, set_session, get_agent |
@@ -60,16 +75,16 @@
 | tea_agent\store\_base.py | 20 | StoreComponent | — |
 | tea_agent\store\_config.py | 72 | ConfigHistoryStore | add_config_change, get_config_history, get_config_changes_since |
 | tea_agent\store\_conversations.py | 236 | ConversationStore | save_msg, update_msg_rounds, save_agent_round |
-| tea_agent\store\_core.py | 676 | Storage | save_msg, backup_now, close |
+| tea_agent\store\_core.py | 678 | Storage | save_msg, backup_now, close |
 | tea_agent\store\_memories.py | 241 | MemoryStore | add_memory, update_memory, deactivate_memory |
 | tea_agent\store\_prompts.py | 92 | PromptStore | add_system_prompt, get_latest_system_prompt, get_system_prompt_history |
 | tea_agent\store\_reflections.py | 77 | ReflectionStore | add_reflection, get_recent_reflections, mark_reflection_applied |
 | tea_agent\store\_scheduled_tasks.py | 221 | ScheduledTaskStore | parse_schedule, add_task, update_task |
 | tea_agent\store\_summaries.py | 245 | SummaryStore | get_topic_summary, update_topic_summary, get_level2 |
-| tea_agent\store\_topics.py | 194 | TopicStore | create_topic, update_topic_title, update_topic_active |
+| tea_agent\store\_topics.py | 199 | TopicStore | create_topic, update_topic_title, update_topic_active |
 | tea_agent\store\_vectors.py | 237 | VectorStore | store_embedding, get_msg_embedding, get_all_embeddings |
 | tea_agent\tea_agent.py | 330 | TeaAgent | toolkit_save, toolkit_reload, chat |
-| tea_agent\tea_main_cli.py | 367 | TeaCLI | chat, stream_cb, status_cb |
+| tea_agent\tea_main_cli.py | 368 | TeaCLI | chat, stream_cb, status_cb |
 | tea_agent\tlk.py | 607 | Toolkit | meta_toolkit_reload, meta_toolkit_save, toolkit_reload |
 | tea_agent\toolkit\__init__.py | 1 | — | — |
 | tea_agent\toolkit\subconscious\__init__.py | 1 | — | — |
@@ -92,7 +107,7 @@
 | tea_agent\toolkit\toolkit_lsp.py | 85 | — | toolkit_lsp, meta_toolkit_lsp |
 | tea_agent\toolkit\toolkit_lunar.py | 336 | — | toolkit_lunar, meta_toolkit_lunar |
 | tea_agent\toolkit\toolkit_mcp.py | 384 | — | toolkit_mcp, meta_toolkit_mcp |
-| tea_agent\toolkit\toolkit_memory.py | 164 | — | toolkit_memory, meta_toolkit_memory |
+| tea_agent\toolkit\toolkit_memory.py | 166 | — | toolkit_memory, meta_toolkit_memory |
 | tea_agent\toolkit\toolkit_mode.py | 230 | — | toolkit_mode, meta_toolkit_mode, meta_toolkit_mode |
 | tea_agent\toolkit\toolkit_notify.py | 124 | — | toolkit_notify, meta_toolkit_notify |
 | tea_agent\toolkit\toolkit_os_info.py | 46 | — | toolkit_os_info, meta_toolkit_os_info |
@@ -111,7 +126,7 @@
 | tea_agent\toolkit\toolkit_self_report.py | 75 | — | toolkit_self_report, meta_toolkit_self_report |
 | tea_agent\toolkit\toolkit_set_topic_title.py | 78 | — | toolkit_set_topic_title, meta_toolkit_set_topic_title |
 | tea_agent\toolkit\toolkit_subconscious.py | 1003 | — | toolkit_subconscious, meta_toolkit_subconscious |
-| tea_agent\toolkit\toolkit_sudo_gui.py | 81 | — | toolkit_sudo_gui, meta_toolkit_sudo_gui |
+| tea_agent\toolkit\toolkit_sudo_gui.py | 82 | — | toolkit_sudo_gui, meta_toolkit_sudo_gui |
 | tea_agent\toolkit\toolkit_test_gui.py | 150 | — | toolkit_test_gui, meta_toolkit_test_gui |
 | tea_agent\toolkit\toolkit_todo.py | 266 | — | toolkit_todo, meta_toolkit_todo |
 | tea_agent\toolkit\toolkit_toggle_reasoning.py | 50 | — | toolkit_toggle_reasoning, meta_toolkit_toggle_reasoning |
@@ -129,26 +144,26 @@
 
 | 函数 | 文件:行号 | 调用者数 |
 |------|-----------|----------|
-| `len` | ?:? | 223 |
-| `get` | tea_agent\config.py:211 | 196 |
-| `append` | ?:? | 179 |
-| `join` | ?:? | 145 |
-| `str` | ?:? | 137 |
+| `len` | ?:? | 224 |
+| `get` | tea_agent\config.py:214 | 199 |
+| `append` | ?:? | 182 |
+| `join` | ?:? | 147 |
+| `str` | ?:? | 139 |
 | `execute` | tea_agent\session_pipeline.py:131 | 121 |
 | `info` | ?:? | 110 |
-| `close` | tea_agent\store\_core.py:658 | 97 |
+| `close` | tea_agent\store\_core.py:660 | 99 |
 | `cursor` | ?:? | 93 |
 | `strip` | ?:? | 79 |
 | `open` | ?:? | 67 |
 | `commit` | ?:? | 67 |
-| `startswith` | ?:? | 60 |
-| `isinstance` | ?:? | 56 |
-| `set` | tea_agent\config.py:217 | 56 |
+| `startswith` | ?:? | 62 |
+| `isinstance` | ?:? | 58 |
+| `set` | tea_agent\config.py:220 | 56 |
 | `warning` | ?:? | 56 |
 | `split` | ?:? | 55 |
-| `exists` | ?:? | 51 |
+| `exists` | ?:? | 53 |
 | `fetchall` | ?:? | 45 |
-| `enumerate` | ?:? | 42 |
+| `enumerate` | ?:? | 43 |
 
 ## 生成文件
 

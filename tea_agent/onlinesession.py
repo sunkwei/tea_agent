@@ -1300,7 +1300,8 @@ class OnlineToolSession(BaseChatSession):
         except Exception:
             pass
 
-    def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: int = -1, on_status: Optional[Callable[[str], None]] = None) -> Tuple[str, bool]:
+# NOTE: 2026-05-27 15:45:40, self-evolved by tea_agent --- chat_stream: topic_id 类型 int→str，默认值 -1→""
+    def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: str = "", on_status: Optional[Callable[[str], None]] = None) -> Tuple[str, bool]:
         """
         流式对话，支持工具调用。
         使用 Pipeline 执行可配置的步骤。

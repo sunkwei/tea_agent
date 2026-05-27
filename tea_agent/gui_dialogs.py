@@ -712,8 +712,9 @@ class TopicDialog(tk.Toplevel):
             col: Description.
         """
         items = [(self.topic_tree.set(i, col), i) for i in self.topic_tree.get_children("")]
+# NOTE: 2026-05-27 15:55:23, self-evolved by tea_agent --- _sort("id"): 移除 int()，id 列为 UUID 字符串
         if col == "id":
-            items.sort(key=lambda x: int(x[0]))
+            items.sort(key=lambda x: x[0])
         elif col == "tokens":
             def parse_tok(s):
                 """Parse tok.
@@ -737,7 +738,8 @@ class TopicDialog(tk.Toplevel):
         """Internal: selected id."""
         tree = self.search_tree if self._is_search_mode else self.topic_tree
         sel = tree.selection()
-        return int(sel[0]) if sel else None
+# NOTE: 2026-05-27 15:55:11, self-evolved by tea_agent --- _selected_id: 移除 int()，topic_id 已为 UUID 字符串
+        return sel[0] if sel else None
 
     def _switch_to(self):
         """Internal: switch to."""

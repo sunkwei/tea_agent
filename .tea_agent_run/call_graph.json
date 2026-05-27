@@ -358,11 +358,11 @@
     },
     "_handle_command": {
       "file": "tea_agent\\tui.py",
-      "line": 430
+      "line": 432
     },
     "_cmd_set": {
       "file": "tea_agent\\tui.py",
-      "line": 474
+      "line": 476
     },
     "_toggle_think": {
       "file": "tea_agent\\cli.py",
@@ -382,7 +382,7 @@
     },
     "_switch_topic": {
       "file": "tea_agent\\tui.py",
-      "line": 499
+      "line": 501
     },
     "_chat": {
       "file": "tea_agent\\tui.py",
@@ -650,7 +650,7 @@
     },
     "_update_status": {
       "file": "tea_agent\\tui.py",
-      "line": 332
+      "line": 334
     },
     "safe_stream": {
       "file": "tea_agent\\_gui\\_stream_manager.py",
@@ -1572,10 +1572,6 @@
       "file": "tea_agent\\tea_agent.py",
       "line": 129
     },
-    "_no_tools_chat": {
-      "file": "tea_agent\\tea_agent.py",
-      "line": 197
-    },
     "toolkit_save": {
       "file": "tea_agent\\tlk.py",
       "line": 64
@@ -1594,7 +1590,7 @@
     },
     "_chat_impl": {
       "file": "tea_agent\\tea_agent.py",
-      "line": 268
+      "line": 252
     },
     "stream_cb": {
       "file": "tea_agent\\tea_main_cli.py",
@@ -1606,19 +1602,19 @@
     },
     "__enter__": {
       "file": "tea_agent\\tea_agent.py",
-      "line": 328
+      "line": 312
     },
     "__exit__": {
       "file": "tea_agent\\tea_agent.py",
-      "line": 331
+      "line": 315
     },
     "config": {
       "file": "tea_agent\\tea_agent.py",
-      "line": 339
+      "line": 323
     },
     "toolkit": {
       "file": "tea_agent\\tea_agent.py",
-      "line": 344
+      "line": 328
     },
     "_auto_start_subconscious": {
       "file": "tea_agent\\tea_main_cli.py",
@@ -1708,105 +1704,101 @@
       "file": "tea_agent\\tlk.py",
       "line": 425
     },
-    "action_send_from_input": {
+    "_on_key": {
       "file": "tea_agent\\tui.py",
-      "line": 262
-    },
-    "action_insert_newline": {
-      "file": "tea_agent\\tui.py",
-      "line": 265
+      "line": 258
     },
     "compose": {
       "file": "tea_agent\\tui.py",
-      "line": 268
+      "line": 269
     },
     "on_mount": {
       "file": "tea_agent\\tui.py",
-      "line": 280
+      "line": 282
     },
     "_init_agent": {
       "file": "tea_agent\\tui.py",
-      "line": 290
+      "line": 292
     },
     "_check_agent_ready": {
       "file": "tea_agent\\tui.py",
-      "line": 301
+      "line": 303
     },
     "_show_welcome": {
       "file": "tea_agent\\tui.py",
-      "line": 306
+      "line": 308
     },
     "_show_error": {
       "file": "tea_agent\\tui.py",
-      "line": 325
+      "line": 327
     },
     "_update_status_right": {
       "file": "tea_agent\\tui.py",
-      "line": 338
+      "line": 340
     },
     "_start_stream_timer": {
       "file": "tea_agent\\tui.py",
-      "line": 347
+      "line": 349
     },
     "_stop_stream_timer": {
       "file": "tea_agent\\tui.py",
-      "line": 351
+      "line": 353
     },
     "on_key": {
       "file": "tea_agent\\tui.py",
-      "line": 356
+      "line": 358
     },
     "_do_send": {
       "file": "tea_agent\\tui.py",
-      "line": 359
+      "line": 361
     },
     "run_chat": {
       "file": "tea_agent\\tui.py",
-      "line": 378
+      "line": 380
     },
     "_on_chat_done": {
       "file": "tea_agent\\tui.py",
-      "line": 394
+      "line": 396
     },
     "_append_chat": {
       "file": "tea_agent\\tui.py",
-      "line": 409
+      "line": 411
     },
     "_chat_write": {
       "file": "tea_agent\\tui.py",
-      "line": 415
+      "line": 417
     },
     "_append_chat_inline": {
       "file": "tea_agent\\tui.py",
-      "line": 419
+      "line": 421
     },
     "_flush_stream_buffer": {
       "file": "tea_agent\\tui.py",
-      "line": 422
+      "line": 424
     },
     "_show_help": {
       "file": "tea_agent\\tui.py",
-      "line": 455
+      "line": 457
     },
     "action_interrupt": {
       "file": "tea_agent\\tui.py",
-      "line": 543
+      "line": 545
     },
     "action_toggle_think": {
       "file": "tea_agent\\tui.py",
-      "line": 550
+      "line": 552
     },
     "action_toggle_verbose": {
       "file": "tea_agent\\tui.py",
-      "line": 559
+      "line": 561
     },
     "action_new_topic": {
       "file": "tea_agent\\tui.py",
-      "line": 566
+      "line": 568
     },
     "action_list_topics": {
       "file": "tea_agent\\tui.py",
-      "line": 577
+      "line": 579
     },
     "_get_jedi_project": {
       "file": "tea_agent\\lsp\\lsp_engine.py",
@@ -3198,43 +3190,43 @@
     },
     "_fix_code_block": {
       "file": "tea_agent\\_gui\\_markdown.py",
-      "line": 86
+      "line": 87
     },
     "_build_tool_blocks": {
       "file": "tea_agent\\_gui\\_markdown.py",
-      "line": 103
+      "line": 107
     },
     "_render_tool_group": {
       "file": "tea_agent\\_gui\\_markdown.py",
-      "line": 141
+      "line": 145
     },
     "_chat_to_markdown": {
       "file": "tea_agent\\_gui\\_markdown.py",
-      "line": 228
+      "line": 232
     },
     "_sanitize_html_control_chars": {
       "file": "tea_agent\\_gui\\_markdown.py",
-      "line": 296
+      "line": 300
     },
     "_escape_orphan_brackets": {
       "file": "tea_agent\\_gui\\_markdown.py",
-      "line": 313
+      "line": 317
     },
     "_validate_html_structure": {
       "file": "tea_agent\\_gui\\_markdown.py",
-      "line": 355
+      "line": 359
     },
     "handle_starttag": {
       "file": "tea_agent\\_gui\\_markdown.py",
-      "line": 377
+      "line": 381
     },
     "handle_endtag": {
       "file": "tea_agent\\_gui\\_markdown.py",
-      "line": 387
+      "line": 391
     },
     "get_result": {
       "file": "tea_agent\\_gui\\_markdown.py",
-      "line": 409
+      "line": 413
     },
     "_show_mode": {
       "file": "tea_agent\\_gui\\_renderer.py",
@@ -3832,7 +3824,7 @@
     },
     "_TagChecker": {
       "file": "tea_agent\\_gui\\_markdown.py",
-      "line": 366
+      "line": 370
     },
     "ChatRenderer": {
       "file": "tea_agent\\_gui\\_renderer.py",
@@ -4474,7 +4466,6 @@
     ],
     "_init_session": [
       "OnlineToolSession",
-      "_real_create_chat_stream",
       "cast",
       "get",
       "getattr",
@@ -6810,9 +6801,6 @@
       "str",
       "toolkit_reload"
     ],
-    "_no_tools_chat": [
-      "_real_create_chat_stream"
-    ],
     "toolkit_save": [
       "cast",
       "get",
@@ -6989,11 +6977,12 @@
       "warning",
       "write"
     ],
-    "action_send_from_input": [
-      "_do_send"
-    ],
-    "action_insert_newline": [
-      "insert"
+    "_on_key": [
+      "_do_send",
+      "_on_key",
+      "insert",
+      "stop",
+      "super"
     ],
     "compose": [
       "Container",
@@ -10228,11 +10217,13 @@
     "_fix_double_escape_in_code": [
       "group",
       "replace",
-      "sub"
+      "sub",
+      "unescape"
     ],
     "_fix_code_block": [
       "group",
-      "replace"
+      "replace",
+      "unescape"
     ],
     "_build_tool_blocks": [
       "_render_tool_group",

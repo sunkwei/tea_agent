@@ -73,7 +73,8 @@ class AgentCore:
         self._sess_lock = threading.Lock()
 
         # ── 6. 初始化会话 ──
-        self.current_topic_id: int = 0
+# NOTE: 2026-05-27 15:44:53, self-evolved by tea_agent --- current_topic_id: int=0 → str=''
+        self.current_topic_id: str = ""
         self._init_session()
 
         # ── 7. 启动潜意识引擎（后台每小时：总结/反思/创意/头脑风暴）──

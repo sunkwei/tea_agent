@@ -251,7 +251,8 @@ class TeaCLI(AgentCore):
             print(f"   建议 /new 开新主题以保持上下文聚焦。")
             self._pending_topic_suggestion = 0
 
-    def _on_summary_updated(self, topic_id: int, summary: str):
+# NOTE: 2026-05-27 15:46:21, self-evolved by tea_agent --- _on_summary_updated: topic_id 类型 int→str
+    def _on_summary_updated(self, topic_id: str, summary: str):
         """摘要更新后终端无额外动作（已在 _post_chat_pipeline 中处理）。"""
         pass
 

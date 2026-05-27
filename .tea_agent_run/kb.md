@@ -1,9 +1,9 @@
 # tea_agent 项目知识库
 
-> 自动生成: 2026-05-27 12:17
+> 自动生成: 2026-05-27 15:43
 > 工具: ctags + AST + graphviz
 >
-> 符号: 0 唯一 · 函数: 906 · 类: 72 · 调用边: 5341
+> 符号: 0 唯一 · 函数: 904 · 类: 72 · 调用边: 5344
 
 ## 符号种类分布
 
@@ -23,7 +23,7 @@
 | tea_agent\_gui\__init__.py | 4 | — | — |
 | tea_agent\_gui\_fonts.py | 85 | — | — |
 | tea_agent\_gui\_images.py | 130 | ImageHandler | attach, clear, show_popup |
-| tea_agent\_gui\_markdown.py | 424 | _TagChecker | handle_starttag, handle_endtag, get_result |
+| tea_agent\_gui\_markdown.py | 428 | _TagChecker | handle_starttag, handle_endtag, get_result |
 | tea_agent\_gui\_renderer.py | 464 | ChatRenderer | scroll_to_bottom |
 | tea_agent\_gui\_stream_manager.py | 161 | StreamManager | safe_stream, safe_log, safe_log_tool |
 | tea_agent\_gui\_topic_manager.py | 364 | TopicManager | clear_chat, auto_new_topic, new_topic |
@@ -68,7 +68,7 @@
 | tea_agent\store\_summaries.py | 245 | SummaryStore | get_topic_summary, update_topic_summary, get_level2 |
 | tea_agent\store\_topics.py | 194 | TopicStore | create_topic, update_topic_title, update_topic_active |
 | tea_agent\store\_vectors.py | 237 | VectorStore | store_embedding, get_msg_embedding, get_all_embeddings |
-| tea_agent\tea_agent.py | 346 | TeaAgent | toolkit_save, toolkit_reload, chat |
+| tea_agent\tea_agent.py | 330 | TeaAgent | toolkit_save, toolkit_reload, chat |
 | tea_agent\tea_main_cli.py | 367 | TeaCLI | chat, stream_cb, status_cb |
 | tea_agent\tlk.py | 607 | Toolkit | meta_toolkit_reload, meta_toolkit_save, toolkit_reload |
 | tea_agent\toolkit\__init__.py | 1 | — | — |
@@ -115,7 +115,7 @@
 | tea_agent\toolkit\toolkit_test_gui.py | 150 | — | toolkit_test_gui, meta_toolkit_test_gui |
 | tea_agent\toolkit\toolkit_todo.py | 266 | — | toolkit_todo, meta_toolkit_todo |
 | tea_agent\toolkit\toolkit_toggle_reasoning.py | 50 | — | toolkit_toggle_reasoning, meta_toolkit_toggle_reasoning |
-| tea_agent\tui.py | 618 | _TUIAgentCore, TeaTUI, _SendTextArea | on_stream, on_status, action_send_from_input |
+| tea_agent\tui.py | 620 | _TUIAgentCore, TeaTUI, _SendTextArea | on_stream, on_status, compose |
 | test_main.py | 92 | — | test_config_loads, test_storage_init, test_tea_cli_import |
 | test_session.py | 100 | — | test_toolkit, test_online_session, test_reset_and_iter |
 | tests\__init__.py | 1 | — | — |

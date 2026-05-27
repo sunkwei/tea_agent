@@ -29,7 +29,8 @@ class ToolCallRecord:
 @dataclass
 class SessionTrace:
     """一次会话的完整追踪"""
-    topic_id: int = -1
+# NOTE: 2026-05-27 15:45:55, self-evolved by tea_agent --- SessionTrace.topic_id: int→str + start_trace topic_id: int→str
+    topic_id: str = ""
     user_msg: str = ""
     tool_calls: List[ToolCallRecord] = field(default_factory=list)
     total_iterations: int = 0
@@ -90,7 +91,8 @@ class ReflectionManager:
         self._cheap_model = cheap_model
         self._pending_traces: List[SessionTrace] = []
 
-    def start_trace(self, topic_id: int, user_msg: str) -> SessionTrace:
+# NOTE: 2026-05-27 15:46:01, self-evolved by tea_agent --- start_trace: topic_id 类型 int→str
+    def start_trace(self, topic_id: str, user_msg: str) -> SessionTrace:
         """开始追踪一次会话"""
         trace = SessionTrace(
             topic_id=topic_id,

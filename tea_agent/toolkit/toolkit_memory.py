@@ -5,7 +5,8 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
-def toolkit_memory(action: str, content: str = "", category: str = "general", priority: int = 2, importance: int = 3, expires_at: str = None, tags: str = "", id: int = 0, hard: bool = False, query: str = "", min_importance: int = 0, limit: int = 10, topic_id: int = -1, max_chars: int = 4000):
+# NOTE: 2026-05-27 15:46:34, self-evolved by tea_agent --- toolkit_memory: topic_id 类型 int→str (签名+meta)
+def toolkit_memory(action: str, content: str = "", category: str = "general", priority: int = 2, importance: int = 3, expires_at: str = None, tags: str = "", id: int = 0, hard: bool = False, query: str = "", min_importance: int = 0, limit: int = 10, topic_id: str = "", max_chars: int = 4000):
     """
     统一长期记忆管理入口。根据 action 执行不同操作：
 
@@ -155,7 +156,8 @@ def meta_toolkit_memory() -> dict:
                     "query": {"type": "string", "description": "[search] 搜索关键词", "default": ""},
                     "min_importance": {"type": "integer", "description": "[search] 最低重要度 1-5", "default": 0},
                     "limit": {"type": "integer", "description": "[list/search] 返回数量上限", "default": 10},
-                    "topic_id": {"type": "integer", "description": "[extract] topic ID，-1=当前活跃topic", "default": -1},
+# NOTE: 2026-05-27 15:46:40, self-evolved by tea_agent --- meta_toolkit_memory: topic_id 参数类型 integer→string
+                    "topic_id": {"type": "string", "description": "[extract] topic ID", "default": ""},
                     "max_chars": {"type": "integer", "description": "[extract] 返回文本最大字符数", "default": 4000},
                 },
                 "required": ["action"],

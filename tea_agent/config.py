@@ -126,9 +126,12 @@ class EmbeddingConfig:
     api_key: str = ""       # API Key，为空则使用 main_model.api_key
     dimension: int = 0      # 向量维度，0=自动检测
 
+# NOTE: 2026-05-27 16:48:10, self-evolved by tea_agent --- 修复 EmbeddingConfig.is_configured 属性缺少函数体，导致永远返回 None
     @property
     def is_configured(self) -> bool:
         """至少配置了 api_url 和 model_name 才视为有效"""
+        return bool(self.api_url and self.model_name)
+
 @dataclass
 class AgentConfig:
     """Agent 全局配置"""

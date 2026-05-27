@@ -1198,19 +1198,23 @@ class OnlineToolSession(BaseChatSession):
                         break
 
                 if content:
-                    # 构造工具调用摘要
-                    tool_summaries = []
+                    # 构造多行工具调用摘要
+                    import json
+                    tool_lines = []
                     for tc in valid_tool_calls:
                         fn = tc.function.name
-                        args = tc.function.arguments or ""
-                        if len(args.encode("utf-8")) > 32:
-                            args = args[:32] + "…"
-                        tool_summaries.append(f"{fn}({args})" if args else fn)
-                    summary = ", ".join(tool_summaries[:3])
-                    if len(tool_summaries) > 3:
-                        summary += f"… +{len(tool_summaries)-3}"
-                    callback(f"\n\n -- 正在执行工具: {summary}]\n\n")
-
+                        tool_lines.append(f" -- 正在执行工具：{fn}")
+                        args_str = tc.function.arguments or "{}"
+                        try:
+                            args_dict = json.loads(args_str)
+                            for k, v in args_dict.items():
+                                v_str = str(v)
+                                if len(v_str.encode("utf-8")) > 32:
+                                    v_str = v_str[:32] + "…"
+                                tool_lines.append(f"\t{k}: {v_str}")
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    callback("\n".join(tool_lines) + "\n\n")
                 continue
 
             elif content:

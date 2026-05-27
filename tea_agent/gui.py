@@ -517,6 +517,132 @@ class TkGUI(AgentCore):
         self._update_status(f"🧠 Reasoning 已{state}")
         return {"enable_thinking": self.sess.enable_thinking, "changed": True}
 
+    def export_last_pdf(self, e=None):
+        """Ctrl+P: 导出当前主题最后一轮对话为 last.pdf（仿 HtmlFrame 渲染效果）"""
+        import threading, json, os, tempfile, subprocess
+
+        def _do():
+            try:
+                tid = self.current_topic_id
+                if not tid:
+                    self._update_status("⚠️ 无当前主题")
+                    return
+
+                convs = self.db.get_conversations(tid, limit=1)
+                if not convs:
+                    self._update_status("⚠️ 无对话记录")
+                    return
+                conv = convs[0]
+
+                # ── 解析 user_msg ──
+                user_msg = conv.get("user_msg", "")
+                user_text = ""
+                if isinstance(user_msg, str):
+                    if user_msg.startswith("{"):
+                        try:
+                            obj = json.loads(user_msg)
+                            user_text = obj.get("text", user_msg) if isinstance(obj, dict) else user_msg
+                        except (json.JSONDecodeError, TypeError):
+                            user_text = user_msg
+                    else:
+                        user_text = user_msg
+                elif isinstance(user_msg, dict):
+                    user_text = user_msg.get("text", str(user_msg))
+                else:
+                    user_text = str(user_msg)
+
+                # ── 解析 rounds_json → chat_messages 格式 ──
+                rounds = conv.get("rounds_json_parsed") or []
+                stamp = conv.get("stamp", "")
+
+                msgs = [{"role": "user", "content": user_text, "timestamp": stamp}]
+
+                for r in rounds:
+                    role = r.get("role", "")
+                    if role == "assistant":
+                        reasoning = r.get("reasoning_content", "")
+                        content = r.get("content", "")
+                        tool_calls = r.get("tool_calls") or []
+
+                        if reasoning:
+                            msgs.append({"role": "think", "content": reasoning, "timestamp": ""})
+
+                        for tc in tool_calls:
+                            fn = tc.get("function", {})
+                            name = fn.get("name", "?")
+                            args = fn.get("arguments", "")
+                            msgs.append({"role": "tool", "content": f"🔧 调用工具：{name}\n参数：\n{args}", "timestamp": ""})
+
+                        if content:
+                            msgs.append({"role": "ai", "content": content, "timestamp": ""})
+
+                    elif role == "tool":
+                        content = r.get("content", "")
+                        msgs.append({"role": "tool", "content": f"📋 结果：{content}", "timestamp": ""})
+
+                # ── 渲染为 HTML ──
+                from tea_agent._gui._markdown import _chat_to_markdown, _render_markdown, _DEFAULT_FONT_SIZE
+                md = _chat_to_markdown(msgs)
+                font_size = int(_DEFAULT_FONT_SIZE * getattr(self, '_zoom_level', 100) / 100)
+                html = _render_markdown(md, font_size=font_size)
+
+                # ── 写临时 HTML ──
+                tmp = tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8")
+                tmp.write(html)
+                tmp.close()
+
+# NOTE: 2026-05-27 16:31:55, self-evolved by tea_agent --- export_last_pdf: Edge → Playwright 跨平台 PDF 导出，Edge 作为回退
+                # ── Playwright 无头转 PDF（跨平台，Windows/Linux/macOS）──
+                output = os.path.join(self._initial_cwd, "last.pdf")
+                tmp_url = "file:///" + tmp.name.replace("\\", "/")
+
+                pdf_ok = False
+                try:
+                    from playwright.sync_api import sync_playwright
+                    with sync_playwright() as p:
+                        browser = p.chromium.launch(headless=True)
+                        page = browser.new_page()
+                        page.goto(tmp_url, wait_until="networkidle", timeout=15000)
+                        page.pdf(path=output, format="A4", print_background=True,
+                                  margin={"top": "15mm", "bottom": "15mm", "left": "12mm", "right": "12mm"})
+                        browser.close()
+                    pdf_ok = True
+                    self._update_status(f"✅ 已导出: last.pdf")
+                except Exception:
+                    # 回退：Windows 下尝试 Edge 无头
+                    edge_paths = [
+                        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+                    ]
+                    edge = None
+                    for p in edge_paths:
+                        if os.path.exists(p):
+                            edge = p
+                            break
+                    if edge:
+                        subprocess.run(
+                            [edge, "--headless=new", f"--print-to-pdf={output}",
+                             "--no-pdf-header-footer", tmp_url],
+                            capture_output=True, text=True, timeout=30,
+                        )
+                        pdf_ok = True
+                        self._update_status(f"✅ 已导出: last.pdf")
+                    else:
+                        import shutil
+                        html_output = os.path.join(self._initial_cwd, "last.html")
+                        shutil.copy(tmp.name, html_output)
+                        self._update_status(f"⚠️ 无可用浏览器，已保存 HTML: last.html")
+
+                os.unlink(tmp.name)
+
+            except Exception as ex:
+                self._update_status(f"❌ 导出失败: {ex}")
+                import traceback
+                traceback.print_exc()
+
+        threading.Thread(target=_do, daemon=True).start()
+
+
     def _update_status(self, msg: str):
         """更新状态栏"""
         if hasattr(self, 'status_var'):

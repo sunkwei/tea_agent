@@ -123,10 +123,9 @@ class UIBuilder:
         )
 
         # 右侧：提示文字
-        ttk.Label(toolbar, text="Enter 发送  •  Shift+Enter 换行  •  ESC 打断",
+        ttk.Label(toolbar, text="Enter 发送  •  Shift+Enter 换行  •  ESC 打断  •  Ctrl+P 导出PDF",
                   foreground="#888", font=(SYSTEM_FONT, _fs(10)))\
             .pack(side=tk.RIGHT, padx=6)
-
         # 样式配置
         gui.console.tag_configure("user", foreground="#0055cc")
         gui.console.tag_configure("ai", foreground="black")
@@ -153,3 +152,6 @@ class UIBuilder:
         if HAS_TKINTERWEB:
             gui.root.bind("<Alt-Up>", gui._history_prev_round)
             gui.root.bind("<Alt-Down>", gui._history_next_round)
+
+        # Ctrl+P: 导出当前主题最后一轮为 PDF
+        gui.root.bind("<Control-p>", gui.export_last_pdf)

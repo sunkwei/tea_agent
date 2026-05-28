@@ -311,9 +311,11 @@ class ChatRenderer:
         round_msgs = rounds[active_idx]
         self.gui._image_cache.clear()
         round_md = _chat_to_markdown(round_msgs, image_cache=self.gui._image_cache)
+# NOTE: 2026-05-28 09:45:51, self-evolved by tea_agent --- _build_round_view_html 中调用 _fix_double_escape_all 修复全文双重转义
         if HAS_TKINTERWEB:
             round_body = _md_lib.markdown(round_md, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
-            from tea_agent._gui._markdown import _fix_double_escape_in_code
+            from tea_agent._gui._markdown import _fix_double_escape_all, _fix_double_escape_in_code
+            round_body = _fix_double_escape_all(round_body)
             round_body = _fix_double_escape_in_code(round_body)
             css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
             full_html = "<html><head>" + css + "</head><body>" + table_html + round_body + "</body></html>"

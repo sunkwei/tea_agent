@@ -64,11 +64,14 @@ a.chat-image-link { text-decoration: none; display: inline-block; }
 a.chat-image-link:hover { text-decoration: none; }
 </style>
 """)
+# NOTE: 2026-05-28 09:45:35, self-evolved by tea_agent --- _render_markdown 中调用 _fix_double_escape_all 修复全文双重转义
 def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
     """将 markdown 文本转换为带样式的 HTML 片段"""
     if not HAS_TKINTERWEB:
         return text
     html_body = markdown.markdown(text, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
+    # 修复全文双重转义（&amp;lt;→&lt; 等），再修复 <code> 块内彻底 unescape
+    html_body = _fix_double_escape_all(html_body)
     html_body = _fix_double_escape_in_code(html_body)
     css = _MD_CSS_TEMPLATE.safe_substitute(font_size=font_size)
     return f"<html><head>{css}</head><body>{html_body}</body></html>"
@@ -104,6 +107,22 @@ def _fix_double_escape_in_code(html: str) -> str:
         return '<code>' + inner + '</code>'
 # NOTE: 2026-05-28 07:07:40, self-evolved by tea_agent --- 修复 _fix_double_escape_in_code 正则，匹配带 class 属性的 code 标签（codehilite 生成 &lt;code class=&quot;language-python&quot;&gt;）
     return re.sub(r'<code[^>]*>(.*?)</code>', _fix_code_block, html, flags=re.DOTALL)
+
+# NOTE: 2026-05-28 09:45:15, self-evolved by tea_agent --- 新增 _fix_double_escape_all 修复全文双重转义，解决 HtmlFrame 显示 &lt; &amp; &quot; 字面量问题
+def _fix_double_escape_all(html: str) -> str:
+    """修复整个 HTML 正文中的双重转义（不仅限于 <code> 块）。
+
+    流程: _chat_to_markdown 做 html_mod.escape → markdown.markdown 可能
+    再次转义（尤其 md_in_html 扩展），导致 &lt; → &amp;lt;、
+    &amp; → &amp;amp; 等。此函数还原明确的双重转义 pattern。
+    """
+    html = html.replace('&amp;amp;', '&amp;')
+    html = html.replace('&amp;lt;', '&lt;')
+    html = html.replace('&amp;gt;', '&gt;')
+    html = html.replace('&amp;quot;', '&quot;')
+    html = html.replace('&amp;#39;', '&#39;')
+    html = html.replace('&amp;#x27;', '&#x27;')
+    return html
 
 def _build_tool_blocks(messages):
 

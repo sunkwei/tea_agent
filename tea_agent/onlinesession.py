@@ -1036,36 +1036,9 @@ class OnlineToolSession(BaseChatSession):
     # ──────────────────────────────────────────────
 
     def _analyze_intent(self, text: str) -> dict:
-        """轻量级意图分析"""
-        # import re
-        # text_lower = text.lower().strip()
-
-        # if re.match(r'^(你好|谢谢|在吗|确认|好的|是的|不是|收到|ok|yes|no|bye|hello|hi)\W*$', text_lower):
-        #     return {'type': 'chat', 'skip_tool_loop': True, 'required_tools': []}
-
-        # tools = []
-        # if re.search(r'文件|目录|读取|写入|列表|file|dir|list|read|write', text_lower):
-        #     tools.extend(['toolkit_file', 'toolkit_exec'])
-        # if re.search(r'天气|气温|forecast|weather|温度', text_lower):
-        #     tools.append('toolkit_weather_my')
-        # if re.search(r'时间|日期|农历|几点了|time|date|星期', text_lower):
-        #     tools.extend(['toolkit_gettime', 'toolkit_date_diff', 'toolkit_lunar'])
-        # if re.search(r'安装|包|依赖|pip|install|package|模块', text_lower):
-        #     tools.append('toolkit_pkg')
-        # if re.search(r'命令|执行|运行|shell|cmd|run|execute|git|push', text_lower):
-        #     tools.append('toolkit_exec')
-        # if re.search(r'记忆|搜索|记录|search|memory|remember|遗忘', text_lower):
-        #     tools.append('toolkit_memory')
-        # if re.search(r'知识|文档|笔记|kb|note|knowledge', text_lower):
-        #     tools.append('toolkit_kb')
-        # if re.search(r'模式|pragmatic|creative|切换', text_lower):
-        #     tools.append('toolkit_mode')
-
-        # if tools:
-        #     return {'type': 'task', 'skip_tool_loop': False, 'required_tools': list(set(tools))}
-
-        return {'type': 'general', 'skip_tool_loop': False, 'required_tools': None}
-
+        """轻量级意图分析 — 委派给独立的 session_intent 模块。"""
+        from tea_agent.session_intent import analyze_intent
+        return analyze_intent(text)
     def _execute_tool_loop(self, context: Dict) -> Dict:
         """
         执行工具调用循环。
@@ -1265,17 +1238,12 @@ class OnlineToolSession(BaseChatSession):
         }
 
     def _build_tools(self, tool_filter: list = None):
-        """构建工具定义列表"""
-        tools = self.tools_comp.build_tools()
-
+        """构建工具定义列表 — 委派给 session_tools_builder 进行过滤。"""
+        from tea_agent.session_tools_builder import filter_tools
+        all_tools = self.tools_comp.build_tools()
+        self.tools = filter_tools(all_tools, tool_filter)
         if tool_filter:
-            essential = {'toolkit_memory', 'toolkit_kb'}
-            allowed = set(tool_filter) | essential
-            self.tools = [t for t in tools if t['function']['name'] in allowed]
             logger.info(f"[Pipe Dynamic] Tool Injection: enabled {len(self.tools)} tools based on intent")
-        else:
-            self.tools = tools
-
     def update_tools(self):
         """重新加载并刷新工具定义"""
         self.context.toolkit.reload()
@@ -1286,22 +1254,23 @@ class OnlineToolSession(BaseChatSession):
         try:
             result = self.context.toolkit.call_tool('toolkit_mode', action='auto', text=user_text)
             if isinstance(result, dict):
-                if result.get('switched'):
-                    logger.info(
-                        f"🤖 自动切换模式: {result.get('from_mode')} → {result.get('to_mode')} "
-                        f"(原因: {result.get('reason', 'N/A')})"
-                    )
-                detected = result.get('to_mode') or result.get('mode') or result.get('detected')
-                if detected and detected in ("pragmatic", "creative", "mixed"):
-                    self._current_mode = detected
-        except Exception:
-            pass
-
-    def reset_session_state(self):
-        """重置会话状态。"""
-        self.api.reset_usage()
-        self.api.reset_cheap_usage()
-        self._rounds_collector = []
+    def _auto_detect_mode(self, user_text: str):
+        """根据用户输入自动检测并切换 Agent 模式 — 委派给 session_mode 模块。"""
+        from tea_agent.session_mode import detect_mode, extract_mode
+        result = detect_mode(
+            call_tool_fn=lambda action, text: self.context.toolkit.call_tool(
+                'toolkit_mode', action=action, text=text
+            ),
+            user_text=user_text,
+        )
+        if result.get('switched'):
+            logger.info(
+                f"🤖 自动切换模式: {result.get('from_mode')} → {result.get('to_mode')} "
+                f"(原因: {result.get('reason', 'N/A')})"
+            )
+        new_mode = extract_mode(result)
+        if new_mode:
+            self._current_mode = new_mode        self._rounds_collector = []
         self._extra_iterations = 0
         self._max_iter_wait.clear()
         self._strip_reasoning_content(self.context.messages)

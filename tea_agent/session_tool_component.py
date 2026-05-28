@@ -185,12 +185,23 @@ class ToolComponent(SessionComponent):
         """
         valid_tool_calls = []
         for tc_data in tool_calls_data:
-            if tc_data["id"] and tc_data["name"]:
-                valid_tool_calls.append(SimpleNamespace(
-                    id=tc_data["id"],
-                    function=SimpleNamespace(
-                        name=tc_data["name"],
-                        arguments=tc_data["arguments"]
-                    )
-                ))
+            func_id = tc_data["id"]
+            if "name" in tc_data:
+                func_name = tc_data["name"]
+                func_args = tc_data["arguments"]
+            elif "function" in tc_data:
+                func_name = tc_data["function"]["name"]
+                func_args = tc_data["function"]["arguments"]
+            else:
+                logger.warning(f"tool call failed: invalid data format, data={tc_data}")
+                print(f"parse_tool_calls_from_stream: tool call failed: invalid data format, data={tc_data}")
+                continue
+
+            valid_tool_calls.append(SimpleNamespace(
+                id=func_id,
+                function=SimpleNamespace(
+                    name=func_name,
+                    arguments=func_args,
+                )
+            ))
         return valid_tool_calls

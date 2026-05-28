@@ -13,8 +13,6 @@ except ImportError:
     HAS_TKINTERWEB = False
 
 _DEFAULT_FONT_SIZE = 16  # 模块级默认
-
-_DEFAULT_FONT_SIZE = 16  # 模块级默认
 # ====================== Markdown → HTML 渲染 ======================
 
 _MD_CSS_TEMPLATE = string.Template("""
@@ -77,36 +75,41 @@ def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
     return f"<html><head>{css}</head><body>{html_body}</body></html>"
 
 # 导致 <code> 块内 &amp; → &amp;amp;，显示为 &amp; 字面量而非正确渲染
-# 此函数在最终 HTML 中，将 <code>...</code> 内部的 &amp; 还原为 &
+# 此函数在最终 HTML 中，将 <code>...</code> 和 <pre>...</pre> 内部的 HTML 实体还原为原始字符
 def _fix_double_escape_in_code(html: str) -> str:
-    """修复 <code> 块内的双重 HTML 转义。
+    """修复代码块内的双重 HTML 转义并还原实体。
     
-    由于 _chat_to_markdown 先做了 html_mod.escape，markdown.codehilite
-    又对代码块内容再次转义，导致 <code> 内 &amp; 变成 &amp;amp;。
-    此函数仅还原明确的双重转义 pattern（&amp;amp; → &amp; 等），
-    避免破坏内联代码中的单次转义。
+    HtmlFrame(tkinterweb) 在 <code> 和 <pre> 块内不解析实体，
+    所以需要将 &lt; &gt; &amp; &quot; 等彻底还原为原始字符。
+    由于流程中可能存在多重转义，此处采用循环 unescape 直到稳定。
     """
-# NOTE: 2026-05-27 15:00:55, self-evolved by tea_agent --- _fix_double_escape_in_code: 彻底还原 code 块内 HTML 实体为原始字符（&lt;→<, &gt;→>, &amp;→&）
+    import html as _html
+
     def _fix_code_block(m):
-        """Internal: fix code block — 彻底还原 HTML 实体为原始字符。
+        """Internal: fix code block — 彻底还原 HTML 实体为原始字符。"""
+        tag_start = m.group(1) # e.g. '<code class="...">' or '<pre>'
+        inner = m.group(3)
+        tag_end = m.group(4)   # '</code>' or '</pre>'
         
-        HtmlFrame(tkinterweb) 在 <code> 块内不解析实体，
-        &lt; &gt; &amp; 会显示为字面文本，所以需要完全 unescape。
-        """
-        inner = m.group(1)
-        # 先修复双重转义（markdown.codehilite 对已转义内容再次转义）
+        # 1. 先修复明确的双重转义 pattern（加速处理）
         inner = inner.replace('&amp;amp;', '&amp;')
         inner = inner.replace('&amp;lt;', '&lt;')
         inner = inner.replace('&amp;gt;', '&gt;')
         inner = inner.replace('&amp;quot;', '&quot;')
         inner = inner.replace('&amp;#39;', '&#39;')
         inner = inner.replace('&amp;#x27;', '&#x27;')
-        # 彻底还原所有 HTML 实体为原始字符
-        import html as _html
-        inner = _html.unescape(inner)
-        return '<code>' + inner + '</code>'
-# NOTE: 2026-05-28 07:07:40, self-evolved by tea_agent --- 修复 _fix_double_escape_in_code 正则，匹配带 class 属性的 code 标签（codehilite 生成 &lt;code class=&quot;language-python&quot;&gt;）
-    return re.sub(r'<code[^>]*>(.*?)</code>', _fix_code_block, html, flags=re.DOTALL)
+        
+        # 2. 循环还原所有 HTML 实体为原始字符，直到不再变化（应对多重转义）
+        last_inner = ""
+        while last_inner != inner:
+            last_inner = inner
+            inner = _html.unescape(inner)
+        
+        return f"{tag_start}{inner}{tag_end}"
+
+    # 匹配 <code...>...</code> 或 <pre...>...</pre>
+    # 使用 (code|pre) 捕获标签名，确保起始和结束标签匹配
+    return re.sub(r'(<(code|pre)[^>]*>)(.*?)(</\2>)', _fix_code_block, html, flags=re.DOTALL)
 
 # NOTE: 2026-05-28 09:45:15, self-evolved by tea_agent --- 新增 _fix_double_escape_all 修复全文双重转义，解决 HtmlFrame 显示 &lt; &amp; &quot; 字面量问题
 def _fix_double_escape_all(html: str) -> str:
@@ -297,17 +300,17 @@ def _chat_to_markdown(messages, image_cache=None):
                 if img_tags:
                     img_html = '<div class="chat-images">' + "".join(img_tags) + '</div>'
             # 2026-05-16 fix: 对content进行HTML转义，防止未转义标签导致HtmlFrame解析错误
-            safe_content = html_mod.escape(content.strip())
+            safe_content = _transform_non_code_segments(content.strip(), html_mod.escape)
             parts.append(f'{ts_display}\n\n<div class="msg-user" markdown="1">\n\n### 👤 你\n\n{img_html}\n\n{safe_content}\n</div>\n')
         elif role == "think":
             # 2026-05-16 fix: 对content进行HTML转义
-            safe_content = html_mod.escape(content.strip())
+            safe_content = _transform_non_code_segments(content.strip(), html_mod.escape)
             parts.append(f'{ts_display}\n\n<div class="msg-think" markdown="1">\n\n### 💭 思考过程\n\n{safe_content}\n</div>\n\n---\n')
         elif role == "ai":
             # 2026-05-16 fix: 对content进行HTML转义
-            safe_content = html_mod.escape(content.strip())
+            safe_content = _transform_non_code_segments(content.strip(), html_mod.escape)
             # NOTE: 2026-05-18 fix: 转义孤立的 [ ] 方括号，防止被 Markdown 解析器误认为链接语法导致 HTML 结构损坏
-            safe_content = _escape_orphan_brackets(safe_content)
+            safe_content = _transform_non_code_segments(safe_content, _escape_orphan_brackets)
             parts.append(f'{ts_display}\n\n<div class="msg-ai" markdown="1">\n\n### 🤖 AI\n\n{safe_content}\n</div>\n\n---\n')
         elif role == "tool":
             if tool_blocks[i]:
@@ -315,6 +318,24 @@ def _chat_to_markdown(messages, image_cache=None):
         elif role == "notice":
             parts.append(f"\n{content.strip()}\n")
     return "\n".join(parts)
+
+
+def _transform_non_code_segments(text: str, transform) -> str:
+    """仅对代码段之外的文本应用变换。
+
+    保护两类 Markdown 代码语法：
+    - fenced code block: ```...```
+    - inline code: `...`
+    """
+    parts = re.split(r'(```[\s\S]*?```|`[^`\n]+`)', text)
+    out = []
+    for part in parts:
+        if ((part.startswith("```") and part.endswith("```"))
+                or (part.startswith("`") and part.endswith("`"))):
+            out.append(part)
+        else:
+            out.append(transform(part))
+    return "".join(out)
 
 # NOTE: 2026-05-18 fix: 扩展控制字符过滤范围，包含 \x7f(DEL)、Unicode C0/C1 控制字符、零宽字符等
 def _sanitize_html_control_chars(html: str) -> str:

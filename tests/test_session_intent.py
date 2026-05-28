@@ -1,4 +1,3 @@
-# @2026-05-21 gen by tea_agent, 意图分析模块契约测试
 """
 session_intent 模块测试 — 独立纯函数 analyze_intent()。
 

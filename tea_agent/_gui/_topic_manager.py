@@ -25,7 +25,6 @@ class TopicManager:
         """
         self.gui = gui
 
-    # NOTE: 2026-05-07 17:33:40, clear_chat 初始化缓冲区
     def clear_chat(self):
         """Clear chat."""
         gui = self.gui
@@ -65,7 +64,6 @@ class TopicManager:
         gui.refresh_topics()
         gui.switch_topic(tid)
 
-    # @2026-05-19 gen by claude, 仅显示活跃主题(is_active=1)，停用主题从列表中隐藏
     def refresh_topics(self):
         """Refresh topics."""
         gui = self.gui
@@ -242,7 +240,6 @@ class TopicManager:
 
         gui.root.after(60, lambda: threading.Thread(target=load_worker, daemon=True).start())
 
-# NOTE: 2026-05-27 17:04:42, self-evolved by tea_agent --- on_topic_select 使用活跃主题列表避免停用主题导致索引错位
     def on_topic_select(self, e):
         """Handle topic select event.
         

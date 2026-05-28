@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# 2026-05-21 gen by tea_agent, Extracted from onlinesession._build_tools
 """工具构建与过滤模块 — 独立纯函数，管理与注入工具定义列表。
 
 用法:

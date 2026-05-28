@@ -68,7 +68,6 @@ class OnlineToolSession(BaseChatSession):
         memory_dedup_threshold: float = 0.3,
         supports_vision: bool = False,
         supports_reasoning: bool = True,
-# NOTE: 2026-05-28 08:12:27, self-evolved by tea_agent --- OnlineToolSession 添加 no_stream_chunk 参数，传递到 SessionContext
         disable_summary: bool = False,
         no_stream_chunk: bool = False,
     ):
@@ -125,7 +124,6 @@ class OnlineToolSession(BaseChatSession):
             memory_dedup_threshold=memory_dedup_threshold,
             supports_vision=supports_vision,
             supports_reasoning=supports_reasoning,
-# NOTE: 2026-05-28 08:12:33, self-evolved by tea_agent --- SessionContext 初始化传入 no_stream_chunk
             disable_summary=disable_summary,
             no_stream_chunk=no_stream_chunk,
             extra_iterations_on_continue=extra_iterations_on_continue,
@@ -353,7 +351,6 @@ class OnlineToolSession(BaseChatSession):
     # 流式处理（委派给 API 组件）
     # ──────────────────────────────────────────────
 
-# NOTE: 2026-05-28 08:12:46, self-evolved by tea_agent --- _process_stream_with_reasoning 支持非流式 (stream=False) 响应
     def _process_stream_with_reasoning(self, response, callback) -> Tuple[str, List[Dict], str]:
         """
         处理流式/非流式响应，收集内容、工具调用数据和 reasoning_content。
@@ -1250,11 +1247,6 @@ class OnlineToolSession(BaseChatSession):
         self._build_tools()
 
     def _auto_detect_mode(self, user_text: str):
-        """根据用户输入自动检测并切换 Agent 模式。"""
-        try:
-            result = self.context.toolkit.call_tool('toolkit_mode', action='auto', text=user_text)
-            if isinstance(result, dict):
-    def _auto_detect_mode(self, user_text: str):
         """根据用户输入自动检测并切换 Agent 模式 — 委派给 session_mode 模块。"""
         from tea_agent.session_mode import detect_mode, extract_mode
         result = detect_mode(
@@ -1270,11 +1262,16 @@ class OnlineToolSession(BaseChatSession):
             )
         new_mode = extract_mode(result)
         if new_mode:
-            self._current_mode = new_mode        self._rounds_collector = []
+            self._current_mode = new_mode
+
+    def reset_session_state(self):
+        """重置会话状态。"""
+        self.api.reset_usage()
+        self.api.reset_cheap_usage()
+        self._rounds_collector = []
         self._extra_iterations = 0
         self._max_iter_wait.clear()
         self._strip_reasoning_content(self.context.messages)
-
     def _notify_reflection_done(self, reflection_id: int):
         """反思完成后发送桌面通知"""
         try:
@@ -1299,7 +1296,6 @@ class OnlineToolSession(BaseChatSession):
         except Exception:
             pass
 
-# NOTE: 2026-05-27 15:45:40, self-evolved by tea_agent --- chat_stream: topic_id 类型 int→str，默认值 -1→""
     def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: str = "", on_status: Optional[Callable[[str], None]] = None) -> Tuple[str, bool]:
         """
         流式对话，支持工具调用。

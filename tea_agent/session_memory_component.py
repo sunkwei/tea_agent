@@ -113,7 +113,6 @@ class MemoryComponent(SessionComponent):
 
         return self.ctx.messages
 
-# NOTE: 2026-05-27 15:46:12, self-evolved by tea_agent --- trigger_memory_extraction: topic_id 类型 int→str
     def trigger_memory_extraction(self, topic_id: str) -> int:
         """
         从当前会话的未摘要对话中提取新记忆（使用便宜模型）。

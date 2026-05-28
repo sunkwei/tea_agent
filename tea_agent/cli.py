@@ -32,7 +32,6 @@ from tea_agent.config import load_config
 class TeaCLI(AgentCore):
     """Tea Agent 命令行客户端。"""
 
-# NOTE: 2026-05-28 08:13:54, self-evolved by tea_agent --- cli.py TeaCLI 接受并传递 no_stream_chunk
     def __init__(self, config_path: str = None, enable_think: bool = False,
                  verbose: bool = False, disable_summary: bool = False,
                  no_stream_chunk: bool = False):
@@ -435,7 +434,6 @@ def main():
                         help="启用 thinking 模式")
     parser.add_argument("--verbose", action="store_true", default=False,
                         help="显示工具调用中间轮次")
-# NOTE: 2026-05-28 08:13:59, self-evolved by tea_agent --- cli.py argparse 和 main 添加 --no_stream_chunk
     parser.add_argument("--disable_summary", action="store_true", default=False,
                         help="禁用历史压缩和摘要，超过30轮直接丢弃")
     parser.add_argument("--no_stream_chunk", action="store_true", default=False,

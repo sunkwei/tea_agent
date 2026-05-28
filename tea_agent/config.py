@@ -126,7 +126,6 @@ class EmbeddingConfig:
     api_key: str = ""       # API Key，为空则使用 main_model.api_key
     dimension: int = 0      # 向量维度，0=自动检测
 
-# NOTE: 2026-05-27 16:48:10, self-evolved by tea_agent --- 修复 EmbeddingConfig.is_configured 属性缺少函数体，导致永远返回 None
     @property
     def is_configured(self) -> bool:
         """至少配置了 api_url 和 model_name 才视为有效"""
@@ -181,10 +180,8 @@ class AgentConfig:
     memory_extraction_threshold: int = 2  # 触发记忆提取的最低未摘要消息数
     memory_dedup_threshold: float = 0.3  # 记忆去重相似度阈值 (0~1)，bigram Jaccard
     chat_page_size: int = 50  # GUI 单页加载的对话轮数（最多50条）
-    # 2026-05-20 gen by Tea Agent, L2/L3分层压缩参数
     history_l2_max: int = 30    # L2最多保留轮数（含user+assistant，不含工具轮）
     history_l3_batch: int = 10  # L3摘要批处理大小（攒够N条触发便宜模型摘要）
-    # 2026-04-30 gen by deepseek-v4-pro, 运行时配置读写方法（支持自我调优）
 
     # 可运行时修改的配置键白名单
     _RUNTIME_CONFIG_KEYS = {
@@ -374,7 +371,6 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
             cfg.memory_extraction_threshold = int(data.get("memory_extraction_threshold", cfg.memory_extraction_threshold))
             cfg.memory_dedup_threshold = float(data.get("memory_dedup_threshold", cfg.memory_dedup_threshold))
             cfg.chat_page_size = int(data.get("chat_page_size", cfg.chat_page_size))
-            # 2026-05-20 gen by Tea Agent, L2/L3分层压缩
             cfg.history_l2_max = int(data.get("history_l2_max", cfg.history_l2_max))
             cfg.history_l3_batch = int(data.get("history_l3_batch", cfg.history_l3_batch))            
         except Exception:
@@ -465,7 +461,6 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     data["memory_extraction_threshold"] = cfg.memory_extraction_threshold
     data["memory_dedup_threshold"] = cfg.memory_dedup_threshold
     data["chat_page_size"] = cfg.chat_page_size
-    # 2026-05-20 gen by Tea Agent, L2/L3分层压缩
     data["history_l2_max"] = cfg.history_l2_max
     data["history_l3_batch"] = cfg.history_l3_batch    
     with open(yaml_path, "w", encoding="utf-8") as f:

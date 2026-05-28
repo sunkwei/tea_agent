@@ -1,4 +1,3 @@
-# @2026-05-10 gen by tea_agent, Storage 核心 CRUD 测试
 """
 Storage 测试套件 — 覆盖所有核心 CRUD 操作。
 
@@ -150,7 +149,6 @@ class TestTopicCRUD:
         convs = storage.get_conversations(tid)
         assert len(convs) == 0
 
-# NOTE: 2026-05-10 09:09:23, self-evolved by tea_agent --- 修复 test_update_topic_active: sleep 0.1→1.1 秒（SQLite 时间戳秒级精度）
     def test_update_topic_active(self, storage):
         """更新主题活跃时间"""
         import time
@@ -178,7 +176,6 @@ class TestMessageCRUD:
         cid2 = storage.save_msg(tid, "再见", "拜拜", True)
         assert isinstance(cid2, str) and cid2 != cid
 
-# NOTE: 2026-05-10 09:09:34, self-evolved by tea_agent --- 修复 test_save_msg_updates_topic_active: sleep 0.1→1.1 秒
     def test_save_msg_updates_topic_active(self, storage):
         """保存消息应自动更新主题活跃时间"""
         tid = storage.create_topic("活跃测试")
@@ -231,7 +228,6 @@ class TestMessageCRUD:
         assert len(convs) == 1
         assert "rounds_json_parsed" not in convs[0]
 
-# NOTE: 2026-05-10 09:10:41, self-evolved by tea_agent --- 修复 test_get_recent_conversations: 消息间 sleep 1.1s 确保不同时间戳
     def test_get_recent_conversations(self, storage):
         """获取最近 N 轮对话（正序）"""
         import time
@@ -360,7 +356,6 @@ class TestMemoryCRUD:
         storage.add_memory("B", category="instruction", priority=0)
         storage.add_memory("C", category="preference")
 
-# NOTE: 2026-05-10 09:10:00, self-evolved by tea_agent --- 修复 test_memory_stats: by_priority key 是 int 不是 str
         stats = storage.get_memory_stats()
         assert stats["total"] == 3
         assert stats["by_category"]["fact"] == 1

@@ -143,7 +143,6 @@ class ChatRenderer:
             """Internal: prepare."""
             return self._build_round_view_html(rounds, active_idx, font_size)
 
-# NOTE: 2026-05-27 17:18:39, self-evolved by tea_agent --- _render_and_show_chat _on_done: load_html 前显示渲染提示 + _loading_topic 标记处理
         def _on_done(html):
             """Internal: handle done event.
             
@@ -183,7 +182,6 @@ class ChatRenderer:
                 self.gui.root.after(0, lambda: _on_done("<p>渲染错误</p>"))
         threading.Thread(target=_worker, daemon=True).start()
 
-# NOTE: 2026-05-27 17:18:25, self-evolved by tea_agent --- _render_loaded_topic 跳过 ScrolledText 直接构建 chat_messages + 每50条 yield
     # ── _render_loaded_topic ──
     def _render_loaded_topic(self, render_items):
         """主线程：批量加载历史，跳过 ScrolledText 直接构建 chat_messages"""
@@ -311,7 +309,6 @@ class ChatRenderer:
         round_msgs = rounds[active_idx]
         self.gui._image_cache.clear()
         round_md = _chat_to_markdown(round_msgs, image_cache=self.gui._image_cache)
-# NOTE: 2026-05-28 09:45:51, self-evolved by tea_agent --- _build_round_view_html 中调用 _fix_double_escape_all 修复全文双重转义
         if HAS_TKINTERWEB:
             round_body = _md_lib.markdown(round_md, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
             from tea_agent._gui._markdown import _fix_double_escape_all, _fix_double_escape_in_code

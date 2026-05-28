@@ -43,8 +43,6 @@ class TopicStore(StoreComponent):
         self.conn.commit()
         c.close()
 
-# NOTE: 2026-05-27 15:44:29, self-evolved by tea_agent --- update_topic_active/delete_topic/get_topic_tokens：topic_id 类型 int→str
-# NOTE: 2026-05-27 16:53:52, self-evolved by tea_agent --- update_topic_active 增加 active 参数，实际设置 is_active 列
     def update_topic_active(self, topic_id: str, active: int = 1):
         """设置主题活跃状态。active=1 活跃，active=0 停用。
         
@@ -79,7 +77,6 @@ class TopicStore(StoreComponent):
         c.close()
         return self.get_drift_count(topic_id)
 
-# NOTE: 2026-05-27 15:44:34, self-evolved by tea_agent --- delete_topic：topic_id 类型 int→str
     def delete_topic(self, topic_id: str):
         """Delete topic.
         
@@ -177,7 +174,6 @@ class TopicStore(StoreComponent):
         self.conn.commit()
         c.close()
 
-# NOTE: 2026-05-27 15:44:39, self-evolved by tea_agent --- get_topic_tokens：topic_id 类型 int→str
     def get_topic_tokens(self, topic_id: str) -> Dict:
         """Get the topic tokens.
         

@@ -1,4 +1,3 @@
-# @2026-04-29 gen by deepseek-v4-pro, 内置工具: 自进化——修改项目代码并带注释/备份/验证
 import logging
 
 logger = logging.getLogger("toolkit")

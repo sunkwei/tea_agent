@@ -1,4 +1,3 @@
-# @2026-05-10 gen by tea_agent, pytest fixtures — 临时数据库、配置等共享资源
 """
 pytest 公共 fixtures。
 提供可复用的测试资源：临时 Storage、临时配置文件、内存模型配置等。

@@ -215,7 +215,6 @@ if HAS_SNI:
 
 class TkGUI(AgentCore):
     """TkGUI class."""
-# NOTE: 2026-05-28 08:13:05, self-evolved by tea_agent --- TkGUI 接受并传递 no_stream_chunk
     def __init__(self, root, debug:bool=False, config_fname:str="", disable_summary:bool=False, no_stream_chunk:bool=False):
         """Initialize  .
         
@@ -235,7 +234,6 @@ class TkGUI(AgentCore):
         self.sess = None  # 预设，AgentCore._init_session 会创建它
 
         # ── AgentCore 初始化：配置、目录、Storage/Toolkit、会话 ──
-# NOTE: 2026-05-28 08:13:10, self-evolved by tea_agent --- TkGUI super().__init__ 传递 no_stream_chunk
         super().__init__(debug=debug, config_path=config_fname, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
 
         self.stream_mgr = StreamManager(self)
@@ -594,7 +592,6 @@ class TkGUI(AgentCore):
                 tmp.write(html)
                 tmp.close()
 
-# NOTE: 2026-05-27 16:31:55, self-evolved by tea_agent --- export_last_pdf: Edge → Playwright 跨平台 PDF 导出，Edge 作为回退
                 # ── Playwright 无头转 PDF（跨平台，Windows/Linux/macOS）──
                 output = os.path.join(self._initial_cwd, "last.pdf")
                 tmp_url = "file:///" + tmp.name.replace("\\", "/")
@@ -1068,8 +1065,6 @@ class TkGUI(AgentCore):
 
         popup.focus_set()
 
-# NOTE: 2026-05-27 17:04:34, self-evolved by tea_agent --- 主题管理对话框关闭后刷新主界面主题列表，当前主题被停用时自动切换
-    # @2026-04-29 gen by deepseek-v4-pro, 打开主题管理弹窗
     def open_topic_dialog(self):
         """打开主题管理弹窗，关闭后自动刷新主界面主题列表"""
         old_topic_id = self.current_topic_id
@@ -1256,7 +1251,6 @@ class TkGUI(AgentCore):
         """Internal: hide raw check btn."""
         return self.renderer._hide_raw_check_btn()
 
-# NOTE: 2026-05-28 08:13:17, self-evolved by tea_agent --- gui.py main() 和 argparse 添加 --no_stream_chunk
 def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str="", disable_summary:bool=False, no_stream_chunk:bool=False):
     """启动 GUI 主界面。
 
@@ -1293,7 +1287,6 @@ if __name__ == "__main__":
         help="超时秒数，超时后自动关闭（用于自动化测试）"
     )
     ap.add_argument("--config", type=str, help="配置文件路径")
-# NOTE: 2026-05-28 08:13:22, self-evolved by tea_agent --- gui.py __main__ 添加 --no_stream_chunk argparse
     ap.add_argument("--disable_summary", action="store_true", default=False,
                     help="禁用历史压缩和摘要，超过30轮直接丢弃")
     ap.add_argument("--no_stream_chunk", action="store_true", default=False,

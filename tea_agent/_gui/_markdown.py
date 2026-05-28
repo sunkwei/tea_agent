@@ -62,7 +62,6 @@ a.chat-image-link { text-decoration: none; display: inline-block; }
 a.chat-image-link:hover { text-decoration: none; }
 </style>
 """)
-# NOTE: 2026-05-28 09:45:35, self-evolved by tea_agent --- _render_markdown 中调用 _fix_double_escape_all 修复全文双重转义
 def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
     """将 markdown 文本转换为带样式的 HTML 片段"""
     if not HAS_TKINTERWEB:
@@ -111,7 +110,6 @@ def _fix_double_escape_in_code(html: str) -> str:
     # 使用 (code|pre) 捕获标签名，确保起始和结束标签匹配
     return re.sub(r'(<(code|pre)[^>]*>)(.*?)(</\2>)', _fix_code_block, html, flags=re.DOTALL)
 
-# NOTE: 2026-05-28 09:45:15, self-evolved by tea_agent --- 新增 _fix_double_escape_all 修复全文双重转义，解决 HtmlFrame 显示 &lt; &amp; &quot; 字面量问题
 def _fix_double_escape_all(html: str) -> str:
     """修复整个 HTML 正文中的双重转义（不仅限于 <code> 块）。
 
@@ -309,7 +307,6 @@ def _chat_to_markdown(messages, image_cache=None):
         elif role == "ai":
             # 2026-05-16 fix: 对content进行HTML转义
             safe_content = _transform_non_code_segments(content.strip(), html_mod.escape)
-            # NOTE: 2026-05-18 fix: 转义孤立的 [ ] 方括号，防止被 Markdown 解析器误认为链接语法导致 HTML 结构损坏
             safe_content = _transform_non_code_segments(safe_content, _escape_orphan_brackets)
             parts.append(f'{ts_display}\n\n<div class="msg-ai" markdown="1">\n\n### 🤖 AI\n\n{safe_content}\n</div>\n\n---\n')
         elif role == "tool":
@@ -337,7 +334,6 @@ def _transform_non_code_segments(text: str, transform) -> str:
             out.append(transform(part))
     return "".join(out)
 
-# NOTE: 2026-05-18 fix: 扩展控制字符过滤范围，包含 \x7f(DEL)、Unicode C0/C1 控制字符、零宽字符等
 def _sanitize_html_control_chars(html: str) -> str:
     """移除 HTML 中的控制字符（保留 \\n 0x0a 和 \\t 0x09）。
     
@@ -354,7 +350,6 @@ def _sanitize_html_control_chars(html: str) -> str:
     html = re.sub(r'[\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]', '', html)
     return html
 
-# NOTE: 2026-05-18 fix: 转义孤立的方括号，防止被 Markdown 解析器误认为链接/引用语法
 def _escape_orphan_brackets(text: str) -> str:
     """转义孤立的 [ 或 ] 方括号。
     

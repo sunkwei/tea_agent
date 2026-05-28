@@ -116,7 +116,6 @@ class Storage:
                 last_update_stamp TEXT DEFAULT (datetime('now', 'localtime'))
             )
         ''')
-# NOTE: 2026-05-27 16:53:46, self-evolved by tea_agent --- topics 表添加 is_active 列 + update_topic_active 接受 active 参数
         for col, col_def in [
             ("semantic_summary", "TEXT DEFAULT ''"),
             ("tool_chain_summary", "TEXT DEFAULT ''"),

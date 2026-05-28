@@ -1,4 +1,3 @@
-# @2026-05-21 gen by tea_agent, session_tools_builder 模块契约测试
 """
 session_tools_builder 单元测试 — 独立纯函数 filter_tools()。
 

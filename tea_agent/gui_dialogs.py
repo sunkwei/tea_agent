@@ -13,7 +13,6 @@ import platform as _platform
 
 # ====================== 记忆管理对话框 ======================
 
-# @2026-04-29 gen by deepseek-v4-pro, MemoryDialog记忆管理弹窗+on_status状态回调
 # ====================== 字体检测（与 _gui/_fonts 独立副本） ======================
 _IS_WINDOWS = _platform.system() == "Windows"
 SYSTEM_FONT = "TkDefaultFont"
@@ -373,7 +372,6 @@ class MemoryDialog(tk.Toplevel):
         except Exception as e:
             self.stats_var.set(f"导出失败: {e}")
 
-# @2026-04-29 gen by deepseek-v4-pro, 主题管理弹窗: 浏览/切换/导出/重命名/删除
 class TopicDialog(tk.Toplevel):
     """主题管理弹窗 — 浏览/切换/导出/重命名/删除"""
 
@@ -712,7 +710,6 @@ class TopicDialog(tk.Toplevel):
             col: Description.
         """
         items = [(self.topic_tree.set(i, col), i) for i in self.topic_tree.get_children("")]
-# NOTE: 2026-05-27 15:55:23, self-evolved by tea_agent --- _sort("id"): 移除 int()，id 列为 UUID 字符串
         if col == "id":
             items.sort(key=lambda x: x[0])
         elif col == "tokens":
@@ -738,7 +735,6 @@ class TopicDialog(tk.Toplevel):
         """Internal: selected id."""
         tree = self.search_tree if self._is_search_mode else self.topic_tree
         sel = tree.selection()
-# NOTE: 2026-05-27 15:55:11, self-evolved by tea_agent --- _selected_id: 移除 int()，topic_id 已为 UUID 字符串
         return sel[0] if sel else None
 
     def _switch_to(self):

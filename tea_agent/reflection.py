@@ -1,4 +1,3 @@
-# @2026-04-30 gen by deepseek-v4-pro, ReflectionManager: 元认知反思—分析工具调用、生成改进建议、存储反思记录
 """
 反思管理器 (ReflectionManager)
 
@@ -29,7 +28,6 @@ class ToolCallRecord:
 @dataclass
 class SessionTrace:
     """一次会话的完整追踪"""
-# NOTE: 2026-05-27 15:45:55, self-evolved by tea_agent --- SessionTrace.topic_id: int→str + start_trace topic_id: int→str
     topic_id: str = ""
     user_msg: str = ""
     tool_calls: List[ToolCallRecord] = field(default_factory=list)
@@ -91,7 +89,6 @@ class ReflectionManager:
         self._cheap_model = cheap_model
         self._pending_traces: List[SessionTrace] = []
 
-# NOTE: 2026-05-27 15:46:01, self-evolved by tea_agent --- start_trace: topic_id 类型 int→str
     def start_trace(self, topic_id: str, user_msg: str) -> SessionTrace:
         """开始追踪一次会话"""
         trace = SessionTrace(

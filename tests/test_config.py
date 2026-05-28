@@ -1,4 +1,3 @@
-# @2026-05-10 gen by tea_agent, Config 模块测试
 """
 Config 测试套件 — ModelConfig / PathsConfig / AgentConfig / load_config / save_config。
 """

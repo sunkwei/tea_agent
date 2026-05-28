@@ -31,7 +31,6 @@ class AgentCore:
       - _on_init_done(): 初始化完成后的 UI 回调
     """
 
-# NOTE: 2026-05-28 08:12:50, self-evolved by tea_agent --- AgentCore 添加 no_stream_chunk 参数
     def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False, no_stream_chunk: bool = False):
         # ── 尽早初始化文件日志，确保后续所有 logger 都有文件 handler ──
         """Initialize  .
@@ -42,7 +41,6 @@ class AgentCore:
             disable_summary: Description.
         """
         from tea_agent.logging_setup import setup_logging
-# NOTE: 2026-05-28 08:12:54, self-evolved by tea_agent --- AgentCore.__init__ 保存并传递 no_stream_chunk
         self.debug = debug
         self.disable_summary = disable_summary
         self.no_stream_chunk = no_stream_chunk
@@ -76,7 +74,6 @@ class AgentCore:
         self._sess_lock = threading.Lock()
 
         # ── 6. 初始化会话 ──
-# NOTE: 2026-05-27 15:44:53, self-evolved by tea_agent --- current_topic_id: int=0 → str=''
         self.current_topic_id: str = ""
         self._init_session()
 
@@ -156,7 +153,6 @@ class AgentCore:
             enable_thinking=cfg.enable_thinking,
             supports_vision=supports_vision,
             supports_reasoning=supports_reasoning,
-# NOTE: 2026-05-28 08:12:58, self-evolved by tea_agent --- _init_session 传递 no_stream_chunk 到 OnlineToolSession
             disable_summary=self.disable_summary,
             no_stream_chunk=self.no_stream_chunk,
         )
@@ -259,7 +255,6 @@ class AgentCore:
                 topic_id, old_l1["user_msg"], old_l1["ai_msg"], files=old_files,
                 max_level2=l2_max,
             )
-            # 2026-05-20 gen by Tea Agent, L3批处理：溢出条目先进入pending缓冲
             if overflow:
                 self.db.push_l3_pending(topic_id, overflow)
                 pending_count = len(self.db.get_l3_pending(topic_id))
@@ -290,7 +285,6 @@ class AgentCore:
                 embedding_tokens=emb_tokens, embedding_prompt_tokens=emb_prompt,
             )
         # 避免阻塞 generating 状态恢复，用户可立即发送新消息
-        # 2026-05-20 gen by Tea Agent, L3批处理：仅攒够时触发摘要
         threading.Thread(
             target=self._do_async_summaries,
             args=(topic_id, need_l3_summary),

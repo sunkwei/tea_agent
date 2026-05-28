@@ -1,4 +1,3 @@
-# @2026-05-21 gen by tea_agent, Pipeline 注册/排序/执行契约测试
 """
 Session Pipeline 单元测试 — 覆盖全部公共接口。
 

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# 2026-05-21 gen by tea_agent, Extracted from onlinesession._auto_detect_mode
 """模式检测模块 — 根据用户输入自动检测 Agent 人格模式。
 
 用法:

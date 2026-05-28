@@ -45,7 +45,6 @@ class SessionContext:
     max_assistant_content: int = 128 * 1024
     memory_extraction_threshold: int = 2
     memory_dedup_threshold: float = 0.3
-# NOTE: 2026-05-28 08:12:17, self-evolved by tea_agent --- SessionContext 添加 no_stream_chunk 字段
     supports_vision: bool = False
     supports_reasoning: bool = True
     disable_summary: bool = False

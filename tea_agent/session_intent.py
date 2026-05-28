@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# 2026-05-21 gen by tea_agent, Extracted from onlinesession._analyze_intent
 """意图分析模块 — 独立纯函数，从用户输入文本推断意图类型。
 
 用法:

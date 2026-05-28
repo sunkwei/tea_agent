@@ -42,7 +42,6 @@ from tea_agent.agent_core import AgentCore
 class _TUIAgentCore(AgentCore):
     """TUI-specific AgentCore subclass that bridges streaming to Textual UI."""
 
-# NOTE: 2026-05-28 08:13:28, self-evolved by tea_agent --- _TUIAgentCore 接受并传递 no_stream_chunk
     def __init__(self, tui: App, config_path: str = None,
                  enable_think: bool = False, verbose: bool = False,
                  disable_summary: bool = False, no_stream_chunk: bool = False):
@@ -239,7 +238,6 @@ class TeaTUI(App):
         Binding("ctrl+l", "list_topics", "ListTopics"),
     ]
 
-# NOTE: 2026-05-28 08:13:35, self-evolved by tea_agent --- TeaTUI 和 _init_agent 传递 no_stream_chunk
     def __init__(self, config_path: str = None, enable_think: bool = False,
                  verbose: bool = False, disable_summary: bool = False,
                  no_stream_chunk: bool = False):
@@ -295,7 +293,6 @@ class TeaTUI(App):
 
     def _init_agent(self):
         try:
-# NOTE: 2026-05-28 08:13:40, self-evolved by tea_agent --- TeaTUI._init_agent 传递 no_stream_chunk
             self.agent = _TUIAgentCore(
                 tui=self, config_path=self._config_path,
                 enable_think=self._cli_think, verbose=self._cli_verbose,
@@ -612,7 +609,6 @@ Examples:
                         help="Enable thinking mode")
     parser.add_argument("--verbose", action="store_true", default=False,
                         help="Show tool call intermediate rounds")
-# NOTE: 2026-05-28 08:13:45, self-evolved by tea_agent --- tui.py argparse 和 main 添加 --no_stream_chunk
     parser.add_argument("--disable_summary", action="store_true", default=False,
                         help="Disable history compression and summary")
     parser.add_argument("--no_stream_chunk", action="store_true", default=False,

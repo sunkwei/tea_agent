@@ -60,18 +60,19 @@ else:
 
 # ====================== 配置加载 ======================
 # 优先使用 $HOME/.tea_agent/config.yaml，不存在时使用 tea_agent/config.yaml
-_cfg = load_config()
+# _cfg = load_config()
 
-if not _cfg.main_model.is_configured:
-    print("错误: 请配置主模型 (main_model)")
-    print("  编辑 $HOME/.tea_agent/config.yaml 或 tea_agent/config.yaml")
-    sys.exit(1)
+# if not _cfg.main_model.is_configured:
+#     print("错误: 请配置主模型 (main_model)")
+#     print("  编辑 $HOME/.tea_agent/config.yaml 或 tea_agent/config.yaml")
+#     sys.exit(1)
 
-API_KEY = _cfg.main_model.api_key
-API_URL = _cfg.main_model.api_url
-MODEL = _cfg.main_model.model_name
-CHEAP_MODEL = _cfg.cheap_model
+# API_KEY = _cfg.main_model.api_key
+# API_URL = _cfg.main_model.api_url
+# MODEL = _cfg.main_model.model_name
+# CHEAP_MODEL = _cfg.cheap_model
 
+_cfg = None
 _storage_ = None
 _toolkit_ = None
 

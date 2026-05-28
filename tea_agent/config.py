@@ -277,6 +277,7 @@ class AgentConfig:
         """导出运行时配置为字典"""
         return {key: getattr(self, key) for key in self._RUNTIME_CONFIG_KEYS if hasattr(self, key)}
 
+_last_config_path = None
 def load_config(config_path: Optional[str] = None) -> AgentConfig:
     """
     加载配置。优先读取 $HOME/.tea_agent/config.yaml，不存在时回退到 tea_agent/config.yaml。
@@ -287,6 +288,12 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
     Returns:
         AgentConfig 实例
     """
+    global _last_config_path
+    if config_path is None:
+        config_path = _last_config_path
+    else:
+        _last_config_path = config_path
+
     cfg = AgentConfig()
     yaml_path: Optional[str] = None
 

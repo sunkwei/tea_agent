@@ -230,6 +230,20 @@ class OnlineToolSession(BaseChatSession):
             value: Description.
         """
         self.context.model = value
+    @property
+    def enable_thinking(self):
+        """Enable thinking (reasoning) mode."""
+        return self.context.enable_thinking
+
+    @enable_thinking.setter
+    def enable_thinking(self, value):
+        """Enable thinking (reasoning) mode.
+
+        Args:
+            value: Description.
+        """
+        self.context.enable_thinking = value
+
 
     @property
     def _rounds_collector(self):

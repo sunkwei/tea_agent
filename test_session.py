@@ -73,15 +73,15 @@ def test_reset_and_iter(sess):
 
 
 def test_memory_integration(sess, storage):
-    """Test memory features are accessible."""
+    """Test memory features are accessible via MemoryComponent."""
     print("\n" + "=" * 50)
     print("Test Memory Integration")
     print("=" * 50)
 
-    assert hasattr(sess, '_setup_memory'), "Should have _setup_memory"
-    assert hasattr(sess, '_pipeline_inject_memories'), "Should have memory injection"
-    print("✅ Session has memory mixin methods")
-
+    assert hasattr(sess, 'memory_comp'), "Should have memory_comp"
+    assert hasattr(sess.memory_comp, 'inject_memories'), "Should have inject_memories"
+    assert hasattr(sess.memory_comp, 'initialize'), "Should have initialize"
+    print("✅ Session has MemoryComponent with inject_memories/initialize")
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)

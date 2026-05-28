@@ -214,7 +214,8 @@ if HAS_SNI:
 
 class TkGUI(AgentCore):
     """TkGUI class."""
-    def __init__(self, root, debug:bool=False, config_fname:str="", disable_summary:bool=False):
+# NOTE: 2026-05-28 08:13:05, self-evolved by tea_agent --- TkGUI 接受并传递 no_stream_chunk
+    def __init__(self, root, debug:bool=False, config_fname:str="", disable_summary:bool=False, no_stream_chunk:bool=False):
         """Initialize  .
         
         Args:
@@ -233,7 +234,8 @@ class TkGUI(AgentCore):
         self.sess = None  # 预设，AgentCore._init_session 会创建它
 
         # ── AgentCore 初始化：配置、目录、Storage/Toolkit、会话 ──
-        super().__init__(debug=debug, config_path=config_fname, disable_summary=disable_summary)
+# NOTE: 2026-05-28 08:13:10, self-evolved by tea_agent --- TkGUI super().__init__ 传递 no_stream_chunk
+        super().__init__(debug=debug, config_path=config_fname, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
 
         self.stream_mgr = StreamManager(self)
         self.topic_mgr = TopicManager(self)
@@ -1253,16 +1255,18 @@ class TkGUI(AgentCore):
         """Internal: hide raw check btn."""
         return self.renderer._hide_raw_check_btn()
 
-def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str="", disable_summary:bool=False):
+# NOTE: 2026-05-28 08:13:17, self-evolved by tea_agent --- gui.py main() 和 argparse 添加 --no_stream_chunk
+def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str="", disable_summary:bool=False, no_stream_chunk:bool=False):
     """启动 GUI 主界面。
 
     Args:
         debug: 调试模式
         timeout: 超时秒数，超时后自动关闭窗口（0=不超时，用于自动化测试）
         disable_summary: 禁用历史压缩和摘要
+        no_stream_chunk: 非流式模式，方便单步调试
     """
     root = tk.Tk()
-    app = TkGUI(root, debug=debug, config_fname=config_fname, disable_summary=disable_summary)
+    app = TkGUI(root, debug=debug, config_fname=config_fname, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
     
     if timeout > 0:
         logger.info(f"GUI debug timeout set: {timeout}s, will auto-close")
@@ -1288,7 +1292,10 @@ if __name__ == "__main__":
         help="超时秒数，超时后自动关闭（用于自动化测试）"
     )
     ap.add_argument("--config", type=str, help="配置文件路径")
+# NOTE: 2026-05-28 08:13:22, self-evolved by tea_agent --- gui.py __main__ 添加 --no_stream_chunk argparse
     ap.add_argument("--disable_summary", action="store_true", default=False,
                     help="禁用历史压缩和摘要，超过30轮直接丢弃")
+    ap.add_argument("--no_stream_chunk", action="store_true", default=False,
+                    help="非流式模式，方便单步调试")
     args = ap.parse_args()
-    main(debug=args.debug, timeout=args.timeout, config_fname=args.config, disable_summary=args.disable_summary)
+    main(debug=args.debug, timeout=args.timeout, config_fname=args.config, disable_summary=args.disable_summary, no_stream_chunk=args.no_stream_chunk)

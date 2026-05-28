@@ -158,12 +158,13 @@ class APIComponent(SessionComponent):
         target_client = client or self.ctx.client
         target_model = model or self.ctx.model
 
+# NOTE: 2026-05-28 08:12:22, self-evolved by tea_agent --- create_chat_stream 根据 no_stream_chunk 控制 stream 参数
         kwargs = {
             "model": target_model,
             "messages": api_messages,
             "tools": tools,
             "tool_choice": "auto",
-            "stream": True,
+            "stream": not self.ctx.no_stream_chunk,
         }
         # 传入推理参数（仅在非 None 时设置）
         for param_name in ("temperature", "max_tokens", "top_p"):

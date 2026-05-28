@@ -68,7 +68,9 @@ class OnlineToolSession(BaseChatSession):
         memory_dedup_threshold: float = 0.3,
         supports_vision: bool = False,
         supports_reasoning: bool = True,
+# NOTE: 2026-05-28 08:12:27, self-evolved by tea_agent --- OnlineToolSession 添加 no_stream_chunk 参数，传递到 SessionContext
         disable_summary: bool = False,
+        no_stream_chunk: bool = False,
     ):
         """
         初始化会话
@@ -123,7 +125,9 @@ class OnlineToolSession(BaseChatSession):
             memory_dedup_threshold=memory_dedup_threshold,
             supports_vision=supports_vision,
             supports_reasoning=supports_reasoning,
+# NOTE: 2026-05-28 08:12:33, self-evolved by tea_agent --- SessionContext 初始化传入 no_stream_chunk
             disable_summary=disable_summary,
+            no_stream_chunk=no_stream_chunk,
             extra_iterations_on_continue=extra_iterations_on_continue,
         )
 
@@ -349,14 +353,43 @@ class OnlineToolSession(BaseChatSession):
     # 流式处理（委派给 API 组件）
     # ──────────────────────────────────────────────
 
+# NOTE: 2026-05-28 08:12:46, self-evolved by tea_agent --- _process_stream_with_reasoning 支持非流式 (stream=False) 响应
     def _process_stream_with_reasoning(self, response, callback) -> Tuple[str, List[Dict], str]:
         """
-        处理流式响应，收集内容、工具调用数据和 reasoning_content。
+        处理流式/非流式响应，收集内容、工具调用数据和 reasoning_content。
+        当 no_stream_chunk=True 时，response 为 ChatCompletion 对象（非迭代器）。
         """
         content_parts = []
         tool_calls_data = []
         reasoning_parts = []
 
+        # 非流式模式：直接提取 completion 对象
+        if self.context.no_stream_chunk:
+            if hasattr(response, 'usage') and response.usage:
+                self.api._accumulate_usage(response.usage)
+            if response.choices:
+                msg = response.choices[0].message
+                if hasattr(msg, 'reasoning_content') and msg.reasoning_content:
+                    reasoning_parts.append(msg.reasoning_content)
+                    callback(f"[THINK]{msg.reasoning_content}")
+                if msg.content:
+                    content_parts.append(msg.content)
+                    callback(msg.content)
+                if msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        tool_calls_data.append({
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        })
+            content = "".join(content_parts)
+            reasoning_content = "".join(reasoning_parts)
+            return content, tool_calls_data, reasoning_content
+
+        # 流式模式：逐 chunk 处理
         for chunk in response:
             # 累积 usage 信息（委派给 API 组件）
             if hasattr(chunk, 'usage') and chunk.usage:

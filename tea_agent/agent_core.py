@@ -31,7 +31,8 @@ class AgentCore:
       - _on_init_done(): 初始化完成后的 UI 回调
     """
 
-    def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False):
+# NOTE: 2026-05-28 08:12:50, self-evolved by tea_agent --- AgentCore 添加 no_stream_chunk 参数
+    def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False, no_stream_chunk: bool = False):
         # ── 尽早初始化文件日志，确保后续所有 logger 都有文件 handler ──
         """Initialize  .
         
@@ -41,8 +42,10 @@ class AgentCore:
             disable_summary: Description.
         """
         from tea_agent.logging_setup import setup_logging
+# NOTE: 2026-05-28 08:12:54, self-evolved by tea_agent --- AgentCore.__init__ 保存并传递 no_stream_chunk
         self.debug = debug
         self.disable_summary = disable_summary
+        self.no_stream_chunk = no_stream_chunk
         setup_logging(debug=self.debug)
         self.generating = False
         self._config_path = config_path
@@ -153,7 +156,9 @@ class AgentCore:
             enable_thinking=cfg.enable_thinking,
             supports_vision=supports_vision,
             supports_reasoning=supports_reasoning,
+# NOTE: 2026-05-28 08:12:58, self-evolved by tea_agent --- _init_session 传递 no_stream_chunk 到 OnlineToolSession
             disable_summary=self.disable_summary,
+            no_stream_chunk=self.no_stream_chunk,
         )
 
         import tea_agent.session_ref as _sref

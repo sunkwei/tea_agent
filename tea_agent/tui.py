@@ -42,13 +42,14 @@ from tea_agent.agent_core import AgentCore
 class _TUIAgentCore(AgentCore):
     """TUI-specific AgentCore subclass that bridges streaming to Textual UI."""
 
+# NOTE: 2026-05-28 08:13:28, self-evolved by tea_agent --- _TUIAgentCore 接受并传递 no_stream_chunk
     def __init__(self, tui: App, config_path: str = None,
                  enable_think: bool = False, verbose: bool = False,
-                 disable_summary: bool = False):
+                 disable_summary: bool = False, no_stream_chunk: bool = False):
         self._tui = tui
         self._tui_think = enable_think
         self._tui_verbose = verbose
-        super().__init__(config_path=config_path, disable_summary=disable_summary)
+        super().__init__(config_path=config_path, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
         self._cfg.enable_thinking = self._tui_think
         self.sess.enable_thinking = self._tui_think
         self._init_session()
@@ -238,13 +239,16 @@ class TeaTUI(App):
         Binding("ctrl+l", "list_topics", "ListTopics"),
     ]
 
+# NOTE: 2026-05-28 08:13:35, self-evolved by tea_agent --- TeaTUI 和 _init_agent 传递 no_stream_chunk
     def __init__(self, config_path: str = None, enable_think: bool = False,
-                 verbose: bool = False, disable_summary: bool = False):
+                 verbose: bool = False, disable_summary: bool = False,
+                 no_stream_chunk: bool = False):
         super().__init__()
         self._config_path = config_path
         self._cli_think = enable_think
         self._cli_verbose = verbose
         self._disable_summary = disable_summary
+        self._no_stream_chunk = no_stream_chunk
         self._generating = False
         self._agent_ready = threading.Event()
         self.agent: Optional[_TUIAgentCore] = None
@@ -291,10 +295,12 @@ class TeaTUI(App):
 
     def _init_agent(self):
         try:
+# NOTE: 2026-05-28 08:13:40, self-evolved by tea_agent --- TeaTUI._init_agent 传递 no_stream_chunk
             self.agent = _TUIAgentCore(
                 tui=self, config_path=self._config_path,
                 enable_think=self._cli_think, verbose=self._cli_verbose,
                 disable_summary=self._disable_summary,
+                no_stream_chunk=self._no_stream_chunk,
             )
             self._agent_ready.set()
         except Exception as e:
@@ -606,12 +612,16 @@ Examples:
                         help="Enable thinking mode")
     parser.add_argument("--verbose", action="store_true", default=False,
                         help="Show tool call intermediate rounds")
+# NOTE: 2026-05-28 08:13:45, self-evolved by tea_agent --- tui.py argparse 和 main 添加 --no_stream_chunk
     parser.add_argument("--disable_summary", action="store_true", default=False,
                         help="Disable history compression and summary")
+    parser.add_argument("--no_stream_chunk", action="store_true", default=False,
+                        help="Non-streaming mode, easier for step debugging")
     args = parser.parse_args()
     app = TeaTUI(
         config_path=args.config, enable_think=args.think,
         verbose=args.verbose, disable_summary=args.disable_summary,
+        no_stream_chunk=args.no_stream_chunk,
     )
     app.run()
 

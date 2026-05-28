@@ -34,7 +34,8 @@ class TeaCLI(AgentCore):
     支持 --config 参数指定配置文件，实现多 agent 隔离。
     """
 
-    def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False):
+# NOTE: 2026-05-28 08:15:38, self-evolved by tea_agent --- tea_main_cli.py TeaCLI 接受并传递 no_stream_chunk
+    def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False, no_stream_chunk: bool = False):
         # ── AgentCore 初始化：配置、目录、Storage/Toolkit、连接器、会话、MQTT ──
         """Initialize  .
         
@@ -42,8 +43,9 @@ class TeaCLI(AgentCore):
             debug: Description.
             config_path: Description.
             disable_summary: Description.
+            no_stream_chunk: Description.
         """
-        super().__init__(debug=debug, config_path=config_path, disable_summary=disable_summary)
+        super().__init__(debug=debug, config_path=config_path, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
 
         # ── CLI 特定：显示状态信息 ──
         print(self._init_session_info_str())
@@ -353,11 +355,14 @@ def main():
     ap.add_argument("--oneshot", type=str, default=None, help="单次对话（非交互）")
     ap.add_argument("--config", type=str, default=None,
                     help="配置文件路径（支持多 agent 隔离）")
+# NOTE: 2026-05-28 08:15:43, self-evolved by tea_agent --- tea_main_cli.py argparse 和 main 添加 --no_stream_chunk
     ap.add_argument("--disable_summary", action="store_true", default=False,
                     help="禁用历史压缩和摘要，超过30轮直接丢弃")
+    ap.add_argument("--no_stream_chunk", action="store_true", default=False,
+                    help="非流式模式，方便单步调试")
     args = ap.parse_args()
 
-    cli = TeaCLI(debug=args.debug, config_path=args.config, disable_summary=args.disable_summary)
+    cli = TeaCLI(debug=args.debug, config_path=args.config, disable_summary=args.disable_summary, no_stream_chunk=args.no_stream_chunk)
 
     if args.oneshot:
         cli.run_oneshot(args.oneshot)

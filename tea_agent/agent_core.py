@@ -81,10 +81,10 @@ class AgentCore:
         self._init_session()
 
         # ── 7. 启动潜意识引擎（后台每小时：总结/反思/创意/头脑风暴）──
-        self._start_subconscious()
+        # self._start_subconscious()
 
         # ── 7b. 启动定时任务调度器（后台每分钟检查执行）──
-        self._start_scheduler()
+        # self._start_scheduler()
 
     def _start_subconscious(self):
         """自动启动潜意识引擎 daemon 线程。

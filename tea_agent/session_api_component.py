@@ -158,7 +158,6 @@ class APIComponent(SessionComponent):
         target_client = client or self.ctx.client
         target_model = model or self.ctx.model
 
-# NOTE: 2026-05-28 08:12:22, self-evolved by tea_agent --- create_chat_stream 根据 no_stream_chunk 控制 stream 参数
         kwargs = {
             "model": target_model,
             "messages": api_messages,
@@ -189,7 +188,12 @@ class APIComponent(SessionComponent):
                 }
             }
 
-        return target_client.chat.completions.create(**kwargs)
+        if target_model in ("mimo-v2.5-pro", "mimo-v2.5", "mimo-v2.0"):
+            kwargs.pop("stream_options")
+            kwargs.pop("extra_body")
+
+        stream = target_client.chat.completions.create(**kwargs)
+        return stream
 
     def call_summarize_api(self, cli, mdl, messages, temperature=0.1, max_tokens=500):
         """

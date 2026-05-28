@@ -1117,10 +1117,6 @@ class OnlineToolSession(BaseChatSession):
                 print(f"{asctime}: call model: {self.context.model}, {msg}")
                 logger.info(f"call model: {self.context.model}, {msg}")
 
-            logger.debug(f"model request: model={self.context.model}, msgs={len(api_messages)}, tools={len(self.tools)}, iteration={iterations}")
-            sys_msg_preview = api_messages[0]['content'][:100] if api_messages else ""
-            logger.debug(f"system_prompt preview: {sys_msg_preview}")
-
             try:
                 eff = self._get_effective_params("main")
                 response = self.api.create_chat_stream(
@@ -1251,6 +1247,7 @@ class OnlineToolSession(BaseChatSession):
                 continue
 
             elif content:
+                ## ai final message
                 iterations += 1
                 assistant_msg = {"role": "assistant", "content": content}
                 if reasoning_content:

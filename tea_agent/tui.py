@@ -16,6 +16,8 @@ Keybindings:
     Ctrl+V      Toggle Verbose mode
     Ctrl+N      New topic
     Ctrl+L      List topics
+    Ctrl+Up     Previous history message
+    Ctrl+Down   Next history message
 """
 
 import argparse
@@ -23,7 +25,7 @@ import sys
 import os
 import threading
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict
 import re
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -236,6 +238,8 @@ class TeaTUI(App):
         Binding("ctrl+v", "toggle_verbose", "Verbose"),
         Binding("ctrl+n", "new_topic", "NewTopic"),
         Binding("ctrl+l", "list_topics", "ListTopics"),
+        Binding("ctrl+up", "history_up", "HistoryUp"),
+        Binding("ctrl+down", "history_down", "HistoryDown"),
     ]
 
     def __init__(self, config_path: str = None, enable_think: bool = False,
@@ -253,6 +257,9 @@ class TeaTUI(App):
         self._stream_buffer = ""
         self._stream_timer = None
         self._welcome_shown = False
+        # 历史消息导航
+        self._history_msgs: List[Dict] = []  # 当前主题的所有历史对话
+        self._history_index: int = -1        # -1 = 不在导航状态, 0..n-1 = 当前查看的索引
 
     class _SendTextArea(TextArea):
         """TextArea with Enter=send, Shift+Enter=newline."""
@@ -474,6 +481,8 @@ class TeaTUI(App):
   Ctrl+C    Quit    Esc          Interrupt
   Ctrl+T    Think   Ctrl+V       Verbose
   Ctrl+N    New     Ctrl+L       List
+  Ctrl+Up   Prev history msg
+  Ctrl+Down Next history msg
 """)
 
     def _cmd_set(self, arg: str):
@@ -501,6 +510,68 @@ class TeaTUI(App):
         else:
             self._chat_write(f"[bold yellow]Unknown setting: {k} (think, verbose)[/]")
 
+    def _load_history_msgs(self):
+        """Load all history conversations for current topic into _history_msgs."""
+        self._history_msgs = []
+        self._history_index = -1
+        if not self.agent or not self.agent.current_topic_id:
+            return
+        try:
+            convs = self.agent.db.get_conversations(
+                self.agent.current_topic_id, limit=-1, include_rounds=False
+            )
+            for c in convs:
+                user_text = c.get("user_msg", "")
+                ai_text = c.get("ai_msg", "")
+                if isinstance(user_text, str) and user_text.startswith("{"):
+                    try:
+                        import json
+                        parsed = json.loads(user_text)
+                        user_text = parsed.get("text", user_text)
+                    except Exception:
+                        pass
+                self._history_msgs.append({
+                    "user": user_text or "",
+                    "ai": ai_text or "",
+                })
+        except Exception as e:
+            self._chat_write(f"[bold red]Failed to load history: {e}[/]")
+
+    def action_history_up(self):
+        """Ctrl+Up: 往前翻一条历史消息."""
+        if not self._history_msgs:
+            self._chat_write("[dim]No history messages[/]")
+            return
+        if self._history_index >= len(self._history_msgs) - 1:
+            self._chat_write("[dim]Already at oldest message[/]")
+            return
+        self._history_index += 1
+        self._display_history_msg()
+
+    def action_history_down(self):
+        """Ctrl+Down: 往后翻一条历史消息."""
+        if self._history_index <= 0:
+            if self._history_index == 0:
+                self._chat_write("[dim]Already at newest message[/]")
+            else:
+                self._chat_write("[dim]No history messages[/]")
+            return
+        self._history_index -= 1
+        self._display_history_msg()
+
+    def _display_history_msg(self):
+        """Display the history message at current _history_index."""
+        if self._history_index < 0 or self._history_index >= len(self._history_msgs):
+            return
+        msg = self._history_msgs[self._history_index]
+        total = len(self._history_msgs)
+        idx = self._history_index
+        self._chat_write(f"\n[bold cyan]--- History ({total - idx}/{total}) ---[/]")
+        self._chat_write(f"[bold green]You:[/] {msg['user'][:500]}")
+        self._chat_write(f"[bold blue]AI:[/] {msg['ai'][:1000]}")
+        self._chat_write(f"[bold cyan]--- End ---[/]")
+        self._update_status(f"History: {total - idx}/{total}")
+
     def _switch_topic(self, arg: str):
         """
         Switch topic. Supports:
@@ -522,6 +593,7 @@ class TeaTUI(App):
                 tp = topics[idx]
                 self.agent.current_topic_id = tp["topic_id"]
                 self.agent._load_topic_history_into_session(tp["topic_id"])
+                self._load_history_msgs()
                 self._chat_write(
                     f"[bold]Switched to ({idx+1}): {tp.get('title', tp['topic_id'][:8])}[/]"
                 )
@@ -543,6 +615,7 @@ class TeaTUI(App):
             return
         self.agent.current_topic_id = tp["topic_id"]
         self.agent._load_topic_history_into_session(tp["topic_id"])
+        self._load_history_msgs()
         self._chat_write(f"[bold]Switched to: {tp.get('title', tp['topic_id'][:8])}[/]")
 
     def action_interrupt(self):
@@ -577,6 +650,8 @@ class TeaTUI(App):
             {"role": "system", "content": self.agent.sess.system_prompt}
         ]
         self.agent.sess._history_summary = ""
+        self._history_msgs = []
+        self._history_index = -1
         self._append_chat(f"[bold]New topic: {tid[:10]}...[/]")
 
     def action_list_topics(self):

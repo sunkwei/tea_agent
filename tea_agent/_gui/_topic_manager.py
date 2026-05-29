@@ -234,7 +234,10 @@ class TopicManager:
 
                 gui._pending_render = render_items
                 gui._loading_done = True
+# NOTE: 2026-05-29 07:57:11, self-evolved by tea_agent --- load_worker 异常时记录完整堆栈到日志
             except Exception as e:
+                import traceback as _tb
+                logger.error(f"主题加载失败: {e}\n{_tb.format_exc()}")
                 gui._pending_error = str(e)
                 gui._loading_done = True
 

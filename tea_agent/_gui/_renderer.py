@@ -4,6 +4,7 @@
 Usage: self.renderer = ChatRenderer(self)  # self = TkGUI instance
 """
 
+# NOTE: 2026-05-29 07:58:50, self-evolved by tea_agent --- 添加 logger 定义
 import tkinter as tk
 import html as html_mod
 import json
@@ -14,6 +15,8 @@ from typing import List, Dict, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from tea_agent.gui import TkGUI
+
+logger = logging.getLogger("tea_agent")
 
 from ._markdown import (
     HAS_TKINTERWEB,
@@ -253,13 +256,15 @@ class ChatRenderer:
                 self.gui.root.after(0, lambda: _on_done("<p>渲染错误</p>"))
         threading.Thread(target=_worker, daemon=True).start()
 
+# NOTE: 2026-05-29 07:58:44, self-evolved by tea_agent --- _render_topic_error 添加详细错误输出到日志
     # ── _render_topic_error ──
     def _render_topic_error(self, error_msg):
         """主线程：加载失败回调"""
+        logger.error(f"❌ 主题加载失败详情: {error_msg}")
         self.gui.clear_chat()
         self.gui.log(f"❌ 加载历史失败: {error_msg}", "error")
         self.gui.generating = False
-        self.gui._update_status("❌ 加载失败")
+        self.gui._update_status(f"❌ 加载失败: {error_msg}")
 
     # ── _build_round_view_html ──
     def _build_round_view_html(self, rounds, active_idx, font_size):
@@ -390,11 +395,12 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self.gui.root.after(50, self._poll_loading_progress)
             return
         # 队列已空，检查后台线程是否完成
+# NOTE: 2026-05-29 08:00:22, self-evolved by tea_agent --- 修复 _pending_error None 值误判
         if getattr(self.gui, '_loading_done', False):
             # 最终渲染
-            if hasattr(self.gui, '_pending_error'):
+            if getattr(self.gui, '_pending_error', None) is not None:
                 self._render_topic_error(self.gui._pending_error)
-                delattr(self.gui, '_pending_error')
+                self.gui._pending_error = None
             elif hasattr(self.gui, '_pending_render'):
                 self._render_loaded_topic(self.gui._pending_render)
                 delattr(self.gui, '_pending_render')

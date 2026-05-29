@@ -1110,16 +1110,42 @@ class OnlineToolSession(BaseChatSession):
                     top_p=eff.get("top_p"),
                 )
             except Exception as e:
-                error_msg = f"API调用错误: {e}"
-                logger.warning(f"API调用失败: model={self.context.model}, error={e}, iteration={iterations}")
-                callback(error_msg)
-                self.add_assistant_message(full_reply + error_msg)
-                self.tools_comp.collect_api_error_round(full_reply + error_msg)
-                return {
-                    "full_reply": full_reply + error_msg,
-                    "used_tools": used_tools,
-                    "error": e,
-                }
+                err_str = str(e)
+                if "image input" in err_str.lower() and self.context.supports_vision:
+                    logger.warning(f"模型端点不支持图片输入，自动回退纯文本模式: {e}")
+                    callback("\n⚠️ 当前 API 端点不支持图片输入，已自动切换为纯文本模式。\n")
+                    self.context.supports_vision = False
+                    api_messages = self._build_api_messages()
+                    try:
+                        eff = self._get_effective_params("main")
+                        response = self.api.create_chat_stream(
+                            api_messages, self.tools,
+                            temperature=eff.get("temperature"),
+                            max_tokens=eff.get("max_tokens"),
+                            top_p=eff.get("top_p"),
+                        )
+                    except Exception as e2:
+                        error_msg = f"API调用错误: {e2}"
+                        logger.warning(f"API调用失败(重试): model={self.context.model}, error={e2}, iteration={iterations}")
+                        callback(error_msg)
+                        self.add_assistant_message(full_reply + error_msg)
+                        self.tools_comp.collect_api_error_round(full_reply + error_msg)
+                        return {
+                            "full_reply": full_reply + error_msg,
+                            "used_tools": used_tools,
+                            "error": e2,
+                        }
+                else:
+                    error_msg = f"API调用错误: {e}"
+                    logger.warning(f"API调用失败: model={self.context.model}, error={e}, iteration={iterations}")
+                    callback(error_msg)
+                    self.add_assistant_message(full_reply + error_msg)
+                    self.tools_comp.collect_api_error_round(full_reply + error_msg)
+                    return {
+                        "full_reply": full_reply + error_msg,
+                        "used_tools": used_tools,
+                        "error": e,
+                    }
 
             # 处理流式响应
             content, tool_calls_data, reasoning_content = self._process_stream_with_reasoning(response, callback)

@@ -1374,40 +1374,5 @@ class OnlineToolSession(BaseChatSession):
                 error=str(result.get("error", "")) if result.get("error") else None,
             )
 
-        # 自动提取记忆
-        # import threading
-        # if isinstance(topic_id, str) and topic_id and not result.get("interrupted", False):
-        #     def _auto_extract():
-        #         """Internal: auto extract."""
-        #         try:
-        #             count = self.memory_comp.trigger_memory_extraction(topic_id)
-        #             if count > 0 and on_status:
-        #                 on_status(f"🧠 自动提取了 {count} 条新记忆")
-        #         except Exception:
-        #             pass
-        #     threading.Thread(target=_auto_extract, daemon=True).start()
-
-        # # 异步触发反思
-        # if not result.get("interrupted", False) and self.reflection_manager is not None:
-        #     def _auto_reflect():
-        #         """Internal: auto reflect."""
-        #         try:
-        #             if self.reflection_manager.should_reflect():
-        #                 rid = self.reflection_manager.generate_reflection()
-        #                 if rid:
-        #                     if on_status:
-        #                         on_status(f"🔍 元认知反思完成 (id={rid})")
-        #                     self._notify_reflection_done(rid)
-        #                 if self.reflection_manager.last_prompt_suggestion and self.prompt_manager is not None:
-        #                     new_pid = self.prompt_manager.evolve(
-        #                         reflection_suggestion=self.reflection_manager.last_prompt_suggestion
-        #                     )
-        #                     if new_pid:
-        #                         if on_status:
-        #                             on_status(f"📝 系统提示词进化到 v{self.prompt_manager.current_version}")
-        #                         self._notify_prompt_evolved(self.prompt_manager.current_version)
-        #         except Exception:
-        #             pass
-        #     threading.Thread(target=_auto_reflect, daemon=True).start()
-
+# NOTE: 2026-05-29 07:47:35, self-evolved by tea_agent --- 清理注释掉的自动记忆提取和反思代码块
         return full_reply, used_tools

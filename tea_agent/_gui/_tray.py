@@ -127,7 +127,13 @@ class TrayManager:
             logger.info("Dream 已停止")
         except Exception as e:
             logger.warning(f"停止 Dream 失败: {e}")
-        # 关闭数据库
+        # 停止定时任务调度器
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            toolkit_scheduler("stop")
+            logger.info("定时任务调度器已停止")
+        except Exception as e:
+            logger.warning(f"停止定时任务调度器失败: {e}")        # 关闭数据库
         try:
             self.gui.db.close()
             self.gui._update_status("✅ 数据库已正常关闭")

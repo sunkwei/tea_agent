@@ -1,3 +1,4 @@
+# NOTE: 2026-05-29 07:47:17, self-evolved by tea_agent --- 复用 _gui/_fonts 模块的字体检测逻辑
 # -*- coding: utf-8 -*-
 """GUI 对话框：MemoryDialog / TopicDialog / ConfigDialog"""
 import tkinter as tk
@@ -9,63 +10,12 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from tea_agent.config import get_config, save_config, load_config
-import platform as _platform
 
-# ====================== 记忆管理对话框 ======================
-
-# ====================== 字体检测（与 _gui/_fonts 独立副本） ======================
-_IS_WINDOWS = _platform.system() == "Windows"
-SYSTEM_FONT = "TkDefaultFont"
-MONO_FONT = "TkFixedFont"
-_FONTS_DETECTED = False
-_SCALE_FACTOR = 1.0
-_DEFAULT_FONT_SIZE = 16
-
-def _fs(size):
-    """Internal: fs.
-    
-    Args:
-        size: Description.
-    """
-    return max(1, int(size * _SCALE_FACTOR))
-
-def _init_fonts():
-    """Internal: initialize fonts."""
-    global SYSTEM_FONT, MONO_FONT, _FONTS_DETECTED, _SCALE_FACTOR, _DEFAULT_FONT_SIZE
-    if _FONTS_DETECTED:
-        return
-    try:
-        from tkinter import font as _tkfont
-        available = set(_tkfont.families())
-        def _detect(candidates):
-            """Internal: detect.
-            
-            Args:
-                candidates: Description.
-            """
-            for f in candidates:
-                if f in available:
-                    return f
-            return "TkDefaultFont"
-        if _IS_WINDOWS:
-            SYSTEM_FONT = _detect(["Microsoft YaHei", "Microsoft YaHei UI", "DengXian", "SimHei", "SimSun", "Noto Sans SC", "Microsoft JhengHei"])
-            MONO_FONT = _detect(["Cascadia Code", "Cascadia Mono", "Consolas", "Courier New", "Lucida Console"])
-        else:
-            SYSTEM_FONT = _detect(["Noto Sans CJK SC", "Noto Sans SC", "WenQuanYi Micro Hei", "Source Han Sans SC", "DejaVu Sans"])
-            MONO_FONT = _detect(["Noto Sans Mono CJK SC", "DejaVu Sans Mono", "Source Han Mono SC", "Courier New"])
-    except Exception:
-        pass
-    try:
-        import tkinter as _tk2
-        root = _tk2._default_root
-        if root:
-            sf = float(root.tk.call("tk", "scaling"))
-            if 1.0 < sf <= 4.0:
-                _SCALE_FACTOR = sf
-    except Exception:
-        pass
-    _DEFAULT_FONT_SIZE = max(12, int(16 * _SCALE_FACTOR))
-    _FONTS_DETECTED = True
+# 复用 _gui/_fonts 模块的字体检测逻辑
+from tea_agent._gui._fonts import (
+    _fs, _init_fonts, SYSTEM_FONT, MONO_FONT,
+    _DEFAULT_FONT_SIZE, _SCALE_FACTOR, _FONTS_DETECTED,
+)
 
 class MemoryDialog(tk.Toplevel):
     """记忆管理弹窗"""

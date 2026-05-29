@@ -11,7 +11,8 @@ import html as html_mod
 import traceback
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, cast, Callable, Optional, List, Tuple
+# NOTE: 2026-05-29 07:47:01, self-evolved by tea_agent --- 清理重复的 Optional 类型注解导入
+from typing import Optional, Dict, cast, Callable, List, Tuple
 import logging
 import webbrowser
 
@@ -22,15 +23,6 @@ try:
 except ImportError:
     HAS_TKINTERWEB = False
 
-try:
-    import dbus
-    import dbus.service
-    import dbus.mainloop.glib
-    from gi.repository import GLib
-    HAS_SNI = True
-except ImportError:
-    HAS_SNI = False
-from PIL import Image, ImageDraw
 
 logger = logging.getLogger("main_db_gui")
 
@@ -58,24 +50,9 @@ else:
     from tea_agent._gui._renderer import ChatRenderer
     from .config import load_config, get_config, save_config, ModelConfig
 
-# ====================== 配置加载 ======================
-# 优先使用 $HOME/.tea_agent/config.yaml，不存在时使用 tea_agent/config.yaml
-# _cfg = load_config()
-
-# if not _cfg.main_model.is_configured:
-#     print("错误: 请配置主模型 (main_model)")
-#     print("  编辑 $HOME/.tea_agent/config.yaml 或 tea_agent/config.yaml")
-#     sys.exit(1)
-
-# API_KEY = _cfg.main_model.api_key
-# API_URL = _cfg.main_model.api_url
-# MODEL = _cfg.main_model.model_name
-# CHEAP_MODEL = _cfg.cheap_model
-
-_cfg = None
+# ====================== 模块级引用（供 toolkit 通过 globals() 访问） ======================
 _storage_ = None
 _toolkit_ = None
-
 # ====================== 从 _gui 子包导入（组合模式） ======================
 from tea_agent._gui._fonts import (
     _fs, _init_fonts, SYSTEM_FONT, MONO_FONT,
@@ -103,133 +80,32 @@ from tea_agent._gui._renderer import ChatRenderer
 # Dialogs
 from tea_agent.gui_dialogs import MemoryDialog, TopicDialog, ConfigDialog
 
-import os as _os
 
-try:
-    import dbus
-    import dbus.service
-    import dbus.mainloop.glib
-    from gi.repository import GLib
-    HAS_SNI = True
-except ImportError:
-    HAS_SNI = False
 
-if HAS_SNI:
-    class StatusNotifierItemDBus(dbus.service.Object):
-        """StatusNotifierItem D-Bus 服务，替代 pystray，原生兼容 KDE Plasma 6"""
-
-        def __init__(self, app_id, title, icon_pixmap_ar32, on_activate, on_context_menu):
-            """Initialize  .
-            
-            Args:
-                app_id: Description.
-                title: Description.
-                icon_pixmap_ar32: Description.
-                on_activate: Description.
-                on_context_menu: Description.
-            """
-            self._app_id = app_id
-            self._title = title
-            self._icon_data = icon_pixmap_ar32  # ARGB32 bytes
-            self._on_activate = on_activate
-            self._on_context_menu = on_context_menu
-            self._loop = None
-            self._thread = None
-
-            # 初始化 D-Bus
-            dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-            self._bus = dbus.SessionBus()
-            bus_name = dbus.service.BusName(
-                f'org.kde.StatusNotifierItem-{app_id.replace(".", "_")}-{os.getpid()}',
-                self._bus,
-            )
-            super().__init__(bus_name, '/StatusNotifierItem')
-
-        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
-        def Title(self):
-            """Title."""
-            return self._title
-
-        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
-        def Id(self):
-            """Id."""
-            return self._app_id
-
-        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
-        def Status(self):
-            """Status."""
-            return 'Active'
-
-        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='s')
-        def Category(self):
-            """Category."""
-            return 'ApplicationStatus'
-
-        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='ay')
-        def IconPixmap(self):
-            # 返回 ARGB32 像素数组
-            """IconPixmap."""
-            import struct
-            width = 32
-            height = 32
-            return struct.pack('<ii', width, height) + self._icon_data
-
-        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='')
-        def Activate(self, x, y):
-            """Activate.
-            
-            Args:
-                x: Description.
-                y: Description.
-            """
-            if callable(self._on_activate):
-                self._on_activate()
-
-        @dbus.service.method('org.kde.StatusNotifierItem', in_signature='', out_signature='')
-        def ContextMenu(self, x, y):
-            """ContextMenu.
-            
-            Args:
-                x: Description.
-                y: Description.
-            """
-            if callable(self._on_context_menu):
-                self._on_context_menu(x, y)
-
-        def start(self):
-            """在后台线程启动 GLib main loop"""
-            import threading
-            self._loop = GLib.MainLoop()
-
-            def run():
-                """Run."""
-                self._loop.run()
-
-            self._thread = threading.Thread(target=run, daemon=True)
-            self._thread.start()
-
-        def stop(self):
-            """Stop."""
-            if self._loop:
-                self._loop.quit()
-
+# NOTE: 2026-05-29 07:45:59, self-evolved by tea_agent --- 修复 generating 线程竞争：添加锁保护
+# NOTE: 2026-05-29 07:48:49, self-evolved by tea_agent --- 提取窗口大小和延迟相关的魔法数字为命名常量
 class TkGUI(AgentCore):
     """TkGUI class."""
+    # 窗口大小常量
+    WINDOW_DEFAULT_SIZE = "1100x850"
+    WINDOW_MIN_SIZE = (900, 600)
+    
+    # 延迟常量（毫秒）
+    STREAM_FLUSH_INTERVAL_MS = 500  # 流式刷新间隔
+    RENDER_DELAY_MS = 200           # 渲染延迟
+    NOTIFY_DELAY_MS = 600           # 通知延迟
+    
     def __init__(self, root, debug:bool=False, config_fname:str="", disable_summary:bool=False, no_stream_chunk:bool=False):
-        """Initialize  .
-        
-        Args:
-            root: Description.
-            debug: Description.
-            config_fname: Description.
-            disable_summary: Description.
-        """
         self.root = root
         import os
         self._initial_cwd = os.path.abspath(os.getcwd())
         self._update_title()
-        self.root.geometry("1100x850")
-        self.root.minsize(900, 600)
+        self.root.geometry(self.WINDOW_DEFAULT_SIZE)
+        self.root.minsize(*self.WINDOW_MIN_SIZE)
+        
+        # 线程安全的 generating 状态
+        self._generating_lock = threading.Lock()
+        self._generating = False
 
         self.sess = None  # 预设，AgentCore._init_session 会创建它
 
@@ -268,8 +144,23 @@ class TkGUI(AgentCore):
         self._think_buffer = ""  # think/reasoning 内容缓冲区
         self._pending_console_text = []  # (text, tag) 列表
 
+# NOTE: 2026-05-29 07:46:53, self-evolved by tea_agent --- 添加 _show_mode 等缺失属性初始化
         # 当前对话 ID
         self._current_conversation_id: Optional[int] = None
+        
+        # 显示模式："console" 或 "chat_view"
+        self._show_mode = "console"
+        
+        # 主题列表相关状态
+        self._topic_cache: List[Dict] = []
+        self._topic_hover_after = None
+        self._topic_tooltip = None
+        
+        # 加载状态
+        self._progress_queue: List[tuple] = []
+        self._loading_done = False
+        self._pending_render: Optional[List] = None
+        self._pending_error: Optional[str] = None
 
         # 创建界面
         self._create_ui()
@@ -285,99 +176,21 @@ class TkGUI(AgentCore):
         self.refresh_topics()
         self.auto_new_topic()
 
+# NOTE: 2026-05-29 07:46:31, self-evolved by tea_agent --- 添加 generating property 访问器
         # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
         self.root.protocol("WM_DELETE_WINDOW", self.tray._on_closing)
 
-    def _create_tray_icon(self):
-        """动态生成托盘图标图像（32x32 蓝色圆角方块 + TA 字母），返回 PIL Image"""
-        size = 32
-        img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-        # 绘制蓝色圆角背景
-        draw.rounded_rectangle([2, 2, size-2, size-2], radius=6, fill=(59, 130, 246, 255))
-        # 绘制 "TA" 字母
-        try:
-            from PIL import ImageFont
-            font = ImageFont.truetype("arial.ttf", 14)
-        except:
-            font = ImageFont.load_default()
-        draw.text((6, 6), "TA", fill=(255, 255, 255, 255), font=font)
-        return img
+    @property
+    def generating(self):
+        """线程安全的 generating 状态访问"""
+        with self._generating_lock:
+            return self._generating
 
-    def _pil_to_argb32(self, img):
-        """PIL RGBA Image -> ARGB32 bytes (用于 StatusNotifierItem IconPixmap)"""
-        rgba = img.tobytes()  # R,G,B,A, R,G,B,A, ...
-        argb = bytearray(len(rgba))
-        for i in range(0, len(rgba), 4):
-            r, g, b, a = rgba[i], rgba[i+1], rgba[i+2], rgba[i+3]
-            argb[i], argb[i+1], argb[i+2], argb[i+3] = a, r, g, b
-        return bytes(argb)
-
-    def _init_tray(self):
-        """初始化系统托盘图标（StatusNotifierItem / KDE Plasma 6 原生支持）"""
-        if not HAS_SNI:
-            return
-        try:
-            pil_icon = self._create_tray_icon()
-            argb_data = self._pil_to_argb32(pil_icon)
-            self._sni = StatusNotifierItemDBus(
-                app_id="tea_agent",
-                title="TeaAgent",
-                icon_pixmap_ar32=argb_data,
-                on_activate=lambda: self.root.after(0, self._on_tray_activate),
-                on_context_menu=lambda x, y: self.root.after(0, self._on_tray_context_menu, x, y),
-            )
-            # 在后台线程启动 GLib 事件循环
-            self._tray_thread = threading.Thread(
-                target=self._sni.run, daemon=True, name="tray-icon"
-            )
-            self._tray_thread.start()
-            logger.info("托盘图标已启动 (StatusNotifierItem)")
-        except Exception as e:
-            logger.warning(f"初始化托盘图标失败: {e}")
-
-    def _on_tray_activate(self):
-        """托盘图标左键点击：显示/恢复主窗口"""
-        self.root.deiconify()
-        self.root.lift()
-        self.root.focus_force()
-
-    def _on_tray_context_menu(self, x, y):
-        """托盘图标右键：弹出菜单（含退出选项）"""
-        menu = tk.Menu(self.root, tearoff=0)
-        menu.add_command(label="退出", command=self._on_closing)
-        try:
-            menu.tk_popup(x, y)
-        finally:
-            menu.grab_release()
-
-    def _on_closing(self):
-        """窗口关闭时的清理流程"""
-        self._update_status("⏳ 正在清理资源...")
-        if HAS_SNI and self._sni:
-            try:
-                self._sni.stop()
-                logger.info("托盘图标已停止")
-            except Exception as e:
-                logger.warning(f"停止托盘图标失败: {e}")
-        try:
-            from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
-            toolkit_subconscious("stop")
-            logger.info("Dream 已停止")
-        except Exception as e:
-            logger.warning(f"停止 Dream 失败: {e}")
-        try:
-            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
-            toolkit_scheduler("stop")
-            logger.info("定时任务调度器已停止")
-        except Exception as e:
-            logger.warning(f"停止定时任务调度器失败: {e}")
-        try:
-            self.db.close()
-            self._update_status("✅ 数据库已正常关闭")
-        except Exception as e:
-            logger.warning(f"关闭数据库失败: {e}")
-        self.root.destroy()
+    @generating.setter
+    def generating(self, value):
+        """线程安全的 generating 状态设置"""
+        with self._generating_lock:
+            self._generating = value
 
     def _start_dream(self):
         """启动Dream潜意识引擎后台线程，每小时循环一次"""
@@ -397,36 +210,18 @@ class TkGUI(AgentCore):
                 logger.info(f"Dream 已在运行中 (pid={result.get('pid')})")
             else:
                 logger.info(f"Dream 自动启动成功: {status}")
+# NOTE: 2026-05-29 07:47:56, self-evolved by tea_agent --- 删除 gui.py 中重复的 _start_scheduler 方法（继承自 AgentCore）
         except Exception as e:
             logger.warning(f"Dream 自动启动失败: {e}")
-
-    def _start_scheduler(self):
-        """启动定时任务调度器后台线程，每分钟检查一次"""
-        try:
-            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
-            result = toolkit_scheduler("start")
-            status = result.get("status", "unknown")
-            if status == "already_running":
-                logger.info(f"定时任务调度器已在运行中 (pid={result.get('pid')})")
-            else:
-                logger.info(f"定时任务调度器自动启动成功: {status}")
-        except Exception as e:
-            logger.warning(f"定时任务调度器自动启动失败: {e}")
 
     def _create_ui(self):
         """创建界面 — 委托给 UIBuilder"""
         self.ui_builder.build()
 
-    def _adjust_chat_sash(self):
-        """权重比已调整，此方法保留作兼容"""
-        pass
 
+# NOTE: 2026-05-29 07:48:15, self-evolved by tea_agent --- 清理 zoom_in/zoom_out 的无意义 docstring
     def zoom_in(self, e=None):
-        """Zoom in.
-        
-        Args:
-            e: Description.
-        """
+        """放大 HtmlFrame 渲染内容"""
         if not HAS_TKINTERWEB or self._show_mode != "chat_view":
             return "break"
         self._zoom_level = min(self._zoom_level + 10, 200)
@@ -435,11 +230,7 @@ class TkGUI(AgentCore):
         return "break"
 
     def zoom_out(self, e=None):
-        """Zoom out.
-        
-        Args:
-            e: Description.
-        """
+        """缩小 HtmlFrame 渲染内容"""
         if not HAS_TKINTERWEB or self._show_mode != "chat_view":
             return "break"
         self._zoom_level = max(self._zoom_level - 10, 50)
@@ -447,8 +238,9 @@ class TkGUI(AgentCore):
         self._update_status(f"🔍 缩放: {self._zoom_level}%")
         return "break"
 
+# NOTE: 2026-05-29 07:49:09, self-evolved by tea_agent --- 更新 _apply_zoom 中的 RENDER_DELAY_MS 常量
     def _apply_zoom(self):
-        """Internal: apply zoom."""
+        """应用缩放级别到 HtmlFrame"""
         if not HAS_TKINTERWEB or not self._filtered_messages():
             return
         self._image_cache.clear()
@@ -456,7 +248,7 @@ class TkGUI(AgentCore):
         font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
         html = _render_markdown(md, font_size=font_size)
         self._html_render(html)
-        self.root.after(200, self.scroll_to_bottom)
+        self.root.after(self.RENDER_DELAY_MS, self.scroll_to_bottom)
 
     def _history_prev_round(self, e=None):
         """Alt+Up: 切换到上一条历史轮次，若无则忽略"""
@@ -497,7 +289,6 @@ class TkGUI(AgentCore):
             self._render_round_view(self._current_round_view)
         return "break"
 
-        # 不调用 root.update()：让 CSS animation 自己跑，GUI 主循环保持响应
 
     def _now_ts(self) -> str:
         """Internal: now ts."""
@@ -520,8 +311,7 @@ class TkGUI(AgentCore):
 
     def export_last_pdf(self, e=None):
         """Ctrl+P: 导出当前主题最后一轮对话为 last.pdf（仿 HtmlFrame 渲染效果）"""
-        import threading, json, os, tempfile, subprocess
-
+        import json, tempfile, subprocess
         def _do():
             try:
                 tid = self.current_topic_id
@@ -831,16 +621,11 @@ class TkGUI(AgentCore):
         self._clear_img_btn.pack(side=tk.LEFT, padx=4)
 
     def _clear_images(self):
-        """清空待发送图片列表"""
-        self._pending_images.clear()
-        self._img_label.config(text="")
-
+        """清空待发送图片列表 — 委托 ImageHandler"""
+        self.images.clear()
+# NOTE: 2026-05-29 07:48:20, self-evolved by tea_agent --- 清理 send 方法的无意义 docstring
     def send(self, e=None):
-        """Send.
-        
-        Args:
-            e: Description.
-        """
+        """发送用户消息"""
         if self.generating or not self.current_topic_id:
             return "break"
         msg = self.input_box.get("1.0", tk.END).strip()
@@ -856,9 +641,10 @@ class TkGUI(AgentCore):
         display_msg = f"你：{msg}" if msg else "你：[图片]"
         self.log(display_msg, "user", images=images if images else None)
         self._hide_raw_check_btn()  # 会话中隐藏切换按钮
+# NOTE: 2026-05-29 07:46:37, self-evolved by tea_agent --- 使用 STREAM_FLUSH_INTERVAL_MS 常量
         self.generating = True
-        # 启动 500ms 定时器，批量刷新流式内容到 ScrolledText（不渲染 HtmlFrame）
-        self.root.after(500, self._stream_flush_tick)
+        # 启动定时器，批量刷新流式内容到 ScrolledText（不渲染 HtmlFrame）
+        self.root.after(self.STREAM_FLUSH_INTERVAL_MS, self._stream_flush_tick)
         self.log("AI：", "title")
 
         mem_count = len(self.db.get_active_memories(50))
@@ -899,14 +685,15 @@ class TkGUI(AgentCore):
                             emb_str = f" | Emb:{euse['total_tokens']:,}"
                     except Exception:
                         pass
+# NOTE: 2026-05-29 07:49:31, self-evolved by tea_agent --- 更新 NOTIFY_DELAY_MS 常量的使用
                     status_msg = (f"✅ 完成 | Tokens: {usage['total_tokens']:,} "
                                   f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,}){emb_str}")
                     self.root.after(0, lambda m=status_msg: self._update_status(m))
                     self.root.after(0, self._refresh_topics_preserve_selection)
-                    self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
+                    self.root.after(self.NOTIFY_DELAY_MS, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
                 else:
                     self.root.after(0, lambda: self._update_status("✅ 完成"))
-                    self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
+                    self.root.after(self.NOTIFY_DELAY_MS, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
             except Exception as ex:
                 import traceback
                 tb = traceback.format_exc()
@@ -927,11 +714,11 @@ class TkGUI(AgentCore):
                 self.root.after(0, self._render_and_show_chat)
                 self.root.after(0, self._show_raw_check_btn)
                 self.root.after(0, lambda: self._update_status(f"❌ 错误: {ai_msg}"))
-                self.root.after(600, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
+                self.root.after(self.NOTIFY_DELAY_MS, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
             finally:
-                self.generating = False
+                # 回到主线程设置 generating=False，避免跨线程竞争
+                self.root.after(0, self._on_generation_done)
                 self.safe_log("")
-
         threading.Thread(target=work, daemon=True).start()
         return "break"
 
@@ -1113,12 +900,14 @@ class TkGUI(AgentCore):
 
         ConfigDialog(self.root, on_save=on_save, config_path=self._config_path)
 
+
+# NOTE: 2026-05-29 07:48:25, self-evolved by tea_agent --- 清理 interrupt 方法的无意义 docstring
+    def _on_generation_done(self):
+        """主线程回调：标记生成完成（避免跨线程写 generating）"""
+        self.generating = False
+
     def interrupt(self, e=None):
-        """Interrupt.
-        
-        Args:
-            e: Description.
-        """
+        """打断当前 AI 生成"""
         if self.generating:
             self.sess.interrupt()
             self.safe_log("\n🛑 已打断", "tool")
@@ -1147,50 +936,33 @@ class TkGUI(AgentCore):
         """
         return self.renderer._switch_display(mode)
 
+# NOTE: 2026-05-29 07:48:35, self-evolved by tea_agent --- 批量清理委托方法的无意义 docstring
     def _show_loading(self, text: str = "正在加载历史记录", progress: str = None):
-        """Internal: show loading.
-        
-        Args:
-            text: Description.
-            progress: Description.
-        """
+        """显示加载动画"""
         return self.renderer._show_loading(text, progress)
 
     def _poll_loading_progress(self):
-        """Internal: poll loading progress."""
+        """轮询加载进度"""
         return self.renderer._poll_loading_progress()
 
     def scroll_to_bottom(self):
-        """Scroll to bottom."""
+        """滚动到底部"""
         return self.renderer.scroll_to_bottom()
 
     def _html_render(self, html: str):
-        """Internal: html render.
-        
-        Args:
-            html: Description.
-        """
+        """渲染 HTML 到 chat_view"""
         return self.renderer._html_render(html)
 
     def _render_chat(self, streaming_think: str = "", streaming_text: str = ""):
-        """Internal: render chat.
-        
-        Args:
-            streaming_think: Description.
-            streaming_text: Description.
-        """
+        """渲染聊天消息"""
         return self.renderer._render_chat(streaming_think, streaming_text)
 
     def _render_and_show_chat(self):
-        """Internal: render and show chat."""
+        """渲染并显示聊天"""
         return self.renderer._render_and_show_chat()
 
     def _render_loaded_topic(self, render_items):
-        """Internal: render loaded topic.
-        
-        Args:
-            render_items: Description.
-        """
+        """渲染加载的主题历史"""
         return self.renderer._render_loaded_topic(render_items)
 
     def _render_round_view(self, round_idx: int):

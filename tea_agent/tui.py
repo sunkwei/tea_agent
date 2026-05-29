@@ -37,6 +37,7 @@ from textual.widgets import Label, RichLog, TextArea
 from textual.containers import Container, ScrollableContainer
 from textual.binding import Binding
 from textual.css.query import NoMatches
+from rich.errors import MarkupError
 
 from tea_agent.agent_core import AgentCore
 
@@ -75,15 +76,12 @@ class _TUIAgentCore(AgentCore):
             if chunk.startswith("[THINK]"):
                 text = chunk[7:]
                 if text:
-                    if not think_started:
-                        tui.call_from_thread(tui._append_chat_inline, "[italic]# ")
-                        think_started = True
-                    tui.call_from_thread(tui._append_chat_inline, text)
+                    think_started = True
+                    tui.call_from_thread(tui._append_think_text, text)
                 return
             if chunk.startswith("[THINK_DONE]"):
                 if think_started:
-                    tui.call_from_thread(tui._append_chat_inline, "[/italic]")
-                    tui.call_from_thread(tui._flush_stream_buffer)
+                    tui.call_from_thread(tui._flush_think_buffer)
                     think_started = False
                 return
             if chunk.startswith("[TOOL_START:"):
@@ -255,6 +253,7 @@ class TeaTUI(App):
         self._agent_ready = threading.Event()
         self.agent: Optional[_TUIAgentCore] = None
         self._stream_buffer = ""
+        self._think_buffer = ""       # separate buffer for think blocks
         self._stream_timer = None
         self._welcome_shown = False
         # 历史消息导航
@@ -404,6 +403,7 @@ class TeaTUI(App):
         threading.Thread(target=run_chat, daemon=True).start()
 
     def _on_chat_done(self):
+        self._flush_think_buffer()   # flush any incomplete think block
         self._flush_stream_buffer()
         self._stop_stream_timer()
         try:
@@ -426,10 +426,28 @@ class TeaTUI(App):
 
     def _chat_write(self, text: str) -> None:
         chat = self.query_one("#chat-area", RichLog)
-        chat.write(text)
+        try:
+            chat.write(text)
+        except MarkupError:
+            # @{date} gen by model, fallback for broken Rich markup tags
+            from rich.text import Text
+            chat.write(Text(text))
 
     def _append_chat_inline(self, text: str):
         self._stream_buffer += text
+
+    def _append_think_text(self, text: str):
+        """Accumulate think text in a separate buffer (no Rich markup tags)."""
+        self._think_buffer += text
+
+    def _flush_think_buffer(self):
+        """Flush think buffer as a single [italic]...[/italic] unit."""
+        if self._think_buffer:
+            try:
+                self._chat_write(f"[italic]# {self._think_buffer}[/italic]")
+            except NoMatches:
+                pass
+            self._think_buffer = ""
 
     def _flush_stream_buffer(self):
         if self._stream_buffer:

@@ -98,8 +98,6 @@ class BaseChatSession(ABC):
     def get_recent_messages(self) -> List[Dict]:
         """获取最近的消息（排除系统消息）"""
         return [m for m in self.messages if m["role"] != "system"]
-
-# NOTE: 2026-04-28, self-evolved by claude-agent ---
     # 从加载的历史消息中清除 reasoning_content。
     # reasoning_content 是 DeepSeek thinking 模式下的会话内状态，
     # 只在一个 API 会话内有效。从数据库加载的历史消息中的

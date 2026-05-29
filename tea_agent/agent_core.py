@@ -49,7 +49,7 @@ class AgentCore:
         self._config_path = config_path
 
         # ── 1. 加载配置 ──
-        self._cfg = load_config(config_path) if config_path else load_config()
+        self._cfg = load_config(config_path)
         if not self._cfg.main_model.is_configured:
             print("错误: 请配置主模型 (main_model)")
             print(f"  编辑 {config_path or '$HOME/.tea_agent/config.yaml 或 tea_agent/config.yaml'}")

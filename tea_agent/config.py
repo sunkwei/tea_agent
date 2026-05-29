@@ -285,7 +285,7 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
     Returns:
         AgentConfig 实例
     """
-    global _last_config_path
+    global _last_config_path, _config_cache
     if config_path is None:
         config_path = _last_config_path
     else:
@@ -293,7 +293,6 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
 
     cfg = AgentConfig()
     yaml_path: Optional[str] = None
-
     if config_path:
         yaml_path = config_path
     else:
@@ -376,6 +375,8 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
         except Exception:
             pass  # 加载失败时使用默认空配置
 
+    # 更新全局缓存，确保 get_config() 返回最新配置
+    _config_cache = cfg
     return cfg
 
 def ensure_config_dir() -> Path:
@@ -399,12 +400,9 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     Returns:
         实际保存的文件路径
     """
-    if not HAS_YAML:
-        raise RuntimeError("需要安装 pyyaml: pip install pyyaml")
-
-    yaml_path = config_path or str(Path.home() / ".tea_agent" / "config.yaml")
+    global _last_config_path
+    yaml_path = config_path or _last_config_path or str(Path.home() / ".tea_agent" / "config.yaml")
     ensure_config_dir()
-
     data = {}
     
     # 保存模型配置
@@ -571,13 +569,17 @@ def get_config(reload: bool = False) -> AgentConfig:
     """
     获取全局配置单例。
 
+    检测 _last_config_path 是否已由 load_config(config_path) 更新，
+    若缓存路径与 _last_config_path 不一致则自动重载。
+    确保后续所有 get_config() 调用都返回与 load_config() 一致的配置。
+
     Args:
         reload: 强制重新加载
 
     Returns:
         AgentConfig 实例
     """
-    global _config_cache
+    global _config_cache, _last_config_path
     if _config_cache is None or reload:
         _config_cache = load_config()
     return _config_cache

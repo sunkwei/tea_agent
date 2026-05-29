@@ -1373,6 +1373,4 @@ class OnlineToolSession(BaseChatSession):
                 interrupted=result.get("interrupted", False),
                 error=str(result.get("error", "")) if result.get("error") else None,
             )
-
-# NOTE: 2026-05-29 07:47:35, self-evolved by tea_agent --- 清理注释掉的自动记忆提取和反思代码块
         return full_reply, used_tools

@@ -11,7 +11,6 @@ import html as html_mod
 import traceback
 from pathlib import Path
 from datetime import datetime
-# NOTE: 2026-05-29 07:47:01, self-evolved by tea_agent --- 清理重复的 Optional 类型注解导入
 from typing import Optional, Dict, cast, Callable, List, Tuple
 import logging
 import webbrowser
@@ -79,11 +78,6 @@ from tea_agent._gui._renderer import ChatRenderer
 
 # Dialogs
 from tea_agent.gui_dialogs import MemoryDialog, TopicDialog, ConfigDialog
-
-
-
-# NOTE: 2026-05-29 07:45:59, self-evolved by tea_agent --- 修复 generating 线程竞争：添加锁保护
-# NOTE: 2026-05-29 07:48:49, self-evolved by tea_agent --- 提取窗口大小和延迟相关的魔法数字为命名常量
 class TkGUI(AgentCore):
     """TkGUI class."""
     # 窗口大小常量
@@ -143,8 +137,6 @@ class TkGUI(AgentCore):
         self._stream_buffer = ""
         self._think_buffer = ""  # think/reasoning 内容缓冲区
         self._pending_console_text = []  # (text, tag) 列表
-
-# NOTE: 2026-05-29 07:46:53, self-evolved by tea_agent --- 添加 _show_mode 等缺失属性初始化
         # 当前对话 ID
         self._current_conversation_id: Optional[int] = None
         
@@ -175,8 +167,6 @@ class TkGUI(AgentCore):
         # 加载主题
         self.refresh_topics()
         self.auto_new_topic()
-
-# NOTE: 2026-05-29 07:46:31, self-evolved by tea_agent --- 添加 generating property 访问器
         # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
         self.root.protocol("WM_DELETE_WINDOW", self.tray._on_closing)
 
@@ -210,16 +200,12 @@ class TkGUI(AgentCore):
                 logger.info(f"Dream 已在运行中 (pid={result.get('pid')})")
             else:
                 logger.info(f"Dream 自动启动成功: {status}")
-# NOTE: 2026-05-29 07:47:56, self-evolved by tea_agent --- 删除 gui.py 中重复的 _start_scheduler 方法（继承自 AgentCore）
         except Exception as e:
             logger.warning(f"Dream 自动启动失败: {e}")
 
     def _create_ui(self):
         """创建界面 — 委托给 UIBuilder"""
         self.ui_builder.build()
-
-
-# NOTE: 2026-05-29 07:48:15, self-evolved by tea_agent --- 清理 zoom_in/zoom_out 的无意义 docstring
     def zoom_in(self, e=None):
         """放大 HtmlFrame 渲染内容"""
         if not HAS_TKINTERWEB or self._show_mode != "chat_view":
@@ -237,8 +223,6 @@ class TkGUI(AgentCore):
         self._apply_zoom()
         self._update_status(f"🔍 缩放: {self._zoom_level}%")
         return "break"
-
-# NOTE: 2026-05-29 07:49:09, self-evolved by tea_agent --- 更新 _apply_zoom 中的 RENDER_DELAY_MS 常量
     def _apply_zoom(self):
         """应用缩放级别到 HtmlFrame"""
         if not HAS_TKINTERWEB or not self._filtered_messages():
@@ -623,7 +607,6 @@ class TkGUI(AgentCore):
     def _clear_images(self):
         """清空待发送图片列表 — 委托 ImageHandler"""
         self.images.clear()
-# NOTE: 2026-05-29 07:48:20, self-evolved by tea_agent --- 清理 send 方法的无意义 docstring
     def send(self, e=None):
         """发送用户消息"""
         if self.generating or not self.current_topic_id:
@@ -641,7 +624,6 @@ class TkGUI(AgentCore):
         display_msg = f"你：{msg}" if msg else "你：[图片]"
         self.log(display_msg, "user", images=images if images else None)
         self._hide_raw_check_btn()  # 会话中隐藏切换按钮
-# NOTE: 2026-05-29 07:46:37, self-evolved by tea_agent --- 使用 STREAM_FLUSH_INTERVAL_MS 常量
         self.generating = True
         # 启动定时器，批量刷新流式内容到 ScrolledText（不渲染 HtmlFrame）
         self.root.after(self.STREAM_FLUSH_INTERVAL_MS, self._stream_flush_tick)
@@ -685,7 +667,6 @@ class TkGUI(AgentCore):
                             emb_str = f" | Emb:{euse['total_tokens']:,}"
                     except Exception:
                         pass
-# NOTE: 2026-05-29 07:49:31, self-evolved by tea_agent --- 更新 NOTIFY_DELAY_MS 常量的使用
                     status_msg = (f"✅ 完成 | Tokens: {usage['total_tokens']:,} "
                                   f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,}){emb_str}")
                     self.root.after(0, lambda m=status_msg: self._update_status(m))
@@ -899,9 +880,6 @@ class TkGUI(AgentCore):
             self._update_status("⚙️ 配置已更新")
 
         ConfigDialog(self.root, on_save=on_save, config_path=self._config_path)
-
-
-# NOTE: 2026-05-29 07:48:25, self-evolved by tea_agent --- 清理 interrupt 方法的无意义 docstring
     def _on_generation_done(self):
         """主线程回调：标记生成完成（避免跨线程写 generating）"""
         self.generating = False
@@ -935,8 +913,6 @@ class TkGUI(AgentCore):
             mode: Description.
         """
         return self.renderer._switch_display(mode)
-
-# NOTE: 2026-05-29 07:48:35, self-evolved by tea_agent --- 批量清理委托方法的无意义 docstring
     def _show_loading(self, text: str = "正在加载历史记录", progress: str = None):
         """显示加载动画"""
         return self.renderer._show_loading(text, progress)

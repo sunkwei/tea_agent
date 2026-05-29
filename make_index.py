@@ -310,7 +310,6 @@ if __name__ == "__main__":
         name = sys.argv[2] if len(sys.argv) > 2 else ""
         kind = sys.argv[3] if len(sys.argv) > 3 else "all"
         results = query_index(name, kind)
-# NOTE: 2026-05-09 19:47:06, self-evolved by tea_agent --- 修复 make_index.py 嵌套 f-string 语法错误（Python 3.11 不支持）
         for r in results:
             line_info = f":{r['line']}" if 'line' in r else ''
             print(f"[{r['kind']}] {r['name']} → {r['file']}{line_info}")

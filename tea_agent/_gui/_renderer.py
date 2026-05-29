@@ -3,8 +3,6 @@
 处理流式缓冲刷新、轮次视图、加载动画。
 Usage: self.renderer = ChatRenderer(self)  # self = TkGUI instance
 """
-
-# NOTE: 2026-05-29 07:58:50, self-evolved by tea_agent --- 添加 logger 定义
 import tkinter as tk
 import html as html_mod
 import json
@@ -255,8 +253,6 @@ class ChatRenderer:
             except Exception:
                 self.gui.root.after(0, lambda: _on_done("<p>渲染错误</p>"))
         threading.Thread(target=_worker, daemon=True).start()
-
-# NOTE: 2026-05-29 07:58:44, self-evolved by tea_agent --- _render_topic_error 添加详细错误输出到日志
     # ── _render_topic_error ──
     def _render_topic_error(self, error_msg):
         """主线程：加载失败回调"""
@@ -395,7 +391,6 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             self.gui.root.after(50, self._poll_loading_progress)
             return
         # 队列已空，检查后台线程是否完成
-# NOTE: 2026-05-29 08:00:22, self-evolved by tea_agent --- 修复 _pending_error None 值误判
         if getattr(self.gui, '_loading_done', False):
             # 最终渲染
             if getattr(self.gui, '_pending_error', None) is not None:

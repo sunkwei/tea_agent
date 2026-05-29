@@ -19,8 +19,6 @@ _DEFAULT_FONT_SIZE = 16  # 模块级默认（_init_fonts 后会更新）
 def _fs(size):
     """返回按显示缩放因子调整后的字体大小（适配 Wayland/X11 高分屏）。"""
     return max(1, int(size * _SCALE_FACTOR))
-
-# NOTE: 2026-05-29 07:52:57, self-evolved by tea_agent --- 修复 _init_fonts 中缺少的 global 声明
 def _init_fonts():
     """延迟检测系统可用字体（需 Tk root 创建后调用）。"""
     global SYSTEM_FONT, MONO_FONT, _FONTS_DETECTED, _SCALE_FACTOR, _DEFAULT_FONT_SIZE
@@ -67,7 +65,6 @@ def _init_fonts():
             f"字体检测: SYSTEM={SYSTEM_FONT}, MONO={MONO_FONT}"
         )
     except Exception as e:
-# NOTE: 2026-05-29 07:53:07, self-evolved by tea_agent --- 合并重复的 global 声明
         logging.getLogger("tea_agent").warning(
             f"字体检测失败: {e}，使用默认字体"
         )

@@ -46,7 +46,6 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                                capture_output=True, text=True, timeout=10, cwd=cwd)
             if r.returncode != 0:
                 return False
-            # 忽略 untracked 文件（??），只检查已跟踪文件的改动
             lines = [l for l in r.stdout.splitlines() if l.strip() and not l.startswith("?")]
             return len(lines) == 0
         except Exception:
@@ -58,7 +57,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
             subprocess.run(["git", "add", file_path],
                            capture_output=True, timeout=10, cwd=cwd, check=True)
             subprocess.run(["git", "commit", "-m",
-                           f"🔒 snapshot: pre-evolve — {desc}"],
+                           f"snapshot: pre-evolve -- {desc}"],
                            capture_output=True, timeout=10, cwd=cwd, check=True)
             return True, None
         except subprocess.CalledProcessError as e:
@@ -96,12 +95,9 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
             return 0, 0, "test timeout (>120s)"
         except Exception as e:
             return 0, 0, str(e)[:200]
-        except Exception as e:
-            return 0, 0, str(e)[:200]
 
     # ── LSP 辅助函数 ── @2026-05-19 gen by claude
     def _run_lsp_checks(full_path, symbol, old_code, new_code, content):
-        """Layer 2.5: 影响分析 + ruff lint + 签名对比。非阻塞。"""
         """Layer 2.5: 影响分析 + ruff lint + 签名对比 + 语义诊断。非阻塞。"""
         result = {"impact": None, "lint_before": 0, "lint_after": 0, "lint_new": 0,
                   "sig_changed": False, "old_sig": None, "new_sig": None,
@@ -168,14 +164,14 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                 except Exception:
                     pass
 
-            # 5. 语义诊断（jedi）— 检查未定义符号/无法解析的引用
+            # 5. 语义诊断（jedi）
             try:
                 from tea_agent.lsp.lsp_engine import semantic_diagnose
                 sd = semantic_diagnose(cwd, full_path)
                 result["semantic"] = {"ok": sd.get("ok", True), "issues": sd.get("issues", [])[:5],
                                       "total": sd.get("total", 0), "hint": sd.get("hint", "")}
                 if not sd.get("ok", True):
-                    logger.warning(f"LSP 语义诊断: {sd.get('hint', '')}")
+                    logger.warning(f"LSP semantic: {sd.get('hint', '')}")
             except Exception:
                 result["semantic"] = {"ok": True, "issues": [], "hint": "skipped"}
 
@@ -193,14 +189,9 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     if old_code not in content:
         return {"ok": False, "error": "old_code 在文件中未找到（精确匹配失败）"}
 
-    # 检查 old_code 出现次数，避免多次出现时修改错误位置
+    # 检查 old_code 出现次数
     if content.count(old_code) > 1:
-        return {"ok": False, "error": f"old_code 在文件中出现 {content.count(old_code)} 次，无法确定修改位置，请提供更多上下文"}
-
-    # 生成演化注释（仅 .py 源码文件，README/CHANGELOG 等不加）
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    is_py = file_path.endswith(".py")
-    comment = f"# NOTE: {now}, self-evolved by tea_agent --- {description}\n" if is_py else ""
+        return {"ok": False, "error": f"old_code 在文件中出现 {content.count(old_code)} 次，无法确定修改位置"}
 
     # ── Layer 0: Git 快照 ──
     git_snapped = False
@@ -223,9 +214,8 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     tmp_bak = full_path + ".tmp_bak"
     shutil.copy2(full_path, tmp_bak)
 
-    # 应用修改（.py 文件在 new_code 前加注释）
-    annotated_new = (comment + new_code) if comment else new_code
-    new_content = content.replace(old_code, annotated_new, 1)
+    # 应用修改（不再添加 NOTE 注释）
+    new_content = content.replace(old_code, new_code, 1)
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(new_content)
 
@@ -251,16 +241,17 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                            "compile_verify": False, "tests": "skipped"}
             }
 
-    # ── Layer 2.5: LSP 智能检查 ── @2026-05-19 gen by claude
+    # ── Layer 2.5: LSP 智能检查 ──
     lsp_result = None
     if lsp_checks and verify_ok and file_path.endswith(".py"):
         lsp_result = _run_lsp_checks(full_path, symbol, old_code, new_code, content)
         if lsp_result.get("lint_new", 0) > 0:
             logger.warning(f"LSP: 引入 {lsp_result['lint_new']} 个新 lint 问题")
         if lsp_result.get("sig_changed"):
-            logger.warning(f"LSP: 签名变更: {lsp_result.get('old_sig')} → {lsp_result.get('new_sig')}")
+            logger.warning(f"LSP: 签名变更: {lsp_result.get('old_sig')} -> {lsp_result.get('new_sig')}")
 
-    # ── Layer 3: 测试验证 ──    test_passed = None
+    # ── Layer 3: 测试验证 ──
+    test_passed = None
     test_total = None
     test_error = None
     if run_tests and verify_ok:
@@ -268,7 +259,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         if test_error and not isinstance(test_error, str):
             test_error = str(test_error)
         if test_passed == -1:
-            pass  # no tests found, skip verification
+            pass
         elif isinstance(test_passed, int) and test_total is not None and test_passed < test_total:
             shutil.copy2(tmp_bak, full_path)
             if os.path.exists(tmp_bak):
@@ -290,7 +281,6 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     return {
         "ok": True,
         "file": file_path,
-        "comment": comment.strip(),
         "bak_path": bak_path,
         "verified": verify_ok,
         "layers": {
@@ -302,18 +292,19 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         }
     }
 
+
 def meta_toolkit_self_evolve():
     """Meta toolkit self evolve."""
     return {
         "type": "function",
         "function": {
             "name": "toolkit_self_evolve",
-            "description": "五层安全自进化：修改项目源文件，自动添加演化注释。Layer0=git快照, Layer1=时间戳.bak, Layer2=编译验证, Layer2.5=LSP检查(影响分析+lint+签名), Layer3=测试回滚。",
+            "description": "五层安全自进化：修改项目源文件，不再添加 NOTE 注释。Layer0=git快照, Layer1=时间戳.bak, Layer2=编译验证, Layer2.5=LSP检查(影响分析+lint+签名), Layer3=测试回滚。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "file_path": {"type": "string", "description": "要修改的文件路径（相对于项目根目录，如 tea_agent/store.py）"},
-                    "description": {"type": "string", "description": "修改的简短描述，会写入注释"},
+                    "description": {"type": "string", "description": "修改的简短描述"},
                     "old_code": {"type": "string", "description": "要替换的旧代码片段（必须精确匹配）"},
                     "new_code": {"type": "string", "description": "替换后的新代码片段"},
                     "verify": {"type": "boolean", "description": "[Layer2] 是否验证编译通过，默认 true。失败自动回滚"},

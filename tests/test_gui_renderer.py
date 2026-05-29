@@ -79,8 +79,6 @@ class TestHasattrVsGetattrPattern:
         
         assert hasattr(Obj, 'attr') is True  # 属性存在
         assert Obj.attr is None  # 但值是 None
-
-# NOTE: 2026-05-29 08:02:56, self-evolved by tea_agent --- 修复测试中的运算符优先级问题
     def test_getattr_none_check_correct(self):
         """getattr + is not None 是正确的检查方式"""
         class Obj:

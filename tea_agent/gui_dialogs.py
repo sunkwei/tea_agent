@@ -1,4 +1,3 @@
-# NOTE: 2026-05-29 07:47:17, self-evolved by tea_agent --- 复用 _gui/_fonts 模块的字体检测逻辑
 # -*- coding: utf-8 -*-
 """GUI 对话框：MemoryDialog / TopicDialog / ConfigDialog"""
 import tkinter as tk

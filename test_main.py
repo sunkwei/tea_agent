@@ -25,7 +25,6 @@ def test_storage_init():
         assert s is not None
         # 验证基本操作
         tid = s.create_topic("测试主题")
-        # NOTE: 2026-05-16 12:56:55, self-evolved by tea_agent --- 修复 test_storage_init: topic_id 是 UUID 字符串，用 isinstance+len 替代 int 比较
         assert isinstance(tid, str) and len(tid) > 0, f"topic_id should be non-empty str, got {tid!r}"
         topics = s.list_topics()
         assert any(t["topic_id"] == tid for t in topics)
@@ -52,8 +51,6 @@ def test_topic_summary_validation():
         raw = re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
         raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
         raw = raw.strip()
-# NOTE: 2026-05-01 08:17:43, self-evolved by tea_agent --- test_topic_summary_validation: min_length从2同步到5
-# NOTE: 2026-05-01 08:18:19, self-evolved by tea_agent --- test: min_length同步为4
         if not raw or len(raw) < 4:
             return None
         return raw[:20] if len(raw) > 20 else raw
@@ -63,7 +60,6 @@ def test_topic_summary_validation():
     # 带引号
     assert _clean('"你好世界"') == "你好世界"
     assert _clean('\u201cGPT 答复\u201d') == "GPT 答复"  # 全角引号
-# NOTE: 2026-05-01 08:17:51, self-evolved by tea_agent --- test: 添加"KB与"（3字）拒绝的回归用例，消除LLM残句
     # 单字（应拒绝）
     assert _clean("为") is None
     assert _clean("a") is None

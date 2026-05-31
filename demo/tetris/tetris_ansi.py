@@ -162,24 +162,36 @@ class InputHandler:
                     return key_map.get(key, None)
                 return key
         else:
-            if select.select([sys.stdin], [], [], 0)[0]:
-                key = sys.stdin.read(1)
+            fd = sys.stdin.fileno()
+            # Use os.read(fd, 1) instead of sys.stdin.read(1) to bypass
+            # Python's TextIOWrapper buffering.
+            if select.select([fd], [], [], 0)[0]:
+                ch = os.read(fd, 1)
                 # Handle escape sequences (arrow keys)
-                if key == '\x1b':
-                    if select.select([sys.stdin], [], [], 0)[0]:
-                        key += sys.stdin.read(1)
-                        if key == '\x1b[':
-                            if select.select([sys.stdin], [], [], 0)[0]:
-                                key += sys.stdin.read(1)
+                if ch == b'\x1b':
+                    # Wait up to 20ms for remaining bytes
+                    if select.select([fd], [], [], 0.02)[0]:
+                        second = os.read(fd, 1)
+                        # CSI mode: \x1b[A..\x1b[D  (standard terminals)
+                        # SS3 mode: \x1bOA..\x1bOD  (some terminals)
+                        if second in (b'[', b'O'):
+                            if select.select([fd], [], [], 0.02)[0]:
+                                third = os.read(fd, 1)
                                 key_map = {
-                                    'A': 'up',
-                                    'B': 'down',
-                                    'D': 'left',
-                                    'C': 'right',
+                                    b'A': 'up',
+                                    b'B': 'down',
+                                    b'D': 'left',
+                                    b'C': 'right',
                                 }
-                                return key_map.get(key[-1], None)
+                                return key_map.get(third, None)
+                            return None
+                        return None
                     return 'escape'
-                return key
+                elif ch:
+                    try:
+                        return ch.decode('utf-8', errors='replace')
+                    except Exception:
+                        return None
         return None
     
     def cleanup(self):
@@ -200,6 +212,9 @@ class TetrisGame:
         self.lines_cleared = 0
         self.game_over = False
         self.paused = False
+        self.auto_mode = False  # Strategy-based auto-play (press A to toggle)
+        self.model_mode = False  # Model-based AI auto-play (press M to toggle)
+        self.model_interpreter = None  # TFLite interpreter for CNN
         self.drop_interval = 1.0  # seconds per drop
         self.last_drop_time = 0
         
@@ -356,9 +371,146 @@ class TetrisGame:
         
         # Increase speed
         self.drop_interval = max(0.1, 1.0 - (self.level - 1) * 0.1)
-    
-# NOTE: 2026-05-30 10:56:13, self-evolved by tea_agent --- Fix drawing logic to show falling piece before it's locked
-# NOTE: 2026-05-30 11:02:11, self-evolved by tea_agent --- Fix cell width inconsistency - use 2-char width for all cells
+
+    def _evaluate_board(self, board: List[List[int]]) -> float:
+        """Evaluate a board state. Higher score = better placement."""
+        full_lines = sum(
+            1 for r in range(BOARD_HEIGHT)
+            if all(board[r][c] == CELL_FILLED for c in range(BOARD_WIDTH))
+        )
+        heights = []
+        for c in range(BOARD_WIDTH):
+            h = 0
+            for r in range(BOARD_HEIGHT):
+                if board[r][c] == CELL_FILLED:
+                    h = BOARD_HEIGHT - r
+                    break
+            heights.append(h)
+        max_height = max(heights)
+        avg_height = sum(heights) / BOARD_WIDTH
+        holes = 0
+        for c in range(BOARD_WIDTH):
+            found_filled = False
+            for r in range(BOARD_HEIGHT):
+                if board[r][c] == CELL_FILLED:
+                    found_filled = True
+                elif found_filled:
+                    holes += 1
+        bumpiness = sum(abs(heights[i] - heights[i + 1]) for i in range(BOARD_WIDTH - 1))
+        height_range = max(heights) - min(heights)
+        used_columns = sum(1 for h in heights if h > 0)
+        variance = sum((h - avg_height) ** 2 for h in heights) / BOARD_WIDTH
+        score = 0.0
+        score += full_lines * 1000.0          # Lines cleared (highest)
+        score -= max_height * 200.0            # Heavily penalize tall stacks
+        score -= holes * 300.0                 # Heavily penalize holes
+        score -= bumpiness * 100.0             # Heavily penalize uneven adjacent cols
+        score -= height_range * 80.0           # Heavily penalize local mountains
+        score -= variance * 40.0               # Heavily penalize uneven distribution
+        score += used_columns * 50.0           # Strongly reward using more columns
+        return score
+
+    def _search_best_next_move(self):
+        """Row-by-row search: from current piece position, find the best next action.
+        Returns: ('action', count) where action is 'left','right','rotate','down'.
+        For 'rotate', count = number of 90-degree rotations needed (1,2,3)."""
+        if self.current_piece is None:
+            return None
+        best_score = float('-inf')
+        best_action = ('down', 0)
+        cur_rot = self.current_piece['rotation']
+        cur_col = self.current_piece['col']
+        cur_row = self.current_piece['row']
+        piece_type = self.current_piece['type']
+        rotations = self.current_piece['rotations']
+        num_rot = len(rotations)
+        actions_to_try = [('down', 0, cur_col, cur_rot)]
+        for rot_steps in range(1, num_rot):
+            new_rot = cur_rot + rot_steps
+            if self._is_valid_position(self.current_piece, rotation_offset=rot_steps):
+                actions_to_try.append(('rotate', rot_steps, cur_col, new_rot))
+        if self._is_valid_position(self.current_piece, col_offset=-1):
+            actions_to_try.append(('left', 1, cur_col - 1, cur_rot))
+        if self._is_valid_position(self.current_piece, col_offset=1):
+            actions_to_try.append(('right', 1, cur_col + 1, cur_rot))
+        for action_name, count, col, rot in actions_to_try:
+            test_piece = {
+                'type': piece_type,
+                'rotations': rotations,
+                'rotation': rot % num_rot,
+                'row': cur_row,
+                'col': col,
+            }
+            if not self._is_valid_position(test_piece):
+                continue
+            while self._is_valid_position(test_piece, row_offset=1):
+                test_piece['row'] += 1
+            test_board = [row[:] for row in self.board]
+            for r, c in self._get_piece_cells(test_piece):
+                if 0 <= r < BOARD_HEIGHT and 0 <= c < BOARD_WIDTH:
+                    test_board[r][c] = CELL_FILLED
+            for r in range(BOARD_HEIGHT - 1, -1, -1):
+                if all(test_board[r][c] == CELL_FILLED for c in range(BOARD_WIDTH)):
+                    for r2 in range(r, 0, -1):
+                        test_board[r2] = test_board[r2 - 1][:]
+                    test_board[0] = [CELL_EMPTY] * BOARD_WIDTH
+            score = self._evaluate_board(test_board)
+            if score > best_score:
+                best_score = score
+                best_action = (action_name, count)
+        return best_action
+
+    def _load_model(self):
+        """Load the trained TFLite CNN model for AI play."""
+        try:
+            import numpy as np
+            model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                      'tetris_cnn_model.tflite')
+            if not os.path.exists(model_path):
+                print(f'Model not found: {model_path}')
+                return False
+            try:
+                import tflite_runtime.interpreter as tflite
+            except ImportError:
+                import tensorflow as tf
+                tflite = tf.lite
+            self.model_interpreter = tflite.Interpreter(model_path=model_path)
+            self.model_interpreter.allocate_tensors()
+            self.model_input_details = self.model_interpreter.get_input_details()
+            self.model_output_details = self.model_interpreter.get_output_details()
+            return True
+        except Exception as e:
+            print(f'Model load error: {e}')
+            return False
+
+    def _model_predict_action(self):
+        """Use the TFLite CNN to predict best action.
+        Returns: ('left'|'right'|'rotate'|'down', 1) or None."""
+        if self.model_interpreter is None:
+            if not self._load_model():
+                return None
+        import numpy as np
+        # Build 20x10 image: 0=empty, 1=fixed, 0.5=active
+        img = np.zeros((BOARD_HEIGHT, BOARD_WIDTH), dtype=np.float32)
+        for r in range(BOARD_HEIGHT):
+            for c in range(BOARD_WIDTH):
+                if self.board[r][c] == CELL_FILLED:
+                    img[r, c] = 1.0
+        if self.current_piece:
+            for r, c in self._get_piece_cells(self.current_piece):
+                if 0 <= r < BOARD_HEIGHT and 0 <= c < BOARD_WIDTH:
+                    img[r, c] = 0.5
+        # Add batch+channel dims: (1, 20, 10, 1)
+        input_data = img[np.newaxis, ..., np.newaxis].astype(np.float32)
+        self.model_interpreter.set_tensor(
+            self.model_input_details[0]['index'], input_data)
+        self.model_interpreter.invoke()
+        output = self.model_interpreter.get_tensor(
+            self.model_output_details[0]['index'])
+        action = int(np.argmax(output[0]))
+        action_map = {0: 'left', 1: 'right', 2: 'rotate', 3: 'down'}
+        return (action_map[action], 1)
+
     def _draw_board(self):
         """Draw the game board using ANSI sequences."""
         # Move to top-left corner
@@ -462,12 +614,25 @@ class TetrisGame:
             '↓    : Soft drop',
             'Space: Hard drop',
             'P    : Pause',
+            'A    : Strategy AI',
+            'M    : Model AI',
             'Q    : Quit',
         ]
         
         for i, control in enumerate(controls):
             ANSIHelper.move_cursor(row + 1 + i, info_col)
             print(control)
+        
+        # AI mode indicator
+        row_ai = row + len(controls) + 1
+        ANSIHelper.move_cursor(row_ai, info_col)
+        if self.model_mode:
+            mode_text = f'{ANSI_BOLD}Model AI{ANSI_RESET}'
+        elif self.auto_mode:
+            mode_text = f'{ANSI_BOLD}Strategy{ANSI_RESET}'
+        else:
+            mode_text = 'Manual'
+        print(f'AI: {mode_text}')
         
         # Game over
         if self.game_over:
@@ -477,26 +642,15 @@ class TetrisGame:
             print('Press R to restart')
     
     def _draw_pause(self):
-        """Draw pause overlay."""
+        """Draw pause indicator without blocking the board view."""
         if not self.paused:
             return
         
-        # Semi-transparent overlay
-        for r in range(2, BOARD_HEIGHT + 2):
-            ANSIHelper.move_cursor(r, 2)
-            # Overwrite board area with dim characters
-            for c in range(BOARD_WIDTH):
-# NOTE: 2026-05-30 11:02:53, self-evolved by tea_agent --- Update pause overlay to use 2-char width per cell
-                print(f'{ANSI_DIM}··{ANSI_RESET}', end='')
-        
-        # Pause message
-        msg = 'PAUSED'
-# NOTE: 2026-05-30 11:03:00, self-evolved by tea_agent --- Update pause message x-coordinate calculation
-        x = BOARD_WIDTH * 2 // 2 - len(msg) // 2 + 1
-        y = BOARD_HEIGHT // 2 + 1
-        ANSIHelper.move_cursor(y, x)
-        print(f'{ANSI_BOLD}{msg}{ANSI_RESET}')
-    
+        # Show PAUSED label in the info panel area (right side),
+        # no board overlay so user can see piece positions and select text
+        info_col = BOARD_WIDTH * 2 + 5
+        ANSIHelper.move_cursor(BOARD_HEIGHT // 2 + 1, info_col)
+        print(f'{ANSI_BOLD}PAUSED{ANSI_RESET}')    
     def _handle_input(self):
         """Handle user input."""
         key = self.input_handler.get_key()
@@ -512,7 +666,18 @@ class TetrisGame:
         if self.paused:
             if key in ('p', 'P'):
                 self.paused = False
-            return
+                return
+            elif key in ('q', 'Q'):
+                self.game_over = True
+                return
+            elif key in ('a', 'A'):
+                self.auto_mode = not self.auto_mode
+                return
+            elif key in ('m', 'M'):
+                self.model_mode = not self.model_mode
+                if self.model_mode:
+                    self.auto_mode = False  # model_mode takes precedence
+                return
         
         # Game controls
         if key == 'left':
@@ -528,17 +693,62 @@ class TetrisGame:
             self._hard_drop()
         elif key in ('p', 'P'):
             self.paused = True
+        elif key in ('a', 'A'):
+            self.auto_mode = not self.auto_mode
+            if self.auto_mode:
+                self.model_mode = False  # auto_mode takes precedence
+        elif key in ('m', 'M'):
+            self.model_mode = not self.model_mode
+            if self.model_mode:
+                self.auto_mode = False
         elif key in ('q', 'Q'):
             self.game_over = True
     
     def _update(self):
         """Update game state."""
         current_time = time.time()
-        
-        # Auto-drop
-        if current_time - self.last_drop_time >= self.drop_interval:
-            self._drop_piece()
-            self.last_drop_time = current_time
+
+        if self.model_mode and not self.paused:
+            # CNN model-based AI
+            if self.current_piece:
+                result = self._model_predict_action()
+                if result:
+                    action, count = result
+                    if action == 'left':
+                        self._move_piece(0, -1)
+                    elif action == 'right':
+                        self._move_piece(0, 1)
+                    elif action == 'rotate':
+                        for _ in range(count):
+                            self._rotate_piece()
+                    # 'down' = let gravity handle
+                if current_time - self.last_drop_time >= 0.3:
+                    self._drop_piece()
+                    self.last_drop_time = current_time
+        elif self.auto_mode and not self.paused:
+            # Strategy-based row-by-row search
+            if self.current_piece:
+                result = self._search_best_next_move()
+                if result:
+                    action, count = result
+                    if action == 'left':
+                        self._move_piece(0, -1)
+                    elif action == 'right':
+                        self._move_piece(0, 1)
+                    elif action == 'rotate':
+                        for _ in range(count):
+                            self._rotate_piece()
+                    # 'down' = let gravity handle
+
+                # Gravity: 300ms per row for visible step-by-step demo
+                if current_time - self.last_drop_time >= 0.3:
+                    self._drop_piece()
+                    self.last_drop_time = current_time
+        else:
+            # Manual: normal auto-drop
+            if current_time - self.last_drop_time >= self.drop_interval:
+                self._drop_piece()
+                self.last_drop_time = current_time
     
     def run(self):
         """Main game loop."""
@@ -565,6 +775,11 @@ class TetrisGame:
                 
                 # Small delay to prevent high CPU usage
                 time.sleep(0.05)
+                
+                # When paused, stop refreshing so user can select text with mouse
+                while self.paused and not self.game_over:
+                    self._handle_input()
+                    time.sleep(0.1)
             
             # Game over screen
             ANSIHelper.move_home()

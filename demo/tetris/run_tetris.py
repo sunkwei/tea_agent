@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
 Launcher script for Console Tetris Game.
+
+Controls:
+  ← →  Move   ↑ Rotate   ↓ Soft drop   Space Hard drop
+  P Pause   A Strategy AI   M Model AI   Q Quit
 """
 
 import sys
@@ -10,6 +14,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 if __name__ == '__main__':
+    print("🎮 Tetris with AI!  Press A = Strategy AI, M = Trained CNN Model, Q = Quit")
     try:
         from tetris_ansi import main
         main()

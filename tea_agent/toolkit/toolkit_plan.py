@@ -204,6 +204,11 @@ def toolkit_plan(
                 return {"ok": True, "deleted": plan_id}
             return {"ok": False, "error": f"计划不存在: {plan_id}"}
 
+        elif action == "decompose":
+            if not goal:
+                return {"ok": False, "error": "decompose 需要 goal 参数"}
+            return _decompose_goal(goal, cwd)
+
         else:
             return {"ok": False, "error": f"未知 action: {action}"}
 
@@ -431,6 +436,301 @@ def _verify_step(step: dict, cwd: str) -> dict:
     all_ok = all(not str(v).startswith("FAIL") for v in results.values())
     return {"ok": all_ok, "step_id": step.get("id"), "verify": results}
 
+# ── 智能分解 ────────────────────────────────────────────
+
+def _decompose_goal(goal: str, cwd: str) -> dict:
+    """智能分解目标为可执行步骤。
+    
+    分析目标，自动生成步骤列表，考虑依赖关系。
+    
+    Args:
+        goal: 目标描述
+        cwd: 当前工作目录
+        
+    Returns:
+        分解结果，包含建议的步骤列表
+    """
+    import re
+    
+    # 分析目标类型
+    goal_lower = goal.lower()
+    
+    # 检测关键词，确定任务类型
+    task_types = []
+    if any(k in goal_lower for k in ["修复", "fix", "bug", "错误", "问题"]):
+        task_types.append("bugfix")
+    if any(k in goal_lower for k in ["添加", "add", "新增", "实现", "implement", "功能"]):
+        task_types.append("feature")
+    if any(k in goal_lower for k in ["重构", "refactor", "优化", "optimize", "改进"]):
+        task_types.append("refactor")
+    if any(k in goal_lower for k in ["测试", "test", "验证"]):
+        task_types.append("test")
+    if any(k in goal_lower for k in ["文档", "doc", "readme", "说明"]):
+        task_types.append("docs")
+    if any(k in goal_lower for k in ["配置", "config", "设置", "setup"]):
+        task_types.append("config")
+    
+    # 如果没有检测到类型，默认为通用任务
+    if not task_types:
+        task_types.append("general")
+    
+    # 根据任务类型生成步骤
+    steps = []
+    step_id = 1
+    
+    # 通用步骤：分析和规划
+    steps.append({
+        "id": str(step_id),
+        "desc": "分析需求，理解目标",
+        "action": "analyze",
+        "params": {"goal": goal},
+        "depends_on": [],
+        "verify": "manual"
+    })
+    step_id += 1
+    
+    # 根据任务类型添加特定步骤
+    if "bugfix" in task_types:
+        steps.append({
+            "id": str(step_id),
+            "desc": "定位问题根源",
+            "action": "investigate",
+            "params": {"goal": goal},
+            "depends_on": ["1"],
+            "verify": "manual"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "实现修复方案",
+            "action": "self_evolve",
+            "params": {"goal": goal},
+            "depends_on": [str(step_id - 1)],
+            "verify": "py_compile"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "验证修复效果",
+            "action": "verify",
+            "params": {"goal": goal},
+            "depends_on": [str(step_id - 1)],
+            "verify": "test"
+        })
+        step_id += 1
+    
+    elif "feature" in task_types:
+        steps.append({
+            "id": str(step_id),
+            "desc": "设计实现方案",
+            "action": "design",
+            "params": {"goal": goal},
+            "depends_on": ["1"],
+            "verify": "manual"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "实现核心功能",
+            "action": "self_evolve",
+            "params": {"goal": goal},
+            "depends_on": [str(step_id - 1)],
+            "verify": "py_compile"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "添加测试用例",
+            "action": "self_evolve",
+            "params": {"goal": f"为 {goal} 添加测试"},
+            "depends_on": [str(step_id - 1)],
+            "verify": "test"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "更新文档",
+            "action": "self_evolve",
+            "params": {"goal": f"更新文档：{goal}"},
+            "depends_on": [str(step_id - 2)],
+            "verify": "manual"
+        })
+        step_id += 1
+    
+    elif "refactor" in task_types:
+        steps.append({
+            "id": str(step_id),
+            "desc": "分析现有代码结构",
+            "action": "analyze",
+            "params": {"goal": f"分析代码结构：{goal}"},
+            "depends_on": ["1"],
+            "verify": "manual"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "制定重构计划",
+            "action": "design",
+            "params": {"goal": goal},
+            "depends_on": [str(step_id - 1)],
+            "verify": "manual"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "执行重构",
+            "action": "self_evolve",
+            "params": {"goal": goal},
+            "depends_on": [str(step_id - 1)],
+            "verify": "py_compile"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "运行测试验证",
+            "action": "verify",
+            "params": {"goal": "验证重构后功能正常"},
+            "depends_on": [str(step_id - 1)],
+            "verify": "test"
+        })
+        step_id += 1
+    
+    elif "test" in task_types:
+        steps.append({
+            "id": str(step_id),
+            "desc": "分析测试需求",
+            "action": "analyze",
+            "params": {"goal": goal},
+            "depends_on": ["1"],
+            "verify": "manual"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "编写测试用例",
+            "action": "self_evolve",
+            "params": {"goal": goal},
+            "depends_on": [str(step_id - 1)],
+            "verify": "py_compile"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "运行测试验证",
+            "action": "verify",
+            "params": {"goal": "运行测试"},
+            "depends_on": [str(step_id - 1)],
+            "verify": "test"
+        })
+        step_id += 1
+    
+    elif "docs" in task_types:
+        steps.append({
+            "id": str(step_id),
+            "desc": "分析文档需求",
+            "action": "analyze",
+            "params": {"goal": goal},
+            "depends_on": ["1"],
+            "verify": "manual"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "编写文档",
+            "action": "self_evolve",
+            "params": {"goal": goal},
+            "depends_on": [str(step_id - 1)],
+            "verify": "manual"
+        })
+        step_id += 1
+    
+    elif "config" in task_types:
+        steps.append({
+            "id": str(step_id),
+            "desc": "分析配置需求",
+            "action": "analyze",
+            "params": {"goal": goal},
+            "depends_on": ["1"],
+            "verify": "manual"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "修改配置",
+            "action": "self_evolve",
+            "params": {"goal": goal},
+            "depends_on": [str(step_id - 1)],
+            "verify": "py_compile"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "验证配置生效",
+            "action": "verify",
+            "params": {"goal": "验证配置"},
+            "depends_on": [str(step_id - 1)],
+            "verify": "test"
+        })
+        step_id += 1
+    
+    else:  # general
+        steps.append({
+            "id": str(step_id),
+            "desc": "制定实现方案",
+            "action": "design",
+            "params": {"goal": goal},
+            "depends_on": ["1"],
+            "verify": "manual"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "执行实现",
+            "action": "self_evolve",
+            "params": {"goal": goal},
+            "depends_on": [str(step_id - 1)],
+            "verify": "py_compile"
+        })
+        step_id += 1
+        
+        steps.append({
+            "id": str(step_id),
+            "desc": "验证结果",
+            "action": "verify",
+            "params": {"goal": "验证实现"},
+            "depends_on": [str(step_id - 1)],
+            "verify": "test"
+        })
+        step_id += 1
+    
+    # 创建计划
+    plan = _new_plan(goal, steps)
+    _save_plan(plan)
+    
+    return {
+        "ok": True,
+        "plan_id": plan["id"],
+        "goal": goal,
+        "task_types": task_types,
+        "total_steps": len(steps),
+        "steps": [{"id": s["id"], "desc": s["desc"], "depends_on": s["depends_on"]} for s in steps],
+        "hint": f"已创建计划，使用 action='run' plan_id='{plan['id']}' 执行全部步骤",
+    }
+
 # ── Meta ────────────────────────────────────────────────
 
 def meta_toolkit_plan():
@@ -439,11 +739,11 @@ def meta_toolkit_plan():
         "type": "function",
         "function": {
             "name": "toolkit_plan",
-            "description": "Plandex 风格 Plan→Execute→Verify 三步工作流。create=创建计划, show=查看, step=执行下一步, verify=验证, run=全量执行, resume=恢复, list=列表, delete=删除。",
+            "description": "Plandex 风格 Plan→Execute→Verify 三步工作流。create=创建计划, decompose=智能分解目标, show=查看, step=执行下一步, verify=验证, run=全量执行, resume=恢复, list=列表, delete=删除。",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["create", "show", "step", "verify", "run", "resume", "list", "delete"]},
+                    "action": {"type": "string", "enum": ["create", "decompose", "show", "step", "verify", "run", "resume", "list", "delete"]},
                     "goal": {"type": "string", "description": "[create] 计划目标"},
                     "steps": {"type": "array", "items": {"type": "object"}, "description": "[create] 步骤列表"},
                     "plan_id": {"type": "string", "description": "[show/step/verify/run/resume/delete] 计划ID"},

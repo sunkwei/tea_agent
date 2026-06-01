@@ -179,6 +179,137 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
             logger.debug(f"LSP checks: {e}")
         return result
 
+    def _check_python_syntax(content: str, new_code: str) -> dict:
+        """Layer 1.5: Python 语法严格检查。
+        
+        检查内容：
+        1. 换行符是否正确（LF 或 CRLF 一致性）
+        2. 缩进是否一致（不能混用 Tab 和空格）
+        3. 是否有明显的语法错误（如缺少冒号、括号不匹配等）
+        4. 新代码中是否有未闭合的字符串
+        
+        Args:
+            content: 完整文件内容
+            new_code: 新添加的代码片段
+            
+        Returns:
+            {"ok": bool, "error": str, "details": dict}
+        """
+        import re
+        
+        details = {"checks": []}
+        
+        # 1. 检查换行符一致性
+        has_crlf = "\r\n" in content
+        has_lf = "\n" in content.replace("\r\n", "")
+        
+        if has_crlf and has_lf:
+            # 混用换行符
+            # 但只在新代码中检查，因为旧文件可能已有混用
+            new_has_crlf = "\r\n" in new_code
+            new_has_lf = "\n" in new_code.replace("\r\n", "")
+            if new_has_crlf and new_has_lf:
+                return {"ok": False, "error": "新代码中混用了 CRLF 和 LF 换行符",
+                        "details": {"issue": "mixed_newlines", "suggestion": "统一使用 LF (\\n)"}}
+            details["checks"].append("newline_consistency: ok")
+        else:
+            details["checks"].append("newline_consistency: ok")
+        
+        # 2. 检查缩进一致性
+        lines = new_code.split("\n")
+        indent_issues = []
+        for i, line in enumerate(lines):
+            if not line.strip():
+                continue
+            # 检查是否混用 Tab 和空格
+            leading = line[:len(line) - len(line.lstrip())]
+            if "\t" in leading and " " in leading:
+                indent_issues.append(f"行 {i+1}: 混用 Tab 和空格")
+            # 检查缩进是否是 4 的倍数（Python 标准）
+            if leading and " " in leading and "\t" not in leading:
+                spaces = len(leading)
+                if spaces % 4 != 0:
+                    indent_issues.append(f"行 {i+1}: 缩进 {spaces} 空格，不是 4 的倍数")
+        
+        if indent_issues:
+            return {"ok": False, "error": f"缩进问题: {indent_issues[0]}",
+                    "details": {"issue": "indentation", "problems": indent_issues[:3]}}
+        details["checks"].append("indentation: ok")
+        
+        # 3. 检查括号匹配
+        brackets = {"(": ")", "[": "]", "{": "}"}
+        stack = []
+        in_string = False
+        string_char = None
+        line_num = 1
+        
+        for i, char in enumerate(new_code):
+            if char == "\n":
+                line_num += 1
+            
+            # 处理字符串
+            if char in ('"', "'") and not in_string:
+                in_string = True
+                string_char = char
+                # 检查三引号
+                if new_code[i:i+3] in ('"""', "'''"):
+                    string_char = new_code[i:i+3]
+            elif in_string:
+                if char == string_char[0] and new_code[i:i+len(string_char)] == string_char:
+                    in_string = False
+                    string_char = None
+                continue
+            
+            if not in_string:
+                if char in brackets:
+                    stack.append((char, line_num))
+                elif char in brackets.values():
+                    if not stack:
+                        return {"ok": False, "error": f"行 {line_num}: 多余的闭合括号 '{char}'",
+                                "details": {"issue": "bracket_mismatch", "line": line_num}}
+                    open_char, open_line = stack.pop()
+                    if brackets[open_char] != char:
+                        return {"ok": False, "error": f"行 {line_num}: 括号不匹配，'{open_char}' (行 {open_line}) 与 '{char}'",
+                                "details": {"issue": "bracket_mismatch", "line": line_num}}
+        
+        if stack:
+            open_char, open_line = stack[-1]
+            return {"ok": False, "error": f"行 {open_line}: 未闭合的括号 '{open_char}'",
+                    "details": {"issue": "unclosed_bracket", "line": open_line}}
+        details["checks"].append("brackets: ok")
+        
+        # 4. 检查明显的语法错误模式
+        # 检查行尾是否有冒号缺失（def, class, if, for, while 等）
+        control_patterns = [
+            (r'^\s*(def|class|if|elif|else|for|while|with|try|except|finally)\s+.*[^:]\s*$', "控制语句后缺少冒号"),
+        ]
+        
+        for pattern, msg in control_patterns:
+            for i, line in enumerate(lines):
+                if re.match(pattern, line) and not line.strip().endswith(":"):
+                    # 排除多行情况
+                    if not line.strip().endswith("\\"):
+                        return {"ok": False, "error": f"行 {i+1}: {msg}",
+                                "details": {"issue": "missing_colon", "line": i+1}}
+        details["checks"].append("syntax_patterns: ok")
+        
+        # 5. 检查新代码是否有明显的换行问题
+        # 检查是否有应该换行但没有换行的情况（如多条语句在同一行）
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            # 检查是否有分号分隔的多条语句（不推荐）
+            if ";" in stripped and not stripped.startswith("print"):
+                # 排除字符串中的分号
+                parts = stripped.split(";")
+                if len(parts) > 1 and all(p.strip() for p in parts):
+                    return {"ok": False, "error": f"行 {i+1}: 使用分号分隔多条语句，建议分行书写",
+                            "details": {"issue": "multiple_statements", "line": i+1}}
+        details["checks"].append("line_statements: ok")
+        
+        return {"ok": True, "error": None, "details": details}
+
     # ──────────────────────────────────────
     # 主逻辑
     # ──────────────────────────────────────
@@ -216,6 +347,26 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
 
     # 应用修改（不再添加 NOTE 注释）
     new_content = content.replace(old_code, new_code, 1)
+    
+    # ── Layer 1.5: Python 语法严格检查 ──
+    if file_path.endswith(".py"):
+        syntax_check = _check_python_syntax(new_content, new_code)
+        if not syntax_check["ok"]:
+            # 语法检查失败，回滚
+            shutil.copy2(tmp_bak, full_path)
+            if os.path.exists(tmp_bak):
+                os.remove(tmp_bak)
+            if git_snapped:
+                _git_revert()
+            return {
+                "ok": False,
+                "error": f"Python 语法检查失败: {syntax_check['error']}",
+                "file": file_path,
+                "syntax_details": syntax_check,
+                "layers": {"git_snapshot": git_snapped, "bak": bak_path,
+                           "syntax_check": False, "compile_verify": "skipped", "tests": "skipped"}
+            }
+    
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(new_content)
 

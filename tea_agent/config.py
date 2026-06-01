@@ -200,13 +200,6 @@ class AgentConfig:
         "memory_dedup_threshold": float, "chat_page_size": int,
         "history_l2_max": int, "history_l3_batch": int,
     }
-    # 类型映射
-    _CONFIG_TYPES = {
-        "max_history": int, "max_iterations": int, "enable_thinking": bool,
-        "keep_turns": int, "max_tool_output": int, "max_assistant_content": int,
-        "extra_iterations_on_continue": int, "memory_extraction_threshold": int,
-        "memory_dedup_threshold": float, "chat_page_size": int,
-    }
 
     def get(self, key: str, default=None):
         """读取配置值"""

@@ -14,6 +14,17 @@ from tea_agent.toolkit.toolkit_set_topic_title import (
 
 logger = logging.getLogger("tookit")
 
+# ── 模块级 Toolkit 单例 ──
+# 由 AgentCore/TeaAgent 在初始化时设置: tlk._toolkit_ = toolkit_instance
+# 工具函数通过 _get_toolkit() 访问，避免 globals().get() 脆弱模式
+_toolkit_ = None
+
+def _get_toolkit():
+    """获取当前 Toolkit 实例。由 Agent 初始化时设置。"""
+    if _toolkit_ is None:
+        raise RuntimeError("Toolkit 未初始化。请先调用 AgentCore/TeaAgent 初始化。")
+    return _toolkit_
+
 def meta_toolkit_reload():
     """Meta toolkit reload."""
     return {
@@ -58,34 +69,19 @@ def meta_toolkit_save() -> dict:
 
 def toolkit_reload() -> Dict:
     """Toolkit reload."""
-    tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    return tlk.reload()
+    return _get_toolkit().reload()
 
 def toolkit_save(name: str, meta: dict, pycode: str, version: str = "") -> Tuple[int, str]:
-    """
-    保存工具函数，支持版本管理。
-    
-    Args:
-        name: 工具函数名
-        meta: 工具元数据
-        pycode: 工具函数代码
-        version: 版本号（可选），不提供则自动递增
-        
-    Returns:
-        Tuple[int, str]: (状态码, 消息)
-    """
-    tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    return tlk.save(name, meta, pycode, version)
+    """保存工具函数，支持版本管理。"""
+    return _get_toolkit().save(name, meta, pycode, version)
 
 def toolkit_rollback(name: str, version: str) -> Tuple[int, str]:
     """回滚工具到指定版本"""
-    tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    return tlk.rollback(name, version)
+    return _get_toolkit().rollback(name, version)
 
 def toolkit_list_versions(name: str) -> Tuple[int, List[str]]:
     """列出工具的所有可用版本"""
-    tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    return tlk.list_versions(name)
+    return _get_toolkit().list_versions(name)
 
 def meta_toolkit_rollback():
     """Meta toolkit rollback."""
@@ -133,8 +129,7 @@ def meta_toolkit_list_versions():
 
 def toolkit_rollback_impl(name: str, version: str) -> str:
     """回滚工具到指定版本"""
-    tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    status, msg = tlk.rollback(name, version)
+    status, msg = _get_toolkit().rollback(name, version)
     if status == 0:
         return f"✅ {msg}"
     else:
@@ -142,8 +137,7 @@ def toolkit_rollback_impl(name: str, version: str) -> str:
 
 def toolkit_list_versions_impl(name: str) -> str:
     """列出工具的所有可用版本"""
-    tlk = cast(Toolkit, globals().get("_toolkit_", None))
-    status, versions = tlk.list_versions(name)
+    status, versions = _get_toolkit().list_versions(name)
     if status == 0:
         if not versions:
             return f"工具 {name} 没有历史版本。"

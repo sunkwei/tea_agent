@@ -13,6 +13,7 @@ Token 优化策略:
 - 从 Mixin 多重继承改为组合模式
 - 所有共享状态通过 SessionContext 管理
 - 功能委派给各个 Component：API, Tool, Memory, Summarizer
+- 2026-05 P2重构: 提取 JsonSanitizer/HistoryBuilder/OsInfoInjector/ToolLoopRunner
 """
 
 from openai import OpenAI
@@ -30,7 +31,13 @@ from tea_agent.session_tool_component import ToolComponent
 from tea_agent.session_memory_component import MemoryComponent
 from tea_agent.session_summarizer_component import SummarizerComponent
 
+# 提取的独立模块
+from tea_agent.session._history_builder import build_api_messages
+from tea_agent.session._os_info_injector import inject_os_info as _inject_os_info_impl
+from tea_agent.session._tool_loop_runner import execute_tool_loop
+
 logger = logging.getLogger("session")
+
 
 class OnlineToolSession(BaseChatSession):
     """
@@ -71,8 +78,7 @@ class OnlineToolSession(BaseChatSession):
         disable_summary: bool = False,
         no_stream_chunk: bool = False,
     ):
-        """
-        初始化会话
+        """初始化会话
 
         Args:
             toolkit: Toolkit 工具库实例
@@ -103,13 +109,13 @@ class OnlineToolSession(BaseChatSession):
         import httpx
         _http_client = httpx.Client(proxy=None)
         main_client = OpenAI(api_key=api_key, base_url=api_url, http_client=_http_client)
-        
+
         cheap_client: Optional[OpenAI] = None
         if cheap_api_key and cheap_api_url and cheap_model:
             cheap_client = OpenAI(api_key=cheap_api_key, base_url=cheap_api_url, http_client=httpx.Client(proxy=None))
 
         self.context = SessionContext(
-            messages=[],  # 稍后由 BaseChatSession.__init__ 初始化
+            messages=[],
             model=model,
             enable_thinking=enable_thinking,
             client=main_client,
@@ -129,7 +135,7 @@ class OnlineToolSession(BaseChatSession):
             extra_iterations_on_continue=extra_iterations_on_continue,
         )
 
-        # ── 2. 调用基类初始化（会触发属性桥接） ──
+        # ── 2. 调用基类初始化 ──
         BaseChatSession.__init__(self, model, max_history, sp)
 
         logger.info(f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}")
@@ -139,12 +145,11 @@ class OnlineToolSession(BaseChatSession):
         self.tools_comp = ToolComponent(self.context)
         self.memory_comp = MemoryComponent(self.context)
         self.summarizer_comp = SummarizerComponent(self.context)
-        
+
         for comp in [self.api, self.tools_comp, self.memory_comp, self.summarizer_comp]:
             comp.initialize()
 
-        # ── 兼容属性（指向 context）──
-        # 这些属性保持与旧代码的兼容性，但实际数据存储在 context 中
+        # ── 兼容属性 ──
         self.max_iterations = 50
         self.storage = storage
         self._cheap_client = cheap_client
@@ -162,12 +167,9 @@ class OnlineToolSession(BaseChatSession):
 
         # ── 工具定义 ──
         self.tools: List[Dict] = []
-
-
-        # 构建工具列表（委派给组件）
         self.tools = self.tools_comp.build_tools()
 
-        # 初始化 Memory 管理器（委派给组件）
+        # 初始化 Memory 管理器
         self.memory_comp.initialize()
 
         # ── 反思和提示词管理器 ──
@@ -188,8 +190,7 @@ class OnlineToolSession(BaseChatSession):
             if not system_prompt:
                 self.system_prompt = dynamic_prompt
             logger.info(f"系统提示词 v{self.prompt_manager.current_version} 已加载")
-            
-            # 同步到 context
+
             self.context.reflection_manager = self.reflection_manager
         else:
             self.reflection_manager = None
@@ -201,150 +202,92 @@ class OnlineToolSession(BaseChatSession):
         self.context.pipeline = self.pipeline
         self._setup_default_pipeline()
 
-    # ── 属性桥接（兼容旧代码直接访问 self._rounds_collector 等） ──
-    # 重构后数据存储在 self.context 中，通过 property 桥接访问
+    # ──────────────────────────────────────────────
+    # 属性桥接（兼容旧代码直接访问 self.xxx）
+    # ──────────────────────────────────────────────
+
     @property
     def messages(self):
-        """Messages."""
         return self.context.messages
 
     @messages.setter
     def messages(self, value):
-        """Messages.
-        
-        Args:
-            value: Description.
-        """
         self.context.messages = value
 
     @property
     def model(self):
-        """Model."""
         return self.context.model
 
     @model.setter
     def model(self, value):
-        """Model.
-        
-        Args:
-            value: Description.
-        """
         self.context.model = value
+
     @property
     def enable_thinking(self):
-        """Enable thinking (reasoning) mode."""
         return self.context.enable_thinking
 
     @enable_thinking.setter
     def enable_thinking(self, value):
-        """Enable thinking (reasoning) mode.
-
-        Args:
-            value: Description.
-        """
         self.context.enable_thinking = value
-
 
     @property
     def _rounds_collector(self):
-        """Internal: rounds collector."""
         return self.context._rounds_collector
 
     @_rounds_collector.setter
     def _rounds_collector(self, value):
-        """Internal: rounds collector.
-        
-        Args:
-            value: Description.
-        """
         self.context._rounds_collector = value
 
     @property
     def _last_usage(self):
-        """Internal: last usage."""
         return self.context._last_usage
 
     @_last_usage.setter
     def _last_usage(self, value):
-        """Internal: last usage.
-        
-        Args:
-            value: Description.
-        """
         self.context._last_usage = value
 
     @property
     def _last_cheap_usage(self):
-        """Internal: last cheap usage."""
         return self.context._last_cheap_usage
 
     @_last_cheap_usage.setter
     def _last_cheap_usage(self, value):
-        """Internal: last cheap usage.
-        
-        Args:
-            value: Description.
-        """
         self.context._last_cheap_usage = value
 
     @property
     def _history_summary(self):
-        """Internal: history summary."""
         return self.context._history_summary
 
     @_history_summary.setter
     def _history_summary(self, value):
-        """Internal: history summary.
-        
-        Args:
-            value: Description.
-        """
         self.context._history_summary = value
 
     @property
     def _semantic_summary(self):
-        """Internal: semantic summary."""
         return self.context._semantic_summary
 
     @_semantic_summary.setter
     def _semantic_summary(self, value):
-        """Internal: semantic summary.
-        
-        Args:
-            value: Description.
-        """
         self.context._semantic_summary = value
 
     @property
     def _tool_chain_summary(self):
-        """Internal: tool chain summary."""
         return self.context._tool_chain_summary
 
     @_tool_chain_summary.setter
     def _tool_chain_summary(self, value):
-        """Internal: tool chain summary.
-        
-        Args:
-            value: Description.
-        """
         self.context._tool_chain_summary = value
 
     @property
     def _level2(self):
-        """Internal: level2."""
         return self.context._level2
 
     @_level2.setter
     def _level2(self, value):
-        """Internal: level2.
-        
-        Args:
-            value: Description.
-        """
         self.context._level2 = value
 
     # ──────────────────────────────────────────────
-    # 委派方法（保持向后兼容）
+    # 委派方法
     # ──────────────────────────────────────────────
 
     def _get_summarize_client(self) -> Tuple[Any, str]:
@@ -366,15 +309,12 @@ class OnlineToolSession(BaseChatSession):
     # ──────────────────────────────────────────────
 
     def _process_stream_with_reasoning(self, response, callback) -> Tuple[str, List[Dict], str]:
-        """
-        处理流式/非流式响应，收集内容、工具调用数据和 reasoning_content。
-        当 no_stream_chunk=True 时，response 为 ChatCompletion 对象（非迭代器）。
-        """
+        """处理流式/非流式响应，收集内容、工具调用数据和 reasoning_content。"""
         content_parts = []
         tool_calls_data = []
         reasoning_parts = []
 
-        # 非流式模式：直接提取 completion 对象
+        # 非流式模式
         if self.context.no_stream_chunk:
             if hasattr(response, 'usage') and response.usage:
                 self.api._accumulate_usage(response.usage)
@@ -400,9 +340,8 @@ class OnlineToolSession(BaseChatSession):
             reasoning_content = "".join(reasoning_parts)
             return content, tool_calls_data, reasoning_content
 
-        # 流式模式：逐 chunk 处理
+        # 流式模式
         for chunk in response:
-            # 累积 usage 信息（委派给 API 组件）
             if hasattr(chunk, 'usage') and chunk.usage:
                 self.api._accumulate_usage(chunk.usage)
 
@@ -411,17 +350,14 @@ class OnlineToolSession(BaseChatSession):
 
             delta = chunk.choices[0].delta
 
-            # 处理 reasoning_content
             if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
                 reasoning_parts.append(delta.reasoning_content)
                 callback(f"[THINK]{delta.reasoning_content}")
 
-            # 处理内容
             if delta.content:
                 content_parts.append(delta.content)
                 callback(delta.content)
 
-            # 处理工具调用（委派给 API 组件）
             if delta.tool_calls:
                 self.api.accumulate_tool_calls_from_delta(delta, tool_calls_data)
 
@@ -430,617 +366,49 @@ class OnlineToolSession(BaseChatSession):
         return content, tool_calls_data, reasoning_content
 
     # ──────────────────────────────────────────────
-    # Pipeline 设置（委派给组件）
+    # Pipeline 设置
     # ──────────────────────────────────────────────
 
     def _inject_os_info(self, context: Dict) -> List:
-        """
-        注入操作系统环境信息轮次（放在用户消息之前）。
-        根据实际运行的 OS 注入差异化的工具使用提示，
-        指导 LLM 使用正确的命令、路径分隔符和工具策略。
-        """
-        import platform as _platform
-        import socket as _socket
-        import os as _os
-
-        os_name = _platform.system()
-        os_release = _platform.release()
-        os_version = _platform.version()
-        os_machine = _platform.machine()
-        os_processor = _platform.processor() or "unknown"
-        py_ver = _platform.python_version()
-        hostname = _socket.gethostname()
-        path_sep = _os.sep          # / 或 \
-        env_sep = _os.pathsep       # : 或 ;
-
-        is_windows = os_name == "Windows"
-        is_linux = os_name == "Linux"
-        is_macos = os_name == "Darwin"
-
-        # ── OS 概要 ──
-        lines = [
-            f"操作系统: {os_name} {os_release} ({os_version})",
-            f"架构: {os_machine}",
-            f"主机名: {hostname}",
-            f"Python: {py_ver}",
-        ]
-
-        # ── 路径约定 ──
-        lines.append("")
-        lines.append("═══ 路径与分隔符 ═══")
-        lines.append(f"路径分隔符: '{path_sep}'（Windows 使用 \\\\，Linux/macOS 使用 /）")
-        lines.append(f"环境变量分隔符: '{env_sep}'（Windows 使用 ;，Linux/macOS 使用 :）")
-        lines.append(f"当前工作目录: {_os.getcwd()}")
-
-        # ── OS 特有工具提示 ──
-        lines.append("")
-        lines.append("═══ 操作提示（请严格遵循当前 OS 的指令语法）═══")
-
-        if is_windows:
-            lines.extend([
-                "🪟 Windows 环境 — 请特别注意：",
-                "",
-                "【路径】使用反斜杠 \\（如 C:\\Users\\...），但在 Python 字符串中请用正斜杠 / 或双反斜杠 \\\\",
-                "【环境变量】用 %VAR% 引用（如 %USERPROFILE%），PowerShell 用 $env:VAR",
-                "",
-                "【文件搜索】使用 findstr（代替 grep）：",
-                "  toolkit_exec(app='findstr', args=['/i', '关键词', 'C:\\path\\file.txt'])",
-                "  或 dir /s /b | findstr /i 关键词",
-                "",
-                "【目录列表】使用 dir（代替 ls）：",
-                "  toolkit_exec(app='cmd', args=['/c', 'dir /b /s C:\\path'])",
-                "",
-                "【文件读取】使用 type（代替 cat）：",
-                "  toolkit_exec(app='cmd', args=['/c', 'type', 'C:\\path\\file.txt'])",
-                "  或在 Python 中直接用 open() 读取（推荐）",
-                "",
-                "【路径环境】可用环境变量：%USERPROFILE%, %APPDATA%, %LOCALAPPDATA%, %TEMP%, %PATH%",
-                "【Shell】默认 cmd.exe；如需 PowerShell 需显式指定 app='powershell'",
-            ])
-        elif is_linux:
-            lines.extend([
-                "🐧 Linux 环境 — 请特别注意：",
-                "",
-                "【路径】使用正斜杠 /（如 /home/user/...）",
-                "【环境变量】用 $VAR 引用（如 $HOME, $PATH）",
-                "",
-                "【文件搜索】使用 grep：",
-                "  toolkit_exec(app='grep', args=['-rn', '关键词', '/path'])",
-                "",
-                "【目录列表】使用 ls：",
-                "  toolkit_exec(app='ls', args=['-la', '/path'])",
-                "",
-                "【文件读取】使用 cat：",
-                "  toolkit_exec(app='cat', args=['/path/file.txt'])",
-                "  或在 Python 中直接用 open() 读取（推荐）",
-                "",
-                "【路径环境】可用环境变量：$HOME, $PWD, $SHELL, $PATH",
-                "【权限】部分操作需 sudo，将自动弹出 GUI 密码框",
-            ])
-        elif is_macos:
-            lines.extend([
-                "🍎 macOS 环境 — 请特别注意：",
-                "",
-                "【路径】使用正斜杠 /（如 /Users/username/...）",
-                "【环境变量】用 $VAR 引用（如 $HOME, $PATH）",
-                "",
-                "【文件搜索】使用 grep：",
-                "  toolkit_exec(app='grep', args=['-rn', '关键词', '/path'])",
-                "",
-                "【目录列表】使用 ls：",
-                "  toolkit_exec(app='ls', args=['-la', '/path'])",
-                "",
-                "【文件读取】使用 cat：",
-                "  toolkit_exec(app='cat', args=['/path/file.txt'])",
-                "",
-                "【路径环境】可用环境变量：$HOME, $PWD, $SHELL, $PATH",
-            ])
-
-        # ── 通用工具提示 ──
-        lines.append("")
-        lines.append("═══ 通用规则 ═══")
-        lines.append("• 文件读写优先使用 toolkit_file（跨平台兼容），避免执行 shell 命令")
-        lines.append("• 执行 shell 命令使用 toolkit_exec，注意不同 OS 下命令名和参数不同")
-        lines.append("• 路径字符串在 Python 中统一用正斜杠 /，Python 会自动适配底层 OS")
-        lines.append(f"• 当前 tool 目录: {self.toolkit.root_dir}")
-        lines.append("• 如需获取更详细的 OS 信息，可调用 toolkit_os_info() 工具")
-
-        info_text = "[系统环境信息]\n" + "\n".join(lines)
-
-        # 注入为用户轮次 + 助手确认
-        self.messages.append({"role": "user", "content": info_text})
-        ack = {
-            "role": "assistant",
-            "content": f"✅ 已识别当前环境为 {os_name} {os_machine}，将遵循对应的路径约定和命令语法。"
-        }
-        if self.context.supports_reasoning:
-            ack["reasoning_content"] = ""
-        self.messages.append(ack)
-
-        return self.messages
+        """注入操作系统环境信息轮次 — 委派给 _os_info_injector 模块。"""
+        return _inject_os_info_impl(
+            self.messages,
+            toolkit_root_dir=self.toolkit.root_dir,
+            supports_reasoning=self.context.supports_reasoning,
+        )
 
     def _setup_default_pipeline(self):
         """设置默认的 Pipeline 步骤"""
-        # 0. 操作系统信息注入（放在用户消息之前）
         self.pipeline.register_step(
-            name="inject_os_info",            func=self._inject_os_info,
-            enabled=True,
-            description="注入操作系统环境信息轮次，放在用户消息之前",
-            position=17,
+            name="inject_os_info", func=self._inject_os_info,
+            enabled=True, description="注入操作系统环境信息轮次", position=17,
         )
-
-        # 1. 记忆注入（委派给 Memory 组件）
         self.pipeline.register_step(
-            name="inject_memories",
-            func=self.memory_comp.inject_memories,
-            enabled=True,
-            description="从长期记忆中注入相关记忆",
-            position=15,
+            name="inject_memories", func=self.memory_comp.inject_memories,
+            enabled=True, description="从长期记忆中注入相关记忆", position=15,
         )
-
-        # 2. 添加用户消息
         self.pipeline.register_step(
             name="add_user_message",
             func=lambda ctx: (self.add_user_message(ctx.get("user_msg", "")), self.context.messages)[1],
-            enabled=True,
-            description="添加用户消息到会话历史",
-            position=20,
+            enabled=True, description="添加用户消息到会话历史", position=20,
         )
-
-        # 3. 摘要旧历史（委派给 Summarizer 组件）
         self.pipeline.register_step(
             name="summarize_old_history",
             func=lambda ctx: (self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client), self.context.messages)[1],
-            enabled=True,
-            description="将旧对话历史压缩为摘要",
-            position=30,
+            enabled=True, description="将旧对话历史压缩为摘要", position=30,
         )
-
-        # 4. 工具调用循环（核心）
         self.pipeline.register_step(
-            name="tool_loop",
-            func=self._execute_tool_loop,
-            enabled=True,
-            description="执行工具调用循环",
-            position=40,
+            name="tool_loop", func=self._execute_tool_loop,
+            enabled=True, description="执行工具调用循环", position=40,
         )
-    
+
     # ──────────────────────────────────────────────
-    # 构建 API 消息（使用 context 状态）
+    # 构建 API 消息（委派给 _history_builder）
+    # ──────────────────────────────────────────────
+
     def _build_api_messages(self) -> List[Dict]:
-        """
-        三级历史拼接：
-            Level 0: 系统提示词 + 长期记忆注入
-            Level 3: 语义摘要 + 工具链摘要
-            Level 2: 按语义相关性筛选的 user+assistant 对
-            Level 1: 最新一轮压缩对话
-        """
-        result: List[Dict] = []
-
-        # ── Level 0: 系统提示词 ──
-        sys_msg = dict(self.context.messages[0])
-        result.append(sys_msg)
-        # ── 潜意识引擎状态注入 ──
-        sub_ctx = self._get_subconscious_context()
-        if sub_ctx:
-            result.append({
-                "role": "user",
-                "content": sub_ctx
-            })
-
-        # ── 长期记忆注入 ──
-        if self.context._injected_memories_text:
-            result.append({
-                "role": "user",
-                "content": self.context._injected_memories_text
-            })
-
-        # NOTE: disable_summary 启用时跳过 L3/L2 历史构造
-        if not self.context.disable_summary:
-            # ── Level 3: 摘要 ──
-            has_level3 = False
-            parts = []
-            sem = self.context._semantic_summary
-            tc = self.context._tool_chain_summary
-            if sem:
-                parts.append(f"## 长期背景/偏好/关键结论\n{sem}")
-                has_level3 = True
-            if tc:
-                parts.append(f"## 历史工具调用链回顾\n{tc}")
-                has_level3 = True
-
-            if has_level3:
-                result.append({
-                    "role": "user",
-                    "content": "[系统记忆 — 以下为需要遵循的有效信息和规则]\n\n" + "\n\n---\n\n".join(parts)
-                })
-                _asst = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
-                if self.context.supports_reasoning:
-                    _asst["reasoning_content"] = ""
-                result.append(_asst)
-
-            # ── 兼容旧 _history_summary ──
-            if not has_level3 and self.context._history_summary:
-                result.append({
-                    "role": "user",
-                    "content": f"这是我们之前对话的摘要：\n{self.context._history_summary}"
-                })
-                _asst2 = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
-                if self.context.supports_reasoning:
-                    _asst2["reasoning_content"] = ""
-                result.append(_asst2)
-
-            # ── Level 2: 按语义相关性筛选 ──
-            level2 = self.context._level2
-            if level2:
-                current_user_msg = ""
-                for i in range(len(self.context.messages)-1, 0, -1):
-                    if self.context.messages[i].get("role") == "user":
-                        cur_content = self.context.messages[i].get("content", "")
-                        if isinstance(cur_content, list):
-                            current_user_msg = "".join(
-                                p.get("text", "") for p in cur_content if p.get("type") == "text"
-                            )
-                        else:
-                            current_user_msg = str(cur_content)
-                        break
-                filtered = self._filter_level2_by_relevance(level2, current_user_msg)
-                for item in filtered:
-                    kind = item.get("kind", "full")
-                    if kind == "summary":
-                        result.append({
-                            "role": "user",
-                            "content": f"[历史相关对话摘要] {item['content']}"
-                        })
-                    else:
-                        result.append({"role": "user", "content": item.get("user", "")})
-                        _msg = {"role": "assistant", "content": item.get("assistant", "")}
-                        if self.context.supports_reasoning:
-                            _msg["reasoning_content"] = ""
-                        result.append(_msg)
-
-        # ── Level 1: 最新一轮压缩对话 ──
-        disable_summary = self.context.disable_summary
-        max_turns_limit = 30
-
-        start_idx = 1
-        if disable_summary:
-            user_msg_indices = []
-            for i in range(1, len(self.context.messages)):
-                if self.context.messages[i].get("role") == "user":
-                    user_msg_indices.append(i)
-
-            if len(user_msg_indices) > max_turns_limit:
-                start_idx = user_msg_indices[-max_turns_limit]
-                logger.info(f"disable_summary 启用: 丢弃早期历史，保留最近 {max_turns_limit} 轮 (共 {len(user_msg_indices)} 轮)")
-
-        for i in range(start_idx, len(self.context.messages)):
-            msg = self.context.messages[i]
-            msg_copy = dict(msg)
-            if msg_copy["role"] == "assistant" and self.context.supports_reasoning and "reasoning_content" not in msg_copy:
-                msg_copy["reasoning_content"] = ""
-            msg_copy = self._to_multimodal(msg_copy)
-            if isinstance(msg_copy.get("content"), list) and not self.context.supports_vision:
-                text_parts = []
-                for p in msg_copy["content"]:
-                    if isinstance(p, dict):
-                        if p.get("type") == "text":
-                            text_parts.append(p.get("text", ""))
-                        elif p.get("type") == "image_url":
-                            text_parts.append("[图片]")
-                msg_copy["content"] = "\n".join(text_parts) if text_parts else "[图片]"
-            result.append(msg_copy)
-
-        # JSON完整性校验
-        result = self._sanitize_api_messages(result)
-
-        # Safeguard: 移除孤立 tool 消息
-        valid_ids = set()
-        cleaned = []
-        for msg in result:
-            if msg.get("role") == "assistant" and msg.get("tool_calls"):
-                for tc in msg["tool_calls"]:
-                    if tc.get("id"):
-                        valid_ids.add(tc["id"])
-                cleaned.append(msg)
-            elif msg.get("role") == "tool":
-                if msg.get("tool_call_id") in valid_ids:
-                    cleaned.append(msg)
-                else:
-                    logger.warning(f"_build_api_messages: 移除孤立 tool 消息 (id={msg.get('tool_call_id')})")
-                    pass
-            else:
-                cleaned.append(msg)
-        result = cleaned
-
-        return result
-
-    # ──────────────────────────────────────────────
-    # JSON 校验与修复（保持原有逻辑）
-    # ──────────────────────────────────────────────
-
-    def _sanitize_api_messages(self, messages: List[Dict]) -> List[Dict]:
-        """校验并修复 API 消息中的 tool_calls JSON"""
-        import json as _json
-        sanitized = []
-        removed_count = 0
-        for msg in messages:
-            if msg.get("role") != "assistant":
-                sanitized.append(msg)
-                continue
-
-            tool_calls = msg.get("tool_calls")
-            if not tool_calls:
-                sanitized.append(msg)
-                continue
-
-            valid_calls = []
-            for tc in tool_calls:
-                func = tc.get("function", {})
-                raw_args = func.get("arguments", "")
-
-                if isinstance(raw_args, dict):
-                    valid_calls.append(tc)
-                    continue
-
-                if not raw_args or not raw_args.strip():
-                    valid_calls.append(tc)
-                    continue
-
-                try:
-                    _json.loads(raw_args)
-                    valid_calls.append(tc)
-                    continue
-                except _json.JSONDecodeError:
-                    pass
-
-                fixed = self._try_fix_truncated_json(raw_args)
-                if fixed is not None:
-                    tc_copy = dict(tc)
-                    tc_copy["function"] = dict(func)
-                    tc_copy["function"]["arguments"] = fixed
-                    valid_calls.append(tc_copy)
-                    logger.warning(f"_sanitize_api_messages: 修复截断JSON → {fixed[:80]}...")
-                else:
-                    removed_count += 1
-                    logger.warning(f"_sanitize_api_messages: 移除非法tool_call → func={func.get('name','?')}, args前80={raw_args[:80]}")
-
-            if valid_calls:
-                msg_copy = dict(msg)
-                msg_copy["tool_calls"] = valid_calls
-                sanitized.append(msg_copy)
-            else:
-                sanitized.append({
-                    "role": "assistant",
-                    "content": msg.get("content", "") or "[工具调用参数损坏，已移除]"
-                })
-
-        if removed_count > 0:
-            logger.info(f"_sanitize_api_messages: 共移除 {removed_count} 个非法 tool_call")
-        return sanitized
-
-    def _try_fix_truncated_json(self, s: str) -> Optional[str]:
-        """尝试修复被截断的 JSON 字符串"""
-        import json as _json
-        if not s or not s.strip():
-            return None
-
-        s = s.strip()
-        stack = []
-        in_str = False
-        escape = False
-        for ch in s:
-            if escape:
-                escape = False
-                continue
-            if ch == '\\':
-                escape = True
-                continue
-            if ch == '"' and not escape:
-                in_str = not in_str
-                continue
-            if in_str:
-                continue
-            if ch in '{[':
-                stack.append(ch)
-            elif ch in '}]':
-                if stack and ((ch == '}' and stack[-1] == '{') or (ch == ']' and stack[-1] == '[')):
-                    stack.pop()
-
-        if not stack:
-            if in_str:
-                s = s + '"'
-            try:
-                _json.loads(s)
-                return s
-            except _json.JSONDecodeError:
-                return None
-
-        close_map = {'{': '}', '[': ']'}
-        suffix = ''.join(close_map[c] for c in reversed(stack))
-        if in_str:
-            suffix = '"' + suffix
-
-        fixed = s + suffix
-        try:
-            _json.loads(fixed)
-            return fixed
-        except _json.JSONDecodeError:
-            return None
-
-    # ──────────────────────────────────────────────
-    # 辅助方法（潜意识、多模态、L2 过滤）
-    # ──────────────────────────────────────────────
-
-    def _get_subconscious_context(self):
-        """读取潜意识引擎状态并格式化为上下文"""
-        import os, json
-        try:
-            try:
-                from tea_agent.config import get_config
-                cfg = get_config()
-                data_dir = cfg.paths.data_dir_abs
-            except:
-                data_dir = os.path.expanduser("~/.tea_agent")
-
-            state_file = os.path.join(data_dir, "subconscious_state.json")
-            if not os.path.exists(state_file):
-                return None
-
-            with open(state_file, 'r') as f:
-                state = json.load(f)
-
-            goals = state.get("goals", [])
-            insights = state.get("insights", [])
-            focus = state.get("last_focus", "mixed")
-
-            if not goals and not insights:
-                return None
-
-            lines = [f"## 潜意识引擎状态 (场景: {focus})"]
-
-            if goals:
-                lines.append("### 🎯 当前目标 (Goals)")
-                for g in goals[:3]:
-                    lines.append(f"- {g}")
-
-            if insights:
-                lines.append("### 💡 最新洞察 (Insights)")
-                for i in insights[:3]:
-                    lines.append(f"- {i}")
-
-            return "\n".join(lines)
-        except Exception:
-            return None
-
-    def _to_multimodal(self, msg: Dict) -> Dict:
-        """如果消息包含 images 字段，将 content 转换为多模态格式。"""
-        images = msg.pop("images", None)
-        if not images:
-            return msg
-        if not self.context.supports_vision:
-            skipped = len(images)
-            logger.warning(f"模型 {self.context.model} 不支持视觉，跳过 {skipped} 张图片")
-            text = msg.get("content", "")
-            if not text:
-                msg["content"] = "[图片]（当前模型不支持视觉，图片已跳过）"
-            return msg
-        import base64, os
-        text = msg.get("content", "")
-        parts = []
-        if text:
-            parts.append({"type": "text", "text": text})
-        for img_path in images:
-            if not os.path.isfile(img_path):
-                continue
-            try:
-                with open(img_path, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode("utf-8")
-                ext = os.path.splitext(img_path)[1].lower()
-                mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-                           ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"}
-                mime = mime_map.get(ext, "image/png")
-                parts.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{mime};base64,{b64}"}
-                })
-            except Exception as e:
-                logger.warning(f"图片编码失败 {img_path}: {e}")
-        if not parts:
-            msg["content"] = ""
-            return msg
-        if len(parts) == 1 and parts[0]["type"] == "text":
-            msg["content"] = text
-            return msg
-        msg["content"] = parts
-        return msg
-
-    def _filter_level2_by_relevance(self, level2: list, current_msg: str) -> list:
-        """按语义相关性筛选 Level 2 条目。"""
-        if not level2 or not current_msg:
-            return [{"kind": "full", **p} for p in level2]
-
-        def _key_words(text):
-            """Internal: key words.
-            
-            Args:
-                text: Description.
-            """
-            import re
-            cn = re.findall(r'[一-鿿]{2,}', text)
-            en = re.findall(r'[a-zA-Z_]{3,}', text.lower())
-            return set(cn + en)
-
-        def _extract_files_from_text(text):
-            """Internal: extract files from text.
-            
-            Args:
-                text: Description.
-            """
-            import re
-            files = set()
-            for m in re.finditer(r'[\w.-]+/[\w.-]+(?:/[\w.-]+)*\.\w+', text):
-                files.add(m.group())
-            symbols = set(re.findall(r'\b[a-zA-Z_]\w{2,}\b', text))
-            if symbols:
-                try:
-                    import os, json as _json
-                    idx_path = os.path.join('.tea_agent_run', 'symbol_index.json')
-                    if os.path.exists(idx_path):
-                        with open(idx_path, 'r', encoding='utf-8') as _f:
-                            sym_index = _json.load(_f)
-                        for sym in symbols:
-                            if sym in sym_index:
-                                for entry in sym_index[sym]:
-                                    fp = entry.get('path', '')
-                                    if fp:
-                                        files.add(fp)
-                except Exception:
-                    pass
-            return files
-
-        k_current = _key_words(current_msg)
-        current_files = _extract_files_from_text(current_msg)
-
-        scored = []
-        for pair in level2:
-            k_pair = _key_words(pair.get("user", "") + " " + pair.get("assistant", ""))
-            if not k_current or not k_pair:
-                score = 0.5
-            else:
-                intersection = k_current & k_pair
-                union = k_current | k_pair
-                score = len(intersection) / max(len(union), 1)
-
-            pair_files = set(pair.get("files", []))
-            if current_files and pair_files:
-                file_overlap = len(current_files & pair_files)
-                if file_overlap > 0:
-                    score = max(score, 0.4 + file_overlap * 0.1)
-
-            scored.append((score, pair))
-
-        result = []
-        for score, pair in scored:
-            if score >= 0.15:
-                result.append({"kind": "full", **pair})
-            elif score >= 0.05:
-                user_brief = pair.get("user", "")[:80]
-                ai_brief = pair.get("assistant", "")[:120]
-                result.append({
-                    "kind": "summary",
-                    "content": f"User: {user_brief}... → Assistant: {ai_brief}..."
-                })
-
-        if not result and scored:
-            _, best = max(scored, key=lambda x: x[0])
-            result = [{"kind": "full", **best}]
-
-        logger.debug(
-            f"L2 filter: {len(level2)} in -> {len(result)} out "
-            f"(scores: {[round(s,3) for s,_ in scored]})"
-        )
-        return result
+        """三级历史拼接 — 委派给 _history_builder.build_api_messages。"""
+        return build_api_messages(self.context, self.system_prompt)
 
     # ──────────────────────────────────────────────
     # 意图分析与工具循环
@@ -1050,229 +418,10 @@ class OnlineToolSession(BaseChatSession):
         """轻量级意图分析 — 委派给独立的 session_intent 模块。"""
         from tea_agent.session_intent import analyze_intent
         return analyze_intent(text)
+
     def _execute_tool_loop(self, context: Dict) -> Dict:
-        """
-        执行工具调用循环。
-        委派给各个组件处理。
-        """
-        msg = context.get("msg", "")
-        callback = context.get("callback", lambda x: None)
-        on_status = context.get("on_status", None)
-
-        # Level 1: 动态跳过
-        if context.get("skip_tool_loop"):
-            logger.info("[Pipe Dynamic] Skipping tool loop (chat intent)")
-            try:
-                api_messages = self._build_api_messages()
-                eff = self._get_effective_params("main")
-                response = self.api.create_chat_stream(
-                    api_messages, tools=[],
-                    temperature=eff.get("temperature"),
-                    max_tokens=eff.get("max_tokens"),
-                    top_p=eff.get("top_p"),
-                )
-                content, _, reasoning = self._process_stream_with_reasoning(response, callback)
-                self.add_assistant_message(content, reasoning)
-                self.tools_comp.collect_assistant_text_round(content, reasoning)
-                return {"full_reply": content, "used_tools": False, "iterations": 1}
-            except Exception as e:
-                logger.warning(f"Direct answer failed, falling back: {e}")
-
-        full_reply = ""
-        used_tools = False
-        iterations = 0
-
-        while iterations < self.max_iterations + self._extra_iterations:
-            if self.interrupted:
-                final_msg = full_reply + "\n[已打断]"
-                self.add_assistant_message(final_msg)
-                self.tools_comp.collect_interruption_round(final_msg)
-                return {
-                    "full_reply": final_msg,
-                    "used_tools": used_tools,
-                    "interrupted": True,
-                }
-
-            api_messages = self._build_api_messages()
-
-            if iterations == 0:
-                import time
-                asctime = time.strftime("%Y-%m-%d %H:%M:%S")
-                print(f"{asctime}: call model: {self.context.model}, {msg}")
-                logger.info(f"call model: {self.context.model}, {msg}")
-
-            try:
-                eff = self._get_effective_params("main")
-                response = self.api.create_chat_stream(
-                    api_messages, self.tools,
-                    temperature=eff.get("temperature"),
-                    max_tokens=eff.get("max_tokens"),
-                    top_p=eff.get("top_p"),
-                )
-            except Exception as e:
-                err_str = str(e)
-                if "image input" in err_str.lower() and self.context.supports_vision:
-                    logger.warning(f"模型端点不支持图片输入，自动回退纯文本模式: {e}")
-                    callback("\n⚠️ 当前 API 端点不支持图片输入，已自动切换为纯文本模式。\n")
-                    self.context.supports_vision = False
-                    api_messages = self._build_api_messages()
-                    try:
-                        eff = self._get_effective_params("main")
-                        response = self.api.create_chat_stream(
-                            api_messages, self.tools,
-                            temperature=eff.get("temperature"),
-                            max_tokens=eff.get("max_tokens"),
-                            top_p=eff.get("top_p"),
-                        )
-                    except Exception as e2:
-                        error_msg = f"API调用错误: {e2}"
-                        logger.warning(f"API调用失败(重试): model={self.context.model}, error={e2}, iteration={iterations}")
-                        callback(error_msg)
-                        self.add_assistant_message(full_reply + error_msg)
-                        self.tools_comp.collect_api_error_round(full_reply + error_msg)
-                        return {
-                            "full_reply": full_reply + error_msg,
-                            "used_tools": used_tools,
-                            "error": e2,
-                        }
-                else:
-                    error_msg = f"API调用错误: {e}"
-                    logger.warning(f"API调用失败: model={self.context.model}, error={e}, iteration={iterations}")
-                    callback(error_msg)
-                    self.add_assistant_message(full_reply + error_msg)
-                    self.tools_comp.collect_api_error_round(full_reply + error_msg)
-                    return {
-                        "full_reply": full_reply + error_msg,
-                        "used_tools": used_tools,
-                        "error": e,
-                    }
-
-            # 处理流式响应
-            content, tool_calls_data, reasoning_content = self._process_stream_with_reasoning(response, callback)
-            full_reply += content
-            logger.debug(f"model response: content_len={len(content)}, reasoning_len={len(reasoning_content)}, tool_calls_data={len(tool_calls_data)}, usage={self.context._last_usage}")
-
-            # 解析工具调用（委派给 Tool 组件）
-            valid_tool_calls = self.tools_comp.parse_tool_calls_from_stream(tool_calls_data)
-
-            if valid_tool_calls:
-                used_tools = True
-                callback("[THINK_DONE]")
-
-                if on_status:
-                    on_status(f"⏳ 生成中... 调用工具第{iterations+1}轮 (ESC 打断)")
-
-                # 收集 assistant tool_calls（委派给 Tool 组件）
-                self.tools_comp.collect_assistant_tool_calls_round(content, valid_tool_calls, reasoning_content)
-
-                assistant_msg = {
-                    "role": "assistant",
-                    "content": content if content else None,
-                    "tool_calls": [{
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments
-                        }
-                    } for tc in valid_tool_calls]
-                }
-                if reasoning_content:
-                    assistant_msg["reasoning_content"] = reasoning_content
-
-                self.context.messages.append(assistant_msg)
-
-                has_reload = any(
-                    tc.function.name == "toolkit_reload"
-                    for tc in valid_tool_calls
-                )
-
-                for call in valid_tool_calls:
-                    import time as _time
-                    _asctime = _time.strftime("%Y-%m-%d %H:%M:%S")
-                    print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name}")
-                    logger.info(f"    tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
-                    # 委派给 Tool 组件执行
-                    call_id, func_name, result_str = self.tools_comp.execute_tool_call(call)
-                    logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")
-                    self.tools_comp.collect_tool_call_round(call_id, result_str)
-
-                if has_reload:
-                    self._build_tools()
-
-                iterations += 1
-
-                if iterations >= self.max_iterations + self._extra_iterations:
-                    if on_status:
-                        on_status(f"!MAX_ITER:已执行{iterations}轮，上限{self.max_iterations + self._extra_iterations}，是否继续？")
-                        while not self._max_iter_wait.wait(timeout=0.5):
-                            if self.interrupted:
-                                final_msg = full_reply + "\n[已打断]"
-                                self.add_assistant_message(final_msg)
-                                self.tools_comp.collect_interruption_round(final_msg)
-                                return {
-                                    "full_reply": final_msg,
-                                    "used_tools": used_tools,
-                                    "interrupted": True,
-                                }
-                        if not self._continue_after_max:
-                            warning = f"\n\n[用户选择终止，已执行 {iterations} 轮工具调用]"
-                            callback(warning)
-                            full_reply += warning
-                            self.add_assistant_message(full_reply)
-                            self.tools_comp.collect_max_iterations_round(full_reply)
-                            break
-                        self._extra_iterations += self.context.extra_iterations_on_continue
-                        self._continue_after_max = False
-                        self._max_iter_wait.clear()
-                        extra = self.context.extra_iterations_on_continue
-                        on_status(f"⏳ 已续命{extra}轮，继续生成... (ESC 打断)")
-                        continue
-                    else:
-                        warning = f"\n\n[警告：已达到最大迭代次数 {self.max_iterations}，对话终止]"
-                        callback(warning)
-                        full_reply += warning
-                        self.add_assistant_message(full_reply)
-                        self.tools_comp.collect_max_iterations_round(full_reply)
-                        break
-
-                if content:
-                    # 构造多行工具调用摘要
-                    import json
-                    tool_lines = []
-                    for tc in valid_tool_calls:
-                        fn = tc.function.name
-                        tool_lines.append(f" -- 正在执行工具：{fn}")
-                        args_str = tc.function.arguments or "{}"
-                        try:
-                            args_dict = json.loads(args_str)
-                            for k, v in args_dict.items():
-                                v_str = str(v)
-                                if len(v_str.encode("utf-8")) > 32:
-                                    v_str = v_str[:32] + "…"
-                                tool_lines.append(f"\t{k}: {v_str}")
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-                    callback("\n".join(tool_lines) + "\n\n")
-                continue
-
-            elif content:
-                ## ai final message
-                iterations += 1
-                assistant_msg = {"role": "assistant", "content": content}
-                if reasoning_content:
-                    assistant_msg["reasoning_content"] = reasoning_content
-                self.context.messages.append(assistant_msg)
-                self.tools_comp.collect_assistant_text_round(content, reasoning_content)
-                break
-            else:
-                break
-
-        return {
-            "full_reply": full_reply,
-            "used_tools": used_tools,
-            "iterations": iterations,
-        }
+        """执行工具调用循环 — 委派给 _tool_loop_runner.execute_tool_loop。"""
+        return execute_tool_loop(self, context)
 
     def _build_tools(self, tool_filter: list = None):
         """构建工具定义列表 — 委派给 session_tools_builder 进行过滤。"""
@@ -1281,6 +430,7 @@ class OnlineToolSession(BaseChatSession):
         self.tools = filter_tools(all_tools, tool_filter)
         if tool_filter:
             logger.info(f"[Pipe Dynamic] Tool Injection: enabled {len(self.tools)} tools based on intent")
+
     def update_tools(self):
         """重新加载并刷新工具定义"""
         self.context.toolkit.reload()
@@ -1312,6 +462,7 @@ class OnlineToolSession(BaseChatSession):
         self._extra_iterations = 0
         self._max_iter_wait.clear()
         self._strip_reasoning_content(self.context.messages)
+
     def _notify_reflection_done(self, reflection_id: int):
         """反思完成后发送桌面通知"""
         try:
@@ -1337,10 +488,7 @@ class OnlineToolSession(BaseChatSession):
             pass
 
     def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: str = "", on_status: Optional[Callable[[str], None]] = None) -> Tuple[str, bool]:
-        """
-        流式对话，支持工具调用。
-        使用 Pipeline 执行可配置的步骤。
-        """
+        """流式对话，支持工具调用。使用 Pipeline 执行可配置的步骤。"""
         _msg_text = msg if isinstance(msg, str) else msg.get("text", "")
         _msg_images = None if isinstance(msg, str) else msg.get("images", [])
 

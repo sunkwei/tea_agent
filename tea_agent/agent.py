@@ -79,6 +79,7 @@ class Agent:
         self._db = None  # 仅 full 模式使用
 
         # ── 加载配置 ──
+        self._config_path = config_path  # 保存原始路径，供 GUI 使用
         self._cfg = self._load_config(config_path)
 
         # ── 初始化 Toolkit ──
@@ -176,6 +177,8 @@ class Agent:
                 f"  config:  {actual_path}"
             )
 
+        # 保存实际使用的配置文件路径
+        self._config_path = actual_path
         logger.info(f"配置加载: {actual_path} | 模型: {main_m.model_name}")
         return cfg
 

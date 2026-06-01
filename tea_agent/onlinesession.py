@@ -150,7 +150,7 @@ class OnlineToolSession(BaseChatSession):
             comp.initialize()
 
         # ── 兼容属性 ──
-        self.max_iterations = 50
+        self.max_iterations = max_iterations
         self.storage = storage
         self._cheap_client = cheap_client
         self._cheap_model_name = cheap_model

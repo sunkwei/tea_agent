@@ -221,6 +221,19 @@ def toolkit_plan(
                 return {"ok": False, "error": "decompose 需要 goal 参数"}
             return _decompose_goal(goal, cwd)
 
+        # ── 动态规划操作 ──
+        elif action == "insert":
+            return _insert_step(plan_id, step_id, steps)
+
+        elif action == "replace":
+            return _replace_step(plan_id, step_id, steps)
+
+        elif action == "delete_step":
+            return _delete_step(plan_id, step_id)
+
+        elif action == "replan":
+            return _replan(plan_id, steps, cwd)
+
         else:
             return {"ok": False, "error": f"未知 action: {action}"}
 
@@ -751,11 +764,11 @@ def meta_toolkit_plan():
         "type": "function",
         "function": {
             "name": "toolkit_plan",
-            "description": "Plandex 风格 Plan→Execute→Verify 三步工作流。create=创建计划, decompose=智能分解目标, show=查看, step=执行下一步, verify=验证, run=全量执行, resume=恢复, list=列表, delete=删除。",
+            "description": "Plandex 风格 Plan→Execute→Verify 三步工作流。create=创建计划, decompose=智能分解目标, show=查看, step=执行下一步, verify=验证, run=全量执行, resume=恢复, list=列表, delete=删除。动态规划: insert=插入步骤, replace=替换步骤, delete_step=删除步骤, replan=重新规划。",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["create", "decompose", "show", "step", "verify", "run", "resume", "list", "delete"]},
+                    "action": {"type": "string", "enum": ["create", "decompose", "show", "step", "verify", "run", "resume", "list", "delete", "insert", "replace", "delete_step", "replan"]},
                     "goal": {"type": "string", "description": "[create] 计划目标"},
                     "steps": {"type": "array", "items": {"type": "object"}, "description": "[create] 步骤列表"},
                     "plan_id": {"type": "string", "description": "[show/step/verify/run/resume/delete] 计划ID"},
@@ -764,4 +777,262 @@ def meta_toolkit_plan():
                 "required": ["action"],
             },
         },
+    }
+
+
+# ── 动态规划操作 ──────────────────────────────────────────
+
+def _insert_step(plan_id: str, after_step_id: str, new_steps: list) -> dict:
+    """在指定步骤后插入新步骤。
+    
+    Args:
+        plan_id: 计划ID
+        after_step_id: 在此步骤后插入，None 则插入到开头
+        new_steps: 要插入的步骤列表
+        
+    Returns:
+        操作结果
+    """
+    if not plan_id or not new_steps:
+        return {"ok": False, "error": "insert 需要 plan_id 和 steps 参数"}
+    
+    plan = _load_plan(plan_id)
+    if not plan:
+        return {"ok": False, "error": f"计划不存在: {plan_id}"}
+    
+    # 找到插入位置
+    insert_idx = 0
+    if after_step_id:
+        for i, s in enumerate(plan["steps"]):
+            if s["id"] == after_step_id:
+                insert_idx = i + 1
+                break
+        else:
+            return {"ok": False, "error": f"步骤不存在: {after_step_id}"}
+    
+    # 生成新步骤ID
+    existing_ids = {s["id"] for s in plan["steps"]}
+    next_id = max(int(s["id"]) for s in plan["steps"]) + 1 if plan["steps"] else 1
+    
+    # 构建新步骤
+    normalized = []
+    for ns in new_steps:
+        while str(next_id) in existing_ids:
+            next_id += 1
+        step = {
+            "id": ns.get("id", str(next_id)),
+            "desc": ns["desc"],
+            "action": ns.get("action", "self_evolve"),
+            "params": ns.get("params", {}),
+            "depends_on": ns.get("depends_on", []),
+            "verify": ns.get("verify", "py_compile"),
+            "status": "pending",
+            "result": None,
+            "started_at": None,
+            "finished_at": None,
+        }
+        normalized.append(step)
+        existing_ids.add(step["id"])
+        next_id += 1
+    
+    # 插入
+    plan["steps"] = plan["steps"][:insert_idx] + normalized + plan["steps"][insert_idx:]
+    _save_plan(plan)
+    
+    return {
+        "ok": True,
+        "plan_id": plan_id,
+        "inserted": [s["id"] for s in normalized],
+        "total_steps": len(plan["steps"]),
+        "progress": f"{_count_status(plan, 'done')}/{len(plan['steps'])}",
+    }
+
+
+def _replace_step(plan_id: str, step_id: str, new_steps: list) -> dict:
+    """替换指定步骤。
+    
+    Args:
+        plan_id: 计划ID
+        step_id: 要替换的步骤ID
+        new_steps: 替换后的步骤列表（1个或多个）
+        
+    Returns:
+        操作结果
+    """
+    if not plan_id or not step_id or not new_steps:
+        return {"ok": False, "error": "replace 需要 plan_id, step_id 和 steps 参数"}
+    
+    plan = _load_plan(plan_id)
+    if not plan:
+        return {"ok": False, "error": f"计划不存在: {plan_id}"}
+    
+    # 找到要替换的步骤
+    replace_idx = None
+    old_step = None
+    for i, s in enumerate(plan["steps"]):
+        if s["id"] == step_id:
+            replace_idx = i
+            old_step = s
+            break
+    
+    if replace_idx is None:
+        return {"ok": False, "error": f"步骤不存在: {step_id}"}
+    
+    # 检查是否已完成
+    if old_step["status"] == "done":
+        return {"ok": False, "error": f"步骤已完成，不能替换: {step_id}"}
+    
+    # 生成新步骤
+    existing_ids = {s["id"] for s in plan["steps"]}
+    next_id = max(int(s["id"]) for s in plan["steps"]) + 1
+    
+    normalized = []
+    for ns in new_steps:
+        while str(next_id) in existing_ids:
+            next_id += 1
+        step = {
+            "id": ns.get("id", str(next_id)),
+            "desc": ns["desc"],
+            "action": ns.get("action", "self_evolve"),
+            "params": ns.get("params", {}),
+            "depends_on": ns.get("depends_on", old_step.get("depends_on", [])),
+            "verify": ns.get("verify", "py_compile"),
+            "status": "pending",
+            "result": None,
+            "started_at": None,
+            "finished_at": None,
+        }
+        normalized.append(step)
+        existing_ids.add(step["id"])
+        next_id += 1
+    
+    # 替换
+    plan["steps"] = plan["steps"][:replace_idx] + normalized + plan["steps"][replace_idx+1:]
+    
+    # 更新依赖：将其他步骤对旧步骤的依赖改为新步骤
+    new_ids = [s["id"] for s in normalized]
+    for s in plan["steps"]:
+        if step_id in s.get("depends_on", []):
+            s["depends_on"] = [new_ids[0] if d == step_id else d for d in s["depends_on"]]
+    
+    _save_plan(plan)
+    
+    return {
+        "ok": True,
+        "plan_id": plan_id,
+        "replaced": step_id,
+        "with": new_ids,
+        "total_steps": len(plan["steps"]),
+        "progress": f"{_count_status(plan, 'done')}/{len(plan['steps'])}",
+    }
+
+
+def _delete_step(plan_id: str, step_id: str) -> dict:
+    """删除指定步骤。
+    
+    Args:
+        plan_id: 计划ID
+        step_id: 要删除的步骤ID
+        
+    Returns:
+        操作结果
+    """
+    if not plan_id or not step_id:
+        return {"ok": False, "error": "delete_step 需要 plan_id 和 step_id"}
+    
+    plan = _load_plan(plan_id)
+    if not plan:
+        return {"ok": False, "error": f"计划不存在: {plan_id}"}
+    
+    # 找到要删除的步骤
+    target = None
+    for s in plan["steps"]:
+        if s["id"] == step_id:
+            target = s
+            break
+    
+    if not target:
+        return {"ok": False, "error": f"步骤不存在: {step_id}"}
+    
+    # 检查是否已完成
+    if target["status"] == "done":
+        return {"ok": False, "error": f"步骤已完成，不能删除: {step_id}"}
+    
+    # 检查是否有其他步骤依赖此步骤
+    dependents = [s["id"] for s in plan["steps"] if step_id in s.get("depends_on", [])]
+    if dependents:
+        return {"ok": False, "error": f"步骤 {step_id} 被依赖: {dependents}，请先修改依赖关系"}
+    
+    # 删除
+    plan["steps"] = [s for s in plan["steps"] if s["id"] != step_id]
+    _save_plan(plan)
+    
+    return {
+        "ok": True,
+        "plan_id": plan_id,
+        "deleted": step_id,
+        "total_steps": len(plan["steps"]),
+        "progress": f"{_count_status(plan, 'done')}/{len(plan['steps'])}",
+    }
+
+
+def _replan(plan_id: str, new_steps: list, cwd: str) -> dict:
+    """基于当前状态重新规划。
+    
+    保留已完成的步骤，用新步骤替换未完成的步骤。
+    
+    Args:
+        plan_id: 计划ID
+        new_steps: 新的步骤列表
+        cwd: 当前工作目录
+        
+    Returns:
+        操作结果
+    """
+    if not plan_id or not new_steps:
+        return {"ok": False, "error": "replan 需要 plan_id 和 steps 参数"}
+    
+    plan = _load_plan(plan_id)
+    if not plan:
+        return {"ok": False, "error": f"计划不存在: {plan_id}"}
+    
+    # 保留已完成的步骤
+    done_steps = [s for s in plan["steps"] if s["status"] == "done"]
+    
+    # 生成新步骤
+    existing_ids = {s["id"] for s in done_steps}
+    next_id = max(int(s["id"]) for s in done_steps) + 1 if done_steps else 1
+    
+    normalized = []
+    for ns in new_steps:
+        while str(next_id) in existing_ids:
+            next_id += 1
+        step = {
+            "id": ns.get("id", str(next_id)),
+            "desc": ns["desc"],
+            "action": ns.get("action", "self_evolve"),
+            "params": ns.get("params", {}),
+            "depends_on": ns.get("depends_on", []),
+            "verify": ns.get("verify", "py_compile"),
+            "status": "pending",
+            "result": None,
+            "started_at": None,
+            "finished_at": None,
+        }
+        normalized.append(step)
+        existing_ids.add(step["id"])
+        next_id += 1
+    
+    # 更新计划
+    plan["steps"] = done_steps + normalized
+    plan["status"] = "running"
+    _save_plan(plan)
+    
+    return {
+        "ok": True,
+        "plan_id": plan_id,
+        "kept_done": len(done_steps),
+        "added_new": len(normalized),
+        "total_steps": len(plan["steps"]),
+        "progress": f"{_count_status(plan, 'done')}/{len(plan['steps'])}",
     }

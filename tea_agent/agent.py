@@ -309,25 +309,28 @@ class Agent:
     # 后台服务（仅 full 模式）
     # ═══════════════════════════════════════════════
     def _start_background_services(self):
-        """启动潜意识引擎和定时任务调度器。"""
-        self._start_subconscious()
+        """启动自进化引擎和定时任务调度器。"""
+        self._start_self_evolve_thread()
         self._start_scheduler()
 
-    def _start_subconscious(self):
-        """启动潜意识引擎 daemon 线程。"""
+    def _start_self_evolve_thread(self):
+        """启动自进化引擎 daemon 线程（替代旧潜意识引擎）。
+        
+        每小时循环：工具使用率分析 → README 同步 → 技能整理。
+        """
         try:
             import importlib.util
-            fpath = os.path.join(self._toolkit.root_dir, "toolkit_subconscious.py")
+            fpath = os.path.join(self._toolkit.root_dir, "toolkit_self_evolve_thread.py")
             if not os.path.exists(fpath):
                 return
-            spec = importlib.util.spec_from_file_location("_subconscious_startup", fpath)
+            spec = importlib.util.spec_from_file_location("_self_evolve_thread_startup", fpath)
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
-            result = mod.toolkit_subconscious("start")
+            result = mod.toolkit_self_evolve_thread("start")
             if result.get("status") == "started":
-                logger.info("🧠 潜意识引擎已自动启动")
+                logger.info("🔄 自进化引擎已自动启动")
         except Exception as e:
-            logger.debug(f"潜意识引擎启动跳过: {e}")
+            logger.debug(f"自进化引擎启动跳过: {e}")
 
     def _start_scheduler(self):
         """启动定时任务调度器 daemon 线程。"""
@@ -335,9 +338,7 @@ class Agent:
             from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
             toolkit_scheduler("start")
         except Exception as e:
-            logger.debug(f"定时任务调度器启动跳过: {e}")
-
-    # ═══════════════════════════════════════════════
+            logger.debug(f"定时任务调度器启动跳过: {e}")    # ═══════════════════════════════════════════════
     # 工具管理
     # ═══════════════════════════════════════════════
     def toolkit_save(self, name: str, meta: dict, pycode: str) -> bool:

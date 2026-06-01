@@ -29,19 +29,7 @@ logger = logging.getLogger("agent")
 
 
 class Agent:
-    """统一 Agent 类 — 支持 lightweight/full/lite 三种模式。
-
-    Args:
-        mode: 'lightweight' (无存储) / 'full' (有存储+后台线程) / 'lite' (轻量级单轮)
-        config_path: 配置文件路径
-        callback: 中间轮次回调（lightweight 模式常用）
-        use_tools: 是否启用工具调用
-        enable_thinking: 是否启用思考链
-        disable_summary: 禁用历史压缩
-        no_stream_chunk: 禁用流式分块
-        debug: 调试模式
-        use_cheap_model: lite 模式下是否使用便宜模型作为主模型
-    """
+    """统一 Agent 类 — 支持 lightweight/full/lite 三种模式。"""
 
     def __init__(
         self,

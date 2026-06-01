@@ -1,7 +1,5 @@
-"""
-工具调用循环执行器
+"""工具调用循环执行器
 
-从 onlinesession.py 提取的独立功能：
 - execute_tool_loop: 执行工具调用循环（核心对话引擎）
 """
 
@@ -34,14 +32,14 @@ def _format_tool_summary(tool_calls) -> str:
 
 def execute_tool_loop(session, context: Dict) -> Dict:
     """执行工具调用循环。
-    
+
     核心对话引擎：调用 LLM → 解析工具调用 → 执行工具 → 循环直到无工具调用。
     支持中断、最大迭代限制、续命机制。
-    
+
     Args:
         session: OnlineToolSession 实例（通过 self 传入）
         context: Pipeline 上下文，包含 msg, callback, on_status 等
-        
+
     Returns:
         dict: {full_reply, used_tools, iterations, [interrupted], [error]}
     """
@@ -73,7 +71,6 @@ def execute_tool_loop(session, context: Dict) -> Dict:
     iterations = 0
 
     while iterations < session.max_iterations + session._extra_iterations:
-        # ── 中断检查 ──
         if session.interrupted:
             final_msg = full_reply + "\n[已打断]"
             session.add_assistant_message(final_msg)
@@ -86,13 +83,12 @@ def execute_tool_loop(session, context: Dict) -> Dict:
 
         api_messages = session._build_api_messages()
 
-        # ── 首轮日志 ──
         if iterations == 0:
             asctime = time.strftime("%Y-%m-%d %H:%M:%S")
             print(f"{asctime}: call model: {session.context.model}, {msg}")
             logger.info(f"call model: {session.context.model}, {msg}")
 
-        # ── API 调用（含 429 重试 + 视觉回退） ──
+        # API 调用（含 429 重试 + 视觉回退）
         _MAX_RETRIES = 3
         _RETRY_BASE_DELAY = 5  # 秒，递增: 5s, 10s, 15s
         response = None
@@ -105,7 +101,7 @@ def execute_tool_loop(session, context: Dict) -> Dict:
                     max_tokens=eff.get("max_tokens"),
                     top_p=eff.get("top_p"),
                 )
-                break  # 成功
+                break
             except Exception as e:
                 err_str = str(e)
                 # 429 速率限制：等待后重试
@@ -115,7 +111,6 @@ def execute_tool_loop(session, context: Dict) -> Dict:
                     callback(f"\n⚠️ 请求频率过高，{wait_sec}秒后自动重试 ({_retry+1}/{_MAX_RETRIES})...\n")
                     time.sleep(wait_sec)
                     continue
-                # 非 429 或重试耗尽
                 if "image input" in err_str.lower() and session.context.supports_vision:
                     logger.warning(f"模型端点不支持图片输入，自动回退纯文本模式: {e}")
                     callback("\n⚠️ 当前 API 端点不支持图片输入，已自动切换为纯文本模式。\n")
@@ -143,7 +138,7 @@ def execute_tool_loop(session, context: Dict) -> Dict:
                     session.add_assistant_message(full_reply + error_msg)
                     session.tools_comp.collect_api_error_round(full_reply + error_msg)
                     return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": e}
-                break  # 非 429 错误，跳出重试循环
+                break
         else:
             # 所有重试都失败（429 耗尽）
             error_msg = f"API调用错误: 429 速率限制，重试 {_MAX_RETRIES} 次后仍失败"
@@ -153,7 +148,6 @@ def execute_tool_loop(session, context: Dict) -> Dict:
             session.tools_comp.collect_api_error_round(full_reply + error_msg)
             return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": "429 rate limit exhausted"}
 
-        # ── 处理流式响应 ──
         content, tool_calls_data, reasoning_content = session._process_stream_with_reasoning(response, callback)
         full_reply += content
         logger.debug(
@@ -161,7 +155,6 @@ def execute_tool_loop(session, context: Dict) -> Dict:
             f"tool_calls_data={len(tool_calls_data)}, usage={session.context._last_usage}"
         )
 
-        # ── 解析工具调用 ──
         valid_tool_calls = session.tools_comp.parse_tool_calls_from_stream(tool_calls_data)
 
         if valid_tool_calls:
@@ -171,7 +164,6 @@ def execute_tool_loop(session, context: Dict) -> Dict:
             if on_status:
                 on_status(f"⏳ 生成中... 调用工具第{iterations+1}轮 (ESC 打断)")
 
-            # 收集 assistant tool_calls
             session.tools_comp.collect_assistant_tool_calls_round(content, valid_tool_calls, reasoning_content)
 
             assistant_msg = {
@@ -193,7 +185,6 @@ def execute_tool_loop(session, context: Dict) -> Dict:
 
             has_reload = any(tc.function.name == "toolkit_reload" for tc in valid_tool_calls)
 
-            # 执行每个工具调用
             for call in valid_tool_calls:
                 _asctime = time.strftime("%Y-%m-%d %H:%M:%S")
                 print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name}")
@@ -207,7 +198,6 @@ def execute_tool_loop(session, context: Dict) -> Dict:
 
             iterations += 1
 
-            # ── 最大迭代检查 ──
             if iterations >= session.max_iterations + session._extra_iterations:
                 if on_status:
                     on_status(f"!MAX_ITER:已执行{iterations}轮，上限{session.max_iterations + session._extra_iterations}，是否继续？")
@@ -238,13 +228,11 @@ def execute_tool_loop(session, context: Dict) -> Dict:
                     session.tools_comp.collect_max_iterations_round(full_reply)
                     break
 
-            # 工具调用摘要回调
             if content:
                 callback(_format_tool_summary(valid_tool_calls))
             continue
 
         elif content:
-            # ── AI 最终回复（无工具调用） ──
             iterations += 1
             assistant_msg = {"role": "assistant", "content": content}
             if reasoning_content:

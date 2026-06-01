@@ -459,6 +459,12 @@ def _search_github(query: str, search_type: str, max_results: int):
         "User-Agent": "TeaAgent/1.0",
     }
     
+    # 添加 GitHub Token（如果存在）
+    import os
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"token {token}"
+    
     params = {
         "q": query,
         "per_page": min(max_results, 30),  # GitHub API 最大 100，但 30 足够

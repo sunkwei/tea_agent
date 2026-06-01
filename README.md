@@ -1,4 +1,4 @@
-# sunkw v0.9.13
+# sunkw v0.9.14
 
 A self-evolving AI agent with dynamic toolkit management.
 
@@ -77,4 +77,4 @@ A self-evolving AI agent with dynamic toolkit management.
 - 📝 README.md 自动同步（本文件）
 - 🎯 技能模式整理
 
-> 最后更新: 2026-06-01 14:09
+> 最后更新: 2026-06-01 16:58

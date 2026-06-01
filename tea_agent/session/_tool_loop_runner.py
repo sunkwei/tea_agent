@@ -10,6 +10,131 @@ from typing import Dict, Callable, Optional, Any
 
 logger = logging.getLogger("session.tool_loop_runner")
 
+class LoopDetector:
+    """循环检测器 - 检测 LLM 重复输出/工具调用。
+    
+    检测维度：
+    1. 工具调用重复：相同工具 + 相同参数
+    2. 输出内容重复：连续几轮输出高度相似
+    3. 工具序列循环：A→B→A→B 模式
+    """
+    
+    def __init__(self, window: int = 5, similarity_threshold: float = 0.85):
+        """
+        Args:
+            window: 检测窗口大小（最近 N 轮）
+            similarity_threshold: 相似度阈值 (0~1)，超过此值视为重复
+        """
+        self.window = window
+        self.threshold = similarity_threshold
+        self._tool_hashes: list[str] = []  # 工具调用 hash 序列
+        self._contents: list[str] = []     # 输出内容序列
+        self._tool_names: list[list[str]] = []  # 工具名序列
+    
+    def _hash_tool_call(self, name: str, args: str) -> str:
+        """计算工具调用的 hash。"""
+        import hashlib
+        # 规范化参数（排序 keys）
+        try:
+            args_dict = json.loads(args) if args else {}
+            args_normalized = json.dumps(args_dict, sort_keys=True)
+        except (json.JSONDecodeError, TypeError):
+            args_normalized = args or ""
+        return hashlib.md5(f"{name}:{args_normalized}".encode()).hexdigest()[:12]
+    
+    def _text_similarity(self, a: str, b: str) -> float:
+        """简单的文本相似度（基于字符级 Jaccard）。"""
+        if not a or not b:
+            return 0.0
+        # 取较短文本的前 500 字符比较
+        a, b = a[:500], b[:500]
+        set_a = set(a)
+        set_b = set(b)
+        if not set_a or not set_b:
+            return 0.0
+        intersection = len(set_a & set_b)
+        union = len(set_a | set_b)
+        return intersection / union if union > 0 else 0.0
+    
+    def check_and_record(self, content: str, tool_calls: list) -> dict:
+        """检查当前轮是否循环，并记录。
+        
+        Args:
+            content: LLM 输出内容
+            tool_calls: 工具调用列表 [(name, args), ...]
+            
+        Returns:
+            {"is_loop": bool, "type": str|None, "detail": str}
+        """
+        result = {"is_loop": False, "type": None, "detail": ""}
+        
+        # 计算本轮的工具调用 hash
+        current_hashes = []
+        current_names = []
+        for name, args in tool_calls:
+            current_hashes.append(self._hash_tool_call(name, args))
+            current_names.append(name)
+        
+        # ── 检测 1: 工具调用完全重复 ──
+        if current_hashes:
+            current_hash_str = "|".join(current_hashes)
+            for i, prev_hash in enumerate(self._tool_hashes[-self.window:]):
+                if current_hash_str == prev_hash:
+                    result = {
+                        "is_loop": True,
+                        "type": "tool_repeat",
+                        "detail": f"工具调用与第 {len(self._tool_hashes) - self.window + i + 1} 轮完全相同"
+                    }
+                    break
+        
+        # ── 检测 2: 输出内容高度相似 ──
+        if not result["is_loop"] and content:
+            for i, prev_content in enumerate(self._contents[-self.window:]):
+                sim = self._text_similarity(content, prev_content)
+                if sim >= self.threshold:
+                    result = {
+                        "is_loop": True,
+                        "type": "content_repeat",
+                        "detail": f"输出内容与第 {len(self._contents) - self.window + i + 1} 轮相似度 {sim:.0%}"
+                    }
+                    break
+        
+        # ── 检测 3: 工具序列循环 (A→B→A→B) ──
+        if not result["is_loop"] and len(self._tool_names) >= 4:
+            # 检查最近 4 轮是否是 ABAB 模式
+            recent = self._tool_names[-3:]  # 最近 3 轮 + 当前
+            if (len(recent) == 3 and 
+                current_names and recent[0] and recent[1] and recent[2] and
+                current_names == recent[0] and recent[1] == recent[2] and
+                current_names != recent[1]):
+                result = {
+                    "is_loop": True,
+                    "type": "sequence_loop",
+                    "detail": f"检测到工具序列循环模式: {'→'.join(current_names)} ↔ {'→'.join(recent[1])}"
+                }
+        
+        # ── 记录本轮 ──
+        self._tool_hashes.append("|".join(current_hashes) if current_hashes else "")
+        self._contents.append(content or "")
+        self._tool_names.append(current_names)
+        
+        # 保持窗口大小
+        if len(self._tool_hashes) > self.window * 2:
+            self._tool_hashes = self._tool_hashes[-self.window:]
+            self._contents = self._contents[-self.window:]
+            self._tool_names = self._tool_names[-self.window:]
+        
+        return result
+    
+    def reset(self):
+        """重置检测器状态。"""
+        self._tool_hashes.clear()
+        self._contents.clear()
+        self._tool_names.clear()
+
+
+
+
 
 def _format_tool_summary(tool_calls) -> str:
     """构造多行工具调用摘要用于回调显示。"""
@@ -69,6 +194,7 @@ def execute_tool_loop(session, context: Dict) -> Dict:
     full_reply = ""
     used_tools = False
     iterations = 0
+    loop_detector = LoopDetector(window=5, similarity_threshold=0.85)
 
     while iterations < session.max_iterations + session._extra_iterations:
         if session.interrupted:
@@ -195,6 +321,28 @@ def execute_tool_loop(session, context: Dict) -> Dict:
 
             if has_reload:
                 session._build_tools()
+
+            # ── 循环检测 ──
+            tool_calls_for_check = [(tc.function.name, tc.function.arguments) for tc in valid_tool_calls]
+            loop_result = loop_detector.check_and_record(content, tool_calls_for_check)
+            if loop_result["is_loop"]:
+                loop_count = getattr(session, '_loop_count', 0) + 1
+                session._loop_count = loop_count
+                logger.warning(f"检测到循环: {loop_result['type']} - {loop_result['detail']} (连续第 {loop_count} 次)")
+                
+                if loop_count >= 3:
+                    # 连续 3 次循环，强制跳出
+                    warning = f"\n\n[循环检测] 检测到重复输出 ({loop_result['detail']})，已自动跳出"
+                    callback(warning)
+                    full_reply += warning
+                    session.add_assistant_message(full_reply)
+                    session.tools_comp.collect_max_iterations_round(full_reply)
+                    return {"full_reply": full_reply, "used_tools": used_tools, "loop_detected": True}
+                elif loop_count >= 2:
+                    # 第 2 次循环，注入提示
+                    callback(f"\n⚠️ 检测到重复输出，请尝试不同方法...\n")
+            else:
+                session._loop_count = 0
 
             iterations += 1
 

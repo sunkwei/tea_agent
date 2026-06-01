@@ -92,44 +92,66 @@ def execute_tool_loop(session, context: Dict) -> Dict:
             print(f"{asctime}: call model: {session.context.model}, {msg}")
             logger.info(f"call model: {session.context.model}, {msg}")
 
-        # ── API 调用（含视觉回退） ──
-        try:
-            eff = session._get_effective_params("main")
-            response = session.api.create_chat_stream(
-                api_messages, session.tools,
-                temperature=eff.get("temperature"),
-                max_tokens=eff.get("max_tokens"),
-                top_p=eff.get("top_p"),
-            )
-        except Exception as e:
-            err_str = str(e)
-            if "image input" in err_str.lower() and session.context.supports_vision:
-                logger.warning(f"模型端点不支持图片输入，自动回退纯文本模式: {e}")
-                callback("\n⚠️ 当前 API 端点不支持图片输入，已自动切换为纯文本模式。\n")
-                session.context.supports_vision = False
-                api_messages = session._build_api_messages()
-                try:
-                    eff = session._get_effective_params("main")
-                    response = session.api.create_chat_stream(
-                        api_messages, session.tools,
-                        temperature=eff.get("temperature"),
-                        max_tokens=eff.get("max_tokens"),
-                        top_p=eff.get("top_p"),
-                    )
-                except Exception as e2:
-                    error_msg = f"API调用错误: {e2}"
-                    logger.warning(f"API调用失败(重试): model={session.context.model}, error={e2}, iteration={iterations}")
+        # ── API 调用（含 429 重试 + 视觉回退） ──
+        _MAX_RETRIES = 3
+        _RETRY_BASE_DELAY = 5  # 秒，递增: 5s, 10s, 15s
+        response = None
+        for _retry in range(_MAX_RETRIES + 1):
+            try:
+                eff = session._get_effective_params("main")
+                response = session.api.create_chat_stream(
+                    api_messages, session.tools,
+                    temperature=eff.get("temperature"),
+                    max_tokens=eff.get("max_tokens"),
+                    top_p=eff.get("top_p"),
+                )
+                break  # 成功
+            except Exception as e:
+                err_str = str(e)
+                # 429 速率限制：等待后重试
+                if "429" in err_str and _retry < _MAX_RETRIES:
+                    wait_sec = _RETRY_BASE_DELAY * (_retry + 1)
+                    logger.warning(f"⚠️ API 429 速率限制，{wait_sec}s 后重试 ({_retry+1}/{_MAX_RETRIES})")
+                    callback(f"\n⚠️ 请求频率过高，{wait_sec}秒后自动重试 ({_retry+1}/{_MAX_RETRIES})...\n")
+                    time.sleep(wait_sec)
+                    continue
+                # 非 429 或重试耗尽
+                if "image input" in err_str.lower() and session.context.supports_vision:
+                    logger.warning(f"模型端点不支持图片输入，自动回退纯文本模式: {e}")
+                    callback("\n⚠️ 当前 API 端点不支持图片输入，已自动切换为纯文本模式。\n")
+                    session.context.supports_vision = False
+                    api_messages = session._build_api_messages()
+                    try:
+                        eff = session._get_effective_params("main")
+                        response = session.api.create_chat_stream(
+                            api_messages, session.tools,
+                            temperature=eff.get("temperature"),
+                            max_tokens=eff.get("max_tokens"),
+                            top_p=eff.get("top_p"),
+                        )
+                    except Exception as e2:
+                        error_msg = f"API调用错误: {e2}"
+                        logger.warning(f"API调用失败(重试): model={session.context.model}, error={e2}, iteration={iterations}")
+                        callback(error_msg)
+                        session.add_assistant_message(full_reply + error_msg)
+                        session.tools_comp.collect_api_error_round(full_reply + error_msg)
+                        return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": e2}
+                else:
+                    error_msg = f"API调用错误: {e}"
+                    logger.warning(f"API调用失败: model={session.context.model}, error={e}, iteration={iterations}")
                     callback(error_msg)
                     session.add_assistant_message(full_reply + error_msg)
                     session.tools_comp.collect_api_error_round(full_reply + error_msg)
-                    return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": e2}
-            else:
-                error_msg = f"API调用错误: {e}"
-                logger.warning(f"API调用失败: model={session.context.model}, error={e}, iteration={iterations}")
-                callback(error_msg)
-                session.add_assistant_message(full_reply + error_msg)
-                session.tools_comp.collect_api_error_round(full_reply + error_msg)
-                return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": e}
+                    return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": e}
+                break  # 非 429 错误，跳出重试循环
+        else:
+            # 所有重试都失败（429 耗尽）
+            error_msg = f"API调用错误: 429 速率限制，重试 {_MAX_RETRIES} 次后仍失败"
+            logger.warning(error_msg)
+            callback(error_msg)
+            session.add_assistant_message(full_reply + error_msg)
+            session.tools_comp.collect_api_error_round(full_reply + error_msg)
+            return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": "429 rate limit exhausted"}
 
         # ── 处理流式响应 ──
         content, tool_calls_data, reasoning_content = session._process_stream_with_reasoning(response, callback)

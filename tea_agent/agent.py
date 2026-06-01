@@ -29,10 +29,10 @@ logger = logging.getLogger("agent")
 
 
 class Agent:
-    """统一 Agent 类 — 支持 lightweight/full 两种模式。
+    """统一 Agent 类 — 支持 lightweight/full/lite 三种模式。
 
     Args:
-        mode: 'lightweight' (无存储) 或 'full' (有存储+后台线程)
+        mode: 'lightweight' (无存储) / 'full' (有存储+后台线程) / 'lite' (轻量级单轮)
         config_path: 配置文件路径
         callback: 中间轮次回调（lightweight 模式常用）
         use_tools: 是否启用工具调用
@@ -40,27 +40,45 @@ class Agent:
         disable_summary: 禁用历史压缩
         no_stream_chunk: 禁用流式分块
         debug: 调试模式
+        use_cheap_model: lite 模式下是否使用便宜模型作为主模型
     """
 
     def __init__(
         self,
         mode: str = "lightweight",
         config_path: Optional[str] = None,
+        config_fname: Optional[str] = None,
         callback: Optional[Callable[[Dict], None]] = None,
         use_tools: bool = True,
         enable_thinking: bool = True,
         disable_summary: bool = False,
         no_stream_chunk: bool = False,
         debug: bool = False,
+        use_cheap_model: bool = False,
     ):
-        if mode not in ("lightweight", "full"):
-            raise ValueError(f"mode 必须是 'lightweight' 或 'full'，收到: {mode}")
+        """
+        Args:
+            mode: 'lightweight'/'full'/'lite'
+            config_path: 配置文件完整路径
+            config_fname: 配置文件名（在 ~/.tea_agent/ 下查找）
+            callback: 中间轮次回调
+            use_tools: 是否启用工具调用
+            enable_thinking: 是否启用思考链
+            disable_summary: 禁用历史压缩
+            no_stream_chunk: 禁用流式分块
+            debug: 调试模式
+            use_cheap_model: lite 模式下是否使用便宜模型
+        """
+        if mode not in ("lightweight", "full", "lite"):
+            raise ValueError(f"mode 必须是 'lightweight'/'full'/'lite'，收到: {mode}")
 
         from tea_agent.logging_setup import setup_logging
         self.mode = mode
         self.debug = debug
         self.disable_summary = disable_summary
         self.no_stream_chunk = no_stream_chunk
+        self._use_cheap_model = use_cheap_model
+        self._config_fname = config_fname
         setup_logging(debug=debug)
 
         self._callback = callback
@@ -126,14 +144,25 @@ class Agent:
     # 配置加载
     # ═══════════════════════════════════════════════
     def _load_config(self, config_path: Optional[str]):
-        """加载并验证配置。"""
+        """加载并验证配置。
+        
+        优先级: config_path > config_fname > 默认路径
+        """
         from tea_agent.config import load_config
 
         if config_path:
+            # 完整路径优先
             if not os.path.isfile(config_path):
                 raise FileNotFoundError(f"配置文件不存在: {config_path}")
             actual_path = config_path
+        elif self._config_fname:
+            # 指定文件名，在 ~/.tea_agent/ 下查找
+            fname_path = str(Path.home() / ".tea_agent" / self._config_fname)
+            if not os.path.isfile(fname_path):
+                raise FileNotFoundError(f"配置文件不存在: {fname_path}")
+            actual_path = fname_path
         else:
+            # 默认路径
             default_path = str(Path.home() / ".tea_agent" / "config.yaml")
             fallback_path = str(Path(__file__).parent / "config.yaml")
             if os.path.isfile(default_path):
@@ -200,13 +229,53 @@ class Agent:
     # 会话初始化
     # ═══════════════════════════════════════════════
     def _init_session(self):
-        """初始化 OnlineToolSession。"""
-        from tea_agent.onlinesession import OnlineToolSession
+        """初始化会话（根据模式选择 LiteSession 或 OnlineToolSession）。"""
         import tea_agent.session_ref as _sref
 
         cfg = self._cfg
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
+
+        # lite 模式使用 LiteSession
+        if self.mode == "lite":
+            from tea_agent.litesession import LiteSession
+            
+            # 根据 use_cheap_model 选择模型
+            if self._use_cheap_model and cheap_m.api_key:
+                model_key = cast(str, cheap_m.api_key)
+                model_url = cast(str, cheap_m.api_url)
+                model_name = cast(str, cheap_m.model_name)
+                logger.info(f"Lite 模式使用便宜模型: {model_name}")
+            else:
+                model_key = cast(str, main_m.api_key)
+                model_url = cast(str, main_m.api_url)
+                model_name = cast(str, main_m.model_name)
+            
+            _options = getattr(main_m, 'options', {}) or {}
+            supports_reasoning = _options.get('supports_reasoning', True) if isinstance(_options, dict) else True
+
+            self._sess = LiteSession(
+                toolkit=self._toolkit,
+                api_key=model_key,
+                api_url=model_url,
+                model=model_name,
+                enable_thinking=self._enable_thinking,
+                max_iterations=cfg.max_iterations,
+                supports_reasoning=supports_reasoning,
+            )
+            
+            _sref.set_session(self._sess, setter=f"Agent({self.mode})")
+            _sref.set_agent(self, setter=f"Agent({self.mode})")
+            
+            logger.info(
+                f"会话初始化 | 模式: lite | "
+                f"模型: {model_name} | "
+                f"工具: {'开' if self._use_tools else '关'}"
+            )
+            return
+
+        # lightweight/full 模式使用 OnlineToolSession
+        from tea_agent.onlinesession import OnlineToolSession
 
         _options = getattr(main_m, 'options', {}) or {}
         supports_vision = _options.get('supports_vision', False) if isinstance(_options, dict) else False
@@ -314,17 +383,18 @@ class Agent:
         user_input: str,
         topic_id: str = "",
         on_status: Optional[Callable] = None,
-    ) -> List[Dict]:
+    ) -> List[Dict] | Dict:
         """
         发送用户消息，阻塞直到 AI 返回完整回复。
 
         Args:
             user_input: 用户输入文本
-            topic_id: 主题 ID（full 模式用于入库，lightweight 模式忽略）
+            topic_id: 主题 ID（full 模式用于入库，lightweight/lite 模式忽略）
             on_status: 状态回调（full 模式用于 GUI）
 
         Returns:
-            本轮对话的所有消息列表
+            lightweight/full: 本轮对话的所有消息列表
+            lite: {user, thinking, assistant, tool_calls, error}
         """
         if self._generating:
             raise RuntimeError("正在生成中，请等待当前对话完成")
@@ -332,6 +402,13 @@ class Agent:
         with self._sess_lock:
             self._generating = True
             try:
+                # lite 模式直接调用 LiteSession.chat()
+                if self.mode == "lite":
+                    def stream_cb(text: str):
+                        if self._callback:
+                            self._callback({"type": "chunk", "content": text})
+                    return self._sess.chat(user_input, callback=stream_cb)
+                
                 return self._chat_impl(user_input, topic_id, on_status)
             finally:
                 self._generating = False

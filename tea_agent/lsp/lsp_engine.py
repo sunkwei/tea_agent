@@ -378,4 +378,215 @@ def collect_context(project_root: str, filepath: str, symbol: str = None, max_fi
         return results
 
     except Exception as e:
+
+# ── C++ (clangd) 支持 ────────────────────────────────────────
+
+def _check_clangd() -> bool:
+    """检查 clangd 是否已安装。"""
+    try:
+        result = subprocess.run(
+            ["clangd", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return result.returncode == 0
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def cpp_diagnose(project_root: str, filepath: str) -> Dict:
+    """C++ 诊断 — 基于 clangd。
+    
+    Args:
+        project_root: 项目根目录
+        filepath: 目标 .cpp/.h 文件
+    
+    Returns:
+        {"ok": bool, "diagnostics": [...], "total": int, "hint": str}
+    """
+    if not filepath or not any(filepath.endswith(ext) for ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx')):
+        return {"ok": True, "diagnostics": [], "total": 0, "hint": "非 C++ 文件，跳过"}
+    
+    if not _check_clangd():
+        return {"ok": False, "error": "clangd 未安装，请安装 LLVM 工具链"}
+    
+    try:
+        # 使用 clangd 的 --check 模式进行诊断
+        # 注意：clangd 需要 compile_commands.json 或 compile_flags.txt
+        result = subprocess.run(
+            ["clangd", "--check", filepath, f"--path-mapping={project_root}={project_root}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=project_root
+        )
+        
+        # 解析 clangd 输出
+        diagnostics = []
+        for line in result.stderr.split('\n'):
+            if 'error:' in line or 'warning:' in line:
+                # 格式: file:line:col: error: message
+                parts = line.split(':', 3)
+                if len(parts) >= 4:
+                    diag = {
+                        "file": parts[0],
+                        "line": int(parts[1]) if parts[1].isdigit() else 0,
+                        "column": int(parts[2]) if parts[2].isdigit() else 0,
+                        "severity": "error" if "error:" in line else "warning",
+                        "message": parts[3].strip()
+                    }
+                    diagnostics.append(diag)
+        
+        errors = [d for d in diagnostics if d.get("severity") == "error"]
+        warnings = [d for d in diagnostics if d.get("severity") == "warning"]
+        
+        summary = []
+        if errors:
+            summary.append(f"{len(errors)} 错误")
+        if warnings:
+            summary.append(f"{len(warnings)} 警告")
+        
+        return {
+            "ok": len(errors) == 0,
+            "diagnostics": diagnostics[:20],
+            "total": len(diagnostics),
+            "errors": len(errors),
+            "warnings": len(warnings),
+            "hint": f"发现 {', '.join(summary)}" if summary else "无问题 ✓",
+        }
+    
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "clangd 诊断超时"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def cpp_goto_definition(project_root: str, filepath: str, line: int, col: int) -> Dict:
+    """C++ 跳转定义 — 基于 clangd。
+    
+    注意：需要 clangd 运行在 LSP 服务器模式，这里使用简化实现。
+    """
+    if not filepath or not any(filepath.endswith(ext) for ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx')):
+        return {"ok": False, "error": "非 C++ 文件"}
+    
+    if not _check_clangd():
+        return {"ok": False, "error": "clangd 未安装"}
+    
+    try:
+        # 使用 ctags 作为简化实现
+        result = subprocess.run(
+            ["ctags", "-f", "-", "--fields=+n", "--sort=yes", filepath],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=project_root
+        )
+        
+        if result.returncode != 0:
+            return {"ok": False, "error": "ctags 执行失败"}
+        
+        # 解析 ctags 输出
+        definitions = []
+        for tag_line in result.stdout.strip().split('\n'):
+            if not tag_line or tag_line.startswith('!'):
+                continue
+            
+            parts = tag_line.split('\t')
+            if len(parts) >= 3:
+                definitions.append({
+                    "name": parts[0],
+                    "file": parts[1],
+                    "pattern": parts[2] if len(parts) > 2 else "",
+                })
+        
+        return {
+            "ok": True,
+            "definitions": definitions[:10],
+            "hint": f"找到 {len(definitions)} 个定义" if definitions else "未找到定义",
+        }
+    
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def cpp_completion(project_root: str, filepath: str, line: int, col: int) -> Dict:
+    """C++ 代码补全 — 基于 clangd。
+    
+    注意：完整实现需要 clangd LSP 协议，这里使用简化实现。
+    """
+    if not filepath or not any(filepath.endswith(ext) for ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx')):
+        return {"ok": False, "error": "非 C++ 文件"}
+    
+    # 简化实现：使用 ctags 提取当前文件的符号
+    try:
+        result = subprocess.run(
+            ["ctags", "-f", "-", "--fields=+n", "--sort=yes", filepath],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=project_root
+        )
+        
+        if result.returncode != 0:
+            return {"ok": False, "error": "ctags 执行失败"}
+        
+        # 解析 ctags 输出
+        completions = []
+        for tag_line in result.stdout.strip().split('\n'):
+            if not tag_line or tag_line.startswith('!'):
+                continue
+            
+            parts = tag_line.split('\t')
+            if len(parts) >= 3:
+                completions.append({
+                    "name": parts[0],
+                    "type": "function" if "f:" in tag_line else "variable",
+                })
+        
+        return {
+            "ok": True,
+            "completions": completions[:15],
+            "hint": f"找到 {len(completions)} 个补全项",
+        }
+    
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def diagnose_auto(project_root: str, filepath: str = None) -> Dict:
+    """自动检测语言并运行诊断。"""
+    if not filepath:
+        return diagnose(project_root)
+    
+    ext = Path(filepath).suffix.lower()
+    if ext in ('.py', '.pyw', '.pyi'):
+        return diagnose(project_root, filepath)
+    elif ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'):
+        return cpp_diagnose(project_root, filepath)
+    else:
+        return {"ok": True, "diagnostics": [], "total": 0, "hint": f"不支持的文件类型: {ext}"}
+
+
+def goto_definition_auto(project_root: str, filepath: str, line: int, col: int) -> Dict:
+    """自动检测语言并跳转定义。"""
+    ext = Path(filepath).suffix.lower()
+    if ext in ('.py', '.pyw', '.pyi'):
+        return goto_definition(project_root, filepath, line, col)
+    elif ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'):
+        return cpp_goto_definition(project_root, filepath, line, col)
+    else:
+        return {"ok": False, "error": f"不支持的文件类型: {ext}"}
+
+
+def completion_auto(project_root: str, filepath: str, line: int, col: int) -> Dict:
+    """自动检测语言并补全。"""
+    ext = Path(filepath).suffix.lower()
+    if ext in ('.py', '.pyw', '.pyi'):
+        return completion(project_root, filepath, line, col)
+    elif ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx'):
+        return cpp_completion(project_root, filepath, line, col)
+    else:
+        return {"ok": False, "error": f"不支持的文件类型: {ext}"}
+
         return {"ok": False, "error": str(e)}

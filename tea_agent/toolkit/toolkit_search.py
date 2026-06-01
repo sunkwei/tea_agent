@@ -1,4 +1,5 @@
-# version: 1.2.0
+# version: 1.3.0
+# 2026-06-01 gen by agent, 添加 GitHub 搜索能力（repos/code/issues）
 
 import logging
 
@@ -7,7 +8,7 @@ logger = logging.getLogger("toolkit")
 def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: str = "duckduckgo",
                    search_type: str = "web", root_path: str = "", glob_pattern: str = ""):
     """
-    搜索工具，支持互联网搜索和项目内代码搜索。
+    搜索工具，支持互联网搜索（DuckDuckGo/百度/GitHub）和项目内代码搜索。
 
     search_type='web' (默认): 互联网搜索
         toolkit_search(query='Python tutorial', engine='duckduckgo')
@@ -18,12 +19,17 @@ def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: st
     search_type='symbol': 符号搜索（查找函数/类定义）
         toolkit_search(query='MyClass', search_type='symbol', root_path='/path/to/project')
 
+    search_type='github': GitHub 搜索（仓库/代码/Issues）
+        toolkit_search(query='tea-agent', search_type='github', engine='repos')  # 搜索仓库
+        toolkit_search(query='def toolkit_search', search_type='github', engine='code')  # 搜索代码
+        toolkit_search(query='bug fix', search_type='github', engine='issues')  # 搜索 Issues
+
     Args:
         query: 搜索关键词
         max_results: 返回结果数量上限，默认10，最大50
         lang: 语言偏好，如 zh-cn, en，空=不限（仅 web 搜索）
-        engine: 搜索引擎，duckduckgo（默认）或 baidu（仅 web 搜索）
-        search_type: 搜索类型，web/code/symbol，默认 web
+        engine: 搜索引擎，duckduckgo（默认）/ baidu / repos / code / issues
+        search_type: 搜索类型，web/code/symbol/github，默认 web
         root_path: 搜索根目录（code/symbol 搜索需要）
         glob_pattern: 文件过滤模式，如 '*.py'（仅 code 搜索）
     """
@@ -37,6 +43,8 @@ def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: st
         return _search_codebase(query, root_path, glob_pattern, max_results)
     elif search_type == "symbol":
         return _search_symbol(query, root_path, max_results)
+    elif search_type == "github":
+        return _search_github(query, engine, max_results)
     else:
         if engine == "baidu":
             return _search_baidu(query, max_results)
@@ -229,7 +237,7 @@ def _search_baidu(query: str, max_results: int):
 
 def meta_toolkit_search() -> dict:
     """Meta toolkit search."""
-    return {"type": "function", "function": {"name": "toolkit_search", "description": "搜索工具，支持互联网搜索（DuckDuckGo/百度）和项目内代码搜索（全文搜索/符号搜索）。", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "搜索关键词，如 'Python async tutorial' 或 'def login'"}, "max_results": {"type": "integer", "description": "返回结果数量上限，默认10，最大50", "default": 10}, "lang": {"type": "string", "description": "语言偏好，如 zh-cn, en, 空=不限。仅 web 搜索支持", "default": ""}, "engine": {"type": "string", "enum": ["duckduckgo", "baidu"], "description": "搜索引擎，默认 duckduckgo。仅 web 搜索", "default": "duckduckgo"}, "search_type": {"type": "string", "enum": ["web", "code", "symbol"], "description": "搜索类型: web=互联网搜索, code=代码全文搜索, symbol=符号搜索", "default": "web"}, "root_path": {"type": "string", "description": "搜索根目录路径。code/symbol 搜索需要"}, "glob_pattern": {"type": "string", "description": "文件过滤模式，如 '*.py'。仅 code 搜索"}}, "required": ["query"]}}}
+    return {"type": "function", "function": {"name": "toolkit_search", "description": "搜索工具，支持互联网搜索（DuckDuckGo/百度/GitHub）和项目内代码搜索（全文搜索/符号搜索）。GitHub 搜索支持仓库、代码、Issues 搜索。", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "搜索关键词，如 'Python async tutorial' 或 'def login'"}, "max_results": {"type": "integer", "description": "返回结果数量上限，默认10，最大50", "default": 10}, "lang": {"type": "string", "description": "语言偏好，如 zh-cn, en, 空=不限。仅 web 搜索支持", "default": ""}, "engine": {"type": "string", "enum": ["duckduckgo", "baidu", "repos", "code", "issues"], "description": "搜索引擎，默认 duckduckgo。repos/code/issues 为 GitHub 搜索", "default": "duckduckgo"}, "search_type": {"type": "string", "enum": ["web", "code", "symbol", "github"], "description": "搜索类型: web=互联网搜索, code=代码全文搜索, symbol=符号搜索, github=GitHub搜索", "default": "web"}, "root_path": {"type": "string", "description": "搜索根目录路径。code/symbol 搜索需要"}, "glob_pattern": {"type": "string", "description": "文件过滤模式，如 '*.py'。仅 code 搜索"}}, "required": ["query"]}}}
 
 def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results: int):
     """项目内全文搜索（优先使用 ripgrep，回退到 Python 实现）"""
@@ -422,3 +430,100 @@ def _extract_args(node):
     if node.args.kwarg:
         args.append(f"**{node.args.kwarg.arg}")
     return args
+
+def _search_github(query: str, search_type: str, max_results: int):
+    """
+    GitHub 搜索（使用公开 API，无需 token）
+    
+    Args:
+        query: 搜索关键词
+        search_type: repos/code/issues
+        max_results: 最大结果数
+    """
+    import requests
+    import json
+    
+    # GitHub API 端点映射
+    endpoints = {
+        "repos": "https://api.github.com/search/repositories",
+        "code": "https://api.github.com/search/code",
+        "issues": "https://api.github.com/search/issues",
+    }
+    
+    # 默认搜索仓库
+    api_type = search_type if search_type in endpoints else "repos"
+    url = endpoints[api_type]
+    
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "TeaAgent/1.0",
+    }
+    
+    params = {
+        "q": query,
+        "per_page": min(max_results, 30),  # GitHub API 最大 100，但 30 足够
+    }
+    
+    try:
+        resp = requests.get(url, headers=headers, params=params, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        results = []
+        items = data.get("items", [])
+        
+        for item in items[:max_results]:
+            if api_type == "repos":
+                results.append({
+                    "title": item.get("full_name", ""),
+                    "url": item.get("html_url", ""),
+                    "snippet": item.get("description", "") or "",
+                    "stars": item.get("stargazers_count", 0),
+                    "forks": item.get("forks_count", 0),
+                    "language": item.get("language", ""),
+                    "updated": item.get("updated_at", "")[:10],  # 只取日期部分
+                })
+            elif api_type == "code":
+                repo = item.get("repository", {})
+                results.append({
+                    "title": item.get("name", ""),
+                    "url": item.get("html_url", ""),
+                    "snippet": f"仓库: {repo.get('full_name', '')}",
+                    "path": item.get("path", ""),
+                    "repo_stars": repo.get("stargazers_count", 0),
+                })
+            elif api_type == "issues":
+                labels = [l.get("name", "") for l in item.get("labels", [])]
+                is_pr = "pull_request" in item
+                results.append({
+                    "title": item.get("title", ""),
+                    "url": item.get("html_url", ""),
+                    "snippet": (item.get("body", "") or "")[:200],  # 截取前 200 字符
+                    "state": item.get("state", ""),
+                    "type": "PR" if is_pr else "Issue",
+                    "labels": labels,
+                    "comments": item.get("comments", 0),
+                    "created": item.get("created_at", "")[:10],
+                })
+        
+        if not results:
+            return (0, "[]", f"GitHub 未找到相关{api_type}结果")
+        
+        return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+    
+    except requests.Timeout:
+        return (1, "", "GitHub API 请求超时")
+    except requests.ConnectionError:
+        return (1, "", "网络连接失败，请检查网络")
+    except requests.HTTPError as e:
+        if e.response.status_code == 403:
+            return (1, "", "GitHub API 速率限制，请稍后再试（未认证限制 10 次/分钟）")
+        elif e.response.status_code == 401:
+            if api_type == "code":
+                return (1, "", "GitHub 代码搜索需要认证。请使用仓库搜索(repos)或 Issues 搜索(issues)")
+            return (1, "", "GitHub API 认证失败")
+        elif e.response.status_code == 422:
+            return (1, "", "GitHub 搜索语法错误，请简化关键词后重试")
+        return (1, "", f"GitHub API 错误: {e.response.status_code}")
+    except Exception as e:
+        return (1, "", f"GitHub 搜索出错: {str(e)}")

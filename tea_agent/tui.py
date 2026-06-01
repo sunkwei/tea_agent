@@ -54,7 +54,6 @@ class _TUIAgentCore(AgentCore):
         super().__init__(config_path=config_path, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
         self._cfg.enable_thinking = self._tui_think
         self.sess.enable_thinking = self._tui_think
-        self._init_session()
         self.sess.max_iterations = 1000
 
     def _on_post_reply(self, ai_msg, used_tools, topic_id):

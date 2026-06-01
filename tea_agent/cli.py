@@ -26,27 +26,24 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from tea_agent.agent_core import AgentCore
+from tea_agent.agent import Agent
 from tea_agent.config import load_config
 
-class TeaCLI(AgentCore):
+class TeaCLI(Agent):
     """Tea Agent 命令行客户端。"""
 
     def __init__(self, config_path: str = None, enable_think: bool = False,
                  verbose: bool = False, disable_summary: bool = False,
                  no_stream_chunk: bool = False):
-        """Initialize  .
-        
-        Args:
-            config_path: Description.
-            enable_think: Description.
-            verbose: Description.
-            disable_summary: Description.
-            no_stream_chunk: Description.
-        """
         self._cli_think = enable_think
         self._cli_verbose = verbose
-        super().__init__(config_path=config_path, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
+        super().__init__(
+            mode="full",
+            config_path=config_path,
+            enable_thinking=enable_think,
+            disable_summary=disable_summary,
+            no_stream_chunk=no_stream_chunk,
+        )
 
         # 应用 CLI 参数覆盖 config 的 think 设置
         self._cfg.enable_thinking = self._cli_think

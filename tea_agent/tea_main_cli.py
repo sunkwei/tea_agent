@@ -25,26 +25,25 @@ _parent_dir = str(Path(__file__).resolve().parent.parent)
 if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
 
-from tea_agent.agent_core import AgentCore
+from tea_agent.agent import Agent
 from tea_agent.config import load_config
 
-class TeaCLI(AgentCore):
-    """Tea Agent 命令行界面 — 继承 AgentCore 共享核心逻辑。
+class TeaCLI(Agent):
+    """Tea Agent 命令行界面 — 继承 Agent 共享核心逻辑。
 
     支持 --config 参数指定配置文件，实现多 agent 隔离。
     """
 
-    def __init__(self, debug: bool = False, config_path: Optional[str] = None, disable_summary: bool = False, no_stream_chunk: bool = False):
-        # ── AgentCore 初始化：配置、目录、Storage/Toolkit、连接器、会话、MQTT ──
-        """Initialize  .
-        
-        Args:
-            debug: Description.
-            config_path: Description.
-            disable_summary: Description.
-            no_stream_chunk: Description.
-        """
-        super().__init__(debug=debug, config_path=config_path, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
+    def __init__(self, debug: bool = False, config_path: Optional[str] = None,
+                 disable_summary: bool = False, no_stream_chunk: bool = False):
+        super().__init__(
+            mode="full",
+            debug=debug,
+            config_path=config_path,
+            enable_thinking=True,
+            disable_summary=disable_summary,
+            no_stream_chunk=no_stream_chunk,
+        )
 
         # ── CLI 特定：显示状态信息 ──
         print(self._init_session_info_str())

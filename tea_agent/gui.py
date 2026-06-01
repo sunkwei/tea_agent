@@ -33,7 +33,7 @@ if __name__ == "__main__":
     from tea_agent.onlinesession import OnlineToolSession
     from tea_agent.store import Storage
     from tea_agent import tlk
-    from tea_agent.agent_core import AgentCore
+    from tea_agent.agent import Agent
 
     from tea_agent._gui._tray import TrayManager
     from tea_agent._gui._images import ImageHandler
@@ -43,7 +43,7 @@ else:
     from .onlinesession import OnlineToolSession
     from .store import Storage
     from . import tlk
-    from .agent_core import AgentCore
+    from .agent import Agent
     from tea_agent._gui._tray import TrayManager
     from tea_agent._gui._images import ImageHandler
     from tea_agent._gui._renderer import ChatRenderer
@@ -78,7 +78,7 @@ from tea_agent._gui._renderer import ChatRenderer
 
 # Dialogs
 from tea_agent.gui_dialogs import MemoryDialog, TopicDialog, ConfigDialog
-class TkGUI(AgentCore):
+class TkGUI(Agent):
     """TkGUI class."""
     # 窗口大小常量
     WINDOW_DEFAULT_SIZE = "1100x850"
@@ -101,10 +101,12 @@ class TkGUI(AgentCore):
         self._generating_lock = threading.Lock()
         self._generating = False
 
-        self.sess = None  # 预设，AgentCore._init_session 会创建它
+        self.sess = None  # 预设，Agent._init_session 会创建它
 
-        # ── AgentCore 初始化：配置、目录、Storage/Toolkit、会话 ──
-        super().__init__(debug=debug, config_path=config_fname, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
+        # ── Agent 初始化：配置、目录、Storage/Toolkit、会话 ──
+        super().__init__(mode="full", debug=debug, config_path=config_fname,
+                         enable_thinking=True, disable_summary=disable_summary,
+                         no_stream_chunk=no_stream_chunk)
 
         self.stream_mgr = StreamManager(self)
         self.topic_mgr = TopicManager(self)

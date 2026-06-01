@@ -1,9 +1,11 @@
 # 2026-05-06 gen by claude, 添加包版本号
+# 2026-05-29 refactor: 统一 Agent 类
 
-__version__ = "0.9.9"
+__version__ = "0.9.10"
 
-__all__ = [    "TeaAgent",
-    "AgentCore",
+__all__ = [
+    "Agent",
+    "TeaAgent",      # 向后兼容别名
     "BaseChatSession",
     "OnlineToolSession",
     "Storage",
@@ -12,4 +14,4 @@ __all__ = [    "TeaAgent",
     "save_config",
 ]
 
-from tea_agent.tea_agent import TeaAgent
+from tea_agent.agent import Agent, TeaAgent

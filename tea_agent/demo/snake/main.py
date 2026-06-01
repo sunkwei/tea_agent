@@ -22,11 +22,11 @@ import sys
 import os
 
 # ensure demo package is importable
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from demo.snake.engine import Game
-from demo.snake.strategies import STRATEGIES
-from demo.snake.renderer import Renderer, make_human_strategy
+from tea_agent.demo.snake.engine import Game
+from tea_agent.demo.snake.strategies import STRATEGIES
+from tea_agent.demo.snake.renderer import Renderer, make_human_strategy
 
 
 def parse_args():

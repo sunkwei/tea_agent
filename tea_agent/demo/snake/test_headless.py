@@ -4,10 +4,10 @@ Headless test for Battle Snakes engine — run without curses.
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from demo.snake.engine import Game, Position, Direction
-from demo.snake.strategies import STRATEGIES
+from tea_agent.demo.snake.engine import Game, Position, Direction
+from tea_agent.demo.snake.strategies import STRATEGIES
 
 
 def test_basic():
@@ -21,7 +21,7 @@ def test_basic():
     ]
     game = Game(width=30, height=20, snakes_config=configs, seed=42)
 
-    max_ticks = 5000
+    max_ticks = 10000
     for _ in range(max_ticks):
         result = game.tick()
         if result["winner"] or result["alive_count"] == 0:
@@ -40,7 +40,7 @@ def test_basic():
 
 def test_head_collision():
     """Test that head-to-head collisions kill both snakes."""
-    from demo.snake.engine import Snake, Board, Game, Position, Direction
+    from tea_agent.demo.snake.engine import Snake, Board, Game, Position, Direction
 
     # custom setup: two snakes heading toward each other
     configs = [

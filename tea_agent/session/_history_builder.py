@@ -232,6 +232,29 @@ def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
     sys_msg = {"role": "system", "content": system_prompt}
     result.append(sys_msg)
 
+    # ── 未完成任务自动恢复检查 ──
+    try:
+        from tea_agent.toolkit.toolkit_task_resume import toolkit_task_resume
+        resume_info = toolkit_task_resume(action="check")
+        if resume_info.get("has_pending"):
+            parts = ["[未完成任务提醒]"]
+            if resume_info.get("pending_todos"):
+                todos = resume_info["pending_todos"]
+                parts.append(f"有 {len(todos)} 个未完成的 TODO 项:")
+                for t in todos[:5]:  # 最多显示 5 个
+                    parts.append(f"  - [{t['idx']}] {t['desc']}")
+                if len(todos) > 5:
+                    parts.append(f"  ... 还有 {len(todos)-5} 项")
+            if resume_info.get("pending_plans"):
+                plans = resume_info["pending_plans"]
+                parts.append(f"有 {len(plans)} 个未完成的 Plan:")
+                for p in plans[:3]:  # 最多显示 3 个
+                    parts.append(f"  - [{p['plan_id']}] {p['goal']} (进度: {p['progress']})")
+            parts.append("提示: 使用 toolkit_todo(action='show') 或 toolkit_plan(action='list') 查看详情")
+            result.append({"role": "user", "content": "\n".join(parts)})
+    except Exception as e:
+        logger.debug(f"task resume check failed: {e}")
+
     # ── 潜意识引擎状态注入 ──
     sub_ctx = get_subconscious_context()
     if sub_ctx:

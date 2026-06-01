@@ -60,6 +60,17 @@ def _save_plan(plan: dict):
 
 _KNOWN_STEP_META = {"id", "desc", "action", "depends_on", "verify", "params"}
 
+def _get_topic_id() -> Optional[str]:
+    """获取当前 topic_id"""
+    try:
+        from tea_agent.session_ref import get_agent
+        agent = get_agent()
+        if agent is not None:
+            return getattr(agent, 'current_topic_id', None)
+    except Exception:
+        pass
+    return None
+
 def _new_plan(goal: str, steps: List[dict]) -> dict:
     """Internal: new plan.
     
@@ -90,6 +101,7 @@ def _new_plan(goal: str, steps: List[dict]) -> dict:
         })
     return {
         "id": uuid.uuid4().hex[:8],
+        "topic_id": _get_topic_id() or "",
         "goal": goal,
         "status": "created",
         "created_at": now,

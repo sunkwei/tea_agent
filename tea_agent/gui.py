@@ -425,6 +425,10 @@ class TkGUI(Agent):
                         self._update_status(f"⚠️ 无可用浏览器，已保存 HTML: last.html")
 
                 os.unlink(tmp.name)
+                
+                # 导出成功后打开文件管理器并定位到文件
+                if pdf_ok and os.path.exists(output):
+                    self._open_file_manager(output)
 
             except Exception as ex:
                 self._update_status(f"❌ 导出失败: {ex}")
@@ -438,6 +442,32 @@ class TkGUI(Agent):
         """更新状态栏"""
         if hasattr(self, 'status_var'):
             self.status_var.set(msg)
+    
+    def _open_file_manager(self, file_path: str):
+        """打开文件管理器并定位到指定文件"""
+        import subprocess
+        import platform
+        
+        try:
+            system = platform.system()
+            if system == "Windows":
+                # Windows: explorer /select,<file_path>
+                subprocess.Popen(["explorer", "/select,", os.path.normpath(file_path)])
+            elif system == "Darwin":
+                # macOS: open -R <file_path>
+                subprocess.Popen(["open", "-R", file_path])
+            else:
+                # Linux: 尝试多种文件管理器
+                dir_path = os.path.dirname(file_path)
+                # 优先尝试 nautilus --select (GNOME)
+                try:
+                    subprocess.Popen(["nautilus", "--select", file_path])
+                except FileNotFoundError:
+                    # 尝试 xdg-open 打开目录
+                    subprocess.Popen(["xdg-open", dir_path])
+        except Exception:
+            # 静默失败，不影响主流程
+            pass
 
     def safe_stream(self, text):
         """线程安全的流式输出 — 委托 StreamManager"""

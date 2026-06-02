@@ -10,6 +10,7 @@ Usage:
 Keybindings:
     Enter       Send message
     Shift+Enter Newline
+    Up/Down     History (when input empty)
     Ctrl+C      Quit
     Esc         Interrupt generation
     Ctrl+T      Toggle Think mode
@@ -260,15 +261,24 @@ class TeaTUI(App):
         self._history_index: int = -1        # -1 = 不在导航状态, 0..n-1 = 当前查看的索引
 
     class _SendTextArea(TextArea):
-        """TextArea with Enter=send, Shift+Enter=newline."""
+        """TextArea with Enter=send, Shift+Enter=newline, Up/Down=history when empty."""
 
         async def _on_key(self, event):
-            """Enter=send, Shift+Enter=newline."""
+            """Enter=send, Shift+Enter=newline, Up/Down=history when empty."""
             if event.key in ("enter", "shift+enter"):
                 if event.key == "shift+enter":
                     self.insert("\n")
                 else:
                     self.app._do_send()
+                event.stop()
+                return
+            # 向上/向下键：仅在输入框为空时触发历史导航
+            if event.key == "up" and not self.text.strip():
+                self.app._navigate_history_up()
+                event.stop()
+                return
+            if event.key == "down" and not self.text.strip():
+                self.app._navigate_history_down()
                 event.stop()
                 return
             await super()._on_key(event)
@@ -495,6 +505,7 @@ class TeaTUI(App):
   /switch <N/id>     Switch by list number or topic id
 
   Enter     Send    Shift+Enter  Newline
+  Up/Down   History (when input empty)
   Ctrl+C    Quit    Esc          Interrupt
   Ctrl+T    Think   Ctrl+V       Verbose
   Ctrl+N    New     Ctrl+L       List
@@ -588,6 +599,52 @@ class TeaTUI(App):
         self._chat_write(f"[bold blue]AI:[/] {msg['ai'][:1000]}")
         self._chat_write(f"[bold cyan]--- End ---[/]")
         self._update_status(f"History: {total - idx}/{total}")
+
+    def _navigate_history_up(self):
+        """向上键：输入框为空时，用历史user输入替换。"""
+        if not self._history_msgs:
+            self._load_history_msgs()
+        if not self._history_msgs:
+            self._update_status("No history messages")
+            return
+        # 从最新消息开始往前翻
+        if self._history_index < len(self._history_msgs) - 1:
+            self._history_index += 1
+            self._display_current_history()
+        else:
+            self._update_status("Already at oldest message")
+
+    def _navigate_history_down(self):
+        """向下键：返回更新的历史消息。"""
+        if self._history_index > 0:
+            self._history_index -= 1
+            self._display_current_history()
+        elif self._history_index == 0:
+            # 回到最新，清空输入框
+            self._history_index = -1
+            try:
+                input_widget = self.query_one("#input-area", TextArea)
+                input_widget.clear()
+            except NoMatches:
+                pass
+            self._update_status("Ready")
+        else:
+            self._update_status("No history messages")
+
+    def _display_current_history(self):
+        """在输入框中显示当前历史消息的user输入。"""
+        if self._history_index < 0 or self._history_index >= len(self._history_msgs):
+            return
+        msg = self._history_msgs[self._history_index]
+        total = len(self._history_msgs)
+        idx = self._history_index
+        try:
+            input_widget = self.query_one("#input-area", TextArea)
+            input_widget.clear()
+            input_widget.insert(msg["user"])
+        except NoMatches:
+            pass
+        self._update_status(f"History: {total - idx}/{total} (Up/Down to navigate)")
 
     def _switch_topic(self, arg: str):
         """

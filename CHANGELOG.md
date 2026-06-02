@@ -1,6 +1,11 @@
 # Changelog
 
 
+## [0.9.10] - 2026-05-27
+### Bug Fixes
+- 修复 GUI 左侧面板宽度问题：ttk.PanedWindow 使用 sashpos API 替代 sash_place
+
+
 ## [0.9.9] - 2026-05-27
 ### Dependencies
 - add: `httpx>=0.25.0` — API HTTP 客户端（onlinesession.py 直接引用）

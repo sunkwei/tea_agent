@@ -313,7 +313,28 @@ def execute_tool_loop(session, context: Dict) -> Dict:
 
             for call in valid_tool_calls:
                 _asctime = time.strftime("%Y-%m-%d %H:%M:%S")
-                print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name}")
+                # 格式化参数：非字符转str，超长截断32字节
+                _args_str = ""
+                if call.function.arguments:
+                    try:
+                        import json as _json
+                        _args = _json.loads(call.function.arguments) if isinstance(call.function.arguments, str) else call.function.arguments
+                        if isinstance(_args, dict):
+                            _parts = []
+                            for _k, _v in _args.items():
+                                _vs = str(_v)
+                                if len(_vs) > 32:
+                                    _vs = _vs[:32] + "…"
+                                _parts.append(f"{_k}={_vs}")
+                            _args_str = "(" + ", ".join(_parts) + ")"
+                        else:
+                            _vs = str(_args)
+                            if len(_vs) > 32:
+                                _vs = _vs[:32] + "…"
+                            _args_str = f"({_vs})"
+                    except Exception:
+                        _args_str = f"({call.function.arguments[:32]}…)" if len(call.function.arguments) > 32 else f"({call.function.arguments})"
+                print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name}{_args_str}")
                 logger.info(f"    tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
                 call_id, func_name, result_str = session.tools_comp.execute_tool_call(call)
                 logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")

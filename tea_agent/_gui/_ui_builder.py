@@ -36,9 +36,10 @@ class UIBuilder:
         main_split = ttk.PanedWindow(gui.root, orient=tk.HORIZONTAL)
         main_split.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
 
-        # ===== 左侧面板 =====
-        left = Frame(main_split, width=220)
-        main_split.add(left, weight=1)
+        # ===== 左侧面板 (占 1/5) =====
+        left = Frame(main_split, width=280)
+        left.pack_propagate(False)  # 固定宽度
+        main_split.add(left, weight=0)
 
         ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, _fs(14), "bold")).pack(pady=5)
         _topic_font = tkFont.Font(family=SYSTEM_FONT, size=_fs(12))
@@ -88,7 +89,7 @@ class UIBuilder:
         gui.console.config(state=tk.DISABLED)
 
         if HAS_TKINTERWEB:
-            gui.chat_view = HtmlFrame(chat_frame, messages_enabled=False, on_link_click=gui._on_history_link_click)
+            gui.chat_view = HtmlFrame(chat_frame, messages_enabled=False, on_link_click=gui._on_history_link_click, fontscale=1.5)
         else:
             gui.chat_view = scrolledtext.ScrolledText(
                 chat_frame, font=(SYSTEM_FONT, _fs(15)), bg="#fafafa", fg="black", wrap=tk.WORD
@@ -155,3 +156,19 @@ class UIBuilder:
 
         # Ctrl+P: 导出当前主题最后一轮为 PDF
         gui.root.bind("<Control-p>", gui.export_last_pdf)
+
+        # 左侧面板占 1/5，右侧占 4/5
+        # ttk.PanedWindow 用 sashpos(index, newpos)
+        def _set_sash_position(attempt=0):
+            try:
+                gui.root.update_idletasks()
+                w = gui.root.winfo_width()
+                if w > 100:
+                    sash_x = max(200, w // 5)
+                    main_split.sashpos(0, sash_x)
+                elif attempt < 10:
+                    gui.root.after(100, _set_sash_position, attempt + 1)
+            except Exception:
+                if attempt < 10:
+                    gui.root.after(100, _set_sash_position, attempt + 1)
+        gui.root.after(200, _set_sash_position)

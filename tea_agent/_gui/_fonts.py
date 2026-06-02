@@ -73,11 +73,72 @@ def _init_fonts():
         import tkinter as _tk2
         root = _tk2._default_root
         if root:
-            sf = float(root.tk.call("tk", "scaling"))
+            if _IS_WINDOWS:
+                # DPI-aware 模式下 tk scaling 报物理 DPI（可能 2.0），
+                # 但用户 Windows 缩放设置可能是 150%（1.5x）。
+                # 用系统缩放因子更准确，避免 Tk 控件字体过大。
+                try:
+                    import ctypes
+                    scale_pct = ctypes.windll.shcore.GetScaleFactorForDevice(0)
+                    sf = scale_pct / 100.0
+                except Exception:
+                    sf = float(root.tk.call("tk", "scaling"))
+            else:
+                sf = float(root.tk.call("tk", "scaling"))
             if 1.0 < sf <= 4.0:
                 _SCALE_FACTOR = sf
     except Exception:
         pass
     _DEFAULT_FONT_SIZE = max(12, int(16 * _SCALE_FACTOR))
 
+    # 将 Tk 默认字体大小也乘以缩放因子，保持控件字体与 _fs() 一致
+    try:
+        from tkinter import font as _tkfont
+        for _fname in ["TkDefaultFont", "TkTextFont", "TkMenuFont",
+                        "TkHeadingFont", "TkCaptionFont", "TkSmallCaptionFont",
+                        "TkIconFont", "TkTooltipFont"]:
+            try:
+                _f = _tkfont.nametofont(_fname)
+                _orig = _f.cget("size")
+                if _orig > 0:
+                    _f.configure(size=max(1, int(_orig * _SCALE_FACTOR)))
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # 配置 Treeview 行高，避免字体重叠
+    _configure_treeview_rowheight()
+
     _FONTS_DETECTED = True
+
+
+def _configure_treeview_rowheight():
+    """配置 Treeview 行高，确保与缩放后的字体匹配。"""
+    try:
+        import tkinter.ttk as _ttk
+        from tkinter import font as _tkfont
+        
+        style = _ttk.Style()
+        
+        # 获取 Treeview 实际使用的字体大小
+        # Treeview 默认使用 TkDefaultFont
+        try:
+            default_font = _tkfont.nametofont("TkDefaultFont")
+            font_size = default_font.cget("size")
+            if font_size <= 0:
+                font_size = _fs(10)
+        except Exception:
+            font_size = _fs(10)
+        
+        # 计算合适的行高：字体大小 * 2.8 + 4（上下边距）
+        # 对于 13 号字体：13 * 2.8 + 4 ≈ 40，中文字符更高需要更大行高
+        row_height = max(28, int(font_size * 2.8 + 4))
+        
+        style.configure("Treeview", rowheight=row_height)
+        # 也配置 Topic.Treeview 样式（主界面使用）
+        style.configure("Topic.Treeview", rowheight=row_height)
+        
+        logger.debug(f"Treeview 行高配置: font_size={font_size}, rowheight={row_height}")
+    except Exception as e:
+        logger.debug(f"配置 Treeview 行高失败: {e}")

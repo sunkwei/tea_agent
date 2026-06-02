@@ -12,7 +12,7 @@ try:
 except ImportError:
     HAS_TKINTERWEB = False
 
-_DEFAULT_FONT_SIZE = 16  # 模块级默认
+from ._fonts import _DEFAULT_FONT_SIZE  # 从 _fonts 导入，确保 DPI 缩放后值正确
 # ====================== Markdown → HTML 渲染 ======================
 
 _MD_CSS_TEMPLATE = string.Template("""

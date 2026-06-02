@@ -1,3 +1,15 @@
+# ── Windows DPI 感知：必须在 tkinter 导入前设置 ──
+# mss 库会在截图时调用 SetProcessDpiAwareness(2)，如果 GUI 未提前设置，
+# 会导致 Windows 停止位图缩放，GUI 字体突然变小。
+# 这里抢先设置为 Per-Monitor DPI Aware，避免中途被 mss 改变。
+import sys as _sys
+if _sys.platform == "win32":
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        pass
+
 import tkinter as tk
 from tkinter import font as tkFont
 from tkinter import ttk, scrolledtext, Listbox, Frame
@@ -81,8 +93,8 @@ from tea_agent.gui_dialogs import MemoryDialog, TopicDialog, ConfigDialog
 class TkGUI(Agent):
     """TkGUI class."""
     # 窗口大小常量
-    WINDOW_DEFAULT_SIZE = "1100x850"
-    WINDOW_MIN_SIZE = (900, 600)
+    WINDOW_DEFAULT_SIZE = "1440x960"
+    WINDOW_MIN_SIZE = (960, 720)
     
     # 延迟常量（毫秒）
     STREAM_FLUSH_INTERVAL_MS = 500  # 流式刷新间隔
@@ -118,6 +130,9 @@ class TkGUI(Agent):
 
         self.tray = TrayManager(self)
         self.tray.start()
+
+        # 初始化字体缩放（必须在 UI 构建前调用）
+        _init_fonts()
 
         # 暴露给 toolkit 工具函数
         globals()["_storage_"] = self.db

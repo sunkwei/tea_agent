@@ -373,6 +373,7 @@ class TopicDialog(tk.Toplevel):
         self.export_mode = tk.StringVar(value="all")
         ttk.Radiobutton(toolbar, text="完整", variable=self.export_mode, value="all").pack(side=tk.LEFT, padx=2)
         ttk.Radiobutton(toolbar, text="仅用户", variable=self.export_mode, value="user").pack(side=tk.LEFT, padx=2)
+        ttk.Radiobutton(toolbar, text="用户+AI终答", variable=self.export_mode, value="final_msg").pack(side=tk.LEFT, padx=2)
 
         ttk.Button(toolbar, text="🔄 生成向量", command=self._generate_vectors).pack(side=tk.RIGHT, padx=2)
         ttk.Button(toolbar, text="📋 导出选中", command=self._export_selected).pack(side=tk.RIGHT, padx=2)
@@ -810,12 +811,19 @@ class TopicDialog(tk.Toplevel):
         """
         from tkinter import filedialog
 
-        mode = self.export_mode.get()  # "all" or "user"
-        mode_label = "完整" if mode == "all" else "仅用户输入"
+        mode = self.export_mode.get()  # "all" or "user" or "final_msg"
+        if mode == "all":
+            mode_label = "完整"
+        elif mode == "final_msg":
+            mode_label = "用户+AI终答"
+        else:
+            mode_label = "仅用户输入"
 
         if len(topic_ids) == 1:
             tp = self.db.get_topic(topic_ids[0])
-            default_name = f"topic_{topic_ids[0]}.md"
+            raw_title = tp.get("title", f"topic_{topic_ids[0]}") if tp else f"topic_{topic_ids[0]}"
+            safe = re.sub(r'[\\/:*?"<>|]', '_', raw_title).strip()
+            default_name = f"{safe}.md"
         else:
             default_name = f"topics_{datetime.now().strftime('%Y%m%d')}.md"
 
@@ -870,7 +878,7 @@ class TopicDialog(tk.Toplevel):
                 f"C:{ts.get('total_cheap_completion_tokens', 0):,})\n")
         f.write(f"- **嵌入模型:** {ts.get('total_embedding_tokens', 0):,} "
                 f"(P:{ts.get('total_embedding_prompt_tokens', 0):,})\n")
-        f.write(f"- **导出模式:** {'仅用户输入' if mode == 'user' else '完整（含AI回复与工具调用）'}\n")
+        f.write(f"- **导出模式:** {'仅用户输入' if mode == 'user' else '用户+AI终答（跳过工具链）' if mode == 'final_msg' else '完整（含AI回复与工具调用）'}\n")
         f.write("\n---\n\n")
 
         for c in convs:
@@ -899,6 +907,8 @@ class TopicDialog(tk.Toplevel):
                     f.write("\n")
                 else:
                     f.write(f"## 🤖 AI\n\n{ai_msg}\n\n")
+            elif mode == "final_msg":
+                f.write(f"## 🤖 AI\n\n{ai_msg}\n\n")
 
             f.write("---\n\n")
 

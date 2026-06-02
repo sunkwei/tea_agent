@@ -1,3 +1,6 @@
+## llm generated tool func, created Tue Jun  2 08:09:21 2026
+# version: 1.0.0
+
 import logging
 
 logger = logging.getLogger("toolkit")
@@ -8,8 +11,16 @@ def toolkit_screen_read(action: str, browser: str = "firefox", tab_title: str = 
     屏幕内容读取工具 - 组合截图、OCR、浏览器标签管理。
 
     action='read_tab': 读取浏览器标签内容
+        toolkit_screen_read(action='read_tab', browser='firefox', tab_title='智能研修平台')
+
     action='read_region': 读取屏幕指定区域
+        toolkit_screen_read(action='read_region', region='100,200,800,600')
+
     action='read_window': 读取当前活动窗口
+        toolkit_screen_read(action='read_window')
+
+    返回:
+        {'ok': True, 'text': 'OCR识别的文字', 'title': '窗口/标签标题'}
     """
     logger.info(f"toolkit_screen_read called: action={action!r}, browser={browser!r}, tab_title={tab_title!r}")
 
@@ -21,6 +32,7 @@ def toolkit_screen_read(action: str, browser: str = "firefox", tab_title: str = 
 
     # 延迟导入工具函数（避免循环依赖）
     def get_toolkit_func(name):
+        """动态获取工具函数"""
         import importlib
         module = importlib.import_module(f"tea_agent.toolkit.{name}")
         return getattr(module, name)
@@ -190,3 +202,7 @@ def toolkit_screen_read(action: str, browser: str = "firefox", tab_title: str = 
 
     else:
         return {"ok": False, "error": f"未知 action: {action}，支持: read_tab/read_region/read_window"}
+
+
+def meta_toolkit_screen_read() -> dict:
+    return {"type": "function", "function": {"name": "toolkit_screen_read", "description": "屏幕内容读取工具 - 组合截图、OCR、浏览器标签管理，实现「激活标签→截图→OCR→返回文字」的工作流。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["read_tab", "read_region", "read_window"], "description": "read_tab=读取浏览器标签内容, read_region=读取屏幕区域, read_window=读取当前窗口"}, "browser": {"type": "string", "description": "[read_tab] 浏览器名称", "default": "firefox"}, "tab_title": {"type": "string", "description": "[read_tab] 标签标题（支持部分匹配）"}, "region": {"type": "string", "description": "[read_region] 区域 'x,y,w,h'"}, "lang": {"type": "string", "description": "OCR 语言", "default": "zh-CN"}, "output": {"type": "string", "description": "OCR 结果输出文件路径（可选）"}}, "required": ["action"]}}}

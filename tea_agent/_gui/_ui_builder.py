@@ -116,6 +116,12 @@ class UIBuilder:
         gui._img_label = ttk.Label(toolbar, text="", foreground="#888")
         gui._img_label.pack(side=tk.LEFT, padx=(4, 2))
         gui._clear_img_btn = ttk.Button(toolbar, text="✕ 清除", command=gui.images.clear)
+        
+        # 检查模型是否支持图像输入，不支持则禁用图片按钮
+        if hasattr(gui, '_cfg') and hasattr(gui._cfg, 'main_model'):
+            if not gui._cfg.main_model.supports_vision:
+                gui._img_btn.config(state=tk.DISABLED)
+                gui._img_label.config(text="(当前模型不支持图片)", foreground="#aaa")
 
         # 中间：视图切换
         gui._raw_check_btn = ttk.Checkbutton(

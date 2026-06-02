@@ -86,25 +86,37 @@ def _ask_gui(
     import tkinter as tk
     from tkinter import ttk
     
-    # 创建弹窗
+    # 创建弹窗 - 根据选项数量动态调整窗口高度
+    base_height = 350
+    option_height = 35 if options else 0
+    window_height = base_height + (len(options) * option_height if options else 80)
+    window_width = 500
+    
     dialog = tk.Toplevel()
     dialog.title(f"❓ {title}")
-    dialog.geometry("450x300")
+    dialog.geometry(f"{window_width}x{window_height}")
     dialog.resizable(False, False)
     dialog.transient()
     dialog.grab_set()
     
     # 居中显示
     dialog.update_idletasks()
-    x = (dialog.winfo_screenwidth() - 450) // 2
-    y = (dialog.winfo_screenheight() - 300) // 2
+    x = (dialog.winfo_screenwidth() - window_width) // 2
+    y = (dialog.winfo_screenheight() - window_height) // 2
     dialog.geometry(f"+{x}+{y}")
+    
+    # 字体配置 - Windows 使用微软雅黑，其他平台使用系统默认
+    import platform
+    if platform.system() == "Windows":
+        font_family = "Microsoft YaHei UI"  # 微软雅黑 UI 版，更清晰
+    else:
+        font_family = "System"  # Linux/macOS 使用系统字体
     
     # 标题
     title_label = ttk.Label(
         dialog,
         text=title,
-        font=("", 14, "bold"),
+        font=(font_family, 16, "bold"),
         anchor="center"
     )
     title_label.pack(pady=(15, 5))
@@ -113,7 +125,8 @@ def _ask_gui(
     question_label = ttk.Label(
         dialog,
         text=question,
-        wraplength=400,
+        font=(font_family, 12),
+        wraplength=450,
         anchor="center",
         justify="center"
     )
@@ -128,26 +141,28 @@ def _ask_gui(
         options_frame.pack(fill=tk.BOTH, expand=True, padx=20)
         
         for opt in options:
-            rb = ttk.Radiobutton(
+            rb = tk.Radiobutton(
                 options_frame,
                 text=opt,
                 variable=answer_var,
-                value=opt
+                value=opt,
+                font=(font_family, 12)
             )
-            rb.pack(anchor="w", pady=3)
+            rb.pack(anchor="w", pady=4)
         
         # 自定义输入选项
-        custom_frame = ttk.Frame(dialog)
+        custom_frame = tk.Frame(dialog)
         custom_frame.pack(fill=tk.X, padx=20, pady=(10, 0))
         
-        ttk.Radiobutton(
+        tk.Radiobutton(
             custom_frame,
             text="自定义:",
             variable=answer_var,
-            value="__custom__"
+            value="__custom__",
+            font=(font_family, 12)
         ).pack(side=tk.LEFT)
         
-        custom_entry = ttk.Entry(custom_frame, width=30)
+        custom_entry = tk.Entry(custom_frame, width=30, font=(font_family, 12))
         custom_entry.pack(side=tk.LEFT, padx=(5, 0))
         
         def on_custom_focus(event):
@@ -155,10 +170,10 @@ def _ask_gui(
         custom_entry.bind("<FocusIn>", on_custom_focus)
     else:
         # 自由输入模式
-        input_frame = ttk.Frame(dialog)
+        input_frame = tk.Frame(dialog)
         input_frame.pack(fill=tk.X, padx=20)
         
-        entry = ttk.Entry(input_frame, width=50)
+        entry = tk.Entry(input_frame, width=50, font=(font_family, 12))
         entry.pack(fill=tk.X)
         entry.insert(0, default)
         entry.select_range(0, tk.END)
@@ -198,10 +213,11 @@ def _ask_gui(
         _answer_event.set()
         dialog.destroy()
     
-    submit_btn = ttk.Button(button_frame, text="确定", command=_submit)
+    # 使用 tk.Button 以支持 font 参数
+    submit_btn = tk.Button(button_frame, text="确定", command=_submit, font=(font_family, 12))
     submit_btn.pack(side=tk.RIGHT, padx=5)
     
-    cancel_btn = ttk.Button(button_frame, text="取消", command=_cancel)
+    cancel_btn = tk.Button(button_frame, text="取消", command=_cancel, font=(font_family, 12))
     cancel_btn.pack(side=tk.RIGHT, padx=5)
     
     # 超时处理

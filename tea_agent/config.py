@@ -40,6 +40,11 @@ class ModelConfig:
         """检查配置是否完整"""
         return bool(self.api_key and self.api_url and self.model_name)
 
+    @property
+    def supports_vision(self) -> bool:
+        """检查模型是否支持图像输入（从配置文件 options.supports_vision 读取）"""
+        return self.options.get("supports_vision", False)
+
 @dataclass
 class PathsConfig:
     """路径配置。所有相对路径均相对于 config.yaml 所在目录解析。

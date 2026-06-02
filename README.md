@@ -1,4 +1,4 @@
-# sunkw v0.9.14
+# sunkw v0.9.15
 
 A self-evolving AI agent with dynamic toolkit management.
 
@@ -8,8 +8,9 @@ A self-evolving AI agent with dynamic toolkit management.
 |------|---------|
 | — | — |
 
-## 🧰 所有工具 (59 个)
+## 🧰 所有工具 (62 个)
 
+- **`toolkit_browser_tab`** — def toolkit_browser_tab(action: str, browser: str = "firefox", tab_title: str = 
 - **`toolkit_build`** — def toolkit_build(action: str, directory: str = "."):
 - **`toolkit_build_package`** — def toolkit_build_package():
 - **`toolkit_bump_version`** — def toolkit_bump_version(version: str, file: str = "pyproject.toml", dry_run: bo
@@ -42,6 +43,7 @@ A self-evolving AI agent with dynamic toolkit management.
 - **`toolkit_memory`** — def toolkit_memory(action: str, content: str = "", category: str = "general", pr
 - **`toolkit_mode`** — def toolkit_mode(action: str, text: str = "", mode: str = ""):
 - **`toolkit_notify`** — def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
+- **`toolkit_ocr`** — def toolkit_ocr(action: str, image_path: str = None, image_base64: str = None,
 - **`toolkit_os_info`** — Internal: cached os info.
 - **`toolkit_parallel_subtasks`** — 执行单个子任务（在独立线程中运行）。
 - **`toolkit_pkg`** — def toolkit_pkg(action: str, packages: str = None, module: str = None):
@@ -57,6 +59,7 @@ A self-evolving AI agent with dynamic toolkit management.
 - **`toolkit_run_tests`** — def toolkit_run_tests(pattern: str = "test_*.py") -> dict:
 - **`toolkit_save_file`** — def toolkit_save_file(path=None, content=None, chunks=None, append=False, encodi
 - **`toolkit_scheduler`** — def toolkit_scheduler(action: str, **kwargs):
+- **`toolkit_screen_read`** — def toolkit_screen_read(action: str, browser: str = "firefox", tab_title: str = 
 - **`toolkit_screenshot`** — def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
 - **`toolkit_search`** — def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: st
 - **`toolkit_self_evolve`** — def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
@@ -77,4 +80,4 @@ A self-evolving AI agent with dynamic toolkit management.
 - 📝 README.md 自动同步（本文件）
 - 🎯 技能模式整理
 
-> 最后更新: 2026-06-01 16:58
+> 最后更新: 2026-06-02 11:09

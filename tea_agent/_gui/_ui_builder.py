@@ -64,6 +64,8 @@ class UIBuilder:
             fill=tk.X, padx=4, pady=2)
         ttk.Button(left, text="⚙️ 配置", command=gui.open_config_dialog).pack(
             fill=tk.X, padx=4, pady=2)
+        ttk.Button(left, text="⏰ 定时任务", command=gui.open_scheduler_dialog).pack(
+            fill=tk.X, padx=4, pady=2)
 
         # ===== 右侧面板 =====
         right = Frame(main_split)

@@ -8,12 +8,13 @@ A self-evolving AI agent with dynamic toolkit management.
 |------|---------|
 | — | — |
 
-## 🧰 所有工具 (62 个)
+## 🧰 所有工具 (64 个)
 
 - **`toolkit_browser_tab`** — def toolkit_browser_tab(action: str, browser: str = "firefox", tab_title: str = 
 - **`toolkit_build`** — def toolkit_build(action: str, directory: str = "."):
 - **`toolkit_build_package`** — def toolkit_build_package():
 - **`toolkit_bump_version`** — def toolkit_bump_version(version: str, file: str = "pyproject.toml", dry_run: bo
+- **`toolkit_clean_comments`** — def toolkit_clean_comments(
 - **`toolkit_comment`** — def toolkit_comment(mode: str, description: str = "", model_name: str = ""):
 - **`toolkit_config`** — toolkit_config — 允许 Agent 读取和修改自身运行时配置
 - **`toolkit_date_diff`** — def toolkit_date_diff(start_date: str, end_date: str = None) -> dict:
@@ -68,6 +69,7 @@ A self-evolving AI agent with dynamic toolkit management.
 - **`toolkit_stream_save`** — def toolkit_stream_save(stream_id=None, target_path=None, append=False):
 - **`toolkit_subconscious`** — def toolkit_subconscious(action: str, focus: str = None):
 - **`toolkit_sudo_gui`** — def toolkit_sudo_gui(app: str, args: list, prompt: str = "请输入管理员密码"):
+- **`toolkit_task_resume`** — 自动恢复机制 - 检查并恢复未完成的 TODO/Plan
 - **`toolkit_test_gui`** — def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
 - **`toolkit_todo`** — 获取当前 DB 连接（通过 session_ref → agent → db）
 - **`toolkit_toggle_reasoning`** — def toolkit_toggle_reasoning(enable: bool = None) -> dict:
@@ -80,4 +82,4 @@ A self-evolving AI agent with dynamic toolkit management.
 - 📝 README.md 自动同步（本文件）
 - 🎯 技能模式整理
 
-> 最后更新: 2026-06-02 11:09
+> 最后更新: 2026-06-03 07:46

@@ -1272,4 +1272,389 @@ class ConfigDialog(tk.Toplevel):
             except Exception:
                 pass
         super().destroy()
+    def destroy(self):
+        """Destroy."""
+        if hasattr(self, '_mw_binding'):
+            try:
+                self.unbind_all("<MouseWheel>")
+            except Exception:
+                pass
+        super().destroy()
+
+
+class ScheduledTaskDialog(tk.Toplevel):
+    """定时任务管理弹窗 — 浏览/新增/编辑/删除/启停/立即执行"""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("⏰ 定时任务管理")
+        self.geometry("950x650")
+        self.minsize(750, 450)
+        self.transient(parent)
+        self.grab_set()
+
+        _init_fonts()
+        self._create_ui()
+        self._refresh()
+
+    def _create_ui(self):
+        """Internal: create ui."""
+        # ── 顶部：调度器状态栏 ──
+        top = ttk.Frame(self)
+        top.pack(fill=tk.X, padx=10, pady=8)
+
+        self._scheduler_status_var = tk.StringVar(value="调度器状态: 检测中...")
+        ttk.Label(top, textvariable=self._scheduler_status_var,
+                  font=(SYSTEM_FONT, _fs(10))).pack(side=tk.LEFT)
+
+        btn_start = ttk.Button(top, text="▶️ 启动调度器", command=self._start_scheduler)
+        btn_start.pack(side=tk.RIGHT, padx=4)
+        btn_stop = ttk.Button(top, text="⏹️ 停止调度器", command=self._stop_scheduler)
+        btn_stop.pack(side=tk.RIGHT, padx=4)
+
+        ttk.Separator(self, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10)
+
+        # ── 工具栏 ──
+        toolbar = ttk.Frame(self)
+        toolbar.pack(fill=tk.X, padx=10, pady=4)
+
+        ttk.Button(toolbar, text="➕ 新增任务", command=self._add_task).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="✏️ 编辑", command=self._edit_task).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="🗑️ 删除", command=self._delete_task).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="▶️ 立即执行", command=self._run_task).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="🔄 刷新", command=self._refresh).pack(side=tk.LEFT, padx=2)
+
+        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=8)
+
+        ttk.Button(toolbar, text="✅ 启用", command=self._enable_task).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="⏸️ 禁用", command=self._disable_task).pack(side=tk.LEFT, padx=2)
+
+        ttk.Button(toolbar, text="🧪 测试调度表达式", command=self._test_schedule).pack(side=tk.RIGHT, padx=2)
+
+        # ── 任务列表 ──
+        list_frame = ttk.Frame(self)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+
+        columns = ("id", "name", "command", "schedule", "enabled", "next_run", "last_result")
+        self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
+        self.tree.heading("id", text="ID")
+        self.tree.heading("name", text="任务名称")
+        self.tree.heading("command", text="命令")
+        self.tree.heading("schedule", text="调度表达式")
+        self.tree.heading("enabled", text="状态")
+        self.tree.heading("next_run", text="下次执行")
+        self.tree.heading("last_result", text="上次结果")
+
+        self.tree.column("id", width=60, anchor=tk.CENTER)
+        self.tree.column("name", width=140)
+        self.tree.column("command", width=280)
+        self.tree.column("schedule", width=160)
+        self.tree.column("enabled", width=60, anchor=tk.CENTER)
+        self.tree.column("next_run", width=140)
+        self.tree.column("last_result", width=100, anchor=tk.CENTER)
+
+        self.tree.bind("<Double-1>", lambda e: self._edit_task())
+
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # ── 底部：统计栏 ──
+        bottom = ttk.Frame(self)
+        bottom.pack(fill=tk.X, padx=10, pady=6)
+
+        self._stats_var = tk.StringVar(value="")
+        ttk.Label(bottom, textvariable=self._stats_var,
+                  font=(SYSTEM_FONT, _fs(10)), foreground="#666").pack(side=tk.LEFT)
+
+        # 调度格式提示
+        hint_text = ("调度格式: daily:HH:MM | hourly:MM | interval:SEC | "
+                     "weekly:mon:HH:MM | once:ISO | cron:分 时 日 月 周")
+        ttk.Label(bottom, text=hint_text,
+                  font=(SYSTEM_FONT, _fs(9)), foreground="#999").pack(side=tk.RIGHT)
+
+        self.bind("<Escape>", lambda e: self.destroy())
+        self.bind("<Delete>", lambda e: self._delete_task())
+
+        # 初始刷新调度器状态
+        self._refresh_scheduler_status()
+
+    # ── 调度器状态 ──
+
+    def _refresh_scheduler_status(self):
+        """Internal: refresh scheduler status."""
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            result = toolkit_scheduler(action="status")
+            running = result.get("running", False)
+            pid = result.get("pid", None)
+            if running:
+                self._scheduler_status_var.set(f"🟢 调度器运行中 (PID: {pid})")
+            else:
+                self._scheduler_status_var.set("🔴 调度器已停止")
+        except Exception as e:
+            self._scheduler_status_var.set(f"⚠️ 状态检测失败: {e}")
+
+    def _start_scheduler(self):
+        """Internal: start scheduler."""
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            result = toolkit_scheduler(action="start")
+            if result.get("status") == "started":
+                self._scheduler_status_var.set(f"🟢 调度器已启动 (PID: {result.get('pid')})")
+            elif result.get("status") == "already_running":
+                self._scheduler_status_var.set(f"🟢 调度器已在运行 (PID: {result.get('pid')})")
+            else:
+                self._scheduler_status_var.set(f"⚠️ 启动失败: {result}")
+        except Exception as e:
+            self._scheduler_status_var.set(f"❌ 启动异常: {e}")
+
+    def _stop_scheduler(self):
+        """Internal: stop scheduler."""
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            toolkit_scheduler(action="stop")
+            self._scheduler_status_var.set("🔴 调度器已停止")
+        except Exception as e:
+            self._scheduler_status_var.set(f"❌ 停止异常: {e}")
+
+    # ── 任务列表 ──
+
+    def _refresh(self):
+        """Internal: refresh."""
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            result = toolkit_scheduler(action="list")
+            tasks = result.get("tasks", [])
+
+            total = len(tasks)
+            enabled = 0
+            for t in tasks:
+                tid = t.get("id", "?")[:8]
+                name = t.get("name", "")
+                command = t.get("command", "")
+                schedule = t.get("schedule", "")
+                is_enabled = t.get("enabled", 0)
+                next_run = t.get("_next_label", t.get("next_run", ""))
+                last_result = t.get("last_result", "")
+                if last_result and len(last_result) > 30:
+                    last_result = last_result[:30] + "..."
+                last_code = t.get("last_exit_code")
+
+                status_icon = "🟢" if is_enabled else "⚫"
+                result_str = ""
+                if last_code is not None:
+                    result_str = "✅" if last_code == 0 else "❌"
+
+                if is_enabled:
+                    enabled += 1
+
+                self.tree.insert("", tk.END,
+                                 values=(tid, name, command, schedule,
+                                         status_icon, next_run, result_str),
+                                 iid=t.get("id", ""))
+
+            self._stats_var.set(f"共 {total} 个任务 (启用: {enabled})")
+            self._refresh_scheduler_status()
+
+        except Exception as e:
+            self._stats_var.set(f"加载失败: {e}")
+
+    def _selected_id(self):
+        """Internal: selected id."""
+        sel = self.tree.selection()
+        return sel[0] if sel else None
+
+    # ── 任务操作 ──
+
+    def _add_task(self):
+        """Internal: add task."""
+        self._task_dialog(title="新增定时任务")
+
+    def _edit_task(self):
+        """Internal: edit task."""
+        tid = self._selected_id()
+        if not tid:
+            return
+        self._task_dialog(title=f"编辑任务", task_id=tid)
+
+    def _task_dialog(self, title: str, task_id: str = None):
+        """Internal: task dialog."""
+        dlg = tk.Toplevel(self)
+        dlg.title(title)
+        dlg.geometry("550x280")
+        dlg.transient(self)
+        dlg.grab_set()
+
+        ttk.Label(dlg, text="任务名称:", font=(SYSTEM_FONT, _fs(11))).grid(
+            row=0, column=0, sticky=tk.W, padx=10, pady=8)
+        name_var = tk.StringVar()
+        ttk.Entry(dlg, textvariable=name_var, width=45, font=(SYSTEM_FONT, _fs(11))).grid(
+            row=0, column=1, sticky=tk.EW, padx=10, pady=8)
+
+        ttk.Label(dlg, text="命令:", font=(SYSTEM_FONT, _fs(11))).grid(
+            row=1, column=0, sticky=tk.W, padx=10, pady=8)
+        cmd_var = tk.StringVar()
+        ttk.Entry(dlg, textvariable=cmd_var, width=45, font=(SYSTEM_FONT, _fs(11))).grid(
+            row=1, column=1, sticky=tk.EW, padx=10, pady=8)
+
+        ttk.Label(dlg, text="调度表达式:", font=(SYSTEM_FONT, _fs(11))).grid(
+            row=2, column=0, sticky=tk.W, padx=10, pady=8)
+        sched_var = tk.StringVar()
+        ttk.Entry(dlg, textvariable=sched_var, width=45, font=(SYSTEM_FONT, _fs(11))).grid(
+            row=2, column=1, sticky=tk.EW, padx=10, pady=8)
+
+        hint = ttk.Label(dlg, text="格式: daily:09:00 | hourly:30 | interval:3600 | weekly:mon:09:00 | cron:0 9 * * *",
+                         font=(SYSTEM_FONT, _fs(9)), foreground="#888")
+        hint.grid(row=3, column=0, columnspan=2, sticky=tk.W, padx=10, pady=(0, 4))
+
+        status_var = tk.StringVar()
+        ttk.Label(dlg, textvariable=status_var, foreground="#666").grid(
+            row=4, column=0, columnspan=2, sticky=tk.W, padx=10, pady=4)
+
+        # 如果是编辑模式，加载已有数据
+        if task_id:
+            try:
+                from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+                result = toolkit_scheduler(action="list")
+                for t in result.get("tasks", []):
+                    if t.get("id") == task_id:
+                        name_var.set(t.get("name", ""))
+                        cmd_var.set(t.get("command", ""))
+                        sched_var.set(t.get("schedule", ""))
+                        break
+            except Exception:
+                pass
+
+        def do_save():
+            """Internal: do save."""
+            name = name_var.get().strip()
+            cmd = cmd_var.get().strip()
+            sched = sched_var.get().strip()
+            if not name or not cmd or not sched:
+                status_var.set("❌ 请填写所有字段")
+                return
+            try:
+                from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+                if task_id:
+                    toolkit_scheduler(action="update", task_id=task_id,
+                                     name=name, command=cmd, schedule=sched)
+                else:
+                    toolkit_scheduler(action="add", name=name,
+                                     command=cmd, schedule=sched)
+                self._refresh()
+                dlg.destroy()
+            except Exception as e:
+                status_var.set(f"❌ 保存失败: {e}")
+
+        btn_frame = ttk.Frame(dlg)
+        btn_frame.grid(row=5, column=0, columnspan=2, pady=12)
+        ttk.Button(btn_frame, text="保存", command=do_save).pack(side=tk.LEFT, padx=8)
+        ttk.Button(btn_frame, text="取消", command=dlg.destroy).pack(side=tk.LEFT, padx=8)
+
+        dlg.columnconfigure(1, weight=1)
+        dlg.bind("<Return>", lambda e: do_save())
+
+    def _delete_task(self):
+        """Internal: delete task."""
+        tid = self._selected_id()
+        if not tid:
+            return
+        from tkinter import messagebox
+        ok = messagebox.askyesno(
+            "确认删除", "确定要删除这个定时任务吗？",
+            parent=self, icon="warning"
+        )
+        if not ok:
+            return
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            toolkit_scheduler(action="delete", task_id=tid)
+            self._refresh()
+        except Exception as e:
+            self._stats_var.set(f"❌ 删除失败: {e}")
+
+    def _enable_task(self):
+        """Internal: enable task."""
+        tid = self._selected_id()
+        if not tid:
+            return
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            toolkit_scheduler(action="enable", task_id=tid)
+            self._refresh()
+        except Exception:
+            pass
+
+    def _disable_task(self):
+        """Internal: disable task."""
+        tid = self._selected_id()
+        if not tid:
+            return
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            toolkit_scheduler(action="disable", task_id=tid)
+            self._refresh()
+        except Exception:
+            pass
+
+    def _run_task(self):
+        """Internal: run task."""
+        tid = self._selected_id()
+        if not tid:
+            return
+        try:
+            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+            result = toolkit_scheduler(action="run", task_id=tid)
+            output = result.get("output", "")
+            exit_code = result.get("exit_code", -1)
+            icon = "✅" if exit_code == 0 else "❌"
+            self._stats_var.set(f"{icon} 任务执行完成 (退出码: {exit_code})")
+            self._refresh()
+        except Exception as e:
+            self._stats_var.set(f"❌ 执行失败: {e}")
+
+    def _test_schedule(self):
+        """Internal: test schedule."""
+        dlg = tk.Toplevel(self)
+        dlg.title("测试调度表达式")
+        dlg.geometry("420x200")
+        dlg.transient(self)
+        dlg.grab_set()
+
+        ttk.Label(dlg, text="输入调度表达式:", font=(SYSTEM_FONT, _fs(11))).pack(
+            padx=10, pady=(15, 4), anchor=tk.W)
+
+        sched_var = tk.StringVar()
+        entry = ttk.Entry(dlg, textvariable=sched_var, width=40, font=(SYSTEM_FONT, _fs(11)))
+        entry.pack(padx=10, pady=4)
+        entry.focus()
+
+        result_var = tk.StringVar()
+        ttk.Label(dlg, textvariable=result_var, font=(SYSTEM_FONT, _fs(10)),
+                  wraplength=380, justify=tk.LEFT).pack(padx=10, pady=8)
+
+        def do_test():
+            """Internal: do test."""
+            sched = sched_var.get().strip()
+            if not sched:
+                result_var.set("请输入调度表达式")
+                return
+            try:
+                from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
+                res = toolkit_scheduler(action="test_schedule", schedule=sched)
+                next_run = res.get("next_run", "无效")
+                label = res.get("next_label", "")
+                result_var.set(f"下次执行: {next_run}\n{label}")
+            except Exception as e:
+                result_var.set(f"测试失败: {e}")
+
+        entry.bind("<Return>", lambda e: do_test())
+        ttk.Button(dlg, text="测试", command=do_test).pack(padx=10, pady=4)
+
 

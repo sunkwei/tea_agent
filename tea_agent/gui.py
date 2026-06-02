@@ -927,6 +927,12 @@ class TkGUI(Agent):
             self._update_status("⚙️ 配置已更新")
 
         ConfigDialog(self.root, on_save=on_save, config_path=self._config_path)
+
+    def open_scheduler_dialog(self):
+        """打开定时任务管理对话框"""
+        from tea_agent.gui_dialogs import ScheduledTaskDialog
+        ScheduledTaskDialog(self.root)
+
     def _on_generation_done(self):
         """主线程回调：标记生成完成（避免跨线程写 generating）"""
         self.generating = False

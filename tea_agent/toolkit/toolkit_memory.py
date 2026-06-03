@@ -1,10 +1,11 @@
-# version: 1.0.0
+# version: 2.0.0
 
 import logging
+import json
 
 logger = logging.getLogger("toolkit")
 
-def toolkit_memory(action: str, content: str = "", category: str = "general", priority: int = 2, importance: int = 3, expires_at: str = None, tags: str = "", id: int = 0, hard: bool = False, query: str = "", min_importance: int = 0, limit: int = 10, topic_id: str = "", max_chars: int = 4000):
+def toolkit_memory(action: str, content: str = "", category: str = "general", priority: int = 2, importance: int = 3, expires_at: str = None, tags: str = "", id: int = 0, hard: bool = False, query: str = "", min_importance: int = 0, limit: int = 10, topic_id: str = "", max_chars: int = 4000, force: bool = False, top_k: int = 10, **kwargs):
     """
     统一长期记忆管理入口。根据 action 执行不同操作：
 
@@ -15,6 +16,9 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
     - "search": 搜索记忆。可选 query/category/tags/min_importance/limit。
     - "forget": 删除/失效记忆。需 id。可选 hard（true=硬删除, false=软删除）。
     - "extract": 从对话中提取待分析文本。可选 topic_id/max_chars。
+    - "auto_extract": 自动从对话中提取记忆。需 topic_id。
+    - "semantic_search": 基于 embedding 的语义搜索。需 query。
+    - "stats": 获取记忆统计信息。
     """
     logger.info(f"toolkit_memory called: action={action!r}, content={repr(content)[:80]}, category={category!r}, priority={priority!r}, importance={importance!r}, expires_at={expires_at!r}, tags={tags!r}, id={id!r}, hard={hard!r}, query={repr(query)[:80]}, min_importance={min_importance!r}, limit={limit!r}, topic_id={topic_id!r}, max_chars={max_chars!r}")
 
@@ -125,8 +129,73 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
         except Exception as e:
             return f"❌ 提取记忆文本失败: {e}"
 
+    # ── action: auto_extract ──
+    elif action == "auto_extract":
+        topic_id = kwargs.get("topic_id", "")
+        force = kwargs.get("force", False)
+        if not topic_id:
+            return "❌ auto_extract 操作需要 topic_id 参数"
+        try:
+            from ..store._auto_memory import AutoMemoryExtractor
+            extractor = AutoMemoryExtractor(storage)
+            result = extractor.extract_from_topic(topic_id, force=force)
+            if result["status"] == "success":
+                return f"✅ 自动提取完成: 保存 {result['extracted']} 条记忆, 跳过 {result['skipped']} 条 (共分析 {result['total_conversations']} 条对话)"
+            else:
+                return f"⚠️ {result['status']}"
+        except Exception as e:
+            return f"❌ 自动提取失败: {e}"
+
+    # ── action: semantic_search ──
+    elif action == "semantic_search":
+        query = kwargs.get("query", "")
+        if not query:
+            return "❌ semantic_search 操作需要 query 参数"
+        top_k = kwargs.get("top_k", 10)
+        try:
+            from ..store._semantic_search import SemanticSearch
+            searcher = SemanticSearch(storage)
+            # 先索引新记忆
+            searcher.index_all_memories()
+            # 执行搜索
+            results = searcher.semantic_search(query, top_k=top_k)
+            if not results:
+                return "📭 未找到匹配的记忆。"
+            lines = [f"🔍 语义搜索找到 {len(results)} 条记忆:"]
+            for m in results:
+                pl = priority_labels.get(m["priority"], str(m["priority"]))
+                cat = m.get("category", "general")
+                lines.append(f"  #{m['id']} [{pl}/{cat}]: {m['content']}")
+            return "\n".join(results)
+        except Exception as e:
+            return f"❌ 语义搜索失败: {e}"
+
+    # ── action: stats ──
+    elif action == "stats":
+        try:
+            stats = storage.get_memory_stats()
+            lines = [
+                "📊 记忆统计:",
+                f"  总数: {stats['total']}",
+                f"  按分类: {json.dumps(stats['by_category'], ensure_ascii=False)}",
+                f"  按优先级: {json.dumps(stats['by_priority'], ensure_ascii=False)}",
+            ]
+            
+            # 向量索引统计
+            try:
+                from ..store._semantic_search import SemanticSearch
+                searcher = SemanticSearch(storage)
+                vec_stats = searcher.get_vector_stats()
+                lines.append(f"  向量索引: {vec_stats['indexed_memories']}/{vec_stats['total_memories']} ({vec_stats['coverage']:.1%})")
+            except:
+                pass
+            
+            return "\n".join(lines)
+        except Exception as e:
+            return f"❌ 获取统计失败: {e}"
+
     else:
-        return f"❌ 未知 action: '{action}'，可选: add/list/search/forget/extract"
+        return f"❌ 未知 action: '{action}'，可选: add/list/search/forget/extract/auto_extract/semantic_search/stats"
 
 def meta_toolkit_memory() -> dict:
     """Meta toolkit memory."""
@@ -134,13 +203,13 @@ def meta_toolkit_memory() -> dict:
         "type": "function",
         "function": {
             "name": "toolkit_memory",
-            "description": "统一长期记忆管理。action: add(添加)/list(列出)/search(搜索)/forget(删除)/extract(提取对话)。add需content；forget需id；search可选query；list可选limit。",
+            "description": "统一长期记忆管理。action: add(添加)/list(列出)/search(搜索)/forget(删除)/extract(提取对话)/auto_extract(自动提取)/semantic_search(语义搜索)/stats(统计)。add需content；forget需id；search可选query；list可选limit。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
-                        "enum": ["add", "list", "search", "forget", "extract"],
+                        "enum": ["add", "list", "search", "forget", "extract", "auto_extract", "semantic_search", "stats"],
                         "description": "操作类型"
                     },
                     "content": {"type": "string", "description": "[add] 记忆内容，精简摘要"},
@@ -151,11 +220,13 @@ def meta_toolkit_memory() -> dict:
                     "tags": {"type": "string", "description": "[add/search] 逗号分隔标签"},
                     "id": {"type": "integer", "description": "[forget] 记忆ID"},
                     "hard": {"type": "boolean", "description": "[forget] 是否硬删除，默认false(软删除)", "default": False},
-                    "query": {"type": "string", "description": "[search] 搜索关键词", "default": ""},
+                    "query": {"type": "string", "description": "[search/semantic_search] 搜索关键词", "default": ""},
                     "min_importance": {"type": "integer", "description": "[search] 最低重要度 1-5", "default": 0},
                     "limit": {"type": "integer", "description": "[list/search] 返回数量上限", "default": 10},
-                    "topic_id": {"type": "string", "description": "[extract] topic ID", "default": ""},
+                    "topic_id": {"type": "string", "description": "[extract/auto_extract] topic ID", "default": ""},
                     "max_chars": {"type": "integer", "description": "[extract] 返回文本最大字符数", "default": 4000},
+                    "force": {"type": "boolean", "description": "[auto_extract] 是否强制提取（忽略去重）", "default": False},
+                    "top_k": {"type": "integer", "description": "[semantic_search] 返回数量上限", "default": 10},
                 },
                 "required": ["action"],
             },

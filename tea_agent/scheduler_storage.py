@@ -191,64 +191,6 @@ class SchedulerStorage:
         conn.commit()
         conn.close()
     
-    # ── 数据库合并 ──────────────────────────────────────────────
-    
-    def merge_from(self, other_db_path: str, strategy: str = "keep_both") -> Dict:
-        """
-        从另一个数据库合并数据。
-        
-        strategy:
-            - "keep_both": 保留两边（重命名冲突项）
-            - "overwrite": 用源覆盖目标
-            - "skip": 跳过冲突项
-        """
-        other = SchedulerStorage(other_db_path)
-        
-        stats = {
-            "scripts_merged": 0,
-            "tasks_merged": 0,
-            "conflicts": 0,
-        }
-        
-        # 合并脚本
-        for script in other.list_scripts():
-            existing = self.get_script(script["id"])
-            if existing:
-                if strategy == "skip":
-                    stats["conflicts"] += 1
-                    continue
-                elif strategy == "overwrite":
-                    pass  # 继续覆盖
-                elif strategy == "keep_both":
-                    # 重命名
-                    script["id"] = f"{script['id']}_merged_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            
-            self.save_script(
-                script["id"], script["name"], script["content"],
-                script.get("description", "")
-            )
-            stats["scripts_merged"] += 1
-        
-        # 合并任务
-        for task in other.list_tasks():
-            # 检查是否引用了合并的脚本
-            if task.get("script_id"):
-                # TODO: 更新 script_id 引用
-                pass
-            
-            existing = [t for t in self.list_tasks() if t["id"] == task["id"]]
-            if existing:
-                if strategy == "skip":
-                    stats["conflicts"] += 1
-                    continue
-            
-            self.save_task(
-                task["id"], task["name"], task["command"],
-                task["schedule"], task.get("script_id")
-            )
-            stats["tasks_merged"] += 1
-        
-        return stats
 
 
 # ── 便捷函数 ──────────────────────────────────────────────

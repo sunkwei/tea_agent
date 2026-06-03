@@ -376,12 +376,12 @@ class DbMerger:
     # ------------------------------------------------------------------
 
     def _merge_memories(self):
-        """合并 memories，去重 + 映射 source_topic_id"""
-        logger.info("  合并 memories (带去重, threshold=%.2f) ...", self.dedup_threshold)
+        """合并 memories，直接插入（UUID 保证唯一，INSERT OR IGNORE 防冲突）"""
+        logger.info("  合并 memories ...")
         try:
             cols = self._get_table_columns(self.source, "memories")
             src_memories = self.source.execute(
-                f"SELECT {', '.join(cols)} FROM memories WHERE is_active = 1 ORDER BY id"
+                f"SELECT {', '.join(cols)} FROM memories ORDER BY id"
             ).fetchall()
         except sqlite3.OperationalError:
             logger.info("    source 无 memories 表，跳过")
@@ -391,59 +391,34 @@ class DbMerger:
             return
 
         col_idx = {name: i for i, name in enumerate(cols)}
-
-        # 加载 target 已有活跃记忆用于去重比对
-        target_memories = self.target.execute(
-            "SELECT id, content, category, priority, importance, tags, expires_at FROM memories WHERE is_active = 1"
-        ).fetchall()
-
-        new_count = 0
-        merged_count = 0
-        skipped_count = 0
+        inserted = 0
+        skipped = 0
 
         for src_row in src_memories:
             src_content = src_row[col_idx["content"]] or ""
-            src_category = src_row[col_idx["category"]] or "general"
-
             if not src_content.strip():
-                skipped_count += 1
+                skipped += 1
                 continue
 
-            # 去重检测
-            dup = self._find_duplicate(src_content, src_category, target_memories)
-            if dup:
-                self._merge_memory_record(dup, src_row, col_idx)
-                merged_count += 1
-            else:
-                values = list(src_row)
-                values[col_idx["id"]] = str(uuid.uuid4())
-                # 映射 source_topic_id
-                if "source_topic_id" in col_idx:
-                    old_stid = values[col_idx["source_topic_id"]]
-                    if old_stid is not None:
-                        values[col_idx["source_topic_id"]] = self.topic_map.get(old_stid, old_stid)
+            values = list(src_row)
+            # 映射 source_topic_id
+            if "source_topic_id" in col_idx:
+                old_stid = values[col_idx["source_topic_id"]]
+                if old_stid is not None:
+                    values[col_idx["source_topic_id"]] = self.topic_map.get(old_stid, old_stid)
 
-                placeholders = ", ".join("?" for _ in cols)
+            placeholders = ", ".join("?" for _ in cols)
+            try:
                 self.target.execute(
-                    f"INSERT INTO memories ({', '.join(cols)}) VALUES ({placeholders})",
+                    f"INSERT OR IGNORE INTO memories ({', '.join(cols)}) VALUES ({placeholders})",
                     values,
                 )
-                # 同时更新内存中的列表用于后续去重
-                new_dict = dict(zip(cols, values))
-                target_memories.append((
-                    next_mem_id,
-                    new_dict.get("content", ""),
-                    new_dict.get("category", "general"),
-                    new_dict.get("priority", 2),
-                    new_dict.get("importance", 3),
-                    new_dict.get("tags", ""),
-                    new_dict.get("expires_at", None),
-                ))
-                pass  # UUID already generated
-                new_count += 1
+                inserted += 1
+            except sqlite3.IntegrityError:
+                skipped += 1
 
         self.target.commit()
-        logger.info(f"    memories: 新增 {new_count}, 合并更新 {merged_count}, 跳过 {skipped_count}")
+        logger.info(f"    memories: 插入 {inserted} 条, 跳过 {skipped} 条 (空内容/冲突), ID 直接映射")
 
     def _find_duplicate(self, content: str, category: str, existing: List[tuple]) -> Optional[tuple]:
         """在已有记忆中查找相似度超过阈值的记忆"""

@@ -86,7 +86,8 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                 p = subprocess.Popen(
                     [a] + list(ar),
                     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    text=True, start_new_session=True,
+                    text=True, encoding="utf-8", errors="replace",
+                    start_new_session=True,
                 )
                 try:
                     stdout, stderr = p.communicate(timeout=timeout)
@@ -143,7 +144,7 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                 [app] + list(args),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
+                text=True, encoding="utf-8", errors="replace",
                 start_new_session=True,  # 创建新进程组，便于超时后统一杀死
             )
             stdout, stderr = process.communicate(timeout=effective_timeout)
@@ -190,7 +191,7 @@ def _sudo_with_gui(app: str, args: list):
         ]
 
     if dialog_cmd:
-        pwd_result = subprocess.run(dialog_cmd, capture_output=True, text=True, timeout=30)
+        pwd_result = subprocess.run(dialog_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
         if pwd_result.returncode != 0:
             return (126, "", "用户取消了密码输入")
         password = pwd_result.stdout.strip()
@@ -203,7 +204,7 @@ def _sudo_with_gui(app: str, args: list):
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
+                text=True, encoding="utf-8", errors="replace",
             )
             stdout, stderr = process.communicate(
                 input=password + "\n",
@@ -228,7 +229,7 @@ def _sudo_with_gui(app: str, args: list):
                 ["pkexec"] + list(args),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
+                text=True, encoding="utf-8", errors="replace",
             )
             stdout, stderr = process.communicate(timeout=120)
             result = (process.returncode, stdout, stderr)
@@ -247,7 +248,7 @@ def _sudo_with_gui(app: str, args: list):
             [app] + list(args),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
         )
         stdout, stderr = process.communicate(timeout=120)
         result = (process.returncode, stdout, stderr)

@@ -67,8 +67,9 @@ _toolkit_ = None
 # ====================== 从 _gui 子包导入（组合模式） ======================
 from tea_agent._gui._fonts import (
     _fs, _init_fonts, SYSTEM_FONT, MONO_FONT,
-    _DEFAULT_FONT_SIZE, _SCALE_FACTOR, _FONTS_DETECTED,
+    _SCALE_FACTOR, _FONTS_DETECTED,
 )
+import tea_agent._gui._fonts as _fonts_mod  # 模块引用，动态获取 _DEFAULT_FONT_SIZE
 # 平台检测（从 _fonts 重导出，保持兼容）
 _IS_WINDOWS = __import__('platform').system() == "Windows"
 
@@ -246,7 +247,7 @@ class TkGUI(Agent):
             return
         self._image_cache.clear()
         md = _chat_to_markdown(self._filtered_messages(), image_cache=self._image_cache)
-        font_size = int(_DEFAULT_FONT_SIZE * self._zoom_level / 100)
+        font_size = int(_fonts_mod._DEFAULT_FONT_SIZE * self._zoom_level / 100)
         html = _render_markdown(md, font_size=font_size)
         self._html_render(html)
         self.root.after(self.RENDER_DELAY_MS, self.scroll_to_bottom)
@@ -373,9 +374,9 @@ class TkGUI(Agent):
                         msgs.append({"role": "tool", "content": f"📋 结果：{content}", "timestamp": ""})
 
                 # ── 渲染为 HTML ──
-                from tea_agent._gui._markdown import _chat_to_markdown, _render_markdown, _DEFAULT_FONT_SIZE
+                from tea_agent._gui._markdown import _chat_to_markdown, _render_markdown
                 md = _chat_to_markdown(msgs)
-                font_size = int(_DEFAULT_FONT_SIZE * getattr(self, '_zoom_level', 100) / 100)
+                font_size = int(_fonts_mod._DEFAULT_FONT_SIZE * getattr(self, '_zoom_level', 100) / 100)
                 html = _render_markdown(md, font_size=font_size)
 
                 # ── 写临时 HTML ──

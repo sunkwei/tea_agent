@@ -14,11 +14,12 @@ MONO_FONT = "TkFixedFont"
 
 _FONTS_DETECTED = False
 _SCALE_FACTOR = 1.0
-_DEFAULT_FONT_SIZE = 16  # 模块级默认（_init_fonts 后会更新）
+_FONT_SIZE_MULTIPLIER = 0.56  # 字体缩放倍率，1.0=原始大小
+_DEFAULT_FONT_SIZE = max(10, int(16 * _FONT_SIZE_MULTIPLIER))  # 模块级默认（_init_fonts 后会更新）
 
 def _fs(size):
-    """返回按显示缩放因子调整后的字体大小（适配 Wayland/X11 高分屏）。"""
-    return max(1, int(size * _SCALE_FACTOR))
+    """返回按显示缩放因子和字体倍率调整后的字体大小。"""
+    return max(1, int(size * _SCALE_FACTOR * _FONT_SIZE_MULTIPLIER))
 def _init_fonts():
     """延迟检测系统可用字体（需 Tk root 创建后调用）。"""
     global SYSTEM_FONT, MONO_FONT, _FONTS_DETECTED, _SCALE_FACTOR, _DEFAULT_FONT_SIZE
@@ -89,7 +90,7 @@ def _init_fonts():
                 _SCALE_FACTOR = sf
     except Exception:
         pass
-    _DEFAULT_FONT_SIZE = max(12, int(16 * _SCALE_FACTOR))
+    _DEFAULT_FONT_SIZE = max(10, int(16 * _SCALE_FACTOR * _FONT_SIZE_MULTIPLIER))
 
     # 将 Tk 默认字体大小也乘以缩放因子，保持控件字体与 _fs() 一致
     try:
@@ -101,7 +102,7 @@ def _init_fonts():
                 _f = _tkfont.nametofont(_fname)
                 _orig = _f.cget("size")
                 if _orig > 0:
-                    _f.configure(size=max(1, int(_orig * _SCALE_FACTOR)))
+                    _f.configure(size=max(1, int(_orig * _SCALE_FACTOR * _FONT_SIZE_MULTIPLIER)))
             except Exception:
                 pass
     except Exception:

@@ -12,7 +12,7 @@ try:
 except ImportError:
     HAS_TKINTERWEB = False
 
-from ._fonts import _DEFAULT_FONT_SIZE  # 从 _fonts 导入，确保 DPI 缩放后值正确
+from . import _fonts as _fonts_mod  # 模块引用，动态获取 _DEFAULT_FONT_SIZE
 # ====================== Markdown → HTML 渲染 ======================
 
 _MD_CSS_TEMPLATE = string.Template("""
@@ -62,8 +62,10 @@ a.chat-image-link { text-decoration: none; display: inline-block; }
 a.chat-image-link:hover { text-decoration: none; }
 </style>
 """)
-def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
+def _render_markdown(text: str, font_size: int = None) -> str:
     """将 markdown 文本转换为带样式的 HTML 片段"""
+    if font_size is None:
+        font_size = _fonts_mod._DEFAULT_FONT_SIZE
     if not HAS_TKINTERWEB:
         return text
     html_body = markdown.markdown(text, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])

@@ -158,7 +158,7 @@ class DbMerger:
     # ------------------------------------------------------------------
 
     def _merge_topics(self):
-        """将 source 的 topics 全部插入 target，分配新 topic_id"""
+        """将 source 的 topics 全部插入 target，直接使用源 topic_id（UUID 保证唯一）"""
         logger.info("  合并 topics ...")
         src_topics = self.source.execute(
             "SELECT topic_id, title, create_stamp, last_update_stamp FROM topics ORDER BY topic_id"
@@ -169,23 +169,22 @@ class DbMerger:
             return
 
         for old_id, title, create_stamp, last_update_stamp in src_topics:
-            new_id = str(uuid.uuid4())
-            self.topic_map[old_id] = new_id
+            # 直接使用源 ID（UUID 保证唯一，无需生成新 ID）
+            self.topic_map[old_id] = old_id
             self.target.execute(
-                "INSERT INTO topics (topic_id, title, create_stamp, last_update_stamp) VALUES (?, ?, ?, ?)",
-                (new_id, title, create_stamp, last_update_stamp),
+                "INSERT OR IGNORE INTO topics (topic_id, title, create_stamp, last_update_stamp) VALUES (?, ?, ?, ?)",
+                (old_id, title, create_stamp, last_update_stamp),
             )
-            pass  # UUID
 
         self.target.commit()
-        logger.info(f"    topics: 合并 {len(src_topics)} 条, ID 映射 {min(self.topic_map.keys())}→{min(self.topic_map.values())} ... {max(self.topic_map.keys())}→{max(self.topic_map.values())}")
+        logger.info(f"    topics: 合并 {len(src_topics)} 条, ID 直接映射（保留源 ID）")
 
     # ------------------------------------------------------------------
     # 步骤 3: 合并 conversations
     # ------------------------------------------------------------------
 
     def _merge_conversations(self):
-        """合并 conversations，映射 topic_id → 新 topic_id"""
+        """合并 conversations，直接使用源 conv_id，映射 topic_id"""
         logger.info("  合并 conversations ...")
         cols = self._get_table_columns(self.source, "conversations")
 
@@ -206,29 +205,28 @@ class DbMerger:
                 logger.warning(f"    跳过 conversation {old_conv_id}: topic_id={old_topic_id} 无映射")
                 continue
 
-            new_conv_id = str(uuid.uuid4())
-            self.conv_map[old_conv_id] = new_conv_id
+            # 直接使用源 ID（UUID 保证唯一）
+            self.conv_map[old_conv_id] = old_conv_id
 
             # 构建插入数据
             values = list(row)
-            values[col_idx["id"]] = new_conv_id
             values[col_idx["topic_id"]] = new_topic_id
 
             placeholders = ", ".join("?" for _ in cols)
             self.target.execute(
-                f"INSERT INTO conversations ({', '.join(cols)}) VALUES ({placeholders})",
+                f"INSERT OR IGNORE INTO conversations ({', '.join(cols)}) VALUES ({placeholders})",
                 values,
             )
 
         self.target.commit()
-        logger.info(f"    conversations: 合并 {len(self.conv_map)} 条")
+        logger.info(f"    conversations: 合并 {len(self.conv_map)} 条, ID 直接映射")
 
     # ------------------------------------------------------------------
     # 步骤 4: 合并 agent_rounds
     # ------------------------------------------------------------------
 
     def _merge_agent_rounds(self):
-        """合并 agent_rounds，映射 conversation_id"""
+        """合并 agent_rounds，直接使用源 ID，映射 conversation_id"""
         logger.info("  合并 agent_rounds ...")
         cols = self._get_table_columns(self.source, "agent_rounds")
 
@@ -249,18 +247,17 @@ class DbMerger:
                 continue  # conversation 已被跳过
 
             values = list(row)
-            values[col_idx["id"]] = str(uuid.uuid4())
             values[col_idx["conversation_id"]] = new_conv_id
 
             placeholders = ", ".join("?" for _ in cols)
             self.target.execute(
-                f"INSERT INTO agent_rounds ({', '.join(cols)}) VALUES ({placeholders})",
+                f"INSERT OR IGNORE INTO agent_rounds ({', '.join(cols)}) VALUES ({placeholders})",
                 values,
             )
             count += 1
 
         self.target.commit()
-        logger.info(f"    agent_rounds: 合并 {count} 条")
+        logger.info(f"    agent_rounds: 合并 {count} 条, ID 直接映射")
 
     # ------------------------------------------------------------------
     # 步骤 5: 合并 topic_token_stats
@@ -564,7 +561,7 @@ class DbMerger:
     # ------------------------------------------------------------------
 
     def _merge_reflections(self):
-        """合并 reflections，映射 topic_id"""
+        """合并 reflections，直接使用源 ID，映射 topic_id"""
         logger.info("  合并 reflections ...")
         try:
             cols = self._get_table_columns(self.source, "reflections")
@@ -582,7 +579,6 @@ class DbMerger:
         count = 0
         for row in src_refs:
             values = list(row)
-            values[col_idx["id"]] = str(uuid.uuid4())
 
             if "topic_id" in col_idx:
                 old_tid = values[col_idx["topic_id"]]
@@ -591,21 +587,20 @@ class DbMerger:
 
             placeholders = ", ".join("?" for _ in cols)
             self.target.execute(
-                f"INSERT INTO reflections ({', '.join(cols)}) VALUES ({placeholders})",
+                f"INSERT OR IGNORE INTO reflections ({', '.join(cols)}) VALUES ({placeholders})",
                 values,
             )
-            pass
             count += 1
 
         self.target.commit()
-        logger.info(f"    reflections: 合并 {count} 条")
+        logger.info(f"    reflections: 合并 {count} 条, ID 直接映射")
 
     # ------------------------------------------------------------------
     # 步骤 10: 合并 config_history
     # ------------------------------------------------------------------
 
     def _merge_config_history(self):
-        """合并 config_history（无外键，直接追加）"""
+        """合并 config_history，直接使用源 ID"""
         logger.info("  合并 config_history ...")
         try:
             cols = self._get_table_columns(self.source, "config_history")
@@ -623,17 +618,15 @@ class DbMerger:
         count = 0
         for row in src_cfgs:
             values = list(row)
-            values[col_idx["id"]] = str(uuid.uuid4())
             placeholders = ", ".join("?" for _ in cols)
             self.target.execute(
-                f"INSERT INTO config_history ({', '.join(cols)}) VALUES ({placeholders})",
+                f"INSERT OR IGNORE INTO config_history ({', '.join(cols)}) VALUES ({placeholders})",
                 values,
             )
-            pass
             count += 1
 
         self.target.commit()
-        logger.info(f"    config_history: 合并 {count} 条")
+        logger.info(f"    config_history: 合并 {count} 条, ID 直接映射")
 
     # ------------------------------------------------------------------
     # 主流程

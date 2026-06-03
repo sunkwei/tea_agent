@@ -174,10 +174,88 @@ def toolkit_scheduler(action: str, **kwargs):
         except Exception:
             pass
 
+    # ── 脚本存储 ──
+    def _get_script_db_path():
+        """获取脚本存储的数据库路径（与调度器同库）"""
+        return DB_PATH
+    
+    def _save_script_to_db(script_id: str, name: str, content: str, description: str = ""):
+        """将脚本内容保存到数据库"""
+        conn = _get_conn()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_scripts (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                content TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                is_enabled INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            INSERT OR REPLACE INTO scheduled_scripts 
+            (id, name, content, description, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (script_id, name, content, description, datetime.now().isoformat()))
+        conn.commit()
+        conn.close()
+        return {"status": "saved", "id": script_id}
+    
+    def _get_script_from_db(script_id: str):
+        """从数据库获取脚本内容"""
+        conn = _get_conn()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_scripts (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                content TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                is_enabled INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        row = conn.execute(
+            "SELECT * FROM scheduled_scripts WHERE id = ?", (script_id,)
+        ).fetchone()
+        conn.close()
+        return dict(row) if row else None
+    
+    def _prepare_script(script_id: str):
+        """将脚本从数据库加载到临时目录，返回可执行路径"""
+        script = _get_script_from_db(script_id)
+        if not script:
+            return None
+        
+        import tempfile
+        import hashlib
+        
+        scripts_dir = Path(tempfile.gettempdir()) / "tea_agent_scripts"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        
+        content_hash = hashlib.md5(script["content"].encode()).hexdigest()[:8]
+        filename = f"{script_id}_{content_hash}.py"
+        filepath = scripts_dir / filename
+        
+        filepath.write_text(script["content"], encoding="utf-8")
+        return str(filepath)
+    
     # ── 执行任务 ──
     def _execute_task(task: dict):
-        """执行命令行任务，返回 (exit_code, output)"""
+        """执行命令行任务，支持从数据库加载脚本"""
         cmd = task["command"]
+        
+        # 如果命令是 script:xxx 格式，从数据库加载脚本
+        if cmd.startswith("script:"):
+            script_id = cmd[7:]
+            script_path = _prepare_script(script_id)
+            if script_path:
+                cmd = f"python {script_path}"
+                logger.info(f"从数据库加载脚本: {script_id} -> {script_path}")
+            else:
+                return -3, f"脚本不存在: {script_id}"
+        
         logger.info(f"执行定时任务: {task['name']} -> {cmd}")
         try:
             result = subprocess.run(
@@ -396,9 +474,140 @@ def toolkit_scheduler(action: str, **kwargs):
             "next_label": _format_next({"schedule": schedule, "next_run": next_run.isoformat() if next_run else None}),
         }
 
+    elif action == "save_script":
+        script_id = kwargs.get("script_id", "")
+        name = kwargs.get("name", "")
+        content = kwargs.get("content", "")
+        description = kwargs.get("description", "")
+        if not all([script_id, name, content]):
+            return {"error": "需要 script_id, name, content 参数"}
+        return _save_script_to_db(script_id, name, content, description)
+    
+    elif action == "get_script":
+        script_id = kwargs.get("script_id", "")
+        if not script_id:
+            return {"error": "需要 script_id 参数"}
+        script = _get_script_from_db(script_id)
+        if not script:
+            return {"error": f"脚本不存在: {script_id}"}
+        return script
+    
+    elif action == "list_scripts":
+        conn = _get_conn()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_scripts (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                content TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                is_enabled INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        rows = conn.execute("SELECT * FROM scheduled_scripts ORDER BY created_at DESC").fetchall()
+        conn.close()
+        return {"scripts": [dict(r) for r in rows], "count": len(rows)}
+    
+    elif action == "delete_script":
+        script_id = kwargs.get("script_id", "")
+        if not script_id:
+            return {"error": "需要 script_id 参数"}
+        conn = _get_conn()
+        conn.execute("DELETE FROM scheduled_scripts WHERE id=?", (script_id,))
+        conn.commit()
+        conn.close()
+        return {"status": "deleted"}
+    
+    elif action == "add_script_task":
+        """添加基于脚本的定时任务"""
+        script_id = kwargs.get("script_id", "")
+        name = kwargs.get("name", "")
+        schedule = kwargs.get("schedule", "")
+        if not all([script_id, name, schedule]):
+            return {"error": "需要 script_id, name, schedule 参数"}
+        
+        # 检查脚本是否存在
+        script = _get_script_from_db(script_id)
+        if not script:
+            return {"error": f"脚本不存在: {script_id}"}
+        
+        # 添加任务，命令为 script:xxx 格式
+        command = f"script:{script_id}"
+        next_run = parse_schedule(schedule)
+        conn = _get_conn()
+        tid = str(__import__('uuid').uuid4())
+        conn.execute(
+            "INSERT INTO scheduled_tasks (id,name,command,schedule,enabled,next_run) VALUES (?,?,?,?,1,?)",
+            (tid, name.strip(), command, schedule.strip(),
+             next_run.isoformat() if next_run else None)
+        )
+        conn.commit()
+        conn.close()
+        _notify("⏰ 新增脚本任务", f"{name}\n脚本: {script_id}\n调度: {schedule}")
+        return {"status": "added", "task_id": tid, "next_run": next_run.isoformat() if next_run else None}
+    
+    elif action == "save_evolve_script":
+        """保存自进化守护脚本到数据库"""
+        script_content = '''#!/usr/bin/env python3
+"""
+确保自进化进程启动的守护脚本。
+从数据库动态加载执行，支持跨机器迁移。
+"""
+import sys, os, json, subprocess
+from pathlib import Path
+from datetime import datetime
+
+DATA_DIR = Path.home() / ".tea_agent"
+STATE_FILE = DATA_DIR / "self_evolve_state.json"
+
+def _log(msg):
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+
+def _read_state():
+    if STATE_FILE.exists():
+        try:
+            return json.loads(STATE_FILE.read_text())
+        except: pass
+    return {"running": False, "pid": None}
+
+def _start_thread():
+    python = sys.executable
+    result = subprocess.run(
+        [python, "-c", """
+import sys, json, os
+sys.path.insert(0, os.getcwd())
+from tea_agent.toolkit.toolkit_self_evolve_thread import toolkit_self_evolve_thread
+r = toolkit_self_evolve_thread("start")
+print(json.dumps(r))
+"""],
+        capture_output=True, text=True, timeout=15
+    )
+    return result.returncode == 0
+
+def ensure_running():
+    state = _read_state()
+    if state.get("running"):
+        _log(f"🟢 运行中 (PID: {state.get('pid')})")
+        return True
+    
+    _log("🔴 未启动，正在启动...")
+    if _start_thread():
+        _log("✅ 启动成功")
+        return True
+    _log("❌ 启动失败")
+    return False
+
+if __name__ == "__main__":
+    success = ensure_running()
+    sys.exit(0 if success else 1)
+'''
+        return _save_script_to_db("self_evolve_watchdog", "自进化守护", script_content, "每分钟检查自进化进程")
+    
     else:
         return {"error": f"未知 action: {action}",
-                "supported": ["list","add","update","delete","enable","disable","run","start","stop","status","test_schedule"]}
+                "supported": ["list","add","update","delete","enable","disable","run","start","stop","status","test_schedule",
+                              "save_script","get_script","list_scripts","delete_script","add_script_task","save_evolve_script"]}
 
 def _format_next(task: dict) -> str:
     """格式化下次执行时间为人可读"""

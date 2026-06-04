@@ -11,7 +11,6 @@ Tea Agent CLI — 无 GUI 的命令行交互入口，适用于自动化测试和
 
 import os
 import sys
-import atexit
 import logging
 import threading
 from pathlib import Path
@@ -52,38 +51,9 @@ class TeaCLI(Agent):
         # ── 自动创建或加载主题 ──
         self._auto_init_topic()
 
-        # 自动启动潜意识引擎
-        self._auto_start_subconscious()
-
     # ------------------------------------------------------
     # 主题管理
     # ------------------------------------------------------
-    def _auto_start_subconscious(self):
-        """自动启动潜意识引擎（与 GUI 行为一致）。"""
-        import logging
-        logger = logging.getLogger("TeaCLI")
-        try:
-            from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
-            result = toolkit_subconscious("start")
-            status = result.get("status", "unknown")
-            if status == "rejected":
-                logger.debug(f"Dream 未启动: {result.get('reason')}")
-            elif status == "already_running":
-                logger.debug(f"Dream 已在运行 (pid={result.get('pid')})")
-            else:
-                logger.debug(f"Dream 已启动: {status}")
-        except Exception as e:
-            logger.debug(f"Dream 启动失败: {e}")
-        # 退出时自动停止
-        def _stop_dream():
-            """Internal: stop dream."""
-            try:
-                from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
-                toolkit_subconscious("stop")
-            except Exception:
-                pass
-        atexit.register(_stop_dream)
-
     def _auto_init_topic(self):
         """Internal: auto init topic."""
         topics = self.db.list_topics()

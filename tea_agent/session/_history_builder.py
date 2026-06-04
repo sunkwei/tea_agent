@@ -4,7 +4,6 @@
 从 onlinesession.py 提取的独立功能：
 - build_api_messages: 三级历史拼接 (L0系统提示 + L3摘要 + L2相关 + L1最新)
 - filter_level2_by_relevance: 按语义相关性筛选 Level 2 条目
-- get_subconscious_context: 读取潜意识引擎状态
 - to_multimodal: 多模态消息转换
 """
 
@@ -16,54 +15,6 @@ import logging
 from typing import List, Dict, Optional, Any
 
 logger = logging.getLogger("session.history_builder")
-
-
-def get_subconscious_context(data_dir: str = "") -> Optional[str]:
-    """读取潜意识引擎状态并格式化为上下文。
-    
-    Args:
-        data_dir: 数据目录路径，为空则自动检测
-        
-    Returns:
-        格式化的潜意识状态文本，无数据则返回 None
-    """
-    try:
-        if not data_dir:
-            try:
-                from tea_agent.config import get_config
-                data_dir = get_config().paths.data_dir_abs
-            except Exception:
-                data_dir = os.path.expanduser("~/.tea_agent")
-
-        state_file = os.path.join(data_dir, "subconscious_state.json")
-        if not os.path.exists(state_file):
-            return None
-
-        with open(state_file, 'r') as f:
-            state = json.load(f)
-
-        goals = state.get("goals", [])
-        insights = state.get("insights", [])
-        focus = state.get("last_focus", "mixed")
-
-        if not goals and not insights:
-            return None
-
-        lines = [f"## 潜意识引擎状态 (场景: {focus})"]
-
-        if goals:
-            lines.append("### 🎯 当前目标 (Goals)")
-            for g in goals[:3]:
-                lines.append(f"- {g}")
-
-        if insights:
-            lines.append("### 💡 最新洞察 (Insights)")
-            for i in insights[:3]:
-                lines.append(f"- {i}")
-
-        return "\n".join(lines)
-    except Exception:
-        return None
 
 
 def to_multimodal(msg: Dict, supports_vision: bool) -> Dict:
@@ -126,6 +77,22 @@ def _key_words(text: str) -> set:
     return set(cn + en)
 
 
+def _find_prune_cutoff(messages: list, tail_turns: int = 3) -> int:
+    """找到最近 tail_turns 轮的分界索引。
+    
+    从后往前数 user 消息，第 tail_turns 个 user 的索引即为裁剪分界。
+    此索引之前的 tool 消息可安全裁剪。
+    不足 tail_turns 轮则返回 0（不裁剪）。
+    """
+    user_count = 0
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].get("role") == "user":
+            user_count += 1
+            if user_count >= tail_turns:
+                return i
+    return 0
+
+
 def _extract_files_from_text(text: str) -> set:
     """从文本中提取文件路径和符号引用"""
     files = set()
@@ -170,7 +137,11 @@ def filter_level2_by_relevance(level2: list, current_msg: str) -> list:
 
     scored = []
     for pair in level2:
-        k_pair = _key_words(pair.get("user", "") + " " + pair.get("assistant", ""))
+        k_pair = _key_words(
+            pair.get("user", "") + " "
+            + pair.get("thinking", "") + " "
+            + pair.get("assistant", "")
+        )
         if not k_current or not k_pair:
             score = 0.5
         else:
@@ -255,11 +226,6 @@ def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
     except Exception as e:
         logger.debug(f"task resume check failed: {e}")
 
-    # ── 潜意识引擎状态注入 ──
-    sub_ctx = get_subconscious_context()
-    if sub_ctx:
-        result.append({"role": "user", "content": sub_ctx})
-
     # ── 长期记忆注入 ──
     if context._injected_memories_text:
         result.append({
@@ -325,15 +291,25 @@ def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
                         "content": f"[历史相关对话摘要] {item['content']}"
                     })
                 else:
-                    result.append({"role": "user", "content": item.get("user", "")})
-                    _msg = {"role": "assistant", "content": item.get("assistant", "")}
+                    user_text = item.get("user", "")
+                    assistant_text = item.get("assistant", "")
+
+                    # L2 注入仅携带 user+assistant 最终问答对
+                    # thinking 保留在存储中，仅用于 L3 摘要生成
+                    user_content = f"[历史记录]\n用户: {user_text}"
+
+                    result.append({"role": "user", "content": user_content})
+                    _msg = {"role": "assistant", "content": assistant_text}
                     if context.supports_reasoning:
                         _msg["reasoning_content"] = ""
                     result.append(_msg)
 
-    # ── Level 1: 最新一轮压缩对话 ──
+    # ── Level 1: 最新对话（含工具输出裁剪） ──
     max_turns_limit = 30
     start_idx = 1
+
+    # P0: 工具输出裁剪 — 保留最近 3 轮完整结果，更早的替换为占位符
+    _tool_prune_cutoff = _find_prune_cutoff(context.messages, tail_turns=3)
 
     if context.disable_summary:
         user_msg_indices = []
@@ -351,6 +327,14 @@ def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
     for i in range(start_idx, len(context.messages)):
         msg = context.messages[i]
         msg_copy = dict(msg)
+
+        # P0: 裁剪旧工具输出 — 替换为占位符以节省 token
+        if msg_copy["role"] == "tool" and i < _tool_prune_cutoff:
+            raw = msg_copy.get("content", "")
+            n_chars = len(raw) if isinstance(raw, str) else len(str(raw))
+            if n_chars > 100:
+                msg_copy["content"] = f"[工具结果已省略: {n_chars} 字符]"
+
         if (msg_copy["role"] == "assistant" and context.supports_reasoning
                 and "reasoning_content" not in msg_copy):
             msg_copy["reasoning_content"] = ""

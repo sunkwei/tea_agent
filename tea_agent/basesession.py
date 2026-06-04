@@ -561,48 +561,51 @@ class BaseChatSession(ABC):
         # ── Level 2 存储（用于 prompt 构建时直接拼入）──
         self._level2 = level2 or []
 
-        # ── Level 1: 最新一轮压缩加载 ──
+        # ── Level 1: 最近 3 轮压缩加载 ──
+        # 加载最近 N 轮对话的压缩工具链，使会话重启后保留多轮调试上下文
         total = len(conversations)
         if total == 0:
             self._history_summary = ""  # 兼容旧代码
             logger.info("加载历史 0条 (新主题)")
             return
 
-        # 最新一条作为 Level 1（压缩工具链）
-        last_conv = conversations[-1]
-        raw_user_msg = last_conv["user_msg"]
-        user_entry = {"role": "user"}
-        if isinstance(raw_user_msg, str) and raw_user_msg.startswith('{'):
-            try:
-                import json as _json_lh
-                parsed = _json_lh.loads(raw_user_msg)
-                if isinstance(parsed, dict):
-                    user_entry["content"] = parsed.get("text", "")
-                    imgs = parsed.get("images", [])
-                    if imgs:
-                        user_entry["images"] = imgs
-                else:
-                    user_entry["content"] = raw_user_msg
-            except Exception:
-                user_entry["content"] = raw_user_msg
-        else:
-            user_entry["content"] = str(raw_user_msg) if raw_user_msg else ""
-        self.messages.append(user_entry)
+        _L1_RECENT = 3  # 加载最近 N 轮到 L1
+        recent_convs = conversations[-_L1_RECENT:] if total >= _L1_RECENT else conversations
 
-        rounds = last_conv.get("rounds_json_parsed")
-        if rounds and last_conv.get("is_func_calling"):
-            repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
-            compressed = BaseChatSession._compress_tool_rounds(repaired)
-            for rd in compressed:
-                self.messages.append(rd)
-        else:
-            self.messages.append({"role": "assistant", "content": last_conv["ai_msg"]})
+        for conv in recent_convs:
+            raw_user_msg = conv["user_msg"]
+            user_entry = {"role": "user"}
+            if isinstance(raw_user_msg, str) and raw_user_msg.startswith('{'):
+                try:
+                    import json as _json_lh
+                    parsed = _json_lh.loads(raw_user_msg)
+                    if isinstance(parsed, dict):
+                        user_entry["content"] = parsed.get("text", "")
+                        imgs = parsed.get("images", [])
+                        if imgs:
+                            user_entry["images"] = imgs
+                    else:
+                        user_entry["content"] = raw_user_msg
+                except Exception:
+                    user_entry["content"] = raw_user_msg
+            else:
+                user_entry["content"] = str(raw_user_msg) if raw_user_msg else ""
+            self.messages.append(user_entry)
+
+            rounds = conv.get("rounds_json_parsed")
+            if rounds and conv.get("is_func_calling"):
+                repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
+                compressed = BaseChatSession._compress_tool_rounds(repaired)
+                for rd in compressed:
+                    self.messages.append(rd)
+            else:
+                self.messages.append({"role": "assistant", "content": conv["ai_msg"]})
 
         # ── 旧轮次不再直接加载到 self.messages ──
         # Level 2 + Level 3 由 _build_api_messages 拼接
         self._history_summary = ""  # 旧字段，不再使用
         logger.info(
-            f"三级加载: L1=1轮压缩 , L2={len(self._level2)}对 , "
+            f"三级加载: L1={len(recent_convs)}轮压缩 , L2={len(self._level2)}对 , "
             f"L3_semantic={len(self._semantic_summary)}chars , L3_tool={len(self._tool_chain_summary)}chars"
         )
 

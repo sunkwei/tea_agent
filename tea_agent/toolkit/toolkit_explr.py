@@ -318,6 +318,26 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
         f.write(md)
     _log(f"KB: {kb_path} ({len(md):,} chars)")
 
+def _check_index_stale(directory, run_dir):
+    """检查索引是否比源码文件旧。
+    
+    对比索引文件 mtime 与最近改动的 Python 源文件 mtime。
+    如果任何源文件比索引新，返回 True（索引过期）。
+    """
+    idx_mtime = os.path.getmtime(os.path.join(run_dir, "symbol_index.json"))
+    # 扫描 Python 源文件，找最新 mtime
+    max_src_mtime = 0
+    for root, dirs, files in os.walk(directory):
+        # 跳过隐藏目录和虚拟环境
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('__pycache__', 'node_modules', 'venv', 'build', 'dist', '.git')]
+        for f in files:
+            if f.endswith('.py'):
+                mtime = os.path.getmtime(os.path.join(root, f))
+                if mtime > max_src_mtime:
+                    max_src_mtime = mtime
+    return max_src_mtime > idx_mtime
+
+
 def _action_build(directory, force):
     """Internal: action build.
     
@@ -337,7 +357,12 @@ def _action_build(directory, force):
     if not force and os.path.exists(kb_path) and os.path.exists(sym_path):
         age = time.time() - os.path.getmtime(kb_path)
         if age < 3600:
-            return f"✅ 知识库已存在 (更新于 {age/60:.0f} 分钟前)，使用 force=true 强制重建"
+            # 新鲜度检查：索引是否比源码旧
+            stale = _check_index_stale(directory, run_dir)
+            if not stale:
+                return f"✅ 知识库已存在 (更新于 {age/60:.0f} 分钟前)，使用 force=true 强制重建"
+            else:
+                _log("⚠ 检测到源码变更，自动重建索引")
 
     _log(f"🏗 构建项目知识库: {directory}")
     t0 = time.time()

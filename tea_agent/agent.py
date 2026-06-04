@@ -459,7 +459,7 @@ class Agent:
     # ═══════════════════════════════════════════════
     def _post_chat_pipeline(self, ai_msg: str, used_tools: bool,
                             user_msg, topic_id: str) -> None:
-        """AI 回复后流水线：入库 → Token 统计 → 摘要。"""
+        """AI 回复后流水线：入库 → Token 统计 → L2 推送 → 条件摘要。"""
         if not self._db:
             return
 
@@ -479,19 +479,73 @@ class Agent:
                 completion_tokens=usage["completion_tokens"],
             )
 
-        # 异步摘要
+        # 提取 user_msg 文本（可能是 str 或 dict）
+        user_text = user_msg if isinstance(user_msg, str) else (
+            user_msg.get("text", "") if isinstance(user_msg, dict) else str(user_msg)
+        )
+
+        # L2 推送：用户+AI 对话对
+        # 当 L2 达到 50 条时，将溢出 30 条 + 现有 L3 摘要一起生成新摘要，L2 裁剪到 20
+        l2_count, overflow_items, should_summarize = self._db.push_to_level2(
+            topic_id, user_text, ai_msg,
+            rounds=rounds if rounds else None,
+        )
+        logger.debug(f"L2 push: count={l2_count}, overflow={len(overflow_items)}, "
+                     f"summarize={should_summarize}")
+
+        # 异步摘要（标题 + 条件 L2→L3）
         threading.Thread(
             target=self._do_async_summaries,
-            args=(topic_id,),
+            args=(topic_id, overflow_items, should_summarize),
             daemon=True
         ).start()
 
-    def _do_async_summaries(self, topic_id: str):
-        """后台线程：执行摘要。"""
+    def _do_async_summaries(self, topic_id: str, overflow_items: list = None,
+                            should_summarize: bool = False):
+        """后台线程：执行标题摘要 + 条件 L2→L3 摘要 + 工具链摘要。"""
         try:
+            # 标题摘要
             self._auto_summary(topic_id)
+            # L2→L3 语义摘要 + 工具链摘要（仅在 L2 溢出时触发，约每 30 轮一次）
+            if should_summarize and overflow_items:
+                self._l2_to_l3_summary(topic_id, overflow_items)
+                self._tool_chain_summary(topic_id, overflow_items)
         except Exception as e:
             logger.warning(f"异步摘要失败: {e}")
+
+    def _l2_to_l3_summary(self, topic_id: str, overflow_items: list):
+        """将溢出的 L2 条目 + 现有 L3 摘要合并，生成新的 L3 语义摘要。"""
+        try:
+            cli, mdl = self._sess._get_summarize_client()
+            existing_l3 = self._db.get_semantic_summary(topic_id) or ""
+            extra_params = self._sess._get_effective_params("cheap")
+            new_summary = self._db.generate_l2_to_l3_summary(
+                topic_id, overflow_items, existing_l3, cli, mdl,
+                extra_params=extra_params,
+            )
+            # 同步到内存，使当前会话立即可用（原只写 DB，重启才生效）
+            if new_summary and hasattr(self._sess, 'context'):
+                self._sess.context._semantic_summary = new_summary
+            logger.info(f"L2→L3 摘要完成: topic={topic_id}")
+        except Exception as e:
+            logger.warning(f"L2→L3 摘要失败: {e}")
+
+    def _tool_chain_summary(self, topic_id: str, overflow_items: list):
+        """从 L2 溢出条目生成工具调用链摘要。"""
+        try:
+            cli, mdl = self._sess._get_summarize_client()
+            existing_tc = self._db.get_tool_chain_summary(topic_id) or ""
+            extra_params = self._sess._get_effective_params("cheap")
+            new_tc = self._db.generate_tool_chain_summary(
+                topic_id, overflow_items, existing_tc, cli, mdl,
+                extra_params=extra_params,
+            )
+            # 同步到内存
+            if new_tc and hasattr(self._sess, 'context'):
+                self._sess.context._tool_chain_summary = new_tc
+            logger.info(f"工具链摘要完成: topic={topic_id}")
+        except Exception as e:
+            logger.warning(f"工具链摘要失败: {e}")
 
     def _auto_summary(self, topic_id: str):
         """自动生成主题摘要。"""

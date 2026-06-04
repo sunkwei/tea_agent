@@ -157,12 +157,6 @@ def toolkit_scheduler(action: str, **kwargs):
     def _notify(title: str, msg: str):
         """发送系统通知"""
         try:
-            from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious as _ts
-            # 复用潜意识的通知基础设施
-            pass
-        except Exception:
-            pass
-        try:
             import sys
             if sys.platform == 'linux':
                 subprocess.run(['notify-send', '--app-name=TeaAgent', title, msg],

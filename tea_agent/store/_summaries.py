@@ -145,20 +145,249 @@ class SummaryStore(StoreComponent):
         c.close()
 
     def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str,
-                        files: list = None, max_level2: int = 30) -> list:
+                        files: list = None, rounds: list = None,
+                        max_level2: int = 50) -> tuple:
         """
-        2026-05-20 gen by Tea Agent, L2扩容+分层压缩
-        将一轮对话推入 Level 2，最多保留 max_level2 轮，返回溢出条目（进入L3待处理）。
+        将一轮对话推入 Level 2，最多保留 max_level2 条。
+
+        L2 条目包含完整 user + ai thinking + ai final msg（不含工具轮）。
+        thinking 从 rounds 中提取所有带 tool_calls 的 assistant content。
+
+        当 L2 达到上限时：保留最新 20 条，返回最老 30 条溢出 + 触发摘要信号。
+
+        Returns:
+            (level2_count, overflow_items, should_summarize)
+            - level2_count: 当前 L2 条目数
+            - overflow_items: 溢出的最老条目（待摘要），[] 表示无溢出
+            - should_summarize: 是否需要触发 L2→L3 摘要
         """
         level2 = self.get_level2(topic_id)
+
+        # 从 rounds 提取 thinking：所有带 tool_calls 的 assistant 消息
+        thinking_parts = []
+        if rounds:
+            for r in rounds:
+                if r.get("role") == "assistant" and r.get("tool_calls"):
+                    parts = []
+                    if r.get("reasoning_content"):
+                        parts.append(f"[思考] {r['reasoning_content']}")
+                    if r.get("content"):
+                        parts.append(r["content"])
+                    if parts:
+                        thinking_parts.append("\n".join(parts))
+
         entry = {"user": user_msg, "assistant": ai_msg}
+        if thinking_parts:
+            entry["thinking"] = "\n\n".join(thinking_parts)
         if files:
             entry["files"] = files
         level2.append(entry)
-        overflow = level2[:-max_level2] if len(level2) > max_level2 else []
-        level2 = level2[-max_level2:]
+
+        overflow_items = []
+        should_summarize = False
+
+        if len(level2) >= max_level2:
+            # L2 达到 50 条：取最老 30 条做 L3 摘要，保留最新 20 条
+            overflow_items = level2[:30]
+            level2 = level2[-20:]
+            should_summarize = True
+
         self.set_level2(topic_id, level2)
-        return overflow
+        return len(level2), overflow_items, should_summarize
+
+    # ── L2→L3 摘要生成 ──
+
+    def generate_l2_to_l3_summary(
+        self, topic_id: str, overflow_items: list,
+        existing_l3: str, summarize_client, summarize_model: str,
+        extra_params: dict = None,
+    ) -> str:
+        """
+        将 L2 溢出条目 + 现有 L3 摘要合并，调用 LLM 生成新的 L3 摘要。
+
+        策略：每 30 轮触发一次（50→20），而非每轮更新，大幅节省 Token。
+
+        Args:
+            topic_id: 主题 ID
+            overflow_items: 溢出的最老 L2 条目列表
+            existing_l3: 现有 L3 语义摘要（可能为空）
+            summarize_client: OpenAI 客户端
+            summarize_model: 摘要模型名
+            extra_params: 额外参数（temperature 等）
+
+        Returns:
+            新生成的 L3 语义摘要文本
+        """
+        if not overflow_items:
+            return existing_l3
+
+        # 构建对话文本
+        conv_lines = []
+        for idx, item in enumerate(overflow_items, 1):
+            u = item.get("user", "")[:2000]
+            t = item.get("thinking", "")
+            a = item.get("assistant", "")[:2000]
+            if t:
+                conv_lines.append(
+                    f"[对话 {idx}]\nUser: {u}\nAI思考: {t[:2000]}\nAI回复: {a}"
+                )
+            else:
+                conv_lines.append(f"[对话 {idx}]\nUser: {u}\nAssistant: {a}")
+
+        conv_text = "\n\n".join(conv_lines)
+
+        existing_text = existing_l3 if existing_l3 else "（无）"
+
+        prompt = f"""你是一个编程项目对话摘要助手。请将以下历史对话提炼为结构化的技术摘要，供后续 AI 编码会话使用。
+
+## 现有背景摘要
+{existing_text}
+
+## 新增历史对话（共 {len(overflow_items)} 轮）
+{conv_text}
+
+## 摘要格式要求
+请按以下结构输出摘要（每个段落用 ## 标题分隔）：
+
+## 项目背景
+（项目类型、技术栈、当前阶段）
+## 已完成的修改
+（列出具体改动的文件及变更内容，格式: file.py — 变更描述）
+## 关键决策与原因
+（做了什么重要选择，为什么这样选）
+## 遇到的错误及解决方案
+（如果对话中有调试/报错，记录错误和修复方法）
+## 架构约束与注意事项
+（不可违反的规则、兼容性要求、特殊约定）
+## 用户偏好与长期要求
+（用户明确表达的编码风格、工具偏好、全局要求）
+## 当前待办事项
+（未完成的任务、下一步计划）
+
+要求：
+1. 中文输出，控制在 32000 字符以内
+2. 信息密度优先 — 避免冗长的叙述，用列表和简洁陈述
+3. 丢弃已过时或与当前任务无关的内容
+4. 直接输出摘要正文，无需额外解释"""
+
+        try:
+            params = {"max_tokens": 4096, "temperature": 0.3}
+            if extra_params:
+                params.update(extra_params)
+
+            response = summarize_client.chat.completions.create(
+                model=summarize_model,
+                messages=[{"role": "user", "content": prompt}],
+                **params,
+            )
+            new_summary = response.choices[0].message.content or ""
+            new_summary = new_summary.strip()[:32000]
+
+            if new_summary:
+                self.set_semantic_summary(topic_id, new_summary)
+                logger.info(
+                    f"L3 摘要更新: {len(overflow_items)}条L2→{len(new_summary)}字符 "
+                    f"(现有L3={len(existing_l3)}字符)"
+                )
+            return new_summary
+        except Exception as e:
+            logger.warning(f"L2→L3 摘要生成失败: {e}")
+            return existing_l3
+
+    # ── L2→L3 工具链摘要 ──
+
+    def generate_tool_chain_summary(
+        self, topic_id: str, overflow_items: list,
+        existing_tc: str, summarize_client, summarize_model: str,
+        extra_params: dict = None,
+    ) -> str:
+        """
+        从 L2 溢出条目的 thinking 中提取工具调用链摘要。
+
+        与语义摘要互补：语义摘要关注"做了什么决策、有什么偏好"，
+        工具链摘要关注"调了哪些工具、看了哪些文件、搜索了什么"。
+
+        Args:
+            topic_id: 主题 ID
+            overflow_items: 溢出的最老 L2 条目列表
+            existing_tc: 现有工具链摘要（可能为空）
+            summarize_client: OpenAI 客户端
+            summarize_model: 摘要模型名
+            extra_params: 额外参数
+        """
+        if not overflow_items:
+            return existing_tc
+
+        # 构建工具调用上下文 — 重点关注 thinking 中的工具序列
+        tc_lines = []
+        for idx, item in enumerate(overflow_items, 1):
+            u = item.get("user", "")[:500]
+            t = item.get("thinking", "")
+            a = item.get("assistant", "")[:500]
+            # thinking 包含完整工具调用推理链，是工具链摘要的核心素材
+            if t:
+                tc_lines.append(
+                    f"[轮次 {idx}]\n用户请求: {u}\n工具推理与执行: {t[:3000]}"
+                )
+            else:
+                tc_lines.append(
+                    f"[轮次 {idx}]\n用户请求: {u}\nAI回复: {a}"
+                )
+
+        tc_text = "\n\n".join(tc_lines)
+        existing_text = existing_tc if existing_tc else "（无）"
+
+        prompt = f"""你是一个编程会话工具调用分析器。请从以下对话历史中提取工具调用模式和执行轨迹。
+
+## 现有工具链摘要
+{existing_text}
+
+## 新增对话记录（共 {len(overflow_items)} 轮）
+{tc_text}
+
+## 输出格式
+请按以下结构输出（每个段落用 ## 标题）：
+
+## 被检查/修改的文件
+（列出具体文件路径及操作类型：读取/搜索/编辑/创建）
+## 搜索模式
+（记录 grep/find/search 的关键词及搜索范围）
+## 工具调用序列
+（按时间顺序列出工具调用链，格式: 工具名 → 关键参数 → 结果摘要）
+## 调试轨迹
+（如果对话中涉及调试，记录错误信息及修复步骤）
+## 关键发现
+（工具执行中发现的重要信息、文件位置、配置项等）
+
+要求：
+1. 中文输出，控制在 16000 字符以内
+2. 聚焦工具执行事实，不要主观判断
+3. 丢弃已过时的信息（文件已被后续修改覆盖的）
+4. 直接输出摘要正文，无需额外解释"""
+
+        try:
+            params = {"max_tokens": 2048, "temperature": 0.2}
+            if extra_params:
+                params.update(extra_params)
+
+            response = summarize_client.chat.completions.create(
+                model=summarize_model,
+                messages=[{"role": "user", "content": prompt}],
+                **params,
+            )
+            new_tc = response.choices[0].message.content or ""
+            new_tc = new_tc.strip()[:16000]
+
+            if new_tc:
+                self.set_tool_chain_summary(topic_id, new_tc)
+                logger.info(
+                    f"工具链摘要更新: {len(overflow_items)}条L2→{len(new_tc)}字符 "
+                    f"(现有TC={len(existing_tc)}字符)"
+                )
+            return new_tc
+        except Exception as e:
+            logger.warning(f"工具链摘要生成失败: {e}")
+            return existing_tc
 
     # ── L3 待处理缓冲（批处理：攒够 N 条再触发摘要）──
 

@@ -25,16 +25,22 @@ class TopicStore(StoreComponent):
         return tid
 
     def update_topic_title(self, topic_id: str, new_title: str):
-        """Update topic title.
-        
+        """Update topic title. ※ 前缀的主题标题不可被自动摘要覆盖。
+
         Args:
             topic_id: Description.
             new_title: Description.
         """
         old = self.get_topic(topic_id)
-        if old and (old.get("title") or "").startswith("chat_room_"):
-            logger.debug(f"拒绝修改 chat_room 主题标题: {old['title']}")
-            return
+        if old:
+            old_title = old.get("title") or ""
+            if old_title.startswith("chat_room_"):
+                logger.debug(f"拒绝修改 chat_room 主题标题: {old_title}")
+                return
+            # ※ 前缀表示手动设置的标题，禁止自动摘要覆盖（竞态安全）
+            if old_title.startswith("※") and not new_title.startswith("※"):
+                logger.debug(f"拒绝覆盖 ※ 手动标题: {old_title}")
+                return
         c = self.conn.cursor()
         c.execute(
             "UPDATE topics SET title = ? WHERE topic_id = ?",

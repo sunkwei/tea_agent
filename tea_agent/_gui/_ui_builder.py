@@ -149,6 +149,10 @@ class UIBuilder:
         gui.input_box.bind("<Return>", gui.send)
         gui.input_box.bind("<Shift-Return>", gui.newline)
         gui.root.bind("<Escape>", gui.interrupt)
+        # Ctrl+V: 粘贴图像（模型支持视觉时）
+        gui.input_box.bind("<Control-v>", gui.on_paste)
+
+
 
         # HtmlFrame 缩放快捷键
         if HAS_TKINTERWEB:

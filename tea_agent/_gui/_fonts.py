@@ -16,13 +16,25 @@ _FONTS_DETECTED = False
 _SCALE_FACTOR = 1.0
 _FONT_SIZE_MULTIPLIER = 0.56  # 字体缩放倍率，1.0=原始大小
 _DEFAULT_FONT_SIZE = max(10, int(16 * _FONT_SIZE_MULTIPLIER))  # 模块级默认（_init_fonts 后会更新）
+_HTML_FONT_SIZE = 16  # HtmlFrame使用的独立基础字体大小（独立于 config font_size）
+_GUI_FONT_RATIO = 1.0  # config font_size 与默认值(12)的比值，由 _init_fonts() 设置
 
 def _fs(size):
-    """返回按显示缩放因子和字体倍率调整后的字体大小。"""
-    return max(1, int(size * _SCALE_FACTOR * _FONT_SIZE_MULTIPLIER))
+    """返回按显示缩放因子、字体倍率和 config font_size 比例调整后的字体大小。"""
+    return max(1, int(size * _SCALE_FACTOR * _FONT_SIZE_MULTIPLIER * _GUI_FONT_RATIO))
+
+def _get_font_size_from_config():
+    """从配置文件读取字体大小，失败时返回默认值12"""
+    try:
+        from tea_agent.config import get_config
+        cfg = get_config()
+        return cfg.font_size if hasattr(cfg, 'font_size') else 12
+    except Exception:
+        return 12
+
 def _init_fonts():
     """延迟检测系统可用字体（需 Tk root 创建后调用）。"""
-    global SYSTEM_FONT, MONO_FONT, _FONTS_DETECTED, _SCALE_FACTOR, _DEFAULT_FONT_SIZE
+    global SYSTEM_FONT, MONO_FONT, _FONTS_DETECTED, _SCALE_FACTOR, _DEFAULT_FONT_SIZE, _GUI_FONT_RATIO
 
     if _FONTS_DETECTED:
         return
@@ -90,9 +102,14 @@ def _init_fonts():
                 _SCALE_FACTOR = sf
     except Exception:
         pass
-    _DEFAULT_FONT_SIZE = max(10, int(16 * _SCALE_FACTOR * _FONT_SIZE_MULTIPLIER))
+    
+    # 从配置文件读取 GUI 基础字体大小，HtmlFrame 使用独立的 _HTML_FONT_SIZE 不受此影响
+    config_font_size = _get_font_size_from_config()
+    _DEFAULT_FONT_SIZE = max(10, int(config_font_size * _SCALE_FACTOR * _FONT_SIZE_MULTIPLIER))
+    # 计算 config font_size 相对于默认值(12)的比例，供 _fs() 和 Tk 命名字体使用
+    _GUI_FONT_RATIO = config_font_size / 12.0
 
-    # 将 Tk 默认字体大小也乘以缩放因子，保持控件字体与 _fs() 一致
+    # 将 Tk 默认字体大小也乘以缩放因子和 config 比例，保持控件字体与 _fs() 一致
     try:
         from tkinter import font as _tkfont
         for _fname in ["TkDefaultFont", "TkTextFont", "TkMenuFont",
@@ -102,7 +119,7 @@ def _init_fonts():
                 _f = _tkfont.nametofont(_fname)
                 _orig = _f.cget("size")
                 if _orig > 0:
-                    _f.configure(size=max(1, int(_orig * _SCALE_FACTOR * _FONT_SIZE_MULTIPLIER)))
+                    _f.configure(size=max(1, int(_orig * _SCALE_FACTOR * _FONT_SIZE_MULTIPLIER * _GUI_FONT_RATIO)))
             except Exception:
                 pass
     except Exception:

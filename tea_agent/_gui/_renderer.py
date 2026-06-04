@@ -113,7 +113,8 @@ class ChatRenderer:
         self.gui._image_cache.clear()
         md = _chat_to_markdown(msgs, image_cache=self.gui._image_cache)
         if HAS_TKINTERWEB:
-            font_size = int(_fonts_mod._DEFAULT_FONT_SIZE * self.gui._zoom_level / 100)
+            # HtmlFrame 使用独立的 _HTML_FONT_SIZE，不受 config font_size 影响
+            font_size = int(_fonts_mod._HTML_FONT_SIZE * self.gui._zoom_level / 100)
             html = _render_markdown(md, font_size=font_size)
             self._html_render(html)
         else:

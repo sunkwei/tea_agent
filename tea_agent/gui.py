@@ -247,7 +247,8 @@ class TkGUI(Agent):
             return
         self._image_cache.clear()
         md = _chat_to_markdown(self._filtered_messages(), image_cache=self._image_cache)
-        font_size = int(_fonts_mod._DEFAULT_FONT_SIZE * self._zoom_level / 100)
+        # HtmlFrame使用独立的字体大小，不受配置影响
+        font_size = int(_fonts_mod._HTML_FONT_SIZE * self._zoom_level / 100)
         html = _render_markdown(md, font_size=font_size)
         self._html_render(html)
         self.root.after(self.RENDER_DELAY_MS, self.scroll_to_bottom)
@@ -312,71 +313,30 @@ class TkGUI(Agent):
         return {"enable_thinking": self.sess.enable_thinking, "changed": True}
 
     def export_last_pdf(self, e=None):
-        """Ctrl+P: 导出当前主题最后一轮对话为 last.pdf（仿 HtmlFrame 渲染效果）"""
+        """Ctrl+P: 导出当前 HtmlFrame 中渲染的轮次为 last.pdf（支持 Alt+Up/Down 切换轮次）"""
         import json, tempfile, subprocess
         def _do():
             try:
-                tid = self.current_topic_id
-                if not tid:
-                    self._update_status("⚠️ 无当前主题")
-                    return
-
-                convs = self.db.get_conversations(tid, limit=1)
-                if not convs:
+                # ── 优先使用内存中当前渲染的轮次（与 HtmlFrame 一致）──
+                rounds = getattr(self, '_chat_rounds', [])
+                if not rounds:
                     self._update_status("⚠️ 无对话记录")
                     return
-                conv = convs[0]
 
-                # ── 解析 user_msg ──
-                user_msg = conv.get("user_msg", "")
-                user_text = ""
-                if isinstance(user_msg, str):
-                    if user_msg.startswith("{"):
-                        try:
-                            obj = json.loads(user_msg)
-                            user_text = obj.get("text", user_msg) if isinstance(obj, dict) else user_msg
-                        except (json.JSONDecodeError, TypeError):
-                            user_text = user_msg
-                    else:
-                        user_text = user_msg
-                elif isinstance(user_msg, dict):
-                    user_text = user_msg.get("text", str(user_msg))
+                cur_view = getattr(self, '_current_round_view', None)
+                if cur_view is None:
+                    # 最新轮
+                    active_idx = len(rounds) - 1
                 else:
-                    user_text = str(user_msg)
+                    active_idx = max(0, min(cur_view, len(rounds) - 1))
 
-                # ── 解析 rounds_json → chat_messages 格式 ──
-                rounds = conv.get("rounds_json_parsed") or []
-                stamp = conv.get("stamp", "")
-
-                msgs = [{"role": "user", "content": user_text, "timestamp": stamp}]
-
-                for r in rounds:
-                    role = r.get("role", "")
-                    if role == "assistant":
-                        reasoning = r.get("reasoning_content", "")
-                        content = r.get("content", "")
-                        tool_calls = r.get("tool_calls") or []
-
-                        if reasoning:
-                            msgs.append({"role": "think", "content": reasoning, "timestamp": ""})
-
-                        for tc in tool_calls:
-                            fn = tc.get("function", {})
-                            name = fn.get("name", "?")
-                            args = fn.get("arguments", "")
-                            msgs.append({"role": "tool", "content": f"🔧 调用工具：{name}\n参数：\n{args}", "timestamp": ""})
-
-                        if content:
-                            msgs.append({"role": "ai", "content": content, "timestamp": ""})
-
-                    elif role == "tool":
-                        content = r.get("content", "")
-                        msgs.append({"role": "tool", "content": f"📋 结果：{content}", "timestamp": ""})
+                msgs = rounds[active_idx]
 
                 # ── 渲染为 HTML ──
                 from tea_agent._gui._markdown import _chat_to_markdown, _render_markdown
-                md = _chat_to_markdown(msgs)
-                font_size = int(_fonts_mod._DEFAULT_FONT_SIZE * getattr(self, '_zoom_level', 100) / 100)
+                self._image_cache.clear()
+                md = _chat_to_markdown(msgs, image_cache=self._image_cache)
+                font_size = int(_fonts_mod._HTML_FONT_SIZE * getattr(self, '_zoom_level', 100) / 100)
                 html = _render_markdown(md, font_size=font_size)
 
                 # ── 写临时 HTML ──
@@ -655,6 +615,53 @@ class TkGUI(Agent):
     def _clear_images(self):
         """清空待发送图片列表 — 委托 ImageHandler"""
         self.images.clear()
+
+    def on_paste(self, e=None):
+        """Ctrl+V 粘贴：若模型支持视觉且剪贴板含图像，则缓冲到临时目录并加入待发送列表。
+
+        Returns:
+            "break" 表示已处理（阻止默认文本粘贴），None 表示未处理（允许默认粘贴）。
+        """
+        # 1. 检查模型是否支持视觉
+        vision_ok = False
+        try:
+            vision_ok = (hasattr(self, '_cfg')
+                         and hasattr(self._cfg, 'main_model')
+                         and self._cfg.main_model.supports_vision)
+        except Exception:
+            pass
+        if not vision_ok:
+            return None
+
+        # 2. 尝试从剪贴板获取图像
+        img = None
+        try:
+            from PIL import ImageGrab
+            img = ImageGrab.grabclipboard()
+        except Exception:
+            return None
+
+        if img is None:
+            return None
+
+        # 3. 保存到 tmp/images/ 目录
+        img_dir = os.path.join(self._initial_cwd, "tmp", "images")
+        os.makedirs(img_dir, exist_ok=True)
+
+        from datetime import datetime as _dt
+        ts = _dt.now().strftime("%Y%m%d_%H%M%S")
+        dest = os.path.join(img_dir, f"paste_{ts}.png")
+        img.save(dest, "PNG")
+        self._pending_images.append(dest)
+
+        # 4. 更新 UI 反馈（与 images.attach 一致）
+        count = len(self._pending_images)
+        self._img_label.config(text=f"已选 {count} 张图片")
+        self._clear_img_btn.pack(side=tk.LEFT, padx=4)
+        self._update_status(f"📸 已粘贴图像 ({img.size[0]}×{img.size[1]})")
+
+        return "break"
+
     def send(self, e=None):
         """发送用户消息"""
         if self.generating or not self.current_topic_id:

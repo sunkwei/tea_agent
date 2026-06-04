@@ -14,3 +14,4 @@ cheap_model:
   model_name: zfujicute/OmniCoder-Qwen3.5-9B-Claude-4.6-Opus-Uncensored-v2-GGUF:latest
 
 keep_turns: 5
+font_size: 29

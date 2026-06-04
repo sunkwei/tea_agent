@@ -8,10 +8,57 @@
 import platform
 import socket
 import os
+import json
 import logging
 from typing import List, Dict
 
 logger = logging.getLogger("session.os_info_injector")
+
+# 持久化 OS 签名文件，跨会话跟踪执行环境变化
+_OS_STATE_FILE = os.path.join(os.path.expanduser("~"), ".tea_agent", "os_state.json")
+
+
+def _get_os_signature() -> str:
+    """生成当前 OS 的简短签名，用于跨会话对比。
+    
+    格式: "system-release-machine"，如 "Windows-10-AMD64" / "Linux-6.8.0-x86_64"
+    """
+    try:
+        import platform as _plat
+        return f"{_plat.system()}-{_plat.release()}-{_plat.machine()}"
+    except Exception:
+        return "unknown"
+
+
+def _load_persisted_os_sig(topic_id: str) -> str:
+    """从持久化文件加载指定 topic 的上次 OS 签名。"""
+    if not topic_id:
+        return ""
+    try:
+        if os.path.exists(_OS_STATE_FILE):
+            with open(_OS_STATE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return data.get("topics", {}).get(topic_id, "")
+    except Exception:
+        pass
+    return ""
+
+
+def _save_os_sig(topic_id: str, sig: str) -> None:
+    """持久化指定 topic 的当前 OS 签名。"""
+    if not topic_id:
+        return
+    try:
+        os.makedirs(os.path.dirname(_OS_STATE_FILE), exist_ok=True)
+        data = {}
+        if os.path.exists(_OS_STATE_FILE):
+            with open(_OS_STATE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        data.setdefault("topics", {})[topic_id] = sig
+        with open(_OS_STATE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception as e:
+        logger.debug(f"保存 OS 签名失败: {e}")
 
 
 def inject_os_info(messages: List[Dict], toolkit_root_dir: str = "",

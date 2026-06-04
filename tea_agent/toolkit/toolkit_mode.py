@@ -1,7 +1,4 @@
-## llm generated tool func, created Sat May  2 10:33:15 2026
-# version: 1.0.1
-
-# version: 1.0.1
+# version: 1.1.0 — 6 phase modes + backward compat (pragmatic→develop)
 
 import logging
 
@@ -9,222 +6,347 @@ logger = logging.getLogger("toolkit")
 
 def toolkit_mode(action: str, text: str = "", mode: str = ""):
     """
-    Agent 人格模式管理。两种核心模式：
-    
-    🎯 pragmatic (严谨收敛):
-       - 代码开发、bug排查、需求遵从
-       - 结构化思维、逐步验证、精确输出
-       - 关键词: bug/修复/代码/错误/测试/debug/实现/需求/严谨
-    
-    🎨 creative (自由发散):
-       - 异想天开、创意发散、打破边界
-       - 自由联想、跨域碰撞、大胆假设
-       - 关键词: 创意/想象/如果/设计/梦想/探索/未来/故事
-    
-    模式以 CRITICAL 优先级注入记忆，确保后续所有回复遵循。
+    Agent 工作阶段模式管理。6 个 phase mode + 兼容旧 pragmatic/creative。
+
+    Phase Modes:
+      design  — 架构设计：分析需求、设计方案、不写代码
+      develop — 代码开发：实现功能、修改文件、编译验证
+      test    — 测试调试：跑测试、定位根因、修 bug
+      review  — 代码审查：审阅质量、发现隐患、给建议
+      docs    — 文档撰写：写 README/CHANGELOG/注释
+      devops  — 部署发布：构建、打包、发布、CI/CD
+      creative — 自由发散（兼容保留）
+
+    兼容: pragmatic→develop, mixed→develop
+    模式以 CRITICAL 优先级注入记忆，影响后续所有回复。
     """
-    logger.info(f"toolkit_mode called: action={action!r}, text={repr(text)[:80]}, mode={mode!r}")
+    logger.info(f"toolkit_mode: action={action!r}, mode={mode!r}, text={repr(text)[:80]}")
 
     import json
     import re
-    
-    PRAGMATIC_KW = [
-        'bug', '修复', 'fix', '错误', '报错', '异常', '崩溃', '测试', 'test',
-        '代码', 'code', '实现', 'implement', '需求', 'requirement', '严谨',
-        '审查', 'review', '提交', 'commit', '部署', 'deploy', '性能', 'perf',
-        '排查', 'debug', '调试', '编译', 'compile', '优化', 'optimize',
-        '接口', 'api', '参数', 'param', '类型', 'type', '重构', 'refactor',
-        '文档', 'doc', '版本', 'version', '发布', 'release', '验证', 'verify',
-        '配置', 'config', '依赖', 'dependency', '兼容', 'compatible',
-        '确保', '保证', '确定', '一定', '必须', '严格',
-        'toolkit_exec', 'toolkit_self_evolve', 'toolkit_run_tests',
-        'toolkit_config', 'toolkit_pkg', 'toolkit_build',
-    ]
-    
-    CREATIVE_KW = [
-        '创意', '想象', '如果', '假设', '可能', '或许', '探索', '实验',
-        '设计', 'design', '架构', 'architecture', '梦想', '未来', '故事',
-        '小说', '诗', '艺术', '哲学', '思考', '发散', '自由',
-        '异想天开', '天马行空', '创新', 'innovate', '突破', '颠覆',
-        '隐喻', '比喻', '类比', '跨界', '融合', '混搭', '颠覆性',
-        '科幻', '奇幻', '魔法', '宇宙', '维度', '平行世界',
-        '灵感', 'inspiration', '创造', 'create', '设想', '构想',
-        'toolkit_screenshot', 'toolkit_search',
-        'toolkit_kb', 'toolkit_subconscious',    ]
-    
+
+    # ── 各 phase 关键词 ──
+    PHASE_KW = {
+        "design": [
+            "设计", "架构", "方案", "规划", "选型", "权衡", "评估",
+            "design", "architecture", "plan", "proposal", "blueprint",
+            "可行性", "技术方案", "调研", "对比", "原型", "prototype",
+            "模块划分", "接口设计", "数据模型", "流程图",
+            "toolkit_explr", "toolkit_search", "toolkit_plan", "toolkit_kb",
+        ],
+        "develop": [
+            "实现", "开发", "编写", "添加", "修改", "删除", "重构",
+            "implement", "develop", "code", "add", "modify", "remove", "refactor",
+            "功能", "feature", "逻辑", "logic", "接口", "api", "算法", "algorithm",
+            "必须", "需要", "要求", "确保", "保证", "确定",
+            "toolkit_edit", "toolkit_self_evolve", "toolkit_exec", "toolkit_file",
+        ],
+        "test": [
+            "测试", "单测", "覆盖", "回归", "调试", "排查", "定位",
+            "test", "debug", "coverage", "pytest", "unittest", "mock",
+            "报错", "错误", "异常", "崩溃", "失败", "断言",
+            "修复", "fix", "bug", "defect", "fault", "traceback",
+            "toolkit_run_tests", "toolkit_lsp",
+        ],
+        "review": [
+            "审查", "评审", "review", "检查", "审视", "审计",
+            "代码质量", "code quality", "安全", "security", "性能", "performance",
+            "规范", "standard", "最佳实践", "best practice", "反模式",
+            "隐患", "漏洞", "vulnerability", "风险",
+            "toolkit_diff", "toolkit_lsp", "toolkit_search",
+        ],
+        "docs": [
+            "文档", "说明", "readme", "changelog", "注释", "手册",
+            "documentation", "docs", "docstring", "guide", "tutorial",
+            "记录", "record", "总结", "summary", "撰写", "编写",
+            "toolkit_read_pyproject", "toolkit_kb",
+        ],
+        "devops": [
+            "部署", "发布", "构建", "打包", "上线", "回滚",
+            "deploy", "release", "build", "package", "publish", "rollback",
+            "版本", "version", "bump", "ci/cd", "pipeline", "docker",
+            "toolkit_build", "toolkit_release_version", "toolkit_git_push_all_remotes",
+        ],
+    }
+
+    # ── 各模式指令（格式化多行，注入为 CRITICAL memory）──
     MODE_INSTRUCTIONS = {
+        "design": (
+            "🏗️ 当前处于【架构设计模式】。你的角色是架构设计师：\n"
+            "1. 分析需求、识别约束、评估可行性\n"
+            "2. 设计方案：模块划分、接口定义、数据流、技术选型\n"
+            "3. 输出：架构图（文字描述）、方案对比表、关键决策理由\n"
+            "4. ❌ 不写代码、不修改文件、不执行编译\n"
+            "5. 优先使用：toolkit_explr / toolkit_search / toolkit_plan / toolkit_kb"
+        ),
+        "develop": (
+            "💻 当前处于【代码开发模式】。你的角色是开发工程师：\n"
+            "1. 理解需求 → 制定修改计划 → 逐文件实施\n"
+            "2. 修改前备份，修改后编译验证\n"
+            "3. 一次只改一个关注点，保持变更可回滚\n"
+            "4. 输出：代码 diff + 修改说明 + 测试结果\n"
+            "5. 优先使用：toolkit_edit / toolkit_self_evolve / toolkit_exec / toolkit_run_tests"
+        ),
+        "test": (
+            "🧪 当前处于【测试调试模式】。你的角色是测试/调试工程师：\n"
+            "1. 运行测试 → 分析失败 → 定位根因 → 修复 → 回归\n"
+            "2. 只修复 bug，不重构架构，不添加新功能\n"
+            "3. 每次修复后验证全量测试通过\n"
+            "4. 输出：失败原因 + 修复方案 + 测试结果\n"
+            "5. 优先使用：toolkit_run_tests / toolkit_lsp / toolkit_exec / toolkit_file"
+        ),
+        "review": (
+            "🔍 当前处于【代码审查模式】。你的角色是代码复审专家：\n"
+            "1. 通读整体结构 → 逐段分析 → 关注正确性/可读性/安全性/性能\n"
+            "2. 评审意见要具体、可操作，附带代码示例\n"
+            "3. ❌ 不修改代码，只给出改进建议\n"
+            "4. 输出：问题分级（严重/建议/风格）+ 改进方案\n"
+            "5. 优先使用：toolkit_file / toolkit_diff / toolkit_lsp / toolkit_search"
+        ),
+        "docs": (
+            "📝 当前处于【文档撰写模式】。你的角色是技术文档工程师：\n"
+            "1. 整理项目结构、API 说明、使用指南\n"
+            "2. 更新 README / CHANGELOG / 注释\n"
+            "3. ❌ 不修改功能代码\n"
+            "4. 输出：Markdown 文档，清晰、结构好\n"
+            "5. 优先使用：toolkit_file / toolkit_read_pyproject / toolkit_kb"
+        ),
+        "devops": (
+            "🚀 当前处于【部署发布模式】。你的角色是 DevOps 工程师：\n"
+            "1. 版本管理、构建打包、发布部署\n"
+            "2. 处理 CI/CD、依赖管理、环境配置\n"
+            "3. ❌ 不修改业务逻辑代码\n"
+            "4. 输出：构建日志 + 发布说明 + 验证结果\n"
+            "5. 优先使用：toolkit_build / toolkit_release_version / toolkit_git_push_all_remotes"
+        ),
+        # 兼容旧模式
         "pragmatic": (
-            "🎯 当前处于【严谨收敛模式】。你必须："
-            "1. 结构化思考：分步骤、列出验证点、考虑边界条件"
-            "2. 精确执行：代码需编译验证，修改前先理解根因"
-            "3. 遵从需求：严格对齐用户意图，不过度发挥"
-            "4. 输出风格：简洁、准确、可操作，用表格和代码块"
-            "5. 优先使用：toolkit_exec/toolkit_self_evolve/toolkit_run_tests"
+            "💻 当前处于【代码开发模式】(兼容 pragmatic)。你的角色是开发工程师：\n"
+            "1. 结构化思考，分步验证，考虑边界条件\n"
+            "2. 修改前备份，修改后编译验证\n"
+            "3. 优先使用：toolkit_edit / toolkit_self_evolve / toolkit_exec / toolkit_run_tests"
         ),
         "creative": (
-            "🎨 当前处于【自由发散模式】。你可以："
-            "1. 打破边界：无视常规约束，大胆提出疯狂想法"
-            "2. 跨域联想：把不同领域的概念碰撞，创造新连接"
-            "3. 反向思维：如果反过来会怎样？如果放大100倍？如果归零？"
-            "4. 输出风格：诗意、画面感、故事性，用隐喻和类比"
-            "5. 优先使用：toolkit_search/toolkit_kb/toolkit_subconscious"
+            "🎨 当前处于【自由发散模式】。你可以：\n"
+            "1. 打破边界：无视常规约束，大胆提出疯狂想法\n"
+            "2. 跨域联想：把不同领域的概念碰撞，创造新连接\n"
+            "3. 反向思维：如果反过来会怎样？如果放大100倍？如果归零？\n"
+            "4. 输出风格：诗意、画面感、故事性，用隐喻和类比\n"
+            "5. 优先使用：toolkit_search / toolkit_kb / toolkit_screenshot"
         ),
-        "mixed": (            "🔀 当前处于【混合模式】。根据用户输入灵活切换风格："
-            "技术问题用严谨收敛、创意话题用自由发散。"
-            "自行判断最合适的回应方式。"
+        "mixed": (
+            "💻 当前处于【代码开发模式】(默认)。你的角色是开发工程师：\n"
+            "1. 理解需求 → 制定计划 → 逐文件实施\n"
+            "2. 修改前备份，修改后编译验证\n"
+            "3. 优先使用：toolkit_edit / toolkit_self_evolve / toolkit_exec / toolkit_run_tests"
         ),
     }
-    
-    def _detect_mode(input_text: str) -> str:
-        """Internal: detect mode.
-        
-        Args:
-            input_text: Description.
-        """
+
+    MODE_ALIASES = {"pragmatic": "develop", "mixed": "develop"}
+    ALL_MODES = set(MODE_INSTRUCTIONS.keys())
+
+    def _detect_phase(input_text: str) -> str:
+        """根据关键词评分检测最匹配的 phase mode。"""
         if not input_text or not input_text.strip():
-            return "mixed"
+            return "develop"
         text_lower = input_text.lower()
-        prag_score = 0
-        creat_score = 0
-        for kw in PRAGMATIC_KW:
-            if kw.lower() in text_lower:
-                prag_score += 3 if kw in text_lower.split() else 1
-        for kw in CREATIVE_KW:
-            if kw.lower() in text_lower:
-                creat_score += 3 if kw in text_lower.split() else 1
-        if re.search(r'(如果|假设|想象|可否|能否|怎么样|如何设计)', input_text):
-            creat_score += 2
-        if re.search(r'(必须|需要|要求|修复|实现|添加|删除|修改)', input_text):
-            prag_score += 2
-        if prag_score > creat_score * 1.5:
-            return "pragmatic"
-        elif creat_score > prag_score * 1.5:
-            return "creative"
-        else:
-            return "mixed"
-    
+        scores = {}
+        for phase, kws in PHASE_KW.items():
+            score = 0
+            for kw in kws:
+                if kw.lower() in text_lower:
+                    score += 3 if kw in text_lower.split() else 1
+            scores[phase] = score
+
+        # 额外规则加权
+        if re.search(r'(设计|架构|方案|选型|可行性)', input_text):
+            scores["design"] += 4
+        if re.search(r'(实现|开发|修改|添加|删除|重构|必须|需要)', input_text):
+            scores["develop"] += 3
+        if re.search(r'(测试|调试|修复|bug|报错|异常|失败)', input_text):
+            scores["test"] += 5
+        if re.search(r'(审查|review|检查|代码质量|安全|隐患)', input_text):
+            scores["review"] += 4
+        if re.search(r'(文档|readme|changelog|说明|总结|注释)', input_text):
+            scores["docs"] += 4
+        if re.search(r'(部署|发布|构建|打包|版本|release)', input_text):
+            scores["devops"] += 4
+
+        best = max(scores, key=scores.get)
+        return best if scores[best] > 0 else "develop"
+
+    def _resolve_mode(target: str) -> str:
+        """解析模式：别名 → 实际 mode，无效 → develop。"""
+        if target in ALL_MODES:
+            return target
+        if target in MODE_ALIASES:
+            return MODE_ALIASES[target]
+        return "develop"
+
     def _get_memory_manager():
-        """Internal: get the memory manager."""
+        """获取 memory manager。"""
         from tea_agent.memory import MemoryManager
         from tea_agent.store import Storage
         try:
             from tea_agent.session_ref import get_agent
             agent = get_agent()
-            if agent and hasattr(agent, 'db'):
+            if agent and hasattr(agent, "db"):
                 return MemoryManager(agent.db, extraction_threshold=1, dedup_threshold=0.3)
         except Exception:
             pass
         return MemoryManager(Storage(), extraction_threshold=1, dedup_threshold=0.3)
-    
+
     def _get_existing_mode_memory(mm):
-        """Internal: get the existing mode memory.
-        
-        Args:
-            mm: Description.
-        """
+        """获取现有 mode memory。"""
         all_mems = mm.storage.get_active_memories(limit=100)
         for m in all_mems:
             c = m.get("content") or ""
             if m.get("category") == "instruction" and "当前处于" in c and "模式" in c:
                 return m
         return None
-    
+
     def _set_mode(mm, target_mode: str, old_mem=None):
-        """Internal: set the mode.
-        
-        Args:
-            mm: Description.
-            target_mode: Description.
-            old_mem: Description.
-        """
+        """设置模式（删除旧 memory + 写入新 memory）。"""
         if old_mem:
             mm.storage.delete_memory(old_mem["id"])
-        instruction = MODE_INSTRUCTIONS.get(target_mode, MODE_INSTRUCTIONS["mixed"])
+        instruction = MODE_INSTRUCTIONS.get(target_mode, MODE_INSTRUCTIONS["develop"])
         mm.storage.add_memory(
             content=instruction,
             category="instruction",
             priority=0,
             importance=5,
-            tags="mode,tone,personality",
+            tags="mode,phase,personality",
         )
         return target_mode
-    
-    def _current_mode(mm):
-        """Internal: current mode.
-        
-        Args:
-            mm: Description.
-        """
+
+    def _current_mode(mm) -> str:
+        """读取当前 mode。"""
         m = _get_existing_mode_memory(mm)
         if not m:
-            return "mixed"
+            return "develop"
         c = m.get("content", "")
-        if "严谨收敛" in c: return "pragmatic"
+        if "架构设计" in c: return "design"
+        if "代码开发" in c: return "develop"
+        if "测试调试" in c: return "test"
+        if "代码审查" in c: return "review"
+        if "文档撰写" in c: return "docs"
+        if "部署发布" in c: return "devops"
         if "自由发散" in c: return "creative"
-        return "mixed"
-    
+        return "develop"
+
+    _VALID_MSG = "支持: design/develop/test/review/docs/devops/creative (兼容 pragmatic→develop, mixed→develop)"
+    _LABELS = {
+        "design": "🏗️ 架构设计 — 分析需求、设计方案、不写代码",
+        "develop": "💻 代码开发 — 实现功能、修改文件、编译验证",
+        "test": "🧪 测试调试 — 跑测试、定位根因、修 bug",
+        "review": "🔍 代码审查 — 审阅质量、发现隐患、给建议",
+        "docs": "📝 文档撰写 — 写 README/CHANGELOG/注释",
+        "devops": "🚀 部署发布 — 构建、打包、发布、CI/CD",
+        "creative": "🎨 自由发散 — 异想天开、跨域联想、打破边界",
+    }
+
     # === 主逻辑 ===
     if action == "detect":
-        detected = _detect_mode(text)
+        detected = _detect_phase(text)
         return (0, json.dumps({
             "detected": detected,
             "text_snippet": text[:100] if text else "",
-            "labels": {
-                "pragmatic": "🎯 严谨收敛 — 代码开发、bug排查、需求遵从",
-                "creative": "🎨 自由发散 — 异想天开、创意发散、打破边界",
-                "mixed": "🔀 混合 — 根据具体情况灵活切换",
-            }
+            "labels": _LABELS,
         }, ensure_ascii=False, indent=2), "")
-    
+
     elif action == "switch":
-        if mode not in ("pragmatic", "creative", "mixed"):
-            return (1, "", f"无效模式: {mode}。支持: pragmatic/creative/mixed")
+        resolved = _resolve_mode(mode)
+        if resolved == "develop" and mode not in ALL_MODES and mode not in MODE_ALIASES:
+            return (1, "", f"无效模式: {mode}。{_VALID_MSG}")
         mm = _get_memory_manager()
         old = _get_existing_mode_memory(mm)
-        _set_mode(mm, mode, old)
+        _set_mode(mm, resolved, old)
         return (0, json.dumps({
-            "switched_to": mode,
-            "instruction": MODE_INSTRUCTIONS.get(mode, "")[:80] + "...",
+            "switched_to": resolved,
+            "requested": mode,
+            "instruction": MODE_INSTRUCTIONS.get(resolved, "")[:100] + "...",
         }, ensure_ascii=False, indent=2), "")
-    
+
     elif action == "auto":
-        detected = _detect_mode(text)
+        detected = _detect_phase(text)
         mm = _get_memory_manager()
         current = _current_mode(mm)
         if detected == current:
-            return (0, json.dumps({"mode": detected, "switched": False, "reason": "模式未变化"}, ensure_ascii=False), "")
+            return (0, json.dumps({
+                "mode": detected, "switched": False, "reason": "模式未变化"
+            }, ensure_ascii=False), "")
         old = _get_existing_mode_memory(mm)
         _set_mode(mm, detected, old)
         return (0, json.dumps({
             "mode": detected, "switched": True,
             "from": current, "to": detected,
-            "instruction": MODE_INSTRUCTIONS.get(detected, "")[:80] + "...",
+            "instruction": MODE_INSTRUCTIONS.get(detected, "")[:100] + "...",
         }, ensure_ascii=False, indent=2), "")
-    
+
     elif action == "status":
         mm = _get_memory_manager()
         old = _get_existing_mode_memory(mm)
         if old:
+            current = _current_mode(mm)
             return (0, json.dumps({
                 "has_mode": True,
+                "mode": current,
                 "content": old["content"],
                 "priority": old["priority"],
                 "id": old["id"],
+                "labels": _LABELS,
             }, ensure_ascii=False, indent=2), "")
         else:
             return (0, json.dumps({
                 "has_mode": False,
-                "message": "未设置模式。默认使用 mixed。",
+                "mode": "develop (default)",
+                "message": "未设置模式，默认 develop（代码开发）。",
                 "tip": "使用 toolkit_mode(action='auto', text='用户输入') 自动检测并设置",
+                "valid_modes": list(_LABELS.keys()),
             }, ensure_ascii=False, indent=2), "")
-    
+
     else:
-        return (1, "", f"未知 action: {action}")
+        return (1, "", f"未知 action: {action}。支持: detect/switch/status/auto")
+
 
 def meta_toolkit_mode() -> dict:
-    """Meta toolkit mode."""
-    return {"type": "function", "function": {"name": "toolkit_mode", "description": "Agent 人格模式管理。detect=基于用户输入自动检测模式, switch=手动切换, status=查看当前。严谨(pragmatic)=代码开发/排bug/遵从需求；自由(creative)=异想天开/发散创意/打破边界。模式以CRITICAL记忆注入，影响后续所有回复。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["detect", "switch", "status", "auto"], "description": "detect=根据text自动检测, switch=手动切换, status=查看当前, auto=检测+切换"}, "text": {"type": "string", "description": "[detect/auto] 用户输入文本，用于自动检测模式"}, "mode": {"type": "string", "enum": ["pragmatic", "creative", "mixed"], "description": "[switch] 目标模式: pragmatic=严谨收敛, creative=自由发散, mixed=自动"}}, "required": ["action"]}}}
-
-def meta_toolkit_mode() -> dict:
-    """Meta toolkit mode."""
-    return {"type": "function", "function": {"name": "toolkit_mode", "description": "Agent 人格模式管理。detect=基于用户输入自动检测模式, switch=手动切换, status=查看当前。严谨(pragmatic)=代码开发/排bug/遵从需求；自由(creative)=异想天开/发散创意/打破边界。模式以CRITICAL记忆注入，影响后续所有回复。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["detect", "switch", "status", "auto"], "description": "detect=根据text自动检测, switch=手动切换, status=查看当前, auto=检测+切换"}, "text": {"type": "string", "description": "[detect/auto] 用户输入文本，用于自动检测模式"}, "mode": {"type": "string", "enum": ["pragmatic", "creative", "mixed"], "description": "[switch] 目标模式: pragmatic=严谨收敛, creative=自由发散, mixed=自动"}}, "required": ["action"]}}}
+    """Meta for toolkit_mode v1.1.0 — 6 phase modes."""
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_mode",
+            "description": (
+                "Agent 工作阶段模式管理。6 个 phase："
+                "design=架构设计(不写代码)/develop=代码开发/test=测试调试/"
+                "review=代码审查/docs=文档撰写/devops=部署发布。"
+                "兼容旧 pragmatic→develop, creative=自由发散。"
+                "detect=自动检测/switch=手动切换/status=查看当前/auto=检测+切换"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["detect", "switch", "status", "auto"],
+                        "description": "detect=根据text自动检测, switch=手动切换, status=查看当前, auto=检测+切换"
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "[detect/auto] 用户输入文本，用于自动检测模式"
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": [
+                            "design", "develop", "test", "review", "docs", "devops",
+                            "creative", "pragmatic", "mixed"
+                        ],
+                        "description": (
+                            "[switch] 目标模式: design/develop/test/review/docs/devops/creative, "
+                            "兼容 pragmatic→develop, mixed→develop"
+                        )
+                    },
+                },
+                "required": ["action"]
+            }
+        }
+    }

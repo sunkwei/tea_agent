@@ -370,7 +370,31 @@ class OnlineToolSession(BaseChatSession):
     # ──────────────────────────────────────────────
 
     def _inject_os_info(self, context: Dict) -> List:
-        """注入操作系统环境信息轮次 — 委派给 _os_info_injector 模块。"""
+        """注入操作系统环境信息 — 仅 OS 变化时重新注入。
+        
+        跨会话持久化 OS 签名：同一 topic 在同一 OS 上只注入一次，
+        切换主机（Windows↔Linux）时自动重新注入。
+        """
+        from tea_agent.session._os_info_injector import (
+            _get_os_signature, _load_persisted_os_sig, _save_os_sig,
+            inject_os_info as _inject_os_info_impl,
+        )
+        current_sig = _get_os_signature()
+
+        # 首次检查：从持久化文件加载上次签名
+        topic_id = getattr(self.context, 'current_topic_id', None)
+        if not self.context._os_info_injected and topic_id:
+            self.context._os_info_injected = _load_persisted_os_sig(topic_id)
+
+        # OS 未变化 → 跳过
+        if self.context._os_info_injected == current_sig:
+            return self.messages
+
+        # OS 变化或首次注入
+        self.context._os_info_injected = current_sig
+        if topic_id:
+            _save_os_sig(topic_id, current_sig)
+        logger.info(f"OS 信息注入: {current_sig} (topic={topic_id})")
         return _inject_os_info_impl(
             self.messages,
             toolkit_root_dir=self.toolkit.root_dir,

@@ -469,28 +469,178 @@ class TeaTUI(App):
 
     def _handle_command(self, cmd: str):
         parts = cmd.split(None, 1)
-        cmd_name = parts[0].lower()
+        cmd_name = parts[0].lower().lstrip("/")  # 去掉 / 前缀
         arg = parts[1] if len(parts) > 1 else ""
-        chat = self.query_one("#chat-area", RichLog)
 
-        if cmd_name in ("/bye", "/quit", "/exit"):
-            self.exit()
-        elif cmd_name == "/help":
-            self._show_help()
-        elif cmd_name == "/set":
+        # TUI 内置命令
+        builtins = {
+            "bye": lambda: self.exit(),
+            "quit": lambda: self.exit(),
+            "exit": lambda: self.exit(),
+            "help": lambda: self._show_help(),
+            "think": lambda: self.action_toggle_think(),
+            "verbose": lambda: self.action_toggle_verbose(),
+            "new": lambda: self.action_new_topic(),
+            "list": lambda: self.action_list_topics(),
+        }
+        if cmd_name in builtins:
+            builtins[cmd_name]()
+            return
+        if cmd_name == "set":
             self._cmd_set(arg)
-        elif cmd_name == "/think":
-            self.action_toggle_think()
-        elif cmd_name == "/verbose":
-            self.action_toggle_verbose()
-        elif cmd_name == "/new":
-            self.action_new_topic()
-        elif cmd_name == "/list":
-            self.action_list_topics()
-        elif cmd_name == "/switch":
+            return
+        if cmd_name == "switch":
             self._switch_topic(arg)
-        else:
-            self._chat_write(f"[bold yellow]Unknown: {cmd_name} (/help for help)[/]")
+            return
+
+        # ── 元命令 ──
+        if cmd_name == "commands":
+            self._list_custom_commands()
+            return
+        if cmd_name == "command":
+            if not arg:
+                self._chat_write("[bold yellow]用法: /command <name> — 查看命令详情[/]")
+                return
+            self._show_custom_command(arg)
+            return
+
+        # ── Custom Commands 路由 ──
+        self._handle_custom_command(cmd_name, arg)
+
+    def _handle_custom_command(self, cmd_name: str, arg: str):
+        """将 /command 路由到 toolkit_custom_commands"""
+        try:
+            from tea_agent.toolkit.toolkit_custom_commands import toolkit_custom_commands
+
+            # 解析参数：支持 key=val 格式和位置参数
+            args_dict = {}
+            if arg:
+                # 尝试 key=value 对
+                kv_pairs = [p for p in arg.split() if "=" in p]
+                positional = [p for p in arg.split() if "=" not in p]
+                for kv in kv_pairs:
+                    k, _, v = kv.partition("=")
+                    args_dict[k.strip()] = v.strip()
+                # 位置参数作为 'args' 传入
+                if positional:
+                    # 第一个位置参数作为默认参数
+                    if not args_dict:
+                        args_dict["args"] = positional
+                    else:
+                        args_dict.setdefault("args", positional)
+
+            # 先查看命令是否存在
+            result = toolkit_custom_commands(action="show", name=cmd_name)
+            if not result.get("ok"):
+                self._chat_write(f"[bold yellow]未知命令: /{cmd_name} (/help 查看帮助)[/]")
+                return
+
+            # 获取命令的参数定义
+            cmd_info = result.get("command", {})
+            defined_args = cmd_info.get("args_def", [])
+
+            # 如果是 key=value 格式，直接用；否则将位置参数映射到命令参数
+            if args_dict and "args" not in args_dict:
+                run_args = {k: v for k, v in args_dict.items() if k != "args"}
+            else:
+                # 位置参数 → 按顺序映射到命令的 args_def
+                positional = args_dict.get("args", [])
+                run_args = {}
+                for i, pa in enumerate(positional):
+                    if i < len(defined_args):
+                        run_args[defined_args[i]] = pa
+
+            # 执行命令
+            result = toolkit_custom_commands(
+                action="run", name=cmd_name, args=run_args if run_args else None
+            )
+
+            if not result.get("ok"):
+                self._chat_write(f"[bold red]命令执行失败: {result.get('error', '')}[/]")
+                return
+
+            # 输出结果
+            prompt = result.get("resolved_prompt", "")
+            unresolved = result.get("unresolved_placeholders", [])
+
+            self._chat_write(f"\n[bold cyan]▶ /{cmd_name}[/]")
+            self._chat_write(f"[dim]{result.get('description', '')}[/]")
+
+            if unresolved:
+                self._chat_write(f"[bold yellow]缺少参数: {', '.join(unresolved)}[/]")
+                self._chat_write(f"[dim]用法: /{cmd_name} {' '.join(f'<{a}>' for a in defined_args)}[/]")
+            elif prompt:
+                # 将 resolved_prompt 发送给 agent 执行
+                self._chat_write(f"[bold cyan]正在执行 /{cmd_name} ...[/]")
+                self._do_send_custom(prompt)
+
+        except Exception as e:
+            self._chat_write(f"[bold red]命令处理异常: {e}[/]")
+
+    def _list_custom_commands(self):
+        """列出所有可用的自定义命令"""
+        try:
+            from tea_agent.toolkit.toolkit_custom_commands import toolkit_custom_commands
+            result = toolkit_custom_commands(action="list")
+            if not result.get("ok"):
+                self._chat_write(f"[bold red]获取命令列表失败[/]")
+                return
+            cmds = result.get("commands", [])
+            self._chat_write(f"\n[bold cyan]可用命令 ({len(cmds)} 个)[/]")
+            for c in cmds:
+                scope_mark = "📁" if c["scope"] == "project" else "👤"
+                tags = f" [{','.join(c['tags'])}]" if c.get("tags") else ""
+                self._chat_write(
+                    f"  {scope_mark} [bold]/{c['name']}[/] — {c['description']}{tags}"
+                )
+            self._chat_write("[dim]用法: /<命令名> [参数...] 或 /command <命令名> 查看详情[/]")
+        except Exception as e:
+            self._chat_write(f"[bold red]获取命令列表异常: {e}[/]")
+
+    def _show_custom_command(self, name: str):
+        """显示某个命令的详情"""
+        try:
+            from tea_agent.toolkit.toolkit_custom_commands import toolkit_custom_commands
+            result = toolkit_custom_commands(action="show", name=name)
+            if not result.get("ok"):
+                self._chat_write(f"[bold yellow]命令 '{name}' 不存在[/]")
+                return
+            cmd = result.get("command", {})
+            defined_args = cmd.get("args_def", [])
+            usage = f"/{name} {' '.join(f'<{a}>' for a in defined_args)}" if defined_args else f"/{name}"
+            self._chat_write(f"\n[bold cyan]/{name}[/]")
+            self._chat_write(f"  [dim]{cmd.get('description', '')}[/]")
+            self._chat_write(f"  用法: [bold]{usage}[/]")
+            if cmd.get("tags"):
+                self._chat_write(f"  标签: {', '.join(cmd['tags'])}")
+            if cmd.get("scope"):
+                self._chat_write(f"  范围: {'项目级' if cmd['scope']=='project' else '用户级'}")
+        except Exception as e:
+            self._chat_write(f"[bold red]异常: {e}[/]")
+
+    def _do_send_custom(self, text: str):
+        """发送自定义命令解析后的 prompt 给 agent 执行"""
+        if self._generating:
+            return
+        self._generating = True
+        self._start_stream_timer()
+        self._update_status(f"Executing command...")
+
+        def run_chat():
+            try:
+                self.agent._chat(text)
+            except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
+                self.call_from_thread(
+                    self._append_chat,
+                    f"\n[bold red]ERROR: {e}[/]\n```\n{tb[-1000:]}\n```"
+                )
+            finally:
+                self._generating = False
+                self.call_from_thread(self._on_chat_done)
+
+        threading.Thread(target=run_chat, daemon=True).start()
 
     def _show_help(self):
         self._chat_write("""
@@ -505,6 +655,16 @@ class TeaTUI(App):
   /list              List recent topics
   /switch <N/id>     Switch by list number or topic id
 
+[bold cyan]Custom Commands[/]
+  /init <path>       项目初始化，扫描构建项目知识库
+  /explain <target>  解释指定代码文件或函数
+  /plan <goal>       根据目标创建执行计划
+  /review <file>     审查代码变更
+  /test <pattern>    运行测试并分析结果
+  /commands          列出所有可用自定义命令
+  /command <name>    查看 / 执行自定义命令
+
+[bold]Keybindings[/]
   Enter     Send    Shift+Enter  Newline
   Up/Down   History (when input empty)
   Ctrl+C    Quit    Esc          Interrupt

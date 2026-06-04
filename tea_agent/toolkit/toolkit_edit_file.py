@@ -19,4 +19,4 @@ def toolkit_edit_file(filename: str, old_text: str, new_text: str, description: 
         return f"Error: {e}"
 
 def meta_toolkit_edit_file() -> dict:
-    return {"description": "编辑文件，替换指定的文本片段", "type": "function", "function": {"name": "toolkit_edit_file", "parameters": {"type": "object", "properties": {"filename": {"type": "string", "description": "文件路径"}, "old_text": {"type": "string", "description": "要替换的旧文本"}, "new_text": {"type": "string", "description": "替换后的新文本"}, "description": {"type": "string", "description": "修改说明"}}, "required": ["filename", "old_text", "new_text"]}}}
+    return {"type": "function", "function": {"name": "toolkit_edit_file", "description": "编辑文件，替换指定的文本片段", "parameters": {"type": "object", "properties": {"filename": {"type": "string", "description": "文件路径"}, "old_text": {"type": "string", "description": "要替换的旧文本"}, "new_text": {"type": "string", "description": "替换后的新文本"}, "description": {"type": "string", "description": "修改说明"}}, "required": ["filename", "old_text", "new_text"]}}}

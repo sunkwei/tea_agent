@@ -15,4 +15,4 @@ def toolkit_read_lines(filename: str, start: int, end: int) -> str:
         return f"Error reading file: {e}"
 
 def meta_toolkit_read_lines() -> dict:
-    return {"description": "读取文件指定行范围的内容", "type": "function", "function": {"name": "toolkit_read_lines", "parameters": {"type": "object", "properties": {"filename": {"type": "string", "description": "文件路径"}, "start": {"type": "integer", "description": "起始行号（从1开始）"}, "end": {"type": "integer", "description": "结束行号（包含）"}}, "required": ["filename", "start", "end"]}}}
+    return {"type": "function", "function": {"name": "toolkit_read_lines", "description": "读取文件指定行范围的内容", "parameters": {"type": "object", "properties": {"filename": {"type": "string", "description": "文件路径"}, "start": {"type": "integer", "description": "起始行号（从1开始）"}, "end": {"type": "integer", "description": "结束行号（包含）"}}, "required": ["filename", "start", "end"]}}}

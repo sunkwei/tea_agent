@@ -341,6 +341,7 @@ class TeaTUI(App):
         self._chat_write("")
         self._update_status_right()
         self.agent._auto_init_topic()
+        self._load_history_msgs()
 
     def _show_error(self, msg: str):
         try:
@@ -568,6 +569,8 @@ class TeaTUI(App):
     def action_history_up(self):
         """Ctrl+Up: 往前翻一条历史消息."""
         if not self._history_msgs:
+            self._load_history_msgs()
+        if not self._history_msgs:
             self._chat_write("[dim]No history messages[/]")
             return
         if self._history_index >= len(self._history_msgs) - 1:
@@ -578,6 +581,8 @@ class TeaTUI(App):
 
     def action_history_down(self):
         """Ctrl+Down: 往后翻一条历史消息."""
+        if not self._history_msgs:
+            self._load_history_msgs()
         if self._history_index <= 0:
             if self._history_index == 0:
                 self._chat_write("[dim]Already at newest message[/]")

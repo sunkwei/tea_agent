@@ -194,6 +194,97 @@ def toolkit_plan(
         elif action == "resume":
             return _do_resume(plan_id, cwd)
 
+        elif action == "review":
+            """画布审阅模式 — 展示计划但绝不修改文件，支持 diff 预览"""
+            if not plan_id:
+                return {"ok": False, "error": "review 需要 plan_id"}
+            plan = _load_plan(plan_id)
+            if not plan:
+                return {"ok": False, "error": f"计划不存在: {plan_id}"}
+
+            review_sections = []
+
+            # 1. 计划概览
+            review_sections.append(f"## 📋 计划审阅: {plan['goal'][:60]}")
+            review_sections.append(f"- **状态**: {plan['status']}")
+            review_sections.append(f"- **进度**: {_count_status(plan, 'done')}/{len(plan['steps'])} 完成")
+            review_sections.append(f"- **创建于**: {plan['created_at'][:19]}")
+
+            # 2. 步骤概览
+            review_sections.append("\n### 步骤概览")
+            icons = {"done": "✅", "failed": "❌", "running": "▶️", "pending": "⬜", "skipped": "⏭️"}
+            for s in plan["steps"]:
+                deps = f" (依赖: {', '.join(s['depends_on'])})" if s.get("depends_on") else ""
+                status_icon = icons.get(s["status"], "❓")
+                review_sections.append(f"  {status_icon} **[{s['id']}]** {s['desc']}{deps}")
+
+            # 3. 依赖关系图 (Mermaid)
+            review_sections.append("\n### 依赖关系")
+            review_sections.append("```mermaid")
+            review_sections.append("graph LR")
+            for s in plan["steps"]:
+                node_id = s["id"].replace(" ", "_")
+                review_sections.append(f"  {node_id}[\"{s['id']}: {s['desc'][:30]}\"]")
+                for dep in s.get("depends_on", []):
+                    review_sections.append(f"  {dep.replace(' ', '_')} --> {node_id}")
+            review_sections.append("```")
+
+            # 4. 文件变更预览
+            files_changed = []
+            for s in plan["steps"]:
+                fp = s.get("params", {}).get("file_path", "")
+                if fp and fp not in files_changed:
+                    files_changed.append(fp)
+            if files_changed:
+                review_sections.append(f"\n### 涉及文件 ({len(files_changed)} 个)")
+                for fp in files_changed:
+                    review_sections.append(f"- `{fp}`")
+
+            # 5. 审阅结论
+            has_pending = any(s["status"] == "pending" for s in plan["steps"])
+            all_done = all(s["status"] == "done" for s in plan["steps"])
+            if all_done:
+                review_sections.append("\n✅ **所有步骤已完成，无需执行。**")
+            elif has_pending:
+                review_sections.append(f"\n🟡 **有待执行步骤，使用 action='run' plan_id='{plan_id}' 执行。**")
+            else:
+                review_sections.append(f"\n🔵 **计划就绪。**")
+
+            return {
+                "ok": True,
+                "plan_id": plan_id,
+                "review_markdown": "\n".join(review_sections),
+                "summary": {
+                    "goal": plan["goal"][:80],
+                    "status": plan["status"],
+                    "total": len(plan["steps"]),
+                    "done": _count_status(plan, "done"),
+                    "failed": _count_status(plan, "failed"),
+                    "pending": _count_status(plan, "pending"),
+                    "files_changed": files_changed,
+                },
+                "hint": "review 仅展示计划，不修改任何文件。使用 action='run' 执行。",
+            }
+
+        elif action == "canvas":
+            """画布模式 — 创建一个空白画布计划用于 brainstorming"""
+            if not goal:
+                return {"ok": False, "error": "canvas 需要 goal 参数"}
+            plan = _new_plan(goal, steps or [{
+                "id": "draft",
+                "desc": f"设计实现: {goal[:50]}",
+                "action": "verify_only",
+                "params": {},
+                "verify": "manual",
+            }])
+            plan["status"] = "draft"
+            _save_plan(plan)
+            return {
+                "ok": True, "plan_id": plan["id"], "goal": goal,
+                "mode": "canvas",
+                "hint": f"画布已创建 (plan_id='{plan['id']}')。使用 action='review' 查看，action='insert' 添加步骤，确认后 action='run' 执行。",
+            }
+
         elif action == "list":
             _ensure_plans_dir()
             plans = []
@@ -206,7 +297,6 @@ def toolkit_plan(
                         "updated": p.get("updated_at", "")[:19],
                     })
             return {"ok": True, "plans": plans}
-
         elif action == "delete":
             if not plan_id:
                 return {"ok": False, "error": "delete 需要 plan_id"}
@@ -764,11 +854,11 @@ def meta_toolkit_plan():
         "type": "function",
         "function": {
             "name": "toolkit_plan",
-            "description": "Plandex 风格 Plan→Execute→Verify 三步工作流。create=创建计划, decompose=智能分解目标, show=查看, step=执行下一步, verify=验证, run=全量执行, resume=恢复, list=列表, delete=删除。动态规划: insert=插入步骤, replace=替换步骤, delete_step=删除步骤, replan=重新规划。",
+            "description": "Plandex 风格 Plan→Execute→Verify 三步工作流。create=创建计划, decompose=智能分解目标, show=查看, review=画布审阅(不修改文件), canvas=创建空白画布, step=执行下一步, verify=验证, run=全量执行, resume=恢复, list=列表, delete=删除。动态规划: insert=插入步骤, replace=替换步骤, delete_step=删除步骤, replan=重新规划。",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["create", "decompose", "show", "step", "verify", "run", "resume", "list", "delete", "insert", "replace", "delete_step", "replan"]},
+                    "action": {"type": "string", "enum": ["create", "decompose", "show", "review", "canvas", "step", "verify", "run", "resume", "list", "delete", "insert", "replace", "delete_step", "replan"]},
                     "goal": {"type": "string", "description": "[create] 计划目标"},
                     "steps": {"type": "array", "items": {"type": "object"}, "description": "[create] 步骤列表"},
                     "plan_id": {"type": "string", "description": "[show/step/verify/run/resume/delete] 计划ID"},

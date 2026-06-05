@@ -1070,6 +1070,7 @@ def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str=""
         no_stream_chunk: 非流式模式，方便单步调试
     """
     root = tk.Tk()
+    _set_app_icon(root)  # 设置窗口图标（齿轮图标）
     app = TkGUI(root, debug=debug, config_fname=config_fname, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
     
     if timeout > 0:
@@ -1077,6 +1078,21 @@ def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str=""
         root.after(timeout * 1000, lambda: _safe_destroy(root))
     
     root.mainloop()
+
+def _set_app_icon(root):
+    """给窗口设置 Tea Agent 齿轮图标（跨平台）。"""
+    icon_path = os.path.join(os.path.dirname(__file__), "_gui", "icon.png")
+    if not os.path.exists(icon_path):
+        return
+    try:
+        from PIL import Image, ImageTk
+        img = Image.open(icon_path)
+        photo = ImageTk.PhotoImage(img)
+        root.iconphoto(True, photo)
+        root._icon_ref = photo  # 防止被 GC
+    except Exception:
+        pass
+
 
 def _safe_destroy(root):
     """安全销毁 Tk 窗口，捕获可能的异常。"""

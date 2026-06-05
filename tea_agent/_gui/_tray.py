@@ -72,9 +72,18 @@ class TrayManager:
             logger.warning(f"初始化托盘图标失败: {e}")
 
     def _create_tray_icon(self):
-        """Internal: create tray icon."""
-        from PIL import Image, ImageDraw
+        """加载或生成托盘图标（32x32 齿轮图标）。"""
+        from PIL import Image
+        import os as _os
         size = 32
+        # 先尝试加载生成的图标，fallback 到代码绘制
+        icon_path = _os.path.join(_os.path.dirname(__file__), "icon.png")
+        if _os.path.exists(icon_path):
+            img = Image.open(icon_path).convert("RGBA")
+            img = img.resize((size, size), Image.LANCZOS)
+            return img
+        # Fallback: 简单齿轮图案
+        from PIL import ImageDraw
         img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         draw.rounded_rectangle([2, 2, size - 2, size - 2], radius=6, fill=(59, 130, 246, 255))

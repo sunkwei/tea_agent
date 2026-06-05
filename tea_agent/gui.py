@@ -200,6 +200,27 @@ class TkGUI(Agent):
         with self._generating_lock:
             self._generating = value
 
+    def _start_dream(self):
+        """启动Dream潜意识引擎后台线程，每小时循环一次"""
+        # 确保 cwd 为项目根目录，使 _is_tea_agent_cwd() 检查通过
+        _proj_root = str(Path(__file__).resolve().parent.parent)
+        try:
+            os.chdir(_proj_root)
+        except Exception:
+            pass
+        try:
+            from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
+            result = toolkit_subconscious("start")
+            status = result.get("status", "unknown")
+            if status == "rejected":
+                logger.warning(f"Dream 未自动启动: {result.get('reason')}, cwd={os.getcwd()}")
+            elif status == "already_running":
+                logger.info(f"Dream 已在运行中 (pid={result.get('pid')})")
+            else:
+                logger.info(f"Dream 自动启动成功: {status}")
+        except Exception as e:
+            logger.warning(f"Dream 自动启动失败: {e}")
+
     def _create_ui(self):
         """创建界面 — 委托给 UIBuilder"""
         self.ui_builder.build()

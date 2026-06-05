@@ -14,49 +14,60 @@ class TestIntentContract:
     """analyze_intent 的接口契约"""
 
     def test_returns_dict(self):
+        """测试: Returns dict"""
         result = analyze_intent("hello")
         assert isinstance(result, dict)
 
     def test_has_required_keys(self):
+        """测试: Has required keys"""
         result = analyze_intent("hello")
         assert "type" in result
         assert "skip_tool_loop" in result
         assert "required_tools" in result
 
     def test_type_is_string(self):
+        """测试: Type is string"""
         result = analyze_intent("hello")
         assert isinstance(result["type"], str)
 
     def test_skip_tool_loop_is_bool(self):
+        """测试: Skip tool loop is bool"""
         result = analyze_intent("hello")
         assert isinstance(result["skip_tool_loop"], bool)
 
     def test_required_tools_is_optional_list(self):
+        """测试: Required tools is optional list"""
         result = analyze_intent("hello")
         assert result["required_tools"] is None or isinstance(result["required_tools"], list)
 
     def test_default_return_value(self):
+        """测试: Default return value"""
         result = analyze_intent("hello")
         assert result["type"] == "general"
         assert result["skip_tool_loop"] is False
         assert result["required_tools"] is None
 
     def test_empty_string_returns_default(self):
+        """测试: Empty string returns default"""
         result = analyze_intent("")
         assert result["type"] == "general"
 
     def test_special_chars_returns_default(self):
+        """测试: Special chars returns default"""
         result = analyze_intent("!@#$%^&*()_+")
         assert result["type"] == "general"
 
     def test_multiline_text_returns_default(self):
+        """测试: Multiline text returns default"""
         result = analyze_intent("line1\nline2\nline3")
         assert result["type"] == "general"
 
     def test_chinese_text_returns_default(self):
+        """测试: Chinese text returns default"""
         result = analyze_intent("你好，请帮我读取文件")
         assert result["type"] == "general"
 
     def test_numbers_only_returns_default(self):
+        """测试: Numbers only returns default"""
         result = analyze_intent("12345")
         assert result["type"] == "general"

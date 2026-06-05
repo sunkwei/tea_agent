@@ -90,6 +90,7 @@ class PathsConfig:
                 return os.path.join(self._data_dir_abs, default_rel)
             expanded = os.path.expanduser(value)
             if os.path.isabs(expanded):
+                """解析配置值，支持环境变量引用和默认值回退。"""
                 return os.path.abspath(expanded)
             return os.path.abspath(os.path.join(self._data_dir_abs, expanded))
 
@@ -187,7 +188,8 @@ class AgentConfig:
     chat_page_size: int = 50  # GUI 单页加载的对话轮数（最多50条）
     history_l2_max: int = 30    # L2最多保留轮数（含user+assistant，不含工具轮）
     history_l3_batch: int = 10  # L3摘要批处理大小（攒够N条触发便宜模型摘要）
-    font_size: int = 12  # GUI基础字体大小（未缩放，HtmlFrame除外）
+    font_size: int = 16  # HtmlFrame 字体大小（px）
+    app_font_size: int = 12  # App GUI 字体大小（pt，控制 label/input/treeview 等原生组件）
 
     # 可运行时修改的配置键白名单
     _RUNTIME_CONFIG_KEYS = {
@@ -196,7 +198,8 @@ class AgentConfig:
         "extra_iterations_on_continue", "memory_extraction_threshold",
         "memory_dedup_threshold", "chat_page_size",
         "history_l2_max", "history_l3_batch",  # 2026-05-20 gen by Tea Agent, L2/L3分层压缩
-        "font_size",  # GUI基础字体大小
+        "font_size",  # HtmlFrame 字体大小
+        "app_font_size",  # App GUI 字体大小
     }
 
     # 类型映射
@@ -207,6 +210,7 @@ class AgentConfig:
         "memory_dedup_threshold": float, "chat_page_size": int,
         "history_l2_max": int, "history_l3_batch": int,
         "font_size": int,
+        "app_font_size": int,
     }
 
     def get(self, key: str, default=None):
@@ -373,7 +377,8 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
             cfg.chat_page_size = int(data.get("chat_page_size", cfg.chat_page_size))
             cfg.history_l2_max = int(data.get("history_l2_max", cfg.history_l2_max))
             cfg.history_l3_batch = int(data.get("history_l3_batch", cfg.history_l3_batch))
-            cfg.font_size = int(data.get("font_size", cfg.font_size))            
+            cfg.font_size = int(data.get("font_size", cfg.font_size))
+            cfg.app_font_size = int(data.get("app_font_size", cfg.app_font_size))
         except Exception:
             pass  # 加载失败时使用默认空配置
 
@@ -462,8 +467,7 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     data["memory_dedup_threshold"] = cfg.memory_dedup_threshold
     data["chat_page_size"] = cfg.chat_page_size
     data["history_l2_max"] = cfg.history_l2_max
-    data["history_l3_batch"] = cfg.history_l3_batch
-    data["font_size"] = cfg.font_size    
+    data["history_l3_batch"] = cfg.history_l3_batch    
     with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
@@ -558,11 +562,7 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "# L2 最大保留轮数（用户+助手对，不含工具轮次）\n"
         "history_l2_max: 30\n\n"
         "# L3 摘要批处理：每攒够 N 条L2溢出，触发便宜模型摘要合并\n"
-        "history_l3_batch: 10\n\n"
-        "# ==================== 字体配置 ====================\n"
-        "# GUI基础字体大小（未缩放，HtmlFrame除外）\n"
-        "# 会根据屏幕DPI自动缩放，此处设置基础大小\n"
-        "font_size: 12\n"    )
+        "history_l3_batch: 10\n"    )
 
     with open(yaml_path, "w", encoding="utf-8") as f:
         f.write(template)

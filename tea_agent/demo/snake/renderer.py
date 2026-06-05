@@ -4,11 +4,12 @@ Battle Snakes TUI Renderer — curses-based ASCII display.
 
 import curses
 import time
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from .engine import Game, Snake, Position, Direction
 
 
+# ── color pair IDs ─────────────────────────────────────────
 STRAWBERRY_COLOR = 100
 WALL_COLOR = 101
 STATUS_COLOR = 102
@@ -17,6 +18,7 @@ HUMAN_COLOR = 50
 
 
 def _init_colors() -> None:
+    """Initialize curses color pairs."""
     curses.start_color()
     curses.use_default_colors()
     snake_fg = [
@@ -46,18 +48,23 @@ class Renderer:
         self._running = False
         self._pause = False
         self._speed = 0.12
-        self._quit = False
+        self._event_log: List[str] = []
         self._event_log: List[str] = []
         self._max_events = 10
+        self._quit = False  # True if user pressed Q
+
+    # ── public ─────────────────────────────────────────────
+
+    def run(self) -> Optional[str]:
+        """Run the game loop. Returns winner name, or None for draw/all-dead.
+        Check ._quit to distinguish user quit from natural draw."""
+        result = curses.wrapper(self._run)
+        return result
 
     @property
     def user_quit(self) -> bool:
         return self._quit
-
-    def run(self) -> Optional[str]:
-        """Run the game loop. Returns winner name, or None for draw.
-        Check .user_quit to distinguish."""
-        return curses.wrapper(self._run)
+    # ── main loop ──────────────────────────────────────────
 
     def _run(self, stdscr) -> Optional[str]:
         self.stdscr = stdscr
@@ -77,29 +84,29 @@ class Renderer:
                     self._event_log.append(ev)
                 if len(self._event_log) > self._max_events:
                     self._event_log = self._event_log[-self._max_events:]
-
                 if result["winner"]:
                     self._draw()
                     self._show_game_over(result["winner"])
                     time.sleep(2.5)
                     return result["winner"]
                 if result["alive_count"] == 0:
-                    self._draw()
-                    self._show_game_over(None)
-                    time.sleep(2.5)
-                    return None
+                    if key == ord('q') or key == 27:
+                        self._running = False
+                        self._quit = True
+                        return None
 
             self._draw()
             time.sleep(self._speed if not self._pause else 0.05)
 
         return None
 
+    # ── input ──────────────────────────────────────────────
+
     def _handle_input(self, key: int) -> None:
         if key == -1:
             return
         if key == ord('q') or key == 27:
             self._running = False
-            self._quit = True
         elif key == ord(' '):
             self._pause = not self._pause
         elif key in (ord('+'), ord('=')):
@@ -107,6 +114,7 @@ class Renderer:
         elif key == ord('-'):
             self._speed = min(0.5, self._speed + 0.02)
 
+        # human player
         if self.human_index is not None and self.human_state is not None:
             human = self.game.snakes[self.human_index]
             if human.alive:
@@ -122,6 +130,8 @@ class Renderer:
                 if d is not None:
                     self.human_state["dir"] = d
 
+    # ── drawing ────────────────────────────────────────────
+
     def _draw(self) -> None:
         if not self.stdscr:
             return
@@ -134,6 +144,7 @@ class Renderer:
         oy = max(0, (h - bh) // 2)
 
         self._draw_board(ox, oy)
+
         sidebar_x = ox + bw + 2
         if sidebar_x + 20 < w:
             self._draw_sidebar(sidebar_x, oy, h)
@@ -145,34 +156,39 @@ class Renderer:
         bh = self.game.board.height
         wattr = curses.color_pair(WALL_COLOR) | curses.A_BOLD
 
+        # walls
         for x in range(bw + 2):
             try:
-                self.stdscr.addch(oy, ox + x, '\u2588', wattr)
-                self.stdscr.addch(oy + bh + 1, ox + x, '\u2588', wattr)
+                self.stdscr.addch(oy, ox + x, '█', wattr)
+                self.stdscr.addch(oy + bh + 1, ox + x, '█', wattr)
             except curses.error:
                 pass
         for y in range(bh + 2):
             try:
-                self.stdscr.addch(oy + y, ox, '\u2588', wattr)
-                self.stdscr.addch(oy + y, ox + bw + 1, '\u2588', wattr)
+                self.stdscr.addch(oy + y, ox, '█', wattr)
+                self.stdscr.addch(oy + y, ox + bw + 1, '█', wattr)
             except curses.error:
                 pass
 
+        # strawberries
         sattr = curses.color_pair(STRAWBERRY_COLOR) | curses.A_BOLD
         for pos in self.game.strawberries:
             try:
-                self.stdscr.addch(oy + 1 + pos.y, ox + 1 + pos.x, '\u2665', sattr)
+                self.stdscr.addch(oy + 1 + pos.y, ox + 1 + pos.x, '♥', sattr)
             except curses.error:
                 pass
 
+        # snakes
         for snake in self.game.snakes:
             attr = curses.color_pair(snake.color_id) if snake.alive \
                 else curses.color_pair(DEAD_COLOR)
+            # head
             try:
                 self.stdscr.addch(oy + 1 + snake.head.y, ox + 1 + snake.head.x,
                                   snake.char, attr | curses.A_BOLD)
             except curses.error:
                 pass
+            # body
             for seg in snake.body[1:]:
                 try:
                     self.stdscr.addch(oy + 1 + seg.y, ox + 1 + seg.x,
@@ -180,66 +196,67 @@ class Renderer:
                 except curses.error:
                     pass
 
+        # pause indicator
         if self._pause:
             try:
-                self.stdscr.addstr(oy, ox + bw // 2 - 4, " \u23f8 PAUSED ",
+                self.stdscr.addstr(oy, ox + bw // 2 - 4, " ⏸ PAUSED ",
                                    curses.color_pair(STATUS_COLOR) | curses.A_BOLD)
             except curses.error:
                 pass
 
     def _draw_sidebar(self, sx: int, sy: int, max_h: int) -> None:
-        def put(r, text, *attrs):
+        def _put(row: int, text: str, *attrs) -> None:
             try:
-                self.stdscr.addstr(r, sx, text, *attrs)
+                if attrs:
+                    self.stdscr.addstr(row, sx, text, *attrs)
+                else:
+                    self.stdscr.addstr(row, sx, text)
             except curses.error:
                 pass
 
-        put(sy, "\u2550\u2550 BATTLE SNAKES \u2550\u2550",
-            curses.A_BOLD | curses.color_pair(STRAWBERRY_COLOR))
-        put(sy + 2, f"Tick: {self.game.tick_count}")
-        put(sy + 3, f"Speed: {self._speed:.2f}s")
-        put(sy + 4, f"Status: {'PAUSED' if self._pause else 'RUNNING'}")
-        put(sy + 5, "\u2500" * 22)
-        put(sy + 6, "Snakes:", curses.A_BOLD)
+        _put(sy, "══ BATTLE SNAKES ══", curses.A_BOLD | curses.color_pair(STRAWBERRY_COLOR))
+        _put(sy + 2, f"Tick: {self.game.tick_count}")
+        _put(sy + 3, f"Speed: {self._speed:.2f}s")
+        _put(sy + 4, f"Status: {'PAUSED' if self._pause else 'RUNNING'}")
+        _put(sy + 5, "─" * 22)
+        _put(sy + 6, "Snakes:", curses.A_BOLD)
 
         row = sy + 7
         for snake in self.game.snakes:
             if row >= max_h - 2:
                 break
-            icon = "\u2713" if snake.alive else "\u2717"
+            icon = "✓" if snake.alive else "✗"
             a = curses.color_pair(snake.color_id) if snake.alive \
                 else curses.color_pair(DEAD_COLOR)
-            put(row, f" {icon} [{snake.char}] {snake.name[:12]:12s} "
-                f"len={snake.length:3d} score={snake.score:3d}", a)
+            _put(row, f" {icon} [{snake.char}] {snake.name[:12]:12s} "
+                 f"len={snake.length:3d} score={snake.score:3d}", a)
             row += 1
 
-        put(row, "\u2500" * 22)
-        row += 1
-        put(row, "Events:", curses.A_BOLD)
-        row += 1
+        _put(row, "─" * 22); row += 1
+        _put(row, "Events:", curses.A_BOLD); row += 1
         for ev in self._event_log[-8:]:
             if row >= max_h - 2:
                 break
-            put(row, f" {ev[:35]}", curses.color_pair(STATUS_COLOR))
+            _put(row, f" {ev[:35]}", curses.color_pair(STATUS_COLOR))
             row += 1
 
         if row + 6 < max_h:
-            put(row + 1, "\u2500" * 22)
-            put(row + 2, "Controls:", curses.A_BOLD)
-            put(row + 3, " Space: pause/resume")
-            put(row + 4, " +/- : speed")
-            put(row + 5, " Q/ESC: quit")
+            _put(row + 1, "─" * 22)
+            _put(row + 2, "Controls:", curses.A_BOLD)
+            _put(row + 3, " Space: pause/resume")
+            _put(row + 4, " +/- : speed")
+            _put(row + 5, " Q/ESC: quit")
             if self.human_index is not None:
-                put(row + 6, " Arrows/WASD: move")
+                _put(row + 6, " Arrows/WASD: move")
 
     def _show_game_over(self, winner: Optional[str]) -> None:
         if not self.stdscr:
             return
         h, w = self.stdscr.getmaxyx()
         if winner:
-            msg = f"GAME OVER \u2014 {winner} WINS!"
+            msg = f"GAME OVER — {winner} WINS!"
         else:
-            msg = "GAME OVER \u2014 DRAW!"
+            msg = "GAME OVER — DRAW!"
         try:
             self.stdscr.addstr(h // 2, (w - len(msg)) // 2, msg,
                                curses.A_BOLD | curses.color_pair(STRAWBERRY_COLOR))
@@ -248,8 +265,10 @@ class Renderer:
         self.stdscr.refresh()
 
 
+# ── human player strategy ──────────────────────────────────
+
 def make_human_strategy():
-    """Returns a strategy function + state dict for human-controlled snake."""
+    """Returns a strategy function + state dict for a human-controlled snake."""
     state = {"dir": None}
 
     def human_strategy(snake: Snake, game: Game) -> Direction:
@@ -259,6 +278,7 @@ def make_human_strategy():
         nh = snake.head + d
         if game.board.in_bounds(nh) and nh not in snake.body[1:]:
             return d
+        # unsafe — pick any safe direction
         for dd in Direction.all():
             nnh = snake.head + dd
             if game.board.in_bounds(nnh) and nnh not in snake.body[1:]:

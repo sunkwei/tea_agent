@@ -29,6 +29,7 @@ def _format_content(text: str, max_len: int = 120) -> str:
 
 
 def main():
+    """main 辅助函数。"""
     config_path = sys.argv[1] if len(sys.argv) > 1 else None
 
     from tea_agent import TeaAgent

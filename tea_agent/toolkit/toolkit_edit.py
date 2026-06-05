@@ -110,7 +110,6 @@ def _replace_text(file_path: str, old_text: str, new_content: str,
         # find old_text
         idx = original_norm.find(old_norm)
         if idx == -1:
-            # try with stripped whitespace tolerance
             old_stripped = old_norm.strip()
             idx_stripped = original_norm.find(old_stripped)
             if idx_stripped == -1:

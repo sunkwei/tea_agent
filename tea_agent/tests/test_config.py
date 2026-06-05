@@ -12,21 +12,25 @@ class TestModelConfig:
     """ModelConfig 测试"""
 
     def test_default_not_configured(self):
+        """测试: Default not configured"""
         from tea_agent.config import ModelConfig
         mc = ModelConfig()
         assert not mc.is_configured
 
     def test_configured_when_all_set(self):
+        """测试: Configured when all set"""
         from tea_agent.config import ModelConfig
         mc = ModelConfig(api_key="sk-xxx", api_url="http://api.example.com/v1", model_name="test-model")
         assert mc.is_configured
 
     def test_not_configured_when_partial(self):
+        """测试: Not configured when partial"""
         from tea_agent.config import ModelConfig
         mc = ModelConfig(api_key="sk-xxx", api_url="", model_name="test-model")
         assert not mc.is_configured
 
     def test_options_default_empty(self):
+        """测试: Options default empty"""
         from tea_agent.config import ModelConfig
         mc = ModelConfig()
         assert mc.options == {}
@@ -126,17 +130,20 @@ class TestMqttConfig:
     """MqttConfig 测试"""
 
     def test_default_disabled(self):
+        """测试: Default disabled"""
         from tea_agent.config import MqttConfig
         mc = MqttConfig()
         assert not mc.enabled
         assert not mc.is_configured
 
     def test_configured_when_enabled(self):
+        """测试: Configured when enabled"""
         from tea_agent.config import MqttConfig
         mc = MqttConfig(enabled=True, broker_host="localhost")
         assert mc.is_configured
 
     def test_not_configured_without_host(self):
+        """测试: Not configured without host"""
         from tea_agent.config import MqttConfig
         mc = MqttConfig(enabled=True, broker_host="")
         assert not mc.is_configured
@@ -146,11 +153,13 @@ class TestEmbeddingConfig:
     """EmbeddingConfig 测试"""
 
     def test_default_not_configured(self):
+        """测试: Default not configured"""
         from tea_agent.config import EmbeddingConfig
         ec = EmbeddingConfig()
         assert not ec.is_configured
 
     def test_configured_when_url_and_model_set(self):
+        """测试: Configured when url and model set"""
         from tea_agent.config import EmbeddingConfig
         ec = EmbeddingConfig(api_url="http://localhost:11434/v1", model_name="bge-m3")
         assert ec.is_configured

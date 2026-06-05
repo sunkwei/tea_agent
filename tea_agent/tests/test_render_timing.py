@@ -16,6 +16,7 @@ class TestRenderTiming(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        """测试前置初始化。"""
         gui_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
             "tea_agent", "gui.py"
@@ -72,6 +73,7 @@ class TestRenderTiming(unittest.TestCase):
         return -1
 
     def test_render_before_pipeline(self):
+        """测试: Render before pipeline"""
         body = self._extract_try_block()
         rp = self._first_line_with(body, "_render_and_show_chat")
         pp = self._first_line_with(body, "_post_chat_pipeline")
@@ -82,6 +84,7 @@ class TestRenderTiming(unittest.TestCase):
                         f"_post_chat_pipeline (行 {pp}) 之前")
 
     def test_show_raw_check_btn_before_pipeline(self):
+        """测试: Show raw check btn before pipeline"""
         body = self._extract_try_block()
         bp = self._first_line_with(body, "_show_raw_check_btn")
         pp = self._first_line_with(body, "_post_chat_pipeline")
@@ -91,6 +94,7 @@ class TestRenderTiming(unittest.TestCase):
                         f"_post_chat_pipeline (行 {pp}) 之前")
 
     def test_flush_before_render(self):
+        """测试: Flush before render"""
         body = self._extract_try_block()
         fp = self._first_line_with(body, "_flush_stream_to_messages")
         rp = self._first_line_with(body, "_render_and_show_chat")
@@ -100,6 +104,7 @@ class TestRenderTiming(unittest.TestCase):
                         f"_render_and_show_chat (行 {rp}) 之前")
 
     def test_else_branch_no_render(self):
+        """测试: Else branch no render"""
         body = self._extract_try_block()
         else_match = re.search(r'\n                else:', body)
         self.assertIsNotNone(else_match, "未找到 else 分支")
@@ -125,11 +130,13 @@ class TestRenderTiming(unittest.TestCase):
             )
 
     def test_render_comment_exists(self):
+        """测试: Render comment exists"""
         body = self._extract_try_block()
         self.assertIn("修复渲染延迟15s+", body,
                       "try 块中缺少渲染延迟修复注释")
 
     def test_except_branch_still_has_render(self):
+        """测试: Except branch still has render"""
         body = self._extract_work_body()
         except_match = re.search(r'\n            except Exception as ex:', body)
         self.assertIsNotNone(except_match, "未找到外层的 except 分支")

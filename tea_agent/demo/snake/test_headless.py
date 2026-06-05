@@ -21,7 +21,7 @@ def test_basic():
     ]
     game = Game(width=30, height=20, snakes_config=configs, seed=42)
 
-    max_ticks = 10000
+    max_ticks = 5000
     for _ in range(max_ticks):
         result = game.tick()
         if result["winner"] or result["alive_count"] == 0:

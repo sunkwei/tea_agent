@@ -117,24 +117,23 @@ class TrayManager:
             menu.grab_release()
 
     def _on_closing(self):
-        """窗口关闭：清理托盘 + 自进化引擎 + 调度器 + DB，然后 destroy"""
+        """窗口关闭：清理托盘 + DB + Dream，然后 destroy"""
         self.gui._update_status("⏳ 正在清理资源...")
         self.stop()
-        # 停止自进化引擎
+        # 停止 Dream
         try:
-            from tea_agent.toolkit.toolkit_self_evolve_thread import toolkit_self_evolve_thread
-            toolkit_self_evolve_thread("stop")
-            logger.info("自进化引擎已停止")
+            from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
+            toolkit_subconscious("stop")
+            logger.info("Dream 已停止")
         except Exception as e:
-            logger.warning(f"停止自进化引擎失败: {e}")
+            logger.warning(f"停止 Dream 失败: {e}")
         # 停止定时任务调度器
         try:
             from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
             toolkit_scheduler("stop")
             logger.info("定时任务调度器已停止")
         except Exception as e:
-            logger.warning(f"停止定时任务调度器失败: {e}")
-        # 关闭数据库
+            logger.warning(f"停止定时任务调度器失败: {e}")        # 关闭数据库
         try:
             self.gui.db.close()
             self.gui._update_status("✅ 数据库已正常关闭")

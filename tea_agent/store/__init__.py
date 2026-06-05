@@ -9,7 +9,6 @@
   _summaries.py   - SummaryStore（摘要 & 三级历史）
   _memories.py    - MemoryStore（长期记忆）
   _auto_memory.py - AutoMemoryExtractor（自动记忆提取）
-  _semantic_search.py - SemanticSearch（语义搜索）
   _prompts.py     - PromptStore（系统提示词版本）
   _reflections.py - ReflectionStore（反思记录）
   _config.py      - ConfigHistoryStore（配置变更历史）
@@ -17,9 +16,8 @@
 """
 from ._core import Storage
 from ._auto_memory import AutoMemoryExtractor
-from ._semantic_search import SemanticSearch, EmbeddingProvider, SimpleHashEmbedding
 
-__all__ = ["Storage", "AutoMemoryExtractor", "SemanticSearch", "EmbeddingProvider", "SimpleHashEmbedding"]
+__all__ = ["Storage", "AutoMemoryExtractor"]
 
 # ── 模块级单例 ──
 

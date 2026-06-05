@@ -5,78 +5,35 @@
 """
 import sys
 import os
-import json
-from pathlib import Path
-from datetime import datetime
 
-# 状态文件路径
-STATE_FILE = os.path.expanduser("~/.tea_agent/self_evolve_state.json")
+# 添加项目根目录到路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-
-def _read_state():
-    if os.path.exists(STATE_FILE):
-        try:
-            with open(STATE_FILE, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {
-        "running": False, "pid": os.getpid(), "started_at": None,
-        "last_cycle_at": None, "cycles_completed": 0,
-    }
-
-
-def _write_state(state):
-    os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-    state["_updated"] = datetime.now().isoformat()
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2, ensure_ascii=False)
+from tea_agent.toolkit.toolkit_self_evolve_thread import toolkit_self_evolve_thread
 
 
 def ensure_running():
     """检查自进化进程状态，未启动则启动"""
     # 1. 检查状态
-    state = _read_state()
-    running = state.get("running", False)
-    pid = state.get("pid")
+    status = toolkit_self_evolve_thread("status")
+    running = status.get("running", False)
     
     if running:
-        print(f"[OK] 自进化进程已在运行 (PID: {pid}, 已完成 {state.get('cycles_completed', 0)} 轮)")
+        print(f"[OK] 自进化进程已在运行 (PID: {status.get('pid')}, 已完成 {status.get('cycles_completed', 0)} 轮)")
         return True
     
-    # 2. 未启动，启动新线程
+    # 2. 未启动，执行启动
     print("[INFO] 自进化进程未启动，正在启动...")
+    result = toolkit_self_evolve_thread("start")
     
-    # 简化版：直接写入状态文件并启动线程
-    # 实际应该调用完整的 toolkit_self_evolve_thread("start")
-    try:
-        # 使用子进程调用
-        import subprocess
-        result = subprocess.run(
-            [sys.executable, "-c", 
-             "import sys; sys.path.insert(0, '.'); "
-             "from tea_agent.toolkit.toolkit_self_evolve_thread import toolkit_self_evolve_thread; "
-             "r = toolkit_self_evolve_thread('start'); "
-             "import json; print(json.dumps(r))"],
-            capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0:
-            try:
-                r = json.loads(result.stdout)
-                if r.get("status") in ("started", "already_running"):
-                    print(f"[OK] 自进化进程已启动 (PID: {r.get('pid')})")
-                    return True
-                else:
-                    print(f"[WARN] 启动返回: {r}")
-                    return False
-            except json.JSONDecodeError:
-                print(f"[OK] 已调用启动命令")
-                return True
-        else:
-            print(f"[ERROR] 启动失败: {result.stderr[:200]}")
-            return False
-    except Exception as e:
-        print(f"[ERROR] 异常: {e}")
+    if result.get("status") == "started":
+        print(f"[OK] 自进化进程已启动 (PID: {result.get('pid')})")
+        return True
+    elif result.get("status") == "already_running":
+        print(f"[OK] 自进化进程已在运行 (PID: {result.get('pid')})")
+        return True
+    else:
+        print(f"[ERROR] 启动失败: {result}")
         return False
 
 

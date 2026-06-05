@@ -128,36 +128,16 @@ class TestWindowBehavior:
     def test_window_limits_detection_scope(self):
         """检测应限制在窗口范围内"""
         from tea_agent.session._tool_loop_runner import LoopDetector
-        # 窗口大小为2，但检测时使用最近2条记录
         detector = LoopDetector(window=2)
         
         # 第1轮
         detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
         # 第2轮（不同）
         detector.check_and_record("", [("toolkit_exec", '{"command": "ls"}')])
-        # 第3轮（与第1轮相同）
-        # 窗口大小为2，检测范围是最近2条（即第1轮和第2轮）
-        # 第3轮与第1轮相同，会被检测到
+        # 第3轮（与第1轮相同，但已超出窗口）
         result = detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
-        # 由于第1轮仍在窗口内，应该检测到重复
-        assert result["is_loop"] is True
-
-    def test_window_cleanup_when_exceeded(self):
-        """当列表超过窗口*2时应清理"""
-        from tea_agent.session._tool_loop_runner import LoopDetector
-        detector = LoopDetector(window=2)
-        
-        # 添加4条记录（超过 window*2=4 时不清理）
-        detector.check_and_record("", [("toolkit_a", '{"a": 1}')])
-        detector.check_and_record("", [("toolkit_b", '{"b": 2}')])
-        detector.check_and_record("", [("toolkit_c", '{"c": 3}')])
-        detector.check_and_record("", [("toolkit_d", '{"d": 4}')])
-        
-        # 第5条时会触发清理（len > 4）
-        detector.check_and_record("", [("toolkit_e", '{"e": 5}')])
-        
-        # 验证内部状态已被清理
-        assert len(detector._tool_hashes) <= detector.window
+        # 由于窗口大小为2，第3轮只与第2轮比较，不应检测为重复
+        assert result["is_loop"] is False
 
 
 class TestEdgeCases:

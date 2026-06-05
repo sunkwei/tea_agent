@@ -24,7 +24,5 @@ def analyze_intent(text: str) -> dict:
     增加新意图类型时，请同时更新 tests/test_session_intent.py 中的契约测试。
     """
     # 暂未启用正则匹配（保留注释供后续参考）
-    # import re
     # text_lower = text.lower().strip()
-    # if re.match(...): return {'type': 'chat', ...}
     return {"type": "general", "skip_tool_loop": False, "required_tools": None}

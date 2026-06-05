@@ -208,82 +208,102 @@ class OnlineToolSession(BaseChatSession):
 
     @property
     def messages(self):
+        """获取会话消息列表（桥接到 context.messages）。"""
         return self.context.messages
 
     @messages.setter
     def messages(self, value):
+        """获取会话消息列表（桥接到 context.messages）。"""
         self.context.messages = value
 
     @property
     def model(self):
+        """获取当前模型名称（桥接到 context.model）。"""
         return self.context.model
 
     @model.setter
     def model(self, value):
+        """获取当前模型名称（桥接到 context.model）。"""
         self.context.model = value
 
     @property
     def enable_thinking(self):
+        """获取/设置推理模式（桥接到 context.enable_thinking）。"""
         return self.context.enable_thinking
 
     @enable_thinking.setter
     def enable_thinking(self, value):
+        """获取/设置推理模式（桥接到 context.enable_thinking）。"""
         self.context.enable_thinking = value
 
     @property
     def _rounds_collector(self):
+        """获取/设置轮次收集器（桥接到 context._rounds_collector）。"""
         return self.context._rounds_collector
 
     @_rounds_collector.setter
     def _rounds_collector(self, value):
+        """获取/设置轮次收集器（桥接到 context._rounds_collector）。"""
         self.context._rounds_collector = value
 
     @property
     def _last_usage(self):
+        """获取/设置上次主模型用量统计（桥接到 context._last_usage）。"""
         return self.context._last_usage
 
     @_last_usage.setter
     def _last_usage(self, value):
+        """获取/设置上次主模型用量统计（桥接到 context._last_usage）。"""
         self.context._last_usage = value
 
     @property
     def _last_cheap_usage(self):
+        """获取/设置上次便宜模型用量统计（桥接到 context._last_cheap_usage）。"""
         return self.context._last_cheap_usage
 
     @_last_cheap_usage.setter
     def _last_cheap_usage(self, value):
+        """获取/设置上次便宜模型用量统计（桥接到 context._last_cheap_usage）。"""
         self.context._last_cheap_usage = value
 
     @property
     def _history_summary(self):
+        """获取/设置历史摘要（桥接到 context._history_summary）。"""
         return self.context._history_summary
 
     @_history_summary.setter
     def _history_summary(self, value):
+        """获取/设置历史摘要（桥接到 context._history_summary）。"""
         self.context._history_summary = value
 
     @property
     def _semantic_summary(self):
+        """获取/设置语义摘要（桥接到 context._semantic_summary）。"""
         return self.context._semantic_summary
 
     @_semantic_summary.setter
     def _semantic_summary(self, value):
+        """获取/设置语义摘要（桥接到 context._semantic_summary）。"""
         self.context._semantic_summary = value
 
     @property
     def _tool_chain_summary(self):
+        """获取/设置工具链摘要（桥接到 context._tool_chain_summary）。"""
         return self.context._tool_chain_summary
 
     @_tool_chain_summary.setter
     def _tool_chain_summary(self, value):
+        """获取/设置工具链摘要（桥接到 context._tool_chain_summary）。"""
         self.context._tool_chain_summary = value
 
     @property
     def _level2(self):
+        """获取/设置 Level 2 历史条目（桥接到 context._level2）。"""
         return self.context._level2
 
     @_level2.setter
     def _level2(self, value):
+        """获取/设置 Level 2 历史条目（桥接到 context._level2）。"""
         self.context._level2 = value
 
     # ──────────────────────────────────────────────
@@ -377,7 +397,7 @@ class OnlineToolSession(BaseChatSession):
         """
         from tea_agent.session._os_info_injector import (
             _get_os_signature, _load_persisted_os_sig, _save_os_sig,
-            inject_os_info as _inject_os_info_impl,
+            _inject_os_info_impl,
         )
         current_sig = _get_os_signature()
 

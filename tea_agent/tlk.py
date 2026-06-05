@@ -6,7 +6,6 @@ import os.path as osp
 import time
 import logging
 
-#
 from tea_agent.toolkit.toolkit_set_topic_title import (
     toolkit_set_topic_title,
     meta_toolkit_set_topic_title,
@@ -158,7 +157,7 @@ class Toolkit:
         'toolkit_exec', 'toolkit_self_evolve', 'toolkit_save',
         'toolkit_build', 'toolkit_bump_version', 'toolkit_release_version',
         'toolkit_pkg', 'toolkit_memory', 'toolkit_kb', 'toolkit_reflection',
-        'toolkit_proactive', 'toolkit_dump_topic',
+        'toolkit_proactive', 'toolkit_subconscious', 'toolkit_dump_topic',
         'toolkit_mode', 'toolkit_prompt_evolve', 'toolkit_input',
         'toolkit_notify',        'toolkit_run_tests', 'toolkit_toggle_reasoning',
         'toolkit_set_topic_title', 'toolkit_sudo_gui',        'toolkit_git_push_all_remotes',

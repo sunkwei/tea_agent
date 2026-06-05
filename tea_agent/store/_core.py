@@ -31,7 +31,7 @@ from ._semantic_search import SemanticSearch
 logger = logging.getLogger("Storage")
 
 class Storage:
-    """主存储类 — 组合 8 个委派组件 + 扩展功能，管理数据库连接与生命周期。"""
+    """主存储类 — 组合 8 个委派组件，管理数据库连接与生命周期。"""
 
     # 委派组件名列表，用于 __getattr__ 路由
     _delegate_attrs = (
@@ -66,10 +66,6 @@ class Storage:
         self._reflections = ReflectionStore(self.conn)
         self._config_history = ConfigHistoryStore(self.conn)
         self._vectors = VectorStore(self.conn)
-        
-        # ── 扩展功能组件 ──
-        self._auto_memory = AutoMemoryExtractor(self)
-        self._semantic_search = SemanticSearch(self)
 
     # ── 自动委派：未匹配的方法路由到子组件 ──
 

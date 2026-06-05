@@ -153,7 +153,6 @@ def aggressive_strategy(snake: Snake, game: Game) -> Direction:
     nearest_enemy = min(enemies, key=lambda e: snake.head.manhattan(e.head))
     enemy_dist = snake.head.manhattan(nearest_enemy.head)
 
-    # if enemy is close (within 6 cells), try to intercept
     if enemy_dist <= 6:
         # head toward where the enemy will likely go
         # predict: enemy head + enemy direction (if known)
@@ -239,56 +238,6 @@ def hybrid_strategy(snake: Snake, game: Game) -> Direction:
     return safe_greedy_strategy(snake, game)
 
 
-def coward_strategy(snake: Snake, game: Game) -> Direction:
-    """
-    Maximize minimum distance to all enemy snakes.
-    For each safe direction, compute the Manhattan distance to the nearest
-    enemy body cell. Pick the direction that maximizes that distance —
-    i.e. stay as far away from everyone as possible.
-    Falls back to survival (flood fill) when no enemies are nearby.
-    """
-    safe = _safe_directions(snake, game)
-    if not safe:
-        return random.choice(Direction.all())
-
-    enemies = [s for s in game.snakes if s.alive and s is not snake]
-    if not enemies:
-        return greedy_strategy(snake, game)
-
-    # collect all enemy body positions
-    enemy_cells: list = []
-    for e in enemies:
-        enemy_cells.extend(e.body)
-
-    best_dir = safe[0]
-    best_min_dist = -1
-
-    for d in safe:
-        nh = snake.head + d
-        # min distance from this new head to any enemy cell
-        min_dist = min(nh.manhattan(c) for c in enemy_cells)
-        if min_dist > best_min_dist:
-            best_min_dist = min_dist
-            best_dir = d
-
-    # if we're already well separated, add a slight strawberry bias
-    strawberries = game.strawberries
-    if best_min_dist >= 5 and strawberries:
-        candidates = []
-        for d in safe:
-            nh = snake.head + d
-            min_dist = min(nh.manhattan(c) for c in enemy_cells)
-            straw_bonus = 0
-            if strawberries:
-                nearest_straw = min(nh.manhattan(s) for s in strawberries)
-                straw_bonus = max(0, 10 - nearest_straw) * 0.5
-            candidates.append((min_dist + straw_bonus, d))
-        candidates.sort(key=lambda x: x[0], reverse=True)
-        return candidates[0][1]
-
-    return best_dir
-
-
 # ── registry ───────────────────────────────────────────────
 
 STRATEGIES = {
@@ -299,5 +248,4 @@ STRATEGIES = {
     "aggressive": aggressive_strategy,
     "wall_hugger": wall_hugger_strategy,
     "hybrid": hybrid_strategy,
-    "coward": coward_strategy,
 }

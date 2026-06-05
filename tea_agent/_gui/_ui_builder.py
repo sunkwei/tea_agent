@@ -105,7 +105,7 @@ class UIBuilder:
         input_frame = Frame(gui.chat_split)
         gui.chat_split.add(input_frame, weight=1)
         gui.input_box = scrolledtext.ScrolledText(
-            input_frame, font=(SYSTEM_FONT, _fs(16)), height=4, bg="#f8f8f8"
+            input_frame, font=(SYSTEM_FONT, _fs(11)), height=4, bg="#f8f8f8"
         )
         gui.input_box.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
 
@@ -149,10 +149,6 @@ class UIBuilder:
         gui.input_box.bind("<Return>", gui.send)
         gui.input_box.bind("<Shift-Return>", gui.newline)
         gui.root.bind("<Escape>", gui.interrupt)
-        # Ctrl+V: 粘贴图像（模型支持视觉时）
-        gui.input_box.bind("<Control-v>", gui.on_paste)
-
-
 
         # HtmlFrame 缩放快捷键
         if HAS_TKINTERWEB:

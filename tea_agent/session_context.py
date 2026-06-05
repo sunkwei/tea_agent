@@ -66,7 +66,7 @@ class SessionContext:
     _injected_memories_text: str = ""
     _injected_memories: List[Dict] = field(default_factory=list)
     _injected_os_info_text: str = ""
-    _os_info_injected: str = ""  # 上次注入的 OS 签名，空=从未注入，变化则重新注入
+    _os_info_injected: bool = False  # 防重复注入
     _history_summary: str = ""
     _semantic_summary: str = ""
     _tool_chain_summary: str = ""

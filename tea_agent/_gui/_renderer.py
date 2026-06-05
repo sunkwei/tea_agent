@@ -113,7 +113,7 @@ class ChatRenderer:
         self.gui._image_cache.clear()
         md = _chat_to_markdown(msgs, image_cache=self.gui._image_cache)
         if HAS_TKINTERWEB:
-            # HtmlFrame 使用独立的 _HTML_FONT_SIZE，不受 config font_size 影响
+            # HtmlFrame 使用 _HTML_FONT_SIZE（由 _init_fonts 从 config 读取）
             font_size = int(_fonts_mod._HTML_FONT_SIZE * self.gui._zoom_level / 100)
             html = _render_markdown(md, font_size=font_size)
             self._html_render(html)
@@ -139,7 +139,7 @@ class ChatRenderer:
             return
 
         active_idx = len(rounds) - 1  # 最新轮
-        font_size = int(_fonts_mod._DEFAULT_FONT_SIZE * self.gui._zoom_level / 100)
+        font_size = int(_fonts_mod._HTML_FONT_SIZE * self.gui._zoom_level / 100)
 
         def _prepare():
             """Internal: prepare."""
@@ -220,7 +220,7 @@ class ChatRenderer:
         rounds = self.gui._chat_rounds
         if not rounds or round_idx < 0 or round_idx >= len(rounds):
             return
-        font_size = int(_fonts_mod._DEFAULT_FONT_SIZE * self.gui._zoom_level / 100)
+        font_size = int(_fonts_mod._HTML_FONT_SIZE * self.gui._zoom_level / 100)
 
         def _prepare():
             """Internal: prepare."""
@@ -364,7 +364,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
 .spinner {{ width:48px; height:48px; border:4px solid #e0e0e0; border-top-color:#1a73e8;
            border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 20px; }}
 @keyframes spin {{ to {{ transform:rotate(360deg); }} }}
-.text {{ color:#888; font-size:{_fonts_mod._DEFAULT_FONT_SIZE}px; }}
+.text {{ color:#888; font-size:{_fonts_mod._HTML_FONT_SIZE}px; }}
 .dots::after {{ content:''; animation:d 1.5s steps(4,end) infinite; }}
 @keyframes d {{ 0% {{ content:'' }} 25% {{ content:'.' }} 50% {{ content:'..' }} 75% {{ content:'...' }} 100% {{ content:'' }} }}
 </style></head>

@@ -200,6 +200,7 @@ def fetch_index():
     except Exception as e:
         logger.error(f"fetch index error: {e}")
         return None
+
 def fetch_all_news():
     today = datetime.now().strftime("%Y-%m-%d")
     if news_fetched_today(today):

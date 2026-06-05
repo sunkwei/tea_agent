@@ -397,6 +397,7 @@ class Agent:
                 # lite 模式直接调用 LiteSession.chat()
                 if self.mode == "lite":
                     def stream_cb(text: str):
+                        """流式回调，处理 thinking 和 token 两种消息类型。"""
                         if self._callback:
                             self._callback({"type": "chunk", "content": text})
                     return self._sess.chat(user_input, callback=stream_cb)
@@ -415,12 +416,14 @@ class Agent:
 
         # ── 流式回调 ──
         def stream_cb(text: str):
+            """流式回调，处理 thinking 和 token 两种消息类型。"""
             if text.startswith("[THINK]"):
                 self._notify({"type": "thinking", "text": text[7:]})
             else:
                 self._notify({"type": "token", "text": text})
 
         def status_cb(status_msg: str):
+            """状态回调，处理 max_iter 续命和普通状态消息。"""
             if status_msg.startswith("!MAX_ITER:"):
                 self._sess._continue_after_max = True
                 extra = getattr(self._sess.context, "extra_iterations_on_continue", 10)
@@ -530,23 +533,6 @@ class Agent:
         except Exception as e:
             logger.warning(f"L2→L3 摘要失败: {e}")
 
-    def _tool_chain_summary(self, topic_id: str, overflow_items: list):
-        """从 L2 溢出条目生成工具调用链摘要。"""
-        try:
-            cli, mdl = self._sess._get_summarize_client()
-            existing_tc = self._db.get_tool_chain_summary(topic_id) or ""
-            extra_params = self._sess._get_effective_params("cheap")
-            new_tc = self._db.generate_tool_chain_summary(
-                topic_id, overflow_items, existing_tc, cli, mdl,
-                extra_params=extra_params,
-            )
-            # 同步到内存
-            if new_tc and hasattr(self._sess, 'context'):
-                self._sess.context._tool_chain_summary = new_tc
-            logger.info(f"工具链摘要完成: topic={topic_id}")
-        except Exception as e:
-            logger.warning(f"工具链摘要失败: {e}")
-
     def _auto_summary(self, topic_id: str):
         """自动生成主题摘要。"""
         if not self._db:
@@ -646,6 +632,7 @@ class Agent:
 
     @current_topic_id.setter
     def current_topic_id(self, value: str):
+        """设置当前主题 ID。"""
         self._current_topic_id = value
 
 

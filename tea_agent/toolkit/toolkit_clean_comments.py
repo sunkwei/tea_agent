@@ -139,7 +139,6 @@ def _clean_comments(file_path: str, dry_run: bool = False) -> str:
                 continue
 
             # 跳过过时的 TODO/FIXME（可选，这里保留）
-            # if re.match(r'^#\s*(TODO|FIXME|HACK|XXX)', stripped, re.IGNORECASE):
             #     removed_count += 1
             #     continue
 

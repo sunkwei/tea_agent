@@ -223,37 +223,57 @@ class Game:
                     d = safe[0] if safe else Direction.UP
                 decisions[s] = d
 
-        # 2. tentatively move all snakes (insert new head, keep tail for now)
+        # 2. compute new heads (before moving)
         new_heads: Dict[Snake, Position] = {}
         for s, d in decisions.items():
-            nh = s.head + d
-            new_heads[s] = nh
-            s.body.insert(0, nh)  # tentative: tail still there for collision detection
-            s._last_direction = d
+            new_heads[s] = s.head + d
+        # 3. check which snakes will eat a strawberry
+        # handle multiple snakes landing on same strawberry: first-come-first-served
+        eaten_strawberries: Set[Position] = set()
+        ate: Set[Snake] = set()
+        for s in decisions:
+            nh = new_heads[s]
+            if nh in self._strawberries and nh not in eaten_strawberries:
+                ate.add(s)
+                eaten_strawberries.add(nh)
 
-        # 3. resolve collisions (simultaneous, using tentative bodies)
+        # 4. move all snakes (grow if ate)
+        for s, d in decisions.items():
+            grow = s in ate
+            s.body.insert(0, new_heads[s])
+            if not grow:
+                s.body.pop()
+            s._last_direction = d
+            if grow:
+                pos = new_heads[s]
+                if pos in self._strawberries:
+                    self._strawberries.remove(pos)
+                s.score += 1
+                events.append(f"{s.name} ate a strawberry!")
+                self._spawn_one_strawberry()
+        # 5. resolve collisions (simultaneous)
         dead_this_tick: Set[Snake] = set()
 
+        # wall & self collisions
         for s in self.snakes:
             if not s.alive:
                 continue
             h = s.head
-            # wall
             if not self.board.in_bounds(h):
                 dead_this_tick.add(s)
                 events.append(f"{s.name} hit a wall!")
                 continue
-            # self
             if h in s.body[1:]:
                 dead_this_tick.add(s)
                 events.append(f"{s.name} ran into itself!")
                 continue
 
-        # head-to-head (among survivors of wall/self checks)
+        # head-to-head collisions
         alive_now = [s for s in self.snakes if s.alive and s not in dead_this_tick]
         head_map: Dict[Position, List[Snake]] = {}
         for s in alive_now:
             head_map.setdefault(s.head, []).append(s)
+
         for pos, snakes_here in head_map.items():
             if len(snakes_here) > 1:
                 for s in snakes_here:
@@ -273,30 +293,10 @@ class Game:
                     events.append(f"{s.name} crashed into {other.name}!")
                     break
 
-        # 4. for survivors: check strawberry eating, then finalize body
-        for s in self.snakes:
-            if not s.alive:
-                continue
-            if s in dead_this_tick:
-                continue
-            # check strawberry
-            if s.head in self._strawberries:
-                self._strawberries.remove(s.head)
-                s.score += 1
-                events.append(f"{s.name} ate a strawberry!")
-                self._spawn_one_strawberry()
-                # keep tail → snake grows
-            else:
-                # remove tail
-                s.body.pop()
-
-        # mark dead (after finalizing bodies)
+        # mark dead
         for s in dead_this_tick:
             s.alive = False
-            # remove tail since dead snakes don't grow
-            # (body was tentatively grown, pop tail)
-            if len(s.body) > 1:
-                s.body.pop()
+
         # 6. win condition
         alive = [s for s in self.snakes if s.alive]
         winner = alive[0].name if len(alive) == 1 else None

@@ -58,12 +58,15 @@ class _TUIAgentCore(AgentCore):
         self.sess.max_iterations = 1000
 
     def _on_post_reply(self, ai_msg, used_tools, topic_id):
+        """AI 回复后的回调钩子，子类可重写。"""
         pass
 
     def _on_init_done(self):
+        """Agent 初始化完成后的回调钩子。"""
         pass
 
     def _chat(self, user_msg: str):
+        """发送用户消息并处理流式回复的主循环。"""
         if not self.current_topic_id:
             self._auto_init_topic()
         tui = self._tui
@@ -72,6 +75,7 @@ class _TUIAgentCore(AgentCore):
         think_started = False
 
         def on_stream(chunk: str):
+            """流式数据回调，处理 thinking/token/tool 等消息类型。"""
             nonlocal think_started
             if chunk.startswith("[THINK]"):
                 text = chunk[7:]
@@ -115,6 +119,7 @@ class _TUIAgentCore(AgentCore):
                     tui.call_from_thread(tui._append_chat_inline, chunk)
 
         def on_status(status_msg: str):
+            """状态更新回调，处理 max_iter 续命和状态显示。"""
             if status_msg.startswith("!MAX_ITER:"):
                 remaining = status_msg.split(":", 2)[1] if ":" in status_msg else "?"
                 tui.call_from_thread(
@@ -148,6 +153,7 @@ class _TUIAgentCore(AgentCore):
             )
 
     def _auto_init_topic(self):
+        """自动初始化新主题，创建 topic 并加载系统提示词。"""
         topics = self.db.list_topics()
         if topics:
             tp = topics[0]
@@ -285,6 +291,7 @@ class TeaTUI(App):
 
     def compose(self) -> ComposeResult:
         with Container(id="header-bar"):
+            """Textual compose：创建 UI 组件布局。"""
             yield Label("Tea Agent TUI", id="header-title")
             yield Label("", id="header-model")
         with ScrollableContainer(id="chat-container"):
@@ -307,6 +314,7 @@ class TeaTUI(App):
             pass
 
     def _init_agent(self):
+        """初始化 Agent 实例。"""
         try:
             self.agent = _TUIAgentCore(
                 tui=self, config_path=self._config_path,
@@ -319,11 +327,13 @@ class TeaTUI(App):
             self.call_from_thread(self._show_error, f"Init failed: {e}")
 
     def _check_agent_ready(self):
+        """检查 Agent 是否已就绪，未就绪则初始化。"""
         if self._agent_ready.is_set() and not self._welcome_shown:
             self._welcome_shown = True
             self._show_welcome()
 
     def _show_welcome(self):
+        """显示欢迎信息和快捷键提示。"""
         cfg = self.agent._cfg
         model_name = cfg.main_model.model_name
         tool_count = len(self.agent.toolkit.func_map)
@@ -341,9 +351,9 @@ class TeaTUI(App):
         self._chat_write("")
         self._update_status_right()
         self.agent._auto_init_topic()
-        self._load_history_msgs()
 
     def _show_error(self, msg: str):
+        """在聊天区显示错误信息。"""
         try:
             self._chat_write(f"[bold red]ERROR: {msg}[/]")
         except NoMatches:
@@ -351,12 +361,14 @@ class TeaTUI(App):
         self._update_status(f"ERROR: {msg}")
 
     def _update_status(self, msg: str):
+        """更新底部状态栏左侧信息。"""
         try:
             self.query_one("#status-left", Label).update(msg[:80])
         except NoMatches:
             pass
 
     def _update_status_right(self):
+        """更新底部状态栏右侧信息（think/verbose 状态）。"""
         try:
             self.query_one("#status-right", Label).update(
                 f"Think:{'ON' if self._cli_think else 'OFF'} "
@@ -366,18 +378,22 @@ class TeaTUI(App):
             pass
 
     def _start_stream_timer(self):
+        """启动流式输出定时器，每 500ms 刷新缓冲区到界面。"""
         self._stop_stream_timer()
         self._stream_timer = self.set_interval(0.5, self._flush_stream_buffer)
 
     def _stop_stream_timer(self):
+        """停止流式输出定时器。"""
         if self._stream_timer:
             self._stream_timer.stop()
             self._stream_timer = None
 
     def on_key(self, event):
+        """Textual 按键事件处理入口。"""
         pass
 
     def _do_send(self):
+        """发送用户输入到 Agent 并处理回复。"""
         if self._generating:
             return
         try:
@@ -397,6 +413,7 @@ class TeaTUI(App):
         self._update_status("Generating...")
 
         def run_chat():
+            """运行聊天循环（内部调用 _chat）。"""
             try:
                 self.agent._chat(text)
             except Exception as e:
@@ -413,6 +430,7 @@ class TeaTUI(App):
         threading.Thread(target=run_chat, daemon=True).start()
 
     def _on_chat_done(self):
+        """聊天完成后的清理工作。"""
         self._flush_think_buffer()   # flush any incomplete think block
         self._flush_stream_buffer()
         self._stop_stream_timer()
@@ -429,6 +447,7 @@ class TeaTUI(App):
             self._update_status("Done")
 
     def _append_chat(self, text: str):
+        """向聊天区追加文本（带 Markdown 渲染）。"""
         try:
             self._chat_write(text)
         except NoMatches:
@@ -444,6 +463,7 @@ class TeaTUI(App):
             chat.write(Text(text))
 
     def _append_chat_inline(self, text: str):
+        """向聊天区追加内联文本（流式输出用）。"""
         self._stream_buffer += text
 
     def _append_think_text(self, text: str):
@@ -460,6 +480,7 @@ class TeaTUI(App):
             self._think_buffer = ""
 
     def _flush_stream_buffer(self):
+        """将流式缓冲区内容刷新到聊天区。"""
         if self._stream_buffer:
             try:
                 self._chat_write(self._stream_buffer)
@@ -468,181 +489,33 @@ class TeaTUI(App):
             self._stream_buffer = ""
 
     def _handle_command(self, cmd: str):
+        """处理斜杠命令（/help, /set, /switch 等）。"""
         parts = cmd.split(None, 1)
-        cmd_name = parts[0].lower().lstrip("/")  # 去掉 / 前缀
+        cmd_name = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
+        chat = self.query_one("#chat-area", RichLog)
 
-        # TUI 内置命令
-        builtins = {
-            "bye": lambda: self.exit(),
-            "quit": lambda: self.exit(),
-            "exit": lambda: self.exit(),
-            "help": lambda: self._show_help(),
-            "think": lambda: self.action_toggle_think(),
-            "verbose": lambda: self.action_toggle_verbose(),
-            "new": lambda: self.action_new_topic(),
-            "list": lambda: self.action_list_topics(),
-        }
-        if cmd_name in builtins:
-            builtins[cmd_name]()
-            return
-        if cmd_name == "set":
+        if cmd_name in ("/bye", "/quit", "/exit"):
+            self.exit()
+        elif cmd_name == "/help":
+            self._show_help()
+        elif cmd_name == "/set":
             self._cmd_set(arg)
-            return
-        if cmd_name == "switch":
+        elif cmd_name == "/think":
+            self.action_toggle_think()
+        elif cmd_name == "/verbose":
+            self.action_toggle_verbose()
+        elif cmd_name == "/new":
+            self.action_new_topic()
+        elif cmd_name == "/list":
+            self.action_list_topics()
+        elif cmd_name == "/switch":
             self._switch_topic(arg)
-            return
-
-        # ── 元命令 ──
-        if cmd_name == "commands":
-            self._list_custom_commands()
-            return
-        if cmd_name == "command":
-            if not arg:
-                self._chat_write("[bold yellow]用法: /command <name> — 查看命令详情[/]")
-                return
-            self._show_custom_command(arg)
-            return
-
-        # ── Custom Commands 路由 ──
-        self._handle_custom_command(cmd_name, arg)
-
-    def _handle_custom_command(self, cmd_name: str, arg: str):
-        """将 /command 路由到 toolkit_custom_commands"""
-        try:
-            from tea_agent.toolkit.toolkit_custom_commands import toolkit_custom_commands
-
-            # 解析参数：支持 key=val 格式和位置参数
-            args_dict = {}
-            if arg:
-                # 尝试 key=value 对
-                kv_pairs = [p for p in arg.split() if "=" in p]
-                positional = [p for p in arg.split() if "=" not in p]
-                for kv in kv_pairs:
-                    k, _, v = kv.partition("=")
-                    args_dict[k.strip()] = v.strip()
-                # 位置参数作为 'args' 传入
-                if positional:
-                    # 第一个位置参数作为默认参数
-                    if not args_dict:
-                        args_dict["args"] = positional
-                    else:
-                        args_dict.setdefault("args", positional)
-
-            # 先查看命令是否存在
-            result = toolkit_custom_commands(action="show", name=cmd_name)
-            if not result.get("ok"):
-                self._chat_write(f"[bold yellow]未知命令: /{cmd_name} (/help 查看帮助)[/]")
-                return
-
-            # 获取命令的参数定义
-            cmd_info = result.get("command", {})
-            defined_args = cmd_info.get("args_def", [])
-
-            # 如果是 key=value 格式，直接用；否则将位置参数映射到命令参数
-            if args_dict and "args" not in args_dict:
-                run_args = {k: v for k, v in args_dict.items() if k != "args"}
-            else:
-                # 位置参数 → 按顺序映射到命令的 args_def
-                positional = args_dict.get("args", [])
-                run_args = {}
-                for i, pa in enumerate(positional):
-                    if i < len(defined_args):
-                        run_args[defined_args[i]] = pa
-
-            # 执行命令
-            result = toolkit_custom_commands(
-                action="run", name=cmd_name, args=run_args if run_args else None
-            )
-
-            if not result.get("ok"):
-                self._chat_write(f"[bold red]命令执行失败: {result.get('error', '')}[/]")
-                return
-
-            # 输出结果
-            prompt = result.get("resolved_prompt", "")
-            unresolved = result.get("unresolved_placeholders", [])
-
-            self._chat_write(f"\n[bold cyan]▶ /{cmd_name}[/]")
-            self._chat_write(f"[dim]{result.get('description', '')}[/]")
-
-            if unresolved:
-                self._chat_write(f"[bold yellow]缺少参数: {', '.join(unresolved)}[/]")
-                self._chat_write(f"[dim]用法: /{cmd_name} {' '.join(f'<{a}>' for a in defined_args)}[/]")
-            elif prompt:
-                # 将 resolved_prompt 发送给 agent 执行
-                self._chat_write(f"[bold cyan]正在执行 /{cmd_name} ...[/]")
-                self._do_send_custom(prompt)
-
-        except Exception as e:
-            self._chat_write(f"[bold red]命令处理异常: {e}[/]")
-
-    def _list_custom_commands(self):
-        """列出所有可用的自定义命令"""
-        try:
-            from tea_agent.toolkit.toolkit_custom_commands import toolkit_custom_commands
-            result = toolkit_custom_commands(action="list")
-            if not result.get("ok"):
-                self._chat_write(f"[bold red]获取命令列表失败[/]")
-                return
-            cmds = result.get("commands", [])
-            self._chat_write(f"\n[bold cyan]可用命令 ({len(cmds)} 个)[/]")
-            for c in cmds:
-                scope_mark = "📁" if c["scope"] == "project" else "👤"
-                tags = f" [{','.join(c['tags'])}]" if c.get("tags") else ""
-                self._chat_write(
-                    f"  {scope_mark} [bold]/{c['name']}[/] — {c['description']}{tags}"
-                )
-            self._chat_write("[dim]用法: /<命令名> [参数...] 或 /command <命令名> 查看详情[/]")
-        except Exception as e:
-            self._chat_write(f"[bold red]获取命令列表异常: {e}[/]")
-
-    def _show_custom_command(self, name: str):
-        """显示某个命令的详情"""
-        try:
-            from tea_agent.toolkit.toolkit_custom_commands import toolkit_custom_commands
-            result = toolkit_custom_commands(action="show", name=name)
-            if not result.get("ok"):
-                self._chat_write(f"[bold yellow]命令 '{name}' 不存在[/]")
-                return
-            cmd = result.get("command", {})
-            defined_args = cmd.get("args_def", [])
-            usage = f"/{name} {' '.join(f'<{a}>' for a in defined_args)}" if defined_args else f"/{name}"
-            self._chat_write(f"\n[bold cyan]/{name}[/]")
-            self._chat_write(f"  [dim]{cmd.get('description', '')}[/]")
-            self._chat_write(f"  用法: [bold]{usage}[/]")
-            if cmd.get("tags"):
-                self._chat_write(f"  标签: {', '.join(cmd['tags'])}")
-            if cmd.get("scope"):
-                self._chat_write(f"  范围: {'项目级' if cmd['scope']=='project' else '用户级'}")
-        except Exception as e:
-            self._chat_write(f"[bold red]异常: {e}[/]")
-
-    def _do_send_custom(self, text: str):
-        """发送自定义命令解析后的 prompt 给 agent 执行"""
-        if self._generating:
-            return
-        self._generating = True
-        self._start_stream_timer()
-        self._update_status(f"Executing command...")
-
-        def run_chat():
-            try:
-                self.agent._chat(text)
-            except Exception as e:
-                import traceback
-                tb = traceback.format_exc()
-                self.call_from_thread(
-                    self._append_chat,
-                    f"\n[bold red]ERROR: {e}[/]\n```\n{tb[-1000:]}\n```"
-                )
-            finally:
-                self._generating = False
-                self.call_from_thread(self._on_chat_done)
-
-        threading.Thread(target=run_chat, daemon=True).start()
+        else:
+            self._chat_write(f"[bold yellow]Unknown: {cmd_name} (/help for help)[/]")
 
     def _show_help(self):
+        """显示帮助信息。"""
         self._chat_write("""
 [bold]Tea Agent TUI Help[/]
   /help              Show this help
@@ -655,16 +528,6 @@ class TeaTUI(App):
   /list              List recent topics
   /switch <N/id>     Switch by list number or topic id
 
-[bold cyan]Custom Commands[/]
-  /init <path>       项目初始化，扫描构建项目知识库
-  /explain <target>  解释指定代码文件或函数
-  /plan <goal>       根据目标创建执行计划
-  /review <file>     审查代码变更
-  /test <pattern>    运行测试并分析结果
-  /commands          列出所有可用自定义命令
-  /command <name>    查看 / 执行自定义命令
-
-[bold]Keybindings[/]
   Enter     Send    Shift+Enter  Newline
   Up/Down   History (when input empty)
   Ctrl+C    Quit    Esc          Interrupt
@@ -675,6 +538,7 @@ class TeaTUI(App):
 """)
 
     def _cmd_set(self, arg: str):
+        """处理 /set 命令，修改运行时配置。"""
         if "=" not in arg:
             self._chat_write("[bold yellow]Usage: /set think=on|off or /set verbose=on|off[/]")
             return
@@ -858,6 +722,7 @@ class TeaTUI(App):
         self._chat_write(f"[bold]Switched to: {tp.get('title', tp['topic_id'][:8])}[/]")
 
     def action_interrupt(self):
+        """中断当前生成（Ctrl+C 快捷键）。"""
         if self._generating and self.agent and self.agent.sess:
             self.agent.sess.interrupt()
             self._append_chat("[bold yellow]Interrupted[/]")
@@ -865,6 +730,7 @@ class TeaTUI(App):
             self._update_status("Interrupted")
 
     def action_toggle_think(self):
+        """切换推理模式开关（Ctrl+T 快捷键）。"""
         self._cli_think = not self._cli_think
         if self.agent:
             self.agent._tui_think = self._cli_think
@@ -874,6 +740,7 @@ class TeaTUI(App):
         self._append_chat(f"[bold]Think = {'ON' if self._cli_think else 'OFF'}[/]")
 
     def action_toggle_verbose(self):
+        """切换详细模式开关（Ctrl+V 快捷键）。"""
         self._cli_verbose = not self._cli_verbose
         if self.agent:
             self.agent._tui_verbose = self._cli_verbose
@@ -881,6 +748,7 @@ class TeaTUI(App):
         self._append_chat(f"[bold]Verbose = {'ON' if self._cli_verbose else 'OFF'}[/]")
 
     def action_new_topic(self):
+        """创建新主题（Ctrl+N 快捷键）。"""
         if not self.agent:
             return
         tid = self.agent.db.create_topic("TUI Session")
@@ -894,6 +762,7 @@ class TeaTUI(App):
         self._append_chat(f"[bold]New topic: {tid[:10]}...[/]")
 
     def action_list_topics(self):
+        """列出最近主题（Ctrl+L 快捷键）。"""
         if not self.agent:
             return
         topics = self.agent.db.list_topics()
@@ -907,6 +776,7 @@ class TeaTUI(App):
 
 
 def main():
+    """TUI 入口函数，解析命令行参数并启动 Textual 应用。"""
     parser = argparse.ArgumentParser(
         description="Tea Agent TUI -- Terminal AI Assistant",
         formatter_class=argparse.RawDescriptionHelpFormatter,

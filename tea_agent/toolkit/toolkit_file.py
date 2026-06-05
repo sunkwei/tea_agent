@@ -31,13 +31,10 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
     elif action == "write":
         try:
             # 检查数据库保护标记：若目标文件所在目录有 .chat_history_protected，拒绝覆盖
-            # import os as _os
             # target_abs = _os.path.abspath(filename)
             # target_dir = _os.path.dirname(target_abs)
             # marker = _os.path.join(target_dir, ".chat_history_protected")
-            # if _os.path.exists(marker):
             #     logger.warning(f"toolkit_file write BLOCKED: 目标目录受保护 ({marker}), 拒绝写入 {filename}")
-            #     return f"🛡️ 保护拒绝: '{filename}' 所在目录存在数据库保护标记，禁止覆盖。如需修改请先确认。"
             
             # 归一化换行符：\r\n → \n，确保始终使用 LF
             normalized = content.replace('\r\n', '\n').replace('\r', '\n')

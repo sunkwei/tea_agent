@@ -90,6 +90,7 @@ class TestHasattrVsGetattrPattern:
     def test_getattr_missing_attr_returns_default(self):
         """getattr 对不存在的属性返回默认值"""
         class Obj:
+            """Obj 测试辅助类。"""
             pass
         
         assert getattr(Obj, 'attr', None) is None

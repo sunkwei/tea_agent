@@ -190,7 +190,6 @@ class SchedulerStorage:
         """, (exit_code, output[:1000], datetime.now().isoformat(), script_id))
         conn.commit()
         conn.close()
-    
 
 
 # ── 便捷函数 ──────────────────────────────────────────────

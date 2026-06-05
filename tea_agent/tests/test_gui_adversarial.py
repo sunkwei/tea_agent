@@ -67,11 +67,13 @@ class TestPendingErrorAdversarial:
         gui = self._make_gui()
         
         def set_error():
+            """set_error 辅助函数。"""
             time.sleep(0.01)
             gui._pending_error = "concurrent error"
             gui._loading_done = True
         
         def set_render():
+            """set_render 辅助函数。"""
             gui._pending_render = [("user", "hello")]
         
         t1 = threading.Thread(target=set_error)

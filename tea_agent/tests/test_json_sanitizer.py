@@ -78,8 +78,7 @@ class TestTryFixTruncatedJson:
     def test_complex_truncated_json(self):
         """复杂截断场景：多层嵌套 + 字符串"""
         from tea_agent.session._json_sanitizer import try_fix_truncated_json
-        # 简化的截断 JSON，确保可修复
-        s = '{"tool_calls": [{"name": "toolkit_file", "args": {"action": "read"'
+        s = '{"tool_calls": [{"name": "toolkit_file", "args": {"action": "read", "file'
         result = try_fix_truncated_json(s)
         assert result is not None
         parsed = json.loads(result)

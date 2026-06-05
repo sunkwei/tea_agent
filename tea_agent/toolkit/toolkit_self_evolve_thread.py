@@ -1,7 +1,7 @@
 # Self-Evolution Background Thread
 # Replaces subconscious dream engine with practical self-maintenance tasks:
 #   1. 工具使用率分析 → 优化建议 / 合并非正交工具
-#   2. README.md 自动同步
+#   2. docs/TOOLS.md 自动同步
 #   3. 技能 (skills) 整理
 # version: 1.0.0
 
@@ -11,7 +11,7 @@ logger = logging.getLogger("toolkit")
 
 
 def toolkit_self_evolve_thread(action: str):
-    """自进化后台线程 — 定期评估工具、同步README、整理技能。
+    """自进化后台线程 — 定期评估工具、同步TOOLS.md、整理技能。
 
     Actions:
         start  — 启动 daemon 线程（每小时运行一次完整循环）
@@ -20,7 +20,6 @@ def toolkit_self_evolve_thread(action: str):
         run    — 立即强制执行一次循环（不等待定时）
     """
     logger.info(f"toolkit_self_evolve_thread called: action={action!r}")
-
     import os
     import json
     import time
@@ -210,9 +209,11 @@ def toolkit_self_evolve_thread(action: str):
     # ═══════════════════════════════════════════
 
     def _sync_readme(tool_analysis):
-        """自动生成/更新项目 README.md。"""
+        """自动生成/更新工具清单到 docs/TOOLS.md（不再覆盖 README.md）。"""
         cwd = os.getcwd()
-        readme_path = os.path.join(cwd, "README.md")
+        docs_dir = os.path.join(cwd, "docs")
+        os.makedirs(docs_dir, exist_ok=True)
+        tools_md_path = os.path.join(docs_dir, "TOOLS.md")
 
         # 读取 pyproject.toml 获取项目元信息
         name = version = description = ""
@@ -288,16 +289,16 @@ def toolkit_self_evolve_thread(action: str):
 
 后台每小时自动运行：
 - 🔍 工具使用分析 & 优化建议
-- 📝 README.md 自动同步（本文件）
+- 📝 docs/TOOLS.md 自动同步（本文件）
 - 🎯 技能模式整理
 
 > 最后更新: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 """
 
         try:
-            with open(readme_path, "w", encoding="utf-8") as f:
+            with open(tools_md_path, "w", encoding="utf-8") as f:
                 f.write(readme)
-            return {"synced": True, "path": readme_path, "tools_count": len(tools)}
+            return {"synced": True, "path": tools_md_path, "tools_count": len(tools)}
         except Exception as e:
             return {"synced": False, "error": str(e)}
 
@@ -514,7 +515,7 @@ def meta_toolkit_self_evolve_thread() -> dict:
         "type": "function",
         "function": {
             "name": "toolkit_self_evolve_thread",
-            "description": "自进化后台线程 — 每小时自动运行：①工具使用率分析&优化建议 ②README.md同步 ③技能模式整理。替代旧的潜意识引擎。",
+            "description": "自进化后台线程 — 每小时自动运行：①工具使用率分析&优化建议 ②docs/TOOLS.md同步 ③技能模式整理。替代旧的潜意识引擎。",
             "parameters": {
                 "type": "object",
                 "properties": {

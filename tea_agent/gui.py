@@ -1080,18 +1080,33 @@ def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str=""
     root.mainloop()
 
 def _set_app_icon(root):
-    """给窗口设置 Tea Agent 齿轮图标（跨平台）。"""
-    icon_path = os.path.join(os.path.dirname(__file__), "_gui", "icon.png")
-    if not os.path.exists(icon_path):
-        return
-    try:
-        from PIL import Image, ImageTk
-        img = Image.open(icon_path)
-        photo = ImageTk.PhotoImage(img)
-        root.iconphoto(True, photo)
-        root._icon_ref = photo  # 防止被 GC
-    except Exception:
-        pass
+    """给窗口+任务栏设置 Tea Agent 齿轮图标（跨平台）。"""
+    gui_dir = os.path.join(os.path.dirname(__file__), "_gui")
+    ico_path = os.path.join(gui_dir, "icon.ico")
+    png_path = os.path.join(gui_dir, "icon.png")
+
+    # Windows: 用 iconbitmap(.ico) 设置任务栏图标
+    if sys.platform == "win32" and os.path.exists(ico_path):
+        try:
+            # 设置 AppUserModelID，让 Windows 识别为独立应用
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                "tea_agent.gui"
+            )
+            root.iconbitmap(default=ico_path)
+        except Exception:
+            pass
+
+    # 跨平台：用 iconphoto(.png) 设置标题栏图标
+    if os.path.exists(png_path):
+        try:
+            from PIL import Image, ImageTk
+            img = Image.open(png_path)
+            photo = ImageTk.PhotoImage(img)
+            root.iconphoto(True, photo)
+            root._icon_ref = photo  # 防止被 GC
+        except Exception:
+            pass
 
 
 def _safe_destroy(root):

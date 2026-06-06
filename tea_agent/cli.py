@@ -20,6 +20,7 @@ import argparse
 import sys
 import os
 import threading
+import atexit
 
 # 将项目根目录加入 sys.path（支持 python -m tea_agent.cli）
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,7 +34,7 @@ class TeaCLI(Agent):
     """Tea Agent 命令行客户端。"""
 
     def __init__(self, config_path: str = None, enable_think: bool = False,
-                 verbose: bool = False, disable_summary: bool = False,
+                 verbose: bool = False, debug: bool = False, disable_summary: bool = False,
                  no_stream_chunk: bool = False):
         self._cli_think = enable_think
         self._cli_verbose = verbose
@@ -41,6 +42,7 @@ class TeaCLI(Agent):
             mode="full",
             config_path=config_path,
             enable_thinking=enable_think,
+            debug=debug,
             disable_summary=disable_summary,
             no_stream_chunk=no_stream_chunk,
         )
@@ -91,6 +93,11 @@ class TeaCLI(Agent):
             self._chat(user_input)
 
         print("\n👋 再见")
+
+    def run_oneshot(self, msg: str):
+        """单次对话模式（非交互）。"""
+        self._auto_init_topic()
+        self._chat(msg)
 
     # ——— 多行输入（Enter 发送，Shift+Enter 换行）———
     def _read_multiline(self) -> str:
@@ -206,6 +213,12 @@ class TeaCLI(Agent):
         elif cmd_name == "/switch":
             self._switch_topic(arg)
 
+        elif cmd_name == "/memories":
+            self._show_memories()
+
+        elif cmd_name == "/status":
+            self._cmd_status()
+
         else:
             print(f"❓ 未知命令: {cmd_name}（输入 /help 查看帮助）")
 
@@ -292,6 +305,30 @@ class TeaCLI(Agent):
         self._load_topic_history_into_session(tp["topic_id"])
         print(f"📌 已切换到: {tp.get('title', tp['topic_id'][:8])}")
 
+    def _show_memories(self):
+        """显示活跃的长期记忆。"""
+        memories = self.db.get_active_memories(limit=20)
+        if not memories:
+            print("(无活跃记忆)")
+            return
+        labels = {0: "!!!", 1: "▲", 2: "●", 3: "○"}
+        for m in memories:
+            pri = labels.get(m.get("priority", 2), "?")
+            cat = m.get("category", "general")
+            content = m.get("content", "")[:80]
+            print(f"  [{m['id']}] {pri} [{cat}] {content}")
+
+    def _cmd_status(self):
+        """显示当前会话状态。"""
+        tp = self.db.get_topic(self.current_topic_id)
+        ts = self.db.get_topic_tokens(self.current_topic_id)
+        print(f"📌 当前主题: [{self.current_topic_id}] {tp.get('title', '') if tp else '?'}")
+        if ts:
+            t = ts.get("total_tokens", 0)
+            print(f"📊 累计 Token: {t:,}")
+        print(f"🔧 工具数量: {len(self.toolkit.func_map)}")
+        print(f"🧠 活跃记忆: {len(self.db.get_active_memories(50))} 条")
+
     # ——— 对话 ———
     def _chat(self, user_msg: str):
         """发送消息并流式输出回复。"""
@@ -359,6 +396,13 @@ class TeaCLI(Agent):
 
         print()  # 换行
 
+        # Token 反馈
+        usage = self.sess._last_usage
+        if usage and usage.get("total_tokens", 0) > 0:
+            ts = self.db.get_topic_tokens(self.current_topic_id)
+            t_total = ts.get("total_tokens", 0) if ts else 0
+            print(f"📊 本轮: {usage['total_tokens']:,} tokens | 主题累计: {t_total:,}")
+
         # 后处理
         if ai_msg:
             self._post_chat_pipeline(
@@ -407,6 +451,8 @@ class TeaCLI(Agent):
 │  /new                 创建新主题              │
 │  /list                列出最近主题            │
 │  /switch <id>         切换到指定主题          │
+│  /memories            查看长期记忆             │
+│  /status              查看当前状态             │
 ├─────────────────────────────────────────────┤
 │  Enter       发送消息                        │
 │  Shift+Enter 换行（Windows: 行末 \\\\ 续行）  │
@@ -431,8 +477,12 @@ def main():
                         help="启用 thinking 模式")
     parser.add_argument("--verbose", action="store_true", default=False,
                         help="显示工具调用中间轮次")
+    parser.add_argument("--debug", action="store_true", default=False,
+                        help="调试模式")
+    parser.add_argument("--oneshot", type=str, default=None,
+                        help="单次对话（非交互模式）")
     parser.add_argument("--disable_summary", action="store_true", default=False,
-                        help="禁用历史压缩和摘要，超过30轮直接丢弃")
+                        help="禁用历史压缩和摘要")
     parser.add_argument("--no_stream_chunk", action="store_true", default=False,
                         help="非流式模式，方便单步调试")
 
@@ -442,10 +492,15 @@ def main():
         config_path=args.config,
         enable_think=args.think,
         verbose=args.verbose,
+        debug=args.debug,
         disable_summary=args.disable_summary,
         no_stream_chunk=args.no_stream_chunk,
     )
-    cli.run()
+
+    if args.oneshot:
+        cli.run_oneshot(args.oneshot)
+    else:
+        cli.run()
 
 if __name__ == "__main__":
     main()

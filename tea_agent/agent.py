@@ -96,26 +96,6 @@ class Agent:
         if mode == "full":
             self._start_background_services()
 
-    @property
-    def sess(self):
-        """向后兼容：返回底层会话对象。"""
-        return self._sess
-
-    @sess.setter
-    def sess(self, value):
-        """向后兼容：允许设置底层会话对象。"""
-        self._sess = value
-
-    @property
-    def toolkit(self):
-        """向后兼容：返回 Toolkit 实例。"""
-        return self._toolkit
-
-    @property
-    def db(self):
-        """向后兼容：返回 Storage 实例（仅 full 模式）。"""
-        return self._db
-
     def _init_session_info_str(self) -> str:
         """向后兼容：返回会话初始化的摘要。"""
         main_m = self._cfg.main_model
@@ -605,34 +585,30 @@ class Agent:
     # ═══════════════════════════════════════════════
     # 属性
     # ═══════════════════════════════════════════════
-    @property
-    def config(self):
-        """返回当前配置对象。"""
-        return self._cfg
 
     @property
-    def toolkit(self):
-        """返回 Toolkit 实例。"""
-        return self._toolkit
+    def config(self): return self._cfg
 
     @property
-    def session(self):
-        """返回 OnlineToolSession 实例。"""
-        return self._sess
+    def toolkit(self): return self._toolkit
 
     @property
-    def db(self):
-        """返回 Storage 实例（仅 full 模式）。"""
-        return self._db
+    def sess(self): return self._sess
+    @sess.setter
+    def sess(self, v): self._sess = v
+
+    @property
+    def session(self): return self._sess
+
+    @property
+    def db(self): return self._db
 
     @property
     def current_topic_id(self) -> str:
-        """返回当前主题 ID。"""
         return getattr(self, '_current_topic_id', '')
 
     @current_topic_id.setter
     def current_topic_id(self, value: str):
-        """设置当前主题 ID。"""
         self._current_topic_id = value
 
 

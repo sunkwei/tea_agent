@@ -40,11 +40,11 @@ from textual.binding import Binding
 from textual.css.query import NoMatches
 from rich.errors import MarkupError
 
-from tea_agent.agent_core import AgentCore
+from tea_agent import Agent
 
 
-class _TUIAgentCore(AgentCore):
-    """TUI-specific AgentCore subclass that bridges streaming to Textual UI."""
+class _TUIAgentCore(Agent):
+    """TUI-specific Agent subclass that bridges streaming to Textual UI."""
 
     def __init__(self, tui: App, config_path: str = None,
                  enable_think: bool = False, verbose: bool = False,
@@ -52,7 +52,7 @@ class _TUIAgentCore(AgentCore):
         self._tui = tui
         self._tui_think = enable_think
         self._tui_verbose = verbose
-        super().__init__(config_path=config_path, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
+        super().__init__(mode="full", config_path=config_path, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
         self._cfg.enable_thinking = self._tui_think
         self.sess.enable_thinking = self._tui_think
         self.sess.max_iterations = 1000

@@ -1,20 +1,13 @@
-"""
-所有 Store 子组件继承此类，共享 conn 和 ID 生成。
-"""
+"""Store 组件基类 — 零依赖，避免循环导入。"""
 import uuid
+
 
 class StoreComponent:
     """所有 Store 委派组件的基类，提供 conn 访问和 ID 生成。"""
 
     def __init__(self, conn):
-        """Initialize  .
-        
-        Args:
-            conn: Description.
-        """
         self.conn = conn
 
     @staticmethod
     def _new_id() -> str:
-        """Internal: new id."""
         return str(uuid.uuid4())

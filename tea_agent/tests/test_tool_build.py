@@ -9,7 +9,7 @@ session_tools_builder 单元测试 — 独立纯函数 filter_tools()。
 """
 
 import pytest
-from tea_agent.session_tools_builder import filter_tools, has_tool, ESSENTIAL_TOOLS
+from tea_agent.session_tool_component import filter_tools, has_tool, ESSENTIAL_TOOLS
 
 SAMPLE_TOOLS = [
     {"function": {"name": "toolkit_file", "description": "文件操作"}},

@@ -1,6 +1,6 @@
 """Test CLI entry point — verifies import, construction, command dispatch without API calls."""
 
-from tea_agent.tea_main_cli import TeaCLI  # noqa: F401 — verify import works
+from tea_agent.cli import TeaCLI  # noqa: F401 — verify import works
 from tea_agent.store import Storage
 from tea_agent.config import load_config
 

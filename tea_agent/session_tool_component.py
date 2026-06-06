@@ -13,6 +13,25 @@ from .session_context import SessionComponent, SessionContext
 
 logger = logging.getLogger("session.tool")
 
+# ── 模块级纯函数（原 session_tools_builder）──
+
+ESSENTIAL_TOOLS = {"toolkit_memory", "toolkit_kb"}
+"""始终保留的必要工具集合。"""
+
+
+def filter_tools(tools: list, tool_filter: list = None) -> list:
+    """根据 tool_filter 过滤工具列表，始终保留 ESSENTIAL_TOOLS。"""
+    if tool_filter:
+        allowed = set(tool_filter) | ESSENTIAL_TOOLS
+        return [t for t in tools if t["function"]["name"] in allowed]
+    return tools
+
+
+def has_tool(tools: list, name: str) -> bool:
+    """检查指定工具是否存在。"""
+    return any(t.get("function", {}).get("name") == name for t in tools)
+
+
 class ToolComponent(SessionComponent):
     """
     工具执行组件。

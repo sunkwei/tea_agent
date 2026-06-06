@@ -39,6 +39,36 @@ from tea_agent.session._tool_loop_runner import execute_tool_loop
 logger = logging.getLogger("session")
 
 
+# ── 模块级纯函数 ──
+
+def analyze_intent(text: str) -> dict:
+    """轻量级意图分析 — 返回 {type, skip_tool_loop, required_tools}。"""
+    return {"type": "general", "skip_tool_loop": False, "required_tools": None}
+
+
+_VALID_MODES = {"pragmatic", "creative", "mixed"}
+
+
+def detect_mode(call_tool_fn, user_text: str) -> dict:
+    """根据用户输入自动检测并返回建议的模式。"""
+    try:
+        result = call_tool_fn(action="auto", text=user_text)
+        if isinstance(result, dict):
+            return result
+        return {"switched": False, "mode": None}
+    except Exception as e:
+        logging.getLogger("session").debug(f"模式检测失败: {e}")
+        return {"switched": False, "mode": None, "error": str(e)}
+
+
+def extract_mode(result: dict):
+    """从 detect_mode 结果中提取模式值，验证合法性。"""
+    mode = result.get("to_mode") or result.get("mode") or result.get("detected")
+    if mode in _VALID_MODES:
+        return mode
+    return None
+
+
 class OnlineToolSession(BaseChatSession):
     """
     在线工具调用会话 - Token 优化版
@@ -202,109 +232,57 @@ class OnlineToolSession(BaseChatSession):
         self.context.pipeline = self.pipeline
         self._setup_default_pipeline()
 
-    # ──────────────────────────────────────────────
-    # 属性桥接（兼容旧代码直接访问 self.xxx）
-    # ──────────────────────────────────────────────
+    # ── 属性桥接（context 代理，保持 BaseChatSession 兼容）──
 
     @property
-    def messages(self):
-        """获取会话消息列表（桥接到 context.messages）。"""
-        return self.context.messages
-
+    def messages(self): return self.context.messages
     @messages.setter
-    def messages(self, value):
-        """获取会话消息列表（桥接到 context.messages）。"""
-        self.context.messages = value
+    def messages(self, v): self.context.messages = v
 
     @property
-    def model(self):
-        """获取当前模型名称（桥接到 context.model）。"""
-        return self.context.model
-
+    def model(self): return self.context.model
     @model.setter
-    def model(self, value):
-        """获取当前模型名称（桥接到 context.model）。"""
-        self.context.model = value
+    def model(self, v): self.context.model = v
 
     @property
-    def enable_thinking(self):
-        """获取/设置推理模式（桥接到 context.enable_thinking）。"""
-        return self.context.enable_thinking
-
+    def enable_thinking(self): return self.context.enable_thinking
     @enable_thinking.setter
-    def enable_thinking(self, value):
-        """获取/设置推理模式（桥接到 context.enable_thinking）。"""
-        self.context.enable_thinking = value
+    def enable_thinking(self, v): self.context.enable_thinking = v
 
     @property
-    def _rounds_collector(self):
-        """获取/设置轮次收集器（桥接到 context._rounds_collector）。"""
-        return self.context._rounds_collector
-
+    def _rounds_collector(self): return self.context._rounds_collector
     @_rounds_collector.setter
-    def _rounds_collector(self, value):
-        """获取/设置轮次收集器（桥接到 context._rounds_collector）。"""
-        self.context._rounds_collector = value
+    def _rounds_collector(self, v): self.context._rounds_collector = v
 
     @property
-    def _last_usage(self):
-        """获取/设置上次主模型用量统计（桥接到 context._last_usage）。"""
-        return self.context._last_usage
-
+    def _last_usage(self): return self.context._last_usage
     @_last_usage.setter
-    def _last_usage(self, value):
-        """获取/设置上次主模型用量统计（桥接到 context._last_usage）。"""
-        self.context._last_usage = value
+    def _last_usage(self, v): self.context._last_usage = v
 
     @property
-    def _last_cheap_usage(self):
-        """获取/设置上次便宜模型用量统计（桥接到 context._last_cheap_usage）。"""
-        return self.context._last_cheap_usage
-
+    def _last_cheap_usage(self): return self.context._last_cheap_usage
     @_last_cheap_usage.setter
-    def _last_cheap_usage(self, value):
-        """获取/设置上次便宜模型用量统计（桥接到 context._last_cheap_usage）。"""
-        self.context._last_cheap_usage = value
+    def _last_cheap_usage(self, v): self.context._last_cheap_usage = v
 
     @property
-    def _history_summary(self):
-        """获取/设置历史摘要（桥接到 context._history_summary）。"""
-        return self.context._history_summary
-
+    def _history_summary(self): return self.context._history_summary
     @_history_summary.setter
-    def _history_summary(self, value):
-        """获取/设置历史摘要（桥接到 context._history_summary）。"""
-        self.context._history_summary = value
+    def _history_summary(self, v): self.context._history_summary = v
 
     @property
-    def _semantic_summary(self):
-        """获取/设置语义摘要（桥接到 context._semantic_summary）。"""
-        return self.context._semantic_summary
-
+    def _semantic_summary(self): return self.context._semantic_summary
     @_semantic_summary.setter
-    def _semantic_summary(self, value):
-        """获取/设置语义摘要（桥接到 context._semantic_summary）。"""
-        self.context._semantic_summary = value
+    def _semantic_summary(self, v): self.context._semantic_summary = v
 
     @property
-    def _tool_chain_summary(self):
-        """获取/设置工具链摘要（桥接到 context._tool_chain_summary）。"""
-        return self.context._tool_chain_summary
-
+    def _tool_chain_summary(self): return self.context._tool_chain_summary
     @_tool_chain_summary.setter
-    def _tool_chain_summary(self, value):
-        """获取/设置工具链摘要（桥接到 context._tool_chain_summary）。"""
-        self.context._tool_chain_summary = value
+    def _tool_chain_summary(self, v): self.context._tool_chain_summary = v
 
     @property
-    def _level2(self):
-        """获取/设置 Level 2 历史条目（桥接到 context._level2）。"""
-        return self.context._level2
-
+    def _level2(self): return self.context._level2
     @_level2.setter
-    def _level2(self, value):
-        """获取/设置 Level 2 历史条目（桥接到 context._level2）。"""
-        self.context._level2 = value
+    def _level2(self, v): self.context._level2 = v
 
     # ──────────────────────────────────────────────
     # 委派方法
@@ -459,8 +437,7 @@ class OnlineToolSession(BaseChatSession):
     # ──────────────────────────────────────────────
 
     def _analyze_intent(self, text: str) -> dict:
-        """轻量级意图分析 — 委派给独立的 session_intent 模块。"""
-        from tea_agent.session_intent import analyze_intent
+        """轻量级意图分析。"""
         return analyze_intent(text)
 
     def _execute_tool_loop(self, context: Dict) -> Dict:
@@ -468,8 +445,8 @@ class OnlineToolSession(BaseChatSession):
         return execute_tool_loop(self, context)
 
     def _build_tools(self, tool_filter: list = None):
-        """构建工具定义列表 — 委派给 session_tools_builder 进行过滤。"""
-        from tea_agent.session_tools_builder import filter_tools
+        """构建工具定义列表。"""
+        from tea_agent.session_tool_component import filter_tools
         all_tools = self.tools_comp.build_tools()
         self.tools = filter_tools(all_tools, tool_filter)
         if tool_filter:
@@ -481,8 +458,7 @@ class OnlineToolSession(BaseChatSession):
         self._build_tools()
 
     def _auto_detect_mode(self, user_text: str):
-        """根据用户输入自动检测并切换 Agent 模式 — 委派给 session_mode 模块。"""
-        from tea_agent.session_mode import detect_mode, extract_mode
+        """根据用户输入自动检测并切换 Agent 模式。"""
         result = detect_mode(
             call_tool_fn=lambda action, text: self.context.toolkit.call_tool(
                 'toolkit_mode', action=action, text=text

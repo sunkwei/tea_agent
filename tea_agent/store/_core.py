@@ -16,19 +16,154 @@ import sqlite3
 import logging
 from datetime import datetime
 
+from ._component import StoreComponent  # 基类定义在 __init__.py（避免循环导入）
 from ._topics import TopicStore
 from ._conversations import ConversationStore
 from ._summaries import SummaryStore
 from ._memories import MemoryStore
-from ._prompts import PromptStore
-from ._reflections import ReflectionStore
-from ._config import ConfigHistoryStore
 from ._vectors import VectorStore
-from ._base import StoreComponent
 from ._auto_memory import AutoMemoryExtractor
 from ._semantic_search import SemanticSearch
 
 logger = logging.getLogger("Storage")
+
+
+class ConfigHistoryStore(StoreComponent):
+    """配置变更追踪：记录每次配置修改的历史。"""
+
+    def add_config_change(self, key: str, new_value: str, old_value=None,
+                          reason: str = "", source_reflection_id=None) -> str:
+        c = self.conn.cursor()
+        cid = self._new_id()
+        c.execute(
+            "INSERT INTO config_history (id, key, old_value, new_value, reason, source_reflection_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
+            (cid, key, str(old_value) if old_value is not None else None,
+             str(new_value), reason, source_reflection_id),
+        )
+        self.conn.commit()
+        c.close()
+        return cid
+
+    def get_config_history(self, key: str = "", limit: int = 20):
+        c = self.conn.cursor()
+        if key:
+            c.execute("SELECT * FROM config_history WHERE key = ? ORDER BY created_at DESC LIMIT ?", (key, limit))
+        else:
+            c.execute("SELECT * FROM config_history ORDER BY created_at DESC LIMIT ?", (limit,))
+        rows = c.fetchall()
+        c.close()
+        return [dict(r) for r in rows]
+
+    def get_config_changes_since(self, since_id: str = "0"):
+        c = self.conn.cursor()
+        c.execute("SELECT * FROM config_history WHERE id > ? ORDER BY created_at ASC", (since_id,))
+        rows = c.fetchall()
+        c.close()
+        return [dict(r) for r in rows]
+
+
+class ReflectionStore(StoreComponent):
+    """反思记录：元认知反思的增删查改。"""
+
+    def add_reflection(self, summary: str, details: str = "",
+                       tool_stats=None, suggestions=None,
+                       topic_id=None) -> str:
+        import json as _json_rs
+        c = self.conn.cursor()
+        rid = self._new_id()
+        c.execute(
+            "INSERT INTO reflections (id, topic_id, summary, details, tool_stats, suggestions, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
+            (rid, topic_id, summary, details,
+             _json_rs.dumps(tool_stats or {}, ensure_ascii=False),
+             _json_rs.dumps(suggestions or [], ensure_ascii=False)),
+        )
+        self.conn.commit()
+        c.close()
+        return rid
+
+    def get_recent_reflections(self, limit: int = 10):
+        c = self.conn.cursor()
+        c.execute("SELECT * FROM reflections WHERE is_applied = 0 ORDER BY created_at DESC LIMIT ?", (limit,))
+        rows = c.fetchall()
+        c.close()
+        return [dict(r) for r in rows]
+
+    def mark_reflection_applied(self, reflection_id: str):
+        c = self.conn.cursor()
+        c.execute("UPDATE reflections SET is_applied = 1 WHERE id = ?", (reflection_id,))
+        self.conn.commit()
+        c.close()
+
+    def get_reflection_stats(self):
+        c = self.conn.cursor()
+        c.execute("SELECT COUNT(*) as total FROM reflections")
+        total = c.fetchone()["total"]
+        c.execute("SELECT COUNT(*) as unapplied FROM reflections WHERE is_applied = 0")
+        unapplied = c.fetchone()["unapplied"]
+        c.close()
+        return {"total": total, "unapplied": unapplied}
+
+
+class PromptStore(StoreComponent):
+    """系统提示词版本管理：添加、查询、停用、回滚。"""
+
+    def add_system_prompt(self, content: str, reason: str = "",
+                           source_reflection_id=None) -> str:
+        c = self.conn.cursor()
+        c.execute("SELECT MAX(CAST(version AS INTEGER)) FROM system_prompts")
+        row = c.fetchone()
+        max_ver = (row[0] or 0) if row else 0
+        new_ver = str(max_ver + 1)
+        pid = self._new_id()
+        c.execute(
+            "INSERT INTO system_prompts (id, version, content, reason, source_reflection_id, created_at) "
+            "VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))",
+            (pid, new_ver, content, reason, source_reflection_id),
+        )
+        self.conn.commit()
+        c.close()
+        return pid
+
+    def get_latest_system_prompt(self):
+        c = self.conn.cursor()
+        c.execute("SELECT * FROM system_prompts WHERE is_active = 1 ORDER BY CAST(version AS INTEGER) DESC LIMIT 1")
+        row = c.fetchone()
+        c.close()
+        return dict(row) if row else None
+
+    def get_system_prompt_history(self, limit: int = 20):
+        c = self.conn.cursor()
+        c.execute("SELECT * FROM system_prompts ORDER BY CAST(version AS INTEGER) DESC LIMIT ?", (limit,))
+        rows = c.fetchall()
+        c.close()
+        return [dict(r) for r in rows]
+
+    def deactivate_system_prompt(self, prompt_id: str) -> bool:
+        c = self.conn.cursor()
+        c.execute("UPDATE system_prompts SET is_active = 0 WHERE id = ?", (prompt_id,))
+        self.conn.commit()
+        affected = c.rowcount
+        c.close()
+        return affected > 0
+
+    def rollback_system_prompt(self, prompt_id: str) -> bool:
+        c = self.conn.cursor()
+        c.execute("UPDATE system_prompts SET is_active = 0 WHERE is_active = 1")
+        c.execute("UPDATE system_prompts SET is_active = 1 WHERE id = ?", (prompt_id,))
+        self.conn.commit()
+        affected = c.rowcount
+        c.close()
+        return affected > 0
+
+    def get_system_prompt_count(self) -> int:
+        c = self.conn.cursor()
+        c.execute("SELECT COUNT(*) FROM system_prompts")
+        count = c.fetchone()[0]
+        c.close()
+        return count
+
 
 class Storage:
     """主存储类 — 组合 8 个委派组件，管理数据库连接与生命周期。"""
@@ -66,6 +201,16 @@ class Storage:
         self._reflections = ReflectionStore(self.conn)
         self._config_history = ConfigHistoryStore(self.conn)
         self._vectors = VectorStore(self.conn)
+
+        # ── 显式公开属性，便于 IDE 跳转和代码导航 ──
+        self.topics = self._topics
+        self.conversations = self._conversations
+        self.summaries = self._summaries
+        self.memories = self._memories
+        self.prompts = self._prompts
+        self.reflections = self._reflections
+        self.config_history = self._config_history
+        self.vectors = self._vectors
 
     # ── 自动委派：未匹配的方法路由到子组件 ──
 

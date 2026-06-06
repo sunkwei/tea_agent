@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
-from ._base import StoreComponent
+from ._component import StoreComponent
 
 logger = logging.getLogger("Storage.ScheduledTasks")
 

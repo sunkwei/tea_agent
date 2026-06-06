@@ -7,7 +7,7 @@ Contract:
 """
 
 import pytest
-from tea_agent.session_intent import analyze_intent
+from tea_agent.onlinesession import analyze_intent
 
 
 class TestIntentContract:

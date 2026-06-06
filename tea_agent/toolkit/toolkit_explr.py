@@ -83,7 +83,8 @@ def _build_ctags(directory, run_dir):
     try:
         result = subprocess.run(
             [ctags_bin, '-R', '--fields=+nKzS', '--python-kinds=+cfmv', '--output-format=json'] + src_dirs,
-            capture_output=True, text=True, timeout=60, cwd=directory
+            capture_output=True, text=True, encoding='utf-8', errors='replace',
+            timeout=60, cwd=directory
         )
     except Exception as e:
         _log(f"⚠ ctags 执行失败: {e}")
@@ -500,6 +501,260 @@ def _action_query(directory, symbol, query_type):
 
     return "❌ 未知 query_type"
 
+def _action_generate_docs(directory):
+    """生成结构化项目文档（codegen-doc 风格）。
+
+    生成 docs/ 目录下的：
+      - API参考.md    — 所有模块的公开 API
+      - 模块概览.md   — 模块职责与依赖关系
+      - 调用图分析.md — Top 调用者和被调用者
+      - 架构总览.md   — 项目级架构摘要
+
+    Args:
+        directory: 项目根目录
+
+    Returns:
+        结果摘要
+    """
+    directory = os.path.abspath(directory)
+    run_dir = os.path.join(directory, _RUN_DIR)
+    cg_path = os.path.join(run_dir, "call_graph.json")
+    idx_path = os.path.join(run_dir, "symbol_index.json")
+
+    # 若知识库不存在，先构建
+    if not os.path.exists(cg_path) or not os.path.exists(idx_path):
+        _log("知识库不存在，先自动构建...")
+        _action_build(directory, force=True)
+
+    # 加载数据
+    with open(cg_path, 'r', encoding='utf-8') as f:
+        cg = json.load(f)
+    calls = cg.get('calls', {})
+    defs = cg.get('functions', {})
+    classes = cg.get('classes', {})
+
+    if os.path.exists(idx_path):
+        with open(idx_path, 'r', encoding='utf-8') as f:
+            index = json.load(f)
+    else:
+        index = {}
+
+    # 输出目录
+    doc_dir = os.path.join(directory, "docs")
+    os.makedirs(doc_dir, exist_ok=True)
+    now = time.strftime("%Y-%m-%d %H:%M")
+    project_name = os.path.basename(directory)
+
+    # ── 1. API参考.md ──
+    _log("生成 API参考.md ...")
+    api_lines = [
+        f"# {project_name} API 参考",
+        "",
+        f"> 自动生成: {now}  |  函数: {len(defs)}  |  类: {len(classes)}  |  符号: {len(index)}",
+        "",
+    ]
+
+    # 按模块分组
+    module_api = defaultdict(lambda: {"classes": [], "funcs": []})
+    for sym, entries in index.items():
+        for e in entries:
+            path = e.get('path', '')
+            kind = e.get('kind', '')
+            line = e.get('line', '')
+            module = os.path.dirname(path) or "root"
+            if 'class' in kind or kind == 'member':
+                module_api[module]["classes"].append((sym, path, line, kind))
+            else:
+                module_api[module]["funcs"].append((sym, path, line, kind))
+
+    for module in sorted(module_api.keys()):
+        info = module_api[module]
+        cls_list = info["classes"]
+        fn_list = info["funcs"]
+
+        if not cls_list and not fn_list:
+            continue
+
+        api_lines.append(f"## 模块 `{module}`")
+        api_lines.append("")
+
+        # 类
+        if cls_list:
+            api_lines.append("### 类")
+            api_lines.append("")
+            api_lines.append("| 类名 | 文件:行号 | 类型 |")
+            api_lines.append("|------|----------|------|")
+            seen = set()
+            for name, path, line, kind in sorted(cls_list):
+                dedup_key = (name, path, line)
+                if dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
+                api_lines.append(f"| `{name}` | `{path}:{line}` | {kind} |")
+            api_lines.append("")
+
+        # 函数
+        if fn_list:
+            api_lines.append("### 函数")
+            api_lines.append("")
+            api_lines.append("| 函数名 | 文件:行号 | 类型 |")
+            api_lines.append("|--------|----------|------|")
+            seen = set()
+            for name, path, line, kind in sorted(fn_list):
+                dedup_key = (name, path, line)
+                if dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
+                api_lines.append(f"| `{name}` | `{path}:{line}` | {kind} |")
+            api_lines.append("")
+
+        # 限制条目数避免文档过肥
+        if len(api_lines) > 2000:
+            break
+
+    with open(os.path.join(doc_dir, "API参考.md"), 'w', encoding='utf-8') as f:
+        f.write('\n'.join(api_lines))
+
+    # ── 2. 模块概览.md ──
+    _log("生成 模块概览.md ...")
+    mod_lines = [
+        f"# {project_name} 模块概览",
+        "",
+        f"> 自动生成: {now}",
+        "",
+    ]
+    # 收集模块级统计
+    mod_stats = defaultdict(lambda: {"lines": 0, "funcs": 0, "classes": 0, "imports": set()})
+    for root, dirs, files in os.walk(directory):
+        dirs[:] = [d for d in dirs if d not in ('__pycache__', 'build', 'dist', '.git', '.tea_agent_run', 'tmp', 'docs')]
+        for fname in files:
+            if not fname.endswith('.py'):
+                continue
+            fpath = os.path.join(root, fname)
+            relpath = os.path.relpath(fpath, directory).replace('\\', '/')
+            try:
+                with open(fpath, 'r', encoding='utf-8') as fh:
+                    src = fh.readlines()
+            except Exception:
+                continue
+            mod_stats[relpath]["lines"] = len(src)
+            for line in src:
+                s = line.strip()
+                if s.startswith('class '):
+                    mod_stats[relpath]["classes"] += 1
+                elif s.startswith('def ') and not s.startswith((' ', '\t')):
+                    mod_stats[relpath]["funcs"] += 1
+                elif s.startswith(('import ', 'from ')):
+                    mod_stats[relpath]["imports"].add(s)
+
+    mod_lines.append("| 模块 | 行数 | 类 | 函数 | 导入 |")
+    mod_lines.append("|------|:----:|:---:|:----:|------|")
+    for mp in sorted(mod_stats.keys()):
+        s = mod_stats[mp]
+        imps = ', '.join(sorted(s["imports"])[:3]) or "—"
+        mod_lines.append(f"| `{mp}` | {s['lines']} | {s['classes']} | {s['funcs']} | {imps[:60]} |")
+
+    mod_lines.append("")
+    with open(os.path.join(doc_dir, "模块概览.md"), 'w', encoding='utf-8') as f:
+        f.write('\n'.join(mod_lines))
+
+    # ── 3. 调用图分析.md ──
+    _log("生成 调用图分析.md ...")
+    callers_map = defaultdict(list)
+    for caller, callees in calls.items():
+        for callee in callees:
+            callers_map[callee].append(caller)
+
+    call_lines = [
+        f"# {project_name} 调用图分析",
+        "",
+        f"> 自动生成: {now}  |  调用边: {sum(len(v) for v in calls.values())}",
+        "",
+        "## Top 20 被调用最多",
+        "",
+        "| 函数 | 调用者数 | 文件:行号 |",
+        "|------|:--------:|----------|",
+    ]
+    top_callees = sorted(callers_map.items(), key=lambda x: -len(x[1]))[:20]
+    for name, clrs in top_callees:
+        loc = defs.get(name, {})
+        fp = loc.get('file', '?')
+        ln = loc.get('line', '?')
+        call_lines.append(f"| `{name}` | {len(clrs)} | `{fp}:{ln}` |")
+
+    call_lines.append("")
+    call_lines.append("## Top 20 最活跃调用者")
+    call_lines.append("")
+    call_lines.append("| 函数 | 调用次数 | 文件:行号 |")
+    call_lines.append("|------|:--------:|----------|")
+    top_callers = sorted(calls.items(), key=lambda x: -len(x[1]))[:20]
+    for name, callees in top_callers:
+        loc = defs.get(name, {})
+        fp = loc.get('file', '?')
+        ln = loc.get('line', '?')
+        call_lines.append(f"| `{name}` | {len(callees)} | `{fp}:{ln}` |")
+
+    call_lines.append("")
+    with open(os.path.join(doc_dir, "调用图分析.md"), 'w', encoding='utf-8') as f:
+        f.write('\n'.join(call_lines))
+
+    # ── 4. 架构总览.md ──
+    _log("生成 架构总览.md ...")
+    arch_lines = [
+        f"# {project_name} 架构总览",
+        "",
+        f"> 自动生成: {now}",
+        "",
+        f"## 项目规模",
+        "",
+        f"| 指标 | 数值 |",
+        f"|------|:----:|",
+        f"| Python 模块 | {len(mod_stats)} |",
+        f"| 函数定义 | {len(defs)} |",
+        f"| 类定义 | {len(classes)} |",
+        f"| 符号总数 | {len(index)} |",
+        f"| 调用边 | {sum(len(v) for v in calls.values())} |",
+        "",
+        "## 入口点",
+        "",
+    ]
+
+    # 找入口点：定义了但很少被调用的顶层函数
+    entry_points = []
+    for name in defs:
+        caller_count = len(callers_map.get(name, []))
+        callee_count = len(calls.get(name, []))
+        if caller_count <= 1 and callee_count >= 3:
+            entry_points.append((name, callee_count, caller_count))
+    for name, cc, cr in sorted(entry_points, key=lambda x: -x[1])[:10]:
+        loc = defs.get(name, {})
+        arch_lines.append(f"- **`{name}`** → 调用 {cc} 个函数，被 {cr} 个调用 (`{loc.get('file','?')}:{loc.get('line','?')}`)")
+
+    arch_lines.append("")
+    arch_lines.append("## 生成文档")
+    arch_lines.append("")
+    arch_lines.append("| 文档 | 说明 |")
+    arch_lines.append("|------|------|")
+    arch_lines.append("| [API参考.md](API参考.md) | 所有模块的公开 API 索引 |")
+    arch_lines.append("| [模块概览.md](模块概览.md) | 模块职责与依赖关系 |")
+    arch_lines.append("| [调用图分析.md](调用图分析.md) | Top 调用关系分析 |")
+    arch_lines.append("| [架构总览.md](架构总览.md) | 本文档 |")
+    arch_lines.append("")
+
+    with open(os.path.join(doc_dir, "架构总览.md"), 'w', encoding='utf-8') as f:
+        f.write('\n'.join(arch_lines))
+
+    file_count = 4
+    return (
+        f"✅ 项目文档已生成 ({file_count} 文件)\n"
+        f"  📁 {doc_dir}/\n"
+        f"  📄 API参考.md — {len(defs)} 函数 + {len(classes)} 类\n"
+        f"  📄 模块概览.md — {len(mod_stats)} 模块\n"
+        f"  📄 调用图分析.md — {sum(len(v) for v in calls.values())} 调用边\n"
+        f"  📄 架构总览.md — 入口点 {len(entry_points)} 个"
+    )
+
+
 def _action_status(directory):
     """Internal: action status.
     
@@ -725,6 +980,8 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
     force_bool = force in ("true", "True", "1")
     if action == "build":
         return _action_build(directory, force_bool)
+    elif action == "generate_docs":
+        return _action_generate_docs(directory)
     elif action == "query":
         if query_type == "arch_context":
             return _extract_arch_context(directory, symbol)
@@ -741,4 +998,4 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
 # @2026-05-19 gen by claude, 新增 impact(影响分析) / deps(依赖图) 查询类型 + filepath 参数
 def meta_toolkit_explr() -> dict:
     """Meta toolkit explr."""
-    return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=query 查询符号位置/调用者/被调用者/影响分析/依赖图；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "query", "status"], "description": "build=构建项目知识库, query=查询符号/调用关系/影响/依赖, status=查看知识库状态"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "[query] 要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "arch_context", "impact", "deps"], "description": "[query] 查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, arch_context=架构上下文, impact=影响分析, deps=模块依赖图", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "[build] true=强制重建，忽略已有索引", "default": "false"}, "filepath": {"type": "string", "description": "[impact] 符号所在的文件路径"}}, "required": ["action"]}}}
+    return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=generate_docs 生成结构化项目文档到docs/；action=query 查询符号位置/调用者/被调用者/影响分析/依赖图；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "generate_docs", "query", "status"], "description": "build=构建项目知识库, generate_docs=生成结构化文档, query=查询符号/调用关系/影响/依赖, status=查看知识库状态"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "[query] 要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "arch_context", "impact", "deps"], "description": "[query] 查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, arch_context=架构上下文, impact=影响分析, deps=模块依赖图", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "[build] true=强制重建，忽略已有索引", "default": "false"}, "filepath": {"type": "string", "description": "[impact] 符号所在的文件路径"}}, "required": ["action"]}}}

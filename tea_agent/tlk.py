@@ -144,6 +144,140 @@ def toolkit_list_versions_impl(name: str) -> str:
     else:
         return f"❌ {versions}"
 
+# ========== Skill Document 自动生成 ==========
+
+def _auto_generate_skill_doc(name: str, meta: dict, pycode: str, version: str, toolkit_path: str) -> str:
+    """工具保存后自动生成 best-skills 风格的 SKILL.md 文档。
+
+    写入路径: {toolkit_path}/../skills/{name}/SKILL.md
+
+    Args:
+        name: 工具函数名（如 toolkit_my_tool）
+        meta: OpenAI function tool schema
+        pycode: Python 源码
+        version: 版本号
+        toolkit_path: 工具目录路径
+
+    Returns:
+        状态消息
+    """
+    try:
+        import ast as _ast
+        import os.path as _osp
+
+        # 目标目录: {toolkit_dir}/../skills/{name}/
+        parent = _osp.dirname(toolkit_path)
+        skill_dir = _osp.join(parent, "skills", name)
+        os.makedirs(skill_dir, exist_ok=True)
+
+        # 提取工具描述
+        func_meta = meta.get("function", {})
+        description = func_meta.get("description", "No description")
+
+        # 提取参数信息
+        params = func_meta.get("parameters", {})
+        required = params.get("required", [])
+        properties = params.get("properties", {})
+
+        # 从 pycode 提取函数签名和 docstring
+        try:
+            tree = _ast.parse(pycode)
+            func_node = None
+            for node in _ast.walk(tree):
+                if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)) and node.name == name:
+                    func_node = node
+                    break
+
+            pydoc = _ast.get_docstring(func_node) if func_node else ""
+            args_list = []
+            if func_node:
+                for arg in func_node.args.args:
+                    args_list.append(arg.arg)
+            signature = f"{name}({', '.join(args_list)})" if args_list else f"{name}()"
+        except SyntaxError:
+            pydoc = ""
+            signature = f"{name}(...)"
+            args_list = []
+
+        # 构建 SKILL.md 内容
+        now = time.strftime("%Y-%m-%d %H:%M")
+        skill_name = name.replace("toolkit_", "").replace("_", " ").title()
+
+        lines = [
+            "---",
+            f"name: {skill_name}",
+            f"description: {description}",
+            f"version: {version}",
+            f"generated: {now}",
+            "---",
+            "",
+            f"# {skill_name}",
+            "",
+            f"> **工具函数**: `{name}`  ",
+            f"> **版本**: {version}  ",
+            f"> **生成时间**: {now}",
+            "",
+            "## 概述",
+            "",
+            description,
+            "",
+        ]
+
+        if pydoc:
+            # 缩进 pydoc 以保持可读性
+            lines.append("## 详细说明")
+            lines.append("")
+            for doc_line in pydoc.strip().split("\n"):
+                lines.append(doc_line)
+            lines.append("")
+
+        # 参数表
+        if properties:
+            lines.append("## 参数")
+            lines.append("")
+            lines.append("| 参数名 | 类型 | 必填 | 说明 |")
+            lines.append("|--------|------|:----:|------|")
+            for pname, pinfo in properties.items():
+                ptype = pinfo.get("type", "any")
+                is_req = "✅" if pname in required else ""
+                pdesc = pinfo.get("description", "").replace("|", "\\|")
+                lines.append(f"| `{pname}` | `{ptype}` | {is_req} | {pdesc} |")
+            lines.append("")
+
+        # 调用示例
+        lines.append("## 调用示例")
+        lines.append("")
+        lines.append("```python")
+        if args_list:
+            args_str = ", ".join(f"{a}=..." for a in args_list)
+            lines.append(f"# {name}({args_str})")
+        else:
+            lines.append(f"# {name}()")
+        lines.append(f"# → {description[:80]}...")
+        lines.append("```")
+        lines.append("")
+
+        # 源码位置
+        rel_path = _osp.relpath(
+            _osp.join(toolkit_path, f"{name}.py"),
+            _osp.dirname(toolkit_path)
+        )
+        lines.append("## 源码")
+        lines.append("")
+        lines.append(f"`{rel_path}` → function `{name}()` + `meta_{name}()`")
+        lines.append("")
+
+        # 写入
+        skill_md_path = _osp.join(skill_dir, "SKILL.md")
+        with open(skill_md_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+
+        return f"SKILL.md → {skill_dir}"
+
+    except Exception as e:
+        logger.warning(f"SKILL.md 生成失败: {e}")
+        return ""
+
 # ========== Memory 工具函数 ==========
 
 class Toolkit:
@@ -540,7 +674,13 @@ class Toolkit:
 
         logger.warning(f"save toolkit function: {name}, version:{version}\n==> meta:\n{json.dumps(meta, indent=4)}\n==> pycode:\n{pycode}\n")
 
-        return (0, f"ok (v{version})")
+        # 5. 自动生成 best-skills 风格的 SKILL.md 文档
+        skill_doc_msg = _auto_generate_skill_doc(name, meta, pycode, version, toolkit_path)
+        result_msg = f"ok (v{version})"
+        if skill_doc_msg:
+            result_msg = f"ok (v{version}); {skill_doc_msg}"
+
+        return (0, result_msg)
     
     def rollback(self, name: str, version: str) -> Tuple[int, str]:
         """

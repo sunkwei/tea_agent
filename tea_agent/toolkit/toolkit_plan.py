@@ -58,7 +58,7 @@ def _save_plan(plan: dict):
     with open(_plan_path(plan["id"]), "w", encoding="utf-8") as f:
         json.dump(plan, f, indent=2, ensure_ascii=False)
 
-_KNOWN_STEP_META = {"id", "desc", "action", "depends_on", "verify", "params"}
+_KNOWN_STEP_META = {"id", "desc", "action", "depends_on", "verify", "params", "doc_type", "doc_module", "doc_content"}
 
 def _get_topic_id() -> Optional[str]:
     """获取当前 topic_id"""
@@ -94,6 +94,9 @@ def _new_plan(goal: str, steps: List[dict]) -> dict:
             "params": params,
             "depends_on": s.get("depends_on", []),
             "verify": s.get("verify", "py_compile"),
+            "doc_type": s.get("doc_type", ""),
+            "doc_module": s.get("doc_module", ""),
+            "doc_content": s.get("doc_content", ""),
             "status": "pending",
             "result": None,
             "started_at": None,
@@ -504,6 +507,17 @@ def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
     step["result"] = result
     step["status"] = "done" if result.get("ok") else "failed"
     step["finished_at"] = datetime.now().isoformat()
+
+    # 自动落盘：成功完成的步骤若标记了 doc_type，产物写入 docs/
+    if step["status"] == "done":
+        try:
+            doc_path = _auto_save_doc(step, plan, cwd)
+            if doc_path:
+                step["doc_saved"] = doc_path
+                logger.info(f"Plan step doc saved: {doc_path}")
+        except Exception as e:
+            logger.warning(f"Plan step doc save failed (non-fatal): {e}")
+
     _save_plan(plan)
 
     return {"ok": result.get("ok", False), "step_id": step["id"],
@@ -550,6 +564,136 @@ def _verify_step(step: dict, cwd: str) -> dict:
 
     all_ok = all(not str(v).startswith("FAIL") for v in results.values())
     return {"ok": all_ok, "step_id": step.get("id"), "verify": results}
+
+# ── 自动落盘（借鉴 best-skills/dev-workflow）────────────────
+
+def _detect_doc_type(step: dict) -> Optional[str]:
+    """从步骤描述自动检测落盘文档类型。
+
+    Args:
+        step: 步骤字典
+
+    Returns:
+        'requirement' | 'design' | 'review' | None
+    """
+    desc = step.get("desc", "").lower()
+    if any(k in desc for k in ["需求", "requirement", "理解需求", "分析需求"]):
+        return "requirement"
+    if any(k in desc for k in ["设计", "design", "方案", "架构"]):
+        return "design"
+    if any(k in desc for k in ["审查", "review", "检查代码", "代码检查", "代码审查"]):
+        return "review"
+    return None
+
+
+_DOC_NAME_MAP = {
+    "requirement": "需求理解.md",
+    "design": "方案设计.md",
+    "review": "代码审查.md",
+}
+
+
+def _auto_save_doc(step: dict, plan: dict, cwd: str) -> Optional[str]:
+    """步骤成功完成后，自动将产物追加写入 docs/ 目录。
+
+    规则（对齐 best-skills/dev-workflow）：
+    - 需求理解 → docs/{module}/需求理解.md
+    - 方案设计 → docs/{module}/方案设计.md
+    - 代码审查 → docs/{module}/代码审查.md
+    - 未指定 module 时回退到 docs/ 根目录
+    - 文件不存在则创建，存在则追加
+    - 每次写入带时间戳标题：## YYYY-MM-DD HH:mm
+    - 末尾加分隔线 ---
+
+    Args:
+        step: 已完成的步骤字典
+        plan: 所属计划字典
+        cwd: 工作目录
+
+    Returns:
+        写入的文件路径，不适用时返回 None
+    """
+    import os as _os
+    import json as _json
+    from datetime import datetime as _datetime
+
+    # 优先用显式 doc_type，否则自动检测
+    doc_type = step.get("doc_type") or _detect_doc_type(step)
+    if not doc_type:
+        return None
+
+    doc_name = _DOC_NAME_MAP.get(doc_type)
+    if not doc_name:
+        return None
+
+    doc_module = step.get("doc_module", "")
+    if doc_module:
+        doc_dir = _os.path.join(cwd, "docs", doc_module)
+    else:
+        doc_dir = _os.path.join(cwd, "docs")
+
+    _os.makedirs(doc_dir, exist_ok=True)
+    doc_path = _os.path.join(doc_dir, doc_name)
+
+    # 组装内容
+    now = _datetime.now()
+    lines = [
+        f"## {now.strftime('%Y-%m-%d %H:%M')}",
+        "",
+        f"**计划**: {plan.get('goal', '')[:120]}",
+        f"**步骤**: {step.get('desc', '')}",
+        "",
+    ]
+
+    # 显式 doc_content 优先，否则提取 result
+    doc_content = step.get("doc_content", "")
+    if doc_content:
+        lines.append(doc_content.strip())
+    else:
+        result = step.get("result", {})
+        if isinstance(result, dict):
+            ok_flag = "✅" if result.get("ok") else "❌"
+            summary = result.get("summary", result.get("error", _json.dumps(result, indent=2, ensure_ascii=False)))
+            lines.append(f"**结果**: {ok_flag} {summary}")
+        elif isinstance(result, str):
+            lines.append(result)
+
+    lines.append("\n---\n")
+    content = "\n".join(lines)
+
+    with open(doc_path, "a", encoding="utf-8") as f:
+        f.write(content)
+
+    # 可选：维护模块索引
+    if doc_module:
+        _update_module_index(cwd, doc_module, doc_type, doc_path)
+
+    return doc_path
+
+
+def _update_module_index(cwd: str, module: str, doc_type: str, doc_path: str):
+    """维护 docs/模块索引.md，记录模块→文档路径映射。
+
+    Args:
+        cwd: 工作目录
+        module: 模块名
+        doc_type: 文档类型
+        doc_path: 文档路径
+    """
+    try:
+        import os as _os
+        index_path = _os.path.join(cwd, "docs", "模块索引.md")
+        entry = f"- **{module}** → [{doc_type}]({_os.path.relpath(doc_path, _os.path.dirname(index_path))})"
+        existing = ""
+        if _os.path.exists(index_path):
+            with open(index_path, "r", encoding="utf-8") as f:
+                existing = f.read()
+        if entry not in existing:
+            with open(index_path, "a", encoding="utf-8") as f:
+                f.write(f"{entry}\n")
+    except Exception:
+        pass  # 索引更新失败不影响主流程
+
 
 # ── 智能分解 ────────────────────────────────────────────
 

@@ -514,9 +514,6 @@ class Agent:
             logger.warning(f"L2→L3 摘要失败: {e}")
 
     def _auto_summary(self, topic_id: str):
-        """自动生成主题摘要。"""
-        if not self._db:
-            return
         tp = self._db.get_topic(topic_id)
         if tp and (tp.get("title") or "").startswith("※"):
             return

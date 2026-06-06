@@ -19,7 +19,7 @@ class TestRenderTiming(unittest.TestCase):
         """测试前置初始化。"""
         gui_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
-            "tea_agent", "gui.py"
+            "gui.py"
         )
         with open(gui_path, "r", encoding="utf-8") as f:
             cls.source = f.read()

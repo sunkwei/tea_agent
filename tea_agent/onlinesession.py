@@ -483,29 +483,20 @@ class OnlineToolSession(BaseChatSession):
         self._max_iter_wait.clear()
         self._strip_reasoning_content(self.context.messages)
 
-    def _notify_reflection_done(self, reflection_id: int):
-        """反思完成后发送桌面通知"""
+    def _notify(self, title: str, message: str) -> None:
+        """跨平台桌面通知（通过 toolkit_notify）。"""
         try:
-            import subprocess
-            subprocess.run([
-                "notify-send", "🔍 元认知反思完成",
-                f"反思 #{reflection_id} 已生成\n建议已存储到数据库",
-                "--expire-time=5000"
-            ], capture_output=True, timeout=3)
+            self.context.toolkit.call_tool(
+                "toolkit_notify", title=title, message=message, duration=5000
+            )
         except Exception:
             pass
 
+    def _notify_reflection_done(self, reflection_id: int):
+        self._notify("🔍 元认知反思完成", f"反思 #{reflection_id} 已生成")
+
     def _notify_prompt_evolved(self, version: int):
-        """提示词进化后发送桌面通知"""
-        try:
-            import subprocess
-            subprocess.run([
-                "notify-send", "📝 提示词进化",
-                f"系统提示词已进化到 v{version}\n优化已应用于下一轮对话",
-                "--expire-time=5000"
-            ], capture_output=True, timeout=3)
-        except Exception:
-            pass
+        self._notify("📝 提示词进化", f"系统提示词已进化到 v{version}")
 
     def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: str = "", on_status: Optional[Callable[[str], None]] = None) -> Tuple[str, bool]:
         """流式对话，支持工具调用。使用 Pipeline 执行可配置的步骤。"""

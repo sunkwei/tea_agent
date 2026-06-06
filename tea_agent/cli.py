@@ -47,11 +47,6 @@ class TeaCLI(Agent):
             no_stream_chunk=no_stream_chunk,
         )
 
-        # 应用 CLI 参数覆盖 config 的 think 设置
-        self._cfg.enable_thinking = self._cli_think
-        self.sess.enable_thinking = self._cli_think
-        self._init_session()  # 用新 think 设置重建 session
-
     # ——— AgentCore 要求的回调 ———
     def _on_post_reply(self, ai_msg, used_tools, topic_id):
         """Internal: handle post reply event.
@@ -224,39 +219,32 @@ class TeaCLI(Agent):
 
         return True
 
+    def _set_think(self, val: bool):
+        """设置 think 模式并重建 session。"""
+        self._cli_think = val
+        self._cfg.enable_thinking = val
+        self.sess.enable_thinking = val
+        self._init_session()
+        print(f"🧠 think = {'ON' if val else 'OFF'}")
+
     def _cmd_set(self, arg: str):
-        """Internal: cmd set.
-        
-        Args:
-            arg: Description.
-        """
         if "=" not in arg:
             print("用法: /set think=on|off  或  /set verbose=on|off")
             return
         k, v = arg.split("=", 1)
         k, v = k.strip().lower(), v.strip().lower()
         if k == "think":
-            val = v in ("on", "true", "1", "yes")
-            self._cli_think = val
-            self._cfg.enable_thinking = val
-            self.sess.enable_thinking = val
-            print(f"🧠 think = {'ON' if val else 'OFF'}")
+            self._set_think(v in ("on", "true", "1", "yes"))
         elif k == "verbose":
-            val = v in ("on", "true", "1", "yes")
-            self._cli_verbose = val
-            print(f"📢 verbose = {'ON' if val else 'OFF'}")
+            self._cli_verbose = v in ("on", "true", "1", "yes")
+            print(f"📢 verbose = {'ON' if self._cli_verbose else 'OFF'}")
         else:
             print(f"❓ 未知设置: {k}（支持: think, verbose）")
 
     def _toggle_think(self):
-        """Internal: toggle think."""
-        self._cli_think = not self._cli_think
-        self._cfg.enable_thinking = self._cli_think
-        self.sess.enable_thinking = self._cli_think
-        print(f"🧠 think = {'ON' if self._cli_think else 'OFF'}")
+        self._set_think(not self._cli_think)
 
     def _toggle_verbose(self):
-        """Internal: toggle verbose."""
         self._cli_verbose = not self._cli_verbose
         print(f"📢 verbose = {'ON' if self._cli_verbose else 'OFF'}")
 

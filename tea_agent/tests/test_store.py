@@ -124,9 +124,9 @@ class TestTopicCRUD:
 
     def test_update_topic_title_chat_room_protected(self, storage):
         """chat_room_ 前缀主题标题不可修改"""
-        # 直接用 SQL 插入一个 chat_room 主题（因为 create_topic 不走保护逻辑）
+        import uuid
         c = storage.conn.cursor()
-        tid = storage._generate_id()
+        tid = str(uuid.uuid4())
         c.execute("INSERT INTO topics (topic_id, title) VALUES (?, 'chat_room_test')", (tid,))
         storage.conn.commit()
         c.close()

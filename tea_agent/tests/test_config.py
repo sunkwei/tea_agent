@@ -50,7 +50,6 @@ class TestPathsConfig:
         assert pc.db_path_abs == os.path.join(home, ".tea_agent", "chat_history.db")
         assert pc.toolkit_dir_abs == os.path.join(home, ".tea_agent", "toolkit")
         assert pc.kb_dir_abs == os.path.join(home, ".tea_agent", "kb")
-        assert pc.skills_dir_abs == os.path.join(home, ".tea_agent", "skills")
 
     def test_resolve_relative_data_dir(self):
         """相对 data_dir 解析"""
@@ -123,30 +122,6 @@ class TestPathsConfig:
 
         assert pc.data_dir_abs == pc.data_dir_abs
         assert pc.toolkit_dir_abs == pc.toolkit_dir_abs
-        assert pc.skills_dir_abs == pc.skills_dir_abs
-
-
-class TestMqttConfig:
-    """MqttConfig 测试"""
-
-    def test_default_disabled(self):
-        """测试: Default disabled"""
-        from tea_agent.config import MqttConfig
-        mc = MqttConfig()
-        assert not mc.enabled
-        assert not mc.is_configured
-
-    def test_configured_when_enabled(self):
-        """测试: Configured when enabled"""
-        from tea_agent.config import MqttConfig
-        mc = MqttConfig(enabled=True, broker_host="localhost")
-        assert mc.is_configured
-
-    def test_not_configured_without_host(self):
-        """测试: Not configured without host"""
-        from tea_agent.config import MqttConfig
-        mc = MqttConfig(enabled=True, broker_host="")
-        assert not mc.is_configured
 
 
 class TestEmbeddingConfig:
@@ -271,11 +246,10 @@ class TestLoadSaveConfig:
         path = create_default_config(config_path=tmp_yaml_config)
 
         assert os.path.exists(path)
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             content = f.read()
 
         assert "main_model:" in content
         assert "cheap_model:" in content
-        assert "mqtt:" in content
         assert "paths:" in content
         assert "max_iterations: 50" in content

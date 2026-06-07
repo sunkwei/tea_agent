@@ -208,14 +208,46 @@ class MemoryManager:
 
     @staticmethod
     def _compute_recency(memory: Dict) -> float:
-        """计算最近访问因子。越近越高，从未访问过给中值。"""
+        """计算最近访问因子。越近越高，从未访问过给中值。
+
+        基于 last_accessed_at 距当前时间的天数计算衰减：
+        - 1天内访问: 1.0
+        - 7天内访问: 0.9
+        - 30天内访问: 0.7
+        - 90天内访问: 0.5
+        - 超过90天或从未访问: 0.3
+        """
+        from datetime import datetime, timezone
         last = memory.get("last_accessed_at")
         if not last:
-            return 0.7  # 从未访问，给略高分数鼓励使用
-        # SQLite timestamp 格式可直接字符串比较
-        # 简化：有访问记录就给 0.85（实际应解析时间差）
-        # 精确实现留给后续优化
-        return 0.85
+            return 0.3  # 从未访问，给低分
+        try:
+            # 兼容 SQLite 格式 'YYYY-MM-DD HH:MM:SS' 和 ISO 格式
+            if isinstance(last, str):
+                if ' ' in last and 'T' not in last:
+                    last_dt = datetime.strptime(last, '%Y-%m-%d %H:%M:%S')
+                else:
+                    last_dt = datetime.fromisoformat(last)
+            else:
+                return 0.3
+            # 确保 naive datetime 可比较
+            if last_dt.tzinfo is None:
+                now = datetime.now()
+            else:
+                now = datetime.now(timezone.utc)
+            delta_days = (now - last_dt).days
+            if delta_days <= 1:
+                return 1.0
+            elif delta_days <= 7:
+                return 0.9
+            elif delta_days <= 30:
+                return 0.7
+            elif delta_days <= 90:
+                return 0.5
+            else:
+                return 0.3
+        except Exception:
+            return 0.3
 
     def _touch_selected(self, memories: List[Dict]):
         """更新入选记忆的最后访问时间"""

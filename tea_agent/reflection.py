@@ -138,6 +138,17 @@ class ReflectionManager:
         if len(self._pending_traces) >= 3:
             return True
 
+        # 距离上次反思超过 10 条对话
+        try:
+            last_reflections = self.storage.get_reflections(limit=1)
+            if last_reflections:
+                last_conv_count = last_reflections[0].get("conversation_count", 0)
+                current_count = self.storage.get_conversation_count()
+                if current_count - last_conv_count >= 10:
+                    return True
+        except Exception:
+            pass
+
         return False
 
     def build_reflection_prompt(self) -> Tuple[str, List[Dict]]:

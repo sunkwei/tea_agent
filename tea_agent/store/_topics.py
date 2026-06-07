@@ -84,23 +84,32 @@ class TopicStore(StoreComponent):
         return self.get_drift_count(topic_id)
 
     def delete_topic(self, topic_id: str):
-        """Delete topic.
-        
+        """Delete a topic and all associated data atomically.
+
+        Deletes agent_rounds, conversations, token stats, summaries,
+        and the topic record itself within a single transaction.
+
         Args:
-            topic_id: Description.
+            topic_id: The UUID of the topic to delete.
         """
         c = self.conn.cursor()
-        c.execute(
-            "DELETE FROM agent_rounds WHERE conversation_id IN "
-            "(SELECT id FROM conversations WHERE topic_id = ?)",
-            (topic_id,),
-        )
-        c.execute("DELETE FROM conversations WHERE topic_id = ?", (topic_id,))
-        c.execute("DELETE FROM topic_token_stats WHERE topic_id = ?", (topic_id,))
-        c.execute("DELETE FROM t_conv_summary WHERE topic_id = ?", (topic_id,))
-        c.execute("DELETE FROM topics WHERE topic_id = ?", (topic_id,))
-        self.conn.commit()
-        c.close()
+        try:
+            c.execute("BEGIN")
+            c.execute(
+                "DELETE FROM agent_rounds WHERE conversation_id IN "
+                "(SELECT id FROM conversations WHERE topic_id = ?)",
+                (topic_id,),
+            )
+            c.execute("DELETE FROM conversations WHERE topic_id = ?", (topic_id,))
+            c.execute("DELETE FROM topic_token_stats WHERE topic_id = ?", (topic_id,))
+            c.execute("DELETE FROM t_conv_summary WHERE topic_id = ?", (topic_id,))
+            c.execute("DELETE FROM topics WHERE topic_id = ?", (topic_id,))
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+        finally:
+            c.close()
 
     def get_topic(self, topic_id: str) -> Optional[Dict]:
         """Get the topic.

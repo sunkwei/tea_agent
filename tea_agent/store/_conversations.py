@@ -3,6 +3,8 @@
 import json
 import base64
 import os
+import queue
+import sqlite3
 import threading
 import logging
 from typing import Dict, List, Optional
@@ -201,36 +203,70 @@ class ConversationStore(StoreComponent):
             result.append(d)
         return result
 
-    # ── 自动嵌入 ──
+    # ── 自动嵌入（队列 + 单后台线程，独立连接）──
 
-    def _auto_embed_async(self, conv_id: str, text: str):
-        """后台线程自动生成并存储文本向量。"""
+    _embed_queue = queue.Queue()
+    _embed_worker_started = False
 
-        def _run():
-            """Internal: run."""
+    @classmethod
+    def _ensure_embed_worker(cls, conn):
+        """Ensure a single background worker thread is running."""
+        if cls._embed_worker_started:
+            return
+        cls._embed_worker_started = True
+
+        def _worker():
+            """Background worker with its own connection."""
+            db_path = None
             try:
+                db_path = conn.execute("PRAGMA database_list").fetchone()[2]
+            except Exception:
+                return
+            if not db_path:
+                return
+            try:
+                worker_conn = sqlite3.connect(db_path, check_same_thread=False)
+                worker_conn.row_factory = sqlite3.Row
+                import numpy as np
                 from tea_agent.embedding_util import get_embedding_engine
                 engine = get_embedding_engine()
-                vec = engine.embed(text)
-                if vec:
-                    self._store_embedding_inline(conv_id, vec, engine.model_name, len(vec))
-            except Exception as e:
-                logging.getLogger("store").warning(f"自动嵌入失败 (conv_id={conv_id}): {e}")
+                while True:
+                    try:
+                        conv_id, text = cls._embed_queue.get(timeout=1)
+                    except queue.Empty:
+                        continue
+                    if conv_id is None:
+                        break
+                    try:
+                        vec = engine.embed(text)
+                        if vec:
+                            arr = np.array(vec, dtype=np.float32)
+                            blob = arr.tobytes()
+                            c = worker_conn.cursor()
+                            c.execute(
+                                "INSERT OR REPLACE INTO msg_vectors "
+                                "(conversation_id, embedding, dimension, model_name, created_at) "
+                                "VALUES (?, ?, ?, ?, datetime('now', 'localtime'))",
+                                (conv_id, blob, len(vec), engine.model_name),
+                            )
+                            worker_conn.commit()
+                            c.close()
+                    except Exception as e:
+                        logging.getLogger("store").warning(
+                            f"自动嵌入失败 (conv_id={conv_id}): {e}"
+                        )
+                worker_conn.close()
+            except Exception:
+                logging.getLogger("store").exception("嵌入工作线程异常退出")
 
-        t = threading.Thread(target=_run, daemon=True, name=f"auto-embed-{conv_id}")
+        t = threading.Thread(target=_worker, daemon=True, name="auto-embed-worker")
         t.start()
 
-    def _store_embedding_inline(self, conversation_id: str, embedding: list,
-                                 model_name: str = "", dimension: int = 0):
-        """内联存储向量（避免循环导入，由 _auto_embed_async 调用）。"""
-        import numpy as np
-        arr = np.array(embedding, dtype=np.float32)
-        blob = arr.tobytes()
-        c = self.conn.cursor()
-        c.execute(
-            "INSERT OR REPLACE INTO msg_vectors (conversation_id, embedding, dimension, model_name, created_at) "
-            "VALUES (?, ?, ?, ?, datetime('now', 'localtime'))",
-            (conversation_id, blob, dimension or len(embedding), model_name),
-        )
-        self.conn.commit()
-        c.close()
+    def _auto_embed_async(self, conv_id: str, text: str):
+        """Enqueue embedding request for async processing.
+
+        Uses a single daemon worker thread with its own connection,
+        avoiding thread-safety issues.
+        """
+        self._ensure_embed_worker(self.conn)
+        self._embed_queue.put((conv_id, text))

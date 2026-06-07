@@ -202,6 +202,17 @@ class Storage:
         self._config_history = ConfigHistoryStore(self.conn)
         self._vectors = VectorStore(self.conn)
 
+        # ── 注入 EmbeddingEngine 到 MemoryStore ──
+        try:
+            from tea_agent.embedding_util import EmbeddingEngine
+            from tea_agent.config import get_config
+            cfg = get_config()
+            engine = EmbeddingEngine(cfg.embedding)
+            self._memories.embedding_engine = engine
+            logger.info("EmbeddingEngine injected into MemoryStore")
+        except Exception as e:
+            logger.warning(f"Inject EmbeddingEngine failed (non-fatal): {e}")
+
         # ── 显式公开属性，便于 IDE 跳转和代码导航 ──
         self.topics = self._topics
         self.conversations = self._conversations
@@ -342,6 +353,8 @@ class Storage:
                 is_active INTEGER NOT NULL DEFAULT 1,
                 tags TEXT DEFAULT '',
                 source_topic_id TEXT,
+                content_hash TEXT DEFAULT '',
+                embedding BLOB,
                 created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
                 updated_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
                 last_accessed_at TIMESTAMP,
@@ -349,11 +362,14 @@ class Storage:
                 FOREIGN KEY (source_topic_id) REFERENCES topics(topic_id)
             )
         ''')
-        # 兼容旧表：尝试新增 pinned 列
-        try:
-            c.execute("ALTER TABLE memories ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
-        except Exception:
-            pass
+        # 兼容旧表：尝试新增新列
+        for col, col_def in [('pinned', 'INTEGER NOT NULL DEFAULT 0'),
+                              ('content_hash', "TEXT DEFAULT ''"),
+                              ('embedding', 'BLOB')]:
+            try:
+                c.execute(f"ALTER TABLE memories ADD COLUMN {col} {col_def}")
+            except Exception:
+                pass
 
         # system_prompts 表
         c.execute('''

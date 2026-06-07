@@ -16,10 +16,14 @@ logger = logging.getLogger("lsp")
 
 # ── Jedi 智能后端 ────────────────────────────────────────
 
+_JEDI_PROJECT_CACHE: Dict[str, Any] = {}
+
 def _get_jedi_project(project_root: str):
-    """获取 jedi Project 实例"""
-    import jedi
-    return jedi.Project(project_root)
+    """获取 jedi Project 实例（缓存，避免重复创建）"""
+    if project_root not in _JEDI_PROJECT_CACHE:
+        import jedi
+        _JEDI_PROJECT_CACHE[project_root] = jedi.Project(project_root)
+    return _JEDI_PROJECT_CACHE[project_root]
 
 def _read_file_safe(filepath: str) -> Optional[str]:
     """安全读取文件"""
@@ -198,7 +202,7 @@ def completion(project_root: str, filepath: str, line: int, col: int) -> Dict:
         return {"ok": False, "error": str(e)}
 
 def goto_definition(project_root: str, filepath: str, line: int, col: int) -> Dict:
-    """跳转微义 — 基于 jedi"""
+    """跳转定义 — 基于 jedi"""
     try:
         source = _read_file_safe(filepath)
         if source is None:
@@ -223,13 +227,13 @@ def goto_definition(project_root: str, filepath: str, line: int, col: int) -> Di
         return {
             "ok": True,
             "definitions": items,
-            "hint": f"记录 {len(items)} 个定义" if items else "未拶到定义",
+            "hint": f"记录 {len(items)} 个定义" if items else "未找到定义",
         }
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
 def hover(project_root: str, filepath: str, line: int, col: int) -> Dict:
-    """悬停信情 — 系垈 + docstring"""
+    """悬停信息 — 类型 + docstring"""
     try:
         source = _read_file_safe(filepath)
         if source is None:
@@ -238,7 +242,7 @@ def hover(project_root: str, filepath: str, line: int, col: int) -> Dict:
         import jedi
         script = jedi.Script(source, path=filepath, project=_get_jedi_project(project_root))
 
-        # 荷取当前位置的签名＜帮助
+        # 获取当前位置的签名/帮助
         signatures = script.get_signatures(line, col)
         definitions = script.infer(line, col)
 

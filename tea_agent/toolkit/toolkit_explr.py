@@ -392,6 +392,17 @@ def _action_build(directory, force):
     _build_dot_flow(calls, defs, run_dir)
     _build_kb_md(directory, index, calls, defs, classes, run_dir)
 
+    # Build SymbolIndex (SQLite + TF-IDF 向量)
+    try:
+        from tea_agent.lsp.symbol_index import SymbolIndex
+        si = SymbolIndex(directory)
+        si.build_index(force=True)
+        si.build_vector_index()
+        si.close()
+        _log(f"SymbolIndex: {si.get_symbol_count()} 符号已索引 (SQLite)")
+    except Exception as e:
+        _log(f"SymbolIndex 构建跳过: {e}")
+
     elapsed = time.time() - t0
     summary = (
         f"✅ 知识库构建完成 ({elapsed:.1f}s)\n"
@@ -464,6 +475,23 @@ def _action_query(directory, symbol, query_type):
 
     calls = cg.get('calls', {})
     defs = cg.get('functions', {})
+
+    if query_type == 'semantic':
+        try:
+            from tea_agent.lsp.symbol_index import SymbolIndex
+            si = SymbolIndex(directory)
+            results = si.search_natural(symbol, top_k=10)
+            si.close()
+            if not results:
+                return f"Semantic search no results: {symbol}"
+            parts = [f"## Semantic search: {symbol}"]
+            for r in results:
+                p = r.get('parent', '')
+                name = f'{p}.{r["name"]}' if p else r['name']
+                parts.append(f"- [sim={r['similarity']:.3f}] {name} ({r['file_path']}:{r['line']})")
+            return chr(10).join(parts)
+        except Exception as e:
+            return f"Semantic search failed: {e}"
 
     if query_type == 'callers':
         callers = defaultdict(list)
@@ -998,4 +1026,4 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
 # @2026-05-19 gen by claude, 新增 impact(影响分析) / deps(依赖图) 查询类型 + filepath 参数
 def meta_toolkit_explr() -> dict:
     """Meta toolkit explr."""
-    return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=generate_docs 生成结构化项目文档到docs/；action=query 查询符号位置/调用者/被调用者/影响分析/依赖图；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "generate_docs", "query", "status"], "description": "build=构建项目知识库, generate_docs=生成结构化文档, query=查询符号/调用关系/影响/依赖, status=查看知识库状态"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "[query] 要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "arch_context", "impact", "deps"], "description": "[query] 查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, arch_context=架构上下文, impact=影响分析, deps=模块依赖图", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "[build] true=强制重建，忽略已有索引", "default": "false"}, "filepath": {"type": "string", "description": "[impact] 符号所在的文件路径"}}, "required": ["action"]}}}
+    return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=generate_docs 生成结构化项目文档到docs/；action=query 查询符号位置/调用者/被调用者/影响分析/依赖图；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "generate_docs", "query", "status"], "description": "build=构建项目知识库, generate_docs=生成结构化文档, query=查询符号/调用关系/影响/依赖, status=查看知识库状态"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "[query] 要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "semantic", "arch_context", "impact", "deps"], "description": "[query] 查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, arch_context=架构上下文, impact=影响分析, deps=模块依赖图", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "[build] true=强制重建，忽略已有索引", "default": "false"}, "filepath": {"type": "string", "description": "[impact] 符号所在的文件路径"}}, "required": ["action"]}}}

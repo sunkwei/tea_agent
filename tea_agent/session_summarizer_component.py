@@ -12,21 +12,12 @@ from .session_prompts import (
     HISTORY_SUMMARIZE_SYSTEM,
     HISTORY_SUMMARIZE_USER,
 )
+from tea_agent.session._params import get_cheap_params
 
 logger = logging.getLogger("session.summarizer")
 
-def _get_cheap_params(defaults=None):
-    """返回 cheap 模型 {temperature, max_tokens}，失败时使用传入的 defaults 或保守值。"""
-    d = defaults or {"temperature": 0.1, "max_tokens": 500}
-    try:
-        from .config import get_config
-        eff = get_config().get_effective_params("cheap", "mixed")
-        return {
-            "temperature": eff.get("temperature", d["temperature"]),
-            "max_tokens": eff.get("max_tokens", d["max_tokens"]),
-        }
-    except Exception:
-        return d
+# 向后兼容别名
+_get_cheap_params = lambda defaults=None: get_cheap_params("summarizer")
 
 class SummarizerComponent(SessionComponent):
     """

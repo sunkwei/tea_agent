@@ -7,6 +7,7 @@
 
 from typing import List, Dict, Optional, TYPE_CHECKING
 from .session_context import SessionComponent, SessionContext
+from tea_agent.session._params import get_cheap_params
 
 if TYPE_CHECKING:
     from tea_agent.memory import MemoryManager
@@ -15,17 +16,8 @@ import logging
 
 logger = logging.getLogger("session.memory")
 
-def _get_cheap_params():
-    """返回 cheap 模型 {temperature, max_tokens}，失败时使用保守默认值。"""
-    try:
-        from .config import get_config
-        eff = get_config().get_effective_params("cheap", "mixed")
-        return {
-            "temperature": eff.get("temperature", 0.3),
-            "max_tokens": eff.get("max_tokens", 1000),
-        }
-    except Exception:
-        return {"temperature": 0.3, "max_tokens": 1000}
+# 向后兼容别名
+_get_cheap_params = lambda: get_cheap_params("memory")
 
 class MemoryComponent(SessionComponent):
     """

@@ -1,5 +1,6 @@
 /*
- * @2026-05-16 gen by tea_agent, ApiClient — LLM 对话引擎（SSE + 工具调用循环）
+ * @2026-06-04 gen by tea_agent, ApiClient — LLM 对话引擎（SSE + 工具调用循环）
+ * @2026-06-04 refactor: 集成 ToolComponent + SessionPipeline 架构
  *
  * 对标 tea_agent 桌面版 session_api.py + agent_core.py 的 tool_loop:
  *   1. 构建 messages（system + 压缩历史 + 新用户消息）
@@ -7,13 +8,17 @@
  *   3. 如果响应包含 tool_calls → 执行工具 → 结果追加到 messages → 回到步骤 2
  *   4. 最终文本 → 回调 onDone
  *   5. 所有消息持久化到 SQLite
+ *
+ * 架构升级：
+ *   - 使用 ToolComponent 替代旧 ToolManager
+ *   - 可选集成 SessionPipeline
+ *   - 原生工具支持（toolkit_memory, toolkit_kb）
  */
 
 package com.teaagent.android.api
 
 import android.util.Log
-import com.teaagent.android.core.HistoryCompressor
-import com.teaagent.android.core.ToolManager
+import com.teaagent.android.core.*
 import com.teaagent.android.db.MessageDao
 import com.teaagent.android.model.AgentConfig
 import com.teaagent.android.model.Message
@@ -31,7 +36,7 @@ import java.util.concurrent.TimeUnit
 
 class ApiClient(
     private val messageDao: MessageDao,
-    private val toolManager: ToolManager,
+    private val toolComponent: ToolComponent,
     private val historyCompressor: HistoryCompressor
 ) {
     companion object {
@@ -47,16 +52,19 @@ class ApiClient(
 
     private var currentCall: Call? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var pipeline: SessionPipeline? = null
 
-    // ==================== Public API ====================
+    // ==================== Callbacks ====================
 
     data class ChatCallbacks(
         val onToken: (String) -> Unit = {},
         val onThinking: (String) -> Unit = {},
-        val onToolCall: (String) -> Unit = {},  // JSON string
-        val onDone: (String, Int, Int, Int) -> Unit = { _, _, _, _ -> }, // (finalText, totalTokens, promptTokens, completionTokens)
+        val onToolCall: (String) -> Unit = {},
+        val onDone: (String, Int, Int, Int) -> Unit = { _, _, _, _ -> },
         val onError: (String) -> Unit = {}
     )
+
+    // ==================== 主聊天入口 ====================
 
     fun chat(
         config: AgentConfig,
@@ -69,19 +77,16 @@ class ApiClient(
                 val modelCfg = config.mainModel
                 val systemPrompt = buildSystemPrompt(config)
 
-                // 构建初始 messages（MutableList，后续追加工具调用结果）
                 var messages = historyCompressor.buildMessages(
                     topicId, userMessage, config.keepTurns, systemPrompt
                 ).toMutableList()
 
-                // 保存用户消息
                 val userMsgId = UUID.randomUUID().toString()
                 messageDao.insert(Message(
                     id = userMsgId, topicId = topicId, role = "user",
                     content = userMessage, createdAt = System.currentTimeMillis()
                 ))
 
-                // 工具调用循环
                 var iteration = 0
                 var finalText = ""
                 var totalTokens = 0
@@ -90,8 +95,8 @@ class ApiClient(
 
                 while (iteration < config.maxIterations) {
                     iteration++
+                    Log.d(TAG, "[iter $iteration/${config.maxIterations}] msgs=${messages.size}")
 
-                    Log.d(TAG, "[iter " + iteration + "/" + config.maxIterations + "] msgs=" + messages.size + " lastRole=" + (messages.lastOrNull()?.get("role") ?: "?"))
                     val result = callLLM(modelCfg, messages, callbacks)
 
                     if (result.error != null) {
@@ -104,15 +109,12 @@ class ApiClient(
                     totalCompletion += result.completionTokens
 
                     if (result.toolCalls.isNotEmpty()) {
-                        // 处理工具调用
-                        val assistantMsg = buildAssistantToolCallMsg(result.toolCalls, result.content, result.reasoningContent)
-                        Log.d(TAG, "[iter " + iteration + "] toolCalls=" + result.toolCalls.size + " names=" + result.toolCalls.map { it.optJSONObject("function")?.optString("name") })
+                        val assistantMsg = buildAssistantToolCallMsg(
+                            result.toolCalls, result.content, result.reasoningContent
+                        )
                         messages.add(assistantMsg)
 
-                        // 保存 assistant 消息（含 tool_calls）
-                        val tcJson = JSONArray().apply {
-                            result.toolCalls.forEach { put(it) }
-                        }.toString()
+                        val tcJson = JSONArray(result.toolCalls).toString()
                         messageDao.insert(Message(
                             id = UUID.randomUUID().toString(),
                             topicId = topicId, role = "assistant",
@@ -123,7 +125,6 @@ class ApiClient(
                             createdAt = System.currentTimeMillis()
                         ))
 
-                        // 执行每个工具
                         for (tc in result.toolCalls) {
                             val fnName = tc.optJSONObject("function")?.optString("name") ?: continue
                             val fnArgsStr = tc.optJSONObject("function")?.optString("arguments") ?: "{}"
@@ -131,29 +132,25 @@ class ApiClient(
 
                             withContext(Dispatchers.Main) {
                                 callbacks.onToolCall(JSONObject().apply {
-                                    put("name", fnName)
-                                    put("args", fnArgsStr)
+                                    put("name", fnName); put("args", fnArgsStr)
                                 }.toString())
                             }
 
-                            val toolResult = toolManager.execute(fnName, fnArgs)
-                                Log.d(TAG, "[iter " + iteration + "] exec " + fnName + " → " + (toolResult.take(100)))
+                            val toolResult = toolComponent.execute(fnName, fnArgs)
+                            Log.d(TAG, "[iter $iteration] exec $fnName → ${toolResult.take(100)}")
 
                             withContext(Dispatchers.Main) {
                                 callbacks.onToolCall(JSONObject().apply {
-                                    put("name", fnName)
-                                    put("result", toolResult)
+                                    put("name", fnName); put("result", toolResult)
                                 }.toString())
                             }
 
-                            // 添加 tool 结果到 messages
                             messages.add(mapOf(
                                 "role" to "tool",
                                 "tool_call_id" to tc.optString("id", ""),
                                 "content" to toolResult
                             ))
 
-                            // 保存 tool 消息
                             messageDao.insert(Message(
                                 id = UUID.randomUUID().toString(),
                                 topicId = topicId, role = "tool",
@@ -162,12 +159,9 @@ class ApiClient(
                                 createdAt = System.currentTimeMillis()
                             ))
                         }
-                        continue // 继续循环
+                        continue
                     } else {
-                        // 最终文本响应
                         finalText = result.content ?: ""
-
-                        // 保存 assistant 消息
                         messageDao.insert(Message(
                             id = UUID.randomUUID().toString(),
                             topicId = topicId, role = "assistant",
@@ -177,7 +171,6 @@ class ApiClient(
                             completionTokens = result.completionTokens,
                             createdAt = System.currentTimeMillis()
                         ))
-
                         break
                     }
                 }
@@ -191,33 +184,25 @@ class ApiClient(
                 }
 
             } catch (e: CancellationException) {
-                withContext(Dispatchers.Main) {
-                    callbacks.onDone("", 0, 0, 0)
-                }
+                withContext(Dispatchers.Main) { callbacks.onDone("", 0, 0, 0) }
             } catch (e: java.net.ConnectException) {
-                withContext(Dispatchers.Main) {
-                    callbacks.onError("连接失败：无法连接到 ${config.mainModel.apiUrl}")
-                }
+                withContext(Dispatchers.Main) { callbacks.onError("连接失败：无法连接到 ${config.mainModel.apiUrl}") }
             } catch (e: Exception) {
                 Log.e(TAG, "Chat error", e)
-                withContext(Dispatchers.Main) {
-                    callbacks.onError(e.message ?: "未知错误")
-                }
+                withContext(Dispatchers.Main) { callbacks.onError(e.message ?: "未知错误") }
             }
         }
     }
 
     fun stop() {
-        currentCall?.cancel()
-        currentCall = null
+        currentCall?.cancel(); currentCall = null
     }
 
     fun close() {
-        stop()
-        scope.cancel()
+        stop(); scope.cancel()
     }
 
-    // ==================== Private ====================
+    // ==================== LLM 调用 ====================
 
     data class LLMResult(
         val content: String?,
@@ -226,182 +211,130 @@ class ApiClient(
         val promptTokens: Int,
         val completionTokens: Int,
         val error: String?,
-        val reasoningContent: String? = null  // DeepSeek 等 thinking 模式的 reasoning_content，不回传则 400
+        val reasoningContent: String? = null
     )
 
     private suspend fun callLLM(
         config: ModelConfig,
         messages: List<Map<String, Any?>>,
         callbacks: ChatCallbacks
-    ): LLMResult {
-        return withContext(Dispatchers.IO) {
-            try {
-                val url = "${config.apiUrl.trimEnd('/')}/chat/completions"
-                Log.d(TAG, "→ callLLM url=$url msgs=${messages.size} tools=${toolManager.getToolSchemas().size}")
+    ): LLMResult = withContext(Dispatchers.IO) {
+        try {
+            val url = "${config.apiUrl.trimEnd('/')}/chat/completions"
+            Log.d(TAG, "→ callLLM url=$url msgs=${messages.size}")
 
-                val requestBody = JSONObject().apply {
-                    put("model", config.modelName)
-                    put("messages", JSONArray(messages.map { m ->
-                        JSONObject(m.filterValues { it != null })
+            val requestBody = JSONObject().apply {
+                put("model", config.modelName)
+                put("messages", JSONArray(messages.map { JSONObject(it.filterValues { it != null }) }))
+                put("stream", true)
+                put("max_tokens", config.maxTokens)
+                put("temperature", config.temperature.toDouble())
+
+                val toolSchemas = toolComponent.buildToolSchemas()
+                if (toolSchemas.isNotEmpty()) {
+                    put("tools", JSONArray(toolSchemas.map { schema ->
+                        JSONObject().apply { put("type", "function"); put("function", schema) }
                     }))
-                    put("stream", true)
-                    put("max_tokens", config.maxTokens)
-                    put("temperature", config.temperature.toDouble())
-
-                    // 工具定义
-                    val toolSchemas = toolManager.getToolSchemas()
-                    if (toolSchemas.isNotEmpty()) {
-                        put("tools", JSONArray(toolSchemas.map { schema ->
-                            JSONObject().apply {
-                                put("type", "function")
-                                put("function", schema)
-                            }
-                        }))
-                        put("tool_choice", "auto")
-                    }
-                }.toString()
-
-                val body = requestBody.toRequestBody("application/json".toMediaType())
-
-                val request = Request.Builder()
-                    .url(url)
-                    .post(body)
-                    .header("Content-Type", "application/json")
-                    .header("Accept", "text/event-stream")
-                    .apply {
-                        if (config.apiKey.isNotBlank()) {
-                            header("Authorization", "Bearer ${config.apiKey}")
-                        }
-                    }
-                    .build()
-
-                currentCall = client.newCall(request)
-                val response = currentCall!!.execute()
-
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "X HTTP " + response.code + " body=" + (response.body?.string()?.take(500) ?: "null"))
-                    return@withContext LLMResult(
-                        null, emptyList(), 0, 0, 0,
-                        "HTTP ${response.code}: ${response.message}"
-                    )
+                    put("tool_choice", "auto")
                 }
+            }.toString()
 
-                val reader = BufferedReader(
-                    InputStreamReader(response.body?.byteStream(), Charsets.UTF_8)
-                )
+            val request = Request.Builder()
+                .url(url).post(requestBody.toRequestBody("application/json".toMediaType()))
+                .header("Content-Type", "application/json").header("Accept", "text/event-stream")
+                .apply { if (config.apiKey.isNotBlank()) header("Authorization", "Bearer ${config.apiKey}") }
+                .build()
 
-                var contentBuilder = StringBuilder()
-                var thinkingBuilder = StringBuilder()
-                val toolCalls = mutableListOf<JSONObject>()
-                var tokenCount = 0
-                var promptTokens = 0
-                var completionTokens = 0
-                val toolCallAccumulator = mutableMapOf<Int, JSONObject>()
-                val toolCallArgsAccumulator = mutableMapOf<Int, StringBuilder>()
+            currentCall = client.newCall(request)
+            val response = currentCall!!.execute()
 
-                reader.useLines { lines ->
-                    for (line in lines) {
-                        if (!line.startsWith("data: ")) continue
-                        val data = line.removePrefix("data: ").trim()
-                        if (data == "[DONE]") break
-
-                        try {
-                            val json = JSONObject(data)
-                            val choices = json.optJSONArray("choices") ?: continue
-
-                            // Token 统计
-                            val usage = json.optJSONObject("usage")
-                            if (usage != null) {
-                                tokenCount = usage.optInt("total_tokens", tokenCount)
-                                promptTokens = usage.optInt("prompt_tokens", promptTokens)
-                                completionTokens = usage.optInt("completion_tokens", completionTokens)
-                            }
-
-                            val delta = choices.optJSONObject(0)?.optJSONObject("delta") ?: continue
-
-                            // 文本内容（注意：optString 对 JSON null 返回 "null" 字符串！）
-                            val content = if (delta.isNull("content")) "" else delta.optString("content", "")
-                            if (content.isNotEmpty()) {
-                                contentBuilder.append(content)
-                                withContext(Dispatchers.Main) {
-                                    callbacks.onToken(content)
-                                }
-                            }
-
-                            // 思考过程（DeepSeek/Claude 等模型的 reasoning_content）
-                            val reasoning = if (delta.isNull("reasoning_content")) "" else delta.optString("reasoning_content", "")
-                            if (reasoning.isNotEmpty()) {
-                                thinkingBuilder.append(reasoning)
-                                withContext(Dispatchers.Main) {
-                                    callbacks.onThinking(reasoning)
-                                }
-                            }
-
-                            // 工具调用（delta 方式）
-                            val tcArray = delta.optJSONArray("tool_calls")
-                            if (tcArray != null) {
-                                for (i in 0 until tcArray.length()) {
-                                    val tc = tcArray.getJSONObject(i)
-                                    val idx = tc.optInt("index", i)
-
-                                    // 累积
-                                    if (!toolCallAccumulator.containsKey(idx)) {
-                                        toolCallAccumulator[idx] = JSONObject()
-                                        toolCallArgsAccumulator[idx] = StringBuilder()
-                                    }
-
-                                    val acc = toolCallAccumulator[idx]!!
-                                    val id = tc.optString("id", "")
-                                    if (id.isNotEmpty()) acc.put("id", id)
-
-                                    val fn = tc.optJSONObject("function")
-                                    if (fn != null) {
-                                        if (!acc.has("function")) acc.put("function", JSONObject())
-                                        val fnAcc = acc.getJSONObject("function")
-                                        val fnName = fn.optString("name", "")
-                                        if (fnName.isNotEmpty()) fnAcc.put("name", fnName)
-
-                                        val args = fn.optString("arguments", "")
-                                        if (args.isNotEmpty()) {
-                                            toolCallArgsAccumulator[idx]!!.append(args)
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (_: Exception) { /* skip malformed line */ }
-                    }
-                }
-
-                // 最终组装工具调用
-                for (idx in toolCallAccumulator.keys) {
-                    val tc = toolCallAccumulator[idx]!!
-                    val argsStr = toolCallArgsAccumulator[idx]?.toString() ?: "{}"
-                    if (tc.has("function")) {
-                        tc.getJSONObject("function").put("arguments", argsStr)
-                    }
-                    // 确保有 id（某些 API 不在 delta 中返回 id，导致后续 tool_call_id 为空 HTTP 400）
-                    if (!tc.has("id") || tc.optString("id", "").isEmpty()) {
-                        tc.put("id", "call_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12))
-                    }
-                    toolCalls.add(tc)
-                }
-
-                LLMResult(
-                    content = contentBuilder.toString().ifBlank { null },
-                    toolCalls = toolCalls,
-                    tokenCount = tokenCount,
-                    promptTokens = promptTokens,
-                    completionTokens = completionTokens,
-                    error = null,
-                    reasoningContent = thinkingBuilder.toString().ifBlank { null }
-                )
-
-            } catch (e: Exception) {
-                Log.e(TAG, "callLLM error", e)
-                LLMResult(null, emptyList(), 0, 0, 0, e.message ?: "Unknown error")
+            if (!response.isSuccessful) {
+                return@withContext LLMResult(null, emptyList(), 0, 0, 0,
+                    "HTTP ${response.code}: ${response.message}")
             }
+
+            val reader = BufferedReader(
+                InputStreamReader(response.body?.byteStream(), Charsets.UTF_8)
+            )
+
+            var contentBuilder = StringBuilder()
+            var thinkingBuilder = StringBuilder()
+            val toolCalls = mutableListOf<JSONObject>()
+            var tokenCount = 0; var promptTokens = 0; var completionTokens = 0
+            val toolCallAcc = mutableMapOf<Int, JSONObject>()
+            val toolCallArgs = mutableMapOf<Int, StringBuilder>()
+
+            reader.useLines { lines ->
+                for (line in lines) {
+                    if (!line.startsWith("data: ")) continue
+                    val data = line.removePrefix("data: ").trim()
+                    if (data == "[DONE]") break
+                    try {
+                        val json = JSONObject(data)
+                        val choices = json.optJSONArray("choices") ?: continue
+                        json.optJSONObject("usage")?.let { u ->
+                            tokenCount = u.optInt("total_tokens", tokenCount)
+                            promptTokens = u.optInt("prompt_tokens", promptTokens)
+                            completionTokens = u.optInt("completion_tokens", completionTokens)
+                        }
+                        val delta = choices.optJSONObject(0)?.optJSONObject("delta") ?: continue
+                        val content = if (delta.isNull("content")) "" else delta.optString("content", "")
+                        if (content.isNotEmpty()) {
+                            contentBuilder.append(content)
+                            withContext(Dispatchers.Main) { callbacks.onToken(content) }
+                        }
+                        val reasoning = if (delta.isNull("reasoning_content")) "" else delta.optString("reasoning_content", "")
+                        if (reasoning.isNotEmpty()) {
+                            thinkingBuilder.append(reasoning)
+                            withContext(Dispatchers.Main) { callbacks.onThinking(reasoning) }
+                        }
+                        val tcArray = delta.optJSONArray("tool_calls")
+                        if (tcArray != null) {
+                            for (i in 0 until tcArray.length()) {
+                                val tc = tcArray.getJSONObject(i)
+                                val idx = tc.optInt("index", i)
+                                if (!toolCallAcc.containsKey(idx)) {
+                                    toolCallAcc[idx] = JSONObject(); toolCallArgs[idx] = StringBuilder()
+                                }
+                                val id = tc.optString("id", "")
+                                if (id.isNotEmpty()) toolCallAcc[idx]!!.put("id", id)
+                                val fn = tc.optJSONObject("function")
+                                if (fn != null) {
+                                    if (!toolCallAcc[idx]!!.has("function")) toolCallAcc[idx]!!.put("function", JSONObject())
+                                    val fnName = fn.optString("name", "")
+                                    if (fnName.isNotEmpty()) toolCallAcc[idx]!!.getJSONObject("function").put("name", fnName)
+                                    val args = fn.optString("arguments", "")
+                                    if (args.isNotEmpty()) toolCallArgs[idx]!!.append(args)
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+
+            for (idx in toolCallAcc.keys) {
+                val tc = toolCallAcc[idx]!!
+                val argsStr = toolCallArgs[idx]?.toString() ?: "{}"
+                if (tc.has("function")) tc.getJSONObject("function").put("arguments", argsStr)
+                if (!tc.has("id") || tc.optString("id", "").isEmpty())
+                    tc.put("id", "call_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12))
+                toolCalls.add(tc)
+            }
+
+            LLMResult(
+                content = contentBuilder.toString().ifBlank { null },
+                toolCalls = toolCalls,
+                tokenCount = tokenCount, promptTokens = promptTokens,
+                completionTokens = completionTokens, error = null,
+                reasoningContent = thinkingBuilder.toString().ifBlank { null }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "callLLM error", e)
+            LLMResult(null, emptyList(), 0, 0, 0, e.message)
         }
     }
+
+    // ==================== System Prompt ====================
 
     private fun buildSystemPrompt(config: AgentConfig): String {
         return """
@@ -411,42 +344,26 @@ class ApiClient(
 你有以下能力：
 - 流式对话
 - 工具调用（Function Calling）
-- 代码编写和执行
-- 文件操作（通过工具）
+- 长期记忆管理（toolkit_memory）
+- 知识库查询（toolkit_kb）
 
-回复要求：
-- 使用中文
-- 简洁准确
-- 代码用 Markdown 代码块
+回复要求：使用中文，简洁准确，代码用 Markdown 代码块。
         """.trimIndent()
     }
 
     private fun buildAssistantToolCallMsg(
-        toolCalls: List<JSONObject>,
-        content: String?,
-        reasoningContent: String? = null
+        toolCalls: List<JSONObject>, content: String?, reasoningContent: String? = null
     ): Map<String, Any?> {
         val msg = mutableMapOf<String, Any?>(
             "role" to "assistant",
             "tool_calls" to toolCalls.map { tc ->
-                mapOf(
-                    "id" to tc.optString("id"),
-                    "type" to "function",
-                    "function" to mapOf(
-                        "name" to tc.optJSONObject("function")?.optString("name"),
-                        "arguments" to tc.optJSONObject("function")?.optString("arguments")
-                    )
-                )
+                mapOf("id" to tc.optString("id"), "type" to "function",
+                    "function" to mapOf("name" to tc.optJSONObject("function")?.optString("name"),
+                        "arguments" to tc.optJSONObject("function")?.optString("arguments")))
             }
         )
-        // 只有有实际文本内容时才加 content，避免 content=""+tool_calls 导致部分 API 返回 400
-        if (!content.isNullOrBlank()) {
-            msg["content"] = content
-        }
-        // DeepSeek 等 thinking 模式：必须回传 reasoning_content，否则 400
-        if (!reasoningContent.isNullOrBlank()) {
-            msg["reasoning_content"] = reasoningContent
-        }
+        if (!content.isNullOrBlank()) msg["content"] = content
+        if (!reasoningContent.isNullOrBlank()) msg["reasoning_content"] = reasoningContent
         return msg
     }
 }

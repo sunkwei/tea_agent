@@ -1,5 +1,6 @@
 /*
- * @2026-05-16 gen by tea_agent, JsBridge — JS ↔ Kotlin 桥接
+ * @2026-06-04 gen by tea_agent, JsBridge — JS ↔ Kotlin 桥接
+ * @2026-06-04 refactor: 使用 ToolComponent 替代旧 ToolManager
  *
  * 封装所有需要 Kotlin 原生能力的接口：
  * - 对话（chat.send / chat.stop）
@@ -19,7 +20,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import com.teaagent.android.api.ApiClient
 import com.teaagent.android.core.ConfigManager
-import com.teaagent.android.core.ToolManager
+import com.teaagent.android.core.ToolComponent
 import com.teaagent.android.db.*
 import com.teaagent.android.model.Topic
 import org.json.JSONArray
@@ -32,11 +33,9 @@ class JsBridge(
     private val db: AppDatabase,
     private val apiClient: ApiClient,
     private val configManager: ConfigManager,
-    private val toolManager: ToolManager
+    private val toolComponent: ToolComponent
 ) {
-    companion object {
-        private const val TAG = "TeaJsBridge"
-    }
+    companion object { private const val TAG = "TeaJsBridge" }
 
     private val topicDao: TopicDao
     private val messageDao: MessageDao
@@ -55,45 +54,22 @@ class JsBridge(
             val args = JSONObject(jsonArgs)
             val message = args.optString("message", "")
             val topicId = args.optString("topic_id", "")
-
-            if (message.isBlank()) {
-                emitEvent("error", """{"message":"消息不能为空"}""")
-                return
-            }
+            if (message.isBlank()) { emitEvent("error", """{"message":"消息不能为空"}"""); return }
 
             val config = configManager.load()
-
             apiClient.chat(
-                config = config,
-                topicId = topicId,
-                userMessage = message,
+                config = config, topicId = topicId, userMessage = message,
                 callbacks = ApiClient.ChatCallbacks(
-                    onToken = { token ->
-                        emitEvent("token", JSONObject().apply {
-                            put("text", token)
-                        }.toString())
-                    },
-                    onThinking = { thinking ->
-                        emitEvent("thinking", JSONObject().apply {
-                            put("text", thinking)
-                        }.toString())
-                    },
-                    onToolCall = { tcJson ->
-                        emitEvent("tool_call", tcJson)
-                    },
-                    onDone = { finalText, totalTokens, promptTokens, completionTokens ->
+                    onToken = { t -> emitEvent("token", JSONObject().apply { put("text", t) }.toString()) },
+                    onThinking = { t -> emitEvent("thinking", JSONObject().apply { put("text", t) }.toString()) },
+                    onToolCall = { tcJson -> emitEvent("tool_call", tcJson) },
+                    onDone = { text, total, prompt, comp ->
                         emitEvent("done", JSONObject().apply {
-                            put("text", finalText)
-                            put("total_tokens", totalTokens)
-                            put("prompt_tokens", promptTokens)
-                            put("completion_tokens", completionTokens)
+                            put("text", text); put("total_tokens", total)
+                            put("prompt_tokens", prompt); put("completion_tokens", comp)
                         }.toString())
                     },
-                    onError = { error ->
-                        emitEvent("error", JSONObject().apply {
-                            put("message", error)
-                        }.toString())
-                    }
+                    onError = { e -> emitEvent("error", JSONObject().apply { put("message", e) }.toString()) }
                 )
             )
         } catch (e: Exception) {
@@ -103,9 +79,7 @@ class JsBridge(
     }
 
     @JavascriptInterface
-    fun chatStop() {
-        apiClient.stop()
-    }
+    fun chatStop() { apiClient.stop() }
 
     // ==================== Config ====================
 
@@ -128,7 +102,6 @@ class JsBridge(
         try {
             val args = JSONObject(jsonArgs)
             val config = configManager.load()
-
             args.optJSONObject("main_model")?.let { config.mainModel = parseModel(it) }
             args.optJSONObject("cheap_model")?.let { config.cheapModel = parseModel(it) }
             args.optJSONObject("embedding_model")?.let { config.embeddingModel = parseModel(it) }
@@ -136,25 +109,19 @@ class JsBridge(
             if (args.has("max_iterations")) config.maxIterations = args.getInt("max_iterations")
             if (args.has("enable_thinking")) config.enableThinking = args.getBoolean("enable_thinking")
             if (args.has("theme")) config.theme = args.optString("theme")
-
             configManager.save(config)
-        } catch (e: Exception) {
-            Log.e(TAG, "configSet error", e)
-        }
+        } catch (e: Exception) { Log.e(TAG, "configSet error", e) }
     }
 
     // ==================== Topics ====================
 
     @JavascriptInterface
     fun topicList(): String {
-        val topics = topicDao.listAll()
         return JSONArray().apply {
-            topics.forEach { t ->
+            topicDao.listAll().forEach { t ->
                 put(JSONObject().apply {
-                    put("id", t.id)
-                    put("title", t.title)
-                    put("created_at", t.createdAt)
-                    put("updated_at", t.updatedAt)
+                    put("id", t.id); put("title", t.title)
+                    put("created_at", t.createdAt); put("updated_at", t.updatedAt)
                 })
             }
         }.toString()
@@ -170,18 +137,15 @@ class JsBridge(
 
     @JavascriptInterface
     fun topicDelete(topicId: String) {
-        messageDao.deleteByTopic(topicId)
-        topicDao.delete(topicId)
+        messageDao.deleteByTopic(topicId); topicDao.delete(topicId)
     }
 
     @JavascriptInterface
     fun topicMessages(topicId: String): String {
-        val msgs = messageDao.getByTopic(topicId, 200)
         return JSONArray().apply {
-            msgs.forEach { m ->
+            messageDao.getByTopic(topicId, 200).forEach { m ->
                 put(JSONObject().apply {
-                    put("id", m.id)
-                    put("role", m.role)
+                    put("id", m.id); put("role", m.role)
                     put("content", m.content ?: "")
                     put("tool_calls", m.toolCalls ?: "")
                     put("token_count", m.tokenCount)
@@ -197,51 +161,46 @@ class JsBridge(
     fun topicTokenStats(topicId: String): String {
         val (total, prompt, comp) = messageDao.totalTokensByTopic(topicId)
         return JSONObject().apply {
-            put("total_tokens", total)
-            put("prompt_tokens", prompt)
-            put("completion_tokens", comp)
+            put("total_tokens", total); put("prompt_tokens", prompt); put("completion_tokens", comp)
         }.toString()
     }
 
-    // ==================== Tools ====================
+    // ==================== Tools（使用 ToolComponent） ====================
 
     @JavascriptInterface
     fun toolSave(name: String, metaJson: String, jsCode: String): String {
-        return toolManager.save(name, metaJson, jsCode)
+        // 通过 ToolComponent 保存
+        val args = JSONObject().apply {
+            put("name", name); put("meta", metaJson); put("js_code", jsCode)
+        }
+        return kotlinx.coroutines.runBlocking { toolComponent.execute("toolkit_save", args) }
     }
 
     @JavascriptInterface
     fun toolReload(): String {
-        // reload() 是 suspend，在 @JavascriptInterface 中需要用 runBlocking
-        return kotlinx.coroutines.runBlocking {
-            toolManager.reload()
-        }
+        return kotlinx.coroutines.runBlocking { toolComponent.execute("toolkit_reload", JSONObject()) }
     }
 
     @JavascriptInterface
     fun toolList(): String {
         val arr = JSONArray()
-
         // 受保护工具
-        for (name in ToolManager.PROTECTED_TOOL_NAMES) {
-            arr.put(JSONObject().apply {
-                put("name", name)
-                put("is_protected", true)
-            })
+        for (name in ToolComponent.PROTECTED_TOOL_NAMES) {
+            arr.put(JSONObject().apply { put("name", name); put("is_protected", true) })
         }
-
-        // 用户工具（SQLite）
+        // 原生工具
+        val nativeNames = listOf("toolkit_memory", "toolkit_kb")
+        for (name in nativeNames) {
+            arr.put(JSONObject().apply { put("name", name); put("is_native", true) })
+        }
+        // 用户工具
         val wDb = db.readableDatabase
-        val tools = ToolDao(wDb).listAll()
-        for (t in tools) {
+        ToolDao(wDb).listAll().forEach { t ->
             arr.put(JSONObject().apply {
-                put("name", t.name)
-                put("meta", t.meta ?: "")
-                put("created_at", t.createdAt)
-                put("is_protected", false)
+                put("name", t.name); put("meta", t.meta ?: "")
+                put("created_at", t.createdAt); put("is_protected", false)
             })
         }
-
         return arr.toString()
     }
 
@@ -261,21 +220,14 @@ class JsBridge(
     // ==================== Helpers ====================
 
     private fun emitEvent(eventType: String, data: String) {
-        val escaped = data
-            .replace("\\", "\\\\")
-            .replace("'", "\\'")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-        val js = "javascript:TeaBridge.emit('$eventType', '$escaped')"
-        webView.post { webView.evaluateJavascript(js, null) }
+        val escaped = data.replace("\\", "\\\\").replace("'", "\\'")
+            .replace("\n", "\\n").replace("\r", "\\r")
+        webView.post { webView.evaluateJavascript("javascript:TeaBridge.emit('$eventType', '$escaped')", null) }
     }
 
     private fun modelToJson(m: com.teaagent.android.model.ModelConfig) = JSONObject().apply {
-        put("id", m.id)
-        put("api_url", m.apiUrl)
-        put("api_key", m.apiKey)
-        put("model_name", m.modelName)
-        put("max_tokens", m.maxTokens)
+        put("id", m.id); put("api_url", m.apiUrl); put("api_key", m.apiKey)
+        put("model_name", m.modelName); put("max_tokens", m.maxTokens)
         put("temperature", m.temperature.toDouble())
     }
 

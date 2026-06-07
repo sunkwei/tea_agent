@@ -16,7 +16,7 @@ from typing import List, Dict, Any, Optional
 logger = logging.getLogger("toolkit.parallel_subtasks")
 
 
-def _execute_single_subtask(task: Dict, timeout: int = 60) -> Dict:
+def _execute_single_subtask(task: Dict, timeout: int = 60, enable_thinking: bool = True) -> Dict:
     """执行单个子任务（在独立线程中运行）。"""
     from tea_agent.agent import Agent
     
@@ -28,12 +28,12 @@ def _execute_single_subtask(task: Dict, timeout: int = 60) -> Dict:
     start_time = time.time()
     
     try:
-        # 创建 lite agent
+        # 创建 lite agent（开启 thinking 以支持深度推理）
         agent = Agent(
             mode="lite",
             config_fname=config_fname,
             use_tools=True,
-            enable_thinking=False,  # 子任务关闭 thinking 提速
+            enable_thinking=enable_thinking,
             use_cheap_model=True,
         )
         
@@ -75,6 +75,7 @@ def toolkit_parallel_subtasks(
     subtasks: List[Dict],
     max_workers: int = 5,
     timeout: int = 60,
+    enable_thinking: bool = True,
 ) -> Dict:
     """
     分治并发执行器。
@@ -88,6 +89,7 @@ def toolkit_parallel_subtasks(
         subtasks: 子任务列表，每项包含 id, description, difficulty
         max_workers: 最大并发数
         timeout: 单个任务超时秒数
+        enable_thinking: 是否启用推理（thinking）功能，默认 True。复杂分析任务建议开启，简单查询可关闭以提速
         
     Returns:
         {
@@ -129,7 +131,7 @@ def toolkit_parallel_subtasks(
     if parallel_tasks:
         with ThreadPoolExecutor(max_workers=min(max_workers, len(parallel_tasks))) as executor:
             future_to_task = {
-                executor.submit(_execute_single_subtask, task, timeout): task
+                executor.submit(_execute_single_subtask, task, timeout, enable_thinking): task
                 for task in parallel_tasks
             }
             
@@ -181,4 +183,4 @@ def toolkit_parallel_subtasks(
 
 
 def meta_toolkit_parallel_subtasks() -> dict:
-    return {"type": "function", "function": {"name": "toolkit_parallel_subtasks", "description": "分治并发执行器：将复杂问题分解为子任务，简单任务用 lite agent 并发执行，复杂任务由主 agent 执行，最后整合结果。\n\n适用场景：\n- 多文件代码分析\n- 批量数据处理\n- 多源信息收集\n- 并行调研任务\n\n返回：{summary, results[], errors[], stats}", "parameters": {"type": "object", "properties": {"subtasks": {"type": "array", "description": "子任务列表", "items": {"type": "object", "properties": {"id": {"type": "string", "description": "任务ID，如 'task_1'"}, "description": {"type": "string", "description": "任务描述"}, "difficulty": {"type": "string", "enum": ["easy", "medium", "hard"], "description": "难度评估：easy=lite并发, medium=可选, hard=主agent"}, "config_fname": {"type": "string", "description": "lite agent 配置文件名（可选）"}, "system_prompt": {"type": "string", "description": "lite agent 系统提示词（可选）"}}, "required": ["id", "description", "difficulty"]}, "minItems": 1}, "max_workers": {"type": "integer", "description": "最大并发数，默认 5", "default": 5}, "timeout": {"type": "integer", "description": "单个任务超时秒数，默认 60", "default": 60}}, "required": ["subtasks"]}}}
+    return {"type": "function", "function": {"name": "toolkit_parallel_subtasks", "description": "分治并发执行器：将复杂问题分解为子任务，简单任务用 lite agent 并发执行，复杂任务由主 agent 执行，最后整合结果。\n\n适用场景：\n- 多文件代码分析\n- 批量数据处理\n- 多源信息收集\n- 并行调研任务\n\n返回：{summary, results[], errors[], stats}", "parameters": {"type": "object", "properties": {"subtasks": {"type": "array", "description": "子任务列表", "items": {"type": "object", "properties": {"id": {"type": "string", "description": "任务ID，如 'task_1'"}, "description": {"type": "string", "description": "任务描述"}, "difficulty": {"type": "string", "enum": ["easy", "medium", "hard"], "description": "难度评估：easy=lite并发, medium=可选, hard=主agent"}, "config_fname": {"type": "string", "description": "lite agent 配置文件名（可选）"}, "system_prompt": {"type": "string", "description": "lite agent 系统提示词（可选）"}}, "required": ["id", "description", "difficulty"]}, "minItems": 1}, "max_workers": {"type": "integer", "description": "最大并发数，默认 5", "default": 5}, "timeout": {"type": "integer", "description": "单个任务超时秒数，默认 60", "default": 60}, "enable_thinking": {"type": "boolean", "description": "是否启用推理（thinking）功能，默认 True。复杂分析任务建议开启，简单查询可关闭以提速", "default": True}}, "required": ["subtasks"]}}}

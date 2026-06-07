@@ -162,6 +162,10 @@ class ConfigDao(private val db: SQLiteDatabase) {
         db.insertWithOnConflict(AppDatabase.TABLE_CONFIG, null, cv, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
+    fun delete(key: String): Int {
+        return db.delete(AppDatabase.TABLE_CONFIG, "key=?", arrayOf(key))
+    }
+
     fun getAll(): Map<String, String> {
         val map = mutableMapOf<String, String>()
         db.query(AppDatabase.TABLE_CONFIG, null, null, null, null, null, null)

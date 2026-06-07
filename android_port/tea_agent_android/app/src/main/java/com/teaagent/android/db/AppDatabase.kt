@@ -26,6 +26,7 @@ class AppDatabase(context: Context) :
         const val TABLE_MESSAGES = "messages"
         const val TABLE_TOOLS = "tools"
         const val TABLE_CONFIG = "config"
+        const val TABLE_MEMORIES = "memories"
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -72,9 +73,23 @@ class AppDatabase(context: Context) :
             )
         """.trimIndent())
 
+        // 记忆表（用于长期记忆）
+        db.execSQL("""
+            CREATE TABLE $TABLE_MEMORIES (
+                id TEXT PRIMARY KEY,
+                content TEXT NOT NULL,
+                category TEXT DEFAULT 'general',
+                tags TEXT DEFAULT '',
+                importance INTEGER DEFAULT 3,
+                created_at INTEGER NOT NULL,
+                accessed_at INTEGER NOT NULL
+            )
+        """.trimIndent())
+
         // 索引
         db.execSQL("CREATE INDEX idx_msg_topic ON $TABLE_MESSAGES(topic_id, created_at)")
         db.execSQL("CREATE INDEX idx_tools_name ON $TABLE_TOOLS(name)")
+        db.execSQL("CREATE INDEX idx_memories_cat ON $TABLE_MEMORIES(category)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {

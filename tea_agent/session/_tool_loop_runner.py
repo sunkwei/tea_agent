@@ -76,26 +76,33 @@ class LoopDetector:
             current_names.append(name)
         
         # ── 检测 1: 工具调用完全重复 ──
+        # 注意：只与最近 window-1 轮比较（排除当前轮，且不与自身比较）
         if current_hashes:
             current_hash_str = "|".join(current_hashes)
-            for i, prev_hash in enumerate(self._tool_hashes[-self.window:]):
+            # 取最近 window-1 轮（不包括当前轮，因为还没记录）
+            compare_range = self._tool_hashes[-(self.window-1):] if self.window > 1 else []
+            for i, prev_hash in enumerate(compare_range):
                 if current_hash_str == prev_hash:
+                    # 计算实际轮次索引
+                    actual_idx = len(self._tool_hashes) - len(compare_range) + i
                     result = {
                         "is_loop": True,
                         "type": "tool_repeat",
-                        "detail": f"工具调用与第 {len(self._tool_hashes) - self.window + i + 1} 轮完全相同"
+                        "detail": f"工具调用与第 {actual_idx + 1} 轮完全相同"
                     }
                     break
         
         # ── 检测 2: 输出内容高度相似 ──
         if not result["is_loop"] and content:
-            for i, prev_content in enumerate(self._contents[-self.window:]):
+            compare_contents = self._contents[-(self.window-1):] if self.window > 1 else []
+            for i, prev_content in enumerate(compare_contents):
                 sim = self._text_similarity(content, prev_content)
                 if sim >= self.threshold:
+                    actual_idx = len(self._contents) - len(compare_contents) + i
                     result = {
                         "is_loop": True,
                         "type": "content_repeat",
-                        "detail": f"输出内容与第 {len(self._contents) - self.window + i + 1} 轮相似度 {sim:.0%}"
+                        "detail": f"输出内容与第 {actual_idx + 1} 轮相似度 {sim:.0%}"
                     }
                     break
         

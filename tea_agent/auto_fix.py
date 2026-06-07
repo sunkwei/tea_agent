@@ -65,12 +65,13 @@ class AutoFixAgent:
         for item in raw:
             loc = item["location"]
             rel = os.path.relpath(item["filename"], str(self.project_root)).replace("\\", "/")
+            code = item.get("code") or ""
             issues.append({
-                "id": hashlib.md5(f"{rel}:{item['code']}:{loc['row']}".encode()).hexdigest()[:8],
+                "id": hashlib.md5(f"{rel}:{code}:{loc['row']}".encode()).hexdigest()[:8],
                 "file": rel, "line": loc["row"],
-                "severity": "error" if item["code"].startswith("F") else "warning",
-                "rule": item["code"], "rule_name": item.get("name", ""),
-                "message": item["message"], "via": "ruff",
+                "severity": "error" if code.startswith("F") else "warning",
+                "rule": code, "rule_name": item.get("name", ""),
+                "message": item.get("message", ""), "via": "ruff",
                 "ruff_autofix": (item.get("fix") or {}).get("edits"),
             })
         return issues

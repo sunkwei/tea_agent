@@ -28,6 +28,21 @@ def try_fix_truncated_json(s: str) -> Optional[str]:
         return None
 
     s = s.strip()
+    close_map = {'{': '}', '[': ']'}
+    
+    def _try_fix_with_stack(text, stack, in_str):
+        """尝试用给定的栈状态修复 JSON"""
+        suffix = ''.join(close_map[c] for c in reversed(stack))
+        if in_str:
+            suffix = '"' + suffix
+        fixed = text + suffix
+        try:
+            json.loads(fixed)
+            return fixed
+        except json.JSONDecodeError:
+            return None
+    
+    # 第一次尝试：直接补全
     stack = []
     in_str = False
     escape = False
@@ -58,17 +73,46 @@ def try_fix_truncated_json(s: str) -> Optional[str]:
         except json.JSONDecodeError:
             return None
 
-    close_map = {'{': '}', '[': ']'}
-    suffix = ''.join(close_map[c] for c in reversed(stack))
-    if in_str:
-        suffix = '"' + suffix
-
-    fixed = s + suffix
-    try:
-        json.loads(fixed)
-        return fixed
-    except json.JSONDecodeError:
-        return None
+    result = _try_fix_with_stack(s, stack, in_str)
+    if result:
+        return result
+    
+    # 第二次尝试：从末尾往前删除不完整的部分
+    # 找到最后一个逗号或冒号的位置
+    for i in range(len(s) - 1, -1, -1):
+        ch = s[i]
+        if ch in ',:':
+            truncated = s[:i].rstrip(',').rstrip(':')
+            if not truncated:
+                continue
+            
+            # 重新分析截断后的字符串
+            t_stack = []
+            t_in_str = False
+            t_escape = False
+            for c in truncated:
+                if t_escape:
+                    t_escape = False
+                    continue
+                if c == '\\':
+                    t_escape = True
+                    continue
+                if c == '"' and not t_escape:
+                    t_in_str = not t_in_str
+                    continue
+                if t_in_str:
+                    continue
+                if c in '{[':
+                    t_stack.append(c)
+                elif c in '}]':
+                    if t_stack and ((c == '}' and t_stack[-1] == '{') or (c == ']' and t_stack[-1] == '[')):
+                        t_stack.pop()
+            
+            result = _try_fix_with_stack(truncated, t_stack, t_in_str)
+            if result:
+                return result
+    
+    return None
 
 
 def sanitize_api_messages(messages: List[Dict]) -> List[Dict]:

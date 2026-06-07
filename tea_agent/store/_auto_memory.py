@@ -204,6 +204,36 @@ class AutoMemoryExtractor:
                         break
         return memories[:3]  # max 3 from fallback
 
+    def _calculate_similarity(self, text1: str, text2: str) -> float:
+        """计算两个文本之间的相似度（bigram Jaccard 系数）。
+        
+        Args:
+            text1: 第一个文本
+            text2: 第二个文本
+            
+        Returns:
+            相似度分数 0-1，1 表示完全相同
+        """
+        if not text1 or not text2:
+            return 0.0
+        if text1 == text2:
+            return 1.0
+            
+        # 生成 bigrams
+        def get_bigrams(text):
+            return set(text[i:i+2] for i in range(len(text) - 1))
+        
+        bigrams1 = get_bigrams(text1.lower())
+        bigrams2 = get_bigrams(text2.lower())
+        
+        if not bigrams1 or not bigrams2:
+            return 0.0
+            
+        # Jaccard 相似度
+        intersection = bigrams1 & bigrams2
+        union = bigrams1 | bigrams2
+        return len(intersection) / len(union) if union else 0.0
+
     def _is_duplicate(self, content: str, threshold: float = 0.85) -> bool:
         """使用 embedding 余弦相似度检测重复（替代旧的 Jaccard 系数）。"""
         try:

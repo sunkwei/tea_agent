@@ -293,35 +293,9 @@ class Agent:
     # ═══════════════════════════════════════════════
     def _start_background_services(self):
         """启动自进化引擎和定时任务调度器。"""
-        self._start_self_evolve_thread()
-        self._start_scheduler()
-
-    def _start_self_evolve_thread(self):
-        """启动自进化引擎 daemon 线程（替代旧潜意识引擎）。
-        
-        每小时循环：工具使用率分析 → README 同步 → 技能整理。
-        """
-        try:
-            import importlib.util
-            fpath = os.path.join(self._toolkit.root_dir, "toolkit_self_evolve_thread.py")
-            if not os.path.exists(fpath):
-                return
-            spec = importlib.util.spec_from_file_location("_self_evolve_thread_startup", fpath)
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            result = mod.toolkit_self_evolve_thread("start")
-            if result.get("status") == "started":
-                logger.info("🔄 自进化引擎已自动启动")
-        except Exception as e:
-            logger.debug(f"自进化引擎启动跳过: {e}")
-
-    def _start_scheduler(self):
-        """启动定时任务调度器 daemon 线程。"""
-        try:
-            from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler
-            toolkit_scheduler("start")
-        except Exception as e:
-            logger.debug(f"定时任务调度器启动跳过: {e}")    # ═══════════════════════════════════════════════
+        from .agent_background import start_self_evolve_thread, start_scheduler
+        start_self_evolve_thread(self._toolkit.tool_dir)
+        start_scheduler()    # ═══════════════════════════════════════════════
     # 工具管理
     # ═══════════════════════════════════════════════
     def toolkit_save(self, name: str, meta: dict, pycode: str) -> bool:
@@ -485,50 +459,9 @@ class Agent:
 
     def _do_async_summaries(self, topic_id: str, overflow_items: list = None,
                             should_summarize: bool = False):
-        """后台线程：执行标题摘要 + 条件 L2→L3 摘要 + 工具链摘要。"""
-        try:
-            # 标题摘要
-            self._auto_summary(topic_id)
-            # L2→L3 语义摘要 + 工具链摘要（仅在 L2 溢出时触发，约每 30 轮一次）
-            if should_summarize and overflow_items:
-                self._l2_to_l3_summary(topic_id, overflow_items)
-                self._tool_chain_summary(topic_id, overflow_items)
-        except Exception as e:
-            logger.warning(f"异步摘要失败: {e}")
-
-    def _l2_to_l3_summary(self, topic_id: str, overflow_items: list):
-        """将溢出的 L2 条目 + 现有 L3 摘要合并，生成新的 L3 语义摘要。"""
-        try:
-            cli, mdl = self._sess._get_summarize_client()
-            existing_l3 = self._db.get_semantic_summary(topic_id) or ""
-            extra_params = self._sess._get_effective_params("cheap")
-            new_summary = self._db.generate_l2_to_l3_summary(
-                topic_id, overflow_items, existing_l3, cli, mdl,
-                extra_params=extra_params,
-            )
-            # 同步到内存，使当前会话立即可用（原只写 DB，重启才生效）
-            if new_summary and hasattr(self._sess, 'context'):
-                self._sess.context._semantic_summary = new_summary
-            logger.info(f"L2→L3 摘要完成: topic={topic_id}")
-        except Exception as e:
-            logger.warning(f"L2→L3 摘要失败: {e}")
-
-    def _auto_summary(self, topic_id: str):
-        tp = self._db.get_topic(topic_id)
-        if tp and (tp.get("title") or "").startswith("※"):
-            return
-        recent = self._db.get_recent_conversations(topic_id, limit=10)
-        if not recent:
-            return
-        try:
-            cli, mdl = self._sess._get_summarize_client()
-            from tea_agent._gui._topic_summary import _generate_topic_summary
-            summary = _generate_topic_summary(client=cli, model=mdl, conversations=recent)
-            if summary:
-                self._db.update_topic_title(topic_id, summary)
-                logger.info(f"📝 主题摘要更新: {summary}")
-        except Exception as e:
-            logger.warning(f"自动摘要失败: {e}")
+        """后台线程：执行标题摘要 + 条件 L2→L3 摘要。"""
+        from .agent_pipeline import do_async_summaries
+        do_async_summaries(self, topic_id, overflow_items, should_summarize)
 
     # ═══════════════════════════════════════════════
     # 历史加载（仅 full 模式）

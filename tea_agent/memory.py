@@ -534,20 +534,61 @@ importance 评分：
 
     @staticmethod
     def parse_extraction_result(result_text: str) -> List[Dict]:
-        """解析 LLM 提取结果"""
+        """解析 LLM 提取结果。
+        
+        增强健壮性:
+        1. 处理 markdown 代码块包裹
+        2. 处理 JSON 前后的额外文本
+        3. 处理多个 JSON 块
+        4. 处理嵌套在对象中的数组
+        """
         import json
+        import re
+        
+        if not result_text or not result_text.strip():
+            return []
+        
+        text = result_text.strip()
+        
+        # 1. 尝试直接解析
         try:
-            # 尝试提取 JSON 数组
-            text = result_text.strip()
-            # 处理可能的 markdown 代码块包裹
-            if text.startswith("```"):
-                lines = text.split("\n")
-                text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
             data = json.loads(text)
             if isinstance(data, list):
                 return data
+            if isinstance(data, dict):
+                # 尝试从常见键名提取数组
+                for key in ("memories", "items", "results", "data"):
+                    if key in data and isinstance(data[key], list):
+                        return data[key]
         except (json.JSONDecodeError, ValueError):
             pass
+        
+        # 2. 处理 markdown 代码块
+        code_block_pattern = r'```(?:json)?\s*\n?(.*?)\n?\s*```'
+        matches = re.findall(code_block_pattern, text, re.DOTALL)
+        for match in matches:
+            try:
+                data = json.loads(match.strip())
+                if isinstance(data, list):
+                    return data
+                if isinstance(data, dict):
+                    for key in ("memories", "items", "results", "data"):
+                        if key in data and isinstance(data[key], list):
+                            return data[key]
+            except (json.JSONDecodeError, ValueError):
+                continue
+        
+        # 3. 尝试提取文本中的 JSON 数组（处理前后有额外文本的情况）
+        array_pattern = r'\[\s*\{.*?\}\s*\]'
+        array_matches = re.findall(array_pattern, text, re.DOTALL)
+        for match in array_matches:
+            try:
+                data = json.loads(match)
+                if isinstance(data, list):
+                    return data
+            except (json.JSONDecodeError, ValueError):
+                continue
+        
         return []
 
     # ------------------------------------------------------------------

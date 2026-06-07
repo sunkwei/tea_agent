@@ -103,3 +103,41 @@ class SessionComponent(ABC):
     def name(self) -> str:
         """组件名称"""
         pass
+
+    def save_agent_config(self, config: Any) -> None:
+        """将 AgentConfig 保存到数据库（如果 storage 可用）。
+        
+        用于反思/自进化产生的配置变更持久化。
+        
+        Args:
+            config: AgentConfig 实例或包含配置变更的 dict
+        """
+        if not self.ctx.storage:
+            return
+        
+        try:
+            if hasattr(config, '__dict__'):
+                # AgentConfig 实例
+                cfg_dict = {
+                    'max_iterations': getattr(config, 'max_iterations', None),
+                    'keep_turns': getattr(config, 'keep_turns', None),
+                    'max_tool_output': getattr(config, 'max_tool_output', None),
+                    'enable_thinking': getattr(config, 'enable_thinking', None),
+                }
+            elif isinstance(config, dict):
+                cfg_dict = config
+            else:
+                return
+            
+            # 过滤 None 值
+            cfg_dict = {k: v for k, v in cfg_dict.items() if v is not None}
+            
+            if cfg_dict:
+                self.ctx.storage.add_config_change(
+                    key="agent_config_update",
+                    new_value=str(cfg_dict),
+                    reason="会话中配置变更",
+                )
+        except Exception as e:
+            import logging
+            logging.getLogger("session.context").debug(f"保存配置变更失败: {e}")

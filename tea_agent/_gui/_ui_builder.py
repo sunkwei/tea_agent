@@ -148,6 +148,7 @@ class UIBuilder:
         # 快捷键绑定
         gui.input_box.bind("<Return>", gui.send)
         gui.input_box.bind("<Shift-Return>", gui.newline)
+        gui.input_box.bind("<Control-v>", gui.on_paste)
         gui.root.bind("<Escape>", gui.interrupt)
 
         # HtmlFrame 缩放快捷键

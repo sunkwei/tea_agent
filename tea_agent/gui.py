@@ -636,7 +636,7 @@ class TkGUI(Agent):
         # 2. 尝试从剪贴板获取图像
         img = None
         try:
-            from PIL import ImageGrab
+            from PIL import ImageGrab, Image
             img = ImageGrab.grabclipboard()
         except Exception:
             return None
@@ -650,8 +650,18 @@ class TkGUI(Agent):
 
         from datetime import datetime as _dt
         ts = _dt.now().strftime("%Y%m%d_%H%M%S")
-        dest = os.path.join(img_dir, f"paste_{ts}.png")
-        img.save(dest, "PNG")
+        dest = os.path.join(img_dir, f"paste_{ts}.jpg")
+        # 转换为 RGB 模式以支持 JPEG 保存
+        if img.mode in ("RGBA", "LA", "P"):
+            # 创建白色背景
+            background = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "P":
+                img = img.convert("RGBA")
+            background.paste(img, mask=img.split()[-1] if img.mode == "RGBA" else None)
+            img = background
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+        img.save(dest, "JPEG", quality=95)
         self._pending_images.append(dest)
 
         # 4. 更新 UI 反馈（与 images.attach 一致）

@@ -87,15 +87,17 @@ def _ask_gui(
     from tkinter import ttk
     
     # 创建弹窗 - 根据选项数量动态调整窗口高度
-    base_height = 350
-    option_height = 35 if options else 0
-    window_height = base_height + (len(options) * option_height if options else 80)
+    base_height = 300
+    option_height = 32 if options else 0
+    window_height = base_height + (len(options) * option_height if options else 60)
+    window_height = min(window_height, 600)  # 限制最大高度
     window_width = 500
     
     dialog = tk.Toplevel()
     dialog.title(f"❓ {title}")
+    dialog.minsize(400, 280)  # 保证按钮可见的最小尺寸
     dialog.geometry(f"{window_width}x{window_height}")
-    dialog.resizable(False, False)
+    dialog.resizable(True, True)  # 允许调整大小
     dialog.transient()
     dialog.grab_set()
     

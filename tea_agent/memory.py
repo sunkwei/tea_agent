@@ -779,6 +779,173 @@ importance 评分：
             logger.info(f"记忆提取完成: 新增 {new_count} 条, 合并更新 {merged_count} 条")
         return new_count + merged_count
 
+    # ------------------------------------------------------------------
+    # 重复检测与合并提权（原 store._memories.MemoryStore 迁入）
+    # ------------------------------------------------------------------
+
+    def detect_duplicates(self, threshold: float = 0.92) -> List[tuple]:
+        """通过 embedding 余弦相似度扫描活跃记忆中的近似重复对。"""
+        mems = self.storage.memories.batch_get_embeddings(limit=200)
+        if len(mems) < 2:
+            return []
+
+        import numpy as np
+        pairs = []
+        for i in range(len(mems)):
+            emb_i = mems[i].get('embedding')
+            if emb_i is None:
+                continue
+            arr_i = np.array(emb_i, dtype=np.float32)
+            ni = np.linalg.norm(arr_i)
+            if ni == 0:
+                continue
+            for j in range(i + 1, len(mems)):
+                emb_j = mems[j].get('embedding')
+                if emb_j is None or len(emb_j) != len(emb_i):
+                    continue
+                arr_j = np.array(emb_j, dtype=np.float32)
+                sim = float(arr_i @ arr_j) / (ni * np.linalg.norm(arr_j))
+                if sim >= threshold:
+                    pairs.append((mems[i]['id'], mems[j]['id'], round(sim, 4)))
+
+        pairs.sort(key=lambda x: x[2], reverse=True)
+        return pairs
+
+    def merge_duplicates(self, keep_id: str, remove_id: str) -> bool:
+        """合并两条重复记忆：融合内容、提权、软删除。"""
+        try:
+            # 通过 storage API 读取两条记忆
+            all_mems = self.storage.get_active_memories(limit=500)
+            keep = next((m for m in all_mems if m['id'] == keep_id), None)
+            remove = next((m for m in all_mems if m['id'] == remove_id), None)
+            if not keep or not remove:
+                logger.warning(f'Merge failed: memory not found keep={keep_id} remove={remove_id}')
+                return False
+
+            # Merge content
+            merged = keep['content']
+            if remove['content'] not in merged:
+                merged = keep['content'] + '\n---\n' + remove['content']
+
+            # Merge tags
+            ktags = set(t.strip() for t in (keep.get('tags', '') or '').split(',') if t.strip())
+            rtags = set(t.strip() for t in (remove.get('tags', '') or '').split(',') if t.strip())
+            merged_tags = ','.join(sorted(ktags | rtags))
+
+            # Boost
+            new_priority = max(0, keep['priority'] - 1)
+            new_importance = min(5, (keep['importance'] or 3) + 1)
+
+            self.storage.update_memory(keep_id,
+                content=merged, tags=merged_tags,
+                priority=new_priority, importance=new_importance)
+            self.storage.deactivate_memory(remove_id)
+            logger.info(f'Merged: {remove_id} -> {keep_id}, priority={new_priority}, importance={new_importance}')
+            return True
+
+        except Exception as e:
+            logger.error(f'Merge failed: {e}')
+            return False
+
+    def auto_dedup(self, threshold: float = 0.92) -> Dict:
+        """自动检测并合并所有重复记忆对。"""
+        pairs = self.detect_duplicates(threshold=threshold)
+        merged = 0
+        errors = 0
+        processed = set()
+        for a_id, b_id, sim in pairs:
+            if a_id in processed or b_id in processed:
+                continue
+            if self.merge_duplicates(a_id, b_id):
+                merged += 1
+                processed.add(a_id)
+                processed.add(b_id)
+            else:
+                errors += 1
+        return {'scanned': len(pairs), 'merged': merged, 'errors': errors, 'threshold': threshold}
+
+    # ------------------------------------------------------------------
+    # 反思归纳（原 store._memories.MemoryStore 迁入）
+    # ------------------------------------------------------------------
+
+    def reflect_and_summarize(self, max_memories: int = 50, min_cluster_size: int = 2) -> Dict:
+        """按类别聚类近期记忆，生成摘要并归档旧记忆。"""
+        from datetime import datetime
+
+        all_mems = self.storage.get_active_memories(limit=max_memories)
+        if not all_mems:
+            return {'summarized': 0, 'degraded': 0, 'summary_ids': []}
+
+        groups = {}
+        for m in all_mems:
+            cat = m.get('category') or 'general'
+            groups.setdefault(cat, []).append(m)
+
+        summary_ids = []
+        degraded = 0
+
+        for cat, mems in groups.items():
+            if len(mems) < min_cluster_size:
+                continue
+            texts = [m['content'] for m in mems if m.get('content')]
+            if not texts:
+                continue
+
+            summary = self._generate_summary(texts, cat)
+
+            sid = self.storage.add_memory(
+                content=summary,
+                category='reflection',
+                priority=0,
+                importance=5,
+                tags='summary,' + cat,
+            )
+            summary_ids.append(sid)
+
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            for m in mems:
+                new_imp = max(1, (m.get('importance') or 3) - 1)
+                if new_imp != m.get('importance'):
+                    self.storage.update_memory(m['id'], importance=new_imp)
+                    degraded += 1
+
+            logger.info(f'归纳 [{cat}]: {len(mems)}条 -> 摘要 {sid[:8]}, 降级 {degraded}条')
+
+        return {'summarized': len(summary_ids), 'degraded': degraded, 'summary_ids': summary_ids}
+
+    @staticmethod
+    def _generate_summary(texts, category):
+        """基于关键词从同类记忆中生成摘要。"""
+        from collections import Counter
+        from datetime import datetime
+
+        if not texts:
+            return f"[{category}] 暂无内容"
+        if len(texts) == 1:
+            return f"[{category}] {texts[0][:200]}"
+
+        all_words = []
+        for t in texts:
+            all_words.extend(t.lower().split())
+
+        word_counts = Counter(all_words)
+        keywords = [w for w, c in word_counts.most_common(10) if len(w) > 1][:5]
+
+        date_info = datetime.now().strftime('%Y-%m-%d')
+        parts = [
+            f"[{category.upper()}] 反思归纳 ({date_info})",
+            f"涵盖 {len(texts)} 条相关记忆",
+        ]
+        if keywords:
+            parts.append(f"关键词: {', '.join(keywords)}")
+        parts.append("---")
+        for i, t in enumerate(texts[:5]):
+            parts.append(f"{i+1}. {t.strip()[:100]}")
+        if len(texts) > 5:
+            parts.append(f"... 及其他 {len(texts)-5} 条")
+
+        return '\n'.join(parts)
+
     def is_extraction_needed(self, unsummarized_count: int) -> bool:
         """判断是否需要触发记忆提取"""
         return unsummarized_count >= self._extraction_threshold

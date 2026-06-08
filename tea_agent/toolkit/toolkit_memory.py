@@ -136,7 +136,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
         if not topic_id:
             return "❌ auto_extract 操作需要 topic_id 参数"
         try:
-            from ..store._auto_memory import AutoMemoryExtractor
+            from ..session_memory_component import AutoMemoryExtractor
             extractor = AutoMemoryExtractor(storage)
             result = extractor.extract_from_topic(topic_id, force=force)
             if result["status"] == "success":

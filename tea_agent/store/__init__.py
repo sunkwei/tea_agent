@@ -2,9 +2,8 @@
 向后兼容导出：from tea_agent.store import Storage, get_storage 保持不变。
 """
 from ._core import Storage
-from ._auto_memory import AutoMemoryExtractor
 
-__all__ = ["Storage", "AutoMemoryExtractor"]
+__all__ = ["Storage"]
 
 # ── 模块级单例 ──
 

@@ -50,14 +50,14 @@ class TestAutoMemoryExtractor:
 
     def test_extractor_init(self, storage):
         """测试提取器初始化"""
-        from tea_agent.store._auto_memory import AutoMemoryExtractor
+        from tea_agent.session_memory_component import AutoMemoryExtractor
 
         extractor = AutoMemoryExtractor(storage)
         assert extractor.storage == storage
 
     def test_get_unextracted_conversations(self, storage):
         """测试获取未提取的对话"""
-        from tea_agent.store._auto_memory import AutoMemoryExtractor
+        from tea_agent.session_memory_component import AutoMemoryExtractor
 
         topic_id = storage.create_topic("测试主题")
         storage.save_msg(topic_id, "用户消息", "AI回复", False)
@@ -70,7 +70,7 @@ class TestAutoMemoryExtractor:
 
     def test_merge_conversations(self, storage):
         """测试合并对话"""
-        from tea_agent.store._auto_memory import AutoMemoryExtractor
+        from tea_agent.session_memory_component import AutoMemoryExtractor
 
         extractor = AutoMemoryExtractor(storage)
 
@@ -87,7 +87,7 @@ class TestAutoMemoryExtractor:
 
     def test_calculate_similarity(self, storage):
         """测试文本相似度计算"""
-        from tea_agent.store._auto_memory import AutoMemoryExtractor
+        from tea_agent.session_memory_component import AutoMemoryExtractor
 
         extractor = AutoMemoryExtractor(storage)
 
@@ -102,7 +102,7 @@ class TestAutoMemoryExtractor:
 
     def test_is_duplicate(self, storage):
         """测试重复检测"""
-        from tea_agent.store._auto_memory import AutoMemoryExtractor
+        from tea_agent.session_memory_component import AutoMemoryExtractor
 
         storage.add_memory("这是一条测试记忆", category="general")
 

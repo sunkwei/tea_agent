@@ -284,6 +284,56 @@ class OnlineToolSession(BaseChatSession):
     @_level2.setter
     def _level2(self, v): self.context._level2 = v
 
+    @property
+    def max_tool_output(self): return self.context.max_tool_output
+    @max_tool_output.setter
+    def max_tool_output(self, v): self.context.max_tool_output = v
+
+    @property
+    def max_assistant_content(self): return self.context.max_assistant_content
+    @max_assistant_content.setter
+    def max_assistant_content(self, v): self.context.max_assistant_content = v
+
+    @property
+    def keep_turns(self): return self.context.keep_turns
+    @keep_turns.setter
+    def keep_turns(self, v): self.context.keep_turns = v
+
+    @property
+    def extra_iterations_on_continue(self): return self.context.extra_iterations_on_continue
+    @extra_iterations_on_continue.setter
+    def extra_iterations_on_continue(self, v): self.context.extra_iterations_on_continue = v
+
+    @property
+    def memory_extraction_threshold(self): return self.context.memory_extraction_threshold
+    @memory_extraction_threshold.setter
+    def memory_extraction_threshold(self, v): self.context.memory_extraction_threshold = v
+
+    @property
+    def memory_dedup_threshold(self): return self.context.memory_dedup_threshold
+    @memory_dedup_threshold.setter
+    def memory_dedup_threshold(self, v): self.context.memory_dedup_threshold = v
+
+    @property
+    def disable_summary(self): return self.context.disable_summary
+    @disable_summary.setter
+    def disable_summary(self, v): self.context.disable_summary = v
+
+    @property
+    def no_stream_chunk(self): return self.context.no_stream_chunk
+    @no_stream_chunk.setter
+    def no_stream_chunk(self, v): self.context.no_stream_chunk = v
+
+    @property
+    def supports_vision(self): return self.context.supports_vision
+    @supports_vision.setter
+    def supports_vision(self, v): self.context.supports_vision = v
+
+    @property
+    def supports_reasoning(self): return self.context.supports_reasoning
+    @supports_reasoning.setter
+    def supports_reasoning(self, v): self.context.supports_reasoning = v
+
     # ──────────────────────────────────────────────
     # 委派方法
     # ──────────────────────────────────────────────

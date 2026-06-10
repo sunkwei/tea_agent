@@ -115,6 +115,32 @@ class ToolComponent(SessionComponent):
                 self.ctx.tool_log(f"❌ 错误: {e}")
 
         result_str = str(result)
+        
+        # 截断超长工具输出，防止 413 Request Entity Too Large
+        max_output = self.ctx.max_tool_output
+        result_bytes = len(result_str.encode("utf-8"))
+        if result_bytes > max_output:
+            # 首尾各保留一半，按换行对齐
+            half = max_output // 2
+            raw = result_str.encode("utf-8")
+            
+            # 前半部分
+            head_end = half
+            nl = raw.find(b'\n', head_end)
+            if nl != -1 and nl < half + 256:
+                head_end = nl
+            head_text = raw[:head_end].decode("utf-8", errors="replace")
+            
+            # 后半部分
+            tail_start = len(raw) - half
+            nl = raw.rfind(b'\n', tail_start, len(raw))
+            if nl != -1 and nl > tail_start - 256:
+                tail_start = nl + 1
+            tail_text = raw[tail_start:].decode("utf-8", errors="replace")
+            
+            result_str = f"{head_text}\n\n... [工具输出截断: {result_bytes}B → {len(head_text.encode('utf-8')) + len(tail_text.encode('utf-8'))}B] ...\n\n{tail_text}"
+            logger.info(f"tool output truncated: {func_name}, {result_bytes}B → {len(result_str.encode('utf-8'))}B")
+        
         self.add_tool_result(call_id, result_str)
         self._record_tool_to_trace(func_name, success, error_msg, start_time)
         return call_id, func_name, result_str

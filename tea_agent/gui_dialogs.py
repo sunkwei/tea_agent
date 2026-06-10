@@ -927,12 +927,17 @@ class ConfigDialog(tk.Toplevel):
         self.on_save = on_save
         self._config_path = config_path
         self.title("⚙️ 配置编辑")
-        self.geometry("650x680")
-        self.minsize(550, 500)
+        _init_fonts()
+        # 根据字体大小计算对话框尺寸
+        width = _fs(650)
+        height = _fs(680)
+        self.geometry(f"{width}x{height}")
+        min_width = _fs(550)
+        min_height = _fs(500)
+        self.minsize(min_width, min_height)
         self.transient(parent)
         self.grab_set()
 
-        _init_fonts()
         self._cfg = load_config(self._config_path) if self._config_path else get_config()
         self._create_ui()
         self._load_values()

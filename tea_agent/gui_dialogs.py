@@ -1039,7 +1039,7 @@ class ConfigDialog(tk.Toplevel):
             for p_key, p_label, p_default in [
                 ("temperature", "Temperature", "0.7"),
                 ("max_tokens", "Max Tokens (输出)", "4096"),
-                ("max_context_tokens", "Max Context (上下文, 0=不限)", "0"),
+                ("max_context_tokens", "Max Context", "0"),
                 ("top_p", "Top-P", "0.9"),
             ]:
                 row_idx += 1

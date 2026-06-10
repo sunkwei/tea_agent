@@ -984,9 +984,9 @@ class ConfigDialog(tk.Toplevel):
         f = ttk.Frame(nb)
         nb.add(f, text=label)
         fields = [
-            ("API Key", "api_key", 40),
-            ("API URL", "api_url", 50),
-            ("模型名称", "model_name", 50),
+            ("API Key", "api_key", 30),
+            ("API URL", "api_url", 40),
+            ("模型名称", "model_name", 40),
         ]
         if extra_fields:
             fields.extend(extra_fields)
@@ -996,7 +996,7 @@ class ConfigDialog(tk.Toplevel):
                 row=row_idx, column=0, sticky=tk.W, padx=(5, 0), pady=4)
             var = tk.StringVar()
             ttk.Entry(f, textvariable=var, width=width, font=(SYSTEM_FONT, _fs(11))).grid(
-                row=row_idx, column=1, sticky=tk.EW, padx=(0, 5), pady=4)
+                row=row_idx, column=1, sticky=tk.W, padx=(0, 5), pady=4)
             vars_map[key] = var
         if hint:
             ttk.Label(f, text="ℹ️ " + hint, font=(SYSTEM_FONT, _fs(10)),

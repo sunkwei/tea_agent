@@ -23,6 +23,7 @@ from ._summaries import SummaryStore
 from ._memories import MemoryStore
 from ._vectors import VectorStore
 from ._semantic_search import SemanticSearch
+from ._scheduled_tasks import ScheduledTaskStore
 
 logger = logging.getLogger("Storage")
 
@@ -171,6 +172,7 @@ class Storage:
     _delegate_attrs = (
         "_topics", "_conversations", "_summaries", "_memories",
         "_prompts", "_reflections", "_config_history", "_vectors",
+        "_scheduled_tasks",
     )
 
     def __init__(self, db_path="chat_history.db"):
@@ -200,6 +202,7 @@ class Storage:
         self._reflections = ReflectionStore(self.conn)
         self._config_history = ConfigHistoryStore(self.conn)
         self._vectors = VectorStore(self.conn)
+        self._scheduled_tasks = ScheduledTaskStore(self.conn)
 
         # ── 注入 EmbeddingEngine 到 MemoryStore ──
         try:
@@ -221,6 +224,7 @@ class Storage:
         self.reflections = self._reflections
         self.config_history = self._config_history
         self.vectors = self._vectors
+        self.scheduled_tasks = self._scheduled_tasks
 
     # ── 自动委派：未匹配的方法路由到子组件 ──
 
@@ -421,6 +425,23 @@ class Storage:
                 model_name TEXT DEFAULT '',
                 created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
                 FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+            )
+        ''')
+
+        # scheduled_tasks 表（定时任务）
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS scheduled_tasks (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                command TEXT NOT NULL,
+                schedule TEXT NOT NULL,
+                enabled INTEGER DEFAULT 1,
+                last_run TIMESTAMP,
+                last_result TEXT DEFAULT '',
+                last_exit_code INTEGER,
+                next_run TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
 

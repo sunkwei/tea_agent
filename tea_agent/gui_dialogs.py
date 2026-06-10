@@ -34,12 +34,16 @@ class MemoryDialog(tk.Toplevel):
         super().__init__(parent)
         self.db = storage
         self.title("🧠 长期记忆管理")
-        self.geometry("800x600")
-        self.minsize(600, 400)
+        _init_fonts()  # 延迟检测系统字体
+        # 根据字体大小计算对话框尺寸
+        width = _fs(800)
+        height = _fs(600)
+        self.geometry(f"{width}x{height}")
+        min_width = _fs(600)
+        min_height = _fs(400)
+        self.minsize(min_width, min_height)
         self.transient(parent)
         self.grab_set()
-
-        _init_fonts()  # 延迟检测系统字体
         self._create_ui()
         self._refresh()
 
@@ -336,16 +340,20 @@ class TopicDialog(tk.Toplevel):
         self.db = storage
         self.on_switch = on_switch  # callback(topic_id) when user switches
         self.title("📁 主题管理")
-        self.geometry("900x600")
-        self.minsize(700, 400)
+        _init_fonts()
+        # 根据字体大小计算对话框尺寸
+        width = _fs(900)
+        height = _fs(600)
+        self.geometry(f"{width}x{height}")
+        min_width = _fs(700)
+        min_height = _fs(400)
+        self.minsize(min_width, min_height)
         self.transient(parent)
         self.grab_set()
 
         # 搜索状态
         self._is_search_mode = False
         self._search_results = []
-
-        _init_fonts()
         self._create_ui()
         self._refresh()
 

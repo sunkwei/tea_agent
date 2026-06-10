@@ -993,10 +993,10 @@ class ConfigDialog(tk.Toplevel):
         vars_map = {}
         for row_idx, (title, key, width) in enumerate(fields):
             ttk.Label(f, text=title + ":", font=(SYSTEM_FONT, _fs(11))).grid(
-                row=row_idx, column=0, sticky=tk.W, padx=(2, 0), pady=4)
+                row=row_idx, column=0, sticky=tk.E, padx=(2, 4), pady=4)
             var = tk.StringVar()
             ttk.Entry(f, textvariable=var, width=width, font=(SYSTEM_FONT, _fs(11))).grid(
-                row=row_idx, column=1, sticky=tk.W, padx=(0, 2), pady=4)
+                row=row_idx, column=1, sticky=tk.EW, padx=(0, 5), pady=4)
             vars_map[key] = var
         if hint:
             ttk.Label(f, text="ℹ️ " + hint, font=(SYSTEM_FONT, _fs(10)),
@@ -1044,10 +1044,10 @@ class ConfigDialog(tk.Toplevel):
             ]:
                 row_idx += 1
                 ttk.Label(f, text=p_label + ":", font=(SYSTEM_FONT, _fs(11))).grid(
-                    row=row_idx, column=0, sticky=tk.W, padx=(2, 2), pady=2)
+                    row=row_idx, column=0, sticky=tk.E, padx=(2, 4), pady=2)
                 var = tk.StringVar(value=p_default)
                 ttk.Entry(f, textvariable=var, width=8, font=(SYSTEM_FONT, _fs(11))).grid(
-                    row=row_idx, column=1, sticky=tk.W, padx=(2, 2), pady=2)
+                    row=row_idx, column=1, sticky=tk.EW, padx=(0, 5), pady=2)
                 params_var[p_key] = var
             setattr(self, f"_{options_prefix}_params", params_var)
 

@@ -937,7 +937,7 @@ class ConfigDialog(tk.Toplevel):
         self.title("⚙️ 配置编辑")
         _init_fonts()
         # 根据字体大小计算对话框尺寸
-        width = _fs(650)
+        width = _fs(700)
         height = _fs(680)
         self.geometry(f"{width}x{height}")
         min_width = _fs(550)
@@ -993,16 +993,17 @@ class ConfigDialog(tk.Toplevel):
         vars_map = {}
         for row_idx, (title, key, width) in enumerate(fields):
             ttk.Label(f, text=title + ":", font=(SYSTEM_FONT, _fs(11))).grid(
-                row=row_idx, column=0, sticky=tk.W, padx=(5, 0), pady=4)
+                row=row_idx, column=0, sticky=tk.W, padx=(2, 0), pady=4)
             var = tk.StringVar()
             ttk.Entry(f, textvariable=var, width=width, font=(SYSTEM_FONT, _fs(11))).grid(
-                row=row_idx, column=1, sticky=tk.W, padx=(0, 5), pady=4)
+                row=row_idx, column=1, sticky=tk.W, padx=(0, 2), pady=4)
             vars_map[key] = var
         if hint:
             ttk.Label(f, text="ℹ️ " + hint, font=(SYSTEM_FONT, _fs(10)),
                       foreground="#888").grid(row=row_idx + 1, column=0, columnspan=2,
                                               sticky=tk.W, padx=(5, 2), pady=(0, 4))
-        f.columnconfigure(1, weight=1)
+        f.columnconfigure(0, weight=1)
+        f.columnconfigure(1, weight=2)
         setattr(self, f"_{prefix}_vars", vars_map)
 
         # 模型能力选项 (supports_vision / supports_reasoning)

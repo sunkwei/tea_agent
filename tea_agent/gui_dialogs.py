@@ -953,7 +953,7 @@ class ConfigDialog(tk.Toplevel):
     def _create_ui(self):
         """Internal: create ui."""
         nb = ttk.Notebook(self)
-        nb.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        nb.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
         self._model_tab(nb, "主模型", "main", options_prefix="main")
         self._model_tab(nb, "便宜模型", "cheap", options_prefix="cheap")
@@ -964,7 +964,7 @@ class ConfigDialog(tk.Toplevel):
         self._runtime_tab(nb)
 
         btn_frame = ttk.Frame(self)
-        btn_frame.pack(fill=tk.X, padx=10, pady=10)
+        btn_frame.pack(fill=tk.X, padx=5, pady=5)
         self._status_var = tk.StringVar(value="")
         ttk.Label(btn_frame, textvariable=self._status_var, foreground="#666").pack(side=tk.LEFT, padx=4)
         ttk.Button(btn_frame, text="💾 保存", command=self._do_save).pack(side=tk.RIGHT, padx=2)
@@ -993,15 +993,15 @@ class ConfigDialog(tk.Toplevel):
         vars_map = {}
         for row_idx, (title, key, width) in enumerate(fields):
             ttk.Label(f, text=title + ":", font=(SYSTEM_FONT, _fs(11))).grid(
-                row=row_idx, column=0, sticky=tk.W, padx=(10, 4), pady=8)
+                row=row_idx, column=0, sticky=tk.W, padx=(5, 2), pady=4)
             var = tk.StringVar()
             ttk.Entry(f, textvariable=var, width=width, font=(SYSTEM_FONT, _fs(11))).grid(
-                row=row_idx, column=1, sticky=tk.EW, padx=(4, 10), pady=8)
+                row=row_idx, column=1, sticky=tk.EW, padx=(2, 5), pady=4)
             vars_map[key] = var
         if hint:
             ttk.Label(f, text="ℹ️ " + hint, font=(SYSTEM_FONT, _fs(10)),
                       foreground="#888").grid(row=row_idx + 1, column=0, columnspan=2,
-                                              sticky=tk.W, padx=(10, 4), pady=(0, 8))
+                                              sticky=tk.W, padx=(5, 2), pady=(0, 4))
         f.columnconfigure(1, weight=1)
         setattr(self, f"_{prefix}_vars", vars_map)
 
@@ -1015,7 +1015,7 @@ class ConfigDialog(tk.Toplevel):
             row_idx += 2
             ttk.Label(f, text="── 模型能力 ──", font=(SYSTEM_FONT, _fs(10)),
                       foreground="#888").grid(row=row_idx, column=0, columnspan=2,
-                                              sticky=tk.W, padx=(10, 4), pady=(12, 4))
+                                              sticky=tk.W, padx=(5, 2), pady=(8, 2))
             for cb_label, cb_key, cb_default in [
                 ("👁️ 支持视觉（发送 image_url 格式图片）", "supports_vision", False),
                 ("🧠 支持推理（发送 reasoning_content 字段）", "supports_reasoning", True),
@@ -1025,7 +1025,7 @@ class ConfigDialog(tk.Toplevel):
                 ttk.Checkbutton(f, text=cb_label, variable=var,
                                 style=f"{options_prefix}.TCheckbutton").grid(
                     row=row_idx, column=0, columnspan=2,
-                    sticky=tk.W, padx=(20, 10), pady=2)
+                    sticky=tk.W, padx=(10, 5), pady=1)
                 opts_var[cb_key] = var
             setattr(self, opts_key, opts_var)
 
@@ -1033,7 +1033,7 @@ class ConfigDialog(tk.Toplevel):
             row_idx += 2
             ttk.Label(f, text="── 推理参数 ──", font=(SYSTEM_FONT, _fs(10)),
                       foreground="#888").grid(row=row_idx, column=0, columnspan=2,
-                                              sticky=tk.W, padx=(10, 4), pady=(12, 4))
+                                              sticky=tk.W, padx=(5, 2), pady=(8, 2))
             params_var = {}
             for p_key, p_label, p_default in [
                 ("temperature", "Temperature", "0.7"),
@@ -1043,10 +1043,10 @@ class ConfigDialog(tk.Toplevel):
             ]:
                 row_idx += 1
                 ttk.Label(f, text=p_label + ":", font=(SYSTEM_FONT, _fs(11))).grid(
-                    row=row_idx, column=0, sticky=tk.W, padx=(20, 4), pady=4)
+                    row=row_idx, column=0, sticky=tk.W, padx=(10, 2), pady=2)
                 var = tk.StringVar(value=p_default)
                 ttk.Entry(f, textvariable=var, width=10, font=(SYSTEM_FONT, _fs(11))).grid(
-                    row=row_idx, column=1, sticky=tk.W, padx=(4, 10), pady=4)
+                    row=row_idx, column=1, sticky=tk.W, padx=(2, 5), pady=2)
                 params_var[p_key] = var
             setattr(self, f"_{options_prefix}_params", params_var)
 

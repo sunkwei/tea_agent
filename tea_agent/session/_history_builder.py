@@ -1,3 +1,4 @@
+
 """
 历史消息构建模块
 
@@ -15,6 +16,73 @@ import logging
 from typing import List, Dict, Optional, Any
 
 logger = logging.getLogger("session.history_builder")
+
+
+def estimate_tokens(text: str) -> int:
+    """快速估算文本的 token 数。
+    
+    启发式算法：
+    - 英文：约 4 字符 = 1 token（含空格和标点）
+    - 中文：约 1.5 字 = 1 token
+    - 混合文本取加权平均
+    
+    Args:
+        text: 输入文本
+        
+    Returns:
+        估算的 token 数
+    """
+    if not text:
+        return 0
+    
+    # 统计中文字符数
+    cn_chars = len(re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf]', text))
+    total_chars = len(text)
+    non_cn_chars = total_chars - cn_chars
+    
+    # 中文约 1.5 字/token，英文约 4 字符/token
+    cn_tokens = cn_chars / 1.5 if cn_chars else 0
+    en_tokens = non_cn_chars / 4.0 if non_cn_chars else 0
+    
+    return int(cn_tokens + en_tokens) + 4  # +4 为消息结构开销
+
+
+def estimate_messages_tokens(messages: List[Dict]) -> int:
+    """估算消息列表的总 token 数。
+    
+    Args:
+        messages: 消息列表
+        
+    Returns:
+        估算的总 token 数
+    """
+    total = 0
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            # 多模态消息
+            for part in content:
+                if isinstance(part, dict):
+                    if part.get("type") == "text":
+                        total += estimate_tokens(part.get("text", ""))
+                    elif part.get("type") == "image_url":
+                        total += 85  # 图片固定估算 ~85 tokens
+        elif isinstance(content, str):
+            total += estimate_tokens(content)
+        
+        # tool_calls 结构开销
+        if msg.get("tool_calls"):
+            for tc in msg["tool_calls"]:
+                total += estimate_tokens(json.dumps(tc, ensure_ascii=False))
+        
+        # reasoning_content
+        rc = msg.get("reasoning_content", "")
+        if rc:
+            total += estimate_tokens(rc)
+        
+        total += 4  # 每条消息的 role/metadata 开销
+    
+    return total
 
 
 def to_multimodal(msg: Dict, supports_vision: bool) -> Dict:
@@ -114,6 +182,117 @@ def _extract_files_from_text(text: str) -> set:
         except Exception:
             pass
     return files
+
+
+def _progressive_trim(messages: List[Dict], budget: int, context: Any) -> List[Dict]:
+    """渐进式裁剪消息以满足 token 预算。
+    
+    裁剪策略（按优先级从高到低）：
+    1. 删除 [历史记录] 等标记的 L2 条目（最旧的先删）
+    2. 替换工具输出为占位符
+    3. 删除 reasoning_content
+    4. 截断长文本（assistant/tool 消息）
+    5. 删除 L1 旧轮次（保留最近 5 轮）
+    
+    Args:
+        messages: API 消息列表
+        budget: token 预算
+        context: SessionContext
+        
+    Returns:
+        裁剪后的消息列表
+    """
+    result = list(messages)
+    est = estimate_messages_tokens(result)
+    if est <= budget:
+        return result
+    
+    # 策略1: 删除 [历史记录] 标记的 L2 条目
+    i = 0
+    while i < len(result) and est > budget:
+        msg = result[i]
+        content = msg.get("content", "")
+        if isinstance(content, str) and "[历史记录]" in content:
+            est -= estimate_tokens(content) + 4
+            result.pop(i)
+            logger.debug(f"裁剪 L2 条目: {content[:50]}...")
+        else:
+            i += 1
+    
+    # 策略2: 替换工具输出为占位符
+    if est > budget:
+        for i in range(len(result) - 1, -1, -1):
+            if est <= budget:
+                break
+            msg = result[i]
+            if msg.get("role") == "tool":
+                content = msg.get("content", "")
+                if isinstance(content, str) and len(content) > 100:
+                    n_chars = len(content)
+                    msg["content"] = f"[工具结果已省略: {n_chars} 字符]"
+                    est -= estimate_tokens(content) - 30
+                    est = max(est, 0)
+    
+    # 策略3: 删除 reasoning_content
+    if est > budget:
+        for msg in result:
+            if est <= budget:
+                break
+            if "reasoning_content" in msg and msg["reasoning_content"]:
+                est -= estimate_tokens(msg["reasoning_content"])
+                msg["reasoning_content"] = ""
+                est = max(est, 0)
+    
+    # 策略4: 截断长文本
+    if est > budget:
+        max_text_len = 4096  # 初始截断长度
+        for msg in result:
+            if est <= budget:
+                break
+            if msg.get("role") in ("assistant", "tool", "user"):
+                content = msg.get("content", "")
+                if isinstance(content, str) and len(content) > max_text_len:
+                    trimmed = content[:max_text_len] + f"\n... [已截断: 原长 {len(content)} 字符]"
+                    est -= estimate_tokens(content) - estimate_tokens(trimmed)
+                    msg["content"] = trimmed
+                    est = max(est, 0)
+    
+    # 策略5: 删除 L1 旧轮次（保留最近 5 轮 user 消息）
+    if est > budget:
+        # 找到最近 5 个 user 消息的位置
+        user_positions = []
+        for i in range(len(result) - 1, -1, -1):
+            if result[i].get("role") == "user":
+                user_positions.append(i)
+                if len(user_positions) >= 5:
+                    break
+        
+        if len(user_positions) >= 5:
+            cutoff = min(user_positions)
+            # 删除 cutoff 之前的消息（保留 system 和记忆注入）
+            new_result = [msg for msg in result[:cutoff]
+                         if msg.get("role") == "system" 
+                         or "[系统记忆" in msg.get("content", "")
+                         or "记忆" in msg.get("content", "")[:20]]
+            # 加回最近 5 轮
+            new_result.extend(result[cutoff:])
+            est = estimate_messages_tokens(new_result)
+            result = new_result
+            logger.info(f"裁剪 L1 旧轮次: 保留最近 5 轮，估计 {est} tokens")
+    
+    # 最终保护：如果还超，强制截断最后一条消息
+    if est > budget and result:
+        last = result[-1]
+        content = last.get("content", "")
+        if isinstance(content, str):
+            # 保留最后一条消息的前 1/3
+            keep = len(content) // 3
+            if keep > 256:
+                last["content"] = content[:keep] + f"\n... [紧急截断: 原长 {len(content)} 字符]"
+                est = estimate_messages_tokens(result)
+                logger.warning(f"紧急截断最后一条消息至 {keep} 字符")
+    
+    return result
 
 
 def filter_level2_by_relevance(level2: list, current_msg: str) -> list:
@@ -349,6 +528,18 @@ def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
                         text_parts.append("[图片]")
             msg_copy["content"] = "\n".join(text_parts) if text_parts else "[图片]"
         result.append(msg_copy)
+
+    # ── 渐进式 token 裁剪 ──
+    max_ctx = getattr(context, 'max_context_tokens', 0) or 0
+    if max_ctx > 0:
+        est = estimate_messages_tokens(result)
+        # 预留 20% 给输出，实际输入预算 = 80%
+        input_budget = int(max_ctx * 0.8)
+        if est > input_budget:
+            logger.info(f"token 预估: {est} > 预算 {input_budget}，启动渐进式裁剪")
+            result = _progressive_trim(result, input_budget, context)
+            est_after = estimate_messages_tokens(result)
+            logger.info(f"裁剪后: {est_after} tokens (节省 {est - est_after})")
 
     # JSON 完整性校验
     result = sanitize_api_messages(result)

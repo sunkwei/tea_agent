@@ -100,6 +100,7 @@ class OnlineToolSession(BaseChatSession):
         keep_turns: int = 5,
         max_tool_output: int = 128 * 1024,
         max_assistant_content: int = 128 * 1024,
+        max_context_tokens: int = 0,
         extra_iterations_on_continue: int = 5,
         memory_extraction_threshold: int = 2,
         memory_dedup_threshold: float = 0.3,
@@ -126,6 +127,7 @@ class OnlineToolSession(BaseChatSession):
             keep_turns: 保留最近N轮完整对话
             max_tool_output: 工具输出截断字符数
             max_assistant_content: 助手回复截断字符数
+            max_context_tokens: 最大上下文 token 数，0=不限制
             extra_iterations_on_continue: 续命时追加的工具调用轮数
             memory_extraction_threshold: 触发记忆提取的最低未摘要消息数
             memory_dedup_threshold: 记忆去重相似度阈值 (0~1)
@@ -156,6 +158,7 @@ class OnlineToolSession(BaseChatSession):
             keep_turns=keep_turns,
             max_tool_output=max_tool_output,
             max_assistant_content=max_assistant_content,
+            max_context_tokens=max_context_tokens,
             memory_extraction_threshold=memory_extraction_threshold,
             memory_dedup_threshold=memory_dedup_threshold,
             supports_vision=supports_vision,
@@ -293,6 +296,11 @@ class OnlineToolSession(BaseChatSession):
     def max_assistant_content(self): return self.context.max_assistant_content
     @max_assistant_content.setter
     def max_assistant_content(self, v): self.context.max_assistant_content = v
+
+    @property
+    def max_context_tokens(self): return self.context.max_context_tokens
+    @max_context_tokens.setter
+    def max_context_tokens(self, v): self.context.max_context_tokens = v
 
     @property
     def keep_turns(self): return self.context.keep_turns

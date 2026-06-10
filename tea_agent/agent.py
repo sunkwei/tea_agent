@@ -262,6 +262,7 @@ class Agent:
             keep_turns=cfg.keep_turns,
             max_tool_output=cfg.max_tool_output,
             max_assistant_content=cfg.max_assistant_content,
+            max_context_tokens=main_m.max_context_tokens,
             extra_iterations_on_continue=cfg.extra_iterations_on_continue,
             memory_extraction_threshold=cfg.memory_extraction_threshold,
             storage=self._db,  # None for lightweight, Storage for full

@@ -942,6 +942,11 @@ class TkGUI(Agent):
                             setattr(self.sess, key, val)
                         except Exception:
                             pass
+                # max_context_tokens 从 main_model 读取（非全局配置）
+                try:
+                    self.sess.max_context_tokens = cfg.main_model.max_context_tokens
+                except Exception:
+                    pass
             self._update_status("⚙️ 配置已更新")
 
         ConfigDialog(self.root, on_save=on_save, config_path=self._config_path)

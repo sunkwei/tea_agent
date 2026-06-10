@@ -43,6 +43,7 @@ class SessionContext:
     keep_turns: int = 5
     max_tool_output: int = 128 * 1024
     max_assistant_content: int = 128 * 1024
+    max_context_tokens: int = 0  # 0=不限制，>0 时启用渐进式裁剪
     memory_extraction_threshold: int = 2
     memory_dedup_threshold: float = 0.3
     supports_vision: bool = False

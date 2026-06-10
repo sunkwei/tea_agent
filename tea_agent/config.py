@@ -33,6 +33,7 @@ class ModelConfig:
     options: Dict[str, Any] = field(default_factory=dict)
     temperature: float = 0.7       # 温度 0~2，越高越随机
     max_tokens: int = 4096         # 最大输出 token 数
+    max_context_tokens: int = 0    # 最大上下文 token 数，0=不限制
     top_p: float = 0.9             # 核采样阈值
 
     @property

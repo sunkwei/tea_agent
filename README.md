@@ -1,4 +1,4 @@
-# Tea Agent v0.9.21
+# Tea Agent v0.9.22
 
 > 一个自进化 AI 编程助手 — 工具驱动、自我进化、多界面形态
 
@@ -101,13 +101,37 @@ tea_agent/
 配置文件 `~/.tea_agent/config.yaml`：
 
 ```yaml
-model:
-  provider: openai
-  model: gpt-4o
+main_model:
+  api_key: "sk-xxx"
+  api_url: "https://api.openai.com/v1"
+  model_name: "gpt-4o"
+  max_context_tokens: 0   # 0=不限制，>0 时启用渐进式 token 裁剪
+cheap_model:
+  api_key: ""
+  api_url: ""
+  model_name: ""
+  max_context_tokens: 0   # 独立配置，适用于本地小模型
 embedding:
   provider: openai
   model: text-embedding-3-small
 ```
+
+### 上下文窗口控制
+
+`max_context_tokens` 用于限制发送给 LLM 的最大上下文 token 数：
+
+- **0**（默认）= 不限制，发送全部历史
+- **32000** = 适合 32K 窗口模型
+- **128000** = 适合 GPT-4o / Claude 等大窗口模型
+
+启用后，系统会自动预估 token 数，超出预算时按优先级渐进裁剪：
+1. 删除旧的 `[历史记录]` 条目
+2. 替换旧工具输出为占位符
+3. 清空 thinking 内容
+4. 截断长文本
+5. 删除旧轮次（保留最近 5 轮）
+
+> 主模型和便宜模型独立配置，互不影响。
 
 Agent 可在运行时通过 `toolkit_config` 自主调优参数。
 

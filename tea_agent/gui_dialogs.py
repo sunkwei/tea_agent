@@ -984,9 +984,9 @@ class ConfigDialog(tk.Toplevel):
         f = ttk.Frame(nb)
         nb.add(f, text=label)
         fields = [
-            ("API Key", "api_key", 30),
-            ("API URL", "api_url", 40),
-            ("模型名称", "model_name", 40),
+            ("API Key", "api_key", 25),
+            ("API URL", "api_url", 35),
+            ("模型名称", "model_name", 35),
         ]
         if extra_fields:
             fields.extend(extra_fields)
@@ -1002,8 +1002,8 @@ class ConfigDialog(tk.Toplevel):
             ttk.Label(f, text="ℹ️ " + hint, font=(SYSTEM_FONT, _fs(10)),
                       foreground="#888").grid(row=row_idx + 1, column=0, columnspan=2,
                                               sticky=tk.W, padx=(5, 2), pady=(0, 4))
-        f.columnconfigure(0, weight=1)
-        f.columnconfigure(1, weight=2)
+        f.columnconfigure(0, weight=2)
+        f.columnconfigure(1, weight=3)
         setattr(self, f"_{prefix}_vars", vars_map)
 
         # 模型能力选项 (supports_vision / supports_reasoning)
@@ -1044,10 +1044,10 @@ class ConfigDialog(tk.Toplevel):
             ]:
                 row_idx += 1
                 ttk.Label(f, text=p_label + ":", font=(SYSTEM_FONT, _fs(11))).grid(
-                    row=row_idx, column=0, sticky=tk.W, padx=(10, 2), pady=2)
+                    row=row_idx, column=0, sticky=tk.W, padx=(2, 2), pady=2)
                 var = tk.StringVar(value=p_default)
-                ttk.Entry(f, textvariable=var, width=10, font=(SYSTEM_FONT, _fs(11))).grid(
-                    row=row_idx, column=1, sticky=tk.W, padx=(2, 5), pady=2)
+                ttk.Entry(f, textvariable=var, width=8, font=(SYSTEM_FONT, _fs(11))).grid(
+                    row=row_idx, column=1, sticky=tk.W, padx=(2, 2), pady=2)
                 params_var[p_key] = var
             setattr(self, f"_{options_prefix}_params", params_var)
 

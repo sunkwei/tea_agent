@@ -1290,3 +1290,133 @@ class ConfigDialog(tk.Toplevel):
                 pass
         super().destroy()
 
+class ScheduledTaskDialog(tk.Toplevel):
+    """定时任务管理弹窗（简化版）"""
+
+    def __init__(self, parent):
+        """初始化定时任务管理对话框。
+        
+        Args:
+            parent: 父窗口
+        """
+        super().__init__(parent)
+        self.title("⏰ 定时任务管理")
+        _init_fonts()
+        # 根据字体大小计算对话框尺寸
+        width = _fs(800)
+        height = _fs(600)
+        self.geometry(f"{width}x{height}")
+        min_width = _fs(600)
+        min_height = _fs(400)
+        self.minsize(min_width, min_height)
+        self.transient(parent)
+        self.grab_set()
+        
+        self._create_ui()
+        self._load_tasks()
+
+    def _create_ui(self):
+        """创建用户界面"""
+        # 顶部标题
+        top = ttk.Frame(self)
+        top.pack(fill=tk.X, padx=5, pady=5)
+        
+        ttk.Label(top, text="⏰ 定时任务管理", font=(SYSTEM_FONT, _fs(14), "bold")).pack(side=tk.LEFT)
+        
+        # 工具栏
+        toolbar = ttk.Frame(self)
+        toolbar.pack(fill=tk.X, padx=5, pady=2)
+        
+        ttk.Button(toolbar, text="➕ 添加任务", command=self._add_task).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="🔄 刷新", command=self._load_tasks).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="▶️ 启动调度器", command=self._start_scheduler).pack(side=tk.LEFT, padx=2)
+        ttk.Button(toolbar, text="⏹️ 停止调度器", command=self._stop_scheduler).pack(side=tk.LEFT, padx=2)
+        
+        # 任务列表
+        list_frame = ttk.Frame(self)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        columns = ("id", "name", "command", "schedule", "enabled", "next_run", "last_run")
+        self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
+        
+        self.tree.heading("id", text="ID")
+        self.tree.heading("name", text="任务名称")
+        self.tree.heading("command", text="命令")
+        self.tree.heading("schedule", text="调度计划")
+        self.tree.heading("enabled", text="启用")
+        self.tree.heading("next_run", text="下次执行")
+        self.tree.heading("last_run", text="上次执行")
+        
+        self.tree.column("id", width=50, anchor=tk.CENTER)
+        self.tree.column("name", width=120)
+        self.tree.column("command", width=200)
+        self.tree.column("schedule", width=120)
+        self.tree.column("enabled", width=60, anchor=tk.CENTER)
+        self.tree.column("next_run", width=120)
+        self.tree.column("last_run", width=120)
+        
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        
+        self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # 底部状态栏
+        bottom = ttk.Frame(self)
+        bottom.pack(fill=tk.X, padx=5, pady=5)
+        
+        self.status_var = tk.StringVar(value="就绪")
+        ttk.Label(bottom, textvariable=self.status_var, foreground="#666").pack(side=tk.LEFT)
+        
+        ttk.Button(bottom, text="关闭", command=self.destroy).pack(side=tk.RIGHT, padx=2)
+
+    def _load_tasks(self):
+        """加载任务列表"""
+        try:
+            from tea_agent.store import Storage
+            storage = Storage()
+            tasks = storage.scheduled_tasks.list_tasks()
+            
+            # 清空列表
+            for item in self.tree.get_children():
+                self.tree.delete(item)
+            
+            # 添加任务
+            for task in tasks:
+                enabled = "✓" if task.get("enabled", 0) else "✗"
+                next_run = task.get("next_run", "") or ""
+                last_run = task.get("last_run", "") or ""
+                self.tree.insert("", tk.END, values=(
+                    task.get("id", ""),
+                    task.get("name", ""),
+                    task.get("command", ""),
+                    task.get("schedule", ""),
+                    enabled,
+                    next_run[:16] if next_run else "",
+                    last_run[:16] if last_run else ""
+                ))
+            
+            self.status_var.set(f"已加载 {len(tasks)} 个任务")
+        except Exception as e:
+            self.status_var.set(f"加载失败: {e}")
+            logger.error(f"加载定时任务失败: {e}")
+
+    def _add_task(self):
+        """添加新任务（简化版：使用输入对话框）"""
+        # 这里可以扩展为完整的对话框
+        self.status_var.set("添加任务功能开发中...")
+
+    def _start_scheduler(self):
+        """启动调度器"""
+        try:
+            from tea_agent.agent_background import start_scheduler
+            start_scheduler()
+            self.status_var.set("调度器已启动")
+        except Exception as e:
+            self.status_var.set(f"启动失败: {e}")
+
+    def _stop_scheduler(self):
+        """停止调度器"""
+        self.status_var.set("停止调度器功能开发中...")
+
+

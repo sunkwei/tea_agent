@@ -993,10 +993,10 @@ class ConfigDialog(tk.Toplevel):
         vars_map = {}
         for row_idx, (title, key, width) in enumerate(fields):
             ttk.Label(f, text=title + ":", font=(SYSTEM_FONT, _fs(11))).grid(
-                row=row_idx, column=0, sticky=tk.W, padx=(5, 2), pady=4)
+                row=row_idx, column=0, sticky=tk.W, padx=(5, 0), pady=4)
             var = tk.StringVar()
             ttk.Entry(f, textvariable=var, width=width, font=(SYSTEM_FONT, _fs(11))).grid(
-                row=row_idx, column=1, sticky=tk.EW, padx=(2, 5), pady=4)
+                row=row_idx, column=1, sticky=tk.EW, padx=(0, 5), pady=4)
             vars_map[key] = var
         if hint:
             ttk.Label(f, text="ℹ️ " + hint, font=(SYSTEM_FONT, _fs(10)),

@@ -90,7 +90,7 @@ score = 相关性(关键词匹配) × 重要度(importance/5) × 时效因子 ×
 
 ---
 
-## 📜 三级历史压缩 (L0 → L3 → L2 → L1)
+## 📜 四级历史压缩 (L0 → L3 → L2 → L1)
 
 Tea Agent 使用**四级分层**构建发送给 LLM 的上下文，在有限的 token 窗口内最大化信息密度：
 
@@ -102,17 +102,104 @@ Tea Agent 使用**四级分层**构建发送给 LLM 的上下文，在有限的 
 │  └─ 长期记忆注入 (MemoryManager 选取)             │
 ├─────────────────────────────────────────────────┤
 │  Level 3: 摘要层 (LLM 生成)                      │
-│  ├─ 语义摘要 — 长期背景/偏好/关键结论              │
-│  └─ 工具链摘要 — 历史工具调用链回顾                │
+│  └─ L2 溢出时生成：保留关键结论，丢弃细节          │
 ├─────────────────────────────────────────────────┤
-│  Level 2: 历史相关层 (按相关性筛选)                │
-│  ├─ 高相关(≥0.15): 保留完整 user+assistant 对     │
-│  └─ 低相关(≥0.05): 仅保留摘要片段                 │
+│  Level 2: 历史对列表 (SQLite 持久化)              │
+│  └─ user + AI final msg 对，按相关性动态筛选注入   │
 ├─────────────────────────────────────────────────┤
-│  Level 1: 最新对话层 (原始消息)                    │
-│  ├─ 工具输出裁剪: 旧工具结果→占位符                │
-│  └─ 渐进式 token 裁剪 (5级策略)                   │
+│  Level 1: 最新对话 (当前 session)                 │
+│  ├─ 压缩工具链 (中间工具调用→摘要，保留最终回复)   │
+│  ├─ 旧工具输出 → 占位符                           │
+│  └─ 工具输出截断 (首尾各半，按换行对齐)            │
 └─────────────────────────────────────────────────┘
+```
+
+### Level 2 (L2) — 历史对列表
+
+L2 是一个**固定大小的环形缓冲区**，存储在 SQLite 中，容量 50 条。
+
+每个条目包含：
+
+```json
+{
+  "user": "用户的原始消息",
+  "assistant": "AI 的最终回复（不含工具调用中间过程）",
+  "thinking": "工具调用轮的 assistant content + reasoning（可选）",
+  "files": ["涉及的文件路径（可选）"]
+}
+```
+
+**流转机制**：
+
+```
+每轮对话结束
+  → push_to_level2() 追加新条目
+  → L2 count ≥ 50?
+      是 → 取最老 30 条 → generate_l2_to_l3_summary()
+      → 合并现有 L3 摘要 → LLM 生成新 L3 → L2 裁剪到 20 条
+```
+
+**注入策略**：每次构建上下文时，L2 全部条目按**语义相关性**筛选：
+
+| 相关度 | 处理 |
+|--------|------|
+| ≥ 0.15 | 保留完整 user+assistant 对（作为 `[历史记录]` 注入） |
+| ≥ 0.05 | 仅保留摘要片段（User: xxx... → Assistant: yyy...） |
+| < 0.05 | **不注入**（节省 token） |
+
+> 相关性基于关键词重叠度（Jaccard）+ 文件路径匹配计算。
+
+### Level 1 (L1) — 最新对话
+
+L1 是**当前 session 的原始消息**，经多层压缩后传入 API。
+
+#### 工具链压缩
+
+加载历史时，`_compress_tool_rounds` 对工具调用链做 L1 智能压缩：
+
+```
+原始 rounds:  [user] → [asst+tool_call] → [tool_result] → [asst+tool_call] → [tool_result] → [final_asst]
+                                              ↓ 压缩                  ↓ 压缩
+压缩后 rounds: [user] → [asst+tool_call(参数截断)] → [tool_result(首尾各半)] → [final_asst(完整保留)]
+```
+
+- **中间 assistant**（含 tool_calls）：保留 reasoning_content，工具参数 >2048 字节则截断
+- **tool 消息**：`_compress_tool_content()` 首尾各 1024 字节，按换行边界对齐
+- **最终 assistant**（末尾无 tool_calls）：**完整保留**，不压缩
+
+#### 实时工具输出截断
+
+每个工具调用返回时，`session_tool_component` 立即截断：
+
+```python
+# 默认 max_tool_output = 128KB (131072 字节)
+if result_bytes > max_output:
+    # 首尾各保留一半，按换行对齐
+    result_str = f"{head_text}\n\n... [工具输出截断] ...\n\n{tail_text}"
+```
+
+> 这是**第一道防线**，确保单个工具输出不会撑爆 token 窗口。
+
+#### 多轮工具调用的 token 膨胀处理
+
+当 Agent 执行读取大日志等场景时，可能在**同一轮 user 消息**内产生多次工具调用。处理流程：
+
+```
+第 1 轮工具调用:
+  toolkit_exec("cat huge.log") → 10MB 输出 → max_tool_output 截断到 128KB
+  toolkit_edit(...) → 小输出
+
+第 2 轮工具调用:
+  toolkit_exec("grep pattern huge.log") → 5MB 输出 → 截断到 128KB
+
+... (最多 max_iterations=50 轮)
+
+── 每轮 API 调用前 ──
+
+1. _build_api_messages() 构建上下文
+2. _tool_prune_cutoff = 最近 3 轮 user 消息分界
+3. 3 轮外的 tool 消息 → "[工具结果已省略: N 字符]"
+4. 如 max_context_tokens > 0 → _progressive_trim() 5 级渐进裁剪
 ```
 
 ### 渐进式裁剪策略
@@ -122,10 +209,11 @@ Tea Agent 使用**四级分层**构建发送给 LLM 的上下文，在有限的 
 | 策略 | 操作 | 说明 |
 |------|------|------|
 | 1 | 删除 `[历史记录]` L2 条目 | 最旧的先删 |
-| 2 | 替换工具输出为占位符 | `[工具结果已省略: N 字符]` |
+| 2 | 替换旧工具输出为占位符 | `[工具结果已省略: N 字符]` |
 | 3 | 清空 reasoning_content | 释放 thinking token |
 | 4 | 截断长文本 | 限制 4096 字符 |
 | 5 | 删除 L1 旧轮次 | 保留最近 5 轮 user 消息 |
+| 兜底 | 截断最后一条消息 | 仅保留前 1/3 |
 
 ### Token 估算
 

@@ -458,11 +458,89 @@ class Agent:
             daemon=True
         ).start()
 
+        # 评估 + 结晶（异步）
+        threading.Thread(
+            target=self._do_task_evaluation,
+            args=(user_text, ai_msg, used_tools, rounds, usage),
+            daemon=True
+        ).start()
+
     def _do_async_summaries(self, topic_id: str, overflow_items: list = None,
                             should_summarize: bool = False):
         """后台线程：执行标题摘要 + 条件 L2→L3 摘要。"""
         from .agent_pipeline import do_async_summaries
         do_async_summaries(self, topic_id, overflow_items, should_summarize)
+
+    def _do_task_evaluation(
+        self,
+        user_text: str,
+        ai_msg: str,
+        used_tools: bool,
+        rounds: list,
+        usage: dict,
+    ):
+        """后台线程：评估任务 → 结晶技能 → 更新记忆。"""
+        try:
+            from .evaluation import TaskEvaluator
+            from .skills import SkillCrystallizer, SkillRegistry
+            
+            # 1. 提取使用的工具列表
+            tools_used = []
+            if rounds:
+                for round_data in rounds:
+                    for tc in round_data.get("tool_calls", []):
+                        func_name = tc.get("function", {}).get("name", "")
+                        if func_name and func_name not in tools_used:
+                            tools_used.append(func_name)
+            
+            # 2. 评估任务
+            evaluator = TaskEvaluator()
+            token_cost = usage.get("total_tokens", 0) if usage else 0
+            
+            result = evaluator.evaluate(
+                task=user_text,
+                rounds=rounds or [],
+                tools_used=tools_used,
+                token_cost=token_cost,
+                time_seconds=0,  # TODO: 计算实际耗时
+            )
+            
+            logger.debug(f"📊 评估结果: {result.summary}")
+            
+            # 3. 如果应该结晶，创建技能
+            if result.should_crystallize and tools_used:
+                crystallizer = SkillCrystallizer()
+                skill = crystallizer.crystallize(
+                    task=user_text,
+                    tools_used=tools_used,
+                    rounds=rounds,
+                    success=result.success,
+                    token_cost=token_cost,
+                )
+                
+                # 注册到技能库
+                registry = SkillRegistry()
+                registry.register(skill)
+                
+                logger.info(f"✨ 技能结晶: {skill.name}")
+            
+            # 4. 记录经验教训到记忆
+            if result.lessons and self._db:
+                from .memory import PRIORITY_MEDIUM
+                for lesson in result.lessons:
+                    try:
+                        self._db.add_memory(
+                            content=lesson,
+                            category="fact",
+                            importance=3,
+                            priority=PRIORITY_MEDIUM,
+                            tags="经验教训,自动提取",
+                        )
+                    except Exception as e:
+                        logger.debug(f"记录经验失败: {e}")
+            
+        except Exception as e:
+            logger.debug(f"任务评估异常 (非致命): {e}")
 
     # ═══════════════════════════════════════════════
     # 历史加载（仅 full 模式）

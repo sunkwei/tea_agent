@@ -1,6 +1,6 @@
-# Tea Agent v0.9.22
+# Tea Agent v0.9.30
 
-> ⚠️ **这是一个 AI 写 AI 的实验项目，不做任何质量担保。**
+> ⚠️ **这是一个 AI 写 AI 的实验项目，自行承担责任。**
 
 > 一个自进化 AI 编程助手 — 工具驱动、自我进化、多界面形态
 
@@ -21,6 +21,9 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 60+ 可调用
 - 📋 **Plan / TODO** — 内置任务规划与追踪系统
 - 🌐 **MCP 协议** — 支持连接外部 MCP Server，扩展第三方工具
 - 🎯 **模式切换** — design / develop / test / review / docs / devops 六阶段工作流
+- 🤖 **多 Agent 协作** — 任务分解 + 并行执行，子 Agent 独立完成子任务
+- 📊 **任务评估** — 自动评估任务质量，记录成功/失败经验
+- 💎 **技能结晶** — 从成功经验中提取可复用技能模式
 
 ---
 
@@ -72,8 +75,48 @@ tea-agent-cli
 | 🗓️ 工具 | `toolkit_lunar`, `toolkit_weather_my`, `toolkit_gettime` |
 | 🔧 系统 | `toolkit_exec`, `toolkit_config`, `toolkit_os_info` |
 | 🧠 记忆/知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_reflection` |
+| 🤖 多 Agent | `Dispatcher`, `LiteAgent`, 并行任务执行 |
 
 > 完整列表见 [`docs/TOOLS.md`](docs/TOOLS.md)（每小时自动更新）
+
+---
+
+## 🤖 多 Agent 协作
+
+```python
+from tea_agent.multi_agent import Dispatcher, LiteAgent
+
+# 一步到位：分解 + 执行
+dispatcher = Dispatcher()
+result = dispatcher.dispatch("重构项目添加类型注解")
+print(result["summary"])
+
+# 可视化执行计划（不执行）
+print(dispatcher.visualize("为 gui.py 添加类型注解"))
+
+# 单独使用 LiteAgent
+agent = LiteAgent()
+result = agent.execute_sync("读取 README.md 并总结")
+```
+
+### 架构
+
+```
+Dispatcher.dispatch(goal)
+  │
+  ├─ _identify_pattern()     → 识别任务模式
+  ├─ _generate_tasks()       → 生成 SubTask 列表
+  ├─ _topological_sort()     → 拓扑排序（分层）
+  │
+  ├─ _execute_layers()       → 逐层执行
+  │   ├─ 第 1 层: [task_1] ─── LiteAgent.execute_sync()
+  │   │              ↓ 结果写入 accumulated_context
+  │   ├─ 第 2 层: [task_2] ─── LiteAgent.execute_sync()  ← 带前置上下文
+  │   │              ↓
+  │   └─ ...
+  │
+  └─ _merge_results()        → 整合结果
+```
 
 ---
 
@@ -93,6 +136,8 @@ tea_agent/
 ├── multi_agent/        # 多 Agent 协作
 ├── lsp/                # LSP 语言服务
 ├── store/              # 数据存储
+├── evaluation/         # 任务评估
+├── skills/             # 技能结晶
 └── _gui/               # GUI 资源（图标、字体）
 ```
 

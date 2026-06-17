@@ -42,9 +42,9 @@ class UIBuilder:
         main_split.add(left, weight=0)
 
         ttk.Label(left, text="聊天主题", font=(SYSTEM_FONT, _fs(14), "bold")).pack(pady=5)
-        _topic_font = tkFont.Font(family=SYSTEM_FONT, size=_fs(12))
+        _topic_font = tkFont.Font(family=SYSTEM_FONT, size=_fs(11))
         _topic_style = ttk.Style()
-        _topic_style.configure("Topic.Treeview", rowheight=_fs(30))
+        _topic_style.configure("Topic.Treeview", rowheight=_fs(26))
         gui.topic_list = ttk.Treeview(left, show="tree", style="Topic.Treeview",
                                        selectmode="browse", height=12)
         gui.topic_list.tag_configure("topic_item", font=_topic_font)

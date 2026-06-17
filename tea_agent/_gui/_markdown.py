@@ -17,7 +17,7 @@ _DEFAULT_FONT_SIZE = 16  # 模块级默认
 
 _MD_CSS_TEMPLATE = string.Template("""
 <style>
-body { font-family: "Microsoft YaHei", "Microsoft YaHei UI", "DengXian", "SimHei", "SimSun", "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", "DejaVu Sans", sans-serif; font-size: ${font_size}px; line-height: 1.6; color: #333; padding: 8px; }
+body { font-family: "DengXian", "Noto Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", "Microsoft YaHei UI", "Source Han Sans SC", "WenQuanYi Micro Hei", "SimHei", "SimSun", "DejaVu Sans", sans-serif; font-size: ${font_size}px; line-height: 1.7; color: #333; padding: 8px; }
 h1, h2, h3, h4, h5, h6 { margin: 0.8em 0 0.4em; color: #1a73e8; }
 h1 { font-size: 1.5em; border-bottom: 2px solid #eee; padding-bottom: 0.3em; }
 h2 { font-size: 1.3em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
@@ -394,12 +394,13 @@ _KNOWN_HTML_TAGS = {'textarea', 'script', 'section', 'details', 'img', 'ul', 'h2
 
 def _validate_html_structure(html: str) -> tuple:
     """快速校验 HTML 基本结构：长度、html 标签、标签配对。
-    返回 (ok: bool, 诊断信息: str)。"""
+    返回 (ok: bool, 诊断信息: str, unclosed_tags: list)。
+    unclosed_tags 为未闭合标签名列表（栈顺序，从内到外）。"""
     if len(html) < 10:
-        return False, f"HTML 过短 ({len(html)} 字节)"
+        return False, f"HTML 过短 ({len(html)} 字节)", []
     lower = html.lower()
     if '<html>' not in lower and '<html ' not in lower:
-        return False, "缺少 <html> 标签"
+        return False, "缺少 <html> 标签", []
     # 用 HTMLParser 检查标签配对
     from html.parser import HTMLParser
 
@@ -410,6 +411,7 @@ def _validate_html_structure(html: str) -> tuple:
             super().__init__()
             self.stack = []
             self.errors = []
+            self.unclosed = []  # 单独跟踪解析中检测到的未闭合标签
             self.known_tags = _KNOWN_HTML_TAGS
             self.void_elements = {'br', 'hr', 'img', 'input', 'meta', 'link',
                                   'area', 'base', 'col', 'embed', 'source', 'track', 'wbr'}
@@ -439,8 +441,9 @@ def _validate_html_structure(html: str) -> tuple:
             else:
                 if tag in self.stack:
                     while self.stack and self.stack[-1] != tag:
-                        unclosed = self.stack.pop()
-                        self.errors.append(f"未闭合 <{unclosed}>")
+                        unclosed_tag = self.stack.pop()
+                        self.unclosed.append(unclosed_tag)
+                        self.errors.append(f"未闭合 <{unclosed_tag}>")
                     if self.stack:
                         self.stack.pop()
                 else:
@@ -448,17 +451,60 @@ def _validate_html_structure(html: str) -> tuple:
 
         def get_result(self):
             """Get the result."""
+            # 栈中残留的也是未闭合
             for tag in reversed(self.stack):
+                self.unclosed.append(tag)
                 self.errors.append(f"未闭合 <{tag}>")
-            return len(self.errors) == 0, self.errors
+            return len(self.errors) == 0, self.errors, self.unclosed
 
     try:
         checker = _TagChecker()
         checker.feed(html)
-        ok, errors = checker.get_result()
+        ok, errors, unclosed = checker.get_result()
         if ok:
-            return True, "OK"
+            return True, "OK", []
         else:
-            return False, "; ".join(errors[:3])
+            return False, "; ".join(errors[:3]), unclosed
     except Exception as e:
-        return False, f"HTML 解析异常: {e}"
+        return False, f"HTML 解析异常: {e}", []
+
+
+def _auto_close_unclosed_tags(html: str, unclosed_tags: list) -> str:
+    """自动闭合未关闭的 HTML 标签。
+    
+    策略：对每个未闭合标签，在其最后一个 <tag> 之后找到第一个 </xxx>，
+    在该位置之前插入 </tag>，确保闭合顺序正确。
+    
+    Args:
+        html: 原始 HTML 字符串
+        unclosed_tags: 未闭合标签列表（栈顺序，从内到外）
+    
+    Returns:
+        修复后的 HTML 字符串
+    """
+    if not unclosed_tags:
+        return html
+    # 跳过 html（通常已有 </html>）
+    to_close = [t for t in unclosed_tags if t != 'html']
+    if not to_close:
+        return html
+    result = html
+    lower = result.lower()
+    for tag in to_close:
+        lower = result.lower()
+        # 找到最后一个 <tag> 开始位置
+        last_open = max(lower.rfind(f'<{tag}>'), lower.rfind(f'<{tag} '))
+        if last_open < 0:
+            continue
+        # 从该位置向后找第一个 </xxx>（任意闭合标签）
+        idx = last_open + 1
+        while idx < len(result) - 1:
+            if result[idx] == '<' and result[idx + 1] == '/':
+                # 在此闭合标签之前插入 </tag>
+                result = result[:idx] + f'</{tag}>' + result[idx:]
+                break
+            idx += 1
+        else:
+            # 没找到后续闭合标签，追加在末尾
+            result = result + f'</{tag}>'
+    return result

@@ -23,6 +23,7 @@ from ._markdown import (
     _chat_to_markdown,
     _sanitize_html_control_chars,
     _validate_html_structure,
+    _auto_close_unclosed_tags,
 )
 from . import _fonts as _fonts_mod  # 动态获取 _DEFAULT_FONT_SIZE
 
@@ -38,6 +39,7 @@ class ChatRenderer:
             gui: Description.
         """
         self.gui = gui
+        self._last_html_warn = None  # 用于去重相同的 WARN
 
     # ── 便捷属性 ────────────────────────
     @property
@@ -55,11 +57,10 @@ class ChatRenderer:
 
     # ── _html_render ──
     def _html_render(self, html: str):
-        # 0. 基础校验
-        """Internal: html render.
+        """Internal: html render — 校验+自动修复+渲染。
         
         Args:
-            html: Description.
+            html: 完整 HTML 字符串
         """
         if not html or not isinstance(html, str):
             print("[_html_render WARN] HTML 为空或非字符串，跳过渲染")
@@ -67,34 +68,28 @@ class ChatRenderer:
         # 1. 清洗控制字符（保留 \n \t）
         cleaned = _sanitize_html_control_chars(html)
         if cleaned != html:
-            print(f"[_html_render WARN] 移除了 {len(html) - len(cleaned)} 个控制字符")
-        # 2. 结构校验
-        ok, diag = _validate_html_structure(cleaned)
+            logger.debug(f"[_html_render] 移除了 {len(html) - len(cleaned)} 个控制字符")
+        # 2. 结构校验 + 自动修复
+        ok, diag, unclosed = _validate_html_structure(cleaned)
         if not ok:
-            print(f"[_html_render WARN] HTML 结构异常: {diag}")
-            # 尝试自动修复
-            fixed = cleaned.rstrip()
-            if not fixed.endswith('</html>'):
-                fixed += '\n</html>'
-                print(f"[_html_render] 已自动补全 </html>")
-            # 修复后二次校验
-            ok2, diag2 = _validate_html_structure(fixed)
+            # 自动补全未闭合标签
+            fixed = _auto_close_unclosed_tags(cleaned.rstrip(), unclosed)
+            # 二次校验
+            ok2, diag2, unclosed2 = _validate_html_structure(fixed)
             if ok2:
                 cleaned = fixed
-                print(f"[_html_render] 修复后校验通过")
             else:
-                print(f"[_html_render WARN] 修复后仍有问题: {diag2}，尝试继续渲染")
+                # 仍有问题但尝试继续渲染（HtmlFrame 有容错能力）
                 cleaned = fixed
+                warn_key = f"html_warn:{';'.join(sorted(unclosed2))}"
+                if warn_key != self._last_html_warn:
+                    self._last_html_warn = warn_key
+                    logger.warning(f"[_html_render] 修复后仍有未闭合标签: {diag2}，尝试继续渲染")
         # 3. 渲染
-        # print("=" * 60)
-        # print("HTML_BYTES_BEGIN")
-        # print(cleaned)
-        # print("HTML_BYTES_END")
-        # print("=" * 60)
         try:
             self.gui.chat_view.load_html(cleaned)
         except Exception as e:
-            print(f"[_html_render ERROR] {e}")
+            logger.error(f"[_html_render ERROR] {e}")
             import traceback
             traceback.print_exc()
 
@@ -359,7 +354,7 @@ class ChatRenderer:
         loading_html = f'''<html><head>
 <style>
 body {{ display:flex; align-items:center; justify-content:center; height:100vh;
-       margin:0; background:#fafafa; font-family:"Noto Sans CJK SC","Microsoft YaHei",sans-serif; }}
+       margin:0; background:#fafafa; font-family:"DengXian","Noto Sans SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif; }}
 .loader {{ text-align:center; }}
 .spinner {{ width:48px; height:48px; border:4px solid #e0e0e0; border-top-color:#1a73e8;
            border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 20px; }}

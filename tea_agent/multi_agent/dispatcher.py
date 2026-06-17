@@ -1,38 +1,34 @@
 """
 子 Agent 调度器 — 任务分解 + 并行执行。
 
-设计灵感:
-  learn-claude-code 的 Subagent 隔离 + EvoAgentX 的工作流生成
-
-功能:
-  - 将复杂任务分解为子任务
-  - 调度 lite_agent 并行执行
-  - 整合结果
+核心设计:
+  1. 将复杂任务分解为有向无环图 (DAG)
+  2. 拓扑排序确定执行层级
+  3. 同层子任务并行（ThreadPoolExecutor）
+  4. 上下文透传：前置步骤结果 → 后续步骤
 
 用法:
     from tea_agent.multi_agent import Dispatcher
     
     dispatcher = Dispatcher()
-    result = await dispatcher.dispatch(
-        goal="重构项目添加类型注解",
-        tools=["toolkit_file", "toolkit_edit", "toolkit_lsp"]
-    )
+    result = dispatcher.dispatch("重构项目添加类型注解")
+    print(result)
 """
 
-import asyncio
-import json
-from typing import List, Dict, Optional, Any
+import logging
+import uuid
+from typing import List, Dict, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import logging
+from .lite_agent import LiteAgent
 
 logger = logging.getLogger(__name__)
 
 
 class TaskStatus(Enum):
-    """任务状态"""
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -45,334 +41,300 @@ class SubTask:
     id: str
     name: str
     description: str
-    tools: List[str]
-    dependencies: List[str] = field(default_factory=list)  # 依赖的其他子任务 ID
+    tools: List[str] = field(default_factory=list)
+    dependencies: List[str] = field(default_factory=list)
     status: TaskStatus = TaskStatus.PENDING
     result: Optional[str] = None
     error: Optional[str] = None
-    token_cost: int = 0
     time_seconds: float = 0
 
 
-@dataclass
-class Workflow:
-    """工作流定义"""
-    id: str
-    goal: str
-    tasks: List[SubTask]
-    created_at: str = ""
-    
-    def __post_init__(self):
-        if not self.created_at:
-            self.created_at = datetime.now().isoformat()
-
-
 class Dispatcher:
-    """子 Agent 调度器"""
-    
-    # 任务分解模式
-    DECOMPOSE_PATTERNS = {
-        "refactor": ["分析代码", "设计重构方案", "执行重构", "验证测试"],
-        "test": ["分析测试需求", "编写测试用例", "运行测试", "修复失败"],
-        "doc": ["分析代码结构", "生成文档", "校验格式"],
-        "fix": ["定位问题", "分析原因", "修复代码", "验证修复"],
-        "feature": ["分析需求", "设计实现", "编写代码", "测试验证"],
-        "default": ["分析任务", "执行操作", "验证结果"],
+    """
+    子 Agent 调度器。
+
+    工作流: dispatch() → decompose() → _topological_sort() → _execute_layers() → _merge_results()
+    """
+
+    # 任务模式到步骤的映射
+    PATTERNS = {
+        "refactor": [
+            ("analyze", "分析代码结构，列出需要重构的部分"),
+            ("plan", "设计重构方案"),
+            ("execute", "执行重构，修改代码"),
+            ("verify", "验证：运行测试确保没有破坏"),
+        ],
+        "type_annotation": [
+            ("scan", "扫描 Python 文件，列出需要添加类型注解的函数"),
+            ("annotate", "为函数添加类型注解"),
+            ("check", "运行类型检查 (mypy/pyright)"),
+            ("test", "运行测试确保没有破坏"),
+        ],
+        "test": [
+            ("analyze", "分析需要测试的代码"),
+            ("write", "编写测试用例"),
+            ("run", "运行测试"),
+            ("fix", "修复失败的测试（如果有）"),
+        ],
+        "fix": [
+            ("locate", "定位问题根因"),
+            ("fix", "修复代码"),
+            ("verify", "验证修复"),
+        ],
+        "doc": [
+            ("analyze", "分析代码结构"),
+            ("write", "编写文档"),
+            ("format", "格式化文档"),
+        ],
+        "feature": [
+            ("analyze", "分析需求"),
+            ("implement", "实现功能"),
+            ("test", "编写并运行测试"),
+        ],
+        "default": [
+            ("analyze", "分析任务"),
+            ("execute", "执行操作"),
+            ("verify", "验证结果"),
+        ],
     }
-    
+
     def __init__(self, max_workers: int = 3):
-        """
-        Args:
-            max_workers: 最大并行 worker 数量
-        """
         self.max_workers = max_workers
-        self.workflows: Dict[str, Workflow] = {}
-    
-    async def dispatch(
+
+    def dispatch(
         self,
         goal: str,
-        tools: Optional[List[str]] = None,
         files: Optional[List[str]] = None,
         context: Optional[Dict] = None,
+        on_progress: Optional[callable] = None,
     ) -> Dict:
         """
-        分发任务。
-        
+        分发任务并同步执行。
+
         Args:
             goal: 任务目标
-            tools: 可用工具列表
             files: 相关文件列表
             context: 额外上下文
-            
+            on_progress: 进度回调 fn(task_id, status, message)
+
         Returns:
-            执行结果
+            执行结果字典
         """
         # 1. 分解任务
-        workflow = self.decompose(goal, tools, files)
-        self.workflows[workflow.id] = workflow
-        
-        logger.info(f"📋 工作流创建: {workflow.id} ({len(workflow.tasks)} 个子任务)")
-        
-        # 2. 拓扑排序，确定执行顺序
-        execution_order = self._topological_sort(workflow.tasks)
-        
-        # 3. 执行工作流
-        results = await self._execute_workflow(workflow, execution_order, context)
-        
-        # 4. 整合结果
-        final_result = self._merge_results(workflow, results)
-        
-        return final_result
-    
-    def decompose(
-        self,
-        goal: str,
-        tools: Optional[List[str]] = None,
-        files: Optional[List[str]] = None,
-    ) -> Workflow:
-        """
-        分解任务为工作流。
-        
-        Args:
-            goal: 任务目标
-            tools: 可用工具列表
-            files: 相关文件列表
-            
-        Returns:
-            Workflow 对象
-        """
-        if tools is None:
-            tools = []
-        if files is None:
-            files = []
-        
-        # 生成工作流 ID
-        workflow_id = f"wf_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        # 识别任务模式
         pattern = self._identify_pattern(goal)
-        
-        # 生成子任务
-        tasks = self._generate_tasks(goal, pattern, tools, files)
-        
-        return Workflow(
-            id=workflow_id,
-            goal=goal,
-            tasks=tasks,
-        )
-    
+        tasks = self._generate_tasks(goal, pattern)
+        logger.info(f"📋 任务分解: {goal} → {len(tasks)} 个子任务 ({pattern})")
+
+        # 2. 拓扑排序
+        layers = self._topological_sort(tasks)
+
+        # 3. 执行
+        context = context or {}
+        results = self._execute_layers(layers, context, on_progress)
+
+        # 4. 整合结果
+        return self._merge_results(goal, tasks, results)
+
+    # ═══════════════════════════════════════════════
+    # 任务分解
+    # ═══════════════════════════════════════════════
+
     def _identify_pattern(self, goal: str) -> str:
-        """识别任务模式"""
         goal_lower = goal.lower()
-        
-        if any(kw in goal_lower for kw in ["重构", "refactor", "重写"]):
-            return "refactor"
-        elif any(kw in goal_lower for kw in ["测试", "test", "pytest"]):
-            return "test"
-        elif any(kw in goal_lower for kw in ["文档", "doc", "readme"]):
-            return "doc"
-        elif any(kw in goal_lower for kw in ["修复", "fix", "bug"]):
-            return "fix"
-        elif any(kw in goal_lower for kw in ["新增", "add", "创建", "create"]):
-            return "feature"
-        else:
-            return "default"
-    
-    def _generate_tasks(
-        self,
-        goal: str,
-        pattern: str,
-        tools: List[str],
-        files: List[str],
-    ) -> List[SubTask]:
-        """根据模式生成子任务"""
-        steps = self.DECOMPOSE_PATTERNS.get(pattern, self.DECOMPOSE_PATTERNS["default"])
-        
-        tasks = []
-        for i, step in enumerate(steps):
-            task_id = f"task_{i+1}"
-            
-            # 确定每个子任务需要的工具
-            task_tools = self._assign_tools(step, tools)
-            
-            # 确定依赖
-            dependencies = [f"task_{i}"] if i > 0 else []
-            
-            task = SubTask(
-                id=task_id,
-                name=step,
-                description=f"{goal} - {step}",
-                tools=task_tools,
-                dependencies=dependencies,
-            )
-            tasks.append(task)
-        
-        return tasks
-    
-    def _assign_tools(self, step: str, available_tools: List[str]) -> List[str]:
-        """为子任务分配工具"""
-        # 根据步骤名称推断需要的工具
-        step_lower = step.lower()
-        
-        tool_mapping = {
-            "分析": ["toolkit_file", "toolkit_search", "toolkit_lsp"],
-            "测试": ["toolkit_run_tests"],
-            "重构": ["toolkit_edit", "toolkit_diff"],
-            "文档": ["toolkit_file", "toolkit_save_file"],
-            "修复": ["toolkit_edit", "toolkit_diff"],
-            "代码": ["toolkit_file", "toolkit_edit"],
+        pattern_keywords = {
+            "refactor": ["重构", "refactor", "重写"],
+            "type_annotation": ["类型注解", "type annotation", "type hint", "类型提示"],
+            "test": ["测试", "test", "pytest", "unittest"],
+            "fix": ["修复", "fix", "bug", "问题", "错误"],
+            "doc": ["文档", "doc", "readme"],
+            "feature": ["新增", "add", "创建", "create", "功能"],
         }
-        
-        assigned = []
-        for keyword, tools in tool_mapping.items():
-            if keyword in step_lower:
-                assigned.extend(tools)
-        
-        # 添加用户指定的工具
-        for tool in available_tools:
-            if tool not in assigned:
-                assigned.append(tool)
-        
-        # 确保至少有一个工具
-        if not assigned:
-            assigned = ["toolkit_file"]
-        
-        return assigned
-    
+        for pattern, keywords in pattern_keywords.items():
+            if any(kw in goal_lower for kw in keywords):
+                return pattern
+        return "default"
+
+    def _generate_tasks(self, goal: str, pattern: str) -> List[SubTask]:
+        steps = self.PATTERNS.get(pattern, self.PATTERNS["default"])
+        tasks = []
+        for i, (name, desc) in enumerate(steps):
+            task_id = f"step_{i + 1}"
+            dependencies = [f"step_{i}"] if i > 0 else []
+            tasks.append(SubTask(
+                id=task_id,
+                name=name,
+                description=f"{goal} — {desc}",
+                dependencies=dependencies,
+            ))
+        return tasks
+
+    # ═══════════════════════════════════════════════
+    # 拓扑排序
+    # ═══════════════════════════════════════════════
+
     def _topological_sort(self, tasks: List[SubTask]) -> List[List[SubTask]]:
-        """拓扑排序，返回执行层级"""
-        task_map = {t.id: t for t in tasks}
         in_degree = {t.id: len(t.dependencies) for t in tasks}
-        
-        # 初始化队列
         queue = [t for t in tasks if in_degree[t.id] == 0]
         layers = []
-        
+
         while queue:
-            # 当前层
-            layer = list(queue)
-            layers.append(layer)
-            
-            # 下一层
+            layers.append(list(queue))
             next_queue = []
             for task in queue:
-                # 找到依赖当前任务的其他任务
                 for other in tasks:
                     if task.id in other.dependencies:
                         in_degree[other.id] -= 1
                         if in_degree[other.id] == 0:
                             next_queue.append(other)
-            
             queue = next_queue
-        
+
         return layers
-    
-    async def _execute_workflow(
+
+    # ═══════════════════════════════════════════════
+    # 执行引擎
+    # ═══════════════════════════════════════════════
+
+    def _execute_layers(
         self,
-        workflow: Workflow,
         layers: List[List[SubTask]],
-        context: Optional[Dict],
-    ) -> Dict[str, Any]:
-        """执行工作流"""
-        results = {}
-        
-        for layer in layers:
-            # 并行执行当前层
-            layer_tasks = [
-                self._execute_task(task, results, context)
-                for task in layer
-            ]
-            layer_results = await asyncio.gather(*layer_tasks, return_exceptions=True)
-            
-            # 收集结果
-            for task, result in zip(layer, layer_results):
-                if isinstance(result, Exception):
-                    task.status = TaskStatus.FAILED
-                    task.error = str(result)
-                    results[task.id] = {"success": False, "error": str(result)}
-                    logger.error(f"❌ 子任务失败: {task.name}, {result}")
-                else:
-                    task.status = TaskStatus.COMPLETED
-                    task.result = result
-                    results[task.id] = {"success": True, "result": result}
-                    logger.info(f"✅ 子任务完成: {task.name}")
-        
-        return results
-    
-    async def _execute_task(
+        context: Dict,
+        on_progress: Optional[callable],
+    ) -> Dict[str, Dict]:
+        """逐层执行，同层并行。"""
+        all_results: Dict[str, Dict] = {}
+        # 累积上下文：前置步骤结果
+        accumulated_context: Dict[str, str] = {}
+
+        for layer_idx, layer in enumerate(layers):
+            logger.info(f"  ⚡ 执行第 {layer_idx + 1}/{len(layers)} 层 ({len(layer)} 个子任务)")
+
+            if len(layer) == 1:
+                # 单任务直接执行
+                task = layer[0]
+                result = self._execute_single_task(task, accumulated_context, context)
+                all_results[task.id] = result
+                if result["success"]:
+                    accumulated_context[task.name] = result["result"]
+            else:
+                # 多任务并行
+                with ThreadPoolExecutor(max_workers=min(self.max_workers, len(layer))) as pool:
+                    future_map = {
+                        pool.submit(
+                            self._execute_single_task, task, accumulated_context, context
+                        ): task
+                        for task in layer
+                    }
+                    for future in as_completed(future_map):
+                        task = future_map[future]
+                        try:
+                            result = future.result()
+                        except Exception as e:
+                            result = {"success": False, "result": "", "error": str(e)}
+                            task.status = TaskStatus.FAILED
+                            task.error = str(e)
+
+                        all_results[task.id] = result
+                        if result["success"]:
+                            accumulated_context[task.name] = result["result"]
+
+        return all_results
+
+    def _execute_single_task(
         self,
         task: SubTask,
-        context: Dict,
-        extra_context: Optional[Dict],
-    ) -> str:
-        """执行单个子任务"""
+        accumulated_context: Dict[str, str],
+        global_context: Dict,
+    ) -> Dict:
+        """执行单个子任务。"""
         task.status = TaskStatus.RUNNING
-        start_time = datetime.now()
-        
+        start = datetime.now()
+
+        if on_progress := getattr(self, '_on_progress', None):
+            on_progress(task.id, "running", task.name)
+
         try:
-            # 使用 lite_agent 执行
-            from .lite_agent import LiteAgent
-            
-            agent = LiteAgent(
-                tools=task.tools,
-                context=context,
-            )
-            
-            result = await agent.execute(
-                goal=task.description,
-                tools=task.tools,
-            )
-            
-            # 更新统计
-            elapsed = (datetime.now() - start_time).total_seconds()
+            agent = LiteAgent(max_iterations=15, enable_thinking=False)
+
+            # 构建子任务上下文
+            sub_context = {}
+            # 注入前置步骤结果
+            for dep_id in task.dependencies:
+                for step_name, result_text in accumulated_context.items():
+                    sub_context[step_name] = result_text
+            # 注入全局上下文
+            if global_context:
+                sub_context.update(global_context)
+
+            if sub_context:
+                result_text = agent.execute_with_context(task.description, sub_context)
+            else:
+                result_text = agent.execute_sync(task.description)
+
+            elapsed = (datetime.now() - start).total_seconds()
+            task.status = TaskStatus.COMPLETED
+            task.result = result_text
             task.time_seconds = elapsed
-            
-            return result
-            
+
+            logger.info(f"  ✅ {task.name} 完成 ({elapsed:.1f}s)")
+            return {"success": True, "result": result_text, "error": None, "time": elapsed}
+
         except Exception as e:
+            elapsed = (datetime.now() - start).total_seconds()
             task.status = TaskStatus.FAILED
             task.error = str(e)
-            raise
-    
-    def _merge_results(self, workflow: Workflow, results: Dict) -> Dict:
-        """整合结果"""
-        successful = sum(1 for r in results.values() if r.get("success"))
-        total = len(results)
-        
-        # 收集所有结果
-        all_results = []
-        for task in workflow.tasks:
-            task_result = results.get(task.id, {})
-            all_results.append({
-                "task": task.name,
-                "success": task_result.get("success", False),
-                "result": task_result.get("result", ""),
+            task.time_seconds = elapsed
+
+            logger.error(f"  ❌ {task.name} 失败: {e}")
+            return {"success": False, "result": "", "error": str(e), "time": elapsed}
+
+    # ═══════════════════════════════════════════════
+    # 结果整合
+    # ═══════════════════════════════════════════════
+
+    def _merge_results(self, goal: str, tasks: List[SubTask], results: Dict) -> Dict:
+        total = len(tasks)
+        successful = sum(1 for t in tasks if t.status == TaskStatus.COMPLETED)
+        total_time = sum(t.time_seconds for t in tasks)
+
+        task_summaries = []
+        for t in tasks:
+            task_summaries.append({
+                "step": t.name,
+                "description": t.description,
+                "status": t.status.value,
+                "result": t.result[:500] if t.result else None,
+                "error": t.error,
+                "time_seconds": round(t.time_seconds, 1),
             })
-        
+
         return {
-            "workflow_id": workflow.id,
-            "goal": workflow.goal,
-            "total_tasks": total,
-            "successful_tasks": successful,
-            "failed_tasks": total - successful,
-            "success_rate": successful / total if total > 0 else 0,
-            "tasks": all_results,
-            "summary": self._generate_summary(workflow, results),
+            "goal": goal,
+            "success": successful == total,
+            "total_steps": total,
+            "completed_steps": successful,
+            "failed_steps": total - successful,
+            "total_time_seconds": round(total_time, 1),
+            "tasks": task_summaries,
+            "summary": self._build_summary(goal, successful, total, total_time),
         }
-    
-    def _generate_summary(self, workflow: Workflow, results: Dict) -> str:
-        """生成执行摘要"""
-        successful = sum(1 for r in results.values() if r.get("success"))
-        total = len(results)
-        
-        status = "✅ 成功" if successful == total else "⚠️ 部分成功"
-        
-        return f"{status}: {workflow.goal} ({successful}/{total} 子任务完成)"
-    
-    def get_workflow(self, workflow_id: str) -> Optional[Workflow]:
-        """获取工作流"""
-        return self.workflows.get(workflow_id)
-    
-    def list_workflows(self) -> List[Workflow]:
-        """列出所有工作流"""
-        return list(self.workflows.values())
+
+    def _build_summary(self, goal: str, successful: int, total: int, time: float) -> str:
+        if successful == total:
+            return f"✅ 全部完成: {goal} ({total} 步, {time:.1f}s)"
+        else:
+            return f"⚠️ 部分完成: {goal} ({successful}/{total} 步, {time:.1f}s)"
+
+    def visualize(self, goal: str) -> str:
+        """可视化执行计划（不执行）。"""
+        pattern = self._identify_pattern(goal)
+        tasks = self._generate_tasks(goal, pattern)
+
+        lines = [f"📋 执行计划: {goal}", f"   模式: {pattern}", ""]
+        for i, t in enumerate(tasks):
+            prefix = "├─" if i < len(tasks) - 1 else "└─"
+            lines.append(f"   {prefix} [{t.id}] {t.name}")
+            lines.append(f"   │  {t.description}")
+            if i < len(tasks) - 1:
+                lines.append("   │")
+
+        return "\n".join(lines)

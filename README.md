@@ -61,6 +61,158 @@ tea-agent-cli
 
 ---
 
+## 🧠 长期记忆系统
+
+Tea Agent 的记忆系统模拟人类记忆的工作方式：优先级分层、相关性检索、自然衰减。
+
+### 核心机制
+
+| 机制 | 说明 |
+|------|------|
+| **四级优先级** | `CRITICAL`(指令) > `HIGH`(偏好) > `MEDIUM`(经验) > `LOW`(参考) |
+| **年龄衰减** | CRITICAL→HIGH(30天) → MEDIUM(60天) → LOW(90天)，模拟遗忘曲线 |
+| **相关性检索** | jieba 中文分词 + 关键词匹配 + 文件路径关联，计算相关性分数 |
+| **分层保底** | 每次注入上限 30 条，按优先级保底分配（HIGH≥3, MEDIUM≥2, LOW≥1） |
+| **去重机制** | 新记忆与已有记忆计算相似度，超过阈值(0.3)则合并 |
+
+### 选择算法
+
+```
+score = 相关性(关键词匹配) × 重要度(importance/5) × 时效因子 × 优先级因子
+
+时效因子: 1天内=1.0, 7天=0.9, 30天=0.7, 90天=0.5, >90天=0.3
+优先级因子: (4 - priority) / 4
+```
+
+### 自动提取
+
+对话结束后，系统自动从用户消息中提取记忆（基于 jieba 分词），存入 SQLite 持久化。Agent 也可通过 `toolkit_memory` 工具手动管理记忆。
+
+---
+
+## 📜 三级历史压缩 (L0 → L3 → L2 → L1)
+
+Tea Agent 使用**四级分层**构建发送给 LLM 的上下文，在有限的 token 窗口内最大化信息密度：
+
+```
+┌─────────────────────────────────────────────────┐
+│  Level 0: 系统层                                 │
+│  ├─ 系统提示词                                   │
+│  ├─ 未完成任务自动恢复 (TODO/Plan)                │
+│  └─ 长期记忆注入 (MemoryManager 选取)             │
+├─────────────────────────────────────────────────┤
+│  Level 3: 摘要层 (LLM 生成)                      │
+│  ├─ 语义摘要 — 长期背景/偏好/关键结论              │
+│  └─ 工具链摘要 — 历史工具调用链回顾                │
+├─────────────────────────────────────────────────┤
+│  Level 2: 历史相关层 (按相关性筛选)                │
+│  ├─ 高相关(≥0.15): 保留完整 user+assistant 对     │
+│  └─ 低相关(≥0.05): 仅保留摘要片段                 │
+├─────────────────────────────────────────────────┤
+│  Level 1: 最新对话层 (原始消息)                    │
+│  ├─ 工具输出裁剪: 旧工具结果→占位符                │
+│  └─ 渐进式 token 裁剪 (5级策略)                   │
+└─────────────────────────────────────────────────┘
+```
+
+### 渐进式裁剪策略
+
+当 `max_context_tokens > 0` 时，超出预算按以下优先级裁剪：
+
+| 策略 | 操作 | 说明 |
+|------|------|------|
+| 1 | 删除 `[历史记录]` L2 条目 | 最旧的先删 |
+| 2 | 替换工具输出为占位符 | `[工具结果已省略: N 字符]` |
+| 3 | 清空 reasoning_content | 释放 thinking token |
+| 4 | 截断长文本 | 限制 4096 字符 |
+| 5 | 删除 L1 旧轮次 | 保留最近 5 轮 user 消息 |
+
+### Token 估算
+
+使用启发式算法快速估算 token 数（无需 tiktoken）：
+- 英文：约 4 字符 = 1 token
+- 中文：约 1.5 字 = 1 token
+- 图片：固定 ~85 tokens
+
+---
+
+## 🔄 自进化基础：toolkit_save / toolkit_reload
+
+Tea Agent 的核心进化能力建立在**工具热插拔**机制上：Agent 可以在运行时创建新工具、修改现有工具，并立即生效。
+
+### 工作流程
+
+```
+Agent 发现需要新能力
+  │
+  ├─ 1. 编写 Python 函数代码
+  ├─ 2. 定义 OpenAI function schema (参数/描述)
+  │
+  ├─ 3. toolkit_save(name, meta, pycode)
+  │     ├─ 存储到 tea_agent/toolkit/{name}.py
+  │     ├─ 自动版本管理 (v1.0.0 → v1.1.0 → ...)
+  │     ├─ 保存历史版本到 .versions/ 目录
+  │     └─ 自动生成 SKILL.md 文档
+  │
+  ├─ 4. toolkit_reload()
+  │     ├─ 扫描 toolkit/ 目录所有 .py 文件
+  │     ├─ 动态 import 模块
+  │     ├─ 注册 meta 函数 → 生成 tool schema
+  │     └─ 所有 toolkit_* 函数 → 全局可用
+  │
+  └─ 5. 新工具立即可用于后续对话
+```
+
+### 关键实现
+
+| 特性 | 说明 |
+|------|------|
+| **版本管理** | 每次 save 自动生成版本号，保留完整历史 |
+| **安全回滚** | `toolkit_rollback(name, version)` 可回退到任意历史版本 |
+| **Schema 自动生成** | `meta_toolkit_*()` 函数返回 OpenAI function calling schema |
+| **热加载** | `toolkit_reload()` 无需重启进程，importlib 动态加载 |
+| **技能文档** | 保存后自动生成 `skills/{name}/SKILL.md`，便于知识沉淀 |
+
+### Agent 自进化的例子
+
+```python
+# Agent 可以这样调用（内部实现）
+
+# 创建一个新工具
+toolkit_save(
+    name="toolkit_count_lines",
+    meta={
+        "type": "function",
+        "function": {
+            "name": "toolkit_count_lines",
+            "description": "统计文件行数",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "文件路径"}
+                },
+                "required": ["path"]
+            }
+        }
+    },
+    pycode="""
+def toolkit_count_lines(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        lines = len(f.readlines())
+    return {"path": path, "lines": lines}
+"""
+)
+
+# 重新加载工具集
+toolkit_reload()
+
+# 新工具立即可用
+toolkit_count_lines(path="tea_agent/agent.py")
+# → {"path": "tea_agent/agent.py", "lines": 520}
+```
+
+---
+
 ## 🧰 工具概览（60+）
 
 | 类别 | 工具 |

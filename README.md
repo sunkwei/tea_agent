@@ -63,19 +63,32 @@ tea-agent-cli
 
 ## 🧠 长期记忆系统
 
-Tea Agent 的记忆系统模拟人类记忆的工作方式：优先级分层、相关性检索、自然衰减。
+Tea Agent 的记忆系统模拟人类记忆的工作方式：**优先级分层**、**相关性检索**、**自然衰减**、**去重合并**。底层基于 SQLite 持久化 + embedding 语义向量，由 `MemoryManager` 统一管理。
 
-### 核心机制
+---
 
-| 机制 | 说明 |
-|------|------|
-| **四级优先级** | `CRITICAL`(指令) > `HIGH`(偏好) > `MEDIUM`(经验) > `LOW`(参考) |
-| **年龄衰减** | CRITICAL→HIGH(30天) → MEDIUM(60天) → LOW(90天)，模拟遗忘曲线 |
-| **相关性检索** | jieba 中文分词 + 关键词匹配 + 文件路径关联，计算相关性分数 |
-| **分层保底** | 每次注入上限 30 条，按优先级保底分配（HIGH≥3, MEDIUM≥2, LOW≥1） |
-| **去重机制** | 新记忆与已有记忆计算相似度，超过阈值(0.3)则合并 |
+### 1. 记忆存储结构
 
-### 选择算法
+每条记忆包含以下核心字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `content` | TEXT | 记忆内容（精简摘要） |
+| `priority` | INT (0-3) | 优先级：`0=CRITICAL` / `1=HIGH` / `2=MEDIUM` / `3=LOW` |
+| `importance` | INT (1-5) | 重要度：5=关键，忽略会导致严重问题；1=琐碎 |
+| `category` | TEXT | 分类：`instruction`(指令) / `preference`(偏好) / `fact`(事实) / `reminder`(提醒) / `general`(通用) |
+| `tags` | TEXT | 逗号分隔标签，用于快速匹配 |
+| `content_hash` | TEXT | SHA256 前 16 位，快速去重指纹 |
+| `embedding` | BLOB | `numpy.float32` 向量，用于余弦相似度语义搜索 |
+| `expires_at` | DATETIME | 过期时间，NULL=永不过期 |
+| `pinned` | INT | 是否钉住（豁免年龄衰减） |
+| `created_at` | DATETIME | 创建时间（用于年龄衰减计算） |
+
+---
+
+### 2. 选择算法
+
+每次对话开始时，`MemoryManager.select_memories()` 从活跃记忆池中选出最相关的 **≤30 条** 注入上下文：
 
 ```
 score = 相关性(关键词匹配) × 重要度(importance/5) × 时效因子 × 优先级因子
@@ -84,127 +97,296 @@ score = 相关性(关键词匹配) × 重要度(importance/5) × 时效因子 ×
 优先级因子: (4 - priority) / 4
 ```
 
-### 自动提取
+**分层保底策略**（确保不会全选 CRITICAL）：
 
-对话结束后，系统自动从用户消息中提取记忆（基于 jieba 分词），存入 SQLite 持久化。Agent 也可通过 `toolkit_memory` 工具手动管理记忆。
+```
+1. CRITICAL 优先入选（上限 10 条，FIFO 取最新）
+2. 非 CRITICAL 按 score 排序
+3. 分层保底配额：
+   - HIGH   ≥ 3 条
+   - MEDIUM ≥ 2 条
+   - LOW    ≥ 1 条
+4. 剩余名额自由竞争（score 最高的先选）
+5. 入选记忆更新 last_accessed_at
+```
+
+---
+
+### 3. 年龄衰减
+
+模拟 Ebbinghaus 遗忘曲线。每次选择前自动执行 `degrade_by_age()`，**pinned=true 的记忆豁免**：
+
+| 原始优先级 | 衰减条件 | 降级为 |
+|-----------|---------|--------|
+| CRITICAL | 创建 > 30 天 | HIGH |
+| HIGH | 创建 > 60 天 | MEDIUM |
+| MEDIUM | 创建 > 90 天 | LOW |
+
+---
+
+### 4. LLM 优先级精调
+
+`MemoryManager.llm_adjust_priorities()` 使用便宜 LLM 评估近期对话主题，微调记忆优先级：
+
+```
+输入：近期对话主题摘要 (≤2000字符) + 当前活跃记忆列表 (≤100条, 每条≤80字符预览)
+规则：
+  - 只能 ±1 级调整（不允许跳级）
+  - 每次最多调整 3 条
+  - 升级时重置 created_at（重新计时衰减）
+  - 仅输出 JSON 数组，无额外文本
+```
+
+---
+
+### 5. 记忆提取
+
+对话结束后，`MemoryManager` 通过 LLM 从用户消息中自动提取记忆：
+
+```
+提取分类：
+  instruction → 用户明确要求"记住"的规则   → priority=0 (CRITICAL)
+  preference  → 用户表达的习惯/偏好          → priority=1 (HIGH)
+  reminder    → 有时效性的提醒（含 expires_at）→ priority=1 (HIGH)
+  fact        → 技术事实/架构决策             → priority=2 (MEDIUM)
+  general     → 其他参考信息                 → priority=3 (LOW)
+
+容错解析：
+  1. 直接 JSON.parse
+  2. 提取 markdown ```json 代码块
+  3. 提取 JSON 数组正则匹配
+  4. 对象型 -> 从常见键名 (memories/items/results/data) 提取数组
+```
+
+---
+
+### 6. 去重合并
+
+提取结果写入前，`ingest_extracted()` 执行去重合并流水线：
+
+```
+每条新记忆：
+  1. jieba 分词 → 关键词 Jaccard 相似度计算
+  2. 同分类加权 10%
+  3. 相似度 ≥ 0.3 → 合并更新已有记忆：
+     - content: 保留更长的，或拼接
+     - priority: 取较小值（更关键）
+     - importance: 取较高值
+     - tags: 并集去重
+     - expires_at: 保留更早的过期时间
+  4. < 0.3 → 新增记录
+```
+
+**批量去重** (`detect_duplicates` / `auto_dedup`)：通过 embedding 余弦相似度（阈值 0.92）扫描全部活跃记忆，发现近似重复对自动合并提权。
+
+---
+
+### 7. CRITICAL FIFO 淘汰
+
+CRITICAL 记忆上限 15 条，超出时软删除最旧的（FIFO），防止指令记忆无限膨胀。
+
+---
+
+### 8. 反思归纳
+
+`reflect_and_summarize()` 按类别聚类近期记忆，生成摘要并归档：
+
+```
+类别聚类 (instruction/preference/fact/reminder/general)
+  → 每类 ≥ 2 条 → 关键词频率生成摘要
+  → 摘要作为 CRITICAL/importance=5 存储
+  → 原始记忆 importance -1（降级）
+```
+
+---
+
+### 格式化注入
+
+入选记忆按优先级格式化注入系统提示区：
+
+```python
+def _prefix_for(memory):
+    if priority == CRITICAL:  return "!!! 必须遵循:"
+    if category == "reminder": return "⏰ 提醒:"
+    if category == "preference": return "💡 偏好:"
+    if category == "fact":      return "📌 事实:"
+    return "📎"
+```
+
+> Agent 可通过 `toolkit_memory` 工具手动管理记忆（增删查改）。见 [`docs/TOOLS.md`](docs/TOOLS.md)
 
 ---
 
 ## 📜 四级历史压缩 (L0 → L3 → L2 → L1)
 
-Tea Agent 使用**四级分层**构建发送给 LLM 的上下文，在有限的 token 窗口内最大化信息密度：
+Tea Agent 使用**四级分层**构建发送给 LLM 的上下文，在有限的 token 窗口内最大化信息密度。四大层级由 `session/_history_builder.py` 的 `build_api_messages()` 统一组装。
 
 ```
-┌─────────────────────────────────────────────────┐
-│  Level 0: 系统层                                 │
-│  ├─ 系统提示词                                   │
-│  ├─ 未完成任务自动恢复 (TODO/Plan)                │
-│  └─ 长期记忆注入 (MemoryManager 选取)             │
-├─────────────────────────────────────────────────┤
-│  Level 3: 摘要层 (LLM 生成)                      │
-│  └─ L2 溢出时生成：保留关键结论，丢弃细节          │
-├─────────────────────────────────────────────────┤
-│  Level 2: 历史对列表 (SQLite 持久化)              │
-│  └─ user + AI final msg 对，按相关性动态筛选注入   │
-├─────────────────────────────────────────────────┤
-│  Level 1: 最新对话 (当前 session)                 │
-│  ├─ 压缩工具链 (中间工具调用→摘要，保留最终回复)   │
-│  ├─ 旧工具输出 → 占位符                           │
-│  └─ 工具输出截断 (首尾各半，按换行对齐)            │
-└─────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│  Level 0: 系统层                                                    │
+│  ├─ 系统提示词 (PromptManager 最新版本)                              │
+│  ├─ 未完成任务自动恢复 (TODO/Plan → toolkit_task_resume)             │
+│  └─ 长期记忆注入 (MemoryManager.select_memories + format_memories)  │
+├───────────────────────────────────────────────────────────────────┤
+│  Level 3: 摘要层 (LLM 生成，仅 disable_summary=False 时启用)         │
+│  ├─ 语义摘要 (semantic_summary): L2 溢出时用 cheap model 生成        │
+│  └─ 工具链摘要 (tool_chain_summary): 工具调用模式回顾                 │
+├───────────────────────────────────────────────────────────────────┤
+│  Level 2: 历史对列表 (SQLite topics.level2_json 持久化)              │
+│  └─ user + AI final msg 对，按语义相关性 (Jaccard 关键词重叠) 筛选    │
+├───────────────────────────────────────────────────────────────────┤
+│  Level 1: 最新对话 (当前 session context.messages)                   │
+│  ├─ 实时工具输出截断 (第一道防线: max_tool_output=128KB 首尾各半)     │
+│  ├─ 旧工具输出占位符化 (保留最近 3 轮，其余 → "[已省略: N 字符]")    │
+│  └─ 渐进式 token 裁剪 (5 级，仅在 max_context_tokens > 0 时触发)     │
+└───────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+### Level 0: 系统层
+
+```python
+# build_api_messages() 中的 L0 组装顺序
+result = []
+
+# 1. 系统提示词
+result.append({"role": "system", "content": system_prompt})
+
+# 2. 未完成任务自动恢复 (toolkit_task_resume)
+resume_info = toolkit_task_resume(action="check")
+if resume_info["has_pending"]:
+    result.append({"role": "user", "content": format_resume(resume_info)})
+
+# 3. 长期记忆注入
+if context._injected_memories_text:
+    result.append({"role": "user", "content": context._injected_memories_text})
+```
+
+---
+
+### Level 3 (L3) — 语义摘要
+
+`SummaryStore` 管理两种 L3 摘要：
+
+| 摘要类型 | 存储位置 | 生成时机 | 内容 |
+|---------|----------|---------|------|
+| **语义摘要** | `topics.semantic_summary` | L2 溢出时（50→20 裁剪） | 项目背景 / 已完成修改 / 关键决策 / 错误修复 / 架构约束 / 用户偏好 / 待办事项 |
+| **工具链摘要** | `topics.tool_chain_summary` | 后台异步线程 | 最近一轮工具调用链回顾 |
+
+**L2→L3 摘要生成** (`generate_l2_to_l3_summary`)：
+
+```
+触发条件: push_to_level2() 返回 should_summarize=True
+          (即 L2 count ≥ 50 → 最老 30 条溢出)
+
+摘要流程:
+  1. 取溢出 30 条 L2 条目（含 user + thinking + assistant）
+  2. 合并现有 L3 摘要（如有）
+  3. 用 cheap model 生成新摘要（参数: temperature=0.3, max_tokens=4096）
+  4. 存入 topics.semantic_summary
+  5. L2 裁剪到最新 20 条
+
+压缩比: 30 轮对话 (≈20K tokens) → ~500 tokens 摘要
+```
+
+**L3 注入格式**：
+
+```
+[系统记忆 — 以下为需要遵循的有效信息和规则]
+
+## 长期背景/偏好/关键结论
+{semantic_summary}
+
+---
+
+## 历史工具调用链回顾
+{tool_chain_summary}
+```
+
+---
 
 ### Level 2 (L2) — 历史对列表
 
-L2 是一个**固定大小的环形缓冲区**，存储在 SQLite 中，容量 50 条。
+L2 是一个**固定大小的环形缓冲区**，存储在 SQLite `topics.level2_json` 列中，容量 50 条。
 
-每个条目包含：
+**条目结构**：
 
 ```json
 {
   "user": "用户的原始消息",
   "assistant": "AI 的最终回复（不含工具调用中间过程）",
-  "thinking": "工具调用轮的 assistant content + reasoning（可选）",
+  "thinking": "工具调用轮的 assistant content + reasoning（从 rounds 中提取）",
   "files": ["涉及的文件路径（可选）"]
 }
 ```
 
-**流转机制**：
+**写入流程** (`push_to_level2`)：
+
+```python
+def push_to_level2(topic_id, user_msg, ai_msg, files, rounds):
+    # 从 rounds 中提取 thinking：所有带 tool_calls 的 assistant 消息
+    thinking = extract_thinking_from_rounds(rounds)
+    entry = {"user": user_msg, "assistant": ai_msg, "thinking": thinking, "files": files}
+    level2.append(entry)
+
+    overflow = []
+    should_summarize = False
+    if len(level2) >= 50:
+        overflow = level2[:30]      # 最老 30 条 → 送给 L3 摘要
+        level2 = level2[-20:]        # 保留最新 20 条
+        should_summarize = True
+
+    return len(level2), overflow, should_summarize
+```
+
+**相关性筛选** (`filter_level2_by_relevance`)：
 
 ```
-每轮对话结束
-  → push_to_level2() 追加新条目
-  → L2 count ≥ 50?
-      是 → 取最老 30 条 → generate_l2_to_l3_summary()
-      → 合并现有 L3 摘要 → LLM 生成新 L3 → L2 裁剪到 20 条
+对每条 L2 条目，用当前 user 消息的关键词做 Jaccard 相似度匹配：
+  - 提取 user 消息的 2字中文 + 3字母英文关键词
+  - 提取 L2 条目的 user + thinking + assistant 中的关键词
+  - 计算 Jaccard 系数: |交集| / |并集|
+  - 文件路径额外加权 (file_overlap ≥ 1 → min(score, 0.4 + count × 0.1))
+
+筛选规则:
+  ≥ 0.15   →  保留完整 user+assistant 对（注入为 [历史记录]）
+  ≥ 0.05   →  仅保留摘要片段（"User: xxx... → Assistant: yyy..."）
+  < 0.05   →  不注入（节省 token）
+ 全部<0.05 →  保底注入最高分的一条（完整对）
 ```
 
-**注入策略**：每次构建上下文时，L2 全部条目按**语义相关性**筛选：
-
-| 相关度 | 处理 |
-|--------|------|
-| ≥ 0.15 | 保留完整 user+assistant 对（作为 `[历史记录]` 注入） |
-| ≥ 0.05 | 仅保留摘要片段（User: xxx... → Assistant: yyy...） |
-| < 0.05 | **不注入**（节省 token） |
-
-> 相关性基于关键词重叠度（Jaccard）+ 文件路径匹配计算。
+---
 
 ### Level 1 (L1) — 最新对话
 
-L1 是**当前 session 的原始消息**，经多层压缩后传入 API。
+L1 是**当前 session 的原始消息**（`context.messages`），经多层压缩后传入 API。
 
-#### 工具链压缩
+#### 第一道防线：实时工具输出截断
 
-加载历史时，`_compress_tool_rounds` 对工具调用链做 L1 智能压缩：
-
-```
-原始 rounds:  [user] → [asst+tool_call] → [tool_result] → [asst+tool_call] → [tool_result] → [final_asst]
-                                              ↓ 压缩                  ↓ 压缩
-压缩后 rounds: [user] → [asst+tool_call(参数截断)] → [tool_result(首尾各半)] → [final_asst(完整保留)]
-```
-
-- **中间 assistant**（含 tool_calls）：保留 reasoning_content，工具参数 >2048 字节则截断
-- **tool 消息**：`_compress_tool_content()` 首尾各 1024 字节，按换行边界对齐
-- **最终 assistant**（末尾无 tool_calls）：**完整保留**，不压缩
-
-#### 实时工具输出截断
-
-每个工具调用返回时，`session_tool_component` 立即截断：
+每个工具调用返回时立即截断，防止单个输出超大：
 
 ```python
-# 默认 max_tool_output = 128KB (131072 字节)
-if result_bytes > max_output:
-    # 首尾各保留一半，按换行对齐
-    result_str = f"{head_text}\n\n... [工具输出截断] ...\n\n{tail_text}"
+max_tool_output = 128 * 1024  # 128KB
+if len(result_bytes) > max_tool_output:
+    # 首尾各保留一半，按换行边界对齐
+    head = result_bytes[:max_tool_output // 2]  # 64KB
+    tail = result_bytes[-max_tool_output // 2:] # 64KB
+    result_str = f"{head.decode()}\n\n... [工具输出截断] ...\n\n{tail.decode()}"
 ```
 
-> 这是**第一道防线**，确保单个工具输出不会撑爆 token 窗口。
+#### 第二道防线：旧工具输出占位符化
 
-#### 多轮工具调用的 token 膨胀处理
-
-当 Agent 执行读取大日志等场景时，可能在**同一轮 user 消息**内产生多次工具调用。处理流程：
+`_find_prune_cutoff()` 找到最近 3 个 user 消息的分界线：
 
 ```
-第 1 轮工具调用:
-  toolkit_exec("cat huge.log") → 10MB 输出 → max_tool_output 截断到 128KB
-  toolkit_edit(...) → 小输出
-
-第 2 轮工具调用:
-  toolkit_exec("grep pattern huge.log") → 5MB 输出 → 截断到 128KB
-
-... (最多 max_iterations=50 轮)
-
-── 每轮 API 调用前 ──
-
-1. _build_api_messages() 构建上下文
-2. _tool_prune_cutoff = 最近 3 轮 user 消息分界
-3. 3 轮外的 tool 消息 → "[工具结果已省略: N 字符]"
-4. 如 max_context_tokens > 0 → _progressive_trim() 5 级渐进裁剪
+3 轮外的 tool 消息 → "[工具结果已省略: N 字符]"
+3 轮内的 tool 消息 → 完整保留
 ```
 
-### 渐进式裁剪策略
+#### 第三道防线：渐进式 token 裁剪
 
-当 `max_context_tokens > 0` 时，超出预算按以下优先级裁剪：
+当 `max_context_tokens > 0` 时，触发 `_progressive_trim()` 5 级裁剪：
 
 | 策略 | 操作 | 说明 |
 |------|------|------|
@@ -215,20 +397,51 @@ if result_bytes > max_output:
 | 5 | 删除 L1 旧轮次 | 保留最近 5 轮 user 消息 |
 | 兜底 | 截断最后一条消息 | 仅保留前 1/3 |
 
+---
+
+### 组装流程总览
+
+```
+build_api_messages(context, system_prompt) 完整流程:
+
+1. Level 0: 系统提示词 + TODO 恢复 + 记忆注入
+2. Level 3: 语义摘要 + 工具链摘要 (注入后加 assistant "好的，已了解...")
+3. Level 2: 相关性筛选 → [历史记录] user + assistant 对
+4. Level 1: 截断边界计算 → tool 占位符 → 消息遍历:
+   - tool_calls 完整性检查
+   - 多模态格式转换
+   - reasoning_content 补齐
+5. 渐进式裁剪: estimate_messages_tokens() > 80% budget → _progressive_trim()
+6. JSON 完整性校验 + 孤立 tool 消息移除
+```
+
 ### Token 估算
 
 使用启发式算法快速估算 token 数（无需 tiktoken）：
 - 英文：约 4 字符 = 1 token
 - 中文：约 1.5 字 = 1 token
 - 图片：固定 ~85 tokens
+- 消息结构开销：每条 +4 tokens
+
+### 异步摘要
+
+每轮对话结束后，`do_async_summaries()` 在后台线程执行：
+1. **标题摘要** (`auto_summary`): 用 cheap model 为 topic 生成一句话标题
+2. **L2→L3 摘要** (`l2_to_l3_summary`): 仅在 L2 溢出时触发
+
+便宜模型产生的 token 消耗通过 `agent._pending_cheap_tokens` 合并到下一轮 GUI 显示。
 
 ---
 
-## 🔄 自进化基础：toolkit_save / toolkit_reload
+## 🔄 自进化引擎
 
-Tea Agent 的核心进化能力建立在**工具热插拔**机制上：Agent 可以在运行时创建新工具、修改现有工具，并立即生效。
+Tea Agent 的自进化体系由**五个层次**构成：工具热插拔（基础）→ 安全自修改 → 提示词进化 → 经验固化 → 后台进化线程。
 
-### 工作流程
+---
+
+### 1. 工具热插拔：`toolkit_save` / `toolkit_reload`
+
+Agent 可以在运行时创建新工具、修改现有工具，并**立即生效**，无需重启。
 
 ```
 Agent 发现需要新能力
@@ -240,64 +453,146 @@ Agent 发现需要新能力
   │     ├─ 存储到 tea_agent/toolkit/{name}.py
   │     ├─ 自动版本管理 (v1.0.0 → v1.1.0 → ...)
   │     ├─ 保存历史版本到 .versions/ 目录
-  │     └─ 自动生成 SKILL.md 文档
+  │     └─ 自动生成 skills/{name}/SKILL.md 文档
   │
   ├─ 4. toolkit_reload()
   │     ├─ 扫描 toolkit/ 目录所有 .py 文件
-  │     ├─ 动态 import 模块
+  │     ├─ 动态 importlib 加载模块
   │     ├─ 注册 meta 函数 → 生成 tool schema
   │     └─ 所有 toolkit_* 函数 → 全局可用
   │
   └─ 5. 新工具立即可用于后续对话
 ```
 
-### 关键实现
+**版本管理**：
 
 | 特性 | 说明 |
 |------|------|
-| **版本管理** | 每次 save 自动生成版本号，保留完整历史 |
+| **自动版本号** | 每次 save 自动递增 `v1.0.0 → v1.0.1 → v1.1.0` |
 | **安全回滚** | `toolkit_rollback(name, version)` 可回退到任意历史版本 |
-| **Schema 自动生成** | `meta_toolkit_*()` 函数返回 OpenAI function calling schema |
-| **热加载** | `toolkit_reload()` 无需重启进程，importlib 动态加载 |
-| **技能文档** | 保存后自动生成 `skills/{name}/SKILL.md`，便于知识沉淀 |
+| **版本列表** | `toolkit_list_versions(name)` 查看所有历史版本 |
+| **SKILL.md** | 保存后自动生成技能文档，参数表 + 示例代码 |
 
-### Agent 自进化的例子
+---
 
-```python
-# Agent 可以这样调用（内部实现）
+### 2. 五层安全自修改：`toolkit_self_evolve`
 
-# 创建一个新工具
-toolkit_save(
-    name="toolkit_count_lines",
-    meta={
-        "type": "function",
-        "function": {
-            "name": "toolkit_count_lines",
-            "description": "统计文件行数",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "文件路径"}
-                },
-                "required": ["path"]
-            }
-        }
-    },
-    pycode="""
-def toolkit_count_lines(path):
-    with open(path, 'r', encoding='utf-8') as f:
-        lines = len(f.readlines())
-    return {"path": path, "lines": lines}
-"""
-)
+Agent 修改自身代码时，通过**五层安全机制**确保不会自毁：
 
-# 重新加载工具集
-toolkit_reload()
-
-# 新工具立即可用
-toolkit_count_lines(path="tea_agent/agent.py")
-# → {"path": "tea_agent/agent.py", "lines": 520}
 ```
+┌──────────────────────────────────────────────┐
+│  Layer 0: Git 快照                              │
+│  git add + git commit "snapshot: pre-evolve"   │
+│  仅在工作区干净时执行                            │
+├──────────────────────────────────────────────┤
+│  Layer 1: 时间戳 .bak 文件                       │
+│  {file}.bak.{YYYYMMDD_HHMMSS}                 │
+│  永不覆盖历史备份                                │
+├──────────────────────────────────────────────┤
+│  Layer 1.5: Python 语法严格检查                  │
+│  换行符 / 缩进 / 括号匹配 / 冒号缺失 / 分号      │
+│  失败 → 立即回滚                                 │
+├──────────────────────────────────────────────┤
+│  Layer 2: py_compile 编译验证                   │
+│  失败 → 自动回滚 tmp_bak + git reset --hard    │
+├──────────────────────────────────────────────┤
+│  Layer 2.5: LSP 智能检查                        │
+│  ├─ 影响分析 (ts_analyzer): 调用者/依赖/风险    │
+│  ├─ ruff lint 对比: 新旧 lint 数量差异          │
+│  ├─ 函数签名对比: 参数是否变更                   │
+│  └─ jedi 语义诊断: 未定义/未使用的符号           │
+│  非阻塞：lint 新增 > 0 或签名变更仅警告          │
+├──────────────────────────────────────────────┤
+│  Layer 3: pytest 测试验证                       │
+│  失败（passed < total）→ git reset --hard 回滚  │
+└──────────────────────────────────────────────┘
+```
+
+回滚链：Layer 1.5 失败 → 恢复 tmp_bak；Layer 2 失败 → 恢复 git；Layer 3 失败 → git reset --hard。
+
+---
+
+### 3. 提示词进化：`toolkit_prompt_evolve`
+
+Agent 可以**自我优化系统提示词**，由 `SystemPromptManager` 管理多版本：
+
+```
+版本管理流程:
+  配置表 system_prompts (is_active, version, content, created_at)
+
+进化操作:
+  action='list'     → 查看所有版本历史
+  action='current'  → 查看当前活跃版本
+  action='evolve'   → 基于反思建议 + 长期记忆 → LLM 生成新版本 → 设为活跃
+  action='rollback' → 回滚到指定版本（旧版设为活跃）
+  action='set'      → 手动设置新版本
+
+进化输入:
+  - 当前提示词 (≤500字要求)
+  - 最近的反思建议 (ReflectionManager.last_prompt_suggestion)
+  - 相关长期记忆 (MemoryManager 选取)
+```
+
+---
+
+### 4. 经验固化：`toolkit_experience_solidify`
+
+任务完成后自动复盘，转化为可复用模式：
+
+```
+action='auto':
+  analyze → 分析任务执行过程
+  ├─ 成功 → solidify → 固化到技能库 (toolkit_dynamic_skill)
+  └─ 失败 → lesson   → 记录到经验库 (toolkit_evolution_exp)
+
+分类标签:
+  dependency / architecture / ui / performance / testing / deployment
+```
+
+**动态技能系统** (`toolkit_dynamic_skill`)：
+
+```
+record     → 记录成功的 agent 组合模式（task + agents[]）
+recommend  → 根据任务推荐 agent 组合
+search     → 搜索相似技能模式
+list       → 列出所有技能模式
+```
+
+---
+
+### 5. 后台进化线程：`toolkit_self_evolve_thread`
+
+每小时自动运行一轮三合一巡检：
+
+```
+1. 工具使用率分析 → 优化建议
+   - 统计各工具调用次数
+   - 识别低使用率工具（建议删除或合并）
+   - 识别高频组合（建议合并为复合工具）
+
+2. docs/TOOLS.md 同步
+   - 扫描 toolkit/ 目录
+   - 根据 meta 信息生成工具文档
+   - 按类别分组 + 参数表格
+
+3. 技能模式整理
+   - 清理过时技能
+   - 合并相似模式
+   - 更新模式评分
+```
+
+---
+
+### 自进化能力全景
+
+| 能力 | 工具 | 安全层级 | 说明 |
+|------|------|---------|------|
+| 创建新工具 | `toolkit_save` + `toolkit_reload` | 版本回滚 | 热插拔，无需重启 |
+| 修改源文件 | `toolkit_self_evolve` | 5层安全 | Git↔Bak↔编译↔LSP↔测试 |
+| 优化提示词 | `toolkit_prompt_evolve` | 版本回滚 | 基于反思+记忆 |
+| 固化经验 | `toolkit_experience_solidify` | 分类标签 | 成功→技能，失败→教训 |
+| 后台进化 | `toolkit_self_evolve_thread` | 每小时 | 工具分析+文档同步+技能整理 |
+| 代码智能 | `toolkit_lsp` | 只读 | diagnose/completion/definition/references |
 
 ---
 

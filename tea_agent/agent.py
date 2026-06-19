@@ -77,6 +77,7 @@ class Agent:
         self._use_tools = use_tools
         self._enable_thinking = enable_thinking
         self._db = None  # 仅 full 模式使用
+        self._pending_cheap_tokens = {}  # 异步摘要产生的便宜模型 token，下一轮显示后清零
 
         # ── 加载配置 ──
         self._config_path = config_path  # 保存原始路径，供 GUI 使用

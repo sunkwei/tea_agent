@@ -17,12 +17,14 @@ class TopicStore(StoreComponent):
         Args:
             title: Description.
         """
-        c = self.conn.cursor()
-        tid = self._new_id()
-        c.execute("INSERT INTO topics (topic_id, title, create_stamp, last_update_stamp) VALUES (?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))", (tid, title))
-        self.conn.commit()
-        c.close()
-        return tid
+        # 使用临时连接
+        with self._get_connection() as conn:
+            conn.row_factory = __import__('sqlite3').Row
+            c = conn.cursor()
+            tid = self._new_id()
+            c.execute("INSERT INTO topics (topic_id, title, create_stamp, last_update_stamp) VALUES (?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))", (tid, title))
+            conn.commit()
+            return tid
 
     def update_topic_title(self, topic_id: str, new_title: str):
         """Update topic title. ※ 前缀的主题标题不可被自动摘要覆盖。

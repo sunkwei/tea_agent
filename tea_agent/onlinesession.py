@@ -197,6 +197,15 @@ class OnlineToolSession(BaseChatSession):
         self._extra_iterations = 0
         self._continue_after_max = False
         self._max_iter_wait = threading.Event()
+        
+        # ── HTTP客户端管理 ──
+        self._http_clients = []
+        if _http_client:
+            self._http_clients.append(_http_client)
+        if cheap_client and hasattr(self.context, 'client') and self.context.client != main_client:
+            # 获取cheap_client的http_client
+            if hasattr(cheap_client, '_client'):
+                self._http_clients.append(cheap_client._client)
 
         # ── 工具定义 ──
         self.tools: List[Dict] = []
@@ -617,3 +626,47 @@ class OnlineToolSession(BaseChatSession):
                 error=str(result.get("error", "")) if result.get("error") else None,
             )
         return full_reply, used_tools
+    
+    def close(self):
+        """关闭会话，释放资源"""
+        try:
+            # 关闭所有HTTP客户端
+            for client in self._http_clients:
+                try:
+                    if hasattr(client, 'close'):
+                        client.close()
+                except Exception as e:
+                    logger.debug(f"关闭HTTP客户端失败: {e}")
+            
+            # 关闭OpenAI客户端
+            if hasattr(self.context, 'client') and self.context.client:
+                try:
+                    if hasattr(self.context.client, 'close'):
+                        self.context.client.close()
+                except Exception as e:
+                    logger.debug(f"关闭主OpenAI客户端失败: {e}")
+            
+            if hasattr(self.context, 'cheap_client') and self.context.cheap_client:
+                try:
+                    if hasattr(self.context.cheap_client, 'close'):
+                        self.context.cheap_client.close()
+                except Exception as e:
+                    logger.debug(f"关闭便宜OpenAI客户端失败: {e}")
+            
+            # 关闭存储连接
+            if hasattr(self, 'storage') and self.storage:
+                try:
+                    self.storage.close()
+                except Exception as e:
+                    logger.debug(f"关闭存储连接失败: {e}")
+            
+            logger.info("OnlineToolSession 资源已释放")
+        except Exception as e:
+            logger.warning(f"关闭OnlineToolSession资源失败: {e}")
+    
+    def __del__(self):
+        """析构函数，确保资源被释放"""
+        try:
+            self.close()
+        except Exception:
+            pass

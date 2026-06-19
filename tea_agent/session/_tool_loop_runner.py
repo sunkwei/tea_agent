@@ -59,6 +59,11 @@ class LoopDetector:
     def check_and_record(self, content: str, tool_calls: list) -> dict:
         """检查当前轮是否循环，并记录。
         
+        支持三种循环模式检测：
+        1. AAA..模式：连续相同的工具调用
+        2. ABABAB模式：两种工具调用交替
+        3. ABCABCABC模式：三种工具调用的循环
+        
         Args:
             content: LLM 输出内容
             tool_calls: 工具调用列表 [(name, args), ...]
@@ -106,19 +111,52 @@ class LoopDetector:
                     }
                     break
         
-        # ── 检测 3: 工具序列循环 (A→B→A→B) ──
-        if not result["is_loop"] and len(self._tool_names) >= 4:
-            # 检查最近 4 轮是否是 ABAB 模式
-            recent = self._tool_names[-3:]  # 最近 3 轮 + 当前
-            if (len(recent) == 3 and 
-                current_names and recent[0] and recent[1] and recent[2] and
-                current_names == recent[0] and recent[1] == recent[2] and
-                current_names != recent[1]):
-                result = {
-                    "is_loop": True,
-                    "type": "sequence_loop",
-                    "detail": f"检测到工具序列循环模式: {'→'.join(current_names)} ↔ {'→'.join(recent[1])}"
-                }
+        # ── 检测 3: 工具序列循环 ──
+        # 支持三种模式：AAA.., ABABAB, ABCABCABC
+        # 注意：所有模式都要检查工具名和参数都相同（通过hash比较）
+        if not result["is_loop"] and len(self._tool_hashes) >= 3:
+            # 将当前轮的工具调用hash转换为字符串
+            current_hash_str = "|".join(current_hashes) if current_hashes else ""
+            
+            # 模式1: AAA..模式（连续相同的工具调用，包括参数）
+            if len(self._tool_hashes) >= 3:
+                last_three_hashes = self._tool_hashes[-3:]
+                if (len(last_three_hashes) == 3 and 
+                    current_hash_str and 
+                    all(h == current_hash_str for h in last_three_hashes)):
+                    result = {
+                        "is_loop": True,
+                        "type": "sequence_loop",
+                        "detail": f"检测到连续相同工具调用模式（含参数）: {'→'.join(current_names)}"
+                    }
+            
+            # 模式2: ABABAB模式（两种工具调用交替，包括参数）
+            if not result["is_loop"] and len(self._tool_hashes) >= 4:
+                recent_hashes = self._tool_hashes[-3:]  # 最近 3 轮 + 当前
+                if (len(recent_hashes) == 3 and 
+                    current_hash_str and recent_hashes[0] and recent_hashes[1] and recent_hashes[2] and
+                    current_hash_str == recent_hashes[0] and recent_hashes[1] == recent_hashes[2] and
+                    current_hash_str != recent_hashes[1]):
+                    result = {
+                        "is_loop": True,
+                        "type": "sequence_loop",
+                        "detail": f"检测到交替循环模式（含参数）: {'→'.join(current_names)} ↔ {'→'.join(self._tool_names[-3])}"
+                    }
+            
+            # 模式3: ABCABCABC模式（三种工具调用的循环，包括参数）
+            if not result["is_loop"] and len(self._tool_hashes) >= 6:
+                recent_hashes = self._tool_hashes[-5:]  # 最近 5 轮 + 当前
+                if (len(recent_hashes) == 5 and 
+                    current_hash_str and recent_hashes[0] and recent_hashes[1] and recent_hashes[2] and recent_hashes[3] and recent_hashes[4] and
+                    current_hash_str == recent_hashes[0] == recent_hashes[3] and
+                    recent_hashes[1] == recent_hashes[4] and
+                    recent_hashes[2] == current_hash_str and  # 第三个应该与当前相同
+                    current_hash_str != recent_hashes[1] and recent_hashes[1] != recent_hashes[2]):
+                    result = {
+                        "is_loop": True,
+                        "type": "sequence_loop",
+                        "detail": f"检测到三元循环模式（含参数）: {'→'.join(current_names)} → {'→'.join(self._tool_names[-3])} → {'→'.join(self._tool_names[-2])}"
+                    }
         
         # ── 记录本轮 ──
         self._tool_hashes.append("|".join(current_hashes) if current_hashes else "")

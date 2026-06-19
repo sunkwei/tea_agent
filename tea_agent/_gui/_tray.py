@@ -142,7 +142,15 @@ class TrayManager:
             toolkit_scheduler("stop")
             logger.info("定时任务调度器已停止")
         except Exception as e:
-            logger.warning(f"停止定时任务调度器失败: {e}")        # 关闭数据库
+            logger.warning(f"停止定时任务调度器失败: {e}")
+        # 关闭会话资源
+        try:
+            if hasattr(self.gui, 'sess') and self.gui.sess:
+                self.gui.sess.close()
+                logger.info("会话资源已释放")
+        except Exception as e:
+            logger.warning(f"关闭会话资源失败: {e}")
+        # 关闭数据库
         try:
             self.gui.db.close()
             self.gui._update_status("✅ 数据库已正常关闭")

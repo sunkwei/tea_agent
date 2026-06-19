@@ -3,12 +3,17 @@ Storage 委派 + StoreComponent 基类测试。
 
 覆盖:
 - StoreComponent._new_id() 生成 UUID
+- DB 短连接上下文管理器
+- _db() 与 _get_connection() 上下文
+- 线程局部连接 (self.conn property)
 - Storage 委派属性 (topics, memories, conversations 等)
 - __getattr__ 自动路由方法调用到子组件
 - get_storage() 单例工厂
 """
+import sqlite3
 import pytest
 import uuid
+from tea_agent.store._component import DB, StoreComponent
 
 
 class TestStoreComponent:
@@ -97,3 +102,169 @@ class TestGetStorage:
         assert s1 is not s2
         s1.close()
         s2.close()
+
+
+# ============================================================
+# 短连接模式新增测试
+# ============================================================
+
+class TestDB:
+    """DB 短连接上下文管理器"""
+
+    def test_db_enter_exit_creates_and_closes_conn(self, tmp_path):
+        """__enter__ 创建连接，__exit__ 关闭"""
+        db_path = tmp_path / "test.db"
+        db = DB(str(db_path))
+        assert db.conn is None
+
+        with db:
+            assert db.conn is not None
+            assert db.conn.execute("SELECT 1").fetchone()[0] == 1
+
+        assert db.conn is None  # __exit__ 后关闭
+
+    def test_db_auto_commit(self, tmp_path):
+        """正常退出自动 commit"""
+        db_path = tmp_path / "auto_commit.db"
+        with DB(str(db_path)) as db:
+            db.execute("CREATE TABLE t (v TEXT)")
+            db.execute("INSERT INTO t VALUES ('hello')")
+
+        # 新连接验证数据已提交
+        c = sqlite3.connect(str(db_path))
+        row = c.execute("SELECT v FROM t").fetchone()
+        assert row[0] == "hello"
+        c.close()
+
+    def test_db_auto_rollback_on_error(self, tmp_path):
+        """异常退出自动 rollback（显式事务回滚）。"""
+        db_path = tmp_path / "rollback.db"
+        try:
+            with DB(str(db_path)) as db:
+                db.execute("CREATE TABLE t (k INT, v TEXT)")
+                db.execute("INSERT INTO t VALUES (1, 'persisted')")
+                # 提交隐式事务，再手动开启显式事务
+                db.conn.commit()
+                db.execute("BEGIN")
+                db.execute("INSERT INTO t VALUES (2, 'rollback_me')")
+                raise RuntimeError("模拟错误")
+        except RuntimeError:
+            pass
+
+        # DDL + 第一个 INSERT 已提交，第二个 INSERT 在显式事务中回滚
+        c = sqlite3.connect(str(db_path))
+        rows = c.execute("SELECT v FROM t ORDER BY k").fetchall()
+        assert len(rows) == 1
+        assert rows[0][0] == "persisted"
+        c.close()
+
+    def test_db_cursor_returns_sqlite_cursor(self, tmp_path):
+        """cursor() 返回标准 sqlite3.Cursor"""
+        db_path = tmp_path / "cursor.db"
+        with DB(str(db_path)) as db:
+            c = db.cursor()
+            assert c is not None
+
+    def test_db_row_factory(self, tmp_path):
+        """row_factory 设为 sqlite3.Row"""
+        db_path = tmp_path / "row_factory.db"
+        with DB(str(db_path)) as db:
+            db.execute("CREATE TABLE t (k TEXT, v TEXT)")
+            db.execute("INSERT INTO t VALUES ('key1', 'val1')")
+            row = db.execute("SELECT k, v FROM t").fetchone()
+            assert row["k"] == "key1"
+            assert row["v"] == "val1"
+
+    def test_db_wal_enabled(self, tmp_path):
+        """WAL 模式已启用"""
+        db_path = tmp_path / "wal.db"
+        with DB(str(db_path)) as db:
+            mode = db.execute("PRAGMA journal_mode").fetchone()[0]
+            assert mode.upper() == "WAL"
+
+
+class TestStoreComponentDB:
+    """StoreComponent._db() 上下文管理器"""
+
+    def test_db_context_works(self, tmp_db_path):
+        """_db() 返回可用 DB 实例"""
+        from tea_agent.store._component import StoreComponent
+        comp = StoreComponent(db_path=tmp_db_path)
+
+        with comp._db() as db:
+            db.execute("CREATE TABLE IF NOT EXISTS test_db (v TEXT)")
+            db.execute("INSERT INTO test_db VALUES ('ok')")
+
+        # 验证提交
+        c = sqlite3.connect(tmp_db_path)
+        assert c.execute("SELECT v FROM test_db").fetchone()[0] == "ok"
+        c.close()
+
+    def test_get_connection_backward_compat(self, tmp_db_path):
+        """_get_connection() 向后兼容，返回 conn"""
+        from tea_agent.store._component import StoreComponent
+        comp = StoreComponent(db_path=tmp_db_path)
+
+        with comp._get_connection() as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS test_gc (v TEXT)")
+            conn.execute("INSERT INTO test_gc VALUES ('ok')")
+
+        c = sqlite3.connect(tmp_db_path)
+        assert c.execute("SELECT v FROM test_gc").fetchone()[0] == "ok"
+        c.close()
+
+
+class TestThreadLocalConn:
+    """self.conn 线程局部连接"""
+
+    def test_conn_is_cached_in_thread(self, tmp_db_path):
+        """同一线程内多次访问返回同一对象"""
+        from tea_agent.store._component import StoreComponent
+        comp = StoreComponent(db_path=tmp_db_path)
+
+        c1 = comp.conn
+        c2 = comp.conn
+        assert c1 is c2
+
+    def test_conn_isolation_between_threads(self, tmp_db_path):
+        """不同线程返回不同连接"""
+        import threading
+        from tea_agent.store._component import StoreComponent
+        comp = StoreComponent(db_path=tmp_db_path)
+
+        conns = []
+
+        def capture():
+            conns.append(comp.conn)
+
+        t = threading.Thread(target=capture)
+        t.start()
+        t.join()
+
+        assert len(conns) == 1
+        assert comp.conn is not conns[0]
+
+    def test_close_thread_conn_cleans_up(self, tmp_db_path):
+        """close_thread_conn 关闭并清空连接"""
+        from tea_agent.store._component import StoreComponent
+        comp = StoreComponent(db_path=tmp_db_path)
+
+        c = comp.conn
+        StoreComponent.close_thread_conn()
+
+        # close 后重新访问应获取新连接
+        c2 = comp.conn
+        assert c2 is not c
+
+    def test_conn_supports_cursor_execute_commit(self, tmp_db_path):
+        """self.conn 支持 cursor/execute/commit 等标准操作"""
+        from tea_agent.store._component import StoreComponent
+        comp = StoreComponent(db_path=tmp_db_path)
+
+        comp.conn.execute("CREATE TABLE IF NOT EXISTS test_conn (v TEXT)")
+        comp.conn.execute("INSERT INTO test_conn VALUES ('data')")
+        comp.conn.commit()
+
+        # 使用同一连接验证（比新建连接更可靠）
+        row = comp.conn.execute("SELECT v FROM test_conn").fetchone()
+        assert row[0] == "data"

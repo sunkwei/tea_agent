@@ -321,3 +321,13 @@ class LiteSession:
     def interrupt(self):
         """中断当前对话。"""
         self.interrupted = True
+
+    def close(self):
+        """关闭会话，释放 HTTP 客户端资源。"""
+        try:
+            if hasattr(self, 'api') and self.api:
+                if hasattr(self.api, 'close'):
+                    self.api.close()
+            logger.info("LiteSession 资源已释放")
+        except Exception as e:
+            logger.warning(f"关闭 LiteSession 资源失败: {e}")

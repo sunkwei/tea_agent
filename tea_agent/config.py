@@ -557,7 +557,6 @@ def create_default_config(config_path: Optional[str] = None) -> str:
         "# 记忆去重相似度阈值，超过此值视为重复并合并(0~1)\n"
         "memory_dedup_threshold: 0.3\n\n"
         "# GUI 单页加载的最大对话轮数（超过则省略更早的对话）\n"
-        "# GUI 单页加载的最大对话轮数（超过则省略更早的对话）\n"
         "chat_page_size: 50\n\n"
         "# 2026-05-20 gen by Tea Agent, L2/L3分层压缩参数\n"
         "# L2 最大保留轮数（用户+助手对，不含工具轮次）\n"

@@ -10,6 +10,17 @@ import pytest
 sys.path.insert(0, os.path.expanduser("~/work/git/tea_agent"))
 from tea_agent.auto_fix import AutoFixAgent, FixResult
 
+# 检测 ruff 是否可用，用于跳过依赖 ruff 的测试
+_HAS_RUFF = False
+try:
+    import subprocess
+    result = subprocess.run(["ruff", "--version"], capture_output=True, text=True, timeout=5)
+    _HAS_RUFF = result.returncode == 0
+except (FileNotFoundError, subprocess.TimeoutExpired):
+    pass
+
+ruff_skip = pytest.mark.skipif(not _HAS_RUFF, reason="ruff 未安装")
+
 
 # ── 测试夹具 ──
 
@@ -49,6 +60,7 @@ def agent():
 # ── 扫描测试 ──
 
 class TestScan:
+    @ruff_skip
     def test_ruff_scan_finds_imports(self, agent, sample_file):
         """ruff 应发现未使用的导入。"""
         issues = agent.scan(sample_file)
@@ -91,6 +103,7 @@ class TestScan:
         finally:
             os.unlink(path)
 
+    @ruff_skip
     def test_ruff_autofix_provided(self, agent, sample_file):
         """ruff 发现的 issue 应包含 autofix 信息。"""
         issues = agent.scan(sample_file)
@@ -223,6 +236,7 @@ class TestEdgeCases:
 
 
 class TestIntegration:
+    @ruff_skip
     def test_ruff_deep_scan(self, agent):
         """ruff 全量扫描应覆盖 tea_agent/store/ 目录。"""
         store_dir = os.path.join(str(agent.project_root), "tea_agent", "store")

@@ -70,24 +70,6 @@ class TestPipelineOrdering:
         names = [n for n, _ in p.get_enabled_steps()]
         assert names == ["c", "b", "a"]
 
-    def test_before_inserts_before(self):
-        """测试: Before inserts before"""
-        from tea_agent.session_pipeline import SessionPipeline
-        p = SessionPipeline()
-        p.register_step("middle", lambda ctx: {})
-        p.register_step("first", lambda ctx: {}, before="middle")
-        names = [n for n, _ in p.get_enabled_steps()]
-        assert names == ["first", "middle"]
-
-    def test_after_inserts_after(self):
-        """测试: After inserts after"""
-        from tea_agent.session_pipeline import SessionPipeline
-        p = SessionPipeline()
-        p.register_step("first", lambda ctx: {})
-        p.register_step("second", lambda ctx: {}, after="first")
-        names = [n for n, _ in p.get_enabled_steps()]
-        assert names == ["first", "second"]
-
     def test_set_step_position_reorders(self):
         """测试: Set step position reorders"""
         from tea_agent.session_pipeline import SessionPipeline
@@ -126,17 +108,6 @@ class TestPipelineEnableDisable:
         p.register_step("a", lambda ctx: {}, enabled=False)
         p.enable_step("a")
         assert len(p.get_enabled_steps()) == 1
-
-    def test_toggle_step_flips_state(self):
-        """测试: Toggle step flips state"""
-        from tea_agent.session_pipeline import SessionPipeline
-        p = SessionPipeline()
-        p.register_step("a", lambda ctx: {})
-        p.toggle_step("a")
-        assert len(p.get_enabled_steps()) == 0
-        p.toggle_step("a")
-        assert len(p.get_enabled_steps()) == 1
-
 
 class TestPipelineExecution:
     """Pipeline 执行逻辑"""

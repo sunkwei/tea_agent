@@ -31,8 +31,7 @@ class SessionPipeline:
     管理对话流程的步骤，支持：
     - 启用/禁用步骤
     - 重新排序步骤
-    - 插入自定义步骤
-    - 跳过步骤
+    - 自定义步骤插入
     """
     
     def __init__(self):
@@ -47,8 +46,6 @@ class SessionPipeline:
         enabled: bool = True,
         description: str = "",
         position: int = 0,
-        before: Optional[str] = None,
-        after: Optional[str] = None,
     ):
         """
         注册一个 Pipeline 步骤。
@@ -58,9 +55,7 @@ class SessionPipeline:
             func: 执行函数，签名为 (self, **kwargs) -> dict
             enabled: 是否启用
             description: 步骤描述
-            position: 执行顺序（越小越先执行）
-            before: 在哪个步骤之前执行（可选）
-            after: 在哪个步骤之后执行（可选）
+            position: 执行顺序（越小越先执行，默认追加末尾）
         """
         if name in self._steps:
             raise ValueError(f"步骤 '{name}' 已存在")
@@ -74,22 +69,7 @@ class SessionPipeline:
         )
         
         self._steps[name] = step
-        
-        # 插入到正确的位置
-        if before is not None:
-            if before in self._step_order:
-                idx = self._step_order.index(before)
-                self._step_order.insert(idx, name)
-            else:
-                self._step_order.append(name)
-        elif after is not None:
-            if after in self._step_order:
-                idx = self._step_order.index(after)
-                self._step_order.insert(idx + 1, name)
-            else:
-                self._step_order.append(name)
-        else:
-            self._step_order.append(name)
+        self._step_order.append(name)
         
         # 按 position 排序
         self._step_order.sort(key=lambda n: self._steps[n].position)
@@ -103,11 +83,6 @@ class SessionPipeline:
         """禁用指定步骤"""
         if name in self._steps:
             self._steps[name].enabled = False
-    
-    def toggle_step(self, name: str):
-        """切换步骤的启用/禁用状态"""
-        if name in self._steps:
-            self._steps[name].enabled = not self._steps[name].enabled
     
     def set_step_position(self, name: str, position: int):
         """设置步骤的执行顺序"""

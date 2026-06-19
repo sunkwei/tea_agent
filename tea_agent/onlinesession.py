@@ -202,10 +202,8 @@ class OnlineToolSession(BaseChatSession):
         self._http_clients = []
         if _http_client:
             self._http_clients.append(_http_client)
-        if cheap_client and hasattr(self.context, 'client') and self.context.client != main_client:
-            # 获取cheap_client的http_client
-            if hasattr(cheap_client, '_client'):
-                self._http_clients.append(cheap_client._client)
+        if cheap_client and hasattr(cheap_client, '_client') and cheap_client._client:
+            self._http_clients.append(cheap_client._client)
 
         # ── 工具定义 ──
         self.tools: List[Dict] = []

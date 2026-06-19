@@ -16,7 +16,7 @@ import sqlite3
 import logging
 from datetime import datetime
 
-from ._component import StoreComponent  # 基类定义在 __init__.py（避免循环导入）
+from ._component import StoreComponent, DB  # DB 短连接上下文管理器
 from ._topics import TopicStore
 from ._conversations import ConversationStore
 from ._summaries import SummaryStore
@@ -41,7 +41,7 @@ class ConfigHistoryStore(StoreComponent):
             (cid, key, str(old_value) if old_value is not None else None,
              str(new_value), reason, source_reflection_id),
         )
-        self.conn.commit()
+        c.connection.commit()
         c.close()
         return cid
 
@@ -79,7 +79,7 @@ class ReflectionStore(StoreComponent):
              _json_rs.dumps(tool_stats or {}, ensure_ascii=False),
              _json_rs.dumps(suggestions or [], ensure_ascii=False)),
         )
-        self.conn.commit()
+        c.connection.commit()
         c.close()
         return rid
 
@@ -93,7 +93,7 @@ class ReflectionStore(StoreComponent):
     def mark_reflection_applied(self, reflection_id: str):
         c = self.conn.cursor()
         c.execute("UPDATE reflections SET is_applied = 1 WHERE id = ?", (reflection_id,))
-        self.conn.commit()
+        c.connection.commit()
         c.close()
 
     def get_reflection_stats(self):
@@ -122,7 +122,7 @@ class PromptStore(StoreComponent):
             "VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))",
             (pid, new_ver, content, reason, source_reflection_id),
         )
-        self.conn.commit()
+        c.connection.commit()
         c.close()
         return pid
 
@@ -143,7 +143,7 @@ class PromptStore(StoreComponent):
     def deactivate_system_prompt(self, prompt_id: str) -> bool:
         c = self.conn.cursor()
         c.execute("UPDATE system_prompts SET is_active = 0 WHERE id = ?", (prompt_id,))
-        self.conn.commit()
+        c.connection.commit()
         affected = c.rowcount
         c.close()
         return affected > 0
@@ -152,7 +152,7 @@ class PromptStore(StoreComponent):
         c = self.conn.cursor()
         c.execute("UPDATE system_prompts SET is_active = 0 WHERE is_active = 1")
         c.execute("UPDATE system_prompts SET is_active = 1 WHERE id = ?", (prompt_id,))
-        self.conn.commit()
+        c.connection.commit()
         affected = c.rowcount
         c.close()
         return affected > 0
@@ -176,33 +176,34 @@ class Storage:
     )
 
     def __init__(self, db_path="chat_history.db"):
-        """Initialize  .
+        """初始化存储，每次操作独立连接（短连接模式）。
         
         Args:
-            db_path: Description.
+            db_path: 数据库文件路径。
         """
         self.db_path = db_path
         self._maybe_rotate_db()
         logger.info(f"load database {db_path}")
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self._init_tables()
-        self._migrate()
-        self._write_week_key()
+
+        # 临时连接初始化表结构
+        with DB(db_path) as db:
+            self._init_tables(db)
+            self._migrate(db)
+            self._write_week_key(db)
+
         self._auto_backup()
         self._protect_db()
 
-        # ── 创建所有委派组件 ──
-        self._topics = TopicStore(self.conn)
-        self._conversations = ConversationStore(self.conn)
-        self._summaries = SummaryStore(self.conn)
-        self._memories = MemoryStore(self.conn)
-        self._prompts = PromptStore(self.conn)
-        self._reflections = ReflectionStore(self.conn)
-        self._config_history = ConfigHistoryStore(self.conn)
-        self._vectors = VectorStore(self.conn)
-        self._scheduled_tasks = ScheduledTaskStore(self.conn)
+        # ── 创建所有委派组件（传入 db_path，无持久连接）──
+        self._topics = TopicStore(db_path)
+        self._conversations = ConversationStore(db_path)
+        self._summaries = SummaryStore(db_path)
+        self._memories = MemoryStore(db_path)
+        self._prompts = PromptStore(db_path)
+        self._reflections = ReflectionStore(db_path)
+        self._config_history = ConfigHistoryStore(db_path)
+        self._vectors = VectorStore(db_path)
+        self._scheduled_tasks = ScheduledTaskStore(db_path)
 
         # ── 注入 EmbeddingEngine 到 MemoryStore ──
         try:
@@ -454,9 +455,13 @@ class Storage:
 
     # ── 表初始化 ──
 
-    def _init_tables(self):
-        """Internal: initialize tables."""
-        c = self.conn.cursor()
+    def _init_tables(self, db):
+        """初始化所有数据库表。
+        
+        Args:
+            db: DB 实例（由调用方管理生命周期）。
+        """
+        c = db.cursor()
 
         # 元数据表
         c.execute("CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT)")
@@ -645,34 +650,38 @@ class Storage:
             )
         ''')
 
-        self.conn.commit()
+        c.connection.commit()
         c.close()
 
     # ── 数据库迁移 ──
 
-    def _migrate(self):
-        """Internal: migrate."""
-        c = self.conn.cursor()
+    def _migrate(self, db):
+        """执行数据库迁移。
+        
+        Args:
+            db: DB 实例（由调用方管理生命周期）。
+        """
+        c = db.cursor()
         self._migrate_int_to_uuid(c)
 
         # 添加 rounds_json 列
         try:
             c.execute("ALTER TABLE conversations ADD COLUMN rounds_json TEXT")
-            self.conn.commit()
+            c.connection.commit()
         except sqlite3.OperationalError:
             pass
 
         # 添加 is_summarized 列
         try:
             c.execute("ALTER TABLE conversations ADD COLUMN is_summarized INTEGER DEFAULT 0")
-            self.conn.commit()
+            c.connection.commit()
         except sqlite3.OperationalError:
             pass
 
         # t_conv_summary 添加 last_summarized_id
         try:
             c.execute("ALTER TABLE t_conv_summary ADD COLUMN last_summarized_id TEXT")
-            self.conn.commit()
+            c.connection.commit()
         except sqlite3.OperationalError:
             pass
 
@@ -684,7 +693,7 @@ class Storage:
         ]:
             try:
                 c.execute(f"ALTER TABLE topic_token_stats ADD COLUMN {col} {col_type}")
-                self.conn.commit()
+                c.connection.commit()
             except sqlite3.OperationalError:
                 pass
 
@@ -695,13 +704,13 @@ class Storage:
         ]:
             try:
                 c.execute(f"ALTER TABLE topic_token_stats ADD COLUMN {col} {col_type}")
-                self.conn.commit()
+                c.connection.commit()
             except sqlite3.OperationalError:
                 pass
 
         try:
             c.execute("ALTER TABLE topics ADD COLUMN drift_count INTEGER DEFAULT 0")
-            self.conn.commit()
+            c.connection.commit()
         except sqlite3.OperationalError:
             pass
 
@@ -714,7 +723,7 @@ class Storage:
             created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
             FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
         )''')
-        self.conn.commit()
+        c.connection.commit()
 
         c.close()
 
@@ -731,8 +740,8 @@ class Storage:
 
         log = logging.getLogger("Store")
         log.warning("检测到旧版 INTEGER 主键，开始迁移为 TEXT UUID 格式...")
-        self.conn.execute("PRAGMA foreign_keys = OFF")
-        self.conn.execute("PRAGMA legacy_alter_table = ON")
+        c.connection.execute("PRAGMA foreign_keys = OFF")
+        c.connection.execute("PRAGMA legacy_alter_table = ON")
 
         def _table_columns(table):
             """Internal: table columns.
@@ -859,15 +868,15 @@ class Storage:
                 "source_reflection_id TEXT", "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
             ], cast_cols={"id", "source_reflection_id"})
 
-            self.conn.commit()
+            c.connection.commit()
             log.warning("INTEGER→TEXT UUID 主键迁移完成！")
         except Exception as e:
             log.error(f"UUID 迁移失败，回滚: {e}")
-            self.conn.rollback()
+            c.connection.rollback()
             raise
         finally:
-            self.conn.execute("PRAGMA foreign_keys = ON")
-            self.conn.execute("PRAGMA legacy_alter_table = OFF")
+            c.connection.execute("PRAGMA foreign_keys = ON")
+            c.connection.execute("PRAGMA legacy_alter_table = OFF")
 
     def _migrate_msg_vectors(self, c):
         """Internal: migrate msg vectors.
@@ -886,7 +895,7 @@ class Storage:
             "msg_vectors 表从 TEXT 迁移到 BLOB 格式，旧数据将被丢弃"
         )
         c.execute("DROP TABLE IF EXISTS msg_vectors")
-        self.conn.commit()
+        c.connection.commit()
 
     # ── 周轮转 ──
 
@@ -928,14 +937,18 @@ class Storage:
                 f"无法归档旧数据库: {e}。将继续使用当前 db，下次启动时重试。"
             )
 
-    def _write_week_key(self):
-        """Internal: write week key."""
-        c = self.conn.cursor()
+    def _write_week_key(self, db):
+        """写入当前周标识。
+        
+        Args:
+            db: DB 实例（由调用方管理生命周期）。
+        """
+        c = db.cursor()
         c.execute(
             "INSERT OR REPLACE INTO _meta (key, value) VALUES ('week_key', ?)",
             (self._get_week_key(),),
         )
-        self.conn.commit()
+        c.connection.commit()
         c.close()
 
     # ── 自动备份 ──
@@ -959,8 +972,10 @@ class Storage:
             ts = time.strftime("%Y-%m-%d_%H%M%S")
             backup_path = os.path.join(backup_dir, f"chat_history_{ts}.db")
             backup_conn = sqlite3.connect(backup_path)
-            self.conn.backup(backup_conn)
+            src_conn = sqlite3.connect(self.db_path)
+            src_conn.backup(backup_conn)
             backup_conn.close()
+            src_conn.close()
             self._meta_set("last_backup_ts", str(now))
             self._cleanup_backups(backup_dir, keep=7)
             size_mb = os.path.getsize(backup_path) / 1024 / 1024
@@ -998,30 +1013,25 @@ class Storage:
     # ── 元数据 ──
 
     def _meta_get(self, key: str):
-        """Internal: meta get.
-        
-        Args:
-            key: Description.
-        """
+        """读取元数据（短连接）。"""
         try:
-            c = self.conn.execute("SELECT value FROM _meta WHERE key=?", (key,))
+            conn = sqlite3.connect(self.db_path)
+            c = conn.execute("SELECT value FROM _meta WHERE key=?", (key,))
             row = c.fetchone()
+            conn.close()
             return row[0] if row else None
         except Exception:
             return None
 
     def _meta_set(self, key: str, value: str):
-        """Internal: meta set.
-        
-        Args:
-            key: Description.
-            value: Description.
-        """
+        """写入元数据（短连接）。"""
         try:
-            self.conn.execute(
+            conn = sqlite3.connect(self.db_path)
+            conn.execute(
                 "INSERT OR REPLACE INTO _meta (key, value) VALUES (?, ?)", (key, value)
             )
-            self.conn.commit()
+            conn.commit()
+            conn.close()
         except Exception:
             pass
 
@@ -1044,18 +1054,16 @@ class Storage:
     # ── 生命周期 ──
 
     def close(self):
-        """Close."""
+        """关闭存储（关闭线程局部连接 + WAL checkpoint）。"""
+        StoreComponent.close_thread_conn()
         try:
-            self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            with DB(self.db_path) as db:
+                db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             logger.info("WAL checkpoint(TRUNCATE) 完成")
         except Exception as e:
             logger.warning(f"WAL checkpoint 失败 (非致命): {e}")
         finally:
-            try:
-                self.conn.close()
-                logger.info(f"数据库连接已关闭: {self.db_path}")
-            except Exception:
-                pass
+            logger.info(f"存储已关闭: {self.db_path}")
 
     def __del__(self):
         try:

@@ -430,12 +430,19 @@ class Agent:
 
         # Token stats
         usage = self._sess._last_usage
+        cheap_usage = self._sess._last_cheap_usage
         if usage and usage.get("total_tokens", 0) > 0:
-            self._db.add_topic_tokens(
-                topic_id, total_tokens=usage["total_tokens"],
-                prompt_tokens=usage["prompt_tokens"],
-                completion_tokens=usage["completion_tokens"],
-            )
+            kwargs = {
+                "total_tokens": usage["total_tokens"],
+                "prompt_tokens": usage["prompt_tokens"],
+                "completion_tokens": usage["completion_tokens"],
+            }
+            # 同时写入便宜模型 token（历史压缩等同步调用产生的）
+            if cheap_usage and cheap_usage.get("total_tokens", 0) > 0:
+                kwargs["cheap_tokens"] = cheap_usage["total_tokens"]
+                kwargs["cheap_prompt_tokens"] = cheap_usage["prompt_tokens"]
+                kwargs["cheap_completion_tokens"] = cheap_usage["completion_tokens"]
+            self._db.add_topic_tokens(topic_id, **kwargs)
 
         # 提取 user_msg 文本（可能是 str 或 dict）
         user_text = user_msg if isinstance(user_msg, str) else (

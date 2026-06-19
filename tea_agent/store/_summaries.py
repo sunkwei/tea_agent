@@ -201,7 +201,7 @@ class SummaryStore(StoreComponent):
         self, topic_id: str, overflow_items: list,
         existing_l3: str, summarize_client, summarize_model: str,
         extra_params: dict = None,
-    ) -> str:
+    ) -> tuple:
         """
         将 L2 溢出条目 + 现有 L3 摘要合并，调用 LLM 生成新的 L3 摘要。
 
@@ -216,10 +216,12 @@ class SummaryStore(StoreComponent):
             extra_params: 额外参数（temperature 等）
 
         Returns:
-            新生成的 L3 语义摘要文本
+            (new_summary: str, usage: dict)
+            — usage 为 {'total_tokens': N, 'prompt_tokens': N, 'completion_tokens': N}
         """
+        _empty = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
         if not overflow_items:
-            return existing_l3
+            return existing_l3, _empty
 
         # 构建对话文本
         conv_lines = []
@@ -283,16 +285,28 @@ class SummaryStore(StoreComponent):
             new_summary = response.choices[0].message.content or ""
             new_summary = new_summary.strip()[:32000]
 
+            # 提取 usage
+            usage = _empty
+            try:
+                u = response.usage
+                usage = {
+                    "total_tokens": getattr(u, 'total_tokens', 0) or 0,
+                    "prompt_tokens": getattr(u, 'prompt_tokens', 0) or 0,
+                    "completion_tokens": getattr(u, 'completion_tokens', 0) or 0,
+                }
+            except Exception:
+                pass
+
             if new_summary:
                 self.set_semantic_summary(topic_id, new_summary)
                 logger.info(
                     f"L3 摘要更新: {len(overflow_items)}条L2→{len(new_summary)}字符 "
                     f"(现有L3={len(existing_l3)}字符)"
                 )
-            return new_summary
+            return new_summary, usage
         except Exception as e:
             logger.warning(f"L2→L3 摘要生成失败: {e}")
-            return existing_l3
+            return existing_l3, _empty
 
     # ── L3 待处理缓冲（批处理：攒够 N 条再触发摘要）──
 

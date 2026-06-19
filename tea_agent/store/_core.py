@@ -265,6 +265,14 @@ class Storage:
         embedding_tokens, embedding_prompt_tokens 等关键字参数。"""
         return self._topics.add_topic_tokens(topic_id, **kwargs)
 
+    def accumulate_pending_cheap_tokens(self, topic_id: str, usage: dict):
+        """累加待显示的便宜模型 token（异步摘要产生）。"""
+        return self._topics.accumulate_pending_cheap_tokens(topic_id, usage)
+
+    def get_and_clear_pending_cheap_tokens(self, topic_id: str) -> dict:
+        """读取并清零待显示的便宜模型 token。"""
+        return self._topics.get_and_clear_pending_cheap_tokens(topic_id)
+
     # ── Conversation 操作 ──
     def get_conversations(self, topic_id: str, limit: int = 5, include_rounds: bool = True) -> list:
         """获取主题下的对话记录。"""
@@ -707,6 +715,13 @@ class Storage:
                 c.connection.commit()
             except sqlite3.OperationalError:
                 pass
+
+        # pending_cheap_tokens_json — 存储异步摘要产生的便宜模型 token，下一轮显示后清零
+        try:
+            c.execute("ALTER TABLE topic_token_stats ADD COLUMN pending_cheap_tokens_json TEXT DEFAULT ''")
+            c.connection.commit()
+        except sqlite3.OperationalError:
+            pass
 
         try:
             c.execute("ALTER TABLE topics ADD COLUMN drift_count INTEGER DEFAULT 0")

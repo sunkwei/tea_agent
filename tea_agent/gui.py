@@ -803,6 +803,15 @@ class TkGUI(Agent):
         c_c = cheap_usage.get("completion_tokens", 0)
         c_cache_hit = cheap_usage.get("prompt_cache_hit_tokens", 0)
         c_cache_miss = cheap_usage.get("prompt_cache_miss_tokens", 0)
+        # 合并上轮异步摘要产生的 pending cheap tokens（如有）
+        try:
+            pending = self.db.get_and_clear_pending_cheap_tokens(self.current_topic_id)
+            if pending and pending.get("total_tokens", 0) > 0:
+                c_total += pending.get("total_tokens", 0)
+                c_p += pending.get("prompt_tokens", 0)
+                c_c += pending.get("completion_tokens", 0)
+        except Exception:
+            pass
         # 嵌入模型 token 用量（从 EmbeddingEngine 读取本轮）
         e_total = 0
         e_p = 0

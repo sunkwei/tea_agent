@@ -192,6 +192,55 @@ class TopicStore(StoreComponent):
         self.conn.commit()
         c.close()
 
+    def accumulate_pending_cheap_tokens(self, topic_id: str, usage: dict):
+        """累加待显示的便宜模型 token（异步摘要完成后调用，下一轮显示的轮合并）。"""
+        import json as _json_pt
+        if not usage or usage.get("total_tokens", 0) <= 0:
+            return
+        # 读取已有 pending
+        existing = self.get_topic_tokens(topic_id).get("pending_cheap_tokens_json", "")
+        prev = {}
+        if existing:
+            try:
+                prev = _json_pt.loads(existing)
+            except Exception:
+                pass
+        # 合并
+        for k in ("total_tokens", "prompt_tokens", "completion_tokens"):
+            prev[k] = prev.get(k, 0) + usage.get(k, 0)
+        c = self.conn.cursor()
+        c.execute(
+            "INSERT INTO topic_token_stats (topic_id, pending_cheap_tokens_json) "
+            "VALUES (?, ?) ON CONFLICT(topic_id) DO UPDATE SET "
+            "pending_cheap_tokens_json = excluded.pending_cheap_tokens_json",
+            (topic_id, _json_pt.dumps(prev)),
+        )
+        self.conn.commit()
+        c.close()
+
+    def get_and_clear_pending_cheap_tokens(self, topic_id: str) -> Dict:
+        """读取并清零待显示的便宜模型 token。返回 {'total_tokens': N, ...}。"""
+        import json as _json_pt
+        row = self.get_topic_tokens(topic_id)
+        existing = row.get("pending_cheap_tokens_json", "")
+        result = {}
+        if existing:
+            try:
+                result = _json_pt.loads(existing)
+            except Exception:
+                pass
+        # 清零
+        c = self.conn.cursor()
+        c.execute(
+            "INSERT INTO topic_token_stats (topic_id, pending_cheap_tokens_json) "
+            "VALUES (?, '') ON CONFLICT(topic_id) DO UPDATE SET "
+            "pending_cheap_tokens_json = ''",
+            (topic_id,),
+        )
+        self.conn.commit()
+        c.close()
+        return result
+
     def get_topic_tokens(self, topic_id: str) -> Dict:
         """Get the topic tokens.
         

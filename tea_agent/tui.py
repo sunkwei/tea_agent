@@ -94,7 +94,7 @@ class _TUIAgentCore(Agent):
                 if self._tui_verbose:
                     tui.call_from_thread(tui._append_chat, f"Tool [{tool_round[0]}]: {tool_name}")
                 else:
-                    tui.call_from_thread(tui._append_chat, f"🔧 {tool_name}")
+                    tui.call_from_thread(tui._append_chat, f"⚙ {tool_name}")
                 return
             if chunk.startswith("[TOOL_DONE]"):
                 return

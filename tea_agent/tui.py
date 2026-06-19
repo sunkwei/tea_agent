@@ -437,10 +437,13 @@ class TeaTUI(App):
         try:
             usage = self.agent.sess._last_usage
             if usage and usage.get("total_tokens", 0) > 0:
-                self._update_status(
-                    f"Done | Tokens: {usage['total_tokens']:,} "
-                    f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,})"
-                )
+                status = f"Done | Tokens: {usage['total_tokens']:,} (P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,})"
+                hit = usage.get("prompt_cache_hit_tokens", 0)
+                miss = usage.get("prompt_cache_miss_tokens", 0)
+                if hit + miss > 0:
+                    rate = hit / (hit + miss) * 100
+                    status += f" | Cache:{rate:.0f}%({hit:,}/{miss:,})"
+                self._update_status(status)
             else:
                 self._update_status("Done")
         except Exception:

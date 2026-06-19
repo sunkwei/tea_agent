@@ -321,6 +321,8 @@ class APIComponent(SessionComponent):
         prompt = getattr(usage, 'prompt_tokens', None)
         completion = getattr(usage, 'completion_tokens', None)
         total = getattr(usage, 'total_tokens', None)
+        cache_hit = getattr(usage, 'prompt_cache_hit_tokens', None)
+        cache_miss = getattr(usage, 'prompt_cache_miss_tokens', None)
 
         if prompt is not None:
             u["prompt_tokens"] += prompt
@@ -329,10 +331,13 @@ class APIComponent(SessionComponent):
         if total is not None:
             u["total_tokens"] += total
         else:
-            # API 未返回 total_tokens，用本次调用的 prompt+completion 推算
             p = prompt if prompt is not None else 0
             c = completion if completion is not None else 0
             u["total_tokens"] += p + c
+        if cache_hit is not None:
+            u["prompt_cache_hit_tokens"] += cache_hit
+        if cache_miss is not None:
+            u["prompt_cache_miss_tokens"] += cache_miss
 
     def _accumulate_cheap_usage(self, usage):
         if usage is None:
@@ -341,6 +346,8 @@ class APIComponent(SessionComponent):
         prompt = getattr(usage, 'prompt_tokens', None)
         completion = getattr(usage, 'completion_tokens', None)
         total = getattr(usage, 'total_tokens', None)
+        cache_hit = getattr(usage, 'prompt_cache_hit_tokens', None)
+        cache_miss = getattr(usage, 'prompt_cache_miss_tokens', None)
 
         if prompt is not None:
             u["prompt_tokens"] += prompt
@@ -352,6 +359,10 @@ class APIComponent(SessionComponent):
             p = prompt if prompt is not None else 0
             c = completion if completion is not None else 0
             u["total_tokens"] += p + c
+        if cache_hit is not None:
+            u["prompt_cache_hit_tokens"] += cache_hit
+        if cache_miss is not None:
+            u["prompt_cache_miss_tokens"] += cache_miss
 
     def _track_api_usage(self, response, is_cheap=False):
         if hasattr(response, 'usage') and response.usage:
@@ -454,10 +465,12 @@ class APIComponent(SessionComponent):
                     tool_calls_data[idx]["arguments"] += tc.function.arguments
 
     def reset_usage(self):
-        self.ctx._last_usage = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
+        self.ctx._last_usage = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
+                                "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0}
 
     def reset_cheap_usage(self):
-        self.ctx._last_cheap_usage = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
+        self.ctx._last_cheap_usage = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
+                                      "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0}
 
     def get_last_usage(self) -> Dict[str, int]:
         return dict(self.ctx._last_usage)

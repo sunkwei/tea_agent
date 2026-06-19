@@ -746,6 +746,12 @@ class TkGUI(Agent):
                         pass
                     status_msg = (f"✅ 完成 | Tokens: {usage['total_tokens']:,} "
                                   f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,}){emb_str}")
+                    # 追加缓存命中率（如有）
+                    hit = usage.get('prompt_cache_hit_tokens', 0)
+                    miss = usage.get('prompt_cache_miss_tokens', 0)
+                    if hit + miss > 0:
+                        rate = hit / (hit + miss) * 100
+                        status_msg += f" | 缓存:{rate:.0f}%({hit:,}/{miss:,})"
                     self.root.after(0, lambda m=status_msg: self._update_status(m))
                     self.root.after(0, self._refresh_topics_preserve_selection)
                     self.root.after(self.NOTIFY_DELAY_MS, lambda am=ai_msg, um=msg: self._notify_completion(am, um))
@@ -789,10 +795,14 @@ class TkGUI(Agent):
         m_total = usage.get("total_tokens", 0)
         m_p = usage.get("prompt_tokens", 0)
         m_c = usage.get("completion_tokens", 0)
+        m_cache_hit = usage.get("prompt_cache_hit_tokens", 0)
+        m_cache_miss = usage.get("prompt_cache_miss_tokens", 0)
         # 本轮：便宜模型
         c_total = cheap_usage.get("total_tokens", 0)
         c_p = cheap_usage.get("prompt_tokens", 0)
         c_c = cheap_usage.get("completion_tokens", 0)
+        c_cache_hit = cheap_usage.get("prompt_cache_hit_tokens", 0)
+        c_cache_miss = cheap_usage.get("prompt_cache_miss_tokens", 0)
         # 嵌入模型 token 用量（从 EmbeddingEngine 读取本轮）
         e_total = 0
         e_p = 0
@@ -828,11 +838,20 @@ class TkGUI(Agent):
                 return f"{val:,} (P:{detail_p:,})"
             return f"{val:,}"
 
+        def _cache_cell(hit, miss):
+            """格式化为 'hit/miss (rate%)' 或 '—'"""
+            total = hit + miss
+            if total <= 0:
+                return "—"
+            rate = hit / total * 100
+            return f"{hit:,}/{miss:,} ({rate:.0f}%)"
+
         lines = [
             "| | 主模型 | 便宜模型 | 嵌入模型 |",
             "|-------|--------|----------|----------|",
             f"| 本轮 | {_cell(m_total, m_p, m_c)} | {_cell(c_total, c_p, c_c)} | {_cell(e_total, e_p)} |",
             f"| 主题 | {_cell(tm_total, tm_p, tm_c)} | {_cell(tc_total, tc_p, tc_c)} | {_cell(te_total, te_p)} |",
+            f"| 缓存 | {_cache_cell(m_cache_hit, m_cache_miss)} | {_cache_cell(c_cache_hit, c_cache_miss)} | — |",
         ]
         token_msg = "\n".join(lines)
         self.chat_messages.append({"role": "notice", "content": token_msg, "timestamp": self._now_ts()})

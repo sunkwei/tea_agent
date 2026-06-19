@@ -195,7 +195,8 @@ class TestOnlineToolSessionLifecycle:
         sess.context._rounds_collector = [{"role": "assistant", "content": "test"}]
         sess._extra_iterations = 5
         sess.reset_session_state()
-        assert sess.context._last_usage == {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
+        assert sess.context._last_usage == {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
+                                              "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0}
         assert sess.context._rounds_collector == []
         assert sess._extra_iterations == 0
 

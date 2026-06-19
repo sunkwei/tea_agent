@@ -389,7 +389,14 @@ class TeaCLI(Agent):
         if usage and usage.get("total_tokens", 0) > 0:
             ts = self.db.get_topic_tokens(self.current_topic_id)
             t_total = ts.get("total_tokens", 0) if ts else 0
-            print(f"📊 本轮: {usage['total_tokens']:,} tokens | 主题累计: {t_total:,}")
+            print(f"📊 本轮: {usage['total_tokens']:,} tokens | 主题累计: {t_total:,}", end="")
+            hit = usage.get("prompt_cache_hit_tokens", 0)
+            miss = usage.get("prompt_cache_miss_tokens", 0)
+            if hit + miss > 0:
+                rate = hit / (hit + miss) * 100
+                print(f" | 缓存:{rate:.0f}%({hit:,}/{miss:,})")
+            else:
+                print()
 
         # 后处理
         if ai_msg:

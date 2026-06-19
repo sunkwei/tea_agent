@@ -21,15 +21,9 @@ from typing import List, Dict, Callable, Tuple, Any, Optional
 import logging
 
 from tea_agent.basesession import BaseChatSession
-from tea_agent.session_prompts import COMPACT_SYSTEM_PROMPT
 from tea_agent.session_pipeline import SessionPipeline
 
 # 组件导入（替代 Mixin）
-from tea_agent.session_context import SessionContext
-from tea_agent.session_api_component import APIComponent
-from tea_agent.session_tool_component import ToolComponent
-from tea_agent.session_memory_component import MemoryComponent
-from tea_agent.session_summarizer_component import SummarizerComponent
 
 # 提取的独立模块
 from tea_agent.session._history_builder import build_api_messages
@@ -67,6 +61,779 @@ def extract_mode(result: dict):
     if mode in _VALID_MODES:
         return mode
     return None
+
+
+
+
+# ═══════════════════════════════════════════════════
+# 合并自 session_context/session_prompts/session_api/session_tool/session_summarizer
+# ═══════════════════════════════════════════════════
+
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import List, Dict, Any, Optional, Callable
+from openai import OpenAI
+
+
+@dataclass
+class SessionContext:
+    # ── 核心状态 ──
+    messages: List[Dict] = field(default_factory=list)
+    model: str = ""
+    enable_thinking: bool = True
+    
+    # ── 客户端 ──
+    client: Optional[OpenAI] = None
+    cheap_client: Optional[OpenAI] = None
+    cheap_model: str = ""
+    
+    # ── 工具相关 ──
+    toolkit: Any = None  # Toolkit 实例
+    tool_log: Optional[Callable[[str], None]] = None
+    _rounds_collector: List[Dict] = field(default_factory=list)
+    
+    # ── 存储与记忆 ──
+    storage: Any = None  # Storage 实例
+    memory: Any = None   # MemoryManager 实例
+    pipeline: Any = None # SessionPipeline 实例
+    
+    # ── 配置参数 ──
+    keep_turns: int = 5
+    max_tool_output: int = 128 * 1024
+    max_assistant_content: int = 128 * 1024
+    max_context_tokens: int = 0  # 0=不限制，>0 时启用渐进式裁剪
+    memory_extraction_threshold: int = 2
+    memory_dedup_threshold: float = 0.3
+    supports_vision: bool = False
+    supports_reasoning: bool = True
+    disable_summary: bool = False
+    no_stream_chunk: bool = False  # True=非流式模式，方便单步调试
+    
+    # ── 运行时状态 ──
+    _thinking_supported: Optional[bool] = True
+    _cheap_thinking_supported: Optional[bool] = None
+    _last_usage: Dict[str, int] = field(default_factory=lambda: {
+        "total_tokens": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+    })
+    _last_cheap_usage: Dict[str, int] = field(default_factory=lambda: {
+        "total_tokens": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+    })
+    _injected_memories_text: str = ""
+    _injected_memories: List[Dict] = field(default_factory=list)
+    _injected_os_info_text: str = ""
+    _os_info_injected: bool = False  # 防重复注入
+    _history_summary: str = ""
+    _semantic_summary: str = ""
+    _tool_chain_summary: str = ""
+    _level2: List[Dict] = field(default_factory=list)
+    _current_trace: Any = None
+    reflection_manager: Any = None
+    _current_mode: str = "mixed"
+    
+    # ── 额外迭代 ──
+    extra_iterations_on_continue: int = 5
+
+
+class SessionComponent(ABC):
+    def __init__(self, context: SessionContext):
+        self.ctx = context
+    
+    @abstractmethod
+    def initialize(self) -> None:
+        pass
+    
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        pass
+
+    def save_agent_config(self, config: Any) -> None:
+        if not self.ctx.storage:
+            return
+        
+        try:
+            if hasattr(config, '__dict__'):
+                # AgentConfig 实例
+                cfg_dict = {
+                    'max_iterations': getattr(config, 'max_iterations', None),
+                    'keep_turns': getattr(config, 'keep_turns', None),
+                    'max_tool_output': getattr(config, 'max_tool_output', None),
+                    'enable_thinking': getattr(config, 'enable_thinking', None),
+                }
+            elif isinstance(config, dict):
+                cfg_dict = config
+            else:
+                return
+            
+            # 过滤 None 值
+            cfg_dict = {k: v for k, v in cfg_dict.items() if v is not None}
+            
+            if cfg_dict:
+                self.ctx.storage.add_config_change(
+                    key="agent_config_update",
+                    new_value=str(cfg_dict),
+                    reason="会话中配置变更",
+                )
+        except Exception as e:
+            import logging
+            logging.getLogger("session.context").debug(f"保存配置变更失败: {e}")
+
+
+"""
+会话 Prompt 模板常量
+用于 LLM 摘要、Topic 摘要等任务
+
+分类:
+    - 历史摘要 Prompt (HISTORY_*)
+    - Topic 摘要 Prompt (TOPIC_*)
+    - 系统提示词 (COMPACT_*)
+"""
+
+# ──────────────────────────────────────────────
+# 历史摘要 Prompt
+# ──────────────────────────────────────────────
+
+HISTORY_SUMMARIZE_SYSTEM = (
+    "将对话压缩为摘要，保留关键信息（决策、结论、事实、用户需求），"
+    "忽略寒暄和过程细节。200字以内。"
+)
+
+HISTORY_SUMMARIZE_USER = (
+    "{existing}新增对话内容：\n{old_text}\n\n"
+    "请输出合并后的精炼摘要（200字以内）："
+)
+
+# ──────────────────────────────────────────────
+# Topic 摘要 Prompt
+# ──────────────────────────────────────────────
+
+TOPIC_SUMMARY_SYSTEM = (
+    "你是一个极简摘要生成器。根据对话内容，生成不超过20字的摘要标题。"
+    "要求：精准概括对话核心主题，不使用书名号，不加引号，不加多余修饰。"
+    "直接输出摘要文本，不要任何额外说明。"
+)
+
+TOPIC_SUMMARY_USER_TEMPLATE = (
+    "以下是最近3轮对话的用户消息：\n\n{user_msgs}\n\n"
+    "请生成不超过20字的摘要标题："
+)
+
+# ──────────────────────────────────────────────
+# 系统提示词
+# ──────────────────────────────────────────────
+
+COMPACT_SYSTEM_PROMPT = (
+    "你是可自我扩展的智能Agent，拥有27+工具。"
+    "核心工具：toolkit_exec(命令)、toolkit_file(r/w/list)、toolkit_self_evolve(四层安全自进化)、"
+    "toolkit_memory(记忆管理)、toolkit_kb(知识库)、toolkit_reflection(元认知)、"
+    "toolkit_subconscious(潜意识引擎)、toolkit_prompt_evolve(提示词进化)等。"
+    "通过toolkit_save保存新工具、toolkit_reload重载。\n\n"
+    "行为准则：主动分析需求，优先专用工具，修改前备份(.bak)，关键步骤验证，"
+    "减少无效迭代(上限50)。所有工具调用参数严格JSON双引号格式。"
+    "修改代码加注释前缀。宽进严出——出口管线严格校验，不假定模型宽容。"
+)
+
+
+
+from typing import List, Dict, Tuple, Any, Optional, Callable
+from tea_agent.session._params import get_cheap_params
+
+# 向后兼容别名
+
+class APIComponent(SessionComponent):
+    
+    @property
+    def name(self) -> str:
+        return "api"
+    
+    def initialize(self) -> None:
+        pass
+    
+    def _probe_thinking_support(self, client=None, model=None, is_cheap=False):
+        # 根据 is_cheap 选择要检查和更新的状态字段
+        if is_cheap:
+            if self.ctx._cheap_thinking_supported is not None:
+                return  # 已经检测过
+        else:
+            if self.ctx._thinking_supported is not None:
+                return  # 已经检测过
+
+        target_client = client or self.ctx.client
+        target_model = model or self.ctx.model
+
+        if not self.ctx.enable_thinking or not target_client:
+            return
+
+        try:
+            # 发送一个极简请求来检测 thinking 支持
+            test_response = target_client.chat.completions.create(
+                model=target_model,
+                messages=[{"role": "user", "content": "Hi"}],
+                stream=False,
+                extra_body={"thinking": {"type": "enabled"}},
+                max_tokens=10,
+            )
+
+            # 更新对应的状态
+            if is_cheap:
+                self.ctx._cheap_thinking_supported = True
+            else:
+                self.ctx._thinking_supported = True
+
+            if self.ctx.tool_log:
+                model_type = "便宜模型" if is_cheap else "主模型"
+                self.ctx.tool_log(f"🧠 {model_type}支持 thinking，已启用")
+        except Exception as e:
+            err_str = str(e).lower()
+            if ('thinking' in err_str or 'extra_body' in err_str or
+                    'unsupported' in err_str or 'invalid' in err_str):
+                # 更新对应的状态
+                if is_cheap:
+                    self.ctx._cheap_thinking_supported = False
+                else:
+                    self.ctx._thinking_supported = False
+
+                if self.ctx.tool_log:
+                    model_type = "便宜模型" if is_cheap else "主模型"
+                    self.ctx.tool_log(f"⚠️ {model_type}不支持 thinking，已禁用")
+            else:
+                # 其他错误，不影响 thinking 检测，保持 None 状态
+                if self.ctx.tool_log:
+                    model_type = "便宜模型" if is_cheap else "主模型"
+                    self.ctx.tool_log(f"⚠️ {model_type} thinking 检测时出错: {e}")
+
+    def _accumulate_usage(self, usage):
+        if usage is None:
+            return
+        u = self.ctx._last_usage
+        prompt = getattr(usage, 'prompt_tokens', None)
+        completion = getattr(usage, 'completion_tokens', None)
+        total = getattr(usage, 'total_tokens', None)
+
+        if prompt is not None:
+            u["prompt_tokens"] += prompt
+        if completion is not None:
+            u["completion_tokens"] += completion
+        if total is not None:
+            u["total_tokens"] += total
+        else:
+            # API 未返回 total_tokens，用本次调用的 prompt+completion 推算
+            p = prompt if prompt is not None else 0
+            c = completion if completion is not None else 0
+            u["total_tokens"] += p + c
+
+    def _accumulate_cheap_usage(self, usage):
+        if usage is None:
+            return
+        u = self.ctx._last_cheap_usage
+        prompt = getattr(usage, 'prompt_tokens', None)
+        completion = getattr(usage, 'completion_tokens', None)
+        total = getattr(usage, 'total_tokens', None)
+
+        if prompt is not None:
+            u["prompt_tokens"] += prompt
+        if completion is not None:
+            u["completion_tokens"] += completion
+        if total is not None:
+            u["total_tokens"] += total
+        else:
+            p = prompt if prompt is not None else 0
+            c = completion if completion is not None else 0
+            u["total_tokens"] += p + c
+
+    def _track_api_usage(self, response, is_cheap=False):
+        if hasattr(response, 'usage') and response.usage:
+            if is_cheap:
+                self._accumulate_cheap_usage(response.usage)
+            else:
+                self._accumulate_usage(response.usage)
+
+    def create_chat_stream(self, api_messages: List[Dict], tools: List[Dict], 
+                          client=None, model=None, is_cheap=False, 
+                          temperature=None, max_tokens=None, top_p=None):
+        target_client = client or self.ctx.client
+        target_model = model or self.ctx.model
+
+        kwargs = {
+            "model": target_model,
+            "messages": api_messages,
+            "tools": tools,
+            "tool_choice": "auto",
+            "stream": not self.ctx.no_stream_chunk,
+        }
+        # 传入推理参数（仅在非 None 时设置）
+        for param_name in ("temperature", "max_tokens", "top_p"):
+            val = locals().get(param_name)
+            if val is not None:
+                kwargs[param_name] = val
+
+        # 根据模型能力决定是否传 stream_options
+        if self.ctx.supports_reasoning:
+            kwargs["stream_options"] = {"include_usage": True}
+
+        # 根据对应的 thinking 状态决定是否启用
+        if is_cheap:
+            thinking_supported = self.ctx._cheap_thinking_supported
+        else:
+            thinking_supported = self.ctx._thinking_supported
+
+        if thinking_supported:
+            kwargs["extra_body"] = {
+                "thinking": {
+                    "type": "enabled" if self.ctx.enable_thinking else "disabled"
+                }
+            }
+
+        if target_model in ("mimo-v2.5-pro", "mimo-v2.5", "mimo-v2.0"):
+            kwargs.pop("stream_options")
+            kwargs.pop("extra_body")
+
+        stream = target_client.chat.completions.create(**kwargs)
+        return stream
+
+    def call_summarize_api(self, cli, mdl, messages, temperature=0.1, max_tokens=500):
+        import logging
+        logger = logging.getLogger("session.api")
+        
+        try:
+            logger.debug(f"summarize API request: model={mdl}, msgs={len(messages)}, temperature={temperature}, max_tokens={max_tokens}")
+            return cli.chat.completions.create(
+                model=mdl,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                extra_body={"thinking": {"type": "disabled"}},
+            )
+        except Exception as e:
+            err_str = str(e).lower()
+            if 'thinking' in err_str or 'extra_body' in err_str:
+                # 模型不支持 thinking 参数，回退到不带 extra_body 的调用
+                logger.debug(f"summarize API: thinking disabled not supported, retrying without extra_body")
+                return cli.chat.completions.create(
+                    model=mdl,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+            logger.warning(f"summarize API call failed: model={mdl}, error={e}")
+            raise
+
+    def accumulate_tool_calls_from_delta(self, delta, tool_calls_data: List[Dict]):
+        if not delta.tool_calls:
+            return
+
+        for tc in delta.tool_calls:
+            idx = tc.index
+
+            # 扩展列表
+            while len(tool_calls_data) <= idx:
+                tool_calls_data.append({
+                    "id": "",
+                    "name": "",
+                    "arguments": ""
+                })
+
+            if tc.id:
+                tool_calls_data[idx]["id"] = tc.id
+            if tc.function:
+                if tc.function.name:
+                    tool_calls_data[idx]["name"] = tc.function.name
+                if tc.function.arguments:
+                    tool_calls_data[idx]["arguments"] += tc.function.arguments
+
+    def reset_usage(self):
+        self.ctx._last_usage = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
+
+    def reset_cheap_usage(self):
+        self.ctx._last_cheap_usage = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
+
+    def get_last_usage(self) -> Dict[str, int]:
+        return dict(self.ctx._last_usage)
+
+    def get_cheap_usage(self) -> Dict[str, int]:
+        return dict(self.ctx._last_cheap_usage)
+
+    def get_total_usage(self) -> Dict[str, Dict[str, int]]:
+        return {
+            "main": dict(self.ctx._last_usage),
+            "cheap": dict(self.ctx._last_cheap_usage),
+        }
+
+
+
+import json
+import logging
+from typing import List, Dict, Tuple, Any, Optional
+from types import SimpleNamespace
+
+logger = logging.getLogger("session.tool")
+
+# ── 模块级纯函数（原 session_tools_builder）──
+
+ESSENTIAL_TOOLS = {"toolkit_memory", "toolkit_kb"}
+
+
+def filter_tools(tools: list, tool_filter: list = None) -> list:
+    if tool_filter:
+        allowed = set(tool_filter) | ESSENTIAL_TOOLS
+        return [t for t in tools if t["function"]["name"] in allowed]
+    return tools
+
+
+def has_tool(tools: list, name: str) -> bool:
+    return any(t.get("function", {}).get("name") == name for t in tools)
+
+
+class ToolComponent(SessionComponent):
+    
+    @property
+    def name(self) -> str:
+        return "tool"
+    
+    def initialize(self) -> None:
+        pass
+    
+    def build_tools(self) -> List[Dict]:
+        tools = []
+        if self.ctx.toolkit is None:
+            logger.warning("toolkit 未设置，无法构建工具列表")
+            return tools
+        
+        for name, meta in self.ctx.toolkit.meta_map.items():
+            tools.append(meta)
+        return tools
+
+    def execute_tool_call(self, call) -> Tuple[str, str, str]:
+        import time
+        func_name = call.function.name
+        call_id = call.id
+        start_time = time.time()
+
+        if self.ctx.toolkit is None:
+            err = "错误：toolkit 未设置"
+            logger.error(err)
+            self.add_tool_result(call_id, err)
+            self._record_tool_to_trace(func_name, False, err, start_time)
+            return call_id, func_name, err
+
+        if func_name not in self.ctx.toolkit.func_map:
+            err = f"错误：未知工具 {func_name}"
+            logger.warning(f"tool call failed: unknown function '{func_name}'")
+            self.add_tool_result(call_id, err)
+            self._record_tool_to_trace(func_name, False, err, start_time)
+            return call_id, func_name, err
+
+        try:
+            args = json.loads(call.function.arguments)
+        except json.JSONDecodeError:
+            err = "错误：参数解析失败"
+            logger.warning(f"tool call failed: JSON decode error, func={func_name}, raw_args={call.function.arguments[:200]}")
+            self.add_tool_result(call_id, err)
+            self._record_tool_to_trace(func_name, False, err, start_time)
+            return call_id, func_name, err
+
+        if self.ctx.tool_log:
+            self.ctx.tool_log(f"🔧 调用工具: {func_name}({args})")
+
+        success = True
+        error_msg = ""
+        try:
+            result = self.ctx.toolkit.call_tool(func_name, **args)
+            if self.ctx.tool_log:
+                self.ctx.tool_log(f"✅ 结果: {result}")
+        except Exception as e:
+            result = f"工具执行错误: {e}"
+            logger.warning(f"tool execution failed: {func_name}, error={e}")
+            success = False
+            error_msg = str(e)
+            if self.ctx.tool_log:
+                self.ctx.tool_log(f"❌ 错误: {e}")
+
+        result_str = str(result)
+        
+        # 截断超长工具输出，防止 413 Request Entity Too Large
+        max_output = self.ctx.max_tool_output
+        result_bytes = len(result_str.encode("utf-8"))
+        if result_bytes > max_output:
+            # 首尾各保留一半，按换行对齐
+            half = max_output // 2
+            raw = result_str.encode("utf-8")
+            
+            # 前半部分
+            head_end = half
+            nl = raw.find(b'\n', head_end)
+            if nl != -1 and nl < half + 256:
+                head_end = nl
+            head_text = raw[:head_end].decode("utf-8", errors="replace")
+            
+            # 后半部分
+            tail_start = len(raw) - half
+            nl = raw.rfind(b'\n', tail_start, len(raw))
+            if nl != -1 and nl > tail_start - 256:
+                tail_start = nl + 1
+            tail_text = raw[tail_start:].decode("utf-8", errors="replace")
+            
+            result_str = f"{head_text}\n\n... [工具输出截断: {result_bytes}B → {len(head_text.encode('utf-8')) + len(tail_text.encode('utf-8'))}B] ...\n\n{tail_text}"
+            logger.info(f"tool output truncated: {func_name}, {result_bytes}B → {len(result_str.encode('utf-8'))}B")
+        
+        self.add_tool_result(call_id, result_str)
+        self._record_tool_to_trace(func_name, success, error_msg, start_time)
+        return call_id, func_name, result_str
+
+    def _record_tool_to_trace(self, func_name: str, success: bool, error_msg: str, start_time: float):
+        import time
+        trace = self.ctx._current_trace
+        if trace is None:
+            return
+        reflection_mgr = self.ctx.reflection_manager
+        if reflection_mgr is None:
+            return
+        duration_ms = (time.time() - start_time) * 1000
+        reflection_mgr.record_tool_call(trace, func_name, success, error_msg, duration_ms)
+
+    def add_tool_result(self, tool_call_id: str, content: str):
+        self.ctx.messages.append({
+            "role": "tool",
+            "tool_call_id": tool_call_id,
+            "content": content
+        })
+
+    def collect_tool_call_round(self, call_id: str, result_str: str):
+        self.ctx._rounds_collector.append({
+            "role": "tool",
+            "content": result_str,
+            "tool_call_id": call_id,
+        })
+
+    def collect_assistant_tool_calls_round(self, content: str, tool_calls: list, reasoning_content: str = ""):
+        tc_list_for_collector = [{
+            "id": tc.id,
+            "type": "function",
+            "function": {
+                "name": tc.function.name,
+                "arguments": tc.function.arguments
+            }
+        } for tc in tool_calls]
+
+        entry = {
+            "role": "assistant",
+            "content": content if content else "",
+            "tool_calls": tc_list_for_collector,
+        }
+        if reasoning_content:
+            entry["reasoning_content"] = reasoning_content
+        self.ctx._rounds_collector.append(entry)
+
+    def collect_assistant_text_round(self, content: str, reasoning_content: str = ""):
+        entry = {
+            "role": "assistant",
+            "content": content,
+        }
+        if reasoning_content:
+            entry["reasoning_content"] = reasoning_content
+        self.ctx._rounds_collector.append(entry)
+
+    def collect_api_error_round(self, content: str):
+        self.ctx._rounds_collector.append({
+            "role": "assistant",
+            "content": content,
+        })
+
+    def collect_max_iterations_round(self, content: str):
+        self.ctx._rounds_collector.append({
+            "role": "assistant",
+            "content": content,
+        })
+
+    def collect_interruption_round(self, content: str):
+        self.ctx._rounds_collector.append({
+            "role": "assistant",
+            "content": content,
+        })
+
+    def parse_tool_calls_from_stream(self, tool_calls_data: List[Dict]) -> list:
+        valid_tool_calls = []
+        for tc_data in tool_calls_data:
+            func_id = tc_data["id"]
+            if "name" in tc_data:
+                func_name = tc_data["name"]
+                func_args = tc_data["arguments"]
+            elif "function" in tc_data:
+                func_name = tc_data["function"]["name"]
+                func_args = tc_data["function"]["arguments"]
+            else:
+                logger.warning(f"tool call failed: invalid data format, data={tc_data}")
+                print(f"parse_tool_calls_from_stream: tool call failed: invalid data format, data={tc_data}")
+                continue
+
+            valid_tool_calls.append(SimpleNamespace(
+                id=func_id,
+                function=SimpleNamespace(
+                    name=func_name,
+                    arguments=func_args,
+                )
+            ))
+        return valid_tool_calls
+
+
+
+import logging
+from typing import List, Dict, Tuple, Any, Optional, Callable
+from tea_agent.session._params import get_cheap_params
+
+logger = logging.getLogger("session.summarizer")
+
+# 向后兼容别名
+
+class SummarizerComponent(SessionComponent):
+    
+    @property
+    def name(self) -> str:
+        return "summarizer"
+    
+    def initialize(self) -> None:
+        pass
+
+    def summarize_old_history(self, api_component, get_summarize_client_fn) -> None:
+        # 检查是否禁用摘要
+        if self.ctx.disable_summary:
+            return
+
+        topic_id = getattr(self.ctx, "current_topic_id", None)
+        storage = self.ctx.storage
+        if not (topic_id and storage):
+            return
+
+        # 1. 获取未摘要的对话
+        try:
+            unsummarized = storage.get_unsummarized_conversations(topic_id)
+        except Exception as e:
+            logger.warning(f"获取未摘要对话失败: {e}")
+            return
+
+        if len(unsummarized) <= self.ctx.keep_turns:
+            return
+
+        # 2. 确定需要摘要的范围
+        num_to_summarize = len(unsummarized) - self.ctx.keep_turns
+        convs_to_summarize = unsummarized[:num_to_summarize]
+
+        # 3. 提取对话文本
+        old_text = self._conversations_to_text(convs_to_summarize)
+        if not old_text:
+            return
+
+        # 获取旧摘要
+        try:
+            old_summary = storage.get_topic_summary(topic_id) or ""
+        except Exception:
+            old_summary = ""
+
+        # 构建 Prompt
+        existing = (
+            f"已有摘要：{old_summary}\n\n"
+            if old_summary
+            else ""
+        )
+
+        try:
+            cli, mdl = get_summarize_client_fn()
+            # 判断是否使用便宜模型
+            is_cheap = (
+                self.ctx.cheap_client is not None
+                and cli is self.ctx.cheap_client
+            )
+            
+            cheap_params = _get_cheap_params({"temperature": 0.1, "max_tokens": 500})
+            response = api_component.call_summarize_api(
+                cli, mdl,
+                messages=[
+                    {"role": "system", "content": HISTORY_SUMMARIZE_SYSTEM},
+                    {
+                        "role": "user",
+                        "content": HISTORY_SUMMARIZE_USER.format(
+                            existing=existing, old_text=old_text
+                        ),
+                    },
+                ],
+                temperature=cheap_params["temperature"],
+                max_tokens=cheap_params["max_tokens"],
+            )
+            
+            # 统计 token 用量
+            api_component._track_api_usage(response, is_cheap=is_cheap)
+
+            content = response.choices[0].message.content
+            if isinstance(content, str):
+                new_summary = content.strip()
+
+                # 4. 更新数据库
+                last_conv_id = convs_to_summarize[-1]['id']
+                storage.update_topic_summary(topic_id, new_summary, last_summarized_id=last_conv_id)
+                for conv in convs_to_summarize:
+                    storage.mark_as_summarized(conv['id'])
+
+                # 5. 同步内存
+                self.ctx._history_summary = new_summary
+
+                # 裁剪 messages，保持与数据库同步
+                boundary = self._find_recent_boundary()
+                if boundary > 1:
+                    self.ctx.messages = [self.ctx.messages[0]] + self.ctx.messages[boundary:]
+
+                if self.ctx.tool_log:
+                    self.ctx.tool_log(f"📝 历史摘要更新：{new_summary}")
+
+        except Exception as e:
+            logger.warning(f"历史摘要生成失败: error={e}")
+            if self.ctx.tool_log:
+                self.ctx.tool_log(f"⚠️ 摘要生成失败: {e}")
+
+    def _conversations_to_text(self, conversations: List[Dict], max_per_msg: int = 500) -> str:
+        lines = []
+        for conv in conversations:
+            # 用户消息
+            u_msg = conv.get("user_msg", "")
+            lines.append(f"[USER]: {u_msg[:max_per_msg]}")
+
+            # AI 消息（含工具调用链）
+            rounds = conv.get("rounds_json_parsed")
+            if rounds and conv.get("is_func_calling"):
+                for rd in rounds:
+                    role = rd.get("role", "")
+                    content = rd.get("content", "")
+                    if role == "assistant" and rd.get("tool_calls"):
+                        tc_names = [tc["function"]["name"] for tc in rd["tool_calls"]]
+                        lines.append(f"[ASSISTANT 调用工具]: {', '.join(tc_names)}")
+                        if content:
+                            lines.append(f"[ASSISTANT]: {content[:max_per_msg]}")
+                    elif role == "tool":
+                        lines.append(f"[工具结果]: {content[:max_per_msg]}")
+                    elif role == "assistant" and content:
+                        lines.append(f"[ASSISTANT]: {content[:max_per_msg]}")
+            else:
+                ai_msg = conv.get("ai_msg", "")
+                lines.append(f"[ASSISTANT]: {ai_msg[:max_per_msg]}")
+
+        return "\n".join(lines)
+
+    def _find_recent_boundary(self) -> int:
+        user_count = 0
+
+        for i in range(len(self.ctx.messages) - 1, 0, -1):
+            msg = self.ctx.messages[i]
+            if msg.get("role") == "user":
+                user_count += 1
+                if user_count >= self.ctx.keep_turns:
+                    return i
+
+        # 不足 keep_turns 轮，保留全部
+        return 1
 
 
 class OnlineToolSession(BaseChatSession):
@@ -608,3 +1375,4 @@ class OnlineToolSession(BaseChatSession):
             self.close()
         except Exception:
             pass
+from tea_agent.session_memory_component import MemoryComponent

@@ -226,8 +226,218 @@ class Storage:
         self.vectors = self._vectors
         self.scheduled_tasks = self._scheduled_tasks
 
-    # ── 自动委派：未匹配的方法路由到子组件 ──
+    # ── 显式委托方法（IDE 可跳转，文档可索引）──
 
+    # ── Topic 操作 ──
+    def create_topic(self, title: str, topic_id: str = None) -> str:
+        """创建新主题。"""
+        return self._topics.create_topic(title, topic_id)
+
+    def get_topic(self, topic_id: str) -> dict:
+        """获取主题信息。"""
+        return self._topics.get_topic(topic_id)
+
+    def list_topics(self) -> list:
+        """列出所有主题。"""
+        return self._topics.list_topics()
+
+    def delete_topic(self, topic_id: str) -> bool:
+        """删除主题。"""
+        return self._topics.delete_topic(topic_id)
+
+    def update_topic_title(self, topic_id: str, title: str):
+        """更新主题标题。"""
+        return self._topics.update_topic_title(topic_id, title)
+
+    def update_topic_active(self, topic_id: str, is_active: bool = True):
+        """更新主题活跃状态。"""
+        return self._topics.update_topic_active(topic_id, is_active)
+
+    # ── Topic Token 统计 ──
+    def get_topic_tokens(self, topic_id: str) -> dict:
+        """获取主题 token 统计。"""
+        return self._topics.get_topic_tokens(topic_id)
+
+    def add_topic_tokens(self, topic_id: str, **kwargs):
+        """累加主题 token 统计。支持 total_tokens, prompt_tokens, completion_tokens,
+        cheap_tokens, cheap_prompt_tokens, cheap_completion_tokens,
+        embedding_tokens, embedding_prompt_tokens 等关键字参数。"""
+        return self._topics.add_topic_tokens(topic_id, **kwargs)
+
+    # ── Conversation 操作 ──
+    def get_conversations(self, topic_id: str, limit: int = 5, include_rounds: bool = True) -> list:
+        """获取主题下的对话记录。"""
+        return self._conversations.get_conversations(topic_id, limit=limit, include_rounds=include_rounds)
+
+    def get_recent_conversations(self, topic_id: str, limit: int = 10) -> list:
+        """获取最近的对话记录。"""
+        return self._conversations.get_recent_conversations(topic_id, limit)
+
+    def update_msg_rounds(self, conversation_id: str, ai_msg: str, is_func_calling: bool, rounds: list = None):
+        """更新消息的 rounds 数据。"""
+        return self._conversations.update_msg_rounds(conversation_id, ai_msg, is_func_calling, rounds)
+
+    def get_agent_rounds(self, conversation_id: str) -> list:
+        """获取对话的 agent rounds。"""
+        return self._conversations.get_agent_rounds(conversation_id)
+
+    # ── 特殊桥接：save_msg 需要回调其他组件的 update_active ──
+    def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool) -> str:
+        """桥接方法：save_msg 需要 update_topic_active 回调。"""
+        return self._conversations.save_msg(
+            topic_id, user_msg, ai_msg, is_func,
+            update_active_cb=self._topics.update_topic_active,
+            auto_embed_cb=None,  # 使用 _conversations 内置的 _auto_embed_async
+        )
+
+    # ── Memory 操作 ──
+    def add_memory(self, content: str, category: str = "general", priority: int = 2,
+                   importance: int = 3, expires_at: str = None, tags: str = "",
+                   source_topic_id: str = None, pinned: int = 0,
+                   embedding: list = None) -> str:
+        """添加记忆。"""
+        return self._memories.add_memory(content, category, priority, importance,
+                                         expires_at=expires_at, tags=tags,
+                                         source_topic_id=source_topic_id,
+                                         pinned=pinned, embedding=embedding)
+
+    def get_active_memories(self, limit: int = 50) -> list:
+        """获取活跃记忆。"""
+        return self._memories.get_active_memories(limit)
+
+    def search_memories(self, query: str = "", category: str = "",
+                        tags: list = None, min_importance: int = 0, limit: int = 10) -> list:
+        """搜索记忆。"""
+        return self._memories.search_memories(query, category=category,
+                                              tags=tags, min_importance=min_importance,
+                                              limit=limit)
+
+    def get_memory_stats(self) -> dict:
+        """获取记忆统计。"""
+        return self._memories.get_memory_stats()
+
+    # ── Summary 操作 ──
+    def get_topic_summary(self, topic_id: str) -> str:
+        """获取主题摘要。"""
+        return self._summaries.get_topic_summary(topic_id)
+
+    def update_topic_summary(self, topic_id: str, summary: str,
+                             last_summarized_id=None):
+        """更新主题摘要。"""
+        return self._summaries.update_topic_summary(topic_id, summary, last_summarized_id=last_summarized_id)
+
+    def get_unsummarized_conversations(self, topic_id: str) -> list:
+        """获取未摘要的对话。"""
+        return self._summaries.get_unsummarized_conversations(topic_id)
+
+    def mark_as_summarized(self, conversation_id: str):
+        """标记对话为已摘要。"""
+        return self._summaries.mark_as_summarized(conversation_id)
+
+    def get_semantic_summary(self, topic_id: str) -> str:
+        """获取语义摘要。"""
+        return self._summaries.get_semantic_summary(topic_id)
+
+    def set_semantic_summary(self, topic_id: str, summary: str):
+        """设置语义摘要。"""
+        return self._summaries.set_semantic_summary(topic_id, summary)
+
+    def get_tool_chain_summary(self, topic_id: str) -> str:
+        """获取工具链摘要。"""
+        return self._summaries.get_tool_chain_summary(topic_id)
+
+    def set_tool_chain_summary(self, topic_id: str, summary: str):
+        """设置工具链摘要。"""
+        return self._summaries.set_tool_chain_summary(topic_id, summary)
+
+    # ── Prompt 操作 ──
+    def add_system_prompt(self, content: str, reason: str = "", source_reflection_id=None) -> str:
+        """添加系统提示词。"""
+        return self._prompts.add_system_prompt(content, reason, source_reflection_id)
+
+    def get_latest_system_prompt(self) -> dict:
+        """获取最新系统提示词。"""
+        return self._prompts.get_latest_system_prompt()
+
+    def get_system_prompt_history(self, limit: int = 20) -> list:
+        """获取系统提示词历史。"""
+        return self._prompts.get_system_prompt_history(limit)
+
+    def deactivate_system_prompt(self, prompt_id: str) -> bool:
+        """停用系统提示词。"""
+        return self._prompts.deactivate_system_prompt(prompt_id)
+
+    def rollback_system_prompt(self, prompt_id: str) -> bool:
+        """回滚系统提示词。"""
+        return self._prompts.rollback_system_prompt(prompt_id)
+
+    def get_system_prompt_count(self) -> int:
+        """获取系统提示词数量。"""
+        return self._prompts.get_system_prompt_count()
+
+    # ── Reflection 操作 ──
+    def add_reflection(self, summary: str, details: str = "", tool_stats=None,
+                       suggestions=None, topic_id=None) -> str:
+        """添加反思记录。"""
+        return self._reflections.add_reflection(summary, details, tool_stats, suggestions, topic_id)
+
+    def get_recent_reflections(self, limit: int = 10) -> list:
+        """获取最近的反思记录。"""
+        return self._reflections.get_recent_reflections(limit)
+
+    def mark_reflection_applied(self, reflection_id: str):
+        """标记反思为已应用。"""
+        return self._reflections.mark_reflection_applied(reflection_id)
+
+    def get_reflection_stats(self) -> dict:
+        """获取反思统计。"""
+        return self._reflections.get_reflection_stats()
+
+    # ── Config History 操作 ──
+    def add_config_change(self, key: str, new_value: str, old_value=None,
+                          reason: str = "", source_reflection_id=None) -> str:
+        """添加配置变更记录。"""
+        return self._config_history.add_config_change(key, new_value, old_value, reason, source_reflection_id)
+
+    def get_config_history(self, key: str = "", limit: int = 20) -> list:
+        """获取配置变更历史。"""
+        return self._config_history.get_config_history(key, limit)
+
+    # ── Vector 操作 ──
+    def store_embedding(self, conversation_id: str, embedding: bytes, dimension: int = 0, model_name: str = ""):
+        """存储对话嵌入向量。"""
+        return self._vectors.store_embedding(conversation_id, embedding, dimension, model_name)
+
+    def get_msg_embedding(self, conversation_id: str) -> bytes:
+        """获取对话嵌入向量。"""
+        return self._vectors.get_msg_embedding(conversation_id)
+
+    def search_by_keyword(self, query: str, limit: int = 10) -> list:
+        """关键词搜索对话。"""
+        return self._vectors.search_by_keyword(query, limit)
+
+    # ── Scheduled Task 操作 ──
+    def add_task(self, name: str, command: str, schedule: str) -> str:
+        """添加定时任务。"""
+        return self._scheduled_tasks.add_task(name, command, schedule)
+
+    def list_tasks(self) -> list:
+        """列出所有定时任务。"""
+        return self._scheduled_tasks.list_tasks()
+
+    def get_task(self, task_id: str) -> dict:
+        """获取定时任务。"""
+        return self._scheduled_tasks.get_task(task_id)
+
+    def delete_task(self, task_id: str) -> bool:
+        """删除定时任务。"""
+        return self._scheduled_tasks.delete_task(task_id)
+
+    def update_task(self, task_id: str, **kwargs):
+        """更新定时任务。"""
+        return self._scheduled_tasks.update_task(task_id, **kwargs)
+
+    # ── 向后兼容：自动委派（fallback）──
     def __getattr__(self, name):
         # 避免私有属性递归查找
         if name.startswith("_"):
@@ -240,16 +450,6 @@ class Storage:
                 return getattr(delegate, name)
         raise AttributeError(
             f"'{type(self).__name__}' object has no attribute '{name}'"
-        )
-
-    # ── 特殊桥接：save_msg 需要回调其他组件的 update_active ──
-
-    def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool) -> str:
-        """桥接方法：save_msg 需要 update_topic_active 回调。"""
-        return self._conversations.save_msg(
-            topic_id, user_msg, ai_msg, is_func,
-            update_active_cb=self._topics.update_topic_active,
-            auto_embed_cb=None,  # 使用 _conversations 内置的 _auto_embed_async
         )
 
     # ── 表初始化 ──

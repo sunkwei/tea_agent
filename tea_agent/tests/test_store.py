@@ -206,6 +206,21 @@ class TestMessageCRUD:
         assert conv["rounds_json_parsed"] is not None
         assert len(conv["rounds_json_parsed"]) == 3
 
+    def test_get_conversations_default_params(self, storage):
+        """get_conversations 默认参数：limit=5, include_rounds=True"""
+        tid = storage.create_topic("默认参数测试")
+        for i in range(10):
+            cid = storage.save_msg(tid, f"msg{i}", f"reply{i}", False)
+            storage.update_msg_rounds(cid, f"reply{i}", False, [{"role": "assistant", "content": f"test{i}"}])
+
+        # 不传 limit / include_rounds → 应返回最近 5 条，含 rounds_json_parsed
+        convs = storage.get_conversations(tid)
+        assert len(convs) == 5
+        assert convs[0]["user_msg"] == "msg5"
+        assert convs[-1]["user_msg"] == "msg9"
+        for c in convs:
+            assert "rounds_json_parsed" in c
+
     def test_get_conversations_limit(self, storage):
         """get_conversations 限制返回条数"""
         tid = storage.create_topic("限制测试")
@@ -218,6 +233,35 @@ class TestMessageCRUD:
         assert len(convs) == 3
         assert convs[-1]["user_msg"] == "msg9"
 
+    def test_get_conversations_limit_negative(self, storage):
+        """get_conversations limit=-1 返回全部对话"""
+        tid = storage.create_topic("全量测试")
+        for i in range(7):
+            cid = storage.save_msg(tid, f"msg{i}", f"reply{i}", False)
+            storage.update_msg_rounds(cid, f"reply{i}", False)
+
+        convs = storage.get_conversations(tid, limit=-1)
+        assert len(convs) == 7
+
+    def test_get_conversations_limit_zero(self, storage):
+        """get_conversations limit=0 返回空列表"""
+        tid = storage.create_topic("空列表测试")
+        cid = storage.save_msg(tid, "msg", "reply", False)
+        storage.update_msg_rounds(cid, "reply", False)
+
+        convs = storage.get_conversations(tid, limit=0)
+        assert len(convs) == 0
+
+    def test_get_conversations_limit_exceeds_total(self, storage):
+        """get_conversations limit 大于总数时返回全部"""
+        tid = storage.create_topic("超限测试")
+        for i in range(3):
+            cid = storage.save_msg(tid, f"msg{i}", f"reply{i}", False)
+            storage.update_msg_rounds(cid, f"reply{i}", False)
+
+        convs = storage.get_conversations(tid, limit=100)
+        assert len(convs) == 3
+
     def test_get_conversations_lightweight(self, storage):
         """轻量模式不加载 rounds_json"""
         tid = storage.create_topic("轻量测试")
@@ -227,6 +271,52 @@ class TestMessageCRUD:
         convs = storage.get_conversations(tid, include_rounds=False)
         assert len(convs) == 1
         assert "rounds_json_parsed" not in convs[0]
+
+    def test_get_conversations_include_rounds_true(self, storage):
+        """include_rounds=True 应返回 rounds_json_parsed"""
+        tid = storage.create_topic("含轮次测试")
+        cid = storage.save_msg(tid, "问题", "回答", True)
+        rounds = [
+            {"role": "assistant", "content": "思考"},
+            {"role": "tool", "content": "工具结果"},
+            {"role": "assistant", "content": "最终回答"},
+        ]
+        storage.update_msg_rounds(cid, "最终回答", True, rounds)
+
+        convs = storage.get_conversations(tid, include_rounds=True)
+        assert len(convs) == 1
+        assert convs[0]["rounds_json_parsed"] is not None
+        assert len(convs[0]["rounds_json_parsed"]) == 3
+
+    def test_get_conversations_empty_topic(self, storage):
+        """空主题返回空列表"""
+        tid = storage.create_topic("空主题")
+        convs = storage.get_conversations(tid)
+        assert convs == []
+
+    def test_get_conversations_signature_compatibility(self, storage):
+        """签名兼容性：关键字参数和位置参数都能正常工作"""
+        import inspect
+        sig = inspect.signature(storage.get_conversations)
+        params = list(sig.parameters.keys())
+        # 必须有 topic_id, limit, include_rounds 三个参数
+        assert "topic_id" in params
+        assert "limit" in params
+        assert "include_rounds" in params
+
+        tid = storage.create_topic("签名测试")
+        cid = storage.save_msg(tid, "msg", "reply", False)
+
+        # 位置参数
+        convs1 = storage.get_conversations(tid, 1, False)
+        assert len(convs1) == 1
+        # 关键字参数
+        convs2 = storage.get_conversations(tid, limit=1, include_rounds=False)
+        assert len(convs2) == 1
+        # 混合
+        convs3 = storage.get_conversations(tid, limit=1, include_rounds=True)
+        assert len(convs3) == 1
+        assert "rounds_json_parsed" in convs3[0]
 
     def test_get_recent_conversations(self, storage):
         """获取最近 N 轮对话（正序）"""

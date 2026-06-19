@@ -11,17 +11,18 @@ class TopicStore(StoreComponent):
 
     # ── 主题 CRUD ──
 
-    def create_topic(self, title: str) -> str:
+    def create_topic(self, title: str, topic_id: str = None) -> str:
         """Create topic.
         
         Args:
             title: Description.
+            topic_id: Description.
         """
         # 使用临时连接
         with self._get_connection() as conn:
             conn.row_factory = __import__('sqlite3').Row
             c = conn.cursor()
-            tid = self._new_id()
+            tid = topic_id or self._new_id()
             c.execute("INSERT INTO topics (topic_id, title, create_stamp, last_update_stamp) VALUES (?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))", (tid, title))
             conn.commit()
             return tid

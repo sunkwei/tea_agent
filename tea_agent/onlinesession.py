@@ -244,17 +244,17 @@ class OnlineToolSession(BaseChatSession):
         self.context.pipeline = self.pipeline
         self._setup_default_pipeline()
 
-    # ── 属性桥接（context 代理，保持 BaseChatSession 兼容）──
+    # ── 属性桥接（仅保留外部代码实际使用的 7 个）──
+    # 移除了 14 个冗余属性：model, _last_cheap_usage, _level2, max_tool_output,
+    # max_assistant_content, max_context_tokens, keep_turns, extra_iterations_on_continue,
+    # memory_extraction_threshold, memory_dedup_threshold, disable_summary, no_stream_chunk,
+    # supports_vision, supports_reasoning
+    # 这些属性在外部代码中未被使用，直接使用 self.context.xxx 访问
 
     @property
     def messages(self): return self.context.messages
     @messages.setter
     def messages(self, v): self.context.messages = v
-
-    @property
-    def model(self): return self.context.model
-    @model.setter
-    def model(self, v): self.context.model = v
 
     @property
     def enable_thinking(self): return self.context.enable_thinking
@@ -290,66 +290,6 @@ class OnlineToolSession(BaseChatSession):
     def _tool_chain_summary(self): return self.context._tool_chain_summary
     @_tool_chain_summary.setter
     def _tool_chain_summary(self, v): self.context._tool_chain_summary = v
-
-    @property
-    def _level2(self): return self.context._level2
-    @_level2.setter
-    def _level2(self, v): self.context._level2 = v
-
-    @property
-    def max_tool_output(self): return self.context.max_tool_output
-    @max_tool_output.setter
-    def max_tool_output(self, v): self.context.max_tool_output = v
-
-    @property
-    def max_assistant_content(self): return self.context.max_assistant_content
-    @max_assistant_content.setter
-    def max_assistant_content(self, v): self.context.max_assistant_content = v
-
-    @property
-    def max_context_tokens(self): return self.context.max_context_tokens
-    @max_context_tokens.setter
-    def max_context_tokens(self, v): self.context.max_context_tokens = v
-
-    @property
-    def keep_turns(self): return self.context.keep_turns
-    @keep_turns.setter
-    def keep_turns(self, v): self.context.keep_turns = v
-
-    @property
-    def extra_iterations_on_continue(self): return self.context.extra_iterations_on_continue
-    @extra_iterations_on_continue.setter
-    def extra_iterations_on_continue(self, v): self.context.extra_iterations_on_continue = v
-
-    @property
-    def memory_extraction_threshold(self): return self.context.memory_extraction_threshold
-    @memory_extraction_threshold.setter
-    def memory_extraction_threshold(self, v): self.context.memory_extraction_threshold = v
-
-    @property
-    def memory_dedup_threshold(self): return self.context.memory_dedup_threshold
-    @memory_dedup_threshold.setter
-    def memory_dedup_threshold(self, v): self.context.memory_dedup_threshold = v
-
-    @property
-    def disable_summary(self): return self.context.disable_summary
-    @disable_summary.setter
-    def disable_summary(self, v): self.context.disable_summary = v
-
-    @property
-    def no_stream_chunk(self): return self.context.no_stream_chunk
-    @no_stream_chunk.setter
-    def no_stream_chunk(self, v): self.context.no_stream_chunk = v
-
-    @property
-    def supports_vision(self): return self.context.supports_vision
-    @supports_vision.setter
-    def supports_vision(self, v): self.context.supports_vision = v
-
-    @property
-    def supports_reasoning(self): return self.context.supports_reasoning
-    @supports_reasoning.setter
-    def supports_reasoning(self, v): self.context.supports_reasoning = v
 
     # ──────────────────────────────────────────────
     # 委派方法

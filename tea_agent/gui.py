@@ -302,28 +302,36 @@ class TkGUI(Agent):
         super()._init_session()
 
     def toggle_reasoning(self, enable: Optional[bool] = None) -> dict:
-        """切换或查询 reasoning/thinking 状态。供 toolkit 工具调用。"""
-        if self.sess is None:
+        """切换或查询 reasoning/thinking 状态。供 toolkit 工具调用。线程安全版。"""
+        # 捕获 sess 到本地变量
+        sess = self.sess
+        if sess is None:
             return {"error": "无活跃会话"}
         if enable is None:
-            return {"enable_thinking": self.sess.enable_thinking}
-        self.sess.enable_thinking = bool(enable)
+            return {"enable_thinking": sess.enable_thinking}
+        sess.enable_thinking = bool(enable)
         state = "开启" if enable else "关闭"
         self._update_status(f"🧠 Reasoning 已{state}")
-        return {"enable_thinking": self.sess.enable_thinking, "changed": True}
+        return {"enable_thinking": sess.enable_thinking, "changed": True}
 
     def export_last_pdf(self, e=None):
         """Ctrl+P: 导出当前 HtmlFrame 中渲染的轮次为 last.pdf（支持 Alt+Up/Down 切换轮次）"""
         import json, tempfile, subprocess
+        
+        # 捕获必要的状态到本地变量，避免 worker 线程与主线程竞争
+        chat_rounds = list(self._chat_rounds)  # 复制列表
+        current_round_view = self._current_round_view
+        zoom_level = self._zoom_level
+        
         def _do():
             try:
                 # ── 优先使用内存中当前渲染的轮次（与 HtmlFrame 一致）──
-                rounds = getattr(self, '_chat_rounds', [])
+                rounds = chat_rounds
                 if not rounds:
                     self._update_status("⚠️ 无对话记录")
                     return
 
-                cur_view = getattr(self, '_current_round_view', None)
+                cur_view = current_round_view
                 if cur_view is None:
                     # 最新轮
                     active_idx = len(rounds) - 1
@@ -336,7 +344,7 @@ class TkGUI(Agent):
                 from tea_agent._gui._markdown import _chat_to_markdown, _render_markdown
                 self._image_cache.clear()
                 md = _chat_to_markdown(msgs, image_cache=self._image_cache)
-                font_size = int(_fonts_mod._HTML_FONT_SIZE * getattr(self, '_zoom_level', 100) / 100)
+                font_size = int(_fonts_mod._HTML_FONT_SIZE * zoom_level / 100)
                 html = _render_markdown(md, font_size=font_size)
 
                 # ── 写临时 HTML ──
@@ -446,9 +454,6 @@ class TkGUI(Agent):
         """线程安全的状态更新 — 委托 StreamManager"""
         self.stream_mgr.safe_update_status(msg)
 
-    def _handle_max_iter(self, msg: str):
-        """处理最大迭代次数 — 委托 StreamManager"""
-        self.stream_mgr.handle_max_iter(msg)
 
     def log(self, msg, tag="ai", images=None):
         """输出日志到控制台 — 委托 StreamManager"""
@@ -612,10 +617,6 @@ class TkGUI(Agent):
         self._img_label.config(text=f"已选 {count} 张图片")
         self._clear_img_btn.pack(side=tk.LEFT, padx=4)
 
-    def _clear_images(self):
-        """清空待发送图片列表 — 委托 ImageHandler"""
-        self.images.clear()
-
     def on_paste(self, e=None):
         """Ctrl+V 粘贴：若模型支持视觉且剪贴板含图像，则缓冲到临时目录并加入待发送列表。
 
@@ -673,14 +674,19 @@ class TkGUI(Agent):
         return "break"
 
     def send(self, e=None):
-        """发送用户消息"""
-        if self.generating or not self.current_topic_id:
-            return "break"
+        """发送用户消息 — 线程安全版（原子 check-and-set generating）"""
+        # 原子操作：检查并设置 generating，避免竞态条件
+        with self._generating_lock:
+            if self._generating or not self.current_topic_id:
+                return "break"
+            self._generating = True
+        
         msg = self.input_box.get("1.0", tk.END).strip()
         # 允许仅有图片无文本的情况
         images = list(self._pending_images)
         self.images.clear()  # 发送后清空
         if not msg and not images:
+            self.generating = False  # 回退状态
             return "break"
         self.input_box.delete("1.0", tk.END)
 
@@ -689,7 +695,6 @@ class TkGUI(Agent):
         display_msg = f"你：{msg}" if msg else "你：[图片]"
         self.log(display_msg, "user", images=images if images else None)
         self._hide_raw_check_btn()  # 会话中隐藏切换按钮
-        self.generating = True
         # 启动定时器，批量刷新流式内容到 ScrolledText（不渲染 HtmlFrame）
         self.root.after(self.STREAM_FLUSH_INTERVAL_MS, self._stream_flush_tick)
         self.log("AI：", "title")
@@ -700,9 +705,16 @@ class TkGUI(Agent):
         chat_input = {"text": msg} if not images else {"text": msg, "images": images}
 
         def work():
-            """Work."""
+            """Work — 线程安全版：捕获 sess 到本地变量，避免跨线程竞争"""
+            # 捕获 sess 到本地变量，避免 worker 线程与主线程竞争
+            sess = self.sess
+            if sess is None:
+                self.safe_stream("❌ 错误：会话未初始化")
+                self.root.after(0, self._on_generation_done)
+                return
+            
             try:
-                ai_msg, is_func = self.sess.chat_stream(
+                ai_msg, is_func = sess.chat_stream(
                     chat_input, 
                     callback=self.safe_stream,
                     topic_id=self.current_topic_id,
@@ -718,9 +730,9 @@ class TkGUI(Agent):
                 user_msg_for_db = msg if not images else {"text": msg, "images": images}
                 self._post_chat_pipeline(ai_msg, is_func, user_msg_for_db, self.current_topic_id)
 
-                # GUI 特定：token 渲染 + 通知
-                usage = self.sess._last_usage
-                cheap_usage = self.sess._last_cheap_usage
+                # GUI 特定：token 渲染 + 通知（使用本地变量）
+                usage = sess._last_usage
+                cheap_usage = sess._last_cheap_usage
                 if usage and usage.get("total_tokens", 0) > 0:
                     self.root.after(0, lambda u=usage, cu=cheap_usage: self._add_token_notice_and_render(u, cu))
                     # 读取嵌入模型用量
@@ -747,7 +759,8 @@ class TkGUI(Agent):
                 self.safe_stream(ai_msg)
                 self.root.after(0, self._flush_stream_to_messages)
                 if self._current_conversation_id is not None:
-                    rounds = self.sess._rounds_collector
+                    # 使用本地变量访问 _rounds_collector
+                    rounds = sess._rounds_collector if sess else []
                     try:
                         self.db.update_msg_rounds(
                             conversation_id=self._current_conversation_id,
@@ -961,26 +974,34 @@ class TkGUI(Agent):
         self.generating = False
 
     def interrupt(self, e=None):
-        """打断当前 AI 生成"""
-        if self.generating:
-            self.sess.interrupt()
-            self.safe_log("\n🛑 已打断", "tool")
-            self.generating = False
-            # 先刷新控制台剩余内容，再 flush 到 messages
-            if self._pending_console_text:
-                self.console.config(state=tk.NORMAL)
-                for text, tag in self._pending_console_text:
-                    if tag == "think":
-                        self.console.insert(tk.END, text, "think")
-                    else:
-                        self.console.insert(tk.END, text)
-                self.console.see(tk.END)
-                self.console.config(state=tk.DISABLED)
-                self._pending_console_text.clear()
-            self.root.after(0, self._flush_stream_to_messages)
-            self.root.after(0, self._render_and_show_chat)
-            self.root.after(0, self._show_raw_check_btn)
-            self._update_status("🛑 已打断")
+        """打断当前 AI 生成 — 线程安全版"""
+        # 原子检查并重置 generating
+        with self._generating_lock:
+            if not self._generating:
+                return
+            self._generating = False
+        
+        # 安全访问 sess（可能为 None）
+        sess = self.sess
+        if sess is not None:
+            sess.interrupt()
+        
+        self.safe_log("\n🛑 已打断", "tool")
+        # 先刷新控制台剩余内容，再 flush 到 messages
+        if self._pending_console_text:
+            self.console.config(state=tk.NORMAL)
+            for text, tag in self._pending_console_text:
+                if tag == "think":
+                    self.console.insert(tk.END, text, "think")
+                else:
+                    self.console.insert(tk.END, text)
+            self.console.see(tk.END)
+            self.console.config(state=tk.DISABLED)
+            self._pending_console_text.clear()
+        self.root.after(0, self._flush_stream_to_messages)
+        self.root.after(0, self._render_and_show_chat)
+        self.root.after(0, self._show_raw_check_btn)
+        self._update_status("🛑 已打断")
 
     def _switch_display(self, mode: str):
         """Internal: switch display.

@@ -16,7 +16,7 @@ import sqlite3
 import logging
 from datetime import datetime
 
-from ._component import StoreComponent, DB  # DB 短连接上下文管理器
+from ._component import StoreComponent, DB, Cursor  # DB 短连接上下文管理器
 from ._topics import TopicStore
 from ._conversations import ConversationStore
 from ._summaries import SummaryStore
@@ -943,13 +943,12 @@ class Storage:
         Args:
             db: DB 实例（由调用方管理生命周期）。
         """
-        c = db.cursor()
-        c.execute(
-            "INSERT OR REPLACE INTO _meta (key, value) VALUES ('week_key', ?)",
-            (self._get_week_key(),),
-        )
-        c.connection.commit()
-        c.close()
+        with Cursor(db) as c:
+            c.execute(
+                "INSERT OR REPLACE INTO _meta (key, value) VALUES ('week_key', ?)",
+                (self._get_week_key(),),
+            )
+            c.connection.commit()
 
     # ── 自动备份 ──
 

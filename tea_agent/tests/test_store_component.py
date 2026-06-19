@@ -268,3 +268,98 @@ class TestThreadLocalConn:
         # 使用同一连接验证（比新建连接更可靠）
         row = comp.conn.execute("SELECT v FROM test_conn").fetchone()
         assert row[0] == "data"
+
+
+# ============================================================
+# Cursor 上下文管理器测试
+# ============================================================
+
+class TestCursor:
+    """Cursor 上下文管理器"""
+
+    def test_cursor_enter_exit_closes(self, tmp_path):
+        """__enter__ 返回 cursor，__exit__ 关闭"""
+        db_path = tmp_path / "cursor_ctx.db"
+        from tea_agent.store._component import DB, Cursor
+
+        with DB(str(db_path)) as db:
+            c_obj = None
+            with Cursor(db) as c:
+                c_obj = c
+                assert c is not None
+                c.execute("CREATE TABLE IF NOT EXISTS t (v TEXT)")
+                c.execute("INSERT INTO t VALUES ('hello')")
+            # 退出 with 后 c 仍存在但已关闭
+            # 验证数据已通过 DB.__exit__ 提交
+        # 新连接验证
+        c2 = sqlite3.connect(str(db_path))
+        assert c2.execute("SELECT v FROM t").fetchone()[0] == "hello"
+        c2.close()
+
+    def test_cursor_with_db_multi_statements(self, tmp_path):
+        """with Cursor(db) 中执行多条语句"""
+        from tea_agent.store._component import DB, Cursor
+        db_path = tmp_path / "multi.db"
+
+        with DB(str(db_path)) as db:
+            with Cursor(db) as c:
+                c.execute("CREATE TABLE t (k INT, v TEXT)")
+                c.execute("INSERT INTO t VALUES (1, 'a')")
+                c.execute("INSERT INTO t VALUES (2, 'b')")
+                rows = c.execute("SELECT v FROM t ORDER BY k").fetchall()
+                assert [r[0] for r in rows] == ["a", "b"]
+
+    def test_cursor_execute_with_params(self, tmp_path):
+        """带参数执行"""
+        from tea_agent.store._component import DB, Cursor
+        db_path = tmp_path / "params.db"
+
+        with DB(str(db_path)) as db:
+            with Cursor(db) as c:
+                c.execute("CREATE TABLE t (k INT, v TEXT)")
+                c.execute("INSERT INTO t VALUES (?, ?)", (1, "param_test"))
+                row = c.execute("SELECT v FROM t WHERE k=?", (1,)).fetchone()
+                assert row[0] == "param_test"
+
+    def test_cursor_fetchone_fetchall(self, tmp_path):
+        """fetchone / fetchall 正常工作"""
+        from tea_agent.store._component import DB, Cursor
+        db_path = tmp_path / "fetch.db"
+
+        with DB(str(db_path)) as db:
+            with Cursor(db) as c:
+                c.execute("CREATE TABLE t (v TEXT)")
+                c.execute("INSERT INTO t VALUES ('x'), ('y'), ('z')")
+                c.execute("SELECT v FROM t ORDER BY v")
+                first = c.fetchone()
+                assert first[0] == "x"
+                rest = c.fetchall()
+                assert [r[0] for r in rest] == ["y", "z"]
+
+    def test_cursor_rowcount(self, tmp_path):
+        """rowcount 属性可用"""
+        from tea_agent.store._component import DB, Cursor
+        db_path = tmp_path / "rowcount.db"
+
+        with DB(str(db_path)) as db:
+            with Cursor(db) as c:
+                c.execute("CREATE TABLE t (v TEXT)")
+                c.execute("INSERT INTO t VALUES ('a'), ('b'), ('c')")
+                c.execute("UPDATE t SET v='x' WHERE v='a'")
+                assert c.rowcount == 1
+
+    def test_db_cursor_backward_compat(self, tmp_path):
+        """DB.cursor() 仍可用（向后兼容）"""
+        from tea_agent.store._component import DB
+        db_path = tmp_path / "backward.db"
+
+        with DB(str(db_path)) as db:
+            c = db.cursor()
+            assert c is not None
+            c.execute("CREATE TABLE t (v TEXT)")
+            c.execute("INSERT INTO t VALUES ('compat')")
+            c.close()
+
+        c2 = sqlite3.connect(str(db_path))
+        assert c2.execute("SELECT v FROM t").fetchone()[0] == "compat"
+        c2.close()

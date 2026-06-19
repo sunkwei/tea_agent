@@ -44,6 +44,34 @@ class DB:
         return self.conn.execute(sql)
 
 
+class Cursor:
+    """Cursor context manager: with Cursor(db) as cur: → open → auto close.
+
+    配合 DB 使用，确保 cursor 在 with 块结束后自动关闭：
+
+        with DB(path) as db:
+            with Cursor(db) as cur:
+                cur.execute("SELECT * FROM t")
+                rows = cur.fetchall()
+            # cursor 自动关闭
+        # 连接自动 commit + 关闭
+    """
+
+    def __init__(self, db: DB):
+        self._db = db
+        self._cursor = None
+
+    def __enter__(self):
+        self._cursor = self._db.conn.cursor()
+        return self._cursor
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._cursor:
+            self._cursor.close()
+            self._cursor = None
+        return False
+
+
 class StoreComponent:
     """Base class for all Store delegate components."""
 

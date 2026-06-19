@@ -86,6 +86,14 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
             logger.warning(f"_generate_topic_summary: 清洗后 raw 为空, content={repr(content[:80])}")
             return None
 
+        # NOTE: 2026-06-22 硬过滤：禁止输出废词标题
+        forbidden = ['我们', '用户', '您', '对话', '消息', '根据', '以下', '上文',
+                     '主题', '这个', '输入', '生成', '摘要', '标题']
+        for word in forbidden:
+            if word in raw:
+                logger.warning(f"_generate_topic_summary: 标题含禁词'{word}'被拒: {repr(raw)}")
+                return None
+
         # NOTE: 2026-05-01 08:17:32, min_length调整为4
         # 拒绝过短的摘要（<4个字符）
         if len(raw) < 4:

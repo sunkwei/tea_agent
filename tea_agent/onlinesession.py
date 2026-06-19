@@ -219,7 +219,7 @@ TOPIC_SUMMARY_SYSTEM = (
 )
 
 TOPIC_SUMMARY_USER_TEMPLATE = (
-    "以下是最近3轮对话的用户消息：\n\n{user_msgs}\n\n"
+    "以下是最近1\u223c2条用户消息：\n\n{user_msgs}\n\n"
     "请生成不超过20字的摘要标题："
 )
 

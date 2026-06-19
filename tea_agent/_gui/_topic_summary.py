@@ -14,7 +14,7 @@ from tea_agent.session_prompts import TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_T
 
 def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Optional[str]:
     """
-    根据最近3轮对话通过 LLM 生成不超过20字的摘要。
+    根据最近1～2条用户消息通过 LLM 生成不超过20字的摘要。
 
     Args:
         client: OpenAI 客户端实例
@@ -27,8 +27,9 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> Op
     if not conversations:
         return None
 
+    # 只取最近 1~2 条用户消息（避免长对话内容发散）
     user_msgs = []
-    for conv in conversations:
+    for conv in conversations[-2:]:
         um = conv.get("user_msg", "").strip()
         if um:
             if um.startswith('{'):

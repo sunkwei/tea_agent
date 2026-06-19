@@ -66,7 +66,7 @@ def auto_summary(agent, topic_id: str):
     tp = agent._db.get_topic(topic_id)
     if tp and (tp.get("title") or "").startswith("※"):
         return
-    recent = agent._db.get_recent_conversations(topic_id, limit=10)
+    recent = agent._db.get_recent_conversations(topic_id, limit=3)
     if not recent:
         return
     try:

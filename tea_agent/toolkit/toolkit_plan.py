@@ -415,6 +415,15 @@ def _do_run(plan_id, cwd):
             _save_plan(plan)
             return {"ok": False, "error": f"步骤 {step['id']} 失败: {result.get('error','')}",
                     "executed": executed, "plan_id": plan_id}
+    # 整体计划完成时结晶技能
+    try:
+        plan_skill = _auto_solidify_plan(plan)
+        if plan_skill:
+            plan["plan_skill"] = plan_skill
+            logger.info(f"Plan skill solidified: {plan_skill}")
+    except Exception as e:
+        logger.warning(f"Plan skill solidify failed (non-fatal): {e}")
+
     plan["status"] = "done"
     _save_plan(plan)
     return {"ok": True, "executed": executed, "plan_id": plan_id, "summary": _step_summary(plan)}
@@ -517,6 +526,15 @@ def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
                 logger.info(f"Plan step doc saved: {doc_path}")
         except Exception as e:
             logger.warning(f"Plan step doc save failed (non-fatal): {e}")
+
+        # 自动结晶：将成功步骤的执行经验沉淀为可复用技能
+        try:
+            skill_name = _auto_solidify_skill(step, plan, cwd)
+            if skill_name:
+                step["skill_saved"] = skill_name
+                logger.info(f"Skill solidified: {skill_name}")
+        except Exception as e:
+            logger.warning(f"Skill solidify failed (non-fatal): {e}")
 
     _save_plan(plan)
 
@@ -693,6 +711,124 @@ def _update_module_index(cwd: str, module: str, doc_type: str, doc_path: str):
                 f.write(f"{entry}\n")
     except Exception:
         pass  # 索引更新失败不影响主流程
+
+
+# ── 自动技能结晶 ──────────────────────────────────────────
+
+def _extract_step_tools(step: dict) -> list:
+    """从步骤中提取使用的工具列表。"""
+    action = step.get("action", "")
+    params = step.get("params", {})
+    tools = []
+
+    action_tool_map = {
+        "self_evolve": "toolkit_self_evolve",
+        "create_file": "toolkit_save_file",
+        "exec": "toolkit_exec",
+        "verify_only": "toolkit_run_tests",
+        "analyze": "toolkit_explr",
+        "investigate": "toolkit_search",
+        "design": "toolkit_explr",
+        "verify": "toolkit_run_tests",
+    }
+
+    if action in action_tool_map:
+        tools.append(action_tool_map[action])
+
+    file_path = params.get("file_path", "")
+    if file_path:
+        tools.append("toolkit_edit")
+
+    return tools or ["toolkit_plan"]
+
+
+def _auto_solidify_skill(step: dict, plan: dict, cwd: str) -> Optional[str]:
+    """步骤成功完成后，自动将执行经验结晶为可复用技能。
+
+    使用 SkillCrystallizer 将步骤描述、工具组合、耗时等信息
+    转化为 Skill 并注册到 SkillRegistry 索引。
+    """
+    from tea_agent.skills.skill_crystallize import SkillCrystallizer
+    from tea_agent.skills.skill_registry import SkillRegistry
+
+    task = f"{plan.get('goal', '')} - {step.get('desc', '')}"
+    tools_used = _extract_step_tools(step)
+
+    time_seconds = 0
+    started = step.get("started_at")
+    finished = step.get("finished_at")
+    if started and finished:
+        try:
+            from datetime import datetime as dt
+            t1 = dt.fromisoformat(started)
+            t2 = dt.fromisoformat(finished)
+            time_seconds = (t2 - t1).total_seconds()
+        except Exception:
+            pass
+
+    try:
+        crystallizer = SkillCrystallizer()
+        skill = crystallizer.crystallize(
+            task=task,
+            tools_used=tools_used,
+            success=True,
+            time_seconds=time_seconds,
+        )
+        registry = SkillRegistry()
+        registry.register(skill)
+        logger.info(f"Skill solidified: {skill.name}")
+        return skill.name
+    except Exception as e:
+        logger.warning(f"Skill solidify failed: {e}")
+        return None
+
+
+def _auto_solidify_plan(plan: dict) -> Optional[str]:
+    """整个计划完成后，将整体经验结晶为高层级技能。
+
+    聚合所有步骤的工具、计算总耗时，生成代表整个执行方案的技能。
+    """
+    from tea_agent.skills.skill_crystallize import SkillCrystallizer
+    from tea_agent.skills.skill_registry import SkillRegistry
+
+    all_tools = set()
+    for step in plan.get("steps", []):
+        tools = _extract_step_tools(step)
+        all_tools.update(tools)
+
+    total_time = 0
+    first_start = None
+    last_finish = None
+    for step in plan.get("steps", []):
+        started = step.get("started_at")
+        finished = step.get("finished_at")
+        if started and (first_start is None or started < first_start):
+            first_start = started
+        if finished and (last_finish is None or finished > last_finish):
+            last_finish = finished
+    if first_start and last_finish:
+        try:
+            from datetime import datetime as dt
+            total_time = (dt.fromisoformat(last_finish) - dt.fromisoformat(first_start)).total_seconds()
+        except Exception:
+            pass
+
+    try:
+        crystallizer = SkillCrystallizer()
+        skill = crystallizer.crystallize(
+            task=plan.get("goal", ""),
+            tools_used=list(all_tools),
+            success=True,
+            time_seconds=total_time,
+            force_name=f"plan_{plan.get('goal', '')[:20]}",
+        )
+        registry = SkillRegistry()
+        registry.register(skill)
+        logger.info(f"Plan skill solidified: {skill.name}")
+        return skill.name
+    except Exception as e:
+        logger.warning(f"Plan skill solidify failed: {e}")
+        return None
 
 
 # ── 智能分解 ────────────────────────────────────────────

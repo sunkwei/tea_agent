@@ -382,6 +382,35 @@ def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
     sys_msg = {"role": "system", "content": system_prompt}
     result.append(sys_msg)
 
+    # ── 技能推荐注入 ──
+    try:
+        _current_user_msg = ""
+        for _i in range(len(context.messages) - 1, -1, -1):
+            if context.messages[_i].get("role") == "user":
+                _c = context.messages[_i].get("content", "")
+                if isinstance(_c, list):
+                    _current_user_msg = " ".join(_p.get("text", "") for _p in _c if _p.get("type") == "text")
+                else:
+                    _current_user_msg = str(_c)
+                break
+        if _current_user_msg:
+            from tea_agent.skills.skill_registry import SkillRegistry as _SkillRegistry
+            _reg = _SkillRegistry()
+            _recommended = _reg.recommend(_current_user_msg, top_k=3)
+            if _recommended:
+                _parts = ["[经验技能参考 — 以下模式来自历史任务经验，可参考复用]"]
+                for _idx, _sk in enumerate(_recommended, 1):
+                    _tools_str = ", ".join(_sk.tools[:5])
+                    _parts.append(f"{_idx}. {_sk.name} (置信度: {_sk.confidence:.0%})")
+                    _parts.append(f"   工具: {_tools_str}")
+                result.append({"role": "user", "content": "\n".join(_parts)})
+                _dummy = {"role": "assistant", "content": "已阅，我会参考历史经验处理当前任务。"}
+                if getattr(context, 'supports_reasoning', False):
+                    _dummy["reasoning_content"] = ""
+                result.append(_dummy)
+    except Exception as _e:
+        logger.debug(f"Skill recommendation injection failed: {_e}")
+
     # ── 未完成任务自动恢复检查 ──
     try:
         from tea_agent.toolkit.toolkit_task_resume import toolkit_task_resume

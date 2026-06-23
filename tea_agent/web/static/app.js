@@ -411,9 +411,154 @@ function escapeHtml(text) {
 
 // ── Keyboard shortcut ──
 document.addEventListener('keydown', (e) => {
-    // Ctrl+K: focus input
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         messageInput.focus();
     }
 });
+
+// ── Model Settings ──
+const settingsModal = document.getElementById('settings-modal');
+const closeSettings = document.getElementById('close-settings');
+const settingsBtn = document.getElementById('settings-btn');
+const switchModelBtn = document.getElementById('switch-model-btn');
+const switchConfigBtn = document.getElementById('switch-config-btn');
+const providerSelect = document.getElementById('provider-select');
+const modelNameInput = document.getElementById('model-name');
+const apiUrlInput = document.getElementById('api-url');
+const apiKeyInput = document.getElementById('api-key');
+const switchStatus = document.getElementById('model-switch-status');
+
+function openSettings() {
+    settingsModal.style.display = 'flex';
+    overlay.classList.add('open');
+    switchStatus.textContent = '';
+    switchStatus.className = 'form-status';
+    loadCurrentModel();
+    loadProviders();
+}
+
+function closeSettings() {
+    settingsModal.style.display = 'none';
+    overlay.classList.remove('open');
+}
+
+async function loadCurrentModel() {
+    try {
+        const res = await fetch('/api/model');
+        const data = await res.json();
+        modelNameInput.value = data.model || '';
+        apiUrlInput.value = data.api_url || '';
+        apiKeyInput.value = '';
+        apiKeyInput.placeholder = data.api_key_masked || 'sk-...';
+    } catch (e) {
+        switchStatus.textContent = '无法加载当前模型信息';
+        switchStatus.className = 'form-status error';
+    }
+}
+
+async function loadProviders() {
+    try {
+        const res = await fetch('/api/model/providers');
+        const data = await res.json();
+        providerSelect.innerHTML = '<option value="">— 手动输入 —</option>';
+        for (const [name, info] of Object.entries(data.providers)) {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = `${name} (${info.model})`;
+            providerSelect.appendChild(opt);
+        }
+    } catch (e) {
+        console.warn('加载提供商预设失败');
+    }
+}
+
+providerSelect.addEventListener('change', () => {
+    const name = providerSelect.value;
+    if (!name) return;
+    fetch('/api/model/providers')
+        .then(r => r.json())
+        .then(data => {
+            const info = data.providers[name];
+            if (info) {
+                modelNameInput.value = info.model;
+                apiUrlInput.value = info.url;
+            }
+        });
+});
+
+async function doSwitchModel() {
+    const apiKey = apiKeyInput.value.trim() || undefined;
+    const apiUrl = apiUrlInput.value.trim();
+    const modelName = modelNameInput.value.trim();
+
+    if (!apiUrl || !modelName) {
+        switchStatus.textContent = '请填写 API URL 和模型名称';
+        switchStatus.className = 'form-status error';
+        return;
+    }
+
+    switchStatus.textContent = '⏳ 正在切换模型...';
+    switchStatus.className = 'form-status loading';
+    switchModelBtn.disabled = true;
+
+    try {
+        const res = await fetch('/api/model', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: apiKey, api_url: apiUrl, model_name: modelName }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            switchStatus.textContent = `✅ 已切换到 ${data.model} @ ${data.api_url}`;
+            switchStatus.className = 'form-status success';
+            modelInfo.textContent = data.model;
+            apiKeyInput.value = '';
+            apiKeyInput.placeholder = data.api_key_masked || 'sk-...';
+        } else {
+            switchStatus.textContent = `❌ 切换失败: ${data.error || data.errors?.join(', ')}`;
+            switchStatus.className = 'form-status error';
+        }
+    } catch (e) {
+        switchStatus.textContent = `❌ 网络错误: ${e.message}`;
+        switchStatus.className = 'form-status error';
+    } finally {
+        switchModelBtn.disabled = false;
+    }
+}
+
+async function doSwitchConfig() {
+    const configPath = prompt('请输入配置文件路径:');
+    if (!configPath) return;
+
+    switchStatus.textContent = '⏳ 正在从配置文件加载...';
+    switchStatus.className = 'form-status loading';
+
+    try {
+        const res = await fetch('/api/model/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config_path: configPath }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+            switchStatus.textContent = `✅ 已从配置文件加载: ${configPath}`;
+            switchStatus.className = 'form-status success';
+            await loadCurrentModel();
+            const mi = await (await fetch('/api/model')).json();
+            modelInfo.textContent = mi.model;
+        } else {
+            switchStatus.textContent = `❌ 加载失败: ${data.error}`;
+            switchStatus.className = 'form-status error';
+        }
+    } catch (e) {
+        switchStatus.textContent = `❌ 错误: ${e.message}`;
+        switchStatus.className = 'form-status error';
+    }
+}
+
+settingsBtn.addEventListener('click', openSettings);
+modelInfo.addEventListener('click', openSettings);
+closeSettings.addEventListener('click', closeSettings);
+switchModelBtn.addEventListener('click', doSwitchModel);
+switchConfigBtn.addEventListener('click', doSwitchConfig);

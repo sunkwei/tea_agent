@@ -15,9 +15,10 @@
                 <span>Web</span>
             </h1>
             <div class="header-actions">
-                <span class="model-info" id="model-info">加载中...</span>
+                <span class="model-info" id="model-info" title="点击切换模型" style="cursor:pointer;">加载中...</span>
                 <button id="new-btn">新会话</button>
                 <button id="sessions-btn">历史</button>
+                <button id="settings-btn" title="模型设置">⚙</button>
             </div>
         </header>
 
@@ -59,6 +60,41 @@
                 <button id="close-sessions" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
             </div>
             <div id="session-list"></div>
+        </div>
+
+        <!-- Model Settings Modal -->
+        <div id="settings-modal" style="display:none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>⚙ 模型设置</h3>
+                    <button class="modal-close" id="close-settings">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>模型提供商预设</label>
+                        <select id="provider-select">
+                            <option value="">— 手动输入 —</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>模型名称 <span class="req">*</span></label>
+                        <input type="text" id="model-name" placeholder="如: gpt-4o, deepseek-chat, qwen-plus">
+                    </div>
+                    <div class="form-group">
+                        <label>API URL <span class="req">*</span></label>
+                        <input type="url" id="api-url" placeholder="如: https://api.openai.com/v1">
+                    </div>
+                    <div class="form-group">
+                        <label>API Key <span class="req">*</span></label>
+                        <input type="password" id="api-key" placeholder="sk-...">
+                    </div>
+                    <div id="model-switch-status" class="form-status"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" id="switch-config-btn">从配置文件重载</button>
+                    <button class="btn-primary" id="switch-model-btn">切换模型</button>
+                </div>
+            </div>
         </div>
     </div>
 

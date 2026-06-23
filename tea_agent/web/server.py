@@ -140,14 +140,49 @@ class WebAgent:
 
     def get_config_info(self):
         cfg = self.config
+        key = cfg.main_model.api_key
+        masked_key = (key[:6] + "..." + key[-4:]) if len(key) > 12 else "***"
         return {
             "model": cfg.main_model.model_name,
             "api_url": cfg.main_model.api_url,
+            "api_key_masked": masked_key,
             "keep_turns": cfg.keep_turns,
             "max_iterations": cfg.max_iterations,
             "enable_thinking": cfg.enable_thinking,
             "tools_count": len(self.toolkit.func_map),
         }
+
+    def switch_model(self, api_key: str, api_url: str, model_name: str):
+        """Hot-switch the main model at runtime. Preserves current topic."""
+        topic_id = self.agent.current_topic_id
+
+        with self._lock:
+            if self.agent.sess:
+                self.agent.sess.close()
+
+            cfg = self.agent._cfg
+            cfg.main_model.api_key = api_key
+            cfg.main_model.api_url = api_url
+            cfg.main_model.model_name = model_name
+
+            self.agent._init_session()
+
+            if topic_id:
+                self.agent.current_topic_id = topic_id
+                self.agent.load_topic_history(topic_id)
+
+        logger.info(
+            f"模型切换: {model_name} @ {api_url}"
+        )
+
+    def switch_config(self, config_path: str):
+        """Load model info from a config file and switch."""
+        from tea_agent.config import load_config
+        new_cfg = load_config(config_path)
+        if not new_cfg.main_model.is_configured:
+            raise ValueError(f"配置文件 {config_path} 的 main_model 配置不完整")
+        cm = new_cfg.main_model
+        self.switch_model(cm.api_key, cm.api_url, cm.model_name)
 
 
 _web_agent: Optional[WebAgent] = None
@@ -159,6 +194,19 @@ def get_agent() -> WebAgent:
         _web_agent = WebAgent()
     return _web_agent
 
+
+PROVIDER_PRESETS = {
+    "OpenAI": {"url": "https://api.openai.com/v1", "model": "gpt-4o"},
+    "DeepSeek": {"url": "https://api.deepseek.com/v1", "model": "deepseek-chat"},
+    "Anthropic": {"url": "https://api.anthropic.com/v1", "model": "claude-sonnet-4-20250514"},
+    "GLM (智谱)": {"url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-5"},
+    "Qwen (阿里)": {"url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus"},
+    "DeepSeek V4": {"url": "https://api.deepseek.com/v1", "model": "deepseek-v4"},
+    "Kimi (月之暗面)": {"url": "https://api.moonshot.cn/v1", "model": "kimi-latest"},
+    "Ollama (本地)": {"url": "http://localhost:11434/v1", "model": "qwen3.6"},
+    "vLLM (本地)": {"url": "http://localhost:8000/v1", "model": "Qwen/Qwen2.5-14B"},
+    "OpenRouter": {"url": "https://openrouter.ai/api/v1", "model": "openai/gpt-4o"},
+}
 
 # ── Route Handlers ──
 
@@ -228,6 +276,61 @@ async def handle_root(request):
     return HTMLResponse("<h1>Tea Agent Web</h1><p>前端页面未找到</p>")
 
 
+async def handle_model_info(request):
+    agent = get_agent()
+    return JSONResponse(agent.get_config_info())
+
+
+async def handle_model_switch(request):
+    body = await request.json()
+    agent = get_agent()
+
+    current_key = agent.agent._cfg.main_model.api_key
+    api_key = (body.get("api_key") or current_key or "").strip()
+    api_url = (body.get("api_url") or "").strip()
+    model_name = (body.get("model_name") or "").strip()
+
+    errors = []
+    if not api_key:
+        errors.append("API Key 不能为空（当前未配置，请填写）")
+    if not api_url:
+        errors.append("API URL 不能为空")
+    if not model_name:
+        errors.append("模型名称不能为空")
+    if errors:
+        return JSONResponse({"ok": False, "errors": errors}, status_code=400)
+
+    try:
+        agent.switch_model(api_key, api_url, model_name)
+        masked_key = (api_key[:6] + "..." + api_key[-4:]) if len(api_key) > 12 else "***"
+        return JSONResponse({
+            "ok": True, "model": model_name, "api_url": api_url,
+            "api_key_masked": masked_key,
+        })
+    except Exception as e:
+        logger.exception("模型切换失败")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+async def handle_model_config(request):
+    body = await request.json()
+    config_path = (body.get("config_path") or "").strip()
+    if not config_path:
+        return JSONResponse({"error": "配置文件路径不能为空"}, status_code=400)
+
+    agent = get_agent()
+    try:
+        agent.switch_config(config_path)
+        return JSONResponse({"ok": True, "config_path": config_path})
+    except Exception as e:
+        logger.exception("配置文件加载失败")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+async def handle_model_providers(request):
+    return JSONResponse({"providers": PROVIDER_PRESETS})
+
+
 # ── App Factory ──
 
 
@@ -245,6 +348,10 @@ def create_app(config_path: Optional[str] = None):
         Route("/api/sessions", endpoint=handle_sessions),
         Route("/api/config", endpoint=handle_config),
         Route("/api/tools", endpoint=handle_tools),
+        Route("/api/model", endpoint=handle_model_info),
+        Route("/api/model", endpoint=handle_model_switch, methods=["POST"]),
+        Route("/api/model/config", endpoint=handle_model_config, methods=["POST"]),
+        Route("/api/model/providers", endpoint=handle_model_providers),
         Mount("/static", app=StaticFiles(directory=static_dir), name="static"),
     ]
 

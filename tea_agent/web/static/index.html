@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tea Agent Web</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header>
+            <h1>
+                🍵 Tea Agent
+                <span>Web</span>
+            </h1>
+            <div class="header-actions">
+                <span class="model-info" id="model-info">加载中...</span>
+                <button id="new-btn">新会话</button>
+                <button id="sessions-btn">历史</button>
+            </div>
+        </header>
+
+        <!-- Chat Container -->
+        <div id="chat-container">
+            <div id="welcome">
+                <div class="logo">🍵</div>
+                <h2>Tea Agent Web</h2>
+                <p>
+                    自进化 AI 编程助手 · 60+ 内置工具 · 多 Agent 协作 · 长期记忆<br>
+                    在下方输入消息开始对话
+                </p>
+            </div>
+        </div>
+
+        <!-- Usage Bar -->
+        <div id="usage-bar" class="usage-bar" style="display: none;">
+            <span>📊 已使用 <strong id="usage-tokens">0</strong> tokens</span>
+        </div>
+
+        <!-- Input Area -->
+        <div id="input-area">
+            <textarea
+                id="message-input"
+                placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
+                rows="1"
+            ></textarea>
+            <button id="stop-btn" style="display: none;" title="停止生成">■</button>
+            <button id="send-btn">
+                <span>发送</span>
+            </button>
+        </div>
+
+        <!-- Session Panel -->
+        <div id="overlay"></div>
+        <div id="session-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0;">历史会话</h3>
+                <button id="close-sessions" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+            </div>
+            <div id="session-list"></div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

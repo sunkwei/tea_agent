@@ -43,6 +43,12 @@ dependencies = [
 [project.scripts]
 tea_agent = "tea_agent.gui:main"
 
+[project.optional-dependencies]
+web = [
+    "starlette>=0.37.0",
+    "uvicorn>=0.27.0",
+]
+
 [tool.setuptools]
 include-package-data = true
 

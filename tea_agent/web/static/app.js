@@ -1,3 +1,9 @@
+/**
+ * Tea Agent Web 前端 — 主应用逻辑
+ * 所有事件绑定统一在 DOMContentLoaded 中完成，避免竞态条件。
+ * 所有 fetch 请求设置超时机制，防止请求挂起。
+ */
+
 let isStreaming = false;
 let currentTopicId = '';
 let abortController = null;
@@ -14,38 +20,181 @@ const modelInfo = document.getElementById('model-info');
 const sessionPanel = document.getElementById('session-panel');
 const overlay = document.getElementById('overlay');
 
-// ── Initialize ──
-document.addEventListener('DOMContentLoaded', async () => {
-    await loadConfig();
+// ── 带超时的 fetch 工具函数 ──
+async function fetchWithTimeout(url, options = {}, timeout = 10000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    try {
+        const res = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+        });
+        return res;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+// ── Initialize（DOM 完全加载后） ──
+document.addEventListener('DOMContentLoaded', () => {
+    // 绑定所有事件
+    bindEvents();
+    // 初始化
+    loadConfig();
     setupAutoResize();
     messageInput.focus();
 });
 
-// ── Message Input ──
-messageInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
+// ── 统一事件绑定 ──
+function bindEvents() {
+    // 发送消息
+    messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    sendBtn.addEventListener('click', sendMessage);
+
+    // 历史会话面板
+    const sessionsBtn = document.getElementById('sessions-btn');
+    if (sessionsBtn) {
+        sessionsBtn.addEventListener('click', async () => {
+            sessionPanel.classList.add('open');
+            overlay.classList.add('open');
+            await loadSessions();
+        });
     }
-});
 
-sendBtn.addEventListener('click', sendMessage);
+    const closeSessionsBtn = document.getElementById('close-sessions');
+    if (closeSessionsBtn) {
+        closeSessionsBtn.addEventListener('click', closeSessionPanel);
+    }
+    overlay.addEventListener('click', closeSessionPanel);
 
-function setupAutoResize() {
-    messageInput.addEventListener('input', () => {
-        messageInput.style.height = 'auto';
-        messageInput.style.height = Math.min(messageInput.scrollHeight, 160) + 'px';
+    // 新会话
+    const newBtn = document.getElementById('new-btn');
+    if (newBtn) {
+        newBtn.addEventListener('click', () => {
+            currentTopicId = '';
+            chatContainer.innerHTML = '';
+            welcome.style.display = 'flex';
+            messageInput.focus();
+            usageTokens.textContent = '0';
+        });
+    }
+
+    // 停止生成
+    const stopBtn = document.getElementById('stop-btn');
+    if (stopBtn) {
+        stopBtn.addEventListener('click', () => {
+            if (abortController) {
+                abortController.abort();
+                finishStreaming();
+            }
+        });
+    }
+
+    // 模型设置
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsModal = document.getElementById('settings-modal');
+    const closeSettings = document.getElementById('close-settings');
+    const switchModelBtn = document.getElementById('switch-model-btn');
+    const configSelect = document.getElementById('config-select');
+    const addConfigBtn = document.getElementById('add-config-btn');
+
+    if (settingsBtn) settingsBtn.addEventListener('click', () => openSettings(settingsModal));
+    if (modelInfo) modelInfo.addEventListener('click', () => openSettings(settingsModal));
+    if (closeSettings) closeSettings.addEventListener('click', () => closeSettingsModal(settingsModal));
+    if (switchModelBtn) switchModelBtn.addEventListener('click', () => doSwitchModel(settingsModal));
+
+    // 配置选择变化时自动填充字段
+    if (configSelect) {
+        configSelect.addEventListener('change', () => {
+            const selected = configSelect.selectedOptions[0];
+            if (selected && selected.dataset.mainModel) {
+                const main = JSON.parse(selected.dataset.mainModel);
+                const cheap = selected.dataset.cheapModel ? JSON.parse(selected.dataset.cheapModel) : null;
+                document.getElementById('model-name').value = main.model_name || '';
+                document.getElementById('api-url').value = main.api_url || '';
+                document.getElementById('api-key').value = '';
+                document.getElementById('api-key').placeholder = main.api_key_masked || 'sk-...';
+                if (cheap) {
+                    document.getElementById('cheap-model-name').value = cheap.model_name || '';
+                    document.getElementById('cheap-api-url').value = cheap.api_url || '';
+                    document.getElementById('cheap-api-key').value = '';
+                    document.getElementById('cheap-api-key').placeholder = cheap.api_key_masked || 'sk-...';
+                } else {
+                    document.getElementById('cheap-model-name').value = '';
+                    document.getElementById('cheap-api-url').value = '';
+                    document.getElementById('cheap-api-key').value = '';
+                    document.getElementById('cheap-api-key').placeholder = '不填则使用主模型的 Key';
+                }
+            }
+        });
+    }
+
+    // 新增配置
+    if (addConfigBtn) {
+        addConfigBtn.addEventListener('click', () => {
+            const newConfigModal = document.getElementById('new-config-modal');
+            if (newConfigModal) {
+                newConfigModal.style.display = 'flex';
+                overlay.classList.add('open');
+                document.getElementById('new-config-status').textContent = '';
+                document.getElementById('new-config-status').className = 'form-status';
+            }
+        });
+    }
+
+    // 新增配置弹窗关闭
+    const closeNewConfig = document.getElementById('close-new-config');
+    if (closeNewConfig) {
+        closeNewConfig.addEventListener('click', () => {
+            document.getElementById('new-config-modal').style.display = 'none';
+            overlay.classList.remove('open');
+        });
+    }
+
+    // 保存新配置
+    const saveNewConfigBtn = document.getElementById('save-new-config-btn');
+    if (saveNewConfigBtn) {
+        saveNewConfigBtn.addEventListener('click', () => doSaveNewConfig(settingsModal));
+    }
+
+    // 键盘快捷键
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            messageInput.focus();
+        }
     });
 }
 
-// ── Config ──
+// ── Config 加载（带超时） ──
 async function loadConfig() {
     try {
-        const res = await fetch('/api/config');
+        const res = await fetchWithTimeout('/api/config', {}, 8000);
         const data = await res.json();
-        modelInfo.textContent = `${data.model}`;
+        let text = `${data.model}`;
+        if (data.cheap_model) {
+            text += ` | cheap: ${data.cheap_model.model}`;
+        }
+        modelInfo.textContent = text;
+        modelInfo.title = `主模型: ${data.model}\nAPI: ${data.api_url}\n便宜模型: ${data.cheap_model ? data.cheap_model.model + ' @ ' + data.cheap_model.api_url : '无'}`;
     } catch (e) {
-        modelInfo.textContent = '无法连接服务器';
+        if (e.name === 'AbortError') {
+            modelInfo.textContent = '⏳ 服务加载中...';
+            // 3秒后重试一次
+            setTimeout(() => {
+                loadConfig();
+            }, 3000);
+        } else {
+            modelInfo.textContent = '⚠ 连接失败';
+            modelInfo.title = '点击重试';
+            modelInfo.style.cursor = 'pointer';
+            modelInfo.onclick = () => loadConfig();
+        }
     }
 }
 
@@ -67,7 +216,8 @@ async function sendMessage() {
     sendBtn.innerHTML = '...';
 
     abortController = new AbortController();
-    document.getElementById('stop-btn').style.display = 'block';
+    const stopBtn = document.getElementById('stop-btn');
+    if (stopBtn) stopBtn.style.display = 'block';
 
     const assistantMsg = addAssistantMessage();
     const contentDiv = assistantMsg.querySelector('.message-bubble');
@@ -89,7 +239,8 @@ async function sendMessage() {
         });
 
         if (!res.ok) {
-            contentDiv.textContent = `服务器错误: ${res.status}`;
+            const errText = await res.text().catch(() => '');
+            contentDiv.textContent = `服务器错误 (${res.status}): ${errText || '请求失败'}`;
             finishStreaming();
             return;
         }
@@ -127,7 +278,7 @@ async function sendMessage() {
         }
     } catch (e) {
         if (e.name !== 'AbortError') {
-            contentDiv.textContent = `连接错误: ${e.message}`;
+            contentDiv.textContent = `连接错误: ${e.message}。请检查服务是否正常运行。`;
         }
     } finally {
         finishStreaming();
@@ -138,7 +289,8 @@ function finishStreaming() {
     isStreaming = false;
     sendBtn.disabled = false;
     sendBtn.innerHTML = '发送';
-    document.getElementById('stop-btn').style.display = 'none';
+    const stopBtn = document.getElementById('stop-btn');
+    if (stopBtn) stopBtn.style.display = 'none';
     abortController = null;
 
     // 移除所有流式光标
@@ -305,15 +457,6 @@ function scrollToBottom() {
 }
 
 // ── Session Panel ──
-document.getElementById('sessions-btn').addEventListener('click', async () => {
-    sessionPanel.classList.add('open');
-    overlay.classList.add('open');
-    await loadSessions();
-});
-
-document.getElementById('close-sessions').addEventListener('click', closeSessionPanel);
-overlay.addEventListener('click', closeSessionPanel);
-
 function closeSessionPanel() {
     sessionPanel.classList.remove('open');
     overlay.classList.remove('open');
@@ -321,11 +464,15 @@ function closeSessionPanel() {
 
 async function loadSessions() {
     const list = document.getElementById('session-list');
-    list.innerHTML = '<div class="status-msg">加载中...</div>';
+    list.innerHTML = '<div class="status-msg">⏳ 加载中...</div>';
     try {
-        const res = await fetch('/api/sessions');
+        const res = await fetchWithTimeout('/api/sessions', {}, 8000);
         const data = await res.json();
         list.innerHTML = '';
+        if (!data.sessions || data.sessions.length === 0) {
+            list.innerHTML = '<div class="status-msg">暂无历史会话</div>';
+            return;
+        }
         for (const s of data.sessions) {
             const item = document.createElement('div');
             item.className = 'session-item';
@@ -344,26 +491,13 @@ async function loadSessions() {
             list.appendChild(item);
         }
     } catch (e) {
-        list.innerHTML = '<div class="status-msg">加载失败</div>';
+        if (e.name === 'AbortError') {
+            list.innerHTML = '<div class="status-msg" style="color:var(--orange)">⏳ 加载超时，请重试</div>';
+        } else {
+            list.innerHTML = `<div class="status-msg" style="color:var(--red)">❌ 加载失败: ${e.message}</div>`;
+        }
     }
 }
-
-// ── New Topic ──
-document.getElementById('new-btn').addEventListener('click', () => {
-    currentTopicId = '';
-    chatContainer.innerHTML = '';
-    welcome.style.display = 'flex';
-    messageInput.focus();
-    usageTokens.textContent = '0';
-});
-
-// ── Stop Generation ──
-document.getElementById('stop-btn').addEventListener('click', () => {
-    if (abortController) {
-        abortController.abort();
-        finishStreaming();
-    }
-});
 
 // ── Markdown Renderer ──
 function renderMarkdown(text) {
@@ -409,156 +543,300 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// ── Keyboard shortcut ──
-document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault();
-        messageInput.focus();
-    }
-});
-
-// ── Model Settings ──
-const settingsModal = document.getElementById('settings-modal');
-const closeSettings = document.getElementById('close-settings');
-const settingsBtn = document.getElementById('settings-btn');
-const switchModelBtn = document.getElementById('switch-model-btn');
-const switchConfigBtn = document.getElementById('switch-config-btn');
-const providerSelect = document.getElementById('provider-select');
-const modelNameInput = document.getElementById('model-name');
-const apiUrlInput = document.getElementById('api-url');
-const apiKeyInput = document.getElementById('api-key');
-const switchStatus = document.getElementById('model-switch-status');
-
-function openSettings() {
+// ── Model Settings Modal ──
+function openSettings(settingsModal) {
+    if (!settingsModal) return;
     settingsModal.style.display = 'flex';
     overlay.classList.add('open');
-    switchStatus.textContent = '';
-    switchStatus.className = 'form-status';
+    const switchStatus = document.getElementById('model-switch-status');
+    if (switchStatus) {
+        switchStatus.textContent = '';
+        switchStatus.className = 'form-status';
+    }
     loadCurrentModel();
-    loadProviders();
+    loadConfigList();
 }
 
-function closeSettings() {
+function closeSettingsModal(settingsModal) {
+    if (!settingsModal) return;
     settingsModal.style.display = 'none';
     overlay.classList.remove('open');
+    // 同时关闭新增配置弹窗
+    const newConfigModal = document.getElementById('new-config-modal');
+    if (newConfigModal) newConfigModal.style.display = 'none';
 }
 
 async function loadCurrentModel() {
+    const modelNameInput = document.getElementById('model-name');
+    const apiUrlInput = document.getElementById('api-url');
+    const apiKeyInput = document.getElementById('api-key');
+    const cheapModelNameInput = document.getElementById('cheap-model-name');
+    const cheapApiUrlInput = document.getElementById('cheap-api-url');
+    const cheapApiKeyInput = document.getElementById('cheap-api-key');
+    const switchStatus = document.getElementById('model-switch-status');
     try {
-        const res = await fetch('/api/model');
+        const res = await fetchWithTimeout('/api/model', {}, 8000);
         const data = await res.json();
-        modelNameInput.value = data.model || '';
-        apiUrlInput.value = data.api_url || '';
-        apiKeyInput.value = '';
-        apiKeyInput.placeholder = data.api_key_masked || 'sk-...';
-    } catch (e) {
-        switchStatus.textContent = '无法加载当前模型信息';
-        switchStatus.className = 'form-status error';
-    }
-}
-
-async function loadProviders() {
-    try {
-        const res = await fetch('/api/model/providers');
-        const data = await res.json();
-        providerSelect.innerHTML = '<option value="">— 手动输入 —</option>';
-        for (const [name, info] of Object.entries(data.providers)) {
-            const opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = `${name} (${info.model})`;
-            providerSelect.appendChild(opt);
+        if (modelNameInput) modelNameInput.value = data.model || '';
+        if (apiUrlInput) apiUrlInput.value = data.api_url || '';
+        if (apiKeyInput) {
+            apiKeyInput.value = '';
+            apiKeyInput.placeholder = data.api_key_masked || 'sk-...';
+        }
+        // 便宜模型
+        const cheap = data.cheap_model;
+        if (cheap && cheapModelNameInput) {
+            cheapModelNameInput.value = cheap.model || '';
+            cheapApiUrlInput.value = cheap.api_url || '';
+            cheapApiKeyInput.value = '';
+            cheapApiKeyInput.placeholder = cheap.api_key_masked || '不填则使用主模型的 Key';
         }
     } catch (e) {
-        console.warn('加载提供商预设失败');
+        if (switchStatus) {
+            switchStatus.textContent = '⚠ 无法加载当前模型信息';
+            switchStatus.className = 'form-status error';
+        }
     }
 }
 
-providerSelect.addEventListener('change', () => {
-    const name = providerSelect.value;
-    if (!name) return;
-    fetch('/api/model/providers')
-        .then(r => r.json())
-        .then(data => {
-            const info = data.providers[name];
-            if (info) {
-                modelNameInput.value = info.model;
-                apiUrlInput.value = info.url;
+async function loadConfigList() {
+    const configSelect = document.getElementById('config-select');
+    if (!configSelect) return;
+    configSelect.innerHTML = '<option value="">⏳ 加载中...</option>';
+    try {
+        const res = await fetchWithTimeout('/api/configs', {}, 8000);
+        const data = await res.json();
+        configSelect.innerHTML = '<option value="">— 选择配置文件 —</option>';
+        if (data.configs && data.configs.length > 0) {
+            for (const cfg of data.configs) {
+                const opt = document.createElement('option');
+                opt.value = cfg.filename;
+                let label = cfg.filename;
+                if (cfg.main_model && cfg.main_model.model_name) {
+                    label += `  [main: ${cfg.main_model.model_name}`;
+                    if (cfg.cheap_model && cfg.cheap_model.model_name) {
+                        label += ` | cheap: ${cfg.cheap_model.model_name}`;
+                    }
+                    label += ']';
+                }
+                if (cfg.error) {
+                    label += ` ⚠ ${cfg.error}`;
+                }
+                opt.textContent = label;
+                if (cfg.main_model) {
+                    opt.dataset.mainModel = JSON.stringify(cfg.main_model);
+                }
+                if (cfg.cheap_model) {
+                    opt.dataset.cheapModel = JSON.stringify(cfg.cheap_model);
+                }
+                opt.dataset.configPath = cfg.path || '';
+                configSelect.appendChild(opt);
             }
-        });
-});
+        } else {
+            configSelect.innerHTML = '<option value="">— 暂无配置文件，请新增 —</option>';
+        }
+    } catch (e) {
+        configSelect.innerHTML = '<option value="">— 加载失败，请重试 —</option>';
+    }
+}
 
-async function doSwitchModel() {
-    const apiKey = apiKeyInput.value.trim() || undefined;
-    const apiUrl = apiUrlInput.value.trim();
-    const modelName = modelNameInput.value.trim();
+async function doSwitchModel(settingsModal) {
+    const apiKeyInput = document.getElementById('api-key');
+    const apiUrlInput = document.getElementById('api-url');
+    const modelNameInput = document.getElementById('model-name');
+    const cheapApiKeyInput = document.getElementById('cheap-api-key');
+    const cheapApiUrlInput = document.getElementById('cheap-api-url');
+    const cheapModelNameInput = document.getElementById('cheap-model-name');
+    const switchStatus = document.getElementById('model-switch-status');
 
-    if (!apiUrl || !modelName) {
-        switchStatus.textContent = '请填写 API URL 和模型名称';
-        switchStatus.className = 'form-status error';
+    const apiKey = apiKeyInput ? apiKeyInput.value.trim() : '';
+    const apiUrl = apiUrlInput ? apiUrlInput.value.trim() : '';
+    const modelName = modelNameInput ? modelNameInput.value.trim() : '';
+    const cheapApiKey = cheapApiKeyInput ? cheapApiKeyInput.value.trim() : '';
+    const cheapApiUrl = cheapApiUrlInput ? cheapApiUrlInput.value.trim() : '';
+    const cheapModelName = cheapModelNameInput ? cheapModelNameInput.value.trim() : '';
+
+    // 如果 apiKey 为空，尝试从占位符获取 masked key（但实际需要真实 key）
+    // 如果占位符有 masked key，说明已有配置，使用当前配置的 key
+    let finalApiKey = apiKey;
+    if (!finalApiKey && apiKeyInput && apiKeyInput.placeholder && apiKeyInput.placeholder !== 'sk-...') {
+        // 用户没有输入新 key，提示
+        if (switchStatus) {
+            switchStatus.textContent = '请输入 API Key（或留空保持当前 Key，但需先填入值）';
+            switchStatus.className = 'form-status error';
+        }
         return;
     }
 
-    switchStatus.textContent = '⏳ 正在切换模型...';
-    switchStatus.className = 'form-status loading';
-    switchModelBtn.disabled = true;
-
-    try {
-        const res = await fetch('/api/model', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ api_key: apiKey, api_url: apiUrl, model_name: modelName }),
-        });
-        const data = await res.json();
-        if (data.ok) {
-            switchStatus.textContent = `✅ 已切换到 ${data.model} @ ${data.api_url}`;
-            switchStatus.className = 'form-status success';
-            modelInfo.textContent = data.model;
-            apiKeyInput.value = '';
-            apiKeyInput.placeholder = data.api_key_masked || 'sk-...';
-        } else {
-            switchStatus.textContent = `❌ 切换失败: ${data.error || data.errors?.join(', ')}`;
+    if (!finalApiKey && apiKeyInput && apiKeyInput.placeholder && apiKeyInput.placeholder.startsWith('sk-')) {
+        // 有占位符 key，尝试自动使用
+        // 但无法从占位符获取完整 key，需要用户输入
+        if (switchStatus) {
+            switchStatus.textContent = '如需保留当前 API Key，请从配置文件选择（下拉框选择即可自动填充字段）。或手动填入 Key。';
             switchStatus.className = 'form-status error';
         }
+        return;
+    }
+
+    const errors = [];
+    if (!finalApiKey) errors.push('API Key 不能为空');
+    if (!apiUrl) errors.push('API URL 不能为空');
+    if (!modelName) errors.push('模型名称不能为空');
+    if (errors.length) {
+        if (switchStatus) {
+            switchStatus.textContent = errors.join('；');
+            switchStatus.className = 'form-status error';
+        }
+        return;
+    }
+
+    // 便宜模型：如果填了名或url，必须两者都填
+    if ((cheapModelName || cheapApiUrl) && (!cheapModelName || !cheapApiUrl)) {
+        if (switchStatus) {
+            switchStatus.textContent = '便宜模型需同时填写名称和 URL';
+            switchStatus.className = 'form-status error';
+        }
+        return;
+    }
+
+    if (switchStatus) {
+        switchStatus.textContent = '⏳ 正在切换模型...';
+        switchStatus.className = 'form-status loading';
+    }
+    const switchModelBtn = document.getElementById('switch-model-btn');
+    if (switchModelBtn) switchModelBtn.disabled = true;
+
+    try {
+        const body = {
+            api_key: finalApiKey,
+            api_url: apiUrl,
+            model_name: modelName,
+        };
+        if (cheapModelName && cheapApiUrl) {
+            body.cheap_api_key = cheapApiKey || finalApiKey;
+            body.cheap_api_url = cheapApiUrl;
+            body.cheap_model_name = cheapModelName;
+        }
+
+        const res = await fetchWithTimeout('/api/model', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        }, 30000);
+
+        const data = await res.json();
+        if (data.ok) {
+            if (switchStatus) {
+                let msg = `✅ 已切换到 ${data.model}`;
+                if (data.cheap_model) {
+                    msg += ` | cheap: ${data.cheap_model.model}`;
+                }
+                switchStatus.textContent = msg;
+                switchStatus.className = 'form-status success';
+            }
+            // 更新 header 显示
+            let headerText = data.model;
+            if (data.cheap_model) {
+                headerText += ` | cheap: ${data.cheap_model.model}`;
+            }
+            modelInfo.textContent = headerText;
+            if (apiKeyInput) {
+                apiKeyInput.value = '';
+                apiKeyInput.placeholder = data.api_key_masked || 'sk-...';
+            }
+            // 关闭弹窗
+            setTimeout(() => closeSettingsModal(settingsModal), 1500);
+        } else {
+            if (switchStatus) {
+                switchStatus.textContent = `❌ 切换失败: ${data.error || (data.errors ? data.errors.join(', ') : '未知错误')}`;
+                switchStatus.className = 'form-status error';
+            }
+        }
     } catch (e) {
-        switchStatus.textContent = `❌ 网络错误: ${e.message}`;
-        switchStatus.className = 'form-status error';
+        if (switchStatus) {
+            if (e.name === 'AbortError') {
+                switchStatus.textContent = '⏳ 切换超时（30s），服务可能仍在处理中，请检查模型配置';
+            } else {
+                switchStatus.textContent = `❌ 网络错误: ${e.message}`;
+            }
+            switchStatus.className = 'form-status error';
+        }
     } finally {
-        switchModelBtn.disabled = false;
+        if (switchModelBtn) switchModelBtn.disabled = false;
     }
 }
 
-async function doSwitchConfig() {
-    const configPath = prompt('请输入配置文件路径:');
-    if (!configPath) return;
+// ── New Config ──
+async function doSaveNewConfig(settingsModal) {
+    const filenameInput = document.getElementById('new-config-filename');
+    const mainNameInput = document.getElementById('new-main-name');
+    const mainUrlInput = document.getElementById('new-main-url');
+    const mainKeyInput = document.getElementById('new-main-key');
+    const cheapNameInput = document.getElementById('new-cheap-name');
+    const cheapUrlInput = document.getElementById('new-cheap-url');
+    const cheapKeyInput = document.getElementById('new-cheap-key');
+    const statusEl = document.getElementById('new-config-status');
 
-    switchStatus.textContent = '⏳ 正在从配置文件加载...';
-    switchStatus.className = 'form-status loading';
+    const filename = filenameInput ? filenameInput.value.trim() : '';
+    const mainName = mainNameInput ? mainNameInput.value.trim() : '';
+    const mainUrl = mainUrlInput ? mainUrlInput.value.trim() : '';
+    const mainKey = mainKeyInput ? mainKeyInput.value.trim() : '';
+    const cheapName = cheapNameInput ? cheapNameInput.value.trim() : '';
+    const cheapUrl = cheapUrlInput ? cheapUrlInput.value.trim() : '';
+    const cheapKey = cheapKeyInput ? cheapKeyInput.value.trim() : '';
+
+    const errors = [];
+    if (!filename) errors.push('文件名不能为空');
+    if (!mainName) errors.push('主模型名称不能为空');
+    if (!mainUrl) errors.push('主模型 API URL 不能为空');
+    if (!mainKey) errors.push('主模型 API Key 不能为空');
+    if (errors.length) {
+        statusEl.textContent = errors.join('；');
+        statusEl.className = 'form-status error';
+        return;
+    }
+
+    statusEl.textContent = '⏳ 正在保存并应用...';
+    statusEl.className = 'form-status loading';
+    const saveBtn = document.getElementById('save-new-config-btn');
+    if (saveBtn) saveBtn.disabled = true;
 
     try {
-        const res = await fetch('/api/model/config', {
+        const res = await fetchWithTimeout('/api/config/create', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ config_path: configPath }),
-        });
+            body: JSON.stringify({
+                filename: filename,
+                main_model_name: mainName,
+                main_api_url: mainUrl,
+                main_api_key: mainKey,
+                cheap_model_name: cheapName,
+                cheap_api_url: cheapUrl,
+                cheap_api_key: cheapKey || mainKey,
+            }),
+        }, 30000);
+
         const data = await res.json();
         if (data.ok) {
-            switchStatus.textContent = `✅ 已从配置文件加载: ${configPath}`;
-            switchStatus.className = 'form-status success';
-            await loadCurrentModel();
-            const mi = await (await fetch('/api/model')).json();
-            modelInfo.textContent = mi.model;
+            statusEl.textContent = `✅ 已创建并应用配置: ${data.filename}`;
+            statusEl.className = 'form-status success';
+            // 更新 header
+            modelInfo.textContent = mainName;
+            // 关闭新增配置弹窗
+            setTimeout(() => {
+                document.getElementById('new-config-modal').style.display = 'none';
+                // 刷新设置弹窗的配置列表
+                loadConfigList();
+                loadCurrentModel();
+            }, 1000);
         } else {
-            switchStatus.textContent = `❌ 加载失败: ${data.error}`;
-            switchStatus.className = 'form-status error';
+            statusEl.textContent = `❌ 创建失败: ${data.error || (data.errors ? data.errors.join(', ') : '未知错误')}`;
+            statusEl.className = 'form-status error';
         }
     } catch (e) {
-        switchStatus.textContent = `❌ 错误: ${e.message}`;
-        switchStatus.className = 'form-status error';
+        statusEl.textContent = `❌ 错误: ${e.message}`;
+        statusEl.className = 'form-status error';
+    } finally {
+        if (saveBtn) saveBtn.disabled = false;
     }
 }
-
-settingsBtn.addEventListener('click', openSettings);
-modelInfo.addEventListener('click', openSettings);
-closeSettings.addEventListener('click', closeSettings);
-switchModelBtn.addEventListener('click', doSwitchModel);
-switchConfigBtn.addEventListener('click', doSwitchConfig);

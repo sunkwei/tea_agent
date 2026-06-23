@@ -71,28 +71,101 @@
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label>模型提供商预设</label>
-                        <select id="provider-select">
-                            <option value="">— 手动输入 —</option>
+                        <label>配置文件 <span class="req">*</span></label>
+                        <select id="config-select">
+                            <option value="">— 请选择或新增配置 —</option>
                         </select>
+                        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">
+                            从 ~/.tea_agent/*.yaml 读取，选中后自动填充下方字段
+                        </div>
                     </div>
+
+                    <h4 style="margin:16px 0 8px; font-size:14px; color:var(--accent); border-bottom:1px solid var(--border); padding-bottom:8px;">
+                        📌 主模型 (Main Model)
+                    </h4>
                     <div class="form-group">
                         <label>模型名称 <span class="req">*</span></label>
-                        <input type="text" id="model-name" placeholder="如: gpt-4o, deepseek-chat, qwen-plus">
+                        <input type="text" id="model-name" placeholder="如: deepseek-v4-pro, gpt-4o">
                     </div>
                     <div class="form-group">
                         <label>API URL <span class="req">*</span></label>
-                        <input type="url" id="api-url" placeholder="如: https://api.openai.com/v1">
+                        <input type="url" id="api-url" placeholder="如: https://api.deepseek.com">
                     </div>
                     <div class="form-group">
                         <label>API Key <span class="req">*</span></label>
                         <input type="password" id="api-key" placeholder="sk-...">
                     </div>
+
+                    <h4 style="margin:16px 0 8px; font-size:14px; color:var(--green); border-bottom:1px solid var(--border); padding-bottom:8px;">
+                        🔄 便宜模型 (Cheap Model)
+                    </h4>
+                    <div class="form-group">
+                        <label>模型名称</label>
+                        <input type="text" id="cheap-model-name" placeholder="如: deepseek-v4-flash, qwen-turbo">
+                    </div>
+                    <div class="form-group">
+                        <label>API URL</label>
+                        <input type="url" id="cheap-api-url" placeholder="如: https://api.deepseek.com">
+                    </div>
+                    <div class="form-group">
+                        <label>API Key</label>
+                        <input type="password" id="cheap-api-key" placeholder="不填则使用主模型的 Key">
+                    </div>
+
                     <div id="model-switch-status" class="form-status"></div>
                 </div>
+                <div class="modal-footer" style="flex-wrap: wrap;">
+                    <button class="btn-secondary" id="add-config-btn" style="margin-right: auto;">➕ 新增配置</button>
+                    <button class="btn-primary" id="switch-model-btn">✅ 应用配置</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- New Config Modal -->
+        <div id="new-config-modal" style="display:none;">
+            <div class="modal-content" style="width:520px;">
+                <div class="modal-header">
+                    <h3>➕ 新增配置</h3>
+                    <button class="modal-close" id="close-new-config">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>文件名 <span class="req">*</span></label>
+                        <input type="text" id="new-config-filename" placeholder="如: config_my" value="config_custom.yaml">
+                        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">将保存到 ~/.tea_agent/ 目录</div>
+                    </div>
+
+                    <h4 style="margin:12px 0 6px; font-size:13px; color:var(--accent);">主模型 (Main Model)</h4>
+                    <div class="form-group">
+                        <label>模型名称 <span class="req">*</span></label>
+                        <input type="text" id="new-main-name" placeholder="如: gpt-4o, deepseek-chat">
+                    </div>
+                    <div class="form-group">
+                        <label>API URL <span class="req">*</span></label>
+                        <input type="url" id="new-main-url" placeholder="https://api.openai.com/v1">
+                    </div>
+                    <div class="form-group">
+                        <label>API Key <span class="req">*</span></label>
+                        <input type="password" id="new-main-key" placeholder="sk-...">
+                    </div>
+
+                    <h4 style="margin:12px 0 6px; font-size:13px; color:var(--green);">便宜模型 (Cheap Model) — 可选</h4>
+                    <div class="form-group">
+                        <label>模型名称</label>
+                        <input type="text" id="new-cheap-name" placeholder="如: deepseek-v4-flash">
+                    </div>
+                    <div class="form-group">
+                        <label>API URL</label>
+                        <input type="url" id="new-cheap-url" placeholder="https://api.deepseek.com">
+                    </div>
+                    <div class="form-group">
+                        <label>API Key</label>
+                        <input type="password" id="new-cheap-key" placeholder="不填则使用主模型的 Key">
+                    </div>
+                    <div id="new-config-status" class="form-status"></div>
+                </div>
                 <div class="modal-footer">
-                    <button class="btn-secondary" id="switch-config-btn">从配置文件重载</button>
-                    <button class="btn-primary" id="switch-model-btn">切换模型</button>
+                    <button class="btn-primary" id="save-new-config-btn">💾 保存并应用</button>
                 </div>
             </div>
         </div>

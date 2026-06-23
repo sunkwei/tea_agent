@@ -185,6 +185,8 @@ class TkGUI(Agent):
         # 加载主题
         self.refresh_topics()
         self.auto_new_topic()
+        # 延迟加载配置列表（等 UI 完全构建后）
+        self.root.after(500, self._refresh_config_list)
         # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
         self.root.protocol("WM_DELETE_WINDOW", self.tray._on_closing)
 
@@ -989,6 +991,151 @@ class TkGUI(Agent):
             self._update_status("⚙️ 配置已更新")
 
         ConfigDialog(self.root, on_save=on_save, config_path=self._config_path)
+
+    # ── 配置快捷切换 ──
+
+    def get_config_list(self) -> list:
+        """扫描 ~/.tea_agent/*.yaml，返回配置摘要列表。
+        
+        每个元素: {"filename": str, "path": str, "main_model": str, "cheap_model": str}
+        """
+        configs_dir = Path.home() / ".tea_agent"
+        if not configs_dir.exists():
+            return []
+        results = []
+        for fpath in sorted(configs_dir.glob("*.yaml")):
+            try:
+                cfg = load_config(str(fpath))
+                main_name = cfg.main_model.model_name or ""
+                cheap_name = cfg.cheap_model.model_name or ""
+                results.append({
+                    "filename": fpath.name,
+                    "path": str(fpath),
+                    "main_model": main_name,
+                    "cheap_model": cheap_name,
+                })
+            except Exception as e:
+                results.append({
+                    "filename": fpath.name,
+                    "path": str(fpath),
+                    "main_model": f"❌ {e}",
+                    "cheap_model": "",
+                })
+        return results
+
+    def switch_config_file(self, config_path: str) -> bool:
+        """切换配置文件，重新初始化会话。
+        
+        Args:
+            config_path: 配置文件的完整路径
+        
+        Returns:
+            True 表示切换成功，False 表示失败
+        """
+        try:
+            new_cfg = load_config(config_path)
+            if not new_cfg.main_model.is_configured:
+                logger.warning(f"配置文件 {config_path} 主模型不完整，跳过")
+                return False
+
+            topic_id = getattr(self, 'current_topic_id', None)
+
+            # 关闭旧会话
+            if hasattr(self, 'sess') and self.sess:
+                try:
+                    self.sess.close()
+                except Exception:
+                    pass
+                self.sess = None
+
+            # 更新配置
+            self._cfg = new_cfg
+
+            # 重新初始化会话
+            self._init_session()
+            if hasattr(self, 'sess') and self.sess is not None:
+                self.sess.tool_log = self.safe_log_tool
+
+            # 重新加载当前主题
+            if topic_id:
+                self.current_topic_id = topic_id
+                try:
+                    self.load_topic_history(topic_id)
+                except Exception:
+                    pass
+
+            # 更新状态栏
+            cheap_m = self._cfg.cheap_model
+            cheap_info = f" | 摘要模型: {cheap_m.model_name}" if cheap_m and cheap_m.model_name else ""
+            self._update_status(
+                f"📡 已切换 | {Path(config_path).name} | "
+                f"模型: {self._cfg.main_model.model_name}{cheap_info}"
+            )
+
+            # 通知前端刷新
+            self.root.after(100, lambda: self._update_title())
+            return True
+
+        except Exception as e:
+            logger.exception(f"切换配置文件失败: {config_path}")
+            self._update_status(f"❌ 切换失败: {e}")
+            return False
+
+    def _refresh_config_list(self):
+        """刷新左侧面板的配置选择下拉框"""
+        configs = self.get_config_list()
+        if not hasattr(self, 'config_combo') or not self.config_combo:
+            return
+        values = []
+        for cfg in configs:
+            label = cfg["filename"]
+            if cfg["main_model"]:
+                label += f"  [{cfg['main_model']}"
+                if cfg["cheap_model"]:
+                    label += f" | {cfg['cheap_model']}"
+                label += "]"
+            values.append(label)
+        self.config_combo["values"] = values
+        # 标记当前配置
+        current_path = getattr(self, '_config_path', None)
+        if current_path:
+            for i, cfg in enumerate(configs):
+                if cfg["path"] == current_path:
+                    if i < len(values):
+                        self._config_var.set(values[i])
+                    break
+        else:
+            self._config_var.set("")
+        # 如果没有配置，提示
+        if not values:
+            self.config_combo["values"] = ["(暂无配置文件)"]
+            self._config_var.set("(暂无配置文件)")
+
+    def _on_config_selected(self, event=None):
+        """左侧面板配置选择下拉框回调"""
+        selected = self._config_var.get()
+        if not selected or "(暂无" in selected or "(加载中" in selected:
+            return
+        # 从选中文本提取文件名
+        filename = selected.split("  [")[0].strip()
+        configs_dir = Path.home() / ".tea_agent"
+        fpath = configs_dir / filename
+        if not fpath.exists():
+            self._update_status(f"❌ 配置文件不存在: {fpath}")
+            return
+        # 检查是否已经是当前配置
+        if getattr(self, '_config_path', None) == str(fpath):
+            self._update_status(f"✓ 已是当前配置: {filename}")
+            return
+        self._update_status(f"⏳ 正在切换到: {filename}...")
+        ok = self.switch_config_file(str(fpath))
+        if ok:
+            self._config_path = str(fpath)
+            self._update_status(f"✅ 已切换到: {filename}")
+            # 刷新列表以更新"当前配置"标记
+            self.root.after(500, self._refresh_config_list)
+        else:
+            self._update_status(f"❌ 切换失败: {filename}")
 
     def open_scheduler_dialog(self):
         """打开定时任务管理对话框"""

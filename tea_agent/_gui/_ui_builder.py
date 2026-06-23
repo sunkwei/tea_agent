@@ -62,8 +62,9 @@ class UIBuilder:
             fill=tk.X, padx=4, pady=2)
         ttk.Button(left, text="🧠 记忆管理", command=gui.open_memory_dialog).pack(
             fill=tk.X, padx=4, pady=2)
-        ttk.Button(left, text="⚙️ 配置", command=gui.open_config_dialog).pack(
-            fill=tk.X, padx=4, pady=2)
+
+
+
         ttk.Button(left, text="⏰ 定时任务", command=gui.open_scheduler_dialog).pack(
             fill=tk.X, padx=4, pady=2)
 
@@ -82,8 +83,12 @@ class UIBuilder:
         gui.chat_split = ttk.PanedWindow(right, orient=tk.VERTICAL)
         gui.chat_split.pack(fill=tk.BOTH, expand=True)
 
-        chat_frame = Frame(gui.chat_split)
-        gui.chat_split.add(chat_frame, weight=3)
+        # ── 顶部合并容器：chat + config（无 sash，整体拖动）──
+        top_frame = Frame(gui.chat_split)
+        gui.chat_split.add(top_frame, weight=3)
+
+        chat_frame = Frame(top_frame)
+        chat_frame.pack(fill=tk.BOTH, expand=True)
 
         gui.console = scrolledtext.ScrolledText(
             chat_frame, font=(SYSTEM_FONT, _fs(15)), bg="white", fg="black", wrap=tk.WORD
@@ -101,7 +106,26 @@ class UIBuilder:
         gui._show_mode = "console"
         gui._switch_display("console")
 
-        # 输入区域
+        # ── 配置切换栏（固定在 chat 区域底部）──
+        cfg_bar_frame = Frame(top_frame)
+        cfg_bar_frame.pack(fill=tk.X)  # 固定高度，不扩展
+
+        cfg_row = ttk.Frame(cfg_bar_frame)
+        cfg_row.pack(fill=tk.X, padx=4, pady=2)
+
+        gui._config_var = tk.StringVar()
+        gui.config_combo = ttk.Combobox(
+            cfg_row, textvariable=gui._config_var, state="readonly",
+            font=(SYSTEM_FONT, _fs(10)), values=["(加载中...)"])
+        gui.config_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        gui.config_combo.bind("<<ComboboxSelected>>", gui._on_config_selected)
+
+        ttk.Button(cfg_row, text="↻",
+                   command=gui._refresh_config_list, width=3).pack(side=tk.LEFT, padx=(4, 2))
+        ttk.Button(cfg_row, text="⚙️ 配置编辑",
+                   command=gui.open_config_dialog).pack(side=tk.LEFT)
+
+        # 输入区域（与 top_frame 之间只有一条 sash）
         input_frame = Frame(gui.chat_split)
         gui.chat_split.add(input_frame, weight=1)
         gui.input_box = scrolledtext.ScrolledText(
@@ -181,3 +205,28 @@ class UIBuilder:
                 if attempt < 10:
                     gui.root.after(100, _set_sash_position, attempt + 1)
         gui.root.after(200, _set_sash_position)
+
+        # ── 约束顶部面板（chat+config）不被 sash 压缩到 config 不可见 ──
+        def _constrain_top_pane(event=None):
+            """防止向上拖拽 sash 时 config 区域被隐藏。"""
+            try:
+                gui.root.update_idletasks()
+                cfg_height = cfg_bar_frame.winfo_reqheight()
+                if cfg_height <= 0:
+                    return
+                # 至少保留一行聊天文本高度 + 上下 padding
+                min_chat_height = _fs(15) + 10
+                min_top_height = cfg_height + min_chat_height
+                # 只有一条 sash（index=0），检查 top_frame 的当前高度
+                cur_sash_pos = gui.chat_split.sashpos(0)
+                if 0 < cur_sash_pos < min_top_height:
+                    gui.chat_split.sashpos(0, min_top_height)
+            except Exception:
+                pass
+
+        # UI 就绪后首次计算并约束
+        gui.root.after(500, _constrain_top_pane)
+        # 每次鼠标释放时重新约束（防止在可拖拽区域外也能触发约束）
+        gui.chat_split.bind("<ButtonRelease-1>", _constrain_top_pane)
+        # 窗口大小变化时也重新检查
+        gui.root.bind("<Configure>", lambda e: gui.root.after_idle(_constrain_top_pane))

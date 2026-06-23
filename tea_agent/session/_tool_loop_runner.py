@@ -182,22 +182,40 @@ class LoopDetector:
 
 
 def _format_tool_summary(tool_calls) -> str:
-    """构造多行工具调用摘要用于回调显示。"""
-    tool_lines = []
+    """构造多行工具调用摘要用于回调显示，含 TOOL_START/DONE 标记。
+
+    格式：
+        [TOOL_START:toolkit_exec]
+            app=python
+            args=["-c", "print('hello')"]
+        [TOOL_DONE]
+
+    Args:
+        tool_calls: 工具调用列表
+    Returns:
+        带标记的格式化字符串
+    """
+    lines = []
     for tc in tool_calls:
         fn = tc.function.name
-        tool_lines.append(f" -- 正在执行工具：{fn}")
+        lines.append(f"[TOOL_START:{fn}]")
         args_str = tc.function.arguments or "{}"
         try:
             args_dict = json.loads(args_str)
             for k, v in args_dict.items():
                 v_str = str(v)
-                if len(v_str.encode("utf-8")) > 32:
-                    v_str = v_str[:32] + "…"
-                tool_lines.append(f"\t{k}: {v_str}")
+                _MAX_PARAM_DISPLAY = 500
+                if len(v_str) > _MAX_PARAM_DISPLAY:
+                    v_str = v_str[:_MAX_PARAM_DISPLAY] + f"… [剩余 {len(v_str) - _MAX_PARAM_DISPLAY} 字符]"
+                lines.append(f"\t{k}={v_str}")
         except (json.JSONDecodeError, TypeError):
-            pass
-    return "\n".join(tool_lines) + "\n\n"
+            # 非 JSON 参数，直接显示
+            raw = args_str
+            if len(raw) > 500:
+                raw = raw[:500] + f"… [剩余 {len(raw) - 500} 字符]"
+            lines.append(f"\t{raw}")
+        lines.append("[TOOL_DONE]")
+    return "\n".join(lines) + "\n\n"
 
 
 def execute_tool_loop(session, context: Dict) -> Dict:
@@ -358,32 +376,37 @@ def execute_tool_loop(session, context: Dict) -> Dict:
 
             for call in valid_tool_calls:
                 _asctime = time.strftime("%Y-%m-%d %H:%M:%S")
-                # 格式化参数：非字符转str，超长截断32字节
-                _args_str = ""
+                # 发送 TOOL_START 标记（前端据此创建工具调用块）
+                callback(f"[TOOL_START:{call.function.name}]")
+                # 发送参数信息到工具块
                 if call.function.arguments:
                     try:
                         import json as _json
                         _args = _json.loads(call.function.arguments) if isinstance(call.function.arguments, str) else call.function.arguments
                         if isinstance(_args, dict):
-                            _parts = []
                             for _k, _v in _args.items():
                                 _vs = str(_v)
-                                if len(_vs) > 32:
-                                    _vs = _vs[:32] + "…"
-                                _parts.append(f"{_k}={_vs}")
-                            _args_str = "(" + ", ".join(_parts) + ")"
+                                _MAX_PARAM = 500
+                                if len(_vs) > _MAX_PARAM:
+                                    _vs = _vs[:_MAX_PARAM] + f"… [剩余 {len(_vs) - _MAX_PARAM} 字符]"
+                                callback(f"{_k}={_vs}\n")
                         else:
                             _vs = str(_args)
-                            if len(_vs) > 32:
-                                _vs = _vs[:32] + "…"
-                            _args_str = f"({_vs})"
+                            if len(_vs) > 500:
+                                _vs = _vs[:500] + f"… [剩余 {len(_vs) - 500} 字符]"
+                            callback(f"{_vs}\n")
                     except Exception:
-                        _args_str = f"({call.function.arguments[:32]}…)" if len(call.function.arguments) > 32 else f"({call.function.arguments})"
-                print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name}{_args_str}")
+                        _raw = call.function.arguments
+                        if len(_raw) > 500:
+                            _raw = _raw[:500] + f"… [剩余 {len(_raw) - 500} 字符]"
+                        callback(f"{_raw}\n")
+                print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name} args_len={len(call.function.arguments or '')}")
                 logger.info(f"    tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
                 call_id, func_name, result_str = session.tools_comp.execute_tool_call(call)
                 logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")
                 session.tools_comp.collect_tool_call_round(call_id, result_str)
+                # 发送 TOOL_DONE 标记
+                callback("[TOOL_DONE]")
 
             if has_reload:
                 session._build_tools()
@@ -443,7 +466,7 @@ def execute_tool_loop(session, context: Dict) -> Dict:
                     break
 
             if content:
-                callback(_format_tool_summary(valid_tool_calls))
+                callback("")
             continue
 
         elif content:

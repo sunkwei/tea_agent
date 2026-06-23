@@ -19,6 +19,9 @@ const usageTokens = document.getElementById('usage-tokens');
 const modelInfo = document.getElementById('model-info');
 const sessionPanel = document.getElementById('session-panel');
 const overlay = document.getElementById('overlay');
+const roundsPanel = document.getElementById('rounds-panel');
+const roundsList = document.getElementById('rounds-list');
+const roundsTopicTitle = document.getElementById('rounds-topic-title');
 
 // ── 带超时的 fetch 工具函数 ──
 async function fetchWithTimeout(url, options = {}, timeout = 10000) {
@@ -70,7 +73,34 @@ function bindEvents() {
     if (closeSessionsBtn) {
         closeSessionsBtn.addEventListener('click', closeSessionPanel);
     }
-    overlay.addEventListener('click', closeSessionPanel);
+    overlay.addEventListener('click', closeAllPanels);
+
+    // 历史轮次面板
+    const roundsBtn = document.getElementById('rounds-btn');
+    if (roundsBtn) {
+        roundsBtn.addEventListener('click', async () => {
+            if (!currentTopicId) {
+                // 如果没有当前主题，尝试从欢迎标题获取或提示
+                roundsList.innerHTML = '<div class="status-msg">⚠ 请先开始对话或从历史会话中选择一个主题</div>';
+                roundsPanel.classList.add('open');
+                overlay.classList.add('open');
+                return;
+            }
+            roundsPanel.classList.add('open');
+            overlay.classList.add('open');
+            await loadRounds(currentTopicId);
+        });
+    }
+
+    // 所有面板的关闭按钮
+    document.querySelectorAll('.close-panel-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const panelId = btn.dataset.panel;
+            const panel = document.getElementById(panelId);
+            if (panel) panel.classList.remove('open');
+            overlay.classList.remove('open');
+        });
+    });
 
     // 新会话
     const newBtn = document.getElementById('new-btn');
@@ -79,8 +109,13 @@ function bindEvents() {
             currentTopicId = '';
             chatContainer.innerHTML = '';
             welcome.style.display = 'flex';
+            const welcomeSubtitle = welcome.querySelector('p');
+            welcomeSubtitle.innerHTML = '自进化 AI 编程助手 · 60+ 内置工具 · 多 Agent 协作 · 长期记忆<br>在下方输入消息开始对话';
             messageInput.focus();
             usageTokens.textContent = '0';
+            if (roundsTopicTitle) roundsTopicTitle.textContent = '';
+            roundsList.innerHTML = '<div class="status-msg">请先开始对话或选择一个历史会话</div>';
+            document.getElementById('usage-bar').style.display = 'none';
         });
     }
 
@@ -299,6 +334,9 @@ function finishStreaming() {
     });
 
     messageInput.focus();
+
+    // 如果有当前主题，自动刷新轮次数据（不打开面板）
+    autoLoadRounds();
 }
 
 function handleSSEEvent(event, contentDiv, assistantMsg) {
@@ -332,7 +370,16 @@ function handleSSEEvent(event, contentDiv, assistantMsg) {
         }
         case 'tool_done': {
             if (currentToolBlock) {
-                currentToolBlock.querySelector('.tool-result').classList.add('open');
+                // 移除旋转图标
+                const spinner = currentToolBlock.querySelector('.tool-spinner');
+                if (spinner) spinner.remove();
+                // 添加完成标记
+                const header = currentToolBlock.querySelector('.tool-header');
+                const doneMark = document.createElement('span');
+                doneMark.textContent = '✅';
+                doneMark.style.marginLeft = 'auto';
+                doneMark.style.fontSize = '14px';
+                header.appendChild(doneMark);
                 currentToolBlock = null;
             }
             scrollToBottom();
@@ -340,9 +387,10 @@ function handleSSEEvent(event, contentDiv, assistantMsg) {
         }
         case 'token': {
             if (currentToolBlock) {
-                const tr = currentToolBlock.querySelector('.tool-result');
-                tr.textContent += event.text;
-                tr.classList.add('open');
+                const paramsDiv = currentToolBlock.querySelector('.tool-params');
+                if (paramsDiv) {
+                    paramsDiv.textContent += event.text;
+                }
             } else {
                 contentDiv.textContent += event.text;
                 contentDiv.innerHTML = renderMarkdown(contentDiv.textContent);
@@ -419,9 +467,10 @@ function createToolBlock(name) {
     div.innerHTML = `
         <div class="tool-header">
             <span class="tool-icon">🔧</span>
-            调用工具: <code>${escapeHtml(name)}</code>
+            调用工具: <span class="tool-name">${escapeHtml(name)}</span>
+            <span class="tool-spinner"></span>
         </div>
-        <div class="tool-result"></div>
+        <div class="tool-params" style="display:block;"></div>
     `;
     return div;
 }
@@ -486,7 +535,15 @@ async function loadSessions() {
                 // Reload conversation
                 chatContainer.innerHTML = '';
                 welcome.style.display = 'block';
-                welcome.querySelector('h2').textContent = s.title;
+                const welcomeTitle = welcome.querySelector('h2');
+                welcomeTitle.textContent = s.title;
+                // 加载历史轮次信息到 welcome 区域
+                const welcomeSubtitle = welcome.querySelector('p');
+                if (welcomeSubtitle) {
+                    welcomeSubtitle.innerHTML = `📜 主题: ${escapeHtml(s.title)}<br>` +
+                        `<span style="font-size:12px; color:var(--text-muted);">${s.updated} · ${(s.total_tokens || 0).toLocaleString()} tokens</span><br>` +
+                        `<button class="btn-secondary" style="margin-top:12px; padding:6px 16px; font-size:13px;" onclick="openRounds()">🔄 查看本轮次对话</button>`;
+                }
             });
             list.appendChild(item);
         }
@@ -838,5 +895,149 @@ async function doSaveNewConfig(settingsModal) {
         statusEl.className = 'form-status error';
     } finally {
         if (saveBtn) saveBtn.disabled = false;
+    }
+}
+
+// ── Rounds Panel (历史轮次) ──
+
+// 打开轮次面板（供 onclick 调用）
+window.openRounds = function() {
+    if (!currentTopicId) return;
+    roundsPanel.classList.add('open');
+    overlay.classList.add('open');
+    loadRounds(currentTopicId);
+};
+
+// 关闭所有侧面板
+function closeAllPanels() {
+    sessionPanel.classList.remove('open');
+    if (roundsPanel) roundsPanel.classList.remove('open');
+    overlay.classList.remove('open');
+}
+
+// 加载指定主题的历史轮次
+async function loadRounds(topicId) {
+    if (!topicId) {
+        roundsList.innerHTML = '<div class="status-msg">⚠ 未选择主题</div>';
+        return;
+    }
+
+    roundsList.innerHTML = '<div class="status-msg">⏳ 加载历史轮次...</div>';
+
+    try {
+        // 先获取主题信息
+        const topicRes = await fetchWithTimeout(`/api/topic/${topicId}`, {}, 8000);
+        const topicData = await topicRes.json();
+        if (topicData.topic && roundsTopicTitle) {
+            roundsTopicTitle.textContent = `— ${escapeHtml(topicData.topic.title)}`;
+        }
+
+        const res = await fetchWithTimeout(`/api/topic/${topicId}/conversations?limit=0`, {}, 15000);
+        const data = await res.json();
+        roundsList.innerHTML = '';
+
+        if (!data.conversations || data.conversations.length === 0) {
+            roundsList.innerHTML = '<div class="status-msg">📭 该主题暂无对话记录</div>';
+            return;
+        }
+
+        // 从后往前遍历（最新的在最上面）
+        const convs = data.conversations.reverse();
+        for (let i = 0; i < convs.length; i++) {
+            const c = convs[i];
+            const item = renderRoundItem(c, i + 1, convs.length);
+            roundsList.appendChild(item);
+        }
+    } catch (e) {
+        if (e.name === 'AbortError') {
+            roundsList.innerHTML = '<div class="status-msg" style="color:var(--orange)">⏳ 加载超时，请重试</div>';
+        } else {
+            roundsList.innerHTML = `<div class="status-msg" style="color:var(--red)">❌ 加载失败: ${e.message}</div>`;
+        }
+    }
+}
+
+// 渲染单个历史轮次条目
+function renderRoundItem(conv, index, total) {
+    const item = document.createElement('div');
+    item.className = 'round-item';
+
+    // 解析用户消息
+    let userText = conv.user_msg || '';
+    try {
+        const parsed = JSON.parse(userText);
+        if (typeof parsed === 'object' && parsed.text) {
+            userText = parsed.text;
+        } else if (typeof parsed === 'string') {
+            userText = parsed;
+        }
+    } catch (e) {
+        // 不是 JSON，保持原样
+    }
+
+    const aiText = conv.ai_msg || '';
+    const stamp = conv.stamp ? conv.stamp.slice(0, 19) : '';
+    const aiPreview = aiText.length > 100 ? aiText.slice(0, 100) + '...' : aiText;
+    const userPreview = userText.length > 80 ? userText.slice(0, 80) + '...' : userText;
+
+    item.innerHTML = `
+        <div class="round-stamp">
+            <span>#${total - index + 1} · ${escapeHtml(stamp)}</span>
+            <span class="round-index">轮次 ${total - index + 1}/${total}</span>
+        </div>
+        <div class="round-msg">
+            <div class="round-label user-label">Q</div>
+            <div class="round-text" title="${escapeHtml(userText)}">${escapeHtml(userPreview)}</div>
+        </div>
+        <div class="round-msg">
+            <div class="round-label ai-label">A</div>
+            <div class="round-text" title="${escapeHtml(aiText)}">${escapeHtml(aiPreview)}</div>
+        </div>
+        <div class="round-text-full">${renderMarkdown(aiText)}</div>
+        <div class="round-expand" onclick="event.stopPropagation(); toggleRoundFull(this)">▼ 展开完整对话</div>
+    `;
+
+    // 点击条目：将对话加载到聊天区域
+    item.addEventListener('click', () => restoreRound(conv, userText, aiText));
+
+    return item;
+}
+
+// 展开/收起完整 AI 回答
+window.toggleRoundFull = function(el) {
+    const fullDiv = el.parentElement.querySelector('.round-text-full');
+    if (fullDiv) {
+        fullDiv.classList.toggle('open');
+        el.textContent = fullDiv.classList.contains('open') ? '▲ 收起' : '▼ 展开完整对话';
+    }
+};
+
+// 将历史轮次恢复到聊天区域
+function restoreRound(conv, userText, aiText) {
+    // 关闭侧面板
+    closeAllPanels();
+
+    // 清除当前聊天
+    chatContainer.innerHTML = '';
+    welcome.style.display = 'none';
+
+    // 添加用户消息
+    addUserMessage(userText || conv.user_msg || '');
+
+    // 添加 AI 回复
+    const assistantMsg = addAssistantMessage();
+    const contentDiv = assistantMsg.querySelector('.message-bubble');
+    if (aiText) {
+        contentDiv.innerHTML = renderMarkdown(aiText);
+    } else {
+        contentDiv.textContent = '(空回复)';
+    }
+}
+
+// 自动加载当前主题的轮次（对话结束后调用）
+function autoLoadRounds() {
+    if (currentTopicId) {
+        // 不自动打开面板，只记录
+        console.log(`当前主题 ${currentTopicId} 有新轮次`);
     }
 }

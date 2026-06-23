@@ -42,6 +42,7 @@ dependencies = [
 
 [project.scripts]
 tea_agent = "tea_agent.gui:main"
+tea-agent-web = "tea_agent.web:main"
 
 [project.optional-dependencies]
 web = [

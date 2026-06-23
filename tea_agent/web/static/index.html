@@ -17,6 +17,7 @@
             <div class="header-actions">
                 <span class="model-info" id="model-info" title="点击切换模型" style="cursor:pointer;">加载中...</span>
                 <button id="new-btn">新会话</button>
+                <button id="rounds-btn" title="查看当前主题下的历史轮次">🔄 轮次</button>
                 <button id="sessions-btn">历史</button>
                 <button id="settings-btn" title="模型设置">⚙</button>
             </div>
@@ -57,9 +58,23 @@
         <div id="session-panel">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                 <h3 style="margin: 0;">历史会话</h3>
-                <button id="close-sessions" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+                <button class="close-panel-btn" data-panel="session-panel" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
             </div>
             <div id="session-list"></div>
+        </div>
+
+        <!-- Rounds Panel (历史轮次) -->
+        <div id="rounds-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                    🔄 历史轮次
+                    <span id="rounds-topic-title" style="font-size:13px; color:var(--text-muted); font-weight:400;"></span>
+                </h3>
+                <button class="close-panel-btn" data-panel="rounds-panel" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+            </div>
+            <div id="rounds-list" style="font-size:13px;">
+                <div class="status-msg">请先开始对话或选择一个历史会话</div>
+            </div>
         </div>
 
         <!-- Model Settings Modal -->

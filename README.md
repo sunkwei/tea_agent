@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 60+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 GUI / TUI / CLI 三种界面。
+Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 60+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **Web / GUI / TUI / CLI** 四种界面。
 
 ---
 
@@ -15,7 +15,8 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 60+ 可调用
 
 - 🧠 **自进化引擎** — Agent 可以修改自身代码、创建新工具、优化提示词，实现自主进化
 - 🧰 **60+ 内置工具** — 涵盖文件操作、代码编辑、搜索、截图、OCR、包管理、Git 等
-- 🖥️ **三态界面** — GUI（Tkinter）、TUI（Textual）、CLI，按需切换
+- 🖥️ **四态界面** — Web（Starlette + SSE）、GUI（Tkinter）、TUI（Textual）、CLI，按需切换
+- 🌐 **Web 实时流式界面** — 浏览器访问，SSE 流式输出，工具调用实时可视化（含参数展示、执行状态动画）
 - 📚 **项目知识库** — 自动构建符号索引、调用图，支持代码影响分析
 - 🔄 **断点续聊** — 聊天记录持久化，重启后恢复上下文
 - 📋 **Plan / TODO** — 内置任务规划与追踪系统
@@ -37,6 +38,9 @@ pip install tea_agent
 git clone https://github.com/sunkwei/tea_agent
 cd tea_agent
 pip install -e .
+
+# Web 界面依赖（可选）
+pip install starlette uvicorn
 ```
 
 Playwright 浏览器（可选，用于 JS 渲染页面抓取）：
@@ -49,6 +53,9 @@ playwright install chromium
 ## 🚀 快速开始
 
 ```bash
+# 启动 Web 界面（浏览器访问 http://127.0.0.1:8080）
+tea-agent-web
+
 # 启动 GUI（默认）
 tea_agent
 
@@ -58,6 +65,58 @@ tea-agent-tui
 # 启动 CLI
 tea-agent-cli
 ```
+
+---
+
+## 💻 Web 界面
+
+Tea Agent 的 Web 界面基于 **Starlette** + **Server-Sent Events (SSE)**，提供与桌面端同等的全功能 LLM 对话体验。
+
+### 启动方式
+
+```bash
+# 方式 1: 命令行入口
+tea-agent-web
+
+# 方式 2: Python 模块
+python -m tea_agent.web
+
+# 自定义端口
+python -m tea_agent.web --port 8099 --host 0.0.0.0
+```
+
+### 界面特性
+
+| 特性 | 说明 |
+|------|------|
+| 🖥️ **流式对话** | SSE 实时推送，逐 token 流式输出，低延迟 |
+| 🧠 **思考过程可视化** | AI 的推理过程实时展开显示，支持折叠 |
+| 🔧 **工具调用可视化** | 详见下方「工具调用实时展示」 |
+| 📝 **Markdown 渲染** | 自动渲染代码块、表格、列表等 |
+| 🌙 **深色主题** | 护眼深色主题，代码高亮 |
+| 📋 **历史会话** | 自动保存，重启后恢复上下文 |
+| 🔄 **断点续聊** | 随时打断 AI，重新提问 |
+
+### 工具调用实时展示
+
+Web 界面优化了工具调用的可视化，逐工具实时展示：
+
+```
+┌─ 🔧 调用工具: toolkit_file ─────────────────⏳─┐
+│  action=read                                          │
+│  filename=tea_agent/config.py                         │
+│  offset=0                                             │
+│  limit=50                                             │
+└────────────────────────────────────────────────────────┘
+```
+
+**展示特性：**
+
+- **实时逐工具** — 每个工具调用立即创建独立卡片，无需等待全部完成
+- **参数完整显示** — 所有参数按 `key=value` 格式完整列出，超长参数智能截断（>500字符显示 `… [剩余 N 字符]`）
+- **执行状态动画** — 执行中显示旋转动画 ⏳，完成后变为 ✅
+- **工具结果** — 工具执行结果自动展开显示
+- **格式** — 等宽字体 + 深色背景，清晰易读
 
 ---
 
@@ -611,8 +670,11 @@ list       → 列出所有技能模式
 | 🔧 系统 | `toolkit_exec`, `toolkit_config`, `toolkit_os_info` |
 | 🧠 记忆/知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_reflection` |
 | 🤖 多 Agent | `Dispatcher`, `LiteAgent`, 并行任务执行 |
+| 🌐 Web 界面 | `toolkit_browser_tab`, `toolkit_dump_topic`, `toolkit_export_last_pdf` |
 
-> 完整列表见 [`docs/TOOLS.md`](docs/TOOLS.md)（每小时自动更新）
+> **Web 界面特性**：工具调用实时展示完整参数、执行状态动画、SSE 流式输出。详见上方 [💻 Web 界面](#-web-界面) 章节。
+>
+> 完整工具列表见 [`docs/TOOLS.md`](docs/TOOLS.md)（每小时自动更新）
 
 ---
 
@@ -659,6 +721,13 @@ Dispatcher.dispatch(goal)
 
 ```
 tea_agent/
+├── web/               # Web 界面（Starlette + SSE）
+│   ├── server.py      # SSE 流式服务器 + 工具参数解析
+│   ├── __main__.py    # python -m tea_agent.web 入口
+│   └── static/        # 前端资源
+│       ├── app.js     # 对话交互、工具可视化、Markdown 渲染
+│       ├── style.css  # 深色主题 + 工具卡片动画
+│       └── index.html # 主页面
 ├── gui.py              # GUI 主界面（Tkinter）
 ├── tui.py              # TUI 界面（Textual）
 ├── cli.py / tlk.py     # CLI 交互

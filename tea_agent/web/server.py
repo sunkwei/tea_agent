@@ -56,10 +56,21 @@ class WebAgent:
                 logger.warning("Failed to push SSE event")
 
         _thinking_active = False
+        _tool_active = False
 
         def stream_cb(text: str):
-            nonlocal _thinking_active
-            if text == "[THINK_DONE]":
+            nonlocal _thinking_active, _tool_active
+            # 工具调用标记
+            if text.startswith("[TOOL_START:"):
+                # [TOOL_START:toolkit_exec]
+                tool_name = text[len("[TOOL_START:"):-1] if text.endswith("]") else text[len("[TOOL_START:"):]
+                _put({"type": "tool_start", "name": tool_name})
+                _tool_active = True
+            elif text == "[TOOL_DONE]":
+                if _tool_active:
+                    _put({"type": "tool_done"})
+                    _tool_active = False
+            elif text == "[THINK_DONE]":
                 _put({"type": "think_done"})
                 _thinking_active = False
             elif text.startswith("[THINK]"):
@@ -124,6 +135,21 @@ class WebAgent:
                 "created": str(t.get("create_stamp", ""))[:19],
                 "updated": str(t.get("last_update_stamp", ""))[:19],
                 "total_tokens": (tokens or {}).get("total_tokens", 0),
+            })
+        return result
+
+    def get_topic_conversations(self, topic_id: str, limit: int = 0) -> list:
+        """获取指定主题下的所有历史对话轮次。"""
+        convs = self.db.get_conversations(topic_id, limit=limit, include_rounds=True)
+        result = []
+        for c in convs:
+            result.append({
+                "id": c["id"],
+                "topic_id": c["topic_id"],
+                "user_msg": c["user_msg"],
+                "ai_msg": c["ai_msg"],
+                "is_func_calling": c["is_func_calling"],
+                "stamp": c["stamp"],
             })
         return result
 
@@ -376,6 +402,51 @@ async def handle_sessions(request):
     return JSONResponse({"sessions": sessions})
 
 
+async def handle_topic_conversations(request):
+    """获取指定主题下的所有历史对话轮次。
+    GET /api/topic/{topic_id}/conversations
+    """
+    agent = get_agent()
+    topic_id = request.path_params.get("topic_id", "")
+    if not topic_id:
+        return JSONResponse({"error": "topic_id 不能为空"}, status_code=400)
+    limit = int(request.query_params.get("limit", 0))
+    try:
+        convs = agent.get_topic_conversations(topic_id, limit=limit)
+        return JSONResponse({"conversations": convs, "count": len(convs)})
+    except Exception as e:
+        logger.exception("获取主题对话失败")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def handle_topic_info(request):
+    """获取指定主题的详细信息。
+    GET /api/topic/{topic_id}
+    """
+    agent = get_agent()
+    topic_id = request.path_params.get("topic_id", "")
+    if not topic_id:
+        return JSONResponse({"error": "topic_id 不能为空"}, status_code=400)
+    try:
+        topic = agent.agent.db.get_topic(topic_id)
+        if not topic:
+            return JSONResponse({"error": "主题不存在"}, status_code=404)
+        tokens = agent.agent.db.get_topic_tokens(topic_id)
+        return JSONResponse({
+            "topic": {
+                "id": topic["topic_id"],
+                "title": topic.get("title", ""),
+                "created": str(topic.get("create_stamp", "")),
+                "updated": str(topic.get("last_update_stamp", "")),
+                "total_tokens": tokens.get("total_tokens", 0),
+                "conversation_count": tokens.get("conversation_count", 0),
+            }
+        })
+    except Exception as e:
+        logger.exception("获取主题信息失败")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 async def handle_config(request):
     agent = get_agent()
     return JSONResponse(agent.get_config_info())
@@ -535,6 +606,8 @@ def create_app(config_path: Optional[str] = None):
         Route("/api/chat", endpoint=handle_chat, methods=["POST"]),
         Route("/api/new_topic", endpoint=handle_new_topic, methods=["POST"]),
         Route("/api/sessions", endpoint=handle_sessions),
+        Route("/api/topic/{topic_id:str}/conversations", endpoint=handle_topic_conversations),
+        Route("/api/topic/{topic_id:str}", endpoint=handle_topic_info),
         Route("/api/config", endpoint=handle_config),
         Route("/api/configs", endpoint=handle_list_configs),
         Route("/api/config/create", endpoint=handle_create_config, methods=["POST"]),

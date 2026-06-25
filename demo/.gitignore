@@ -1,0 +1,23 @@
+# Generated animations (HTML/MP4)
+*.mp4
+# Generated animations
+data/animations/*.html
+*.mp4
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Frames cache
+.frames/
+__pycache__/
+*.pyc
+*.bak
+*.bak*
+*.tmp
+
+# Keep structure but not generated files
+data/animations/*
+data/videos/*
+!data/animations/.gitkeep
+!data/videos/.gitkeep

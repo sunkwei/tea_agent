@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>动画画布</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0a}
+canvas{display:block;width:100%;height:100%}
+#info{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    color:rgba(255,255,255,0.3);font:14px monospace;
+    pointer-events:none;text-align:center;z-index:1}
+#startOverlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,0.85);z-index:999;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;transition:opacity 0.6s;color:#fff;
+  font-family:"Microsoft YaHei",sans-serif;
+}
+#startOverlay.hidden{opacity:0;pointer-events:none}
+#startOverlay .btn{
+  font-size:clamp(24px,5vw,48px);padding:clamp(12px,2vw,24px) clamp(24px,4vw,48px);
+  border:2px solid rgba(255,255,255,0.3);border-radius:16px;
+  background:rgba(255,255,255,0.08);cursor:pointer;transition:all 0.3s;
+  margin:16px;text-align:center;
+}
+#startOverlay .btn:hover{background:rgba(255,255,255,0.18);border-color:rgba(255,255,255,0.6);transform:scale(1.05)}
+#startOverlay .hint{font-size:clamp(13px,2vw,18px);color:rgba(255,255,255,0.4);margin-top:12px}
+#startOverlay .title{font-size:clamp(18px,3.5vw,32px);font-weight:bold;margin-bottom:8px;
+  background:linear-gradient(90deg,#ff6b6b,#ffd93d,#6bcbff,#a66cff);-webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;background-clip:text}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="info">● {{DESCRIPTION}} ● {{DURATION}}s</div>
+<!-- 点击启动浮层 -->
+<div id="startOverlay">
+  <div class="title" id="animTitle">🎬 {{DESCRIPTION}}</div>
+  <div class="btn" id="playBtn">▶ 点击开始</div>
+  <div class="hint"><span id="ttsHint">🔊 含语音旁白</span> · {{DURATION}}秒</div>
+</div>
+<script>
+const CONFIG={{CONFIG_JSON}};
+const DISABLE_TTS = CONFIG.tts === false;
+const CA=document.getElementById('c'),CX=CA.getContext('2d');
+let W,H,cx,cy,stT=0;
+window.addEventListener('resize',()=>{W=CA.width=window.innerWidth;H=CA.height=window.innerHeight;cx=W/2;cy=H/2});
+window.dispatchEvent(new Event('resize'));
+
+function clamp(v,mn,mx){return Math.max(mn,Math.min(mx,v))}
+function rand(a,b){return Math.random()*(b-a)+a}
+function easeOut(t){return 1-Math.pow(1-t,3)}
+const hsl=(h,s,l)=>'hsl('+h+','+s+'%,'+l+'%)';
+const hsla=(h,s,l,a)=>'hsla('+h+','+s+'%,'+l+'%,'+a+')';
+
+function rc(C,x,y,w,h,r){
+  r=Math.min(r,w/2,h/2);C.beginPath();
+  C.moveTo(x+r,y);C.lineTo(x+w-r,y);C.quadraticCurveTo(x+w,y,x+w,y+r);
+  C.lineTo(x+w,y+h-r);C.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  C.lineTo(x+r,y+h);C.quadraticCurveTo(x,y+h,x,y+h-r);
+  C.lineTo(x,y+r);C.quadraticCurveTo(x,y,x+r,y);C.closePath();
+}
+const frc=(C,x,y,w,h,r,cl)=>{rc(C,x,y,w,h,r);C.fillStyle=cl;C.fill()};
+
+function drawBg(colors){
+  const g=CX.createRadialGradient(cx,cy,0,cx,cy,Math.max(W,H)*0.8);
+  if(typeof colors==='string')colors=[colors,colors];
+  for(let i=0;i<colors.length;i++)g.addColorStop(i/(colors.length-1||1),colors[i]);
+  CX.fillStyle=g;CX.fillRect(0,0,W,H);
+}
+
+// ── 拟人化眼口 ──
+function drEyes(C,x,y,r,dx,dy,blink,big){
+  if(blink<0.92){C.strokeStyle='#222';C.lineWidth=r*0.3;
+    C.beginPath();C.moveTo(x-r*0.8,y);C.lineTo(x+r*0.8,y);C.stroke();return;}
+  const s=big?1.35:1;
+  C.fillStyle='#fff';C.beginPath();C.ellipse(x,y,r*s,r*1.15*s,0,0,Math.PI*2);C.fill();
+  C.fillStyle='#222';C.beginPath();
+  C.ellipse(x+dx*r*0.35*s,y+dy*r*0.3*s,r*0.48*s,r*0.55*s,0,0,Math.PI*2);C.fill();
+  C.fillStyle='#fff';C.beginPath();
+  C.arc(x+dx*r*0.35*s+r*0.2*s,y+dy*r*0.3*s-r*0.2*s,r*0.17*s,0,Math.PI*2);C.fill();
+}
+function drMouth(C,x,y,s,type){
+  if(type==='smile'){C.strokeStyle='#222';C.lineWidth=s*0.12;C.lineCap='round';
+    C.beginPath();C.arc(x,y+s*0.15,s*0.35,0.1,Math.PI-0.1);C.stroke()}
+  else if(type==='open'){C.fillStyle='#333';C.beginPath();C.ellipse(x,y+s*0.1,s*0.25,s*0.3,0,0,Math.PI*2);C.fill();
+    C.fillStyle='#a00';C.beginPath();C.ellipse(x,y+s*0.15,s*0.12,s*0.2,0,0,Math.PI*2);C.fill()}
+  else if(type==='wow'){C.fillStyle='#222';C.beginPath();C.ellipse(x,y,s*0.3,s*0.4,0,0,Math.PI*2);C.fill()}
+  else if(type==='happy'){C.fillStyle='#333';C.beginPath();C.arc(x,y+s*0.1,s*0.35,0,Math.PI);C.fill()}
+}
+
+// ============================================================
+// 📱 卡通拟人化手机 — 大哥大
+// ============================================================
+function pBrick(C,sc,T,emo){
+  const w=80*sc,h=155*sc,r=10*sc,bl=Math.abs(Math.sin(T*2.5));
+  const eR=6*sc,eY=-h/2+55*sc,eSp=28*sc,dx=Math.sin(T*0.3)*0.3,dy=Math.cos(T*0.2)*0.2;
+  C.save();C.translate(0,Math.sin(T*1.3)*4*sc);C.rotate(Math.sin(T*1.2)*0.02);
+  // 天线手臂
+  C.strokeStyle='#777';C.lineWidth=3.5*sc;C.lineCap='round';
+  C.beginPath();C.moveTo(-w/2+15*sc,-h/2-5*sc);
+  C.quadraticCurveTo(-w/2-30*sc,-h/2-35*sc,-w/2-25*sc,-h/2-55*sc+Math.sin(T*2)*6*sc);C.stroke();
+  C.fillStyle='#888';C.beginPath();C.arc(-w/2-25*sc,-h/2-55*sc+Math.sin(T*2)*6*sc,5*sc,0,Math.PI*2);C.fill();
+  C.strokeStyle='#777';C.lineWidth=3*sc;
+  C.beginPath();C.moveTo(w/2-10*sc,-h/2+5*sc);
+  C.quadraticCurveTo(w/2+25*sc,-h/2-15*sc,w/2+20*sc,-h/2-40*sc+Math.sin(T*1.7)*5*sc);C.stroke();
+  C.fillStyle='#888';C.beginPath();C.arc(w/2+20*sc,-h/2-40*sc+Math.sin(T*1.7)*5*sc,4*sc,0,Math.PI*2);C.fill();
+  // 机身
+  C.shadowColor='rgba(0,0,0,0.6)';C.shadowBlur=25*sc;
+  const bg=C.createLinearGradient(-w/2,-h/2,-w/2,h/2);
+  bg.addColorStop(0,'#555');bg.addColorStop(0.3,'#333');bg.addColorStop(1,'#111');
+  frc(C,-w/2,-h/2,w,h,r,bg);C.shadowBlur=0;
+  C.strokeStyle='#666';C.lineWidth=2*sc;rc(C,-w/2,-h/2,w,h,r);C.stroke();
+  frc(C,-w/2+12*sc,-h/2+18*sc,w-24*sc,28*sc,3*sc,'#121a0a');
+  C.strokeStyle='#2a4a1a';C.lineWidth=1;rc(C,-w/2+12*sc,-h/2+18*sc,w-24*sc,28*sc,3*sc);C.stroke();
+  C.fillStyle='#3a8a1a';C.font=7*sc+'px monospace';C.textAlign='left';C.textBaseline='middle';
+  C.fillText('MOTOROLA',-w/2+16*sc,-h/2+26*sc);C.fillText('87.01.23',-w/2+16*sc,-h/2+36*sc);
+  const kw=(w-30*sc)/3,kh=13*sc,gp=4*sc,sx=-w/2+14*sc,sy=-h/2+56*sc;
+  for(let r=0;r<4;r++)for(let c=0;c<3;c++){frc(C,sx+c*(kw+gp),sy+r*(kh+gp),kw,kh,3*sc,'#444');C.strokeStyle='#666';C.lineWidth=1;rc(C,sx+c*(kw+gp),sy+r*(kh+gp),kw,kh,3*sc);C.stroke()}
+  C.fillStyle='#777';C.font=8*sc+'px Arial';C.textAlign='center';C.fillText('DynaTAC',0,h/2-12*sc);
+  frc(C,-15*sc,-h/2+3*sc,30*sc,6*sc,3*sc,'#222');
+  // 表情
+  drEyes(C,-eSp,eY,eR,dx,dy,bl,true);drEyes(C,eSp,eY,eR,dx,dy,bl,true);
+  drMouth(C,0,eY+eR*2.8,eR*2.5,emo||'smile');
+  C.restore();
+}
+
+// ============================================================
+// 📱 卡通拟人化手机 — 翻盖
+// ============================================================
+function pFlip(C,sc,T,emo){
+  const w=70*sc,hB=75*sc,r=8*sc,bl=Math.abs(Math.sin(T*3));
+  const eR=5*sc,eY=-8*sc,eSp=22*sc,dx=Math.sin(T*0.4)*0.2,dy=Math.cos(T*0.3)*0.2;
+  C.save();C.translate(0,Math.sin(T*1.8)*3*sc);
+  const bg=C.createLinearGradient(-w/2,0,-w/2,hB);bg.addColorStop(0,'#3a4a6a');bg.addColorStop(1,'#1a2a4a');
+  frc(C,-w/2,0,w,hB,r,bg);
+  const kw=(w-24*sc)/3,kh=10*sc,gp=3*sc,sx=-w/2+12*sc,sy=10*sc;
+  for(let r=0;r<4;r++)for(let c=0;c<3;c++)frc(C,sx+c*(kw+gp),sy+r*(kh+gp),kw,kh,3*sc,'#2a3a5a');
+  C.beginPath();C.arc(0,sy+50*sc,12*sc,0,Math.PI*2);C.fillStyle='#2a3a5a';C.fill();
+  C.fillStyle='#5a7a9a';C.font=7*sc+'px Arial';C.textAlign='center';C.fillText('OK',0,sy+50*sc);
+  // 翻盖屏幕
+  C.save();C.translate(-w/2-5*sc,-45*sc);C.rotate(-0.08);
+  frc(C,0,0,w+10*sc,50*sc,6*sc,'#2a3a5a');frc(C,4,4,w+2*sc,42*sc,3*sc,'#0a1a3a');
+  C.fillStyle='#4a8aff';C.font=5*sc+'px monospace';C.textAlign='left';C.fillText('12:00',10,18*sc);C.restore();
+  C.fillStyle='#4a5a6a';C.fillRect(-5*sc,-2*sc,10*sc,6*sc);
+  // 表情
+  C.save();C.translate(0,6*sc+Math.sin(T*1.5)*2*sc);
+  drEyes(C,-eSp,eY,eR,dx,dy,bl,false);drEyes(C,eSp,eY,eR,dx,dy,bl,false);
+  drMouth(C,0,eY+eR*2.5,eR*2.2,emo||'smile');C.restore();C.restore();
+}
+
+// ============================================================
+// 📱 卡通拟人化手机 — 按键机
+// ============================================================
+function pCandy(C,sc,T,emo){
+  const w=72*sc,h=140*sc,r=12*sc,bl=Math.abs(Math.sin(T*2.8));
+  const eR=5.5*sc,eY=-h/2+45*sc,eSp=25*sc,dx=Math.sin(T*0.5)*0.4,dy=Math.cos(T*0.4)*0.3;
+  C.save();C.translate(0,Math.sin(T*2)*4*sc);C.rotate(Math.sin(T*1.5)*0.03);
+  C.shadowColor='rgba(0,0,0,0.5)';C.shadowBlur=20*sc;
+  const bg=C.createLinearGradient(-w/2,-h/2,-w/2,h/2);
+  bg.addColorStop(0,'#2a2a3a');bg.addColorStop(0.3,'#1a1a2a');bg.addColorStop(1,'#0a0a1a');
+  frc(C,-w/2,-h/2,w,h,r,bg);C.shadowBlur=0;
+  frc(C,-w/2+8*sc,-h/2+12*sc,w-16*sc,55*sc,5*sc,'#0a0a1a');
+  C.strokeStyle='#3a4a6a';C.lineWidth=1.5*sc;rc(C,-w/2+8*sc,-h/2+12*sc,w-16*sc,55*sc,5*sc);C.stroke();
+  C.fillStyle='#6a9aff';C.font=7*sc+'px monospace';C.textAlign='left';C.textBaseline='top';
+  C.fillText('NOKIA',-w/2+14*sc,-h/2+17*sc);C.fillStyle='#4a7a3a';C.font=10*sc+'px sans-serif';
+  C.fillText('🐍贪吃蛇',-w/2+14*sc,-h/2+32*sc);
+  const kw=(w-28*sc)/3,kh=11*sc,gp=3*sc,sx=-w/2+14*sc,sy=-h/2+78*sc;
+  const keys=['1','2','3','4','5','6','7','8','9','*','0','#'];
+  for(let r=0;r<4;r++)for(let c=0;c<3;c++){frc(C,sx+c*(kw+gp),sy+r*(kh+gp),kw,kh,4*sc,'#3a3a4a');C.fillStyle='#8a8a9a';C.font=6*sc+'px Arial';C.textAlign='center';C.textBaseline='middle';C.fillText(keys[r*3+c],sx+c*(kw+gp)+kw/2,sy+r*(kh+gp)+kh/2)}
+  drEyes(C,-eSp,eY,eR,dx,dy,bl,true);drEyes(C,eSp,eY,eR,dx,dy,bl,true);
+  drMouth(C,0,eY+eR*2.6,eR*2.4,emo||'happy');C.restore();
+}
+
+// ============================================================
+// 📱 卡通拟人化手机 — 触屏
+// ============================================================
+function pTouch(C,sc,T,emo){
+  const w=80*sc,h=155*sc,r=16*sc,bl=Math.abs(Math.sin(T*2.2));
+  const eR=6*sc,eY=-h/2+32*sc,eSp=28*sc,dx=Math.sin(T*0.3)*0.5,dy=Math.cos(T*0.2)*0.3;
+  C.save();C.translate(0,Math.sin(T*1.6)*3*sc);C.rotate(Math.sin(T*0.8)*0.01);
+  C.shadowColor='rgba(0,0,0,0.6)';C.shadowBlur=25*sc;
+  const bg=C.createLinearGradient(-w/2,-h/2,-w/2,h/2);
+  bg.addColorStop(0,'#1a1a1a');bg.addColorStop(0.1,'#0a0a0a');bg.addColorStop(1,'#000');
+  frc(C,-w/2,-h/2,w,h,r,bg);C.shadowBlur=0;
+  C.strokeStyle='rgba(100,150,255,0.15)';C.lineWidth=1.5*sc;rc(C,-w/2,-h/2,w,h,r);C.stroke();
+  frc(C,-w/2+5*sc,-h/2+6*sc,w-10*sc,h-12*sc,10*sc,'#000811');
+  const scr=C.createLinearGradient(-w/2+6*sc,-h/2+7*sc,-w/2+6*sc,-h/2+7*sc+h-14*sc);
+  scr.addColorStop(0,'rgba(30,60,120,0.6)');scr.addColorStop(0.5,'rgba(10,20,40,0.8)');scr.addColorStop(1,'rgba(5,10,20,0.9)');
+  frc(C,-w/2+6*sc,-h/2+7*sc,w-12*sc,h-14*sc,8*sc,scr);
+  frc(C,-25*sc,-h/2+8*sc,50*sc,18*sc,8*sc,'#000');
+  C.fillStyle='#fff';C.font=8*sc+'px Arial';C.textAlign='center';C.textBaseline='middle';C.fillText('09:41',0,-h/2+21*sc);
+  const apS=12*sc,apG=5*sc,apY=-h/2+52*sc,apps=['●','■','▲','◆','★','◉'],clrs=['#ff453a','#ff9a0a','#30d158','#64d2ff','#bf5af2','#fff'];
+  for(let i=0;i<3;i++){frc(C,-w/2+18*sc+i*(apS+apG),apY,apS,apS,3*sc,clrs[i]);C.fillStyle='#fff';C.font=6*sc+'px Arial';C.textAlign='center';C.fillText(apps[i],-w/2+18*sc+i*(apS+apG)+apS/2,apY+apS/2+2*sc);frc(C,-w/2+18*sc+i*(apS+apG),apY+apS+apG,apS,apS,3*sc,clrs[i+3]);C.fillText(apps[i+3],-w/2+18*sc+i*(apS+apG)+apS/2,apY+apS+apG+apS/2+2*sc)}
+  frc(C,-30*sc,h/2-12*sc,60*sc,5*sc,2.5*sc,'rgba(255,255,255,0.3)');
+  drEyes(C,-eSp,eY,eR,dx,dy,bl,false);drEyes(C,eSp,eY,eR,dx,dy,bl,false);
+  drMouth(C,0,eY+eR*2.6,eR*2.5,emo||'smile');C.restore();
+}
+
+// ============================================================
+// 📱 卡通拟人化手机 — 折叠屏
+// ============================================================
+function pFold(C,sc,T,emo){
+  const w=90*sc,h=75*sc,r=12*sc,bl=Math.abs(Math.sin(T*2));
+  const eR=5*sc,eY=-h/2+22*sc,eSp=24*sc,dx=Math.sin(T*0.4)*0.3,dy=Math.cos(T*0.3)*0.2;
+  C.save();C.translate(0,Math.sin(T*1.2)*3*sc);C.rotate(Math.sin(T*0.6)*0.02);
+  const unfold=Math.min(T/1.5,1);C.scale(0.85+unfold*0.15,1);
+  C.shadowColor='rgba(0,0,0,0.5)';C.shadowBlur=20*sc;
+  const bgL=C.createLinearGradient(-w/2,0,-w/2,h);bgL.addColorStop(0,'#1a1a2a');bgL.addColorStop(1,'#0a0a1a');
+  frc(C,-w/2,-h/2,w/2-r/2,h,r,bgL);
+  const bgR=C.createLinearGradient(0,0,0,h);bgR.addColorStop(0,'#1a1a2a');bgR.addColorStop(1,'#0a0a1a');
+  frc(C,-r/2,-h/2,w/2+r/2,h,r,bgR);C.shadowBlur=0;
+  C.fillStyle='#2a2a3a';C.fillRect(-3*sc,-h/2+5*sc,6*sc,h-10*sc);
+  C.fillStyle='rgba(255,255,255,0.1)';C.fillRect(-1*sc,-h/2+5*sc,2*sc,h-10*sc);
+  C.fillStyle='#4a8aff';C.font=6*sc+'px Arial';C.textAlign='center';C.textBaseline='middle';C.fillText('折叠',-w/4-r/4,0);
+  C.fillStyle='#ffd64a';C.fillText('未来',w/4-r/4,0);
+  C.strokeStyle='rgba(100,150,255,0.2)';C.lineWidth=1*sc;rc(C,-w/2,-h/2,w/2-r/2,h,r);C.stroke();
+  C.strokeStyle='rgba(100,150,255,0.2)';rc(C,-r/2,-h/2,w/2+r/2,h,r);C.stroke();
+  C.fillStyle='#222';C.beginPath();C.arc(w/2-15*sc,-h/2+12*sc,3*sc,0,Math.PI*2);C.fill();
+  drEyes(C,-eSp,eY,eR,dx,dy,bl,true);drEyes(C,eSp,eY,eR,dx,dy,bl,true);
+  drMouth(C,0,eY+eR*2.6,eR*2.5,emo||'happy');C.restore();
+}
+
+
+
+// ============================================================
+// 🎨 DSL 元素渲染 — 形状/文字/Emoji/动画
+// ============================================================
+
+// 动画插值
+function calcAnimValue(el, prop, sceneTime, defaultVal){
+  const anims=el.animations||[];
+  let baseVal = el[prop]!==undefined?el[prop]:defaultVal;
+  for(const a of anims){
+    if(a.prop!==prop)continue;
+    const dur=a.duration||(sceneTime+0.01);
+    const delay=a.delay||0;
+    let t=clamp((sceneTime-delay)/dur,0,1);
+    if(t<=0)return (a.from!==undefined?a.from:baseVal)||defaultVal||0;
+    if(t>=1){
+      if(a.loop){var loopT=(sceneTime-delay)%(dur*2);var normT=loopT<dur?loopT:(dur*2-loopT);return calcAnimValue(el,prop,normT+delay);}
+      return (a.to!==undefined?a.to:baseVal)||defaultVal||0;
+    }
+    const from=a.from!==undefined?a.from:baseVal;
+    const to=a.to!==undefined?a.to:baseVal;
+    const eased={linear:t,easeOut:1-Math.pow(1-t,3),easeIn:t*t*t,easeInOut:t<0.5?2*t*t:-1+(4-2*t)*t,bounce:1-Math.abs(Math.sin(3.14*t*2.5))*Math.pow(1-t,2),elastic:Math.pow(2,-10*t)*Math.sin((t*10-0.75)*2*3.14/3)+1,backOut:(t-=1)*t*((1.70158+1)*t+1.70158)+1,backInOut:t<0.5?(t*=2)*t*((1.70158*1.525+1)*t-1.70158*1.525)/2:(t=t*2-2)*t*((1.70158*1.525+1)*t+1.70158*1.525)/2+1}[a.easing]||t;
+    return from+(to-from)*eased;
+  }
+  return baseVal!==undefined?baseVal:(defaultVal||0);
+}
+
+// 绘制形状
+
+// 贝塞尔路径插值
+function bezierPath(t,pts){
+  if(!pts||pts.length<2)return {x:0,y:0};
+  if(t>=1)return {x:pts[pts.length-1].x,y:pts[pts.length-1].y};
+  if(t<=0)return {x:pts[0].x,y:pts[0].y};
+  if(pts.length===2)return {x:lerp(pts[0].x,pts[1].x,t),y:lerp(pts[0].y,pts[1].y,t)};
+  if(pts.length===3){var u=1-t;return {x:u*u*pts[0].x+2*u*t*pts[1].x+t*t*pts[2].x,y:u*u*pts[0].y+2*u*t*pts[1].y+t*t*pts[2].y};}
+  var segs=pts.length-1,seg=Math.min(Math.floor(t*segs),segs-1),lt=(t*segs)-seg;
+  var p0=pts[seg],p3=pts[seg+1],p1=pts[Math.max(0,seg-1)]||p0,p2=pts[Math.min(segs,seg+2)]||p3;
+  var b1x=p0.x+(p1.x-p0.x)/6,b1y=p0.y+(p1.y-p0.y)/6;
+  var b2x=p3.x+(p2.x-p3.x)/6,b2y=p3.y+(p2.y-p3.y)/6;
+  var u2=1-lt;
+  return {x:u2*u2*u2*p0.x+3*u2*u2*lt*b1x+3*u2*lt*lt*b2x+lt*lt*lt*p3.x,y:u2*u2*u2*p0.y+3*u2*u2*lt*b1y+3*u2*lt*lt*b2y+lt*lt*lt*p3.y};
+}
+// 元素位置（支持路径动画）
+function getElPos(el,prop,st,defVal){
+  var pathAnim=(el.animations||[]).find(function(a){return a.prop==='path'});
+  if(prop==='x'&&pathAnim){
+    var dur=pathAnim.duration||1,t=clamp(st/dur,0,1),eased={linear:t,easeOut:1-Math.pow(1-t,3),easeIn:t*t*t}[pathAnim.easing]||t;
+    return bezierPath(eased,pathAnim.points).x*W;
+  }
+  if(prop==='y'&&pathAnim){
+    var dur=pathAnim.duration||1,t=clamp(st/dur,0,1),eased={linear:t,easeOut:1-Math.pow(1-t,3),easeIn:t*t*t}[pathAnim.easing]||t;
+    return bezierPath(eased,pathAnim.points).y*H;
+  }
+  return calcAnimValue(el,prop,st,defVal);
+}
+function drawShapeEl(C,el,sc,st){
+  const x=getElPos(el,'x',st,el.x*W);
+  const y=getElPos(el,'y',st,el.y*H);
+  const r=calcAnimValue(el,'r',st,0);
+  const w=calcAnimValue(el,'w',st,0)||(r*2);
+  const h=calcAnimValue(el,'h',st,0)||(r*2);
+  const op=calcAnimValue(el,'opacity',st,1);
+  const rot=calcAnimValue(el,'rotation',st,0);
+  const sx=calcAnimValue(el,'scaleX',st,1);
+  const sy=calcAnimValue(el,'scaleY',st,1);
+  C.save();C.globalAlpha*=op;
+  C.translate(x,y);C.rotate(rot*Math.PI/180);C.scale(sx,sy);
+  const fill=el.fill||'#fff',stroke=el.stroke||null,sw=el.strokeWidth||0;
+  const shape=el.shape||'circle';
+  if(shape==='circle'){
+    C.beginPath();C.arc(0,0,r*sc,0,Math.PI*2);
+    if(fill){C.fillStyle=fill;C.fill()}
+    if(stroke){C.strokeStyle=stroke;C.lineWidth=sw*sc;C.stroke()}
+  }else if(shape==='rect'){
+    const wr=w*sc/2,hr=h*sc/2;
+    if(fill){frc(C,-wr,-hr,w*sc,h*sc,Math.min(w*sc*0.15,h*sc*0.15),fill)}
+    if(stroke){C.strokeStyle=stroke;C.lineWidth=sw*sc;rc(C,-wr,-hr,w*sc,h*sc,Math.min(w*sc*0.15,h*sc*0.15));C.stroke()}
+  }else if(shape==='triangle'){
+    const s=w*sc/2;
+    C.beginPath();C.moveTo(0,-s);C.lineTo(-s,s);C.lineTo(s,s);C.closePath();
+    if(fill){C.fillStyle=fill;C.fill()}
+    if(stroke){C.strokeStyle=stroke;C.lineWidth=sw*sc;C.stroke()}
+  }else if(shape==='star'){
+    const s=w*sc/2;
+    C.beginPath();for(let i=0;i<10;i++){const a=i*Math.PI/5-Math.PI/2;const r2=i%2===0?s:s*0.45;C.lineTo(Math.cos(a)*r2,Math.sin(a)*r2)}
+    C.closePath();
+    if(fill){C.fillStyle=fill;C.fill()}
+    if(stroke){C.strokeStyle=stroke;C.lineWidth=sw*sc;C.stroke()}
+  }else if(shape==='heart'){
+    const s=w*sc/2;
+    C.beginPath();for(let t=0;t<=Math.PI*2;t+=0.05){const x2=16*Math.pow(Math.sin(t),3);const y2=13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t);C.lineTo(x2*(s/16),-y2*(s/16))}
+    C.closePath();
+    if(fill){C.fillStyle=fill;C.fill()}
+    if(stroke){C.strokeStyle=stroke;C.lineWidth=sw*sc;C.stroke()}
+  }else if(shape==='polygon'){
+    const s=w*sc/2,sides=el.sides||6;
+    C.beginPath();for(let i=0;i<=sides;i++){const a=i/sides*Math.PI*2-Math.PI/2;C.lineTo(Math.cos(a)*s,Math.sin(a)*s)}
+    C.closePath();
+    if(fill){C.fillStyle=fill;C.fill()}
+    if(stroke){C.strokeStyle=stroke;C.lineWidth=sw*sc;C.stroke()}
+  }
+  C.restore();
+}
+
+// 绘制文字
+function drawTextEl(C,el,sc,st){
+  const x=el.x*W,y=el.y*H;
+  const op=calcAnimValue(el,'opacity',st,1);
+  const rot=calcAnimValue(el,'rotation',st,0);
+  C.save();C.globalAlpha*=op;
+  C.translate(x,y);C.rotate(rot*Math.PI/180);
+  C.fillStyle=el.fill||'#fff';
+  C.font=(el.fontSize||24)+'px '+(el.font||'"Microsoft YaHei",sans-serif');
+  C.textAlign='center';C.textBaseline='middle';
+  C.fillText(el.text||'',0,0);
+  C.restore();
+}
+
+// 绘制 Emoji
+function drawEmojiEl(C,el,sc,st){
+  const x=el.x*W,y=el.y*H;
+  const op=calcAnimValue(el,'opacity',st,1);
+  const rot=calcAnimValue(el,'rotation',st,0);
+  C.save();C.globalAlpha*=op;
+  C.translate(x,y);C.rotate(rot*Math.PI/180);
+  C.font=(el.fontSize||50)+'px "Segoe UI Emoji","Apple Color Emoji",sans-serif';
+  C.textAlign='center';C.textBaseline='middle';
+  C.fillText(el.emoji||'',0,0);
+  C.restore();
+}
+
+// 渲染场景元素
+function drawImageEl(C,el,sc,st){
+  if(!el._img&&(el.src_base64||el.src)){el._img=new Image();el._img.src=el.src_base64||el.src||''}
+  var img=el._img;if(!img||!img.complete)return;
+  var x=getElPos(el,'x',st,el.x*W),y=getElPos(el,'y',st,el.y*H);
+  var w=(el.w||100)*sc,h=(el.h||100)*sc;
+  var op=calcAnimValue(el,'opacity',st,1),rot=calcAnimValue(el,'rotation',st,0);
+  var sx=calcAnimValue(el,'scaleX',st,1),sy=calcAnimValue(el,'scaleY',st,1);
+  C.save();C.globalAlpha*=op;C.translate(x,y);C.rotate(rot*Math.PI/180);C.scale(sx,sy);
+  C.drawImage(img,-w/2,-h/2,w,h);C.restore();
+}
+function drawGroupEl(C,el,sc,st){
+  var x=(el.x||0.5)*W,y=(el.y||0.5)*H;
+  var op=calcAnimValue(el,'opacity',st,1),rot=calcAnimValue(el,'rotation',st,0);
+  var sx=calcAnimValue(el,'scaleX',st,1),sy=calcAnimValue(el,'scaleY',st,1);
+  C.save();C.globalAlpha*=op;C.translate(x,y);C.rotate(rot*Math.PI/180);C.scale(sx,sy);
+  drawSceneElements(C,el.children||[],sc,st,true);C.restore();
+}
+function drawSceneElements(C,els,sc,st,isSub){
+  for(const el of els){
+    var t=el.type||'shape';
+    if(t==='shape')drawShapeEl(C,el,sc,st);
+    else if(t==='text'){if(!isSub)drawTextEl(C,el,sc,st)}
+    else if(t==='emoji')drawEmojiEl(C,el,sc,st);
+    else if(t==='image')drawImageEl(C,el,sc,st);
+    else if(t==='group')drawGroupEl(C,el,sc,st);
+  }
+}
+const PHONE_FN={brick:pBrick,flip:pFlip,candy:pCandy,touch:pTouch,fold:pFold};
+
+// ============================================================
+// 📖 故事引擎（修复版）
+// ============================================================
+
+// ============================================================
+// 🔊 TTS 语音合成 (需用户点击启动)
+// ============================================================
+let _ttsReady=false;
+const TTS={
+  init(){
+    if(!window.speechSynthesis){console.warn('TTS unsupported');return}
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.onvoiceschanged=()=>{_ttsReady=true};
+    _ttsReady=true;
+    try{window.speechSynthesis.cancel()}catch(e){}
+  },
+  speak(text){
+    if(DISABLE_TTS||!text||!window.speechSynthesis)return;
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='zh-CN';u.rate=1.2;u.pitch=1.05;
+    const v=window.speechSynthesis.getVoices();
+    const zh=v.find(v=>v.lang.startsWith('zh'));
+    if(zh)u.voice=zh;
+    window.speechSynthesis.speak(u);
+  },
+  stop(){if(window.speechSynthesis)window.speechSynthesis.cancel()}
+};
+const STORY={
+  scenes:CONFIG.scenes||[],idx:0,t:0,fin:false,
+  reset(){this.idx=0;this.t=0;this.fin=false},
+  update(dt){
+    if(this.fin)return;
+    this.t+=dt;
+    const s=this.scenes[this.idx];
+    if(!s)return;
+    if(this.t>=(s.dur||4)){
+      this.t=0;this.idx++;
+      if(this.idx>=this.scenes.length){this.idx=this.scenes.length-1;this.fin=true;}
+    }
+  },
+  cur(){return this.scenes[this.idx]||this.scenes[this.scenes.length-1]},
+  prog(){const s=this.cur();return Math.min(this.t/(s.dur||4),1)},
+  draw(){
+    const s=this.cur(),sp=this.prog(),sc=Math.min(W,H)/420;
+    drawBg(s.bg||['#0a0a1a','#1a0a2a']);
+    // 入场动效
+    const ei=Math.min(sp*2,1),alpha=easeOut(Math.min(sp*1.5,1));
+    const s2=0.4+0.6*easeOut(ei);
+    CX.save();CX.globalAlpha=alpha;
+    CX.translate(cx,cy);CX.scale(s2,s2);CX.translate(-cx,-cy);
+    // 绘制手机 (原有)
+    const fn=PHONE_FN[s.phone];
+    if(fn){
+      CX.save();
+      CX.translate(cx,cy*0.5);
+      fn(CX,sc*0.85,this.t,s.emote||'smile');
+      CX.restore();
+    }
+    // 绘制 DSL 元素 (新增)
+    if(s.elements&&s.elements.length>0){
+      drawSceneElements(CX,s.elements,sc,this.t);
+    }
+    CX.restore();
+    // 文字
+    this.text(s,sp,sc);
+  },
+  text(s,sp,sc){
+    const tp=clamp((sp-0.05)/0.2,0,1);
+    const dp=clamp((sp-0.15)/0.25,0,1);
+    // 年份水印
+    if(s.year){
+      CX.save();CX.globalAlpha=easeOut(tp)*0.1;
+      CX.fillStyle='#fff';CX.font=Math.min(W,H)*0.1+'px Arial';
+      CX.textAlign='center';CX.textBaseline='middle';
+      CX.fillText(s.year,cx,cy+H*0.04);CX.restore();
+    }
+    // 标题
+    if(s.title){
+      CX.save();CX.globalAlpha=easeOut(tp);
+      CX.fillStyle='#fff';CX.font='bold '+(sc*22)+'px \"Microsoft YaHei\",sans-serif';
+      CX.textAlign='center';CX.textBaseline='middle';
+      CX.shadowColor='rgba(0,0,0,0.7)';CX.shadowBlur=8;
+      CX.fillText(s.title,cx,H*0.06);CX.shadowBlur=0;CX.restore();
+      if(s.sub){
+        CX.save();CX.globalAlpha=easeOut(clamp((sp-0.1)/0.25,0,1))*0.8;
+        CX.fillStyle='#8ab4f8';CX.font=(sc*12)+'px \"Microsoft YaHei\",sans-serif';
+        CX.textAlign='center';CX.textBaseline='middle';CX.fillText(s.sub,cx,H*0.06+sc*26);CX.restore();
+      }
+    }
+    // 描述
+    if(s.desc){
+      CX.save();CX.globalAlpha=easeOut(dp)*0.7;
+      CX.fillStyle='#ccc';CX.font=(sc*11)+'px \"Microsoft YaHei\",sans-serif';
+      CX.textAlign='center';CX.textBaseline='middle';CX.fillText(s.desc,cx,H*0.86);CX.restore();
+    }
+    // 左上角标识
+    if(s.era||s.year){
+      CX.save();CX.globalAlpha=easeOut(tp)*0.3;
+      CX.fillStyle='#8ab4f8';CX.font=(sc*9)+'px monospace';
+      CX.textAlign='left';CX.textBaseline='top';CX.fillText('📱 '+(s.era||'')+'  '+(s.year||''),15,15);
+      CX.restore();
+    }
+  }
+};
+
+// ============================================================
+// 🎬 主循环（修复dt为秒级 + TTS触发）
+// ============================================================
+let _lastSceneIdx=-1;
+function renderStory(ts){
+  if(!stT)stT=ts;
+  const dt=(ts-stT)/1000;
+  stT=ts;
+  if(!window._si){window._si=Object.create(STORY);window._si.reset();_lastSceneIdx=-1}
+  window._si.update(Math.min(dt,0.2));
+  // TTS: 场景变化时朗读
+  const cur=window._si.cur();
+  const idx=window._si.idx;
+  if(cur&&idx!==_lastSceneIdx){
+    _lastSceneIdx=idx;
+    const sceneNum=idx+1;
+    const total=window._si.scenes.length;
+    console.log('[Animator] ▶ 场景 '+sceneNum+'/'+total+' | '+(cur.title||cur.narration||'').slice(0,40));
+    const text=cur.narration||cur.desc||cur.title||'';
+    setTimeout(()=>TTS.speak(text),300);
+  }
+  window._si.draw();
+  if(!window._si.fin||window._si.t<1.5)requestAnimationFrame(renderStory);
+}
+
+// ── 非 story 占位（后续可扩展）──
+function renderLoop(ts){
+  if(!stT)stT=ts;
+  const dt=(ts-stT)/1000;stT=ts;
+  drawBg(['#0a0a0a','#0a0a1a']);
+  CX.fillStyle='rgba(255,255,255,0.08)';
+  CX.font='24px Arial';CX.textAlign='center';CX.textBaseline='middle';
+  CX.fillText('🎨 '+CONFIG.type,cx,cy);
+  requestAnimationFrame(renderLoop);
+}
+
+function startAnim(){
+  stT=0;
+  if(CONFIG.type==='story'||CONFIG.type==='dsl_scenes')requestAnimationFrame(renderStory);
+  else requestAnimationFrame(renderLoop);
+}
+
+// ── 点击启动 ──
+const overlay=document.getElementById('startOverlay');
+const playBtn=document.getElementById('playBtn');
+function startWithAudio(){
+  overlay.classList.add('hidden');
+  TTS.init();
+  console.log('[Animator] ▶ 启动动画');
+  startAnim();
+}
+playBtn.addEventListener('click',function(e){e.stopPropagation();startWithAudio()});
+overlay.addEventListener('click',function(){startWithAudio()});
+// 自动启动（用于录制模式&pywebview）
+if(location.search.includes('autoplay=1'))setTimeout(startWithAudio,500);
+</script>
+</body>
+</html>

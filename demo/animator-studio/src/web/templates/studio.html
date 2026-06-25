@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>动画工作室</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <h1>🎨 动画工作室</h1>
+    <nav><a href="/">首页</a> | <a href="/docs">API</a></nav>
+  </header>
+
+  <main class="main">
+    <section class="input-section">
+      <textarea id="prompt" placeholder="描述你想看到的动画...
+
+关键词模式:
+  • 彩色粒子 快速 5秒
+  • 手机进化史 卡通拟人化
+
+🤖 LLM 模式:
+  • 一只跳舞的熊猫
+  • 一艘太空船穿越星云
+  • 两只小猫在玩毛线球" rows="4"></textarea>
+      <div class="controls">
+        <div class="mode-switch">
+          <button id="modeNormal" class="mode-btn active">🎯 关键词</button>
+          <button id="modeLLM" class="mode-btn">🤖 LLM</button>
+        </div>
+        <label>时长: <input type="number" id="duration" value="8" min="2" max="60"> 秒</label>
+        <label><input type="checkbox" id="tts" checked> 语音</label>
+        <label><input type="checkbox" id="record"> 录制 MP4</label>
+        <button id="generateBtn" class="btn-primary">▶ 生成动画</button>
+      </div>
+      <div id="llmStatus" class="llm-status" style="display:none">
+        <div class="spinner-sm"></div><span>LLM 思考中...</span>
+      </div>
+    </section>
+
+    <section class="preview-section" id="preview" style="display:none">
+      <div class="preview-header">
+        <h2>预览</h2>
+        <span id="status"></span>
+      </div>
+      <div class="preview-frame">
+        <iframe id="previewIframe" sandbox="allow-scripts allow-same-origin allow-autoplay"></iframe>
+        <div class="preview-overlay" id="previewOverlay">
+          <div class="spinner"></div>
+          <p>生成中...</p>
+        </div>
+      </div>
+      <div class="dsl-preview" id="dslPreview" style="display:none">
+        <div class="dsl-header">
+          <span>📜 LLM 生成的脚本</span>
+          <button id="toggleDslBtn" class="btn-sm">展开</button>
+        </div>
+        <pre id="dslContent" class="dsl-content"></pre>
+      </div>
+      <div class="actions">
+        <a id="downloadHtml" class="btn">📄 下载 HTML</a>
+        <a id="downloadMp4" class="btn" style="display:none">🎬 下载 MP4</a>
+        <button id="fullscreenBtn" class="btn">⛶ 全屏</button>
+      </div>
+    </section>
+
+    <section class="history-section">
+      <h2>历史记录</h2>
+      <div id="historyList">
+        <p class="empty-hint">还没有生成过动画</p>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

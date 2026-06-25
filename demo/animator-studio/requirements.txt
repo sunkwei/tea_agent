@@ -1,0 +1,4 @@
+fastapi>=0.104
+uvicorn>=0.24
+# animator 本地依赖
+-e ../animator

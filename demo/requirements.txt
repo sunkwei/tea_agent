@@ -1,0 +1,7 @@
+# pip dependencies
+pywebview>=6.0
+playwright>=1.40
+# ffmpeg is also required (install separately)
+#   Windows: https://ffmpeg.org/download.html
+#   macOS: brew install ffmpeg
+#   Linux: sudo apt install ffmpeg

@@ -191,7 +191,7 @@ class Storage:
             self._migrate(db)
             self._write_week_key(db)
 
-        self._auto_backup()
+        # 不再自动备份，需要请调用 backup_now()
         self._protect_db()
 
         # ── 创建所有委派组件（传入 db_path，无持久连接）──

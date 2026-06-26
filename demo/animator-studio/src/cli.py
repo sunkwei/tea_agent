@@ -23,12 +23,14 @@ def main():
   python -m src.cli --llm "两只小猫玩毛线球" # LLM 模式
   python -m src.cli --serve                  # 启动 Web 服务""")
 
-    parser.add_argument("text", nargs="?", help="动画描述文字")
+    parser.add_argument("text", nargs="*", default=None, help="动画描述文字（多词自动拼接）")
     parser.add_argument("-d", "--duration", type=float, default=None, help="时长(秒)")
     parser.add_argument("--record", action="store_true", help="录制 MP4")
     parser.add_argument("--no-tts", action="store_true", help="禁用语音")
     parser.add_argument("--no-play", action="store_true", help="生成后不播放")
     parser.add_argument("--llm", action="store_true", help="使用 LLM 模式（AI 生成动画脚本）")
+    parser.add_argument("--config", type=str, default=None,
+                        help="LLM 配置文件路径 (YAML)")
     parser.add_argument("--serve", action="store_true", help="启动 Web 服务")
     parser.add_argument("--host", default=config.host, help="Web 服务地址")
     parser.add_argument("--port", type=int, default=config.port, help="Web 服务端口")
@@ -45,36 +47,38 @@ def main():
         serve()
         return
 
-    if not args.text:
+    # 拼接多词描述
+    desc = " ".join(args.text) if args.text else None
+    if not desc:
         parser.print_help()
         print("\n❌ 请提供动画描述")
         sys.exit(1)
 
     config.ensure_dirs()
-    is_llm = args.llm or _detect_llm_needed(args.text)
+    is_llm = args.llm or _detect_llm_needed(desc)
 
     if is_llm:
         print("=" * 50)
         print("🤖 LLM 模式 — AI 生成动画脚本")
         print("=" * 50)
         result = llm_generate(
-            text=args.text,
+            text=desc,
             duration=args.duration or 8,
             tts=not args.no_tts,
+            config_path=args.config,
         )
     else:
         print("=" * 50)
         print("🎯 关键词模式 — 匹配动画类型")
         print("=" * 50)
         result = generator.generate(
-            text=args.text,
+            text=desc,
             duration=args.duration or 5,
             tts=not args.no_tts,
         )
 
     print(f"✅ 生成: {result['html_path']}")
 
-    # 录制
     if args.record:
         print(f"🎬 录制: {result['duration']}s @ {args.fps}fps")
         try:
@@ -89,14 +93,13 @@ def main():
         except Exception as e:
             print(f"❌ 录制失败: {e}")
 
-    # 播放
     if not args.no_play:
         try:
             from animator import WebviewPlayer
             tts_str = "" if args.no_tts else "🔊 含语音"
             print(f"\n▶️ 播放动画 (点击「▶ 点击开始」启动{tts_str})...")
             player = WebviewPlayer(
-                title=f"Animator: {args.text[:40]}",
+                title=f"Animator: {desc[:40]}",
                 fullscreen=False,
             )
             player.play(result["html_path"])
@@ -106,14 +109,10 @@ def main():
 
 
 def _detect_llm_needed(text: str) -> bool:
-    """检测复杂描述 → 自动启用 LLM"""
-    # 关键词模式已有的类型
     keyword_types = {"粒子","烟火","星星","球","彩虹","波浪","螺旋","极光","几何",
                      "文字","手机","大哥大","翻盖","触屏","折叠"}
-    # 如果描述较长或包含复杂场景
     if len(text) > 15:
         return True
-    # 如果没有匹配任何关键词
     has_keyword = any(k in text for k in keyword_types)
     return not has_keyword
 

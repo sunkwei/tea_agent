@@ -60,6 +60,7 @@ async def api_llm_generate(req: LLMGenerateRequest):
             text=req.text,
             duration=req.duration,
             tts=req.tts,
+            config_path=req.config_path,
         )
         return {"ok": True, "data": result}
     except Exception as e:

@@ -14,12 +14,15 @@ from typing import Optional
 from src.core.animation_dsl import (validate_dsl, format_dsl_preview,                                     dsl_to_scene_config, embed_local_images)
 
 
-# 模板路径
-_TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent / ".." / "animator" / "templates"
-_TEMPLATE_FILE = _TEMPLATE_DIR / "animation.html"
-
-# 备选：使用 animator-studio 自己的模板
-_OWN_TEMPLATE = Path(__file__).resolve().parent.parent / "templates" / "dsl_animation.html"
+# 模板路径（支持 PyInstaller 打包）
+import sys
+_BUNDLED = getattr(sys, '_MEIPASS', None)
+if _BUNDLED:
+    _TEMPLATE_DIR = Path(_BUNDLED) / 'animator' / 'templates'
+else:
+    _TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent / '..' / 'animator' / 'templates'
+_TEMPLATE_FILE = _TEMPLATE_DIR / 'animation.html'
+_OWN_TEMPLATE = _TEMPLATE_DIR / 'dsl_animation.html'  # 备选
 
 
 def _get_template() -> str:

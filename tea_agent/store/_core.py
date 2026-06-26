@@ -290,6 +290,15 @@ class Storage:
         """获取对话的 agent rounds。"""
         return self._conversations.get_agent_rounds(conversation_id)
 
+    def search_conversations(self, query: str, limit: int = 30,
+                              include_ai: bool = True, include_rounds: bool = True,
+                              date_from: str = "", date_to: str = "") -> list:
+        """全文搜索对话。"""
+        return self._conversations.search_conversations(
+            query, limit=limit, include_ai=include_ai,
+            include_rounds=include_rounds, date_from=date_from, date_to=date_to,
+        )
+
     # ── 特殊桥接：save_msg 需要回调其他组件的 update_active ──
     def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool) -> str:
         """桥接方法：save_msg 需要 update_topic_active 回调。"""

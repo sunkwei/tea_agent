@@ -203,6 +203,134 @@ class ConversationStore(StoreComponent):
             result.append(d)
         return result
 
+    # ── 全文搜索（FTS5 fallback LIKE）──
+
+    def search_conversations(self, query: str, limit: int = 30,
+                              include_ai: bool = True, include_rounds: bool = True,
+                              date_from: str = "", date_to: str = "") -> List[Dict]:
+        """跨主题全文搜索对话内容。
+
+        同时搜索 user_msg、ai_msg 和 agent_rounds.content，
+        结果按相关度排序，附带主题标题和上下文片段。
+
+        Args:
+            query: 搜索关键词。
+            limit: 返回结果上限。
+            include_ai: 是否搜索 ai_msg 字段。
+            include_rounds: 是否搜索 agent_rounds 内容。
+            date_from: 起始日期 YYYY-MM-DD（可选）。
+            date_to: 结束日期 YYYY-MM-DD（可选）。
+
+        Returns:
+            搜索结果列表：conversation_id, topic_id, topic_title,
+            user_msg, ai_msg, snippet, rank_score, stamp
+        """
+        if not query or not query.strip():
+            return []
+
+        q = query.strip()
+        like_pat = f"%{q}%"
+        conditions = ["c.user_msg LIKE ?"]
+        params = [like_pat]
+
+        if include_ai:
+            conditions.append("c.ai_msg LIKE ?")
+            params.append(like_pat)
+
+        if date_from:
+            conditions.append("c.stamp >= ?")
+            params.append(f"{date_from} 00:00:00")
+        if date_to:
+            conditions.append("c.stamp <= ?")
+            params.append(f"{date_to} 23:59:59")
+
+        where = " OR ".join(f"({cond})" for cond in conditions)
+
+        sql = f'''
+            SELECT c.id as conversation_id, c.topic_id, t.title as topic_title,
+                   c.user_msg, c.ai_msg, c.stamp
+            FROM conversations c
+            JOIN topics t ON c.topic_id = t.topic_id
+            WHERE ({where})
+            ORDER BY c.stamp DESC
+            LIMIT ?
+        '''
+        params.append(limit)
+
+        c = self.conn.cursor()
+        c.execute(sql, params)
+        rows = c.fetchall()
+        conv_results = [dict(r) for r in rows]
+
+        # 如果也搜索 agent_rounds，补充查询
+        if include_rounds:
+            rc = self.conn.cursor()
+            rc.execute('''
+                SELECT DISTINCT r.conversation_id
+                FROM agent_rounds r
+                WHERE r.content LIKE ?
+            ''', (like_pat,))
+            round_conv_ids = {row["conversation_id"] for row in rc.fetchall()}
+            rc.close()
+
+            if round_conv_ids:
+                existing_ids = {r["conversation_id"] for r in conv_results}
+                missing_ids = round_conv_ids - existing_ids
+                if missing_ids:
+                    placeholders = ",".join("?" for _ in missing_ids)
+                    rc2 = self.conn.cursor()
+                    rc2.execute(f'''
+                        SELECT c.id as conversation_id, c.topic_id, t.title as topic_title,
+                               c.user_msg, c.ai_msg, c.stamp
+                        FROM conversations c
+                        JOIN topics t ON c.topic_id = t.topic_id
+                        WHERE c.id IN ({placeholders})
+                    ''', list(missing_ids))
+                    conv_results.extend(dict(r) for r in rc2.fetchall())
+                    rc2.close()
+
+        c.close()
+
+        # 计算排序分数
+        q_lower = q.lower()
+        for r in conv_results:
+            score = 0
+            user_msg = r.get("user_msg", "") or ""
+            ai_msg = r.get("ai_msg", "") or ""
+            for field in [user_msg, ai_msg]:
+                field_lower = field.lower()
+                count = field_lower.count(q_lower)
+                score += count * 10
+                if field_lower.startswith(q_lower):
+                    score += 50
+                if field_lower == q_lower:
+                    score += 200
+            r["rank_score"] = score
+            r["snippet"] = self._make_snippet(user_msg + " " + ai_msg, q)
+
+        conv_results.sort(key=lambda x: x["rank_score"], reverse=True)
+        return conv_results
+
+    @staticmethod
+    def _make_snippet(text: str, query: str, context_chars: int = 60) -> str:
+        """从文本中提取包含关键词的上下文片段。"""
+        if not text:
+            return ""
+        q_lower = query.lower()
+        text_lower = text.lower()
+        idx = text_lower.find(q_lower)
+        if idx < 0:
+            return text[:context_chars * 2] + ("..." if len(text) > context_chars * 2 else "")
+        start = max(0, idx - context_chars)
+        end = min(len(text), idx + len(query) + context_chars)
+        snippet = text[start:end]
+        if start > 0:
+            snippet = "..." + snippet
+        if end < len(text):
+            snippet = snippet + "..."
+        snippet = snippet.replace("\n", " ").replace("\r", " ").strip()
+        return snippet
+
     # ── 自动嵌入（队列 + 单后台线程，独立连接）──
 
     _embed_queue = queue.Queue()

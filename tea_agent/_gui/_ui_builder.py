@@ -17,7 +17,7 @@ try:
 except ImportError:
     HAS_TKINTERWEB = False
 
-logger = logging.getLogger("main_db_gui")
+logger = logging.getLogger(__name__)
 
 class UIBuilder:
     """界面构建器：创建所有 Tk widgets、布局、样式、快捷键"""
@@ -67,6 +67,10 @@ class UIBuilder:
 
         ttk.Button(left, text="⏰ 定时任务", command=gui.open_scheduler_dialog).pack(
             fill=tk.X, padx=4, pady=2)
+        ttk.Button(left, text="🔍 搜索对话", command=gui.open_search_dialog).pack(
+            fill=tk.X, padx=4, pady=2)
+        ttk.Button(left, text="📄 导出 PDF", command=gui.export_topic_pdf).pack(
+            fill=tk.X, padx=4, pady=(2,6))
 
         # ===== 右侧面板 =====
         right = Frame(main_split)

@@ -14,8 +14,6 @@ from typing import List, Dict, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from tea_agent.gui import TkGUI
 
-logger = logging.getLogger("tea_agent")
-
 from ._markdown import (
     HAS_TKINTERWEB,
     _MD_CSS_TEMPLATE,

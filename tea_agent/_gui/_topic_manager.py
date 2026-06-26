@@ -12,7 +12,7 @@ from typing import Optional, Dict, List, cast
 if __import__('typing').TYPE_CHECKING:
     from tea_agent.gui import TkGUI
 
-logger = logging.getLogger("main_db_gui")
+logger = logging.getLogger(__name__)
 
 class TopicManager:
     """主题列表管理：创建、切换、加载、刷新"""

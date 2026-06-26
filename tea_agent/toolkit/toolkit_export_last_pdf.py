@@ -26,10 +26,21 @@ def _find_db_path():
     return None
 
 def _setup_fonts(pdf):
+    """跨平台中文字体查找：Windows → Linux → macOS"""
     cn_fonts = [
+        # Windows
         "C:/Windows/Fonts/simfang.ttf",
         "C:/Windows/Fonts/simhei.ttf",
         "C:/Windows/Fonts/msyh.ttf",
+        # Linux (Noto Sans CJK)
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/google-noto-cjk/NotoSansCJK-Regular.ttc",
+        # macOS
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/STHeiti Light.ttc",
+        "/Library/Fonts/Arial Unicode.ttf",
     ]
     for fp in cn_fonts:
         if os.path.exists(fp):
@@ -159,7 +170,7 @@ def toolkit_export_last_pdf(output_path="last.pdf"):
                 if self.page_no() > 1:
                     self.set_font("F", "", 10)
                     self.set_text_color(120, 120, 120)
-                    self.cell(0, 8, "Code Review Report", align="L", new_x="LMARGIN", new_y="NEXT")
+                    self.cell(0, 8, topic_title, align="L", new_x="LMARGIN", new_y="NEXT")
                     self.ln(12)
             
             def footer(self):
@@ -179,7 +190,7 @@ def toolkit_export_last_pdf(output_path="last.pdf"):
         pdf.ln(30)
         pdf.set_font(font_name, "", 28)
         pdf.set_text_color(40, 40, 80)
-        pdf.cell(0, 15, "Code Review Report", align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 15, topic_title, align="C", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(5)
         
         pdf.set_font(font_name, "", 14)

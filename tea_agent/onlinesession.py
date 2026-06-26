@@ -12,20 +12,25 @@ Token 优化策略:
 重构说明:
 - 从 Mixin 多重继承改为组合模式
 - 所有共享状态通过 SessionContext 管理
-- 功能委派给各个 Component：API, Tool, Memory, Summarizer
-- 2026-05 P2重构: 提取 JsonSanitizer/HistoryBuilder/OsInfoInjector/ToolLoopRunner
+- 功能委派给各个 Component：API, Tool, Summarizer
+- 2026-07 拆分: SessionContext/SessionComponent→_context.py, Prompt→_prompts.py
 """
 
 from openai import OpenAI
 from typing import List, Dict, Callable, Tuple, Any, Optional
-import logging
+import json, logging
+from types import SimpleNamespace
 
 from tea_agent.basesession import BaseChatSession
 from tea_agent.session_pipeline import SessionPipeline
 
 # 组件导入（替代 Mixin）
-
-# 提取的独立模块
+from tea_agent.session._context import SessionContext, SessionComponent
+from tea_agent.session._prompts import (
+    HISTORY_SUMMARIZE_SYSTEM, HISTORY_SUMMARIZE_USER,
+    TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_TEMPLATE,
+    COMPACT_SYSTEM_PROMPT,
+)
 from tea_agent.session._history_builder import build_api_messages
 from tea_agent.session._os_info_injector import inject_os_info as _inject_os_info_impl
 from tea_agent.session._tool_loop_runner import execute_tool_loop
@@ -63,194 +68,6 @@ def extract_mode(result: dict):
     return None
 
 
-
-
-# ═══════════════════════════════════════════════════
-# 合并自 session_context/session_prompts/session_api/session_tool/session_summarizer
-# ═══════════════════════════════════════════════════
-
-
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Callable
-from openai import OpenAI
-
-
-@dataclass
-class SessionContext:
-    # ── 核心状态 ──
-    messages: List[Dict] = field(default_factory=list)
-    model: str = ""
-    enable_thinking: bool = True
-    
-    # ── 客户端 ──
-    client: Optional[OpenAI] = None
-    cheap_client: Optional[OpenAI] = None
-    cheap_model: str = ""
-    
-    # ── 工具相关 ──
-    toolkit: Any = None  # Toolkit 实例
-    tool_log: Optional[Callable[[str], None]] = None
-    _rounds_collector: List[Dict] = field(default_factory=list)
-    
-    # ── 存储与记忆 ──
-    storage: Any = None  # Storage 实例
-    memory: Any = None   # MemoryManager 实例
-    pipeline: Any = None # SessionPipeline 实例
-    
-    # ── 配置参数 ──
-    keep_turns: int = 5
-    max_tool_output: int = 128 * 1024
-    max_assistant_content: int = 128 * 1024
-    max_context_tokens: int = 0  # 0=不限制，>0 时启用渐进式裁剪
-    memory_extraction_threshold: int = 2
-    memory_dedup_threshold: float = 0.3
-    supports_vision: bool = False
-    supports_reasoning: bool = True
-    disable_summary: bool = False
-    no_stream_chunk: bool = False  # True=非流式模式，方便单步调试
-    
-    # ── 运行时状态 ──
-    _thinking_supported: Optional[bool] = True
-    _cheap_thinking_supported: Optional[bool] = None
-    _last_usage: Dict[str, int] = field(default_factory=lambda: {
-        "total_tokens": 0,
-        "prompt_tokens": 0,
-        "completion_tokens": 0,
-    })
-    _last_cheap_usage: Dict[str, int] = field(default_factory=lambda: {
-        "total_tokens": 0,
-        "prompt_tokens": 0,
-        "completion_tokens": 0,
-    })
-    _injected_memories_text: str = ""
-    _injected_memories: List[Dict] = field(default_factory=list)
-    _injected_os_info_text: str = ""
-    _os_info_injected: bool = False  # 防重复注入
-    _history_summary: str = ""
-    _semantic_summary: str = ""
-    _tool_chain_summary: str = ""
-    _level2: List[Dict] = field(default_factory=list)
-    _current_trace: Any = None
-    reflection_manager: Any = None
-    _current_mode: str = "mixed"
-    
-    # ── 额外迭代 ──
-    extra_iterations_on_continue: int = 5
-
-
-class SessionComponent(ABC):
-    def __init__(self, context: SessionContext):
-        self.ctx = context
-    
-    @abstractmethod
-    def initialize(self) -> None:
-        pass
-    
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        pass
-
-    def save_agent_config(self, config: Any) -> None:
-        if not self.ctx.storage:
-            return
-        
-        try:
-            if hasattr(config, '__dict__'):
-                # AgentConfig 实例
-                cfg_dict = {
-                    'max_iterations': getattr(config, 'max_iterations', None),
-                    'keep_turns': getattr(config, 'keep_turns', None),
-                    'max_tool_output': getattr(config, 'max_tool_output', None),
-                    'enable_thinking': getattr(config, 'enable_thinking', None),
-                }
-            elif isinstance(config, dict):
-                cfg_dict = config
-            else:
-                return
-            
-            # 过滤 None 值
-            cfg_dict = {k: v for k, v in cfg_dict.items() if v is not None}
-            
-            if cfg_dict:
-                self.ctx.storage.add_config_change(
-                    key="agent_config_update",
-                    new_value=str(cfg_dict),
-                    reason="会话中配置变更",
-                )
-        except Exception as e:
-            import logging
-            logging.getLogger("session.context").debug(f"保存配置变更失败: {e}")
-
-
-"""
-会话 Prompt 模板常量
-用于 LLM 摘要、Topic 摘要等任务
-
-分类:
-    - 历史摘要 Prompt (HISTORY_*)
-    - Topic 摘要 Prompt (TOPIC_*)
-    - 系统提示词 (COMPACT_*)
-"""
-
-# ──────────────────────────────────────────────
-# 历史摘要 Prompt
-# ──────────────────────────────────────────────
-
-HISTORY_SUMMARIZE_SYSTEM = (
-    "将对话压缩为摘要，保留关键信息（决策、结论、事实、用户需求），"
-    "忽略寒暄和过程细节。200字以内。"
-)
-
-HISTORY_SUMMARIZE_USER = (
-    "{existing}新增对话内容：\n{old_text}\n\n"
-    "请输出合并后的精炼摘要（200字以内）："
-)
-
-# ──────────────────────────────────────────────
-# Topic 摘要 Prompt
-# ──────────────────────────────────────────────
-
-TOPIC_SUMMARY_SYSTEM = (
-    "你是一个极简标题生成器。"
-    "看一条用户消息，提炼成不超过20字的摘要标题。\n"
-    "规则（严格遵守）：\n"
-    "1. 禁止出现：我们、用户、您、对话、消息、上文、根据、以下、主题、这个、输入、生成\n"
-    "2. 禁止描述任务：不能说'根据xxx生成'、'关于xxx的'等元描述\n"
-    "3. 禁止无意义词：禁止输出'主题'，禁止只输出时间戳\n"
-    "4. 直接输出标题本身，不要任何前缀、后缀、解释\n"
-    "5. 控制在20字以内\n\n"
-    "好的示例：'重构Session模块'、'修改标题生成规则'、'Cursor类设计讨论'\n"
-    "坏的示例：'我们根据用户消息生成摘要'、'主题 06-08 20:03'、'这个项目的进展'"
-)
-
-TOPIC_SUMMARY_USER_TEMPLATE = (
-    "用户最新消息：\n\n{user_msgs}\n\n"
-    "直接输出不超过20字的摘要标题，禁止任何解释："
-)
-
-# ──────────────────────────────────────────────
-# 系统提示词
-# ──────────────────────────────────────────────
-
-COMPACT_SYSTEM_PROMPT = (
-    "你是可自我扩展的智能Agent，拥有大量工具。"
-    "核心工具：toolkit_exec(命令)、toolkit_file(r/w/list)、toolkit_self_evolve、"
-    "toolkit_memory(记忆管理)、toolkit_kb(知识库)、toolkit_reflection(元认知)、"
-    "toolkit_subconscious(潜意识引擎)、toolkit_prompt_evolve(提示词进化)等。"
-    "通过toolkit_save 保存新建新工具、toolkit_reload重载。\n\n"
-    "行为准则：主动分析需求，优先专用工具，修改前备份(.bak)，关键步骤验证，"
-    "减少无效迭代。所有工具调用参数严格JSON双引号格式。"
-    "宽进严出——出口管线严格校验，不假定模型宽容。"
-)
-
-
-
-from typing import List, Dict, Tuple, Any, Optional, Callable
-from tea_agent.session._params import get_cheap_params
-
-# 向后兼容别名
 
 class APIComponent(SessionComponent):
     
@@ -486,11 +303,6 @@ class APIComponent(SessionComponent):
 
 
 
-import json
-import logging
-from typing import List, Dict, Tuple, Any, Optional
-from types import SimpleNamespace
-
 logger = logging.getLogger("session.tool")
 
 # ── 模块级纯函数（原 session_tools_builder）──
@@ -702,13 +514,7 @@ class ToolComponent(SessionComponent):
 
 
 
-import logging
-from typing import List, Dict, Tuple, Any, Optional, Callable
-from tea_agent.session._params import get_cheap_params
-
 logger = logging.getLogger("session.summarizer")
-
-# 向后兼容别名
 
 class SummarizerComponent(SessionComponent):
     

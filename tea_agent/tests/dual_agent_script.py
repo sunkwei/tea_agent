@@ -5,11 +5,15 @@
 
 用法:
     python tests/test_tea_agent_dual.py [config_path]
+
+注意: 此文件没有 pytest 测试函数，仅作为脚本使用。
 """
 
 import sys
 import os
 from typing import List, Dict
+
+__test__ = False  # 标记跳过 pytest 扫描，防止超时
 
 
 def extract_final_reply(rounds: List[Dict]) -> str:

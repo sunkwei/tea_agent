@@ -656,22 +656,27 @@ list       → 列出所有技能模式
 
 ---
 
-## 🧰 工具概览（60+）
+## 🧰 工具概览（65+）
 
 | 类别 | 工具 |
 |------|------|
 | 📁 文件操作 | `toolkit_file`, `toolkit_save_file`, `toolkit_explr` |
-| ✏️ 代码编辑 | `toolkit_edit`, `toolkit_diff`, `toolkit_self_evolve` |
+| ✏️ 代码编辑 | `toolkit_edit`, `toolkit_diff_edit`, `toolkit_diff`, `toolkit_self_evolve`, `toolkit_clean_comments`, `toolkit_format_code` |
 | 🔍 搜索 | `toolkit_search`, `toolkit_lsp`, `toolkit_query_chat_history` |
 | 📸 截图/OCR | `toolkit_screenshot`, `toolkit_ocr`, `toolkit_screen_read` |
 | 🖱️ 操控 | `toolkit_input`, `toolkit_browser_tab`, `toolkit_js_fetch` |
-| 📦 包管理 | `toolkit_pkg`, `toolkit_build`, `toolkit_format_code` |
+| 📦 包管理 | `toolkit_pkg`, `toolkit_build`, `toolkit_read_pyproject` |
 | 🧪 测试 | `toolkit_run_tests`, `toolkit_test_gui` |
-| 🗓️ 工具 | `toolkit_lunar`, `toolkit_weather_my`, `toolkit_gettime` |
-| 🔧 系统 | `toolkit_exec`, `toolkit_config`, `toolkit_os_info` |
-| 🧠 记忆/知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_reflection` |
-| 🤖 多 Agent | `Dispatcher`, `LiteAgent`, 并行任务执行 |
-| 🌐 Web 界面 | `toolkit_browser_tab`, `toolkit_dump_topic`, `toolkit_export_last_pdf` |
+| 🗓️ 工具 | `toolkit_lunar`, `toolkit_weather_my`, `toolkit_gettime`, `toolkit_date_diff` |
+| 🔧 系统 | `toolkit_exec`, `toolkit_config`, `toolkit_os_info`, `toolkit_sudo_gui` |
+| 🧠 记忆/知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_reflection`, `toolkit_proactive` |
+| 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_dynamic_skill`, `toolkit_experience_solidify` |
+| 📋 计划/任务 | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume` |
+| 🔌 MCP 集成 | `toolkit_mcp` |
+| 🌐 Web/GUI | `toolkit_browser_tab`, `toolkit_dump_topic`, `toolkit_export_last_pdf`, `toolkit_notify` |
+| 📤 导出 | `toolkit_dump_topic`, `toolkit_export_last_pdf` |
+| 🧬 自进化 | `toolkit_self_evolve`, `toolkit_self_evolve_thread`, `toolkit_prompt_evolve`, `toolkit_evolution_exp` |
+| 🛠️ 其他 | `toolkit_question`, `toolkit_stream_save`, `toolkit_set_topic_title`, `toolkit_self_report`, `toolkit_comment`, `toolkit_toggle_reasoning`, `toolkit_get_config_path`, `toolkit_get_models`, `toolkit_list_provider_models`, `toolkit_ip_location_my`, `toolkit_custom_commands`, `toolkit_scheduler_storage`, `toolkit_mode` |
 
 > **Web 界面特性**：工具调用实时展示完整参数、执行状态动画、SSE 流式输出。详见上方 [💻 Web 界面](#-web-界面) 章节。
 >
@@ -736,14 +741,14 @@ tea_agent/
 ├── config.py           # 配置管理
 ├── memory.py           # 长期记忆
 ├── prompt_manager.py   # 提示词版本管理
-├── toolkit/            # 60+ 工具模块
-├── session/            # 会话管理（Tool/Schemata）
+├── toolkit/            # 65+ 工具模块（含 diff/edit/plan/scheduler/mcp…）
+├── session/            # 会话管理（Tool/Schemata/token 裁剪）
 ├── multi_agent/        # 多 Agent 协作
-├── lsp/                # LSP 语言服务
-├── store/              # 数据存储
+├── lsp/                # LSP 代码智能（jedi + tree-sitter 符号索引）
+├── store/              # 数据存储（10 子模块：topics/conversations/memories/vectors…）
 ├── evaluation/         # 任务评估
 ├── skills/             # 技能结晶
-└── _gui/               # GUI 资源（图标、字体）
+└── _gui/               # GUI 组件（12 模块：渲染器/搜索/主题管理/托盘/字体…）
 ```
 
 ---
@@ -772,7 +777,8 @@ embedding:
 
 `max_context_tokens` 用于限制发送给 LLM 的最大上下文 token 数：
 
-- **0**（默认）= 不限制，发送全部历史
+- **0** = 不限制，发送全部历史
+- **64000**（默认）= 适合 64K~128K 窗口的主流模型
 - **32000** = 适合 32K 窗口模型
 - **128000** = 适合 GPT-4o / Claude 等大窗口模型
 

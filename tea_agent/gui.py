@@ -35,7 +35,7 @@ except ImportError:
     HAS_TKINTERWEB = False
 
 
-logger = logging.getLogger("main_db_gui")
+logger = logging.getLogger(__name__)
 
 # ====================== 包导入兼容处理 ======================
 if __name__ == "__main__":
@@ -189,6 +189,9 @@ class TkGUI(Agent):
         self.root.after(500, self._refresh_config_list)
         # 注册窗口关闭回调：退出时正常关闭数据库（WAL checkpoint + close）
         self.root.protocol("WM_DELETE_WINDOW", self.tray._on_closing)
+        # Ctrl+F 搜索快捷键
+        self.root.bind("<Control-f>", lambda e: self.open_search_dialog())
+        self.root.bind("<Control-F>", lambda e: self.open_search_dialog())
 
     @property
     def generating(self):
@@ -398,6 +401,123 @@ class TkGUI(Agent):
                 os.unlink(tmp.name)
                 
                 # 导出成功后打开文件管理器并定位到文件
+                if pdf_ok and os.path.exists(output):
+                    self._open_file_manager(output)
+
+            except Exception as ex:
+                self._update_status(f"❌ 导出失败: {ex}")
+                import traceback
+                traceback.print_exc()
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def export_topic_pdf(self, topic_id: str = None, e=None):
+        """导出完整主题为 PDF（当前主题或指定主题）"""
+        import json, tempfile, subprocess, threading, shutil
+
+        tid = topic_id or self.current_topic_id
+        if not tid:
+            self._update_status("⚠️ 无主题可导出")
+            return
+
+        chat_messages = list(self.chat_messages)
+        topic_title = "导出主题"
+
+        # 获取主题标题
+        for tp in self._topic_cache:
+            if tp.get("topic_id") == tid:
+                topic_title = tp.get("title", "导出主题")
+                break
+
+        def _do():
+            try:
+                # ── 用 chat_messages 构建 Markdown ──
+                md_parts = [f"# {topic_title}\n\n"]
+                md_parts.append(f"> 导出时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+                md_parts.append("---\n\n")
+
+                for msg in chat_messages:
+                    role = msg.get("role", "")
+                    content = msg.get("content", "")
+                    if isinstance(content, list):
+                        text_parts = []
+                        for p in content:
+                            if isinstance(p, dict) and p.get("type") == "text":
+                                text_parts.append(p.get("text", ""))
+                        content = "\n".join(text_parts) if text_parts else str(content)
+
+                    if not isinstance(content, str):
+                        content = str(content)
+
+                    if role == "user":
+                        md_parts.append(f"## 🧑 用户\n\n{content}\n\n---\n\n")
+                    elif role == "assistant":
+                        rc = msg.get("reasoning_content", "")
+                        if rc:
+                            md_parts.append(f"## 🤖 AI (思考过程)\n\n> {rc}\n\n")
+                        md_parts.append(f"### 🤖 AI 回复\n\n{content}\n\n---\n\n")
+                    elif role == "tool":
+                        name = msg.get("name", "?")
+                        call_id = msg.get("tool_call_id", "")
+                        n_chars = len(content)
+                        if n_chars > 200:
+                            content = content[:200] + f"\n\n... [结果过长，仅显示前 200/ {n_chars} 字符]"
+                        md_parts.append(f"### 🔧 工具: {name} ({call_id})\n\n```\n{content}\n```\n\n---\n\n")
+
+                md = "".join(md_parts)
+
+                # ── 渲染为 HTML ──
+                from tea_agent._gui._markdown import _render_markdown
+                from tea_agent._gui import _fonts_mod
+                html = _render_markdown(md, font_size=int(_fonts_mod._HTML_FONT_SIZE * self._zoom_level / 100))
+
+                # ── 写临时 HTML ──
+                tmp = tempfile.NamedTemporaryFile(suffix=".html", delete=False, mode="w", encoding="utf-8")
+                tmp.write(html)
+                tmp.close()
+
+                # ── Playwright 无头转 PDF ──
+                safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in topic_title)
+                output = os.path.join(self._initial_cwd, f"{safe_title}.pdf")
+                tmp_url = "file:///" + tmp.name.replace("\\", "/")
+
+                pdf_ok = False
+                try:
+                    from playwright.sync_api import sync_playwright
+                    with sync_playwright() as p:
+                        browser = p.chromium.launch(headless=True)
+                        page = browser.new_page()
+                        page.goto(tmp_url, wait_until="networkidle", timeout=15000)
+                        page.pdf(path=output, format="A4", print_background=True,
+                                  margin={"top": "15mm", "bottom": "15mm", "left": "12mm", "right": "12mm"})
+                        browser.close()
+                    pdf_ok = True
+                    self._update_status(f"✅ 已导出: {safe_title}.pdf")
+                except Exception:
+                    # 回退：Edge 无头
+                    edge_paths = [
+                        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+                    ]
+                    edge = None
+                    for p in edge_paths:
+                        if os.path.exists(p):
+                            edge = p
+                            break
+                    if edge:
+                        subprocess.run(
+                            [edge, "--headless=new", f"--print-to-pdf={output}",
+                             "--no-pdf-header-footer", tmp_url],
+                            capture_output=True, text=True, timeout=30,
+                        )
+                        pdf_ok = True
+                        self._update_status(f"✅ 已导出: {safe_title}.pdf")
+                    else:
+                        html_output = os.path.join(self._initial_cwd, f"{safe_title}.html")
+                        shutil.copy(tmp.name, html_output)
+                        self._update_status(f"⚠️ 已保存 HTML: {safe_title}.html")
+
+                os.unlink(tmp.name)
                 if pdf_ok and os.path.exists(output):
                     self._open_file_manager(output)
 
@@ -735,17 +855,26 @@ class TkGUI(Agent):
                 # GUI 特定：token 渲染 + 通知（使用本地变量）
                 usage = sess._last_usage
                 cheap_usage = sess._last_cheap_usage
+                # 嵌入模型 token：读取本轮用量→写DB→重置
+                emb_total = 0
+                emb_p = 0
+                try:
+                    from tea_agent.embedding_util import get_embedding_engine
+                    euse = get_embedding_engine().get_embedding_usage(reset=True)
+                    emb_total = euse.get("total_tokens", 0)
+                    emb_p = euse.get("prompt_tokens", 0)
+                    if emb_total > 0:
+                        self._db.add_topic_tokens(
+                            self.current_topic_id,
+                            embedding_tokens=emb_total,
+                            embedding_prompt_tokens=emb_p,
+                        )
+                except Exception:
+                    pass
                 if usage and usage.get("total_tokens", 0) > 0:
-                    self.root.after(0, lambda u=usage, cu=cheap_usage: self._add_token_notice_and_render(u, cu))
-                    # 读取嵌入模型用量
-                    emb_str = ""
-                    try:
-                        from tea_agent.embedding_util import get_embedding_engine
-                        euse = get_embedding_engine().get_embedding_usage(reset=False)
-                        if euse.get("total_tokens", 0) > 0:
-                            emb_str = f" | Emb:{euse['total_tokens']:,}"
-                    except Exception:
-                        pass
+                    self.root.after(0, lambda u=usage, cu=cheap_usage, et=emb_total, ep=emb_p:
+                                    self._add_token_notice_and_render(u, cu, et, ep))
+                    emb_str = f" | Emb:{emb_total:,}" if emb_total > 0 else ""
                     status_msg = (f"✅ 完成 | Tokens: {usage['total_tokens']:,} "
                                   f"(P:{usage['prompt_tokens']:,} C:{usage['completion_tokens']:,}){emb_str}")
                     # 追加缓存命中率（如有）
@@ -789,7 +918,8 @@ class TkGUI(Agent):
         threading.Thread(target=work, daemon=True).start()
         return "break"
 
-    def _add_token_notice_and_render(self, usage: dict, cheap_usage: dict = None):
+    def _add_token_notice_and_render(self, usage: dict, cheap_usage: dict = None,
+                                     emb_total: int = 0, emb_prompt: int = 0):
         """在聊天消息中追加 Markdown 表格：本轮/主题累积 × 主模型/便宜模型/嵌入模型 token 消耗"""
         if cheap_usage is None:
             cheap_usage = {}
@@ -812,17 +942,9 @@ class TkGUI(Agent):
             c_p += pending.get("prompt_tokens", 0)
             c_c += pending.get("completion_tokens", 0)
         self._pending_cheap_tokens = {}  # 清零
-        # 嵌入模型 token 用量（从 EmbeddingEngine 读取本轮）
-        e_total = 0
-        e_p = 0
-        try:
-            from tea_agent.embedding_util import get_embedding_engine
-            emb_engine = get_embedding_engine()
-            emb_usage = emb_engine.get_embedding_usage(reset=False)  # 已在 _post_chat_pipeline reset
-            e_total = emb_usage.get("total_tokens", 0)
-            e_p = emb_usage.get("prompt_tokens", 0)
-        except Exception:
-            pass
+        # 嵌入模型 token（由 work() 在 _post_chat_pipeline 后 capture+reset 后传入）
+        e_total = emb_total
+        e_p = emb_prompt
         # 主题累积
         try:
             ts = self.db.get_topic_tokens(self.current_topic_id)
@@ -1141,6 +1263,12 @@ class TkGUI(Agent):
         """打开定时任务管理对话框"""
         from tea_agent.gui_dialogs import ScheduledTaskDialog
         ScheduledTaskDialog(self.root)
+
+    def open_search_dialog(self):
+        """打开对话搜索对话框"""
+        from tea_agent._gui._search import SearchDialog
+        SearchDialog(self.root, self.db,
+                     on_switch_topic=lambda tid: self.root.after(0, self.switch_topic, tid))
 
     def _on_generation_done(self):
         """主线程回调：标记生成完成（避免跨线程写 generating）"""

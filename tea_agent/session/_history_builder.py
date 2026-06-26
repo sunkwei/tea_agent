@@ -243,19 +243,21 @@ def _progressive_trim(messages: List[Dict], budget: int, context: Any) -> List[D
                 msg["reasoning_content"] = ""
                 est = max(est, 0)
     
-    # 策略4: 截断长文本
+    # 策略4: 截断长文本（逐步收紧截断阈值）
     if est > budget:
-        max_text_len = 4096  # 初始截断长度
-        for msg in result:
+        for max_text_len in [4096, 2048, 1024, 512]:
             if est <= budget:
                 break
-            if msg.get("role") in ("assistant", "tool", "user"):
-                content = msg.get("content", "")
-                if isinstance(content, str) and len(content) > max_text_len:
-                    trimmed = content[:max_text_len] + f"\n... [已截断: 原长 {len(content)} 字符]"
-                    est -= estimate_tokens(content) - estimate_tokens(trimmed)
-                    msg["content"] = trimmed
-                    est = max(est, 0)
+            for msg in result:
+                if est <= budget:
+                    break
+                if msg.get("role") in ("assistant", "tool", "user"):
+                    content = msg.get("content", "")
+                    if isinstance(content, str) and len(content) > max_text_len:
+                        trimmed = content[:max_text_len] + f"\n... [已截断: 原长 {len(content)} 字符]"
+                        est -= estimate_tokens(content) - estimate_tokens(trimmed)
+                        msg["content"] = trimmed
+                        est = max(est, 0)
     
     # 策略5: 删除 L1 旧轮次（保留最近 5 轮 user 消息）
     if est > budget:

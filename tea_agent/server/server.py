@@ -150,22 +150,34 @@ class APIServer:
             put({"type": "error", "error": str(e)})
 
     async def _generate_sse(self, queue, model):
-        cid = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+        cid = "chatcmpl-" + uuid.uuid4().hex[:12]
         now = int(time.time())
-        yield f"data: {json.dumps(dict(id=cid, object='chat.completion.chunk', created=now, model=model, choices=[dict(index=0, delta=dict(role='assistant'), finish_reason=None)]), ensure_ascii)}\n\n"
+        init_data = {"id": cid, "object": "chat.completion.chunk", "created": now, "model": model,
+                     "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]}
+        NL2 = "\n\n"
+        yield "data: " + json.dumps(init_data) + NL2
         while True:
             event = await queue.get()
-            if event["type"] == "content":
-                yield f"data: {json.dumps(dict(id=cid, object='chat.completion.chunk', created=now, model=model, choices=[dict(index=0, delta=dict(content=event['text']), finish_reason=None)]), ensure_ascii)}\n\n"
-            elif event["type"] == "done":
-                yield f"data: {json.dumps(dict(id=cid, object='chat.completion.chunk', created=now, model=model, choices=[dict(index=0, delta={{}}, finish_reason='stop')]), ensure_ascii)}\n\n"
-                yield "data: [DONE]\n\n"
+            t = event["type"]
+            if t == "content":
+                data = {"id": cid, "object": "chat.completion.chunk", "created": now, "model": model,
+                        "choices": [{"index": 0, "delta": {"content": event["text"]}, "finish_reason": None}]}
+                yield "data: " + json.dumps(data) + NL2
+            elif t == "tool_call":
+                yield "data: " + json.dumps({"type": "tool_call", "tool_calls": event["tool_calls"]}) + NL2
+            elif t == "reasoning":
+                yield "data: " + json.dumps({"type": "reasoning", "content": event["text"]}) + NL2
+            elif t == "done":
+                done_data = {"id": cid, "object": "chat.completion.chunk", "created": now, "model": model,
+                            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                            "tools_used": event.get("tools_used", [])}
+                yield "data: " + json.dumps(done_data) + NL2
+                yield "data: [DONE]" + NL2
                 break
-            elif event["type"] == "error":
-                yield f"data: {json.dumps(dict(error=event['error']), ensure_ascii)}\n\n"
-                yield "data: [DONE]\n\n"
+            elif t == "error":
+                yield "data: " + json.dumps({"error": event["error"]}) + NL2
+                yield "data: [DONE]" + NL2
                 break
-
 
     @staticmethod
     def _extract_user_message(messages):

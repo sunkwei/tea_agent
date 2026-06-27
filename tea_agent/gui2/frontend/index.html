@@ -583,4 +583,125 @@ window.doExport=async function(){
 </div>
 
 </body>
-</html>
+</html>// Streaming parser continued
+            const ls = buf.split('\n');
+            for(let i=0;i<ls.length-1;i++){
+                const l = ls[i].trim();
+                if(l.startsWith('data: ')){
+                    try{
+                        const d = JSON.parse(l.slice(6));
+                        if(d.type === 'tool_call'){
+                            hideLoading();
+                            d.tool_calls.forEach(addToolCall);
+                        }else if(d.type === 'reasoning'){
+                            addReasoning(d.content);
+                        }else if(d.choices?[0]?.delta?.content){
+                            hideLoading();
+                            aiBubble.innerHTML += d.choices[0].delta.content;
+                        }else if(d.choices?[0]?.finish_reason){
+                            if(d.tools_used){
+                                d.tools_used.forEach(addToolCall);
+                            }
+                        }
+                    }catch(e){}
+                }
+            }
+            buf=ls[ls.length-1];
+        }
+    }catch(e){aiBubble.innerHTML='<span style="color:#ff5555">Error: '+e.message+'</span>'}finally{
+        streaming=false;
+        aiBubble.classList.remove('s');
+        $('bs').disabled=false;
+        hideLoading();
+        refreshTopics();
+    }
+}
+
+// Topics
+async function refreshTopics(){
+    try{
+        const r=await fetch('/v1/sessions');
+        if(!r.ok)return;
+        const d=await r.json();
+        if(d.data)${('tl').innerHTML=d.data.map(t=>'div class="ti'+(t.id===tid?' act':'')+'" onclick="openTopic(\''+t.id+'\',\''+(t.title||t.id.slice(0,8))+'\')">'+esc(t.title||t.id.slice(0,8))+'</div>').join('')}
+    }catch(e){}
+}
+
+function openTopic(id,title){tid=id;$('tt').textContent=title||id.slice(0,8);refreshTopics();
+    fetch('/v1/sessions/'++'+'/messages').then(r=r.json()).then(d=>{$('msgs').innerHTML='';if(d.data)d.data.forEach(m=>addMsg(m.role=='user'?'':'a',m.content))});
+}
+
+function newTopic(){tid=null;$('tt').textContent='\u65b0\u8bdd\u8001\u8bd';$('msgs').innerHTML='';refreshTopics()}
+
+function clearChat(){streaming?alert('\u6b63\u7ed9\u53d1\u9001'):$('msgs').innerHTML=''}
+
+// Modals
+function show(id){document.getElementById(id).style.display='flex'}
+function hide(id){document.getElementById(id).style.display='none'}
+
+window.showSearch=function(){show('modal-search');document.getElementById('sq').value='';document.getElementById('sr').innerHTML=''}
+
+window.doSearch=async function(){
+    const q=document.getElementById('sq').value.trim();
+    if(!q)return;
+    const el=document.getElementById('sr');
+    el.innerHTML='<div style="color:#8b949e;font-size:13px">\u52a0\u7e22\u4e2d...</div>';
+    try{
+        const r=await fetch('/v1/search?q='+encodeURIComponent(q));
+        if(!r.ok)throw new Error(r.status);
+        const d=await r.json();
+        let h='';
+        if(d.conversations&&d.conversations.length){
+            h+='<div style="font-size:13px;font-weight:600;margin:8px 0 4px">\u5bf9\u8c02\u7ed3\u679c</div>';
+            d.conversations.forEach(c=>{h+='<div class="sr"><div class="st">+esc(c.user_msg||c.ai_msg||'')+'</div><div class="sp">+esc(c.stamp||'')+'</div></div>'});
+        }
+        if(d.memories&&d.memories.length){
+            h+='<div style="font-size:13px;font-weight:600;margin:8px 0 4px">\u8bb0\u5fc6\u7ed3\u679c</div>';
+            d.memories.forEach(m=>{h+='<div class="sr"><div class="st">+esc(m.content||'')+'</div><div class="sp">+esc(m.category||'')+'</div></div>'});
+        }
+        if(!h)h='<div style="color:#8b949e;font-size:13px">\u672c\u6709\u7ed3\u679c\n \u540c\u85cb</div>';
+        el.innerHTML=h;
+    }catch(e){el.innerHTML='<div style="color:#ff5555;font-size:13px">Error: '+e.message+'</div>'}
+}
+// Memory
+window.showMemory=async function(){show('modal-memory');document.getElementById('mc').value='';refreshMemoryList()}
+window.addMemory=async function(){const c=document.getElementById('mc').value.trim();if(!c)return;try{await fetch('/v1/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:c})});document.getElementById('mc').value='';await refreshMemoryList()}catch(e){alert('Error: '+e.message)}}
+window.refreshMemoryList=async function(){try{const r=await fetch('/v1/memory');if(!r.ok)throw new Error(r.status);const d=await r.json();const el=document.getElementById('ml');if(d.data&&d.data.length)el.innerHTML=d.data.map(m=>'<div class="mi"><div class="tx">+esc(m.content||'')+' <s>'+esc(m.category||'')+'</s></div><button class="btn btn-g btn-s" onclick="deleteMemory(\''+m.id+'\')">\u5220\u9664</button></div>').join('');else el.innerHTML='<div style="color:#8b949e;font-size:13px">\u662b\u65e0\u8bb0\u5fc6</div>'}catch(e){}}
+
+// Scheduler
+window.showScheduler=async function(){show('modal-scheduler');document.getElementById('tn').value='';document.getElementById('tc').value='';document.getElementById('ts').value='';refreshTaskList()}
+window.addTask=async function(){const name=document.getElementById('tn').value.trim();const cmd=document.getElementById('tc').value.trim();const sched=document.getElementById('ts').value.trim();if(!name||!cmd)return;try{await fetch('/v1/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,command:cmd,schedule:sched||'once'})});document.getElementById('tn').value='';document.getElementById('tc').value='';document.getElementById('ts').value='';await refreshTaskList()}catch(e){alert('Error: '+e.message)}}
+window.refreshTaskList=async function(){try{const r=await fetch('/v1/tasks');if(!r.ok)throw new Error(r.status);const d=await r.json();const el=document.getElementById('tkl');if(d.data&&d.data.length)el.innerHTML=d.data.map(t=>'<div class="mi"><div class="tx">+esc(t.name||'')+' <s>'+esc(t.schedule||'')+'</s></div><button class="btn btn-g btn-s" onclick="deleteTask(\''+t.id+'\')">\u5220\u9664</button></div>').join('');else el.innerHTML='<div style="color:#8b949e;font-size:13px">\u662b\u65e0\u4ebb\u52a1</div>'}catch(e){}}
+
+window.deleteMemory=async function(id){try{await fetch('/v1/memory/'+encodeURIComponent(id),{method:'DELETE'});await refreshMemoryList()}catch(e){}}
+window.deleteTask=async function(id){try{await fetch('/v1/tasks/'+encodeURIComponent(id),{method:'DELETE'});await refreshTaskList()}catch(e){}}
+
+// Export
+window.showExport=function(){show('modal-export');document.getElementById('er').innerHTML=''}
+window.doExport=async function(){
+    if(!tid){document.getElementById('er').innerHTML='<div style="color:#ff5555;font-size:13px">\u8bf7\u5148\u9009\u6219\u4e00\u4e2a\u8bd5\u9898</div>';return}
+    const el=document.getElementById('er');
+    el.innerHTML='<div style="color:#8b949e;font-size:13px">\u5bf9\u51fa\u4e2d...</div>';
+    try{
+        const r=await fetch('/v1/export/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic_id:tid})});
+        const d=await r.json();
+        if(d.success)el.innerHTML='<div style="color:#3fb950;font-size:13px">\u2713 \u5df2\u51fa: '+esc(d.path||'')+'</div>';
+        else el.innerHTML='<div style="color:#ff5555;font-size:13px">+es(d.error||'\u5931\u625')+'</div>';
+    }catch(e){el.innerHTML='<div style="color:#ff5555;font-size:13px">Error: '+e.message+'</div>'}
+}
+
+// Init
+refreshTopics();
+</script>
+</body></html>
+<script>
+// showLoading might be missing, re-add it
+if(typeof showLoading==='undefined'){
+    window.showLoading=function(){
+        const d=document.createElement('div');d.className='ld';d.id='ld';
+        d.innerHTML='<div class="sp"></div><span>正在思考...</span>';
+        document.getElementById('msgs').appendChild(d);
+        document.getElementById('msgs').scrollTop=document.getElementById('msgs').scrollHeight;
+    };
+}
+</script>

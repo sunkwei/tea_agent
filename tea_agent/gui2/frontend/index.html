@@ -70,7 +70,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 </div>
 </div>
 <div id="ia">
-<textarea id="ci" rows="1" placeholder="输入消息... (Enter 发送)" onkeydown="if(event.key=="Enter"&&!event.shiftKey){event.preventDefault();send()}" oninput="document.getElementById('bs').disabled=!this.value.trim()"></textarea>
+<textarea id="ci" rows="1" placeholder="输入消息... (Enter 发送)" onkeydown='if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();send()}' oninput="document.getElementById('bs').disabled=!this.value.trim()"></textarea>
 <button id="bs" class="bs" disabled onclick="send()">发送</button>
 </div>
 </main>
@@ -83,7 +83,7 @@ const esc=t=>{if(!t)return"";let d=document.createElement("div");d.textContent=t
 function addMsg(r,c,s){
     let d=document.createElement("div");
     d.className="m "+r;
-    d.innerHTML="<div class="ml">"+(r=="u"?"你":"Tea Agent")+"</div><div class="mb""+(s?">":">")+esc(c)+"</div>";
+    d.innerHTML='<div class="ml">'+(r=='u'?'你':'Tea Agent')+'</div><div class="mb">'+esc(c)+'</div>';
     $("msgs").appendChild(d);
     setTimeout(()=>$("msgs").scrollTop=$("msgs").scrollHeight,50);
     return d.querySelector(".mb");
@@ -110,8 +110,7 @@ window.send=async function(){
             let{done,value}=await rd.read();
             if(done)break;
             buf+=dec.decode(value,{stream:true});
-            let ls=buf.split("
-");
+            let ls=buf.split("\n");
             for(let i=0;i<ls.length-1;i++){
                 let l=ls[i].trim();
                 if(l.startsWith("data:")){
@@ -129,7 +128,13 @@ async function refreshTopics(){
         let r=await fetch("/v1/sessions");
         if(!r.ok)return;
         let d=await r.json();
-        if(d.data)$("tl").innerHTML=d.data.map(t=>"<div class='ti"+(t.id===tid?" act":"")+"' onclick="openTopic('"+t.id+"','"+(t.title||t.id.slice(0,8))+"')">"+esc(t.title||t.id.slice(0,8))+"</div>").join("");
+        if(d.data){
+            $("tl").innerHTML=d.data.map(t=>{
+                const title=t.title||t.id.slice(0,8);
+                const cls='ti'+(t.id===tid?' act':'');
+                return `<div class="${cls}" onclick="openTopic('${t.id}','${title}')">${esc(title)}</div>`;
+            }).join('');
+        }
     }catch(e){}
 }
 
@@ -197,7 +202,7 @@ window.refreshMemoryList=async function(){
         const d=await r.json();
         const el=document.getElementById('ml');
         if(d.data&&d.data.length){
-            el.innerHTML=d.data.map(m=>'<div class="mi"><div class="tx">'+esc(m.content||'')+' <s>'+esc(m.category||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteMemory(''+m.id+'')">删除</button></div>').join('');
+            el.innerHTML=d.data.map(m=>'<div class="mi"><div class="tx">'+esc(m.content||'')+' <s>'+esc(m.category||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteMemory(\'+m.id+\')">删除</button></div>').join('');
         }else{el.innerHTML='<div style="color:#8b949e;font-size:13px">暂无记忆</div>'}
     }catch(e){}
 }
@@ -233,7 +238,7 @@ window.refreshTaskList=async function(){
         const d=await r.json();
         const el=document.getElementById('tkl');
         if(d.data&&d.data.length){
-            el.innerHTML=d.data.map(t=>'<div class="mi"><div class="tx">'+esc(t.name||'')+' <s>'+esc(t.schedule||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteTask(''+t.id+'')">删除</button></div>').join('');
+            el.innerHTML=d.data.map(t=>'<div class="mi"><div class="tx">'+esc(t.name||'')+' <s>'+esc(t.schedule||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteTask(\'+t.id+\')">删除</button></div>').join('');
         }else{el.innerHTML='<div style="color:#8b949e;font-size:13px">暂无任务</div>'}
     }catch(e){}
 }
@@ -332,7 +337,7 @@ window.refreshMemoryList=async function(){
         const d=await r.json();
         const el=document.getElementById('ml');
         if(d.data&&d.data.length){
-            el.innerHTML=d.data.map(m=>'<div class="mi"><div class="tx">'+esc(m.content||'')+' <s>'+esc(m.category||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteMemory(''+m.id+'')">删除</button></div>').join('');
+            el.innerHTML=d.data.map(m=>'<div class="mi"><div class="tx">'+esc(m.content||'')+' <s>'+esc(m.category||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteMemory(\'+m.id+\')">删除</button></div>').join('');
         }else{el.innerHTML='<div style="color:#8b949e;font-size:13px">暂无记忆</div>'}
     }catch(e){}
 }
@@ -368,7 +373,7 @@ window.refreshTaskList=async function(){
         const d=await r.json();
         const el=document.getElementById('tkl');
         if(d.data&&d.data.length){
-            el.innerHTML=d.data.map(t=>'<div class="mi"><div class="tx">'+esc(t.name||'')+' <s>'+esc(t.schedule||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteTask(''+t.id+'')">删除</button></div>').join('');
+            el.innerHTML=d.data.map(t=>'<div class="mi"><div class="tx">'+esc(t.name||'')+' <s>'+esc(t.schedule||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteTask(\'+t.id+\')">删除</button></div>').join('');
         }else{el.innerHTML='<div style="color:#8b949e;font-size:13px">暂无任务</div>'}
     }catch(e){}
 }
@@ -463,7 +468,7 @@ window.refreshMemoryList=async function(){
         const d=await r.json();
         const el=document.getElementById('ml');
         if(d.data&&d.data.length){
-            el.innerHTML=d.data.map(m=>'<div class="mi"><div class="tx">'+esc(m.content||'')+' <s>'+esc(m.category||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteMemory(''+m.id+'')">删除</button></div>').join('');
+            el.innerHTML=d.data.map(m=>'<div class="mi"><div class="tx">'+esc(m.content||'')+' <s>'+esc(m.category||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteMemory(\'+m.id+\')">删除</button></div>').join('');
         }else{el.innerHTML='<div style="color:#8b949e;font-size:13px">暂无记忆</div>'}
     }catch(e){}
 }
@@ -499,7 +504,7 @@ window.refreshTaskList=async function(){
         const d=await r.json();
         const el=document.getElementById('tkl');
         if(d.data&&d.data.length){
-            el.innerHTML=d.data.map(t=>'<div class="mi"><div class="tx">'+esc(t.name||'')+' <s>'+esc(t.schedule||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteTask(''+t.id+'')">删除</button></div>').join('');
+            el.innerHTML=d.data.map(t=>'<div class="mi"><div class="tx">'+esc(t.name||'')+' <s>'+esc(t.schedule||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteTask(\'+t.id+\')">删除</button></div>').join('');
         }else{el.innerHTML='<div style="color:#8b949e;font-size:13px">暂无任务</div>'}
     }catch(e){}
 }
@@ -672,27 +677,48 @@ window.refreshMemoryList=async function(){try{const r=await fetch('/v1/memory');
 window.showScheduler=async function(){show('modal-scheduler');document.getElementById('tn').value='';document.getElementById('tc').value='';document.getElementById('ts').value='';refreshTaskList()}
 window.addTask=async function(){const name=document.getElementById('tn').value.trim();const cmd=document.getElementById('tc').value.trim();const sched=document.getElementById('ts').value.trim();if(!name||!cmd)return;try{await fetch('/v1/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,command:cmd,schedule:sched||'once'})});document.getElementById('tn').value='';document.getElementById('tc').value='';document.getElementById('ts').value='';await refreshTaskList()}catch(e){alert('Error: '+e.message)}}
 window.refreshTaskList=async function(){try{const r=await fetch('/v1/tasks');if(!r.ok)throw new Error(r.status);const d=await r.json();const el=document.getElementById('tkl');if(d.data&&d.data.length)el.innerHTML=d.data.map(t=>'<div class="mi"><div class="tx">+esc(t.name||'')+' <s>'+esc(t.schedule||'')+'</s></div><button class="btn btn-g btn-s" onclick="deleteTask(\''+t.id+'\')">\u5220\u9664</button></div>').join('');else el.innerHTML='<div style="color:#8b949e;font-size:13px">\u662b\u65e0\u4ebb\u52a1</div>'}catch(e){}}
-
-window.deleteMemory=async function(id){try{await fetch('/v1/memory/'+encodeURIComponent(id),{method:'DELETE'});await refreshMemoryList()}catch(e){}}
-window.deleteTask=async function(id){try{await fetch('/v1/tasks/'+encodeURIComponent(id),{method:'DELETE'});await refreshTaskList()}catch(e){}}
-
-// Export
-window.showExport=function(){show('modal-export');document.getElementById('er').innerHTML=''}
-window.doExport=async function(){
-    if(!tid){document.getElementById('er').innerHTML='<div style="color:#ff5555;font-size:13px">\u8bf7\u5148\u9009\u6219\u4e00\u4e2a\u8bd5\u9898</div>';return}
-    const el=document.getElementById('er');
-    el.innerHTML='<div style="color:#8b949e;font-size:13px">\u5bf9\u51fa\u4e2d...</div>';
-    try{
-        const r=await fetch('/v1/export/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic_id:tid})});
-        const d=await r.json();
-        if(d.success)el.innerHTML='<div style="color:#3fb950;font-size:13px">\u2713 \u5df2\u51fa: '+esc(d.path||'')+'</div>';
-        else el.innerHTML='<div style="color:#ff5555;font-size:13px">+es(d.error||'\u5931\u625')+'</div>';
-    }catch(e){el.innerHTML='<div style="color:#ff5555;font-size:13px">Error: '+e.message+'</div>'}
-}
-
-// Init
-refreshTopics();
-</script>
+
+
+window.deleteMemory=async function(id){try{await fetch('/v1/memory/'+encodeURIComponent(id),{method:'DELETE'});await refreshMemoryList()}catch(e){}}
+
+window.deleteTask=async function(id){try{await fetch('/v1/tasks/'+encodeURIComponent(id),{method:'DELETE'});await refreshTaskList()}catch(e){}}
+
+
+
+// Export
+
+window.showExport=function(){show('modal-export');document.getElementById('er').innerHTML=''}
+
+window.doExport=async function(){
+
+    if(!tid){document.getElementById('er').innerHTML='<div style="color:#ff5555;font-size:13px">\u8bf7\u5148\u9009\u6219\u4e00\u4e2a\u8bd5\u9898</div>';return}
+
+    const el=document.getElementById('er');
+
+    el.innerHTML='<div style="color:#8b949e;font-size:13px">\u5bf9\u51fa\u4e2d...</div>';
+
+    try{
+
+        const r=await fetch('/v1/export/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic_id:tid})});
+
+        const d=await r.json();
+
+        if(d.success)el.innerHTML='<div style="color:#3fb950;font-size:13px">\u2713 \u5df2\u51fa: '+esc(d.path||'')+'</div>';
+
+        else el.innerHTML='<div style="color:#ff5555;font-size:13px">+es(d.error||'\u5931\u625')+'</div>';
+
+    }catch(e){el.innerHTML='<div style="color:#ff5555;font-size:13px">Error: '+e.message+'</div>'}
+
+}
+
+
+
+// Init
+
+refreshTopics();
+
+</script>
+
 </body></html>
 <script>
 // showLoading might be missing, re-add it
@@ -710,16 +736,16 @@ if(typeof showLoading==='undefined'){
 // Store theme in localStorage
 (function(){
     const th = {
-        dark: { --bg: #0d1117, --surface: #161b22, --surface2: #21262d, --text: #c9d1d9, --text-dim: #8b949e, --border: #30363d },
-        light: { --bg: #ffffff, --surface: #f6f8fa, --surface2: #e8eaed, --text: #1f2928, --text-dim: #67758e, --border: #d1d5da },
+        dark: { '--bg': '#0d1117', '--surface': '#161b22', '--surface2': '#21262d', '--text': '#c9d1d9', '--text-dim': '#8b949e', '--border': '#30363d' },
+        light: { '--bg': '#ffffff', '--surface': '#f6f8fa', '--surface2': '#e8eaed', '--text': '#1f2928', '--text-dim': '#67758e', '--border': '#d1d5da' },
     };
-    const accents = { 'blue': #58a6ff, 'green': #3fb950, 'purple': #d76eff, 'yellow': #d29900, 'red': #f60} };
+    const accents = { 'blue': '#58a6ff', 'green': '#3fb950', 'purple': '#d76eff', 'yellow': '#d29900', 'red': '#f60' };
     
     let currentTheme = localStorage.getItem('tea-theme') || 'dark';
     let currentAccent = localStorage.getItem('tea-accent') || 'blue';
 
     function applyTheme() {
-        const th = th.currentTheme];
+        const t = th[currentTheme];
         const root = document.documentElement;
         for (const [key, val] of Object.entries(th)) {
             root.style.setProperty(key, val);

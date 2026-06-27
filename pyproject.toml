@@ -44,6 +44,8 @@ dependencies = [
 tea_agent = "tea_agent.gui:main"
 tea-agent-web = "tea_agent.web:main"
 tea-agent-api = "tea_agent.server:main"
+tea-agent-acp = "tea_agent.protocol:main"
+tea-agent-cli = "tea_agent.cli:main"
 
 [project.optional-dependencies]
 web = [

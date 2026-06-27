@@ -45,9 +45,8 @@ class GatewayDaemon:
             self._api_server = APIServer(api_key="", config_path=self.config_path)
         return self._api_server
 
-    @property
-    def starlette_app(self):
-        """构建 Starlette 应用"""
+    def _build_app(self):
+        """构建 Starlette 应用实例（内部使用）"""
         routes = [
             Route("/health", endpoint=self._handle_health),
             Route("/api/tools", endpoint=self._handle_list_tools),
@@ -71,15 +70,21 @@ class GatewayDaemon:
             yield
             await self._on_shutdown()
 
-        app = Starlette(routes=routes, lifespan=lifespan)
-        return app# ── 生命周期 ──
+        return Starlette(routes=routes, lifespan=lifespan)
+
+    @property
+    def starlette_app(self):
+        """兼容属性 — 返回 Starlette 应用实例"""
+        return self._build_app()# ── 生命周期 ──
     def start(self, daemon=True):
         """启动 Gateway"""
         if _STATUS["running"]:
             return {"ok": False, "error": "已在运行", "port": _STATUS["port"]}
         self._start_time = time.time()
         _STATUS.update({"running": True, "pid": os.getpid(), "port": self.port, "started_at": self._start_time})
-        config = uvicorn.Config(app=self.starlette_app, host=self.host, port=self.port, log_level="info", reload=False, workers=1, access_log=False)
+        # 构建 Starlette 应用实例（属性不能传给 uvicorn，直接构建）
+        app = self._build_app()
+        config = uvicorn.Config(app=app, host=self.host, port=self.port, log_level="info", reload=False, workers=1, access_log=False)
         self._server = uvicorn.Server(config)
         if daemon:
             self._thread = threading.Thread(target=self._server.run, daemon=True, name="Gateway")

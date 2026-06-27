@@ -9,7 +9,7 @@ from datetime import datetime
 """
 
 from typing import List, Dict, Optional, TYPE_CHECKING
-from .session_context import SessionComponent, SessionContext
+from .session._context import SessionComponent, SessionContext
 from tea_agent.session._params import get_cheap_params
 
 if TYPE_CHECKING:

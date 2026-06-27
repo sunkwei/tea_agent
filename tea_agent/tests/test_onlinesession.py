@@ -14,8 +14,8 @@ OnlineSession 测试套件 — 模块级函数 + OnlineToolSession 核心方法�
 from unittest.mock import MagicMock, PropertyMock
 
 from tea_agent.onlinesession import detect_mode, extract_mode, OnlineToolSession
-from tea_agent.session_context import SessionContext
-from tea_agent.session_api_component import APIComponent
+from tea_agent.session._context import SessionContext
+from tea_agent.onlinesession import APIComponent
 
 
 # ════════════════════════════════════════════════════════════

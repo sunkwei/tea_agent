@@ -1044,7 +1044,7 @@ class OnlineToolSession(BaseChatSession):
 
     def _build_tools(self, tool_filter: list = None):
         """构建工具定义列表。"""
-        from tea_agent.session_tool_component import filter_tools
+        # from tea_agent.session_tool_component import filter_tools
         all_tools = self.tools_comp.build_tools()
         self.tools = filter_tools(all_tools, tool_filter)
         if tool_filter:

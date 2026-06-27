@@ -327,42 +327,131 @@ def toolkit_self_evolve_thread(action: str):
             return {"synced": False, "error": str(e)}
 
     # ═══════════════════════════════════════════
-    # 任务 3：技能 (Skills) 整理
+    # 任务 3：技能 (Skills) 整理 + 晋升
     # ═══════════════════════════════════════════
 
     def _organize_skills():
-        """调用 toolkit_dynamic_skill 整理技能。"""
+        """整理技能 + 自动晋升高置信度结晶技能到 SKILL.md。"""
+        result = {"skills": 0, "promoted": 0, "skipped": 0}
+
+        # ── 3a. 统计已有 SKILL.md 技能数 ──
         try:
-            # 动态导入避免循环依赖
-            import importlib.util
-            toolkit_dir = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), ""
-            )
-            skill_path = os.path.join(toolkit_dir, "toolkit_dynamic_skill.py")
-            if not os.path.exists(skill_path):
-                return {"skills": 0, "msg": "skill 模块未找到"}
+            skill_md_dir = os.path.expanduser("~/.tea_agent/skills")
+            if os.path.isdir(skill_md_dir):
+                skill_count = 0
+                for entry in os.listdir(skill_md_dir):
+                    entry_path = os.path.join(skill_md_dir, entry)
+                    if os.path.isdir(entry_path):
+                        for fname in ("SKILL.md", "BRIEF.md"):
+                            if os.path.isfile(os.path.join(entry_path, fname)):
+                                skill_count += 1
+                                break
+                result["skills"] = skill_count
+        except Exception:
+            pass
 
-            spec = importlib.util.spec_from_file_location(
-                "_dynamic_skill", skill_path
-            )
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            result = mod.toolkit_dynamic_skill("list")
-            skills = result.get("skills", []) if isinstance(result, dict) else []
-            count = len(skills)
+        # ── 3b. 晋升：JSON 结晶技能 → SKILL.md ──
+        try:
+            import yaml
+            skills_dir = os.path.expanduser("~/.tea_agent/skills")
+            if not os.path.isdir(skills_dir):
+                return result
 
-            # 按类别分组
-            by_category = Counter(
-                s.get("category", "general") for s in skills
-            )
+            for fname in os.listdir(skills_dir):
+                if not fname.endswith(".json") or fname == "skill_index.json":
+                    continue
+                fpath = os.path.join(skills_dir, fname)
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                except Exception:
+                    result["skipped"] += 1
+                    continue
 
-            return {
-                "skills": count,
-                "by_category": dict(by_category),
-                "top": [s.get("name", "?") for s in skills[:5]],
-            }
+                # 晋升条件：成功次数 >= 3 且置信度 >= 0.75
+                success_count = data.get("success_count", 0)
+                fail_count = data.get("fail_count", 0)
+                total = success_count + fail_count
+                confidence = success_count / total if total > 0 else 0.0
+
+                if success_count < 3 or confidence < 0.75:
+                    result["skipped"] += 1
+                    continue
+
+                name = data.get("name", "").strip()
+                if not name:
+                    name = data.get("example_task", fname[:30])
+                # 清理名称，作为目录名
+                safe_name = re.sub(r'[^\w\u4e00-\u9fff\s-]', '', name)[:40].strip()
+                if not safe_name:
+                    safe_name = f"skill_{hash(fname) % 10000:04d}"
+
+                # 检查是否已被晋升
+                skill_dir = os.path.join(skills_dir, safe_name)
+                skill_md = os.path.join(skill_dir, "SKILL.md")
+                if os.path.exists(skill_md):
+                    result["skipped"] += 1
+                    continue
+
+                # 构建 YAML front matter
+                desc = data.get("description", "") or data.get("example_task", "")[:100]
+                tags = data.get("tags", [])
+                category = data.get("category", "general")
+                steps = data.get("steps", [])
+                tools = data.get("tools", [])
+                tools_str = "\n".join(f"- `{t}`" for t in tools[:8]) if tools else ""
+                steps_str = "\n".join(f"{i+1}. {s}" for i, s in enumerate(steps[:10])) if steps else ""
+
+                # 构建内容
+                content_lines = [
+                    "---",
+                    f"name: {safe_name}",
+                    f"description: {desc}",
+                    f"category: {category}",
+                    f"tags: {yaml.dump(tags, default_flow_style=True).strip()}",
+                    f"version: {data.get('version', '1.0.0')}",
+                    f"success_count: {success_count}",
+                    f"confidence: {confidence:.2f}",
+                    "---",
+                ]
+                content_lines.append("")
+                content_lines.append(f"# {safe_name}")
+                content_lines.append("")
+                if desc:
+                    content_lines.append(desc)
+                    content_lines.append("")
+
+                if steps_str:
+                    content_lines.append("## 步骤")
+                    content_lines.append(steps_str)
+                    content_lines.append("")
+
+                if tools_str:
+                    content_lines.append("## 使用的工具")
+                    content_lines.append(tools_str)
+                    content_lines.append("")
+
+                if data.get("success_conditions"):
+                    content_lines.append("## 成功条件")
+                    for sc in data["success_conditions"][:5]:
+                        content_lines.append(f"- {sc}")
+                    content_lines.append("")
+
+                content_lines.append(f"> 自动晋升自 {fname}")
+
+                # 写入 SKILL.md
+                os.makedirs(skill_dir, exist_ok=True)
+                with open(skill_md, "w", encoding="utf-8") as f:
+                    f.write("\n".join(content_lines))
+
+                result["promoted"] += 1
+                logger.info(f"🏆 技能晋升: {safe_name} (置信度={confidence:.2f}, 成功{success_count}次)")
+
         except Exception as e:
-            return {"skills": 0, "error": str(e)}
+            logger.warning(f"技能晋升过程出错: {e}")
+            result["error"] = str(e)[:100]
+
+        return result
 
     # ═══════════════════════════════════════════
     # 任务 4：跨主题记忆提取
@@ -638,7 +727,11 @@ def toolkit_self_evolve_thread(action: str):
         if rd.get("synced"):
             lines.append(f"README: 已同步 ({rd.get('tools_count',0)}个工具)")
         if sk.get("skills"):
-            lines.append(f"技能: {sk.get('skills',0)}个")
+            lines.append(f"SKILL.md: {sk.get('skills',0)}个")
+        if sk.get("promoted", 0):
+            lines.append(f"🏆 技能晋升: {sk['promoted']}个")
+        if sk.get("skipped", 0) and not sk.get("promoted", 0):
+            pass  # skipped is normal (most skills don't qualify)
 
         _send_notification("🔄 自进化引擎", "\n".join(lines), expire_ms=6000)
 
@@ -655,7 +748,7 @@ def toolkit_self_evolve_thread(action: str):
         _write_state(state)
         _send_notification(
             "🔄 自进化引擎",
-            "已启动！每小时：工具分析 · README同步 · 技能整理 · 跨主题记忆提取",
+            "已启动！每小时：工具分析 · README同步 · 技能整理+晋升 · 跨主题记忆提取",
         )
 
         # 立即执行首轮
@@ -716,7 +809,7 @@ def toolkit_self_evolve_thread(action: str):
             "pid": os.getpid(),
             "started_at": state.get("started_at"),
             "cycle_interval": "1小时",
-            "tasks": ["工具使用分析", "README同步", "技能整理", "跨主题记忆提取"],
+            "tasks": ["工具使用分析", "README同步", "技能整理+晋升", "跨主题记忆提取"],
         }
 
     elif action == "stop":

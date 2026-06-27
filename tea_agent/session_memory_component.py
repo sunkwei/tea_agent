@@ -1,6 +1,3 @@
-import json
-import requests
-from datetime import datetime
 """
 会话记忆组件
 
@@ -8,6 +5,9 @@ from datetime import datetime
 从 SessionMemoryMixin 重构而来，使用组合模式替代 Mixin。
 """
 
+import json
+import requests
+from datetime import datetime
 from typing import List, Dict, Optional, TYPE_CHECKING
 from .session._context import SessionComponent, SessionContext
 from tea_agent.session._params import get_cheap_params
@@ -201,6 +201,7 @@ class MemoryComponent(SessionComponent):
 
     def get_injected_memories(self) -> List[Dict]:
         """获取当前会话注入的记忆列表"""
+        return list(self.ctx._injected_memories)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -459,7 +460,6 @@ class AutoMemoryExtractor:
         c.close()
 
         return {"total_memories": total, "from_topic": from_topic, "by_category": by_category}
-        return list(self.ctx._injected_memories)
 
     def get_memory_stats(self) -> Dict:
         """获取记忆统计"""

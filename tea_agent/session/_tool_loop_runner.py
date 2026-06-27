@@ -172,7 +172,7 @@ class LoopDetector:
         return result
     
     def reset(self):
-        """重置检测器状态。"""
+        """重置检测器状态（清空历史窗口）。"""
         self._tool_hashes.clear()
         self._contents.clear()
         self._tool_names.clear()

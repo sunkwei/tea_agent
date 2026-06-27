@@ -98,12 +98,7 @@ class BaseChatSession(ABC):
     def get_recent_messages(self) -> List[Dict]:
         """获取最近的消息（排除系统消息）"""
         return [m for m in self.messages if m["role"] != "system"]
-    # 从加载的历史消息中清除 reasoning_content。
-    # reasoning_content 是 DeepSeek thinking 模式下的会话内状态，
-    # 只在一个 API 会话内有效。从数据库加载的历史消息中的
-    # reasoning_content 属于之前的 API 会话，传回新会话将导致
-    # DeepSeek API 返回 400 错误：
-    # "The reasoning_content in the thinking mode must be passed back to the API."
+
     @staticmethod
     def _strip_reasoning_content(messages: List[Dict]) -> None:
         """

@@ -70,6 +70,7 @@ def extract_mode(result: dict):
 
 
 class APIComponent(SessionComponent):
+    """API 交互组件 — 负责 LLM API 通信（thinking 检测、流式调用、Token 用量追踪）。"""
     
     @property
     def name(self) -> str:
@@ -311,6 +312,7 @@ ESSENTIAL_TOOLS = {"toolkit_memory", "toolkit_kb"}
 
 
 def filter_tools(tools: list, tool_filter: list = None) -> list:
+    """按白名单筛选工具列表（保留 ESSENTIAL_TOOLS）。"""
     if tool_filter:
         allowed = set(tool_filter) | ESSENTIAL_TOOLS
         return [t for t in tools if t["function"]["name"] in allowed]
@@ -318,10 +320,12 @@ def filter_tools(tools: list, tool_filter: list = None) -> list:
 
 
 def has_tool(tools: list, name: str) -> bool:
+    """检查工具列表中是否存在指定名称的工具。"""
     return any(t.get("function", {}).get("name") == name for t in tools)
 
 
 class ToolComponent(SessionComponent):
+    """工具执行组件 — 负责工具调用执行、结果管理、输出截断与追踪。"""
     
     @property
     def name(self) -> str:
@@ -517,6 +521,7 @@ class ToolComponent(SessionComponent):
 logger = logging.getLogger("session.summarizer")
 
 class SummarizerComponent(SessionComponent):
+    """历史摘要组件 — 负责旧对话压缩、三级历史管理、语义摘要生成。"""
     
     @property
     def name(self) -> str:

@@ -6,8 +6,9 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.9.37-blue)](https://pypi.org/project/tea-agent)
 
-Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 60+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **Web / GUI / TUI / CLI** 四种界面。
+Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / CLI / Web / REST API / ACP Protocol / TUI** 六种界面形态。
 
 ---
 
@@ -16,8 +17,8 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 60+ 可调用
 - 🧠 **自进化引擎** — Agent 可以修改自身代码、创建新工具、优化提示词，实现自主进化
 - 🧰 **60+ 内置工具** — 涵盖文件操作、代码编辑、搜索、截图、OCR、包管理、Git 等
 - ⏱️ **智能命令超时** — 后台监控进程 CPU/MEM/IO，活跃进程自动延长超时至 4x，空闲进程及时终止
-- 🖥️ **四态界面** — Web（Starlette + SSE）、GUI（Tkinter）、TUI（Textual）、CLI，按需切换
-- 🌐 **Web 实时流式界面** — 浏览器访问，SSE 流式输出，工具调用实时可视化（含参数展示、执行状态动画）
+- 🖥️ **六种界面** — GUI（Tkinter）、CLI、Web（Starlette + SSE）、REST API、ACP Protocol、TUI（Textual），按需选择
+- 🌐 **Web V2 实时流式界面** — 单页应用(SPA)，内存搜索、记忆管理、任务调度、历史会话，全部功能浏览器内完成
 - 📚 **项目知识库** — 自动构建符号索引、调用图，支持代码影响分析
 - 🔄 **断点续聊** — 聊天记录持久化，重启后恢复上下文
 - 📋 **Plan / TODO** — 内置任务规划与追踪系统
@@ -54,70 +55,204 @@ playwright install chromium
 ## 🚀 快速开始
 
 ```bash
-# 启动 Web 界面（浏览器访问 http://127.0.0.1:8080）
-tea-agent-web
+# Web V2 界面 — 单页应用，全功能浏览器体验（推荐）
+python -m tea_agent.server
 
-# 启动 GUI（默认）
+# GUI 桌面界面（Tkinter）
 tea_agent
 
-# 启动 TUI
-tea-agent-tui
+# ACP Protocol Server（VS Code 集成）
+python -m tea_agent.protocol --port 9090
 
-# 启动 CLI
-tea-agent-cli
+# CLI 对话
+python -m tea_agent.cli
+
+# TUI 界面
+python -m tea_agent.tui
 ```
 
 ---
 
-## 💻 Web 界面
+## 💻 界面形态
 
-Tea Agent 的 Web 界面基于 **Starlette** + **Server-Sent Events (SSE)**，提供与桌面端同等的全功能 LLM 对话体验。
+Tea Agent 提供 **六种界面形态**，覆盖从桌面到 Web、从命令行到 API 的全部使用场景。
 
-### 启动方式
+---
+
+### 1. GUI 桌面界面 (`tea_agent`)
+
+基于 **Tkinter** 的原生桌面客户端，支持 Windows / Linux / macOS。
+
+**启动方式：**
+```bash
+tea_agent                         # 入口命令
+python -m tea_agent.gui           # 模块方式
+```
+
+**功能特性：**
+- 🔄 实时流式对话，Markdown 渲染，工具调用可视化
+- 📋 左侧会话列表，支持搜索、切换、新建、删除
+- 🧠 长期记忆管理面板（查看/搜索/添加/删除）
+- ⏱️ 定时任务管理（scheduler 增删改查）
+- 📤 PDF 导出、聊天记录导出
+- 🌙 系统托盘常驻，全局热键唤出
+- 🎨 主题切换 + 字体缩放
+
+---
+
+### 2. CLI 命令行界面 (`python -m tea_agent.cli`)
+
+轻量级终端对话界面，适合远程服务器、CI/CD 管道、脚本集成。
+
+**启动方式：**
+```bash
+python -m tea_agent.cli           # 交互模式
+python -m tea_agent.cli --oneshot "帮我写一个快速排序"  # 单次模式
+```
+
+**功能特性：**
+- 📝 交互式 REPL 对话，支持多行输入（`\` 换行，EOF 提交）
+- 🎨 语法高亮 + 工具调用实时显示
+- 💾 聊天记录按 UUID 持久化
+- 📋 `/history` 命令查看历史，`/clear` 清屏
+- 🔧 支持指定配置文件：`python -m tea_agent.cli -c config_prod.yaml`
+- 单次模式适合脚本调用：直接输出结果到 stdout
+
+---
+
+### 3. Web V2 界面 (`python -m tea_agent.server`)
+
+新一代单页应用（SPA），纯前端 HTML/JS + 后端 Starlette API，所有功能在浏览器中完成。
+
+> **注意**：`python -m tea_agent.server` 同时启动 REST API 和 Web V2 前端。
+> 浏览器访问 `http://127.0.0.1:8081` 即可使用完整 Web 界面。
+
+**启动方式：**
+```bash
+python -m tea_agent.server           # 默认端口 8081
+tea-agent-api                        # PyPI 入口
+python -m tea_agent.server --port 8099 --host 0.0.0.0
+```
+
+**界面特性：**
+
+| 功能 | 说明 |
+|------|------|
+| 💬 **流式对话** | SSE 实时推送，逐 token 输出 |
+| 📋 **会话管理** | 左侧列表面板，点击切换历史会话，自动加载消息 |
+| 🧠 **记忆管理** | 弹窗面板，查看/搜索/添加/删除长期记忆 |
+| ⏱️ **任务调度** | 定时任务 CRUD，cron / interval / daily 等 |
+| 🔍 **全局搜索** | 搜索聊天记录、记忆、任务 |
+| 📤 **PDF 导出** | 导出当前会话为 PDF |
+| 🌙 **主题切换** | 深色/浅色主题 + 强调色定制 |
+| 📎 **图片预览** | 消息中图片点击放大 |
+
+**技术架构：**
+```
+前端: 纯 HTML5 + CSS3 + Vanilla JS（无框架依赖）
+后端: Starlette + SSE 流式
+API:  /v1/chat/completions（OpenAI 兼容）
+      /v1/sessions（CRUD）
+      /v1/memory（记忆管理）
+      /v1/tasks（任务调度）
+      /v1/search（全局搜索）
+      /v1/export/pdf（PDF 导出）
+```
+
+---
+
+### 4. REST API Server (`python -m tea_agent.server`)
+
+OpenAI 兼容的 HTTP API 服务器，方便第三方应用集成。
+
+**启动方式：**
+```bash
+tea-agent-api                        # PyPI 入口
+python -m tea_agent.server           # 模块方式
+python -m tea_agent.server --port 8081 --host 0.0.0.0
+```
+
+**API 路由：**
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| `GET` | `/health` | 健康检查 |
+| `POST` | `/v1/chat/completions` | OpenAI 兼容聊天（支持 stream） |
+| `GET` | `/v1/models` | 当前模型信息 |
+| `GET` | `/v1/tools` | 所有可用工具列表 |
+| `POST` | `/v1/tools/{name}/run` | 直接调用指定工具 |
+| `GET/POST` | `/v1/sessions` | 列出/创建会话 |
+| `GET/DELETE` | `/v1/sessions/{id}` | 获取/删除会话 |
+| `GET` | `/v1/sessions/{id}/messages` | 获取会话消息 |
+| `GET` | `/v1/config` | 获取配置 |
+| `POST` | `/v1/config/switch` | 切换配置文件 |
+| `GET/POST/DELETE` | `/v1/memory` | 记忆管理 |
+| `GET/POST/DELETE` | `/v1/tasks` | 定时任务管理 |
+| `GET` | `/v1/search` | 全局搜索 |
+| `POST` | `/v1/export/pdf` | 导出 PDF |
+| `GET` | `/docs` | OpenAPI 文档 |
+| `GET` | `/openapi.json` | OpenAPI Schema |
+
+**示例：**
+```bash
+# 流式聊天
+curl -N -X POST http://127.0.0.1:8081/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Hello"}],"stream":true}'
+
+# 非流式聊天
+curl -X POST http://127.0.0.1:8081/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Hello"}],"stream":false}'
+
+# 列出会话
+curl http://127.0.0.1:8081/v1/sessions
+
+# 搜索
+curl "http://127.0.0.1:8081/v1/search?q=keyword"
+```
+
+---
+
+### 5. ACP Protocol Server (`python -m tea_agent.protocol`)
+
+Agent Communication Protocol 服务器，提供标准化的 Agent-to-Agent 通信，可用于 VS Code / Cursor 等 IDE 集成。
+
+**启动方式：**
+```bash
+python -m tea_agent.protocol --port 9090
+```
+
+**API 路由：**
+
+| 方法 | 路由 | 说明 |
+|------|------|------|
+| `GET` | `/health` | 健康检查 |
+| `GET` | `/v1/agents` | 发现所有可用 Agent |
+| `GET` | `/v1/agents/tea-agent` | Tea Agent 详情（含工具列表） |
+| `POST` | `/v1/agents/tea-agent/chat` | 发送消息（支持 stream） |
+| `GET/POST` | `/v1/sessions` | 列出/创建会话 |
+| `GET/DELETE` | `/v1/sessions/{id}` | 获取/删除会话 |
+| `GET` | `/v1/sessions/{id}/messages` | 获取会话消息 |
+
+**特性：**
+- 🧰 **工具发现** — 客户端可查询 Agent 的完整工具列表和 JSON Schema
+- 📡 **SSE 流式** — 实时推送对话内容，支持逐 token 输出
+- 🧵 **会话管理** — 多会话隔离，可获取历史消息
+- 🔗 **IDE 集成** — 标准 ACP 协议，可对接任何 ACP 客户端
+
+---
+
+### 6. Web V1 旧版 (`tea-agent-web`)
+
+基于 Starlette + SSE 的旧版 Web 界面，工具调用可视化卡片。
 
 ```bash
-# 方式 1: 命令行入口
 tea-agent-web
-
-# 方式 2: Python 模块
 python -m tea_agent.web
-
-# 自定义端口
-python -m tea_agent.web --port 8099 --host 0.0.0.0
 ```
 
-### 界面特性
-
-| 特性 | 说明 |
-|------|------|
-| 🖥️ **流式对话** | SSE 实时推送，逐 token 流式输出，低延迟 |
-| 🧠 **思考过程可视化** | AI 的推理过程实时展开显示，支持折叠 |
-| 🔧 **工具调用可视化** | 详见下方「工具调用实时展示」 |
-| 📝 **Markdown 渲染** | 自动渲染代码块、表格、列表等 |
-| 🌙 **深色主题** | 护眼深色主题，代码高亮 |
-| 📋 **历史会话** | 自动保存，重启后恢复上下文 |
-| 🔄 **断点续聊** | 随时打断 AI，重新提问 |
-
-### 工具调用实时展示
-
-Web 界面优化了工具调用的可视化，逐工具实时展示：
-
-```
-┌─ 🔧 调用工具: toolkit_file ─────────────────⏳─┐
-│  action=read                                          │
-│  filename=tea_agent/config.py                         │
-│  offset=0                                             │
-│  limit=50                                             │
-└────────────────────────────────────────────────────────┘
-```
-
-**展示特性：**
-
-- **实时逐工具** — 每个工具调用立即创建独立卡片，无需等待全部完成
-- **参数完整显示** — 所有参数按 `key=value` 格式完整列出，超长参数智能截断（>500字符显示 `… [剩余 N 字符]`）
-- **执行状态动画** — 执行中显示旋转动画 ⏳，完成后变为 ✅
-- **工具结果** — 工具执行结果自动展开显示
-- **格式** — 等宽字体 + 深色背景，清晰易读
+> 推荐使用 Web V2（`python -m tea_agent.gui2`），功能更全面。
 
 ---
 
@@ -355,12 +490,12 @@ if context._injected_memories_text:
 ```
 [系统记忆 — 以下为需要遵循的有效信息和规则]
 
-## 长期背景/偏好/关键结论
+##### 长期背景/偏好/关键结论
 {semantic_summary}
 
 ---
 
-## 历史工具调用链回顾
+##### 历史工具调用链回顾
 {tool_chain_summary}
 ```
 
@@ -656,7 +791,7 @@ list       → 列出所有技能模式
 
 ---
 
-## 🧰 工具概览（65+）
+## 🧰 工具概览（70+）
 
 | 类别 | 工具 |
 |------|------|
@@ -678,8 +813,6 @@ list       → 列出所有技能模式
 | 🧬 自进化 | `toolkit_self_evolve`, `toolkit_self_evolve_thread`, `toolkit_prompt_evolve`, `toolkit_evolution_exp` |
 | 🛠️ 其他 | `toolkit_question`, `toolkit_stream_save`, `toolkit_set_topic_title`, `toolkit_self_report`, `toolkit_comment`, `toolkit_toggle_reasoning`, `toolkit_get_config_path`, `toolkit_get_models`, `toolkit_list_provider_models`, `toolkit_ip_location_my`, `toolkit_custom_commands`, `toolkit_scheduler_storage`, `toolkit_mode` |
 
-> **Web 界面特性**：工具调用实时展示完整参数、执行状态动画、SSE 流式输出。详见上方 [💻 Web 界面](#-web-界面) 章节。
->
 > 完整工具列表见 [`docs/TOOLS.md`](docs/TOOLS.md)（每小时自动更新）
 
 ---
@@ -727,28 +860,35 @@ Dispatcher.dispatch(goal)
 
 ```
 tea_agent/
-├── web/               # Web 界面（Starlette + SSE）
-│   ├── server.py      # SSE 流式服务器 + 工具参数解析
-│   ├── __main__.py    # python -m tea_agent.web 入口
-│   └── static/        # 前端资源
-│       ├── app.js     # 对话交互、工具可视化、Markdown 渲染
-│       ├── style.css  # 深色主题 + 工具卡片动画
-│       └── index.html # 主页面
-├── gui.py              # GUI 主界面（Tkinter）
-├── tui.py              # TUI 界面（Textual）
-├── cli.py / tlk.py     # CLI 交互
-├── agent.py            # Agent 核心引擎
-├── config.py           # 配置管理
-├── memory.py           # 长期记忆
-├── prompt_manager.py   # 提示词版本管理
-├── toolkit/            # 65+ 工具模块（含 diff/edit/plan/scheduler/mcp…）
-├── session/            # 会话管理（Tool/Schemata/token 裁剪）
-├── multi_agent/        # 多 Agent 协作
-├── lsp/                # LSP 代码智能（jedi + tree-sitter 符号索引）
-├── store/              # 数据存储（10 子模块：topics/conversations/memories/vectors…）
-├── evaluation/         # 任务评估
-├── skills/             # 技能结晶
-└── _gui/               # GUI 组件（12 模块：渲染器/搜索/主题管理/托盘/字体…）
+├── gui.py                 # GUI 桌面入口（Tkinter）
+├── gui2/                  # Web V2 界面（SPA + Bottle）
+│   ├── server.py          # Bottle 静态服务器
+│   └── frontend/          # HTML/CSS/JS 单页应用
+│       └── index.html     # 全部界面逻辑（无框架依赖）
+├── web/                   # Web V1 界面（Starlette + SSE）
+│   ├── server.py          # SSE 流式服务器
+│   └── static/            # 前端资源
+├── server/                # REST API Server（OpenAI 兼容）
+│   ├── server.py          # Starlette 路由 + SSE
+│   └── __main__.py        # python -m tea_agent.server
+├── protocol/              # ACP Protocol Server
+│   ├── acp_server.py      # ACP 协议实现
+│   └── __main__.py        # python -m tea_agent.protocol
+├── cli.py                 # CLI 命令行
+├── tui.py                 # TUI 界面（Textual）
+├── agent.py               # Agent 核心引擎
+├── config.py              # 配置管理
+├── memory.py              # 长期记忆
+├── prompt_manager.py      # 提示词版本管理
+├── toolkit/               # 70+ 工具模块
+├── session/               # 会话管理（历史压缩/Token 裁剪）
+├── multi_agent/           # 多 Agent 协作
+├── lsp/                   # LSP 代码智能
+├── store/                 # 数据存储（10 子模块）
+├── evaluation/            # 任务评估
+├── skills/                # 技能结晶
+├── sdk/                   # Python SDK（外部调用）
+└── _gui/                  # GUI 组件（12 模块）
 ```
 
 ---

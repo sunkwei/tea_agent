@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tea_agent_sdk"
+version = "0.1.0"
+description = "Tea Agent Python SDK — 标一准接触"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.30.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tea_agent_sdk**"]

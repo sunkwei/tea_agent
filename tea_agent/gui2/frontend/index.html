@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tea Agent</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0d1117;color:#c9d1d9;height:100vh;overflow:hidden}
+#app{display:flex;height:100vh}
+#sidebar{width:260px;background:#161b22;border-right:1px solid #30363d;display:flex;flex-direction:column;flex-shrink:0}
+.sb-hdr{padding:16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #30363d}
+.sb-hdr h1{font-size:22px}.sb-hdr span{font-size:16px;font-weight:600;color:#58a6ff}
+.sb-acts{padding:12px}
+.btn{padding:8px 16px;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s}
+.btn-p{background:#58a6ff;color:#fff;width:100%}.btn-p:hover{background:#1f6feb}
+.btn-s{padding:4px 12px;font-size:12px}
+.btn-g{background:transparent;color:#8b949e}.btn-g:hover{background:#21262d;color:#c9d1d9}
+.tl{flex:1;overflow-y:auto;padding:8px}
+.ti{padding:8px 12px;border-radius:6px;cursor:pointer;margin-bottom:2px;font-size:13px;color:#8b949e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:all .15s}
+.ti:hover{background:#21262d;color:#c9d1d9}
+.ti.act{background:#1f6feb;color:#fff}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#tb{padding:8px 16px;border-bottom:1px solid #30363d;display:flex;align-items:center;gap:8px}
+#tt{flex:1;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#msgs{flex:1;overflow-y:auto;padding:16px}
+.w{text-align:center;padding:60px 20px;color:#8b949e}
+.w h2{font-size:20px;color:#c9d1d9}
+.m{margin-bottom:16px;max-width:85%}
+.m.u{margin-left:auto}.m.a{margin-right:auto}
+.ml{font-size:11px;color:#8b949e;margin-bottom:4px}
+.mb{padding:10px 14px;border-radius:8px;line-height:1.6;font-size:14px;white-space:pre-wrap}
+.m.u .mb{background:#1f6feb;color:#fff;border-bottom-right-radius:2px}
+.m.a .mb{background:#21262d;border-bottom-left-radius:2px}
+#ia{padding:12px 16px;border-top:1px solid #30363d;display:flex;gap:8px;align-items:flex-end}
+#ci{flex:1;padding:10px 12px;border:1px solid #30363d;border-radius:8px;background:#161b22;color:#c9d1d9;font-size:14px;resize:none;outline:none;font-family:inherit;min-height:44px}
+#ci:focus{border-color:#58a6ff}
+.bs{padding:10px 20px;background:#58a6ff;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600}
+.bs:disabled{opacity:.4}
+.mo{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000}
+.mc{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:24px;min-width:400px;max-width:600px;max-height:80vh;overflow-y:auto}
+.mc h3{margin-bottom:16px}.mc input,.mc textarea{width:100%;padding:8px;border:1px solid #30363d;border-radius:6px;background:#21262d;color:#c9d1d9;font-size:13px;margin-bottom:8px;outline:none}
+.mc input:focus,.mc textarea:focus{border-color:#58a6ff}
+.ma{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+.mi{padding:8px 0;border-bottom:1px solid #30363d;display:flex;justify-content:space-between;align-items:center}
+.mi .tx{flex:1;font-size:13px}
+.mi .tx s{color:#8b949e;display:block;font-size:11px}
+</style>
+</head>
+<body>
+<div id="app">
+<aside id="sidebar">
+<div class="sb-hdr"><h1>☕</h1><span>Tea Agent</span></div>
+<div class="sb-acts"><button class="btn btn-p" onclick="newTopic()">+ 新对话</button></div>
+<div id="tl" class="tl"></div>
+</aside>
+<main id="main">
+<div id="tb">
+<span id="tt">欢迎使用 Tea Agent</span>
+<button class="btn btn-g btn-s" onclick="showSearch()">搜索</button>
+<button class="btn btn-g btn-s" onclick="showMemory()">记忆</button>
+<button class="btn btn-g btn-s" onclick="showScheduler()">任务</button>
+<button class="btn btn-g btn-s" onclick="showExport()">导出</button>
+<button class="btn btn-g btn-s" onclick="clearChat()">清空</button>
+</div>
+<div id="msgs">
+<div class="w">
+<h2>Tea Agent</h2>
+<p>开始对话，或使用上方工具栏管理记忆、任务和搜索</p>
+</div>
+</div>
+<div id="ia">
+<textarea id="ci" rows="1" placeholder="输入消息... (Enter 发送)" onkeydown='if(event.key==="Enter"&&!event.shiftKey){event.preventDefault();send()}' oninput="document.getElementById('bs').disabled=!this.value.trim()"></textarea>
+<button id="bs" class="bs" disabled onclick="send()">发送</button>
+</div>
+</main>
+</div>
+<script>
+let tid=null,streaming=false;
+const $=id=>document.getElementById(id);
+const esc=t=>{if(!t)return"";let d=document.createElement("div");d.textContent=t;return d.innerHTML};
+
+function addMsg(r,c,s){
+    let d=document.createElement("div");
+    d.className="m "+r;
+    d.innerHTML='<div class="ml">'+(r=='u'?'你':'Tea Agent')+'</div><div class="mb">'+esc(c)+'</div>';
+    $("msgs").appendChild(d);
+    setTimeout(()=>$("msgs").scrollTop=$("msgs").scrollHeight,50);
+    return d.querySelector(".mb");
+}
+
+function rmw(){document.querySelector(".w")?.remove()}
+
+window.send=async function(){
+    let inp=$("ci"),msg=inp.value.trim();
+    if(!msg||streaming)return;
+    inp.value="";
+    $("bs").disabled=true;
+    rmw();
+    addMsg("u",msg);
+    let ab=addMsg("a","",true);
+    streaming=true;
+    try{
+        let p={messages:[{role:"user",content:msg}],stream:true};
+        if(tid)p.topic_id=tid;
+        let r=await fetch("/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
+        if(!r.ok)throw new Error(r.status);
+        let rd=r.body.getReader(),dec=new TextDecoder(),buf="";
+        while(true){
+            let{done,value}=await rd.read();
+            if(done)break;
+            buf+=dec.decode(value,{stream:true});
+            let ls=buf.split("\n");
+            for(let i=0;i<ls.length-1;i++){
+                let l=ls[i].trim();
+                if(l.startsWith("data:")){
+                    try{let d=JSON.parse(l.slice(5));if(d.choices?.[0]?.delta?.content)ab.innerHTML+=d.choices[0].delta.content}catch(e){}
+                }
+            }
+            buf=ls[ls.length-1];
+        }
+    }catch(e){ab.innerHTML="<span style='color:#ff5555'>Error: "+e.message+"</span>"}
+    finally{streaming=false;$("bs").disabled=false;refreshTopics()}
+};
+
+async function refreshTopics(){
+    try{
+        let r=await fetch("/v1/sessions");
+        if(!r.ok)return;
+        let d=await r.json();
+        if(d.data){
+            $("tl").innerHTML=d.data.map(t=>{
+                const title=t.title||t.id.slice(0,8);
+                const cls='ti'+(t.id===tid?' act':'');
+                return `<div class="${cls}" onclick="openTopic('${t.id}','${title}')">${esc(title)}</div>`;
+            }).join('');
+        }
+    }catch(e){}
+}
+
+window.openTopic=async function(id,title){
+    tid=id;
+    $("tt").textContent=title||id.slice(0,8);
+    refreshTopics();
+// Modal utilities
+function show(id){document.getElementById(id).style.display='flex'}
+function hide(id){document.getElementById(id).style.display='none'}
+
+// Search
+window.showSearch=function(){
+    show('modal-search');
+    document.getElementById('sq').value='';
+    document.getElementById('sr').innerHTML='';
+    setTimeout(()=>document.getElementById('sq').focus(),100);
+}
+window.doSearch=async function(){
+    const q=document.getElementById('sq').value.trim();
+    if(!q)return;
+    const el=document.getElementById('sr');
+    el.innerHTML='<div style="color:#8b949e;font-size:13px">搜索中...</div>';
+    try{
+        const r=await fetch('/v1/search?q='+encodeURIComponent(q)+'&limit=20');
+        if(!r.ok)throw new Error(r.status);
+        const d=await r.json();
+        let h='';
+        if(d.conversations&&d.conversations.length){
+            h+='<div style="font-size:13px;font-weight:600;margin:8px 0 4px">对话结果</div>';
+            d.conversations.forEach(c=>{
+                h+='<div class="sr"><div class="st">'+esc(c.user_msg||c.ai_msg||'')+'</div><div class="sp">'+(c.stamp||'')+'</div></div>';
+            });
+        }
+        if(d.memories&&d.memories.length){
+            h+='<div style="font-size:13px;font-weight:600;margin:8px 0 4px">记忆结果</div>';
+            d.memories.forEach(m=>{
+                h+='<div class="sr"><div class="st">'+esc(m.content||'')+'</div><div class="sp">'+esc(m.category||'')+'</div></div>';
+            });
+        }
+        if(!h)h='<div style="color:#8b949e;font-size:13px">没有结果</div>';
+        el.innerHTML=h;
+    }catch(e){el.innerHTML='<div style="color:#ff5555;font-size:13px">Error: '+e.message+'</div>'}
+}
+
+// Memory
+window.showMemory=async function(){
+    show('modal-memory');
+    document.getElementById('mc').value='';
+    await refreshMemoryList();
+}
+window.addMemory=async function(){
+    const c=document.getElementById('mc').value.trim();
+    if(!c)return;
+    try{
+        await fetch('/v1/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:c})});
+        document.getElementById('mc').value='';
+        await refreshMemoryList();
+    }catch(e){alert('Error: '+e.message)}
+}
+window.refreshMemoryList=async function(){
+    try{
+        const r=await fetch('/v1/memory');
+        if(!r.ok)throw new Error(r.status);
+        const d=await r.json();
+        const el=document.getElementById('ml');
+        if(d.data&&d.data.length){
+            el.innerHTML=d.data.map(m=>'<div class="mi"><div class="tx">'+esc(m.content||'')+' <s>'+esc(m.category||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteMemory(\'+m.id+\')">删除</button></div>').join('');
+        }else{el.innerHTML='<div style="color:#8b949e;font-size:13px">暂无记忆</div>'}
+    }catch(e){}
+}
+window.deleteMemory=async function(id){
+    try{await fetch('/v1/memory/'+id,{method:'DELETE'});await refreshMemoryList();}catch(e){}
+}
+
+// Scheduler
+window.showScheduler=async function(){
+    show('modal-scheduler');
+    document.getElementById('tn').value='';
+    document.getElementById('tc').value='';
+    document.getElementById('ts').value='';
+    await refreshTaskList();
+}
+window.addTask=async function(){
+    const name=document.getElementById('tn').value.trim();
+    const cmd=document.getElementById('tc').value.trim();
+    const sched=document.getElementById('ts').value.trim();
+    if(!name||!cmd)return;
+    try{
+        await fetch('/v1/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,command:cmd,schedule:sched||'once'})});
+        document.getElementById('tn').value='';
+        document.getElementById('tc').value='';
+        document.getElementById('ts').value='';
+        await refreshTaskList();
+    }catch(e){alert('Error: '+e.message)}
+}
+window.refreshTaskList=async function(){
+    try{
+        const r=await fetch('/v1/tasks');
+        if(!r.ok)throw new Error(r.status);
+        const d=await r.json();
+        const el=document.getElementById('tkl');
+        if(d.data&&d.data.length){
+            el.innerHTML=d.data.map(t=>'<div class="mi"><div class="tx">'+esc(t.name||'')+' <s>'+esc(t.schedule||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteTask(\'+t.id+\')">删除</button></div>').join('');
+        }else{el.innerHTML='<div style="color:#8b949e;font-size:13px">暂无任务</div>'}
+    }catch(e){}
+}
+window.deleteTask=async function(id){
+    try{await fetch('/v1/tasks/'+id,{method:'DELETE'});await refreshTaskList();}catch(e){}
+}
+
+// Export
+window.showExport=function(){
+    show('modal-export');
+    document.getElementById('er').innerHTML='';
+}
+window.doExport=async function(){
+    if(!tid){document.getElementById('er').innerHTML='<div style="color:#ff5555;font-size:13px">请先选择一个话题</div>';return}
+    const el=document.getElementById('er');
+    el.innerHTML='<div style="color:#8b949e;font-size:13px">导出中...</div>';
+    try{
+        const r=await fetch('/v1/export/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic_id:tid})});
+        const d=await r.json();
+        if(d.success)el.innerHTML='<div style="color:#3fb950;font-size:13px">✓ 已导出: '+esc(d.path||'')+'</div>';
+        else el.innerHTML='<div style="color:#ff5555;font-size:13px">'+esc(d.error||'失败')+'</div>';
+    }catch(e){el.innerHTML='<div style="color:#ff5555;font-size:13px">Error: '+e.message+'</div>'}
+}
+
+    try{
+        let r=await fetch("/v1/sessions/"+id+"/messages");
+        if(!r.ok)return;
+        let d=await r.json();
+        $("msgs").innerHTML="";
+        if(d.data)d.data.forEach(m=>addMsg(m.role==="user"?"u":"a",m.content||""));
+    }catch(e){}
+}
+
+window.newTopic=function(){
+    tid=null;
+    $("tt").textContent="新对话";
+    $("msgs").innerHTML="";
+    refreshTopics();
+// Modal utilities
+function show(id){document.getElementById(id).style.display='flex'}
+function hide(id){document.getElementById(id).style.display='none'}
+
+// Search
+window.showSearch=function(){
+    show('modal-search');
+    document.getElementById('sq').value='';
+    document.getElementById('sr').innerHTML='';
+    setTimeout(()=>document.getElementById('sq').focus(),100);
+}
+window.doSearch=async function(){
+    const q=document.getElementById('sq').value.trim();
+    if(!q)return;
+    const el=document.getElementById('sr');
+    el.innerHTML='<div style="color:#8b949e;font-size:13px">搜索中...</div>';
+    try{
+        const r=await fetch('/v1/search?q='+encodeURIComponent(q)+'&limit=20');
+        if(!r.ok)throw new Error(r.status);
+        const d=await r.json();
+        let h='';
+        if(d.conversations&&d.conversations.length){
+            h+='<div style="font-size:13px;font-weight:600;margin:8px 0 4px">对话结果</div>';
+            d.conversations.forEach(c=>{
+                h+='<div class="sr"><div class="st">'+esc(c.user_msg||c.ai_msg||'')+'</div><div class="sp">'+(c.stamp||'')+'</div></div>';
+            });
+        }
+        if(d.memories&&d.memories.length){
+            h+='<div style="font-size:13px;font-weight:600;margin:8px 0 4px">记忆结果</div>';
+            d.memories.forEach(m=>{
+                h+='<div class="sr"><div class="st">'+esc(m.content||'')+'</div><div class="sp">'+esc(m.category||'')+'</div></div>';
+            });
+        }
+        if(!h)h='<div style="color:#8b949e;font-size:13px">没有结果</div>';
+        el.innerHTML=h;
+    }catch(e){el.innerHTML='<div style="color:#ff5555;font-size:13px">Error: '+e.message+'</div>'}
+}
+
+// Memory
+window.showMemory=async function(){
+    show('modal-memory');
+    document.getElementById('mc').value='';
+    await refreshMemoryList();
+}
+window.addMemory=async function(){
+    const c=document.getElementById('mc').value.trim();
+    if(!c)return;
+    try{
+        await fetch('/v1/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:c})});
+        document.getElementById('mc').value='';
+        await refreshMemoryList();
+    }catch(e){alert('Error: '+e.message)}
+}
+window.refreshMemoryList=async function(){
+    try{
+        const r=await fetch('/v1/memory');
+        if(!r.ok)throw new Error(r.status);
+        const d=await r.json();
+        const el=document.getElementById('ml');
+        if(d.data&&d.data.length){
+            el.innerHTML=d.data.map(m=>'<div class="mi"><div class="tx">'+esc(m.content||'')+' <s>'+esc(m.category||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteMemory(\'+m.id+\')">删除</button></div>').join('');
+        }else{el.innerHTML='<div style="color:#8b949e;font-size:13px">暂无记忆</div>'}
+    }catch(e){}
+}
+window.deleteMemory=async function(id){
+    try{await fetch('/v1/memory/'+id,{method:'DELETE'});await refreshMemoryList();}catch(e){}
+}
+
+// Scheduler
+window.showScheduler=async function(){
+    show('modal-scheduler');
+    document.getElementById('tn').value='';
+    document.getElementById('tc').value='';
+    document.getElementById('ts').value='';
+    await refreshTaskList();
+}
+window.addTask=async function(){
+    const name=document.getElementById('tn').value.trim();
+    const cmd=document.getElementById('tc').value.trim();
+    const sched=document.getElementById('ts').value.trim();
+    if(!name||!cmd)return;
+    try{
+        await fetch('/v1/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,command:cmd,schedule:sched||'once'})});
+        document.getElementById('tn').value='';
+        document.getElementById('tc').value='';
+        document.getElementById('ts').value='';
+        await refreshTaskList();
+    }catch(e){alert('Error: '+e.message)}
+}
+window.refreshTaskList=async function(){
+    try{
+        const r=await fetch('/v1/tasks');
+        if(!r.ok)throw new Error(r.status);
+        const d=await r.json();
+        const el=document.getElementById('tkl');
+        if(d.data&&d.data.length){
+            el.innerHTML=d.data.map(t=>'<div class="mi"><div class="tx">'+esc(t.name||'')+' <s>'+esc(t.schedule||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteTask(\'+t.id+\')">删除</button></div>').join('');
+        }else{el.innerHTML='<div style="color:#8b949e;font-size:13px">暂无任务</div>'}
+    }catch(e){}
+}
+window.deleteTask=async function(id){
+    try{await fetch('/v1/tasks/'+id,{method:'DELETE'});await refreshTaskList();}catch(e){}
+}
+
+// Export
+window.showExport=function(){
+    show('modal-export');
+    document.getElementById('er').innerHTML='';
+}
+window.doExport=async function(){
+    if(!tid){document.getElementById('er').innerHTML='<div style="color:#ff5555;font-size:13px">请先选择一个话题</div>';return}
+    const el=document.getElementById('er');
+    el.innerHTML='<div style="color:#8b949e;font-size:13px">导出中...</div>';
+    try{
+        const r=await fetch('/v1/export/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic_id:tid})});
+        const d=await r.json();
+        if(d.success)el.innerHTML='<div style="color:#3fb950;font-size:13px">✓ 已导出: '+esc(d.path||'')+'</div>';
+        else el.innerHTML='<div style="color:#ff5555;font-size:13px">'+esc(d.error||'失败')+'</div>';
+    }catch(e){el.innerHTML='<div style="color:#ff5555;font-size:13px">Error: '+e.message+'</div>'}
+}
+
+}
+
+window.clearChat=function(){$("msgs").innerHTML=""}
+
+window.showSearch=function(){alert("Search dialog (coming soon)")}
+window.showMemory=function(){alert("Memory dialog (coming soon)")}
+window.showScheduler=function(){alert("Scheduler dialog (coming soon)")}
+window.showExport=function(){alert("PDF export dialog (coming soon)")}
+
+refreshTopics();
+// Modal utilities
+function show(id){document.getElementById(id).style.display='flex'}
+function hide(id){document.getElementById(id).style.display='none'}
+
+// Search
+window.showSearch=function(){
+    show('modal-search');
+    document.getElementById('sq').value='';
+    document.getElementById('sr').innerHTML='';
+    setTimeout(()=>document.getElementById('sq').focus(),100);
+}
+window.doSearch=async function(){
+    const q=document.getElementById('sq').value.trim();
+    if(!q)return;
+    const el=document.getElementById('sr');
+    el.innerHTML='<div style="color:#8b949e;font-size:13px">搜索中...</div>';
+    try{
+        const r=await fetch('/v1/search?q='+encodeURIComponent(q)+'&limit=20');
+        if(!r.ok)throw new Error(r.status);
+        const d=await r.json();
+        let h='';
+        if(d.conversations&&d.conversations.length){
+            h+='<div style="font-size:13px;font-weight:600;margin:8px 0 4px">对话结果</div>';
+            d.conversations.forEach(c=>{
+                h+='<div class="sr"><div class="st">'+esc(c.user_msg||c.ai_msg||'')+'</div><div class="sp">'+(c.stamp||'')+'</div></div>';
+            });
+        }
+        if(d.memories&&d.memories.length){
+            h+='<div style="font-size:13px;font-weight:600;margin:8px 0 4px">记忆结果</div>';
+            d.memories.forEach(m=>{
+                h+='<div class="sr"><div class="st">'+esc(m.content||'')+'</div><div class="sp">'+esc(m.category||'')+'</div></div>';
+            });
+        }
+        if(!h)h='<div style="color:#8b949e;font-size:13px">没有结果</div>';
+        el.innerHTML=h;
+    }catch(e){el.innerHTML='<div style="color:#ff5555;font-size:13px">Error: '+e.message+'</div>'}
+}
+
+// Memory
+window.showMemory=async function(){
+    show('modal-memory');
+    document.getElementById('mc').value='';
+    await refreshMemoryList();
+}
+window.addMemory=async function(){
+    const c=document.getElementById('mc').value.trim();
+    if(!c)return;
+    try{
+        await fetch('/v1/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:c})});
+        document.getElementById('mc').value='';
+        await refreshMemoryList();
+    }catch(e){alert('Error: '+e.message)}
+}
+window.refreshMemoryList=async function(){
+    try{
+        const r=await fetch('/v1/memory');
+        if(!r.ok)throw new Error(r.status);
+        const d=await r.json();
+        const el=document.getElementById('ml');
+        if(d.data&&d.data.length){
+            el.innerHTML=d.data.map(m=>'<div class="mi"><div class="tx">'+esc(m.content||'')+' <s>'+esc(m.category||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteMemory(\'+m.id+\')">删除</button></div>').join('');
+        }else{el.innerHTML='<div style="color:#8b949e;font-size:13px">暂无记忆</div>'}
+    }catch(e){}
+}
+window.deleteMemory=async function(id){
+    try{await fetch('/v1/memory/'+id,{method:'DELETE'});await refreshMemoryList();}catch(e){}
+}
+
+// Scheduler
+window.showScheduler=async function(){
+    show('modal-scheduler');
+    document.getElementById('tn').value='';
+    document.getElementById('tc').value='';
+    document.getElementById('ts').value='';
+    await refreshTaskList();
+}
+window.addTask=async function(){
+    const name=document.getElementById('tn').value.trim();
+    const cmd=document.getElementById('tc').value.trim();
+    const sched=document.getElementById('ts').value.trim();
+    if(!name||!cmd)return;
+    try{
+        await fetch('/v1/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,command:cmd,schedule:sched||'once'})});
+        document.getElementById('tn').value='';
+        document.getElementById('tc').value='';
+        document.getElementById('ts').value='';
+        await refreshTaskList();
+    }catch(e){alert('Error: '+e.message)}
+}
+window.refreshTaskList=async function(){
+    try{
+        const r=await fetch('/v1/tasks');
+        if(!r.ok)throw new Error(r.status);
+        const d=await r.json();
+        const el=document.getElementById('tkl');
+        if(d.data&&d.data.length){
+            el.innerHTML=d.data.map(t=>'<div class="mi"><div class="tx">'+esc(t.name||'')+' <s>'+esc(t.schedule||'')+'</s></div>'+'<button class="btn btn-g btn-s" onclick="deleteTask(\'+t.id+\')">删除</button></div>').join('');
+        }else{el.innerHTML='<div style="color:#8b949e;font-size:13px">暂无任务</div>'}
+    }catch(e){}
+}
+window.deleteTask=async function(id){
+    try{await fetch('/v1/tasks/'+id,{method:'DELETE'});await refreshTaskList();}catch(e){}
+}
+
+// Export
+window.showExport=function(){
+    show('modal-export');
+    document.getElementById('er').innerHTML='';
+}
+window.doExport=async function(){
+    if(!tid){document.getElementById('er').innerHTML='<div style="color:#ff5555;font-size:13px">请先选择一个话题</div>';return}
+    const el=document.getElementById('er');
+    el.innerHTML='<div style="color:#8b949e;font-size:13px">导出中...</div>';
+    try{
+        const r=await fetch('/v1/export/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic_id:tid})});
+        const d=await r.json();
+        if(d.success)el.innerHTML='<div style="color:#3fb950;font-size:13px">✓ 已导出: '+esc(d.path||'')+'</div>';
+        else el.innerHTML='<div style="color:#ff5555;font-size:13px">'+esc(d.error||'失败')+'</div>';
+    }catch(e){el.innerHTML='<div style="color:#ff5555;font-size:13px">Error: '+e.message+'</div>'}
+}
+
+</script>
+
+<!-- Search Modal -->
+<div id="modal-search" class="mo" style="display:none">
+<div class="mc">
+<h3>搜索</h3>
+<input id="sq" placeholder="输入搜索关键词..." onkeydown="if(event.key=='Enter')doSearch()">
+<div id="sr"></div>
+<div class="ma">
+<button class="btn btn-g" onclick="hide('modal-search')">取消</button>
+<button class="btn btn-p" onclick="doSearch()">搜索</button>
+</div>
+</div>
+</div>
+
+<!-- Memory Modal -->
+<div id="modal-memory" class="mo" style="display:none">
+<div class="mc">
+<h3>记忆管理</h3>
+<textarea id="mc" rows="2" placeholder="输入新记忆内容..."></textarea>
+<button class="btn btn-p" onclick="addMemory()" style="width:auto">+ 添加记忆</button>
+<div id="ml"></div>
+<div class="ma">
+<button class="btn btn-g" onclick="hide('modal-memory')">关闭</button>
+</div>
+</div>
+</div>
+
+<!-- Scheduler Modal -->
+<div id="modal-scheduler" class="mo" style="display:none">
+<div class="mc">
+<h3>定时任务</h3>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<input id="tn" placeholder="任务名称" style="flex:2">
+<input id="tc" placeholder="命令行" style="flex:3">
+<input id="ts" placeholder="调度 (daily:08:00)" style="flex:2">
+</div>
+<button class="btn btn-p" onclick="addTask()" style="width:auto">+ 添加任务</button>
+<div id="tkl"></div>
+<div class="ma">
+<button class="btn btn-g" onclick="hide('modal-scheduler')">关闭</button>
+</div>
+</div>
+</div>
+
+<!-- Export Modal -->
+<div id="modal-export" class="mo" style="display:none">
+<div class="mc">
+<h3>导出 PDF</h3>
+<p style="font-size:13px;color:#8b949e;margin-bottom:12px">导出当前话题为 PDF 文件</p>
+<div id="er"></div>
+<div class="ma">
+<button class="btn btn-g" onclick="hide('modal-export')">取消</button>
+<button class="btn btn-p" onclick="doExport()">导出</button>
+</div>
+</div>
+</div>
+
+</body>
+</html>// Streaming parser continued
+            const ls = buf.split('\n');
+            for(let i=0;i<ls.length-1;i++){
+                const l = ls[i].trim();
+                if(l.startsWith('data: ')){
+                    try{
+                        const d = JSON.parse(l.slice(6));
+                        if(d.type === 'tool_call'){
+                            hideLoading();
+                            d.tool_calls.forEach(addToolCall);
+                        }else if(d.type === 'reasoning'){
+                            addReasoning(d.content);
+                        }else if(d.choices?[0]?.delta?.content){
+                            hideLoading();
+                            aiBubble.innerHTML += d.choices[0].delta.content;
+                        }else if(d.choices?[0]?.finish_reason){
+                            if(d.tools_used){
+                                d.tools_used.forEach(addToolCall);
+                            }
+                        }
+                    }catch(e){}
+                }
+            }
+            buf=ls[ls.length-1];
+        }
+    }catch(e){aiBubble.innerHTML='<span style="color:#ff5555">Error: '+e.message+'</span>'}finally{
+        streaming=false;
+        aiBubble.classList.remove('s');
+        $('bs').disabled=false;
+        hideLoading();
+        refreshTopics();
+    }
+}
+
+// Topics
+async function refreshTopics(){
+    try{
+        const r=await fetch('/v1/sessions');
+        if(!r.ok)return;
+        const d=await r.json();
+        if(d.data)${('tl').innerHTML=d.data.map(t=>'div class="ti'+(t.id===tid?' act':'')+'" onclick="openTopic(\''+t.id+'\',\''+(t.title||t.id.slice(0,8))+'\')">'+esc(t.title||t.id.slice(0,8))+'</div>').join('')}
+    }catch(e){}
+}
+
+function openTopic(id,title){tid=id;$('tt').textContent=title||id.slice(0,8);refreshTopics();
+    fetch('/v1/sessions/'++'+'/messages').then(r=r.json()).then(d=>{$('msgs').innerHTML='';if(d.data)d.data.forEach(m=>addMsg(m.role=='user'?'':'a',m.content))});
+}
+
+function newTopic(){tid=null;$('tt').textContent='\u65b0\u8bdd\u8001\u8bd';$('msgs').innerHTML='';refreshTopics()}
+
+function clearChat(){streaming?alert('\u6b63\u7ed9\u53d1\u9001'):$('msgs').innerHTML=''}
+
+// Modals
+function show(id){document.getElementById(id).style.display='flex'}
+function hide(id){document.getElementById(id).style.display='none'}
+
+window.showSearch=function(){show('modal-search');document.getElementById('sq').value='';document.getElementById('sr').innerHTML=''}
+
+window.doSearch=async function(){
+    const q=document.getElementById('sq').value.trim();
+    if(!q)return;
+    const el=document.getElementById('sr');
+    el.innerHTML='<div style="color:#8b949e;font-size:13px">\u52a0\u7e22\u4e2d...</div>';
+    try{
+        const r=await fetch('/v1/search?q='+encodeURIComponent(q));
+        if(!r.ok)throw new Error(r.status);
+        const d=await r.json();
+        let h='';
+        if(d.conversations&&d.conversations.length){
+            h+='<div style="font-size:13px;font-weight:600;margin:8px 0 4px">\u5bf9\u8c02\u7ed3\u679c</div>';
+            d.conversations.forEach(c=>{h+='<div class="sr"><div class="st">+esc(c.user_msg||c.ai_msg||'')+'</div><div class="sp">+esc(c.stamp||'')+'</div></div>'});
+        }
+        if(d.memories&&d.memories.length){
+            h+='<div style="font-size:13px;font-weight:600;margin:8px 0 4px">\u8bb0\u5fc6\u7ed3\u679c</div>';
+            d.memories.forEach(m=>{h+='<div class="sr"><div class="st">+esc(m.content||'')+'</div><div class="sp">+esc(m.category||'')+'</div></div>'});
+        }
+        if(!h)h='<div style="color:#8b949e;font-size:13px">\u672c\u6709\u7ed3\u679c\n \u540c\u85cb</div>';
+        el.innerHTML=h;
+    }catch(e){el.innerHTML='<div style="color:#ff5555;font-size:13px">Error: '+e.message+'</div>'}
+}
+// Memory
+window.showMemory=async function(){show('modal-memory');document.getElementById('mc').value='';refreshMemoryList()}
+window.addMemory=async function(){const c=document.getElementById('mc').value.trim();if(!c)return;try{await fetch('/v1/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:c})});document.getElementById('mc').value='';await refreshMemoryList()}catch(e){alert('Error: '+e.message)}}
+window.refreshMemoryList=async function(){try{const r=await fetch('/v1/memory');if(!r.ok)throw new Error(r.status);const d=await r.json();const el=document.getElementById('ml');if(d.data&&d.data.length)el.innerHTML=d.data.map(m=>'<div class="mi"><div class="tx">+esc(m.content||'')+' <s>'+esc(m.category||'')+'</s></div><button class="btn btn-g btn-s" onclick="deleteMemory(\''+m.id+'\')">\u5220\u9664</button></div>').join('');else el.innerHTML='<div style="color:#8b949e;font-size:13px">\u662b\u65e0\u8bb0\u5fc6</div>'}catch(e){}}
+
+// Scheduler
+window.showScheduler=async function(){show('modal-scheduler');document.getElementById('tn').value='';document.getElementById('tc').value='';document.getElementById('ts').value='';refreshTaskList()}
+window.addTask=async function(){const name=document.getElementById('tn').value.trim();const cmd=document.getElementById('tc').value.trim();const sched=document.getElementById('ts').value.trim();if(!name||!cmd)return;try{await fetch('/v1/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,command:cmd,schedule:sched||'once'})});document.getElementById('tn').value='';document.getElementById('tc').value='';document.getElementById('ts').value='';await refreshTaskList()}catch(e){alert('Error: '+e.message)}}
+window.refreshTaskList=async function(){try{const r=await fetch('/v1/tasks');if(!r.ok)throw new Error(r.status);const d=await r.json();const el=document.getElementById('tkl');if(d.data&&d.data.length)el.innerHTML=d.data.map(t=>'<div class="mi"><div class="tx">+esc(t.name||'')+' <s>'+esc(t.schedule||'')+'</s></div><button class="btn btn-g btn-s" onclick="deleteTask(\''+t.id+'\')">\u5220\u9664</button></div>').join('');else el.innerHTML='<div style="color:#8b949e;font-size:13px">\u662b\u65e0\u4ebb\u52a1</div>'}catch(e){}}
+
+
+window.deleteMemory=async function(id){try{await fetch('/v1/memory/'+encodeURIComponent(id),{method:'DELETE'});await refreshMemoryList()}catch(e){}}
+
+window.deleteTask=async function(id){try{await fetch('/v1/tasks/'+encodeURIComponent(id),{method:'DELETE'});await refreshTaskList()}catch(e){}}
+
+
+
+// Export
+
+window.showExport=function(){show('modal-export');document.getElementById('er').innerHTML=''}
+
+window.doExport=async function(){
+
+    if(!tid){document.getElementById('er').innerHTML='<div style="color:#ff5555;font-size:13px">\u8bf7\u5148\u9009\u6219\u4e00\u4e2a\u8bd5\u9898</div>';return}
+
+    const el=document.getElementById('er');
+
+    el.innerHTML='<div style="color:#8b949e;font-size:13px">\u5bf9\u51fa\u4e2d...</div>';
+
+    try{
+
+        const r=await fetch('/v1/export/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic_id:tid})});
+
+        const d=await r.json();
+
+        if(d.success)el.innerHTML='<div style="color:#3fb950;font-size:13px">\u2713 \u5df2\u51fa: '+esc(d.path||'')+'</div>';
+
+        else el.innerHTML='<div style="color:#ff5555;font-size:13px">+es(d.error||'\u5931\u625')+'</div>';
+
+    }catch(e){el.innerHTML='<div style="color:#ff5555;font-size:13px">Error: '+e.message+'</div>'}
+
+}
+
+
+
+// Init
+
+refreshTopics();
+
+</script>
+
+</body></html>
+<script>
+// showLoading might be missing, re-add it
+if(typeof showLoading==='undefined'){
+    window.showLoading=function(){
+        const d=document.createElement('div');d.className='ld';d.id='ld';
+        d.innerHTML='<div class="sp"></div><span>正在思考...</span>';
+        document.getElementById('msgs').appendChild(d);
+        document.getElementById('msgs').scrollTop=document.getElementById('msgs').scrollHeight;
+    };
+}
+</script>
+<script>
+// === Theme System ===
+// Store theme in localStorage
+(function(){
+    const th = {
+        dark: { '--bg': '#0d1117', '--surface': '#161b22', '--surface2': '#21262d', '--text': '#c9d1d9', '--text-dim': '#8b949e', '--border': '#30363d' },
+        light: { '--bg': '#ffffff', '--surface': '#f6f8fa', '--surface2': '#e8eaed', '--text': '#1f2928', '--text-dim': '#67758e', '--border': '#d1d5da' },
+    };
+    const accents = { 'blue': '#58a6ff', 'green': '#3fb950', 'purple': '#d76eff', 'yellow': '#d29900', 'red': '#f60' };
+    
+    let currentTheme = localStorage.getItem('tea-theme') || 'dark';
+    let currentAccent = localStorage.getItem('tea-accent') || 'blue';
+
+    function applyTheme() {
+        const t = th[currentTheme];
+        const root = document.documentElement;
+        for (const [key, val] of Object.entries(th)) {
+            root.style.setProperty(key, val);
+        }
+        // Accent color
+        root.style.setProperty('--primary', accents[currentAccent] || accents.blue);
+        root.style.setProperty('--primary-dim', accents[currentAccent] + '88');
+    }
+
+    // Add theme toggle button to toolbar
+    function addThemeButton() {
+        const tb = document.getElementById('tb');
+        if (!tb) return;
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-g btn-s';
+        btn.onclick = () => {
+            currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('tea-theme', currentTheme);
+            applyTheme();
+        };
+        const svn = document.createElement('span');
+        svn.id='theme-icon';
+        btn.appendChild(svn);
+        tb.appendChild(btn);
+    }
+
+    // Update theme icon periodically
+    setInterval(() => {
+        const icon = document.getElementById('theme-icon');
+        if (icon) {
+            icon.textContent = currentTheme === 'dark' ? '\u2600' : '\u26010';
+        }
+    }, 300);
+
+    // Init
+    applyTheme();
+    document.addEventListener('DOMContentLoaded', addThemeButton);
+})();
+
+// === Image Preview ===
+function setupImagePreview() {
+    const style = document.createElement('style');
+    style.textContent = `/modal-img{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:2000;cursor:zoom-out}@modal-img img{max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 0 40px rgba(0,0,0,.5);cursor:pointer}`;
+    document.head.appendChild(style);
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-img';
+    modal.style.display = 'none';
+    modal.addEventListener('click', () => { modal.style.display = 'none'; });
+    document.body.appendChild(modal);
+
+    // Intercept message rendering to make images clickable
+    const orig = window.addMsg;
+    window.addMsg = function (r, c, s) {
+        const el = orig(r, c, s);
+        // Make images in messages clickable
+        setTimeout(() => {
+            el.querySelectorAll('img').forEach((img) => {
+                img.style.cursor = 'zoom-in';
+                img.style.maxWidth = '400';
+                img.style.maxHeight = '300px';
+                img.borderRadius = '8px';
+                img.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    modal.innerHTML = `<img src="${img.src}">`;
+                    modal.style.display = 'flex';
+                });
+            });
+        }, 100);
+        return el;
+    };
+}
+
+document.addEventListener('DOMContentLoaded', setupImagePreview);
+</script>

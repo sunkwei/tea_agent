@@ -1,0 +1,45 @@
+# Tea Agent — Systemd Service
+# Install: sudo cp deploy/tea-agent.service /etc/systemd/system/
+#          sudo systemctl daemon-reload
+#          sudo systemctl enable tea-agent
+#          sudo systemctl start tea-agent
+# Logs:    journalctl -u tea-agent -f
+
+[Unit]
+Description=Tea Agent — Self-evolving AI coding agent
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tea-agent
+Group=tea-agent
+WorkingDirectory=/opt/tea-agent
+
+# Environment
+Environment="HOME=/opt/tea-agent"
+Environment="TEA_CONFIG=/opt/tea-agent/config.yaml"
+
+# Executable
+ExecStart=/usr/local/bin/python -m tea_agent.server --host 127.0.0.1 --port 8081
+ExecReload=/bin/kill -HUP $MAINPID
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/tea-agent
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

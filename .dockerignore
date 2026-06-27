@@ -1,0 +1,30 @@
+# Tea Agent — .dockerignore
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (use volume mount instead)
+config.yaml
+
+# Temp
+*.bak
+*.tmp

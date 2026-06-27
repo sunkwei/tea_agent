@@ -10,6 +10,7 @@ dump_*/
 test_tmp/
 *.db
 .*
+!.tea_agent/skills/
 *.example
 *.txt
 *.png

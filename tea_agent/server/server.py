@@ -60,7 +60,7 @@ class APIServer:
 
     def get_agent(self) -> Agent:
         if self._agent is None:
-            self._agent = Agent(mode="lightweight",
+            self._agent = Agent(mode="full",
                                 config_path=self._config_path)
             logger.info(f"Agent initialized")
         return self._agent

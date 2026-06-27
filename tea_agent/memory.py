@@ -114,8 +114,10 @@ class MemoryManager:
         for m in others:
             score = self._score_memory(m, topic_text)
             scored.append((score, m))
+        # 清理 embedding 查询缓存（避免重复调用 API）
+        if hasattr(self, '_query_emb_cache'):
+            self._query_emb_cache = {}
         scored.sort(key=lambda x: x[0], reverse=True)
-
         # 辅助函数：从已打分列表中按优先级取 top N
         def _pick_top_by_priority(scored_list, priority, count):
             """从 scored_list 中取出指定优先级的 top count 条，返回 (picked, remaining)"""
@@ -305,6 +307,7 @@ class MemoryManager:
         计算记忆与查询文本的 embedding 余弦相似度。
 
         使用缓存避免重复计算。TF-IDF 回退始终可用。
+        查询向量使用 _query_emb_cache 避免循环中对同一 topic_text 反复调用 API。
 
         Returns:
             0.0 ~ 1.0 的相似度。engine 不可用或出错时返回 None（由调用方决定回退策略）。
@@ -316,11 +319,19 @@ class MemoryManager:
         if engine is None:
             return None
 
-        # 查询向量（不缓存，每次重新计算）
-        try:
-            query_emb = engine.embed(topic_text)
-        except Exception:
-            return None
+        # 查询向量缓存（key=topic_text，避免循环中重复调用 embedding API）
+        cache_key = f"query_emb::{topic_text}"
+        if not hasattr(self, '_query_emb_cache'):
+            self._query_emb_cache = {}
+        cached = self._query_emb_cache.get(cache_key)
+        if cached is not None:
+            query_emb = cached
+        else:
+            try:
+                query_emb = engine.embed(topic_text)
+                self._query_emb_cache[cache_key] = query_emb
+            except Exception:
+                return None
         if not query_emb:
             return None
 

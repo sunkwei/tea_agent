@@ -57,7 +57,8 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> tu
                     if isinstance(parsed, dict):
                         um = parsed.get("text", um)
                 except Exception:
-                    pass
+                    logger.exception("operation failed")
+
             if len(um) > 200:
                 um = um[:200] + "..."
             user_msgs.append(f"用户：{um}")

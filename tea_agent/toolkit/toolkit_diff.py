@@ -18,9 +18,8 @@ toolkit_diff — Diff-first 代码编辑引擎
 import json
 import os
 import subprocess
-import tempfile
 from datetime import datetime
-from typing import List, Dict, Optional, Tuple
+from typing import List, Optional, Tuple
 import logging
 
 logger = logging.getLogger("toolkit")
@@ -144,7 +143,6 @@ def _verify_all(files: List[str], cwd: str, run_tests: bool = True) -> dict:
 def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, description: str = "") -> dict:
     """应用单个修改，返回 {ok, file, error, bak_path}"""
     import shutil
-    from datetime import datetime
 
     full = os.path.join(cwd, file_path)
 

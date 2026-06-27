@@ -14,13 +14,11 @@ Usage:
   python generate_tetris_data.py --games 500 --workers 8 --output data.npz
 """
 import sys, os, time, random, argparse, multiprocessing as mp
-from functools import partial
 from copy import deepcopy
-from typing import List, Tuple
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tetris_ansi import TetrisGame, BOARD_WIDTH, BOARD_HEIGHT, CELL_EMPTY, CELL_FILLED, TETROMINOES
+from tetris_ansi import TetrisGame, BOARD_WIDTH, BOARD_HEIGHT, CELL_EMPTY, CELL_FILLED
 
 # ─── Core Logic ──────────────────────────────────────────────────
 

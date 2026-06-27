@@ -11,7 +11,6 @@ import os
 import logging
 import subprocess
 from pathlib import Path
-from typing import Optional, Tuple
 
 logger = logging.getLogger("toolkit.format_code")
 

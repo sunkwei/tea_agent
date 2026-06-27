@@ -1,19 +1,15 @@
 # -*- coding: utf-8 -*-
 """GUI 对话框：MemoryDialog / TopicDialog / ConfigDialog"""
 import tkinter as tk
-from tkinter import ttk, scrolledtext
-import os
+from tkinter import ttk
 import re
 import threading
-import logging
-from pathlib import Path
 from datetime import datetime
 from tea_agent.config import get_config, save_config, load_config
 
 # 复用 _gui/_fonts 模块的字体检测逻辑
 from tea_agent._gui._fonts import (
-    _fs, _init_fonts, SYSTEM_FONT, MONO_FONT,
-    _DEFAULT_FONT_SIZE, _SCALE_FACTOR, _FONTS_DETECTED,
+    _fs, _init_fonts, SYSTEM_FONT,
 )
 
 class MemoryDialog(tk.Toplevel):
@@ -607,7 +603,6 @@ class TopicDialog(tk.Toplevel):
             self.stats_var.set("✅ 所有消息已向量化，无需生成")
             return
 
-        import threading
 
         def _run():
             """Internal: run."""

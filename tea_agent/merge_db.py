@@ -21,9 +21,8 @@ import sqlite3
 import sys
 import os
 import re
-import uuid
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("merge_db")

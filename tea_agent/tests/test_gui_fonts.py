@@ -2,8 +2,6 @@
 测试 _gui/_fonts.py 中的字体检测逻辑
 重点：_init_fonts() 的 global 变量声明
 """
-import pytest
-from unittest.mock import MagicMock, patch
 
 
 class TestInitFontsGlobalDeclarations:

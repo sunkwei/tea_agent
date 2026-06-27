@@ -31,7 +31,7 @@ def toolkit_sudo_gui(app: str, args: list, prompt: str = "请输入管理员密�
                 return (1, "", "用户取消了 UAC 提权")
             else:
                 return (result, "", f"ShellExecute 失败，错误码: {result}")
-        except Exception as e:
+        except Exception:
             ps_cmd = f"Start-Process -FilePath '{app}' -ArgumentList '{' '.join(args)}' -Verb RunAs"
             result = subprocess.run(
                 ['powershell', '-Command', ps_cmd],

@@ -3,7 +3,6 @@
 
 
 import sqlite3
-import json
 import os
 
 DB_PATH = os.path.expanduser("~/.tea_agent/chat_history.db")

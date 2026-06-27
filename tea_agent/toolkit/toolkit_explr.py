@@ -114,7 +114,8 @@ def _build_ctags(directory, run_dir):
                     'line': line_num,
                 })
         except json.JSONDecodeError:
-            pass
+            logger.exception("operation failed")
+
 
     return ctags_path, index
 

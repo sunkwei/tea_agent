@@ -23,11 +23,6 @@ def toolkit_ocr(action: str, image_path: str = None, image_base64: str = None,
     """
     logger.info(f"toolkit_ocr called: action={action!r}, image_path={image_path!r}")
     
-    import os
-    import sys
-    import json
-    import base64
-    import tempfile
     
     if action == "recognize":
         return _ocr_recognize(image_path, image_base64, lang, output)
@@ -73,7 +68,8 @@ def _ocr_recognize(image_path: str, image_base64: str, lang: str, output: str):
         try:
             os.unlink(img_path)
         except:
-            pass
+            logger.exception("operation failed")
+
     
     # 保存结果
     if output and result.get("ok"):
@@ -90,7 +86,6 @@ def _ocr_recognize(image_path: str, image_base64: str, lang: str, output: str):
 def _ocr_windows(image_path: str, lang: str):
     """使用 Windows 内置 OCR API（通过 winocr 库）"""
     import sys
-    import os
     
     # 将 winocr 所在目录添加到 sys.path
     winocr_dir = r"C:\Users\Hetin\venv_work\Lib\site-packages"
@@ -131,7 +126,7 @@ def _ocr_windows(image_path: str, lang: str):
             "text": text.strip(),
             "lang": ocr_lang
         }
-    except ImportError as e:
+    except ImportError:
         # 如果 winocr 不可用，尝试 tesseract
         return _ocr_tesseract(image_path, lang)
     except Exception as e:
@@ -207,7 +202,8 @@ def _ocr_screenshot(region: str, lang: str, output: str):
     try:
         os.unlink(tmp_path)
     except:
-        pass
+        logger.exception("operation failed")
+
     
     # 添加截图信息
     if ocr_result.get("ok"):

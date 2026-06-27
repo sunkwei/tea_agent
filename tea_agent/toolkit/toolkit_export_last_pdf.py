@@ -4,8 +4,6 @@
 import sqlite3
 import json
 import os
-import re
-from datetime import datetime
 from pathlib import Path
 
 def _find_db_path():
@@ -146,8 +144,8 @@ def toolkit_export_last_pdf(output_path="last.pdf"):
         if tool_calls_raw:
             try:
                 tool_calls = json.loads(tool_calls_raw) if isinstance(tool_calls_raw, str) else tool_calls_raw
-            except:
-                pass
+            except Exception:
+                logger.exception("operation failed")
         if tool_calls and not content.strip():
             continue
         if role == "tool":

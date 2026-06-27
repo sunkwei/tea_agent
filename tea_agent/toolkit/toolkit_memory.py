@@ -188,7 +188,8 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
                 vec_stats = searcher.get_vector_stats()
                 lines.append(f"  向量索引: {vec_stats['indexed_memories']}/{vec_stats['total_memories']} ({vec_stats['coverage']:.1%})")
             except:
-                pass
+                logger.exception("operation failed")
+
             
             return "\n".join(lines)
         except Exception as e:

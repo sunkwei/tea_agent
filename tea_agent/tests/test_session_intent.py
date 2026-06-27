@@ -6,7 +6,6 @@ Contract:
 - 任何用户输入都应返回有效的 dict，不抛异常
 """
 
-import pytest
 from tea_agent.onlinesession import analyze_intent
 
 

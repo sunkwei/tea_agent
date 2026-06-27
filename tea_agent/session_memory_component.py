@@ -83,7 +83,8 @@ class MemoryComponent(SessionComponent):
                     all_memory_texts.append(formatted)
                     logger.info(f"注入了 {len(memories)} 条用户记忆")
             except Exception:
-                pass
+                logger.exception("operation failed")
+
 
         # ── 项目记忆 ──
         try:

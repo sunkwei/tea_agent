@@ -12,7 +12,7 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
     """
     logger.info(f"toolkit_pkg called: action={action!r}, packages={packages!r}, module={module!r}")
 
-    import subprocess, sys, importlib, os
+    import subprocess, sys, importlib
 
     def _pip_install(pkgs):
         """安装包列表"""
@@ -43,9 +43,11 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
                 import pkg_resources
                 return pkg_resources.get_distribution(name).version
             except:
-                pass
+                logger.exception("operation failed")
+
         except:
-            pass
+            logger.exception("operation failed")
+
         return None
 
     def _list_installed():

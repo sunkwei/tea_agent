@@ -53,7 +53,6 @@ class TrayManager:
         if not HAS_SNI:
             return
         try:
-            from PIL import Image, ImageDraw
             pil_icon = self._create_tray_icon()
             argb_data = self._pil_to_argb32(pil_icon)
             self._sni = StatusNotifierItemDBus(

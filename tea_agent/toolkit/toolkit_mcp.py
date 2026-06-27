@@ -32,7 +32,6 @@ def toolkit_mcp(action: str = "connect", server_name: str = "", command: str = "
     """
     logger.info(f"toolkit_mcp called: action={action!r}, server_name={server_name!r}")
 
-    import json
 
     if action == "connect":
         return _mcp_connect(server_name, command, args or [], transport, url)
@@ -87,7 +86,6 @@ def _mcp_run_async(coro, timeout: float = 30.0):
     except asyncio.TimeoutError:
         return (1, "", "⏰ MCP 操作超时")
     except Exception as e:
-        import traceback
         return (1, "", f"❌ MCP 操作异常: {e.__class__.__name__}: {str(e)}")
 
 def _mcp_connect(server_name: str, command: str, args: list, transport: str, url: str):
@@ -165,11 +163,13 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
             try:
                 await session_ctx.__aexit__(None, None, None)
             except Exception:
-                pass
+                logger.exception("operation failed")
+
             try:
                 await ctx.__aexit__(None, None, None)
             except Exception:
-                pass
+                logger.exception("operation failed")
+
 
             return (0, "disconnected", "")
 

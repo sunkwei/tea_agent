@@ -3,10 +3,6 @@
 覆盖: 工具注册、调用、重载、版本管理、用户覆盖等核心链路
 """
 import pytest
-import json
-import tempfile
-import os
-from unittest.mock import MagicMock
 
 
 class TestToolkitRegistration:

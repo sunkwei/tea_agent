@@ -16,7 +16,7 @@ import os
 import threading
 import time
 import uuid
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from pathlib import Path
 
 logger = logging.getLogger("api_server")
@@ -69,7 +69,7 @@ class APIServer:
         with self._lock:
             if self._agent:
                 try: self._agent.sess.close()
-                except Exception: pass
+                except Exception: logger.exception("operation failed")
             self._agent = None
             logger.info("Agent reset")
 
@@ -120,7 +120,7 @@ class APIServer:
         def _put(event):
             try: event_loop.call_soon_threadsafe(
                 lambda: queue.put_nowait(event))
-            except Exception: pass
+            except Exception: logger.exception("operation failed")
         def stream_cb(text):
             if text.startswith("["): return
             _put({"type": "content", "text": text})

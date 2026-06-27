@@ -204,7 +204,8 @@ class TopicStore(StoreComponent):
             try:
                 prev = _json_pt.loads(existing)
             except Exception:
-                pass
+                logger.exception("operation failed")
+
         # 合并
         for k in ("total_tokens", "prompt_tokens", "completion_tokens"):
             prev[k] = prev.get(k, 0) + usage.get(k, 0)
@@ -228,7 +229,8 @@ class TopicStore(StoreComponent):
             try:
                 result = _json_pt.loads(existing)
             except Exception:
-                pass
+                logger.exception("operation failed")
+
         # 清零
         c = self.conn.cursor()
         c.execute(

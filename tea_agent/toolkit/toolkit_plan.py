@@ -14,7 +14,7 @@ import json
 import os
 import uuid
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 import logging
 
 logger = logging.getLogger("toolkit")
@@ -68,7 +68,8 @@ def _get_topic_id() -> Optional[str]:
         if agent is not None:
             return getattr(agent, 'current_topic_id', None)
     except Exception:
-        pass
+        logger.exception("operation failed")
+
     return None
 
 def _new_plan(goal: str, steps: List[dict]) -> dict:
@@ -764,7 +765,8 @@ def _auto_solidify_skill(step: dict, plan: dict, cwd: str) -> Optional[str]:
             t2 = dt.fromisoformat(finished)
             time_seconds = (t2 - t1).total_seconds()
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
     try:
         crystallizer = SkillCrystallizer()
@@ -811,7 +813,8 @@ def _auto_solidify_plan(plan: dict) -> Optional[str]:
             from datetime import datetime as dt
             total_time = (dt.fromisoformat(last_finish) - dt.fromisoformat(first_start)).total_seconds()
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
     try:
         crystallizer = SkillCrystallizer()
@@ -845,7 +848,6 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
     Returns:
         分解结果，包含建议的步骤列表
     """
-    import re
     
     # 分析目标类型
     goal_lower = goal.lower()

@@ -40,7 +40,7 @@ def test_basic():
 
 def test_head_collision():
     """Test that head-to-head collisions kill both snakes."""
-    from tea_agent.demo.snake.engine import Snake, Board, Game, Position, Direction
+    from tea_agent.demo.snake.engine import Game, Position, Direction
 
     # custom setup: two snakes heading toward each other
     configs = [

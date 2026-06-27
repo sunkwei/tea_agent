@@ -52,7 +52,8 @@ def toolkit_set_topic_title(title: str) -> dict:
         if hasattr(agent, '_on_summary_updated'):
             agent._on_summary_updated(topic_id, new_title)
     except Exception:
-        pass
+        logger.exception("operation failed")
+
 
     logger.info(f"主题标题已手动设置: topic={topic_id} → {new_title}")
     return {"ok": True, "title": new_title, "topic_id": topic_id}

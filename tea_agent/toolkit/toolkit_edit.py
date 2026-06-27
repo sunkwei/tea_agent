@@ -55,7 +55,6 @@ def _verify_after_write(file_path: str, old_text: str = "",
     Read file back and verify old_text is gone, new_text is present.
     Returns warning string if something looks wrong, empty string if OK.
     """
-    import os
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             current = f.read()
@@ -167,7 +166,6 @@ def _replace_text(file_path: str, old_text: str, new_content: str,
 # ═══════════════════════════════════════════════════════════════
 
 def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool):
-    import json
     import os
     import tempfile
     import subprocess
@@ -200,7 +198,8 @@ def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool
                 try:
                     os.unlink(patch_file)
                 except OSError:
-                    pass
+                    logger.exception("operation failed")
+
         else:
             return _apply_patch_python(file_path, original_content,
                                        patch_content, preview, backup)
@@ -211,7 +210,6 @@ def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool
 def _apply_patch_python(file_path: str, original_content: str,
                         patch_content: str, preview: bool, backup: bool):
     import json
-    import os
     import re
     import shutil
 

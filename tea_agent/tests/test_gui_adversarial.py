@@ -2,8 +2,7 @@
 对抗性测试：针对 GUI 加载失败 bug 的回归测试
 修改：_gui/_renderer.py, _gui/_fonts.py, _gui/_topic_manager.py
 """
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 import threading
 import time
 

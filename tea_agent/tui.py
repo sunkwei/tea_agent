@@ -25,9 +25,7 @@ import argparse
 import sys
 import os
 import threading
-from datetime import datetime
 from typing import Optional, List, Dict
-import re
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:

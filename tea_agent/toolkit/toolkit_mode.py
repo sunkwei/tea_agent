@@ -193,7 +193,8 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             if agent and hasattr(agent, "db"):
                 return MemoryManager(agent.db, extraction_threshold=1, dedup_threshold=0.3)
         except Exception:
-            pass
+            logger.exception("operation failed")
+
         return MemoryManager(Storage(), extraction_threshold=1, dedup_threshold=0.3)
 
     def _get_existing_mode_memory(mm):

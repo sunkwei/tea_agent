@@ -25,8 +25,6 @@ def toolkit_screen_read(action: str, browser: str = "firefox", tab_title: str = 
     logger.info(f"toolkit_screen_read called: action={action!r}, browser={browser!r}, tab_title={tab_title!r}")
 
     import os
-    import sys
-    import json
     import time
     import tempfile
 
@@ -83,7 +81,8 @@ def toolkit_screen_read(action: str, browser: str = "firefox", tab_title: str = 
             if os.path.exists(screenshot_path):
                 os.remove(screenshot_path)
         except:
-            pass
+            logger.exception("operation failed")
+
 
         # 6. 保存结果（可选）
         if output:
@@ -131,7 +130,8 @@ def toolkit_screen_read(action: str, browser: str = "firefox", tab_title: str = 
             if os.path.exists(screenshot_path):
                 os.remove(screenshot_path)
         except:
-            pass
+            logger.exception("operation failed")
+
 
         # 4. 保存结果（可选）
         if output:
@@ -183,7 +183,8 @@ def toolkit_screen_read(action: str, browser: str = "firefox", tab_title: str = 
             if os.path.exists(screenshot_path):
                 os.remove(screenshot_path)
         except:
-            pass
+            logger.exception("operation failed")
+
 
         # 5. 保存结果（可选）
         if output:

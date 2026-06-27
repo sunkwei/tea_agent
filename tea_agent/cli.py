@@ -19,8 +19,6 @@ Tea Agent 轻量 CLI — 单文件实现。
 import argparse
 import sys
 import os
-import threading
-import atexit
 
 # 将项目根目录加入 sys.path（支持 python -m tea_agent.cli）
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -28,7 +26,6 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from tea_agent.agent import Agent
-from tea_agent.config import load_config
 
 class TeaCLI(Agent):
     """Tea Agent 命令行客户端。"""

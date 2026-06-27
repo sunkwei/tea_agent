@@ -1,6 +1,5 @@
 """ACP Protocol Server - Enhanced for vscode-acp."""
 import asyncio, json, logging, os, threading, time, uuid
-from typing import Optional
 
 logger = logging.getLogger("acp_server")
 
@@ -11,7 +10,7 @@ try:
 except ImportError:
     raise ImportError("pip install starlette uvicorn")
 
-from tea_agent.store import Storage, get_storage
+from tea_agent.store import get_storage
 
 __version__ = "0.2.0"
 
@@ -103,7 +102,8 @@ class ACPProtocolServer:
             try:
                 loop.call_soon_threadsafe(lambda: queue.put_nowait(event))
             except Exception:
-                pass
+                logger.exception("operation failed")
+
         def cb(text):
             if not text or text.startswith("["):
                 return

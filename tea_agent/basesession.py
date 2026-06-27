@@ -370,7 +370,6 @@ class BaseChatSession(ABC):
         if not rounds:
             return rounds
 
-        import json as _json_cr
 
         # ── 首遍扫描：收集 tool_call_id → (tool_name, arguments) ──
         tc_map: Dict[str, tuple] = {}  # tool_call_id → (tool_name, arguments_str)

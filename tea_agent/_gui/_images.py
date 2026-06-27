@@ -8,7 +8,7 @@ import shutil
 import base64
 import io
 import logging
-from typing import List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from tea_agent.gui import TkGUI

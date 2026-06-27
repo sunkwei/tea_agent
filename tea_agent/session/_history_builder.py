@@ -13,7 +13,7 @@ import re
 import json
 import base64
 import logging
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Any
 
 logger = logging.getLogger("session.history_builder")
 
@@ -180,7 +180,8 @@ def _extract_files_from_text(text: str) -> set:
                             if fp:
                                 files.add(fp)
         except Exception:
-            pass
+            logger.exception("operation failed")
+
     return files
 
 

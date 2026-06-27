@@ -6,7 +6,6 @@ Monitors token usage and auto-triggers summarization.
 import logging
 import json
 import re
-from typing import List, Dict, Tuple
 
 logger = logging.getLogger("auto_compact")
 

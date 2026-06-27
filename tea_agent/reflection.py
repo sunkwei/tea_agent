@@ -12,7 +12,7 @@
 import json
 import time
 import logging
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
 logger = logging.getLogger("ReflectionManager")
@@ -147,7 +147,8 @@ class ReflectionManager:
                 if current_count - last_conv_count >= 10:
                     return True
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
         return False
 
@@ -256,7 +257,8 @@ class ReflectionManager:
                             importance=mem.get("importance", 3),
                         )
                     except Exception:
-                        pass
+                        logger.exception("operation failed")
+
 
             # 返回 prompt_adjustment 供 SystemPromptManager 使用
             prompt_adjustment = parsed.get("prompt_adjustment")

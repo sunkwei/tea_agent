@@ -7,7 +7,7 @@
 import json
 import logging
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List
 from datetime import datetime
 
 logger = logging.getLogger("ProjectMemory")

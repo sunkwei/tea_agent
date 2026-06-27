@@ -6,7 +6,7 @@ Memory 管理器
 
 import logging
 import re
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Optional
 
 logger = logging.getLogger("MemoryManager")
 
@@ -255,7 +255,8 @@ class MemoryManager:
             try:
                 self.storage.touch_memory(m["id"])
             except Exception:
-                pass
+                logger.exception("operation failed")
+
 
     # ------------------------------------------------------------------
     # 优先级自动调整
@@ -561,7 +562,8 @@ importance 评分：
                     if key in data and isinstance(data[key], list):
                         return data[key]
         except (json.JSONDecodeError, ValueError):
-            pass
+            logger.exception("operation failed")
+
         
         # 2. 处理 markdown 代码块
         code_block_pattern = r'```(?:json)?\s*\n?(.*?)\n?\s*```'

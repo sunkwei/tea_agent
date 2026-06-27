@@ -6,7 +6,7 @@
 import os, ast as py_ast, logging
 from pathlib import Path
 from collections import defaultdict
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 
 logger = logging.getLogger("ts_analyzer")
 

@@ -295,7 +295,8 @@ class SummaryStore(StoreComponent):
                     "completion_tokens": getattr(u, 'completion_tokens', 0) or 0,
                 }
             except Exception:
-                pass
+                logger.exception("operation failed")
+
 
             if new_summary:
                 self.set_semantic_summary(topic_id, new_summary)

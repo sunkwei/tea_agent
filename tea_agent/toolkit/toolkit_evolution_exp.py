@@ -15,7 +15,6 @@ action:
 
 import os
 import json
-import time
 from datetime import datetime
 
 def _get_exp_path():

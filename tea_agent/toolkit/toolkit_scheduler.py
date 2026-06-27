@@ -26,7 +26,7 @@ def toolkit_scheduler(action: str, **kwargs):
     """
     logger.info(f"toolkit_scheduler called: action={action!r}")
 
-    import os, json, time, sqlite3, threading, subprocess
+    import os, time, sqlite3, threading, subprocess
     from datetime import datetime, timedelta
     from pathlib import Path
 
@@ -107,7 +107,8 @@ def toolkit_scheduler(action: str, **kwargs):
             if s.startswith("cron:"):
                 return _parse_cron(s[5:].strip(), now)
         except (ValueError, IndexError):
-            pass
+            logger.exception("operation failed")
+
         return None
 
     def _match_cron(pattern: str, value: int) -> bool:
@@ -165,7 +166,8 @@ def toolkit_scheduler(action: str, **kwargs):
                     f'display notification "{msg}" with title "{title}"'],
                     capture_output=True, timeout=5)
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
     # ── 脚本存储 ──
     def _get_script_db_path():

@@ -9,7 +9,6 @@ import os
 import re
 import ast
 import logging
-from typing import List, Dict, Tuple, Optional
 
 logger = logging.getLogger("toolkit.clean_comments")
 

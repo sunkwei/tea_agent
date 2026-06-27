@@ -20,14 +20,12 @@ class TestStoreComponent:
     """StoreComponent 基类"""
 
     def test_new_id_returns_uuid_string(self):
-        from tea_agent.store._component import StoreComponent
         sid = StoreComponent._new_id()
         assert isinstance(sid, str)
         # 验证是有效 UUID
         uuid.UUID(sid)
 
     def test_new_id_is_unique(self):
-        from tea_agent.store._component import StoreComponent
         ids = {StoreComponent._new_id() for _ in range(100)}
         assert len(ids) == 100
 
@@ -188,7 +186,6 @@ class TestStoreComponentDB:
 
     def test_db_context_works(self, tmp_db_path):
         """_db() 返回可用 DB 实例"""
-        from tea_agent.store._component import StoreComponent
         comp = StoreComponent(db_path=tmp_db_path)
 
         with comp._db() as db:
@@ -202,7 +199,6 @@ class TestStoreComponentDB:
 
     def test_get_connection_backward_compat(self, tmp_db_path):
         """_get_connection() 向后兼容，返回 conn"""
-        from tea_agent.store._component import StoreComponent
         comp = StoreComponent(db_path=tmp_db_path)
 
         with comp._get_connection() as conn:
@@ -219,7 +215,6 @@ class TestThreadLocalConn:
 
     def test_conn_is_cached_in_thread(self, tmp_db_path):
         """同一线程内多次访问返回同一对象"""
-        from tea_agent.store._component import StoreComponent
         comp = StoreComponent(db_path=tmp_db_path)
 
         c1 = comp.conn
@@ -229,7 +224,6 @@ class TestThreadLocalConn:
     def test_conn_isolation_between_threads(self, tmp_db_path):
         """不同线程返回不同连接"""
         import threading
-        from tea_agent.store._component import StoreComponent
         comp = StoreComponent(db_path=tmp_db_path)
 
         conns = []
@@ -246,7 +240,6 @@ class TestThreadLocalConn:
 
     def test_close_thread_conn_cleans_up(self, tmp_db_path):
         """close_thread_conn 关闭并清空连接"""
-        from tea_agent.store._component import StoreComponent
         comp = StoreComponent(db_path=tmp_db_path)
 
         c = comp.conn
@@ -258,7 +251,6 @@ class TestThreadLocalConn:
 
     def test_conn_supports_cursor_execute_commit(self, tmp_db_path):
         """self.conn 支持 cursor/execute/commit 等标准操作"""
-        from tea_agent.store._component import StoreComponent
         comp = StoreComponent(db_path=tmp_db_path)
 
         comp.conn.execute("CREATE TABLE IF NOT EXISTS test_conn (v TEXT)")

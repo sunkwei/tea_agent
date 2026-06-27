@@ -12,7 +12,6 @@ def toolkit_self_report() -> dict:
 
     import os
     import json
-    import sqlite3
 
     # 1. Robustly find the base directory
     # Start from cwd and walk up to find the root .tea_agent directory
@@ -52,7 +51,8 @@ def toolkit_self_report() -> dict:
                 if f.startswith("toolkit_") and f.endswith(".py"):
                     tool_count += 1
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
     # 3. Strategy & Counter Info
     counter_file = os.path.join(toolkit_dir, ".chat_counter.json")
@@ -62,7 +62,8 @@ def toolkit_self_report() -> dict:
         try:
             with open(counter_file, 'r', encoding='utf-8') as f: counter_data = json.load(f)
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
     return {
         "status": "online",

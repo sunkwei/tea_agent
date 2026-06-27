@@ -1,5 +1,5 @@
 """toolkit_auto_fix — 代码自动修复 Agent 工具入口"""
-import os, sys, json, logging
+import sys, logging
 from pathlib import Path
 
 logger = logging.getLogger("toolkit_auto_fix")

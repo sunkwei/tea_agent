@@ -1,9 +1,7 @@
 """
 Permission System - Access Control for Files, Commands, and Network.
 """
-import os, logging
-from pathlib import Path, PurePath
-from typing import Optional, List, Set, Dict
+import logging
 logger = logging.getLogger("permission")
 
 class PermissionManager:

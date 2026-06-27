@@ -8,8 +8,6 @@
 - 窗口大小和阈值配置
 """
 
-import json
-import pytest
 
 
 class TestLoopDetectorInit:

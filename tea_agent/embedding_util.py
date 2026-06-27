@@ -15,7 +15,7 @@ import math
 import json
 import hashlib
 import logging
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 from collections import Counter
 
 logger = logging.getLogger("Embedding")
@@ -139,7 +139,8 @@ class EmbeddingEngine:
                 cfg = get_config()
                 self.api_key = cfg.main_model.api_key
             except Exception:
-                pass
+                logger.exception("operation failed")
+
 
         self._use_api = bool(self.api_url and self.model_name and HAS_REQUESTS)
 

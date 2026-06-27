@@ -3,7 +3,7 @@
 覆盖: 会话创建、配置加载、thinking 探测、推理剥离、工具压缩
 """
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 class TestBaseSessionConfig:

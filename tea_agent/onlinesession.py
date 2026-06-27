@@ -1088,7 +1088,8 @@ class OnlineToolSession(BaseChatSession):
                 "toolkit_notify", title=title, message=message, duration=5000
             )
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
     def _notify_reflection_done(self, reflection_id: int):
         self._notify("🔍 元认知反思完成", f"反思 #{reflection_id} 已生成")
@@ -1200,5 +1201,6 @@ class OnlineToolSession(BaseChatSession):
         try:
             self.close()
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 from tea_agent.session_memory_component import MemoryComponent

@@ -5,7 +5,7 @@ Each strategy is a callable: (snake: Snake, game: Game) -> Direction
 """
 
 import random
-from typing import List, Set, Optional
+from typing import List, Optional
 
 from .engine import Snake, Game, Direction, Position
 

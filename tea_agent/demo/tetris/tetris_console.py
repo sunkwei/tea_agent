@@ -10,7 +10,6 @@ import curses
 import random
 import time
 import sys
-import os
 from typing import List, Tuple, Optional
 
 # Game constants

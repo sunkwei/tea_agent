@@ -60,7 +60,8 @@ def toolkit_stream_save(stream_id=None, target_path=None, append=False):
             try:
                 bak.write_bytes(target.read_bytes())
             except Exception:
-                pass
+                logger.exception("operation failed")
+
         
         if append:
             with open(target, 'a', encoding='utf-8') as f:

@@ -183,7 +183,8 @@ class TopicManager:
                                 user_text = parsed.get("text", raw_user_msg)
                                 user_images = parsed.get("images", [])
                         except Exception:
-                            pass
+                            logger.exception("operation failed")
+
                     render_items.append(("user", f"你：{user_text}", user_images))
 
                     if is_old:
@@ -364,5 +365,6 @@ class TopicManager:
             try:
                 gui._topic_tooltip.destroy()
             except Exception:
-                pass
+                logger.exception("operation failed")
+
             gui._topic_tooltip = None

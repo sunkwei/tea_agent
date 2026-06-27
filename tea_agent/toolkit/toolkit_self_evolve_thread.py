@@ -28,7 +28,6 @@ def toolkit_self_evolve_thread(action: str):
     import re
     import subprocess
     from datetime import datetime
-    from pathlib import Path
     from collections import Counter
 
     # ── 路径 ──
@@ -52,7 +51,8 @@ def toolkit_self_evolve_thread(action: str):
                     if 'name = "tea_agent"' in f.read() or "name = 'tea_agent'" in f.read():
                         return True
             except Exception:
-                pass
+                logger.exception("operation failed")
+
         if os.path.isdir(os.path.join(cwd, "tea_agent")):
             return True
         return False
@@ -66,7 +66,8 @@ def toolkit_self_evolve_thread(action: str):
                 with open(STATE_FILE, "r") as f:
                     return json.load(f)
             except Exception:
-                pass
+                logger.exception("operation failed")
+
         return {
             "running": False, "pid": os.getpid(), "started_at": None,
             "last_cycle_at": None, "cycles_completed": 0,
@@ -118,14 +119,16 @@ def toolkit_self_evolve_thread(action: str):
                     try:
                         os.unlink(tmp.name)
                     except Exception:
-                        pass
+                        logger.exception("operation failed")
+
             else:
                 subprocess.run(
                     ["notify-send", "--app-name=TeaAgent", title, msg],
                     capture_output=True, timeout=5,
                 )
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
     # ═══════════════════════════════════════════
     # 任务 1：工具使用率分析
@@ -153,7 +156,8 @@ def toolkit_self_evolve_thread(action: str):
                 for m in re.finditer(r"toolkit_(\w+)", str(ai_msg)):
                     tool_counter[m.group(1)] += 1
         except Exception:
-            pass
+            logger.exception("operation failed")
+
         finally:
             conn.close()
 
@@ -229,7 +233,8 @@ def toolkit_self_evolve_thread(action: str):
                 for m in re.finditer(r'description\s*=\s*"([^"]+)"', content):
                     description = m.group(1)
             except Exception:
-                pass
+                logger.exception("operation failed")
+
 
         # 收集工具列表
         toolkit_dir = os.path.join(cwd, "tea_agent", "toolkit")

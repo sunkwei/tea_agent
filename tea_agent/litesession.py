@@ -8,10 +8,9 @@
 4. 可以指定使用便宜模型作为主模型
 """
 
-import time
 import json
 import logging
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Optional, Callable
 
 from openai import OpenAI
 
@@ -265,7 +264,6 @@ class LiteSession:
     def _parse_tool_calls(self, tool_calls_data: Dict) -> List:
         """解析工具调用数据。"""
         from dataclasses import dataclass
-        from typing import Any
         
         @dataclass
         class SimpleFunction:

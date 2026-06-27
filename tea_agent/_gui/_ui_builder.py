@@ -226,7 +226,8 @@ class UIBuilder:
                 if 0 < cur_sash_pos < min_top_height:
                     gui.chat_split.sashpos(0, min_top_height)
             except Exception:
-                pass
+                logger.exception("operation failed")
+
 
         # UI 就绪后首次计算并约束
         gui.root.after(500, _constrain_top_pane)

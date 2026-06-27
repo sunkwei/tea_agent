@@ -9,12 +9,11 @@
 - 失败任务 -> 分析根因 -> 记录到经验库 (evolution_exp)
 """
 
-import os
 import json
 import logging
 import time
 from datetime import datetime
-from typing import List, Dict, Optional, Any
+from typing import List, Dict
 
 logger = logging.getLogger("toolkit.experience_solidify")
 

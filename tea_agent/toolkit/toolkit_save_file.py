@@ -2,8 +2,7 @@
 # version: 1.0.1
 
 
-import base64, pathlib, os
-from datetime import date
+import base64, pathlib
 
 def toolkit_save_file(path=None, content=None, chunks=None, append=False, encoding="utf-8", mode="text"):
     """Write file with chunked content support. Use chunks list for large files."""

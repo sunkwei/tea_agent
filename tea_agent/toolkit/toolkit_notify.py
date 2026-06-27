@@ -34,7 +34,8 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
             n.show()
             return (0, f"通知已发送: {title}", "")
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
         # 2) notify-send (D-Bus 标准通知，KDE Plasma 通知中心收录)
         try:
@@ -47,7 +48,8 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
             )
             return (0, f"通知已发送: {title}", "")
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
         # 3) kdialog (KDE)
         try:
@@ -57,7 +59,8 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
             )
             return (0, f"通知已发送: {title}", "")
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
         # 4) zenity (GNOME/通用)
         try:
@@ -68,7 +71,8 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
             )
             return (0, f"通知已发送: {title}", "")
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
         # 5) wall 广播（最后手段）
         try:

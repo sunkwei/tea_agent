@@ -2,7 +2,7 @@
 """
 Tetris CNN Trainer (Lightweight)
 """
-import sys, os, time, argparse
+import os, time, argparse
 import numpy as np
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'

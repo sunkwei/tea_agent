@@ -2,8 +2,7 @@
 测试 _gui/_renderer.py 中的关键逻辑
 重点：_poll_loading_progress 的 _pending_error 处理
 """
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 class TestPollLoadingProgress:

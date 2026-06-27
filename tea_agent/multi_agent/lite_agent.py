@@ -12,9 +12,8 @@
     result = agent.execute_sync("重构 gui.py 添加类型注解")
 """
 
-import json
 import logging
-from typing import List, Dict, Optional
+from typing import Dict
 
 from tea_agent.litesession import LiteSession
 

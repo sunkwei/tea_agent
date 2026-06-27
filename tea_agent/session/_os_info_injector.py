@@ -40,7 +40,8 @@ def _load_persisted_os_sig(topic_id: str) -> str:
                 data = json.load(f)
             return data.get("topics", {}).get(topic_id, "")
     except Exception:
-        pass
+        logger.exception("operation failed")
+
     return ""
 
 

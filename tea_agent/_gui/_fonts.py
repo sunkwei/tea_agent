@@ -110,7 +110,8 @@ def _init_fonts():
             if 1.0 < sf <= 4.0:
                 _SCALE_FACTOR = sf
     except Exception:
-        pass
+        logger.exception("operation failed")
+
     _DEFAULT_FONT_SIZE = max(10, int(16 * _SCALE_FACTOR * _FONT_SIZE_MULTIPLIER))
     # 从配置文件读取用户字体大小
     _HTML_FONT_SIZE = _get_font_size_from_config()
@@ -130,9 +131,11 @@ def _init_fonts():
                 if _orig > 0:
                     _f.configure(size=max(1, int(_orig * _SCALE_FACTOR * _FONT_SIZE_MULTIPLIER)))
             except Exception:
-                pass
+                logger.exception("operation failed")
+
     except Exception:
-        pass
+        logger.exception("operation failed")
+
 
     # 配置 Treeview 行高，避免字体重叠
     _configure_treeview_rowheight()

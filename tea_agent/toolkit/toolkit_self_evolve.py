@@ -114,7 +114,8 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                                             "risk": imp.get("risk", "unknown"),
                                             "hint": imp.get("hint", "")}
                 except Exception:
-                    pass
+                    logger.exception("operation failed")
+
 
             # 2. Ruff lint: before
             import tempfile
@@ -128,10 +129,11 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                     import json
                     result["lint_before"] = len(json.loads(r.stdout))
             except Exception:
-                pass
+                logger.exception("operation failed")
+
             finally:
                 try: os.unlink(tmp_b)
-                except: pass
+                except Exception: logger.exception("operation failed")
 
             # 3. Ruff lint: after
             try:
@@ -145,10 +147,11 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                     result["lint_after"] = len(json.loads(r.stdout))
                 result["lint_new"] = max(0, result["lint_after"] - result["lint_before"])
             except Exception:
-                pass
+                logger.exception("operation failed")
+
             finally:
                 try: os.unlink(tmp_a)
-                except: pass
+                except Exception: logger.exception("operation failed")
 
             # 4. 签名对比
             if symbol:
@@ -162,7 +165,8 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                     if result["old_sig"] and result["new_sig"] and result["old_sig"] != result["new_sig"]:
                         result["sig_changed"] = True
                 except Exception:
-                    pass
+                    logger.exception("operation failed")
+
 
             # 5. 语义诊断（jedi）
             try:

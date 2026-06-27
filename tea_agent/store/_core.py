@@ -594,7 +594,8 @@ class Storage:
             try:
                 c.execute(f"ALTER TABLE memories ADD COLUMN {col} {col_def}")
             except Exception:
-                pass
+                logger.exception("operation failed")
+
 
         # system_prompts 表
         c.execute('''
@@ -686,21 +687,24 @@ class Storage:
             c.execute("ALTER TABLE conversations ADD COLUMN rounds_json TEXT")
             c.connection.commit()
         except sqlite3.OperationalError:
-            pass
+            logger.exception("operation failed")
+
 
         # 添加 is_summarized 列
         try:
             c.execute("ALTER TABLE conversations ADD COLUMN is_summarized INTEGER DEFAULT 0")
             c.connection.commit()
         except sqlite3.OperationalError:
-            pass
+            logger.exception("operation failed")
+
 
         # t_conv_summary 添加 last_summarized_id
         try:
             c.execute("ALTER TABLE t_conv_summary ADD COLUMN last_summarized_id TEXT")
             c.connection.commit()
         except sqlite3.OperationalError:
-            pass
+            logger.exception("operation failed")
+
 
         # topic_token_stats 便宜模型列
         for col, col_type in [
@@ -712,7 +716,8 @@ class Storage:
                 c.execute(f"ALTER TABLE topic_token_stats ADD COLUMN {col} {col_type}")
                 c.connection.commit()
             except sqlite3.OperationalError:
-                pass
+                logger.exception("operation failed")
+
 
         # topic_token_stats 嵌入模型列
         for col, col_type in [
@@ -723,20 +728,23 @@ class Storage:
                 c.execute(f"ALTER TABLE topic_token_stats ADD COLUMN {col} {col_type}")
                 c.connection.commit()
             except sqlite3.OperationalError:
-                pass
+                logger.exception("operation failed")
+
 
         # pending_cheap_tokens_json — 存储异步摘要产生的便宜模型 token，下一轮显示后清零
         try:
             c.execute("ALTER TABLE topic_token_stats ADD COLUMN pending_cheap_tokens_json TEXT DEFAULT ''")
             c.connection.commit()
         except sqlite3.OperationalError:
-            pass
+            logger.exception("operation failed")
+
 
         try:
             c.execute("ALTER TABLE topics ADD COLUMN drift_count INTEGER DEFAULT 0")
             c.connection.commit()
         except sqlite3.OperationalError:
-            pass
+            logger.exception("operation failed")
+
 
         c.execute('''CREATE TABLE IF NOT EXISTS todo_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -822,7 +830,8 @@ class Storage:
                              "msg_vectors_new","system_prompts_new","reflections_new",
                              "config_history_new"]:
                 try: c.execute(f"DROP TABLE IF EXISTS {leftover}")
-                except: pass
+                except Exception:
+                    logger.exception("operation failed")
             _migrate_table("topics", [
                 "topic_id TEXT PRIMARY KEY",
                 "title TEXT NOT NULL",
@@ -941,7 +950,8 @@ class Storage:
             db_week = row[0] if row else None
             tmp_conn.close()
         except sqlite3.OperationalError:
-            pass
+            logger.exception("operation failed")
+
         current_week = self._get_week_key()
         if db_week == current_week:
             return
@@ -987,7 +997,8 @@ class Storage:
                     if now - float(last) < 3600:
                         return
                 except ValueError:
-                    pass
+                    logger.exception("operation failed")
+
             backup_dir = os.path.join(
                 os.path.dirname(os.path.abspath(self.db_path)), "backup"
             )
@@ -1026,7 +1037,8 @@ class Storage:
                 os.remove(p)
                 logger.debug(f"清理旧备份: {p}")
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
     def backup_now(self):
         """Backup now."""
@@ -1056,7 +1068,8 @@ class Storage:
             conn.commit()
             conn.close()
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
     # ── 保护标记 ──
 
@@ -1072,7 +1085,8 @@ class Storage:
                     f.write(f"# 数据库路径: {db_abs}\n")
                     f.write(f"# 创建时间: {datetime.now().isoformat()}\n")
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
     # ── 生命周期 ──
 

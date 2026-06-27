@@ -11,7 +11,6 @@ def toolkit_proactive(action: str, content: str = "", priority: int = 2, goal_id
     """Agent 自主心跳系统"""
     logger.info(f"toolkit_proactive called: action={action!r}, content={repr(content)[:80]}, priority={priority!r}, goal_id={goal_id!r}")
 
-    import json
     
     try:
         if action == "check":

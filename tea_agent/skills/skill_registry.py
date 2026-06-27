@@ -26,8 +26,7 @@ Skill 注册中心 — 管理、索引、推荐技能。
 import json
 import re
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
-from collections import defaultdict
+from typing import List, Dict, Optional
 from datetime import datetime
 
 import logging
@@ -147,7 +146,7 @@ class SkillRegistry:
     
     def get_skill(self, skill_id: str):
         """获取单个技能"""
-        from .skill_crystallize import Skill, SkillCrystallizer
+        from .skill_crystallize import SkillCrystallizer
         
         # 从索引检查
         if skill_id not in self.index["skills"]:
@@ -159,7 +158,7 @@ class SkillRegistry:
     
     def list_all(self):
         """列出所有技能"""
-        from .skill_crystallize import Skill, SkillCrystallizer
+        from .skill_crystallize import SkillCrystallizer
         
         crystallizer = SkillCrystallizer(skills_dir=str(self.skills_dir))
         return crystallizer.list_skills()
@@ -185,7 +184,7 @@ class SkillRegistry:
         Returns:
             匹配的技能列表
         """
-        from .skill_crystallize import Skill, SkillCrystallizer
+        from .skill_crystallize import SkillCrystallizer
         
         # 获取候选 ID
         candidate_ids = set(self.index["skills"].keys())

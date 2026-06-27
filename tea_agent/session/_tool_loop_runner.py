@@ -6,7 +6,7 @@
 import json
 import time
 import logging
-from typing import Dict, Callable, Optional, Any
+from typing import Dict
 
 logger = logging.getLogger("session.tool_loop_runner")
 

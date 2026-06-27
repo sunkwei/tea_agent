@@ -14,7 +14,6 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
 
     import os, subprocess, tempfile, shutil
     from datetime import datetime
-    from pathlib import Path
 
     def _detect_env():
         """Internal: detect env."""
@@ -41,7 +40,8 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
             img.save(dst, quality=quality)
             return True
         except ImportError:
-            pass
+            logger.exception("operation failed")
+
         # fallback: ImageMagick convert
         cv = _find_tool("convert")
         if cv:
@@ -103,7 +103,8 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
                 if os.path.exists(out_path) and os.path.getsize(out_path) > 100:
                     return out_path
         except ImportError:
-            pass
+            logger.exception("operation failed")
+
 
         try:
             from PIL import ImageGrab
@@ -115,7 +116,8 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
             if os.path.exists(out_path) and os.path.getsize(out_path) > 100:
                 return out_path
         except ImportError:
-            pass
+            logger.exception("operation failed")
+
 
         xs = _find_tool("xfce4-screenshooter")
         if xs:

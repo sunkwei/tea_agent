@@ -4,9 +4,9 @@ Battle Snakes TUI Renderer — curses-based ASCII display.
 
 import curses
 import time
-from typing import List, Optional, Set
+from typing import List, Optional
 
-from .engine import Game, Snake, Position, Direction
+from .engine import Game, Snake, Direction
 
 
 # ── color pair IDs ─────────────────────────────────────────

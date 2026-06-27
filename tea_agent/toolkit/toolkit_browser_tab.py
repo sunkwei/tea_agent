@@ -24,11 +24,7 @@ def toolkit_browser_tab(action: str, browser: str = "firefox", tab_title: str = 
     """
     logger.info(f"toolkit_browser_tab called: action={action!r}, browser={browser!r}, tab_title={tab_title!r}")
 
-    import os
     import sys
-    import json
-    import time
-    import subprocess
 
     # 平台检测
     is_windows = sys.platform == "win32"
@@ -40,8 +36,6 @@ def toolkit_browser_tab(action: str, browser: str = "firefox", tab_title: str = 
 
 def _windows_browser_tab(action, browser, tab_title, window_index):
     """Windows 平台实现"""
-    import os
-    import json
     import time
     import ctypes
     import ctypes.wintypes

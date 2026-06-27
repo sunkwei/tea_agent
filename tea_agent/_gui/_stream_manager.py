@@ -10,7 +10,6 @@ Handles streaming output, logging, status updates, buffer flushing.
 
 import tkinter as tk
 from tkinter import messagebox
-from typing import Optional, List
 
 class StreamManager:
     """流式输出管理组件"""

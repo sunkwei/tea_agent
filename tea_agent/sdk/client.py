@@ -2,7 +2,6 @@
 Tea Agent Python SDK — Synchronous API wrapper using urllib.
 """
 import json
-import logging
 from urllib.request import Request, urlopen, HTTPError
 
 class AgentSDK:

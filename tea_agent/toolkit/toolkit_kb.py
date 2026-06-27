@@ -122,7 +122,8 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
                     if f"category:{category}" in text:
                         filtered.append(f)
                 except Exception:
-                    pass
+                    logger.exception("operation failed")
+
             md_files = filtered
         if sort == "time":
             md_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)

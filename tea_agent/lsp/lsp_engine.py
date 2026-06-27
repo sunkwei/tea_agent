@@ -7,9 +7,8 @@
 
 import os
 import subprocess
-import tempfile
 from pathlib import Path
-from typing import List, Dict, Optional, Any, Tuple
+from typing import Dict, Optional, Any
 import logging
 
 logger = logging.getLogger("lsp")
@@ -140,7 +139,8 @@ def semantic_diagnose(project_root: str, filepath: str) -> Dict:
                         "message": f"符号 '{name}' 无法解析到定义，可能是拼写错误或缺少导入",
                     })
             except Exception:
-                pass
+                logger.exception("operation failed")
+
 
         # 2. 检查导入
         for name in script.get_names(all_scopes=True):
@@ -156,7 +156,8 @@ def semantic_diagnose(project_root: str, filepath: str) -> Dict:
                             "message": f"导入 '{name.name}' 无法解析",
                         })
                 except Exception:
-                    pass
+                    logger.exception("operation failed")
+
 
         hint = f"发现 {len(issues)} 个语义问题" if issues else "语义检查通过 ✓"
         return {
@@ -381,8 +382,9 @@ def collect_context(project_root: str, filepath: str, symbol: str = None, max_fi
         results["hint"] = f"收集了 {len(results['files'])} 个文件, {len(results['symbols'])} 个符号引用"
         return results
 
-    except Exception as e:
-        pass
+    except Exception:
+        logger.exception("operation failed")
+
 
 # ── C++ (clangd) 支持 ────────────────────────────────────────
 

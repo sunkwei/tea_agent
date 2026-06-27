@@ -10,7 +10,7 @@
 """
 
 from typing import List, Dict, Callable, Any, Optional, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import logging
 
 logger = logging.getLogger("session_pipeline")

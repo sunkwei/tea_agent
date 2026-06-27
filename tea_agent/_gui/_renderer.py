@@ -5,11 +5,9 @@ Usage: self.renderer = ChatRenderer(self)  # self = TkGUI instance
 """
 import tkinter as tk
 import html as html_mod
-import json
 import logging
-import traceback
 import threading
-from typing import List, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from tea_agent.gui import TkGUI
@@ -167,7 +165,6 @@ class ChatRenderer:
                 self.gui.chat_view.see(tk.END)
                 self._switch_display("chat_view")
 
-        import threading
         def _worker():
             """Internal: worker."""
             try:
@@ -238,7 +235,6 @@ class ChatRenderer:
                 self.gui.chat_view.see(tk.END)
                 self._switch_display("chat_view")
 
-        import threading
         def _worker():
             """Internal: worker."""
             try:

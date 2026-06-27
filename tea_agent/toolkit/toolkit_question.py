@@ -7,10 +7,9 @@
 支持 GUI 弹窗和 CLI 输入两种模式。
 """
 
-import sys
 import logging
 import threading
-from typing import List, Optional
+from typing import List
 
 logger = logging.getLogger("toolkit.question")
 
@@ -231,7 +230,8 @@ def _ask_gui(
             try:
                 dialog.destroy()
             except:
-                pass
+                logger.exception("operation failed")
+
         dialog.after(timeout * 1000, _timeout)
     
     # 等待用户回答
@@ -277,7 +277,8 @@ def _ask_cli(
                     if 0 <= idx < len(options):
                         return options[idx]
                 except ValueError:
-                    pass
+                    logger.exception("operation failed")
+
                 
                 # 尝试匹配选项名称
                 for opt in options:

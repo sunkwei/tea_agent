@@ -12,10 +12,8 @@ Storage 测试套件 — 覆盖所有核心 CRUD 操作。
 """
 
 import os
-import json
 import time
 
-import pytest
 
 
 # ============================================================
@@ -151,7 +149,6 @@ class TestTopicCRUD:
 
     def test_update_topic_active(self, storage):
         """更新主题活跃时间"""
-        import time
         tid = storage.create_topic("活跃测试")
         old_stamp = storage.get_topic(tid)["last_update_stamp"]
         time.sleep(1.1)  # SQLite CURRENT_TIMESTAMP 秒级精度，需 >=1 秒
@@ -180,7 +177,6 @@ class TestMessageCRUD:
         """保存消息应自动更新主题活跃时间"""
         tid = storage.create_topic("活跃测试")
         old = storage.get_topic(tid)["last_update_stamp"]
-        import time
         time.sleep(1.1)  # SQLite CURRENT_TIMESTAMP 秒级精度
         storage.save_msg(tid, "新消息", "", False)
         new = storage.get_topic(tid)["last_update_stamp"]
@@ -320,7 +316,6 @@ class TestMessageCRUD:
 
     def test_get_recent_conversations(self, storage):
         """获取最近 N 轮对话（正序）"""
-        import time
         tid = storage.create_topic("最近测试")
         for i in range(5):
             cid = storage.save_msg(tid, f"msg{i}", f"reply{i}", False)

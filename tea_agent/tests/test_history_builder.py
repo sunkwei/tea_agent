@@ -5,10 +5,6 @@
 - to_multimodal: 支持视觉 / 不支持视觉 / 有图片 / 无图片
 """
 
-import json
-import os
-import pytest
-from unittest.mock import patch, MagicMock
 
 
 # ============================================================

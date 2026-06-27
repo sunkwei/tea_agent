@@ -19,7 +19,6 @@
 """
 
 import os
-import sys
 import logging
 import threading
 from pathlib import Path

@@ -19,11 +19,11 @@
 依赖: pip install numpy requests pyyaml
 """
 
-import os, re, sys, json, time, sqlite3, logging, argparse, math
+import os, re, sys, sqlite3, logging, argparse, math
 from pathlib import Path
 from datetime import datetime, timedelta
 from collections import defaultdict, Counter
-from typing import Optional, List, Tuple
+from typing import List, Tuple
 import io
 
 try:

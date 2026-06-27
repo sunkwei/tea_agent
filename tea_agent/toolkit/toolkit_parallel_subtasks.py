@@ -7,11 +7,10 @@
 将复杂问题分解为子任务，简单任务用 lite agent 并发执行。
 """
 
-import json
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Any, Optional
+from typing import List, Dict
 
 logger = logging.getLogger("toolkit.parallel_subtasks")
 

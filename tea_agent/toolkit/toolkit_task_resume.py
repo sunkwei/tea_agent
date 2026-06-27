@@ -20,7 +20,8 @@ def _get_topic_id() -> Optional[str]:
         if agent is not None:
             return getattr(agent, 'current_topic_id', None)
     except Exception:
-        pass
+        logger.exception("operation failed")
+
     return None
 
 def _get_pending_todos() -> List[Dict]:

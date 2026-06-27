@@ -212,7 +212,8 @@ class TkGUI(Agent):
         try:
             os.chdir(_proj_root)
         except Exception:
-            pass
+            logger.exception("operation failed")
+
         try:
             from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
             result = toolkit_subconscious("start")
@@ -635,7 +636,8 @@ class TkGUI(Agent):
             dir_name = os.path.basename(self._initial_cwd or os.getcwd())
             title = f"{title}  [{dir_name}]"
         except Exception:
-            pass
+            logger.exception("operation failed")
+
         self.root.title(title)
 
     def switch_topic(self, topic_id):
@@ -752,7 +754,8 @@ class TkGUI(Agent):
                          and hasattr(self._cfg, 'main_model')
                          and self._cfg.main_model.supports_vision)
         except Exception:
-            pass
+            logger.exception("operation failed")
+
         if not vision_ok:
             return None
 
@@ -870,7 +873,8 @@ class TkGUI(Agent):
                             embedding_prompt_tokens=emb_p,
                         )
                 except Exception:
-                    pass
+                    logger.exception("operation failed")
+
                 if usage and usage.get("total_tokens", 0) > 0:
                     self.root.after(0, lambda u=usage, cu=cheap_usage, et=emb_total, ep=emb_p:
                                     self._add_token_notice_and_render(u, cu, et, ep))
@@ -906,7 +910,8 @@ class TkGUI(Agent):
                             rounds=rounds if rounds else None,
                         )
                     except Exception:
-                        pass
+                        logger.exception("operation failed")
+
                 self.root.after(0, self._render_and_show_chat)
                 self.root.after(0, self._show_raw_check_btn)
                 self.root.after(0, lambda: self._update_status(f"❌ 错误: {ai_msg}"))
@@ -1007,7 +1012,8 @@ class TkGUI(Agent):
                 self._current_round_view = None
                 self._render_and_show_chat()
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
     def _show_image_popup(self, idx):
         """点击聊天图片时弹出放大查看窗口。点击图片或按 Esc 关闭。"""
@@ -1104,12 +1110,14 @@ class TkGUI(Agent):
                         try:
                             setattr(self.sess, key, val)
                         except Exception:
-                            pass
+                            logger.exception("operation failed")
+
                 # max_context_tokens 从 main_model 读取（非全局配置）
                 try:
                     self.sess.max_context_tokens = cfg.main_model.max_context_tokens
                 except Exception:
-                    pass
+                    logger.exception("operation failed")
+
             self._update_status("⚙️ 配置已更新")
 
         ConfigDialog(self.root, on_save=on_save, config_path=self._config_path)
@@ -1167,7 +1175,8 @@ class TkGUI(Agent):
                 try:
                     self.sess.close()
                 except Exception:
-                    pass
+                    logger.exception("operation failed")
+
                 self.sess = None
 
             # 更新配置
@@ -1184,7 +1193,8 @@ class TkGUI(Agent):
                 try:
                     self.load_topic_history(topic_id)
                 except Exception:
-                    pass
+                    logger.exception("operation failed")
+
 
             # 更新状态栏
             cheap_m = self._cfg.cheap_model
@@ -1432,7 +1442,8 @@ def _set_app_icon(root):
             )
             root.iconbitmap(default=ico_path)
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
     # 跨平台：用 iconphoto(.png) 设置标题栏图标
     if os.path.exists(png_path):
@@ -1443,7 +1454,8 @@ def _set_app_icon(root):
             root.iconphoto(True, photo)
             root._icon_ref = photo  # 防止被 GC
         except Exception:
-            pass
+            logger.exception("operation failed")
+
 
 
 def _safe_destroy(root):

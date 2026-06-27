@@ -4,9 +4,6 @@ Tea Agent Gui2 Server — Bottle-based static file + API proxy server.
 Mounts the frontend static files and provides API proxy to tea_agent backend.
 """
 
-import os as _os
-import sys as _sys
-import json as _json
 import threading as _threading
 import logging as _logging
 import socket as _socket

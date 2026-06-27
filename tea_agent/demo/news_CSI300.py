@@ -11,8 +11,8 @@
 
 依赖: pip install requests beautifulsoup4
 """
-import os, re, time, sqlite3, logging
-from datetime import datetime, timedelta
+import re, time, sqlite3, logging
+from datetime import datetime
 from pathlib import Path
 import requests
 from bs4 import BeautifulSoup

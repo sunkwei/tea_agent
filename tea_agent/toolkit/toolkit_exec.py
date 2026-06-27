@@ -73,7 +73,8 @@ class _ProcessMonitor:
                         if cpu_pct > 0:
                             is_active = True
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
+                        logger.exception("operation failed")
+
 
                     # 内存检查（RSS 增长 > 1%）
                     try:
@@ -82,7 +83,8 @@ class _ProcessMonitor:
                             is_active = True
                         self._last_rss = mem.rss
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
+                        logger.exception("operation failed")
+
 
                     # IO 检查（读写字节增长）
                     try:
@@ -93,7 +95,8 @@ class _ProcessMonitor:
                         self._last_io_read = io.read_bytes
                         self._last_io_write = io.write_bytes
                     except (psutil.AccessDenied, AttributeError):
-                        pass
+                        logger.exception("operation failed")
+
 
                     # 子进程检查
                     if not is_active:
@@ -104,9 +107,11 @@ class _ProcessMonitor:
                                         is_active = True
                                         break
                                 except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                    pass
+                                    logger.exception("operation failed")
+
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
-                            pass
+                            logger.exception("operation failed")
+
 
                     if is_active:
                         self.last_active_time = time.time()
@@ -114,7 +119,8 @@ class _ProcessMonitor:
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     break
         except psutil.NoSuchProcess:
-            pass
+            logger.exception("operation failed")
+
 
 def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
     """使用 _ProcessMonitor 智能超时执行单条命令。
@@ -144,12 +150,14 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
             for line in iter(stream.readline, ""):
                 lines.append(line)
         except ValueError:
-            pass
+            logger.exception("operation failed")
+
         finally:
             try:
                 stream.close()
             except OSError:
-                pass
+                logger.exception("operation failed")
+
 
     t_out = threading.Thread(target=_reader, args=(process.stdout, stdout_lines), daemon=True)
     t_err = threading.Thread(target=_reader, args=(process.stderr, stderr_lines), daemon=True)
@@ -180,9 +188,11 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
                     process.kill()
                     process.wait(timeout=5)
                 except Exception:
-                    pass
+                    logger.exception("operation failed")
+
             except Exception:
-                pass
+                logger.exception("operation failed")
+
     finally:
         monitor.stop()
 
@@ -235,12 +245,14 @@ def _run_batch_with_monitor(idx, cmd, timeout):
                 for line in iter(stream.readline, ""):
                     lines.append(line)
             except ValueError:
-                pass
+                logger.exception("operation failed")
+
             finally:
                 try:
                     stream.close()
                 except OSError:
-                    pass
+                    logger.exception("operation failed")
+
 
         t_out = threading.Thread(target=_reader, args=(process.stdout, out_lines), daemon=True)
         t_err = threading.Thread(target=_reader, args=(process.stderr, err_lines), daemon=True)
@@ -268,7 +280,8 @@ def _run_batch_with_monitor(idx, cmd, timeout):
                     process.kill()
                     process.wait(timeout=3)
                 except Exception:
-                    pass
+                    logger.exception("operation failed")
+
 
         monitor.stop()
         t_out.join(timeout=2)
@@ -340,7 +353,8 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                         try:
                             os.unlink(tmppath)
                         except OSError:
-                            pass
+                            logger.exception("operation failed")
+
                     return result
                 break  # 只处理第一个 -c
 
@@ -426,7 +440,8 @@ def _sudo_with_gui(app: str, args: list):
                 process.kill()
                 process.wait(timeout=5)
             except Exception:
-                pass
+                logger.exception("operation failed")
+
             result = (-1, "", "⏰ sudo 命令超时被强制终止 (>180s)")        # 清除密码
         password = "\x00" * len(password)
         del password
@@ -448,7 +463,8 @@ def _sudo_with_gui(app: str, args: list):
                 process.kill()
                 process.wait(timeout=5)
             except Exception:
-                pass
+                logger.exception("operation failed")
+
             result = (-1, "", "⏰ pkexec 命令超时被强制终止 (>120s)")
         return result
 
@@ -467,7 +483,8 @@ def _sudo_with_gui(app: str, args: list):
             process.kill()
             process.wait(timeout=5)
         except Exception:
-            pass
+            logger.exception("operation failed")
+
         result = (-1, "", f"⏰ 命令超时被强制终止 (>120s): {app}")
     return result
 

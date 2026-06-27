@@ -463,7 +463,6 @@ class TetrisGame:
     def _load_model(self):
         """Load the trained TFLite CNN model for AI play."""
         try:
-            import numpy as np
             model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                       'tetris_cnn_model.tflite')
             if not os.path.exists(model_path):

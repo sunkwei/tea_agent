@@ -313,7 +313,8 @@ class SymbolIndex:
             if texts:
                 self._embedding_engine.build_tfidf_vocabulary(texts)
         except Exception:
-            pass
+            logger.exception("operation failed")
+
         return self._embedding_engine
 
     def get_symbol_count(self) -> int:

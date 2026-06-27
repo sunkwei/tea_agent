@@ -5,7 +5,6 @@ logger = logging.getLogger("toolkit")
 
 """toolkit_config — 允许 Agent 读取和修改自身运行时配置"""
 
-import json
 
 def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
     """
@@ -75,7 +74,8 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
                 try:
                     setattr(session, key, cfg.get(key))
                 except Exception:
-                    pass
+                    logger.exception("operation failed")
+
 
         return f"✅ {key}: {old_val} → {new_val}"
 

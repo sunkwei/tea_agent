@@ -35,7 +35,6 @@ def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: st
     """
     logger.info(f"toolkit_search called: query={repr(query)[:80]}, search_type={search_type!r}")
 
-    import json
 
     max_results = min(max(max_results, 1), 50)
 
@@ -197,7 +196,8 @@ def _search_baidu(query: str, max_results: int):
                     if encoded.startswith('http'):
                         real_url = encoded
             except Exception:
-                pass
+                logger.exception("operation failed")
+
             
             # 摘要
             snippet = ''
@@ -243,7 +243,6 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
     """项目内全文搜索（优先使用 ripgrep，回退到 Python 实现）"""
     import json
     import os
-    import re
     import subprocess
 
     if not root_path:
@@ -412,7 +411,7 @@ def _search_symbol(query: str, root_path: str, max_results: int):
                                 if len(results) >= max_results:
                                     return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
 
-                except Exception as e:
+                except Exception:
                     continue
 
     if not results:

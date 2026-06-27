@@ -3,9 +3,7 @@
 覆盖: estimate_tokens, _progressive_trim, search_conversations
 """
 
-import json
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 # ============================================================

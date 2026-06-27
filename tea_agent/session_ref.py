@@ -13,7 +13,6 @@
 """
 
 import logging
-from typing import Optional, Any
 
 logger = logging.getLogger("session_ref")
 

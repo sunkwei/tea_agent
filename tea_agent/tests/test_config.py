@@ -231,7 +231,6 @@ class TestLoadSaveConfig:
         cfg1.main_model.model_name = "test-model"
 
         # 先确保 yaml 可用
-        import yaml
         save_config(cfg1, config_path=tmp_yaml_config)
 
         cfg2 = load_config(config_path=tmp_yaml_config)

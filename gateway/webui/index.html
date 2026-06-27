@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tea Agent</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- 侧边栏 -->
+  <aside id="sidebar">
+    <div class="sidebar-header">
+      <span class="logo">🍵</span>
+      <span class="title">Tea Agent</span>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-btn active" data-panel="chat" onclick="app.switchPanel('chat')">
+        <span class="icon">💬</span> 对话
+      </button>
+      <button class="nav-btn" data-panel="canvas" onclick="app.switchPanel('canvas')">
+        <span class="icon">🎨</span> 画布
+      </button>
+      <button class="nav-btn" data-panel="sessions" onclick="app.switchPanel('sessions')">
+        <span class="icon">📋</span> 会话
+      </button>
+      <button class="nav-btn" data-panel="tools" onclick="app.switchPanel('tools')">
+        <span class="icon">🔧</span> 工具
+      </button>
+      <button class="nav-btn" data-panel="settings" onclick="app.switchPanel('settings')">
+        <span class="icon">⚙</span> 设置
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">连接中...</span>
+    </div>
+  </aside>
+
+  <!-- 主面板 -->
+  <main id="main">
+    <!-- 聊天面板 -->
+    <div id="panel-chat" class="panel active">
+      <div class="panel-header">
+        <span id="sessionTitle">当前会话</span>
+        <div class="panel-actions">
+          <button onclick="chat.clear()" title="清空对话">🗑️</button>
+          <button onclick="chat.newSession()" title="新建会话">➕</button>
+        </div>
+      </div>
+      <div id="messages" class="messages"></div>
+      <div class="input-area">
+        <textarea id="chatInput" rows="3" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
+                  onkeydown="chat.onKeyDown(event)"></textarea>
+        <button id="sendBtn" onclick="chat.send()">发送</button>
+      </div>
+    </div>
+
+    <!-- 画布面板 -->
+    <div id="panel-canvas" class="panel">
+      <div class="panel-header">
+        <span>🎨 Canvas 可视化工作区</span>
+        <div class="panel-actions">
+          <button onclick="canvas.refresh()">🔄 刷新</button>
+          <button onclick="canvas.openA2UI()">📐 A2UI</button>
+          <button onclick="canvas.openNewTab()">↗️ 新标签</button>
+        </div>
+      </div>
+      <div class="canvas-body">
+        <div class="canvas-sidebar" id="canvasFiles">
+          <div class="canvas-files-header">📄 页面</div>
+          <div class="canvas-files-list" id="canvasFileList"></div>
+        </div>
+        <div class="canvas-view">
+          <iframe id="canvasFrame" class="canvas-frame"></iframe>
+          <div id="canvasEmpty" class="canvas-empty">
+            <div class="big-icon">🎨</div>
+            <h3>画布空的</h3>
+            <p>Agent 可以通过对话推送内容到这里</p>
+          </div>
+        </div>
+      </div>
+      <!-- A2UI 面板 -->
+      <div id="a2uiPanel" class="a2ui-panel">
+        <textarea id="a2uiInput" rows="6" placeholder='A2UI JSON 组件...'></textarea>
+        <div class="a2ui-actions">
+          <button onclick="canvas.pushA2UI()">▶ 推送</button>
+          <button onclick="canvas.loadExample()">📋 示例</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 会话面板 -->
+    <div id="panel-sessions" class="panel">
+      <div class="panel-header"><span>📋 历史会话</span></div>
+      <div class="sessions-list" id="sessionsList"></div>
+    </div>
+
+    <!-- 工具面板 -->
+    <div id="panel-tools" class="panel">
+      <div class="panel-header">
+        <span>🔧 工具清单</span>
+        <button onclick="tools.refresh()">🔄</button>
+      </div>
+      <div class="tools-list" id="toolsList"></div>
+    </div>
+
+    <!-- 设置面板 -->
+    <div id="panel-settings" class="panel">
+      <div class="panel-header"><span>⚙ 设置</span></div>
+      <div class="settings-body">
+        <div class="setting-item">
+          <label>Gateway 地址</label>
+          <input type="text" id="gwUrl" value="http://127.0.0.1:18789">
+        </div>
+        <div class="setting-item">
+          <label>主题</label>
+          <select id="themeSelect" onchange="app.setTheme(this.value)">
+            <option value="dark">深色</option>
+            <option value="light">浅色</option>
+          </select>
+        </div>
+        <button onclick="app.reconnect()" class="setting-btn">重新连接</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/gateway.js"></script>
+<script src="js/chat.js"></script>
+<script src="js/canvas.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

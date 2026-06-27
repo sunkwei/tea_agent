@@ -21,6 +21,7 @@ from tea_agent.server.server import APIServer
 DEFAULT_PORT = 18789
 DEFAULT_HOST = "127.0.0.1"
 CANVAS_ROOT = Path(__file__).parent.parent.parent / "gateway" / "canvas"
+WEBUI_ROOT = Path(__file__).parent.parent.parent / "gateway" / "webui"
 
 _STATUS = {"running": False, "pid": None, "port": None, "started_at": None}
 class GatewayDaemon:
@@ -56,6 +57,8 @@ class GatewayDaemon:
             Route("/api/canvas/push", endpoint=self._handle_canvas_push, methods=["POST"]),
             Route("/api/canvas/snapshot", endpoint=self._handle_canvas_snapshot),
             Mount("/canvas", app=StaticFiles(directory=str(CANVAS_ROOT), html=True), name="canvas"),
+            Mount("/css", app=StaticFiles(directory=str(WEBUI_ROOT / "css")), name="css"),
+            Mount("/js", app=StaticFiles(directory=str(WEBUI_ROOT / "js")), name="js"),
             WebSocketRoute("/ws", endpoint=self._handle_ws),
             Route("/a2ui/push", endpoint=self._handle_a2ui_push, methods=["POST"]),
             Route("/", endpoint=self._handle_root),
@@ -108,6 +111,7 @@ class GatewayDaemon:
     async def _on_startup(self):
         logger.info(f"Gateway 就绪 → http://{self.host}:{self.port}")
         CANVAS_ROOT.mkdir(parents=True, exist_ok=True)
+        WEBUI_ROOT.mkdir(parents=True, exist_ok=True)
 
     async def _on_shutdown(self):
         logger.info("Gateway 关闭中...")
@@ -117,8 +121,14 @@ class GatewayDaemon:
         self._ws_clients.clear()
 
     async def _handle_root(self, request):
-        if CANVAS_ROOT.exists() and (CANVAS_ROOT / "index.html").exists():
-            return FileResponse(str(CANVAS_ROOT / "index.html"))
+        """根路径 → WebUI 主界面"""
+        index = WEBUI_ROOT / "index.html"
+        if WEBUI_ROOT.exists() and index.exists():
+            return FileResponse(str(index))
+        # 降级到 Canvas
+        canvas_index = CANVAS_ROOT / "index.html"
+        if canvas_index.exists():
+            return FileResponse(str(canvas_index))
         return JSONResponse({"service": "Tea Agent Gateway", "version": "0.1.0"})
 
     async def _handle_health(self, request):

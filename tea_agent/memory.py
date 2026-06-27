@@ -29,10 +29,16 @@ MIN_HIGH_INJECT = 3   # HIGH 保底
 MIN_MEDIUM_INJECT = 2  # MEDIUM 保底
 MIN_LOW_INJECT = 1    # LOW 保底（至少1条）
 
-# 年龄衰减阈值（天）
-CRITICAL_DEGRADE_DAYS = 30   # CRITICAL → HIGH
-HIGH_DEGRADE_DAYS = 60       # HIGH → MEDIUM
-MEDIUM_DEGRADE_DAYS = 90     # MEDIUM → LOW
+# 年龄衰减阈值（天）— 基础值，会被动态遗忘机制调整
+# 动态调整范围：基础值 × [0.3, 3.0]
+_BASE_CRITICAL_DEGRADE_DAYS = 30   # CRITICAL → HIGH
+_BASE_HIGH_DEGRADE_DAYS = 60       # HIGH → MEDIUM
+_BASE_MEDIUM_DEGRADE_DAYS = 90     # MEDIUM → LOW
+
+# 当前实际使用的阈值（动态调整后）
+CRITICAL_DEGRADE_DAYS = 30
+HIGH_DEGRADE_DAYS = 60
+MEDIUM_DEGRADE_DAYS = 90
 
 # LLM 精调上限
 MAX_LLM_ADJUSTMENTS = 3  # 每次最多调整条数
@@ -50,6 +56,9 @@ class MemoryManager:
         self.storage = storage
         self._extraction_threshold = extraction_threshold
         self._dedup_threshold = dedup_threshold
+        # embedding 缓存（惰性加载）
+        self._embedding_engine = None
+        self._embedding_cache = {}  # memory_id → embedding vector
 
     # ------------------------------------------------------------------
     # 记忆选择
@@ -142,16 +151,32 @@ class MemoryManager:
 
     def _score_memory(self, memory: Dict, topic_text: str) -> float:
         """
-        计算记忆与当前对话的相关性分数。
+        计算记忆与当前对话的相关性分数（Hybrid）。
 
-        分数 = 相关性 × 重要度 × 最近访问因子 × 优先级因子
+        分数 = hybrid_relevance × 重要度 × 最近访问因子 × 优先级因子
 
-        - 相关性: 关键词匹配率 (0.1~1.0)
+        - hybrid_relevance: 关键词匹配 (0.1~1.0) × 0.4 + embedding 相似度 × 0.6
+                          若 embedding 不可用，纯关键词
         - 重要度: importance / 5
         - 最近访问因子: 越近越高 (0.5~1.0)
         - 优先级因子: (4 - priority) / 4
         """
-        relevance = self._compute_relevance(memory, topic_text)
+        # 关键词得分
+        keyword_relevance = self._compute_relevance(memory, topic_text)
+
+        # embedding 语义得分
+        emb_sim = self._compute_embedding_similarity(memory, topic_text)
+
+        # Hybrid 融合：关键词兜底 + 语义提准
+        if emb_sim is not None:
+            # 关键词保底 0.1，避免完全无匹配时归零
+            kw = max(keyword_relevance, 0.1)
+            # 融合公式：关键词 40% + 语义 60%
+            relevance = 0.4 * kw + 0.6 * emb_sim
+        else:
+            # embedding 不可用，纯关键词
+            relevance = keyword_relevance
+
         importance = max(memory.get("importance", 3), 1) / 5.0
         recency = self._compute_recency(memory)
         priority_factor = (4 - memory.get("priority", 2)) / 4.0
@@ -259,23 +284,178 @@ class MemoryManager:
 
 
     # ------------------------------------------------------------------
+    # Hybrid 检索：Embedding 相似度 + 缓存
+    # ------------------------------------------------------------------
+
+    def _get_embedding_engine(self):
+        """惰性获取 embedding 引擎（通过 storage.memories.embedding_engine）"""
+        if self._embedding_engine is not None:
+            return self._embedding_engine
+        try:
+            engine = getattr(self.storage.memories, 'embedding_engine', None)
+            if engine is not None and engine.configured:
+                self._embedding_engine = engine
+                return engine
+        except Exception:
+            pass
+        return None
+
+    def _compute_embedding_similarity(self, memory: Dict, topic_text: str) -> float:
+        """
+        计算记忆与查询文本的 embedding 余弦相似度。
+
+        使用缓存避免重复计算。TF-IDF 回退始终可用。
+
+        Returns:
+            0.0 ~ 1.0 的相似度。engine 不可用或出错时返回 None（由调用方决定回退策略）。
+        """
+        if not topic_text or not topic_text.strip():
+            return None
+
+        engine = self._get_embedding_engine()
+        if engine is None:
+            return None
+
+        # 查询向量（不缓存，每次重新计算）
+        try:
+            query_emb = engine.embed(topic_text)
+        except Exception:
+            return None
+        if not query_emb:
+            return None
+
+        # 记忆向量（缓存）
+        mid = memory.get("id", "")
+        mem_emb = self._embedding_cache.get(mid)
+        if mem_emb is None:
+            try:
+                mem_emb = self.storage.memories.get_memory_embedding(mid)
+                if mem_emb:
+                    self._embedding_cache[mid] = mem_emb
+            except Exception:
+                pass
+
+        if not mem_emb or len(mem_emb) != len(query_emb):
+            return None
+
+        # 余弦相似度
+        import numpy as np
+        q_arr = np.array(query_emb, dtype=np.float32)
+        m_arr = np.array(mem_emb, dtype=np.float32)
+        q_norm = np.linalg.norm(q_arr)
+        m_norm = np.linalg.norm(m_arr)
+        if q_norm == 0 or m_norm == 0:
+            return None
+        return float(q_arr @ m_arr) / (q_norm * m_norm)
+
+
+    # ------------------------------------------------------------------
     # 优先级自动调整
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # 动态遗忘：根据记忆插入频率调整衰减阈值
+    # ------------------------------------------------------------------
+
+    def _update_dynamic_thresholds(self):
+        """
+        根据近期记忆插入频率动态调整衰老衰减阈值。
+
+        哲学含义（来自用户的比喻）：
+        - 低频（中年打工）→ 阈值放大，记忆保留更久，珍惜每一段经历
+        - 高频（学生时代）→ 阈值缩小，记忆快速刷新，拥抱变化
+
+        算法：
+        1. 统计最近 N 天（7/30/90）的记忆创建数量
+        2. 计算加权平均频率（条/天），近期权重更高
+        3. 映射到 [0.3, 3.0] 的缩放因子
+        4. 更新全局 CRITICAL/HIGH/MEDIUM_DEGRADE_DAYS
+        """
+        global CRITICAL_DEGRADE_DAYS, HIGH_DEGRADE_DAYS, MEDIUM_DEGRADE_DAYS
+
+        try:
+            from datetime import datetime, timedelta
+            now = datetime.now()
+
+            # 查询不同时间窗口的记忆数量
+            windows = [7, 30, 90]
+            counts = {}
+            c = self.storage.conn.cursor()
+            for days in windows:
+                since = (now - timedelta(days=days)).strftime('%Y-%m-%d %H:%M:%S')
+                c.execute(
+                    "SELECT COUNT(*) FROM memories "
+                    "WHERE is_active = 1 AND created_at >= ?",
+                    (since,),
+                )
+                counts[days] = c.fetchone()[0]
+            c.close()
+
+            # 加权平均频率（条/天）：7天权重3，30天权重2，90天权重1
+            freq_7d = counts[7] / 7.0
+            freq_30d = counts[30] / 30.0
+            freq_90d = counts[90] / 90.0
+            weighted_freq = (freq_7d * 3 + freq_30d * 2 + freq_90d * 1) / 6.0
+
+            # 映射到缩放因子 [0.3, 3.0]
+            # 中位频率 = 1.0 条/天 → 缩放因子 = 1.0（无变化）
+            # 频率 → 缩放因子使用幂函数映射
+            if weighted_freq <= 0:
+                scale = 3.0  # 没有新记忆，极度慢速遗忘
+            elif weighted_freq < 0.3:
+                # 极低频（<0.3条/天）：3x → 2x 线性插值
+                scale = 3.0 - (weighted_freq / 0.3) * 1.0
+            elif weighted_freq < 1.0:
+                # 低频（0.3~1条/天）：2x → 1x
+                ratio = (weighted_freq - 0.3) / 0.7
+                scale = 2.0 - ratio * 1.0
+            elif weighted_freq < 3.0:
+                # 中等（1~3条/天）：1x → 0.7x
+                ratio = (weighted_freq - 1.0) / 2.0
+                scale = 1.0 - ratio * 0.3
+            elif weighted_freq < 10:
+                # 高频（3~10条/天）：0.7x → 0.4x
+                ratio = (weighted_freq - 3.0) / 7.0
+                scale = 0.7 - ratio * 0.3
+            else:
+                # 极高频率（>10条/天，学生时代）：0.4x → 0.3x 渐近
+                scale = max(0.3, 0.4 - (weighted_freq - 10) * 0.01)
+
+            # 更新全局阈值
+            CRITICAL_DEGRADE_DAYS = max(5, int(_BASE_CRITICAL_DEGRADE_DAYS * scale))
+            HIGH_DEGRADE_DAYS = max(10, int(_BASE_HIGH_DEGRADE_DAYS * scale))
+            MEDIUM_DEGRADE_DAYS = max(15, int(_BASE_MEDIUM_DEGRADE_DAYS * scale))
+
+            logger.info(
+                f"动态遗忘: 频率={weighted_freq:.2f}条/天, "
+                f"缩放因子={scale:.2f}x, "
+                f"阈值=[{CRITICAL_DEGRADE_DAYS}/{HIGH_DEGRADE_DAYS}/{MEDIUM_DEGRADE_DAYS}]天"
+            )
+
+        except Exception as e:
+            logger.debug(f"动态阈值更新跳过: {e}")
 
     def degrade_by_age(self) -> int:
         """
         基于创建时间的年龄衰减。pinned=true 的记忆豁免。
 
-        衰减规则：
-        - CRITICAL → HIGH    (创建 >30 天)
-        - HIGH     → MEDIUM  (创建 >60 天)
-        - MEDIUM   → LOW     (创建 >90 天)
+        先调用 _update_dynamic_thresholds() 根据近期记忆插入频率
+        动态调整衰减阈值（你提出的"中年打工 vs 学生时代"机制）。
+
+        衰减规则（动态阈值）：
+        - CRITICAL → HIGH    (创建 >CRITICAL_DEGRADE_DAYS 天)
+        - HIGH     → MEDIUM  (创建 >HIGH_DEGRADE_DAYS 天)
+        - MEDIUM   → LOW     (创建 >MEDIUM_DEGRADE_DAYS 天)
 
         Returns:
             调整的记忆条数
         """
         from datetime import datetime
         now = datetime.now()
+
+        # 先根据插入频率动态调整阈值
+        self._update_dynamic_thresholds()
+
         all_memories = self.storage.get_active_memories(limit=500)
         adjusted = 0
 

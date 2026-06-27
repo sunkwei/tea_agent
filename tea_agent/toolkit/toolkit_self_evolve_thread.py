@@ -92,7 +92,27 @@ def toolkit_self_evolve_thread(action: str):
                 return c
         return os.path.abspath(DEFAULT_DB)
 
-    def _send_notification(title, msg, expire_ms=5000):
+    def _send_notification(title, msg, expire_ms=6000):
+        """发送桌面系统通知。
+
+        优先使用 toolkit_notify（跨平台、更稳健），
+        失败时 fallback 到直接 PowerShell/notify-send。
+        """
+        try:
+            # 优先调用 toolkit_notify（注册的工具函数）
+            # 通过直接 import 函数实现，避免依赖 toolkit 调用链
+            from tea_agent.toolkit.toolkit_notify import toolkit_notify
+            toolkit_notify(
+                title=title,
+                message=msg,
+                urgency="normal",
+                duration=expire_ms,
+            )
+            return  # 成功，直接返回
+        except Exception:
+            logger.debug("toolkit_notify 不可用，使用 fallback 通知")
+
+        # ── Fallback：PowerShell Toast (Windows) ──
         try:
             if os.name == "nt":
                 _ensure_dir(os.path.expanduser("~/.tea_agent/tmp"))
@@ -120,14 +140,13 @@ def toolkit_self_evolve_thread(action: str):
                         os.unlink(tmp.name)
                     except Exception:
                         logger.exception("operation failed")
-
             else:
                 subprocess.run(
                     ["notify-send", "--app-name=TeaAgent", title, msg],
                     capture_output=True, timeout=5,
                 )
         except Exception:
-            logger.exception("operation failed")
+            logger.exception("通知发送失败")
 
 
     # ═══════════════════════════════════════════
@@ -346,6 +365,207 @@ def toolkit_self_evolve_thread(action: str):
             return {"skills": 0, "error": str(e)}
 
     # ═══════════════════════════════════════════
+    # 任务 4：跨主题记忆提取
+    # ═══════════════════════════════════════════
+
+    def _acquire_extract_lock(lock_path, ttl_minutes=30):
+        """进程间互斥锁（文件锁）：防止多个 Agent 进程同时提取记忆。
+
+        使用带有 O_CREAT|O_EXCL 标志的临时锁文件实现原子性。
+        Windows/macOS/Linux 均适用。
+
+        Args:
+            lock_path: 锁文件路径
+            ttl_minutes: 锁的超时时间，超时后自动视为过期
+
+        Returns:
+            True 表示获得锁，False 表示其他进程正在提取
+        """
+        try:
+            # 检查过期锁
+            if os.path.exists(lock_path):
+                try:
+                    mtime = os.path.getmtime(lock_path)
+                    age = time.time() - mtime
+                    if age > ttl_minutes * 60:
+                        os.unlink(lock_path)
+                        logger.debug(f"过期锁已清理: {lock_path} ({age:.0f}s old)")
+                except OSError:
+                    pass
+
+            # 原子创建锁文件
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            with os.fdopen(fd, 'w') as f:
+                f.write(f"pid={os.getpid()}\n")
+                f.write(f"time={time.time()}\n")
+            return True
+        except (OSError, FileExistsError):
+            # 锁已被其他进程持有
+            return False
+
+    def _release_extract_lock(lock_path):
+        """释放提取锁"""
+        try:
+            if os.path.exists(lock_path):
+                os.unlink(lock_path)
+        except OSError:
+            pass
+
+    def _extract_memories_from_all_topics(db_path):
+        """扫描所有主题中未摘要的对话，用 LLM 提取记忆并写入。
+
+        策略：
+        - 进程间互斥锁（30分钟TTL），防止 GUI/Server 同时提取
+        - 按主题最后活动时间降序处理（最新优先）
+        - 每个主题最多处理 20 条未摘要对话
+        - 每次循环最多处理 5 个主题（防止资源耗尽）
+        - 用便宜模型提取，非关键对话跳过
+
+        Returns:
+            dict: {status, topics_scanned, memories_extracted, errors}
+        """
+        if not os.path.exists(db_path):
+            return {"status": "no_db", "topics_scanned": 0, "memories_extracted": 0}
+
+        # ── 进程间互斥锁 ──
+        lock_path = os.path.join(
+            os.path.dirname(STATE_FILE),
+            ".memory_extract.lock",
+        )
+        if not _acquire_extract_lock(lock_path, ttl_minutes=30):
+            return {
+                "status": "locked",
+                "topics_scanned": 0,
+                "memories_extracted": 0,
+                "msg": "另一进程正在提取记忆，跳过本轮",
+            }
+
+        try:
+            from tea_agent.store._core import Storage
+            from tea_agent.memory import MemoryManager
+            from tea_agent.config import get_config
+        except ImportError as e:
+            return {"status": f"import_error: {e}", "topics_scanned": 0, "memories_extracted": 0}
+
+        result = {"topics_scanned": 0, "memories_extracted": 0, "errors": 0, "skipped": 0}
+
+        try:
+            storage = Storage(db_path)
+        except Exception as e:
+            _release_extract_lock(lock_path)
+            return {"status": f"storage_error: {e}", "topics_scanned": 0, "memories_extracted": 0}
+
+        try:
+            # 获取所有活跃主题，按最后更新时间降序
+            all_topics = storage.list_topics()
+            # 按 last_update_stamp 排序（最近更新的优先）
+            active_topics = [
+                t for t in all_topics
+                if t.get("is_active", 1) and t.get("topic_id")
+            ]
+            active_topics.sort(
+                key=lambda t: t.get("last_update_stamp", ""),
+                reverse=True,
+            )
+
+            # 最多处理 5 个主题
+            for topic in active_topics[:5]:
+                topic_id = topic["topic_id"]
+                try:
+                    # 获取未摘要对话
+                    unsummarized = storage.get_unsummarized_conversations(topic_id)
+                    if not unsummarized:
+                        continue
+
+                    # 最多 20 条
+                    unsummarized = unsummarized[:20]
+                    result["topics_scanned"] += 1
+
+                    # 构建对话文本
+                    conv_lines = []
+                    for conv in unsummarized:
+                        user_msg = (conv.get("user_msg") or "")[:500]
+                        ai_msg = (conv.get("ai_msg") or "")[:1000]
+                        conv_lines.append(f"User: {user_msg}\nAssistant: {ai_msg}")
+                    conv_text = "\n\n".join(conv_lines)
+
+                    if not conv_text.strip():
+                        continue
+
+                    # 用 MemoryManager 提取
+                    mm = MemoryManager(storage)
+                    messages = mm.build_extraction_prompt(conv_text[:4000])
+
+                    # 获取便宜模型客户端
+                    try:
+                        from tea_agent.session._params import get_cheap_params
+                        cheap_params = get_cheap_params("memory")
+                        cfg = get_config()
+                        client = None
+                        model = ""
+
+                        if cfg.cheap_model and getattr(cfg.cheap_model, 'api_key', None):
+                            from openai import OpenAI
+                            cheap = cfg.cheap_model
+                            client = OpenAI(
+                                api_key=cheap.api_key,
+                                base_url=(cheap.api_url or "").rstrip("/") + "/v1",
+                            )
+                            model = cheap.model
+                        elif cfg.main_model and getattr(cfg.main_model, 'api_key', None):
+                            from openai import OpenAI
+                            main = cfg.main_model
+                            client = OpenAI(
+                                api_key=main.api_key,
+                                base_url=(main.api_url or "").rstrip("/") + "/v1",
+                            )
+                            model = main.model
+                    except Exception:
+                        client = None
+
+                    if client is None:
+                        result["skipped"] += 1
+                        continue
+
+                    response = client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        stream=False,
+                        extra_body={"thinking": {"type": "disabled"}},
+                        temperature=0.1,
+                        max_tokens=1024,
+                        **cheap_params,
+                    )
+                    result_text = response.choices[0].message.content or ""
+                    extracted = mm.parse_extraction_result(result_text)
+
+                    if extracted:
+                        count = mm.ingest_extracted(extracted, topic_id)
+                        result["memories_extracted"] += count
+
+                    # 标记已提取
+                    c = storage.conn.cursor()
+                    for conv in unsummarized:
+                        c.execute(
+                            "UPDATE conversations SET is_summarized = 1 WHERE id = ?",
+                            (conv["id"],),
+                        )
+                    storage.conn.commit()
+                    c.close()
+
+                except Exception as e:
+                    logger.warning(f"记忆提取失败 topic={topic_id}: {e}")
+                    result["errors"] += 1
+                    continue
+
+        finally:
+            storage.close()
+            _release_extract_lock(lock_path)
+
+        result["status"] = "success"
+        return result
+
+    # ═══════════════════════════════════════════
     # 完整循环
     # ═══════════════════════════════════════════
 
@@ -369,6 +589,14 @@ def toolkit_self_evolve_thread(action: str):
         skill_result = _organize_skills()
         state["skills_organized"] = skill_result.get("skills", 0)
 
+        # 4. 跨主题记忆提取
+        memory_result = _extract_memories_from_all_topics(db_path)
+        state["last_memory_extraction"] = {
+            "topics_scanned": memory_result.get("topics_scanned", 0),
+            "memories_extracted": memory_result.get("memories_extracted", 0),
+            "errors": memory_result.get("errors", 0),
+        }
+
         state["last_cycle_at"] = datetime.now().isoformat()
         state["cycles_completed"] = state.get("cycles_completed", 0) + 1
         _write_state(state)
@@ -377,6 +605,7 @@ def toolkit_self_evolve_thread(action: str):
             "tool_analysis": tool_analysis,
             "readme": readme_result,
             "skills": skill_result,
+            "memory_extraction": memory_result,
         }
 
     def _notify_cycle(result, state, first_run=False):
@@ -390,6 +619,16 @@ def toolkit_self_evolve_thread(action: str):
 
         prefix = "首轮" if first_run else f"第{state.get('cycles_completed',0)}轮"
         lines = [f"🔄 自进化 {prefix}完成"]
+
+        # 记忆提取
+        mem = result.get("memory_extraction", {})
+        if mem.get("memories_extracted", 0):
+            lines.append(f"🧠 记忆提取: {mem['memories_extracted']}条 (扫描{mem.get('topics_scanned',0)}主题)")
+        elif mem.get("status") == "locked":
+            lines.append(f"🔒 记忆提取跳过 (另一进程正在提取)")
+        if mem.get("errors", 0):
+            lines.append(f"⚠️ 提取错误: {mem['errors']}个")
+
         if n_calls:
             lines.append(f"工具: {n_tools}种 / {n_calls}次调用")
         if n_sug:
@@ -416,7 +655,7 @@ def toolkit_self_evolve_thread(action: str):
         _write_state(state)
         _send_notification(
             "🔄 自进化引擎",
-            "已启动！每小时：工具分析 · README同步 · 技能整理",
+            "已启动！每小时：工具分析 · README同步 · 技能整理 · 跨主题记忆提取",
         )
 
         # 立即执行首轮
@@ -477,7 +716,7 @@ def toolkit_self_evolve_thread(action: str):
             "pid": os.getpid(),
             "started_at": state.get("started_at"),
             "cycle_interval": "1小时",
-            "tasks": ["工具使用分析", "README同步", "技能整理"],
+            "tasks": ["工具使用分析", "README同步", "技能整理", "跨主题记忆提取"],
         }
 
     elif action == "stop":
@@ -520,7 +759,7 @@ def meta_toolkit_self_evolve_thread() -> dict:
         "type": "function",
         "function": {
             "name": "toolkit_self_evolve_thread",
-            "description": "自进化后台线程 — 每小时自动运行：①工具使用率分析&优化建议 ②docs/TOOLS.md同步 ③技能模式整理。替代旧的潜意识引擎。",
+            "description": "自进化后台线程 — 每小时自动运行：①工具使用率分析&优化建议 ②docs/TOOLS.md同步 ③技能模式整理 ④跨主题记忆提取。替代旧的潜意识引擎。",
             "parameters": {
                 "type": "object",
                 "properties": {

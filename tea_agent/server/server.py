@@ -31,6 +31,7 @@ except ImportError:
     raise ImportError("pip install starlette uvicorn")
 
 from tea_agent.agent import Agent
+from tea_agent.store import Storage, get_storage
 
 __version__ = "0.1.0"
 
@@ -46,7 +47,15 @@ class APIServer:
         self._api_key = (api_key or os.environ.get("TEA_API_KEY", "")).strip()
         self._config_path = config_path
         self._agent: Optional[Agent] = None
+        self._start_time = time.time()
         self._lock = threading.Lock()
+        self._storage: Optional[Storage] = None
+
+    def _get_storage(self) -> Storage:
+        """Get Storage directly (lightweight, no Agent dependency)."""
+        if self._storage is None:
+            self._storage = get_storage()
+        return self._storage
         self._start_time = time.time()
 
     def get_agent(self) -> Agent:
@@ -194,12 +203,12 @@ class APIServer:
             return {"ok": False, "error": str(e), "tool": tool_name}
 
     def list_sessions(self, limit=20):
-        agent = self.get_agent()
-        topics = agent.db.list_topics()
+        # Use storage directly, avoid heavy Agent init if possible
+        topics = self._get_storage().list_topics()
         result = []
         for t in topics[:limit]:
             tid = t["topic_id"]
-            tokens = agent.db.get_topic_tokens(tid)
+            tokens = self._get_storage().get_topic_tokens(tid)
             result.append({"id": tid, "title": t.get("title","") or tid[:8],
                            "created": str(t.get("create_stamp",""))[:19],
                            "updated": str(t.get("last_update_stamp",""))[:19],
@@ -207,17 +216,18 @@ class APIServer:
         return result
 
     def create_session(self, title="API 会话"):
-        agent = self.get_agent()
-        tid = agent.db.create_topic(title)
-        agent.current_topic_id = tid
+        tid = self._get_storage().create_topic(title)
+        # Also try to set it on agent if agent is already initialized
+        if self._agent is not None:
+            self._agent.current_topic_id = tid
         return {"id": tid, "title": title}
 
     def get_session(self, topic_id):
-        agent = self.get_agent()
-        topic = agent.db.get_topic(topic_id)
+        s = self._get_storage()
+        topic = s.get_topic(topic_id)
         if not topic: return None
-        tokens = agent.db.get_topic_tokens(topic_id)
-        convs = agent.db.get_conversations(topic_id, limit=0, include_rounds=True)
+        tokens = s.get_topic_tokens(topic_id)
+        convs = s.get_conversations(topic_id, limit=0, include_rounds=True)
         return {"id": topic["topic_id"], "title": topic.get("title",""),
                 "created": str(topic.get("create_stamp","")),
                 "updated": str(topic.get("last_update_stamp","")),
@@ -228,10 +238,65 @@ class APIServer:
 
     def delete_session(self, topic_id):
         try:
-            self.get_agent().db.delete_topic(topic_id)
+            self._get_storage().delete_topic(topic_id)
             return True
         except Exception:
             return False
+
+
+    def get_session_messages(self, topic_id: str, limit: int = 50) -> list:
+        convs = self._get_storage().get_conversations(topic_id, limit=limit, include_rounds=True)
+        result = []
+        for c in convs:
+            result.append({"id": c["id"], "role": "user", "content": c["user_msg"],
+                           "stamp": str(c.get("stamp",""))[:26]})
+            result.append({"id": c["id"], "role": "assistant", "content": c["ai_msg"],
+                           "stamp": str(c.get("stamp",""))[:26]})
+        return result
+
+    @staticmethod
+    def _sanitize(obj):
+        "Remove non-JSON-serializable fields (e.g. bytes)."
+        if isinstance(obj, dict):
+            return {k: APIServer._sanitize(v) for k, v in obj.items()
+                    if not isinstance(v, (bytes, bytearray))}
+        if isinstance(obj, list):
+            return [APIServer._sanitize(item) for item in obj]
+        return obj
+
+    def list_memories(self, limit=50):
+        mems = self._get_storage().get_active_memories(limit=limit)
+        return self._sanitize(mems)
+
+    def create_memory(self, content: str, category: str = "general", priority: int = 2):
+        mem_id = self._get_storage().add_memory(content, category=category, priority=priority, tags="", importance=3)
+        return {"id": mem_id, "content": content, "category": category}
+
+    def delete_memory(self, mem_id):
+        # Soft delete via storage
+        try:
+            from tea_agent.memory import MemoryManager
+            mm = MemoryManager()
+            mm.delete(mem_id)
+            return True
+        except Exception:
+            return False
+
+    def list_tasks(self):
+        return self._get_storage().list_tasks()
+
+    def create_task(self, name: str, command: str, schedule: str):
+        task_id = self._get_storage().add_task(name, command, schedule)
+        return {"id": task_id, "name": name, "command": command, "schedule": schedule}
+
+    def delete_task(self, task_id: str):
+        return self._get_storage().delete_task(task_id)
+
+    def search(self, query: str, limit: int = 20) -> dict:
+        s = self._get_storage()
+        convs = self._sanitize(s.search_conversations(query, limit=limit))
+        mems = self._sanitize(s.search_memories(query, limit=limit))
+        return {"conversations": convs, "memories": mems}
 
     def get_config(self):
         agent = self.get_agent()
@@ -430,6 +495,99 @@ OPENAPI_SPEC = {
 }
 
 
+async def handle_get_session_messages(request):
+    server = get_server()
+    topic_id = request.path_params.get("topic_id", "")
+    limit = int(request.query_params.get("limit", 50))
+    msgs = server.get_session_messages(topic_id, limit=limit)
+    return JSONResponse({"data": msgs, "total": len(msgs)})
+
+async def _safe_handle(handler, request):
+    """Wrapper to catch agent initialization errors."""
+    try:
+        return await handler(request)
+    except ValueError as e:
+        if "配置不完整" in str(e):
+            return JSONResponse(
+                {"error": "Agent not configured", "detail": str(e),
+                 "hint": "Run 'tea-agent --setup' or configure ~/.tea_agent/config.yaml"},
+                status_code=503)
+        return JSONResponse({"error": str(e)}, status_code=500)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+async def handle_list_memory(request):
+    server = get_server()
+    memories = server.list_memories()
+    return JSONResponse({"data": memories, "total": len(memories)})
+
+async def handle_create_memory(request):
+    server = get_server()
+    body = await request.json()
+    mem = server.create_memory(body.get("content",""),
+        category=body.get("category","general"),
+        priority=body.get("priority",2))
+    return JSONResponse(mem, status_code=201)
+
+async def handle_delete_memory(request):
+    server = get_server()
+    mem_id = request.path_params.get("mem_id", "")
+    ok = server.delete_memory(mem_id)
+    return JSONResponse({"deleted": ok})
+
+async def handle_list_tasks(request):
+    server = get_server()
+    tasks = server.list_tasks()
+    return JSONResponse({"data": tasks, "total": len(tasks)})
+
+async def handle_create_task(request):
+    server = get_server()
+    body = await request.json()
+    task = server.create_task(body.get("name",""),
+        body.get("command",""), body.get("schedule",""))
+    return JSONResponse(task, status_code=201)
+
+async def handle_delete_task(request):
+    server = get_server()
+    task_id = request.path_params.get("task_id", "")
+    ok = server.delete_task(task_id)
+    return JSONResponse({"deleted": ok})
+
+async def handle_search(request):
+    server = get_server()
+    query = request.query_params.get("q", "")
+    limit = int(request.query_params.get("limit", 20))
+    if not query:
+        return JSONResponse({"error": "query required"}, status_code=400)
+    results = server.search(query, limit=limit)
+    return JSONResponse(results)
+
+async def handle_export_pdf(request):
+    from tea_agent.toolkit.toolkit_export_last_pdf import export_topic_pdf
+    body = await request.json()
+    topic_id = body.get("topic_id", "")
+    if not topic_id:
+        return JSONResponse({"error": "topic_id required"}, status_code=400)
+    output = body.get("output")
+    try:
+        result = await asyncio.to_thread(export_topic_pdf, topic_id, output or None)
+        return JSONResponse({"success": True, "path": result or output})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+async def handle_upload(request):
+    form = await request.form()
+    file = form.get("file")
+    if not file:
+        return JSONResponse({"error": "No file"}, status_code=400)
+    upload_dir = Path("uploads")
+    upload_dir.mkdir(exist_ok=True)
+    content = await file.read()
+    dest = upload_dir / file.filename
+    with open(dest, "wb") as f:
+        f.write(content)
+    return JSONResponse({"path": str(dest), "url": f"/uploads/{file.filename}"})
+
 def create_app(api_key: Optional[str] = None,
                config_path: Optional[str] = None):
     """Create the Starlette application for the API server."""
@@ -456,10 +614,33 @@ def create_app(api_key: Optional[str] = None,
               methods=["POST"]),
         Route("/docs", endpoint=handle_docs),
         Route("/openapi.json", endpoint=handle_openapi),
+        Route("/v1/sessions/{topic_id:str}/messages",
+              endpoint=handle_get_session_messages),
+        Route("/v1/memory", endpoint=handle_list_memory),
+        Route("/v1/memory", endpoint=handle_create_memory,
+              methods=["POST"]),
+        Route("/v1/memory/{mem_id:str}", endpoint=handle_delete_memory,
+              methods=["DELETE"]),
+        Route("/v1/tasks", endpoint=handle_list_tasks),
+        Route("/v1/tasks", endpoint=handle_create_task,
+              methods=["POST"]),
+        Route("/v1/tasks/{task_id:str}", endpoint=handle_delete_task,
+              methods=["DELETE"]),
+        Route("/v1/search", endpoint=handle_search),
+        Route("/v1/export/pdf", endpoint=handle_export_pdf,
+              methods=["POST"]),
+        Route("/v1/upload", endpoint=handle_upload,
+              methods=["POST"]),
     ]
 
     logger.info(f"API Server initialized | v{__version__}")
-    return Starlette(debug=False, routes=routes)
+    app = Starlette(debug=False, routes=routes)
+    frontend_dir = Path(__file__).parent.parent / "gui2" / "frontend"
+    if frontend_dir.exists():
+        from starlette.staticfiles import StaticFiles
+        app.mount("/", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
+        logger.info(f"Frontend: {frontend_dir}")
+    return app
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8081,

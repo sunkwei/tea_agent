@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tea Agent</title>
+<link rel="stylesheet" href="/static/style.css?v=4">
+</head>
+<body>
+<div id="app">
+<aside id="sidebar">
+<div class="sb-header">
+<span class="sb-logo">☕</span>
+<span class="sb-title">Tea Agent</span>
+</div>
+<div class="sb-actions">
+<button class="btn btn-primary" onclick="newTopic()">+ 新对话</button>
+</div>
+<div id="topic-list" class="topic-list"></div>
+<div class="sb-footer">
+<button class="btn btn-ghost" id="settings-btn" onclick="showSettings()">⚙ 设置</button>
+</div>
+</aside>
+<div id="sidebar-splitter"></div>
+<main id="main">
+<div id="toolbar">
+<span id="topic-title">欢迎使用 Tea Agent</span>
+<div class="toolbar-actions">
+<button class="btn btn-ghost btn-sm" onclick="showSearch()">🔍 搜索</button>
+<button class="btn btn-ghost btn-sm" onclick="showMemory()">🧠 记忆</button>
+<button class="btn btn-ghost btn-sm" onclick="showScheduler()">📋 任务</button>
+<button class="btn btn-ghost btn-sm" onclick="showExport()">📄 导出</button>
+<button class="btn btn-ghost btn-sm" onclick="clearChat()">🗑 清空</button>
+<button class="btn btn-ghost btn-sm" id="theme-btn" onclick="toggleTheme()">🌓</button>
+</div>
+</div>
+<div id="messages">
+<div class="welcome">
+<div class="welcome-icon">☕</div>
+<h2>Tea Agent</h2>
+<p>自进化 AI 编程助手 · 60+ 内置工具 · 多 Agent 协作 · 长期记忆<br>在下方输入消息开始对话</p>
+</div>
+</div>
+<div id="vsplitter"></div>
+<div id="input-row" style="gap:6px">
+<div id="config-switcher">
+<label for="cs-select" class="cs-label">⚡ 配置</label>
+<select id="cs-select" onchange="switchConfig(this.value)"><option value="">加载中...</option></select>
+</div>
+<textarea id="chat-input" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" onkeydown="handleInputKey(event)" oninput="document.getElementById('send-btn').disabled=!this.value.trim()" style="flex:1;min-width:0"></textarea>
+<button id="send-btn" class="btn btn-primary" disabled onclick="sendMessage()">发送</button>
+</div>
+</main>
+</div>
+
+<!-- Search Modal -->
+<div id="modal-search" class="modal" style="display:none"><div class="modal-box">
+<h3>🔍 搜索</h3>
+<input id="search-query" placeholder="输入搜索关键词..." onkeydown="if(event.key==='Enter')doSearch()">
+<div id="search-results"></div>
+<div class="modal-actions">
+<button class="btn btn-ghost" onclick="hide('modal-search')">取消</button>
+<button class="btn btn-primary" onclick="doSearch()">搜索</button>
+</div>
+</div></div>
+
+<!-- Memory Modal -->
+<div id="modal-memory" class="modal" style="display:none"><div class="modal-box">
+<h3>🧠 记忆管理</h3>
+<textarea id="memory-input" rows="2" placeholder="输入新记忆内容..."></textarea>
+<button class="btn btn-primary" onclick="addMemory()" style="width:auto;margin-top:8px">+ 添加记忆</button>
+<div id="memory-list"></div>
+<div class="modal-actions">
+<button class="btn btn-ghost" onclick="hide('modal-memory')">关闭</button>
+</div>
+</div></div>
+
+<!-- Scheduler Modal -->
+<div id="modal-scheduler" class="modal" style="display:none"><div class="modal-box">
+<h3>📋 定时任务</h3>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+<input id="task-name" placeholder="任务名称" style="flex:2">
+<input id="task-command" placeholder="命令行" style="flex:3">
+<input id="task-schedule" placeholder="调度 (daily:08:00)" style="flex:2">
+</div>
+<button class="btn btn-primary" onclick="addTask()" style="width:auto">+ 添加任务</button>
+<div id="task-list"></div>
+<div class="modal-actions">
+<button class="btn btn-ghost" onclick="hide('modal-scheduler')">关闭</button>
+</div>
+</div></div>
+
+<!-- Export Modal -->
+<div id="modal-export" class="modal" style="display:none"><div class="modal-box">
+<h3>📄 导出 PDF</h3>
+<p style="font-size:13px;color:var(--text-dim);margin-bottom:12px">导出当前话题为 PDF 文件</p>
+<div id="export-result"></div>
+<div class="modal-actions">
+<button class="btn btn-ghost" onclick="hide('modal-export')">取消</button>
+<button class="btn btn-primary" onclick="doExport()">导出</button>
+</div>
+</div></div>
+
+<!-- Settings Modal -->
+<div id="modal-settings" class="modal" style="display:none"><div class="modal-box" style="min-width:480px;max-width:600px">
+<h3>⚙ 模型设置</h3>
+<div class="form-group">
+<label>配置文件</label>
+<select id="config-select"><option value="">— 请选择或新增 —</option></select>
+<div style="font-size:12px;color:var(--text-dim);margin-top:4px">从 ~/.tea_agent/*.yaml 读取</div>
+</div>
+
+<h4 style="margin:16px 0 8px;font-size:13px;color:var(--primary);border-bottom:1px solid var(--border);padding-bottom:6px">📌 主模型 (Main Model)</h4>
+<div class="form-group"><label>模型名称</label><input type="text" id="model-name" placeholder="如: deepseek-chat"></div>
+<div class="form-group"><label>API URL</label><input type="url" id="api-url" placeholder="如: https://api.deepseek.com"></div>
+<div class="form-group"><label>API Key</label><input type="password" id="api-key" placeholder="sk-..."></div>
+<div class="form-row" style="display:flex;gap:8px">
+<div class="form-group" style="flex:1"><label>Temperature</label><input type="number" id="main-temperature" placeholder="0.7" step="0.01" min="0" max="2"></div>
+<div class="form-group" style="flex:1"><label>Max Tokens</label><input type="number" id="main-max-tokens" placeholder="4096" min="1"></div>
+</div>
+<div class="form-row" style="display:flex;gap:8px">
+<div class="form-group" style="flex:1"><label>Top-P</label><input type="number" id="main-top-p" placeholder="0.9" step="0.01" min="0" max="1"></div>
+<div class="form-group" style="flex:1"><label>Max Context Tokens</label><input type="number" id="main-max-context" placeholder="0=不限制" min="0"></div>
+</div>
+<div class="form-row" style="display:flex;gap:16px;margin-top:4px">
+<label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer"><input type="checkbox" id="main-supports-vision"> 👁️ 支持视觉</label>
+<label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer"><input type="checkbox" id="main-supports-reasoning" checked> 🧠 支持推理</label>
+</div>
+
+<h4 style="margin:16px 0 8px;font-size:13px;color:var(--green);border-bottom:1px solid var(--border);padding-bottom:6px">🔄 便宜模型 (Cheap Model)</h4>
+<div class="form-group"><label>模型名称</label><input type="text" id="cheap-model-name" placeholder="如: deepseek-v4-flash"></div>
+<div class="form-group"><label>API URL</label><input type="url" id="cheap-api-url" placeholder="如: https://api.deepseek.com"></div>
+<div class="form-group"><label>API Key <small>(不填则用主模型Key)</small></label><input type="password" id="cheap-api-key" placeholder="sk-..."></div>
+<div class="form-row" style="display:flex;gap:8px">
+<div class="form-group" style="flex:1"><label>Temperature</label><input type="number" id="cheap-temperature" placeholder="0.7" step="0.01" min="0" max="2"></div>
+<div class="form-group" style="flex:1"><label>Max Tokens</label><input type="number" id="cheap-max-tokens" placeholder="4096" min="1"></div>
+</div>
+<div class="form-row" style="display:flex;gap:8px">
+<div class="form-group" style="flex:1"><label>Top-P</label><input type="number" id="cheap-top-p" placeholder="0.9" step="0.01" min="0" max="1"></div>
+<div class="form-group" style="flex:1"><label>Max Context Tokens</label><input type="number" id="cheap-max-context" placeholder="0=不限制" min="0"></div>
+</div>
+<div class="form-row" style="display:flex;gap:16px;margin-top:4px">
+<label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer"><input type="checkbox" id="cheap-supports-vision"> 👁️ 支持视觉</label>
+<label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer"><input type="checkbox" id="cheap-supports-reasoning" checked> 🧠 支持推理</label>
+</div>
+
+<div id="settings-status" class="status-msg"></div>
+
+<h4 style="margin:16px 0 8px;font-size:13px;color:var(--accent);border-bottom:1px solid var(--border);padding-bottom:6px">⚡ 运行时参数</h4>
+<div class="form-row" style="display:flex;gap:8px">
+<div class="form-group" style="flex:1"><label>Max Iterations</label><input type="number" id="rt-max-iterations" placeholder="50" min="1"></div>
+<div class="form-group" style="flex:1"><label>Keep Turns</label><input type="number" id="rt-keep-turns" placeholder="5" min="1"></div>
+</div>
+<div class="form-row" style="display:flex;gap:8px">
+<div class="form-group" style="flex:1"><label>Max History</label><input type="number" id="rt-max-history" placeholder="10" min="1"></div>
+<div class="form-group" style="flex:1"><label>Max Tool Output (chars)</label><input type="number" id="rt-max-tool-output" placeholder="131072" min="1024"></div>
+</div>
+<div class="form-row" style="display:flex;gap:8px">
+<div class="form-group" style="flex:1"><label>Extra Iter on Continue</label><input type="number" id="rt-extra-iters" placeholder="5" min="1"></div>
+<div class="form-group" style="flex:1"><label>Memory Extract Threshold</label><input type="number" id="rt-mem-extract" placeholder="2" min="1"></div>
+</div>
+<div class="form-row" style="display:flex;gap:8px">
+<div class="form-group" style="flex:1"><label>Memory Dedup Threshold</label><input type="number" id="rt-mem-dedup" placeholder="0.3" step="0.01" min="0" max="1"></div>
+<div class="form-group" style="flex:1"><label>Chat Page Size</label><input type="number" id="rt-chat-page" placeholder="50" min="5" max="200"></div>
+</div>
+<div style="margin-top:4px">
+<label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer"><input type="checkbox" id="rt-enable-thinking" checked> 🧠 Enable Thinking</label>
+</div>
+
+<div class="modal-actions">
+<button class="btn btn-ghost" onclick="showNewConfig()" style="margin-right:auto">➕ 新增配置</button>
+<button class="btn btn-ghost" onclick="hide('modal-settings')">取消</button>
+<button class="btn btn-primary" onclick="applyConfig()">✅ 应用</button>
+</div>
+</div></div>
+
+<!-- New Config Modal -->
+<div id="modal-new-config" class="modal" style="display:none"><div class="modal-box" style="max-width:520px">
+<h3>➕ 新增配置</h3>
+<div class="form-group"><label>文件名</label><input type="text" id="new-config-filename" placeholder="如: config_custom" value="config_custom"></div>
+<h4 style="margin:12px 0 6px;font-size:13px;color:var(--primary)">主模型</h4>
+<div class="form-group"><label>模型名称</label><input type="text" id="new-main-name" placeholder="如: gpt-4o"></div>
+<div class="form-group"><label>API URL</label><input type="url" id="new-main-url" placeholder="https://api.openai.com/v1"></div>
+<div class="form-group"><label>API Key</label><input type="password" id="new-main-key" placeholder="sk-..."></div>
+<h4 style="margin:12px 0 6px;font-size:13px;color:var(--green)">便宜模型 — 可选</h4>
+<div class="form-group"><label>模型名称</label><input type="text" id="new-cheap-name" placeholder="如: deepseek-v4-flash"></div>
+<div class="form-group"><label>API URL</label><input type="url" id="new-cheap-url" placeholder="https://api.deepseek.com"></div>
+<div class="form-group"><label>API Key</label><input type="password" id="new-cheap-key" placeholder="不填则使用主模型Key"></div>
+<div id="new-config-status" class="status-msg"></div>
+<div class="modal-actions">
+<button class="btn btn-ghost" onclick="hide('modal-new-config')">取消</button>
+<button class="btn btn-primary" onclick="saveNewConfig()">💾 保存并应用</button>
+</div>
+</div></div>
+
+<script src="/static/app.js?v=3"></script>
+</body>
+</html>

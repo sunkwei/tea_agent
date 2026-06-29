@@ -46,17 +46,44 @@ function applyTheme() {
 applyTheme();
 
 // -- Messages --
-function addMessage(role, content) {
+function addMessage(role, content, images) {
     let w = document.querySelector('.welcome');
     if (w) w.style.display = 'none';
     const div = document.createElement('div');
     div.className = 'msg ' + (role === 'user' ? 'user' : 'agent');
-    div.innerHTML = '<div class="msg-label">' + (role === 'user' ? '\u4f60' : 'Tea Agent') + '</div>' +
-        '<div class="msg-bubble">' + formatMarkdown(content) + '</div>';
+
+    let html = '<div class="msg-label">' + (role === 'user' ? '\u4f60' : 'Tea Agent') + '</div>';
+    html += '<div class="msg-bubble">';
+    // 显示图片
+    if (images && images.length > 0) {
+        html += '<div class="msg-images" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">';
+        images.forEach(function(img) {
+            html += '<img src="' + esc(img) + '" style="max-height:150px;max-width:250px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="window.openImageOverlay(this.src)">';
+        });
+        html += '</div>';
+    }
+    html += formatMarkdown(content || '');
+    html += '</div>';
+    div.innerHTML = html;
+
+    // 点击图片查看大图
+    div.querySelectorAll('.msg-images img').forEach(function(img) {
+        img.addEventListener('click', function() { window.openImageOverlay(this.src); });
+    });
+
     $('messages').appendChild(div);
     scrollBottom();
     return div.querySelector('.msg-bubble');
 }
+
+// 图片大图查看
+window.openImageOverlay = function(src) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:pointer;';
+    overlay.innerHTML = '<img src="' + esc(src) + '" style="max-width:90vw;max-height:90vh;border-radius:8px;">';
+    overlay.addEventListener('click', function() { overlay.remove(); });
+    document.body.appendChild(overlay);
+};
 
 function scrollBottom() {
     const m = $('messages');
@@ -82,12 +109,18 @@ function removeLoading() {
 window.sendMessage = async function() {
     const input = $('chat-input');
     const msg = input.value.trim();
-    if (!msg || isStreaming) return;
+    if ((!msg && pendingImages.length === 0) || isStreaming) return;
     input.value = '';
     $('send-btn').disabled = true;
 
-    addMessage('user', msg);
+    // 构建用户消息显示（含图片预览）
+    addMessage('user', msg || '(图片)', pendingImages.length > 0 ? pendingImages : null);
     addLoading();
+
+    // 收集图片数据并清空
+    const imagesToSend = [...pendingImages];
+    pendingImages = [];
+    updateImagePreview();
 
     const agentDiv = document.createElement('div');
     agentDiv.className = 'msg agent';
@@ -110,10 +143,12 @@ window.sendMessage = async function() {
     isStreaming = true;
 
     try {
+        const body = { message: msg, topic_id: currentTopicId };
+        if (imagesToSend.length > 0) body.images = imagesToSend;
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: msg, topic_id: currentTopicId }),
+            body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
 
@@ -735,12 +770,71 @@ window.saveNewConfig = async function() {
 
 
 
-// -- Modal backdrop click --
-document.querySelectorAll('.modal').forEach(modal => {
-    modal.addEventListener('click', function(e) {
-        if (e.target === this) this.style.display = 'none';
+// -- Image Upload --
+let pendingImages = []; // 存储待发送的图片 base64 数据
+
+window.triggerImageUpload = function() {
+    $('image-input').click();
+};
+
+window.handleImageSelect = function(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith('image/')) continue;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            pendingImages.push(e.target.result); // base64 data URL
+            updateImagePreview();
+        };
+        reader.readAsDataURL(file);
+    }
+    // 重置 input 以便可以再次选择同一文件
+    event.target.value = '';
+};
+
+window.clearImages = function() {
+    pendingImages = [];
+    updateImagePreview();
+};
+
+function updateImagePreview() {
+    const container = $('image-preview-container');
+    const row = $('image-preview-row');
+    if (!container || !row) return;
+
+    if (pendingImages.length === 0) {
+        row.style.display = 'none';
+        container.innerHTML = '';
+        return;
+    }
+
+    row.style.display = 'flex';
+    container.innerHTML = '';
+    pendingImages.forEach(function(img, idx) {
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'position:relative;display:inline-block;';
+        wrapper.innerHTML = '<img src="' + esc(img) + '" style="max-height:80px;max-width:120px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" title="点击查看大图">' +
+            '<button onclick="removeImage(' + idx + ')" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:12px;cursor:pointer;line-height:1;">×</button>';
+        // 点击查看大图
+        wrapper.querySelector('img').addEventListener('click', function() {
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:pointer;';
+            overlay.innerHTML = '<img src="' + esc(img) + '" style="max-width:90vw;max-height:90vh;border-radius:8px;">';
+            overlay.addEventListener('click', function() { overlay.remove(); });
+            document.body.appendChild(overlay);
+        });
+        container.appendChild(wrapper);
     });
-});
+}
+
+window.removeImage = function(idx) {
+    pendingImages.splice(idx, 1);
+    updateImagePreview();
+};
 
 // -- Config Switcher --
 let _configCurrentPath = '';

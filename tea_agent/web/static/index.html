@@ -42,15 +42,22 @@
 
         <!-- Input Area -->
         <div id="input-area">
-            <textarea
-                id="message-input"
-                placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
-                rows="1"
-            ></textarea>
-            <button id="stop-btn" style="display: none;" title="停止生成">■</button>
-            <button id="send-btn">
-                <span>发送</span>
-            </button>
+            <div id="image-preview-container" style="display: none;">
+                <div id="image-preview-list"></div>
+            </div>
+            <div class="input-row">
+                <button id="upload-image-btn" title="上传图片" style="background: none; border: none; font-size: 20px; cursor: pointer; padding: 4px 8px;">🖼️</button>
+                <input type="file" id="image-input" accept="image/*" multiple style="display: none;">
+                <textarea
+                    id="message-input"
+                    placeholder="输入消息... (Enter 发送, Shift+Enter 换行，可粘贴图片)"
+                    rows="1"
+                ></textarea>
+                <button id="stop-btn" style="display: none;" title="停止生成">■</button>
+                <button id="send-btn">
+                    <span>发送</span>
+                </button>
+            </div>
         </div>
 
         <!-- Session Panel -->

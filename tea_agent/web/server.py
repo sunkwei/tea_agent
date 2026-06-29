@@ -42,9 +42,13 @@ class WebAgent:
     def config(self):
         return self.agent.config
 
-    def chat_stream_sse(self, msg: str, queue: asyncio.Queue, topic_id: str = "",
+    def chat_stream_sse(self, msg, queue: asyncio.Queue, topic_id: str = "",
                          event_loop=None):
-        """Run chat in a thread, pushing SSE events to an asyncio queue."""
+        """Run chat in a thread, pushing SSE events to an asyncio queue.
+
+        Args:
+            msg: 纯文本字符串，或包含 text/images 的字典
+        """
         sess = self.agent.sess
 
         def _put(event: dict):
@@ -365,12 +369,56 @@ def get_agent() -> WebAgent:
 
 
 async def handle_chat(request):
+    """POST /api/chat - SSE streaming chat for Web UI.
+
+    支持纯文本和图片输入：
+    - 纯文本: {"message": "hello", "topic_id": "..."}
+    - 图片+文本: {"message": "hello", "images": ["data:image/png;base64,..."], "topic_id": "..."}
+    """
     body = await request.json()
     message = body.get("message", "").strip()
     topic_id = body.get("topic_id", "")
+    images_b64 = body.get("images", [])
 
-    if not message:
+    if not message and not images_b64:
         return JSONResponse({"error": "消息不能为空"}, status_code=400)
+
+    # 将 base64 图片保存到临时文件
+    image_paths = []
+    if images_b64:
+        import base64 as b64mod
+        upload_dir = Path("uploads")
+        upload_dir.mkdir(exist_ok=True)
+        for idx, img_b64 in enumerate(images_b64):
+            try:
+                if img_b64.startswith("data:"):
+                    header, data = img_b64.split(",", 1)
+                    ext_map = {
+                        "image/png": ".png",
+                        "image/jpeg": ".jpg",
+                        "image/gif": ".gif",
+                        "image/webp": ".webp",
+                        "image/bmp": ".bmp",
+                    }
+                    mime = header.split(";")[0].replace("data:", "")
+                    ext = ext_map.get(mime, ".png")
+                else:
+                    data = img_b64
+                    ext = ".png"
+                import uuid as uuid_mod
+                img_bytes = b64mod.b64decode(data)
+                fname = f"upload_{uuid_mod.uuid4().hex[:8]}_{idx}{ext}"
+                fpath = upload_dir / fname
+                fpath.write_bytes(img_bytes)
+                image_paths.append(str(fpath))
+            except Exception as e:
+                logger.warning(f"图片 base64 解码失败: {e}")
+
+    # 构建消息：如果有图片则用字典格式，否则纯文本
+    if image_paths:
+        msg_payload = {"text": message, "images": image_paths}
+    else:
+        msg_payload = message
 
     agent = get_agent()
     queue: asyncio.Queue = asyncio.Queue()
@@ -380,7 +428,7 @@ async def handle_chat(request):
 
         thread = threading.Thread(
             target=agent.chat_stream_sse,
-            args=(message, queue, topic_id, loop),
+            args=(msg_payload, queue, topic_id, loop),
             daemon=True,
         )
         thread.start()

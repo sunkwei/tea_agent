@@ -22,6 +22,101 @@ const overlay = document.getElementById('overlay');
 const roundsPanel = document.getElementById('rounds-panel');
 const roundsList = document.getElementById('rounds-list');
 const roundsTopicTitle = document.getElementById('rounds-topic-title');
+const uploadImageBtn = document.getElementById('upload-image-btn');
+const imageInput = document.getElementById('image-input');
+const imagePreviewContainer = document.getElementById('image-preview-container');
+const imagePreviewList = document.getElementById('image-preview-list');
+
+// ── Image Upload State ──
+let pendingImages = [];
+
+// ── Auto Resize ──
+function setupAutoResize() {
+    if (messageInput) {
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+        });
+    }
+}
+
+// ── Image Upload Functions ──
+function handleImageUpload(e) {
+    const files = e.target.files;
+    if (files.length > 0) {
+        handleFileFiles(files);
+    }
+    // 重置 input 以允许再次选择相同文件
+    e.target.value = '';
+}
+
+function handleFileFiles(files) {
+    Array.from(files).forEach(file => {
+        if (!file.type.startsWith('image/')) {
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const base64 = e.target.result;
+            pendingImages.push(base64);
+            updateImagePreview();
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function handlePaste(e) {
+    const items = e.clipboardData.items;
+    for (let item of items) {
+        if (item.type.startsWith('image/')) {
+            e.preventDefault();
+            const file = item.getAsFile();
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const base64 = event.target.result;
+                pendingImages.push(base64);
+                updateImagePreview();
+            };
+            reader.readAsDataURL(file);
+            break;
+        }
+    }
+}
+
+function updateImagePreview() {
+    if (!imagePreviewContainer || !imagePreviewList) return;
+    
+    if (pendingImages.length === 0) {
+        imagePreviewContainer.style.display = 'none';
+        return;
+    }
+    
+    imagePreviewContainer.style.display = 'block';
+    imagePreviewList.innerHTML = '';
+    
+    pendingImages.forEach((img, index) => {
+        const previewItem = document.createElement('div');
+        previewItem.className = 'image-preview-item';
+        previewItem.style.cssText = 'display: inline-block; position: relative; margin: 4px;';
+        
+        const imgEl = document.createElement('img');
+        imgEl.src = img;
+        imgEl.style.cssText = 'width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid var(--border);';
+        
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = '×';
+        removeBtn.style.cssText = 'position: absolute; top: -5px; right: -5px; background: var(--danger); color: white; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 12px; cursor: pointer; line-height: 1;';
+        removeBtn.onclick = () => {
+            pendingImages.splice(index, 1);
+            updateImagePreview();
+        };
+        
+        previewItem.appendChild(imgEl);
+        previewItem.appendChild(removeBtn);
+        imagePreviewList.appendChild(previewItem);
+    });
+}
 
 // ── 带超时的 fetch 工具函数 ──
 async function fetchWithTimeout(url, options = {}, timeout = 10000) {
@@ -46,6 +141,38 @@ document.addEventListener('DOMContentLoaded', () => {
     loadConfig();
     setupAutoResize();
     messageInput.focus();
+    
+    // 图片上传按钮事件
+    if (uploadImageBtn) {
+        uploadImageBtn.addEventListener('click', () => imageInput.click());
+    }
+    
+    // 图片输入变化事件
+    if (imageInput) {
+        imageInput.addEventListener('change', handleImageUpload);
+    }
+    
+    // 粘贴图片支持
+    messageInput.addEventListener('paste', handlePaste);
+    
+    // 拖拽上传支持
+    messageInput.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        messageInput.style.borderColor = 'var(--accent)';
+    });
+    
+    messageInput.addEventListener('dragleave', () => {
+        messageInput.style.borderColor = '';
+    });
+    
+    messageInput.addEventListener('drop', (e) => {
+        e.preventDefault();
+        messageInput.style.borderColor = '';
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleFileFiles(files);
+        }
+    });
 });
 
 // ── 统一事件绑定 ──
@@ -236,14 +363,19 @@ async function loadConfig() {
 // ── Send Message ──
 async function sendMessage() {
     const text = messageInput.value.trim();
-    if (!text || isStreaming) return;
+    const images = [...pendingImages]; // 复制当前图片列表
+    if ((!text && images.length === 0) || isStreaming) return;
 
     messageInput.value = '';
     messageInput.style.height = 'auto';
     welcome.style.display = 'none';
+    
+    // 清空待发送图片
+    pendingImages = [];
+    updateImagePreview();
 
-    // 添加用户消息
-    addUserMessage(text);
+    // 添加用户消息（包含图片预览）
+    addUserMessage(text, images);
 
     // 准备流式接收
     isStreaming = true;
@@ -263,13 +395,20 @@ async function sendMessage() {
     let currentToolContent = '';
 
     try {
+        const requestBody = {
+            message: text || '[图片]',
+            topic_id: currentTopicId,
+        };
+        
+        // 如果有图片，添加到请求中
+        if (images.length > 0) {
+            requestBody.images = images;
+        }
+
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: text,
-                topic_id: currentTopicId,
-            }),
+            body: JSON.stringify(requestBody),
             signal: abortController.signal,
         });
 
@@ -426,12 +565,30 @@ function handleSSEEvent(event, contentDiv, assistantMsg) {
 }
 
 // ── UI Builders ──
-function addUserMessage(text) {
+function addUserMessage(text, images = []) {
     const div = document.createElement('div');
     div.className = 'message user';
+    
+    let contentHtml = '';
+    
+    // 添加图片预览
+    if (images.length > 0) {
+        const imagesHtml = images.map(img => 
+            `<img src="${img}" style="max-width: 200px; max-height: 200px; border-radius: 4px; margin: 4px; border: 1px solid var(--border);">`
+        ).join('');
+        contentHtml += `<div style="margin-bottom: 8px;">${imagesHtml}</div>`;
+    }
+    
+    // 添加文本内容
+    if (text) {
+        contentHtml += `<div class="message-bubble">${escapeHtml(text)}</div>`;
+    } else if (images.length > 0) {
+        contentHtml += `<div class="message-bubble" style="color: var(--text-muted);">[图片]</div>`;
+    }
+    
     div.innerHTML = `
         <div class="message-label">你</div>
-        <div class="message-bubble">${escapeHtml(text)}</div>
+        ${contentHtml}
     `;
     chatContainer.appendChild(div);
     scrollToBottom();

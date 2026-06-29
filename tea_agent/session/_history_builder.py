@@ -382,7 +382,36 @@ def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
     result: List[Dict] = []
 
     # ── Level 0: 系统提示词 ──
-    sys_msg = {"role": "system", "content": system_prompt}
+    _base_system = system_prompt
+    # 小模型自动注入输出规范约束
+    try:
+        from tea_agent.session._prompts import is_small_model, SMALL_MODEL_CONSTRAINT, get_skill_validate_rules
+        _model_name = getattr(context, 'model', '') or ''
+        if is_small_model(_model_name):
+            _base_system = _base_system.rstrip('\n') + '\n\n' + SMALL_MODEL_CONSTRAINT
+            logger.info(f"🧩 小模型检测 ({_model_name})：已自动注入输出规范约束")
+            # 尝试加载默认约束 SKILL 的 validate 规则
+            _rules = get_skill_validate_rules("output-format-constraint")
+            if _rules:
+                setattr(context, '_skill_validate_rules', _rules)
+        # 即使不是小模型，也检查用户是否显式加载了带 validate 的 SKILL.md
+        else:
+            # 扫描最近的 assistant 消息中是否有 SKILL.md 加载记录
+            for _msg in reversed(getattr(context, 'messages', []) or []):
+                _c = _msg.get('content', '') or ''
+                if isinstance(_c, str) and 'toolkit_skills' in _c and 'load' in _c:
+                    # 提取 SKILL 名称
+                    _m = __import__('re').search(r'name["\']?\s*[:=]\s*["\']([^"\']+)', _c)
+                    if _m:
+                        _loaded_skill = _m.group(1)
+                        _rules = get_skill_validate_rules(_loaded_skill)
+                        if _rules:
+                            setattr(context, '_skill_validate_rules', _rules)
+                            logger.info(f"📋 加载 SKILL.md 验证规则: {_loaded_skill}")
+                    break
+    except Exception as _e:
+        logger.debug(f"Small model constraint injection failed: {_e}")
+    sys_msg = {"role": "system", "content": _base_system}
     result.append(sys_msg)
 
     # ── 技能推荐注入 ──

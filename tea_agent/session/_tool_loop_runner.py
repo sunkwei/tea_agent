@@ -218,6 +218,94 @@ def _format_tool_summary(tool_calls) -> str:
     return "\n".join(lines) + "\n\n"
 
 
+# ── SKILL 校验缓存 ──
+_skill_validate_cache: dict = {}
+
+
+def _get_validate_rules(session) -> dict:
+    """从 session context 获取当前生效的校验规则（带缓存）。"""
+    _rules = getattr(session.context, '_skill_validate_rules', None) or {}
+    if not _rules:
+        return {}
+    # 缓存 key：session id（如果有的话）
+    return _rules
+
+
+def _validate_tool_call(tool_name: str, rules: dict) -> tuple:
+    """工具调用前校验。
+
+    检查：
+      - allowed_tools: 工具白名单
+      - forbidden_tools: 工具黑名单
+
+    Args:
+        tool_name: 工具函数名
+        rules: 校验规则 dict（来自 SKILL.md validate 字段）
+
+    Returns:
+        (allowed: bool, reason: str)
+        allowed=True 表示通过，False 表示违规
+    """
+    if not rules:
+        return True, ""
+
+    # 白名单检查
+    allowed = rules.get("allowed_tools")
+    if allowed and tool_name not in allowed:
+        _allowed_str = ", ".join(allowed)
+        return False, f"🚫 工具 '{tool_name}' 不在白名单中。当前允许: {_allowed_str}"
+
+    # 黑名单检查
+    forbidden = rules.get("forbidden_tools")
+    if forbidden and tool_name in forbidden:
+        return False, f"🚫 工具 '{tool_name}' 被黑名单禁止"
+
+    return True, ""
+
+
+def _validate_output_format(content: str, rules: dict) -> tuple:
+    """输出格式校验。
+
+    检查：
+      - required_sections: 必须包含的段落
+      - forbidden_patterns: 禁止出现的模式
+      - output_format: 期望格式（json/text/markdown/code）
+
+    Args:
+        content: 模型输出的文本
+        rules: 校验规则 dict
+
+    Returns:
+        (valid: bool, warnings: list)
+    """
+    if not rules or not content:
+        return True, []
+
+    warnings = []
+
+    # 1. 必含段落检查
+    required_sections = rules.get("required_sections", [])
+    for section in required_sections:
+        if f"【{section}】" not in content and f"## {section}" not in content:
+            warnings.append(f"⚠️ 缺少必含段落「{section}」")
+
+    # 2. 禁止模式检查
+    forbidden = rules.get("forbidden_patterns", [])
+    for pattern in forbidden:
+        if pattern in content:
+            warnings.append(f"⚠️ 包含禁止模式「{pattern}」")
+
+    # 3. JSON 格式校验
+    if rules.get("output_format") == "json":
+        try:
+            import json as _json
+            _json.loads(content)
+        except (ValueError, TypeError):
+            warnings.append("⚠️ 输出应为 JSON 格式但解析失败")
+
+    return len(warnings) == 0, warnings
+
+
 def execute_tool_loop(session, context: Dict) -> Dict:
     """执行工具调用循环。
 
@@ -402,6 +490,25 @@ def execute_tool_loop(session, context: Dict) -> Dict:
                         callback(f"{_raw}\n")
                 print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name} args_len={len(call.function.arguments or '')}")
                 logger.info(f"    tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
+
+                # ── SKILL 校验：工具调用前检查白名单 ──
+                _rules = _get_validate_rules(session)
+                _allowed, _reason = _validate_tool_call(call.function.name, _rules)
+                if not _allowed:
+                    logger.warning(f"SKILL 校验拦截: {call.function.name} — {_reason}")
+                    callback(f"\n⚠️ {_reason}\n")
+                    # 注入虚假结果让模型知道被拦截了
+                    _blocked_result = json.dumps({
+                        "error": "tool_call_blocked",
+                        "reason": _reason,
+                        "message": "该工具调用被当前 SKILL.md 规则拦截。请检查 allowed_tools 配置。"
+                    })
+                    call_id, func_name = call.id, call.function.name
+                    result_str = _blocked_result
+                    session.tools_comp.collect_tool_call_round(call_id, result_str)
+                    callback("[TOOL_DONE]")
+                    continue  # 跳过执行
+
                 call_id, func_name, result_str = session.tools_comp.execute_tool_call(call)
                 logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")
                 session.tools_comp.collect_tool_call_round(call_id, result_str)
@@ -479,6 +586,18 @@ def execute_tool_loop(session, context: Dict) -> Dict:
             break
         else:
             break
+
+    # ── SKILL 校验：最终输出格式检查 ──
+    _rules = _get_validate_rules(session)
+    if _rules and full_reply:
+        _valid, _warnings = _validate_output_format(full_reply, _rules)
+        if _warnings:
+            _warn_text = "\n\n---\n⚠️ **输出规范提醒**：\n" + "\n".join(_warnings)
+            logger.info(f"输出规范校验: {'通过' if _valid else '有警告'}, {len(_warnings)} 条")
+            # 警告附在回复末尾（不阻断，仅提醒）
+            full_reply += _warn_text
+            if on_status:
+                on_status(f"⏳ 输出规范校验完成 ({'✅' if _valid else '⚠️'})")
 
     return {
         "full_reply": full_reply,

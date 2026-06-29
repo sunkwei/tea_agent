@@ -60,6 +60,7 @@ include-package-data = true
 "tea_agent._gui" = ["*.png", "*.ico"]
 "tea_agent.web" = ["*.py", "*.html", "*.js", "*.css"]
 "tea_agent.web.static" = ["*.html", "*.js", "*.css"]
+"tea_agent.skills" = ["*/*.md"]
 
 [tool.setuptools.packages.find]
 where = ["."]

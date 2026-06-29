@@ -66,6 +66,12 @@ class WebAgent:
                 tool_name = text[len("[TOOL_START:"):-1] if text.endswith("]") else text[len("[TOOL_START:"):]
                 _put({"type": "tool_start", "name": tool_name})
                 _tool_active = True
+            elif text.startswith("[TOOL_ARG:"):
+                _arg = text[len("[TOOL_ARG:"):-1] if text.endswith("]") else text[len("[TOOL_ARG:"):]
+                _put({"type": "tool_args", "args": _arg})
+            elif text.startswith("[TOOL_RESULT:"):
+                _res = text[len("[TOOL_RESULT:"):-1] if text.endswith("]") else text[len("[TOOL_RESULT:"):]
+                _put({"type": "tool_result", "result": _res})
             elif text == "[TOOL_DONE]":
                 if _tool_active:
                     _put({"type": "tool_done"})
@@ -107,10 +113,12 @@ class WebAgent:
                     topic_id=topic_id or self.agent.current_topic_id,
                     on_status=status_cb,
                 )
+                # 保存对话到数据库
+                self.agent._post_chat_pipeline(ai_msg, used_tools, msg,
+                                                topic_id or self.agent.current_topic_id)
 
                 usage = sess._last_usage or {}
-                _put({
-                    "type": "done",
+                _put({                    "type": "done",
                     "ai_msg": ai_msg,
                     "used_tools": used_tools,
                     "usage": {

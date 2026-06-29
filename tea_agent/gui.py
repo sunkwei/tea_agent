@@ -1214,19 +1214,12 @@ class TkGUI(Agent):
             return False
 
     def _refresh_config_list(self):
-        """刷新左侧面板的配置选择下拉框"""
+        """刷新左侧面板的配置选择下拉框（简洁显示：仅文件名）"""
         configs = self.get_config_list()
         if not hasattr(self, 'config_combo') or not self.config_combo:
             return
-        values = []
-        for cfg in configs:
-            label = cfg["filename"]
-            if cfg["main_model"]:
-                label += f"  [{cfg['main_model']}"
-                if cfg["cheap_model"]:
-                    label += f" | {cfg['cheap_model']}"
-                label += "]"
-            values.append(label)
+        # 仅用文件名作为显示文本，一行一个配置
+        values = [cfg["filename"] for cfg in configs]
         self.config_combo["values"] = values
         # 标记当前配置
         current_path = getattr(self, '_config_path', None)
@@ -1248,8 +1241,8 @@ class TkGUI(Agent):
         selected = self._config_var.get()
         if not selected or "(暂无" in selected or "(加载中" in selected:
             return
-        # 从选中文本提取文件名
-        filename = selected.split("  [")[0].strip()
+        # 选中值即为文件名（已简化，不含模型信息）
+        filename = selected
         configs_dir = Path.home() / ".tea_agent"
         fpath = configs_dir / filename
         if not fpath.exists():

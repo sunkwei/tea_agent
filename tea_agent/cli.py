@@ -340,6 +340,11 @@ class TeaCLI(Agent):
                     rn = tool_round_count[0]
                     tool_name = chunk.split(":", 1)[1].rstrip("]")
                     print(f"\n🔧 工具轮 {rn}: {tool_name}")
+                elif chunk.startswith("[TOOL_ARG:"):
+                    _arg_raw = chunk.split("[TOOL_ARG:", 1)[1].rstrip("]")
+                    if len(_arg_raw) > 120:
+                        _arg_raw = _arg_raw[:120] + "…"
+                    print(f"   📎 {_arg_raw}")
                 elif chunk.startswith("[TOOL_DONE]"):
                     print("🔧 工具完成")
                 elif chunk.startswith("[REPLY]"):

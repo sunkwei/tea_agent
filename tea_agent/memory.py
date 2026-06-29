@@ -108,11 +108,19 @@ class MemoryManager:
             self._touch_selected(selected)
             return selected
 
-        # 2. 非 CRITICAL 打分排序
+        # 2. 非 CRITICAL 打分排序（预计算查询向量，避免每条记忆重复请求）
+        query_emb = None
+        engine = self._get_embedding_engine()
+        if engine and topic_text:
+            try:
+                query_emb = engine.embed(topic_text)
+            except Exception:
+                query_emb = None
+
         others = high + medium + low
         scored = []
         for m in others:
-            score = self._score_memory(m, topic_text)
+            score = self._score_memory_cached(m, topic_text, query_emb)
             scored.append((score, m))
         scored.sort(key=lambda x: x[0], reverse=True)
 
@@ -150,31 +158,30 @@ class MemoryManager:
         return selected
 
     def _score_memory(self, memory: Dict, topic_text: str) -> float:
-        """
-        计算记忆与当前对话的相关性分数（Hybrid）。
+        """兼容旧接口，内部转调 _score_memory_cached。"""
+        engine = self._get_embedding_engine()
+        query_emb = None
+        if engine and topic_text:
+            try:
+                query_emb = engine.embed(topic_text)
+            except Exception:
+                pass
+        return self._score_memory_cached(memory, topic_text, query_emb)
 
-        分数 = hybrid_relevance × 重要度 × 最近访问因子 × 优先级因子
-
-        - hybrid_relevance: 关键词匹配 (0.1~1.0) × 0.4 + embedding 相似度 × 0.6
-                          若 embedding 不可用，纯关键词
-        - 重要度: importance / 5
-        - 最近访问因子: 越近越高 (0.5~1.0)
-        - 优先级因子: (4 - priority) / 4
-        """
+    def _score_memory_cached(self, memory: Dict, topic_text: str, query_emb=None) -> float:
+        """计算记忆与当前对话的相关性分数（Hybrid），复用预计算的查询向量。"""
         # 关键词得分
         keyword_relevance = self._compute_relevance(memory, topic_text)
 
-        # embedding 语义得分
-        emb_sim = self._compute_embedding_similarity(memory, topic_text)
-
-        # Hybrid 融合：关键词兜底 + 语义提准
-        if emb_sim is not None:
-            # 关键词保底 0.1，避免完全无匹配时归零
-            kw = max(keyword_relevance, 0.1)
-            # 融合公式：关键词 40% + 语义 60%
-            relevance = 0.4 * kw + 0.6 * emb_sim
+        # embedding 语义得分（使用预计算向量）
+        if query_emb is not None:
+            emb_sim = self._compute_embedding_similarity_cached(memory, query_emb)
+            if emb_sim is not None:
+                kw = max(keyword_relevance, 0.1)
+                relevance = 0.4 * kw + 0.6 * emb_sim
+            else:
+                relevance = keyword_relevance
         else:
-            # embedding 不可用，纯关键词
             relevance = keyword_relevance
 
         importance = max(memory.get("importance", 3), 1) / 5.0
@@ -356,6 +363,34 @@ class MemoryManager:
     # ------------------------------------------------------------------
     # 动态遗忘：根据记忆插入频率调整衰减阈值
     # ------------------------------------------------------------------
+
+
+    def _compute_embedding_similarity_cached(self, memory: Dict, query_emb):
+        """使用预计算的查询向量计算余弦相似度（避免重复 embedding 请求）。"""
+        if query_emb is None:
+            return None
+
+        mid = memory.get("id", "")
+        mem_emb = self._embedding_cache.get(mid)
+        if mem_emb is None:
+            try:
+                mem_emb = self.storage.memories.get_memory_embedding(mid)
+                if mem_emb:
+                    self._embedding_cache[mid] = mem_emb
+            except Exception:
+                pass
+
+        if not mem_emb or len(mem_emb) != len(query_emb):
+            return None
+
+        import numpy as np
+        q_arr = np.array(query_emb, dtype=np.float32)
+        m_arr = np.array(mem_emb, dtype=np.float32)
+        q_norm = np.linalg.norm(q_arr)
+        m_norm = np.linalg.norm(m_arr)
+        if q_norm == 0 or m_norm == 0:
+            return None
+        return float(q_arr @ m_arr) / (q_norm * m_norm)
 
     def _update_dynamic_thresholds(self):
         """

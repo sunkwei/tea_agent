@@ -94,6 +94,9 @@ class _TUIAgentCore(Agent):
                 else:
                     tui.call_from_thread(tui._append_chat, f"⚙ {tool_name}")
                 return
+            if chunk.startswith("[TOOL_ARG:"):
+                # 非 verbose 模式忽略参数，verbose 模式在后续 TOOL_DONE 或 REPLY 处理
+                return
             if chunk.startswith("[TOOL_DONE]"):
                 return
             if self._tui_verbose:

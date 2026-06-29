@@ -466,28 +466,30 @@ def execute_tool_loop(session, context: Dict) -> Dict:
                 _asctime = time.strftime("%Y-%m-%d %H:%M:%S")
                 # 发送 TOOL_START 标记（前端据此创建工具调用块）
                 callback(f"[TOOL_START:{call.function.name}]")
-                # 发送参数信息到工具块
+                # 发送参数信息到工具块（[TOOL_ARG:json] 格式，避免泄露到聊天文本）
                 if call.function.arguments:
                     try:
                         import json as _json
                         _args = _json.loads(call.function.arguments) if isinstance(call.function.arguments, str) else call.function.arguments
                         if isinstance(_args, dict):
+                            _parts = []
                             for _k, _v in _args.items():
                                 _vs = str(_v)
                                 _MAX_PARAM = 500
                                 if len(_vs) > _MAX_PARAM:
-                                    _vs = _vs[:_MAX_PARAM] + f"… [剩余 {len(_vs) - _MAX_PARAM} 字符]"
-                                callback(f"{_k}={_vs}\n")
+                                    _vs = _vs[:_MAX_PARAM] + f"…"
+                                _parts.append(f"{_k}: {_vs}")
+                            callback(f"[TOOL_ARG:{', '.join(_parts)}]")
                         else:
                             _vs = str(_args)
-                            if len(_vs) > 500:
-                                _vs = _vs[:500] + f"… [剩余 {len(_vs) - 500} 字符]"
-                            callback(f"{_vs}\n")
+                            if len(_vs) > 120:
+                                _vs = _vs[:120] + "…"
+                            callback(f"[TOOL_ARG:{_vs}]")
                     except Exception:
-                        _raw = call.function.arguments
-                        if len(_raw) > 500:
-                            _raw = _raw[:500] + f"… [剩余 {len(_raw) - 500} 字符]"
-                        callback(f"{_raw}\n")
+                        _raw = str(call.function.arguments)
+                        if len(_raw) > 120:
+                            _raw = _raw[:120] + "…"
+                        callback(f"[TOOL_ARG:{_raw}]")
                 print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name} args_len={len(call.function.arguments or '')}")
                 logger.info(f"    tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
 
@@ -512,6 +514,11 @@ def execute_tool_loop(session, context: Dict) -> Dict:
                 call_id, func_name, result_str = session.tools_comp.execute_tool_call(call)
                 logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")
                 session.tools_comp.collect_tool_call_round(call_id, result_str)
+                # 发送 TOOL_RESULT（返回值，120 字节截断）
+                _res = result_str or ""
+                if len(_res) > 120:
+                    _res = _res[:120] + "…"
+                callback(f"[TOOL_RESULT:{_res}]")
                 # 发送 TOOL_DONE 标记
                 callback("[TOOL_DONE]")
 

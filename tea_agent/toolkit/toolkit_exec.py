@@ -2,6 +2,7 @@
 # version: 1.1.0
 
 import logging
+import re
 import threading
 import time
 import os
@@ -12,6 +13,122 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger("toolkit")
+
+# ── 进程自杀保护 ──
+_process_tree_cache: set | None = None
+_process_tree_cache_time: float = 0
+
+
+def _get_process_tree() -> set:
+    """获取当前进程及其所有祖先进程的 PID 集合（缓存 30 秒）。"""
+    global _process_tree_cache, _process_tree_cache_time
+    now = time.time()
+    if _process_tree_cache is not None and (now - _process_tree_cache_time) < 30:
+        return _process_tree_cache
+
+    pids = {os.getpid()}
+    if hasattr(os, "getppid"):
+        pids.add(os.getppid())
+    try:
+        import psutil
+        current = psutil.Process()
+        parent = current.parent()
+        while parent is not None and parent.pid > 1:
+            pids.add(parent.pid)
+            parent = parent.parent()
+    except (ImportError, psutil.NoSuchProcess, psutil.AccessDenied):
+        pass
+
+    _process_tree_cache = pids
+    _process_tree_cache_time = now
+    return pids
+
+
+def _is_self_destructive(app: str, args: list) -> tuple:
+    """检查命令是否可能终止当前进程或其祖先进程。
+
+    Returns (is_dangerous, reason) or (False, "").
+    """
+    known_pids = _get_process_tree()
+    app_lower = (app or "").lower()
+
+    # ── 处理 cmd /c 包装（Windows shell 内置命令包装）──
+    effective_app = app_lower
+    effective_args = list(args) if args else []
+    if app_lower == "cmd" and args and args[0].lower() in ("/c", "/k"):
+        inner = args[1] if len(args) > 1 else ""
+        parts = inner.split()
+        if parts:
+            effective_app = parts[0].lower()
+            effective_args = parts[1:]
+
+    # ── 模式1: PowerShell Stop-Process ──
+    if effective_app in ("powershell", "pwsh"):
+        cmd_text = " ".join(effective_args).lower()
+        for m in re.finditer(r"stop-process\s.*?-id\s+(\d+)", cmd_text, re.I):
+            try:
+                target_pid = int(m.group(1))
+                if target_pid in known_pids:
+                    return (True, f"⛔ 阻止自杀：Stop-Process 目标 PID {target_pid} 是当前进程或其祖先进程")
+            except ValueError:
+                pass
+
+    # ── 模式2: Windows taskkill ──
+    if effective_app == "taskkill":
+        for i, arg in enumerate(effective_args):
+            if arg.lower() in ("/pid", "-pid") and i + 1 < len(effective_args):
+                try:
+                    target_pid = int(effective_args[i + 1])
+                    if target_pid in known_pids:
+                        return (True, f"⛔ 阻止自杀：taskkill 目标 PID {target_pid} 是当前进程或其祖先进程")
+                except ValueError:
+                    pass
+
+    # ── 模式3: Windows tskill ──
+    if effective_app == "tskill":
+        for arg in effective_args:
+            try:
+                target_pid = int(arg)
+                if target_pid in known_pids:
+                    return (True, f"⛔ 阻止自杀：tskill 目标 PID {target_pid} 是当前进程或其祖先进程")
+            except ValueError:
+                pass
+
+    # ── 模式4: Windows wmic process delete ──
+    if effective_app == "wmic" and "delete" in " ".join(effective_args).lower():
+        cmd_text = " ".join(effective_args).lower()
+        m = re.search(r"processid[= ]+(\d+)", cmd_text)
+        if m:
+            try:
+                target_pid = int(m.group(1))
+                if target_pid in known_pids:
+                    return (True, f"⛔ 阻止自杀：wmic delete 目标 PID {target_pid} 是当前进程或其祖先进程")
+            except ValueError:
+                pass
+
+    # ── 模式5: Linux kill ──
+    if effective_app == "kill" and effective_args:
+        for arg in effective_args:
+            stripped = arg.lstrip("-")
+            if stripped.isdigit():
+                try:
+                    target_pid = int(stripped)
+                    if target_pid in known_pids:
+                        return (True, f"⛔ 阻止自杀：kill 目标 PID {target_pid} 是当前进程或其祖先进程")
+                except ValueError:
+                    pass
+
+    # ── 模式6: 系统级危险命令（关机/重启）──
+    _DANGEROUS_SYSTEM = {"shutdown", "reboot", "halt", "poweroff", "init"}
+    if effective_app in _DANGEROUS_SYSTEM:
+        return (True, f"⛔ 阻止危险系统命令：{effective_app} {' '.join(effective_args[:5])}")
+
+    if effective_app == "systemctl":
+        dangerous_actions = {"poweroff", "reboot", "halt", "suspend", "shutdown"}
+        if any(a.lower() in dangerous_actions for a in effective_args):
+            return (True, f"⛔ 阻止危险系统命令：systemctl {' '.join(effective_args[:3])}")
+
+    return (False, "")
 
 
 class _ProcessMonitor:
@@ -329,6 +446,22 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         batch: (0, json结果数组, "")
     """
     logger.info(f"toolkit_exec called: app={app!r}, args={repr(args)[:80]}, action={action!r}, commands={repr(commands)[:80]}, timeout={timeout!r}")
+
+    # ── 自杀检测：阻止可能终止自身进程的危险命令 ──
+    if action == "single" and app:
+        dangerous, reason = _is_self_destructive(app, args or [])
+        if dangerous:
+            logger.warning(f"toolkit_exec blocked: {reason}")
+            return (-1, "", reason)
+    elif action == "batch" and commands:
+        for cmd in commands:
+            a = cmd.get("app", "")
+            ar = cmd.get("args", [])
+            if a:
+                dangerous, reason = _is_self_destructive(a, ar)
+                if dangerous:
+                    logger.warning(f"toolkit_exec batch blocked: {reason}")
+                    return (-1, json.dumps([{"error": True, "stderr": reason}], ensure_ascii=False), "")
 
     _PY_CMD_THRESHOLD = 500  # -c 脚本超过此字符数则写入临时文件
     if action == "single" and app in ("python", "python3") and args:

@@ -147,11 +147,9 @@ class ConversationStore(StoreComponent):
         rows = c.fetchall()
         c.close()
 
-        if limit == 0:
-            return []
+        # limit <= 0 表示不限制，limit > 0 则截取最后 limit 条
         if limit > 0 and len(rows) > limit:
             rows = rows[-limit:]
-
         result = []
         for r in rows:
             d = dict(r)

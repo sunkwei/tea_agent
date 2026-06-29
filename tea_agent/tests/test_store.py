@@ -240,14 +240,13 @@ class TestMessageCRUD:
         assert len(convs) == 7
 
     def test_get_conversations_limit_zero(self, storage):
-        """get_conversations limit=0 返回空列表"""
-        tid = storage.create_topic("空列表测试")
+        """get_conversations limit=0 返回全部（不限制）"""
+        tid = storage.create_topic("无限测试")
         cid = storage.save_msg(tid, "msg", "reply", False)
         storage.update_msg_rounds(cid, "reply", False)
 
         convs = storage.get_conversations(tid, limit=0)
-        assert len(convs) == 0
-
+        assert len(convs) == 1  # limit=0 表示不限制，返回全部
     def test_get_conversations_limit_exceeds_total(self, storage):
         """get_conversations limit 大于总数时返回全部"""
         tid = storage.create_topic("超限测试")

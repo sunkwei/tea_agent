@@ -587,15 +587,14 @@ class Storage:
                 FOREIGN KEY (source_topic_id) REFERENCES topics(topic_id)
             )
         ''')
-        # 兼容旧表：尝试新增新列
+        # 兼容旧表：尝试新增新列（列已存在则跳过）
         for col, col_def in [('pinned', 'INTEGER NOT NULL DEFAULT 0'),
-                              ('content_hash', "TEXT DEFAULT ''"),
-                              ('embedding', 'BLOB')]:
+                               ('content_hash', "TEXT DEFAULT ''"),
+                               ('embedding', 'BLOB')]:
             try:
                 c.execute(f"ALTER TABLE memories ADD COLUMN {col} {col_def}")
             except Exception:
-                logger.exception("operation failed")
-
+                pass  # 列已存在，静默跳过
 
         # system_prompts 表
         c.execute('''
@@ -682,31 +681,27 @@ class Storage:
         c = db.cursor()
         self._migrate_int_to_uuid(c)
 
-        # 添加 rounds_json 列
+        # 添加 rounds_json 列（列已存在则跳过）
         try:
             c.execute("ALTER TABLE conversations ADD COLUMN rounds_json TEXT")
             c.connection.commit()
         except sqlite3.OperationalError:
-            logger.exception("operation failed")
+            pass
 
-
-        # 添加 is_summarized 列
+        # 添加 is_summarized 列（列已存在则跳过）
         try:
             c.execute("ALTER TABLE conversations ADD COLUMN is_summarized INTEGER DEFAULT 0")
             c.connection.commit()
         except sqlite3.OperationalError:
-            logger.exception("operation failed")
-
-
-        # t_conv_summary 添加 last_summarized_id
+            pass
+        # t_conv_summary 添加 last_summarized_id（列已存在则跳过）
         try:
             c.execute("ALTER TABLE t_conv_summary ADD COLUMN last_summarized_id TEXT")
             c.connection.commit()
         except sqlite3.OperationalError:
-            logger.exception("operation failed")
+            pass
 
-
-        # topic_token_stats 便宜模型列
+        # topic_token_stats 便宜模型列（列已存在则跳过）
         for col, col_type in [
             ("total_cheap_tokens", "INTEGER DEFAULT 0"),
             ("total_cheap_prompt_tokens", "INTEGER DEFAULT 0"),
@@ -716,10 +711,9 @@ class Storage:
                 c.execute(f"ALTER TABLE topic_token_stats ADD COLUMN {col} {col_type}")
                 c.connection.commit()
             except sqlite3.OperationalError:
-                logger.exception("operation failed")
+                pass
 
-
-        # topic_token_stats 嵌入模型列
+        # topic_token_stats 嵌入模型列（列已存在则跳过）
         for col, col_type in [
             ("total_embedding_tokens", "INTEGER DEFAULT 0"),
             ("total_embedding_prompt_tokens", "INTEGER DEFAULT 0"),
@@ -728,23 +722,21 @@ class Storage:
                 c.execute(f"ALTER TABLE topic_token_stats ADD COLUMN {col} {col_type}")
                 c.connection.commit()
             except sqlite3.OperationalError:
-                logger.exception("operation failed")
+                pass
 
-
-        # pending_cheap_tokens_json — 存储异步摘要产生的便宜模型 token，下一轮显示后清零
+        # pending_cheap_tokens_json（列已存在则跳过）
         try:
             c.execute("ALTER TABLE topic_token_stats ADD COLUMN pending_cheap_tokens_json TEXT DEFAULT ''")
             c.connection.commit()
         except sqlite3.OperationalError:
-            logger.exception("operation failed")
+            pass
 
-
+        # drift_count（列已存在则跳过）
         try:
             c.execute("ALTER TABLE topics ADD COLUMN drift_count INTEGER DEFAULT 0")
             c.connection.commit()
         except sqlite3.OperationalError:
-            logger.exception("operation failed")
-
+            pass
 
         c.execute('''CREATE TABLE IF NOT EXISTS todo_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -1,6 +1,10 @@
 # Changelog
 
 
+
+## [0.10.1] - 2026-06-29
+### Improvements & Changes
+- Version bump: 0.10.0 → 0.10.1
 ## [0.9.10] - 2026-05-27
 ### Bug Fixes
 - 修复 GUI 左侧面板宽度问题：ttk.PanedWindow 使用 sashpos API 替代 sash_place

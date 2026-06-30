@@ -19,6 +19,5 @@ tmp/
 # Android
 local.properties
 
-!tea_agent/.tea_agent_run/
 *.log
 .tea_agent_run/

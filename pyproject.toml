@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tea_agent"
-version = "0.10.2"
+version = "0.10.3"
 description = "A self-evolving AI agent with dynamic toolkit management."
 readme = "README.md"
 license = "MIT"
@@ -58,11 +58,9 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 "tea_agent._gui" = ["*.png", "*.ico"]
-"tea_agent.web" = ["*.py", "*.html", "*.js", "*.css"]
-"tea_agent.web.static" = ["*.html", "*.js", "*.css"]
-"tea_agent.server" = ["*.py"]
-"tea_agent.server.static" = ["*.html", "*.js", "*.css"]
-"tea_agent.skills" = ["*/*.md"]
+"tea_agent.web" = ["*.py", "static/*.html", "static/*.js", "static/*.css"]
+"tea_agent.server" = ["*.py", "static/*.html", "static/*.js", "static/*.css"]
+"tea_agent.skills" = ["**/*.md"]
 
 [tool.setuptools.packages.find]
 where = ["."]

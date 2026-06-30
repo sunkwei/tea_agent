@@ -490,6 +490,45 @@ class APIServer:
         mems = self._sanitize(s.search_memories(query, limit=limit))
         return {"conversations": convs, "memories": mems}
 
+    def screenshot_region(self, x: int, y: int, w: int, h: int) -> dict:
+        """Capture a screen region and return base64 image data.
+
+        Args:
+            x: Left coordinate
+            y: Top coordinate
+            w: Width
+            h: Height
+        Returns:
+            dict: {ok: bool, image_base64?: str, error?: str}
+        """
+        from tea_agent.toolkit.toolkit_screenshot import toolkit_screenshot
+        import base64
+        import tempfile
+        import os
+
+        try:
+            # 截取区域截图
+            tmp_path = os.path.join(tempfile.gettempdir(), "screenshot_region.png")
+            result = toolkit_screenshot(action="region", region=f"{x},{y},{w},{h}", output=tmp_path)
+
+            if not result.get("success"):
+                return {"ok": False, "error": result.get("error", "截图失败")}
+
+            # 读取图片并转为 base64
+            with open(result["path"], "rb") as f:
+                img_data = f.read()
+            b64_str = base64.b64encode(img_data).decode("utf-8")
+            data_url = f"data:image/png;base64,{b64_str}"
+
+            return {
+                "ok": True,
+                "image_base64": data_url,
+                "path": result["path"],
+                "size": result.get("size", 0),
+                "method": result.get("method", ""),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     # ═══════════════════════════════════════════════════════════════
     #  Model Hot-Switch & Config Management
@@ -557,7 +596,7 @@ class APIServer:
         """Load a full config file and switch both main and cheap models."""
         if not os.path.exists(config_path):
             return {"ok": False, "error": "Config not found: " + config_path}
-        from tea_agent.config import load_config
+        from tea_agent.config import load_config, AgentConfig
         new_cfg = load_config(config_path)
         if not new_cfg.main_model.is_configured:
             return {"ok": False, "error": "config main_model not complete: " + config_path}
@@ -568,7 +607,25 @@ class APIServer:
             cheap_api_key=(cc.api_key or "") if cc else "",
             cheap_api_url=(cc.api_url or "") if cc else "",
             cheap_model_name=(cc.model_name or "") if cc else "",
+            temperature=cm.temperature,
+            max_tokens=cm.max_tokens,
+            top_p=cm.top_p,
+            max_context_tokens=cm.max_context_tokens,
+            options=cm.options,
+            cheap_temperature=cc.temperature if cc else None,
+            cheap_max_tokens=cc.max_tokens if cc else None,
+            cheap_top_p=cc.top_p if cc else None,
+            cheap_max_context_tokens=cc.max_context_tokens if cc else None,
+            cheap_options=cc.options if cc else None,
         )
+        # 同步运行时参数到运行中的 agent
+        agent = self._agent
+        if agent and hasattr(agent, '_cfg'):
+            cfg = agent._cfg
+            for key in AgentConfig._RUNTIME_CONFIG_KEYS:
+                setattr(cfg, key, getattr(new_cfg, key))
+            cfg.embedding = new_cfg.embedding
+            cfg.mode_params = new_cfg.mode_params
         self._config_path = config_path
         return {"ok": True, "config_path": config_path}
 
@@ -1045,6 +1102,27 @@ async def handle_upload(request):
     return JSONResponse({"path": str(dest), "url": f"/uploads/{file.filename}"})
 
 
+async def handle_screenshot_region(request):
+    """POST /api/screenshot/region — capture a screen region and return base64.
+
+    Body: {"x": int, "y": int, "w": int, "h": int}
+    """
+    body = await request.json()
+    for key in ("x", "y", "w", "h"):
+        if key not in body:
+            return JSONResponse({"ok": False, "error": f"缺少参数: {key}"}, status_code=400)
+    try:
+        x, y, w, h = int(body["x"]), int(body["y"]), int(body["w"]), int(body["h"])
+    except (ValueError, TypeError):
+        return JSONResponse({"ok": False, "error": "参数必须为整数"}, status_code=400)
+    if w <= 0 or h <= 0:
+        return JSONResponse({"ok": False, "error": "宽高必须大于0"}, status_code=400)
+    result = get_server().screenshot_region(x, y, w, h)
+    if result.get("ok"):
+        return JSONResponse(result)
+    return JSONResponse(result, status_code=500)
+
+
 # ================================================================
 #  Web UI API Route Handlers (SSE chat, model switch, etc.)
 # ================================================================
@@ -1215,8 +1293,23 @@ async def handle_web_update_config(request):
 
 async def handle_web_list_configs(request):
     """GET /api/configs"""
-    configs = get_server().list_config_files()
-    return JSONResponse({"configs": configs, "count": len(configs)})
+    server = get_server()
+    configs = server.list_config_files()
+    # 获取当前活跃配置路径和文件名
+    active_config_path = ""
+    active_config_filename = ""
+    if server._agent and server._agent._config_path:
+        active_config_path = server._agent._config_path
+        try:
+            active_config_filename = Path(active_config_path).name
+        except Exception:
+            pass
+    return JSONResponse({
+        "configs": configs,
+        "count": len(configs),
+        "active_config_path": active_config_path,
+        "active_config_filename": active_config_filename,
+    })
 
 
 async def handle_web_create_config(request):
@@ -1367,6 +1460,7 @@ def create_app(api_key: Optional[str] = None,
         # Web UI API
         Route("/api/chat", endpoint=handle_web_chat, methods=["POST"]),
         Route("/api/chat/continue", endpoint=handle_chat_continue, methods=["POST"]),
+        Route("/api/screenshot/region", endpoint=handle_screenshot_region, methods=["POST"]),
         Route("/api/new_topic", endpoint=handle_web_new_topic, methods=["POST"]),
         Route("/api/sessions", endpoint=handle_web_sessions),
         Route("/api/topic/{topic_id:str}", endpoint=handle_web_topic_info),

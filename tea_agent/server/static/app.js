@@ -308,6 +308,15 @@ window.sendMessage = async function() {
                                 bubbleText.innerHTML = '(\u65e0\u54cd\u5e94)';
                             }
                             if (data.usage) updateUsage(data.usage);
+                            // 保存 topic_id 以便后续消息关联到同一主题
+                            if (data.topic_id) {
+                                currentTopicId = data.topic_id;
+                                // 更新工具栏标题（新主题时用简短id显示）
+                                const titleEl = document.getElementById('topic-title');
+                                if (titleEl && titleEl.textContent === '新对话') {
+                                    titleEl.textContent = 'Web Session';
+                                }
+                            }
                             break;
                         case 'error':
                             removeLoading();

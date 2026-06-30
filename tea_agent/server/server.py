@@ -318,16 +318,20 @@ class APIServer:
                     topic_id=topic_id or agent.current_topic_id,
                     on_status=status_cb,
                 )
-                # 保存对话到数据库
-                agent._post_chat_pipeline(ai_msg, used_tools, msg,
-                                           topic_id or agent.current_topic_id)
+                # 保存对话到数据库（异常时不阻断 done 事件）
+                actual_topic_id = topic_id or agent.current_topic_id
+                try:
+                    agent._post_chat_pipeline(ai_msg, used_tools, msg,
+                                               actual_topic_id)
+                except Exception as save_err:
+                    logger.exception(f"保存对话失败 topic={actual_topic_id}: {save_err}")
 
                 usage = agent.sess._last_usage or {}
                 _put({
                     "type": "done",
                     "ai_msg": ai_msg,
                     "used_tools": used_tools,
-                    "topic_id": topic_id or agent.current_topic_id,
+                    "topic_id": actual_topic_id,
                     "usage": {
                         "total_tokens": usage.get("total_tokens", 0),
                         "prompt_tokens": usage.get("prompt_tokens", 0),
@@ -626,7 +630,11 @@ class APIServer:
                 setattr(cfg, key, getattr(new_cfg, key))
             cfg.embedding = new_cfg.embedding
             cfg.mode_params = new_cfg.mode_params
+        # 同步更新 agent._config_path，确保后续 API 查询返回正确路径
         self._config_path = config_path
+        agent = self._agent
+        if agent and hasattr(agent, '_config_path'):
+            agent._config_path = config_path
         return {"ok": True, "config_path": config_path}
 
     @staticmethod
@@ -1298,12 +1306,14 @@ async def handle_web_list_configs(request):
     # 获取当前活跃配置路径和文件名
     active_config_path = ""
     active_config_filename = ""
-    if server._agent and server._agent._config_path:
-        active_config_path = server._agent._config_path
-        try:
+    # 确保 Agent 已初始化，以便能获取到当前生效的配置文件路径
+    try:
+        agent = server.get_agent()
+        if agent and agent._config_path:
+            active_config_path = agent._config_path
             active_config_filename = Path(active_config_path).name
-        except Exception:
-            pass
+    except Exception:
+        pass
     return JSONResponse({
         "configs": configs,
         "count": len(configs),

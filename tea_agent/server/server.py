@@ -46,12 +46,138 @@ __version__ = "0.2.0"
 # 当工具轮达到上限时，后端等待前端用户确认后继续或终止
 _max_iter_pending = {}  # type: dict[str, dict]
 
+# ── 配置缓存（按路径缓存，减少重复 IO） ──
+_config_cache: dict = {}
+
+def _load_config_cached(config_path: Optional[str] = None):
+    """加载配置（带缓存）。"""
+    key = config_path or "__default__"
+    if key not in _config_cache:
+        from tea_agent.config import load_config
+        _config_cache[key] = load_config(config_path)
+    return _config_cache[key]
+
+
+def _create_session_from_cfg(cfg, toolkit, storage=None):
+    """从配置对象创建 OnlineToolSession（不依赖 Agent）。"""
+    from tea_agent.onlinesession import OnlineToolSession
+    main_m = cfg.main_model
+    cheap_m = cfg.cheap_model
+    _options = getattr(main_m, 'options', {}) or {}
+    supports_vision = _options.get('supports_vision', False) if isinstance(_options, dict) else False
+    supports_reasoning = _options.get('supports_reasoning', True) if isinstance(_options, dict) else True
+
+    return OnlineToolSession(
+        toolkit=toolkit,
+        api_key=main_m.api_key, api_url=main_m.api_url, model=main_m.model_name,
+        max_history=cfg.max_history, max_iterations=cfg.max_iterations,
+        keep_turns=cfg.keep_turns, max_tool_output=cfg.max_tool_output,
+        max_assistant_content=cfg.max_assistant_content,
+        max_context_tokens=main_m.max_context_tokens,
+        extra_iterations_on_continue=cfg.extra_iterations_on_continue,
+        memory_extraction_threshold=cfg.memory_extraction_threshold,
+        storage=storage,
+        cheap_api_key=cheap_m.api_key, cheap_api_url=cheap_m.api_url,
+        cheap_model=cheap_m.model_name,
+        enable_thinking=True,
+        supports_vision=supports_vision, supports_reasoning=supports_reasoning,
+    )
+
+
+class _ChatAgentProxy:
+    """轻量级 Agent 代理，供后处理流水线（do_async_summaries 等）使用。
+
+    提供 _db 和 _sess 属性，让 agent_pipeline 函数无需依赖完整 Agent。
+    """
+    def __init__(self, storage, session):
+        self._db = storage
+        self._sess = session
+        self._pending_cheap_tokens = {}
+
+
+def _load_topic_history(storage, session, topic_id):
+    """加载主题历史到会话（Agent.load_topic_history 的独立版本）。
+    
+    不依赖 Agent 实例，只需要 storage 和 session。
+    """
+    if not storage:
+        return
+    all_light = storage.get_conversations(topic_id, limit=-1, include_rounds=False)
+    if all_light:
+        recent = storage.get_conversations(topic_id, limit=1, include_rounds=True)
+        if recent:
+            all_light[-1] = recent[-1]
+        level2 = storage.get_level2(topic_id)
+        semantic = storage.get_semantic_summary(topic_id)
+        tool_chain = storage.get_tool_chain_summary(topic_id)
+        old_summary = storage.get_topic_summary(topic_id) or ""
+        session.load_history(all_light, summary=old_summary,
+                            level2=level2, semantic_summary=semantic,
+                            tool_chain_summary=tool_chain)
+    else:
+        session.messages = [{"role": "system", "content": session.system_prompt}]
+        session._history_summary = ""
+        session._semantic_summary = ""
+        session._tool_chain_summary = ""
+        session._level2 = []
+
+
+def _save_chat_result(storage, session, topic_id, user_msg, ai_msg, used_tools):
+    """保存对话结果（Agent._post_chat_pipeline 的独立版本）。
+
+    直接操作 storage 和 session，不依赖 Agent 实例。
+    """
+    if not storage:
+        return
+    user_text = user_msg if isinstance(user_msg, str) else (
+        user_msg.get("text", "") if isinstance(user_msg, dict) else str(user_msg)
+    )
+    conv_id = storage.save_msg(topic_id, user_text, "", False)
+    rounds = session._rounds_collector
+    storage.update_msg_rounds(conversation_id=conv_id, ai_msg=ai_msg,
+                               is_func_calling=used_tools,
+                               rounds=rounds if rounds else None)
+    # Token 统计
+    usage = session._last_usage
+    cheap_usage = session._last_cheap_usage
+    if usage and usage.get("total_tokens", 0) > 0:
+        kwargs = {"total_tokens": usage["total_tokens"],
+                  "prompt_tokens": usage["prompt_tokens"],
+                  "completion_tokens": usage["completion_tokens"]}
+        if cheap_usage and cheap_usage.get("total_tokens", 0) > 0:
+            kwargs["cheap_tokens"] = cheap_usage["total_tokens"]
+            kwargs["cheap_prompt_tokens"] = cheap_usage["prompt_tokens"]
+            kwargs["cheap_completion_tokens"] = cheap_usage["completion_tokens"]
+        storage.add_topic_tokens(topic_id, **kwargs)
+    # L2 推送
+    l2_count, overflow_items, should_summarize = storage.push_to_level2(
+        topic_id, user_text, ai_msg,
+        rounds=rounds if rounds else None,
+    )
+    # 异步摘要（fire-and-forget）
+    if overflow_items or should_summarize:
+        from tea_agent.agent_pipeline import do_async_summaries
+        proxy = _ChatAgentProxy(storage, session)
+        threading.Thread(
+            target=do_async_summaries,
+            args=(proxy, topic_id, overflow_items, should_summarize),
+            daemon=True,
+        ).start()
+
+
 def get_server_version() -> str:
     return __version__
 
 
 class APIServer:
-    """HTTP API Server for Tea Agent -- REST API + Web UI + OpenAI compatible."""
+    """HTTP API Server for Tea Agent -- REST API + Web UI + OpenAI compatible.
+
+    架构说明（v2.0 并发改造）：
+    - 非流式操作（admin/config/tool-list）使用共享 Agent
+    - 流式操作（SSE chat / streaming completions）使用每请求独立 Session
+    - 共享 Toolkit + Storage 跨请求复用，Session 隔离
+    - 支持不同 Web 实例通过 config_path 使用不同配置
+    """
 
     def __init__(self, api_key: Optional[str] = None,
                  config_path: Optional[str] = None):
@@ -61,13 +187,34 @@ class APIServer:
         self._start_time = time.time()
         self._lock = threading.Lock()
         self._storage: Optional[Storage] = None
+        # 共享 Toolkit（跨请求复用，只读）
+        self._toolkit: Optional[object] = None
+
+    # ═══════════════════════════════════════════════
+    # 共享资源（Toolkit + Storage）
+    # ═══════════════════════════════════════════════
 
     def _get_storage(self) -> Storage:
         """Get Storage directly (lightweight, no Agent dependency)."""
         if self._storage is None:
             self._storage = get_storage()
         return self._storage
-        self._start_time = time.time()
+
+    def _get_toolkit(self):
+        """获取共享 Toolkit 实例（延迟初始化，只需一次）。"""
+        if self._toolkit is None:
+            from tea_agent import tlk
+            cfg = _load_config_cached(self._config_path)
+            tool_dir = str(Path(cfg.paths.toolkit_dir_abs))
+            Path(tool_dir).mkdir(parents=True, exist_ok=True)
+            self._toolkit = tlk.Toolkit(tool_dir)
+            tlk._toolkit_ = self._toolkit
+            logger.info(f"Toolkit 初始化 | 工具: {len(self._toolkit.func_map)} 个 | dir: {tool_dir}")
+        return self._toolkit
+
+    # ═══════════════════════════════════════════════
+    # 共享 Agent（非流式操作：admin/config/tool-list）
+    # ═══════════════════════════════════════════════
 
     def get_agent(self) -> Agent:
         if self._agent is None:
@@ -83,6 +230,26 @@ class APIServer:
                 except Exception: logger.exception("operation failed")
             self._agent = None
             logger.info("Agent reset")
+
+    # ═══════════════════════════════════════════════
+    # 每请求 Session 工厂（流式操作）
+    # ═══════════════════════════════════════════════
+
+    def create_session(self, config_path: Optional[str] = None):
+        """为流式请求创建独立的 OnlineToolSession。
+
+        每个请求获得独立 Session，互不干扰，无需全局锁。
+        支持指定 config_path 实现不同 Web 实例使用不同配置。
+
+        Returns:
+            (OnlineToolSession, Storage) 元组
+        """
+        cfg = _load_config_cached(config_path or self._config_path)
+        storage = self._get_storage()
+        toolkit = self._get_toolkit()
+        session = _create_session_from_cfg(cfg, toolkit, storage)
+        logger.debug(f"Session created | model={cfg.main_model.model_name} | config={config_path or '(default)'}")
+        return session, storage
 
     def health(self) -> dict:
         return {"status": "ok", "version": __version__,
@@ -129,9 +296,14 @@ class APIServer:
 
     async def chat_completion_stream(self, model, messages,
                                       temperature=0.7,
-                                      max_tokens=None, topic_id=""):
-        """Streaming chat completion. Returns async generator for SSE."""
-        agent = self.get_agent()
+                                      max_tokens=None, topic_id="",
+                                      config_path=None):
+        """Streaming chat completion. 每请求创建独立 Session，支持并发。
+
+        Args:
+            config_path: 可选，指定使用的配置文件路径
+        """
+        session, storage = self.create_session(config_path)
         user_msg = self._extract_user_message(messages)
         queue = asyncio.Queue()
         event_loop = asyncio.get_running_loop()
@@ -144,31 +316,30 @@ class APIServer:
             _put({"type": "content", "text": text})
         thread = threading.Thread(
             target=self._run_stream,
-            args=(agent, user_msg, topic_id, stream_cb, _put),
+            args=(session, storage, user_msg, topic_id, stream_cb, _put),
             daemon=True)
         thread.start()
         async for event in self._generate_sse(queue, model):
             yield event
 
-    def _run_stream(self, agent, user_msg, topic_id, stream_cb, put):
+    def _run_stream(self, session, storage, user_msg, topic_id, stream_cb, put):
+        """在后台线程运行流式对话。使用独立 Session，无需全局锁。"""
         try:
-            with self._lock:
-                if topic_id:
-                    agent.current_topic_id = topic_id
-                    agent.load_topic_history(topic_id)
-                elif not agent.current_topic_id:
-                    agent.current_topic_id = agent.db.create_topic(
-                        "API 流式会话")
-                ai_msg, used_tools = agent.sess.chat_stream(
-                    user_msg, callback=stream_cb,
-                    topic_id=topic_id or agent.current_topic_id)
-                # 保存对话到数据库
-                agent._post_chat_pipeline(ai_msg, used_tools, user_msg,
-                                           topic_id or agent.current_topic_id)
-                put({"type": "done", "ai_msg": ai_msg,
-                     "tools_used": used_tools or []})
+            if topic_id:
+                _load_topic_history(storage, session, topic_id)
+            else:
+                topic_id = storage.create_topic("API 流式会话")
+            ai_msg, used_tools = session.chat_stream(
+                user_msg, callback=stream_cb, topic_id=topic_id)
+            _save_chat_result(storage, session, topic_id, user_msg, ai_msg, used_tools)
+            put({"type": "done", "ai_msg": ai_msg,
+                 "tools_used": used_tools or []})
         except Exception as e:
-            put({"type": "error", "error": str(e)})
+            logger.exception(f"Stream chat error: {e}")
+            try:
+                put({"type": "error", "error": f"{type(e).__name__}: {e}"})
+            except Exception:
+                pass
     async def _generate_sse(self, queue, model):
         cid = "chatcmpl-" + uuid.uuid4().hex[:12]
         now = int(time.time())
@@ -238,15 +409,18 @@ class APIServer:
     #  Web UI SSE Chat (rich events: think/tool/status/done)
     # ═══════════════════════════════════════════════════════════════
 
-    def chat_stream_sse(self, msg, queue: "asyncio.Queue", topic_id: str = "",
+    def chat_stream_sse(self, session, storage, msg,
+                         queue: "asyncio.Queue", topic_id: str = "",
                          event_loop=None):
         """Run chat in a thread, pushing SSE events to an asyncio queue.
 
+        使用独立 Session + Storage，无需全局锁，支持并发。
+
         Args:
+            session: OnlineToolSession 实例（每请求独立）
+            storage: Storage 实例（共享）
             msg: 纯文本字符串，或包含 text/images 的字典
         """
-        agent = self.get_agent()
-
         def _put(event: dict):
             if event_loop is None:
                 return
@@ -287,11 +461,10 @@ class APIServer:
 
         def status_cb(status_msg: str):
             if status_msg.startswith("!MAX_ITER:"):
-                # 生成唯一确认ID，存储session引用，供前端确认后继续/终止
                 import uuid as _uuid_mod
                 confirm_id = _uuid_mod.uuid4().hex[:12]
                 _max_iter_pending[confirm_id] = {
-                    "session": agent.sess,
+                    "session": session,
                     "timestamp": time.time(),
                 }
                 _put({"type": "max_iter_confirm", "confirm_id": confirm_id, "text": status_msg})
@@ -301,43 +474,35 @@ class APIServer:
                 _put({"type": "status", "text": status_msg})
 
         try:
-            with self._lock:
-                # If no topic_id is provided, always create a new topic
-                if not topic_id:
-                    tid = agent.db.create_topic("Web Session")
-                    agent.current_topic_id = tid
-                    agent.load_topic_history(tid)
-                elif not agent.current_topic_id:
-                    # topic_id provided but agent has no active topic
-                    agent.current_topic_id = topic_id
-                    agent.load_topic_history(topic_id)
+            # 新主题或已有主题
+            if not topic_id:
+                topic_id = storage.create_topic("Web Session")
+            _load_topic_history(storage, session, topic_id)
 
-                ai_msg, used_tools = agent.sess.chat_stream(
-                    msg,
-                    callback=stream_cb,
-                    topic_id=topic_id or agent.current_topic_id,
-                    on_status=status_cb,
-                )
-                # 保存对话到数据库（异常时不阻断 done 事件）
-                actual_topic_id = topic_id or agent.current_topic_id
-                try:
-                    agent._post_chat_pipeline(ai_msg, used_tools, msg,
-                                               actual_topic_id)
-                except Exception as save_err:
-                    logger.exception(f"保存对话失败 topic={actual_topic_id}: {save_err}")
+            ai_msg, used_tools = session.chat_stream(
+                msg,
+                callback=stream_cb,
+                topic_id=topic_id,
+                on_status=status_cb,
+            )
+            # 保存对话到数据库（异常时不阻断 done 事件）
+            try:
+                _save_chat_result(storage, session, topic_id, msg, ai_msg, used_tools)
+            except Exception as save_err:
+                logger.exception(f"保存对话失败 topic={topic_id}: {save_err}")
 
-                usage = agent.sess._last_usage or {}
-                _put({
-                    "type": "done",
-                    "ai_msg": ai_msg,
-                    "used_tools": used_tools,
-                    "topic_id": actual_topic_id,
-                    "usage": {
-                        "total_tokens": usage.get("total_tokens", 0),
-                        "prompt_tokens": usage.get("prompt_tokens", 0),
-                        "completion_tokens": usage.get("completion_tokens", 0),
-                    },
-                })
+            usage = session._last_usage or {}
+            _put({
+                "type": "done",
+                "ai_msg": ai_msg,
+                "used_tools": used_tools,
+                "topic_id": topic_id,
+                "usage": {
+                    "total_tokens": usage.get("total_tokens", 0),
+                    "prompt_tokens": usage.get("prompt_tokens", 0),
+                    "completion_tokens": usage.get("completion_tokens", 0),
+                },
+            })
         except Exception as e:
             logger.exception("Chat stream error")
             _put({"type": "error", "error": str(e)})
@@ -411,7 +576,8 @@ class APIServer:
                            "total_tokens": (tokens or {}).get("total_tokens",0)})
         return result
 
-    def create_session(self, title="API 会话"):
+    def create_topic_session(self, title="API 会话"):
+        """Create a new topic (dialogue session) in storage."""
         tid = self._get_storage().create_topic(title)
         # Also try to set it on agent if agent is already initialized
         if self._agent is not None:
@@ -863,13 +1029,16 @@ async def handle_chat_completions(request):
     temperature = body.get("temperature", 0.7)
     max_tokens = body.get("max_tokens")
     topic_id = body.get("topic_id", "")
+    config_path = body.get("config_path") or None
     if not messages:
         return JSONResponse({"error": "messages required"}, status_code=400)
     server = get_server()
     if stream:
+        # 流式：每请求独立 Session，支持 config_path
         gen = server.chat_completion_stream(
-            model, messages, temperature, max_tokens, topic_id)
+            model, messages, temperature, max_tokens, topic_id, config_path)
         return StreamingResponse(gen, media_type="text/event-stream")
+    # 非流式：保留共享 Agent（带锁）
     result = server.chat_completion(
         model, messages, False, temperature, max_tokens, topic_id)
     return JSONResponse(result)
@@ -914,7 +1083,7 @@ async def handle_create_session(request):
     body = await request.json() if request.headers.get("content-length") else {}
     title = (body.get("title") or "API 会话").strip()
     try:
-        return JSONResponse(get_server().create_session(title), status_code=201)
+        return JSONResponse(get_server().create_topic_session(title), status_code=201)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=503)
 
@@ -982,7 +1151,9 @@ OPENAPI_SPEC = {
                         "messages": {"type": "array", "items": {"type": "object"}},
                         "stream": {"type": "boolean", "default": False},
                         "temperature": {"type": "number", "default": 0.7},
-                        "topic_id": {"type": "string"}},
+                        "topic_id": {"type": "string"},
+                        "config_path": {"type": "string",
+                            "description": "指定配置文件路径，不同实例可用不同配置"}},
                     "required": ["messages"]}}}},
             "responses": {"200": {"description": "OK"}}}},
         "/v1/models": {"get": {"summary": "List models", "tags": ["Models"],
@@ -1141,10 +1312,12 @@ async def handle_web_chat(request):
     支持纯文本和图片输入：
     - 纯文本: {"message": "hello", "topic_id": "..."}
     - 图片+文本: {"message": "hello", "images": ["data:image/png;base64,..."], "topic_id": "..."}
+    - 扩展: {"config_path": "..."} 指定使用的配置文件（每请求独立 Session）
     """
     body = await request.json()
     message = body.get("message", "").strip()
     topic_id = body.get("topic_id", "")
+    config_path = body.get("config_path") or None
     images_b64 = body.get("images", [])
 
     if not message and not images_b64:
@@ -1158,7 +1331,6 @@ async def handle_web_chat(request):
         upload_dir.mkdir(exist_ok=True)
         for idx, img_b64 in enumerate(images_b64):
             try:
-                # 支持 "data:image/png;base64,XXXX" 和纯 base64 两种格式
                 if img_b64.startswith("data:"):
                     header, data = img_b64.split(",", 1)
                     ext_map = {
@@ -1188,6 +1360,8 @@ async def handle_web_chat(request):
         msg_payload = message
 
     server = get_server()
+    # 每请求创建独立 Session（支持指定 config_path）
+    session, storage = server.create_session(config_path)
     queue: asyncio.Queue = asyncio.Queue()
 
     async def event_stream():
@@ -1195,7 +1369,7 @@ async def handle_web_chat(request):
 
         thread = threading.Thread(
             target=server.chat_stream_sse,
-            args=(msg_payload, queue, topic_id, loop),
+            args=(session, storage, msg_payload, queue, topic_id, loop),
             daemon=True,
         )
         thread.start()

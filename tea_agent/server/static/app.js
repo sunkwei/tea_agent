@@ -145,6 +145,8 @@ window.sendMessage = async function() {
     try {
         const body = { message: msg, topic_id: currentTopicId };
         if (imagesToSend.length > 0) body.images = imagesToSend;
+        // 如果当前有选中的配置路径，附带发送（不同 Web 实例可用不同配置）
+        if (_configCurrentPath) body.config_path = _configCurrentPath;
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

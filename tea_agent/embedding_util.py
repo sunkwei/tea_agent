@@ -171,8 +171,12 @@ class EmbeddingEngine:
 
         if self._use_api:
             try:
-                return self._embed_api(text)
+                result = self._embed_api(text)
+                dim = len(result)
+                print(f"✅ embedding 成功: {self.model_name}, dim={dim}")
+                return result
             except Exception as e:
+                print(f"❌ embedding 失败: {e}, 回退到 TF-IDF")
                 logger.warning(f"API 嵌入失败，回退 TF-IDF: {e}")
                 # 回退到 TF-IDF
                 return self._embed_tfidf(text)
@@ -183,8 +187,11 @@ class EmbeddingEngine:
         """批量嵌入（API 模式尝试批量请求，TF-IDF 逐个处理）"""
         if self._use_api:
             try:
-                return self._embed_api_batch(texts)
+                result = self._embed_api_batch(texts)
+                print(f"✅ embedding 批量成功: {self.model_name}, batch_size={len(texts)}")
+                return result
             except Exception as e:
+                print(f"❌ embedding 批量失败: {e}, 逐个回退 TF-IDF")
                 logger.warning(f"API 批量嵌入失败，逐个 TF-IDF: {e}")
         return [self._embed_tfidf(t) for t in texts]
 
@@ -215,9 +222,7 @@ class EmbeddingEngine:
         }
 
         import time
-        asctime = time.strftime("%Y-%m-%d %H:%M:%S")
-        print(f"{asctime}: call embedding: {self.model_name}, {text[:80]}")
-        logger.info(f"embedding request: model={self.model_name}, text_len={len(text)}, text:{text[:80]}, url={url}")
+        logger.info(f"embedding request: model={self.model_name}, text_len={len(text)}, url={url}")
 
         resp = requests.post(url, json=payload, headers=headers, timeout=30)
         resp.raise_for_status()

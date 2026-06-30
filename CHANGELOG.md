@@ -2,6 +2,10 @@
 
 
 
+
+## [0.10.6] - 2026-06-30
+### Improvements & Changes
+- 版本 0.10.6
 ## [0.10.1] - 2026-06-29
 ### Improvements & Changes
 - Version bump: 0.10.0 → 0.10.1

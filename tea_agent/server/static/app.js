@@ -415,6 +415,11 @@ function formatMarkdown(text) {
 }
 
 // -- Topics --
+function escHtml(s) {
+    // Escape HTML entities for safe interpolation in attributes
+    return (s || '').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 async function refreshTopics() {
     try {
         const r = await fetch('/api/sessions');
@@ -425,9 +430,81 @@ async function refreshTopics() {
         list.innerHTML = sessions.map(t => {
             const title = t.title || (t.id || '').slice(0, 8);
             const cls = 'topic-item' + (t.id === currentTopicId ? ' active' : '');
-            return '<div class="' + cls + '" onclick="openTopic(\'' + t.id + '\',\'' + esc(title) + '\')">' + esc(title) + '</div>';
+            const safeId = escHtml(t.id);
+            const safeTitle = escHtml(title);
+            return '<div class="' + cls + '" data-topic-id="' + safeId + '">'
+                + '<span class="topic-item-title" onclick="openTopic(\'' + safeId + '\',\'' + safeTitle + '\')">' + safeTitle + '</span>'
+                + '<button class="topic-actions-btn" onclick="event.stopPropagation();toggleTopicMenu(this)">⋯</button>'
+                + '<div class="topic-actions-menu">'
+                + '<button class="topic-actions-menu-item" onclick="event.stopPropagation();renameTopic(\'' + safeId + '\')">✏️ 改名</button>'
+                + '<button class="topic-actions-menu-item danger" onclick="event.stopPropagation();deleteTopic(\'' + safeId + '\')">🗑️ 删除</button>'
+                + '</div>'
+                + '</div>';
         }).join('');
     } catch (e) { /* ignore */ }
+}
+
+function toggleTopicMenu(btn) {
+    // Close all other menus
+    document.querySelectorAll('.topic-actions-menu.show').forEach(m => {
+        if (m !== btn.nextElementSibling) m.classList.remove('show');
+    });
+    const menu = btn.nextElementSibling;
+    menu.classList.toggle('show');
+}
+
+// Close topic menus when clicking outside
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.topic-item')) {
+        document.querySelectorAll('.topic-actions-menu.show').forEach(m => m.classList.remove('show'));
+    }
+});
+
+async function renameTopic(id) {
+    document.querySelectorAll('.topic-actions-menu.show').forEach(m => m.classList.remove('show'));
+    const newTitle = prompt('请输入新主题名称:');
+    if (!newTitle || !newTitle.trim()) return;
+    try {
+        const r = await fetch('/api/topic/' + id, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({title: newTitle.trim()})
+        });
+        if (!r.ok) {
+            toast('重命名失败: HTTP ' + r.status);
+            return;
+        }
+        toast('✅ 已重命名');
+        refreshTopics();
+        // 如果当前打开的就是这个主题，更新标题栏
+        if (id === currentTopicId) {
+            $('topic-title').textContent = newTitle.trim();
+        }
+    } catch (e) {
+        toast('重命名失败: ' + e.message);
+    }
+}
+
+async function deleteTopic(id) {
+    document.querySelectorAll('.topic-actions-menu.show').forEach(m => m.classList.remove('show'));
+    if (!confirm('确定要删除此主题及其所有对话吗？此操作不可撤销。')) return;
+    try {
+        const r = await fetch('/api/topic/' + id, { method: 'DELETE' });
+        if (!r.ok) {
+            toast('删除失败: HTTP ' + r.status);
+            return;
+        }
+        toast('🗑️ 已删除');
+        // 如果删除的是当前主题，清空消息区域
+        if (id === currentTopicId) {
+            currentTopicId = '';
+            $('topic-title').textContent = '欢迎使用 Tea Agent';
+            $('messages').innerHTML = '<div class="welcome"><div class="welcome-icon">☕</div><h2>Tea Agent</h2><p>自进化 AI 编程助手 · 60+ 内置工具 · 多 Agent 协作 · 长期记忆<br>在下方输入消息开始对话</p></div>';
+        }
+        refreshTopics();
+    } catch (e) {
+        toast('删除失败: ' + e.message);
+    }
 }
 
 window.openTopic = async function(id, title) {

@@ -605,6 +605,13 @@ class APIServer:
         except Exception:
             return False
 
+    def rename_topic(self, topic_id: str, new_title: str):
+        """Rename a topic."""
+        try:
+            self._get_storage().update_topic_title(topic_id, new_title)
+            return True
+        except Exception:
+            return False
 
     def get_session_messages(self, topic_id: str, limit: int = 50) -> list:
         convs = self._get_storage().get_conversations(topic_id, limit=limit, include_rounds=True)
@@ -1438,10 +1445,27 @@ async def handle_web_sessions(request):
 
 
 async def handle_web_topic_info(request):
-    """GET /api/topic/{topic_id}"""
+    """GET /api/topic/{topic_id} — 也支持 PUT（重命名）和 DELETE（删除）"""
     topic_id = request.path_params.get("topic_id", "")
     if not topic_id:
         return JSONResponse({"error": "topic_id required"}, status_code=400)
+
+    if request.method == "PUT":
+        body = await request.json()
+        new_title = (body.get("title") or "").strip()
+        if not new_title:
+            return JSONResponse({"error": "title required"}, status_code=400)
+        ok = get_server().rename_topic(topic_id, new_title)
+        if not ok:
+            return JSONResponse({"error": "Rename failed"}, status_code=500)
+        return JSONResponse({"ok": True, "title": new_title})
+
+    if request.method == "DELETE":
+        ok = get_server().delete_session(topic_id)
+        if not ok:
+            return JSONResponse({"error": "Delete failed"}, status_code=500)
+        return JSONResponse({"ok": True})
+
     info = get_server().get_topic_info(topic_id)
     if not info:
         return JSONResponse({"error": "Topic not found"}, status_code=404)
@@ -1746,7 +1770,7 @@ def create_app(api_key: Optional[str] = None,
         Route("/api/screenshot/region", endpoint=handle_screenshot_region, methods=["POST"]),
         Route("/api/new_topic", endpoint=handle_web_new_topic, methods=["POST"]),
         Route("/api/sessions", endpoint=handle_web_sessions),
-        Route("/api/topic/{topic_id:str}", endpoint=handle_web_topic_info),
+        Route("/api/topic/{topic_id:str}", endpoint=handle_web_topic_info, methods=["GET", "PUT", "DELETE"]),
         Route("/api/topic/{topic_id:str}/conversations", endpoint=handle_web_topic_conversations),
         Route("/api/tools", endpoint=handle_web_tools),
         Route("/api/config", endpoint=handle_web_config),

@@ -1224,11 +1224,22 @@ function _screenshotOnKey(e) {
 }
 
 // -- Init --
-refreshTopics();
-loadConfigSwitcher();
-checkVisionSupport();
-checkConfigStatus();
-$('chat-input').focus();
+async function initApp() {
+    await refreshTopics();
+    await loadConfigSwitcher();
+    checkVisionSupport();
+    checkConfigStatus();
+    // 自动选中最近的主题，避免空 topic_id 导致刷新后创建多余的 "Web Session"
+    const list = document.getElementById('topic-list');
+    if (list) {
+        const first = list.querySelector('.topic-item');
+        if (first && !currentTopicId) {
+            first.click();
+        }
+    }
+    $('chat-input').focus();
+}
+initApp();
 // Init splitters after DOM ready
 initSplitter('sidebar-splitter', 'sidebar', 'h');
 initSplitter('vsplitter', 'input-row', 'v');

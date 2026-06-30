@@ -117,7 +117,7 @@ class UIBuilder:
         cfg_row = ttk.Frame(cfg_bar_frame)
         cfg_row.pack(fill=tk.X, padx=4, pady=2)
 
-        gui._config_var = tk.StringVar()
+        gui._config_var = tk.StringVar(value="(加载中...)")
         gui.config_combo = ttk.Combobox(
             cfg_row, textvariable=gui._config_var, state="readonly",
             font=(SYSTEM_FONT, _fs(10)), values=["(加载中...)"])

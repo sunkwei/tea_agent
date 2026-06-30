@@ -18,7 +18,14 @@ class TopicDao(private val db: SQLiteDatabase) {
         db.update(AppDatabase.TABLE_TOPICS, topic.toCV(), "id=?", arrayOf(topic.id))
     }
 
+    /** 软删除：标记为死亡，而非物理删除 */
     fun delete(id: String) {
+        val cv = ContentValues().apply { put("is_dead", 1) }
+        db.update(AppDatabase.TABLE_TOPICS, cv, "id=?", arrayOf(id))
+    }
+
+    /** 物理删除（用于清理等场景） */
+    fun hardDelete(id: String) {
         db.delete(AppDatabase.TABLE_TOPICS, "id=?", arrayOf(id))
     }
 
@@ -30,12 +37,16 @@ class TopicDao(private val db: SQLiteDatabase) {
         return null
     }
 
+    /** 仅列出未标记死亡的主题 */
     fun listAll(): List<Topic> {
         val list = mutableListOf<Topic>()
-        db.query(AppDatabase.TABLE_TOPICS, null, null, null, null, null, "updated_at DESC")
-            .use { cursor ->
-                while (cursor.moveToNext()) list.add(cursor.toTopic())
-            }
+        db.query(
+            AppDatabase.TABLE_TOPICS, null,
+            "is_dead IS NULL OR is_dead = 0", null,
+            null, null, "updated_at DESC"
+        ).use { cursor ->
+            while (cursor.moveToNext()) list.add(cursor.toTopic())
+        }
         return list
     }
 }
@@ -183,6 +194,7 @@ class ConfigDao(private val db: SQLiteDatabase) {
 private fun Topic.toCV() = ContentValues().apply {
     put("id", id); put("title", title)
     put("created_at", createdAt); put("updated_at", updatedAt)
+    put("is_dead", if (isDead) 1 else 0)
 }
 
 private fun Message.toCV() = ContentValues().apply {
@@ -202,7 +214,8 @@ private fun android.database.Cursor.toTopic() = Topic(
     id = getString(getColumnIndexOrThrow("id")),
     title = getString(getColumnIndexOrThrow("title")),
     createdAt = getLong(getColumnIndexOrThrow("created_at")),
-    updatedAt = getLong(getColumnIndexOrThrow("updated_at"))
+    updatedAt = getLong(getColumnIndexOrThrow("updated_at")),
+    isDead = getInt(getColumnIndexOrThrow("is_dead")) == 1
 )
 
 private fun android.database.Cursor.toMessage() = Message(

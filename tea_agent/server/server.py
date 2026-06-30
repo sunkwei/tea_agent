@@ -42,6 +42,10 @@ from tea_agent.store import Storage, get_storage
 
 __version__ = "0.2.0"
 
+# 全局：max_iter 确认请求存储（confirm_id -> {session, timestamp}）
+# 当工具轮达到上限时，后端等待前端用户确认后继续或终止
+_max_iter_pending = {}  # type: dict[str, dict]
+
 def get_server_version() -> str:
     return __version__
 
@@ -283,8 +287,14 @@ class APIServer:
 
         def status_cb(status_msg: str):
             if status_msg.startswith("!MAX_ITER:"):
-                remaining = status_msg.split(":", 2)[1] if ":" in status_msg else "?"
-                _put({"type": "status", "text": "Max iterations, auto-continue (" + remaining + " left)"})
+                # 生成唯一确认ID，存储session引用，供前端确认后继续/终止
+                import uuid as _uuid_mod
+                confirm_id = _uuid_mod.uuid4().hex[:12]
+                _max_iter_pending[confirm_id] = {
+                    "session": agent.sess,
+                    "timestamp": time.time(),
+                }
+                _put({"type": "max_iter_confirm", "confirm_id": confirm_id, "text": status_msg})
             elif status_msg.startswith("\u23f3"):
                 pass
             else:
@@ -1113,6 +1123,30 @@ async def handle_web_chat(request):
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+async def handle_chat_continue(request):
+    """POST /api/chat/continue — 用户确认 max_iter 后继续或终止"""
+    body = await request.json()
+    confirm_id = body.get("confirm_id", "")
+    decision = body.get("continue", True)  # True=继续, False=终止
+
+    if not confirm_id:
+        return JSONResponse({"ok": False, "error": "confirm_id 不能为空"}, status_code=400)
+
+    pending = _max_iter_pending.pop(confirm_id, None)
+    if not pending:
+        return JSONResponse({"ok": False, "error": "确认请求已过期或不存在"}, status_code=404)
+
+    session = pending["session"]
+    try:
+        session._continue_after_max = decision
+        session._max_iter_wait.set()
+        logger.info(f"用户确认 max_iter: continue={decision}")
+        return JSONResponse({"ok": True, "continue": decision})
+    except Exception as e:
+        logger.exception(f"处理 max_iter 确认失败: {e}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 async def handle_web_new_topic(request):
     """POST /api/new_topic"""
     body = await request.json()
@@ -1332,6 +1366,7 @@ def create_app(api_key: Optional[str] = None,
 
         # Web UI API
         Route("/api/chat", endpoint=handle_web_chat, methods=["POST"]),
+        Route("/api/chat/continue", endpoint=handle_chat_continue, methods=["POST"]),
         Route("/api/new_topic", endpoint=handle_web_new_topic, methods=["POST"]),
         Route("/api/sessions", endpoint=handle_web_sessions),
         Route("/api/topic/{topic_id:str}", endpoint=handle_web_topic_info),

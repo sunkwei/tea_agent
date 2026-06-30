@@ -50,6 +50,8 @@ var TeaBridge = (function() {
         topicList: function() { var r = TeaNative?TeaNative.topicList():'[]'; try{return JSON.parse(r);}catch(e){return[];} },
         topicNew: function(title) { return TeaNative ? TeaNative.topicNew(title) : ''; },
         topicDelete: function(id) { call('topicDelete', {topic_id:id}); },
+        topicRename: function(id, title) { call('topicRename', {topic_id:id, title:title}); },
+        topicHardDelete: function(id) { call('topicHardDelete', {topic_id:id}); },
         topicMessages: function(id) { var r = TeaNative?TeaNative.topicMessages(id):'[]'; try{return JSON.parse(r);}catch(e){return[];} },
         topicTokenStats: function(id) { var r = TeaNative?TeaNative.topicTokenStats(id):'{}'; try{return JSON.parse(r);}catch(e){return{};} },
         // Tools

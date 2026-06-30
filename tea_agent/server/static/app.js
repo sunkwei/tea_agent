@@ -286,6 +286,11 @@ window.sendMessage = async function() {
                             bubble.insertBefore(st, bubbleText);
                             setTimeout(() => st.remove(), 3000);
                             break;
+                        case 'max_iter_confirm':
+                            // 工具轮达到上限，弹窗询问用户是否继续
+                            removeLoading();
+                            showMaxIterConfirm(data.confirm_id, data.text);
+                            break;
                         case 'done':
                             removeLoading();
                             // Finalize tool container if still open
@@ -931,6 +936,53 @@ function initSplitter(splitterId, targetId, direction) {
         document.addEventListener('mouseup', onUp);
     });
 }
+
+// -- Max Iter 确认弹窗 --
+window.showMaxIterConfirm = function(confirmId, text) {
+    const match = text.match(/已执行(\d+)轮/);
+    const info = match ? match[0] : '达到上限';
+
+    let existing = document.querySelector('.max-iter-overlay');
+    if (existing) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'max-iter-overlay';
+
+    const box = document.createElement('div');
+    box.className = 'mi-box';
+    box.innerHTML = '<div class="mi-icon">🔧</div>' +
+        '<div class="mi-title">工具调用轮次已达上限</div>' +
+        '<div class="mi-desc">已执行 <strong>' + info + '</strong>，是否继续执行？</div>' +
+        '<div class="mi-actions">' +
+        '<button id="max-iter-stop" class="btn btn-ghost">终止</button>' +
+        '<button id="max-iter-continue" class="btn btn-primary">继续</button>' +
+        '</div>';
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    document.getElementById('max-iter-stop').addEventListener('click', async function() {
+        try {
+            await fetch('/api/chat/continue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ confirm_id: confirmId, continue: false }),
+            });
+        } catch (e) { /* ignore */ }
+        overlay.remove();
+    });
+
+    document.getElementById('max-iter-continue').addEventListener('click', async function() {
+        try {
+            await fetch('/api/chat/continue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ confirm_id: confirmId, continue: true }),
+            });
+        } catch (e) { /* ignore */ }
+        overlay.remove();
+    });
+};
 
 // -- Init --
 refreshTopics();

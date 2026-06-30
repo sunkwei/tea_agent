@@ -87,32 +87,14 @@ class TopicStore(StoreComponent):
         return self.get_drift_count(topic_id)
 
     def delete_topic(self, topic_id: str):
-        """Delete a topic and all associated data atomically.
-
-        Deletes agent_rounds, conversations, token stats, summaries,
-        and the topic record itself within a single transaction.
-
+        """Soft delete a topic by setting is_active to 0.
+        
+        This hides the topic from listings but preserves all data.
+        
         Args:
             topic_id: The UUID of the topic to delete.
         """
-        c = self.conn.cursor()
-        try:
-            c.execute("BEGIN")
-            c.execute(
-                "DELETE FROM agent_rounds WHERE conversation_id IN "
-                "(SELECT id FROM conversations WHERE topic_id = ?)",
-                (topic_id,),
-            )
-            c.execute("DELETE FROM conversations WHERE topic_id = ?", (topic_id,))
-            c.execute("DELETE FROM topic_token_stats WHERE topic_id = ?", (topic_id,))
-            c.execute("DELETE FROM t_conv_summary WHERE topic_id = ?", (topic_id,))
-            c.execute("DELETE FROM topics WHERE topic_id = ?", (topic_id,))
-            self.conn.commit()
-        except Exception:
-            self.conn.rollback()
-            raise
-        finally:
-            c.close()
+        self.update_topic_active(topic_id, 0)
 
     def get_topic(self, topic_id: str) -> Optional[Dict]:
         """Get the topic.
@@ -127,7 +109,7 @@ class TopicStore(StoreComponent):
         return dict(r) if r else None
 
     def list_topics(self) -> List[Dict]:
-        """List topics."""
+        """List topics (only active ones)."""
         c = self.conn.cursor()
         c.execute('''
             SELECT t.*,
@@ -135,6 +117,7 @@ class TopicStore(StoreComponent):
                    COALESCE(s.conversation_count, 0) as conversation_count
             FROM topics t
             LEFT JOIN topic_token_stats s ON t.topic_id = s.topic_id
+            WHERE t.is_active = 1
             ORDER BY t.last_update_stamp DESC
         ''')
         rows = c.fetchall()

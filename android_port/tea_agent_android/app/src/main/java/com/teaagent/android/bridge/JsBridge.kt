@@ -136,8 +136,26 @@ class JsBridge(
     }
 
     @JavascriptInterface
+    fun topicRename(jsonArgs: String) {
+        try {
+            val args = JSONObject(jsonArgs)
+            val topicId = args.getString("topic_id")
+            val newTitle = args.getString("title")
+            val topic = topicDao.getById(topicId) ?: return
+            topicDao.update(topic.copy(title = newTitle, updatedAt = System.currentTimeMillis()))
+        } catch (e: Exception) {
+            Log.e(TAG, "topicRename error", e)
+        }
+    }
+
+    @JavascriptInterface
     fun topicDelete(topicId: String) {
-        messageDao.deleteByTopic(topicId); topicDao.delete(topicId)
+        topicDao.delete(topicId) // 软删除：标记 is_dead=1
+    }
+
+    @JavascriptInterface
+    fun topicHardDelete(topicId: String) {
+        messageDao.deleteByTopic(topicId); topicDao.hardDelete(topicId)
     }
 
     @JavascriptInterface

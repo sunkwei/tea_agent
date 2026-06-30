@@ -8,7 +8,8 @@ data class Topic(
     val id: String,          // UUID
     val title: String,
     val createdAt: Long,     // epoch millis
-    val updatedAt: Long
+    val updatedAt: Long,
+    val isDead: Boolean = false   // false=活跃, true=已标记死亡（不显示）
 )
 
 data class Message(

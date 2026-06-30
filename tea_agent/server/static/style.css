@@ -254,11 +254,8 @@ body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Input */
-/* Config Switcher — compact select */
+/* Config Switcher — in toolbar */
 #config-switcher {
-    padding: 4px 16px;
-    border-top: 1px solid var(--border);
-    background: var(--surface);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -509,3 +506,43 @@ body {
     pointer-events: none;
 }
 #toast.show { opacity: 1; transform: translateY(0); }
+
+/* Max Iter 确认弹窗 */
+.max-iter-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+    animation: maxIterFadeIn .25s ease;
+}
+@keyframes maxIterFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+.max-iter-overlay .mi-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 32px;
+    min-width: 380px;
+    max-width: 440px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    text-align: center;
+    animation: maxIterSlideUp .3s ease;
+}
+@keyframes maxIterSlideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.max-iter-overlay .mi-icon { font-size: 48px; margin-bottom: 12px; }
+.max-iter-overlay .mi-title { font-size: 18px; margin-bottom: 8px; color: var(--text); }
+.max-iter-overlay .mi-desc { font-size: 14px; color: var(--text-dim); margin-bottom: 20px; line-height: 1.5; }
+.max-iter-overlay .mi-desc strong { color: var(--primary); }
+.max-iter-overlay .mi-actions { display: flex; gap: 12px; justify-content: center; }
+.max-iter-overlay .mi-actions .btn { padding: 10px 28px; font-size: 14px; }

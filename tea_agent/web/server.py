@@ -7,6 +7,9 @@ from typing import Optional
 
 logger = logging.getLogger("web")
 
+# 全局：max_iter 确认请求存储
+_max_iter_pending = {}  # type: dict[str, dict]
+
 try:
     from starlette.applications import Starlette
     from starlette.responses import HTMLResponse, JSONResponse, StreamingResponse, FileResponse
@@ -93,8 +96,14 @@ class WebAgent:
 
         def status_cb(status_msg: str):
             if status_msg.startswith("!MAX_ITER:"):
-                remaining = status_msg.split(":", 2)[1] if ":" in status_msg else "?"
-                _put({"type": "status", "text": f"已达最大轮次，自动续命...（剩余 {remaining} 轮）"})
+                # 生成唯一确认ID，存储session引用，供前端确认后继续/终止
+                import uuid as _uuid_mod
+                confirm_id = _uuid_mod.uuid4().hex[:12]
+                _max_iter_pending[confirm_id] = {
+                    "session": sess,
+                    "timestamp": time.time(),
+                }
+                _put({"type": "max_iter_confirm", "confirm_id": confirm_id, "text": status_msg})
             elif status_msg.startswith("⏳"):
                 pass
             else:
@@ -233,18 +242,40 @@ class WebAgent:
         )
 
     def switch_config(self, config_path: str):
-        """Load a full config file and switch both main and cheap models."""
-        from tea_agent.config import load_config
+        """Load a full config file and switch all configuration items.
+
+        Previously only updated main_model and cheap_model API params,
+        missing temperature, max_tokens, top_p, embedding, paths,
+        max_history, max_iterations, keep_turns, etc.
+        Now replaces the entire _cfg object and re-initializes the session.
+        """
+        from tea_agent.config import load_config, set_active_config_path
         new_cfg = load_config(config_path)
         if not new_cfg.main_model.is_configured:
             raise ValueError(f"配置文件 {config_path} 的 main_model 配置不完整")
-        cm = new_cfg.main_model
-        cc = new_cfg.cheap_model
-        self.switch_model(
-            cm.api_key, cm.api_url, cm.model_name,
-            cheap_api_key=(cc.api_key or "") if cc else "",
-            cheap_api_url=(cc.api_url or "") if cc else "",
-            cheap_model_name=(cc.model_name or "") if cc else "",
+
+        topic_id = self.agent.current_topic_id
+
+        with self._lock:
+            if self.agent.sess:
+                self.agent.sess.close()
+
+            # Replace entire config object (not just model params)
+            self.agent._cfg = new_cfg
+            self.agent._config_path = config_path
+            set_active_config_path(config_path)
+
+            # Re-initialize session with new config
+            self.agent._init_session()
+
+            if topic_id:
+                self.agent.current_topic_id = topic_id
+                self.agent.load_topic_history(topic_id)
+
+        logger.info(
+            f"配置切换: {Path(config_path).name} | "
+            f"主模型: {new_cfg.main_model.model_name}"
+            + (f" | 摘要: {new_cfg.cheap_model.model_name}" if new_cfg.cheap_model.model_name else "")
         )
 
     # ── 配置文件管理 ──
@@ -440,6 +471,30 @@ async def handle_chat(request):
                 break
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+async def handle_chat_continue(request):
+    """POST /api/chat/continue — 用户确认 max_iter 后继续或终止"""
+    body = await request.json()
+    confirm_id = body.get("confirm_id", "")
+    decision = body.get("continue", True)
+
+    if not confirm_id:
+        return JSONResponse({"ok": False, "error": "confirm_id 不能为空"}, status_code=400)
+
+    pending = _max_iter_pending.pop(confirm_id, None)
+    if not pending:
+        return JSONResponse({"ok": False, "error": "确认请求已过期或不存在"}, status_code=404)
+
+    session = pending["session"]
+    try:
+        session._continue_after_max = decision
+        session._max_iter_wait.set()
+        logger.info(f"用户确认 max_iter: continue={decision}")
+        return JSONResponse({"ok": True, "continue": decision})
+    except Exception as e:
+        logger.exception(f"处理 max_iter 确认失败: {e}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
 async def handle_new_topic(request):
@@ -660,6 +715,7 @@ def create_app(config_path: Optional[str] = None):
     routes = [
         Route("/", endpoint=handle_root),
         Route("/api/chat", endpoint=handle_chat, methods=["POST"]),
+        Route("/api/chat/continue", endpoint=handle_chat_continue, methods=["POST"]),
         Route("/api/new_topic", endpoint=handle_new_topic, methods=["POST"]),
         Route("/api/sessions", endpoint=handle_sessions),
         Route("/api/topic/{topic_id:str}/conversations", endpoint=handle_topic_conversations),

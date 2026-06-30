@@ -26,11 +26,10 @@
 <div id="toolbar">
 <span id="topic-title">欢迎使用 Tea Agent</span>
 <div class="toolbar-actions">
-<button class="btn btn-ghost btn-sm" onclick="showSearch()">🔍 搜索</button>
-<button class="btn btn-ghost btn-sm" onclick="showMemory()">🧠 记忆</button>
-<button class="btn btn-ghost btn-sm" onclick="showScheduler()">📋 任务</button>
-<button class="btn btn-ghost btn-sm" onclick="showExport()">📄 导出</button>
-<button class="btn btn-ghost btn-sm" onclick="clearChat()">🗑 清空</button>
+<div id="config-switcher">
+<label for="cs-select" class="cs-label">⚡ 配置</label>
+<select id="cs-select" onchange="switchConfig(this.value)"><option value="">加载中...</option></select>
+</div>
 <button class="btn btn-ghost btn-sm" id="theme-btn" onclick="toggleTheme()">🌓</button>
 </div>
 </div>
@@ -43,10 +42,6 @@
 </div>
 <div id="vsplitter"></div>
 <div id="input-row" style="gap:6px">
-<div id="config-switcher">
-<label for="cs-select" class="cs-label">⚡ 配置</label>
-<select id="cs-select" onchange="switchConfig(this.value)"><option value="">加载中...</option></select>
-</div>
 <div id="image-upload-area">
 <button id="image-upload-btn" class="btn btn-ghost btn-sm" onclick="triggerImageUpload()" title="上传图片">🖼️</button>
 <input type="file" id="image-input" accept="image/*" multiple style="display:none" onchange="handleImageSelect(event)">

@@ -20,7 +20,7 @@ class AppDatabase(context: Context) :
 
     companion object {
         const val DB_NAME = "tea_agent.db"
-        const val DB_VERSION = 1
+        const val DB_VERSION = 2
 
         const val TABLE_TOPICS = "topics"
         const val TABLE_MESSAGES = "messages"
@@ -35,7 +35,8 @@ class AppDatabase(context: Context) :
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
+                updated_at INTEGER NOT NULL,
+                is_dead INTEGER NOT NULL DEFAULT 0
             )
         """.trimIndent())
 
@@ -93,6 +94,8 @@ class AppDatabase(context: Context) :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // v1 → future: 迁移逻辑
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE $TABLE_TOPICS ADD COLUMN is_dead INTEGER NOT NULL DEFAULT 0")
+        }
     }
 }

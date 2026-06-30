@@ -50,7 +50,7 @@ if __name__ == "__main__":
     from tea_agent._gui._tray import TrayManager
     from tea_agent._gui._images import ImageHandler
     from tea_agent._gui._renderer import ChatRenderer
-    from tea_agent.config import load_config, get_config, save_config, ModelConfig
+    from tea_agent.config import load_config, get_config, save_config, ModelConfig, set_active_config_path
 else:
     from .onlinesession import OnlineToolSession
     from .store import Storage
@@ -1181,6 +1181,8 @@ class TkGUI(Agent):
 
             # 更新配置
             self._cfg = new_cfg
+            self._config_path = config_path  # 同步更新，确保 GUI 下拉框标记正确
+            set_active_config_path(config_path)  # 更新全局活跃配置路径
 
             # 重新初始化会话
             self._init_session()
@@ -1221,14 +1223,25 @@ class TkGUI(Agent):
         # 仅用文件名作为显示文本，一行一个配置
         values = [cfg["filename"] for cfg in configs]
         self.config_combo["values"] = values
-        # 标记当前配置
+        # 标记当前配置（规范化路径比较，避免 \ vs / 差异）
         current_path = getattr(self, '_config_path', None)
         if current_path:
+            norm_current = str(Path(current_path)).lower()
             for i, cfg in enumerate(configs):
-                if cfg["path"] == current_path:
+                if str(Path(cfg["path"])).lower() == norm_current:
                     if i < len(values):
                         self._config_var.set(values[i])
                     break
+            else:
+                # 退而求其次：仅比较文件名
+                current_name = Path(current_path).name.lower()
+                for i, cfg in enumerate(configs):
+                    if cfg["filename"].lower() == current_name:
+                        if i < len(values):
+                            self._config_var.set(values[i])
+                        break
+                else:
+                    self._config_var.set("")
         else:
             self._config_var.set("")
         # 如果没有配置，提示

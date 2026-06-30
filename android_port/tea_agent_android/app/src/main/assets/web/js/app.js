@@ -214,24 +214,82 @@
         topicList.innerHTML = topics.map(function(t) {
             var cls = t.id === currentTopicId ? 'topic-item active' : 'topic-item';
             return '<div class="' + cls + '" data-id="' + t.id + '">' +
-                '<span>' + escHtml(t.title) + '</span>' +
-                '<button class="del-btn" data-id="' + t.id + '">✕</button>' +
-                '</div>';
+                '<span class="topic-title">' + escHtml(t.title) + '</span>' +
+                '<div class="topic-actions">' +
+                '<button class="topic-menu-btn" data-id="' + t.id + '">⋯</button>' +
+                '<div class="topic-dropdown" data-id="' + t.id + '">' +
+                '<div class="dropdown-item" data-action="rename">✏️ 重命名</div>' +
+                '<div class="dropdown-item" data-action="delete">🗑️ 删除</div>' +
+                '</div></div></div>';
         }).join('');
 
+        // 点击主题标题 → 选择主题
         topicList.querySelectorAll('.topic-item').forEach(function(el) {
             el.addEventListener('click', function(e) {
-                if (e.target.classList.contains('del-btn')) {
-                    var tid = e.target.dataset.id;
-                    if (confirm('删除此对话？')) {
-                        TeaBridge.topicDelete(tid);
-                        if (tid === currentTopicId) { currentTopicId = ''; chatMsgs.innerHTML = ''; }
-                        loadTopics();
-                    }
-                    return;
-                }
+                // 如果点击的是按钮或下拉菜单内部，不触发选择
+                if (e.target.closest('.topic-actions')) return;
                 selectTopic(this.dataset.id);
             });
+        });
+
+        // 点击 "⋯" 按钮 → 切换下拉菜单
+        topicList.querySelectorAll('.topic-menu-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var id = this.dataset.id;
+                // 关闭其他所有下拉
+                document.querySelectorAll('.topic-dropdown.open').forEach(function(d) {
+                    if (d.dataset.id !== id) d.classList.remove('open');
+                });
+                var dd = this.nextElementSibling;
+                dd.classList.toggle('open');
+            });
+        });
+
+        // 下拉菜单项点击
+        topicList.querySelectorAll('.dropdown-item').forEach(function(item) {
+            item.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var action = this.dataset.action;
+                var id = this.closest('.topic-dropdown').dataset.id;
+                // 关闭下拉
+                this.closest('.topic-dropdown').classList.remove('open');
+
+                if (action === 'rename') {
+                    var topic = topics.find(function(t){ return t.id === id; });
+                    var oldTitle = topic ? topic.title : '';
+                    var newTitle = prompt('请输入新标题：', oldTitle);
+                    if (newTitle && newTitle.trim() && newTitle !== oldTitle) {
+                        // 加 ※ 前缀表示手动标记主题（保持主题，不被自动摘要覆盖）
+                        var finalTitle = newTitle.trim();
+                        if (!finalTitle.startsWith('※')) finalTitle = '※' + finalTitle;
+                        TeaBridge.topicRename(id, finalTitle);
+                        if (id === currentTopicId) {
+                            topicTitle.textContent = finalTitle;
+                        }
+                        loadTopics();
+                    }
+                } else if (action === 'delete') {
+                    if (confirm('确定删除此对话？')) {
+                        TeaBridge.topicDelete(id);
+                        if (id === currentTopicId) {
+                            currentTopicId = '';
+                            chatMsgs.innerHTML = '';
+                            topicTitle.textContent = '新对话';
+                        }
+                        loadTopics();
+                    }
+                }
+            });
+        });
+
+        // 点击页面空白处关闭所有下拉菜单
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.topic-actions')) {
+                document.querySelectorAll('.topic-dropdown.open').forEach(function(d) {
+                    d.classList.remove('open');
+                });
+            }
         });
     }
 

@@ -6,14 +6,14 @@ logger = logging.getLogger("toolkit")
 
 def toolkit_get_config_path() -> dict:
     """
-    获取当前 Agent 正在使用的配置文件路径。
+    获取当前全局活跃的配置文件路径。
     
-    读取 tea_agent.config 模块的 _last_config_path 变量，
-    该变量在 load_config(config_path) 被调用时设置。
+    优先读取 tea_agent.config.get_active_config_path()（GUI/Web/CLI 共享的全局变量），
+    回退到 _last_config_path。
     
     Returns:
         dict: {"config_path": str|None, "resolved_path": str|None, "note": str}
-            - config_path: 原始传入的路径（可能为 None）
+            - config_path: 当前活跃的配置文件路径
             - resolved_path: 实际解析后加载的 YAML 文件路径
             - note: 说明信息
     """
@@ -26,43 +26,49 @@ def toolkit_get_config_path() -> dict:
     try:
         if 'tea_agent.config' in sys.modules:
             config_mod = sys.modules['tea_agent.config']
+            # 优先读取全局活跃配置路径（GUI/Web/CLI 共享）
+            active_path = getattr(config_mod, 'get_active_config_path', lambda: None)()
             last_path = getattr(config_mod, '_last_config_path', None)
             cfg = getattr(config_mod, '_config_cache', None)
             
+            resolved = active_path or last_path
+            
             result = {
-                "config_path": last_path,
-                "note": "从已加载的 tea_agent.config 模块读取"
+                "config_path": resolved,
+                "resolved_path": resolved,
+                "note": "从全局活跃配置路径读取" if active_path else "从 _last_config_path 读取"
             }
             
-            if last_path is None and cfg is not None:
+            if resolved is None and cfg is not None:
                 default_path = str(Path.home() / ".tea_agent" / "config.yaml")
                 fallback = str(Path(__file__).parent / "config.yaml") if hasattr(config_mod, '__file__') and config_mod.__file__ else ""
                 
                 if os.path.isfile(default_path):
                     result["resolved_path"] = default_path
-                    result["note"] += "，回退到 ~/.tea_agent/config.yaml"
+                    result["note"] = "回退到 ~/.tea_agent/config.yaml"
                 elif fallback and os.path.isfile(fallback):
                     result["resolved_path"] = fallback
-                    result["note"] += "，回退到项目默认路径"
-            else:
-                result["resolved_path"] = last_path
+                    result["note"] = "回退到项目默认路径"
             
             return result
         else:
             sys.path.insert(0, os.getcwd())
             import tea_agent.config
+            active_path = getattr(tea_agent.config, 'get_active_config_path', lambda: None)()
             last_path = getattr(tea_agent.config, '_last_config_path', None)
+            resolved = active_path or last_path
             
             result = {
-                "config_path": last_path,
-                "note": "新导入 tea_agent.config 模块读取"
+                "config_path": resolved,
+                "resolved_path": resolved,
+                "note": "从全局活跃配置路径读取" if active_path else "从 _last_config_path 读取"
             }
             
-            if last_path is None:
+            if resolved is None:
                 default_path = str(Path.home() / ".tea_agent" / "config.yaml")
                 if os.path.isfile(default_path):
                     result["resolved_path"] = default_path
-                    result["note"] += "，回退到默认路径"
+                    result["note"] = "回退到默认路径"
             
             return result
     except Exception as e:

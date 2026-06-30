@@ -281,6 +281,19 @@ class AgentConfig:
         return {key: getattr(self, key) for key in self._RUNTIME_CONFIG_KEYS if hasattr(self, key)}
 
 _last_config_path = None
+
+# ── 全局活跃配置路径（跨 GUI/Web/CLI 共享） ──
+_active_config_path: Optional[str] = None
+
+def set_active_config_path(config_path: str) -> None:
+    """设置全局活跃配置路径（GUI/Web 切换配置时调用）。"""
+    global _active_config_path
+    _active_config_path = os.path.abspath(config_path)
+
+def get_active_config_path() -> Optional[str]:
+    """获取全局活跃配置路径。优先返回此值，None 时回退到 _last_config_path。"""
+    return _active_config_path or _last_config_path
+
 def load_config(config_path: Optional[str] = None) -> AgentConfig:
     """
     加载配置。优先读取 $HOME/.tea_agent/config.yaml，不存在时回退到 tea_agent/config.yaml。
@@ -385,6 +398,10 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
 
     # 更新全局缓存，确保 get_config() 返回最新配置
     _config_cache = cfg
+    # 同步更新全局活跃配置路径（如果传入了具体路径）
+    if yaml_path:
+        global _active_config_path
+        _active_config_path = os.path.abspath(yaml_path)
     return cfg
 
 def ensure_config_dir() -> Path:

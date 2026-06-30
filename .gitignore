@@ -21,3 +21,9 @@ local.properties
 
 *.log
 .tea_agent_run/
+
+# build / test artifacts
+build_mini_dist/
+uploads/
+test_concurrent_stream.py
+test_config_switch.py

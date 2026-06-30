@@ -160,6 +160,29 @@ API:  /v1/chat/completions（OpenAI 兼容）
       /v1/export/pdf（PDF 导出）
 ```
 
+**并发流式架构（v0.10.0+）：**
+
+```
+请求 A ─→ create_session() → OnlineToolSession A 🔓（独立配置 X）
+请求 B ─→ create_session() → OnlineToolSession B 🔓（独立配置 Y）
+请求 C ─→ create_session() → OnlineToolSession C 🔓（独立配置 Z）
+
+共享资源: Toolkit（只读）+ Storage（线程安全）
+流式操作: 每请求独立 Session，无需全局锁，真正并发
+非流式操作: 共享 Agent + 锁（管理/配置类接口）
+```
+
+**指定配置文件** — 流式请求可通过 `config_path` 参数使用不同配置：
+
+```bash
+# Web UI 自动发送当前选中配置；API 可手动指定
+curl -N -X POST http://127.0.0.1:8081/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Hello"}],"stream":true,"config_path":"/home/user/.tea_agent/config_prod.yaml"}'
+```
+
+不同 Web 实例可使用不同配置文件，各自独立运行不同模型。
+
 ---
 
 ### 4. REST API Server (`python -m tea_agent.server`)
@@ -178,7 +201,7 @@ python -m tea_agent.server --port 8081 --host 0.0.0.0
 | 方法 | 路由 | 说明 |
 |------|------|------|
 | `GET` | `/health` | 健康检查 |
-| `POST` | `/v1/chat/completions` | OpenAI 兼容聊天（支持 stream） |
+| `POST` | `/v1/chat/completions` | OpenAI 兼容聊天（支持 stream、config_path） |
 | `GET` | `/v1/models` | 当前模型信息 |
 | `GET` | `/v1/tools` | 所有可用工具列表 |
 | `POST` | `/v1/tools/{name}/run` | 直接调用指定工具 |
@@ -815,6 +838,51 @@ list       → 列出所有技能模式
 | 🛠️ 其他 | `toolkit_question`, `toolkit_stream_save`, `toolkit_set_topic_title`, `toolkit_self_report`, `toolkit_comment`, `toolkit_toggle_reasoning`, `toolkit_get_config_path`, `toolkit_get_models`, `toolkit_list_provider_models`, `toolkit_ip_location_my`, `toolkit_custom_commands`, `toolkit_scheduler_storage`, `toolkit_mode` |
 
 > 完整工具列表见 [`docs/TOOLS.md`](docs/TOOLS.md)（每小时自动更新）
+
+---
+
+## ⚔️ Multi-Agent 辩论赛 Demo
+
+`demo/multi_agent/` — 双 AI Agent 对抗辩论，50 轮实时交替。
+
+**快速启动：**
+```bash
+python demo/multi_agent/server.py --port 8083
+# 浏览器打开 http://127.0.0.1:8083
+```
+
+**功能特性：**
+- 🔵🔴 左右分屏：甲乙双方各持不同配置文件、不同模型
+- ✍️ 甲方先开篇立论 → 乙方反驳 → 甲方回击 → ... 共 50 轮
+- 📡 SSE 实时流式推送每轮发言
+- 📊 进度条 + 打字动画 + 双方面板独立滚动
+- 🛑 支持中途停止
+- ⚙️ 双方独立选择配置文件（下拉列表自动发现 `~/.tea_agent/*.yaml`）
+
+**辩论流程：**
+```
+第 1 轮  → 🔵 甲方 开篇立论
+第 2 轮  → 🔴 乙方 针对甲方辩论
+第 3 轮  → 🔵 甲方 回击乙方
+   ...
+第 50 轮 → 🔴 乙方 最终反驳
+```
+
+```
+┌────────────────────┬────────────────────┐
+│    🔵 甲方          │    🔴 乙方          │
+│  config_prod.yaml   │  config_local.yaml │
+│    GPT-4o           │    Qwen 2.5        │
+├────────────────────┼────────────────────┤
+│ 第1轮: 开篇立论      │                    │
+│        ↓            │ 第2轮: 反驳         │
+│ 第3轮: 回击          │        ↓           │
+│        ↓            │ 第4轮: 再次反驳     │
+│       ...50轮       │       ...50轮      │
+└────────────────────┴────────────────────┘
+```
+
+> 技术实现：复用 `server.py` 中的 `_create_session_from_cfg()` + `_load_config_cached()`，每个辩论方拥有独立的 `OnlineToolSession`，完全隔离。
 
 ---
 

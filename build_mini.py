@@ -3,9 +3,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 
-CORE_TOP = ["__init__.py","agent.py","basesession.py","litesession.py",
-    "onlinesession.py","session_pipeline.py","session_memory_component.py",
-    "session_tool_component.py","session_ref.py",
+CORE_TOP = ["__init__.py","agent.py","agent_pipeline.py","basesession.py",
+    "litesession.py","onlinesession.py","session_pipeline.py",
+    "session_memory_component.py","session_tool_component.py","session_ref.py",
     "config.py","providers.py","logging_setup.py",
     "tlk.py","auto_fix.py","scheduler_storage.py","memory.py",
     "reflection.py","prompt_manager.py","project_memory.py",

@@ -70,6 +70,15 @@ def l2_to_l3_summary(agent, topic_id: str, overflow_items: list) -> tuple:
         return "", _empty_usage()
 
 
+# 尝试导入 GUI 主题摘要（精简版可能没有 _gui 模块）
+try:
+    from tea_agent._gui._topic_summary import _generate_topic_summary
+    _HAVE_GUI_TOPIC_SUMMARY = True
+except ImportError:
+    _HAVE_GUI_TOPIC_SUMMARY = False
+    logger.debug("tea_agent._gui._topic_summary 不可用，自动主题摘要将被跳过")
+
+
 def auto_summary(agent, topic_id: str) -> tuple:
     """自动生成主题摘要.
     
@@ -80,6 +89,8 @@ def auto_summary(agent, topic_id: str) -> tuple:
     Returns:
         (summary: Optional[str], usage: dict)
     """
+    if not _HAVE_GUI_TOPIC_SUMMARY:
+        return None, _empty_usage()
     tp = agent._db.get_topic(topic_id)
     if tp and (tp.get("title") or "").startswith("‛"):
         return None, _empty_usage()
@@ -88,7 +99,6 @@ def auto_summary(agent, topic_id: str) -> tuple:
         return None, _empty_usage()
     try:
         cli, mdl = agent._sess._get_summarize_client()
-        from tea_agent._gui._topic_summary import _generate_topic_summary
         summary, usage = _generate_topic_summary(client=cli, model=mdl, conversations=recent)
         if summary:
             agent._db.update_topic_title(topic_id, summary)

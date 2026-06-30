@@ -650,7 +650,20 @@ async def handle_list_configs(request):
     """列出 ~/.tea_agent/ 下所有配置文件的模型信息"""
     agent = get_agent()
     configs = agent.list_config_files()
-    return JSONResponse({"configs": configs, "count": len(configs)})
+    active_config_path = agent.agent._config_path or ""
+    # 如果活跃配置路径存在，提取文件名
+    active_config_filename = ""
+    if active_config_path:
+        try:
+            active_config_filename = Path(active_config_path).name
+        except Exception:
+            pass
+    return JSONResponse({
+        "configs": configs,
+        "count": len(configs),
+        "active_config_path": active_config_path,
+        "active_config_filename": active_config_filename,
+    })
 
 
 async def handle_create_config(request):

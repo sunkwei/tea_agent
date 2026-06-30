@@ -682,6 +682,7 @@ window.applyConfig = async function() {
             $('settings-status').innerHTML = '<div class="status-msg success">\u2713 \u5df2\u5e94\u7528: ' + esc(d.model) + '</div>';
             // Also save runtime params
             saveRuntimeParams();
+            checkVisionSupport();
             setTimeout(() => hide('modal-settings'), 1500);
         } else {
             $('settings-status').innerHTML = '<div class="status-msg error">' + esc(d.error || '\u5931\u8d25') + '</div>';
@@ -854,6 +855,10 @@ async function loadConfigSwitcher() {
         if (!r.ok) throw new Error(r.status);
         const d = await r.json();
         const configs = d.configs || [];
+        // 使用服务器返回的活跃配置路径设置默认选中项
+        if (d.active_config_path) {
+            _configCurrentPath = d.active_config_path.replace(/\\/g, '/');
+        }
         let html = '<option value="">未选择</option>';
         let found = false;
         configs.forEach(function(c) {
@@ -886,6 +891,7 @@ window.switchConfig = async function(path) {
         if (d.ok) {
             _configCurrentPath = path.replace(/\\/g, '/');
             toast('✓ 已切换到: ' + (path.split('/').pop() || path.split('\\').pop()), 'success');
+            checkVisionSupport();
         } else {
             toast('✗ 切换失败: ' + (d.error || '未知错误'), 'error');
         }
@@ -984,9 +990,154 @@ window.showMaxIterConfirm = function(confirmId, text) {
     });
 };
 
+// ================================================================
+//  Screenshot Region Capture (full-screen overlay + drag select)
+// ================================================================
+
+let _screenshotOverlay = null;
+let _screenshotRect = null;
+let _screenshotStartX = 0;
+let _screenshotStartY = 0;
+let _isDragging = false;
+
+/** Check vision support from config, show/hide screenshot button */
+async function checkVisionSupport() {
+    const btn = document.getElementById('screenshot-btn');
+    if (!btn) return;
+    try {
+        const r = await fetch('/api/config');
+        if (!r.ok) { btn.style.display = 'none'; return; }
+        const cfg = await r.json();
+        const supportsVision = cfg.options && cfg.options.supports_vision === true;
+        btn.style.display = supportsVision ? '' : 'none';
+    } catch (e) {
+        btn.style.display = 'none';
+    }
+}
+
+window.startScreenshot = function() {
+    if (_screenshotOverlay) return;
+
+    // 创建全屏遮罩
+    const overlay = document.createElement('div');
+    overlay.id = 'screenshot-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:10000;cursor:crosshair;';
+
+    // 选区矩形
+    const rect = document.createElement('div');
+    rect.id = 'screenshot-selection';
+    rect.style.cssText = 'position:fixed;border:2px solid #00aaff;background:rgba(0,170,255,0.1);display:none;pointer-events:none;z-index:10001;';
+    overlay.appendChild(rect);
+
+    // 提示文字
+    const hint = document.createElement('div');
+    hint.id = 'screenshot-hint';
+    hint.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:#fff;padding:8px 20px;border-radius:8px;font-size:14px;z-index:10002;pointer-events:none;';
+    hint.textContent = '按住鼠标左键拖动选择截图区域，松开完成截图 · ESC 取消';
+    overlay.appendChild(hint);
+
+    document.body.appendChild(overlay);
+    _screenshotOverlay = overlay;
+    _isDragging = false;
+
+    // 鼠标事件
+    overlay.addEventListener('mousedown', function(e) {
+        // 使用 screenX/screenY 作为屏幕坐标
+        _screenshotStartX = e.screenX;
+        _screenshotStartY = e.screenY;
+        _isDragging = true;
+        _screenshotRect = rect;
+        rect.style.left = e.screenX + 'px';
+        rect.style.top = e.screenY + 'px';
+        rect.style.width = '0px';
+        rect.style.height = '0px';
+        rect.style.display = 'block';
+    });
+
+    document.addEventListener('mousemove', _screenshotOnMove);
+    document.addEventListener('mouseup', _screenshotOnUp);
+
+    // ESC 取消
+    overlay.addEventListener('keydown', function(e) {});
+    document.addEventListener('keydown', _screenshotOnKey);
+};
+
+function _screenshotOnMove(e) {
+    if (!_isDragging || !_screenshotRect) return;
+    const x = Math.min(_screenshotStartX, e.screenX);
+    const y = Math.min(_screenshotStartY, e.screenY);
+    const w = Math.abs(e.screenX - _screenshotStartX);
+    const h = Math.abs(e.screenY - _screenshotStartY);
+    _screenshotRect.style.left = x + 'px';
+    _screenshotRect.style.top = y + 'px';
+    _screenshotRect.style.width = w + 'px';
+    _screenshotRect.style.height = h + 'px';
+}
+
+async function _screenshotOnUp(e) {
+    if (!_isDragging) return;
+    _isDragging = false;
+    document.removeEventListener('mousemove', _screenshotOnMove);
+    document.removeEventListener('mouseup', _screenshotOnUp);
+    document.removeEventListener('keydown', _screenshotOnKey);
+
+    const x = Math.min(_screenshotStartX, e.screenX);
+    const y = Math.min(_screenshotStartY, e.screenY);
+    const w = Math.abs(e.screenX - _screenshotStartX);
+    const h = Math.abs(e.screenY - _screenshotStartY);
+
+    const overlay = _screenshotOverlay;
+    _screenshotOverlay = null;
+    _screenshotRect = null;
+
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+
+    // 最小尺寸过滤
+    if (w < 10 || h < 10) {
+        toast('选区太小，请重新选择', 'error');
+        return;
+    }
+
+    // 更新提示（截图进行中）
+    toast('正在截图...', 'info');
+
+    try {
+        const r = await fetch('/api/screenshot/region', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) }),
+        });
+        const data = await r.json();
+        if (data.ok && data.image_base64) {
+            pendingImages.push(data.image_base64);
+            updateImagePreview();
+            toast('✓ 截图已添加', 'success');
+        } else {
+            toast('截图失败: ' + (data.error || '未知错误'), 'error');
+        }
+    } catch (err) {
+        toast('截图请求失败: ' + err.message, 'error');
+    }
+}
+
+function _screenshotOnKey(e) {
+    if (e.key === 'Escape') {
+        _isDragging = false;
+        document.removeEventListener('mousemove', _screenshotOnMove);
+        document.removeEventListener('mouseup', _screenshotOnUp);
+        document.removeEventListener('keydown', _screenshotOnKey);
+        if (_screenshotOverlay && _screenshotOverlay.parentNode) {
+            _screenshotOverlay.parentNode.removeChild(_screenshotOverlay);
+        }
+        _screenshotOverlay = null;
+        _screenshotRect = null;
+    }
+}
+
 // -- Init --
 refreshTopics();
 loadConfigSwitcher();
+checkVisionSupport();
 $('chat-input').focus();
 // Init splitters after DOM ready
 initSplitter('sidebar-splitter', 'sidebar', 'h');

@@ -139,6 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bindEvents();
     // 初始化
     loadConfig();
+    loadHeaderConfigList(); // 加载头部配置下拉框
     setupAutoResize();
     messageInput.focus();
     
@@ -357,6 +358,94 @@ async function loadConfig() {
             modelInfo.style.cursor = 'pointer';
             modelInfo.onclick = () => loadConfig();
         }
+    }
+}
+
+// ── 头部配置下拉框加载 ──
+async function loadHeaderConfigList() {
+    const headerConfigSelect = document.getElementById('header-config-select');
+    if (!headerConfigSelect) return;
+    
+    try {
+        const res = await fetchWithTimeout('/api/configs', {}, 8000);
+        const data = await res.json();
+        const activeFilename = data.active_config_filename || '';
+        
+        headerConfigSelect.innerHTML = '<option value="">— 选择配置 —</option>';
+        
+        if (data.configs && data.configs.length > 0) {
+            for (const cfg of data.configs) {
+                const opt = document.createElement('option');
+                opt.value = cfg.filename;
+                let label = cfg.filename;
+                if (cfg.main_model && cfg.main_model.model_name) {
+                    label += ` [${cfg.main_model.model_name}]`;
+                }
+                if (cfg.error) {
+                    label += ` ⚠`;
+                }
+                opt.textContent = label;
+                opt.dataset.configPath = cfg.path || '';
+                headerConfigSelect.appendChild(opt);
+            }
+            
+            // 自动选中当前活跃配置
+            if (activeFilename) {
+                headerConfigSelect.value = activeFilename;
+            }
+        } else {
+            headerConfigSelect.innerHTML = '<option value="">— 暂无配置 —</option>';
+        }
+        
+        // 绑定切换事件
+        headerConfigSelect.addEventListener('change', handleHeaderConfigSwitch);
+        
+    } catch (e) {
+        console.error('加载配置列表失败:', e);
+        headerConfigSelect.innerHTML = '<option value="">— 加载失败 —</option>';
+    }
+}
+
+// ── 头部配置切换处理 ──
+async function handleHeaderConfigSwitch(e) {
+    const select = e.target;
+    const filename = select.value;
+    if (!filename) return;
+    
+    const configPath = select.selectedOptions[0]?.dataset.configPath;
+    if (!configPath) {
+        console.error('配置路径为空');
+        return;
+    }
+    
+    // 显示切换状态
+    const originalText = modelInfo.textContent;
+    modelInfo.textContent = '⏳ 切换中...';
+    
+    try {
+        const res = await fetchWithTimeout('/api/model/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ config_path: configPath }),
+        }, 15000);
+        
+        const data = await res.json();
+        if (data.ok) {
+            // 刷新模型信息
+            await loadConfig();
+            // 更新设置模态框中的配置列表（如果打开）
+            const configSelect = document.getElementById('config-select');
+            if (configSelect) {
+                await loadConfigList();
+            }
+        } else {
+            modelInfo.textContent = originalText;
+            alert(`切换失败: ${data.error || '未知错误'}`);
+        }
+    } catch (e) {
+        modelInfo.textContent = originalText;
+        console.error('配置切换失败:', e);
+        alert(`切换失败: ${e.message}`);
     }
 }
 
@@ -820,6 +909,7 @@ async function loadConfigList() {
     try {
         const res = await fetchWithTimeout('/api/configs', {}, 8000);
         const data = await res.json();
+        const activeFilename = data.active_config_filename || '';
         configSelect.innerHTML = '<option value="">— 选择配置文件 —</option>';
         if (data.configs && data.configs.length > 0) {
             for (const cfg of data.configs) {
@@ -845,6 +935,10 @@ async function loadConfigList() {
                 }
                 opt.dataset.configPath = cfg.path || '';
                 configSelect.appendChild(opt);
+            }
+            // 自动选中当前活跃配置
+            if (activeFilename) {
+                configSelect.value = activeFilename;
             }
         } else {
             configSelect.innerHTML = '<option value="">— 暂无配置文件，请新增 —</option>';

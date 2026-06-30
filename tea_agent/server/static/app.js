@@ -853,6 +853,77 @@ window.removeImage = function(idx) {
     updateImagePreview();
 };
 
+// -- Config Upload --
+// 创建一个隐藏的 file input 用于上传配置文件
+let _configUploadInput = null;
+function _ensureConfigUploadInput() {
+    if (!_configUploadInput) {
+        _configUploadInput = document.createElement('input');
+        _configUploadInput.type = 'file';
+        _configUploadInput.accept = '.yaml,.yml';
+        _configUploadInput.style.display = 'none';
+        document.body.appendChild(_configUploadInput);
+        _configUploadInput.addEventListener('change', async function(e) {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            await _doUploadConfig(file);
+            // 重置 input 以便可以再次选择同一文件
+            _configUploadInput.value = '';
+        });
+    }
+    return _configUploadInput;
+}
+
+window.uploadConfigFile = function() {
+    _ensureConfigUploadInput().click();
+};
+
+async function _doUploadConfig(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    toast('正在上传配置...', 'info');
+    try {
+        const r = await fetch('/api/config/upload', {
+            method: 'POST',
+            body: formData,
+        });
+        const d = await r.json();
+        if (d.ok) {
+            toast('✓ 配置已上传: ' + d.filename, 'success');
+            // 刷新配置组合框和配置状态
+            await loadConfigSwitcher();
+            checkConfigStatus();
+        } else {
+            toast('✗ 上传失败: ' + (d.error || '未知错误'), 'error');
+        }
+    } catch (e) {
+        toast('✗ 上传失败: ' + e.message, 'error');
+    }
+}
+
+// -- Config Status Check --
+async function checkConfigStatus() {
+    const warningEl = document.getElementById('config-warning');
+    if (!warningEl) return;
+    try {
+        const r = await fetch('/api/configs');
+        if (!r.ok) throw new Error(r.status);
+        const d = await r.json();
+        // 检查是否有有效配置
+        const anyValid = d.any_valid === true;
+        const hasActive = !!(d.active_config_path);
+        if (!anyValid && !hasActive) {
+            warningEl.style.display = 'block';
+        } else {
+            warningEl.style.display = 'none';
+        }
+    } catch (e) {
+        // 出错时隐藏警告，避免占位
+        warningEl.style.display = 'none';
+    }
+}
+
 // -- Config Switcher --
 let _configCurrentPath = '';
 
@@ -886,6 +957,8 @@ async function loadConfigSwitcher() {
         sel.innerHTML = '<option value="">❌ 加载失败</option>';
         sel.disabled = true;
     }
+    // 加载完成后检查配置状态
+    checkConfigStatus();
 }
 
 window.switchConfig = async function(path) {
@@ -910,6 +983,7 @@ window.switchConfig = async function(path) {
         toast('✗ 切换失败: ' + e.message, 'error');
     }
     await loadConfigSwitcher();
+    checkConfigStatus();
 };
 
 
@@ -1149,6 +1223,7 @@ function _screenshotOnKey(e) {
 refreshTopics();
 loadConfigSwitcher();
 checkVisionSupport();
+checkConfigStatus();
 $('chat-input').focus();
 // Init splitters after DOM ready
 initSplitter('sidebar-splitter', 'sidebar', 'h');

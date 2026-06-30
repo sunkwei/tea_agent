@@ -258,8 +258,17 @@ body {
 #config-switcher {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     flex-shrink: 0;
+}
+#config-switcher .btn-ghost.btn-sm {
+    padding: 3px 6px;
+    font-size: 14px;
+    line-height: 1;
+    border-radius: 4px;
+}
+#config-switcher .btn-ghost.btn-sm:hover {
+    background: var(--surface2);
 }
 .cs-label {
     font-size: 12px;

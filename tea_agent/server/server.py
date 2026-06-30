@@ -808,21 +808,31 @@ class APIServer:
         """Get the ~/.tea_agent/ directory path."""
         return Path.home() / ".tea_agent"
 
-    def list_config_files(self):
-        """Scan ~/.tea_agent/*.yaml and return parsed config summaries."""
+    def list_config_files(self, check_valid: bool = False):
+        """Scan ~/.tea_agent/*.yaml and return parsed config summaries.
+
+        Args:
+            check_valid: 如果 True，额外返回 any_valid 字段
+        """
         configs_dir = self._get_configs_dir()
         if not configs_dir.exists():
-            return []
+            return {"configs": [], "any_valid": False} if check_valid else []
         from tea_agent.config import load_config
         results = []
+        any_valid = False
         for fpath in sorted(configs_dir.glob("*.yaml")):
             try:
                 cfg = load_config(str(fpath))
                 main_m = cfg.main_model
                 cheap_m = cfg.cheap_model
+                # 判断配置是否有效：必须有 api_url、api_key 和 model_name
+                is_valid = main_m.is_configured
+                if is_valid:
+                    any_valid = True
                 results.append({
                     "filename": fpath.name,
                     "path": str(fpath),
+                    "is_valid": is_valid,
                     "main_model": {
                         "model_name": main_m.model_name or "",
                         "api_url": main_m.api_url or "",
@@ -844,8 +854,11 @@ class APIServer:
                 results.append({
                     "filename": fpath.name,
                     "path": str(fpath),
+                    "is_valid": False,
                     "error": str(e),
                 })
+        if check_valid:
+            return {"configs": results, "any_valid": any_valid}
         return results
 
     def create_config_file(self, filename: str,
@@ -1476,7 +1489,9 @@ async def handle_web_update_config(request):
 async def handle_web_list_configs(request):
     """GET /api/configs"""
     server = get_server()
-    configs = server.list_config_files()
+    result = server.list_config_files(check_valid=True)
+    configs = result["configs"]
+    any_valid = result["any_valid"]
     # 获取当前活跃配置路径和文件名
     active_config_path = ""
     active_config_filename = ""
@@ -1491,6 +1506,7 @@ async def handle_web_list_configs(request):
     return JSONResponse({
         "configs": configs,
         "count": len(configs),
+        "any_valid": any_valid,
         "active_config_path": active_config_path,
         "active_config_filename": active_config_filename,
     })
@@ -1620,6 +1636,89 @@ async def handle_web_model_config(request):
     return JSONResponse(result)
 
 
+async def handle_web_upload_config(request):
+    """POST /api/config/upload - upload a .yaml config file.
+
+    Accepts multipart form data with a 'file' field.
+    Saves to ~/.tea_agent/, validates, and auto-switches if valid.
+    """
+    form = await request.form()
+    file = form.get("file")
+    if not file:
+        return JSONResponse({"ok": False, "error": "请选择文件"}, status_code=400)
+
+    # 检查文件名
+    filename = file.filename or ""
+    if not filename.endswith((".yaml", ".yml")):
+        return JSONResponse({"ok": False, "error": "仅支持 .yaml / .yml 文件"}, status_code=400)
+
+    # 读取上传内容
+    content = await file.read()
+    if not content or not content.strip():
+        return JSONResponse({"ok": False, "error": "文件内容为空"}, status_code=400)
+
+    # 保存到 ~/.tea_agent/
+    server = get_server()
+    configs_dir = server._get_configs_dir()
+    configs_dir.mkdir(parents=True, exist_ok=True)
+    dest_path = configs_dir / filename
+
+    # 如果已存在同名文件，添加时间戳后缀
+    if dest_path.exists():
+        from datetime import datetime
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        name_stem = dest_path.stem
+        dest_path = configs_dir / f"{name_stem}_{stamp}.yaml"
+
+    # 写入文件
+    try:
+        if isinstance(content, bytes):
+            dest_path.write_bytes(content)
+        else:
+            dest_path.write_text(content, encoding="utf-8")
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"保存文件失败: {e}"}, status_code=500)
+
+    # 验证配置有效性
+    from tea_agent.config import load_config
+    try:
+        cfg = load_config(str(dest_path))
+    except Exception as e:
+        # 配置解析失败，删除无效文件
+        try:
+            dest_path.unlink()
+        except Exception:
+            pass
+        return JSONResponse({"ok": False, "error": f"配置解析失败: {e}"}, status_code=400)
+
+    # 检查是否包含主模型配置
+    main_m = cfg.main_model
+    if not main_m.is_configured:
+        try:
+            dest_path.unlink()
+        except Exception:
+            pass
+        return JSONResponse({
+            "ok": False,
+            "error": "配置无效：必须包含 main_model 的 api_url、api_key 和 model_name",
+        }, status_code=400)
+
+    # 自动切换到新配置
+    try:
+        switch_result = server.switch_config(str(dest_path))
+        if not switch_result.get("ok"):
+            logger.warning(f"上传后自动切换配置失败: {switch_result.get('error', '')}")
+    except Exception as e:
+        logger.warning(f"上传后自动切换配置异常: {e}")
+
+    return JSONResponse({
+        "ok": True,
+        "filename": dest_path.name,
+        "path": str(dest_path),
+        "is_valid": True,
+    })
+
+
 async def handle_web_root(request):
     """GET / - serve Web UI index.html."""
     static_dir = Path(__file__).parent / "static"
@@ -1657,6 +1756,7 @@ def create_app(api_key: Optional[str] = None,
         Route("/api/model", endpoint=handle_web_model_info),
         Route("/api/model", endpoint=handle_web_model_switch, methods=["POST"]),
         Route("/api/model/config", endpoint=handle_web_model_config, methods=["POST"]),
+        Route("/api/config/upload", endpoint=handle_web_upload_config, methods=["POST"]),
 
         # OpenAI-compatible REST API
         Route("/health", endpoint=handle_health),

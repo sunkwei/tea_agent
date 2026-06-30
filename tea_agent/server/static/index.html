@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tea Agent</title>
-<link rel="stylesheet" href="/static/style.css?v=4">
+<link rel="stylesheet" href="/static/style.css?v=5">
 </head>
 <body>
 <div id="app">
@@ -27,11 +27,17 @@
 <div id="config-switcher">
 <label for="cs-select" class="cs-label">⚡ 配置</label>
 <select id="cs-select" onchange="switchConfig(this.value)"><option value="">加载中...</option></select>
+<button class="btn btn-ghost btn-sm" onclick="uploadConfigFile()" title="上传配置文件 (.yaml)">📤</button>
 </div>
 <button class="btn btn-ghost btn-sm" id="theme-btn" onclick="toggleTheme()">🌓</button>
 </div>
 </div>
 <div id="messages">
+<div id="config-warning" style="display:none;padding:10px 16px;margin-bottom:8px;background:rgba(248,81,73,.12);border:1px solid var(--red);border-radius:8px;text-align:center;">
+<span style="font-size:16px;margin-right:6px">⚠️</span>
+<span id="config-warning-text" style="font-size:14px;color:var(--red);font-weight:600;">无有效配置</span>
+<span style="font-size:13px;color:var(--text-dim);margin-left:6px">请上传配置文件</span>
+</div>
 <div class="welcome">
 <div class="welcome-icon">☕</div>
 <h2>Tea Agent</h2>
@@ -195,6 +201,6 @@
 </div>
 </div></div>
 
-<script src="/static/app.js?v=5"></script>
+<script src="/static/app.js?v=6"></script>
 </body>
 </html>

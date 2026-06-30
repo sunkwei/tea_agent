@@ -983,7 +983,7 @@ class OnlineToolSession(BaseChatSession):
         current_sig = _get_os_signature()
 
         # 首次检查：从持久化文件加载上次签名
-        topic_id = getattr(self.context, 'current_topic_id', None)
+        topic_id = getattr(self, 'current_topic_id', None)
         if not self.context._os_info_injected and topic_id:
             self.context._os_info_injected = _load_persisted_os_sig(topic_id)
 

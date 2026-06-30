@@ -44,11 +44,16 @@ dependencies = [
 tea_agent = "tea_agent.gui:main"
 tea-agent-web = "tea_agent.server:main"
 tea-agent-api = "tea_agent.server:main"
+tea-agent-mini = "tea_agent_mini.__main__:main"
 tea-agent-acp = "tea_agent.protocol:main"
 tea-agent-cli = "tea_agent.cli:main"
 
 [project.optional-dependencies]
 web = [
+    "starlette>=0.37.0",
+    "uvicorn>=0.27.0",
+]
+mini = [
     "starlette>=0.37.0",
     "uvicorn>=0.27.0",
 ]
@@ -58,7 +63,6 @@ include-package-data = true
 
 [tool.setuptools.package-data]
 "tea_agent._gui" = ["*.png", "*.ico"]
-"tea_agent.web" = ["*.py", "static/*.html", "static/*.js", "static/*.css"]
 "tea_agent.server" = ["*.py", "static/*.html", "static/*.js", "static/*.css"]
 "tea_agent.skills" = ["**/*.md"]
 

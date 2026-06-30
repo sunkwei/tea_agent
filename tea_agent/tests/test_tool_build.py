@@ -8,7 +8,7 @@ session_tools_builder 单元测试 — 独立纯函数 filter_tools()。
 - 空 filter [] 等效于无 filter（falsy 短路），保留全部工具
 """
 
-from tea_agent.session_tool_component import filter_tools, has_tool, ESSENTIAL_TOOLS
+from tea_agent.onlinesession import filter_tools, has_tool, ESSENTIAL_TOOLS
 
 SAMPLE_TOOLS = [
     {"function": {"name": "toolkit_file", "description": "文件操作"}},

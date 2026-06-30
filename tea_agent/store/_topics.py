@@ -87,14 +87,36 @@ class TopicStore(StoreComponent):
         return self.get_drift_count(topic_id)
 
     def delete_topic(self, topic_id: str):
-        """Soft delete a topic by setting is_active to 0.
+        """Hard delete a topic and all associated data (cascade).
         
-        This hides the topic from listings but preserves all data.
+        Deletes agent_rounds, images, conversations,
+        topic_token_stats, t_conv_summary, memories, and the topic itself.
         
         Args:
             topic_id: The UUID of the topic to delete.
         """
-        self.update_topic_active(topic_id, 0)
+        c = self.conn.cursor()
+        try:
+            # 级联删除：先删孙表，再删子表，最后删主表
+            c.execute(
+                "DELETE FROM agent_rounds WHERE conversation_id IN "
+                "(SELECT id FROM conversations WHERE topic_id = ?)",
+                (topic_id,))
+            c.execute(
+                "DELETE FROM images WHERE conversation_id IN "
+                "(SELECT id FROM conversations WHERE topic_id = ?)",
+                (topic_id,))
+            c.execute("DELETE FROM conversations WHERE topic_id = ?", (topic_id,))
+            c.execute("DELETE FROM topic_token_stats WHERE topic_id = ?", (topic_id,))
+            c.execute("DELETE FROM t_conv_summary WHERE topic_id = ?", (topic_id,))
+            c.execute("DELETE FROM memories WHERE source_topic_id = ?", (topic_id,))
+            c.execute("DELETE FROM topics WHERE topic_id = ?", (topic_id,))
+            self.conn.commit()
+        except Exception:
+            self.conn.rollback()
+            raise
+        finally:
+            c.close()
 
     def get_topic(self, topic_id: str) -> Optional[Dict]:
         """Get the topic.

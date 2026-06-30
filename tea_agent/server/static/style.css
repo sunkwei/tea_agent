@@ -296,10 +296,13 @@ body {
     border-top: 1px solid var(--border);
     display: flex;
     gap: 6px;
-    align-items: center;
+    align-items: flex-end;
+    flex: none;
+    min-height: 60px;
 }
 #chat-input {
     flex: 1;
+    align-self: stretch;
     padding: 10px 12px;
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -309,7 +312,7 @@ body {
     resize: none;
     outline: none;
     font-family: inherit;
-    min-height: 44px;
+    min-height: 36px;
 }
 #chat-input:focus { border-color: var(--primary); }
 

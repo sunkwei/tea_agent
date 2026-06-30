@@ -998,7 +998,11 @@ function initSplitter(splitterId, targetId, direction) {
 
     function onMove(e) {
         const delta = (direction === 'h' ? e.clientX : e.clientY) - startPos;
-        const newSize = Math.max(100, startSize + delta);
+        // 若 target 在 splitter 之后（DOM 中），反转方向：拖向下时 target 缩小
+        const isReversed = splitter.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING;
+        const effectiveDelta = isReversed ? -delta : delta;
+        const minSize = direction === 'h' ? 100 : 60;
+        const newSize = Math.max(minSize, startSize + effectiveDelta);
         if (direction === 'h') {
             target.style.width = newSize + 'px';
             target.style.flex = 'none';
@@ -1227,6 +1231,6 @@ checkConfigStatus();
 $('chat-input').focus();
 // Init splitters after DOM ready
 initSplitter('sidebar-splitter', 'sidebar', 'h');
-initSplitter('vsplitter', 'messages', 'v');
+initSplitter('vsplitter', 'input-row', 'v');
 })();
 

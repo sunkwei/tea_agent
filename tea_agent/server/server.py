@@ -1735,6 +1735,39 @@ async def handle_web_upload_config(request):
     except Exception as e:
         logger.warning(f"上传后自动切换配置异常: {e}")
 
+    # 创建 $HOME/.tea_agent/config.yaml 符号链接指向新上传的配置
+    config_link = configs_dir / "config.yaml"
+    try:
+        # 如果已存在 config.yaml 且是符号链接，先删除
+        if config_link.exists() or config_link.is_symlink():
+            if config_link.is_symlink():
+                config_link.unlink()
+            else:
+                # 普通文件，先备份再删除
+                from datetime import datetime
+                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_path = configs_dir / f"config_{stamp}.yaml"
+                import shutil
+                shutil.move(str(config_link), str(backup_path))
+                logger.info(f"已有 config.yaml 已备份到 {backup_path}")
+        # 创建符号链接（Windows 下可能需管理员权限，fallback 到复制）
+        try:
+            if os.name == "nt":  # Windows
+                try:
+                    os.symlink(str(dest_path), str(config_link))
+                    logger.info(f"创建符号链接: {config_link} → {dest_path}")
+                except (OSError, PermissionError):
+                    import shutil
+                    shutil.copy2(str(dest_path), str(config_link))
+                    logger.info(f"符号链接失败，已复制文件到 {config_link}")
+            else:
+                os.symlink(str(dest_path), str(config_link))
+                logger.info(f"创建符号链接: {config_link} → {dest_path}")
+        except Exception as e:
+            logger.warning(f"创建 config.yaml 链接失败: {e}")
+    except Exception as e:
+        logger.warning(f"处理 config.yaml 链接时出错: {e}")
+
     return JSONResponse({
         "ok": True,
         "filename": dest_path.name,

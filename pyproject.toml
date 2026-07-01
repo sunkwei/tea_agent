@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tea_agent"
-version = "0.10.6"
+version = "0.10.7"
 description = "A self-evolving AI agent with dynamic toolkit management."
 readme = "README.md"
 license = "MIT"
@@ -52,10 +52,12 @@ tea-agent-cli = "tea_agent.cli:main"
 web = [
     "starlette>=0.37.0",
     "uvicorn>=0.27.0",
+    "python-multipart>=0.0.7",
 ]
 mini = [
     "starlette>=0.37.0",
     "uvicorn>=0.27.0",
+    "python-multipart>=0.0.7",
 ]
 
 [tool.setuptools]

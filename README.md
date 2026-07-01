@@ -1,4 +1,4 @@
-# Tea Agent v0.10.5
+# Tea Agent v0.10.7
 
 > ⚠️ **这是一个 AI 写 AI 的实验项目，自行承担责任。**
 
@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.10.5-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.10.7-blue)](https://pypi.org/project/tea-agent)
 
 Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / CLI / Web / REST API / ACP Protocol / TUI** 六种界面形态。
 
@@ -42,13 +42,147 @@ cd tea_agent
 pip install -e .
 
 # Web 界面依赖（可选）
-pip install starlette uvicorn
+pip install starlette uvicorn python-multipart
 ```
 
 Playwright 浏览器（可选，用于 JS 渲染页面抓取）：
 ```bash
 playwright install chromium
 ```
+
+---
+
+## 📦 Mini 版（tea_agent_mini）
+
+对于**嵌入式设备、资源受限环境或仅需 Web 界面**的场景，Tea Agent 提供 **Mini 版**（`tea_agent_mini`）—— 在保留核心功能的同时大幅缩减体积和依赖。
+
+### ✨ 特性对比
+
+| 能力 | Full 版 | Mini 版 |
+|------|---------|---------|
+| Agent 核心引擎 | ✅ | ✅ 完整保留 |
+| Web V2 界面（SPA） | ✅ | ✅ 完整保留 |
+| REST API Server | ✅ | ✅ 完整保留 |
+| 内存搜索 / 记忆管理 | ✅ | ✅ 完整保留 |
+| 任务调度 / PDF 导出 | ✅ | ✅ 完整保留 |
+| 配置切换 | ✅ | ✅ 完整保留 |
+| GUI 桌面界面 | ✅ | ❌ |
+| CLI / TUI 界面 | ✅ | ❌ |
+| ACP Protocol | ✅ | ❌ |
+| 文件上传配置 (Drag & Drop) | ✅ | ✅ `python-multipart` 支持 |
+| NumPy 向量操作 | ✅ | ❌ 替换为纯 Python `math+struct` |
+| Playwright (JS 渲染) | ✅ | ❌ 可选自行安装 |
+| PyAutoGUI / MSS (截图) | ✅ | ❌ 可选自行安装 |
+| TkinterWeb（富文本） | ✅ | ❌ |
+
+### 📐 打包原理
+
+`build_mini.py` 从 `tea_agent/` 源码中智能筛选文件：
+
+```
+build_mini.py 工作流程
+  │
+  ├─ 1. 复制核心模块:
+  │     ├─ 顶层 .py: agent.py, config.py, memory.py 等 20 个核心文件
+  │     ├─ session/ — 会话管理 (历史压缩/Token 裁剪)
+  │     ├─ store/   — 数据存储 (10 子模块)
+  │     ├─ toolkit/ — 排除 12 个重型工具 (见下方)
+  │     ├─ server/  — Web 服务器 (路由 + 静态资源)
+  │     ├─ multi_agent/ — 多 Agent 协作
+  │     ├─ compaction/ — 历史压缩
+  │     └─ skills/  — 技能结晶 (.md 文档)
+  │
+  ├─ 2. 排除的包和文件:
+  │     ├─ _gui/     — Tkinter 桌面 GUI
+  │     ├─ gui2/     — Web V1 旧版
+  │     ├─ protocol/ — ACP 协议
+  │     ├─ lsp/      — 代码智能
+  │     ├─ sdk/      — Python SDK
+  │     ├─ web/      — Web V1 旧版
+  │     ├─ evaluation/ — 任务评估
+  │     ├─ cli.py / tui.py / gui.py — CLI/TUI/GUI 入口
+  │     └─ demo/ / tests/ / scripts/
+  │
+  ├─ 3. 排除的重型工具 (HEAVY_TOOLS):
+  │     toolkit_js_fetch   (Playwright)
+  │     toolkit_input      (PyAutoGUI)
+  │     toolkit_screenshot (mss/PIL)
+  │     toolkit_screen_read (OCR)
+  │     toolkit_ocr        (OCR)
+  │     toolkit_lsp        (Jedi/Tree-sitter)
+  │     toolkit_browser_tab (Playwright)
+  │     toolkit_clipboard  (GUI 依赖)
+  │     toolkit_sudo_gui   (提权)
+  │     toolkit_test_gui   (GUI 测试)
+  │     toolkit_explr      (符号索引)
+  │     toolkit_pkg        (包管理)
+  │
+  ├─ 4. 去除 NumPy 依赖:
+  │     store/_vectors.py         numpy → math+struct
+  │     store/_memories.py        numpy → math+struct
+  │     store/_semantic_search.py numpy → math+struct
+  │     store/_conversations.py   numpy → math+struct
+  │
+  └─ 5. 生成独立 wheel:
+        ├─ pyproject.toml (仅 mini 依赖)
+        ├─ README.mini.md
+        └─ 打包 → tea_agent_mini-{version}-py3-none-any.whl
+```
+
+### 📦 安装
+
+```bash
+# 方法一：从 PyPI 安装（Mini 版已发布为独立包，待上架）
+pip install tea_agent_mini
+
+# 方法二：从源码构建
+git clone https://github.com/sunkwei/tea_agent
+cd tea_agent
+python build_mini.py
+
+# 构建产物位于 build_mini_dist/dist/
+pip install build_mini_dist/dist/tea_agent_mini-*.whl
+```
+
+### 🚀 使用
+
+Mini 版安装后与 Full 版的 Web 界面使用方式完全一致：
+
+```bash
+# 启动 Web V2 界面（推荐）
+python -m tea_agent.server
+
+# 或通过入口命令
+tea-agent-mini    # 等效于 python -m tea_agent_mini.__main__
+```
+
+浏览器访问 `http://127.0.0.1:8081` 即可使用完整的 Web 界面（对话、记忆管理、任务调度、搜索、PDF 导出等全部功能）。
+
+### 🧩 Mini 版依赖清单
+
+Mini 版仅依赖 **7 个核心包**，合计安装体积约 **5 MB**（Full 版约 80 MB）：
+
+```
+openai>=1.0.0           # LLM API 调用
+httpx>=0.25.0           # HTTP 客户端
+PyYAML>=6.0             # 配置文件
+requests>=2.30.0        # HTTP 请求
+starlette>=0.37.0       # Web 框架
+uvicorn>=0.27.0         # ASGI 服务器
+python-multipart>=0.0.7 # 文件上传解析
+```
+
+> 💡 Mini 版不包含 NumPy（~15 MB）、Playwright（~30 MB）、PyAutoGUI（~3 MB）等重型依赖，非常适合 **Docker 镜像、树莓派、低配 VPS、CI/CD 管道**等场景。
+
+### 📊 体积对比
+
+| 维度 | Full 版 | Mini 版 |
+|------|---------|---------|
+| 安装包大小 | ~600 KB | ~250 KB |
+| 解压后体积 | ~3 MB | ~1.2 MB |
+| 运行时依赖 | ~80 MB | ~5 MB |
+| Python 文件数 | ~420 | ~280 |
+| 工具数 | 70+ | 50+ |
 
 ---
 

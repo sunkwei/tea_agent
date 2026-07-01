@@ -22,7 +22,7 @@ HEAVY_TOOLS = [
     "toolkit_test_gui.py","toolkit_explr.py","toolkit_pkg.py"]
 
 DEPS = ["openai>=1.0.0","httpx>=0.25.0","PyYAML>=6.0","requests>=2.30.0",
-    "starlette>=0.37.0","uvicorn>=0.27.0"]
+    "starlette>=0.37.0","uvicorn>=0.27.0","python-multipart>=0.0.7"]
 def ok(path, src):
     rel = path.relative_to(src); parts = rel.parts
     if "__pycache__" in parts: return False

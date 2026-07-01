@@ -12,7 +12,7 @@ CORE_TOP = ["__init__.py","agent.py","agent_pipeline.py","basesession.py",
     "agent_background.py"]
 
 EXCLUDED_PKGS = ["_gui","gui2","protocol","lsp","sdk","scripts",
-    "evaluation","web","demo","tests"]
+    "evaluation","demo","tests"]
 EXCLUDED_TOP = ["cli.py","tui.py","gui.py","gui_dialogs.py"]
 
 HEAVY_TOOLS = [

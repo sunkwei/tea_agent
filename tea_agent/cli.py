@@ -483,30 +483,7 @@ def main():
     parser.add_argument("--no_stream_chunk", action="store_true", default=False,
                         help="非流式模式，方便单步调试")
 
-    # ── Web 服务器参数 ──
-    parser.add_argument("--web", action="store_true", default=False,
-                        help="启动 Web 服务器模式")
-    parser.add_argument("--host", type=str, default="127.0.0.1",
-                        help="Web 服务器监听地址（默认 127.0.0.1）")
-    parser.add_argument("--port", type=int, default=8080,
-                        help="Web 服务器监听端口（默认 8080）")
-
     args = parser.parse_args()
-
-    # ── Web 模式 ──
-    if args.web:
-        try:
-            from tea_agent.web import run_server
-        except ImportError as e:
-            print(f"❌ {e}")
-            print("请安装 web 依赖: pip install starlette uvicorn")
-            sys.exit(1)
-        run_server(
-            config_path=args.config,
-            host=args.host,
-            port=args.port,
-        )
-        return
 
     # ── CLI 模式 ──
     cli = TeaCLI(

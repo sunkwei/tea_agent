@@ -243,19 +243,6 @@ python -m tea_agent.protocol --port 9090
 
 ---
 
-### 6. Web V1 Legacy (`tea-agent-web`)
-
-Older Web interface based on Starlette + SSE, with tool visualization cards.
-
-```bash
-tea-agent-web
-python -m tea_agent.web
-```
-
-> Web V2 (`python -m tea_agent.gui2`) is recommended for more comprehensive features.
-
----
-
 ## 🧠 Long-Term Memory System
 
 Tea Agent's memory system mimics human memory: **priority layering**, **relevance retrieval**, **natural decay**, **dedup & merge**. It's backed by SQLite persistence + embedding semantic vectors, managed by `MemoryManager`.
@@ -784,9 +771,6 @@ tea_agent/
 │   ├── server.py          # Bottle static server
 │   └── frontend/          # HTML/CSS/JS SPA
 │       └── index.html     # All UI logic (no framework)
-├── web/                   # Web V1 (Starlette + SSE)
-│   ├── server.py          # SSE streaming server
-│   └── static/            # Frontend assets
 ├── server/                # REST API Server (OpenAI compat)
 │   ├── server.py          # Starlette routes + SSE
 │   └── __main__.py        # python -m tea_agent.server

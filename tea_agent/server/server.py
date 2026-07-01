@@ -13,7 +13,6 @@ Provides:
 Quick start:
     python -m tea_agent.server
     tea-agent-api
-    tea-agent-web  (compat)
 """
 
 import asyncio
@@ -1881,7 +1880,7 @@ if __name__ == "__main__":
 # ── CLI Entry ──
 
 def main():
-    """CLI entry: tea-agent-api / tea-agent-web (unified)"""
+    """CLI entry: tea-agent-api (unified)"""
     import argparse
     parser = argparse.ArgumentParser(description="Tea Agent Unified Server (API + Web UI)")
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Listen address")

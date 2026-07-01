@@ -94,11 +94,10 @@ build_mini.py 工作流程
   │
   ├─ 2. 排除的包和文件:
   │     ├─ _gui/     — Tkinter 桌面 GUI
-  │     ├─ gui2/     — Web V1 旧版
+      │     ├─ gui2/     — pywebview 桌面 GUI
   │     ├─ protocol/ — ACP 协议
   │     ├─ lsp/      — 代码智能
   │     ├─ sdk/      — Python SDK
-  │     ├─ web/      — Web V1 旧版
   │     ├─ evaluation/ — 任务评估
   │     ├─ cli.py / tui.py / gui.py — CLI/TUI/GUI 入口
   │     └─ demo/ / tests/ / scripts/
@@ -398,19 +397,6 @@ python -m tea_agent.protocol --port 9090
 - 📡 **SSE 流式** — 实时推送对话内容，支持逐 token 输出
 - 🧵 **会话管理** — 多会话隔离，可获取历史消息
 - 🔗 **IDE 集成** — 标准 ACP 协议，可对接任何 ACP 客户端
-
----
-
-### 6. Web V1 旧版 (`tea-agent-web`)
-
-基于 Starlette + SSE 的旧版 Web 界面，工具调用可视化卡片。
-
-```bash
-tea-agent-web
-python -m tea_agent.web
-```
-
-> 推荐使用 Web V2（`python -m tea_agent.gui2`），功能更全面。
 
 ---
 
@@ -1068,9 +1054,6 @@ tea_agent/
 │   ├── server.py          # Bottle 静态服务器
 │   └── frontend/          # HTML/CSS/JS 单页应用
 │       └── index.html     # 全部界面逻辑（无框架依赖）
-├── web/                   # Web V1 界面（Starlette + SSE）
-│   ├── server.py          # SSE 流式服务器
-│   └── static/            # 前端资源
 ├── server/                # REST API Server（OpenAI 兼容）
 │   ├── server.py          # Starlette 路由 + SSE
 │   └── __main__.py        # python -m tea_agent.server

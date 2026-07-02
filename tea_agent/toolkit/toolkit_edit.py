@@ -1,4 +1,4 @@
-# version: 1.1.0 — added replace_text + post-write verification
+# version: 1.2.0 — renamed new_content → new_text for symmetry with old_text
 
 import logging
 
@@ -6,7 +6,7 @@ logger = logging.getLogger("toolkit")
 
 
 def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
-                 start_line: int = 0, end_line: int = 0, new_content: str = "",
+                 start_line: int = 0, end_line: int = 0, new_text: str = "",
                  old_text: str = "", preview: bool = False, backup: bool = True):
     """
     高级代码编辑工具。推荐使用 replace_text（文本匹配）代替 replace_lines（行号匹配）。
@@ -14,7 +14,7 @@ def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
     action='replace_text': 【推荐】按旧文本精确匹配替换，免疫行号漂移
         toolkit_edit(file_path='x.py', action='replace_text',
                     old_text='def foo():\\n    pass',
-                    new_content='def foo():\\n    return 42')
+                    new_text='def foo():\\n    return 42')
 
     action='replace_lines': 替换指定行范围（注意：连续多次编辑会行号漂移）
     action='insert_lines': 在指定行插入
@@ -32,13 +32,13 @@ def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
     if action == "apply_patch":
         return _apply_patch(file_path, content, preview, backup)
     elif action == "insert_lines":
-        return _insert_lines(file_path, start_line, new_content, preview, backup)
+        return _insert_lines(file_path, start_line, new_text, preview, backup)
     elif action == "delete_lines":
         return _delete_lines(file_path, start_line, end_line, preview, backup)
     elif action == "replace_lines":
-        return _replace_lines(file_path, start_line, end_line, new_content, preview, backup)
+        return _replace_lines(file_path, start_line, end_line, new_text, preview, backup)
     elif action == "replace_text":
-        return _replace_text(file_path, old_text, new_content, preview, backup)
+        return _replace_text(file_path, old_text, new_text, preview, backup)
     elif action == "preview_patch":
         return _preview_patch(file_path, content)
     else:
@@ -69,7 +69,6 @@ def _verify_after_write(file_path: str, old_text: str = "",
         old_norm = old_text.replace('\r\n', '\n').replace('\r', '\n')
         cur_norm = current.replace('\r\n', '\n').replace('\r', '\n')
         if old_norm in cur_norm:
-            # count occurrences
             count = cur_norm.count(old_norm)
             warnings.append(f"旧内容仍然存在（出现 {count} 次），替换可能不完整")
 
@@ -88,7 +87,7 @@ def _verify_after_write(file_path: str, old_text: str = "",
 #  replace_text — text-based matching (recommended)
 # ═══════════════════════════════════════════════════════════════
 
-def _replace_text(file_path: str, old_text: str, new_content: str,
+def _replace_text(file_path: str, old_text: str, new_text: str,
                   preview: bool, backup: bool):
     """Replace by exact text match — immune to line number drift."""
     import json
@@ -104,7 +103,7 @@ def _replace_text(file_path: str, old_text: str, new_content: str,
         # normalize line endings
         original_norm = original.replace('\r\n', '\n').replace('\r', '\n')
         old_norm = old_text.replace('\r\n', '\n').replace('\r', '\n')
-        new_norm = new_content.replace('\r\n', '\n').replace('\r', '\n')
+        new_norm = new_text.replace('\r\n', '\n').replace('\r', '\n')
 
         # find old_text
         idx = original_norm.find(old_norm)
@@ -114,7 +113,6 @@ def _replace_text(file_path: str, old_text: str, new_content: str,
             if idx_stripped == -1:
                 return (1, "",
                         f"❌ 未找到匹配文本。old_text 的前80字符: {old_norm[:80]!r}")
-            # use stripped match
             idx = idx_stripped
             old_norm = old_stripped
 
@@ -127,10 +125,10 @@ def _replace_text(file_path: str, old_text: str, new_content: str,
             )
 
         # perform replacement (preserve original line endings style)
-        new_content_raw = original[:idx] + new_norm + original[idx + len(old_norm):]
+        new_text_raw = original[:idx] + new_norm + original[idx + len(old_norm):]
 
         if preview:
-            diff_preview = _generate_diff(original, new_content_raw)
+            diff_preview = _generate_diff(original, new_text_raw)
             return (0, json.dumps({
                 "status": "preview",
                 "file": file_path,
@@ -146,7 +144,7 @@ def _replace_text(file_path: str, old_text: str, new_content: str,
 
         # write
         with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(new_content_raw)
+            f.write(new_text_raw)
 
         # verify
         vrf = _verify_after_write(file_path,
@@ -257,10 +255,10 @@ def _apply_patch_python(file_path: str, original_content: str,
             for i, il in enumerate(insert_lines):
                 new_lines.insert(start_idx + i, il)
 
-        new_content = '\n'.join(new_lines)
+        new_text = '\n'.join(new_lines)
 
         if preview:
-            diff_preview = _generate_diff(original_content, new_content)
+            diff_preview = _generate_diff(original_content, new_text)
             return (0, json.dumps({"status": "preview", "file": file_path,
                                    "diff": diff_preview},
                                   ensure_ascii=False, indent=2), "")
@@ -268,7 +266,7 @@ def _apply_patch_python(file_path: str, original_content: str,
         if backup:
             shutil.copy2(file_path, file_path + '.bak')
         with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(new_content)
+            f.write(new_text)
 
         vrf = _verify_after_write(file_path, label="apply_patch")
         if vrf:
@@ -278,7 +276,7 @@ def _apply_patch_python(file_path: str, original_content: str,
         return (1, "", f"❌ 应用 patch 失败: {str(e)}")
 
 
-def _insert_lines(file_path: str, start_line: int, new_content: str,
+def _insert_lines(file_path: str, start_line: int, new_text: str,
                   preview: bool, backup: bool):
     import json
     import shutil
@@ -291,8 +289,8 @@ def _insert_lines(file_path: str, start_line: int, new_content: str,
             return (1, "", f"❌ 行号 {start_line} 超出范围 (1-{len(lines)+1})")
 
         original_content = ''.join(lines)
-        new_content = new_content.replace('\r\n', '\n').replace('\r', '\n')
-        insert_lines_list = new_content.split('\n')
+        new_text = new_text.replace('\r\n', '\n').replace('\r', '\n')
+        insert_lines_list = new_text.split('\n')
         insert_with_nl = []
         for i, line in enumerate(insert_lines_list):
             if i < len(insert_lines_list) - 1:
@@ -306,10 +304,10 @@ def _insert_lines(file_path: str, start_line: int, new_content: str,
         insert_index = start_line - 1
         new_lines = (lines[:insert_index] + insert_with_nl +
                      lines[insert_index:])
-        new_content_joined = ''.join(new_lines)
+        new_text_joined = ''.join(new_lines)
 
         if preview:
-            diff_preview = _generate_diff(original_content, new_content_joined)
+            diff_preview = _generate_diff(original_content, new_text_joined)
             return (0, json.dumps({"status": "preview", "file": file_path,
                                    "action": "insert", "at_line": start_line,
                                    "diff": diff_preview},
@@ -318,9 +316,9 @@ def _insert_lines(file_path: str, start_line: int, new_content: str,
         if backup:
             shutil.copy2(file_path, file_path + '.bak')
         with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(new_content_joined)
+            f.write(new_text_joined)
 
-        vrf = _verify_after_write(file_path, new_text=new_content.strip(),
+        vrf = _verify_after_write(file_path, new_text=new_text.strip(),
                                   label=f"insert_lines@{start_line}")
         if vrf:
             return (0, f"✅ 成功在 {file_path}:{start_line} 插入 "
@@ -348,10 +346,10 @@ def _delete_lines(file_path: str, start_line: int, end_line: int,
         deleted = lines[start_line - 1:end_line]
         deleted_text = ''.join(deleted).strip()
         new_lines = lines[:start_line - 1] + lines[end_line:]
-        new_content = ''.join(new_lines)
+        new_text = ''.join(new_lines)
 
         if preview:
-            diff_preview = _generate_diff(''.join(lines), new_content)
+            diff_preview = _generate_diff(''.join(lines), new_text)
             return (0, json.dumps({"status": "preview", "file": file_path,
                                    "action": "delete",
                                    "deleted_lines": f"{start_line}-{end_line}",
@@ -361,7 +359,7 @@ def _delete_lines(file_path: str, start_line: int, end_line: int,
         if backup:
             shutil.copy2(file_path, file_path + '.bak')
         with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(new_content)
+            f.write(new_text)
 
         vrf = _verify_after_write(file_path, old_text=deleted_text,
                                   label=f"delete_lines:{start_line}-{end_line}")
@@ -375,7 +373,7 @@ def _delete_lines(file_path: str, start_line: int, end_line: int,
 
 
 def _replace_lines(file_path: str, start_line: int, end_line: int,
-                   new_content: str, preview: bool, backup: bool):
+                   new_text: str, preview: bool, backup: bool):
     import json
     import shutil
 
@@ -390,16 +388,16 @@ def _replace_lines(file_path: str, start_line: int, end_line: int,
 
         old_lines = lines[start_line - 1:end_line]
         old_text = ''.join(old_lines)
-        new_content = new_content.replace('\r\n', '\n').replace('\r', '\n')
-        insert_list = new_content.split('\n')
+        new_text = new_text.replace('\r\n', '\n').replace('\r', '\n')
+        insert_list = new_text.split('\n')
         insert_with_nl = [l + '\n' for l in insert_list[:-1]] + [insert_list[-1]]
 
         new_lines = (lines[:start_line - 1] + insert_with_nl +
                      lines[end_line:])
-        new_content_joined = ''.join(new_lines)
+        new_text_joined = ''.join(new_lines)
 
         if preview:
-            diff_preview = _generate_diff(''.join(lines), new_content_joined)
+            diff_preview = _generate_diff(''.join(lines), new_text_joined)
             return (0, json.dumps({"status": "preview", "file": file_path,
                                    "action": "replace",
                                    "replaced_lines": f"{start_line}-{end_line}",
@@ -409,11 +407,11 @@ def _replace_lines(file_path: str, start_line: int, end_line: int,
         if backup:
             shutil.copy2(file_path, file_path + '.bak')
         with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(new_content_joined)
+            f.write(new_text_joined)
 
         vrf = _verify_after_write(file_path,
                                   old_text=old_text.strip(),
-                                  new_text=new_content.strip(),
+                                  new_text=new_text.strip(),
                                   label=f"replace_lines:{start_line}-{end_line}")
         if vrf:
             return (0, f"✅ 成功替换 {file_path}:{start_line}-{end_line} "
@@ -428,10 +426,10 @@ def _preview_patch(file_path: str, patch_content: str):
     return _apply_patch(file_path, patch_content, preview=True, backup=False)
 
 
-def _generate_diff(old_content: str, new_content: str) -> str:
+def _generate_diff(old_content: str, new_text: str) -> str:
     import difflib
     old_lines = old_content.splitlines(keepends=True)
-    new_lines = new_content.splitlines(keepends=True)
+    new_lines = new_text.splitlines(keepends=True)
     diff = difflib.unified_diff(old_lines, new_lines,
                                 fromfile='original', tofile='modified', n=3)
     return ''.join(diff)
@@ -465,7 +463,7 @@ def meta_toolkit_edit() -> dict:
                         "type": "integer",
                         "description": "结束行号 1-indexed（delete/replace_lines）",
                     },
-                    "new_content": {
+                    "new_text": {
                         "type": "string",
                         "description": "新内容（insert/replace_lines/replace_text）",
                     },

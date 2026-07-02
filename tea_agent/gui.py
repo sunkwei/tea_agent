@@ -1216,32 +1216,50 @@ class TkGUI(Agent):
             return False
 
     def _refresh_config_list(self):
-        """刷新左侧面板的配置选择下拉框（简洁显示：仅文件名）"""
+        """刷新左侧面板的配置选择下拉框（显示主模型/便宜模型名称）"""
         configs = self.get_config_list()
         if not hasattr(self, 'config_combo') or not self.config_combo:
             return
-        # 仅用文件名作为显示文本，一行一个配置
-        values = [cfg["filename"] for cfg in configs]
+        # 构建显示文本 → 路径映射（主模型 / 便宜模型，相同时只显示一个）
+        self._config_display_map = {}
+        values = []
+        # 第一遍：检测 display 文本重复
+        seen = {}
+        for cfg in configs:
+            m = cfg["main_model"] or "?"
+            c = cfg["cheap_model"] or ""
+            base_display = f"{m} / {c}" if (c and c != m) else m
+            if base_display in seen:
+                seen[base_display] += 1
+            else:
+                seen[base_display] = 1
+        # 第二遍：生成最终 display（重复时追加文件名）
+        for cfg in configs:
+            m = cfg["main_model"] or "?"
+            c = cfg["cheap_model"] or ""
+            base_display = f"{m} / {c}" if (c and c != m) else m
+            if seen.get(base_display, 0) > 1:
+                display = f"{base_display} ({cfg['filename']})"
+            else:
+                display = base_display
+            self._config_display_map[display] = cfg["path"]
+            values.append(display)
         self.config_combo["values"] = values
         # 标记当前配置（规范化路径比较，避免 \ vs / 差异）
         current_path = getattr(self, '_config_path', None)
         if current_path:
             norm_current = str(Path(current_path)).lower()
-            for i, cfg in enumerate(configs):
+            for cfg in configs:
                 if str(Path(cfg["path"])).lower() == norm_current:
-                    if i < len(values):
-                        self._config_var.set(values[i])
+                    # 找到对应的 display 文本
+                    m = cfg["main_model"] or "?"
+                    c = cfg["cheap_model"] or ""
+                    base_display = f"{m} / {c}" if (c and c != m) else m
+                    display = f"{base_display} ({cfg['filename']})" if seen.get(base_display, 0) > 1 else base_display
+                    self._config_var.set(display)
                     break
             else:
-                # 退而求其次：仅比较文件名
-                current_name = Path(current_path).name.lower()
-                for i, cfg in enumerate(configs):
-                    if cfg["filename"].lower() == current_name:
-                        if i < len(values):
-                            self._config_var.set(values[i])
-                        break
-                else:
-                    self._config_var.set("")
+                self._config_var.set("")
         else:
             self._config_var.set("")
         # 如果没有配置，提示
@@ -1254,17 +1272,21 @@ class TkGUI(Agent):
         selected = self._config_var.get()
         if not selected or "(暂无" in selected or "(加载中" in selected:
             return
-        # 选中值即为文件名（已简化，不含模型信息）
-        filename = selected
-        configs_dir = Path.home() / ".tea_agent"
-        fpath = configs_dir / filename
-        if not fpath.exists():
+        # 通过 display_text → path 映射查找配置文件路径
+        display_map = getattr(self, '_config_display_map', {})
+        fpath = display_map.get(selected)
+        if not fpath:
+            # 兼容旧逻辑：直接作为文件名
+            configs_dir = Path.home() / ".tea_agent"
+            fpath = str(configs_dir / selected)
+        if not Path(fpath).exists():
             self._update_status(f"❌ 配置文件不存在: {fpath}")
             return
         # 检查是否已经是当前配置
         if getattr(self, '_config_path', None) == str(fpath):
-            self._update_status(f"✓ 已是当前配置: {filename}")
+            self._update_status(f"✓ 已是当前配置: {selected}")
             return
+        filename = Path(fpath).name
         self._update_status(f"⏳ 正在切换到: {filename}...")
         ok = self.switch_config_file(str(fpath))
         if ok:

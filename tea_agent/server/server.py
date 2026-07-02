@@ -670,10 +670,10 @@ class APIServer:
         """Capture a screen region and return base64 image data.
 
         Args:
-            x: Left coordinate
-            y: Top coordinate
-            w: Width
-            h: Height
+            x: Left coordinate (physical pixels)
+            y: Top coordinate (physical pixels)
+            w: Width (physical pixels)
+            h: Height (physical pixels)
         Returns:
             dict: {ok: bool, image_base64?: str, error?: str}
         """
@@ -690,18 +690,69 @@ class APIServer:
             if not result.get("success"):
                 return {"ok": False, "error": result.get("error", "截图失败")}
 
+            # 容错：确保 path 是有效的文件路径
+            img_path = result.get("path", "")
+            if not img_path or not isinstance(img_path, str) or not os.path.isfile(img_path):
+                if os.path.isfile(tmp_path):
+                    img_path = tmp_path
+                else:
+                    return {"ok": False, "error": f"截图文件无效: path={img_path!r}"}
+
             # 读取图片并转为 base64
-            with open(result["path"], "rb") as f:
+            with open(img_path, "rb") as f:
                 img_data = f.read()
+            if len(img_data) < 100:
+                return {"ok": False, "error": f"截图文件过小: {len(img_data)} bytes"}
             b64_str = base64.b64encode(img_data).decode("utf-8")
             data_url = f"data:image/png;base64,{b64_str}"
 
             return {
                 "ok": True,
                 "image_base64": data_url,
-                "path": result["path"],
-                "size": result.get("size", 0),
+                "path": img_path,
+                "size": len(img_data),
                 "method": result.get("method", ""),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def screenshot_full(self) -> dict:
+        """Capture full screen and return base64 image data.
+
+        Returns:
+            dict: {ok: bool, image_base64?: str, error?: str, size?: int}
+        """
+        from tea_agent.toolkit.toolkit_screenshot import toolkit_screenshot
+        import base64
+        import tempfile
+        import os
+
+        try:
+            tmp_path = os.path.join(tempfile.gettempdir(), "screenshot_full.png")
+            result = toolkit_screenshot(action="full", output=tmp_path)
+
+            if not result.get("success"):
+                return {"ok": False, "error": result.get("error", "截图失败")}
+
+            img_path = result.get("path", "")
+            if not img_path or not isinstance(img_path, str) or not os.path.isfile(img_path):
+                if os.path.isfile(tmp_path):
+                    img_path = tmp_path
+                else:
+                    return {"ok": False, "error": f"截图文件无效: path={img_path!r}"}
+
+            with open(img_path, "rb") as f:
+                img_data = f.read()
+            if len(img_data) < 100:
+                return {"ok": False, "error": f"截图文件过小: {len(img_data)} bytes"}
+            b64_str = base64.b64encode(img_data).decode("utf-8")
+            data_url = f"data:image/png;base64,{b64_str}"
+
+            return {
+                "ok": True,
+                "image_base64": data_url,
+                "path": img_path,
+                "size": len(img_data),
             }
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -1321,6 +1372,91 @@ async def handle_screenshot_region(request):
     return JSONResponse(result, status_code=500)
 
 
+async def handle_screenshot_full(request):
+    """GET /api/screenshot/full — capture full screen and return base64."""
+    result = get_server().screenshot_full()
+    if result.get("ok"):
+        return JSONResponse(result)
+    return JSONResponse(result, status_code=500)
+
+
+async def handle_screenshot_interactive(request):
+    """POST /api/screenshot/interactive — 系统级截图选区（tkinter 全屏窗口）
+
+    用户在全屏窗口中拖拽选择区域，返回裁剪后的图片 base64。
+    完全绕过浏览器坐标限制。
+    """
+    import subprocess, json, tempfile, os, base64
+    import sys as _sys
+
+    try:
+        # 用子进程运行选区工具（避免阻塞 asyncio 事件循环）
+        _self_path = os.path.dirname(os.path.abspath(__file__))
+        # 找项目根目录：从 server.py 向上找，直到找到 toolkit/ 目录
+        _probe = _self_path
+        for _ in range(6):
+            if os.path.isdir(os.path.join(_probe, "toolkit")):
+                break
+            _probe = os.path.dirname(_probe)
+        agent_root = _probe
+        script_code = (
+            "import sys, json, tempfile, os\n"
+            f"sys.path.insert(0, {agent_root!r})\n"
+            "from tea_agent.toolkit.toolkit_screenshot_picker import toolkit_screenshot_picker\n"
+            "result = toolkit_screenshot_picker()\n"
+            "print(json.dumps(result))\n"
+            "sys.stdout.flush()\n"
+        )
+
+        proc = await asyncio.create_subprocess_exec(
+            _sys.executable, "-c", script_code,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+
+        if proc.returncode != 0:
+            err_msg = stderr.decode()[:300] if stderr else "未知错误"
+            return JSONResponse({"ok": False, "error": f"选区工具异常: {err_msg}"},
+                                status_code=500)
+
+        result = json.loads(stdout.decode().strip())
+        if not result.get("success"):
+            return JSONResponse({"ok": False, "error": result.get("error", "用户取消")},
+                                status_code=400)
+
+        # 读取裁剪后的图片
+        img_path = result["path"]
+        if not os.path.isfile(img_path):
+            return JSONResponse({"ok": False, "error": "结果文件不存在"}, status_code=500)
+
+        with open(img_path, "rb") as f:
+            b64_str = base64.b64encode(f.read()).decode("utf-8")
+
+        # 清理临时文件
+        try:
+            os.remove(img_path)
+        except OSError:
+            pass
+
+        return JSONResponse({
+            "ok": True,
+            "image_base64": b64_str,
+            "width": result["width"],
+            "height": result["height"],
+            "x": result["x"],
+            "y": result["y"],
+            "w": result["w"],
+            "h": result["h"],
+        })
+
+    except asyncio.TimeoutError:
+        return JSONResponse({"ok": False, "error": "选区超时（120秒）"}, status_code=504)
+    except Exception as e:
+        logger.exception("handle_screenshot_interactive error")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 # ================================================================
 #  Web UI API Route Handlers (SSE chat, model switch, etc.)
 # ================================================================
@@ -1800,6 +1936,8 @@ def create_app(api_key: Optional[str] = None,
         Route("/api/chat", endpoint=handle_web_chat, methods=["POST"]),
         Route("/api/chat/continue", endpoint=handle_chat_continue, methods=["POST"]),
         Route("/api/screenshot/region", endpoint=handle_screenshot_region, methods=["POST"]),
+        Route("/api/screenshot/full", endpoint=handle_screenshot_full),
+        Route("/api/screenshot/interactive", endpoint=handle_screenshot_interactive, methods=["POST"]),
         Route("/api/new_topic", endpoint=handle_web_new_topic, methods=["POST"]),
         Route("/api/sessions", endpoint=handle_web_sessions),
         Route("/api/topic/{topic_id:str}", endpoint=handle_web_topic_info, methods=["GET", "PUT", "DELETE"]),

@@ -176,25 +176,44 @@ class ChatRenderer:
 
     # ── _render_loaded_topic ──
     def _render_loaded_topic(self, render_items):
-        """主线程：批量加载历史，跳过 ScrolledText 直接构建 chat_messages"""
+        """主线程：快速加载最近轮次到 chat_messages 并渲染。
+        
+        只加载 header（标题/Token/摘要）+ 最近 MAX_RECENT 轮对话到 chat_messages，
+        完整历史已通过 load_history 存入 session，后续轮次导航/导出可从中获取。
+        """
         self.gui.clear_chat()
-        total = len(render_items)
+        total_convs = getattr(self.gui, '_pending_total', 0)
+
+        # ── 找到对话边界：每个 ("user", ...) 标志一轮的开始 ──
+        conv_starts = []
         for i, item in enumerate(render_items):
-            if len(item) == 3:
-                tag, text, images = item
-            else:
-                tag, text = item
-                images = None
-            # 跳过 ScrolledText 写入（随后切到 HtmlFrame），直接追加到 chat_messages
+            if item[0] == "user":
+                conv_starts.append(i)
+
+        MAX_RECENT = 20
+        if conv_starts and len(conv_starts) > MAX_RECENT:
+            cutoff = len(conv_starts) - MAX_RECENT
+            recent_start = conv_starts[cutoff]
+            # header = 第一个 "user" 之前的所有条目（标题、Token、摘要等）
+            items_to_load = render_items[:conv_starts[0]] + render_items[recent_start:]
+            displayed = MAX_RECENT
+        else:
+            items_to_load = render_items
+            displayed = len(conv_starts) if conv_starts else 0
+
+        # 批量构建 chat_messages entries（无 update_idletasks，纯内存操作 <1ms）
+        entries = []
+        for tag, text, *rest in items_to_load:
             if tag in ("user", "ai", "tool", "notice", "title"):
                 entry = {"role": tag, "content": text, "timestamp": self.gui._now_ts()}
-                if images:
-                    entry["images"] = images
-                self.gui.chat_messages.append(entry)
-            # 每 50 条让出主线程，保持 GUI 响应（可拖动窗口、ESC 取消等）
-            if i > 0 and i % 50 == 0:
-                self.gui._update_status(f"⏳ 加载中（{i}/{total}）...")
-                self.gui.root.update_idletasks()
+                if rest:
+                    entry["images"] = rest[0]
+                entries.append(entry)
+        self.gui.chat_messages.extend(entries)
+
+        # 状态提示
+        if total_convs > displayed:
+            self.gui._update_status(f"✅ 就绪（显示最近 {displayed}/{total_convs} 轮）")
 
         if HAS_TKINTERWEB and self.gui.chat_messages:
             self.gui._loading_topic = True  # 标记：_on_done 中负责 generating=False
@@ -202,7 +221,8 @@ class ChatRenderer:
         else:
             self._switch_display("chat_view")
             self.gui.generating = False
-            self.gui._update_status("✅ 就绪")
+            if total_convs <= displayed:
+                self.gui._update_status("✅ 就绪")
 
     # ── _render_round_view ──
     def _render_round_view(self, round_idx):
@@ -389,6 +409,8 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
             elif hasattr(self.gui, '_pending_render'):
                 self._render_loaded_topic(self.gui._pending_render)
                 delattr(self.gui, '_pending_render')
+                if hasattr(self.gui, '_pending_total'):
+                    delattr(self.gui, '_pending_total')
             self.gui._loading_done = False
             self.gui.generating = False  # loading完成，释放send()锁
             return

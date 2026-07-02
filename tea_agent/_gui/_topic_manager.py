@@ -234,6 +234,7 @@ class TopicManager:
                     render_items.append(("notice", ""))
 
                 gui._pending_render = render_items
+                gui._pending_total = total_convs
                 gui._loading_done = True
             except Exception as e:
                 import traceback as _tb

@@ -97,7 +97,8 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
                 # mss region capture
                 if geo:
                     sct.shot(output=out_path, mon=-1)
-                    return _crop_image(out_path, out_path, geo) if True else out_path
+                    if _crop_image(out_path, out_path, geo):
+                        return out_path
                 else:
                     sct.shot(output=out_path)
                 if os.path.exists(out_path) and os.path.getsize(out_path) > 100:

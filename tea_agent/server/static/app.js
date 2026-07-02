@@ -1186,144 +1186,247 @@ window.showMaxIterConfirm = function(confirmId, text) {
 // ================================================================
 
 let _screenshotOverlay = null;
-let _screenshotRect = null;
-let _screenshotStartX = 0;
-let _screenshotStartY = 0;
-let _isDragging = false;
 
 /** Check vision support from config, show/hide screenshot button */
 async function checkVisionSupport() {
     const btn = document.getElementById('screenshot-btn');
+    const btn2 = document.getElementById('screenshot-interactive-btn');
     if (!btn) return;
     try {
         const r = await fetch('/api/config');
-        if (!r.ok) { btn.style.display = 'none'; return; }
+        if (!r.ok) { btn.style.display = 'none'; if(btn2) btn2.style.display = 'none'; return; }
         const cfg = await r.json();
         const supportsVision = cfg.options && cfg.options.supports_vision === true;
         btn.style.display = supportsVision ? '' : 'none';
+        if (btn2) btn2.style.display = supportsVision ? '' : 'none';
     } catch (e) {
         btn.style.display = 'none';
+        if (btn2) btn2.style.display = 'none';
     }
 }
 
-window.startScreenshot = function() {
+window.startScreenshot = async function() {
     if (_screenshotOverlay) return;
 
-    // 创建全屏遮罩
+    toast('正在截取全屏...', 'info');
+
+    // 1. 获取全屏截图
+    let fullImageData;
+    try {
+        const r = await fetch('/api/screenshot/full');
+        const data = await r.json();
+        if (!data.ok || !data.image_base64) {
+            toast('全屏截图失败: ' + (data.error || '未知错误'), 'error');
+            return;
+        }
+        fullImageData = data.image_base64;
+    } catch (err) {
+        toast('截图请求失败: ' + err.message, 'error');
+        return;
+    }
+
+    // 2. 创建 overlay，显示全屏截图
     const overlay = document.createElement('div');
     overlay.id = 'screenshot-overlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:10000;cursor:crosshair;';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:10000;cursor:crosshair;display:flex;align-items:center;justify-content:center;overflow:auto;';
 
-    // 选区矩形
-    const rect = document.createElement('div');
-    rect.id = 'screenshot-selection';
-    rect.style.cssText = 'position:fixed;border:2px solid #00aaff;background:rgba(0,170,255,0.1);display:none;pointer-events:none;z-index:10001;';
-    overlay.appendChild(rect);
+    // 缩放控制
+    let zoomMode = 'fit'; // 'fit' | 'full'
+
+    // 截图图片（默认缩放 fit 到视口）
+    const img = document.createElement('img');
+    img.src = fullImageData;
+    img.style.cssText = 'object-fit:contain;user-select:none;-webkit-user-drag:none;display:block;';
+    img.draggable = false;
+
+    // 等图片加载完成
+    await new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; });
+    overlay.appendChild(img);
+
+    // 缩放控制工具栏
+    const toolbar = document.createElement('div');
+    toolbar.style.cssText = 'position:fixed;top:12px;right:12px;display:flex;gap:6px;z-index:10003;pointer-events:auto;';
+    toolbar.innerHTML = '<button class="zoom-btn active" data-zoom="fit" style="background:rgba(0,0,0,0.7);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;">适应</button>' +
+        '<button class="zoom-btn" data-zoom="full" style="background:rgba(0,0,0,0.7);color:#fff;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer;">1:1</button>';
+    overlay.appendChild(toolbar);
+
+    // 缩放控制函数
+    function applyZoom(mode) {
+        zoomMode = mode;
+        // 更新按钮高亮
+        toolbar.querySelectorAll('.zoom-btn').forEach(function(btn) {
+            btn.style.background = btn.dataset.zoom === mode ? 'rgba(0,170,255,0.6)' : 'rgba(0,0,0,0.7)';
+        });
+        if (mode === 'fit') {
+            img.style.maxWidth = '95vw';
+            img.style.maxHeight = '90vh';
+            img.style.width = 'auto';
+            img.style.height = 'auto';
+            overlay.style.justifyContent = 'center';
+            overlay.style.alignItems = 'center';
+        } else {
+            // 1:1 原始尺寸
+            img.style.maxWidth = 'none';
+            img.style.maxHeight = 'none';
+            img.style.width = img.naturalWidth + 'px';
+            img.style.height = img.naturalHeight + 'px';
+            overlay.style.justifyContent = 'flex-start';
+            overlay.style.alignItems = 'flex-start';
+        }
+    }
+    toolbar.addEventListener('click', function(e) {
+        const btn = e.target.closest('.zoom-btn');
+        if (!btn) return;
+        applyZoom(btn.dataset.zoom);
+    });
+
+    // 选区矩形（使用 fixed 定位，坐标系与视口对齐，避免滚动影响）
+    const selectionBox = document.createElement('div');
+    selectionBox.style.cssText = 'position:fixed;border:2px dashed #00aaff;background:rgba(0,170,255,0.15);display:none;pointer-events:none;z-index:10001;';
+    overlay.appendChild(selectionBox);
 
     // 提示文字
     const hint = document.createElement('div');
-    hint.id = 'screenshot-hint';
     hint.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:#fff;padding:8px 20px;border-radius:8px;font-size:14px;z-index:10002;pointer-events:none;';
-    hint.textContent = '按住鼠标左键拖动选择截图区域，松开完成截图 · ESC 取消';
+    hint.textContent = '拖动选择区域 · 按 F11 全屏可截浏览器外内容 · ESC 取消';
     overlay.appendChild(hint);
 
     document.body.appendChild(overlay);
     _screenshotOverlay = overlay;
-    _isDragging = false;
 
-    // 鼠标事件
+    // 3. 拖拽框选（使用 screenX/Y * devicePixelRatio 获取桌面物理像素坐标，消除浏览器位置依赖）
+    let startClientX = 0, startClientY = 0;
+    let startScreenX = 0, startScreenY = 0;
+    let isDragging = false;
+
     overlay.addEventListener('mousedown', function(e) {
-        // 使用 screenX/screenY 作为屏幕坐标
-        _screenshotStartX = e.screenX;
-        _screenshotStartY = e.screenY;
-        _isDragging = true;
-        _screenshotRect = rect;
-        rect.style.left = e.screenX + 'px';
-        rect.style.top = e.screenY + 'px';
-        rect.style.width = '0px';
-        rect.style.height = '0px';
-        rect.style.display = 'block';
+        // 记录视口坐标（用于 visual rubber band）和屏幕坐标（用于裁剪）
+        startClientX = e.clientX;
+        startClientY = e.clientY;
+        startScreenX = e.screenX;
+        startScreenY = e.screenY;
+        isDragging = true;
+        // 1:1 模式下叠加滚动偏移，使 selectionBox 与图片内容对齐
+        const sbLeft = zoomMode === 'full' ? e.clientX + overlay.scrollLeft : e.clientX;
+        const sbTop = zoomMode === 'full' ? e.clientY + overlay.scrollTop : e.clientY;
+        selectionBox.style.left = sbLeft + 'px';
+        selectionBox.style.top = sbTop + 'px';
+        selectionBox.style.width = '0px';
+        selectionBox.style.height = '0px';
+        selectionBox.style.display = 'block';
     });
 
-    document.addEventListener('mousemove', _screenshotOnMove);
-    document.addEventListener('mouseup', _screenshotOnUp);
+    overlay.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        // 1:1 模式下叠加滚动偏移，使 selectionBox 与图片内容对齐
+        const scrollOffX = zoomMode === 'full' ? overlay.scrollLeft : 0;
+        const scrollOffY = zoomMode === 'full' ? overlay.scrollTop : 0;
+        const adjStartX = startClientX + scrollOffX;
+        const adjStartY = startClientY + scrollOffY;
+        const adjCurX = e.clientX + scrollOffX;
+        const adjCurY = e.clientY + scrollOffY;
+        const x = Math.min(adjStartX, adjCurX);
+        const y = Math.min(adjStartY, adjCurY);
+        const w = Math.abs(adjCurX - adjStartX);
+        const h = Math.abs(adjCurY - adjStartY);
+        selectionBox.style.left = x + 'px';
+        selectionBox.style.top = y + 'px';
+        selectionBox.style.width = w + 'px';
+        selectionBox.style.height = h + 'px';
+    });
 
-    // ESC 取消
-    overlay.addEventListener('keydown', function(e) {});
-    document.addEventListener('keydown', _screenshotOnKey);
-};
+    overlay.addEventListener('mouseup', async function(e) {
+        if (!isDragging) return;
+        isDragging = false;
 
-function _screenshotOnMove(e) {
-    if (!_isDragging || !_screenshotRect) return;
-    const x = Math.min(_screenshotStartX, e.screenX);
-    const y = Math.min(_screenshotStartY, e.screenY);
-    const w = Math.abs(e.screenX - _screenshotStartX);
-    const h = Math.abs(e.screenY - _screenshotStartY);
-    _screenshotRect.style.left = x + 'px';
-    _screenshotRect.style.top = y + 'px';
-    _screenshotRect.style.width = w + 'px';
-    _screenshotRect.style.height = h + 'px';
-}
+        // 保存图片信息后移除 overlay
+        const natW = img.naturalWidth;
+        const natH = img.naturalHeight;
+        _screenshotOverlay = null;
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
 
-async function _screenshotOnUp(e) {
-    if (!_isDragging) return;
-    _isDragging = false;
-    document.removeEventListener('mousemove', _screenshotOnMove);
-    document.removeEventListener('mouseup', _screenshotOnUp);
-    document.removeEventListener('keydown', _screenshotOnKey);
+        const vw = Math.abs(e.clientX - startClientX);
+        const vh = Math.abs(e.clientY - startClientY);
+        if (vw < 10 || vh < 10) {
+            toast('选区太小，请重新选择', 'error');
+            return;
+        }
 
-    const x = Math.min(_screenshotStartX, e.screenX);
-    const y = Math.min(_screenshotStartY, e.screenY);
-    const w = Math.abs(e.screenX - _screenshotStartX);
-    const h = Math.abs(e.screenY - _screenshotStartY);
+        toast('正在裁剪截图...', 'info');
 
-    const overlay = _screenshotOverlay;
-    _screenshotOverlay = null;
-    _screenshotRect = null;
+        try {
+            // 核心修复：用 screenX/Y * devicePixelRatio 直接获取桌面物理像素坐标
+            // 不依赖图片在视口中的位置计算，消除浏览器窗口位置对坐标的影响
+            const dpr = window.devicePixelRatio || 1;
+            const physStartX = Math.round(startScreenX * dpr);
+            const physStartY = Math.round(startScreenY * dpr);
+            const physEndX = Math.round(e.screenX * dpr);
+            const physEndY = Math.round(e.screenY * dpr);
 
-    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            // 裁剪坐标（物理像素，相对于全屏截图左上角）
+            const cropX = Math.max(0, Math.min(Math.min(physStartX, physEndX), natW));
+            const cropY = Math.max(0, Math.min(Math.min(physStartY, physEndY), natH));
+            const cropW = Math.min(Math.abs(physEndX - physStartX), natW - cropX);
+            const cropH = Math.min(Math.abs(physEndY - physStartY), natH - cropY);
 
-    // 最小尺寸过滤
-    if (w < 10 || h < 10) {
-        toast('选区太小，请重新选择', 'error');
-        return;
-    }
+            if (cropW < 5 || cropH < 5) {
+                toast('选区太小', 'error');
+                return;
+            }
 
-    // 更新提示（截图进行中）
-    toast('正在截图...', 'info');
+            const canvas = document.createElement('canvas');
+            canvas.width = cropW;
+            canvas.height = cropH;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+            const croppedDataUrl = canvas.toDataURL('image/png');
 
-    try {
-        const r = await fetch('/api/screenshot/region', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) }),
-        });
-        const data = await r.json();
-        if (data.ok && data.image_base64) {
-            pendingImages.push(data.image_base64);
+            pendingImages.push(croppedDataUrl);
             updateImagePreview();
             toast('✓ 截图已添加', 'success');
-        } else {
-            toast('截图失败: ' + (data.error || '未知错误'), 'error');
+        } catch (err) {
+            toast('裁剪失败: ' + err.message, 'error');
         }
-    } catch (err) {
-        toast('截图请求失败: ' + err.message, 'error');
+    });
+
+    // ESC 取消
+    function onKey(e) {
+        if (e.key === 'Escape') {
+            isDragging = false;
+            document.removeEventListener('keydown', onKey);
+            if (_screenshotOverlay && _screenshotOverlay.parentNode) {
+                _screenshotOverlay.parentNode.removeChild(_screenshotOverlay);
+            }
+            _screenshotOverlay = null;
+            toast('截图已取消', 'info');
+        }
     }
+    document.addEventListener('keydown', onKey);
 }
 
-function _screenshotOnKey(e) {
-    if (e.key === 'Escape') {
-        _isDragging = false;
-        document.removeEventListener('mousemove', _screenshotOnMove);
-        document.removeEventListener('mouseup', _screenshotOnUp);
-        document.removeEventListener('keydown', _screenshotOnKey);
-        if (_screenshotOverlay && _screenshotOverlay.parentNode) {
-            _screenshotOverlay.parentNode.removeChild(_screenshotOverlay);
+// ===== 系统级截图（绕过浏览器坐标限制，使用 tkinter 全屏窗口） =====
+window.startInteractiveScreenshot = async function() {
+    if (_screenshotOverlay) return;
+
+    toast('请在全屏窗口中选择截图区域...', 'info');
+
+    try {
+        const r = await fetch('/api/screenshot/interactive', { method: 'POST' });
+        const data = await r.json();
+
+        if (!data.ok || !data.image_base64) {
+            toast('系统截图失败: ' + (data.error || '未知错误'), 'error');
+            return;
         }
-        _screenshotOverlay = null;
-        _screenshotRect = null;
+
+        // 添加到待发送图片
+        pendingImages.push('data:image/png;base64,' + data.image_base64);
+        updateImagePreview();
+        toast('✓ 截图已添加 (' + data.width + '×' + data.height + ')', 'success');
+    } catch (err) {
+        toast('系统截图请求失败: ' + err.message, 'error');
     }
-}
+};
 
 // -- Init --
 async function initApp() {

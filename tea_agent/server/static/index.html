@@ -50,7 +50,6 @@
 <button id="image-upload-btn" class="btn btn-ghost btn-sm" onclick="triggerImageUpload()" title="上传图片">🖼️</button>
 <input type="file" id="image-input" accept="image/*" multiple style="display:none" onchange="handleImageSelect(event)">
 <button id="screenshot-btn" class="btn btn-ghost btn-sm" onclick="startScreenshot()" title="浏览器截图" style="display:none">📷</button>
-<button id="screenshot-interactive-btn" class="btn btn-ghost btn-sm" onclick="startInteractiveScreenshot()" title="系统截图（绕过浏览器限制）" style="display:none">💻📷</button>
 </div>
 <textarea id="chat-input" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" onkeydown="handleInputKey(event)" oninput="document.getElementById('send-btn').disabled=!this.value.trim()" style="flex:1;min-width:0"></textarea>
 <button id="send-btn" class="btn btn-primary" disabled onclick="sendMessage()">发送</button>

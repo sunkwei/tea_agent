@@ -9,6 +9,8 @@
 let currentTopicId = '';
 let isStreaming = false;
 let activeTheme = localStorage.getItem('tea-theme') || 'dark';
+let abortController = null;     // AbortController 实例，用于中断请求
+let _pendingUsage = null;       // 暂存 token 用量，流结束后才显示
 
 // -- DOM helpers --
 const $ = (id) => document.getElementById(id);
@@ -85,9 +87,22 @@ window.openImageOverlay = function(src) {
     document.body.appendChild(overlay);
 };
 
-function scrollBottom() {
+// ── 智能滚动：用户向上翻看时不自动跳转 ──
+let _userNearBottom = true;  // 用户是否在聊天底部附近
+
+function _isNearBottom() {
     const m = $('messages');
-    setTimeout(() => { m.scrollTop = m.scrollHeight; }, 50);
+    if (!m) return true;
+    // 距离底部 80px 以内视为"在底部"
+    return m.scrollHeight - m.scrollTop - m.clientHeight < 80;
+}
+
+function scrollBottom() {
+    if (!_userNearBottom) return;  // 用户在看历史，不强制跳转
+    const m = $('messages');
+    if (!m) return;
+    // 直接同步滚动，避免 setTimeout 延迟导致肉眼可见的跳动
+    m.scrollTop = m.scrollHeight;
 }
 
 function addLoading() {
@@ -106,12 +121,43 @@ function removeLoading() {
 }
 
 // -- SSE Chat --
+// 中断当前对话（模拟 ESC 行为）
+window.interruptChat = async function() {
+    // 1. Abort the HTTP request
+    if (abortController) {
+        abortController.abort();
+        abortController = null;
+    }
+    // 2. Signal the backend to stop processing
+    if (currentTopicId) {
+        try {
+            await fetch('/api/chat/abort', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic_id: currentTopicId }),
+                signal: AbortSignal.timeout(3000),  // 最多等3秒
+            });
+        } catch (e) { /* ignore timeout errors */ }
+    }
+    // 3. Update loading indicator if still visible
+    removeLoading();
+    const bubbleText = document.getElementById('bubble-text');
+    if (bubbleText && !bubbleText.innerHTML.trim()) {
+        bubbleText.innerHTML = '(\u5df2\u4e2d\u65ad)';
+    }
+    // Note: isStreaming will be set to false in sendMessage's finally block
+};
+
 window.sendMessage = async function() {
+    // 如果正在对话中，点击发送按钮=中断
+    if (isStreaming) {
+        await interruptChat();
+        return;
+    }
     const input = $('chat-input');
     const msg = input.value.trim();
-    if ((!msg && pendingImages.length === 0) || isStreaming) return;
+    if (!msg && pendingImages.length === 0) return;
     input.value = '';
-    $('send-btn').disabled = true;
 
     // 构建用户消息显示（含图片预览）
     addMessage('user', msg || '(图片)', pendingImages.length > 0 ? pendingImages : null);
@@ -141,6 +187,13 @@ window.sendMessage = async function() {
     let activeToolItem = null;     // currently running tool DOM element
 
     isStreaming = true;
+    _pendingUsage = null;
+    abortController = new AbortController();
+    // 切换发送按钮为「中断」样式
+    const sendBtn = $('send-btn');
+    sendBtn.textContent = '\u23f9 \u4e2d\u65ad';
+    sendBtn.className = 'btn btn-danger';
+    sendBtn.disabled = false;
 
     try {
         const body = { message: msg, topic_id: currentTopicId };
@@ -151,6 +204,7 @@ window.sendMessage = async function() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
+            signal: abortController.signal,
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
 
@@ -309,7 +363,8 @@ window.sendMessage = async function() {
                             } else if (!fullText) {
                                 bubbleText.innerHTML = '(\u65e0\u54cd\u5e94)';
                             }
-                            if (data.usage) updateUsage(data.usage);
+                            // 暂存 usage，等流结束后在 finally 中显示（避免用户误以为对话已结束）
+                            if (data.usage) _pendingUsage = data.usage;
                             // 保存 topic_id 以便后续消息关联到同一主题
                             if (data.topic_id) {
                                 currentTopicId = data.topic_id;
@@ -331,11 +386,29 @@ window.sendMessage = async function() {
             buf = lines[lines.length - 1];
         }
     } catch (e) {
-        removeLoading();
-        bubbleText.innerHTML = '<span style="color:var(--red)">\u7f51\u7edc\u9519\u8bef: ' + esc(e.message) + '</span>';
+        if (e.name === 'AbortError') {
+            // 用户主动中断，不显示错误
+            removeLoading();
+            if (!bubbleText.innerHTML.trim()) {
+                bubbleText.innerHTML = '(\u5df2\u4e2d\u65ad)';
+            }
+        } else {
+            removeLoading();
+            bubbleText.innerHTML = '<span style="color:var(--red)">\u7f51\u7edc\u9519\u8bef: ' + esc(e.message) + '</span>';
+        }
     } finally {
         isStreaming = false;
-        $('send-btn').disabled = false;
+        abortController = null;
+        // 恢复发送按钮
+        const sendBtn = $('send-btn');
+        sendBtn.textContent = '\u53d1\u9001';
+        sendBtn.className = 'btn btn-primary';
+        sendBtn.disabled = false;
+        // 流结束后才显示 token 用量，避免用户误以为对话还在进行中
+        if (_pendingUsage) {
+            updateUsage(_pendingUsage);
+            _pendingUsage = null;
+        }
         $('chat-input').focus();
         // Clean up ids to prevent DOM id collision on next message
         const old = $('current-ai-msg');
@@ -564,7 +637,7 @@ window.clearChat = function() {
 window.handleInputKey = function(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        sendMessage();
+        if (!isStreaming) sendMessage();
     }
 };
 
@@ -1494,12 +1567,22 @@ window.startScreenshot = async function() {
 
 
 
+// ── 监听用户在 messages 区域的手动滚动 ──
+function _initScrollTracking() {
+    const m = $('messages');
+    if (!m) return;
+    m.addEventListener('scroll', function() {
+        _userNearBottom = _isNearBottom();
+    }, { passive: true });
+}
+
 // -- Init --
 async function initApp() {
     await refreshTopics();
     await loadConfigSwitcher();
     checkVisionSupport();
     checkConfigStatus();
+    _initScrollTracking();
     // 自动选中最近的主题，避免空 topic_id 导致刷新后创建多余的 "Web Session"
     const list = document.getElementById('topic-list');
     if (list) {

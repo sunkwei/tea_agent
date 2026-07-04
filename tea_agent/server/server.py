@@ -45,6 +45,10 @@ __version__ = "0.2.0"
 # 当工具轮达到上限时，后端等待前端用户确认后继续或终止
 _max_iter_pending = {}  # type: dict[str, dict]
 
+# 全局：活跃会话存储（topic_id -> session）
+# 用于中断请求通过 topic_id 找到对应 session 并调用 interrupt()
+_active_sessions: dict = {}
+
 # ── 配置缓存（按路径缓存，减少重复 IO） ──
 _config_cache: dict = {}
 
@@ -1522,18 +1526,30 @@ async def handle_web_chat(request):
     async def event_stream():
         loop = asyncio.get_running_loop()
 
-        thread = threading.Thread(
-            target=server.chat_stream_sse,
-            args=(session, storage, msg_payload, queue, topic_id, loop),
-            daemon=True,
-        )
-        thread.start()
+        # 确保 topic_id 存在，用于注册活跃会话（中断时查找）
+        nonlocal topic_id
+        if not topic_id:
+            topic_id = storage.create_topic("Web Session (进行中)")
 
-        while True:
-            event = await queue.get()
-            yield "data: " + json.dumps(event, ensure_ascii=False) + "\n\n"
-            if event.get("type") in ("done", "error"):
-                break
+        # 注册活跃会话，供 interrupt 端点查找
+        _active_sessions[topic_id] = session
+
+        try:
+            thread = threading.Thread(
+                target=server.chat_stream_sse,
+                args=(session, storage, msg_payload, queue, topic_id, loop),
+                daemon=True,
+            )
+            thread.start()
+
+            while True:
+                event = await queue.get()
+                yield "data: " + json.dumps(event, ensure_ascii=False) + "\n\n"
+                if event.get("type") in ("done", "error"):
+                    break
+        finally:
+            # 取消注册活跃会话
+            _active_sessions.pop(topic_id, None)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -1559,6 +1575,27 @@ async def handle_chat_continue(request):
         return JSONResponse({"ok": True, "continue": decision})
     except Exception as e:
         logger.exception(f"处理 max_iter 确认失败: {e}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+async def handle_chat_abort(request):
+    """POST /api/chat/abort — 中断当前正在进行的对话（模拟 ESC 行为）"""
+    body = await request.json()
+    topic_id = body.get("topic_id", "")
+    if not topic_id:
+        return JSONResponse({"ok": False, "error": "topic_id 不能为空"}, status_code=400)
+
+    session = _active_sessions.get(topic_id)
+    if not session:
+        logger.warning(f"中断失败：未找到 topic_id={topic_id} 的活跃会话")
+        return JSONResponse({"ok": False, "error": "未找到活跃会话（可能已结束）"}, status_code=404)
+
+    try:
+        session.interrupt()
+        logger.info(f"用户中断会话 topic_id={topic_id}")
+        return JSONResponse({"ok": True, "message": "已发送中断信号"})
+    except Exception as e:
+        logger.exception(f"中断会话失败 topic_id={topic_id}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
@@ -1935,6 +1972,7 @@ def create_app(api_key: Optional[str] = None,
         # Web UI API
         Route("/api/chat", endpoint=handle_web_chat, methods=["POST"]),
         Route("/api/chat/continue", endpoint=handle_chat_continue, methods=["POST"]),
+        Route("/api/chat/abort", endpoint=handle_chat_abort, methods=["POST"]),
         Route("/api/screenshot/region", endpoint=handle_screenshot_region, methods=["POST"]),
         Route("/api/screenshot/full", endpoint=handle_screenshot_full),
         Route("/api/screenshot/interactive", endpoint=handle_screenshot_interactive, methods=["POST"]),

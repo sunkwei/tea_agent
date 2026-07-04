@@ -392,6 +392,12 @@ body {
 .btn:disabled { opacity: .4; cursor: default; }
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:hover:not(:disabled) { background: var(--primary-dim); }
+.btn-danger { background: var(--red); color: #fff; animation: pulseBtn 1.5s ease-in-out infinite; }
+.btn-danger:hover:not(:disabled) { background: #d93a33; animation: none; }
+@keyframes pulseBtn {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(248,81,73,0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(248,81,73,0); }
+}
 .btn-ghost { background: transparent; color: var(--text-dim); }
 .btn-ghost:hover { background: var(--surface2); color: var(--text); }
 .btn-sm { padding: 4px 12px; font-size: 12px; }

@@ -994,7 +994,6 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
         filepath: Description.
     """
     logger.info(f"toolkit_explr called: action={action!r}, directory={repr(directory)[:80]}, symbol={symbol!r}, query_type={query_type!r}, force={force!r}")
-def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol", force="false", filepath=None):
     """Toolkit explr.
     
     Args:

@@ -3,6 +3,7 @@
 import re
 from pathlib import Path
 from datetime import datetime
+import subprocess
 
 import logging
 
@@ -78,19 +79,17 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
     
     # 3. 执行构建
     if build:
-        ret, stdout, stderr = toolkit_exec("bash", ["-c", "python -m build"])
-        if ret == 0:
+        proc = subprocess.run(["python", "-m", "build"], capture_output=True, text=True)
+        if proc.returncode == 0:
             results["steps"].append(f"✓ 构建成功: tea_agent-{version}.tar.gz 和 .whl")
         else:
-            results["steps"].append(f"✗ 构建失败: {stderr}")
+            results["steps"].append(f"✗ 构建失败: {proc.stderr.strip()}")
             results["status"] = "partial_failure"
     
     # 4. Git 提交
     if git_commit:
-        # 先 add
-        toolkit_exec("bash", ["-c", "git add -A"])
+        subprocess.run(["git", "add", "-A"], capture_output=True, text=True)
         
-        # 构建提交消息
         commit_title = f"release: v{version}"
         if len(changes) > 0:
             commit_title += f" - {changes[0][:50]}"
@@ -99,13 +98,11 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
         for change in changes:
             commit_msg_parts.append(f"-m '{change}'")
         
-        commit_cmd = f"git commit -m ' ' ".join(commit_msg_parts)
-        ret, stdout, stderr = toolkit_exec("bash", ["-c", f"git commit {' '.join(commit_msg_parts)}"])
-        
-        if ret == 0:
+        proc = subprocess.run(["git", "commit"] + commit_msg_parts, capture_output=True, text=True)
+        if proc.returncode == 0:
             results["steps"].append("✓ Git 提交成功")
         else:
-            results["steps"].append(f"✗ Git 提交失败: {stderr}")
+            results["steps"].append(f"✗ Git 提交失败: {proc.stderr.strip()}")
             results["status"] = "partial_failure"
     
     return results

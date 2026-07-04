@@ -5,6 +5,9 @@ from tkinter import ttk
 import re
 import threading
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 from tea_agent.config import get_config, save_config, load_config
 
 # 复用 _gui/_fonts 模块的字体检测逻辑

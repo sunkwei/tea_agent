@@ -237,5 +237,4 @@ def meta_toolkit_ocr():
     }
 
 
-def meta_toolkit_ocr() -> dict:
     return {"type": "function", "function": {"name": "toolkit_ocr", "description": "OCR 文字识别工具。支持图片文件、截图、base64 图片作为输入，返回识别的文字。Windows 使用内置 OCR API，Linux/macOS 使用 Tesseract。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["recognize", "screenshot_ocr"], "description": "recognize=识别图片文字, screenshot_ocr=截图并识别"}, "image_path": {"type": "string", "description": "[recognize] 图片文件路径"}, "image_base64": {"type": "string", "description": "[recognize] base64 编码的图片数据"}, "region": {"type": "string", "description": "[screenshot_ocr] 截图区域 'x,y,w,h'"}, "lang": {"type": "string", "description": "语言，默认 zh-CN"}, "output": {"type": "string", "description": "输出文件路径（可选）"}}, "required": ["action"]}}}

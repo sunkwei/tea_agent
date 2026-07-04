@@ -34,8 +34,8 @@ class AgentSDK:
 
     def chat(self, message, stream=False,
               model="default", topic_id=""):
-        payload = {messages: [{"role": "user", "content": message}],
-                  stream: stream, model: model}
+        payload = {"messages": [{"role": "user", "content": message}],
+                  "stream": stream, "model": model}
         if topic_id:
             payload["topic_id"] = topic_id
         code, data = self._request("POST", "/v1/chat/completions", payload)

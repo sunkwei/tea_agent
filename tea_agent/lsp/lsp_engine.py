@@ -595,5 +595,3 @@ def completion_auto(project_root: str, filepath: str, line: int, col: int) -> Di
         return cpp_completion(project_root, filepath, line, col)
     else:
         return {"ok": False, "error": f"不支持的文件类型: {ext}"}
-
-        return {"ok": False, "error": str(e)}

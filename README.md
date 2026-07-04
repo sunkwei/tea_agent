@@ -155,7 +155,7 @@ python -m tea_agent.server
 tea-agent-mini    # 等效于 python -m tea_agent_mini.__main__
 ```
 
-浏览器访问 `http://127.0.0.1:8081` 即可使用完整的 Web 界面（对话、记忆管理、任务调度、搜索、PDF 导出等全部功能）。
+浏览器访问 `http://127.0.0.1:8080` 即可使用完整的 Web 界面（对话、记忆管理、任务调度、搜索、PDF 导出等全部功能）。
 
 ### 🧩 Mini 版依赖清单
 
@@ -258,11 +258,11 @@ python -m tea_agent.cli --oneshot "帮我写一个快速排序"  # 单次模式
 新一代单页应用（SPA），纯前端 HTML/JS + 后端 Starlette API，所有功能在浏览器中完成。
 
 > **注意**：`python -m tea_agent.server` 同时启动 REST API 和 Web V2 前端。
-> 浏览器访问 `http://127.0.0.1:8081` 即可使用完整 Web 界面。
+> 浏览器访问 `http://127.0.0.1:8080` 即可使用完整 Web 界面。
 
 **启动方式：**
 ```bash
-python -m tea_agent.server           # 默认端口 8081
+python -m tea_agent.server           # 默认端口 8080
 tea-agent-api                        # PyPI 入口
 python -m tea_agent.server --port 8099 --host 0.0.0.0
 ```
@@ -309,7 +309,7 @@ API:  /v1/chat/completions（OpenAI 兼容）
 
 ```bash
 # Web UI 自动发送当前选中配置；API 可手动指定
-curl -N -X POST http://127.0.0.1:8081/v1/chat/completions \
+curl -N -X POST http://127.0.0.1:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Hello"}],"stream":true,"config_path":"/home/user/.tea_agent/config_prod.yaml"}'
 ```
@@ -353,20 +353,20 @@ python -m tea_agent.server --port 8081 --host 0.0.0.0
 **示例：**
 ```bash
 # 流式聊天
-curl -N -X POST http://127.0.0.1:8081/v1/chat/completions \
+curl -N -X POST http://127.0.0.1:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Hello"}],"stream":true}'
 
 # 非流式聊天
-curl -X POST http://127.0.0.1:8081/v1/chat/completions \
+curl -X POST http://127.0.0.1:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Hello"}],"stream":false}'
 
 # 列出会话
-curl http://127.0.0.1:8081/v1/sessions
+curl http://127.0.0.1:8080/v1/sessions
 
 # 搜索
-curl "http://127.0.0.1:8081/v1/search?q=keyword"
+curl "http://127.0.0.1:8080/v1/search?q=keyword"
 ```
 
 ---

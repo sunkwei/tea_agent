@@ -18,7 +18,7 @@ class TestTryFixTruncatedJson:
 
     def test_valid_json_returns_unchanged(self):
         """合法 JSON 应原样返回"""
-        from tea_agent.session._json_sanitizer import try_fix_truncated_json
+        from tea_agent.session.json_sanitizer import try_fix_truncated_json
         s = '{"key": "value"}'
         result = try_fix_truncated_json(s)
         assert result == s
@@ -26,14 +26,14 @@ class TestTryFixTruncatedJson:
 
     def test_empty_string_returns_none(self):
         """空字符串应返回 None"""
-        from tea_agent.session._json_sanitizer import try_fix_truncated_json
+        from tea_agent.session.json_sanitizer import try_fix_truncated_json
         assert try_fix_truncated_json("") is None
         assert try_fix_truncated_json("   ") is None
         assert try_fix_truncated_json(None) is None
 
     def test_truncated_object_closes_braces(self):
         """截断的对象应补全闭合括号"""
-        from tea_agent.session._json_sanitizer import try_fix_truncated_json
+        from tea_agent.session.json_sanitizer import try_fix_truncated_json
         s = '{"key": "value", "nested": {"a": 1'
         result = try_fix_truncated_json(s)
         assert result is not None
@@ -43,7 +43,7 @@ class TestTryFixTruncatedJson:
 
     def test_truncated_array_closes_brackets(self):
         """截断的数组应补全闭合括号"""
-        from tea_agent.session._json_sanitizer import try_fix_truncated_json
+        from tea_agent.session.json_sanitizer import try_fix_truncated_json
         s = '[1, 2, 3'
         result = try_fix_truncated_json(s)
         assert result is not None
@@ -51,7 +51,7 @@ class TestTryFixTruncatedJson:
 
     def test_truncated_string_closes_quote(self):
         """截断的字符串应补全引号"""
-        from tea_agent.session._json_sanitizer import try_fix_truncated_json
+        from tea_agent.session.json_sanitizer import try_fix_truncated_json
         s = '{"key": "val'
         result = try_fix_truncated_json(s)
         assert result is not None
@@ -60,7 +60,7 @@ class TestTryFixTruncatedJson:
 
     def test_nested_truncated_json(self):
         """嵌套截断 JSON 应正确修复"""
-        from tea_agent.session._json_sanitizer import try_fix_truncated_json
+        from tea_agent.session.json_sanitizer import try_fix_truncated_json
         s = '{"a": {"b": [1, 2'
         result = try_fix_truncated_json(s)
         assert result is not None
@@ -69,14 +69,14 @@ class TestTryFixTruncatedJson:
 
     def test_invalid_json_returns_none(self):
         """无法修复的 JSON 应返回 None"""
-        from tea_agent.session._json_sanitizer import try_fix_truncated_json
+        from tea_agent.session.json_sanitizer import try_fix_truncated_json
         s = '{"key": }'  # 语法错误，无法修复
         result = try_fix_truncated_json(s)
         assert result is None
 
     def test_complex_truncated_json(self):
         """复杂截断场景：多层嵌套 + 字符串"""
-        from tea_agent.session._json_sanitizer import try_fix_truncated_json
+        from tea_agent.session.json_sanitizer import try_fix_truncated_json
         s = '{"tool_calls": [{"name": "toolkit_file", "args": {"action": "read", "file'
         result = try_fix_truncated_json(s)
         assert result is not None
@@ -94,7 +94,7 @@ class TestSanitizeApiMessages:
 
     def test_valid_messages_pass_through(self):
         """合法消息应原样返回"""
-        from tea_agent.session._json_sanitizer import sanitize_api_messages
+        from tea_agent.session.json_sanitizer import sanitize_api_messages
         messages = [
             {"role": "user", "content": "hello"},
             {"role": "assistant", "content": "hi"},
@@ -105,7 +105,7 @@ class TestSanitizeApiMessages:
 
     def test_valid_tool_calls_preserved(self):
         """合法 tool_calls 应保留"""
-        from tea_agent.session._json_sanitizer import sanitize_api_messages
+        from tea_agent.session.json_sanitizer import sanitize_api_messages
         messages = [
             {
                 "role": "assistant",
@@ -128,7 +128,7 @@ class TestSanitizeApiMessages:
 
     def test_truncated_tool_call_fixed(self):
         """截断的 tool_call 参数应被修复"""
-        from tea_agent.session._json_sanitizer import sanitize_api_messages
+        from tea_agent.session.json_sanitizer import sanitize_api_messages
         messages = [
             {
                 "role": "assistant",
@@ -155,7 +155,7 @@ class TestSanitizeApiMessages:
 
     def test_invalid_tool_call_removed(self):
         """无法修复的 tool_call 应被移除"""
-        from tea_agent.session._json_sanitizer import sanitize_api_messages
+        from tea_agent.session.json_sanitizer import sanitize_api_messages
         messages = [
             {
                 "role": "assistant",
@@ -180,7 +180,7 @@ class TestSanitizeApiMessages:
 
     def test_mixed_valid_and_invalid_tool_calls(self):
         """混合场景：部分合法部分非法"""
-        from tea_agent.session._json_sanitizer import sanitize_api_messages
+        from tea_agent.session.json_sanitizer import sanitize_api_messages
         messages = [
             {
                 "role": "assistant",
@@ -211,7 +211,7 @@ class TestSanitizeApiMessages:
 
     def test_non_assistant_messages_ignored(self):
         """非 assistant 消息应被忽略"""
-        from tea_agent.session._json_sanitizer import sanitize_api_messages
+        from tea_agent.session.json_sanitizer import sanitize_api_messages
         messages = [
             {"role": "user", "content": "hello"},
             {"role": "system", "content": "you are helpful"},
@@ -225,6 +225,6 @@ class TestSanitizeApiMessages:
 
     def test_empty_messages_list(self):
         """空消息列表应返回空列表"""
-        from tea_agent.session._json_sanitizer import sanitize_api_messages
+        from tea_agent.session.json_sanitizer import sanitize_api_messages
         result = sanitize_api_messages([])
         assert result == []

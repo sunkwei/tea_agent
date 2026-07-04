@@ -41,7 +41,7 @@ class LiteAgent:
         # 获取 toolkit
         if toolkit is None:
             from tea_agent import tlk
-            toolkit = tlk._toolkit_
+            toolkit = tlk.toolkit
         self.toolkit = toolkit
 
     def execute_sync(self, goal: str, system_prompt: str = "") -> str:

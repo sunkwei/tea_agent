@@ -182,7 +182,7 @@ def _get_tools_schemas() -> List[Dict]:
     """获取所有注册工具的 JSON Schema"""
     try:
         from tea_agent import tlk
-        toolkit = tlk._toolkit_
+        toolkit = tlk.toolkit
         if not toolkit:
             return []
 

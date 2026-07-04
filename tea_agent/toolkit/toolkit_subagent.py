@@ -66,7 +66,7 @@ def _execute_subagent(
                 _subagent_registry[agent_id]["started_at"] = datetime.now().isoformat()
 
         # 获取 toolkit 和配置
-        toolkit = tlk._toolkit_
+        toolkit = tlk.toolkit
         cfg = load_config()
         main_m = cfg.main_model
 

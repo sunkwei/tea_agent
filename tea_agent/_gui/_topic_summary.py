@@ -10,7 +10,7 @@ from typing import Optional, List, Dict
 logger = logging.getLogger(__name__)
 
 # 从 session/_prompts 导入共享 prompt 模板
-from tea_agent.session._prompts import TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_TEMPLATE
+from tea_agent.session.prompts import TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_TEMPLATE
 
 
 def _empty_usage():

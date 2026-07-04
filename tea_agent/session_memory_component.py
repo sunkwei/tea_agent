@@ -9,8 +9,8 @@ import json
 import requests
 from datetime import datetime
 from typing import List, Dict, Optional, TYPE_CHECKING
-from .session._context import SessionComponent, SessionContext
-from tea_agent.session._params import get_cheap_params
+from .session.context import SessionComponent, SessionContext
+from tea_agent.session.params import get_cheap_params
 
 if TYPE_CHECKING:
     from tea_agent.memory import MemoryManager

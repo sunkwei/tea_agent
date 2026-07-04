@@ -14,12 +14,12 @@ class TestTokenEstimation:
     """token 估算功能测试"""
 
     def test_empty_text(self):
-        from tea_agent.session._history_builder import estimate_tokens
+        from tea_agent.session.history_builder import estimate_tokens
         assert estimate_tokens("") == 0
         assert estimate_tokens(None) == 0
 
     def test_english_text(self):
-        from tea_agent.session._history_builder import estimate_tokens
+        from tea_agent.session.history_builder import estimate_tokens
         text = "Hello world, this is a test message with some English words."
         tokens = estimate_tokens(text)
         assert tokens > 0
@@ -27,7 +27,7 @@ class TestTokenEstimation:
         assert 10 <= tokens <= 25
 
     def test_chinese_text(self):
-        from tea_agent.session._history_builder import estimate_tokens
+        from tea_agent.session.history_builder import estimate_tokens
         text = "这是一个中文测试消息，用于验证估算函数"
         tokens = estimate_tokens(text)
         assert tokens > 0
@@ -35,13 +35,13 @@ class TestTokenEstimation:
         assert 10 <= tokens <= 30
 
     def test_mixed_text(self):
-        from tea_agent.session._history_builder import estimate_tokens
+        from tea_agent.session.history_builder import estimate_tokens
         text = "Hello 你好 world 世界 test 测试"
         tokens = estimate_tokens(text)
         assert tokens > 0
 
     def test_messages_list(self):
-        from tea_agent.session._history_builder import estimate_messages_tokens
+        from tea_agent.session.history_builder import estimate_messages_tokens
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": "Hello!"},
@@ -57,7 +57,7 @@ class TestProgressiveTrim:
     """渐进式裁剪测试"""
 
     def test_no_trim_needed(self):
-        from tea_agent.session._history_builder import _progressive_trim, estimate_messages_tokens
+        from tea_agent.session.history_builder import _progressive_trim, estimate_messages_tokens
         messages = [
             {"role": "system", "content": "You are helpful."},
             {"role": "user", "content": "Hello"},
@@ -68,7 +68,7 @@ class TestProgressiveTrim:
         assert len(result) == len(messages)
 
     def test_trim_long_tool_output(self):
-        from tea_agent.session._history_builder import _progressive_trim
+        from tea_agent.session.history_builder import _progressive_trim
         long_output = "x" * 10000
         messages = [
             {"role": "system", "content": "You are helpful."},
@@ -87,7 +87,7 @@ class TestProgressiveTrim:
         assert "[工具结果已省略" in tool_msgs[0]["content"]
 
     def test_trim_reasoning_content(self):
-        from tea_agent.session._history_builder import _progressive_trim, estimate_tokens
+        from tea_agent.session.history_builder import _progressive_trim, estimate_tokens
         messages = [
             {"role": "system", "content": "You are helpful."},
             {"role": "user", "content": "Tell me a story"},
@@ -102,7 +102,7 @@ class TestProgressiveTrim:
                 assert m.get("reasoning_content", "") == ""
 
     def test_trim_old_user_turns(self):
-        from tea_agent.session._history_builder import _progressive_trim
+        from tea_agent.session.history_builder import _progressive_trim
         messages = [
             {"role": "system", "content": "You are helpful."},
         ]
@@ -118,7 +118,7 @@ class TestProgressiveTrim:
         assert result[0]["role"] == "system"
 
     def test_l2_entry_removal(self):
-        from tea_agent.session._history_builder import _progressive_trim
+        from tea_agent.session.history_builder import _progressive_trim
         messages = [
             {"role": "system", "content": "You are helpful."},
             {"role": "user", "content": "[历史记录]\n用户: old question"},
@@ -231,7 +231,7 @@ class TestPruneCutoff:
     """裁剪分界点检测测试"""
 
     def test_find_cutoff_basic(self):
-        from tea_agent.session._history_builder import _find_prune_cutoff
+        from tea_agent.session.history_builder import _find_prune_cutoff
         msgs = [
             {"role": "user"}, {"role": "assistant"},
             {"role": "user"}, {"role": "assistant"},
@@ -241,7 +241,7 @@ class TestPruneCutoff:
         assert _find_prune_cutoff(msgs, tail_turns=3) == 0
 
     def test_find_cutoff_less_than_tail(self):
-        from tea_agent.session._history_builder import _find_prune_cutoff
+        from tea_agent.session.history_builder import _find_prune_cutoff
         msgs = [
             {"role": "user"}, {"role": "assistant"},
         ]
@@ -249,7 +249,7 @@ class TestPruneCutoff:
         assert _find_prune_cutoff(msgs, tail_turns=3) == 0
 
     def test_find_cutoff_many_users(self):
-        from tea_agent.session._history_builder import _find_prune_cutoff
+        from tea_agent.session.history_builder import _find_prune_cutoff
         msgs = []
         for i in range(10):
             msgs.append({"role": "user"})

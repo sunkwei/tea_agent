@@ -587,7 +587,7 @@ def toolkit_self_evolve_thread(action: str):
 
                     # 获取便宜模型客户端
                     try:
-                        from tea_agent.session._params import get_cheap_params
+                        from tea_agent.session.params import get_cheap_params
                         cheap_params = get_cheap_params("memory")
                         cfg = get_config()
                         client = None

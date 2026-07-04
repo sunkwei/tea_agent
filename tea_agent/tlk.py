@@ -18,16 +18,11 @@ from tea_agent.toolkit.toolkit_set_topic_title import (
 
 logger = logging.getLogger("toolkit")
 
-# ── 模块级 Toolkit 单例 ──
-# 由 AgentCore/TeaAgent 在初始化时设置: tlk._toolkit_ = toolkit_instance
-# 工具函数通过 _get_toolkit() 访问，避免 globals().get() 脆弱模式
-_toolkit_ = None
+# ── 模块级 Toolkit 实例（公开发行；由 Agent / APIServer 在初始化时设置）──
+# 读取方（lite_agent / subagent / harness_schema）通过 tlk.toolkit 直接访问。
+# 历史命名 _toolkit_ 已废弃；新代码请使用 tlk.toolkit。
+toolkit = None
 
-def _get_toolkit():
-    """获取当前 Toolkit 实例。由 Agent 初始化时设置。"""
-    if _toolkit_ is None:
-        raise RuntimeError("Toolkit 未初始化。请先调用 AgentCore/TeaAgent 初始化。")
-    return _toolkit_
 
 def meta_toolkit_reload():
     """Meta toolkit reload."""
@@ -70,22 +65,6 @@ def meta_toolkit_save() -> dict:
             }
         }
     }
-
-def toolkit_reload() -> Dict:
-    """Toolkit reload."""
-    return _get_toolkit().reload()
-
-def toolkit_save(name: str, meta: dict, pycode: str, version: str = "") -> Tuple[int, str]:
-    """保存工具函数，支持版本管理。"""
-    return _get_toolkit().save(name, meta, pycode, version)
-
-def toolkit_rollback(name: str, version: str) -> Tuple[int, str]:
-    """回滚工具到指定版本"""
-    return _get_toolkit().rollback(name, version)
-
-def toolkit_list_versions(name: str) -> Tuple[int, List[str]]:
-    """列出工具的所有可用版本"""
-    return _get_toolkit().list_versions(name)
 
 def meta_toolkit_rollback():
     """Meta toolkit rollback."""
@@ -130,24 +109,6 @@ def meta_toolkit_list_versions():
             }
         }
     }
-
-def toolkit_rollback_impl(name: str, version: str) -> str:
-    """回滚工具到指定版本"""
-    status, msg = _get_toolkit().rollback(name, version)
-    if status == 0:
-        return f"✅ {msg}"
-    else:
-        return f"❌ {msg}"
-
-def toolkit_list_versions_impl(name: str) -> str:
-    """列出工具的所有可用版本"""
-    status, versions = _get_toolkit().list_versions(name)
-    if status == 0:
-        if not versions:
-            return f"工具 {name} 没有历史版本。"
-        return f"工具 {name} 的版本：\n" + "\n".join(f"  - v{v}" for v in versions)
-    else:
-        return f"❌ {versions}"
 
 # ========== Skill Document 自动生成 ==========
 
@@ -509,17 +470,17 @@ class Toolkit:
             self.func_map[k] = v
             self.meta_map[k] = temp_metas[k]
 
-        # 这几个永远有效
-        self.func_map["toolkit_reload"] = toolkit_reload
+        # 这几个永远有效 —— 直接绑定 Toolkit 实例方法（去除旧的 5 跳间接）
+        self.func_map["toolkit_reload"] = self.reload
         self.meta_map["toolkit_reload"] = meta_toolkit_reload()
 
-        self.func_map["toolkit_save"] = toolkit_save
+        self.func_map["toolkit_save"] = self.save
         self.meta_map["toolkit_save"] = meta_toolkit_save()
 
-        self.func_map["toolkit_rollback"] = toolkit_rollback_impl
+        self.func_map["toolkit_rollback"] = self.rollback_for_llm
         self.meta_map["toolkit_rollback"] = meta_toolkit_rollback()
 
-        self.func_map["toolkit_list_versions"] = toolkit_list_versions_impl
+        self.func_map["toolkit_list_versions"] = self.list_versions_for_llm
         self.meta_map["toolkit_list_versions"] = meta_toolkit_list_versions()
 
         self.func_map["toolkit_set_topic_title"] = toolkit_set_topic_title
@@ -715,5 +676,23 @@ class Toolkit:
         
         # 排序版本号
         versions.sort(key=lambda v: [int(x) for x in v.split('.')])
-        
+
         return (0, versions)
+
+    # ── LLM 友好的格式化版本（供 func_map 直接绑定，去除旧的 toolkit_*_impl 模块级函数）──
+
+    def rollback_for_llm(self, name: str, version: str) -> str:
+        """回滚工具到指定版本（LLM 友好输出，含 ✅/❌）。"""
+        status, msg = self.rollback(name, version)
+        if status == 0:
+            return f"✅ {msg}"
+        return f"❌ {msg}"
+
+    def list_versions_for_llm(self, name: str) -> str:
+        """列出工具的所有可用版本（LLM 友好输出）。"""
+        status, versions = self.list_versions(name)
+        if status == 0:
+            if not versions:
+                return f"工具 {name} 没有历史版本。"
+            return f"工具 {name} 的版本：\n" + "\n".join(f"  - v{v}" for v in versions)
+        return f"❌ {versions}"

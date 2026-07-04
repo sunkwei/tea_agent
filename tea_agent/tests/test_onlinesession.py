@@ -14,7 +14,7 @@ OnlineSession 测试套件 — 模块级函数 + OnlineToolSession 核心方法�
 from unittest.mock import MagicMock, PropertyMock
 
 from tea_agent.onlinesession import detect_mode, extract_mode, OnlineToolSession
-from tea_agent.session._context import SessionContext
+from tea_agent.session.context import SessionContext
 from tea_agent.onlinesession import APIComponent
 
 
@@ -852,7 +852,7 @@ class TestToolLoopAndCompression:
         assert threshold == BaseChatSession._DEFAULT_TOOL_THRESHOLD
 
 
-from tea_agent.session._tool_loop_runner import execute_tool_loop
+from tea_agent.session.tool_loop_runner import execute_tool_loop
 
 
 class TestExecuteToolLoop:
@@ -1002,13 +1002,13 @@ class TestLoopDetector:
     """工具循环检测器"""
 
     def test_no_repeat_on_first_call(self):
-        from tea_agent.session._tool_loop_runner import LoopDetector
+        from tea_agent.session.tool_loop_runner import LoopDetector
         ld = LoopDetector()
         result = ld.check_and_record("hello", [("search", '{"q":"test"}')])
         assert result["is_loop"] is False
 
     def test_detects_exact_duplicate_tool_call(self):
-        from tea_agent.session._tool_loop_runner import LoopDetector
+        from tea_agent.session.tool_loop_runner import LoopDetector
         ld = LoopDetector(window=5)
         for _ in range(3):
             ld.check_and_record("", [("search", '{"q":"test"}')])
@@ -1017,7 +1017,7 @@ class TestLoopDetector:
         assert result["type"] == "tool_repeat"
 
     def test_detects_content_repeat(self):
-        from tea_agent.session._tool_loop_runner import LoopDetector
+        from tea_agent.session.tool_loop_runner import LoopDetector
         ld = LoopDetector(window=5, similarity_threshold=0.5)
         ld.check_and_record("相同的输出内容", [])
         result = ld.check_and_record("相同的输出内容", [])
@@ -1025,7 +1025,7 @@ class TestLoopDetector:
         assert result["type"] == "content_repeat"
 
     def test_reset_clears_state(self):
-        from tea_agent.session._tool_loop_runner import LoopDetector
+        from tea_agent.session.tool_loop_runner import LoopDetector
         ld = LoopDetector()
         ld.check_and_record("hello", [("search", '{}')])
         ld.reset()

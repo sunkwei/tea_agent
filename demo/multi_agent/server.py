@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+!/usr/bin/env python
 """
 Multi-Agent 辩论赛 — 双 Session 对抗辩论服务器。
 
@@ -72,7 +72,7 @@ class DebateServer:
             tool_dir = str(Path(cfg.paths.toolkit_dir_abs))
             Path(tool_dir).mkdir(parents=True, exist_ok=True)
             self._toolkit = tlk.Toolkit(tool_dir)
-            tlk._toolkit_ = self._toolkit
+            tlk.toolkit = self._toolkit
             logger.info(f"Toolkit ready: {len(self._toolkit.func_map)} tools")
         return self._toolkit
 

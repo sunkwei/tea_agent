@@ -211,7 +211,7 @@ class APIServer:
             tool_dir = str(Path(cfg.paths.toolkit_dir_abs))
             Path(tool_dir).mkdir(parents=True, exist_ok=True)
             self._toolkit = tlk.Toolkit(tool_dir)
-            tlk._toolkit_ = self._toolkit
+            tlk.toolkit = self._toolkit
             logger.info(f"Toolkit 初始化 | 工具: {len(self._toolkit.func_map)} 个 | dir: {tool_dir}")
         return self._toolkit
 
@@ -1094,7 +1094,7 @@ def create_app(api_key: Optional[str] = None,
                config_path: Optional[str] = None):
     """Create the Starlette application for the unified server."""
     # Import route handlers here to avoid circular imports
-    from ._route_handlers import (
+    from .route_handlers import (
         handle_health,
         handle_chat_completions, handle_list_models,
         handle_list_tools, handle_run_tool,

@@ -38,7 +38,7 @@ from tea_agent.multi_agent import LiteAgent
 from tea_agent.server import create_app, run_server, main as run_server_main
 
 # ── Toolkit ──
-# Toolkit 由 Agent 内部管理，通过 tlk._get_toolkit() 访问
+# Toolkit 由 Agent 内部管理，完成后会写入 tlk.toolkit 模块全局供外部读取
 # 如需直接使用：from tea_agent.tlk import Toolkit
 
 __all__ = [

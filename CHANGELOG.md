@@ -3,8 +3,8 @@
 ## [0.10.9] - 2026-07-04
 ### Improvements & Changes
 - clean: 删除 75+ .bak.* 残留文件，移除 gateway/、web/ 废弃目录
-- refactor: server.py 拆分 → _route_handlers.py (2072→460 行)
-- refactor: store/_core.py 拆分 → _migration.py (1101→480 行)
+- refactor: server.py 拆分 → route_handlers.py (2072→460 行)
+- refactor: store/_core.py 拆分 → migration.py (1101→480 行)
 - fix: tlk.py logger name typo tookit → toolkit
 - style: 统一 import 风格（移除函数内 import），修复敷衍 docstring
 

@@ -16,7 +16,7 @@ class TestToMultimodal:
 
     def test_no_images_returns_unchanged(self):
         """无图片时应原样返回"""
-        from tea_agent.session._history_builder import to_multimodal
+        from tea_agent.session.history_builder import to_multimodal
         msg = {"role": "user", "content": "hello"}
         result = to_multimodal(msg, supports_vision=True)
         assert result["content"] == "hello"
@@ -24,7 +24,7 @@ class TestToMultimodal:
 
     def test_empty_images_returns_unchanged(self):
         """空图片列表应原样返回"""
-        from tea_agent.session._history_builder import to_multimodal
+        from tea_agent.session.history_builder import to_multimodal
         msg = {"role": "user", "content": "hello", "images": []}
         result = to_multimodal(msg, supports_vision=True)
         assert result["content"] == "hello"
@@ -32,7 +32,7 @@ class TestToMultimodal:
 
     def test_vision_supported_converts_to_multimodal(self, tmp_path):
         """支持视觉时应转换为多模态格式"""
-        from tea_agent.session._history_builder import to_multimodal
+        from tea_agent.session.history_builder import to_multimodal
         # 创建临时图片文件
         img_path = tmp_path / "test.png"
         img_path.write_bytes(b"fake png data")
@@ -52,7 +52,7 @@ class TestToMultimodal:
 
     def test_vision_not_supported_removes_images(self, tmp_path):
         """不支持视觉时应移除图片"""
-        from tea_agent.session._history_builder import to_multimodal
+        from tea_agent.session.history_builder import to_multimodal
         img_path = tmp_path / "test.png"
         img_path.write_bytes(b"fake png data")
         
@@ -67,7 +67,7 @@ class TestToMultimodal:
 
     def test_multiple_images(self, tmp_path):
         """多图片应全部转换"""
-        from tea_agent.session._history_builder import to_multimodal
+        from tea_agent.session.history_builder import to_multimodal
         # 创建多个临时图片文件
         img1 = tmp_path / "test1.png"
         img1.write_bytes(b"fake png 1")
@@ -85,7 +85,7 @@ class TestToMultimodal:
 
     def test_removes_images_key_from_result(self, tmp_path):
         """转换后应移除 images 键"""
-        from tea_agent.session._history_builder import to_multimodal
+        from tea_agent.session.history_builder import to_multimodal
         img_path = tmp_path / "test.png"
         img_path.write_bytes(b"fake png data")
         

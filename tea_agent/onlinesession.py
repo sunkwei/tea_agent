@@ -25,15 +25,15 @@ from tea_agent.basesession import BaseChatSession
 from tea_agent.session_pipeline import SessionPipeline
 
 # 组件导入（替代 Mixin）
-from tea_agent.session._context import SessionContext, SessionComponent
-from tea_agent.session._prompts import (
+from tea_agent.session.context import SessionContext, SessionComponent
+from tea_agent.session.prompts import (
     HISTORY_SUMMARIZE_SYSTEM, HISTORY_SUMMARIZE_USER,
     TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_TEMPLATE,
     COMPACT_SYSTEM_PROMPT,
 )
-from tea_agent.session._history_builder import build_api_messages
-from tea_agent.session._os_info_injector import inject_os_info as _inject_os_info_impl
-from tea_agent.session._tool_loop_runner import execute_tool_loop
+from tea_agent.session.history_builder import build_api_messages
+from tea_agent.session.os_info_injector import inject_os_info as _inject_os_info_impl
+from tea_agent.session.tool_loop_runner import execute_tool_loop
 
 logger = logging.getLogger("session")
 
@@ -976,7 +976,7 @@ class OnlineToolSession(BaseChatSession):
         跨会话持久化 OS 签名：同一 topic 在同一 OS 上只注入一次，
         切换主机（Windows↔Linux）时自动重新注入。
         """
-        from tea_agent.session._os_info_injector import (
+        from tea_agent.session.os_info_injector import (
             _get_os_signature, _load_persisted_os_sig, _save_os_sig,
             _inject_os_info_impl,
         )

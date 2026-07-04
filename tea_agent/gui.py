@@ -137,7 +137,7 @@ class TkGUI(Agent):
 
         # 暴露给 toolkit 工具函数
         globals()["_storage_"] = self.db
-        globals()["tlk"]._toolkit_ = self.toolkit
+        globals()["tlk"].toolkit = self.toolkit
 
         # HtmlFrame 缩放级别
         self._zoom_level = 100

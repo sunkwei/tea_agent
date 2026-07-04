@@ -377,7 +377,7 @@ def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
     Returns:
         构建好的 API 消息列表
     """
-    from tea_agent.session._json_sanitizer import sanitize_api_messages
+    from tea_agent.session.json_sanitizer import sanitize_api_messages
 
     result: List[Dict] = []
 
@@ -385,7 +385,7 @@ def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
     _base_system = system_prompt
     # 小模型自动注入输出规范约束
     try:
-        from tea_agent.session._prompts import is_small_model, SMALL_MODEL_CONSTRAINT, get_skill_validate_rules
+        from tea_agent.session.prompts import is_small_model, SMALL_MODEL_CONSTRAINT, get_skill_validate_rules
         _model_name = getattr(context, 'model', '') or ''
         if is_small_model(_model_name):
             _base_system = _base_system.rstrip('\n') + '\n\n' + SMALL_MODEL_CONSTRAINT

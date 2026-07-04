@@ -12,6 +12,8 @@ prompts, reflections, config_history, vectors, scheduled_tasks。
 """
 import json as _json_rs
 import logging
+import sqlite3
+import threading
 
 from ._component import StoreComponent, DB  # DB 短连接上下文管理器
 from ._topics import TopicStore
@@ -21,6 +23,7 @@ from ._memories import MemoryStore
 from ._vectors import VectorStore
 from ._scheduled_tasks import ScheduledTaskStore
 from .migration import (
+    backup_now, meta_get, meta_set,
     init_tables, migrate,
     maybe_rotate_db, write_week_key,
     protect_db,
@@ -196,6 +199,9 @@ class Storage:
         self._vectors = VectorStore(db_path)
         self._scheduled_tasks = ScheduledTaskStore(db_path)
 
+        # ── conn 属性：兼容旧代码直接访问 storage.conn ──
+        self._conn_lock = threading.Lock()
+
         # ── 注入 EmbeddingEngine 到 MemoryStore ──
         try:
             from tea_agent.embedding_util import EmbeddingEngine
@@ -218,7 +224,22 @@ class Storage:
         self.vectors = self._vectors
         self.scheduled_tasks = self._scheduled_tasks
 
-    # ── 显式委托方法（IDE 可跳转，文档可索引）──
+    @property
+    def conn(self):
+        """Get a thread-local database connection (backward compat).
+
+        旧代码直接访问 storage.conn 进行原始 SQL 操作。
+        使用线程局部连接，与 StoreComponent.conn 逻辑一致。
+        """
+        tl = StoreComponent._thread_local
+        if not hasattr(tl, 'conn') or tl.conn is None:
+            with self._conn_lock:
+                if not hasattr(tl, 'conn') or tl.conn is None:
+                    c = sqlite3.connect(self.db_path)
+                    c.row_factory = sqlite3.Row
+                    c.execute("PRAGMA journal_mode=WAL")
+                    tl.conn = c
+        return tl.conn
 
     # ── Topic 操作 ──
     def create_topic(self, title: str, topic_id: str = None) -> str:
@@ -263,6 +284,17 @@ class Storage:
     def get_and_clear_pending_cheap_tokens(self, topic_id: str) -> dict:
         """读取并清零待显示的便宜模型 token。"""
         return self._topics.get_and_clear_pending_cheap_tokens(topic_id)
+
+    # ── Agent Round 操作 ──
+    def save_agent_round(
+        self, conversation_id: int, round_num: int, role: str, content: str,
+        tool_calls: list = None, tool_call_id: str = None,
+    ):
+        """保存 Agent 循环记录。"""
+        return self._conversations.save_agent_round(
+            conversation_id, round_num, role, content,
+            tool_calls=tool_calls, tool_call_id=tool_call_id,
+        )
 
     # ── Conversation 操作 ──
     def get_conversations(self, topic_id: str, limit: int = 5, include_rounds: bool = True) -> list:
@@ -325,6 +357,30 @@ class Storage:
         """获取记忆统计。"""
         return self._memories.get_memory_stats()
 
+    def update_memory(self, memory_id: str, **fields) -> bool:
+        """更新记忆字段。"""
+        return self._memories.update_memory(memory_id, **fields)
+
+    def deactivate_memory(self, memory_id: str) -> bool:
+        """软删除记忆（标记为不活跃）。"""
+        return self._memories.deactivate_memory(memory_id)
+
+    def delete_memory(self, memory_id: str) -> bool:
+        """硬删除记忆。"""
+        return self._memories.delete_memory(memory_id)
+
+    def get_instructions(self) -> list:
+        """获取所有指令类记忆。"""
+        return self._memories.get_instructions()
+
+    def cleanup_expired_memories(self) -> int:
+        """清理过期记忆。"""
+        return self._memories.cleanup_expired_memories()
+
+    def touch_memory(self, memory_id: str):
+        """更新记忆的最近使用时间。"""
+        return self._memories.touch_memory(memory_id)
+
     # ── Summary 操作 ──
     def get_topic_summary(self, topic_id: str) -> str:
         """获取主题摘要。"""
@@ -358,6 +414,30 @@ class Storage:
     def set_tool_chain_summary(self, topic_id: str, summary: str):
         """设置工具链摘要。"""
         return self._summaries.set_tool_chain_summary(topic_id, summary)
+
+    def get_level2(self, topic_id: str) -> list:
+        """获取 Level 2 对话记录。"""
+        return self._summaries.get_level2(topic_id)
+
+    def set_level2(self, topic_id: str, level2: list):
+        """设置 Level 2 对话记录。"""
+        return self._summaries.set_level2(topic_id, level2)
+
+    def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str,
+                       files: list = None, rounds: list = None,
+                       max_level2: int = 50) -> tuple:
+        """将一轮对话推入 Level 2。"""
+        return self._summaries.push_to_level2(
+            topic_id, user_msg, ai_msg,
+            files=files, rounds=rounds, max_level2=max_level2,
+        )
+
+    def generate_l2_to_l3_summary(self, topic_id: str, level2_items: list,
+                                   cheap_model: object = None) -> tuple:
+        """将 Level 2 摘要为 Level 3。"""
+        return self._summaries.generate_l2_to_l3_summary(
+            topic_id, level2_items, cheap_model=cheap_model,
+        )
 
     # ── Prompt 操作 ──
     def add_system_prompt(self, content: str, reason: str = "", source_reflection_id=None) -> str:
@@ -445,6 +525,18 @@ class Storage:
     def update_task(self, task_id: str, **kwargs):
         """更新定时任务。"""
         return self._scheduled_tasks.update_task(task_id, **kwargs)
+
+    def backup_now(self):
+        """手动触发数据库备份。"""
+        return backup_now(self.db_path)
+
+    def _meta_set(self, key: str, value: str):
+        """写入元数据（短连接）。"""
+        return meta_set(self.db_path, key, value)
+
+    def _meta_get(self, key: str):
+        """读取元数据（短连接）。"""
+        return meta_get(self.db_path, key)
 
     # ── 生命周期 ──
 

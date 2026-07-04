@@ -1,10 +1,13 @@
 ## llm generated tool func, created Wed May 27 13:15:16 2026
-# version: 1.0.11
+# version: 1.0.12
 
 import sqlite3
 import json
 import os
 from pathlib import Path
+import logging
+
+logger = logging.getLogger("export_pdf")
 
 def _find_db_path():
     try:
@@ -87,244 +90,243 @@ def _sanitize(text):
         # Skip everything else (emoji, special symbols, etc.)
     return ''.join(result)
 
-def toolkit_export_last_pdf(output_path="last.pdf"):
+
+# ═══════════════════════════════════════════════════════════════
+#  Public API — export_topic_pdf (for server route)
+# ═══════════════════════════════════════════════════════════════
+
+def _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path):
+    """Generate PDF from extracted conversation data (fpdf2)."""
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        raise ImportError("fpdf2 not installed. Run: pip install fpdf2")
+
+    class PDF(FPDF):
+        def header(self):
+            if self.page_no() > 1:
+                self.set_font("F", "", 10)
+                self.set_text_color(120, 120, 120)
+                self.cell(0, 8, topic_title, align="L", new_x="LMARGIN", new_y="NEXT")
+                self.ln(12)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font("F", "", 8)
+            self.set_text_color(150, 150, 150)
+            self.cell(0, 10, f"Page {self.page_no()}/{{nb}}", align="C")
+
+    pdf = PDF()
+    pdf.alias_nb_pages()
+    pdf.set_auto_page_break(auto=True, margin=20)
+    font_name = _setup_fonts(pdf)
+
+    # Title page
+    pdf.add_page()
+    pdf.ln(30)
+    pdf.set_font(font_name, "", 28)
+    pdf.set_text_color(40, 40, 80)
+    pdf.cell(0, 15, topic_title, align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(5)
+    pdf.set_font(font_name, "", 14)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 10, f"Topic: {topic_title}", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, f"Date: {stamp}", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(10)
+    pdf.set_draw_color(60, 60, 120)
+    pdf.set_line_width(0.5)
+    pdf.line(30, pdf.get_y(), pdf.w - 30, pdf.get_y())
+    pdf.ln(15)
+
+    # User message
+    pdf.set_font(font_name, "", 16)
+    pdf.set_text_color(40, 40, 80)
+    pdf.cell(0, 12, "User Request", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+    pdf.set_font(font_name, "", 11)
+    pdf.set_text_color(50, 50, 50)
+    pdf.multi_cell(0, 6, user_msg)
+    pdf.ln(10)
+
+    # Thinking / reasoning
+    if reasoning_text.strip():
+        pdf.add_page()
+        pdf.set_font(font_name, "", 16)
+        pdf.set_text_color(40, 40, 80)
+        pdf.cell(0, 12, "Thinking Process", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(3)
+        for para in reasoning_text.split("\n\n"):
+            if not para.strip():
+                continue
+            if para.strip().startswith("```"):
+                code = para.strip().strip("```").strip()
+                pdf.set_fill_color(245, 245, 250)
+                pdf.set_text_color(60, 60, 80)
+                pdf.set_font(font_name, "", 9)
+                for line in code.split("\n"):
+                    if line.strip():
+                        pdf.multi_cell(0, 4.5, line, fill=True)
+                    else:
+                        pdf.ln(2)
+                pdf.ln(3)
+            else:
+                pdf.set_text_color(80, 80, 80)
+                pdf.set_font(font_name, "", 10)
+                pdf.multi_cell(0, 5, para.strip())
+                pdf.ln(2)
+        pdf.ln(8)
+
+    # AI response
+    pdf.add_page()
+    pdf.set_font(font_name, "", 16)
+    pdf.set_text_color(40, 40, 80)
+    pdf.cell(0, 12, "AI Response", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+    in_code, buf = False, []
+    for line in ai_msg.split("\n"):
+        s = line.strip()
+        if s.startswith("```"):
+            if in_code:
+                pdf.set_fill_color(240, 240, 248)
+                pdf.set_text_color(50, 50, 80)
+                pdf.set_font(font_name, "", 9)
+                for cl in buf:
+                    pdf.multi_cell(0, 4.5, cl, fill=True) if cl.strip() else pdf.ln(2)
+                pdf.ln(3); buf = []; in_code = False
+                pdf.set_font(font_name, "", 11)
+                pdf.set_text_color(50, 50, 50)
+            else:
+                in_code = True; buf = []
+            continue
+        if in_code:
+            buf.append(line); continue
+        if s.startswith("### "):
+            pdf.set_font(font_name, "", 12)
+            pdf.set_text_color(60, 60, 100)
+            pdf.multi_cell(0, 7, s[4:])
+            pdf.set_font(font_name, "", 11)
+            pdf.set_text_color(50, 50, 50)
+        elif s.startswith("## "):
+            pdf.set_font(font_name, "", 13)
+            pdf.set_text_color(50, 50, 90)
+            pdf.multi_cell(0, 8, s[3:])
+            pdf.set_font(font_name, "", 11)
+            pdf.set_text_color(50, 50, 50)
+        elif s.startswith("# "):
+            pdf.set_font(font_name, "", 14)
+            pdf.set_text_color(40, 40, 80)
+            pdf.multi_cell(0, 9, s[2:])
+            pdf.set_font(font_name, "", 11)
+            pdf.set_text_color(50, 50, 50)
+        elif s in ("---", "***"):
+            pdf.set_draw_color(180, 180, 200)
+            pdf.set_line_width(0.3)
+            pdf.line(30, pdf.get_y(), pdf.w - 30, pdf.get_y())
+            pdf.ln(5)
+        else:
+            pdf.multi_cell(0, 6, line)
+    if buf:
+        pdf.set_fill_color(240, 240, 248)
+        pdf.set_text_color(50, 50, 80)
+        pdf.set_font(font_name, "", 9)
+        for cl in buf:
+            pdf.multi_cell(0, 4.5, cl, fill=True) if cl.strip() else pdf.ln(2)
+
+    pdf.output(output_path)
+    return output_path
+
+
+def export_topic_pdf(topic_id: str, output_path: str = None) -> str:
+    """Export a specific topic's last conversation as PDF.
+    
+    Args:
+        topic_id: Topic UUID.
+        output_path: Output path (default: 'export_{topic_id[:8]}.pdf').
+    
+    Returns:
+        Path to the generated PDF file.
+    """
     db_path = _find_db_path()
     if not db_path:
-        return {"error": "chat_history.db not found"}
-    
+        raise FileNotFoundError("chat_history.db not found")
+
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    
-    c.execute("SELECT topic_id, title FROM topics ORDER BY rowid DESC LIMIT 1")
-    topic_row = c.fetchone()
-    if not topic_row:
+
+    c.execute("SELECT title FROM topics WHERE topic_id = ?", (topic_id,))
+    row = c.fetchone()
+    if not row:
         conn.close()
-        return {"error": "No topics found in database"}
-    
-    topic_id = topic_row["topic_id"]
-    topic_title = _sanitize(topic_row["title"] or "Untitled")
-    
+        raise ValueError(f"Topic {topic_id} not found")
+    topic_title = _sanitize(row["title"] or "Untitled")
+
     c.execute(
         "SELECT * FROM conversations WHERE topic_id = ? ORDER BY stamp DESC LIMIT 1",
-        (topic_id,)
+        (topic_id,),
     )
     conv = c.fetchone()
     if not conv:
         conn.close()
-        return {"error": f"No conversations found for topic {topic_id}"}
-    
-    conv_id = conv["id"]
-    user_msg_raw = conv["user_msg"]
-    ai_msg = conv["ai_msg"]
-    stamp = conv["stamp"]
-    
+        raise ValueError(f"No conversations for topic {topic_id}")
+    conv_id, user_raw, ai_msg, stamp = conv["id"], conv["user_msg"], conv["ai_msg"], conv["stamp"]
+
+    # Parse user_msg
     try:
-        user_msg_data = json.loads(user_msg_raw)
-        if isinstance(user_msg_data, dict):
-            user_msg = user_msg_data.get("text", user_msg_raw)
-        else:
-            user_msg = str(user_msg_data)
-    except (json.JSONDecodeError, TypeError):
-        user_msg = str(user_msg_raw)
-    
+        data = json.loads(user_raw)
+        user_msg = data.get("text", user_raw) if isinstance(data, dict) else str(data)
+    except Exception:
+        user_msg = str(user_raw)
+
+    # Agent rounds
     c.execute(
         "SELECT * FROM agent_rounds WHERE conversation_id = ? ORDER BY id ASC",
-        (conv_id,)
+        (conv_id,),
     )
     rounds = c.fetchall()
     conn.close()
-    
-    reasoning_parts = []
+
+    reasoning = []
     for r in rounds:
-        role = r["role"]
-        content = r["content"] or ""
-        tool_calls_raw = r["tool_calls"]
-        tool_calls = None
-        if tool_calls_raw:
+        role, content = r["role"], (r["content"] or "")
+        tc_raw = r["tool_calls"]
+        tc = None
+        if tc_raw:
             try:
-                tool_calls = json.loads(tool_calls_raw) if isinstance(tool_calls_raw, str) else tool_calls_raw
+                tc = json.loads(tc_raw) if isinstance(tc_raw, str) else tc_raw
             except Exception:
-                logger.exception("operation failed")
-        if tool_calls and not content.strip():
-            continue
-        if role == "tool":
+                pass
+        if (tc and not content.strip()) or role == "tool":
             continue
         if role == "assistant" and content:
-            reasoning_parts.append(content)
-    
-    reasoning_text = "\n\n".join(reasoning_parts)
-    
-    # Sanitize all text
+            reasoning.append(content)
+
     user_msg = _sanitize(user_msg)
-    reasoning_text = _sanitize(reasoning_text)
+    reasoning_text = _sanitize("\n\n".join(reasoning))
     ai_msg = _sanitize(ai_msg)
-    
+    output_path = output_path or f"export_{topic_id[:8]}.pdf"
+
+    return _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path)
+
+
+def toolkit_export_last_pdf(output_path="last.pdf"):
+    """Toolkit: export last conversation of latest topic as PDF."""
+    db_path = _find_db_path()
+    if not db_path:
+        return {"error": "chat_history.db not found"}
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT topic_id, title FROM topics ORDER BY rowid DESC LIMIT 1")
+    row = c.fetchone()
+    conn.close()
+    if not row:
+        return {"error": "No topics found"}
     try:
-        from fpdf import FPDF
-        
-        class PDF(FPDF):
-            def header(self):
-                if self.page_no() > 1:
-                    self.set_font("F", "", 10)
-                    self.set_text_color(120, 120, 120)
-                    self.cell(0, 8, topic_title, align="L", new_x="LMARGIN", new_y="NEXT")
-                    self.ln(12)
-            
-            def footer(self):
-                self.set_y(-15)
-                self.set_font("F", "", 8)
-                self.set_text_color(150, 150, 150)
-                self.cell(0, 10, f"Page {self.page_no()}/{{nb}}", align="C")
-        
-        pdf = PDF()
-        pdf.alias_nb_pages()
-        pdf.set_auto_page_break(auto=True, margin=20)
-        
-        font_name = _setup_fonts(pdf)
-        
-        # Title Page
-        pdf.add_page()
-        pdf.ln(30)
-        pdf.set_font(font_name, "", 28)
-        pdf.set_text_color(40, 40, 80)
-        pdf.cell(0, 15, topic_title, align="C", new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(5)
-        
-        pdf.set_font(font_name, "", 14)
-        pdf.set_text_color(100, 100, 100)
-        pdf.cell(0, 10, f"Topic: {topic_title}", align="C", new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 10, f"Date: {stamp}", align="C", new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(10)
-        
-        pdf.set_draw_color(60, 60, 120)
-        pdf.set_line_width(0.5)
-        pdf.line(30, pdf.get_y(), pdf.w - 30, pdf.get_y())
-        pdf.ln(15)
-        
-        # User Message
-        pdf.set_font(font_name, "", 16)
-        pdf.set_text_color(40, 40, 80)
-        pdf.cell(0, 12, "User Request", new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(3)
-        pdf.set_font(font_name, "", 11)
-        pdf.set_text_color(50, 50, 50)
-        pdf.multi_cell(0, 6, user_msg)
-        pdf.ln(10)
-        
-        # Reasoning
-        if reasoning_text.strip():
-            pdf.add_page()
-            pdf.set_font(font_name, "", 16)
-            pdf.set_text_color(40, 40, 80)
-            pdf.cell(0, 12, "Thinking Process", new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(3)
-            
-            paragraphs = reasoning_text.split("\n\n")
-            for para in paragraphs:
-                if para.strip():
-                    if para.strip().startswith("```"):
-                        code_content = para.strip().strip("```").strip()
-                        pdf.set_fill_color(245, 245, 250)
-                        pdf.set_text_color(60, 60, 80)
-                        pdf.set_font(font_name, "", 9)
-                        for line in code_content.split("\n"):
-                            if line.strip():
-                                pdf.multi_cell(0, 4.5, line, fill=True)
-                            else:
-                                pdf.ln(2)
-                        pdf.ln(3)
-                    else:
-                        pdf.set_text_color(80, 80, 80)
-                        pdf.set_font(font_name, "", 10)
-                        pdf.multi_cell(0, 5, para.strip())
-                        pdf.ln(2)
-            pdf.ln(8)
-        
-        # AI Response
-        pdf.add_page()
-        pdf.set_font(font_name, "", 16)
-        pdf.set_text_color(40, 40, 80)
-        pdf.cell(0, 12, "AI Response", new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(3)
-        
-        lines = ai_msg.split("\n")
-        in_code_block = False
-        code_buffer = []
-        
-        for line in lines:
-            stripped = line.strip()
-            
-            if stripped.startswith("```"):
-                if in_code_block:
-                    pdf.set_fill_color(240, 240, 248)
-                    pdf.set_text_color(50, 50, 80)
-                    pdf.set_font(font_name, "", 9)
-                    for cl in code_buffer:
-                        if cl.strip():
-                            pdf.multi_cell(0, 4.5, cl, fill=True)
-                        else:
-                            pdf.ln(2)
-                    pdf.ln(3)
-                    code_buffer = []
-                    in_code_block = False
-                    pdf.set_font(font_name, "", 11)
-                    pdf.set_text_color(50, 50, 50)
-                else:
-                    in_code_block = True
-                    code_buffer = []
-                continue
-            
-            if in_code_block:
-                code_buffer.append(line)
-                continue
-            
-            if stripped.startswith("### "):
-                pdf.set_font(font_name, "", 12)
-                pdf.set_text_color(60, 60, 100)
-                pdf.multi_cell(0, 7, stripped[4:])
-                pdf.set_font(font_name, "", 11)
-                pdf.set_text_color(50, 50, 50)
-            elif stripped.startswith("## "):
-                pdf.set_font(font_name, "", 13)
-                pdf.set_text_color(50, 50, 90)
-                pdf.multi_cell(0, 8, stripped[3:])
-                pdf.set_font(font_name, "", 11)
-                pdf.set_text_color(50, 50, 50)
-            elif stripped.startswith("# "):
-                pdf.set_font(font_name, "", 14)
-                pdf.set_text_color(40, 40, 80)
-                pdf.multi_cell(0, 9, stripped[2:])
-                pdf.set_font(font_name, "", 11)
-                pdf.set_text_color(50, 50, 50)
-            elif stripped.startswith("- **") or stripped.startswith("- "):
-                pdf.set_x(pdf.l_margin + 5)
-                pdf.multi_cell(0, 6, line)
-            elif stripped == "---" or stripped == "***":
-                pdf.set_draw_color(180, 180, 200)
-                pdf.set_line_width(0.3)
-                pdf.line(30, pdf.get_y(), pdf.w - 30, pdf.get_y())
-                pdf.ln(5)
-            else:
-                pdf.multi_cell(0, 6, line)
-        
-        if code_buffer:
-            pdf.set_fill_color(240, 240, 248)
-            pdf.set_text_color(50, 50, 80)
-            pdf.set_font(font_name, "", 9)
-            for cl in code_buffer:
-                if cl.strip():
-                    pdf.multi_cell(0, 4.5, cl, fill=True)
-                else:
-                    pdf.ln(2)
-        
-        pdf.output(output_path)
-        return {"success": True, "output": output_path, "topic": topic_title, "stamp": stamp}
-    
-    except ImportError:
-        return {"error": "fpdf2 not installed. Run: pip install fpdf2"}
+        path = export_topic_pdf(row["topic_id"], output_path)
+        return {"success": True, "output": path, "topic": _sanitize(row["title"] or "Untitled")}
     except Exception as e:
-        return {"error": f"PDF generation failed: {str(e)}"}
+        return {"error": str(e)}
 
 
 def meta_toolkit_export_last_pdf() -> dict:

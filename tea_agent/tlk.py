@@ -1,3 +1,17 @@
+"""
+Toolkit 系统核心 — 工具加载/注册/执行引擎。
+
+职责链：
+  1. 从 toolkit/*.py 加载工具定义（名称/描述/参数/Python 代码）
+  2. 编译代码 → 动态注册为全局 `toolkit_*()` 函数
+  3. 构建 LLM 可消费的 func_map（name→function_ref）
+  4. 提供 reload/save/rollback/list_versions 版本管理
+
+关键设计：
+  - func_map 直绑 Toolkit 实例方法（消除旧的 5 跳间接调用）
+  - exec(code, safe_globals) 隔离执行，不污染命名空间
+  - rollback_for_llm() 专门给 LLM 调用，内部调 rollback_impl()
+"""
 import ast
 import importlib.util
 import json

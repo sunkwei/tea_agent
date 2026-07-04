@@ -9,21 +9,29 @@ if _sys.platform == "win32":
         ctypes.windll.shcore.SetProcessDpiAwareness(2)
     except Exception:
         pass
+"""
+GUI 主窗口 — Tkinter 桌面版 Agent 界面。
+
+架构分层：
+  1. _gui/_*.py — 渲染引擎/搜索/流式/Markdown/托盘等组件
+  2. gui.py — 主窗口组装：菜单栏 + 输入区 + 输出区 + 状态栏
+  3. TkGUI.mainloop() — 事件循环入口
+
+关键设计：
+  - 所有 _gui 组件通过 constructor injection 注入 TkGUI
+  - 流式响应：StreamManager 管理异步输出，Renderer 渲染 Markdown
+  - 会话生命周期：open()→run()→close()，通过 session_ref 关联
+"""
 
 import tkinter as tk
-from tkinter import font as tkFont
-from tkinter import ttk, scrolledtext, Listbox, Frame
+
 import threading
 import os
-import os.path as osp
 import sys
-import re
-import string
-import html as html_mod
-import traceback
+
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, cast, Callable, List, Tuple
+from typing import Optional, Dict, List
 import logging
 import webbrowser
 
@@ -79,7 +87,6 @@ from tea_agent._gui._markdown import (
     _validate_html_structure, _MD_CSS_TEMPLATE, _KNOWN_HTML_TAGS,
     HAS_TKINTERWEB,
 )
-from tea_agent._gui._topic_summary import _generate_topic_summary
 
 # 组件委托（composition）
 from tea_agent._gui._stream_manager import StreamManager

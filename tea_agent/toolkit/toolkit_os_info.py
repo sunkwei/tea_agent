@@ -1,3 +1,6 @@
+"""OS 信息查询工具 — 提供 platform 信息的进程级缓存封装。"""
+
+
 import platform
 import functools
 

@@ -204,10 +204,10 @@ class MemoryComponent(SessionComponent):
         return list(self.ctx._injected_memories)
 
 
-# ══════════════════════════════════════════════════════════════
+# ────────────────────────────────────────────────────────────══
 # AutoMemoryExtractor — 从 store/_auto_memory.py 迁入
 # 独立提取器，不依赖会话上下文，可直接用 storage 实例化
-# ══════════════════════════════════════════════════════════════
+# ────────────────────────────────────────────────────────────══
 
 EXTRACTION_PROMPT = """Analyze the following conversation and extract information worth long-term preservation.
 

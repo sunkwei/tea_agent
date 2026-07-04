@@ -5,7 +5,7 @@
 """
 
 from typing import Optional
-from tea_agent.config import load_config
+from tea_agent.config import load_config, save_config
 
 # ── Provider 定义 ──
 
@@ -201,7 +201,6 @@ def generate_config(provider_name: str, api_key: str,
     return "\n".join(lines)
 
 
-# switch_provider needs save_config - implement when ready
 def switch_provider(config_path: str, provider_name: str, api_key: str,
                     model: str = "", use_cheap: bool = False,
                     cheap_provider: str = "", cheap_api_key: str = "",

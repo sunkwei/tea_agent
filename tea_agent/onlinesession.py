@@ -28,12 +28,12 @@ from tea_agent.session_pipeline import SessionPipeline
 from tea_agent.session.context import SessionContext, SessionComponent
 from tea_agent.session.prompts import (
     HISTORY_SUMMARIZE_SYSTEM, HISTORY_SUMMARIZE_USER,
-    TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_TEMPLATE,
     COMPACT_SYSTEM_PROMPT,
 )
 from tea_agent.session.history_builder import build_api_messages
-from tea_agent.session.os_info_injector import inject_os_info as _inject_os_info_impl
+from tea_agent.session.os_info_injector import inject_os_info
 from tea_agent.session.tool_loop_runner import execute_tool_loop
+from tea_agent.session.params import get_cheap_params
 
 logger = logging.getLogger("session")
 
@@ -580,7 +580,7 @@ class SummarizerComponent(SessionComponent):
                 and cli is self.ctx.cheap_client
             )
             
-            cheap_params = _get_cheap_params({"temperature": 0.1, "max_tokens": 500})
+            cheap_params = get_cheap_params("summarizer")
             response = api_component.call_summarize_api(
                 cli, mdl,
                 messages=[
@@ -978,7 +978,6 @@ class OnlineToolSession(BaseChatSession):
         """
         from tea_agent.session.os_info_injector import (
             _get_os_signature, _load_persisted_os_sig, _save_os_sig,
-            _inject_os_info_impl,
         )
         current_sig = _get_os_signature()
 
@@ -996,7 +995,7 @@ class OnlineToolSession(BaseChatSession):
         if topic_id:
             _save_os_sig(topic_id, current_sig)
         logger.info(f"OS 信息注入: {current_sig} (topic={topic_id})")
-        return _inject_os_info_impl(
+        return inject_os_info(
             self.messages,
             toolkit_root_dir=self.toolkit.root_dir,
             supports_reasoning=self.context.supports_reasoning,

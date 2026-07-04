@@ -1187,44 +1187,31 @@ window.showMaxIterConfirm = function(confirmId, text) {
 
 let _screenshotOverlay = null;
 
-/** Check if browser supports getDisplayMedia, show/hide screenshot button */
+/** 服务端截图 — 无需浏览器 WebRTC 权限 */
 async function checkVisionSupport() {
     const btn = document.getElementById('screenshot-btn');
-    const hasDisplayMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
-    if (btn) btn.style.display = hasDisplayMedia ? '' : 'none';
+    if (btn) {
+        btn.style.display = '';
+        btn.title = '服务端截图\n点击后从服务器截取屏幕，然后在截图上拖拽选区域或点击「截取全屏」';
+    }
 }
 
 window.startScreenshot = async function() {
     if (_screenshotOverlay) return;
 
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        toast('您的浏览器不支持屏幕截图，请使用 Chrome/Edge 74+ 或 Firefox 66+', 'error');
-        return;
-    }
+    toast('正在从服务器截取屏幕...', 'info');
 
-    toast('请选择要共享的屏幕/窗口...', 'info');
-
-    // 1. getDisplayMedia 捕获一帧
-    let fullImageData, stream;
+    // 1. 调服务端 API 获取全屏截图 base64
+    let fullImageData;
     try {
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        var video = document.createElement('video');
-        video.srcObject = stream;
-        await video.play();
-        var capCanvas = document.createElement('canvas');
-        capCanvas.width = video.videoWidth;
-        capCanvas.height = video.videoHeight;
-        capCanvas.getContext('2d').drawImage(video, 0, 0);
-        fullImageData = capCanvas.toDataURL('image/png');
-        stream.getTracks().forEach(function(t) { t.stop(); });
-        stream = null;
+        const resp = await fetch('/api/screenshot/full');
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || '服务端截图失败');
+        const b64 = data.image_base64;  // "data:image/png;base64,xxxxx"
+        if (!b64 || b64.length < 100) throw new Error('截图数据无效');
+        fullImageData = b64;
     } catch (err) {
-        if (stream) stream.getTracks().forEach(function(t) { t.stop(); });
-        if (err.name === 'AbortError' || err.name === 'NotAllowedError') {
-            toast('截图已取消', 'info');
-        } else {
-            toast('截图失败: ' + err.message, 'error');
-        }
+        toast('截图失败: ' + err.message, 'error');
         return;
     }
 
@@ -1244,15 +1231,34 @@ window.startScreenshot = async function() {
     // 等待图片加载
     await new Promise(function(r) { img.onload = r; img.onerror = r; });
 
+    // 确保布局稳定：等待两帧以保证 getBoundingClientRect 返回正确值
+    await new Promise(function(r) { requestAnimationFrame(function() { requestAnimationFrame(r); }); });
+
+    // 检查布局是否有效，若无效则强制布局
+    var _checkRect = img.getBoundingClientRect();
+    if (_checkRect.width < 1 || _checkRect.height < 1) {
+        // 强制重排：临时修改样式触发 reflow
+        img.style.display = 'inline-block';
+        void img.offsetHeight; // force reflow
+        img.style.display = 'block';
+        await new Promise(function(r) { requestAnimationFrame(function() { requestAnimationFrame(r); }); });
+    }
+    console.log('[screenshot] img rect:', JSON.stringify(img.getBoundingClientRect()), 'natural:', img.naturalWidth, 'x', img.naturalHeight);
+
     // 3. 橡皮筋选区框
     var sel = document.createElement('div');
     sel.style.cssText = 'position:fixed;border:2px dashed #00aaff;background:rgba(0,170,255,0.18);display:none;pointer-events:none;z-index:10001;';
     overlay.appendChild(sel);
 
-    var hint = document.createElement('div');
-    hint.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:#ddd;padding:8px 24px;border-radius:20px;font-size:14px;z-index:10002;pointer-events:none;';
-    hint.textContent = '拖拽框选截图区域 · ESC 取消';
-    overlay.appendChild(hint);
+    // 工具条（固定在 overlay 底部）
+    var toolbar = document.createElement('div');
+    toolbar.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:12px;align-items:center;z-index:10002;pointer-events:auto;';
+    toolbar.innerHTML = '' +
+        '<span style="color:#aaa;font-size:13px;background:rgba(0,0,0,0.6);padding:6px 14px;border-radius:16px;">' +
+        '🖱️ 拖拽选区域 · 点击=全图</span>' +
+        '<button id="screenshot-capture-all" style="background:#1a73e8;color:white;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;">📷 截取全屏</button>' +
+        '<button id="screenshot-cancel" style="background:rgba(255,255,255,0.15);color:#ddd;border:1px solid rgba(255,255,255,0.3);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;">✕ 取消</button>';
+    overlay.appendChild(toolbar);
 
     // 辅助函数：获取图片在视口中的实际渲染矩形
     function imgRenderRect() {
@@ -1263,23 +1269,75 @@ window.startScreenshot = async function() {
     // 辅助函数：视口坐标 → 图片原始像素坐标
     function clientToImage(cx, cy) {
         var r = imgRenderRect();
+        // 零宽保护：若布局未完成，用视口尺寸作为兜底
+        var w = r.width > 0 ? r.width : window.innerWidth;
+        var h = r.height > 0 ? r.height : window.innerHeight;
+        var left = isFinite(r.left) ? r.left : 0;
+        var top = isFinite(r.top) ? r.top : 0;
         // 在图片渲染区域内的比例
-        var rx = (cx - r.left) / r.width;
-        var ry = (cy - r.top) / r.height;
+        var rx = (cx - left) / w;
+        var ry = (cy - top) / h;
         // 钳制到 [0,1]
         rx = Math.max(0, Math.min(1, rx));
         ry = Math.max(0, Math.min(1, ry));
+        var imgW = img.naturalWidth || screen.width || 1920;
+        var imgH = img.naturalHeight || screen.height || 1080;
         return {
-            x: Math.round(rx * img.naturalWidth),
-            y: Math.round(ry * img.naturalHeight)
+            x: Math.round(rx * imgW),
+            y: Math.round(ry * imgH)
         };
     }
 
+    // 截取并添加图片（公共函数）
+    function doCrop(cropX, cropY, cropW, cropH) {
+        toast('正在裁剪...', 'info');
+        try {
+            var canvas = document.createElement('canvas');
+            canvas.width = cropW;
+            canvas.height = cropH;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+            pendingImages.push(canvas.toDataURL('image/png'));
+            updateImagePreview();
+            cleanupOverlay();
+            toast('✓ 截图已添加', 'success');
+        } catch (err) {
+            toast('裁剪失败: ' + err.message, 'error');
+        }
+    }
+
+    // 清理 overlay
+    function cleanupOverlay() {
+        document.removeEventListener('keydown', onKey);
+        if (_screenshotOverlay && _screenshotOverlay.parentNode) {
+            _screenshotOverlay.parentNode.removeChild(_screenshotOverlay);
+        }
+        _screenshotOverlay = null;
+    }
+
+    // 截取全屏
+    function captureFull() {
+        cleanupOverlay();
+        doCrop(0, 0, img.naturalWidth, img.naturalHeight);
+    }
+
+    // 按钮事件
+    document.getElementById('screenshot-capture-all').addEventListener('click', captureFull);
+    document.getElementById('screenshot-cancel').addEventListener('click', function() {
+        cleanupOverlay();
+        toast('截图已取消', 'info');
+    });
+
     var dragging = false;
+    var clickOnly = false;
     var sx = 0, sy = 0;
 
+    // ----- 鼠标事件 -----
     overlay.addEventListener('mousedown', function(e) {
+        // 排除工具条按钮点击
+        if (e.target.closest('#screenshot-cancel') || e.target.closest('#screenshot-capture-all')) return;
         dragging = true;
+        clickOnly = true;
         sx = e.clientX;
         sy = e.clientY;
         sel.style.left = e.clientX + 'px';
@@ -1291,6 +1349,8 @@ window.startScreenshot = async function() {
 
     overlay.addEventListener('mousemove', function(e) {
         if (!dragging) return;
+        // 有移动 → 不是纯点击
+        clickOnly = false;
         var x = Math.min(sx, e.clientX);
         var y = Math.min(sy, e.clientY);
         var w = Math.abs(e.clientX - sx);
@@ -1305,16 +1365,20 @@ window.startScreenshot = async function() {
         if (!dragging) return;
         dragging = false;
 
-        // 保存后移除 overlay
-        var natW = img.naturalWidth;
-        var natH = img.naturalHeight;
+        // 情形 A：纯点击（无移动）→ 截取全屏
+        if (clickOnly) {
+            captureFull();
+            return;
+        }
+
+        // 情形 B：拖拽选区
         _screenshotOverlay = null;
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
 
         var vw = Math.abs(e.clientX - sx);
         var vh = Math.abs(e.clientY - sy);
-        if (vw < 8 || vh < 8) {
-            toast('选区太小，请重新截取', 'error');
+        if (vw < 12 || vh < 12) {
+            toast('选区太小，点击=全屏截图，拖拽=选区截图', 'error');
             return;
         }
 
@@ -1327,36 +1391,100 @@ window.startScreenshot = async function() {
         var cropW = Math.abs(p2.x - p1.x);
         var cropH = Math.abs(p2.y - p1.y);
 
-        if (cropW < 4 || cropH < 4) {
-            toast('选区太小', 'error');
+        // 若比例映射结果异常小，直接按视口比例估算（备用方案）
+        if (cropW < 8 || cropH < 8) {
+            var _r = imgRenderRect();
+            var _scaleX = (_r.width > 0) ? (img.naturalWidth / _r.width) : 1;
+            var _scaleY = (_r.height > 0) ? (img.naturalHeight / _r.height) : 1;
+            var _altW = Math.round(vw * _scaleX);
+            var _altH = Math.round(vh * _scaleY);
+            if (_altW >= 8 && _altH >= 8) {
+                console.log('[screenshot] fallback: clientToImage gave', cropW, 'x', cropH, '→ using', _altW, 'x', _altH);
+                cropW = _altW;
+                cropH = _altH;
+                // 重新估算起始点
+                var pMinX = Math.min(sx, e.clientX);
+                var pMinY = Math.min(sy, e.clientY);
+                cropX = Math.round((pMinX - _r.left) / _r.width * img.naturalWidth);
+                cropY = Math.round((pMinY - _r.top) / _r.height * img.naturalHeight);
+                cropX = Math.max(0, Math.min(img.naturalWidth - cropW, cropX));
+                cropY = Math.max(0, Math.min(img.naturalHeight - cropH, cropY));
+            } else {
+                toast('选区太小，请重试', 'error');
+                return;
+            }
+        }
+
+        doCrop(cropX, cropY, cropW, cropH);
+    });
+
+    // ----- 触屏事件（移动端支持） -----
+    var touchStart = null;
+
+    overlay.addEventListener('touchstart', function(e) {
+        if (e.target.closest('#screenshot-cancel') || e.target.closest('#screenshot-capture-all')) return;
+        var t = e.touches[0];
+        touchStart = { x: t.clientX, y: t.clientY };
+        sx = t.clientX;
+        sy = t.clientY;
+        clickOnly = true;
+        sel.style.left = t.clientX + 'px';
+        sel.style.top = t.clientY + 'px';
+        sel.style.width = '0px';
+        sel.style.height = '0px';
+        sel.style.display = 'block';
+    }, { passive: true });
+
+    overlay.addEventListener('touchmove', function(e) {
+        if (!touchStart) return;
+        clickOnly = false;
+        var t = e.touches[0];
+        var x = Math.min(sx, t.clientX);
+        var y = Math.min(sy, t.clientY);
+        var w = Math.abs(t.clientX - sx);
+        var h = Math.abs(t.clientY - sy);
+        sel.style.left = x + 'px';
+        sel.style.top = y + 'px';
+        sel.style.width = w + 'px';
+        sel.style.height = h + 'px';
+    }, { passive: true });
+
+    overlay.addEventListener('touchend', function(e) {
+        if (!touchStart) return;
+        var endX = sx, endY = sy;
+        // 如果是拖拽，取最后移动位置
+        if (e.changedTouches && e.changedTouches.length > 0) {
+            endX = e.changedTouches[0].clientX;
+            endY = e.changedTouches[0].clientY;
+        }
+        touchStart = null;
+
+        if (clickOnly) {
+            captureFull();
             return;
         }
 
-        toast('正在裁剪...', 'info');
+        cleanupOverlay();
 
-        try {
-            var canvas = document.createElement('canvas');
-            canvas.width = cropW;
-            canvas.height = cropH;
-            var ctx = canvas.getContext('2d');
-            ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-            pendingImages.push(canvas.toDataURL('image/png'));
-            updateImagePreview();
-            toast('✓ 截图已添加', 'success');
-        } catch (err) {
-            toast('裁剪失败: ' + err.message, 'error');
-        }
-    });
+        var vw = Math.abs(endX - sx);
+        var vh = Math.abs(endY - sy);
+        if (vw < 12 || vh < 12) return;
+
+        var p1 = clientToImage(sx, sy);
+        var p2 = clientToImage(endX, endY);
+        var cropX = Math.max(0, Math.min(p1.x, p2.x));
+        var cropY = Math.max(0, Math.min(p1.y, p2.y));
+        var cropW = Math.abs(p2.x - p1.x);
+        var cropH = Math.abs(p2.y - p1.y);
+        if (cropW < 8 || cropH < 8) return;
+
+        doCrop(cropX, cropY, cropW, cropH);
+    }, { passive: true });
 
     // ESC 取消
     function onKey(e) {
         if (e.key === 'Escape') {
-            dragging = false;
-            document.removeEventListener('keydown', onKey);
-            if (_screenshotOverlay && _screenshotOverlay.parentNode) {
-                _screenshotOverlay.parentNode.removeChild(_screenshotOverlay);
-            }
-            _screenshotOverlay = null;
+            cleanupOverlay();
             toast('截图已取消', 'info');
         }
     }

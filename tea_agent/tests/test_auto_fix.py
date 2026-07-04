@@ -214,7 +214,6 @@ class TestEdgeCases:
     def test_ruff_not_installed(self, agent, monkeypatch):
         """模拟 ruff 不可用时，应优雅降级。"""
         import subprocess
-        original_run = subprocess.run
 
         def mock_run(*args, **kwargs):
             raise FileNotFoundError("ruff not found")

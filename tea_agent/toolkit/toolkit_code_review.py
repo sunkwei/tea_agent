@@ -134,15 +134,22 @@ def _assess_complexity(filepath: str) -> Dict[str, Any]:
 
 def _complexity_score(total: int, code: int, max_indent: int) -> str:
     score = 0
-    if total < 50: score += 10
-    elif total < 200: score += 7
-    elif total < 500: score += 4
+    if total < 50:
+        score += 10
+    elif total < 200:
+        score += 7
+    elif total < 500:
+        score += 4
     else: score += 1
-    if max_indent <= 2: score += 5
-    elif max_indent <= 4: score += 3
+    if max_indent <= 2:
+        score += 5
+    elif max_indent <= 4:
+        score += 3
     else: score += 1
-    if score >= 13: return "简单"
-    elif score >= 8: return "中等"
+    if score >= 13:
+        return "简单"
+    elif score >= 8:
+        return "中等"
     else: return "复杂"
 
 
@@ -156,7 +163,8 @@ def _check_style(filepath: str) -> Dict[str, Any]:
         for i, line in enumerate(lines, 1):
             if len(line) > 100 and line.strip():
                 issues.append({"line": i, "type": "line_too_long", "description": f"行过长: {len(line)}字符(建议≤100)", "severity": "low"})
-                if len(issues) >= 5: break
+                if len(issues) >= 5:
+                    break
         if content.strip() and not content.strip().startswith('"""') and not content.strip().startswith("'''"):
             issues.append({"line": 1, "type": "missing_docstring", "description": "缺少模块级 docstring", "severity": "low"})
         return {"ok": len(issues) == 0, "issues": issues, "count": len(issues)}

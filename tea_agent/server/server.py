@@ -230,7 +230,8 @@ class APIServer:
         with self._lock:
             if self._agent:
                 try: self._agent.sess.close()
-                except Exception: logger.exception("operation failed")
+                except Exception:
+                    logger.exception("operation failed")
             self._agent = None
             logger.info("Agent reset")
 
@@ -274,7 +275,8 @@ class APIServer:
                 agent.current_topic_id = agent.db.create_topic("API 会话")
             collected = []
             def cb(text: str):
-                if text and not text.startswith("["): collected.append(text)
+                if text and not text.startswith("["):
+                    collected.append(text)
             ai_msg, used_tools = agent.sess.chat_stream(
                 user_msg, callback=cb,
                 topic_id=topic_id or agent.current_topic_id)
@@ -313,9 +315,11 @@ class APIServer:
         def _put(event):
             try: event_loop.call_soon_threadsafe(
                 lambda: queue.put_nowait(event))
-            except Exception: logger.exception("operation failed")
+            except Exception:
+                logger.exception("operation failed")
         def stream_cb(text):
-            if text.startswith("["): return
+            if text.startswith("["):
+                return
             _put({"type": "content", "text": text})
         thread = threading.Thread(
             target=self._run_stream,
@@ -590,7 +594,8 @@ class APIServer:
     def get_session(self, topic_id):
         s = self._get_storage()
         topic = s.get_topic(topic_id)
-        if not topic: return None
+        if not topic:
+            return None
         tokens = s.get_topic_tokens(topic_id)
         convs = s.get_conversations(topic_id, limit=0, include_rounds=True)
         return {"id": topic["topic_id"], "title": topic.get("title",""),

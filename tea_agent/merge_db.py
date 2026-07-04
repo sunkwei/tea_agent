@@ -588,7 +588,7 @@ class DbMerger:
         if not src_cfgs:
             return
 
-        col_idx = {name: i for i, name in enumerate(cols)}
+        {name: i for i, name in enumerate(cols)}
         count = 0
         for row in src_cfgs:
             values = list(row)

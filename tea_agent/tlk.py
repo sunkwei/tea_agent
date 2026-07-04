@@ -169,10 +169,9 @@ def _auto_generate_skill_doc(name: str, meta: dict, pycode: str, version: str, t
             if func_node:
                 for arg in func_node.args.args:
                     args_list.append(arg.arg)
-            signature = f"{name}({', '.join(args_list)})" if args_list else f"{name}()"
+            f"{name}({', '.join(args_list)})" if args_list else f"{name}()"
         except SyntaxError:
             pydoc = ""
-            signature = f"{name}(...)"
             args_list = []
 
         # 构建 SKILL.md 内容

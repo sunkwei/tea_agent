@@ -168,7 +168,7 @@ def _enhance_comments(file_path: str, dry_run: bool = False) -> str:
         except SyntaxError as e:
             return f"❌ 语法错误: {e}"
 
-        lines = content.split("\n")
+        content.split("\n")
         enhancements = []
 
         # 遍历 AST 节点

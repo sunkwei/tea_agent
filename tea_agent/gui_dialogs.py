@@ -189,9 +189,6 @@ class MemoryDialog(tk.Toplevel):
         dlg.grab_set()
         dlg.geometry("500x420")
 
-        fields = [
-            ("内容 (content):", "content", tk.Text, {"height": 3}),
-        ]
 
         ttk.Label(dlg, text="内容 (必填):").place(x=10, y=10)
         content_text = tk.Text(dlg, height=3, width=55, font=(SYSTEM_FONT, _fs(10)))

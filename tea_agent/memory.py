@@ -1119,7 +1119,7 @@ importance 评分：
             )
             summary_ids.append(sid)
 
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             for m in mems:
                 new_imp = max(1, (m.get('importance') or 3) - 1)
                 if new_imp != m.get('importance'):

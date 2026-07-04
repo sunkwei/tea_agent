@@ -438,7 +438,7 @@ class TestCreateChatStreamParams:
         api.ctx.client.chat.completions.create.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
         )
-        response = api.create_chat_stream(
+        api.create_chat_stream(
             [{"role": "user", "content": "hi"}], [],
         )
         api.ctx.client.chat.completions.create.assert_called_once()
@@ -925,7 +925,8 @@ class TestExecuteToolLoop:
         ]
         sess._process_stream_with_reasoning.side_effect = responses
 
-        mock_tc = lambda name: MagicMock(id="c1", function=MagicMock(name=name, arguments="{}"))
+        def mock_tc(name):
+            return MagicMock(id="c1", function=MagicMock(name=name, arguments="{}"))
         sess.tools_comp.parse_tool_calls_from_stream.side_effect = [
             [mock_tc("search")],
             [mock_tc("read_file")],

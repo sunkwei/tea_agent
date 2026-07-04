@@ -92,7 +92,7 @@ def detect_content(text: str) -> ClipContent:
 
     t = text.strip()
     lines = text.splitlines()
-    fl = lines[0].strip() if lines else ""
+    lines[0].strip() if lines else ""
 
     # 1. 错误信息
     for pat, sub in ERROR_PATTERNS:

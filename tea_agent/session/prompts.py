@@ -129,7 +129,8 @@ def is_small_model(model_name: str) -> bool:
     if m:
         try:
             param_count = float(m.group(1))
-            if param_count < 70:  # 70B 以下视为小模型
+            if param_count < 70:
+                # 70B 以下视为小模型
                 return True
         except ValueError:
             pass

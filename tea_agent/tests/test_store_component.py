@@ -275,9 +275,7 @@ class TestCursor:
         from tea_agent.store._component import DB, Cursor
 
         with DB(str(db_path)) as db:
-            c_obj = None
             with Cursor(db) as c:
-                c_obj = c
                 assert c is not None
                 c.execute("CREATE TABLE IF NOT EXISTS t (v TEXT)")
                 c.execute("INSERT INTO t VALUES ('hello')")

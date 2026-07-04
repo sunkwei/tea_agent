@@ -226,13 +226,20 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         if not m:
             return "develop"
         c = m.get("content", "")
-        if "架构设计" in c: return "design"
-        if "代码开发" in c: return "develop"
-        if "测试调试" in c: return "test"
-        if "代码审查" in c: return "review"
-        if "文档撰写" in c: return "docs"
-        if "部署发布" in c: return "devops"
-        if "自由发散" in c: return "creative"
+        if "架构设计" in c:
+            return "design"
+        if "代码开发" in c:
+            return "develop"
+        if "测试调试" in c:
+            return "test"
+        if "代码审查" in c:
+            return "review"
+        if "文档撰写" in c:
+            return "docs"
+        if "部署发布" in c:
+            return "devops"
+        if "自由发散" in c:
+            return "creative"
         return "develop"
 
     _VALID_MSG = "支持: design/develop/test/review/docs/devops/creative (兼容 pragmatic→develop, mixed→develop)"

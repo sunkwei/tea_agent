@@ -88,7 +88,7 @@ class AutoFixAgent:
                 with open(s, "r", encoding="utf-8", errors="replace") as f:
                     source = f.read()
                 tree = ast.parse(source, filename=s)
-                lines = source.split('\n')
+                source.split('\n')
                 for node in ast.walk(tree):
                     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                         if node.name.startswith('_') and not isinstance(node, ast.ClassDef):

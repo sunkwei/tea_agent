@@ -219,7 +219,6 @@ def hybrid_strategy(snake: Snake, game: Game) -> Direction:
         return random.choice(Direction.all())
 
     alive_count = len(game.alive_snakes)
-    strawberries = game.strawberries
 
     # check if we're in danger (few safe moves, or snake is long)
     danger_level = 6 - len(safe)  # fewer safe dirs = more danger

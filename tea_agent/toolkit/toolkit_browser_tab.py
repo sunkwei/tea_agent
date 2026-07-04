@@ -43,8 +43,6 @@ def _windows_browser_tab(action, browser, tab_title, window_index):
 
     # Windows API 常量
     SW_RESTORE = 9
-    SW_SHOW = 5
-    GW_OWNER = 4
 
     # 获取前台窗口
     user32 = ctypes.windll.user32

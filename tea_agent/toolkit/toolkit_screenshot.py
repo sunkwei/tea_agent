@@ -27,7 +27,8 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
         """Internal: find tool."""
         for name in names:
             path = shutil.which(name)
-            if path: return path
+            if path:
+                return path
         return None
 
     def _crop_image(src, dst, geo):
@@ -91,9 +92,8 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
             with mss.mss() as sct:
                 if geo:
                     x, y, w, h = map(int, geo.split(","))
-                    monitor = {"top": y, "left": x, "width": w, "height": h}
                 else:
-                    monitor = sct.monitors[0]
+                    sct.monitors[0]
                 # mss region capture
                 if geo:
                     sct.shot(output=out_path, mon=-1)
@@ -157,13 +157,15 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
             for line in r.stdout.split("\n"):
                 line = line.strip()
                 if line and not line.startswith(" "):
-                    if current: monitors.append(current)
+                    if current:
+                        monitors.append(current)
                     current = {"name": line.split()[0]}
                 elif "Position:" in line:
                     current["geometry"] = line.split("Position:")[-1].strip()
                 elif "Enabled:" in line and "yes" in line:
                     current["enabled"] = True
-            if current: monitors.append(current)
+            if current:
+                monitors.append(current)
         return monitors
 
     # === 主逻辑 ===

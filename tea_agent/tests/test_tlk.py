@@ -76,7 +76,7 @@ class TestToolkitUserOverride:
         user_dir.mkdir()
         (user_dir / "toolkit_bad.py").write_text('def toolkit_bad(): return 1')
 
-        tk = Toolkit(tool_dir=str(user_dir))
+        Toolkit(tool_dir=str(user_dir))
         # Should not crash
 
 

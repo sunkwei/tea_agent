@@ -194,7 +194,7 @@ def _build_dot_flow(calls, defs, run_dir):
             callers[callee].append(caller)
 
     top = sorted(callers.items(), key=lambda x: -len(x[1]))[:30]
-    top_names = {n for n, _ in top}
+    {n for n, _ in top}
 
     dot = ['digraph G {', '  rankdir=TB;', '  node [shape=box, style=filled, fillcolor=lightyellow, fontsize=10];']
     for i, (name, clrs) in enumerate(top):

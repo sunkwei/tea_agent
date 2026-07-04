@@ -30,7 +30,6 @@ def _gear_polygon(cx, cy, inner_r, outer_r, n_teeth, phase_offset=0.0):
     """
     points = []
     # 每齿两段：上升沿（inner→outer）+ 下降沿外侧（outer→inner）
-    segments_per_tooth = 4  # inner_start, outer_start, outer_mid, outer_end=inner_end
     # 更精细：每齿用 6 个点 —— inner→outer 斜面，outer 顶弧两点，outer→inner 斜面
     for i in range(n_teeth):
         a0 = 2 * math.pi * i / n_teeth + phase_offset

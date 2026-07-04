@@ -371,7 +371,8 @@ class TetrisGame:
         except:
             return
         
-        if key == -1:  # No input
+        if key == -1:
+            # No input
             return
         
         if self.game_over:

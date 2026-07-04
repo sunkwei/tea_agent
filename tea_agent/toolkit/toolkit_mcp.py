@@ -176,7 +176,7 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
         # 在后台提交 keepalive 任务，不等待完成
         loop = _mcp_get_or_create_loop()
         # 使用 run_coroutine_threadsafe 提交连接任务
-        future = asyncio.run_coroutine_threadsafe(_connect_and_keepalive(), loop)
+        asyncio.run_coroutine_threadsafe(_connect_and_keepalive(), loop)
 
         # 等待连接完成（或用短超时）
         try:

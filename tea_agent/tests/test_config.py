@@ -212,7 +212,7 @@ class TestLoadSaveConfig:
     def test_load_default_no_file(self, tmp_yaml_config):
         """无配置文件时返回默认值"""
         # 临时目录中无 config.yaml，应返回默认配置
-        with pytest.MonkeyPatch.context() as mp:
+        with pytest.MonkeyPatch.context():
             # 强制使用临时路径
             from tea_agent.config import load_config, AgentConfig
             cfg = load_config(config_path=tmp_yaml_config)  # 文件不存在时返回默认值

@@ -300,7 +300,7 @@ class TestMessageCRUD:
         assert "include_rounds" in params
 
         tid = storage.create_topic("签名测试")
-        cid = storage.save_msg(tid, "msg", "reply", False)
+        storage.save_msg(tid, "msg", "reply", False)
 
         # 位置参数
         convs1 = storage.get_conversations(tid, 1, False)

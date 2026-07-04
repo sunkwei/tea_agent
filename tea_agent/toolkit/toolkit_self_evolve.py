@@ -133,7 +133,8 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
 
             finally:
                 try: os.unlink(tmp_b)
-                except Exception: logger.exception("operation failed")
+                except Exception:
+                    logger.exception("operation failed")
 
             # 3. Ruff lint: after
             try:
@@ -151,7 +152,8 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
 
             finally:
                 try: os.unlink(tmp_a)
-                except Exception: logger.exception("operation failed")
+                except Exception:
+                    logger.exception("operation failed")
 
             # 4. 签名对比
             if symbol:

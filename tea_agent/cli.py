@@ -119,19 +119,23 @@ class TeaCLI(Agent):
             tty.setraw(fd)
             while True:
                 ch = sys.stdin.read(1)
-                if ch == "\r":  # Enter
+                if ch == "\r":
+                    # Enter
                     sys.stdout.write("\r\n")
                     sys.stdout.flush()
                     lines.append("".join(current))
                     break
-                elif ch == "\n":  # Shift+Enter 在某些终端产生 \n
+                elif ch == "\n":
+                    # Shift+Enter 在某些终端产生 \n
                     sys.stdout.write("\n")
                     sys.stdout.flush()
                     lines.append("".join(current))
                     current = []
-                elif ch == "\x1b":  # ESC 序列
+                elif ch == "\x1b":
+                    # ESC 序列
                     seq = sys.stdin.read(2)
-                    if seq == "[Z":  # Shift+Tab (部分终端 Shift+Enter)
+                    if seq == "[Z":
+                        # Shift+Tab (部分终端 Shift+Enter)
                         sys.stdout.write("\n")
                         sys.stdout.flush()
                         lines.append("".join(current))
@@ -139,11 +143,13 @@ class TeaCLI(Agent):
                     else:
                         # 忽略其他 ESC 序列
                         pass
-                elif ch in ("\x03", "\x04"):  # Ctrl+C / Ctrl+D
+                elif ch in ("\x03", "\x04"):
+                    # Ctrl+C / Ctrl+D
                     sys.stdout.write("\r\n")
                     sys.stdout.flush()
                     raise EOFError
-                elif ch == "\x7f":  # Backspace
+                elif ch == "\x7f":
+                    # Backspace
                     if current:
                         current.pop()
                         sys.stdout.write("\b \b")

@@ -622,9 +622,12 @@ def _format_next(task: dict) -> str:
         hours, rem = divmod(diff.seconds, 3600)
         mins = rem // 60
         parts = []
-        if days: parts.append(f"{days}天")
-        if hours: parts.append(f"{hours}时")
-        if mins or not parts: parts.append(f"{mins}分")
+        if days:
+            parts.append(f"{days}天")
+        if hours:
+            parts.append(f"{hours}时")
+        if mins or not parts:
+            parts.append(f"{mins}分")
         return f"{' '.join(parts)}后 ({dt.strftime('%m-%d %H:%M')})"
     except Exception:
         return str(nr)[:16]

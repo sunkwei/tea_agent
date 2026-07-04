@@ -174,7 +174,7 @@ class TestAgentChatIntegration:
             MockOpenAI.return_value = mock_client
 
             agent = Agent(mode="lightweight", config_path=tmp_yaml_config, callback=callback)
-            result = agent.chat("Hello")
+            agent.chat("Hello")
 
             # 验证回调被调用
             assert len(callback_data) >= 1

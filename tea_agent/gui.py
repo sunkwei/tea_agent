@@ -1453,7 +1453,7 @@ def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str=""
     """
     root = tk.Tk()
     _set_app_icon(root)  # 设置窗口图标（齿轮图标）
-    app = TkGUI(root, debug=debug, config_fname=config_fname, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
+    TkGUI(root, debug=debug, config_fname=config_fname, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
     
     if timeout > 0:
         logger.info(f"GUI debug timeout set: {timeout}s, will auto-close")

@@ -302,8 +302,8 @@ class TestReflectionManager:
 
         manager = ReflectionManager(storage)
 
-        trace1 = manager.start_trace(topic_id="topic1", user_msg="Hello")
-        trace2 = manager.start_trace(topic_id="topic2", user_msg="World")
+        manager.start_trace(topic_id="topic1", user_msg="Hello")
+        manager.start_trace(topic_id="topic2", user_msg="World")
 
         assert len(manager._pending_traces) == 2
         assert manager._pending_traces[0].topic_id == "topic1"

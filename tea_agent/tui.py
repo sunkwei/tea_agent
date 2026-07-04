@@ -497,7 +497,7 @@ class TeaTUI(App):
         parts = cmd.split(None, 1)
         cmd_name = parts[0].lower()
         arg = parts[1] if len(parts) > 1 else ""
-        chat = self.query_one("#chat-area", RichLog)
+        self.query_one("#chat-area", RichLog)
 
         if cmd_name in ("/bye", "/quit", "/exit"):
             self.exit()

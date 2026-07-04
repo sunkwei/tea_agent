@@ -501,7 +501,6 @@ def build_samples(news_by_date, idx_series_by_date):
 def _find_closest(idx_data: dict, target_time: str):
     """找最接近 target_time 的价格（容差10分钟）"""
     target = datetime.strptime(target_time, "%H:%M")
-    best_time = None
     best_price = None
     best_diff = None
 
@@ -515,7 +514,6 @@ def _find_closest(idx_data: dict, target_time: str):
             continue
         if best_diff is None or diff < best_diff:
             best_diff = diff
-            best_time = t_str
             best_price = price
 
     return best_price
@@ -570,7 +568,8 @@ class CurveFitter:
         d1 = np.diff(prices)
         turning = []  # [(index_in_parsed, abs_d2)]
         for i in range(1, len(d1)):
-            if d1[i] * d1[i - 1] < 0:  # 符号变化 = 极值点
+            if d1[i] * d1[i - 1] < 0:
+                # 符号变化 = 极值点
                 turning.append((i, abs(d2[i - 1]) if i - 1 < len(d2) else 0))
 
         # 按二阶差分绝对值排序，取 top-(n-2)

@@ -20,7 +20,8 @@ import logging
 logger = logging.getLogger("session.memory")
 
 # 向后兼容别名
-_get_cheap_params = lambda: get_cheap_params("memory")
+def _get_cheap_params():
+    return get_cheap_params("memory")
 
 class MemoryComponent(SessionComponent):
     """

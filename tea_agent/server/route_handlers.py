@@ -620,10 +620,14 @@ async def handle_web_create_config(request):
     cheap_api_key = (body.get("cheap_api_key") or "").strip()
 
     errors = []
-    if not filename: errors.append("filename required")
-    if not main_model_name: errors.append("main_model_name required")
-    if not main_api_url: errors.append("main_api_url required")
-    if not main_api_key: errors.append("main_api_key required")
+    if not filename:
+        errors.append("filename required")
+    if not main_model_name:
+        errors.append("main_model_name required")
+    if not main_api_url:
+        errors.append("main_api_url required")
+    if not main_api_key:
+        errors.append("main_api_key required")
     if errors:
         return JSONResponse({"ok": False, "errors": errors}, status_code=400)
 
@@ -687,9 +691,12 @@ async def handle_web_model_switch(request):
     cheap_options = body.get("cheap_options")
 
     errors = []
-    if not api_key: errors.append("api_key required")
-    if not api_url: errors.append("api_url required")
-    if not model_name: errors.append("model_name required")
+    if not api_key:
+        errors.append("api_key required")
+    if not api_url:
+        errors.append("api_url required")
+    if not model_name:
+        errors.append("model_name required")
     if errors:
         return JSONResponse({"ok": False, "errors": errors}, status_code=400)
 

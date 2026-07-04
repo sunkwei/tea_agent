@@ -65,7 +65,8 @@ class AgentSDK:
 
     def get_session(self, topic_id):
         code, data = self._request("GET", f"/v1/sessions/{topic_id}")
-        if code == 200: return data
+        if code == 200:
+            return data
         return None
 
     def delete_session(self, topic_id):

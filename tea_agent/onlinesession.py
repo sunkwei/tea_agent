@@ -96,7 +96,7 @@ class APIComponent(SessionComponent):
 
         try:
             # 发送一个极简请求来检测 thinking 支持
-            test_response = target_client.chat.completions.create(
+            target_client.chat.completions.create(
                 model=target_model,
                 messages=[{"role": "user", "content": "Hi"}],
                 stream=False,

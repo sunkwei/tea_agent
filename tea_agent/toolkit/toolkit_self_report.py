@@ -24,7 +24,8 @@ def toolkit_self_report() -> dict:
             found = True
             break
         parent = os.path.dirname(temp)
-        if parent == temp: break
+        if parent == temp:
+            break
         temp = parent
 
     # Fallback if not found by walking up：优先从 config 读取

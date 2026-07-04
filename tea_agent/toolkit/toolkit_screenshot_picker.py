@@ -108,7 +108,7 @@ def _run_picker(output_path: str) -> dict:
         if rect_id[0]:
             canvas.coords(rect_id[0], start["x"], start["y"], e.x, e.y)
             # 显示尺寸信息
-            w, h = abs(e.x - start["x"]), abs(e.y - start["y"])
+            _w, _h = abs(e.x - start["x"]), abs(e.y - start["y"])
             canvas.itemconfig(rect_id[0], width=3)
 
     def on_release(e):

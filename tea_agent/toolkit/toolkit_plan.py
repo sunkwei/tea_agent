@@ -82,7 +82,7 @@ def _new_plan(goal: str, steps: List[dict]) -> dict:
     now = datetime.now().isoformat()
     normalized = []
     for i, s in enumerate(steps):
-        meta_keys = _KNOWN_STEP_META & set(s.keys())
+        _KNOWN_STEP_META & set(s.keys())
         # 显式 params 优先，否则所有非 meta 键自动归入 params
         if "params" in s:
             params = {**s["params"]}

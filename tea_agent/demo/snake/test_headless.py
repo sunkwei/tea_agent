@@ -53,7 +53,7 @@ def test_head_collision():
     game.snakes[0].body = [Position(4, 5), Position(3, 5), Position(2, 5)]
     game.snakes[1].body = [Position(6, 5), Position(7, 5), Position(8, 5)]
 
-    result = game.tick()
+    game.tick()
     # both should die from head-on collision
     assert not game.snakes[0].alive, "Left snake should be dead"
     assert not game.snakes[1].alive, "Right snake should be dead"

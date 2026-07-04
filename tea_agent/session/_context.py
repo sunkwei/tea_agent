@@ -2,6 +2,7 @@
 @2026-07-07 gen by tea_agent, Session 共享上下文与基类
 从 onlinesession.py 提取 SessionContext + SessionComponent
 """
+import logging
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, Callable
 from abc import ABC, abstractmethod
@@ -112,5 +113,4 @@ class SessionComponent(ABC):
                     reason="会话中配置变更",
                 )
         except Exception as e:
-            import logging
             logging.getLogger("session.context").debug(f"保存配置变更失败: {e}")

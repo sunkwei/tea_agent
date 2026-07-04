@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
+from tea_agent.lsp.lsp_engine import diagnose
+
 logger = logging.getLogger("toolkit.code_review")
 
 # ── 安全模式库 ──────────────────────────────────────────
@@ -70,7 +72,6 @@ def _check_ruff(filepath: str) -> Dict[str, Any]:
 def _check_semantic(project_root: str, filepath: str) -> Dict[str, Any]:
     """LSP 语义诊断"""
     try:
-        from tea_agent.lsp.lsp_engine import diagnose
         result = diagnose(project_root, filepath)
         return result
     except Exception as e:

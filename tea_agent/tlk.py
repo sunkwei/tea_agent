@@ -1,17 +1,22 @@
 import ast
-from typing import Dict, Callable, Tuple, List
+import importlib.util
 import json
+import logging
 import os
 import os.path as osp
+import re
+import shutil
+import subprocess
+import sys
 import time
-import logging
+from typing import Dict, Callable, Tuple, List
 
 from tea_agent.toolkit.toolkit_set_topic_title import (
     toolkit_set_topic_title,
     meta_toolkit_set_topic_title,
 )
 
-logger = logging.getLogger("tookit")
+logger = logging.getLogger("toolkit")
 
 # ── 模块级 Toolkit 单例 ──
 # 由 AgentCore/TeaAgent 在初始化时设置: tlk._toolkit_ = toolkit_instance
@@ -162,12 +167,8 @@ def _auto_generate_skill_doc(name: str, meta: dict, pycode: str, version: str, t
         状态消息
     """
     try:
-        import ast as _ast
-        import os.path as _osp
-
-        # 目标目录: {toolkit_dir}/../skills/{name}/
-        parent = _osp.dirname(toolkit_path)
-        skill_dir = _osp.join(parent, "skills", name)
+        parent = osp.dirname(toolkit_path)
+        skill_dir = osp.join(parent, "skills", name)
         os.makedirs(skill_dir, exist_ok=True)
 
         # 提取工具描述
@@ -181,14 +182,14 @@ def _auto_generate_skill_doc(name: str, meta: dict, pycode: str, version: str, t
 
         # 从 pycode 提取函数签名和 docstring
         try:
-            tree = _ast.parse(pycode)
+            tree = ast.parse(pycode)
             func_node = None
-            for node in _ast.walk(tree):
-                if isinstance(node, (_ast.FunctionDef, _ast.AsyncFunctionDef)) and node.name == name:
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
                     func_node = node
                     break
 
-            pydoc = _ast.get_docstring(func_node) if func_node else ""
+            pydoc = ast.get_docstring(func_node) if func_node else ""
             args_list = []
             if func_node:
                 for arg in func_node.args.args:
@@ -258,9 +259,9 @@ def _auto_generate_skill_doc(name: str, meta: dict, pycode: str, version: str, t
         lines.append("")
 
         # 源码位置
-        rel_path = _osp.relpath(
-            _osp.join(toolkit_path, f"{name}.py"),
-            _osp.dirname(toolkit_path)
+        rel_path = osp.relpath(
+            osp.join(toolkit_path, f"{name}.py"),
+            osp.dirname(toolkit_path)
         )
         lines.append("## 源码")
         lines.append("")
@@ -268,7 +269,7 @@ def _auto_generate_skill_doc(name: str, meta: dict, pycode: str, version: str, t
         lines.append("")
 
         # 写入
-        skill_md_path = _osp.join(skill_dir, "SKILL.md")
+        skill_md_path = osp.join(skill_dir, "SKILL.md")
         with open(skill_md_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
@@ -281,10 +282,7 @@ def _auto_generate_skill_doc(name: str, meta: dict, pycode: str, version: str, t
 # ========== Memory 工具函数 ==========
 
 class Toolkit:
-    # 工具调用缓存：对只读/幂等工具缓存结果，减少重复调用
-    # key = (func_name, json.dumps(args, sort_keys=True))
-    # value = (result, timestamp)
-    """Toolkit class."""
+    """动态工具加载器 — 管理 75+ 内置工具，支持运行时热加载和版本回滚。"""
     _CACHE_TTL = 30  # 默认缓存 30 秒
     _CACHE_BLACKLIST = {
         # 有外部副作用的工具不缓存
@@ -299,12 +297,7 @@ class Toolkit:
     }
 
     def __init__(self, tool_dir=None):
-        
-        """Initialize  .
-        
-        Args:
-            tool_dir: Description.
-        """
+        """初始化 Toolkit 实例，加载内置和用户自定义工具。"""
         self.func_map: Dict[str, Callable] = {}
         self.meta_map: Dict[str, dict] = {}
         self._cache: Dict[tuple, tuple] = {}  # (key, ttl) → (result, expire_time)
@@ -337,20 +330,16 @@ class Toolkit:
         Returns:
             工具函数返回值
         """
-        import json as _json
-
-        # 黑名单工具不走缓存
         if func_name in self._CACHE_BLACKLIST:
             if func_name not in self.func_map:
                 raise KeyError(f"Unknown tool: {func_name}")
             return self.func_map[func_name](**kwargs)
 
-        # toolkit_file write 操作不走缓存
         if func_name == 'toolkit_file' and kwargs.get('action') == 'write':
             return self.func_map[func_name](**kwargs)
 
         now = time.time()
-        cache_key = (func_name, _json.dumps(kwargs, sort_keys=True, default=str))
+        cache_key = (func_name, json.dumps(kwargs, sort_keys=True, default=str))
 
         # 检查缓存
         if cache_key in self._cache:
@@ -387,11 +376,6 @@ class Toolkit:
 
     def _check_dependencies(self, pycode: str) -> str:
         """自动检测 pycode 中的 import 并安装缺失依赖"""
-        import ast as _ast
-        import importlib.util as _importlib
-        import subprocess
-        import sys
-        
         MODULE_MAP = {
             'PIL': 'Pillow', 'cv2': 'opencv-python', 'sklearn': 'scikit-learn',
             'yaml': 'PyYAML', 'bs4': 'beautifulsoup4', 'dateutil': 'python-dateutil',
@@ -399,16 +383,16 @@ class Toolkit:
         }
         
         try:
-            tree = _ast.parse(pycode)
+            tree = ast.parse(pycode)
         except SyntaxError:
             return ""
 
         imports = set()
-        for node in _ast.walk(tree):
-            if isinstance(node, _ast.Import):
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
                 for alias in node.names:
                     imports.add(alias.name.split('.')[0])
-            elif isinstance(node, _ast.ImportFrom):
+            elif isinstance(node, ast.ImportFrom):
                 if node.module:
                     imports.add(node.module.split('.')[0])
         
@@ -418,7 +402,7 @@ class Toolkit:
         for mod in imports:
             if mod in std_libs:
                 continue
-            if _importlib.find_spec(mod) is None:
+            if importlib.util.find_spec(mod) is None:
                 pkg_name = MODULE_MAP.get(mod, mod)
                 missing.append(pkg_name)
         
@@ -453,11 +437,7 @@ class Toolkit:
         }
 
         def check_meta(meta) -> bool:
-            """Check meta.
-            
-            Args:
-                meta: Description.
-            """
+            """校验 meta 字典是否符合 OpenAI function calling schema。"""
             if "type" not in meta or meta["type"] != "function":
                 return False
             func = meta.get("function", {})
@@ -646,7 +626,6 @@ class Toolkit:
             
             # 自动提取版本号并递增
             if not version:
-                import re
                 version_match = re.search(r'# version:\s*([\d.]+)', old_content)
                 if version_match:
                     old_version = version_match.group(1)
@@ -702,7 +681,6 @@ class Toolkit:
         if not osp.exists(backup_path):
             return (1, f"Version {version} backup not found for {name}")
         
-        import shutil
         # 备份当前版本
         if osp.exists(filename):
             current_backup = f"{name}.current.bak.py"

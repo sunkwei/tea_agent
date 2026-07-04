@@ -1,125 +1,131 @@
-# Changelog
+﻿# Changelog
 
-
-
+## [0.10.9] - 2026-07-04
+### Improvements & Changes
+- clean: 删除 75+ .bak.* 残留文件，移除 gateway/、web/ 废弃目录
+- refactor: server.py 拆分 → _route_handlers.py (2072→460 行)
+- refactor: store/_core.py 拆分 → _migration.py (1101→480 行)
+- fix: tlk.py logger name typo tookit → toolkit
+- style: 统一 import 风格（移除函数内 import），修复敷衍 docstring
 
 ## [0.10.6] - 2026-06-30
 ### Improvements & Changes
-- 版本 0.10.6
+- ç‰ˆæœ¬ 0.10.6
 ## [0.10.1] - 2026-06-29
 ### Improvements & Changes
-- Version bump: 0.10.0 → 0.10.1
+- Version bump: 0.10.0 â†’ 0.10.1
 ## [0.9.10] - 2026-05-27
 ### Bug Fixes
-- 修复 GUI 左侧面板宽度问题：ttk.PanedWindow 使用 sashpos API 替代 sash_place
+- ä¿®å¤ GUI å·¦ä¾§é¢æ¿å®½åº¦é—®é¢˜ï¼šttk.PanedWindow ä½¿ç”¨ sashpos API æ›¿ä»£ sash_place
 
 
 ## [0.9.9] - 2026-05-27
 ### Dependencies
-- add: `httpx>=0.25.0` — API HTTP 客户端（onlinesession.py 直接引用）
-- add: `PyYAML>=6.0` — YAML 配置解析（config.py）
-- add: `jedi>=0.19.0` — LSP 代码智能引擎（lsp/lsp_engine.py）
-- add: `tree-sitter>=0.21.0`, `tree-sitter-python>=0.21.0` — LSP 语法分析（lsp/ts_analyzer.py）
-- remove: `tkhtmlview` — 源码未使用，仅 build 残留
-- remove: 所有可选依赖组 `[ocr]` / `[tts]` / `[asr]` / `[desktop]` — OCR/ASR 不再内置支持，将来通过 MCP 扩展
-- remove: `toolkit_ocr.py` / `toolkit_speak.py` / `toolkit_listen.py` — 删除 OCR/TTS/STT 工具
-- clean: description 移除 "Optional: OCR/TTS/ASR"
-- clean: `tlk.py` / `toolkit_mode.py` / `toolkit_input.py` / README 移除 ocr/speak/listen 引用
+- add: `httpx>=0.25.0` â€” API HTTP å®¢æˆ·ç«¯ï¼ˆonlinesession.py ç›´æŽ¥å¼•ç”¨ï¼‰
+- add: `PyYAML>=6.0` â€” YAML é…ç½®è§£æžï¼ˆconfig.pyï¼‰
+- add: `jedi>=0.19.0` â€” LSP ä»£ç æ™ºèƒ½å¼•æ“Žï¼ˆlsp/lsp_engine.pyï¼‰
+- add: `tree-sitter>=0.21.0`, `tree-sitter-python>=0.21.0` â€” LSP è¯­æ³•åˆ†æžï¼ˆlsp/ts_analyzer.pyï¼‰
+- remove: `tkhtmlview` â€” æºç æœªä½¿ç”¨ï¼Œä»… build æ®‹ç•™
+- remove: æ‰€æœ‰å¯é€‰ä¾èµ–ç»„ `[ocr]` / `[tts]` / `[asr]` / `[desktop]` â€” OCR/ASR ä¸å†å†…ç½®æ”¯æŒï¼Œå°†æ¥é€šè¿‡ MCP æ‰©å±•
+- remove: `toolkit_ocr.py` / `toolkit_speak.py` / `toolkit_listen.py` â€” åˆ é™¤ OCR/TTS/STT å·¥å…·
+- clean: description ç§»é™¤ "Optional: OCR/TTS/ASR"
+- clean: `tlk.py` / `toolkit_mode.py` / `toolkit_input.py` / README ç§»é™¤ ocr/speak/listen å¼•ç”¨
 
 ### Improvements
-- sync: `__init__.py` 版本号与 pyproject.toml 对齐## [0.9.8] - 2026-05-25
+- sync: `__init__.py` ç‰ˆæœ¬å·ä¸Ž pyproject.toml å¯¹é½## [0.9.8] - 2026-05-25
 ### New Features
-- feat: TUI 模式 — 基于 textual 的终端 UI（`tea_agent/tui.py`）
-- feat: `toolkit_todo` DB 持久化 — per-topic，跨进程/重启不丢失
-- feat: L3 批处理摘要 — 攒够 N 条触发便宜模型合并，移除漂移检测
-- feat: demo 可随包打包（pyproject.toml include 新增 demo*）
+- feat: TUI æ¨¡å¼ â€” åŸºäºŽ textual çš„ç»ˆç«¯ UIï¼ˆ`tea_agent/tui.py`ï¼‰
+- feat: `toolkit_todo` DB æŒä¹…åŒ– â€” per-topicï¼Œè·¨è¿›ç¨‹/é‡å¯ä¸ä¸¢å¤±
+- feat: L3 æ‰¹å¤„ç†æ‘˜è¦ â€” æ”’å¤Ÿ N æ¡è§¦å‘ä¾¿å®œæ¨¡åž‹åˆå¹¶ï¼Œç§»é™¤æ¼‚ç§»æ£€æµ‹
+- feat: demo å¯éšåŒ…æ‰“åŒ…ï¼ˆpyproject.toml include æ–°å¢ž demo*ï¼‰
 
 ### Demo Applications
-- feat: `demo/news_CSI300.py` — 新华网新闻 + 沪深300 指数定时抓取
-- feat: `demo/csi300_predictor.py` — 基于新闻预测 CSI300 日内走势（KNN+策略分类器）
-- feat: CurveFitter — 日内关键点采样 + 二次曲线拟合
-- feat: matplotlib 图表 — 走势图 JPG blob 存入 SQLite
-- feat: `--task` 模式 + Windows 计划任务自动运行
+- feat: `demo/news_CSI300.py` â€” æ–°åŽç½‘æ–°é—» + æ²ªæ·±300 æŒ‡æ•°å®šæ—¶æŠ“å–
+- feat: `demo/csi300_predictor.py` â€” åŸºäºŽæ–°é—»é¢„æµ‹ CSI300 æ—¥å†…èµ°åŠ¿ï¼ˆKNN+ç­–ç•¥åˆ†ç±»å™¨ï¼‰
+- feat: CurveFitter â€” æ—¥å†…å…³é”®ç‚¹é‡‡æ · + äºŒæ¬¡æ›²çº¿æ‹Ÿåˆ
+- feat: matplotlib å›¾è¡¨ â€” èµ°åŠ¿å›¾ JPG blob å­˜å…¥ SQLite
+- feat: `--task` æ¨¡å¼ + Windows è®¡åˆ’ä»»åŠ¡è‡ªåŠ¨è¿è¡Œ
 
 ### Refactoring
-- refactor: 移除 `main_db_gui.py`，全部迁移到 `gui.py`
-- refactor: 移除意图分析中工具预加载逻辑，简化会话流程
-- refactor: 移除 watchdog 自动重启，新增 OS 信息注入 pipeline
-- refactor: 换行符归一化处理
-- refactor: 工具执行提示改为多行参数显示格式
+- refactor: ç§»é™¤ `main_db_gui.py`ï¼Œå…¨éƒ¨è¿ç§»åˆ° `gui.py`
+- refactor: ç§»é™¤æ„å›¾åˆ†æžä¸­å·¥å…·é¢„åŠ è½½é€»è¾‘ï¼Œç®€åŒ–ä¼šè¯æµç¨‹
+- refactor: ç§»é™¤ watchdog è‡ªåŠ¨é‡å¯ï¼Œæ–°å¢ž OS ä¿¡æ¯æ³¨å…¥ pipeline
+- refactor: æ¢è¡Œç¬¦å½’ä¸€åŒ–å¤„ç†
+- refactor: å·¥å…·æ‰§è¡Œæç¤ºæ”¹ä¸ºå¤šè¡Œå‚æ•°æ˜¾ç¤ºæ ¼å¼
 
 ### Cleanup
-- cleanup: 清除 432 条自演化注释（# NOTE: ... self-evolved by...）
-- cleanup: 删除 `_gui/` 死模块 (13)、Mixin 残留 (5)、store 脚本 (6)、gui/dialogs 死代码 (2)
-- cleanup: 删除死测试文件
+- cleanup: æ¸…é™¤ 432 æ¡è‡ªæ¼”åŒ–æ³¨é‡Šï¼ˆ# NOTE: ... self-evolved by...ï¼‰
+- cleanup: åˆ é™¤ `_gui/` æ­»æ¨¡å— (13)ã€Mixin æ®‹ç•™ (5)ã€store è„šæœ¬ (6)ã€gui/dialogs æ­»ä»£ç  (2)
+- cleanup: åˆ é™¤æ­»æµ‹è¯•æ–‡ä»¶
 
 ### Documentation
-- docs: PyDoc docstrings — 86 文件、1001 类/函数全覆盖
-- docs: 同步 README 至当前项目状态
+- docs: PyDoc docstrings â€” 86 æ–‡ä»¶ã€1001 ç±»/å‡½æ•°å…¨è¦†ç›–
+- docs: åŒæ­¥ README è‡³å½“å‰é¡¹ç›®çŠ¶æ€
 
 ### Improvements
-- feat: `disable_summary` flag — 跳过历史压缩和摘要生成
-- improve: L2 扩容 5→30，ConfigDialog 支持指定路径
-- fix: 新华网财经频道 URL 兼容修复
-- fix: Sina CSI300 行情解析修正
+- feat: `disable_summary` flag â€” è·³è¿‡åŽ†å²åŽ‹ç¼©å’Œæ‘˜è¦ç”Ÿæˆ
+- improve: L2 æ‰©å®¹ 5â†’30ï¼ŒConfigDialog æ”¯æŒæŒ‡å®šè·¯å¾„
+- fix: æ–°åŽç½‘è´¢ç»é¢‘é“ URL å…¼å®¹ä¿®å¤
+- fix: Sina CSI300 è¡Œæƒ…è§£æžä¿®æ­£
 
 ## [0.9.2] - 2026-05-20
 ### Bug Fixes
-- fix: `_post_chat_pipeline` 中 `self.config` → `self._cfg`，修复 AttributeError: 'TkGUI' object has no attribute 'config'
+- fix: `_post_chat_pipeline` ä¸­ `self.config` â†’ `self._cfg`ï¼Œä¿®å¤ AttributeError: 'TkGUI' object has no attribute 'config'
 
 ### Improvements
-- improve: 版本号同步 — `__init__.py` 从 0.8.2 对齐 pyproject.toml 到 0.9.2
+- improve: ç‰ˆæœ¬å·åŒæ­¥ â€” `__init__.py` ä»Ž 0.8.2 å¯¹é½ pyproject.toml åˆ° 0.9.2
 
 
 
 
 ## [0.8.2] - 2026-05-15
 ### New Features
-- feat: 图片消息持久化到 Storage（新增 `images` 表存储图片二进制数据）
+- feat: å›¾ç‰‡æ¶ˆæ¯æŒä¹…åŒ–åˆ° Storageï¼ˆæ–°å¢ž `images` è¡¨å­˜å‚¨å›¾ç‰‡äºŒè¿›åˆ¶æ•°æ®ï¼‰
 
 ### Improvements
-- improve: `save_msg` 自动将本地图片转为 Base64 存入数据库，不再依赖外部 `tmp/images` 文件
-- improve: 聊天记录查看直接渲染 Base64 图片数据，重启后即使清理临时文件图片依然可见
+- improve: `save_msg` è‡ªåŠ¨å°†æœ¬åœ°å›¾ç‰‡è½¬ä¸º Base64 å­˜å…¥æ•°æ®åº“ï¼Œä¸å†ä¾èµ–å¤–éƒ¨ `tmp/images` æ–‡ä»¶
+- improve: èŠå¤©è®°å½•æŸ¥çœ‹ç›´æŽ¥æ¸²æŸ“ Base64 å›¾ç‰‡æ•°æ®ï¼Œé‡å¯åŽå³ä½¿æ¸…ç†ä¸´æ—¶æ–‡ä»¶å›¾ç‰‡ä¾ç„¶å¯è§
 
 ### Improvements & Changes
-- 添加系统托盘图标支持（Windows 和 KDE Plasma 6），右键菜单提供退出选项，保持原有窗口关闭按钮行为不变
+- æ·»åŠ ç³»ç»Ÿæ‰˜ç›˜å›¾æ ‡æ”¯æŒï¼ˆWindows å’Œ KDE Plasma 6ï¼‰ï¼Œå³é”®èœå•æä¾›é€€å‡ºé€‰é¡¹ï¼Œä¿æŒåŽŸæœ‰çª—å£å…³é—­æŒ‰é’®è¡Œä¸ºä¸å˜
 ## [0.8.0] - 2026-05-15
 
 ### New Features
-- feat: 聊天图片附件支持 — GUI 选择图片复制到 tmp/images/，支持多选
-- feat: HtmlFrame 图片 base64 内嵌渲染（最大400x300，圆角边框，hover 高亮）
-- feat: 点击聊天图片弹出放大查看窗口（PIL 解码，自适应屏幕90%，点击/Esc关闭）
-- feat: GUI 窗口标题含当前目录完整路径
-- feat: 工具轮始终显示（不再过滤），思维链与工具轮对应存储
+- feat: èŠå¤©å›¾ç‰‡é™„ä»¶æ”¯æŒ â€” GUI é€‰æ‹©å›¾ç‰‡å¤åˆ¶åˆ° tmp/images/ï¼Œæ”¯æŒå¤šé€‰
+- feat: HtmlFrame å›¾ç‰‡ base64 å†…åµŒæ¸²æŸ“ï¼ˆæœ€å¤§400x300ï¼Œåœ†è§’è¾¹æ¡†ï¼Œhover é«˜äº®ï¼‰
+- feat: ç‚¹å‡»èŠå¤©å›¾ç‰‡å¼¹å‡ºæ”¾å¤§æŸ¥çœ‹çª—å£ï¼ˆPIL è§£ç ï¼Œè‡ªé€‚åº”å±å¹•90%ï¼Œç‚¹å‡»/Escå…³é—­ï¼‰
+- feat: GUI çª—å£æ ‡é¢˜å«å½“å‰ç›®å½•å®Œæ•´è·¯å¾„
+- feat: å·¥å…·è½®å§‹ç»ˆæ˜¾ç¤ºï¼ˆä¸å†è¿‡æ»¤ï¼‰ï¼Œæ€ç»´é“¾ä¸Žå·¥å…·è½®å¯¹åº”å­˜å‚¨
 
 ### Improvements
-- improve: 图片+文本消息支持 JSON 序列化存储（兼容纯文本回退）
-- improve: 加载历史时解析 JSON 格式恢复图片附件
-- improve: 流式输出控制台批量刷新（500ms定时器），降低 GUI 阻塞感
-- improve: Alt+Up/Down 切换历史轮次视图
-- improve: HTML 渲染前控制字符清洗 + 标签配对校验
-- improve: **多模态图片理解支持** — `supports_vision` 配置项，从 `options` 读取并传入 `OnlineToolSession`，启用后自动将图片转为 base64 通过 `image_url` 格式发送
+- improve: å›¾ç‰‡+æ–‡æœ¬æ¶ˆæ¯æ”¯æŒ JSON åºåˆ—åŒ–å­˜å‚¨ï¼ˆå…¼å®¹çº¯æ–‡æœ¬å›žé€€ï¼‰
+- improve: åŠ è½½åŽ†å²æ—¶è§£æž JSON æ ¼å¼æ¢å¤å›¾ç‰‡é™„ä»¶
+- improve: æµå¼è¾“å‡ºæŽ§åˆ¶å°æ‰¹é‡åˆ·æ–°ï¼ˆ500mså®šæ—¶å™¨ï¼‰ï¼Œé™ä½Ž GUI é˜»å¡žæ„Ÿ
+- improve: Alt+Up/Down åˆ‡æ¢åŽ†å²è½®æ¬¡è§†å›¾
+- improve: HTML æ¸²æŸ“å‰æŽ§åˆ¶å­—ç¬¦æ¸…æ´— + æ ‡ç­¾é…å¯¹æ ¡éªŒ
+- improve: **å¤šæ¨¡æ€å›¾ç‰‡ç†è§£æ”¯æŒ** â€” `supports_vision` é…ç½®é¡¹ï¼Œä»Ž `options` è¯»å–å¹¶ä¼ å…¥ `OnlineToolSession`ï¼Œå¯ç”¨åŽè‡ªåŠ¨å°†å›¾ç‰‡è½¬ä¸º base64 é€šè¿‡ `image_url` æ ¼å¼å‘é€
 
 ## [0.6.3] - 2026-05-05
 
 ### Breaking Changes
-- **依赖瘦身：easyocr 从必选改为可选**
-  - `easyocr` 及其重量级依赖（torch 746MB + torchvision + scipy + scikit-image + opencv ≈ 1GB+）从硬依赖中移除
-  - OCR 功能（`toolkit_ocr`）在 `easyocr` 未安装时给出友好提示：`pip install tea_agent[ocr]`
-  - 核心依赖精简为 8 个轻量包：openai、markdown、tkinterweb、pyautogui、mss、Pillow、requests、beautifulsoup4
-  - 新增可选依赖组：`[ocr]`、`[tts]`、`[asr]`、`[desktop]`（一键安装全部可选）
+- **ä¾èµ–ç˜¦èº«ï¼šeasyocr ä»Žå¿…é€‰æ”¹ä¸ºå¯é€‰**
+  - `easyocr` åŠå…¶é‡é‡çº§ä¾èµ–ï¼ˆtorch 746MB + torchvision + scipy + scikit-image + opencv â‰ˆ 1GB+ï¼‰ä»Žç¡¬ä¾èµ–ä¸­ç§»é™¤
+  - OCR åŠŸèƒ½ï¼ˆ`toolkit_ocr`ï¼‰åœ¨ `easyocr` æœªå®‰è£…æ—¶ç»™å‡ºå‹å¥½æç¤ºï¼š`pip install tea_agent[ocr]`
+  - æ ¸å¿ƒä¾èµ–ç²¾ç®€ä¸º 8 ä¸ªè½»é‡åŒ…ï¼šopenaiã€markdownã€tkinterwebã€pyautoguiã€mssã€Pillowã€requestsã€beautifulsoup4
+  - æ–°å¢žå¯é€‰ä¾èµ–ç»„ï¼š`[ocr]`ã€`[tts]`ã€`[asr]`ã€`[desktop]`ï¼ˆä¸€é”®å®‰è£…å…¨éƒ¨å¯é€‰ï¼‰
 
 ### New Features
-- feat: 可选依赖分组
-  - `pip install tea_agent[ocr]` → easyocr
-  - `pip install tea_agent[tts]` → pyttsx3 + gTTS
-  - `pip install tea_agent[asr]` → SpeechRecognition
-  - `pip install tea_agent[desktop]` → 全部可选依赖
+- feat: å¯é€‰ä¾èµ–åˆ†ç»„
+  - `pip install tea_agent[ocr]` â†’ easyocr
+  - `pip install tea_agent[tts]` â†’ pyttsx3 + gTTS
+  - `pip install tea_agent[asr]` â†’ SpeechRecognition
+  - `pip install tea_agent[desktop]` â†’ å…¨éƒ¨å¯é€‰ä¾èµ–
 
 ### Improvements
-- improve: `toolkit_ocr` easyocr 懒加载增强 — 缺失时返回安装指引而非崩溃
-- improve: 项目 description 更新，强调可选 OCR/TTS/ASR
+- improve: `toolkit_ocr` easyocr æ‡’åŠ è½½å¢žå¼º â€” ç¼ºå¤±æ—¶è¿”å›žå®‰è£…æŒ‡å¼•è€Œéžå´©æºƒ
+- improve: é¡¹ç›® description æ›´æ–°ï¼Œå¼ºè°ƒå¯é€‰ OCR/TTS/ASR
 
 
 ## [0.6.2] - 2026-05-04
 ... (previous content unchanged)
+

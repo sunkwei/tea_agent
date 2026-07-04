@@ -9,7 +9,7 @@ import shutil
 import sqlite3
 from datetime import datetime
 
-from ._component import DB, Cursor
+from ._component import Cursor
 
 logger = logging.getLogger("Storage")
 
@@ -220,7 +220,6 @@ def migrate(db):
 
     for col in ["rounds_json TEXT", "is_summarized INTEGER DEFAULT 0"]:
         try:
-            col_name = col.split()[0]
             c.execute(f"ALTER TABLE conversations ADD COLUMN {col}")
             c.connection.commit()
         except sqlite3.OperationalError:
@@ -321,6 +320,9 @@ def migrate_int_to_uuid(c):
             select_sql = ", ".join(select_parts)
         else:
             select_sql = ", ".join(old_cols)
+        # SAFETY: `old_name`/`new_name` come from _next_table_name() which uses internal counter
+        # `select_sql` is built from column names discovered via PRAGMA table_info
+        # Neither involves user input - safe for f-string SQL construct
         c.execute(f"INSERT INTO {new_name} SELECT {select_sql} FROM {old_name}")
         c.execute(f"DROP TABLE {old_name}")
         c.execute(f"ALTER TABLE {new_name} RENAME TO {old_name}")
@@ -331,7 +333,8 @@ def migrate_int_to_uuid(c):
                          "t_conv_summary_new","memories_new","agent_rounds_new",
                          "msg_vectors_new","system_prompts_new","reflections_new",
                          "config_history_new"]:
-            try: c.execute(f"DROP TABLE IF EXISTS {leftover}")
+            try:
+                c.execute(f"DROP TABLE IF EXISTS {leftover}")
             except Exception:
                 logger.exception("operation failed")
 

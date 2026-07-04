@@ -1,14 +1,14 @@
 """
 
 Storage 类自身管理：连接生命周期、数据库迁移/备份/轮转、表初始化。
-业务逻辑委派给 8 个子组件：topics, conversations, summaries, memories,
-prompts, reflections, config_history, vectors。
+业务逻辑委派给 9 个子组件：topics, conversations, summaries, memories,
+prompts, reflections, config_history, vectors, scheduled_tasks。
 
 扩展功能：
-- SemanticSearch: 语义搜索
+- SemanticSearch: 语义搜索（独立模块，未挂载到 Storage）
 - AutoMemoryExtractor: 移入 session_memory_component.py
 
-向后兼容：通过 __getattr__ 自动将方法调用路由到对应委派组件。
+所有公共方法显式定义在 Storage 上（48 个委派方法），不再使用 __getattr__ 兜底。
 """
 import json as _json_rs
 import logging
@@ -19,13 +19,10 @@ from ._conversations import ConversationStore
 from ._summaries import SummaryStore
 from ._memories import MemoryStore
 from ._vectors import VectorStore
-from ._semantic_search import SemanticSearch
 from ._scheduled_tasks import ScheduledTaskStore
-from ._migration import (
+from .migration import (
     init_tables, migrate,
     maybe_rotate_db, write_week_key,
-    auto_backup, cleanup_backups, backup_now,
-    meta_get, meta_set,
     protect_db,
 )
 
@@ -169,14 +166,7 @@ class PromptStore(StoreComponent):
 
 
 class Storage:
-    """主存储类 — 组合 8 个委派组件，管理数据库连接与生命周期。"""
-
-    # 委派组件名列表，用于 __getattr__ 路由
-    _delegate_attrs = (
-        "_topics", "_conversations", "_summaries", "_memories",
-        "_prompts", "_reflections", "_config_history", "_vectors",
-        "_scheduled_tasks",
-    )
+    """主存储类 — 组合 9 个委派组件，管理数据库连接与生命周期。"""
 
     def __init__(self, db_path="chat_history.db"):
         """初始化存储，每次操作独立连接（短连接模式）。
@@ -455,21 +445,6 @@ class Storage:
     def update_task(self, task_id: str, **kwargs):
         """更新定时任务。"""
         return self._scheduled_tasks.update_task(task_id, **kwargs)
-
-    # ── 向后兼容：自动委派（fallback）──
-    def __getattr__(self, name):
-        # 避免私有属性递归查找
-        if name.startswith("_"):
-            raise AttributeError(
-                f"'{type(self).__name__}' object has no attribute '{name}'"
-            )
-        for attr in self._delegate_attrs:
-            delegate = object.__getattribute__(self, attr)
-            if hasattr(delegate, name):
-                return getattr(delegate, name)
-        raise AttributeError(
-            f"'{type(self).__name__}' object has no attribute '{name}'"
-        )
 
     # ── 生命周期 ──
 

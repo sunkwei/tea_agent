@@ -10,7 +10,7 @@
 
 import re
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 
 # ── 历史摘要 Prompt ──
 

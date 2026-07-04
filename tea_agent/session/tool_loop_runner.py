@@ -477,7 +477,7 @@ def execute_tool_loop(session, context: Dict) -> Dict:
                                 _vs = str(_v)
                                 _MAX_PARAM = 500
                                 if len(_vs) > _MAX_PARAM:
-                                    _vs = _vs[:_MAX_PARAM] + f"…"
+                                    _vs = _vs[:_MAX_PARAM] + "…"
                                 _parts.append(f"{_k}: {_vs}")
                             callback(f"[TOOL_ARG:{', '.join(_parts)}]")
                         else:
@@ -543,7 +543,7 @@ def execute_tool_loop(session, context: Dict) -> Dict:
                     return {"full_reply": full_reply, "used_tools": used_tools, "loop_detected": True}
                 elif loop_count >= 2:
                     # 第 2 次循环，注入提示
-                    callback(f"\n⚠️ 检测到重复输出，请尝试不同方法...\n")
+                    callback("\n⚠️ 检测到重复输出，请尝试不同方法...\n")
             else:
                 session._loop_count = 0
 

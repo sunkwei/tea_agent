@@ -81,7 +81,6 @@ def inject_os_info(messages: List[Dict], toolkit_root_dir: str = "",
     os_release = platform.release()
     os_version = platform.version()
     os_machine = platform.machine()
-    os_processor = platform.processor() or "unknown"
     py_ver = platform.python_version()
     hostname = socket.gethostname()
     path_sep = os.sep

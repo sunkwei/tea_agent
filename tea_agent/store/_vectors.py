@@ -157,7 +157,6 @@ class VectorStore(StoreComponent):
         rows = c.fetchall()
         c.close()
         results = []
-        qlen = len(query) if query else 1
         for row in rows:
             d = dict(row)
             user_msg = d.get("user_msg", "") or ""

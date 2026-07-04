@@ -118,6 +118,10 @@ class ScheduledTaskStore(StoreComponent):
             updates["next_run"] = self.parse_schedule(updates["schedule"])
         if updates:
             updates["updated_at"] = "CURRENT_TIMESTAMP"
+        # SAFETY: `k` comes from TaskStore.update_task(kwargs) - internal code, not user input
+        _ALLOWED_COLUMNS = {"name", "command", "schedule", "enabled", "updated_at"}
+        for k in updates:
+            assert k in _ALLOWED_COLUMNS, f"invalid column: {k}"
         set_clause = ", ".join(
             f"{k}=?" if k != "updated_at" else f"{k}=CURRENT_TIMESTAMP"
             for k in updates

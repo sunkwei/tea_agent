@@ -24,6 +24,10 @@ local.properties
 
 # build / test artifacts
 build_mini_dist/
+build_nuitka_dist/
+nuitka-crash-report.xml
+nuitka_entry.py
+private-key.asc
 uploads/
 test_concurrent_stream.py
 test_config_switch.py

@@ -132,35 +132,16 @@ class APIComponent(SessionComponent):
                     model_type = "便宜模型" if is_cheap else "主模型"
                     self.ctx.tool_log(f"⚠️ {model_type} thinking 检测时出错: {e}")
 
-    def _accumulate_usage(self, usage):
+    def _accumulate_usage(self, usage, is_cheap=False):
+        """累加 token 用量到主模型或便宜模型的计数器。
+        
+        Args:
+            usage: API 返回的 usage 对象（含 prompt_tokens/completion_tokens 等）
+            is_cheap: True=累加到便宜模型计数, False=累加到主模型计数
+        """
         if usage is None:
             return
-        u = self.ctx._last_usage
-        prompt = getattr(usage, 'prompt_tokens', None)
-        completion = getattr(usage, 'completion_tokens', None)
-        total = getattr(usage, 'total_tokens', None)
-        cache_hit = getattr(usage, 'prompt_cache_hit_tokens', None)
-        cache_miss = getattr(usage, 'prompt_cache_miss_tokens', None)
-
-        if prompt is not None:
-            u["prompt_tokens"] += prompt
-        if completion is not None:
-            u["completion_tokens"] += completion
-        if total is not None:
-            u["total_tokens"] += total
-        else:
-            p = prompt if prompt is not None else 0
-            c = completion if completion is not None else 0
-            u["total_tokens"] += p + c
-        if cache_hit is not None:
-            u["prompt_cache_hit_tokens"] += cache_hit
-        if cache_miss is not None:
-            u["prompt_cache_miss_tokens"] += cache_miss
-
-    def _accumulate_cheap_usage(self, usage):
-        if usage is None:
-            return
-        u = self.ctx._last_cheap_usage
+        u = self.ctx._last_cheap_usage if is_cheap else self.ctx._last_usage
         prompt = getattr(usage, 'prompt_tokens', None)
         completion = getattr(usage, 'completion_tokens', None)
         total = getattr(usage, 'total_tokens', None)
@@ -184,10 +165,7 @@ class APIComponent(SessionComponent):
 
     def _track_api_usage(self, response, is_cheap=False):
         if hasattr(response, 'usage') and response.usage:
-            if is_cheap:
-                self._accumulate_cheap_usage(response.usage)
-            else:
-                self._accumulate_usage(response.usage)
+            self._accumulate_usage(response.usage, is_cheap=is_cheap)
 
     def create_chat_stream(self, api_messages: List[Dict], tools: List[Dict], 
                           client=None, model=None, is_cheap=False, 

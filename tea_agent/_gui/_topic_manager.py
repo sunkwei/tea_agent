@@ -18,15 +18,11 @@ class TopicManager:
     """主题列表管理：创建、切换、加载、刷新"""
 
     def __init__(self, gui):
-        """Initialize  .
-        
-        Args:
-            gui: Description.
-        """
+        """绑定 TkGUI 实例，接管主题列表管理。"""
         self.gui = gui
 
     def clear_chat(self):
-        """Clear chat."""
+        """清空聊天区域的所有内容（控制台 + 消息列表 + 缓冲）。"""
         gui = self.gui
         gui.console.config(state=tk.NORMAL)
         gui.console.delete("1.0", tk.END)
@@ -40,7 +36,7 @@ class TopicManager:
         gui._clear_img_btn.pack_forget()
 
     def auto_new_topic(self):
-        """Auto new topic."""
+        """启动时自动加载第一个活跃主题，无主题时创建新主题。"""
         gui = self.gui
         topics = gui.db.list_topics()
         if topics:
@@ -56,7 +52,7 @@ class TopicManager:
             gui.new_topic()
 
     def new_topic(self):
-        """New topic."""
+        """创建新主题并立即切换到该主题。"""
         gui = self.gui
         title = f"主题 {datetime.now().strftime('%m-%d %H:%M:%S')}"
         tid = gui.db.create_topic(title)
@@ -65,7 +61,7 @@ class TopicManager:
         gui.switch_topic(tid)
 
     def refresh_topics(self):
-        """Refresh topics."""
+        """从 DB 刷新主题列表 Treeview，保持当前选中高亮。"""
         gui = self.gui
         for item in gui.topic_list.get_children():
             gui.topic_list.delete(item)
@@ -89,33 +85,21 @@ class TopicManager:
         if topics:
             gui.topic_list.selection_set(highlight_iid)
             gui.topic_list.see(highlight_iid)
-    def _update_title(self, topic_title=""):
-        """Internal: update title.
-        
-        Args:
-            topic_title: Description.
-        """
-        gui = self.gui
-        cwd = getattr(gui, "_initial_cwd", "")
-        if topic_title:
-            gui.root.title(f"AI助手 - {topic_title} - cwd {cwd}")
-        else:
-            gui.root.title(f"AI助手 - cwd {cwd}")
-
     def switch_topic(self, topic_id):
-        """Switch topic.
+        """切换到指定主题：加载历史 → 渲染 UI → 更新标题。
         
         Args:
-            topic_id: Description.
+            topic_id: 目标主题 ID。
         """
         gui = self.gui
         gui.current_topic_id = topic_id
+        # 统一走 gui._update_title()（含摘要 + 目录名显示）
         try:
             tp = gui.db.get_topic(topic_id)
             title = (tp or {}).get("title", "")
-            self._update_title(title)
+            gui._update_title(title)
         except Exception:
-            self._update_title()
+            gui._update_title()
         self.clear_chat()
         # 加载期间阻塞输入
         gui.generating = True
@@ -201,12 +185,11 @@ class TopicManager:
                                         fn_args = tc.get("function", {}).get("arguments", "")
                                         if fn_name not in tool_names:
                                             tool_names.append(fn_name)
-                                        import json as _json_tc2
                                         try:
-                                            args_dict = _json_tc2.loads(fn_args) if fn_args else {}
+                                            args_dict = _json_um.loads(fn_args) if fn_args else {}
                                             args_lines = []
                                             for k, v in args_dict.items():
-                                                v_str = _json_tc2.dumps(v, ensure_ascii=False)
+                                                v_str = _json_um.dumps(v, ensure_ascii=False)
                                                 if len(v_str) > 160:
                                                     v_str = v_str[:160] + "..."
                                                 args_lines.append(f"    {k}: {v_str}")
@@ -241,15 +224,13 @@ class TopicManager:
                 logger.error(f"主题加载失败: {e}\n{_tb.format_exc()}")
                 gui._pending_error = str(e)
                 gui._loading_done = True
+                # 异常路径必须恢复 generating，防止 UI 永久卡死
+                gui.root.after(0, gui._on_generation_done)
 
         gui.root.after(60, lambda: threading.Thread(target=load_worker, daemon=True).start())
 
     def on_topic_select(self, e):
-        """Handle topic select event.
-        
-        Args:
-            e: Description.
-        """
+        """Treeview 选中事件回调：切换主题。"""
         gui = self.gui
         sel = gui.topic_list.selection()
         if not sel:
@@ -265,11 +246,7 @@ class TopicManager:
         gui.switch_topic(tp["topic_id"])
 
     def newline(self, e=None):
-        """Newline.
-        
-        Args:
-            e: Description.
-        """
+        """Shift+Enter：在输入框中插入换行。"""
         self.gui.input_box.insert(tk.INSERT, "\n")
         return "break"
 

@@ -12,7 +12,7 @@ CORE_TOP = ["__init__.py","agent.py","agent_pipeline.py","basesession.py",
     "agent_background.py"]
 
 EXCLUDED_PKGS = ["_gui","gui2","protocol","lsp","sdk","scripts",
-    "evaluation","demo","tests"]
+    "demo","tests"]
 EXCLUDED_TOP = ["cli.py","tui.py","gui.py","gui_dialogs.py"]
 
 HEAVY_TOOLS = [
@@ -31,7 +31,7 @@ def ok(path, src):
     if len(parts)==1 and parts[0] in EXCLUDED_TOP+HEAVY_TOOLS: return False
     if len(parts)>=2 and parts[0]=="toolkit" and parts[-1] in HEAVY_TOOLS: return False
     if len(parts)==1 and parts[0].endswith(".py"): return parts[0] in CORE_TOP
-    if parts[0] in ["session","store","toolkit","multi_agent","server","compaction"]: return True
+    if parts[0] in ["session","store","toolkit","multi_agent","server","compaction","evaluation","skills"]: return True
     if len(parts)>=2 and parts[0]=="server" and parts[1]=="static":
         return path.suffix in (".html",".js",".css",".png",".ico")
     if len(parts)>=2 and parts[0]=="server" and path.suffix==".py": return True

@@ -196,12 +196,28 @@ class APIComponent(SessionComponent):
         else:
             thinking_supported = self.ctx._thinking_supported
 
+        # 构建 extra_body：合并 thinking + 模型 options（如 Ollama 的 num_ctx）
+        extra_body = {}
         if thinking_supported:
-            kwargs["extra_body"] = {
-                "thinking": {
-                    "type": "enabled" if self.ctx.enable_thinking else "disabled"
-                }
+            extra_body["thinking"] = {
+                "type": "enabled" if self.ctx.enable_thinking else "disabled"
             }
+
+        # 从配置中获取模型 options（如 num_ctx）并合并到 extra_body
+        try:
+            from tea_agent.config import get_config
+            _cfg = get_config()
+            if not is_cheap:
+                model_opts = _cfg.main_model.options
+            else:
+                model_opts = _cfg.cheap_model.options
+            if model_opts:
+                extra_body.update(model_opts)
+        except Exception:
+            pass
+
+        if extra_body:
+            kwargs["extra_body"] = extra_body
 
         if target_model in ("mimo-v2.5-pro", "mimo-v2.5", "mimo-v2.0"):
             kwargs.pop("stream_options")

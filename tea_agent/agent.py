@@ -36,7 +36,8 @@ from tea_agent.litesession import LiteSession
 from tea_agent.onlinesession import OnlineToolSession
 from .agent_background import start_self_evolve_thread, start_scheduler
 from .agent_pipeline import do_async_summaries
-from .evaluation import TaskEvaluator
+# 惰性导入：避免 mini 构建缺失 evaluation 时崩溃
+# 实际使用时在方法内动态导入
 from .skills import SkillCrystallizer, SkillRegistry
 from .memory import PRIORITY_MEDIUM
 
@@ -532,6 +533,7 @@ class Agent:
                         if func_name and func_name not in tools_used:
                             tools_used.append(func_name)
 
+            from .evaluation import TaskEvaluator
             evaluator = TaskEvaluator()
             token_cost = usage.get("total_tokens", 0) if usage else 0
 

@@ -3,6 +3,7 @@
 # 会导致 Windows 停止位图缩放，GUI 字体突然变小。
 # 这里抢先设置为 Per-Monitor DPI Aware，避免中途被 mss 改变。
 import sys as _sys
+
 if _sys.platform == "win32":
     try:
         import ctypes
@@ -23,21 +24,18 @@ GUI 主窗口 — Tkinter 桌面版 Agent 界面。
   - 会话生命周期：open()→run()→close()，通过 session_ref 关联
 """
 
-import tkinter as tk
-
-import threading
+import logging
 import os
 import sys
-
-from pathlib import Path
-from datetime import datetime
-from typing import Optional, Dict, List
-import logging
+import threading
+import tkinter as tk
 import webbrowser
+from datetime import datetime
+from pathlib import Path
 
 try:
-    from tkinterweb import HtmlFrame
     import markdown
+    from tkinterweb import HtmlFrame
     HAS_TKINTERWEB = True
 except ImportError:
     HAS_TKINTERWEB = False
@@ -50,65 +48,64 @@ if __name__ == "__main__":
     parent_dir = str(Path(__file__).resolve().parent.parent)
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
-    from tea_agent.onlinesession import OnlineToolSession
-    from tea_agent.store import Storage
-    from tea_agent import tlk
+    from tea_agent._gui._images import ImageHandler
+    from tea_agent._gui._renderer import ChatRenderer
+    from tea_agent._gui._tray import TrayManager
     from tea_agent.agent import Agent
-
-    from tea_agent._gui._tray import TrayManager
-    from tea_agent._gui._images import ImageHandler
-    from tea_agent._gui._renderer import ChatRenderer
-    from tea_agent.config import load_config, get_config, save_config, ModelConfig, set_active_config_path
+    from tea_agent.config import load_config, set_active_config_path
 else:
-    from .onlinesession import OnlineToolSession
-    from .store import Storage
-    from . import tlk
-    from .agent import Agent
-    from tea_agent._gui._tray import TrayManager
     from tea_agent._gui._images import ImageHandler
     from tea_agent._gui._renderer import ChatRenderer
-    from .config import load_config, get_config, save_config, ModelConfig
+    from tea_agent._gui._tray import TrayManager
+
+    from .agent import Agent
+    from .config import load_config
 
 # ====================== 模块级引用（供 toolkit 通过 globals() 访问） ======================
 _storage_ = None
 _toolkit_ = None
+
+# tlk 模块：toolkit 实例存放处，供 globals()["tlk"].toolkit 访问
+from tea_agent import tlk
+
 # ====================== 从 _gui 子包导入（组合模式） ======================
-from tea_agent._gui._fonts import (
-    _fs, _init_fonts, SYSTEM_FONT, MONO_FONT,
-    _SCALE_FACTOR, _FONTS_DETECTED,
-)
 import tea_agent._gui._fonts as _fonts_mod  # 模块引用，动态获取 _DEFAULT_FONT_SIZE
+from tea_agent._gui._fonts import (
+    _init_fonts,
+)
+
 # 平台检测（从 _fonts 重导出，保持兼容）
 _IS_WINDOWS = __import__('platform').system() == "Windows"
 
+from tea_agent._gui._images import ImageHandler
 from tea_agent._gui._markdown import (
-    _render_markdown, _build_tool_blocks, _render_tool_group,
-    _chat_to_markdown, _sanitize_html_control_chars,
-    _validate_html_structure, _MD_CSS_TEMPLATE, _KNOWN_HTML_TAGS,
     HAS_TKINTERWEB,
+    _chat_to_markdown,
+    _render_markdown,
 )
+from tea_agent._gui._renderer import ChatRenderer
 
 # 组件委托（composition）
 from tea_agent._gui._stream_manager import StreamManager
 from tea_agent._gui._topic_manager import TopicManager
-from tea_agent._gui._ui_builder import UIBuilder
 from tea_agent._gui._tray import TrayManager
-from tea_agent._gui._images import ImageHandler
-from tea_agent._gui._renderer import ChatRenderer
+from tea_agent._gui._ui_builder import UIBuilder
 
 # Dialogs
-from tea_agent.gui_dialogs import MemoryDialog, TopicDialog, ConfigDialog
+from tea_agent.gui_dialogs import ConfigDialog, MemoryDialog, TopicDialog
+
+
 class TkGUI(Agent):
     """TkGUI class."""
     # 窗口大小常量
     WINDOW_DEFAULT_SIZE = "1440x960"
     WINDOW_MIN_SIZE = (960, 720)
-    
+
     # 延迟常量（毫秒）
     STREAM_FLUSH_INTERVAL_MS = 500  # 流式刷新间隔
     RENDER_DELAY_MS = 200           # 渲染延迟
     NOTIFY_DELAY_MS = 600           # 通知延迟
-    
+
     def __init__(self, root, debug:bool=False, config_fname:str="", disable_summary:bool=False, no_stream_chunk:bool=False):
         self.root = root
         import os
@@ -116,7 +113,7 @@ class TkGUI(Agent):
         self._update_title()
         self.root.geometry(self.WINDOW_DEFAULT_SIZE)
         self.root.minsize(*self.WINDOW_MIN_SIZE)
-        
+
         # 线程安全的 generating 状态
         self._generating_lock = threading.Lock()
         self._generating = False
@@ -153,31 +150,31 @@ class TkGUI(Agent):
         self._raw_view = tk.BooleanVar(value=False)  # False=HtmlFrame, True=ScrolledText
 
         # 聊天消息列表
-        self.chat_messages: List[Dict] = []
-        self._pending_images: List[str] = []
-        self._current_round_view: Optional[int] = None
-        self._chat_rounds: List[List[Dict]] = []
+        self.chat_messages: list[dict] = []
+        self._pending_images: list[str] = []
+        self._current_round_view: int | None = None
+        self._chat_rounds: list[list[dict]] = []
 
         # 当前 stream 累积 buffer
         self._stream_buffer = ""
         self._think_buffer = ""  # think/reasoning 内容缓冲区
         self._pending_console_text = []  # (text, tag) 列表
         # 当前对话 ID
-        self._current_conversation_id: Optional[int] = None
-        
+        self._current_conversation_id: int | None = None
+
         # 显示模式："console" 或 "chat_view"
         self._show_mode = "console"
-        
+
         # 主题列表相关状态
-        self._topic_cache: List[Dict] = []
+        self._topic_cache: list[dict] = []
         self._topic_hover_after = None
         self._topic_tooltip = None
-        
+
         # 加载状态
-        self._progress_queue: List[tuple] = []
+        self._progress_queue: list[tuple] = []
         self._loading_done = False
-        self._pending_render: Optional[List] = None
-        self._pending_error: Optional[str] = None
+        self._pending_render: list | None = None
+        self._pending_error: str | None = None
 
         # 创建界面
         self._create_ui()
@@ -314,7 +311,7 @@ class TkGUI(Agent):
         """GUI 的会话初始化 — 继承 AgentCore 创建 sess。"""
         super()._init_session()
 
-    def toggle_reasoning(self, enable: Optional[bool] = None) -> dict:
+    def toggle_reasoning(self, enable: bool | None = None) -> dict:
         """切换或查询 reasoning/thinking 状态。供 toolkit 工具调用。线程安全版。"""
         # 捕获 sess 到本地变量
         sess = self.sess
@@ -329,13 +326,14 @@ class TkGUI(Agent):
 
     def export_last_pdf(self, e=None):
         """Ctrl+P: 导出当前 HtmlFrame 中渲染的轮次为 last.pdf（支持 Alt+Up/Down 切换轮次）"""
-        import json, tempfile, subprocess
-        
+        import subprocess
+        import tempfile
+
         # 捕获必要的状态到本地变量，避免 worker 线程与主线程竞争
         chat_rounds = list(self._chat_rounds)  # 复制列表
         current_round_view = self._current_round_view
         zoom_level = self._zoom_level
-        
+
         def _do():
             try:
                 # ── 优先使用内存中当前渲染的轮次（与 HtmlFrame 一致）──
@@ -380,7 +378,7 @@ class TkGUI(Agent):
                                   margin={"top": "15mm", "bottom": "15mm", "left": "12mm", "right": "12mm"})
                         browser.close()
                     pdf_ok = True
-                    self._update_status(f"✅ 已导出: last.pdf")
+                    self._update_status("✅ 已导出: last.pdf")
                 except Exception:
                     # 回退：Windows 下尝试 Edge 无头
                     edge_paths = [
@@ -399,15 +397,15 @@ class TkGUI(Agent):
                             capture_output=True, text=True, timeout=30,
                         )
                         pdf_ok = True
-                        self._update_status(f"✅ 已导出: last.pdf")
+                        self._update_status("✅ 已导出: last.pdf")
                     else:
                         import shutil
                         html_output = os.path.join(self._initial_cwd, "last.html")
                         shutil.copy(tmp.name, html_output)
-                        self._update_status(f"⚠️ 无可用浏览器，已保存 HTML: last.html")
+                        self._update_status("⚠️ 无可用浏览器，已保存 HTML: last.html")
 
                 os.unlink(tmp.name)
-                
+
                 # 导出成功后打开文件管理器并定位到文件
                 if pdf_ok and os.path.exists(output):
                     self._open_file_manager(output)
@@ -421,7 +419,10 @@ class TkGUI(Agent):
 
     def export_topic_pdf(self, topic_id: str = None, e=None):
         """导出完整主题为 PDF（当前主题或指定主题）"""
-        import json, tempfile, subprocess, threading, shutil
+        import shutil
+        import subprocess
+        import tempfile
+        import threading
 
         tid = topic_id or self.current_topic_id
         if not tid:
@@ -475,8 +476,8 @@ class TkGUI(Agent):
                 md = "".join(md_parts)
 
                 # ── 渲染为 HTML ──
-                from tea_agent._gui._markdown import _render_markdown
                 from tea_agent._gui import _fonts_mod
+                from tea_agent._gui._markdown import _render_markdown
                 html = _render_markdown(md, font_size=int(_fonts_mod._HTML_FONT_SIZE * self._zoom_level / 100))
 
                 # ── 写临时 HTML ──
@@ -541,12 +542,12 @@ class TkGUI(Agent):
         """更新状态栏"""
         if hasattr(self, 'status_var'):
             self.status_var.set(msg)
-    
+
     def _open_file_manager(self, file_path: str):
         """打开文件管理器并定位到指定文件"""
-        import subprocess
         import platform
-        
+        import subprocess
+
         try:
             system = platform.system()
             if system == "Windows":
@@ -687,7 +688,7 @@ class TkGUI(Agent):
         """隐藏工具提示 — 委托 TopicManager"""
         self.topic_mgr._hide_tooltip()
 
-    def _notify_completion(self, ai_msg: Optional[str] = None, user_msg: Optional[str] = None):
+    def _notify_completion(self, ai_msg: str | None = None, user_msg: str | None = None):
         """LLM 任务完成后发送桌面通知。通知内容: TeaAgent: {user_msg} + {ai_msg}。
         委托给 toolkit_notify（跨平台兼容：Windows/macOS/Linux）。"""
         # 构建通知消息：TeaAgent: {user_msg} + {ai_msg}
@@ -716,8 +717,9 @@ class TkGUI(Agent):
 
     def _attach_image(self):
         """打开文件对话框选择图片，存入 _pending_images"""
+        import os
+        import shutil
         from tkinter import filedialog
-        import shutil, os
         files = filedialog.askopenfilenames(
             title="选择图片",
             filetypes=[
@@ -769,7 +771,7 @@ class TkGUI(Agent):
         # 2. 尝试从剪贴板获取图像
         img = None
         try:
-            from PIL import ImageGrab, Image
+            from PIL import Image, ImageGrab
             img = ImageGrab.grabclipboard()
         except Exception:
             return None
@@ -812,7 +814,7 @@ class TkGUI(Agent):
             if self._generating or not self.current_topic_id:
                 return "break"
             self._generating = True
-        
+
         msg = self.input_box.get("1.0", tk.END).strip()
         # 允许仅有图片无文本的情况
         images = list(self._pending_images)
@@ -844,10 +846,10 @@ class TkGUI(Agent):
                 self.safe_stream("❌ 错误：会话未初始化")
                 self.root.after(0, self._on_generation_done)
                 return
-            
+
             try:
                 ai_msg, is_func = sess.chat_stream(
-                    chat_input, 
+                    chat_input,
                     callback=self.safe_stream,
                     topic_id=self.current_topic_id,
                     on_status=self.safe_update_status,
@@ -1028,7 +1030,8 @@ class TkGUI(Agent):
             return
         b64_data, mime = self._image_cache[idx]
 
-        import base64, io
+        import base64
+        import io
         try:
             from PIL import Image, ImageTk
         except ImportError:
@@ -1070,7 +1073,7 @@ class TkGUI(Agent):
         ph = popup.winfo_reqheight()
         x = (screen_w - pw) // 2
         y = (screen_h - ph) // 2
-        popup.geometry("+{}+{}".format(x, y))
+        popup.geometry(f"+{x}+{y}")
 
         popup.focus_set()
 
@@ -1106,7 +1109,7 @@ class TkGUI(Agent):
         def on_save(cfg):
             # 同步到当前 session
             """Handle save event.
-            
+
             Args:
                 cfg: Description.
             """
@@ -1133,7 +1136,7 @@ class TkGUI(Agent):
 
     def get_config_list(self) -> list:
         """扫描 ~/.tea_agent/*.yaml，返回配置摘要列表。
-        
+
         每个元素: {"filename": str, "path": str, "main_model": str, "cheap_model": str}
         """
         configs_dir = Path.home() / ".tea_agent"
@@ -1162,10 +1165,10 @@ class TkGUI(Agent):
 
     def switch_config_file(self, config_path: str) -> bool:
         """切换配置文件，重新初始化会话。
-        
+
         Args:
             config_path: 配置文件的完整路径
-        
+
         Returns:
             True 表示切换成功，False 表示失败
         """
@@ -1245,10 +1248,7 @@ class TkGUI(Agent):
             m = cfg["main_model"] or "?"
             c = cfg["cheap_model"] or ""
             base_display = f"{m} / {c}" if (c and c != m) else m
-            if seen.get(base_display, 0) > 1:
-                display = f"{base_display} ({cfg['filename']})"
-            else:
-                display = base_display
+            display = f"{base_display} ({cfg['filename']})" if seen.get(base_display, 0) > 1 else base_display
             self._config_display_map[display] = cfg["path"]
             values.append(display)
         self.config_combo["values"] = values
@@ -1326,12 +1326,12 @@ class TkGUI(Agent):
             if not self._generating:
                 return
             self._generating = False
-        
+
         # 安全访问 sess（可能为 None）
         sess = self.sess
         if sess is not None:
             sess.interrupt()
-        
+
         self.safe_log("\n🛑 已打断", "tool")
         # 先刷新控制台剩余内容，再 flush 到 messages
         if self._pending_console_text:
@@ -1351,7 +1351,7 @@ class TkGUI(Agent):
 
     def _switch_display(self, mode: str):
         """Internal: switch display.
-        
+
         Args:
             mode: Description.
         """
@@ -1386,7 +1386,7 @@ class TkGUI(Agent):
 
     def _render_round_view(self, round_idx: int):
         """Internal: render round view.
-        
+
         Args:
             round_idx: Description.
         """
@@ -1394,7 +1394,7 @@ class TkGUI(Agent):
 
     def _render_topic_error(self, error_msg: str):
         """Internal: render topic error.
-        
+
         Args:
             error_msg: Description.
         """
@@ -1402,7 +1402,7 @@ class TkGUI(Agent):
 
     def _build_round_view_html(self, rounds, active_idx, font_size):
         """Internal: build round view html.
-        
+
         Args:
             rounds: Description.
             active_idx: Description.
@@ -1416,7 +1416,7 @@ class TkGUI(Agent):
 
     def _group_into_rounds(self, msgs):
         """Internal: group into rounds.
-        
+
         Args:
             msgs: Description.
         """
@@ -1454,11 +1454,11 @@ def main(debug:bool=False, no_gui:bool=False, timeout:int=0, config_fname:str=""
     root = tk.Tk()
     _set_app_icon(root)  # 设置窗口图标（齿轮图标）
     TkGUI(root, debug=debug, config_fname=config_fname, disable_summary=disable_summary, no_stream_chunk=no_stream_chunk)
-    
+
     if timeout > 0:
         logger.info(f"GUI debug timeout set: {timeout}s, will auto-close")
         root.after(timeout * 1000, lambda: _safe_destroy(root))
-    
+
     root.mainloop()
 
 def _set_app_icon(root):

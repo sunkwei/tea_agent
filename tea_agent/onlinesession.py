@@ -331,7 +331,7 @@ class ToolComponent(SessionComponent):
     def build_tools(self) -> List[Dict]:
         tools = []
         if self.ctx.toolkit is None:
-            logger.warning("toolkit 未设置，无法构建工具列表")
+            logger.warning("toolkit not set, cannot build tool list")
             return tools
         
         for name, meta in self.ctx.toolkit.meta_map.items():
@@ -498,7 +498,6 @@ class ToolComponent(SessionComponent):
                 func_args = tc_data["function"]["arguments"]
             else:
                 logger.warning(f"tool call failed: invalid data format, data={tc_data}")
-                print(f"parse_tool_calls_from_stream: tool call failed: invalid data format, data={tc_data}")
                 continue
 
             valid_tool_calls.append(SimpleNamespace(
@@ -538,7 +537,7 @@ class SummarizerComponent(SessionComponent):
         try:
             unsummarized = storage.get_unsummarized_conversations(topic_id)
         except Exception as e:
-            logger.warning(f"获取未摘要对话失败: {e}")
+            logger.warning(f"Fetch unsaved conversations failed: {e}")
             return
 
         if len(unsummarized) <= self.ctx.keep_turns:
@@ -615,7 +614,7 @@ class SummarizerComponent(SessionComponent):
                     self.ctx.tool_log(f"📝 历史摘要更新：{new_summary}")
 
         except Exception as e:
-            logger.warning(f"历史摘要生成失败: error={e}")
+            logger.warning(f"History summary failed: error={e}")
             if self.ctx.tool_log:
                 self.ctx.tool_log(f"⚠️ 摘要生成失败: {e}")
 
@@ -821,13 +820,13 @@ class OnlineToolSession(BaseChatSession):
             dynamic_prompt = self.prompt_manager.initialize()
             if not system_prompt:
                 self.system_prompt = dynamic_prompt
-            logger.info(f"系统提示词 v{self.prompt_manager.current_version} 已加载")
+            logger.info(f"System prompt v{self.prompt_manager.current_version} loaded")
 
             self.context.reflection_manager = self.reflection_manager
         else:
             self.reflection_manager = None
             self.prompt_manager = None
-            logger.info("Storage 未设置，跳过 ReflectionManager/PromptManager 初始化")
+            logger.info("Storage not set, skipping ReflectionManager/PromptManager initialization")
 
         # ── Pipeline ──
         self.pipeline = SessionPipeline()
@@ -988,7 +987,7 @@ class OnlineToolSession(BaseChatSession):
         self.context._os_info_injected = current_sig
         if topic_id:
             _save_os_sig(topic_id, current_sig)
-        logger.info(f"OS 信息注入: {current_sig} (topic={topic_id})")
+        logger.info(f"OS info injected: {current_sig} (topic={topic_id})")
         return inject_os_info(
             self.messages,
             toolkit_root_dir=self.toolkit.root_dir,
@@ -1166,7 +1165,7 @@ class OnlineToolSession(BaseChatSession):
                     if hasattr(client, 'close'):
                         client.close()
                 except Exception as e:
-                    logger.debug(f"关闭HTTP客户端失败: {e}")
+                    logger.debug(f"Close HTTP client failed: {e}")
             
             # 关闭OpenAI客户端
             if hasattr(self.context, 'client') and self.context.client:
@@ -1174,25 +1173,25 @@ class OnlineToolSession(BaseChatSession):
                     if hasattr(self.context.client, 'close'):
                         self.context.client.close()
                 except Exception as e:
-                    logger.debug(f"关闭主OpenAI客户端失败: {e}")
+                    logger.debug(f"Close main OpenAI client failed: {e}")
             
             if hasattr(self.context, 'cheap_client') and self.context.cheap_client:
                 try:
                     if hasattr(self.context.cheap_client, 'close'):
                         self.context.cheap_client.close()
                 except Exception as e:
-                    logger.debug(f"关闭便宜OpenAI客户端失败: {e}")
+                    logger.debug(f"Close cheap OpenAI client failed: {e}")
             
             # 关闭存储连接
             if hasattr(self, 'storage') and self.storage:
                 try:
                     self.storage.close()
                 except Exception as e:
-                    logger.debug(f"关闭存储连接失败: {e}")
+                    logger.debug(f"Close storage connection failed: {e}")
             
-            logger.info("OnlineToolSession 资源已释放")
+            logger.info("OnlineToolSession resources released")
         except Exception as e:
-            logger.warning(f"关闭OnlineToolSession资源失败: {e}")
+            logger.warning(f"Close OnlineToolSession resources failed: {e}")
     
     def __del__(self):
         """析构函数，确保资源被释放"""

@@ -413,7 +413,7 @@ async def handle_web_chat(request):
                 fpath.write_bytes(img_bytes)
                 image_paths.append(str(fpath))
             except Exception as e:
-                logger.warning(f"图片 base64 解码失败: {e}")
+                logger.warning(f"Image base64 decode failed: {e}")
 
     if image_paths:
         msg_payload = {"text": message, "images": image_paths}
@@ -469,10 +469,10 @@ async def handle_chat_continue(request):
     try:
         session._continue_after_max = decision
         session._max_iter_wait.set()
-        logger.info(f"用户确认 max_iter: continue={decision}")
+        logger.info(f"User confirmed max_iter: continue={decision}")
         return JSONResponse({"ok": True, "continue": decision})
     except Exception as e:
-        logger.exception(f"处理 max_iter 确认失败: {e}")
+        logger.exception(f"Handle max_iter confirm failed: {e}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
@@ -485,15 +485,15 @@ async def handle_chat_abort(request):
 
     session = _active_sessions.get(topic_id)
     if not session:
-        logger.warning(f"中断失败：未找到 topic_id={topic_id} 的活跃会话")
+        logger.warning(f"Abort failed: no active session for topic_id={topic_id}")
         return JSONResponse({"ok": False, "error": "未找到活跃会话（可能已结束）"}, status_code=404)
 
     try:
         session.interrupt()
-        logger.info(f"用户中断会话 topic_id={topic_id}")
+        logger.info(f"User aborted session topic_id={topic_id}")
         return JSONResponse({"ok": True, "message": "已发送中断信号"})
     except Exception as e:
-        logger.exception(f"中断会话失败 topic_id={topic_id}")
+        logger.exception(f"Abort session failed topic_id={topic_id}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
@@ -796,9 +796,9 @@ async def handle_web_upload_config(request):
     try:
         switch_result = server.switch_config(str(dest_path))
         if not switch_result.get("ok"):
-            logger.warning(f"上传后自动切换配置失败: {switch_result.get('error', '')}")
+            logger.warning(f"Auto-switch config after upload failed: {switch_result.get('error', '')}")
     except Exception as e:
-        logger.warning(f"上传后自动切换配置异常: {e}")
+                    logger.warning(f"Auto-switch config after upload exception: {e}")
 
     config_link = configs_dir / "config.yaml"
     try:
@@ -811,23 +811,23 @@ async def handle_web_upload_config(request):
                 backup_path = configs_dir / f"config_{stamp}.yaml"
                 import shutil
                 shutil.move(str(config_link), str(backup_path))
-                logger.info(f"已有 config.yaml 已备份到 {backup_path}")
+                logger.info(f"Existing config.yaml backed up to {backup_path}")
         try:
             if os.name == "nt":
                 try:
                     os.symlink(str(dest_path), str(config_link))
-                    logger.info(f"创建符号链接: {config_link} → {dest_path}")
+                    logger.info(f"Symlink created: {config_link} → {dest_path}")
                 except (OSError, PermissionError):
                     import shutil
                     shutil.copy2(str(dest_path), str(config_link))
-                    logger.info(f"符号链接失败，已复制文件到 {config_link}")
+                    logger.info(f"Symlink failed, copied file to {config_link}")
             else:
                 os.symlink(str(dest_path), str(config_link))
-                logger.info(f"创建符号链接: {config_link} → {dest_path}")
+                logger.info(f"Symlink created: {config_link} → {dest_path}")
         except Exception as e:
-            logger.warning(f"创建 config.yaml 链接失败: {e}")
+            logger.warning(f"Create config.yaml symlink failed: {e}")
     except Exception as e:
-        logger.warning(f"处理 config.yaml 链接时出错: {e}")
+        logger.warning(f"Config.yaml symlink handling error: {e}")
 
     return JSONResponse({
         "ok": True,
@@ -855,7 +855,7 @@ async def _safe_handle(handler, request):
     try:
         return await handler(request)
     except ValueError as e:
-        if "配置不完整" in str(e):
+        if "incomplete config" in str(e).lower():
             return JSONResponse(
                 {"error": "Agent not configured", "detail": str(e),
                  "hint": "Run 'tea-agent --setup' or configure ~/.tea_agent/config.yaml"},
@@ -888,7 +888,7 @@ OPENAPI_SPEC = {
                         "temperature": {"type": "number", "default": 0.7},
                         "topic_id": {"type": "string"},
                         "config_path": {"type": "string",
-                            "description": "指定配置文件路径，不同实例可用不同配置"}},
+                            "description": "Config file path, different instances can use different configs"}},
                     "required": ["messages"]}}}},
             "responses": {"200": {"description": "OK"}}}},
         "/v1/models": {"get": {"summary": "List models", "tags": ["Models"],

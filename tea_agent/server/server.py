@@ -212,7 +212,7 @@ class APIServer:
             Path(tool_dir).mkdir(parents=True, exist_ok=True)
             self._toolkit = tlk.Toolkit(tool_dir)
             tlk.toolkit = self._toolkit
-            logger.info(f"Toolkit 初始化 | 工具: {len(self._toolkit.func_map)} 个 | dir: {tool_dir}")
+            logger.debug(f"Toolkit initialized | tools: {len(self._toolkit.func_map)} | dir: {tool_dir}")
         return self._toolkit
 
     # ═══════════════════════════════════════════════
@@ -233,7 +233,7 @@ class APIServer:
                 except Exception:
                     logger.exception("operation failed")
             self._agent = None
-            logger.info("Agent reset")
+            logger.debug("Agent reset")
 
     # ═══════════════════════════════════════════════
     # 每请求 Session 工厂（流式操作）
@@ -496,7 +496,7 @@ class APIServer:
             try:
                 _save_chat_result(storage, session, topic_id, msg, ai_msg, used_tools)
             except Exception as save_err:
-                logger.exception(f"保存对话失败 topic={topic_id}: {save_err}")
+                logger.exception(f"Save chat failed topic={topic_id}: {save_err}")
 
             usage = session._last_usage or {}
             _put({
@@ -697,7 +697,7 @@ class APIServer:
             result = toolkit_screenshot(action="region", region=f"{x},{y},{w},{h}", output=tmp_path)
 
             if not result.get("success"):
-                return {"ok": False, "error": result.get("error", "截图失败")}
+                return {"ok": False, "error": result.get("error", "Screenshot failed")}
 
             # 容错：确保 path 是有效的文件路径
             img_path = result.get("path", "")
@@ -705,7 +705,7 @@ class APIServer:
                 if os.path.isfile(tmp_path):
                     img_path = tmp_path
                 else:
-                    return {"ok": False, "error": f"截图文件无效: path={img_path!r}"}
+                    return {"ok": False, "error": f"Invalid screenshot file: path={img_path!r}"}
 
             # 读取图片并转为 base64
             with open(img_path, "rb") as f:
@@ -741,14 +741,14 @@ class APIServer:
             result = toolkit_screenshot(action="full", output=tmp_path)
 
             if not result.get("success"):
-                return {"ok": False, "error": result.get("error", "截图失败")}
+                return {"ok": False, "error": result.get("error", "Screenshot failed")}
 
             img_path = result.get("path", "")
             if not img_path or not isinstance(img_path, str) or not os.path.isfile(img_path):
                 if os.path.isfile(tmp_path):
                     img_path = tmp_path
                 else:
-                    return {"ok": False, "error": f"截图文件无效: path={img_path!r}"}
+                    return {"ok": False, "error": f"Invalid screenshot file: path={img_path!r}"}
 
             with open(img_path, "rb") as f:
                 img_data = f.read()
@@ -823,7 +823,7 @@ class APIServer:
                 agent.current_topic_id = topic_id
                 agent.load_topic_history(topic_id)
 
-        logger.info(
+        logger.debug(
             "Model switch: main=" + model_name + " @ " + api_url
             + (", cheap=" + cheap_model_name if cheap_model_name else "")
         )
@@ -1188,18 +1188,26 @@ def create_app(api_key: Optional[str] = None,
 def run_server(host: str = "127.0.0.1", port: int = 8080,
                api_key: Optional[str] = None,
                config_path: Optional[str] = None):
-    """Run the API server."""
+    """Run the API server with minimal terminal output."""
     try:
         import uvicorn
     except ImportError:
-        raise ImportError("pip install uvicorn")
+        raise ImportError("pip install starlette uvicorn")
+
+    # Suppress noisy loggers: only show WARNING+ on terminal for runtime logs
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("api_server").setLevel(logging.INFO)
 
     app = create_app(api_key=api_key, config_path=config_path)
+    print(f"\n  Tea Agent Server v{__version__}")
     if api_key:
-        logger.info(f"API Key auth enabled")
-    logger.info(f"API Server starting: http://{host}:{port}")
-    logger.info(f"API Docs: http://{host}:{port}/docs")
-    uvicorn.run(app, host=host, port=port, log_level="info")
+        print(f"  API Key auth: enabled")
+    print(f"  Listening on http://{host}:{port}")
+    print(f"  API Docs:     http://{host}:{port}/docs")
+    print(f"  Press Ctrl+C to stop\n")
+    uvicorn.run(app, host=host, port=port, log_level="warning", access_log=False)
 
 
 # ── CLI Entry ──

@@ -1,4 +1,4 @@
-# Tea Agent v0.10.11
+# Tea Agent v0.10.12
 
 > ⚠️ **这是一个 AI 写 AI 的实验项目，自行承担责任。**
 
@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.10.11-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.10.12-blue)](https://pypi.org/project/tea-agent)
 
 Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / CLI / Web / REST API / ACP Protocol / TUI** 六种界面形态。
 
@@ -27,6 +27,7 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用
 - 🤖 **多 Agent 协作** — 任务分解 + 并行执行，子 Agent 独立完成子任务
 - 📊 **任务评估** — 自动评估任务质量，记录成功/失败经验
 - 💎 **技能结晶** — Plan 执行后自动结晶 → 新对话按语义匹配注入 → 技能自进化闭环
+- 🛡️ **LLM JSON 容错** — 智能修复截断JSON、控制字符、单引号、尾逗号等常见LLM输出问题
 
 ---
 
@@ -957,7 +958,7 @@ list       → 列出所有技能模式
 | 类别 | 工具 |
 |------|------|
 | 📁 文件操作 | `toolkit_file`, `toolkit_save_file`, `toolkit_explr` |
-| ✏️ 代码编辑 | `toolkit_edit`, `toolkit_diff_edit`, `toolkit_diff`, `toolkit_self_evolve`, `toolkit_clean_comments`, `toolkit_format_code` |
+| ✏️ 代码编辑 | `toolkit_edit`, `toolkit_diff_edit`, `toolkit_diff`, `toolkit_self_evolve`, `toolkit_clean_comments`, `toolkit_format_code`, `toolkit_auto_fix`, `toolkit_comment` |
 | 🔍 搜索 | `toolkit_search`, `toolkit_lsp`, `toolkit_query_chat_history` |
 | 📸 截图/OCR | `toolkit_screenshot`, `toolkit_ocr`, `toolkit_screen_read` |
 | 🖱️ 操控 | `toolkit_input`, `toolkit_browser_tab`, `toolkit_js_fetch` |
@@ -966,7 +967,7 @@ list       → 列出所有技能模式
 | 🗓️ 工具 | `toolkit_lunar`, `toolkit_weather_my`, `toolkit_gettime`, `toolkit_date_diff` |
 | 🔧 系统 | `toolkit_exec`, `toolkit_config`, `toolkit_os_info`, `toolkit_sudo_gui` |
 | 🧠 记忆/知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_reflection`, `toolkit_proactive` |
-| 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_dynamic_skill`, `toolkit_experience_solidify` |
+| 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_dynamic_skill`, `toolkit_experience_solidify`, `toolkit_auto_pipeline` |
 | 📋 计划/任务 | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume` |
 | 🔌 MCP 集成 | `toolkit_mcp` |
 | 🌐 Web/GUI | `toolkit_browser_tab`, `toolkit_dump_topic`, `toolkit_export_last_pdf`, `toolkit_notify` |
@@ -1088,10 +1089,10 @@ tea_agent/
 ├── lsp/                   # 代码智能（Jedi + Tree-sitter）
 ├── store/                 # 数据存储（12 子模块）
 ├── evaluation/            # 任务评估
-├── skills/                # 技能结晶（17 个 .md 技能）
+├── skills/                # 技能结晶（17+ 个 .md 技能）
 ├── sdk/                   # Python SDK（外部调用）
 ├── _gui/                  # GUI 组件（12 模块）
-├── tests/                 # 29 个测试文件（133+ 用例）
+├── tests/                 # 29 个测试文件（546+ 用例）
 └── demo/                  # 演示：蛇/俄罗斯方块/沪深300
 ```
 

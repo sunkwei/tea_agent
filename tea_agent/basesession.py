@@ -22,6 +22,8 @@ def relaxed_json_loads(raw: str):
     - 未引号包裹的 key（如 {a: 1} → {"a": 1}）
     - 未转义路径反斜杠（如 "C:\\Users" → "C:\\\\Users"）
     - 行内注释 // 和 /* */
+    - 控制字符（\\x00-\\x1f 除 \\t\\n\\r 外自动移除）
+    - 被截断的 JSON（自动补全缺失括号/引号）
 
     Returns:
         解析后的 Python 对象
@@ -42,6 +44,9 @@ def relaxed_json_loads(raw: str):
         return json.loads(s)
     except json.JSONDecodeError:
         pass
+
+    # Step 1.5: 移除非法控制字符（保留 \t \n \r）
+    s = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', s)
 
     # Step 2: 替换 Python 布尔值/None
     s = re.sub(r'\bTrue\b', 'true', s)
@@ -117,6 +122,16 @@ def relaxed_json_loads(raw: str):
             return json.loads(brace_match.group())
         except json.JSONDecodeError:
             pass
+
+    # Step 9: 尝试修复被截断的 JSON
+    # 延迟导入避免循环依赖
+    try:
+        from tea_agent.session.json_sanitizer import try_fix_truncated_json
+        fixed = try_fix_truncated_json(s)
+        if fixed is not None:
+            return json.loads(fixed)
+    except Exception:
+        pass
 
     # 全部失败，抛原始异常
     raise json.JSONDecodeError("无法解析 JSON (已尝试多种修复)", raw, 0)

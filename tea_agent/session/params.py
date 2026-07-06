@@ -7,7 +7,7 @@
 """
 
 import logging
-from typing import Dict, Any
+from typing import Any
 
 logger = logging.getLogger("session.params")
 
@@ -19,12 +19,12 @@ _DEFAULTS = {
 }
 
 
-def get_cheap_params(section: str = "api") -> Dict[str, Any]:
+def get_cheap_params(section: str = "api") -> dict[str, Any]:
     """获取 cheap 模型参数，按使用场景区分。
-    
+
     Args:
         section: 使用场景，可选 "api", "summarizer", "memory"
-        
+
     Returns:
         包含 temperature, max_tokens 的 dict
     """

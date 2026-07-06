@@ -12,7 +12,6 @@
 """
 
 import logging
-from typing import Dict, List
 
 logger = logging.getLogger("Storage.SemanticSearch")
 
@@ -34,11 +33,11 @@ class SemanticSearch:
 
     def _cosine_similarity(self, vec1: list, vec2: list) -> float:
         """计算两个向量的余弦相似度。
-        
+
         Args:
             vec1: 第一个向量
             vec2: 第二个向量
-            
+
         Returns:
             余弦相似度 -1 到 1，1 表示完全相同
         """
@@ -48,15 +47,15 @@ class SemanticSearch:
             return 0.0
         if vec1 == vec2:
             return 1.0
-            
+
         # 计算点积和模
-        dot_product = sum(a * b for a, b in zip(vec1, vec2))
+        dot_product = sum(a * b for a, b in zip(vec1, vec2, strict=False))
         norm1 = sum(a * a for a in vec1) ** 0.5
         norm2 = sum(b * b for b in vec2) ** 0.5
-        
+
         if norm1 == 0 or norm2 == 0:
             return 0.0
-            
+
         return dot_product / (norm1 * norm2)
 
     # ── 回填索引 ──
@@ -122,7 +121,7 @@ class SemanticSearch:
     # ── 搜索 ──
 
     def semantic_search(self, query: str, top_k: int = 10,
-                         min_similarity: float = 0.3) -> List[Dict]:
+                         min_similarity: float = 0.3) -> list[dict]:
         """语义搜索：将查询转为向量后搜索记忆。
 
         Args:
@@ -148,7 +147,7 @@ class SemanticSearch:
         )
 
     def hybrid_search(self, query: str, top_k: int = 10,
-                      semantic_weight: float = 0.7) -> List[Dict]:
+                      semantic_weight: float = 0.7) -> list[dict]:
         """混合搜索：语义搜索 + 关键词搜索融合。
 
         Args:
@@ -192,7 +191,7 @@ class SemanticSearch:
 
         return memories
 
-    def get_vector_stats(self) -> Dict:
+    def get_vector_stats(self) -> dict:
         """获取向量索引统计。"""
         c = self.storage.conn.cursor()
         c.execute("SELECT COUNT(*) as total FROM memories WHERE is_active = 1")

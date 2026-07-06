@@ -17,12 +17,11 @@
         - _meta: 仅插入 target 中不存在的 key（保留 target 的 week_key）
 """
 
-import sqlite3
-import sys
+import logging
 import os
 import re
-import logging
-from typing import Dict, List, Optional
+import sqlite3
+import sys
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("merge_db")
@@ -71,7 +70,7 @@ class DbMerger:
     """DbMerger class."""
     def __init__(self, target_path: str, source_path: str, dedup_threshold: float = 0.35):
         """Initialize  .
-        
+
         Args:
             target_path: Description.
             source_path: Description.
@@ -82,8 +81,8 @@ class DbMerger:
         self.dedup_threshold = dedup_threshold
 
         # ID 映射表
-        self.topic_map: Dict[int, int] = {}        # old_topic_id → new_topic_id
-        self.conv_map: Dict[int, int] = {}          # old_conv_id → new_conv_id
+        self.topic_map: dict[int, int] = {}        # old_topic_id → new_topic_id
+        self.conv_map: dict[int, int] = {}          # old_conv_id → new_conv_id
 
         # 连接
         self.target = sqlite3.connect(target_path)
@@ -93,7 +92,7 @@ class DbMerger:
     # 步骤 0: 预检 & 最大 ID 收集
     # ------------------------------------------------------------------
 
-    def _get_max_ids(self, conn: sqlite3.Connection) -> Dict[str, int]:
+    def _get_max_ids(self, conn: sqlite3.Connection) -> dict[str, int]:
         """获取各表当前最大 ID"""
         max_ids = {}
         # NOTE: 表名和列名来自内部硬编码常量，不受用户输入影响。
@@ -118,7 +117,7 @@ class DbMerger:
                 max_ids[table] = 0
         return max_ids
 
-    def _get_table_columns(self, conn: sqlite3.Connection, table: str) -> List[str]:
+    def _get_table_columns(self, conn: sqlite3.Connection, table: str) -> list[str]:
         """获取表的所有列名"""
         # NOTE: table 来自内部循环，但为防御性编程做白名单校验
         _ALLOWED_TABLES = {"topics", "conversations", "agent_rounds", "memories",
@@ -419,7 +418,7 @@ class DbMerger:
         self.target.commit()
         logger.info(f"    memories: 插入 {inserted} 条, 跳过 {skipped} 条 (空内容/冲突), ID 直接映射")
 
-    def _find_duplicate(self, content: str, category: str, existing: List[tuple]) -> Optional[tuple]:
+    def _find_duplicate(self, content: str, category: str, existing: list[tuple]) -> tuple | None:
         """在已有记忆中查找相似度超过阈值的记忆"""
         best = None
         best_score = 0.0

@@ -13,12 +13,18 @@ Usage:
   python generate_tetris_data.py --games 500 --output data.npz
   python generate_tetris_data.py --games 500 --workers 8 --output data.npz
 """
-import sys, os, time, random, argparse, multiprocessing as mp
+import argparse
+import multiprocessing as mp
+import os
+import random
+import sys
+import time
 from copy import deepcopy
+
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tetris_ansi import TetrisGame, BOARD_WIDTH, BOARD_HEIGHT, CELL_EMPTY, CELL_FILLED
+from tetris_ansi import BOARD_HEIGHT, BOARD_WIDTH, CELL_EMPTY, CELL_FILLED, TetrisGame
 
 # ─── Core Logic ──────────────────────────────────────────────────
 
@@ -176,23 +182,23 @@ def generate_dataset(num_games=100, max_steps=10000, seed=None, workers=None, ve
         workers = min(mp.cpu_count(), 8)
     base_seed = seed if seed is not None else int(time.time())
     game_args = [(base_seed + i, max_steps) for i in range(num_games)]
-    
+
     if workers > 1:
         with mp.Pool(workers) as pool:
             results = list(pool.imap_unordered(play_one_game, game_args, chunksize=1))
     else:
         results = [play_one_game(arg) for arg in game_args]
-    
+
     all_imgs, all_acts = [], []
     total_samples = 0
-    for imgs, acts, score, lines, n in results:
+    for imgs, acts, _score, _lines, n in results:
         total_samples += n
         all_imgs.append(imgs)
         all_acts.append(acts)
-    
+
     imgs_np = np.concatenate(all_imgs, axis=0)
     acts_np = np.concatenate(all_acts, axis=0)
-    
+
     if verbose:
         print(f'Total: {num_games} games, {len(imgs_np)} samples, shape {imgs_np.shape}')
         for lbl, nm in [(0,"left"),(1,"right"),(2,"rotate"),(3,"none")]:

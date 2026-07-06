@@ -3,9 +3,8 @@
 依赖: jedi (代码智能), ruff (诊断)
 """
 
-from typing import Optional
-import os
 import logging
+import os
 
 logger = logging.getLogger("toolkit_lsp")
 
@@ -14,8 +13,8 @@ def toolkit_lsp(
     filepath: str,
     line: int = 1,
     col: int = 0,
-    project_root: Optional[str] = None,
-    symbol: Optional[str] = None,
+    project_root: str | None = None,
+    symbol: str | None = None,
 ):
     """实时代码智能工具。基于 jedi + ruff。
 
@@ -27,9 +26,7 @@ def toolkit_lsp(
         project_root: 项目根目录，默认自动检测
         symbol: [context] 要追踪的符号名
     """
-    from tea_agent.lsp.lsp_engine import (
-        diagnose, completion, goto_definition, hover, references, collect_context
-    )
+    from tea_agent.lsp.lsp_engine import collect_context, completion, diagnose, goto_definition, hover, references
 
     if not project_root:
         project_root = os.path.dirname(os.path.abspath(filepath)) if filepath else os.getcwd()

@@ -9,11 +9,13 @@ ReflectionManager 单元测试
 - ReflectionManager 核心功能
 """
 
-import pytest
-import tempfile
+import contextlib
 import os
 import shutil
+import tempfile
 import time
+
+import pytest
 
 
 @pytest.fixture
@@ -27,15 +29,11 @@ def storage():
     s = Storage(db_path)
     yield s
     time.sleep(0.3)
-    try:
+    with contextlib.suppress(Exception):
         s.close()
-    except Exception:
-        pass
     time.sleep(0.2)
-    try:
+    with contextlib.suppress(Exception):
         shutil.rmtree(tmpdir, ignore_errors=True)
-    except Exception:
-        pass
 
 
 class TestToolCallRecord:

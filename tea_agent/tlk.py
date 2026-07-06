@@ -23,11 +23,11 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import Dict, Callable, Tuple, List
+from collections.abc import Callable
 
 from tea_agent.toolkit.toolkit_set_topic_title import (
-    toolkit_set_topic_title,
     meta_toolkit_set_topic_title,
+    toolkit_set_topic_title,
 )
 
 logger = logging.getLogger("toolkit")
@@ -272,9 +272,9 @@ class Toolkit:
 
     def __init__(self, tool_dir=None):
         """初始化 Toolkit 实例，加载内置和用户自定义工具。"""
-        self.func_map: Dict[str, Callable] = {}
-        self.meta_map: Dict[str, dict] = {}
-        self._cache: Dict[tuple, tuple] = {}  # (key, ttl) → (result, expire_time)
+        self.func_map: dict[str, Callable] = {}
+        self.meta_map: dict[str, dict] = {}
+        self._cache: dict[tuple, tuple] = {}  # (key, ttl) → (result, expire_time)
 
         # User directory for saving and overriding tools
         self.user_dir = osp.join(
@@ -293,7 +293,7 @@ class Toolkit:
 
     def call_tool(self, func_name: str, **kwargs):
         """带缓存的工具调用代理。
-        
+
         对非黑名单工具缓存结果，TTL 默认 30 秒。
         相同工具+相同参数在 TTL 内重复调用直接返回缓存结果。
 
@@ -355,7 +355,7 @@ class Toolkit:
             'yaml': 'PyYAML', 'bs4': 'beautifulsoup4', 'dateutil': 'python-dateutil',
             'jwt': 'PyJWT', 'Crypto': 'pycryptodome', 'Image': 'Pillow'
         }
-        
+
         try:
             tree = ast.parse(pycode)
         except SyntaxError:
@@ -366,12 +366,11 @@ class Toolkit:
             if isinstance(node, ast.Import):
                 for alias in node.names:
                     imports.add(alias.name.split('.')[0])
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    imports.add(node.module.split('.')[0])
-        
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imports.add(node.module.split('.')[0])
+
         std_libs = getattr(sys, 'stdlib_module_names', set())
-        
+
         missing = []
         for mod in imports:
             if mod in std_libs:
@@ -379,7 +378,7 @@ class Toolkit:
             if importlib.util.find_spec(mod) is None:
                 pkg_name = MODULE_MAP.get(mod, mod)
                 missing.append(pkg_name)
-        
+
         if not missing:
             return "✅ 依赖已就绪"
 
@@ -397,13 +396,13 @@ class Toolkit:
                     errors.append(f"{pkg}: {result.stderr[:100]}")
             except Exception as e:
                 errors.append(f"{pkg}: {str(e)}")
-        
+
         msg = f"📦 自动安装依赖: {', '.join(installed)}"
         if errors:
             msg += f" | ❌ 安装失败: {', '.join(errors)}"
         return msg
 
-    def reload(self) -> Dict:
+    def reload(self) -> dict:
         """Reload."""
         result = {
             "valid_tool": {},
@@ -415,9 +414,7 @@ class Toolkit:
             if "type" not in meta or meta["type"] != "function":
                 return False
             func = meta.get("function", {})
-            if "description" not in func or "name" not in func:
-                return False
-            return True
+            return not ("description" not in func or "name" not in func)
 
         # Load from builtin first, then user dir (user overrides builtin)
         dirs_to_load = []
@@ -504,16 +501,16 @@ class Toolkit:
 
         return result
 
-    def save(self, name: str, meta: dict, pycode: str, version: str = "") -> Tuple[int, str]:
+    def save(self, name: str, meta: dict, pycode: str, version: str = "") -> tuple[int, str]:
         """
         保存工具函数到文件，支持版本管理。
-        
+
         Args:
             name: 工具函数名
             meta: 工具元数据
             pycode: 工具函数代码
             version: 版本号（可选），格式如 "1.0.0"。如果不提供，自动递增
-            
+
         Returns:
             Tuple[int, str]: (状态码, 消息)
         """
@@ -595,9 +592,9 @@ class Toolkit:
         # 如果文件已存在，备份旧版本
         if osp.exists(filename):
             # 读取现有文件的版本号
-            with open(filename, "r", encoding="utf-8") as f:
+            with open(filename, encoding="utf-8") as f:
                 old_content = f.read()
-            
+
             # 自动提取版本号并递增
             if not version:
                 version_match = re.search(r'# version:\s*([\d.]+)', old_content)
@@ -609,10 +606,10 @@ class Toolkit:
                     version = '.'.join(parts)
                 else:
                     version = "1.0.0"
-            
+
             # 版本历史通过 git (内置) 或手动备份 (用户) 管理
             pass
-        
+
         # 如果没有提供版本号，使用默认的 "1.0.0"
         if not version:
             version = "1.0.0"
@@ -635,15 +632,15 @@ class Toolkit:
             result_msg = f"ok (v{version}); {skill_doc_msg}"
 
         return (0, result_msg)
-    
-    def rollback(self, name: str, version: str) -> Tuple[int, str]:
+
+    def rollback(self, name: str, version: str) -> tuple[int, str]:
         """
         回滚工具到指定版本。
-        
+
         Args:
             name: 工具函数名
             version: 要回滚到的版本号
-            
+
         Returns:
             Tuple[int, str]: (状态码, 消息)
         """
@@ -651,34 +648,34 @@ class Toolkit:
         backup_name = f"{name}.v{version}.bak.py"
         backup_path = osp.join(toolkit_path, backup_name)
         filename = osp.join(toolkit_path, f"{name}.py")
-        
+
         if not osp.exists(backup_path):
             return (1, f"Version {version} backup not found for {name}")
-        
+
         # 备份当前版本
         if osp.exists(filename):
             current_backup = f"{name}.current.bak.py"
             current_backup_path = osp.join(toolkit_path, current_backup)
             shutil.copy2(filename, current_backup_path)
-        
+
         # 恢复旧版本
         shutil.copy2(backup_path, filename)
-        
+
         return (0, f"Rolled back {name} to v{version}")
-    
-    def list_versions(self, name: str) -> Tuple[int, List[str]]:
+
+    def list_versions(self, name: str) -> tuple[int, list[str]]:
         """
         列出工具的所有可用版本。
-        
+
         Args:
             name: 工具函数名
-            
+
         Returns:
             Tuple[int, List[str]]: (状态码, 版本列表)
         """
         toolkit_path = self.tool_dir
         versions = []
-        
+
         # 查找所有备份文件
         pattern = f"{name}.v"
         for filename in os.listdir(toolkit_path):
@@ -686,7 +683,7 @@ class Toolkit:
                 # 提取版本号
                 version = filename[len(pattern):-len(".bak.py")]
                 versions.append(version)
-        
+
         # 排序版本号
         versions.sort(key=lambda v: [int(x) for x in v.split('.')])
 

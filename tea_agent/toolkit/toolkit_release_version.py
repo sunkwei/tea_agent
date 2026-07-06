@@ -1,26 +1,25 @@
 ## llm generated tool func, created Thu Apr 16 21:15:45 2026
 
-import re
-from pathlib import Path
-from datetime import datetime
-import subprocess
-
 import logging
+import re
+import subprocess
+from datetime import datetime
+from pathlib import Path
 
 logger = logging.getLogger("toolkit")
 
-def toolkit_release_version(version: str, changes: list, changelog_section: str = "Improvements & Changes", 
+def toolkit_release_version(version: str, changes: list, changelog_section: str = "Improvements & Changes",
                            build: bool = True, git_commit: bool = True) -> dict:
     """
     自动化版本发布工具
-    
+
     Args:
         version: 新版本号，如 '0.2.4'
         changes: 变更说明列表
         changelog_section: 变更章节类型（Features, Improvements & Changes, Bug Fixes, Documentation等）
         build: 是否执行构建
         git_commit: 是否创建 git commit
-    
+
     Returns:
         dict: 包含操作结果的字典
     """
@@ -31,7 +30,7 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
         "status": "success",
         "steps": []
     }
-    
+
     # 1. 更新 pyproject.toml 版本号
     pyproject_path = Path("pyproject.toml")
     if pyproject_path.exists():
@@ -43,16 +42,16 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
         )
         pyproject_path.write_text(new_content, encoding='utf-8')
         results["steps"].append("✓ 更新 pyproject.toml 版本号")
-    
+
     # 2. 更新 CHANGELOG.md
     changelog_path = Path("CHANGELOG.md")
     if changelog_path.exists():
         changelog_content = changelog_path.read_text(encoding='utf-8')
-        
+
         # 生成新条目
         today = datetime.now().strftime("%Y-%m-%d")
         new_entry = f"\n## [{version}] - {today}\n"
-        
+
         # 根据章节类型添加前缀
         section_prefix = {
             "Features": "### Features",
@@ -61,11 +60,11 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
             "Documentation": "### Documentation",
             "Chore": "### Chore"
         }
-        
+
         new_entry += f"{section_prefix.get(changelog_section, '### Improvements & Changes')}\n"
         for change in changes:
             new_entry += f"- {change}\n"
-        
+
         # 插入到第一个版本号之前
         first_version_match = re.search(r'##\s*\[', changelog_content)
         if first_version_match:
@@ -73,10 +72,10 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
             new_changelog = changelog_content[:insert_pos] + new_entry + changelog_content[insert_pos:]
         else:
             new_changelog = changelog_content + new_entry
-        
+
         changelog_path.write_text(new_changelog, encoding='utf-8')
         results["steps"].append("✓ 更新 CHANGELOG.md")
-    
+
     # 3. 执行构建
     if build:
         proc = subprocess.run(["python", "-m", "build"], capture_output=True, text=True)
@@ -85,26 +84,26 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
         else:
             results["steps"].append(f"✗ 构建失败: {proc.stderr.strip()}")
             results["status"] = "partial_failure"
-    
+
     # 4. Git 提交
     if git_commit:
         subprocess.run(["git", "add", "-A"], capture_output=True, text=True)
-        
+
         commit_title = f"release: v{version}"
         if len(changes) > 0:
             commit_title += f" - {changes[0][:50]}"
-        
+
         commit_msg_parts = [f"'{commit_title}'"]
         for change in changes:
             commit_msg_parts.append(f"-m '{change}'")
-        
+
         proc = subprocess.run(["git", "commit"] + commit_msg_parts, capture_output=True, text=True)
         if proc.returncode == 0:
             results["steps"].append("✓ Git 提交成功")
         else:
             results["steps"].append(f"✗ Git 提交失败: {proc.stderr.strip()}")
             results["status"] = "partial_failure"
-    
+
     return results
 
 def meta_toolkit_release_version() -> dict:

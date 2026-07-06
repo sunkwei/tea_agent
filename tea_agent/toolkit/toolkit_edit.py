@@ -56,7 +56,7 @@ def _verify_after_write(file_path: str, old_text: str = "",
     Returns warning string if something looks wrong, empty string if OK.
     """
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             current = f.read()
     except Exception as e:
         return f"⚠️ 验证失败：无法读回文件 {file_path}: {e}"
@@ -97,7 +97,7 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
         return (1, "", "❌ old_text 不能为空，请提供要替换的原始文本")
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             original = f.read()
 
         # normalize line endings
@@ -165,12 +165,12 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
 
 def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool):
     import os
-    import tempfile
-    import subprocess
     import shutil
+    import subprocess
+    import tempfile
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             original_content = f.read()
 
         patch_available = shutil.which('patch') is not None
@@ -282,7 +282,7 @@ def _insert_lines(file_path: str, start_line: int, new_text: str,
     import shutil
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             lines = f.readlines()
 
         if start_line < 1 or start_line > len(lines) + 1:
@@ -335,7 +335,7 @@ def _delete_lines(file_path: str, start_line: int, end_line: int,
     import shutil
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             lines = f.readlines()
 
         if start_line < 1 or start_line > len(lines):
@@ -378,7 +378,7 @@ def _replace_lines(file_path: str, start_line: int, end_line: int,
     import shutil
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding='utf-8') as f:
             lines = f.readlines()
 
         if start_line < 1 or start_line > len(lines):

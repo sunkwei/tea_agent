@@ -18,18 +18,14 @@ Harness JSON Schema v1.0 — Tea Agent 机器可读能力清单
   - config: 可配置参数摘要
 """
 
-import json
-import os
-import sys
 import logging
-from typing import Dict, List, Optional
+import sys
 from datetime import datetime
-from pathlib import Path
 
 logger = logging.getLogger("harness_schema")
 
 
-def _get_agent_info() -> Dict:
+def _get_agent_info() -> dict:
     """获取 Agent 基础信息"""
     try:
         from tea_agent import __init__ as agent_mod
@@ -49,7 +45,7 @@ def _get_agent_info() -> Dict:
     }
 
 
-def _get_capabilities() -> Dict:
+def _get_capabilities() -> dict:
     """获取能力矩阵"""
     caps = {
         "streaming": {
@@ -178,7 +174,7 @@ def _get_capabilities() -> Dict:
     return caps
 
 
-def _get_tools_schemas() -> List[Dict]:
+def _get_tools_schemas() -> list[dict]:
     """获取所有注册工具的 JSON Schema"""
     try:
         from tea_agent import tlk
@@ -208,7 +204,7 @@ def _get_tools_schemas() -> List[Dict]:
         return []
 
 
-def _get_skills_summary() -> List[Dict]:
+def _get_skills_summary() -> list[dict]:
     """获取技能摘要"""
     try:
         from tea_agent.toolkit.toolkit_skills import toolkit_skills
@@ -218,7 +214,7 @@ def _get_skills_summary() -> List[Dict]:
         return []
 
 
-def _get_memory_info() -> Dict:
+def _get_memory_info() -> dict:
     """获取记忆系统详情"""
     return {
         "engine": "memory.py + session_memory_component.py",
@@ -232,7 +228,7 @@ def _get_memory_info() -> Dict:
     }
 
 
-def _get_subagent_info() -> Dict:
+def _get_subagent_info() -> dict:
     """获取子 Agent 详情"""
     return {
         "engine": "LiteSession with isolated context window",
@@ -245,7 +241,7 @@ def _get_subagent_info() -> Dict:
     }
 
 
-def _get_protocols() -> Dict:
+def _get_protocols() -> dict:
     """获取支持的协议"""
     return {
         "acp": {
@@ -268,7 +264,7 @@ def _get_protocols() -> Dict:
     }
 
 
-def _get_security() -> Dict:
+def _get_security() -> dict:
     """获取安全能力"""
     return {
         "permission_layers": [
@@ -283,7 +279,7 @@ def _get_security() -> Dict:
     }
 
 
-def _get_config_summary() -> Dict:
+def _get_config_summary() -> dict:
     """获取可配置参数摘要"""
     try:
         from tea_agent.config import load_config
@@ -299,7 +295,7 @@ def _get_config_summary() -> Dict:
         return {}
 
 
-def generate_harness_schema(include_tools: bool = True) -> Dict:
+def generate_harness_schema(include_tools: bool = True) -> dict:
     """生成完整的 Harness JSON Schema"""
     schema = {
         "schema_version": "1.0",
@@ -326,7 +322,7 @@ def generate_harness_schema(include_tools: bool = True) -> Dict:
     return schema
 
 
-def toolkit_harness_schema(action: str = "generate", format: str = "json") -> Dict:
+def toolkit_harness_schema(action: str = "generate", format: str = "json") -> dict:
     """
     Harness JSON Schema — Tea Agent 机器可读能力清单
 

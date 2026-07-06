@@ -11,8 +11,10 @@ Storage 委派 + StoreComponent 基类测试。
 - get_storage() 单例工厂
 """
 import sqlite3
-import pytest
 import uuid
+
+import pytest
+
 from tea_agent.store._component import DB, StoreComponent
 
 
@@ -93,6 +95,7 @@ class TestGetStorage:
 
     def test_different_db_path_returns_new_instance(self, tmp_db_path):
         import os
+
         from tea_agent.store import get_storage
         s1 = get_storage(db_path=tmp_db_path)
         db2 = os.path.join(os.path.dirname(tmp_db_path), "other.db")
@@ -274,11 +277,10 @@ class TestCursor:
         db_path = tmp_path / "cursor_ctx.db"
         from tea_agent.store._component import DB, Cursor
 
-        with DB(str(db_path)) as db:
-            with Cursor(db) as c:
-                assert c is not None
-                c.execute("CREATE TABLE IF NOT EXISTS t (v TEXT)")
-                c.execute("INSERT INTO t VALUES ('hello')")
+        with DB(str(db_path)) as db, Cursor(db) as c:
+            assert c is not None
+            c.execute("CREATE TABLE IF NOT EXISTS t (v TEXT)")
+            c.execute("INSERT INTO t VALUES ('hello')")
             # 退出 with 后 c 仍存在但已关闭
             # 验证数据已通过 DB.__exit__ 提交
         # 新连接验证
@@ -291,52 +293,48 @@ class TestCursor:
         from tea_agent.store._component import DB, Cursor
         db_path = tmp_path / "multi.db"
 
-        with DB(str(db_path)) as db:
-            with Cursor(db) as c:
-                c.execute("CREATE TABLE t (k INT, v TEXT)")
-                c.execute("INSERT INTO t VALUES (1, 'a')")
-                c.execute("INSERT INTO t VALUES (2, 'b')")
-                rows = c.execute("SELECT v FROM t ORDER BY k").fetchall()
-                assert [r[0] for r in rows] == ["a", "b"]
+        with DB(str(db_path)) as db, Cursor(db) as c:
+            c.execute("CREATE TABLE t (k INT, v TEXT)")
+            c.execute("INSERT INTO t VALUES (1, 'a')")
+            c.execute("INSERT INTO t VALUES (2, 'b')")
+            rows = c.execute("SELECT v FROM t ORDER BY k").fetchall()
+            assert [r[0] for r in rows] == ["a", "b"]
 
     def test_cursor_execute_with_params(self, tmp_path):
         """带参数执行"""
         from tea_agent.store._component import DB, Cursor
         db_path = tmp_path / "params.db"
 
-        with DB(str(db_path)) as db:
-            with Cursor(db) as c:
-                c.execute("CREATE TABLE t (k INT, v TEXT)")
-                c.execute("INSERT INTO t VALUES (?, ?)", (1, "param_test"))
-                row = c.execute("SELECT v FROM t WHERE k=?", (1,)).fetchone()
-                assert row[0] == "param_test"
+        with DB(str(db_path)) as db, Cursor(db) as c:
+            c.execute("CREATE TABLE t (k INT, v TEXT)")
+            c.execute("INSERT INTO t VALUES (?, ?)", (1, "param_test"))
+            row = c.execute("SELECT v FROM t WHERE k=?", (1,)).fetchone()
+            assert row[0] == "param_test"
 
     def test_cursor_fetchone_fetchall(self, tmp_path):
         """fetchone / fetchall 正常工作"""
         from tea_agent.store._component import DB, Cursor
         db_path = tmp_path / "fetch.db"
 
-        with DB(str(db_path)) as db:
-            with Cursor(db) as c:
-                c.execute("CREATE TABLE t (v TEXT)")
-                c.execute("INSERT INTO t VALUES ('x'), ('y'), ('z')")
-                c.execute("SELECT v FROM t ORDER BY v")
-                first = c.fetchone()
-                assert first[0] == "x"
-                rest = c.fetchall()
-                assert [r[0] for r in rest] == ["y", "z"]
+        with DB(str(db_path)) as db, Cursor(db) as c:
+            c.execute("CREATE TABLE t (v TEXT)")
+            c.execute("INSERT INTO t VALUES ('x'), ('y'), ('z')")
+            c.execute("SELECT v FROM t ORDER BY v")
+            first = c.fetchone()
+            assert first[0] == "x"
+            rest = c.fetchall()
+            assert [r[0] for r in rest] == ["y", "z"]
 
     def test_cursor_rowcount(self, tmp_path):
         """rowcount 属性可用"""
         from tea_agent.store._component import DB, Cursor
         db_path = tmp_path / "rowcount.db"
 
-        with DB(str(db_path)) as db:
-            with Cursor(db) as c:
-                c.execute("CREATE TABLE t (v TEXT)")
-                c.execute("INSERT INTO t VALUES ('a'), ('b'), ('c')")
-                c.execute("UPDATE t SET v='x' WHERE v='a'")
-                assert c.rowcount == 1
+        with DB(str(db_path)) as db, Cursor(db) as c:
+            c.execute("CREATE TABLE t (v TEXT)")
+            c.execute("INSERT INTO t VALUES ('a'), ('b'), ('c')")
+            c.execute("UPDATE t SET v='x' WHERE v='a'")
+            assert c.rowcount == 1
 
     def test_db_cursor_backward_compat(self, tmp_path):
         """DB.cursor() 仍可用（向后兼容）"""

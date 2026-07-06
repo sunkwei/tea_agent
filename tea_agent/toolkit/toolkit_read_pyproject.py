@@ -9,7 +9,7 @@ def toolkit_read_pyproject(path: str = ".") -> dict:
     """
     读取并解析 pyproject.toml 提取项目元数据。
     自动处理 Python 版本兼容（3.11+ tomllib / tomli / toml 回退）。
-    
+
     Returns:
         dict: {"ok": True, "name": ..., "version": ..., ...} 或 {"ok": False, "error": ...}
     """
@@ -17,7 +17,7 @@ def toolkit_read_pyproject(path: str = ".") -> dict:
     pyproject_path = Path(path) / "pyproject.toml"
     if not pyproject_path.exists():
         return {"ok": False, "error": f"未找到 pyproject.toml: {pyproject_path}"}
-    
+
     try:
         # 1. 标准库 (Python 3.11+)
         if sys.version_info >= (3, 11):
@@ -31,7 +31,7 @@ def toolkit_read_pyproject(path: str = ".") -> dict:
                 try:
                     lib = __import__(lib_name)
                     if lib_name == "toml":
-                        with open(pyproject_path, "r") as f:
+                        with open(pyproject_path) as f:
                             data = lib.load(f)
                     else:
                         with open(pyproject_path, "rb") as f:
@@ -42,7 +42,7 @@ def toolkit_read_pyproject(path: str = ".") -> dict:
                     continue
             if not loaded:
                 return {"ok": False, "error": "无可用 TOML 解析器。请安装 tomli (Python<3.11) 或升级到 Python 3.11+"}
-        
+
         project = data.get("project", {})
         return {
             "ok": True,

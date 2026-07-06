@@ -7,13 +7,9 @@ toolkit_auto_pipeline — 自动工具管线编排器（工具共生网络）
 实现「任务→工具链→执行→学习」的闭环。
 """
 
-import os
-import re
-import json
-import time
 import logging
-from typing import List, Dict, Any, Optional
-from datetime import datetime
+import re
+import time
 
 logger = logging.getLogger("toolkit.auto_pipeline")
 
@@ -207,10 +203,7 @@ def toolkit_auto_pipeline(action="analyze", task="", inputs=None, pipeline=None)
                     if score > best_score:
                         best_score = score
                         best_match = tmpl_name
-                if best_match and best_score > 0.3:
-                    pl = TASK_TEMPLATES[best_match]["pipeline"]
-                else:
-                    pl = _build_dynamic_pipeline(task_lower)["pipeline"]
+                pl = TASK_TEMPLATES[best_match]["pipeline"] if best_match and best_score > 0.3 else _build_dynamic_pipeline(task_lower)["pipeline"]
 
             if not pl:
                 return {"ok": False, "error": f"无法为任务'{task}'构建管线"}

@@ -14,8 +14,8 @@ def toolkit_comment(mode: str, description: str = "", model_name: str = ""):
     """
     logger.info(f"toolkit_comment called: mode={mode!r}, description={repr(description)[:80]}, model_name={model_name!r}")
 
-    from datetime import datetime
     import os
+    from datetime import datetime
 
     now = datetime.now()
 

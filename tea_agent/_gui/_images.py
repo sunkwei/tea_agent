@@ -2,12 +2,12 @@
 Usage: self.images = ImageHandler(self)  # self = TkGUI instance
 """
 
-import tkinter as tk
-import os
-import shutil
 import base64
 import io
 import logging
+import os
+import shutil
+import tkinter as tk
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ class ImageHandler:
 
     def __init__(self, gui: 'TkGUI'):
         """Initialize  .
-        
+
         Args:
             gui: Description.
         """
@@ -125,6 +125,6 @@ class ImageHandler:
         ph = popup.winfo_reqheight()
         x = (screen_w - pw) // 2
         y = (screen_h - ph) // 2
-        popup.geometry("+{}+{}".format(x, y))
+        popup.geometry(f"+{x}+{y}")
 
         popup.focus_set()

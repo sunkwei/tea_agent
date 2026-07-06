@@ -10,23 +10,28 @@ prompts, reflections, config_history, vectors, scheduled_tasks。
 
 所有公共方法显式定义在 Storage 上（48 个委派方法），不再使用 __getattr__ 兜底。
 """
+import contextlib
 import json as _json_rs
 import logging
 import sqlite3
 import threading
 
-from ._component import StoreComponent, DB  # DB 短连接上下文管理器
-from ._topics import TopicStore
+from ._component import DB, StoreComponent  # DB 短连接上下文管理器
 from ._conversations import ConversationStore
-from ._summaries import SummaryStore
 from ._memories import MemoryStore
-from ._vectors import VectorStore
 from ._scheduled_tasks import ScheduledTaskStore
+from ._summaries import SummaryStore
+from ._topics import TopicStore
+from ._vectors import VectorStore
 from .migration import (
-    backup_now, meta_get, meta_set,
-    init_tables, migrate,
-    maybe_rotate_db, write_week_key,
+    backup_now,
+    init_tables,
+    maybe_rotate_db,
+    meta_get,
+    meta_set,
+    migrate,
     protect_db,
+    write_week_key,
 )
 
 logger = logging.getLogger("Storage")
@@ -173,7 +178,7 @@ class Storage:
 
     def __init__(self, db_path="chat_history.db"):
         """初始化存储，每次操作独立连接（短连接模式）。
-        
+
         Args:
             db_path: 数据库文件路径。
         """
@@ -204,8 +209,8 @@ class Storage:
 
         # ── 注入 EmbeddingEngine 到 MemoryStore ──
         try:
-            from tea_agent.embedding_util import EmbeddingEngine
             from tea_agent.config import get_config
+            from tea_agent.embedding_util import EmbeddingEngine
             cfg = get_config()
             engine = EmbeddingEngine(cfg.embedding)
             self._memories.embedding_engine = engine
@@ -553,7 +558,5 @@ class Storage:
             logger.info(f"存储已关闭: {self.db_path}")
 
     def __del__(self):
-        try:
+        with contextlib.suppress(Exception):
             self.close()
-        except Exception:
-            pass

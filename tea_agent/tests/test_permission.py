@@ -9,7 +9,6 @@
 - 日志开关和 Windows 路径兼容
 """
 
-import pytest
 from tea_agent.permission import PermissionManager
 
 
@@ -119,7 +118,7 @@ class TestCheckPath:
         assert pm.check_read("/tmpfile.txt") is False
 
     def test_windows_path_backslash(self):
-        """Windows 反斜杠路径：路径中 \ 被替换为 /，deny_dirs 应使用正斜杠"""
+        r"""Windows 反斜杠路径：路径中 \ 被替换为 /，deny_dirs 应使用正斜杠"""
         pm = PermissionManager(deny_dirs=["C:/Windows"])
         assert pm.check_read("C:\\Windows\\System32\\cmd.exe") is False
 

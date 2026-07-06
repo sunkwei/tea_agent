@@ -19,27 +19,31 @@
     from tea_agent import TeaAgent  # 现在是 Agent 的别名
 """
 
-import os
 import logging
+import os
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, List, Dict, Callable, cast
+from typing import cast
+
+import tea_agent.session_ref as _sref
+from tea_agent import tlk
+from tea_agent.config import load_config
+from tea_agent.litesession import LiteSession
 
 # ── 顶层 import（无循环依赖；所有子模块已审计，不反向导入 agent.py）──
 from tea_agent.logging_setup import setup_logging
-from tea_agent.config import load_config
-from tea_agent import tlk
-from tea_agent.store import Storage
-import tea_agent.session_ref as _sref
-from tea_agent.litesession import LiteSession
 from tea_agent.onlinesession import OnlineToolSession
-from .agent_background import start_self_evolve_thread, start_scheduler
+from tea_agent.store import Storage
+
+from .agent_background import start_scheduler, start_self_evolve_thread
 from .agent_pipeline import do_async_summaries
+from .memory import PRIORITY_MEDIUM
+
 # 惰性导入：避免 mini 构建缺失 evaluation 时崩溃
 # 实际使用时在方法内动态导入
 from .skills import SkillCrystallizer, SkillRegistry
-from .memory import PRIORITY_MEDIUM
 
 logger = logging.getLogger("agent")
 
@@ -62,7 +66,7 @@ class _ModeBehavior:
     load_topic_history: bool     # load_topic_history() 是否可用
 
 
-_MODE_BEHAVIORS: Dict[str, _ModeBehavior] = {
+_MODE_BEHAVIORS: dict[str, _ModeBehavior] = {
     "lightweight": _ModeBehavior(
         name="lightweight",
         use_storage=False,
@@ -109,9 +113,9 @@ class Agent:
     def __init__(
         self,
         mode: str = "lightweight",
-        config_path: Optional[str] = None,
-        config_fname: Optional[str] = None,
-        callback: Optional[Callable[[Dict], None]] = None,
+        config_path: str | None = None,
+        config_fname: str | None = None,
+        callback: Callable[[dict], None] | None = None,
         use_tools: bool = True,
         enable_thinking: bool = True,
         disable_summary: bool = False,
@@ -185,7 +189,7 @@ class Agent:
     # ────────────────────────────────────────────═══
     # 配置加载
     # ────────────────────────────────────────────═══
-    def _load_config(self, config_path: Optional[str]):
+    def _load_config(self, config_path: str | None):
         """加载并验证配置。优先级: config_path > config_fname > 默认路径。"""
         if config_path:
             if not os.path.isfile(config_path):
@@ -368,7 +372,7 @@ class Agent:
     # ────────────────────────────────────────────═══
     # 回调辅助
     # ────────────────────────────────────────────═══
-    def _notify(self, data: Dict):
+    def _notify(self, data: dict):
         """安全调用用户回调。"""
         if self._callback:
             try:
@@ -383,8 +387,8 @@ class Agent:
         self,
         user_input: str,
         topic_id: str = "",
-        on_status: Optional[Callable] = None,
-    ) -> List[Dict] | Dict:
+        on_status: Callable | None = None,
+    ) -> list[dict] | dict:
         """发送用户消息，阻塞直到 AI 返回完整回复。
 
         Args:
@@ -416,8 +420,8 @@ class Agent:
         self,
         user_input: str,
         topic_id: str,
-        on_status: Optional[Callable],
-    ) -> List[Dict]:
+        on_status: Callable | None,
+    ) -> list[dict]:
         """chat 的内部实现（lightweight/full 模式）。"""
 
         def stream_cb(text: str):
@@ -450,7 +454,7 @@ class Agent:
             self._post_chat_pipeline(ai_msg, used_tools, user_input, topic_id)
 
         rounds = self._sess._rounds_collector
-        result: List[Dict] = [{"role": "user", "content": user_input}]
+        result: list[dict] = [{"role": "user", "content": user_input}]
         if rounds:
             result.extend(rounds)
 
@@ -659,8 +663,8 @@ class Agent:
 # ────────────────────────────────────────────────────────────═══
 
 def TeaAgent(
-    config_path: Optional[str] = None,
-    callback: Optional[Callable[[Dict], None]] = None,
+    config_path: str | None = None,
+    callback: Callable[[dict], None] | None = None,
     use_tools: bool = False,
     enable_thinking: bool = False,
     debug: bool = False,

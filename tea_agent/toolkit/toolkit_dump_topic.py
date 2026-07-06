@@ -19,7 +19,7 @@ def _export_one_topic(storage, topic, role, dump_dir):
     lines.append(f"**创建时间:** {topic.get('create_stamp', 'N/A')}")
     lines.append(f"**最后更新:** {topic.get('last_update_stamp', 'N/A')}")
     lines.append("")
-    lines.append(f"**Token 统计:**")
+    lines.append("**Token 统计:**")
     stats_items = [
         f"- 总消耗: {token_stats.get('total_tokens', 0):,}",
         f"- Prompt: {token_stats.get('total_prompt_tokens', 0):,}",
@@ -162,12 +162,14 @@ def meta_toolkit_dump_topic() -> dict:
     }
 
 if __name__ == "__main__":
-    import sys, os, json
+    import json
+    import os
+    import sys
     # 将项目根目录添加到 sys.path 以支持直接运行
     root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     if root_dir not in sys.path:
         sys.path.append(root_dir)
-        
+
     print("开始导出所有 Topic...")
     res = toolkit_dump_topic("user")
     print(json.dumps(res, indent=2, ensure_ascii=False))

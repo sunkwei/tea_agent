@@ -7,12 +7,12 @@
 自动记录成功的 agent 组合模式，供未来重用。
 """
 
-import os
 import json
 import logging
-from pathlib import Path
-from typing import List, Dict, Optional, Any
+import os
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("toolkit.dynamic_skill")
 
@@ -25,19 +25,19 @@ def _ensure_skills_dir():
     os.makedirs(SKILLS_DIR, exist_ok=True)
 
 
-def _load_pattern(name: str) -> Optional[Dict]:
+def _load_pattern(name: str) -> dict | None:
     """加载技能模式。"""
     filepath = os.path.join(SKILLS_DIR, f"{name}.json")
     if os.path.exists(filepath):
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
+            with open(filepath, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.error(f"加载技能模式失败: {e}")
     return None
 
 
-def _save_pattern(name: str, pattern: Dict):
+def _save_pattern(name: str, pattern: dict):
     """保存技能模式。"""
     _ensure_skills_dir()
     filepath = os.path.join(SKILLS_DIR, f"{name}.json")
@@ -48,13 +48,13 @@ def _save_pattern(name: str, pattern: Dict):
         logger.error(f"保存技能模式失败: {e}")
 
 
-def _list_patterns() -> List[Dict]:
+def _list_patterns() -> list[dict]:
     """列出所有技能模式。"""
     _ensure_skills_dir()
     patterns = []
     for filepath in Path(SKILLS_DIR).glob("*.json"):
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
+            with open(filepath, encoding="utf-8") as f:
                 pattern = json.load(f)
                 pattern["name"] = filepath.stem
                 patterns.append(pattern)
@@ -66,7 +66,7 @@ def _list_patterns() -> List[Dict]:
 def _classify_task(task: str) -> str:
     """分类任务类型。"""
     task_lower = task.lower()
-    
+
     # 关键词映射
     keywords = {
         "refactor": ["重构", "refactor", "优化", "optimize"],
@@ -77,12 +77,12 @@ def _classify_task(task: str) -> str:
         "document": ["文档", "document", "注释", "comment"],
         "analyze": ["分析", "analyze", "理解", "understand"],
     }
-    
+
     for category, kw_list in keywords.items():
         for kw in kw_list:
             if kw in task_lower:
                 return category
-    
+
     return "general"
 
 
@@ -91,13 +91,13 @@ def _calculate_similarity(task1: str, task2: str) -> float:
     # 基于关键词重叠
     words1 = set(task1.lower().split())
     words2 = set(task2.lower().split())
-    
+
     if not words1 or not words2:
         return 0.0
-    
+
     intersection = words1 & words2
     union = words1 | words2
-    
+
     return len(intersection) / len(union) if union else 0.0
 
 
@@ -105,13 +105,13 @@ def toolkit_dynamic_skill(
     action: str,
     task: str = "",
     pattern_name: str = "",
-    agents: List[Dict] = None,
+    agents: list[dict] = None,
     query: str = "",
     limit: int = 10
 ) -> Any:
     """
     动态技能系统。
-    
+
     Args:
         action: 操作类型
         task: 任务描述
@@ -119,7 +119,7 @@ def toolkit_dynamic_skill(
         agents: agent 组合配置
         query: 搜索关键词
         limit: 返回数量限制
-    
+
     Returns:
         技能信息或推荐结果
     """
@@ -140,18 +140,18 @@ def toolkit_dynamic_skill(
 def _record_pattern(
     task: str,
     pattern_name: str,
-    agents: List[Dict]
-) -> Dict:
+    agents: list[dict]
+) -> dict:
     """记录成功的 agent 组合模式。"""
     if not pattern_name:
         # 自动生成名称
         task_type = _classify_task(task)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         pattern_name = f"{task_type}_{timestamp}"
-    
+
     if not agents:
         return {"ok": False, "error": "缺少 agents 配置"}
-    
+
     # 构建模式
     pattern = {
         "name": pattern_name,
@@ -165,10 +165,10 @@ def _record_pattern(
         "success_count": 0,
         "success_rate": 0.0,
     }
-    
+
     # 保存模式
     _save_pattern(pattern_name, pattern)
-    
+
     return {
         "ok": True,
         "pattern_name": pattern_name,
@@ -176,11 +176,11 @@ def _record_pattern(
     }
 
 
-def _recommend_pattern(task: str, limit: int = 5) -> Dict:
+def _recommend_pattern(task: str, limit: int = 5) -> dict:
     """根据任务推荐 agent 组合。"""
     if not task:
         return {"ok": False, "error": "缺少任务描述"}
-    
+
     patterns = _list_patterns()
     if not patterns:
         return {
@@ -188,32 +188,32 @@ def _recommend_pattern(task: str, limit: int = 5) -> Dict:
             "recommendations": [],
             "message": "暂无技能模式，请先记录成功的 agent 组合"
         }
-    
+
     # 计算相似度
     scored_patterns = []
     for pattern in patterns:
         # 基于任务类型
         task_type = _classify_task(task)
         type_score = 1.0 if pattern.get("task_type") == task_type else 0.3
-        
+
         # 基于关键词相似度
         keyword_score = _calculate_similarity(
             task,
             pattern.get("description", "")
         )
-        
+
         # 综合得分
         total_score = type_score * 0.4 + keyword_score * 0.6
-        
+
         # 考虑成功率
         success_rate = pattern.get("success_rate", 0.0)
         total_score *= (0.5 + success_rate * 0.5)
-        
+
         scored_patterns.append((total_score, pattern))
-    
+
     # 排序并返回
     scored_patterns.sort(key=lambda x: x[0], reverse=True)
-    
+
     recommendations = []
     for score, pattern in scored_patterns[:limit]:
         recommendations.append({
@@ -225,7 +225,7 @@ def _recommend_pattern(task: str, limit: int = 5) -> Dict:
             "use_count": pattern.get("use_count", 0),
             "similarity_score": round(score, 3),
         })
-    
+
     return {
         "ok": True,
         "task": task,
@@ -234,13 +234,13 @@ def _recommend_pattern(task: str, limit: int = 5) -> Dict:
     }
 
 
-def _list_patterns_result(limit: int = 20) -> Dict:
+def _list_patterns_result(limit: int = 20) -> dict:
     """列出所有技能模式。"""
     patterns = _list_patterns()
-    
+
     # 按使用次数排序
     patterns.sort(key=lambda p: p.get("use_count", 0), reverse=True)
-    
+
     result = []
     for pattern in patterns[:limit]:
         result.append({
@@ -252,7 +252,7 @@ def _list_patterns_result(limit: int = 20) -> Dict:
             "use_count": pattern.get("use_count", 0),
             "created_at": pattern.get("created_at", ""),
         })
-    
+
     return {
         "ok": True,
         "patterns": result,
@@ -261,38 +261,38 @@ def _list_patterns_result(limit: int = 20) -> Dict:
     }
 
 
-def _search_patterns(query: str, limit: int = 10) -> Dict:
+def _search_patterns(query: str, limit: int = 10) -> dict:
     """搜索技能模式。"""
     if not query:
         return _list_patterns_result(limit)
-    
+
     patterns = _list_patterns()
-    
+
     # 搜索匹配
     matched = []
     query_lower = query.lower()
-    
+
     for pattern in patterns:
         # 检查名称
         if query_lower in pattern.get("name", "").lower():
             matched.append((1.0, pattern))
             continue
-        
+
         # 检查描述
         if query_lower in pattern.get("description", "").lower():
             matched.append((0.8, pattern))
             continue
-        
+
         # 检查关键词
         keywords = pattern.get("task_keywords", [])
         for kw in keywords:
             if query_lower in kw.lower():
                 matched.append((0.6, pattern))
                 break
-    
+
     # 按相关性排序
     matched.sort(key=lambda x: x[0], reverse=True)
-    
+
     result = []
     for score, pattern in matched[:limit]:
         result.append({
@@ -302,7 +302,7 @@ def _search_patterns(query: str, limit: int = 10) -> Dict:
             "agents": pattern.get("agents", []),
             "relevance_score": round(score, 3),
         })
-    
+
     return {
         "ok": True,
         "query": query,
@@ -311,15 +311,15 @@ def _search_patterns(query: str, limit: int = 10) -> Dict:
     }
 
 
-def _delete_pattern(pattern_name: str) -> Dict:
+def _delete_pattern(pattern_name: str) -> dict:
     """删除技能模式。"""
     if not pattern_name:
         return {"ok": False, "error": "缺少模式名称"}
-    
+
     filepath = os.path.join(SKILLS_DIR, f"{pattern_name}.json")
     if not os.path.exists(filepath):
         return {"ok": False, "error": f"技能模式不存在: {pattern_name}"}
-    
+
     try:
         os.remove(filepath)
         return {

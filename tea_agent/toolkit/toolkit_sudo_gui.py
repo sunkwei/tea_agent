@@ -1,12 +1,11 @@
 # version: 1.0.1
 
-import subprocess
-import shutil
-import os
-import sys
 import ctypes
-
 import logging
+import os
+import shutil
+import subprocess
+import sys
 
 logger = logging.getLogger("toolkit")
 

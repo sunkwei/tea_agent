@@ -41,6 +41,7 @@ def toolkit_input(
     logger.info(f"toolkit_input called: action={action!r}, x={x!r}, y={y!r}, text={repr(text)[:80]}, button={button!r}, duration={duration!r}, dx={dx!r}, dy={dy!r}, keys={keys!r}, amount={amount!r}")
 
     import json
+
     import pyautogui as pg
     pg.FAILSAFE = True
     pg.PAUSE = 0.05

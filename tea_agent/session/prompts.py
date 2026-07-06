@@ -10,7 +10,6 @@
 
 import re
 from pathlib import Path
-from typing import Optional, Dict
 
 # ── 历史摘要 Prompt ──
 
@@ -138,7 +137,7 @@ def is_small_model(model_name: str) -> bool:
     return False
 
 
-def get_skill_validate_rules(skill_name: str) -> Optional[Dict]:
+def get_skill_validate_rules(skill_name: str) -> dict | None:
     """解析 SKILL.md 的 validate: 字段，返回校验规则。
 
     在 tea_agent/skills/<skill_name>/SKILL.md 中查找

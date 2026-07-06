@@ -2,7 +2,7 @@
 """
 import json
 import logging
-from typing import Dict, List, Optional
+
 from ._component import StoreComponent
 
 logger = logging.getLogger("Storage.Summaries")
@@ -12,9 +12,9 @@ class SummaryStore(StoreComponent):
 
     # ── 话题摘要 (t_conv_summary) ──
 
-    def get_topic_summary(self, topic_id: str) -> Optional[str]:
+    def get_topic_summary(self, topic_id: str) -> str | None:
         """Get the topic summary.
-        
+
         Args:
             topic_id: Description.
         """
@@ -25,9 +25,9 @@ class SummaryStore(StoreComponent):
         return row["summary"] if row else None
 
     def update_topic_summary(self, topic_id: str, summary: str,
-                              last_summarized_id: Optional[int] = None):
+                              last_summarized_id: int | None = None):
         """Update topic summary.
-        
+
         Args:
             topic_id: Description.
             summary: Description.
@@ -58,7 +58,7 @@ class SummaryStore(StoreComponent):
 
     def get_level2(self, topic_id: str) -> list:
         """Get the level2.
-        
+
         Args:
             topic_id: Description.
         """
@@ -75,7 +75,7 @@ class SummaryStore(StoreComponent):
 
     def set_level2(self, topic_id: str, level2: list):
         """Set the level2.
-        
+
         Args:
             topic_id: Description.
             level2: Description.
@@ -92,7 +92,7 @@ class SummaryStore(StoreComponent):
 
     def get_semantic_summary(self, topic_id: str) -> str:
         """Get the semantic summary.
-        
+
         Args:
             topic_id: Description.
         """
@@ -104,7 +104,7 @@ class SummaryStore(StoreComponent):
 
     def set_semantic_summary(self, topic_id: str, summary: str):
         """Set the semantic summary.
-        
+
         Args:
             topic_id: Description.
             summary: Description.
@@ -119,7 +119,7 @@ class SummaryStore(StoreComponent):
 
     def get_tool_chain_summary(self, topic_id: str) -> str:
         """Get the tool chain summary.
-        
+
         Args:
             topic_id: Description.
         """
@@ -131,7 +131,7 @@ class SummaryStore(StoreComponent):
 
     def set_tool_chain_summary(self, topic_id: str, summary: str):
         """Set the tool chain summary.
-        
+
         Args:
             topic_id: Description.
             summary: Description.
@@ -346,7 +346,7 @@ class SummaryStore(StoreComponent):
 
     def mark_as_summarized(self, conversation_id: str):
         """Mark as summarized.
-        
+
         Args:
             conversation_id: Description.
         """
@@ -358,9 +358,9 @@ class SummaryStore(StoreComponent):
         self.conn.commit()
         c.close()
 
-    def get_unsummarized_conversations(self, topic_id: str, limit: int = 50) -> List[Dict]:
+    def get_unsummarized_conversations(self, topic_id: str, limit: int = 50) -> list[dict]:
         """Get the unsummarized conversations.
-        
+
         Args:
             topic_id: Description.
             limit: Description.

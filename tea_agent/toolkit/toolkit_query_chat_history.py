@@ -2,8 +2,8 @@
 # version: 1.0.1
 
 
-import sqlite3
 import os
+import sqlite3
 
 DB_PATH = os.path.expanduser("~/.tea_agent/chat_history.db")
 
@@ -12,7 +12,7 @@ def toolkit_query_chat_history(action="schema", conversation_id=None, keyword=No
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    
+
     if action == "schema":
         cur.execute("SELECT sql FROM sqlite_master WHERE type='table' ORDER BY name")
         tables = cur.fetchall()
@@ -21,7 +21,7 @@ def toolkit_query_chat_history(action="schema", conversation_id=None, keyword=No
             result += f"\n{t['sql']}\n"
         conn.close()
         return result
-    
+
     elif action == "query":
         if not conversation_id:
             conn.close()
@@ -40,7 +40,7 @@ def toolkit_query_chat_history(action="schema", conversation_id=None, keyword=No
             result += f"\n--- {c} ---\n{val}\n"
         conn.close()
         return result
-    
+
     elif action == "topic":
         if not topic_id:
             conn.close()
@@ -62,10 +62,10 @@ def toolkit_query_chat_history(action="schema", conversation_id=None, keyword=No
             result += f"  ai_msg: {ai}\n"
             # 检查是否包含错误
             if 'error' in (d['ai_msg'] or '').lower():
-                result += f"  ⚠️ CONTAINS ERROR in ai_msg\n"
+                result += "  ⚠️ CONTAINS ERROR in ai_msg\n"
         conn.close()
         return result
-    
+
     elif action == "search":
         if not keyword:
             conn.close()
@@ -94,7 +94,7 @@ def toolkit_query_chat_history(action="schema", conversation_id=None, keyword=No
                 result += f"  {k}: {vs}\n"
         conn.close()
         return result
-    
+
     conn.close()
     return f"Unknown action: {action}"
 

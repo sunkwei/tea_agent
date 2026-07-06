@@ -1,10 +1,11 @@
 """
 # @2026-06-07 gen by deepseek-v4-pro, Step 1: 记忆写入时自动计算并存储 embedding
 """
-import logging
 import hashlib
+import logging
+
 import numpy as np
-from typing import Dict, List, Optional
+
 from ._component import StoreComponent
 
 logger = logging.getLogger("Storage.Memories")
@@ -19,9 +20,9 @@ class MemoryStore(StoreComponent):
 
     def add_memory(
         self, content: str, category: str = "general", priority: int = 2,
-        importance: int = 3, expires_at: Optional[str] = None, tags: str = "",
-        source_topic_id: Optional[str] = None, pinned: int = 0,
-        embedding: Optional[List[float]] = None,
+        importance: int = 3, expires_at: str | None = None, tags: str = "",
+        source_topic_id: str | None = None, pinned: int = 0,
+        embedding: list[float] | None = None,
     ) -> str:
         """Add memory with optional embedding (auto-computes via embedding_engine)."""
         if priority == 0:
@@ -57,7 +58,7 @@ class MemoryStore(StoreComponent):
 
     def _enforce_critical_limit(self, max_critical: int = 15):
         """Internal: enforce critical limit.
-        
+
         Args:
             max_critical: Description.
         """
@@ -82,7 +83,7 @@ class MemoryStore(StoreComponent):
 
     def update_memory(self, memory_id: str, **fields) -> bool:
         """Update memory.
-        
+
         Args:
             memory_id: Description.
         """
@@ -117,7 +118,7 @@ class MemoryStore(StoreComponent):
 
     def deactivate_memory(self, memory_id: str) -> bool:
         """Deactivate memory.
-        
+
         Args:
             memory_id: Description.
         """
@@ -125,7 +126,7 @@ class MemoryStore(StoreComponent):
 
     def delete_memory(self, memory_id: str) -> bool:
         """Delete memory.
-        
+
         Args:
             memory_id: Description.
         """
@@ -136,9 +137,9 @@ class MemoryStore(StoreComponent):
         c.close()
         return affected > 0
 
-    def get_active_memories(self, limit: int = 50) -> List[Dict]:
+    def get_active_memories(self, limit: int = 50) -> list[dict]:
         """Get the active memories.
-        
+
         Args:
             limit: Description.
         """
@@ -153,7 +154,7 @@ class MemoryStore(StoreComponent):
         c.close()
         return [dict(r) for r in rows]
 
-    def get_instructions(self) -> List[Dict]:
+    def get_instructions(self) -> list[dict]:
         """Get the instructions."""
         self.cleanup_expired_memories()
         c = self.conn.cursor()
@@ -167,10 +168,10 @@ class MemoryStore(StoreComponent):
 
     def search_memories(
         self, query: str = "", category: str = "",
-        tags: Optional[List[str]] = None, min_importance: int = 0, limit: int = 20,
-    ) -> List[Dict]:
+        tags: list[str] | None = None, min_importance: int = 0, limit: int = 20,
+    ) -> list[dict]:
         """Search memories.
-        
+
         Args:
             query: Description.
             category: Description.
@@ -201,10 +202,10 @@ class MemoryStore(StoreComponent):
         c.close()
         results = [dict(r) for r in rows]
         if tags:
-            tag_set = set(t.lower() for t in tags)
+            tag_set = {t.lower() for t in tags}
             results = [
                 r for r in results
-                if tag_set & set(t.strip().lower() for t in (r.get("tags", "") or "").split(","))
+                if tag_set & {t.strip().lower() for t in (r.get("tags", "") or "").split(",")}
             ]
         return results[:limit]
 
@@ -222,7 +223,7 @@ class MemoryStore(StoreComponent):
 
     def touch_memory(self, memory_id: str):
         """Touch memory.
-        
+
         Args:
             memory_id: Description.
         """
@@ -236,7 +237,7 @@ class MemoryStore(StoreComponent):
 
     # ── Embedding 存取 ──
 
-    def get_memory_embedding(self, memory_id: str) -> Optional[List[float]]:
+    def get_memory_embedding(self, memory_id: str) -> list[float] | None:
         """读取记忆的 embedding 向量。"""
         c = self.conn.cursor()
         c.execute("SELECT embedding FROM memories WHERE id = ?", (memory_id,))
@@ -250,7 +251,7 @@ class MemoryStore(StoreComponent):
                 return None
         return None
 
-    def batch_get_embeddings(self, limit: int = 200) -> List[Dict]:
+    def batch_get_embeddings(self, limit: int = 200) -> list[dict]:
         """批量获取有 embedding 的活跃记忆（用于相似度扫描）。"""
         c = self.conn.cursor()
         c.execute(
@@ -274,8 +275,8 @@ class MemoryStore(StoreComponent):
             results.append(d)
         return results
 
-    def search_by_vector(self, query_embedding: List[float], top_k: int = 10,
-                          min_similarity: float = 0.3) -> List[Dict]:
+    def search_by_vector(self, query_embedding: list[float], top_k: int = 10,
+                          min_similarity: float = 0.3) -> list[dict]:
         """基于向量相似度搜索记忆。"""
         all_mems = self.batch_get_embeddings(limit=200)
         if not all_mems:
@@ -299,7 +300,7 @@ class MemoryStore(StoreComponent):
         scored.sort(key=lambda x: x["similarity"], reverse=True)
         return scored[:top_k]
 
-    def get_memory_stats(self) -> Dict:
+    def get_memory_stats(self) -> dict:
         """Get the memory stats."""
         c = self.conn.cursor()
         c.execute("SELECT COUNT(*) as total FROM memories WHERE is_active = 1")

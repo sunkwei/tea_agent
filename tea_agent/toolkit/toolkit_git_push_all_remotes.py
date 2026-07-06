@@ -12,7 +12,7 @@ def toolkit_git_push_all_remotes() -> dict:
         remotes = [r for r in res.stdout.strip().split('\n') if r]
         if not remotes:
             return {"ok": False, "error": "未配置任何远程仓库", "results": []}
-        
+
         results = []
         all_ok = True
         for name in remotes:
@@ -22,7 +22,7 @@ def toolkit_git_push_all_remotes() -> dict:
                 all_ok = False
             msg = r.stdout.strip().split('\n')[-1] if r.stdout else (r.stderr.strip()[:200] if r.stderr else "未知错误")
             results.append({"remote": name, "ok": ok, "message": msg})
-        
+
         return {"ok": all_ok, "results": results, "count": len(results)}
     except Exception as e:
         logger.warning(f"toolkit_git_push_all_remotes error: {e}")

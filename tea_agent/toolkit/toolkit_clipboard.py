@@ -3,7 +3,7 @@ Clipboard Processor — 剪贴板内容感知与智能路由
 
 核心思想：
   感受（监听）是免费的，选择（处理）才是价值。
-  
+
 架构：
   ClipboardMonitor (后台线程监听)
        │
@@ -24,9 +24,14 @@ Clipboard Processor — 剪贴板内容感知与智能路由
                          └── Image file   → process
 """
 
-import os, re, time, json, logging, threading, hashlib
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Callable
+import hashlib
+import json
+import logging
+import os
+import re
+import threading
+import time
+from collections.abc import Callable
 from datetime import datetime
 
 logger = logging.getLogger("clipboard")
@@ -143,7 +148,7 @@ def detect_content(text: str) -> ClipContent:
 # 路由决策
 # ────────────────────────────────────────
 
-def route_content(content: ClipContent) -> Dict:
+def route_content(content: ClipContent) -> dict:
     """根据内容类型路由到合适的处理方案"""
     sub = content.subtype
     sug = []
@@ -184,10 +189,7 @@ def route_content(content: ClipContent) -> Dict:
         ]
 
     else:  # plain
-        if len(content.text.strip()) < 100:
-            sug = [{"label": "💬 直接回复"}]
-        else:
-            sug = [{"label": "💬 回复"}, {"label": "📝 总结"}]
+        sug = [{"label": "💬 直接回复"}] if len(content.text.strip()) < 100 else [{"label": "💬 回复"}, {"label": "📝 总结"}]
 
     return {
         "type": content.type, "subtype": sub, "confidence": content.confidence,
@@ -269,7 +271,7 @@ def _monitor_loop():
             time.sleep(2.0)
 
 
-def start_monitoring(callback: Optional[Callable] = None, interval: float = 1.0):
+def start_monitoring(callback: Callable | None = None, interval: float = 1.0):
     """启动剪贴板监听"""
     global _monitor_thread, _running, _callback
     if _running:
@@ -295,7 +297,7 @@ def stop_monitoring():
 # 工具入口
 # ────────────────────────────────────────
 
-def toolkit_clipboard(action: str = "read", format: str = "text") -> Dict:
+def toolkit_clipboard(action: str = "read", format: str = "text") -> dict:
     """
     剪贴板处理工具 — 感知 + 智能路由
 
@@ -325,7 +327,6 @@ def toolkit_clipboard(action: str = "read", format: str = "text") -> Dict:
         return stop_monitoring()
 
     elif action == "status":
-        import sys
         return {
             "running": _running,
             "last_clip_subtype": "",

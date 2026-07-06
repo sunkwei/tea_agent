@@ -10,21 +10,20 @@ Custom Commands 系统 — 借鉴 OpenCode 的可复用命令模板
 
 用法:
   # 添加命令
-  toolkit_custom_commands(action='add', name='mycmd', 
+  toolkit_custom_commands(action='add', name='mycmd',
     content='## {{title}}\n\n分析 {{file}} 的代码...')
-  
+
   # 列出命令
   toolkit_custom_commands(action='list')
-  
+
   # 执行命令
-  toolkit_custom_commands(action='run', name='mycmd', 
+  toolkit_custom_commands(action='run', name='mycmd',
     args={'title': '代码审查', 'file': 'main.py'})
 """
 
+import logging
 import os
 import re
-import logging
-from typing import Optional, List, Dict
 
 logger = logging.getLogger("toolkit")
 
@@ -49,10 +48,10 @@ def _cmd_path(name: str, scope: str = "user") -> str:
     safe_name = name.replace(" ", "_").replace("/", "_")
     return os.path.join(base, f"{safe_name}.md")
 
-def _scan_commands() -> List[dict]:
+def _scan_commands() -> list[dict]:
     """扫描所有可用命令"""
     commands = []
-    for scope, base in [("user", _get_user_commands_dir()), 
+    for scope, base in [("user", _get_user_commands_dir()),
                         ("project", _get_project_commands_dir())]:
         if not os.path.isdir(base):
             continue
@@ -70,17 +69,17 @@ def _scan_commands() -> List[dict]:
                 logger.warning(f"解析命令文件失败 {fpath}: {e}")
     return commands
 
-def _parse_command_file(fpath: str) -> Optional[dict]:
+def _parse_command_file(fpath: str) -> dict | None:
     """解析命令 Markdown 文件，提取 front matter 和正文"""
-    with open(fpath, "r", encoding="utf-8") as f:
+    with open(fpath, encoding="utf-8") as f:
         content = f.read()
-    
+
     name = os.path.splitext(os.path.basename(fpath))[0]
-    
+
     # 解析 YAML front matter (简易版)
     meta = {"description": "", "args": [], "tags": []}
     body = content
-    
+
     if content.startswith("---"):
         parts = content.split("---", 2)
         if len(parts) >= 3:
@@ -98,10 +97,10 @@ def _parse_command_file(fpath: str) -> Optional[dict]:
                         meta["tags"] = [t.strip() for t in val.split(",")]
                     elif key == "args":
                         meta["args"] = [a.strip() for a in val.split(",")]
-    
+
     # 提取占位符
     placeholders = re.findall(r"\{\{(\w+)\}\}", body)
-    
+
     return {
         "name": name,
         "description": meta.get("description", ""),
@@ -210,14 +209,14 @@ def toolkit_custom_commands(
     action: str,
     name: str = None,
     content: str = None,
-    args: Dict[str, str] = None,
+    args: dict[str, str] = None,
     scope: str = "user",
     query: str = None,
     tag: str = None,
 ) -> dict:
     """
     Custom Commands 系统 — OpenCode 式可复用命令模板。
-    
+
     Args:
         action: add/list/show/run/delete/search/builtin
         name: 命令名称
@@ -230,7 +229,7 @@ def toolkit_custom_commands(
     try:
         # 确保内置命令
         _ensure_builtins()
-        
+
         if action == "add":
             if not name or not content:
                 return {"ok": False, "error": "add 需要 name 和 content 参数"}
@@ -239,7 +238,7 @@ def toolkit_custom_commands(
                 f.write(content)
             return {"ok": True, "name": name, "scope": scope, "path": fpath,
                     "msg": f"命令 '{name}' 已添加 ({scope}级)"}
-        
+
         elif action == "list":
             cmds = _scan_commands()
             if tag:
@@ -255,7 +254,7 @@ def toolkit_custom_commands(
                     "args": c.get("args_def", []),
                 } for c in cmds],
             }
-        
+
         elif action == "show":
             if not name:
                 return {"ok": False, "error": "show 需要 name 参数"}
@@ -264,7 +263,7 @@ def toolkit_custom_commands(
                 if c["name"] == name:
                     return {"ok": True, "command": c}
             return {"ok": False, "error": f"命令 '{name}' 不存在"}
-        
+
         elif action == "run":
             if not name:
                 return {"ok": False, "error": "run 需要 name 参数"}
@@ -272,29 +271,29 @@ def toolkit_custom_commands(
             cmd = next((c for c in cmds if c["name"] == name), None)
             if not cmd:
                 return {"ok": False, "error": f"命令 '{name}' 不存在"}
-            
+
             body = cmd["body"]
             resolved_args = args or {}
-            
+
             # 参数插值
             for ph in cmd.get("placeholders", []):
                 val = resolved_args.get(ph, "")
                 if val:
                     body = body.replace("{{" + ph + "}}", val)
-            
+
             # 检查未替换的占位符
             unresolved = re.findall(r"\{\{(\w+)\}\}", body)
-            
+
             return {
                 "ok": True,
                 "name": name,
                 "description": cmd.get("description", ""),
                 "resolved_prompt": body,
                 "unresolved_placeholders": unresolved,
-                "hint": "将 resolved_prompt 作为指令执行" if not unresolved 
+                "hint": "将 resolved_prompt 作为指令执行" if not unresolved
                         else f"请提供参数: {', '.join(unresolved)}",
             }
-        
+
         elif action == "delete":
             if not name:
                 return {"ok": False, "error": "delete 需要 name 参数"}
@@ -305,9 +304,9 @@ def toolkit_custom_commands(
                     os.remove(fpath)
                     deleted = True
                     break
-            return {"ok": deleted, "name": name, 
+            return {"ok": deleted, "name": name,
                     "msg": f"命令 '{name}' 已删除" if deleted else f"命令 '{name}' 不存在"}
-        
+
         elif action == "search":
             cmds = _scan_commands()
             results = []
@@ -324,7 +323,7 @@ def toolkit_custom_commands(
                     "tags": c.get("tags", []),
                 })
             return {"ok": True, "total": len(results), "commands": results}
-        
+
         elif action == "builtin":
             """重新生成所有内置命令"""
             count = 0
@@ -334,10 +333,10 @@ def toolkit_custom_commands(
                     f.write(content.strip())
                 count += 1
             return {"ok": True, "count": count, "msg": f"已重置 {count} 个内置命令"}
-        
+
         else:
             return {"ok": False, "error": f"未知 action: {action}"}
-    
+
     except Exception as e:
         logger.exception(f"toolkit_custom_commands: {e}")
         return {"ok": False, "error": str(e)[:300]}

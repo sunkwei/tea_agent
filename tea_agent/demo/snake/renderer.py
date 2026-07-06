@@ -2,12 +2,11 @@
 Battle Snakes TUI Renderer — curses-based ASCII display.
 """
 
+import contextlib
 import curses
 import time
-from typing import List, Optional
 
-from .engine import Game, Snake, Direction
-
+from .engine import Direction, Game, Snake
 
 # ── color pair IDs ─────────────────────────────────────────
 STRAWBERRY_COLOR = 100
@@ -39,23 +38,23 @@ class Renderer:
     """Curses-based TUI renderer for Battle Snakes."""
 
     def __init__(self, game: Game,
-                 human_index: Optional[int] = None,
-                 human_state: Optional[dict] = None):
+                 human_index: int | None = None,
+                 human_state: dict | None = None):
         self.game = game
         self.human_index = human_index
         self.human_state = human_state
-        self.stdscr: Optional[curses.window] = None
+        self.stdscr: curses.window | None = None
         self._running = False
         self._pause = False
         self._speed = 0.12
-        self._event_log: List[str] = []
-        self._event_log: List[str] = []
+        self._event_log: list[str] = []
+        self._event_log: list[str] = []
         self._max_events = 10
         self._quit = False  # True if user pressed Q
 
     # ── public ─────────────────────────────────────────────
 
-    def run(self) -> Optional[str]:
+    def run(self) -> str | None:
         """Run the game loop. Returns winner name, or None for draw/all-dead.
         Check ._quit to distinguish user quit from natural draw."""
         result = curses.wrapper(self._run)
@@ -66,7 +65,7 @@ class Renderer:
         return self._quit
     # ── main loop ──────────────────────────────────────────
 
-    def _run(self, stdscr) -> Optional[str]:
+    def _run(self, stdscr) -> str | None:
         self.stdscr = stdscr
         _init_colors()
         curses.curs_set(0)
@@ -89,11 +88,10 @@ class Renderer:
                     self._show_game_over(result["winner"])
                     time.sleep(2.5)
                     return result["winner"]
-                if result["alive_count"] == 0:
-                    if key == ord('q') or key == 27:
-                        self._running = False
-                        self._quit = True
-                        return None
+                if result["alive_count"] == 0 and (key == ord('q') or key == 27):
+                    self._running = False
+                    self._quit = True
+                    return None
 
             self._draw()
             time.sleep(self._speed if not self._pause else 0.05)
@@ -173,36 +171,28 @@ class Renderer:
         # strawberries
         sattr = curses.color_pair(STRAWBERRY_COLOR) | curses.A_BOLD
         for pos in self.game.strawberries:
-            try:
+            with contextlib.suppress(curses.error):
                 self.stdscr.addch(oy + 1 + pos.y, ox + 1 + pos.x, '♥', sattr)
-            except curses.error:
-                pass
 
         # snakes
         for snake in self.game.snakes:
             attr = curses.color_pair(snake.color_id) if snake.alive \
                 else curses.color_pair(DEAD_COLOR)
             # head
-            try:
+            with contextlib.suppress(curses.error):
                 self.stdscr.addch(oy + 1 + snake.head.y, ox + 1 + snake.head.x,
                                   snake.char, attr | curses.A_BOLD)
-            except curses.error:
-                pass
             # body
             for seg in snake.body[1:]:
-                try:
+                with contextlib.suppress(curses.error):
                     self.stdscr.addch(oy + 1 + seg.y, ox + 1 + seg.x,
                                       snake.char.lower(), attr)
-                except curses.error:
-                    pass
 
         # pause indicator
         if self._pause:
-            try:
+            with contextlib.suppress(curses.error):
                 self.stdscr.addstr(oy, ox + bw // 2 - 4, " ⏸ PAUSED ",
                                    curses.color_pair(STATUS_COLOR) | curses.A_BOLD)
-            except curses.error:
-                pass
 
     def _draw_sidebar(self, sx: int, sy: int, max_h: int) -> None:
         def _put(row: int, text: str, *attrs) -> None:
@@ -249,19 +239,14 @@ class Renderer:
             if self.human_index is not None:
                 _put(row + 6, " Arrows/WASD: move")
 
-    def _show_game_over(self, winner: Optional[str]) -> None:
+    def _show_game_over(self, winner: str | None) -> None:
         if not self.stdscr:
             return
         h, w = self.stdscr.getmaxyx()
-        if winner:
-            msg = f"GAME OVER — {winner} WINS!"
-        else:
-            msg = "GAME OVER — DRAW!"
-        try:
+        msg = f"GAME OVER — {winner} WINS!" if winner else "GAME OVER — DRAW!"
+        with contextlib.suppress(curses.error):
             self.stdscr.addstr(h // 2, (w - len(msg)) // 2, msg,
                                curses.A_BOLD | curses.color_pair(STRAWBERRY_COLOR))
-        except curses.error:
-            pass
         self.stdscr.refresh()
 
 

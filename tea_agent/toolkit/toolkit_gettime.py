@@ -6,7 +6,7 @@ logger = logging.getLogger("toolkit")
 
 def toolkit_gettime() -> dict:
     """Toolkit gettime."""
-    logger.info(f"toolkit_gettime called")
+    logger.info("toolkit_gettime called")
 
     import datetime
     now = datetime.datetime.now()

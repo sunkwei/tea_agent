@@ -1,5 +1,6 @@
 """toolkit_auto_fix — 代码自动修复 Agent 工具入口"""
-import sys, logging
+import logging
+import sys
 from pathlib import Path
 
 logger = logging.getLogger("toolkit_auto_fix")
@@ -43,11 +44,11 @@ def toolkit_auto_fix(action="scan", filepath=None, severity="warning",
 
         lines = [f"🔍 扫描完成: 发现 {len(issues)} 个问题"]
         lines.append(f"  严重级别: {by_severity}")
-        lines.append(f"  按规则:")
+        lines.append("  按规则:")
         for rule, count in by_rule.most_common(10):
             lines.append(f"    {rule:20s} x {count}")
         lines.append("")
-        lines.append(f"  前 10 条详情:")
+        lines.append("  前 10 条详情:")
         for i in issues[:10]:
             lines.append(f"  [{i['severity'][0].upper()}] {i['rule']:20s} L{i['line']:4d} {i['file']}")
             lines.append(f"       {i['message'][:70]}")
@@ -60,16 +61,16 @@ def toolkit_auto_fix(action="scan", filepath=None, severity="warning",
         result = agent.fix_all(severity=severity, dry_run=dry_run, max_fixes=max_fixes)
         lines = []
         if dry_run:
-            lines.append(f"🔍 Dry-run 预览 (设置 dry_run=false 执行)")
+            lines.append("🔍 Dry-run 预览 (设置 dry_run=false 执行)")
         else:
-            lines.append(f"🔧 批量修复完成")
+            lines.append("🔧 批量修复完成")
 
         lines.append(f"  扫描: {result['scanned']} 个问题")
         lines.append(f"  待修: {result['filtered']} 个 (>= {severity})")
         lines.append(f"  修复: {result['fixed']} | 跳过: {result['skipped']} | 错误: {result['errors']}")
 
         if result["results"]:
-            lines.append(f"  详情:")
+            lines.append("  详情:")
             for r in result["results"][:10]:
                 issue = r["issue"]
                 res = r["result"]
@@ -98,14 +99,14 @@ def toolkit_auto_fix(action="scan", filepath=None, severity="warning",
     elif action == "status":
         report = agent.report()
         verify = agent.verify()
-        lines = [f"📊 AutoFix Agent 状态"]
+        lines = ["📊 AutoFix Agent 状态"]
         lines.append(f"  累计修复: {report['total_fixes']} 次")
         lines.append(f"  编译检查: {'✅ 通过' if verify['ok'] else '❌ 有错误'}")
-        lines.append(f"  按规则:")
+        lines.append("  按规则:")
         for rule, count in report["by_rule"].items():
             lines.append(f"    {rule:20s}: {count}")
         if report["changes"]:
-            lines.append(f"  最近修改:")
+            lines.append("  最近修改:")
             for c in report["changes"][-5:]:
                 lines.append(f"    {c['status']:8s} [{c['rule']}] {c['file']}:{c['line']}")
         return "\n".join(lines)

@@ -13,15 +13,15 @@ toolkit_code_review — 自动代码审查引擎
 输出结构化审查报告（Markdown），含严重等级和修复建议。
 """
 
-import os
-import re
 import json
 import logging
-import subprocess
+import os
 import py_compile
-from pathlib import Path
-from typing import List, Optional, Dict, Any
+import re
+import subprocess
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from tea_agent.lsp.lsp_engine import diagnose
 
@@ -40,7 +40,7 @@ SUSPICIOUS_PATTERNS = [
 
 # ── 审查引擎 ────────────────────────────────────────────
 
-def _check_compile(filepath: str) -> Dict[str, Any]:
+def _check_compile(filepath: str) -> dict[str, Any]:
     """Python 编译检查"""
     try:
         py_compile.compile(filepath, doraise=True)
@@ -49,17 +49,14 @@ def _check_compile(filepath: str) -> Dict[str, Any]:
         return {"ok": False, "errors": [str(e)]}
 
 
-def _check_ruff(filepath: str) -> Dict[str, Any]:
+def _check_ruff(filepath: str) -> dict[str, Any]:
     """Ruff Lint 检查"""
     try:
         r = subprocess.run(
             ["ruff", "check", "--output-format", "json", filepath],
             capture_output=True, text=True, timeout=30,
         )
-        if r.stdout.strip():
-            issues = json.loads(r.stdout)
-        else:
-            issues = []
+        issues = json.loads(r.stdout) if r.stdout.strip() else []
         return {"ok": len(issues) == 0, "issues": issues, "count": len(issues)}
     except FileNotFoundError:
         return {"ok": True, "issues": [], "count": 0, "hint": "ruff 未安装"}
@@ -69,7 +66,7 @@ def _check_ruff(filepath: str) -> Dict[str, Any]:
         return {"ok": True, "issues": [], "count": 0, "hint": f"ruff 错误: {e}"}
 
 
-def _check_semantic(project_root: str, filepath: str) -> Dict[str, Any]:
+def _check_semantic(project_root: str, filepath: str) -> dict[str, Any]:
     """LSP 语义诊断"""
     try:
         result = diagnose(project_root, filepath)
@@ -78,10 +75,10 @@ def _check_semantic(project_root: str, filepath: str) -> Dict[str, Any]:
         return {"ok": True, "issues": [], "hint": f"语义诊断跳过: {e}"}
 
 
-def _check_security(filepath: str) -> Dict[str, Any]:
+def _check_security(filepath: str) -> dict[str, Any]:
     """安全扫描"""
     try:
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+        with open(filepath, encoding="utf-8", errors="replace") as f:
             content = f.read()
         findings = []
         for pattern, category, desc in SUSPICIOUS_PATTERNS:
@@ -97,10 +94,10 @@ def _check_security(filepath: str) -> Dict[str, Any]:
         return {"ok": True, "findings": [], "count": 0, "hint": f"安全扫描错误: {e}"}
 
 
-def _assess_complexity(filepath: str) -> Dict[str, Any]:
+def _assess_complexity(filepath: str) -> dict[str, Any]:
     """代码复杂度评估"""
     try:
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+        with open(filepath, encoding="utf-8", errors="replace") as f:
             content = f.read()
         lines = content.split('\n')
         total_lines = len(lines)
@@ -153,10 +150,10 @@ def _complexity_score(total: int, code: int, max_indent: int) -> str:
     else: return "复杂"
 
 
-def _check_style(filepath: str) -> Dict[str, Any]:
+def _check_style(filepath: str) -> dict[str, Any]:
     """风格检查"""
     try:
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+        with open(filepath, encoding="utf-8", errors="replace") as f:
             content = f.read()
         issues = []
         lines = content.split('\n')
@@ -192,35 +189,35 @@ def _generate_report(filepath, compile_result, lint_result, semantic_result, sec
 
     report = []
     report.append(f"# 📋 代码审查报告: {filename}")
-    report.append(f"")
+    report.append("")
     report.append(f"**时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     report.append(f"**摘要**: {total_issues} 个问题（{error_count} 错误, {warning_count} 警告）")
-    report.append(f"")
+    report.append("")
 
     metrics = complexity_result.get("metrics", {})
-    report.append(f"## 📊 代码复杂度")
-    report.append(f"")
-    report.append(f"| 指标 | 值 |")
-    report.append(f"|------|-----|")
+    report.append("## 📊 代码复杂度")
+    report.append("")
+    report.append("| 指标 | 值 |")
+    report.append("|------|-----|")
     report.append(f"| 总行数 | {metrics.get('total_lines', 'N/A')} |")
     report.append(f"| 代码行数 | {metrics.get('code_lines', 'N/A')} |")
     report.append(f"| 注释比例 | {metrics.get('comment_ratio', 'N/A')}% |")
     report.append(f"| 函数数 | {metrics.get('function_count', 'N/A')} |")
     report.append(f"| 类数 | {metrics.get('class_count', 'N/A')} |")
     report.append(f"| **复杂度** | **{complexity_result.get('complexity_score', 'N/A')}** |")
-    report.append(f"")
+    report.append("")
 
     if not compile_result.get("ok", True):
-        report.append(f"## ❌ 编译错误")
+        report.append("## ❌ 编译错误")
         for err in compile_result.get("errors", []):
             report.append(f"- `{err[:200]}`")
-        report.append(f"")
+        report.append("")
 
     lint_issues = lint_result.get("issues", [])
     if lint_issues:
         report.append(f"## ⚠️ Lint 问题 ({len(lint_issues)})")
-        report.append(f"| 行号 | 类型 | 描述 |")
-        report.append(f"|------|------|------|")
+        report.append("| 行号 | 类型 | 描述 |")
+        report.append("|------|------|------|")
         for issue in lint_issues[:30]:
             loc = issue.get("location", {})
             line = loc.get("row", issue.get("row", "?"))
@@ -229,34 +226,34 @@ def _generate_report(filepath, compile_result, lint_result, semantic_result, sec
             report.append(f"| {line} | `{code}` | {msg} |")
         if len(lint_issues) > 30:
             report.append(f"| ... | ... | 还有 {len(lint_issues) - 30} 个 |")
-        report.append(f"")
+        report.append("")
 
     sec = security_result.get("findings", [])
     if sec:
         report.append(f"## 🔒 安全问题 ({len(sec)})")
-        report.append(f"| 行号 | 严重度 | 类型 |")
-        report.append(f"|------|--------|------|")
+        report.append("| 行号 | 严重度 | 类型 |")
+        report.append("|------|--------|------|")
         for f in sec:
             report.append(f"| {f['line']} | {f['severity']} | {f['description']} |")
-        report.append(f"")
+        report.append("")
 
     sem = semantic_result.get("issues", [])
     if sem:
         report.append(f"## 🔍 语义问题 ({len(sem)})")
         for issue in sem[:20]:
             report.append(f"- {issue.get('message', str(issue))[:100]}")
-        report.append(f"")
+        report.append("")
 
     sty = style_result.get("issues", [])
     if sty:
         report.append(f"## 🎨 风格建议 ({len(sty)})")
         for issue in sty:
             report.append(f"- L{issue['line']}: {issue['description']}")
-        report.append(f"")
+        report.append("")
 
-    report.append(f"## 📝 总结")
+    report.append("## 📝 总结")
     if error_count == 0 and warning_count == 0:
-        report.append(f"✅ **代码质量优秀** — 未发现问题")
+        report.append("✅ **代码质量优秀** — 未发现问题")
     elif error_count == 0:
         report.append(f"⚠️ **代码质量良好** — {warning_count} 个警告需关注")
     else:

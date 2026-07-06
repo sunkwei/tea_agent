@@ -1,12 +1,12 @@
 import json
-import urllib.request as urllib_req
 import urllib.error as urllib_err
+import urllib.request as urllib_req
 
 
 def toolkit_list_provider_models(provider: str = "all", api_url: str = None, api_key: str = None):
     """
     根据当前配置文件查询指定 API 提供商的可用模型列表。
-    
+
     支持两种模式：
     1. 从配置文件读取：传入 provider 参数指定 main_model/cheap_model/embedding_model/all
     2. 直接指定端点：传入 api_url + api_key 查询任意 OpenAI 兼容 API

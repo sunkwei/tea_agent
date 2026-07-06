@@ -10,12 +10,11 @@
 """
 
 import sys
-from typing import List, Dict
 
 __test__ = False  # 标记跳过 pytest 扫描，防止超时
 
 
-def extract_final_reply(rounds: List[Dict]) -> str:
+def extract_final_reply(rounds: list[dict]) -> str:
     """从轮次列表中提取 AI 的最终文本回复。"""
     # 倒序查找最后一个 assistant 消息（含 content 且非 tool_calls）
     for r in reversed(rounds):

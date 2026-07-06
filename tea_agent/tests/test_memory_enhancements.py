@@ -7,17 +7,20 @@
 - 新的 toolkit_memory actions
 """
 
-import pytest
-import tempfile
+import contextlib
 import os
 import shutil
+import tempfile
 from unittest.mock import patch
+
+import pytest
 
 
 @pytest.fixture
 def storage():
     """创建临时数据库（使用目录，避免 Windows 文件锁定）"""
     import time
+
     from tea_agent.store import Storage
 
     tmpdir = tempfile.mkdtemp(prefix="tea_mem_test_")
@@ -27,15 +30,11 @@ def storage():
     yield s
     # 等待后台线程完成，避免 access violation
     time.sleep(0.3)
-    try:
+    with contextlib.suppress(Exception):
         s.close()
-    except Exception:
-        pass
     time.sleep(0.2)
-    try:
+    with contextlib.suppress(Exception):
         shutil.rmtree(tmpdir, ignore_errors=True)
-    except Exception:
-        pass
 
 
 def _mock_get_storage(s):

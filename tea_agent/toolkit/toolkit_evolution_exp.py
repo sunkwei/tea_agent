@@ -13,9 +13,10 @@ action:
   - list: 列出最近的进化经验
 """
 
-import os
 import json
+import os
 from datetime import datetime
+
 
 def _get_exp_path():
     """Internal: get the exp path."""
@@ -25,13 +26,13 @@ def _load_exp_db():
     """Internal: load exp db."""
     path = _get_exp_path()
     if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             return json.load(f)
     return []
 
 def _save_exp_db(data):
     """Internal: save exp db.
-    
+
     Args:
         data: Description.
     """
@@ -43,7 +44,7 @@ def _save_exp_db(data):
 def toolkit_evolution_exp(action="list", description="", category="", tags="", outcome="success", notes="", query="", limit=10):
     """
     管理进化经验库。
-    
+
     action:
       - list: 列出最近经验
       - record: 记录经验
@@ -54,7 +55,7 @@ def toolkit_evolution_exp(action="list", description="", category="", tags="", o
     if action == "list":
         if not db:
             return "📚 经验库为空，开始记录进化经验吧！"
-        
+
         lines = [f"📚 最近 {min(limit, len(db))} 条进化经验:"]
         for exp in db[-limit:]:
             tags_str = f" [{', '.join(exp.get('tags', []))}]" if exp.get('tags') else ""
@@ -64,7 +65,7 @@ def toolkit_evolution_exp(action="list", description="", category="", tags="", o
     elif action == "record":
         if not description:
             return "❌ 记录经验需要提供 description 参数"
-        
+
         exp = {
             "timestamp": datetime.now().isoformat(),
             "description": description,
@@ -80,17 +81,17 @@ def toolkit_evolution_exp(action="list", description="", category="", tags="", o
     elif action == "search":
         if not query:
             return "❌ 搜索经验需要提供 query 参数"
-        
+
         results = []
         q = query.lower()
         for exp in db:
             text = json.dumps(exp).lower()
             if q in text:
                 results.append(exp)
-        
+
         if not results:
             return f"🔍 未找到与 '{query}' 相关的经验"
-            
+
         lines = [f"🔍 找到 {len(results)} 条与 '{query}' 相关的经验:"]
         for exp in results[-limit:]:
             tags_str = f" [{', '.join(exp.get('tags', []))}]" if exp.get('tags') else ""

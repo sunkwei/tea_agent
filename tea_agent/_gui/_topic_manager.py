@@ -2,15 +2,15 @@
 从 gui.py L1258-1519 提取：主题列表、切换、加载、回调
 """
 
-import tkinter as tk
-import threading
 import json as _json_um
 import logging
+import threading
+import tkinter as tk
 from datetime import datetime
-from typing import Optional, Dict, List, cast
+from typing import cast
 
 if __import__('typing').TYPE_CHECKING:
-    from tea_agent.gui import TkGUI
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -70,10 +70,9 @@ class TopicManager:
         gui._topic_cache = all_topics  # 缓存全部供 tooltip 使用
         current_tid = getattr(gui, 'current_topic_id', None)
         # 如果当前主题被停用，自动切到第一个活跃主题
-        if not any(tp.get("topic_id") == current_tid for tp in topics):
-            if topics:
-                current_tid = topics[0].get("topic_id")
-                gui.current_topic_id = current_tid
+        if not any(tp.get("topic_id") == current_tid for tp in topics) and topics:
+            current_tid = topics[0].get("topic_id")
+            gui.current_topic_id = current_tid
         highlight_iid = ""
         for i, tp in enumerate(topics):
             title = tp.get("title", "")
@@ -87,7 +86,7 @@ class TopicManager:
             gui.topic_list.see(highlight_iid)
     def switch_topic(self, topic_id):
         """切换到指定主题：加载历史 → 渲染 UI → 更新标题。
-        
+
         Args:
             topic_id: 目标主题 ID。
         """
@@ -252,7 +251,7 @@ class TopicManager:
 
     def _suggest_new_topic_if_needed(self, topic_id: str):
         """Internal: suggest new topic if needed.
-        
+
         Args:
             topic_id: Description.
         """
@@ -302,13 +301,13 @@ class TopicManager:
         gui = self.gui
         if idx < 0 or idx >= len(gui._topic_cache):
             return
-        from tea_agent._gui._fonts import _fs, SYSTEM_FONT
+        from tea_agent._gui._fonts import SYSTEM_FONT, _fs
         tp = gui._topic_cache[idx]
         create_ts = tp.get("create_stamp", "")
         update_ts = tp.get("last_update_stamp", "")
         def fmt(ts):
             """Fmt.
-            
+
             Args:
                 ts: Description.
             """

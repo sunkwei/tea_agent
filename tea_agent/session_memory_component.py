@@ -6,14 +6,16 @@
 """
 
 import json
+from typing import TYPE_CHECKING
+
 import requests
-from datetime import datetime
-from typing import List, Dict, Optional, TYPE_CHECKING
-from .session.context import SessionComponent, SessionContext
+
 from tea_agent.session.params import get_cheap_params
 
+from .session.context import SessionComponent
+
 if TYPE_CHECKING:
-    from tea_agent.memory import MemoryManager
+    pass
 
 import logging
 
@@ -26,20 +28,20 @@ def _get_cheap_params():
 class MemoryComponent(SessionComponent):
     """
     会话记忆组件。
-    
+
     通过 self.ctx 访问共享状态（memory, storage, messages, pipeline, _injected_memories 等）。
     """
-    
+
     @property
     def name(self) -> str:
         """Name."""
         return "memory"
-    
+
     def initialize(self) -> None:
         """初始化 Memory 管理器（需要 storage 已设置）"""
         if not self.ctx.storage:
             return
-        
+
         from tea_agent.memory import MemoryManager
         threshold = self.ctx.memory_extraction_threshold
         dedup = self.ctx.memory_dedup_threshold
@@ -54,7 +56,7 @@ class MemoryComponent(SessionComponent):
             logger.warning(f"MemoryManager 初始化失败: {e}")
             self.ctx.memory = None
 
-    def inject_memories(self, context: Dict) -> List:
+    def inject_memories(self, context: dict) -> list:
         """
         从长期记忆（用户+项目）中注入相关记忆。
 
@@ -171,7 +173,7 @@ class MemoryComponent(SessionComponent):
 
         return 0
 
-    def _mark_conversations_extracted(self, conversations: List[Dict]):
+    def _mark_conversations_extracted(self, conversations: list[dict]):
         """标记对话为已提取，避免重复处理。"""
         if not conversations or not self.ctx.storage:
             return
@@ -191,7 +193,7 @@ class MemoryComponent(SessionComponent):
         return self.ctx.client, self.ctx.model
 
     @staticmethod
-    def _build_conversation_text(conversations: List[Dict]) -> str:
+    def _build_conversation_text(conversations: list[dict]) -> str:
         """将对话列表构建为纯文本"""
         lines = []
         for conv in conversations:
@@ -200,7 +202,7 @@ class MemoryComponent(SessionComponent):
             lines.append("")
         return "\n".join(lines)
 
-    def get_injected_memories(self) -> List[Dict]:
+    def get_injected_memories(self) -> list[dict]:
         """获取当前会话注入的记忆列表"""
         return list(self.ctx._injected_memories)
 
@@ -254,7 +256,7 @@ class AutoMemoryExtractor:
             logger.warning(f"加载模型配置失败: {e}")
             self._model_config = None
 
-    def extract_from_topic(self, topic_id: str, force: bool = False) -> Dict:
+    def extract_from_topic(self, topic_id: str, force: bool = False) -> dict:
         """从主题对话中自动提取记忆。"""
         try:
             conversations = self._get_unextracted_conversations(topic_id)
@@ -295,7 +297,7 @@ class AutoMemoryExtractor:
             logger.error(f"AutoMemory extract failed: {e}")
             return {"status": "error", "error": str(e)}
 
-    def _get_unextracted_conversations(self, topic_id: str) -> List[Dict]:
+    def _get_unextracted_conversations(self, topic_id: str) -> list[dict]:
         c = self.storage.conn.cursor()
         c.execute(
             "SELECT id, user_msg, ai_msg, stamp FROM conversations "
@@ -306,7 +308,7 @@ class AutoMemoryExtractor:
         c.close()
         return [dict(r) for r in rows]
 
-    def _merge_conversations(self, conversations: List[Dict]) -> str:
+    def _merge_conversations(self, conversations: list[dict]) -> str:
         parts = []
         for conv in conversations[:10]:
             user_msg = (conv.get("user_msg", "") or "")[:500]
@@ -321,7 +323,7 @@ class AutoMemoryExtractor:
         if text1 == text2:
             return 1.0
         def get_bigrams(text):
-            return set(text[i:i+2] for i in range(len(text) - 1))
+            return {text[i:i+2] for i in range(len(text) - 1)}
         bigrams1 = get_bigrams(text1.lower())
         bigrams2 = get_bigrams(text2.lower())
         if not bigrams1 or not bigrams2:
@@ -332,7 +334,7 @@ class AutoMemoryExtractor:
 
 
 
-    def _extract_with_llm(self, conversation_text: str) -> List[Dict]:
+    def _extract_with_llm(self, conversation_text: str) -> list[dict]:
         """真实 LLM 调用，替代旧的 mock 实现。"""
         if self._model_config is None:
             logger.warning("No LLM config, falling back to keyword extraction")
@@ -383,7 +385,7 @@ class AutoMemoryExtractor:
             logger.warning(f"LLM extraction failed: {e}, falling back to keyword")
             return self._fallback_extract(conversation_text)
 
-    def _fallback_extract(self, conversation_text: str) -> List[Dict]:
+    def _fallback_extract(self, conversation_text: str) -> list[dict]:
         """关键词提取作为 LLM 失败的备选。"""
         memories = []
         lines = conversation_text.split('\n')
@@ -438,14 +440,14 @@ class AutoMemoryExtractor:
             logger.debug(f"Dedup check failed: {e}")
             return False
 
-    def _mark_conversations_extracted(self, conversations: List[Dict]):
+    def _mark_conversations_extracted(self, conversations: list[dict]):
         c = self.storage.conn.cursor()
         for conv in conversations:
             c.execute("UPDATE conversations SET is_summarized = 1 WHERE id = ?", (conv["id"],))
         self.storage.conn.commit()
         c.close()
 
-    def get_extraction_stats(self, topic_id: Optional[str] = None) -> Dict:
+    def get_extraction_stats(self, topic_id: str | None = None) -> dict:
         c = self.storage.conn.cursor()
         c.execute("SELECT COUNT(*) as total FROM memories WHERE is_active = 1")
         total = c.fetchone()["total"]
@@ -462,7 +464,7 @@ class AutoMemoryExtractor:
 
         return {"total_memories": total, "from_topic": from_topic, "by_category": by_category}
 
-    def get_memory_stats(self) -> Dict:
+    def get_memory_stats(self) -> dict:
         """获取记忆统计"""
         if not self.ctx.memory or not self.ctx.storage:
             return {"total": 0, "by_category": {}, "by_priority": {}}

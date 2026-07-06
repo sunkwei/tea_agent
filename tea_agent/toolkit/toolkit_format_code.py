@@ -7,8 +7,8 @@
 支持 Python (black) 和 C/C++ (clang-format) 格式化。
 """
 
-import os
 import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -23,22 +23,22 @@ def toolkit_format_code(
 ) -> str:
     """
     代码格式化工具。
-    
+
     Args:
         action: 操作类型：format=格式化，check=检查
         path: 文件或目录路径
         language: 语言类型，默认 auto 自动检测
         style: 格式化风格
-    
+
     Returns:
         格式化结果或错误信息
     """
     path = os.path.abspath(path)
-    
+
     # 检测语言
     if language == "auto":
         language = _detect_language(path)
-    
+
     # 根据语言选择格式化工具
     if language == "python":
         return _format_python(action, path, style)
@@ -60,12 +60,12 @@ def _detect_language(path: str) -> str:
         # 检查目录中的文件类型
         py_files = list(Path(path).rglob("*.py"))
         cpp_files = list(Path(path).rglob("*.cpp")) + list(Path(path).rglob("*.h"))
-        
+
         if py_files:
             return "python"
         elif cpp_files:
             return "cpp"
-    
+
     return "unknown"
 
 
@@ -73,31 +73,31 @@ def _format_python(action: str, path: str, style: str) -> str:
     """Python 格式化 (black)。"""
     # 检查 black 是否安装
     try:
-        subprocess.run(["python", "-m", "black", "--version"], 
+        subprocess.run(["python", "-m", "black", "--version"],
                       capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
         # 尝试安装 black
         logger.info("black 未安装，正在安装...")
         try:
-            subprocess.run(["pip", "install", "black"], 
+            subprocess.run(["pip", "install", "black"],
                           capture_output=True, check=True)
         except:
             return "❌ black 未安装，请运行: pip install black"
-    
+
     # 构建命令
     cmd = ["python", "-m", "black"]
-    
+
     if action == "check":
         cmd.append("--check")
         cmd.append("--diff")
-    
+
     if style:
         cmd.extend(["--line-length", style])
     else:
         cmd.extend(["--line-length", "88"])  # black 默认
-    
+
     cmd.append(path)
-    
+
     # 执行格式化
     try:
         result = subprocess.run(
@@ -106,7 +106,7 @@ def _format_python(action: str, path: str, style: str) -> str:
             text=True,
             timeout=60
         )
-        
+
         if action == "check":
             if result.returncode == 0:
                 return f"✅ {path} 格式符合规范"
@@ -117,7 +117,7 @@ def _format_python(action: str, path: str, style: str) -> str:
                 return f"✅ {path} 格式化完成\n{result.stdout}"
             else:
                 return f"❌ 格式化失败:\n{result.stderr}"
-    
+
     except subprocess.TimeoutExpired:
         return "❌ 格式化超时"
     except Exception as e:
@@ -128,23 +128,23 @@ def _format_cpp(action: str, path: str, style: str) -> str:
     """C/C++ 格式化 (clang-format)。"""
     # 检查 clang-format 是否安装
     try:
-        subprocess.run(["clang-format", "--version"], 
+        subprocess.run(["clang-format", "--version"],
                       capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
         return "❌ clang-format 未安装，请安装 LLVM 工具链"
-    
+
     # 构建命令
     cmd = ["clang-format"]
-    
+
     if action == "check":
         cmd.append("--dry-run")
         cmd.append("--Werror")
-    
+
     if style:
         cmd.extend(["--style", style])
     else:
         cmd.extend(["--style", "Google"])  # 默认 Google 风格
-    
+
     if os.path.isfile(path):
         cmd.append(path)
     elif os.path.isdir(path):
@@ -155,7 +155,7 @@ def _format_cpp(action: str, path: str, style: str) -> str:
                 result = _format_cpp(action, str(file), style)
                 results.append(result)
         return "\n".join(results)
-    
+
     # 执行格式化
     try:
         if action == "format":
@@ -174,7 +174,7 @@ def _format_cpp(action: str, path: str, style: str) -> str:
                 text=True,
                 timeout=60
             )
-        
+
         if result.returncode == 0:
             if action == "check":
                 return f"✅ {path} 格式符合规范"
@@ -182,7 +182,7 @@ def _format_cpp(action: str, path: str, style: str) -> str:
                 return f"✅ {path} 格式化完成"
         else:
             return f"⚠️ {path} 格式问题:\n{result.stderr or result.stdout}"
-    
+
     except subprocess.TimeoutExpired:
         return "❌ 格式化超时"
     except Exception as e:
@@ -192,7 +192,7 @@ def _format_cpp(action: str, path: str, style: str) -> str:
 def _check_tool_installed(tool_name: str) -> bool:
     """检查工具是否已安装。"""
     try:
-        subprocess.run([tool_name, "--version"], 
+        subprocess.run([tool_name, "--version"],
                       capture_output=True, check=True)
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):

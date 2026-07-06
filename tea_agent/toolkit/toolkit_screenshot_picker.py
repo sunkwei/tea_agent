@@ -13,9 +13,12 @@ toolkit_screenshot_picker — 系统级交互式截图选区工具
   #         "x": ..., "y": ..., "w": ..., "h": ...}
 """
 
+import logging
+import os
+import tempfile
 import tkinter as tk
-from PIL import Image, ImageTk, ImageGrab
-import os, sys, tempfile, logging
+
+from PIL import Image, ImageGrab, ImageTk
 
 logger = logging.getLogger("toolkit")
 

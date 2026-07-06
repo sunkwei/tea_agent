@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 2025-01-20 gen by Claude, news_CSI300
 新华网新闻 + 沪深300指数定时抓取
@@ -11,9 +10,13 @@
 
 依赖: pip install requests beautifulsoup4
 """
-import re, time, sqlite3, logging
+import logging
+import re
+import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -219,10 +222,7 @@ def fetch_all_news():
 def next_aligned_minute(interval=INDEX_INTERVAL_MIN):
     now = datetime.now()
     mins = now.minute // interval * interval + interval
-    if mins >= 60:
-        target = now.replace(hour=now.hour+1, minute=0, second=0, microsecond=0)
-    else:
-        target = now.replace(minute=mins, second=0, microsecond=0)
+    target = now.replace(hour=now.hour + 1, minute=0, second=0, microsecond=0) if mins >= 60 else now.replace(minute=mins, second=0, microsecond=0)
     return target
 
 def is_index_time():

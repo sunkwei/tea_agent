@@ -6,7 +6,7 @@ logger = logging.getLogger("toolkit")
 def toolkit_run_tests(pattern: str = "test_*.py") -> dict:
     """
     运行项目中的测试文件。
-    
+
     Args:
         pattern: 测试文件匹配模式，默认 'test_*.py' 运行所有测试
     """

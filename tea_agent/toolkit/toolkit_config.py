@@ -69,12 +69,11 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
             )
 
         # 同步到活跃 session
-        if session:
-            if hasattr(session, key):
-                try:
-                    setattr(session, key, cfg.get(key))
-                except Exception:
-                    logger.exception("operation failed")
+        if session and hasattr(session, key):
+            try:
+                setattr(session, key, cfg.get(key))
+            except Exception:
+                logger.exception("operation failed")
 
 
         return f"✅ {key}: {old_val} → {new_val}"

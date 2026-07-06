@@ -2,6 +2,7 @@
 Permission System - Access Control for Files, Commands, and Network.
 """
 import logging
+
 logger = logging.getLogger("permission")
 
 class PermissionManager:

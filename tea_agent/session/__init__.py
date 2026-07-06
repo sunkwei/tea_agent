@@ -16,17 +16,19 @@ All modules can be directly imported and used by AI Agents.
 无需知道底层文件名。
 """
 
-from .context import SessionContext, SessionComponent
-from .prompts import (
-    HISTORY_SUMMARIZE_SYSTEM, HISTORY_SUMMARIZE_USER,
-    TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_TEMPLATE,
-    COMPACT_SYSTEM_PROMPT,
-)
+from .context import SessionComponent, SessionContext
 from .history_builder import build_api_messages, estimate_tokens, to_multimodal
 from .json_sanitizer import sanitize_api_messages, try_fix_truncated_json
 from .os_info_injector import inject_os_info
 from .params import get_cheap_params
-from .tool_loop_runner import execute_tool_loop, LoopDetector
+from .prompts import (
+    COMPACT_SYSTEM_PROMPT,
+    HISTORY_SUMMARIZE_SYSTEM,
+    HISTORY_SUMMARIZE_USER,
+    TOPIC_SUMMARY_SYSTEM,
+    TOPIC_SUMMARY_USER_TEMPLATE,
+)
+from .tool_loop_runner import LoopDetector, execute_tool_loop
 
 __all__ = [
     "SessionContext", "SessionComponent",

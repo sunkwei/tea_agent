@@ -1,5 +1,11 @@
 """ACP Protocol Server - Enhanced for vscode-acp."""
-import asyncio, json, logging, os, threading, time, uuid
+import asyncio
+import json
+import logging
+import os
+import threading
+import time
+import uuid
 
 logger = logging.getLogger("acp_server")
 

@@ -18,8 +18,8 @@ def toolkit_build(action: str, directory: str = "."):
     import os
 
     if action == "package":
-        import subprocess
         import shutil
+        import subprocess
 
         cwd = os.getcwd()
         build_dir = os.path.join(cwd, "build")

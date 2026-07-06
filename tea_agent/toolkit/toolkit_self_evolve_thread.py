@@ -20,15 +20,15 @@ def toolkit_self_evolve_thread(action: str):
         run    — 立即强制执行一次循环（不等待定时）
     """
     logger.info(f"toolkit_self_evolve_thread called: action={action!r}")
-    import os
     import json
-    import time
-    import sqlite3
-    import threading
+    import os
     import re
+    import sqlite3
     import subprocess
-    from datetime import datetime
+    import threading
+    import time
     from collections import Counter
+    from datetime import datetime
 
     # ── 路径 ──
     try:
@@ -47,15 +47,13 @@ def toolkit_self_evolve_thread(action: str):
         pyproj = os.path.join(cwd, "pyproject.toml")
         if os.path.exists(pyproj):
             try:
-                with open(pyproj, "r") as f:
+                with open(pyproj) as f:
                     if 'name = "tea_agent"' in f.read() or "name = 'tea_agent'" in f.read():
                         return True
             except Exception:
                 logger.exception("operation failed")
 
-        if os.path.isdir(os.path.join(cwd, "tea_agent")):
-            return True
-        return False
+        return bool(os.path.isdir(os.path.join(cwd, "tea_agent")))
 
     def _ensure_dir(p):
         os.makedirs(p, exist_ok=True)
@@ -63,7 +61,7 @@ def toolkit_self_evolve_thread(action: str):
     def _read_state():
         if os.path.exists(STATE_FILE):
             try:
-                with open(STATE_FILE, "r") as f:
+                with open(STATE_FILE) as f:
                     return json.load(f)
             except Exception:
                 logger.exception("operation failed")
@@ -243,7 +241,7 @@ def toolkit_self_evolve_thread(action: str):
         pyproj_path = os.path.join(cwd, "pyproject.toml")
         if os.path.exists(pyproj_path):
             try:
-                with open(pyproj_path, "r") as f:
+                with open(pyproj_path) as f:
                     content = f.read()
                 for m in re.finditer(r'name\s*=\s*"([^"]+)"', content):
                     name = m.group(1)
@@ -267,7 +265,7 @@ def toolkit_self_evolve_thread(action: str):
                     # 提取第一行 docstring
                     fpath = os.path.join(toolkit_dir, fname)
                     try:
-                        with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                        with open(fpath, encoding="utf-8", errors="ignore") as f:
                             first_line = ""
                             for line in f:
                                 stripped = line.strip()
@@ -362,7 +360,7 @@ def toolkit_self_evolve_thread(action: str):
                     continue
                 fpath = os.path.join(skills_dir, fname)
                 try:
-                    with open(fpath, "r", encoding="utf-8") as f:
+                    with open(fpath, encoding="utf-8") as f:
                         data = json.load(f)
                 except Exception:
                     result["skipped"] += 1
@@ -530,9 +528,9 @@ def toolkit_self_evolve_thread(action: str):
             }
 
         try:
-            from tea_agent.store._core import Storage
-            from tea_agent.memory import MemoryManager
             from tea_agent.config import get_config
+            from tea_agent.memory import MemoryManager
+            from tea_agent.store._core import Storage
         except ImportError as e:
             return {"status": f"import_error: {e}", "topics_scanned": 0, "memories_extracted": 0}
 
@@ -714,7 +712,7 @@ def toolkit_self_evolve_thread(action: str):
         if mem.get("memories_extracted", 0):
             lines.append(f"🧠 记忆提取: {mem['memories_extracted']}条 (扫描{mem.get('topics_scanned',0)}主题)")
         elif mem.get("status") == "locked":
-            lines.append(f"🔒 记忆提取跳过 (另一进程正在提取)")
+            lines.append("🔒 记忆提取跳过 (另一进程正在提取)")
         if mem.get("errors", 0):
             lines.append(f"⚠️ 提取错误: {mem['errors']}个")
 

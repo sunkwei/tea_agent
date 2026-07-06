@@ -7,36 +7,33 @@ logger = logging.getLogger("toolkit")
 def toolkit_date_diff(start_date: str, end_date: str = None) -> dict:
     """
     计算两个日期之间的天数差。
-    
+
     参数:
         start_date: 开始日期，格式YYYY-MM-DD
         end_date: 结束日期，格式YYYY-MM-DD，不填则默认为今天
-    
+
     返回:
         dict: 包含天数差和详细信息的字典
     """
     logger.info(f"toolkit_date_diff called: start_date={start_date!r}, end_date={end_date!r}")
 
-    from datetime import datetime, date
-    
+    from datetime import date, datetime
+
     try:
         # 解析开始日期
         start = datetime.strptime(start_date, "%Y-%m-%d").date()
-        
+
         # 解析结束日期（默认为今天）
-        if end_date:
-            end = datetime.strptime(end_date, "%Y-%m-%d").date()
-        else:
-            end = date.today()
-        
+        end = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else date.today()
+
         # 计算天数差
         delta = end - start
         days = delta.days
-        
+
         # 计算详细信息
         weeks = days // 7
         remaining_days = days % 7
-        
+
         # 判断是过去还是未来
         if days >= 0:
             direction = "过去"
@@ -45,7 +42,7 @@ def toolkit_date_diff(start_date: str, end_date: str = None) -> dict:
             days = abs(days)
             weeks = days // 7
             remaining_days = days % 7
-        
+
         return {
             "start_date": start_date,
             "end_date": end.strftime("%Y-%m-%d"),

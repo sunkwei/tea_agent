@@ -2,10 +2,10 @@
 Usage: self.tray = TrayManager(self)  # self = TkGUI instance
 """
 
-import tkinter as tk
-import threading
 import logging
-from typing import Optional, TYPE_CHECKING
+import threading
+import tkinter as tk
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from tea_agent.gui import TkGUI
@@ -23,13 +23,13 @@ class TrayManager:
 
     def __init__(self, gui: 'TkGUI'):
         """Initialize  .
-        
+
         Args:
             gui: Description.
         """
         self.gui = gui
         self._sni = None
-        self._tray_thread: Optional[threading.Thread] = None
+        self._tray_thread: threading.Thread | None = None
 
     # ── 初始化 ──────────────────────────
 
@@ -72,8 +72,9 @@ class TrayManager:
 
     def _create_tray_icon(self):
         """加载或生成托盘图标（32x32 齿轮图标）。"""
-        from PIL import Image
         import os as _os
+
+        from PIL import Image
         size = 32
         # 先尝试加载生成的图标，fallback 到代码绘制
         icon_path = _os.path.join(_os.path.dirname(__file__), "icon.png")
@@ -96,7 +97,7 @@ class TrayManager:
 
     def _pil_to_argb32(self, img):
         """Internal: pil to argb32.
-        
+
         Args:
             img: Description.
         """

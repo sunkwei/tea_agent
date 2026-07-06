@@ -8,10 +8,10 @@ def toolkit_self_report() -> dict:
     """
     Generates a comprehensive status report of the Agent.
     """
-    logger.info(f"toolkit_self_report called")
+    logger.info("toolkit_self_report called")
 
-    import os
     import json
+    import os
 
     # 1. Robustly find the base directory
     # Start from cwd and walk up to find the root .tea_agent directory
@@ -43,7 +43,7 @@ def toolkit_self_report() -> dict:
         toolkit_dir = get_config().paths.toolkit_dir_abs
     except Exception:
         toolkit_dir = os.path.join(base_dir, "toolkit")
-    
+
     # 2. Tool Count (File-based custom tools)
     tool_count = 0
     if os.path.isdir(toolkit_dir):
@@ -61,7 +61,7 @@ def toolkit_self_report() -> dict:
     counter_data = {}
     if os.path.exists(counter_file):
         try:
-            with open(counter_file, 'r', encoding='utf-8') as f: counter_data = json.load(f)
+            with open(counter_file, encoding='utf-8') as f: counter_data = json.load(f)
         except Exception:
             logger.exception("operation failed")
 

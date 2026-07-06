@@ -2,10 +2,9 @@
 从 gui.py L477-572 提取：LLM 生成不超过20字的主题摘要标题
 """
 
-import re
 import json as _json_gs
 import logging
-from typing import Optional, List, Dict
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ def _extract_usage(response):
         return _empty_usage()
 
 
-def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> tuple:
+def _generate_topic_summary(client, model: str, conversations: list[dict]) -> tuple:
     """
     根据最近1～2条用户消息通过 LLM 生成不超过20字的摘要。
 
@@ -40,7 +39,7 @@ def _generate_topic_summary(client, model: str, conversations: List[Dict]) -> tu
         conversations: 最近的对话列表（按时间正序），包含 user_msg 和 ai_msg
 
     Returns:
-        (summary: Optional[str], usage: dict) 
+        (summary: Optional[str], usage: dict)
         — summary 为 None 表示生成失败，usage 为 {'total_tokens': N, 'prompt_tokens': N, 'completion_tokens': N}
     """
     if not conversations:

@@ -11,24 +11,25 @@ Handles streaming output, logging, status updates, buffer flushing.
 import tkinter as tk
 from tkinter import messagebox
 
+
 class StreamManager:
     """流式输出管理组件"""
-    
+
     def __init__(self, gui):
         """Initialize  .
-        
+
         Args:
             gui: Description.
         """
         self.gui = gui
-    
+
     def safe_stream(self, text):
         """线程安全的流式输出"""
         self.gui.root.after(0, self.gui.stream, text)
 
     def safe_log(self, msg, tag="ai"):
         """Safe log.
-        
+
         Args:
             msg: Description.
             tag: Description.
@@ -37,7 +38,7 @@ class StreamManager:
 
     def safe_log_tool(self, msg: str):
         """Safe log tool.
-        
+
         Args:
             msg: Description.
         """
@@ -45,7 +46,7 @@ class StreamManager:
 
     def safe_update_status(self, msg: str):
         """Safe update status.
-        
+
         Args:
             msg: Description.
         """
@@ -86,13 +87,7 @@ class StreamManager:
         ts = datetime.now().strftime("%H:%M:%S")
         if tag == "user":
             self.gui.console.insert(tk.END, f"\n[{ts}]\n", "timestamp")
-        elif tag == "ai":
-            self.gui.console.insert(tk.END, f"[{ts}] ", "timestamp")
-        elif tag == "tool" or tag == "tool_raw":
-            self.gui.console.insert(tk.END, f"[{ts}] ", "timestamp")
-        elif tag == "system":
-            self.gui.console.insert(tk.END, f"[{ts}] ", "timestamp")
-        elif tag == "notice":
+        elif tag == "ai" or tag == "tool" or tag == "tool_raw" or tag == "system" or tag == "notice":
             self.gui.console.insert(tk.END, f"[{ts}] ", "timestamp")
 
         self.gui.console.insert(tk.END, msg, tag)

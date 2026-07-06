@@ -11,11 +11,10 @@
     results = engine.search("搜索词", top_k=10)  # -> [dict, ...]
 """
 
-import math
-import json
 import hashlib
+import json
 import logging
-from typing import List, Dict, Optional
+import math
 from collections import Counter
 
 logger = logging.getLogger("Embedding")
@@ -37,7 +36,7 @@ class _SimpleTFIDF:
 
     def __init__(self, vector_dim: int = 256):
         """Initialize  .
-        
+
         Args:
             vector_dim: Description.
         """
@@ -45,7 +44,7 @@ class _SimpleTFIDF:
         self._doc_freq: Counter = Counter()  # bigram → 出现过该 bigram 的文档数
         self._doc_count: int = 0
 
-    def _tokenize(self, text: str) -> List[str]:
+    def _tokenize(self, text: str) -> list[str]:
         """字符 bigram 分词（对中文友好）"""
         text = text.strip().lower()
         if len(text) < 2:
@@ -67,7 +66,7 @@ class _SimpleTFIDF:
             self._doc_freq[t] += 1
         self._doc_count += 1
 
-    def vectorize(self, text: str) -> List[float]:
+    def vectorize(self, text: str) -> list[float]:
         """将文本转为 TF-IDF 向量（稀疏向量 + 哈希降维）"""
         tokens = self._tokenize(text)
         if not tokens:
@@ -154,7 +153,7 @@ class EmbeddingEngine:
         """是否已配置（API 模式需要 URL + model，TF-IDF 始终可用）"""
         return True  # TF-IDF 始终作为回退
 
-    def embed(self, text: str) -> List[float]:
+    def embed(self, text: str) -> list[float]:
         """
         将文本转为向量。
 
@@ -183,7 +182,7 @@ class EmbeddingEngine:
         else:
             return self._embed_tfidf(text)
 
-    def embed_batch(self, texts: List[str]) -> List[List[float]]:
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """批量嵌入（API 模式尝试批量请求，TF-IDF 逐个处理）"""
         if self._use_api:
             try:
@@ -207,7 +206,7 @@ class EmbeddingEngine:
         # 否则补全 /v1/embeddings
         return base + "/v1/embeddings"
 
-    def _embed_api(self, text: str) -> List[float]:
+    def _embed_api(self, text: str) -> list[float]:
         """通过 API 获取单个文本的嵌入"""
         url = self._build_url()
         headers = {
@@ -221,7 +220,6 @@ class EmbeddingEngine:
             "input": text,
         }
 
-        import time
         logger.info(f"embedding request: model={self.model_name}, text_len={len(text)}, url={url}")
 
         resp = requests.post(url, json=payload, headers=headers, timeout=30)
@@ -248,7 +246,7 @@ class EmbeddingEngine:
 
         raise RuntimeError(f"API 返回格式异常: {json.dumps(data)[:200]}")
 
-    def _embed_api_batch(self, texts: List[str]) -> List[List[float]]:
+    def _embed_api_batch(self, texts: list[str]) -> list[list[float]]:
         """通过 API 批量获取嵌入"""
         url = self._build_url()
         logger.debug(f"embedding batch request: model={self.model_name}, batch_size={len(texts)}, url={url}")
@@ -274,11 +272,11 @@ class EmbeddingEngine:
 
         raise RuntimeError("API 批量返回格式异常")
 
-    def _embed_tfidf(self, text: str) -> List[float]:
+    def _embed_tfidf(self, text: str) -> list[float]:
         """本地 TF-IDF 向量化"""
         return self._tfidf.vectorize(text)
 
-    def build_tfidf_vocabulary(self, texts: List[str]):
+    def build_tfidf_vocabulary(self, texts: list[str]):
         """用一批文本构建 TF-IDF 语料库（提升本地搜索质量）"""
         for t in texts:
             if t and t.strip():
@@ -286,7 +284,7 @@ class EmbeddingEngine:
         logger.debug(f"TF-IDF 词汇表: {self._tfidf._doc_count} 文档, "
                      f"{len(self._tfidf._doc_freq)} 特征")
 
-    def cosine_similarity(self, a: List[float], b: List[float]) -> float:
+    def cosine_similarity(self, a: list[float], b: list[float]) -> float:
         """计算两个向量的余弦相似度（numpy 加速）"""
         import numpy as np
         if len(a) != len(b):
@@ -318,7 +316,7 @@ class EmbeddingEngine:
             self._session_embedding_prompt_tokens = 0
         return usage
 
-    def search(self, query: str, top_k: int = 10, min_similarity: float = 0.3) -> List[Dict]:
+    def search(self, query: str, top_k: int = 10, min_similarity: float = 0.3) -> list[dict]:
         """
         搜索与查询最相似的对话（需要先通过 store 获取向量数据）。
 
@@ -349,4 +347,4 @@ def get_embedding_engine(reload: bool = False) -> EmbeddingEngine:
             _engine_singleton = EmbeddingEngine()
     return _engine_singleton
 
-_engine_singleton: Optional[EmbeddingEngine] = None
+_engine_singleton: EmbeddingEngine | None = None

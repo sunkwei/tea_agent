@@ -7,18 +7,18 @@ Tea Agent GUI2 — pywebview + Bottle + Vanilla JS SPA
     python -m tea_agent.gui2
 """
 
-import sys as _sys
-import os as _os
-import threading as _threading
 import logging as _logging
+import os as _os
+import sys as _sys
+import threading as _threading
 
 _logger = _logging.getLogger('gui2')
 
 # ── 后端服务器 ────────────────────────────────────
-from tea_agent.gui2.server import create_gui_server
-
 # ── WebView 窗口 ──────────────────────────────────
 import webview as _webview
+
+from tea_agent.gui2.server import create_gui_server
 
 _window = None
 _server = None
@@ -28,7 +28,7 @@ def _start_gui(port: int, debug: bool, maximized: bool):
     global _window
     url = f'http://127.0.0.1:{port}'
     _logger.info(f'GUI URL: {url}')
-    
+
     # 创建窗口
     _window = _webview.create_window(
         title='Tea Agent',
@@ -46,12 +46,12 @@ def _start_gui(port: int, debug: bool, maximized: bool):
 def main(port: int = 0, debug: bool = False, maximized: bool = False):
     """主入口：启动服务器 + 打开 GUI 窗口"""
     global _server
-    
+
     # 创建并启动后端服务器
     _server = create_gui_server(port=port)
     actual_port = _server.server_port
     _logger.info(f'GUI backend started on port {actual_port}')
-    
+
     # 在新线程启动 pywebview
     gui_thread = _threading.Thread(
         target=_start_gui,

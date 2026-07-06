@@ -1,7 +1,9 @@
 # @2026-05-19 gen by claude, v1.2.1: 修复 engine._name 不存在；用 label 标识浏览器
 # version: 1.2.1
 
-import asyncio, sys
+import asyncio
+import sys
+
 from playwright.async_api import async_playwright
 
 

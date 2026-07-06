@@ -1,8 +1,10 @@
 """
 """
+
 import numpy as np
-from typing import Dict, List, Optional
+
 from ._component import StoreComponent
+
 
 class VectorStore(StoreComponent):
     """向量管理：存储、检索、批量向量化、语义搜索（余弦相似度）。"""
@@ -10,7 +12,7 @@ class VectorStore(StoreComponent):
     def store_embedding(self, conversation_id: str, embedding: list,
                          model_name: str = "", dimension: int = 0):
         """Store embedding.
-        
+
         Args:
             conversation_id: Description.
             embedding: Description.
@@ -28,9 +30,9 @@ class VectorStore(StoreComponent):
         self.conn.commit()
         c.close()
 
-    def get_msg_embedding(self, conversation_id: str) -> Optional[List[float]]:
+    def get_msg_embedding(self, conversation_id: str) -> list[float] | None:
         """Get the msg embedding.
-        
+
         Args:
             conversation_id: Description.
         """
@@ -49,7 +51,7 @@ class VectorStore(StoreComponent):
                 return None
         return None
 
-    def get_all_embeddings(self) -> List[Dict]:
+    def get_all_embeddings(self) -> list[dict]:
         """Get the all embeddings."""
         c = self.conn.cursor()
         c.execute('''
@@ -75,10 +77,10 @@ class VectorStore(StoreComponent):
             results.append(d)
         return results
 
-    def search_by_vector(self, query_embedding: List[float], top_k: int = 10,
-                          min_similarity: float = 0.3) -> List[Dict]:
+    def search_by_vector(self, query_embedding: list[float], top_k: int = 10,
+                          min_similarity: float = 0.3) -> list[dict]:
         """Search by vector.
-        
+
         Args:
             query_embedding: Description.
             top_k: Description.
@@ -138,9 +140,9 @@ class VectorStore(StoreComponent):
             s["ai_msg"] = ai_map.get(s["conversation_id"], "")
         return top
 
-    def search_by_keyword(self, query: str, top_k: int = 50) -> List[Dict]:
+    def search_by_keyword(self, query: str, top_k: int = 50) -> list[dict]:
         """Search by keyword.
-        
+
         Args:
             query: Description.
             top_k: Description.
@@ -174,9 +176,9 @@ class VectorStore(StoreComponent):
         c.close()
         return count
 
-    def get_unvectorized_conversations(self, limit: int = 100) -> List[Dict]:
+    def get_unvectorized_conversations(self, limit: int = 100) -> list[dict]:
         """Get the unvectorized conversations.
-        
+
         Args:
             limit: Description.
         """
@@ -194,9 +196,9 @@ class VectorStore(StoreComponent):
         return [dict(r) for r in rows]
 
     def vectorize_conversation(self, conversation_id: int, user_msg: str,
-                                 model_name: str = "", embedding: Optional[List[float]] = None) -> bool:
+                                 model_name: str = "", embedding: list[float] | None = None) -> bool:
         """Vectorize conversation.
-        
+
         Args:
             conversation_id: Description.
             user_msg: Description.
@@ -208,9 +210,9 @@ class VectorStore(StoreComponent):
         self.store_embedding(conversation_id, embedding, model_name, len(embedding))
         return True
 
-    def batch_vectorize(self, conversation_data: List[Dict], model_name: str = "") -> int:
+    def batch_vectorize(self, conversation_data: list[dict], model_name: str = "") -> int:
         """Batch vectorize.
-        
+
         Args:
             conversation_data: Description.
             model_name: Description.
@@ -226,7 +228,7 @@ class VectorStore(StoreComponent):
 
     def delete_vector(self, conversation_id: str):
         """Delete vector.
-        
+
         Args:
             conversation_id: Description.
         """

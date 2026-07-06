@@ -7,6 +7,7 @@ logger = logging.getLogger("toolkit")
 
 from tea_agent.session_ref import get_session
 
+
 def toolkit_prompt_evolve(action: str = "current", version: str = "", content: str = "") -> str:
     """
     管理系统提示词的多版本进化。

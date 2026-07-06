@@ -1,13 +1,13 @@
 """
 """
-import json
 import base64
+import json
+import logging
 import os
 import queue
 import sqlite3
 import threading
-import logging
-from typing import Dict, List, Optional
+
 from ._component import StoreComponent
 
 logger = logging.getLogger("Storage.Conversations")
@@ -83,10 +83,10 @@ class ConversationStore(StoreComponent):
 
     def update_msg_rounds(
         self, conversation_id: int, ai_msg: str, is_func_calling: bool,
-        rounds: Optional[List[Dict]] = None,
+        rounds: list[dict] | None = None,
     ):
         """Update msg rounds.
-        
+
         Args:
             conversation_id: Description.
             ai_msg: Description.
@@ -104,10 +104,10 @@ class ConversationStore(StoreComponent):
 
     def save_agent_round(
         self, conversation_id: int, round_num: int, role: str, content: str,
-        tool_calls: Optional[List[Dict]] = None, tool_call_id: Optional[str] = None,
+        tool_calls: list[dict] | None = None, tool_call_id: str | None = None,
     ):
         """Save agent round.
-        
+
         Args:
             conversation_id: Description.
             round_num: Description.
@@ -126,9 +126,9 @@ class ConversationStore(StoreComponent):
         self.conn.commit()
         c.close()
 
-    def get_conversations(self, topic_id: str, limit: int = 5, include_rounds: bool = True) -> List[Dict]:
+    def get_conversations(self, topic_id: str, limit: int = 5, include_rounds: bool = True) -> list[dict]:
         """Get the conversations.
-        
+
         Args:
             topic_id: Description.
             limit: Description.
@@ -164,9 +164,9 @@ class ConversationStore(StoreComponent):
             result.append(d)
         return result
 
-    def get_recent_conversations(self, topic_id: str, limit: int = 3) -> List[Dict]:
+    def get_recent_conversations(self, topic_id: str, limit: int = 3) -> list[dict]:
         """Get the recent conversations.
-        
+
         Args:
             topic_id: Description.
             limit: Description.
@@ -180,9 +180,9 @@ class ConversationStore(StoreComponent):
         c.close()
         return [dict(r) for r in reversed(rows)]
 
-    def get_agent_rounds(self, conversation_id: str) -> List[Dict]:
+    def get_agent_rounds(self, conversation_id: str) -> list[dict]:
         """Get the agent rounds.
-        
+
         Args:
             conversation_id: Description.
         """
@@ -205,7 +205,7 @@ class ConversationStore(StoreComponent):
 
     def search_conversations(self, query: str, limit: int = 30,
                               include_ai: bool = True, include_rounds: bool = True,
-                              date_from: str = "", date_to: str = "") -> List[Dict]:
+                              date_from: str = "", date_to: str = "") -> list[dict]:
         """跨主题全文搜索对话内容。
 
         同时搜索 user_msg、ai_msg 和 agent_rounds.content，
@@ -354,6 +354,7 @@ class ConversationStore(StoreComponent):
                 worker_conn = sqlite3.connect(db_path, check_same_thread=False)
                 worker_conn.row_factory = sqlite3.Row
                 import numpy as np
+
                 from tea_agent.embedding_util import get_embedding_engine
                 engine = get_embedding_engine()
                 while True:

@@ -1,12 +1,12 @@
 """
 Headless test for Battle Snakes engine — run without curses.
 """
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
-from tea_agent.demo.snake.engine import Game, Position, Direction
+from tea_agent.demo.snake.engine import Direction, Game, Position
 from tea_agent.demo.snake.strategies import STRATEGIES
 
 
@@ -40,7 +40,7 @@ def test_basic():
 
 def test_head_collision():
     """Test that head-to-head collisions kill both snakes."""
-    from tea_agent.demo.snake.engine import Game, Position, Direction
+    from tea_agent.demo.snake.engine import Direction, Game, Position
 
     # custom setup: two snakes heading toward each other
     configs = [

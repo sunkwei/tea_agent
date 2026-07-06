@@ -10,11 +10,13 @@ SystemPromptManager 单元测试
 - 配置调整
 """
 
-import pytest
-import tempfile
+import contextlib
 import os
 import shutil
+import tempfile
 import time
+
+import pytest
 
 
 @pytest.fixture
@@ -28,15 +30,11 @@ def storage():
     s = Storage(db_path)
     yield s
     time.sleep(0.3)
-    try:
+    with contextlib.suppress(Exception):
         s.close()
-    except Exception:
-        pass
     time.sleep(0.2)
-    try:
+    with contextlib.suppress(Exception):
         shutil.rmtree(tmpdir, ignore_errors=True)
-    except Exception:
-        pass
 
 
 class TestSystemPromptManager:
@@ -54,7 +52,7 @@ class TestSystemPromptManager:
 
     def test_initialize_creates_default(self, storage):
         """测试初始化创建默认提示词"""
-        from tea_agent.prompt_manager import SystemPromptManager, DEFAULT_SYSTEM_PROMPT
+        from tea_agent.prompt_manager import DEFAULT_SYSTEM_PROMPT, SystemPromptManager
 
         manager = SystemPromptManager(storage)
         prompt = manager.initialize()
@@ -69,7 +67,7 @@ class TestSystemPromptManager:
 
         # 先添加一个提示词
         storage.add_system_prompt(content="Custom prompt", reason="test")
-        
+
         manager = SystemPromptManager(storage)
         prompt = manager.initialize()
 
@@ -94,10 +92,10 @@ class TestSystemPromptManager:
 
         manager = SystemPromptManager(storage)
         manager.initialize()
-        
+
         # 添加新版本
         storage.add_system_prompt(content="Updated prompt", reason="update")
-        
+
         # 重新加载
         prompt = manager.reload()
         assert prompt == "Updated prompt"
@@ -109,9 +107,9 @@ class TestSystemPromptManager:
 
         manager = SystemPromptManager(storage)
         manager.initialize()
-        
+
         messages = manager.build_evolve_prompt(reflection_suggestion="Add more security checks")
-        
+
         assert isinstance(messages, list)
         assert len(messages) == 2
         assert messages[0]["role"] == "system"
@@ -124,15 +122,15 @@ class TestSystemPromptManager:
 
         manager = SystemPromptManager(storage)
         manager.initialize()
-        
+
         # 添加反思记录
         storage.add_reflection(
             summary="Test reflection",
             suggestions=["Improve error handling", "Add more tests"]
         )
-        
+
         messages = manager.build_evolve_prompt()
-        
+
         assert isinstance(messages, list)
         # 检查反思建议被包含
         user_content = messages[1]["content"]
@@ -152,11 +150,11 @@ class TestSystemPromptManager:
 
         manager = SystemPromptManager(storage)
         manager.initialize()
-        
+
         # 添加多个版本
         storage.add_system_prompt(content="Version 2 prompt", reason="v2")
         storage.add_system_prompt(content="Version 3 prompt", reason="v3")
-        
+
         # 重新加载最新版本
         prompt = manager.reload()
         assert prompt == "Version 3 prompt"
@@ -168,14 +166,14 @@ class TestSystemPromptManager:
 
         manager = SystemPromptManager(storage)
         manager.initialize()
-        
+
         # 添加多个版本
         storage.add_system_prompt(content="Version 2", reason="v2")
         storage.add_system_prompt(content="Version 3", reason="v3")
-        
+
         # 获取历史
         history = storage.get_system_prompt_history(limit=10)
-        
+
         assert len(history) >= 3
         # 验证版本顺序（最新在前）
         versions = [h["version"] for h in history]

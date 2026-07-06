@@ -16,7 +16,7 @@
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any
 
 try:
     import yaml
@@ -30,7 +30,7 @@ class ModelConfig:
     api_key: str = ""
     api_url: str = ""
     model_name: str = ""
-    options: Dict[str, Any] = field(default_factory=dict)
+    options: dict[str, Any] = field(default_factory=dict)
     temperature: float = 0.7       # 温度 0~2，越高越随机
     max_tokens: int = 4096         # 最大输出 token 数
     max_context_tokens: int = 0    # 最大上下文 token 数，0=不限制
@@ -49,7 +49,7 @@ class ModelConfig:
 @dataclass
 class PathsConfig:
     """路径配置。所有相对路径均相对于 config.yaml 所在目录解析。
-    
+
     以 / 或 ~ 开头的路径视为绝对路径（~ 展开为用户目录）。
     未配置时回退到 ~/.tea_agent/<默认值>。
     """
@@ -66,9 +66,9 @@ class PathsConfig:
 
     def resolve(self, config_dir: str) -> None:
         """根据 config.yaml 所在目录解析所有路径为绝对路径。
-        
+
         子路径（db/toolkit/kb）的相对路径相对于 data_dir_abs 解析。
-        
+
         Args:
             config_dir: config.yaml 所在目录的绝对路径
         """
@@ -121,11 +121,11 @@ class PathsConfig:
 @dataclass
 class EmbeddingConfig:
     """文本向量模型配置。用于消息语义搜索。
-    
+
     支持两种模式：
     1. API 模式：通过 api_url/embeddings 端点获取向量
     2. 本地 TF-IDF 回退：当 api_url 为空时自动使用
-    
+
     api_key 为空时复用 main_model 的 api_key。
     """
     api_url: str = ""       # Embedding API 地址，如 http://localhost:11434/v1
@@ -146,9 +146,9 @@ class AgentConfig:
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
     # 格式: {"pragmatic": {"temperature": 0.3}, "creative": {"temperature": 0.8}, "mixed": {"temperature": 0.6}}
-    mode_params: Dict[str, Dict[str, Any]] = field(default_factory=dict)
-    
-    def get_effective_params(self, model_type: str = "main", mode: str = "mixed") -> Dict[str, Any]:
+    mode_params: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    def get_effective_params(self, model_type: str = "main", mode: str = "mixed") -> dict[str, Any]:
         """
         获取最终生效的模型推理参数。优先级：mode_params > model 默认值。
 
@@ -176,7 +176,7 @@ class AgentConfig:
     max_history: int = 10  # 最大历史消息数
     max_iterations: int = 50  # 最大工具调用迭代次数
     enable_thinking: bool = True  # 是否启用 thinking 功能
-    
+
     # Token 优化参数
     keep_turns: int = 5  # 保留最近N轮完整对话，更早的对话自动摘要
     max_tool_output: int = 128 * 1024  # 工具输出截断字符数
@@ -237,17 +237,14 @@ class AgentConfig:
         expected_type = self._CONFIG_TYPES.get(key)
         if expected_type:
             try:
-                if expected_type == bool and isinstance(value, str):
-                    value = value.lower() in ("true", "1", "yes", "on")
-                else:
-                    value = expected_type(value)
+                value = value.lower() in ("true", "1", "yes", "on") if expected_type == bool and isinstance(value, str) else expected_type(value)
             except (ValueError, TypeError):
                 return False
 
         setattr(self, key, value)
         return True
 
-    def apply_changes(self, changes: List[Dict]) -> List[Dict]:
+    def apply_changes(self, changes: list[dict]) -> list[dict]:
         """
         批量应用配置变更。
 
@@ -270,31 +267,31 @@ class AgentConfig:
             })
         return results
 
-    def reload_from_dict(self, data: Dict):
+    def reload_from_dict(self, data: dict):
         """从字典重新加载配置"""
         for key in self._RUNTIME_CONFIG_KEYS:
             if key in data:
                 self.set(key, data[key])
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """导出运行时配置为字典"""
         return {key: getattr(self, key) for key in self._RUNTIME_CONFIG_KEYS if hasattr(self, key)}
 
 _last_config_path = None
 
 # ── 全局活跃配置路径（跨 GUI/Web/CLI 共享） ──
-_active_config_path: Optional[str] = None
+_active_config_path: str | None = None
 
 def set_active_config_path(config_path: str) -> None:
     """设置全局活跃配置路径（GUI/Web 切换配置时调用）。"""
     global _active_config_path
     _active_config_path = os.path.abspath(config_path)
 
-def get_active_config_path() -> Optional[str]:
+def get_active_config_path() -> str | None:
     """获取全局活跃配置路径。优先返回此值，None 时回退到 _last_config_path。"""
     return _active_config_path or _last_config_path
 
-def load_config(config_path: Optional[str] = None) -> AgentConfig:
+def load_config(config_path: str | None = None) -> AgentConfig:
     """
     加载配置。优先读取 $HOME/.tea_agent/config.yaml，不存在时回退到 tea_agent/config.yaml。
 
@@ -311,7 +308,7 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
         _last_config_path = config_path
 
     cfg = AgentConfig()
-    yaml_path: Optional[str] = None
+    yaml_path: str | None = None
     if config_path:
         yaml_path = config_path
     else:
@@ -327,7 +324,7 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
 
     if HAS_YAML and yaml_path and os.path.isfile(yaml_path):
         try:
-            with open(yaml_path, "r", encoding="utf-8") as f:
+            with open(yaml_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
 
             # 加载模型配置
@@ -378,7 +375,7 @@ def load_config(config_path: Optional[str] = None) -> AgentConfig:
             cfg.max_history = int(data.get("max_history", cfg.max_history))
             cfg.max_iterations = int(data.get("max_iterations", cfg.max_iterations))
             cfg.enable_thinking = bool(data.get("enable_thinking", cfg.enable_thinking))
-            
+
             # 加载 Token 优化参数
             cfg.keep_turns = int(data.get("keep_turns", cfg.keep_turns))
             cfg.max_tool_output = int(data.get("max_tool_output", cfg.max_tool_output))
@@ -414,7 +411,7 @@ def ensure_config_dir() -> Path:
     cfg_dir.mkdir(parents=True, exist_ok=True)
     return cfg_dir
 
-def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
+def save_config(cfg: AgentConfig, config_path: str | None = None) -> str:
     """
     保存配置到 YAML 文件。
 
@@ -429,7 +426,7 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     yaml_path = config_path or _last_config_path or str(Path.home() / ".tea_agent" / "config.yaml")
     ensure_config_dir()
     data = {}
-    
+
     # 保存模型配置
     for m_type in ["main_model", "cheap_model"]:
         target = cfg.main_model if m_type == "main_model" else cfg.cheap_model
@@ -448,7 +445,7 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
             if target.options:
                 m_data["options"] = target.options
             data[m_type] = m_data
-    
+
     # 保存 Embedding 配置
     data["embedding_model"] = {
         "api_url": cfg.embedding.api_url,
@@ -473,7 +470,7 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     data["max_history"] = cfg.max_history
     data["max_iterations"] = cfg.max_iterations
     data["enable_thinking"] = cfg.enable_thinking
-    
+
     # 保存 Token 优化参数
     data["keep_turns"] = cfg.keep_turns
     data["max_tool_output"] = cfg.max_tool_output
@@ -485,13 +482,13 @@ def save_config(cfg: AgentConfig, config_path: Optional[str] = None) -> str:
     data["memory_dedup_threshold"] = cfg.memory_dedup_threshold
     data["chat_page_size"] = cfg.chat_page_size
     data["history_l2_max"] = cfg.history_l2_max
-    data["history_l3_batch"] = cfg.history_l3_batch    
+    data["history_l3_batch"] = cfg.history_l3_batch
     with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
     return yaml_path
 
-def create_default_config(config_path: Optional[str] = None) -> str:
+def create_default_config(config_path: str | None = None) -> str:
     """
     创建默认配置文件模板。
 
@@ -587,7 +584,7 @@ def create_default_config(config_path: Optional[str] = None) -> str:
     return yaml_path
 
 # 全局单例缓存
-_config_cache: Optional[AgentConfig] = None
+_config_cache: AgentConfig | None = None
 
 def get_config(reload: bool = False) -> AgentConfig:
     """

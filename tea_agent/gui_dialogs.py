@@ -1,19 +1,22 @@
-# -*- coding: utf-8 -*-
 """GUI 对话框：MemoryDialog / TopicDialog / ConfigDialog"""
-import tkinter as tk
-from tkinter import ttk
+import logging
 import re
 import threading
+import tkinter as tk
 from datetime import datetime
-import logging
+from tkinter import ttk
 
 logger = logging.getLogger(__name__)
-from tea_agent.config import get_config, save_config, load_config
-
 # 复用 _gui/_fonts 模块的字体检测逻辑
+import contextlib
+
 from tea_agent._gui._fonts import (
-    _fs, _init_fonts, SYSTEM_FONT,
+    SYSTEM_FONT,
+    _fs,
+    _init_fonts,
 )
+from tea_agent.config import get_config, load_config, save_config
+
 
 class MemoryDialog(tk.Toplevel):
     """记忆管理弹窗"""
@@ -25,7 +28,7 @@ class MemoryDialog(tk.Toplevel):
 
     def __init__(self, parent, storage):
         """Initialize  .
-        
+
         Args:
             parent: Description.
             storage: Description.
@@ -166,7 +169,7 @@ class MemoryDialog(tk.Toplevel):
 
     def _sort(self, col):
         """Internal: sort.
-        
+
         Args:
             col: Description.
         """
@@ -253,10 +256,8 @@ class MemoryDialog(tk.Toplevel):
         if not selection:
             return
         for iid in selection:
-            try:
+            with contextlib.suppress(Exception):
                 self.db.deactivate_memory(int(iid))
-            except Exception:
-                pass
         self._refresh()
 
     def _hard_delete(self):
@@ -265,15 +266,13 @@ class MemoryDialog(tk.Toplevel):
         if not selection:
             return
         for iid in selection:
-            try:
+            with contextlib.suppress(Exception):
                 self.db.delete_memory(int(iid))
-            except Exception:
-                pass
         self._refresh()
 
     def _on_double_click(self, event):
         """Internal: handle double click event.
-        
+
         Args:
             event: Description.
         """
@@ -326,7 +325,7 @@ class TopicDialog(tk.Toplevel):
 
     def __init__(self, parent, storage, on_switch=None):
         """Initialize  .
-        
+
         Args:
             parent: Description.
             storage: Description.
@@ -623,10 +622,7 @@ class TopicDialog(tk.Toplevel):
                     batch_texts = [item["user_msg"] for item in batch if item.get("user_msg")]
 
                     try:
-                        if engine.mode == "api":
-                            embeddings = engine.embed_batch(batch_texts)
-                        else:
-                            embeddings = [engine.embed(t) for t in batch_texts]
+                        embeddings = engine.embed_batch(batch_texts) if engine.mode == "api" else [engine.embed(t) for t in batch_texts]
 
                         # 存储
                         batch_data = []
@@ -658,7 +654,7 @@ class TopicDialog(tk.Toplevel):
 
     def _sort(self, col):
         """Internal: sort.
-        
+
         Args:
             col: Description.
         """
@@ -668,7 +664,7 @@ class TopicDialog(tk.Toplevel):
         elif col == "tokens":
             def parse_tok(s):
                 """Parse tok.
-                
+
                 Args:
                     s: Description.
                 """
@@ -808,7 +804,7 @@ class TopicDialog(tk.Toplevel):
 
     def _do_export(self, topic_ids: list):
         """Internal: do export.
-        
+
         Args:
             topic_ids: Description.
         """
@@ -893,7 +889,7 @@ class TopicDialog(tk.Toplevel):
             if mode == "all":
                 rounds = c.get("rounds_json_parsed")
                 if rounds and c.get("is_func_calling"):
-                    f.write(f"### 🔧 工具调用链\n\n")
+                    f.write("### 🔧 工具调用链\n\n")
                     for rd in rounds:
                         role = rd.get("role", "")
                         if role == "assistant" and rd.get("tool_calls"):
@@ -920,7 +916,7 @@ class ConfigDialog(tk.Toplevel):
 
     def __init__(self, parent, on_save=None, config_path=None):
         """Initialize  .
-        
+
         Args:
             parent: Description.
             on_save: Description.
@@ -967,7 +963,7 @@ class ConfigDialog(tk.Toplevel):
 
     def _model_tab(self, nb, label, prefix, extra_fields=None, hint=None, options_prefix=None):
         """Internal: model tab.
-        
+
         Args:
             nb: Description.
             label: Description.
@@ -1048,7 +1044,7 @@ class ConfigDialog(tk.Toplevel):
 
     def _mode_params_tab(self, nb):
         """Internal: mode params tab.
-        
+
         Args:
             nb: Description.
         """
@@ -1085,7 +1081,7 @@ class ConfigDialog(tk.Toplevel):
 
     def _runtime_tab(self, nb):
         """Internal: runtime tab.
-        
+
         Args:
             nb: Description.
         """
@@ -1103,7 +1099,7 @@ class ConfigDialog(tk.Toplevel):
 
         def _on_mousewheel(event):
             """Internal: handle mousewheel event.
-            
+
             Args:
                 event: Description.
             """
@@ -1161,7 +1157,7 @@ class ConfigDialog(tk.Toplevel):
                 params_map["top_p"].set(str(model_cfg.top_p))
 
         # 加载向量模型配置
-        emb_vars = getattr(self, "_embedding_vars")
+        emb_vars = self._embedding_vars
         emb_vars["api_key"].set(cfg.embedding.api_key)
         emb_vars["api_url"].set(cfg.embedding.api_url)
         emb_vars["model_name"].set(cfg.embedding.model_name)
@@ -1280,10 +1276,8 @@ class ConfigDialog(tk.Toplevel):
     def destroy(self):
         """Destroy."""
         if hasattr(self, '_mw_binding'):
-            try:
+            with contextlib.suppress(Exception):
                 self.unbind_all("<MouseWheel>")
-            except Exception:
-                pass
         super().destroy()
 
 class ScheduledTaskDialog(tk.Toplevel):
@@ -1291,7 +1285,7 @@ class ScheduledTaskDialog(tk.Toplevel):
 
     def __init__(self, parent):
         """初始化定时任务管理对话框。
-        
+
         Args:
             parent: 父窗口
         """
@@ -1307,7 +1301,7 @@ class ScheduledTaskDialog(tk.Toplevel):
         self.minsize(min_width, min_height)
         self.transient(parent)
         self.grab_set()
-        
+
         self._create_ui()
         self._load_tasks()
 
@@ -1316,25 +1310,25 @@ class ScheduledTaskDialog(tk.Toplevel):
         # 顶部标题
         top = ttk.Frame(self)
         top.pack(fill=tk.X, padx=5, pady=5)
-        
+
         ttk.Label(top, text="⏰ 定时任务管理", font=(SYSTEM_FONT, _fs(14), "bold")).pack(side=tk.LEFT)
-        
+
         # 工具栏
         toolbar = ttk.Frame(self)
         toolbar.pack(fill=tk.X, padx=5, pady=2)
-        
+
         ttk.Button(toolbar, text="➕ 添加任务", command=self._add_task).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="🔄 刷新", command=self._load_tasks).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="▶️ 启动调度器", command=self._start_scheduler).pack(side=tk.LEFT, padx=2)
         ttk.Button(toolbar, text="⏹️ 停止调度器", command=self._stop_scheduler).pack(side=tk.LEFT, padx=2)
-        
+
         # 任务列表
         list_frame = ttk.Frame(self)
         list_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
+
         columns = ("id", "name", "command", "schedule", "enabled", "next_run", "last_run")
         self.tree = ttk.Treeview(list_frame, columns=columns, show="headings", height=15)
-        
+
         self.tree.heading("id", text="ID")
         self.tree.heading("name", text="任务名称")
         self.tree.heading("command", text="命令")
@@ -1342,7 +1336,7 @@ class ScheduledTaskDialog(tk.Toplevel):
         self.tree.heading("enabled", text="启用")
         self.tree.heading("next_run", text="下次执行")
         self.tree.heading("last_run", text="上次执行")
-        
+
         self.tree.column("id", width=50, anchor=tk.CENTER)
         self.tree.column("name", width=120)
         self.tree.column("command", width=200)
@@ -1350,20 +1344,20 @@ class ScheduledTaskDialog(tk.Toplevel):
         self.tree.column("enabled", width=60, anchor=tk.CENTER)
         self.tree.column("next_run", width=120)
         self.tree.column("last_run", width=120)
-        
+
         scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
-        
+
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
+
         # 底部状态栏
         bottom = ttk.Frame(self)
         bottom.pack(fill=tk.X, padx=5, pady=5)
-        
+
         self.status_var = tk.StringVar(value="就绪")
         ttk.Label(bottom, textvariable=self.status_var, foreground="#666").pack(side=tk.LEFT)
-        
+
         ttk.Button(bottom, text="关闭", command=self.destroy).pack(side=tk.RIGHT, padx=2)
 
     def _load_tasks(self):
@@ -1372,11 +1366,11 @@ class ScheduledTaskDialog(tk.Toplevel):
             from tea_agent.store import Storage
             storage = Storage()
             tasks = storage.scheduled_tasks.list_tasks()
-            
+
             # 清空列表
             for item in self.tree.get_children():
                 self.tree.delete(item)
-            
+
             # 添加任务
             for task in tasks:
                 enabled = "✓" if task.get("enabled", 0) else "✗"
@@ -1391,7 +1385,7 @@ class ScheduledTaskDialog(tk.Toplevel):
                     next_run[:16] if next_run else "",
                     last_run[:16] if last_run else ""
                 ))
-            
+
             self.status_var.set(f"已加载 {len(tasks)} 个任务")
         except Exception as e:
             self.status_var.set(f"加载失败: {e}")

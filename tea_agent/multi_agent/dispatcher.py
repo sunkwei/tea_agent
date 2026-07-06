@@ -9,18 +9,17 @@
 
 用法:
     from tea_agent.multi_agent import Dispatcher
-    
+
     dispatcher = Dispatcher()
     result = dispatcher.dispatch("重构项目添加类型注解")
     print(result)
 """
 
 import logging
-from typing import List, Dict, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .lite_agent import LiteAgent
 
@@ -40,11 +39,11 @@ class SubTask:
     id: str
     name: str
     description: str
-    tools: List[str] = field(default_factory=list)
-    dependencies: List[str] = field(default_factory=list)
+    tools: list[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     status: TaskStatus = TaskStatus.PENDING
-    result: Optional[str] = None
-    error: Optional[str] = None
+    result: str | None = None
+    error: str | None = None
     time_seconds: float = 0
 
 
@@ -103,10 +102,10 @@ class Dispatcher:
     def dispatch(
         self,
         goal: str,
-        files: Optional[List[str]] = None,
-        context: Optional[Dict] = None,
-        on_progress: Optional[callable] = None,
-    ) -> Dict:
+        files: list[str] | None = None,
+        context: dict | None = None,
+        on_progress: callable | None = None,
+    ) -> dict:
         """
         分发任务并同步执行。
 
@@ -153,7 +152,7 @@ class Dispatcher:
                 return pattern
         return "default"
 
-    def _generate_tasks(self, goal: str, pattern: str) -> List[SubTask]:
+    def _generate_tasks(self, goal: str, pattern: str) -> list[SubTask]:
         steps = self.PATTERNS.get(pattern, self.PATTERNS["default"])
         tasks = []
         for i, (name, desc) in enumerate(steps):
@@ -171,7 +170,7 @@ class Dispatcher:
     # 拓扑排序
     # ───────────────────────────────────────────────
 
-    def _topological_sort(self, tasks: List[SubTask]) -> List[List[SubTask]]:
+    def _topological_sort(self, tasks: list[SubTask]) -> list[list[SubTask]]:
         in_degree = {t.id: len(t.dependencies) for t in tasks}
         queue = [t for t in tasks if in_degree[t.id] == 0]
         layers = []
@@ -195,14 +194,14 @@ class Dispatcher:
 
     def _execute_layers(
         self,
-        layers: List[List[SubTask]],
-        context: Dict,
-        on_progress: Optional[callable],
-    ) -> Dict[str, Dict]:
+        layers: list[list[SubTask]],
+        context: dict,
+        on_progress: callable | None,
+    ) -> dict[str, dict]:
         """逐层执行，同层并行。"""
-        all_results: Dict[str, Dict] = {}
+        all_results: dict[str, dict] = {}
         # 累积上下文：前置步骤结果
-        accumulated_context: Dict[str, str] = {}
+        accumulated_context: dict[str, str] = {}
 
         for layer_idx, layer in enumerate(layers):
             logger.info(f"  ⚡ 执行第 {layer_idx + 1}/{len(layers)} 层 ({len(layer)} 个子任务)")
@@ -241,9 +240,9 @@ class Dispatcher:
     def _execute_single_task(
         self,
         task: SubTask,
-        accumulated_context: Dict[str, str],
-        global_context: Dict,
-    ) -> Dict:
+        accumulated_context: dict[str, str],
+        global_context: dict,
+    ) -> dict:
         """执行单个子任务。"""
         task.status = TaskStatus.RUNNING
         start = datetime.now()
@@ -257,17 +256,14 @@ class Dispatcher:
             # 构建子任务上下文
             sub_context = {}
             # 注入前置步骤结果
-            for dep_id in task.dependencies:
+            for _dep_id in task.dependencies:
                 for step_name, result_text in accumulated_context.items():
                     sub_context[step_name] = result_text
             # 注入全局上下文
             if global_context:
                 sub_context.update(global_context)
 
-            if sub_context:
-                result_text = agent.execute_with_context(task.description, sub_context)
-            else:
-                result_text = agent.execute_sync(task.description)
+            result_text = agent.execute_with_context(task.description, sub_context) if sub_context else agent.execute_sync(task.description)
 
             elapsed = (datetime.now() - start).total_seconds()
             task.status = TaskStatus.COMPLETED
@@ -290,7 +286,7 @@ class Dispatcher:
     # 结果整合
     # ───────────────────────────────────────────────
 
-    def _merge_results(self, goal: str, tasks: List[SubTask], results: Dict) -> Dict:
+    def _merge_results(self, goal: str, tasks: list[SubTask], results: dict) -> dict:
         total = len(tasks)
         successful = sum(1 for t in tasks if t.status == TaskStatus.COMPLETED)
         total_time = sum(t.time_seconds for t in tasks)

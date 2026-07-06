@@ -1,7 +1,7 @@
 """
 """
 import logging
-from typing import Dict, List, Optional
+
 from ._component import StoreComponent
 
 logger = logging.getLogger("Storage.Topics")
@@ -13,7 +13,7 @@ class TopicStore(StoreComponent):
 
     def create_topic(self, title: str, topic_id: str = None) -> str:
         """Create topic.
-        
+
         Args:
             title: Description.
             topic_id: Description.
@@ -54,7 +54,7 @@ class TopicStore(StoreComponent):
 
     def update_topic_active(self, topic_id: str, active: int = 1):
         """设置主题活跃状态。active=1 活跃，active=0 停用。
-        
+
         Args:
             topic_id: 主题ID
             active: 1=活跃, 0=停用
@@ -88,10 +88,10 @@ class TopicStore(StoreComponent):
 
     def delete_topic(self, topic_id: str):
         """Hard delete a topic and all associated data (cascade).
-        
+
         Deletes agent_rounds, images, conversations,
         topic_token_stats, t_conv_summary, memories, and the topic itself.
-        
+
         Args:
             topic_id: The UUID of the topic to delete.
         """
@@ -118,9 +118,9 @@ class TopicStore(StoreComponent):
         finally:
             c.close()
 
-    def get_topic(self, topic_id: str) -> Optional[Dict]:
+    def get_topic(self, topic_id: str) -> dict | None:
         """Get the topic.
-        
+
         Args:
             topic_id: Description.
         """
@@ -130,7 +130,7 @@ class TopicStore(StoreComponent):
         c.close()
         return dict(r) if r else None
 
-    def list_topics(self) -> List[Dict]:
+    def list_topics(self) -> list[dict]:
         """List topics (only active ones)."""
         c = self.conn.cursor()
         c.execute('''
@@ -155,7 +155,7 @@ class TopicStore(StoreComponent):
         embedding_tokens: int = 0, embedding_prompt_tokens: int = 0,
     ):
         """Add topic tokens.
-        
+
         Args:
             topic_id: Description.
             total_tokens: Description.
@@ -224,7 +224,7 @@ class TopicStore(StoreComponent):
         self.conn.commit()
         c.close()
 
-    def get_and_clear_pending_cheap_tokens(self, topic_id: str) -> Dict:
+    def get_and_clear_pending_cheap_tokens(self, topic_id: str) -> dict:
         """读取并清零待显示的便宜模型 token。返回 {'total_tokens': N, ...}。"""
         import json as _json_pt
         row = self.get_topic_tokens(topic_id)
@@ -248,9 +248,9 @@ class TopicStore(StoreComponent):
         c.close()
         return result
 
-    def get_topic_tokens(self, topic_id: str) -> Dict:
+    def get_topic_tokens(self, topic_id: str) -> dict:
         """Get the topic tokens.
-        
+
         Args:
             topic_id: Description.
         """

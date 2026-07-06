@@ -2,8 +2,9 @@
 从 gui.py 提取，供 ChatRenderer 等组件使用。
 """
 
-import string
 import re
+import string
+
 import markdown
 
 try:
@@ -77,7 +78,7 @@ def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
 # 此函数在最终 HTML 中，将 <code>...</code> 和 <pre>...</pre> 内部的 HTML 实体还原为原始字符
 def _fix_double_escape_in_code(html: str) -> str:
     """修复代码块内的双重 HTML 转义并还原实体。
-    
+
     HtmlFrame(tkinterweb) 在 <code> 和 <pre> 块内不解析实体，
     所以需要将 &lt; &gt; &amp; &quot; 等彻底还原为原始字符。
     由于流程中可能存在多重转义，此处采用循环 unescape 直到稳定。
@@ -89,7 +90,7 @@ def _fix_double_escape_in_code(html: str) -> str:
         tag_start = m.group(1) # e.g. '<code class="...">' or '<pre>'
         inner = m.group(3)
         tag_end = m.group(4)   # '</code>' or '</pre>'
-        
+
         # 1. 先修复明确的双重转义 pattern（加速处理）
         inner = inner.replace('&amp;amp;', '&amp;')
         inner = inner.replace('&amp;lt;', '&lt;')
@@ -97,13 +98,13 @@ def _fix_double_escape_in_code(html: str) -> str:
         inner = inner.replace('&amp;quot;', '&quot;')
         inner = inner.replace('&amp;#39;', '&#39;')
         inner = inner.replace('&amp;#x27;', '&#x27;')
-        
+
         # 2. 循环还原所有 HTML 实体为原始字符，直到不再变化（应对多重转义）
         last_inner = ""
         while last_inner != inner:
             last_inner = inner
             inner = _html.unescape(inner)
-        
+
         return f"{tag_start}{inner}{tag_end}"
 
     # 匹配 <code...>...</code> 或 <pre...>...</pre>
@@ -266,7 +267,8 @@ def _chat_to_markdown(messages, image_cache=None):
             imgs = msg.get("images", [])
             if imgs:
                 img_tags = []
-                import os, base64
+                import base64
+                import os
                 for img_path in imgs:
                     try:
                         # 支持直接渲染 Base64 数据（由 Storage 持久化后返回）
@@ -336,7 +338,7 @@ def _transform_non_code_segments(text: str, transform) -> str:
 
 def _sanitize_html_control_chars(html: str) -> str:
     """移除 HTML 中的控制字符（保留 \\n 0x0a 和 \\t 0x09）。
-    
+
     过滤范围：
     - ASCII 0x00-0x08, 0x0b-0x0c, 0x0e-0x1f (C0 控制字符，除 \n \t)
     - 0x7f (DEL)
@@ -352,7 +354,7 @@ def _sanitize_html_control_chars(html: str) -> str:
 
 def _escape_orphan_brackets(text: str) -> str:
     """转义孤立的 [ 或 ] 方括号。
-    
+
     Markdown 中 [text](url) 是链接语法，如果 AI 输出中包含未配对的 [，
     解析器可能生成损坏的 HTML 结构。此函数将孤立的 [ 和 ] 转义为 HTML 实体。
     """
@@ -361,7 +363,7 @@ def _escape_orphan_brackets(text: str) -> str:
     protected_ranges = []
     for m in re.finditer(r'\[([^\]]*)\](?:\([^)]*\))?', text):
         protected_ranges.append((m.start(), m.end()))
-    
+
     # 逐字符扫描，转义不在保护范围内的 [ 和 ]
     result = []
     i = 0
@@ -375,10 +377,10 @@ def _escape_orphan_brackets(text: str) -> str:
                 result.append(text[start:end])
                 i = end
                 break
-        
+
         if in_protected:
             continue
-        
+
         char = text[i]
         if char == '[':
             result.append('&#91;')  # [ 的 HTML 实体
@@ -387,7 +389,7 @@ def _escape_orphan_brackets(text: str) -> str:
         else:
             result.append(char)
         i += 1
-    
+
     return ''.join(result)
 
 _KNOWN_HTML_TAGS = {'textarea', 'script', 'section', 'details', 'img', 'ul', 'h2', 'article', 'source', 'link', 'audio', 'h3', 'select', 'th', 'tr', 'tfoot', 'h1', 'h6', 'label', 'html', 'dt', 's', 'ol', 'colgroup', 'ins', 'code', 'summary', 'body', 'blockquote', 'abbr', 'tt', 'b', 'dd', 'input', 'nav', 'button', 'option', 'title', 'data', 'fieldset', 'head', 'iframe', 'sup', 'style', 'td', 'a', 'h5', 'dl', 'hr', 'main', 'figcaption', 'tbody', 'col', 'del', 'video', 'meta', 'sub', 'header', 'wbr', 'span', 'template', 'li', 'pre', 'caption', 'figure', 'strike', 'thead', 'form', 'footer', 'table', 'u', 'mark', 'canvas', 'legend', 'time', 'center', 'small', 'h4', 'strong', 'br', 'aside', 'div', 'big', 'p', 'em', 'font', 'i'}
@@ -418,7 +420,7 @@ def _validate_html_structure(html: str) -> tuple:
 
         def handle_starttag(self, tag, attrs):
             """Handle starttag.
-            
+
             Args:
                 tag: Description.
                 attrs: Description.
@@ -428,7 +430,7 @@ def _validate_html_structure(html: str) -> tuple:
 
         def handle_endtag(self, tag):
             """Handle endtag.
-            
+
             Args:
                 tag: Description.
             """
@@ -471,14 +473,14 @@ def _validate_html_structure(html: str) -> tuple:
 
 def _auto_close_unclosed_tags(html: str, unclosed_tags: list) -> str:
     """自动闭合未关闭的 HTML 标签。
-    
+
     策略：对每个未闭合标签，在其最后一个 <tag> 之后找到第一个 </xxx>，
     在该位置之前插入 </tag>，确保闭合顺序正确。
-    
+
     Args:
         html: 原始 HTML 字符串
         unclosed_tags: 未闭合标签列表（栈顺序，从内到外）
-    
+
     Returns:
         修复后的 HTML 字符串
     """

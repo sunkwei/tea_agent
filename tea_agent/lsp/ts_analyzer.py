@@ -3,10 +3,11 @@
 提供：精确 AST 解析 / 影响分析 / 依赖图 / 跨文件引用
 """
 
-import os, ast as py_ast, logging
-from pathlib import Path
+import ast as py_ast
+import logging
+import os
 from collections import defaultdict
-from typing import Dict, Optional
+from pathlib import Path
 
 logger = logging.getLogger("ts_analyzer")
 
@@ -20,8 +21,8 @@ def _ensure_ts():
         return _TS_LANG
     _TS_LANG_LOADED = True
     try:
-        from tree_sitter import Language
         import tree_sitter_python as tsp
+        from tree_sitter import Language
         _TS_LANG = Language(tsp.language())
         return _TS_LANG
     except ImportError:
@@ -33,7 +34,7 @@ def _ensure_ts():
 
 def _get_text(source_bytes, node):
     """Internal: get the text.
-    
+
     Args:
         source_bytes: Description.
         node: Description.
@@ -42,7 +43,7 @@ def _get_text(source_bytes, node):
 
 def _extract_docstring(source_bytes, body_node):
     """Internal: extract docstring.
-    
+
     Args:
         source_bytes: Description.
         body_node: Description.
@@ -58,7 +59,7 @@ def _extract_docstring(source_bytes, body_node):
 
 def _extract_calls(source_bytes, body_node):
     """Internal: extract calls.
-    
+
     Args:
         source_bytes: Description.
         body_node: Description.
@@ -82,7 +83,7 @@ def _extract_calls(source_bytes, body_node):
 
 def _extract_params(source_bytes, func_node):
     """Internal: extract params.
-    
+
     Args:
         source_bytes: Description.
         func_node: Description.
@@ -101,9 +102,9 @@ def _extract_params(source_bytes, func_node):
                     break
     return params
 
-def parse_file(filepath: str) -> Optional[Dict]:
+def parse_file(filepath: str) -> dict | None:
     """Parse file.
-    
+
     Args:
         filepath: Description.
     """
@@ -112,7 +113,7 @@ def parse_file(filepath: str) -> Optional[Dict]:
         return _parse_file_ast_fallback(filepath)
 
     try:
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+        with open(filepath, encoding="utf-8", errors="replace") as f:
             source = f.read()
     except Exception:
         return None
@@ -128,7 +129,7 @@ def parse_file(filepath: str) -> Optional[Dict]:
 
     def _walk(node, depth=0):
         """Internal: walk.
-        
+
         Args:
             node: Description.
             depth: Description.
@@ -208,14 +209,14 @@ def parse_file(filepath: str) -> Optional[Dict]:
     _walk(root)
     return result
 
-def _parse_file_ast_fallback(filepath: str) -> Optional[Dict]:
+def _parse_file_ast_fallback(filepath: str) -> dict | None:
     """Internal: parse file ast fallback.
-    
+
     Args:
         filepath: Description.
     """
     try:
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+        with open(filepath, encoding="utf-8", errors="replace") as f:
             source = f.read()
         tree = py_ast.parse(source, filename=filepath)
     except Exception:
@@ -278,9 +279,9 @@ def _parse_file_ast_fallback(filepath: str) -> Optional[Dict]:
 
     return result
 
-def impact_analysis(project_root: str, filepath: str, symbol: str) -> Dict:
+def impact_analysis(project_root: str, filepath: str, symbol: str) -> dict:
     """Impact analysis.
-    
+
     Args:
         project_root: Description.
         filepath: Description.
@@ -371,9 +372,9 @@ def impact_analysis(project_root: str, filepath: str, symbol: str) -> Dict:
         "risk_level": risk, "hint": " | ".join(hint_parts),
     }
 
-def build_dependency_graph(project_root: str) -> Dict:
+def build_dependency_graph(project_root: str) -> dict:
     """Build dependency graph.
-    
+
     Args:
         project_root: Description.
     """
@@ -405,7 +406,7 @@ def build_dependency_graph(project_root: str) -> Dict:
     path = []
     def _dfs(m):
         """Internal: dfs.
-        
+
         Args:
             m: Description.
         """

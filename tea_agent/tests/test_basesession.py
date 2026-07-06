@@ -2,8 +2,9 @@
 @2026-06-07 gen by deepseek, BaseChatSession 核心功能测试
 覆盖: 会话创建、配置加载、thinking 探测、推理剥离、工具压缩
 """
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 
 class TestBaseSessionConfig:

@@ -9,11 +9,12 @@
 """
 
 import pytest
+
 from tea_agent.providers import (
     PROVIDERS,
-    list_providers,
-    get_provider,
     generate_config,
+    get_provider,
+    list_providers,
 )
 
 

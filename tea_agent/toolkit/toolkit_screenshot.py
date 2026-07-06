@@ -12,7 +12,10 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
     """
     logger.info(f"toolkit_screenshot called: action={action!r}, region={region!r}, monitor={monitor!r}, output={repr(output)[:80]}, quality={quality!r}")
 
-    import os, subprocess, tempfile, shutil
+    import os
+    import shutil
+    import subprocess
+    import tempfile
     from datetime import datetime
 
     def _detect_env():
@@ -82,7 +85,7 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
 
     def _x11_screenshot(out_path, geo=None):
         """Internal: x11 screenshot.
-        
+
         Args:
             out_path: Description.
             geo: Description.

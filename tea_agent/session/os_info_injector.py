@@ -5,12 +5,11 @@
 - inject_os_info: 根据当前 OS 注入差异化的工具使用提示
 """
 
-import platform
-import socket
-import os
 import json
 import logging
-from typing import List, Dict
+import os
+import platform
+import socket
 
 logger = logging.getLogger("session.os_info_injector")
 
@@ -20,7 +19,7 @@ _OS_STATE_FILE = os.path.join(os.path.expanduser("~"), ".tea_agent", "os_state.j
 
 def _get_os_signature() -> str:
     """生成当前 OS 的简短签名，用于跨会话对比。
-    
+
     格式: "system-release-machine"，如 "Windows-10-AMD64" / "Linux-6.8.0-x86_64"
     """
     try:
@@ -36,7 +35,7 @@ def _load_persisted_os_sig(topic_id: str) -> str:
         return ""
     try:
         if os.path.exists(_OS_STATE_FILE):
-            with open(_OS_STATE_FILE, 'r', encoding='utf-8') as f:
+            with open(_OS_STATE_FILE, encoding='utf-8') as f:
                 data = json.load(f)
             return data.get("topics", {}).get(topic_id, "")
     except Exception:
@@ -53,7 +52,7 @@ def _save_os_sig(topic_id: str, sig: str) -> None:
         os.makedirs(os.path.dirname(_OS_STATE_FILE), exist_ok=True)
         data = {}
         if os.path.exists(_OS_STATE_FILE):
-            with open(_OS_STATE_FILE, 'r', encoding='utf-8') as f:
+            with open(_OS_STATE_FILE, encoding='utf-8') as f:
                 data = json.load(f)
         data.setdefault("topics", {})[topic_id] = sig
         with open(_OS_STATE_FILE, 'w', encoding='utf-8') as f:
@@ -62,18 +61,18 @@ def _save_os_sig(topic_id: str, sig: str) -> None:
         logger.debug(f"保存 OS 签名失败: {e}")
 
 
-def inject_os_info(messages: List[Dict], toolkit_root_dir: str = "",
-                   supports_reasoning: bool = True) -> List[Dict]:
+def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
+                   supports_reasoning: bool = True) -> list[dict]:
     """注入操作系统环境信息轮次（放在用户消息之前）。
-    
+
     根据实际运行的 OS 注入差异化的工具使用提示，
     指导 LLM 使用正确的命令、路径分隔符和工具策略。
-    
+
     Args:
         messages: 当前消息列表（会被原地修改）
         toolkit_root_dir: toolkit 目录路径
         supports_reasoning: 模型是否支持 reasoning
-        
+
     Returns:
         修改后的消息列表
     """

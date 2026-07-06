@@ -8,22 +8,24 @@ Imports:
 """
 
 import asyncio
+import contextlib
 import json
-import logging
 import os
 import threading
 import time
 import uuid
 from pathlib import Path
 
-from starlette.responses import JSONResponse, StreamingResponse, HTMLResponse, FileResponse
-from starlette.requests import Request
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 
 from tea_agent.toolkit.toolkit_export_last_pdf import export_topic_pdf
 
 from .server import (
-    get_server, _max_iter_pending, _active_sessions,
-    logger, __version__,
+    __version__,
+    _active_sessions,
+    _max_iter_pending,
+    get_server,
+    logger,
 )
 
 # ================================================================
@@ -304,7 +306,8 @@ async def handle_screenshot_full(request):
 
 async def handle_screenshot_interactive(request):
     """POST /api/screenshot/interactive — 系统级截图选区"""
-    import subprocess, tempfile, base64
+    import base64
+    import subprocess
     import sys as _sys
 
     try:
@@ -348,10 +351,8 @@ async def handle_screenshot_interactive(request):
         with open(img_path, "rb") as f:
             b64_str = base64.b64encode(f.read()).decode("utf-8")
 
-        try:
+        with contextlib.suppress(OSError):
             os.remove(img_path)
-        except OSError:
-            pass
 
         return JSONResponse({
             "ok": True,
@@ -415,10 +416,7 @@ async def handle_web_chat(request):
             except Exception as e:
                 logger.warning(f"图片 base64 解码失败: {e}")
 
-    if image_paths:
-        msg_payload = {"text": message, "images": image_paths}
-    else:
-        msg_payload = message
+    msg_payload = {"text": message, "images": image_paths} if image_paths else message
 
     server = get_server()
     session, storage = server.create_session(config_path)
@@ -776,18 +774,14 @@ async def handle_web_upload_config(request):
     try:
         cfg = load_config(str(dest_path))
     except Exception as e:
-        try:
+        with contextlib.suppress(Exception):
             dest_path.unlink()
-        except Exception:
-            pass
         return JSONResponse({"ok": False, "error": f"配置解析失败: {e}"}, status_code=400)
 
     main_m = cfg.main_model
     if not main_m.is_configured:
-        try:
+        with contextlib.suppress(Exception):
             dest_path.unlink()
-        except Exception:
-            pass
         return JSONResponse({
             "ok": False,
             "error": "配置无效：必须包含 main_model 的 api_url、api_key 和 model_name",

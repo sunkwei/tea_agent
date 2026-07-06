@@ -9,9 +9,10 @@
 - 支持自定义步骤插入
 """
 
-from typing import List, Dict, Callable, Any, Optional, Tuple
-from dataclasses import dataclass
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger("session_pipeline")
 
@@ -27,18 +28,18 @@ class PipelineStep:
 class SessionPipeline:
     """
     会话 Pipeline 管理器
-    
+
     管理对话流程的步骤，支持：
     - 启用/禁用步骤
     - 重新排序步骤
     - 自定义步骤插入
     """
-    
+
     def __init__(self):
         """Initialize  ."""
-        self._steps: Dict[str, PipelineStep] = {}
-        self._step_order: List[str] = []  # 步骤执行顺序
-        
+        self._steps: dict[str, PipelineStep] = {}
+        self._step_order: list[str] = []  # 步骤执行顺序
+
     def register_step(
         self,
         name: str,
@@ -49,7 +50,7 @@ class SessionPipeline:
     ):
         """
         注册一个 Pipeline 步骤。
-        
+
         Args:
             name: 步骤名称（唯一标识）
             func: 执行函数，签名为 (self, **kwargs) -> dict
@@ -59,7 +60,7 @@ class SessionPipeline:
         """
         if name in self._steps:
             raise ValueError(f"步骤 '{name}' 已存在")
-        
+
         step = PipelineStep(
             name=name,
             func=func,
@@ -67,68 +68,68 @@ class SessionPipeline:
             description=description,
             position=position,
         )
-        
+
         self._steps[name] = step
         self._step_order.append(name)
-        
+
         # 按 position 排序
         self._step_order.sort(key=lambda n: self._steps[n].position)
-        
+
     def enable_step(self, name: str):
         """启用指定步骤"""
         if name in self._steps:
             self._steps[name].enabled = True
-    
+
     def disable_step(self, name: str):
         """禁用指定步骤"""
         if name in self._steps:
             self._steps[name].enabled = False
-    
+
     def set_step_position(self, name: str, position: int):
         """设置步骤的执行顺序"""
         if name in self._steps:
             self._steps[name].position = position
             self._step_order.sort(key=lambda n: self._steps[n].position)
-    
+
     def remove_step(self, name: str):
         """移除步骤"""
         if name in self._steps:
             del self._steps[name]
             self._step_order.remove(name)
-    
-    def get_enabled_steps(self) -> List[Tuple[str, PipelineStep]]:
+
+    def get_enabled_steps(self) -> list[tuple[str, PipelineStep]]:
         """获取所有启用的步骤，按执行顺序排列"""
         return [
             (name, self._steps[name]) for name in self._step_order
             if self._steps[name].enabled
         ]
-    
+
     def execute(
         self,
-        context: Dict[str, Any],
-        stop_at: Optional[str] = None,
-        skip_steps: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        context: dict[str, Any],
+        stop_at: str | None = None,
+        skip_steps: list[str] | None = None,
+    ) -> dict[str, Any]:
         """
         执行 Pipeline。
-        
+
         Args:
             context: 上下文数据字典，传递给每个步骤
             stop_at: 执行完该步骤后停止（该步骤本身会执行，后续步骤跳过）
             skip_steps: 要跳过的步骤列表（临时禁用）
-            
+
         Returns:
             更新后的上下文数据字典
         """
         skip_steps = skip_steps or []
-        
+
         logger.debug(f"Executing session pipe with context:\n{context}")
         for i, (name, step) in enumerate(self.get_enabled_steps()):
             # 检查是否要跳过
             logger.debug(f"  Step {i}: {name}")
             if name in skip_steps:
                 continue
-            
+
             # 执行步骤
             try:
                 logger.debug(f"    Running step {name}, context: {context}")
@@ -148,14 +149,14 @@ class SessionPipeline:
                     "step": name,
                     "error": str(e),
                 })
-            
+
             # 检查是否要停止
             if stop_at and name == stop_at:
                 break
         logger.debug(f"Execution complete, with content\n{context}\n")
         return context
-    
-    def list_steps(self) -> List[Dict[str, Any]]:
+
+    def list_steps(self) -> list[dict[str, Any]]:
         """列出所有步骤及其状态"""
         return [
             {

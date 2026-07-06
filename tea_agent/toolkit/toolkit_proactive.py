@@ -11,7 +11,7 @@ def toolkit_proactive(action: str, content: str = "", priority: int = 2, goal_id
     """Agent 自主心跳系统"""
     logger.info(f"toolkit_proactive called: action={action!r}, content={repr(content)[:80]}, priority={priority!r}, goal_id={goal_id!r}")
 
-    
+
     try:
         if action == "check":
             return _check_proactive()
@@ -39,7 +39,7 @@ def _check_proactive():
     try:
         mm = _get_memory_manager()
         all_mems = mm.storage.get_active_memories(limit=100)
-        
+
         goals = []
         insights = []
         for m in all_mems:
@@ -49,7 +49,7 @@ def _check_proactive():
                 goals.append(m)
             elif "insight" in tags:
                 insights.append(m)
-        
+
         report = {
             "pending_goals": len(goals),
             "pending_insights": len(insights),
@@ -57,7 +57,7 @@ def _check_proactive():
             "insights": [],
             "suggestion": "",
         }
-        
+
         for g in sorted(goals, key=lambda x: x.get("priority", 2))[:5]:
             report["goals"].append({
                 "id": g["id"],
@@ -65,26 +65,26 @@ def _check_proactive():
                 "priority": g.get("priority", 2),
                 "category": g.get("category", ""),
             })
-        
+
         for ins in insights[:3]:
             report["insights"].append({
                 "id": ins["id"],
                 "content": ins["content"][:120],
             })
-        
+
         if not goals and not insights:
             report["suggestion"] = "无待办目标。建议：反思当前会话，设定下一步进化方向。"
         elif goals:
             top = goals[0]
             report["suggestion"] = f"最高优先级待办: {top['content'][:80]}"
-        
+
         return (0, json.dumps(report, ensure_ascii=False, indent=2), "")
     except Exception as e:
         return (1, "", f"检查失败: {str(e)}")
 
 def _add_goal(content: str, priority: int = 2):
     """Internal: add goal.
-    
+
     Args:
         content: Description.
         priority: Description.
@@ -109,7 +109,7 @@ def _add_goal(content: str, priority: int = 2):
 
 def _complete_goal(goal_id: int):
     """Internal: complete goal.
-    
+
     Args:
         goal_id: Description.
     """

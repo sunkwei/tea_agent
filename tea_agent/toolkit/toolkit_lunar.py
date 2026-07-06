@@ -62,7 +62,7 @@ _JIEQI_NAMES = [
 
 def _solar_days_in_year(y):
     """Internal: solar days in year.
-    
+
     Args:
         y: Description.
     """
@@ -70,7 +70,7 @@ def _solar_days_in_year(y):
 
 def _solar_days_in_month(y, m):
     """Internal: solar days in month.
-    
+
     Args:
         y: Description.
         m: Description.
@@ -90,7 +90,7 @@ def _offset_from_base(y, m, d):
 
 def _lunar_year_info(idx):
     """Internal: lunar year info.
-    
+
     Args:
         idx: Description.
     """
@@ -98,7 +98,7 @@ def _lunar_year_info(idx):
 
 def _leap_month(info):
     """Internal: leap month.
-    
+
     Args:
         info: Description.
     """
@@ -106,7 +106,7 @@ def _leap_month(info):
 
 def _leap_days(info):
     """Internal: leap days.
-    
+
     Args:
         info: Description.
     """
@@ -200,7 +200,8 @@ def toolkit_lunar(date_str: str = "", action: str = "solar_to_lunar") -> str:
     """
     logger.info(f"toolkit_lunar called: date_str={date_str!r}, action={action!r}")
 
-    import json, datetime
+    import datetime
+    import json
 
     if action in ("solar_to_lunar", "today"):
         if not date_str:
@@ -264,7 +265,7 @@ def toolkit_lunar(date_str: str = "", action: str = "solar_to_lunar") -> str:
             ly, lm, ld = int(ymd[0]), int(ymd[1]), int(ymd[2])
             want_leap = len(parts) > 1 and parts[1].strip() == "1"
         except (ValueError, IndexError):
-            return json.dumps({"error": f"格式: 'YYYY-MM-DD,L'"}, ensure_ascii=False)
+            return json.dumps({"error": "格式: 'YYYY-MM-DD,L'"}, ensure_ascii=False)
 
         found = None
         for sy in range(ly - 1, ly + 2):

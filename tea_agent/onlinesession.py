@@ -21,7 +21,7 @@ from typing import List, Dict, Callable, Tuple, Any, Optional
 import json, logging
 from types import SimpleNamespace
 
-from tea_agent.basesession import BaseChatSession
+from tea_agent.basesession import BaseChatSession, relaxed_json_loads
 from tea_agent.session_pipeline import SessionPipeline
 
 # 组件导入（替代 Mixin）
@@ -359,10 +359,10 @@ class ToolComponent(SessionComponent):
             return call_id, func_name, err
 
         try:
-            args = json.loads(call.function.arguments)
+            args = relaxed_json_loads(call.function.arguments)
         except json.JSONDecodeError:
             err = "错误：参数解析失败"
-            logger.warning(f"tool call failed: JSON decode error, func={func_name}, raw_args={call.function.arguments[:200]}")
+            logger.warning(f"tool call failed: JSON decode error, func={func_name}, raw_args={call.function.arguments[:300]}")
             self.add_tool_result(call_id, err)
             self._record_tool_to_trace(func_name, False, err, start_time)
             return call_id, func_name, err

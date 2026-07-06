@@ -14,6 +14,8 @@ from typing import Dict, List, Optional, Callable
 
 from openai import OpenAI
 
+from tea_agent.basesession import relaxed_json_loads
+
 logger = logging.getLogger("session.lite")
 
 
@@ -281,8 +283,8 @@ class LiteSession:
             data = tool_calls_data[idx]
             if data["id"] and data["name"]:
                 try:
-                    # 验证 JSON 参数
-                    json.loads(data["arguments"])
+                    # 验证 JSON 参数（使用容错解析）
+                    relaxed_json_loads(data["arguments"])
                     valid_calls.append(SimpleToolCall(
                         id=data["id"],
                         function=SimpleFunction(
@@ -302,7 +304,7 @@ class LiteSession:
         call_id = call.id
         
         try:
-            args = json.loads(args_str) if args_str else {}
+            args = relaxed_json_loads(args_str) if args_str else {}
         except json.JSONDecodeError:
             args = {}
         

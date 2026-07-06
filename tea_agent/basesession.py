@@ -11,6 +11,117 @@ import sys
 
 logger = logging.getLogger("basesession")
 
+
+def relaxed_json_loads(raw: str):
+    """容错 JSON 解析：处理 LLM 常见的无效 JSON 输出。
+    
+    自动修复的常见问题：
+    - 单引号 → 双引号
+    - 尾逗号（dict/array）
+    - Python 风格 True/False/None → JSON true/false/null
+    - 未引号包裹的 key（如 {a: 1} → {"a": 1}）
+    - 未转义路径反斜杠（如 "C:\\Users" → "C:\\\\Users"）
+    - 行内注释 // 和 /* */
+    
+    Returns:
+        解析后的 Python 对象
+        
+    Raises:
+        json.JSONDecodeError: 所有修复尝试均失败
+    """
+    import json
+    import re
+    
+    if not raw or not raw.strip():
+        return {}
+    
+    s = raw.strip()
+    
+    # Step 1: 标准解析
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        pass
+    
+    # Step 2: 替换 Python 布尔值/None
+    s = re.sub(r'\bTrue\b', 'true', s)
+    s = re.sub(r'\bFalse\b', 'false', s)
+    s = re.sub(r'\bNone\b', 'null', s)
+    
+    # Step 3: 去掉 // 和 /* */ 注释
+    s = re.sub(r'//[^\n]*', '', s)
+    s = re.sub(r'/\*.*?\*/', '', s, flags=re.DOTALL)
+    
+    # Step 4: 去除尾逗号
+    s = re.sub(r',\s*}', '}', s)
+    s = re.sub(r',\s*]', ']', s)
+    
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        pass
+    
+    # Step 5: 处理路径反斜杠 — 将单反斜杠（非 \n \t \r 等控制符）替换为双反斜杠
+    # 匹配 \ 后面跟着字母的场景（如 C:\Users 中的 \U），不匹配 \n \t \r 等
+    s = re.sub(r'\\([a-zA-Z])', r'\\\\\1', s)
+    
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        pass
+    
+    # Step 6: 单引号 → 双引号
+    def _fix_single_quotes(text):
+        result = []
+        i = 0
+        in_single = False
+        in_double = False
+        while i < len(text):
+            ch = text[i]
+            if ch == '\\':
+                result.append(ch)
+                if i + 1 < len(text):
+                    result.append(text[i+1])
+                    i += 2
+                continue
+            if ch == "'" and not in_double:
+                in_single = not in_single
+                result.append('"')
+            elif ch == '"' and not in_single:
+                in_double = not in_double
+                result.append(ch)
+            else:
+                result.append(ch)
+            i += 1
+        return ''.join(result)
+    
+    s = _fix_single_quotes(s)
+    
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        pass
+    
+    # Step 7: 为未引号包裹的 key 添加引号
+    s = re.sub(r'([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', s)
+    
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        pass
+    
+    # Step 8: 尝试从文本中提取 JSON 对象
+    brace_match = re.search(r'\{.*\}|\[.*\]', s, re.DOTALL)
+    if brace_match:
+        try:
+            return json.loads(brace_match.group())
+        except json.JSONDecodeError:
+            pass
+    
+    # 全部失败，抛原始异常
+    raise json.JSONDecodeError(f"无法解析 JSON (已尝试多种修复)", raw, 0)
+
+
 class BaseChatSession(ABC):
     """
     聊天会话抽象基类

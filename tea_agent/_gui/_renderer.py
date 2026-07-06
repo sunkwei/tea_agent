@@ -3,25 +3,27 @@
 处理流式缓冲刷新、轮次视图、加载动画。
 Usage: self.renderer = ChatRenderer(self)  # self = TkGUI instance
 """
-import tkinter as tk
 import html as html_mod
 import logging
 import threading
+import tkinter as tk
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from tea_agent.gui import TkGUI
 
+import contextlib
+
+from . import _fonts as _fonts_mod  # 动态获取 _DEFAULT_FONT_SIZE
 from ._markdown import (
-    HAS_TKINTERWEB,
     _MD_CSS_TEMPLATE,
-    _render_markdown,
+    HAS_TKINTERWEB,
+    _auto_close_unclosed_tags,
     _chat_to_markdown,
+    _render_markdown,
     _sanitize_html_control_chars,
     _validate_html_structure,
-    _auto_close_unclosed_tags,
 )
-from . import _fonts as _fonts_mod  # 动态获取 _DEFAULT_FONT_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,7 @@ class ChatRenderer:
 
     def __init__(self, gui: 'TkGUI'):
         """Initialize  .
-        
+
         Args:
             gui: Description.
         """
@@ -49,7 +51,7 @@ class ChatRenderer:
     # ── _html_render ──
     def _html_render(self, html: str):
         """Internal: html render — 校验+自动修复+渲染。
-        
+
         Args:
             html: 完整 HTML 字符串
         """
@@ -112,7 +114,7 @@ class ChatRenderer:
 
     def _threaded_render(self, prepare_fn, on_done_fn):
         """后台线程执行 prepare_fn → 主线程执行 on_done_fn。
-        
+
         消除多处的 _prepare/_on_done/_worker 三件套重复。
         """
         def _worker():
@@ -186,7 +188,7 @@ class ChatRenderer:
     # ── _render_loaded_topic ──
     def _render_loaded_topic(self, render_items):
         """主线程：快速加载最近轮次到 chat_messages 并渲染。
-        
+
         只加载 header（标题/Token/摘要）+ 最近 MAX_RECENT 轮对话到 chat_messages，
         完整历史已通过 load_history 存入 session，后续轮次导航/导出可从中获取。
         """
@@ -394,10 +396,8 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                 self.gui._pending_error = None
             elif hasattr(self.gui, '_pending_render'):
                 self._render_loaded_topic(self.gui._pending_render)
-                try:
+                with contextlib.suppress(AttributeError):
                     delattr(self.gui, '_pending_render')
-                except AttributeError:
-                    pass
                 try:
                     if hasattr(self.gui, '_pending_total'):
                         delattr(self.gui, '_pending_total')

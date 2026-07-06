@@ -4,9 +4,9 @@ Memory 管理器
 负责记忆的选择、格式化注入和从对话中提取新记忆。
 """
 
+import contextlib
 import logging
 import re
-from typing import Dict, List, Optional
 
 logger = logging.getLogger("MemoryManager")
 
@@ -68,7 +68,7 @@ class MemoryManager:
         self,
         topic_text: str = "",
         limit: int = MAX_INJECT,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         从活跃记忆中选出最相关的若干条（上限 limit）。
 
@@ -157,18 +157,16 @@ class MemoryManager:
         self._touch_selected(selected)
         return selected
 
-    def _score_memory(self, memory: Dict, topic_text: str) -> float:
+    def _score_memory(self, memory: dict, topic_text: str) -> float:
         """兼容旧接口，内部转调 _score_memory_cached。"""
         engine = self._get_embedding_engine()
         query_emb = None
         if engine and topic_text:
-            try:
+            with contextlib.suppress(Exception):
                 query_emb = engine.embed(topic_text)
-            except Exception:
-                pass
         return self._score_memory_cached(memory, topic_text, query_emb)
 
-    def _score_memory_cached(self, memory: Dict, topic_text: str, query_emb=None) -> float:
+    def _score_memory_cached(self, memory: dict, topic_text: str, query_emb=None) -> float:
         """计算记忆与当前对话的相关性分数（Hybrid），复用预计算的查询向量。"""
         # 关键词得分
         keyword_relevance = self._compute_relevance(memory, topic_text)
@@ -190,7 +188,7 @@ class MemoryManager:
 
         return relevance * importance * recency * priority_factor
 
-    def _compute_relevance(self, memory: Dict, topic_text: str) -> float:
+    def _compute_relevance(self, memory: dict, topic_text: str) -> float:
         """简单关键词匹配计算相关性"""
         if not topic_text:
             return 0.5  # 无上下文时给中等分
@@ -239,7 +237,7 @@ class MemoryManager:
         return keywords
 
     @staticmethod
-    def _compute_recency(memory: Dict) -> float:
+    def _compute_recency(memory: dict) -> float:
         """计算最近访问因子。越近越高，从未访问过给中值。
 
         基于 last_accessed_at 距当前时间的天数计算衰减：
@@ -256,17 +254,11 @@ class MemoryManager:
         try:
             # 兼容 SQLite 格式 'YYYY-MM-DD HH:MM:SS' 和 ISO 格式
             if isinstance(last, str):
-                if ' ' in last and 'T' not in last:
-                    last_dt = datetime.strptime(last, '%Y-%m-%d %H:%M:%S')
-                else:
-                    last_dt = datetime.fromisoformat(last)
+                last_dt = datetime.strptime(last, '%Y-%m-%d %H:%M:%S') if ' ' in last and 'T' not in last else datetime.fromisoformat(last)
             else:
                 return 0.3
             # 确保 naive datetime 可比较
-            if last_dt.tzinfo is None:
-                now = datetime.now()
-            else:
-                now = datetime.now(timezone.utc)
+            now = datetime.now() if last_dt.tzinfo is None else datetime.now(timezone.utc)
             delta_days = (now - last_dt).days
             if delta_days <= 1:
                 return 1.0
@@ -281,7 +273,7 @@ class MemoryManager:
         except Exception:
             return 0.3
 
-    def _touch_selected(self, memories: List[Dict]):
+    def _touch_selected(self, memories: list[dict]):
         """更新入选记忆的最后访问时间"""
         for m in memories:
             try:
@@ -307,7 +299,7 @@ class MemoryManager:
             pass
         return None
 
-    def _compute_embedding_similarity(self, memory: Dict, topic_text: str) -> float:
+    def _compute_embedding_similarity(self, memory: dict, topic_text: str) -> float:
         """
         计算记忆与查询文本的 embedding 余弦相似度。
 
@@ -365,7 +357,7 @@ class MemoryManager:
     # ------------------------------------------------------------------
 
 
-    def _compute_embedding_similarity_cached(self, memory: Dict, query_emb):
+    def _compute_embedding_similarity_cached(self, memory: dict, query_emb):
         """使用预计算的查询向量计算余弦相似度（避免重复 embedding 请求）。"""
         if query_emb is None:
             return None
@@ -665,7 +657,7 @@ class MemoryManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def format_memories(memories: List[Dict]) -> str:
+    def format_memories(memories: list[dict]) -> str:
         """
         将记忆列表格式化为可注入消息的文本。
 
@@ -679,9 +671,7 @@ class MemoryManager:
             return ""
 
         lines = [
-            "[系统记忆 — 以下为需要遵循的有效信息和规则，共 {n} 条]".format(
-                n=len(memories)
-            ),
+            f"[系统记忆 — 以下为需要遵循的有效信息和规则，共 {len(memories)} 条]",
             ""
         ]
 
@@ -695,7 +685,7 @@ class MemoryManager:
         return "\n".join(lines)
 
     @staticmethod
-    def _prefix_for(memory: Dict) -> str:
+    def _prefix_for(memory: dict) -> str:
         """根据优先级和分类返回行前缀"""
         priority = memory.get("priority", 2)
         category = memory.get("category", "general")
@@ -741,7 +731,7 @@ importance 评分：
 
 只输出对后续对话有价值的记忆。如果对话中无明显值得记忆的内容，输出空数组 []。"""
 
-    def build_extraction_prompt(self, conversations_text: str) -> List[Dict[str, str]]:
+    def build_extraction_prompt(self, conversations_text: str) -> list[dict[str, str]]:
         """构建记忆提取的 API 消息列表"""
         return [
             {"role": "system", "content": self.EXTRACTION_SYSTEM_PROMPT},
@@ -749,9 +739,9 @@ importance 评分：
         ]
 
     @staticmethod
-    def parse_extraction_result(result_text: str) -> List[Dict]:
+    def parse_extraction_result(result_text: str) -> list[dict]:
         """解析 LLM 提取结果。
-        
+
         增强健壮性:
         1. 处理 markdown 代码块包裹
         2. 处理 JSON 前后的额外文本
@@ -760,12 +750,12 @@ importance 评分：
         """
         import json
         import re
-        
+
         if not result_text or not result_text.strip():
             return []
-        
+
         text = result_text.strip()
-        
+
         # 1. 尝试直接解析
         try:
             data = json.loads(text)
@@ -779,7 +769,7 @@ importance 评分：
         except (json.JSONDecodeError, ValueError):
             logger.exception("operation failed")
 
-        
+
         # 2. 处理 markdown 代码块
         code_block_pattern = r'```(?:json)?\s*\n?(.*?)\n?\s*```'
         matches = re.findall(code_block_pattern, text, re.DOTALL)
@@ -794,7 +784,7 @@ importance 评分：
                             return data[key]
             except (json.JSONDecodeError, ValueError):
                 continue
-        
+
         # 3. 尝试提取文本中的 JSON 数组（处理前后有额外文本的情况）
         array_pattern = r'\[\s*\{.*?\}\s*\]'
         array_matches = re.findall(array_pattern, text, re.DOTALL)
@@ -805,7 +795,7 @@ importance 评分：
                     return data
             except (json.JSONDecodeError, ValueError):
                 continue
-        
+
         return []
 
     # ------------------------------------------------------------------
@@ -831,7 +821,7 @@ importance 评分：
             return len(set_a & set_b) / len(set_a | set_b)
         return len(kw_a & kw_b) / len(kw_a | kw_b)
 
-    def _find_duplicate(self, content: str, category: str, existing: List[Dict]) -> Optional[Dict]:
+    def _find_duplicate(self, content: str, category: str, existing: list[dict]) -> dict | None:
         """
         在活跃记忆中查找与 content 相似度超过阈值的记忆。
 
@@ -863,7 +853,7 @@ importance 评分：
             return best
         return None
 
-    def _merge_memory(self, existing: Dict, new_item: Dict) -> Dict:
+    def _merge_memory(self, existing: dict, new_item: dict) -> dict:
         """
         合并新旧记忆，返回合并后的字段 dict。
 
@@ -890,12 +880,12 @@ importance 评分：
             merged_content = old_content
 
         # 标签合并
-        old_tags = set(t.strip() for t in (existing.get("tags") or "").split(",") if t.strip())
+        old_tags = {t.strip() for t in (existing.get("tags") or "").split(",") if t.strip()}
         new_tags_raw = new_item.get("tags", "")
         if isinstance(new_tags_raw, list):
-            new_tags = set(t.strip() for t in new_tags_raw if t.strip())
+            new_tags = {t.strip() for t in new_tags_raw if t.strip()}
         else:
-            new_tags = set(t.strip() for t in str(new_tags_raw).split(",") if t.strip())
+            new_tags = {t.strip() for t in str(new_tags_raw).split(",") if t.strip()}
         merged_tags = ", ".join(sorted(old_tags | new_tags))
 
         # 优先级取更关键（数字更小）
@@ -912,10 +902,7 @@ importance 评分：
         # 过期时间取更早
         old_expires = existing.get("expires_at")
         new_expires = new_item.get("expires_at")
-        if old_expires and new_expires:
-            merged_expires = min(str(old_expires), str(new_expires))
-        else:
-            merged_expires = old_expires or new_expires
+        merged_expires = min(str(old_expires), str(new_expires)) if old_expires and new_expires else old_expires or new_expires
 
         merged = {
             "content": merged_content,
@@ -934,7 +921,7 @@ importance 评分：
         )
         return merged
 
-    def ingest_extracted(self, results: List[Dict], topic_id: Optional[int] = None) -> int:
+    def ingest_extracted(self, results: list[dict], topic_id: int | None = None) -> int:
         """
         将提取结果写入存储（带去重合并）。
 
@@ -1000,7 +987,7 @@ importance 评分：
     # 重复检测与合并提权（原 store._memories.MemoryStore 迁入）
     # ------------------------------------------------------------------
 
-    def detect_duplicates(self, threshold: float = 0.92) -> List[tuple]:
+    def detect_duplicates(self, threshold: float = 0.92) -> list[tuple]:
         """通过 embedding 余弦相似度扫描活跃记忆中的近似重复对。"""
         mems = self.storage.memories.batch_get_embeddings(limit=200)
         if len(mems) < 2:
@@ -1045,8 +1032,8 @@ importance 评分：
                 merged = keep['content'] + '\n---\n' + remove['content']
 
             # Merge tags
-            ktags = set(t.strip() for t in (keep.get('tags', '') or '').split(',') if t.strip())
-            rtags = set(t.strip() for t in (remove.get('tags', '') or '').split(',') if t.strip())
+            ktags = {t.strip() for t in (keep.get('tags', '') or '').split(',') if t.strip()}
+            rtags = {t.strip() for t in (remove.get('tags', '') or '').split(',') if t.strip()}
             merged_tags = ','.join(sorted(ktags | rtags))
 
             # Boost
@@ -1064,13 +1051,13 @@ importance 评分：
             logger.error(f'Merge failed: {e}')
             return False
 
-    def auto_dedup(self, threshold: float = 0.92) -> Dict:
+    def auto_dedup(self, threshold: float = 0.92) -> dict:
         """自动检测并合并所有重复记忆对。"""
         pairs = self.detect_duplicates(threshold=threshold)
         merged = 0
         errors = 0
         processed = set()
-        for a_id, b_id, sim in pairs:
+        for a_id, b_id, _sim in pairs:
             if a_id in processed or b_id in processed:
                 continue
             if self.merge_duplicates(a_id, b_id):
@@ -1085,7 +1072,7 @@ importance 评分：
     # 反思归纳（原 store._memories.MemoryStore 迁入）
     # ------------------------------------------------------------------
 
-    def reflect_and_summarize(self, max_memories: int = 50, min_cluster_size: int = 2) -> Dict:
+    def reflect_and_summarize(self, max_memories: int = 50, min_cluster_size: int = 2) -> dict:
         """按类别聚类近期记忆，生成摘要并归档旧记忆。"""
         from datetime import datetime
 

@@ -5,10 +5,10 @@
 清理 Python 文件中的无效注释，强化 pydoc 风格注释。
 """
 
-import os
-import re
 import ast
 import logging
+import os
+import re
 
 logger = logging.getLogger("toolkit.clean_comments")
 
@@ -52,7 +52,7 @@ def toolkit_clean_comments(
 def _scan_comments(file_path: str) -> str:
     """扫描文件，识别无效注释。"""
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             lines = f.readlines()
 
         issues = []
@@ -118,13 +118,13 @@ def _scan_comments(file_path: str) -> str:
 def _clean_comments(file_path: str, dry_run: bool = False) -> str:
     """清理无效注释。"""
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             lines = f.readlines()
 
         cleaned_lines = []
         removed_count = 0
 
-        for i, line in enumerate(lines):
+        for _i, line in enumerate(lines):
             stripped = line.strip()
 
             # 跳过空注释
@@ -159,7 +159,7 @@ def _clean_comments(file_path: str, dry_run: bool = False) -> str:
 def _enhance_comments(file_path: str, dry_run: bool = False) -> str:
     """强化 pydoc 风格注释。"""
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
 
         # 解析 AST
@@ -183,7 +183,7 @@ def _enhance_comments(file_path: str, dry_run: bool = False) -> str:
                         "suggestion": f'"""{node.name} 类。"""'
                     })
 
-            elif isinstance(node, ast.FunctionDef) or isinstance(node, ast.AsyncFunctionDef):
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 # 检查方法是否有 docstring
                 if not ast.get_docstring(node):
                     # 生成参数列表

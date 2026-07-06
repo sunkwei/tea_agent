@@ -4,21 +4,20 @@
 """
 
 import json
-import time
 import logging
-from typing import Dict
+import time
 
 logger = logging.getLogger("session.tool_loop_runner")
 
 class LoopDetector:
     """循环检测器 - 检测 LLM 重复输出/工具调用。
-    
+
     检测维度：
     1. 工具调用重复：相同工具 + 相同参数
     2. 输出内容重复：连续几轮输出高度相似
     3. 工具序列循环：A→B→A→B 模式
     """
-    
+
     def __init__(self, window: int = 5, similarity_threshold: float = 0.85):
         """
         Args:
@@ -30,7 +29,7 @@ class LoopDetector:
         self._tool_hashes: list[str] = []  # 工具调用 hash 序列
         self._contents: list[str] = []     # 输出内容序列
         self._tool_names: list[list[str]] = []  # 工具名序列
-    
+
     def _hash_tool_call(self, name: str, args: str) -> str:
         """计算工具调用的 hash。"""
         import hashlib
@@ -41,7 +40,7 @@ class LoopDetector:
         except (json.JSONDecodeError, TypeError):
             args_normalized = args or ""
         return hashlib.md5(f"{name}:{args_normalized}".encode()).hexdigest()[:12]
-    
+
     def _text_similarity(self, a: str, b: str) -> float:
         """简单的文本相似度（基于字符级 Jaccard）。"""
         if not a or not b:
@@ -55,31 +54,31 @@ class LoopDetector:
         intersection = len(set_a & set_b)
         union = len(set_a | set_b)
         return intersection / union if union > 0 else 0.0
-    
+
     def check_and_record(self, content: str, tool_calls: list) -> dict:
         """检查当前轮是否循环，并记录。
-        
+
         支持三种循环模式检测：
         1. AAA..模式：连续相同的工具调用
         2. ABABAB模式：两种工具调用交替
         3. ABCABCABC模式：三种工具调用的循环
-        
+
         Args:
             content: LLM 输出内容
             tool_calls: 工具调用列表 [(name, args), ...]
-            
+
         Returns:
             {"is_loop": bool, "type": str|None, "detail": str}
         """
         result = {"is_loop": False, "type": None, "detail": ""}
-        
+
         # 计算本轮的工具调用 hash
         current_hashes = []
         current_names = []
         for name, args in tool_calls:
             current_hashes.append(self._hash_tool_call(name, args))
             current_names.append(name)
-        
+
         # ── 检测 1: 工具调用完全重复 ──
         # 注意：只与最近 window-1 轮比较（排除当前轮，且不与自身比较）
         if current_hashes:
@@ -96,7 +95,7 @@ class LoopDetector:
                         "detail": f"工具调用与第 {actual_idx + 1} 轮完全相同"
                     }
                     break
-        
+
         # ── 检测 2: 输出内容高度相似 ──
         if not result["is_loop"] and content:
             compare_contents = self._contents[-(self.window-1):] if self.window > 1 else []
@@ -110,30 +109,30 @@ class LoopDetector:
                         "detail": f"输出内容与第 {actual_idx + 1} 轮相似度 {sim:.0%}"
                     }
                     break
-        
+
         # ── 检测 3: 工具序列循环 ──
         # 支持三种模式：AAA.., ABABAB, ABCABCABC
         # 注意：所有模式都要检查工具名和参数都相同（通过hash比较）
         if not result["is_loop"] and len(self._tool_hashes) >= 3:
             # 将当前轮的工具调用hash转换为字符串
             current_hash_str = "|".join(current_hashes) if current_hashes else ""
-            
+
             # 模式1: AAA..模式（连续相同的工具调用，包括参数）
             if len(self._tool_hashes) >= 3:
                 last_three_hashes = self._tool_hashes[-3:]
-                if (len(last_three_hashes) == 3 and 
-                    current_hash_str and 
+                if (len(last_three_hashes) == 3 and
+                    current_hash_str and
                     all(h == current_hash_str for h in last_three_hashes)):
                     result = {
                         "is_loop": True,
                         "type": "sequence_loop",
                         "detail": f"检测到连续相同工具调用模式（含参数）: {'→'.join(current_names)}"
                     }
-            
+
             # 模式2: ABABAB模式（两种工具调用交替，包括参数）
             if not result["is_loop"] and len(self._tool_hashes) >= 4:
                 recent_hashes = self._tool_hashes[-3:]  # 最近 3 轮 + 当前
-                if (len(recent_hashes) == 3 and 
+                if (len(recent_hashes) == 3 and
                     current_hash_str and recent_hashes[0] and recent_hashes[1] and recent_hashes[2] and
                     current_hash_str == recent_hashes[0] and recent_hashes[1] == recent_hashes[2] and
                     current_hash_str != recent_hashes[1]):
@@ -142,11 +141,11 @@ class LoopDetector:
                         "type": "sequence_loop",
                         "detail": f"检测到交替循环模式（含参数）: {'→'.join(current_names)} ↔ {'→'.join(self._tool_names[-3])}"
                     }
-            
+
             # 模式3: ABCABCABC模式（三种工具调用的循环，包括参数）
             if not result["is_loop"] and len(self._tool_hashes) >= 6:
                 recent_hashes = self._tool_hashes[-5:]  # 最近 5 轮 + 当前
-                if (len(recent_hashes) == 5 and 
+                if (len(recent_hashes) == 5 and
                     current_hash_str and recent_hashes[0] and recent_hashes[1] and recent_hashes[2] and recent_hashes[3] and recent_hashes[4] and
                     current_hash_str == recent_hashes[0] == recent_hashes[3] and
                     recent_hashes[1] == recent_hashes[4] and
@@ -157,20 +156,20 @@ class LoopDetector:
                         "type": "sequence_loop",
                         "detail": f"检测到三元循环模式（含参数）: {'→'.join(current_names)} → {'→'.join(self._tool_names[-3])} → {'→'.join(self._tool_names[-2])}"
                     }
-        
+
         # ── 记录本轮 ──
         self._tool_hashes.append("|".join(current_hashes) if current_hashes else "")
         self._contents.append(content or "")
         self._tool_names.append(current_names)
-        
+
         # 保持窗口大小
         if len(self._tool_hashes) > self.window * 2:
             self._tool_hashes = self._tool_hashes[-self.window:]
             self._contents = self._contents[-self.window:]
             self._tool_names = self._tool_names[-self.window:]
-        
+
         return result
-    
+
     def reset(self):
         """重置检测器状态（清空历史窗口）。"""
         self._tool_hashes.clear()
@@ -306,7 +305,7 @@ def _validate_output_format(content: str, rules: dict) -> tuple:
     return len(warnings) == 0, warnings
 
 
-def execute_tool_loop(session, context: Dict) -> Dict:
+def execute_tool_loop(session, context: dict) -> dict:
     """执行工具调用循环。
 
     核心对话引擎：调用 LLM → 解析工具调用 → 执行工具 → 循环直到无工具调用。
@@ -321,7 +320,7 @@ def execute_tool_loop(session, context: Dict) -> Dict:
     """
     msg = context.get("msg", "")
     callback = context.get("callback", lambda x: None)
-    on_status = context.get("on_status", None)
+    on_status = context.get("on_status")
 
     # Level 1: 动态跳过（纯聊天意图，不走工具循环）
     if context.get("skip_tool_loop"):
@@ -532,7 +531,7 @@ def execute_tool_loop(session, context: Dict) -> Dict:
                 loop_count = getattr(session, '_loop_count', 0) + 1
                 session._loop_count = loop_count
                 logger.warning(f"检测到循环: {loop_result['type']} - {loop_result['detail']} (连续第 {loop_count} 次)")
-                
+
                 if loop_count >= 3:
                     # 连续 3 次循环，强制跳出
                     warning = f"\n\n[循环检测] 检测到重复输出 ({loop_result['detail']})，已自动跳出"

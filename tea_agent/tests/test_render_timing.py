@@ -21,7 +21,7 @@ class TestRenderTiming(unittest.TestCase):
             os.path.dirname(os.path.dirname(__file__)),
             "gui.py"
         )
-        with open(gui_path, "r", encoding="utf-8") as f:
+        with open(gui_path, encoding="utf-8") as f:
             cls.source = f.read()
 
     def _extract_try_block(self):
@@ -117,9 +117,8 @@ class TestRenderTiming(unittest.TestCase):
             if stripped.startswith('#'):
                 continue
             # 遇到下一个同级块时停止
-            if stripped and len(line) - len(stripped) <= 12:
-                if stripped.startswith(('except', 'finally', 'if ', 'try:')):
-                    break
+            if stripped and len(line) - len(stripped) <= 12 and stripped.startswith(('except', 'finally', 'if ', 'try:')):
+                break
             self.assertNotIn(
                 "self._render_and_show_chat", line.split('#')[0],
                 f"else 分支中不应包含 _render_and_show_chat 调用: {line}"
@@ -134,7 +133,7 @@ class TestRenderTiming(unittest.TestCase):
         body = self._extract_try_block()
         # 注释可能有多种表述，只要提到渲染延迟相关即可
         has_render_comment = (
-            "渲染延迟" in body or 
+            "渲染延迟" in body or
             ("渲染" in body and "延迟" in body) or
             ("_post_chat_pipeline" in body and "渲染" in body)
         )
@@ -149,7 +148,7 @@ class TestRenderTiming(unittest.TestCase):
         after_except = body[except_match.start():]
         # 只检查非注释行
         found = False
-        for i, line in self._non_comment_lines(after_except):
+        for _i, line in self._non_comment_lines(after_except):
             if "_render_and_show_chat" in line:
                 found = True
                 break

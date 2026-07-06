@@ -5,14 +5,12 @@ Each strategy is a callable: (snake: Snake, game: Game) -> Direction
 """
 
 import random
-from typing import List, Optional
 
-from .engine import Snake, Game, Direction, Position
-
+from .engine import Direction, Game, Position, Snake
 
 # ── helpers ────────────────────────────────────────────────
 
-def _safe_directions(snake: Snake, game: Game) -> List[Direction]:
+def _safe_directions(snake: Snake, game: Game) -> list[Direction]:
     """Directions that don't immediately hit a wall, self, or other snake."""
     safe = []
     for d in Direction.all():
@@ -33,7 +31,7 @@ def _safe_directions(snake: Snake, game: Game) -> List[Direction]:
     return safe
 
 
-def _direction_toward(head: Position, target: Position) -> Optional[Direction]:
+def _direction_toward(head: Position, target: Position) -> Direction | None:
     """Pick the single-axis direction that moves toward target. Prefer axis with larger gap."""
     dx = target.x - head.x
     dy = target.y - head.y
@@ -108,10 +106,7 @@ def safe_greedy_strategy(snake: Snake, game: Game) -> Direction:
 
         # score: lower is better
         # heavily penalize dead ends
-        if reachable < snake.length + 3:
-            score = 99999
-        else:
-            score = (dist if dist is not None else 9999) - reachable * 0.01
+        score = 99999 if reachable < snake.length + 3 else (dist if dist is not None else 9999) - reachable * 0.01
         candidates.append((score, d, reachable, dist))
 
     candidates.sort(key=lambda x: x[0])
@@ -156,10 +151,7 @@ def aggressive_strategy(snake: Snake, game: Game) -> Direction:
     if enemy_dist <= 6:
         # head toward where the enemy will likely go
         # predict: enemy head + enemy direction (if known)
-        if nearest_enemy._last_direction:
-            predicted = nearest_enemy.head + nearest_enemy._last_direction
-        else:
-            predicted = nearest_enemy.head
+        predicted = nearest_enemy.head + nearest_enemy._last_direction if nearest_enemy._last_direction else nearest_enemy.head
 
         best_dir = safe[0]
         best_dist = 999999

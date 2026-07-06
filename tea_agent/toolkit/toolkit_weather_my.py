@@ -1,10 +1,9 @@
 ## llm generated tool func, created Thu May 14 09:02:43 2026
 # version: 1.0.1
 
-import urllib.request
 import json
-from datetime import datetime, timezone, timedelta
-
+import urllib.request
+from datetime import datetime, timedelta, timezone
 
 # WMO 天气码中文映射
 _WMO = {

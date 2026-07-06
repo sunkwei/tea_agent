@@ -5,17 +5,17 @@
 依赖: jedi (代码智能), ruff (诊断), tree-sitter (语法树)
 """
 
+import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Dict, Optional, Any
-import logging
+from typing import Any
 
 logger = logging.getLogger("lsp")
 
 # ── Jedi 智能后端 ────────────────────────────────────────
 
-_JEDI_PROJECT_CACHE: Dict[str, Any] = {}
+_JEDI_PROJECT_CACHE: dict[str, Any] = {}
 
 def _get_jedi_project(project_root: str):
     """获取 jedi Project 实例（缓存，避免重复创建）"""
@@ -24,15 +24,15 @@ def _get_jedi_project(project_root: str):
         _JEDI_PROJECT_CACHE[project_root] = jedi.Project(project_root)
     return _JEDI_PROJECT_CACHE[project_root]
 
-def _read_file_safe(filepath: str) -> Optional[str]:
+def _read_file_safe(filepath: str) -> str | None:
     """安全读取文件"""
     try:
-        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+        with open(filepath, encoding="utf-8", errors="replace") as f:
             return f.read()
     except Exception:
         return None
 
-def diagnose(project_root: str, filepath: str = None) -> Dict:
+def diagnose(project_root: str, filepath: str = None) -> dict:
     """运行 ruff 诊断，返回 (ok, diagnostics, error)"""
     try:
         target = filepath or project_root
@@ -76,7 +76,7 @@ def diagnose(project_root: str, filepath: str = None) -> Dict:
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-def _fmt_diagnostic(d: Dict) -> str:
+def _fmt_diagnostic(d: dict) -> str:
     """格式化单条诊断为可读字符串"""
     loc = f"{d.get('filename', '')}:{d.get('location', {}).get('row', '?')}:{d.get('location', {}).get('column', '?')}"
     code = d.get("code", "?")
@@ -85,7 +85,7 @@ def _fmt_diagnostic(d: Dict) -> str:
     fix_hint = f" (可自动修复: {fix.get('message', '')})" if fix else ""
     return f"[{code}] {loc}\n  {msg}{fix_hint}"
 
-def semantic_diagnose(project_root: str, filepath: str) -> Dict:
+def semantic_diagnose(project_root: str, filepath: str) -> dict:
     """基于 jedi 的语义级诊断 — 检查未定义符号、无法解析的引用等深局问题。
 
     与 diagnose() 的 ruff lint 不同，此函数深入语义层：
@@ -172,7 +172,7 @@ def semantic_diagnose(project_root: str, filepath: str) -> Dict:
     except Exception as e:
         return {"ok": False, "error": str(e)[:300]}
 
-def completion(project_root: str, filepath: str, line: int, col: int) -> Dict:
+def completion(project_root: str, filepath: str, line: int, col: int) -> dict:
     """代码补全 — 基于 jedi"""
     try:
         source = _read_file_safe(filepath)
@@ -202,7 +202,7 @@ def completion(project_root: str, filepath: str, line: int, col: int) -> Dict:
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-def goto_definition(project_root: str, filepath: str, line: int, col: int) -> Dict:
+def goto_definition(project_root: str, filepath: str, line: int, col: int) -> dict:
     """跳转定义 — 基于 jedi"""
     try:
         source = _read_file_safe(filepath)
@@ -233,7 +233,7 @@ def goto_definition(project_root: str, filepath: str, line: int, col: int) -> Di
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-def hover(project_root: str, filepath: str, line: int, col: int) -> Dict:
+def hover(project_root: str, filepath: str, line: int, col: int) -> dict:
     """悬停信息 — 类型 + docstring"""
     try:
         source = _read_file_safe(filepath)
@@ -273,7 +273,7 @@ def hover(project_root: str, filepath: str, line: int, col: int) -> Dict:
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-def references(project_root: str, filepath: str, line: int, col: int) -> Dict:
+def references(project_root: str, filepath: str, line: int, col: int) -> dict:
     """查找引用 — 基于 jedi"""
     try:
         source = _read_file_safe(filepath)
@@ -304,7 +304,7 @@ def references(project_root: str, filepath: str, line: int, col: int) -> Dict:
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
-def collect_context(project_root: str, filepath: str, symbol: str = None, max_files: int = 5) -> Dict:
+def collect_context(project_root: str, filepath: str, symbol: str = None, max_files: int = 5) -> dict:
     """仓库级上下文收集：给定文件/符号，自动拉取相关代码片段。
 
     策略:
@@ -402,22 +402,22 @@ def _check_clangd() -> bool:
         return False
 
 
-def cpp_diagnose(project_root: str, filepath: str) -> Dict:
+def cpp_diagnose(project_root: str, filepath: str) -> dict:
     """C++ 诊断 — 基于 clangd。
-    
+
     Args:
         project_root: 项目根目录
         filepath: 目标 .cpp/.h 文件
-    
+
     Returns:
         {"ok": bool, "diagnostics": [...], "total": int, "hint": str}
     """
     if not filepath or not any(filepath.endswith(ext) for ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx')):
         return {"ok": True, "diagnostics": [], "total": 0, "hint": "非 C++ 文件，跳过"}
-    
+
     if not _check_clangd():
         return {"ok": False, "error": "clangd 未安装，请安装 LLVM 工具链"}
-    
+
     try:
         # 使用 clangd 的 --check 模式进行诊断
         # 注意：clangd 需要 compile_commands.json 或 compile_flags.txt
@@ -428,7 +428,7 @@ def cpp_diagnose(project_root: str, filepath: str) -> Dict:
             timeout=30,
             cwd=project_root
         )
-        
+
         # 解析 clangd 输出
         diagnostics = []
         for line in result.stderr.split('\n'):
@@ -444,16 +444,16 @@ def cpp_diagnose(project_root: str, filepath: str) -> Dict:
                         "message": parts[3].strip()
                     }
                     diagnostics.append(diag)
-        
+
         errors = [d for d in diagnostics if d.get("severity") == "error"]
         warnings = [d for d in diagnostics if d.get("severity") == "warning"]
-        
+
         summary = []
         if errors:
             summary.append(f"{len(errors)} 错误")
         if warnings:
             summary.append(f"{len(warnings)} 警告")
-        
+
         return {
             "ok": len(errors) == 0,
             "diagnostics": diagnostics[:20],
@@ -462,24 +462,24 @@ def cpp_diagnose(project_root: str, filepath: str) -> Dict:
             "warnings": len(warnings),
             "hint": f"发现 {', '.join(summary)}" if summary else "无问题 ✓",
         }
-    
+
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": "clangd 诊断超时"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
 
-def cpp_goto_definition(project_root: str, filepath: str, line: int, col: int) -> Dict:
+def cpp_goto_definition(project_root: str, filepath: str, line: int, col: int) -> dict:
     """C++ 跳转定义 — 基于 clangd。
-    
+
     注意：需要 clangd 运行在 LSP 服务器模式，这里使用简化实现。
     """
     if not filepath or not any(filepath.endswith(ext) for ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx')):
         return {"ok": False, "error": "非 C++ 文件"}
-    
+
     if not _check_clangd():
         return {"ok": False, "error": "clangd 未安装"}
-    
+
     try:
         # 使用 ctags 作为简化实现
         result = subprocess.run(
@@ -489,16 +489,16 @@ def cpp_goto_definition(project_root: str, filepath: str, line: int, col: int) -
             timeout=10,
             cwd=project_root
         )
-        
+
         if result.returncode != 0:
             return {"ok": False, "error": "ctags 执行失败"}
-        
+
         # 解析 ctags 输出
         definitions = []
         for tag_line in result.stdout.strip().split('\n'):
             if not tag_line or tag_line.startswith('!'):
                 continue
-            
+
             parts = tag_line.split('\t')
             if len(parts) >= 3:
                 definitions.append({
@@ -506,25 +506,25 @@ def cpp_goto_definition(project_root: str, filepath: str, line: int, col: int) -
                     "file": parts[1],
                     "pattern": parts[2] if len(parts) > 2 else "",
                 })
-        
+
         return {
             "ok": True,
             "definitions": definitions[:10],
             "hint": f"找到 {len(definitions)} 个定义" if definitions else "未找到定义",
         }
-    
+
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
 
-def cpp_completion(project_root: str, filepath: str, line: int, col: int) -> Dict:
+def cpp_completion(project_root: str, filepath: str, line: int, col: int) -> dict:
     """C++ 代码补全 — 基于 clangd。
-    
+
     注意：完整实现需要 clangd LSP 协议，这里使用简化实现。
     """
     if not filepath or not any(filepath.endswith(ext) for ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx')):
         return {"ok": False, "error": "非 C++ 文件"}
-    
+
     # 简化实现：使用 ctags 提取当前文件的符号
     try:
         result = subprocess.run(
@@ -534,38 +534,38 @@ def cpp_completion(project_root: str, filepath: str, line: int, col: int) -> Dic
             timeout=10,
             cwd=project_root
         )
-        
+
         if result.returncode != 0:
             return {"ok": False, "error": "ctags 执行失败"}
-        
+
         # 解析 ctags 输出
         completions = []
         for tag_line in result.stdout.strip().split('\n'):
             if not tag_line or tag_line.startswith('!'):
                 continue
-            
+
             parts = tag_line.split('\t')
             if len(parts) >= 3:
                 completions.append({
                     "name": parts[0],
                     "type": "function" if "f:" in tag_line else "variable",
                 })
-        
+
         return {
             "ok": True,
             "completions": completions[:15],
             "hint": f"找到 {len(completions)} 个补全项",
         }
-    
+
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
 
-def diagnose_auto(project_root: str, filepath: str = None) -> Dict:
+def diagnose_auto(project_root: str, filepath: str = None) -> dict:
     """自动检测语言并运行诊断。"""
     if not filepath:
         return diagnose(project_root)
-    
+
     ext = Path(filepath).suffix.lower()
     if ext in ('.py', '.pyw', '.pyi'):
         return diagnose(project_root, filepath)
@@ -575,7 +575,7 @@ def diagnose_auto(project_root: str, filepath: str = None) -> Dict:
         return {"ok": True, "diagnostics": [], "total": 0, "hint": f"不支持的文件类型: {ext}"}
 
 
-def goto_definition_auto(project_root: str, filepath: str, line: int, col: int) -> Dict:
+def goto_definition_auto(project_root: str, filepath: str, line: int, col: int) -> dict:
     """自动检测语言并跳转定义。"""
     ext = Path(filepath).suffix.lower()
     if ext in ('.py', '.pyw', '.pyi'):
@@ -586,7 +586,7 @@ def goto_definition_auto(project_root: str, filepath: str, line: int, col: int) 
         return {"ok": False, "error": f"不支持的文件类型: {ext}"}
 
 
-def completion_auto(project_root: str, filepath: str, line: int, col: int) -> Dict:
+def completion_auto(project_root: str, filepath: str, line: int, col: int) -> dict:
     """自动检测语言并补全。"""
     ext = Path(filepath).suffix.lower()
     if ext in ('.py', '.pyw', '.pyi'):

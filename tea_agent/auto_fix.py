@@ -1,10 +1,14 @@
 """
 # @2026-06-07 gen by deepseek-v4-pro, AutoFix v2 — ruff + LLM 集成
 """
-import os, ast, json, logging, subprocess, hashlib
-from pathlib import Path
-from typing import Dict, List, Optional
+import ast
+import hashlib
+import json
+import logging
+import os
+import subprocess
 from collections import defaultdict
+from pathlib import Path
 
 logger = logging.getLogger("AutoFix")
 RUFF_SELECT = "F401,F841,F811,W291,W293"
@@ -28,7 +32,7 @@ class FixResult:
 class AutoFixAgent:
     def __init__(self, project_root: str):
         self.project_root = Path(project_root).resolve()
-        self.fix_log: List[Dict] = []
+        self.fix_log: list[dict] = []
         self._llm = None
         self._init_llm()
 
@@ -42,7 +46,7 @@ class AutoFixAgent:
 
     # ── 扫描 ──
 
-    def scan(self, filepath: Optional[str] = None) -> List[Dict]:
+    def scan(self, filepath: str | None = None) -> list[dict]:
         issues = self._scan_ruff(filepath) + self._scan_ast_docstring(filepath)
         seen, deduped = set(), []
         for i in sorted(issues, key=lambda x: ("ast", "ruff").index(x.get("via", "ruff"))):
@@ -52,7 +56,7 @@ class AutoFixAgent:
                 deduped.append(i)
         return deduped
 
-    def _scan_ruff(self, filepath: Optional[str] = None) -> List[Dict]:
+    def _scan_ruff(self, filepath: str | None = None) -> list[dict]:
         cmd = ["ruff", "check"]
         cmd.append(filepath or str(self.project_root))
         cmd += ["--select", RUFF_SELECT, "--output-format", "json"]
@@ -76,7 +80,7 @@ class AutoFixAgent:
             })
         return issues
 
-    def _scan_ast_docstring(self, filepath: Optional[str] = None) -> List[Dict]:
+    def _scan_ast_docstring(self, filepath: str | None = None) -> list[dict]:
         issues = []
         py_files = [Path(filepath)] if filepath else list(self.project_root.rglob("*.py"))
         for pf in py_files:
@@ -85,7 +89,7 @@ class AutoFixAgent:
                 continue
             rel = os.path.relpath(s, str(self.project_root)).replace("\\", "/")
             try:
-                with open(s, "r", encoding="utf-8", errors="replace") as f:
+                with open(s, encoding="utf-8", errors="replace") as f:
                     source = f.read()
                 tree = ast.parse(source, filename=s)
                 source.split('\n')
@@ -106,7 +110,7 @@ class AutoFixAgent:
         return issues
     # ── 修复 ──
 
-    def fix(self, issue: Dict, dry_run: bool = True) -> FixResult:
+    def fix(self, issue: dict, dry_run: bool = True) -> FixResult:
         via = issue.get("via", "ruff")
         # Layer 1: ruff autofix
         if via == "ruff" and issue.get("ruff_autofix"):
@@ -124,11 +128,11 @@ class AutoFixAgent:
                 return r
         return FixResult(ok=False, action="skip", detail=f"无法修复: {issue['rule']}")
 
-    def _fix_ruff(self, issue: Dict, dry_run: bool) -> FixResult:
+    def _fix_ruff(self, issue: dict, dry_run: bool) -> FixResult:
         fp = str(self.project_root / issue["file"])
         if not os.path.isfile(fp):
             return FixResult(ok=False)
-        with open(fp, "r", encoding="utf-8") as f:
+        with open(fp, encoding="utf-8") as f:
             source = f.read()
         lines = source.split('\n')
         edits = sorted(issue["ruff_autofix"], key=lambda e: e["location"]["row"], reverse=True)
@@ -151,11 +155,11 @@ class AutoFixAgent:
                 del new_lines[r+1:er+1]
         return self._apply(fp, source, '\n'.join(new_lines), issue, "ruff")
 
-    def _fix_ast(self, issue: Dict, dry_run: bool) -> FixResult:
+    def _fix_ast(self, issue: dict, dry_run: bool) -> FixResult:
         fp = str(self.project_root / issue["file"])
         if not os.path.isfile(fp):
             return FixResult(ok=False)
-        with open(fp, "r", encoding="utf-8") as f:
+        with open(fp, encoding="utf-8") as f:
             source = f.read()
         lines = source.split('\n')
         li = issue["line"] - 1
@@ -169,17 +173,17 @@ class AutoFixAgent:
             new = old + '\n' + doc
             if dry_run:
                 return FixResult(ok=True, action="dry_run",
-                                 detail=f"[AST] 添加 docstring", old=old, new=new, via="ast")
+                                 detail="[AST] 添加 docstring", old=old, new=new, via="ast")
             new_lines = lines[:]
             new_lines.insert(li + 1, doc)
             return self._apply(fp, source, '\n'.join(new_lines), issue, "ast")
         return FixResult(ok=False)
 
-    def _fix_llm(self, issue: Dict, dry_run: bool) -> FixResult:
+    def _fix_llm(self, issue: dict, dry_run: bool) -> FixResult:
         fp = str(self.project_root / issue["file"])
         if not os.path.isfile(fp):
             return FixResult(ok=False)
-        with open(fp, "r", encoding="utf-8") as f:
+        with open(fp, encoding="utf-8") as f:
             source = f.read()
         lines = source.split('\n')
         li = issue["line"] - 1
@@ -215,7 +219,7 @@ class AutoFixAgent:
             return FixResult(ok=False, action="error", detail=str(e), via="llm")
 
     def _apply(self, fp: str, old_src: str, new_src: str,
-                issue: Dict, via: str) -> FixResult:
+                issue: dict, via: str) -> FixResult:
         try:
             compile(new_src, fp, "exec")
         except SyntaxError as e:
@@ -231,7 +235,7 @@ class AutoFixAgent:
             return FixResult(ok=False, action="error", detail=str(e), via=via)
 
     def fix_all(self, severity: str = "warning", dry_run: bool = True,
-                max_fixes: int = 10) -> Dict:
+                max_fixes: int = 10) -> dict:
         all_i = self.scan()
         sev = {"error": 0, "warning": 1, "info": 2}
         flt = [i for i in all_i if sev.get(i["severity"], 99) >= sev.get(severity, 1)]
@@ -251,19 +255,19 @@ class AutoFixAgent:
                 "fixed": fixed, "skipped": skipped, "errors": errors,
                 "dry_run": dry_run, "results": results}
 
-    def verify(self) -> Dict:
+    def verify(self) -> dict:
         errors = []
         for e in self.fix_log:
             fp = self.project_root / e["file"]
             try:
-                with open(fp, "r", encoding="utf-8") as f:
+                with open(fp, encoding="utf-8") as f:
                     compile(f.read(), str(fp), "exec")
             except SyntaxError as ex:
                 errors.append(f"{e['file']}:{ex.lineno}: {ex.msg}")
         return {"ok": len(errors) == 0, "compile_errors": errors,
                 "fixes": len(self.fix_log)}
 
-    def report(self) -> Dict:
+    def report(self) -> dict:
         by_rule = defaultdict(list)
         for e in self.fix_log:
             by_rule[e["rule"]].append(e)

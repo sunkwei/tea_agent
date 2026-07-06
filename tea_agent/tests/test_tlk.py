@@ -28,7 +28,7 @@ class TestToolkitRegistration:
         from tea_agent.tlk import Toolkit
         tk = Toolkit()
         result = tk.call_tool("toolkit_gettime")
-        assert result is not None, f"gettime 返回 None"
+        assert result is not None, "gettime 返回 None"
 
     def test_gettime_returns_date_fields(self):
         """toolkit_gettime 应返回日期字段"""

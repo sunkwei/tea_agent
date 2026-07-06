@@ -8,11 +8,10 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import Dict, Optional, List
 
 logger = logging.getLogger("toolkit")
 
-def _get_topic_id() -> Optional[str]:
+def _get_topic_id() -> str | None:
     """获取当前 topic_id"""
     try:
         from tea_agent.session_ref import get_agent
@@ -24,64 +23,64 @@ def _get_topic_id() -> Optional[str]:
 
     return None
 
-def _get_pending_todos() -> List[Dict]:
+def _get_pending_todos() -> list[dict]:
     """获取当前主题未完成的 TODO 项"""
     try:
         from tea_agent.session_ref import get_agent
         agent = get_agent()
         if agent is None or not hasattr(agent, 'db'):
             return []
-        
+
         db = agent.db
         topic_id = _get_topic_id()
         if not topic_id:
             return []
-        
+
         c = db.conn.cursor()
         c.execute("""
-            SELECT idx, desc, done FROM todo_items 
-            WHERE topic_id=? AND done=0 
+            SELECT idx, desc, done FROM todo_items
+            WHERE topic_id=? AND done=0
             ORDER BY idx ASC
         """, (topic_id,))
         rows = c.fetchall()
         c.close()
-        
+
         return [{"idx": r[0], "desc": r[1]} for r in rows]
     except Exception as e:
         logger.debug(f"check pending todos failed: {e}")
         return []
 
-def _get_pending_plans() -> List[Dict]:
+def _get_pending_plans() -> list[dict]:
     """获取当前主题未完成的 Plan"""
     try:
-        import os
         import json
-        
+        import os
+
         plans_dir = ".tea_agent_run/plans"
         if not os.path.exists(plans_dir):
             return []
-        
+
         topic_id = _get_topic_id()
         if not topic_id:
             return []
-        
+
         pending = []
         for fname in os.listdir(plans_dir):
             if not fname.endswith(".json"):
                 continue
             try:
                 path = os.path.join(plans_dir, fname)
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     plan = json.load(f)
-                
+
                 # 检查是否关联到当前主题
                 if plan.get("topic_id") != topic_id:
                     continue
-                
+
                 # 检查是否有未完成的步骤
                 total = len(plan.get("steps", []))
                 done = sum(1 for s in plan.get("steps", []) if s.get("status") == "done")
-                
+
                 if done < total:
                     pending.append({
                         "plan_id": plan["id"],
@@ -91,7 +90,7 @@ def _get_pending_plans() -> List[Dict]:
                     })
             except Exception:
                 continue
-        
+
         return pending
     except Exception as e:
         logger.debug(f"check pending plans failed: {e}")
@@ -106,7 +105,7 @@ _DOC_TYPE_FILENAME_MAP = {
 }
 
 
-def _scan_docs_dir(cwd: str = ".") -> List[Dict]:
+def _scan_docs_dir(cwd: str = ".") -> list[dict]:
     """扫描 docs/ 目录，返回已有落盘产物清单。
 
     遍历 docs/ 及其子目录（模块目录），统计每个 .md 文件的条目数，
@@ -121,13 +120,13 @@ def _scan_docs_dir(cwd: str = ".") -> List[Dict]:
         return []
 
     results = []
-    for root, dirs, files in os.walk(docs_dir):
+    for root, _dirs, files in os.walk(docs_dir):
         for fname in files:
             if not fname.endswith(".md"):
                 continue
             full = os.path.join(root, fname)
             try:
-                with open(full, "r", encoding="utf-8") as fh:
+                with open(full, encoding="utf-8") as fh:
                     content = fh.read()
             except Exception:
                 continue
@@ -153,7 +152,7 @@ def _scan_docs_dir(cwd: str = ".") -> List[Dict]:
     return results
 
 
-def _get_all_plans_for_topic() -> List[Dict]:
+def _get_all_plans_for_topic() -> list[dict]:
     """获取当前主题的所有 Plan（含已完成和未完成）。
 
     Returns:
@@ -171,7 +170,7 @@ def _get_all_plans_for_topic() -> List[Dict]:
             continue
         try:
             path = os.path.join(plans_dir, fname)
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 plan = json.load(f)
             if topic_id and plan.get("topic_id") != topic_id:
                 continue
@@ -199,7 +198,7 @@ def _get_all_plans_for_topic() -> List[Dict]:
     return results
 
 
-def _cross_check_docs_plans(cwd: str = ".") -> Dict:
+def _cross_check_docs_plans(cwd: str = ".") -> dict:
     """交叉对照 docs/ 产物与 Plan 状态。
 
     双向检查：
@@ -280,7 +279,7 @@ def _cross_check_docs_plans(cwd: str = ".") -> Dict:
 
 def toolkit_task_resume(action: str = "check", plan_id: str = None) -> dict:
     """检查当前主题未完成的 TODO 和 Plan，返回恢复提示。
-    
+
     对话开始时自动调用，或用户主动询问时调用。
     """
     try:
@@ -288,15 +287,15 @@ def toolkit_task_resume(action: str = "check", plan_id: str = None) -> dict:
             todos = _get_pending_todos()
             plans = _get_pending_plans()
             cross = _cross_check_docs_plans()
-            
+
             # 构建提示
             hints = []
-            
+
             if todos:
                 hints.append(f"有 {len(todos)} 个未完成的 TODO 项")
             if plans:
                 hints.append(f"有 {len(plans)} 个未完成的 Plan")
-            
+
             if cross["docs_count"] > 0:
                 hints.append(f"docs/ 有 {cross['docs_count']} 个落盘文档")
             if cross["orphan_docs"]:
@@ -305,7 +304,7 @@ def toolkit_task_resume(action: str = "check", plan_id: str = None) -> dict:
                 hints.append(f"{len(cross['unfulfilled_steps'])} 个步骤标记落盘但文件缺失")
             if cross["doc_planned_steps"]:
                 hints.append(f"{len(cross['doc_planned_steps'])} 个步骤有待落盘")
-            
+
             # 无任何任务
             if not todos and not plans and cross["docs_count"] == 0:
                 return {
@@ -315,9 +314,9 @@ def toolkit_task_resume(action: str = "check", plan_id: str = None) -> dict:
                     "cross_check": cross,
                     "message": "当前主题没有未完成的任务，docs/ 也无产物",
                 }
-            
+
             has_pending = bool(todos) or bool(plans) or bool(cross["orphan_docs"]) or bool(cross["unfulfilled_steps"])
-            
+
             return {
                 "ok": True,
                 "has_pending": has_pending,
@@ -330,21 +329,21 @@ def toolkit_task_resume(action: str = "check", plan_id: str = None) -> dict:
                 "cross_check": cross,
                 "hint": "；".join(hints) + ("。" if hints else ""),
             }
-        
+
         elif action == "resume_todo":
             # 恢复 TODO 执行
             from tea_agent.toolkit.toolkit_todo import toolkit_todo
             return toolkit_todo(action="show")
-        
+
         elif action == "resume_plan":
             if not plan_id:
                 return {"ok": False, "error": "resume_plan 需要 plan_id"}
             from tea_agent.toolkit.toolkit_plan import toolkit_plan
             return toolkit_plan(action="show", plan_id=plan_id)
-        
+
         else:
             return {"ok": False, "error": f"未知 action: {action}"}
-    
+
     except Exception as e:
         logger.exception("toolkit_task_resume")
         return {"ok": False, "error": str(e)[:200]}

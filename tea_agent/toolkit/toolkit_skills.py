@@ -19,14 +19,13 @@ v2.0 新增：
   - 兼容 ~/.agents/skills/ 和 ~/.claude/skills/ 目录
 """
 
-import os
-import time
-import yaml
-import json
+import contextlib
 import logging
-from pathlib import Path
-from typing import List, Dict, Optional, Set
+import time
 from datetime import datetime
+from pathlib import Path
+
+import yaml
 
 logger = logging.getLogger("toolkit.skills")
 
@@ -40,15 +39,15 @@ DESC_LIMIT = 120
 SKILL_META_KEYS = {"name", "description", "tags", "category", "version", "author", "repo_reference"}
 
 # ── 缓存 ────────────────────────────────────────────
-_scan_cache: Optional[dict] = None
+_scan_cache: dict | None = None
 _scan_cache_time: float = 0
 SCAN_CACHE_TTL = 30  # 秒
 
 
-def _parse_skill_md(path: str) -> Optional[Dict]:
+def _parse_skill_md(path: str) -> dict | None:
     """解析 SKILL.md 文件，提取 YAML front matter"""
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, encoding='utf-8') as f:
             raw = f.read()
         if not raw.startswith('---'):
             return None
@@ -86,7 +85,7 @@ def _parse_skill_md(path: str) -> Optional[Dict]:
         return None
 
 
-def _scan_skill_dirs() -> List[Dict]:
+def _scan_skill_dirs() -> list[dict]:
     """扫描所有技能目录 v2.0
       - ~/.tea_agent/skills/<skill>/SKILL.md   (user, 读写)
       - ~/.tea_agent/skills/<skill>/SKILL.md   (user, 不删除)
@@ -144,7 +143,7 @@ def _scan_skill_dirs() -> List[Dict]:
 
 # ── 核心 API ────────────────────────────────────────────
 
-def _load_all_skills(force_refresh: bool = False) -> List[Dict]:
+def _load_all_skills(force_refresh: bool = False) -> list[dict]:
     """加载所有技能"""
     global _scan_cache, _scan_cache_time
     now = time.time()
@@ -163,7 +162,7 @@ def _load_all_skills(force_refresh: bool = False) -> List[Dict]:
         else:
             # 即使没有 front matter，也作为纯文本技能加载
             try:
-                with open(item["path"], 'r', encoding='utf-8') as f:
+                with open(item["path"], encoding='utf-8') as f:
                     content = f.read().strip()
                 skills.append({
                     "name": item["skill_name"],
@@ -186,8 +185,8 @@ def _load_all_skills(force_refresh: bool = False) -> List[Dict]:
     return skills
 
 
-def _search_skills(query: str = "", skills: Optional[List[Dict]] = None,
-                   category: str = "", tags: Optional[List[str]] = None) -> List[Dict]:
+def _search_skills(query: str = "", skills: list[dict] | None = None,
+                   category: str = "", tags: list[str] | None = None) -> list[dict]:
     """搜索技能"""
     if skills is None:
         skills = _load_all_skills()
@@ -201,7 +200,7 @@ def _search_skills(query: str = "", skills: Optional[List[Dict]] = None,
             continue
         # 标签过滤 (OR)
         if tags:
-            skill_tags = set(t.lower() for t in s.get("tags", []))
+            skill_tags = {t.lower() for t in s.get("tags", [])}
             if not any(t.lower() in skill_tags for t in tags):
                 continue
         # 关键词搜索
@@ -218,11 +217,11 @@ def toolkit_skills(
     action: str = "list",
     query: str = "",
     category: str = "",
-    tags: Optional[List[str]] = None,
+    tags: list[str] | None = None,
     name: str = "",
     content: str = "",
     description: str = "",
-) -> Dict:
+) -> dict:
     """
     Skills .md 体系 — 兼容 anthropics/skills 格式 v2.0
 
@@ -278,10 +277,7 @@ def toolkit_skills(
     elif action == "recommend":
         """根据当前工具上下文推荐技能"""
         skills = _load_all_skills()
-        if query:
-            results = _search_skills(query, skills)
-        else:
-            results = skills[:10]
+        results = _search_skills(query, skills) if query else skills[:10]
         return {"total": len(results), "skills": results}
 
     elif action == "add":
@@ -321,10 +317,8 @@ def toolkit_skills(
         if skill_file.exists():
             skill_file.unlink()
             # 如果目录空了就删除
-            try:
+            with contextlib.suppress(OSError):
                 skill_dir.rmdir()
-            except OSError:
-                pass
             _scan_cache = None
             return {"success": True, "name": name}
         return {"error": f"未找到技能: {name}"}

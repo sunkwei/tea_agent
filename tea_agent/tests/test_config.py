@@ -53,9 +53,11 @@ class TestPathsConfig:
 
     def test_resolve_relative_data_dir(self):
         """相对 data_dir 解析"""
-        from tea_agent.config import PathsConfig
         import os as _os
-        import tempfile, shutil as _shutil
+        import shutil as _shutil
+        import tempfile
+
+        from tea_agent.config import PathsConfig
         # 使用临时目录的绝对路径作为 config_dir，确保跨平台
         tmpd = tempfile.mkdtemp(prefix="tea_test_")
         config_dir = _os.path.join(tmpd, "config")
@@ -73,8 +75,9 @@ class TestPathsConfig:
 
     def test_resolve_absolute_data_dir(self):
         """绝对 data_dir 解析"""
-        from tea_agent.config import PathsConfig
         import os as _os
+
+        from tea_agent.config import PathsConfig
         # 使用平台无关的绝对路径
         abs_dir = _os.path.abspath("/var/lib/tea_agent")
         pc = PathsConfig(data_dir=abs_dir)
@@ -95,8 +98,9 @@ class TestPathsConfig:
 
     def test_resolve_explicit_paths(self):
         """显式指定子路径"""
-        from tea_agent.config import PathsConfig
         import os as _os
+
+        from tea_agent.config import PathsConfig
         pc = PathsConfig(
             db_path="my_db/agent.db",
             toolkit_dir="/opt/tools",
@@ -214,14 +218,14 @@ class TestLoadSaveConfig:
         # 临时目录中无 config.yaml，应返回默认配置
         with pytest.MonkeyPatch.context():
             # 强制使用临时路径
-            from tea_agent.config import load_config, AgentConfig
+            from tea_agent.config import AgentConfig, load_config
             cfg = load_config(config_path=tmp_yaml_config)  # 文件不存在时返回默认值
             assert isinstance(cfg, AgentConfig)
             assert cfg.max_iterations == 50
 
     def test_load_and_save_roundtrip(self, tmp_yaml_config):
         """加载-保存-再加载 一致性"""
-        from tea_agent.config import AgentConfig, save_config, load_config
+        from tea_agent.config import AgentConfig, load_config, save_config
 
         cfg1 = AgentConfig()
         cfg1.set("max_iterations", 123)
@@ -245,7 +249,7 @@ class TestLoadSaveConfig:
         path = create_default_config(config_path=tmp_yaml_config)
 
         assert os.path.exists(path)
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             content = f.read()
 
         assert "main_model:" in content

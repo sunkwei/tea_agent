@@ -11,12 +11,12 @@
 
 用法:
     from tea_agent.workflow import WorkflowBuilder
-    
+
     builder = WorkflowBuilder()
     workflow = builder.build(
         goal="重构项目添加类型注解"
     )
-    
+
     print(workflow)
     # Workflow(
     #   goal="重构项目添加类型注解",
@@ -29,12 +29,10 @@
     # )
 """
 
-from typing import List, Dict, Optional
+import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-import json
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +43,9 @@ class Step:
     id: str
     name: str
     description: str
-    tools: List[str]
-    inputs: List[str] = field(default_factory=list)   # 输入依赖
-    outputs: List[str] = field(default_factory=list)   # 输出产物
+    tools: list[str]
+    inputs: list[str] = field(default_factory=list)   # 输入依赖
+    outputs: list[str] = field(default_factory=list)   # 输出产物
     estimated_tokens: int = 0
     estimated_time: float = 0
 
@@ -57,14 +55,14 @@ class Workflow:
     """工作流定义"""
     id: str
     goal: str
-    steps: List[Step]
+    steps: list[Step]
     created_at: str = ""
-    
+
     def __post_init__(self):
         if not self.created_at:
             self.created_at = datetime.now().isoformat()
-    
-    def to_dict(self) -> Dict:
+
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "goal": self.goal,
@@ -81,14 +79,14 @@ class Workflow:
             ],
             "created_at": self.created_at,
         }
-    
+
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
 
 
 class WorkflowBuilder:
     """工作流自动构建器"""
-    
+
     # 任务模式到步骤的映射
     PATTERNS = {
         "refactor": {
@@ -166,24 +164,24 @@ class WorkflowBuilder:
             ]
         },
     }
-    
+
     def __init__(self):
         pass
-    
+
     def build(
         self,
         goal: str,
-        files: Optional[List[str]] = None,
-        context: Optional[Dict] = None,
+        files: list[str] | None = None,
+        context: dict | None = None,
     ) -> Workflow:
         """
         从目标构建工作流。
-        
+
         Args:
             goal: 任务目标
             files: 相关文件
             context: 额外上下文
-            
+
         Returns:
             Workflow 对象
         """
@@ -191,66 +189,65 @@ class WorkflowBuilder:
             files = []
         if context is None:
             context = {}
-        
+
         # 1. 识别任务模式
         pattern = self._identify_pattern(goal, files)
-        
+
         # 2. 生成工作流
         workflow = self._generate_workflow(goal, pattern, files, context)
-        
+
         logger.info(f"🔧 工作流构建完成: {workflow.goal} ({len(workflow.steps)} 步)")
-        
+
         return workflow
-    
-    def _identify_pattern(self, goal: str, files: List[str]) -> str:
+
+    def _identify_pattern(self, goal: str, files: list[str]) -> str:
         """识别任务模式"""
         goal_lower = goal.lower()
-        
+
         # 检查关键词
         if any(kw in goal_lower for kw in ["类型注解", "type annotation", "type hint"]):
             return "type_annotation"
-        
+
         if any(kw in goal_lower for kw in ["重构", "refactor"]):
             return "refactor"
-        
+
         if any(kw in goal_lower for kw in ["测试", "test", "pytest"]):
             return "test"
-        
+
         if any(kw in goal_lower for kw in ["修复", "fix", "bug"]):
             return "fix"
-        
+
         if any(kw in goal_lower for kw in ["文档", "doc", "readme"]):
             return "doc"
-        
+
         if any(kw in goal_lower for kw in ["新增", "add", "创建", "create", "功能"]):
             return "feature"
-        
+
         if any(kw in goal_lower for kw in ["搜索", "search", "查找", "find"]):
             return "search"
-        
+
         # 检查文件类型
         if files:
             py_files = [f for f in files if f.endswith('.py')]
-            if py_files:
-                if any(kw in goal_lower for kw in ["类型", "type"]):
-                    return "type_annotation"
-        
+            if py_files and any(kw in goal_lower for kw in ["类型", "type"]):
+                return "type_annotation"
+
         return "default"
-    
+
     def _generate_workflow(
         self,
         goal: str,
         pattern: str,
-        files: List[str],
-        context: Dict,
+        files: list[str],
+        context: dict,
     ) -> Workflow:
         """生成工作流"""
         # 获取模式定义
         pattern_def = self.PATTERNS.get(pattern, self.PATTERNS["default"])
-        
+
         # 生成工作流 ID
         workflow_id = f"wf_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
+
         # 生成步骤
         steps = []
         for i, (step_id, step_name, tools) in enumerate(pattern_def["steps"]):
@@ -263,22 +260,22 @@ class WorkflowBuilder:
                 outputs=self._infer_outputs(step_id, goal),
             )
             steps.append(step)
-        
+
         return Workflow(
             id=workflow_id,
             goal=goal,
             steps=steps,
         )
-    
-    def _infer_inputs(self, step_index: int, steps: List) -> List[str]:
+
+    def _infer_inputs(self, step_index: int, steps: list) -> list[str]:
         """推断步骤输入"""
         if step_index == 0:
             return []  # 第一步无输入
-        
+
         # 默认依赖上一步
         return [f"step_{step_index}"]
-    
-    def _infer_outputs(self, step_id: str, goal: str) -> List[str]:
+
+    def _infer_outputs(self, step_id: str, goal: str) -> list[str]:
         """推断步骤输出"""
         output_map = {
             "scan": ["file_list", "structure"],
@@ -293,9 +290,9 @@ class WorkflowBuilder:
             "search": ["search_results"],
             "report": ["report"],
         }
-        
+
         return output_map.get(step_id, [])
-    
+
     def visualize(self, workflow: Workflow) -> str:
         """生成工作流可视化文本"""
         lines = [
@@ -305,27 +302,27 @@ class WorkflowBuilder:
             "",
             "   执行计划:",
         ]
-        
+
         for i, step in enumerate(workflow.steps):
             prefix = "   ├─" if i < len(workflow.steps) - 1 else "   └─"
             tools_str = ", ".join(step.tools) if step.tools else "(无工具)"
             lines.append(f"{prefix} [{step.id}] {step.name}")
             lines.append(f"   │  工具: {tools_str}")
-            
+
             if i < len(workflow.steps) - 1:
                 lines.append("   │")
-        
+
         return "\n".join(lines)
 
 
 def build_workflow(goal: str, **kwargs) -> Workflow:
     """
     便捷函数：构建工作流。
-    
+
     Args:
         goal: 任务目标
         **kwargs: 传递给 WorkflowBuilder.build() 的参数
-        
+
     Returns:
         Workflow 对象
     """

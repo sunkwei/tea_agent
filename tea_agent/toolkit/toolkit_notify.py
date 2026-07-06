@@ -6,7 +6,7 @@ logger = logging.getLogger("toolkit")
 
 def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: int = 5000):
     """Toolkit notify.
-    
+
     Args:
         title: Description.
         message: Description.
@@ -15,8 +15,8 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
     """
     logger.info(f"toolkit_notify called: title={repr(title)[:80]}, message={repr(message)[:80]}, urgency={urgency!r}, duration={duration!r}")
 
-    import sys
     import subprocess
+    import sys
 
     urgency_map = {"low": 0, "normal": 1, "critical": 2}
 
@@ -94,14 +94,14 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
         # PowerShell + Windows.UI.Notifications，非阻塞通知栏弹出
         try:
             app_id = "TeaAgent.TeaAgent.TeaAgent"
-            ps_register = f'''
+            ps_register = '''
 $shortcutPath = "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\\TeaAgent.lnk"
-if (-not (Test-Path $shortcutPath)) {{
+if (-not (Test-Path $shortcutPath)) {
     $WshShell = New-Object -ComObject WScript.Shell
     $shortcut = $WshShell.CreateShortcut($shortcutPath)
     $shortcut.TargetPath = "powershell.exe"
     $shortcut.Save()
-}}
+}
 '''
             subprocess.run(['powershell', '-NoProfile', '-Command', ps_register],
                            timeout=10, capture_output=True)

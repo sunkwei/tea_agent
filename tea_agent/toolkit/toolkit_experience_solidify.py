@@ -13,7 +13,6 @@ import json
 import logging
 import time
 from datetime import datetime
-from typing import List, Dict
 
 logger = logging.getLogger("toolkit.experience_solidify")
 
@@ -23,7 +22,7 @@ def toolkit_experience_solidify(
     task: str = "",
     result: str = "",
     success: bool = True,
-    tools_used: List[str] = None,
+    tools_used: list[str] = None,
     duration: float = 0,
     error: str = "",
     pattern_name: str = ""
@@ -62,7 +61,7 @@ def _analyze_execution(
     task: str,
     result: str,
     success: bool,
-    tools_used: List[str],
+    tools_used: list[str],
     duration: float,
     error: str
 ) -> str:
@@ -91,7 +90,7 @@ def _analyze_execution(
 def _solidify_pattern(
     task: str,
     result: str,
-    tools_used: List[str],
+    tools_used: list[str],
     pattern_name: str
 ) -> str:
     """固化成功模式到技能库。"""
@@ -126,7 +125,7 @@ def _solidify_pattern(
 def _record_lesson(
     task: str,
     error: str,
-    tools_used: List[str]
+    tools_used: list[str]
 ) -> str:
     """记录失败教训到经验库。"""
     try:
@@ -151,7 +150,7 @@ def _auto_solidify(
     task: str,
     result: str,
     success: bool,
-    tools_used: List[str],
+    tools_used: list[str],
     duration: float,
     error: str
 ) -> str:
@@ -179,7 +178,7 @@ def _generate_pattern_name(task: str) -> str:
     return f"{name}-{timestamp}"
 
 
-def _build_agent_config(tools_used: List[str]) -> List[Dict]:
+def _build_agent_config(tools_used: list[str]) -> list[dict]:
     """根据使用的工具构建 agent 配置。"""
     agents = []
 

@@ -3,8 +3,8 @@
 覆盖: estimate_tokens, _progressive_trim, search_conversations
 """
 
+import contextlib
 from unittest.mock import MagicMock
-
 
 # ============================================================
 # estimate_tokens / estimate_messages_tokens / _progressive_trim
@@ -176,10 +176,13 @@ class TestSearchConversations:
 
     def test_search_ranks_by_relevance(self):
         """验证搜索结果按相关性排序"""
-        from tea_agent.store._conversations import ConversationStore
+        import os
         import sqlite3
+
         # 使用临时文件数据库并初始化表
-        import tempfile, os
+        import tempfile
+
+        from tea_agent.store._conversations import ConversationStore
         tmpf = tempfile.mktemp(suffix='.db')
         try:
             conn = sqlite3.connect(tmpf)
@@ -219,8 +222,7 @@ class TestSearchConversations:
             scores = [r["rank_score"] for r in results]
             assert scores == sorted(scores, reverse=True), "必须按分数降序排列"
         finally:
-            try: os.unlink(tmpf)
-            except: pass
+            with contextlib.suppress(BaseException): os.unlink(tmpf)
 
 
 # ============================================================
@@ -251,7 +253,7 @@ class TestPruneCutoff:
     def test_find_cutoff_many_users(self):
         from tea_agent.session.history_builder import _find_prune_cutoff
         msgs = []
-        for i in range(10):
+        for _i in range(10):
             msgs.append({"role": "user"})
             msgs.append({"role": "assistant"})
         # 从后往前数 3 个 user: i=7,8,9 → 索引 14 (user 7 在 14)

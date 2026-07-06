@@ -2,14 +2,15 @@
 从 gui.py L892-1030 提取：TkGUI._create_ui() 界面构建逻辑
 """
 
-import tkinter as tk
-from tkinter import font as tkFont, ttk, scrolledtext, Frame
 import logging
+import tkinter as tk
+from tkinter import Frame, scrolledtext, ttk
+from tkinter import font as tkFont
 
 if __import__('typing').TYPE_CHECKING:
-    from tea_agent.gui import TkGUI
+    pass
 
-from ._fonts import SYSTEM_FONT, MONO_FONT, _fs, _DEFAULT_FONT_SIZE
+from ._fonts import SYSTEM_FONT, _fs
 
 try:
     from tkinterweb import HtmlFrame
@@ -142,12 +143,11 @@ class UIBuilder:
         gui._img_label = ttk.Label(toolbar, text="", foreground="#888")
         gui._img_label.pack(side=tk.LEFT, padx=(4, 2))
         gui._clear_img_btn = ttk.Button(toolbar, text="✕ 清除", command=gui.images.clear)
-        
+
         # 检查模型是否支持图像输入，不支持则禁用图片按钮
-        if hasattr(gui, '_cfg') and hasattr(gui._cfg, 'main_model'):
-            if not gui._cfg.main_model.supports_vision:
-                gui._img_btn.config(state=tk.DISABLED)
-                gui._img_label.config(text="(当前模型不支持图片)", foreground="#aaa")
+        if hasattr(gui, '_cfg') and hasattr(gui._cfg, 'main_model') and not gui._cfg.main_model.supports_vision:
+            gui._img_btn.config(state=tk.DISABLED)
+            gui._img_label.config(text="(当前模型不支持图片)", foreground="#aaa")
 
         # 中间：视图切换
         gui._raw_check_btn = ttk.Checkbutton(

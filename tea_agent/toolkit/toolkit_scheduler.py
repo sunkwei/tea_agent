@@ -1,6 +1,7 @@
 # version: 1.0.0
 
 import logging
+
 logger = logging.getLogger("toolkit")
 
 def toolkit_scheduler(action: str, **kwargs):
@@ -26,7 +27,11 @@ def toolkit_scheduler(action: str, **kwargs):
     """
     logger.info(f"toolkit_scheduler called: action={action!r}")
 
-    import os, time, sqlite3, threading, subprocess
+    import os
+    import sqlite3
+    import subprocess
+    import threading
+    import time
     from datetime import datetime, timedelta
     from pathlib import Path
 
@@ -69,7 +74,7 @@ def toolkit_scheduler(action: str, **kwargs):
     # ── 调度解析 ──
     def parse_schedule(schedule: str, from_time: datetime = None):
         """Parse schedule.
-        
+
         Args:
             schedule: Description.
             from_time: Description.
@@ -113,7 +118,7 @@ def toolkit_scheduler(action: str, **kwargs):
 
     def _match_cron(pattern: str, value: int) -> bool:
         """Internal: match cron.
-        
+
         Args:
             pattern: Description.
             value: Description.
@@ -138,7 +143,7 @@ def toolkit_scheduler(action: str, **kwargs):
 
     def _parse_cron(expr: str, now: datetime):
         """Internal: parse cron.
-        
+
         Args:
             expr: Description.
             now: Description.
@@ -148,7 +153,7 @@ def toolkit_scheduler(action: str, **kwargs):
             return None
         dt = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
         for _ in range(7 * 24 * 60):
-            if all(_match_cron(p, v) for p, v in zip(parts, [dt.minute, dt.hour, dt.day, dt.month, dt.weekday()])):
+            if all(_match_cron(p, v) for p, v in zip(parts, [dt.minute, dt.hour, dt.day, dt.month, dt.weekday()], strict=False)):
                 return dt
             dt += timedelta(minutes=1)
         return None
@@ -173,7 +178,7 @@ def toolkit_scheduler(action: str, **kwargs):
     def _get_script_db_path():
         """获取脚本存储的数据库路径（与调度器同库）"""
         return DB_PATH
-    
+
     def _save_script_to_db(script_id: str, name: str, content: str, description: str = ""):
         """将脚本内容保存到数据库"""
         conn = _get_conn()
@@ -189,14 +194,14 @@ def toolkit_scheduler(action: str, **kwargs):
             )
         """)
         conn.execute("""
-            INSERT OR REPLACE INTO scheduled_scripts 
+            INSERT OR REPLACE INTO scheduled_scripts
             (id, name, content, description, updated_at)
             VALUES (?, ?, ?, ?, ?)
         """, (script_id, name, content, description, datetime.now().isoformat()))
         conn.commit()
         conn.close()
         return {"status": "saved", "id": script_id}
-    
+
     def _get_script_from_db(script_id: str):
         """从数据库获取脚本内容"""
         conn = _get_conn()
@@ -216,31 +221,31 @@ def toolkit_scheduler(action: str, **kwargs):
         ).fetchone()
         conn.close()
         return dict(row) if row else None
-    
+
     def _prepare_script(script_id: str):
         """将脚本从数据库加载到临时目录，返回可执行路径"""
         script = _get_script_from_db(script_id)
         if not script:
             return None
-        
-        import tempfile
+
         import hashlib
-        
+        import tempfile
+
         scripts_dir = Path(tempfile.gettempdir()) / "tea_agent_scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
-        
+
         content_hash = hashlib.md5(script["content"].encode()).hexdigest()[:8]
         filename = f"{script_id}_{content_hash}.py"
         filepath = scripts_dir / filename
-        
+
         filepath.write_text(script["content"], encoding="utf-8")
         return str(filepath)
-    
+
     # ── 执行任务 ──
     def _execute_task(task: dict):
         """执行命令行任务，支持从数据库加载脚本"""
         cmd = task["command"]
-        
+
         # 如果命令是 script:xxx 格式，从数据库加载脚本
         if cmd.startswith("script:"):
             script_id = cmd[7:]
@@ -250,7 +255,7 @@ def toolkit_scheduler(action: str, **kwargs):
                 logger.info(f"从数据库加载脚本: {script_id} -> {script_path}")
             else:
                 return -3, f"脚本不存在: {script_id}"
-        
+
         logger.info(f"执行定时任务: {task['name']} -> {cmd}")
         try:
             result = subprocess.run(
@@ -477,7 +482,7 @@ def toolkit_scheduler(action: str, **kwargs):
         if not all([script_id, name, content]):
             return {"error": "需要 script_id, name, content 参数"}
         return _save_script_to_db(script_id, name, content, description)
-    
+
     elif action == "get_script":
         script_id = kwargs.get("script_id", "")
         if not script_id:
@@ -486,7 +491,7 @@ def toolkit_scheduler(action: str, **kwargs):
         if not script:
             return {"error": f"脚本不存在: {script_id}"}
         return script
-    
+
     elif action == "list_scripts":
         conn = _get_conn()
         conn.execute("""
@@ -503,7 +508,7 @@ def toolkit_scheduler(action: str, **kwargs):
         rows = conn.execute("SELECT * FROM scheduled_scripts ORDER BY created_at DESC").fetchall()
         conn.close()
         return {"scripts": [dict(r) for r in rows], "count": len(rows)}
-    
+
     elif action == "delete_script":
         script_id = kwargs.get("script_id", "")
         if not script_id:
@@ -513,7 +518,7 @@ def toolkit_scheduler(action: str, **kwargs):
         conn.commit()
         conn.close()
         return {"status": "deleted"}
-    
+
     elif action == "add_script_task":
         """添加基于脚本的定时任务"""
         script_id = kwargs.get("script_id", "")
@@ -521,12 +526,12 @@ def toolkit_scheduler(action: str, **kwargs):
         schedule = kwargs.get("schedule", "")
         if not all([script_id, name, schedule]):
             return {"error": "需要 script_id, name, schedule 参数"}
-        
+
         # 检查脚本是否存在
         script = _get_script_from_db(script_id)
         if not script:
             return {"error": f"脚本不存在: {script_id}"}
-        
+
         # 添加任务，命令为 script:xxx 格式
         command = f"script:{script_id}"
         next_run = parse_schedule(schedule)
@@ -541,7 +546,7 @@ def toolkit_scheduler(action: str, **kwargs):
         conn.close()
         _notify("⏰ 新增脚本任务", f"{name}\n脚本: {script_id}\n调度: {schedule}")
         return {"status": "added", "task_id": tid, "next_run": next_run.isoformat() if next_run else None}
-    
+
     elif action == "save_evolve_script":
         """保存自进化守护脚本到数据库"""
         script_content = '''#!/usr/bin/env python3
@@ -585,7 +590,7 @@ def ensure_running():
     if state.get("running"):
         _log(f"🟢 运行中 (PID: {state.get('pid')})")
         return True
-    
+
     _log("🔴 未启动，正在启动...")
     if _start_thread():
         _log("✅ 启动成功")
@@ -598,7 +603,7 @@ if __name__ == "__main__":
     sys.exit(0 if success else 1)
 '''
         return _save_script_to_db("self_evolve_watchdog", "自进化守护", script_content, "每分钟检查自进化进程")
-    
+
     else:
         return {"error": f"未知 action: {action}",
                 "supported": ["list","add","update","delete","enable","disable","run","start","stop","status","test_schedule",

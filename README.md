@@ -1,4 +1,4 @@
-# Tea Agent v0.10.9
+# Tea Agent v0.10.12
 
 > ⚠️ **这是一个 AI 写 AI 的实验项目，自行承担责任。**
 
@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.10.9-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.10.12-blue)](https://pypi.org/project/tea-agent)
 
 Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / CLI / Web / REST API / ACP Protocol / TUI** 六种界面形态。
 
@@ -15,7 +15,7 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用
 ## ✨ 核心特性
 
 - 🧠 **自进化引擎** — Agent 可以修改自身代码、创建新工具、优化提示词，实现自主进化
-- 🧰 **60+ 内置工具** — 涵盖文件操作、代码编辑、搜索、截图、OCR、包管理、Git 等
+- 🧰 **70+ 内置工具** — 涵盖文件操作、代码编辑、搜索、截图、OCR、包管理、Git 等
 - ⏱️ **智能命令超时** — 后台监控进程 CPU/MEM/IO，活跃进程自动延长超时至 4x，空闲进程及时终止
 - 🖥️ **六种界面** — GUI（Tkinter）、CLI、Web（Starlette + SSE）、REST API、ACP Protocol、TUI（Textual），按需选择
 - 🌐 **Web V2 实时流式界面** — 单页应用(SPA)，内存搜索、记忆管理、任务调度、历史会话，全部功能浏览器内完成
@@ -27,6 +27,7 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用
 - 🤖 **多 Agent 协作** — 任务分解 + 并行执行，子 Agent 独立完成子任务
 - 📊 **任务评估** — 自动评估任务质量，记录成功/失败经验
 - 💎 **技能结晶** — Plan 执行后自动结晶 → 新对话按语义匹配注入 → 技能自进化闭环
+- 🛡️ **LLM JSON 容错** — 智能修复截断JSON、控制字符、单引号、尾逗号等常见LLM输出问题
 
 ---
 
@@ -64,6 +65,7 @@ playwright install chromium
 | Web V2 界面（SPA） | ✅ | ✅ 完整保留 |
 | REST API Server | ✅ | ✅ 完整保留 |
 | 内存搜索 / 记忆管理 | ✅ | ✅ 完整保留 |
+| 任务评估 / 技能结晶 | ✅ | ✅ 完整保留 |
 | 任务调度 / PDF 导出 | ✅ | ✅ 完整保留 |
 | 配置切换 | ✅ | ✅ 完整保留 |
 | GUI 桌面界面 | ✅ | ❌ |
@@ -89,16 +91,15 @@ build_mini.py 工作流程
   │     ├─ toolkit/ — 排除 12 个重型工具 (见下方)
   │     ├─ server/  — Web 服务器 (路由 + 静态资源)
   │     ├─ multi_agent/ — 多 Agent 协作
-  │     ├─ compaction/ — 历史压缩
-  │     └─ skills/  — 技能结晶 (.md 文档)
+  │     ├─ evaluation/ — 任务评估
+  │     └─ skills/  — 技能结晶 (.md 文档 + 注册表)
   │
   ├─ 2. 排除的包和文件:
   │     ├─ _gui/     — Tkinter 桌面 GUI
-      │     ├─ gui2/     — pywebview 桌面 GUI
+  │     ├─ gui2/     — pywebview 桌面 GUI
   │     ├─ protocol/ — ACP 协议
   │     ├─ lsp/      — 代码智能
   │     ├─ sdk/      — Python SDK
-  │     ├─ evaluation/ — 任务评估
   │     ├─ cli.py / tui.py / gui.py — CLI/TUI/GUI 入口
   │     └─ demo/ / tests/ / scripts/
   │
@@ -142,6 +143,23 @@ python build_mini.py
 # 构建产物位于 build_mini_dist/dist/
 pip install build_mini_dist/dist/tea_agent_mini-*.whl
 ```
+
+### 🔨 编译为单文件可执行文件
+
+`build_nuitka.py` 将 Mini 版进一步编译为**单文件可执行文件**（`.exe` / ELF），无需 Python 环境即可运行。
+
+```bash
+# 单文件模式（适合分发给无 Python 环境的用户）
+python build_nuitka.py
+
+# standalone 目录模式（调试用，编译更快）
+python build_nuitka.py --standalone
+
+# 输出：build_nuitka_dist/tea-agent-mini[.exe]  (~60 MB)
+```
+
+> ⚠️ 编译耗时较长（5-30 分钟），需要安装 Nuitka 和 C 编译器。
+> 日常使用推荐 `pip install` 方式。
 
 ### 🚀 使用
 
@@ -940,7 +958,7 @@ list       → 列出所有技能模式
 | 类别 | 工具 |
 |------|------|
 | 📁 文件操作 | `toolkit_file`, `toolkit_save_file`, `toolkit_explr` |
-| ✏️ 代码编辑 | `toolkit_edit`, `toolkit_diff_edit`, `toolkit_diff`, `toolkit_self_evolve`, `toolkit_clean_comments`, `toolkit_format_code` |
+| ✏️ 代码编辑 | `toolkit_edit`, `toolkit_diff_edit`, `toolkit_diff`, `toolkit_self_evolve`, `toolkit_clean_comments`, `toolkit_format_code`, `toolkit_auto_fix`, `toolkit_comment` |
 | 🔍 搜索 | `toolkit_search`, `toolkit_lsp`, `toolkit_query_chat_history` |
 | 📸 截图/OCR | `toolkit_screenshot`, `toolkit_ocr`, `toolkit_screen_read` |
 | 🖱️ 操控 | `toolkit_input`, `toolkit_browser_tab`, `toolkit_js_fetch` |
@@ -949,7 +967,7 @@ list       → 列出所有技能模式
 | 🗓️ 工具 | `toolkit_lunar`, `toolkit_weather_my`, `toolkit_gettime`, `toolkit_date_diff` |
 | 🔧 系统 | `toolkit_exec`, `toolkit_config`, `toolkit_os_info`, `toolkit_sudo_gui` |
 | 🧠 记忆/知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_reflection`, `toolkit_proactive` |
-| 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_dynamic_skill`, `toolkit_experience_solidify` |
+| 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_dynamic_skill`, `toolkit_experience_solidify`, `toolkit_auto_pipeline` |
 | 📋 计划/任务 | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume` |
 | 🔌 MCP 集成 | `toolkit_mcp` |
 | 🌐 Web/GUI | `toolkit_browser_tab`, `toolkit_dump_topic`, `toolkit_export_last_pdf`, `toolkit_notify` |
@@ -1050,12 +1068,11 @@ Dispatcher.dispatch(goal)
 ```
 tea_agent/
 ├── gui.py                 # GUI 桌面入口（Tkinter）
-├── gui2/                  # Web V2 界面（SPA + Bottle）
-│   ├── server.py          # Bottle 静态服务器
-│   └── frontend/          # HTML/CSS/JS 单页应用
-│       └── index.html     # 全部界面逻辑（无框架依赖）
-├── server/                # REST API Server（OpenAI 兼容）
+├── gui2/                  # pywebview 桌面 GUI（备用）
+├── server/                # REST API + Web V2 界面（Starlette + SSE）
 │   ├── server.py          # Starlette 路由 + SSE
+│   ├── route_handlers.py  # API 路由处理
+│   ├── static/            # HTML/CSS/JS 单页应用
 │   └── __main__.py        # python -m tea_agent.server
 ├── protocol/              # ACP Protocol Server
 │   ├── acp_server.py      # ACP 协议实现
@@ -1066,15 +1083,17 @@ tea_agent/
 ├── config.py              # 配置管理
 ├── memory.py              # 长期记忆
 ├── prompt_manager.py      # 提示词版本管理
-├── toolkit/               # 70+ 工具模块
+├── toolkit/               # 73+ 工具模块
 ├── session/               # 会话管理（历史压缩/Token 裁剪）
 ├── multi_agent/           # 多 Agent 协作
-├── lsp/                   # LSP 代码智能
-├── store/                 # 数据存储（10 子模块）
+├── lsp/                   # 代码智能（Jedi + Tree-sitter）
+├── store/                 # 数据存储（12 子模块）
 ├── evaluation/            # 任务评估
-├── skills/                # 技能结晶
+├── skills/                # 技能结晶（17+ 个 .md 技能）
 ├── sdk/                   # Python SDK（外部调用）
-└── _gui/                  # GUI 组件（12 模块）
+├── _gui/                  # GUI 组件（12 模块）
+├── tests/                 # 29 个测试文件（546+ 用例）
+└── demo/                  # 演示：蛇/俄罗斯方块/沪深300
 ```
 
 ---
@@ -1118,6 +1137,33 @@ embedding:
 > 主模型和便宜模型独立配置，互不影响。
 
 Agent 可在运行时通过 `toolkit_config` 自主调优参数。
+
+### 🎯 Ruff 代码规范（v0.10.11+）
+
+`pyproject.toml` 内置 Ruff 配置，确保代码风格统一：
+
+```toml
+[tool.ruff]
+line-length = 150
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+```
+
+| 规则集 | 说明 |
+|--------|------|
+| `E` / `W` | pycodestyle 错误/警告 |
+| `F` | pyflakes 逻辑错误 |
+| `I` | isort 导入排序 |
+| `N` | pep8-naming 命名规范 |
+| `UP` | pyupgrade Python 3.10+ 语法升级 |
+| `B` | flake8-bugbear 常见 bug 检测 |
+| `C4` | 化简代码 |
+| `SIM` | 简化表达式 |
+
+所有源码已通过 Ruff 检查，采用 Python 3.10 现代类型注解（`str | None` 替代 `Optional[str]`）。
 
 ---
 

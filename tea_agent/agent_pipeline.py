@@ -44,12 +44,12 @@ def do_async_summaries(agent, topic_id: str, overflow_items: list = None,
 
 def l2_to_l3_summary(agent, topic_id: str, overflow_items: list) -> tuple:
     """将昶出 LR 条目、 玻线 L3 摘要 合回，刟绐新的 L3 语义摘要。
-    
+
     Args:
         agent: Agent 实例
         topic_id: 主题 ID
         overflow_items: L2 昶出 条目
-        
+
     Returns:
         (new_summary: str, usage: dict)
     """
@@ -81,11 +81,11 @@ except ImportError:
 
 def auto_summary(agent, topic_id: str) -> tuple:
     """自动生成主题摘要.
-    
+
     Args:
         agent: Agent 实例
         topic_id: 主题 ID
-        
+
     Returns:
         (summary: Optional[str], usage: dict)
     """

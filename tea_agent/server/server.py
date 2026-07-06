@@ -22,19 +22,20 @@ import os
 import threading
 import time
 import uuid
-from typing import Optional, List
 from pathlib import Path
 
 logger = logging.getLogger("api_server")
 
 try:
     from starlette.applications import Starlette
-    from starlette.responses import JSONResponse, StreamingResponse
-    from starlette.routing import Route, Mount
     from starlette.requests import Request
+    from starlette.responses import JSONResponse, StreamingResponse
+    from starlette.routing import Mount, Route
     from starlette.staticfiles import StaticFiles
 except ImportError:
     raise ImportError("pip install starlette uvicorn")
+
+import contextlib
 
 from tea_agent.agent import Agent
 from tea_agent.store import Storage, get_storage
@@ -52,7 +53,7 @@ _active_sessions: dict = {}
 # ── 配置缓存（按路径缓存，减少重复 IO） ──
 _config_cache: dict = {}
 
-def _load_config_cached(config_path: Optional[str] = None):
+def _load_config_cached(config_path: str | None = None):
     """加载配置（带缓存）。"""
     key = config_path or "__default__"
     if key not in _config_cache:
@@ -100,7 +101,7 @@ class _ChatAgentProxy:
 
 def _load_topic_history(storage, session, topic_id):
     """加载主题历史到会话（Agent.load_topic_history 的独立版本）。
-    
+
     不依赖 Agent 实例，只需要 storage 和 session。
     """
     if not storage:
@@ -182,16 +183,16 @@ class APIServer:
     - 支持不同 Web 实例通过 config_path 使用不同配置
     """
 
-    def __init__(self, api_key: Optional[str] = None,
-                 config_path: Optional[str] = None):
+    def __init__(self, api_key: str | None = None,
+                 config_path: str | None = None):
         self._api_key = (api_key or os.environ.get("TEA_API_KEY", "")).strip()
         self._config_path = config_path
-        self._agent: Optional[Agent] = None
+        self._agent: Agent | None = None
         self._start_time = time.time()
         self._lock = threading.Lock()
-        self._storage: Optional[Storage] = None
+        self._storage: Storage | None = None
         # 共享 Toolkit（跨请求复用，只读）
-        self._toolkit: Optional[object] = None
+        self._toolkit: object | None = None
 
     # ═══════════════════════════════════════════════
     # 共享资源（Toolkit + Storage）
@@ -223,7 +224,7 @@ class APIServer:
         if self._agent is None:
             self._agent = Agent(mode="full",
                                 config_path=self._config_path)
-            logger.info(f"Agent initialized")
+            logger.info("Agent initialized")
         return self._agent
 
     def reset_agent(self):
@@ -239,7 +240,7 @@ class APIServer:
     # 每请求 Session 工厂（流式操作）
     # ═══════════════════════════════════════════════
 
-    def create_session(self, config_path: Optional[str] = None):
+    def create_session(self, config_path: str | None = None):
         """为流式请求创建独立的 OnlineToolSession。
 
         每个请求获得独立 Session，互不干扰，无需全局锁。
@@ -260,9 +261,9 @@ class APIServer:
                 "uptime_seconds": round(time.time() - self._start_time, 1),
                 "agent_initialized": self._agent is not None}
 
-    def chat_completion(self, model: str, messages: List[dict],
+    def chat_completion(self, model: str, messages: list[dict],
                         stream: bool = False, temperature: float = 0.7,
-                        max_tokens: Optional[int] = None,
+                        max_tokens: int | None = None,
                         topic_id: str = "") -> dict:
         """Non-streaming chat completion. Returns OpenAI-compatible dict."""
         agent = self.get_agent()
@@ -343,10 +344,8 @@ class APIServer:
                  "tools_used": used_tools or []})
         except Exception as e:
             logger.exception(f"Stream chat error: {e}")
-            try:
+            with contextlib.suppress(Exception):
                 put({"type": "error", "error": f"{type(e).__name__}: {e}"})
-            except Exception:
-                pass
     async def _generate_sse(self, queue, model):
         cid = "chatcmpl-" + uuid.uuid4().hex[:12]
         now = int(time.time())
@@ -380,7 +379,7 @@ class APIServer:
     @staticmethod
     def _extract_user_message(messages):
         """提取用户消息，支持纯文本和多模态内容（包含图片）。
-        
+
         返回格式：
         - 纯文本消息：返回字符串
         - 多模态消息：返回字典 {"text": str, "images": list}
@@ -686,10 +685,11 @@ class APIServer:
         Returns:
             dict: {ok: bool, image_base64?: str, error?: str}
         """
-        from tea_agent.toolkit.toolkit_screenshot import toolkit_screenshot
         import base64
-        import tempfile
         import os
+        import tempfile
+
+        from tea_agent.toolkit.toolkit_screenshot import toolkit_screenshot
 
         try:
             # 截取区域截图
@@ -731,10 +731,11 @@ class APIServer:
         Returns:
             dict: {ok: bool, image_base64?: str, error?: str, size?: int}
         """
-        from tea_agent.toolkit.toolkit_screenshot import toolkit_screenshot
         import base64
-        import tempfile
         import os
+        import tempfile
+
+        from tea_agent.toolkit.toolkit_screenshot import toolkit_screenshot
 
         try:
             tmp_path = os.path.join(tempfile.gettempdir(), "screenshot_full.png")
@@ -832,7 +833,7 @@ class APIServer:
         """Load a full config file and switch both main and cheap models."""
         if not os.path.exists(config_path):
             return {"ok": False, "error": "Config not found: " + config_path}
-        from tea_agent.config import load_config, AgentConfig
+        from tea_agent.config import AgentConfig, load_config
         new_cfg = load_config(config_path)
         if not new_cfg.main_model.is_configured:
             return {"ok": False, "error": "config main_model not complete: " + config_path}
@@ -1053,10 +1054,10 @@ class APIServer:
 
     def update_config(self, updates: dict):
         """Update runtime config fields on the fly. Only whitelisted keys are accepted.
-        
+
         Args:
             updates: dict of config key → value pairs (e.g. {"max_iterations": 100})
-        
+
         Returns:
             dict: {ok: bool, updated: list, errors: list}
         """
@@ -1073,10 +1074,7 @@ class APIServer:
                 continue
             try:
                 expected_type = type_map.get(key, str)
-                if expected_type == bool:
-                    value = bool(value)
-                else:
-                    value = expected_type(value)
+                value = bool(value) if expected_type == bool else expected_type(value)
                 setattr(cfg, key, value)
                 updated.append(key)
                 logger.info(f"Config updated: {key} = {value}")
@@ -1086,7 +1084,7 @@ class APIServer:
 
 
 
-_server_instance: Optional[APIServer] = None
+_server_instance: APIServer | None = None
 
 def get_server() -> APIServer:
     global _server_instance
@@ -1095,32 +1093,54 @@ def get_server() -> APIServer:
     return _server_instance
 
 
-def create_app(api_key: Optional[str] = None,
-               config_path: Optional[str] = None):
+def create_app(api_key: str | None = None,
+               config_path: str | None = None):
     """Create the Starlette application for the unified server."""
     # Import route handlers here to avoid circular imports
     from .route_handlers import (
-        handle_health,
-        handle_chat_completions, handle_list_models,
-        handle_list_tools, handle_run_tool,
-        handle_list_sessions, handle_create_session,
-        handle_get_session, handle_delete_session,
+        handle_chat_abort,
+        handle_chat_completions,
+        handle_chat_continue,
+        handle_create_memory,
+        handle_create_session,
+        handle_create_task,
+        handle_delete_memory,
+        handle_delete_session,
+        handle_delete_task,
+        handle_docs,
+        handle_export_pdf,
+        handle_get_config,
+        handle_get_session,
         handle_get_session_messages,
-        handle_get_config, handle_switch_config,
-        handle_docs, handle_openapi,
-        handle_list_memory, handle_create_memory, handle_delete_memory,
-        handle_list_tasks, handle_create_task, handle_delete_task,
+        handle_health,
+        handle_list_memory,
+        handle_list_models,
+        handle_list_sessions,
+        handle_list_tasks,
+        handle_list_tools,
+        handle_openapi,
+        handle_run_tool,
+        handle_screenshot_full,
+        handle_screenshot_interactive,
+        handle_screenshot_region,
         handle_search,
-        handle_export_pdf, handle_upload,
-        handle_screenshot_region, handle_screenshot_full, handle_screenshot_interactive,
-        handle_web_chat, handle_chat_continue, handle_chat_abort,
-        handle_web_new_topic, handle_web_sessions,
-        handle_web_topic_info, handle_web_topic_conversations,
-        handle_web_tools, handle_web_config, handle_web_update_config,
-        handle_web_list_configs, handle_web_create_config,
-        handle_web_model_info, handle_web_model_switch,
-        handle_web_model_config, handle_web_upload_config,
+        handle_switch_config,
+        handle_upload,
+        handle_web_chat,
+        handle_web_config,
+        handle_web_create_config,
+        handle_web_list_configs,
+        handle_web_model_config,
+        handle_web_model_info,
+        handle_web_model_switch,
+        handle_web_new_topic,
         handle_web_root,
+        handle_web_sessions,
+        handle_web_tools,
+        handle_web_topic_conversations,
+        handle_web_topic_info,
+        handle_web_update_config,
+        handle_web_upload_config,
     )
 
     global _server_instance
@@ -1186,9 +1206,9 @@ def create_app(api_key: Optional[str] = None,
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8080,
-               api_key: Optional[str] = None,
-               config_path: Optional[str] = None):
-    """Run the API server with minimal terminal output."""
+               api_key: str | None = None,
+               config_path: str | None = None):
+    """Run the API server."""
     try:
         import uvicorn
     except ImportError:
@@ -1203,11 +1223,10 @@ def run_server(host: str = "127.0.0.1", port: int = 8080,
     app = create_app(api_key=api_key, config_path=config_path)
     print(f"\n  Tea Agent Server v{__version__}")
     if api_key:
-        print(f"  API Key auth: enabled")
-    print(f"  Listening on http://{host}:{port}")
-    print(f"  API Docs:     http://{host}:{port}/docs")
-    print(f"  Press Ctrl+C to stop\n")
-    uvicorn.run(app, host=host, port=port, log_level="warning", access_log=False)
+        logger.info("API Key auth enabled")
+    logger.info(f"API Server starting: http://{host}:{port}")
+    logger.info(f"API Docs: http://{host}:{port}/docs")
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 # ── CLI Entry ──

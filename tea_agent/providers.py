@@ -4,7 +4,7 @@
 所有 Provider 均为 OpenAI API 兼容格式。
 """
 
-from typing import Optional
+
 from tea_agent.config import load_config, save_config
 
 # ── Provider 定义 ──
@@ -169,7 +169,7 @@ def list_providers() -> list[dict]:
     return result
 
 
-def get_provider(name: str) -> Optional[dict]:
+def get_provider(name: str) -> dict | None:
     """根据名称查找 Provider（不区分大小写）。"""
     name_lower = name.lower()
     for pname, info in PROVIDERS.items():
@@ -193,7 +193,7 @@ def generate_config(provider_name: str, api_key: str,
         f"  api_url: {provider['api_url']}",
         f'  model_name: "{model}"',
         '  temperature: 0.65',
-        f'  max_tokens: 131072',
+        '  max_tokens: 131072',
         '  options:',
         f'    supports_vision: {"true" if provider.get("supports_vision") else "false"}',
         f'    supports_reasoning: {"true" if provider.get("supports_thinking") else "false"}',

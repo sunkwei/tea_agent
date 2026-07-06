@@ -4,9 +4,9 @@
 def toolkit_scheduler_storage(action: str, **kwargs):
     """调度器存储管理 — 脚本与任务的统一管理。"""
     from tea_agent.scheduler_storage import SchedulerStorage, save_evolve_script
-    
+
     storage = SchedulerStorage()
-    
+
     if action == "save_script":
         script_id = kwargs.get("script_id")
         name = kwargs.get("name")
@@ -15,32 +15,32 @@ def toolkit_scheduler_storage(action: str, **kwargs):
         if not all([script_id, name, content]):
             return {"error": "需要 script_id, name, content"}
         return storage.save_script(script_id, name, content, description)
-    
+
     elif action == "get_script":
         script_id = kwargs.get("script_id")
         if not script_id:
             return {"error": "需要 script_id"}
         return storage.get_script(script_id)
-    
+
     elif action == "list_scripts":
         return {"scripts": storage.list_scripts()}
-    
+
     elif action == "delete_script":
         script_id = kwargs.get("script_id")
         if not script_id:
             return {"error": "需要 script_id"}
         return {"deleted": storage.delete_script(script_id)}
-    
+
     elif action == "save_evolve_script":
         return save_evolve_script()
-    
+
     elif action == "prepare_script":
         script_id = kwargs.get("script_id")
         if not script_id:
             return {"error": "需要 script_id"}
         path = storage.prepare_script_for_execution(script_id)
         return {"path": path}
-    
+
     else:
         return {"error": f"未知操作: {action}"}
 

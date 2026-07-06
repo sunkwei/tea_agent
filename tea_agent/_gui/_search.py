@@ -2,10 +2,9 @@
 @2026-07-07 gen by tea_agent, 对话搜索对话框
 跨主题全文搜索对话历史，支持关键词搜索、结果预览、点击跳转
 """
+import logging
 import tkinter as tk
 from tkinter import ttk
-import logging
-from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +14,7 @@ class SearchDialog(tk.Toplevel):
 
     def __init__(self, parent, db, on_switch_topic=None):
         """Initialize SearchDialog.
-        
+
         Args:
             parent: 父窗口
             db: Storage 实例
@@ -24,7 +23,7 @@ class SearchDialog(tk.Toplevel):
         super().__init__(parent)
         self.db = db
         self.on_switch_topic = on_switch_topic or (lambda tid: None)
-        self._results: List[Dict] = []
+        self._results: list[dict] = []
 
         self.title("🔍 搜索对话历史")
         self.geometry("650x500")

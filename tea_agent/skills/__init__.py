@@ -7,22 +7,22 @@ Skill 树系统 — 自动结晶任务经验为可复用技能。
 
 用法:
     from tea_agent.skills import SkillRegistry, SkillCrystallizer
-    
+
     # 结晶新技能
     crystallizer = SkillCrystallizer()
-    skill = crystallizer.crystallize(task="重构 gui.py 添加类型注解", 
+    skill = crystallizer.crystallize(task="重构 gui.py 添加类型注解",
                                      tools_used=["toolkit_file", "toolkit_edit", "toolkit_lsp"],
                                      result="成功添加了 45 个函数的类型注解")
-    
+
     # 注册到技能库
     registry = SkillRegistry()
     registry.register(skill)
-    
+
     # 推荐相关技能
     skills = registry.recommend("帮我给 cli.py 添加类型提示")
 """
 
-from .skill_registry import SkillRegistry
 from .skill_crystallize import SkillCrystallizer
+from .skill_registry import SkillRegistry
 
 __all__ = ["SkillRegistry", "SkillCrystallizer"]

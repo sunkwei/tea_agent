@@ -22,21 +22,22 @@ Keybindings:
 """
 
 import argparse
-import sys
 import os
+import sys
 import threading
-from typing import Optional, List, Dict
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from textual.app import App, ComposeResult
-from textual.widgets import Label, RichLog, TextArea
-from textual.containers import Container, ScrollableContainer
-from textual.binding import Binding
-from textual.css.query import NoMatches
+import contextlib
+
 from rich.errors import MarkupError
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Container, ScrollableContainer
+from textual.css.query import NoMatches
+from textual.widgets import Label, RichLog, TextArea
 
 from tea_agent import Agent
 
@@ -258,13 +259,13 @@ class TeaTUI(App):
         self._no_stream_chunk = no_stream_chunk
         self._generating = False
         self._agent_ready = threading.Event()
-        self.agent: Optional[_TUIAgentCore] = None
+        self.agent: _TUIAgentCore | None = None
         self._stream_buffer = ""
         self._think_buffer = ""       # separate buffer for think blocks
         self._stream_timer = None
         self._welcome_shown = False
         # 历史消息导航
-        self._history_msgs: List[Dict] = []  # 当前主题的所有历史对话
+        self._history_msgs: list[dict] = []  # 当前主题的所有历史对话
         self._history_index: int = -1        # -1 = 不在导航状态, 0..n-1 = 当前查看的索引
 
     class _SendTextArea(TextArea):
@@ -309,10 +310,8 @@ class TeaTUI(App):
         self._update_status("Initializing Tea Agent...")
         threading.Thread(target=self._init_agent, daemon=True).start()
         self.set_interval(0.5, self._check_agent_ready)
-        try:
+        with contextlib.suppress(NoMatches):
             self.query_one("#input-area", TextArea).focus()
-        except NoMatches:
-            pass
 
     def _init_agent(self):
         """初始化 Agent 实例。"""
@@ -355,28 +354,22 @@ class TeaTUI(App):
 
     def _show_error(self, msg: str):
         """在聊天区显示错误信息。"""
-        try:
+        with contextlib.suppress(NoMatches):
             self._chat_write(f"[bold red]ERROR: {msg}[/]")
-        except NoMatches:
-            pass
         self._update_status(f"ERROR: {msg}")
 
     def _update_status(self, msg: str):
         """更新底部状态栏左侧信息。"""
-        try:
+        with contextlib.suppress(NoMatches):
             self.query_one("#status-left", Label).update(msg[:80])
-        except NoMatches:
-            pass
 
     def _update_status_right(self):
         """更新底部状态栏右侧信息（think/verbose 状态）。"""
-        try:
+        with contextlib.suppress(NoMatches):
             self.query_one("#status-right", Label).update(
                 f"Think:{'ON' if self._cli_think else 'OFF'} "
                 f"Verbose:{'ON' if self._cli_verbose else 'OFF'}"
             )
-        except NoMatches:
-            pass
 
     def _start_stream_timer(self):
         """启动流式输出定时器，每 500ms 刷新缓冲区到界面。"""
@@ -452,10 +445,8 @@ class TeaTUI(App):
 
     def _append_chat(self, text: str):
         """向聊天区追加文本（带 Markdown 渲染）。"""
-        try:
+        with contextlib.suppress(NoMatches):
             self._chat_write(text)
-        except NoMatches:
-            pass
 
     def _chat_write(self, text: str) -> None:
         chat = self.query_one("#chat-area", RichLog)
@@ -477,19 +468,15 @@ class TeaTUI(App):
     def _flush_think_buffer(self):
         """Flush think buffer as a single [italic]...[/italic] unit."""
         if self._think_buffer:
-            try:
+            with contextlib.suppress(NoMatches):
                 self._chat_write(f"[italic]# {self._think_buffer}[/italic]")
-            except NoMatches:
-                pass
             self._think_buffer = ""
 
     def _flush_stream_buffer(self):
         """将流式缓冲区内容刷新到聊天区。"""
         if self._stream_buffer:
-            try:
+            with contextlib.suppress(NoMatches):
                 self._chat_write(self._stream_buffer)
-            except NoMatches:
-                pass
             self._stream_buffer = ""
 
     def _handle_command(self, cmd: str):
@@ -630,7 +617,7 @@ class TeaTUI(App):
         self._chat_write(f"\n[bold cyan]--- History ({total - idx}/{total}) ---[/]")
         self._chat_write(f"[bold green]You:[/] {msg['user'][:500]}")
         self._chat_write(f"[bold blue]AI:[/] {msg['ai'][:1000]}")
-        self._chat_write(f"[bold cyan]--- End ---[/]")
+        self._chat_write("[bold cyan]--- End ---[/]")
         self._update_status(f"History: {total - idx}/{total}")
 
     def _navigate_history_up(self):

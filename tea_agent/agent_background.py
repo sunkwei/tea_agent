@@ -7,18 +7,18 @@ Agent 后台服务模块
 - 定时任务调度器
 """
 
-import os
 import logging
+import os
 
 logger = logging.getLogger("agent.background")
 
 
 def start_self_evolve_thread(toolkit_root_dir: str) -> bool:
     """启动自进化引擎 daemon 线程。
-    
+
     Args:
         toolkit_root_dir: toolkit 根目录路径
-        
+
     Returns:
         是否成功启动
     """
@@ -41,7 +41,7 @@ def start_self_evolve_thread(toolkit_root_dir: str) -> bool:
 
 def start_scheduler() -> bool:
     """启动定时任务调度器 daemon 线程。
-    
+
     Returns:
         是否成功启动
     """

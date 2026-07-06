@@ -2,7 +2,7 @@
 """
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+
 from ._component import StoreComponent
 
 logger = logging.getLogger("Storage.ScheduledTasks")
@@ -16,7 +16,7 @@ class ScheduledTaskStore(StoreComponent):
     # ── 调度格式解析 ──
 
     @staticmethod
-    def parse_schedule(schedule: str, from_time: datetime = None) -> Optional[datetime]:
+    def parse_schedule(schedule: str, from_time: datetime = None) -> datetime | None:
         """解析 schedule 字符串，返回下次执行时间；None 表示单次已过期或无匹配。
 
         支持格式:
@@ -140,14 +140,14 @@ class ScheduledTaskStore(StoreComponent):
         self.conn.commit()
         return c.rowcount > 0
 
-    def get_task(self, task_id: str) -> Optional[Dict]:
+    def get_task(self, task_id: str) -> dict | None:
         """获取单个任务。"""
         c = self.conn.cursor()
         c.execute("SELECT * FROM scheduled_tasks WHERE id=?", (task_id,))
         row = c.fetchone()
         return dict(row) if row else None
 
-    def list_tasks(self, enabled_only: bool = False) -> List[Dict]:
+    def list_tasks(self, enabled_only: bool = False) -> list[dict]:
         """列出所有任务。"""
         c = self.conn.cursor()
         if enabled_only:
@@ -156,7 +156,7 @@ class ScheduledTaskStore(StoreComponent):
             c.execute("SELECT * FROM scheduled_tasks ORDER BY enabled DESC, next_run ASC")
         return [dict(row) for row in c.fetchall()]
 
-    def get_due_tasks(self) -> List[Dict]:
+    def get_due_tasks(self) -> list[dict]:
         """获取所有到期需要执行的任务 (enabled=1 AND next_run <= now)。"""
         now = datetime.now().isoformat()
         c = self.conn.cursor()
@@ -166,7 +166,7 @@ class ScheduledTaskStore(StoreComponent):
         )
         return [dict(row) for row in c.fetchall()]
 
-    def mark_run(self, task_id: str, exit_code: int, result: str, next_run: Optional[str] = None):
+    def mark_run(self, task_id: str, exit_code: int, result: str, next_run: str | None = None):
         """标记任务执行完成，更新 last_run/result/exit_code/next_run."""
         c = self.conn.cursor()
         c.execute(
@@ -178,7 +178,7 @@ class ScheduledTaskStore(StoreComponent):
         )
         self.conn.commit()
 
-def _parse_cron(expr: str, now: datetime) -> Optional[datetime]:
+def _parse_cron(expr: str, now: datetime) -> datetime | None:
     """简易 5 字段 cron 解析，返回下次匹配时间 (精度到分钟)。"""
     try:
         parts = expr.strip().split()

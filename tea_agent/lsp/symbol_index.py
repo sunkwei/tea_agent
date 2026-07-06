@@ -3,13 +3,13 @@
 基于 ts_analyzer 的 AST 解析 + SQLite 持久化 + 嵌入向量搜索。
 """
 
-import os
-import json
-import sqlite3
-import logging
+import contextlib
 import hashlib
+import json
+import logging
+import os
+import sqlite3
 from pathlib import Path
-from typing import Dict, List, Optional
 
 logger = logging.getLogger("SymbolIndex")
 
@@ -17,7 +17,7 @@ logger = logging.getLogger("SymbolIndex")
 class SymbolIndex:
     """持久化符号索引 — 全量扫描、增量更新、语义搜索。"""
 
-    def __init__(self, project_root: str, db_path: Optional[str] = None):
+    def __init__(self, project_root: str, db_path: str | None = None):
         self.project_root = Path(project_root).resolve()
         self.db_path = db_path or str(self.project_root / ".tea_agent_run" / "symbol_index.db")
         self._conn = sqlite3.connect(self.db_path)
@@ -84,7 +84,7 @@ class SymbolIndex:
 
     # ── 索引构建 ──
 
-    def build_index(self, force: bool = False) -> Dict:
+    def build_index(self, force: bool = False) -> dict:
         from tea_agent.lsp.ts_analyzer import parse_file
         py_files = list(self.project_root.rglob("*.py"))
         scanned = indexed = skipped = errors = 0
@@ -186,7 +186,7 @@ class SymbolIndex:
 
     # ── 查询 ──
 
-    def search_by_name(self, query: str, limit: int = 20) -> List[Dict]:
+    def search_by_name(self, query: str, limit: int = 20) -> list[dict]:
         c = self._conn.cursor()
         c.execute("SELECT * FROM symbols WHERE name LIKE ? ORDER BY kind, name LIMIT ?",
                   (f"%{query}%", limit))
@@ -194,7 +194,7 @@ class SymbolIndex:
         c.close()
         return rows
 
-    def search_by_file(self, file_path: str) -> List[Dict]:
+    def search_by_file(self, file_path: str) -> list[dict]:
         c = self._conn.cursor()
         rel = file_path.replace("\\", "/")
         c.execute("SELECT * FROM symbols WHERE file_path = ? ORDER BY line", (rel,))
@@ -202,7 +202,7 @@ class SymbolIndex:
         c.close()
         return rows
 
-    def get_callers(self, symbol_name: str, limit: int = 50) -> List[Dict]:
+    def get_callers(self, symbol_name: str, limit: int = 50) -> list[dict]:
         c = self._conn.cursor()
         c.execute("SELECT * FROM calls WHERE callee_name = ? ORDER BY caller_file, caller_line LIMIT ?",
                   (symbol_name, limit))
@@ -210,7 +210,7 @@ class SymbolIndex:
         c.close()
         return rows
 
-    def get_callees(self, name: str, file_path: str = "") -> List[Dict]:
+    def get_callees(self, name: str, file_path: str = "") -> list[dict]:
         c = self._conn.cursor()
         if file_path:
             c.execute("SELECT * FROM calls WHERE caller_name = ? AND caller_file = ? ORDER BY callee_name",
@@ -221,7 +221,7 @@ class SymbolIndex:
         c.close()
         return rows
 
-    def search_natural(self, query: str, top_k: int = 10) -> List[Dict]:
+    def search_natural(self, query: str, top_k: int = 10) -> list[dict]:
         engine = self._get_embedding_engine()
         if engine is None:
             return self.search_by_name(query, limit=top_k)
@@ -324,7 +324,7 @@ class SymbolIndex:
         c.close()
         return count
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         c = self._conn.cursor()
         c.execute("SELECT kind, COUNT(*) as cnt FROM symbols GROUP BY kind")
         by_kind = {r["kind"]: r["cnt"] for r in c.fetchall()}
@@ -339,7 +339,5 @@ class SymbolIndex:
                 "call_edges": calls, "vectors": vectors, "tracked_files": files}
 
     def close(self):
-        try:
+        with contextlib.suppress(Exception):
             self._conn.close()
-        except Exception:
-            pass

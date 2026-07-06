@@ -6,7 +6,9 @@ logger = logging.getLogger("toolkit")
 """toolkit_reflection — 允许 Agent 主动触发自我反思"""
 
 import json
+
 from tea_agent.session_ref import get_session
+
 
 def toolkit_reflection(action: str = "trigger", limit: int = 5) -> str:
     """

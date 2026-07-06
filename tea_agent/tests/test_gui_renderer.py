@@ -21,7 +21,7 @@ class TestPollLoadingProgress:
     def test_pending_error_none_should_not_trigger_error(self):
         """_pending_error=None 时不应触发 _render_topic_error"""
         gui = self._make_gui_mock()
-        
+
         # 模拟正确的判断逻辑: getattr(...) is not None
         error_val = getattr(gui, '_pending_error', None)
         assert error_val is None, "None 值不应被当作错误"
@@ -30,7 +30,7 @@ class TestPollLoadingProgress:
         """_pending_error='some error' 时应触发 _render_topic_error"""
         gui = self._make_gui_mock()
         gui._pending_error = "some error"
-        
+
         error_val = getattr(gui, '_pending_error', None)
         assert error_val is not None, "非 None 值应被当作错误"
         assert error_val == "some error"
@@ -39,7 +39,7 @@ class TestPollLoadingProgress:
         """_pending_error='' 空字符串也应触发（用户可能需要看到空错误）"""
         gui = self._make_gui_mock()
         gui._pending_error = ""
-        
+
         # 空字符串不是 None，应该触发
         error_val = getattr(gui, '_pending_error', None)
         # 注意：空字符串 is not None = True，但可能是无意义的
@@ -51,7 +51,7 @@ class TestPollLoadingProgress:
         gui = self._make_gui_mock()
         gui._pending_error = "error"
         gui._pending_render = [("user", "hello")]
-        
+
         # 错误优先
         has_error = getattr(gui, '_pending_error', None) is not None
         assert has_error
@@ -61,7 +61,7 @@ class TestPollLoadingProgress:
         """当 _pending_error=None 且 _pending_render 存在时，应渲染"""
         gui = self._make_gui_mock()
         gui._pending_render = [("user", "hello")]
-        
+
         has_error = getattr(gui, '_pending_error', None) is not None
         has_render = hasattr(gui, '_pending_render')
         assert not has_error
@@ -75,14 +75,14 @@ class TestHasattrVsGetattrPattern:
         """hasattr 对 None 值返回 True — 这是 bug 的根因"""
         class Obj:
             attr = None
-        
+
         assert hasattr(Obj, 'attr') is True  # 属性存在
         assert Obj.attr is None  # 但值是 None
     def test_getattr_none_check_correct(self):
         """getattr + is not None 是正确的检查方式"""
         class Obj:
             attr = None
-        
+
         assert getattr(Obj, 'attr', None) is None  # 正确识别 None
         assert (getattr(Obj, 'attr', None) is not None) is False
 
@@ -91,6 +91,6 @@ class TestHasattrVsGetattrPattern:
         class Obj:
             """Obj 测试辅助类。"""
             pass
-        
+
         assert getattr(Obj, 'attr', None) is None
         assert getattr(Obj, 'attr', 'default') == 'default'

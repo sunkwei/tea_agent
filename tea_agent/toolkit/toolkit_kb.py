@@ -10,7 +10,7 @@ logger = logging.getLogger("toolkit")
 
 def toolkit_kb(action, title="", content="", tags="", category="", query="", brief="", sort="time"):
     """Toolkit kb.
-    
+
     Args:
         action: Description.
         title: Description.
@@ -23,9 +23,11 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
     """
     logger.info(f"toolkit_kb called: action={action!r}, title={repr(title)[:80]}, content={repr(content)[:80]}, tags={tags!r}, category={category!r}, query={repr(query)[:80]}, brief={repr(brief)[:80]}, sort={sort!r}")
 
-    import os, re, subprocess
-    from pathlib import Path
+    import os
+    import re
+    import subprocess
     from datetime import datetime
+    from pathlib import Path
 
     try:
         from tea_agent.config import get_config
@@ -37,7 +39,7 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
 
     def sanitize(name):
         """Sanitize.
-        
+
         Args:
             name: Description.
         """
@@ -47,7 +49,7 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
 
     def _meta(text, key):
         """Internal: meta.
-        
+
         Args:
             text: Description.
             key: Description.

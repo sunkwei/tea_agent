@@ -16,8 +16,8 @@
 import ast
 import json
 import os
-import subprocess
 import shutil
+import subprocess
 import time
 from collections import defaultdict
 
@@ -32,7 +32,7 @@ _PYTHON_BUILTINS = frozenset({
     'round', 'set', 'setattr', 'slice', 'sorted', 'staticmethod', 'str', 'sum',
     'super', 'tuple', 'type', 'vars', 'zip', '__import__',
     # 常见方法名（ast.Attribute 产生的 .append .strip .join 等）
-    'append', 'strip', 'join', 'split', 'replace', 'format', 'startswith',
+    'append', 'strip', 'join', 'split', 'replace', 'startswith',
     'endswith', 'get', 'items', 'keys', 'values', 'update', 'pop', 'clear',
     'copy', 'read', 'write', 'close', 'seek', 'find', 'index', 'count',
     'remove', 'insert', 'sort', 'reverse', 'extend', 'upper', 'lower',
@@ -47,13 +47,14 @@ _PYTHON_BUILTINS = frozenset({
 })
 
 import logging
+
 logger = logging.getLogger("toolkit")
 
 _RUN_DIR = ".tea_agent_run"
 
 def _log(msg):
     """Internal: log.
-    
+
     Args:
         msg: Description.
     """
@@ -70,7 +71,7 @@ def _build_ctags(directory, run_dir):
     for entry in sorted(os.listdir(directory)):
         epath = os.path.join(directory, entry)
         if os.path.isdir(epath) and not entry.startswith('.') and entry not in ('build', '__pycache__', 'tmp', 'dist'):
-            for root, dirs, files in os.walk(epath):
+            for _root, _dirs, files in os.walk(epath):
                 if any(f.endswith('.py') for f in files):
                     src_dirs.append(epath)
                     break
@@ -133,7 +134,7 @@ def _build_call_graph(directory):
             fpath = os.path.join(root, fname)
             relpath = os.path.relpath(fpath, directory)
             try:
-                with open(fpath, 'r', encoding='utf-8') as fh:
+                with open(fpath, encoding='utf-8') as fh:
                     source = fh.read()
                 tree = ast.parse(source, filename=relpath)
             except (SyntaxError, UnicodeDecodeError) as e:
@@ -144,7 +145,7 @@ def _build_call_graph(directory):
                 """CallVisitor class."""
                 def visit_FunctionDef(self, node):
                     """Visit FunctionDef.
-                    
+
                     Args:
                         node: Description.
                     """
@@ -162,7 +163,7 @@ def _build_call_graph(directory):
 
                 def visit_AsyncFunctionDef(self, node):
                     """Visit AsyncFunctionDef.
-                    
+
                     Args:
                         node: Description.
                     """
@@ -170,7 +171,7 @@ def _build_call_graph(directory):
 
                 def visit_ClassDef(self, node):
                     """Visit ClassDef.
-                    
+
                     Args:
                         node: Description.
                     """
@@ -235,7 +236,7 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
             fpath = os.path.join(root, fname)
             relpath = os.path.relpath(fpath, directory)
             try:
-                with open(fpath, 'r', encoding='utf-8') as fh:
+                with open(fpath, encoding='utf-8') as fh:
                     lines = fh.readlines()
             except Exception:
                 continue
@@ -287,7 +288,7 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
         fn_str = ', '.join(info['funcs'][:3]) or '—'
         md += f"| {path} | {info['lines']} | {cls_str} | {fn_str} |\n"
 
-    md += f"""
+    md += """
 ## Top 20 被调用函数
 
 | 函数 | 文件:行号 | 调用者数 |
@@ -303,7 +304,7 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
         ln = loc.get('line', '?')
         md += f"| `{name}` | {fp}:{ln} | {len(clrs)} |\n"
 
-    md += f"""
+    md += """
 ## 生成文件
 
 | 文件 | 说明 |
@@ -322,7 +323,7 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
 
 def _check_index_stale(directory, run_dir):
     """检查索引是否比源码文件旧。
-    
+
     对比索引文件 mtime 与最近改动的 Python 源文件 mtime。
     如果任何源文件比索引新，返回 True（索引过期）。
     """
@@ -342,7 +343,7 @@ def _check_index_stale(directory, run_dir):
 
 def _action_build(directory, force):
     """Internal: action build.
-    
+
     Args:
         directory: Description.
         force: Description.
@@ -416,7 +417,7 @@ def _action_build(directory, force):
 
 def _action_query(directory, symbol, query_type):
     """Internal: action query.
-    
+
     Args:
         directory: Description.
         symbol: Description.
@@ -431,7 +432,7 @@ def _action_query(directory, symbol, query_type):
     if query_type == 'module':
         kb_path = os.path.join(run_dir, "kb.md")
         if os.path.exists(kb_path):
-            with open(kb_path, 'r', encoding='utf-8') as f:
+            with open(kb_path, encoding='utf-8') as f:
                 content = f.read()
             in_table = False
             lines = []
@@ -452,7 +453,7 @@ def _action_query(directory, symbol, query_type):
     if query_type == 'symbol':
         if not os.path.exists(idx_path):
             return "❌ 无索引，请先 build"
-        with open(idx_path, 'r', encoding='utf-8') as f:
+        with open(idx_path, encoding='utf-8') as f:
             index = json.load(f)
 
         if symbol in index:
@@ -471,7 +472,7 @@ def _action_query(directory, symbol, query_type):
 
     if not os.path.exists(cg_path):
         return "❌ 无调用图，请先 build"
-    with open(cg_path, 'r', encoding='utf-8') as f:
+    with open(cg_path, encoding='utf-8') as f:
         cg = json.load(f)
 
     calls = cg.get('calls', {})
@@ -556,14 +557,14 @@ def _action_generate_docs(directory):
         _action_build(directory, force=True)
 
     # 加载数据
-    with open(cg_path, 'r', encoding='utf-8') as f:
+    with open(cg_path, encoding='utf-8') as f:
         cg = json.load(f)
     calls = cg.get('calls', {})
     defs = cg.get('functions', {})
     classes = cg.get('classes', {})
 
     if os.path.exists(idx_path):
-        with open(idx_path, 'r', encoding='utf-8') as f:
+        with open(idx_path, encoding='utf-8') as f:
             index = json.load(f)
     else:
         index = {}
@@ -662,7 +663,7 @@ def _action_generate_docs(directory):
             fpath = os.path.join(root, fname)
             relpath = os.path.relpath(fpath, directory).replace('\\', '/')
             try:
-                with open(fpath, 'r', encoding='utf-8') as fh:
+                with open(fpath, encoding='utf-8') as fh:
                     src = fh.readlines()
             except Exception:
                 continue
@@ -734,10 +735,10 @@ def _action_generate_docs(directory):
         "",
         f"> 自动生成: {now}",
         "",
-        f"## 项目规模",
+        "## 项目规模",
         "",
-        f"| 指标 | 数值 |",
-        f"|------|:----:|",
+        "| 指标 | 数值 |",
+        "|------|:----:|",
         f"| Python 模块 | {len(mod_stats)} |",
         f"| 函数定义 | {len(defs)} |",
         f"| 类定义 | {len(classes)} |",
@@ -786,7 +787,7 @@ def _action_generate_docs(directory):
 
 def _action_status(directory):
     """Internal: action status.
-    
+
     Args:
         directory: Description.
     """
@@ -808,11 +809,11 @@ def _action_status(directory):
     idx_path = os.path.join(run_dir, "symbol_index.json")
     cg_path = os.path.join(run_dir, "call_graph.json")
     if os.path.exists(idx_path):
-        with open(idx_path, 'r', encoding='utf-8') as f:
+        with open(idx_path, encoding='utf-8') as f:
             index = json.load(f)
         lines.append(f"\n🏷 {len(index)} 符号")
     if os.path.exists(cg_path):
-        with open(cg_path, 'r', encoding='utf-8') as f:
+        with open(cg_path, encoding='utf-8') as f:
             cg = json.load(f)
         lines.append(f"🔗 {len(cg.get('calls', {}))} 函数有调用关系, {sum(len(v) for v in cg.get('calls', {}).values())} 调用边")
 
@@ -824,25 +825,25 @@ def _extract_arch_context(directory, symbol=None):
     directory = os.path.abspath(directory)
     run_dir = os.path.join(directory, _RUN_DIR)
     cg_path = os.path.join(run_dir, "call_graph.json")
-    
+
     if not os.path.exists(cg_path):
         return "❌ 无调用图索引，请先 build"
-        
-    with open(cg_path, 'r', encoding='utf-8') as f:
+
+    with open(cg_path, encoding='utf-8') as f:
         cg = json.load(f)
-        
+
     calls = cg.get('calls', {})
     defs = cg.get('functions', {})
     classes = cg.get('classes', {})
-    
+
     # 1. 项目级上下文
     if not symbol:
         lines = ["## 项目架构概览"]
         lines.append(f"- **函数定义**: {len(defs)} | **类定义**: {len(classes)} | **调用边**: {sum(len(v) for v in calls.values())}")
-        
+
         entry_points = [c for c in calls if len(calls[c]) > 3 and c not in {callee for callees in calls.values() for callee in callees}]
         if entry_points:
-            lines.append(f"\n### 🚪 疑似入口函数 (调用多且少被调用)")
+            lines.append("\n### 🚪 疑似入口函数 (调用多且少被调用)")
             for ep in sorted(entry_points)[:5]:
                 lines.append(f"- `{ep}`")
         return "\n".join(lines)
@@ -851,20 +852,20 @@ def _extract_arch_context(directory, symbol=None):
     info = defs.get(symbol, classes.get(symbol))
     if not info:
         return f"❌ 未找到符号 `{symbol}` 的架构信息"
-        
+
     lines = [f"## 🏛️ 架构上下文: `{symbol}`"]
     lines.append(f"- **类型**: {'📦 Class' if symbol in classes else '⚡ Function'}")
     lines.append(f"- **位置**: `{info['file']}:{info['line']}`")
-    
+
     if symbol in calls:
         callees = [c for c in calls[symbol] if c not in _PYTHON_BUILTINS]
         if callees:
             lines.append(f"- **👇 依赖内部组件 ({len(callees)})**: `{', '.join(callees[:8])}`")
-    
+
     callers = [c for c, callees in calls.items() if symbol in callees]
     if callers:
         lines.append(f"- **👆 被外部调用 ({len(callers)})**: `{', '.join(sorted(callers)[:8])}`")
-        
+
     return "\n".join(lines)
 
 # @2026-05-19 gen by claude, 影响分析 — 基于 tree-sitter 的仓库级上下文
@@ -878,7 +879,7 @@ def _action_impact(directory, symbol, filepath=None):
         run_dir = os.path.join(directory, _RUN_DIR)
         idx_path = os.path.join(run_dir, "symbol_index.json")
         if os.path.exists(idx_path):
-            with open(idx_path, 'r', encoding='utf-8') as f:
+            with open(idx_path, encoding='utf-8') as f:
                 index = json.load(f)
             if symbol in index:
                 entries = index[symbol]
@@ -901,7 +902,7 @@ def _action_impact(directory, symbol, filepath=None):
     lines.append(f"- **定义位置**: `{result['definition']['file']}:{result['definition']['line']}`")
     lines.append(f"- **类型**: `{result['definition']['type']}`")
     lines.append(f"- **风险等级**: **{result['risk_level'].upper()}**")
-    lines.append(f"")
+    lines.append("")
 
     # 同文件其他符号
     same_file = result.get("same_file_symbols", [])
@@ -909,7 +910,7 @@ def _action_impact(directory, symbol, filepath=None):
         lines.append(f"### 📄 同文件其他符号 ({len(same_file)})")
         for s in same_file[:8]:
             lines.append(f"- `{s['name']}` ({s['kind']}:{s['line']})")
-        lines.append(f"")
+        lines.append("")
 
     # 直接调用者
     callers = result.get("direct_callers", [])
@@ -918,7 +919,7 @@ def _action_impact(directory, symbol, filepath=None):
         for c in callers[:15]:
             fname = os.path.relpath(c['file'], directory) if c.get('file') else '?'
             lines.append(f"- `{c.get('name', '?')}` → `{fname}:{c.get('line', '?')}`")
-        lines.append(f"")
+        lines.append("")
 
     # 间接调用者
     indirect = result.get("indirect_callers", [])
@@ -927,14 +928,14 @@ def _action_impact(directory, symbol, filepath=None):
         for c in indirect[:10]:
             fname = os.path.relpath(c['file'], directory) if c.get('file') else '?'
             lines.append(f"- `{c.get('name', '?')}` → `{fname}:{c.get('line', '?')}`")
-        lines.append(f"")
+        lines.append("")
 
     # 它调用了谁
     callees = result.get("callees", [])
     if callees:
         lines.append(f"### 👇 它依赖 ({len(callees)})")
         lines.append(f"`{', '.join(callees[:12])}`")
-        lines.append(f"")
+        lines.append("")
 
     lines.append(f"---\n> {result.get('hint', '')}")
     return '\n'.join(lines)
@@ -947,44 +948,44 @@ def _action_deps(directory):
     result = build_dependency_graph(directory)
 
     if not result.get("ok"):
-        return f"❌ 依赖分析失败"
+        return "❌ 依赖分析失败"
 
-    lines = [f"## 📊 模块依赖图"]
+    lines = ["## 📊 模块依赖图"]
     lines.append(f"- **模块数**: {len(result['modules'])}")
-    lines.append(f"")
+    lines.append("")
 
     circular = result.get("circular", [])
     if circular:
         lines.append(f"### ⚠️ 循环依赖 ({len(circular)})")
         for cycle in circular[:5]:
             lines.append(f"- {' → '.join(cycle)}")
-        lines.append(f"")
+        lines.append("")
 
     orphans = result.get("orphans", [])
     if orphans:
         lines.append(f"### 🏝️ 孤立模块 ({len(orphans)})")
         for o in orphans[:10]:
             lines.append(f"- `{o}`")
-        lines.append(f"")
+        lines.append("")
 
     # Top importers
     top = sorted(result["modules"].items(),
                  key=lambda x: len(x[1].get("imported_by", [])),
                  reverse=True)[:10]
     if top:
-        lines.append(f"### 📌 最被依赖的模块 (Top 10)")
+        lines.append("### 📌 最被依赖的模块 (Top 10)")
         for mod, info in top:
             importers = info.get("imported_by", [])
             if importers:
                 lines.append(f"- `{mod}` ← {len(importers)} 处引用: `{', '.join(importers[:3])}`")
-        lines.append(f"")
+        lines.append("")
 
     lines.append(f"---\n> {result.get('hint', '')}")
     return '\n'.join(lines)
 
 def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol", force="false", filepath=None):
     """Toolkit explr.
-    
+
     Args:
         action: Description.
         directory: Description.
@@ -995,7 +996,7 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
     """
     logger.info(f"toolkit_explr called: action={action!r}, directory={repr(directory)[:80]}, symbol={symbol!r}, query_type={query_type!r}, force={force!r}")
     """Toolkit explr.
-    
+
     Args:
         action: Description.
         directory: Description.

@@ -16,7 +16,7 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
 
     if action == "read":
         try:
-            with open(filename, 'r', encoding='utf-8') as f:
+            with open(filename, encoding='utf-8') as f:
                 if offset > 0 or limit > 0:
                     lines = f.readlines()
                     start = max(0, offset - 1) if offset > 0 else 0
@@ -35,7 +35,7 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
             # target_dir = _os.path.dirname(target_abs)
             # marker = _os.path.join(target_dir, ".chat_history_protected")
             #     logger.warning(f"toolkit_file write BLOCKED: 目标目录受保护 ({marker}), 拒绝写入 {filename}")
-            
+
             # 归一化换行符：\r\n → \n，确保始终使用 LF
             normalized = content.replace('\r\n', '\n').replace('\r', '\n')
             with open(filename, 'w', encoding='utf-8') as f:
@@ -53,7 +53,7 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
 
         def scan_dir(current_dir, indent=""):
             """Scan dir.
-            
+
             Args:
                 current_dir: Description.
                 indent: Description.

@@ -3,8 +3,8 @@ Auto-Compact — 自动上下文压缩。
 监控 Token 用量，达到阈值时自动触发摘要折叠。
 """
 
-import logging
 import json
+import logging
 import re
 
 logger = logging.getLogger("auto_compact")
@@ -71,10 +71,7 @@ def compact_messages(messages: list, keep_recent: int = 5, summary: str = ""):
         if isinstance(c, str) and c:
             older_text += f"[{r}] {c[:200]}" + "\n"
     if older_text and len(older_text) > 50:
-        if summary:
-            summary = (summary + "\n---\n" + older_text[:500])[:1000]
-        else:
-            summary = older_text[:500]
+        summary = (summary + "\n---\n" + older_text[:500])[:1000] if summary else older_text[:500]
 
     compressed = list(sys_msgs)
     if summary:

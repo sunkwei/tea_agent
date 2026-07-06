@@ -8,19 +8,18 @@ JSON 校验与修复模块
 
 import json
 import logging
-from typing import List, Dict, Optional
 
 logger = logging.getLogger("session.json_sanitizer")
 
 
-def try_fix_truncated_json(s: str) -> Optional[str]:
+def try_fix_truncated_json(s: str) -> str | None:
     """尝试修复被截断的 JSON 字符串。
-    
+
     通过分析括号栈和字符串状态，补全缺失的闭合符号。
-    
+
     Args:
         s: 可能被截断的 JSON 字符串
-        
+
     Returns:
         修复后的合法 JSON 字符串，无法修复则返回 None
     """
@@ -29,7 +28,7 @@ def try_fix_truncated_json(s: str) -> Optional[str]:
 
     s = s.strip()
     close_map = {'{': '}', '[': ']'}
-    
+
     def _try_fix_with_stack(text, stack, in_str):
         """尝试用给定的栈状态修复 JSON"""
         suffix = ''.join(close_map[c] for c in reversed(stack))
@@ -41,7 +40,7 @@ def try_fix_truncated_json(s: str) -> Optional[str]:
             return fixed
         except json.JSONDecodeError:
             return None
-    
+
     # 第一次尝试：直接补全
     stack = []
     in_str = False
@@ -60,9 +59,8 @@ def try_fix_truncated_json(s: str) -> Optional[str]:
             continue
         if ch in '{[':
             stack.append(ch)
-        elif ch in '}]':
-            if stack and ((ch == '}' and stack[-1] == '{') or (ch == ']' and stack[-1] == '[')):
-                stack.pop()
+        elif ch in '}]' and stack and ((ch == '}' and stack[-1] == '{') or (ch == ']' and stack[-1] == '[')):
+            stack.pop()
 
     if not stack:
         if in_str:
@@ -76,7 +74,7 @@ def try_fix_truncated_json(s: str) -> Optional[str]:
     result = _try_fix_with_stack(s, stack, in_str)
     if result:
         return result
-    
+
     # 第二次尝试：从末尾往前删除不完整的部分
     # 找到最后一个逗号或冒号的位置
     for i in range(len(s) - 1, -1, -1):
@@ -85,7 +83,7 @@ def try_fix_truncated_json(s: str) -> Optional[str]:
             truncated = s[:i].rstrip(',').rstrip(':')
             if not truncated:
                 continue
-            
+
             # 重新分析截断后的字符串
             t_stack = []
             t_in_str = False
@@ -104,26 +102,25 @@ def try_fix_truncated_json(s: str) -> Optional[str]:
                     continue
                 if c in '{[':
                     t_stack.append(c)
-                elif c in '}]':
-                    if t_stack and ((c == '}' and t_stack[-1] == '{') or (c == ']' and t_stack[-1] == '[')):
-                        t_stack.pop()
-            
+                elif c in '}]' and t_stack and ((c == '}' and t_stack[-1] == '{') or (c == ']' and t_stack[-1] == '[')):
+                    t_stack.pop()
+
             result = _try_fix_with_stack(truncated, t_stack, t_in_str)
             if result:
                 return result
-    
+
     return None
 
 
-def sanitize_api_messages(messages: List[Dict]) -> List[Dict]:
+def sanitize_api_messages(messages: list[dict]) -> list[dict]:
     """校验并修复 API 消息中的 tool_calls JSON。
-    
+
     扫描所有 assistant 消息的 tool_calls，对非法 JSON 参数尝试修复，
     无法修复的则移除该 tool_call。
-    
+
     Args:
         messages: API 消息列表
-        
+
     Returns:
         修复后的消息列表
     """

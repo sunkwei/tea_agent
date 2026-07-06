@@ -11,11 +11,10 @@ toolkit_plan — 结构化任务规划与执行
 """
 
 import json
+import logging
 import os
 import uuid
 from datetime import datetime
-from typing import Optional, List
-import logging
 
 logger = logging.getLogger("toolkit")
 
@@ -29,27 +28,27 @@ def _ensure_plans_dir():
 
 def _plan_path(plan_id: str) -> str:
     """Internal: plan path.
-    
+
     Args:
         plan_id: Description.
     """
     return os.path.join(PLANS_DIR, f"{plan_id}.json")
 
-def _load_plan(plan_id: str) -> Optional[dict]:
+def _load_plan(plan_id: str) -> dict | None:
     """Internal: load plan.
-    
+
     Args:
         plan_id: Description.
     """
     path = _plan_path(plan_id)
     if not os.path.exists(path):
         return None
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 def _save_plan(plan: dict):
     """Internal: save plan.
-    
+
     Args:
         plan: Description.
     """
@@ -60,7 +59,7 @@ def _save_plan(plan: dict):
 
 _KNOWN_STEP_META = {"id", "desc", "action", "depends_on", "verify", "params", "doc_type", "doc_module", "doc_content"}
 
-def _get_topic_id() -> Optional[str]:
+def _get_topic_id() -> str | None:
     """获取当前 topic_id"""
     try:
         from tea_agent.session_ref import get_agent
@@ -72,9 +71,9 @@ def _get_topic_id() -> Optional[str]:
 
     return None
 
-def _new_plan(goal: str, steps: List[dict]) -> dict:
+def _new_plan(goal: str, steps: list[dict]) -> dict:
     """Internal: new plan.
-    
+
     Args:
         goal: Description.
         steps: Description.
@@ -84,10 +83,7 @@ def _new_plan(goal: str, steps: List[dict]) -> dict:
     for i, s in enumerate(steps):
         _KNOWN_STEP_META & set(s.keys())
         # 显式 params 优先，否则所有非 meta 键自动归入 params
-        if "params" in s:
-            params = {**s["params"]}
-        else:
-            params = {k: v for k, v in s.items() if k not in _KNOWN_STEP_META}
+        params = {**s["params"]} if "params" in s else {k: v for k, v in s.items() if k not in _KNOWN_STEP_META}
         normalized.append({
             "id": s.get("id", str(i + 1)),
             "desc": s["desc"],
@@ -116,9 +112,9 @@ def _new_plan(goal: str, steps: List[dict]) -> dict:
 
 # ── 核心逻辑 ────────────────────────────────────────────
 
-def _deps_satisfied(step: dict, all_steps: List[dict]) -> bool:
+def _deps_satisfied(step: dict, all_steps: list[dict]) -> bool:
     """Internal: deps satisfied.
-    
+
     Args:
         step: Description.
         all_steps: Description.
@@ -129,9 +125,9 @@ def _deps_satisfied(step: dict, all_steps: List[dict]) -> bool:
             return False
     return True
 
-def _next_pending(plan: dict) -> Optional[dict]:
+def _next_pending(plan: dict) -> dict | None:
     """Internal: next pending.
-    
+
     Args:
         plan: Description.
     """
@@ -142,7 +138,7 @@ def _next_pending(plan: dict) -> Optional[dict]:
 
 def _count_status(plan: dict, status: str) -> int:
     """Internal: count status.
-    
+
     Args:
         plan: Description.
         status: Description.
@@ -154,7 +150,7 @@ def _count_status(plan: dict, status: str) -> int:
 def toolkit_plan(
     action: str,
     goal: str = None,
-    steps: List[dict] = None,
+    steps: list[dict] = None,
     plan_id: str = None,
     step_id: str = None,
     cwd: str = None,
@@ -252,7 +248,7 @@ def toolkit_plan(
             elif has_pending:
                 review_sections.append(f"\n🟡 **有待执行步骤，使用 action='run' plan_id='{plan_id}' 执行。**")
             else:
-                review_sections.append(f"\n🔵 **计划就绪。**")
+                review_sections.append("\n🔵 **计划就绪。**")
 
             return {
                 "ok": True,
@@ -339,7 +335,7 @@ def toolkit_plan(
 
 def _do_step(plan_id, step_id, cwd):
     """Internal: do step.
-    
+
     Args:
         plan_id: Description.
         step_id: Description.
@@ -371,7 +367,7 @@ def _do_step(plan_id, step_id, cwd):
 
 def _do_verify(plan_id, step_id, cwd):
     """Internal: do verify.
-    
+
     Args:
         plan_id: Description.
         step_id: Description.
@@ -392,7 +388,7 @@ def _do_verify(plan_id, step_id, cwd):
 
 def _do_run(plan_id, cwd):
     """Internal: do run.
-    
+
     Args:
         plan_id: Description.
         cwd: Description.
@@ -431,7 +427,7 @@ def _do_run(plan_id, cwd):
 
 def _do_resume(plan_id, cwd):
     """Internal: do resume.
-    
+
     Args:
         plan_id: Description.
         cwd: Description.
@@ -452,7 +448,7 @@ def _do_resume(plan_id, cwd):
 
 def _step_summary(plan: dict) -> str:
     """Internal: step summary.
-    
+
     Args:
         plan: Description.
     """
@@ -461,7 +457,7 @@ def _step_summary(plan: dict) -> str:
 
 def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
     """Internal: execute step.
-    
+
     Args:
         plan: Description.
         step: Description.
@@ -545,7 +541,7 @@ def _execute_step(plan: dict, step: dict, cwd: str) -> dict:
 
 def _verify_step(step: dict, cwd: str) -> dict:
     """Internal: verify step.
-    
+
     Args:
         step: Description.
         cwd: Description.
@@ -558,20 +554,18 @@ def _verify_step(step: dict, cwd: str) -> dict:
         params = step.get("params", {})
         fp = params.get("file_path", "")
 
-        if any(k in verify_type for k in ("py_compile", "compile")):
-            if fp and fp.endswith(".py"):
-                try:
-                    py_compile.compile(os.path.join(cwd, fp), doraise=True)
-                    results["compile"] = "ok"
-                except py_compile.PyCompileError as e:
-                    results["compile"] = f"FAIL: {e}"
+        if any(k in verify_type for k in ("py_compile", "compile")) and fp and fp.endswith(".py"):
+            try:
+                py_compile.compile(os.path.join(cwd, fp), doraise=True)
+                results["compile"] = "ok"
+            except py_compile.PyCompileError as e:
+                results["compile"] = f"FAIL: {e}"
 
-        if any(k in verify_type for k in ("lint", "ruff")):
-            if fp:
-                r = sp.run(["ruff", "check", "--output-format", "json", os.path.join(cwd, fp)],
-                           capture_output=True, text=True, timeout=15, cwd=cwd)
-                diags = json.loads(r.stdout) if r.stdout.strip() else []
-                results["lint"] = "ok" if not diags else f"{len(diags)} issues"
+        if any(k in verify_type for k in ("lint", "ruff")) and fp:
+            r = sp.run(["ruff", "check", "--output-format", "json", os.path.join(cwd, fp)],
+                       capture_output=True, text=True, timeout=15, cwd=cwd)
+            diags = json.loads(r.stdout) if r.stdout.strip() else []
+            results["lint"] = "ok" if not diags else f"{len(diags)} issues"
 
         if any(k in verify_type for k in ("test", "pytest")):
             r = sp.run([os.sys.executable, "-m", "pytest", "test_*.py", "-q", "--tb=short"],
@@ -586,7 +580,7 @@ def _verify_step(step: dict, cwd: str) -> dict:
 
 # ── 自动落盘（借鉴 best-skills/dev-workflow）────────────────
 
-def _detect_doc_type(step: dict) -> Optional[str]:
+def _detect_doc_type(step: dict) -> str | None:
     """从步骤描述自动检测落盘文档类型。
 
     Args:
@@ -612,7 +606,7 @@ _DOC_NAME_MAP = {
 }
 
 
-def _auto_save_doc(step: dict, plan: dict, cwd: str) -> Optional[str]:
+def _auto_save_doc(step: dict, plan: dict, cwd: str) -> str | None:
     """步骤成功完成后，自动将产物追加写入 docs/ 目录。
 
     规则（对齐 best-skills/dev-workflow）：
@@ -632,8 +626,8 @@ def _auto_save_doc(step: dict, plan: dict, cwd: str) -> Optional[str]:
     Returns:
         写入的文件路径，不适用时返回 None
     """
-    import os as _os
     import json as _json
+    import os as _os
     from datetime import datetime as _datetime
 
     # 优先用显式 doc_type，否则自动检测
@@ -646,10 +640,7 @@ def _auto_save_doc(step: dict, plan: dict, cwd: str) -> Optional[str]:
         return None
 
     doc_module = step.get("doc_module", "")
-    if doc_module:
-        doc_dir = _os.path.join(cwd, "docs", doc_module)
-    else:
-        doc_dir = _os.path.join(cwd, "docs")
+    doc_dir = _os.path.join(cwd, "docs", doc_module) if doc_module else _os.path.join(cwd, "docs")
 
     _os.makedirs(doc_dir, exist_ok=True)
     doc_path = _os.path.join(doc_dir, doc_name)
@@ -705,7 +696,7 @@ def _update_module_index(cwd: str, module: str, doc_type: str, doc_path: str):
         entry = f"- **{module}** → [{doc_type}]({_os.path.relpath(doc_path, _os.path.dirname(index_path))})"
         existing = ""
         if _os.path.exists(index_path):
-            with open(index_path, "r", encoding="utf-8") as f:
+            with open(index_path, encoding="utf-8") as f:
                 existing = f.read()
         if entry not in existing:
             with open(index_path, "a", encoding="utf-8") as f:
@@ -743,7 +734,7 @@ def _extract_step_tools(step: dict) -> list:
     return tools or ["toolkit_plan"]
 
 
-def _auto_solidify_skill(step: dict, plan: dict, cwd: str) -> Optional[str]:
+def _auto_solidify_skill(step: dict, plan: dict, cwd: str) -> str | None:
     """步骤成功完成后，自动将执行经验结晶为可复用技能。
 
     使用 SkillCrystallizer 将步骤描述、工具组合、耗时等信息
@@ -785,7 +776,7 @@ def _auto_solidify_skill(step: dict, plan: dict, cwd: str) -> Optional[str]:
         return None
 
 
-def _auto_solidify_plan(plan: dict) -> Optional[str]:
+def _auto_solidify_plan(plan: dict) -> str | None:
     """整个计划完成后，将整体经验结晶为高层级技能。
 
     聚合所有步骤的工具、计算总耗时，生成代表整个执行方案的技能。
@@ -838,20 +829,20 @@ def _auto_solidify_plan(plan: dict) -> Optional[str]:
 
 def _decompose_goal(goal: str, cwd: str) -> dict:
     """智能分解目标为可执行步骤。
-    
+
     分析目标，自动生成步骤列表，考虑依赖关系。
-    
+
     Args:
         goal: 目标描述
         cwd: 当前工作目录
-        
+
     Returns:
         分解结果，包含建议的步骤列表
     """
-    
+
     # 分析目标类型
     goal_lower = goal.lower()
-    
+
     # 检测关键词，确定任务类型
     task_types = []
     if any(k in goal_lower for k in ["修复", "fix", "bug", "错误", "问题"]):
@@ -866,15 +857,15 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
         task_types.append("docs")
     if any(k in goal_lower for k in ["配置", "config", "设置", "setup"]):
         task_types.append("config")
-    
+
     # 如果没有检测到类型，默认为通用任务
     if not task_types:
         task_types.append("general")
-    
+
     # 根据任务类型生成步骤
     steps = []
     step_id = 1
-    
+
     # 通用步骤：分析和规划
     steps.append({
         "id": str(step_id),
@@ -885,7 +876,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
         "verify": "manual"
     })
     step_id += 1
-    
+
     # 根据任务类型添加特定步骤
     if "bugfix" in task_types:
         steps.append({
@@ -897,7 +888,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "manual"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "实现修复方案",
@@ -907,7 +898,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "py_compile"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "验证修复效果",
@@ -917,7 +908,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "test"
         })
         step_id += 1
-    
+
     elif "feature" in task_types:
         steps.append({
             "id": str(step_id),
@@ -928,7 +919,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "manual"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "实现核心功能",
@@ -938,7 +929,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "py_compile"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "添加测试用例",
@@ -948,7 +939,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "test"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "更新文档",
@@ -958,7 +949,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "manual"
         })
         step_id += 1
-    
+
     elif "refactor" in task_types:
         steps.append({
             "id": str(step_id),
@@ -969,7 +960,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "manual"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "制定重构计划",
@@ -979,7 +970,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "manual"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "执行重构",
@@ -989,7 +980,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "py_compile"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "运行测试验证",
@@ -999,7 +990,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "test"
         })
         step_id += 1
-    
+
     elif "test" in task_types:
         steps.append({
             "id": str(step_id),
@@ -1010,7 +1001,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "manual"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "编写测试用例",
@@ -1020,7 +1011,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "py_compile"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "运行测试验证",
@@ -1030,7 +1021,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "test"
         })
         step_id += 1
-    
+
     elif "docs" in task_types:
         steps.append({
             "id": str(step_id),
@@ -1041,7 +1032,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "manual"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "编写文档",
@@ -1051,7 +1042,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "manual"
         })
         step_id += 1
-    
+
     elif "config" in task_types:
         steps.append({
             "id": str(step_id),
@@ -1062,7 +1053,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "manual"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "修改配置",
@@ -1072,7 +1063,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "py_compile"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "验证配置生效",
@@ -1082,7 +1073,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "test"
         })
         step_id += 1
-    
+
     else:  # general
         steps.append({
             "id": str(step_id),
@@ -1093,7 +1084,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "manual"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "执行实现",
@@ -1103,7 +1094,7 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "py_compile"
         })
         step_id += 1
-        
+
         steps.append({
             "id": str(step_id),
             "desc": "验证结果",
@@ -1113,11 +1104,11 @@ def _decompose_goal(goal: str, cwd: str) -> dict:
             "verify": "test"
         })
         step_id += 1
-    
+
     # 创建计划
     plan = _new_plan(goal, steps)
     _save_plan(plan)
-    
+
     return {
         "ok": True,
         "plan_id": plan["id"],
@@ -1156,22 +1147,22 @@ def meta_toolkit_plan():
 
 def _insert_step(plan_id: str, after_step_id: str, new_steps: list) -> dict:
     """在指定步骤后插入新步骤。
-    
+
     Args:
         plan_id: 计划ID
         after_step_id: 在此步骤后插入，None 则插入到开头
         new_steps: 要插入的步骤列表
-        
+
     Returns:
         操作结果
     """
     if not plan_id or not new_steps:
         return {"ok": False, "error": "insert 需要 plan_id 和 steps 参数"}
-    
+
     plan = _load_plan(plan_id)
     if not plan:
         return {"ok": False, "error": f"计划不存在: {plan_id}"}
-    
+
     # 找到插入位置
     insert_idx = 0
     if after_step_id:
@@ -1181,11 +1172,11 @@ def _insert_step(plan_id: str, after_step_id: str, new_steps: list) -> dict:
                 break
         else:
             return {"ok": False, "error": f"步骤不存在: {after_step_id}"}
-    
+
     # 生成新步骤ID
     existing_ids = {s["id"] for s in plan["steps"]}
     next_id = max(int(s["id"]) for s in plan["steps"]) + 1 if plan["steps"] else 1
-    
+
     # 构建新步骤
     normalized = []
     for ns in new_steps:
@@ -1206,11 +1197,11 @@ def _insert_step(plan_id: str, after_step_id: str, new_steps: list) -> dict:
         normalized.append(step)
         existing_ids.add(step["id"])
         next_id += 1
-    
+
     # 插入
     plan["steps"] = plan["steps"][:insert_idx] + normalized + plan["steps"][insert_idx:]
     _save_plan(plan)
-    
+
     return {
         "ok": True,
         "plan_id": plan_id,
@@ -1222,22 +1213,22 @@ def _insert_step(plan_id: str, after_step_id: str, new_steps: list) -> dict:
 
 def _replace_step(plan_id: str, step_id: str, new_steps: list) -> dict:
     """替换指定步骤。
-    
+
     Args:
         plan_id: 计划ID
         step_id: 要替换的步骤ID
         new_steps: 替换后的步骤列表（1个或多个）
-        
+
     Returns:
         操作结果
     """
     if not plan_id or not step_id or not new_steps:
         return {"ok": False, "error": "replace 需要 plan_id, step_id 和 steps 参数"}
-    
+
     plan = _load_plan(plan_id)
     if not plan:
         return {"ok": False, "error": f"计划不存在: {plan_id}"}
-    
+
     # 找到要替换的步骤
     replace_idx = None
     old_step = None
@@ -1246,18 +1237,18 @@ def _replace_step(plan_id: str, step_id: str, new_steps: list) -> dict:
             replace_idx = i
             old_step = s
             break
-    
+
     if replace_idx is None:
         return {"ok": False, "error": f"步骤不存在: {step_id}"}
-    
+
     # 检查是否已完成
     if old_step["status"] == "done":
         return {"ok": False, "error": f"步骤已完成，不能替换: {step_id}"}
-    
+
     # 生成新步骤
     existing_ids = {s["id"] for s in plan["steps"]}
     next_id = max(int(s["id"]) for s in plan["steps"]) + 1
-    
+
     normalized = []
     for ns in new_steps:
         while str(next_id) in existing_ids:
@@ -1277,18 +1268,18 @@ def _replace_step(plan_id: str, step_id: str, new_steps: list) -> dict:
         normalized.append(step)
         existing_ids.add(step["id"])
         next_id += 1
-    
+
     # 替换
     plan["steps"] = plan["steps"][:replace_idx] + normalized + plan["steps"][replace_idx+1:]
-    
+
     # 更新依赖：将其他步骤对旧步骤的依赖改为新步骤
     new_ids = [s["id"] for s in normalized]
     for s in plan["steps"]:
         if step_id in s.get("depends_on", []):
             s["depends_on"] = [new_ids[0] if d == step_id else d for d in s["depends_on"]]
-    
+
     _save_plan(plan)
-    
+
     return {
         "ok": True,
         "plan_id": plan_id,
@@ -1301,44 +1292,44 @@ def _replace_step(plan_id: str, step_id: str, new_steps: list) -> dict:
 
 def _delete_step(plan_id: str, step_id: str) -> dict:
     """删除指定步骤。
-    
+
     Args:
         plan_id: 计划ID
         step_id: 要删除的步骤ID
-        
+
     Returns:
         操作结果
     """
     if not plan_id or not step_id:
         return {"ok": False, "error": "delete_step 需要 plan_id 和 step_id"}
-    
+
     plan = _load_plan(plan_id)
     if not plan:
         return {"ok": False, "error": f"计划不存在: {plan_id}"}
-    
+
     # 找到要删除的步骤
     target = None
     for s in plan["steps"]:
         if s["id"] == step_id:
             target = s
             break
-    
+
     if not target:
         return {"ok": False, "error": f"步骤不存在: {step_id}"}
-    
+
     # 检查是否已完成
     if target["status"] == "done":
         return {"ok": False, "error": f"步骤已完成，不能删除: {step_id}"}
-    
+
     # 检查是否有其他步骤依赖此步骤
     dependents = [s["id"] for s in plan["steps"] if step_id in s.get("depends_on", [])]
     if dependents:
         return {"ok": False, "error": f"步骤 {step_id} 被依赖: {dependents}，请先修改依赖关系"}
-    
+
     # 删除
     plan["steps"] = [s for s in plan["steps"] if s["id"] != step_id]
     _save_plan(plan)
-    
+
     return {
         "ok": True,
         "plan_id": plan_id,
@@ -1350,31 +1341,31 @@ def _delete_step(plan_id: str, step_id: str) -> dict:
 
 def _replan(plan_id: str, new_steps: list, cwd: str) -> dict:
     """基于当前状态重新规划。
-    
+
     保留已完成的步骤，用新步骤替换未完成的步骤。
-    
+
     Args:
         plan_id: 计划ID
         new_steps: 新的步骤列表
         cwd: 当前工作目录
-        
+
     Returns:
         操作结果
     """
     if not plan_id or not new_steps:
         return {"ok": False, "error": "replan 需要 plan_id 和 steps 参数"}
-    
+
     plan = _load_plan(plan_id)
     if not plan:
         return {"ok": False, "error": f"计划不存在: {plan_id}"}
-    
+
     # 保留已完成的步骤
     done_steps = [s for s in plan["steps"] if s["status"] == "done"]
-    
+
     # 生成新步骤
     existing_ids = {s["id"] for s in done_steps}
     next_id = max(int(s["id"]) for s in done_steps) + 1 if done_steps else 1
-    
+
     normalized = []
     for ns in new_steps:
         while str(next_id) in existing_ids:
@@ -1394,12 +1385,12 @@ def _replan(plan_id: str, new_steps: list, cwd: str) -> dict:
         normalized.append(step)
         existing_ids.add(step["id"])
         next_id += 1
-    
+
     # 更新计划
     plan["steps"] = done_steps + normalized
     plan["status"] = "running"
     _save_plan(plan)
-    
+
     return {
         "ok": True,
         "plan_id": plan_id,

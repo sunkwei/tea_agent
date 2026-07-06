@@ -1,7 +1,7 @@
 # version: 2.0.0
 
-import logging
 import json
+import logging
 
 logger = logging.getLogger("toolkit")
 
@@ -180,7 +180,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
                 f"  按分类: {json.dumps(stats['by_category'], ensure_ascii=False)}",
                 f"  按优先级: {json.dumps(stats['by_priority'], ensure_ascii=False)}",
             ]
-            
+
             # 向量索引统计
             try:
                 from ..store._semantic_search import SemanticSearch
@@ -190,7 +190,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
             except:
                 logger.exception("operation failed")
 
-            
+
             return "\n".join(lines)
         except Exception as e:
             return f"❌ 获取统计失败: {e}"

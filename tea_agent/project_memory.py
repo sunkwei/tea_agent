@@ -7,7 +7,6 @@
 import json
 import logging
 import os
-from typing import Dict, List
 from datetime import datetime
 
 logger = logging.getLogger("ProjectMemory")
@@ -20,7 +19,7 @@ class ProjectMemoryManager:
 
     def __init__(self, project_root: str = "."):
         """Initialize  .
-        
+
         Args:
             project_root: Description.
         """
@@ -34,10 +33,10 @@ class ProjectMemoryManager:
         if not os.path.exists(self.store_path):
             self._write([])
 
-    def _read(self) -> List[Dict]:
+    def _read(self) -> list[dict]:
         """读取所有项目记忆"""
         try:
-            with open(self.store_path, "r", encoding="utf-8") as f:
+            with open(self.store_path, encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, list):
                     return data
@@ -45,7 +44,7 @@ class ProjectMemoryManager:
             pass
         return []
 
-    def _write(self, data: List[Dict]):
+    def _write(self, data: list[dict]):
         """写入项目记忆"""
         with open(self.store_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -79,12 +78,12 @@ class ProjectMemoryManager:
         logger.info(f"项目记忆新增 #{entry['id']}, 总数={len(data)}")
         return len(data)
 
-    def get_all(self, limit: int = MAX_ENTRIES) -> List[Dict]:
+    def get_all(self, limit: int = MAX_ENTRIES) -> list[dict]:
         """获取所有项目记忆（最新在前）"""
         data = self._read()
         return list(reversed(data[-limit:]))
 
-    def search(self, query: str, limit: int = 10) -> List[Dict]:
+    def search(self, query: str, limit: int = 10) -> list[dict]:
         """关键词搜索项目记忆"""
         if not query:
             return self.get_all(limit)
@@ -101,7 +100,7 @@ class ProjectMemoryManager:
         return results
 
     @staticmethod
-    def _new_id(data: List[Dict]) -> str:
+    def _new_id(data: list[dict]) -> str:
         """生成新的记忆 ID"""
         max_id = 0
         for m in data:
@@ -113,7 +112,7 @@ class ProjectMemoryManager:
         return f"proj_{max_id + 1}"
 
     @staticmethod
-    def format_memories(memories: List[Dict]) -> str:
+    def format_memories(memories: list[dict]) -> str:
         """格式化项目记忆为注入文本"""
         if not memories:
             return ""

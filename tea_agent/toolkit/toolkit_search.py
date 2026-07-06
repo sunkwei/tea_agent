@@ -52,43 +52,44 @@ def toolkit_search(query: str, max_results: int = 10, lang: str = "", engine: st
 
 def _search_duckduckgo(query: str, max_results: int, lang: str):
     """Internal: search duckduckgo.
-    
+
     Args:
         query: Description.
         max_results: Description.
         lang: Description.
     """
+    import json
+    import re
+    from urllib.parse import parse_qs, unquote, urlparse
+
     import requests
     from bs4 import BeautifulSoup
-    from urllib.parse import urlparse, parse_qs, unquote
-    import re
-    import json
-    
+
     session = requests.Session()
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0',
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
     })
-    
+
     results = []
     params = {'q': query}
     if lang:
         params['kl'] = lang
-    
+
     try:
         resp = session.post('https://lite.duckduckgo.com/lite/', data=params, timeout=15)
         resp.encoding = 'utf-8'
         soup = BeautifulSoup(resp.text, 'html.parser')
-        
+
         result_links = soup.find_all('a', class_='result-link')
         result_snippets = soup.find_all('td', class_='result-snippet')
         link_texts = soup.find_all('span', class_='link-text')
-        
+
         for i, link in enumerate(result_links):
             if len(results) >= max_results:
                 break
-            
+
             title = link.get_text(strip=True)
             href = link.get('href', '')
             real_url = href
@@ -98,58 +99,59 @@ def _search_duckduckgo(query: str, max_results: int, lang: str):
                 uddg = qp.get('uddg', [None])[0]
                 if uddg:
                     real_url = unquote(uddg)
-            
+
             snippet = ''
             if i < len(result_snippets):
                 raw = result_snippets[i].get_text('', strip=True) or ''
                 snippet = re.sub(r'<[^>]+>', '', raw).strip()
-            
+
             display_url = ''
             if i < len(link_texts):
                 display_url = link_texts[i].get_text(strip=True)
-            
+
             results.append({
                 'title': title,
                 'url': real_url,
                 'display_url': display_url,
                 'snippet': snippet,
             })
-        
+
     except requests.Timeout:
         return (1, '', 'DuckDuckGo 搜索超时')
     except requests.ConnectionError:
         return (1, '', '网络连接失败')
     except Exception as e:
         return (1, '', f'DuckDuckGo 搜索出错: {str(e)}')
-    
+
     if not results:
         return (0, '[]', '未找到相关结果')
-    
+
     return (0, json.dumps(results, ensure_ascii=False, indent=2), '')
 
 def _search_baidu(query: str, max_results: int):
     """Internal: search baidu.
-    
+
     Args:
         query: Description.
         max_results: Description.
     """
+    import json
+    from urllib.parse import parse_qs, urlparse
+
     import requests
     from bs4 import BeautifulSoup
-    from urllib.parse import urlparse, parse_qs
-    import json
-    
+
     session = requests.Session()
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
     })
-    
+
     try:
         # 先访问百度首页获取 cookie，否则可能被反爬
         session.get('https://www.baidu.com/', timeout=10)
-        
+
         # 搜索
         resp = session.get(
             f'https://www.baidu.com/s?wd={requests.utils.quote(query)}&rn={max_results}',
@@ -157,28 +159,28 @@ def _search_baidu(query: str, max_results: int):
         )
         resp.encoding = 'utf-8'
         soup = BeautifulSoup(resp.text, 'lxml')
-        
+
         result_divs = soup.select('div.c-container')
         results = []
-        
+
         for r in result_divs:
             if len(results) >= max_results:
                 break
-            
+
             h3 = r.find('h3')
             if not h3:
                 continue
             a = h3.find('a')
             if not a:
                 continue
-            
+
             title = a.get_text(strip=True)
             if not title:
                 continue
-            
+
             href = a.get('href', '')
             real_url = href
-            
+
             # 尝试解析百度跳转链接获取真实URL
             try:
                 if 'baidu.com/link' in href:
@@ -198,7 +200,7 @@ def _search_baidu(query: str, max_results: int):
             except Exception:
                 logger.exception("operation failed")
 
-            
+
             # 摘要
             snippet = ''
             for cls_name in ['c-abstract', 'c-span-last']:
@@ -207,7 +209,7 @@ def _search_baidu(query: str, max_results: int):
                     t = span.get_text(strip=True)
                     if len(t) > len(snippet):
                         snippet = t
-            
+
             # 显示URL
             display_url = ''
             for cls_name in ['c-showurl', 'showurl']:
@@ -215,19 +217,19 @@ def _search_baidu(query: str, max_results: int):
                 if el:
                     display_url = el.get_text(strip=True)
                     break
-            
+
             results.append({
                 'title': title,
                 'url': real_url,
                 'display_url': display_url,
                 'snippet': snippet,
             })
-        
+
         if not results:
             return (0, '[]', '未找到相关结果')
-        
+
         return (0, json.dumps(results, ensure_ascii=False, indent=2), '')
-    
+
     except requests.Timeout:
         return (1, '', '百度搜索超时')
     except requests.ConnectionError:
@@ -311,17 +313,17 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
 
 def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_results: int):
     """Python 实现的代码全文搜索（ripgrep 不可用时的回退方案）"""
+    import fnmatch
     import json
     import os
     import re
-    import fnmatch
 
     results = []
     pattern = re.compile(re.escape(query), re.IGNORECASE)
 
     for root, dirs, files in os.walk(root_path):
         # 跳过隐藏目录和常见忽略目录
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in 
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in
                    ('node_modules', '__pycache__', '.git', 'venv', 'env', 'dist', 'build')]
 
         for filename in files:
@@ -333,7 +335,7 @@ def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_r
 
             filepath = os.path.join(root, filename)
             try:
-                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                with open(filepath, encoding='utf-8', errors='ignore') as f:
                     lines = f.readlines()
 
                 for line_num, line in enumerate(lines, 1):
@@ -356,9 +358,9 @@ def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_r
 
 def _search_symbol(query: str, root_path: str, max_results: int):
     """符号搜索（查找函数/类定义）"""
+    import ast
     import json
     import os
-    import ast
 
     if not root_path:
         return (1, "", "root_path 不能为空（符号搜索需要）")
@@ -380,9 +382,9 @@ def _search_symbol(query: str, root_path: str, max_results: int):
     for search_dir in search_dirs:
         if not os.path.isdir(search_dir):
             continue
-            
+
         for root, dirs, files in os.walk(search_dir):
-            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in 
+            dirs[:] = [d for d in dirs if not d.startswith('.') and d not in
                        ('node_modules', '__pycache__', '.git', 'venv', 'env', 'dist', 'build')]
 
             for filename in files:
@@ -391,7 +393,7 @@ def _search_symbol(query: str, root_path: str, max_results: int):
 
                 filepath = os.path.join(root, filename)
                 try:
-                    with open(filepath, 'r', encoding='utf-8') as f:
+                    with open(filepath, encoding='utf-8') as f:
                         source = f.read()
 
                     tree = ast.parse(source, filename=filepath)
@@ -433,50 +435,51 @@ def _extract_args(node):
 def _search_github(query: str, search_type: str, max_results: int):
     """
     GitHub 搜索（使用公开 API，无需 token）
-    
+
     Args:
         query: 搜索关键词
         search_type: repos/code/issues
         max_results: 最大结果数
     """
-    import requests
     import json
-    
+
+    import requests
+
     # GitHub API 端点映射
     endpoints = {
         "repos": "https://api.github.com/search/repositories",
         "code": "https://api.github.com/search/code",
         "issues": "https://api.github.com/search/issues",
     }
-    
+
     # 默认搜索仓库
     api_type = search_type if search_type in endpoints else "repos"
     url = endpoints[api_type]
-    
+
     headers = {
         "Accept": "application/vnd.github.v3+json",
         "User-Agent": "TeaAgent/1.0",
     }
-    
+
     # 添加 GitHub Token（如果存在）
     import os
     token = os.environ.get("GITHUB_TOKEN")
     if token:
         headers["Authorization"] = f"token {token}"
-    
+
     params = {
         "q": query,
         "per_page": min(max_results, 30),  # GitHub API 最大 100，但 30 足够
     }
-    
+
     try:
         resp = requests.get(url, headers=headers, params=params, timeout=15)
         resp.raise_for_status()
         data = resp.json()
-        
+
         results = []
         items = data.get("items", [])
-        
+
         for item in items[:max_results]:
             if api_type == "repos":
                 results.append({
@@ -510,12 +513,12 @@ def _search_github(query: str, search_type: str, max_results: int):
                     "comments": item.get("comments", 0),
                     "created": item.get("created_at", "")[:10],
                 })
-        
+
         if not results:
             return (0, "[]", f"GitHub 未找到相关{api_type}结果")
-        
+
         return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
-    
+
     except requests.Timeout:
         return (1, "", "GitHub API 请求超时")
     except requests.ConnectionError:

@@ -5,9 +5,9 @@ Short-connection design:
 - DB class: with DB(path) as db: for explicit short connections
 - All existing methods using self.conn work unchanged
 """
-import uuid
 import sqlite3
 import threading
+import uuid
 from contextlib import contextmanager
 
 

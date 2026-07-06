@@ -12,7 +12,9 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
     """
     logger.info(f"toolkit_pkg called: action={action!r}, packages={packages!r}, module={module!r}")
 
-    import subprocess, sys, importlib
+    import importlib
+    import subprocess
+    import sys
 
     def _pip_install(pkgs):
         """安装包列表"""

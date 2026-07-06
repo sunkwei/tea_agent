@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os
 import tempfile
@@ -106,17 +107,13 @@ def toolkit_screen_read(action: str, browser: str = "firefox", tab_title: str = 
     try:
         text = _ocr_image(img_path)
     except RuntimeError as e:
-        try:
+        with contextlib.suppress(Exception):
             os.remove(img_path)
-        except Exception:
-            pass
         return {"ok": False, "error": str(e)}
 
     # ── 清理临时文件 ──
-    try:
+    with contextlib.suppress(Exception):
         os.remove(img_path)
-    except Exception:
-        pass
 
     # 保存结果（可选）
     if output:

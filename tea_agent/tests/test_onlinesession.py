@@ -13,10 +13,8 @@ OnlineSession 测试套件 — 模块级函数 + OnlineToolSession 核心方法�
 
 from unittest.mock import MagicMock, PropertyMock
 
-from tea_agent.onlinesession import detect_mode, extract_mode, OnlineToolSession
+from tea_agent.onlinesession import APIComponent, OnlineToolSession, detect_mode, extract_mode
 from tea_agent.session.context import SessionContext
-from tea_agent.onlinesession import APIComponent
-
 
 # ════════════════════════════════════════════════════════════
 # 1. detect_mode / extract_mode（已有）
@@ -107,10 +105,10 @@ class TestOnlineToolSessionCreate:
     def _make_session(self, **kwargs):
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
-        defaults = dict(
-            toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
-            model="test-model", max_history=5, enable_thinking=False, storage=None,
-        )
+        defaults = {
+            "toolkit": mock_tk, "api_key": "sk-test", "api_url": "https://api.test.com/v1",
+            "model": "test-model", "max_history": 5, "enable_thinking": False, "storage": None,
+        }
         defaults.update(kwargs)
         sess = OnlineToolSession(**defaults)
         return sess
@@ -175,10 +173,10 @@ class TestOnlineToolSessionLifecycle:
     def _make_session(self, **kwargs):
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
-        defaults = dict(
-            toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
-            model="test-model", enable_thinking=False, storage=None,
-        )
+        defaults = {
+            "toolkit": mock_tk, "api_key": "sk-test", "api_url": "https://api.test.com/v1",
+            "model": "test-model", "enable_thinking": False, "storage": None,
+        }
         defaults.update(kwargs)
         return OnlineToolSession(**defaults)
 
@@ -223,10 +221,10 @@ class TestBuildApiMessages:
 
     def _make_context(self, **kwargs):
         """创建 SessionContext 并填充默认状态"""
-        defaults = dict(
-            model="test-model", enable_thinking=False,
-            supports_reasoning=False, disable_summary=False,
-        )
+        defaults = {
+            "model": "test-model", "enable_thinking": False,
+            "supports_reasoning": False, "disable_summary": False,
+        }
         defaults.update(kwargs)
         ctx = SessionContext(**defaults)
         return ctx
@@ -378,7 +376,7 @@ class TestBuildApiMessages:
         ctx = self._make_context(max_context_tokens=500)
         # 填入大量历史消息触发裁剪
         ctx.messages = []
-        for i in range(20):
+        for _i in range(20):
             ctx.messages.append({"role": "user", "content": "Q" * 200})
             ctx.messages.append({"role": "assistant", "content": "A" * 500})
             ctx.messages.append({"role": "tool", "content": "R" * 1000})
@@ -422,12 +420,12 @@ class TestCreateChatStreamParams:
     """create_chat_stream 参数传递测试"""
 
     def _make_api(self, **kwargs):
-        ctx_kwargs = dict(
-            model="test-model", enable_thinking=False,
-            client=MagicMock(), supports_reasoning=False,
-            no_stream_chunk=True,
-            _thinking_supported=None,
-        )
+        ctx_kwargs = {
+            "model": "test-model", "enable_thinking": False,
+            "client": MagicMock(), "supports_reasoning": False,
+            "no_stream_chunk": True,
+            "_thinking_supported": None,
+        }
         ctx_kwargs.update(kwargs)
         ctx = SessionContext(**ctx_kwargs)
         return APIComponent(ctx)
@@ -566,11 +564,11 @@ class TestProcessStreamWithReasoning:
     def _make_session(self, **kwargs):
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
-        defaults = dict(
-            toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
-            model="test-model", enable_thinking=False, storage=None,
-            no_stream_chunk=True,
-        )
+        defaults = {
+            "toolkit": mock_tk, "api_key": "sk-test", "api_url": "https://api.test.com/v1",
+            "model": "test-model", "enable_thinking": False, "storage": None,
+            "no_stream_chunk": True,
+        }
         defaults.update(kwargs)
         return OnlineToolSession(**defaults)
 
@@ -760,11 +758,11 @@ class TestToolLoopAndCompression:
         mock_tk.meta_map = {}
         # 模拟 call_tool 返回结果
         mock_tk.call_tool.return_value = "mock_result"
-        defaults = dict(
-            toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
-            model="test-model", enable_thinking=False, storage=None,
-            no_stream_chunk=True, max_iterations=5,
-        )
+        defaults = {
+            "toolkit": mock_tk, "api_key": "sk-test", "api_url": "https://api.test.com/v1",
+            "model": "test-model", "enable_thinking": False, "storage": None,
+            "no_stream_chunk": True, "max_iterations": 5,
+        }
         defaults.update(kwargs)
         return OnlineToolSession(**defaults)
 
@@ -832,8 +830,9 @@ class TestToolLoopAndCompression:
 
     def test_compress_tool_content_threshold(self):
         """不同工具类型的阈值适配"""
-        from tea_agent.basesession import BaseChatSession
         import sys
+
+        from tea_agent.basesession import BaseChatSession
 
         # 源码文件 → sys.maxsize（不截断）
         threshold = BaseChatSession._guess_tool_threshold("toolkit_file", '{"filename": "main.py"}')

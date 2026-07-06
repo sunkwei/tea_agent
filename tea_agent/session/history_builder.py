@@ -8,51 +8,51 @@
 - to_multimodal: 多模态消息转换
 """
 
+import base64
+import json
+import logging
 import os
 import re
-import json
-import base64
-import logging
-from typing import List, Dict, Any
+from typing import Any
 
 logger = logging.getLogger("session.history_builder")
 
 
 def estimate_tokens(text: str) -> int:
     """快速估算文本的 token 数。
-    
+
     启发式算法：
     - 英文：约 4 字符 = 1 token（含空格和标点）
     - 中文：约 1.5 字 = 1 token
     - 混合文本取加权平均
-    
+
     Args:
         text: 输入文本
-        
+
     Returns:
         估算的 token 数
     """
     if not text:
         return 0
-    
+
     # 统计中文字符数
     cn_chars = len(re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf]', text))
     total_chars = len(text)
     non_cn_chars = total_chars - cn_chars
-    
+
     # 中文约 1.5 字/token，英文约 4 字符/token
     cn_tokens = cn_chars / 1.5 if cn_chars else 0
     en_tokens = non_cn_chars / 4.0 if non_cn_chars else 0
-    
+
     return int(cn_tokens + en_tokens) + 4  # +4 为消息结构开销
 
 
-def estimate_messages_tokens(messages: List[Dict]) -> int:
+def estimate_messages_tokens(messages: list[dict]) -> int:
     """估算消息列表的总 token 数。
-    
+
     Args:
         messages: 消息列表
-        
+
     Returns:
         估算的总 token 数
     """
@@ -69,29 +69,29 @@ def estimate_messages_tokens(messages: List[Dict]) -> int:
                         total += 85  # 图片固定估算 ~85 tokens
         elif isinstance(content, str):
             total += estimate_tokens(content)
-        
+
         # tool_calls 结构开销
         if msg.get("tool_calls"):
             for tc in msg["tool_calls"]:
                 total += estimate_tokens(json.dumps(tc, ensure_ascii=False))
-        
+
         # reasoning_content
         rc = msg.get("reasoning_content", "")
         if rc:
             total += estimate_tokens(rc)
-        
+
         total += 4  # 每条消息的 role/metadata 开销
-    
+
     return total
 
 
-def to_multimodal(msg: Dict, supports_vision: bool) -> Dict:
+def to_multimodal(msg: dict, supports_vision: bool) -> dict:
     """如果消息包含 images 字段，将 content 转换为多模态格式。
-    
+
     Args:
         msg: 消息字典（会原地修改）
         supports_vision: 模型是否支持视觉输入
-        
+
     Returns:
         处理后的消息字典
     """
@@ -147,7 +147,7 @@ def _key_words(text: str) -> set:
 
 def _find_prune_cutoff(messages: list, tail_turns: int = 3) -> int:
     """找到最近 tail_turns 轮的分界索引。
-    
+
     从后往前数 user 消息，第 tail_turns 个 user 的索引即为裁剪分界。
     此索引之前的 tool 消息可安全裁剪。
     不足 tail_turns 轮则返回 0（不裁剪）。
@@ -171,7 +171,7 @@ def _extract_files_from_text(text: str) -> set:
         try:
             idx_path = os.path.join('.tea_agent_run', 'symbol_index.json')
             if os.path.exists(idx_path):
-                with open(idx_path, 'r', encoding='utf-8') as _f:
+                with open(idx_path, encoding='utf-8') as _f:
                     sym_index = json.load(_f)
                 for sym in symbols:
                     if sym in sym_index:
@@ -185,21 +185,21 @@ def _extract_files_from_text(text: str) -> set:
     return files
 
 
-def _progressive_trim(messages: List[Dict], budget: int, context: Any) -> List[Dict]:
+def _progressive_trim(messages: list[dict], budget: int, context: Any) -> list[dict]:
     """渐进式裁剪消息以满足 token 预算。
-    
+
     裁剪策略（按优先级从高到低）：
     1. 删除 [历史记录] 等标记的 L2 条目（最旧的先删）
     2. 替换工具输出为占位符
     3. 删除 reasoning_content
     4. 截断长文本（assistant/tool 消息）
     5. 删除 L1 旧轮次（保留最近 5 轮）
-    
+
     Args:
         messages: API 消息列表
         budget: token 预算
         context: SessionContext
-        
+
     Returns:
         裁剪后的消息列表
     """
@@ -207,7 +207,7 @@ def _progressive_trim(messages: List[Dict], budget: int, context: Any) -> List[D
     est = estimate_messages_tokens(result)
     if est <= budget:
         return result
-    
+
     # 策略1: 删除 [历史记录] 标记的 L2 条目
     i = 0
     while i < len(result) and est > budget:
@@ -219,7 +219,7 @@ def _progressive_trim(messages: List[Dict], budget: int, context: Any) -> List[D
             logger.debug(f"裁剪 L2 条目: {content[:50]}...")
         else:
             i += 1
-    
+
     # 策略2: 替换工具输出为占位符
     if est > budget:
         for i in range(len(result) - 1, -1, -1):
@@ -233,7 +233,7 @@ def _progressive_trim(messages: List[Dict], budget: int, context: Any) -> List[D
                     msg["content"] = f"[工具结果已省略: {n_chars} 字符]"
                     est -= estimate_tokens(content) - 30
                     est = max(est, 0)
-    
+
     # 策略3: 删除 reasoning_content
     if est > budget:
         for msg in result:
@@ -243,7 +243,7 @@ def _progressive_trim(messages: List[Dict], budget: int, context: Any) -> List[D
                 est -= estimate_tokens(msg["reasoning_content"])
                 msg["reasoning_content"] = ""
                 est = max(est, 0)
-    
+
     # 策略4: 截断长文本（逐步收紧截断阈值）
     if est > budget:
         for max_text_len in [4096, 2048, 1024, 512]:
@@ -259,7 +259,7 @@ def _progressive_trim(messages: List[Dict], budget: int, context: Any) -> List[D
                         est -= estimate_tokens(content) - estimate_tokens(trimmed)
                         msg["content"] = trimmed
                         est = max(est, 0)
-    
+
     # 策略5: 删除 L1 旧轮次（保留最近 5 轮 user 消息）
     if est > budget:
         # 找到最近 5 个 user 消息的位置
@@ -269,12 +269,12 @@ def _progressive_trim(messages: List[Dict], budget: int, context: Any) -> List[D
                 user_positions.append(i)
                 if len(user_positions) >= 5:
                     break
-        
+
         if len(user_positions) >= 5:
             cutoff = min(user_positions)
             # 删除 cutoff 之前的消息（保留 system 和记忆注入）
             new_result = [msg for msg in result[:cutoff]
-                         if msg.get("role") == "system" 
+                         if msg.get("role") == "system"
                          or "[系统记忆" in msg.get("content", "")
                          or "记忆" in msg.get("content", "")[:20]]
             # 加回最近 5 轮
@@ -282,7 +282,7 @@ def _progressive_trim(messages: List[Dict], budget: int, context: Any) -> List[D
             est = estimate_messages_tokens(new_result)
             result = new_result
             logger.info(f"裁剪 L1 旧轮次: 保留最近 5 轮，估计 {est} tokens")
-    
+
     # 最终保护：如果还超，强制截断最后一条消息
     if est > budget and result:
         last = result[-1]
@@ -294,20 +294,20 @@ def _progressive_trim(messages: List[Dict], budget: int, context: Any) -> List[D
                 last["content"] = content[:keep] + f"\n... [紧急截断: 原长 {len(content)} 字符]"
                 est = estimate_messages_tokens(result)
                 logger.warning(f"紧急截断最后一条消息至 {keep} 字符")
-    
+
     return result
 
 
 def filter_level2_by_relevance(level2: list, current_msg: str) -> list:
     """按语义相关性筛选 Level 2 条目。
-    
+
     基于关键词重叠度和文件路径匹配进行评分，
     高相关(>=0.15)保留完整对话，低相关(>=0.05)保留摘要。
-    
+
     Args:
         level2: Level 2 条目列表
         current_msg: 当前用户消息
-        
+
     Returns:
         筛选后的条目列表
     """
@@ -362,30 +362,30 @@ def filter_level2_by_relevance(level2: list, current_msg: str) -> list:
     return result
 
 
-def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
+def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     """构建 API 消息列表 — 三级历史拼接。
-    
+
     Level 0: 系统提示词 + 潜意识状态 + 长期记忆注入
     Level 3: 语义摘要 + 工具链摘要
     Level 2: 按语义相关性筛选的 user+assistant 对
     Level 1: 最新一轮压缩对话
-    
+
     Args:
         context: SessionContext 实例
         system_prompt: 系统提示词
-        
+
     Returns:
         构建好的 API 消息列表
     """
     from tea_agent.session.json_sanitizer import sanitize_api_messages
 
-    result: List[Dict] = []
+    result: list[dict] = []
 
     # ── Level 0: 系统提示词 ──
     _base_system = system_prompt
     # 小模型自动注入输出规范约束
     try:
-        from tea_agent.session.prompts import is_small_model, SMALL_MODEL_CONSTRAINT, get_skill_validate_rules
+        from tea_agent.session.prompts import SMALL_MODEL_CONSTRAINT, get_skill_validate_rules, is_small_model
         _model_name = getattr(context, 'model', '') or ''
         if is_small_model(_model_name):
             _base_system = _base_system.rstrip('\n') + '\n\n' + SMALL_MODEL_CONSTRAINT
@@ -393,7 +393,7 @@ def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
             # 尝试加载默认约束 SKILL 的 validate 规则
             _rules = get_skill_validate_rules("output-format-constraint")
             if _rules:
-                setattr(context, '_skill_validate_rules', _rules)
+                context._skill_validate_rules = _rules
         # 即使不是小模型，也检查用户是否显式加载了带 validate 的 SKILL.md
         else:
             # 扫描最近的 assistant 消息中是否有 SKILL.md 加载记录
@@ -406,7 +406,7 @@ def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
                         _loaded_skill = _m.group(1)
                         _rules = get_skill_validate_rules(_loaded_skill)
                         if _rules:
-                            setattr(context, '_skill_validate_rules', _rules)
+                            context._skill_validate_rules = _rules
                             logger.info(f"📋 加载 SKILL.md 验证规则: {_loaded_skill}")
                     break
     except Exception as _e:
@@ -420,10 +420,7 @@ def build_api_messages(context: Any, system_prompt: str) -> List[Dict]:
         for _i in range(len(context.messages) - 1, -1, -1):
             if context.messages[_i].get("role") == "user":
                 _c = context.messages[_i].get("content", "")
-                if isinstance(_c, list):
-                    _current_user_msg = " ".join(_p.get("text", "") for _p in _c if _p.get("type") == "text")
-                else:
-                    _current_user_msg = str(_c)
+                _current_user_msg = " ".join(_p.get("text", "") for _p in _c if _p.get("type") == "text") if isinstance(_c, list) else str(_c)
                 break
         if _current_user_msg:
             from tea_agent.skills.skill_registry import SkillRegistry as _SkillRegistry

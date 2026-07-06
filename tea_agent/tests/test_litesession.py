@@ -11,10 +11,9 @@
 - chat() 边界情况
 """
 
-import json
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ── Fixtures ──
 
@@ -123,7 +122,7 @@ class TestLiteSessionInit:
         """应创建 OpenAI 客户端"""
         with patch("tea_agent.litesession.OpenAI") as mock_openai:
             from tea_agent.litesession import LiteSession
-            session = LiteSession(
+            LiteSession(
                 toolkit=mock_toolkit,
                 api_key="custom-key",
                 api_url="https://custom.api.com",
@@ -340,7 +339,7 @@ class TestExecuteTool:
 
     def test_execute_with_empty_args(self, lite_session, mock_toolkit):
         """空参数应传空 dict"""
-        from dataclasses import dataclass, field
+        from dataclasses import dataclass
         @dataclass
         class FakeCall:
             id: str = "call_2"
@@ -353,7 +352,7 @@ class TestExecuteTool:
 
     def test_execute_with_invalid_json_args(self, lite_session, mock_toolkit):
         """无效 JSON 参数应传空 dict"""
-        from dataclasses import dataclass, field
+        from dataclasses import dataclass
         @dataclass
         class FakeCall:
             id: str = "call_3"
@@ -367,7 +366,7 @@ class TestExecuteTool:
     def test_execute_toolkit_raises(self, lite_session, mock_toolkit):
         """工具执行异常应返回错误字符串"""
         mock_toolkit.call_tool.side_effect = RuntimeError("工具崩溃")
-        from dataclasses import dataclass, field
+        from dataclasses import dataclass
         @dataclass
         class FakeCall:
             id: str = "call_4"

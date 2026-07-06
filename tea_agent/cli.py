@@ -17,8 +17,8 @@ Tea Agent 轻量 CLI — 单文件实现。
 """
 
 import argparse
-import sys
 import os
+import sys
 
 # 将项目根目录加入 sys.path（支持 python -m tea_agent.cli）
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -26,6 +26,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from tea_agent.agent import Agent
+
 
 class TeaCLI(Agent):
     """Tea Agent 命令行客户端。"""
@@ -47,7 +48,7 @@ class TeaCLI(Agent):
     # ——— AgentCore 要求的回调 ———
     def _on_post_reply(self, ai_msg, used_tools, topic_id):
         """Internal: handle post reply event.
-        
+
         Args:
             ai_msg: Description.
             used_tools: Description.
@@ -93,7 +94,7 @@ class TeaCLI(Agent):
 
     # ——— 多行输入（Enter 发送，Shift+Enter 换行）———
     def _read_multiline(self) -> str:
-        """读取多行输入。Enter 发送，Shift+Enter 换行（输入末尾加「换行不分隔符」）。
+        r"""读取多行输入。Enter 发送，Shift+Enter 换行（输入末尾加「换行不分隔符」）。
 
         实现策略：逐行读取，若行末以「换行符号」结尾则继续追加下一行。
         由于终端无法直接检测 Shift+Enter，改用「\」续行符：
@@ -107,8 +108,8 @@ class TeaCLI(Agent):
 
     def _read_multiline_unix(self) -> str:
         """Unix 终端：使用 termios 检测 Shift+Enter（\x1b + 换行序列）。"""
-        import tty
         import termios
+        import tty
 
         fd = sys.stdin.fileno()
         old = termios.tcgetattr(fd)
@@ -254,7 +255,7 @@ class TeaCLI(Agent):
     def _new_topic(self):
         """Internal: new topic."""
         title = input("主题名称（留空自动生成）: ").strip()
-        tid = self.db.create_topic(title or f"CLI 会话")
+        tid = self.db.create_topic(title or "CLI 会话")
         self.current_topic_id = tid
         self.sess.messages = [{"role": "system", "content": self.sess.system_prompt}]
         self.sess._history_summary = ""
@@ -274,7 +275,7 @@ class TeaCLI(Agent):
 
     def _switch_topic(self, arg: str):
         """Internal: switch topic.
-        
+
         Args:
             arg: Description.
         """
@@ -431,12 +432,12 @@ class TeaCLI(Agent):
     def _print_welcome(self):
         """Internal: print welcome."""
         cfg = self._cfg
-        print(f"🤖 Tea Agent CLI")
+        print("🤖 Tea Agent CLI")
         print(f"   模型: {cfg.main_model.model_name}")
         print(f"   think: {'ON' if self._cli_think else 'OFF'}  "
               f"verbose: {'ON' if self._cli_verbose else 'OFF'}")
         print(f"   工具: {len(self.toolkit.func_map)} 个已加载")
-        print(f"   输入 /help 查看命令，Shift+Enter 换行，Enter 发送")
+        print("   输入 /help 查看命令，Shift+Enter 换行，Enter 发送")
         print()
 
     def _print_help(self):

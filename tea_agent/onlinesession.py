@@ -16,24 +16,28 @@ Token 优化策略:
 - 2026-07 拆分: SessionContext/SessionComponent→_context.py, Prompt→_prompts.py
 """
 
-from openai import OpenAI
-from typing import List, Dict, Callable, Tuple, Any, Optional
-import json, logging
+import json
+import logging
+from collections.abc import Callable
 from types import SimpleNamespace
+from typing import Any
+
+from openai import OpenAI
 
 from tea_agent.basesession import BaseChatSession, relaxed_json_loads
-from tea_agent.session_pipeline import SessionPipeline
 
 # 组件导入（替代 Mixin）
-from tea_agent.session.context import SessionContext, SessionComponent
-from tea_agent.session.prompts import (
-    HISTORY_SUMMARIZE_SYSTEM, HISTORY_SUMMARIZE_USER,
-    COMPACT_SYSTEM_PROMPT,
-)
+from tea_agent.session.context import SessionComponent, SessionContext
 from tea_agent.session.history_builder import build_api_messages
 from tea_agent.session.os_info_injector import inject_os_info
-from tea_agent.session.tool_loop_runner import execute_tool_loop
 from tea_agent.session.params import get_cheap_params
+from tea_agent.session.prompts import (
+    COMPACT_SYSTEM_PROMPT,
+    HISTORY_SUMMARIZE_SYSTEM,
+    HISTORY_SUMMARIZE_USER,
+)
+from tea_agent.session.tool_loop_runner import execute_tool_loop
+from tea_agent.session_pipeline import SessionPipeline
 
 logger = logging.getLogger("session")
 
@@ -71,14 +75,14 @@ def extract_mode(result: dict):
 
 class APIComponent(SessionComponent):
     """API 交互组件 — 负责 LLM API 通信（thinking 检测、流式调用、Token 用量追踪）。"""
-    
+
     @property
     def name(self) -> str:
         return "api"
-    
+
     def initialize(self) -> None:
         pass
-    
+
     def _probe_thinking_support(self, client=None, model=None, is_cheap=False):
         # 根据 is_cheap 选择要检查和更新的状态字段
         if is_cheap:
@@ -134,7 +138,7 @@ class APIComponent(SessionComponent):
 
     def _accumulate_usage(self, usage, is_cheap=False):
         """累加 token 用量到主模型或便宜模型的计数器。
-        
+
         Args:
             usage: API 返回的 usage 对象（含 prompt_tokens/completion_tokens 等）
             is_cheap: True=累加到便宜模型计数, False=累加到主模型计数
@@ -167,8 +171,8 @@ class APIComponent(SessionComponent):
         if hasattr(response, 'usage') and response.usage:
             self._accumulate_usage(response.usage, is_cheap=is_cheap)
 
-    def create_chat_stream(self, api_messages: List[Dict], tools: List[Dict], 
-                          client=None, model=None, is_cheap=False, 
+    def create_chat_stream(self, api_messages: list[dict], tools: list[dict],
+                          client=None, model=None, is_cheap=False,
                           temperature=None, max_tokens=None, top_p=None):
         target_client = client or self.ctx.client
         target_model = model or self.ctx.model
@@ -191,10 +195,7 @@ class APIComponent(SessionComponent):
             kwargs["stream_options"] = {"include_usage": True}
 
         # 根据对应的 thinking 状态决定是否启用
-        if is_cheap:
-            thinking_supported = self.ctx._cheap_thinking_supported
-        else:
-            thinking_supported = self.ctx._thinking_supported
+        thinking_supported = self.ctx._cheap_thinking_supported if is_cheap else self.ctx._thinking_supported
 
         # 构建 extra_body：合并 thinking + 模型 options（如 Ollama 的 num_ctx）
         extra_body = {}
@@ -207,10 +208,7 @@ class APIComponent(SessionComponent):
         try:
             from tea_agent.config import get_config
             _cfg = get_config()
-            if not is_cheap:
-                model_opts = _cfg.main_model.options
-            else:
-                model_opts = _cfg.cheap_model.options
+            model_opts = _cfg.main_model.options if not is_cheap else _cfg.cheap_model.options
             if model_opts:
                 extra_body.update(model_opts)
         except Exception:
@@ -229,7 +227,7 @@ class APIComponent(SessionComponent):
     def call_summarize_api(self, cli, mdl, messages, temperature=0.1, max_tokens=500):
         import logging
         logger = logging.getLogger("session.api")
-        
+
         try:
             logger.debug(f"summarize API request: model={mdl}, msgs={len(messages)}, temperature={temperature}, max_tokens={max_tokens}")
             return cli.chat.completions.create(
@@ -243,7 +241,7 @@ class APIComponent(SessionComponent):
             err_str = str(e).lower()
             if 'thinking' in err_str or 'extra_body' in err_str:
                 # 模型不支持 thinking 参数，回退到不带 extra_body 的调用
-                logger.debug(f"summarize API: thinking disabled not supported, retrying without extra_body")
+                logger.debug("summarize API: thinking disabled not supported, retrying without extra_body")
                 return cli.chat.completions.create(
                     model=mdl,
                     messages=messages,
@@ -253,7 +251,7 @@ class APIComponent(SessionComponent):
             logger.warning(f"summarize API call failed: model={mdl}, error={e}")
             raise
 
-    def accumulate_tool_calls_from_delta(self, delta, tool_calls_data: List[Dict]):
+    def accumulate_tool_calls_from_delta(self, delta, tool_calls_data: list[dict]):
         if not delta.tool_calls:
             return
 
@@ -284,13 +282,13 @@ class APIComponent(SessionComponent):
         self.ctx._last_cheap_usage = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
                                       "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0}
 
-    def get_last_usage(self) -> Dict[str, int]:
+    def get_last_usage(self) -> dict[str, int]:
         return dict(self.ctx._last_usage)
 
-    def get_cheap_usage(self) -> Dict[str, int]:
+    def get_cheap_usage(self) -> dict[str, int]:
         return dict(self.ctx._last_cheap_usage)
 
-    def get_total_usage(self) -> Dict[str, Dict[str, int]]:
+    def get_total_usage(self) -> dict[str, dict[str, int]]:
         return {
             "main": dict(self.ctx._last_usage),
             "cheap": dict(self.ctx._last_cheap_usage),
@@ -320,25 +318,25 @@ def has_tool(tools: list, name: str) -> bool:
 
 class ToolComponent(SessionComponent):
     """工具执行组件 — 负责工具调用执行、结果管理、输出截断与追踪。"""
-    
+
     @property
     def name(self) -> str:
         return "tool"
-    
+
     def initialize(self) -> None:
         pass
-    
-    def build_tools(self) -> List[Dict]:
+
+    def build_tools(self) -> list[dict]:
         tools = []
         if self.ctx.toolkit is None:
             logger.warning("toolkit not set, cannot build tool list")
             return tools
-        
-        for name, meta in self.ctx.toolkit.meta_map.items():
+
+        for _name, meta in self.ctx.toolkit.meta_map.items():
             tools.append(meta)
         return tools
 
-    def execute_tool_call(self, call) -> Tuple[str, str, str]:
+    def execute_tool_call(self, call) -> tuple[str, str, str]:
         import time
         func_name = call.function.name
         call_id = call.id
@@ -385,7 +383,7 @@ class ToolComponent(SessionComponent):
                 self.ctx.tool_log(f"❌ 错误: {e}")
 
         result_str = str(result)
-        
+
         # 截断超长工具输出，防止 413 Request Entity Too Large
         max_output = self.ctx.max_tool_output
         result_bytes = len(result_str.encode("utf-8"))
@@ -393,24 +391,24 @@ class ToolComponent(SessionComponent):
             # 首尾各保留一半，按换行对齐
             half = max_output // 2
             raw = result_str.encode("utf-8")
-            
+
             # 前半部分
             head_end = half
             nl = raw.find(b'\n', head_end)
             if nl != -1 and nl < half + 256:
                 head_end = nl
             head_text = raw[:head_end].decode("utf-8", errors="replace")
-            
+
             # 后半部分
             tail_start = len(raw) - half
             nl = raw.rfind(b'\n', tail_start, len(raw))
             if nl != -1 and nl > tail_start - 256:
                 tail_start = nl + 1
             tail_text = raw[tail_start:].decode("utf-8", errors="replace")
-            
+
             result_str = f"{head_text}\n\n... [工具输出截断: {result_bytes}B → {len(head_text.encode('utf-8')) + len(tail_text.encode('utf-8'))}B] ...\n\n{tail_text}"
             logger.info(f"tool output truncated: {func_name}, {result_bytes}B → {len(result_str.encode('utf-8'))}B")
-        
+
         self.add_tool_result(call_id, result_str)
         self._record_tool_to_trace(func_name, success, error_msg, start_time)
         return call_id, func_name, result_str
@@ -486,7 +484,7 @@ class ToolComponent(SessionComponent):
             "content": content,
         })
 
-    def parse_tool_calls_from_stream(self, tool_calls_data: List[Dict]) -> list:
+    def parse_tool_calls_from_stream(self, tool_calls_data: list[dict]) -> list:
         valid_tool_calls = []
         for tc_data in tool_calls_data:
             func_id = tc_data["id"]
@@ -515,11 +513,11 @@ logger = logging.getLogger("session.summarizer")
 
 class SummarizerComponent(SessionComponent):
     """历史摘要组件 — 负责旧对话压缩、三级历史管理、语义摘要生成。"""
-    
+
     @property
     def name(self) -> str:
         return "summarizer"
-    
+
     def initialize(self) -> None:
         pass
 
@@ -572,7 +570,7 @@ class SummarizerComponent(SessionComponent):
                 self.ctx.cheap_client is not None
                 and cli is self.ctx.cheap_client
             )
-            
+
             cheap_params = get_cheap_params("summarizer")
             response = api_component.call_summarize_api(
                 cli, mdl,
@@ -588,7 +586,7 @@ class SummarizerComponent(SessionComponent):
                 temperature=cheap_params["temperature"],
                 max_tokens=cheap_params["max_tokens"],
             )
-            
+
             # 统计 token 用量
             api_component._track_api_usage(response, is_cheap=is_cheap)
 
@@ -618,7 +616,7 @@ class SummarizerComponent(SessionComponent):
             if self.ctx.tool_log:
                 self.ctx.tool_log(f"⚠️ 摘要生成失败: {e}")
 
-    def _conversations_to_text(self, conversations: List[Dict], max_per_msg: int = 500) -> str:
+    def _conversations_to_text(self, conversations: list[dict], max_per_msg: int = 500) -> str:
         lines = []
         for conv in conversations:
             # 用户消息
@@ -733,7 +731,7 @@ class OnlineToolSession(BaseChatSession):
         _http_client = httpx.Client(proxy=None)
         main_client = OpenAI(api_key=api_key, base_url=api_url, http_client=_http_client)
 
-        cheap_client: Optional[OpenAI] = None
+        cheap_client: OpenAI | None = None
         if cheap_api_key and cheap_api_url and cheap_model:
             cheap_client = OpenAI(api_key=cheap_api_key, base_url=cheap_api_url, http_client=httpx.Client(proxy=None))
 
@@ -788,7 +786,7 @@ class OnlineToolSession(BaseChatSession):
         self._extra_iterations = 0
         self._continue_after_max = False
         self._max_iter_wait = threading.Event()
-        
+
         # ── HTTP客户端管理 ──
         self._http_clients = []
         if _http_client:
@@ -797,7 +795,7 @@ class OnlineToolSession(BaseChatSession):
             self._http_clients.append(cheap_client._client)
 
         # ── 工具定义 ──
-        self.tools: List[Dict] = []
+        self.tools: list[dict] = []
         self.tools = self.tools_comp.build_tools()
 
         # 初始化 Memory 管理器
@@ -805,8 +803,8 @@ class OnlineToolSession(BaseChatSession):
 
         # ── 反思和提示词管理器 ──
         if self.storage is not None:
-            from tea_agent.reflection import ReflectionManager
             from tea_agent.prompt_manager import SystemPromptManager
+            from tea_agent.reflection import ReflectionManager
             self.reflection_manager = ReflectionManager(
                 storage=self.storage,
                 cheap_client=cheap_client,
@@ -884,13 +882,13 @@ class OnlineToolSession(BaseChatSession):
     # 委派方法
     # ──────────────────────────────────────────────
 
-    def _get_summarize_client(self) -> Tuple[Any, str]:
+    def _get_summarize_client(self) -> tuple[Any, str]:
         """获取用于摘要/提取任务的客户端和模型名。"""
         if self._cheap_client and self._cheap_model_name:
             return self._cheap_client, self._cheap_model_name
         return self.context.client, self.context.model
 
-    def _get_effective_params(self, model_type: str = "main") -> Dict[str, Any]:
+    def _get_effective_params(self, model_type: str = "main") -> dict[str, Any]:
         """返回 {temperature, max_tokens, top_p}，失败时返回空 dict。"""
         try:
             from .config import get_config
@@ -902,7 +900,7 @@ class OnlineToolSession(BaseChatSession):
     # 流式处理（委派给 API 组件）
     # ──────────────────────────────────────────────
 
-    def _process_stream_with_reasoning(self, response, callback) -> Tuple[str, List[Dict], str]:
+    def _process_stream_with_reasoning(self, response, callback) -> tuple[str, list[dict], str]:
         """处理流式/非流式响应，收集内容、工具调用数据和 reasoning_content。"""
         content_parts = []
         tool_calls_data = []
@@ -963,14 +961,16 @@ class OnlineToolSession(BaseChatSession):
     # Pipeline 设置
     # ──────────────────────────────────────────────
 
-    def _inject_os_info(self, context: Dict) -> List:
+    def _inject_os_info(self, context: dict) -> list:
         """注入操作系统环境信息 — 仅 OS 变化时重新注入。
-        
+
         跨会话持久化 OS 签名：同一 topic 在同一 OS 上只注入一次，
         切换主机（Windows↔Linux）时自动重新注入。
         """
         from tea_agent.session.os_info_injector import (
-            _get_os_signature, _load_persisted_os_sig, _save_os_sig,
+            _get_os_signature,
+            _load_persisted_os_sig,
+            _save_os_sig,
         )
         current_sig = _get_os_signature()
 
@@ -1023,7 +1023,7 @@ class OnlineToolSession(BaseChatSession):
     # 构建 API 消息（委派给 _history_builder）
     # ──────────────────────────────────────────────
 
-    def _build_api_messages(self) -> List[Dict]:
+    def _build_api_messages(self) -> list[dict]:
         """三级历史拼接 — 委派给 _history_builder.build_api_messages。"""
         return build_api_messages(self.context, self.system_prompt)
 
@@ -1035,7 +1035,7 @@ class OnlineToolSession(BaseChatSession):
         """轻量级意图分析。"""
         return analyze_intent(text)
 
-    def _execute_tool_loop(self, context: Dict) -> Dict:
+    def _execute_tool_loop(self, context: dict) -> dict:
         """执行工具调用循环 — 委派给 _tool_loop_runner.execute_tool_loop。"""
         return execute_tool_loop(self, context)
 
@@ -1094,7 +1094,7 @@ class OnlineToolSession(BaseChatSession):
     def _notify_prompt_evolved(self, version: int):
         self._notify("📝 提示词进化", f"系统提示词已进化到 v{version}")
 
-    def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: str = "", on_status: Optional[Callable[[str], None]] = None) -> Tuple[str, bool]:
+    def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: str = "", on_status: Callable[[str], None] | None = None) -> tuple[str, bool]:
         """流式对话，支持工具调用。使用 Pipeline 执行可配置的步骤。"""
         _msg_text = msg if isinstance(msg, str) else msg.get("text", "")
         _msg_images = None if isinstance(msg, str) else msg.get("images", [])
@@ -1155,7 +1155,7 @@ class OnlineToolSession(BaseChatSession):
                 error=str(result.get("error", "")) if result.get("error") else None,
             )
         return full_reply, used_tools
-    
+
     def close(self):
         """关闭会话，释放资源"""
         try:

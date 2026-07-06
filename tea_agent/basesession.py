@@ -3,18 +3,18 @@
 提供统一的聊天会话接口抽象基类
 """
 
-from abc import ABC, abstractmethod
-from typing import List, Dict, Callable, Tuple
 import logging
 import os
 import sys
+from abc import ABC, abstractmethod
+from collections.abc import Callable
 
 logger = logging.getLogger("basesession")
 
 
 def relaxed_json_loads(raw: str):
     """容错 JSON 解析：处理 LLM 常见的无效 JSON 输出。
-    
+
     自动修复的常见问题：
     - 单引号 → 双引号
     - 尾逗号（dict/array）
@@ -22,54 +22,59 @@ def relaxed_json_loads(raw: str):
     - 未引号包裹的 key（如 {a: 1} → {"a": 1}）
     - 未转义路径反斜杠（如 "C:\\Users" → "C:\\\\Users"）
     - 行内注释 // 和 /* */
-    
+    - 控制字符（\\x00-\\x1f 除 \\t\\n\\r 外自动移除）
+    - 被截断的 JSON（自动补全缺失括号/引号）
+
     Returns:
         解析后的 Python 对象
-        
+
     Raises:
         json.JSONDecodeError: 所有修复尝试均失败
     """
     import json
     import re
-    
+
     if not raw or not raw.strip():
         return {}
-    
+
     s = raw.strip()
-    
+
     # Step 1: 标准解析
     try:
         return json.loads(s)
     except json.JSONDecodeError:
         pass
-    
+
+    # Step 1.5: 移除非法控制字符（保留 \t \n \r）
+    s = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', s)
+
     # Step 2: 替换 Python 布尔值/None
     s = re.sub(r'\bTrue\b', 'true', s)
     s = re.sub(r'\bFalse\b', 'false', s)
     s = re.sub(r'\bNone\b', 'null', s)
-    
+
     # Step 3: 去掉 // 和 /* */ 注释
     s = re.sub(r'//[^\n]*', '', s)
     s = re.sub(r'/\*.*?\*/', '', s, flags=re.DOTALL)
-    
+
     # Step 4: 去除尾逗号
     s = re.sub(r',\s*}', '}', s)
     s = re.sub(r',\s*]', ']', s)
-    
+
     try:
         return json.loads(s)
     except json.JSONDecodeError:
         pass
-    
+
     # Step 5: 处理路径反斜杠 — 将单反斜杠（非 \n \t \r 等控制符）替换为双反斜杠
     # 匹配 \ 后面跟着字母的场景（如 C:\Users 中的 \U），不匹配 \n \t \r 等
     s = re.sub(r'\\([a-zA-Z])', r'\\\\\1', s)
-    
+
     try:
         return json.loads(s)
     except json.JSONDecodeError:
         pass
-    
+
     # Step 6: 单引号 → 双引号
     def _fix_single_quotes(text):
         result = []
@@ -94,22 +99,22 @@ def relaxed_json_loads(raw: str):
                 result.append(ch)
             i += 1
         return ''.join(result)
-    
+
     s = _fix_single_quotes(s)
-    
+
     try:
         return json.loads(s)
     except json.JSONDecodeError:
         pass
-    
+
     # Step 7: 为未引号包裹的 key 添加引号
     s = re.sub(r'([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', s)
-    
+
     try:
         return json.loads(s)
     except json.JSONDecodeError:
         pass
-    
+
     # Step 8: 尝试从文本中提取 JSON 对象
     brace_match = re.search(r'\{.*\}|\[.*\]', s, re.DOTALL)
     if brace_match:
@@ -117,9 +122,19 @@ def relaxed_json_loads(raw: str):
             return json.loads(brace_match.group())
         except json.JSONDecodeError:
             pass
-    
+
+    # Step 9: 尝试修复被截断的 JSON
+    # 延迟导入避免循环依赖
+    try:
+        from tea_agent.session.json_sanitizer import try_fix_truncated_json
+        fixed = try_fix_truncated_json(s)
+        if fixed is not None:
+            return json.loads(fixed)
+    except Exception:
+        pass
+
     # 全部失败，抛原始异常
-    raise json.JSONDecodeError(f"无法解析 JSON (已尝试多种修复)", raw, 0)
+    raise json.JSONDecodeError("无法解析 JSON (已尝试多种修复)", raw, 0)
 
 
 class BaseChatSession(ABC):
@@ -161,14 +176,14 @@ class BaseChatSession(ABC):
         self._history_summary = ""
 
         # 消息列表
-        self.messages: List[Dict] = []
+        self.messages: list[dict] = []
         self.messages.append({"role": "system", "content": self.system_prompt})
 
         # 打断标志
         self.interrupted = False
 
     @abstractmethod
-    def chat_stream(self, msg: str, callback: Callable[[str], None]) -> Tuple[str, bool]:
+    def chat_stream(self, msg: str, callback: Callable[[str], None]) -> tuple[str, bool]:
         """
         流式对话（抽象方法，子类必须实现）
 
@@ -206,15 +221,15 @@ class BaseChatSession(ABC):
             "content": content
         })
 
-    def get_recent_messages(self) -> List[Dict]:
+    def get_recent_messages(self) -> list[dict]:
         """获取最近的消息（排除系统消息）"""
         return [m for m in self.messages if m["role"] != "system"]
 
     @staticmethod
-    def _strip_reasoning_content(messages: List[Dict]) -> None:
+    def _strip_reasoning_content(messages: list[dict]) -> None:
         """
         原地清除消息列表中的 reasoning_content 字段。
-        
+
         注意：对于包含 tool_calls 的 assistant 消息，必须保留 reasoning_content，
         否则 DeepSeek API 会返回 400 错误。
         """
@@ -300,26 +315,26 @@ class BaseChatSession(ABC):
     def _compress_json_args(args_str: str, args_bytes: int, max_bytes: int = 2048) -> str:
         """
         JSON 感知截断 tool_calls 参数。
-        
+
         策略：
         1. 尝试 json.loads 解析 → 成功则递归压缩超长 string value
         2. 解析失败 → 回退到字节截断（首尾各1024B，按换行对齐）
-        
+
         递归压缩规则（对 dict 和 list 中的值）：
         - string > 1024 字节：截为首512B+尾512B，标记 [截断]
         - 其他类型（number/bool/null）：原样保留
         - 嵌套 dict/list：递归处理
-        
+
         Args:
             args_str: 原始 arguments JSON 字符串
             args_bytes: 原始字节数（用于截断标记）
             max_bytes: 触发压缩的阈值
-        
+
         Returns:
             压缩后的合法 JSON 字符串
         """
         import json as _json
-        
+
         # Step 1: 尝试解析
         try:
             obj = _json.loads(args_str)
@@ -340,7 +355,7 @@ class BaseChatSession(ABC):
             nl = raw.rfind(b'\n', tail_start, len(raw))
             if nl != -1 and nl > tail_start - 256:
                 tail_start = nl + 1
-            
+
             head_text = raw[:head_end].decode("utf-8", errors="replace")
             tail_text = raw[tail_start:].decode("utf-8", errors="replace")
             return (
@@ -348,10 +363,10 @@ class BaseChatSession(ABC):
                 f"\n... [L1截断: {args_bytes}B 参数] ...\n" +
                 tail_text
             )
-        
+
         # Step 2: 递归压缩超长 string value
         HALF = 512  # 每个 value 的首尾保留字节数
-        
+
         def _compress_value(val, path=""):
             """递归压缩值，返回 (compressed_val, truncated_count)"""
             if isinstance(val, str):
@@ -395,13 +410,13 @@ class BaseChatSession(ABC):
             else:
                 # number, bool, null
                 return (val, 0)
-        
+
         compressed_obj, truncated = _compress_value(obj)
-        
+
         if truncated == 0:
             # 没有需要截断的 value，返回原字符串（避免 re-serialize 格式变化）
             return args_str
-        
+
         result = _json.dumps(compressed_obj, ensure_ascii=False)
         return result
 
@@ -409,7 +424,7 @@ class BaseChatSession(ABC):
     def _guess_tool_threshold(tool_name: str, arguments: str) -> int:
         """
         根据工具名称和参数推断合适的输出截断阈值。
-        
+
         策略：
         - toolkit_kb → 64KB
         - toolkit_file read 源码文件 → 不截断 (sys.maxsize)
@@ -417,19 +432,19 @@ class BaseChatSession(ABC):
         - 其他 → 2KB 默认
         """
         import json as _json_gt
-        
+
         if tool_name == 'toolkit_kb':
             return BaseChatSession._KB_THRESHOLD
-        
+
         # 尝试从参数中提取文件路径/扩展名
         try:
             args = _json_gt.loads(arguments) if isinstance(arguments, str) else (arguments or {})
         except Exception:
             return BaseChatSession._DEFAULT_TOOL_THRESHOLD
-        
+
         if not isinstance(args, dict):
             return BaseChatSession._DEFAULT_TOOL_THRESHOLD
-        
+
         # 查找可能的文件路径参数
         filepath = None
         for key in ('filename', 'path', 'file', 'file_path', 'target'):
@@ -437,14 +452,14 @@ class BaseChatSession(ABC):
             if isinstance(val, str) and val:
                 filepath = val
                 break
-        
+
         if not filepath:
             return BaseChatSession._DEFAULT_TOOL_THRESHOLD
-        
+
         # 提取扩展名并匹配
         ext = os.path.splitext(filepath)[1].lower()
         basename = os.path.basename(filepath).lower()
-        
+
         if ext in BaseChatSession._SOURCE_EXTENSIONS:
             return sys.maxsize  # 源码文件：不截断
         if ext in BaseChatSession._TEXT_EXTENSIONS:
@@ -452,11 +467,11 @@ class BaseChatSession(ABC):
         # 无扩展名的常见文本文件
         if basename in ('makefile', 'dockerfile', 'license', 'changelog', 'readme', 'authors'):
             return BaseChatSession._TEXT_FILE_THRESHOLD
-        
+
         return BaseChatSession._DEFAULT_TOOL_THRESHOLD
 
     @staticmethod
-    def _compress_tool_rounds(rounds: List[Dict]) -> List[Dict]:
+    def _compress_tool_rounds(rounds: list[dict]) -> list[dict]:
         """
         对 rounds 中的工具调用链进行 L1 智能压缩。
 
@@ -478,7 +493,7 @@ class BaseChatSession(ABC):
 
 
         # ── 首遍扫描：收集 tool_call_id → (tool_name, arguments) ──
-        tc_map: Dict[str, tuple] = {}  # tool_call_id → (tool_name, arguments_str)
+        tc_map: dict[str, tuple] = {}  # tool_call_id → (tool_name, arguments_str)
         for rd in rounds:
             if rd.get("role") == "assistant" and rd.get("tool_calls"):
                 for tc in rd["tool_calls"]:
@@ -545,7 +560,7 @@ class BaseChatSession(ABC):
         return result
 
     @staticmethod
-    def _repair_incomplete_tool_chains(rounds: List[Dict]) -> List[Dict]:
+    def _repair_incomplete_tool_chains(rounds: list[dict]) -> list[dict]:
         """
         修复中断导致的不完整工具调用链。
 
@@ -563,12 +578,12 @@ class BaseChatSession(ABC):
         if not rounds:
             return rounds
 
-        result: List[Dict] = []
+        result: list[dict] = []
         # 追踪尚未匹配的 tool_call_id -> 在 result 中的起始索引
-        pending: Dict[str, int] = {}
+        pending: dict[str, int] = {}
         last_safe_len = 0  # 最后安全点：所有 pending 已清零时的 result 长度
 
-        for i, rd in enumerate(rounds):
+        for _i, rd in enumerate(rounds):
             role = rd.get("role", "")
 
             if role == "assistant" and rd.get("tool_calls"):
@@ -581,10 +596,7 @@ class BaseChatSession(ABC):
 
                 # 记录新的 tool_call_ids
                 tc_list = rd["tool_calls"]
-                if isinstance(tc_list, list):
-                    tc_ids = [tc.get("id", "") for tc in tc_list if tc.get("id")]
-                else:
-                    tc_ids = []
+                tc_ids = [tc.get("id", "") for tc in tc_list if tc.get("id")] if isinstance(tc_list, list) else []
 
                 if not tc_ids:
                     # 有 tool_calls 字段但没有有效 id，视为纯 assistant 消息
@@ -639,7 +651,7 @@ class BaseChatSession(ABC):
 
         return result
 
-    def load_history(self, conversations: List[Dict], summary: str = "", recent_turns: int = 10,
+    def load_history(self, conversations: list[dict], summary: str = "", recent_turns: int = 10,
                      level2: list = None, semantic_summary: str = "", tool_chain_summary: str = ""):
         """
         三级历史加载：

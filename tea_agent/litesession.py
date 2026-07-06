@@ -10,7 +10,7 @@
 
 import json
 import logging
-from typing import Dict, List, Optional, Callable
+from collections.abc import Callable
 
 from openai import OpenAI
 
@@ -22,7 +22,7 @@ logger = logging.getLogger("session.lite")
 class LiteSession:
     """
     轻量级会话 - 无状态、无历史、单轮执行
-    
+
     每次 chat() 调用：
     - 构建消息: [system_prompt, user_input]
     - 调用 LLM（支持工具调用循环，但只返回最终结果）
@@ -42,7 +42,7 @@ class LiteSession:
     ):
         """
         初始化轻量级会话。
-        
+
         Args:
             toolkit: Toolkit 工具库实例
             api_key: API密钥
@@ -60,13 +60,13 @@ class LiteSession:
         self.max_iterations = max_iterations
         self.supports_reasoning = supports_reasoning
         self.interrupted = False
-        
+
         # API 客户端
         self.api = OpenAI(api_key=api_key, base_url=api_url)
-        
+
         # 构建工具定义
         self.tools = self._build_tools()
-        
+
         logger.info(f"LiteSession 初始化 | 模型: {model} | 工具数: {len(self.tools)}")
 
     def _default_system_prompt(self) -> str:
@@ -77,12 +77,12 @@ class LiteSession:
 
 你不断进化，能力无上限。以最有效优雅的方式完成任务并持续增强自身。"""
 
-    def _build_tools(self) -> List[Dict]:
+    def _build_tools(self) -> list[dict]:
         """构建工具定义列表。"""
         tools = []
         if not self.toolkit:
             return tools
-        
+
         # 使用 meta_map 获取工具定义
         for name, meta in self.toolkit.meta_map.items():
             if name.startswith("toolkit_"):
@@ -91,17 +91,17 @@ class LiteSession:
                         tools.append(meta)
                 except Exception as e:
                     logger.warning(f"工具 {name} 定义加载失败: {e}")
-        
+
         return tools
 
-    def chat(self, user_input: str, callback: Optional[Callable[[str], None]] = None) -> Dict:
+    def chat(self, user_input: str, callback: Callable[[str], None] | None = None) -> dict:
         """
         执行单轮对话。
-        
+
         Args:
             user_input: 用户输入
             callback: 流式回调（可选）
-            
+
         Returns:
             {
                 "user": str,           # 用户输入
@@ -112,41 +112,41 @@ class LiteSession:
             }
         """
         self.interrupted = False
-        
+
         # 构建消息：只有系统提示 + 用户输入
         messages = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": user_input}
         ]
-        
+
         full_reply = ""
         thinking_content = ""
         tool_calls_count = 0
         iterations = 0
-        
+
         try:
             while iterations < self.max_iterations:
                 # 中断检查
                 if self.interrupted:
                     break
-                
+
                 # 调用 API
                 response = self._call_api(messages)
-                
+
                 # 处理响应
                 content, tool_calls_data, reasoning = self._process_response(response, callback)
-                
+
                 # 累积回复
                 full_reply += content
                 if reasoning:
                     thinking_content += reasoning
-                
+
                 # 解析工具调用
                 valid_tool_calls = self._parse_tool_calls(tool_calls_data)
-                
+
                 if valid_tool_calls:
                     tool_calls_count += len(valid_tool_calls)
-                    
+
                     # 添加 assistant 消息到上下文
                     assistant_msg = {
                         "role": "assistant",
@@ -161,7 +161,7 @@ class LiteSession:
                         } for tc in valid_tool_calls]
                     }
                     messages.append(assistant_msg)
-                    
+
                     # 执行工具调用
                     for call in valid_tool_calls:
                         if self.interrupted:
@@ -172,14 +172,14 @@ class LiteSession:
                             "tool_call_id": call_id,
                             "content": result_str
                         })
-                    
+
                     iterations += 1
                     continue
                 else:
                     # 无工具调用，对话结束
                     iterations += 1
                     break
-            
+
             return {
                 "user": user_input,
                 "thinking": thinking_content,
@@ -187,7 +187,7 @@ class LiteSession:
                 "tool_calls": tool_calls_count,
                 "error": None
             }
-            
+
         except Exception as e:
             logger.error(f"LiteSession.chat 失败: {e}")
             return {
@@ -198,51 +198,51 @@ class LiteSession:
                 "error": str(e)
             }
 
-    def _call_api(self, messages: List[Dict]):
+    def _call_api(self, messages: list[dict]):
         """调用 API。"""
         kwargs = {
             "model": self.model,
             "messages": messages,
             "stream": True,
         }
-        
+
         # 如果有工具，添加工具定义
         if self.tools:
             kwargs["tools"] = self.tools
-        
+
         # thinking 模式
         if self.enable_thinking and self.supports_reasoning:
             kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
-        
+
         return self.api.chat.completions.create(**kwargs)
 
-    def _process_response(self, response, callback: Optional[Callable]) -> tuple:
+    def _process_response(self, response, callback: Callable | None) -> tuple:
         """处理流式响应。"""
         content = ""
         reasoning_content = ""
         tool_calls_data = {}
-        
+
         for chunk in response:
             if self.interrupted:
                 break
-                
+
             if not chunk.choices:
                 continue
-                
+
             delta = chunk.choices[0].delta
-            
+
             # 处理推理内容
             if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
                 reasoning_content += delta.reasoning_content
                 if callback:
                     callback(delta.reasoning_content)
-            
+
             # 处理普通内容
             if delta.content:
                 content += delta.content
                 if callback:
                     callback(delta.content)
-            
+
             # 处理工具调用
             if delta.tool_calls:
                 for tc in delta.tool_calls:
@@ -260,24 +260,24 @@ class LiteSession:
                             tool_calls_data[idx]["name"] = tc.function.name
                         if tc.function.arguments:
                             tool_calls_data[idx]["arguments"] += tc.function.arguments
-        
+
         return content, tool_calls_data, reasoning_content
 
-    def _parse_tool_calls(self, tool_calls_data: Dict) -> List:
+    def _parse_tool_calls(self, tool_calls_data: dict) -> list:
         """解析工具调用数据。"""
         from dataclasses import dataclass
-        
+
         @dataclass
         class SimpleFunction:
             name: str
             arguments: str
-        
+
         @dataclass
         class SimpleToolCall:
             id: str
             type: str = "function"
             function: SimpleFunction = None
-        
+
         valid_calls = []
         for idx in sorted(tool_calls_data.keys()):
             data = tool_calls_data[idx]
@@ -294,7 +294,7 @@ class LiteSession:
                     ))
                 except json.JSONDecodeError:
                     logger.warning(f"工具 {data['name']} 参数 JSON 无效: {data['arguments'][:100]}")
-        
+
         return valid_calls
 
     def _execute_tool(self, call) -> tuple:
@@ -302,12 +302,12 @@ class LiteSession:
         func_name = call.function.name
         args_str = call.function.arguments
         call_id = call.id
-        
+
         try:
             args = relaxed_json_loads(args_str) if args_str else {}
         except json.JSONDecodeError:
             args = {}
-        
+
         # 执行工具
         try:
             result = self.toolkit.call_tool(func_name, **args)
@@ -315,7 +315,7 @@ class LiteSession:
         except Exception as e:
             result_str = f"工具执行错误: {e}"
             logger.warning(f"工具 {func_name} 执行失败: {e}")
-        
+
         return call_id, func_name, result_str
 
     def interrupt(self):
@@ -325,9 +325,8 @@ class LiteSession:
     def close(self):
         """关闭会话，释放 HTTP 客户端资源。"""
         try:
-            if hasattr(self, 'api') and self.api:
-                if hasattr(self.api, 'close'):
-                    self.api.close()
+            if hasattr(self, 'api') and self.api and hasattr(self.api, 'close'):
+                self.api.close()
             logger.info("LiteSession 资源已释放")
         except Exception as e:
             logger.warning(f"关闭 LiteSession 资源失败: {e}")

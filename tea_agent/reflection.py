@@ -10,9 +10,8 @@
 """
 
 import json
-import time
 import logging
-from typing import Dict, List, Optional, Tuple
+import time
 from dataclasses import dataclass, field
 
 logger = logging.getLogger("ReflectionManager")
@@ -30,11 +29,11 @@ class SessionTrace:
     """一次会话的完整追踪"""
     topic_id: str = ""
     user_msg: str = ""
-    tool_calls: List[ToolCallRecord] = field(default_factory=list)
+    tool_calls: list[ToolCallRecord] = field(default_factory=list)
     total_iterations: int = 0
     used_tools: bool = False
     interrupted: bool = False
-    error: Optional[str] = None
+    error: str | None = None
     start_time: float = 0.0
     end_time: float = 0.0
 
@@ -87,7 +86,7 @@ class ReflectionManager:
         self.storage = storage
         self._cheap_client = cheap_client
         self._cheap_model = cheap_model
-        self._pending_traces: List[SessionTrace] = []
+        self._pending_traces: list[SessionTrace] = []
 
     def start_trace(self, topic_id: str, user_msg: str) -> SessionTrace:
         """开始追踪一次会话"""
@@ -109,7 +108,7 @@ class ReflectionManager:
         ))
 
     def finish_trace(self, trace: SessionTrace, total_iterations: int = 0, used_tools: bool = False,
-                     interrupted: bool = False, error: Optional[str] = None):
+                     interrupted: bool = False, error: str | None = None):
         """结束追踪"""
         trace.end_time = time.time()
         trace.total_iterations = total_iterations
@@ -152,7 +151,7 @@ class ReflectionManager:
 
         return False
 
-    def build_reflection_prompt(self) -> Tuple[str, List[Dict]]:
+    def build_reflection_prompt(self) -> tuple[str, list[dict]]:
         """构建反思 prompt，返回 (文本, API messages)"""
         if not self._pending_traces:
             return "", []
@@ -181,7 +180,7 @@ class ReflectionManager:
 
         return prompt_text, messages
 
-    def parse_reflection_result(self, result_text: str) -> Optional[Dict]:
+    def parse_reflection_result(self, result_text: str) -> dict | None:
         """解析 LLM 反思结果"""
         try:
             text = result_text.strip()
@@ -192,7 +191,7 @@ class ReflectionManager:
         except (json.JSONDecodeError, ValueError):
             return None
 
-    def generate_reflection(self) -> Optional[int]:
+    def generate_reflection(self) -> int | None:
         """
         触发反思：调用 LLM 分析 pending traces，存储反思记录。
 
@@ -277,9 +276,9 @@ class ReflectionManager:
             logger.warning(f"反思生成失败: {e}")
             return None
 
-    def _build_tool_stats(self) -> Dict:
+    def _build_tool_stats(self) -> dict:
         """构建工具统计"""
-        stats: Dict[str, Dict] = {}
+        stats: dict[str, dict] = {}
         for trace in self._pending_traces:
             for tc in trace.tool_calls:
                 if tc.name not in stats:
@@ -294,10 +293,10 @@ class ReflectionManager:
         return stats
 
     @property
-    def last_prompt_suggestion(self) -> Optional[str]:
+    def last_prompt_suggestion(self) -> str | None:
         """获取最近一次反思生成的提示词建议"""
         return getattr(self, '_last_prompt_suggestion', None)
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """获取反思统计"""
         return self.storage.get_reflection_stats()

@@ -4,21 +4,21 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
-def toolkit_mcp(action: str = "connect", server_name: str = "", command: str = "", 
+def toolkit_mcp(action: str = "connect", server_name: str = "", command: str = "",
                 args: list = None, transport: str = "stdio", url: str = "",
                 tool_name: str = "", tool_args: dict = None):
     """
     MCP (Model Context Protocol) 客户端工具，用于连接外部 MCP Server 并使用第三方工具。
 
     action='connect': 连接 MCP Server
-        toolkit_mcp(action='connect', server_name='filesystem', command='npx', 
+        toolkit_mcp(action='connect', server_name='filesystem', command='npx',
                    args=['-y', '@modelcontextprotocol/server-filesystem', '/path/to/allow'])
 
     action='list_tools': 列出服务器可用工具
         toolkit_mcp(action='list_tools', server_name='filesystem')
 
     action='call_tool': 调用 MCP 工具
-        toolkit_mcp(action='call_tool', server_name='filesystem', 
+        toolkit_mcp(action='call_tool', server_name='filesystem',
                    tool_name='read_file', tool_args={'path': '/tmp/test.txt'})
 
     action='disconnect': 断开连接
@@ -90,8 +90,8 @@ def _mcp_run_async(coro, timeout: float = 30.0):
 
 def _mcp_connect(server_name: str, command: str, args: list, transport: str, url: str):
     """连接 MCP Server（在持久事件循环中，保持 stdio context manager 活跃）"""
-    import json
     import asyncio
+    import json
 
     if not server_name:
         return (1, "", "server_name 不能为空")
@@ -101,8 +101,8 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
 
     try:
         from mcp import ClientSession, StdioServerParameters
-        from mcp.client.stdio import stdio_client
         from mcp.client.sse import sse_client
+        from mcp.client.stdio import stdio_client
 
         async def _connect_and_keepalive():
             """连接并创建一个永不退出的 keepalive 任务来保持 context manager 活跃"""
@@ -279,8 +279,8 @@ def _mcp_call(server_name: str, tool_name: str, tool_args: dict):
 
 def _mcp_disconnect(server_name: str):
     """断开 MCP Server 连接（设置 keepalive event 触发清理）"""
-    import json
     import asyncio
+    import json
 
     if not server_name:
         return (1, "", "server_name 不能为空")
@@ -378,7 +378,6 @@ def meta_toolkit_mcp() -> dict:
                     },
                 },
                 "required": ["action"],
-                "type": "object",
             },
         },
     }

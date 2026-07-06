@@ -3,7 +3,7 @@
 
 用法:
     from tea_agent.evaluation import TaskEvaluator
-    
+
     evaluator = TaskEvaluator()
     result = evaluator.evaluate(
         task="重构 gui.py 添加类型注解",
@@ -14,6 +14,6 @@
     )
 """
 
-from .task_evaluator import TaskEvaluator, EvalResult
+from .task_evaluator import EvalResult, TaskEvaluator
 
 __all__ = ["TaskEvaluator", "EvalResult"]

@@ -7,13 +7,12 @@
 
 用法:
     from tea_agent.multi_agent import LiteAgent
-    
+
     agent = LiteAgent()
     result = agent.execute_sync("重构 gui.py 添加类型注解")
 """
 
 import logging
-from typing import Dict
 
 from tea_agent.litesession import LiteSession
 
@@ -94,7 +93,7 @@ class LiteAgent:
     def execute_with_context(
         self,
         goal: str,
-        context: Dict,
+        context: dict,
         system_prompt: str = "",
     ) -> str:
         """
@@ -113,14 +112,7 @@ class LiteAgent:
         for key, value in context.items():
             context_parts.append(f"【{key}】\n{value}")
 
-        if context_parts:
-            enriched_goal = (
-                "## 前置信息\n"
-                + "\n\n".join(context_parts)
-                + f"\n\n## 当前任务\n{goal}"
-            )
-        else:
-            enriched_goal = goal
+        enriched_goal = "## 前置信息\n" + "\n\n".join(context_parts) + f"\n\n## 当前任务\n{goal}" if context_parts else goal
 
         return self.execute_sync(enriched_goal, system_prompt)
 

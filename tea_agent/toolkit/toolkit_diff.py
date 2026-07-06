@@ -16,11 +16,10 @@ toolkit_diff — Diff-first 代码编辑引擎
 """
 
 import json
+import logging
 import os
 import subprocess
 from datetime import datetime
-from typing import List, Optional, Tuple
-import logging
 
 logger = logging.getLogger("toolkit")
 
@@ -36,7 +35,7 @@ def _generate_unified_diff(old: str, new: str, filename: str = "file", context_l
 
 # ── Git Stash 集成 ──────────────────────────────────────
 
-def _git_stash_push(cwd: str) -> Tuple[bool, str]:
+def _git_stash_push(cwd: str) -> tuple[bool, str]:
     """保存当前工作区到 stash，返回 (ok, stash_ref)"""
     try:
         r = subprocess.run(["git", "stash", "push", "-m", "toolkit_diff auto-save"],
@@ -46,7 +45,7 @@ def _git_stash_push(cwd: str) -> Tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
-def _git_stash_pop(cwd: str) -> Tuple[bool, str]:
+def _git_stash_pop(cwd: str) -> tuple[bool, str]:
     """恢复最近一次 stash"""
     try:
         r = subprocess.run(["git", "stash", "pop"], capture_output=True, text=True, timeout=15, cwd=cwd)
@@ -64,12 +63,12 @@ def _git_stash_drop(cwd: str) -> bool:
 
 # ── 冲突检测 ────────────────────────────────────────────
 
-def _check_conflict(file_path: str, old_code: str, cwd: str) -> Optional[str]:
+def _check_conflict(file_path: str, old_code: str, cwd: str) -> str | None:
     """检查 old_code 是否仍存在于文件。返回 None=无冲突, 否则返回错误信息"""
     full = os.path.join(cwd, file_path)
     if not os.path.exists(full):
         return f"文件不存在: {file_path}"
-    with open(full, "r", encoding="utf-8", errors="replace") as f:
+    with open(full, encoding="utf-8", errors="replace") as f:
         content = f.read()
     if old_code not in content:
         return f"冲突: old_code 在 {file_path} 中未找到（文件可能已被修改）"
@@ -79,7 +78,7 @@ def _check_conflict(file_path: str, old_code: str, cwd: str) -> Optional[str]:
 
 # ── 验证 ────────────────────────────────────────────────
 
-def _verify_all(files: List[str], cwd: str, run_tests: bool = True) -> dict:
+def _verify_all(files: list[str], cwd: str, run_tests: bool = True) -> dict:
     """批量编译+lint 验证，可选测试"""
     results = {"compile": {}, "lint": {}, "test": None}
 
@@ -161,7 +160,7 @@ def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, descripti
 
     # 应用
     try:
-        with open(full, "r", encoding="utf-8") as f:
+        with open(full, encoding="utf-8") as f:
             content = f.read()
         # 归一化换行符，确保只使用 \n
         content = content.replace('\r\n', '\n').replace('\r', '\n')
@@ -181,7 +180,7 @@ def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, descripti
 
 def toolkit_diff(
     action: str,
-    files: List[dict] = None,
+    files: list[dict] = None,
     cwd: str = None,
     run_tests: bool = True,
     description: str = "",

@@ -1,11 +1,12 @@
 ## llm generated tool func, created Wed May 27 13:15:16 2026
 # version: 1.0.12
 
-import sqlite3
+import contextlib
 import json
-import os
-from pathlib import Path
 import logging
+import os
+import sqlite3
+from pathlib import Path
 
 logger = logging.getLogger("export_pdf")
 
@@ -61,31 +62,7 @@ def _sanitize(text):
         # Keep ASCII printable, CJK, common symbols
         if cp == 0x09 or cp == 0x0A or cp == 0x0D:  # tab, newline, carriage return
             result.append(' ')
-        elif 0x20 <= cp <= 0x7E:  # ASCII printable
-            result.append(ch)
-        elif 0x4E00 <= cp <= 0x9FFF:  # CJK Unified
-            result.append(ch)
-        elif 0x3000 <= cp <= 0x303F:  # CJK Symbols
-            result.append(ch)
-        elif 0xFF00 <= cp <= 0xFFEF:  # Fullwidth forms
-            result.append(ch)
-        elif cp in (0x2014, 0x2013, 0x2018, 0x2019, 0x201C, 0x201D, 0x2026):  # Common punctuation
-            result.append(ch)
-        elif 0x2000 <= cp <= 0x206F:  # General Punctuation
-            result.append(ch)
-        elif 0x2100 <= cp <= 0x214F:  # Letterlike Symbols
-            result.append(ch)
-        elif 0x2150 <= cp <= 0x218F:  # Number Forms
-            result.append(ch)
-        elif 0x2190 <= cp <= 0x21FF:  # Arrows
-            result.append(ch)
-        elif 0x2200 <= cp <= 0x22FF:  # Math Operators
-            result.append(ch)
-        elif 0x2500 <= cp <= 0x257F:  # Box Drawing
-            result.append(ch)
-        elif 0x2580 <= cp <= 0x259F:  # Block Elements
-            result.append(ch)
-        elif 0x25A0 <= cp <= 0x25FF:  # Geometric Shapes
+        elif 0x20 <= cp <= 0x7E or 0x4E00 <= cp <= 0x9FFF or 0x3000 <= cp <= 0x303F or 0xFF00 <= cp <= 0xFFEF or cp in (0x2014, 0x2013, 0x2018, 0x2019, 0x201C, 0x201D, 0x2026) or 0x2000 <= cp <= 0x206F or 0x2100 <= cp <= 0x214F or 0x2150 <= cp <= 0x218F or 0x2190 <= cp <= 0x21FF or 0x2200 <= cp <= 0x22FF or 0x2500 <= cp <= 0x257F or 0x2580 <= cp <= 0x259F or 0x25A0 <= cp <= 0x25FF:  # ASCII printable
             result.append(ch)
         # Skip everything else (emoji, special symbols, etc.)
     return ''.join(result)
@@ -238,11 +215,11 @@ def _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path)
 
 def export_topic_pdf(topic_id: str, output_path: str = None) -> str:
     """Export a specific topic's last conversation as PDF.
-    
+
     Args:
         topic_id: Topic UUID.
         output_path: Output path (default: 'export_{topic_id[:8]}.pdf').
-    
+
     Returns:
         Path to the generated PDF file.
     """
@@ -292,10 +269,8 @@ def export_topic_pdf(topic_id: str, output_path: str = None) -> str:
         tc_raw = r["tool_calls"]
         tc = None
         if tc_raw:
-            try:
+            with contextlib.suppress(Exception):
                 tc = json.loads(tc_raw) if isinstance(tc_raw, str) else tc_raw
-            except Exception:
-                pass
         if (tc and not content.strip()) or role == "tool":
             continue
         if role == "assistant" and content:

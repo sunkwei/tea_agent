@@ -3,10 +3,10 @@ Battle Snakes Engine — pure game logic, no I/O.
 Multi-snake survival: each snake has its own strategy, last one alive wins.
 """
 
+import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Callable, Set, Tuple, Dict
-import random
 
 
 class Direction(Enum):
@@ -25,7 +25,7 @@ class Direction(Enum):
         return opposites[self]
 
     @staticmethod
-    def all() -> List["Direction"]:
+    def all() -> list["Direction"]:
         return [Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT]
 
 
@@ -46,20 +46,20 @@ class Snake:
 
     def __init__(
         self,
-        body: List[Position],
+        body: list[Position],
         strategy: Callable[["Snake", "Game"], Direction],
         name: str,
         char: str,
         color_id: int = 0,
     ):
-        self.body: List[Position] = list(body)  # head is body[0]
+        self.body: list[Position] = list(body)  # head is body[0]
         self.strategy = strategy
         self.name = name
         self.char = char
         self.color_id = color_id
         self.alive: bool = True
         self.score: int = 0
-        self._last_direction: Optional[Direction] = None
+        self._last_direction: Direction | None = None
 
     @property
     def head(self) -> Position:
@@ -92,19 +92,19 @@ class Game:
         self,
         width: int,
         height: int,
-        snakes_config: List[dict],
-        seed: Optional[int] = None,
+        snakes_config: list[dict],
+        seed: int | None = None,
     ):
         self.board = Board(width, height)
-        self.snakes: List[Snake] = []
+        self.snakes: list[Snake] = []
         self.tick_count: int = 0
         self.max_strawberries: int = 3
         self._rng = random.Random(seed)
-        self._strawberries: Set[Position] = set()
+        self._strawberries: set[Position] = set()
         self._init_snakes(snakes_config)
         self._spawn_initial_strawberries()
 
-    def _init_snakes(self, configs: List[dict]) -> None:
+    def _init_snakes(self, configs: list[dict]) -> None:
         """Place snakes at spaced starting positions."""
         chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         for i, cfg in enumerate(configs):
@@ -162,14 +162,11 @@ class Game:
     # ── queries ────────────────────────────────────────────
 
     def _any_snake_at(self, pos: Position) -> bool:
-        for s in self.snakes:
-            if s.alive and pos in s.body:
-                return True
-        return False
+        return any(s.alive and pos in s.body for s in self.snakes)
 
-    def all_occupied_positions(self, exclude: Optional[Snake] = None) -> Set[Position]:
+    def all_occupied_positions(self, exclude: Snake | None = None) -> set[Position]:
         """Set of all occupied cells (walls + snake bodies)."""
-        occupied: Set[Position] = set()
+        occupied: set[Position] = set()
         # walls just outside bounds
         for x in range(-1, self.board.width + 1):
             occupied.add(Position(x, -1))
@@ -186,7 +183,7 @@ class Game:
     # ── strawberries ───────────────────────────────────────
 
     @property
-    def strawberries(self) -> Set[Position]:
+    def strawberries(self) -> set[Position]:
         return self._strawberries
 
     def has_strawberry_at(self, pos: Position) -> bool:
@@ -210,10 +207,10 @@ class Game:
         Advance the game by one tick. Returns status dict.
         """
         self.tick_count += 1
-        events: List[str] = []
+        events: list[str] = []
 
         # 1. collect decisions from all alive snakes
-        decisions: Dict[Snake, Direction] = {}
+        decisions: dict[Snake, Direction] = {}
         for s in self.snakes:
             if s.alive:
                 try:
@@ -224,13 +221,13 @@ class Game:
                 decisions[s] = d
 
         # 2. compute new heads (before moving)
-        new_heads: Dict[Snake, Position] = {}
+        new_heads: dict[Snake, Position] = {}
         for s, d in decisions.items():
             new_heads[s] = s.head + d
         # 3. check which snakes will eat a strawberry
         # handle multiple snakes landing on same strawberry: first-come-first-served
-        eaten_strawberries: Set[Position] = set()
-        ate: Set[Snake] = set()
+        eaten_strawberries: set[Position] = set()
+        ate: set[Snake] = set()
         for s in decisions:
             nh = new_heads[s]
             if nh in self._strawberries and nh not in eaten_strawberries:
@@ -252,7 +249,7 @@ class Game:
                 events.append(f"{s.name} ate a strawberry!")
                 self._spawn_one_strawberry()
         # 5. resolve collisions (simultaneous)
-        dead_this_tick: Set[Snake] = set()
+        dead_this_tick: set[Snake] = set()
 
         # wall & self collisions
         for s in self.snakes:
@@ -270,7 +267,7 @@ class Game:
 
         # head-to-head collisions
         alive_now = [s for s in self.snakes if s.alive and s not in dead_this_tick]
-        head_map: Dict[Position, List[Snake]] = {}
+        head_map: dict[Position, list[Snake]] = {}
         for s in alive_now:
             head_map.setdefault(s.head, []).append(s)
 
@@ -310,7 +307,7 @@ class Game:
 
     # ── helpers for strategies ─────────────────────────────
 
-    def _safe_dirs(self, snake: Snake) -> List[Direction]:
+    def _safe_dirs(self, snake: Snake) -> list[Direction]:
         """Return directions that don't immediately kill the snake."""
         safe = []
         for d in Direction.all():
@@ -330,7 +327,7 @@ class Game:
                 safe.append(d)
         return safe
 
-    def flood_fill(self, start: Position, exclude: Optional[Snake] = None) -> int:
+    def flood_fill(self, start: Position, exclude: Snake | None = None) -> int:
         """Count reachable cells from start (used by survival strategies)."""
         occupied = self.all_occupied_positions(exclude)
         if start in occupied:
@@ -346,8 +343,8 @@ class Game:
                     stack.append(np)
         return len(visited)
 
-    def bfs_distance(self, start: Position, goals: Set[Position],
-                     exclude: Optional[Snake] = None) -> Optional[int]:
+    def bfs_distance(self, start: Position, goals: set[Position],
+                     exclude: Snake | None = None) -> int | None:
         """BFS shortest path distance from start to any goal. None if unreachable."""
         if start in goals:
             return 0
@@ -355,7 +352,7 @@ class Game:
         if start in occupied:
             return None
         visited = {start}
-        queue: List[Tuple[Position, int]] = [(start, 0)]
+        queue: list[tuple[Position, int]] = [(start, 0)]
         for p, dist in queue:
             for d in Direction.all():
                 np = p + d
@@ -367,5 +364,5 @@ class Game:
         return None
 
     @property
-    def alive_snakes(self) -> List[Snake]:
+    def alive_snakes(self) -> list[Snake]:
         return [s for s in self.snakes if s.alive]

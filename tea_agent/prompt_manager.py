@@ -10,7 +10,6 @@
 """
 
 import logging
-from typing import Dict, List, Optional
 
 logger = logging.getLogger("SystemPromptManager")
 
@@ -113,7 +112,7 @@ class SystemPromptManager:
             self._current_prompt_id = latest["id"]
         return self._current_prompt
 
-    def build_evolve_prompt(self, reflection_suggestion: Optional[str] = None) -> List[Dict]:
+    def build_evolve_prompt(self, reflection_suggestion: str | None = None) -> list[dict]:
         """
         构建提示词进化 prompt。
 
@@ -165,7 +164,7 @@ class SystemPromptManager:
             {"role": "user", "content": user_content}
         ]
 
-    def evolve(self, reflection_suggestion: Optional[str] = None) -> Optional[int]:
+    def evolve(self, reflection_suggestion: str | None = None) -> int | None:
         """
         触发提示词进化：调用 LLM 生成新版本，存储到数据库。
 
@@ -260,11 +259,11 @@ class SystemPromptManager:
         logger.info(f"系统提示词回滚到 v{version}")
         return True
 
-    def list_versions(self) -> List[Dict]:
+    def list_versions(self) -> list[dict]:
         """列出所有版本"""
         return self.storage.get_system_prompt_history(limit=50)
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> dict:
         """获取统计"""
         count = self.storage.get_system_prompt_count()
         return {

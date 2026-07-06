@@ -93,7 +93,7 @@ def toolkit_diff_edit(
             "error": f"文件不存在: {file_path}",
         }
 
-    with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+    with open(full_path, encoding="utf-8", errors="replace") as f:
         content = f.read()
 
     # 2. 归一化换行符

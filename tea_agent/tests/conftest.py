@@ -3,10 +3,11 @@ pytest 公共 fixtures。
 提供可复用的测试资源：临时 Storage、临时配置文件、内存模型配置等。
 """
 
+import contextlib
 import os
+import shutil
 import sys
 import tempfile
-import shutil
 from pathlib import Path
 
 import pytest
@@ -22,10 +23,8 @@ def tmp_db_path():
     db_path = os.path.join(tmpdir, "test_chat_history.db")
     yield db_path
     # 清理
-    try:
+    with contextlib.suppress(Exception):
         shutil.rmtree(tmpdir, ignore_errors=True)
-    except Exception:
-        pass
 
 
 @pytest.fixture
@@ -35,10 +34,8 @@ def storage(tmp_db_path):
 
     s = Storage(db_path=tmp_db_path)
     yield s
-    try:
+    with contextlib.suppress(Exception):
         s.close()
-    except Exception:
-        pass
 
 
 @pytest.fixture
@@ -47,10 +44,8 @@ def tmp_yaml_config():
     tmpdir = tempfile.mkdtemp(prefix="tea_config_")
     yaml_path = os.path.join(tmpdir, "config.yaml")
     yield yaml_path
-    try:
+    with contextlib.suppress(Exception):
         shutil.rmtree(tmpdir, ignore_errors=True)
-    except Exception:
-        pass
 
 
 @pytest.fixture

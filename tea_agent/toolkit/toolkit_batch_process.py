@@ -13,22 +13,18 @@ toolkit_batch_process — 批量文件处理工具
 支持 glob 匹配、并行执行、进度报告、失败隔离。
 """
 
-import os
-import re
-import glob
+import concurrent.futures
 import json
 import logging
+import os
 import subprocess
-import concurrent.futures
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Callable
-from datetime import datetime
 
 logger = logging.getLogger("toolkit.batch_process")
 
 # ── 内置处理器 ──────────────────────────────────────────
 
-def _handler_compile(abspath: str, **kwargs) -> Dict:
+def _handler_compile(abspath: str, **kwargs) -> dict:
     """编译检查"""
     import py_compile
     try:
@@ -38,21 +34,18 @@ def _handler_compile(abspath: str, **kwargs) -> Dict:
         return {"file": abspath, "ok": False, "result": str(e)[:200]}
 
 
-def _handler_lint(abspath: str, **kwargs) -> Dict:
+def _handler_lint(abspath: str, **kwargs) -> dict:
     """Ruff Lint 检查"""
     try:
         r = subprocess.run(["ruff", "check", "--output-format", "json", abspath],
                            capture_output=True, text=True, timeout=30)
-        if r.stdout.strip():
-            issues = json.loads(r.stdout)
-        else:
-            issues = []
+        issues = json.loads(r.stdout) if r.stdout.strip() else []
         return {"file": abspath, "ok": len(issues) == 0, "result": f"{len(issues)} 个问题", "issues": issues}
     except Exception as e:
         return {"file": abspath, "ok": False, "result": f"lint 错误: {e}"}
 
 
-def _handler_format(abspath: str, **kwargs) -> Dict:
+def _handler_format(abspath: str, **kwargs) -> dict:
     """Black 格式化"""
     try:
         r = subprocess.run(["python", "-m", "black", "--quiet", abspath],
@@ -64,10 +57,10 @@ def _handler_format(abspath: str, **kwargs) -> Dict:
         return {"file": abspath, "ok": False, "result": f"格式化错误: {e}"}
 
 
-def _handler_stats(abspath: str, **kwargs) -> Dict:
+def _handler_stats(abspath: str, **kwargs) -> dict:
     """文件统计"""
     try:
-        with open(abspath, "r", encoding="utf-8", errors="replace") as f:
+        with open(abspath, encoding="utf-8", errors="replace") as f:
             content = f.read()
         lines = content.split('\n')
         code_lines = sum(1 for l in lines if l.strip() and not l.strip().startswith('#'))
@@ -84,14 +77,14 @@ def _handler_stats(abspath: str, **kwargs) -> Dict:
         return {"file": abspath, "ok": False, "result": f"统计错误: {e}"}
 
 
-def _handler_replace(abspath: str, **kwargs) -> Dict:
+def _handler_replace(abspath: str, **kwargs) -> dict:
     """文本替换"""
     old = kwargs.get("old", "")
     new = kwargs.get("new", "")
     if not old:
         return {"file": abspath, "ok": False, "result": "需要 old 参数"}
     try:
-        with open(abspath, "r", encoding="utf-8", errors="replace") as f:
+        with open(abspath, encoding="utf-8", errors="replace") as f:
             content = f.read()
         if old not in content:
             return {"file": abspath, "ok": True, "result": "未匹配到模式", "count": 0}
@@ -104,10 +97,10 @@ def _handler_replace(abspath: str, **kwargs) -> Dict:
         return {"file": abspath, "ok": False, "result": f"替换错误: {e}"}
 
 
-def _handler_count_lines(abspath: str, **kwargs) -> Dict:
+def _handler_count_lines(abspath: str, **kwargs) -> dict:
     """行数统计"""
     try:
-        with open(abspath, "r", encoding="utf-8", errors="replace") as f:
+        with open(abspath, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
         return {"file": abspath, "ok": True, "result": len(lines)}
     except Exception as e:
@@ -126,7 +119,7 @@ BUILTIN_HANDLERS = {
 }
 
 
-def _resolve_files(glob_pattern: str, directory: str = "", max_files: int = 100) -> List[str]:
+def _resolve_files(glob_pattern: str, directory: str = "", max_files: int = 100) -> list[str]:
     """解析文件列表"""
     if os.path.isfile(glob_pattern):
         return [os.path.abspath(glob_pattern)]
@@ -146,13 +139,13 @@ def toolkit_batch_process(
     action: str = "compile",
     glob_pattern: str = "*.py",
     directory: str = "",
-    files: List[str] = None,
+    files: list[str] = None,
     max_files: int = 100,
     parallel: bool = True,
     max_workers: int = 8,
     output: str = "",
     **kwargs,
-) -> Dict:
+) -> dict:
     """
     批量文件处理工具。对多个文件并行执行相同的操作。
 
@@ -171,10 +164,7 @@ def toolkit_batch_process(
     """
     try:
         # 解析文件列表
-        if files:
-            file_list = [os.path.abspath(f) for f in files if os.path.isfile(f)]
-        else:
-            file_list = _resolve_files(glob_pattern, directory, max_files)
+        file_list = [os.path.abspath(f) for f in files if os.path.isfile(f)] if files else _resolve_files(glob_pattern, directory, max_files)
 
         if not file_list:
             return {"ok": False, "error": f"未找到匹配文件: {glob_pattern}", "total": 0, "success": 0, "fail": 0, "results": []}

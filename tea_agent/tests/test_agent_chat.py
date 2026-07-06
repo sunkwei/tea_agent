@@ -11,12 +11,14 @@ Agent.chat() 集成测试
 - 错误处理
 """
 
-import pytest
-import tempfile
+import contextlib
 import os
 import shutil
+import tempfile
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
@@ -25,10 +27,8 @@ def tmp_dir():
     tmpdir = tempfile.mkdtemp(prefix="tea_agent_chat_test_")
     yield tmpdir
     time.sleep(0.3)
-    try:
+    with contextlib.suppress(Exception):
         shutil.rmtree(tmpdir, ignore_errors=True)
-    except Exception:
-        pass
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def _write_config(path, **overrides):
     db_path = overrides.get("db_path", ":memory:")
     toolkit_dir = overrides.get("toolkit_dir", "./tools")
     kb_dir = overrides.get("kb_dir", "./kb")
-    
+
     import yaml as _yaml
     config = {
         "main_model": {
@@ -140,7 +140,7 @@ class TestAgentChatIntegration:
             agent = Agent(mode="full", config_path=tmp_yaml_config)
             # 创建测试主题
             topic_id = agent._db.create_topic("Test Topic")
-            
+
             result = agent.chat("Test message", topic_id=topic_id)
 
             assert isinstance(result, list)
@@ -300,7 +300,7 @@ class TestAgentChatErrorHandling:
             MockOpenAI.return_value = mock_client
 
             agent = Agent(mode="lightweight", config_path=tmp_yaml_config)
-            
+
             # lightweight 模式下 API 异常会被 session 捕获，返回含 error 的 dict
             result = agent.chat("Hello")
             assert isinstance(result, (list, dict))

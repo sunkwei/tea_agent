@@ -43,7 +43,7 @@ class TestToolCallRepeatDetection:
         """完全相同的工具调用应检测为循环"""
         from tea_agent.session.tool_loop_runner import LoopDetector
         detector = LoopDetector()
-        
+
         # 第一次调用
         detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
         # 第二次相同调用
@@ -55,7 +55,7 @@ class TestToolCallRepeatDetection:
         """不同的工具调用不应检测为循环"""
         from tea_agent.session.tool_loop_runner import LoopDetector
         detector = LoopDetector()
-        
+
         detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
         result = detector.check_and_record("", [("toolkit_exec", '{"command": "ls"}')])
         assert result["is_loop"] is False
@@ -64,7 +64,7 @@ class TestToolCallRepeatDetection:
         """相同工具但不同参数不应检测为循环"""
         from tea_agent.session.tool_loop_runner import LoopDetector
         detector = LoopDetector()
-        
+
         detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
         result = detector.check_and_record("", [("toolkit_file", '{"action": "write"}')])
         assert result["is_loop"] is False
@@ -73,7 +73,7 @@ class TestToolCallRepeatDetection:
         """A→B→A→B 模式应检测为序列循环"""
         from tea_agent.session.tool_loop_runner import LoopDetector
         detector = LoopDetector(window=4)
-        
+
         # A
         detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
         # B
@@ -92,10 +92,10 @@ class TestContentRepeatDetection:
         """高度相似的内容应检测为循环"""
         from tea_agent.session.tool_loop_runner import LoopDetector
         detector = LoopDetector(similarity_threshold=0.5)  # 降低阈值便于测试
-        
+
         content1 = "这是一段测试内容，用于检测循环"
         content2 = "这是一段测试内容，用于检测循环！"  # 几乎相同
-        
+
         detector.check_and_record(content1, [])
         result = detector.check_and_record(content2, [])
         # 可能检测为内容重复（取决于相似度计算）
@@ -105,7 +105,7 @@ class TestContentRepeatDetection:
         """完全不同的内容不应检测为循环"""
         from tea_agent.session.tool_loop_runner import LoopDetector
         detector = LoopDetector()
-        
+
         detector.check_and_record("第一段完全不同的内容", [])
         result = detector.check_and_record("第二段截然不同的文字", [])
         assert result["is_loop"] is False
@@ -114,7 +114,7 @@ class TestContentRepeatDetection:
         """空内容不应检测为循环"""
         from tea_agent.session.tool_loop_runner import LoopDetector
         detector = LoopDetector()
-        
+
         detector.check_and_record("", [])
         result = detector.check_and_record("", [])
         assert result["is_loop"] is False
@@ -127,7 +127,7 @@ class TestWindowBehavior:
         """检测应限制在窗口范围内"""
         from tea_agent.session.tool_loop_runner import LoopDetector
         detector = LoopDetector(window=2)
-        
+
         # 第1轮
         detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
         # 第2轮（不同）
@@ -145,12 +145,12 @@ class TestEdgeCases:
         """一轮中多个工具调用应正确处理"""
         from tea_agent.session.tool_loop_runner import LoopDetector
         detector = LoopDetector()
-        
+
         tool_calls = [
             ("toolkit_file", '{"action": "read"}'),
             ("toolkit_exec", '{"command": "ls"}')
         ]
-        
+
         # 第一次
         detector.check_and_record("", tool_calls)
         # 第二次相同
@@ -161,7 +161,7 @@ class TestEdgeCases:
         """畸形参数应被正确处理"""
         from tea_agent.session.tool_loop_runner import LoopDetector
         detector = LoopDetector()
-        
+
         # 非 JSON 参数
         detector.check_and_record("", [("toolkit_file", "not json")])
         result = detector.check_and_record("", [("toolkit_file", "not json")])
@@ -171,7 +171,7 @@ class TestEdgeCases:
         """空工具调用列表应正确处理"""
         from tea_agent.session.tool_loop_runner import LoopDetector
         detector = LoopDetector()
-        
+
         detector.check_and_record("some content", [])
         result = detector.check_and_record("some content", [])
         assert "is_loop" in result

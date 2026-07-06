@@ -28,7 +28,7 @@ def get_session():
 
 def set_session(sess, setter: str = ""):
     """设置当前会话引用。
-    
+
     Args:
         sess: OnlineToolSession 实例或 None
         setter: 设置者标识（用于调试）
@@ -48,7 +48,7 @@ def get_agent():
 
 def set_agent(agent, setter: str = ""):
     """设置当前 Agent 引用。
-    
+
     Args:
         agent: Agent 实例或 None
         setter: 设置者标识（用于调试）

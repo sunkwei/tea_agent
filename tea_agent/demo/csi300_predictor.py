@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 2026-05-20 gen by Claude, CSI300 predictor
 基于新华网新闻预测沪深300日内走势（策略型分类器）
@@ -19,12 +18,17 @@
 依赖: pip install numpy requests pyyaml
 """
 
-import os, re, sys, sqlite3, logging, argparse, math
-from pathlib import Path
-from datetime import datetime, timedelta
-from collections import defaultdict, Counter
-from typing import List, Tuple
+import argparse
 import io
+import logging
+import math
+import os
+import re
+import sqlite3
+import sys
+from collections import Counter, defaultdict
+from datetime import datetime, timedelta
+from pathlib import Path
 
 try:
     import matplotlib
@@ -297,9 +301,9 @@ def _eval_curve_silent(predictor, samples):
         "b_mae": float(np.mean(errors_b)),
     }
 
-def plot_and_save_fig(db_path: Path, date: str, series: List[Tuple[str, float]],
-                      keypoints: List[Tuple[float, float]],
-                      curve: Tuple[float, float, float, float],
+def plot_and_save_fig(db_path: Path, date: str, series: list[tuple[str, float]],
+                      keypoints: list[tuple[float, float]],
+                      curve: tuple[float, float, float, float],
                       curve_feat: dict, label: str) -> bool:
     """绘制日内走势图并存入 DB 的 fig 表。"""
     if not HAS_MPL:
@@ -531,8 +535,8 @@ class CurveFitter:
 
     @staticmethod
     def extract_keypoints(
-        series: List[Tuple[str, float]], n: int = 5
-    ) -> List[Tuple[float, float]]:
+        series: list[tuple[str, float]], n: int = 5
+    ) -> list[tuple[float, float]]:
         """从日内序列中抽样 n 个最具代表性的点 (t_minutes, price)。
         策略: 首尾必选 + 中间选局部极值点（二阶差分符号变化处）。
         """
@@ -593,8 +597,8 @@ class CurveFitter:
 
     @staticmethod
     def fit_quadratic(
-        points: List[Tuple[float, float]]
-    ) -> Tuple[float, float, float, float]:
+        points: list[tuple[float, float]]
+    ) -> tuple[float, float, float, float]:
         """二次曲线拟合 y = a*t^2 + b*t + c。
         返回: (a, b, c, r2)
           a > 0: 加速上涨/下跌 (凸)
@@ -610,10 +614,7 @@ class CurveFitter:
 
         # 归一化 x 到 [0, 1] 避免数值问题
         x_min, x_max = xs.min(), xs.max()
-        if x_max > x_min:
-            x_norm = (xs - x_min) / (x_max - x_min)
-        else:
-            x_norm = np.zeros_like(xs)
+        x_norm = (xs - x_min) / (x_max - x_min) if x_max > x_min else np.zeros_like(xs)
 
         # 最小二乘二次拟合
         coeffs = np.polyfit(x_norm, ys, 2)
@@ -628,7 +629,7 @@ class CurveFitter:
         return (a, b, c, r2)
 
     @staticmethod
-    def curve_to_features(curve: Tuple[float, float, float, float]) -> dict:
+    def curve_to_features(curve: tuple[float, float, float, float]) -> dict:
         """将曲线参数转为可解释的特征字典"""
         a, b, c, r2 = curve
         shape = _describe_curve(a, b)
@@ -992,7 +993,7 @@ class CSIPredictor:
 
         # 混淆矩阵
         logger.info("混淆矩阵:")
-        logger.info(f"          预测up  预测flat 预测down")
+        logger.info("          预测up  预测flat 预测down")
         for label in ["up", "flat", "down"]:
             row = confusion[label]
             logger.info(f"  实际{label:4s}  {row['up']:5d}   {row['flat']:7d}   {row['down']:6d}")
@@ -1214,7 +1215,7 @@ def main():
         for s in samples:
             plot_and_save_fig(db_path, s["date"], s.get("series", []),
                             s["keypoints"], s["curve"], s["curve_feat"], s["label"])
-    elif args.eval or True:
+    elif True:
         logger.info("=" * 60)
         logger.info("留一法交叉验证 (Leave-One-Out CV)")
         logger.info("=" * 60)

@@ -10,30 +10,31 @@ class TestInitFontsGlobalDeclarations:
     def test_all_globals_declared(self):
         """检查 _init_fonts 函数的字节码中是否包含所有必要的 global 声明"""
         import dis
+
         from tea_agent._gui._fonts import _init_fonts
-        
+
         # 获取函数的字节码
         bytecode = dis.Bytecode(_init_fonts)
-        
+
         # 查找 STORE_GLOBAL 操作
         global_stores = set()
         for instr in bytecode:
             if instr.opname == 'STORE_GLOBAL':
                 global_stores.add(instr.argval)
-        
+
         # 应该包含以下全局变量
         expected_globals = {
             'SYSTEM_FONT', 'MONO_FONT', '_FONTS_DETECTED',
             '_SCALE_FACTOR', '_DEFAULT_FONT_SIZE'
         }
-        
+
         missing = expected_globals - global_stores
         assert not missing, f"缺少 global 声明: {missing}"
 
     def test_fs_uses_scale_factor(self):
         """_fs 函数应使用 _SCALE_FACTOR"""
-        from tea_agent._gui._fonts import _fs, _SCALE_FACTOR
-        
+        from tea_agent._gui._fonts import _SCALE_FACTOR, _fs
+
         # 默认缩放因子
         result = _fs(16)
         assert result == max(1, int(16 * _SCALE_FACTOR))
@@ -53,15 +54,15 @@ class TestInitFontsGlobalDeclarations:
 
     def test_init_fonts_idempotent(self):
         """多次调用 _init_fonts 应该是幂等的"""
-        from tea_agent._gui._fonts import _init_fonts, _FONTS_DETECTED
-        
+        from tea_agent._gui._fonts import _FONTS_DETECTED, _init_fonts
+
         # 记录调用前状态
         before = _FONTS_DETECTED
-        
+
         # 调用两次
         _init_fonts()
         _init_fonts()
-        
+
         # 状态应该一致
         from tea_agent._gui._fonts import _FONTS_DETECTED as after
         assert before == after or after is True  # 只能从 False 变 True
@@ -78,7 +79,7 @@ class TestFontSizeCalculation:
 
     def test_fs_scales_proportionally(self):
         """_fs 应按比例缩放"""
-        from tea_agent._gui._fonts import _fs, _SCALE_FACTOR
+        from tea_agent._gui._fonts import _SCALE_FACTOR, _fs
         result = _fs(100)
         expected = max(1, int(100 * _SCALE_FACTOR))
         assert result == expected

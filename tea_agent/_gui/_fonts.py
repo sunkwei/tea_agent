@@ -2,8 +2,8 @@
 从 gui.py L84-160 提取：跨平台字体自动检测 + Wayland/X11 显示缩放
 """
 
-import platform as _platform
 import logging
+import platform as _platform
 
 logger = logging.getLogger("tea_agent")
 
@@ -53,7 +53,7 @@ def _init_fonts():
 
         def _detect(candidates):
             """Internal: detect.
-            
+
             Args:
                 candidates: Description.
             """
@@ -148,9 +148,9 @@ def _configure_treeview_rowheight():
     try:
         import tkinter.ttk as _ttk
         from tkinter import font as _tkfont
-        
+
         style = _ttk.Style()
-        
+
         # 获取 Treeview 实际使用的字体大小
         # Treeview 默认使用 TkDefaultFont
         try:
@@ -160,15 +160,15 @@ def _configure_treeview_rowheight():
                 font_size = _fs(10)
         except Exception:
             font_size = _fs(10)
-        
+
         # 计算合适的行高：字体大小 * 2.8 + 4（上下边距）
         # 对于 13 号字体：13 * 2.8 + 4 ≈ 40，中文字符更高需要更大行高
         row_height = max(28, int(font_size * 2.8 + 4))
-        
+
         style.configure("Treeview", rowheight=row_height)
         # 也配置 Topic.Treeview 样式（主界面使用）
         style.configure("Topic.Treeview", rowheight=row_height)
-        
+
         logger.debug(f"Treeview 行高配置: font_size={font_size}, rowheight={row_height}")
     except Exception as e:
         logger.debug(f"配置 Treeview 行高失败: {e}")

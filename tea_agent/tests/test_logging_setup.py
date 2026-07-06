@@ -9,16 +9,14 @@
 - _set_root_level() 运行时切换
 """
 
-import os
+import contextlib
 import logging
 import logging.handlers
-import tempfile
-import shutil
+import os
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
-
 
 # ── Fixtures ──
 
@@ -31,10 +29,8 @@ def cleanup_logging():
     for h in root.handlers[:]:
         if isinstance(h, logging.handlers.TimedRotatingFileHandler):
             root.removeHandler(h)
-            try:
+            with contextlib.suppress(Exception):
                 h.close()
-            except Exception:
-                pass
     # 重置模块状态
     import tea_agent.logging_setup as ls
     ls._logging_initialized = False
@@ -66,7 +62,7 @@ class TestSetupLogging:
         from tea_agent.logging_setup import setup_logging
         setup_logging()
         log_dir = mock_home / ".tea_agent"
-        log_file = log_dir / "tea_agent.log"
+        log_dir / "tea_agent.log"
         assert log_dir.exists()
         # 文件可能尚未写入内容，但 handler 已指向该路径
 
@@ -292,10 +288,8 @@ class TestEdgeCases:
             for h in root.handlers[:]:
                 if isinstance(h, logging.handlers.TimedRotatingFileHandler):
                     root.removeHandler(h)
-                    try:
+                    with contextlib.suppress(Exception):
                         h.close()
-                    except Exception:
-                        pass
             import tea_agent.logging_setup as ls
             ls._logging_initialized = False
             ls._logging_debug = False

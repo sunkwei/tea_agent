@@ -36,9 +36,9 @@ def toolkit_browser_tab(action: str, browser: str = "firefox", tab_title: str = 
 
 def _windows_browser_tab(action, browser, tab_title, window_index):
     """Windows 平台实现"""
-    import time
     import ctypes
     import ctypes.wintypes
+    import time
     from ctypes import wintypes
 
     # Windows API 常量
@@ -80,11 +80,7 @@ def _windows_browser_tab(action, browser, tab_title, window_index):
                 return True
 
             # 根据浏览器类型匹配
-            if browser_name_lower == "firefox" and "firefox" in title.lower():
-                windows.append({"hwnd": hwnd, "title": title})
-            elif browser_name_lower == "chrome" and "chrome" in title.lower():
-                windows.append({"hwnd": hwnd, "title": title})
-            elif browser_name_lower == "edge" and ("edge" in title.lower() or "microsoft" in title.lower()):
+            if browser_name_lower == "firefox" and "firefox" in title.lower() or browser_name_lower == "chrome" and "chrome" in title.lower() or browser_name_lower == "edge" and ("edge" in title.lower() or "microsoft" in title.lower()):
                 windows.append({"hwnd": hwnd, "title": title})
             return True
 

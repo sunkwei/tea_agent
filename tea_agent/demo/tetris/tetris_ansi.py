@@ -6,20 +6,19 @@ A Python implementation of Tetris for the terminal using ANSI escape sequences.
 Works on Windows (with Windows Terminal) and Unix-like systems.
 """
 
-import sys
 import os
-import time
 import random
+import sys
 import threading
-from typing import List, Tuple, Optional
+import time
 
 # Check for Windows-specific modules
 if sys.platform == 'win32':
     import msvcrt
 else:
     import select
-    import tty
     import termios
+    import tty
 
 # ANSI escape sequences
 ANSI_CLEAR = '\033[2J'
@@ -88,44 +87,44 @@ TETROMINOES = {
 
 class ANSIHelper:
     """Helper class for ANSI terminal operations."""
-    
+
     @staticmethod
     def clear_screen():
         """Clear the terminal screen."""
         sys.stdout.write(ANSI_CLEAR)
         sys.stdout.write(ANSI_HOME)
         sys.stdout.flush()
-    
+
     @staticmethod
     def move_home():
         """Move cursor to home position (1,1) without clearing."""
         sys.stdout.write(ANSI_HOME)
         sys.stdout.flush()
-    
+
     @staticmethod
     def move_cursor(row: int, col: int):
         """Move cursor to specific position (1-indexed)."""
         sys.stdout.write(f'\033[{row};{col}H')
         sys.stdout.flush()
-    
+
     @staticmethod
     def hide_cursor():
         """Hide the cursor."""
         sys.stdout.write(ANSI_HIDE_CURSOR)
         sys.stdout.flush()
-    
+
     @staticmethod
     def show_cursor():
         """Show the cursor."""
         sys.stdout.write(ANSI_SHOW_CURSOR)
         sys.stdout.flush()
-    
+
     @staticmethod
     def set_color(color_code: str):
         """Set text color."""
         sys.stdout.write(color_code)
         sys.stdout.flush()
-    
+
     @staticmethod
     def reset_color():
         """Reset text color to default."""
@@ -135,17 +134,17 @@ class ANSIHelper:
 
 class InputHandler:
     """Cross-platform keyboard input handler."""
-    
+
     def __init__(self):
         self.running = True
         self.key_queue = []
         self.lock = threading.Lock()
-        
+
         if sys.platform != 'win32':
             self.old_settings = termios.tcgetattr(sys.stdin)
             tty.setcbreak(sys.stdin.fileno())
-    
-    def get_key(self) -> Optional[str]:
+
+    def get_key(self) -> str | None:
         """Get a key press (non-blocking). Returns None if no key pressed."""
         if sys.platform == 'win32':
             if msvcrt.kbhit():
@@ -159,7 +158,7 @@ class InputHandler:
                         'K': 'left',
                         'M': 'right',
                     }
-                    return key_map.get(key, None)
+                    return key_map.get(key)
                 return key
         else:
             fd = sys.stdin.fileno()
@@ -183,7 +182,7 @@ class InputHandler:
                                     b'D': 'left',
                                     b'C': 'right',
                                 }
-                                return key_map.get(third, None)
+                                return key_map.get(third)
                             return None
                         return None
                     return 'escape'
@@ -193,7 +192,7 @@ class InputHandler:
                     except Exception:
                         return None
         return None
-    
+
     def cleanup(self):
         """Restore terminal settings."""
         if sys.platform != 'win32':
@@ -202,11 +201,11 @@ class InputHandler:
 
 class TetrisGame:
     """Main Tetris game class."""
-    
+
     def __init__(self):
-        self.board: List[List[int]] = [[CELL_EMPTY] * BOARD_WIDTH for _ in range(BOARD_HEIGHT)]
-        self.current_piece: Optional[dict] = None
-        self.next_piece: Optional[dict] = None
+        self.board: list[list[int]] = [[CELL_EMPTY] * BOARD_WIDTH for _ in range(BOARD_HEIGHT)]
+        self.current_piece: dict | None = None
+        self.next_piece: dict | None = None
         self.score = 0
         self.level = 1
         self.lines_cleared = 0
@@ -217,14 +216,14 @@ class TetrisGame:
         self.model_interpreter = None  # TFLite interpreter for CNN
         self.drop_interval = 1.0  # seconds per drop
         self.last_drop_time = 0
-        
+
         # Input handler
         self.input_handler = InputHandler()
-        
+
         # Generate first pieces
         self.next_piece = self._generate_piece()
         self._spawn_piece()
-    
+
     def _generate_piece(self) -> dict:
         """Generate a random tetromino."""
         piece_type = random.choice(list(TETROMINOES.keys()))
@@ -236,42 +235,42 @@ class TetrisGame:
             'row': 0,       # Top-left row position
             'col': BOARD_WIDTH // 2 - 1,  # Center horizontally
         }
-    
+
     def _spawn_piece(self):
         """Spawn a new piece at the top."""
         if self.next_piece is None:
             self.next_piece = self._generate_piece()
-        
+
         self.current_piece = self.next_piece
         self.next_piece = self._generate_piece()
-        
+
         # Check if the new piece can be placed
         if not self._is_valid_position(self.current_piece):
             self.game_over = True
-    
-    def _get_piece_cells(self, piece: dict) -> List[Tuple[int, int]]:
+
+    def _get_piece_cells(self, piece: dict) -> list[tuple[int, int]]:
         """Get the absolute positions of all cells in the current piece."""
         rotations = piece['rotations']
         rotation = piece['rotation'] % len(rotations)
         offsets = rotations[rotation]
-        
+
         cells = []
         for dr, dc in offsets:
             r = piece['row'] + dr
             c = piece['col'] + dc
             cells.append((r, c))
         return cells
-    
-    def _is_valid_position(self, piece: dict, row_offset: int = 0, col_offset: int = 0, 
+
+    def _is_valid_position(self, piece: dict, row_offset: int = 0, col_offset: int = 0,
                            rotation_offset: int = 0) -> bool:
         """Check if a piece can be placed at the given position."""
         test_piece = piece.copy()
         test_piece['row'] = piece['row'] + row_offset
         test_piece['col'] = piece['col'] + col_offset
         test_piece['rotation'] = piece['rotation'] + rotation_offset
-        
+
         cells = self._get_piece_cells(test_piece)
-        
+
         for r, c in cells:
             # Check boundaries
             if r < 0 or r >= BOARD_HEIGHT:
@@ -282,45 +281,45 @@ class TetrisGame:
             if self.board[r][c] == CELL_FILLED:
                 return False
         return True
-    
+
     def _rotate_piece(self):
         """Rotate the current piece clockwise."""
         if self.current_piece is None:
             return
-        
+
         rotations = self.current_piece['rotations']
         new_rotation = (self.current_piece['rotation'] + 1) % len(rotations)
-        
+
         # Try simple rotation first
         if self._is_valid_position(self.current_piece, rotation_offset=1):
             self.current_piece['rotation'] = new_rotation
             return
-        
+
         # Wall kick: try moving left/right
         for dc in [1, -1, 2, -2]:
             if self._is_valid_position(self.current_piece, col_offset=dc, rotation_offset=1):
                 self.current_piece['col'] += dc
                 self.current_piece['rotation'] = new_rotation
                 return
-    
+
     def _move_piece(self, dr: int, dc: int) -> bool:
         """Move the current piece by (dr, dc). Returns True if successful."""
         if self.current_piece is None:
             return False
-        
+
         if self._is_valid_position(self.current_piece, row_offset=dr, col_offset=dc):
             self.current_piece['row'] += dr
             self.current_piece['col'] += dc
             return True
         return False
-    
+
     def _drop_piece(self):
         """Drop the piece one row down. If it can't move down, lock it."""
         if not self._move_piece(1, 0):
             self._lock_piece()
             self._clear_lines()
             self._spawn_piece()
-    
+
     def _hard_drop(self):
         """Instantly drop the piece to the bottom."""
         while self._move_piece(1, 0):
@@ -328,28 +327,28 @@ class TetrisGame:
         self._lock_piece()
         self._clear_lines()
         self._spawn_piece()
-    
+
     def _lock_piece(self):
         """Lock the current piece into the board."""
         if self.current_piece is None:
             return
-        
+
         cells = self._get_piece_cells(self.current_piece)
         for r, c in cells:
             if 0 <= r < BOARD_HEIGHT and 0 <= c < BOARD_WIDTH:
                 self.board[r][c] = CELL_FILLED
-    
+
     def _clear_lines(self):
         """Clear completed lines and update score."""
         lines_to_clear = []
-        
+
         for r in range(BOARD_HEIGHT):
             if all(self.board[r][c] == CELL_FILLED for c in range(BOARD_WIDTH)):
                 lines_to_clear.append(r)
-        
+
         if not lines_to_clear:
             return
-        
+
         # Remove lines from top to bottom
         for line in sorted(lines_to_clear):
             # Move all lines above down
@@ -357,22 +356,22 @@ class TetrisGame:
                 self.board[r] = self.board[r-1][:]
             # Add empty line at top
             self.board[0] = [CELL_EMPTY] * BOARD_WIDTH
-        
+
         # Update score
         cleared = len(lines_to_clear)
         self.lines_cleared += cleared
-        
+
         # Scoring: 100, 300, 500, 800 for 1, 2, 3, 4 lines
         points = {1: 100, 2: 300, 3: 500, 4: 800}
         self.score += points.get(cleared, 0) * self.level
-        
+
         # Level up every 10 lines
         self.level = self.lines_cleared // 10 + 1
-        
+
         # Increase speed
         self.drop_interval = max(0.1, 1.0 - (self.level - 1) * 0.1)
 
-    def _evaluate_board(self, board: List[List[int]]) -> float:
+    def _evaluate_board(self, board: list[list[int]]) -> float:
         """Evaluate a board state. Higher score = better placement."""
         full_lines = sum(
             1 for r in range(BOARD_HEIGHT)
@@ -485,9 +484,8 @@ class TetrisGame:
     def _model_predict_action(self):
         """Use the TFLite CNN to predict best action.
         Returns: ('left'|'right'|'rotate'|'down', 1) or None."""
-        if self.model_interpreter is None:
-            if not self._load_model():
-                return None
+        if self.model_interpreter is None and not self._load_model():
+            return None
         import numpy as np
         # Build 20x10 image: 0=empty, 1=fixed, 0.5=active
         img = np.zeros((BOARD_HEIGHT, BOARD_WIDTH), dtype=np.float32)
@@ -514,10 +512,10 @@ class TetrisGame:
         """Draw the game board using ANSI sequences."""
         # Move to top-left corner
         ANSIHelper.move_cursor(1, 1)
-        
+
         # Draw top border (each cell is 2 chars wide)
         print('+' + '--' * BOARD_WIDTH + '+')
-        
+
         # Pre-compute current piece cells and ghost cells
         current_cells = set()
         ghost_cells = set()
@@ -528,7 +526,7 @@ class TetrisGame:
             while self._is_valid_position(ghost_piece, row_offset=1):
                 ghost_piece['row'] += 1
             ghost_cells = set(self._get_piece_cells(ghost_piece))
-        
+
         # Draw board cells (each cell is 2 characters wide)
         for r in range(BOARD_HEIGHT):
             print('|', end='')
@@ -548,48 +546,48 @@ class TetrisGame:
                 else:
                     print('  ', end='')
             print('|')
-        
+
         # Draw bottom border
         print('+' + '--' * BOARD_WIDTH + '+')
-    
+
     def _draw_info(self):
         """Draw game information panel."""
 # NOTE: 2026-05-30 11:02:33, self-evolved by tea_agent --- Update info column calculation for 2-char cell width
         # Calculate position (to the right of the board)
         info_col = BOARD_WIDTH * 2 + 5
         row = 1
-        
+
         ANSIHelper.move_cursor(row, info_col)
         print(f'{ANSI_BOLD}TETRIS{ANSI_RESET}')
-        
+
         row += 2
         ANSIHelper.move_cursor(row, info_col)
         print(f'Score: {self.score}')
-        
+
         row += 1
         ANSIHelper.move_cursor(row, info_col)
         print(f'Level: {self.level}')
-        
+
         row += 1
         ANSIHelper.move_cursor(row, info_col)
         print(f'Lines: {self.lines_cleared}')
-        
+
         row += 2
         ANSIHelper.move_cursor(row, info_col)
         print('Next:')
-        
+
         if self.next_piece:
             # Draw next piece preview
             preview_col = info_col + 2
             rotations = self.next_piece['rotations']
             offsets = rotations[0]  # Show first rotation
-            
+
             # Find bounding box
             min_r = min(dr for dr, dc in offsets)
             max_r = max(dr for dr, dc in offsets)
             min_c = min(dc for dr, dc in offsets)
             max_c = max(dc for dr, dc in offsets)
-            
+
             for dr in range(min_r, max_r + 1):
                 ANSIHelper.move_cursor(row + 1 + dr - min_r, preview_col)
                 for dc in range(min_c, max_c + 1):
@@ -601,12 +599,12 @@ class TetrisGame:
 # NOTE: 2026-05-30 11:03:16, self-evolved by tea_agent --- Update next piece preview to use 2-char width
                         print('  ', end='')
                 print()
-        
+
         # Controls
         row = 12
         ANSIHelper.move_cursor(row, info_col)
         print(f'{ANSI_BOLD}Controls:{ANSI_RESET}')
-        
+
         controls = [
             '← → : Move',
             '↑    : Rotate',
@@ -617,11 +615,11 @@ class TetrisGame:
             'M    : Model AI',
             'Q    : Quit',
         ]
-        
+
         for i, control in enumerate(controls):
             ANSIHelper.move_cursor(row + 1 + i, info_col)
             print(control)
-        
+
         # AI mode indicator
         row_ai = row + len(controls) + 1
         ANSIHelper.move_cursor(row_ai, info_col)
@@ -632,36 +630,36 @@ class TetrisGame:
         else:
             mode_text = 'Manual'
         print(f'AI: {mode_text}')
-        
+
         # Game over
         if self.game_over:
             ANSIHelper.move_cursor(row + len(controls) + 2, info_col)
             print(f'{ANSI_BOLD}GAME OVER!{ANSI_RESET}')
             ANSIHelper.move_cursor(row + len(controls) + 3, info_col)
             print('Press R to restart')
-    
+
     def _draw_pause(self):
         """Draw pause indicator without blocking the board view."""
         if not self.paused:
             return
-        
+
         # Show PAUSED label in the info panel area (right side),
         # no board overlay so user can see piece positions and select text
         info_col = BOARD_WIDTH * 2 + 5
         ANSIHelper.move_cursor(BOARD_HEIGHT // 2 + 1, info_col)
-        print(f'{ANSI_BOLD}PAUSED{ANSI_RESET}')    
+        print(f'{ANSI_BOLD}PAUSED{ANSI_RESET}')
     def _handle_input(self):
         """Handle user input."""
         key = self.input_handler.get_key()
-        
+
         if key is None:
             return
-        
+
         if self.game_over:
             if key in ('r', 'R'):
                 self.__init__()  # Restart game
             return
-        
+
         if self.paused:
             if key in ('p', 'P'):
                 self.paused = False
@@ -677,7 +675,7 @@ class TetrisGame:
                 if self.model_mode:
                     self.auto_mode = False  # model_mode takes precedence
                 return
-        
+
         # Game controls
         if key == 'left':
             self._move_piece(0, -1)
@@ -702,7 +700,7 @@ class TetrisGame:
                 self.auto_mode = False
         elif key in ('q', 'Q'):
             self.game_over = True
-    
+
     def _update(self):
         """Update game state."""
         current_time = time.time()
@@ -748,43 +746,43 @@ class TetrisGame:
             if current_time - self.last_drop_time >= self.drop_interval:
                 self._drop_piece()
                 self.last_drop_time = current_time
-    
+
     def run(self):
         """Main game loop."""
         try:
             # Setup terminal
             ANSIHelper.hide_cursor()
             ANSIHelper.clear_screen()  # Clear once at start
-            
+
             self.last_drop_time = time.time()
-            
+
             while not self.game_over:
                 # Handle input
                 self._handle_input()
-                
+
                 # Update game state
                 if not self.paused:
                     self._update()
-                
+
                 # Draw everything - move cursor to home instead of clearing
                 ANSIHelper.move_home()
                 self._draw_board()
                 self._draw_info()
                 self._draw_pause()
-                
+
                 # Small delay to prevent high CPU usage
                 time.sleep(0.05)
-                
+
                 # When paused, stop refreshing so user can select text with mouse
                 while self.paused and not self.game_over:
                     self._handle_input()
                     time.sleep(0.1)
-            
+
             # Game over screen
             ANSIHelper.move_home()
             self._draw_board()
             self._draw_info()
-            
+
             # Wait for restart or quit
             while True:
                 key = self.input_handler.get_key()
@@ -795,7 +793,7 @@ class TetrisGame:
                 elif key in ('q', 'Q'):
                     return
                 time.sleep(0.1)
-        
+
         finally:
             # Cleanup
             ANSIHelper.show_cursor()
@@ -807,13 +805,13 @@ def main():
     """Main function."""
     print("Starting Tetris...")
     print("Press any key to begin...")
-    
+
     # Wait for a key press to start
     if sys.platform == 'win32':
         msvcrt.getwch()
     else:
         sys.stdin.read(1)
-    
+
     game = TetrisGame()
     game.run()
 

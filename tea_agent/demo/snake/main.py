@@ -17,16 +17,16 @@ Available strategies: random, greedy, safe_greedy, survival, aggressive,
 """
 
 import argparse
+import os
 import random
 import sys
-import os
 
 # ensure demo package is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from tea_agent.demo.snake.engine import Game
-from tea_agent.demo.snake.strategies import STRATEGIES
 from tea_agent.demo.snake.renderer import Renderer, make_human_strategy
+from tea_agent.demo.snake.strategies import STRATEGIES
 
 
 def parse_args():
@@ -48,10 +48,7 @@ def main():
     strategy_names = list(STRATEGIES.keys())
 
     # parse strategies
-    if args.strategies:
-        requested = [s.strip() for s in args.strategies.split(",")]
-    else:
-        requested = []
+    requested = [s.strip() for s in args.strategies.split(",")] if args.strategies else []
 
     # build snake configs
     snake_names = [

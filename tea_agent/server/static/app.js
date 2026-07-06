@@ -188,6 +188,9 @@ window.sendMessage = async function() {
 
     isStreaming = true;
     _pendingUsage = null;
+    // 会话进行中隐藏旧的 tokens 用量提示
+    const oldUsageBar = document.getElementById('usage-bar');
+    if (oldUsageBar) oldUsageBar.style.display = 'none';
     abortController = new AbortController();
     // 切换发送按钮为「中断」样式
     const sendBtn = $('send-btn');
@@ -251,6 +254,8 @@ window.sendMessage = async function() {
                         case 'tool_start':
                             removeLoading();
                             toolCallCount++;
+                            // Refresh TODO sidebar — auto-opens if TODOs already exist
+                            if (toolCallCount === 1) refreshTodos().catch(function(){});
                             // Create collapsible container on first tool call
                             if (!toolCallContainer) {
                                 toolCallContainer = document.createElement('details');
@@ -283,6 +288,8 @@ window.sendMessage = async function() {
                                 const icon = activeToolItem.querySelector('.status-icon');
                                 if (icon) icon.innerHTML = '✅';
                                 toolDoneCount++;
+                                // 每个工具完成后立即刷新 TODO — 面板在 TODO 创建后马上可见
+                                refreshTodos().catch(function(){});
                                 if (toolCallBadge) toolCallBadge.textContent = toolDoneCount + '/' + toolCallCount;
                             }
                             activeToolItem = null;
@@ -420,6 +427,7 @@ window.sendMessage = async function() {
             if (oldText) oldText.removeAttribute('id');
         }
         refreshTopics();
+        refreshTodos();
     }
 };
 
@@ -433,6 +441,7 @@ function updateUsage(usage) {
         const main = $('main');
         main.insertBefore(bar, $('input-row'));
     }
+    bar.style.display = ''; // 恢复显示（可能在流式开始时被隐藏）
     bar.textContent = '\uD83D\uDCCA \u672c\u6b21: ' + usage.total_tokens + ' tokens (prompt: ' + usage.prompt_tokens + ', completion: ' + usage.completion_tokens + ')';
 }
 
@@ -514,6 +523,8 @@ async function refreshTopics() {
                 + '</div>';
         }).join('');
     } catch (e) { /* ignore */ }
+    // Also refresh todos after topic list update
+    refreshTodos();
 }
 
 // Event delegation for topic list — handles click on title, "⋯" button, menu items
@@ -618,6 +629,8 @@ window.openTopic = async function(id, title) {
             addMessage('user', c.user_msg || '');
             addMessage('agent', c.ai_msg || '');
         });
+        // Refresh TODO for newly opened topic
+        refreshTodos();
     } catch (e) { /* ignore */ }
 };
 
@@ -1075,6 +1088,104 @@ async function _doUploadConfig(file) {
     } catch (e) {
         toast('✗ 上传失败: ' + e.message, 'error');
     }
+}
+
+// ================================================================
+//  TODO Sidebar
+// ================================================================
+
+let _todoSidebarOpen = false;
+
+window.toggleTodoSidebar = function() {
+    _todoSidebarOpen = !_todoSidebarOpen;
+    const panel = document.getElementById('todo-sidebar');
+    if (panel) panel.classList.toggle('open', _todoSidebarOpen);
+    if (_todoSidebarOpen) refreshTodos();
+};
+
+window.refreshTodos = async function() {
+    if (!currentTopicId) {
+        const list = $('todo-list');
+        if (list) list.innerHTML = '<div class="tsb-empty">请先选择一个话题</div>';
+        const dot = $('todo-dot');
+        if (dot) dot.classList.remove('show');
+        return;
+    }
+    try {
+        const r = await fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/todos');
+        if (!r.ok) return;
+        const data = await r.json();
+        const items = data.items || [];
+        const total = data.total || 0;
+        const done = data.done || 0;
+
+        // Update progress bar
+        const pct = total > 0 ? Math.round(done / total * 100) : 0;
+        const progressText = $('todo-progress-text');
+        const progressFill = $('todo-progress-fill');
+        if (progressText) progressText.textContent = done + '/' + total;
+        if (progressFill) progressFill.style.width = pct + '%';
+
+        // List items
+        const list = $('todo-list');
+        if (!list) return;
+        if (items.length === 0) {
+            list.innerHTML = '';
+            const dot = $('todo-dot');
+            if (dot) dot.classList.remove('show');
+        } else {
+            list.innerHTML = items.map(function(item) {
+                const doneCls = item.done ? 'checked' : '';
+                const descCls = item.done ? 'done' : '';
+                return '<div class="todo-item">'
+                    + '<div class="cb ' + doneCls + '" data-idx="' + item.idx + '" onclick="checkTodo(' + item.idx + ', ' + (!item.done) + ')"></div>'
+                    + '<span class="desc ' + descCls + '">' + esc(item.desc) + '</span>'
+                    + '<span class="idx-badge">#' + item.idx + '</span>'
+                    + '</div>';
+            }).join('');
+            // Show dot indicator in toolbar
+            const dot = $('todo-dot');
+            if (dot) dot.classList.add('show');
+        }
+
+        // 有 TODO → 自动展开面板；没有 TODO → 自动收起面板
+        if (items.length > 0) {
+            if (!_todoSidebarOpen) {
+                _todoSidebarOpen = true;
+                const panel = $('todo-sidebar');
+                if (panel) panel.classList.add('open');
+            }
+        } else {
+            if (_todoSidebarOpen) {
+                _todoSidebarOpen = false;
+                const panel = $('todo-sidebar');
+                if (panel) panel.classList.remove('open');
+            }
+        }
+    } catch (e) { /* ignore */ }
+};
+
+window.checkTodo = async function(idx, done) {
+    if (!currentTopicId) return;
+    try {
+        const r = await fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/todos/' + idx, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ done: done }),
+        });
+        if (r.ok) {
+            // Optimistic UI update: refresh the list
+            await refreshTodos();
+        }
+    } catch (e) { /* ignore */ }
+};
+
+// Auto-refresh todos on topic change and after chat
+function _patchRefreshTodos() {
+    // After sendMessage completes, refresh todos
+    const origRefresh = refreshTopics;
+    const _origSend = window.sendMessage;
+    // We'll hook into the existing refreshTopics which is called after send
 }
 
 // -- Config Status Check --

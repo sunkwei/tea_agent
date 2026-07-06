@@ -3,6 +3,7 @@
 Extracted from _core.py to reduce file size.
 """
 
+import contextlib
 import logging
 import os
 import shutil
@@ -53,10 +54,8 @@ def init_tables(db):
         ("l3_pending_json", "TEXT DEFAULT ''"),
         ("is_active", "INTEGER DEFAULT 1"),
     ]:
-        try:
+        with contextlib.suppress(Exception):
             c.execute(f"ALTER TABLE topics ADD COLUMN {col} {col_def}")
-        except Exception:
-            pass
 
     c.execute('''
         CREATE TABLE IF NOT EXISTS conversations (
@@ -130,10 +129,8 @@ def init_tables(db):
     for col, col_def in [('pinned', 'INTEGER NOT NULL DEFAULT 0'),
                            ('content_hash', "TEXT DEFAULT ''"),
                            ('embedding', 'BLOB')]:
-        try:
+        with contextlib.suppress(Exception):
             c.execute(f"ALTER TABLE memories ADD COLUMN {col} {col_def}")
-        except Exception:
-            pass
 
     c.execute('''
         CREATE TABLE IF NOT EXISTS system_prompts (

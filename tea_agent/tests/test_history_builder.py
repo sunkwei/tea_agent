@@ -36,7 +36,7 @@ class TestToMultimodal:
         # 创建临时图片文件
         img_path = tmp_path / "test.png"
         img_path.write_bytes(b"fake png data")
-        
+
         msg = {
             "role": "user",
             "content": "描述这张图片",
@@ -55,7 +55,7 @@ class TestToMultimodal:
         from tea_agent.session.history_builder import to_multimodal
         img_path = tmp_path / "test.png"
         img_path.write_bytes(b"fake png data")
-        
+
         msg = {
             "role": "user",
             "content": "描述这张图片",
@@ -73,7 +73,7 @@ class TestToMultimodal:
         img1.write_bytes(b"fake png 1")
         img2 = tmp_path / "test2.jpg"
         img2.write_bytes(b"fake jpg 2")
-        
+
         msg = {
             "role": "user",
             "content": "比较这两张图",
@@ -88,7 +88,7 @@ class TestToMultimodal:
         from tea_agent.session.history_builder import to_multimodal
         img_path = tmp_path / "test.png"
         img_path.write_bytes(b"fake png data")
-        
+
         msg = {
             "role": "user",
             "content": "test",

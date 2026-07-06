@@ -3,10 +3,10 @@
 提供：诊断 / 补全 / 跳转 / 悬停 / 引用 / 上下文收集
 """
 from tea_agent.lsp.lsp_engine import (
-    diagnose,
+    collect_context,
     completion,
+    diagnose,
     goto_definition,
     hover,
     references,
-    collect_context,
 )

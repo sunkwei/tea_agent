@@ -23,18 +23,17 @@ Args:
     agent_id: 子 agent ID（status/cancel 时使用）
 """
 
-import uuid
-import time
 import logging
 import threading
-from concurrent.futures import ThreadPoolExecutor, Future
-from typing import Dict, List, Optional, Any
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 logger = logging.getLogger("toolkit.subagent")
 
 # ── 全局子 agent 注册表 ────────────────────────────
-_subagent_registry: Dict[str, Dict] = {}
+_subagent_registry: dict[str, dict] = {}
 _registry_lock = threading.Lock()
 _executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="subagent")
 
@@ -47,15 +46,15 @@ def _generate_agent_id() -> str:
 def _execute_subagent(
     agent_id: str,
     goal: str,
-    context: Optional[Dict[str, str]],
+    context: dict[str, str] | None,
     max_iterations: int,
     enable_thinking: bool,
     timeout: int,
-) -> Dict:
+) -> dict:
     """在隔离线程中执行子 agent"""
-    from tea_agent.litesession import LiteSession
     from tea_agent import tlk
     from tea_agent.config import load_config
+    from tea_agent.litesession import LiteSession
 
     start = time.time()
     try:
@@ -142,13 +141,13 @@ def _execute_subagent(
 def toolkit_subagent(
     action: str = "list",
     goal: str = "",
-    context: Optional[Dict[str, str]] = None,
+    context: dict[str, str] | None = None,
     max_iterations: int = 20,
     enable_thinking: bool = False,
     timeout: int = 120,
     max_concurrent: int = 5,
     agent_id: str = "",
-) -> Dict:
+) -> dict:
     """
     子 Agent 生成系统 v2.0 — 隔离上下文窗口
 

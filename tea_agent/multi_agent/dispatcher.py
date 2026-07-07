@@ -16,6 +16,7 @@
 """
 
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -104,7 +105,7 @@ class Dispatcher:
         goal: str,
         files: list[str] | None = None,
         context: dict | None = None,
-        on_progress: callable | None = None,
+        on_progress: Callable | None = None,
     ) -> dict:
         """
         分发任务并同步执行。
@@ -196,7 +197,7 @@ class Dispatcher:
         self,
         layers: list[list[SubTask]],
         context: dict,
-        on_progress: callable | None,
+        on_progress: Callable | None,
     ) -> dict[str, dict]:
         """逐层执行，同层并行。"""
         all_results: dict[str, dict] = {}

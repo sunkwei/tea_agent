@@ -151,6 +151,7 @@ def toolkit_todo(action: str, items: list = None, index: int = None) -> dict:
             _todos.clear()
             _todos.extend([{"desc": d, "done": False, "idx": i} for i, d in enumerate(items)])
             _sync_to_db()
+            _signal_todo_created()  # 写库后主动触发 GUI 任务面板弹出
             return {
                 "ok": True,
                 "total": len(_todos),
@@ -231,6 +232,21 @@ def _fmt():
         icon = "DONE" if t["done"] else "TODO"
         lines.append(f"[{icon}] [{t['idx']}] {t['desc']}")
     return "\n".join(lines)
+
+def _signal_todo_created():
+    """写库后主动触发 GUI 任务面板弹出（通过 session_ref 查找 GUI 实例）。"""
+    try:
+        from tea_agent.session_ref import get_agent
+        agent = get_agent()
+        if agent is None:
+            return
+        # 尝试调用 GUI 特有的 _check_and_show_todo 方法
+        show = getattr(agent, '_check_and_show_todo', None)
+        if show:
+            show()
+    except Exception:
+        logger.debug("_signal_todo_created: GUI not available, skipped")
+
 
 def meta_toolkit_todo():
     """Meta toolkit todo."""

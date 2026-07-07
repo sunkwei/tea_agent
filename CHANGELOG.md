@@ -1,5 +1,13 @@
 ﻿# Changelog
 
+
+## [0.10.13] - 2026-07-07
+### Bug Fixes
+- 修复: 任务面板 TodoDialog 去掉 TOPMOST 属性，创建独立非模态窗口
+- 修复: 任务完成后不再自动关闭面板，等待用户手动关闭
+- 优化: 添加 tool_log 属性桥接兼容性修复
+- 优化: todo_items 表不存在时自动创建容错
+- 文档: 更新 TodoDialog 类文档说明
 ## [0.10.9] - 2026-07-04
 ### Improvements & Changes
 - clean: 删除 75+ .bak.* 残留文件，移除 gateway/、web/ 废弃目录

@@ -849,6 +849,11 @@ class OnlineToolSession(BaseChatSession):
     def enable_thinking(self, v): self.context.enable_thinking = v
 
     @property
+    def tool_log(self): return self.context.tool_log
+    @tool_log.setter
+    def tool_log(self, v): self.context.tool_log = v
+
+    @property
     def _rounds_collector(self): return self.context._rounds_collector
     @_rounds_collector.setter
     def _rounds_collector(self, v): self.context._rounds_collector = v

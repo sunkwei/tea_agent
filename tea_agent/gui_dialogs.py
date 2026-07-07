@@ -1411,7 +1411,7 @@ class ScheduledTaskDialog(tk.Toplevel):
 
 
 class TodoDialog(tk.Toplevel):
-    """非模态任务面板对话框 — 统一展示 Plan 计划 + TODO 清单。
+    """非模态独立任务面板对话框 — 统一展示 Plan 计划 + TODO 清单。
 
     功能：
     - 每次 AI 生成完成后自动弹出
@@ -1419,7 +1419,8 @@ class TodoDialog(tk.Toplevel):
     - 下半部分：TODO 待办清单（勾选、删除线）
     - 支持勾选 TODO 项并同步到 DB
     - 每 3 秒自动刷新
-    - Plan 全部完成且 TODO 全部勾选后自动关闭
+    - 任务全部完成后不自动关闭，等待用户手动关闭
+    - 独立窗口，不设置 transient/grab/topmost，可自由切换
     """
 
     STATUS_ICONS = {
@@ -1428,7 +1429,7 @@ class TodoDialog(tk.Toplevel):
     }
 
     def __init__(self, parent, db, topic_id, on_state_change=None):
-        super().__init__(parent)
+        super().__init__()  # 不传 parent，创建真正独立的窗口
         self.db = db
         self.topic_id = topic_id
         self._on_state_change = on_state_change  # 回调：通知 GUI 按钮状态需更新
@@ -1441,7 +1442,8 @@ class TodoDialog(tk.Toplevel):
         self.geometry(f"{width}x{height}")
         self.minsize(_fs(340), _fs(300))
 
-        # 非模态：不设置 transient/topmost，用户可自由切换窗口
+        # 非模态独立窗口：不设置 transient/grab/topmost，用户可自由切换窗口
+        self.attributes('-topmost', False)
 
         self._create_ui()
         self._refresh()
@@ -1659,11 +1661,7 @@ class TodoDialog(tk.Toplevel):
                                font=(SYSTEM_FONT, _fs(11)), anchor=tk.W)
             lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        # 全部完成时自动关闭（Plan 全完成 + TODO 全勾选）
-        todo_all_done = (total > 0 and done_count == total)
-        plan_all_done = self._plan_all_done or not self._plan_has_content
-        if plan_all_done and todo_all_done:
-            self.after(1000, self._on_close)
+        # 全部完成时不自动关闭，等待用户手动关闭
 
     def _on_check(self, idx, check_var):
         """用户勾选/取消勾选 TODO 项"""

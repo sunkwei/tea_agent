@@ -342,7 +342,10 @@ class TkGUI(Agent):
             btn.configure(state="disabled")
 
     def _check_and_show_todo(self):
-        """检查当前主题的 TODO 清单，有待办则弹窗提醒，无则关闭。"""
+        """检查当前主题的 TODO 清单，有待办则弹窗提醒，无则关闭。
+
+        安全处理：确保 todo_items 表存在后再查询，避免静默吞异常。
+        """
         if not hasattr(self, 'db') or not self.db:
             return
         topic_id = getattr(self, 'current_topic_id', None)
@@ -350,6 +353,26 @@ class TkGUI(Agent):
             return
 
         try:
+            # 确保表存在（首次调用或旧 DB 未迁移时）
+            c = self.db.conn.cursor()
+            c.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='todo_items'"
+            )
+            if not c.fetchone():
+                c.execute("""CREATE TABLE IF NOT EXISTS todo_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id TEXT NOT NULL,
+                    idx INTEGER NOT NULL,
+                    desc TEXT NOT NULL,
+                    done INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
+                    FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
+                )""")
+                self.db.conn.commit()
+                c.close()
+                return  # 刚创建的新表，不可能有待办
+            c.close()
+
             c = self.db.conn.cursor()
             c.execute(
                 "SELECT COUNT(*) FROM todo_items WHERE topic_id=? AND done=0",
@@ -357,7 +380,8 @@ class TkGUI(Agent):
             )
             pending = c.fetchone()[0]
             c.close()
-        except Exception:
+        except Exception as exc:
+            logger.warning(f"_check_and_show_todo 查询失败: {exc}")
             return
 
         if pending > 0:
@@ -671,6 +695,13 @@ class TkGUI(Agent):
         # AI 调用 toolkit_todo / toolkit_plan 时立即弹出任务面板
         if "toolkit_todo" in msg or "toolkit_plan" in msg:
             self.root.after(300, self._check_and_show_todo)
+
+    def log_tool(self, msg: str):
+        """主线程工具日志 — 继承 StreamManager 的记录逻辑 + 后备触发"""
+        self.log(msg, "tool")
+        # 主线程后备触发：防止 safe_log_tool 因线程问题未生效
+        if "toolkit_todo" in msg or "toolkit_plan" in msg:
+            self.root.after(100, self._check_and_show_todo)
 
     def safe_update_status(self, msg: str):
         """线程安全的状态更新 — 委托 StreamManager"""

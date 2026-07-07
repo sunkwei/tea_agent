@@ -39,6 +39,8 @@ class LiteSession:
         enable_thinking: bool = True,
         max_iterations: int = 50,
         supports_reasoning: bool = True,
+        allowed_tools: list[str] | None = None,
+        denied_tools: list[str] | None = None,
     ):
         """
         初始化轻量级会话。
@@ -52,6 +54,8 @@ class LiteSession:
             enable_thinking: 是否启用 thinking 功能
             max_iterations: 最大工具调用迭代次数
             supports_reasoning: 是否支持推理内容
+            allowed_tools: 允许的工具列表（None=全部允许）
+            denied_tools: 禁止的工具列表（None=无禁止）
         """
         self.toolkit = toolkit
         self.model = model
@@ -60,14 +64,21 @@ class LiteSession:
         self.max_iterations = max_iterations
         self.supports_reasoning = supports_reasoning
         self.interrupted = False
+        self.allowed_tools = allowed_tools
+        self.denied_tools = denied_tools
 
         # API 客户端
         self.api = OpenAI(api_key=api_key, base_url=api_url)
 
-        # 构建工具定义
+        # 构建工具定义（带权限过滤）
         self.tools = self._build_tools()
 
-        logger.info(f"LiteSession 初始化 | 模型: {model} | 工具数: {len(self.tools)}")
+        mode = "all"
+        if allowed_tools:
+            mode = f"allow({len(allowed_tools)})"
+        if denied_tools:
+            mode += f"+deny({len(denied_tools)})" if mode != "all" else f"deny({len(denied_tools)})"
+        logger.info(f"LiteSession init | model: {model} | tools: {len(self.tools)} | filter: {mode}")
 
     def _default_system_prompt(self) -> str:
         """默认系统提示词。"""
@@ -78,19 +89,29 @@ class LiteSession:
 你不断进化，能力无上限。以最有效优雅的方式完成任务并持续增强自身。"""
 
     def _build_tools(self) -> list[dict]:
-        """构建工具定义列表。"""
+        """构建工具定义列表（带权限过滤）。"""
         tools = []
         if not self.toolkit:
             return tools
 
         # 使用 meta_map 获取工具定义
         for name, meta in self.toolkit.meta_map.items():
-            if name.startswith("toolkit_"):
-                try:
-                    if meta and "function" in meta:
-                        tools.append(meta)
-                except Exception as e:
-                    logger.warning(f"工具 {name} 定义加载失败: {e}")
+            if not name.startswith("toolkit_"):
+                continue
+            try:
+                if not (meta and "function" in meta):
+                    continue
+            except Exception as e:
+                logger.warning(f"Tool {name} meta load failed: {e}")
+                continue
+
+            # 权限过滤
+            if self.allowed_tools is not None and name not in self.allowed_tools:
+                continue
+            if self.denied_tools is not None and name in self.denied_tools:
+                continue
+
+            tools.append(meta)
 
         return tools
 

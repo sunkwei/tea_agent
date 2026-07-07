@@ -79,6 +79,10 @@ class UIBuilder:
         status_frame.pack(anchor=tk.E, padx=6, fill=tk.X)
         ttk.Label(status_frame, textvariable=gui.status_var,
                   foreground="#666").pack(side=tk.LEFT, padx=(0, 20))
+        gui.todo_btn = ttk.Button(status_frame, text="📋 任务",
+                                  command=gui.show_todo_dialog,
+                                  state="disabled")
+        gui.todo_btn.pack(side=tk.RIGHT)
 
         # 聊天区域
         gui.chat_split = ttk.PanedWindow(right, orient=tk.VERTICAL)

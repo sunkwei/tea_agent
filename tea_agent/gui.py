@@ -307,6 +307,94 @@ class TkGUI(Agent):
         """Internal: now ts."""
         return datetime.now().strftime("%H:%M:%S")
 
+    # ── TODO 清单提醒 ──────────────────────────
+
+    def show_todo_dialog(self):
+        """公开入口：点击「📋 任务」按钮时调用，始终弹出任务面板。"""
+        if not hasattr(self, 'db') or not self.db:
+            return
+        if not getattr(self, 'current_topic_id', None):
+            return
+        self._show_todo_dialog()
+
+    def _update_todo_btn_state(self):
+        """根据当前主题是否有待办，启用/禁用「📋 任务」按钮。"""
+        btn = getattr(self, 'todo_btn', None)
+        if btn is None:
+            return
+        pending = 0
+        try:
+            db = getattr(self, 'db', None)
+            tid = getattr(self, 'current_topic_id', None)
+            if db and tid:
+                c = db.conn.cursor()
+                c.execute(
+                    "SELECT COUNT(*) FROM todo_items WHERE topic_id=? AND done=0",
+                    (tid,),
+                )
+                pending = c.fetchone()[0]
+                c.close()
+        except Exception:
+            pass
+        if pending > 0:
+            btn.configure(state="normal")
+        else:
+            btn.configure(state="disabled")
+
+    def _check_and_show_todo(self):
+        """检查当前主题的 TODO 清单，有待办则弹窗提醒，无则关闭。"""
+        if not hasattr(self, 'db') or not self.db:
+            return
+        topic_id = getattr(self, 'current_topic_id', None)
+        if not topic_id:
+            return
+
+        try:
+            c = self.db.conn.cursor()
+            c.execute(
+                "SELECT COUNT(*) FROM todo_items WHERE topic_id=? AND done=0",
+                (topic_id,),
+            )
+            pending = c.fetchone()[0]
+            c.close()
+        except Exception:
+            return
+
+        if pending > 0:
+            self._show_todo_dialog()
+        else:
+            self._close_todo_dialog()
+        self._update_todo_btn_state()
+
+    def _show_todo_dialog(self):
+        """显示 TODO 提醒对话框（非模态），已存在则刷新。"""
+        dlg = getattr(self, '_todo_dialog', None)
+        if dlg is not None:
+            try:
+                if dlg.winfo_exists():
+                    dlg._refresh()
+                    self._update_todo_btn_state()
+                    return
+            except Exception:
+                pass
+
+        from tea_agent.gui_dialogs import TodoDialog
+        self._todo_dialog = TodoDialog(self.root, self.db, self.current_topic_id,
+                                       on_state_change=self._update_todo_btn_state)
+        self._update_todo_btn_state()
+
+    def _close_todo_dialog(self):
+        """关闭 TODO 对话框。"""
+        dlg = getattr(self, '_todo_dialog', None)
+        if dlg is not None:
+            try:
+                if dlg.winfo_exists():
+                    dlg._on_close()
+            except Exception:
+                pass
+            self._todo_dialog = None
+        self._update_todo_btn_state()
+
     def _init_session(self):
         """GUI 的会话初始化 — 继承 AgentCore 创建 sess。"""
         super()._init_session()
@@ -580,6 +668,9 @@ class TkGUI(Agent):
     def safe_log_tool(self, msg: str):
         """线程安全的工具日志 — 委托 StreamManager"""
         self.stream_mgr.safe_log_tool(msg)
+        # AI 调用 toolkit_todo / toolkit_plan 时立即弹出任务面板
+        if "toolkit_todo" in msg or "toolkit_plan" in msg:
+            self.root.after(300, self._check_and_show_todo)
 
     def safe_update_status(self, msg: str):
         """线程安全的状态更新 — 委托 StreamManager"""
@@ -1318,6 +1409,8 @@ class TkGUI(Agent):
     def _on_generation_done(self):
         """主线程回调：标记生成完成（避免跨线程写 generating）"""
         self.generating = False
+        # AI 生成完成后检查任务面板（Plan + TODO），延迟确保渲染已完成
+        self.root.after(500, self._check_and_show_todo)
 
     def interrupt(self, e=None):
         """打断当前 AI 生成 — 线程安全版"""

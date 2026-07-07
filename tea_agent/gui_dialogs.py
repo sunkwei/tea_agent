@@ -1410,3 +1410,312 @@ class ScheduledTaskDialog(tk.Toplevel):
         self.status_var.set("停止调度器功能开发中...")
 
 
+class TodoDialog(tk.Toplevel):
+    """非模态任务面板对话框 — 统一展示 Plan 计划 + TODO 清单。
+
+    功能：
+    - 每次 AI 生成完成后自动弹出
+    - 上半部分：Plan 计划概览（目标、步骤、进度）
+    - 下半部分：TODO 待办清单（勾选、删除线）
+    - 支持勾选 TODO 项并同步到 DB
+    - 每 3 秒自动刷新
+    - Plan 全部完成且 TODO 全部勾选后自动关闭
+    """
+
+    STATUS_ICONS = {
+        "done": "✅", "failed": "❌", "running": "▶️",
+        "pending": "⬜", "skipped": "⏭️",
+    }
+
+    def __init__(self, parent, db, topic_id, on_state_change=None):
+        super().__init__(parent)
+        self.db = db
+        self.topic_id = topic_id
+        self._on_state_change = on_state_change  # 回调：通知 GUI 按钮状态需更新
+        self._plans_dir = ".tea_agent_run/plans"
+        self.title("📋 任务面板")
+        _init_fonts()
+
+        width = _fs(560)
+        height = _fs(520)
+        self.geometry(f"{width}x{height}")
+        self.minsize(_fs(340), _fs(300))
+
+        # 非模态：不设置 transient/topmost，用户可自由切换窗口
+
+        self._create_ui()
+        self._refresh()
+
+        # 自动刷新定时器
+        self._timer_id = None
+        self._start_auto_refresh()
+
+        # 窗口关闭回调
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _create_ui(self):
+        """创建界面"""
+        # 标题栏
+        top = ttk.Frame(self)
+        top.pack(fill=tk.X, padx=10, pady=8)
+
+        ttk.Label(top, text="📋 任务面板",
+                  font=(SYSTEM_FONT, _fs(14), "bold")).pack(side=tk.LEFT)
+
+        self.progress_var = tk.StringVar(value="")
+        ttk.Label(top, textvariable=self.progress_var,
+                  font=(SYSTEM_FONT, _fs(10)), foreground="#666").pack(side=tk.RIGHT)
+
+        ttk.Separator(self, orient=tk.HORIZONTAL).pack(fill=tk.X, padx=10)
+
+        # 滚动区域
+        canvas_frame = ttk.Frame(self)
+        canvas_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+
+        self._canvas = tk.Canvas(canvas_frame, highlightthickness=0, bg="#ffffff")
+        scrollbar = ttk.Scrollbar(canvas_frame, orient=tk.VERTICAL, command=self._canvas.yview)
+        self._scroll_frame = ttk.Frame(self._canvas)
+
+        self._scroll_frame.bind("<Configure>",
+            lambda e: self._canvas.configure(scrollregion=self._canvas.bbox("all")))
+
+        self._canvas.create_window((0, 0), window=self._scroll_frame, anchor=tk.NW)
+        self._canvas.configure(yscrollcommand=scrollbar.set)
+
+        self._canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 底部按钮
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill=tk.X, padx=10, pady=6)
+
+        ttk.Button(btn_frame, text="🔄 刷新", command=self._refresh).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="关闭", command=self._on_close).pack(side=tk.RIGHT, padx=2)
+
+        # 快捷键
+        self.bind("<Escape>", lambda e: self._on_close())
+
+    # ── Plan 加载 ──────────────────────────────
+
+    def _load_plans(self):
+        """从 .tea_agent_run/plans/ 加载当前 topic 的计划"""
+        import json
+        import os
+
+        if not os.path.isdir(self._plans_dir):
+            return []
+
+        plans = []
+        try:
+            for fname in sorted(os.listdir(self._plans_dir), reverse=True):
+                if not fname.endswith(".json"):
+                    continue
+                fpath = os.path.join(self._plans_dir, fname)
+                with open(fpath, encoding="utf-8") as f:
+                    p = json.load(f)
+                if p.get("topic_id") == self.topic_id or p.get("topic_id") == "":
+                    plans.append(p)
+        except Exception:
+            pass
+
+        return plans
+
+    def _render_plan_section(self, plans):
+        """渲染 Plan 计划区域"""
+        # Plan 分区标题
+        plan_header = ttk.Frame(self._scroll_frame)
+        plan_header.pack(fill=tk.X, padx=4, pady=(0, 4))
+        ttk.Label(plan_header, text="📐 执行计划",
+                  font=(SYSTEM_FONT, _fs(12), "bold"),
+                  foreground="#2a6496").pack(side=tk.LEFT)
+
+        if not plans:
+            ttk.Label(self._scroll_frame, text="(暂无计划)",
+                      font=(SYSTEM_FONT, _fs(10)),
+                      foreground="#aaaaaa").pack(pady=2)
+            return
+
+        total_steps = 0
+        total_done = 0
+        all_plan_done = True
+
+        for plan in plans:
+            plan_done = sum(1 for s in plan.get("steps", []) if s.get("status") == "done")
+            plan_total = len(plan.get("steps", []))
+            total_steps += plan_total
+            total_done += plan_done
+            if plan.get("status") != "done":
+                all_plan_done = False
+
+            # 计划卡片
+            card = ttk.Frame(self._scroll_frame, relief=tk.GROOVE, borderwidth=1)
+            card.pack(fill=tk.X, padx=4, pady=3, ipady=2)
+
+            goal_text = plan.get("goal", "无目标")[:80]
+            status = plan.get("status", "?")
+
+            # 标题行
+            title_frame = ttk.Frame(card)
+            title_frame.pack(fill=tk.X, padx=6, pady=(2, 1))
+
+            status_icon = "📋" if status in ("created", "draft") else ("🔄" if status == "running" else "✅")
+            ttk.Label(title_frame, text=f"{status_icon} {goal_text}",
+                      font=(SYSTEM_FONT, _fs(10), "bold"),
+                      wraplength=_fs(460)).pack(side=tk.LEFT)
+            ttk.Label(title_frame, text=f"{plan_done}/{plan_total}",
+                      font=(SYSTEM_FONT, _fs(9)),
+                      foreground="#666").pack(side=tk.RIGHT)
+
+            # 步骤列表
+            for step in plan.get("steps", []):
+                s_status = step.get("status", "pending")
+                icon = self.STATUS_ICONS.get(s_status, "❓")
+                desc = step.get("desc", "")[:100]
+
+                step_text = f"  {icon} [{step.get('id', '?')}] {desc}"
+                if s_status == "done":
+                    fg = "#888888"
+                    fs = (SYSTEM_FONT, _fs(9), "overstrike")
+                elif s_status == "failed":
+                    fg = "#cc0000"
+                    fs = (SYSTEM_FONT, _fs(9))
+                else:
+                    fg = "#222222"
+                    fs = (SYSTEM_FONT, _fs(9))
+
+                tk.Label(card, text=step_text, font=fs, fg=fg,
+                         anchor=tk.W, justify=tk.LEFT,
+                         wraplength=_fs(470)).pack(fill=tk.X, padx=12, pady=1)
+
+        self._plan_all_done = all_plan_done
+        self._plan_has_content = True
+
+    # ── 统一刷新 ──────────────────────────────
+
+    def _refresh(self):
+        """刷新 Plan + TODO 显示"""
+        # 清除旧控件
+        for w in self._scroll_frame.winfo_children():
+            w.destroy()
+
+        self._plan_all_done = True
+        self._plan_has_content = False
+
+        # ── Plan 区域 ──
+        plans = self._load_plans()
+        self._render_plan_section(plans)
+
+        # ── 分隔线 ──
+        ttk.Separator(self._scroll_frame, orient=tk.HORIZONTAL).pack(
+            fill=tk.X, padx=10, pady=8)
+
+        # ── TODO 区域 ──
+        todo_header = ttk.Frame(self._scroll_frame)
+        todo_header.pack(fill=tk.X, padx=4, pady=(0, 4))
+        ttk.Label(todo_header, text="✅ 待办清单",
+                  font=(SYSTEM_FONT, _fs(12), "bold"),
+                  foreground="#2a8c4a").pack(side=tk.LEFT)
+
+        items = []
+        try:
+            c = self.db.conn.cursor()
+            c.execute(
+                "SELECT idx, desc, done FROM todo_items WHERE topic_id=? ORDER BY idx ASC",
+                (self.topic_id,),
+            )
+            items = c.fetchall()
+            c.close()
+        except Exception:
+            pass
+
+        done_count = sum(1 for r in items if r[2])
+        total = len(items)
+        self.progress_var.set(f"Plan: {sum(len(p.get('steps',[])) for p in plans)}步 | TODO: {done_count}/{total}")
+
+        if not items:
+            ttk.Label(self._scroll_frame, text="(暂无待办)",
+                      font=(SYSTEM_FONT, _fs(10)),
+                      foreground="#aaaaaa").pack(pady=2)
+
+        for idx, desc, done in items:
+            item_frame = ttk.Frame(self._scroll_frame)
+            item_frame.pack(fill=tk.X, padx=4, pady=2)
+
+            check_var = tk.BooleanVar(value=bool(done))
+            cb = tk.Checkbutton(
+                item_frame, variable=check_var,
+                command=lambda i=idx, v=check_var: self._on_check(i, v),
+                bg="#ffffff",
+            )
+            cb.pack(side=tk.LEFT, padx=(0, 4))
+
+            text = f"[{idx}] {desc}"
+            if done:
+                lbl = tk.Label(item_frame, text=text,
+                               font=(SYSTEM_FONT, _fs(11), "overstrike"),
+                               fg="#888888", anchor=tk.W)
+            else:
+                lbl = tk.Label(item_frame, text=text,
+                               font=(SYSTEM_FONT, _fs(11)), anchor=tk.W)
+            lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # 全部完成时自动关闭（Plan 全完成 + TODO 全勾选）
+        todo_all_done = (total > 0 and done_count == total)
+        plan_all_done = self._plan_all_done or not self._plan_has_content
+        if plan_all_done and todo_all_done:
+            self.after(1000, self._on_close)
+
+    def _on_check(self, idx, check_var):
+        """用户勾选/取消勾选 TODO 项"""
+        done = check_var.get()
+        try:
+            c = self.db.conn.cursor()
+            c.execute(
+                "UPDATE todo_items SET done=? WHERE topic_id=? AND idx=?",
+                (1 if done else 0, self.topic_id, idx),
+            )
+            self.db.conn.commit()
+            c.close()
+
+            # 同步 toolkit_todo 内存缓存（如有）
+            try:
+                from tea_agent.toolkit.toolkit_todo import _todos, _sync_item
+                if 0 <= idx < len(_todos):
+                    _todos[idx]["done"] = done
+                _sync_item(idx, done)
+            except Exception:
+                pass
+        except Exception:
+            pass
+        self._refresh()
+        # 通知 GUI 更新按钮状态（全部完成后变灰）
+        if self._on_state_change:
+            try:
+                self._on_state_change()
+            except Exception:
+                pass
+
+    def _start_auto_refresh(self):
+        """启动自动刷新定时器"""
+        if self._timer_id:
+            self.after_cancel(self._timer_id)
+        self._timer_id = self.after(3000, self._auto_refresh_tick)
+
+    def _auto_refresh_tick(self):
+        """定时器回调：自动刷新"""
+        if not self.winfo_exists():
+            return
+        self._refresh()
+        self._timer_id = self.after(3000, self._auto_refresh_tick)
+
+    def _on_close(self):
+        """关闭窗口时清理定时器"""
+        if self._timer_id:
+            self.after_cancel(self._timer_id)
+            self._timer_id = None
+        try:
+            self.destroy()
+        except Exception:
+            pass
+
+

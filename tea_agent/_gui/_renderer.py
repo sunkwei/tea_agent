@@ -142,6 +142,8 @@ class ChatRenderer:
                 self.gui._loading_topic = False
                 self.gui.generating = False
                 self.gui._update_status("✅ 就绪")
+                # 主题加载完成后检查 TODO 清单
+                self.gui.root.after(400, self.gui._check_and_show_todo)
         else:
             self.gui.chat_view.config(state=tk.NORMAL)
             self.gui.chat_view.delete("1.0", tk.END)
@@ -234,6 +236,8 @@ class ChatRenderer:
             self.gui.generating = False
             if total_convs <= displayed:
                 self.gui._update_status("✅ 就绪")
+            # 主题加载完成后检查 TODO 清单
+            self.gui.root.after(400, self.gui._check_and_show_todo)
 
     # ── _render_round_view ──
     def _render_round_view(self, round_idx):
@@ -405,6 +409,8 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
                     pass
             self.gui._loading_done = False
             self.gui.generating = False  # loading完成，释放send()锁
+            # 加载完成后检查任务面板（Plan + TODO），覆盖启动和切换场景
+            self.gui.root.after(500, self.gui._check_and_show_todo)
             return
         # 线程还在跑，继续等待
         self.gui.root.after(50, lambda: self._poll_loading_progress(_retries + 1))

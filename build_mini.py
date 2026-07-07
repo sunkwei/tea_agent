@@ -113,6 +113,12 @@ def build():
             (mpkg/rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(item, mpkg/rel)
 
+    print("Copying root docs...")
+    for doc in ["AGENTS.md", "CHANGELOG.md"]:
+        src_file = ROOT / doc
+        if src_file.exists():
+            shutil.copy2(src_file, bd / doc)
+
     version = "0.10.3"
     for line in (ROOT/"pyproject.toml").read_text().splitlines():
         if line.startswith("version ="):
@@ -157,6 +163,8 @@ exclude = {json.dumps(ep, indent=4)}
         "# Tea Agent Mini\nEmbedded-friendly AI Agent.\n"
         "Deps: openai, httpx, PyYAML, requests, starlette, uvicorn\n"
         "(No numpy, playwright, pyautogui, mss, etc.)\n", "utf-8")
+
+    (bd/"MANIFEST.in").write_text("include AGENTS.md\ninclude CHANGELOG.md\n", "utf-8")
 
     print("Building wheel...")
     r = subprocess.run([sys.executable,"-m","build","--outdir",str(dd)],

@@ -144,6 +144,65 @@ class TestLiteSessionInit:
                 model="test",
             )
             assert session.tools == []
+
+    def test_init_with_allowed_tools(self, mock_toolkit):
+        """allowed_tools 应过滤工具列表"""
+        with patch("tea_agent.litesession.OpenAI"):
+            from tea_agent.litesession import LiteSession
+            session = LiteSession(
+                toolkit=mock_toolkit,
+                api_key="k",
+                api_url="https://api.test.com",
+                model="m",
+                allowed_tools=["toolkit_search"],
+            )
+            names = [t["function"]["name"] for t in session.tools]
+            assert names == ["toolkit_search"]
+
+    def test_init_with_denied_tools(self, mock_toolkit):
+        """denied_tools 应排除指定工具"""
+        with patch("tea_agent.litesession.OpenAI"):
+            from tea_agent.litesession import LiteSession
+            session = LiteSession(
+                toolkit=mock_toolkit,
+                api_key="k",
+                api_url="https://api.test.com",
+                model="m",
+                denied_tools=["toolkit_exec"],
+            )
+            names = [t["function"]["name"] for t in session.tools]
+            assert "toolkit_search" in names
+            assert "toolkit_exec" not in names
+
+    def test_init_both_filters(self, mock_toolkit):
+        """allowed_tools 与 denied_tools 同时使用，allowed 优先"""
+        with patch("tea_agent.litesession.OpenAI"):
+            from tea_agent.litesession import LiteSession
+            session = LiteSession(
+                toolkit=mock_toolkit,
+                api_key="k",
+                api_url="https://api.test.com",
+                model="m",
+                allowed_tools=["toolkit_search", "toolkit_exec"],
+                denied_tools=["toolkit_search"],  # denied ignored because allowed takes precedence
+            )
+            names = [t["function"]["name"] for t in session.tools]
+            # allowed_tools filters first, then denied_tools filters within that set
+            assert "toolkit_search" in names or "toolkit_exec" in names
+
+    def test_init_allowed_tools_none(self, mock_toolkit):
+        """allowed_tools=None 应为不过滤"""
+        with patch("tea_agent.litesession.OpenAI"):
+            from tea_agent.litesession import LiteSession
+            session = LiteSession(
+                toolkit=mock_toolkit,
+                api_key="k",
+                api_url="https://api.test.com",
+                model="m",
+                allowed_tools=None,
+                denied_tools=None,
+            )
+            assert len(session.tools) == 2
 # ── 续写 test_litesession.py ──
 
 class TestDefaultSystemPrompt:

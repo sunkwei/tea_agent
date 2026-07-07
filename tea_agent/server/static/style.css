@@ -626,3 +626,185 @@ body {
 .max-iter-overlay .mi-desc strong { color: var(--primary); }
 .max-iter-overlay .mi-actions { display: flex; gap: 12px; justify-content: center; }
 .max-iter-overlay .mi-actions .btn { padding: 10px 28px; font-size: 14px; }
+
+/* ── Task Panel (右侧滑出面板) ── */
+#task-panel {
+    width: 0;
+    overflow: hidden;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    transition: width .25s ease;
+    white-space: nowrap;
+}
+#task-panel.open {
+    width: 280px;
+    white-space: normal;
+}
+
+/* Task Panel splitter */
+#task-panel-splitter {
+    width: 5px;
+    cursor: col-resize;
+    background: var(--border);
+    flex-shrink: 0;
+    transition: background 0.15s;
+    position: relative;
+    z-index: 10;
+    display: none;
+}
+#task-panel.open + #task-panel-splitter,
+#task-panel-splitter.visible {
+    display: block;
+}
+#task-panel-splitter:hover,
+#task-panel-splitter.active {
+    background: var(--primary);
+}
+
+/* Header */
+.tp-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.tp-title {
+    font-size: 14px;
+    font-weight: 600;
+    flex: 1;
+}
+.tp-progress {
+    font-size: 12px;
+    color: var(--text-dim);
+    background: var(--surface2);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+/* Content area */
+.tp-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+}
+
+/* Section */
+.tp-section { margin-bottom: 4px; }
+.tp-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--primary);
+    padding: 8px 4px 6px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+}
+.tp-section-title:first-child { padding-top: 0; }
+.tp-section-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 8px 0;
+}
+
+/* ── Plan Cards ── */
+.tp-plan-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    background: rgba(88,166,255,.04);
+    transition: border-color .15s;
+}
+.tp-plan-card:hover { border-color: var(--primary-dim); }
+.tp-plan-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    word-break: break-word;
+}
+.tp-plan-card-progress {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+}
+.tp-step-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px 2px 12px;
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.5;
+}
+.tp-step-item .step-icon { flex-shrink: 0; width: 16px; text-align: center; }
+.tp-step-item .step-desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tp-step-item.done { color: #888; }
+.tp-step-item.done .step-desc { text-decoration: line-through; }
+.tp-step-item.failed .step-desc { color: var(--red); }
+.tp-empty {
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 12px 4px;
+    text-align: center;
+}
+
+/* ── TODO Items ── */
+.tp-todo-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 4px 4px 0;
+    font-size: 12px;
+    line-height: 1.5;
+    border-bottom: 1px solid rgba(48,54,61,.4);
+}
+.tp-todo-item:last-child { border-bottom: none; }
+.tp-todo-cb {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s;
+    font-size: 10px;
+    color: transparent;
+    background: transparent;
+}
+.tp-todo-cb:hover { border-color: var(--primary); }
+.tp-todo-cb.checked {
+    background: var(--green);
+    border-color: var(--green);
+    color: #fff;
+}
+.tp-todo-desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tp-todo-desc.done { text-decoration: line-through; color: #666; }
+.tp-todo-idx {
+    font-size: 10px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    background: var(--surface2);
+    padding: 0 5px;
+    border-radius: 8px;
+}
+
+/* Footer */
+.tp-footer {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+    justify-content: space-between;
+    flex-shrink: 0;
+}

@@ -29,6 +29,7 @@
 <select id="cs-select" onchange="switchConfig(this.value)"><option value="">加载中...</option></select>
 <button class="btn btn-ghost btn-sm" onclick="uploadConfigFile()" title="上传配置文件 (.yaml)">📤</button>
 </div>
+<button class="btn btn-ghost btn-sm" id="task-panel-btn" onclick="toggleTaskPanel()" title="任务面板">📋</button>
 <button class="btn btn-ghost btn-sm" id="theme-btn" onclick="toggleTheme()">🌓</button>
 </div>
 </div>
@@ -59,6 +60,28 @@
 <button id="clear-images-btn" class="btn btn-ghost btn-sm" onclick="clearImages()" style="margin-left:auto">清除图片</button>
 </div>
 </main>
+<div id="task-panel-splitter"></div>
+<div id="task-panel">
+<div class="tp-header">
+<span class="tp-title">📋 任务面板</span>
+<span class="tp-progress" id="tp-progress">0/0</span>
+</div>
+<div class="tp-content" id="tp-content">
+<div class="tp-section">
+<div class="tp-section-title">📐 执行计划</div>
+<div id="tp-plan-list"></div>
+</div>
+<div class="tp-section-divider"></div>
+<div class="tp-section">
+<div class="tp-section-title">✅ 待办清单</div>
+<div id="tp-todo-list"></div>
+</div>
+</div>
+<div class="tp-footer">
+<button class="btn btn-ghost btn-sm" onclick="refreshTaskPanel()">🔄 刷新</button>
+<button class="btn btn-ghost btn-sm" onclick="toggleTaskPanel()">关闭</button>
+</div>
+</div>
 </div>
 
 <!-- Search Modal -->

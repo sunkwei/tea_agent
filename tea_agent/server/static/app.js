@@ -636,6 +636,7 @@ window.openTopic = async function(id, title) {
 
 window.newTopic = function() {
     currentTopicId = '';
+    _taskPanelSuppressAutoOpen = false;  // 新话题重置
     $('topic-title').textContent = '\u65b0\u5bf9\u8bdd';
     $('messages').innerHTML = '<div class="welcome"><div class="welcome-icon">\u2615</div><h2>Tea Agent</h2><p>\u81ea\u8fdb\u5316 AI \u7f16\u7a0b\u52a9\u624b \u00b7 60+ \u5185\u7f6e\u5de5\u5177 \u00b7 \u591a Agent \u534f\u4f5c \u00b7 \u957f\u671f\u8bb0\u5fc6<br>\u5728\u4e0b\u65b9\u8f93\u5165\u6d88\u606f\u5f00\u59cb\u5bf9\u8bdd</p></div>';
     refreshTopics();
@@ -1091,81 +1092,150 @@ async function _doUploadConfig(file) {
 }
 
 // ================================================================
-//  TODO Sidebar
+//  Task Panel（任务面板）— Plan + TODO 整合
 // ================================================================
 
-let _todoSidebarOpen = false;
+let _taskPanelOpen = false;
+let _taskPanelTimer = null;
+let _taskPanelSuppressAutoOpen = false;  // 用户手动关闭后禁止自动弹出
 
-window.toggleTodoSidebar = function() {
-    _todoSidebarOpen = !_todoSidebarOpen;
-    const panel = document.getElementById('todo-sidebar');
-    if (panel) panel.classList.toggle('open', _todoSidebarOpen);
-    if (_todoSidebarOpen) refreshTodos();
+/** 切换任务面板的显示/隐藏 */
+window.toggleTaskPanel = function() {
+    _taskPanelOpen = !_taskPanelOpen;
+    const panel = document.getElementById('task-panel');
+    if (panel) panel.classList.toggle('open', _taskPanelOpen);
+    const splitter = document.getElementById('task-panel-splitter');
+    if (splitter) splitter.classList.toggle('visible', _taskPanelOpen);
+    if (_taskPanelOpen) {
+        _taskPanelSuppressAutoOpen = false;  // 用户手动打开，取消抑制
+        refreshTaskPanel();
+        _startTaskPanelTimer();
+    } else {
+        _taskPanelSuppressAutoOpen = true;   // 用户手动关闭，抑制自动弹出
+        _stopTaskPanelTimer();
+    }
 };
 
-window.refreshTodos = async function() {
+/** 启动自动刷新（每 5 秒） */
+function _startTaskPanelTimer() {
+    _stopTaskPanelTimer();
+    _taskPanelTimer = setInterval(function() {
+        if (_taskPanelOpen && currentTopicId) {
+            refreshTaskPanel();
+        }
+    }, 5000);
+}
+function _stopTaskPanelTimer() {
+    if (_taskPanelTimer) {
+        clearInterval(_taskPanelTimer);
+        _taskPanelTimer = null;
+    }
+}
+
+/** 主刷新函数：同时加载 Plan + TODO */
+window.refreshTaskPanel = async function() {
     if (!currentTopicId) {
-        const list = $('todo-list');
-        if (list) list.innerHTML = '<div class="tsb-empty">请先选择一个话题</div>';
-        const dot = $('todo-dot');
-        if (dot) dot.classList.remove('show');
+        const planList = $('tp-plan-list');
+        const todoList = $('tp-todo-list');
+        if (planList) planList.innerHTML = '<div class="tp-empty">请先选择一个话题</div>';
+        if (todoList) todoList.innerHTML = '';
+        $('tp-progress').textContent = '0/0';
         return;
     }
     try {
-        const r = await fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/todos');
-        if (!r.ok) return;
-        const data = await r.json();
-        const items = data.items || [];
-        const total = data.total || 0;
-        const done = data.done || 0;
+        // 并行加载 Plan 和 TODO
+        const [planResp, todoResp] = await Promise.all([
+            fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/plans'),
+            fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/todos'),
+        ]);
 
-        // Update progress bar
-        const pct = total > 0 ? Math.round(done / total * 100) : 0;
-        const progressText = $('todo-progress-text');
-        const progressFill = $('todo-progress-fill');
-        if (progressText) progressText.textContent = done + '/' + total;
-        if (progressFill) progressFill.style.width = pct + '%';
+        // ── 渲染 Plan ──
+        const planList = $('tp-plan-list');
+        if (planResp.ok) {
+            const planData = await planResp.json();
+            const plans = planData.data || [];
+            if (plans.length === 0) {
+                planList.innerHTML = '<div class="tp-empty">(暂无计划)</div>';
+            } else {
+                let planHtml = '';
+                for (const plan of plans) {
+                    const steps = plan.steps || [];
+                    const doneSteps = steps.filter(function(s) { return s.status === 'done'; }).length;
+                    const totalSteps = steps.length;
+                    const goalText = (plan.goal || '无目标').slice(0, 80);
+                    const statusIcon = plan.status === 'done' ? '✅' : (plan.status === 'running' ? '🔄' : '📋');
 
-        // List items
-        const list = $('todo-list');
-        if (!list) return;
-        if (items.length === 0) {
-            list.innerHTML = '';
-            const dot = $('todo-dot');
-            if (dot) dot.classList.remove('show');
+                    planHtml += '<div class="tp-plan-card">';
+                    planHtml += '<div class="tp-plan-card-header">';
+                    planHtml += '<span>' + statusIcon + '</span>';
+                    planHtml += '<span>' + esc(goalText) + '</span>';
+                    planHtml += '<span class="tp-plan-card-progress">' + doneSteps + '/' + totalSteps + '</span>';
+                    planHtml += '</div>';
+
+                    for (const step of steps) {
+                        const sStatus = step.status || 'pending';
+                        const iconMap = { done: '✅', failed: '❌', running: '▶️', pending: '⬜', skipped: '⏭️' };
+                        const sIcon = iconMap[sStatus] || '❓';
+                        const sDesc = (step.desc || '').slice(0, 100);
+                        const sCls = sStatus === 'done' ? 'done' : (sStatus === 'failed' ? 'failed' : '');
+                        planHtml += '<div class="tp-step-item ' + sCls + '">';
+                        planHtml += '<span class="step-icon">' + sIcon + '</span>';
+                        planHtml += '<span class="step-desc">' + esc(sDesc) + '</span>';
+                        planHtml += '</div>';
+                    }
+                    planHtml += '</div>';
+                }
+                planList.innerHTML = planHtml;
+            }
         } else {
-            list.innerHTML = items.map(function(item) {
-                const doneCls = item.done ? 'checked' : '';
-                const descCls = item.done ? 'done' : '';
-                return '<div class="todo-item">'
-                    + '<div class="cb ' + doneCls + '" data-idx="' + item.idx + '" onclick="checkTodo(' + item.idx + ', ' + (!item.done) + ')"></div>'
-                    + '<span class="desc ' + descCls + '">' + esc(item.desc) + '</span>'
-                    + '<span class="idx-badge">#' + item.idx + '</span>'
-                    + '</div>';
-            }).join('');
-            // Show dot indicator in toolbar
-            const dot = $('todo-dot');
-            if (dot) dot.classList.add('show');
+            planList.innerHTML = '<div class="tp-empty">(加载失败)</div>';
         }
 
-        // 有 TODO → 自动展开面板；没有 TODO → 自动收起面板
-        if (items.length > 0) {
-            if (!_todoSidebarOpen) {
-                _todoSidebarOpen = true;
-                const panel = $('todo-sidebar');
+        // ── 渲染 TODO ──
+        const todoList = $('tp-todo-list');
+        if (todoResp.ok) {
+            const todoData = await todoResp.json();
+            const items = todoData.items || [];
+            const total = todoData.total || 0;
+            const done = todoData.done || 0;
+            $('tp-progress').textContent = done + '/' + total;
+
+            if (items.length === 0) {
+                todoList.innerHTML = '<div class="tp-empty">(暂无待办)</div>';
+            } else {
+                let todoHtml = '';
+                for (const item of items) {
+                    const doneCls = item.done ? 'checked' : '';
+                    const descCls = item.done ? 'done' : '';
+                    todoHtml += '<div class="tp-todo-item">';
+                    todoHtml += '<div class="tp-todo-cb ' + doneCls + '" onclick="checkTodoItem(' + item.idx + ', ' + (!item.done) + ')">' + (item.done ? '✓' : '') + '</div>';
+                    todoHtml += '<span class="tp-todo-desc ' + descCls + '">' + esc(item.desc) + '</span>';
+                    todoHtml += '<span class="tp-todo-idx">#' + item.idx + '</span>';
+                    todoHtml += '</div>';
+                }
+                todoList.innerHTML = todoHtml;
+            }
+
+            // 自动弹出（仅非流式+非抑制状态）
+            const hasContent = items.length > 0;
+            const panel = document.getElementById('task-panel');
+            if (hasContent && !_taskPanelOpen && !_taskPanelSuppressAutoOpen && !isStreaming) {
+                _taskPanelOpen = true;
                 if (panel) panel.classList.add('open');
+                const splitter = document.getElementById('task-panel-splitter');
+                if (splitter) splitter.classList.add('visible');
+                _startTaskPanelTimer();
             }
         } else {
-            if (_todoSidebarOpen) {
-                _todoSidebarOpen = false;
-                const panel = $('todo-sidebar');
-                if (panel) panel.classList.remove('open');
-            }
+            todoList.innerHTML = '<div class="tp-empty">(加载失败)</div>';
         }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+        // 静默失败
+    }
 };
 
-window.checkTodo = async function(idx, done) {
+/** 勾选/取消 TODO 项 */
+window.checkTodoItem = async function(idx, done) {
     if (!currentTopicId) return;
     try {
         const r = await fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/todos/' + idx, {
@@ -1174,19 +1244,14 @@ window.checkTodo = async function(idx, done) {
             body: JSON.stringify({ done: done }),
         });
         if (r.ok) {
-            // Optimistic UI update: refresh the list
-            await refreshTodos();
+            await refreshTaskPanel();
         }
     } catch (e) { /* ignore */ }
 };
 
-// Auto-refresh todos on topic change and after chat
-function _patchRefreshTodos() {
-    // After sendMessage completes, refresh todos
-    const origRefresh = refreshTopics;
-    const _origSend = window.sendMessage;
-    // We'll hook into the existing refreshTopics which is called after send
-}
+/** 向下兼容 — 旧 refreshTodos 映射到新函数 */
+window.refreshTodos = window.refreshTaskPanel;
+window.checkTodo = window.checkTodoItem;
 
 // -- Config Status Check --
 async function checkConfigStatus() {
@@ -1708,5 +1773,6 @@ initApp();
 // Init splitters after DOM ready
 initSplitter('sidebar-splitter', 'sidebar', 'h');
 initSplitter('vsplitter', 'input-row', 'v');
+initSplitter('task-panel-splitter', 'task-panel', 'h');
 })();
 

@@ -516,6 +516,95 @@ async def handle_web_sessions(request):
     return JSONResponse({"sessions": sessions})
 
 
+async def handle_web_topic_todos(request):
+    """GET /api/topic/{topic_id}/todos — 获取当前话题的 TODO 清单"""
+    topic_id = request.path_params.get("topic_id", "")
+    if not topic_id:
+        return JSONResponse({"error": "topic_id required"}, status_code=400)
+    try:
+        from tea_agent.toolkit.toolkit_todo import _todos, _restore_from_db, _restored
+        # 确保从 DB 恢复
+        if not _restored:
+            _restore_from_db()
+        # 从 DB 直接读取
+        server = get_server()
+        storage = server._get_storage()
+        if storage and hasattr(storage, 'conn'):
+            c = storage.conn.cursor()
+            c.execute(
+                "SELECT idx, desc, done FROM todo_items WHERE topic_id=? ORDER BY idx ASC",
+                (topic_id,),
+            )
+            rows = c.fetchall()
+            c.close()
+            items = [{"idx": r[0], "desc": r[1], "done": bool(r[2])} for r in rows]
+        else:
+            items = [{"idx": t["idx"], "desc": t["desc"], "done": t["done"]} for t in _todos]
+        done = sum(1 for it in items if it["done"])
+        return JSONResponse({"items": items, "total": len(items), "done": done})
+    except Exception as e:
+        logger.warning(f"handle_web_topic_todos failed: {e}")
+        return JSONResponse({"items": [], "total": 0, "done": 0})
+
+
+async def handle_web_topic_todo_update(request):
+    """PUT /api/topic/{topic_id}/todos/{idx} — 更新 TODO 状态"""
+    topic_id = request.path_params.get("topic_id", "")
+    idx_str = request.path_params.get("idx", "")
+    if not topic_id or idx_str == "":
+        return JSONResponse({"error": "topic_id and idx required"}, status_code=400)
+    try:
+        idx = int(idx_str)
+    except ValueError:
+        return JSONResponse({"error": "idx must be integer"}, status_code=400)
+    try:
+        body = await request.json()
+        done = bool(body.get("done", True))
+        server = get_server()
+        storage = server._get_storage()
+        if storage and hasattr(storage, 'conn'):
+            c = storage.conn.cursor()
+            c.execute(
+                "UPDATE todo_items SET done=? WHERE topic_id=? AND idx=?",
+                (1 if done else 0, topic_id, idx),
+            )
+            storage.conn.commit()
+            c.close()
+        # Also sync toolkit_todo memory cache
+        try:
+            from tea_agent.toolkit.toolkit_todo import _todos, _sync_item
+            if 0 <= idx < len(_todos):
+                _todos[idx]["done"] = done
+            _sync_item(idx, done)
+        except Exception:
+            pass
+        return JSONResponse({"ok": True, "idx": idx, "done": done})
+    except Exception as e:
+        logger.warning(f"handle_web_topic_todo_update failed: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def handle_web_topic_plans(request):
+    """GET /api/topic/{topic_id}/plans — 获取当前话题的执行计划"""
+    topic_id = request.path_params.get("topic_id", "")
+    plans_dir = ".tea_agent_run/plans"
+    import json, os
+    plans = []
+    try:
+        if os.path.isdir(plans_dir):
+            for fname in sorted(os.listdir(plans_dir), reverse=True):
+                if not fname.endswith(".json"):
+                    continue
+                fpath = os.path.join(plans_dir, fname)
+                with open(fpath, encoding="utf-8") as f:
+                    p = json.load(f)
+                if p.get("topic_id") == topic_id or p.get("topic_id") == "" or not topic_id:
+                    plans.append(p)
+    except Exception as e:
+        logger.warning(f"handle_web_topic_plans failed: {e}")
+    return JSONResponse({"data": plans, "total": len(plans)})
+
+
 async def handle_web_topic_info(request):
     """GET/PUT/DELETE /api/topic/{topic_id}"""
     topic_id = request.path_params.get("topic_id", "")

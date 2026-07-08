@@ -4,7 +4,10 @@
 """
 问题工具 - 执行过程中向用户提问
 
-支持 GUI 弹窗和 CLI 输入两种模式。
+支持三种模式（按优先级）：
+1. Web 模式：通过 _web_handler 回调（由 server.py 设置）
+2. GUI 模式：tkinter 弹窗
+3. CLI 模式：终端输入
 """
 
 import logging
@@ -15,6 +18,10 @@ logger = logging.getLogger("toolkit.question")
 # 全局状态：存储用户回答
 _answer_result = None
 _answer_event = threading.Event()
+
+# Web 回调钩子（由 server.py 在 chat_stream_sse 中设置/清除）
+# 签名：fn(title, question, options, default, timeout) -> str
+_web_handler = None
 
 
 def toolkit_question(
@@ -37,6 +44,13 @@ def toolkit_question(
     Returns:
         用户选择的答案字符串
     """
+    # ── 优先级 1: Web 模式（由 server.py 设置） ──
+    if _web_handler is not None:
+        try:
+            return _web_handler(title, question, options, default, timeout)
+        except Exception as e:
+            logger.warning(f"Web question handler failed, fallback: {e}")
+
     global _answer_result, _answer_event
 
     # 重置状态

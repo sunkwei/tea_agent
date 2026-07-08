@@ -24,6 +24,7 @@ from .server import (
     __version__,
     _active_sessions,
     _max_iter_pending,
+    _question_pending,
     get_server,
     logger,
 )
@@ -472,6 +473,25 @@ async def handle_chat_continue(request):
     except Exception as e:
         logger.exception(f"Handle max_iter confirm failed: {e}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+async def handle_chat_question(request):
+    """POST /api/chat/question — 用户回答 toolkit_question 的提问"""
+    body = await request.json()
+    question_id = body.get("question_id", "")
+    answer = body.get("answer", "")
+
+    if not question_id:
+        return JSONResponse({"ok": False, "error": "question_id 不能为空"}, status_code=400)
+
+    pending = _question_pending.get(question_id)
+    if not pending:
+        return JSONResponse({"ok": False, "error": "问题已过期或不存在"}, status_code=404)
+
+    pending["answer"] = answer
+    pending["event"].set()
+    logger.info(f"User answered question {question_id}: {answer!r}")
+    return JSONResponse({"ok": True, "answer": answer})
 
 
 async def handle_chat_abort(request):

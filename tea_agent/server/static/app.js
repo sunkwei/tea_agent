@@ -354,6 +354,11 @@ window.sendMessage = async function() {
                             removeLoading();
                             showMaxIterConfirm(data.confirm_id, data.text);
                             break;
+                        case 'question':
+                            // Agent 向用户提问
+                            removeLoading();
+                            showQuestionDialog(data.question_id, data.title, data.question, data.options, data.default);
+                            break;
                         case 'done':
                             removeLoading();
                             // Finalize tool container if still open
@@ -1429,6 +1434,129 @@ window.showMaxIterConfirm = function(confirmId, text) {
         overlay.remove();
     });
 };
+
+// ================================================================
+//  Question Dialog (toolkit_question web mode)
+// ================================================================
+
+window.showQuestionDialog = function(questionId, title, question, options, defaultVal) {
+    // 防止重叠
+    let existing = document.querySelector('.question-overlay');
+    if (existing) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'question-overlay';
+
+    const box = document.createElement('div');
+    box.className = 'question-box';
+
+    let optionsHtml = '';
+    if (options && options.length > 0) {
+        optionsHtml = '<div class="q-options">';
+        for (const opt of options) {
+            const checked = (opt === defaultVal) ? ' checked' : '';
+            optionsHtml += '<label class="q-option"><input type="radio" name="q-answer" value="' + escAttr(opt) + '"' + checked + '> <span>' + esc(opt) + '</span></label>';
+        }
+        optionsHtml += '<label class="q-option q-custom-opt"><input type="radio" name="q-answer" value="__custom__"> <span>自定义:</span> <input type="text" id="q-custom-input" class="q-custom-input" placeholder="输入自定义答案"></label>';
+        optionsHtml += '</div>';
+    } else {
+        optionsHtml = '<div class="q-input-wrap"><input type="text" id="q-free-input" class="q-free-input" value="' + escAttr(defaultVal) + '" placeholder="请输入..."></div>';
+    }
+
+    box.innerHTML = '<div class="q-icon">❓</div>' +
+        '<div class="q-title">' + esc(title) + '</div>' +
+        '<div class="q-desc">' + esc(question) + '</div>' +
+        optionsHtml +
+        '<div class="q-actions">' +
+        '<button id="q-cancel" class="btn btn-ghost">取消</button>' +
+        '<button id="q-submit" class="btn btn-primary">确定</button>' +
+        '</div>';
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    // 监听自定义输入框焦点自动选中 radio
+    const customInput = document.getElementById('q-custom-input');
+    if (customInput) {
+        customInput.addEventListener('focus', function() {
+            const radio = this.closest('.q-option').querySelector('input[type="radio"]');
+            if (radio) radio.checked = true;
+        });
+        customInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') document.getElementById('q-submit').click();
+        });
+    }
+
+    const freeInput = document.getElementById('q-free-input');
+    if (freeInput) {
+        freeInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') document.getElementById('q-submit').click();
+        });
+        freeInput.focus();
+        freeInput.select();
+    }
+
+    // 回车提交
+    box.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !customInput && !freeInput) {
+            document.getElementById('q-submit').click();
+        }
+    });
+
+    function getAnswer() {
+        const selected = document.querySelector('input[name="q-answer"]:checked');
+        if (selected) {
+            if (selected.value === '__custom__') {
+                const ci = document.getElementById('q-custom-input');
+                return ci ? ci.value.trim() || defaultVal : defaultVal;
+            }
+            return selected.value;
+        }
+        // 自由输入模式
+        const fi = document.getElementById('q-free-input');
+        return fi ? fi.value.trim() || defaultVal : defaultVal;
+    }
+
+    document.getElementById('q-submit').addEventListener('click', async function() {
+        const answer = getAnswer();
+        try {
+            await fetch('/api/chat/question', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question_id: questionId, answer: answer }),
+            });
+        } catch (e) { /* ignore */ }
+        overlay.remove();
+    });
+
+    document.getElementById('q-cancel').addEventListener('click', async function() {
+        try {
+            await fetch('/api/chat/question', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question_id: questionId, answer: defaultVal || '' }),
+            });
+        } catch (e) { /* ignore */ }
+        overlay.remove();
+    });
+
+    // 自动聚焦第一个 radio
+    const firstRadio = document.querySelector('input[name="q-answer"]');
+    if (firstRadio && !firstRadio.value.startsWith('__')) {
+        // focus first option
+    }
+};
+
+// Helper
+function escAttr(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
 
 // ================================================================
 //  Screenshot Region Capture (full-screen overlay + drag select)

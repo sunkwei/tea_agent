@@ -46,9 +46,62 @@ __version__ = "0.2.0"
 # 当工具轮达到上限时，后端等待前端用户确认后继续或终止
 _max_iter_pending = {}  # type: dict[str, dict]
 
+# 全局：question 待答存储（question_id -> {event, answer, timestamp}）
+# 当 toolkit_question() 在 server 模式被调用时，后端等待前端用户回答
+_question_pending = {}  # type: dict[str, dict]
+
 # 全局：活跃会话存储（topic_id -> session）
 # 用于中断请求通过 topic_id 找到对应 session 并调用 interrupt()
 _active_sessions: dict = {}
+
+
+# ── Server 模式下的 Question 处理器 ──
+
+def _server_question_handler(
+    title: str,
+    question: str,
+    options: list[str] | None,
+    default: str,
+    timeout: int,
+    put_fn: "callable",
+    event_loop: asyncio.AbstractEventLoop | None,
+) -> str:
+    """在 server 模式下处理 toolkit_question()。
+
+    向浏览器发送 question SSE 事件，等待用户回答后返回。
+    """
+    import uuid as _uuid_mod
+    question_id = _uuid_mod.uuid4().hex[:12]
+    event = threading.Event()
+
+    entry = {"event": event, "answer": None, "timestamp": time.time()}
+    _question_pending[question_id] = entry
+
+    # 推送 question SSE 事件到浏览器
+    try:
+        if event_loop is not None:
+            event_loop.call_soon_threadsafe(lambda: put_fn({
+                "type": "question",
+                "question_id": question_id,
+                "title": title,
+                "question": question,
+                "options": options or [],
+                "default": default,
+            }))
+    except Exception:
+        logger.exception("Failed to push question SSE event")
+
+    # 等待用户回答
+    if timeout > 0:
+        event.wait(timeout=timeout)
+    else:
+        event.wait()
+
+    # 读取答案
+    answer = entry.get("answer")
+    _question_pending.pop(question_id, None)
+    return answer if answer is not None else (default or "")
+
 
 # ── 配置缓存（按路径缓存，减少重复 IO） ──
 _config_cache: dict = {}
@@ -485,12 +538,20 @@ class APIServer:
                 topic_id = storage.create_topic("Web Session")
             _load_topic_history(storage, session, topic_id)
 
-            ai_msg, used_tools = session.chat_stream(
-                msg,
-                callback=stream_cb,
-                topic_id=topic_id,
-                on_status=status_cb,
+            # 注册 web question handler，使 toolkit_question 通过 SSE 向浏览器提问
+            from tea_agent.toolkit import toolkit_question as _tq_mod
+            _tq_mod._web_handler = lambda t, q, o, d, to: _server_question_handler(
+                t, q, o, d, to, _put, event_loop,
             )
+            try:
+                ai_msg, used_tools = session.chat_stream(
+                    msg,
+                    callback=stream_cb,
+                    topic_id=topic_id,
+                    on_status=status_cb,
+                )
+            finally:
+                _tq_mod._web_handler = None
             # 保存对话到数据库（异常时不阻断 done 事件）
             try:
                 _save_chat_result(storage, session, topic_id, msg, ai_msg, used_tools)
@@ -1101,6 +1162,7 @@ def create_app(api_key: str | None = None,
         handle_chat_abort,
         handle_chat_completions,
         handle_chat_continue,
+        handle_chat_question,
         handle_create_memory,
         handle_create_session,
         handle_create_task,
@@ -1155,6 +1217,7 @@ def create_app(api_key: str | None = None,
         Route("/", endpoint=handle_web_root),
         Route("/api/chat", endpoint=handle_web_chat, methods=["POST"]),
         Route("/api/chat/continue", endpoint=handle_chat_continue, methods=["POST"]),
+        Route("/api/chat/question", endpoint=handle_chat_question, methods=["POST"]),
         Route("/api/chat/abort", endpoint=handle_chat_abort, methods=["POST"]),
         Route("/api/screenshot/region", endpoint=handle_screenshot_region, methods=["POST"]),
         Route("/api/screenshot/full", endpoint=handle_screenshot_full),

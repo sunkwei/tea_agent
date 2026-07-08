@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tea_agent"
-version = "0.10.13"
+version = "0.10.14"
 description = "A self-evolving AI agent with dynamic toolkit management."
 readme = "README.md"
 license = "MIT"
@@ -61,7 +61,7 @@ mini = [
 
 [tool.ruff]
 line-length = 150
-target-version = "0.10.13"
+target-version = "0.10.14"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]

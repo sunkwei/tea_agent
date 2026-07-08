@@ -266,6 +266,9 @@ class APIServer:
             Path(tool_dir).mkdir(parents=True, exist_ok=True)
             self._toolkit = tlk.Toolkit(tool_dir)
             tlk.toolkit = self._toolkit
+            # 标记为 Server 实例，toolkit_question 检测到此标志后
+            # 将在无 Web handler 时自动返回 default（避免弹出 CLI/GUI）
+            tlk.toolkit._is_server = True
             logger.debug(f"Toolkit initialized | tools: {len(self._toolkit.func_map)} | dir: {tool_dir}")
         return self._toolkit
 
@@ -539,8 +542,9 @@ class APIServer:
             _load_topic_history(storage, session, topic_id)
 
             # 注册 web question handler，使 toolkit_question 通过 SSE 向浏览器提问
-            from tea_agent.toolkit import toolkit_question as _tq_mod
-            _tq_mod._web_handler = lambda t, q, o, d, to: _server_question_handler(
+            # 通过 tlk.toolkit 单例传递，规避 exec() 变量隔离
+            from tea_agent import tlk
+            tlk.toolkit._question_web_handler = lambda t, q, o, d, to: _server_question_handler(
                 t, q, o, d, to, _put, event_loop,
             )
             try:
@@ -551,7 +555,7 @@ class APIServer:
                     on_status=status_cb,
                 )
             finally:
-                _tq_mod._web_handler = None
+                tlk.toolkit._question_web_handler = None
             # 保存对话到数据库（异常时不阻断 done 事件）
             try:
                 _save_chat_result(storage, session, topic_id, msg, ai_msg, used_tools)

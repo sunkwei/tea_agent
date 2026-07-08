@@ -4,14 +4,18 @@
 """
 问题工具 - 执行过程中向用户提问
 
-支持三种模式（按优先级）：
-1. Web 模式：通过 _web_handler 回调（由 server.py 设置）
-2. GUI 模式：tkinter 弹窗
-3. CLI 模式：终端输入
+支持四种模式（按优先级）：
+1. Web 模式：通过 tlk.toolkit._question_web_handler 回调（由 server.py 设置）
+2. 静默模式（Server/Headless）：无交互时自动返回 default 值
+3. GUI 模式：tkinter 弹窗
+4. CLI 模式：终端输入
+
+关键设计：通过 tlk.toolkit 共享单例传递 handler，规避 exec() 变量隔离问题。
 """
 
 import logging
 import threading
+import os
 
 logger = logging.getLogger("toolkit.question")
 
@@ -19,9 +23,40 @@ logger = logging.getLogger("toolkit.question")
 _answer_result = None
 _answer_event = threading.Event()
 
-# Web 回调钩子（由 server.py 在 chat_stream_sse 中设置/清除）
-# 签名：fn(title, question, options, default, timeout) -> str
-_web_handler = None
+
+def _get_web_handler():
+    """从 tlk.toolkit 单例获取 Web handler（绕过 exec 隔离）。
+    
+    当 server.py 的 chat_stream_sse 设置 handler 后，
+    exec 加载的函数也能通过 tlk.toolkit 访问到同一 handler。
+    """
+    try:
+        from tea_agent import tlk
+        if tlk.toolkit is not None:
+            return getattr(tlk.toolkit, '_question_web_handler', None)
+    except Exception:
+        pass
+    return None
+
+
+def _is_headless_context() -> bool:
+    """检测是否在无用户交互环境下运行（Server 后台 / TEA_HEADLESS）。
+    
+    此时不应弹出 GUI/CLI 提问，应直接返回 default。
+    """
+    # 显式环境变量
+    if os.environ.get('TEA_HEADLESS', '').lower() in ('1', 'true', 'yes'):
+        return True
+    
+    # Server 模式：tlk.toolkit 被标记为 server 实例
+    try:
+        from tea_agent import tlk
+        if tlk.toolkit is not None and getattr(tlk.toolkit, '_is_server', False):
+            return True
+    except Exception:
+        pass
+    
+    return False
 
 
 def toolkit_question(
@@ -44,12 +79,21 @@ def toolkit_question(
     Returns:
         用户选择的答案字符串
     """
-    # ── 优先级 1: Web 模式（由 server.py 设置） ──
-    if _web_handler is not None:
+    # ── 优先级 1: Web 模式（通过 tlk.toolkit 共享单例） ──
+    handler = _get_web_handler()
+    if handler is not None:
         try:
-            return _web_handler(title, question, options, default, timeout)
+            return handler(title, question, options, default, timeout)
         except Exception as e:
             logger.warning(f"Web question handler failed, fallback: {e}")
+
+    # ── 优先级 2: 静默模式（Server 后台 / 无头环境） ──
+    if _is_headless_context():
+        logger.info(
+            f"Headless/server mode: auto-return default={default!r} "
+            f"for question: {title}"
+        )
+        return default or ""
 
     global _answer_result, _answer_event
 

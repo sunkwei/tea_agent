@@ -267,6 +267,7 @@ class Toolkit:
         'toolkit_mode', 'toolkit_prompt_evolve', 'toolkit_input',
         'toolkit_notify', 'toolkit_run_tests', 'toolkit_toggle_reasoning',
         'toolkit_set_topic_title', 'toolkit_sudo_gui', 'toolkit_git_push_all_remotes',
+        'toolkit_git_commit',
         'toolkit_reload',  # reload 必须真实执行，不能缓存
     }
 

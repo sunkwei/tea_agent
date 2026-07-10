@@ -1028,9 +1028,21 @@ class OnlineToolSession(BaseChatSession):
     # 构建 API 消息（委派给 _history_builder）
     # ──────────────────────────────────────────────
 
+    def _get_topic_system_prompt(self) -> str | None:
+        """获取当前主题的自定义系统提示词（若有则优先使用）。"""
+        topic_id = getattr(self, 'current_topic_id', None)
+        if topic_id and self.storage:
+            try:
+                return self.storage.get_topic_system_prompt(topic_id)
+            except Exception:
+                pass
+        return None
+
     def _build_api_messages(self) -> list[dict]:
-        """三级历史拼接 — 委派给 _history_builder.build_api_messages。"""
-        return build_api_messages(self.context, self.system_prompt)
+        """三级历史拼接 — 优先使用主题级 system prompt，否则用进化版本。"""
+        topic_sp = self._get_topic_system_prompt()
+        sp = topic_sp if topic_sp else self.system_prompt
+        return build_api_messages(self.context, sp)
 
     # ──────────────────────────────────────────────
     # 意图分析与工具循环

@@ -130,6 +130,39 @@ class TopicStore(StoreComponent):
         c.close()
         return dict(r) if r else None
 
+    def get_topic_system_prompt(self, topic_id: str) -> str | None:
+        """获取主题的自定义系统提示词。
+
+        Args:
+            topic_id: 主题ID
+
+        Returns:
+            自定义 system_prompt 文本，若无则返回 None
+        """
+        c = self.conn.cursor()
+        c.execute("SELECT system_prompt FROM topics WHERE topic_id = ?", (topic_id,))
+        row = c.fetchone()
+        c.close()
+        if row:
+            return row["system_prompt"] if row["system_prompt"] else None
+        return None
+
+    def set_topic_system_prompt(self, topic_id: str, system_prompt: str | None):
+        """设置主题的自定义系统提示词。
+
+        Args:
+            topic_id: 主题ID
+            system_prompt: 系统提示词，传 None 或空字符串可清除自定义设置
+        """
+        c = self.conn.cursor()
+        val = system_prompt if system_prompt else None
+        c.execute(
+            "UPDATE topics SET system_prompt = ?, last_update_stamp = datetime('now', 'localtime') WHERE topic_id = ?",
+            (val, topic_id),
+        )
+        self.conn.commit()
+        c.close()
+
     def list_topics(self) -> list[dict]:
         """List topics (only active ones)."""
         c = self.conn.cursor()

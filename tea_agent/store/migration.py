@@ -53,6 +53,7 @@ def init_tables(db):
         ("level2_json", "TEXT DEFAULT '[]'"),
         ("l3_pending_json", "TEXT DEFAULT ''"),
         ("is_active", "INTEGER DEFAULT 1"),
+        ("system_prompt", "TEXT DEFAULT NULL"),
     ]:
         with contextlib.suppress(Exception):
             c.execute(f"ALTER TABLE topics ADD COLUMN {col} {col_def}")

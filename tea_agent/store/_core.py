@@ -271,6 +271,14 @@ class Storage:
         """更新主题活跃状态。"""
         return self._topics.update_topic_active(topic_id, is_active)
 
+    def get_topic_system_prompt(self, topic_id: str) -> str | None:
+        """获取主题的自定义系统提示词。"""
+        return self._topics.get_topic_system_prompt(topic_id)
+
+    def set_topic_system_prompt(self, topic_id: str, system_prompt: str | None):
+        """设置主题的自定义系统提示词。"""
+        return self._topics.set_topic_system_prompt(topic_id, system_prompt)
+
     # ── Topic Token 统计 ──
     def get_topic_tokens(self, topic_id: str) -> dict:
         """获取主题 token 统计。"""

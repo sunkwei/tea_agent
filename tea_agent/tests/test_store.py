@@ -154,6 +154,48 @@ class TestTopicCRUD:
         new_stamp = storage.get_topic(tid)["last_update_stamp"]
         assert new_stamp != old_stamp
 
+    def test_topic_system_prompt_default_none(self, storage):
+        """新建主题的 system_prompt 应为 None"""
+        tid = storage.create_topic("默认提示词测试")
+        sp = storage.get_topic_system_prompt(tid)
+        assert sp is None
+
+    def test_topic_system_prompt_set_and_get(self, storage):
+        """设置后应能正确读取"""
+        tid = storage.create_topic("设置提示词测试")
+        test_prompt = "你是测试专用 AI，请用 Python 回答所有问题。"
+        storage.set_topic_system_prompt(tid, test_prompt)
+        sp = storage.get_topic_system_prompt(tid)
+        assert sp == test_prompt
+
+    def test_topic_system_prompt_clear(self, storage):
+        """清除后应恢复为 None"""
+        tid = storage.create_topic("清除提示词测试")
+        storage.set_topic_system_prompt(tid, "一些提示词")
+        assert storage.get_topic_system_prompt(tid) == "一些提示词"
+        storage.set_topic_system_prompt(tid, None)
+        assert storage.get_topic_system_prompt(tid) is None
+
+    def test_topic_system_prompt_empty_string(self, storage):
+        """空字符串应被视为 None"""
+        tid = storage.create_topic("空串提示词测试")
+        storage.set_topic_system_prompt(tid, "")
+        assert storage.get_topic_system_prompt(tid) is None
+
+    def test_topic_system_prompt_update_updates_stamp(self, storage):
+        """设置 system_prompt 应更新 last_update_stamp"""
+        tid = storage.create_topic("时间戳测试")
+        old_stamp = storage.get_topic(tid)["last_update_stamp"]
+        time.sleep(1.1)
+        storage.set_topic_system_prompt(tid, "新提示词")
+        new_stamp = storage.get_topic(tid)["last_update_stamp"]
+        assert new_stamp != old_stamp
+
+    def test_topic_system_prompt_nonexistent_topic(self, storage):
+        """不存在的主题应返回 None"""
+        sp = storage.get_topic_system_prompt("nonexistent_id")
+        assert sp is None
+
 
 # ============================================================
 # 3. Message CRUD

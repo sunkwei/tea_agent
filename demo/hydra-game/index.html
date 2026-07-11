@@ -74,7 +74,7 @@ x.strokeStyle=h?"#ff3333":n.r?"#f0e68c":"#5dade2";x.lineWidth=(h?2:1.5)*n.sc;x.s
 if(h){x.fillStyle="#fff";x.font=Math.max(10,r*0.7)+"px sans-serif";x.textAlign="center";x.textBaseline="middle";x.fillText("\U0001f40d",0,0)}
 if(n.r){x.fillStyle="#5a4a1a";x.font="10px sans-serif";x.textAlign="center";x.textBaseline="top";x.fillText("\U0001f45e",0,r+4)}
 x.restore()}}
-function Q(l){if(G.w||G.a||!l||!l.l)return;G.s++;let n=G.s,p=l.p;if(!p)return;let i=p.c.indexOf(l);if(i===-1)return;p.c.splice(i,1);M.delete(l.i)
+function Q(l){if(G.w||!l||!l.l)return;G.s++;let n=G.s,p=l.p;if(!p)return;let i=p.c.indexOf(l);if(i===-1)return;p.c.splice(i,1);M.delete(l.i)
 if(!p.r){let cnt=n,sub=p,gp=sub.p;for(let j=0;j<cnt;j++){let c=CS(sub);c.p=gp;gp.c.push(c)}}
 if(CH(R)===1){G.w=1;document.getElementById("fs").textContent=G.s;document.getElementById("ov").classList.add("s")}
 document.getElementById("ss").textContent=G.s;document.getElementById("sh").textContent=CH(R)

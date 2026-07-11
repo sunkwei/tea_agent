@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Langton's Ant - 朗顿的蚂蚁</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#e0e0e0;display:flex;justify-content:center}
+#app{max-width:1000px;width:100%;padding:16px}
+h1{text-align:center;font-size:28px;background:linear-gradient(135deg,#ff6b6b,#f5a623);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sub{text-align:center;color:#889;font-size:13px;margin:4px 0 12px}
+.main{display:flex;gap:12px;height:600px}
+#cw{flex:1;background:#16213e;border-radius:8px;position:relative;border:1px solid #2a2a4a;overflow:hidden}
+#cv{width:100%;height:100%}
+#sd{width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
+.card{background:#16213e;border-radius:8px;padding:12px;border:1px solid #2a2a4a}
+.card h3{font-size:13px;color:#889;margin-bottom:6px}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.si{background:#0f3460;border-radius:6px;padding:8px;text-align:center}
+.si .v{font-size:20px;font-weight:700;color:#f5a623}
+.si .l{font-size:11px;color:#889}
+button{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;width:100%;margin:2px 0}
+.bp{background:#e94560;color:#fff}
+.bw{background:#f5a623;color:#1a1a2e}
+.bo{background:transparent;border:1px solid #3a3a5a;color:#bbb}
+.bo:hover{background:#2a2a4a}
+#log{background:#0a0a1a;border-radius:6px;padding:8px;overflow-y:auto;font:12px monospace;height:80px;border:1px solid #2a2a4a}
+.speed{display:flex;align-items:center;gap:8px;font-size:12px;color:#889}
+.speed input{flex:1}
+#ov{display:none;position:absolute;inset:0;background:rgba(0,0,0,0.7);border-radius:8px;justify-content:center;align-items:center;z-index:5;flex-direction:column}
+#ov.s{display:flex}
+</style>
+</head>
+<body>
+<div id="app">
+<h1>🐜 朗顿的蚂蚁 &middot; Langton's Ant</h1>
+<p class="sub">简单规则 → 混沌 → 秩序 → 高速公路 &mdash; Chris Langton (1986)</p>
+<div class="main">
+<div id="cw"><canvas id="cv"></canvas>
+<div id="ov"><h2 style="color:#f5a623">⏳ 高速公路建成！</h2><p style="color:#889">混沌 → 秩序的涌现</p></div></div>
+<div id="sd">
+<div class="card"><h3>📊 统计</h3>
+<div class="sg">
+<div class="si"><div class="v" id="ss">0</div><div class="l">步数</div></div>
+<div class="si"><div class="v" id="sb" style="color:#4ecca3">0</div><div class="l">黑格</div></div>
+<div class="si"><div class="v" id="sx">0</div><div class="l">蚂蚁X</div></div>
+<div class="si"><div class="v" id="sy">0</div><div class="l">蚂蚁Y</div></div>
+</div></div>
+<div class="card">
+<button class="bp" id="ba" onclick="tA()">▶ 运行</button>
+<div class="speed"><label>速度</label><input type="range" id="sr" min="1" max="9" value="5"><span id="sl" style="width:40px">中</span></div>
+<button class="bo" onclick="rG()">🔄 重置</button>
+<button class="bo" id="bs" onclick="stP()">⏭ 单步</button>
+</div>
+<div class="card" style="flex:1">
+<h3>📝 说明</h3>
+<div id="log">🐜 白格：右转+涂黑
+🐜 黑格：左转+涂白
+🐜 约10万步后出现高速公路</div></div>
+</div></div></div>
+<script>
+// ========================================
+//  朗顿的蚂蚁 - Langton's Ant
+// ========================================
+
+let W=0,H=0,grid=null,ant={x:0,y:0,d:0}; // 0=up,1=right,2=down,3=left
+let G={step:0,run:0,t:null};
+const DIRS=[[0,-1],[1,0],[0,1],[-1,0]];
+const SPEED=[500,300,150,80,40,20,10,4,1];
+
+function init() {
+  let cv=document.getElementById('cv'),r=cv.parentElement.getBoundingClientRect();
+  W=r.width;H=r.height;
+  cv.width=W;cv.height=H;
+  let cols=Math.floor(W/4),rows=Math.floor(H/4);
+  // Use simple object for grid (memory efficient sparse grid)
+  grid={}; ant={x:Math.floor(cols/2),y:Math.floor(rows/2),d:0}; G={step:0,run:0,t:null};
+  draw(); uI();
+}
+
+function get(x,y){return grid[y+','+x]||0}
+function set(x,y,v){grid[y+','+x]=v}
+function blackCount(){return Object.keys(grid).length}
+
+function step(){
+  let x=ant.x,y=ant.y,cell=get(x,y);
+  if(cell===0){ant.d=(ant.d+1)%4;set(x,y,1)} // white: turn right, flip black
+  else{ant.d=(ant.d+3)%4;set(x,y,0);delete grid[y+','+x]} // black: turn left, flip white
+  ant.x+=DIRS[ant.d][0]; ant.y+=DIRS[ant.d][1]; G.step++;
+  draw(); uI();
+  // Check highway pattern (ant goes off typical grid after ~10000 steps)
+  if(G.step>2000 && G.step%500===0 && get(ant.x,ant.y)===0 && get(ant.x-1,ant.y)===0) {
+    document.getElementById('ov').classList.add('s');
+    setTimeout(()=>document.getElementById('ov').classList.remove('s'),3000);
+  }
+}
+
+function draw(){
+  let cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+  let cols=Math.floor(W/4),rows=Math.floor(H/4);
+  // Background
+  ctx.fillStyle='#16213e'; ctx.fillRect(0,0,W,H);
+  // Draw black cells
+  for(let key in grid){
+    let [y,x]=key.split(',').map(Number);
+    ctx.fillStyle='#fff'; ctx.fillRect(x*4,y*4,4,4);
+  }
+  // Draw ant
+  ctx.fillStyle='#e94560';
+  ctx.beginPath(); ctx.arc(ant.x*4+2,ant.y*4+2,3,0,Math.PI*2); ctx.fill();
+  // Draw direction indicator
+  let dx=DIRS[ant.d][0],dy=DIRS[ant.d][1];
+  ctx.strokeStyle='#f5a623'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(ant.x*4+2,ant.y*4+2); ctx.lineTo((ant.x+dx)*4+2,(ant.y+dy)*4+2); ctx.stroke();
+}
+
+function uI(){
+  document.getElementById('ss').textContent=G.step;
+  document.getElementById('sb').textContent=blackCount();
+  document.getElementById('sx').textContent=ant.x;
+  document.getElementById('sy').textContent=ant.y;
+}
+
+function tA(){
+  if(G.run){G.run=0;clearTimeout(G.t);document.getElementById('ba').textContent='▶ 运行';document.getElementById('ba').className='bp';return}
+  G.run=1;document.getElementById('ba').textContent='■ 停止';document.getElementById('ba').className='bw';aR()
+}
+
+function aR(){
+  if(!G.run) return;
+  let sp=parseInt(document.getElementById('sr').value);
+  for(let i=0;i<3;i++){step();if(!G.run)return}
+  G.t=setTimeout(aR,SPEED[sp-1])
+}
+
+function stP(){if(!G.run)step()}
+
+function rG(){if(G.t)clearTimeout(G.t);init()}
+
+document.getElementById('sr').addEventListener('input',function(){
+  let labels=['极慢','很慢','慢','较慢','中','较快','快','很快','极快'];
+  document.getElementById('sl').textContent=labels[this.value-1];
+});
+window.addEventListener('resize',init);
+init();
+</script></body></html>

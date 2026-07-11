@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Hydra Game - 九头蛇游戏</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:sans-serif;background:#1a1a2e;color:#e0e0e0;display:flex;justify-content:center}
+#app{max-width:1000px;width:100%;padding:16px}
+h1{text-align:center;background:linear-gradient(135deg,#e94560,#f5a623);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:26px}
+p.sub{text-align:center;color:#889;font-size:13px;margin:4px 0 12px}
+.main{display:flex;gap:12px;height:600px}
+#cw{flex:1;background:#16213e;border-radius:8px;position:relative;border:1px solid #2a2a4a}
+#cv{width:100%;height:100%}
+#sd{width:260px}
+.card{background:#16213e;border-radius:8px;padding:12px;margin-bottom:8px;border:1px solid #2a2a4a}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.si{background:#0f3460;border-radius:6px;padding:8px;text-align:center}
+.si .v{font-size:20px;font-weight:700;color:#f5a623}
+.si .l{font-size:11px;color:#889}
+button{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;width:100%;margin:2px 0}
+.bp{background:#e94560;color:#fff}
+.bw{background:#f5a623;color:#1a1a2e}
+.bo{background:transparent;border:1px solid #3a3a5a;color:#bbb}
+#log{background:#0a0a1a;border-radius:6px;padding:8px;overflow-y:auto;font:12px monospace;height:100px;border:1px solid #2a2a4a}
+#ov{display:none;position:absolute;inset:0;background:rgba(0,0,0,0.7);border-radius:8px;justify-content:center;align-items:center;z-index:5;flex-direction:column}
+#ov.s{display:flex}
+#ov h2{color:#4ecca3;font-size:28px}
+.speed{display:flex;align-items:center;gap:8px;font-size:12px;color:#889}
+.speed input{flex:1}
+</style>
+</head>
+<body>
+<div id="app">
+<h1>🐍 九头蛇游戏</h1>
+<p class="sub">砍掉蛇头&rarr;蛇会再生&rarr;但最终必然消灭 &mdash; Kirby-Paris (1982)</p>
+<div class="main">
+<div id="cw"><canvas id="cv"></canvas><div id="ov"><h2>🏆 消灭蛇妖！</h2><p>共 <span id="fs">0</span> 步</p><button class="bp" onclick="rG()">再来一局</button></div></div>
+<div id="sd">
+<div class="card"><h3 style="font-size:13px;color:#889;margin-bottom:6px">📊 战况</h3>
+<div class="sg"><div class="si"><div class="v" id="ss">0</div><div class="l">步数</div></div><div class="si"><div class="v" id="sh" style="color:#e94560">0</div><div class="l">蛇头</div></div><div class="si"><div class="v" id="sn">0</div><div class="l">节点</div></div><div class="si"><div class="v" id="sd" style="color:#4ecca3">0</div><div class="l">深度</div></div></div></div>
+<div class="card"><button class="bp" id="ba" onclick="tA()">▶ 自动演示</button><div class="speed"><label>速度</label><input type="range" id="sr" min="1" max="10" value="5"><span id="sl" style="width:40px">中</span></div><button class="bo" onclick="rG()">🔄 重开</button></div>
+<div class="card" style="flex:1;display:flex;flex-direction:column"><h3 style="font-size:13px;color:#889;margin-bottom:6px">📜 日志</h3><div id="log"></div></div>
+<p style="text-align:center;font-size:11px;color:#556;margin-top:4px">💡 点击红色蛇头砍掉</p>
+</div></div></div>
+
+<script>
+let N=0,R=null,M=new Map(),G={s:0,w:0,a:0,t:0};
+class Nd{constructor(i,d){this.i=i;this.c=[];this.p=0;this.d=d;this.x=0;this.y=0;this.ax=0;this.ay=0;this.r=14;this.a=1;this.sc=1;this.hl=0}
+get l(){return !this.c.length}get r(){return !this.p}}
+function B(d,pa,dp){pa=pa||0;dp=dp||0;let n=new Nd(N++,dp);M.set(n.i,n);n.p=pa;for(let i=0;i<d.length;i++){let c=B(d[i],n,dp+1);n.c.push(c)}return n}
+function CS(s){let n=new Nd(N++,s.d);M.set(n.i,n);for(let i=0;i<s.c.length;i++){let c=CS(s.c[i]);c.p=n;n.c.push(c)}return n}
+function CH(n){return n.l?1:n.c.reduce((s,c)=>s+CH(c),0)}
+function CN(n){return 1+n.c.reduce((s,c)=>s+CN(c),0)}
+function MD(n){return n.c.length?Math.max(...n.c.map(c=>MD(c))):n.d}
+function LG(){let c=document.getElementById("cv"),r=c.parentElement.getBoundingClientRect(),W=r.width,H=r.height;if(!R||!W)return;
+function aw(n){if(!n.c.length){n._p=0;n._w=28;return}n.c.forEach(aw);let mi=1/0,ma=-1/0;n.c.forEach(c=>{mi=Math.min(mi,c._p-c._w/2);ma=Math.max(ma,c._p+c._w/2)})
+n._p=(mi+ma)/2;n._w=Math.max(28,ma-mi+28)}aw(R);let off=W/2-R._p;(function f(n,o){n._p+=o;n.c.forEach(c=>f(c,o))})(R,off);
+let vg=65,hm=30;(function f(n){n.x=Math.max(hm,Math.min(W-hm,n._p));n.y=45+n.d*vg;n.c.forEach(f)})(R);(function f(n){n.ax=n.x;n.ay=n.y;n.c.forEach(f)})(R)}
+function RD(){let c=document.getElementById("cv"),r=c.parentElement.getBoundingClientRect(),dpr=window.devicePixelRatio||1,W=r.width,H=r.height
+if(!W||!H)return;c.width=W*dpr;c.height=H*dpr;c.style.width=W+"px";c.style.height=H+"px";let x=c.getContext("2d");x.scale(dpr,dpr);x.fillStyle="#16213e";x.fillRect(0,0,W,H)
+if(!R)return;let A=[];(function f(n){A.push(n);n.c.forEach(f)})(R);
+for(let i=0;i<A.length;i++){let n=A[i];if(n.r)continue;let p=n.p;x.beginPath();x.moveTo(p.ax,p.ay+p.r*p.sc);x.lineTo(n.ax,n.ay-n.r*n.sc)
+x.strokeStyle="rgba(80,140,200,"+(0.25*n.a)+")";x.lineWidth=2.5*n.sc;x.stroke()}
+for(let i=0;i<A.length;i++){let n=A[i],h=n.l,r=n.r*n.sc;x.save();x.globalAlpha=n.a;x.translate(n.ax,n.ay)
+if(n.hl>0.01){let g=x.createRadialGradient(0,0,0,0,0,r*3);g.addColorStop(0,"rgba(233,69,96,"+(n.hl*0.25)+")");g.addColorStop(1,"rgba(233,69,96,0)");x.fillStyle=g
+x.beginPath();x.arc(0,0,r*3,0,Math.PI*2);x.fill()}
+let g=x.createRadialGradient(-r*0.3,-r*0.3,0,0,0,r*0.8)
+if(h){g.addColorStop(0,"#ff6b6b");g.addColorStop(0.7,"#c0392b");g.addColorStop(1,"#922B21")}
+else if(n.r){g.addColorStop(0,"#f0e68c");g.addColorStop(0.7,"#b8860b");g.addColorStop(1,"#8B6914")}
+else{g.addColorStop(0,"#6bcbff");g.addColorStop(0.7,"#2e86c1");g.addColorStop(1,"#1a5276")}
+x.fillStyle=g;x.beginPath();x.arc(0,0,r,0,Math.PI*2);x.fill()
+x.strokeStyle=h?"#ff3333":n.r?"#f0e68c":"#5dade2";x.lineWidth=(h?2:1.5)*n.sc;x.stroke()
+if(h){x.fillStyle="#fff";x.font=Math.max(10,r*0.7)+"px sans-serif";x.textAlign="center";x.textBaseline="middle";x.fillText("\U0001f40d",0,0)}
+if(n.r){x.fillStyle="#5a4a1a";x.font="10px sans-serif";x.textAlign="center";x.textBaseline="top";x.fillText("\U0001f45e",0,r+4)}
+x.restore()}}
+function Q(l){if(G.w||G.a||!l||!l.l)return;G.s++;let n=G.s,p=l.p;if(!p)return;let i=p.c.indexOf(l);if(i===-1)return;p.c.splice(i,1);M.delete(l.i)
+if(!p.r){let cnt=n,sub=p,gp=sub.p;for(let j=0;j<cnt;j++){let c=CS(sub);c.p=gp;gp.c.push(c)}}
+if(CH(R)===1){G.w=1;document.getElementById("fs").textContent=G.s;document.getElementById("ov").classList.add("s")}
+document.getElementById("ss").textContent=G.s;document.getElementById("sh").textContent=CH(R)
+document.getElementById("sn").textContent=CN(R);document.getElementById("sd").textContent=MD(R)
+let bx=document.getElementById("log"),el=document.createElement("div");el.style.color="#e94560"
+el.textContent="\u2694 \u7b2c "+G.s+" \u5200\uff1a\u780d\u6389\u86c7\u5934";bx.appendChild(el);bx.scrollTop=bx.scrollHeight;LG();RD()}
+function tA(){let btn=document.getElementById("ba")
+if(G.a){G.a=0;if(G.t){clearTimeout(G.t);G.t=0}btn.textContent="\u25b6 \u81ea\u52a8\u6f14\u793a";btn.className="bp"}
+else{G.a=1;btn.textContent="\u25a0 \u505c\u6b62";btn.className="bw";aS()}}
+function aS(){if(!G.a||G.w){if(G.w&&G.a){G.a=0;document.getElementById("ba").textContent="\u25b6 \u81ea\u52a8\u6f14\u793a"}return}
+let sp=parseInt(document.getElementById("sr").value);let dl=Math.max(100,1100-sp*100);let lv=[];(function f(n){if(n.l)lv.push(n);n.c.forEach(f)})(R)
+if(lv.length){let idx=Math.floor(Math.random()*lv.length);Q(lv[idx])}
+if(G.t)clearTimeout(G.t);G.t=setTimeout(aS,dl)}
+function rG(){if(G.t){clearTimeout(G.t);G.t=0}G={s:0,w:0,a:0,t:0};N=0;M=new Map();R=B([[[]],[[]],[[]]])
+document.getElementById("ov").classList.remove("s");document.getElementById("log").innerHTML=""
+document.getElementById("ba").textContent="\u25b6 \u81ea\u52a8\u6f14\u793a";document.getElementById("ba").className="bp";LG();RD();uI()}
+function uI(){document.getElementById("ss").textContent=G.s;if(R){document.getElementById("sh").textContent=CH(R)
+document.getElementById("sn").textContent=CN(R);document.getElementById("sd").textContent=MD(R)}}
+document.addEventListener("DOMContentLoaded",function(){
+let c=document.getElementById("cv");c.addEventListener("click",function(e){
+let rect=c.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;let A=[];(function f(n){A.push(n);n.c.forEach(f)})(R)
+let b=0,bd=1/0;for(let i=0;i<A.length;i++){let n=A[i];if(!n.l)continue;let dx=n.ax-mx,dy=n.ay-my,d=Math.sqrt(dx*dx+dy*dy);if(d<bd&&d<n.r*2){bd=d;b=n}}
+if(b&&!G.a)Q(b)});R=B([[[]],[[]],[[]]]);LG();RD();uI()})
+document.getElementById("sr").addEventListener("input",function(){
+let v=parseInt(this.value);let lb=["\u6781\u6162","\u5f88\u6162","\u6162","\u8f83\u6162","\u4e2d","\u8f83\u5feb","\u5feb","\u5f88\u5feb","\u6781\u5feb","\u95ea\u7535"]
+document.getElementById("sl").textContent=lb[v-1]})
+window.addEventListener("resize",function(){LG();RD()})
+</script>
+</body>
+</html>

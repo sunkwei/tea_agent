@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Nim - 尼姆游戏</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#e0e0e0;display:flex;justify-content:center}
+#app{max-width:760px;width:100%;padding:20px}
+h1{text-align:center;font-size:28px;background:linear-gradient(135deg,#7c4dff,#e94560);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sub{text-align:center;color:#889;font-size:13px;margin:4px 0 16px}
+.row{display:flex;gap:12px}
+.col{flex:1}
+.card{background:#16213e;border-radius:10px;padding:16px;margin-bottom:12px;border:1px solid #2a2a4a}
+.card h3{font-size:13px;color:#889;margin-bottom:8px}
+.piles{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;padding:12px 0}
+.pile{display:flex;flex-direction:column;align-items:center;cursor:pointer;transition:transform .2s}
+.pile:hover{transform:translateY(-4px)}
+.pile.active{opacity:0.5}
+.pile .count{font-size:32px;font-weight:700;color:#f5a623;font-variant-numeric:tabular-nums}
+.pile .bar{width:48px;border-radius:4px;margin:4px 0;transition:height .3s}
+.pile .label{font-size:11px;color:#889;margin-top:4px}
+.controls{display:flex;gap:8px;justify-content:center}
+.controls button{padding:8px 18px;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:14px}
+.bp{background:#7c4dff;color:#fff}
+.bo{background:transparent;border:1px solid #3a3a5a;color:#bbb}
+.bo:hover{background:#2a2a4a}
+.br{background:#e94560;color:#fff}
+.bw{background:#f5a623;color:#1a1a2e}
+#status{text-align:center;font-size:18px;padding:12px;border-radius:8px;margin:8px 0}
+#status.turn{background:#0f3460;color:#4ecca3}
+#status.win{background:#1a4a2e;color:#4ecca3}
+#status.lose{background:#4a1a1a;color:#e94560}
+#log{background:#0a0a1a;border-radius:6px;padding:10px;overflow-y:auto;font:13px monospace;height:100px;border:1px solid #2a2a4a;line-height:1.6}
+#log .ai{color:#f5a623}
+#log .player{color:#4ecca3}
+#log .info{color:#889}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.si{background:#0f3460;border-radius:6px;padding:8px;text-align:center}
+.si .v{font-size:20px;font-weight:700;color:#f5a623}
+.si .l{font-size:11px;color:#889}
+.setup{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap}
+.setup label{font-size:13px;color:#889}
+.setup select{padding:4px 8px;border-radius:4px;background:#0f3460;color:#e0e0e0;border:1px solid #3a3a5a}
+</style>
+</head>
+<body>
+<div id="app">
+<h1>🎮 尼姆游戏 &middot; Nim</h1>
+<p class="sub">异或(XOR)决定胜负 &mdash; Sprague-Grundy 定理 (1935)</p>
+<div class="row">
+<div class="col">
+<div class="card">
+<h3>📊 棋局</h3>
+<div id="piles" class="piles"></div>
+<div class="controls">
+<button class="bp" onclick="playerMove()">👤 取走选中</button>
+<button class="bo" onclick="resetG()">🔀 重开</button>
+</div>
+<div id="status" class="turn">▶ 选择一堆并取走石子</div>
+</div>
+<div class="card">
+<h3>💡 提示</h3>
+<div style="display:flex;gap:8px;justify-content:center">
+<select id="pileCount" onchange="resetG()"><option value="3">3堆</option><option value="4"selected>4堆</option><option value="5">5堆</option></select>
+<select id="maxStones" onchange="resetG()"><option value="5">≤5</option><option value="7"selected>≤7</option><option value="10">≤10</option><option value="15">≤15</option></select>
+<button class="bo" onclick="toggleFirst()">🤖 先手/后手</button>
+</div>
+<div id="firstInfo" style="text-align:center;font-size:12px;color:#889;margin-top:6px">玩家先手</div>
+</div>
+</div>
+<div class="col">
+<div class="card">
+<h3>📜 对局记录</h3>
+<div id="log">游戏开始！点击一堆石子选中，然后点「取走选中」</div>
+</div>
+<div class="card">
+<h3>📊 快速规则</h3>
+<div class="sg">
+<div class="si"><div class="v" id="ss">0</div><div class="l">回合</div></div>
+<div class="si"><div class="v" id="sx" style="color:#4ecca3">0</div><div class="l">XOR</div></div>
+</div>
+<div style="font-size:12px;color:#889;line-height:1.7;margin-top:8px">
+每轮选一堆取任意数量石子<br>
+取最后一颗者<b style="color:#4ecca3">胜</b><br>
+<b>必胜策略</b>：保持异或和为 0
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<script>
+// ========================================
+//  尼姆游戏 - Nim
+// ========================================
+
+let piles=[], selected=-1, steps=0, gameOver=false, playerFirst=true;
+const COLORS=['#ff6b6b','#4ecca3','#f5a623','#7c4dff','#64b5f6','#ff8a65','#ba68c8'];
+
+function init(){
+  let cnt=parseInt(document.getElementById('pileCount').value);
+  let max=parseInt(document.getElementById('maxStones').value);
+  piles=[];
+  for(let i=0;i<cnt;i++) piles.push(Math.floor(Math.random()*max)+1);
+  selected=-1; steps=0; gameOver=false;
+  document.getElementById('status').className='turn';
+  document.getElementById('status').innerHTML='▶ 选择一堆并取走石子';
+  document.getElementById('log').innerHTML='<span class="info">新游戏开始！'+cnt+'堆，石子数≤'+max+'</span>';
+  render(); updateStats();
+}
+
+function render(){
+  let div=document.getElementById('piles');
+  div.innerHTML='';
+  for(let i=0;i<piles.length;i++){
+    let p=document.createElement('div');
+    p.className='pile'+(selected===i?' active':'');
+    p.onclick=function(){selectPile(i)};
+    let color=COLORS[i%COLORS.length];
+    let h=Math.min(120, piles[i]*12);
+    p.innerHTML='<div class="count">'+piles[i]+'</div>'
+      +'<div class="bar" style="height:'+h+'px;background:'+color+'"></div>'
+      +'<div class="label">第'+(i+1)+'堆</div>';
+    div.appendChild(p);
+  }
+  updateStats();
+}
+
+function selectPile(i){
+  if(gameOver) return;
+  if(selected===i){selected=-1;render();return}
+  selected=i; render();
+}
+
+function xorSum(){return piles.reduce((a,b)=>a^b,0)}
+
+function aiMove(){
+  if(gameOver) return;
+  let xor=xorSum();
+  if(xor===0){
+    // Losing position, take 1 from first non-empty pile
+    for(let i=0;i<piles.length;i++){
+      if(piles[i]>0){piles[i]--; break;}
+    }
+    log('🤖 AI 已无必胜策略（XOR=0），随机取1颗','ai');
+  }else{
+    // Find winning move
+    for(let i=0;i<piles.length;i++){
+      let target=piles[i]^xor;
+      if(target<piles[i]){
+        let take=piles[i]-target;
+        piles[i]=target;
+        log('🤖 从第'+(i+1)+'堆取走'+take+'颗（XOR→0）','ai');
+        break;
+      }
+    }
+  }
+  steps++;
+  if(checkWin('🤖')) return;
+  selected=-1; render(); updateStats();
+  document.getElementById('status').className='turn';
+  document.getElementById('status').innerHTML='👤 <b>轮到你了</b> — 选择一排取石子';
+}
+
+function playerMove(){
+  if(gameOver||selected===-1) return;
+  let take=prompt('从第'+(selected+1)+'堆取走多少颗？（1~'+piles[selected]+'）');
+  if(take===null) return;
+  take=parseInt(take);
+  if(isNaN(take)||take<1||take>piles[selected]){
+    alert('请输入 1~'+piles[selected]+' 之间的数'); return;
+  }
+  piles[selected]-=take;
+  steps++;
+  log('👤 从第'+(selected+1)+'堆取走'+take+'颗','player');
+  if(checkWin('👤')) return;
+  selected=-1; render(); updateStats();
+  // AI turn
+  document.getElementById('status').className='';
+  document.getElementById('status').innerHTML='🤖 <b>AI思考中...</b>';
+  setTimeout(aiMove, 300);
+}
+
+function checkWin(who){
+  let empty=piles.every(p=>p===0);
+  if(empty){
+    gameOver=true;
+    let isPlayer=(who==='👤');
+    document.getElementById('status').className=isPlayer?'win':'lose';
+    let msg=isPlayer?'✔️ 你赢了！最后一颗被你取走！':'🤖 AI 赢了！最后一颗被AI取走';
+    document.getElementById('status').innerHTML=msg;
+    log('<b>'+msg+'</b>','info');
+    render(); updateStats();
+    return true;
+  }
+  return false;
+}
+
+function log(msg,cls){
+  let box=document.getElementById('log');
+  let el=document.createElement('div');
+  el.className=cls||'info';
+  el.textContent=msg;
+  box.appendChild(el);
+  box.scrollTop=box.scrollHeight;
+}
+
+function updateStats(){
+  document.getElementById('ss').textContent=steps;
+  document.getElementById('sx').textContent=xorSum();
+}
+
+function resetG(){init()}
+
+function toggleFirst(){
+  playerFirst=!playerFirst;
+  document.getElementById('firstInfo').textContent=playerFirst?'玩家先手':'AI先手';
+  init();
+  if(!playerFirst){setTimeout(aiMove,500)}
+}
+
+window.addEventListener('resize',render);
+init();
+</script></body></html>

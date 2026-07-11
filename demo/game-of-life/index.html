@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Game of Life - 生命游戏</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#e0e0e0;display:flex;justify-content:center}
+#app{max-width:1050px;width:100%;padding:16px}
+h1{text-align:center;font-size:28px;background:linear-gradient(135deg,#4ecca3,#f5a623);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sub{text-align:center;color:#889;font-size:13px;margin:4px 0 12px}
+.main{display:flex;gap:12px;height:620px}
+#cw{flex:1;background:#16213e;border-radius:8px;position:relative;border:1px solid #2a2a4a;overflow:hidden}
+#cv{width:100%;height:100%;cursor:crosshair}
+#sd{width:280px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
+.card{background:#16213e;border-radius:8px;padding:12px;border:1px solid #2a2a4a}
+.card h3{font-size:13px;color:#889;margin-bottom:6px}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.si{background:#0f3460;border-radius:6px;padding:8px;text-align:center}
+.si .v{font-size:20px;font-weight:700;color:#4ecca3}
+.si .l{font-size:11px;color:#889}
+button{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;width:100%;margin:2px 0}
+.bp{background:#4ecca3;color:#1a1a2e}
+.bp:hover{background:#3db88f}
+.bw{background:#f5a623;color:#1a1a2e}
+.bo{background:transparent;border:1px solid #3a3a5a;color:#bbb}
+.bo:hover{background:#2a2a4a}
+.br{background:#e94560;color:#fff}
+.speed{display:flex;align-items:center;gap:8px;font-size:12px;color:#889}
+.speed input{flex:1}
+.preset{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
+.preset button{flex:1;min-width:40%;padding:5px 8px;font-size:11px;margin:0}
+</style>
+</head>
+<body>
+<div id="app">
+<h1>🌱 生命游戏 &middot; Game of Life</h1>
+<p class="sub">点击格子造物 &middot; 康威 (1970) &mdash; 死亡、生存、繁衍</p>
+<div class="main">
+<div id="cw"><canvas id="cv"></canvas></div>
+<div id="sd">
+<div class="card"><h3>📊 统计</h3>
+<div class="sg">
+<div class="si"><div class="v" id="ss">0</div><div class="l">世代</div></div>
+<div class="si"><div class="v" id="sc" style="color:#f5a623">0</div><div class="l">存活</div></div>
+</div></div>
+<div class="card">
+<button class="bp" id="ba" onclick="tA()">▶ 运行</button>
+<div class="speed"><label>速度</label><input type="range" id="sr" min="1" max="9" value="4"><span id="sl" style="width:40px">中</span></div>
+<div style="display:flex;gap:4px">
+<button class="bo" onclick="stP()" style="flex:1">⏭ 单步</button>
+<button class="br" onclick="rG()" style="flex:1">🔄 清空</button>
+</div>
+</div>
+<div class="card">
+<h3>📋 预设图案</h3>
+<div class="preset">
+<button class="bo" onclick="loadP('glider')">👆 滑翔机</button>
+<button class="bo" onclick="loadP('blinker')">⏳ 闪烁器</button>
+<button class="bo" onclick="loadP('block')">🧱 方块</button>
+<button class="bo" onclick="loadP('glider-gun')">🔫 滑翔机枪</button>
+<button class="bo" onclick="loadP('pulsar')">⭐ 脉冲星</button>
+<button class="bo" onclick="loadP('random')">🎲 随机</button>
+</div></div>
+<div class="card" style="flex:1">
+<h3>📝 规则</h3>
+<div style="font-size:12px;color:#889;line-height:1.6">
+🟢 死->活：周围恰好3个活细胞
+🔴 活->死：<2个(孤独) 或 >3个(拥挤)
+🟢 活->活：周围2或3个
+
+👆 点击画布创造/抹除生命
+</div></div>
+</div></div></div>
+<script>
+// ========================================
+//  康威生命游戏 - Game of Life
+// ========================================
+
+let COLS=0,ROWS=0,grid=[],buf=[],G={g:0,run:0,t:null};
+const SPEED=[500,300,150,80,40,20,10,4,1];
+const NEI=[[-1,-1],[0,-1],[1,-1],[-1,0],[1,0],[-1,1],[0,1],[1,1]];
+
+function init(){
+  let cv=document.getElementById('cv'),r=cv.parentElement.getBoundingClientRect();
+  let W=r.width,H=r.height; cv.width=W; cv.height=H;
+  let cs=Math.min(W,H)/100; let cellSize=Math.max(4,Math.min(8,cs));
+  COLS=Math.floor(W/cellSize); ROWS=Math.floor(H/cellSize);
+  grid=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  buf=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  G={g:0,run:0,t:null};
+  loadP('glider');
+}
+
+function countNei(g,x,y){
+  let s=0;
+  for(let [dx,dy] of NEI){
+    let nx=(x+dx+COLS)%COLS,ny=(y+dy+ROWS)%ROWS;
+    s+=g[ny][nx];
+  }
+  return s;
+}
+
+function step(){
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)buf[y][x]=0;
+  for(let y=0;y<ROWS;y++){
+    for(let x=0;x<COLS;x++){
+      let n=countNei(grid,x,y);
+      if(grid[y][x]){buf[y][x]=(n===2||n===3)?1:0}
+      else{buf[y][x]=(n===3)?1:0}
+    }
+  }
+  [grid,buf]=[buf,grid]; G.g++; draw(); uI();
+}
+
+function draw(){
+  let cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+  let cs=Math.floor(cv.width/COLS);
+  ctx.fillStyle='#16213e';ctx.fillRect(0,0,cv.width,cv.height);
+  let lives=0;
+  for(let y=0;y<ROWS;y++){
+    for(let x=0;x<COLS;x++){
+      if(grid[y][x]){ctx.fillStyle='#4ecca3';ctx.fillRect(x*cs,y*cs,cs-0.5,cs-0.5);lives++}
+    }
+  }
+  document.getElementById('sc').textContent=lives;
+}
+
+function uI(){document.getElementById('ss').textContent=G.g}
+
+function tA(){
+  let btn=document.getElementById('ba');
+  if(G.run){G.run=0;clearTimeout(G.t);btn.textContent='▶ 运行';btn.className='bp';return}
+  G.run=1;btn.textContent='■ 停止';btn.className='bw';aR()
+}
+
+function aR(){
+  if(!G.run)return;
+  let sp=parseInt(document.getElementById('sr').value);
+  for(let i=0;i<2;i++){step();if(!G.run)return}
+  G.t=setTimeout(aR,SPEED[sp-1])
+}
+
+function stP(){if(!G.run)step()}
+
+function rG(){
+  if(G.t){clearTimeout(G.t);G.t=null}
+  G={g:0,run:0,t:null};
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)grid[y][x]=0;
+  document.getElementById('ba').textContent='▶ 运行';document.getElementById('ba').className='bp';
+  draw();uI();
+}
+
+function loadP(name){
+  if(G.run)tA();
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)grid[y][x]=0;
+  let cx=Math.floor(COLS/2),cy=Math.floor(ROWS/2);
+  const p={
+    glider:[[1,0],[2,1],[0,2],[1,2],[2,2]],
+    blinker:[[0,0],[1,0],[2,0]],
+    block:[[0,0],[1,0],[0,1],[1,1]],
+    'glider-gun':[[1,5],[2,5],[1,6],[2,6],[11,5],[11,6],[11,7],[12,4],[12,8],[13,3],[13,9],[14,3],[14,9],[15,6],[16,4],[16,8],[17,5],[17,6],[17,7],[18,6],[21,3],[21,4],[21,5],[22,3],[22,4],[22,5],[23,2],[23,6],[25,1],[25,2],[25,6],[25,7],[35,3],[35,4],[36,3],[36,4]],
+    pulsar:[[2,0],[3,0],[4,0],[8,0],[9,0],[10,0],[0,2],[5,2],[7,2],[12,2],[0,3],[5,3],[7,3],[12,3],[0,4],[5,4],[7,4],[12,4],[2,5],[3,5],[4,5],[8,5],[9,5],[10,5],[2,7],[3,7],[4,7],[8,7],[9,7],[10,7],[0,8],[5,8],[7,8],[12,8],[0,9],[5,9],[7,9],[12,9],[0,10],[5,10],[7,10],[12,10],[2,12],[3,12],[4,12],[8,12],[9,12],[10,12]]
+  };
+  if(name==='random'){
+    for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++)grid[y][x]=Math.random()<0.25?1:0;
+  }else{
+    let pat=p[name];
+    if(pat)for(let [dx,dy]of pat)if(cy+dy<ROWS&&cx+dx<COLS)grid[cy+dy][cx+dx]=1;
+  }
+  G.g=0;draw();uI();
+}
+
+// Click handler
+let cv=document.getElementById('cv');
+cv.addEventListener('click',function(e){
+  if(G.run)return;
+  let r=e.target.getBoundingClientRect(),cs=Math.floor(cv.width/COLS);
+  let x=Math.floor((e.clientX-r.left)/cs),y=Math.floor((e.clientY-r.top)/cs);
+  if(x>=0&&x<COLS&&y>=0&&y<ROWS){grid[y][x]=grid[y][x]?0:1;draw();uI()}
+});
+
+document.getElementById('sr').addEventListener('input',function(){
+  let labels=['极慢','很慢','慢','较慢','中','较快','快','很快','极快'];
+  document.getElementById('sl').textContent=labels[this.value-1];
+});
+window.addEventListener('resize',init);
+init();
+</script></body></html>

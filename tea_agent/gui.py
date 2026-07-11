@@ -391,7 +391,14 @@ class TkGUI(Agent):
         self._update_todo_btn_state()
 
     def _show_todo_dialog(self):
-        """显示 TODO 提醒对话框（非模态），已存在则刷新。"""
+        """显示 TODO 提醒对话框（非模态），已存在则刷新。
+        
+        防重复机制：
+        - 检查 _todo_dialog 是否已存在且有效，有效则刷新后返回
+        - 使用 _creating_todo_dialog 标志防止并发创建
+        - 对话框销毁时自动清理 _todo_dialog 引用（通过 WM_DESTROY_WINDOW 协议）
+        """
+        # 检查已有对话框
         dlg = getattr(self, '_todo_dialog', None)
         if dlg is not None:
             try:
@@ -400,15 +407,33 @@ class TkGUI(Agent):
                     self._update_todo_btn_state()
                     return
             except Exception:
-                pass
+                # 对话框已失效（如被外部销毁），清理引用，继续创建新对话框
+                self._todo_dialog = None
 
-        from tea_agent.gui_dialogs import TodoDialog
-        self._todo_dialog = TodoDialog(self.root, self.db, self.current_topic_id,
-                                       on_state_change=self._update_todo_btn_state)
-        self._update_todo_btn_state()
+        # 防重入：防止多个 root.after 回调同时创建对话框
+        if getattr(self, '_creating_todo_dialog', False):
+            return
+        self._creating_todo_dialog = True
+
+        try:
+            from tea_agent.gui_dialogs import TodoDialog
+            new_dlg = TodoDialog(self.root, self.db, self.current_topic_id,
+                                 on_state_change=self._update_todo_btn_state)
+            # 绑定关闭回调：对话框关闭时自动清理引用
+            old_on_close = new_dlg._on_close
+            def _on_close_with_cleanup():
+                old_on_close()
+                self._todo_dialog = None
+                self._update_todo_btn_state()
+            new_dlg._on_close = _on_close_with_cleanup
+            new_dlg.protocol("WM_DELETE_WINDOW", new_dlg._on_close)
+            self._todo_dialog = new_dlg
+            self._update_todo_btn_state()
+        finally:
+            self._creating_todo_dialog = False
 
     def _close_todo_dialog(self):
-        """关闭 TODO 对话框。"""
+        """关闭 TODO 对话框（清理引用）。"""
         dlg = getattr(self, '_todo_dialog', None)
         if dlg is not None:
             try:
@@ -692,21 +717,14 @@ class TkGUI(Agent):
     def safe_log_tool(self, msg: str):
         """线程安全的工具日志 — 委托 StreamManager"""
         self.stream_mgr.safe_log_tool(msg)
-        # AI 调用 toolkit_todo / toolkit_plan 时立即弹出任务面板
-        if "toolkit_todo" in msg or "toolkit_plan" in msg:
-            self.root.after(300, self._check_and_show_todo)
 
     def log_tool(self, msg: str):
-        """主线程工具日志 — 继承 StreamManager 的记录逻辑 + 后备触发"""
-        self.log(msg, "tool")
-        # 主线程后备触发：防止 safe_log_tool 因线程问题未生效
-        if "toolkit_todo" in msg or "toolkit_plan" in msg:
-            self.root.after(100, self._check_and_show_todo)
+        """工具日志 — 委托 StreamManager（优先经由 safe_log_tool 调用）"""
+        self.stream_mgr.log_tool(msg)
 
     def safe_update_status(self, msg: str):
         """线程安全的状态更新 — 委托 StreamManager"""
         self.stream_mgr.safe_update_status(msg)
-
 
     def log(self, msg, tag="ai", images=None):
         """输出日志到控制台 — 委托 StreamManager"""
@@ -715,10 +733,6 @@ class TkGUI(Agent):
     def stream(self, text):
         """流式输出 — 委托 StreamManager"""
         self.stream_mgr.stream(text)
-
-    def log_tool(self, msg: str):
-        """工具日志 — 委托 StreamManager"""
-        self.stream_mgr.log_tool(msg)
 
     def _stream_flush_tick(self):
         """流式刷新 — 委托 StreamManager"""

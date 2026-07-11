@@ -54,9 +54,11 @@ function CH(n){return n.l?1:n.c.reduce((s,c)=>s+CH(c),0)}
 function CN(n){return 1+n.c.reduce((s,c)=>s+CN(c),0)}
 function MD(n){return n.c.length?Math.max(...n.c.map(c=>MD(c))):n.d}
 function LG(){let c=document.getElementById("cv"),r=c.parentElement.getBoundingClientRect(),W=r.width,H=r.height;if(!R||!W)return;
-function aw(n){if(!n.c.length){n._p=0;n._w=28;return}n.c.forEach(aw);let mi=1/0,ma=-1/0;n.c.forEach(c=>{mi=Math.min(mi,c._p-c._w/2);ma=Math.max(ma,c._p+c._w/2)})
-n._p=(mi+ma)/2;n._w=Math.max(28,ma-mi+28)}aw(R);let off=W/2-R._p;(function f(n,o){n._p+=o;n.c.forEach(c=>f(c,o))})(R,off);
-let vg=65,hm=30;(function f(n){n.x=Math.max(hm,Math.min(W-hm,n._p));n.y=45+n.d*vg;n.c.forEach(f)})(R);(function f(n){n.ax=n.x;n.ay=n.y;n.c.forEach(f)})(R)}
+function cw(n){if(n.c.length===0){n._w=28;return}n.c.forEach(cw);let tw=0;n.c.forEach((c,i)=>{if(i>0)tw+=20;tw+=c._w});n._w=Math.max(28,tw)}
+cw(R);(function ap(n,x,y){n.x=x;n.y=y;if(n.c.length===0)return;let cx=x-(n._w-28)/2;
+n.c.forEach((c,i)=>{if(i>0)cx+=20;ap(c,cx+c._w/2,y+65);cx+=c._w})})(R,W/2,45);
+let hm=30;(function cl(n){n.x=Math.max(hm,Math.min(W-hm,n.x));n.c.forEach(cl)})(R);
+(function f(n){n.ax=n.x;n.ay=n.y;n.c.forEach(f)})(R)}
 function RD(){let c=document.getElementById("cv"),r=c.parentElement.getBoundingClientRect(),dpr=window.devicePixelRatio||1,W=r.width,H=r.height
 if(!W||!H)return;c.width=W*dpr;c.height=H*dpr;c.style.width=W+"px";c.style.height=H+"px";let x=c.getContext("2d");x.scale(dpr,dpr);x.fillStyle="#16213e";x.fillRect(0,0,W,H)
 if(!R)return;let A=[];(function f(n){A.push(n);n.c.forEach(f)})(R);

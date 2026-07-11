@@ -38,7 +38,7 @@ button{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-weight
 <div id="cw"><canvas id="cv"></canvas><div id="ov"><h2>🏆 消灭蛇妖！</h2><p>共 <span id="fs">0</span> 步</p><button class="bp" onclick="rG()">再来一局</button></div></div>
 <div id="sd">
 <div class="card"><h3 style="font-size:13px;color:#889;margin-bottom:6px">📊 战况</h3>
-<div class="sg"><div class="si"><div class="v" id="ss">0</div><div class="l">步数</div></div><div class="si"><div class="v" id="sh" style="color:#e94560">0</div><div class="l">蛇头</div></div><div class="si"><div class="v" id="sn">0</div><div class="l">节点</div></div><div class="si"><div class="v" id="sd" style="color:#4ecca3">0</div><div class="l">深度</div></div></div></div>
+<div class="sg"><div class="si"><div class="v" id="ss">0</div><div class="l">步数</div></div><div class="si"><div class="v" id="sh" style="color:#e94560">0</div><div class="l">蛇头</div></div><div class="si"><div class="v" id="sn">0</div><div class="l">节点</div></div><div class="si"><div class="v" id="sdepth" style="color:#4ecca3">0</div><div class="l">深度</div></div></div></div>
 <div class="card"><button class="bp" id="ba" onclick="tA()">▶ 自动演示</button><div class="speed"><label>速度</label><input type="range" id="sr" min="1" max="10" value="5"><span id="sl" style="width:40px">中</span></div><button class="bo" onclick="rG()">🔄 重开</button></div>
 <div class="card" style="flex:1;display:flex;flex-direction:column"><h3 style="font-size:13px;color:#889;margin-bottom:6px">📜 日志</h3><div id="log"></div></div>
 <p style="text-align:center;font-size:11px;color:#556;margin-top:4px">💡 点击红色蛇头砍掉</p>
@@ -78,7 +78,7 @@ function Q(l){if(G.w||!l||!l.l)return;G.s++;let n=G.s,p=l.p;if(!p)return;let i=p
 if(!p.r){let cnt=n,sub=p,gp=sub.p;for(let j=0;j<cnt;j++){let c=CS(sub);c.p=gp;gp.c.push(c)}}
 if(CH(R)===1){G.w=1;document.getElementById("fs").textContent=G.s;document.getElementById("ov").classList.add("s")}
 document.getElementById("ss").textContent=G.s;document.getElementById("sh").textContent=CH(R)
-document.getElementById("sn").textContent=CN(R);document.getElementById("sd").textContent=MD(R)
+document.getElementById("sn").textContent=CN(R);document.getElementById("sdepth").textContent=MD(R)
 let bx=document.getElementById("log"),el=document.createElement("div");el.style.color="#e94560"
 el.textContent="\u2694 \u7b2c "+G.s+" \u5200\uff1a\u780d\u6389\u86c7\u5934";bx.appendChild(el);bx.scrollTop=bx.scrollHeight;LG();RD()}
 function tA(){let btn=document.getElementById("ba")
@@ -92,7 +92,7 @@ function rG(){if(G.t){clearTimeout(G.t);G.t=0}G={s:0,w:0,a:0,t:0};N=0;M=new Map(
 document.getElementById("ov").classList.remove("s");document.getElementById("log").innerHTML=""
 document.getElementById("ba").textContent="\u25b6 \u81ea\u52a8\u6f14\u793a";document.getElementById("ba").className="bp";LG();RD();uI()}
 function uI(){document.getElementById("ss").textContent=G.s;if(R){document.getElementById("sh").textContent=CH(R)
-document.getElementById("sn").textContent=CN(R);document.getElementById("sd").textContent=MD(R)}}
+document.getElementById("sn").textContent=CN(R);document.getElementById("sdepth").textContent=MD(R)}}
 document.addEventListener("DOMContentLoaded",function(){
 let c=document.getElementById("cv");c.addEventListener("click",function(e){
 let rect=c.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;let A=[];(function f(n){A.push(n);n.c.forEach(f)})(R)

@@ -1,14 +1,30 @@
-"""Store component base - zero dependency, avoid circular imports.
-
-Short-connection design:
-- self.conn is a #property returning a thread-local connection
-- DB class: with DB(path) as db: for explicit short connections
-- All existing methods using self.conn work unchanged
 """
+Store 组件基类 — 零依赖、线程安全、短连接设计。
+
+核心设计：
+- StoreComponent: 抽象基类，提供线程级连接管理和短连接上下文
+- DB: 短连接上下文管理器（connect → commit/rollback → close）
+- Cursor: 游标上下文管理器（open → auto close）
+
+短连接设计说明：
+- self.conn 是 #property 返回线程本地连接（Thread-local）
+- DB 类用于显式短连接：with DB(path) as db:
+- 所有现有使用 self.conn 的方法无需修改即可工作
+"""
+
+from __future__ import annotations
+
 import sqlite3
 import threading
 import uuid
 from contextlib import contextmanager
+from typing import Any
+
+__all__ = [
+    "DB",
+    "Cursor",
+    "StoreComponent",
+]
 
 
 class DB:

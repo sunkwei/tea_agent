@@ -1,17 +1,32 @@
-# @2026-04-30 gen by deepseek-v4-pro, SystemPromptManager: 多版本系统提示词管理—基于反思/记忆自动进化，每次使用最新版本
 """
 系统提示词管理器 (SystemPromptManager)
 
-管理多版本系统提示词：
-- 从数据库加载最新活跃版本
-- 基于反思建议 + 长期记忆自动生成新版本
-- 每次对话使用最新版本
-- 支持版本回滚
+管理多版本系统提示词，支持基于反思和记忆的自动进化。
+
+核心功能：
+1. 版本管理：多版本提示词存储、加载、回滚
+2. 自动进化：基于反思建议 + 长期记忆，调用 LLM 生成新版本
+3. 版本历史：查看所有版本及变更原因
+4. 手动设置：支持管理员手动指定提示词内容
+
+工作流程：
+    initialize() → 从数据库加载最新活跃版本，无记录时创建默认版本
+    evolve()     → 基于反思建议生成新版本
+    rollback()   → 回退到指定历史版本
 """
 
+from __future__ import annotations
+
+import json
 import logging
+from typing import Any
 
 logger = logging.getLogger("SystemPromptManager")
+
+__all__ = [
+    "SystemPromptManager",
+    "DEFAULT_SYSTEM_PROMPT",
+]
 
 # 默认系统提示词模板（当数据库无记录时使用）
 DEFAULT_SYSTEM_PROMPT = (
@@ -32,9 +47,19 @@ DEFAULT_SYSTEM_PROMPT = (
 )
 
 class SystemPromptManager:
-    """系统提示词版本管理器"""
+    """系统提示词版本管理器 — 多版本、自动进化、支持回滚。
 
-    EVOLVE_SYSTEM_PROMPT = """你是系统提示词优化器。基于以下信息，优化 Agent 的系统提示词：
+    通过数据库持久化存储提示词版本，每次对话使用最新活跃版本。
+    可基于反思建议和长期记忆自动生成优化版本。
+
+    Attributes:
+        storage: Storage 数据库实例，用于存取提示词版本
+        current_prompt: 当前生效的提示词文本
+        current_version: 当前版本号字符串
+        current_prompt_id: 当前版本的数据库 ID
+    """
+
+    EVOLVE_SYSTEM_PROMPT: str = """你是系统提示词优化器。基于以下信息，优化 Agent 的系统提示词：
 
 优化原则：
 1. 保留原有核心能力定义（工具创建、自进化等）
@@ -50,11 +75,17 @@ class SystemPromptManager:
 
 输出：优化后的完整系统提示词。直接输出提示词文本，不要加引号或其他装饰。"""
 
-    def __init__(self, storage, cheap_client=None, cheap_model: str = ""):
-        """
+    def __init__(
+        self,
+        storage: Any,
+        cheap_client: Any = None,
+        cheap_model: str = "",
+    ) -> None:
+        """初始化提示词管理器。
+
         Args:
-            storage: Storage 实例
-            cheap_client: 便宜模型客户端（用于生成新提示词）
+            storage: Storage 数据库实例（必须已初始化）
+            cheap_client: 便宜模型 OpenAI 客户端，用于生成新提示词版本
             cheap_model: 便宜模型名称
         """
         self.storage = storage
@@ -63,15 +94,13 @@ class SystemPromptManager:
         self._current_prompt: str = ""
         self._current_version: str = "0"
         self._current_prompt_id: int = 0
-        self._initialized = False
+        self._initialized: bool = False
 
     def initialize(self) -> str:
-        """
-        初始化：从数据库加载最新活跃提示词。
-        如果数据库为空，自动插入默认版本 v1。
+        """从数据库加载最新活跃提示词。数据库为空时自动插入默认版本 v1。
 
         Returns:
-            当前生效的系统提示词
+            当前生效的系统提示词文本
         """
         latest = self.storage.get_latest_system_prompt()
         if latest:
@@ -80,12 +109,11 @@ class SystemPromptManager:
             self._current_prompt_id = latest["id"]
             logger.info(f"加载系统提示词 v{self._current_version} (id={self._current_prompt_id})")
         else:
-            # 首次运行，插入默认版本
             self._current_prompt = DEFAULT_SYSTEM_PROMPT
             self._current_version = "1"
             self._current_prompt_id = self.storage.add_system_prompt(
                 content=DEFAULT_SYSTEM_PROMPT,
-                reason="初始默认版本"
+                reason="初始默认版本",
             )
             logger.info(f"创建默认系统提示词 v1 (id={self._current_prompt_id})")
 
@@ -94,23 +122,27 @@ class SystemPromptManager:
 
     @property
     def current_prompt(self) -> str:
-        """获取当前生效的系统提示词"""
+        """获取当前生效的系统提示词。未初始化时自动调用 initialize()。"""
         if not self._initialized:
             return self.initialize()
         return self._current_prompt
 
     @property
     def current_version(self) -> str:
-        """Current version."""
+        """当前版本号（如 "1", "2", "3"）。"""
         return self._current_version
 
     @property
     def current_prompt_id(self) -> int:
-        """Current prompt id."""
+        """当前版本的数据库记录 ID。"""
         return self._current_prompt_id
 
     def reload(self) -> str:
-        """重新从数据库加载最新活跃版本"""
+        """从数据库重新加载最新活跃版本（放弃当前内存中的版本）。
+
+        Returns:
+            重新加载后的提示词文本
+        """
         latest = self.storage.get_latest_system_prompt()
         if latest:
             self._current_prompt = latest["content"]
@@ -118,15 +150,14 @@ class SystemPromptManager:
             self._current_prompt_id = latest["id"]
         return self._current_prompt
 
-    def build_evolve_prompt(self, reflection_suggestion: str | None = None) -> list[dict]:
-        """
-        构建提示词进化 prompt。
+    def build_evolve_prompt(self, reflection_suggestion: str | None = None) -> list[dict[str, str]]:
+        """构建提示词进化用的 LLM prompt，包含当前提示词、反思建议和长期记忆。
 
         Args:
-            reflection_suggestion: 反思生成的具体提示词建议
+            reflection_suggestion: 单条反思生成的具体提示词调整建议
 
         Returns:
-            API 消息列表
+            [system_prompt_message, user_prompt_message] 格式的消息列表
         """
         # 收集最近的反思建议
         suggestions = []
@@ -171,14 +202,20 @@ class SystemPromptManager:
         ]
 
     def evolve(self, reflection_suggestion: str | None = None) -> int | None:
-        """
-        触发提示词进化：调用 LLM 生成新版本，存储到数据库。
+        """触发提示词进化：调用 LLM 生成新版本并存储到数据库。
+
+        流程：
+        1. 构建进化 prompt
+        2. 调用 cheap model 生成新提示词
+        3. 校验内容有效性（长度 > 20，与当前版本不同）
+        4. 存储到数据库并切换到新版本
+        5. 标记相关反思为已应用
 
         Args:
             reflection_suggestion: 反思生成的提示词调整建议
 
         Returns:
-            新提示词 ID，失败返回 None
+            新提示词的数据库 ID，失败或跳过时返回 None
         """
         if not self._cheap_client:
             logger.info("无便宜模型客户端，跳过提示词进化")
@@ -236,14 +273,13 @@ class SystemPromptManager:
             return None
 
     def rollback(self, version: str) -> bool:
-        """
-        回滚到指定版本。
+        """回滚到指定历史版本。
 
         Args:
-            version: 版本号（如 "2"）
+            version: 目标版本号字符串（如 "2"）
 
         Returns:
-            是否成功
+            True 表示回滚成功，False 表示版本不存在或操作失败
         """
         history = self.storage.get_system_prompt_history(limit=100)
         target = None
@@ -265,12 +301,22 @@ class SystemPromptManager:
         logger.info(f"系统提示词回滚到 v{version}")
         return True
 
-    def list_versions(self) -> list[dict]:
-        """列出所有版本"""
+    def list_versions(self) -> list[dict[str, Any]]:
+        """列出所有历史版本（按时间倒序）。
+
+        Returns:
+            版本字典列表，每个包含 id/version/content/reason/created_at 等字段
+        """
         return self.storage.get_system_prompt_history(limit=50)
 
-    def get_stats(self) -> dict:
-        """获取统计"""
+    def get_stats(self) -> dict[str, Any]:
+        """获取提示词版本统计信息。
+
+        Returns:
+            total_versions: 总版本数
+            current_version: 当前版本号
+            current_id: 当前版本的数据库 ID
+        """
         count = self.storage.get_system_prompt_count()
         return {
             "total_versions": count,
@@ -279,7 +325,15 @@ class SystemPromptManager:
         }
 
     def manual_set(self, content: str, reason: str = "手动设置") -> int:
-        """手动设置新提示词版本"""
+        """手动设置新提示词版本（跳过 LLM 生成，直接存储）。
+
+        Args:
+            content: 新的提示词文本
+            reason: 设置原因说明
+
+        Returns:
+            新版本的数据库 ID
+        """
         new_id = self.storage.add_system_prompt(content=content, reason=reason)
         self._current_prompt = content
         self._current_version = str(int(self._current_version) + 1)

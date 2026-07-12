@@ -1,4 +1,4 @@
-# sunkw v0.10.8
+# sunkw v0.10.13
 
 A self-evolving AI agent with dynamic toolkit management.
 
@@ -8,7 +8,7 @@ A self-evolving AI agent with dynamic toolkit management.
 |------|---------|
 | — | — |
 
-## 🧰 所有工具 (72 个)
+## 🧰 所有工具 (73 个)
 
 - **`toolkit_auto_fix`** — toolkit_auto_fix — 代码自动修复 Agent 工具入口
 - **`toolkit_auto_pipeline`** — 计算任务与模板的匹配度
@@ -51,7 +51,7 @@ A self-evolving AI agent with dynamic toolkit management.
 - **`toolkit_mode`** — def toolkit_mode(action: str, text: str = "", mode: str = ""):
 - **`toolkit_notify`** — def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
 - **`toolkit_ocr`** — def toolkit_ocr(action: str, image_path: str = None, image_base64: str = None,
-- **`toolkit_os_info`** — Internal: cached os info.
+- **`toolkit_os_info`** — OS 信息查询工具 — 提供 platform 信息的进程级缓存封装。
 - **`toolkit_parallel_subtasks`** — 执行单个子任务（在独立线程中运行）。
 - **`toolkit_pkg`** — def toolkit_pkg(action: str, packages: str = None, module: str = None):
 - **`toolkit_plan`** — Internal: ensure plans dir.
@@ -75,7 +75,8 @@ A self-evolving AI agent with dynamic toolkit management.
 - **`toolkit_set_topic_title`** — def toolkit_set_topic_title(title: str) -> dict:
 - **`toolkit_skills`** — 解析 SKILL.md 文件，提取 YAML front matter
 - **`toolkit_stream_save`** — def toolkit_stream_save(stream_id=None, target_path=None, append=False):
-- **`toolkit_subagent`** — 生成唯一 agent ID
+- **`toolkit_subagent`** — 获取数据库连接（延迟初始化）。
+- **`toolkit_subagent_msg`** — def toolkit_subagent_msg(
 - **`toolkit_sudo_gui`** — def toolkit_sudo_gui(app: str, args: list, prompt: str = "请输入管理员密码"):
 - **`toolkit_task_resume`** — 自动恢复机制 - 检查并恢复未完成的 TODO/Plan，含 docs/ 产物对照
 - **`toolkit_test_gui`** — def toolkit_test_gui(timeout: int = 30, debug: bool = True) -> dict:
@@ -90,4 +91,4 @@ A self-evolving AI agent with dynamic toolkit management.
 - 📝 docs/TOOLS.md 自动同步（本文件）
 - 🎯 技能模式整理
 
-> 最后更新: 2026-07-04 09:39
+> 最后更新: 2026-07-08 05:57

@@ -1,17 +1,24 @@
 """
-配置管理模块
-从 $HOME/.tea_agent/config.yaml 加载配置，如果不存在则回退到 tea_agent/config.yaml。
+配置管理模块 — 加载/保存/运行时修改 Agent 配置。
 
-数据结构等价于 C++：
-    struct ModelConfig {
-        std::string api_key;    // API 访问密钥
-        std::string api_url;    // API 访问 URL
-        std::string model_name; // 模型名称
-        std::map<std::string, std::string> options; // 模型额外参数
-    };
-    ModelConfig main_model;     // 主模型，完成主任务
-    ModelConfig cheap_model;    // 便宜模型，用于摘要、压缩等
+配置来源（优先级）：
+1. 显式指定路径：load_config(config_path="...")
+2. $HOME/.tea_agent/config.yaml（用户级默认）
+3. tea_agent/config.yaml（包内置回退）
+
+数据结构：
+- AgentConfig: 顶层配置，包含 ModelConfig、PathsConfig、EmbeddingConfig
+- ModelConfig: 单个 LLM 模型的配置（api_key/api_url/model_name/options/温度等）
+- PathsConfig: 文件路径配置，支持相对路径解析
+- EmbeddingConfig: 文本向量模型配置
+
+运行时修改：
+- set(key, value) 方法可在运行时修改白名单内的配置项
+- apply_changes(changes) 批量应用变更
+- reload_from_dict(data) 从字典重新加载
 """
+
+from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
@@ -20,9 +27,23 @@ from typing import Any
 
 try:
     import yaml
-    HAS_YAML = True
+    HAS_YAML: bool = True
 except ImportError:
     HAS_YAML = False
+
+__all__ = [
+    "ModelConfig",
+    "PathsConfig",
+    "EmbeddingConfig",
+    "AgentConfig",
+    "load_config",
+    "save_config",
+    "get_config",
+    "create_default_config",
+    "ensure_config_dir",
+    "set_active_config_path",
+    "get_active_config_path",
+]
 
 @dataclass
 class ModelConfig:
@@ -72,7 +93,6 @@ class PathsConfig:
         Args:
             config_dir: config.yaml 所在目录的绝对路径
         """
-        import os
         default_root = str(Path.home() / ".tea_agent")
 
         # 先解析 data_dir（相对路径相对于 config_dir）
@@ -87,17 +107,25 @@ class PathsConfig:
 
         # 子路径解析：相对路径相对于 data_dir_abs
         def _resolve(value: str, default_rel: str) -> str:
+            """解析配置值，支持绝对路径、用户目录(~)展开和默认值回退。
+
+            Args:
+                value: 配置中的路径值（可能为空）
+                default_rel: 默认相对路径，在 value 为空时使用
+
+            Returns:
+                解析后的绝对路径
+            """
             if not value:
                 return os.path.join(self._data_dir_abs, default_rel)
             expanded = os.path.expanduser(value)
             if os.path.isabs(expanded):
-                """解析配置值，支持环境变量引用和默认值回退。"""
                 return os.path.abspath(expanded)
             return os.path.abspath(os.path.join(self._data_dir_abs, expanded))
 
-        self._db_path_abs = _resolve(self.db_path, "chat_history.db") if self.db_path else os.path.join(self._data_dir_abs, "chat_history.db")
-        self._toolkit_dir_abs = _resolve(self.toolkit_dir, "toolkit") if self.toolkit_dir else os.path.join(self._data_dir_abs, "toolkit")
-        self._kb_dir_abs = _resolve(self.kb_dir, "kb") if self.kb_dir else os.path.join(self._data_dir_abs, "kb")
+        self._db_path_abs = _resolve(self.db_path, "chat_history.db")
+        self._toolkit_dir_abs = _resolve(self.toolkit_dir, "toolkit")
+        self._kb_dir_abs = _resolve(self.kb_dir, "kb")
 
     @property
     def db_path_abs(self) -> str:

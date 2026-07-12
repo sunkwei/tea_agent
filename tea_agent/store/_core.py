@@ -1,20 +1,32 @@
 """
+Storage 核心模块 — 数据库连接生命周期管理 + 9 个子组件委派。
 
-Storage 类自身管理：连接生命周期、数据库迁移/备份/轮转、表初始化。
-业务逻辑委派给 9 个子组件：topics, conversations, summaries, memories,
-prompts, reflections, config_history, vectors, scheduled_tasks。
+设计要点：
+- Storage 类管理：连接生命周期、数据库迁移/备份/轮转、表初始化
+- 业务逻辑委派给子组件：TopicStore、ConversationStore、SummaryStore、MemoryStore 等
+- 所有公共方法显式定义在 Storage 上（约 48 个委派方法），不使用 __getattr__ 兜底
 
-扩展功能：
-- SemanticSearch: 语义搜索（独立模块，未挂载到 Storage）
-- AutoMemoryExtractor: 移入 session_memory_component.py
+子组件清单：
+- ConversationStore: 对话记录 CRUD
+- MemoryStore: 长期记忆存储
+- TopicStore: 主题管理
+- SummaryStore: 摘要存储（L1/L2/L3）
+- ScheduledTaskStore: 定时任务
+- VectorStore: 向量存储
+- ConfigHistoryStore: 配置变更历史
+- ReflectionStore: 反思记录
 
-所有公共方法显式定义在 Storage 上（48 个委派方法），不再使用 __getattr__ 兜底。
+扩展功能（独立模块，未挂载到 Storage）：
+- SemanticSearch: 语义搜索
 """
-import contextlib
-import json as _json_rs
+
+from __future__ import annotations
+
 import logging
+import json as _json_rs
 import sqlite3
 import threading
+import contextlib
 
 from ._component import DB, StoreComponent  # DB 短连接上下文管理器
 from ._conversations import ConversationStore

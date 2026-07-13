@@ -1,3 +1,6 @@
+// ⚠️ [废弃] 此 QML 文件已废弃，保留仅为代码参考。
+// 请使用 tea_agent.gui2 的 Web 界面替代。
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

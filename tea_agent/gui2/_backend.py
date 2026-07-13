@@ -1,18 +1,23 @@
 """
-Backend Bridge — Python↔QML 桥接层。
+[废弃] Backend Bridge — PySide6+QML 桥接层。
+
+⚠️ 此文件已废弃，保留仅为代码参考。
+请使用 tea_agent.gui2 的 Web 界面（Starlette + SSE）替代。
+删除日期: 2026-07
 
 在 QML 中以 `backend` 上下文属性暴露以下接口：
 
 属性:
     backend.messages     : list<dict>   — 当前会话消息列表
     backend.topics       : list<dict>   — 主题列表
-    backend.currentTopic : str          — 当前主题 ID
     backend.statusText   : str          — 状态栏文本
 
 方法 (QML 可调用):
     backend.sendMessage(text)       — 发送用户消息
     backend.loadTopic(topicId)      — 加载指定主题
     backend.newTopic()              — 新建主题
+    backend.getTopicsList()         — 获取主题列表
+    backend.getMessagesList()       — 获取消息列表
     backend.interrupt()             — 中断生成
 
 信号 (QML 可连接):
@@ -28,7 +33,7 @@ import logging
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 from PySide6.QtCore import QObject, Signal, Slot, Property
 
@@ -36,21 +41,18 @@ logger = logging.getLogger(__name__)
 
 
 class BackendBridge(QObject):
-    """QML 后端桥接 — 管理 Agent 会话、消息、主题。
-
-    使用 QObject 信号/槽机制，所有与 QML 的交互都是线程安全的。
-    """
+    """QML 后端桥接 — 管理 Agent 会话、消息、主题。"""
 
     # ── 信号 ──────────────────────────────────────────────
-    messagesChanged = Signal()          # 消息列表变化
-    thinkUpdated = Signal(str)          # 思考过程流式文本
-    streamUpdated = Signal(str)         # AI 回复流式文本
-    statusChanged = Signal(str)         # 状态栏文本
-    topicsChanged = Signal()            # 主题列表变化
-    errorOccurred = Signal(str)         # 错误信息
-    scrollToBottom = Signal()           # 通知 QML 滚动到底部
+    messagesChanged = Signal()
+    thinkUpdated = Signal(str)
+    streamUpdated = Signal(str)
+    statusChanged = Signal(str)
+    topicsChanged = Signal()
+    errorOccurred = Signal(str)
+    scrollToBottom = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, config_path: str | None = None, parent=None):
         super().__init__(parent)
         self._messages: List[dict] = []
         self._topics: List[dict] = []
@@ -61,8 +63,8 @@ class BackendBridge(QObject):
         self._generating = False
         self._think_buffer = ""
         self._stream_buffer = ""
-
-        # _lock 用于跨线程保护消息列表
+        self._cfg = None
+        self._config_path = config_path
         self._lock = threading.Lock()
 
     # ── 初始化 ────────────────────────────────────────────
@@ -72,21 +74,15 @@ class BackendBridge(QObject):
         """初始化后端：加载 Agent 配置、刷新主题列表。"""
         self._update_status("正在初始化...")
         try:
-            # 延迟导入，避免 QML 加载时阻塞
             from tea_agent.config import load_config
             from tea_agent.agent import Agent
 
-            # 加载配置（load_config 自动处理 _active_config_path）
-            self._cfg = load_config()
-
-            # 创建 Agent
+            self._cfg = load_config(self._config_path)
             self._agent = Agent()
             self._agent_ready = True
 
             self._update_status("✅ 就绪")
             self.refresh_topics()
-
-            # 检查 TODO 恢复
             self._check_task_resume()
 
             logger.info("Backend initialized successfully")
@@ -96,10 +92,7 @@ class BackendBridge(QObject):
             self.errorOccurred.emit(str(e))
 
     def _check_task_resume(self):
-        """检查是否有未完成的任务需要恢复提示。"""
         try:
-            from tea_agent._gui._markdown import _chat_to_markdown
-            # 简单的恢复提示
             notice = (
                 "💡 欢迎使用 Tea Agent Qt 界面！\n\n"
                 "输入消息开始对话，或从左侧选择历史主题继续。"
@@ -112,7 +105,6 @@ class BackendBridge(QObject):
 
     @Slot(str)
     def send_message(self, text: str):
-        """发送用户消息。"""
         if not text or not text.strip():
             return
         if self._generating:
@@ -121,80 +113,75 @@ class BackendBridge(QObject):
 
         text = text.strip()
         self._add_message("user", text)
-        self.statusChanged.emit("🤔 思考中...")
+        self._update_status("🤔 思考中...")
         self._generating = True
         self._think_buffer = ""
         self._stream_buffer = ""
 
-        # 在后台线程运行 Agent 推理
         threading.Thread(target=self._run_agent, args=(text,), daemon=True).start()
 
     def _run_agent(self, user_text: str):
-        """在后台线程运行 Agent。"""
+        """在线程中运行 Agent.chat，通过回调实时更新 UI。
+
+        Agent 的 `_callback` 在流式输出和工具调用时被调用，
+        数据类型支持：
+          - {"type":"chunk", "content":"..."}    ← LiteSession
+          - {"type":"token", "text":"..."}        ← FullSession
+          - {"type":"thinking", "text":"..."}     ← 思考过程
+          - {"type":"status", "text":"..."}       ← 状态更新
+          - {"type":"done", "used_tools":[...]}   ← 完成
+        """
         try:
-            response = self._agent.run(
-                user_text,
-                on_think=lambda t: self._on_think(t),
-                on_stream=lambda s: self._on_stream(s),
-                on_tool=lambda t: self._on_tool(t),
+            # ── 注册流式回调 ──────────────────────────────
+            def agent_callback(data: dict):
+                typ = data.get("type", "")
+                if typ in ("token", "chunk"):
+                    text = data.get("text") or data.get("content") or ""
+                    if text:
+                        self._stream_buffer += text
+                        self.streamUpdated.emit(self._stream_buffer)
+                elif typ == "thinking":
+                    text = data.get("text", "")
+                    if text:
+                        self._think_buffer += text
+                        self.thinkUpdated.emit(self._think_buffer)
+                elif typ == "status":
+                    self._update_status(data.get("text", ""))
+                # "done" 在 chat() 返回后统一处理
+
+            self._agent._callback = agent_callback
+
+            # ── 阻塞等待完整回复 ──────────────────────────
+            self._agent.chat(
+                user_input=user_text,
+                topic_id=self._current_topic_id,
             )
-            self._on_agent_done(response)
+
+            # ── 处理完成结果 ──────────────────────────────
+            self._on_agent_done()
+
         except Exception as e:
             logger.error(f"Agent error: {e}", exc_info=True)
             self.errorOccurred.emit(f"Agent 错误: {e}")
-            self._on_agent_done(f"<p style='color:red'>⚠️ 错误: {e}</p>")
+            self._on_agent_done()
 
-    def _on_think(self, text: str):
-        """思考过程回调（可在任何线程调用）。"""
-        self._think_buffer += text
-        self.thinkUpdated.emit(self._think_buffer)
-
-    def _on_stream(self, text: str):
-        """流式文本回调。"""
-        self._stream_buffer += text
-        self.streamUpdated.emit(self._stream_buffer)
-
-    def _on_tool(self, tool_info: dict):
-        """工具调用回调。"""
-        # 将工具调用信息格式化为工具消息
-        name = tool_info.get("name", "unknown")
-        params = tool_info.get("params", {})
-        status = tool_info.get("status", "running")
-        icon = "⚡" if status == "running" else ("✅" if status == "success" else "❌")
-
-        content = f"🔧 调用工具：{name}\n参数：\n{params}"
-        if status != "running":
-            content += f"\n{icon} 结果：{tool_info.get('result', '')}"
-
-        with self._lock:
-            self._messages.append({
-                "role": "tool",
-                "content": content,
-                "timestamp": self._now_ts(),
-            })
-
-        self.messagesChanged.emit()
-        self.scrollToBottom.emit()
-
-    def _on_agent_done(self, final_text: str):
-        """Agent 生成完成。"""
-        # 先 flush 思考缓冲
+    def _on_agent_done(self):
+        """将缓冲区的内容刷新到消息列表，重置生成状态。"""
         if self._think_buffer.strip():
             self._add_message("think", self._think_buffer.strip())
             self._think_buffer = ""
 
-        # 添加 AI 回复
-        if self._stream_buffer.strip() or final_text:
-            content = self._stream_buffer.strip() or final_text
-            self._add_message("ai", content)
+        stream_content = self._stream_buffer.strip()
+        if stream_content:
+            self._add_message("ai", stream_content)
             self._stream_buffer = ""
 
-        self._generating = False
-        self._update_status("✅ 就绪")
-        self.scrollToBottom.emit()
+        if self._generating:
+            self._generating = False
+            self._update_status("✅ 就绪")
+            self.scrollToBottom.emit()
 
     def _add_message(self, role: str, content: str):
-        """线程安全地添加消息。"""
         with self._lock:
             self._messages.append({
                 "role": role,
@@ -207,22 +194,25 @@ class BackendBridge(QObject):
 
     @Slot()
     def refresh_topics(self):
-        """刷新主题列表。"""
+        """刷新主题列表（从配置文件指定的数据库读取）。"""
         try:
             from tea_agent.store import Storage as _Storage
-            store = _Storage()
+            db_path = str(self._cfg.paths.db_path_abs) if self._cfg and hasattr(self._cfg, 'paths') else None
+            store = _Storage(db_path=db_path) if db_path else _Storage()
             topics = store.list_topics()
             self._topics = [
-                {
-                    "id": t["topic_id"],
-                    "title": t.get("title", ""),
-                    "updated": str(t.get("last_update_stamp", "")),
-                }
+                {"id": t["topic_id"], "title": t.get("title", ""),
+                 "updated": str(t.get("last_update_stamp", ""))}
                 for t in topics if isinstance(t, dict)
             ]
             self.topicsChanged.emit()
         except Exception as e:
             logger.warning(f"Refresh topics failed: {e}")
+
+    @Slot(result=list)
+    def getTopicsList(self):
+        """QML 调用：获取当前主题列表。"""
+        return list(self._topics)
 
     @Slot(str)
     def load_topic(self, topic_id: str):
@@ -230,25 +220,22 @@ class BackendBridge(QObject):
         self._update_status(f"📂 加载主题 {topic_id[:8]}...")
         try:
             from tea_agent.store import Storage as _Storage
-            store = _Storage()
+            db_path = str(self._cfg.paths.db_path_abs) if self._cfg and hasattr(self._cfg, 'paths') else None
+            store = _Storage(db_path=db_path) if db_path else _Storage()
             convs = store.get_conversations(topic_id)
-            # convs: list of dicts with {id, topic_id, user_msg, ai_msg, stamp, rounds_json_parsed}
             with self._lock:
                 self._messages.clear()
                 for c in convs:
-                    # 用户消息
                     if c.get("user_msg"):
                         self._messages.append({
                             "role": "user",
                             "content": c["user_msg"],
                             "timestamp": str(c.get("stamp", "")),
                         })
-                    # 工具调用轮次（如果有）
                     rounds = c.get("rounds_json_parsed") or []
                     for r in rounds:
                         role = r.get("role", "ai")
                         content = r.get("content", "") or ""
-                        # 如果有 tool_calls，格式化显示
                         tool_calls = r.get("tool_calls") or []
                         tc_text = ""
                         for tc in tool_calls:
@@ -266,7 +253,6 @@ class BackendBridge(QObject):
                                 "content": content,
                                 "timestamp": "",
                             })
-                    # AI 回复（如果没有工具调用轮次）
                     ai_msg = c.get("ai_msg", "") or ""
                     if ai_msg.strip() and not any(
                         r.get("role") == "assistant" and r.get("content") == ai_msg
@@ -288,7 +274,6 @@ class BackendBridge(QObject):
 
     @Slot()
     def new_topic(self):
-        """新建空白主题。"""
         with self._lock:
             self._messages.clear()
             self._current_topic_id = ""
@@ -298,32 +283,24 @@ class BackendBridge(QObject):
 
     @Slot()
     def interrupt(self):
-        """中断当前生成。"""
         if self._agent and self._generating:
             try:
-                self._agent.interrupt()
+                if hasattr(self._agent._sess, 'interrupt'):
+                    self._agent._sess.interrupt()
                 self._generating = False
                 self._update_status("⏹ 已中断")
             except Exception as e:
                 logger.warning(f"Interrupt failed: {e}")
 
-    # ── 属性暴露给 QML ────────────────────────────────────
+    # ── QML 可调用的消息获取方法 ──────────────────────────
 
     @Slot(result=list)
-    def get_messages(self) -> list:
-        """返回当前消息列表（QML 可调用）。"""
+    def getMessagesList(self):
+        """QML 调用：获取当前消息列表（线程安全）。"""
         with self._lock:
             return list(self._messages)
 
-    messages = Property(list, get_messages, notify=messagesChanged)
-
-    @Slot(result=list)
-    def get_topics(self) -> list:
-        return list(self._topics)
-
-    topics = Property(list, get_topics, notify=topicsChanged)
-
-    # ── 状态 ──────────────────────────────────────────────
+    # ── 属性暴露给 QML ────────────────────────────────────
 
     def _update_status(self, text: str):
         self._status_text = text
@@ -349,7 +326,6 @@ class BackendBridge(QObject):
 
     @Slot()
     def cleanup(self):
-        """清理资源。"""
         if self._agent:
             try:
                 self._agent.close()

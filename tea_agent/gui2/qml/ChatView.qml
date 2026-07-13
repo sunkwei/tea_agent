@@ -1,31 +1,38 @@
+// ⚠️ [废弃] 此 QML 文件已废弃，保留仅为代码参考。
+// 请使用 tea_agent.gui2 的 Web 界面替代。
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtWebEngine
 
-/**
- * ChatView — 聊天消息视图 (QWebEngineView)。
- *
- * 使用 QWebEngineView 渲染 markdown→HTML 管道生成的完整 HTML 页面，
- * 完美支持 HTML5/CSS3，解决 tkinterweb 的兼容性问题。
- */
 Rectangle {
     id: root
 
-    // ── 属性（由父级注入） ─────────────────────
     property var markdownBridge: null
     property var messages: []
     property var themeColors: ({})
     property int zoomLevel: 100
     property bool hasContent: false
+    property string streamContent: ""
+    property string streamRole: ""
+    property bool _pendingScroll: false
 
-    // ── 信号 ──────────────────────────────────
     signal linkClicked(string url)
 
-    // ── 外观 ──────────────────────────────────
+    // 页面加载完成后若有待滚标志则自动滚到底
+    function _onPageLoaded() {
+        loadingOverlay.visible = false
+        hasContent = true
+        emptyHint.visible = false
+        if (_pendingScroll) {
+            _pendingScroll = false
+            scrollToBottom()
+        }
+    }
+
     color: themeColors.chatBg || "#ffffff"
 
-    // ── 加载状态 ──────────────────────────────
     Rectangle {
         id: loadingOverlay
         anchors.fill: parent
@@ -51,7 +58,6 @@ Rectangle {
         }
     }
 
-    // ── 空状态 ────────────────────────────────
     Text {
         id: emptyHint
         anchors.centerIn: parent
@@ -63,7 +69,6 @@ Rectangle {
         visible: !hasContent && !loadingOverlay.visible
     }
 
-    // ── 工具栏 ────────────────────────────────
     Rectangle {
         id: toolBar
         anchors.top: parent.top
@@ -79,7 +84,6 @@ Rectangle {
             anchors.margins: 4
             spacing: 4
 
-            // A− 缩小
             Button {
                 id: zoomOutBtn
                 text: "A−"
@@ -103,7 +107,6 @@ Rectangle {
                 }
             }
 
-            // 缩放百分比
             Text {
                 text: zoomLevel + "%"
                 font.pixelSize: 11
@@ -115,7 +118,6 @@ Rectangle {
                 Layout.minimumWidth: 40
             }
 
-            // A+ 放大
             Button {
                 id: zoomInBtn
                 text: "A+"
@@ -141,7 +143,6 @@ Rectangle {
 
             Item { Layout.fillWidth: true }
 
-            // ↻ 刷新
             Button {
                 id: refreshBtn
                 text: "↻"
@@ -176,54 +177,127 @@ Rectangle {
         }
     }
 
-    // ── WebEngineView ────────────────────────
-    WebEngineView {
-        id: webView
+    // ── 主内容区（WebView + 流式浮层） ──
+
+    Item {
         anchors.top: toolBar.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
+        clip: true
 
-        settings.javascriptEnabled: false
-        settings.localContentCanAccessRemoteUrls: false
+        WebEngineView {
+            id: webView
+            anchors.fill: parent
 
-        onLoadingChanged: function(load) {
-            if (load.status === WebEngineView.LoadSucceededStatus) {
-                loadingOverlay.visible = false
-                hasContent = true
-                emptyHint.visible = false
-            } else if (load.status === WebEngineView.LoadFailedStatus) {
-                console.warn("WebEngineView load failed:", load.errorString)
-                loadingOverlay.visible = false
+            settings.javascriptEnabled: true
+            settings.localContentCanAccessRemoteUrls: false
+            settings.errorPageEnabled: false
+
+            onLoadingChanged: function(load) {
+                if (load.status === WebEngineView.LoadSucceededStatus) {
+                    root._onPageLoaded()
+                } else if (load.status === WebEngineView.LoadFailedStatus) {
+                    console.warn("WebEngineView load failed:", load.errorString)
+                    loadingOverlay.visible = false
+                }
+            }
+
+            onNavigationRequested: function(request) {
+                var url = request.url.toString()
+                if (url.startsWith("tea://")) {
+                    request.action = WebEngineNavigationRequest.IgnoreRequest
+                    linkClicked(url)
+                } else if (url.startsWith("http://") || url.startsWith("https://")) {
+                    request.action = WebEngineNavigationRequest.IgnoreRequest
+                    Qt.openUrlExternally(url)
+                }
+            }
+
+            onContextMenuRequested: function(request) {
+                request.accepted = true
             }
         }
 
-        onNavigationRequested: function(request) {
-            var url = request.url.toString()
-            if (url.startsWith("tea://")) {
-                request.action = WebEngineNavigationRequest.IgnoreRequest
-                linkClicked(url)
-            } else if (url.startsWith("http://") || url.startsWith("https://")) {
-                request.action = WebEngineNavigationRequest.IgnoreRequest
-                Qt.openUrlExternally(url)
-            }
-        }
+        // ── 流式生成浮层（覆盖在 WebView 底部） ──
+        Rectangle {
+            id: streamBanner
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            visible: false
+            height: Math.min(streamScroll.contentHeight + 32, parent.height * 0.5)
+            color: streamRole === "think" ? "#fff8e1" : "#f0f7ff"
+            z: 20
 
-        onContextMenuRequested: function(request) {
-            request.accepted = true
+            Rectangle {
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 2
+                color: streamRole === "think" ? "#f9a825" : "#1976d2"
+            }
+
+            Flickable {
+                id: streamScroll
+                anchors.fill: parent
+                anchors.margins: 12
+                contentHeight: streamLabel.height + streamBody.height + 8
+                flickableDirection: Flickable.VerticalFlick
+                clip: true
+
+                Column {
+                    id: streamCol
+                    width: parent.width
+                    spacing: 4
+
+                    Row {
+                        spacing: 6
+
+                        Text {
+                            id: streamIcon
+                            text: streamRole === "think" ? "💭" : "🤖"
+                            font.pixelSize: 16
+                        }
+
+                        Text {
+                            id: streamLabel
+                            text: streamRole === "think" ? "思考中..." : "生成中..."
+                            font.pixelSize: 13
+                            font.bold: true
+                            color: streamRole === "think" ? "#e65100" : "#1565c0"
+                        }
+                    }
+
+                    Text {
+                        id: streamBody
+                        width: parent.width
+                        text: streamContent
+                        font.pixelSize: 14
+                        color: themeColors.primaryText || "#202124"
+                        wrapMode: Text.WordWrap
+                        textFormat: Text.MarkdownText
+                    }
+                }
+            }
         }
     }
 
-    // ── 公共方法 ──────────────────────────────
+    // ── 渲染 ──
 
     function renderMessages() {
         if (!markdownBridge) return
         if (!messages || messages.length === 0) {
             hasContent = false
             emptyHint.visible = true
+            streamContent = ""
+            streamBanner.visible = false
             return
         }
         loadingOverlay.visible = true
+        streamContent = ""
+        streamBanner.visible = false
+        _pendingScroll = true  // 标记需要加载后自动滚动
         var html = markdownBridge.render_messages(messages)
         webView.loadHtml(html, "file:///")
     }
@@ -231,6 +305,7 @@ Rectangle {
     function renderWithThink(thinkText, msgs) {
         if (!markdownBridge) return
         loadingOverlay.visible = true
+        _pendingScroll = true
         var html = markdownBridge.render_messages_with_think(thinkText, msgs)
         webView.loadHtml(html, "file:///")
     }
@@ -242,9 +317,30 @@ Rectangle {
         emptyHint.visible = false
     }
 
-    function scrollToBottom() {
-        webView.runJavaScript("window.scrollTo(0, document.body.scrollHeight)")
+    // ── 流式更新 ──
+
+    function updateStreaming(text, role) {
+        streamContent = text
+        streamRole = role
+        if (!text) {
+            streamBanner.visible = false
+            return
+        }
+        streamBanner.visible = true
+        streamScroll.contentY = Math.max(0, streamScroll.contentHeight - streamScroll.height)
     }
+
+    function clearStreaming() {
+        streamContent = ""
+        streamRole = ""
+        streamBanner.visible = false
+    }
+
+    function scrollToBottom() {
+        webView.runJavaScript('window.scrollTo(0, document.body.scrollHeight)')
+    }
+
+    // ── 缩放 ──
 
     function zoomIn() {
         if (zoomLevel < 200) {

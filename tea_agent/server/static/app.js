@@ -454,11 +454,20 @@ function updateUsage(usage) {
 function formatMarkdown(text) {
     if (!text) return '';
     let html = esc(text).replace(/\r\n/g, '\n');
-    // Protect code blocks from newline conversion
+    // Protect code blocks from newline conversion — and add copy button
     const codeBlocks = [];
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
         const idx = codeBlocks.length;
-        codeBlocks.push('<pre><code>' + code.trimEnd() + '</code></pre>');
+        const langLabel = lang ? '<span class="code-lang">' + esc(lang) + '</span>' : '';
+        codeBlocks.push(
+            '<div class="code-block-wrapper">'
+            + '<div class="code-block-header">'
+            + langLabel
+            + '<button class="copy-btn" onclick="copyCode(this)" data-code="' + escAttr(code.trimEnd()) + '">📋 复制</button>'
+            + '</div>'
+            + '<pre><code class="lang-' + esc(lang) + '">' + code.trimEnd() + '</code></pre>'
+            + '</div>'
+        );
         return '\x00CODE' + idx + '\x00';
     });
     // Inline code
@@ -469,6 +478,7 @@ function formatMarkdown(text) {
         return '\x00ICODE' + idx + '\x00';
     });
     // Headers (protect from <br> conversion)
+    html = html.replace(/^#### (.+)$/gm, '<h5>$1</h5>');
     html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
     html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
     html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
@@ -484,22 +494,69 @@ function formatMarkdown(text) {
         tableBlocks.push('<table class="md-table"><thead><tr>' + h + '</tr></thead><tbody>' + rows + '</tbody></table>');
         return '\x00TABLE' + idx + '\x00';
     });
-    // Convert newlines to <br> (outside code blocks and tables)
+    // Lists: ordered and unordered (must be on their own lines)
+    const listBlocks = [];
+    html = html.replace(/^(\s*[-*+]\s+.+(?:\n\s*[-*+]\s+.+)*)$/gm, function(match) {
+        const items = match.split('\n').map(function(line) {
+            return '<li>' + line.replace(/^\s*[-*+]\s+/, '') + '</li>';
+        }).join('');
+        const idx = listBlocks.length;
+        listBlocks.push('<ul>' + items + '</ul>');
+        return '\x00ULIST' + idx + '\x00';
+    });
+    html = html.replace(/^(\s*\d+\.\s+.+(?:\n\s*\d+\.\s+.+)*)$/gm, function(match) {
+        const items = match.split('\n').map(function(line) {
+            return '<li>' + line.replace(/^\s*\d+\.\s+/, '') + '</li>';
+        }).join('');
+        const idx = listBlocks.length;
+        listBlocks.push('<ol>' + items + '</ol>');
+        return '\x00OLIST' + idx + '\x00';
+    });
+    // Blockquotes
+    html = html.replace(/^&gt;\s(.+)$/gm, '<blockquote>$1</blockquote>');
+    // Horizontal rules
+    html = html.replace(/^---$/gm, '<hr>');
+    // Convert newlines to <br> (outside protected blocks)
     html = html.replace(/\n/g, '<br>');
     // Bold
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     // Italic
     html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    // Strikethrough
+    html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
     // Links
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
     // Restore inline codes
     html = html.replace(/\x00ICODE(\d+)\x00/g, function(m, idx) { return inlineCodes[idx] || ''; });
     // Restore tables
     html = html.replace(/\x00TABLE(\d+)\x00/g, function(m, idx) { return tableBlocks[idx] || ''; });
+    // Restore lists
+    html = html.replace(/\x00ULIST(\d+)\x00/g, function(m, idx) { return listBlocks[idx] || ''; });
+    html = html.replace(/\x00OLIST(\d+)\x00/g, function(m, idx) { return listBlocks[idx] || ''; });
     // Restore code blocks
     html = html.replace(/\x00CODE(\d+)\x00/g, function(m, idx) { return codeBlocks[idx] || ''; });
     return html;
 }
+
+// -- Copy code button --
+window.copyCode = function(btn) {
+    const code = btn.getAttribute('data-code');
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(function() {
+        btn.textContent = '✅ 已复制';
+        setTimeout(function() { btn.textContent = '📋 复制'; }, 2000);
+    }).catch(function() {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = code;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        btn.textContent = '✅ 已复制';
+        setTimeout(function() { btn.textContent = '📋 复制'; }, 2000);
+    });
+};
 
 // -- Topics --
 function escHtml(s) {

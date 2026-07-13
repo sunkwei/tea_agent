@@ -206,7 +206,7 @@ async def handle_delete_memory(request):
     server = get_server()
     mem_id = request.path_params.get("mem_id", "")
     ok = server.delete_memory(mem_id)
-    return JSONResponse({"deleted": ok})
+    return JSONResponse({"ok": ok, "deleted": ok})
 
 
 # ================================================================

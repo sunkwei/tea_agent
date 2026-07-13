@@ -1008,12 +1008,17 @@ function _formatModelName(modelName) {
   
   return formattedWords.join(' ');
 }
-function showModal(id) { $(id).classList.add('open'); }
-function closeModal(id) { $(id).classList.remove('open'); }
 // Close modals on Escape
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     document.querySelectorAll('.modal.open').forEach(m => closeModal(m.id));
+  }
+});
+// Close modal by clicking on backdrop
+document.addEventListener('mousedown', function(e) {
+  const modal = e.target.closest('.modal');
+  if (modal && e.target === modal) {
+    closeModal(modal.id);
   }
 });
 

@@ -79,54 +79,90 @@ Rectangle {
             anchors.margins: 4
             spacing: 4
 
+            // A− 缩小
             Button {
+                id: zoomOutBtn
                 text: "A−"
-                font.pixelSize: 12
-                implicitWidth: 28
-                implicitHeight: 24
-                flat: true
+                font.pixelSize: 13
+                font.bold: true
+                implicitWidth: 32
+                implicitHeight: 26
                 onClicked: root.zoomOut()
                 background: Rectangle {
-                    radius: 3
-                    color: parent.hovered ? (themeColors.sidebarHover || "#e8f0fe") : "transparent"
+                    radius: 4
+                    color: zoomOutBtn.hovered ? (themeColors.sidebarHover || "#e8f0fe") : "transparent"
+                    border.width: 1
+                    border.color: zoomOutBtn.hovered ? (themeColors.borderColor || "#dadce0") : "transparent"
+                }
+                contentItem: Text {
+                    text: zoomOutBtn.text
+                    color: themeColors.primaryText || "#202124"
+                    font: zoomOutBtn.font
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
             }
 
+            // 缩放百分比
             Text {
                 text: zoomLevel + "%"
                 font.pixelSize: 11
+                font.bold: true
                 color: themeColors.secondaryText || "#5f6368"
                 horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
                 Layout.preferredWidth: 40
+                Layout.minimumWidth: 40
             }
 
+            // A+ 放大
             Button {
+                id: zoomInBtn
                 text: "A+"
-                font.pixelSize: 12
-                implicitWidth: 28
-                implicitHeight: 24
-                flat: true
+                font.pixelSize: 13
+                font.bold: true
+                implicitWidth: 32
+                implicitHeight: 26
                 onClicked: root.zoomIn()
                 background: Rectangle {
-                    radius: 3
-                    color: parent.hovered ? (themeColors.sidebarHover || "#e8f0fe") : "transparent"
+                    radius: 4
+                    color: zoomInBtn.hovered ? (themeColors.sidebarHover || "#e8f0fe") : "transparent"
+                    border.width: 1
+                    border.color: zoomInBtn.hovered ? (themeColors.borderColor || "#dadce0") : "transparent"
+                }
+                contentItem: Text {
+                    text: zoomInBtn.text
+                    color: themeColors.primaryText || "#202124"
+                    font: zoomInBtn.font
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
             }
 
             Item { Layout.fillWidth: true }
 
+            // ↻ 刷新
             Button {
+                id: refreshBtn
                 text: "↻"
-                font.pixelSize: 14
-                implicitWidth: 28
-                implicitHeight: 24
-                flat: true
+                font.pixelSize: 15
+                implicitWidth: 32
+                implicitHeight: 26
                 ToolTip.visible: hovered
                 ToolTip.text: "重新渲染"
                 onClicked: root.renderMessages()
                 background: Rectangle {
-                    radius: 3
-                    color: parent.hovered ? (themeColors.sidebarHover || "#e8f0fe") : "transparent"
+                    radius: 4
+                    color: refreshBtn.hovered ? (themeColors.sidebarHover || "#e8f0fe") : "transparent"
+                    border.width: 1
+                    border.color: refreshBtn.hovered ? (themeColors.borderColor || "#dadce0") : "transparent"
+                }
+                contentItem: Text {
+                    text: refreshBtn.text
+                    color: themeColors.primaryText || "#202124"
+                    font: refreshBtn.font
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
                 }
             }
         }

@@ -26,7 +26,7 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
 
-        // ── 标题 ──────────────────────────────
+        // ── 标题栏 ────────────────────────────
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 48
@@ -34,30 +34,42 @@ Rectangle {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: themeColors.padding || 12
-                spacing: themeColors.spacing || 8
+                anchors.leftMargin: 14
+                anchors.rightMargin: 4
+                anchors.topMargin: 0
+                anchors.bottomMargin: 0
+                spacing: 0
 
                 Text {
                     text: "💬 茶 Agent"
-                    font.pixelSize: themeColors.headingSize || 15
+                    font.pixelSize: 16
                     font.bold: true
                     color: themeColors.primaryText || "#202124"
+                    Layout.fillWidth: true
                 }
 
-                Item { Layout.fillWidth: true }
-
+                // 关闭窗口按钮 — 移除 opacity，使用实色
                 Button {
+                    id: closeBtn
                     text: "✕"
-                    font.pixelSize: 16
-                    flat: true
-                    opacity: 0.6
-                    onClicked: Qt.quit()
-                    background: null
-                    contentItem: Text {
-                        text: parent.text
-                        color: themeColors.secondaryText || "#5f6368"
-                        font: parent.font
+                    implicitWidth: 32
+                    implicitHeight: 32
+                    flat: false
+                    // 使用内联 Rectangle 代替 background，保证始终可见
+                    background: Rectangle {
+                        radius: 4
+                        color: closeBtn.hovered
+                            ? (themeColors.errorColor || "#ea4335")
+                            : "transparent"
                     }
+                    contentItem: Text {
+                        text: closeBtn.text
+                        color: closeBtn.hovered ? "#ffffff" : (themeColors.secondaryText || "#5f6368")
+                        font.pixelSize: 16
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: Qt.quit()
                 }
             }
         }
@@ -69,22 +81,36 @@ Rectangle {
             color: themeColors.dividerColor || "#e8eaed"
         }
 
-        // ── 新建主题按钮 ──────────────────────
+        // ── 新建主题按钮（实色背景，保证可读） ──
         Button {
+            id: newTopicBtn
             Layout.fillWidth: true
-            Layout.margins: themeColors.spacing || 8
-            text: "✏️ 新建主题"
-            font.pixelSize: themeColors.smallSize || 12
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            Layout.topMargin: 8
+            Layout.bottomMargin: 4
+            text: "✏️  新建主题"
+            font.pixelSize: 13
+            implicitHeight: 36
 
+            // 实色背景 + 深色文字，高可读性
             background: Rectangle {
-                radius: themeColors.smallRadius || 4
-                color: parent.hovered
-                    ? (themeColors.sidebarHover || "#e8f0fe")
-                    : "transparent"
-                border.color: themeColors.borderColor || "#dadce0"
+                radius: 6
+                color: newTopicBtn.hovered
+                    ? (themeColors.accentColor || "#1a73e8")
+                    : (themeColors.sidebarHover || "#f0f6ff")
                 border.width: 1
+                border.color: newTopicBtn.hovered
+                    ? (themeColors.accentColor || "#1a73e8")
+                    : (themeColors.borderColor || "#dadce0")
             }
-
+            contentItem: Text {
+                text: newTopicBtn.text
+                color: newTopicBtn.hovered ? "#ffffff" : (themeColors.accentColor || "#1a73e8")
+                font: newTopicBtn.font
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
             onClicked: newTopicRequested()
         }
 
@@ -92,18 +118,20 @@ Rectangle {
         TextField {
             id: searchField
             Layout.fillWidth: true
-            Layout.leftMargin: themeColors.spacing || 8
-            Layout.rightMargin: themeColors.spacing || 8
-            Layout.bottomMargin: (themeColors.spacing || 8) / 2
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            Layout.bottomMargin: 4
             placeholderText: "🔍 搜索主题..."
-            font.pixelSize: themeColors.smallSize || 12
-            leftPadding: 8
+            font.pixelSize: 12
+            implicitHeight: 32
+            leftPadding: 10
             topPadding: 6
             bottomPadding: 6
+            color: themeColors.primaryText || "#202124"
 
             background: Rectangle {
-                radius: themeColors.smallRadius || 4
-                color: themeColors.inputBg || "#f8f9fa"
+                radius: 6
+                color: (themeColors.inputBg || "#f5f5f5")
                 border.color: searchField.activeFocus
                     ? (themeColors.accentColor || "#1a73e8")
                     : (themeColors.borderColor || "#dadce0")
@@ -116,8 +144,8 @@ Rectangle {
             id: topicList
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: (themeColors.spacing || 8) / 2
-            Layout.rightMargin: (themeColors.spacing || 8) / 2
+            Layout.leftMargin: 4
+            Layout.rightMargin: 4
             clip: true
 
             model: topics
@@ -135,20 +163,20 @@ Rectangle {
                 anchors.centerIn: parent
                 text: "暂无主题"
                 color: themeColors.secondaryText || "#5f6368"
-                font.pixelSize: themeColors.smallSize || 12
+                font.pixelSize: 12
                 visible: topicList.count === 0
             }
         }
 
-        // ── 底部状态栏 ────────────────────────
+        // ── 底部统计 ──────────────────────────
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 32
-            color: "#f0f0f0"
+            Layout.preferredHeight: 30
+            color: themeColors.dividerColor || "#f0f0f0"
 
             Text {
                 anchors.left: parent.left
-                anchors.leftMargin: 8
+                anchors.leftMargin: 10
                 anchors.verticalCenter: parent.verticalCenter
                 text: "📦 " + topics.length + " 个主题"
                 font.pixelSize: 11
@@ -168,24 +196,24 @@ Rectangle {
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: 1
-                radius: themeColors.smallRadius || 4
+                radius: 6
                 color: modelData.id === sidebarCurrentId
-                    ? (themeColors.sidebarSelected || "#cce0ff")
-                    : (mouseArea.containsMouse ? (themeColors.sidebarHover || "#e8f0fe") : "transparent")
+                    ? (themeColors.sidebarSelected || "#d2e3fc")
+                    : (mouseArea.containsMouse ? (themeColors.sidebarHover || "#f0f6ff") : "transparent")
             }
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 10
+                anchors.leftMargin: 12
                 anchors.rightMargin: 8
-                anchors.topMargin: 4
-                anchors.bottomMargin: 4
+                anchors.topMargin: 5
+                anchors.bottomMargin: 5
                 spacing: 2
 
                 Text {
                     Layout.fillWidth: true
                     text: modelData.title || "未命名主题"
-                    font.pixelSize: (themeColors.smallSize || 12) + 1
+                    font.pixelSize: 13
                     font.bold: modelData.id === sidebarCurrentId
                     color: themeColors.primaryText || "#202124"
                     elide: Text.ElideRight
@@ -206,7 +234,7 @@ Rectangle {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-
+                acceptedButtons: Qt.LeftButton
                 onClicked: {
                     topicList.currentIndex = index
                     sidebarCurrentId = modelData.id
@@ -216,10 +244,10 @@ Rectangle {
         }
     }
 
-    // ── 当前选中 ID（内部状态） ──────────────
+    // ── 当前选中 ID ──────────────────────────
     property string sidebarCurrentId: ""
 
-    // ── 刷新主题列表 ──────────────────────────
+    // ── 刷新 ──────────────────────────────────
     function refresh() {
         if (backend) {
             backend.refresh_topics()

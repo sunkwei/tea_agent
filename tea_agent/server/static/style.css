@@ -565,6 +565,9 @@ blockquote p { margin: 0; }
     margin: 12px 0;
 }
 
+/* Radio group (export modal) */
+.radio-item:hover { background: var(--bg); }
+
 /* Strikethrough */
 .msg-bubble del {
     color: var(--text-dim);

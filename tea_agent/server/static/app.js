@@ -17,6 +17,22 @@ const $ = (id) => document.getElementById(id);
 const esc = (t) => { if (!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
 const show = (id) => { $(id).style.display = 'flex'; };
 const hide = (id) => { $(id).style.display = 'none'; };
+// Expose globally for HTML onclick handlers
+window.show = show;
+window.hide = hide;
+
+// -- Modal helpers: click outside to close + escape key --
+document.addEventListener('click', function(e) {
+    const modal = e.target.closest('.modal');
+    if (modal && !e.target.closest('.modal-box')) {
+        modal.style.display = 'none';
+    }
+});
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    }
+});
 
 // -- Toast --
 function toast(msg, type) {
@@ -767,7 +783,13 @@ window.addMemory = async function() {
     } catch (e) { toast('Error: ' + e.message, 'error'); }
 };
 window.deleteMemory = async function(id) {
-    try { await fetch('/v1/memory/' + encodeURIComponent(id), { method: 'DELETE' }); await refreshMemory(); } catch (e) {}
+    try {
+        const r = await fetch('/v1/memory/' + encodeURIComponent(id), { method: 'DELETE' });
+        if (!r.ok) { toast('删除失败: ' + r.status, 'error'); return; }
+        const d = await r.json();
+        if (d.deleted) { await refreshMemory(); }
+        else { toast('删除失败（后端返回 false）', 'error'); }
+    } catch (e) { toast('删除错误: ' + e.message, 'error'); }
 };
 
 // -- Tasks --
@@ -806,11 +828,39 @@ window.doExport = async function() {
     const el = $('export-result');
     el.innerHTML = '<div class="status-msg info">\u5bfc\u51fa\u4e2d...</div>';
     try {
-        const r = await fetch('/v1/export/pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic_id: currentTopicId }) });
-        const d = await r.json();
-        if (d.success) el.innerHTML = '<div class="status-msg success">\u2713 \u5df2\u5bfc\u51fa: ' + esc(d.path || '') + '</div>';
-        else el.innerHTML = '<div class="status-msg error">' + esc(d.error || '\u5931\u8d25') + '</div>';
-    } catch (e) { el.innerHTML = '<div class="status-msg error">Error: ' + e.message + '</div>'; }
+        // Read export mode from radio buttons
+        const modeInput = document.querySelector('input[name="export-mode"]:checked');
+        const mode = modeInput ? modeInput.value : 'latest';
+        // Use fetch to get the PDF blob, then trigger download
+        const r = await fetch('/v1/export/pdf/' + encodeURIComponent(currentTopicId) + '?mode=' + encodeURIComponent(mode));
+        if (!r.ok) {
+            const errData = await r.json().catch(() => ({error: r.statusText}));
+            el.innerHTML = '<div class="status-msg error">' + esc(errData.error || '\u5931\u8d25') + '</div>';
+            return;
+        }
+        const blob = await r.blob();
+        // Get filename from Content-Disposition header
+        const disposition = r.headers.get('Content-Disposition') || '';
+        // RFC 5987: prefer filename*=UTF-8''encoded; fallback filename="ascii"
+        let match = disposition.match(/filename\*=(?:UTF-8|utf-8)''([^;\s]+)/);
+        let fname;
+        if (match) {
+            fname = decodeURIComponent(match[1]);
+        } else {
+            match = disposition.match(/filename"?="?([^";]+)/);
+            fname = match ? match[1] : 'export.pdf';
+        }
+        // Trigger download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fname;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        hide('modal-export');
+    } catch (e) { el.innerHTML = '<div class="status-msg error">Error: ' + esc(e.message) + '</div>'; }
 };
 
 // -- Settings --

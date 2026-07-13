@@ -249,14 +249,39 @@ async def handle_search(request):
 
 
 async def handle_export_pdf(request):
-    body = await request.json()
-    topic_id = body.get("topic_id", "")
+    """GET /v1/export/pdf/{topic_id} — export topic as PDF and download
+
+    Query params:
+        mode: 'latest' (default) = last conversation only, 'full_topic' = all conversations.
+    """
+    topic_id = request.path_params.get("topic_id", "")
     if not topic_id:
         return JSONResponse({"error": "topic_id required"}, status_code=400)
-    output = body.get("output")
+    mode = request.query_params.get("mode", "latest")
+    if mode not in ("latest", "full_topic"):
+        mode = "latest"
     try:
-        result = await asyncio.to_thread(export_topic_pdf, topic_id, output or None)
-        return JSONResponse({"success": True, "path": result or output})
+        server = get_server()
+        db_path = server._get_storage().db_path
+        result = await asyncio.to_thread(export_topic_pdf, topic_id, None, db_path, mode=mode)
+        # Get topic title for filename
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT title FROM topics WHERE topic_id = ?", (topic_id,))
+        row = cur.fetchone()
+        conn.close()
+        title = row["title"] if row else "Untitled"
+        safe_title = "".join(c if c.isalnum() or c in ' -_()[]' else '_' for c in title)
+        safe_title = safe_title.strip()[:80] or "export"
+        filename = safe_title + ".pdf"
+        # RFC 5987: use filename* for non-ASCII, fallback ASCII for latin-1 clients
+        import urllib.parse
+        ascii_name = "".join(c if ord(c) < 128 else '_' for c in filename) or "export.pdf"
+        disposition = f'attachment; filename="{ascii_name}"; filename*=UTF-8''{urllib.parse.quote(filename)}'
+        return FileResponse(result, media_type="application/pdf",
+            headers={"Content-Disposition": disposition})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 

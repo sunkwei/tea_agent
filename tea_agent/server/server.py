@@ -714,13 +714,11 @@ class APIServer:
         return {"id": mem_id, "content": content, "category": category}
 
     def delete_memory(self, mem_id):
-        # Soft delete via storage
+        """Delete a memory via storage."""
         try:
-            from tea_agent.memory import MemoryManager
-            mm = MemoryManager()
-            mm.delete(mem_id)
-            return True
-        except Exception:
+            return self._get_storage().delete_memory(mem_id)
+        except Exception as e:
+            logger.warning(f"delete_memory({mem_id}) failed: {e}")
             return False
 
     def list_tasks(self):
@@ -1261,7 +1259,7 @@ def create_app(api_key: str | None = None,
         Route("/v1/tasks", endpoint=handle_create_task, methods=["POST"]),
         Route("/v1/tasks/{task_id:str}", endpoint=handle_delete_task, methods=["DELETE"]),
         Route("/v1/search", endpoint=handle_search),
-        Route("/v1/export/pdf", endpoint=handle_export_pdf, methods=["POST"]),
+        Route("/v1/export/pdf/{topic_id:str}", endpoint=handle_export_pdf),
         Route("/v1/upload", endpoint=handle_upload, methods=["POST"]),
         Route("/docs", endpoint=handle_docs),
         Route("/openapi.json", endpoint=handle_openapi),

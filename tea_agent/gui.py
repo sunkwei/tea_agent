@@ -94,6 +94,78 @@ from tea_agent._gui._ui_builder import UIBuilder
 # Dialogs
 from tea_agent.gui_dialogs import ConfigDialog, MemoryDialog, TopicDialog
 
+# Dialogs
+from tea_agent.gui_dialogs import ConfigDialog, MemoryDialog, TopicDialog
+
+
+def _format_model_name(model_name: str) -> str:
+    """将模型技术名称转换为友好的显示名称。
+    
+    Args:
+        model_name: 模型的技术名称，如 "deepseek-v4-flash", "gpt-4"
+        
+    Returns:
+        友好的显示名称，如 "DeepSeek V4 Flash", "GPT-4"
+    """
+    if not model_name:
+        return ""
+    
+    # 特殊映射表
+    special_mappings = {
+        "gpt-4": "GPT-4",
+        "gpt-4-turbo": "GPT-4 Turbo",
+        "gpt-4o": "GPT-4o",
+        "gpt-4o-mini": "GPT-4o Mini",
+        "gpt-3.5-turbo": "GPT-3.5 Turbo",
+        "claude-3-opus": "Claude 3 Opus",
+        "claude-3-sonnet": "Claude 3 Sonnet",
+        "claude-3-haiku": "Claude 3 Haiku",
+        "claude-3.5-sonnet": "Claude 3.5 Sonnet",
+        "deepseek-chat": "DeepSeek Chat",
+        "deepseek-coder": "DeepSeek Coder",
+        "deepseek-v2": "DeepSeek V2",
+        "deepseek-v2.5": "DeepSeek V2.5",
+        "deepseek-v3": "DeepSeek V3",
+        "deepseek-v4": "DeepSeek V4",
+        "deepseek-v4-flash": "DeepSeek V4 Flash",
+        "deepseek-v4-pro": "DeepSeek V4 Pro",
+        "deepseek-r1": "DeepSeek R1",
+        "qwen-turbo": "Qwen Turbo",
+        "qwen-plus": "Qwen Plus",
+        "qwen-max": "Qwen Max",
+        "qwen-vl-plus": "Qwen VL Plus",
+        "qwen-vl-max": "Qwen VL Max",
+        "glm-4": "GLM-4",
+        "glm-3-turbo": "GLM-3 Turbo",
+        "spark": "Spark",
+        "spark-max": "Spark Max",
+        "spark-lite": "Spark Lite",
+        "ernie-bot": "Ernie Bot",
+        "ernie-bot-turbo": "Ernie Bot Turbo",
+    }
+    
+    # 检查特殊映射
+    if model_name.lower() in special_mappings:
+        return special_mappings[model_name.lower()]
+    
+    # 通用转换：将连字符和下划线替换为空格，每个单词首字母大写
+    # 处理特殊情况：如 "v4" -> "V4", "gpt" -> "GPT"
+    words = model_name.replace("-", " ").replace("_", " ").split()
+    formatted_words = []
+    
+    for word in words:
+        # 常见缩写保持大写
+        if word.lower() in ["gpt", "api", "ai", "ml", "llm", "vl", "r1", "v2", "v3", "v4", "v5"]:
+            formatted_words.append(word.upper())
+        # 数字保持原样
+        elif word.isdigit():
+            formatted_words.append(word)
+        # 其他单词首字母大写
+        else:
+            formatted_words.append(word.capitalize())
+    
+    return " ".join(formatted_words)
+
 
 class TkGUI(Agent):
     """TkGUI class."""
@@ -1372,8 +1444,8 @@ class TkGUI(Agent):
         # 第一遍：检测 display 文本重复
         seen = {}
         for cfg in configs:
-            m = cfg["main_model"] or "?"
-            c = cfg["cheap_model"] or ""
+            m = _format_model_name(cfg["main_model"]) or "?"
+            c = _format_model_name(cfg["cheap_model"]) or ""
             base_display = f"{m} / {c}" if (c and c != m) else m
             if base_display in seen:
                 seen[base_display] += 1
@@ -1381,8 +1453,8 @@ class TkGUI(Agent):
                 seen[base_display] = 1
         # 第二遍：生成最终 display（重复时追加文件名）
         for cfg in configs:
-            m = cfg["main_model"] or "?"
-            c = cfg["cheap_model"] or ""
+            m = _format_model_name(cfg["main_model"]) or "?"
+            c = _format_model_name(cfg["cheap_model"]) or ""
             base_display = f"{m} / {c}" if (c and c != m) else m
             display = f"{base_display} ({cfg['filename']})" if seen.get(base_display, 0) > 1 else base_display
             self._config_display_map[display] = cfg["path"]
@@ -1395,8 +1467,8 @@ class TkGUI(Agent):
             for cfg in configs:
                 if str(Path(cfg["path"])).lower() == norm_current:
                     # 找到对应的 display 文本
-                    m = cfg["main_model"] or "?"
-                    c = cfg["cheap_model"] or ""
+                    m = _format_model_name(cfg["main_model"]) or "?"
+                    c = _format_model_name(cfg["cheap_model"]) or ""
                     base_display = f"{m} / {c}" if (c and c != m) else m
                     display = f"{base_display} ({cfg['filename']})" if seen.get(base_display, 0) > 1 else base_display
                     self._config_var.set(display)

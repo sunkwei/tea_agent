@@ -40,10 +40,6 @@ strong { font-weight: bold; color: #222; }
 .msg-user h3 { color: #1e40af; margin-top: 0; }
 .msg-ai { background: #f3f4f6; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #6b7280; }
 .msg-ai h3 { color: #374151; margin-top: 0; }
-/* Think/reasoning message (独立角色) */
-.msg-think { background: #fef3c7; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #f59e0b; }
-.msg-think h3 { color: #92400e; margin-top: 0; }
-.msg-think p { color: #92400e; font-style: italic; }
 /* code blocks = tool calls/results */
 .msg-ai pre { background: #ecfdf5; border-left: 4px solid #10b981; padding: 8px 12px; border-radius: 4px; margin: 6px 0; font-size: 0.9em; }
 .msg-ai code { background: #d1fae5; color: #065f46; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
@@ -53,6 +49,108 @@ strong { font-weight: bold; color: #222; }
 /* tool rounds */
 .msg-tool { background: #ecfdf5; padding: 8px 14px; border-radius: 8px; margin: 6px 0; border-left: 4px solid #10b981; }
 .msg-tool h5 { color: #065f46; margin-top: 0; font-size: 1em; }
+/* Think/Reasoning block — div 方案（tkinterweb 不支持 HTML5 details） */
+.msg-think { background: #fef3c7; border-radius: 8px; margin: 6px 0; border-left: 4px solid #f59e0b; overflow: hidden; padding: 8px 14px; }
+.msg-think h3 { color: #92400e; margin: 0 0 6px 0; font-size: 1.05em; }
+.msg-think p { color: #92400e; font-style: italic; margin: 0.4em 0; }
+/* tool call container — div 方案 */
+.tool-call-container {
+    background: #ecfdf5;
+    border-radius: 8px;
+    margin: 6px 0;
+    border-left: 4px solid #10b981;
+    overflow: hidden;
+}
+.tc-header-bar {
+    padding: 8px 14px;
+    font-weight: 600;
+    color: #065f46;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 1px solid rgba(16,185,129,0.15);
+}
+.tc-summary-icon { font-size: 1em; }
+.tc-badge {
+    margin-left: auto;
+    font-size: 0.75em;
+    font-weight: 700;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: rgba(16,185,129,0.12);
+    color: #065f46;
+}
+.tc-list { padding: 0 14px 8px; }
+.tc-item {
+    border-top: 1px solid rgba(16,185,129,0.15);
+    padding: 6px 0;
+}
+.tc-item:first-child { border-top: none; }
+.tc-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.tc-status { font-size: 0.85em; padding-right: 2px; }
+.tc-name {
+    font-family: "Cascadia Code", "Consolas", monospace;
+    font-size: 0.85em;
+    background: rgba(16,185,129,0.08);
+    color: #065f46;
+    padding: 1px 6px;
+    border-radius: 3px;
+    word-break: break-all;
+}
+.tc-params { margin: 2px 0 0 24px; }
+.tc-params pre {
+    background: rgba(16,185,129,0.04);
+    border: none;
+    border-left: 2px solid rgba(16,185,129,0.2);
+    padding: 4px 8px;
+    margin: 2px 0;
+    font-size: 0.8em;
+    border-radius: 0 4px 4px 0;
+    color: #065f46;
+    overflow-x: auto;
+}
+.tc-result {
+    margin: 2px 0 0 24px;
+    font-size: 0.8em;
+    color: #065f46;
+    display: flex;
+    gap: 4px;
+    align-items: flex-start;
+}
+.tc-result code {
+    background: rgba(16,185,129,0.06);
+    color: #065f46;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    word-break: break-all;
+}
+.tc-info {
+    color: #065f46;
+    font-size: 0.85em;
+    padding: 2px 0;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+/* running spinner */
+.tc-running .tc-status::after {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #10b981;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: tc-spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-left: 2px;
+}
+@keyframes tc-spin { to { transform: rotate(360deg); } }
 em { font-style: italic; }
 .msg-timestamp { font-size: 0.8em; color: #999; margin-bottom: 0.3em; }
 .msg-divider { border: none; border-top: 2px solid #e8e8e8; margin: 1.2em 0; }
@@ -160,97 +258,77 @@ def _build_tool_blocks(messages):
 
         block = _render_tool_group(group, ts_display)
 
-        result[start] = f'<div class="msg-tool" markdown="1">\n\n{block}\n</div>'
+        result[start] = f'<div>\n{block}\n</div>'
 
     return result
 
 def _render_tool_group(group, ts_display):
-
-    """将一组连续的 tool 消息渲染为 markdown，带轮次编号"""
-
-    lines_out = [f"{ts_display}\n##### 🔧 工具"]
-
-    round_num = 0
-
+    """将一组连续的 tool 消息渲染为可折叠 HTML 结构"""
+    import html as _html
+    items_parts = []
     for msg in group:
-
         text = msg.get("content", "").strip()
-
         m_new = re.match(r'🔧 调用工具：(\w+)\n参数：\n(.+)', text, re.DOTALL)
         m_old = re.match(r'🔧 调用工具：(\w+)\((.+)\)', text)
         if m_new:
-            round_num += 1
-
-            tool_name = m_new.group(1)
-
-            args = m_new.group(2).strip()
-
-            if len(args) > 200:
-
-                args = args[:200] + "..."
-
-            lines_out.append(f"\n**第 {round_num} 轮**")
-
-            lines_out.append(f"- **调用**: `{tool_name}`")
-
-            lines_out.append(f"- **参数**: \n```\n{args}\n```")
-
+            tool_name = _html.escape(m_new.group(1))
+            args_raw = m_new.group(2).strip()
+            params_pre = _html.escape(args_raw)
+            items_parts.append(
+                f'<div class="tc-item tc-running">'
+                f'<div class="tc-header"><span class="tc-status">⚡</span>'
+                f'<span class="tc-name">{tool_name}</span></div>'
+                f'<div class="tc-params"><pre>{params_pre}</pre></div>'
+                f'</div>'
+            )
             continue
         if m_old:
-            round_num += 1
-
-            tool_name = m_old.group(1)
-
-            args = m_old.group(2)
-
-            if len(args) > 160:
-
-                args = args[:160] + "..."
-
-            lines_out.append(f"\n**第 {round_num} 轮**")
-
-            lines_out.append(f"- **调用**: `{tool_name}`")
-
-            lines_out.append(f"- **参数**: `{args}`")
-
+            tool_name = _html.escape(m_old.group(1))
+            args_raw = m_old.group(2).strip()
+            items_parts.append(
+                f'<div class="tc-item tc-running">'
+                f'<div class="tc-header"><span class="tc-status">⚡</span>'
+                f'<span class="tc-name">{tool_name}</span></div>'
+                f'<div class="tc-params"><pre>{_html.escape(args_raw)}</pre></div>'
+                f'</div>'
+            )
             continue
-
         if text.startswith("📋 结果："):
-
-            result = text[6:]
-
-            if len(result) > 200:
-
-                result = result[:200] + "..."
-
-            lines_out.append(f"- **结果**: {result}")
-
+            result_text = text[6:].strip()
+            items_parts.append(
+                f'<div class="tc-item tc-success">'
+                f'<div class="tc-result"><span>📋</span>'
+                f'<code>{_html.escape(result_text)}</code></div>'
+                f'</div>'
+            )
             continue
-
         if text.startswith("ℹ️ "):
-
-            info = text[3:]
-
-            if len(info) > 200:
-
-                info = info[:200] + "..."
-
-            lines_out.append(f"\nℹ️ {info}")
-
+            info = text[3:].strip()
+            items_parts.append(
+                f'<div class="tc-item tc-info">'
+                f'<span>ℹ️</span><span>{_html.escape(info)}</span>'
+                f'</div>'
+            )
             continue
-
-        display = text
-
-        if len(display) > 200:
-
-            display = display[:200] + "..."
-
-        lines_out.append(f"🔧 {display}")
-
-    lines_out.append("")
-
-    return "\n".join(lines_out)
-
+        # fallback
+        display = _html.escape(text)
+        items_parts.append(
+            f'<div class="tc-item"><div class="tc-header">'
+            f'<span class="tc-status">🔧</span>'
+            f'<span class="tc-name">{display}</span></div></div>'
+        )
+    items_inner = "\n".join(items_parts)
+    badge = f'<span class="tc-badge">{len(group)}个</span>'
+    # 【注意】tkinterweb 不支持 HTML5 details/summary，使用 div+CSS 方案
+    return (
+        f'{ts_display}'
+        f'<div class="tool-call-container">'
+        f'<div class="tc-header-bar">'
+        f'<span class="tc-summary-icon">🔧</span> 工具调用 {badge}'
+        f'</div>'
+        f'<div class="tc-list">\n{items_inner}\n</div>'
+        f'</div>'
+    )
 def _chat_to_markdown(messages, image_cache=None):
     """将聊天消息列表转换为 markdown 格式，包含时间戳和分割线"""
     import html as html_mod  # 2026-05-16 fix: HTML转义防止未转义标签导致HtmlFrame解析错误
@@ -303,9 +381,12 @@ def _chat_to_markdown(messages, image_cache=None):
             safe_content = _transform_non_code_segments(content.strip(), html_mod.escape)
             parts.append(f'{ts_display}\n\n<div class="msg-user" markdown="1">\n\n### 👤 你\n\n{img_html}\n\n{safe_content}\n</div>\n')
         elif role == "think":
-            # 2026-05-16 fix: 对content进行HTML转义
+            # 对content进行HTML转义，保护代码段
             safe_content = _transform_non_code_segments(content.strip(), html_mod.escape)
-            parts.append(f'{ts_display}\n\n<div class="msg-think" markdown="1">\n\n### 💭 思考过程\n\n{safe_content}\n</div>\n\n---\n')
+            # 【注意】tkinterweb 不支持 HTML5 details/summary，所以使用 div+CSS 方案
+            # 预渲染 think 内容为 HTML，避免 md_in_html 在 div 内不可靠处理
+            think_html = markdown.markdown(safe_content, extensions=["fenced_code", "tables", "codehilite"])
+            parts.append(f'{ts_display}\n\n<div class="msg-think">\n\n<h3>💭 思考过程</h3>\n\n{think_html}\n</div>\n\n---\n')
         elif role == "ai":
             # 2026-05-16 fix: 对content进行HTML转义
             safe_content = _transform_non_code_segments(content.strip(), html_mod.escape)

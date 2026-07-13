@@ -53,6 +53,9 @@ web = [
     "uvicorn>=0.27.0",
     "python-multipart>=0.0.7",
 ]
+gui2 = [
+    "PySide6>=6.5.0",
+]
 mini = [
     "starlette>=0.37.0",
     "uvicorn>=0.27.0",

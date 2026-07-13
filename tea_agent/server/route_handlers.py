@@ -16,7 +16,7 @@ import time
 import uuid
 from pathlib import Path
 
-from starlette.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from tea_agent.toolkit.toolkit_export_last_pdf import export_topic_pdf
 
@@ -970,7 +970,16 @@ async def handle_web_root(request):
     static_dir = Path(__file__).parent / "static"
     index_path = static_dir / "index.html"
     if index_path.exists():
-        return FileResponse(str(index_path), media_type="text/html")
+        content = index_path.read_bytes()
+        return Response(
+            content=content,
+            media_type="text/html",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
     return HTMLResponse("<h1>Tea Agent Server</h1><p>Web UI not found. Visit <a href='/docs'>/docs</a> for API.</p>")
 
 

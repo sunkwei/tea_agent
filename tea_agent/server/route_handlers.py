@@ -971,19 +971,23 @@ async def handle_web_upload_config(request):
 
 async def handle_web_root(request):
     """GET / - serve Web UI index.html."""
-    static_dir = Path(__file__).parent / "static"
-    index_path = static_dir / "index.html"
-    if index_path.exists():
-        content = index_path.read_bytes()
-        return Response(
-            content=content,
-            media_type="text/html",
-            headers={
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "Pragma": "no-cache",
-                "Expires": "0",
-            },
-        )
+    # Try gui2/frontend/index.html first (primary source), fall back to server/static/index.html
+    candidates = [
+        Path(__file__).parent.parent / "gui2" / "frontend" / "index.html",
+        Path(__file__).parent / "static" / "index.html",
+    ]
+    for index_path in candidates:
+        if index_path.exists():
+            content = index_path.read_bytes()
+            return Response(
+                content=content,
+                media_type="text/html",
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
     return HTMLResponse("<h1>Tea Agent Server</h1><p>Web UI not found. Visit <a href='/docs'>/docs</a> for API.</p>")
 
 

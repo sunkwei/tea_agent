@@ -914,10 +914,20 @@ body {
 <div id="modal-export" class="modal"><div class="modal-box">
   <h3>📄 导出 PDF</h3>
   <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px">导出当前话题为 PDF 文件</p>
+  <div class="modal-section-title">📋 导出范围</div>
+  <div class="form-inline">
+    <label><input type="radio" name="export-mode" value="latest" checked onchange="onExportModeChange()"> 仅最新会话</label>
+    <label><input type="radio" name="export-mode" value="full_topic" onchange="onExportModeChange()"> 完整话题</label>
+  </div>
+  <div class="modal-section-title">🔍 内容过滤</div>
+  <div class="form-inline">
+    <label><input type="radio" name="export-filter" value="final" checked> 仅含最终消息</label>
+    <label><input type="radio" name="export-filter" value="full"> 含推理过程</label>
+  </div>
   <div id="export-result"></div>
   <div class="modal-actions">
     <button class="btn btn-g" onclick="closeModal('modal-export')">取消</button>
-    <button class="btn btn-p" onclick="doExport()">导出</button>
+    <button class="btn btn-p" onclick="doExport()">📥 导出</button>
   </div>
 </div></div>
 
@@ -2283,7 +2293,7 @@ window.switchConfig = async function(path) {
 };
 
 // ══════════════════════════════════════════════════
-//  EXPORT
+//  EXPORT PDF
 // ══════════════════════════════════════════════════
 
 window.showExportModal = function() {
@@ -2291,25 +2301,76 @@ window.showExportModal = function() {
   $('export-result').innerHTML = '';
 };
 
+window.onExportModeChange = function() {
+  // Clear any previous result when mode changes
+  $('export-result').innerHTML = '';
+};
+
 window.doExport = async function() {
   if (!currentTopicId) {
-    $('export-result').innerHTML = '<div style="color:var(--red);font-size:13px">请先选择一个话题</div>';
+    $('export-result').innerHTML = '<div style="color:var(--red);font-size:13px">⚠️ 请先选择一个话题</div>';
     return;
   }
   const el = $('export-result');
-  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">导出中...</div>';
+  
+  // Read selected mode
+  const modeRadio = document.querySelector('input[name="export-mode"]:checked');
+  const mode = modeRadio ? modeRadio.value : 'latest';
+  
+  // Read selected filter
+  const filterRadio = document.querySelector('input[name="export-filter"]:checked');
+  const filterMode = filterRadio ? filterRadio.value : 'final';
+  
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">⏳ 导出中...</div>';
+  
   try {
-    const r = await fetch('/v1/export/pdf/' + encodeURIComponent(currentTopicId), {
-      method: 'GET',
-    });
-    const d = await r.json();
-    if (d.success) {
-      el.innerHTML = '<div style="color:var(--green);font-size:13px">✓ 已导出: ' + esc(d.path || '') + '</div>';
-    } else {
-      el.innerHTML = '<div style="color:var(--red);font-size:13px">' + esc(d.error || '导出失败') + '</div>';
+    // Build URL with query params
+    const url = '/v1/export/pdf/' + encodeURIComponent(currentTopicId)
+      + '?mode=' + encodeURIComponent(mode)
+      + '&filter=' + encodeURIComponent(filterMode);
+    
+    const r = await fetch(url);
+    
+    // Check Content-Type to determine if it's a PDF or error JSON
+    const contentType = r.headers.get('content-type') || '';
+    
+    if (contentType.includes('application/json')) {
+      // Error response
+      const d = await r.json();
+      el.innerHTML = '<div style="color:var(--red);font-size:13px">❌ ' + esc(d.error || '导出失败') + '</div>';
+      return;
     }
+    
+    if (!r.ok) {
+      el.innerHTML = '<div style="color:var(--red);font-size:13px">❌ HTTP ' + r.status + '</div>';
+      return;
+    }
+    
+    // Successful PDF download — get blob and trigger download
+    const blob = await r.blob();
+    const urlObj = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = urlObj;
+    
+    // Try to get filename from Content-Disposition
+    const disposition = r.headers.get('content-disposition') || '';
+    let filename = 'export.pdf';
+    const filenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)/);
+    if (filenameMatch) {
+      filename = decodeURIComponent(filenameMatch[1]);
+    } else {
+      const asciiMatch = disposition.match(/filename="([^"]+)"/);
+      if (asciiMatch) filename = asciiMatch[1];
+    }
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(urlObj);
+    
+    el.innerHTML = '<div style="color:var(--green);font-size:13px">✅ 已下载: ' + esc(filename) + '</div>';
   } catch(e) {
-    el.innerHTML = '<div style="color:var(--red);font-size:13px">Error: ' + esc(e.message) + '</div>';
+    el.innerHTML = '<div style="color:var(--red);font-size:13px">❌ Error: ' + esc(e.message) + '</div>';
   }
 };
 

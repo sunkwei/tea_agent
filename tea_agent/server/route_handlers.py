@@ -253,6 +253,7 @@ async def handle_export_pdf(request):
 
     Query params:
         mode: 'latest' (default) = last conversation only, 'full_topic' = all conversations.
+        filter: 'final' (default) = user + AI final only, 'full' = with reasoning.
     """
     topic_id = request.path_params.get("topic_id", "")
     if not topic_id:
@@ -260,10 +261,13 @@ async def handle_export_pdf(request):
     mode = request.query_params.get("mode", "latest")
     if mode not in ("latest", "full_topic"):
         mode = "latest"
+    filter_mode = request.query_params.get("filter", "final")
+    if filter_mode not in ("final", "full"):
+        filter_mode = "final"
     try:
         server = get_server()
         db_path = server._get_storage().db_path
-        result = await asyncio.to_thread(export_topic_pdf, topic_id, None, db_path, mode=mode)
+        result = await asyncio.to_thread(export_topic_pdf, topic_id, None, db_path, mode=mode, filter_mode=filter_mode)
         # Get topic title for filename
         import sqlite3
         conn = sqlite3.connect(db_path)

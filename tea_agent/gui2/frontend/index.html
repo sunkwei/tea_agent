@@ -2059,8 +2059,11 @@ async function loadConfigForm() {
           modelDisplay = mainFormatted + ' / ' + cheapFormatted;
         }
         
-        // Display: "filename — model1 / model2" or just "filename — model1"
-        const display = c.filename + ' — ' + modelDisplay;
+        // Remove file extension from filename
+        const configName = (c.filename || '').replace(/\.(yaml|yml)$/i, '');
+        
+        // Display: "config_name — Model Name" or "config_name — Model1 / Model2"
+        const display = configName + ' — ' + modelDisplay;
         sel.innerHTML += '<option value="' + esc(c.path) + '"' + selected + '>' + esc(display) + '</option>';
       });
     }
@@ -2244,11 +2247,14 @@ async function refreshConfigDropdown() {
         modelDisplay = mainFormatted + ' / ' + cheapFormatted;
       }
       
-      // Display: "filename — model1 / model2" or just "filename — model1"
-      const display = c.filename + ' — ' + modelDisplay;
+      // Remove file extension from filename
+      const configName = (c.filename || '').replace(/\.(yaml|yml)$/i, '');
+      
+      // Display: "config_name — Model Name" or "config_name — Model1 / Model2"
+      const display = configName + ' — ' + modelDisplay;
       sel.innerHTML += '<option value="' + esc(c.path) + '"' + selected + '>' + esc(display) + '</option>';
     });
-  } catch(e) {}
+  } catch(e) { console.error('refreshConfigDropdown error:', e); }
 }
 
 window.switchConfig = async function(path) {

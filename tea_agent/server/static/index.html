@@ -1981,9 +1981,21 @@ async function loadConfigForm() {
       sel.innerHTML = '<option value="">-- 请选择 --</option>';
       const activePath = d2.active_config_path || '';
       configs.forEach(function(c) {
-        const model = c.main_model ? (c.main_model.model_name || '') : '';
+        const mainModel = c.main_model ? (c.main_model.model_name || '') : '';
+        const cheapModel = c.cheap_model ? (c.cheap_model.model_name || '') : '';
         const selected = c.path === activePath ? ' selected' : '';
-        sel.innerHTML += '<option value="' + esc(c.path) + '"' + selected + '>' + esc(c.filename) + ' — ' + esc(model) + '</option>';
+
+        const mainFormatted = _formatModelName(mainModel);
+        const cheapFormatted = _formatModelName(cheapModel);
+
+        let modelDisplay = mainFormatted || '?';
+        if (cheapFormatted && cheapFormatted !== mainFormatted) {
+          modelDisplay = mainFormatted + ' / ' + cheapFormatted;
+        }
+
+        const configName = (c.filename || '').replace(/\.(yaml|yml)$/i, '');
+        const display = configName + ' — ' + modelDisplay;
+        sel.innerHTML += '<option value="' + esc(c.path) + '"' + selected + '>' + esc(display) + '</option>';
       });
     }
   } catch(e) {
@@ -2142,6 +2154,66 @@ window.saveNewConfig = async function() {
 };
 
 // ── Config Dropdown in Toolbar ──
+function _formatModelName(modelName) {
+  if (!modelName) return '';
+
+  const specialMappings = {
+    'gpt-4': 'GPT-4',
+    'gpt-4-turbo': 'GPT-4 Turbo',
+    'gpt-4o': 'GPT-4o',
+    'gpt-4o-mini': 'GPT-4o Mini',
+    'gpt-3.5-turbo': 'GPT-3.5 Turbo',
+    'claude-3-opus': 'Claude 3 Opus',
+    'claude-3-sonnet': 'Claude 3 Sonnet',
+    'claude-3-haiku': 'Claude 3 Haiku',
+    'claude-3.5-sonnet': 'Claude 3.5 Sonnet',
+    'deepseek-chat': 'DeepSeek Chat',
+    'deepseek-coder': 'DeepSeek Coder',
+    'deepseek-r1': 'DeepSeek R1',
+    'deepseek-v2': 'DeepSeek V2',
+    'deepseek-v2.5': 'DeepSeek V2.5',
+    'deepseek-v3': 'DeepSeek V3',
+    'deepseek-v4': 'DeepSeek V4',
+    'deepseek-v4-flash': 'DeepSeek V4 Flash',
+    'deepseek-v4-pro': 'DeepSeek V4 Pro',
+    'qwen-turbo': 'Qwen Turbo',
+    'qwen-plus': 'Qwen Plus',
+    'qwen-max': 'Qwen Max',
+    'qwen-vl-plus': 'Qwen VL Plus',
+    'qwen-vl-max': 'Qwen VL Max',
+    'glm-4': 'GLM-4',
+    'glm-3-turbo': 'GLM-3 Turbo',
+    'gemini-1.5-pro': 'Gemini 1.5 Pro',
+    'gemini-1.5-flash': 'Gemini 1.5 Flash',
+    'gemini-2.0-flash': 'Gemini 2.0 Flash',
+    'spark': 'Spark',
+    'spark-max': 'Spark Max',
+    'spark-lite': 'Spark Lite',
+    'ernie-bot': 'Ernie Bot',
+    'ernie-bot-turbo': 'Ernie Bot Turbo',
+  };
+
+  const lowerName = modelName.toLowerCase();
+  if (specialMappings[lowerName]) {
+    return specialMappings[lowerName];
+  }
+
+  // General conversion: replace hyphens and underscores with spaces, capitalize each word
+  const words = modelName.replace(/[-_]/g, ' ').split(/\s+/);
+  const formattedWords = words.map(function(word) {
+    const lowerWord = word.toLowerCase();
+    if (['gpt', 'api', 'ai', 'ml', 'llm', 'vl', 'r1', 'v2', 'v3', 'v4', 'v5'].includes(lowerWord)) {
+      return word.toUpperCase();
+    }
+    if (/^\d+$/.test(word)) {
+      return word;
+    }
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+
+  return formattedWords.join(' ');
+}
+
 async function refreshConfigDropdown() {
   try {
     const r = await fetch('/api/configs');
@@ -2152,9 +2224,21 @@ async function refreshConfigDropdown() {
     const activePath = d.active_config_path || '';
     sel.innerHTML = '<option value="">⚡ 切换配置</option>';
     configs.forEach(function(c) {
-      const model = c.main_model ? (c.main_model.model_name || '') : '';
+      const mainModel = c.main_model ? (c.main_model.model_name || '') : '';
+      const cheapModel = c.cheap_model ? (c.cheap_model.model_name || '') : '';
       const selected = c.path === activePath ? ' selected' : '';
-      sel.innerHTML += '<option value="' + esc(c.path) + '"' + selected + '>' + esc(c.filename) + '</option>';
+
+      const mainFormatted = _formatModelName(mainModel);
+      const cheapFormatted = _formatModelName(cheapModel);
+
+      let modelDisplay = mainFormatted || '?';
+      if (cheapFormatted && cheapFormatted !== mainFormatted) {
+        modelDisplay = mainFormatted + ' / ' + cheapFormatted;
+      }
+
+      const configName = (c.filename || '').replace(/\.(yaml|yml)$/i, '');
+      const display = configName + ' — ' + modelDisplay;
+      sel.innerHTML += '<option value="' + esc(c.path) + '"' + selected + '>' + esc(display) + '</option>';
     });
   } catch(e) {}
 }

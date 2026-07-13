@@ -1,7 +1,7 @@
 """
 Tea Agent GUI2 — 本地 Web 服务 + 浏览器界面。
 
-新一代 Web 桌面界面，替代老旧的 PySide6+QML 桌面界面。
+新一代纯 Web 桌面界面。
 采用 tea_agent.server 统一后端，通过 SSE (Server-Sent Events)
 实现实时流式对话，交互流畅、零依赖。
 
@@ -24,8 +24,9 @@ Tea Agent GUI2 — 本地 Web 服务 + 浏览器界面。
 架构:
     gui2/
     ├── __init__.py          ← 入口：启动 Starlette 服务 + 打开浏览器
-    ├── _backend.py          ← [废弃] 旧 PySide6+QML 桥接（保留参考）
-    └── qml/                 ← [废弃] 旧 QML 界面文件（保留参考）
+    ├── __main__.py          ← python -m tea_agent.gui2 入口
+    ├── server.py            ← Bottle-based 静态文件 + API 代理服务
+    └── frontend/            ← 前端静态文件（HTML/JS/CSS）
 
     后端路由由 tea_agent.server 提供：
     ├── server.py            ← Starlette 应用 + SSE 流式 API

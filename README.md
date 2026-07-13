@@ -98,7 +98,7 @@ build_mini.py 工作流程
   │
   ├─ 2. 排除的包和文件:
   │     ├─ _gui/     — Tkinter 桌面 GUI
-  │     ├─ gui2/     — pywebview 桌面 GUI
+  │     ├─ gui2/     — Web 桌面 GUI（Bottle + Starlette）
   │     ├─ protocol/ — ACP 协议
   │     ├─ lsp/      — 代码智能
   │     ├─ sdk/      — Python SDK
@@ -447,14 +447,19 @@ python -m tea_agent.gui2 --debug            # 调试模式
 
 **架构：**
 ```
-gui2/__init__.py          入口：启动 Starlette 服务 + 打开浏览器
-tea_agent.server/         后端路由统一复用
+gui2/
+├── __init__.py          入口：启动 Starlette 服务 + 打开浏览器
+├── __main__.py          python -m tea_agent.gui2 入口
+├── server.py            Bottle-based 静态文件 + API 代理服务
+└── frontend/            前端静态文件（HTML/JS/CSS）
+
+后端路由由 tea_agent.server 提供：
   ├── server.py           Starlette 应用 + SSE 流式 API
   ├── route_handlers.py   所有 API 路由
   └── static/             前端静态文件（HTML/JS/CSS）
 ```
 
-> 💡 gui2 最初基于 PySide6+QML 构建（遗留 `_backend.py` / `qml/` 目录），现已升级为纯 Web 架构，零原生依赖，安装即用。
+> 💡 gui2 为纯 Web 架构，零原生依赖，安装即用。
 
 ---
 
@@ -1129,7 +1134,7 @@ Dispatcher.dispatch(goal)
 ```
 tea_agent/
 ├── gui.py                 # GUI 桌面入口（Tkinter）
-├── gui2/                  # Web 桌面界面（Starlette + 浏览器）
+├── gui2/                  # Web 桌面界面（Bottle + Starlette + 浏览器）
 ├── server/                # REST API + Web V2 界面（Starlette + SSE）
 │   ├── server.py          # Starlette 路由 + SSE
 │   ├── route_handlers.py  # API 路由处理

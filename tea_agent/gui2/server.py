@@ -78,7 +78,11 @@ def create_gui_server(port: int = 0):
     @app.route('/')
     @app.route('/index.html')
     def index():
-        return _bottle.static_file('index.html', root=str(static_dir))
+        resp = _bottle.static_file('index.html', root=str(static_dir))
+        resp.set_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        resp.set_header('Pragma', 'no-cache')
+        resp.set_header('Expires', '0')
+        return resp
 
     @app.route('/static/<filepath:path>')
     def static(filepath):

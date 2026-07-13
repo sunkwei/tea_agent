@@ -30,6 +30,18 @@ class UIBuilder:
     def build(self):
         """创建界面 — 从 gui.py _create_ui 提取"""
         gui = self.gui
+        
+        # 配置 PanedWindow sash 样式：增加宽度和视觉反馈
+        style = ttk.Style()
+        # 配置 sash 宽度为 8 像素，背景色为浅灰色，悬停时变深，鼠标光标为左右箭头
+        style.configure("TPanedwindow", 
+                       sashthickness=8, 
+                       sashrelief="raised", 
+                       sashcursor="sb_h_double_arrow",
+                       sashwidth=8)
+        style.map("TPanedwindow", 
+                  background=[("active", "#909090"), ("!active", "#d0d0d0")])
+        
         main_split = ttk.PanedWindow(gui.root, orient=tk.HORIZONTAL)
         main_split.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
 

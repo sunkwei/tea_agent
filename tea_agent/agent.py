@@ -1,22 +1,9 @@
-"""
-统一 Agent 类 — 合并 TeaAgent + AgentCore
+"""统一 Agent 类 — 合并 TeaAgent + AgentCore
 
-支持三种模式（差异定义见 _MODE_BEHAVIORS）：
+三种模式：
 - lightweight: 无存储、无后台线程，适合孤立任务
-- full:        有存储、有后台线程、调用 post-chat 流水线，适合 CLI/GUI
-- lite:        使用 LiteSession 单轮、便宜模型，适合子 Agent
-
-用法:
-    # 轻量模式（原 TeaAgent）
-    with Agent(mode='lightweight') as agent:
-        rounds = agent.chat("你好")
-
-    # 完整模式（原 AgentCore）
-    agent = Agent(mode='full')
-    agent.chat("你好", topic_id="xxx")
-
-    # 向后兼容
-    from tea_agent import TeaAgent  # 现在是 Agent 的别名
+- full:        有存储/后台/流水线，适合 CLI/GUI
+- lite:        LiteSession 单轮，适合子 Agent
 """
 
 import logging
@@ -31,8 +18,6 @@ import tea_agent.session_ref as _sref
 from tea_agent import tlk
 from tea_agent.config import load_config
 from tea_agent.litesession import LiteSession
-
-# ── 顶层 import（无循环依赖；所有子模块已审计，不反向导入 agent.py）──
 from tea_agent.logging_setup import setup_logging
 from tea_agent.onlinesession import OnlineToolSession
 from tea_agent.store import Storage
@@ -41,29 +26,20 @@ from .agent_background import start_scheduler, start_self_evolve_thread
 from .agent_pipeline import do_async_summaries
 from .memory import PRIORITY_MEDIUM
 
-# 惰性导入：避免 mini 构建缺失 evaluation 时崩溃
-# 实际使用时在方法内动态导入
-from .skills import SkillCrystallizer, SkillRegistry
-
 logger = logging.getLogger("agent")
 
 
-# ────────────────────────────────────────────────────────────═══
-#  Mode 行为定义 — 所有 mode 差异的"单一真相"
-#  AI 修改 mode 行为时只读这一张表，无需 grep 全文件
-# ────────────────────────────────────────────────────────────═══
-
 @dataclass(frozen=True)
 class _ModeBehavior:
-    """集中描述每种 mode 启用的功能。AI 想回答"lite 跟 full 有什么区别"只看这里。"""
+    """每种 mode 启用的功能清单。"""
 
     name: str
-    use_storage: bool            # 构造 Storage(self._db)
-    use_background_services: bool  # self-evolve 线程 + scheduler
-    session_class: str           # "OnlineToolSession" 或 "LiteSession"
-    track_topic: bool            # chat 时是否把 topic_id 传给 session / 后处理
-    call_post_pipeline: bool     # chat 后是否调用 _post_chat_pipeline
-    load_topic_history: bool     # load_topic_history() 是否可用
+    use_storage: bool
+    use_background_services: bool
+    session_class: str
+    track_topic: bool
+    call_post_pipeline: bool
+    load_topic_history: bool
 
 
 _MODE_BEHAVIORS: dict[str, _ModeBehavior] = {
@@ -99,16 +75,8 @@ _MODE_BEHAVIORS: dict[str, _ModeBehavior] = {
 _VALID_MODES = frozenset(_MODE_BEHAVIORS.keys())
 
 
-# ────────────────────────────────────────────────────────────═══
-#  Agent 主类
-# ────────────────────────────────────────────────────────────═══
-
 class Agent:
-    """统一 Agent 类 — 支持 lightweight/full/lite 三种模式。
-
-    行为差异由 self.behavior (=_MODE_BEHAVIORS[mode]) 集中描述，
-    代码里不再出现字符串 `if self.mode == "full"` 散落判断。
-    """
+    """统一 Agent — lightweight/full/lite 三种模式。"""
 
     def __init__(
         self,
@@ -123,19 +91,6 @@ class Agent:
         debug: bool = False,
         use_cheap_model: bool = False,
     ):
-        """
-        Args:
-            mode: 'lightweight'/'full'/'lite'
-            config_path: 配置文件完整路径
-            config_fname: 配置文件名（在 ~/.tea_agent/ 下查找）
-            callback: 中间轮次回调
-            use_tools: 是否启用工具调用
-            enable_thinking: 是否启用思考链
-            disable_summary: 禁用历史压缩
-            no_stream_chunk: 禁用流式分块
-            debug: 调试模式
-            use_cheap_model: lite 模式下是否使用便宜模型
-        """
         if mode not in _VALID_MODES:
             raise ValueError(f"mode 必须是 {sorted(_VALID_MODES)}，收到: {mode}")
 
@@ -158,21 +113,12 @@ class Agent:
         self._db = None
         self._pending_cheap_tokens = {}
 
-        # ── 配置 ──
         self._config_path = config_path
         self._cfg = self._load_config(config_path)
-
-        # ── Toolkit ──
         self._init_toolkit()
-
-        # ── Storage（仅 use_storage=True 模式）──
         if self.behavior.use_storage:
             self._init_storage()
-
-        # ── 会话 ──
         self._init_session()
-
-        # ── 后台服务（仅 use_background_services=True 模式）──
         if self.behavior.use_background_services:
             self._start_background_services()
 
@@ -183,14 +129,10 @@ class Agent:
         return f"Mode: {self.mode} | Model: {main_m.model_name} | Tools: {'ON' if tools_on else 'OFF'}"
 
     def _load_topic_history_into_session(self, topic_id: str):
-        """向后兼容：桥接到 load_topic_history。"""
         return self.load_topic_history(topic_id)
 
-    # ────────────────────────────────────────────═══
-    # 配置加载
-    # ────────────────────────────────────────────═══
     def _load_config(self, config_path: str | None):
-        """加载并验证配置。优先级: config_path > config_fname > 默认路径。"""
+        """优先级: config_path > config_fname > 默认路径。"""
         if config_path:
             if not os.path.isfile(config_path):
                 raise FileNotFoundError(f"配置文件不存在: {config_path}")
@@ -229,9 +171,6 @@ class Agent:
         logger.info(f"配置加载: {actual_path} | 模型: {main_m.model_name}")
         return cfg
 
-    # ────────────────────────────────────────────═══
-    # Toolkit 初始化
-    # ────────────────────────────────────────────═══
     def _init_toolkit(self):
         """初始化 Toolkit 和 KB 目录。"""
         cfg = self._cfg
@@ -248,9 +187,6 @@ class Agent:
             f"toolkit_dir: {tool_dir} | kb_dir: {kb_dir}"
         )
 
-    # ────────────────────────────────────────────═══
-    # Storage 初始化
-    # ────────────────────────────────────────────═══
     def _init_storage(self):
         """初始化 Storage 数据库。"""
         cfg = self._cfg
@@ -258,9 +194,6 @@ class Agent:
         self._db = Storage(db_path=str(db_path))
         logger.info(f"Storage 初始化 | db: {db_path}")
 
-    # ────────────────────────────────────────────═══
-    # 会话初始化（按 behavior.session_class 派发）
-    # ────────────────────────────────────────────═══
     def _init_session(self):
         """根据 behavior.session_class 选择 LiteSession 或 OnlineToolSession。"""
         if self.behavior.session_class == "LiteSession":
@@ -273,7 +206,7 @@ class Agent:
 
         tools_on = self._use_tools or self.behavior.use_background_services
         # lightweight 模式可显式关闭工具
-        if (self.mode == "lightweight" and not self._use_tools):
+        if self.mode == "lightweight" and not self._use_tools:
             self._sess.tools = []
 
         logger.info(
@@ -299,8 +232,12 @@ class Agent:
             model_url = cast(str, main_m.api_url)
             model_name = cast(str, main_m.model_name)
 
-        _options = getattr(main_m, 'options', {}) or {}
-        supports_reasoning = _options.get('supports_reasoning', True) if isinstance(_options, dict) else True
+        _options = getattr(main_m, "options", {}) or {}
+        supports_reasoning = (
+            _options.get("supports_reasoning", True)
+            if isinstance(_options, dict)
+            else True
+        )
 
         return LiteSession(
             toolkit=self._toolkit,
@@ -318,9 +255,17 @@ class Agent:
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
 
-        _options = getattr(main_m, 'options', {}) or {}
-        supports_vision = _options.get('supports_vision', False) if isinstance(_options, dict) else False
-        supports_reasoning = _options.get('supports_reasoning', True) if isinstance(_options, dict) else True
+        _options = getattr(main_m, "options", {}) or {}
+        supports_vision = (
+            _options.get("supports_vision", False)
+            if isinstance(_options, dict)
+            else False
+        )
+        supports_reasoning = (
+            _options.get("supports_reasoning", True)
+            if isinstance(_options, dict)
+            else True
+        )
 
         return OnlineToolSession(
             toolkit=self._toolkit,
@@ -346,20 +291,16 @@ class Agent:
             no_stream_chunk=self.no_stream_chunk,
         )
 
-    # ────────────────────────────────────────────═══
-    # 后台服务
-    # ────────────────────────────────────────────═══
     def _start_background_services(self):
         """启动自进化引擎和定时任务调度器。"""
         start_self_evolve_thread(self._toolkit.tool_dir)
         start_scheduler()
 
-    # ────────────────────────────────────────────═══
-    # 工具管理
-    # ────────────────────────────────────────────═══
     def toolkit_save(self, name: str, meta: dict, pycode: str) -> bool:
         """添加/更新工具。"""
-        result = self._toolkit.call_tool("toolkit_save", name=name, meta=meta, pycode=pycode)
+        result = self._toolkit.call_tool(
+            "toolkit_save", name=name, meta=meta, pycode=pycode
+        )
         return bool(result and (isinstance(result, dict) and result.get("ok")))
 
     def toolkit_reload(self) -> dict:
@@ -369,9 +310,6 @@ class Agent:
             self._sess._build_tools()
         return result or {"ok": False}
 
-    # ────────────────────────────────────────────═══
-    # 回调辅助
-    # ────────────────────────────────────────────═══
     def _notify(self, data: dict):
         """安全调用用户回调。"""
         if self._callback:
@@ -380,25 +318,20 @@ class Agent:
             except Exception as e:
                 logger.warning(f"回调执行异常: {e}")
 
-    # ────────────────────────────────────────────═══
-    # 对话接口
-    # ────────────────────────────────────────────═══
     def chat(
         self,
         user_input: str,
         topic_id: str = "",
         on_status: Callable | None = None,
     ) -> list[dict] | dict:
-        """发送用户消息，阻塞直到 AI 返回完整回复。
+        """发送用户消息，返回回复。
 
         Args:
-            user_input: 用户输入文本
-            topic_id: 主题 ID（track_topic=True 才生效，否则忽略）
+            user_input: 用户输入
+            topic_id: 主题 ID（track_topic=True 才生效）
             on_status: 状态回调
 
-        Returns:
-            非 lite: 本轮对话的所有消息列表
-            lite:    {user, thinking, assistant, tool_calls, error}
+        Returns: 非 lite 返回消息列表，lite 返回 {user,thinking,assistant,tool_calls,error}
         """
         if self._generating:
             raise RuntimeError("正在生成中，请等待当前对话完成")
@@ -407,9 +340,11 @@ class Agent:
             self._generating = True
             try:
                 if self.behavior.session_class == "LiteSession":
+
                     def stream_cb(text: str):
                         if self._callback:
                             self._callback({"type": "chunk", "content": text})
+
                     return self._sess.chat(user_input, callback=stream_cb)
 
                 return self._chat_impl(user_input, topic_id, on_status)
@@ -436,7 +371,9 @@ class Agent:
                 extra = getattr(self._sess.context, "extra_iterations_on_continue", 10)
                 self._sess._extra_iterations += extra
                 self._sess._max_iter_wait.set()
-                self._notify({"type": "status", "text": f"已达最大轮次，自动续命 {extra} 轮..."})
+                self._notify(
+                    {"type": "status", "text": f"已达最大轮次，自动续命 {extra} 轮..."}
+                )
             elif on_status:
                 on_status(status_msg)
             else:
@@ -467,8 +404,9 @@ class Agent:
     # ────────────────────────────────────────────═══
     # 后处理流水线
     # ────────────────────────────────────────────═══
-    def _post_chat_pipeline(self, ai_msg: str, used_tools: bool,
-                            user_msg, topic_id: str) -> None:
+    def _post_chat_pipeline(
+        self, ai_msg: str, used_tools: bool, user_msg, topic_id: str
+    ) -> None:
         """AI 回复后流水线：入库 → Token 统计 → L2 推送 → 条件摘要。"""
         if not self._db:
             return
@@ -476,8 +414,10 @@ class Agent:
         conv_id = self._db.save_msg(topic_id, user_msg, "", False)
         rounds = self._sess._rounds_collector
         self._db.update_msg_rounds(
-            conversation_id=conv_id, ai_msg=ai_msg,
-            is_func_calling=used_tools, rounds=rounds if rounds else None,
+            conversation_id=conv_id,
+            ai_msg=ai_msg,
+            is_func_calling=used_tools,
+            rounds=rounds if rounds else None,
         )
 
         usage = self._sess._last_usage
@@ -494,31 +434,42 @@ class Agent:
                 kwargs["cheap_completion_tokens"] = cheap_usage["completion_tokens"]
             self._db.add_topic_tokens(topic_id, **kwargs)
 
-        user_text = user_msg if isinstance(user_msg, str) else (
-            user_msg.get("text", "") if isinstance(user_msg, dict) else str(user_msg)
+        user_text = (
+            user_msg
+            if isinstance(user_msg, str)
+            else (
+                user_msg.get("text", "")
+                if isinstance(user_msg, dict)
+                else str(user_msg)
+            )
         )
 
         l2_count, overflow_items, should_summarize = self._db.push_to_level2(
-            topic_id, user_text, ai_msg,
+            topic_id,
+            user_text,
+            ai_msg,
             rounds=rounds if rounds else None,
         )
-        logger.debug(f"L2 push: count={l2_count}, overflow={len(overflow_items)}, "
-                     f"summarize={should_summarize}")
+        logger.debug(
+            f"L2 push: count={l2_count}, overflow={len(overflow_items)}, "
+            f"summarize={should_summarize}"
+        )
 
         threading.Thread(
             target=self._do_async_summaries,
             args=(topic_id, overflow_items, should_summarize),
-            daemon=True
+            daemon=True,
         ).start()
 
         threading.Thread(
             target=self._do_task_evaluation,
             args=(user_text, ai_msg, used_tools, rounds, usage),
-            daemon=True
+            daemon=True,
         ).start()
 
-    def _do_async_summaries(self, topic_id: str, overflow_items: list = None,
-                            should_summarize: bool = False):
+    def _do_async_summaries(
+        self, topic_id: str, overflow_items: list = None, should_summarize: bool = False
+    ):
         """后台线程：执行标题摘要 + 条件 L2→L3 摘要。"""
         do_async_summaries(self, topic_id, overflow_items, should_summarize)
 
@@ -541,6 +492,7 @@ class Agent:
                             tools_used.append(func_name)
 
             from .evaluation import TaskEvaluator
+
             evaluator = TaskEvaluator()
             token_cost = usage.get("total_tokens", 0) if usage else 0
 
@@ -602,12 +554,16 @@ class Agent:
             tool_chain = self._db.get_tool_chain_summary(topic_id)
             old_summary = self._db.get_topic_summary(topic_id) or ""
             self._sess.load_history(
-                all_light, summary=old_summary,
-                level2=level2, semantic_summary=semantic,
+                all_light,
+                summary=old_summary,
+                level2=level2,
+                semantic_summary=semantic,
                 tool_chain_summary=tool_chain,
             )
         else:
-            self._sess.messages = [{"role": "system", "content": self._sess.system_prompt}]
+            self._sess.messages = [
+                {"role": "system", "content": self._sess.system_prompt}
+            ]
             self._sess._history_summary = ""
             self._sess._semantic_summary = ""
             self._sess._tool_chain_summary = ""
@@ -636,25 +592,32 @@ class Agent:
     # ────────────────────────────────────────────═══
 
     @property
-    def config(self): return self._cfg
+    def config(self):
+        return self._cfg
 
     @property
-    def toolkit(self): return self._toolkit
+    def toolkit(self):
+        return self._toolkit
 
     @property
-    def sess(self): return self._sess
+    def sess(self):
+        return self._sess
+
     @sess.setter
-    def sess(self, v): self._sess = v
+    def sess(self, v):
+        self._sess = v
 
     @property
-    def session(self): return self._sess
+    def session(self):
+        return self._sess
 
     @property
-    def db(self): return self._db
+    def db(self):
+        return self._db
 
     @property
     def current_topic_id(self) -> str:
-        return getattr(self, '_current_topic_id', '')
+        return getattr(self, "_current_topic_id", "")
 
     @current_topic_id.setter
     def current_topic_id(self, value: str):
@@ -664,6 +627,7 @@ class Agent:
 # ────────────────────────────────────────────────────────────═══
 # 向后兼容别名
 # ────────────────────────────────────────────────────────────═══
+
 
 def TeaAgent(
     config_path: str | None = None,

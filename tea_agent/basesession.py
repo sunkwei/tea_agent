@@ -1,7 +1,4 @@
-"""
-会话模块 - 基类
-提供统一的聊天会话接口抽象基类
-"""
+"""会话模块 - 基类，提供聊天会话接口抽象基类。"""
 
 import logging
 import os
@@ -13,24 +10,7 @@ logger = logging.getLogger("basesession")
 
 
 def relaxed_json_loads(raw: str):
-    """容错 JSON 解析：处理 LLM 常见的无效 JSON 输出。
-
-    自动修复的常见问题：
-    - 单引号 → 双引号
-    - 尾逗号（dict/array）
-    - Python 风格 True/False/None → JSON true/false/null
-    - 未引号包裹的 key（如 {a: 1} → {"a": 1}）
-    - 未转义路径反斜杠（如 "C:\\Users" → "C:\\\\Users"）
-    - 行内注释 // 和 /* */
-    - 控制字符（\\x00-\\x1f 除 \\t\\n\\r 外自动移除）
-    - 被截断的 JSON（自动补全缺失括号/引号）
-
-    Returns:
-        解析后的 Python 对象
-
-    Raises:
-        json.JSONDecodeError: 所有修复尝试均失败
-    """
+    """容错 JSON 解析：处理 LLM 常见无效输出（单引号/尾逗号/Python布尔/反斜杠/注释/控制字符/截断）。"""
     import json
     import re
 
@@ -39,36 +19,26 @@ def relaxed_json_loads(raw: str):
 
     s = raw.strip()
 
-    # Step 1: 标准解析
     try:
         return json.loads(s)
     except json.JSONDecodeError:
         pass
 
-    # Step 1.5: 移除非法控制字符（保留 \t \n \r）
-    s = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', s)
-
-    # Step 2: 替换 Python 布尔值/None
-    s = re.sub(r'\bTrue\b', 'true', s)
-    s = re.sub(r'\bFalse\b', 'false', s)
-    s = re.sub(r'\bNone\b', 'null', s)
-
-    # Step 3: 去掉 // 和 /* */ 注释
-    s = re.sub(r'//[^\n]*', '', s)
-    s = re.sub(r'/\*.*?\*/', '', s, flags=re.DOTALL)
-
-    # Step 4: 去除尾逗号
-    s = re.sub(r',\s*}', '}', s)
-    s = re.sub(r',\s*]', ']', s)
+    s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", s)
+    s = re.sub(r"\bTrue\b", "true", s)
+    s = re.sub(r"\bFalse\b", "false", s)
+    s = re.sub(r"\bNone\b", "null", s)
+    s = re.sub(r"//[^\n]*", "", s)
+    s = re.sub(r"/\*.*?\*/", "", s, flags=re.DOTALL)
+    s = re.sub(r",\s*}", "}", s)
+    s = re.sub(r",\s*]", "]", s)
 
     try:
         return json.loads(s)
     except json.JSONDecodeError:
         pass
 
-    # Step 5: 处理路径反斜杠 — 将单反斜杠（非 \n \t \r 等控制符）替换为双反斜杠
-    # 匹配 \ 后面跟着字母的场景（如 C:\Users 中的 \U），不匹配 \n \t \r 等
-    s = re.sub(r'\\([a-zA-Z])', r'\\\\\1', s)
+    s = re.sub(r"\\([a-zA-Z])", r"\\\\\1", s)
 
     try:
         return json.loads(s)
@@ -83,10 +53,10 @@ def relaxed_json_loads(raw: str):
         in_double = False
         while i < len(text):
             ch = text[i]
-            if ch == '\\':
+            if ch == "\\":
                 result.append(ch)
                 if i + 1 < len(text):
-                    result.append(text[i+1])
+                    result.append(text[i + 1])
                     i += 2
                 continue
             if ch == "'" and not in_double:
@@ -98,7 +68,7 @@ def relaxed_json_loads(raw: str):
             else:
                 result.append(ch)
             i += 1
-        return ''.join(result)
+        return "".join(result)
 
     s = _fix_single_quotes(s)
 
@@ -108,7 +78,7 @@ def relaxed_json_loads(raw: str):
         pass
 
     # Step 7: 为未引号包裹的 key 添加引号
-    s = re.sub(r'([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', s)
+    s = re.sub(r"([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:", r'\1"\2":', s)
 
     try:
         return json.loads(s)
@@ -116,7 +86,7 @@ def relaxed_json_loads(raw: str):
         pass
 
     # Step 8: 尝试从文本中提取 JSON 对象
-    brace_match = re.search(r'\{.*\}|\[.*\]', s, re.DOTALL)
+    brace_match = re.search(r"\{.*\}|\[.*\]", s, re.DOTALL)
     if brace_match:
         try:
             return json.loads(brace_match.group())
@@ -127,6 +97,7 @@ def relaxed_json_loads(raw: str):
     # 延迟导入避免循环依赖
     try:
         from tea_agent.session.json_sanitizer import try_fix_truncated_json
+
         fixed = try_fix_truncated_json(s)
         if fixed is not None:
             return json.loads(fixed)
@@ -143,24 +114,80 @@ class BaseChatSession(ABC):
     定义公共接口和共享功能
     """
 
-    _KB_THRESHOLD: int = 65536          # toolkit_kb 输出阈值: 64KB
+    _KB_THRESHOLD: int = 65536  # toolkit_kb 输出阈值: 64KB
     _DEFAULT_TOOL_THRESHOLD: int = 2048  # 默认工具输出阈值: 2KB
-    _TEXT_FILE_THRESHOLD: int = 16384    # 文本/日志文件阈值: 16KB
-    _SOURCE_EXTENSIONS = {'.py', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.go',
-                          '.ts', '.js', '.jsx', '.tsx', '.vue', '.swift', '.kt',
-                          '.scala', '.rb', '.php', '.cs', '.sql', '.sh', '.bash',
-                          '.ps1', '.bat', '.cmd', '.xml', '.yaml', '.yml', '.toml',
-                          '.json', '.cfg', '.ini', '.conf', '.cmake', '.mk',
-                          '.r', '.jl', '.lua', '.ex', '.exs', '.erl', '.hrl',
-                          '.elm', '.dart', '.nim', '.zig', '.v', '.sv', '.vhdl'}
-    _TEXT_EXTENSIONS = {'.txt', '.log', '.md', '.rst', '.csv', '.tsv', '.text',
-                        '.out', '.err', '.stdout', '.stderr', '.nohup'}
+    _TEXT_FILE_THRESHOLD: int = 16384  # 文本/日志文件阈值: 16KB
+    _SOURCE_EXTENSIONS = {
+        ".py",
+        ".java",
+        ".c",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".rs",
+        ".go",
+        ".ts",
+        ".js",
+        ".jsx",
+        ".tsx",
+        ".vue",
+        ".swift",
+        ".kt",
+        ".scala",
+        ".rb",
+        ".php",
+        ".cs",
+        ".sql",
+        ".sh",
+        ".bash",
+        ".ps1",
+        ".bat",
+        ".cmd",
+        ".xml",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".json",
+        ".cfg",
+        ".ini",
+        ".conf",
+        ".cmake",
+        ".mk",
+        ".r",
+        ".jl",
+        ".lua",
+        ".ex",
+        ".exs",
+        ".erl",
+        ".hrl",
+        ".elm",
+        ".dart",
+        ".nim",
+        ".zig",
+        ".v",
+        ".sv",
+        ".vhdl",
+    }
+    _TEXT_EXTENSIONS = {
+        ".txt",
+        ".log",
+        ".md",
+        ".rst",
+        ".csv",
+        ".tsv",
+        ".text",
+        ".out",
+        ".err",
+        ".stdout",
+        ".stderr",
+        ".nohup",
+    }
 
     def __init__(
         self,
         model: str,
         max_history: int = 10,
-        system_prompt: str = "你是一个智能助手，可以调用工具函数来帮助用户解决问题。"
+        system_prompt: str = "你是一个智能助手，可以调用工具函数来帮助用户解决问题。",
     ):
         """
         初始化基类
@@ -183,7 +210,9 @@ class BaseChatSession(ABC):
         self.interrupted = False
 
     @abstractmethod
-    def chat_stream(self, msg: str, callback: Callable[[str], None]) -> tuple[str, bool]:
+    def chat_stream(
+        self, msg: str, callback: Callable[[str], None]
+    ) -> tuple[str, bool]:
         """
         流式对话（抽象方法，子类必须实现）
 
@@ -215,11 +244,9 @@ class BaseChatSession(ABC):
 
     def add_tool_result(self, tool_call_id: str, content: str):
         """添加工具执行结果"""
-        self.messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "content": content
-        })
+        self.messages.append(
+            {"role": "tool", "tool_call_id": tool_call_id, "content": content}
+        )
 
     def get_recent_messages(self) -> list[dict]:
         """获取最近的消息（排除系统消息）"""
@@ -276,12 +303,12 @@ class BaseChatSession(ABC):
         head_end = half
         if head_end > 0:
             # 向后找换行
-            nl = raw.find(b'\n', head_end)
+            nl = raw.find(b"\n", head_end)
             if nl != -1 and nl < half + 256:
                 head_end = nl
             else:
                 # 向前找换行
-                nl = raw.rfind(b'\n', 0, head_end)
+                nl = raw.rfind(b"\n", 0, head_end)
                 if nl != -1 and nl > half - 256:
                     head_end = nl
 
@@ -290,11 +317,11 @@ class BaseChatSession(ABC):
         # 后半部分：从尾部 half 位置向后找最近换行
         tail_start = total_bytes - half
         if tail_start > 0:
-            nl = raw.rfind(b'\n', tail_start, total_bytes)
+            nl = raw.rfind(b"\n", tail_start, total_bytes)
             if nl != -1 and nl > tail_start - 256:
                 tail_start = nl + 1  # 从换行后开始
             else:
-                nl = raw.find(b'\n', tail_start)
+                nl = raw.find(b"\n", tail_start)
                 if nl != -1 and nl < tail_start + 256:
                     tail_start = nl + 1
 
@@ -312,7 +339,9 @@ class BaseChatSession(ABC):
         )
 
     @staticmethod
-    def _compress_json_args(args_str: str, args_bytes: int, max_bytes: int = 2048) -> str:
+    def _compress_json_args(
+        args_str: str, args_bytes: int, max_bytes: int = 2048
+    ) -> str:
         """
         JSON 感知截断 tool_calls 参数。
 
@@ -344,25 +373,21 @@ class BaseChatSession(ABC):
             raw = args_str.encode("utf-8")
             # 按换行对齐首尾
             head_end = half
-            nl = raw.find(b'\n', head_end)
+            nl = raw.find(b"\n", head_end)
             if nl != -1 and nl < half + 256:
                 head_end = nl
             else:
-                nl = raw.rfind(b'\n', 0, head_end)
+                nl = raw.rfind(b"\n", 0, head_end)
                 if nl != -1 and nl > half - 256:
                     head_end = nl
             tail_start = len(raw) - half
-            nl = raw.rfind(b'\n', tail_start, len(raw))
+            nl = raw.rfind(b"\n", tail_start, len(raw))
             if nl != -1 and nl > tail_start - 256:
                 tail_start = nl + 1
 
             head_text = raw[:head_end].decode("utf-8", errors="replace")
             tail_text = raw[tail_start:].decode("utf-8", errors="replace")
-            return (
-                head_text +
-                f"\n... [L1截断: {args_bytes}B 参数] ...\n" +
-                tail_text
-            )
+            return head_text + f"\n... [L1截断: {args_bytes}B 参数] ...\n" + tail_text
 
         # Step 2: 递归压缩超长 string value
         HALF = 512  # 每个 value 的首尾保留字节数
@@ -375,20 +400,20 @@ class BaseChatSession(ABC):
                     raw = val.encode("utf-8")
                     # 按换行对齐
                     head_end = HALF
-                    nl = raw.find(b'\n', head_end)
+                    nl = raw.find(b"\n", head_end)
                     if nl != -1 and nl < head_end + 128:
                         head_end = nl
                     tail_start = len(raw) - HALF
-                    nl = raw.rfind(b'\n', tail_start, len(raw))
+                    nl = raw.rfind(b"\n", tail_start, len(raw))
                     if nl != -1 and nl > tail_start - 128:
                         tail_start = nl + 1
                     head_t = raw[:head_end].decode("utf-8", errors="replace")
                     tail_t = raw[tail_start:].decode("utf-8", errors="replace")
                     return (
-                        head_t +
-                        f"\n... [截断 {vbytes}B→{len(head_t.encode('utf-8')) + len(tail_t.encode('utf-8'))}B] ...\n" +
-                        tail_t,
-                        1
+                        head_t
+                        + f"\n... [截断 {vbytes}B→{len(head_t.encode('utf-8')) + len(tail_t.encode('utf-8'))}B] ...\n"
+                        + tail_t,
+                        1,
                     )
                 return (val, 0)
             elif isinstance(val, dict):
@@ -433,12 +458,16 @@ class BaseChatSession(ABC):
         """
         import json as _json_gt
 
-        if tool_name == 'toolkit_kb':
+        if tool_name == "toolkit_kb":
             return BaseChatSession._KB_THRESHOLD
 
         # 尝试从参数中提取文件路径/扩展名
         try:
-            args = _json_gt.loads(arguments) if isinstance(arguments, str) else (arguments or {})
+            args = (
+                _json_gt.loads(arguments)
+                if isinstance(arguments, str)
+                else (arguments or {})
+            )
         except Exception:
             return BaseChatSession._DEFAULT_TOOL_THRESHOLD
 
@@ -447,8 +476,8 @@ class BaseChatSession(ABC):
 
         # 查找可能的文件路径参数
         filepath = None
-        for key in ('filename', 'path', 'file', 'file_path', 'target'):
-            val = args.get(key, '')
+        for key in ("filename", "path", "file", "file_path", "target"):
+            val = args.get(key, "")
             if isinstance(val, str) and val:
                 filepath = val
                 break
@@ -465,7 +494,14 @@ class BaseChatSession(ABC):
         if ext in BaseChatSession._TEXT_EXTENSIONS:
             return BaseChatSession._TEXT_FILE_THRESHOLD  # 文本/日志：16KB
         # 无扩展名的常见文本文件
-        if basename in ('makefile', 'dockerfile', 'license', 'changelog', 'readme', 'authors'):
+        if basename in (
+            "makefile",
+            "dockerfile",
+            "license",
+            "changelog",
+            "readme",
+            "authors",
+        ):
             return BaseChatSession._TEXT_FILE_THRESHOLD
 
         return BaseChatSession._DEFAULT_TOOL_THRESHOLD
@@ -491,7 +527,6 @@ class BaseChatSession(ABC):
         if not rounds:
             return rounds
 
-
         # ── 首遍扫描：收集 tool_call_id → (tool_name, arguments) ──
         tc_map: dict[str, tuple] = {}  # tool_call_id → (tool_name, arguments_str)
         for rd in rounds:
@@ -502,7 +537,7 @@ class BaseChatSession(ABC):
                     if tc_id and isinstance(func, dict):
                         tc_map[tc_id] = (
                             func.get("name", ""),
-                            func.get("arguments", "")
+                            func.get("arguments", ""),
                         )
 
         n = len(rounds)
@@ -510,7 +545,7 @@ class BaseChatSession(ABC):
 
         for i, rd in enumerate(rounds):
             role = rd.get("role", "")
-            is_last = (i == n - 1)
+            is_last = i == n - 1
 
             if role == "user":
                 # user 消息完整保留
@@ -531,8 +566,10 @@ class BaseChatSession(ABC):
                             if isinstance(args_str, str):
                                 args_bytes = len(args_str.encode("utf-8"))
                                 if args_bytes > 2048:
-                                    func["arguments"] = BaseChatSession._compress_json_args(
-                                        args_str, args_bytes
+                                    func["arguments"] = (
+                                        BaseChatSession._compress_json_args(
+                                            args_str, args_bytes
+                                        )
                                     )
                             tc_copy["function"] = func
                         new_tc.append(tc_copy)
@@ -596,7 +633,11 @@ class BaseChatSession(ABC):
 
                 # 记录新的 tool_call_ids
                 tc_list = rd["tool_calls"]
-                tc_ids = [tc.get("id", "") for tc in tc_list if tc.get("id")] if isinstance(tc_list, list) else []
+                tc_ids = (
+                    [tc.get("id", "") for tc in tc_list if tc.get("id")]
+                    if isinstance(tc_list, list)
+                    else []
+                )
 
                 if not tc_ids:
                     # 有 tool_calls 字段但没有有效 id，视为纯 assistant 消息
@@ -651,8 +692,15 @@ class BaseChatSession(ABC):
 
         return result
 
-    def load_history(self, conversations: list[dict], summary: str = "", recent_turns: int = 10,
-                     level2: list = None, semantic_summary: str = "", tool_chain_summary: str = ""):
+    def load_history(
+        self,
+        conversations: list[dict],
+        summary: str = "",
+        recent_turns: int = 10,
+        level2: list = None,
+        semantic_summary: str = "",
+        tool_chain_summary: str = "",
+    ):
         """
         三级历史加载：
 
@@ -688,9 +736,10 @@ class BaseChatSession(ABC):
         last_conv = conversations[-1]
         raw_user_msg = last_conv["user_msg"]
         user_entry = {"role": "user"}
-        if isinstance(raw_user_msg, str) and raw_user_msg.startswith('{'):
+        if isinstance(raw_user_msg, str) and raw_user_msg.startswith("{"):
             try:
                 import json as _json_lh
+
                 parsed = _json_lh.loads(raw_user_msg)
                 if isinstance(parsed, dict):
                     user_entry["content"] = parsed.get("text", "")

@@ -1,6 +1,5 @@
 """
-Auto-Compact — 自动上下文压缩。
-监控 Token 用量，达到阈值时自动触发摘要折叠。
+Auto-Compact — 自动上下文压缩。监控 Token 用量，达到阈值时自动触发摘要折叠。
 """
 
 import json
@@ -11,7 +10,7 @@ logger = logging.getLogger("auto_compact")
 
 
 def estimate_tokens(text: str) -> int:
-    """估算文本的 token 数。中文~1.5t/字, 英文~4t/字, +4 基础开销。"""
+    """估算 token 数。中文~1.5t/字, 英文~4t/字。"""
     if not text:
         return 0
     cn = len(re.findall(r"[一-鿿㐀-䶿]", text))
@@ -20,7 +19,7 @@ def estimate_tokens(text: str) -> int:
 
 
 def estimate_messages_tokens(messages: list) -> int:
-    """计算完整消息列表的总 token 数（含 tool_calls / reasoning / images）。"""
+    """计算消息列表的总 token 数。"""
     total = 0
     for msg in messages:
         content = msg.get("content", "")
@@ -29,13 +28,11 @@ def estimate_messages_tokens(messages: list) -> int:
                 if isinstance(part, dict) and part.get("type") == "text":
                     total += estimate_tokens(part.get("text", ""))
                 elif isinstance(part, dict) and part.get("type") == "image_url":
-                    total += 85  # image token 固定开销
+                    total += 85
         elif isinstance(content, str):
             total += estimate_tokens(content)
         if msg.get("tool_calls"):
-            total += estimate_tokens(
-                json.dumps(msg["tool_calls"], ensure_ascii=False)
-            )
+            total += estimate_tokens(json.dumps(msg["tool_calls"], ensure_ascii=False))
         rc = msg.get("reasoning_content", "")
         if rc:
             total += estimate_tokens(rc)
@@ -61,8 +58,8 @@ def compact_messages(messages: list, keep_recent: int = 5, summary: str = ""):
     others = [m for m in messages if m.get("role") != "system"]
     if len(others) <= keep_recent * 2:
         return messages, summary
-    recent = others[-keep_recent * 2:] if keep_recent > 0 else []
-    older = others[:-keep_recent * 2] if keep_recent > 0 else others
+    recent = others[-keep_recent * 2 :] if keep_recent > 0 else []
+    older = others[: -keep_recent * 2] if keep_recent > 0 else others
 
     older_text = ""
     for m in older:
@@ -71,7 +68,11 @@ def compact_messages(messages: list, keep_recent: int = 5, summary: str = ""):
         if isinstance(c, str) and c:
             older_text += f"[{r}] {c[:200]}" + "\n"
     if older_text and len(older_text) > 50:
-        summary = (summary + "\n---\n" + older_text[:500])[:1000] if summary else older_text[:500]
+        summary = (
+            (summary + "\n---\n" + older_text[:500])[:1000]
+            if summary
+            else older_text[:500]
+        )
 
     compressed = list(sys_msgs)
     if summary:
@@ -92,8 +93,10 @@ def get_max_context_tokens(config) -> int:
             return int(val)
         model = (main.model_name or "").lower()
         defaults = {
-            "gpt-4": 128000, "claude": 200000,
-            "deepseek": 65536, "gemini": 1048576,
+            "gpt-4": 128000,
+            "claude": 200000,
+            "deepseek": 65536,
+            "gemini": 1048576,
         }
         for k, v in defaults.items():
             if k in model:

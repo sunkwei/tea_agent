@@ -1,12 +1,4 @@
-"""
-轻量级会话 - LiteSession
-
-特点：
-1. 不使用 db，不使用摘要，不支持历史记录拼接
-2. 每次只执行一轮，返回 user, ai think, ai final message
-3. 可以使用所有 toolkit_xxx 工具函数
-4. 可以指定使用便宜模型作为主模型
-"""
+"""轻量级会话 — LiteSession：无状态、无历史、单轮执行。"""
 
 import json
 import logging
@@ -20,14 +12,7 @@ logger = logging.getLogger("session.lite")
 
 
 class LiteSession:
-    """
-    轻量级会话 - 无状态、无历史、单轮执行
-
-    每次 chat() 调用：
-    - 构建消息: [system_prompt, user_input]
-    - 调用 LLM（支持工具调用循环，但只返回最终结果）
-    - 返回: {user, thinking, assistant, tool_calls_count}
-    """
+    """轻量级会话 — 无状态、无历史、单轮执行。"""
 
     def __init__(
         self,
@@ -42,21 +27,6 @@ class LiteSession:
         allowed_tools: list[str] | None = None,
         denied_tools: list[str] | None = None,
     ):
-        """
-        初始化轻量级会话。
-
-        Args:
-            toolkit: Toolkit 工具库实例
-            api_key: API密钥
-            api_url: API地址
-            model: 模型名称
-            system_prompt: 系统提示词
-            enable_thinking: 是否启用 thinking 功能
-            max_iterations: 最大工具调用迭代次数
-            supports_reasoning: 是否支持推理内容
-            allowed_tools: 允许的工具列表（None=全部允许）
-            denied_tools: 禁止的工具列表（None=无禁止）
-        """
         self.toolkit = toolkit
         self.model = model
         self.system_prompt = system_prompt or self._default_system_prompt()
@@ -77,8 +47,14 @@ class LiteSession:
         if allowed_tools:
             mode = f"allow({len(allowed_tools)})"
         if denied_tools:
-            mode += f"+deny({len(denied_tools)})" if mode != "all" else f"deny({len(denied_tools)})"
-        logger.info(f"LiteSession init | model: {model} | tools: {len(self.tools)} | filter: {mode}")
+            mode += (
+                f"+deny({len(denied_tools)})"
+                if mode != "all"
+                else f"deny({len(denied_tools)})"
+            )
+        logger.info(
+            f"LiteSession init | model: {model} | tools: {len(self.tools)} | filter: {mode}"
+        )
 
     def _default_system_prompt(self) -> str:
         """默认系统提示词。"""
@@ -122,29 +98,16 @@ class LiteSession:
 
         return tools
 
-    def chat(self, user_input: str, callback: Callable[[str], None] | None = None) -> dict:
-        """
-        执行单轮对话。
-
-        Args:
-            user_input: 用户输入
-            callback: 流式回调（可选）
-
-        Returns:
-            {
-                "user": str,           # 用户输入
-                "thinking": str,       # AI 思考过程（如有）
-                "assistant": str,      # AI 最终回复
-                "tool_calls": int,     # 工具调用次数
-                "error": str|None      # 错误信息
-            }
-        """
+    def chat(
+        self, user_input: str, callback: Callable[[str], None] | None = None
+    ) -> dict:
+        """单轮对话。返回 {user, thinking, assistant, tool_calls, error}。"""
         self.interrupted = False
 
         # 构建消息：只有系统提示 + 用户输入
         messages = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content": user_input}
+            {"role": "user", "content": user_input},
         ]
 
         full_reply = ""
@@ -162,7 +125,9 @@ class LiteSession:
                 response = self._call_api(messages)
 
                 # 处理响应
-                content, tool_calls_data, reasoning = self._process_response(response, callback)
+                content, tool_calls_data, reasoning = self._process_response(
+                    response, callback
+                )
 
                 # 累积回复
                 full_reply += content
@@ -179,14 +144,17 @@ class LiteSession:
                     assistant_msg = {
                         "role": "assistant",
                         "content": content if content else None,
-                        "tool_calls": [{
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
                             }
-                        } for tc in valid_tool_calls]
+                            for tc in valid_tool_calls
+                        ],
                     }
                     messages.append(assistant_msg)
 
@@ -195,11 +163,13 @@ class LiteSession:
                         if self.interrupted:
                             break
                         call_id, func_name, result_str = self._execute_tool(call)
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": call_id,
-                            "content": result_str
-                        })
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": call_id,
+                                "content": result_str,
+                            }
+                        )
 
                     iterations += 1
                     continue
@@ -213,7 +183,7 @@ class LiteSession:
                 "thinking": thinking_content,
                 "assistant": full_reply,
                 "tool_calls": tool_calls_count,
-                "error": None
+                "error": None,
             }
 
         except Exception as e:
@@ -223,7 +193,7 @@ class LiteSession:
                 "thinking": thinking_content,
                 "assistant": full_reply,
                 "tool_calls": tool_calls_count,
-                "error": str(e)
+                "error": str(e),
             }
 
     def _call_api(self, messages: list[dict]):
@@ -260,7 +230,7 @@ class LiteSession:
             delta = chunk.choices[0].delta
 
             # 处理推理内容
-            if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+            if hasattr(delta, "reasoning_content") and delta.reasoning_content:
                 reasoning_content += delta.reasoning_content
                 if callback:
                     callback(delta.reasoning_content)
@@ -279,7 +249,7 @@ class LiteSession:
                         tool_calls_data[idx] = {
                             "id": tc.id or "",
                             "name": "",
-                            "arguments": ""
+                            "arguments": "",
                         }
                     if tc.id:
                         tool_calls_data[idx]["id"] = tc.id
@@ -313,15 +283,18 @@ class LiteSession:
                 try:
                     # 验证 JSON 参数（使用容错解析）
                     relaxed_json_loads(data["arguments"])
-                    valid_calls.append(SimpleToolCall(
-                        id=data["id"],
-                        function=SimpleFunction(
-                            name=data["name"],
-                            arguments=data["arguments"]
+                    valid_calls.append(
+                        SimpleToolCall(
+                            id=data["id"],
+                            function=SimpleFunction(
+                                name=data["name"], arguments=data["arguments"]
+                            ),
                         )
-                    ))
+                    )
                 except json.JSONDecodeError:
-                    logger.warning(f"工具 {data['name']} 参数 JSON 无效: {data['arguments'][:100]}")
+                    logger.warning(
+                        f"工具 {data['name']} 参数 JSON 无效: {data['arguments'][:100]}"
+                    )
 
         return valid_calls
 
@@ -339,7 +312,11 @@ class LiteSession:
         # 执行工具
         try:
             result = self.toolkit.call_tool(func_name, **args)
-            result_str = json.dumps(result, ensure_ascii=False) if isinstance(result, dict) else str(result)
+            result_str = (
+                json.dumps(result, ensure_ascii=False)
+                if isinstance(result, dict)
+                else str(result)
+            )
         except Exception as e:
             result_str = f"工具执行错误: {e}"
             logger.warning(f"工具 {func_name} 执行失败: {e}")
@@ -353,7 +330,7 @@ class LiteSession:
     def close(self):
         """关闭会话，释放 HTTP 客户端资源。"""
         try:
-            if hasattr(self, 'api') and self.api and hasattr(self.api, 'close'):
+            if hasattr(self, "api") and self.api and hasattr(self.api, "close"):
                 self.api.close()
             logger.info("LiteSession 资源已释放")
         except Exception as e:

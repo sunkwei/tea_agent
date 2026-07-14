@@ -1,20 +1,4 @@
-"""
-在线工具调用会话 - Token 优化版 (重构版：组合模式)
-支持 OpenAI 兼容 API 的 Function Calling 功能
-
-Token 优化策略:
-1. 压缩系统提示词 (~200 tokens, 原 ~1000+)
-2. 历史摘要：超过5轮的对话自动摘要，只传摘要+最近N轮
-3. 工具输出截断：超长结果截断至 max_tool_output 字符
-4. 助手回复截断：超长回复截断至 max_assistant_content 字符
-5. 长期记忆注入：相关记忆在每次对话中自动注入（上限5条）
-
-重构说明:
-- 从 Mixin 多重继承改为组合模式
-- 所有共享状态通过 SessionContext 管理
-- 功能委派给各个 Component：API, Tool, Summarizer
-- 2026-07 拆分: SessionContext/SessionComponent→_context.py, Prompt→_prompts.py
-"""
+"""在线工具调用会话 — Token 优化版（组合模式，支持 OpenAI Function Calling）。"""
 
 import json
 import logging
@@ -42,10 +26,11 @@ from tea_agent.session_pipeline import SessionPipeline
 logger = logging.getLogger("session")
 
 
-# ── 模块级纯函数 ──
+# 模块级函数
+
 
 def analyze_intent(text: str) -> dict:
-    """轻量级意图分析 — 返回 {type, skip_tool_loop, required_tools}。"""
+    """轻量级意图分析。"""
     return {"type": "general", "skip_tool_loop": False, "required_tools": None}
 
 
@@ -72,9 +57,8 @@ def extract_mode(result: dict):
     return None
 
 
-
 class APIComponent(SessionComponent):
-    """API 交互组件 — 负责 LLM API 通信（thinking 检测、流式调用、Token 用量追踪）。"""
+    """LLM API 通信组件。"""
 
     @property
     def name(self) -> str:
@@ -119,8 +103,12 @@ class APIComponent(SessionComponent):
                 self.ctx.tool_log(f"🧠 {model_type}支持 thinking，已启用")
         except Exception as e:
             err_str = str(e).lower()
-            if ('thinking' in err_str or 'extra_body' in err_str or
-                    'unsupported' in err_str or 'invalid' in err_str):
+            if (
+                "thinking" in err_str
+                or "extra_body" in err_str
+                or "unsupported" in err_str
+                or "invalid" in err_str
+            ):
                 # 更新对应的状态
                 if is_cheap:
                     self.ctx._cheap_thinking_supported = False
@@ -146,11 +134,11 @@ class APIComponent(SessionComponent):
         if usage is None:
             return
         u = self.ctx._last_cheap_usage if is_cheap else self.ctx._last_usage
-        prompt = getattr(usage, 'prompt_tokens', None)
-        completion = getattr(usage, 'completion_tokens', None)
-        total = getattr(usage, 'total_tokens', None)
-        cache_hit = getattr(usage, 'prompt_cache_hit_tokens', None)
-        cache_miss = getattr(usage, 'prompt_cache_miss_tokens', None)
+        prompt = getattr(usage, "prompt_tokens", None)
+        completion = getattr(usage, "completion_tokens", None)
+        total = getattr(usage, "total_tokens", None)
+        cache_hit = getattr(usage, "prompt_cache_hit_tokens", None)
+        cache_miss = getattr(usage, "prompt_cache_miss_tokens", None)
 
         if prompt is not None:
             u["prompt_tokens"] += prompt
@@ -168,12 +156,20 @@ class APIComponent(SessionComponent):
             u["prompt_cache_miss_tokens"] += cache_miss
 
     def _track_api_usage(self, response, is_cheap=False):
-        if hasattr(response, 'usage') and response.usage:
+        if hasattr(response, "usage") and response.usage:
             self._accumulate_usage(response.usage, is_cheap=is_cheap)
 
-    def create_chat_stream(self, api_messages: list[dict], tools: list[dict],
-                          client=None, model=None, is_cheap=False,
-                          temperature=None, max_tokens=None, top_p=None):
+    def create_chat_stream(
+        self,
+        api_messages: list[dict],
+        tools: list[dict],
+        client=None,
+        model=None,
+        is_cheap=False,
+        temperature=None,
+        max_tokens=None,
+        top_p=None,
+    ):
         target_client = client or self.ctx.client
         target_model = model or self.ctx.model
 
@@ -195,7 +191,11 @@ class APIComponent(SessionComponent):
             kwargs["stream_options"] = {"include_usage": True}
 
         # 根据对应的 thinking 状态决定是否启用
-        thinking_supported = self.ctx._cheap_thinking_supported if is_cheap else self.ctx._thinking_supported
+        thinking_supported = (
+            self.ctx._cheap_thinking_supported
+            if is_cheap
+            else self.ctx._thinking_supported
+        )
 
         # 构建 extra_body：合并 thinking + 模型 options（如 Ollama 的 num_ctx）
         extra_body = {}
@@ -207,8 +207,11 @@ class APIComponent(SessionComponent):
         # 从配置中获取模型 options（如 num_ctx）并合并到 extra_body
         try:
             from tea_agent.config import get_config
+
             _cfg = get_config()
-            model_opts = _cfg.main_model.options if not is_cheap else _cfg.cheap_model.options
+            model_opts = (
+                _cfg.main_model.options if not is_cheap else _cfg.cheap_model.options
+            )
             if model_opts:
                 extra_body.update(model_opts)
         except Exception:
@@ -226,10 +229,13 @@ class APIComponent(SessionComponent):
 
     def call_summarize_api(self, cli, mdl, messages, temperature=0.1, max_tokens=500):
         import logging
+
         logger = logging.getLogger("session.api")
 
         try:
-            logger.debug(f"summarize API request: model={mdl}, msgs={len(messages)}, temperature={temperature}, max_tokens={max_tokens}")
+            logger.debug(
+                f"summarize API request: model={mdl}, msgs={len(messages)}, temperature={temperature}, max_tokens={max_tokens}"
+            )
             return cli.chat.completions.create(
                 model=mdl,
                 messages=messages,
@@ -239,9 +245,11 @@ class APIComponent(SessionComponent):
             )
         except Exception as e:
             err_str = str(e).lower()
-            if 'thinking' in err_str or 'extra_body' in err_str:
+            if "thinking" in err_str or "extra_body" in err_str:
                 # 模型不支持 thinking 参数，回退到不带 extra_body 的调用
-                logger.debug("summarize API: thinking disabled not supported, retrying without extra_body")
+                logger.debug(
+                    "summarize API: thinking disabled not supported, retrying without extra_body"
+                )
                 return cli.chat.completions.create(
                     model=mdl,
                     messages=messages,
@@ -260,11 +268,7 @@ class APIComponent(SessionComponent):
 
             # 扩展列表
             while len(tool_calls_data) <= idx:
-                tool_calls_data.append({
-                    "id": "",
-                    "name": "",
-                    "arguments": ""
-                })
+                tool_calls_data.append({"id": "", "name": "", "arguments": ""})
 
             if tc.id:
                 tool_calls_data[idx]["id"] = tc.id
@@ -275,12 +279,22 @@ class APIComponent(SessionComponent):
                     tool_calls_data[idx]["arguments"] += tc.function.arguments
 
     def reset_usage(self):
-        self.ctx._last_usage = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
-                                "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0}
+        self.ctx._last_usage = {
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "prompt_cache_hit_tokens": 0,
+            "prompt_cache_miss_tokens": 0,
+        }
 
     def reset_cheap_usage(self):
-        self.ctx._last_cheap_usage = {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
-                                      "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0}
+        self.ctx._last_cheap_usage = {
+            "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "prompt_cache_hit_tokens": 0,
+            "prompt_cache_miss_tokens": 0,
+        }
 
     def get_last_usage(self) -> dict[str, int]:
         return dict(self.ctx._last_usage)
@@ -293,7 +307,6 @@ class APIComponent(SessionComponent):
             "main": dict(self.ctx._last_usage),
             "cheap": dict(self.ctx._last_cheap_usage),
         }
-
 
 
 logger = logging.getLogger("session.tool")
@@ -338,6 +351,7 @@ class ToolComponent(SessionComponent):
 
     def execute_tool_call(self, call) -> tuple[str, str, str]:
         import time
+
         func_name = call.function.name
         call_id = call.id
         start_time = time.time()
@@ -360,7 +374,9 @@ class ToolComponent(SessionComponent):
             args = relaxed_json_loads(call.function.arguments)
         except json.JSONDecodeError:
             err = "错误：参数解析失败"
-            logger.warning(f"tool call failed: JSON decode error, func={func_name}, raw_args={call.function.arguments[:300]}")
+            logger.warning(
+                f"tool call failed: JSON decode error, func={func_name}, raw_args={call.function.arguments[:300]}"
+            )
             self.add_tool_result(call_id, err)
             self._record_tool_to_trace(func_name, False, err, start_time)
             return call_id, func_name, err
@@ -394,27 +410,32 @@ class ToolComponent(SessionComponent):
 
             # 前半部分
             head_end = half
-            nl = raw.find(b'\n', head_end)
+            nl = raw.find(b"\n", head_end)
             if nl != -1 and nl < half + 256:
                 head_end = nl
             head_text = raw[:head_end].decode("utf-8", errors="replace")
 
             # 后半部分
             tail_start = len(raw) - half
-            nl = raw.rfind(b'\n', tail_start, len(raw))
+            nl = raw.rfind(b"\n", tail_start, len(raw))
             if nl != -1 and nl > tail_start - 256:
                 tail_start = nl + 1
             tail_text = raw[tail_start:].decode("utf-8", errors="replace")
 
             result_str = f"{head_text}\n\n... [工具输出截断: {result_bytes}B → {len(head_text.encode('utf-8')) + len(tail_text.encode('utf-8'))}B] ...\n\n{tail_text}"
-            logger.info(f"tool output truncated: {func_name}, {result_bytes}B → {len(result_str.encode('utf-8'))}B")
+            logger.info(
+                f"tool output truncated: {func_name}, {result_bytes}B → {len(result_str.encode('utf-8'))}B"
+            )
 
         self.add_tool_result(call_id, result_str)
         self._record_tool_to_trace(func_name, success, error_msg, start_time)
         return call_id, func_name, result_str
 
-    def _record_tool_to_trace(self, func_name: str, success: bool, error_msg: str, start_time: float):
+    def _record_tool_to_trace(
+        self, func_name: str, success: bool, error_msg: str, start_time: float
+    ):
         import time
+
         trace = self.ctx._current_trace
         if trace is None:
             return
@@ -422,31 +443,38 @@ class ToolComponent(SessionComponent):
         if reflection_mgr is None:
             return
         duration_ms = (time.time() - start_time) * 1000
-        reflection_mgr.record_tool_call(trace, func_name, success, error_msg, duration_ms)
+        reflection_mgr.record_tool_call(
+            trace, func_name, success, error_msg, duration_ms
+        )
 
     def add_tool_result(self, tool_call_id: str, content: str):
-        self.ctx.messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "content": content
-        })
+        self.ctx.messages.append(
+            {"role": "tool", "tool_call_id": tool_call_id, "content": content}
+        )
 
     def collect_tool_call_round(self, call_id: str, result_str: str):
-        self.ctx._rounds_collector.append({
-            "role": "tool",
-            "content": result_str,
-            "tool_call_id": call_id,
-        })
-
-    def collect_assistant_tool_calls_round(self, content: str, tool_calls: list, reasoning_content: str = ""):
-        tc_list_for_collector = [{
-            "id": tc.id,
-            "type": "function",
-            "function": {
-                "name": tc.function.name,
-                "arguments": tc.function.arguments
+        self.ctx._rounds_collector.append(
+            {
+                "role": "tool",
+                "content": result_str,
+                "tool_call_id": call_id,
             }
-        } for tc in tool_calls]
+        )
+
+    def collect_assistant_tool_calls_round(
+        self, content: str, tool_calls: list, reasoning_content: str = ""
+    ):
+        tc_list_for_collector = [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            }
+            for tc in tool_calls
+        ]
 
         entry = {
             "role": "assistant",
@@ -467,22 +495,28 @@ class ToolComponent(SessionComponent):
         self.ctx._rounds_collector.append(entry)
 
     def collect_api_error_round(self, content: str):
-        self.ctx._rounds_collector.append({
-            "role": "assistant",
-            "content": content,
-        })
+        self.ctx._rounds_collector.append(
+            {
+                "role": "assistant",
+                "content": content,
+            }
+        )
 
     def collect_max_iterations_round(self, content: str):
-        self.ctx._rounds_collector.append({
-            "role": "assistant",
-            "content": content,
-        })
+        self.ctx._rounds_collector.append(
+            {
+                "role": "assistant",
+                "content": content,
+            }
+        )
 
     def collect_interruption_round(self, content: str):
-        self.ctx._rounds_collector.append({
-            "role": "assistant",
-            "content": content,
-        })
+        self.ctx._rounds_collector.append(
+            {
+                "role": "assistant",
+                "content": content,
+            }
+        )
 
     def parse_tool_calls_from_stream(self, tool_calls_data: list[dict]) -> list:
         valid_tool_calls = []
@@ -498,18 +532,20 @@ class ToolComponent(SessionComponent):
                 logger.warning(f"tool call failed: invalid data format, data={tc_data}")
                 continue
 
-            valid_tool_calls.append(SimpleNamespace(
-                id=func_id,
-                function=SimpleNamespace(
-                    name=func_name,
-                    arguments=func_args,
+            valid_tool_calls.append(
+                SimpleNamespace(
+                    id=func_id,
+                    function=SimpleNamespace(
+                        name=func_name,
+                        arguments=func_args,
+                    ),
                 )
-            ))
+            )
         return valid_tool_calls
 
 
-
 logger = logging.getLogger("session.summarizer")
+
 
 class SummarizerComponent(SessionComponent):
     """历史摘要组件 — 负责旧对话压缩、三级历史管理、语义摘要生成。"""
@@ -557,23 +593,19 @@ class SummarizerComponent(SessionComponent):
             old_summary = ""
 
         # 构建 Prompt
-        existing = (
-            f"已有摘要：{old_summary}\n\n"
-            if old_summary
-            else ""
-        )
+        existing = f"已有摘要：{old_summary}\n\n" if old_summary else ""
 
         try:
             cli, mdl = get_summarize_client_fn()
             # 判断是否使用便宜模型
             is_cheap = (
-                self.ctx.cheap_client is not None
-                and cli is self.ctx.cheap_client
+                self.ctx.cheap_client is not None and cli is self.ctx.cheap_client
             )
 
             cheap_params = get_cheap_params("summarizer")
             response = api_component.call_summarize_api(
-                cli, mdl,
+                cli,
+                mdl,
                 messages=[
                     {"role": "system", "content": HISTORY_SUMMARIZE_SYSTEM},
                     {
@@ -595,10 +627,12 @@ class SummarizerComponent(SessionComponent):
                 new_summary = content.strip()
 
                 # 4. 更新数据库
-                last_conv_id = convs_to_summarize[-1]['id']
-                storage.update_topic_summary(topic_id, new_summary, last_summarized_id=last_conv_id)
+                last_conv_id = convs_to_summarize[-1]["id"]
+                storage.update_topic_summary(
+                    topic_id, new_summary, last_summarized_id=last_conv_id
+                )
                 for conv in convs_to_summarize:
-                    storage.mark_as_summarized(conv['id'])
+                    storage.mark_as_summarized(conv["id"])
 
                 # 5. 同步内存
                 self.ctx._history_summary = new_summary
@@ -606,7 +640,9 @@ class SummarizerComponent(SessionComponent):
                 # 裁剪 messages，保持与数据库同步
                 boundary = self._find_recent_boundary()
                 if boundary > 1:
-                    self.ctx.messages = [self.ctx.messages[0]] + self.ctx.messages[boundary:]
+                    self.ctx.messages = [self.ctx.messages[0]] + self.ctx.messages[
+                        boundary:
+                    ]
 
                 if self.ctx.tool_log:
                     self.ctx.tool_log(f"📝 历史摘要更新：{new_summary}")
@@ -616,7 +652,9 @@ class SummarizerComponent(SessionComponent):
             if self.ctx.tool_log:
                 self.ctx.tool_log(f"⚠️ 摘要生成失败: {e}")
 
-    def _conversations_to_text(self, conversations: list[dict], max_per_msg: int = 500) -> str:
+    def _conversations_to_text(
+        self, conversations: list[dict], max_per_msg: int = 500
+    ) -> str:
         lines = []
         for conv in conversations:
             # 用户消息
@@ -728,12 +766,19 @@ class OnlineToolSession(BaseChatSession):
 
         # ── 1. 创建共享上下文 ──
         import httpx
+
         _http_client = httpx.Client(proxy=None)
-        main_client = OpenAI(api_key=api_key, base_url=api_url, http_client=_http_client)
+        main_client = OpenAI(
+            api_key=api_key, base_url=api_url, http_client=_http_client
+        )
 
         cheap_client: OpenAI | None = None
         if cheap_api_key and cheap_api_url and cheap_model:
-            cheap_client = OpenAI(api_key=cheap_api_key, base_url=cheap_api_url, http_client=httpx.Client(proxy=None))
+            cheap_client = OpenAI(
+                api_key=cheap_api_key,
+                base_url=cheap_api_url,
+                http_client=httpx.Client(proxy=None),
+            )
 
         self.context = SessionContext(
             messages=[],
@@ -760,7 +805,9 @@ class OnlineToolSession(BaseChatSession):
         # ── 2. 调用基类初始化 ──
         BaseChatSession.__init__(self, model, max_history, sp)
 
-        logger.info(f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}")
+        logger.info(
+            f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}"
+        )
 
         # ── 3. 创建并初始化组件 ──
         self.api = APIComponent(self.context)
@@ -783,6 +830,7 @@ class OnlineToolSession(BaseChatSession):
 
         # ── 续跑控制 ──
         import threading
+
         self._extra_iterations = 0
         self._continue_after_max = False
         self._max_iter_wait = threading.Event()
@@ -791,7 +839,7 @@ class OnlineToolSession(BaseChatSession):
         self._http_clients = []
         if _http_client:
             self._http_clients.append(_http_client)
-        if cheap_client and hasattr(cheap_client, '_client') and cheap_client._client:
+        if cheap_client and hasattr(cheap_client, "_client") and cheap_client._client:
             self._http_clients.append(cheap_client._client)
 
         # ── 工具定义 ──
@@ -805,6 +853,7 @@ class OnlineToolSession(BaseChatSession):
         if self.storage is not None:
             from tea_agent.prompt_manager import SystemPromptManager
             from tea_agent.reflection import ReflectionManager
+
             self.reflection_manager = ReflectionManager(
                 storage=self.storage,
                 cheap_client=cheap_client,
@@ -824,7 +873,9 @@ class OnlineToolSession(BaseChatSession):
         else:
             self.reflection_manager = None
             self.prompt_manager = None
-            logger.info("Storage not set, skipping ReflectionManager/PromptManager initialization")
+            logger.info(
+                "Storage not set, skipping ReflectionManager/PromptManager initialization"
+            )
 
         # ── Pipeline ──
         self.pipeline = SessionPipeline()
@@ -839,49 +890,76 @@ class OnlineToolSession(BaseChatSession):
     # 这些属性在外部代码中未被使用，直接使用 self.context.xxx 访问
 
     @property
-    def messages(self): return self.context.messages
+    def messages(self):
+        return self.context.messages
+
     @messages.setter
-    def messages(self, v): self.context.messages = v
+    def messages(self, v):
+        self.context.messages = v
 
     @property
-    def enable_thinking(self): return self.context.enable_thinking
+    def enable_thinking(self):
+        return self.context.enable_thinking
+
     @enable_thinking.setter
-    def enable_thinking(self, v): self.context.enable_thinking = v
+    def enable_thinking(self, v):
+        self.context.enable_thinking = v
 
     @property
-    def tool_log(self): return self.context.tool_log
+    def tool_log(self):
+        return self.context.tool_log
+
     @tool_log.setter
-    def tool_log(self, v): self.context.tool_log = v
+    def tool_log(self, v):
+        self.context.tool_log = v
 
     @property
-    def _rounds_collector(self): return self.context._rounds_collector
+    def _rounds_collector(self):
+        return self.context._rounds_collector
+
     @_rounds_collector.setter
-    def _rounds_collector(self, v): self.context._rounds_collector = v
+    def _rounds_collector(self, v):
+        self.context._rounds_collector = v
 
     @property
-    def _last_usage(self): return self.context._last_usage
+    def _last_usage(self):
+        return self.context._last_usage
+
     @_last_usage.setter
-    def _last_usage(self, v): self.context._last_usage = v
+    def _last_usage(self, v):
+        self.context._last_usage = v
 
     @property
-    def _last_cheap_usage(self): return self.context._last_cheap_usage
+    def _last_cheap_usage(self):
+        return self.context._last_cheap_usage
+
     @_last_cheap_usage.setter
-    def _last_cheap_usage(self, v): self.context._last_cheap_usage = v
+    def _last_cheap_usage(self, v):
+        self.context._last_cheap_usage = v
 
     @property
-    def _history_summary(self): return self.context._history_summary
+    def _history_summary(self):
+        return self.context._history_summary
+
     @_history_summary.setter
-    def _history_summary(self, v): self.context._history_summary = v
+    def _history_summary(self, v):
+        self.context._history_summary = v
 
     @property
-    def _semantic_summary(self): return self.context._semantic_summary
+    def _semantic_summary(self):
+        return self.context._semantic_summary
+
     @_semantic_summary.setter
-    def _semantic_summary(self, v): self.context._semantic_summary = v
+    def _semantic_summary(self, v):
+        self.context._semantic_summary = v
 
     @property
-    def _tool_chain_summary(self): return self.context._tool_chain_summary
+    def _tool_chain_summary(self):
+        return self.context._tool_chain_summary
+
     @_tool_chain_summary.setter
-    def _tool_chain_summary(self, v): self.context._tool_chain_summary = v
+    def _tool_chain_summary(self, v):
+        self.context._tool_chain_summary = v
 
     # ──────────────────────────────────────────────
     # 委派方法
@@ -897,6 +975,7 @@ class OnlineToolSession(BaseChatSession):
         """返回 {temperature, max_tokens, top_p}，失败时返回空 dict。"""
         try:
             from .config import get_config
+
             return get_config().get_effective_params(model_type, self._current_mode)
         except Exception:
             return {}
@@ -905,7 +984,9 @@ class OnlineToolSession(BaseChatSession):
     # 流式处理（委派给 API 组件）
     # ──────────────────────────────────────────────
 
-    def _process_stream_with_reasoning(self, response, callback) -> tuple[str, list[dict], str]:
+    def _process_stream_with_reasoning(
+        self, response, callback
+    ) -> tuple[str, list[dict], str]:
         """处理流式/非流式响应，收集内容、工具调用数据和 reasoning_content。"""
         content_parts = []
         tool_calls_data = []
@@ -913,11 +994,11 @@ class OnlineToolSession(BaseChatSession):
 
         # 非流式模式
         if self.context.no_stream_chunk:
-            if hasattr(response, 'usage') and response.usage:
+            if hasattr(response, "usage") and response.usage:
                 self.api._accumulate_usage(response.usage)
             if response.choices:
                 msg = response.choices[0].message
-                if hasattr(msg, 'reasoning_content') and msg.reasoning_content:
+                if hasattr(msg, "reasoning_content") and msg.reasoning_content:
                     reasoning_parts.append(msg.reasoning_content)
                     callback(f"[THINK]{msg.reasoning_content}")
                 if msg.content:
@@ -925,29 +1006,31 @@ class OnlineToolSession(BaseChatSession):
                     callback(msg.content)
                 if msg.tool_calls:
                     for tc in msg.tool_calls:
-                        tool_calls_data.append({
-                            "id": tc.id,
-                            "type": "function",
-                            "function": {
-                                "name": tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
-                        })
+                        tool_calls_data.append(
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
+                            }
+                        )
             content = "".join(content_parts)
             reasoning_content = "".join(reasoning_parts)
             return content, tool_calls_data, reasoning_content
 
         # 流式模式
         for chunk in response:
-            if hasattr(chunk, 'usage') and chunk.usage:
+            if hasattr(chunk, "usage") and chunk.usage:
                 self.api._accumulate_usage(chunk.usage)
 
-            if not hasattr(chunk, 'choices') or not chunk.choices:
+            if not hasattr(chunk, "choices") or not chunk.choices:
                 continue
 
             delta = chunk.choices[0].delta
 
-            if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+            if hasattr(delta, "reasoning_content") and delta.reasoning_content:
                 reasoning_parts.append(delta.reasoning_content)
                 callback(f"[THINK]{delta.reasoning_content}")
 
@@ -977,10 +1060,11 @@ class OnlineToolSession(BaseChatSession):
             _load_persisted_os_sig,
             _save_os_sig,
         )
+
         current_sig = _get_os_signature()
 
         # 首次检查：从持久化文件加载上次签名
-        topic_id = getattr(self, 'current_topic_id', None)
+        topic_id = getattr(self, "current_topic_id", None)
         if not self.context._os_info_injected and topic_id:
             self.context._os_info_injected = _load_persisted_os_sig(topic_id)
 
@@ -1002,26 +1086,47 @@ class OnlineToolSession(BaseChatSession):
     def _setup_default_pipeline(self):
         """设置默认的 Pipeline 步骤"""
         self.pipeline.register_step(
-            name="inject_os_info", func=self._inject_os_info,
-            enabled=True, description="注入操作系统环境信息轮次", position=17,
+            name="inject_os_info",
+            func=self._inject_os_info,
+            enabled=True,
+            description="注入操作系统环境信息轮次",
+            position=17,
         )
         self.pipeline.register_step(
-            name="inject_memories", func=self.memory_comp.inject_memories,
-            enabled=True, description="从长期记忆中注入相关记忆", position=15,
+            name="inject_memories",
+            func=self.memory_comp.inject_memories,
+            enabled=True,
+            description="从长期记忆中注入相关记忆",
+            position=15,
         )
         self.pipeline.register_step(
             name="add_user_message",
-            func=lambda ctx: (self.add_user_message(ctx.get("user_msg", "")), self.context.messages)[1],
-            enabled=True, description="添加用户消息到会话历史", position=20,
+            func=lambda ctx: (
+                self.add_user_message(ctx.get("user_msg", "")),
+                self.context.messages,
+            )[1],
+            enabled=True,
+            description="添加用户消息到会话历史",
+            position=20,
         )
         self.pipeline.register_step(
             name="summarize_old_history",
-            func=lambda ctx: (self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client), self.context.messages)[1],
-            enabled=True, description="将旧对话历史压缩为摘要", position=30,
+            func=lambda ctx: (
+                self.summarizer_comp.summarize_old_history(
+                    self.api, self._get_summarize_client
+                ),
+                self.context.messages,
+            )[1],
+            enabled=True,
+            description="将旧对话历史压缩为摘要",
+            position=30,
         )
         self.pipeline.register_step(
-            name="tool_loop", func=self._execute_tool_loop,
-            enabled=True, description="执行工具调用循环", position=40,
+            name="tool_loop",
+            func=self._execute_tool_loop,
+            enabled=True,
+            description="执行工具调用循环",
+            position=40,
         )
 
     # ──────────────────────────────────────────────
@@ -1030,7 +1135,7 @@ class OnlineToolSession(BaseChatSession):
 
     def _get_topic_system_prompt(self) -> str | None:
         """获取当前主题的自定义系统提示词（若有则优先使用）。"""
-        topic_id = getattr(self, 'current_topic_id', None)
+        topic_id = getattr(self, "current_topic_id", None)
         if topic_id and self.storage:
             try:
                 return self.storage.get_topic_system_prompt(topic_id)
@@ -1062,7 +1167,9 @@ class OnlineToolSession(BaseChatSession):
         all_tools = self.tools_comp.build_tools()
         self.tools = filter_tools(all_tools, tool_filter)
         if tool_filter:
-            logger.info(f"[Pipe Dynamic] Tool Injection: enabled {len(self.tools)} tools based on intent")
+            logger.info(
+                f"[Pipe Dynamic] Tool Injection: enabled {len(self.tools)} tools based on intent"
+            )
 
     def update_tools(self):
         """重新加载并刷新工具定义"""
@@ -1073,11 +1180,11 @@ class OnlineToolSession(BaseChatSession):
         """根据用户输入自动检测并切换 Agent 模式。"""
         result = detect_mode(
             call_tool_fn=lambda action, text: self.context.toolkit.call_tool(
-                'toolkit_mode', action=action, text=text
+                "toolkit_mode", action=action, text=text
             ),
             user_text=user_text,
         )
-        if result.get('switched'):
+        if result.get("switched"):
             logger.info(
                 f"🤖 自动切换模式: {result.get('from_mode')} → {result.get('to_mode')} "
                 f"(原因: {result.get('reason', 'N/A')})"
@@ -1104,14 +1211,19 @@ class OnlineToolSession(BaseChatSession):
         except Exception:
             logger.exception("operation failed")
 
-
     def _notify_reflection_done(self, reflection_id: int):
         self._notify("🔍 元认知反思完成", f"反思 #{reflection_id} 已生成")
 
     def _notify_prompt_evolved(self, version: int):
         self._notify("📝 提示词进化", f"系统提示词已进化到 v{version}")
 
-    def chat_stream(self, msg: str, callback: Callable[[str], None], topic_id: str = "", on_status: Callable[[str], None] | None = None) -> tuple[str, bool]:
+    def chat_stream(
+        self,
+        msg: str,
+        callback: Callable[[str], None],
+        topic_id: str = "",
+        on_status: Callable[[str], None] | None = None,
+    ) -> tuple[str, bool]:
         """流式对话，支持工具调用。使用 Pipeline 执行可配置的步骤。"""
         _msg_text = msg if isinstance(msg, str) else msg.get("text", "")
         _msg_images = None if isinstance(msg, str) else msg.get("images", [])
@@ -1122,8 +1234,14 @@ class OnlineToolSession(BaseChatSession):
             callback(error_msg)
             return error_msg, False
 
-        logger.debug(f"chat_stream start: msg_len={len(str(msg))}, topic_id={topic_id}, model={self.context.model}, enable_thinking={self.context.enable_thinking}")
-        logger.debug(f"chat_stream user message: {_msg_text[:200]}..." if len(_msg_text) > 200 else f"chat_stream user message: {_msg_text}")
+        logger.debug(
+            f"chat_stream start: msg_len={len(str(msg))}, topic_id={topic_id}, model={self.context.model}, enable_thinking={self.context.enable_thinking}"
+        )
+        logger.debug(
+            f"chat_stream user message: {_msg_text[:200]}..."
+            if len(_msg_text) > 200
+            else f"chat_stream user message: {_msg_text}"
+        )
 
         self.current_topic_id = topic_id
         self.reset_interrupt()
@@ -1133,8 +1251,8 @@ class OnlineToolSession(BaseChatSession):
 
         intent = self._analyze_intent(_msg_text)
 
-        if intent.get('required_tools'):
-            self._build_tools(tool_filter=intent['required_tools'])
+        if intent.get("required_tools"):
+            self._build_tools(tool_filter=intent["required_tools"])
         else:
             self._build_tools()
 
@@ -1145,8 +1263,8 @@ class OnlineToolSession(BaseChatSession):
             "on_status": on_status,
         }
 
-        if intent.get('skip_tool_loop'):
-            context['skip_tool_loop'] = True
+        if intent.get("skip_tool_loop"):
+            context["skip_tool_loop"] = True
 
         # 开始反思追踪
         if self.reflection_manager is not None:
@@ -1163,7 +1281,10 @@ class OnlineToolSession(BaseChatSession):
         iterations = result.get("iterations", 0)
 
         # 完成追踪
-        if self.reflection_manager is not None and self.context._current_trace is not None:
+        if (
+            self.reflection_manager is not None
+            and self.context._current_trace is not None
+        ):
             self.reflection_manager.finish_trace(
                 self.context._current_trace,
                 total_iterations=iterations,
@@ -1179,42 +1300,43 @@ class OnlineToolSession(BaseChatSession):
             # 关闭所有HTTP客户端
             for client in self._http_clients:
                 try:
-                    if hasattr(client, 'close'):
+                    if hasattr(client, "close"):
                         client.close()
                 except Exception as e:
                     logger.debug(f"Close HTTP client failed: {e}")
-            
+
             # 关闭OpenAI客户端
-            if hasattr(self.context, 'client') and self.context.client:
+            if hasattr(self.context, "client") and self.context.client:
                 try:
-                    if hasattr(self.context.client, 'close'):
+                    if hasattr(self.context.client, "close"):
                         self.context.client.close()
                 except Exception as e:
                     logger.debug(f"Close main OpenAI client failed: {e}")
-            
-            if hasattr(self.context, 'cheap_client') and self.context.cheap_client:
+
+            if hasattr(self.context, "cheap_client") and self.context.cheap_client:
                 try:
-                    if hasattr(self.context.cheap_client, 'close'):
+                    if hasattr(self.context.cheap_client, "close"):
                         self.context.cheap_client.close()
                 except Exception as e:
                     logger.debug(f"Close cheap OpenAI client failed: {e}")
-            
+
             # 关闭存储连接
-            if hasattr(self, 'storage') and self.storage:
+            if hasattr(self, "storage") and self.storage:
                 try:
                     self.storage.close()
                 except Exception as e:
                     logger.debug(f"Close storage connection failed: {e}")
-            
+
             logger.info("OnlineToolSession resources released")
         except Exception as e:
             logger.warning(f"Close OnlineToolSession resources failed: {e}")
-    
+
     def __del__(self):
         """析构函数，确保资源被释放"""
         try:
             self.close()
         except Exception:
             logger.exception("operation failed")
+
 
 from tea_agent.session_memory_component import MemoryComponent

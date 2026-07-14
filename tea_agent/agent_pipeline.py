@@ -1,15 +1,6 @@
 """
-Agent 后处理流水线模块
-
-从 agent.py 提取的后处理逻辑：
-- L2→L3 语义摘要（将溢出 LR 条目压缩为 L3 语义摘要）
-- 自动主题摘要（基于最近对话生成主题标题）
-- 工具链摘要
-
-设计要点：
-- 所有函数在后台线程执行，不阻塞主对话流程
-- 使用 cheap model 以降低 token 消耗
-- 异常被捕获记录，不影响主流程
+Agent 后处理流水线模块 — 语义摘要、主题摘要、工具链摘要。
+所有函数在后台线程执行，不阻塞主对话流程。
 """
 
 from __future__ import annotations
@@ -21,21 +12,10 @@ logger = logging.getLogger("agent.pipeline")
 
 
 def _empty_usage() -> dict[str, int]:
-    """返回零值 usage 字典，作为 token 消耗的默认初始值。
-
-    Returns:
-        包含 total_tokens/prompt_tokens/completion_tokens 均为 0 的字典
-    """
     return {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
 
 
 def _merge_usage(acc: dict[str, int], new_usage: dict[str, int]) -> None:
-    """将 new_usage 的 token 消耗合并到 acc 累加器中。
-
-    Args:
-        acc: 累加目标字典（原地修改）
-        new_usage: 新的一次 token 消耗数据
-    """
     for k in ("total_tokens", "prompt_tokens", "completion_tokens"):
         acc[k] = acc.get(k, 0) + new_usage.get(k, 0)
 
@@ -46,19 +26,7 @@ def do_async_summaries(
     overflow_items: list[dict] | None = None,
     should_summarize: bool = False,
 ) -> None:
-    """后台线程入口：执行标题摘要 + 条件 L2→L3 摘要。
-
-    工作流程：
-    1. 执行 auto_summary 更新主题标题
-    2. 如果 should_summarize=True 且有 overflow_items，执行 L2→L3 摘要
-    3. 将总 token 消耗记入 agent._pending_cheap_tokens
-
-    Args:
-        agent: Agent 实例
-        topic_id: 主题 ID
-        overflow_items: L2 溢出条目列表（L2→L3 摘要的输入）
-        should_summarize: 是否执行 L2→L3 摘要
-    """
+    """后台线程入口：执行标题摘要 + 条件 L2→L3 摘要。"""
     pending: dict[str, int] = {}
     try:
         _sum, usage = auto_summary(agent, topic_id)
@@ -103,10 +71,14 @@ def l2_to_l3_summary(
         existing_l3 = agent._db.get_semantic_summary(topic_id) or ""
         extra_params = agent._sess._get_effective_params("cheap")
         new_summary, usage = agent._db.generate_l2_to_l3_summary(
-            topic_id, overflow_items, existing_l3, cli, mdl,
+            topic_id,
+            overflow_items,
+            existing_l3,
+            cli,
+            mdl,
             extra_params=extra_params,
         )
-        if new_summary and hasattr(agent._sess, 'context'):
+        if new_summary and hasattr(agent._sess, "context"):
             agent._sess.context._semantic_summary = new_summary
         logger.info(f"L2→L3 摘要完成: topic={topic_id}")
         return new_summary, usage
@@ -118,6 +90,7 @@ def l2_to_l3_summary(
 # ── 尝试导入 GUI 主题摘要（精简版可能没有 _gui 模块）──
 try:
     from tea_agent._gui._topic_summary import _generate_topic_summary  # noqa: F811
+
     _HAVE_GUI_TOPIC_SUMMARY = True
 except ImportError:
     _HAVE_GUI_TOPIC_SUMMARY = False
@@ -154,7 +127,9 @@ def auto_summary(
         return None, _empty_usage()
     try:
         cli, mdl = agent._sess._get_summarize_client()
-        summary, usage = _generate_topic_summary(client=cli, model=mdl, conversations=recent)
+        summary, usage = _generate_topic_summary(
+            client=cli, model=mdl, conversations=recent
+        )
         if summary:
             agent._db.update_topic_title(topic_id, summary)
             logger.info(f"📝 主题摘要更新: {summary}")

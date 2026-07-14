@@ -199,6 +199,17 @@ class AcpAgent:
             "document/didFocus", self._handle_document_did_focus
         )
 
+        # NES (Inline Edit Suggestions)
+        t.on_request("nes/start", self._handle_nes_start)
+        t.on_request("nes/suggest", self._handle_nes_suggest)
+        t.on_request("nes/accept", self._handle_nes_accept)
+        t.on_request("nes/reject", self._handle_nes_reject)
+        t.on_request("nes/close", self._handle_nes_close)
+
+        # Extension points (custom)
+        t.on_request("ext/request", self._handle_ext_request)
+        t.on_notification("ext/notification", self._handle_ext_notification)
+
         # Cancel support
         t.on_cancel(self._handle_cancel_request)
 
@@ -820,6 +831,205 @@ class AcpAgent:
     def _handle_document_did_focus(self, params: Any):
         path = (params or {}).get("path", "")
         logger.debug(f"document/didFocus: {path}")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # HANDLERS — NES (Inline Edit Suggestions)
+    # ══════════════════════════════════════════════════════════════════════
+
+    def _handle_nes_start(
+        self, params: Any, msg_id: RequestId
+    ) -> dict:
+        """Handle ``nes/start`` — start an inline edit session."""
+        session_id = (params or {}).get("sessionId", "")
+        file_path = (params or {}).get("filePath", "")
+        selection = (params or {}).get("selection", "")
+        logger.info(f"nes/start: session={session_id} file={file_path}")
+        return {
+            "nesId": f"nes_{uuid.uuid4().hex[:12]}",
+            "sessionId": session_id,
+            "filePath": file_path,
+            "selection": selection,
+            "status": "ready",
+        }
+
+    def _handle_nes_suggest(
+        self, params: Any, msg_id: RequestId
+    ) -> dict:
+        """Handle ``nes/suggest`` — suggest an inline edit."""
+        nes_id = (params or {}).get("nesId", "")
+        file_path = (params or {}).get("filePath", "")
+        prompt = (params or {}).get("prompt", "")
+        logger.info(f"nes/suggest: {nes_id}")
+        # Generate a suggestion — use agent if available, else simple response
+        ai_text = ""
+        try:
+            if self._agent is not None:
+                ai_text, _ = self._agent.sess.chat_once(
+                    f"Generate a code suggestion for:\n{prompt}"
+                )
+            ai_text = ai_text or ""
+        except Exception:
+            pass
+        if not ai_text:
+            ai_text = f"# Suggested edit for {os.path.basename(file_path) if file_path else 'file'}\n# Based on: {prompt}\n"
+
+        return {
+            "nesId": nes_id,
+            "suggestions": [
+                {
+                    "id": f"sug_{uuid.uuid4().hex[:8]}",
+                    "text": ai_text,
+                    "filePath": file_path,
+                }
+            ],
+            "status": "suggested",
+        }
+
+    def _handle_nes_accept(
+        self, params: Any, msg_id: RequestId
+    ) -> dict:
+        """Handle ``nes/accept`` — accept a suggestion."""
+        nes_id = (params or {}).get("nesId", "")
+        suggestion_id = (params or {}).get("suggestionId", "")
+        logger.info(f"nes/accept: {nes_id} sug={suggestion_id}")
+        return {
+            "nesId": nes_id,
+            "suggestionId": suggestion_id,
+            "status": "accepted",
+        }
+
+    def _handle_nes_reject(
+        self, params: Any, msg_id: RequestId
+    ) -> dict:
+        """Handle ``nes/reject`` — reject a suggestion."""
+        nes_id = (params or {}).get("nesId", "")
+        suggestion_id = (params or {}).get("suggestionId", "")
+        logger.info(f"nes/reject: {nes_id} sug={suggestion_id}")
+        return {
+            "nesId": nes_id,
+            "suggestionId": suggestion_id,
+            "status": "rejected",
+        }
+
+    def _handle_nes_close(
+        self, params: Any, msg_id: RequestId
+    ) -> dict:
+        """Handle ``nes/close`` — close an inline edit session."""
+        nes_id = (params or {}).get("nesId", "")
+        logger.info(f"nes/close: {nes_id}")
+        return {"nesId": nes_id, "status": "closed"}
+
+    # ══════════════════════════════════════════════════════════════════════
+    # HANDLERS — Extension Points
+    # ══════════════════════════════════════════════════════════════════════
+
+    def _handle_ext_request(
+        self, params: Any, msg_id: RequestId
+    ) -> dict:
+        """Handle ``ext/request`` — custom extension request.
+
+        Allows external tools to call arbitrary Tea Agent capabilities.
+        """
+        method = (params or {}).get("method", "")
+        ext_params = (params or {}).get("params", {})
+        logger.info(f"ext/request: method={method}")
+
+        # Route to the appropriate internal handler if available
+        handler_map = {
+            "toolkit/list": self._ext_toolkit_list,
+            "toolkit/call": self._ext_toolkit_call,
+            "config/get": self._ext_config_get,
+            "config/set": self._ext_config_set,
+            "memory/search": self._ext_memory_search,
+            "memory/add": self._ext_memory_add,
+        }
+
+        handler = handler_map.get(method)
+        if handler:
+            return handler(ext_params)
+        return {"error": f"Unknown extension method: {method}"}
+
+    def _ext_toolkit_list(self, params: dict) -> dict:
+        """List available toolkit tools."""
+        try:
+            if self._agent is None:
+                from tea_agent.agent import Agent
+                self._agent = Agent(mode="lightweight", config_path=self._config_path)
+            tools = []
+            for name, meta in self._agent.toolkit.meta_map.items():
+                fn = meta.get("function", {})
+                tools.append({
+                    "name": fn.get("name", name),
+                    "description": fn.get("description", ""),
+                })
+            return {"object": "list", "data": tools, "total": len(tools)}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def _ext_toolkit_call(self, params: dict) -> dict:
+        """Call a toolkit function."""
+        tool_name = params.get("name", "")
+        tool_args = params.get("arguments", {})
+        try:
+            if self._agent is None:
+                from tea_agent.agent import Agent
+                self._agent = Agent(mode="lightweight", config_path=self._config_path)
+            result = self._agent.toolkit.call(tool_name, **tool_args)
+            return {"result": result}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def _ext_config_get(self, params: dict) -> dict:
+        """Get a config value."""
+        key = params.get("key", "")
+        try:
+            from tea_agent.config import get_config
+            config = get_config(self._config_path)
+            return {"key": key, "value": getattr(config, key, None)}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def _ext_config_set(self, params: dict) -> dict:
+        """Set a config value."""
+        key = params.get("key", "")
+        value = params.get("value")
+        try:
+            from tea_agent.config import get_config
+            config = get_config(self._config_path)
+            setattr(config, key, value)
+            config.save()
+            return {"success": True, "key": key, "value": value}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def _ext_memory_search(self, params: dict) -> dict:
+        """Search memory."""
+        query = params.get("query", "")
+        try:
+            from tea_agent.store import get_storage
+            storage = get_storage()
+            results = storage.get_memory(query)
+            return {"results": results or []}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def _ext_memory_add(self, params: dict) -> dict:
+        """Add a memory entry."""
+        content = params.get("content", "")
+        category = params.get("category", "general")
+        try:
+            from tea_agent.store import get_storage
+            storage = get_storage()
+            storage.add_memory(content, category)
+            return {"success": True}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def _handle_ext_notification(self, params: Any):
+        """Handle ``ext/notification`` — custom extension notification."""
+        event = (params or {}).get("event", "")
+        data = (params or {}).get("data", {})
+        logger.info(f"ext/notification: event={event}")
 
     # ══════════════════════════════════════════════════════════════════════
     # HANDLERS — Cancel

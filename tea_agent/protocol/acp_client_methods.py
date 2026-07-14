@@ -226,3 +226,105 @@ class AcpClientMethods:
             timeout=self._timeout,
         )
         return result is not None
+
+    # ── Elicitation (Form Collection) ────────────────────────────────────
+
+    def create_elicitation(
+        self,
+        session_id: str,
+        title: str,
+        fields: list[dict],
+        description: Optional[str] = None,
+        metadata: Optional[dict] = None,
+    ) -> dict:
+        """Ask the client to show a form/elicitation to collect input.
+
+        Args:
+            session_id: Active session
+            title: Form title
+            fields: List of field definitions (type, label, required, etc.)
+            description: Optional form description
+            metadata: Optional metadata
+
+        Returns:
+            Form response with submitted data
+        """
+        logger.info(f"elicitation/create: {title}")
+        params: dict[str, Any] = {
+            "sessionId": session_id,
+            "title": title,
+            "fields": fields,
+        }
+        if description:
+            params["description"] = description
+        if metadata:
+            params["metadata"] = metadata
+
+        result = self._transport.send_request(
+            "elicitation/create",
+            params,
+            timeout=300,  # Can be long if user takes time
+        )
+        return result or {}
+
+    def complete_elicitation(
+        self,
+        session_id: str,
+        form_id: str,
+        data: dict[str, Any],
+    ) -> bool:
+        """Submit completed elicitation data."""
+        result = self._transport.send_request(
+            "elicitation/complete",
+            {"sessionId": session_id, "formId": form_id, "data": data},
+            timeout=self._timeout,
+        )
+        return result is not None
+
+    # ── MCP (Model Context Protocol) ─────────────────────────────────────
+
+    def mcp_connect(
+        self,
+        server_name: str,
+        command: str,
+        args: Optional[list[str]] = None,
+        env: Optional[dict] = None,
+    ) -> dict:
+        """Ask the client to connect an MCP server."""
+        params: dict[str, Any] = {
+            "serverName": server_name,
+            "command": command,
+        }
+        if args:
+            params["args"] = args
+        if env:
+            params["env"] = env
+
+        result = self._transport.send_request(
+            "mcp/connect",
+            params,
+            timeout=self._timeout,
+        )
+        return result or {}
+
+    def mcp_message(
+        self,
+        server_name: str,
+        message: dict,
+    ) -> dict:
+        """Send a message to an MCP server via the client."""
+        result = self._transport.send_request(
+            "mcp/message",
+            {"serverName": server_name, "message": message},
+            timeout=self._timeout,
+        )
+        return result or {}
+
+    def mcp_disconnect(self, server_name: str) -> bool:
+        """Ask the client to disconnect an MCP server."""
+        result = self._transport.send_request(
+            "mcp/disconnect",
+            {"serverName": server_name},
+            timeout=self._timeout,
+        )
+        return result is not None

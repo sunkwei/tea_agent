@@ -287,7 +287,7 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
 
         left_margin = pdf.l_margin + indent
         all_lines = code_text.split("\n")
-        line_h = 4.5
+        line_h = 5.0  # Match body text line height
 
         # Thin top border
         pdf.set_draw_color(200, 200, 215)
@@ -295,15 +295,15 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
         pdf.line(left_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
         pdf.ln(1)
 
-        # Render each line — simple approach: set y before, advance after
+        # Render each line — let write() handle wrapping, then advance correctly
         for line_text in all_lines:
             # Page break check
             if pdf.get_y() + line_h > pdf.h - pdf.b_margin:
                 pdf.add_page()
 
             # Start of this line
-            y_line = pdf.get_y()
-            pdf.set_xy(left_margin + 3, y_line)
+            y_before = pdf.get_y()
+            pdf.set_x(left_margin + 3)
 
             for ttype, tval in lexer.get_tokens(line_text):
                 color = _pygments_to_rgb(ttype)
@@ -326,8 +326,11 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
                     pdf.set_font(code_font, "", 8)
                     pdf.set_text_color(*color)
 
-            # Advance to next line unconditionally
-            pdf.set_y(y_line + line_h)
+            # Advance to next line.
+            # If write() wrapped (long line), y already advanced — don't double-advance.
+            # If write() didn't wrap, advance by exactly one line_h.
+            if pdf.get_y() <= y_before:
+                pdf.set_y(y_before + line_h)
 
         # Bottom border
         pdf.set_draw_color(200, 200, 215)
@@ -377,7 +380,7 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
             # Skip to after the table
             while i < len(lines) and "|" in lines[i]:
                 i += 1
-            pdf.ln(4)
+            pdf.ln(5)
             continue
 
         # ── Headings ──
@@ -436,7 +439,7 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
             y1 = pdf.get_y()
             # Draw vertical bar
             pdf.line(pdf.l_margin + indent + 2, y0, pdf.l_margin + indent + 2, y1)
-            pdf.ln(3)
+            pdf.ln(5)
             i += 1
             continue
 

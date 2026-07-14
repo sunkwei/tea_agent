@@ -103,12 +103,30 @@ body {
 }
 .topic-item:hover { background: var(--surface2); color: var(--text); }
 .topic-item.active { background: var(--primary-dim); color: #fff; }
-.topic-item .del-btn {
+.topic-item .more-btn {
   margin-left: auto; opacity: 0; transition: opacity var(--transition);
-  background: none; border: none; color: inherit; cursor: pointer; font-size: 12px; padding: 2px 4px;
+  background: none; border: none; color: inherit; cursor: pointer; font-size: 14px; padding: 2px 8px; border-radius: var(--radius-sm); line-height: 1;
 }
-.topic-item:hover .del-btn { opacity: .6; }
-.topic-item:hover .del-btn:hover { opacity: 1; }
+.topic-item:hover .more-btn { opacity: .6; }
+.topic-item:hover .more-btn:hover { opacity: 1; background: var(--surface3); }
+
+/* ── Topic Context Menu ── */
+.topic-menu-wrap { position: relative; }
+.topic-menu {
+  position: fixed; z-index: 9999;
+  min-width: 140px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  overflow: hidden; display: none;
+}
+.topic-menu.show { display: block; }
+.topic-menu a {
+  display: block; padding: 8px 14px; font-size: 13px; cursor: pointer;
+  color: var(--text); text-decoration: none; white-space: nowrap;
+  transition: background var(--transition);
+}
+.topic-menu a:hover { background: var(--surface2); }
+.topic-menu a.danger { color: var(--red); }
+.topic-menu a.danger:hover { background: var(--red-bg); }
 
 /* ── Center Column ── */
 #main {
@@ -1729,7 +1747,12 @@ async function refreshTopics() {
       const cls = 'topic-item' + (t.id === currentTopicId ? ' active' : '');
       return '<div class="' + cls + '" onclick="openTopic(\'' + t.id + '\',\'' + esc(title) + '\')">'
         + esc(title)
-        + '<button class="del-btn" onclick="event.stopPropagation();deleteTopic(\'' + t.id + '\')">✕</button>'
+        + '<span class="topic-menu-wrap">'
+        + '<button class="more-btn" onclick="event.stopPropagation();showTopicMenu(this,\'' + t.id + '\')">⋯</button>'
+        + '<div class="topic-menu" id="topic-menu-' + t.id + '">'
+        + '<a onclick="event.stopPropagation();renameTopic(\'' + t.id + '\')">✏️ 编辑标题</a>'
+        + '<a class="danger" onclick="event.stopPropagation();deleteTopic(\'' + t.id + '\')">🗑 删除</a>'
+        + '</div></span>'
         + '</div>';
     }).join('');
   } catch(e) {}
@@ -1789,6 +1812,80 @@ window.deleteTopic = async function(id) {
     toast('删除失败', 'error');
   }
 };
+
+// ── Topic Context Menu ──
+window.showTopicMenu = function(btn, topicId) {
+  const menuId = 'topic-menu-' + topicId;
+  const menu = document.getElementById(menuId);
+  if (!menu) return;
+  const isOpen = menu.classList.contains('show');
+  closeAllTopicMenus();
+  if (!isOpen) {
+    menu.classList.add('show');
+    // Position menu using fixed coordinates relative to viewport
+    const rect = btn.getBoundingClientRect();
+    menu.style.left = rect.right + 'px';
+    menu.style.top = rect.top + 'px';
+    menu.style.transform = 'translate(-100%, 0)';
+    // If not enough space below, flip up
+    const spaceBelow = window.innerHeight - rect.top;
+    if (spaceBelow < 160) {
+      menu.style.top = rect.bottom + 'px';
+      menu.style.transform = 'translate(-100%, -100%)';
+    }
+    // If off-screen left, align to left edge
+    if (rect.right < 160) {
+      menu.style.left = '8px';
+      menu.style.transform = 'translate(0, 0)';
+    }
+  }
+};
+
+window.closeAllTopicMenus = function() {
+  document.querySelectorAll('.topic-menu.show').forEach(function(m) {
+    m.classList.remove('show');
+  });
+};
+
+window.renameTopic = async function(topicId) {
+  closeAllTopicMenus();
+  const topicsEl = document.querySelectorAll('.topic-item');
+  let currentTitle = '';
+  for (const el of topicsEl) {
+    if (el.getAttribute('onclick') && el.getAttribute('onclick').includes(topicId)) {
+      currentTitle = el.childNodes[0] ? el.childNodes[0].textContent.trim() : '';
+      break;
+    }
+  }
+  const newTitle = prompt('修改话题标题：', currentTitle);
+  if (!newTitle || newTitle === currentTitle) return;
+  try {
+    const r = await fetch('/api/topic/' + encodeURIComponent(topicId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: newTitle })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('✏️ 标题已更新', 'success');
+      refreshTopics();
+      if (topicId === currentTopicId) {
+        $('tt').textContent = newTitle;
+      }
+    } else {
+      toast('修改失败: ' + (d.error || ''), 'error');
+    }
+  } catch(e) {
+    toast('修改失败: ' + e.message, 'error');
+  }
+};
+
+// ── Close topic menus when clicking outside ──
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.topic-menu-wrap')) {
+    closeAllTopicMenus();
+  }
+});
 
 // ══════════════════════════════════════════════════
 //  TASK PANEL (Plan + TODO)

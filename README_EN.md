@@ -63,19 +63,13 @@ tea_agent
 
 # ACP Protocol Server (VS Code integration)
 python -m tea_agent.protocol --port 9090
-
-# CLI Chat
-python -m tea_agent.cli
-
-# TUI Interface
-python -m tea_agent.tui
 ```
 
 ---
 
 ## 💻 Interface Modes
 
-Tea Agent offers **six interface modes**, covering all use cases from desktop to web, CLI to API.
+Tea Agent offers **four interface modes**, covering all use cases from desktop to web, CLI to API.
 
 ---
 
@@ -100,27 +94,7 @@ python -m tea_agent.gui           # Module mode
 
 ---
 
-### 2. CLI (`python -m tea_agent.cli`)
-
-Lightweight terminal chat interface, suitable for remote servers, CI/CD pipelines, script integration.
-
-**Launch:**
-```bash
-python -m tea_agent.cli           # Interactive mode
-python -m tea_agent.cli --oneshot "Write a quick sort"  # Single-shot mode
-```
-
-**Features:**
-- 📝 Interactive REPL, multi-line input (`\` for line continuation, EOF to submit)
-- 🎨 Syntax highlighting + real-time tool call display
-- 💾 Chat history persisted by UUID
-- 📋 `/history` command, `/clear` to clear screen
-- 🔧 Supports custom config: `python -m tea_agent.cli -c config_prod.yaml`
-- Single-shot mode outputs directly to stdout
-
----
-
-### 3. Web V2 (`python -m tea_agent.server`)
+### 2. Web V2 (`python -m tea_agent.server`)
 
 Next-gen Single Page Application (SPA), pure HTML/JS frontend + Starlette backend, all features in browser.
 
@@ -161,7 +135,7 @@ API: /v1/chat/completions (OpenAI compatible)
 
 ---
 
-### 4. REST API Server (`python -m tea_agent.server`)
+### 3. REST API Server (`python -m tea_agent.server`)
 
 OpenAI-compatible HTTP API server, easy for third-party integration.
 
@@ -214,7 +188,7 @@ curl "http://127.0.0.1:8081/v1/search?q=keyword"
 
 ---
 
-### 5. ACP Protocol Server (`python -m tea_agent.protocol`)
+### 4. ACP Protocol Server (`python -m tea_agent.protocol`)
 
 Agent Communication Protocol server, providing standardized Agent-to-Agent communication, can be integrated with VS Code / Cursor IDE.
 

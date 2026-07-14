@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.10.15-blue)](https://pypi.org/project/tea-agent)
 
-Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / GUI2 / CLI / Web / REST API / ACP Protocol / TUI** 七种界面形态。
+Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / Web / REST API / ACP Protocol** 四种界面形态。
 
 ---
 
@@ -19,7 +19,7 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用
 - 🧭 **上下文感知** — 自动检测当前项目身份：在 tea_agent 自身项目中启用全部自进化能力，在外部项目中自动禁用自进化行为，专注完成用户任务
 - 🧰 **70+ 内置工具** — 涵盖文件操作、代码编辑、搜索、截图、OCR、包管理、Git 等
 - ⏱️ **智能命令超时** — 后台监控进程 CPU/MEM/IO，活跃进程自动延长超时至 4x，空闲进程及时终止
-- 🖥️ **七种界面** — GUI（Tkinter）、GUI2（Web 桌面）、CLI、Web（Starlette + SSE）、REST API、ACP Protocol、TUI（Textual），按需选择
+- 🖥️ **多种界面** — GUI（Tkinter）、Web（Starlette + SSE）、REST API、ACP Protocol，按需选择
 - 🌐 **Web V2 实时流式界面** — 单页应用(SPA)，内存搜索、记忆管理、任务调度、历史会话，全部功能浏览器内完成
 - 📚 **项目知识库** — 自动构建符号索引、调用图，支持代码影响分析
 - 🔄 **断点续聊** — 聊天记录持久化，重启后恢复上下文
@@ -71,7 +71,6 @@ playwright install chromium
 | 任务调度 / PDF 导出 | ✅ | ✅ 完整保留 |
 | 配置切换 | ✅ | ✅ 完整保留 |
 | GUI 桌面界面 | ✅ | ❌ |
-| CLI / TUI 界面 | ✅ | ❌ |
 | ACP Protocol | ✅ | ❌ |
 | 文件上传配置 (Drag & Drop) | ✅ | ✅ `python-multipart` 支持 |
 | NumPy 向量操作 | ✅ | ❌ 替换为纯 Python `math+struct` |
@@ -98,11 +97,7 @@ build_mini.py 工作流程
   │
   ├─ 2. 排除的包和文件:
   │     ├─ _gui/     — Tkinter 桌面 GUI
-  │     ├─ gui2/     — Web 桌面 GUI（Bottle + Starlette）
-  │     ├─ protocol/ — ACP 协议
-  │     ├─ lsp/      — 代码智能
-  │     ├─ sdk/      — Python SDK
-  │     ├─ cli.py / tui.py / gui.py — CLI/TUI/GUI 入口
+  │     ├─ gui.py / gui_dialogs.py — GUI 桌面入口
   │     └─ demo/ / tests/ / scripts/
   │
   ├─ 3. 排除的重型工具 (HEAVY_TOOLS):
@@ -211,27 +206,18 @@ python-multipart>=0.0.7 # 文件上传解析
 # Web V2 界面 — 单页应用，全功能浏览器体验（推荐）
 python -m tea_agent.server
 
-# GUI2 Web 桌面界面 — 自动打开浏览器，带任务面板
-python -m tea_agent.gui2
-
 # GUI 桌面界面（Tkinter）
 tea_agent
 
 # ACP Protocol Server（VS Code 集成）
 python -m tea_agent.protocol --port 9090
-
-# CLI 对话
-python -m tea_agent.cli
-
-# TUI 界面
-python -m tea_agent.tui
 ```
 
 ---
 
 ## 💻 界面形态
 
-Tea Agent 提供 **七种界面形态**，覆盖从桌面到 Web、从命令行到 API 的全部使用场景。
+Tea Agent 提供 **五种界面形态**，覆盖从桌面到 Web、从命令行到 API 的全部使用场景。
 
 ---
 
@@ -256,27 +242,7 @@ python -m tea_agent.gui           # 模块方式
 
 ---
 
-### 2. CLI 命令行界面 (`python -m tea_agent.cli`)
-
-轻量级终端对话界面，适合远程服务器、CI/CD 管道、脚本集成。
-
-**启动方式：**
-```bash
-python -m tea_agent.cli           # 交互模式
-python -m tea_agent.cli --oneshot "帮我写一个快速排序"  # 单次模式
-```
-
-**功能特性：**
-- 📝 交互式 REPL 对话，支持多行输入（`\` 换行，EOF 提交）
-- 🎨 语法高亮 + 工具调用实时显示
-- 💾 聊天记录按 UUID 持久化
-- 📋 `/history` 命令查看历史，`/clear` 清屏
-- 🔧 支持指定配置文件：`python -m tea_agent.cli -c config_prod.yaml`
-- 单次模式适合脚本调用：直接输出结果到 stdout
-
----
-
-### 3. Web V2 界面 (`python -m tea_agent.server`)
+### 2. Web V2 界面 (`python -m tea_agent.server`)
 
 新一代单页应用（SPA），纯前端 HTML/JS + 后端 Starlette API，所有功能在浏览器中完成。
 
@@ -341,7 +307,7 @@ curl -N -X POST http://127.0.0.1:8080/v1/chat/completions \
 
 ---
 
-### 4. REST API Server (`python -m tea_agent.server`)
+### 3. REST API Server (`python -m tea_agent.server`)
 
 OpenAI 兼容的 HTTP API 服务器，方便第三方应用集成。
 
@@ -394,7 +360,7 @@ curl "http://127.0.0.1:8080/v1/search?q=keyword"
 
 ---
 
-### 5. ACP Protocol Server (`python -m tea_agent.protocol`)
+### 4. ACP Protocol Server (`python -m tea_agent.protocol`)
 
 Agent Communication Protocol 服务器，提供标准化的 Agent-to-Agent 通信，可用于 VS Code / Cursor 等 IDE 集成。
 
@@ -422,44 +388,6 @@ python -m tea_agent.protocol --port 9090
 - 🔗 **IDE 集成** — 标准 ACP 协议，可对接任何 ACP 客户端
 
 ---
-
-### 6. GUI2 Web 桌面界面 (`python -m tea_agent.gui2`)
-
-新一代 **Web 桌面界面**，基于 Starlette + SSE 实时流式架构，自动打开本地浏览器。
-相比 Tkinter GUI，界面更现代、交互更流畅、功能更完整；相比 Web V2，增加了桌面级体验（自动启动浏览器、任务面板集成）。
-
-**启动方式：**
-```bash
-python -m tea_agent.gui2                    # 启动并自动打开浏览器
-python -m tea_agent.gui2 --port 8080        # 指定端口
-python -m tea_agent.gui2 --no-browser       # 不自动打开浏览器
-python -m tea_agent.gui2 --debug            # 调试模式
-```
-
-**功能特性：**
-- 📋 右侧任务面板 — Plan + TODO 实时跟踪，执行进度一目了然
-- 🧠 思维链展示 — 思考过程 + 工具调用可视化，调用参数和结果实时展开
-- 🔧 60+ 内置工具实时显示调用详情
-- 🖼️ 图片上传 / 屏幕截图
-- ⚡ 多配置切换 / 热切换模型
-- 🌓 深色/浅色主题
-- 🌐 浏览器访问，零客户端安装
-
-**架构：**
-```
-gui2/
-├── __init__.py          入口：启动 Starlette 服务 + 打开浏览器
-├── __main__.py          python -m tea_agent.gui2 入口
-├── server.py            Bottle-based 静态文件 + API 代理服务
-└── frontend/            前端静态文件（HTML/JS/CSS）
-
-后端路由由 tea_agent.server 提供：
-  ├── server.py           Starlette 应用 + SSE 流式 API
-  ├── route_handlers.py   所有 API 路由
-  └── static/             前端静态文件（HTML/JS/CSS）
-```
-
-> 💡 gui2 为纯 Web 架构，零原生依赖，安装即用。
 
 ---
 
@@ -1134,7 +1062,6 @@ Dispatcher.dispatch(goal)
 ```
 tea_agent/
 ├── gui.py                 # GUI 桌面入口（Tkinter）
-├── gui2/                  # Web 桌面界面（Bottle + Starlette + 浏览器）
 ├── server/                # REST API + Web V2 界面（Starlette + SSE）
 │   ├── server.py          # Starlette 路由 + SSE
 │   ├── route_handlers.py  # API 路由处理
@@ -1143,10 +1070,7 @@ tea_agent/
 ├── protocol/              # ACP Protocol Server
 │   ├── acp_server.py      # ACP 协议实现
 │   └── __main__.py        # python -m tea_agent.protocol
-├── cli.py                 # CLI 命令行
-├── tui.py                 # TUI 界面（Textual）
-├── agent.py               # Agent 核心引擎
-├── config.py              # 配置管理
+├── gui.py                 # GUI 桌面界面（Tkinter）
 ├── memory.py              # 长期记忆
 ├── prompt_manager.py      # 提示词版本管理
 ├── toolkit/               # 73+ 工具模块

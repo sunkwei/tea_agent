@@ -11,9 +11,9 @@ CORE_TOP = ["__init__.py","agent.py","agent_pipeline.py","basesession.py",
     "reflection.py","prompt_manager.py","project_memory.py",
     "agent_background.py"]
 
-EXCLUDED_PKGS = ["_gui","gui2","protocol","lsp","sdk","scripts",
+EXCLUDED_PKGS = ["_gui","protocol","lsp","sdk","scripts",
     "demo","tests"]
-EXCLUDED_TOP = ["cli.py","tui.py","gui.py","gui_dialogs.py"]
+EXCLUDED_TOP = ["gui.py","gui_dialogs.py"]
 
 HEAVY_TOOLS = [
     "toolkit_js_fetch.py","toolkit_input.py","toolkit_screenshot.py",

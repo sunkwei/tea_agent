@@ -37,7 +37,6 @@ dependencies = [
     "jedi>=0.19.0",
     "tree-sitter>=0.21.0",
     "tree-sitter-python>=0.21.0",
-    "textual>=0.50.0",
 ]
 
 [project.scripts]
@@ -45,7 +44,6 @@ tea_agent = "tea_agent.gui:main"
 tea-agent-api = "tea_agent.server:main"
 tea-agent-mini = "tea_agent_mini.__main__:main"
 tea-agent-acp = "tea_agent.protocol:main"
-tea-agent-cli = "tea_agent.cli:main"
 
 [project.optional-dependencies]
 web = [

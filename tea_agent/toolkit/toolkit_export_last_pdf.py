@@ -36,6 +36,149 @@ def _sanitize(text):
     return text.replace("\x00", "")
 
 
+def _detect_content_type(content):
+    """Detect whether tool result content is text, code-friendly, or binary.
+
+    Returns: 'text' (short/inline), 'code' (multi-line/output),
+             'json' (JSON structure), 'binary' (non-printable).
+    """
+    if not content:
+        return "text"
+    # Check for binary content (high ratio of non-printable chars)
+    non_printable = sum(1 for c in content if ord(c) < 32 and c not in "\t\n\r")
+    if len(content) > 0 and non_printable / max(len(content), 1) > 0.1:
+        return "binary"
+    stripped = content.strip()
+    # Check if it's JSON
+    if stripped.startswith(("{", "[")) and stripped.endswith(("}", "]")):
+        try:
+            json.loads(stripped)
+            return "json"
+        except (json.JSONDecodeError, ValueError):
+            pass
+        # JSON parse failed, check Python repr (dict/list with single quotes or None/True/False)
+        if any(c in stripped for c in ("'", "True", "False", "None")):
+            return "code"
+    # Check if it's a Python repr tuple (common for toolkit_exec returns)
+    if stripped.startswith("(") and stripped.endswith(")"):
+        if any(c in stripped for c in (",", "'", '"')):
+            return "code"
+    # Check if it's a Python list literal
+    if stripped.startswith("[") and stripped.endswith("]"):
+        if "'" in stripped or '"' in stripped:
+            return "code"
+    # Multi-line or long content
+    if "\n" in content or len(content) > 200:
+        return "code"
+    return "text"
+
+
+def _truncate_content(content, max_chars=5000):
+    """Truncate content if too long, appending a note."""
+    if len(content) <= max_chars:
+        return content
+    return content[:max_chars] + f"\n\n... [截断: 共 {len(content)} 字符，仅显示前 {max_chars} 字符]"
+
+
+def _build_full_interactions_md(rounds_data):
+    """Convert rounds_json into richly formatted Markdown timeline.
+
+    Produces a structured timeline of:
+      Thinking → Tool Call args → Tool Result → next Thinking → ...
+
+    Uses markdown formatting that _render_markdown already supports:
+      - --- horizontal rules as round separators
+      - ### headings for round numbers
+      - > blockquotes for thinking/reasoning content
+      - ```code blocks for tool args and results
+      - **bold** for labels
+    """
+    parts = []
+    round_num = 0
+
+    for r in rounds_data:
+        role = r.get("role")
+
+        if role == "assistant":
+            rc = r.get("reasoning_content", "") or ""
+            content = r.get("content", "") or ""
+            tc = r.get("tool_calls")
+
+            has_thinking = rc.strip()
+            has_text = content.strip()
+            has_tool_calls = bool(tc)
+
+            if not (has_thinking or has_text or has_tool_calls):
+                continue
+
+            # Start a new round
+            round_num += 1
+            parts.append("\n---\n\n")
+            parts.append(f"### 🔄 回合 {round_num}\n\n")
+
+            if has_thinking:
+                parts.append("💭 **思考**\n\n")
+                for line in rc.strip().split("\n"):
+                    safe_line = line.replace("\r", "")
+                    parts.append(f"> {safe_line}\n")
+                parts.append("\n")
+
+            if has_text:
+                # Assistant's text response (intermediate or final)
+                parts.append("🤖 **AI 回复**\n\n")
+                for line in content.strip().split("\n"):
+                    parts.append(f"> {line}\n")
+                parts.append("\n")
+
+            if has_tool_calls:
+                for t in tc:
+                    fn = t.get("function", {})
+                    name = fn.get("name", "unknown")
+                    raw_args = fn.get("arguments", "")
+                    try:
+                        args_obj = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                        args_pretty = json.dumps(args_obj, indent=2, ensure_ascii=False)
+                    except Exception:
+                        args_pretty = str(raw_args)
+
+                    parts.append(f"🛠️ **调用工具: `{name}`**\n\n")
+                    parts.append(f"```json\n{args_pretty}\n```\n\n")
+
+        elif role == "tool":
+            content = r.get("content", "") or ""
+            if content.strip():
+                ctype = _detect_content_type(content)
+                display_content = _truncate_content(content)
+
+                if ctype == "binary":
+                    # Show binary content info instead of raw bytes
+                    preview = content[:80]
+                    printable_preview = "".join(
+                        c if 32 <= ord(c) < 127 else "." for c in preview
+                    )
+                    parts.append(
+                        f"📦 **返回结果** *(二进制数据, {len(content)} 字节)*\n\n"
+                    )
+                    parts.append(f"```\n{printable_preview}\n```\n\n")
+                elif ctype == "json":
+                    try:
+                        obj = json.loads(display_content.strip())
+                        pretty = json.dumps(obj, indent=2, ensure_ascii=False)
+                        parts.append(f"📥 **返回结果** *(JSON, {len(content)} 字符)*\n\n")
+                        parts.append(f"```json\n{pretty}\n```\n\n")
+                    except Exception:
+                        parts.append(f"📥 **返回结果** *(文本, {len(content)} 字符)*\n\n")
+                        parts.append(f"```\n{display_content}\n```\n\n")
+                elif ctype == "code":
+                    parts.append(f"📥 **返回结果** *(文本, {len(content)} 字符)*\n\n")
+                    parts.append(f"```\n{display_content}\n```\n\n")
+                else:
+                    # Short inline text
+                    parts.append(f"📥 **返回结果**\n\n> {content.strip()}\n\n")
+
+    return "".join(parts)
+
+
 # ═══════════════════════════════════════════════════════════════
 #  Font setup — cross-platform CJK support
 # ═══════════════════════════════════════════════════════════════
@@ -850,18 +993,13 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
         ai_msg = _sanitize(ai_msg)
 
         if filter_mode == "full":
-            # Include reasoning/thinking from rounds_json (not agent_rounds table)
+            # Full interaction timeline from rounds_json: thinking + tool calls + tool returns
             rounds_json_raw = conv["rounds_json"]
-            reasoning = []
+            reasoning_text = ""
             if rounds_json_raw:
                 with contextlib.suppress(Exception):
                     rounds_data = json.loads(rounds_json_raw) if isinstance(rounds_json_raw, str) else rounds_json_raw
-                    for r in rounds_data:
-                        if r.get("role") == "assistant":
-                            rc = r.get("reasoning_content", "") or ""
-                            if rc.strip():
-                                reasoning.append(rc)
-            reasoning_text = _sanitize("\n\n".join(reasoning))
+                    reasoning_text = _build_full_interactions_md(rounds_data)
         else:
             reasoning_text = ""
 

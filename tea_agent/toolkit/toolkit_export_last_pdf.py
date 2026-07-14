@@ -576,16 +576,19 @@ def _flush_table(pdf, lines, start_idx, body_font, code_font):
                     row_h_obj.cell(cell_text)
     except Exception:
         # Fallback: simple text rendering
+        # Guard against inconsistent column counts (data row > header cols)
+        nc = len(col_widths)
         pdf.set_font(body_font, "B", 9)
         pdf.set_text_color(40, 40, 80)
         for hi, h in enumerate(header):
-            pdf.cell(col_widths[hi], 7, h, border=1)
+            pdf.cell(col_widths[hi] if hi < nc else 20, 7, h, border=1)
         pdf.ln()
         pdf.set_font(body_font, "", 9)
         pdf.set_text_color(50, 50, 50)
         for row_data in data_rows:
             for ci, cell_text in enumerate(row_data):
-                pdf.cell(col_widths[ci], 7, cell_text, border=1)
+                w = col_widths[ci] if ci < nc else 20
+                pdf.cell(w, 7, cell_text, border=1)
             pdf.ln()
 
 
@@ -1011,65 +1014,6 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
         conn.close()
         output_path = output_path or f"export_{topic_id[:8]}.pdf"
         return _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path)
-    """Export a specific topic's last conversation as PDF."""
-    if db_path is None:
-        db_path = _find_db_path()
-    if not db_path:
-        raise FileNotFoundError("chat_history.db not found")
-
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-
-    c.execute("SELECT title FROM topics WHERE topic_id = ?", (topic_id,))
-    row = c.fetchone()
-    if not row:
-        conn.close()
-        raise ValueError(f"Topic {topic_id} not found")
-    topic_title = _sanitize(row["title"] or "Untitled")
-
-    c.execute(
-        "SELECT * FROM conversations WHERE topic_id = ? ORDER BY stamp DESC LIMIT 1",
-        (topic_id,),
-    )
-    conv = c.fetchone()
-    if not conv:
-        conn.close()
-        raise ValueError(f"No conversations for topic {topic_id}")
-    conv_id, user_raw, ai_msg, stamp = conv["id"], conv["user_msg"], conv["ai_msg"], conv["stamp"]
-
-    try:
-        data = json.loads(user_raw)
-        user_msg = data.get("text", user_raw) if isinstance(data, dict) else str(data)
-    except Exception:
-        user_msg = str(user_raw)
-
-    c.execute(
-        "SELECT * FROM agent_rounds WHERE conversation_id = ? ORDER BY id ASC",
-        (conv_id,),
-    )
-    rounds = c.fetchall()
-    conn.close()
-
-    reasoning = []
-    for r in rounds:
-        role, content = r["role"], (r["content"] or "")
-        tc_raw = r["tool_calls"]
-        tc = None
-        if tc_raw:
-            with contextlib.suppress(Exception):
-                tc = json.loads(tc_raw) if isinstance(tc_raw, str) else tc_raw
-        if (tc and not content.strip()) or role == "tool":
-            continue
-        if role == "assistant" and content:
-            reasoning.append(content)
-
-    user_msg = _sanitize(user_msg)
-    reasoning_text = _sanitize("\n\n".join(reasoning))
-    ai_msg = _sanitize(ai_msg)
-    output_path = output_path or f"export_{topic_id[:8]}.pdf"
-
-    return _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path)
 
 
 def toolkit_export_last_pdf(output_path="last.pdf", mode="latest", filter="final",

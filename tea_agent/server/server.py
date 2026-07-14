@@ -393,6 +393,11 @@ class APIServer:
                 _load_topic_history(storage, session, topic_id)
             else:
                 topic_id = storage.create_topic("API 流式会话")
+            # 同步 topic_id 到全局 Agent，使 toolkit_todo 等工具能正确持久化
+            from tea_agent.session_ref import get_agent as _get_agent
+            _ga = _get_agent() or self.get_agent()
+            if _ga:
+                _ga.current_topic_id = topic_id
             ai_msg, used_tools = session.chat_stream(
                 user_msg, callback=stream_cb, topic_id=topic_id)
             _save_chat_result(storage, session, topic_id, user_msg, ai_msg, used_tools)
@@ -539,6 +544,11 @@ class APIServer:
             # 新主题或已有主题
             if not topic_id:
                 topic_id = storage.create_topic("Web Session")
+            # 同步 topic_id 到全局 Agent，使 toolkit_todo 等工具能正确持久化
+            from tea_agent.session_ref import get_agent as _get_agent
+            _ga = _get_agent() or self.get_agent()
+            if _ga:
+                _ga.current_topic_id = topic_id
             _load_topic_history(storage, session, topic_id)
 
             # 注册 web question handler，使 toolkit_question 通过 SSE 向浏览器提问

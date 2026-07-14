@@ -850,24 +850,17 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
         ai_msg = _sanitize(ai_msg)
 
         if filter_mode == "full":
-            # Include reasoning/thinking
-            c.execute(
-                "SELECT * FROM agent_rounds WHERE conversation_id = ? ORDER BY id ASC",
-                (conv_id,),
-            )
-            rounds = c.fetchall()
+            # Include reasoning/thinking from rounds_json (not agent_rounds table)
+            rounds_json_raw = conv["rounds_json"]
             reasoning = []
-            for r in rounds:
-                role, content = r["role"], (r["content"] or "")
-                tc_raw = r["tool_calls"]
-                tc = None
-                if tc_raw:
-                    with contextlib.suppress(Exception):
-                        tc = json.loads(tc_raw) if isinstance(tc_raw, str) else tc_raw
-                if (tc and not content.strip()) or role == "tool":
-                    continue
-                if role == "assistant" and content:
-                    reasoning.append(content)
+            if rounds_json_raw:
+                with contextlib.suppress(Exception):
+                    rounds_data = json.loads(rounds_json_raw) if isinstance(rounds_json_raw, str) else rounds_json_raw
+                    for r in rounds_data:
+                        if r.get("role") == "assistant":
+                            rc = r.get("reasoning_content", "") or ""
+                            if rc.strip():
+                                reasoning.append(rc)
             reasoning_text = _sanitize("\n\n".join(reasoning))
         else:
             reasoning_text = ""

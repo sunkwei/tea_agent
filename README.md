@@ -1,4 +1,4 @@
-# Tea Agent v0.10.15
+# Tea Agent v0.11.0
 
 > ⚠️ **这是一个 AI 写 AI 的实验项目，自行承担责任。**
 
@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.10.15-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.11.0-blue)](https://pypi.org/project/tea-agent)
 
 Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / Web / REST API / ACP Protocol** 四种界面形态。
 
@@ -1080,7 +1080,6 @@ tea_agent/
 ├── store/                 # 数据存储（12 子模块）
 ├── evaluation/            # 任务评估
 ├── skills/                # 技能结晶（17+ 个 .md 技能）
-├── sdk/                   # Python SDK（外部调用）
 ├── _gui/                  # GUI 组件（12 模块）
 ├── tests/                 # 29 个测试文件（546+ 用例）
 └── demo/                  # 演示：蛇/俄罗斯方块/沪深300

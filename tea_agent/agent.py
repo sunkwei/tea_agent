@@ -443,6 +443,9 @@ class Agent:
                 self._notify({"type": "status", "text": status_msg})
 
         effective_topic = topic_id if self.behavior.track_topic else ""
+        # 同步 topic_id 到 Agent 级别，供 toolkit_todo 等工具持久化使用
+        if effective_topic:
+            self.current_topic_id = effective_topic
         ai_msg, used_tools = self._sess.chat_stream(
             user_input,
             callback=stream_cb,

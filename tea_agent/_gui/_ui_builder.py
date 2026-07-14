@@ -139,6 +139,8 @@ class UIBuilder:
 
         ttk.Button(cfg_row, text="↻",
                    command=gui._refresh_config_list, width=3).pack(side=tk.LEFT, padx=(4, 2))
+        ttk.Button(cfg_row, text="📤 上传配置",
+                   command=gui.upload_config).pack(side=tk.LEFT, padx=(2, 2))
         ttk.Button(cfg_row, text="⚙️ 配置编辑",
                    command=gui.open_config_dialog).pack(side=tk.LEFT)
 

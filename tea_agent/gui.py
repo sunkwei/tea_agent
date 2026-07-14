@@ -1340,6 +1340,84 @@ class TkGUI(Agent):
 
         ConfigDialog(self.root, on_save=on_save, config_path=self._config_path)
 
+    def upload_config(self):
+        """上传配置文件并强制重载全部组件。
+
+        1. 打开文件选择对话框选取 .yaml 配置文件
+        2. 复制到 ~/.tea_agent/config.yaml（目录不存在则自动创建）
+        3. 强制重载全局配置缓存、EmbeddingEngine、Storage
+        4. 切换会话（关闭旧 → 创建新），保持当前主题
+        """
+        from tkinter import filedialog, messagebox
+        import shutil
+
+        filepath = filedialog.askopenfilename(
+            title="选择配置文件",
+            filetypes=[("YAML 配置文件", "*.yaml *.yml"), ("所有文件", "*.*")],
+            parent=self.root,
+        )
+        if not filepath:
+            return  # 用户取消
+
+        # ── ① 复制文件到 ~/.tea_agent/config.yaml ──
+        configs_dir = Path.home() / ".tea_agent"
+        try:
+            configs_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            messagebox.showerror("错误", f"无法创建目录 {configs_dir}:\n{e}", parent=self.root)
+            return
+
+        dest = configs_dir / "config.yaml"
+        try:
+            shutil.copy2(filepath, str(dest))
+        except OSError as e:
+            messagebox.showerror("错误", f"复制文件失败:\n{e}", parent=self.root)
+            return
+
+        # ── ② 强制重载全局配置缓存 ──
+        from tea_agent.config import get_config, set_active_config_path
+        get_config(reload=True)  # 强制重新读取配置文件
+        set_active_config_path(str(dest))
+
+        # ── ③ 强制重载 EmbeddingEngine（向量模型） ──
+        try:
+            from tea_agent.embedding_util import get_embedding_engine
+            get_embedding_engine(reload=True)
+        except Exception:
+            logger.warning("EmbeddingEngine 重载失败（非致命）")
+
+        # ── ⑤ 清除 server 的 config cache（如果有） ──
+        try:
+            import tea_agent.server.server as _srv_mod
+            if hasattr(_srv_mod, '_config_cache'):
+                _srv_mod._config_cache.clear()
+                logger.info("Server config cache 已清除")
+        except Exception:
+            pass  # server 模块可能未加载
+
+        # ── ⑥ 切换会话（关闭旧 → 创建新）──
+        self._refresh_config_list()
+        ok = self.switch_config_file(str(dest))
+        if not ok:
+            self._update_status(f"⚠️ 文件已上传至 {dest}，但切换失败，请检查配置内容")
+            return
+
+        # ── ⑦ 重载 Storage 中的 EmbeddingEngine（此时 self._cfg 已更新）──
+        try:
+            from tea_agent.store import get_storage
+            from tea_agent.embedding_util import EmbeddingEngine
+            storage = get_storage()
+            if hasattr(storage, '_memories'):
+                storage._memories.embedding_engine = EmbeddingEngine(self._cfg.embedding)
+                logger.info("Storage EmbeddingEngine 已重新注入")
+        except Exception:
+            logger.warning("Storage EmbeddingEngine 注入失败（非致命）")
+
+        self._update_status(f"✅ 配置已上传并强制重载: {Path(filepath).name} → {dest}")
+        cheap_m = self._cfg.cheap_model
+        cheap_info = f" | 摘要模型: {cheap_m.model_name}" if cheap_m and cheap_m.model_name else ""
+        self._update_status(f"📡 已连接 | 模型: {self._cfg.main_model.model_name}{cheap_info}")
+
     # ── 配置快捷切换 ──
 
     def get_config_list(self) -> list:

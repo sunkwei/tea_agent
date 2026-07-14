@@ -173,8 +173,16 @@ def _build_full_interactions_md(rounds_data):
                     parts.append(f"📥 **返回结果** *(文本, {len(content)} 字符)*\n\n")
                     parts.append(f"```\n{display_content}\n```\n\n")
                 else:
-                    # Short inline text
-                    parts.append(f"📥 **返回结果**\n\n> {content.strip()}\n\n")
+                    # Short inline text — split on \n to preserve visual line breaks
+                    text_content = content.strip()
+                    if "\n" in text_content:
+                        parts.append(f"📥 **返回结果**\n\n")
+                        for line in text_content.split("\n"):
+                            safe_line = line.replace("\r", "")
+                            parts.append(f"> {safe_line}\n")
+                        parts.append("\n")
+                    else:
+                        parts.append(f"📥 **返回结果**\n\n> {text_content}\n\n")
 
     return "".join(parts)
 
@@ -265,7 +273,7 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
     list_counter = 0
 
     def _flush_code_block():
-        nonlocal code_buffer
+        nonlocal code_buffer, code_lang
         if not code_buffer:
             return
         code_text = "\n".join(code_buffer)
@@ -276,19 +284,10 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
                 lexer = guess_lexer(code_text)
         except Exception:
             lexer = PythonLexer()
-        try:
-            from pygments.token import Token
-            tokens = list(lexer.get_tokens(code_text))
-        except Exception:
-            tokens = [(Token.Text, code_text)]
 
         left_margin = pdf.l_margin + indent
         all_lines = code_text.split("\n")
         line_h = 4.5
-        total_h = len(all_lines) * line_h + 6
-
-        if pdf.get_y() + total_h > pdf.h - pdf.b_margin:
-            pdf.add_page()
 
         # Thin top border
         pdf.set_draw_color(200, 200, 215)
@@ -296,13 +295,16 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
         pdf.line(left_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
         pdf.ln(1)
 
-        # Render each line with syntax coloring
-        pdf.set_x(left_margin + 3)
-        y = pdf.get_y()
-
+        # Render each line — simple approach: set y before, advance after
         for line_text in all_lines:
-            pdf.set_y(y)
-            pdf.set_x(left_margin + 3)
+            # Page break check
+            if pdf.get_y() + line_h > pdf.h - pdf.b_margin:
+                pdf.add_page()
+
+            # Start of this line
+            y_line = pdf.get_y()
+            pdf.set_xy(left_margin + 3, y_line)
+
             for ttype, tval in lexer.get_tokens(line_text):
                 color = _pygments_to_rgb(ttype)
                 pdf.set_text_color(*color)
@@ -313,7 +315,6 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
                     pdf.get_string_width(safe_val)
                     pdf.write(line_h, safe_val)
                 except Exception:
-                    # Character not in code font, fallback to body font
                     old_font = pdf.font_family
                     pdf.set_font(body_font, "", 8)
                     for ch in safe_val:
@@ -324,10 +325,11 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
                             pass
                     pdf.set_font(code_font, "", 8)
                     pdf.set_text_color(*color)
-            y += line_h
+
+            # Advance to next line unconditionally
+            pdf.set_y(y_line + line_h)
 
         # Bottom border
-        pdf.set_y(y + 1)
         pdf.set_draw_color(200, 200, 215)
         pdf.set_line_width(0.3)
         pdf.line(left_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())

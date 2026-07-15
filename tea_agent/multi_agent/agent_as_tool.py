@@ -21,11 +21,14 @@ Agent-as-Tool — 将 RoleAgent 包装为可调用工具。
   AgentToolRegistry — 管理 Agent-as-Tool 的生命周期
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import threading
 import time
 import uuid
+
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any

@@ -13,6 +13,7 @@ Protocol lifecycle:
 """
 
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -33,7 +34,7 @@ logger = logging.getLogger("acp.agent")
 
 # ── Protocol constants ────────────────────────────────────────────────────
 
-PROTOCOL_VERSION = "1.2.1"
+PROTOCOL_VERSION = 1
 
 # Methods the agent handles (incoming from client)
 AGENT_METHODS = {
@@ -595,6 +596,37 @@ class AcpAgent:
         session_id = (params or {}).get("sessionId", "")
         messages = (params or {}).get("messages", [])
         tools = (params or {}).get("tools", [])
+
+        # 调试：打印收到的参数（完整 JSON）
+        logger.info(f"session/prompt raw_params type={type(params).__name__}: {json.dumps(params, ensure_ascii=False, default=str)[:500]}")
+
+        # 兼容各种参数格式：
+        # 1. 标准格式：{"messages": [...]}
+        # 2. ACP 标准格式：{"prompt": [...]} (vscode-acp-client 0.2.0)
+        # 3. text 格式：{"text": "..."} (旧版简化协议)
+        # 4. 直接字符串参数："..." (旧版简化协议)
+        if not messages:
+            if isinstance(params, str):
+                messages = [{"role": "user", "content": params}]
+            elif isinstance(params, dict):
+                # ACP 标准：prompt 是 content block 数组
+                # [{"type": "text", "text": "..."}, ...]
+                prompt = params.get("prompt")
+                if prompt and isinstance(prompt, list):
+                    texts = []
+                    for block in prompt:
+                        if isinstance(block, dict):
+                            if block.get("type") == "text":
+                                texts.append(block.get("text", ""))
+                            elif block.get("type") == "image":
+                                texts.append("[Image]")
+                    combined = "\n".join(texts)
+                    if combined:
+                        messages = [{"role": "user", "content": combined}]
+                else:
+                    text = params.get("text", "")
+                    if text:
+                        messages = [{"role": "user", "content": text}]
 
         if not messages:
             raise JsonRpcError(

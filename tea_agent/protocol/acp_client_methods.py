@@ -102,25 +102,58 @@ class AcpClientMethods:
         status: Optional[str] = None,
         metadata: Optional[dict] = None,
     ):
-        """Send a session/update notification to the client.
+        """Send a session/update notification to the client (ACP webview).
+
+        The webview expects ``update.sessionUpdate`` to be one of:
+          - ``'agent_message_chunk'`` (streaming text)
+          - ``'user_message_chunk'`` (replay/reload)
+          - ``'thought_chunk'`` (reasoning)
+          - ``'tool_use'`` (tool call display)
+          - ``'tool_result'`` (tool result display)
+          - ``'status'`` (status update)
+          - ``'completed'`` (streaming done)
+          - ``'error'`` (error)
+
+        For ``agent_message_chunk``, put the content dict *inside* the
+        ``update`` object rather than at the top level.
 
         Args:
             session_id: The active session ID
-            update_type: Type of update (e.g., 'content_block', 'status', 'error')
+            update_type: Type of update (mapped to ACP webview names)
             content_blocks: Content blocks for streaming
             status: Status message
             metadata: Additional metadata
         """
-        params: dict[str, Any] = {
-            "sessionId": session_id,
-            "update": {
-                "sessionUpdate": update_type,
-            },
+        # Map our internal type names to ACP webview type names
+        TYPE_MAP = {
+            "content_block": "agent_message_chunk",
+            "user_message": "user_message_chunk",
+            "thought": "agent_thought_chunk",
+            "tool_call": "tool_call",
+            "tool_result": "tool_result",
+        }
+        acp_type = TYPE_MAP.get(update_type, update_type)
+
+        update: dict[str, Any] = {
+            "sessionUpdate": acp_type,
         }
         if content_blocks:
-            params["contentBlocks"] = content_blocks
+            # ACP webview expects a single content dict, not a list
+            # If we have multiple blocks, send the first text block
+            for block in content_blocks:
+                if isinstance(block, dict):
+                    update["content"] = {
+                        "type": block.get("type", "text"),
+                        "text": block.get("text", ""),
+                    }
+                    break
         if status:
-            params["status"] = status
+            update["status"] = status
+
+        params: dict[str, Any] = {
+            "sessionId": session_id,
+            "update": update,
+        }
         if metadata:
             params["_meta"] = metadata
 

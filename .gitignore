@@ -1,4 +1,12 @@
 _check_db.py
+check_schema.py
+find_*.py
+search_*.py
+fix_settings.py
+show_*.py
+test_acp_*.py
+test_venv_acp*.py
+test_vscode_spawn*.py
 
 dist/
 tea_agent.egg-info/

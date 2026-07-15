@@ -45,6 +45,59 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════
+# DagVizRegistry — 全局可视化实例注册表
+# ═══════════════════════════════════════════════
+
+class DagVizRegistry:
+    """全局 DAG 可视化实例注册表。
+
+    使 tea_agent server 能够通过 viz_id 查找活跃的 WorkflowVisualizer
+    实例，从而提供 /dag/{viz_id} 路由和 SSE 事件流。
+    """
+    _instances: dict[str, "WorkflowVisualizer"] = {}
+
+    @classmethod
+    def register(cls, viz_id: str, viz: "WorkflowVisualizer"):
+        """注册可视化实例。"""
+        cls._instances[viz_id] = viz
+        logger.info(f"DagViz 已注册: {viz_id}")
+
+    @classmethod
+    def get(cls, viz_id: str) -> "WorkflowVisualizer | None":
+        """获取可视化实例。"""
+        return cls._instances.get(viz_id)
+
+    @classmethod
+    def remove(cls, viz_id: str):
+        """移除可视化实例。"""
+        cls._instances.pop(viz_id, None)
+        logger.debug(f"DagViz 已移除: {viz_id}")
+
+    @classmethod
+    def list_ids(cls) -> list[str]:
+        """列出所有活跃的 viz_id。"""
+        return list(cls._instances.keys())
+
+
+def get_viz_html(dag_structure: dict, title: str = "Workflow DAG") -> str:
+    """生成 DAG 可视化 HTML 页面。
+
+    供 server 路由使用，将 DAG 结构数据注入模板。
+
+    Args:
+        dag_structure: _build_dag_structure() 的输出
+        title: 页面标题
+
+    Returns:
+        完整的 HTML 字符串
+    """
+    return _VIZ_HTML_TEMPLATE.replace(
+        "{{DAG_STRUCTURE}}",
+        json.dumps(dag_structure, ensure_ascii=False),
+    ).replace("{{TITLE}}", title)
+
+
+# ═══════════════════════════════════════════════
 # Event Emitter — 轻量事件发布
 # ═══════════════════════════════════════════════
 
@@ -90,10 +143,15 @@ class WorkflowVisualizer:
     包装 WorkflowExec，在执行过程中通过 SSE 推送节点状态变化，
     前端 Canvas 实时渲染。
 
+    两种运行模式：
+    - run()：独立模式，启动自己的 HTTP 服务器
+    - run_registered()：集成模式，注册到 DagVizRegistry，由主服务器提供路由
+
     Attributes:
         dag: 工作流 DAG 定义
         pool: 执行线程池
         emitter: 事件发射器
+        viz_id: 唯一标识（用于注册表）
         _exec: WorkflowExec 实例
     """
 
@@ -103,17 +161,107 @@ class WorkflowVisualizer:
         pool: ExecutionPool | None = None,
         title: str = "Workflow DAG",
         auto_open: bool = True,
+        auto_register: bool = True,
     ):
         self.dag = dag
         self.pool = pool or get_execution_pool()
         self.title = title
         self.auto_open = auto_open
         self.emitter = EventEmitter()
+        self.viz_id = uuid.uuid4().hex[:12]
+        self._auto_register = auto_register
 
         self._exec: WorkflowExec | None = None
         self._poll_thread: threading.Thread | None = None
         self._started_at: float | None = None
         self._finished_at: float | None = None
+
+    def run_registered(
+        self,
+        context: dict | None = None,
+    ) -> str:
+        """
+        集成模式：注册到 DagVizRegistry，不启动独立服务器。
+
+        由主 tea_agent server 通过 /dag/{viz_id} 路由提供可视化页面。
+        工具调用此方法后，返回 viz_id，前端通过 SSE 事件嵌入 IFRAME。
+
+        Args:
+            context: 工作流初始上下文
+
+        Returns:
+            viz_id 字符串（用于构造 URL）
+        """
+        self._started_at = time.time()
+
+        # 注册到全局注册表
+        if self._auto_register:
+            DagVizRegistry.register(self.viz_id, self)
+
+        # 预推送 DAG 结构
+        dag_structure = self._build_dag_structure()
+        self.emitter.emit({
+            "type": "dag_structure",
+            "data": dag_structure,
+            "timestamp": time.time(),
+        })
+
+        logger.info(f"DAG viz 已注册: {self.viz_id} | "
+                    f"{len(dag_structure['nodes'])} 节点, "
+                    f"{len(dag_structure['edges'])} 边")
+
+        # 在后台线程执行工作流
+        self._exec = WorkflowExec(self.dag, pool=self.pool)
+        exec_thread = threading.Thread(
+            target=self._exec.run,
+            kwargs={"initial_context": context},
+            daemon=True,
+        )
+        exec_thread.start()
+
+        # 轮询状态变化
+        self._poll_thread = threading.Thread(
+            target=self._poll_state,
+            daemon=True,
+        )
+        self._poll_thread.start()
+
+        # 后台等待完成 + 清理
+        def _cleanup():
+            exec_thread.join()
+            self._finished_at = time.time()
+            if self._exec:
+                self._push_full_state()
+                self.emitter.emit({
+                    "type": "workflow_end",
+                    "data": {
+                        "state": self._exec.state.value,
+                        "duration": self._exec.duration,
+                        "started_at": self._started_at,
+                        "finished_at": self._finished_at,
+                    },
+                    "timestamp": time.time(),
+                })
+            # 延迟清理，给 SSE 客户端时间接收最终事件
+            time.sleep(5)
+            if self._auto_register:
+                DagVizRegistry.remove(self.viz_id)
+
+        threading.Thread(target=_cleanup, daemon=True).start()
+
+        return self.viz_id
+
+    def get_viz_url(self, host: str = "127.0.0.1", port: int = 8080) -> str:
+        """获取可视化页面 URL。
+
+        Args:
+            host: 服务器地址
+            port: 服务器端口
+
+        Returns:
+            完整 URL，如 http://127.0.0.1:8080/dag/abc123
+        """
+        return f"http://{host}:{port}/dag/{self.viz_id}"
 
     def run(
         self,

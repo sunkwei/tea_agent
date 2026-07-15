@@ -29,6 +29,8 @@ from .server import (
     logger,
 )
 
+from tea_agent.multi_agent.workflow_viz import DagVizRegistry, get_viz_html
+
 # ================================================================
 #  System / Health
 # ================================================================
@@ -992,10 +994,87 @@ async def handle_web_root(request):
 
 
 # ================================================================
-#  Error wrapper
+#  DAG 可视化 — /dag/{viz_id} 和 /dag/{viz_id}/events
 # ================================================================
 
-async def _safe_handle(handler, request):
+async def handle_dag_viz(request):
+    """GET /dag/{viz_id} — 返回 DAG 可视化 HTML 页面。"""
+    viz_id = request.path_params.get("viz_id", "")
+    if not viz_id:
+        return JSONResponse({"error": "viz_id required"}, status_code=400)
+
+    viz = DagVizRegistry.get(viz_id)
+    if not viz:
+        return HTMLResponse(
+            f"<html><body style='background:#0d1117;color:#c9d1d9;"
+            f"font-family:sans-serif;display:flex;align-items:center;"
+            f"justify-content:center;height:100vh'>"
+            f"<div style='text-align:center'><h2>🔌 DAG 已结束或不存在</h2>"
+            f"<p>viz_id: {viz_id}</p></div></body></html>",
+            status_code=404,
+        )
+
+    dag_structure = viz._build_dag_structure()
+    html = get_viz_html(dag_structure, viz.title)
+    return HTMLResponse(html)
+
+
+async def handle_dag_sse(request):
+    """GET /dag/{viz_id}/events — SSE 事件流。"""
+    viz_id = request.path_params.get("viz_id", "")
+    if not viz_id:
+        return JSONResponse({"error": "viz_id required"}, status_code=400)
+
+    viz = DagVizRegistry.get(viz_id)
+    if not viz:
+        return JSONResponse({"error": "viz not found"}, status_code=404)
+
+    q = viz.emitter.subscribe()
+
+    async def event_stream():
+        try:
+            # 先推送全量状态
+            if viz._exec:
+                for nid, nr in viz._exec.results.items():
+                    node = viz.dag.get_node(nid)
+                    yield (
+                        "data: "
+                        + json.dumps({
+                            "type": "node_state",
+                            "data": {
+                                "node_id": nid,
+                                "state": nr.state.value,
+                                "label": node.label if node else nid,
+                                "duration": nr.duration,
+                                "error": nr.error,
+                                "started_at": nr.started_at,
+                            },
+                            "timestamp": time.time(),
+                        }, ensure_ascii=False)
+                        + "\n\n"
+                    )
+
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=1.0)
+                    yield "data: " + json.dumps(event, ensure_ascii=False) + "\n\n"
+                except asyncio.TimeoutError:
+                    # 心跳
+                    yield ": heartbeat\n\n"
+        finally:
+            viz.emitter.unsubscribe(q)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
     """Wrapper to catch agent initialization errors."""
     try:
         return await handler(request)

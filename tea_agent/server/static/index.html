@@ -941,6 +941,14 @@ body {
         <div class="tp-section-title">✅ TODO</div>
         <div id="tp-todo-list"><div class="tp-empty">暂无待办</div></div>
       </div>
+      <div class="tp-section-divider"></div>
+      <div class="tp-section" id="tp-dag-section" style="display:none">
+        <div class="tp-section-title" style="display:flex;align-items:center;justify-content:space-between">
+          <span>📊 DAG 工作流</span>
+          <span class="dag-close-btn" style="cursor:pointer;font-size:14px;color:var(--text-dim);padding:0 4px" onclick="closeDagView()">✕</span>
+        </div>
+        <div id="tp-dag-container"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1716,26 +1724,23 @@ window.sendMessage = async function() {
 
             case 'dag_viz':
               removeLoading();
-              // 在聊天区嵌入 DAG 可视化 IFRAME
+              // DAG 可视化嵌入到任务面板，而不是聊天区
               (function() {
                 const vizId = data.viz_id;
                 if (!vizId) return;
-                const existingIframe = document.getElementById('dag-viz-' + vizId);
-                if (existingIframe) return;  // 避免重复
-                const container = document.createElement('div');
-                container.className = 'dag-viz-container';
-                container.id = 'dag-viz-' + vizId;
-                container.style.cssText = 'margin:8px 0;border-radius:8px;overflow:hidden;border:1px solid var(--border);position:relative;';
-                const header = document.createElement('div');
-                header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:var(--surface2);font-size:12px;color:var(--text-dim);';
-                header.innerHTML = '<span>📊 DAG 工作流</span><span style="color:var(--primary);cursor:pointer;font-size:12px" onclick="this.parentElement.parentElement.remove()">✕ 关闭</span>';
+                const container = $('tp-dag-container');
+                const section = $('tp-dag-section');
+                if (!container || !section) return;
+                // 避免重复
+                if (container.querySelector('.dag-viz-iframe')) return;
                 const iframe = document.createElement('iframe');
+                iframe.className = 'dag-viz-iframe';
                 iframe.src = '/dag/' + vizId;
-                iframe.style.cssText = 'width:100%;height:460px;border:none;display:block;';
-                container.appendChild(header);
+                iframe.style.cssText = 'width:100%;height:300px;border:none;display:block;border-radius:4px;';
                 container.appendChild(iframe);
-                const bubble = $('ai-bubble');
-                if (bubble) bubble.insertBefore(container, bubbleText);
+                section.style.display = '';
+                // 自动打开任务面板
+                if (!_taskPanelOpen) toggleTaskPanel();
               })();
               break;
 
@@ -1955,6 +1960,13 @@ document.addEventListener('click', function(e) {
 // ══════════════════════════════════════════════════
 //  TASK PANEL (Plan + TODO) — 适配 #task-panel / tp-* 结构
 // ══════════════════════════════════════════════════
+
+window.closeDagView = function() {
+  const section = $('tp-dag-section');
+  const container = $('tp-dag-container');
+  if (container) container.innerHTML = '';
+  if (section) section.style.display = 'none';
+};
 
 window.toggleTaskPanel = function() {
   const panel = $('task-panel');

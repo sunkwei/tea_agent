@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.11.0-blue)](https://pypi.org/project/tea-agent)
 
-Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / Web / REST API / ACP Protocol** 四种界面形态。
+Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 75+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / Web / REST API / ACP Protocol** 四种界面形态。
 
 ---
 
@@ -17,7 +17,7 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用
 
 - 🧠 **自进化引擎** — Agent 可以修改自身代码、创建新工具、优化提示词，实现自主进化
 - 🧭 **上下文感知** — 自动检测当前项目身份：在 tea_agent 自身项目中启用全部自进化能力，在外部项目中自动禁用自进化行为，专注完成用户任务
-- 🧰 **70+ 内置工具** — 涵盖文件操作、代码编辑、搜索、截图、OCR、包管理、Git 等
+- 🧰 **75+ 内置工具** — 涵盖文件操作、代码编辑、搜索、截图、OCR、包管理、Git 等
 - ⏱️ **智能命令超时** — 后台监控进程 CPU/MEM/IO，活跃进程自动延长超时至 4x，空闲进程及时终止
 - 🖥️ **多种界面** — GUI（Tkinter）、Web（Starlette + SSE）、REST API、ACP Protocol，按需选择
 - 🌐 **Web V2 实时流式界面** — 单页应用(SPA)，内存搜索、记忆管理、任务调度、历史会话，全部功能浏览器内完成
@@ -26,7 +26,7 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 70+ 可调用
 - 📋 **Plan / TODO** — 内置任务规划与追踪系统
 - 🌐 **MCP 协议** — 支持连接外部 MCP Server，扩展第三方工具
 - 🎯 **模式切换** — design / develop / test / review / docs / devops 六阶段工作流
-- 🤖 **多 Agent 协作** — 任务分解 + 并行执行，子 Agent 独立完成子任务
+- 🤖 **多 Agent 系统** — 6 阶段全栈协作：RoleAgent 角色化 + FlowEngine 事件驱动 + MessageBus 通信 + Agent-as-Tool 互调 + ExecutionPool 并行 + WorkflowDAG 编排
 - 📊 **任务评估** — 自动评估任务质量，记录成功/失败经验
 - 💎 **技能结晶** — Plan 执行后自动结晶 → 新对话按语义匹配注入 → 技能自进化闭环
 - 🛡️ **LLM JSON 容错** — 智能修复截断JSON、控制字符、单引号、尾逗号等常见LLM输出问题
@@ -196,7 +196,7 @@ python-multipart>=0.0.7 # 文件上传解析
 | 解压后体积 | ~3 MB | ~1.2 MB |
 | 运行时依赖 | ~80 MB | ~5 MB |
 | Python 文件数 | ~420 | ~280 |
-| 工具数 | 70+ | 50+ |
+| 工具数 | 75+ | 50+ |
 
 ---
 
@@ -947,7 +947,7 @@ list       → 列出所有技能模式
 
 ---
 
-## 🧰 工具概览（70+）
+## 🧰 工具概览（75+）
 
 | 类别 | 工具 |
 |------|------|
@@ -961,7 +961,7 @@ list       → 列出所有技能模式
 | 🗓️ 工具 | `toolkit_lunar`, `toolkit_weather_my`, `toolkit_gettime`, `toolkit_date_diff` |
 | 🔧 系统 | `toolkit_exec`, `toolkit_config`, `toolkit_os_info`, `toolkit_sudo_gui` |
 | 🧠 记忆/知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_reflection`, `toolkit_proactive` |
-| 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_dynamic_skill`, `toolkit_experience_solidify`, `toolkit_auto_pipeline` |
+| 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_auto_pipeline` |
 | 📋 计划/任务 | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume` |
 | 🔌 MCP 集成 | `toolkit_mcp` |
 | 🌐 Web/GUI | `toolkit_browser_tab`, `toolkit_dump_topic`, `toolkit_export_last_pdf`, `toolkit_notify` |
@@ -971,9 +971,357 @@ list       → 列出所有技能模式
 
 > 完整工具列表见 [`docs/TOOLS.md`](docs/TOOLS.md)（每小时自动更新）
 
+
+## 🤖 多 Agent 系统（v0.11+）
+
+Tea Agent 的 Multi-Agent 系统是一个**从简单到复杂、从对话到编程**的全栈协作框架。覆盖 6 个发展阶段：
+
+```
+Phase 1: 核心架构        RoleAgent + FlowEngine + RoleDispatcher
+Phase 2: Agent 间通信    MessageBus + Agent-as-Tool + ToolRegistry
+Phase 3: 可观测性        CheckpointManager + TraceEngine
+Phase 4: 管理模式市场    PatternMarket + AdminPanel
+Phase 5: 并行执行引擎    ExecutionPool + LoadBalancer + CircuitBreaker
+Phase 6: 高级编排        WorkflowDAG（条件/循环/并行/等待）
+```
+
 ---
 
-## ⚔️ Multi-Agent 辩论赛 Demo
+### 🚀 快速上手
+
+#### 方式一：对话中直接使用（零代码）
+
+无需写 Python，直接在对话中调用工具：
+
+| 工具 | 用途 |
+|------|------|
+| `toolkit_parallel_subtasks` | 分解复杂任务 → 并行执行 → 自动汇总 |
+| `toolkit_subagent` | 生成独立子 Agent 执行任务（sync/async） |
+| `toolkit_subagent_msg` | 子 Agent 间点对点通信 |
+
+**示例** — 并行分析多个文件：
+```
+直接告诉 Agent：「帮我并行审查 src/ 下所有 .py 文件」
+Agent 会自动调用 toolkit_parallel_subtasks 分解 + 执行 + 汇总。
+```
+
+**子 Agent 通信示例：**
+```
+# Agent A 发送消息给 Agent B
+toolkit_subagent_msg(action="send", to="agent-B", message="分析结果已就绪")
+
+# Agent B 接收
+toolkit_subagent_msg(action="check_inbox", agent_id="agent-B")
+```
+
+---
+
+#### 方式二：Python API（编程集成）
+
+##### RoleDispatcher — 一步到位
+
+```python
+from tea_agent.multi_agent import RoleDispatcher
+
+dispatcher = RoleDispatcher()
+
+# 自动识别任务模式（重构/审查/测试/修复/文档/功能开发）
+result = dispatcher.dispatch("重构项目添加类型注解")
+print(result["summary"])
+# → ✅ 全部完成: 重构项目添加类型注解 (4 步, 12.3s)
+
+# 可视化执行计划（不执行）
+print(dispatcher.visualize("为 gui.py 添加类型注解"))
+```
+
+##### RoleAgent — 角色化 Agent
+
+```python
+from tea_agent.multi_agent import RoleAgent
+
+analyst = RoleAgent(
+    role="资深代码审查员",
+    goal="审查代码质量，识别设计问题和代码坏味道",
+    backstory="你拥有 15 年软件架构经验，精通各种设计模式和重构技术。",
+)
+result = analyst.execute("审查 dispatcher.py 的设计")
+print(result.structured)  # Pydantic 结构化输出
+```
+
+预制角色快捷创建：
+```python
+from tea_agent.multi_agent import (
+    create_analyst, create_coder, create_tester, create_reviewer,
+)
+
+coder = create_coder(goal="实现用户登录模块")
+tester = create_tester(goal="为登录模块编写测试")
+reviewer = create_reviewer(goal="审查登录模块代码")
+```
+
+##### FlowEngine — 事件驱动工作流
+
+```python
+from tea_agent.multi_agent import FlowEngine, flow_start, flow_listen
+
+class ReviewFlow(FlowEngine):
+    @flow_start()
+    def scan(self):
+        """步骤1: 代码扫描"""
+        return self.call_agent("reviewer", "全面审查代码")
+
+    @flow_listen(scan)
+    def report(self):
+        """步骤2: 生成报告（scan 完成后自动触发）"""
+        issues = self.state.get("scan_result", {})
+        return f"发现 {len(issues)} 个问题"
+
+flow = ReviewFlow()
+result = flow.run()
+```
+
+**内置 Flow 模式：**
+
+| 模式 | Flow 类 | 执行步骤 |
+|------|---------|---------|
+| 重构 | `RefactorFlow` | 分析 → 规划 → 执行 → 验证 |
+| 审查 | `ReviewFlow` | 扫描 → 报告 |
+| 测试 | `TestFlow` | 规划测试 → 编写 → 运行 |
+| 修复 | `FixFlow` | 诊断 → 修复 → 验证 |
+| 功能开发 | `FeatureFlow` | 分析 → 实现 → 测试 |
+| 文档 | `DocFlow` | 分析 → 编写 → 格式化 |
+
+#### 方式三：自定义 Flow（高级编排）
+
+```python
+from tea_agent.multi_agent import RoleDispatcher
+
+dispatcher = RoleDispatcher()
+
+# 使用自定义 Flow
+class MyPipeline(FlowEngine):
+    @flow_start()
+    def fetch_data(self): ...
+    @flow_listen(fetch_data)
+    def process(self): ...
+    @flow_listen(process)
+    @flow_route(lambda ctx: "fast" if ctx["size"] < 100 else "full")
+    def fast_path(self): ...
+    @flow_listen(process)
+    def full_path(self): ...
+
+result = dispatcher.dispatch_with_flow(MyPipeline, "数据处理")
+```
+
+#### 方式四：SubAgentManager（通信 + 发现 + 注册）
+
+```python
+from tea_agent.multi_agent import SubAgentManager
+
+mgr = SubAgentManager()
+
+# 创建并注册子 Agent（自动注册到 MessageBus + ToolRegistry）
+analyst = mgr.create_analyst_agent(goal="审查代码架构")
+coder = mgr.create_coder_agent(goal="实现功能模块")
+
+# 调用子 Agent（Agent-as-Tool）
+result = mgr.call_agent(analyst.agent_id, "审查 dispatcher.py")
+
+# 跨 Agent 发布消息
+mgr.publish(analyst.agent_id, "task:complete", {"status": "done"})
+
+# 查看所有活跃 Agent
+agents = mgr.list_agents()
+```
+
+---
+
+### 🧩 核心组件详解
+
+#### 1. FlowEngine — 事件驱动流程引擎
+
+借鉴 CrewAI Flows + LangGraph StateGraph 设计：
+
+```
+@flow_start()          → 起始步骤（无依赖）
+@flow_listen(step_a)   → 监听步骤（step_a 完成后自动触发）
+@flow_route(cond_fn)   → 条件路由（根据状态选择分支）
+```
+
+**特性：**
+- 📊 Mermaid 可视化：`flow.visualize()` 生成流程图
+- 🔄 循环检测 + 分支执行
+- 📦 跨步骤状态共享（`FlowState`）
+- ⏱️ 步骤级超时 + 错误隔离
+
+#### 2. RoleAgent — 角色化 Agent
+
+每个 Agent 有明确的**身份、目标、背景故事**：
+
+```python
+RoleAgent(
+    role="高级工程师",       # 身份标签
+    goal="实现功能需求",      # 执行目标
+    backstory="...",         # 背景故事（影响行为风格）
+)
+```
+
+**内置角色：**
+- `create_analyst()` — 分析专家
+- `create_coder()` — 高级工程师
+- `create_tester()` — 测试工程师
+- `create_reviewer()` — 代码审查员
+
+**特性：**
+- 🎯 工具白名单 — 限定子 Agent 能调用的工具
+- 📐 结构化输出 — 支持 Pydantic 模型（`AnalysisReport` / `CodeChangePlan` / `TestPlan` / `CodeReview`）
+- 🧵 基于 `LiteSession` 的真实 LLM 调用
+
+#### 3. MessageBus — 跨 Agent 发布/订阅
+
+```python
+from tea_agent.multi_agent import MessageBus, MessagePriority
+
+bus = MessageBus()
+bus.subscribe("agent-A", "task:update")
+bus.subscribe("agent-B", "task:update")
+
+# 发布（自动广播给所有订阅者）
+bus.publish("task:update", {"progress": 50}, priority=MessagePriority.HIGH)
+
+# 消费
+messages = bus.consume("agent-A")
+```
+
+| 特性 | 说明 |
+|------|------|
+| **Topic 发布/订阅** | 一对多广播（区别于 toolkit_subagent_msg 的点对点） |
+| **优先级队列** | LOW / NORMAL / HIGH / CRITICAL |
+| **消息持久化** | 可选 SQLite 存储 |
+| **线程安全** | 内置锁，支持并发读写 |
+
+#### 4. Agent-as-Tool — Agent 即工具
+
+**核心模式**：任意 RoleAgent 可注册为「工具」，被其他 Agent 像调用普通工具一样调用。
+
+```python
+from tea_agent.multi_agent import AgentTool, AgentToolManager
+
+# 包装 Agent 为工具
+tool = AgentTool(analyst, name="code_analyst",
+                 description="分析代码架构质量问题")
+
+# 调用（像调用 toolkit_xxx 一样）
+result = tool.call(task="审查 dispatcher.py 的设计")
+
+# 批量管理
+mgr = AgentToolManager()
+mgr.register(tool)
+mgr.list_tools()
+```
+
+**优势：**
+- 🔌 调用方无需知道被调用 Agent 的内部实现
+- 🛡️ 并发控制（`max_concurrent` + 超时）
+- 📊 调用统计（成功/失败/耗时）
+
+#### 5. ExecutionPool — 高性能并行执行引擎
+
+```
+ExecutionPool (统一入口)
+    ├── ThreadPoolChannel  ── 同步/IO/CPU 密集型任务
+    ├── AsyncChannel       ── async/await 协程任务
+    ├── PriorityQueue      ── 优先级调度
+    └── Monitor            ── 健康监控 + 统计
+```
+
+**特性：**
+- ⚡ 双通道并发（线程池 + 异步）
+- ⚖️ 智能负载均衡（轮询 / 最少连接 / 加权）
+- 🛡️ 资源隔离（CPU/内存/并发上限）
+- 🔌 熔断器 + 自动重试 + 容错
+- 📊 任务元数据追踪
+
+```python
+from tea_agent.multi_agent import ExecutionPool
+
+pool = ExecutionPool(max_workers=8)
+future = pool.submit(func, arg1, arg2=value)
+result = future.result(timeout=30)
+
+# 批量 + 超时
+results = pool.map(func, items, timeout=30)
+
+# 查看状态
+print(pool.status())
+# → {"running": 2, "queued": 5, "completed": 100, ...}
+```
+
+#### 6. WorkflowDAG — 高级工作流编排
+
+DAG 定义引擎，支持 6 种节点类型：
+
+| 节点类型 | 说明 |
+|---------|------|
+| `TASK` | 普通任务 |
+| `CONDITION` | 条件分支（if/elif/else） |
+| `LOOP` | 循环（for-each / while） |
+| `PARALLEL` | 并行扇出（fan-out → fan-in） |
+| `WAIT` | 等待（定时 / 条件满足后继续） |
+| `END` | 终止节点 |
+
+```python
+from tea_agent.multi_agent import WorkflowDAG, WorkflowExec, WorkflowNode, NodeType
+
+dag = WorkflowDAG()
+dag.add_node(WorkflowNode("start", NodeType.TASK, fn=lambda ctx: {"data": 42}))
+dag.add_node(WorkflowNode("check", NodeType.CONDITION, fn=lambda ctx: ctx["data"] > 10))
+dag.add_node(WorkflowNode("process", NodeType.TASK, fn=lambda ctx: {"result": ctx["data"] * 2}))
+dag.add_edge("start", "check")
+dag.add_edge("check", "process", condition_key="true")
+
+wf = WorkflowExec(dag)
+result = wf.run({"start": {}})
+```
+
+#### 7. PatternMarket — 模式市场
+
+可复用的 Agent 配置模板仓库（CRUD + 搜索 + 推荐 + 实例化）：
+
+```python
+from tea_agent.multi_agent import get_pattern_market
+
+market = get_pattern_market()
+
+# 搜索模式
+patterns = market.search("代码审查")
+
+# 从模式创建 Agent
+agent = market.instantiate("高级工程师")
+
+# 自定义模式
+market.register({
+    "name": "性能优化专家",
+    "role": "性能优化工程师",
+    "goal": "分析和优化代码性能",
+    "backstory": "你精通各类性能分析和优化技术。",
+    "tools": ["toolkit_exec", "toolkit_lsp", "toolkit_explr"],
+    "tags": ["performance", "optimization"],
+})
+```
+
+**内置模式（4 个预制）：** 代码审查专家 / 高级工程师 / 测试工程师 / 分析专家
+
+#### 8. CheckpointManager + TraceEngine
+
+| 组件 | 用途 |
+|------|------|
+| `CheckpointManager` | 执行状态持久化与崩溃恢复，故障时从检查点恢复 |
+| `TraceEngine` | Span-based 执行轨迹追踪，可视化 Agent 调用链 |
+
+---
+
+### ⚔️ Multi-Agent 辩论赛 Demo
 
 `demo/multi_agent/` — 双 AI Agent 对抗辩论，50 轮实时交替。
 
@@ -990,15 +1338,6 @@ python demo/multi_agent/server.py --port 8083
 - 📊 进度条 + 打字动画 + 双方面板独立滚动
 - 🛑 支持中途停止
 - ⚙️ 双方独立选择配置文件（下拉列表自动发现 `~/.tea_agent/*.yaml`）
-
-**辩论流程：**
-```
-第 1 轮  → 🔵 甲方 开篇立论
-第 2 轮  → 🔴 乙方 针对甲方辩论
-第 3 轮  → 🔵 甲方 回击乙方
-   ...
-第 50 轮 → 🔴 乙方 最终反驳
-```
 
 ```
 ┌────────────────────┬────────────────────┐
@@ -1018,42 +1357,26 @@ python demo/multi_agent/server.py --port 8083
 
 ---
 
-## 🤖 多 Agent 协作
+### ✅ 优势
 
-```python
-from tea_agent.multi_agent import Dispatcher, LiteAgent
+- 🚀 **速度快** — 大任务分解为多个子任务并行执行，充分利用并发
+- 🎯 **专注力高** — 每个子 Agent 只关注自己的角色领域，不受无关信息干扰
+- 🧩 **可组合** — Agent 即工具（Agent-as-Tool），像搭积木一样组合能力
+- 🔄 **流程可控** — FlowEngine 事件驱动 + WorkflowDAG 静态编排，灵活选择
+- 📢 **可通信** — MessageBus 发布/订阅 + 点对点消息，Agent 间自由协作
+- 🛡️ **容错强** — 熔断器 + 自动重试 + Checkpoint 恢复 + 错误隔离
+- 📊 **可观测** — TraceEngine 追踪每次 Agent 调用链，便于调试
+- ♻️ **可复用** — PatternMarket 存储模式模板，一键实例化
+- 🔌 **零代码可触发** — 对话中直接使用 `toolkit_parallel_subtasks` / `toolkit_subagent`
 
-# 一步到位：分解 + 执行
-dispatcher = Dispatcher()
-result = dispatcher.dispatch("重构项目添加类型注解")
-print(result["summary"])
+### ⚠️ 限制
 
-# 可视化执行计划（不执行）
-print(dispatcher.visualize("为 gui.py 添加类型注解"))
-
-# 单独使用 LiteAgent
-agent = LiteAgent()
-result = agent.execute_sync("读取 README.md 并总结")
-```
-
-### 架构
-
-```
-Dispatcher.dispatch(goal)
-  │
-  ├─ _identify_pattern()     → 识别任务模式
-  ├─ _generate_tasks()       → 生成 SubTask 列表
-  ├─ _topological_sort()     → 拓扑排序（分层）
-  │
-  ├─ _execute_layers()       → 逐层执行
-  │   ├─ 第 1 层: [task_1] ─── LiteAgent.execute_sync()
-  │   │              ↓ 结果写入 accumulated_context
-  │   ├─ 第 2 层: [task_2] ─── LiteAgent.execute_sync()  ← 带前置上下文
-  │   │              ↓
-  │   └─ ...
-  │
-  └─ _merge_results()        → 整合结果
-```
+- 💰 **Token 成本高** — 每个子 Agent 独立调用 LLM，总 token 消耗 = 子任务数 × 每任务消耗
+- 🐌 **协调开销** — 子任务间依赖需要序列化等待（Flow / DAG），非全部可并行
+- 🔍 **调试困难** — 分布式 Agent 行为不如单 Agent 可预测，追责较复杂
+- 🧠 **上下文隔离** — 子 Agent 间默认不共享记忆，需要显式透传上下文
+- 💥 **修改冲突** — 多个子 Agent 并发修改同一文件可能导致冲突（可通过 Flow 串行化避免）
+- ⚙️ **依赖 LLM 质量** — 子 Agent 的任务理解能力取决于底层模型，小模型可能误解任务
 
 ---
 
@@ -1070,12 +1393,11 @@ tea_agent/
 ├── protocol/              # ACP Protocol Server
 │   ├── acp_server.py      # ACP 协议实现
 │   └── __main__.py        # python -m tea_agent.protocol
-├── gui.py                 # GUI 桌面界面（Tkinter）
 ├── memory.py              # 长期记忆
 ├── prompt_manager.py      # 提示词版本管理
-├── toolkit/               # 73+ 工具模块
+├── toolkit/               # 75+ 工具模块
 ├── session/               # 会话管理（历史压缩/Token 裁剪）
-├── multi_agent/           # 多 Agent 协作
+├── multi_agent/           # 多 Agent 系统（6阶段：角色/流程/通信/并行/编排/市场）
 ├── lsp/                   # 代码智能（Jedi + Tree-sitter）
 ├── store/                 # 数据存储（12 子模块）
 ├── evaluation/            # 任务评估

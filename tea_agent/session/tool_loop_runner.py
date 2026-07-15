@@ -512,6 +512,14 @@ def execute_tool_loop(session, context: dict) -> dict:
                 call_id, func_name, result_str = session.tools_comp.execute_tool_call(call)
                 logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")
                 session.tools_comp.collect_tool_call_round(call_id, result_str)
+                # 检测 DAG 可视化标识（在截断前检测，用完整 result_str）
+                try:
+                    import ast as _ast_mod
+                    _parsed = _ast_mod.literal_eval(result_str) if isinstance(result_str, str) else result_str
+                    if isinstance(_parsed, dict) and _parsed.get("dag_viz_id"):
+                        callback(f"[DAG_VIZ:{_parsed['dag_viz_id']}]")
+                except Exception:
+                    pass
                 # 发送 TOOL_RESULT（返回值，120 字节截断）
                 _res = result_str or ""
                 if len(_res) > 120:

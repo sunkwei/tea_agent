@@ -519,12 +519,18 @@ class APIServer:
                 _res = text[len("[TOOL_RESULT:"):-1] if text.endswith("]") else text[len("[TOOL_RESULT:"):]
                 _put({"type": "tool_result", "result": _res})
                 # 检测 DAG 可视化：工具返回 dag_viz_id 时自动嵌入 IFRAME
+                # [DAG_VIZ:] 标记由 tool_loop_runner 在截断前发出，保证完整
                 try:
-                    _res_obj = json.loads(_res) if isinstance(_res, str) else _res
+                    import ast as _ast_m2
+                    _res_obj = _ast_m2.literal_eval(_res) if isinstance(_res, str) else _res
                     if isinstance(_res_obj, dict) and _res_obj.get("dag_viz_id"):
                         _put({"type": "dag_viz", "viz_id": _res_obj["dag_viz_id"]})
-                except (ValueError, AttributeError, json.JSONDecodeError):
+                except (ValueError, AttributeError, SyntaxError):
                     pass
+            elif text.startswith("[DAG_VIZ:"):
+                _viz_id = text[len("[DAG_VIZ:"):-1] if text.endswith("]") else text[len("[DAG_VIZ:"):]
+                if _viz_id:
+                    _put({"type": "dag_viz", "viz_id": _viz_id})
             elif text == "[TOOL_DONE]":
                 if _tool_active:
                     _put({"type": "tool_done"})

@@ -1,4 +1,13 @@
-"""ACP Protocol Server - Enhanced for vscode-acp."""
+"""ACP Protocol Server (HTTP/SSE) - Legacy mode for older integrations.
+
+Supports the same ACP protocol as the stdio-based ``acp_agent.py`` but
+over HTTP + SSE.  Built with Starlette + Uvicorn.
+
+.. deprecated::
+   The stdio mode (``python -m tea_agent.protocol``) is the primary
+   transport used by vscode-acp.  This HTTP server is kept for backward
+   compatibility.
+"""
 import asyncio
 import json
 import logging
@@ -18,166 +27,331 @@ except ImportError:
 
 from tea_agent.store import get_storage
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
+
 
 class ACPProtocolServer:
-    def __init__(self, config_path=None, api_key=""):
+    """ACP protocol server over HTTP + SSE.
+
+    Provides REST endpoints for agent discovery, chat (sync + streaming),
+    and session management.
+    """
+
+    def __init__(self, config_path: str | None = None, api_key: str = ""):
         self._config_path = config_path
         self._api_key = api_key or os.environ.get("TEA_API_KEY", "")
         self._lock = threading.Lock()
         self._agent_id = "tea-agent"
         self._start_time = time.time()
-        self._storage = None
-        self._agent = None
+        self._storage: "Storage | None" = None
+        self._agent: "Agent | None" = None
 
-    def _get_storage(self):
+    def _get_storage(self) -> "Storage":
+        """Lazy-init storage backend."""
         if self._storage is None:
             self._storage = get_storage()
         return self._storage
 
-    def discover_agents(self):
+    def discover_agents(self) -> dict:
+        """Return the list of available agents (always just tea-agent)."""
         return {"object": "list", "data": [{
             "id": self._agent_id,
             "name": "Tea Agent",
             "description": "Self-evolving AI agent with 60+ built-in tools",
-            "capabilities": {"streaming": True, "tool_execution": True, "session_management": True}
+            "capabilities": {
+                "streaming": True,
+                "tool_execution": True,
+                "session_management": True,
+            },
         }]}
 
-    def get_agent_info(self):
+    def get_agent_info(self) -> dict:
+        """Return agent metadata including available tools."""
         try:
             tools = self._try_get_tools()
-            return {"id": self._agent_id, "name": "Tea Agent",
-                    "description": "Self-evolving AI agent with 60+ tools",
-                    "tools": tools,
-                    "capabilities": {"streaming": True, "tool_execution": True, "session_management": True}}
+            return {
+                "id": self._agent_id,
+                "name": "Tea Agent",
+                "description": "Self-evolving AI agent with 60+ tools",
+                "tools": tools,
+                "capabilities": {
+                    "streaming": True,
+                    "tool_execution": True,
+                    "session_management": True,
+                },
+            }
         except Exception as e:
-            return {"id": self._agent_id, "name": "Tea Agent", "tools": [], "error": str(e)}
+            return {
+                "id": self._agent_id,
+                "name": "Tea Agent",
+                "tools": [],
+                "error": str(e),
+            }
 
-    def _try_get_tools(self):
+    def _try_get_tools(self) -> list[dict]:
+        """Attempt to enumerate toolkit tools from the Agent."""
         try:
             from tea_agent.agent import Agent
             agent = Agent(mode="lightweight", config_path=self._config_path)
             tools = []
             for name, meta in agent.toolkit.meta_map.items():
                 fn = meta.get("function", {})
-                tools.append({"name": fn.get("name", name),
-                              "description": fn.get("description", ""),
-                              "input_schema": fn.get("parameters", {})})
+                tools.append({
+                    "name": fn.get("name", name),
+                    "description": fn.get("description", ""),
+                    "input_schema": fn.get("parameters", {}),
+                })
             return tools
         except Exception:
-            return [{"name": "chat", "description": "Chat with agent", "input_schema": {}}]
+            return [{
+                "name": "chat",
+                "description": "Chat with agent",
+                "input_schema": {},
+            }]
 
-    def _init_agent(self, session_id=""):
+    def _init_agent(self, session_id: str = "") -> "Agent":
+        """Get (or create) a shared Agent instance, bound to *session_id*."""
         from tea_agent.agent import Agent
         if self._agent is None:
-            self._agent = Agent(mode="lightweight", config_path=self._config_path)
+            self._agent = Agent(
+                mode="lightweight", config_path=self._config_path
+            )
         if session_id:
             self._agent.current_topic_id = session_id
         elif not self._agent.current_topic_id:
             with self._lock:
                 if not self._agent.current_topic_id:
-                    self._agent.current_topic_id = self._get_storage().create_topic("ACP")
+                    self._agent.current_topic_id = (
+                        self._get_storage().create_topic("ACP")
+                    )
         return self._agent
 
-    def chat(self, messages, session_id=""):
+    def chat(
+        self, messages: list[dict], session_id: str = ""
+    ) -> dict:
+        """Synchronous chat (non-streaming).
+
+        Returns the full response at once.
+        """
         if not messages:
             return {"error": "messages required"}
-        user_msg = messages[-1]["content"]
+        user_msg = messages[-1].get("content", "")
+        if not user_msg:
+            return {"error": "last message has no content"}
         try:
             agent = self._init_agent(session_id)
-            collected = []
-            def cb(text):
+            collected: list[str] = []
+
+            def cb(text: str):
                 if text and not text.startswith("["):
                     collected.append(text)
-            ai_msg, used = agent.sess.chat_stream(user_msg, callback=cb, topic_id=agent.current_topic_id)
-            return {"id": "chat-" + uuid.uuid4().hex[:12], "agent_id": self._agent_id,
-                    "choices": [{"index": 0, "message": {"role": "assistant", "content": "".join(collected) or ai_msg}, "finish_reason": "stop"}],
-                    "tools_used": used or []}
+
+            ai_msg, used = agent.sess.chat_stream(
+                user_msg,
+                callback=cb,
+                topic_id=agent.current_topic_id,
+            )
+            return {
+                "id": "chat-" + uuid.uuid4().hex[:12],
+                "agent_id": self._agent_id,
+                "choices": [{
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "".join(collected) or ai_msg,
+                    },
+                    "finish_reason": "stop",
+                }],
+                "tools_used": used or [],
+            }
         except Exception as e:
             return {"error": str(e)}
 
-    async def chat_stream(self, messages, session_id=""):
+    async def chat_stream(
+        self, messages: list[dict], session_id: str = ""
+    ):
+        """Streaming chat via SSE.
+
+        Yields ``data:`` lines (JSON) following the SSE protocol,
+        ending with ``data: [DONE]``.
+        """
         if not messages:
-            yield "data: " + json.dumps({"error": "messages required"}) + "\n\n"
+            yield "data: " + json.dumps(
+                {"error": "messages required"}
+            ) + "\n\n"
             yield "data: [DONE]\n\n"
             return
-        user_msg = messages[-1]["content"]
-        queue = asyncio.Queue()
+        user_msg = messages[-1].get("content", "")
+        if not user_msg:
+            yield "data: " + json.dumps(
+                {"error": "last message has no content"}
+            ) + "\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        queue: asyncio.Queue[dict] = asyncio.Queue()
         loop = asyncio.get_running_loop()
-        def put(event):
+
+        def put(event: dict):
             try:
-                loop.call_soon_threadsafe(lambda: queue.put_nowait(event))
+                loop.call_soon_threadsafe(
+                    lambda: queue.put_nowait(event)
+                )
             except Exception:
                 logger.exception("operation failed")
 
-        def cb(text):
+        def cb(text: str):
             if not text or text.startswith("["):
                 return
             put({"type": "content", "text": text})
-        threading.Thread(target=self._run_stream, args=(user_msg, session_id, cb, put), daemon=True).start()
+
+        threading.Thread(
+            target=self._run_stream,
+            args=(user_msg, session_id, cb, put),
+            daemon=True,
+        ).start()
+
         cid = "chat-" + uuid.uuid4().hex[:12]
         now = int(time.time())
-        yield "data: " + json.dumps({"id": cid, "object": "chat.chunk", "created": now, "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]}) + "\n\n"
+        yield (
+            "data: "
+            + json.dumps({
+                "id": cid,
+                "object": "chat.chunk",
+                "created": now,
+                "choices": [{
+                    "index": 0,
+                    "delta": {"role": "assistant"},
+                    "finish_reason": None,
+                }],
+            })
+            + "\n\n"
+        )
+
         while True:
             event = await queue.get()
             if event["type"] == "content":
-                yield "data: " + json.dumps({"id": cid, "object": "chat.chunk", "created": now, "choices": [{"index": 0, "delta": {"content": event["text"]}, "finish_reason": None}]}) + "\n\n"
+                yield (
+                    "data: "
+                    + json.dumps({
+                        "id": cid,
+                        "object": "chat.chunk",
+                        "created": now,
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"content": event["text"]},
+                            "finish_reason": None,
+                        }],
+                    })
+                    + "\n\n"
+                )
             elif event["type"] == "done":
-                yield "data: " + json.dumps({"id": cid, "object": "chat.chunk", "created": now, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}) + "\n\n"
+                yield (
+                    "data: "
+                    + json.dumps({
+                        "id": cid,
+                        "object": "chat.chunk",
+                        "created": now,
+                        "choices": [{
+                            "index": 0,
+                            "delta": {},
+                            "finish_reason": "stop",
+                        }],
+                    })
+                    + "\n\n"
+                )
                 yield "data: [DONE]\n\n"
                 break
             elif event["type"] == "error":
-                yield "data: " + json.dumps({"error": event["error"]}) + "\n\n"
+                yield (
+                    "data: "
+                    + json.dumps({"error": event["error"]})
+                    + "\n\n"
+                )
                 yield "data: [DONE]\n\n"
                 break
 
-    def _run_stream(self, user_msg, session_id, cb, put):
+    def _run_stream(
+        self,
+        user_msg: str,
+        session_id: str,
+        cb: callable,
+        put: callable,
+    ):
+        """Run chat_stream in a background thread and feed the asyncio queue."""
         try:
             agent = self._init_agent(session_id)
-            ai_msg, used = agent.sess.chat_stream(user_msg, callback=cb, topic_id=agent.current_topic_id)
+            ai_msg, used = agent.sess.chat_stream(
+                user_msg,
+                callback=cb,
+                topic_id=agent.current_topic_id,
+            )
             put({"type": "done", "ai_msg": ai_msg, "tools_used": used or []})
         except Exception as e:
             put({"type": "error", "error": str(e)})
 
-    def list_sessions(self, limit=50):
+    def list_sessions(self, limit: int = 50) -> dict:
+        """List sessions from storage."""
         s = self._get_storage()
         result = []
         for t in s.list_topics()[:limit]:
             tid = t["topic_id"]
             tk = s.get_topic_tokens(tid)
-            result.append({"id": tid, "title": t.get("title","") or tid[:8],
-                           "created": str(t.get("create_stamp",""))[:19],
-                           "updated": str(t.get("last_update_stamp",""))[:19],
-                           "total_tokens": (tk or {}).get("total_tokens",0)})
+            result.append({
+                "id": tid,
+                "title": t.get("title", "") or tid[:8],
+                "created": str(t.get("create_stamp", ""))[:19],
+                "updated": str(t.get("last_update_stamp", ""))[:19],
+                "total_tokens": (tk or {}).get("total_tokens", 0),
+            })
         return {"object": "list", "data": result, "total": len(result)}
 
-    def create_session(self, title="ACP"):
+    def create_session(self, title: str = "ACP") -> dict:
+        """Create a new session in storage."""
         tid = self._get_storage().create_topic(title)
         return {"id": tid, "title": title, "object": "session"}
 
-    def get_session(self, sid):
+    def get_session(self, sid: str) -> dict | None:
+        """Get session metadata, or None if not found."""
         s = self._get_storage()
         t = s.get_topic(sid)
         if not t:
             return None
         tk = s.get_topic_tokens(sid)
-        return {"id": sid, "title": t.get("title",""),
-                "created": str(t.get("create_stamp","")),
-                "updated": str(t.get("last_update_stamp","")),
-                "total_tokens": (tk or {}).get("total_tokens",0)}
+        return {
+            "id": sid,
+            "title": t.get("title", ""),
+            "created": str(t.get("create_stamp", "")),
+            "updated": str(t.get("last_update_stamp", "")),
+            "total_tokens": (tk or {}).get("total_tokens", 0),
+        }
 
-    def delete_session(self, sid):
+    def delete_session(self, sid: str) -> bool:
+        """Delete a session from storage."""
         try:
             return self._get_storage().delete_topic(sid)
         except Exception:
             return False
 
-    def get_messages(self, sid, limit=50):
+    def get_messages(
+        self, sid: str, limit: int = 50
+    ) -> dict:
+        """Get messages for a session."""
         s = self._get_storage()
         msgs = []
         for c in s.get_conversations(sid, limit=limit, include_rounds=True):
-            msgs.append({"id": c["id"], "role": "user", "content": c["user_msg"], "stamp": str(c.get("stamp",""))[:26]})
-            msgs.append({"id": c["id"], "role": "assistant", "content": c["ai_msg"], "stamp": str(c.get("stamp",""))[:26]})
+            msgs.append({
+                "id": c["id"],
+                "role": "user",
+                "content": c["user_msg"],
+                "stamp": str(c.get("stamp", ""))[:26],
+            })
+            msgs.append({
+                "id": c["id"],
+                "role": "assistant",
+                "content": c["ai_msg"],
+                "stamp": str(c.get("stamp", ""))[:26],
+            })
         return {"object": "list", "data": msgs, "total": len(msgs)}
 
 _server_instance = None

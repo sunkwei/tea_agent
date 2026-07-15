@@ -486,12 +486,9 @@ function formatMarkdown(text) {
         );
         return '\x00CODE' + idx + '\x00';
     });
-    // Inline code
-    const inlineCodes = [];
+    // Inline code — 直接渲染原文，不做占位符保护
     html = html.replace(/`([^`]+)`/g, function(match, code) {
-        const idx = inlineCodes.length;
-        inlineCodes.push('<code>' + code + '</code>');
-        return '\x00ICODE' + idx + '\x00';
+        return '<code>' + code + '</code>';
     });
     // Headers (protect from <br> conversion)
     html = html.replace(/^#### (.+)$/gm, '<h5>$1</h5>');
@@ -542,8 +539,6 @@ function formatMarkdown(text) {
     html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
     // Links
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-    // Restore inline codes
-    html = html.replace(/\x00ICODE(\d+)\x00/g, function(m, idx) { return inlineCodes[idx] || ''; });
     // Restore tables
     html = html.replace(/\x00TABLE(\d+)\x00/g, function(m, idx) { return tableBlocks[idx] || ''; });
     // Restore lists

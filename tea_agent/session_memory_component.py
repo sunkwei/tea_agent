@@ -178,11 +178,9 @@ class MemoryComponent(SessionComponent):
         if not conversations or not self.ctx.storage:
             return
         try:
-            c = self.ctx.storage.conn.cursor()
+            storage = self.ctx.storage
             for conv in conversations:
-                c.execute("UPDATE conversations SET is_summarized = 1 WHERE id = ?", (conv["id"],))
-            self.ctx.storage.conn.commit()
-            c.close()
+                storage.mark_as_summarized(conv["id"])
         except Exception as e:
             logger.debug(f"标记已提取失败: {e}")
 

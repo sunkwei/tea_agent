@@ -961,6 +961,14 @@ class OnlineToolSession(BaseChatSession):
     def _tool_chain_summary(self, v):
         self.context._tool_chain_summary = v
 
+    @property
+    def _level2(self):
+        return self.context._level2
+
+    @_level2.setter
+    def _level2(self, v):
+        self.context._level2 = v
+
     # ──────────────────────────────────────────────
     # 委派方法
     # ──────────────────────────────────────────────
@@ -1090,14 +1098,14 @@ class OnlineToolSession(BaseChatSession):
             func=self._inject_os_info,
             enabled=True,
             description="注入操作系统环境信息轮次",
-            position=17,
+            position=10,
         )
         self.pipeline.register_step(
             name="inject_memories",
             func=self.memory_comp.inject_memories,
             enabled=True,
             description="从长期记忆中注入相关记忆",
-            position=15,
+            position=20,
         )
         self.pipeline.register_step(
             name="add_user_message",
@@ -1107,27 +1115,33 @@ class OnlineToolSession(BaseChatSession):
             )[1],
             enabled=True,
             description="添加用户消息到会话历史",
-            position=20,
+            position=30,
+            critical=True,
         )
         self.pipeline.register_step(
             name="summarize_old_history",
-            func=lambda ctx: (
-                self.summarizer_comp.summarize_old_history(
-                    self.api, self._get_summarize_client
-                ),
-                self.context.messages,
-            )[1],
+            func=self._summarize_old_history,
             enabled=True,
             description="将旧对话历史压缩为摘要",
-            position=30,
+            position=40,
         )
         self.pipeline.register_step(
             name="tool_loop",
             func=self._execute_tool_loop,
             enabled=True,
             description="执行工具调用循环",
-            position=40,
+            position=50,
+            critical=True,
         )
+
+    # ──────────────────────────────────────────────
+    # Pipeline 步骤辅助方法
+    # ──────────────────────────────────────────────
+
+    def _summarize_old_history(self, context: dict) -> dict:
+        """Pipeline 步骤：将旧对话历史压缩为摘要，返回更新后的 context。"""
+        self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client)
+        return context  # summarize_old_history 副作用修改 context，此处显式返回
 
     # ──────────────────────────────────────────────
     # 构建 API 消息（委派给 _history_builder）

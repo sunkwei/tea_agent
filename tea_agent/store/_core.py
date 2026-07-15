@@ -247,6 +247,10 @@ class Storage:
 
         旧代码直接访问 storage.conn 进行原始 SQL 操作。
         使用线程局部连接，与 StoreComponent.conn 逻辑一致。
+
+        ⚠️ 注意：此属性返回持久化连接（非短连接），调用者不应 close。
+        优先使用 StoreComponent 子组件方法（如 self.topics.create_topic）
+        而非直接操作此连接。新代码应通过 DB() context manager 获取短连接。
         """
         tl = StoreComponent._thread_local
         if not hasattr(tl, 'conn') or tl.conn is None:

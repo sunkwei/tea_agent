@@ -203,6 +203,12 @@ from .workflow_engine import (
     WorkflowTemplate,
 )
 
+# 工作流可视化
+from .workflow_viz import (
+    WorkflowVisualizer,
+    EventEmitter,
+)
+
 # ── Phase 1 兼容 ────────────────────────────────
 
 from .dispatcher_v1 import Dispatcher, SubTask, TaskStatus as V1TaskStatus
@@ -287,6 +293,9 @@ __all__ = [
     "WorkflowDAG",
     "WorkflowExec",
     "WorkflowTemplate",
+    # 可视化
+    "WorkflowVisualizer",
+    "EventEmitter",
     # 旧版兼容
     "Dispatcher",
     "SubTask",

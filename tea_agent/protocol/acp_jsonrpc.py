@@ -8,12 +8,17 @@ import json
 import logging
 import sys
 import threading
+import time
 import traceback
-from typing import Any, Callable, Coroutine, Optional
+from typing import Any, Callable
 
 logger = logging.getLogger("acp.jsonrpc")
 
 RequestId = str | int | float | None
+
+# Heartbeat: send a ping every N seconds; exit if no write success after M failures
+_HEARTBEAT_INTERVAL = 15.0
+_HEARTBEAT_MAX_FAILURES = 3
 
 
 class JsonRpcError(Exception):
@@ -77,13 +82,15 @@ class JsonRpcTransport:
     - Thread-safe write (lock-protected)
     - Graceful shutdown via stop()
     - In-flight request tracking for $/cancelRequest support
+    - Response handler per request-id (thread-safe)
+    - Heartbeat / client-disconnect detection
     - Newline-delimited JSON (NDJSON)
     """
 
     def __init__(
         self,
-        reader: Optional[Any] = None,
-        writer: Optional[Any] = None,
+        reader: Any | None = None,
+        writer: Any | None = None,
     ):
         self._reader = reader or sys.stdin
         self._writer = writer or sys.stdout
@@ -93,6 +100,10 @@ class JsonRpcTransport:
         self._in_flight: dict[RequestId, threading.Event] = {}
         self._in_flight_lock = threading.Lock()
         self._cancel_handlers: list[Callable] = []
+        # Response handlers keyed by request-id (thread-safe)
+        self._response_handlers: dict[str, Callable] = {}
+        self._response_handlers_lock = threading.Lock()
+        self._heartbeat_thread: threading.Thread | None = None
 
     # ── handler registration ──────────────────────────────────────────────
 
@@ -121,6 +132,11 @@ class JsonRpcTransport:
     def start(self):
         """Start reading messages from the input stream (blocking)."""
         self._running = True
+        # Start heartbeat thread to detect client disconnect
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop, daemon=True
+        )
+        self._heartbeat_thread.start()
         logger.info("JsonRpcTransport: started reading from stdin")
         try:
             for line in self._reader:
@@ -150,6 +166,38 @@ class JsonRpcTransport:
         """Signal the transport to stop reading."""
         self._running = False
 
+    def _heartbeat_loop(self):
+        """Background thread: periodically write a ping to detect client disconnect.
+
+        If writing fails repeatedly, triggers self-stop so the read loop
+        can exit cleanly.
+        """
+        failure_count = 0
+        while self._running:
+            time.sleep(_HEARTBEAT_INTERVAL)
+            if not self._running:
+                break
+            try:
+                ping = JsonRpcMessage.notification("$/ping", {"time": time.time()})
+                with self._write_lock:
+                    line = json.dumps(ping, ensure_ascii=False)
+                    self._writer.write(line + "\n")
+                    self._writer.flush()
+                failure_count = 0
+            except Exception:
+                failure_count += 1
+                logger.warning(
+                    f"heartbeat write failed ({failure_count}/"
+                    f"{_HEARTBEAT_MAX_FAILURES})"
+                )
+                if failure_count >= _HEARTBEAT_MAX_FAILURES:
+                    logger.error(
+                        "heartbeat: client appears disconnected, "
+                        "stopping transport"
+                    )
+                    self._running = False
+                    break
+
     def write(self, msg: dict):
         """Write a JSON-RPC message to the output stream (thread-safe)."""
         with self._write_lock:
@@ -166,6 +214,9 @@ class JsonRpcTransport:
 
         Used when the agent needs to call client-side methods like
         fs/read_text_file or session/request_permission.
+
+        Thread-safe: each request gets its own handler registered under
+        its unique request-id, so concurrent calls don't interfere.
         """
         import uuid
 
@@ -173,35 +224,33 @@ class JsonRpcTransport:
         msg = JsonRpcMessage.request(method, params, id=req_id)
         done = threading.Event()
         result_container: list[Any] = [None]
-        error_container: list[Optional[JsonRpcError]] = [None]
+        error_container: list[JsonRpcError | None] = [None]
 
         with self._in_flight_lock:
             self._in_flight[req_id] = done
 
-        # Register a temporary handler to catch the response
-        original_on_response = getattr(self, "_response_handler", None)
-
         def _handle_response(response: dict):
-            if response.get("id") == req_id:
-                if "error" in response:
-                    err = response["error"]
-                    error_container[0] = JsonRpcError(
-                        err.get("code", -1), err.get("message", "Unknown"),
-                        err.get("data"),
-                    )
-                else:
-                    result_container[0] = response.get("result")
-                done.set()
-                # Unregister
-                if original_on_response:
-                    self._response_handler = original_on_response
+            if "error" in response:
+                err = response["error"]
+                error_container[0] = JsonRpcError(
+                    err.get("code", -1), err.get("message", "Unknown"),
+                    err.get("data"),
+                )
+            else:
+                result_container[0] = response.get("result")
+            done.set()
 
-        self._response_handler = _handle_response
+        # Register handler under this specific request-id
+        with self._response_handlers_lock:
+            self._response_handlers[req_id] = _handle_response
+
         self.write(msg)
 
         if not done.wait(timeout=timeout):
             with self._in_flight_lock:
                 self._in_flight.pop(req_id, None)
+            with self._response_handlers_lock:
+                self._response_handlers.pop(req_id, None)
             raise TimeoutError(
                 f"Request {method} timed out after {timeout}s"
             )
@@ -272,28 +321,17 @@ class JsonRpcTransport:
 
         try:
             result = handler(params, msg_id)
-            # Support both sync and async handlers
+            # If a handler accidentally returns a coroutine, log a warning
+            # (all ACP handlers are expected to be synchronous)
             import asyncio
 
             if asyncio.iscoroutine(result):
-                # Can't await in a sync context — run in a new event loop
-                # This is a limitation; for proper async we'd use asyncio
-                try:
-                    loop = asyncio.new_event_loop()
-                    result = loop.run_until_complete(result)
-                    loop.close()
-                except RuntimeError:
-                    # If we're already in an event loop
-                    import asyncio
-                    import concurrent.futures
-
-                    with concurrent.futures.ThreadPoolExecutor(
-                        max_workers=1
-                    ) as pool:
-                        future = pool.submit(
-                            lambda: asyncio.run(result)
-                        )
-                        result = future.result()
+                logger.warning(
+                    f"Handler '{method}' returned a coroutine but "
+                    f"transport is sync-only; the coroutine will not "
+                    f"be executed"
+                )
+                result = None
 
             self.write(JsonRpcMessage.response(result, msg_id))
 
@@ -314,15 +352,21 @@ class JsonRpcTransport:
             )
 
     def _handle_incoming_response(self, msg: dict):
-        """Handle a response to one of our outgoing requests."""
+        """Handle a response to one of our outgoing requests.
+
+        Looks up the registered handler by request-id, invokes it,
+        and cleans up both the in-flight marker and the handler.
+        Thread-safe by design: each request-id has its own handler.
+        """
         msg_id = msg.get("id")
         if msg_id is None:
             return
         with self._in_flight_lock:
             done_event = self._in_flight.pop(msg_id, None)
         if done_event:
-            # Store the response for the waiting thread to pick up
-            handler = getattr(self, "_response_handler", None)
+            # Fetch and remove the per-request handler
+            with self._response_handlers_lock:
+                handler = self._response_handlers.pop(msg_id, None)
             if handler:
                 try:
                     handler(msg)

@@ -723,7 +723,7 @@ class BaseChatSession(ABC):
         self._tool_chain_summary = tool_chain_summary
 
         # ── Level 2 存储（用于 prompt 构建时直接拼入）──
-        self._level2 = level2 or []
+        self._level2 = level2 or []  # instance attribute; subclasses with context bridge to context._level2
 
         # ── Level 1: 最新一轮压缩加载 ──
         total = len(conversations)

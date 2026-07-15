@@ -12,19 +12,16 @@ Protocol lifecycle:
   5. Agent may call client-side methods (fs/*, terminal/*, permissions)
 """
 
-import asyncio
 import json
 import logging
 import os
-import sys
 import threading
 import time
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from tea_agent.protocol.acp_jsonrpc import (
     JsonRpcError,
-    JsonRpcMessage,
     JsonRpcTransport,
     RequestId,
 )
@@ -126,8 +123,17 @@ class AcpAgent:
         self._active_turns: dict[str, threading.Event] = {}
         self._active_turns_lock = threading.Lock()
 
-        # Cached agent reference (lazy init)
-        self._agent = None
+        # Per-session agents (lazy init, thread-safe)
+        self._session_agents: dict[str, "Agent"] = {}
+        self._session_agents_lock = threading.Lock()
+
+        # Global fallback agent for ext/* calls (no session context)
+        self._global_agent: "Agent | None" = None
+        self._global_agent_lock = threading.Lock()
+
+        # Document context: path -> content (for context injection)
+        self._document_context: dict[str, str] = {}
+        self._document_context_lock = threading.Lock()
 
         # Register all handlers
         self._register_handlers()
@@ -231,8 +237,6 @@ class AcpAgent:
             else "initialize"
         )
 
-        client_caps = (params or {}).get("clientCapabilities", {})
-
         # Build agent capabilities
         # These define what the agent can do
         agent_capabilities = {
@@ -258,9 +262,29 @@ class AcpAgent:
     def _handle_authenticate(
         self, params: Any, msg_id: RequestId
     ) -> dict:
-        """Handle ``authenticate`` — authenticate the agent."""
-        logger.info("authenticate requested")
-        return {"authenticated": True, "user": "tea-agent-user"}
+        """Handle ``authenticate`` — authenticate the agent.
+
+        Checks ``apiKey`` or ``token`` from params against the configured
+        TEA_API_KEY.  If no API key is configured, authentication is
+        skipped (pass-through for development).
+        """
+        if not self._api_key:
+            logger.info("authenticate: no API key configured, skipping auth")
+            return {"authenticated": True, "user": "tea-agent-user"}
+
+        token = ""
+        if isinstance(params, dict):
+            token = params.get("apiKey", "") or params.get("token", "")
+
+        if token == self._api_key:
+            logger.info("authenticate: success")
+            return {"authenticated": True, "user": "tea-agent-user"}
+
+        logger.warning("authenticate: invalid credentials")
+        raise JsonRpcError(
+            JsonRpcError.INVALID_PARAMS,
+            "Authentication failed: invalid API key",
+        )
 
     def _handle_logout(
         self, params: Any, msg_id: RequestId
@@ -696,17 +720,19 @@ class AcpAgent:
                     "status",
                     status="Processing your request...",
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"send_update(status) failed: {e}")
 
             # Process via Tea Agent with streaming callback
             stream_buffer = []
             tool_calls = []
+            stream_failures = 0
 
             def stream_callback(text: str):
+                nonlocal stream_failures
                 if cancel_event.is_set():
                     return
-                if text and not text.startswith("["):
+                if text:
                     stream_buffer.append(text)
                     # Send streaming content block updates (every chunk)
                     try:
@@ -720,8 +746,14 @@ class AcpAgent:
                                 }
                             ],
                         )
-                    except Exception:
-                        pass
+                        stream_failures = 0
+                    except Exception as e:
+                        stream_failures += 1
+                        if stream_failures <= 3:
+                            logger.warning(
+                                f"send_update(content_block) failed "
+                                f"({stream_failures}/3): {e}"
+                            )
 
             ai_text, tool_calls = self._process_prompt(
                 session_id, full_prompt, cancel_event,
@@ -768,8 +800,8 @@ class AcpAgent:
                     "completed",
                     status="Response complete",
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"send_update(completed) failed: {e}")
 
             # Send the final response
             return {
@@ -844,23 +876,42 @@ class AcpAgent:
     # ══════════════════════════════════════════════════════════════════════
 
     def _handle_document_did_open(self, params: Any):
+        """Document opened — store content for context injection."""
         path = (params or {}).get("path", "")
         content = (params or {}).get("content", "")
-        logger.debug(f"document/didOpen: {path}")
+        if path:
+            with self._document_context_lock:
+                self._document_context[path] = content or ""
+            logger.debug(f"document/didOpen: {path} ({len(content)} chars)")
 
     def _handle_document_did_change(self, params: Any):
+        """Document changed — update stored content."""
         path = (params or {}).get("path", "")
-        logger.debug(f"document/didChange: {path}")
+        content = (params or {}).get("content", "")
+        if path and content is not None:
+            with self._document_context_lock:
+                self._document_context[path] = content
+            logger.debug(f"document/didChange: {path}")
 
     def _handle_document_did_close(self, params: Any):
+        """Document closed — remove from context."""
         path = (params or {}).get("path", "")
-        logger.debug(f"document/didClose: {path}")
+        if path:
+            with self._document_context_lock:
+                self._document_context.pop(path, None)
+            logger.debug(f"document/didClose: {path}")
 
     def _handle_document_did_save(self, params: Any):
+        """Document saved — update stored content."""
         path = (params or {}).get("path", "")
+        content = (params or {}).get("content", "")
+        if path and content is not None:
+            with self._document_context_lock:
+                self._document_context[path] = content
         logger.debug(f"document/didSave: {path}")
 
     def _handle_document_did_focus(self, params: Any):
+        """Document focused — note the active file."""
         path = (params or {}).get("path", "")
         logger.debug(f"document/didFocus: {path}")
 
@@ -887,23 +938,61 @@ class AcpAgent:
     def _handle_nes_suggest(
         self, params: Any, msg_id: RequestId
     ) -> dict:
-        """Handle ``nes/suggest`` — suggest an inline edit."""
+        """Handle ``nes/suggest`` — suggest an inline edit.
+
+        Uses an existing session agent if available (fast), otherwise
+        falls back to a simple text template to avoid slow Agent init
+        during inline edits.
+        """
         nes_id = (params or {}).get("nesId", "")
         file_path = (params or {}).get("filePath", "")
+        session_id = (params or {}).get("sessionId", "")
         prompt = (params or {}).get("prompt", "")
-        logger.info(f"nes/suggest: {nes_id}")
-        # Generate a suggestion — use agent if available, else simple response
+        selection = (params or {}).get("selection", "")
+        logger.info(f"nes/suggest: {nes_id} file={file_path}")
+
+        # Build context-aware prompt
+        ctx = ""
+        if file_path:
+            with self._document_context_lock:
+                content = self._document_context.get(file_path, "")
+                if content:
+                    ctx = f"File content:\n{content[:2000]}\n\n"
+        if selection:
+            ctx += f"Selected code:\n{selection}\n\n"
+
+        full_prompt = (
+            f"You are a code editor assistant. Generate a concise code "
+            f"suggestion based on the user's request.\n\n"
+            f"{ctx}User request: {prompt}"
+        )
+
         ai_text = ""
         try:
-            if self._agent is not None:
-                ai_text, _ = self._agent.sess.chat_once(
-                    f"Generate a code suggestion for:\n{prompt}"
-                )
-            ai_text = ai_text or ""
-        except Exception:
-            pass
+            # Only use agent if already cached — avoids slow init
+            agent = None
+            if session_id:
+                with self._session_agents_lock:
+                    agent = self._session_agents.get(session_id)
+                if agent is None:
+                    # Fast path: check if global agent is already cached
+                    with self._global_agent_lock:
+                        agent = self._global_agent
+            else:
+                with self._global_agent_lock:
+                    agent = self._global_agent
+
+            if agent is not None:
+                ai_text, _ = agent.sess.chat_once(full_prompt)
+        except Exception as e:
+            logger.warning(f"nes/suggest: agent call failed: {e}")
+
         if not ai_text:
-            ai_text = f"# Suggested edit for {os.path.basename(file_path) if file_path else 'file'}\n# Based on: {prompt}\n"
+            ai_text = (
+                f"# Suggested edit for "
+                f"{os.path.basename(file_path) if file_path else 'file'}\n"
+                f"# Based on: {prompt}\n"
+            )
 
         return {
             "nesId": nes_id,
@@ -984,11 +1073,9 @@ class AcpAgent:
     def _ext_toolkit_list(self, params: dict) -> dict:
         """List available toolkit tools."""
         try:
-            if self._agent is None:
-                from tea_agent.agent import Agent
-                self._agent = Agent(mode="lightweight", config_path=self._config_path)
+            agent = self._get_global_agent()
             tools = []
-            for name, meta in self._agent.toolkit.meta_map.items():
+            for name, meta in agent.toolkit.meta_map.items():
                 fn = meta.get("function", {})
                 tools.append({
                     "name": fn.get("name", name),
@@ -1003,10 +1090,8 @@ class AcpAgent:
         tool_name = params.get("name", "")
         tool_args = params.get("arguments", {})
         try:
-            if self._agent is None:
-                from tea_agent.agent import Agent
-                self._agent = Agent(mode="lightweight", config_path=self._config_path)
-            result = self._agent.toolkit.call(tool_name, **tool_args)
+            agent = self._get_global_agent()
+            result = agent.toolkit.call(tool_name, **tool_args)
             return {"result": result}
         except Exception as e:
             return {"error": str(e)}
@@ -1075,6 +1160,55 @@ class AcpAgent:
     # INTERNALS
     # ══════════════════════════════════════════════════════════════════════
 
+    def _get_session_agent(self, session_id: str) -> "Agent":
+        """Get (or create) a per-session Agent instance.
+
+        Each ACP session gets its own Agent with its own topic_id,
+        eliminating cross-session interference.
+        """
+        with self._session_agents_lock:
+            agent = self._session_agents.get(session_id)
+            if agent is not None:
+                return agent
+
+        from tea_agent.agent import Agent as _Agent
+
+        agent = _Agent(mode="lightweight", config_path=self._config_path)
+        from tea_agent.store import get_storage
+
+        agent.current_topic_id = session_id
+        # Ensure storage has this topic
+        storage = get_storage()
+        try:
+            if not storage.get_topic(session_id):
+                storage.create_topic(
+                    f"ACP-{session_id[:8]}", topic_id=session_id
+                )
+        except Exception:
+            pass
+
+        with self._session_agents_lock:
+            # Double-check after acquiring lock
+            existing = self._session_agents.get(session_id)
+            if existing is not None:
+                return existing
+            self._session_agents[session_id] = agent
+        return agent
+
+    def _get_global_agent(self) -> "Agent":
+        """Get the global fallback agent (for ext/* calls without session)."""
+        if self._global_agent is not None:
+            return self._global_agent
+        with self._global_agent_lock:
+            if self._global_agent is not None:
+                return self._global_agent
+            from tea_agent.agent import Agent as _Agent
+
+            self._global_agent = _Agent(
+                mode="lightweight", config_path=self._config_path
+            )
+            return self._global_agent
+
     def _extract_text_content(self, message: dict) -> str:
         """Extract text from a message, handling content blocks."""
         content = message.get("content", "")
@@ -1100,9 +1234,12 @@ class AcpAgent:
         session_id: str,
         prompt: str,
         cancel_event: threading.Event,
-        stream_callback: Optional[callable] = None,
+        stream_callback: callable | None = None,
     ) -> tuple[str, list[dict]]:
         """Process a prompt through the Tea Agent engine.
+
+        Each session has its own Agent instance to avoid cross-session
+        interference.  Document context is automatically injected.
 
         Args:
             session_id: ACP session ID
@@ -1113,58 +1250,62 @@ class AcpAgent:
         Returns (response_text, tool_calls).
         """
         try:
-            from tea_agent.agent import Agent
+            agent = self._get_session_agent(session_id)
 
-            # Lazily init the agent
-            if self._agent is None:
-                self._agent = Agent(
-                    mode="lightweight",
-                    config_path=self._config_path,
-                )
-
-            # Set session context
-            if session_id:
-                self._agent.current_topic_id = session_id
-            elif not self._agent.current_topic_id:
-                from tea_agent.store import get_storage
-
-                self._agent.current_topic_id = (
-                    get_storage().create_topic("ACP")
-                )
+            # Build enriched prompt with document context
+            enriched = self._inject_document_context(prompt)
 
             # Collect streaming output
-            collected_text = []
-            tool_calls = []
+            collected_text: list[str] = []
+            tool_calls: list[dict] = []
+            stream_failures = 0
 
             def callback(text: str):
+                nonlocal stream_failures
                 if cancel_event and cancel_event.is_set():
                     return
-                if text and not text.startswith("["):
+                # Accept all text, even if it starts with '['.
+                # Tool-internal markers are harmless to collect.
+                if text:
                     collected_text.append(text)
                     if stream_callback:
-                        stream_callback(text)
+                        try:
+                            stream_callback(text)
+                            stream_failures = 0
+                        except Exception:
+                            stream_failures += 1
+                            if stream_failures <= 3:
+                                logger.warning(
+                                    f"stream callback error "
+                                    f"({stream_failures}/3):",
+                                    exc_info=True
+                                )
 
             # Run the chat
-            ai_msg, used = self._agent.sess.chat_stream(
-                prompt,
+            ai_msg, used = agent.sess.chat_stream(
+                enriched,
                 callback=callback,
-                topic_id=self._agent.current_topic_id,
+                topic_id=agent.current_topic_id,
             )
 
-            # Format tool calls
+            # Format tool calls — robustly handle None / str / dict
             if used:
-                for item in used if isinstance(used, list) else []:
+                items = used if isinstance(used, list) else []
+                for item in items:
                     if isinstance(item, dict):
-                        tool_calls.append(item)
+                        # Ensure required fields exist
+                        tc = {
+                            "name": item.get("name", str(item.get("id", "unknown"))),
+                            "input": item.get("input", item.get("arguments", {})),
+                            "id": item.get("id", f"tu_{uuid.uuid4().hex[:12]}"),
+                        }
+                        tool_calls.append(tc)
+                    elif isinstance(item, str):
+                        tool_calls.append({"name": item, "input": {}})
                     else:
-                        tool_calls.append({
-                            "name": str(item),
-                            "input": {},
-                        })
+                        tool_calls.append({"name": str(item), "input": {}})
 
-            response_text = (
-                "".join(collected_text) or ai_msg or ""
-            )
+            response_text = "".join(collected_text) or ai_msg or ""
             return response_text, tool_calls
 
         except ImportError as e:
@@ -1181,6 +1322,23 @@ class AcpAgent:
                 f"Error processing prompt: {e}",
                 [],
             )
+
+    def _inject_document_context(self, prompt: str) -> str:
+        """Prepend currently-open document context to the prompt.
+
+        Reads self._document_context (populated by document/didOpen etc.)
+        and injects it as a system-level hint so the agent knows what
+        file the user is working on.
+        """
+        with self._document_context_lock:
+            if not self._document_context:
+                return prompt
+            ctx_lines = ["--- Active document context ---"]
+            for path, content in self._document_context.items():
+                short = content[:300]  # first 300 chars per file
+                ctx_lines.append(f"# File: {path}\n{short}")
+            ctx_lines.append("--- End context ---\n")
+            return "\n".join(ctx_lines) + prompt
 
     def _get_available_commands(self) -> list[dict]:
         """Return available commands for the session."""
@@ -1240,6 +1398,11 @@ class AcpAgent:
         logger.info("ACP Agent: shutting down")
         with self._sessions_lock:
             self._sessions.clear()
+        with self._session_agents_lock:
+            self._session_agents.clear()
+        self._global_agent = None
+        with self._document_context_lock:
+            self._document_context.clear()
 
 
 class SessionState:

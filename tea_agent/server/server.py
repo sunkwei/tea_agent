@@ -176,7 +176,7 @@ def _load_topic_history(storage, session, topic_id):
         session._history_summary = ""
         session._semantic_summary = ""
         session._tool_chain_summary = ""
-        session._level2 = []
+        session.context._level2 = []
 
 
 def _save_chat_result(storage, session, topic_id, user_msg, ai_msg, used_tools):
@@ -364,6 +364,8 @@ class APIServer:
 
         Args:
             config_path: 可选，指定使用的配置文件路径
+
+        客户端断连时自动发送 interrupt 给 Session，避免后台线程空转。
         """
         session, storage = self.create_session(config_path)
         user_msg = self._extract_user_message(messages)
@@ -383,8 +385,13 @@ class APIServer:
             args=(session, storage, user_msg, topic_id, stream_cb, _put),
             daemon=True)
         thread.start()
-        async for event in self._generate_sse(queue, model):
-            yield event
+        try:
+            async for event in self._generate_sse(queue, model):
+                yield event
+        except asyncio.CancelledError:
+            # 客户端断开连接，通知 Session 终止
+            logger.info("SSE client disconnected, interrupting session")
+            session.interrupt()
 
     def _run_stream(self, session, storage, user_msg, topic_id, stream_cb, put):
         """在后台线程运行流式对话。使用独立 Session，无需全局锁。"""

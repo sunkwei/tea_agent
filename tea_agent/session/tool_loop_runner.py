@@ -489,7 +489,6 @@ def execute_tool_loop(session, context: dict) -> dict:
                         if len(_raw) > 120:
                             _raw = _raw[:120] + "…"
                         callback(f"[TOOL_ARG:{_raw}]")
-                print(f"{_asctime}: \t#{iterations+1}: 调用工具:{call.function.name} args_len={len(call.function.arguments or '')}")
                 logger.info(f"    tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
 
                 # ── SKILL 校验：工具调用前检查白名单 ──

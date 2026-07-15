@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "tetris-ansi"
+version = "1.0.0"
+description = "纯终端 ANSI 俄罗斯方块"
+requires-python = ">=3.10"
+authors = [{ name = "tea_agent" }]
+license = { text = "MIT" }
+
+[project.scripts]
+tetris = "tetris_ansi:main"

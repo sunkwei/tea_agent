@@ -12,7 +12,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 import tea_agent.session_ref as _sref
 from tea_agent import tlk
@@ -36,7 +36,7 @@ class _ModeBehavior:
     name: str
     use_storage: bool
     use_background_services: bool
-    session_class: str
+    session_class: Literal["LiteSession", "OnlineToolSession"]
     track_topic: bool
     call_post_pipeline: bool
     load_topic_history: bool
@@ -407,65 +407,75 @@ class Agent:
     def _post_chat_pipeline(
         self, ai_msg: str, used_tools: bool, user_msg, topic_id: str
     ) -> None:
-        """AI 回复后流水线：入库 → Token 统计 → L2 推送 → 条件摘要。"""
+        """AI 回复后流水线：入库 → Token 统计 → L2 推送 → 条件摘要。
+
+        ⚠️ 此方法在 AI 回复已生成后运行。任何异常只记录日志不冒泡，
+        以免丢失已生成的 AI 回复。
+        """
         if not self._db:
             return
 
-        conv_id = self._db.save_msg(topic_id, user_msg, "", False)
-        rounds = self._sess._rounds_collector
-        self._db.update_msg_rounds(
-            conversation_id=conv_id,
-            ai_msg=ai_msg,
-            is_func_calling=used_tools,
-            rounds=rounds if rounds else None,
-        )
-
-        usage = self._sess._last_usage
-        cheap_usage = self._sess._last_cheap_usage
-        if usage and usage.get("total_tokens", 0) > 0:
-            kwargs = {
-                "total_tokens": usage["total_tokens"],
-                "prompt_tokens": usage["prompt_tokens"],
-                "completion_tokens": usage["completion_tokens"],
-            }
-            if cheap_usage and cheap_usage.get("total_tokens", 0) > 0:
-                kwargs["cheap_tokens"] = cheap_usage["total_tokens"]
-                kwargs["cheap_prompt_tokens"] = cheap_usage["prompt_tokens"]
-                kwargs["cheap_completion_tokens"] = cheap_usage["completion_tokens"]
-            self._db.add_topic_tokens(topic_id, **kwargs)
-
-        user_text = (
-            user_msg
-            if isinstance(user_msg, str)
-            else (
-                user_msg.get("text", "")
-                if isinstance(user_msg, dict)
-                else str(user_msg)
+        try:
+            conv_id = self._db.save_msg(topic_id, user_msg, "", False)
+            rounds = self._sess._rounds_collector
+            self._db.update_msg_rounds(
+                conversation_id=conv_id,
+                ai_msg=ai_msg,
+                is_func_calling=used_tools,
+                rounds=rounds if rounds else None,
             )
-        )
 
-        l2_count, overflow_items, should_summarize = self._db.push_to_level2(
-            topic_id,
-            user_text,
-            ai_msg,
-            rounds=rounds if rounds else None,
-        )
-        logger.debug(
-            f"L2 push: count={l2_count}, overflow={len(overflow_items)}, "
-            f"summarize={should_summarize}"
-        )
+            usage = self._sess._last_usage
+            cheap_usage = self._sess._last_cheap_usage
+            if usage and usage.get("total_tokens", 0) > 0:
+                kwargs = {
+                    "total_tokens": usage["total_tokens"],
+                    "prompt_tokens": usage["prompt_tokens"],
+                    "completion_tokens": usage["completion_tokens"],
+                }
+                if cheap_usage and cheap_usage.get("total_tokens", 0) > 0:
+                    kwargs["cheap_tokens"] = cheap_usage["total_tokens"]
+                    kwargs["cheap_prompt_tokens"] = cheap_usage["prompt_tokens"]
+                    kwargs["cheap_completion_tokens"] = cheap_usage["completion_tokens"]
+                self._db.add_topic_tokens(topic_id, **kwargs)
 
-        threading.Thread(
-            target=self._do_async_summaries,
-            args=(topic_id, overflow_items, should_summarize),
-            daemon=True,
-        ).start()
+            user_text = (
+                user_msg
+                if isinstance(user_msg, str)
+                else (
+                    user_msg.get("text", "")
+                    if isinstance(user_msg, dict)
+                    else str(user_msg)
+                )
+            )
 
-        threading.Thread(
-            target=self._do_task_evaluation,
-            args=(user_text, ai_msg, used_tools, rounds, usage),
-            daemon=True,
-        ).start()
+            l2_count, overflow_items, should_summarize = self._db.push_to_level2(
+                topic_id,
+                user_text,
+                ai_msg,
+                rounds=rounds if rounds else None,
+            )
+            logger.debug(
+                f"L2 push: count={l2_count}, overflow={len(overflow_items)}, "
+                f"summarize={should_summarize}"
+            )
+
+            threading.Thread(
+                target=self._do_async_summaries,
+                args=(topic_id, overflow_items, should_summarize),
+                daemon=True,
+            ).start()
+
+            threading.Thread(
+                target=self._do_task_evaluation,
+                args=(user_text, ai_msg, used_tools, rounds, usage),
+                daemon=True,
+            ).start()
+        except Exception:
+            logger.exception(
+                "_post_chat_pipeline failed — AI reply preserved, "
+                "but DB write may be lost"
+            )
 
     def _do_async_summaries(
         self, topic_id: str, overflow_items: list = None, should_summarize: bool = False
@@ -567,7 +577,7 @@ class Agent:
             self._sess._history_summary = ""
             self._sess._semantic_summary = ""
             self._sess._tool_chain_summary = ""
-            self._sess._level2 = []
+            self._sess.context._level2 = []
 
     # ────────────────────────────────────────────═══
     # 生命周期

@@ -16,7 +16,6 @@ def test_generate_story():
     assert len(result.get("scenes", [])) == 5
     assert "html_path" in result
     print(f"✅ 故事生成: {result['id']} ({result['html_path']})")
-    return result
 
 
 def test_generate_particles():
@@ -25,7 +24,6 @@ def test_generate_particles():
     assert result is not None
     assert result["type"] == "auto"
     print(f"✅ 粒子生成: {result['id']}")
-    return result
 
 
 def test_list():
@@ -33,7 +31,6 @@ def test_list():
     items = generator.list_animations()
     assert len(items) >= 2
     print(f"✅ 列表: {len(items)} 项")
-    return items
 
 
 def test_get():

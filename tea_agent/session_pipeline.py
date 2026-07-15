@@ -28,6 +28,7 @@ class PipelineStep:
     enabled: bool = True
     description: str = ""
     position: int = 0
+    critical: bool = False  # 核心步骤失败时 raise 而非吞异常
 
 
 class SessionPipeline:
@@ -45,6 +46,7 @@ class SessionPipeline:
         enabled: bool = True,
         description: str = "",
         position: int = 0,
+        critical: bool = False,
     ) -> None:
         """注册一个 Pipeline 步骤。同名不可重复注册。"""
         if name in self._steps:
@@ -56,6 +58,7 @@ class SessionPipeline:
             enabled=enabled,
             description=description,
             position=position,
+            critical=critical,
         )
 
         self._steps[name] = step
@@ -108,6 +111,9 @@ class SessionPipeline:
                 if isinstance(result, dict):
                     context.update(result)
             except Exception as e:
+                if step.critical:
+                    logger.error(f"    Critical step {name} failed: {e}", exc_info=True)
+                    raise
                 logger.warning(f"    Error running step {name}: {e}")
                 context.setdefault("_errors", []).append(
                     {

@@ -276,6 +276,7 @@ class Toolkit:
         self.func_map: dict[str, Callable] = {}
         self.meta_map: dict[str, dict] = {}
         self._cache: dict[tuple, tuple] = {}  # (key, ttl) → (result, expire_time)
+        self._user_created_tools: set[str] = set()  # 用户通过 toolkit_save 创建的工具，默认不缓存
 
         # User directory for saving and overriding tools
         self.user_dir = osp.join(
@@ -297,6 +298,7 @@ class Toolkit:
 
         对非黑名单工具缓存结果，TTL 默认 30 秒。
         相同工具+相同参数在 TTL 内重复调用直接返回缓存结果。
+        用户通过 toolkit_save 创建的工具默认不缓存。
 
         Args:
             func_name: 工具函数名
@@ -305,7 +307,8 @@ class Toolkit:
         Returns:
             工具函数返回值
         """
-        if func_name in self._CACHE_BLACKLIST:
+        # 黑名单 + 用户创建的工具不缓存
+        if func_name in self._CACHE_BLACKLIST or func_name in self._user_created_tools:
             if func_name not in self.func_map:
                 raise KeyError(f"Unknown tool: {func_name}")
             return self.func_map[func_name](**kwargs)
@@ -350,7 +353,10 @@ class Toolkit:
             logger.debug(f"Cache purge: removed {len(expired)} expired entries, {len(self._cache)} remaining")
 
     def _check_dependencies(self, pycode: str) -> str:
-        """自动检测 pycode 中的 import 并安装缺失依赖"""
+        """自动检测 pycode 中的 import 并安装缺失依赖。
+
+        在 Server 模式下仅报告缺失依赖，不执行 pip install（避免阻塞请求线程）。
+        """
         MODULE_MAP = {
             'PIL': 'Pillow', 'cv2': 'opencv-python', 'sklearn': 'scikit-learn',
             'yaml': 'PyYAML', 'bs4': 'beautifulsoup4', 'dateutil': 'python-dateutil',
@@ -382,6 +388,10 @@ class Toolkit:
 
         if not missing:
             return "✅ 依赖已就绪"
+
+        # Server 模式下只报告不安装
+        if "tea_agent.server" in sys.modules:
+            return f"⚠️ 缺失依赖（Server 模式跳过安装）: {', '.join(missing)}"
 
         installed = []
         errors = []
@@ -631,6 +641,9 @@ class Toolkit:
         result_msg = f"ok (v{version})"
         if skill_doc_msg:
             result_msg = f"ok (v{version}); {skill_doc_msg}"
+
+        # 标记为用户创建的工具，后续调用不缓存
+        self._user_created_tools.add(name)
 
         return (0, result_msg)
 

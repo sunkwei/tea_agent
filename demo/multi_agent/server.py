@@ -1,4 +1,4 @@
-!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Multi-Agent 辩论赛 — 双 Session 对抗辩论服务器。
 

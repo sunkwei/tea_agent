@@ -284,6 +284,55 @@ body {
     background: var(--border);
     margin: 8px 0;
 }
+/* ── DAG 状态栏（任务面板内） ── */
+.dag-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px;
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+.dag-status-badge {
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 11px;
+}
+.dag-status-badge.badge-pending { background:#30363d; color:#8b949e; }
+.dag-status-badge.badge-running { background:rgba(31,111,235,.25); color:#58a6ff; }
+.dag-status-badge.badge-completed { background:rgba(35,134,54,.25); color:#3fb950; }
+.dag-status-badge.badge-failed { background:rgba(218,54,51,.25); color:#f85149; }
+.dag-status-badge.badge-cancelled { background:rgba(139,148,158,.15); color:#8b949e; }
+.dag-status-progress { color: var(--text); font-weight:600; }
+.dag-status-timer { color: var(--text-dim); margin-left: auto; font-variant-numeric: tabular-nums; }
+.dag-node-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    padding: 4px 4px 8px;
+    font-size: 11px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+}
+.dag-node-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    color: var(--text-dim);
+}
+.dag-node-dot {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+.dag-node-dot.dot-pending { background: #30363d; }
+.dag-node-dot.dot-running { background: #58a6ff; animation: dag-pulse 0.8s ease-in-out infinite alternate; }
+.dag-node-dot.dot-completed { background: #3fb950; }
+.dag-node-dot.dot-failed { background: #f85149; }
+.dag-node-dot.dot-skipped { background: #484f58; }
+@keyframes dag-pulse { from { opacity: 0.5; } to { opacity: 1; } }
+.dag-node-label { max-width: 100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* ── Plan Cards ── */
 .tp-plan-card {
     border: 1px solid var(--border);
@@ -1724,7 +1773,7 @@ window.sendMessage = async function() {
 
             case 'dag_viz':
               removeLoading();
-              // DAG 可视化嵌入到任务面板，而不是聊天区
+              // DAG 可视化 — IFRAME 画布 + 1秒轮询状态
               (function() {
                 const vizId = data.viz_id;
                 if (!vizId) return;
@@ -1733,14 +1782,81 @@ window.sendMessage = async function() {
                 if (!container || !section) return;
                 // 避免重复
                 if (container.querySelector('.dag-viz-iframe')) return;
+
+                // ── 状态栏（轮询驱动） ──
+                const statusBar = document.createElement('div');
+                statusBar.className = 'dag-status-bar';
+                statusBar.innerHTML = '<span class="dag-status-badge badge-pending">⏳ PENDING</span> ' +
+                  '<span class="dag-status-progress">0/0</span> ' +
+                  '<span class="dag-status-timer">00:00</span>';
+                container.appendChild(statusBar);
+
+                // ── 节点进度紧凑列表 ──
+                const nodeList = document.createElement('div');
+                nodeList.className = 'dag-node-list';
+                container.appendChild(nodeList);
+
+                // ── IFRAME 画布（保留） ──
                 const iframe = document.createElement('iframe');
                 iframe.className = 'dag-viz-iframe';
                 iframe.src = '/dag/' + vizId;
-                iframe.style.cssText = 'width:100%;height:300px;border:none;display:block;border-radius:4px;';
+                iframe.style.cssText = 'width:100%;height:260px;border:none;display:block;border-radius:4px;';
                 container.appendChild(iframe);
+
                 section.style.display = '';
                 // 自动打开任务面板
                 if (!_taskPanelOpen) toggleTaskPanel();
+
+                // ── 1秒轮询 DAG 状态 ──
+                let _dagPollTimer = null;
+                let _dagStartTime = Date.now();
+                const _dagPoll = async function() {
+                  try {
+                    const resp = await fetch('/dag/' + vizId + '/status');
+                    if (!resp.ok) { stopPolling(); return; }
+                    const snap = await resp.json();
+                    const done = snap.progress.completed;
+                    const total = snap.progress.total;
+                    const state = snap.state;
+
+                    // 更新状态栏
+                    const badge = statusBar.querySelector('.dag-status-badge');
+                    const progress = statusBar.querySelector('.dag-status-progress');
+                    const timer = statusBar.querySelector('.dag-status-timer');
+                    if (badge) {
+                      badge.textContent = state.toUpperCase();
+                      badge.className = 'dag-status-badge badge-' + state;
+                    }
+                    if (progress) progress.textContent = done + '/' + total;
+                    if (timer) {
+                      const elapsed = Math.floor((Date.now() - _dagStartTime) / 1000);
+                      const m = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                      const s = (elapsed % 60).toString().padStart(2, '0');
+                      timer.textContent = m + ':' + s;
+                    }
+
+                    // 更新节点列表
+                    renderDagNodeList(nodeList, snap);
+
+                    // 完成/失败/取消时停止轮询
+                    if (state === 'completed' || state === 'failed' || state === 'cancelled') {
+                      stopPolling();
+                    }
+                  } catch(e) { /* 网络错误，下次重试 */ }
+                };
+                const stopPolling = function() {
+                  if (_dagPollTimer) { clearInterval(_dagPollTimer); _dagPollTimer = null; }
+                };
+                _dagPoll();  // 立即首次
+                _dagPollTimer = setInterval(_dagPoll, 1000);
+
+                // closeDagView 时停止轮询
+                const origClose = window.closeDagView;
+                window.closeDagView = function() {
+                  stopPolling();
+                  origClose();
+                  window.closeDagView = origClose;
+                };
               })();
               break;
 
@@ -1966,6 +2082,26 @@ window.closeDagView = function() {
   const container = $('tp-dag-container');
   if (container) container.innerHTML = '';
   if (section) section.style.display = 'none';
+};
+
+// DAG 节点列表渲染（轮询驱动）
+window.renderDagNodeList = function(container, snap) {
+  if (!container || !snap.nodes) return;
+  var html = '';
+  for (var i = 0; i < snap.nodes.length; i++) {
+    var n = snap.nodes[i];
+    var stateClass = n.state || 'pending';
+    var icon = stateClass === 'completed' ? '\u2713' :
+               stateClass === 'running' ? '\u25b6' :
+               stateClass === 'failed' ? '\u2717' : '\u25cb';
+    html += '<span class="dag-node-item">' +
+      '<span class="dag-node-dot dot-' + stateClass + '"></span>' +
+      '<span class="dag-node-label" title="' + esc(n.label) + ' [' + stateClass.toUpperCase() +
+      (n.duration > 0 ? ' ' + n.duration.toFixed(1) + 's' : '') + ']">' +
+      icon + ' ' + esc(n.label) +
+      '</span></span>';
+  }
+  container.innerHTML = html;
 };
 
 window.toggleTaskPanel = function() {

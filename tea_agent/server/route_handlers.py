@@ -1015,7 +1015,7 @@ async def handle_dag_viz(request):
         )
 
     dag_structure = viz._build_dag_structure()
-    html = get_viz_html(dag_structure, viz.title)
+    html = get_viz_html(dag_structure, viz.title, viz_id=viz_id)
     return HTMLResponse(html)
 
 
@@ -1075,6 +1075,78 @@ async def handle_dag_sse(request):
             "X-Accel-Buffering": "no",
         },
     )
+async def handle_dag_status(request):
+    """GET /dag/{viz_id}/status — 返回 JSON DAG 状态快照（供轮询）。"""
+    viz_id = request.path_params.get("viz_id", "")
+    if not viz_id:
+        return JSONResponse({"error": "viz_id required"}, status_code=400)
+
+    snapshot = DagVizRegistry.get_status_snapshot(viz_id)
+    if not snapshot:
+        return JSONResponse({"error": "viz not found"}, status_code=404)
+    return JSONResponse(snapshot)
+
+
+async def handle_dag_image(request):
+    """GET /dag/{viz_id}/image — 返回 dot 渲染的 SVG/PNG DAG 状态图。"""
+    viz_id = request.path_params.get("viz_id", "")
+    if not viz_id:
+        return JSONResponse({"error": "viz_id required"}, status_code=400)
+
+    viz = DagVizRegistry.get(viz_id)
+    if not viz:
+        return JSONResponse({"error": "viz not found"}, status_code=404)
+
+    from tea_agent.multi_agent.dag_dot_renderer import (
+        dag_to_dot,
+        render_dot_to_svg,
+        render_dot_to_png,
+        check_dot_available,
+    )
+
+    # 获取格式偏好：svg（默认）或 png
+    fmt = request.query_params.get("format", "svg")
+
+    if viz._exec:
+        node_states = viz._exec.results
+    else:
+        node_states = {}
+
+    dot = dag_to_dot(viz.dag, node_states, viz.title)
+
+    if not check_dot_available():
+        # 返回 DOT 源码作为纯文本，前端可降级渲染
+        return Response(
+            content=dot,
+            media_type="text/plain",
+            headers={"X-Dot-Available": "false"},
+        )
+
+    if fmt == "png":
+        png_data = render_dot_to_png(dot)
+        if png_data:
+            return Response(
+                content=png_data,
+                media_type="image/png",
+                headers={"Cache-Control": "no-cache"},
+            )
+
+    svg_data = render_dot_to_svg(dot)
+    if svg_data:
+        return Response(
+            content=svg_data,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    # 渲染失败，返回 DOT 源码
+    return Response(
+        content=dot,
+        media_type="text/plain",
+        status_code=500,
+    )
+
+
     """Wrapper to catch agent initialization errors."""
     try:
         return await handler(request)

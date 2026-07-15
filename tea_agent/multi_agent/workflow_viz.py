@@ -2,7 +2,7 @@
 WorkflowViz — DAG 工作流实时可视化引擎。
 
 实时推送 WorkflowExec 的执行状态到前端，通过 SSE (Server-Sent Events)
-驱动 Canvas 渲染。零侵入：包装 WorkflowExec.run() 即可。
+驱动前端 <img> 标签，服务端通过 Graphviz dot 渲染 SVG 实时更新。
 
 用法:
     viz = WorkflowVisualizer(dag, pool=pool)
@@ -78,8 +78,83 @@ class DagVizRegistry:
         """列出所有活跃的 viz_id。"""
         return list(cls._instances.keys())
 
+    @classmethod
+    def get_status_snapshot(cls, viz_id: str) -> dict | None:
+        """
+        获取 DAG 状态快照（JSON 格式），供轮询端点使用。
 
-def get_viz_html(dag_structure: dict, title: str = "Workflow DAG") -> str:
+        返回:
+            {
+                "viz_id": str,
+                "title": str,
+                "state": "running"|"completed"|"failed"|...,
+                "progress": {"completed": int, "total": int},
+                "started_at": float | None,
+                "nodes": [{"id": str, "label": str, "type": str, "state": str,
+                           "duration": float, "error": str | None, "level": int}],
+                "edges": [{"from": str, "to": str, "condition_key": str | None}],
+                "dot_available": bool,
+            }
+            或 None 如果 viz_id 未找到。
+        """
+        viz = cls._instances.get(viz_id)
+        if not viz:
+            return None
+
+        # 构建节点状态列表
+        nodes = []
+        levels = viz._compute_levels()
+
+        if viz._exec:
+            results = viz._exec.results
+            wf_state = viz._exec.state.value
+        else:
+            results = {}
+            wf_state = "pending"
+
+        completed = 0
+        total = len(viz.dag.nodes)
+
+        for nid, node in viz.dag.nodes.items():
+            nr = results.get(nid)
+            state = nr.state.value if nr else "pending"
+            if state in ("completed", "failed", "skipped"):
+                completed += 1
+
+            nodes.append({
+                "id": nid,
+                "label": node.label or nid,
+                "type": node.type.value if hasattr(node.type, 'value') else str(node.type),
+                "state": state,
+                "duration": round(nr.duration, 3) if nr and nr.duration else 0,
+                "error": nr.error if nr else None,
+                "level": levels.get(nid, 0),
+            })
+
+        edges = []
+        for e in viz.dag.edges:
+            edges.append({
+                "from": e["from"],
+                "to": e["to"],
+                "condition_key": e.get("condition_key"),
+            })
+
+        from tea_agent.multi_agent.dag_dot_renderer import check_dot_available
+
+        return {
+            "viz_id": viz_id,
+            "title": viz.title,
+            "state": wf_state,
+            "progress": {"completed": completed, "total": total},
+            "started_at": viz._started_at,
+            "finished_at": viz._finished_at,
+            "nodes": nodes,
+            "edges": edges,
+            "dot_available": check_dot_available(),
+        }
+
+
+def get_viz_html(dag_structure: dict, title: str = "Workflow DAG", viz_id: str = "") -> str:
     """生成 DAG 可视化 HTML 页面。
 
     供 server 路由使用，将 DAG 结构数据注入模板。
@@ -87,6 +162,7 @@ def get_viz_html(dag_structure: dict, title: str = "Workflow DAG") -> str:
     Args:
         dag_structure: _build_dag_structure() 的输出
         title: 页面标题
+        viz_id: DAG 可视化实例 ID，用于 SSR 时注入图片 URL
 
     Returns:
         完整的 HTML 字符串
@@ -94,7 +170,7 @@ def get_viz_html(dag_structure: dict, title: str = "Workflow DAG") -> str:
     return _VIZ_HTML_TEMPLATE.replace(
         "{{DAG_STRUCTURE}}",
         json.dumps(dag_structure, ensure_ascii=False),
-    ).replace("{{TITLE}}", title)
+    ).replace("{{TITLE}}", title).replace("{{VIZ_ID}}", viz_id)
 
 
 # ═══════════════════════════════════════════════
@@ -443,6 +519,7 @@ class WorkflowVisualizer:
         return {
             "workflow_id": self.dag.workflow_id,
             "title": self.title,
+            "viz_id": self.viz_id,
             "nodes": nodes,
             "edges": edges,
             "levels": levels,
@@ -478,6 +555,7 @@ class WorkflowVisualizer:
                 StreamingResponse,
                 HTMLResponse,
                 JSONResponse,
+                Response,
             )
             from starlette.routing import Route
             import uvicorn
@@ -493,7 +571,7 @@ class WorkflowVisualizer:
             html = _VIZ_HTML_TEMPLATE.replace(
                 "{{DAG_STRUCTURE}}",
                 json.dumps(dag_structure, ensure_ascii=False),
-            ).replace("{{TITLE}}", self.title)
+            ).replace("{{TITLE}}", self.title).replace("{{VIZ_ID}}", self.viz_id)
             return HTMLResponse(html)
 
         async def handle_dag_structure(request):
@@ -555,8 +633,40 @@ class WorkflowVisualizer:
                 },
             )
 
+        async def handle_image(request):
+            """GET /dag/{viz_id}/image — 返回 dot 渲染的 SVG/PNG/DOT"""
+            fmt = request.query_params.get("format", "svg")
+
+            from tea_agent.multi_agent.dag_dot_renderer import (
+                dag_to_dot, render_dot_to_svg, render_dot_to_png, check_dot_available,
+            )
+            node_states = self._exec.results if self._exec else {}
+            dot_source = dag_to_dot(self.dag, node_states=node_states, title=self.title)
+            
+            if fmt == "dot":
+                return Response(dot_source, media_type="text/plain")
+            
+            if not check_dot_available():
+                return Response(dot_source, media_type="text/plain",
+                                headers={"X-Fallback": "dot-not-available"})
+            
+            try:
+                if fmt == "png":
+                    img_data = render_dot_to_png(dot_source)
+                    mime = "image/png"
+                else:
+                    img_data = render_dot_to_svg(dot_source)
+                    mime = "image/svg+xml"
+                if img_data is None:
+                    return Response(dot_source, media_type="text/plain",
+                                    headers={"X-Fallback": "dot-render-failed"})
+                return Response(img_data, media_type=mime)
+            except Exception as e:
+                return JSONResponse({"error": str(e), "dot_source": dot_source}, status_code=500)
+
         routes = [
             Route("/", endpoint=handle_root),
+            Route("/dag/{viz_id}/image", endpoint=handle_image),
             Route("/api/dag", endpoint=handle_dag_structure),
             Route("/api/status", endpoint=handle_status),
             Route("/api/events", endpoint=handle_sse),
@@ -605,14 +715,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#c9d1d
 .badge-running{background:#1f6feb33;color:#58a6ff}
 .badge-completed{background:#23863633;color:#3fb950}
 .badge-failed{background:#da363333;color:#f85149}
-#canvas-wrapper{flex:1;position:relative;overflow:hidden}
-#dag-canvas{position:absolute;top:0;left:0}
-#tooltip{position:absolute;display:none;background:#1c2128;border:1px solid #30363d;border-radius:8px;padding:12px 16px;font-size:12px;z-index:100;pointer-events:none;min-width:200px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
-#tooltip .tt-label{font-weight:700;font-size:13px;margin-bottom:4px}
-#tooltip .tt-state{font-size:11px}
-#tooltip .tt-duration{color:#8b949e;margin-top:4px}
-#tooltip .tt-error{color:#f85149;margin-top:4px;max-width:300px;word-wrap:break-word}
-#tooltip .tt-output{color:#58a6ff;margin-top:4px;max-width:300px;word-wrap:break-word;max-height:100px;overflow-y:auto}
+#img-wrapper{flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;background:#0d1117}
+#dag-img{max-width:100%;max-height:100%;object-fit:contain}
 #legend{position:absolute;bottom:16px;right:16px;display:flex;gap:8px;flex-wrap:wrap;font-size:11px;opacity:.85}
 .legend-item{display:flex;align-items:center;gap:4px}
 .legend-dot{width:10px;height:10px;border-radius:3px}
@@ -627,9 +731,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#0d1117;color:#c9d1d
     <span id="wf-progress">0/0</span>
   </div>
 </div>
-<div id="canvas-wrapper">
-  <canvas id="dag-canvas"></canvas>
-  <div id="tooltip"></div>
+<div id="img-wrapper">
+  <img id="dag-img" src="/dag/{{VIZ_ID}}/image?format=svg" alt="DAG 流程图" style="display:none">
   <div id="legend">
     <div class="legend-item"><div class="legend-dot" style="background:#30363d"></div>待执行</div>
     <div class="legend-item"><div class="legend-dot" style="background:#1f6feb"></div>运行中</div>
@@ -647,65 +750,9 @@ if (!DAG.nodes || !DAG.nodes.length) {
     throw new Error('DAG 数据为空');
 }
 
-// ── Canvas 设置 ──
-const canvas = document.getElementById('dag-canvas');
-const ctx = canvas.getContext('2d');
-const wrapper = document.getElementById('canvas-wrapper');
-const tooltip = document.getElementById('tooltip');
+// ── DAG SVG 图片更新 ──
+const dagImg = document.getElementById('dag-img');
 
-// ── 颜色映射 ──
-const STATE_COLORS = {
-    pending:    {fill:'#21262d',stroke:'#30363d',text:'#8b949e'},
-    ready:      {fill:'#1f6feb22',stroke:'#1f6feb',text:'#58a6ff'},
-    running:    {fill:'#1f6feb44',stroke:'#58a6ff',text:'#ffffff',glow:true},
-    completed:  {fill:'#23863622',stroke:'#3fb950',text:'#3fb950'},
-    failed:     {fill:'#da363322',stroke:'#f85149',text:'#f85149'},
-    skipped:    {fill:'#161b22',stroke:'#484f58',text:'#484f58'},
-    cancelled:  {fill:'#161b22',stroke:'#8b949e',text:'#8b949e'}
-};
-
-const NODE_W = 180, NODE_H = 56, H_GAP = 220, V_GAP = 80, PAD = 40;
-const ROUND_R = 8;
-
-// ── 布局计算 ──
-function layout() {
-    const levels = DAG.levels || {};
-    // 按 level 分组
-    const levelGroups = {};
-    for (const n of DAG.nodes) {
-        const lvl = levels[n.id] !== undefined ? levels[n.id] : 0;
-        if (!levelGroups[lvl]) levelGroups[lvl] = [];
-        levelGroups[lvl].push(n);
-    }
-    const maxLevel = Math.max(...Object.keys(levelGroups).map(Number), 0);
-
-    // 分配位置
-    for (const [lvl, nodes] of Object.entries(levelGroups)) {
-        const y = PAD + Number(lvl) * (NODE_H + V_GAP);
-        const totalW = nodes.length * (NODE_W + H_GAP) - H_GAP;
-        const startX = PAD;
-
-        nodes.forEach((n, i) => {
-            n._x = startX + i * (NODE_W + H_GAP);
-            n._y = y;
-        });
-    }
-
-    // 坐标映射
-    const pos = {};
-    for (const n of DAG.nodes) {
-        pos[n.id] = {x: n._x, y: n._y};
-    }
-
-    // canvas 尺寸
-    const maxNodesInLevel = Math.max(...Object.values(levelGroups).map(g => g.length), 1);
-    canvas.width = PAD * 2 + maxNodesInLevel * (NODE_W + H_GAP);
-    canvas.height = PAD * 2 + (maxLevel + 1) * (NODE_H + V_GAP);
-
-    return pos;
-}
-
-let nodePositions = {};
 let nodeStates = {};
 let nodeOutputs = {};
 
@@ -713,159 +760,15 @@ let nodeOutputs = {};
 for (const n of DAG.nodes) {
     nodeStates[n.id] = 'pending';
 }
-nodePositions = layout();
 
-// ── 绘制 ──
-function draw() {
-    const w = canvas.width, h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
-
-    // 网格背景
-    ctx.strokeStyle = '#1a2230';
-    ctx.lineWidth = 0.5;
-    for (let x = 0; x < w; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-    for (let y = 0; y < h; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
-
-    // 边
-    for (const e of DAG.edges) {
-        const from = nodePositions[e.from], to = nodePositions[e.to];
-        if (!from || !to) continue;
-
-        const x1 = from.x + NODE_W / 2, y1 = from.y + NODE_H;
-        const x2 = to.x + NODE_W / 2, y2 = to.y;
-
-        ctx.beginPath();
-        ctx.strokeStyle = '#30363d';
-        ctx.lineWidth = 1.5;
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-
-        // 箭头
-        const angle = Math.atan2(y2 - y1, x2 - x1);
-        const arrowLen = 8;
-        ctx.lineTo(
-            x2 - arrowLen * Math.cos(angle - 0.5),
-            y2 - arrowLen * Math.sin(angle - 0.5)
-        );
-        ctx.moveTo(x2, y2);
-        ctx.lineTo(
-            x2 - arrowLen * Math.cos(angle + 0.5),
-            y2 - arrowLen * Math.sin(angle + 0.5)
-        );
-        ctx.stroke();
-
-        // 条件标签
-        if (e.condition) {
-            const midX = (x1 + x2) / 2, midY = (y1 + y2) / 2;
-            ctx.fillStyle = '#8b949e';
-            ctx.font = '10px system-ui';
-            ctx.fillText(e.condition, midX + 6, midY - 6);
-        }
-    }
-
-    // 节点
-    for (const n of DAG.nodes) {
-        const pos = nodePositions[n.id];
-        if (!pos) continue;
-
-        const state = nodeStates[n.id] || 'pending';
-        const colors = STATE_COLORS[state] || STATE_COLORS.pending;
-
-        // 发光效果（运行中）
-        if (colors.glow) {
-            const t = Date.now() / 1000;
-            const alpha = 0.3 + 0.2 * Math.sin(t * 3);
-            ctx.shadowColor = `rgba(88, 166, 255, ${alpha})`;
-            ctx.shadowBlur = 16;
-        }
-
-        // 节点背景
-        const x = pos.x, y = pos.y;
-        ctx.beginPath();
-        ctx.fillStyle = colors.fill;
-        ctx.strokeStyle = colors.stroke;
-        ctx.lineWidth = 2;
-        roundRect(ctx, x, y, NODE_W, NODE_H, ROUND_R);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
-
-        // 图标 + 类型
-        const typeIcons = {task:'⚙',condition:'◇',loop:'↻',parallel:'∥',wait:'⏳',end:'⏹'};
-        const icon = typeIcons[n.type] || '⚙';
-        ctx.fillStyle = colors.text;
-        ctx.font = 'bold 13px system-ui';
-        ctx.fillText(icon, x + 10, y + 22);
-
-        // 标签
-        const label = n.label || n.id;
-        ctx.fillStyle = colors.text;
-        ctx.font = '12px system-ui';
-        const truncated = label.length > 18 ? label.slice(0,17)+'…' : label;
-        ctx.fillText(truncated, x + 30, y + 22);
-
-        // 状态文字
-        ctx.fillStyle = colors.text;
-        ctx.font = '10px system-ui';
-        ctx.globalAlpha = 0.7;
-        ctx.fillText(state.toUpperCase(), x + 10, y + 44);
-        ctx.globalAlpha = 1.0;
-    }
+function refreshDagImage() {
+    dagImg.src = '/dag/{{VIZ_ID}}/image?format=svg&t=' + Date.now();
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-    ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y);
-    ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-    ctx.lineTo(x+w, y+h-r);
-    ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-    ctx.lineTo(x+r, y+h);
-    ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-    ctx.lineTo(x, y+r);
-    ctx.quadraticCurveTo(x, y, x+r, y);
-}
-
-// ── 鼠标交互 ──
-let hoveredNode = null;
-
-canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-
-    hoveredNode = null;
-    for (const n of DAG.nodes) {
-        const pos = nodePositions[n.id];
-        if (!pos) continue;
-        if (mx >= pos.x && mx <= pos.x + NODE_W &&
-            my >= pos.y && my <= pos.y + NODE_H) {
-            hoveredNode = n;
-            break;
-        }
-    }
-
-    if (hoveredNode) {
-        const state = nodeStates[hoveredNode.id] || 'pending';
-        const output = nodeOutputs[hoveredNode.id];
-        const colors = STATE_COLORS[state];
-        tooltip.style.display = 'block';
-        tooltip.style.left = (e.clientX + 15) + 'px';
-        tooltip.style.top = (e.clientY - 10) + 'px';
-        tooltip.innerHTML = `
-            <div class="tt-label">${hoveredNode.label||hoveredNode.id}</div>
-            <div class="tt-state" style="color:${colors?colors.text:'#8b949e'}">● ${state.toUpperCase()}</div>
-            <div class="tt-state" style="color:#8b949e">类型: ${hoveredNode.type}</div>
-            ${output ? `<div class="tt-output">📤 ${escapeHtml(output)}</div>` : ''}
-        `;
-    } else {
-        tooltip.style.display = 'none';
-    }
-});
-
-canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
-
-function escapeHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// 图片加载完成后显示
+if (dagImg) {
+    dagImg.onload = function() { dagImg.style.display = 'block'; };
+    dagImg.onerror = function() { dagImg.style.display = 'block'; dagImg.alt = 'DAG 渲染失败 (Graphviz dot 不可用?)'; };
 }
 
 // ── SSE 连接 ──
@@ -881,7 +784,7 @@ evtSource.addEventListener('node_state', (e) => {
         completedCount++;
     }
     updateUI(d);
-    draw();
+    refreshDagImage();
 });
 
 evtSource.addEventListener('node_output', (e) => {
@@ -926,20 +829,8 @@ function updateUI(data) {
     }
 }
 
-// ── 窗口缩放 ──
-function resize() {
-    const w = wrapper.clientWidth;
-    const h = wrapper.clientHeight;
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
-    // 居中
-    const scale = Math.min(1, w / canvas.width, (h - 60) / canvas.height);
-    canvas.style.transform = `translate(${(w-canvas.width*scale)/2}px,${(h-canvas.height*scale)/2}px) scale(${scale})`;
-}
-
-window.addEventListener('resize', resize);
-resize();
-draw();
+// ── 初始加载 ──
+refreshDagImage();
 </script>
 </body>
 </html>"""

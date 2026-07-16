@@ -138,6 +138,8 @@ class ExecutionPool:
         self._priority_queue: queue.PriorityQueue = queue.PriorityQueue(maxsize=queue_size)
         self._tasks: dict[str, TaskInfo] = {}
         self._futures: dict[str, Future] = {}
+        self._current: int = 0  # 当前活跃（已提交未完成）任务数
+        self._seq: int = 0  # 提交序号，用于同优先级FIFO
 
         # 统计
         self._stats = {
@@ -198,31 +200,45 @@ class ExecutionPool:
         with self._lock:
             self._tasks[tid] = task
             self._stats["submitted"] += 1
+            self._seq += 1
+            seq = self._seq
 
-        # 包装执行
-        def _run():
-            task.state = TaskState.RUNNING
-            task.started_at = time.time()
-            try:
-                result = fn(*args, **kwargs)
-                task.state = TaskState.COMPLETED
-                task.finished_at = time.time()
-                task.duration = task.finished_at - task.started_at
-                with self._lock:
-                    self._stats["completed"] += 1
-                    self._stats["total_duration"] += task.duration
-                return result
-            except Exception as e:
-                task.state = TaskState.FAILED
-                task.finished_at = time.time()
-                task.duration = task.finished_at - task.started_at
-                task.error = f"{type(e).__name__}: {e}"
-                with self._lock:
-                    self._stats["failed"] += 1
-                raise
-
-        future = self._thread_pool.submit(_run)
+        future: Future = Future()
         self._futures[tid] = future
+
+        # 通过优先队列调度：(priority, seq, tid, fn, args, kwargs, task, future)
+        try:
+            self._priority_queue.put_nowait(
+                (priority, seq, tid, fn, args, kwargs, task, future)
+            )
+        except queue.Full:
+            # 队列满时降级为直接提交
+            def _run_direct():
+                task.state = TaskState.RUNNING
+                task.started_at = time.time()
+                self._current += 1
+                try:
+                    result = fn(*args, **kwargs)
+                    task.state = TaskState.COMPLETED
+                    task.finished_at = time.time()
+                    task.duration = task.finished_at - task.started_at
+                    with self._lock:
+                        self._stats["completed"] += 1
+                        self._stats["total_duration"] += task.duration
+                    future.set_result(result)
+                    return result
+                except Exception as e:
+                    task.state = TaskState.FAILED
+                    task.finished_at = time.time()
+                    task.duration = task.finished_at - task.started_at
+                    task.error = f"{type(e).__name__}: {e}"
+                    with self._lock:
+                        self._stats["failed"] += 1
+                    future.set_exception(e)
+                    raise
+                finally:
+                    self._current = max(0, self._current - 1)
+            self._thread_pool.submit(_run_direct)
         return future
 
     def submit_async(
@@ -417,20 +433,63 @@ class ExecutionPool:
     # ── 内部机制 ───────────────────────────────
 
     def _scheduler_loop(self):
-        """后台调度循环（当前作为监控心跳）。"""
+        """后台调度循环：从优先队列取任务，按优先级提交到线程池。"""
         while self._state in (PoolState.RUNNING, PoolState.DRAINING):
             try:
-                time.sleep(5)
-                # 清理已完成的 Future
-                done_ids = []
-                with self._lock:
-                    for tid, future in list(self._futures.items()):
-                        if future.done():
-                            done_ids.append(tid)
-                for tid in done_ids:
-                    self._futures.pop(tid, None)
+                # 从优先队列取任务（1秒超时以便检查状态）
+                item = self._priority_queue.get(timeout=1)
+                priority, seq, tid, fn, args, kwargs, task, future = item
+
+                # 检查任务是否已被取消
+                if task.state == TaskState.CANCELLED:
+                    if not future.done():
+                        future.cancel()
+                    continue
+
+                def _run():
+                    task.state = TaskState.RUNNING
+                    task.started_at = time.time()
+                    self._current += 1
+                    try:
+                        result = fn(*args, **kwargs)
+                        task.state = TaskState.COMPLETED
+                        task.finished_at = time.time()
+                        task.duration = task.finished_at - task.started_at
+                        with self._lock:
+                            self._stats["completed"] += 1
+                            self._stats["total_duration"] += task.duration
+                        if not future.done():
+                            future.set_result(result)
+                        return result
+                    except Exception as e:
+                        task.state = TaskState.FAILED
+                        task.finished_at = time.time()
+                        task.duration = task.finished_at - task.started_at
+                        task.error = f"{type(e).__name__}: {e}"
+                        with self._lock:
+                            self._stats["failed"] += 1
+                        if not future.done():
+                            future.set_exception(e)
+                        raise
+                    finally:
+                        self._current = max(0, self._current - 1)
+
+                self._thread_pool.submit(_run)
+
+            except queue.Empty:
+                # 队列空，继续等待
+                continue
             except Exception:
-                pass
+                logger.debug("_scheduler_loop 异常", exc_info=True)
+
+        # 关闭时清理残留 futures
+        with self._lock:
+            for tid, future in list(self._futures.items()):
+                if not future.done():
+                    try:
+                        future.cancel()
+                    except Exception:
+                        pass
 
     def _start_async_loop(self):
         """启动专用事件循环线程。"""
@@ -494,8 +553,9 @@ class PoolNode:
     _total_duration: float = 0.0
 
     def load_ratio(self) -> float:
-        """当前负载比例 0.0~1.0。"""
-        return self._current / max(1, self.max_concurrent)
+        """当前负载比例 0.0~1.0（基于池实际活跃任务数）。"""
+        active = self.pool.active_count() if self.pool else self._current
+        return min(1.0, active / max(1, self.max_concurrent))
 
     def avg_duration(self) -> float:
         if self._total_submitted == 0:
@@ -607,7 +667,10 @@ class LoadBalancer:
         if node:
             def _on_done(f, n=node):
                 n._current = max(0, n._current - 1)
-                n._total_duration += (n.pool.get_task(f.result()) or {}).get("duration", 0) if hasattr(f, 'result') else 0
+                try:
+                    result = f.result()
+                except Exception:
+                    result = None
             future.add_done_callback(_on_done)
         return future
 

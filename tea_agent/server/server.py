@@ -775,48 +775,11 @@ class APIServer:
             y: Top coordinate (physical pixels)
             w: Width (physical pixels)
             h: Height (physical pixels)
+
         Returns:
             dict: {ok: bool, image_base64?: str, error?: str}
         """
-        import base64
-        import os
-        import tempfile
-
-        from tea_agent.toolkit.toolkit_screenshot import toolkit_screenshot
-
-        try:
-            # 截取区域截图
-            tmp_path = os.path.join(tempfile.gettempdir(), "screenshot_region.png")
-            result = toolkit_screenshot(action="region", region=f"{x},{y},{w},{h}", output=tmp_path)
-
-            if not result.get("success"):
-                return {"ok": False, "error": result.get("error", "Screenshot failed")}
-
-            # 容错：确保 path 是有效的文件路径
-            img_path = result.get("path", "")
-            if not img_path or not isinstance(img_path, str) or not os.path.isfile(img_path):
-                if os.path.isfile(tmp_path):
-                    img_path = tmp_path
-                else:
-                    return {"ok": False, "error": f"Invalid screenshot file: path={img_path!r}"}
-
-            # 读取图片并转为 base64
-            with open(img_path, "rb") as f:
-                img_data = f.read()
-            if len(img_data) < 100:
-                return {"ok": False, "error": f"截图文件过小: {len(img_data)} bytes"}
-            b64_str = base64.b64encode(img_data).decode("utf-8")
-            data_url = f"data:image/png;base64,{b64_str}"
-
-            return {
-                "ok": True,
-                "image_base64": data_url,
-                "path": img_path,
-                "size": len(img_data),
-                "method": result.get("method", ""),
-            }
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
+        return self._capture_and_encode("region", f"{x},{y},{w},{h}")
 
     def screenshot_full(self) -> dict:
         """Capture full screen and return base64 image data.
@@ -824,41 +787,7 @@ class APIServer:
         Returns:
             dict: {ok: bool, image_base64?: str, error?: str, size?: int}
         """
-        import base64
-        import os
-        import tempfile
-
-        from tea_agent.toolkit.toolkit_screenshot import toolkit_screenshot
-
-        try:
-            tmp_path = os.path.join(tempfile.gettempdir(), "screenshot_full.png")
-            result = toolkit_screenshot(action="full", output=tmp_path)
-
-            if not result.get("success"):
-                return {"ok": False, "error": result.get("error", "Screenshot failed")}
-
-            img_path = result.get("path", "")
-            if not img_path or not isinstance(img_path, str) or not os.path.isfile(img_path):
-                if os.path.isfile(tmp_path):
-                    img_path = tmp_path
-                else:
-                    return {"ok": False, "error": f"Invalid screenshot file: path={img_path!r}"}
-
-            with open(img_path, "rb") as f:
-                img_data = f.read()
-            if len(img_data) < 100:
-                return {"ok": False, "error": f"截图文件过小: {len(img_data)} bytes"}
-            b64_str = base64.b64encode(img_data).decode("utf-8")
-            data_url = f"data:image/png;base64,{b64_str}"
-
-            return {
-                "ok": True,
-                "image_base64": data_url,
-                "path": img_path,
-                "size": len(img_data),
-            }
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
+        return self._capture_and_encode("full")
 
     # ═══════════════════════════════════════════════════════════════
     #  Model Hot-Switch & Config Management
@@ -962,6 +891,63 @@ class APIServer:
         if agent and hasattr(agent, '_config_path'):
             agent._config_path = config_path
         return {"ok": True, "config_path": config_path}
+
+    @staticmethod
+    def _capture_and_encode(action: str, region: str = None) -> dict:
+        """公共截图+编码函数，供 screenshot_region() 和 screenshot_full() 复用。
+
+        Args:
+            action: 截图动作 ('region' 或 'full')
+            region: 区域坐标字符串 (仅 action='region' 时需要，如 '100,200,800,600')
+
+        Returns:
+            dict: {ok: bool, image_base64?: str, error?: str, path?: str, size?: int, method?: str}
+        """
+        import base64
+        import os
+        import tempfile
+
+        from tea_agent.toolkit.toolkit_screenshot import toolkit_screenshot
+
+        try:
+            # 生成临时文件路径
+            tmp_path = os.path.join(tempfile.gettempdir(), f"screenshot_{action}.png")
+
+            # 调用截图工具
+            if action == "region":
+                result = toolkit_screenshot(action=action, region=region, output=tmp_path)
+            else:
+                result = toolkit_screenshot(action=action, output=tmp_path)
+
+            if not result.get("success"):
+                return {"ok": False, "error": result.get("error", "Screenshot failed")}
+
+            # 容错：确保 path 是有效的文件路径
+            img_path = result.get("path", "")
+            if not img_path or not isinstance(img_path, str) or not os.path.isfile(img_path):
+                if os.path.isfile(tmp_path):
+                    img_path = tmp_path
+                else:
+                    return {"ok": False, "error": f"Invalid screenshot file: path={img_path!r}"}
+
+            # 读取图片并转为 base64
+            with open(img_path, "rb") as f:
+                img_data = f.read()
+
+            if len(img_data) < 100:
+                return {"ok": False, "error": f"截图文件过小: {len(img_data)} bytes"}
+
+            b64_str = base64.b64encode(img_data).decode("utf-8")
+
+            return {
+                "ok": True,
+                "image_base64": f"data:image/png;base64,{b64_str}",
+                "path": img_path,
+                "size": len(img_data),
+                "method": result.get("method", ""),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     @staticmethod
     def _get_configs_dir():

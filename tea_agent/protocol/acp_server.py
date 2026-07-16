@@ -12,8 +12,10 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import threading
 import time
+from pathlib import Path
 import uuid
 
 logger = logging.getLogger("acp_server")
@@ -38,13 +40,53 @@ class ACPProtocolServer:
     """
 
     def __init__(self, config_path: str | None = None, api_key: str = ""):
-        self._config_path = config_path
+        self._config_path = self._ensure_acp_config(config_path)
         self._api_key = api_key or os.environ.get("TEA_API_KEY", "")
         self._lock = threading.Lock()
         self._agent_id = "tea-agent"
         self._start_time = time.time()
         self._storage: Storage | None = None
         self._agent: Agent | None = None
+
+    @staticmethod
+    def _ensure_acp_config(config_path: str | None = None) -> str | None:
+        """Ensure the ACP-specific config file exists.
+
+        Same logic as :meth:`AcpAgent._ensure_acp_config`.
+        """
+        if config_path:
+            return config_path
+
+        home_dir = Path.home()
+        acp_path = home_dir / ".tea_agent" / "config_acp.yaml"
+        default_path = home_dir / ".tea_agent" / "config.yaml"
+
+        if acp_path.is_file():
+            return str(acp_path)
+
+        if not default_path.is_file():
+            logging.getLogger("acp_server").warning(
+                "No config.yaml found at %s — using fallback", default_path,
+            )
+            return None
+
+        try:
+            shutil.copy2(str(default_path), str(acp_path))
+            import yaml as _yaml
+            with open(acp_path, "r", encoding="utf-8") as f:
+                data = _yaml.safe_load(f) or {}
+            if "paths" not in data or not isinstance(data["paths"], dict):
+                data["paths"] = {}
+            data["paths"]["db_path"] = "chat_acp.db"
+            with open(acp_path, "w", encoding="utf-8") as f:
+                _yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        except Exception as e:
+            logging.getLogger("acp_server").warning(
+                "Failed to create ACP config: %s", e,
+            )
+            return str(default_path)
+
+        return str(acp_path)
 
     def _get_storage(self) -> "Storage":
         """Lazy-init storage backend."""

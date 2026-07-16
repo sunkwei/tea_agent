@@ -15,9 +15,11 @@ Protocol lifecycle:
 import json
 import logging
 import os
+import shutil
 import threading
 import time
 import uuid
+from pathlib import Path
 from typing import Any, Optional
 
 from tea_agent.protocol.acp_client_methods import AcpClientMethods
@@ -55,6 +57,7 @@ AGENT_METHODS = {
     "session/cancel": "Cancel the current turn",
     "session/set_mode": "Set the session mode",
     "session/set_config_option": "Set a session config option",
+    "session/get_messages": "Get conversation history for a session",
     # Document events
     "document/didOpen": "Document opened",
     "document/didChange": "Document changed",
@@ -104,10 +107,26 @@ class AcpAgent:
         agent_name: str = "tea-agent",
         agent_version: str = "0.3.0",
     ):
-        self._config_path = config_path
+        self._config_path = self._ensure_acp_config(config_path)
         self._api_key = api_key or os.environ.get("TEA_API_KEY", "")
         self._agent_name = agent_name
         self._agent_version = agent_version
+
+        # Initialize ACP-specific storage (isolated DB)
+        try:
+            from tea_agent.config import load_config as _load_config
+            from tea_agent.store import Storage as _Storage
+            _acp_cfg = _load_config(self._config_path)
+            self._acp_storage = _Storage(
+                db_path=_acp_cfg.paths.db_path_abs
+            )
+            logger.info(
+                f"ACP storage initialized: "
+                f"{_acp_cfg.paths.db_path_abs}"
+            )
+        except Exception as e:
+            logger.warning(f"ACP storage init failed (will use lazy init): {e}")
+            self._acp_storage = None
 
         # Transport
         self._transport = JsonRpcTransport()
@@ -137,6 +156,72 @@ class AcpAgent:
 
         # Register all handlers
         self._register_handlers()
+
+    # ── ACP Config ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _ensure_acp_config(config_path: str | None = None) -> str | None:
+        """Ensure the ACP-specific config file exists.
+
+        If ``config_path`` is explicitly provided, use it as-is (user override).
+        Otherwise, use ``~/.tea_agent/config_acp.yaml``.  If that file does not
+        exist, copy from ``~/.tea_agent/config.yaml`` and set ``db_path`` to
+        ``chat_acp.db`` so ACP sessions are stored independently.
+
+        Returns:
+            The resolved config path, or ``None`` if no config is available.
+        """
+        if config_path:
+            return config_path
+
+        home_dir = Path.home()
+        acp_path = home_dir / ".tea_agent" / "config_acp.yaml"
+        default_path = home_dir / ".tea_agent" / "config.yaml"
+
+        if acp_path.is_file():
+            return str(acp_path)
+
+        # Need to create config_acp.yaml from default
+        if not default_path.is_file():
+            logger.warning(
+                "No config.yaml found at %s — ACP will use fallback config",
+                default_path,
+            )
+            return None
+
+        try:
+            shutil.copy2(str(default_path), str(acp_path))
+            logger.info("Copied %s → %s", default_path, acp_path)
+
+            # Modify db_path in the new config
+            import yaml as _yaml
+
+            with open(acp_path, "r", encoding="utf-8") as f:
+                data = _yaml.safe_load(f) or {}
+
+            if "paths" not in data or not isinstance(data["paths"], dict):
+                data["paths"] = {}
+            data["paths"]["db_path"] = "chat_acp.db"
+
+            with open(acp_path, "w", encoding="utf-8") as f:
+                _yaml.dump(
+                    data,
+                    f,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                    sort_keys=False,
+                )
+            logger.info(
+                "ACP config customized: db_path → chat_acp.db"
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to create ACP config: %s — will use default path",
+                e,
+            )
+            return str(default_path)
+
+        return str(acp_path)
 
     # ── public API ─────────────────────────────────────────────────────────
 
@@ -187,6 +272,10 @@ class AcpAgent:
         t.on_request(
             "session/set_config_option",
             self._handle_session_set_config_option,
+        )
+        t.on_request(
+            "session/get_messages",
+            self._handle_session_get_messages,
         )
 
         # Document events (notifications)
@@ -422,7 +511,12 @@ class AcpAgent:
     def _handle_session_load(
         self, params: Any, msg_id: RequestId
     ) -> dict:
-        """Handle ``session/load`` — load an existing session."""
+        """Handle ``session/load`` — load an existing session.
+
+        After loading, replays conversation history to the client
+        via ``session/update`` notifications so the VS Code webview
+        displays past messages.
+        """
         session_id = (params or {}).get("sessionId", "")
         logger.info(f"session/load: {session_id}")
 
@@ -432,9 +526,7 @@ class AcpAgent:
         if not session:
             # Try loading from storage
             try:
-                from tea_agent.store import get_storage
-
-                storage = get_storage()
+                storage = self._acp_storage
                 topic = storage.get_topic(session_id)
                 if topic:
                     now = time.strftime(
@@ -459,10 +551,23 @@ class AcpAgent:
                 f"Session not found: {session_id}",
             )
 
+        # Trigger history replay in background after response is sent.
+        # The replay sends past messages as session/update notifications
+        # so the VS Code webview can display the full conversation.
+        replay_history = (params or {}).get("replayHistory", True)
+        if replay_history:
+            threading.Thread(
+                target=self._replay_history,
+                args=(session_id,),
+                daemon=True,
+                name=f"history-replay-{session_id[:8]}",
+            ).start()
+
         return {
             "sessionId": session.session_id,
             "createdAt": session.created_at,
             "cwd": session.cwd,
+            "title": session.title,
             "availableCommands": self._get_available_commands(),
             "configOptions": self._get_config_options(),
             "modes": {
@@ -499,9 +604,7 @@ class AcpAgent:
 
         # Also try storage
         try:
-            from tea_agent.store import get_storage
-
-            storage = get_storage()
+            storage = self._acp_storage
             for t in storage.list_topics()[:limit]:
                 tid = t["topic_id"]
                 if tid not in self._sessions:
@@ -529,9 +632,7 @@ class AcpAgent:
             self._sessions.pop(session_id, None)
 
         try:
-            from tea_agent.store import get_storage
-
-            get_storage().delete_topic(session_id)
+            self._acp_storage.delete_topic(session_id)
         except Exception:
             pass
 
@@ -569,7 +670,11 @@ class AcpAgent:
     def _handle_session_resume(
         self, params: Any, msg_id: RequestId
     ) -> dict:
-        """Handle ``session/resume`` — resume a session."""
+        """Handle ``session/resume`` — resume a session.
+
+        Like ``session/load`` but also replays conversation history
+        so the client can continue from where it left off.
+        """
         session_id = (params or {}).get("sessionId", "")
         logger.info(f"session/resume: {session_id}")
 
@@ -577,15 +682,48 @@ class AcpAgent:
             session = self._sessions.get(session_id)
 
         if not session:
+            # Try loading from storage
+            try:
+                storage = self._acp_storage
+                topic = storage.get_topic(session_id)
+                if topic:
+                    now = time.strftime(
+                        "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
+                    )
+                    session = SessionState(
+                        session_id=session_id,
+                        cwd=os.getcwd(),
+                        created_at=str(
+                            topic.get("create_stamp", "")
+                        )[:19],
+                        title=topic.get("title", ""),
+                    )
+                    with self._sessions_lock:
+                        self._sessions[session_id] = session
+            except Exception as e:
+                logger.error(f"session/resume storage error: {e}")
+
+        if not session:
             raise JsonRpcError(
                 JsonRpcError.INVALID_PARAMS,
                 f"Session not found: {session_id}",
             )
 
+        # Trigger history replay in background
+        replay_history = (params or {}).get("replayHistory", True)
+        if replay_history:
+            threading.Thread(
+                target=self._replay_history,
+                args=(session_id,),
+                daemon=True,
+                name=f"history-replay-{session_id[:8]}",
+            ).start()
+
         return {
             "sessionId": session.session_id,
             "createdAt": session.created_at,
             "cwd": session.cwd,
+            "title": session.title,
             "availableCommands": self._get_available_commands(),
             "configOptions": self._get_config_options(),
         }
@@ -673,13 +811,48 @@ class AcpAgent:
             last_msg = messages[-1]
             user_content = self._extract_text_content(last_msg)
 
-            # Optionally include conversation history
+            # ── Build conversation history ──────────────────────────
+            # 1. Messages passed by the client in this request
             history = []
             for m in messages[:-1]:
                 role = m.get("role", "user")
                 content = self._extract_text_content(m)
                 if content:
                     history.append({"role": role, "content": content})
+
+            # 2. If this is an existing session, also inject DB history
+            #    so the AI has context from previous conversations.
+            if session_id and not history:
+                try:
+                    storage = self._acp_storage
+                    past_convs = storage.get_conversations(
+                        session_id, limit=10, include_rounds=False
+                    )
+                    for pc in past_convs:
+                        u = pc.get("user_msg", "") or ""
+                        a = pc.get("ai_msg", "") or ""
+                        if isinstance(u, str):
+                            try:
+                                import json as _json
+                                p = _json.loads(u)
+                                if isinstance(p, dict):
+                                    u = p.get("text", u)
+                            except Exception:
+                                pass
+                        if u:
+                            history.append({"role": "user", "content": str(u)})
+                        if a:
+                            history.append(
+                                {"role": "assistant", "content": str(a)}
+                            )
+                    if past_convs:
+                        logger.info(
+                            f"session/prompt: injected {len(past_convs)} "
+                            f"past conversations from DB for "
+                            f"session {session_id[:8]}"
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to inject DB history: {e}")
 
             # Build the full prompt with context
             prompt_parts = []
@@ -878,6 +1051,84 @@ class AcpAgent:
             f"{session_id} {option}={value}"
         )
         return {"success": True}
+
+    def _handle_session_get_messages(
+        self, params: Any, msg_id: RequestId
+    ) -> dict:
+        """Handle ``session/get_messages`` — retrieve conversation history.
+
+        Returns messages for a session, supporting pagination via
+        ``limit`` and ``before`` (cursor).  This allows the VS Code
+        client to fetch history on demand (e.g. scroll-back).
+        """
+        session_id = (params or {}).get("sessionId", "")
+        limit = (params or {}).get("limit", 100)
+        before = (params or {}).get("before")  # cursor for pagination
+
+        logger.info(
+            f"session/get_messages: {session_id} "
+            f"limit={limit} before={before}"
+        )
+
+        messages: list[dict] = []
+        try:
+            storage = self._acp_storage
+            # Fetch all conversations; limit=0 means no limit
+            convs = storage.get_conversations(
+                session_id, limit=0, include_rounds=True
+            )
+
+            # Apply pagination cursor if provided
+            if before:
+                # Filter to messages before the cursor timestamp
+                convs = [
+                    c for c in convs
+                    if str(c.get("stamp", "")) < str(before)
+                ]
+
+            # Apply limit
+            if limit > 0 and len(convs) > limit:
+                convs = convs[-limit:]
+
+            for c in convs:
+                stamp = str(c.get("stamp", ""))[:26]
+                # User message
+                user_content = c.get("user_msg", "") or ""
+                if isinstance(user_content, str):
+                    try:
+                        import json as _json
+                        parsed = _json.loads(user_content)
+                        if isinstance(parsed, dict):
+                            user_content = parsed.get("text", user_content)
+                    except Exception:
+                        pass
+                messages.append({
+                    "role": "user",
+                    "content": [{"type": "text", "text": str(user_content)}],
+                    "timestamp": stamp,
+                })
+                # Assistant message
+                ai_content = c.get("ai_msg", "") or ""
+                messages.append({
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": str(ai_content)}],
+                    "timestamp": stamp,
+                })
+        except Exception as e:
+            logger.exception("session/get_messages failed")
+            return {
+                "sessionId": session_id,
+                "messages": [],
+                "error": str(e),
+            }
+
+        has_more = len(messages) >= limit if limit > 0 else False
+        return {
+            "sessionId": session_id,
+            "messages": messages,
+            "total": len(messages),
+            "hasMore": has_more,
+        }
 
     # ══════════════════════════════════════════════════════════════════════
     # HANDLERS — Document Events
@@ -1131,8 +1382,7 @@ class AcpAgent:
         """Search memory."""
         query = params.get("query", "")
         try:
-            from tea_agent.store import get_storage
-            storage = get_storage()
+            storage = self._acp_storage
             results = storage.get_memory(query)
             return {"results": results or []}
         except Exception as e:
@@ -1143,8 +1393,7 @@ class AcpAgent:
         content = params.get("content", "")
         category = params.get("category", "general")
         try:
-            from tea_agent.store import get_storage
-            storage = get_storage()
+            storage = self._acp_storage
             storage.add_memory(content, category)
             return {"success": True}
         except Exception as e:
@@ -1168,6 +1417,105 @@ class AcpAgent:
     # INTERNALS
     # ══════════════════════════════════════════════════════════════════════
 
+    def _replay_history(self, session_id: str, max_messages: int = 100):
+        """Replay conversation history to the client via session/update.
+
+        Called in a background thread after ``session/load`` so the
+        VS Code webview can render past messages.  Sends one
+        ``user_message_chunk`` + ``agent_message_chunk`` pair per
+        conversation, plus a final ``completed`` update.
+
+        Args:
+            session_id: The session whose history to replay.
+            max_messages: Cap on the number of conversations to replay
+                          (each conv = 2 messages: user + assistant).
+                          Prevents overwhelming the client with huge
+                          histories.
+        """
+        try:
+            storage = self._acp_storage
+            convs = storage.get_conversations(
+                session_id, limit=0, include_rounds=False
+            )
+            if not convs:
+                logger.debug(
+                    f"_replay_history: no history for {session_id[:8]}"
+                )
+                return
+
+            total = len(convs)
+            # If the history is very long, only replay the most recent
+            # messages to keep the client responsive.
+            if total > max_messages:
+                convs = convs[-max_messages:]
+                logger.info(
+                    f"_replay_history: truncating {total} → "
+                    f"{max_messages} for {session_id[:8]}"
+                )
+
+            logger.info(
+                f"_replay_history: replaying {len(convs)} messages "
+                f"for session {session_id[:8]}"
+            )
+
+            # Small delay so the client has time to process the
+            # session/load response before receiving updates
+            time.sleep(0.2)
+
+            for c in convs:
+                # User message
+                user_text = c.get("user_msg", "") or ""
+                if isinstance(user_text, str):
+                    try:
+                        import json as _json
+                        parsed = _json.loads(user_text)
+                        if isinstance(parsed, dict):
+                            user_text = parsed.get("text", user_text)
+                    except Exception:
+                        pass
+                if user_text:
+                    self.client.send_update(
+                        session_id,
+                        "user_message",
+                        content_blocks=[
+                            {"type": "text", "text": str(user_text)}
+                        ],
+                    )
+
+                # Assistant message
+                ai_text = c.get("ai_msg", "") or ""
+                if ai_text:
+                    self.client.send_update(
+                        session_id,
+                        "content_block",
+                        content_blocks=[
+                            {"type": "text", "text": str(ai_text)}
+                        ],
+                    )
+
+            # Signal completion of history replay
+            self.client.send_update(
+                session_id,
+                "completed",
+                status="History loaded",
+            )
+            # Also send a session info update with the title
+            try:
+                topic = storage.get_topic(session_id)
+                if topic and topic.get("title"):
+                    self.client.info_update(
+                        session_id,
+                        title=str(topic["title"]),
+                    )
+            except Exception:
+                pass
+
+            logger.info(
+                f"_replay_history: done for {session_id[:8]}"
+            )
+        except Exception as e:
+            logger.exception(f"_replay_history failed: {e}")
+
     def _get_session_agent(self, session_id: str) -> "Agent":
         """Get (or create) a per-session Agent instance.
 
@@ -1182,11 +1530,9 @@ class AcpAgent:
         from tea_agent.agent import Agent as _Agent
 
         agent = _Agent(mode="lightweight", config_path=self._config_path)
-        from tea_agent.store import get_storage
-
         agent.current_topic_id = session_id
         # Ensure storage has this topic
-        storage = get_storage()
+        storage = self._acp_storage
         try:
             if not storage.get_topic(session_id):
                 storage.create_topic(

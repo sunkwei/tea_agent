@@ -1,4 +1,4 @@
-# Tea Agent v0.11.0
+# Tea Agent v0.12.2
 
 > ⚠️ **这是一个 AI 写 AI 的实验项目，自行承担责任。**
 
@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.11.0-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.12.2-blue)](https://pypi.org/project/tea-agent)
 
 Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 75+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / Web / REST API / ACP Protocol** 四种界面形态。
 
@@ -386,6 +386,7 @@ python -m tea_agent.protocol --port 9090
 - 📡 **SSE 流式** — 实时推送对话内容，支持逐 token 输出
 - 🧵 **会话管理** — 多会话隔离，可获取历史消息
 - 🔗 **IDE 集成** — 标准 ACP 协议，可对接任何 ACP 客户端
+- 🔒 **配置隔离** — 使用独立配置文件 `~/.tea_agent/config_acp.yaml` 和数据库 `chat_acp.db`，不影响主应用配置
 
 ---
 

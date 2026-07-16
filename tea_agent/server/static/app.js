@@ -648,12 +648,17 @@ window.sendMessage = async function() {
               break;
 
             case 'think_done':
-              // 更新最后一个 thinking 条目的 summary
+              // 更新最后一个 thinking 条目的 summary，显示前32字符预览
               if (s.thinkList) {
                 var lastEntry = s.thinkList.querySelector('.think-entry:last-child');
                 if (lastEntry) {
                   var summary = lastEntry.querySelector('summary');
-                  if (summary) summary.textContent = '思考 #' + s.thinkCount + ' 完成';
+                  var content = lastEntry.querySelector('.think-content');
+                  if (summary) {
+                    var preview = content ? content.textContent.trim().replace(/\s+/g, ' ').substring(0, 32) : '';
+                    if (preview) preview = '：' + preview;
+                    summary.textContent = '思考 #' + s.thinkCount + ' 完成' + preview;
+                  }
                 }
               }
               break;

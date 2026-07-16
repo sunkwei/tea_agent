@@ -300,7 +300,7 @@ class MemoryDialog(tk.Toplevel):
     def _export(self):
         """Internal: export."""
         from tkinter import filedialog
-        memories = self.db.get_active_memories(limit=200)
+        memories = self.db.get_active_memories(limit=2000)
         if not memories:
             return
         path = filedialog.asksaveasfilename(
@@ -597,7 +597,7 @@ class TopicDialog(tk.Toplevel):
         from tea_agent.embedding_util import get_embedding_engine
 
         # 获取未向量化的 conversation
-        unvec = self.db.get_unvectorized_conversations(limit=200)
+        unvec = self.db.get_unvectorized_conversations(limit=2000)
         if not unvec:
             self.stats_var.set("✅ 所有消息已向量化，无需生成")
             return

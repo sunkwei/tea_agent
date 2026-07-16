@@ -563,7 +563,7 @@ class MemoryManager:
         if not recent_topics or not recent_topics.strip():
             return 0
 
-        all_memories = self.storage.get_active_memories(limit=200)
+        all_memories = self.storage.get_active_memories(limit=500)
         if len(all_memories) < 3:
             return 0  # 太少不值得调
 
@@ -940,8 +940,8 @@ importance 评分：
         new_count = 0
         merged_count = 0
 
-        # 一次性加载活跃记忆，避免每条提取都重复查询
-        existing_memories = self.storage.get_active_memories(limit=200)
+        # 分页加载活跃记忆进行去重，避免200条硬限制遗漏
+        existing_memories = self.storage.get_active_memories(limit=500)
 
         for item in results:
             try:
@@ -989,7 +989,7 @@ importance 评分：
 
     def detect_duplicates(self, threshold: float = 0.92) -> list[tuple]:
         """通过 embedding 余弦相似度扫描活跃记忆中的近似重复对。"""
-        mems = self.storage.memories.batch_get_embeddings(limit=200)
+        mems = self.storage.memories.batch_get_embeddings(limit=500)
         if len(mems) < 2:
             return []
 

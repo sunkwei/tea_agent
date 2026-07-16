@@ -1490,9 +1490,10 @@ def create_app(api_key: str | None = None,
     return app
 
 
-def run_server(host: str = "127.0.0.1", port: int = 8080,
+def run_server(host: str = "127.0.0.1", port: int = 8282,
                api_key: str | None = None,
-               config_path: str | None = None):
+               config_path: str | None = None,
+               open_browser: bool = False):
     """Run the API server."""
     import sys
     try:
@@ -1513,10 +1514,11 @@ def run_server(host: str = "127.0.0.1", port: int = 8080,
     app = create_app(api_key=api_key, config_path=config_path)
 
     # ── 启动横幅：打印所有关键参数 ──
+    server_url = f"http://{host}:{port}"
     print("=" * 56)
     print(f"  Tea Agent Server v{__version__}")
-    print(f"  Listening on:  http://{host}:{port}")
-    print(f"  API Docs:      http://{host}:{port}/docs")
+    print(f"  Listening on:  {server_url}")
+    print(f"  API Docs:      {server_url}/docs")
     print(f"  Config file:   {actual_config}")
     print(f"  API Key:       {'ENABLED  (auth required)' if api_key else 'DISABLED (no auth)'}")
     # 读取配置中的模型信息
@@ -1533,6 +1535,20 @@ def run_server(host: str = "127.0.0.1", port: int = 8080,
         pass  # 配置读取失败不阻塞启动
     print("=" * 56)
 
+    # --browser: 延迟启动浏览器（在 uvicorn 开始监听后打开）
+    if open_browser:
+        import webbrowser as _wb
+        import threading as _th
+        def _open_browser():
+            import time as _time
+            _time.sleep(1.5)
+            try:
+                _wb.open(server_url)
+                print(f"  🌐 Browser opened: {server_url}")
+            except Exception as _e:
+                print(f"  ⚠️  Failed to open browser: {_e}")
+        _th.Thread(target=_open_browser, daemon=True).start()
+
     # 使用 uvicorn.Server 实例（而非 uvicorn.run），以便 restart 时触发 graceful shutdown
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     global _uvicorn_server
@@ -1543,17 +1559,78 @@ def run_server(host: str = "127.0.0.1", port: int = 8080,
 # ── CLI Entry ──
 
 def main():
-    """CLI entry: tea-agent-api (unified)"""
+    """CLI entry: tea_agent (unified server — main entry point)
+
+    默认参数:
+      host=127.0.0.1, port=8282
+      config = $HOME/.tea_agent/config.yaml（若不存在或无效则拒绝执行）
+      --browser 自动打开默认浏览器
+    """
     import argparse
-    parser = argparse.ArgumentParser(description="Tea Agent Unified Server (API + Web UI)")
-    parser.add_argument("--host", type=str, default="127.0.0.1", help="Listen address")
-    parser.add_argument("--port", type=int, default=8080, help="Listen port")
+    parser = argparse.ArgumentParser(
+        description="Tea Agent Unified Server (API + Web UI) — Main Entry Point",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Examples:
+  tea_agent
+  tea_agent --port 8080
+  tea_agent --browser
+  tea_agent --config /path/to/config.yaml
+  tea_agent --host 0.0.0.0 --port 8282 --browser
+        """,
+    )
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Listen address (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8282, help="Listen port (default: 8282)")
     parser.add_argument("--api-key", type=str, default="", help="API key for auth")
-    parser.add_argument("--config", type=str, default=None, help="Config file path")
+    parser.add_argument("--config", type=str, default=None,
+                        help="Config file path (default: $HOME/.tea_agent/config.yaml)")
+    parser.add_argument("--browser", action="store_true",
+                        help="Auto-open default browser after server starts")
     args = parser.parse_args()
+
+    # ── 配置验证：默认 $HOME/.tea_agent/config.yaml ──
+    config_path = args.config or os.path.join(os.path.expanduser("~"), ".tea_agent", "config.yaml")
+
+    if not os.path.isfile(config_path):
+        print(f"❌ Error: Config file not found: {config_path}")
+        print()
+        print("   Tea Agent 需要有效的配置文件才能启动服务器。")
+        print("   请创建配置文件后重试。快速创建方法：")
+        print()
+        print(f"   mkdir -p {os.path.dirname(config_path)}")
+        print()
+        print("   然后编辑 config.yaml，包含以下内容：")
+        print("     main_model:")
+        print('       api_key: "your-api-key"')
+        print('       api_url: "https://api.openai.com/v1"')
+        print('       model_name: "gpt-4"')
+        print()
+        sys.exit(1)
+
+    # ── 验证配置内容是否有效 ──
+    from tea_agent.config import load_config
+    try:
+        cfg = load_config(config_path)
+        if not cfg.main_model.is_configured:
+            print(f"❌ Error: Config file '{config_path}' is invalid!")
+            print()
+            print("   配置文件的 main_model 部分必须包含有效的 api_key、api_url 和 model_name。")
+            print()
+            print("   当前配置内容：")
+            with open(config_path, encoding="utf-8") as _f:
+                for _line in _f:
+                    print(f"     {_line.rstrip()}")
+            print()
+            print("   请修正后重试。")
+            sys.exit(1)
+    except Exception as e:
+        print(f"❌ Error: Failed to load config '{config_path}': {e}")
+        sys.exit(1)
+
+    # ── 启动服务器 ──
     run_server(host=args.host, port=args.port,
                api_key=args.api_key or None,
-               config_path=args.config)
+               config_path=config_path,
+               open_browser=args.browser)
 
 
 if __name__ == "__main__":

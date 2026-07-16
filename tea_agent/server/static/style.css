@@ -545,31 +545,91 @@ body {
 }
 .msg-images img:hover { transform: scale(1.02); }
 
-/* ── Thinking Block ── */
-.think-block {
-  margin: 6px 0;
-  background: var(--surface2);
+/* ── Thinking Container（类似 Tool Call 的收缩列表） ── */
+.think-container {
+  margin: 8px 0;
   border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  box-shadow: 0 1px 4px rgba(0,0,0,.12);
+}
+/* 摘要栏（点击折叠/展开整个列表） */
+.think-summary {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+.think-summary:hover { background: var(--surface3); }
+.think-container.collapsed .think-summary {
+  border-bottom: none;
+}
+.think-summary-icon { font-size: 14px; line-height: 1; }
+.think-summary-label {
+  flex: 1;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.think-summary-badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--purple-bg);
+  color: var(--purple);
+  font-weight: 600;
+  min-width: 24px;
+  text-align: center;
+}
+.think-summary-arrow {
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
+/* 列表容器 */
+.think-list {
+  padding: 6px 10px 10px;
+}
+/* 单个思考轮次条目 */
+.think-entry {
+  margin-bottom: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border2);
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
-.think-block summary {
+.think-entry:last-child { margin-bottom: 0; }
+.think-entry summary {
   padding: 6px 10px;
   cursor: pointer;
   font-size: 12px;
   font-weight: 500;
   color: var(--purple);
   user-select: none;
-  display: flex; align-items: center; gap: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background var(--transition);
 }
-.think-block summary::before { content: '🧠'; }
-.think-block summary:hover { background: var(--surface3); }
+.think-entry summary::before { content: '🧠'; }
+.think-entry summary:hover { background: var(--surface3); }
+.think-entry[open] summary {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface3);
+}
 .think-content {
   padding: 8px 12px;
   font-size: 13px;
   color: var(--text-dim);
   line-height: 1.6;
-  border-top: 1px solid var(--border);
   max-height: 300px;
   overflow-y: auto;
   white-space: pre-wrap;
@@ -579,71 +639,217 @@ body {
 
 /* ── Tool Call Container ── */
 .tool-call-container {
-  margin: 6px 0;
+  margin: 8px 0;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   overflow: hidden;
-  background: var(--surface2);
+  background: var(--surface);
+  box-shadow: 0 1px 4px rgba(0,0,0,.12);
 }
-.tool-call-container.done { border-color: var(--border2); opacity: .85; }
+.tool-call-container.done {
+  border-color: var(--border2);
+  opacity: .9;
+}
+
+/* ── Summary Bar (collapsible header) ── */
 .tool-call-summary {
-  padding: 6px 10px;
+  padding: 8px 12px;
   cursor: pointer;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   user-select: none;
-  display: flex; align-items: center; gap: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
 }
 .tool-call-summary:hover { background: var(--surface3); }
-.tool-call-summary .icon { font-size: 13px; }
-.tool-call-summary .label { flex: 1; color: var(--text); }
-.tool-call-summary .badge {
-  font-size: 10px;
-  padding: 1px 6px;
+/* 列表折叠时，摘要栏底部边框隐藏，避免悬浮感 */
+.tool-call-container.collapsed .tool-call-summary {
+  border-bottom: none;
+}
+.tool-call-summary-icon { font-size: 14px; line-height: 1; }
+.tool-call-summary-label {
+  flex: 1;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.tool-call-summary-badge {
+  font-size: 11px;
+  padding: 1px 8px;
   border-radius: 10px;
   background: var(--primary-bg);
   color: var(--primary);
+  font-weight: 600;
+  min-width: 24px;
+  text-align: center;
 }
-.tool-call-summary .badge .done-count { color: var(--green); }
-.tool-call-list { padding: 4px 8px 8px; }
+.tool-call-summary-arrow {
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
+
+/* ── Tool Call List ── */
+.tool-call-list {
+  padding: 6px 10px 10px;
+}
+
+/* ── Individual Tool Item ── */
 .tool-call-item {
-  display: flex; flex-direction: column;
-  padding: 6px 8px;
-  margin-bottom: 4px;
-  background: var(--surface);
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: var(--bg);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border2);
   font-size: 12px;
+  transition: border-color var(--transition), box-shadow var(--transition);
 }
-.tool-call-item .tool-header {
-  display: flex; align-items: center; gap: 6px;
+.tool-call-item:last-child { margin-bottom: 0; }
+
+/* <details> 默认三角箭头隐藏，与 think-entry 风格一致 */
+.tool-call-item > summary {
+  list-style: none;
+  cursor: pointer;
 }
-.tool-call-item .status-icon { font-size: 13px; width: 18px; text-align: center; }
-.tool-call-item .tool-name { font-weight: 600; color: var(--primary); font-family: var(--font-mono); font-size: 11px; }
-.tool-call-item.running { border-left: 3px solid var(--yellow); }
-.tool-call-item.done { border-left: 3px solid var(--green); }
-.tool-call-item.error { border-left: 3px solid var(--red); }
-.tool-params {
-  margin-top: 4px; margin-left: 24px;
-  display: flex; flex-direction: column; gap: 2px;
+.tool-call-item > summary::-webkit-details-marker {
+  display: none;
 }
-.tool-param-row { display: flex; gap: 6px; font-size: 11px; }
-.tool-param-row .param-key { color: var(--text-dim); flex-shrink: 0; }
-.tool-param-row .param-val { color: var(--text); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; }
-.tool-result {
-  margin-top: 4px; margin-left: 24px;
-  font-size: 11px; color: var(--text-dim);
-  display: flex; gap: 4px;
+.tool-call-item > summary::marker {
+  display: none;
+  content: '';
 }
-.tool-result .result-label { flex-shrink: 0; }
-.tool-result .result-val { color: var(--text-muted); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* State-based left border */
+.tool-call-item.running {
+  border-left: 3px solid var(--yellow);
+  box-shadow: 0 0 0 1px rgba(210,153,34,.08);
+}
+.tool-call-item.done {
+  border-left: 3px solid var(--green);
+}
+.tool-call-item.error {
+  border-left: 3px solid var(--red);
+}
+
+/* ── Tool Call Header ── */
+.tool-call-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+.tool-call-icon {
+  font-size: 13px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.tool-call-name {
+  font-weight: 700;
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Status Labels ── */
+.tool-call-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.6;
+}
+.tool-call-status.status-running {
+  background: var(--yellow-bg);
+  color: var(--yellow);
+}
+.tool-call-status.status-done {
+  background: var(--green-bg);
+  color: var(--green);
+}
+.tool-call-status.status-error {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+/* ── Spinner for running state ── */
+@keyframes tool-spin {
+  to { transform: rotate(360deg); }
+}
+.tool-call-item.running .tool-call-icon::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--yellow);
+  border-radius: 50%;
+  animation: tool-spin .6s linear infinite;
+  vertical-align: middle;
+}
+.tool-call-item.running .tool-call-icon {
+  font-size: 0; /* hide emoji, show spinner via ::before */
+  width: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Detail Section (args + result) ── */
+.tool-call-detail {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  max-height: 260px;
+  overflow-y: auto;
+}
+.tool-call-section {
+  margin-bottom: 4px;
+}
+.tool-call-section:last-child { margin-bottom: 0; }
+.tool-call-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 3px;
+  padding: 0 2px;
+}
+.tool-call-args,
+.tool-call-result {
+  margin: 0;
+  padding: 5px 8px;
+  background: var(--surface2);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 110px;
+  overflow-y: auto;
+}
+
+/* ── Done state subtle fade ── */
+.tool-call-item.done .tool-call-args,
+.tool-call-item.done .tool-call-result {
+  opacity: .75;
+}
+
 @keyframes spin { to { transform: rotate(360deg); } }
-.tool-spinner {
-  display: inline-block; width: 12px; height: 12px;
-  border: 2px solid var(--border); border-top-color: var(--yellow);
-  border-radius: 50%; animation: spin .6s linear infinite;
-}
 
 /* ── Status Messages ── */
 .status-msg {

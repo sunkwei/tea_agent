@@ -467,8 +467,11 @@ function _createStreamState() {
   return {
     bubbleText: $('bubble-text'),
     fullText: '',
-    thinkBlock: null,
+    thinkContainer: null,
+    thinkSummary: null,
+    thinkList: null,
     thinkContent: null,
+    thinkCount: 0,
     toolCallContainer: null,
     toolCallList: null,
     toolCallSummary: null,
@@ -599,14 +602,43 @@ window.sendMessage = async function() {
               break;
 
             case 'think_start':
-              if (!s.thinkBlock) {
-                s.thinkBlock = document.createElement('details');
-                s.thinkBlock.className = 'think-block';
-                s.thinkBlock.innerHTML = '<summary>推理中...</summary><div class="think-content"></div>';
-                s.bubbleText.parentNode.insertBefore(s.thinkBlock, s.bubbleText.nextSibling);
-                s.thinkContent = s.thinkBlock.querySelector('.think-content');
+              if (!s.thinkContainer) {
+                // 创建容器（类似 tool-call-container）
+                s.thinkContainer = document.createElement('div');
+                s.thinkContainer.className = 'think-container collapsed';
+                s.bubbleText.parentNode.insertBefore(s.thinkContainer, s.bubbleText);
+                // 折叠式摘要栏
+                s.thinkSummary = document.createElement('div');
+                s.thinkSummary.className = 'think-summary';
+                s.thinkSummary.innerHTML = '<span class="think-summary-icon">🧠</span>'
+                  + '<span class="think-summary-label">思考过程</span>'
+                  + '<span class="think-summary-badge" id="think-badge">0</span>'
+                  + '<span class="think-summary-arrow">▸</span>';
+                s.thinkSummary.addEventListener('click', function() {
+                  var list = s.thinkContainer.querySelector('.think-list');
+                  if (list) {
+                    var expanded = list.style.display !== 'none';
+                    list.style.display = expanded ? 'none' : '';
+                    s.thinkContainer.classList.toggle('collapsed', expanded);
+                    s.thinkSummary.querySelector('.think-summary-arrow').textContent = expanded ? '▸' : '▾';
+                  }
+                });
+                s.thinkContainer.appendChild(s.thinkSummary);
+                // 列表容器
+                s.thinkList = document.createElement('div');
+                s.thinkList.className = 'think-list';
+                s.thinkList.style.display = 'none'; // 默认折叠
+                s.thinkContainer.appendChild(s.thinkList);
               }
-              s.thinkContent.innerHTML = '';
+              // 每次新的思考轮次创建独立条目
+              s.thinkCount++;
+              var badge = s.thinkContainer.querySelector('.think-summary-badge');
+              if (badge) badge.textContent = s.thinkCount;
+              var entry = document.createElement('details');
+              entry.className = 'think-entry';
+              entry.innerHTML = '<summary>思考 #' + s.thinkCount + '</summary><div class="think-content"></div>';
+              s.thinkList.appendChild(entry);
+              s.thinkContent = entry.querySelector('.think-content');
               break;
 
             case 'think':
@@ -616,9 +648,13 @@ window.sendMessage = async function() {
               break;
 
             case 'think_done':
-              if (s.thinkBlock) {
-                const summary = s.thinkBlock.querySelector('summary');
-                if (summary) summary.textContent = '推理完成';
+              // 更新最后一个 thinking 条目的 summary
+              if (s.thinkList) {
+                var lastEntry = s.thinkList.querySelector('.think-entry:last-child');
+                if (lastEntry) {
+                  var summary = lastEntry.querySelector('summary');
+                  if (summary) summary.textContent = '思考 #' + s.thinkCount + ' 完成';
+                }
               }
               break;
 
@@ -626,29 +662,55 @@ window.sendMessage = async function() {
               removeLoading();
               if (!s.toolCallContainer) {
                 s.toolCallContainer = document.createElement('div');
-                s.toolCallContainer.className = 'tool-call-container';
-                s.bubbleText.parentNode.appendChild(s.toolCallContainer);
+                s.toolCallContainer.className = 'tool-call-container collapsed';
+                // 插入到 bubble-text 之前（使 AI 消息出现在最底部）
+                s.bubbleText.parentNode.insertBefore(s.toolCallContainer, s.bubbleText);
+                // 折叠式摘要栏：点击可展开/折叠整个工具调用列表
                 s.toolCallSummary = document.createElement('div');
                 s.toolCallSummary.className = 'tool-call-summary';
-                s.toolCallBadge = document.createElement('span');
-                s.toolCallBadge.className = 'tool-call-badge';
-                s.toolCallBadge.textContent = '⚙ 0';
-                s.toolCallSummary.appendChild(s.toolCallBadge);
+                s.toolCallSummary.innerHTML = '<span class="tool-call-summary-icon">🛠</span>'
+                  + '<span class="tool-call-summary-label">工具调用</span>'
+                  + '<span class="tool-call-summary-badge" id="tc-badge">0</span>'
+                  + '<span class="tool-call-summary-arrow">▸</span>';
+                s.toolCallSummary.addEventListener('click', function() {
+                  const list = s.toolCallContainer.querySelector('.tool-call-list');
+                  if (list) {
+                    const expanded = list.style.display !== 'none';
+                    list.style.display = expanded ? 'none' : '';
+                    s.toolCallContainer.classList.toggle('collapsed', expanded);
+                    s.toolCallSummary.querySelector('.tool-call-summary-arrow').textContent = expanded ? '▸' : '▾';
+                  }
+                });
                 s.toolCallContainer.appendChild(s.toolCallSummary);
                 s.toolCallList = document.createElement('div');
                 s.toolCallList.className = 'tool-call-list';
+                // 默认折叠：初始隐藏列表
+                s.toolCallList.style.display = 'none';
                 s.toolCallContainer.appendChild(s.toolCallList);
               }
               s.toolCallCount++;
-              if (s.toolCallBadge) s.toolCallBadge.textContent = `⚙ ${s.toolCallCount}`;
-              const item = document.createElement('div');
-              item.className = 'tool-call-item';
+              const badge = s.toolCallContainer.querySelector('.tool-call-summary-badge');
+              if (badge) badge.textContent = s.toolCallCount;
+              // 保持折叠状态，不展开列表
+              const item = document.createElement('details');
+              item.className = 'tool-call-item running';
               item.id = `tool-${s.toolCallCount}`;
-              item.innerHTML = `<span class="tool-call-name">${esc(data.name || '工具')}</span>`
-                + `<span class="tool-call-status running">运行中</span>`
-                + `<div class="tool-call-detail" style="display:none">`
-                + `<pre class="tool-call-args">${esc(data.args || '')}</pre>`
-                + `<pre class="tool-call-result"></pre></div>`;
+              // details 默认不 open，即收缩状态（类似 think-entry）
+              item.innerHTML = '<summary class="tool-call-header">'
+                + '<span class="tool-call-icon">⚡</span>'
+                + '<span class="tool-call-name">' + esc(data.name || '工具') + '</span>'
+                + '<span class="tool-call-status status-running">运行中</span>'
+                + '</summary>'
+                + '<div class="tool-call-detail">'
+                + '<div class="tool-call-section">'
+                + '<div class="tool-call-section-label">参数</div>'
+                + '<pre class="tool-call-args"></pre>'
+                + '</div>'
+                + '<div class="tool-call-section">'
+                + '<div class="tool-call-section-label">结果</div>'
+                + '<pre class="tool-call-result"></pre>'
+                + '</div>'
+                + '</div>';
               s.toolCallList.appendChild(item);
               s.activeToolItem = item;
               break;
@@ -663,8 +725,8 @@ window.sendMessage = async function() {
 
             case 'tool_result':
               if (s.activeToolItem) {
-                const detail = s.activeToolItem.querySelector('.tool-call-detail');
-                if (detail) detail.style.display = 'block';
+                // 保持折叠，用户需点击 summary 手动展开查看详情
+                // s.activeToolItem.open = true;
                 const resPre = s.activeToolItem.querySelector('.tool-call-result');
                 if (resPre) resPre.textContent += data.result;
               }
@@ -673,10 +735,19 @@ window.sendMessage = async function() {
             case 'tool_done':
               s.toolDoneCount++;
               if (s.activeToolItem) {
+                // 更新 item 容器状态类
+                s.activeToolItem.classList.remove('running');
+                s.activeToolItem.classList.add('done');
+                // 更新状态标签
                 const status = s.activeToolItem.querySelector('.tool-call-status');
                 if (status) {
-                  status.textContent = data.error ? `❌ ${esc(data.error)}` : '✅ 完成';
-                  status.className = data.error ? 'tool-call-status error' : 'tool-call-status done';
+                  status.textContent = '✅ 完成';
+                  status.className = 'tool-call-status status-done';
+                }
+                // 更新摘要中的完成计数
+                const badge = s.toolCallContainer && s.toolCallContainer.querySelector('.tool-call-summary-badge');
+                if (badge) {
+                  badge.textContent = s.toolDoneCount + '/' + s.toolCallCount;
                 }
               }
               s.activeToolItem = null;
@@ -714,6 +785,13 @@ window.sendMessage = async function() {
               if (data.topic_id && data.topic_id !== currentTopicId) {
                 currentTopicId = data.topic_id;
                 refreshTopics();
+              }
+              // 用 Markdown 重新渲染 AI 最终消息（流式 token 只是 esc 纯文本）
+              if (data.ai_msg && s.bubbleText) {
+                s.bubbleText.innerHTML = formatMarkdown(data.ai_msg);
+                // 移除 tool/think 容器中的 id，避免下次流式清理时误删
+                if (s.thinkContainer) s.thinkContainer.removeAttribute('id');
+                if (s.toolCallContainer) s.toolCallContainer.removeAttribute('id');
               }
               break;
 

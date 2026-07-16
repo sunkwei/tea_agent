@@ -594,7 +594,7 @@ window.sendMessage = async function() {
 
             case 'token':
               removeLoading();
-              s.fullText += data.content;
+              s.fullText += data.text;
               s.bubbleText.innerHTML = esc(s.fullText);
               break;
 
@@ -611,7 +611,7 @@ window.sendMessage = async function() {
 
             case 'think':
               if (s.thinkContent) {
-                s.thinkContent.textContent += data.content;
+                s.thinkContent.textContent += data.text;
               }
               break;
 
@@ -657,7 +657,7 @@ window.sendMessage = async function() {
             case 'tool_args':
               if (s.activeToolItem) {
                 const argsPre = s.activeToolItem.querySelector('.tool-call-args');
-                if (argsPre) argsPre.textContent += data.content;
+                if (argsPre) argsPre.textContent += data.args;
               }
               break;
 
@@ -666,7 +666,7 @@ window.sendMessage = async function() {
                 const detail = s.activeToolItem.querySelector('.tool-call-detail');
                 if (detail) detail.style.display = 'block';
                 const resPre = s.activeToolItem.querySelector('.tool-call-result');
-                if (resPre) resPre.textContent += data.content;
+                if (resPre) resPre.textContent += data.result;
               }
               break;
 
@@ -683,7 +683,7 @@ window.sendMessage = async function() {
               break;
 
             case 'status':
-              if (data.content) {
+              if (data.text) {
                 const oldStatus = document.getElementById('stream-status');
                 if (!oldStatus) {
                   const statusDiv = document.createElement('div');
@@ -692,7 +692,7 @@ window.sendMessage = async function() {
                   s.bubbleText.parentNode.appendChild(statusDiv);
                 }
                 const sd = $('stream-status');
-                if (sd) sd.textContent = data.content;
+                if (sd) sd.textContent = data.text;
               }
               break;
 
@@ -763,7 +763,7 @@ window.sendMessage = async function() {
     if (e.name === 'AbortError') {
       removeLoading();
       const bt = $('bubble-text');
-      if (bt && !bt.innerHTML.trim()) bt.innerHTML = '(已中断)'
+      if (bt && !bt.innerHTML.trim()) bt.innerHTML = '(已中断)';
     } else {
       removeLoading();
       const bt = $('bubble-text');

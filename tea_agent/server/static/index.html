@@ -13,9 +13,18 @@
     <div class="sb-hdr">
       <span class="sb-logo">☕</span>
       <span class="sb-title">Tea Agent</span>
+      <button class="tb-btn sb-toggle" onclick="toggleFileTree()" title="文件树 (Ctrl+Shift+F)" id="ft-toggle">📁</button>
     </div>
     <div class="sb-acts">
       <button class="btn btn-p" onclick="newTopic()" title="新对话 (Ctrl+N)">+ 新对话</button>
+    </div>
+    <!-- ═══ File Tree Panel (默认折叠) ═══ -->
+    <div id="file-tree-panel" class="file-tree-panel" style="display:none">
+      <div class="ft-header">
+        <span>📁 项目文件</span>
+        <button class="tb-btn ft-refresh" onclick="loadFileTree('')" title="刷新">🔄</button>
+      </div>
+      <div id="file-tree-content" class="file-tree-content"></div>
     </div>
     <div id="topic-list" class="topic-list"></div>
   </aside>

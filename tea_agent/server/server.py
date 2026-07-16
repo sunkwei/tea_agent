@@ -469,8 +469,16 @@ class APIServer:
             ai_msg, used_tools = session.chat_stream(
                 user_msg, callback=stream_cb, topic_id=topic_id)
             _save_chat_result(storage, session, topic_id, user_msg, ai_msg, used_tools)
+            _usage = getattr(session, '_last_usage', None) or {}
+            _model = getattr(session.context, 'model', '')
             put({"type": "done", "ai_msg": ai_msg,
-                 "tools_used": used_tools or []})
+                 "tools_used": used_tools or [],
+                 "usage": {
+                     "total_tokens": _usage.get("total_tokens", 0),
+                     "prompt_tokens": _usage.get("prompt_tokens", 0),
+                     "completion_tokens": _usage.get("completion_tokens", 0),
+                     "model": _model,
+                 }})
         except Exception as e:
             logger.exception(f"Stream chat error: {e}")
             with contextlib.suppress(Exception):
@@ -654,16 +662,24 @@ class APIServer:
                 logger.exception(f"Save chat failed topic={topic_id}: {save_err}")
 
             usage = session._last_usage or {}
+            cheap_usage = getattr(session, '_last_cheap_usage', None) or {}
+            model_name = getattr(session.context, 'model', '')
+            usage_data = {
+                "total_tokens": usage.get("total_tokens", 0),
+                "prompt_tokens": usage.get("prompt_tokens", 0),
+                "completion_tokens": usage.get("completion_tokens", 0),
+                "model": model_name,
+            }
+            if cheap_usage.get("total_tokens", 0) > 0:
+                usage_data["cheap_tokens"] = cheap_usage.get("total_tokens", 0)
+                usage_data["cheap_prompt_tokens"] = cheap_usage.get("prompt_tokens", 0)
+                usage_data["cheap_completion_tokens"] = cheap_usage.get("completion_tokens", 0)
             _put({
                 "type": "done",
                 "ai_msg": ai_msg,
                 "used_tools": used_tools,
                 "topic_id": topic_id,
-                "usage": {
-                    "total_tokens": usage.get("total_tokens", 0),
-                    "prompt_tokens": usage.get("prompt_tokens", 0),
-                    "completion_tokens": usage.get("completion_tokens", 0),
-                },
+                "usage": usage_data,
             })
         except Exception as e:
             logger.exception("Chat stream error")
@@ -1309,6 +1325,8 @@ def create_app(api_key: str | None = None,
         handle_delete_task,
         handle_docs,
         handle_export_pdf,
+        handle_file_read,
+        handle_file_tree,
         handle_get_config,
         handle_list_dags,
         handle_get_session,
@@ -1385,6 +1403,8 @@ def create_app(api_key: str | None = None,
         Route("/api/model/config", endpoint=handle_web_model_config, methods=["POST"]),
         Route("/api/config/upload", endpoint=handle_web_upload_config, methods=["POST"]),
         Route("/api/restart", endpoint=handle_restart, methods=["POST"]),
+        Route("/api/files", endpoint=handle_file_tree),
+        Route("/api/file", endpoint=handle_file_read),
         Route("/health", endpoint=handle_health),
         Route("/v1/chat/completions", endpoint=handle_chat_completions, methods=["POST"]),
         Route("/v1/models", endpoint=handle_list_models),

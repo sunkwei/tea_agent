@@ -854,13 +854,45 @@ window.sendMessage = async function() {
   }
 };
 
+// 成本估算函数 (USD)
+function estimateCost(tokens, modelName) {
+  var total = tokens.total_tokens || 0;
+  var prompt = tokens.prompt_tokens || Math.floor(total / 2);
+  var completion = tokens.completion_tokens || Math.floor(total / 2);
+  var m = (modelName || '').toLowerCase();
+  var promptRate, completionRate;
+  if (m.includes('gpt-4') || m.includes('claude-3')) {
+    promptRate = 2.5; completionRate = 10;
+  } else if (m.includes('deepseek') || m.includes('qwen')) {
+    promptRate = 0.5; completionRate = 2;
+  } else {
+    promptRate = 1; completionRate = 4;
+  }
+  return (prompt * promptRate + completion * completionRate) / 1000000;
+}
+
 function updateUsage(usage) {
   if (!usage || !usage.total_tokens) return;
-  let bar = $('usage-bar');
+  var bar = $('usage-bar');
   if (!bar) return;
   bar.style.display = '';
-  bar.innerHTML = '📊 本次: ' + usage.total_tokens + ' tokens (prompt: ' + usage.prompt_tokens + ', completion: ' + usage.completion_tokens + ')';
+  var cost = estimateCost(usage, usage.model || '');
+  var cheapHtml = '';
+  if (usage.cheap_tokens) {
+    var cheapCost = estimateCost(usage, usage.model || '');
+    cheapHtml = ' | 🧠 便宜模型: ' + usage.cheap_tokens + ' tokens';
+  }
+  var costStr = cost >= 0.001 ? '$' + cost.toFixed(4) : '<$0.0001';
+  bar.innerHTML = '<span class="usage-tokens">📊 T:' + usage.total_tokens
+    + '</span> <span class="usage-detail">(P:' + usage.prompt_tokens + '+C:' + usage.completion_tokens + ')</span>'
+    + cheapHtml
+    + ' | <span class="usage-cost">💰 ' + costStr + '</span>';
+  bar.className = cost > 0.05 ? 'usage-bar usage-high' : 'usage-bar';
 }
+
+// ══════════════════════════════════════════════════
+//  TOPICS / SESSIONS
+// ══════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════
 //  TOPICS / SESSIONS
@@ -1973,6 +2005,125 @@ refreshTaskPanel();
 
 // Auto-refresh topics every 30s
 setInterval(refreshTopics, 30000);
+
+// ══════════════════════════════════════════════════
+//  FILE TREE NAVIGATION
+//  ══════════════════════════════════════════════════
+
+let _fileTreeOpen = false;
+let _fileTreeCache = {};
+
+window.toggleFileTree = function() {
+  var panel = $('file-tree-panel');
+  if (!panel) return;
+  _fileTreeOpen = !_fileTreeOpen;
+  panel.style.display = _fileTreeOpen ? '' : 'none';
+  if (_fileTreeOpen && !_fileTreeCache['/']) {
+    loadFileTree('');
+  }
+};
+
+window.loadFileTree = async function(path) {
+  var container = $('file-tree-content');
+  if (!container) return;
+  
+  if (!path && _fileTreeCache['/']) {
+    // 使用缓存
+    renderFileTree(_fileTreeCache['/'], container);
+    return;
+  }
+  
+  container.innerHTML = '<div class="ft-loading">📂 加载中...</div>';
+  
+  try {
+    var url = '/api/files';
+    if (path) url += '?path=' + encodeURIComponent(path);
+    var res = await fetch(url);
+    var data = await res.json();
+    if (!data.ok) {
+      container.innerHTML = '<div class="ft-loading" style="color:var(--red)">❌ ' + esc(data.error) + '</div>';
+      return;
+    }
+    // 缓存根目录
+    if (!path) _fileTreeCache['/'] = data.items;
+    renderFileTree(data.items, container, path);
+  } catch(e) {
+    container.innerHTML = '<div class="ft-loading" style="color:var(--red)">❌ ' + esc(e.message) + '</div>';
+  }
+};
+
+function renderFileTree(items, container, parentPath) {
+  if (!items || !items.length) {
+    container.innerHTML = '<div class="ft-loading">(空目录)</div>';
+    return;
+  }
+  var html = '<div class="ft-children">';
+  items.forEach(function(item) {
+    var isDir = item.type === 'dir';
+    var icon = isDir ? '📁' : getFileIcon(item.ext || '');
+    var sizeStr = item.size ? formatSize(item.size) : '';
+    html += '<div class="ft-item ' + (isDir ? 'ft-dir' : 'ft-file') + '"'
+      + ' onclick="' + (isDir ? 'loadFileTree(\'' + escAttr(item.path) + '\')' : 'openFile(\'' + escAttr(item.path) + '\')') + '"'
+      + ' title="' + escAttr(item.name) + '">'
+      + '<span class="ft-icon">' + icon + '</span>'
+      + '<span class="ft-name">' + esc(item.name) + '</span>'
+      + (sizeStr ? '<span class="ft-size">' + sizeStr + '</span>' : '')
+      + '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function getFileIcon(ext) {
+  var icons = {
+    '.py': '🐍', '.js': '📜', '.ts': '📘', '.html': '🌐', '.css': '🎨',
+    '.json': '📋', '.yaml': '⚙', '.yml': '⚙', '.toml': '⚙',
+    '.md': '📝', '.txt': '📄', '.csv': '📊',
+    '.sh': '💻', '.bat': '💻', '.ps1': '💻',
+    '.c': '⚡', '.cpp': '⚡', '.h': '🔧', '.hpp': '🔧',
+    '.java': '☕', '.rs': '🦀', '.go': '🔵', '.rb': '💎',
+    '.sql': '🗄', '.db': '🗄', '.sqlite': '🗄',
+    '.gitignore': '🔒', '.dockerignore': '🔒',
+    '.env': '🔑', '.yaml': '⚙',
+    '.xml': '📰', '.svg': '🎨',
+  };
+  return icons[ext] || '📄';
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + 'KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + 'MB';
+}
+
+window.openFile = async function(filePath) {
+  try {
+    var res = await fetch('/api/file?path=' + encodeURIComponent(filePath));
+    var data = await res.json();
+    if (!data.ok) {
+      toast('❌ ' + (data.error || '读取失败'), 'error');
+      return;
+    }
+    // 在消息区域显示文件内容
+    var msgs = $('msgs');
+    var div = document.createElement('div');
+    div.className = 'file-view';
+    div.innerHTML = '<div class="file-view-header">'
+      + '<span>📄 ' + esc(filePath) + '</span>'
+      + '<button class="tb-btn" onclick="closeFileView(this)" title="关闭">✕</button>'
+      + '</div>'
+      + '<pre class="file-view-content"><code>' + esc(data.content || '') + '</code></pre>';
+    // 插入到消息区域顶部
+    msgs.insertBefore(div, msgs.firstChild);
+  } catch(e) {
+    toast('❌ ' + e.message, 'error');
+  }
+};
+
+window.closeFileView = function(btn) {
+  var view = btn.closest('.file-view');
+  if (view) view.remove();
+};
 
 // Expose helpers globally
 window.showModal = showModal;

@@ -33,6 +33,48 @@ def _generate_unified_diff(old: str, new: str, filename: str = "file", context_l
     diff = difflib.unified_diff(old_lines, new_lines, fromfile=filename, tofile=filename, n=context_lines)
     return ''.join(diff)
 
+
+def _colorize_diff(diff_text: str) -> str:
+    """为 unified diff 添加 ANSI 颜色代码（用于终端显示）。
+
+    颜色方案（借鉴 opencode/codex CLI 风格）：
+    - 文件头 (---/+++): 青色 bold
+    - 行号 (@@): 紫色
+    - 删除行 (-): 红色背景
+    - 新增行 (+): 绿色背景
+    - 上下文行: 默认
+    """
+    if not diff_text:
+        return ""
+
+    lines = diff_text.splitlines(keepends=True)
+    result = []
+    for line in lines:
+        if line.startswith('---') or line.startswith('+++'):
+            # 文件头 - 青色加粗
+            result.append(f'\033[36;1m{line.rstrip()}\033[0m\n')
+        elif line.startswith('@@'):
+            # 行号信息 - 紫色
+            result.append(f'\033[35m{line.rstrip()}\033[0m\n')
+        elif line.startswith('-'):
+            # 删除行 - 红色
+            result.append(f'\033[41;97m{line.rstrip()}\033[0m\n')
+        elif line.startswith('+'):
+            # 新增行 - 绿色
+            result.append(f'\033[42;97m{line.rstrip()}\033[0m\n')
+        else:
+            result.append(line)
+    return ''.join(result)
+
+
+def _generate_diff_stats(diff_text: str) -> dict:
+    """统计 diff 的变更行数。"""
+    if not diff_text:
+        return {"additions": 0, "deletions": 0, "changes": 0}
+    additions = sum(1 for line in diff_text.split('\n') if line.startswith('+') and not line.startswith('+++'))
+    deletions = sum(1 for line in diff_text.split('\n') if line.startswith('-') and not line.startswith('---'))
+    return {"additions": additions, "deletions": deletions, "changes": additions + deletions}
+
 # ── Git Stash 集成 ──────────────────────────────────────
 
 def _git_stash_push(cwd: str) -> tuple[bool, str]:
@@ -207,7 +249,9 @@ def toolkit_diff(
             diffs = []
             for f in files:
                 d = _generate_unified_diff(f["old_code"], f["new_code"], f["file_path"])
-                diffs.append({"file": f["file_path"], "diff": d})
+                colored = _colorize_diff(d)
+                stats = _generate_diff_stats(d)
+                diffs.append({"file": f["file_path"], "diff": d, "colored_diff": colored, "stats": stats})
             combined = "\n".join(d["diff"] for d in diffs)
             return {"ok": True, "diffs": diffs, "combined": combined,
                     "file_count": len(diffs)}
@@ -219,13 +263,17 @@ def toolkit_diff(
             conflicts = []
             for f in files:
                 diff = _generate_unified_diff(f["old_code"], f["new_code"], f["file_path"])
+                colored = _colorize_diff(diff)
                 conflict = _check_conflict(f["file_path"], f["old_code"], cwd)
+                stats = _generate_diff_stats(diff)
                 previews.append({
                     "file": f["file_path"],
                     "diff": diff,
+                    "colored_diff": colored,
                     "conflict": conflict,
                     "safe": conflict is None,
                     "change_lines": diff.count('\n') if diff else 0,
+                    "stats": stats,
                 })
                 if conflict:
                     conflicts.append(f["file_path"])
@@ -336,6 +384,99 @@ def toolkit_diff(
     except Exception as e:
         logger.exception(f"toolkit_diff: {e}")
         return {"ok": False, "error": str(e)[:300]}
+
+
+# ── 工具分类表 ────────────────────────────────────────────
+# 用于 tool categorization 场景，方便 LLM 快速找到合适工具
+
+TOOL_CATEGORIES = {
+    "文件操作": [
+        "toolkit_file", "toolkit_save_file", "toolkit_explr",
+    ],
+    "代码编辑": [
+        "toolkit_edit", "toolkit_diff_edit", "toolkit_diff",
+        "toolkit_self_evolve", "toolkit_clean_comments",
+        "toolkit_format_code", "toolkit_auto_fix", "toolkit_comment",
+    ],
+    "搜索": [
+        "toolkit_search", "toolkit_lsp", "toolkit_query_chat_history",
+        "toolkit_js_fetch",
+    ],
+    "截图与OCR": [
+        "toolkit_screenshot", "toolkit_ocr", "toolkit_screen_read",
+    ],
+    "系统操作": [
+        "toolkit_exec", "toolkit_config", "toolkit_os_info",
+        "toolkit_sudo_gui", "toolkit_input", "toolkit_clipboard",
+    ],
+    "包管理": [
+        "toolkit_pkg", "toolkit_build", "toolkit_read_pyproject",
+    ],
+    "测试": [
+        "toolkit_run_tests", "toolkit_test_gui",
+    ],
+    "记忆与知识": [
+        "toolkit_memory", "toolkit_kb", "toolkit_reflection",
+        "toolkit_proactive",
+    ],
+    "多Agent协作": [
+        "toolkit_parallel_subtasks", "toolkit_subagent",
+        "toolkit_subagent_msg", "toolkit_auto_pipeline",
+    ],
+    "计划与任务": [
+        "toolkit_plan", "toolkit_todo", "toolkit_scheduler",
+        "toolkit_task_resume",
+    ],
+    "Git版本控制": [
+        "toolkit_git_commit", "toolkit_git_push_all_remotes",
+        "toolkit_git_branch_manager",
+    ],
+    "Web与网络": [
+        "toolkit_browser_tab", "toolkit_js_fetch", "toolkit_mcp",
+    ],
+    "自进化": [
+        "toolkit_self_evolve", "toolkit_self_evolve_thread",
+        "toolkit_prompt_evolve", "toolkit_evolution_exp",
+        "toolkit_experience_solidify",
+    ],
+    "工具": [
+        "toolkit_gettime", "toolkit_weather_my", "toolkit_lunar",
+        "toolkit_date_diff", "toolkit_ip_location_my",
+    ],
+    "导出与分享": [
+        "toolkit_dump_topic", "toolkit_export_last_pdf",
+        "toolkit_notify",
+    ],
+    "MCP集成": [
+        "toolkit_mcp",
+    ],
+}
+
+
+def toolkit_get_categorized_tools() -> dict:
+    """获取按类别分组的工具列表。
+
+    借鉴 opencode/codex 的最小化工具集理念，
+    将 75+ 工具按15个场景类别组织，降低选择成本。
+
+    Returns:
+        {"categories": [{"name": str, "tools": [str,...]}, ...],
+         "total": int, "category_count": int}
+    """
+    categories = []
+    total = set()
+    for cat_name, tools in TOOL_CATEGORIES.items():
+        categories.append({"name": cat_name, "tools": tools})
+        total.update(tools)
+    return {
+        "categories": categories,
+        "total": len(total),
+        "category_count": len(categories),
+    }
+
+
+# ── 注册到全局工具分类元数据 ──
+# 让 toolkit_self_report 也能读取此分类
 
 # ── Meta ────────────────────────────────────────────────
 

@@ -1309,6 +1309,125 @@ async def handle_restart(request):
 
 
 # ================================================================
+#  File Tree API
+# ================================================================
+
+async def handle_file_tree(request):
+    """GET /api/files?path=... — 列出指定目录的文件树。
+
+    返回目录结构，支持懒加载（只返回当前层级）。
+    自动过滤 .git/ node_modules/ __pycache__/ 等目录。
+    """
+    import os as _os
+    from pathlib import Path as _Path
+
+    req_path = request.query_params.get("path", "")
+    root = _os.getcwd()
+    
+    if req_path:
+        target = _Path(root) / req_path
+        # 安全检查：不能超出项目根目录
+        try:
+            target = target.resolve()
+            _Path(root).resolve()
+            # 简化安全校验：确保目标在项目目录下
+            target_str = str(target).lower()
+            root_str = str(_Path(root).resolve()).lower()
+            if not target_str.startswith(root_str):
+                return JSONResponse({"ok": False, "error": "路径超出项目目录"}, status_code=403)
+        except (ValueError, OSError):
+            return JSONResponse({"ok": False, "error": "无效路径"}, status_code=400)
+    else:
+        target = _Path(root)
+
+    if not target.is_dir():
+        return JSONResponse({"ok": False, "error": "不是目录"}, status_code=400)
+
+    # 忽略的目录模式
+    _IGNORED_DIRS = {
+        ".git", "node_modules", "__pycache__", ".venv", "venv",
+        ".tea_agent_run", ".git", ".svn", ".hg", ".idea", ".vscode",
+        "dist", "build", "build_mini_dist", "build_nuitka_dist",
+        ".egg-info", "__pycache__", ".mypy_cache", ".pytest_cache",
+    }
+    _IGNORED_EXTS = {".pyc", ".pyo", ".egg", ".whl", ".jpg", ".jpeg",
+                     ".png", ".gif", ".ico", ".svg", ".webp", ".mp4",
+                     ".mp3", ".wav", ".ogg", ".pdf", ".zip", ".tar.gz"}
+
+    items = []
+    try:
+        for entry in sorted(target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())):
+            name = entry.name
+            if name.startswith(".") and name not in (".env", ".gitignore", ".dockerignore"):
+                continue
+            if entry.is_dir() and name in _IGNORED_DIRS:
+                continue
+
+            item = {
+                "name": name,
+                "path": str(_Path(req_path) / name) if req_path else name,
+                "type": "dir" if entry.is_dir() else "file",
+            }
+            if entry.is_file():
+                ext = entry.suffix.lower()
+                item["ext"] = ext
+                try:
+                    item["size"] = entry.stat().st_size
+                except OSError:
+                    item["size"] = 0
+                if ext in _IGNORED_EXTS:
+                    continue
+            items.append(item)
+    except PermissionError:
+        return JSONResponse({"ok": False, "error": "无权限访问"}, status_code=403)
+
+    return JSONResponse({
+        "ok": True,
+        "path": req_path or "/",
+        "abs_path": str(target.resolve()),
+        "items": items,
+        "parent": str(_Path(req_path).parent) if req_path else None,
+    })
+
+
+async def handle_file_read(request):
+    """GET /api/file?path=... — 读取单个文件内容。"""
+    import os as _os
+    from pathlib import Path as _Path
+
+    file_path = request.query_params.get("path", "")
+    if not file_path:
+        return JSONResponse({"ok": False, "error": "需要 path 参数"}, status_code=400)
+
+    root = _os.getcwd()
+    target = (_Path(root) / file_path).resolve()
+    root_resolved = _Path(root).resolve()
+
+    # 安全检查
+    if not str(target).lower().startswith(str(root_resolved).lower()):
+        return JSONResponse({"ok": False, "error": "路径超出项目目录"}, status_code=403)
+
+    if not target.is_file():
+        return JSONResponse({"ok": False, "error": "文件不存在"}, status_code=404)
+
+    # 限制文件大小（5MB）
+    max_size = 5 * 1024 * 1024
+    if target.stat().st_size > max_size:
+        return JSONResponse({"ok": False, "error": "文件过大，无法预览"}, status_code=413)
+
+    try:
+        content = target.read_text(encoding="utf-8", errors="replace")
+        return JSONResponse({
+            "ok": True,
+            "path": file_path,
+            "content": content,
+            "size": target.stat().st_size,
+        })
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+# ================================================================
 #  OpenAPI Specification
 # ================================================================
 

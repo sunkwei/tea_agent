@@ -88,6 +88,23 @@ body {
 .btn-p.warning:hover { background: #b8860b; color: #fff; }
 .btn-sm { padding: 4px 8px; font-size: 11px; }
 .sb-acts .btn-p { width: 100%; }
+/* ── File Tree Panel ── */
+.sb-toggle { font-size: 14px; margin-left: auto; padding: 4px 8px; background: none; border: none; cursor: pointer; border-radius: var(--radius-sm); color: var(--text-dim); }
+.sb-toggle:hover { background: var(--surface2); color: var(--text); }
+.file-tree-panel { border-bottom: 1px solid var(--border); max-height: 40vh; display: flex; flex-direction: column; flex-shrink: 0; }
+.ft-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; font-size: 12px; color: var(--text-dim); border-bottom: 1px solid var(--border2); background: var(--surface2); }
+.ft-refresh { font-size: 12px; padding: 2px 6px; }
+.file-tree-content { overflow-y: auto; flex: 1; padding: 2px 0; font-size: 12px; font-family: var(--font-mono); }
+.ft-item { display: flex; align-items: center; gap: 4px; padding: 2px 8px 2px 12px; cursor: pointer; color: var(--text-dim); white-space: nowrap; }
+.ft-item:hover { background: var(--surface2); color: var(--text); }
+.ft-item.ft-dir { color: var(--primary); }
+.ft-item.ft-file { color: var(--text-dim); }
+.ft-item .ft-icon { flex-shrink: 0; width: 16px; text-align: center; }
+.ft-item .ft-name { overflow: hidden; text-overflow: ellipsis; }
+.ft-item .ft-size { margin-left: auto; font-size: 10px; color: var(--text-muted); padding-left: 8px; }
+.ft-item.ft-loaded > .ft-children { display: block; }
+.ft-children { padding-left: 16px; }
+.ft-loading { padding: 8px 16px; color: var(--text-muted); font-size: 11px; text-align: center; }
 .topic-list { flex: 1; overflow-y: auto; padding: 6px 8px; }
 .topic-item {
   display: flex; align-items: center; gap: 6px;
@@ -1045,6 +1062,58 @@ body {
   border-top: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--surface);
+  transition: background var(--transition), color var(--transition);
+}
+#usage-bar .usage-tokens {
+  color: var(--yellow);
+  font-weight: 600;
+}
+#usage-bar .usage-detail {
+  color: var(--text-muted);
+}
+#usage-bar .usage-cost {
+  color: var(--green);
+  font-weight: 600;
+}
+#usage-bar.usage-high .usage-cost {
+  color: var(--red);
+}
+#usage-bar:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+/* ── File View Panel ── */
+.file-view {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 8px 12px;
+  background: var(--surface);
+  overflow: hidden;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+.file-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.file-view-content {
+  padding: 12px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 /* ── Markdown: Code Blocks ── */

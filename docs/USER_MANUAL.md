@@ -59,7 +59,6 @@ Python 3.11+ / Starlette + Uvicorn / OpenAI SDK / SQLite / Tkinter (可选)
 │              │ tea-agent-acp    │ ACP 协议服务器              │
 ├──────────────┼──────────────────┼────────────────────────────┤
 │ -m 模块      │ python -m tea_agent.server    │ API 服务       │
-│              │ python -m tea_agent.gui2      │ Web 桌面(推荐) │
 │              │ python -m tea_agent.protocol  │ ACP 协议       │
 │              │ python -m tea_agent_mini      │ 迷你版         │
 └──────────────┴──────────────────┴────────────────────────────┘

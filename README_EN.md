@@ -741,10 +741,6 @@ Dispatcher.dispatch(goal)
 ```
 tea_agent/
 ├── gui.py                 # GUI Desktop (Tkinter)
-├── gui2/                  # Web V2 (SPA + Bottle)
-│   ├── server.py          # Bottle static server
-│   └── frontend/          # HTML/CSS/JS SPA
-│       └── index.html     # All UI logic (no framework)
 ├── server/                # REST API Server (OpenAI compat)
 │   ├── server.py          # Starlette routes + SSE
 │   └── __main__.py        # python -m tea_agent.server

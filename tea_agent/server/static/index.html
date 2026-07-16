@@ -1861,7 +1861,8 @@ window.sendMessage = async function() {
               if (data.topic_id) {
                 currentTopicId = data.topic_id;
                 const titleEl = $('tt');
-                if (titleEl && titleEl.textContent === '☕ 欢迎使用 Tea Agent') {
+                // 初始欢迎页或点击"新对话"后，标题都需要更新
+                if (titleEl && (titleEl.textContent === '☕ 欢迎使用 Tea Agent' || titleEl.textContent === '新对话')) {
                   titleEl.textContent = 'Web Session';
                 }
               }
@@ -2031,7 +2032,14 @@ async function refreshTopics() {
     const d = await r.json();
     const topics = d.sessions || d.data;
     if (!topics) return;
-    $('topic-list').innerHTML = topics.map(function(t) {
+    let html = '';
+    // 当没有选中任何主题时（新对话），在列表顶部插入高亮的"新对话"虚拟条目
+    if (!currentTopicId) {
+      html += '<div class="topic-item active" data-topic-id="">'
+        + '<span class="topic-item-title">🆕 新对话</span>'
+        + '</div>';
+    }
+    html += topics.map(function(t) {
       const title = t.title || t.id.slice(0, 8);
       const cls = 'topic-item' + (t.id === currentTopicId ? ' active' : '');
       return '<div class="' + cls + '" onclick="openTopic(\'' + t.id + '\',\'' + esc(title) + '\')">'
@@ -2044,6 +2052,7 @@ async function refreshTopics() {
         + '</div></span>'
         + '</div>';
     }).join('');
+    $('topic-list').innerHTML = html;
   } catch(e) {}
 }
 

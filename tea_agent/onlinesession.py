@@ -313,14 +313,11 @@ logger = logging.getLogger("session.tool")
 
 # ── 模块级纯函数（原 session_tools_builder）──
 
-ESSENTIAL_TOOLS = {"toolkit_memory", "toolkit_kb"}
+# ESSENTIAL_TOOLS 已废弃，保留仅为兼容性
 
 
 def filter_tools(tools: list, tool_filter: list = None) -> list:
-    """按白名单筛选工具列表（保留 ESSENTIAL_TOOLS）。"""
-    if tool_filter:
-        allowed = set(tool_filter) | ESSENTIAL_TOOLS
-        return [t for t in tools if t["function"]["name"] in allowed]
+    """工具过滤已禁用，返回全部工具。自由奔放！"""
     return tools
 
 
@@ -761,10 +758,99 @@ class OnlineToolSession(BaseChatSession):
             supports_vision: 是否支持视觉输入
             supports_reasoning: 是否支持 reasoning
             disable_summary: 禁用历史压缩和摘要
+            no_stream_chunk: 是否禁用流式输出
         """
+        # 步骤1: 准备系统提示词
         sp = system_prompt or self._COMPACT_SYSTEM_PROMPT
 
-        # ── 1. 创建共享上下文 ──
+        # 步骤2: 创建HTTP客户端和API客户端
+        _http_client, main_client, cheap_client = self._create_api_clients(
+            api_key, api_url, cheap_api_key, cheap_api_url, cheap_model
+        )
+
+        # 步骤3: 创建共享上下文
+        self.context = self._create_session_context(
+            toolkit=toolkit,
+            model=model,
+            enable_thinking=enable_thinking,
+            main_client=main_client,
+            cheap_client=cheap_client,
+            cheap_model=cheap_model,
+            storage=storage,
+            keep_turns=keep_turns,
+            max_tool_output=max_tool_output,
+            max_assistant_content=max_assistant_content,
+            max_context_tokens=max_context_tokens,
+            memory_extraction_threshold=memory_extraction_threshold,
+            memory_dedup_threshold=memory_dedup_threshold,
+            supports_vision=supports_vision,
+            supports_reasoning=supports_reasoning,
+            disable_summary=disable_summary,
+            no_stream_chunk=no_stream_chunk,
+            extra_iterations_on_continue=extra_iterations_on_continue,
+        )
+
+        # 步骤4: 调用基类初始化
+        BaseChatSession.__init__(self, model, max_history, sp)
+
+        logger.info(
+            f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}"
+        )
+
+        # 步骤5: 创建并初始化组件
+        self._initialize_components()
+
+        # 步骤6: 设置兼容属性
+        self._setup_compatible_attributes(
+            max_iterations=max_iterations,
+            storage=storage,
+            cheap_client=cheap_client,
+            cheap_model=cheap_model,
+            supports_vision=supports_vision,
+            supports_reasoning=supports_reasoning,
+            disable_summary=disable_summary,
+        )
+
+        # 步骤7: 初始化续跑控制
+        self._init_continue_control()
+
+        # 步骤8: 管理HTTP客户端
+        self._manage_http_clients(_http_client, cheap_client)
+
+        # 步骤9: 构建工具定义
+        self._build_tools()
+
+        # 步骤10: 初始化反思和提示词管理器
+        self._init_reflection_and_prompt_manager(
+            storage=storage,
+            cheap_client=cheap_client,
+            cheap_model=cheap_model,
+            system_prompt=system_prompt,
+        )
+
+        # 步骤11: 初始化Pipeline
+        self._init_pipeline()
+
+    def _create_api_clients(
+        self,
+        api_key: str,
+        api_url: str,
+        cheap_api_key: str,
+        cheap_api_url: str,
+        cheap_model: str,
+    ) -> tuple:
+        """创建API客户端。
+
+        Args:
+            api_key: 主API密钥
+            api_url: 主API地址
+            cheap_api_key: 便宜模型API密钥
+            cheap_api_url: 便宜模型API地址
+            cheap_model: 便宜模型名称
+
+        Returns:
+            (http_client, main_client, cheap_client) 元组
+        """
         import httpx
 
         _http_client = httpx.Client(proxy=None)
@@ -780,7 +866,55 @@ class OnlineToolSession(BaseChatSession):
                 http_client=httpx.Client(proxy=None),
             )
 
-        self.context = SessionContext(
+        return _http_client, main_client, cheap_client
+
+    def _create_session_context(
+        self,
+        toolkit,
+        model: str,
+        enable_thinking: bool,
+        main_client: OpenAI,
+        cheap_client: OpenAI | None,
+        cheap_model: str,
+        storage,
+        keep_turns: int,
+        max_tool_output: int,
+        max_assistant_content: int,
+        max_context_tokens: int,
+        memory_extraction_threshold: int,
+        memory_dedup_threshold: float,
+        supports_vision: bool,
+        supports_reasoning: bool,
+        disable_summary: bool,
+        no_stream_chunk: bool,
+        extra_iterations_on_continue: int,
+    ) -> SessionContext:
+        """创建会话上下文。
+
+        Args:
+            toolkit: 工具库实例
+            model: 模型名称
+            enable_thinking: 是否启用思考
+            main_client: 主API客户端
+            cheap_client: 便宜模型客户端
+            cheap_model: 便宜模型名称
+            storage: 存储实例
+            keep_turns: 保留轮数
+            max_tool_output: 工具输出最大长度
+            max_assistant_content: 助手内容最大长度
+            max_context_tokens: 最大上下文token数
+            memory_extraction_threshold: 记忆提取阈值
+            memory_dedup_threshold: 记忆去重阈值
+            supports_vision: 是否支持视觉
+            supports_reasoning: 是否支持推理
+            disable_summary: 是否禁用摘要
+            no_stream_chunk: 是否禁用流式输出
+            extra_iterations_on_continue: 续命轮数
+
+        Returns:
+            SessionContext实例
+        """
+        return SessionContext(
             messages=[],
             model=model,
             enable_thinking=enable_thinking,
@@ -802,14 +936,8 @@ class OnlineToolSession(BaseChatSession):
             extra_iterations_on_continue=extra_iterations_on_continue,
         )
 
-        # ── 2. 调用基类初始化 ──
-        BaseChatSession.__init__(self, model, max_history, sp)
-
-        logger.info(
-            f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}"
-        )
-
-        # ── 3. 创建并初始化组件 ──
+    def _initialize_components(self) -> None:
+        """初始化会话组件。"""
         self.api = APIComponent(self.context)
         self.tools_comp = ToolComponent(self.context)
         self.memory_comp = MemoryComponent(self.context)
@@ -818,7 +946,27 @@ class OnlineToolSession(BaseChatSession):
         for comp in [self.api, self.tools_comp, self.memory_comp, self.summarizer_comp]:
             comp.initialize()
 
-        # ── 兼容属性 ──
+    def _setup_compatible_attributes(
+        self,
+        max_iterations: int,
+        storage,
+        cheap_client: OpenAI | None,
+        cheap_model: str,
+        supports_vision: bool,
+        supports_reasoning: bool,
+        disable_summary: bool,
+    ) -> None:
+        """设置兼容属性。
+
+        Args:
+            max_iterations: 最大迭代次数
+            storage: 存储实例
+            cheap_client: 便宜模型客户端
+            cheap_model: 便宜模型名称
+            supports_vision: 是否支持视觉
+            supports_reasoning: 是否支持推理
+            disable_summary: 是否禁用摘要
+        """
         self.max_iterations = max_iterations
         self.storage = storage
         self._cheap_client = cheap_client
@@ -828,39 +976,65 @@ class OnlineToolSession(BaseChatSession):
         self._supports_reasoning = supports_reasoning
         self._disable_summary = disable_summary
 
-        # ── 续跑控制 ──
+    def _init_continue_control(self) -> None:
+        """初始化续跑控制。"""
         import threading
 
         self._extra_iterations = 0
         self._continue_after_max = False
         self._max_iter_wait = threading.Event()
 
-        # ── HTTP客户端管理 ──
+    def _manage_http_clients(
+        self,
+        _http_client,
+        cheap_client: OpenAI | None
+    ) -> None:
+        """管理HTTP客户端。
+
+        Args:
+            _http_client: 主HTTP客户端
+            cheap_client: 便宜模型客户端
+        """
         self._http_clients = []
         if _http_client:
             self._http_clients.append(_http_client)
         if cheap_client and hasattr(cheap_client, "_client") and cheap_client._client:
             self._http_clients.append(cheap_client._client)
 
-        # ── 工具定义 ──
+    def _build_tools(self) -> None:
+        """构建工具定义。"""
         self.tools: list[dict] = []
         self.tools = self.tools_comp.build_tools()
 
         # 初始化 Memory 管理器
         self.memory_comp.initialize()
 
-        # ── 反思和提示词管理器 ──
-        if self.storage is not None:
+    def _init_reflection_and_prompt_manager(
+        self,
+        storage,
+        cheap_client: OpenAI | None,
+        cheap_model: str,
+        system_prompt: str,
+    ) -> None:
+        """初始化反思和提示词管理器。
+
+        Args:
+            storage: 存储实例
+            cheap_client: 便宜模型客户端
+            cheap_model: 便宜模型名称
+            system_prompt: 系统提示词
+        """
+        if storage is not None:
             from tea_agent.prompt_manager import SystemPromptManager
             from tea_agent.reflection import ReflectionManager
 
             self.reflection_manager = ReflectionManager(
-                storage=self.storage,
+                storage=storage,
                 cheap_client=cheap_client,
                 cheap_model=cheap_model,
             )
             self.prompt_manager = SystemPromptManager(
-                storage=self.storage,
+                storage=storage,
                 cheap_client=cheap_client,
                 cheap_model=cheap_model,
             )
@@ -877,7 +1051,8 @@ class OnlineToolSession(BaseChatSession):
                 "Storage not set, skipping ReflectionManager/PromptManager initialization"
             )
 
-        # ── Pipeline ──
+    def _init_pipeline(self) -> None:
+        """初始化Pipeline。"""
         self.pipeline = SessionPipeline()
         self.context.pipeline = self.pipeline
         self._setup_default_pipeline()
@@ -1353,4 +1528,4 @@ class OnlineToolSession(BaseChatSession):
             logger.exception("operation failed")
 
 
-from tea_agent.session_memory_component import MemoryComponent
+from tea_agent.session_memory_component import MemoryComponent  # noqa: E402

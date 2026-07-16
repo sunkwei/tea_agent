@@ -48,7 +48,7 @@ def main():
     print("创建实例 B ...")
     agent_b = TeaAgent(config_path=config_path, use_tools=False, enable_thinking=False)
 
-    TOTAL_ROUNDS = 10
+    TOTAL_ROUNDS = 10  # noqa: N806
 
     # ── 首轮：A 发起 ──
     seed = "AI 最终会取代程序员的工作?"

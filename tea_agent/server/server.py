@@ -28,17 +28,17 @@ logger = logging.getLogger("api_server")
 
 try:
     from starlette.applications import Starlette
-    from starlette.requests import Request
-    from starlette.responses import JSONResponse, StreamingResponse
+    from starlette.requests import Request  # noqa: F401
+    from starlette.responses import JSONResponse, StreamingResponse  # noqa: F401
     from starlette.routing import Mount, Route
     from starlette.staticfiles import StaticFiles
 except ImportError:
     raise ImportError("pip install starlette uvicorn")
 
-import contextlib
+import contextlib  # noqa: E402
 
-from tea_agent.agent import Agent
-from tea_agent.store import Storage, get_storage
+from tea_agent.agent import Agent  # noqa: E402
+from tea_agent.store import Storage, get_storage  # noqa: E402
 
 __version__ = "0.2.0"
 
@@ -419,7 +419,7 @@ class APIServer:
         now = int(time.time())
         init_data = {"id": cid, "object": "chat.completion.chunk", "created": now, "model": model,
                      "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]}
-        NL2 = "\n\n"
+        NL2 = "\n\n"  # noqa: N806
         yield "data: " + json.dumps(init_data) + NL2
         while True:
             event = await queue.get()
@@ -1182,7 +1182,9 @@ def restart_server() -> dict:
     调用时机：POST /api/restart 时由 route handler 调用。
     返回：{ok: bool, message: str}
     """
-    import subprocess, sys, time
+    import subprocess
+    import sys
+    import time
     global _uvicorn_server, _server_args
 
     try:
@@ -1222,6 +1224,12 @@ def restart_server() -> dict:
 def create_app(api_key: str | None = None,
                config_path: str | None = None):
     """Create the Starlette application for the unified server."""
+    # Suppress noisy loggers: only show WARNING+ on terminal for runtime logs
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("api_server").setLevel(logging.INFO)
+
     # Import route handlers here to avoid circular imports
     from .route_handlers import (
         handle_chat_abort,
@@ -1241,6 +1249,7 @@ def create_app(api_key: str | None = None,
         handle_docs,
         handle_export_pdf,
         handle_get_config,
+        handle_list_dags,
         handle_get_session,
         handle_get_session_messages,
         handle_health,
@@ -1250,6 +1259,7 @@ def create_app(api_key: str | None = None,
         handle_list_tasks,
         handle_list_tools,
         handle_openapi,
+        handle_restart,
         handle_run_tool,
         handle_screenshot_full,
         handle_screenshot_interactive,
@@ -1270,12 +1280,11 @@ def create_app(api_key: str | None = None,
         handle_web_tools,
         handle_web_topic_conversations,
         handle_web_topic_info,
-        handle_web_topic_todos,
-        handle_web_topic_todo_update,
         handle_web_topic_plans,
+        handle_web_topic_todo_update,
+        handle_web_topic_todos,
         handle_web_update_config,
         handle_web_upload_config,
-        handle_restart,
     )
 
     global _server_instance
@@ -1330,6 +1339,7 @@ def create_app(api_key: str | None = None,
         Route("/v1/search", endpoint=handle_search),
         Route("/v1/export/pdf/{topic_id:str}", endpoint=handle_export_pdf),
         Route("/v1/upload", endpoint=handle_upload, methods=["POST"]),
+        Route("/api/dags", endpoint=handle_list_dags),
         Route("/dag/{viz_id:str}", endpoint=handle_dag_viz),
         Route("/dag/{viz_id:str}/events", endpoint=handle_dag_sse),
         Route("/dag/{viz_id:str}/status", endpoint=handle_dag_status),
@@ -1403,25 +1413,41 @@ def run_server(host: str = "127.0.0.1", port: int = 8080,
     except ImportError:
         raise ImportError("pip install starlette uvicorn")
 
-    # Suppress noisy loggers: only show WARNING+ on terminal for runtime logs
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
-    logging.getLogger("uvicorn").setLevel(logging.WARNING)
-    logging.getLogger("api_server").setLevel(logging.INFO)
-
     # 保存启动参数，供 restart 使用
     global _server_args
     _server_args = list(sys.argv)
 
+    # 解析 config_path：显示实际使用的配置文件路径
+    actual_config = config_path or os.environ.get("TEA_CONFIG", "")
+    if not actual_config:
+        default_cfg = os.path.join(os.path.expanduser("~"), ".tea_agent", "config.yaml")
+        actual_config = default_cfg if os.path.isfile(default_cfg) else "(built-in default)"
+
     app = create_app(api_key=api_key, config_path=config_path)
-    print(f"\n  Tea Agent Server v{__version__}")
-    if api_key:
-        logger.info("API Key auth enabled")
-    logger.info(f"API Server starting: http://{host}:{port}")
-    logger.info(f"API Docs: http://{host}:{port}/docs")
+
+    # ── 启动横幅：打印所有关键参数 ──
+    print("=" * 56)
+    print(f"  Tea Agent Server v{__version__}")
+    print(f"  Listening on:  http://{host}:{port}")
+    print(f"  API Docs:      http://{host}:{port}/docs")
+    print(f"  Config file:   {actual_config}")
+    print(f"  API Key:       {'ENABLED  (auth required)' if api_key else 'DISABLED (no auth)'}")
+    # 读取配置中的模型信息
+    try:
+        cfg = _load_config_cached(config_path)
+        m = cfg.main_model
+        print(f"  Main Model:    {m.model_name} @ {m.api_url}")
+        c = cfg.cheap_model
+        if c and c.model_name:
+            print(f"  Cheap Model:   {c.model_name} @ {c.api_url}")
+        print(f"  Max Iter:      {cfg.max_iterations}  |  Keep Turns: {cfg.keep_turns}")
+        print(f"  Max History:   {cfg.max_history}  |  Max Tokens: {m.max_tokens}")
+    except Exception:
+        pass  # 配置读取失败不阻塞启动
+    print("=" * 56)
 
     # 使用 uvicorn.Server 实例（而非 uvicorn.run），以便 restart 时触发 graceful shutdown
-    config = uvicorn.Config(app, host=host, port=port, log_level="info")
+    config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     global _uvicorn_server
     _uvicorn_server = uvicorn.Server(config)
     _uvicorn_server.run()

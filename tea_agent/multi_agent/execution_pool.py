@@ -10,37 +10,36 @@ ExecutionPool — 高性能双通道并行执行池。
 
 使用方法:
     pool = ExecutionPool(max_workers=8)
-    
+
     # 提交同步任务
     future = pool.submit(func, arg1, arg2=value)
     result = future.result(timeout=30)
-    
+
     # 提交异步任务
     future = pool.submit_async(async_func, arg1)
     result = future.result(timeout=30)
-    
+
     # 批量
     results = pool.map(func, [item1, item2])
-    
+
     # 检查状态
     stats = pool.status()
-    
+
     # 优雅关闭
     pool.shutdown()
 """
 
-import abc
 import asyncio
 import logging
 import queue
 import threading
 import time
 import uuid
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed, wait, ALL_COMPLETED
+from collections.abc import Callable, Coroutine
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Coroutine
 
 logger = logging.getLogger(__name__)
 

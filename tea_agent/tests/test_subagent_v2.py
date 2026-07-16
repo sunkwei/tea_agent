@@ -12,10 +12,9 @@ Covers:
 """
 
 import json
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ── Fixtures ──
 
@@ -23,9 +22,11 @@ import pytest
 def clean_registry():
     """Clean registry before and after each test."""
     from tea_agent.toolkit.toolkit_subagent import (
-        _subagent_registry, _registry_lock,
-        _pending_notifications, _notification_lock,
+        _notification_lock,
+        _pending_notifications,
         _persist_loaded,
+        _registry_lock,
+        _subagent_registry,
     )
     with _registry_lock:
         _subagent_registry.clear()
@@ -114,18 +115,14 @@ class TestNotifications:
 
     def test_add_notification(self):
         """Adding a notification should store it."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            _add_notification, _pending_notifications
-        )
+        from tea_agent.toolkit.toolkit_subagent import _add_notification, _pending_notifications
         _add_notification('sub-abc', 'parent-123')
         assert 'parent-123' in _pending_notifications
         assert 'sub-abc' in _pending_notifications['parent-123']
 
     def test_check_notifications(self):
         """Check notifications should return them."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            _add_notification, check_notifications
-        )
+        from tea_agent.toolkit.toolkit_subagent import _add_notification, check_notifications
         _add_notification('sub-xyz', 'session-1')
         result = check_notifications(session_id='session-1')
         assert result['count'] == 1
@@ -133,9 +130,7 @@ class TestNotifications:
 
     def test_check_consumes_notifications(self):
         """check_notifications should consume the notification."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            _add_notification, check_notifications
-        )
+        from tea_agent.toolkit.toolkit_subagent import _add_notification, check_notifications
         _add_notification('sub-m', 'sess')
         check_notifications(session_id='sess')
         result = check_notifications(session_id='sess')
@@ -144,8 +139,10 @@ class TestNotifications:
     def test_notification_with_registry_data(self):
         """Notification should include data from registry."""
         from tea_agent.toolkit.toolkit_subagent import (
-            _add_notification, check_notifications,
-            _subagent_registry, _registry_lock,
+            _add_notification,
+            _registry_lock,
+            _subagent_registry,
+            check_notifications,
         )
         with _registry_lock:
             _subagent_registry['sub-info'] = {
@@ -161,9 +158,7 @@ class TestNotifications:
 
     def test_default_session_key(self):
         """Empty session_id should use default key."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            _add_notification, check_notifications
-        )
+        from tea_agent.toolkit.toolkit_subagent import _add_notification, check_notifications
         _add_notification('sub-d')
         result = check_notifications(session_id='')
         assert result['count'] == 1
@@ -179,9 +174,7 @@ class TestPersistence:
 
     def test_save_to_db(self, tmp_path):
         """Save should write to DB without error."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            _subagent_registry, _registry_lock, _save_to_db
-        )
+        from tea_agent.toolkit.toolkit_subagent import _registry_lock, _save_to_db, _subagent_registry
         with _registry_lock:
             _subagent_registry['sub-test'] = {
                 'agent_id': 'sub-test',
@@ -206,9 +199,7 @@ class TestPersistence:
 
     def test_load_from_db(self, tmp_path):
         """Load should restore registry from DB."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            _subagent_registry, _registry_lock, _load_from_db
-        )
+        from tea_agent.toolkit.toolkit_subagent import _load_from_db, _registry_lock, _subagent_registry
         # Simulate DB returning data
         mock_row = MagicMock()
         mock_row.__getitem__ = lambda self, k: json.dumps({
@@ -268,9 +259,7 @@ class TestRegistryManagement:
 
     def test_status_specific(self):
         """Query specific agent status."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            toolkit_subagent, _subagent_registry, _registry_lock
-        )
+        from tea_agent.toolkit.toolkit_subagent import _registry_lock, _subagent_registry, toolkit_subagent
         with _registry_lock:
             _subagent_registry['sub-status'] = {
                 'agent_id': 'sub-status',
@@ -289,9 +278,7 @@ class TestRegistryManagement:
 
     def test_cleanup_removes_completed(self):
         """Cleanup should remove completed agents."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            toolkit_subagent, _subagent_registry, _registry_lock
-        )
+        from tea_agent.toolkit.toolkit_subagent import _registry_lock, _subagent_registry, toolkit_subagent
         with _registry_lock:
             _subagent_registry['sub-old'] = {
                 'agent_id': 'sub-old', 'status': 'completed'
@@ -305,9 +292,7 @@ class TestRegistryManagement:
 
     def test_collect_completed(self):
         """Collect should return all completed agents."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            toolkit_subagent, _subagent_registry, _registry_lock
-        )
+        from tea_agent.toolkit.toolkit_subagent import _registry_lock, _subagent_registry, toolkit_subagent
         with _registry_lock:
             _subagent_registry['sub-done'] = {
                 'agent_id': 'sub-done', 'goal': 'done', 'status': 'completed',
@@ -335,9 +320,7 @@ class TestCancel:
 
     def test_cancel_pending(self):
         """Cancel a pending agent."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            toolkit_subagent, _subagent_registry, _registry_lock
-        )
+        from tea_agent.toolkit.toolkit_subagent import _registry_lock, _subagent_registry, toolkit_subagent
         with _registry_lock:
             _subagent_registry['sub-cancel'] = {
                 'agent_id': 'sub-cancel', 'status': 'pending'
@@ -353,9 +336,7 @@ class TestCancel:
 
     def test_cancel_already_done(self):
         """Cancel completed agent should not error."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            toolkit_subagent, _subagent_registry, _registry_lock
-        )
+        from tea_agent.toolkit.toolkit_subagent import _registry_lock, _subagent_registry, toolkit_subagent
         with _registry_lock:
             _subagent_registry['sub-done2'] = {
                 'agent_id': 'sub-done2', 'status': 'completed'
@@ -380,9 +361,7 @@ class TestSpawnWithPermissions:
 
     def test_spawn_with_allowed_tools(self):
         """Spawn with allowed_tools should store filter in registry."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            toolkit_subagent, _subagent_registry, _registry_lock
-        )
+        from tea_agent.toolkit.toolkit_subagent import _registry_lock, _subagent_registry, toolkit_subagent
         with patch('tea_agent.toolkit.toolkit_subagent._execute_subagent'):
             r = toolkit_subagent(
                 action='spawn',
@@ -397,9 +376,7 @@ class TestSpawnWithPermissions:
 
     def test_spawn_with_denied_tools(self):
         """Spawn with denied_tools should store filter in registry."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            toolkit_subagent, _subagent_registry, _registry_lock
-        )
+        from tea_agent.toolkit.toolkit_subagent import _registry_lock, _subagent_registry, toolkit_subagent
         with patch('tea_agent.toolkit.toolkit_subagent._execute_subagent'):
             r = toolkit_subagent(
                 action='spawn',
@@ -431,9 +408,7 @@ class TestSpawnWithAutoWake:
 
     def test_spawn_sets_parent_id_in_registry(self):
         """parent_session_id should be passed through."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            toolkit_subagent, _subagent_registry, _registry_lock
-        )
+        from tea_agent.toolkit.toolkit_subagent import toolkit_subagent
         with patch('tea_agent.toolkit.toolkit_subagent._execute_subagent'):
             r = toolkit_subagent(
                 action='spawn',
@@ -446,9 +421,7 @@ class TestSpawnWithAutoWake:
 
     def test_notification_after_completion(self):
         """Completed agent should trigger notification."""
-        from tea_agent.toolkit.toolkit_subagent import (
-            _add_notification, check_notifications
-        )
+        from tea_agent.toolkit.toolkit_subagent import _add_notification, check_notifications
         _add_notification('sub-complete', 'parent-wake')
         r = check_notifications(session_id='parent-wake')
         assert r['count'] == 1

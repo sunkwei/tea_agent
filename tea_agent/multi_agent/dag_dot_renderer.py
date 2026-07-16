@@ -19,7 +19,6 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
-import tempfile
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -107,13 +106,13 @@ def dag_to_dot(
     lines.append("digraph G {")
     lines.append(f'  rankdir={orientation};')
     lines.append(f'  label="{title}";')
-    lines.append(f'  labelloc=t;')
-    lines.append(f'  fontsize=18;')
-    lines.append(f'  fontname="sans-serif";')
-    lines.append(f'  fontcolor="#c9d1d9";')
-    lines.append(f'  bgcolor="#0d1117";')
-    lines.append(f'  node [fontname="sans-serif" fontsize=11 shape=box style=rounded];')
-    lines.append(f'  edge [color="#30363d" fontcolor="#8b949e" fontsize=9];')
+    lines.append('  labelloc=t;')
+    lines.append('  fontsize=18;')
+    lines.append('  fontname="sans-serif";')
+    lines.append('  fontcolor="#c9d1d9";')
+    lines.append('  bgcolor="#0d1117";')
+    lines.append('  node [fontname="sans-serif" fontsize=11 shape=box style=rounded];')
+    lines.append('  edge [color="#30363d" fontcolor="#8b949e" fontsize=9];')
     lines.append("")
 
     # 节点
@@ -267,3 +266,112 @@ def render_viz_snapshot(viz: Any) -> dict:
         result["png"] = render_dot_to_png(dot)
 
     return result
+
+
+def render_dag_dict_to_svg(dag_data: dict) -> str | None:
+    """
+    从简单的 {nodes, edges, title} 字典渲染 SVG。
+
+    与 server 路由和 SimpleDagRegistry 配合使用，不依赖 WorkflowVisualizer。
+
+    Args:
+        dag_data: {
+            "title": str,
+            "nodes": [{"id": str, "label": str, "state": str, "duration": float, "error": str}],
+            "edges": [{"from": str, "to": str}],
+        }
+
+    Returns:
+        SVG 字符串，或 None
+    """
+    if not check_dot_available():
+        return None
+
+    # 构建临时 WorkflowDAG
+    from .workflow_engine import NodeType, WorkflowDAG, WorkflowNode
+
+    dag = WorkflowDAG()
+    for n in dag_data.get("nodes", []):
+        node = WorkflowNode(
+            node_id=n["id"],
+            type=NodeType(n.get("type", "task")),
+            label=n.get("label", n["id"]),
+        )
+        dag.add_node(node)
+    for e in dag_data.get("edges", []):
+        dag.add_edge(e["from"], e["to"], condition_key=e.get("condition_key"))
+
+    # 构建 node_states 伪对象
+    from dataclasses import dataclass
+    @dataclass
+    class _NR:
+        state: _NS
+        duration: float = 0
+        error: str | None = None
+    @dataclass
+    class _NS:
+        value: str = "pending"
+
+    node_states = {}
+    for n in dag_data.get("nodes", []):
+        s = n.get("state", "pending")
+        node_states[n["id"]] = _NR(
+            state=_NS(value=s),
+            duration=n.get("duration", 0),
+            error=n.get("error"),
+        )
+
+    title = dag_data.get("title", "Workflow DAG")
+    dot = dag_to_dot(dag, node_states, title)
+    return render_dot_to_svg(dot)
+
+
+def render_dag_dict_to_png(dag_data: dict) -> bytes | None:
+    """
+    从简单的 {nodes, edges, title} 字典渲染 PNG。
+
+    Args:
+        dag_data: 同 render_dag_dict_to_svg
+
+    Returns:
+        PNG 字节，或 None
+    """
+    if not check_dot_available():
+        return None
+
+    from .workflow_engine import NodeType, WorkflowDAG, WorkflowNode
+    from dataclasses import dataclass
+
+    dag = WorkflowDAG()
+    for n in dag_data.get("nodes", []):
+        node = WorkflowNode(
+            node_id=n["id"],
+            type=NodeType(n.get("type", "task")),
+            label=n.get("label", n["id"]),
+        )
+        dag.add_node(node)
+    for e in dag_data.get("edges", []):
+        dag.add_edge(e["from"], e["to"], condition_key=e.get("condition_key"))
+
+    @dataclass
+    class _NR:
+        state: _NS
+        duration: float = 0
+        error: str | None = None
+    @dataclass
+    class _NS:
+        value: str = "pending"
+
+    node_states = {}
+    for n in dag_data.get("nodes", []):
+        s = n.get("state", "pending")
+        node_states[n["id"]] = _NR(
+            state=_NS(value=s),
+            duration=n.get("duration", 0),
+            error=n.get("error"),
+        )
+
+    title = dag_data.get("title", "Workflow DAG")
+    dot = dag_to_dot(dag, node_states, title)
+    return render_dot_to_png(dot)
+

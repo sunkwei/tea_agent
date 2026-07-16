@@ -36,10 +36,9 @@ TraceEngine — Agent 执行轨迹追踪（Span-based Tracing）。
     print(json.dumps(trace, indent=2, ensure_ascii=False))
 """
 
-import json
 import logging
-import threading
 import sqlite3
+import threading
 import time
 import uuid
 from datetime import datetime
@@ -75,7 +74,7 @@ class TraceSpan:
         self.result: str | None = None
         self.error: str | None = None
         self.tool_calls = 0
-        self.children: list['TraceSpan'] = []
+        self.children: list[TraceSpan] = []
 
     def end(self, status: str = 'completed', result: str | None = None,
             error: str | None = None, tool_calls: int = 0):

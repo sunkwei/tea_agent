@@ -325,133 +325,242 @@ def load_config(config_path: str | None = None) -> AgentConfig:
         AgentConfig 实例
     """
     global _last_config_path, _config_cache
+
+    # 步骤1: 解析配置文件路径
+    yaml_path = resolve_config_path(config_path)
+
+    # 步骤2: 创建默认配置
+    cfg = AgentConfig()
+
+    # 步骤3: 如果找到配置文件，加载并解析
+    if HAS_YAML and yaml_path and os.path.isfile(yaml_path):
+        try:
+            data = _load_yaml_data(yaml_path)
+            if data:
+                # 解析模型配置
+                _parse_model_configs(cfg, data)
+
+                # 解析嵌入模型配置
+                _parse_embedding_config(cfg, data)
+
+                # 解析模式参数
+                _parse_mode_params(cfg, data)
+
+                # 解析路径配置
+                _parse_paths_config(cfg, data, yaml_path)
+
+                # 解析会话参数
+                _parse_session_params(cfg, data)
+
+                # 解析Token优化参数
+                _parse_token_params(cfg, data)
+
+                # 解析交互控制参数
+                _parse_control_params(cfg, data)
+        except Exception:
+            pass  # 加载失败时使用默认空配置
+
+    # 步骤4: 更新全局缓存
+    _update_config_cache(cfg, yaml_path)
+
+    return cfg
+
+
+def resolve_config_path(config_path: str | None = None) -> str | None:
+    """解析配置文件路径（公共函数，供 agent/server 复用）。
+
+    优先级: config_path > _last_config_path > ~/.tea_agent/config.yaml > 内置默认
+
+    Args:
+        config_path: 指定的配置文件路径
+
+    Returns:
+        实际使用的配置文件路径，找不到返回 None
+    """
+    global _last_config_path
+
     if config_path is None:
         config_path = _last_config_path
     else:
         _last_config_path = config_path
 
-    cfg = AgentConfig()
-    yaml_path: str | None = None
     if config_path:
-        yaml_path = config_path
-    else:
-        # 优先级1: $HOME/.tea_agent/config.yaml
-        default_path = str(Path.home() / ".tea_agent" / "config.yaml")
-        if os.path.isfile(default_path):
-            yaml_path = default_path
-        else:
-            # 优先级2: tea_agent/config.yaml (相对于本文件所在目录)
-            fallback_path = str(Path(__file__).parent / "config.yaml")
-            if os.path.isfile(fallback_path):
-                yaml_path = fallback_path
+        return config_path
 
-    if HAS_YAML and yaml_path and os.path.isfile(yaml_path):
-        try:
-            with open(yaml_path, encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
+    # 优先级1: $HOME/.tea_agent/config.yaml
+    default_path = str(Path.home() / ".tea_agent" / "config.yaml")
+    if os.path.isfile(default_path):
+        return default_path
 
-            # 加载模型配置
-            for m_type in ["main_model", "cheap_model"]:
-                m_data = data.get(m_type, {})
-                if isinstance(m_data, dict):
-                    target = (
-                        cfg.main_model if m_type == "main_model" else cfg.cheap_model
-                    )
-                    target.api_key = m_data.get("api_key", "")
-                    target.api_url = m_data.get("api_url", "")
-                    target.model_name = m_data.get("model_name", "")
-                    target.options = m_data.get("options", {})
-                    target.temperature = float(
-                        m_data.get("temperature", target.temperature)
-                    )
-                    target.max_tokens = int(m_data.get("max_tokens", target.max_tokens))
-                    target.top_p = float(m_data.get("top_p", target.top_p))
+    # 优先级2: tea_agent/config.yaml (相对于本文件所在目录)
+    fallback_path = str(Path(__file__).parent / "config.yaml")
+    if os.path.isfile(fallback_path):
+        return fallback_path
 
-            # 加载 Embedding 配置
-            emb_data = data.get("embedding_model", {})
-            if isinstance(emb_data, dict):
-                cfg.embedding.api_url = str(
-                    emb_data.get("api_url", cfg.embedding.api_url)
-                )
-                cfg.embedding.model_name = str(
-                    emb_data.get("model_name", cfg.embedding.model_name)
-                )
-                cfg.embedding.api_key = str(
-                    emb_data.get("api_key", cfg.embedding.api_key)
-                )
-                cfg.embedding.dimension = int(
-                    emb_data.get("dimension", cfg.embedding.dimension)
-                )
+    return None
 
-            mp_data = data.get("mode_params", {})
-            if isinstance(mp_data, dict):
-                for mode_name in ("pragmatic", "creative", "mixed"):
-                    mode_cfg = mp_data.get(mode_name, {})
-                    if isinstance(mode_cfg, dict):
-                        cfg.mode_params[mode_name] = {
-                            k: v
-                            for k, v in mode_cfg.items()
-                            if k in ("temperature", "max_tokens", "top_p")
-                        }
 
-            # 加载路径配置
-            paths_data = data.get("paths", {})
-            if isinstance(paths_data, dict):
-                cfg.paths.data_dir = str(paths_data.get("data_dir", cfg.paths.data_dir))
-                cfg.paths.db_path = str(paths_data.get("db_path", cfg.paths.db_path))
-                cfg.paths.toolkit_dir = str(
-                    paths_data.get("toolkit_dir", cfg.paths.toolkit_dir)
-                )
-                cfg.paths.kb_dir = str(paths_data.get("kb_dir", cfg.paths.kb_dir))
-                cfg.paths.skills_dir = str(
-                    paths_data.get("skills_dir", cfg.paths.skills_dir)
-                )
+def _load_yaml_data(yaml_path: str) -> dict | None:
+    """加载YAML配置文件数据。
 
-            # 解析路径：相对于 config.yaml 所在目录
-            if yaml_path:
-                cfg.paths.resolve(os.path.dirname(os.path.abspath(yaml_path)))
+    Args:
+        yaml_path: YAML文件路径
 
-            # 加载会话参数
-            cfg.max_history = int(data.get("max_history", cfg.max_history))
-            cfg.max_iterations = int(data.get("max_iterations", cfg.max_iterations))
-            cfg.enable_thinking = bool(data.get("enable_thinking", cfg.enable_thinking))
+    Returns:
+        解析后的字典数据，如果加载失败返回None
+    """
+    if not HAS_YAML or not os.path.isfile(yaml_path):
+        return None
 
-            # 加载 Token 优化参数
-            cfg.keep_turns = int(data.get("keep_turns", cfg.keep_turns))
-            cfg.max_tool_output = int(data.get("max_tool_output", cfg.max_tool_output))
-            cfg.max_assistant_content = int(
-                data.get("max_assistant_content", cfg.max_assistant_content)
-            )
+    try:
+        with open(yaml_path, encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except Exception:
+        return None
 
-            # 加载交互与控制参数
-            cfg.extra_iterations_on_continue = int(
-                data.get(
-                    "extra_iterations_on_continue", cfg.extra_iterations_on_continue
-                )
-            )
-            cfg.memory_extraction_threshold = int(
-                data.get("memory_extraction_threshold", cfg.memory_extraction_threshold)
-            )
-            cfg.memory_dedup_threshold = float(
-                data.get("memory_dedup_threshold", cfg.memory_dedup_threshold)
-            )
-            cfg.chat_page_size = int(data.get("chat_page_size", cfg.chat_page_size))
-            cfg.history_l2_max = int(data.get("history_l2_max", cfg.history_l2_max))
-            cfg.history_l3_batch = int(
-                data.get("history_l3_batch", cfg.history_l3_batch)
-            )
-            cfg.font_size = int(data.get("font_size", cfg.font_size))
-            cfg.app_font_size = int(data.get("app_font_size", cfg.app_font_size))
-        except Exception:
-            pass  # 加载失败时使用默认空配置
 
-    # 更新全局缓存，确保 get_config() 返回最新配置
-    _config_cache = cfg
-    # 同步更新全局活跃配置路径（如果传入了具体路径）
+def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
+    """解析模型配置。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典
+    """
+    for m_type in ["main_model", "cheap_model"]:
+        m_data = data.get(m_type, {})
+        if not isinstance(m_data, dict):
+            continue
+
+        target = cfg.main_model if m_type == "main_model" else cfg.cheap_model
+        target.api_key = m_data.get("api_key", "")
+        target.api_url = m_data.get("api_url", "")
+        target.model_name = m_data.get("model_name", "")
+        target.options = m_data.get("options", {})
+        target.temperature = float(m_data.get("temperature", target.temperature))
+        target.max_tokens = int(m_data.get("max_tokens", target.max_tokens))
+        target.top_p = float(m_data.get("top_p", target.top_p))
+
+
+def _parse_embedding_config(cfg: AgentConfig, data: dict) -> None:
+    """解析嵌入模型配置。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典
+    """
+    emb_data = data.get("embedding_model", {})
+    if not isinstance(emb_data, dict):
+        return
+
+    cfg.embedding.api_url = str(emb_data.get("api_url", cfg.embedding.api_url))
+    cfg.embedding.model_name = str(emb_data.get("model_name", cfg.embedding.model_name))
+    cfg.embedding.api_key = str(emb_data.get("api_key", cfg.embedding.api_key))
+    cfg.embedding.dimension = int(emb_data.get("dimension", cfg.embedding.dimension))
+
+
+def _parse_mode_params(cfg: AgentConfig, data: dict) -> None:
+    """解析模式参数配置。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典
+    """
+    mp_data = data.get("mode_params", {})
+    if not isinstance(mp_data, dict):
+        return
+
+    for mode_name in ("pragmatic", "creative", "mixed"):
+        mode_cfg = mp_data.get(mode_name, {})
+        if isinstance(mode_cfg, dict):
+            cfg.mode_params[mode_name] = {
+                k: v
+                for k, v in mode_cfg.items()
+                if k in ("temperature", "max_tokens", "top_p")
+            }
+
+
+def _parse_paths_config(cfg: AgentConfig, data: dict, yaml_path: str) -> None:
+    """解析路径配置。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典
+        yaml_path: 配置文件路径，用于解析相对路径
+    """
+    paths_data = data.get("paths", {})
+    if isinstance(paths_data, dict):
+        cfg.paths.data_dir = str(paths_data.get("data_dir", cfg.paths.data_dir))
+        cfg.paths.db_path = str(paths_data.get("db_path", cfg.paths.db_path))
+        cfg.paths.toolkit_dir = str(paths_data.get("toolkit_dir", cfg.paths.toolkit_dir))
+        cfg.paths.kb_dir = str(paths_data.get("kb_dir", cfg.paths.kb_dir))
+        cfg.paths.skills_dir = str(paths_data.get("skills_dir", cfg.paths.skills_dir))
+
+    # 解析路径：相对于 config.yaml 所在目录
     if yaml_path:
-        global _active_config_path
+        cfg.paths.resolve(os.path.dirname(os.path.abspath(yaml_path)))
+
+
+def _parse_session_params(cfg: AgentConfig, data: dict) -> None:
+    """解析会话参数。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典
+    """
+    cfg.max_history = int(data.get("max_history", cfg.max_history))
+    cfg.max_iterations = int(data.get("max_iterations", cfg.max_iterations))
+    cfg.enable_thinking = bool(data.get("enable_thinking", cfg.enable_thinking))
+
+
+def _parse_token_params(cfg: AgentConfig, data: dict) -> None:
+    """解析Token优化参数。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典
+    """
+    cfg.keep_turns = int(data.get("keep_turns", cfg.keep_turns))
+    cfg.max_tool_output = int(data.get("max_tool_output", cfg.max_tool_output))
+    cfg.max_assistant_content = int(
+        data.get("max_assistant_content", cfg.max_assistant_content)
+    )
+
+
+def _parse_control_params(cfg: AgentConfig, data: dict) -> None:
+    """解析交互控制参数。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典
+    """
+    cfg.extra_iterations_on_continue = int(
+        data.get("extra_iterations_on_continue", cfg.extra_iterations_on_continue)
+    )
+    cfg.memory_extraction_threshold = int(
+        data.get("memory_extraction_threshold", cfg.memory_extraction_threshold)
+    )
+    cfg.memory_dedup_threshold = float(
+        data.get("memory_dedup_threshold", cfg.memory_dedup_threshold)
+    )
+    cfg.chat_page_size = int(data.get("chat_page_size", cfg.chat_page_size))
+    cfg.history_l2_max = int(data.get("history_l2_max", cfg.history_l2_max))
+    cfg.history_l3_batch = int(data.get("history_l3_batch", cfg.history_l3_batch))
+    cfg.font_size = int(data.get("font_size", cfg.font_size))
+    cfg.app_font_size = int(data.get("app_font_size", cfg.app_font_size))
+
+
+def _update_config_cache(cfg: AgentConfig, yaml_path: str | None) -> None:
+    """更新全局配置缓存。
+
+    Args:
+        cfg: AgentConfig实例
+        yaml_path: 配置文件路径
+    """
+    global _config_cache, _active_config_path
+
+    _config_cache = cfg
+    if yaml_path:
         _active_config_path = os.path.abspath(yaml_path)
-    return cfg
 
 
 def ensure_config_dir() -> Path:
@@ -477,15 +586,83 @@ def save_config(cfg: AgentConfig, config_path: str | None = None) -> str:
         实际保存的文件路径
     """
     global _last_config_path
-    yaml_path = (
+
+    # 步骤1: 解析保存路径
+    yaml_path = _resolve_save_path(config_path)
+
+    # 步骤2: 确保配置目录存在
+    ensure_config_dir()
+
+    # 步骤3: 准备配置数据
+    data = _prepare_config_data(cfg)
+
+    # 步骤4: 写入YAML文件
+    _write_yaml_file(yaml_path, data)
+
+    return yaml_path
+
+
+def _resolve_save_path(config_path: str | None) -> str:
+    """解析配置文件保存路径。
+
+    Args:
+        config_path: 指定的保存路径
+
+    Returns:
+        实际保存路径
+    """
+    global _last_config_path
+
+    return (
         config_path
         or _last_config_path
         or str(Path.home() / ".tea_agent" / "config.yaml")
     )
-    ensure_config_dir()
+
+
+def _prepare_config_data(cfg: AgentConfig) -> dict:
+    """准备配置数据字典。
+
+    Args:
+        cfg: AgentConfig实例
+
+    Returns:
+        配置数据字典
+    """
     data = {}
 
-    # 保存模型配置
+    # 准备模型配置
+    _prepare_model_data(cfg, data)
+
+    # 准备嵌入模型配置
+    _prepare_embedding_data(cfg, data)
+
+    # 准备模式参数
+    if cfg.mode_params:
+        data["mode_params"] = cfg.mode_params
+
+    # 准备路径配置
+    _prepare_paths_data(cfg, data)
+
+    # 准备会话参数
+    _prepare_session_data(cfg, data)
+
+    # 准备Token优化参数
+    _prepare_token_data(cfg, data)
+
+    # 准备交互控制参数
+    _prepare_control_data(cfg, data)
+
+    return data
+
+
+def _prepare_model_data(cfg: AgentConfig, data: dict) -> None:
+    """准备模型配置数据。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典（会被修改）
+    """
     for m_type in ["main_model", "cheap_model"]:
         target = cfg.main_model if m_type == "main_model" else cfg.cheap_model
         if target.is_configured:
@@ -504,7 +681,14 @@ def save_config(cfg: AgentConfig, config_path: str | None = None) -> str:
                 m_data["options"] = target.options
             data[m_type] = m_data
 
-    # 保存 Embedding 配置
+
+def _prepare_embedding_data(cfg: AgentConfig, data: dict) -> None:
+    """准备嵌入模型配置数据。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典（会被修改）
+    """
     data["embedding_model"] = {
         "api_url": cfg.embedding.api_url,
         "model_name": cfg.embedding.model_name,
@@ -512,10 +696,14 @@ def save_config(cfg: AgentConfig, config_path: str | None = None) -> str:
         "dimension": cfg.embedding.dimension,
     }
 
-    if cfg.mode_params:
-        data["mode_params"] = cfg.mode_params
 
-    # 保存路径配置（保存原始配置值，非解析后的绝对路径）
+def _prepare_paths_data(cfg: AgentConfig, data: dict) -> None:
+    """准备路径配置数据。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典（会被修改）
+    """
     data["paths"] = {
         "data_dir": cfg.paths.data_dir,
         "db_path": cfg.paths.db_path,
@@ -524,29 +712,57 @@ def save_config(cfg: AgentConfig, config_path: str | None = None) -> str:
         "skills_dir": cfg.paths.skills_dir,
     }
 
-    # 保存会话参数
+
+def _prepare_session_data(cfg: AgentConfig, data: dict) -> None:
+    """准备会话参数数据。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典（会被修改）
+    """
     data["max_history"] = cfg.max_history
     data["max_iterations"] = cfg.max_iterations
     data["enable_thinking"] = cfg.enable_thinking
 
-    # 保存 Token 优化参数
+
+def _prepare_token_data(cfg: AgentConfig, data: dict) -> None:
+    """准备Token优化参数数据。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典（会被修改）
+    """
     data["keep_turns"] = cfg.keep_turns
     data["max_tool_output"] = cfg.max_tool_output
     data["max_assistant_content"] = cfg.max_assistant_content
 
-    # 保存交互与控制参数
+
+def _prepare_control_data(cfg: AgentConfig, data: dict) -> None:
+    """准备交互控制参数数据。
+
+    Args:
+        cfg: AgentConfig实例
+        data: 配置数据字典（会被修改）
+    """
     data["extra_iterations_on_continue"] = cfg.extra_iterations_on_continue
     data["memory_extraction_threshold"] = cfg.memory_extraction_threshold
     data["memory_dedup_threshold"] = cfg.memory_dedup_threshold
     data["chat_page_size"] = cfg.chat_page_size
     data["history_l2_max"] = cfg.history_l2_max
     data["history_l3_batch"] = cfg.history_l3_batch
+
+
+def _write_yaml_file(yaml_path: str, data: dict) -> None:
+    """写入YAML配置文件。
+
+    Args:
+        yaml_path: 文件路径
+        data: 要写入的数据
+    """
     with open(yaml_path, "w", encoding="utf-8") as f:
         yaml.dump(
             data, f, default_flow_style=False, allow_unicode=True, sort_keys=False
         )
-
-    return yaml_path
 
 
 def create_default_config(config_path: str | None = None) -> str:
@@ -559,10 +775,28 @@ def create_default_config(config_path: str | None = None) -> str:
     Returns:
         实际创建的文件路径
     """
+    # 步骤1: 解析保存路径
     yaml_path = config_path or str(Path.home() / ".tea_agent" / "config.yaml")
+
+    # 步骤2: 确保配置目录存在
     ensure_config_dir()
 
-    template = (
+    # 步骤3: 生成配置模板
+    template = _generate_config_template()
+
+    # 步骤4: 写入模板文件
+    _write_template_file(yaml_path, template)
+
+    return yaml_path
+
+
+def _generate_config_template() -> str:
+    """生成配置文件模板内容。
+
+    Returns:
+        配置文件模板字符串
+    """
+    return (
         "# Tea Agent 配置文件\n\n"
         "# 主模型配置（用于核心对话、代码生成等）\n"
         "main_model:\n"
@@ -641,10 +875,16 @@ def create_default_config(config_path: str | None = None) -> str:
         "history_l3_batch: 10\n"
     )
 
+
+def _write_template_file(yaml_path: str, template: str) -> None:
+    """写入模板文件。
+
+    Args:
+        yaml_path: 文件路径
+        template: 模板内容
+    """
     with open(yaml_path, "w", encoding="utf-8") as f:
         f.write(template)
-
-    return yaml_path
 
 
 # 全局单例缓存

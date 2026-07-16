@@ -7,14 +7,10 @@
 - 参数行为: toolkit_root_dir, supports_reasoning
 """
 
-import json
 import os
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
 
 # ============================================================
 # 辅助函数

@@ -2402,8 +2402,8 @@ window.refreshTaskPanel = async function() {
       todoList.innerHTML = '<div class="tp-empty">(加载失败)</div>';
     }
 
-    // ── 自动弹出：当有 TODO 或 Plan 内容时，自动打开任务面板（类似 OpenCode 模式）──
-    const hasContent = items.length > 0 || plans.length > 0;
+    // ── 自动弹出：当有 TODO 或 Plan 或 DAG 内容时，自动打开任务面板 ──
+    const hasContent = items.length > 0 || plans.length > 0 || (window._dagVizId != null);
     const panel = $('task-panel');
     const splitter = $('task-panel-splitter');
     if (hasContent && !_taskPanelOpen && !_taskPanelSuppressAutoOpen && !isStreaming) {
@@ -2412,9 +2412,118 @@ window.refreshTaskPanel = async function() {
       if (splitter) splitter.classList.add('visible');
     }
 
+    // ── DAG 工作流轮询 ──
+    await refreshDagSection();
+
   } catch(e) {
     // 静默失败
   }
+};
+
+// ══════════════════════════════════════════════════
+//  DAG SECTION — 任务面板缩略图 + 自动刷新
+// ══════════════════════════════════════════════════
+
+window._dagPollTimer = null;
+window._dagVizId = null;
+window._dagStopPoll = null;
+
+/** 从 /api/dags 获取活跃 DAG 并渲染到任务面板 */
+window.refreshDagSection = async function() {
+  const section = $('tp-dag-section');
+  if (!section) return;
+
+  try {
+    const r = await fetch('/api/dags');
+    if (!r.ok) return;
+    const data = await r.json();
+    const dags = data.dags || [];
+
+    if (dags.length === 0) {
+      // 没有活跃 DAG，隐藏区域
+      closeDagView();
+      return;
+    }
+
+    // 取第一个活跃 DAG
+    const dag = dags[0];
+    const vizId = dag.viz_id;
+
+    // 如果 vizId 没变，只更新状态（避免闪烁）
+    if (window._dagVizId === vizId) {
+      // 已经在轮询中，跳过
+      return;
+    }
+
+    // 新的 DAG — 初始化
+    if (window._dagStopPoll) { window._dagStopPoll(); window._dagStopPoll = null; }
+    window._dagVizId = vizId;
+
+    // 显示 DAG 区域
+    section.style.display = '';
+    const imgWrap = $('tp-dag-img-wrap');
+    if (imgWrap) imgWrap.style.display = '';
+
+    // 初始状态
+    const badge = $('dag-badge');
+    const progress = $('dag-progress');
+    const timer = $('dag-timer');
+    if (badge) { badge.textContent = dag.state.toUpperCase(); badge.className = 'dag-status-badge badge-' + (dag.state || 'pending'); }
+    if (progress) { const p = dag.progress || {}; progress.textContent = (p.completed || 0) + '/' + (p.total || 0); }
+    if (timer) timer.textContent = '00:00';
+
+    // 缩略图
+    const dagImg = $('tp-dag-img');
+    if (dagImg) {
+      dagImg.src = '/dag/' + encodeURIComponent(vizId) + '/image?format=svg&t=' + Date.now();
+      dagImg.ondblclick = function() { openDagInNewTab(vizId); };
+    }
+
+    // 启动轮询
+    let startTime = Date.now();
+    const poll = async function() {
+      try {
+        const resp = await fetch('/dag/' + encodeURIComponent(vizId) + '/status');
+        if (!resp.ok) { stopPoll(); return; }
+        const snap = await resp.json();
+        const done = (snap.progress && snap.progress.completed) || 0;
+        const total = (snap.progress && snap.progress.total) || 0;
+        const state = snap.state || 'pending';
+
+        if (badge) { badge.textContent = state.toUpperCase(); badge.className = 'dag-status-badge badge-' + state; }
+        if (progress) progress.textContent = done + '/' + total;
+        if (timer) {
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          timer.textContent = String(Math.floor(elapsed/60)).padStart(2,'0') + ':' + String(elapsed%60).padStart(2,'0');
+        }
+        // 更新节点列表
+        renderDagNodeList($('tp-dag-nodes'), snap);
+        // 刷新缩略图
+        if (dagImg) dagImg.src = '/dag/' + encodeURIComponent(vizId) + '/image?format=svg&t=' + Date.now();
+        // 更新灯箱
+        const lbTitle = $('dag-lightbox-title');
+        if (lbTitle) lbTitle.textContent = (snap.title || 'DAG') + ' · ' + state.toUpperCase() + ' · ' + done + '/' + total;
+
+        if (state === 'completed' || state === 'failed' || state === 'cancelled') {
+          stopPoll();
+        }
+      } catch(e) { /* retry */ }
+    };
+    const stopPoll = function() {
+      if (window._dagPollTimer) { clearInterval(window._dagPollTimer); window._dagPollTimer = null; }
+      window._dagStopPoll = null;
+    };
+    window._dagStopPoll = stopPoll;
+    poll(); // 立即首次
+    window._dagPollTimer = setInterval(poll, 2000); // 2秒轮询
+
+  } catch(e) { /* ignore */ }
+};
+
+/** 双击缩略图 → 新标签页打开完整 DAG 页面 */
+window.openDagInNewTab = function(vizId) {
+  if (!vizId) return;
+  window.open('/dag/' + encodeURIComponent(vizId), '_blank');
 };
 
 /** 展开/折叠已归档 Plan */

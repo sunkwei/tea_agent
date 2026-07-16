@@ -8,14 +8,14 @@ from tkinter import ttk
 
 logger = logging.getLogger(__name__)
 # 复用 _gui/_fonts 模块的字体检测逻辑
-import contextlib
+import contextlib  # noqa: E402
 
-from tea_agent._gui._fonts import (
+from tea_agent._gui._fonts import (  # noqa: E402
     SYSTEM_FONT,
     _fs,
     _init_fonts,
 )
-from tea_agent.config import get_config, load_config, save_config
+from tea_agent.config import get_config, load_config, save_config  # noqa: E402
 
 
 class MemoryDialog(tk.Toplevel):
@@ -1607,6 +1607,9 @@ class TodoDialog(tk.Toplevel):
         plans = self._load_plans()
         self._render_plan_section(plans)
 
+        # ── DAG 工作流区域 ──
+        self._render_dag_section()
+
         # ── 分隔线 ──
         ttk.Separator(self._scroll_frame, orient=tk.HORIZONTAL).pack(
             fill=tk.X, padx=10, pady=8)
@@ -1677,7 +1680,7 @@ class TodoDialog(tk.Toplevel):
 
             # 同步 toolkit_todo 内存缓存（如有）
             try:
-                from tea_agent.toolkit.toolkit_todo import _todos, _sync_item
+                from tea_agent.toolkit.toolkit_todo import _sync_item, _todos
                 if 0 <= idx < len(_todos):
                     _todos[idx]["done"] = done
                 _sync_item(idx, done)
@@ -1705,6 +1708,54 @@ class TodoDialog(tk.Toplevel):
             return
         self._refresh()
         self._timer_id = self.after(3000, self._auto_refresh_tick)
+
+    # ── DAG 工作流区域 ──────────────────────────
+
+    def _render_dag_section(self):
+        """渲染 DAG 工作流缩略图区域。"""
+        try:
+            from tea_agent._gui._dag_thumbnail import (
+                DagThumbnailCard,
+                DagViewerDialog,
+                get_active_dag_vizes,
+            )
+        except ImportError:
+            return
+
+        dag_vizes = get_active_dag_vizes()
+        if not dag_vizes:
+            return
+
+        # DAG 分区标题
+        dag_header = ttk.Frame(self._scroll_frame)
+        dag_header.pack(fill=tk.X, padx=4, pady=(0, 4))
+        ttk.Label(dag_header, text="🔀 DAG 工作流",
+                  font=(SYSTEM_FONT, _fs(12), "bold"),
+                  foreground="#b08800").pack(side=tk.LEFT)
+        ttk.Label(dag_header, text=f"({len(dag_vizes)} 个活跃)",
+                  font=(SYSTEM_FONT, _fs(9)),
+                  foreground="#999").pack(side=tk.LEFT, padx=8)
+
+        # 存储卡片引用（防止 GC）
+        if not hasattr(self, '_dag_cards'):
+            self._dag_cards = []
+
+        # DAG 卡片容器（横向排列，允许换行）
+        cards_frame = ttk.Frame(self._scroll_frame)
+        cards_frame.pack(fill=tk.X, padx=4, pady=2)
+
+        def _open_viewer(viz_id, dag_data):
+            try:
+                DagViewerDialog(self, viz_id, dag_data)
+            except Exception as e:
+                logger.warning(f"打开 DAG 查看器失败: {e}")
+
+        col = 0
+        for d in dag_vizes:
+            card = DagThumbnailCard(cards_frame, d, on_double_click=_open_viewer)
+            card.grid(row=0, column=col, padx=4, pady=4, sticky="nw")
+            col += 1
+            self._dag_cards.append(card)
 
     def _on_close(self):
         """关闭窗口时清理定时器"""

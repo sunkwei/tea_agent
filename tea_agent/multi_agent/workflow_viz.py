@@ -27,19 +27,13 @@ import logging
 import threading
 import time
 import uuid
-from datetime import datetime
-from pathlib import Path
-from typing import Optional
 
+from .execution_pool import ExecutionPool, get_execution_pool
 from .workflow_engine import (
     WorkflowDAG,
     WorkflowExec,
-    WorkflowNode,
-    NodeType,
-    NodeState,
     WorkflowState,
 )
-from .execution_pool import ExecutionPool, get_execution_pool
 
 logger = logging.getLogger(__name__)
 
@@ -54,16 +48,16 @@ class DagVizRegistry:
     使 tea_agent server 能够通过 viz_id 查找活跃的 WorkflowVisualizer
     实例，从而提供 /dag/{viz_id} 路由和 SSE 事件流。
     """
-    _instances: dict[str, "WorkflowVisualizer"] = {}
+    _instances: dict[str, WorkflowVisualizer] = {}
 
     @classmethod
-    def register(cls, viz_id: str, viz: "WorkflowVisualizer"):
+    def register(cls, viz_id: str, viz: WorkflowVisualizer):
         """注册可视化实例。"""
         cls._instances[viz_id] = viz
         logger.info(f"DagViz 已注册: {viz_id}")
 
     @classmethod
-    def get(cls, viz_id: str) -> "WorkflowVisualizer | None":
+    def get(cls, viz_id: str) -> WorkflowVisualizer | None:
         """获取可视化实例。"""
         return cls._instances.get(viz_id)
 
@@ -530,7 +524,7 @@ class WorkflowVisualizer:
         try:
             order = self.dag.topological_sort()
         except ValueError:
-            return {nid: 0 for nid in self.dag.nodes}
+            return dict.fromkeys(self.dag.nodes, 0)
 
         # 从拓扑序计算层级：节点的 level = max(前驱 level) + 1
         levels: dict[str, int] = {}
@@ -550,15 +544,15 @@ class WorkflowVisualizer:
     def _start_server(self, port: int, host: str):
         """启动 Starlette HTTP 服务器。"""
         try:
+            import uvicorn
             from starlette.applications import Starlette
             from starlette.responses import (
-                StreamingResponse,
                 HTMLResponse,
                 JSONResponse,
                 Response,
+                StreamingResponse,
             )
             from starlette.routing import Route
-            import uvicorn
         except ImportError:
             logger.error("需要安装 starlette 和 uvicorn: pip install starlette uvicorn")
             return
@@ -638,18 +632,21 @@ class WorkflowVisualizer:
             fmt = request.query_params.get("format", "svg")
 
             from tea_agent.multi_agent.dag_dot_renderer import (
-                dag_to_dot, render_dot_to_svg, render_dot_to_png, check_dot_available,
+                check_dot_available,
+                dag_to_dot,
+                render_dot_to_png,
+                render_dot_to_svg,
             )
             node_states = self._exec.results if self._exec else {}
             dot_source = dag_to_dot(self.dag, node_states=node_states, title=self.title)
-            
+
             if fmt == "dot":
                 return Response(dot_source, media_type="text/plain")
-            
+
             if not check_dot_available():
                 return Response(dot_source, media_type="text/plain",
                                 headers={"X-Fallback": "dot-not-available"})
-            
+
             try:
                 if fmt == "png":
                     img_data = render_dot_to_png(dot_source)
@@ -675,7 +672,7 @@ class WorkflowVisualizer:
         app = Starlette(debug=False, routes=routes)
 
         print(f"\n{'='*60}")
-        print(f"  🎬 DAG 可视化已启动")
+        print("  🎬 DAG 可视化已启动")
         print(f"  📍 http://{host}:{port}")
         print(f"  📊 {self.title}")
         print(f"  📦 {len(dag_structure['nodes'])} 节点 · {len(dag_structure['edges'])} 边")

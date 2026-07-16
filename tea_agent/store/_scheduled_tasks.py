@@ -119,7 +119,7 @@ class ScheduledTaskStore(StoreComponent):
         if updates:
             updates["updated_at"] = "CURRENT_TIMESTAMP"
         # SAFETY: `k` comes from TaskStore.update_task(kwargs) - internal code, not user input
-        _ALLOWED_COLUMNS = {"name", "command", "schedule", "enabled", "updated_at"}
+        _ALLOWED_COLUMNS = {"name", "command", "schedule", "enabled", "updated_at"}  # noqa: N806
         for k in updates:
             assert k in _ALLOWED_COLUMNS, f"invalid column: {k}"
         set_clause = ", ".join(

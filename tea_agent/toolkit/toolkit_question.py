@@ -14,8 +14,8 @@
 """
 
 import logging
-import threading
 import os
+import threading
 
 logger = logging.getLogger("toolkit.question")
 
@@ -26,7 +26,7 @@ _answer_event = threading.Event()
 
 def _get_web_handler():
     """从 tlk.toolkit 单例获取 Web handler（绕过 exec 隔离）。
-    
+
     当 server.py 的 chat_stream_sse 设置 handler 后，
     exec 加载的函数也能通过 tlk.toolkit 访问到同一 handler。
     """
@@ -41,13 +41,13 @@ def _get_web_handler():
 
 def _is_headless_context() -> bool:
     """检测是否在无用户交互环境下运行（Server 后台 / TEA_HEADLESS）。
-    
+
     此时不应弹出 GUI/CLI 提问，应直接返回 default。
     """
     # 显式环境变量
     if os.environ.get('TEA_HEADLESS', '').lower() in ('1', 'true', 'yes'):
         return True
-    
+
     # Server 模式：tlk.toolkit 被标记为 server 实例
     try:
         from tea_agent import tlk
@@ -55,7 +55,7 @@ def _is_headless_context() -> bool:
             return True
     except Exception:
         pass
-    
+
     return False
 
 

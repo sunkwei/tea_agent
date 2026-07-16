@@ -1,7 +1,7 @@
 """Git commit — 固定 author: tea_agent <sunkwei@gmail.com>，不受全局 git 配置影响。"""
 import logging
-import subprocess
 import os
+import subprocess
 
 logger = logging.getLogger("toolkit")
 

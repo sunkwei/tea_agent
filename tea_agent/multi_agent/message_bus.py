@@ -30,7 +30,6 @@ MessageBus — 跨 Agent 发布/订阅消息队列。
     msgs = bus.consume("agent-B")
 """
 
-import json
 import logging
 import threading
 import time

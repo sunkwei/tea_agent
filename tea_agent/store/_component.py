@@ -18,7 +18,6 @@ import sqlite3
 import threading
 import uuid
 from contextlib import contextmanager
-from typing import Any
 
 __all__ = [
     "DB",

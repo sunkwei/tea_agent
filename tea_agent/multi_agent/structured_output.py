@@ -23,7 +23,6 @@ StructuredOutput — 结构化输出支持。
 """
 
 from pydantic import BaseModel, Field
-from typing import Any
 
 
 class StructuredOutput(BaseModel):

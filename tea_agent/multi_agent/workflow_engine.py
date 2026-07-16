@@ -26,9 +26,9 @@ import logging
 import time
 import uuid
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable
 
 from .execution_pool import ExecutionPool, get_execution_pool
 
@@ -217,7 +217,7 @@ class WorkflowDAG:
         Kahn 算法拓扑排序。
         返回有序节点 ID 列表，若有环则抛出 ValueError。
         """
-        in_degree: dict[str, int] = {nid: 0 for nid in self._nodes}
+        in_degree: dict[str, int] = dict.fromkeys(self._nodes, 0)
         adj: dict[str, list[str]] = {nid: [] for nid in self._nodes}
 
         for e in self._edges:
@@ -828,7 +828,7 @@ class WorkflowExec:
 
     def _execute_end(self, node: WorkflowNode) -> dict:
         """结束节点。"""
-        logger.info(f"    ⏹ 工作流结束")
+        logger.info("    ⏹ 工作流结束")
         return {"_end": True}
 
     # ── 状态报告 ──────────────────────────────
@@ -947,7 +947,6 @@ class WorkflowTemplate:
         if not dag:
             return None
 
-        import json
         dag_dict = dag.to_dict()
         vars_dict = variables or {}
 

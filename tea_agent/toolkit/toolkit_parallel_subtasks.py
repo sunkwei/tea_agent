@@ -125,6 +125,33 @@ def toolkit_parallel_subtasks(
     results = []
     errors = []
 
+    # ── 注册 DAG 可视化（任务面板缩略图）──
+    viz_id = None
+    try:
+        from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+        dag_nodes = []
+        for t in parallel_tasks:
+            dag_nodes.append({
+                "id": t.get("id", "unknown"),
+                "label": t.get("description", t.get("id", ""))[:50],
+                "state": "running",
+                "type": "task",
+                "duration": 0,
+                "error": None,
+            })
+        dag_edges = []
+        # 自动添加边：创建虚拟 start 节点到各子任务
+        dag_nodes.insert(0, {"id": "_start", "label": "并行启动", "state": "completed", "type": "task"})
+        for t in parallel_tasks:
+            dag_edges.append({"from": "_start", "to": t.get("id", "unknown")})
+        viz_id = SimpleDagRegistry.register(
+            title=f"并行子任务 ({len(parallel_tasks)})",
+            nodes=dag_nodes,
+            edges=dag_edges,
+        )
+    except Exception:
+        pass  # GUI 未启动时静默忽略
+
     # 并发执行 easy + medium 任务
     if parallel_tasks:
         with ThreadPoolExecutor(max_workers=min(max_workers, len(parallel_tasks))) as executor:
@@ -141,12 +168,31 @@ def toolkit_parallel_subtasks(
                         results.append(result)
                     else:
                         errors.append(result)
+                    # 更新 DAG 节点状态
+                    if viz_id:
+                        try:
+                            SimpleDagRegistry.update_node(
+                                viz_id, task.get("id", "unknown"),
+                                state="completed" if result["status"] == "success" else "failed",
+                                error=result.get("error"),
+                                duration=result.get("elapsed", 0),
+                            )
+                        except Exception:
+                            pass
                 except Exception as e:
                     errors.append({
                         "task_id": task.get("id", "unknown"),
                         "status": "error",
                         "error": str(e),
                     })
+                    if viz_id:
+                        try:
+                            SimpleDagRegistry.update_node(
+                                viz_id, task.get("id", "unknown"),
+                                state="failed", error=str(e),
+                            )
+                        except Exception:
+                            pass
 
     total_elapsed = time.time() - start_time
 

@@ -851,7 +851,7 @@ class TestToolLoopAndCompression:
         assert threshold == BaseChatSession._DEFAULT_TOOL_THRESHOLD
 
 
-from tea_agent.session.tool_loop_runner import execute_tool_loop
+from tea_agent.session.tool_loop_runner import execute_tool_loop  # noqa: E402
 
 
 class TestExecuteToolLoop:

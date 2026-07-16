@@ -9,7 +9,7 @@ import re
 logger = logging.getLogger(__name__)
 
 # 从 session/_prompts 导入共享 prompt 模板
-from tea_agent.session.prompts import TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_TEMPLATE
+from tea_agent.session.prompts import TOPIC_SUMMARY_SYSTEM, TOPIC_SUMMARY_USER_TEMPLATE  # noqa: E402
 
 
 def _empty_usage():

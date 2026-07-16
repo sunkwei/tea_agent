@@ -42,7 +42,7 @@ def _windows_browser_tab(action, browser, tab_title, window_index):
     from ctypes import wintypes
 
     # Windows API 常量
-    SW_RESTORE = 9
+    SW_RESTORE = 9  # noqa: N806
 
     # 获取前台窗口
     user32 = ctypes.windll.user32
@@ -66,7 +66,7 @@ def _windows_browser_tab(action, browser, tab_title, window_index):
 
     def enum_windows(callback):
         """枚举所有顶层窗口"""
-        EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+        EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)  # noqa: N806
         user32.EnumWindows(EnumWindowsProc(callback), 0)
 
     def find_browser_windows(browser_name):

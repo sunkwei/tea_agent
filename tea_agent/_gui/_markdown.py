@@ -8,7 +8,7 @@ import string
 import markdown
 
 try:
-    from tkinterweb import HtmlFrame
+    from tkinterweb import HtmlFrame  # noqa: F401
     HAS_TKINTERWEB = True
 except ImportError:
     HAS_TKINTERWEB = False

@@ -33,12 +33,11 @@ FlowEngine — 事件驱动流程引擎。
 import inspect
 import json
 import logging
-import re
-import traceback
 from collections import OrderedDict
+from collections.abc import Callable
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +220,7 @@ class FlowEngine:
         logger.info(f"🔀 Flow [{self.name}] 开始执行 ({len(self._steps)} 个步骤)")
         self._execution_log = []
         self._results = {}
-        self._statuses = {step_name: StepStatus.PENDING for step_name in self._steps}
+        self._statuses = dict.fromkeys(self._steps, StepStatus.PENDING)
         self._errors = {}
         self._timings = {}
         self._completed_events = set()
@@ -301,7 +300,7 @@ class FlowEngine:
         生成 Mermaid 流程图。
         """
         lines = [
-            f"```mermaid",
+            "```mermaid",
             "flowchart TD",
         ]
 

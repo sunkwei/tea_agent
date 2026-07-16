@@ -7,7 +7,7 @@ All methods use the transport's ``send_request`` / ``send_notification``
 to communicate with the client (VS Code).
 """
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from tea_agent.protocol.acp_jsonrpc import JsonRpcTransport
 
@@ -61,7 +61,7 @@ class AcpClientMethods:
         self,
         title: str,
         options: list[dict],
-        tool_call: Optional[dict] = None,
+        tool_call: dict | None = None,
     ) -> dict:
         """Ask the client to show a permission request to the user.
 
@@ -98,9 +98,9 @@ class AcpClientMethods:
         self,
         session_id: str,
         update_type: str,
-        content_blocks: Optional[list[dict]] = None,
-        status: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        content_blocks: list[dict] | None = None,
+        status: str | None = None,
+        metadata: dict | None = None,
     ):
         """Send a session/update notification to the client (ACP webview).
 
@@ -125,7 +125,7 @@ class AcpClientMethods:
             metadata: Additional metadata
         """
         # Map our internal type names to ACP webview type names
-        TYPE_MAP = {
+        TYPE_MAP = {  # noqa: N806
             "content_block": "agent_message_chunk",
             "user_message": "user_message_chunk",
             "thought": "agent_thought_chunk",
@@ -184,8 +184,8 @@ class AcpClientMethods:
     def info_update(
         self,
         session_id: str,
-        title: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        title: str | None = None,
+        metadata: dict | None = None,
     ):
         """Send session/info_update to update session info."""
         params: dict[str, Any] = {"sessionId": session_id}
@@ -200,9 +200,9 @@ class AcpClientMethods:
     def create_terminal(
         self,
         command: str,
-        args: Optional[list[str]] = None,
-        cwd: Optional[str] = None,
-        env: Optional[dict] = None,
+        args: list[str] | None = None,
+        cwd: str | None = None,
+        env: dict | None = None,
     ) -> dict:
         """Ask the client to create a terminal."""
         params: dict[str, Any] = {"command": command}
@@ -267,8 +267,8 @@ class AcpClientMethods:
         session_id: str,
         title: str,
         fields: list[dict],
-        description: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        description: str | None = None,
+        metadata: dict | None = None,
     ) -> dict:
         """Ask the client to show a form/elicitation to collect input.
 
@@ -320,8 +320,8 @@ class AcpClientMethods:
         self,
         server_name: str,
         command: str,
-        args: Optional[list[str]] = None,
-        env: Optional[dict] = None,
+        args: list[str] | None = None,
+        env: dict | None = None,
     ) -> dict:
         """Ask the client to connect an MCP server."""
         params: dict[str, Any] = {

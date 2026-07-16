@@ -20,12 +20,12 @@ import time
 import uuid
 from typing import Any
 
+from tea_agent.protocol.acp_client_methods import AcpClientMethods
 from tea_agent.protocol.acp_jsonrpc import (
     JsonRpcError,
     JsonRpcTransport,
     RequestId,
 )
-from tea_agent.protocol.acp_client_methods import AcpClientMethods
 
 logger = logging.getLogger("acp.agent")
 
@@ -116,7 +116,7 @@ class AcpAgent:
         self.client = AcpClientMethods(self._transport)
 
         # Sessions: session_id -> session info
-        self._sessions: dict[str, "SessionState"] = {}
+        self._sessions: dict[str, SessionState] = {}
         self._sessions_lock = threading.Lock()
 
         # Active turn tracking for cancellation
@@ -124,11 +124,11 @@ class AcpAgent:
         self._active_turns_lock = threading.Lock()
 
         # Per-session agents (lazy init, thread-safe)
-        self._session_agents: dict[str, "Agent"] = {}
+        self._session_agents: dict[str, Agent] = {}
         self._session_agents_lock = threading.Lock()
 
         # Global fallback agent for ext/* calls (no session context)
-        self._global_agent: "Agent | None" = None
+        self._global_agent: Agent | None = None
         self._global_agent_lock = threading.Lock()
 
         # Document context: path -> content (for context injection)

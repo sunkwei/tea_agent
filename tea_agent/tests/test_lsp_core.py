@@ -10,11 +10,7 @@ LSP 代码智能模块单元测试。
 import json
 import os
 import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
-
-import pytest
-
+from unittest.mock import MagicMock, patch
 
 # ============================================================
 # lsp_engine
@@ -102,7 +98,6 @@ class TestLspEngineSemanticDiagnose:
     def test_semantic_diagnose_no_unresolved(self):
         """所有符号均已定义时不应报 unresolved"""
         from tea_agent.lsp.lsp_engine import semantic_diagnose
-        from jedi import Script
 
         # 使用实际的 jedi 解析简单代码
         code = """

@@ -5,7 +5,7 @@ logger = logging.getLogger("toolkit")
 
 """toolkit_prompt_evolve — 允许 Agent 管理自己的系统提示词版本"""
 
-from tea_agent.session_ref import get_session
+from tea_agent.session_ref import get_session  # noqa: E402
 
 
 def toolkit_prompt_evolve(action: str = "current", version: str = "", content: str = "") -> str:

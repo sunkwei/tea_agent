@@ -70,52 +70,9 @@
 # ── Phase 1: 核心架构 ──────────────────────────
 
 # 角色化 Agent
-from .role_agent import (
-    RoleAgent,
-    AgentResult,
-    AgentStatus,
-    create_analyst,
-    create_coder,
-    create_tester,
-    create_reviewer,
-)
-
-# 流程引擎
-from .flow_engine import (
-    FlowEngine,
-    FlowState,
-    flow_start,
-    flow_listen,
-    flow_route,
-    StepStatus,
-)
-
-# 结构化输出
-from .structured_output import (
-    StructuredOutput,
-    AnalysisReport,
-    CodeChangePlan,
-    CodeIssue,
-    TestPlan,
-    TestCase,
-    TestResult,
-    CodeReview,
-    ReviewComment,
-    ArchitectureDesign,
-)
-
-# 角色化调度器
-from .dispatcher import RoleDispatcher, TaskPattern
-
-# ── Phase 2: Agent 间通信 ──────────────────────
-
-# 消息总线
-from .message_bus import (
-    MessageBus,
-    Message,
-    MessagePriority,
-    get_message_bus,
-    reset_message_bus,
+# 统一管理面板
+from .admin_panel import (
+    AdminPanel,
 )
 
 # Agent-as-Tool
@@ -124,27 +81,106 @@ from .agent_as_tool import (
     AgentToolManager,
 )
 
-# 工具注册与发现
-from .tool_registry import (
-    ToolRegistry,
-    ToolEntry,
-    get_tool_registry,
-    reset_tool_registry,
-    registry,
-)
-
-# 一体化 SubAgent 管理
-from .subagent_manager import (
-    SubAgentManager,
-    SubAgentInfo,
-)
-
 # ── Phase 3: 持久化执行 + 可观测性 ─────────────
-
 # 检查点（执行状态持久化与恢复）
 from .checkpoint_manager import (
     CheckpointManager,
     get_checkpoint_manager,
+)
+
+# 角色化调度器
+from .dispatcher import RoleDispatcher, TaskPattern
+
+# ── Phase 1 兼容 ────────────────────────────────
+from .dispatcher_v1 import Dispatcher, SubTask
+from .dispatcher_v1 import TaskStatus as V1TaskStatus
+
+# ── Phase 5: 高性能并行执行引擎 ──────────────
+# 执行池核心
+from .execution_pool import (
+    # 容错
+    CircuitBreaker,
+    CircuitState,
+    ExecutionPool,
+    # 负载均衡
+    LoadBalancer,
+    LoadBalancerStrategy,
+    PoolNode,
+    PoolState,
+    # 资源隔离
+    ResourceGuard,
+    ResourceLimit,
+    RetryExhaustedError,
+    RetryPolicy,
+    TaskInfo,
+    TaskState,
+    get_execution_pool,
+)
+
+# 流程引擎
+from .flow_engine import (
+    FlowEngine,
+    FlowState,
+    StepStatus,
+    flow_listen,
+    flow_route,
+    flow_start,
+)
+from .lite_agent import LiteAgent
+
+# ── Phase 2: Agent 间通信 ──────────────────────
+# 消息总线
+from .message_bus import (
+    Message,
+    MessageBus,
+    MessagePriority,
+    get_message_bus,
+    reset_message_bus,
+)
+
+# ── Phase 4: 管理面板 + 模式市场 ─────────────
+# 模式市场
+from .pattern_market import (
+    PatternMarket,
+    get_pattern_market,
+)
+from .role_agent import (
+    AgentResult,
+    AgentStatus,
+    RoleAgent,
+    create_analyst,
+    create_coder,
+    create_reviewer,
+    create_tester,
+)
+
+# 结构化输出
+from .structured_output import (
+    AnalysisReport,
+    ArchitectureDesign,
+    CodeChangePlan,
+    CodeIssue,
+    CodeReview,
+    ReviewComment,
+    StructuredOutput,
+    TestCase,
+    TestPlan,
+    TestResult,
+)
+
+# 一体化 SubAgent 管理
+from .subagent_manager import (
+    SubAgentInfo,
+    SubAgentManager,
+)
+
+# 工具注册与发现
+from .tool_registry import (
+    ToolEntry,
+    ToolRegistry,
+    get_tool_registry,
+    registry,
+    reset_tool_registry,
 )
 
 # 执行追踪（Span-based Tracing）
@@ -154,65 +190,23 @@ from .trace_engine import (
     get_trace_engine,
 )
 
-# ── Phase 4: 管理面板 + 模式市场 ─────────────
-
-# 模式市场
-from .pattern_market import (
-    PatternMarket,
-    get_pattern_market,
-)
-
-# 统一管理面板
-from .admin_panel import (
-    AdminPanel,
-)
-
-# ── Phase 5: 高性能并行执行引擎 ──────────────
-
-# 执行池核心
-from .execution_pool import (
-    ExecutionPool,
-    TaskInfo,
-    TaskState,
-    PoolState,
-    get_execution_pool,
-    # 负载均衡
-    LoadBalancer,
-    LoadBalancerStrategy,
-    PoolNode,
-    # 资源隔离
-    ResourceGuard,
-    ResourceLimit,
-    # 容错
-    CircuitBreaker,
-    CircuitState,
-    RetryPolicy,
-    RetryExhaustedError,
-)
-
 # ── Phase 6: 高级编排能力编排 ──────────────
-
 # 工作流 DAG 引擎
 from .workflow_engine import (
-    WorkflowNode,
-    NodeType,
     NodeState,
-    WorkflowState,
+    NodeType,
     WorkflowDAG,
     WorkflowExec,
+    WorkflowNode,
+    WorkflowState,
     WorkflowTemplate,
 )
 
 # 工作流可视化
 from .workflow_viz import (
-    WorkflowVisualizer,
     EventEmitter,
+    WorkflowVisualizer,
 )
-
-# ── Phase 1 兼容 ────────────────────────────────
-
-from .dispatcher_v1 import Dispatcher, SubTask, TaskStatus as V1TaskStatus
-from .lite_agent import LiteAgent
 
 # ── 导出清单 ────────────────────────────────────
 

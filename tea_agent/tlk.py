@@ -357,7 +357,7 @@ class Toolkit:
 
         在 Server 模式下仅报告缺失依赖，不执行 pip install（避免阻塞请求线程）。
         """
-        MODULE_MAP = {
+        MODULE_MAP = {  # noqa: N806
             'PIL': 'Pillow', 'cv2': 'opencv-python', 'sklearn': 'scikit-learn',
             'yaml': 'PyYAML', 'bs4': 'beautifulsoup4', 'dateutil': 'python-dateutil',
             'jwt': 'PyJWT', 'Crypto': 'pycryptodome', 'Image': 'Pillow'

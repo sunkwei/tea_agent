@@ -983,3 +983,49 @@ blockquote p { margin: 0; }
     justify-content: space-between;
     flex-shrink: 0;
 }
+
+/* ── DAG 工作流可视化卡片 ── */
+.dag-card {
+    margin: 8px 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface);
+    transition: border-color 0.2s;
+}
+.dag-card:hover {
+    border-color: var(--primary);
+}
+.dag-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+}
+.dag-card-icon {
+    font-size: 16px;
+}
+.dag-card-link {
+    margin-left: auto;
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 14px;
+    transition: color 0.2s;
+}
+.dag-card-link:hover {
+    color: var(--primary);
+}
+.dag-card-img {
+    display: block;
+    width: 100%;
+    max-width: 560px;
+    height: auto;
+    padding: 8px;
+    background: var(--bg);
+}
+

@@ -46,7 +46,7 @@ _PYTHON_BUILTINS = frozenset({
     'print_exc', 'format_exc', 'getLogger', 'basicConfig',
 })
 
-import logging
+import logging  # noqa: E402
 
 logger = logging.getLogger("toolkit")
 

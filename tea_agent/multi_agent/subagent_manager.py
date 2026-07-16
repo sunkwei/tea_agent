@@ -19,7 +19,6 @@ SubAgentManager — 通信/发现/注册一体化管理。
   - 动态任务分配
 """
 
-import json
 import logging
 import threading
 import time
@@ -27,13 +26,13 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from .role_agent import RoleAgent, create_analyst, create_coder, create_reviewer, create_tester
-from .message_bus import MessageBus, get_message_bus, MessagePriority
 from .agent_as_tool import AgentTool, AgentToolManager
-from .tool_registry import ToolRegistry, get_tool_registry
 from .checkpoint_manager import get_checkpoint_manager
-from .trace_engine import get_trace_engine
+from .message_bus import MessageBus, get_message_bus
 from .pattern_market import get_pattern_market
+from .role_agent import RoleAgent
+from .tool_registry import ToolRegistry, get_tool_registry
+from .trace_engine import get_trace_engine
 
 logger = logging.getLogger(__name__)
 

@@ -18,6 +18,7 @@ from pathlib import Path
 
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 
+from tea_agent.multi_agent.workflow_viz import DagVizRegistry, get_viz_html
 from tea_agent.toolkit.toolkit_export_last_pdf import export_topic_pdf
 
 from .server import (
@@ -28,8 +29,6 @@ from .server import (
     get_server,
     logger,
 )
-
-from tea_agent.multi_agent.workflow_viz import DagVizRegistry, get_viz_html
 
 # ================================================================
 #  System / Health
@@ -283,7 +282,6 @@ async def handle_export_pdf(request):
         safe_title = safe_title.strip()[:80] or "export"
         filename = safe_title + ".pdf"
         # RFC 5987: use filename* for non-ASCII, fallback ASCII for latin-1 clients
-        import urllib.parse
         ascii_name = "".join(c if ord(c) < 128 else '_' for c in filename) or "export.pdf"
         disposition = f'attachment; filename="{ascii_name}"; filename*=UTF-8''{urllib.parse.quote(filename)}'
         return FileResponse(result, media_type="application/pdf",
@@ -573,7 +571,7 @@ async def handle_web_topic_todos(request):
     if not topic_id:
         return JSONResponse({"error": "topic_id required"}, status_code=400)
     try:
-        from tea_agent.toolkit.toolkit_todo import _todos, _restore_from_db, _restored
+        from tea_agent.toolkit.toolkit_todo import _restore_from_db, _restored, _todos
         # 确保从 DB 恢复
         if not _restored:
             _restore_from_db()
@@ -623,7 +621,7 @@ async def handle_web_topic_todo_update(request):
             c.close()
         # Also sync toolkit_todo memory cache
         try:
-            from tea_agent.toolkit.toolkit_todo import _todos, _sync_item
+            from tea_agent.toolkit.toolkit_todo import _sync_item, _todos
             if 0 <= idx < len(_todos):
                 _todos[idx]["done"] = done
             _sync_item(idx, done)
@@ -646,7 +644,8 @@ async def handle_web_topic_plans(request):
     topic_id = request.path_params.get("topic_id", "")
     status_filter = (request.query_params.get("status", "active") or "active").strip().lower()
     plans_dir = ".tea_agent_run/plans"
-    import json, os
+    import json
+    import os
     plans = []
     try:
         if os.path.isdir(plans_dir):
@@ -658,13 +657,7 @@ async def handle_web_topic_plans(request):
                     p = json.load(f)
                 if p.get("topic_id") == topic_id or p.get("topic_id") == "" or not topic_id:
                     plan_status = (p.get("status") or "").lower()
-                    if status_filter == "all":
-                        plans.append(p)
-                    elif status_filter == "done" and plan_status == "done":
-                        plans.append(p)
-                    elif status_filter == "failed" and plan_status == "failed":
-                        plans.append(p)
-                    elif status_filter == "active" and plan_status not in ("done", "failed"):
+                    if status_filter == "all" or status_filter == "done" and plan_status == "done" or status_filter == "failed" and plan_status == "failed" or status_filter == "active" and plan_status not in ("done", "failed"):
                         plans.append(p)
     except Exception as e:
         logger.warning(f"handle_web_topic_plans failed: {e}")
@@ -1014,19 +1007,26 @@ async def handle_dag_viz(request):
         return JSONResponse({"error": "viz_id required"}, status_code=400)
 
     viz = DagVizRegistry.get(viz_id)
-    if not viz:
-        return HTMLResponse(
-            f"<html><body style='background:#0d1117;color:#c9d1d9;"
-            f"font-family:sans-serif;display:flex;align-items:center;"
-            f"justify-content:center;height:100vh'>"
-            f"<div style='text-align:center'><h2>🔌 DAG 已结束或不存在</h2>"
-            f"<p>viz_id: {viz_id}</p></div></body></html>",
-            status_code=404,
-        )
+    if viz:
+        dag_structure = viz._build_dag_structure()
+        html = get_viz_html(dag_structure, viz.title, viz_id=viz_id)
+        return HTMLResponse(html)
 
-    dag_structure = viz._build_dag_structure()
-    html = get_viz_html(dag_structure, viz.title, viz_id=viz_id)
-    return HTMLResponse(html)
+    # 回退到 SimpleDagRegistry
+    from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+    simple = SimpleDagRegistry._instances.get(viz_id)
+    if simple:
+        html = get_viz_html(simple, simple.get("title", "DAG"), viz_id=viz_id)
+        return HTMLResponse(html)
+
+    return HTMLResponse(
+        f"<html><body style='background:#0d1117;color:#c9d1d9;"
+        f"font-family:sans-serif;display:flex;align-items:center;"
+        f"justify-content:center;height:100vh'>"
+        f"<div style='text-align:center'><h2>🔌 DAG 已结束或不存在</h2>"
+        f"<p>viz_id: {viz_id}</p></div></body></html>",
+        status_code=404,
+    )
 
 
 async def handle_dag_sse(request):
@@ -1092,83 +1092,129 @@ async def handle_dag_status(request):
         return JSONResponse({"error": "viz_id required"}, status_code=400)
 
     snapshot = DagVizRegistry.get_status_snapshot(viz_id)
-    if not snapshot:
-        return JSONResponse({"error": "viz not found"}, status_code=404)
-    return JSONResponse(snapshot)
+    if snapshot:
+        return JSONResponse(snapshot)
+
+    # 回退到 SimpleDagRegistry
+    from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+    simple = SimpleDagRegistry._instances.get(viz_id)
+    if simple:
+        return JSONResponse(simple)
+    return JSONResponse({"error": "viz not found"}, status_code=404)
 
 
 async def handle_dag_image(request):
-    """GET /dag/{viz_id}/image — 返回 dot 渲染的 SVG/PNG DAG 状态图。"""
+    """GET /dag/{viz_id}/image — 返回 dot 渲染的 SVG/PNG DAG 状态图。
+
+    支持三个数据源（按优先级）：
+      1. DagVizRegistry（WorkflowVisualizer 完整实例）
+      2. SimpleDagRegistry（轻量注册表，工具推送的简易 DAG）
+    """
     viz_id = request.path_params.get("viz_id", "")
     if not viz_id:
         return JSONResponse({"error": "viz_id required"}, status_code=400)
 
-    viz = DagVizRegistry.get(viz_id)
-    if not viz:
-        return JSONResponse({"error": "viz not found"}, status_code=404)
-
-    from tea_agent.multi_agent.dag_dot_renderer import (
-        dag_to_dot,
-        render_dot_to_svg,
-        render_dot_to_png,
-        check_dot_available,
-    )
-
-    # 获取格式偏好：svg（默认）或 png
     fmt = request.query_params.get("format", "svg")
 
-    if viz._exec:
-        node_states = viz._exec.results
-    else:
-        node_states = {}
-
-    dot = dag_to_dot(viz.dag, node_states, viz.title)
-
-    if not check_dot_available():
-        # 返回 DOT 源码作为纯文本，前端可降级渲染
-        return Response(
-            content=dot,
-            media_type="text/plain",
-            headers={"X-Dot-Available": "false"},
-        )
-
-    if fmt == "png":
-        png_data = render_dot_to_png(dot)
-        if png_data:
-            return Response(
-                content=png_data,
-                media_type="image/png",
-                headers={"Cache-Control": "no-cache"},
-            )
-
-    svg_data = render_dot_to_svg(dot)
-    if svg_data:
-        return Response(
-            content=svg_data,
-            media_type="image/svg+xml",
-            headers={"Cache-Control": "no-cache"},
-        )
-
-    # 渲染失败，返回 DOT 源码
-    return Response(
-        content=dot,
-        media_type="text/plain",
-        status_code=500,
+    from tea_agent.multi_agent.dag_dot_renderer import (
+        check_dot_available,
+        render_dag_dict_to_png,
+        render_dag_dict_to_svg,
     )
 
+    # ── 数据源 1：DagVizRegistry ──
+    viz = DagVizRegistry.get(viz_id)
+    if viz:
+        # 转换为 dict 格式，使用通用渲染函数
+        dag_data = DagVizRegistry.get_status_snapshot(viz_id)
+        if dag_data:
+            if fmt == "png":
+                png_data = render_dag_dict_to_png(dag_data)
+                if png_data:
+                    return Response(content=png_data, media_type="image/png",
+                                    headers={"Cache-Control": "no-cache"})
+            svg_data = render_dag_dict_to_svg(dag_data)
+            if svg_data:
+                return Response(content=svg_data, media_type="image/svg+xml",
+                                headers={"Cache-Control": "no-cache"})
+            return Response(content=str(dag_data), media_type="text/plain",
+                            status_code=500)
 
-    """Wrapper to catch agent initialization errors."""
+    # ── 数据源 2：SimpleDagRegistry ──
     try:
-        return await handler(request)
-    except ValueError as e:
-        if "incomplete config" in str(e).lower():
-            return JSONResponse(
-                {"error": "Agent not configured", "detail": str(e),
-                 "hint": "Run 'tea-agent --setup' or configure ~/.tea_agent/config.yaml"},
-                status_code=503)
-        return JSONResponse({"error": str(e)}, status_code=500)
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+        entry = SimpleDagRegistry._instances.get(viz_id) if hasattr(SimpleDagRegistry, '_instances') else None
+        if entry:
+            dag_dict = {
+                "title": entry.get("title", "DAG"),
+                "nodes": entry.get("nodes", []),
+                "edges": entry.get("edges", []),
+            }
+            if fmt == "png":
+                png_data = render_dag_dict_to_png(dag_dict)
+                if png_data:
+                    return Response(content=png_data, media_type="image/png",
+                                    headers={"Cache-Control": "no-cache"})
+            svg_data = render_dag_dict_to_svg(dag_dict)
+            if svg_data:
+                return Response(content=svg_data, media_type="image/svg+xml",
+                                headers={"Cache-Control": "no-cache"})
+            return Response(content=str(dag_dict), media_type="text/plain",
+                            status_code=500)
+    except ImportError:
+        pass
+
+    # 未找到
+    return JSONResponse({"error": "viz not found", "viz_id": viz_id},
+                        status_code=404)
+
+
+# ═══════════════════════════════════════════════
+# DAG 列表端点 — /api/dags
+# ═══════════════════════════════════════════════
+
+async def handle_list_dags(request):
+    """GET /api/dags — 返回所有活跃 DAG 的摘要列表。
+
+    合并 DagVizRegistry + SimpleDagRegistry，供任务面板轮询。
+    """
+    result = []
+
+    # 1) DagVizRegistry
+    try:
+        from tea_agent.multi_agent.workflow_viz import DagVizRegistry
+        for viz_id in DagVizRegistry.list_ids():
+            snap = DagVizRegistry.get_status_snapshot(viz_id)
+            if snap:
+                result.append({
+                    "viz_id": viz_id,
+                    "title": snap.get("title", viz_id),
+                    "state": snap.get("state", "unknown"),
+                    "progress": snap.get("progress", {}),
+                    "node_count": len(snap.get("nodes", [])),
+                    "edge_count": len(snap.get("edges", [])),
+                    "source": "DagVizRegistry",
+                })
+    except ImportError:
+        pass
+
+    # 2) SimpleDagRegistry
+    try:
+        from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+        for entry in SimpleDagRegistry.list_all():
+            result.append({
+                "viz_id": entry.get("viz_id", ""),
+                "title": entry.get("title", "DAG"),
+                "state": entry.get("state", "unknown"),
+                "progress": entry.get("progress", {}),
+                "node_count": len(entry.get("nodes", [])),
+                "edge_count": len(entry.get("edges", [])),
+                "source": "SimpleDagRegistry",
+            })
+    except ImportError:
+        pass
+
+    return JSONResponse({"dags": result, "count": len(result)})
 
 
 async def handle_restart(request):

@@ -25,7 +25,7 @@ try:
 except ImportError:
     raise ImportError("pip install starlette uvicorn")
 
-from tea_agent.store import get_storage
+from tea_agent.store import get_storage  # noqa: E402
 
 __version__ = "0.3.0"
 
@@ -43,8 +43,8 @@ class ACPProtocolServer:
         self._lock = threading.Lock()
         self._agent_id = "tea-agent"
         self._start_time = time.time()
-        self._storage: "Storage | None" = None
-        self._agent: "Agent | None" = None
+        self._storage: Storage | None = None
+        self._agent: Agent | None = None
 
     def _get_storage(self) -> "Storage":
         """Lazy-init storage backend."""

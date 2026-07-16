@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAG 工作流 — Tea Agent</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: -apple-system, BlinkMacSystemFont, "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 顶部栏 */
+.topbar {
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.topbar h1 { font-size: 18px; font-weight: 600; color: #58a6ff; }
+.topbar .badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 500;
+}
+.badge-running { background: #1f6feb33; color: #58a6ff; border: 1px solid #1f6feb66; }
+
+/* 主布局 */
+.main-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* 侧边栏 — 模拟任务面板 */
+.task-panel {
+    width: 320px;
+    min-width: 260px;
+    background: #161b22;
+    border-right: 1px solid #30363d;
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.task-panel h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    color: #8b949e;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+/* DAG 卡片（任务面板中） */
+.dag-card {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+.dag-card:hover { border-color: #58a6ff; }
+.dag-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #21262d;
+    font-size: 13px;
+    font-weight: 600;
+}
+.dag-card-header .icon { font-size: 18px; }
+.dag-card-img {
+    width: 100%;
+    display: block;
+    background: #0d1117;
+}
+
+/* 进度信息 */
+.dag-progress {
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #8b949e;
+}
+.dag-progress .bar {
+    flex: 1;
+    height: 4px;
+    background: #21262d;
+    border-radius: 2px;
+    overflow: hidden;
+}
+.dag-progress .bar-fill {
+    height: 100%;
+    background: #3fb950;
+    border-radius: 2px;
+    transition: width 0.3s;
+}
+
+/* SVG 查看器 */
+.svg-viewer {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: #0d1117;
+    overflow: auto;
+}
+.svg-viewer svg {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+/* 图例 */
+.legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 10px 14px;
+    border-top: 1px solid #21262d;
+    font-size: 11px;
+    color: #8b949e;
+}
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    display: inline-block;
+}
+
+/* 状态标签 */
+.status-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .main-layout { flex-direction: column; }
+    .task-panel { width: 100%; border-right: none; border-bottom: 1px solid #30363d; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <span style="font-size:22px;">☕</span>
+    <h1>Tea Agent</h1>
+    <span class="badge badge-running">▶ 代码审查工作流 — CI/CD Pipeline</span>
+</div>
+
+<div class="main-layout">
+    <!-- 左侧任务面板 -->
+    <div class="task-panel">
+        <h3>📊 DAG 工作流缩略图</h3>
+
+        <div class="dag-card">
+            <div class="dag-card-header">
+                <span class="icon">🔀</span>
+                <span>代码审查工作流 — CI/CD Pipeline</span>
+            </div>
+            <a href="#svg-view" style="text-decoration:none;">
+                <svg width="539pt" height="196pt"
+ viewBox="0.00 0.00 539.00 196.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 191.81)">
+<title>G</title>
+<polygon fill="#0d1117" stroke="none" points="-4,4 -4,-191.81 535.25,-191.81 535.25,4 -4,4"/>
+<text xml:space="preserve" text-anchor="middle" x="265.62" y="-166.71" font-family="sans-serif" font-size="18.00" fill="#c9d1d9">代码审查工作流 — CI/CD Pipeline</text>
+<!-- init -->
+<g id="node1" class="node">
+<title>init</title>
+<path fill="none" stroke="#3fb950" stroke-width="2" d="M106,-96C106,-96 12,-96 12,-96 6,-96 0,-90 0,-84 0,-84 0,-72 0,-72 0,-66 6,-60 12,-60 12,-60 106,-60 106,-60 112,-60 118,-66 118,-72 118,-72 118,-84 118,-84 118,-90 112,-96 106,-96"/>
+<text xml:space="preserve" text-anchor="middle" x="59" y="-80.67" font-family="sans-serif" font-size="11.00" fill="#3fb950">初始化审查</text>
+<text xml:space="preserve" text-anchor="middle" x="59" y="-68.67" font-family="sans-serif" font-size="11.00" fill="#3fb950">[COMPLETED (0.8s)]</text>
+</g>
+<!-- lint -->
+<g id="node2" class="node">
+<title>lint</title>
+<path fill="none" stroke="#3fb950" stroke-width="2" d="M265.25,-157.25C265.25,-157.25 171.25,-157.25 171.25,-157.25 165.25,-157.25 159.25,-151.25 159.25,-145.25 159.25,-145.25 159.25,-132.75 159.25,-132.75 159.25,-126.75 165.25,-120.75 171.25,-120.75 171.25,-120.75 265.25,-120.75 265.25,-120.75 271.25,-120.75 277.25,-126.75 277.25,-132.75 277.25,-132.75 277.25,-145.25 277.25,-145.25 277.25,-151.25 271.25,-157.25 265.25,-157.25"/>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-142.8" font-family="sans-serif" font-size="11.00" fill="#3fb950">Lint 检查</text>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-128.55" font-family="sans-serif" font-size="11.00" fill="#3fb950">[COMPLETED (2.3s)]</text>
+</g>
+<!-- init&#45;&gt;lint -->
+<g id="edge1" class="edge">
+<title>init&#45;&gt;lint</title>
+<path fill="none" stroke="#30363d" d="M108.89,-96.97C124.28,-102.93 141.44,-109.59 157.49,-115.82"/>
+<polygon fill="#30363d" stroke="#30363d" points="155.85,-118.93 166.43,-119.29 158.38,-112.41 155.85,-118.93"/>
+</g>
+<!-- security -->
+<g id="node3" class="node">
+<title>security</title>
+<path fill="none" stroke="#f85149" stroke-width="2" d="M270.5,-102.25C270.5,-102.25 166,-102.25 166,-102.25 160,-102.25 154,-96.25 154,-90.25 154,-90.25 154,-65.75 154,-65.75 154,-59.75 160,-53.75 166,-53.75 166,-53.75 270.5,-53.75 270.5,-53.75 276.5,-53.75 282.5,-59.75 282.5,-65.75 282.5,-65.75 282.5,-90.25 282.5,-90.25 282.5,-96.25 276.5,-102.25 270.5,-102.25"/>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-87.8" font-family="sans-serif" font-size="11.00" fill="#f85149">安全审计</text>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-75.8" font-family="sans-serif" font-size="11.00" fill="#f85149">[FAILED (1.5s)]</text>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-61.55" font-family="sans-serif" font-size="11.00" fill="#f85149">⚠ semgrep not found</text>
+</g>
+<!-- init&#45;&gt;security -->
+<g id="edge2" class="edge">
+<title>init&#45;&gt;security</title>
+<path fill="none" stroke="#30363d" d="M118.55,-78C126.12,-78 133.96,-78 141.75,-78"/>
+<polygon fill="#30363d" stroke="#30363d" points="141.59,-81.5 151.59,-78 141.59,-74.5 141.59,-81.5"/>
+</g>
+<!-- complexity -->
+<g id="node4" class="node">
+<title>complexity</title>
+<path fill="none" stroke="#3fb950" stroke-width="2" d="M265.25,-36C265.25,-36 171.25,-36 171.25,-36 165.25,-36 159.25,-30 159.25,-24 159.25,-24 159.25,-12 159.25,-12 159.25,-6 165.25,0 171.25,0 171.25,0 265.25,0 265.25,0 271.25,0 277.25,-6 277.25,-12 277.25,-12 277.25,-24 277.25,-24 277.25,-30 271.25,-36 265.25,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-20.68" font-family="sans-serif" font-size="11.00" fill="#3fb950">复杂度分析</text>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-8.68" font-family="sans-serif" font-size="11.00" fill="#3fb950">[COMPLETED (0.6s)]</text>
+</g>
+<!-- init&#45;&gt;complexity -->
+<g id="edge3" class="edge">
+<title>init&#45;&gt;complexity</title>
+<path fill="none" stroke="#30363d" d="M109.75,-59.02C124.74,-53.3 141.35,-46.96 156.95,-41.01"/>
+<polygon fill="#30363d" stroke="#30363d" points="158.04,-44.34 166.13,-37.5 155.54,-37.8 158.04,-44.34"/>
+</g>
+<!-- type_check -->
+<g id="node5" class="node">
+<title>type_check</title>
+<path fill="none" stroke="#58a6ff" stroke-width="2" d="M412.5,-96C412.5,-96 330.5,-96 330.5,-96 324.5,-96 318.5,-90 318.5,-84 318.5,-84 318.5,-72 318.5,-72 318.5,-66 324.5,-60 330.5,-60 330.5,-60 412.5,-60 412.5,-60 418.5,-60 424.5,-66 424.5,-72 424.5,-72 424.5,-84 424.5,-84 424.5,-90 418.5,-96 412.5,-96"/>
+<text xml:space="preserve" text-anchor="middle" x="371.5" y="-80.67" font-family="sans-serif" font-size="11.00" fill="#ffffff">类型检查</text>
+<text xml:space="preserve" text-anchor="middle" x="371.5" y="-68.67" font-family="sans-serif" font-size="11.00" fill="#ffffff">[RUNNING (0.3s)]</text>
+</g>
+<!-- lint&#45;&gt;type_check -->
+<g id="edge4" class="edge">
+<title>lint&#45;&gt;type_check</title>
+<path fill="none" stroke="#30363d" d="M266.69,-119.87C281.4,-113.93 297.78,-107.33 313.09,-101.15"/>
+<polygon fill="#30363d" stroke="#30363d" points="314.12,-104.51 322.08,-97.53 311.5,-98.02 314.12,-104.51"/>
+</g>
+<!-- security&#45;&gt;type_check -->
+<g id="edge5" class="edge">
+<title>security&#45;&gt;type_check</title>
+<path fill="none" stroke="#30363d" d="M283.39,-78C290.99,-78 298.74,-78 306.33,-78"/>
+<polygon fill="#30363d" stroke="#30363d" points="306.18,-81.5 316.18,-78 306.18,-74.5 306.18,-81.5"/>
+</g>
+<!-- complexity&#45;&gt;type_check -->
+<g id="edge6" class="edge">
+<title>complexity&#45;&gt;type_check</title>
+<path fill="none" stroke="#30363d" d="M267.11,-36.98C281.38,-42.65 297.19,-48.92 312.07,-54.82"/>
+<polygon fill="#30363d" stroke="#30363d" points="310.7,-58.04 321.29,-58.48 313.28,-51.54 310.7,-58.04"/>
+</g>
+<!-- report -->
+<g id="node6" class="node">
+<title>report</title>
+<path fill="none" stroke="#30363d" stroke-width="2" d="M519.25,-96C519.25,-96 472.5,-96 472.5,-96 466.5,-96 460.5,-90 460.5,-84 460.5,-84 460.5,-72 460.5,-72 460.5,-66 466.5,-60 472.5,-60 472.5,-60 519.25,-60 519.25,-60 525.25,-60 531.25,-66 531.25,-72 531.25,-72 531.25,-84 531.25,-84 531.25,-90 525.25,-96 519.25,-96"/>
+<text xml:space="preserve" text-anchor="middle" x="495.88" y="-80.67" font-family="sans-serif" font-size="11.00" fill="#8b949e">最终报告</text>
+<text xml:space="preserve" text-anchor="middle" x="495.88" y="-68.67" font-family="sans-serif" font-size="11.00" fill="#8b949e">[PENDING]</text>
+</g>
+<!-- type_check&#45;&gt;report -->
+<g id="edge7" class="edge">
+<title>type_check&#45;&gt;report</title>
+<path fill="none" stroke="#30363d" d="M425.46,-78C433.09,-78 440.9,-78 448.39,-78"/>
+<polygon fill="#30363d" stroke="#30363d" points="448.32,-81.5 458.32,-78 448.32,-74.5 448.32,-81.5"/>
+</g>
+</g>
+</svg>
+
+            </a>
+            <div class="dag-progress">
+                <span>进度: 3/6</span>
+                <div class="bar">
+                    <div class="bar-fill" style="width:50%"></div>
+                </div>
+                <span>50%</span>
+            </div>
+        </div>
+
+        <h3>📋 状态图例</h3>
+        <div class="legend">
+            <div class="legend-item"><span class="legend-dot" style="background:#3fb950"></span> 已完成</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#f85149"></span> 失败</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#58a6ff"></span> 运行中</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#30363d"></span> 待命</div>
+        </div>
+
+        <h3>📝 节点详情</h3>
+        <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;">
+            <div class="status-tag" style="background:#3fb95022;color:#3fb950;">✅ 初始化审查 — 0.8s</div>
+            <div class="status-tag" style="background:#3fb95022;color:#3fb950;">✅ Lint 检查 — 2.3s</div>
+            <div class="status-tag" style="background:#f8514922;color:#f85149;">❌ 安全审计 — semgrep not found</div>
+            <div class="status-tag" style="background:#3fb95022;color:#3fb950;">✅ 复杂度分析 — 0.6s</div>
+            <div class="status-tag" style="background:#58a6ff22;color:#58a6ff;">▶ 类型检查 — 0.3s</div>
+            <div class="status-tag" style="background:#30363d;color:#8b949e;">⬜ 最终报告</div>
+        </div>
+    </div>
+
+    <!-- 右侧 SVG 放大视图 -->
+    <div class="svg-viewer" id="svg-view">
+        <svg width="539pt" height="196pt"
+ viewBox="0.00 0.00 539.00 196.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 191.81)">
+<title>G</title>
+<polygon fill="#0d1117" stroke="none" points="-4,4 -4,-191.81 535.25,-191.81 535.25,4 -4,4"/>
+<text xml:space="preserve" text-anchor="middle" x="265.62" y="-166.71" font-family="sans-serif" font-size="18.00" fill="#c9d1d9">代码审查工作流 — CI/CD Pipeline</text>
+<!-- init -->
+<g id="node1" class="node">
+<title>init</title>
+<path fill="none" stroke="#3fb950" stroke-width="2" d="M106,-96C106,-96 12,-96 12,-96 6,-96 0,-90 0,-84 0,-84 0,-72 0,-72 0,-66 6,-60 12,-60 12,-60 106,-60 106,-60 112,-60 118,-66 118,-72 118,-72 118,-84 118,-84 118,-90 112,-96 106,-96"/>
+<text xml:space="preserve" text-anchor="middle" x="59" y="-80.67" font-family="sans-serif" font-size="11.00" fill="#3fb950">初始化审查</text>
+<text xml:space="preserve" text-anchor="middle" x="59" y="-68.67" font-family="sans-serif" font-size="11.00" fill="#3fb950">[COMPLETED (0.8s)]</text>
+</g>
+<!-- lint -->
+<g id="node2" class="node">
+<title>lint</title>
+<path fill="none" stroke="#3fb950" stroke-width="2" d="M265.25,-157.25C265.25,-157.25 171.25,-157.25 171.25,-157.25 165.25,-157.25 159.25,-151.25 159.25,-145.25 159.25,-145.25 159.25,-132.75 159.25,-132.75 159.25,-126.75 165.25,-120.75 171.25,-120.75 171.25,-120.75 265.25,-120.75 265.25,-120.75 271.25,-120.75 277.25,-126.75 277.25,-132.75 277.25,-132.75 277.25,-145.25 277.25,-145.25 277.25,-151.25 271.25,-157.25 265.25,-157.25"/>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-142.8" font-family="sans-serif" font-size="11.00" fill="#3fb950">Lint 检查</text>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-128.55" font-family="sans-serif" font-size="11.00" fill="#3fb950">[COMPLETED (2.3s)]</text>
+</g>
+<!-- init&#45;&gt;lint -->
+<g id="edge1" class="edge">
+<title>init&#45;&gt;lint</title>
+<path fill="none" stroke="#30363d" d="M108.89,-96.97C124.28,-102.93 141.44,-109.59 157.49,-115.82"/>
+<polygon fill="#30363d" stroke="#30363d" points="155.85,-118.93 166.43,-119.29 158.38,-112.41 155.85,-118.93"/>
+</g>
+<!-- security -->
+<g id="node3" class="node">
+<title>security</title>
+<path fill="none" stroke="#f85149" stroke-width="2" d="M270.5,-102.25C270.5,-102.25 166,-102.25 166,-102.25 160,-102.25 154,-96.25 154,-90.25 154,-90.25 154,-65.75 154,-65.75 154,-59.75 160,-53.75 166,-53.75 166,-53.75 270.5,-53.75 270.5,-53.75 276.5,-53.75 282.5,-59.75 282.5,-65.75 282.5,-65.75 282.5,-90.25 282.5,-90.25 282.5,-96.25 276.5,-102.25 270.5,-102.25"/>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-87.8" font-family="sans-serif" font-size="11.00" fill="#f85149">安全审计</text>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-75.8" font-family="sans-serif" font-size="11.00" fill="#f85149">[FAILED (1.5s)]</text>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-61.55" font-family="sans-serif" font-size="11.00" fill="#f85149">⚠ semgrep not found</text>
+</g>
+<!-- init&#45;&gt;security -->
+<g id="edge2" class="edge">
+<title>init&#45;&gt;security</title>
+<path fill="none" stroke="#30363d" d="M118.55,-78C126.12,-78 133.96,-78 141.75,-78"/>
+<polygon fill="#30363d" stroke="#30363d" points="141.59,-81.5 151.59,-78 141.59,-74.5 141.59,-81.5"/>
+</g>
+<!-- complexity -->
+<g id="node4" class="node">
+<title>complexity</title>
+<path fill="none" stroke="#3fb950" stroke-width="2" d="M265.25,-36C265.25,-36 171.25,-36 171.25,-36 165.25,-36 159.25,-30 159.25,-24 159.25,-24 159.25,-12 159.25,-12 159.25,-6 165.25,0 171.25,0 171.25,0 265.25,0 265.25,0 271.25,0 277.25,-6 277.25,-12 277.25,-12 277.25,-24 277.25,-24 277.25,-30 271.25,-36 265.25,-36"/>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-20.68" font-family="sans-serif" font-size="11.00" fill="#3fb950">复杂度分析</text>
+<text xml:space="preserve" text-anchor="middle" x="218.25" y="-8.68" font-family="sans-serif" font-size="11.00" fill="#3fb950">[COMPLETED (0.6s)]</text>
+</g>
+<!-- init&#45;&gt;complexity -->
+<g id="edge3" class="edge">
+<title>init&#45;&gt;complexity</title>
+<path fill="none" stroke="#30363d" d="M109.75,-59.02C124.74,-53.3 141.35,-46.96 156.95,-41.01"/>
+<polygon fill="#30363d" stroke="#30363d" points="158.04,-44.34 166.13,-37.5 155.54,-37.8 158.04,-44.34"/>
+</g>
+<!-- type_check -->
+<g id="node5" class="node">
+<title>type_check</title>
+<path fill="none" stroke="#58a6ff" stroke-width="2" d="M412.5,-96C412.5,-96 330.5,-96 330.5,-96 324.5,-96 318.5,-90 318.5,-84 318.5,-84 318.5,-72 318.5,-72 318.5,-66 324.5,-60 330.5,-60 330.5,-60 412.5,-60 412.5,-60 418.5,-60 424.5,-66 424.5,-72 424.5,-72 424.5,-84 424.5,-84 424.5,-90 418.5,-96 412.5,-96"/>
+<text xml:space="preserve" text-anchor="middle" x="371.5" y="-80.67" font-family="sans-serif" font-size="11.00" fill="#ffffff">类型检查</text>
+<text xml:space="preserve" text-anchor="middle" x="371.5" y="-68.67" font-family="sans-serif" font-size="11.00" fill="#ffffff">[RUNNING (0.3s)]</text>
+</g>
+<!-- lint&#45;&gt;type_check -->
+<g id="edge4" class="edge">
+<title>lint&#45;&gt;type_check</title>
+<path fill="none" stroke="#30363d" d="M266.69,-119.87C281.4,-113.93 297.78,-107.33 313.09,-101.15"/>
+<polygon fill="#30363d" stroke="#30363d" points="314.12,-104.51 322.08,-97.53 311.5,-98.02 314.12,-104.51"/>
+</g>
+<!-- security&#45;&gt;type_check -->
+<g id="edge5" class="edge">
+<title>security&#45;&gt;type_check</title>
+<path fill="none" stroke="#30363d" d="M283.39,-78C290.99,-78 298.74,-78 306.33,-78"/>
+<polygon fill="#30363d" stroke="#30363d" points="306.18,-81.5 316.18,-78 306.18,-74.5 306.18,-81.5"/>
+</g>
+<!-- complexity&#45;&gt;type_check -->
+<g id="edge6" class="edge">
+<title>complexity&#45;&gt;type_check</title>
+<path fill="none" stroke="#30363d" d="M267.11,-36.98C281.38,-42.65 297.19,-48.92 312.07,-54.82"/>
+<polygon fill="#30363d" stroke="#30363d" points="310.7,-58.04 321.29,-58.48 313.28,-51.54 310.7,-58.04"/>
+</g>
+<!-- report -->
+<g id="node6" class="node">
+<title>report</title>
+<path fill="none" stroke="#30363d" stroke-width="2" d="M519.25,-96C519.25,-96 472.5,-96 472.5,-96 466.5,-96 460.5,-90 460.5,-84 460.5,-84 460.5,-72 460.5,-72 460.5,-66 466.5,-60 472.5,-60 472.5,-60 519.25,-60 519.25,-60 525.25,-60 531.25,-66 531.25,-72 531.25,-72 531.25,-84 531.25,-84 531.25,-90 525.25,-96 519.25,-96"/>
+<text xml:space="preserve" text-anchor="middle" x="495.88" y="-80.67" font-family="sans-serif" font-size="11.00" fill="#8b949e">最终报告</text>
+<text xml:space="preserve" text-anchor="middle" x="495.88" y="-68.67" font-family="sans-serif" font-size="11.00" fill="#8b949e">[PENDING]</text>
+</g>
+<!-- type_check&#45;&gt;report -->
+<g id="edge7" class="edge">
+<title>type_check&#45;&gt;report</title>
+<path fill="none" stroke="#30363d" d="M425.46,-78C433.09,-78 440.9,-78 448.39,-78"/>
+<polygon fill="#30363d" stroke="#30363d" points="448.32,-81.5 458.32,-78 448.32,-74.5 448.32,-81.5"/>
+</g>
+</g>
+</svg>
+
+    </div>
+</div>
+
+<script>
+// 点击 DAG 卡片缩略图滚动到放大视图
+console.log('Tea Agent DAG 工作流可视化');
+console.log('节点: 6 个 (completed=3, running=1, failed=1, pending=1)');
+console.log('边: 7 条');
+</script>
+
+</body>
+</html>

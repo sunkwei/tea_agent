@@ -97,7 +97,7 @@ class DbMerger:
         max_ids = {}
         # NOTE: 表名和列名来自内部硬编码常量，不受用户输入影响。
         # 为防御性编程，仍然做白名单校验。
-        _ALLOWED_TABLES = {"topics", "conversations", "agent_rounds", "memories",
+        _ALLOWED_TABLES = {"topics", "conversations", "agent_rounds", "memories",  # noqa: N806
                            "system_prompts", "reflections", "config_history"}
         for table, col in [
             ("topics", "topic_id"),
@@ -120,7 +120,7 @@ class DbMerger:
     def _get_table_columns(self, conn: sqlite3.Connection, table: str) -> list[str]:
         """获取表的所有列名"""
         # NOTE: table 来自内部循环，但为防御性编程做白名单校验
-        _ALLOWED_TABLES = {"topics", "conversations", "agent_rounds", "memories",
+        _ALLOWED_TABLES = {"topics", "conversations", "agent_rounds", "memories",  # noqa: N806
                            "system_prompts", "reflections", "config_history",
                            "topic_token_stats", "t_conv_summary", "_meta"}
         if table not in _ALLOWED_TABLES:

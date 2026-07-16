@@ -7,11 +7,7 @@ FlowEngine + RoleAgent + AgentTool 单元测试。
 - AgentTool: call, to_tool_schema, 并发控制
 """
 
-import json
-from unittest.mock import MagicMock, patch, PropertyMock
-
-import pytest
-
+from unittest.mock import MagicMock, PropertyMock
 
 # ============================================================
 # FlowEngine
@@ -78,7 +74,7 @@ class TestFlowEngineBasic:
     """FlowEngine 装饰器和基本执行测试"""
 
     def test_flow_start_decorator(self):
-        from tea_agent.multi_agent import FlowEngine, flow_start, flow_listen
+        from tea_agent.multi_agent import FlowEngine, flow_start
 
         class TestFlow(FlowEngine):
             @flow_start()
@@ -92,7 +88,7 @@ class TestFlowEngineBasic:
         assert step_info.get("is_start", False) is True or "__start__" in str(step_info.get("listen_sources", []))
 
     def test_flow_listen_decorator(self):
-        from tea_agent.multi_agent import FlowEngine, flow_start, flow_listen
+        from tea_agent.multi_agent import FlowEngine, flow_listen, flow_start
 
         class TestFlow(FlowEngine):
             @flow_start()
@@ -110,7 +106,7 @@ class TestFlowEngineBasic:
         assert any("step_a" in str(s) for s in listen_sources)
 
     def test_simple_execution(self):
-        from tea_agent.multi_agent import FlowEngine, flow_start, flow_listen
+        from tea_agent.multi_agent import FlowEngine, flow_listen, flow_start
 
         execution_order = []
 
@@ -131,7 +127,7 @@ class TestFlowEngineBasic:
         assert result["success"] is True
 
     def test_flow_state_injection(self):
-        from tea_agent.multi_agent import FlowEngine, flow_start, flow_listen
+        from tea_agent.multi_agent import FlowEngine, flow_listen, flow_start
 
         class StateFlow(FlowEngine):
             @flow_start()
@@ -149,7 +145,7 @@ class TestFlowEngineBasic:
         assert flow.state["value"] == 42
 
     def test_step_failure_isolation(self):
-        from tea_agent.multi_agent import FlowEngine, flow_start, flow_listen
+        from tea_agent.multi_agent import FlowEngine, flow_listen, flow_start
 
         class FailFlow(FlowEngine):
             @flow_start()
@@ -168,7 +164,7 @@ class TestFlowEngineBasic:
         assert "bad" in result.get("errors", {})
 
     def test_visualize_returns_string(self):
-        from tea_agent.multi_agent import FlowEngine, flow_start, flow_listen
+        from tea_agent.multi_agent import FlowEngine, flow_listen, flow_start
 
         class VizFlow(FlowEngine):
             @flow_start()
@@ -187,7 +183,7 @@ class TestFlowEngineDependencies:
     """FlowEngine 依赖检查测试"""
 
     def test_skip_on_dependency_failure(self):
-        from tea_agent.multi_agent import FlowEngine, flow_start, flow_listen
+        from tea_agent.multi_agent import FlowEngine, flow_listen, flow_start
 
         class DepFlow(FlowEngine):
             @flow_start()
@@ -209,7 +205,7 @@ class TestFlowEngineDependencies:
         ) or True  # Accept any non-completed state for now
 
     def test_three_step_chain(self):
-        from tea_agent.multi_agent import FlowEngine, flow_start, flow_listen
+        from tea_agent.multi_agent import FlowEngine, flow_listen, flow_start
 
         order = []
 
@@ -272,8 +268,9 @@ class TestRoleAgent:
         assert "你有10年经验" in prompt
 
     def test_execute_with_mocked_session(self):
-        from tea_agent.multi_agent import RoleAgent
         from unittest.mock import MagicMock, patch
+
+        from tea_agent.multi_agent import RoleAgent
 
         agent = RoleAgent(
             role="测试员",
@@ -282,7 +279,7 @@ class TestRoleAgent:
         )
 
         # Mock LiteSession
-        with patch("tea_agent.multi_agent.role_agent.LiteSession") as MockSession:
+        with patch("tea_agent.multi_agent.role_agent.LiteSession") as MockSession:  # noqa: N806
             mock_sess = MagicMock()
             mock_sess.chat.return_value = {
                 "assistant": "测试通过",
@@ -306,11 +303,12 @@ class TestRoleAgent:
         assert result.error is None
 
     def test_execute_failure_returns_error(self):
-        from tea_agent.multi_agent import RoleAgent
         from unittest.mock import MagicMock, patch
 
+        from tea_agent.multi_agent import RoleAgent
+
         agent = RoleAgent(role="测试员", goal="测试")
-        with patch("tea_agent.multi_agent.role_agent.LiteSession") as MockSession:
+        with patch("tea_agent.multi_agent.role_agent.LiteSession") as MockSession:  # noqa: N806
             mock_sess = MagicMock()
             mock_sess.chat.return_value = {
                 "assistant": "",
@@ -399,8 +397,9 @@ class TestAgentTool:
         assert schema["function"]["name"] == "helper_tool"
 
     def test_concurrent_limit(self):
-        from tea_agent.multi_agent import AgentTool
         import time
+
+        from tea_agent.multi_agent import AgentTool
 
         class SlowAgent:
             def execute_sync(self, goal, system_prompt=""):

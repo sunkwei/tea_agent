@@ -119,7 +119,7 @@ def _is_self_destructive(app: str, args: list) -> tuple:
                     pass
 
     # ── 模式6: 系统级危险命令（关机/重启）──
-    _DANGEROUS_SYSTEM = {"shutdown", "reboot", "halt", "poweroff", "init"}
+    _DANGEROUS_SYSTEM = {"shutdown", "reboot", "halt", "poweroff", "init"}  # noqa: N806
     if effective_app in _DANGEROUS_SYSTEM:
         return (True, f"⛔ 阻止危险系统命令：{effective_app} {' '.join(effective_args[:5])}")
 
@@ -463,7 +463,7 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                     logger.warning(f"toolkit_exec batch blocked: {reason}")
                     return (-1, json.dumps([{"error": True, "stderr": reason}], ensure_ascii=False), "")
 
-    _PY_CMD_THRESHOLD = 500  # -c 脚本超过此字符数则写入临时文件
+    _PY_CMD_THRESHOLD = 500  # -c 脚本超过此字符数则写入临时文件  # noqa: N806
     if action == "single" and app in ("python", "python3") and args:
         # 检测 python -c "很长的代码" 模式
         for i, arg in enumerate(args):

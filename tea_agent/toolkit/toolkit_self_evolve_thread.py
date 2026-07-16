@@ -33,12 +33,12 @@ def toolkit_self_evolve_thread(action: str):
     # ── 路径 ──
     try:
         from tea_agent.config import get_config
-        STATE_FILE = os.path.join(get_config().paths.data_dir_abs, "self_evolve_state.json")
+        STATE_FILE = os.path.join(get_config().paths.data_dir_abs, "self_evolve_state.json")  # noqa: N806
     except Exception:
-        STATE_FILE = os.path.expanduser("~/.tea_agent/self_evolve_state.json")
-    DEFAULT_DB = "chat_history.db"
-    CYCLE_INTERVAL = 3600       # 1 小时
-    CHECK_INTERVAL = 30         # 状态检查间隔
+        STATE_FILE = os.path.expanduser("~/.tea_agent/self_evolve_state.json")  # noqa: N806
+    DEFAULT_DB = "chat_history.db"  # noqa: N806
+    CYCLE_INTERVAL = 3600       # 1 小时  # noqa: N806
+    CHECK_INTERVAL = 30         # 状态检查间隔  # noqa: N806
 
     # ── 辅助 ──────────────────────────────
 

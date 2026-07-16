@@ -1,11 +1,13 @@
 """
 WorkflowEngine 综合回归测试 (Phase 5 + Phase 6)
 """
-import sys, time, logging
+import logging
+import sys
+
 logging.basicConfig(level=logging.WARNING)
 
 sys.path.insert(0, '.')
-from tea_agent.multi_agent import *
+from tea_agent.multi_agent import *  # noqa: E402
 
 
 def test_empty_dag():

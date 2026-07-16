@@ -203,7 +203,7 @@ class ChatRenderer:
             if item[0] == "user":
                 conv_starts.append(i)
 
-        MAX_RECENT = 20
+        MAX_RECENT = 20  # noqa: N806
         if conv_starts and len(conv_starts) > MAX_RECENT:
             cutoff = len(conv_starts) - MAX_RECENT
             recent_start = conv_starts[cutoff]
@@ -378,7 +378,7 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
         """定时器（50ms）：从 _progress_queue 逐条出队更新 HtmlFrame 进度；
         队列排空后若后台线程已完成，触发最终渲染。
         熔断：最多轮询 600 次（≈30 秒），超时后强制结束。"""
-        MAX_POLL = 600  # 30秒熔断上限
+        MAX_POLL = 600  # 30秒熔断上限  # noqa: N806
         if _retries > MAX_POLL:
             self.gui._update_status("⚠️ 主题加载超时，请重试")
             self.gui._loading_done = False

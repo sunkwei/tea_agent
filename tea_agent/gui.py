@@ -24,18 +24,18 @@ GUI 主窗口 — Tkinter 桌面版 Agent 界面。
   - 会话生命周期：open()→run()→close()，通过 session_ref 关联
 """
 
-import logging
-import os
-import sys
-import threading
-import tkinter as tk
-import webbrowser
-from datetime import datetime
-from pathlib import Path
+import logging  # noqa: E402
+import os  # noqa: E402
+import sys  # noqa: E402
+import threading  # noqa: E402
+import tkinter as tk  # noqa: E402
+import webbrowser  # noqa: E402
+from datetime import datetime  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 try:
-    import markdown
-    from tkinterweb import HtmlFrame
+    import markdown  # noqa: F401
+    from tkinterweb import HtmlFrame  # noqa: F401
     HAS_TKINTERWEB = True
 except ImportError:
     HAS_TKINTERWEB = False
@@ -66,50 +66,48 @@ _storage_ = None
 _toolkit_ = None
 
 # tlk 模块：toolkit 实例存放处，供 globals()["tlk"].toolkit 访问
-from tea_agent import tlk
+import tea_agent.tlk as tlk  # noqa: E402
 
 # ====================== 从 _gui 子包导入（组合模式） ======================
-import tea_agent._gui._fonts as _fonts_mod  # 模块引用，动态获取 _DEFAULT_FONT_SIZE
-from tea_agent._gui._fonts import (
+import tea_agent._gui._fonts as _fonts_mod  # 模块引用，动态获取 _DEFAULT_FONT_SIZE  # noqa: E402
+from tea_agent._gui._fonts import (  # noqa: E402
     _init_fonts,
 )
 
 # 平台检测（从 _fonts 重导出，保持兼容）
 _IS_WINDOWS = __import__('platform').system() == "Windows"
 
-from tea_agent._gui._images import ImageHandler
-from tea_agent._gui._markdown import (
+from tea_agent._gui._images import ImageHandler  # noqa: E402
+from tea_agent._gui._markdown import (  # noqa: E402
     HAS_TKINTERWEB,
     _chat_to_markdown,
     _render_markdown,
 )
-from tea_agent._gui._renderer import ChatRenderer
+from tea_agent._gui._renderer import ChatRenderer  # noqa: E402
 
 # 组件委托（composition）
-from tea_agent._gui._stream_manager import StreamManager
-from tea_agent._gui._topic_manager import TopicManager
-from tea_agent._gui._tray import TrayManager
-from tea_agent._gui._ui_builder import UIBuilder
+from tea_agent._gui._stream_manager import StreamManager  # noqa: E402
+from tea_agent._gui._topic_manager import TopicManager  # noqa: E402
+from tea_agent._gui._tray import TrayManager  # noqa: E402
+from tea_agent._gui._ui_builder import UIBuilder  # noqa: E402
 
 # Dialogs
-from tea_agent.gui_dialogs import ConfigDialog, MemoryDialog, TopicDialog
-
 # Dialogs
-from tea_agent.gui_dialogs import ConfigDialog, MemoryDialog, TopicDialog
+from tea_agent.gui_dialogs import ConfigDialog, MemoryDialog, TopicDialog  # noqa: E402
 
 
 def _format_model_name(model_name: str) -> str:
     """将模型技术名称转换为友好的显示名称。
-    
+
     Args:
         model_name: 模型的技术名称，如 "deepseek-v4-flash", "gpt-4"
-        
+
     Returns:
         友好的显示名称，如 "DeepSeek V4 Flash", "GPT-4"
     """
     if not model_name:
         return ""
-    
+
     # 特殊映射表
     special_mappings = {
         "gpt-4": "GPT-4",
@@ -143,16 +141,16 @@ def _format_model_name(model_name: str) -> str:
         "ernie-bot": "Ernie Bot",
         "ernie-bot-turbo": "Ernie Bot Turbo",
     }
-    
+
     # 检查特殊映射
     if model_name.lower() in special_mappings:
         return special_mappings[model_name.lower()]
-    
+
     # 通用转换：将连字符和下划线替换为空格，每个单词首字母大写
     # 处理特殊情况：如 "v4" -> "V4", "gpt" -> "GPT"
     words = model_name.replace("-", " ").replace("_", " ").split()
     formatted_words = []
-    
+
     for word in words:
         # 常见缩写保持大写
         if word.lower() in ["gpt", "api", "ai", "ml", "llm", "vl", "r1", "v2", "v3", "v4", "v5"]:
@@ -163,7 +161,7 @@ def _format_model_name(model_name: str) -> str:
         # 其他单词首字母大写
         else:
             formatted_words.append(word.capitalize())
-    
+
     return " ".join(formatted_words)
 
 
@@ -213,7 +211,7 @@ class TkGUI(Agent):
 
         # 暴露给 toolkit 工具函数
         globals()["_storage_"] = self.db
-        globals()["tlk"].toolkit = self.toolkit
+        tlk.toolkit = self.toolkit
 
         # HtmlFrame 缩放级别
         self._zoom_level = 100
@@ -464,7 +462,7 @@ class TkGUI(Agent):
 
     def _show_todo_dialog(self):
         """显示 TODO 提醒对话框（非模态），已存在则刷新。
-        
+
         防重复机制：
         - 检查 _todo_dialog 是否已存在且有效，有效则刷新后返回
         - 使用 _creating_todo_dialog 标志防止并发创建
@@ -1348,8 +1346,8 @@ class TkGUI(Agent):
         3. 强制重载全局配置缓存、EmbeddingEngine、Storage
         4. 切换会话（关闭旧 → 创建新），保持当前主题
         """
-        from tkinter import filedialog, messagebox
         import shutil
+        from tkinter import filedialog, messagebox
 
         filepath = filedialog.askopenfilename(
             title="选择配置文件",
@@ -1404,8 +1402,8 @@ class TkGUI(Agent):
 
         # ── ⑦ 重载 Storage 中的 EmbeddingEngine（此时 self._cfg 已更新）──
         try:
-            from tea_agent.store import get_storage
             from tea_agent.embedding_util import EmbeddingEngine
+            from tea_agent.store import get_storage
             storage = get_storage()
             if hasattr(storage, '_memories'):
                 storage._memories.embedding_engine = EmbeddingEngine(self._cfg.embedding)

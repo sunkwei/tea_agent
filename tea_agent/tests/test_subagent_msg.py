@@ -16,9 +16,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def clean_registry():
     """Clean message registry before and after each test."""
-    from tea_agent.toolkit.toolkit_subagent_msg import (
-        _message_registry, _registry_lock
-    )
+    from tea_agent.toolkit.toolkit_subagent_msg import _message_registry, _registry_lock
     with _registry_lock:
         _message_registry.clear()
     yield
@@ -143,9 +141,7 @@ class TestContextInjection:
 
     def test_inject_with_messages(self):
         """Inject messages into context dict."""
-        from tea_agent.toolkit.toolkit_subagent_msg import (
-            toolkit_subagent_msg, inject_messages_into_context
-        )
+        from tea_agent.toolkit.toolkit_subagent_msg import inject_messages_into_context, toolkit_subagent_msg
         toolkit_subagent_msg(action='send', to='ctx-agent', message='Important data')
         result = inject_messages_into_context('ctx-agent', {'existing_key': 'value'})
         assert '## Incoming Messages' in result
@@ -166,18 +162,14 @@ class TestContextInjection:
 
     def test_inject_none_context_with_msgs(self):
         """Inject with None context returns inbox dict."""
-        from tea_agent.toolkit.toolkit_subagent_msg import (
-            toolkit_subagent_msg, inject_messages_into_context
-        )
+        from tea_agent.toolkit.toolkit_subagent_msg import inject_messages_into_context, toolkit_subagent_msg
         toolkit_subagent_msg(action='send', to='n', message='Msg')
         result = inject_messages_into_context('n')
         assert '## Incoming Messages' in result
 
     def test_inject_marks_as_read(self):
         """Injection should mark messages as read."""
-        from tea_agent.toolkit.toolkit_subagent_msg import (
-            toolkit_subagent_msg, inject_messages_into_context
-        )
+        from tea_agent.toolkit.toolkit_subagent_msg import inject_messages_into_context, toolkit_subagent_msg
         toolkit_subagent_msg(action='send', to='read-me', message='Msg')
         inject_messages_into_context('read-me')
         r = toolkit_subagent_msg(action='check_inbox', agent_id='read-me')
@@ -191,9 +183,7 @@ class TestInternalAPI:
 
     def test_send_message_as(self):
         """Send message as a specific agent."""
-        from tea_agent.toolkit.toolkit_subagent_msg import (
-            send_message_as, toolkit_subagent_msg
-        )
+        from tea_agent.toolkit.toolkit_subagent_msg import send_message_as, toolkit_subagent_msg
         ok = send_message_as(from_agent='agent-alpha', to='agent-beta', text='From alpha')
         assert ok is True
         inbox = toolkit_subagent_msg(action='check_inbox', agent_id='agent-beta')
@@ -208,9 +198,7 @@ class TestInternalAPI:
 
     def test_get_message_stats(self):
         """get_message_stats returns correct counts."""
-        from tea_agent.toolkit.toolkit_subagent_msg import (
-            toolkit_subagent_msg, get_message_stats
-        )
+        from tea_agent.toolkit.toolkit_subagent_msg import get_message_stats, toolkit_subagent_msg
         toolkit_subagent_msg(action='send', to='a', message='1')
         toolkit_subagent_msg(action='send', to='b', message='2')
         stats = get_message_stats()

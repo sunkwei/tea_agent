@@ -6,12 +6,10 @@ SessionContext + SessionComponent 单元测试。
 - SessionComponent: 抽象基类约束、save_agent_config 行为
 """
 
-from dataclasses import dataclass, fields
-from typing import Any
-from unittest.mock import MagicMock, PropertyMock
+from dataclasses import fields
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # ============================================================
 # SessionContext

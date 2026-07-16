@@ -38,13 +38,13 @@ def toolkit_scheduler(action: str, **kwargs):
     # ── DB 路径 ──
     try:
         from tea_agent.config import get_config
-        DB_PATH = os.path.join(get_config().paths.data_dir_abs, "scheduler.db")
+        DB_PATH = os.path.join(get_config().paths.data_dir_abs, "scheduler.db")  # noqa: N806
     except Exception:
-        DB_PATH = os.path.expanduser("~/.tea_agent/scheduler.db")
+        DB_PATH = os.path.expanduser("~/.tea_agent/scheduler.db")  # noqa: N806
 
-    CHECK_INTERVAL = 60  # 每分钟检查一次
+    CHECK_INTERVAL = 60  # 每分钟检查一次  # noqa: N806
 
-    _CRON_WEEKDAY = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+    _CRON_WEEKDAY = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}  # noqa: N806
 
     # ── DB 初始化 ──
     def _get_conn():

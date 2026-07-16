@@ -176,7 +176,7 @@ def _build_full_interactions_md(rounds_data):
                     # Short inline text — split on \n to preserve visual line breaks
                     text_content = content.strip()
                     if "\n" in text_content:
-                        parts.append(f"📥 **返回结果**\n\n")
+                        parts.append("📥 **返回结果**\n\n")
                         for line in text_content.split("\n"):
                             safe_line = line.replace("\r", "")
                             parts.append(f"> {safe_line}\n")
@@ -262,7 +262,7 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
     if not text.strip():
         return
 
-    from pygments.lexers import get_lexer_by_name, guess_lexer, PythonLexer
+    from pygments.lexers import PythonLexer, get_lexer_by_name, guess_lexer
 
     lines = text.split("\n")
     i = 0

@@ -24,8 +24,8 @@ class LiteSession:
         enable_thinking: bool = True,
         max_iterations: int = 50,
         supports_reasoning: bool = True,
-        allowed_tools: list[str] | None = None,
-        denied_tools: list[str] | None = None,
+        allowed_tools: list[str] | None = None,  # 已废弃，保留参数仅为兼容性
+        denied_tools: list[str] | None = None,  # 已废弃，保留参数仅为兼容性
     ):
         self.toolkit = toolkit
         self.model = model
@@ -34,26 +34,15 @@ class LiteSession:
         self.max_iterations = max_iterations
         self.supports_reasoning = supports_reasoning
         self.interrupted = False
-        self.allowed_tools = allowed_tools
-        self.denied_tools = denied_tools
 
         # API 客户端
         self.api = OpenAI(api_key=api_key, base_url=api_url)
 
-        # 构建工具定义（带权限过滤）
+        # 构建工具定义（全部工具，无过滤）
         self.tools = self._build_tools()
 
-        mode = "all"
-        if allowed_tools:
-            mode = f"allow({len(allowed_tools)})"
-        if denied_tools:
-            mode += (
-                f"+deny({len(denied_tools)})"
-                if mode != "all"
-                else f"deny({len(denied_tools)})"
-            )
         logger.info(
-            f"LiteSession init | model: {model} | tools: {len(self.tools)} | filter: {mode}"
+            f"LiteSession init | model: {model} | tools: {len(self.tools)} | 自由奔放模式"
         )
 
     def _default_system_prompt(self) -> str:
@@ -72,7 +61,7 @@ class LiteSession:
 你不断进化，能力无上限。以最有效优雅的方式完成任务并持续增强自身。"""
 
     def _build_tools(self) -> list[dict]:
-        """构建工具定义列表（带权限过滤）。"""
+        """构建工具定义列表（全部工具，无过滤）。"""
         tools = []
         if not self.toolkit:
             return tools
@@ -88,12 +77,6 @@ class LiteSession:
                 logger.warning(f"Tool {name} meta load failed: {e}")
                 continue
 
-            # 权限过滤
-            if self.allowed_tools is not None and name not in self.allowed_tools:
-                continue
-            if self.denied_tools is not None and name in self.denied_tools:
-                continue
-
             tools.append(meta)
 
         return tools
@@ -101,100 +84,193 @@ class LiteSession:
     def chat(
         self, user_input: str, callback: Callable[[str], None] | None = None
     ) -> dict:
-        """单轮对话。返回 {user, thinking, assistant, tool_calls, error}。"""
+        """单轮对话。返回 {user, thinking, assistant, tool_calls, error}。
+
+        Args:
+            user_input: 用户输入文本
+            callback: 回调函数，用于实时输出内容
+
+        Returns:
+            包含对话结果的字典
+        """
         self.interrupted = False
 
-        # 构建消息：只有系统提示 + 用户输入
-        messages = [
+        # 初始化对话状态
+        state = self._init_chat_state(user_input)
+
+        # 构建初始消息
+        messages = self._build_initial_messages(user_input)
+
+        try:
+            # 执行对话循环
+            self._execute_chat_loop(messages, state, callback)
+
+            # 返回结果
+            return self._build_chat_result(user_input, state)
+
+        except Exception as e:
+            logger.error(f"LiteSession.chat 失败: {e}")
+            return self._build_chat_result(user_input, state, error=str(e))
+
+    def _init_chat_state(self, user_input: str) -> dict:
+        """初始化对话状态。
+
+        Args:
+            user_input: 用户输入
+
+        Returns:
+            对话状态字典
+        """
+        return {
+            "full_reply": "",
+            "thinking_content": "",
+            "tool_calls_count": 0,
+            "iterations": 0,
+        }
+
+    def _build_initial_messages(self, user_input: str) -> list[dict]:
+        """构建初始消息列表。
+
+        Args:
+            user_input: 用户输入
+
+        Returns:
+            消息列表
+        """
+        return [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": user_input},
         ]
 
-        full_reply = ""
-        thinking_content = ""
-        tool_calls_count = 0
-        iterations = 0
+    def _execute_chat_loop(
+        self,
+        messages: list[dict],
+        state: dict,
+        callback: Callable[[str], None] | None
+    ) -> None:
+        """执行对话循环。
 
-        try:
-            while iterations < self.max_iterations:
-                # 中断检查
-                if self.interrupted:
-                    break
+        Args:
+            messages: 消息列表（会被修改）
+            state: 对话状态（会被修改）
+            callback: 回调函数
+        """
+        while state["iterations"] < self.max_iterations:
+            # 中断检查
+            if self.interrupted:
+                break
 
-                # 调用 API
-                response = self._call_api(messages)
+            # 调用 API
+            response = self._call_api(messages)
 
-                # 处理响应
-                content, tool_calls_data, reasoning = self._process_response(
-                    response, callback
-                )
+            # 处理响应
+            content, tool_calls_data, reasoning = self._process_response(
+                response, callback
+            )
 
-                # 累积回复
-                full_reply += content
-                if reasoning:
-                    thinking_content += reasoning
+            # 累积回复
+            state["full_reply"] += content
+            if reasoning:
+                state["thinking_content"] += reasoning
 
-                # 解析工具调用
-                valid_tool_calls = self._parse_tool_calls(tool_calls_data)
+            # 解析工具调用
+            valid_tool_calls = self._parse_tool_calls(tool_calls_data)
 
-                if valid_tool_calls:
-                    tool_calls_count += len(valid_tool_calls)
+            if valid_tool_calls:
+                state["tool_calls_count"] += len(valid_tool_calls)
 
-                    # 添加 assistant 消息到上下文
-                    assistant_msg = {
-                        "role": "assistant",
-                        "content": content if content else None,
-                        "tool_calls": [
-                            {
-                                "id": tc.id,
-                                "type": "function",
-                                "function": {
-                                    "name": tc.function.name,
-                                    "arguments": tc.function.arguments,
-                                },
-                            }
-                            for tc in valid_tool_calls
-                        ],
-                    }
-                    messages.append(assistant_msg)
+                # 处理工具调用
+                self._handle_tool_calls(messages, valid_tool_calls, content)
 
-                    # 执行工具调用
-                    for call in valid_tool_calls:
-                        if self.interrupted:
-                            break
-                        call_id, func_name, result_str = self._execute_tool(call)
-                        messages.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": call_id,
-                                "content": result_str,
-                            }
-                        )
+                state["iterations"] += 1
+                continue
+            else:
+                # 无工具调用，对话结束
+                state["iterations"] += 1
+                break
 
-                    iterations += 1
-                    continue
-                else:
-                    # 无工具调用，对话结束
-                    iterations += 1
-                    break
+    def _handle_tool_calls(
+        self,
+        messages: list[dict],
+        valid_tool_calls: list,
+        content: str
+    ) -> None:
+        """处理工具调用。
 
-            return {
-                "user": user_input,
-                "thinking": thinking_content,
-                "assistant": full_reply,
-                "tool_calls": tool_calls_count,
-                "error": None,
-            }
+        Args:
+            messages: 消息列表（会被修改）
+            valid_tool_calls: 有效的工具调用列表
+            content: 助手回复内容
+        """
+        # 添加 assistant 消息到上下文
+        assistant_msg = self._build_assistant_message(content, valid_tool_calls)
+        messages.append(assistant_msg)
 
-        except Exception as e:
-            logger.error(f"LiteSession.chat 失败: {e}")
-            return {
-                "user": user_input,
-                "thinking": thinking_content,
-                "assistant": full_reply,
-                "tool_calls": tool_calls_count,
-                "error": str(e),
-            }
+        # 执行工具调用
+        for call in valid_tool_calls:
+            if self.interrupted:
+                break
+
+            call_id, func_name, result_str = self._execute_tool(call)
+            messages.append({
+                "role": "tool",
+                "tool_call_id": call_id,
+                "content": result_str,
+            })
+
+    def _build_assistant_message(
+        self,
+        content: str,
+        valid_tool_calls: list
+    ) -> dict:
+        """构建助手消息。
+
+        Args:
+            content: 助手回复内容
+            valid_tool_calls: 工具调用列表
+
+        Returns:
+            助手消息字典
+        """
+        return {
+            "role": "assistant",
+            "content": content if content else None,
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in valid_tool_calls
+            ],
+        }
+
+    def _build_chat_result(
+        self,
+        user_input: str,
+        state: dict,
+        error: str | None = None
+    ) -> dict:
+        """构建对话结果。
+
+        Args:
+            user_input: 用户输入
+            state: 对话状态
+            error: 错误信息
+
+        Returns:
+            对话结果字典
+        """
+        return {
+            "user": user_input,
+            "thinking": state["thinking_content"],
+            "assistant": state["full_reply"],
+            "tool_calls": state["tool_calls_count"],
+            "error": error,
+        }
 
     def _call_api(self, messages: list[dict]):
         """调用 API。"""

@@ -12,11 +12,14 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
+
+if TYPE_CHECKING:
+    from tea_agent.config import AgentConfig
 
 import tea_agent.session_ref as _sref
 from tea_agent import tlk
-from tea_agent.config import load_config
+from tea_agent.config import load_config, resolve_config_path
 from tea_agent.litesession import LiteSession
 from tea_agent.logging_setup import setup_logging
 from tea_agent.onlinesession import OnlineToolSession
@@ -128,32 +131,31 @@ class Agent:
         tools_on = self.behavior.use_background_services or self._use_tools
         return f"Mode: {self.mode} | Model: {main_m.model_name} | Tools: {'ON' if tools_on else 'OFF'}"
 
-    def _load_topic_history_into_session(self, topic_id: str):
+    def _load_topic_history_into_session(self, topic_id: str) -> None:
         return self.load_topic_history(topic_id)
 
-    def _load_config(self, config_path: str | None):
-        """优先级: config_path > config_fname > 默认路径。"""
-        if config_path:
-            if not os.path.isfile(config_path):
-                raise FileNotFoundError(f"配置文件不存在: {config_path}")
-            actual_path = config_path
-        elif self._config_fname:
-            fname_path = str(Path.home() / ".tea_agent" / self._config_fname)
-            if not os.path.isfile(fname_path):
-                raise FileNotFoundError(f"配置文件不存在: {fname_path}")
-            actual_path = fname_path
-        else:
-            default_path = str(Path.home() / ".tea_agent" / "config.yaml")
-            fallback_path = str(Path(__file__).parent / "config.yaml")
-            if os.path.isfile(default_path):
-                actual_path = default_path
-            elif os.path.isfile(fallback_path):
-                actual_path = fallback_path
-            else:
-                raise FileNotFoundError(
-                    f"未找到配置文件。请在以下位置之一创建 config.yaml:\n"
-                    f"  1) {default_path}\n  2) {fallback_path}"
-                )
+    def _load_config(self, config_path: str | None) -> "AgentConfig":
+        """优先级: config_path > config_fname > 默认路径。
+
+        Args:
+            config_path: 配置文件路径，如果为None则使用默认路径
+
+        Returns:
+            AgentConfig: 加载的配置对象
+
+        Raises:
+            FileNotFoundError: 配置文件不存在
+            ValueError: 配置不完整
+        """
+        if self._config_fname and not config_path:
+            config_path = str(Path.home() / ".tea_agent" / self._config_fname)
+
+        actual_path = resolve_config_path(config_path)
+        if not actual_path or not os.path.isfile(actual_path):
+            raise FileNotFoundError(
+                f"未找到配置文件: {actual_path or '无'}。\n"
+                f"请创建 ~/.tea_agent/config.yaml 或指定 --config"
+            )
 
         cfg = load_config(actual_path)
 
@@ -171,7 +173,7 @@ class Agent:
         logger.info(f"配置加载: {actual_path} | 模型: {main_m.model_name}")
         return cfg
 
-    def _init_toolkit(self):
+    def _init_toolkit(self) -> None:
         """初始化 Toolkit 和 KB 目录。"""
         cfg = self._cfg
         tool_dir = Path(cfg.paths.toolkit_dir_abs)
@@ -187,14 +189,14 @@ class Agent:
             f"toolkit_dir: {tool_dir} | kb_dir: {kb_dir}"
         )
 
-    def _init_storage(self):
+    def _init_storage(self) -> None:
         """初始化 Storage 数据库。"""
         cfg = self._cfg
         db_path = Path(cfg.paths.db_path_abs)
         self._db = Storage(db_path=str(db_path))
         logger.info(f"Storage 初始化 | db: {db_path}")
 
-    def _init_session(self):
+    def _init_session(self) -> None:
         """根据 behavior.session_class 选择 LiteSession 或 OnlineToolSession。"""
         if self.behavior.session_class == "LiteSession":
             self._sess = self._build_lite_session()
@@ -291,7 +293,7 @@ class Agent:
             no_stream_chunk=self.no_stream_chunk,
         )
 
-    def _start_background_services(self):
+    def _start_background_services(self) -> None:
         """启动自进化引擎和定时任务调度器。"""
         start_self_evolve_thread(self._toolkit.tool_dir)
         start_scheduler()
@@ -310,8 +312,12 @@ class Agent:
             self._sess._build_tools()
         return result or {"ok": False}
 
-    def _notify(self, data: dict):
-        """安全调用用户回调。"""
+    def _notify(self, data: dict) -> None:
+        """安全调用用户回调。
+
+        Args:
+            data: 要发送的数据字典
+        """
         if self._callback:
             try:
                 self._callback(data)
@@ -411,11 +417,18 @@ class Agent:
 
         ⚠️ 此方法在 AI 回复已生成后运行。任何异常只记录日志不冒泡，
         以免丢失已生成的 AI 回复。
+
+        Args:
+            ai_msg: AI生成的回复内容
+            used_tools: 是否使用了工具
+            user_msg: 用户原始消息
+            topic_id: 主题ID
         """
         if not self._db:
             return
 
         try:
+            # 步骤1: 保存对话到数据库
             conv_id = self._db.save_msg(topic_id, user_msg, "", False)
             rounds = self._sess._rounds_collector
             self._db.update_msg_rounds(
@@ -425,30 +438,13 @@ class Agent:
                 rounds=rounds if rounds else None,
             )
 
-            usage = self._sess._last_usage
-            cheap_usage = self._sess._last_cheap_usage
-            if usage and usage.get("total_tokens", 0) > 0:
-                kwargs = {
-                    "total_tokens": usage["total_tokens"],
-                    "prompt_tokens": usage["prompt_tokens"],
-                    "completion_tokens": usage["completion_tokens"],
-                }
-                if cheap_usage and cheap_usage.get("total_tokens", 0) > 0:
-                    kwargs["cheap_tokens"] = cheap_usage["total_tokens"]
-                    kwargs["cheap_prompt_tokens"] = cheap_usage["prompt_tokens"]
-                    kwargs["cheap_completion_tokens"] = cheap_usage["completion_tokens"]
-                self._db.add_topic_tokens(topic_id, **kwargs)
+            # 步骤2: 更新Token使用统计
+            self._update_token_usage(topic_id)
 
-            user_text = (
-                user_msg
-                if isinstance(user_msg, str)
-                else (
-                    user_msg.get("text", "")
-                    if isinstance(user_msg, dict)
-                    else str(user_msg)
-                )
-            )
+            # 步骤3: 提取用户文本
+            user_text = self._extract_user_text(user_msg)
 
+            # 步骤4: 推送到L2缓存
             l2_count, overflow_items, should_summarize = self._db.push_to_level2(
                 topic_id,
                 user_text,
@@ -460,22 +456,93 @@ class Agent:
                 f"summarize={should_summarize}"
             )
 
-            threading.Thread(
-                target=self._do_async_summaries,
-                args=(topic_id, overflow_items, should_summarize),
-                daemon=True,
-            ).start()
+            # 步骤5: 启动后台任务
+            self._start_background_tasks(
+                topic_id, overflow_items, should_summarize,
+                user_text, ai_msg, used_tools, rounds
+            )
 
-            threading.Thread(
-                target=self._do_task_evaluation,
-                args=(user_text, ai_msg, used_tools, rounds, usage),
-                daemon=True,
-            ).start()
         except Exception:
             logger.exception(
                 "_post_chat_pipeline failed — AI reply preserved, "
                 "but DB write may be lost"
             )
+
+    def _update_token_usage(self, topic_id: str) -> None:
+        """更新Token使用统计。
+
+        Args:
+            topic_id: 主题ID
+        """
+        usage = self._sess._last_usage
+        cheap_usage = self._sess._last_cheap_usage
+
+        if not usage or usage.get("total_tokens", 0) <= 0:
+            return
+
+        kwargs = {
+            "total_tokens": usage["total_tokens"],
+            "prompt_tokens": usage["prompt_tokens"],
+            "completion_tokens": usage["completion_tokens"],
+        }
+
+        if cheap_usage and cheap_usage.get("total_tokens", 0) > 0:
+            kwargs["cheap_tokens"] = cheap_usage["total_tokens"]
+            kwargs["cheap_prompt_tokens"] = cheap_usage["prompt_tokens"]
+            kwargs["cheap_completion_tokens"] = cheap_usage["completion_tokens"]
+
+        self._db.add_topic_tokens(topic_id, **kwargs)
+
+    def _extract_user_text(self, user_msg) -> str:
+        """从用户消息中提取纯文本。
+
+        Args:
+            user_msg: 用户消息（字符串或字典）
+
+        Returns:
+            提取的纯文本
+        """
+        if isinstance(user_msg, str):
+            return user_msg
+        elif isinstance(user_msg, dict):
+            return user_msg.get("text", "")
+        else:
+            return str(user_msg)
+
+    def _start_background_tasks(
+        self,
+        topic_id: str,
+        overflow_items: list,
+        should_summarize: bool,
+        user_text: str,
+        ai_msg: str,
+        used_tools: bool,
+        rounds: list
+    ) -> None:
+        """启动后台任务线程。
+
+        Args:
+            topic_id: 主题ID
+            overflow_items: 溢出项列表
+            should_summarize: 是否需要摘要
+            user_text: 用户文本
+            ai_msg: AI回复
+            used_tools: 是否使用工具
+            rounds: 对话轮次
+        """
+        # 启动异步摘要任务
+        threading.Thread(
+            target=self._do_async_summaries,
+            args=(topic_id, overflow_items, should_summarize),
+            daemon=True,
+        ).start()
+
+        # 启动任务评估任务
+        threading.Thread(
+            target=self._do_task_evaluation,
+            args=(user_text, ai_msg, used_tools, rounds, self._sess._last_usage),
+            daemon=True,
+        ).start()
 
     def _do_async_summaries(
         self, topic_id: str, overflow_items: list = None, should_summarize: bool = False
@@ -491,65 +558,152 @@ class Agent:
         rounds: list,
         usage: dict,
     ):
-        """后台线程：评估任务 → 结晶技能 → 更新记忆。"""
+        """后台线程：评估任务 → 结晶技能 → 更新记忆。
+
+        Args:
+            user_text: 用户文本
+            ai_msg: AI回复
+            used_tools: 是否使用工具
+            rounds: 对话轮次
+            usage: Token使用统计
+        """
         try:
-            tools_used = []
-            if rounds:
-                for round_data in rounds:
-                    for tc in round_data.get("tool_calls", []):
-                        func_name = tc.get("function", {}).get("name", "")
-                        if func_name and func_name not in tools_used:
-                            tools_used.append(func_name)
+            # 步骤1: 提取使用的工具列表
+            tools_used = self._extract_tools_used(rounds)
 
-            from .evaluation import TaskEvaluator
-
-            evaluator = TaskEvaluator()
-            token_cost = usage.get("total_tokens", 0) if usage else 0
-
-            result = evaluator.evaluate(
-                task=user_text,
-                rounds=rounds or [],
-                tools_used=tools_used,
-                token_cost=token_cost,
-                time_seconds=0,
+            # 步骤2: 评估任务
+            evaluation_result = self._evaluate_task(
+                user_text, rounds, tools_used, usage
             )
 
-            logger.debug(f"📊 评估结果: {result.summary}")
-
-            if result.should_crystallize and tools_used:
-                crystallizer = SkillCrystallizer()
-                skill = crystallizer.crystallize(
-                    task=user_text,
-                    tools_used=tools_used,
-                    rounds=rounds,
-                    success=result.success,
-                    token_cost=token_cost,
+            # 步骤3: 如果需要，结晶技能
+            if evaluation_result.should_crystallize and tools_used:
+                self._crystallize_skill(
+                    user_text, tools_used, rounds,
+                    evaluation_result.success, usage
                 )
-                registry = SkillRegistry()
-                registry.register(skill)
-                logger.info(f"✨ 技能结晶: {skill.name}")
 
-            if result.lessons and self._db:
-                for lesson in result.lessons:
-                    try:
-                        self._db.add_memory(
-                            content=lesson,
-                            category="fact",
-                            importance=3,
-                            priority=PRIORITY_MEDIUM,
-                            tags="经验教训,自动提取",
-                        )
-                    except Exception as e:
-                        logger.debug(f"记录经验失败: {e}")
+            # 步骤4: 保存经验教训
+            if evaluation_result.lessons and self._db:
+                self._save_lessons(evaluation_result.lessons)
 
         except Exception as e:
             logger.debug(f"任务评估异常 (非致命): {e}")
 
+    def _extract_tools_used(self, rounds: list) -> list[str]:
+        """从对话轮次中提取使用的工具列表。
+
+        Args:
+            rounds: 对话轮次列表
+
+        Returns:
+            使用的工具名称列表
+        """
+        tools_used = []
+        if not rounds:
+            return tools_used
+
+        for round_data in rounds:
+            for tc in round_data.get("tool_calls", []):
+                func_name = tc.get("function", {}).get("name", "")
+                if func_name and func_name not in tools_used:
+                    tools_used.append(func_name)
+
+        return tools_used
+
+    def _evaluate_task(
+        self,
+        user_text: str,
+        rounds: list,
+        tools_used: list[str],
+        usage: dict
+    ):
+        """评估任务执行情况。
+
+        Args:
+            user_text: 用户文本
+            rounds: 对话轮次
+            tools_used: 使用的工具列表
+            usage: Token使用统计
+
+        Returns:
+            评估结果
+        """
+        from .evaluation import TaskEvaluator
+
+        evaluator = TaskEvaluator()
+        token_cost = usage.get("total_tokens", 0) if usage else 0
+
+        result = evaluator.evaluate(
+            task=user_text,
+            rounds=rounds or [],
+            tools_used=tools_used,
+            token_cost=token_cost,
+            time_seconds=0,
+        )
+
+        logger.debug(f"📊 评估结果: {result.summary}")
+        return result
+
+    def _crystallize_skill(
+        self,
+        user_text: str,
+        tools_used: list[str],
+        rounds: list,
+        success: bool,
+        usage: dict
+    ) -> None:
+        """结晶技能模式。
+
+        Args:
+            user_text: 用户文本
+            tools_used: 使用的工具列表
+            rounds: 对话轮次
+            success: 是否成功
+            usage: Token使用统计
+        """
+        token_cost = usage.get("total_tokens", 0) if usage else 0
+
+        crystallizer = SkillCrystallizer()
+        skill = crystallizer.crystallize(
+            task=user_text,
+            tools_used=tools_used,
+            rounds=rounds,
+            success=success,
+            token_cost=token_cost,
+        )
+
+        registry = SkillRegistry()
+        registry.register(skill)
+        logger.info(f"✨ 技能结晶: {skill.name}")
+
+    def _save_lessons(self, lessons: list[str]) -> None:
+        """保存经验教训到数据库。
+
+        Args:
+            lessons: 经验教训列表
+        """
+        for lesson in lessons:
+            try:
+                self._db.add_memory(
+                    content=lesson,
+                    category="fact",
+                    importance=3,
+                    priority=PRIORITY_MEDIUM,
+                    tags="经验教训,自动提取",
+                )
+            except Exception as e:
+                logger.debug(f"记录经验失败: {e}")
+
     # ────────────────────────────────────────────═══
     # 历史加载
     # ────────────────────────────────────────────═══
-    def load_topic_history(self, topic_id: str):
-        """加载指定主题的对话历史到会话。仅在 behavior.load_topic_history=True 时可用。"""
+    def load_topic_history(self, topic_id: str) -> None:
+        """加载指定主题的对话历史到会话。仅在 behavior.load_topic_history=True 时可用。
+
+        Args:
+            topic_id: 主题ID
+        """
         if not self.behavior.load_topic_history or not self._db:
             logger.warning("load_topic_history 仅在 full 模式下可用")
             return
@@ -582,7 +736,7 @@ class Agent:
     # ────────────────────────────────────────────═══
     # 生命周期
     # ────────────────────────────────────────────═══
-    def close(self):
+    def close(self) -> None:
         """安全关闭 Agent，释放资源。"""
         _sref.clear()
         self._sess = None
@@ -590,10 +744,10 @@ class Agent:
         self._db = None
         logger.info(f"Agent ({self.mode}) 已关闭")
 
-    def __enter__(self):
+    def __enter__(self) -> "Agent":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         self.close()
         return False
 

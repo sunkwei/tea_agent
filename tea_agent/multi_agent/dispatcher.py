@@ -24,12 +24,10 @@
 import json
 import logging
 from collections.abc import Callable
-from datetime import datetime
 from enum import Enum
-from typing import Any
 
-from .flow_engine import FlowEngine, FlowState, flow_start, flow_listen, flow_route
-from .role_agent import RoleAgent, AgentResult
+from .flow_engine import FlowEngine, flow_listen, flow_start
+from .role_agent import AgentResult, RoleAgent
 from .structured_output import AnalysisReport, CodeChangePlan, TestPlan
 
 logger = logging.getLogger(__name__)
@@ -573,7 +571,7 @@ class RoleDispatcher:
 # 向后兼容: 旧版 Dispatcher 保留
 # ───────────────────────────────────────────────
 
-from .dispatcher_v1 import Dispatcher as _DispatcherV1
+from .dispatcher_v1 import Dispatcher as _DispatcherV1  # noqa: E402
 
 
 class Dispatcher(_DispatcherV1):

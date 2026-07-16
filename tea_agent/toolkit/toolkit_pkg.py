@@ -73,7 +73,7 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
         return results
 
     # 常用包别名映射
-    ALIASES = {
+    ALIASES = {  # noqa: N806
         "pillow": "Pillow",
         "pil": "Pillow",
         "opencv": "opencv-python",

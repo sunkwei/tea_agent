@@ -375,6 +375,11 @@ window.sendMessage = async function() {
                             removeLoading();
                             showQuestionDialog(data.question_id, data.title, data.question, data.options, data.default);
                             break;
+                        case 'dag_viz':
+                            // DAG 工作流可视化 — 内嵌 SVG 缩略图，每 2s 自动刷新
+                            removeLoading();
+                            insertDagCard(bubble, bubbleText, data.viz_id);
+                            break;
                         case 'done':
                             removeLoading();
                             // Finalize tool container if still open
@@ -529,8 +534,9 @@ function formatMarkdown(text) {
     html = html.replace(/^&gt;\s(.+)$/gm, '<blockquote>$1</blockquote>');
     // Horizontal rules
     html = html.replace(/^---$/gm, '<hr>');
-    // Convert newlines to <br> (outside protected blocks)
-    html = html.replace(/\n/g, '<br>');
+    // Convert newlines to <br> — collapse runs > 1 into max 1 <br>,
+    // trim trailing newlines, to prevent excessive blank lines in AI final message.
+    html = html.replace(/\n{2,}/g, '\n').replace(/^\n+|\n+$/g, '').replace(/\n/g, '<br>');
     // Bold
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     // Italic
@@ -1972,6 +1978,76 @@ window.startScreenshot = async function() {
 
 
 
+
+// ── DAG 工作流可视化卡片 ──
+// 在聊天流中插入 DAG SVG 缩略图，每 2 秒自动刷新状态
+// _dagTimers: { viz_id -> intervalId } 用于管理刷新定时器
+var _dagTimers = {};
+
+function insertDagCard(bubble, bubbleText, vizId) {
+    // 去重：如果已经存在相同 viz_id 的卡片，先移除旧的
+    var existing = bubble.querySelector('.dag-card[data-viz-id="' + escAttr(vizId) + '"]');
+    if (existing) {
+        existing.remove();
+        if (_dagTimers[vizId]) {
+            clearInterval(_dagTimers[vizId]);
+            delete _dagTimers[vizId];
+        }
+    }
+
+    var card = document.createElement('div');
+    card.className = 'dag-card';
+    card.setAttribute('data-viz-id', vizId);
+    card.title = '双击在新标签页中打开完整 DAG 视图';
+    card.style.cursor = 'pointer';
+
+    // 标题栏
+    var header = document.createElement('div');
+    header.className = 'dag-card-header';
+    header.innerHTML = '<span class="dag-card-icon">🔀</span><span>DAG 工作流</span><a href="/dag/' + encodeURIComponent(vizId) + '" target="_blank" class="dag-card-link" title="在新标签页中打开">🔗</a>';
+    card.appendChild(header);
+
+    // SVG 图片（带缓存破坏参数，确保每次刷新获取最新状态）
+    var img = document.createElement('img');
+    img.className = 'dag-card-img';
+    img.src = '/dag/' + encodeURIComponent(vizId) + '/image?format=svg&t=' + Date.now();
+    img.alt = 'DAG Workflow';
+    img.onerror = function() { this.style.display = 'none'; };
+    card.appendChild(img);
+
+    // 自动刷新：每 2 秒更新一次（DAG 状态变化时实时反映）
+    _dagTimers[vizId] = setInterval(function() {
+        var imgs = card.querySelectorAll('.dag-card-img');
+        for (var i = 0; i < imgs.length; i++) {
+            imgs[i].src = '/dag/' + encodeURIComponent(vizId) + '/image?format=svg&t=' + Date.now();
+        }
+    }, 2000);
+
+    // 双击打开完整 DAG 页面
+    card.addEventListener('dblclick', function() {
+        window.open('/dag/' + encodeURIComponent(vizId), '_blank');
+    });
+
+    // 插入到 bubble 中（在 bubbleText 之前）
+    bubble.insertBefore(card, bubbleText);
+
+    // 卡片关闭时清理定时器（如果卡片被移除）
+    var observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mut) {
+            for (var j = 0; j < mut.removedNodes.length; j++) {
+                if (mut.removedNodes[j] === card) {
+                    if (_dagTimers[vizId]) {
+                        clearInterval(_dagTimers[vizId]);
+                        delete _dagTimers[vizId];
+                    }
+                    observer.disconnect();
+                    return;
+                }
+            }
+        });
+    });
+    observer.observe(bubble, { childList: true });
+}
 
 // ── 监听用户在 messages 区域的手动滚动 ──
 function _initScrollTracking() {

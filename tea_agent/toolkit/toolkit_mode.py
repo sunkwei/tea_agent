@@ -26,7 +26,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
     import re
 
     # ── 各 phase 关键词 ──
-    PHASE_KW = {
+    PHASE_KW = {  # noqa: N806
         "design": [
             "设计", "架构", "方案", "规划", "选型", "权衡", "评估",
             "design", "architecture", "plan", "proposal", "blueprint",
@@ -70,7 +70,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
     }
 
     # ── 各模式指令（格式化多行，注入为 CRITICAL memory）──
-    MODE_INSTRUCTIONS = {
+    MODE_INSTRUCTIONS = {  # noqa: N806
         "design": (
             "🏗️ 当前处于【架构设计模式】。你的角色是架构设计师：\n"
             "1. 分析需求、识别约束、评估可行性\n"
@@ -142,8 +142,8 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
         ),
     }
 
-    MODE_ALIASES = {"pragmatic": "develop", "mixed": "develop"}
-    ALL_MODES = set(MODE_INSTRUCTIONS.keys())
+    MODE_ALIASES = {"pragmatic": "develop", "mixed": "develop"}  # noqa: N806
+    ALL_MODES = set(MODE_INSTRUCTIONS.keys())  # noqa: N806
 
     def _detect_phase(input_text: str) -> str:
         """根据关键词评分检测最匹配的 phase mode。"""
@@ -242,8 +242,8 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             return "creative"
         return "develop"
 
-    _VALID_MSG = "支持: design/develop/test/review/docs/devops/creative (兼容 pragmatic→develop, mixed→develop)"
-    _LABELS = {
+    _VALID_MSG = "支持: design/develop/test/review/docs/devops/creative (兼容 pragmatic→develop, mixed→develop)"  # noqa: N806
+    _LABELS = {  # noqa: N806
         "design": "🏗️ 架构设计 — 分析需求、设计方案、不写代码",
         "develop": "💻 代码开发 — 实现功能、修改文件、编译验证",
         "test": "🧪 测试调试 — 跑测试、定位根因、修 bug",

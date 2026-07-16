@@ -390,7 +390,7 @@ class BaseChatSession(ABC):
             return head_text + f"\n... [L1截断: {args_bytes}B 参数] ...\n" + tail_text
 
         # Step 2: 递归压缩超长 string value
-        HALF = 512  # 每个 value 的首尾保留字节数
+        HALF = 512  # 每个 value 的首尾保留字节数  # noqa: N806
 
         def _compress_value(val, path=""):
             """递归压缩值，返回 (compressed_val, truncated_count)"""
@@ -781,6 +781,6 @@ class BaseChatSession(ABC):
         """重置打断标志"""
         self.interrupted = False
 
-    def _trim_messages(self):
+    def _trim_messages(self):  # noqa: B027
         """[DISABLED: 2026-05-20] no references — trimming now via L3 summary"""
         pass  # DISABLED

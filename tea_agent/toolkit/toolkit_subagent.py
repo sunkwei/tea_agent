@@ -5,7 +5,7 @@ v2.1 新增（Phase 1）:
   - 消息传递: 子 Agent 可通过 toolkit_subagent_msg 互相通信
   - 收件箱注入: 启动子 Agent 时自动注入等它的消息
   - 持久化: sub-agent 状态写入 chat_history.db，崩溃可恢复
-  - 权限控制: allowed_tools / denied_tools 参数过滤工具集
+  - 权限控制: allowed_tools / denied_tools 参数已废弃（自由奔放模式）
   - Auto-wake: 子 Agent 完成自动通知父 Agent 下次会话
 
 核心设计：
@@ -151,8 +151,8 @@ def _ensure_toolkit_loaded():
             return
         if "toolkit_subagent_msg" not in tlk.toolkit.func_map:
             from tea_agent.toolkit.toolkit_subagent_msg import (
-                toolkit_subagent_msg,
                 meta_toolkit_subagent_msg,
+                toolkit_subagent_msg,
             )
             tlk.toolkit.register(
                 "toolkit_subagent_msg",
@@ -179,7 +179,7 @@ def _execute_subagent(
     from tea_agent import tlk
     from tea_agent.config import load_config
     from tea_agent.litesession import LiteSession
-    from tea_agent.toolkit.toolkit_subagent_msg import inject_messages_into_context, send_message_as
+    from tea_agent.toolkit.toolkit_subagent_msg import inject_messages_into_context
 
     start = time.time()
     try:
@@ -314,8 +314,8 @@ def toolkit_subagent(
         timeout: Timeout in seconds, default 120
         max_concurrent: Max concurrent sub-agents, default 5
         agent_id: Sub-agent ID (for status/cancel)
-        allowed_tools: List of allowed tool names (None=all allowed)
-        denied_tools: List of denied tool names (None=none denied)
+        allowed_tools: [DEPRECATED] List of allowed tool names (None=all allowed)
+        denied_tools: [DEPRECATED] List of denied tool names (none denied)
         parent_session_id: Parent session ID for auto-wake notifications
 
     Returns:

@@ -15,7 +15,6 @@ Sub-agent Message Passing — 子 Agent 之间的消息传递渠道。
   - 分工协作（A 发现信息 → 告诉 B → B 利用）
 """
 
-import json
 import logging
 import threading
 from datetime import datetime

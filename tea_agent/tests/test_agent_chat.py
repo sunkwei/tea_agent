@@ -101,7 +101,7 @@ class TestAgentChatIntegration:
         mock_response.usage.prompt_tokens = 50
         mock_response.usage.completion_tokens = 50
 
-        with patch("openai.OpenAI") as MockOpenAI:
+        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_response
             MockOpenAI.return_value = mock_client
@@ -132,7 +132,7 @@ class TestAgentChatIntegration:
         mock_response.usage.prompt_tokens = 50
         mock_response.usage.completion_tokens = 50
 
-        with patch("openai.OpenAI") as MockOpenAI:
+        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_response
             MockOpenAI.return_value = mock_client
@@ -168,7 +168,7 @@ class TestAgentChatIntegration:
         def callback(data):
             callback_data.append(data)
 
-        with patch("openai.OpenAI") as MockOpenAI:
+        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_response
             MockOpenAI.return_value = mock_client
@@ -188,7 +188,7 @@ class TestAgentChatIntegration:
 
         _write_config(tmp_yaml_config)
 
-        with patch("openai.OpenAI") as MockOpenAI:
+        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             MockOpenAI.return_value = mock_client
 
@@ -216,7 +216,7 @@ class TestAgentChatIntegration:
         mock_response.usage.prompt_tokens = 25
         mock_response.usage.completion_tokens = 25
 
-        with patch("openai.OpenAI") as MockOpenAI:
+        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_response
             MockOpenAI.return_value = mock_client
@@ -237,7 +237,7 @@ class TestAgentChatIntegration:
         os.makedirs(os.path.dirname(tmp_db_path) or ".", exist_ok=True)
         _write_config(tmp_yaml_config, db_path=tmp_db_path.replace("\\", "/"))
 
-        with patch("openai.OpenAI") as MockOpenAI:
+        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             MockOpenAI.return_value = mock_client
 
@@ -265,7 +265,7 @@ class TestAgentChatIntegration:
         os.makedirs(os.path.dirname(tmp_db_path) or ".", exist_ok=True)
         _write_config(tmp_yaml_config, db_path=tmp_db_path.replace("\\", "/"))
 
-        with patch("openai.OpenAI") as MockOpenAI:
+        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             MockOpenAI.return_value = mock_client
 
@@ -294,7 +294,7 @@ class TestAgentChatErrorHandling:
 
         _write_config(tmp_yaml_config)
 
-        with patch("openai.OpenAI") as MockOpenAI:
+        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             mock_client.chat.completions.create.side_effect = Exception("API Error")
             MockOpenAI.return_value = mock_client

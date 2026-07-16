@@ -103,6 +103,13 @@ body {
 }
 .topic-item:hover { background: var(--surface2); color: var(--text); }
 .topic-item.active { background: var(--primary-dim); color: #fff; }
+.topic-item .processing-badge {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 12px;
+  animation: spin 1.2s linear infinite;
+}
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .topic-item .more-btn {
   margin-left: auto; opacity: 0; transition: opacity var(--transition);
   background: none; border: none; color: inherit; cursor: pointer; font-size: 14px; padding: 2px 8px; border-radius: var(--radius-sm); line-height: 1;
@@ -798,6 +805,90 @@ body {
   background: var(--surface);
 }
 
+/* ══ Queue Panel ══ */
+#queue-panel {
+  display: none;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  max-height: 120px;
+  overflow-y: auto;
+}
+#queue-panel.has-queue {
+  display: block;
+}
+.queue-header {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--yellow);
+  background: var(--yellow-bg);
+  border-bottom: 1px solid var(--border);
+}
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(48,54,61,.3);
+}
+.queue-item:last-child { border-bottom: none; }
+.queue-pos {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--surface2);
+  padding: 1px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.queue-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.queue-cancel-btn {
+  background: none;
+  border: none;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  opacity: .6;
+  transition: opacity .15s;
+}
+.queue-cancel-btn:hover { opacity: 1; background: var(--red-bg); }
+.queue-bubble {
+  background: var(--surface2) !important;
+  border: 1px dashed var(--yellow) !important;
+  color: var(--text-dim) !important;
+  font-size: 13px !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.queue-indicator { font-size: 16px; }
+/* 工具栏排队计数徽标 */
+#queue-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--yellow);
+  color: #000;
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
 /* ── Markdown: Code Blocks ── */
 .code-block-wrapper {
   margin: 12px 0;
@@ -1041,6 +1132,9 @@ body {
 
     <div id="img-preview-area" class="img-preview-area"></div>
 
+    <!-- ⭐ 排队消息面板 -->
+    <div id="queue-panel"></div>
+
     <div id="ia">
       <div class="ss-dropup">
         <button id="ss-btn" title="截屏" onclick="toggleScreenshotMenu(event)">📷</button>
@@ -1229,6 +1323,8 @@ let _activeTheme = localStorage.getItem('ta-theme') || 'dark';
 let _pendingImages = [];
 let _userNearBottom = true;
 let _toolCallState = null; // tool call tracking during streaming
+let _messageQueue = [];    // 排队消息列表（与后端同步）
+let _streamingTopicId = null; // 当前正在流式传输的主题ID（可能不同于 currentTopicId）
 
 // ── DOM Helpers ──
 const $ = id => document.getElementById(id);
@@ -1585,6 +1681,148 @@ window.copyCode = function(btn) {
 };
 
 // ══════════════════════════════════════════════════
+//  MESSAGE QUEUE — 排队消息管理
+// ══════════════════════════════════════════════════
+
+/** 添加消息到排队队列（服务器端） */
+window.queueAddMessage = async function() {
+  const input = $('ci');
+  const msg = input.value.trim();
+  if (!msg && _pendingImages.length === 0) return;
+  if (!currentTopicId) {
+    toast('请先开始一个对话', 'error');
+    return;
+  }
+
+  // 显示用户消息
+  addMessage('user', msg || '(图片)', _pendingImages.length > 0 ? [..._pendingImages] : null);
+
+  const images = [..._pendingImages];
+  input.value = '';
+  _pendingImages = [];
+  updateImagePreview();
+
+  try {
+    const res = await fetch('/api/queue/' + encodeURIComponent(currentTopicId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, images: images }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.ok) {
+      toast('⏳ 已加入排队队列', 'info');
+      // 显示排队气泡
+      const qDiv = document.createElement('div');
+      qDiv.className = 'msg assistant';
+      qDiv.innerHTML = '<div class="msg-label">⏳ 排队队列</div><div class="msg-bubble queue-bubble">已加入排队，位置 #' + data.position + '</div>';
+      $('msgs').appendChild(qDiv);
+      scrollBottom();
+    }
+    refreshQueueDisplay();
+  } catch(e) {
+    toast('排队失败: ' + e.message, 'error');
+  }
+};
+
+/** 刷新队列显示 */
+window.refreshQueueDisplay = async function() {
+  if (!currentTopicId) {
+    _messageQueue = [];
+    updateQueueUI();
+    return;
+  }
+  try {
+    const res = await fetch('/api/queue/' + encodeURIComponent(currentTopicId));
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    _messageQueue = data.items || [];
+    updateQueueUI();
+  } catch(e) {
+    // 静默
+  }
+};
+
+/** 更新队列 UI */
+function updateQueueUI() {
+  const container = $('queue-panel');
+  if (!container) return;
+  const count = _messageQueue.length;
+  const countEl = $('queue-count');
+  if (countEl) countEl.textContent = count > 0 ? count : '';
+
+  if (count === 0) {
+    container.classList.remove('has-queue');
+    container.innerHTML = '';
+    return;
+  }
+  container.classList.add('has-queue');
+  let html = '<div class="queue-header">⏳ 排队队列 (' + count + ')</div>';
+  _messageQueue.forEach(function(item, idx) {
+    const msgPreview = (item.message || '(图片)').slice(0, 60);
+    html += '<div class="queue-item">' +
+      '<span class="queue-pos">#' + (idx + 1) + '</span>' +
+      '<span class="queue-text">' + esc(msgPreview) + '</span>' +
+      '<button class="queue-cancel-btn" onclick="cancelQueueItem(\'' + escAttr(item.id) + '\')" title="取消排队">✕</button>' +
+      '</div>';
+  });
+  container.innerHTML = html;
+}
+
+/** 取消排队消息 */
+window.cancelQueueItem = async function(itemId) {
+  if (!currentTopicId) return;
+  try {
+    const res = await fetch('/api/queue/' + encodeURIComponent(currentTopicId) + '/' + encodeURIComponent(itemId), {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.ok) {
+      toast('已取消排队消息', 'info');
+      refreshQueueDisplay();
+    }
+  } catch(e) {
+    toast('取消失败: ' + e.message, 'error');
+  }
+};
+
+/** 对话结束后自动处理排队队列 */
+window.processQueueAfterDone = async function(topicId) {
+  // 使用指定的 topic_id，确保即使在切换主题后也能处理正确的队列
+  const qTopicId = topicId || currentTopicId;
+  if (!qTopicId) return;
+  // 等待片刻让状态稳定
+  await new Promise(r => setTimeout(r, 500));
+  try {
+    const res = await fetch('/api/queue/' + encodeURIComponent(qTopicId));
+    if (!res.ok) return;
+    const data = await res.json();
+    const items = data.items || [];
+    if (items.length === 0) return;
+
+    // 自动发送下一条排队消息
+    const next = items[0];
+    toast('▶️ 正在自动发送排队消息...', 'info');
+
+    // 先取消服务器端的这条消息（从队列移除）
+    await fetch('/api/queue/' + encodeURIComponent(qTopicId) + '/' + encodeURIComponent(next.id), {
+      method: 'DELETE',
+    });
+
+    // 刷新队列 UI
+    refreshQueueDisplay();
+
+    // 自动发送（调用 sendMessage 传参 + 指定 topic_id）
+    // 略过 isStreaming 检查，直接发送
+    sendMessage(next.message || '', next.images || [], next.topic_id || qTopicId);
+  } catch(e) {
+    console.warn('Auto queue process error:', e);
+  }
+};
+
+
+// ══════════════════════════════════════════════════
 //  SSE CHAT — Rich Event Stream
 // ══════════════════════════════════════════════════
 
@@ -1594,12 +1832,14 @@ window.interruptChat = async function() {
     abortController.abort();
     abortController = null;
   }
-  if (currentTopicId) {
+  // ⭐ 中断时使用 _streamingTopicId（可能已切换到其他主题）
+  const targetTopicId = _streamingTopicId || currentTopicId;
+  if (targetTopicId) {
     try {
       await fetch('/api/chat/abort', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_id: currentTopicId }),
+        body: JSON.stringify({ topic_id: targetTopicId }),
         signal: AbortSignal.timeout(3000),
       });
     } catch(e) { /* ignore */ }
@@ -1611,24 +1851,47 @@ window.interruptChat = async function() {
   }
 };
 
-window.sendMessage = async function() {
-  if (isStreaming) {
-    await interruptChat();
+window.sendMessage = async function(queuedMsg, queuedImages, queuedTopicId) {
+  // ⭐ 如果传入 queuedMsg，表示这是从排队队列中自动触发的
+  const isQueued = queuedMsg !== undefined;
+
+  // ⭐ 如果当前主题正在对话中：入队（而非中断）
+  if (isStreaming && _streamingTopicId === currentTopicId && !isQueued) {
+    await queueAddMessage();
     return;
   }
+
   const input = $('ci');
-  const msg = input.value.trim();
-  if (!msg && _pendingImages.length === 0) return;
-  input.value = '';
+  let msg, imagesToSend;
 
-  // Show user message
-  addMessage('user', msg || '(图片)', _pendingImages.length > 0 ? _pendingImages : null);
-  addLoading();
+  if (isQueued) {
+    msg = queuedMsg;
+    imagesToSend = queuedImages || [];
+    // 排队消息不立即显示用户气泡（由入队时显示）
+  } else {
+    msg = input.value.trim();
+    if (!msg && _pendingImages.length === 0) return;
+    input.value = '';
+    // Show user message
+    addMessage('user', msg || '(图片)', _pendingImages.length > 0 ? _pendingImages : null);
+    addLoading();
+    // Collect images
+    imagesToSend = [..._pendingImages];
+    _pendingImages = [];
+    updateImagePreview();
+  }
 
-  // Collect images
-  const imagesToSend = [..._pendingImages];
-  _pendingImages = [];
-  updateImagePreview();
+  // 如果是排队消息，不需要再创建气泡（done 事件中会处理）
+  if (isQueued) {
+    // 排队消息也要创建气泡，done 事件会填充内容
+    const agentDiv = document.createElement('div');
+    agentDiv.className = 'msg assistant';
+    agentDiv.id = 'current-ai-msg';
+    agentDiv.innerHTML = '<div class="msg-label">Tea Agent</div><div class="msg-bubble" id="ai-bubble"><div id="bubble-text"></div></div>';
+    $('msgs').appendChild(agentDiv);
+    scrollBottom();
+    addLoading();
+  }
 
   // Create assistant message container
   const agentDiv = document.createElement('div');
@@ -1666,7 +1929,8 @@ window.sendMessage = async function() {
   sendBtn.disabled = false;
 
   try {
-    const body = { message: msg, topic_id: currentTopicId };
+    const sendTopicId = queuedTopicId || currentTopicId;
+    const body = { message: msg, topic_id: sendTopicId };
     if (imagesToSend.length > 0) body.images = imagesToSend;
     // Include current config path if set
     const cfgSel = $('config-dropdown');
@@ -1679,6 +1943,29 @@ window.sendMessage = async function() {
       signal: abortController.signal,
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    // ⭐ 检测排队响应（JSON） vs SSE 流
+    const contentType = res.headers.get('Content-Type') || '';
+    if (contentType.includes('json') || contentType.includes('application/json')) {
+      // 排队成功，服务器返回 JSON { queued: true, ... }
+      const data = await res.json();
+      if (data.queued) {
+        toast('⏳ 已加入排队（第 ' + data.position + ' 位）', 'info');
+        // 显示排队气泡
+        addMessage('user', msg || '(图片)', imagesToSend.length > 0 ? imagesToSend : null);
+        const qDiv = document.createElement('div');
+        qDiv.className = 'msg assistant';
+        qDiv.innerHTML = '<div class="msg-label">排队队列</div><div class="msg-bubble queue-bubble"><span class="queue-indicator">⏳</span> 已加入排队队列，位置 #' + data.position + '</div>';
+        $('msgs').appendChild(qDiv);
+        scrollBottom();
+        // 刷新排队显示
+        refreshQueueDisplay();
+        return; // 结束，不继续 SSE 读取
+      }
+    }
+
+    // ⭐ 记录当前流式主题，用于主题切换保护
+    _streamingTopicId = sendTopicId;
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -1694,6 +1981,11 @@ window.sendMessage = async function() {
         if (!line.startsWith('data: ')) continue;
         try {
           const data = JSON.parse(line.slice(6));
+          // ⭐ 主题切换保护：用户切换了当前查看的主题，跳过非关键 UI 更新
+          const _isActiveTopic = _streamingTopicId === currentTopicId;
+          if (!_isActiveTopic && !['done','error','max_iter_confirm','question'].includes(data.type)) {
+            continue; // 跳过 UI 更新，SSE 流仍需读取直到 done/error
+          }
           switch (data.type) {
 
             case 'token':
@@ -1844,28 +2136,33 @@ window.sendMessage = async function() {
 
             case 'done':
               removeLoading();
-              if (toolCallContainer && !toolCallContainer.classList.contains('done')) {
-                toolCallContainer.classList.add('done');
-                toolCallContainer.open = false;
-                const label = toolCallSummary.querySelector('.label');
-                if (label) label.textContent = '工具调用完成';
-                const iconEl = toolCallSummary.querySelector('.icon');
-                if (iconEl) iconEl.textContent = '✅';
-              }
-              if (!fullText && data.ai_msg) {
-                bubbleText.innerHTML = formatMarkdown(data.ai_msg);
-              } else if (!fullText) {
-                bubbleText.innerHTML = '(无响应)';
+              if (_isActiveTopic) {
+                if (toolCallContainer && !toolCallContainer.classList.contains('done')) {
+                  toolCallContainer.classList.add('done');
+                  toolCallContainer.open = false;
+                  const label = toolCallSummary.querySelector('.label');
+                  if (label) label.textContent = '工具调用完成';
+                  const iconEl = toolCallSummary.querySelector('.icon');
+                  if (iconEl) iconEl.textContent = '✅';
+                }
+                if (!fullText && data.ai_msg) {
+                  bubbleText.innerHTML = formatMarkdown(data.ai_msg);
+                } else if (!fullText) {
+                  bubbleText.innerHTML = '(无响应)';
+                }
+              } else {
+                toast('✅ 后台主题的对话已完成', 'success');
               }
               if (data.usage) _pendingUsage = data.usage;
               if (data.topic_id) {
                 currentTopicId = data.topic_id;
                 const titleEl = $('tt');
-                // 初始欢迎页或点击"新对话"后，标题都需要更新
                 if (titleEl && (titleEl.textContent === '☕ 欢迎使用 Tea Agent' || titleEl.textContent === '新对话')) {
                   titleEl.textContent = 'Web Session';
                 }
               }
+              // ⭐ 对话完成，处理排队队列（使用当前完成主题的队列）
+              processQueueAfterDone(_streamingTopicId || data.topic_id || currentTopicId);
               break;
 
             case 'dag_viz':
@@ -1970,7 +2267,12 @@ window.sendMessage = async function() {
 
             case 'error':
               removeLoading();
-              bubbleText.innerHTML = '<span style="color:var(--red)">错误: ' + esc(data.error) + '</span>';
+              if (_isActiveTopic) {
+                bubbleText.innerHTML = '<span style="color:var(--red)">错误: ' + esc(data.error) + '</span>';
+              } else {
+                toast('❌ 后台会话出错: ' + (data.error || ''), 'error');
+              }
+              processQueueAfterDone(_streamingTopicId || currentTopicId);
               break;
           }
           scrollBottom();
@@ -1989,7 +2291,11 @@ window.sendMessage = async function() {
       if (bt) bt.innerHTML = '<span style="color:var(--red)">网络错误: ' + esc(e.message) + '</span>';
     }
   } finally {
-    isStreaming = false;
+    // ⭐ 只有当前流仍然是活跃流时才重置全局状态（避免误重置另一个主题的新流）
+    if (_streamingTopicId === sendTopicId) {
+      isStreaming = false;
+      _streamingTopicId = null;
+    }
     abortController = null;
     const btn = $('send-btn');
     btn.textContent = '发送';
@@ -2010,6 +2316,7 @@ window.sendMessage = async function() {
     }
     refreshTopics();
     refreshTaskPanel();
+    refreshQueueDisplay();
   }
 };
 
@@ -2042,8 +2349,9 @@ async function refreshTopics() {
     html += topics.map(function(t) {
       const title = t.title || t.id.slice(0, 8);
       const cls = 'topic-item' + (t.id === currentTopicId ? ' active' : '');
+      const processing = _streamingTopicId === t.id ? ' <span class="processing-badge">⟳</span>' : '';
       return '<div class="' + cls + '" onclick="openTopic(\'' + t.id + '\',\'' + esc(title) + '\')">'
-        + esc(title)
+        + esc(title) + processing
         + '<span class="topic-menu-wrap">'
         + '<button class="more-btn" onclick="event.stopPropagation();showTopicMenu(this,\'' + t.id + '\')">⋯</button>'
         + '<div class="topic-menu" id="topic-menu-' + t.id + '">'
@@ -2057,6 +2365,9 @@ async function refreshTopics() {
 }
 
 window.openTopic = async function(id, title) {
+  // ⭐ 如果正在流式传输且切换到不同主题，保留后台处理
+  const wasSwitchingAway = _streamingTopicId && _streamingTopicId !== id && _streamingTopicId !== currentTopicId;
+
   currentTopicId = id;
   $('tt').textContent = title || id.slice(0, 8);
   refreshTopics();
@@ -2071,6 +2382,7 @@ window.openTopic = async function(id, title) {
       if (c.ai_msg) addMessage('assistant', c.ai_msg);
     });
   } catch(e) {}
+  refreshQueueDisplay();
 };
 
 window.newTopic = function() {
@@ -2092,6 +2404,7 @@ window.newTopic = function() {
     + '</div>';
   $('msgs').appendChild(welcome);
   refreshTopics();
+  refreshQueueDisplay();
 };
 
 window.clearChat = function() {
@@ -3127,6 +3440,7 @@ function showMaxIterConfirm(confirmId, text) {
 refreshTopics();
 refreshConfigDropdown();
 refreshTaskPanel();
+refreshQueueDisplay();
 
 // Auto-refresh topics every 30s
 setInterval(refreshTopics, 30000);

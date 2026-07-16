@@ -54,6 +54,67 @@ _question_pending = {}  # type: dict[str, dict]
 # 用于中断请求通过 topic_id 找到对应 session 并调用 interrupt()
 _active_sessions: dict = {}
 
+# 全局：消息队列（topic_id -> list[dict]）
+# 当某 topic 正在对话时，后续输入的消息进入排队队列
+# 当前对话完成后自动执行下一条排队消息（FIFO）
+# 每项: {"id": str, "message": str, "images": list, "timestamp": float}
+_message_queue: dict[str, list[dict]] = {}
+_message_queue_lock = threading.Lock()
+
+
+def _queue_add(topic_id: str, message: str, images: list | None = None) -> str:
+    """添加消息到排队队列，返回 item_id。"""
+    import uuid as _uuid_mod
+    item_id = _uuid_mod.uuid4().hex[:12]
+    with _message_queue_lock:
+        if topic_id not in _message_queue:
+            _message_queue[topic_id] = []
+        _message_queue[topic_id].append({
+            "id": item_id,
+            "message": message,
+            "images": images or [],
+            "timestamp": time.time(),
+        })
+    logger.info(f"Queue add: topic={topic_id} item={item_id} queue_len={len(_message_queue.get(topic_id, []))}")
+    return item_id
+
+
+def _queue_list(topic_id: str) -> list[dict]:
+    """列出排队队列。"""
+    with _message_queue_lock:
+        return list(_message_queue.get(topic_id, []))
+
+
+def _queue_remove(topic_id: str, item_id: str) -> bool:
+    """从排队队列中移除指定项（取消排队）。"""
+    with _message_queue_lock:
+        items = _message_queue.get(topic_id, [])
+        for i, item in enumerate(items):
+            if item["id"] == item_id:
+                items.pop(i)
+                if not items:
+                    _message_queue.pop(topic_id, None)
+                logger.info(f"Queue remove: topic={topic_id} item={item_id}")
+                return True
+    return False
+
+
+def _queue_pop(topic_id: str) -> dict | None:
+    """弹出队列最前面的消息（FIFO）。"""
+    with _message_queue_lock:
+        items = _message_queue.get(topic_id, [])
+        if items:
+            item = items.pop(0)
+            if not items:
+                _message_queue.pop(topic_id, None)
+            return item
+    return None
+
+
+def _is_topic_busy(topic_id: str) -> bool:
+    """检查 topic 是否正在对话中。"""
+    return topic_id in _active_sessions
+
 
 # ── Server 模式下的 Question 处理器 ──
 
@@ -1275,6 +1336,9 @@ def create_app(api_key: str | None = None,
         handle_web_model_info,
         handle_web_model_switch,
         handle_web_new_topic,
+        handle_web_queue_add,
+        handle_web_queue_list,
+        handle_web_queue_remove,
         handle_web_root,
         handle_web_sessions,
         handle_web_tools,
@@ -1298,6 +1362,9 @@ def create_app(api_key: str | None = None,
         Route("/api/chat/continue", endpoint=handle_chat_continue, methods=["POST"]),
         Route("/api/chat/question", endpoint=handle_chat_question, methods=["POST"]),
         Route("/api/chat/abort", endpoint=handle_chat_abort, methods=["POST"]),
+        Route("/api/queue/{topic_id:str}", endpoint=handle_web_queue_list),
+        Route("/api/queue/{topic_id:str}", endpoint=handle_web_queue_add, methods=["POST"]),
+        Route("/api/queue/{topic_id:str}/{item_id:str}", endpoint=handle_web_queue_remove, methods=["DELETE"]),
         Route("/api/screenshot/region", endpoint=handle_screenshot_region, methods=["POST"]),
         Route("/api/screenshot/full", endpoint=handle_screenshot_full),
         Route("/api/screenshot/interactive", endpoint=handle_screenshot_interactive, methods=["POST"]),

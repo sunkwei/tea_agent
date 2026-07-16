@@ -26,6 +26,11 @@ from .server import (
     _active_sessions,
     _max_iter_pending,
     _question_pending,
+    _queue_add,
+    _queue_list,
+    _queue_remove,
+    _queue_pop,
+    _is_topic_busy,
     get_server,
     logger,
 )
@@ -407,7 +412,11 @@ async def handle_screenshot_interactive(request):
 # ================================================================
 
 async def handle_web_chat(request):
-    """POST /api/chat - SSE streaming chat for Web UI."""
+    """POST /api/chat - SSE streaming chat for Web UI.
+
+    如果 topic 正在对话中，消息将被加入排队队列而非启动新对话。
+    前端收到 queued 响应后显示排队状态。
+    """
     body = await request.json()
     message = body.get("message", "").strip()
     topic_id = body.get("topic_id", "")
@@ -416,6 +425,22 @@ async def handle_web_chat(request):
 
     if not message and not images_b64:
         return JSONResponse({"error": "message required"}, status_code=400)
+
+    if not topic_id:
+        # 新主题直接进入 SSE 流
+        pass
+    elif _is_topic_busy(topic_id):
+        # ⭐ 主题正忙 → 加入排队队列
+        item_id = _queue_add(topic_id, message, images_b64)
+        position = len(_queue_list(topic_id))
+        logger.info(f"Topic busy, queued message: topic={topic_id} item={item_id} position={position}")
+        return JSONResponse({
+            "queued": True,
+            "item_id": item_id,
+            "topic_id": topic_id,
+            "position": position,
+            "message": f"已加入排队队列（第 {position} 位）",
+        })
 
     image_paths = []
     if images_b64:
@@ -476,6 +501,7 @@ async def handle_web_chat(request):
                     break
         finally:
             _active_sessions.pop(topic_id, None)
+            # 当前对话结束（后续排队消息由前端驱动自动发送）
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -542,6 +568,46 @@ async def handle_chat_abort(request):
     except Exception as e:
         logger.exception(f"Abort session failed topic_id={topic_id}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+# ================================================================
+#  Queue API — 排队消息管理
+# ================================================================
+
+async def handle_web_queue_add(request):
+    """POST /api/queue/{topic_id} — 添加消息到排队队列（手动入队）"""
+    topic_id = request.path_params.get("topic_id", "")
+    if not topic_id:
+        return JSONResponse({"error": "topic_id 不能为空"}, status_code=400)
+    body = await request.json()
+    message = body.get("message", "").strip()
+    images_b64 = body.get("images", [])
+    if not message and not images_b64:
+        return JSONResponse({"error": "message required"}, status_code=400)
+    item_id = _queue_add(topic_id, message, images_b64)
+    position = len(_queue_list(topic_id))
+    return JSONResponse({"ok": True, "item_id": item_id, "topic_id": topic_id, "position": position})
+
+
+async def handle_web_queue_list(request):
+    """GET /api/queue/{topic_id} — 获取排队消息列表"""
+    topic_id = request.path_params.get("topic_id", "")
+    if not topic_id:
+        return JSONResponse({"error": "topic_id 不能为空"}, status_code=400)
+    items = _queue_list(topic_id)
+    return JSONResponse({"ok": True, "topic_id": topic_id, "items": items, "count": len(items)})
+
+
+async def handle_web_queue_remove(request):
+    """DELETE /api/queue/{topic_id}/{item_id} — 取消排队消息"""
+    topic_id = request.path_params.get("topic_id", "")
+    item_id = request.path_params.get("item_id", "")
+    if not topic_id or not item_id:
+        return JSONResponse({"error": "topic_id 和 item_id 不能为空"}, status_code=400)
+    ok = _queue_remove(topic_id, item_id)
+    if ok:
+        return JSONResponse({"ok": True, "item_id": item_id, "topic_id": topic_id})
+    return JSONResponse({"ok": False, "error": "未找到该排队消息"}, status_code=404)
 
 
 # ================================================================

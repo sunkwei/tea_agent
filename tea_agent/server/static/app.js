@@ -1,2087 +1,1904 @@
-/**
- * Tea Agent Web App - matching GUI layout & behavior
- * Features: SSE streaming, topic management, model switch, search, memory, tasks, export
- */
-(function() {
+
+(function(){
 'use strict';
 
-// -- State --
-let currentTopicId = '';
+/* ═══════════════════════════════════════════════════════
+   Tea Agent GUI2 — Core Application Script
+   ═══════════════════════════════════════════════════════ */
+
+// ── State ──
+let currentTopicId = null;
 let isStreaming = false;
-let activeTheme = localStorage.getItem('tea-theme') || 'dark';
-let abortController = null;     // AbortController 实例，用于中断请求
-let _pendingUsage = null;       // 暂存 token 用量，流结束后才显示
+let abortController = null;
+let _taskPanelOpen = false;
+let _taskPanelSuppressAutoOpen = false;
+let _pendingUsage = null;
+let _activeTheme = localStorage.getItem('ta-theme') || 'dark';
+let _pendingImages = [];
+let _userNearBottom = true;
+let _toolCallState = null; // tool call tracking during streaming
+let _messageQueue = []; // 排队消息队列：isStreaming 时入队，生成完后自动发送
 
-// -- DOM helpers --
-const $ = (id) => document.getElementById(id);
-const esc = (t) => { if (!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
-const show = (id) => { $(id).style.display = 'flex'; };
-const hide = (id) => { $(id).style.display = 'none'; };
-// Expose globally for HTML onclick handlers
-window.show = show;
-window.hide = hide;
-
-// -- Modal helpers: click outside to close + escape key --
-document.addEventListener('click', function(e) {
-    const modal = e.target.closest('.modal');
-    if (modal && !e.target.closest('.modal-box')) {
-        modal.style.display = 'none';
-    }
-});
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
-    }
-});
-
-// -- Toast --
-function toast(msg, type) {
-    let el = $('toast');
-    if (!el) {
-        el = document.createElement('div');
-        el.id = 'toast';
-        document.body.appendChild(el);
-    }
-    el.textContent = msg;
-    el.className = 'show ' + (type || '');
-    setTimeout(() => el.classList.remove('show'), 2500);
+// ── Queue List Render ──
+function renderQueueList() {
+  const container = $('queue-list');
+  if (!container) return;
+  if (_messageQueue.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = _messageQueue.map(function(item, i) {
+    let preview = item.text || '(图片)';
+    if (preview.length > 28) preview = preview.slice(0, 28) + '…';
+    return '<span class="queue-item" title="' + esc(item.text || '(图片)') + '">'
+      + '<span class="q-text">' + esc(preview) + '</span>'
+      + '<button class="q-cancel" onclick="cancelQueuedMessage(' + i + ')" title="取消排队">✕</button>'
+      + '</span>';
+  }).join('');
 }
 
-// -- Theme --
-window.toggleTheme = function() {
-    activeTheme = activeTheme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('tea-theme', activeTheme);
-    applyTheme();
+// ── Cancel Single Queued Message ──
+window.cancelQueuedMessage = function(index) {
+  if (index < 0 || index >= _messageQueue.length) return;
+  const removed = _messageQueue[index];
+  _messageQueue.splice(index, 1);
+  renderQueueList();
+  // 更新按钮显示
+  const sendBtn = $('send-btn');
+  if (_messageQueue.length > 0) {
+    sendBtn.textContent = '⏳ 排队 ' + _messageQueue.length;
+    sendBtn.className = 'btn btn-p warning';
+  } else {
+    sendBtn.textContent = '⏹ 中断';
+    sendBtn.className = 'btn btn-p danger';
+  }
+  toast('🗑 已取消: ' + (removed.text || '(图片)'), 'success');
 };
-function applyTheme() {
-    const t = activeTheme === 'dark'
-        ? { '--bg': '#0d1117', '--surface': '#161b22', '--surface2': '#21262d', '--text': '#c9d1d9', '--text-dim': '#8b949e', '--border': '#30363d' }
-        : { '--bg': '#ffffff', '--surface': '#f6f8fa', '--surface2': '#e8eaed', '--text': '#1f2328', '--text-dim': '#656d76', '--border': '#d1d5da' };
-    const root = document.documentElement;
-    for (const [k, v] of Object.entries(t)) root.style.setProperty(k, v);
-    if ($('theme-btn')) $('theme-btn').textContent = activeTheme === 'dark' ? '\u2600' : '\uD83C\uDF19';
+
+// ── DOM Helpers ──
+const $ = id => document.getElementById(id);
+const esc = t => { if (!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
+const escAttr = t => String(t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function showModal(id) { $(id).classList.add('open'); }
+function closeModal(id) { $(id).classList.remove('open'); }
+// Close modals on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal.open').forEach(m => closeModal(m.id));
+  }
+});
+
+// ── Toast ──
+function toast(msg, type) {
+  let el = $('toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.background = type === 'error' ? 'rgba(248,81,73,.9)' : type === 'success' ? 'rgba(63,185,80,.9)' : 'rgba(88,166,255,.9)';
+  el.style.opacity = '1';
+  setTimeout(() => { el.style.opacity = '0'; }, 2500);
 }
+
+// ── Theme ──
+function applyTheme() {
+  const t = _activeTheme;
+  document.documentElement.setAttribute('data-theme', t);
+  const btn = $('theme-btn');
+  if (btn) btn.textContent = t === 'dark' ? '🌙' : '☀️';
+  localStorage.setItem('ta-theme', t);
+}
+window.toggleTheme = function() {
+  _activeTheme = _activeTheme === 'dark' ? 'light' : 'dark';
+  applyTheme();
+};
 applyTheme();
 
-// -- Messages --
-function addMessage(role, content, images) {
-    let w = document.querySelector('.welcome');
-    if (w) w.style.display = 'none';
-    const div = document.createElement('div');
-    div.className = 'msg ' + (role === 'user' ? 'user' : 'agent');
-
-    let html = '<div class="msg-label">' + (role === 'user' ? '\u4f60' : 'Tea Agent') + '</div>';
-    html += '<div class="msg-bubble">';
-    // 显示图片
-    if (images && images.length > 0) {
-        html += '<div class="msg-images" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">';
-        images.forEach(function(img) {
-            html += '<img src="' + esc(img) + '" style="max-height:150px;max-width:250px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="window.openImageOverlay(this.src)">';
-        });
-        html += '</div>';
-    }
-    html += formatMarkdown(content || '');
-    html += '</div>';
-    div.innerHTML = html;
-
-    // 点击图片查看大图
-    div.querySelectorAll('.msg-images img').forEach(function(img) {
-        img.addEventListener('click', function() { window.openImageOverlay(this.src); });
-    });
-
-    $('messages').appendChild(div);
-    scrollBottom();
-    return div.querySelector('.msg-bubble');
+// ── Smart Scrolling ──
+function _isNearBottom() {
+  const m = $('msgs');
+  if (!m) return true;
+  return m.scrollHeight - m.scrollTop - m.clientHeight < 100;
 }
+function scrollBottom() {
+  if (!_userNearBottom) return;
+  const m = $('msgs');
+  if (!m) return;
+  m.scrollTop = m.scrollHeight;
+}
+// Track user scroll position
+$('msgs').addEventListener('scroll', function() {
+  _userNearBottom = _isNearBottom();
+});
 
-// 图片大图查看
-window.openImageOverlay = function(src) {
-    const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:pointer;';
-    overlay.innerHTML = '<img src="' + esc(src) + '" style="max-width:90vw;max-height:90vh;border-radius:8px;">';
-    overlay.addEventListener('click', function() { overlay.remove(); });
-    document.body.appendChild(overlay);
+// ── Keyboard Shortcuts ──
+document.addEventListener('keydown', function(e) {
+  // Don't trigger shortcuts when typing in input or modals
+  const tag = e.target.tagName;
+  const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+  if (e.ctrlKey && e.key === 'n') {
+    e.preventDefault(); newTopic();
+  } else if (e.ctrlKey && e.key === 'k') {
+    e.preventDefault(); showSearchModal();
+  } else if (e.ctrlKey && e.key === 'j') {
+    e.preventDefault(); toggleTaskPanel();
+  } else if (e.ctrlKey && e.key === 'M' && e.shiftKey) {
+    e.preventDefault(); showMemoryModal();
+  } else if (e.key === 'Escape' && isStreaming) {
+    e.preventDefault(); interruptChat();
+  }
+});
+
+// ── Input handler ──
+window.onInputKeydown = function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+  // Auto-resize
+  const el = e.target;
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  // Enable/disable send button
+  $('send-btn').disabled = !el.value.trim() && _pendingImages.length === 0;
 };
 
-// ── 智能滚动：用户向上翻看时不自动跳转 ──
-let _userNearBottom = true;  // 用户是否在聊天底部附近
+// ── Screenshot ──
+window.toggleScreenshotMenu = function(e) {
+  e.stopPropagation();
+  const menu = $('ss-menu');
+  if (!menu) return;
+  menu.classList.toggle('show');
+};
+document.addEventListener('click', function(e) {
+  const menu = $('ss-menu');
+  if (menu && !e.target.closest('.ss-dropup')) menu.classList.remove('show');
+});
+window.captureFullScreen = async function() {
+  $('ss-menu').classList.remove('show');
+  const btn = $('ss-btn'); btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const res = await fetch('/api/screenshot/full');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    if (!d.ok) throw new Error(d.error || '截图失败');
+    _pendingImages.push('data:image/png;base64,' + d.image_base64);
+    updateImagePreview();
+  } catch(e) {
+    alert('截图失败: ' + e.message);
+  } finally {
+    btn.textContent = '📷'; btn.disabled = false;
+  }
+};
+window.captureInteractive = async function() {
+  $('ss-menu').classList.remove('show');
+  const btn = $('ss-btn'); btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const res = await fetch('/api/screenshot/interactive', { method: 'POST' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    if (!d.ok) throw new Error(d.error || '截图失败');
+    _pendingImages.push('data:image/png;base64,' + d.image_base64);
+    updateImagePreview();
+  } catch(e) {
+    alert('截图失败: ' + e.message);
+  } finally {
+    btn.textContent = '📷'; btn.disabled = false;
+  }
+};
 
-function _isNearBottom() {
-    const m = $('messages');
-    if (!m) return true;
-    // 距离底部 80px 以内视为"在底部"
-    return m.scrollHeight - m.scrollTop - m.clientHeight < 80;
+// ── Image Upload ──
+window.onFilesSelected = function(e) {
+  const files = e.target.files;
+  for (const f of files) {
+    if (!f.type.startsWith('image/')) continue;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      _pendingImages.push(ev.target.result);
+      updateImagePreview();
+    };
+    reader.readAsDataURL(f);
+  }
+  e.target.value = '';
+};
+// Paste image support
+$('ci').addEventListener('paste', function(e) {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      const file = item.getAsFile();
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        _pendingImages.push(ev.target.result);
+        updateImagePreview();
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+  }
+});
+function updateImagePreview() {
+  const area = $('img-preview-area');
+  if (!area) return;
+  if (_pendingImages.length === 0) { area.innerHTML = ''; return; }
+  area.innerHTML = _pendingImages.map((img, i) =>
+    '<div class="img-preview-item"><img src="' + img + '" onclick="window.openImageOverlay(this.src)"><button class="remove-img" onclick="removeImage(' + i + ')">✕</button></div>'
+  ).join('');
+  $('send-btn').disabled = !$('ci').value.trim() && _pendingImages.length === 0;
 }
+window.removeImage = function(i) {
+  _pendingImages.splice(i, 1);
+  updateImagePreview();
+};
+window.openImageOverlay = function(src) {
+  const overlay = document.createElement('div');
+  overlay.className = 'img-overlay';
+  overlay.innerHTML = '<img src="' + src + '">';
+  overlay.addEventListener('click', function() { overlay.remove(); });
+  document.body.appendChild(overlay);
+};
 
-function scrollBottom() {
-    if (!_userNearBottom) return;  // 用户在看历史，不强制跳转
-    const m = $('messages');
-    if (!m) return;
-    // 直接同步滚动，避免 setTimeout 延迟导致肉眼可见的跳动
-    m.scrollTop = m.scrollHeight;
+// ══════════════════════════════════════════════════
+//  ADD MESSAGE — with Markdown formatting
+// ══════════════════════════════════════════════════
+
+function addMessage(role, content, images) {
+  const welcome = document.querySelector('.welcome');
+  if (welcome) welcome.remove();
+
+  const div = document.createElement('div');
+  div.className = 'msg ' + (role === 'user' ? 'user' : 'assistant');
+
+  let html = '<div class="msg-label">' + (role === 'user' ? '你' : 'Tea Agent') + '</div>';
+  html += '<div class="msg-bubble">';
+
+  // Images
+  if (images && images.length > 0) {
+    html += '<div class="msg-images">';
+    images.forEach(function(img) {
+      html += '<img src="' + esc(img) + '" onclick="window.openImageOverlay(this.src)">';
+    });
+    html += '</div>';
+  }
+
+  // Markdown formatted content (only for assistant messages; user messages are plain)
+  if (role === 'assistant') {
+    html += formatMarkdown(content || '');
+  } else {
+    html += esc(content || '');
+  }
+  html += '</div>';
+  div.innerHTML = html;
+  $('msgs').appendChild(div);
+  scrollBottom();
+  return div.querySelector('.msg-bubble');
 }
 
 function addLoading() {
-    let w = document.querySelector('.welcome');
-    if (w) w.style.display = 'none';
-    const div = document.createElement('div');
-    div.className = 'loading';
-    div.id = 'loading-indicator';
-    div.innerHTML = '<div class="spinner"></div><span>\u6b63\u5728\u601d\u8003...</span>';
-    $('messages').appendChild(div);
-    scrollBottom();
+  const welcome = document.querySelector('.welcome');
+  if (welcome) welcome.remove();
+  const div = document.createElement('div');
+  div.className = 'loading-indicator';
+  div.id = 'loading-indicator';
+  div.innerHTML = '<div class="spinner"></div><span>思考中...</span>';
+  $('msgs').appendChild(div);
+  scrollBottom();
 }
 function removeLoading() {
-    const el = $('loading-indicator');
-    if (el) el.remove();
+  const el = $('loading-indicator');
+  if (el) el.remove();
 }
 
-// -- SSE Chat --
-// 中断当前对话（模拟 ESC 行为）
-window.interruptChat = async function() {
-    // 1. Abort the HTTP request
-    if (abortController) {
-        abortController.abort();
-        abortController = null;
-    }
-    // 2. Signal the backend to stop processing
-    if (currentTopicId) {
-        try {
-            await fetch('/api/chat/abort', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topic_id: currentTopicId }),
-                signal: AbortSignal.timeout(3000),  // 最多等3秒
-            });
-        } catch (e) { /* ignore timeout errors */ }
-    }
-    // 3. Update loading indicator if still visible
-    removeLoading();
-    const bubbleText = document.getElementById('bubble-text');
-    if (bubbleText && !bubbleText.innerHTML.trim()) {
-        bubbleText.innerHTML = '(\u5df2\u4e2d\u65ad)';
-    }
-    // Note: isStreaming will be set to false in sendMessage's finally block
+// ══════════════════════════════════════════════════
+//  FORMAT MARKDOWN
+// ══════════════════════════════════════════════════
+
+function formatMarkdown(text) {
+  if (!text) return '';
+  let html = esc(text).replace(/\r\n/g, '\n');
+
+  // Protect code blocks
+  const codeBlocks = [];
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
+    const idx = codeBlocks.length;
+    const langLabel = lang ? '<span class="code-lang">' + esc(lang) + '</span>' : '';
+    const trimmedCode = code.trimEnd();
+    codeBlocks.push(
+      '<div class="code-block-wrapper">'
+      + '<div class="code-block-header">'
+      + langLabel
+      + '<button class="copy-btn" onclick="copyCode(this)" data-code="' + escAttr(trimmedCode) + '">📋 复制</button>'
+      + '</div>'
+      + '<pre><code class="lang-' + esc(lang) + '">' + esc(trimmedCode) + '</code></pre>'
+      + '</div>'
+    );
+    return '\x00CODE' + idx + '\x00';
+  });
+
+  // Inline code — 直接渲染原文，不做占位符保护
+  html = html.replace(/`([^`]+)`/g, function(match, code) {
+    return '<code class="md-inline-code">' + esc(code) + '</code>';
+  });
+
+  // Headers
+  html = html.replace(/^#### (.+)$/gm, '<h5 class="md-h5">$1</h5>');
+  html = html.replace(/^### (.+)$/gm, '<h4 class="md-h4">$1</h4>');
+  html = html.replace(/^## (.+)$/gm, '<h3 class="md-h3">$1</h3>');
+  html = html.replace(/^# (.+)$/gm, '<h2 class="md-h2">$1</h2>');
+
+  // Tables
+  const tableBlocks = [];
+  html = html.replace(/^\|(.+)\|[ \t]*[\r\n]+\|[\-:|\s]+\|[ \t]*[\r\n]+((?:^\|.+\|[ \t]*[\r\n]?)+)/gm, function(match, headerRow, bodyRows) {
+    const h = headerRow.split('|').map(function(c, i) { return '<th>' + c.trim() + '</th>'; }).join('');
+    const rows = bodyRows.trim().split('\n').map(function(line) {
+      const cells = line.replace(/^\||\|$/g, '').split('|').map(function(c) { return '<td>' + c.trim() + '</td>'; }).join('');
+      return '<tr>' + cells + '</tr>';
+    }).join('');
+    const idx = tableBlocks.length;
+    tableBlocks.push('<table class="md-table"><thead><tr>' + h + '</tr></thead><tbody>' + rows + '</tbody></table>');
+    return '\x00TABLE' + idx + '\x00';
+  });
+
+  // Lists (unordered)
+  const listBlocks = [];
+  html = html.replace(/^(\s*[-*+]\s+.+(?:\n\s*[-*+]\s+.+)*)$/gm, function(match) {
+    const items = match.split('\n').map(function(line) {
+      return '<li class="md-li">' + line.replace(/^\s*[-*+]\s+/, '') + '</li>';
+    }).join('');
+    const idx = listBlocks.length;
+    listBlocks.push('<ul class="md-ul">' + items + '</ul>');
+    return '\x00ULIST' + idx + '\x00';
+  });
+  // Lists (ordered)
+  html = html.replace(/^(\s*\d+\.\s+.+(?:\n\s*\d+\.\s+.+)*)$/gm, function(match) {
+    const items = match.split('\n').map(function(line) {
+      return '<li class="md-li">' + line.replace(/^\s*\d+\.\s+/, '') + '</li>';
+    }).join('');
+    const idx = listBlocks.length;
+    listBlocks.push('<ol class="md-ol">' + items + '</ol>');
+    return '\x00OLIST' + idx + '\x00';
+  });
+
+  // Blockquotes
+  html = html.replace(/^&gt;\s(.+)$/gm, '<blockquote class="md-blockquote">$1</blockquote>');
+  // Horizontal rules
+  html = html.replace(/^---$/gm, '<hr class="md-hr">');
+
+  // Convert newlines to <br>
+  html = html.replace(/\n/g, '<br>');
+
+  // Bold, italic, strikethrough, links
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="md-strong">$1</strong>');
+  html = html.replace(/\*([^*]+)\*/g, '<em class="md-em">$1</em>');
+  html = html.replace(/~~([^~]+)~~/g, '<del class="md-del">$1</del>');
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a class="md-link" href="$2" target="_blank" rel="noopener">$1</a>');
+
+  // Restore tables
+  html = html.replace(/\x00TABLE(\d+)\x00/g, function(m, idx) { return tableBlocks[idx] || ''; });
+  // Restore lists
+  html = html.replace(/\x00ULIST(\d+)\x00/g, function(m, idx) { return listBlocks[idx] || ''; });
+  html = html.replace(/\x00OLIST(\d+)\x00/g, function(m, idx) { return listBlocks[idx] || ''; });
+  // Restore code blocks
+  html = html.replace(/\x00CODE(\d+)\x00/g, function(m, idx) { return codeBlocks[idx] || ''; });
+
+  return html;
+}
+
+// ── Copy Code Button ──
+window.copyCode = function(btn) {
+  const code = btn.getAttribute('data-code');
+  if (!code) return;
+  navigator.clipboard.writeText(code).then(function() {
+    btn.textContent = '✅ 已复制';
+    setTimeout(function() { btn.textContent = '📋 复制'; }, 2000);
+  }).catch(function() {
+    const ta = document.createElement('textarea');
+    ta.value = code;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    btn.textContent = '✅ 已复制';
+    setTimeout(function() { btn.textContent = '📋 复制'; }, 2000);
+  });
 };
 
-window.sendMessage = async function() {
-    // 如果正在对话中，点击发送按钮=中断
-    if (isStreaming) {
-        await interruptChat();
-        return;
-    }
-    const input = $('chat-input');
-    const msg = input.value.trim();
-    if (!msg && pendingImages.length === 0) return;
-    input.value = '';
+// ══════════════════════════════════════════════════
+//  SSE CHAT — Rich Event Stream
+// ══════════════════════════════════════════════════
 
-    // 构建用户消息显示（含图片预览）
-    addMessage('user', msg || '(图片)', pendingImages.length > 0 ? pendingImages : null);
-    addLoading();
-
-    // 收集图片数据并清空
-    const imagesToSend = [...pendingImages];
-    pendingImages = [];
-    updateImagePreview();
-
-    const agentDiv = document.createElement('div');
-    agentDiv.className = 'msg agent';
-    agentDiv.id = 'current-ai-msg';
-    agentDiv.innerHTML = '<div class="msg-label">Tea Agent</div><div class="msg-bubble" id="ai-bubble"><div id="bubble-text"></div></div>';
-    $('messages').appendChild(agentDiv);
-    const bubble = $('ai-bubble');
-    const bubbleText = $('bubble-text');
-    let thinkBlock = null, thinkContent = null;
-    let fullText = '';
-    // Tool call state tracking
-    let toolCallContainer = null;  // <details> wrapper
-    let toolCallList = null;       // tool item list inside details
-    let toolCallSummary = null;    // <summary> element
-    let toolCallBadge = null;      // count badge
-    let toolCallCount = 0;
-    let toolDoneCount = 0;
-    let activeToolItem = null;     // currently running tool DOM element
-
-    isStreaming = true;
-    _pendingUsage = null;
-    // 会话进行中隐藏旧的 tokens 用量提示
-    const oldUsageBar = document.getElementById('usage-bar');
-    if (oldUsageBar) oldUsageBar.style.display = 'none';
-    abortController = new AbortController();
-    // 切换发送按钮为「中断」样式
-    const sendBtn = $('send-btn');
-    sendBtn.textContent = '\u23f9 \u4e2d\u65ad';
-    sendBtn.className = 'btn btn-danger';
-    sendBtn.disabled = false;
-
+// Interrupt current chat
+window.interruptChat = async function() {
+  // 清空排队消息
+  if (_messageQueue.length > 0) {
+    _messageQueue = [];
+    renderQueueList();
+    toast('🛑 已清空排队消息', 'error');
+  }
+  if (abortController) {
+    abortController.abort();
+    abortController = null;
+  }
+  if (currentTopicId) {
     try {
-        const body = { message: msg, topic_id: currentTopicId };
-        if (imagesToSend.length > 0) body.images = imagesToSend;
-        // 如果当前有选中的配置路径，附带发送（不同 Web 实例可用不同配置）
-        if (_configCurrentPath) body.config_path = _configCurrentPath;
-        const res = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-            signal: abortController.signal,
-        });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
+      await fetch('/api/chat/abort', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic_id: currentTopicId }),
+        signal: AbortSignal.timeout(3000),
+      });
+    } catch(e) { /* ignore */ }
+  }
+  removeLoading();
+  const bubbleText = document.getElementById('bubble-text');
+  if (bubbleText && !bubbleText.innerHTML.trim()) {
+    bubbleText.innerHTML = '(已中断)';
+  }
+};
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '';
+// ── Helper: 流式生成中入队排队 ──
+function _enqueueMessage(msg, images) {
+  _messageQueue.push({ text: msg, images: [...images] });
+  _pendingImages = [];
+  updateImagePreview();
+  renderQueueList();
+  const qlen = _messageQueue.length;
+  const sendBtn = $('send-btn');
+  sendBtn.textContent = `⏳ 排队 ${qlen}`;
+  sendBtn.className = 'btn btn-p warning';
+  sendBtn.disabled = false;
+  toast(`⏳ 消息已排队（队列中 ${qlen} 条）`, 'success');
+}
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const lines = buf.split('\n');
-            for (let i = 0; i < lines.length - 1; i++) {
-                const line = lines[i].trim();
-                if (!line.startsWith('data: ')) continue;
-                try {
-                    const data = JSON.parse(line.slice(6));
-                    switch (data.type) {
-                        case 'token':
-                            removeLoading();
-                            fullText += data.text;
-                            bubbleText.innerHTML = formatMarkdown(fullText);
-                            break;
-                        case 'think_start':
-                            removeLoading();
-                            thinkBlock = document.createElement('details');
-                            thinkBlock.className = 'think-block';
-                            thinkBlock.innerHTML = '<summary>\uD83D\uDCAD \u601d\u8003\u4e2d...</summary>';
-                            thinkContent = document.createElement('div');
-                            thinkContent.className = 'think-content';
-                            thinkBlock.appendChild(thinkContent);
-                            bubble.insertBefore(thinkBlock, bubbleText);
-                            break;
-                        case 'think':
-                            if (thinkContent) thinkContent.textContent += data.text;
-                            break;
-                        case 'think_done':
-                            if (thinkBlock) {
-                                const summary = thinkBlock.querySelector('summary');
-                                if (summary) summary.textContent = '\uD83D\uDCAD \u601d\u8003\u5b8c\u6210 (' + (thinkContent ? thinkContent.textContent.length : 0) + ' \u5b57)';
-                            }
-                            thinkBlock = null; thinkContent = null;
-                            break;
-                        case 'tool_start':
-                            removeLoading();
-                            toolCallCount++;
-                            // Refresh TODO sidebar — auto-opens if TODOs already exist
-                            if (toolCallCount === 1) refreshTodos().catch(function(){});
-                            // Create collapsible container on first tool call
-                            if (!toolCallContainer) {
-                                toolCallContainer = document.createElement('details');
-                                toolCallContainer.className = 'tool-call-container';
-                                toolCallContainer.open = true;
-                                toolCallSummary = document.createElement('summary');
-                                toolCallSummary.className = 'tool-call-summary';
-                                toolCallSummary.innerHTML = '<span class="icon">🔧</span><span class="label">工具调用中...</span><span class="badge">0/' + toolCallCount + '</span>';
-                                toolCallBadge = toolCallSummary.querySelector('.badge');
-                                toolCallContainer.appendChild(toolCallSummary);
-                                toolCallList = document.createElement('div');
-                                toolCallContainer.appendChild(toolCallList);
-                                bubble.insertBefore(toolCallContainer, bubbleText);
-                            }
-                            // Create tool item with spinner
-                            const item = document.createElement('div');
-                            item.className = 'tool-call-item running';
-                            item.innerHTML = '<span class="status-icon"><span class="tool-spinner"></span></span><span class="tool-name"><code>' + esc(data.name) + '</code></span>';
-                            toolCallList.appendChild(item);
-                            activeToolItem = item;
-                            // Update badge
-                            if (toolCallBadge) toolCallBadge.textContent = toolDoneCount + '/' + toolCallCount;
-                            scrollBottom();
-                            break;
-                        case 'tool_done':
-                            // Mark running tool as done
-                            if (activeToolItem) {
-                                activeToolItem.classList.remove('running');
-                                activeToolItem.classList.add('done');
-                                const icon = activeToolItem.querySelector('.status-icon');
-                                if (icon) icon.innerHTML = '✅';
-                                toolDoneCount++;
-                                // 每个工具完成后立即刷新 TODO — 面板在 TODO 创建后马上可见
-                                refreshTodos().catch(function(){});
-                                if (toolCallBadge) toolCallBadge.textContent = toolDoneCount + '/' + toolCallCount;
-                            }
-                            activeToolItem = null;
-                            // If all tools done, finalize container
-                            if (toolDoneCount >= toolCallCount && toolCallContainer) {
-                                toolCallContainer.classList.add('done');
-                                toolCallContainer.open = false;
-                                const label = toolCallSummary.querySelector('.label');
-                                if (label) label.textContent = '工具调用完成';
-                                const icon = toolCallSummary.querySelector('.icon');
-                                if (icon) icon.textContent = '✅';
-                            }
-                            break;
-                        case 'tool_args':
-                            // Parse "key: value, key: value" and show each param
-                            if (activeToolItem && data.args) {
-                                const paramsDiv = document.createElement('div');
-                                paramsDiv.className = 'tool-params';
-                                const pairs = String(data.args).split(', ');
-                                for (const pair of pairs) {
-                                    const colon = pair.indexOf(': ');
-                                    const row = document.createElement('div');
-                                    row.className = 'tool-param-row';
-                                    if (colon > 0) {
-                                        const key = pair.slice(0, colon);
-                                        let val = pair.slice(colon + 2);
-                                        if (val.length > 120) val = val.slice(0, 120) + '…';
-                                        row.innerHTML = '<span class="param-key">' + esc(key) + '</span><span class="param-val"><code>' + esc(val) + '</code></span>';
-                                    } else {
-                                        let val = pair;
-                                        if (val.length > 120) val = val.slice(0, 120) + '…';
-                                        row.innerHTML = '<span class="param-val"><code>' + esc(val) + '</code></span>';
-                                    }
-                                    paramsDiv.appendChild(row);
-                                }
-                                activeToolItem.appendChild(paramsDiv);
-                            }
-                            break;
-                        case 'tool_result':
-                            // Show return value under the tool item
-                            if (activeToolItem && data.result) {
-                                let val = String(data.result);
-                                if (val.length > 120) val = val.slice(0, 120) + '…';
-                                const resDiv = document.createElement('div');
-                                resDiv.className = 'tool-result';
-                                resDiv.innerHTML = '<span class="result-label">↳</span><span class="result-val"><code>' + esc(val) + '</code></span>';
-                                activeToolItem.appendChild(resDiv);
-                            }
-                            break;
-                        case 'status':
-                            removeLoading();
-                            const st = document.createElement('div');
-                            st.className = 'status-msg info';
-                            st.textContent = data.text;
-                            st.style.fontSize = '12px';
-                            st.style.margin = '4px 0';
-                            bubble.insertBefore(st, bubbleText);
-                            setTimeout(() => st.remove(), 3000);
-                            break;
-                        case 'max_iter_confirm':
-                            // 工具轮达到上限，弹窗询问用户是否继续
-                            removeLoading();
-                            showMaxIterConfirm(data.confirm_id, data.text);
-                            break;
-                        case 'question':
-                            // Agent 向用户提问
-                            removeLoading();
-                            showQuestionDialog(data.question_id, data.title, data.question, data.options, data.default);
-                            break;
-                        case 'dag_viz':
-                            // DAG 工作流可视化 — 内嵌 SVG 缩略图，每 2s 自动刷新
-                            removeLoading();
-                            insertDagCard(bubble, bubbleText, data.viz_id);
-                            break;
-                        case 'done':
-                            removeLoading();
-                            // Finalize tool container if still open
-                            if (toolCallContainer && !toolCallContainer.classList.contains('done')) {
-                                toolCallContainer.classList.add('done');
-                                toolCallContainer.open = false;
-                                const label = toolCallSummary.querySelector('.label');
-                                if (label) label.textContent = '工具调用完成';
-                                const iconEl = toolCallSummary.querySelector('.icon');
-                                if (iconEl) iconEl.textContent = '✅';
-                            }
-                            if (!fullText && data.ai_msg) {
-                                bubbleText.innerHTML = formatMarkdown(data.ai_msg);
-                            } else if (!fullText) {
-                                bubbleText.innerHTML = '(\u65e0\u54cd\u5e94)';
-                            }
-                            // 暂存 usage，等流结束后在 finally 中显示（避免用户误以为对话已结束）
-                            if (data.usage) _pendingUsage = data.usage;
-                            // 保存 topic_id 以便后续消息关联到同一主题
-                            if (data.topic_id) {
-                                currentTopicId = data.topic_id;
-                                // 更新工具栏标题（新主题时用简短id显示）
-                                const titleEl = document.getElementById('topic-title');
-                                if (titleEl && titleEl.textContent === '新对话') {
-                                    titleEl.textContent = 'Web Session';
-                                }
-                            }
-                            break;
-                        case 'error':
-                            removeLoading();
-                            bubbleText.innerHTML = '<span style="color:var(--red)">\u9519\u8bef: ' + esc(data.error) + '</span>';
-                            break;
-                    }
-                    scrollBottom();
-                } catch (e) { /* skip */ }
+// ── Helper: 创建流式消息容器和状态对象 ──
+function _createStreamState() {
+  const agentDiv = document.createElement('div');
+  agentDiv.className = 'msg assistant';
+  agentDiv.id = 'current-ai-msg';
+  agentDiv.innerHTML = '<div class="msg-label">Tea Agent</div><div class="msg-bubble" id="ai-bubble"><div id="bubble-text"></div></div>';
+  $('msgs').appendChild(agentDiv);
+  scrollBottom();
+  return {
+    bubbleText: $('bubble-text'),
+    fullText: '',
+    thinkBlock: null,
+    thinkContent: null,
+    toolCallContainer: null,
+    toolCallList: null,
+    toolCallSummary: null,
+    toolCallBadge: null,
+    toolCallCount: 0,
+    toolDoneCount: 0,
+    activeToolItem: null,
+  };
+}
+
+// ── Helper: 流结束后清理并发送排队消息 ──
+function _processQueueAfterStream() {
+  if (_pendingUsage) {
+    updateUsage(_pendingUsage);
+    _pendingUsage = null;
+  }
+  // 清理 DOM ID，避免下一轮消息 ID 重复
+  const oldMsg = $('current-ai-msg');
+  if (oldMsg) {
+    oldMsg.removeAttribute('id');
+    const ob = oldMsg.querySelector('#ai-bubble');
+    if (ob) ob.removeAttribute('id');
+    const ot = oldMsg.querySelector('#bubble-text');
+    if (ot) ot.removeAttribute('id');
+  }
+  const btn = $('send-btn');
+  if (_messageQueue.length > 0) {
+    const next = _messageQueue.shift();
+    renderQueueList();
+    const input = $('ci');
+    input.value = next.text;
+    input.style.height = 'auto';
+    _pendingImages = next.images || [];
+    updateImagePreview();
+    const qlen = _messageQueue.length;
+    btn.textContent = qlen > 0 ? `⏳ 排队 ${qlen}` : '⏳ 发送中...';
+    btn.className = qlen > 0 ? 'btn btn-p warning' : 'btn btn-p';
+    btn.disabled = false;
+    sendMessage();
+    return;
+  }
+  btn.textContent = '发送';
+  btn.className = 'btn btn-p';
+  btn.disabled = false;
+  $('ci').focus();
+  refreshTopics();
+  refreshTaskPanel();
+}
+
+window.sendMessage = async function() {
+  // 如果正在生成中 → 入队排队，不中断
+  if (isStreaming) {
+    const input = $('ci');
+    const msg = input.value.trim();
+    if (!msg && _pendingImages.length === 0) return;
+    input.value = '';
+    input.style.height = 'auto';
+    _enqueueMessage(msg, _pendingImages);
+    return;
+  }
+
+  const input = $('ci');
+  const msg = input.value.trim();
+  if (!msg && _pendingImages.length === 0) return;
+  input.value = '';
+
+  // Show user message
+  addMessage('user', msg || '(图片)', _pendingImages.length > 0 ? _pendingImages : null);
+  addLoading();
+
+  // Collect images
+  const imagesToSend = [..._pendingImages];
+  _pendingImages = [];
+  updateImagePreview();
+
+  // Create assistant message container and state
+  const s = _createStreamState();
+  isStreaming = true;
+  _pendingUsage = null;
+
+  // Hide old usage bar
+  const oldUsageBar = $('usage-bar');
+  if (oldUsageBar) oldUsageBar.style.display = 'none';
+
+  abortController = new AbortController();
+
+  // Update send button to interrupt
+  const sendBtn = $('send-btn');
+  sendBtn.textContent = '⏹ 中断';
+  sendBtn.className = 'btn btn-p danger';
+  sendBtn.disabled = false;
+
+  try {
+    const body = { message: msg, topic_id: currentTopicId };
+    if (imagesToSend.length > 0) body.images = imagesToSend;
+    // Include current config path if set
+    const cfgSel = $('config-dropdown');
+    if (cfgSel && cfgSel.value) body.config_path = cfgSel.value;
+
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: abortController.signal,
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const slines = buf.split('\n');
+      for (let i = 0; i < slines.length - 1; i++) {
+        const line = slines[i].trim();
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const data = JSON.parse(line.slice(6));
+          switch (data.type) {
+
+            case 'token':
+              removeLoading();
+              s.fullText += data.content;
+              s.bubbleText.innerHTML = esc(s.fullText);
+              break;
+
+            case 'think_start':
+              if (!s.thinkBlock) {
+                s.thinkBlock = document.createElement('details');
+                s.thinkBlock.className = 'think-block';
+                s.thinkBlock.innerHTML = '<summary>推理中...</summary><div class="think-content"></div>';
+                s.bubbleText.parentNode.insertBefore(s.thinkBlock, s.bubbleText.nextSibling);
+                s.thinkContent = s.thinkBlock.querySelector('.think-content');
+              }
+              s.thinkContent.innerHTML = '';
+              break;
+
+            case 'think':
+              if (s.thinkContent) {
+                s.thinkContent.textContent += data.content;
+              }
+              break;
+
+            case 'think_done':
+              if (s.thinkBlock) {
+                const summary = s.thinkBlock.querySelector('summary');
+                if (summary) summary.textContent = '推理完成';
+              }
+              break;
+
+            case 'tool_start': {
+              removeLoading();
+              if (!s.toolCallContainer) {
+                s.toolCallContainer = document.createElement('div');
+                s.toolCallContainer.className = 'tool-call-container';
+                s.bubbleText.parentNode.appendChild(s.toolCallContainer);
+                s.toolCallSummary = document.createElement('div');
+                s.toolCallSummary.className = 'tool-call-summary';
+                s.toolCallBadge = document.createElement('span');
+                s.toolCallBadge.className = 'tool-call-badge';
+                s.toolCallBadge.textContent = '⚙ 0';
+                s.toolCallSummary.appendChild(s.toolCallBadge);
+                s.toolCallContainer.appendChild(s.toolCallSummary);
+                s.toolCallList = document.createElement('div');
+                s.toolCallList.className = 'tool-call-list';
+                s.toolCallContainer.appendChild(s.toolCallList);
+              }
+              s.toolCallCount++;
+              if (s.toolCallBadge) s.toolCallBadge.textContent = `⚙ ${s.toolCallCount}`;
+              const item = document.createElement('div');
+              item.className = 'tool-call-item';
+              item.id = `tool-${s.toolCallCount}`;
+              item.innerHTML = `<span class="tool-call-name">${esc(data.name || '工具')}</span>`
+                + `<span class="tool-call-status running">运行中</span>`
+                + `<div class="tool-call-detail" style="display:none">`
+                + `<pre class="tool-call-args">${esc(data.args || '')}</pre>`
+                + `<pre class="tool-call-result"></pre></div>`;
+              s.toolCallList.appendChild(item);
+              s.activeToolItem = item;
+              break;
             }
-            buf = lines[lines.length - 1];
-        }
-    } catch (e) {
-        if (e.name === 'AbortError') {
-            // 用户主动中断，不显示错误
-            removeLoading();
-            if (!bubbleText.innerHTML.trim()) {
-                bubbleText.innerHTML = '(\u5df2\u4e2d\u65ad)';
+
+            case 'tool_args':
+              if (s.activeToolItem) {
+                const argsPre = s.activeToolItem.querySelector('.tool-call-args');
+                if (argsPre) argsPre.textContent += data.content;
+              }
+              break;
+
+            case 'tool_result':
+              if (s.activeToolItem) {
+                const detail = s.activeToolItem.querySelector('.tool-call-detail');
+                if (detail) detail.style.display = 'block';
+                const resPre = s.activeToolItem.querySelector('.tool-call-result');
+                if (resPre) resPre.textContent += data.content;
+              }
+              break;
+
+            case 'tool_done':
+              s.toolDoneCount++;
+              if (s.activeToolItem) {
+                const status = s.activeToolItem.querySelector('.tool-call-status');
+                if (status) {
+                  status.textContent = data.error ? `❌ ${esc(data.error)}` : '✅ 完成';
+                  status.className = data.error ? 'tool-call-status error' : 'tool-call-status done';
+                }
+              }
+              s.activeToolItem = null;
+              break;
+
+            case 'status':
+              if (data.content) {
+                const oldStatus = document.getElementById('stream-status');
+                if (!oldStatus) {
+                  const statusDiv = document.createElement('div');
+                  statusDiv.id = 'stream-status';
+                  statusDiv.className = 'stream-status';
+                  s.bubbleText.parentNode.appendChild(statusDiv);
+                }
+                const sd = $('stream-status');
+                if (sd) sd.textContent = data.content;
+              }
+              break;
+
+            case 'max_iter_confirm':
+              removeLoading();
+              showMaxIterConfirm(data.confirm_id, data.text);
+              break;
+
+            case 'question':
+              removeLoading();
+              showQuestionDialog(data.question_id, data.title, data.question, data.options, data.default);
+              break;
+
+            case 'done':
+              removeLoading();
+              // 记录 token 用量（延迟显示，等流结束后才更新 UI）
+              if (data.usage) _pendingUsage = data.usage;
+              // 更新 topic_id（首次消息后更新）
+              if (data.topic_id && data.topic_id !== currentTopicId) {
+                currentTopicId = data.topic_id;
+                refreshTopics();
+              }
+              break;
+
+            case 'dag_viz': {
+              let dagSection = $('tp-dag-section');
+              if (!dagSection) break;
+              dagSection.style.display = '';
+              const snap = data.snapshot || {};
+              const done = snap.done || 0;
+              const total = snap.total || 0;
+              const state = snap.state || 'running';
+              // DAG SVG
+              const iframe = $('dag-iframe');
+              if (iframe && snap.svg) {
+                const svgBlob = new Blob([snap.svg], { type: 'image/svg+xml' });
+                iframe.src = URL.createObjectURL(svgBlob);
+              }
+              // 状态和进度条
+              $('dag-state').textContent = state.toUpperCase();
+              const dp = $('dag-progress');
+              if (dp && total > 0) {
+                dp.style.width = Math.round(done / total * 100) + '%';
+                dp.textContent = done + ' / ' + total;
+              }
+              const lbTitle = $('dag-lightbox-title');
+              if (lbTitle) {
+                lbTitle.textContent = (snap.title || 'DAG') + ' · ' + state.toUpperCase() + ' · ' + done + '/' + total;
+              }
+              // 完成/失败/取消时停止轮询
+              if (state === 'completed' || state === 'failed' || state === 'cancelled') {
+                if (_dagStopPoll) _dagStopPoll();
+              }
+              break;
             }
-        } else {
-            removeLoading();
-            bubbleText.innerHTML = '<span style="color:var(--red)">\u7f51\u7edc\u9519\u8bef: ' + esc(e.message) + '</span>';
-        }
-    } finally {
-        isStreaming = false;
-        abortController = null;
-        // 恢复发送按钮
-        const sendBtn = $('send-btn');
-        sendBtn.textContent = '\u53d1\u9001';
-        sendBtn.className = 'btn btn-primary';
-        sendBtn.disabled = false;
-        // 流结束后才显示 token 用量，避免用户误以为对话还在进行中
-        if (_pendingUsage) {
-            updateUsage(_pendingUsage);
-            _pendingUsage = null;
-        }
-        $('chat-input').focus();
-        // Clean up ids to prevent DOM id collision on next message
-        const old = $('current-ai-msg');
-        if (old) {
-            old.removeAttribute('id');
-            const oldBubble = old.querySelector('#ai-bubble');
-            if (oldBubble) oldBubble.removeAttribute('id');
-            const oldText = old.querySelector('#bubble-text');
-            if (oldText) oldText.removeAttribute('id');
-        }
-        refreshTopics();
-        refreshTodos();
+
+            case 'error':
+              removeLoading();
+              s.bubbleText.innerHTML = '<span style="color:var(--red)">错误: ' + esc(data.error) + '</span>';
+              break;
+          }
+          scrollBottom();
+        } catch(e) { /* skip parse errors */ }
+      }
+      buf = slines[slines.length - 1];
     }
+  } catch(e) {
+    if (e.name === 'AbortError') {
+      removeLoading();
+      const bt = $('bubble-text');
+      if (bt && !bt.innerHTML.trim()) bt.innerHTML = '(已中断)'
+    } else {
+      removeLoading();
+      const bt = $('bubble-text');
+      if (bt) bt.innerHTML = '<span style="color:var(--red)">网络错误: ' + esc(e.message) + '</span>';
+    }
+  } finally {
+    isStreaming = false;
+    abortController = null;
+    _processQueueAfterStream();
+  }
 };
 
 function updateUsage(usage) {
-    if (!usage.total_tokens) return;
-    let bar = $('usage-bar');
-    if (!bar) {
-        bar = document.createElement('div');
-        bar.id = 'usage-bar';
-        bar.style.cssText = 'padding:4px 16px;font-size:12px;color:var(--text-dim);text-align:right;border-top:1px solid var(--border)';
-        const main = $('main');
-        main.insertBefore(bar, $('input-row'));
-    }
-    bar.style.display = ''; // 恢复显示（可能在流式开始时被隐藏）
-    bar.textContent = '\uD83D\uDCCA \u672c\u6b21: ' + usage.total_tokens + ' tokens (prompt: ' + usage.prompt_tokens + ', completion: ' + usage.completion_tokens + ')';
+  if (!usage || !usage.total_tokens) return;
+  let bar = $('usage-bar');
+  if (!bar) return;
+  bar.style.display = '';
+  bar.innerHTML = '📊 本次: ' + usage.total_tokens + ' tokens (prompt: ' + usage.prompt_tokens + ', completion: ' + usage.completion_tokens + ')';
 }
 
-// -- Markdown --
-function formatMarkdown(text) {
-    if (!text) return '';
-    let html = esc(text).replace(/\r\n/g, '\n');
-    // Protect code blocks from newline conversion — and add copy button
-    const codeBlocks = [];
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
-        const idx = codeBlocks.length;
-        const langLabel = lang ? '<span class="code-lang">' + esc(lang) + '</span>' : '';
-        codeBlocks.push(
-            '<div class="code-block-wrapper">'
-            + '<div class="code-block-header">'
-            + langLabel
-            + '<button class="copy-btn" onclick="copyCode(this)" data-code="' + escAttr(code.trimEnd()) + '">📋 复制</button>'
-            + '</div>'
-            + '<pre><code class="lang-' + esc(lang) + '">' + code.trimEnd() + '</code></pre>'
-            + '</div>'
-        );
-        return '\x00CODE' + idx + '\x00';
-    });
-    // Inline code — 直接渲染原文，不做占位符保护
-    html = html.replace(/`([^`]+)`/g, function(match, code) {
-        return '<code>' + code + '</code>';
-    });
-    // Headers (protect from <br> conversion)
-    html = html.replace(/^#### (.+)$/gm, '<h5>$1</h5>');
-    html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
-    html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
-    html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
-    // Tables (protect from <br> conversion)
-    const tableBlocks = [];
-    html = html.replace(/^\|(.+)\|[ \t]*[\r\n]+\|[\-:|\s]+\|[ \t]*[\r\n]+((?:^\|.+\|[ \t]*[\r\n]?)+)/gm, function(match, headerRow, bodyRows) {
-        let h = headerRow.split('|').map(function(c, i) { return '<th>' + c.trim() + '</th>'; }).join('');
-        let rows = bodyRows.trim().split('\n').map(function(line) {
-            let cells = line.replace(/^\||\|$/g, '').split('|').map(function(c) { return '<td>' + c.trim() + '</td>'; }).join('');
-            return '<tr>' + cells + '</tr>';
-        }).join('');
-        const idx = tableBlocks.length;
-        tableBlocks.push('<table class="md-table"><thead><tr>' + h + '</tr></thead><tbody>' + rows + '</tbody></table>');
-        return '\x00TABLE' + idx + '\x00';
-    });
-    // Lists: ordered and unordered (must be on their own lines)
-    const listBlocks = [];
-    html = html.replace(/^(\s*[-*+]\s+.+(?:\n\s*[-*+]\s+.+)*)$/gm, function(match) {
-        const items = match.split('\n').map(function(line) {
-            return '<li>' + line.replace(/^\s*[-*+]\s+/, '') + '</li>';
-        }).join('');
-        const idx = listBlocks.length;
-        listBlocks.push('<ul>' + items + '</ul>');
-        return '\x00ULIST' + idx + '\x00';
-    });
-    html = html.replace(/^(\s*\d+\.\s+.+(?:\n\s*\d+\.\s+.+)*)$/gm, function(match) {
-        const items = match.split('\n').map(function(line) {
-            return '<li>' + line.replace(/^\s*\d+\.\s+/, '') + '</li>';
-        }).join('');
-        const idx = listBlocks.length;
-        listBlocks.push('<ol>' + items + '</ol>');
-        return '\x00OLIST' + idx + '\x00';
-    });
-    // Blockquotes
-    html = html.replace(/^&gt;\s(.+)$/gm, '<blockquote>$1</blockquote>');
-    // Horizontal rules
-    html = html.replace(/^---$/gm, '<hr>');
-    // Convert newlines to <br> — collapse runs > 1 into max 1 <br>,
-    // trim trailing newlines, to prevent excessive blank lines in AI final message.
-    html = html.replace(/\n{2,}/g, '\n').replace(/^\n+|\n+$/g, '').replace(/\n/g, '<br>');
-    // Bold
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    // Italic
-    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    // Strikethrough
-    html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
-    // Links
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-    // Restore tables
-    html = html.replace(/\x00TABLE(\d+)\x00/g, function(m, idx) { return tableBlocks[idx] || ''; });
-    // Restore lists
-    html = html.replace(/\x00ULIST(\d+)\x00/g, function(m, idx) { return listBlocks[idx] || ''; });
-    html = html.replace(/\x00OLIST(\d+)\x00/g, function(m, idx) { return listBlocks[idx] || ''; });
-    // Restore code blocks
-    html = html.replace(/\x00CODE(\d+)\x00/g, function(m, idx) { return codeBlocks[idx] || ''; });
-    return html;
-}
-
-// -- Copy code button --
-window.copyCode = function(btn) {
-    const code = btn.getAttribute('data-code');
-    if (!code) return;
-    navigator.clipboard.writeText(code).then(function() {
-        btn.textContent = '✅ 已复制';
-        setTimeout(function() { btn.textContent = '📋 复制'; }, 2000);
-    }).catch(function() {
-        // Fallback
-        const ta = document.createElement('textarea');
-        ta.value = code;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        ta.remove();
-        btn.textContent = '✅ 已复制';
-        setTimeout(function() { btn.textContent = '📋 复制'; }, 2000);
-    });
-};
-
-// -- Topics --
-function escHtml(s) {
-    return (s || '').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+// ══════════════════════════════════════════════════
+//  TOPICS / SESSIONS
+// ══════════════════════════════════════════════════
 
 async function refreshTopics() {
-    try {
-        const r = await fetch('/api/sessions');
-        if (!r.ok) return;
-        const d = await r.json();
-        const list = $('topic-list');
-        const sessions = d.sessions || d.data || [];
-        list.innerHTML = sessions.map(t => {
-            const title = t.title || (t.id || '').slice(0, 8);
-            const cls = 'topic-item' + (t.id === currentTopicId ? ' active' : '');
-            const safeId = escHtml(t.id);
-            const safeTitle = escHtml(title);
-            return '<div class="' + cls + '" data-topic-id="' + safeId + '">'
-                + '<span class="topic-item-title">' + safeTitle + '</span>'
-                + '<button class="topic-actions-btn">⋯</button>'
-                + '<div class="topic-actions-menu" data-topic-id="' + safeId + '">'
-                + '<button class="topic-actions-menu-item" data-action="rename">✏️ 改名</button>'
-                + '<button class="topic-actions-menu-item danger" data-action="delete">🗑️ 删除</button>'
-                + '</div>'
-                + '</div>';
-        }).join('');
-    } catch (e) { /* ignore */ }
-    // Also refresh todos after topic list update
-    refreshTodos();
-}
-
-// Event delegation for topic list — handles click on title, "⋯" button, menu items
-document.getElementById('topic-list').addEventListener('click', function(e) {
-    const item = e.target.closest('.topic-item');
-    if (!item) return;
-    const id = item.dataset.topicId;
-
-    // "⋯" button clicked — toggle menu
-    if (e.target.closest('.topic-actions-btn')) {
-        e.stopPropagation();
-        // Close all other menus
-        document.querySelectorAll('.topic-actions-menu.show').forEach(m => {
-            if (m.closest('.topic-item') !== item) m.classList.remove('show');
-        });
-        const menu = item.querySelector('.topic-actions-menu');
-        menu.classList.toggle('show');
-        return;
+  try {
+    const r = await fetch('/api/sessions');
+    if (!r.ok) return;
+    const d = await r.json();
+    const topics = d.sessions || d.data;
+    if (!topics) return;
+    let html = '';
+    // 当没有选中任何主题时（新对话），在列表顶部插入高亮的"新对话"虚拟条目
+    if (!currentTopicId) {
+      html += '<div class="topic-item active" data-topic-id="">'
+        + '<span class="topic-item-title">🆕 新对话</span>'
+        + '</div>';
     }
-
-    // Menu item clicked
-    const menuItem = e.target.closest('.topic-actions-menu-item');
-    if (menuItem) {
-        e.stopPropagation();
-        const action = menuItem.dataset.action;
-        const menu = menuItem.closest('.topic-actions-menu');
-        menu.classList.remove('show');
-        if (action === 'rename') renameTopic(id);
-        else if (action === 'delete') deleteTopic(id);
-        return;
-    }
-
-    // Title clicked — open topic
-    if (e.target.closest('.topic-item-title')) {
-        // Get original title text from the item
-        const titleSpan = item.querySelector('.topic-item-title');
-        const title = titleSpan.textContent;
-        openTopic(id, title);
-    }
-});
-
-// Close topic menus when clicking outside any topic item
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('.topic-item')) {
-        document.querySelectorAll('.topic-actions-menu.show').forEach(m => m.classList.remove('show'));
-    }
-});
-
-async function renameTopic(id) {
-    const newTitle = prompt('请输入新主题名称:');
-    if (!newTitle || !newTitle.trim()) return;
-    try {
-        const r = await fetch('/api/topic/' + id, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({title: newTitle.trim()})
-        });
-        if (!r.ok) {
-            toast('重命名失败: HTTP ' + r.status);
-            return;
-        }
-        toast('✅ 已重命名');
-        refreshTopics();
-        if (id === currentTopicId) {
-            $('topic-title').textContent = newTitle.trim();
-        }
-    } catch (e) {
-        toast('重命名失败: ' + e.message);
-    }
-}
-
-async function deleteTopic(id) {
-    if (!confirm('确定要删除此主题及其所有对话吗？此操作不可撤销。')) return;
-    try {
-        const r = await fetch('/api/topic/' + id, { method: 'DELETE' });
-        if (!r.ok) {
-            toast('删除失败: HTTP ' + r.status);
-            return;
-        }
-        toast('🗑️ 已删除');
-        if (id === currentTopicId) {
-            currentTopicId = '';
-            $('topic-title').textContent = '欢迎使用 Tea Agent';
-            $('messages').innerHTML = '<div class="welcome"><div class="welcome-icon">☕</div><h2>Tea Agent</h2><p>自进化 AI 编程助手 · 60+ 内置工具 · 多 Agent 协作 · 长期记忆<br>在下方输入消息开始对话</p></div>';
-        }
-        refreshTopics();
-    } catch (e) {
-        toast('删除失败: ' + e.message);
-    }
+    html += topics.map(function(t) {
+      const title = t.title || t.id.slice(0, 8);
+      const cls = 'topic-item' + (t.id === currentTopicId ? ' active' : '');
+      return '<div class="' + cls + '" onclick="openTopic(\'' + t.id + '\',\'' + esc(title) + '\')">'
+        + esc(title)
+        + '<span class="topic-menu-wrap">'
+        + '<button class="more-btn" onclick="event.stopPropagation();showTopicMenu(this,\'' + t.id + '\')">⋯</button>'
+        + '<div class="topic-menu" id="topic-menu-' + t.id + '">'
+        + '<a onclick="event.stopPropagation();renameTopic(\'' + t.id + '\')">✏️ 编辑标题</a>'
+        + '<a class="danger" onclick="event.stopPropagation();deleteTopic(\'' + t.id + '\')">🗑 删除</a>'
+        + '</div></span>'
+        + '</div>';
+    }).join('');
+    $('topic-list').innerHTML = html;
+  } catch(e) {}
 }
 
 window.openTopic = async function(id, title) {
-    currentTopicId = id;
-    $('topic-title').textContent = title || id.slice(0, 8);
-    refreshTopics();
-    try {
-        const r = await fetch('/api/topic/' + id + '/conversations?limit=50');
-        if (!r.ok) return;
-        const d = await r.json();
-        $('messages').innerHTML = '';
-        // 切换话题时重置滚动状态，确保新内容能自动滚动到最新
-        _userNearBottom = true;
-        (d.conversations || []).forEach(c => {
-            addMessage('user', c.user_msg || '');
-            addMessage('agent', c.ai_msg || '');
-        });
-        // Refresh TODO for newly opened topic
-        refreshTodos();
-    } catch (e) { /* ignore */ }
+  currentTopicId = id;
+  $('tt').textContent = title || id.slice(0, 8);
+  refreshTopics();
+  try {
+    const r = await fetch('/api/topic/' + id + '/conversations?limit=50');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.conversations) return;
+    $('msgs').innerHTML = '';
+    _userNearBottom = true;  // 切换话题重置滚动状态
+    d.conversations.forEach(function(c) {
+      if (c.user_msg) addMessage('user', c.user_msg);
+      if (c.ai_msg) addMessage('assistant', c.ai_msg);
+    });
+  } catch(e) {}
 };
 
 window.newTopic = function() {
-    currentTopicId = '';
-    _taskPanelSuppressAutoOpen = false;  // 新话题重置
-    _userNearBottom = true;  // 新话题重置滚动状态
-    $('topic-title').textContent = '\u65b0\u5bf9\u8bdd';
-    $('messages').innerHTML = '<div class="welcome"><div class="welcome-icon">\u2615</div><h2>Tea Agent</h2><p>\u81ea\u8fdb\u5316 AI \u7f16\u7a0b\u52a9\u624b \u00b7 60+ \u5185\u7f6e\u5de5\u5177 \u00b7 \u591a Agent \u534f\u4f5c \u00b7 \u957f\u671f\u8bb0\u5fc6<br>\u5728\u4e0b\u65b9\u8f93\u5165\u6d88\u606f\u5f00\u59cb\u5bf9\u8bdd</p></div>';
-    refreshTopics();
-    $('chat-input').focus();
+  currentTopicId = null;
+  _userNearBottom = true;  // 新话题重置滚动状态
+  $('tt').textContent = '新对话';
+  $('msgs').innerHTML = '';
+  // Restore welcome
+  const welcome = document.createElement('div');
+  welcome.className = 'welcome';
+  welcome.innerHTML = '<h2>☕ Tea Agent GUI</h2><p>开始对话，或使用快捷键快速操作</p>'
+    + '<div class="shortcuts">'
+    + '<span class="shortcut-item"><kbd>Enter</kbd> 发送</span>'
+    + '<span class="shortcut-item"><kbd>Shift+Enter</kbd> 换行</span>'
+    + '<span class="shortcut-item"><kbd>Ctrl+N</kbd> 新对话</span>'
+    + '<span class="shortcut-item"><kbd>Ctrl+K</kbd> 搜索</span>'
+    + '<span class="shortcut-item"><kbd>Ctrl+Shift+M</kbd> 记忆</span>'
+    + '<span class="shortcut-item"><kbd>Ctrl+J</kbd> 任务面板</span>'
+    + '<span class="shortcut-item"><kbd>Escape</kbd> 中断/关闭</span>'
+    + '</div>';
+  $('msgs').appendChild(welcome);
+  refreshTopics();
 };
 
 window.clearChat = function() {
-    if (isStreaming) { toast('\u6b63\u5728\u53d1\u9001\u6d88\u606f\uff0c\u8bf7\u7a0d\u5019...', 'error'); return; }
-    $('messages').innerHTML = '<div class="welcome"><div class="welcome-icon">\u2615</div><h2>Tea Agent</h2><p>\u81ea\u8fdb\u5316 AI \u7f16\u7a0b\u52a9\u624b \u00b7 60+ \u5185\u7f6e\u5de5\u5177 \u00b7 \u591a Agent \u534f\u4f5c \u00b7 \u957f\u671f\u8bb0\u5fc6<br>\u5728\u4e0b\u65b9\u8f93\u5165\u6d88\u606f\u5f00\u59cb\u5bf9\u8bdd</p></div>';
+  if (isStreaming) { toast('正在发送消息中...', 'error'); return; }
+  $('msgs').innerHTML = '';
+  newTopic();
 };
 
-window.handleInputKey = function(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (!isStreaming) sendMessage();
+window.deleteTopic = async function(id) {
+  try {
+    await fetch('/api/topic/' + encodeURIComponent(id), { method: 'DELETE' });
+    if (currentTopicId === id) newTopic();
+    else refreshTopics();
+    toast('🗑 已删除', 'success');
+  } catch(e) {
+    toast('删除失败', 'error');
+  }
+};
+
+// ── Topic Context Menu ──
+window.showTopicMenu = function(btn, topicId) {
+  const menuId = 'topic-menu-' + topicId;
+  const menu = document.getElementById(menuId);
+  if (!menu) return;
+  const isOpen = menu.classList.contains('show');
+  closeAllTopicMenus();
+  if (!isOpen) {
+    menu.classList.add('show');
+    // Position menu using fixed coordinates relative to viewport
+    const rect = btn.getBoundingClientRect();
+    menu.style.left = rect.right + 'px';
+    menu.style.top = rect.top + 'px';
+    menu.style.transform = 'translate(-100%, 0)';
+    // If not enough space below, flip up
+    const spaceBelow = window.innerHeight - rect.top;
+    if (spaceBelow < 160) {
+      menu.style.top = rect.bottom + 'px';
+      menu.style.transform = 'translate(-100%, -100%)';
     }
-};
-
-
-// -- Search --
-window.showSearch = function() { show('modal-search'); $('search-query').value = ''; $('search-results').innerHTML = ''; setTimeout(() => $('search-query').focus(), 100); };
-window.doSearch = async function() {
-    const q = $('search-query').value.trim();
-    if (!q) return;
-    const el = $('search-results');
-    el.innerHTML = '<div class="status-msg info">\u641c\u7d22\u4e2d...</div>';
-    try {
-        const r = await fetch('/v1/search?q=' + encodeURIComponent(q) + '&limit=20');
-        if (!r.ok) throw new Error(r.status);
-        const d = await r.json();
-        let h = '';
-        if (d.conversations && d.conversations.length) {
-            h += '<div style="font-size:13px;font-weight:600;margin:8px 0 4px">\u5bf9\u8bdd\u7ed3\u679c</div>';
-            d.conversations.forEach(c => h += '<div class="search-item"><div class="st">' + esc(c.user_msg || c.ai_msg || '') + '</div><div class="sp">' + esc(c.stamp || '') + '</div></div>');
-        }
-        if (d.memories && d.memories.length) {
-            h += '<div style="font-size:13px;font-weight:600;margin:8px 0 4px">\u8bb0\u5fc6\u7ed3\u679c</div>';
-            d.memories.forEach(m => h += '<div class="search-item"><div class="st">' + esc(m.content || '') + '</div><div class="sp">' + esc(m.category || '') + '</div></div>');
-        }
-        if (!h) h = '<div style="color:var(--text-dim);font-size:13px">\u6ca1\u6709\u7ed3\u679c</div>';
-        el.innerHTML = h;
-    } catch (e) { el.innerHTML = '<div class="status-msg error">Error: ' + e.message + '</div>'; }
-};
-
-// -- Memory --
-window.showMemory = async function() { show('modal-memory'); $('memory-input').value = ''; await refreshMemory(); };
-async function refreshMemory() {
-    try {
-        const r = await fetch('/v1/memory');
-        if (!r.ok) throw new Error(r.status);
-        const d = await r.json();
-        const el = $('memory-list');
-        const items = d.data || [];
-        if (items.length) {
-            el.innerHTML = items.map(m => '<div class="memory-item"><div class="text">' + esc(m.content || '') + '<span class="meta">' + esc(m.category || '') + '</span></div><button class="btn btn-ghost btn-sm" onclick="deleteMemory(\'' + m.id + '\')">\u5220\u9664</button></div>').join('');
-        } else { el.innerHTML = '<div style="color:var(--text-dim);font-size:13px">\u6682\u65e0\u8bb0\u5fc6</div>'; }
-    } catch (e) {}
-}
-window.addMemory = async function() {
-    const c = $('memory-input').value.trim();
-    if (!c) return;
-    try {
-        await fetch('/v1/memory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: c }) });
-        $('memory-input').value = '';
-        await refreshMemory();
-    } catch (e) { toast('Error: ' + e.message, 'error'); }
-};
-window.deleteMemory = async function(id) {
-    try {
-        const r = await fetch('/v1/memory/' + encodeURIComponent(id), { method: 'DELETE' });
-        if (!r.ok) { toast('删除失败: ' + r.status, 'error'); return; }
-        const d = await r.json();
-        if (d.deleted) { await refreshMemory(); }
-        else { toast('删除失败（后端返回 false）', 'error'); }
-    } catch (e) { toast('删除错误: ' + e.message, 'error'); }
-};
-
-// -- Tasks --
-window.showScheduler = async function() { show('modal-scheduler'); $('task-name').value = ''; $('task-command').value = ''; $('task-schedule').value = ''; await refreshTasks(); };
-async function refreshTasks() {
-    try {
-        const r = await fetch('/v1/tasks');
-        if (!r.ok) throw new Error(r.status);
-        const d = await r.json();
-        const el = $('task-list');
-        const items = d.data || [];
-        if (items.length) {
-            el.innerHTML = items.map(t => '<div class="task-item"><div class="text">' + esc(t.name || '') + '<span class="meta">' + esc(t.schedule || '') + '</span></div><button class="btn btn-ghost btn-sm" onclick="deleteTask(\'' + t.id + '\')">\u5220\u9664</button></div>').join('');
-        } else { el.innerHTML = '<div style="color:var(--text-dim);font-size:13px">\u6682\u65e0\u4efb\u52a1</div>'; }
-    } catch (e) {}
-}
-window.addTask = async function() {
-    const name = $('task-name').value.trim();
-    const cmd = $('task-command').value.trim();
-    const sched = $('task-schedule').value.trim();
-    if (!name || !cmd) { toast('\u8bf7\u586b\u5199\u4efb\u52a1\u540d\u79f0\u548c\u547d\u4ee4', 'error'); return; }
-    try {
-        await fetch('/v1/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, command: cmd, schedule: sched || 'once' }) });
-        $('task-name').value = ''; $('task-command').value = ''; $('task-schedule').value = '';
-        await refreshTasks();
-    } catch (e) { toast('Error: ' + e.message, 'error'); }
-};
-window.deleteTask = async function(id) {
-    try { await fetch('/v1/tasks/' + encodeURIComponent(id), { method: 'DELETE' }); await refreshTasks(); } catch (e) {}
-};
-
-// -- Export --
-window.showExport = function() { show('modal-export'); $('export-result').innerHTML = ''; };
-window.doExport = async function() {
-    if (!currentTopicId) { $('export-result').innerHTML = '<div class="status-msg error">\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u8bdd\u9898</div>'; return; }
-    const el = $('export-result');
-    el.innerHTML = '<div class="status-msg info">\u5bfc\u51fa\u4e2d...</div>';
-    try {
-        // Read export mode from radio buttons
-        const modeInput = document.querySelector('input[name="export-mode"]:checked');
-        const mode = modeInput ? modeInput.value : 'latest';
-        // Use fetch to get the PDF blob, then trigger download
-        const r = await fetch('/v1/export/pdf/' + encodeURIComponent(currentTopicId) + '?mode=' + encodeURIComponent(mode));
-        if (!r.ok) {
-            const errData = await r.json().catch(() => ({error: r.statusText}));
-            el.innerHTML = '<div class="status-msg error">' + esc(errData.error || '\u5931\u8d25') + '</div>';
-            return;
-        }
-        const blob = await r.blob();
-        // Get filename from Content-Disposition header
-        const disposition = r.headers.get('Content-Disposition') || '';
-        // RFC 5987: prefer filename*=UTF-8''encoded; fallback filename="ascii"
-        let match = disposition.match(/filename\*=(?:UTF-8|utf-8)''([^;\s]+)/);
-        let fname;
-        if (match) {
-            fname = decodeURIComponent(match[1]);
-        } else {
-            match = disposition.match(/filename"?="?([^";]+)/);
-            fname = match ? match[1] : 'export.pdf';
-        }
-        // Trigger download
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fname;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        hide('modal-export');
-    } catch (e) { el.innerHTML = '<div class="status-msg error">Error: ' + esc(e.message) + '</div>'; }
-};
-
-// -- Settings --
-window.showSettings = async function() {
-    show('modal-settings');
-    $('settings-status').innerHTML = '';
-    try {
-        // Load current config
-        const r1 = await fetch('/api/config');
-        if (r1.ok) {
-            const cfg = await r1.json();
-            $('model-name').value = cfg.model || '';
-            $('api-url').value = cfg.api_url || '';
-            $('api-key').value = '';
-            $('main-temperature').value = cfg.temperature != null ? cfg.temperature : '';
-            $('main-max-tokens').value = cfg.max_tokens != null ? cfg.max_tokens : '';
-            $('main-top-p').value = cfg.top_p != null ? cfg.top_p : '';
-            $('main-max-context').value = cfg.max_context_tokens != null ? cfg.max_context_tokens : '';
-            const mainOpts = cfg.options || {};
-            $('main-supports-vision').checked = !!mainOpts.supports_vision;
-            $('main-supports-reasoning').checked = mainOpts.supports_reasoning !== false;
-            // Runtime params
-            $('rt-max-iterations').value = cfg.max_iterations != null ? cfg.max_iterations : '';
-            $('rt-keep-turns').value = cfg.keep_turns != null ? cfg.keep_turns : '';
-            $('rt-max-history').value = cfg.max_history != null ? cfg.max_history : '';
-            $('rt-max-tool-output').value = cfg.max_tool_output != null ? cfg.max_tool_output : '';
-            $('rt-extra-iters').value = cfg.extra_iterations_on_continue != null ? cfg.extra_iterations_on_continue : '';
-            $('rt-mem-extract').value = cfg.memory_extraction_threshold != null ? cfg.memory_extraction_threshold : '';
-            $('rt-mem-dedup').value = cfg.memory_dedup_threshold != null ? cfg.memory_dedup_threshold : '';
-            $('rt-chat-page').value = cfg.chat_page_size != null ? cfg.chat_page_size : '';
-            $('rt-enable-thinking').checked = cfg.enable_thinking !== false;
-            if (cfg.cheap_model) {
-                $('cheap-model-name').value = cfg.cheap_model.model || '';
-                $('cheap-api-url').value = cfg.cheap_model.api_url || '';
-                $('cheap-api-key').value = '';
-                $('cheap-temperature').value = cfg.cheap_model.temperature != null ? cfg.cheap_model.temperature : '';
-                $('cheap-max-tokens').value = cfg.cheap_model.max_tokens != null ? cfg.cheap_model.max_tokens : '';
-                $('cheap-top-p').value = cfg.cheap_model.top_p != null ? cfg.cheap_model.top_p : '';
-                $('cheap-max-context').value = cfg.cheap_model.max_context_tokens != null ? cfg.cheap_model.max_context_tokens : '';
-                const cheapOpts = cfg.cheap_model.options || {};
-                $('cheap-supports-vision').checked = !!cheapOpts.supports_vision;
-                $('cheap-supports-reasoning').checked = cheapOpts.supports_reasoning !== false;
-            }
-        }
-        // Load config file list
-        const r2 = await fetch('/api/configs');
-        if (r2.ok) {
-            const d = await r2.json();
-            const sel = $('config-select');
-            sel.innerHTML = '<option value="">-- \u8bf7\u9009\u62e9\u6216\u65b0\u589e --</option>';
-            (d.configs || []).forEach(c => {
-                const model = c.main_model ? c.main_model.model_name : '';
-                sel.innerHTML += '<option value="' + c.path + '">' + esc(c.filename) + ' (' + esc(model) + ')</option>';
-            });
-            sel.onchange = async function() {
-                const path = this.value;
-                if (!path) return;
-                // Find matching config
-                const cfg = (d.configs || []).find(c => c.path === path);
-                if (cfg && cfg.main_model) {
-                    $('model-name').value = cfg.main_model.model_name || '';
-                    $('api-url').value = cfg.main_model.api_url || '';
-                    if (cfg.cheap_model && cfg.cheap_model.model_name) {
-                        $('cheap-model-name').value = cfg.cheap_model.model_name || '';
-                        $('cheap-api-url').value = cfg.cheap_model.api_url || '';
-                    }
-                }
-            };
-        }
-    } catch (e) { /* ignore */ }
-};
-
-window.applyConfig = async function() {
-    const apiKey = $('api-key').value.trim();
-    const apiUrl = $('api-url').value.trim();
-    const modelName = $('model-name').value.trim();
-    const cheapKey = $('cheap-api-key').value.trim();
-    const cheapUrl = $('cheap-api-url').value.trim();
-    const cheapModel = $('cheap-model-name').value.trim();
-
-    if (!apiUrl || !modelName) {
-        $('settings-status').innerHTML = '<div class="status-msg error">\u8bf7\u586b\u5199\u5b8c\u6574\u4e3b\u6a21\u578b\u4fe1\u606f</div>';
-        return;
+    // If off-screen left, align to left edge
+    if (rect.right < 160) {
+      menu.style.left = '8px';
+      menu.style.transform = 'translate(0, 0)';
     }
-
-    // Collect extra model parameters
-    function numVal(id) {
-        const v = $(id).value.trim();
-        return v ? Number(v) : null;
-    }
-    const temperature = numVal('main-temperature');
-    const max_tokens = numVal('main-max-tokens');
-    const top_p = numVal('main-top-p');
-    const max_context_tokens = numVal('main-max-context');
-    const options = {
-        supports_vision: $('main-supports-vision').checked,
-        supports_reasoning: $('main-supports-reasoning').checked,
-    };
-
-    $('settings-status').innerHTML = '<div class="status-msg info">\u5e94\u7528\u4e2d...</div>';
-    try {
-        const body = {};
-        if (apiKey) body.api_key = apiKey;
-        body.api_url = apiUrl;
-        body.model_name = modelName;
-        if (temperature != null) body.temperature = temperature;
-        if (max_tokens != null) body.max_tokens = max_tokens;
-        if (top_p != null) body.top_p = top_p;
-        if (max_context_tokens != null) body.max_context_tokens = max_context_tokens;
-        body.options = options;
-        if (cheapModel && cheapUrl) {
-            if (cheapKey) body.cheap_api_key = cheapKey;
-            body.cheap_api_url = cheapUrl;
-            body.cheap_model_name = cheapModel;
-            body.cheap_temperature = numVal('cheap-temperature');
-            body.cheap_max_tokens = numVal('cheap-max-tokens');
-            body.cheap_top_p = numVal('cheap-top-p');
-            body.cheap_max_context_tokens = numVal('cheap-max-context');
-            body.cheap_options = {
-                supports_vision: $('cheap-supports-vision').checked,
-                supports_reasoning: $('cheap-supports-reasoning').checked,
-            };
-        }
-        const r = await fetch('/api/model', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
-        const d = await r.json();
-        if (d.ok) {
-            $('settings-status').innerHTML = '<div class="status-msg success">\u2713 \u5df2\u5e94\u7528: ' + esc(d.model) + '</div>';
-            // Also save runtime params
-            saveRuntimeParams();
-            checkVisionSupport();
-            setTimeout(() => hide('modal-settings'), 1500);
-        } else {
-            $('settings-status').innerHTML = '<div class="status-msg error">' + esc(d.error || '\u5931\u8d25') + '</div>';
-        }
-    } catch (e) {
-        $('settings-status').innerHTML = '<div class="status-msg error">' + esc(e.message) + '</div>';
-    }
+  }
 };
 
-// Save runtime params to server
-async function saveRuntimeParams() {
-    function numVal(id) {
-        const v = $(id).value.trim();
-        return v ? Number(v) : null;
-    }
-    const updates = {};
-    const n = numVal('rt-max-iterations');
-    if (n != null) updates.max_iterations = n;
-    const k = numVal('rt-keep-turns');
-    if (k != null) updates.keep_turns = k;
-    const h = numVal('rt-max-history');
-    if (h != null) updates.max_history = h;
-    const t = numVal('rt-max-tool-output');
-    if (t != null) updates.max_tool_output = t;
-    const e = numVal('rt-extra-iters');
-    if (e != null) updates.extra_iterations_on_continue = e;
-    const m = numVal('rt-mem-extract');
-    if (m != null) updates.memory_extraction_threshold = m;
-    const d = numVal('rt-mem-dedup');
-    if (d != null) updates.memory_dedup_threshold = d;
-    const p = numVal('rt-chat-page');
-    if (p != null) updates.chat_page_size = p;
-    updates.enable_thinking = $('rt-enable-thinking').checked;
-    if (Object.keys(updates).length === 0) return;
-    try {
-        const r = await fetch('/api/config', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updates),
-        });
-        const r2 = await r.json();
-        if (r2.ok) {
-            console.log('Runtime params updated:', r2.updated);
-        }
-    } catch (e) { /* ignore */ }
-}
-
-// -- New Config --
-window.showNewConfig = function() {
-    show('modal-new-config');
-    $('new-config-status').innerHTML = '';
-};
-window.saveNewConfig = async function() {
-    const filename = $('new-config-filename').value.trim();
-    const mainName = $('new-main-name').value.trim();
-    const mainUrl = $('new-main-url').value.trim();
-    const mainKey = $('new-main-key').value.trim();
-    const cheapName = $('new-cheap-name').value.trim();
-    const cheapUrl = $('new-cheap-url').value.trim();
-    const cheapKey = $('new-cheap-key').value.trim();
-
-    if (!filename || !mainName || !mainUrl || !mainKey) {
-        $('new-config-status').innerHTML = '<div class="status-msg error">\u8bf7\u586b\u5199\u5b8c\u6574\u4fe1\u606f</div>';
-        return;
-    }
-
-    $('new-config-status').innerHTML = '<div class="status-msg info">\u4fdd\u5b58\u4e2d...</div>';
-    try {
-        const body = { filename, main_model_name: mainName, main_api_url: mainUrl, main_api_key: mainKey };
-        if (cheapName && cheapUrl) {
-            body.cheap_model_name = cheapName;
-            body.cheap_api_url = cheapUrl;
-            if (cheapKey) body.cheap_api_key = cheapKey;
-        }
-        const r = await fetch('/api/config/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
-        const d = await r.json();
-        if (d.ok) {
-            $('new-config-status').innerHTML = '<div class="status-msg success">\u2713 \u914d\u7f6e\u5df2\u4fdd\u5b58\u5e76\u5e94\u7528: ' + esc(d.filename) + '</div>';
-            setTimeout(() => { hide('modal-new-config'); hide('modal-settings'); }, 1500);
-        } else {
-            $('new-config-status').innerHTML = '<div class="status-msg error">' + esc(d.error || '\u5931\u8d25') + '</div>';
-        }
-    } catch (e) {
-        $('new-config-status').innerHTML = '<div class="status-msg error">' + esc(e.message) + '</div>';
-    }
+window.closeAllTopicMenus = function() {
+  document.querySelectorAll('.topic-menu.show').forEach(function(m) {
+    m.classList.remove('show');
+  });
 };
 
-
-
-// -- Image Upload --
-let pendingImages = []; // 存储待发送的图片 base64 数据
-
-window.triggerImageUpload = function() {
-    $('image-input').click();
-};
-
-window.handleImageSelect = function(event) {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        if (!file.type.startsWith('image/')) continue;
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            pendingImages.push(e.target.result); // base64 data URL
-            updateImagePreview();
-        };
-        reader.readAsDataURL(file);
+window.renameTopic = async function(topicId) {
+  closeAllTopicMenus();
+  // Get current title from the topic list
+  const topicsEl = document.querySelectorAll('.topic-item');
+  let currentTitle = '';
+  for (const el of topicsEl) {
+    if (el.getAttribute('onclick') && el.getAttribute('onclick').includes(topicId)) {
+      // Extract title from the text content (first child text node before the menu)
+      currentTitle = el.childNodes[0] ? el.childNodes[0].textContent.trim() : '';
+      break;
     }
-    // 重置 input 以便可以再次选择同一文件
-    event.target.value = '';
-};
-
-window.clearImages = function() {
-    pendingImages = [];
-    updateImagePreview();
-};
-
-function updateImagePreview() {
-    const container = $('image-preview-container');
-    const row = $('image-preview-row');
-    if (!container || !row) return;
-
-    if (pendingImages.length === 0) {
-        row.style.display = 'none';
-        container.innerHTML = '';
-        return;
-    }
-
-    row.style.display = 'flex';
-    container.innerHTML = '';
-    pendingImages.forEach(function(img, idx) {
-        const wrapper = document.createElement('div');
-        wrapper.style.cssText = 'position:relative;display:inline-block;';
-        wrapper.innerHTML = '<img src="' + esc(img) + '" style="max-height:80px;max-width:120px;border-radius:6px;border:1px solid var(--border);cursor:pointer;" title="点击查看大图">' +
-            '<button onclick="removeImage(' + idx + ')" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:12px;cursor:pointer;line-height:1;">×</button>';
-        // 点击查看大图
-        wrapper.querySelector('img').addEventListener('click', function() {
-            const overlay = document.createElement('div');
-            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:pointer;';
-            overlay.innerHTML = '<img src="' + esc(img) + '" style="max-width:90vw;max-height:90vh;border-radius:8px;">';
-            overlay.addEventListener('click', function() { overlay.remove(); });
-            document.body.appendChild(overlay);
-        });
-        container.appendChild(wrapper);
+  }
+  const newTitle = prompt('修改话题标题：', currentTitle);
+  if (!newTitle || newTitle === currentTitle) return;
+  try {
+    const r = await fetch('/api/topic/' + encodeURIComponent(topicId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: newTitle })
     });
-}
-
-window.removeImage = function(idx) {
-    pendingImages.splice(idx, 1);
-    updateImagePreview();
-};
-
-// -- Config Upload --
-// 创建一个隐藏的 file input 用于上传配置文件
-let _configUploadInput = null;
-function _ensureConfigUploadInput() {
-    if (!_configUploadInput) {
-        _configUploadInput = document.createElement('input');
-        _configUploadInput.type = 'file';
-        _configUploadInput.accept = '.yaml,.yml';
-        _configUploadInput.style.display = 'none';
-        document.body.appendChild(_configUploadInput);
-        _configUploadInput.addEventListener('change', async function(e) {
-            const file = e.target.files && e.target.files[0];
-            if (!file) return;
-            await _doUploadConfig(file);
-            // 重置 input 以便可以再次选择同一文件
-            _configUploadInput.value = '';
-        });
-    }
-    return _configUploadInput;
-}
-
-window.uploadConfigFile = function() {
-    _ensureConfigUploadInput().click();
-};
-
-async function _doUploadConfig(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    toast('正在上传配置...', 'info');
-    try {
-        const r = await fetch('/api/config/upload', {
-            method: 'POST',
-            body: formData,
-        });
-        const d = await r.json();
-        if (d.ok) {
-            toast('✓ 配置已上传: ' + d.filename, 'success');
-            // 刷新配置组合框和配置状态
-            await loadConfigSwitcher();
-            checkConfigStatus();
-        } else {
-            toast('✗ 上传失败: ' + (d.error || '未知错误'), 'error');
-        }
-    } catch (e) {
-        toast('✗ 上传失败: ' + e.message, 'error');
-    }
-}
-
-// ================================================================
-//  Task Panel（任务面板）— Plan + TODO 整合
-// ================================================================
-
-let _taskPanelOpen = false;
-let _taskPanelTimer = null;
-let _taskPanelSuppressAutoOpen = false;  // 用户手动关闭后禁止自动弹出
-
-/** 切换任务面板的显示/隐藏 */
-window.toggleTaskPanel = function() {
-    _taskPanelOpen = !_taskPanelOpen;
-    const panel = document.getElementById('task-panel');
-    if (panel) panel.classList.toggle('open', _taskPanelOpen);
-    const splitter = document.getElementById('task-panel-splitter');
-    if (splitter) splitter.classList.toggle('visible', _taskPanelOpen);
-    if (_taskPanelOpen) {
-        _taskPanelSuppressAutoOpen = false;  // 用户手动打开，取消抑制
-        refreshTaskPanel();
-        _startTaskPanelTimer();
+    const d = await r.json();
+    if (d.ok) {
+      toast('✏️ 标题已更新', 'success');
+      refreshTopics();
+      // Update toolbar title if this is the current topic
+      if (topicId === currentTopicId) {
+        $('tt').textContent = newTitle;
+      }
     } else {
-        _taskPanelSuppressAutoOpen = true;   // 用户手动关闭，抑制自动弹出
-        _stopTaskPanelTimer();
+      toast('修改失败: ' + (d.error || ''), 'error');
     }
+  } catch(e) {
+    toast('修改失败: ' + e.message, 'error');
+  }
 };
 
-/** 启动自动刷新（每 5 秒） */
-function _startTaskPanelTimer() {
-    _stopTaskPanelTimer();
-    _taskPanelTimer = setInterval(function() {
-        if (_taskPanelOpen && currentTopicId) {
-            refreshTaskPanel();
-        }
-    }, 5000);
-}
-function _stopTaskPanelTimer() {
-    if (_taskPanelTimer) {
-        clearInterval(_taskPanelTimer);
-        _taskPanelTimer = null;
-    }
-}
+// ── Extend click handler to close topic menus ──
+// (the existing document click handler already closes ss-menu, we add topic menu close)
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.topic-menu-wrap')) {
+    closeAllTopicMenus();
+  }
+});
 
-/** 主刷新函数：同时加载 Plan + TODO */
+// ══════════════════════════════════════════════════
+//  TASK PANEL (Plan + TODO) — 适配 #task-panel / tp-* 结构
+// ══════════════════════════════════════════════════
+
+window.closeDagView = function() {
+  const section = $('tp-dag-section');
+  if (section) section.style.display = 'none';
+  // 清除缩略图
+  const dagImg = $('tp-dag-img');
+  if (dagImg) dagImg.src = '';
+  // 隐藏缩略图区域
+  const imgWrap = $('tp-dag-img-wrap');
+  if (imgWrap) imgWrap.style.display = 'none';
+  // 清除节点列表
+  const nodes = $('tp-dag-nodes');
+  if (nodes) nodes.innerHTML = '';
+  // 重置状态栏
+  const badge = $('dag-badge');
+  const progress = $('dag-progress');
+  const timer = $('dag-timer');
+  if (badge) { badge.textContent = 'PENDING'; badge.className = 'dag-status-badge badge-pending'; }
+  if (progress) progress.textContent = '0/0';
+  if (timer) timer.textContent = '00:00';
+  // 清除全局 viz_id
+  window._dagVizId = null;
+  // 停止轮询
+  if (window._dagStopPoll) { window._dagStopPoll(); window._dagStopPoll = null; }
+};
+
+// ── DAG 灯箱（双击放大） ──
+window.openDagLightbox = function() {
+  const lb = $('dag-lightbox');
+  const lbImg = $('dag-lightbox-img');
+  const dagImg = $('tp-dag-img');
+  if (!lb || !lbImg || !dagImg || !dagImg.src) return;
+  lbImg.src = dagImg.src.replace(/&t=\d+/, '&t=' + Date.now());
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+};
+
+window.closeDagLightbox = function() {
+  const lb = $('dag-lightbox');
+  if (lb) lb.classList.remove('open');
+  document.body.style.overflow = '';
+};
+
+// 键盘 Esc 关闭灯箱
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const lb = $('dag-lightbox');
+    if (lb && lb.classList.contains('open')) {
+      closeDagLightbox();
+    }
+  }
+});
+
+// DAG 节点列表渲染（轮询驱动）
+window.renderDagNodeList = function(container, snap) {
+  if (!container || !snap.nodes) return;
+  let html = '';
+  for (let i = 0; i < snap.nodes.length; i++) {
+    const n = snap.nodes[i];
+    const stateClass = n.state || 'pending';
+    let icon = stateClass === 'completed' ? '\u2713' :
+               stateClass === 'running' ? '\u25b6' :
+               stateClass === 'failed' ? '\u2717' : '\u25cb';
+    html += '<span class="dag-node-item">' +
+      '<span class="dag-node-dot dot-' + stateClass + '"></span>' +
+      '<span class="dag-node-label" title="' + esc(n.label) + ' [' + stateClass.toUpperCase() +
+      (n.duration > 0 ? ' ' + n.duration.toFixed(1) + 's' : '') + ']">' +
+      icon + ' ' + esc(n.label) +
+      '</span></span>';
+  }
+  container.innerHTML = html;
+};
+
+window.toggleTaskPanel = function() {
+  const panel = $('task-panel');
+  const splitter = $('task-panel-splitter');
+  if (!panel) return;
+  _taskPanelOpen = !panel.classList.contains('open');
+  if (_taskPanelOpen) {
+    panel.classList.add('open');
+    if (splitter) splitter.classList.add('visible');
+    _taskPanelSuppressAutoOpen = false;  // 用户手动打开，取消抑制
+    refreshTaskPanel();
+  } else {
+    panel.classList.remove('open');
+    if (splitter) splitter.classList.remove('visible');
+    _taskPanelSuppressAutoOpen = true;   // 用户手动关闭，抑制自动弹出
+  }
+};
+
 window.refreshTaskPanel = async function() {
-    if (!currentTopicId) {
-        const planList = $('tp-plan-list');
-        const todoList = $('tp-todo-list');
-        if (planList) planList.innerHTML = '<div class="tp-empty">请先选择一个话题</div>';
-        if (todoList) todoList.innerHTML = '';
-        $('tp-progress').textContent = '0/0';
-        return;
-    }
-    try {
-        // 并行加载 Plan 和 TODO
-        const [planResp, todoResp] = await Promise.all([
-            fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/plans'),
-            fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/todos'),
-        ]);
+  if (!currentTopicId) {
+    const planList = $('tp-plan-list');
+    const todoList = $('tp-todo-list');
+    if (planList) planList.innerHTML = '<div class="tp-empty">请先开始对话</div>';
+    if (todoList) todoList.innerHTML = '<div class="tp-empty">请先开始对话</div>';
+    const prog = $('tp-progress');
+    if (prog) prog.textContent = '0/0';
+    return;
+  }
+  try {
+    const [planResp, todoResp] = await Promise.all([
+      fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/plans?status=all'),
+      fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/todos'),
+    ]);
 
-        // ── 渲染 Plan ──
-        const planList = $('tp-plan-list');
-        if (planResp.ok) {
-            const planData = await planResp.json();
-            const plans = planData.data || [];
-            if (plans.length === 0) {
-                planList.innerHTML = '<div class="tp-empty">(暂无计划)</div>';
-            } else {
-                let planHtml = '';
-                for (const plan of plans) {
-                    const steps = plan.steps || [];
-                    const doneSteps = steps.filter(function(s) { return s.status === 'done'; }).length;
-                    const totalSteps = steps.length;
-                    const goalText = (plan.goal || '无目标').slice(0, 80);
-                    const statusIcon = plan.status === 'done' ? '✅' : (plan.status === 'running' ? '🔄' : '📋');
-
-                    planHtml += '<div class="tp-plan-card">';
-                    planHtml += '<div class="tp-plan-card-header">';
-                    planHtml += '<span>' + statusIcon + '</span>';
-                    planHtml += '<span>' + esc(goalText) + '</span>';
-                    planHtml += '<span class="tp-plan-card-progress">' + doneSteps + '/' + totalSteps + '</span>';
-                    planHtml += '</div>';
-
-                    for (const step of steps) {
-                        const sStatus = step.status || 'pending';
-                        const iconMap = { done: '✅', failed: '❌', running: '▶️', pending: '⬜', skipped: '⏭️' };
-                        const sIcon = iconMap[sStatus] || '❓';
-                        const sDesc = (step.desc || '').slice(0, 100);
-                        const sCls = sStatus === 'done' ? 'done' : (sStatus === 'failed' ? 'failed' : '');
-                        planHtml += '<div class="tp-step-item ' + sCls + '">';
-                        planHtml += '<span class="step-icon">' + sIcon + '</span>';
-                        planHtml += '<span class="step-desc">' + esc(sDesc) + '</span>';
-                        planHtml += '</div>';
-                    }
-                    planHtml += '</div>';
-                }
-                planList.innerHTML = planHtml;
-            }
+    // ── 渲染 Plan ──
+    let plans = [];
+    const planList = $('tp-plan-list');
+    if (!planList) return;
+    if (planResp.ok) {
+      const planData = await planResp.json();
+      plans = planData.data || [];
+      // 分组：活跃 (running/paused/created) vs 已归档 (done/failed)
+      const activePlans = [];
+      const archivedPlans = [];
+      for (const plan of plans) {
+        const st = plan.status || '';
+        if (st === 'done' || st === 'failed') {
+          archivedPlans.push(plan);
         } else {
-            planList.innerHTML = '<div class="tp-empty">(加载失败)</div>';
+          activePlans.push(plan);
         }
+      }
+      if (activePlans.length === 0 && archivedPlans.length === 0) {
+        planList.innerHTML = '<div class="tp-empty">(暂无计划)</div>';
+      } else {
+        const statusIconMap = {
+          done: '✅', failed: '❌', running: '🔄',
+          paused: '⏸️', created: '📋', pending: '⬜'
+        };
+        const renderPlanCard = function(plan) {
+          const steps = plan.steps || [];
+          const doneSteps = steps.filter(function(s) { return s.status === 'done'; }).length;
+          const totalSteps = steps.length;
+          const goalText = (plan.goal || '无目标').slice(0, 80);
+          const statusIcon = statusIconMap[plan.status] || '📋';
+          let card = '<div class="tp-plan-card';
+          if (plan.status === 'failed') card += ' tp-plan-failed';
+          card += '">';
+          card += '<div class="tp-plan-card-header">';
+          card += '<span>' + statusIcon + '</span>';
+          card += '<span>' + esc(goalText) + '</span>';
+          card += '<span class="tp-plan-card-progress">' + doneSteps + '/' + totalSteps + '</span>';
+          card += '</div>';
+          for (const step of steps) {
+            const sStatus = step.status || 'pending';
+            const iconMap = { done: '✅', failed: '❌', running: '▶️', pending: '⬜', skipped: '⏭️' };
+            const sIcon = iconMap[sStatus] || '❓';
+            const sDesc = (step.desc || '').slice(0, 100);
+            const sCls = sStatus === 'done' ? 'done' : (sStatus === 'failed' ? 'failed' : '');
+            card += '<div class="tp-step-item ' + sCls + '">';
+            card += '<span class="step-icon">' + sIcon + '</span>';
+            card += '<span class="step-desc">' + esc(sDesc) + '</span>';
+            card += '</div>';
+          }
+          card += '</div>';
+          return card;
+        };
 
-        // ── 渲染 TODO ──
-        const todoList = $('tp-todo-list');
-        if (todoResp.ok) {
-            const todoData = await todoResp.json();
-            const items = todoData.items || [];
-            const total = todoData.total || 0;
-            const done = todoData.done || 0;
-            $('tp-progress').textContent = done + '/' + total;
-
-            if (items.length === 0) {
-                todoList.innerHTML = '<div class="tp-empty">(暂无待办)</div>';
-            } else {
-                let todoHtml = '';
-                for (const item of items) {
-                    const doneCls = item.done ? 'checked' : '';
-                    const descCls = item.done ? 'done' : '';
-                    todoHtml += '<div class="tp-todo-item">';
-                    todoHtml += '<div class="tp-todo-cb ' + doneCls + '" onclick="checkTodoItem(' + item.idx + ', ' + (!item.done) + ')">' + (item.done ? '✓' : '') + '</div>';
-                    todoHtml += '<span class="tp-todo-desc ' + descCls + '">' + esc(item.desc) + '</span>';
-                    todoHtml += '<span class="tp-todo-idx">#' + item.idx + '</span>';
-                    todoHtml += '</div>';
-                }
-                todoList.innerHTML = todoHtml;
-            }
-
-            // 自动弹出（仅非流式+非抑制状态）
-            const hasContent = items.length > 0;
-            const panel = document.getElementById('task-panel');
-            if (hasContent && !_taskPanelOpen && !_taskPanelSuppressAutoOpen && !isStreaming) {
-                _taskPanelOpen = true;
-                if (panel) panel.classList.add('open');
-                const splitter = document.getElementById('task-panel-splitter');
-                if (splitter) splitter.classList.add('visible');
-                _startTaskPanelTimer();
-            }
-        } else {
-            todoList.innerHTML = '<div class="tp-empty">(加载失败)</div>';
+        let html = '';
+        // 活跃计划
+        if (activePlans.length > 0) {
+          html += '<div class="tp-plan-active-section">';
+          for (const plan of activePlans) {
+            html += renderPlanCard(plan);
+          }
+          html += '</div>';
         }
-    } catch (e) {
-        // 静默失败
+        // 已归档（done/failed），默认折叠
+        if (archivedPlans.length > 0) {
+          html += '<div class="tp-plan-archive-group" id="tp-plan-archive-group">';
+          html += '<div class="tp-plan-archive-hdr" onclick="toggleArchive()">';
+          html += '<span class="tp-archive-arrow" id="tp-archive-arrow">▶</span> ';
+          html += '<span>已归档 (' + archivedPlans.length + ')</span>';
+          html += '</div>';
+          html += '<div class="tp-plan-archive-body" id="tp-plan-archive-body" style="display:none">';
+          for (const plan of archivedPlans) {
+            html += renderPlanCard(plan);
+          }
+          html += '</div></div>';
+        }
+        planList.innerHTML = html;
+      }
+    } else {
+      planList.innerHTML = '<div class="tp-empty">(加载失败)</div>';
     }
+
+    // ── 渲染 TODO ──
+    let items = [];
+    const todoList = $('tp-todo-list');
+    if (!todoList) return;
+    if (todoResp.ok) {
+      const todoData = await todoResp.json();
+      items = todoData.items || [];
+      const total = todoData.total || 0;
+      const done = todoData.done || 0;
+      const prog = $('tp-progress');
+      if (prog) prog.textContent = done + '/' + total;
+
+      if (items.length === 0) {
+        todoList.innerHTML = '<div class="tp-empty">(暂无待办)</div>';
+      } else {
+        let html = '';
+        for (const item of items) {
+          const doneCls = item.done ? 'checked' : '';
+          const descCls = item.done ? 'done' : '';
+          html += '<div class="tp-todo-item">';
+          html += '<div class="tp-todo-cb ' + doneCls + '" onclick="checkTodoItem(' + item.idx + ', ' + (!item.done) + ')">' + (item.done ? '✓' : '') + '</div>';
+          html += '<span class="tp-todo-desc ' + descCls + '">' + esc(item.desc) + '</span>';
+          html += '<span class="tp-todo-idx">#' + item.idx + '</span>';
+          html += '</div>';
+        }
+        todoList.innerHTML = html;
+      }
+    } else {
+      todoList.innerHTML = '<div class="tp-empty">(加载失败)</div>';
+    }
+
+    // ── 自动弹出：当有 TODO 或 Plan 或 DAG 内容时，自动打开任务面板 ──
+    const hasContent = items.length > 0 || plans.length > 0 || (window._dagVizId != null);
+    const panel = $('task-panel');
+    const splitter = $('task-panel-splitter');
+    if (hasContent && !_taskPanelOpen && !_taskPanelSuppressAutoOpen && !isStreaming) {
+      _taskPanelOpen = true;
+      if (panel) panel.classList.add('open');
+      if (splitter) splitter.classList.add('visible');
+    }
+
+    // ── DAG 工作流轮询 ──
+    await refreshDagSection();
+
+  } catch(e) {
+    // 静默失败
+  }
+};
+
+// ══════════════════════════════════════════════════
+//  DAG SECTION — 任务面板缩略图 + 自动刷新
+// ══════════════════════════════════════════════════
+
+window._dagPollTimer = null;
+window._dagVizId = null;
+window._dagStopPoll = null;
+
+/** 从 /api/dags 获取活跃 DAG 并渲染到任务面板 */
+window.refreshDagSection = async function() {
+  const section = $('tp-dag-section');
+  if (!section) return;
+
+  try {
+    const r = await fetch('/api/dags');
+    if (!r.ok) return;
+    const data = await r.json();
+    const dags = data.dags || [];
+
+    if (dags.length === 0) {
+      // 没有活跃 DAG，隐藏区域
+      closeDagView();
+      return;
+    }
+
+    // 取第一个活跃 DAG
+    const dag = dags[0];
+    const vizId = dag.viz_id;
+
+    // 如果 vizId 没变，只更新状态（避免闪烁）
+    if (window._dagVizId === vizId) {
+      // 已经在轮询中，跳过
+      return;
+    }
+
+    // 新的 DAG — 初始化
+    if (window._dagStopPoll) { window._dagStopPoll(); window._dagStopPoll = null; }
+    window._dagVizId = vizId;
+
+    // 显示 DAG 区域
+    section.style.display = '';
+    const imgWrap = $('tp-dag-img-wrap');
+    if (imgWrap) imgWrap.style.display = '';
+
+    // 初始状态
+    const badge = $('dag-badge');
+    const progress = $('dag-progress');
+    const timer = $('dag-timer');
+    if (badge) { badge.textContent = dag.state.toUpperCase(); badge.className = 'dag-status-badge badge-' + (dag.state || 'pending'); }
+    if (progress) { const p = dag.progress || {}; progress.textContent = (p.completed || 0) + '/' + (p.total || 0); }
+    if (timer) timer.textContent = '00:00';
+
+    // 缩略图
+    const dagImg = $('tp-dag-img');
+    if (dagImg) {
+      dagImg.src = '/dag/' + encodeURIComponent(vizId) + '/image?format=svg&t=' + Date.now();
+      dagImg.ondblclick = function() { openDagInNewTab(vizId); };
+    }
+
+    // 启动轮询
+    let startTime = Date.now();
+    const poll = async function() {
+      try {
+        const resp = await fetch('/dag/' + encodeURIComponent(vizId) + '/status');
+        if (!resp.ok) { stopPoll(); return; }
+        const snap = await resp.json();
+        const done = (snap.progress && snap.progress.completed) || 0;
+        const total = (snap.progress && snap.progress.total) || 0;
+        const state = snap.state || 'pending';
+
+        if (badge) { badge.textContent = state.toUpperCase(); badge.className = 'dag-status-badge badge-' + state; }
+        if (progress) progress.textContent = done + '/' + total;
+        if (timer) {
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          timer.textContent = String(Math.floor(elapsed/60)).padStart(2,'0') + ':' + String(elapsed%60).padStart(2,'0');
+        }
+        // 更新节点列表
+        renderDagNodeList($('tp-dag-nodes'), snap);
+        // 刷新缩略图
+        if (dagImg) dagImg.src = '/dag/' + encodeURIComponent(vizId) + '/image?format=svg&t=' + Date.now();
+        // 更新灯箱
+        const lbTitle = $('dag-lightbox-title');
+        if (lbTitle) lbTitle.textContent = (snap.title || 'DAG') + ' · ' + state.toUpperCase() + ' · ' + done + '/' + total;
+
+        if (state === 'completed' || state === 'failed' || state === 'cancelled') {
+          stopPoll();
+        }
+      } catch(e) { /* retry */ }
+    };
+    const stopPoll = function() {
+      if (window._dagPollTimer) { clearInterval(window._dagPollTimer); window._dagPollTimer = null; }
+      window._dagStopPoll = null;
+    };
+    window._dagStopPoll = stopPoll;
+    poll(); // 立即首次
+    window._dagPollTimer = setInterval(poll, 2000); // 2秒轮询
+
+  } catch(e) { /* ignore */ }
+};
+
+/** 双击缩略图 → 新标签页打开完整 DAG 页面 */
+window.openDagInNewTab = function(vizId) {
+  if (!vizId) return;
+  window.open('/dag/' + encodeURIComponent(vizId), '_blank');
+};
+
+/** 展开/折叠已归档 Plan */
+window.toggleArchive = function() {
+  const body = $('tp-plan-archive-body');
+  const arrow = $('tp-archive-arrow');
+  if (!body || !arrow) return;
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    arrow.textContent = '▼';
+  } else {
+    body.style.display = 'none';
+    arrow.textContent = '▶';
+  }
 };
 
 /** 勾选/取消 TODO 项 */
 window.checkTodoItem = async function(idx, done) {
-    if (!currentTopicId) return;
-    try {
-        const r = await fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/todos/' + idx, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ done: done }),
-        });
-        if (r.ok) {
-            await refreshTaskPanel();
-        }
-    } catch (e) { /* ignore */ }
+  if (!currentTopicId) return;
+  try {
+    const r = await fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/todos/' + idx, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ done: done }),
+    });
+    if (r.ok) {
+      await refreshTaskPanel();
+    }
+  } catch(e) { /* ignore */ }
 };
 
-/** 向下兼容 — 旧 refreshTodos 映射到新函数 */
-window.refreshTodos = window.refreshTaskPanel;
-window.checkTodo = window.checkTodoItem;
+window.startLeftResize = function(e) {
+  e.preventDefault();
+  const splitter = $('left-splitter');
+  const sidebar = $('sidebar');
+  splitter.classList.add('active');
+  const startX = e.clientX;
+  const startW = sidebar.offsetWidth;
 
-// -- Config Status Check --
-async function checkConfigStatus() {
-    const warningEl = document.getElementById('config-warning');
-    if (!warningEl) return;
-    try {
-        const r = await fetch('/api/configs');
-        if (!r.ok) throw new Error(r.status);
-        const d = await r.json();
-        // 检查是否有有效配置
-        const anyValid = d.any_valid === true;
-        const hasActive = !!(d.active_config_path);
-        if (!anyValid && !hasActive) {
-            warningEl.style.display = 'block';
-        } else {
-            warningEl.style.display = 'none';
-        }
-    } catch (e) {
-        // 出错时隐藏警告，避免占位
-        warningEl.style.display = 'none';
+  function onMove(ev) {
+    const diff = ev.clientX - startX;
+    const newW = Math.max(150, Math.min(400, startW + diff));
+    sidebar.style.width = newW + 'px';
+    // 更新CSS变量以保持一致
+    document.documentElement.style.setProperty('--sidebar-w', newW + 'px');
+  }
+  function onUp() {
+    splitter.classList.remove('active');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+};
+
+// ══════════════════════════════════════════════════
+//  SEARCH
+// ══════════════════════════════════════════════════
+
+window.showSearchModal = function() {
+  showModal('modal-search');
+  $('search-q').value = '';
+  $('search-results').innerHTML = '';
+  setTimeout(function() { $('search-q').focus(); }, 100);
+};
+
+window.doSearch = async function() {
+  const q = $('search-q').value.trim();
+  if (!q) return;
+  const el = $('search-results');
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">搜索中...</div>';
+  try {
+    const r = await fetch('/v1/search?q=' + encodeURIComponent(q) + '&limit=20');
+    if (!r.ok) throw new Error(String(r.status));
+    const d = await r.json();
+    const results = d.data || {};
+    let h = '';
+    if (results.conversations && results.conversations.length) {
+      h += '<div style="font-size:13px;font-weight:600;margin:8px 0 4px;color:var(--primary)">💬 对话</div>';
+      results.conversations.forEach(function(c) {
+        h += '<div class="search-result-item">' + esc(c.user_msg || c.ai_msg || '').slice(0, 200) + '<div class="src">' + (c.stamp || '') + '</div></div>';
+      });
     }
+    if (results.memories && results.memories.length) {
+      h += '<div style="font-size:13px;font-weight:600;margin:8px 0 4px;color:var(--green)">🧠 记忆</div>';
+      results.memories.forEach(function(m) {
+        h += '<div class="search-result-item">' + esc(m.content || '') + '<div class="src">' + esc(m.category || '') + '</div></div>';
+      });
+    }
+    if (!h) h = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">没有结果</div>';
+    el.innerHTML = h;
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--red);font-size:13px;padding:8px 0">Error: ' + esc(e.message) + '</div>';
+  }
+};
+
+// ══════════════════════════════════════════════════
+//  MEMORY
+// ══════════════════════════════════════════════════
+
+window.showMemoryModal = async function() {
+  showModal('modal-memory');
+  $('mem-input').value = '';
+  await refreshMemoryList();
+};
+
+window.addMemory = async function() {
+  const c = $('mem-input').value.trim();
+  if (!c) return;
+  try {
+    const r = await fetch('/v1/memory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: c })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      $('mem-input').value = '';
+      await refreshMemoryList();
+      toast('✓ 记忆已添加', 'success');
+    } else {
+      toast('✗ ' + (d.error || '添加失败'), 'error');
+    }
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+};
+
+async function refreshMemoryList() {
+  try {
+    const r = await fetch('/v1/memory');
+    if (!r.ok) throw new Error(String(r.status));
+    const d = await r.json();
+    const el = $('mem-list');
+    if (d.data && d.data.length) {
+      el.innerHTML = d.data.map(function(m) {
+        return '<div class="mem-item"><div class="tx">' + esc(m.content || '') + '<span class="cat">' + esc(m.category || '') + '</span></div>'
+          + '<button class="btn btn-g btn-sm" onclick="deleteMemory(\'' + m.id + '\')">删除</button></div>';
+      }).join('');
+    } else {
+      el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">暂无记忆</div>';
+    }
+  } catch(e) {
+    $('mem-list').innerHTML = '<div style="color:var(--red);font-size:13px;padding:8px 0">加载失败: ' + esc(e.message) + '</div>';
+  }
 }
 
-// -- Config Switcher --
-let _configCurrentPath = '';
-
-async function loadConfigSwitcher() {
-    const sel = $('cs-select');
-    if (!sel) return;
-    sel.disabled = true;
-    sel.innerHTML = '<option value="">加载中...</option>';
-    try {
-        const r = await fetch('/api/configs');
-        if (!r.ok) throw new Error(r.status);
-        const d = await r.json();
-        const configs = d.configs || [];
-        // 使用服务器返回的活跃配置路径设置默认选中项
-        if (d.active_config_path) {
-            _configCurrentPath = d.active_config_path.replace(/\\/g, '/');
-        }
-        let html = '<option value="">未选择</option>';
-        let found = false;
-        configs.forEach(function(c) {
-            const model = c.main_model ? c.main_model.model_name : '';
-            const norm = c.path.replace(/\\/g, '/');
-            const selAttr = (norm === _configCurrentPath) ? ' selected' : '';
-            if (norm === _configCurrentPath) found = true;
-            html += '<option value="' + esc(c.path) + '"' + selAttr + '>' + esc(c.filename) + ' — ' + esc(model) + '</option>';
-        });
-        sel.innerHTML = html;
-        sel.disabled = false;
-        if (!found) _configCurrentPath = '';
-    } catch (e) {
-        sel.innerHTML = '<option value="">❌ 加载失败</option>';
-        sel.disabled = true;
+window.deleteMemory = async function(id) {
+  try {
+    const r = await fetch('/v1/memory/' + encodeURIComponent(id), { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) {
+      await refreshMemoryList();
+      toast('🗑 已删除', 'success');
     }
-    // 加载完成后检查配置状态
-    checkConfigStatus();
+  } catch(e) {
+    toast('删除失败', 'error');
+  }
+};
+
+// ══════════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════════
+
+window.showConfigModal = async function() {
+  showModal('modal-config');
+  $('cfg-status').style.display = 'none';
+  await loadConfigForm();
+};
+
+async function loadConfigForm() {
+  try {
+    // Load current config
+    const r1 = await fetch('/api/config');
+    if (r1.ok) {
+      const d = await r1.json();
+      const cfg = d.data || d;
+      $('cfg-model').value = cfg.model || '';
+      $('cfg-url').value = cfg.api_url || '';
+      $('cfg-key').value = '';
+      $('cfg-temp').value = cfg.temperature != null ? cfg.temperature : '';
+      $('cfg-max-tokens').value = cfg.max_tokens != null ? cfg.max_tokens : '';
+      $('cfg-top-p').value = cfg.top_p != null ? cfg.top_p : '';
+      $('cfg-max-ctx').value = cfg.max_context_tokens != null ? cfg.max_context_tokens : '';
+      const opts = cfg.options || {};
+      $('cfg-vision').checked = !!opts.supports_vision;
+      $('cfg-reasoning').checked = opts.supports_reasoning !== false;
+      // Cheap model
+      if (cfg.cheap_model) {
+        $('cfg-cheap-model').value = cfg.cheap_model.model || '';
+        $('cfg-cheap-url').value = cfg.cheap_model.api_url || '';
+        $('cfg-cheap-key').value = '';
+      }
+      // Runtime
+      $('cfg-max-iter').value = cfg.max_iterations != null ? cfg.max_iterations : '';
+      $('cfg-keep-turns').value = cfg.keep_turns != null ? cfg.keep_turns : '';
+      $('cfg-thinking').checked = cfg.enable_thinking !== false;
+    }
+    // Load config file list
+    const r2 = await fetch('/api/configs');
+    if (r2.ok) {
+      const d2 = await r2.json();
+      const sel = $('cfg-select');
+      const configs = d2.data || d2.configs || [];
+      sel.innerHTML = '<option value="">-- 请选择 --</option>';
+      const activePath = d2.active_config_path || '';
+      configs.forEach(function(c) {
+        const mainModel = c.main_model ? (c.main_model.model_name || '') : '';
+        const cheapModel = c.cheap_model ? (c.cheap_model.model_name || '') : '';
+        const selected = c.path === activePath ? ' selected' : '';
+
+        const mainFormatted = _formatModelName(mainModel);
+        const cheapFormatted = _formatModelName(cheapModel);
+
+        let modelDisplay = mainFormatted || '?';
+        if (cheapFormatted && cheapFormatted !== mainFormatted) {
+          modelDisplay = mainFormatted + ' / ' + cheapFormatted;
+        }
+
+        const configName = (c.filename || '').replace(/\.(yaml|yml)$/i, '');
+        const display = configName + ' — ' + modelDisplay;
+        sel.innerHTML += '<option value="' + esc(c.path) + '"' + selected + '>' + esc(display) + '</option>';
+      });
+    }
+  } catch(e) {
+    showCfgStatus('加载配置失败: ' + e.message, 'error');
+  }
+}
+
+function onConfigSelect(path) {
+  if (!path) return;
+  fetch('/api/configs').then(function(r) { return r.json(); }).then(function(d2) {
+    const configs = d2.data || d2.configs || [];
+    const cfg = configs.find(function(c) { return c.path === path; });
+    if (cfg && cfg.main_model) {
+      $('cfg-model').value = cfg.main_model.model_name || '';
+      $('cfg-url').value = cfg.main_model.api_url || '';
+      if (cfg.cheap_model) {
+        $('cfg-cheap-model').value = cfg.cheap_model.model_name || '';
+        $('cfg-cheap-url').value = cfg.cheap_model.api_url || '';
+      }
+    }
+  }).catch(function(){});
+}
+
+window.applyConfig = async function() {
+  const apiKey = $('cfg-key').value.trim();
+  const apiUrl = $('cfg-url').value.trim();
+  const modelName = $('cfg-model').value.trim();
+
+  if (!apiUrl || !modelName) {
+    showCfgStatus('请填写 API URL 和 模型名称', 'error');
+    return;
+  }
+
+  function nv(id) { const v = $(id).value.trim(); return v ? Number(v) : null; }
+
+  showCfgStatus('正在应用...', 'info');
+
+  try {
+    const body = {};
+    if (apiKey) body.api_key = apiKey;
+    body.api_url = apiUrl;
+    body.model_name = modelName;
+    body.temperature = nv('cfg-temp');
+    body.max_tokens = nv('cfg-max-tokens');
+    body.top_p = nv('cfg-top-p');
+    body.max_context_tokens = nv('cfg-max-ctx');
+    body.options = {
+      supports_vision: $('cfg-vision').checked,
+      supports_reasoning: $('cfg-reasoning').checked,
+    };
+
+    const cheapName = $('cfg-cheap-model').value.trim();
+    const cheapUrl = $('cfg-cheap-url').value.trim();
+    if (cheapName && cheapUrl) {
+      const cheapKey = $('cfg-cheap-key').value.trim();
+      if (cheapKey) body.cheap_api_key = cheapKey;
+      body.cheap_api_url = cheapUrl;
+      body.cheap_model_name = cheapName;
+    }
+
+    const r = await fetch('/api/model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      showCfgStatus('失败: ' + (d.error || d.errors?.join(', ') || '未知错误'), 'error');
+      return;
+    }
+
+    // Save runtime params
+    const updates = {};
+    const mi = nv('cfg-max-iter'); if (mi != null) updates.max_iterations = mi;
+    const kt = nv('cfg-keep-turns'); if (kt != null) updates.keep_turns = kt;
+    updates.enable_thinking = $('cfg-thinking').checked;
+
+    if (Object.keys(updates).length > 0) {
+      await fetch('/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+    }
+
+    showCfgStatus('✅ 已应用: ' + d.model, 'success');
+    setTimeout(function() { closeModal('modal-config'); }, 1200);
+  } catch(e) {
+    showCfgStatus('失败: ' + e.message, 'error');
+  }
+};
+
+function showCfgStatus(msg, type) {
+  const el = $('cfg-status');
+  if (!el) return;
+  el.style.display = 'block';
+  el.className = 'status-msg ' + (type || 'info');
+  el.textContent = msg;
+}
+
+// ── New Config ──
+window.showNewConfigModal = function() {
+  closeModal('modal-config');
+  showModal('modal-new-config');
+  $('nc-status').style.display = 'none';
+};
+
+window.saveNewConfig = async function() {
+  const filename = $('nc-filename').value.trim();
+  const mainName = $('nc-main-name').value.trim();
+  const mainUrl = $('nc-main-url').value.trim();
+  const mainKey = $('nc-main-key').value.trim();
+
+  if (!filename || !mainName || !mainUrl || !mainKey) {
+    $('nc-status').style.display = 'block';
+    $('nc-status').className = 'status-msg error';
+    $('nc-status').textContent = '请填写完整信息';
+    return;
+  }
+
+  $('nc-status').style.display = 'block';
+  $('nc-status').className = 'status-msg info';
+  $('nc-status').textContent = '保存中...';
+
+  try {
+    const body = { filename: filename, main_model_name: mainName, main_api_url: mainUrl, main_api_key: mainKey };
+    const cheapName = $('nc-cheap-name').value.trim();
+    const cheapUrl = $('nc-cheap-url').value.trim();
+    const cheapKey = $('nc-cheap-key').value.trim();
+    if (cheapName && cheapUrl) {
+      body.cheap_model_name = cheapName;
+      body.cheap_api_url = cheapUrl;
+      if (cheapKey) body.cheap_api_key = cheapKey;
+    }
+    const r = await fetch('/api/config/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      $('nc-status').className = 'status-msg success';
+      $('nc-status').textContent = '✓ 已保存: ' + d.filename;
+      setTimeout(function() {
+        closeModal('modal-new-config');
+        closeModal('modal-config');
+      }, 1200);
+    } else {
+      $('nc-status').className = 'status-msg error';
+      $('nc-status').textContent = d.error || '保存失败';
+    }
+  } catch(e) {
+    $('nc-status').className = 'status-msg error';
+    $('nc-status').textContent = 'Error: ' + e.message;
+  }
+};
+
+// ── Config Dropdown in Toolbar ──
+function _formatModelName(modelName) {
+  if (!modelName) return '';
+
+  const specialMappings = {
+    'gpt-4': 'GPT-4',
+    'gpt-4-turbo': 'GPT-4 Turbo',
+    'gpt-4o': 'GPT-4o',
+    'gpt-4o-mini': 'GPT-4o Mini',
+    'gpt-3.5-turbo': 'GPT-3.5 Turbo',
+    'claude-3-opus': 'Claude 3 Opus',
+    'claude-3-sonnet': 'Claude 3 Sonnet',
+    'claude-3-haiku': 'Claude 3 Haiku',
+    'claude-3.5-sonnet': 'Claude 3.5 Sonnet',
+    'deepseek-chat': 'DeepSeek Chat',
+    'deepseek-coder': 'DeepSeek Coder',
+    'deepseek-r1': 'DeepSeek R1',
+    'deepseek-v2': 'DeepSeek V2',
+    'deepseek-v2.5': 'DeepSeek V2.5',
+    'deepseek-v3': 'DeepSeek V3',
+    'deepseek-v4': 'DeepSeek V4',
+    'deepseek-v4-flash': 'DeepSeek V4 Flash',
+    'deepseek-v4-pro': 'DeepSeek V4 Pro',
+    'qwen-turbo': 'Qwen Turbo',
+    'qwen-plus': 'Qwen Plus',
+    'qwen-max': 'Qwen Max',
+    'qwen-vl-plus': 'Qwen VL Plus',
+    'qwen-vl-max': 'Qwen VL Max',
+    'glm-4': 'GLM-4',
+    'glm-3-turbo': 'GLM-3 Turbo',
+    'gemini-1.5-pro': 'Gemini 1.5 Pro',
+    'gemini-1.5-flash': 'Gemini 1.5 Flash',
+    'gemini-2.0-flash': 'Gemini 2.0 Flash',
+    'spark': 'Spark',
+    'spark-max': 'Spark Max',
+    'spark-lite': 'Spark Lite',
+    'ernie-bot': 'Ernie Bot',
+    'ernie-bot-turbo': 'Ernie Bot Turbo',
+  };
+
+  const lowerName = modelName.toLowerCase();
+  if (specialMappings[lowerName]) {
+    return specialMappings[lowerName];
+  }
+
+  // General conversion: replace hyphens and underscores with spaces, capitalize each word
+  const words = modelName.replace(/[-_]/g, ' ').split(/\s+/);
+  const formattedWords = words.map(function(word) {
+    const lowerWord = word.toLowerCase();
+    if (['gpt', 'api', 'ai', 'ml', 'llm', 'vl', 'r1', 'v2', 'v3', 'v4', 'v5'].includes(lowerWord)) {
+      return word.toUpperCase();
+    }
+    if (/^\d+$/.test(word)) {
+      return word;
+    }
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+
+  return formattedWords.join(' ');
+}
+
+async function refreshConfigDropdown() {
+  try {
+    const r = await fetch('/api/configs');
+    if (!r.ok) return;
+    const d = await r.json();
+    const sel = $('config-dropdown');
+    const configs = d.data || d.configs || [];
+    const activePath = d.active_config_path || '';
+    sel.innerHTML = '<option value="">⚡ 切换配置</option>';
+    configs.forEach(function(c) {
+      const mainModel = c.main_model ? (c.main_model.model_name || '') : '';
+      const cheapModel = c.cheap_model ? (c.cheap_model.model_name || '') : '';
+      const selected = c.path === activePath ? ' selected' : '';
+
+      const mainFormatted = _formatModelName(mainModel);
+      const cheapFormatted = _formatModelName(cheapModel);
+
+      let modelDisplay = mainFormatted || '?';
+      if (cheapFormatted && cheapFormatted !== mainFormatted) {
+        modelDisplay = mainFormatted + ' / ' + cheapFormatted;
+      }
+
+      const configName = (c.filename || '').replace(/\.(yaml|yml)$/i, '');
+      const display = configName + ' — ' + modelDisplay;
+      sel.innerHTML += '<option value="' + esc(c.path) + '"' + selected + '>' + esc(display) + '</option>';
+    });
+  } catch(e) {}
 }
 
 window.switchConfig = async function(path) {
-    if (!path) return;
-    const sel = $('cs-select');
-    if (sel) sel.disabled = true;
-    try {
-        const r = await fetch('/api/model/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ config_path: path }),
-        });
-        const d = await r.json();
-        if (d.ok) {
-            _configCurrentPath = path.replace(/\\/g, '/');
-            toast('✓ 已切换到: ' + (path.split('/').pop() || path.split('\\').pop()), 'success');
-            checkVisionSupport();
-        } else {
-            toast('✗ 切换失败: ' + (d.error || '未知错误'), 'error');
-        }
-    } catch (e) {
-        toast('✗ 切换失败: ' + e.message, 'error');
-    }
-    await loadConfigSwitcher();
-    checkConfigStatus();
-};
-
-
-// -- Splitter drag logic --
-function initSplitter(splitterId, targetId, direction) {
-    const splitter = $(splitterId);
-    const target = $(targetId);
-    if (!splitter || !target) return;
-
-    let startPos = 0;
-    let startSize = 0;
-
-    function onMove(e) {
-        const delta = (direction === 'h' ? e.clientX : e.clientY) - startPos;
-        // 若 target 在 splitter 之后（DOM 中），反转方向：拖向下时 target 缩小
-        const isReversed = splitter.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING;
-        const effectiveDelta = isReversed ? -delta : delta;
-        const minSize = direction === 'h' ? 100 : 60;
-        const newSize = Math.max(minSize, startSize + effectiveDelta);
-        if (direction === 'h') {
-            target.style.width = newSize + 'px';
-            target.style.flex = 'none';
-        } else {
-            target.style.flex = 'none';
-            target.style.height = newSize + 'px';
-        }
-    }
-
-    function onUp() {
-        splitter.classList.remove('active');
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-    }
-
-    splitter.addEventListener('mousedown', function(e) {
-        e.preventDefault();
-        startPos = direction === 'h' ? e.clientX : e.clientY;
-        startSize = direction === 'h' ? target.offsetWidth : target.offsetHeight;
-        splitter.classList.add('active');
-        document.body.style.cursor = direction === 'h' ? 'col-resize' : 'row-resize';
-        document.body.style.userSelect = 'none';
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
+  if (!path) return;
+  try {
+    const r = await fetch('/api/model/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config_path: path }),
     });
-}
-
-// -- Max Iter 确认弹窗 --
-window.showMaxIterConfirm = function(confirmId, text) {
-    const match = text.match(/已执行(\d+)轮/);
-    const info = match ? match[0] : '达到上限';
-
-    let existing = document.querySelector('.max-iter-overlay');
-    if (existing) return;
-
-    const overlay = document.createElement('div');
-    overlay.className = 'max-iter-overlay';
-
-    const box = document.createElement('div');
-    box.className = 'mi-box';
-    box.innerHTML = '<div class="mi-icon">🔧</div>' +
-        '<div class="mi-title">工具调用轮次已达上限</div>' +
-        '<div class="mi-desc">已执行 <strong>' + info + '</strong>，是否继续执行？</div>' +
-        '<div class="mi-actions">' +
-        '<button id="max-iter-stop" class="btn btn-ghost">终止</button>' +
-        '<button id="max-iter-continue" class="btn btn-primary">继续</button>' +
-        '</div>';
-
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
-
-    document.getElementById('max-iter-stop').addEventListener('click', async function() {
-        try {
-            await fetch('/api/chat/continue', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ confirm_id: confirmId, continue: false }),
-            });
-        } catch (e) { /* ignore */ }
-        overlay.remove();
-    });
-
-    document.getElementById('max-iter-continue').addEventListener('click', async function() {
-        try {
-            await fetch('/api/chat/continue', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ confirm_id: confirmId, continue: true }),
-            });
-        } catch (e) { /* ignore */ }
-        overlay.remove();
-    });
-};
-
-// ================================================================
-//  Question Dialog (toolkit_question web mode)
-// ================================================================
-
-window.showQuestionDialog = function(questionId, title, question, options, defaultVal) {
-    // 防止重叠
-    let existing = document.querySelector('.question-overlay');
-    if (existing) return;
-
-    const overlay = document.createElement('div');
-    overlay.className = 'question-overlay';
-
-    const box = document.createElement('div');
-    box.className = 'question-box';
-
-    let optionsHtml = '';
-    if (options && options.length > 0) {
-        optionsHtml = '<div class="q-options">';
-        for (const opt of options) {
-            const checked = (opt === defaultVal) ? ' checked' : '';
-            optionsHtml += '<label class="q-option"><input type="radio" name="q-answer" value="' + escAttr(opt) + '"' + checked + '> <span>' + esc(opt) + '</span></label>';
-        }
-        optionsHtml += '<label class="q-option q-custom-opt"><input type="radio" name="q-answer" value="__custom__"> <span>自定义:</span> <input type="text" id="q-custom-input" class="q-custom-input" placeholder="输入自定义答案"></label>';
-        optionsHtml += '</div>';
+    const d = await r.json();
+    if (d.ok) {
+      toast('✓ 已切换到配置', 'success');
+      refreshConfigDropdown();
     } else {
-        optionsHtml = '<div class="q-input-wrap"><input type="text" id="q-free-input" class="q-free-input" value="' + escAttr(defaultVal) + '" placeholder="请输入..."></div>';
+      toast('✗ 切换失败', 'error');
     }
-
-    box.innerHTML = '<div class="q-icon">❓</div>' +
-        '<div class="q-title">' + esc(title) + '</div>' +
-        '<div class="q-desc">' + esc(question) + '</div>' +
-        optionsHtml +
-        '<div class="q-actions">' +
-        '<button id="q-cancel" class="btn btn-ghost">取消</button>' +
-        '<button id="q-submit" class="btn btn-primary">确定</button>' +
-        '</div>';
-
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
-
-    // 监听自定义输入框焦点自动选中 radio
-    const customInput = document.getElementById('q-custom-input');
-    if (customInput) {
-        customInput.addEventListener('focus', function() {
-            const radio = this.closest('.q-option').querySelector('input[type="radio"]');
-            if (radio) radio.checked = true;
-        });
-        customInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') document.getElementById('q-submit').click();
-        });
-    }
-
-    const freeInput = document.getElementById('q-free-input');
-    if (freeInput) {
-        freeInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') document.getElementById('q-submit').click();
-        });
-        freeInput.focus();
-        freeInput.select();
-    }
-
-    // 回车提交
-    box.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !customInput && !freeInput) {
-            document.getElementById('q-submit').click();
-        }
-    });
-
-    function getAnswer() {
-        const selected = document.querySelector('input[name="q-answer"]:checked');
-        if (selected) {
-            if (selected.value === '__custom__') {
-                const ci = document.getElementById('q-custom-input');
-                return ci ? ci.value.trim() || defaultVal : defaultVal;
-            }
-            return selected.value;
-        }
-        // 自由输入模式
-        const fi = document.getElementById('q-free-input');
-        return fi ? fi.value.trim() || defaultVal : defaultVal;
-    }
-
-    document.getElementById('q-submit').addEventListener('click', async function() {
-        const answer = getAnswer();
-        try {
-            await fetch('/api/chat/question', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question_id: questionId, answer: answer }),
-            });
-        } catch (e) { /* ignore */ }
-        overlay.remove();
-    });
-
-    document.getElementById('q-cancel').addEventListener('click', async function() {
-        try {
-            await fetch('/api/chat/question', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question_id: questionId, answer: defaultVal || '' }),
-            });
-        } catch (e) { /* ignore */ }
-        overlay.remove();
-    });
-
-    // 自动聚焦第一个 radio
-    const firstRadio = document.querySelector('input[name="q-answer"]');
-    if (firstRadio && !firstRadio.value.startsWith('__')) {
-        // focus first option
-    }
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
 };
 
-// Helper
-function escAttr(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+// ══════════════════════════════════════════════════
+//  EXPORT
+// ══════════════════════════════════════════════════
+
+window.showExportModal = function() {
+  showModal('modal-export');
+  $('export-result').innerHTML = '';
+  // Reset to defaults
+  const modeRadios = document.querySelectorAll('input[name="export-mode"]');
+  if (modeRadios.length > 0) modeRadios[0].checked = true;
+  const filterRadios = document.querySelectorAll('input[name="export-filter"]');
+  if (filterRadios.length > 0) filterRadios[0].checked = true;
+};
+
+window.onExportModeChange = function() {
+  $('export-result').innerHTML = '';
+};
+
+window.doExport = async function() {
+  if (!currentTopicId) {
+    $('export-result').innerHTML = '<div style="color:var(--red);font-size:13px">请先选择一个话题</div>';
+    return;
+  }
+  const el = $('export-result');
+  const modeEl = document.querySelector('input[name="export-mode"]:checked');
+  const filterEl = document.querySelector('input[name="export-filter"]:checked');
+  const mode = modeEl ? modeEl.value : 'latest';
+  const filter = filterEl ? filterEl.value : 'final';
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">导出中...</div>';
+  try {
+    const url = '/v1/export/pdf/' + encodeURIComponent(currentTopicId)
+      + '?mode=' + encodeURIComponent(mode)
+      + '&filter=' + encodeURIComponent(filter);
+    const r = await fetch(url, { method: 'GET' });
+    const ct = r.headers.get('Content-Type') || '';
+    if (ct.includes('application/pdf')) {
+      // Download PDF directly
+      const blob = await r.blob();
+      let filename = 'export.pdf';
+      const disp = r.headers.get('Content-Disposition') || '';
+      const match = disp.match(/filename\*?=(?:UTF-8'')?([^;\s]+)/i);
+      if (match) filename = decodeURIComponent(match[1].replace(/"/g, ''));
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      el.innerHTML = '<div style="color:var(--green);font-size:13px">✅ 下载完成: ' + esc(filename) + '</div>';
+    } else {
+      // Error response (JSON)
+      const d = await r.json();
+      el.innerHTML = '<div style="color:var(--red);font-size:13px">' + esc(d.error || '导出失败') + '</div>';
+    }
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--red);font-size:13px">Error: ' + esc(e.message) + '</div>';
+  }
+};
+
+// ══════════════════════════════════════════════════
+//  QUESTION DIALOG & MAX_ITER CONFIRM
+// ══════════════════════════════════════════════════
+
+function showQuestionDialog(qid, title, question, options, defaultVal) {
+  // Simple implementation — uses the global window methods
+  const answer = prompt((title || '问题') + ': ' + (question || ''));
+  if (answer !== null) {
+    fetch('/api/chat/question', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question_id: qid, answer: answer })
+    }).catch(function(){});
+  } else {
+    fetch('/api/chat/question', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question_id: qid, answer: defaultVal || '' })
+    }).catch(function(){});
+  }
 }
 
-// ================================================================
-//  Screenshot Region Capture (full-screen overlay + drag select)
-// ================================================================
-
-let _screenshotOverlay = null;
-
-/** 服务端截图 — 无需浏览器 WebRTC 权限 */
-async function checkVisionSupport() {
-    const btn = document.getElementById('screenshot-btn');
-    if (btn) {
-        btn.style.display = '';
-        btn.title = '服务端截图\n点击后从服务器截取屏幕，然后在截图上拖拽选区域或点击「截取全屏」';
-    }
+function showMaxIterConfirm(confirmId, text) {
+  const cont = confirm((text || '已达到工具调用次数上限') + '\n\n继续执行吗？');
+  fetch('/api/chat/continue', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm_id: confirmId, continue: cont })
+  }).catch(function(){});
 }
 
-window.startScreenshot = async function() {
-    if (_screenshotOverlay) return;
+// ══════════════════════════════════════════════════
+//  BUTTON STYLES (re-export for HTML onclick)
+// ══════════════════════════════════════════════════
 
-    toast('正在从服务器截取屏幕...', 'info');
+// Ensure btn-g, btn-p, btn-sm classes exist in JS context
+// (CSS already has them)
 
-    // 1. 调服务端 API 获取全屏截图 base64
-    let fullImageData;
-    try {
-        const resp = await fetch('/api/screenshot/full');
-        const data = await resp.json();
-        if (!data.ok) throw new Error(data.error || '服务端截图失败');
-        const b64 = data.image_base64;  // "data:image/png;base64,xxxxx"
-        if (!b64 || b64.length < 100) throw new Error('截图数据无效');
-        fullImageData = b64;
-    } catch (err) {
-        toast('截图失败: ' + err.message, 'error');
-        return;
-    }
+// ══════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════
 
-    // 2. 创建 overlay（全屏暗色遮罩 + 图片居中缩放显示）
-    var overlay = document.createElement('div');
-    overlay.id = 'screenshot-overlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.88);z-index:10000;cursor:crosshair;display:flex;align-items:center;justify-content:center;';
-    document.body.appendChild(overlay);
-    _screenshotOverlay = overlay;
+refreshTopics();
+refreshConfigDropdown();
+refreshTaskPanel();
 
-    var img = document.createElement('img');
-    img.src = fullImageData;
-    img.draggable = false;
-    img.style.cssText = 'display:block;max-width:95vw;max-height:90vh;width:auto;height:auto;user-select:none;-webkit-user-drag:none;pointer-events:none;';
-    overlay.appendChild(img);
+// Auto-refresh topics every 30s
+setInterval(refreshTopics, 30000);
 
-    // 等待图片加载
-    await new Promise(function(r) { img.onload = r; img.onerror = r; });
+// Expose helpers globally
+window.showModal = showModal;
+window.closeModal = closeModal;
+window.toast = toast;
 
-    // 确保布局稳定：等待两帧以保证 getBoundingClientRect 返回正确值
-    await new Promise(function(r) { requestAnimationFrame(function() { requestAnimationFrame(r); }); });
-
-    // 检查布局是否有效，若无效则强制布局
-    var _checkRect = img.getBoundingClientRect();
-    if (_checkRect.width < 1 || _checkRect.height < 1) {
-        // 强制重排：临时修改样式触发 reflow
-        img.style.display = 'inline-block';
-        void img.offsetHeight; // force reflow
-        img.style.display = 'block';
-        await new Promise(function(r) { requestAnimationFrame(function() { requestAnimationFrame(r); }); });
-    }
-    console.log('[screenshot] img rect:', JSON.stringify(img.getBoundingClientRect()), 'natural:', img.naturalWidth, 'x', img.naturalHeight);
-
-    // 3. 橡皮筋选区框
-    var sel = document.createElement('div');
-    sel.style.cssText = 'position:fixed;border:2px dashed #00aaff;background:rgba(0,170,255,0.18);display:none;pointer-events:none;z-index:10001;';
-    overlay.appendChild(sel);
-
-    // 工具条（固定在 overlay 底部）
-    var toolbar = document.createElement('div');
-    toolbar.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:12px;align-items:center;z-index:10002;pointer-events:auto;';
-    toolbar.innerHTML = '' +
-        '<span style="color:#aaa;font-size:13px;background:rgba(0,0,0,0.6);padding:6px 14px;border-radius:16px;">' +
-        '🖱️ 拖拽选区域 · 点击=全图</span>' +
-        '<button id="screenshot-capture-all" style="background:#1a73e8;color:white;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;">📷 截取全屏</button>' +
-        '<button id="screenshot-cancel" style="background:rgba(255,255,255,0.15);color:#ddd;border:1px solid rgba(255,255,255,0.3);padding:8px 18px;border-radius:8px;cursor:pointer;font-size:14px;">✕ 取消</button>';
-    overlay.appendChild(toolbar);
-
-    // 辅助函数：获取图片在视口中的实际渲染矩形
-    function imgRenderRect() {
-        var r = img.getBoundingClientRect();
-        return { left: r.left, top: r.top, width: r.width, height: r.height };
-    }
-
-    // 辅助函数：视口坐标 → 图片原始像素坐标
-    function clientToImage(cx, cy) {
-        var r = imgRenderRect();
-        // 零宽保护：若布局未完成，用视口尺寸作为兜底
-        var w = r.width > 0 ? r.width : window.innerWidth;
-        var h = r.height > 0 ? r.height : window.innerHeight;
-        var left = isFinite(r.left) ? r.left : 0;
-        var top = isFinite(r.top) ? r.top : 0;
-        // 在图片渲染区域内的比例
-        var rx = (cx - left) / w;
-        var ry = (cy - top) / h;
-        // 钳制到 [0,1]
-        rx = Math.max(0, Math.min(1, rx));
-        ry = Math.max(0, Math.min(1, ry));
-        var imgW = img.naturalWidth || screen.width || 1920;
-        var imgH = img.naturalHeight || screen.height || 1080;
-        return {
-            x: Math.round(rx * imgW),
-            y: Math.round(ry * imgH)
-        };
-    }
-
-    // 截取并添加图片（公共函数）
-    function doCrop(cropX, cropY, cropW, cropH) {
-        toast('正在裁剪...', 'info');
-        try {
-            var canvas = document.createElement('canvas');
-            canvas.width = cropW;
-            canvas.height = cropH;
-            var ctx = canvas.getContext('2d');
-            ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-            pendingImages.push(canvas.toDataURL('image/png'));
-            updateImagePreview();
-            cleanupOverlay();
-            toast('✓ 截图已添加', 'success');
-        } catch (err) {
-            toast('裁剪失败: ' + err.message, 'error');
-        }
-    }
-
-    // 清理 overlay
-    function cleanupOverlay() {
-        document.removeEventListener('keydown', onKey);
-        if (_screenshotOverlay && _screenshotOverlay.parentNode) {
-            _screenshotOverlay.parentNode.removeChild(_screenshotOverlay);
-        }
-        _screenshotOverlay = null;
-    }
-
-    // 截取全屏
-    function captureFull() {
-        cleanupOverlay();
-        doCrop(0, 0, img.naturalWidth, img.naturalHeight);
-    }
-
-    // 按钮事件
-    document.getElementById('screenshot-capture-all').addEventListener('click', captureFull);
-    document.getElementById('screenshot-cancel').addEventListener('click', function() {
-        cleanupOverlay();
-        toast('截图已取消', 'info');
-    });
-
-    var dragging = false;
-    var clickOnly = false;
-    var sx = 0, sy = 0;
-
-    // ----- 鼠标事件 -----
-    overlay.addEventListener('mousedown', function(e) {
-        // 排除工具条按钮点击
-        if (e.target.closest('#screenshot-cancel') || e.target.closest('#screenshot-capture-all')) return;
-        dragging = true;
-        clickOnly = true;
-        sx = e.clientX;
-        sy = e.clientY;
-        sel.style.left = e.clientX + 'px';
-        sel.style.top = e.clientY + 'px';
-        sel.style.width = '0px';
-        sel.style.height = '0px';
-        sel.style.display = 'block';
-    });
-
-    overlay.addEventListener('mousemove', function(e) {
-        if (!dragging) return;
-        // 有移动 → 不是纯点击
-        clickOnly = false;
-        var x = Math.min(sx, e.clientX);
-        var y = Math.min(sy, e.clientY);
-        var w = Math.abs(e.clientX - sx);
-        var h = Math.abs(e.clientY - sy);
-        sel.style.left = x + 'px';
-        sel.style.top = y + 'px';
-        sel.style.width = w + 'px';
-        sel.style.height = h + 'px';
-    });
-
-    overlay.addEventListener('mouseup', function(e) {
-        if (!dragging) return;
-        dragging = false;
-
-        // 情形 A：纯点击（无移动）→ 截取全屏
-        if (clickOnly) {
-            captureFull();
-            return;
-        }
-
-        // 情形 B：拖拽选区
-        _screenshotOverlay = null;
-        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-
-        var vw = Math.abs(e.clientX - sx);
-        var vh = Math.abs(e.clientY - sy);
-        if (vw < 12 || vh < 12) {
-            toast('选区太小，点击=全屏截图，拖拽=选区截图', 'error');
-            return;
-        }
-
-        // 视口坐标 → 图片像素坐标
-        var p1 = clientToImage(sx, sy);
-        var p2 = clientToImage(e.clientX, e.clientY);
-
-        var cropX = Math.max(0, Math.min(p1.x, p2.x));
-        var cropY = Math.max(0, Math.min(p1.y, p2.y));
-        var cropW = Math.abs(p2.x - p1.x);
-        var cropH = Math.abs(p2.y - p1.y);
-
-        // 若比例映射结果异常小，直接按视口比例估算（备用方案）
-        if (cropW < 8 || cropH < 8) {
-            var _r = imgRenderRect();
-            var _scaleX = (_r.width > 0) ? (img.naturalWidth / _r.width) : 1;
-            var _scaleY = (_r.height > 0) ? (img.naturalHeight / _r.height) : 1;
-            var _altW = Math.round(vw * _scaleX);
-            var _altH = Math.round(vh * _scaleY);
-            if (_altW >= 8 && _altH >= 8) {
-                console.log('[screenshot] fallback: clientToImage gave', cropW, 'x', cropH, '→ using', _altW, 'x', _altH);
-                cropW = _altW;
-                cropH = _altH;
-                // 重新估算起始点
-                var pMinX = Math.min(sx, e.clientX);
-                var pMinY = Math.min(sy, e.clientY);
-                cropX = Math.round((pMinX - _r.left) / _r.width * img.naturalWidth);
-                cropY = Math.round((pMinY - _r.top) / _r.height * img.naturalHeight);
-                cropX = Math.max(0, Math.min(img.naturalWidth - cropW, cropX));
-                cropY = Math.max(0, Math.min(img.naturalHeight - cropH, cropY));
-            } else {
-                toast('选区太小，请重试', 'error');
-                return;
-            }
-        }
-
-        doCrop(cropX, cropY, cropW, cropH);
-    });
-
-    // ----- 触屏事件（移动端支持） -----
-    var touchStart = null;
-
-    overlay.addEventListener('touchstart', function(e) {
-        if (e.target.closest('#screenshot-cancel') || e.target.closest('#screenshot-capture-all')) return;
-        var t = e.touches[0];
-        touchStart = { x: t.clientX, y: t.clientY };
-        sx = t.clientX;
-        sy = t.clientY;
-        clickOnly = true;
-        sel.style.left = t.clientX + 'px';
-        sel.style.top = t.clientY + 'px';
-        sel.style.width = '0px';
-        sel.style.height = '0px';
-        sel.style.display = 'block';
-    }, { passive: true });
-
-    overlay.addEventListener('touchmove', function(e) {
-        if (!touchStart) return;
-        clickOnly = false;
-        var t = e.touches[0];
-        var x = Math.min(sx, t.clientX);
-        var y = Math.min(sy, t.clientY);
-        var w = Math.abs(t.clientX - sx);
-        var h = Math.abs(t.clientY - sy);
-        sel.style.left = x + 'px';
-        sel.style.top = y + 'px';
-        sel.style.width = w + 'px';
-        sel.style.height = h + 'px';
-    }, { passive: true });
-
-    overlay.addEventListener('touchend', function(e) {
-        if (!touchStart) return;
-        var endX = sx, endY = sy;
-        // 如果是拖拽，取最后移动位置
-        if (e.changedTouches && e.changedTouches.length > 0) {
-            endX = e.changedTouches[0].clientX;
-            endY = e.changedTouches[0].clientY;
-        }
-        touchStart = null;
-
-        if (clickOnly) {
-            captureFull();
-            return;
-        }
-
-        cleanupOverlay();
-
-        var vw = Math.abs(endX - sx);
-        var vh = Math.abs(endY - sy);
-        if (vw < 12 || vh < 12) return;
-
-        var p1 = clientToImage(sx, sy);
-        var p2 = clientToImage(endX, endY);
-        var cropX = Math.max(0, Math.min(p1.x, p2.x));
-        var cropY = Math.max(0, Math.min(p1.y, p2.y));
-        var cropW = Math.abs(p2.x - p1.x);
-        var cropH = Math.abs(p2.y - p1.y);
-        if (cropW < 8 || cropH < 8) return;
-
-        doCrop(cropX, cropY, cropW, cropH);
-    }, { passive: true });
-
-    // ESC 取消
-    function onKey(e) {
-        if (e.key === 'Escape') {
-            cleanupOverlay();
-            toast('截图已取消', 'info');
-        }
-    }
-    document.addEventListener('keydown', onKey);
-}
-
-
-
-
-// ── DAG 工作流可视化卡片 ──
-// 在聊天流中插入 DAG SVG 缩略图，每 2 秒自动刷新状态
-// _dagTimers: { viz_id -> intervalId } 用于管理刷新定时器
-var _dagTimers = {};
-
-function insertDagCard(bubble, bubbleText, vizId) {
-    // 去重：如果已经存在相同 viz_id 的卡片，先移除旧的
-    var existing = bubble.querySelector('.dag-card[data-viz-id="' + escAttr(vizId) + '"]');
-    if (existing) {
-        existing.remove();
-        if (_dagTimers[vizId]) {
-            clearInterval(_dagTimers[vizId]);
-            delete _dagTimers[vizId];
-        }
-    }
-
-    var card = document.createElement('div');
-    card.className = 'dag-card';
-    card.setAttribute('data-viz-id', vizId);
-    card.title = '双击在新标签页中打开完整 DAG 视图';
-    card.style.cursor = 'pointer';
-
-    // 标题栏
-    var header = document.createElement('div');
-    header.className = 'dag-card-header';
-    header.innerHTML = '<span class="dag-card-icon">🔀</span><span>DAG 工作流</span><a href="/dag/' + encodeURIComponent(vizId) + '" target="_blank" class="dag-card-link" title="在新标签页中打开">🔗</a>';
-    card.appendChild(header);
-
-    // SVG 图片（带缓存破坏参数，确保每次刷新获取最新状态）
-    var img = document.createElement('img');
-    img.className = 'dag-card-img';
-    img.src = '/dag/' + encodeURIComponent(vizId) + '/image?format=svg&t=' + Date.now();
-    img.alt = 'DAG Workflow';
-    img.onerror = function() { this.style.display = 'none'; };
-    card.appendChild(img);
-
-    // 自动刷新：每 2 秒更新一次（DAG 状态变化时实时反映）
-    _dagTimers[vizId] = setInterval(function() {
-        var imgs = card.querySelectorAll('.dag-card-img');
-        for (var i = 0; i < imgs.length; i++) {
-            imgs[i].src = '/dag/' + encodeURIComponent(vizId) + '/image?format=svg&t=' + Date.now();
-        }
-    }, 2000);
-
-    // 双击打开完整 DAG 页面
-    card.addEventListener('dblclick', function() {
-        window.open('/dag/' + encodeURIComponent(vizId), '_blank');
-    });
-
-    // 插入到 bubble 中（在 bubbleText 之前）
-    bubble.insertBefore(card, bubbleText);
-
-    // 卡片关闭时清理定时器（如果卡片被移除）
-    var observer = new MutationObserver(function(mutations) {
-        mutations.forEach(function(mut) {
-            for (var j = 0; j < mut.removedNodes.length; j++) {
-                if (mut.removedNodes[j] === card) {
-                    if (_dagTimers[vizId]) {
-                        clearInterval(_dagTimers[vizId]);
-                        delete _dagTimers[vizId];
-                    }
-                    observer.disconnect();
-                    return;
-                }
-            }
-        });
-    });
-    observer.observe(bubble, { childList: true });
-}
-
-// ── 监听用户在 messages 区域的手动滚动 ──
-function _initScrollTracking() {
-    const m = $('messages');
-    if (!m) return;
-    m.addEventListener('scroll', function() {
-        _userNearBottom = _isNearBottom();
-    }, { passive: true });
-}
-
-// -- Init --
-async function initApp() {
-    await refreshTopics();
-    await loadConfigSwitcher();
-    checkVisionSupport();
-    checkConfigStatus();
-    _initScrollTracking();
-    // 自动选中最近的主题，避免空 topic_id 导致刷新后创建多余的 "Web Session"
-    const list = document.getElementById('topic-list');
-    if (list) {
-        const first = list.querySelector('.topic-item');
-        if (first && !currentTopicId) {
-            first.click();
-        }
-    }
-    $('chat-input').focus();
-}
-initApp();
-// Init splitters after DOM ready
-initSplitter('sidebar-splitter', 'sidebar', 'h');
-initSplitter('vsplitter', 'input-row', 'v');
-initSplitter('task-panel-splitter', 'task-panel', 'h');
 })();
-

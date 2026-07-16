@@ -243,6 +243,9 @@ class TkGUI(Agent):
         # 加载状态
         self._progress_queue: list[tuple] = []
         self._loading_done = False
+
+        # 消息排队：生成中时入队，完成后自动发送
+        self._message_queue: list[dict] = []
         self._pending_render: list | None = None
         self._pending_error: str | None = None
 
@@ -1014,22 +1017,70 @@ class TkGUI(Agent):
         return "break"
 
     def send(self, e=None):
-        """发送用户消息 — 线程安全版（原子 check-and-set generating）"""
-        # 原子操作：检查并设置 generating，避免竞态条件
-        with self._generating_lock:
-            if self._generating or not self.current_topic_id:
-                return "break"
-            self._generating = True
+        """发送用户消息 — 线程安全版（原子 check-and-set generating + 消息排队）
 
+        当 AI 正在生成时，消息入队等待，当前响应完成后自动发送排队消息。
+        """
         msg = self.input_box.get("1.0", tk.END).strip()
         # 允许仅有图片无文本的情况
         images = list(self._pending_images)
-        self.images.clear()  # 发送后清空
+        self.images.clear()  # 清空图片（排队或发送后都清空）
+
+        # 原子操作：检查并设置 generating，避免竞态条件
+        with self._generating_lock:
+            if not self.current_topic_id:
+                return "break"
+            if self._generating:
+                # 生成中：入队排队，不清空输入框文本（方便用户继续编辑）
+                if msg or images:
+                    self._message_queue.append({"text": msg, "images": images})
+                    qlen = len(self._message_queue)
+                    self._update_status(f"⏳ 消息已排队（队列中 {qlen} 条）")
+                    # 清空输入框（表示消息已接收）
+                    self.input_box.delete("1.0", tk.END)
+                return "break"
+            self._generating = True
+
         if not msg and not images:
             self.generating = False  # 回退状态
             return "break"
         self.input_box.delete("1.0", tk.END)
 
+        self._execute_send(msg, images)
+        return "break"
+
+    def _process_queue(self):
+        """处理消息队列：取出第一条排队消息并自动发送。
+
+        由 _on_generation_done() 在生成结束后调用。
+        若队列为空，什么都不做。
+        """
+        if not self._message_queue:
+            return
+
+        # 原子检查 generating 状态（防止并发调用）
+        with self._generating_lock:
+            if self._generating:
+                return  # 已在生成中，等一下再试
+            self._generating = True
+
+        item = self._message_queue.pop(0)
+        msg = item.get("text", "")
+        images = item.get("images", [])
+
+        if not msg and not images:
+            self.generating = False
+            self._process_queue()  # 继续处理下一条（递归）
+            return
+
+        qlen = len(self._message_queue)
+        suffix = f"（队列中还剩 {qlen} 条）" if qlen > 0 else ""
+        self._update_status(f"📨 发送排队消息{suffix}")
+
+        self._execute_send(msg, images)
+
+    def _execute_send(self, msg: str, images: list):
+        """发送消息的内部执行体（generating 标志已设置）"""
         self._switch_display("console")
 
         display_msg = f"你：{msg}" if msg else "你：[图片]"
@@ -1600,25 +1651,33 @@ class TkGUI(Agent):
                      on_switch_topic=lambda tid: self.root.after(0, self.switch_topic, tid))
 
     def _on_generation_done(self):
-        """主线程回调：标记生成完成（避免跨线程写 generating）"""
+        """主线程回调：标记生成完成（避免跨线程写 generating）并处理排队消息"""
         self.generating = False
+        # 处理消息队列：若有排队消息，自动发送下一条
+        self._process_queue()
         # AI 生成完成后检查任务面板（Plan + TODO），延迟确保渲染已完成
         self.root.after(500, self._check_and_show_todo)
 
     def interrupt(self, e=None):
-        """打断当前 AI 生成 — 线程安全版"""
+        """打断当前 AI 生成 — 线程安全版（同时清空消息队列）"""
         # 原子检查并重置 generating
         with self._generating_lock:
             if not self._generating:
                 return
             self._generating = False
 
+        # 清空消息队列
+        qlen = len(self._message_queue)
+        if qlen > 0:
+            self._message_queue.clear()
+            self.safe_log(f"\n🛑 已打断，清空 {qlen} 条排队消息", "tool")
+        else:
+            self.safe_log("\n🛑 已打断", "tool")
+
         # 安全访问 sess（可能为 None）
         sess = self.sess
         if sess is not None:
             sess.interrupt()
-
-        self.safe_log("\n🛑 已打断", "tool")
         # 先刷新控制台剩余内容，再 flush 到 messages
         if self._pending_console_text:
             self.console.config(state=tk.NORMAL)

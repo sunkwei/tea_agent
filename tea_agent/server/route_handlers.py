@@ -733,9 +733,9 @@ async def handle_web_update_config(request):
 async def handle_web_list_configs(request):
     """GET /api/configs"""
     server = get_server()
-    result = server.list_config_files(check_valid=True)
-    configs = result["configs"]
-    any_valid = result["any_valid"]
+    # ⚠️ 必须先获取 active_config_path，再调用 list_config_files！
+    # list_config_files 内部遍历所有 yaml 文件并调用 load_config()，
+    # 这会污染全局 _last_config_path，导致后续 get_agent() 获取错误的配置路径。
     active_config_path = ""
     active_config_filename = ""
     try:
@@ -745,6 +745,9 @@ async def handle_web_list_configs(request):
             active_config_filename = Path(active_config_path).name
     except Exception:
         pass
+    result = server.list_config_files(check_valid=True)
+    configs = result["configs"]
+    any_valid = result["any_valid"]
     return JSONResponse({
         "configs": configs,
         "count": len(configs),

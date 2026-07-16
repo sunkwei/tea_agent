@@ -88,7 +88,7 @@ _SMALL_MODEL_PATTERNS = [
     "tiny", "small", "mini", "nano", "pico",
     "phi-1", "phi-2",
     "deepseek-coder-1.3b",
-    "qwen-1", "qwen-2",  # Qwen 系列 1.8B/4B/7B
+    "qwen-1-", "qwen-2-",  # Qwen 系列小模型 (qwen2-0.5b/1.5b/7b)，避免误匹配 qwen-2.5
     "gemma-2b", "gemma-7b",
     "llama-2-7b", "llama-3.2-1b", "llama-3.2-3b",
     "mistral-7b",

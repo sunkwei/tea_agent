@@ -636,8 +636,15 @@ async def handle_web_topic_todo_update(request):
 
 
 async def handle_web_topic_plans(request):
-    """GET /api/topic/{topic_id}/plans — 获取当前话题的执行计划"""
+    """GET /api/topic/{topic_id}/plans — 获取当前话题的执行计划
+    Query params:
+      status=active (默认): running/paused/created
+      status=all: 全部计划
+      status=done: 仅已完成
+      status=failed: 仅失败
+    """
     topic_id = request.path_params.get("topic_id", "")
+    status_filter = (request.query_params.get("status", "active") or "active").strip().lower()
     plans_dir = ".tea_agent_run/plans"
     import json, os
     plans = []
@@ -650,7 +657,15 @@ async def handle_web_topic_plans(request):
                 with open(fpath, encoding="utf-8") as f:
                     p = json.load(f)
                 if p.get("topic_id") == topic_id or p.get("topic_id") == "" or not topic_id:
-                    plans.append(p)
+                    plan_status = (p.get("status") or "").lower()
+                    if status_filter == "all":
+                        plans.append(p)
+                    elif status_filter == "done" and plan_status == "done":
+                        plans.append(p)
+                    elif status_filter == "failed" and plan_status == "failed":
+                        plans.append(p)
+                    elif status_filter == "active" and plan_status not in ("done", "failed"):
+                        plans.append(p)
     except Exception as e:
         logger.warning(f"handle_web_topic_plans failed: {e}")
     return JSONResponse({"data": plans, "total": len(plans)})
@@ -973,23 +988,18 @@ async def handle_web_upload_config(request):
 
 async def handle_web_root(request):
     """GET / - serve Web UI index.html."""
-    # Try gui2/frontend/index.html first (primary source), fall back to server/static/index.html
-    candidates = [
-        Path(__file__).parent.parent / "gui2" / "frontend" / "index.html",
-        Path(__file__).parent / "static" / "index.html",
-    ]
-    for index_path in candidates:
-        if index_path.exists():
-            content = index_path.read_bytes()
-            return Response(
-                content=content,
-                media_type="text/html",
-                headers={
-                    "Cache-Control": "no-cache, no-store, must-revalidate",
-                    "Pragma": "no-cache",
-                    "Expires": "0",
-                },
-            )
+    index_path = Path(__file__).parent / "static" / "index.html"
+    if index_path.exists():
+        content = index_path.read_bytes()
+        return Response(
+            content=content,
+            media_type="text/html",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
     return HTMLResponse("<h1>Tea Agent Server</h1><p>Web UI not found. Visit <a href='/docs'>/docs</a> for API.</p>")
 
 
@@ -1159,6 +1169,18 @@ async def handle_dag_image(request):
         return JSONResponse({"error": str(e)}, status_code=500)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def handle_restart(request):
+    """POST /api/restart — spawn 新进程 + graceful shutdown 当前进程。
+
+    用于 server 自我更新后重启，无需人工介入。
+    """
+    from .server import restart_server
+
+    result = restart_server()
+    status = 200 if result.get("ok") else 500
+    return JSONResponse(result, status_code=status)
 
 
 # ================================================================

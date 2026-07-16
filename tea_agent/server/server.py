@@ -1178,12 +1178,59 @@ class APIServer:
 
 
 _server_instance: APIServer | None = None
+# 保存启动参数和 uvicorn Server 实例，供 restart 使用
+_server_args: list[str] = []
+_uvicorn_server: "uvicorn.Server | None" = None
+
 
 def get_server() -> APIServer:
     global _server_instance
     if _server_instance is None:
         _server_instance = APIServer()
     return _server_instance
+
+
+def restart_server() -> dict:
+    """Spawn 新进程（相同参数），然后触发当前 uvicorn graceful shutdown。
+
+    调用时机：POST /api/restart 时由 route handler 调用。
+    返回：{ok: bool, message: str}
+    """
+    import subprocess, sys, time
+    global _uvicorn_server, _server_args
+
+    try:
+        # 1. 构造启动命令
+        if _server_args:
+            cmd = [sys.executable] + _server_args
+        else:
+            # 回退：用 -m tea_agent.server + 已保存的 host/port
+            cmd = [sys.executable, "-m", "tea_agent.server"]
+
+        logger.info(f"Restart: spawning new process: {cmd}")
+
+        # 2. Spawn 新进程（detached，不阻塞）
+        subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
+        )
+
+        # 3. 延迟触发 shutdown（给新进程时间启动）
+        def _delayed_shutdown():
+            time.sleep(1.5)  # 等新进程 ready
+            if _uvicorn_server:
+                logger.info("Restart: triggering uvicorn graceful shutdown")
+                _uvicorn_server.should_exit = True
+
+        threading.Thread(target=_delayed_shutdown, daemon=True).start()
+
+        return {"ok": True, "message": "Server restart initiated"}
+    except Exception as e:
+        logger.exception(f"Restart failed: {e}")
+        return {"ok": False, "message": str(e)}
 
 
 def create_app(api_key: str | None = None,
@@ -1242,6 +1289,7 @@ def create_app(api_key: str | None = None,
         handle_web_topic_plans,
         handle_web_update_config,
         handle_web_upload_config,
+        handle_restart,
     )
 
     global _server_instance
@@ -1274,6 +1322,7 @@ def create_app(api_key: str | None = None,
         Route("/api/model", endpoint=handle_web_model_switch, methods=["POST"]),
         Route("/api/model/config", endpoint=handle_web_model_config, methods=["POST"]),
         Route("/api/config/upload", endpoint=handle_web_upload_config, methods=["POST"]),
+        Route("/api/restart", endpoint=handle_restart, methods=["POST"]),
         Route("/health", endpoint=handle_health),
         Route("/v1/chat/completions", endpoint=handle_chat_completions, methods=["POST"]),
         Route("/v1/models", endpoint=handle_list_models),
@@ -1304,12 +1353,56 @@ def create_app(api_key: str | None = None,
         Mount("/static", app=StaticFiles(directory=static_dir), name="static"),
     ]
 
-    logger.info(f"API Server initialized | v{__version__}")
-    app = Starlette(debug=False, routes=routes)
+    # ── API Key 认证中间件 ──
+    # 如果设置了 api_key，所有 API 路由都需要验证
+    server_api_key = _server_instance._api_key if _server_instance else ""
 
-    frontend_dir = Path(__file__).parent.parent / "gui2" / "frontend"
-    if frontend_dir.exists():
-        logger.info(f"Frontend (gui2): {frontend_dir}")
+    class AuthMiddleware:
+        """Starlette ASGI middleware: 验证 API Key（Bearer / X-API-Key）。"""
+        _SKIP_PATHS = {"/health", "/docs", "/openapi.json", "/", "/static"}
+
+        def __init__(self, app, api_key: str):
+            self.app = app
+            self.api_key = api_key
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http":
+                await self.app(scope, receive, send)
+                return
+
+            path = scope.get("path", "")
+            # 跳过公开路径和静态文件
+            if path in self._SKIP_PATHS or path.startswith("/static"):
+                await self.app(scope, receive, send)
+                return
+
+            # 提取认证头
+            headers = dict(scope.get("headers", []))
+            auth_header = headers.get(b"authorization", b"").decode()
+            x_api_key = headers.get(b"x-api-key", b"").decode()
+
+            token = ""
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:]
+            elif x_api_key:
+                token = x_api_key
+
+            if token != self.api_key:
+                response = JSONResponse(
+                    {"error": "Unauthorized: invalid or missing API key"},
+                    status_code=401,
+                )
+                await response(scope, receive, send)
+                return
+
+            await self.app(scope, receive, send)
+
+    app = Starlette(debug=False, routes=routes)
+    if server_api_key:
+        app.add_middleware(AuthMiddleware, api_key=server_api_key)
+        logger.info("API Key 认证中间件已启用")
+
+    logger.info(f"API Server initialized | v{__version__}")
 
     return app
 
@@ -1318,6 +1411,7 @@ def run_server(host: str = "127.0.0.1", port: int = 8080,
                api_key: str | None = None,
                config_path: str | None = None):
     """Run the API server."""
+    import sys
     try:
         import uvicorn
     except ImportError:
@@ -1329,13 +1423,22 @@ def run_server(host: str = "127.0.0.1", port: int = 8080,
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("api_server").setLevel(logging.INFO)
 
+    # 保存启动参数，供 restart 使用
+    global _server_args
+    _server_args = list(sys.argv)
+
     app = create_app(api_key=api_key, config_path=config_path)
     print(f"\n  Tea Agent Server v{__version__}")
     if api_key:
         logger.info("API Key auth enabled")
     logger.info(f"API Server starting: http://{host}:{port}")
     logger.info(f"API Docs: http://{host}:{port}/docs")
-    uvicorn.run(app, host=host, port=port, log_level="info")
+
+    # 使用 uvicorn.Server 实例（而非 uvicorn.run），以便 restart 时触发 graceful shutdown
+    config = uvicorn.Config(app, host=host, port=port, log_level="info")
+    global _uvicorn_server
+    _uvicorn_server = uvicorn.Server(config)
+    _uvicorn_server.run()
 
 
 # ── CLI Entry ──

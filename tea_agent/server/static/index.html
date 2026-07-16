@@ -333,6 +333,80 @@ body {
 .dag-node-dot.dot-skipped { background: #484f58; }
 @keyframes dag-pulse { from { opacity: 0.5; } to { opacity: 1; } }
 .dag-node-label { max-width: 100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* ── DAG 缩略图（任务面板内） ── */
+.dag-img-wrap {
+    position: relative;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 4px 0;
+    transition: border-color 0.2s;
+}
+.dag-img-wrap:hover { border-color: var(--primary-dim); }
+.dag-img-thumb {
+    width: 100%;
+    display: block;
+    min-height: 100px;
+    object-fit: contain;
+    background: var(--bg);
+}
+.dag-img-hint {
+    position: absolute;
+    bottom: 4px;
+    right: 6px;
+    font-size: 10px;
+    color: var(--text-dim);
+    background: rgba(13,17,23,.75);
+    padding: 1px 6px;
+    border-radius: 3px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.dag-img-wrap:hover .dag-img-hint { opacity: 1; }
+/* ── DAG 灯箱（双击放大） ── */
+.dag-lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.85);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    cursor: zoom-out;
+}
+.dag-lightbox.open { display: flex; }
+.dag-lightbox-img {
+    max-width: 95vw;
+    max-height: 95vh;
+    object-fit: contain;
+    cursor: default;
+    box-shadow: 0 0 60px rgba(0,0,0,.6);
+    border-radius: 4px;
+}
+.dag-lightbox-close {
+    position: absolute;
+    top: 16px;
+    right: 24px;
+    font-size: 32px;
+    color: #c9d1d9;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+.dag-lightbox-close:hover { opacity: 1; }
+.dag-lightbox-title {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #8b949e;
+    font-size: 13px;
+    background: rgba(22,27,34,.8);
+    padding: 4px 14px;
+    border-radius: 12px;
+}
 /* ── Plan Cards ── */
 .tp-plan-card {
     border: 1px solid var(--border);
@@ -371,6 +445,19 @@ body {
 .tp-step-item .step-desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .tp-step-item.done { color: #888; }
 .tp-step-item.done .step-desc { text-decoration: line-through; }
+.tp-plan-failed { border-color: rgba(255,80,80,.35); background: rgba(255,60,60,.06); }
+.tp-plan-archive-group { margin-top: 8px; }
+.tp-plan-archive-hdr {
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 4px 0;
+    user-select: none;
+    transition: color .15s;
+}
+.tp-plan-archive-hdr:hover { color: var(--primary-dim); }
+.tp-archive-arrow { display: inline-block; width: 14px; font-size: 10px; }
+.tp-plan-archive-body { padding-top: 2px; }
 .tp-step-item.failed .step-desc { color: var(--red); }
 .tp-empty {
     font-size: 12px;
@@ -994,9 +1081,18 @@ body {
       <div class="tp-section" id="tp-dag-section" style="display:none">
         <div class="tp-section-title" style="display:flex;align-items:center;justify-content:space-between">
           <span>📊 DAG 工作流</span>
-          <span class="dag-close-btn" style="cursor:pointer;font-size:14px;color:var(--text-dim);padding:0 4px" onclick="closeDagView()">✕</span>
+          <span style="cursor:pointer;font-size:14px;color:var(--text-dim);padding:0 4px" onclick="closeDagView()" title="关闭 DAG 视图">✕</span>
         </div>
-        <div id="tp-dag-container"></div>
+        <div id="tp-dag-status" class="dag-status-bar">
+          <span id="dag-badge" class="dag-status-badge badge-pending">PENDING</span>
+          <span id="dag-progress" class="dag-status-progress">0/0</span>
+          <span id="dag-timer" class="dag-status-timer">00:00</span>
+        </div>
+        <div id="tp-dag-nodes" class="dag-node-list"></div>
+        <div id="tp-dag-img-wrap" class="dag-img-wrap" title="双击放大">
+          <img id="tp-dag-img" class="dag-img-thumb" src="" alt="DAG 流程图" ondblclick="openDagLightbox()">
+          <div class="dag-img-hint">双击查看大图</div>
+        </div>
       </div>
     </div>
   </div>
@@ -1773,37 +1869,37 @@ window.sendMessage = async function() {
 
             case 'dag_viz':
               removeLoading();
-              // DAG 可视化 — IFRAME 画布 + 1秒轮询状态
+              // DAG 可视化 — SVG 缩略图 + 灯箱 + 轮询状态
               (function() {
                 const vizId = data.viz_id;
                 if (!vizId) return;
-                const container = $('tp-dag-container');
                 const section = $('tp-dag-section');
-                if (!container || !section) return;
-                // 避免重复
-                if (container.querySelector('.dag-viz-iframe')) return;
+                const imgWrap = $('tp-dag-img-wrap');
+                if (!section || !imgWrap) return;
+                // 避免重复初始化
+                if (window._dagVizId === vizId) return;
+                // 停止旧的轮询（如果有）
+                if (window._dagStopPoll) { window._dagStopPoll(); window._dagStopPoll = null; }
+                window._dagVizId = vizId;
 
-                // ── 状态栏（轮询驱动） ──
-                const statusBar = document.createElement('div');
-                statusBar.className = 'dag-status-bar';
-                statusBar.innerHTML = '<span class="dag-status-badge badge-pending">⏳ PENDING</span> ' +
-                  '<span class="dag-status-progress">0/0</span> ' +
-                  '<span class="dag-status-timer">00:00</span>';
-                container.appendChild(statusBar);
-
-                // ── 节点进度紧凑列表 ──
-                const nodeList = document.createElement('div');
-                nodeList.className = 'dag-node-list';
-                container.appendChild(nodeList);
-
-                // ── IFRAME 画布（保留） ──
-                const iframe = document.createElement('iframe');
-                iframe.className = 'dag-viz-iframe';
-                iframe.src = '/dag/' + vizId;
-                iframe.style.cssText = 'width:100%;height:260px;border:none;display:block;border-radius:4px;';
-                container.appendChild(iframe);
-
+                // 显示 DAG 区域
                 section.style.display = '';
+                imgWrap.style.display = '';
+                // 重置状态栏
+                const badge = $('dag-badge');
+                const progress = $('dag-progress');
+                const timer = $('dag-timer');
+                if (badge) { badge.textContent = 'PENDING'; badge.className = 'dag-status-badge badge-pending'; }
+                if (progress) progress.textContent = '0/0';
+                if (timer) timer.textContent = '00:00';
+
+                // ── SVG 缩略图 ──
+                const dagImg = $('tp-dag-img');
+                if (dagImg) {
+                  dagImg.src = '/dag/' + vizId + '/image?format=svg&t=' + Date.now();
+                  dagImg.ondblclick = function() { openDagLightbox(); };
+                }
+
                 // 自动打开任务面板
                 if (!_taskPanelOpen) toggleTaskPanel();
 
@@ -1820,9 +1916,6 @@ window.sendMessage = async function() {
                     const state = snap.state;
 
                     // 更新状态栏
-                    const badge = statusBar.querySelector('.dag-status-badge');
-                    const progress = statusBar.querySelector('.dag-status-progress');
-                    const timer = statusBar.querySelector('.dag-status-timer');
                     if (badge) {
                       badge.textContent = state.toUpperCase();
                       badge.className = 'dag-status-badge badge-' + state;
@@ -1836,7 +1929,18 @@ window.sendMessage = async function() {
                     }
 
                     // 更新节点列表
-                    renderDagNodeList(nodeList, snap);
+                    renderDagNodeList($('tp-dag-nodes'), snap);
+
+                    // 刷新 SVG 缩略图（cache-busting）
+                    if (dagImg) {
+                      dagImg.src = '/dag/' + vizId + '/image?format=svg&t=' + Date.now();
+                    }
+
+                    // 更新灯箱标题
+                    const lbTitle = $('dag-lightbox-title');
+                    if (lbTitle) {
+                      lbTitle.textContent = (snap.title || 'DAG') + ' · ' + state.toUpperCase() + ' · ' + done + '/' + total;
+                    }
 
                     // 完成/失败/取消时停止轮询
                     if (state === 'completed' || state === 'failed' || state === 'cancelled') {
@@ -1846,7 +1950,9 @@ window.sendMessage = async function() {
                 };
                 const stopPolling = function() {
                   if (_dagPollTimer) { clearInterval(_dagPollTimer); _dagPollTimer = null; }
+                  window._dagStopPoll = null;
                 };
+                window._dagStopPoll = stopPolling;
                 _dagPoll();  // 立即首次
                 _dagPollTimer = setInterval(_dagPoll, 1000);
 
@@ -1854,6 +1960,7 @@ window.sendMessage = async function() {
                 const origClose = window.closeDagView;
                 window.closeDagView = function() {
                   stopPolling();
+                  window._dagVizId = null;
                   origClose();
                   window.closeDagView = origClose;
                 };
@@ -2079,10 +2186,55 @@ document.addEventListener('click', function(e) {
 
 window.closeDagView = function() {
   const section = $('tp-dag-section');
-  const container = $('tp-dag-container');
-  if (container) container.innerHTML = '';
   if (section) section.style.display = 'none';
+  // 清除缩略图
+  const dagImg = $('tp-dag-img');
+  if (dagImg) dagImg.src = '';
+  // 隐藏缩略图区域
+  const imgWrap = $('tp-dag-img-wrap');
+  if (imgWrap) imgWrap.style.display = 'none';
+  // 清除节点列表
+  const nodes = $('tp-dag-nodes');
+  if (nodes) nodes.innerHTML = '';
+  // 重置状态栏
+  const badge = $('dag-badge');
+  const progress = $('dag-progress');
+  const timer = $('dag-timer');
+  if (badge) { badge.textContent = 'PENDING'; badge.className = 'dag-status-badge badge-pending'; }
+  if (progress) progress.textContent = '0/0';
+  if (timer) timer.textContent = '00:00';
+  // 清除全局 viz_id
+  window._dagVizId = null;
+  // 停止轮询
+  if (window._dagStopPoll) { window._dagStopPoll(); window._dagStopPoll = null; }
 };
+
+// ── DAG 灯箱（双击放大） ──
+window.openDagLightbox = function() {
+  const lb = $('dag-lightbox');
+  const lbImg = $('dag-lightbox-img');
+  const dagImg = $('tp-dag-img');
+  if (!lb || !lbImg || !dagImg || !dagImg.src) return;
+  lbImg.src = dagImg.src.replace(/&t=\d+/, '&t=' + Date.now());
+  lb.classList.add('open');
+  document.body.style.overflow = 'hidden';
+};
+
+window.closeDagLightbox = function() {
+  const lb = $('dag-lightbox');
+  if (lb) lb.classList.remove('open');
+  document.body.style.overflow = '';
+};
+
+// 键盘 Esc 关闭灯箱
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const lb = $('dag-lightbox');
+    if (lb && lb.classList.contains('open')) {
+      closeDagLightbox();
+    }
+  }
+});
 
 // DAG 节点列表渲染（轮询驱动）
 window.renderDagNodeList = function(container, snap) {
@@ -2133,7 +2285,7 @@ window.refreshTaskPanel = async function() {
   }
   try {
     const [planResp, todoResp] = await Promise.all([
-      fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/plans'),
+      fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/plans?status=all'),
       fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/todos'),
     ]);
 
@@ -2144,34 +2296,74 @@ window.refreshTaskPanel = async function() {
     if (planResp.ok) {
       const planData = await planResp.json();
       plans = planData.data || [];
-      if (plans.length === 0) {
+      // 分组：活跃 (running/paused/created) vs 已归档 (done/failed)
+      const activePlans = [];
+      const archivedPlans = [];
+      for (const plan of plans) {
+        const st = plan.status || '';
+        if (st === 'done' || st === 'failed') {
+          archivedPlans.push(plan);
+        } else {
+          activePlans.push(plan);
+        }
+      }
+      if (activePlans.length === 0 && archivedPlans.length === 0) {
         planList.innerHTML = '<div class="tp-empty">(暂无计划)</div>';
       } else {
-        let html = '';
-        for (const plan of plans) {
+        const statusIconMap = {
+          done: '✅', failed: '❌', running: '🔄',
+          paused: '⏸️', created: '📋', pending: '⬜'
+        };
+        const renderPlanCard = function(plan) {
           const steps = plan.steps || [];
           const doneSteps = steps.filter(function(s) { return s.status === 'done'; }).length;
           const totalSteps = steps.length;
           const goalText = (plan.goal || '无目标').slice(0, 80);
-          const statusIcon = plan.status === 'done' ? '✅' : (plan.status === 'running' ? '🔄' : '📋');
-          html += '<div class="tp-plan-card">';
-          html += '<div class="tp-plan-card-header">';
-          html += '<span>' + statusIcon + '</span>';
-          html += '<span>' + esc(goalText) + '</span>';
-          html += '<span class="tp-plan-card-progress">' + doneSteps + '/' + totalSteps + '</span>';
-          html += '</div>';
+          const statusIcon = statusIconMap[plan.status] || '📋';
+          let card = '<div class="tp-plan-card';
+          if (plan.status === 'failed') card += ' tp-plan-failed';
+          card += '">';
+          card += '<div class="tp-plan-card-header">';
+          card += '<span>' + statusIcon + '</span>';
+          card += '<span>' + esc(goalText) + '</span>';
+          card += '<span class="tp-plan-card-progress">' + doneSteps + '/' + totalSteps + '</span>';
+          card += '</div>';
           for (const step of steps) {
             const sStatus = step.status || 'pending';
             const iconMap = { done: '✅', failed: '❌', running: '▶️', pending: '⬜', skipped: '⏭️' };
             const sIcon = iconMap[sStatus] || '❓';
             const sDesc = (step.desc || '').slice(0, 100);
             const sCls = sStatus === 'done' ? 'done' : (sStatus === 'failed' ? 'failed' : '');
-            html += '<div class="tp-step-item ' + sCls + '">';
-            html += '<span class="step-icon">' + sIcon + '</span>';
-            html += '<span class="step-desc">' + esc(sDesc) + '</span>';
-            html += '</div>';
+            card += '<div class="tp-step-item ' + sCls + '">';
+            card += '<span class="step-icon">' + sIcon + '</span>';
+            card += '<span class="step-desc">' + esc(sDesc) + '</span>';
+            card += '</div>';
+          }
+          card += '</div>';
+          return card;
+        };
+
+        let html = '';
+        // 活跃计划
+        if (activePlans.length > 0) {
+          html += '<div class="tp-plan-active-section">';
+          for (const plan of activePlans) {
+            html += renderPlanCard(plan);
           }
           html += '</div>';
+        }
+        // 已归档（done/failed），默认折叠
+        if (archivedPlans.length > 0) {
+          html += '<div class="tp-plan-archive-group" id="tp-plan-archive-group">';
+          html += '<div class="tp-plan-archive-hdr" onclick="toggleArchive()">';
+          html += '<span class="tp-archive-arrow" id="tp-archive-arrow">▶</span> ';
+          html += '<span>已归档 (' + archivedPlans.length + ')</span>';
+          html += '</div>';
+          html += '<div class="tp-plan-archive-body" id="tp-plan-archive-body" style="display:none">';
+          for (const plan of archivedPlans) {
+            html += renderPlanCard(plan);
+          }
+          html += '</div></div>';
         }
         planList.innerHTML = html;
       }
@@ -2222,6 +2414,20 @@ window.refreshTaskPanel = async function() {
 
   } catch(e) {
     // 静默失败
+  }
+};
+
+/** 展开/折叠已归档 Plan */
+window.toggleArchive = function() {
+  const body = $('tp-plan-archive-body');
+  const arrow = $('tp-archive-arrow');
+  if (!body || !arrow) return;
+  if (body.style.display === 'none') {
+    body.style.display = 'block';
+    arrow.textContent = '▼';
+  } else {
+    body.style.display = 'none';
+    arrow.textContent = '▶';
   }
 };
 
@@ -2814,5 +3020,12 @@ window.toast = toast;
 
 })();
 </script>
+<!-- ═══ DAG 灯箱（双击放大） ═══ -->
+<div id="dag-lightbox" class="dag-lightbox" onclick="closeDagLightbox()">
+  <span class="dag-lightbox-close" onclick="closeDagLightbox()">&times;</span>
+  <img id="dag-lightbox-img" class="dag-lightbox-img" src="" alt="DAG 全图" onclick="event.stopPropagation()">
+  <div id="dag-lightbox-title" class="dag-lightbox-title"></div>
+</div>
+
 </body>
 </html>

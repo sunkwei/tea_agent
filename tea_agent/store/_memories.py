@@ -251,13 +251,18 @@ class MemoryStore(StoreComponent):
                 return None
         return None
 
-    def batch_get_embeddings(self, limit: int = 200) -> list[dict]:
-        """批量获取有 embedding 的活跃记忆（用于相似度扫描）。"""
+    def batch_get_embeddings(self, limit: int = 500, offset: int = 0) -> list[dict]:
+        """批量获取有 embedding 的活跃记忆（用于相似度扫描，支持分页）。
+
+        Args:
+            limit: 每批数量，默认 500
+            offset: 偏移量，用于分页
+        """
         c = self.conn.cursor()
         c.execute(
             "SELECT id, content, embedding, priority, importance FROM memories "
             "WHERE is_active = 1 AND embedding IS NOT NULL "
-            "ORDER BY created_at DESC LIMIT ?", (limit,)
+            "ORDER BY created_at DESC LIMIT ? OFFSET ?", (limit, offset)
         )
         rows = c.fetchall()
         c.close()
@@ -276,26 +281,38 @@ class MemoryStore(StoreComponent):
         return results
 
     def search_by_vector(self, query_embedding: list[float], top_k: int = 10,
-                          min_similarity: float = 0.3) -> list[dict]:
-        """基于向量相似度搜索记忆。"""
-        all_mems = self.batch_get_embeddings(limit=200)
-        if not all_mems:
-            return []
+                          min_similarity: float = 0.3,
+                          scan_limit: int = 5000) -> list[dict]:
+        """基于向量相似度搜索记忆（分页扫描，突破 200 硬限制）。
 
+        Args:
+            query_embedding: 查询向量
+            top_k: 返回 Top-K 结果
+            min_similarity: 最低相似度阈值
+            scan_limit: 最大扫描记忆数，默认 5000
+        """
         query_arr = np.array(query_embedding, dtype=np.float32)
         q_norm = np.linalg.norm(query_arr)
         if q_norm == 0:
             return []
 
+        batch_size = 500
         scored = []
-        for mem in all_mems:
-            emb = mem.get("embedding")
-            if not emb or len(emb) != len(query_embedding):
-                continue
-            mem_arr = np.array(emb, dtype=np.float32)
-            sim = float(mem_arr @ query_arr) / (q_norm * np.linalg.norm(mem_arr))
-            if sim >= min_similarity:
-                scored.append({**mem, "similarity": round(sim, 4)})
+        offset = 0
+
+        while offset < scan_limit:
+            batch = self.batch_get_embeddings(limit=batch_size, offset=offset)
+            if not batch:
+                break
+            for mem in batch:
+                emb = mem.get("embedding")
+                if not emb or len(emb) != len(query_embedding):
+                    continue
+                mem_arr = np.array(emb, dtype=np.float32)
+                sim = float(mem_arr @ query_arr) / (q_norm * np.linalg.norm(mem_arr))
+                if sim >= min_similarity:
+                    scored.append({**mem, "similarity": round(sim, 4)})
+            offset += batch_size
 
         scored.sort(key=lambda x: x["similarity"], reverse=True)
         return scored[:top_k]

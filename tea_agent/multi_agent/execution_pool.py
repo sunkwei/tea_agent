@@ -600,7 +600,17 @@ class LoadBalancer:
     ) -> Future:
         """自动选择节点并提交任务。"""
         pool = self.select(task_type=task_type, priority=priority)
-        return pool.submit(fn, *args, priority=priority, name=name, **kwargs)
+        node = self._get_node_for_pool(pool)
+        if node:
+            node._current += 1
+            node._total_submitted += 1
+        future = pool.submit(fn, *args, priority=priority, name=name, **kwargs)
+        if node:
+            def _on_done(f, n=node):
+                n._current = max(0, n._current - 1)
+                n._total_duration += (n.pool.get_task(f.result()) or {}).get("duration", 0) if hasattr(f, 'result') else 0
+            future.add_done_callback(_on_done)
+        return future
 
     def submit_async(
         self,
@@ -613,7 +623,24 @@ class LoadBalancer:
     ) -> Future:
         """自动选择节点并提交异步任务。"""
         pool = self.select(task_type=task_type, priority=priority)
-        return pool.submit_async(coro_fn, *args, priority=priority, name=name, **kwargs)
+        node = self._get_node_for_pool(pool)
+        if node:
+            node._current += 1
+            node._total_submitted += 1
+        future = pool.submit_async(coro_fn, *args, priority=priority, name=name, **kwargs)
+        if node:
+            def _on_done(f, n=node):
+                n._current = max(0, n._current - 1)
+            future.add_done_callback(_on_done)
+        return future
+
+    def _get_node_for_pool(self, pool):
+        # type: (ExecutionPool) -> PoolNode | None
+        """根据 ExecutionPool 实例查找对应的 PoolNode。"""
+        for node in self._nodes.values():
+            if node.pool is pool:
+                return node
+        return None
 
     def status(self) -> dict:
         """返回所有节点的状态。"""

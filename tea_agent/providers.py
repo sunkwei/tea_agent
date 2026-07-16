@@ -226,5 +226,5 @@ def switch_provider(config_path: str, provider_name: str, api_key: str,
             cfg.cheap_model.options["supports_vision"] = str(cp.get("supports_vision", False)).lower()
             cfg.cheap_model.options["supports_reasoning"] = str(cp.get("supports_thinking", False)).lower()
 
-    save_config(config_path, cfg)
+    save_config(cfg, config_path)
     return {"ok": True, "provider": provider_name, "model": cfg.main_model.model_name}

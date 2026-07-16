@@ -101,8 +101,8 @@ def relaxed_json_loads(raw: str):
         fixed = try_fix_truncated_json(s)
         if fixed is not None:
             return json.loads(fixed)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("truncated JSON fix failed: %s", e)
 
     # 全部失败，抛原始异常
     raise json.JSONDecodeError("无法解析 JSON (已尝试多种修复)", raw, 0)
@@ -468,7 +468,8 @@ class BaseChatSession(ABC):
                 if isinstance(arguments, str)
                 else (arguments or {})
             )
-        except Exception:
+        except Exception as e:
+            logger.debug("tool_threshold parse failed: %s", e)
             return BaseChatSession._DEFAULT_TOOL_THRESHOLD
 
         if not isinstance(args, dict):
@@ -748,7 +749,8 @@ class BaseChatSession(ABC):
                         user_entry["images"] = imgs
                 else:
                     user_entry["content"] = raw_user_msg
-            except Exception:
+            except Exception as e:
+                logger.debug("user_msg JSON parse failed, using raw: %s", e)
                 user_entry["content"] = raw_user_msg
         else:
             user_entry["content"] = str(raw_user_msg) if raw_user_msg else ""

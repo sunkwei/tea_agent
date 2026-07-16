@@ -18,7 +18,7 @@ import os
 import threading
 import time
 import uuid
-from typing import Any
+from typing import Any, Optional
 
 from tea_agent.protocol.acp_client_methods import AcpClientMethods
 from tea_agent.protocol.acp_jsonrpc import (
@@ -732,28 +732,36 @@ class AcpAgent:
                 nonlocal stream_failures
                 if cancel_event.is_set():
                     return
-                if text:
+                if not text:
+                    return
+                # 过滤内部协议标记 ([THINK], [THINK_DONE], [TOOL_DONE], [DAG_VIZ:]).
+                # 这些是 Tea Agent 内部的流式协议标记，不应发送给 ACP 客户端。
+                # 参照: agent.py:369, server/server.py:380, _gui/_stream_manager.py:118
+                if (text.startswith("[THINK]") or text == "[THINK_DONE]"
+                        or text == "[TOOL_DONE]" or text.startswith("[DAG_VIZ:")):
                     stream_buffer.append(text)
-                    # Send streaming content block updates (every chunk)
-                    try:
-                        self.client.send_update(
-                            session_id,
-                            "content_block",
-                            content_blocks=[
-                                {
-                                    "type": "text",
-                                    "text": text,
-                                }
-                            ],
+                    return
+                stream_buffer.append(text)
+                # Send streaming content block updates (every chunk)
+                try:
+                    self.client.send_update(
+                        session_id,
+                        "content_block",
+                        content_blocks=[
+                            {
+                                "type": "text",
+                                "text": text,
+                            }
+                        ],
+                    )
+                    stream_failures = 0
+                except Exception as e:
+                    stream_failures += 1
+                    if stream_failures <= 3:
+                        logger.warning(
+                            f"send_update(content_block) failed "
+                            f"({stream_failures}/3): {e}"
                         )
-                        stream_failures = 0
-                    except Exception as e:
-                        stream_failures += 1
-                        if stream_failures <= 3:
-                            logger.warning(
-                                f"send_update(content_block) failed "
-                                f"({stream_failures}/3): {e}"
-                            )
 
             ai_text, tool_calls = self._process_prompt(
                 session_id, full_prompt, cancel_event,
@@ -1234,7 +1242,7 @@ class AcpAgent:
         session_id: str,
         prompt: str,
         cancel_event: threading.Event,
-        stream_callback: callable | None = None,
+        stream_callback: object | None = None,
     ) -> tuple[str, list[dict]]:
         """Process a prompt through the Tea Agent engine.
 
@@ -1264,22 +1272,32 @@ class AcpAgent:
                 nonlocal stream_failures
                 if cancel_event and cancel_event.is_set():
                     return
-                # Accept all text, even if it starts with '['.
-                # Tool-internal markers are harmless to collect.
-                if text:
-                    collected_text.append(text)
-                    if stream_callback:
-                        try:
-                            stream_callback(text)
-                            stream_failures = 0
-                        except Exception:
-                            stream_failures += 1
-                            if stream_failures <= 3:
-                                logger.warning(
-                                    f"stream callback error "
-                                    f"({stream_failures}/3):",
-                                    exc_info=True
-                                )
+                if not text:
+                    return
+                # 过滤内部协议标记: [THINK] 剥离前缀后收集，其他标记不收集也不发送。
+                # 参照: agent.py:369, server/server.py:380, _gui/_stream_manager.py:118
+                is_internal = (
+                    text.startswith("[THINK]") or text == "[THINK_DONE]"
+                    or text == "[TOOL_DONE]" or text.startswith("[DAG_VIZ:")
+                )
+                if is_internal:
+                    if text.startswith("[THINK]"):
+                        collected_text.append(text[7:])  # 剥离 [THINK] 前缀
+                    # 内部标记不传递给外部 stream_callback
+                    return
+                collected_text.append(text)
+                if stream_callback:
+                    try:
+                        stream_callback(text)
+                        stream_failures = 0
+                    except Exception:
+                        stream_failures += 1
+                        if stream_failures <= 3:
+                            logger.warning(
+                                f"stream callback error "
+                                f"({stream_failures}/3):",
+                                exc_info=True
+                            )
 
             # Run the chat
             ai_msg, used = agent.sess.chat_stream(

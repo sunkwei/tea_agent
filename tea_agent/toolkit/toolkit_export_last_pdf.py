@@ -896,6 +896,14 @@ def _make_full_topic_pdf(topic_title, conversations, output_path):
         _render_markdown(pdf, _sanitize(conv["user_msg"]), body_font, code_font, text_color=(50, 50, 50))
         pdf.ln(4)
 
+        # Thinking Process (if filter=full)
+        reasoning_text = conv.get("reasoning_text", "")
+        if reasoning_text.strip():
+            pdf.add_page()
+            _draw_section_header(pdf, f"Thinking Process — Conversation {idx}", body_font,
+                                 symbol="◇", color=(200, 150, 20))
+            _render_markdown(pdf, reasoning_text, body_font, code_font, text_color=(80, 70, 30))
+
         # AI response
         pdf.set_font(body_font, "B", 10)
         pdf.set_text_color(20, 160, 100)
@@ -970,10 +978,20 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
                 user_msg = data.get("text", user_raw) if isinstance(data, dict) else str(data)
             except Exception:
                 user_msg = str(user_raw)
+
+            reasoning_text = ""
+            if filter_mode == "full":
+                rounds_json_raw = conv["rounds_json"]
+                if rounds_json_raw:
+                    with contextlib.suppress(Exception):
+                        rounds_data = json.loads(rounds_json_raw) if isinstance(rounds_json_raw, str) else rounds_json_raw
+                        reasoning_text = _build_full_interactions_md(rounds_data)
+
             conversations.append({
                 "user_msg": _sanitize(user_msg),
                 "ai_msg": _sanitize(conv["ai_msg"]),
                 "stamp": conv["stamp"],
+                "reasoning_text": reasoning_text,
             })
 
         output_path = output_path or f"export_{topic_id[:8]}_full.pdf"

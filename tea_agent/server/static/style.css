@@ -1071,12 +1071,13 @@ body {
 #usage-bar .usage-detail {
   color: var(--text-muted);
 }
-#usage-bar .usage-cost {
-  color: var(--green);
+#usage-bar .usage-model {
+  color: var(--primary);
   font-weight: 600;
 }
-#usage-bar.usage-high .usage-cost {
-  color: var(--red);
+#usage-bar .usage-cheap {
+  color: var(--purple);
+  font-weight: 600;
 }
 #usage-bar:hover {
   background: var(--surface2);

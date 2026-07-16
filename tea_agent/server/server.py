@@ -471,6 +471,7 @@ class APIServer:
             _save_chat_result(storage, session, topic_id, user_msg, ai_msg, used_tools)
             _usage = getattr(session, '_last_usage', None) or {}
             _model = getattr(session.context, 'model', '')
+            _cheap_model = getattr(session.context, 'cheap_model', '')
             put({"type": "done", "ai_msg": ai_msg,
                  "tools_used": used_tools or [],
                  "usage": {
@@ -478,6 +479,7 @@ class APIServer:
                      "prompt_tokens": _usage.get("prompt_tokens", 0),
                      "completion_tokens": _usage.get("completion_tokens", 0),
                      "model": _model,
+                     "cheap_model": _cheap_model,
                  }})
         except Exception as e:
             logger.exception(f"Stream chat error: {e}")
@@ -664,11 +666,13 @@ class APIServer:
             usage = session._last_usage or {}
             cheap_usage = getattr(session, '_last_cheap_usage', None) or {}
             model_name = getattr(session.context, 'model', '')
+            cheap_model_name = getattr(session.context, 'cheap_model', '')
             usage_data = {
                 "total_tokens": usage.get("total_tokens", 0),
                 "prompt_tokens": usage.get("prompt_tokens", 0),
                 "completion_tokens": usage.get("completion_tokens", 0),
                 "model": model_name,
+                "cheap_model": cheap_model_name,
             }
             if cheap_usage.get("total_tokens", 0) > 0:
                 usage_data["cheap_tokens"] = cheap_usage.get("total_tokens", 0)

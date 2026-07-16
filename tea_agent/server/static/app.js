@@ -854,40 +854,21 @@ window.sendMessage = async function() {
   }
 };
 
-// 成本估算函数 (USD)
-function estimateCost(tokens, modelName) {
-  var total = tokens.total_tokens || 0;
-  var prompt = tokens.prompt_tokens || Math.floor(total / 2);
-  var completion = tokens.completion_tokens || Math.floor(total / 2);
-  var m = (modelName || '').toLowerCase();
-  var promptRate, completionRate;
-  if (m.includes('gpt-4') || m.includes('claude-3')) {
-    promptRate = 2.5; completionRate = 10;
-  } else if (m.includes('deepseek') || m.includes('qwen')) {
-    promptRate = 0.5; completionRate = 2;
-  } else {
-    promptRate = 1; completionRate = 4;
-  }
-  return (prompt * promptRate + completion * completionRate) / 1000000;
-}
-
 function updateUsage(usage) {
   if (!usage || !usage.total_tokens) return;
   var bar = $('usage-bar');
   if (!bar) return;
   bar.style.display = '';
-  var cost = estimateCost(usage, usage.model || '');
+  var modelHtml = ' | <span class="usage-model">主模型: ' + (usage.model || '?') + '</span>';
   var cheapHtml = '';
-  if (usage.cheap_tokens) {
-    var cheapCost = estimateCost(usage, usage.model || '');
-    cheapHtml = ' | 🧠 便宜模型: ' + usage.cheap_tokens + ' tokens';
+  if (usage.cheap_model) {
+    cheapHtml = ' | <span class="usage-cheap">便宜模型: ' + usage.cheap_model + '</span>';
   }
-  var costStr = cost >= 0.001 ? '$' + cost.toFixed(4) : '<$0.0001';
   bar.innerHTML = '<span class="usage-tokens">📊 T:' + usage.total_tokens
     + '</span> <span class="usage-detail">(P:' + usage.prompt_tokens + '+C:' + usage.completion_tokens + ')</span>'
-    + cheapHtml
-    + ' | <span class="usage-cost">💰 ' + costStr + '</span>';
-  bar.className = cost > 0.05 ? 'usage-bar usage-high' : 'usage-bar';
+    + modelHtml
+    + cheapHtml;
+  bar.className = 'usage-bar';
 }
 
 // ══════════════════════════════════════════════════

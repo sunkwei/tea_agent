@@ -704,6 +704,8 @@ window.openTopic = async function(id, title) {
         if (!r.ok) return;
         const d = await r.json();
         $('messages').innerHTML = '';
+        // 切换话题时重置滚动状态，确保新内容能自动滚动到最新
+        _userNearBottom = true;
         (d.conversations || []).forEach(c => {
             addMessage('user', c.user_msg || '');
             addMessage('agent', c.ai_msg || '');
@@ -716,6 +718,7 @@ window.openTopic = async function(id, title) {
 window.newTopic = function() {
     currentTopicId = '';
     _taskPanelSuppressAutoOpen = false;  // 新话题重置
+    _userNearBottom = true;  // 新话题重置滚动状态
     $('topic-title').textContent = '\u65b0\u5bf9\u8bdd';
     $('messages').innerHTML = '<div class="welcome"><div class="welcome-icon">\u2615</div><h2>Tea Agent</h2><p>\u81ea\u8fdb\u5316 AI \u7f16\u7a0b\u52a9\u624b \u00b7 60+ \u5185\u7f6e\u5de5\u5177 \u00b7 \u591a Agent \u534f\u4f5c \u00b7 \u957f\u671f\u8bb0\u5fc6<br>\u5728\u4e0b\u65b9\u8f93\u5165\u6d88\u606f\u5f00\u59cb\u5bf9\u8bdd</p></div>';
     refreshTopics();

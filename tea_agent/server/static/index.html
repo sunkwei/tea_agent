@@ -90,6 +90,8 @@ body {
 .btn-p:hover { background: var(--primary-dim); }
 .btn-g { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
 .btn-g:hover { background: var(--surface2); color: var(--text); }
+.btn-p.warning { background: var(--yellow); color: #000; }
+.btn-p.warning:hover { background: #b8860b; color: #fff; }
 .btn-sm { padding: 4px 8px; font-size: 11px; }
 .sb-acts .btn-p { width: 100%; }
 .topic-list { flex: 1; overflow-y: auto; padding: 6px 8px; }
@@ -708,6 +710,53 @@ body {
   padding: 6px 12px 0;
   flex-shrink: 0;
 }
+
+/* ── Queue List ── */
+.queue-list {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 4px 12px 0;
+  flex-shrink: 0;
+  max-height: 72px;
+  overflow-y: auto;
+}
+.queue-item {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--yellow-bg);
+  border: 1px solid var(--yellow);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--yellow);
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+  transition: all var(--transition);
+}
+.queue-item .q-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.queue-item .q-cancel {
+  flex-shrink: 0;
+  width: 16px; height: 16px;
+  border: none; border-radius: 50%;
+  background: transparent;
+  color: var(--yellow);
+  font-size: 10px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition);
+  padding: 0;
+  line-height: 1;
+}
+.queue-item .q-cancel:hover {
+  background: var(--yellow);
+  color: #000;
+}
 .img-preview-item {
   position: relative;
   width: 60px; height: 60px;
@@ -1041,6 +1090,9 @@ body {
 
     <div id="img-preview-area" class="img-preview-area"></div>
 
+    <!-- ═══ Queue List ═══ -->
+    <div id="queue-list" class="queue-list"></div>
+
     <div id="ia">
       <div class="ss-dropup">
         <button id="ss-btn" title="截屏" onclick="toggleScreenshotMenu(event)">📷</button>
@@ -1229,6 +1281,43 @@ let _activeTheme = localStorage.getItem('ta-theme') || 'dark';
 let _pendingImages = [];
 let _userNearBottom = true;
 let _toolCallState = null; // tool call tracking during streaming
+let _messageQueue = []; // 排队消息队列：isStreaming 时入队，生成完后自动发送
+
+// ── Queue List Render ──
+function renderQueueList() {
+  const container = $('queue-list');
+  if (!container) return;
+  if (_messageQueue.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = _messageQueue.map(function(item, i) {
+    var preview = item.text || '(图片)';
+    if (preview.length > 28) preview = preview.slice(0, 28) + '…';
+    return '<span class="queue-item" title="' + esc(item.text || '(图片)') + '">'
+      + '<span class="q-text">' + esc(preview) + '</span>'
+      + '<button class="q-cancel" onclick="cancelQueuedMessage(' + i + ')" title="取消排队">✕</button>'
+      + '</span>';
+  }).join('');
+}
+
+// ── Cancel Single Queued Message ──
+window.cancelQueuedMessage = function(index) {
+  if (index < 0 || index >= _messageQueue.length) return;
+  var removed = _messageQueue[index];
+  _messageQueue.splice(index, 1);
+  renderQueueList();
+  // 更新按钮显示
+  var sendBtn = $('send-btn');
+  if (_messageQueue.length > 0) {
+    sendBtn.textContent = '⏳ 排队 ' + _messageQueue.length;
+    sendBtn.className = 'btn btn-p warning';
+  } else {
+    sendBtn.textContent = '⏹ 中断';
+    sendBtn.className = 'btn btn-p danger';
+  }
+  toast('🗑 已取消: ' + (removed.text || '(图片)'), 'success');
+};
 
 // ── DOM Helpers ──
 const $ = id => document.getElementById(id);
@@ -1590,6 +1679,12 @@ window.copyCode = function(btn) {
 
 // Interrupt current chat
 window.interruptChat = async function() {
+  // 清空排队消息
+  if (_messageQueue.length > 0) {
+    _messageQueue = [];
+    renderQueueList();
+    toast('🛑 已清空排队消息', 'error');
+  }
   if (abortController) {
     abortController.abort();
     abortController = null;
@@ -1612,10 +1707,34 @@ window.interruptChat = async function() {
 };
 
 window.sendMessage = async function() {
+  // 如果正在生成中 → 入队排队，不中断
   if (isStreaming) {
-    await interruptChat();
+    const input = $('ci');
+    const msg = input.value.trim();
+    if (!msg && _pendingImages.length === 0) return;
+    input.value = '';
+    // 重置输入框高度
+    input.style.height = 'auto';
+
+    _messageQueue.push({
+      text: msg,
+      images: [..._pendingImages]
+    });
+    _pendingImages = [];
+    updateImagePreview();
+    renderQueueList();
+
+    // 更新按钮显示排队数
+    const qlen = _messageQueue.length;
+    const sendBtn = $('send-btn');
+    sendBtn.textContent = `⏳ 排队 ${qlen}`;
+    sendBtn.className = 'btn btn-p warning';
+    sendBtn.disabled = false;
+
+    toast(`⏳ 消息已排队（队列中 ${qlen} 条）`, 'success');
     return;
   }
+
   const input = $('ci');
   const msg = input.value.trim();
   if (!msg && _pendingImages.length === 0) return;
@@ -1991,23 +2110,50 @@ window.sendMessage = async function() {
   } finally {
     isStreaming = false;
     abortController = null;
-    const btn = $('send-btn');
-    btn.textContent = '发送';
-    btn.className = 'btn btn-p';
-    btn.disabled = false;
+
+    // ── 先做必要的清理（防止递归 sendMessage 时 ID 冲突）──
     if (_pendingUsage) {
       updateUsage(_pendingUsage);
       _pendingUsage = null;
     }
-    // Clean up DOM ids
-    const old = $('current-ai-msg');
-    if (old) {
-      old.removeAttribute('id');
-      const ob = old.querySelector('#ai-bubble');
+    // 清理 DOM ID，避免下一轮消息 ID 重复
+    const oldMsg = $('current-ai-msg');
+    if (oldMsg) {
+      oldMsg.removeAttribute('id');
+      const ob = oldMsg.querySelector('#ai-bubble');
       if (ob) ob.removeAttribute('id');
-      const ot = old.querySelector('#bubble-text');
+      const ot = oldMsg.querySelector('#bubble-text');
       if (ot) ot.removeAttribute('id');
     }
+
+    const btn = $('send-btn');
+    // 检查队列是否有排队消息 → 自动发送下一条
+    if (_messageQueue.length > 0) {
+      const next = _messageQueue.shift();
+      renderQueueList();
+      const input = $('ci');
+      input.value = next.text;
+      input.style.height = 'auto';
+      _pendingImages = next.images || [];
+      updateImagePreview();
+      const qlen = _messageQueue.length;
+      if (qlen > 0) {
+        btn.textContent = `⏳ 排队 ${qlen}`;
+        btn.className = 'btn btn-p warning';
+      } else {
+        btn.textContent = '⏳ 发送中...';
+        btn.className = 'btn btn-p';
+      }
+      btn.disabled = false;
+      // 自动发送排队消息（递归，但 isStreaming=false 所以走正常发送流程）
+      sendMessage();
+      return;
+    }
+
+    btn.textContent = '发送';
+    btn.className = 'btn btn-p';
+    btn.disabled = false;
+    $('ci').focus();
     refreshTopics();
     refreshTaskPanel();
   }
@@ -2066,6 +2212,7 @@ window.openTopic = async function(id, title) {
     const d = await r.json();
     if (!d.conversations) return;
     $('msgs').innerHTML = '';
+    _userNearBottom = true;  // 切换话题重置滚动状态
     d.conversations.forEach(function(c) {
       if (c.user_msg) addMessage('user', c.user_msg);
       if (c.ai_msg) addMessage('assistant', c.ai_msg);
@@ -2075,6 +2222,7 @@ window.openTopic = async function(id, title) {
 
 window.newTopic = function() {
   currentTopicId = null;
+  _userNearBottom = true;  // 新话题重置滚动状态
   $('tt').textContent = '新对话';
   $('msgs').innerHTML = '';
   // Restore welcome

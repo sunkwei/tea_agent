@@ -470,10 +470,20 @@ async def handle_web_chat(request):
             thread.start()
 
             while True:
-                event = await queue.get()
-                yield "data: " + json.dumps(event, ensure_ascii=False) + "\n\n"
-                if event.get("type") in ("done", "error"):
-                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=300)
+                    yield "data: " + json.dumps(event, ensure_ascii=False) + "\n\n"
+                    if event.get("type") in ("done", "error"):
+                        break
+                except asyncio.TimeoutError:
+                    # 线程已死但没发 done/error → 强制终结（防止按钮卡红）
+                    if not thread.is_alive():
+                        yield "data: " + json.dumps({
+                            "type": "error",
+                            "error": "服务器处理意外终止"
+                        }) + "\n\n"
+                        break
+                    # 线程还活着，继续等（5分钟间隔避免 busy-loop）
         finally:
             _active_sessions.pop(topic_id, None)
 

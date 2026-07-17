@@ -484,9 +484,9 @@ async def handle_web_chat(request):
         if not topic_id:
             topic_id = storage.create_topic("Web Session (进行中)")
 
-        _active_sessions[topic_id] = session
-
         try:
+            _active_sessions[topic_id] = session
+
             thread = threading.Thread(
                 target=server.chat_stream_sse,
                 args=(session, storage, msg_payload, queue, topic_id, loop),
@@ -509,6 +509,16 @@ async def handle_web_chat(request):
                         }) + "\n\n"
                         break
                     # 线程还活着，继续等（5分钟间隔避免 busy-loop）
+        except asyncio.CancelledError:
+            # 客户端断连 → 中断后台线程，避免空跑
+            logger.info("Web SSE client disconnected, interrupting session")
+            session.interrupt()
+            raise
+        except Exception:
+            # 其他 SSE 异常 → 同样中断后台线程
+            logger.exception("SSE stream error, interrupting session")
+            session.interrupt()
+            raise
         finally:
             _active_sessions.pop(topic_id, None)
             # 当前对话结束（后续排队消息由前端驱动自动发送）

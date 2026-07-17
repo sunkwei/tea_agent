@@ -191,8 +191,9 @@ class SymbolIndex:
 
     def search_by_name(self, query: str, limit: int = 20) -> list[dict]:
         c = self._conn.cursor()
-        c.execute("SELECT * FROM symbols WHERE name LIKE ? ORDER BY kind, name LIMIT ?",
-                  (f"%{query}%", limit))
+        escaped = query.replace("%", r"\%").replace("_", r"\_")
+        c.execute("SELECT * FROM symbols WHERE name LIKE ? ESCAPE '\\' ORDER BY kind, name LIMIT ?",
+                  (f"%{escaped}%", limit))
         rows = [dict(r) for r in c.fetchall()]
         c.close()
         return rows

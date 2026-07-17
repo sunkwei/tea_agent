@@ -8,6 +8,7 @@
 import logging
 import os
 import subprocess
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -16,12 +17,15 @@ logger = logging.getLogger("lsp")
 # ── Jedi 智能后端 ────────────────────────────────────────
 
 _JEDI_PROJECT_CACHE: dict[str, Any] = {}
+_JEDI_CACHE_LOCK = threading.Lock()
 
 def _get_jedi_project(project_root: str):
-    """获取 jedi Project 实例（缓存，避免重复创建）"""
+    """获取 jedi Project 实例（缓存 + 线程安全，避免重复创建）"""
     if project_root not in _JEDI_PROJECT_CACHE:
-        import jedi
-        _JEDI_PROJECT_CACHE[project_root] = jedi.Project(project_root)
+        with _JEDI_CACHE_LOCK:
+            if project_root not in _JEDI_PROJECT_CACHE:
+                import jedi
+                _JEDI_PROJECT_CACHE[project_root] = jedi.Project(project_root)
     return _JEDI_PROJECT_CACHE[project_root]
 
 def _read_file_safe(filepath: str) -> str | None:
@@ -384,7 +388,10 @@ def collect_context(project_root: str, filepath: str, symbol: str = None, max_fi
         return results
 
     except Exception:
-        logger.exception("operation failed")
+        logger.exception("collect_context failed")
+        results["ok"] = False
+        results["hint"] = "上下文收集异常"
+        return results
 
 
 # ── C++ (clangd) 支持 ────────────────────────────────────────
@@ -471,10 +478,7 @@ def cpp_diagnose(project_root: str, filepath: str) -> dict:
 
 
 def cpp_goto_definition(project_root: str, filepath: str, line: int, col: int) -> dict:
-    """C++ 跳转定义 — 基于 clangd。
-
-    注意：需要 clangd 运行在 LSP 服务器模式，这里使用简化实现。
-    """
+    """C++ 跳转定义 — 基于 ctags（简化实现，完整 LSP 需 clangd 服务器模式）。"""
     if not filepath or not any(filepath.endswith(ext) for ext in ('.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx')):
         return {"ok": False, "error": "非 C++ 文件"}
 

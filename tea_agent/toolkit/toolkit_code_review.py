@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from tea_agent.lsp.lsp_engine import diagnose
+from tea_agent.lsp.lsp_engine import diagnose, semantic_diagnose
 
 logger = logging.getLogger("toolkit.code_review")
 
@@ -67,9 +67,9 @@ def _check_ruff(filepath: str) -> dict[str, Any]:
 
 
 def _check_semantic(project_root: str, filepath: str) -> dict[str, Any]:
-    """LSP 语义诊断"""
+    """LSP 语义诊断（jedi — 检查未定义符号、无法解析的引用）"""
     try:
-        result = diagnose(project_root, filepath)
+        result = semantic_diagnose(project_root, filepath)
         return result
     except Exception as e:
         return {"ok": True, "issues": [], "hint": f"语义诊断跳过: {e}"}
@@ -173,17 +173,22 @@ def _generate_report(filepath, compile_result, lint_result, semantic_result, sec
     """生成 Markdown 格式审查报告"""
     filename = os.path.basename(filepath)
 
-    error_count = sum([0])
+    error_count = 0
+    warning_count = 0
     if not compile_result.get("ok", True):
         error_count += len(compile_result.get("errors", []))
-    warning_count = 0
     for issue in lint_result.get("issues", []):
         code = issue.get("code", "")
         if code and code[0] in ("E", "F"):
             error_count += 1
         else:
             warning_count += 1
-    error_count += security_result.get("count", 0)
+    # 安全问题按 severity 计数
+    for f in security_result.get("findings", []):
+        if f.get("severity") == "high":
+            error_count += 1
+        else:
+            warning_count += 1
     warning_count += style_result.get("count", 0)
     total_issues = error_count + warning_count
 

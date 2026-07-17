@@ -1237,6 +1237,27 @@ async function refreshTopics() {
 }
 
 window.openTopic = async function(id, title) {
+  // 如果正在流式生成中，先中断
+  if (isStreaming) {
+    if (abortController) {
+      abortController.abort();
+      abortController = null;
+    }
+    if (currentTopicId && currentTopicId !== id) {
+      try {
+        await fetch('/api/chat/abort', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic_id: currentTopicId }),
+          signal: AbortSignal.timeout(3000),
+        });
+      } catch(e) { /* ignore */ }
+    }
+    isStreaming = false;
+    removeLoading();
+    _messageQueue = [];
+    renderQueueList();
+  }
   currentTopicId = id;
   $('tt').textContent = title || id.slice(0, 8);
   refreshTopics();
@@ -1255,6 +1276,27 @@ window.openTopic = async function(id, title) {
 };
 
 window.newTopic = function() {
+  // 如果正在流式生成中，先中断
+  if (isStreaming) {
+    if (abortController) {
+      abortController.abort();
+      abortController = null;
+    }
+    if (currentTopicId) {
+      try {
+        fetch('/api/chat/abort', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic_id: currentTopicId }),
+          signal: AbortSignal.timeout(3000),
+        });
+      } catch(e) { /* ignore */ }
+    }
+    isStreaming = false;
+    removeLoading();
+    _messageQueue = [];
+    renderQueueList();
+  }
   currentTopicId = null;
   _userNearBottom = true;  // 新话题重置滚动状态
   $('tt').textContent = '新对话';

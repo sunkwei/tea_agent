@@ -52,9 +52,10 @@ def diagnose(project_root: str, filepath: str = None) -> dict:
 
         import json
         diagnostics = json.loads(result.stdout) if result.stdout.strip() else []
-        # 按严重程度分组
-        errors = [d for d in diagnostics if d.get("fix") is None or d.get("code", "").startswith("F")]
-        warnings = [d for d in diagnostics if d.get("fix") is not None and not d.get("code", "").startswith("F")]
+        # 按代码前缀分组：E=pycodestyle错误, F=Pyflakes逻辑错误 为 errors
+        # W=pycodestyle警告, I=isort, N=naming, D=docstring, ... 为 warnings
+        errors = [d for d in diagnostics if d.get("code", "").startswith(("E", "F"))]
+        warnings = [d for d in diagnostics if d.get("code", "") and d not in errors]
 
         summary = []
         if errors:

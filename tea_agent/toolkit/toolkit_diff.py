@@ -135,14 +135,16 @@ def _verify_all(files: list[str], cwd: str, run_tests: bool = True) -> dict:
             except py_compile.PyCompileError as e:
                 results["compile"][fp] = f"FAIL: {e}"
 
-    # ruff lint
+    # ruff lint（只对 .py 文件）
     for fp in files:
         full = os.path.join(cwd, fp)
-        if os.path.exists(full):
+        if fp.endswith(".py") and os.path.exists(full):
             r = subprocess.run(["ruff", "check", "--output-format", "json", full],
                                capture_output=True, text=True, timeout=20, cwd=cwd)
             diags = json.loads(r.stdout) if r.stdout.strip() else []
             results["lint"][fp] = len(diags) if diags else 0
+        elif os.path.exists(full):
+            results["lint"][fp] = 0  # 非 Python 文件跳过 lint
 
     # 语义级诊断（jedi）— 检查未定义符号/无法解析的引用
     results["semantic"] = {}

@@ -403,17 +403,24 @@ def _search_symbol(query: str, root_path: str, max_results: int):
                             if node.name == query or query in node.name:
                                 # 相对于 abs_root_path 计算相对路径
                                 rel_path = os.path.relpath(filepath, abs_root_path)
+                                try:
+                                    args = _extract_args(node)
+                                except Exception:
+                                    args = []
                                 results.append({
                                     "file": rel_path,
                                     "line": node.lineno,
                                     "type": "class" if isinstance(node, ast.ClassDef) else "function",
                                     "name": node.name,
-                                    "args": _extract_args(node),
+                                    "args": args,
                                 })
                                 if len(results) >= max_results:
                                     return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
 
-                except Exception:
+                except Exception as e:
+                    if isinstance(e, SyntaxError):
+                        continue
+                    logger.debug(f"search_symbol error {filepath}: {e}")
                     continue
 
     if not results:
@@ -422,14 +429,27 @@ def _search_symbol(query: str, root_path: str, max_results: int):
     return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
 
 def _extract_args(node):
-    """从 AST 节点提取函数参数"""
+    """从 AST 节点提取参数信息。兼容 FunctionDef 和 ClassDef。"""
+    if isinstance(node, ast.ClassDef):
+        bases = []
+        for b in node.bases:
+            try:
+                bases.append(ast.unparse(b))
+            except Exception:
+                bases.append("?")
+        return bases
+    node_args = getattr(node, 'args', None)
+    if node_args is None:
+        return []
     args = []
-    for arg in node.args.args:
+    for arg in getattr(node_args, 'args', []):
         args.append(arg.arg)
-    if node.args.vararg:
-        args.append(f"*{node.args.vararg.arg}")
-    if node.args.kwarg:
-        args.append(f"**{node.args.kwarg.arg}")
+    vararg = getattr(node_args, 'vararg', None)
+    if vararg:
+        args.append(f"*{vararg.arg}")
+    kwarg = getattr(node_args, 'kwarg', None)
+    if kwarg:
+        args.append(f"**{kwarg.arg}")
     return args
 
 def _search_github(query: str, search_type: str, max_results: int):

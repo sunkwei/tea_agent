@@ -11,7 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 
 logger = logging.getLogger("AutoFix")
-RUFF_SELECT = "F401,F841,F811,W291,W293"
+RUFF_SELECT = "F401,F841,F811,W291,W293,E225,E231,E302,E303,E305,W391,E401,E701,E711,E712,E713,E714"
 FIX_PROMPT = """Fix this Python issue.
 Issue: {rule_code} - {message}
 Line {line}: {code_snippet}
@@ -73,7 +73,7 @@ class AutoFixAgent:
             issues.append({
                 "id": hashlib.md5(f"{rel}:{code}:{loc['row']}".encode()).hexdigest()[:8],
                 "file": rel, "line": loc["row"],
-                "severity": "error" if code.startswith("F") else "warning",
+                "severity": "error" if code.startswith(("E", "F")) else "warning",
                 "rule": code, "rule_name": item.get("name", ""),
                 "message": item.get("message", ""), "via": "ruff",
                 "ruff_autofix": (item.get("fix") or {}).get("edits"),

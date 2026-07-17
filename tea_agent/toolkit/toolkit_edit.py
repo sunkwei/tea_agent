@@ -27,22 +27,25 @@ def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
     import os
 
     if not os.path.exists(file_path):
-        return (1, "", f"文件不存在: {file_path}")
+        return {"ok": False, "error": f"文件不存在: {file_path}", "returncode": 1}
 
-    if action == "apply_patch":
-        return _apply_patch(file_path, content, preview, backup)
-    elif action == "insert_lines":
-        return _insert_lines(file_path, start_line, new_text, preview, backup)
-    elif action == "delete_lines":
-        return _delete_lines(file_path, start_line, end_line, preview, backup)
-    elif action == "replace_lines":
-        return _replace_lines(file_path, start_line, end_line, new_text, preview, backup)
-    elif action == "replace_text":
-        return _replace_text(file_path, old_text, new_text, preview, backup)
-    elif action == "preview_patch":
-        return _preview_patch(file_path, content)
-    else:
-        return (1, "", f"未知 action: {action}")
+    _actions = {
+        "apply_patch": lambda: _apply_patch(file_path, content, preview, backup),
+        "insert_lines": lambda: _insert_lines(file_path, start_line, new_text, preview, backup),
+        "delete_lines": lambda: _delete_lines(file_path, start_line, end_line, preview, backup),
+        "replace_lines": lambda: _replace_lines(file_path, start_line, end_line, new_text, preview, backup),
+        "replace_text": lambda: _replace_text(file_path, old_text, new_text, preview, backup),
+        "preview_patch": lambda: _preview_patch(file_path, content),
+    }
+    fn = _actions.get(action)
+    if fn is None:
+        return {"ok": False, "error": f"未知 action: {action}", "returncode": 1}
+
+    result = fn()
+    # 统一为 dict 返回格式（内部函数仍可能返回 tuple 以兼容旧调用者）
+    if isinstance(result, tuple) and len(result) == 3:
+        return _tuple_to_dict(result)
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -94,7 +97,7 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
     import shutil
 
     if not old_text:
-        return (1, "", "❌ old_text 不能为空，请提供要替换的原始文本")
+        return {"ok": False, "error": "❌ old_text 不能为空，请提供要替换的原始文本", "returncode": 1}
 
     try:
         with open(file_path, encoding='utf-8') as f:
@@ -111,8 +114,7 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
             old_stripped = old_norm.strip()
             idx_stripped = original_norm.find(old_stripped)
             if idx_stripped == -1:
-                return (1, "",
-                        f"❌ 未找到匹配文本。old_text 的前80字符: {old_norm[:80]!r}")
+                return {"ok": False, "error": f"❌ 未找到匹配文本。old_text 的前80字符: {old_norm[:80]!r}", "returncode": 1}
             idx = idx_stripped
             old_norm = old_stripped
 
@@ -129,14 +131,8 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
 
         if preview:
             diff_preview = _generate_diff(original, new_text_raw)
-            return (0, json.dumps({
-                "status": "preview",
-                "file": file_path,
-                "action": "replace_text",
-                "match_at": idx,
-                "duplicate": second != -1,
-                "diff": diff_preview,
-            }, ensure_ascii=False, indent=2), "")
+            return {"ok": True, "status": "preview", "file": file_path, "action": "replace_text",
+                    "match_at": idx, "duplicate": second != -1, "diff": diff_preview, "returncode": 0}
 
         # backup
         if backup:
@@ -151,12 +147,21 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
                                   old_text=old_norm,
                                   new_text=new_norm,
                                   label="replace_text")
+        msg = f"✅ 成功替换（文本匹配，位置 {idx}）"
         if vrf:
-            return (0, f"✅ 成功替换（文本匹配，位置 {idx}）{vrf}", "")
-        return (0, f"✅ 成功替换（文本匹配，位置 {idx}）", "")
+            msg += f" {vrf}"
+        return {"ok": True, "message": msg, "returncode": 0}
 
     except Exception as e:
-        return (1, "", f"❌ replace_text 失败: {str(e)}")
+        return {"ok": False, "error": f"❌ replace_text 失败: {str(e)}", "returncode": 1}
+
+
+def _tuple_to_dict(tup):
+    """Convert old-style (returncode, stdout, stderr) tuple to dict."""
+    rc, stdout, stderr = tup
+    if rc == 0:
+        return {"ok": True, "message": stdout, "returncode": 0}
+    return {"ok": False, "error": stderr, "returncode": 1}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -187,11 +192,11 @@ def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool
                     ['patch', '--batch', '--forward', file_path, patch_file],
                     capture_output=True, text=True, timeout=30)
                 if result.returncode == 0:
-                    return (0, f"✅ 成功应用 patch 到 {file_path}", "")
+                    return {"ok": True, "message": f"✅ 成功应用 patch 到 {file_path}", "returncode": 0}
                 else:
                     if backup and os.path.exists(file_path + '.bak'):
                         shutil.copy2(file_path + '.bak', file_path)
-                    return (1, "", f"❌ patch 应用失败:\n{result.stderr}\n{result.stdout}")
+                    return {"ok": False, "error": f"❌ patch 应用失败:\n{result.stderr}\n{result.stdout}", "returncode": 1}
             finally:
                 try:
                     os.unlink(patch_file)
@@ -202,7 +207,7 @@ def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool
             return _apply_patch_python(file_path, original_content,
                                        patch_content, preview, backup)
     except Exception as e:
-        return (1, "", f"❌ 应用 patch 失败: {str(e)}")
+        return {"ok": False, "error": f"❌ 应用 patch 失败: {str(e)}", "returncode": 1}
 
 
 def _apply_patch_python(file_path: str, original_content: str,

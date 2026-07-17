@@ -160,9 +160,10 @@ class SymbolIndex:
     def _clear_file_data(self, file_path: str):
         c = self._conn.cursor()
         rel = os.path.relpath(file_path, str(self.project_root)).replace("\\", "/")
-        c.execute("DELETE FROM symbols WHERE file_path = ?", (rel,))
-        c.execute("DELETE FROM calls WHERE caller_file = ?", (rel,))
-        c.execute("DELETE FROM imports WHERE file_path = ?", (rel,))
+        # 兼容绝对路径和相对路径存储
+        c.execute("DELETE FROM symbols WHERE file_path IN (?, ?)", (rel, file_path))
+        c.execute("DELETE FROM calls WHERE caller_file IN (?, ?)", (rel, file_path))
+        c.execute("DELETE FROM imports WHERE file_path IN (?, ?)", (rel, file_path))
         self._conn.commit()
         c.close()
 
@@ -179,8 +180,10 @@ class SymbolIndex:
                     c.execute("INSERT INTO calls (caller_file, caller_name, caller_line, callee_name) VALUES (?, ?, ?, ?)",
                               (file_path, name, line, callee))
             self._conn.commit()
+        except sqlite3.Error as e:
+            logger.error(f"Insert symbol failed {file_path}:{name}: {e}")
         except Exception as e:
-            logger.warning(f"Insert symbol failed {file_path}:{name}: {e}")
+            logger.error(f"Unexpected error inserting symbol {file_path}:{name}: {e}")
         finally:
             c.close()
 

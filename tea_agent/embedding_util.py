@@ -1,7 +1,7 @@
 """
 轻量级文本嵌入工具。
 1. API 模式：通过兼容 OpenAI embeddings 的 API 获取向量
-2. 本地 TF-IDF 回退：纯 Python stdlib，零额外依赖
+2. 本地 BM25 回退：纯 Python stdlib，零额外依赖（相比 TF-IDF，BM25 对代码搜索更优）
 """
 
 from __future__ import annotations
@@ -29,13 +29,22 @@ except ImportError:
     requests = None
 
 
-class _SimpleTFIDF:
-    """极简 TF-IDF：字符 bigram + 哈希降维 + 余弦相似度。"""
+class _SimpleBM25:
+    """BM25 文本向量化：字符 bigram + 哈希降维 + BM25 评分。
 
-    def __init__(self, vector_dim: int = 256) -> None:
+    相比 TF-IDF 的改进：
+    - 引入 k1 和 b 参数，控制词频饱和度和文档长度归一化
+    - 对代码搜索更优：短名高频符号不被过分惩罚
+    """
+
+    def __init__(self, vector_dim: int = 256, k1: float = 1.2, b: float = 0.75) -> None:
         self.vector_dim = vector_dim
+        self.k1 = k1
+        self.b = b
         self._doc_freq: Counter[str] = Counter()
         self._doc_count: int = 0
+        self._avg_dl: float = 0.0
+        self._total_dl: int = 0
 
     def _tokenize(self, text: str) -> list[str]:
         """字符 bigram 分词。"""
@@ -49,30 +58,39 @@ class _SimpleTFIDF:
         return h % self.vector_dim
 
     def add_document(self, text: str) -> None:
-        """添加文档到语料库，构建 IDF 统计。"""
+        """添加文档到语料库，构建 BM25 统计。"""
         tokens = set(self._tokenize(text))
         for t in tokens:
             self._doc_freq[t] += 1
+        self._total_dl += len(tokens)
         self._doc_count += 1
+        self._avg_dl = self._total_dl / max(self._doc_count, 1)
 
     def vectorize(self, text: str) -> list[float]:
-        """文本 → TF-IDF 向量（哈希降维 + L2 归一化）。"""
+        """文本 → BM25 向量（哈希降维 + L2 归一化）。
+
+        BM25(q, d) = Σ IDF(q) * TF(q, d) * (k1 + 1) / (TF(q, d) + k1 * (1 - b + b * |d| / avgdl))
+        """
         tokens = self._tokenize(text)
         if not tokens:
             return [0.0] * self.vector_dim
 
         tf: Counter[str] = Counter(tokens)
         vec = [0.0] * self.vector_dim
-        total = len(tokens)
+        doc_len = len(tokens)
+        avgdl = self._avg_dl if self._avg_dl > 0 else doc_len
 
         for token, count in tf.items():
             idx = self._hash_token(token)
-            # TF: 词频 / 总词数
-            tf_val = count / total
-            # IDF: log((N+1)/(df+1)) + 1（平滑版）
+            # BM25 TF 饱和函数
+            tf_val = count
+            denom = tf_val + self.k1 * (1 - self.b + self.b * doc_len / avgdl)
+            bm25_tf = tf_val * (self.k1 + 1) / denom if denom > 0 else 0
+
+            # BM25 IDF
             df = self._doc_freq.get(token, 0)
-            idf = math.log((self._doc_count + 1) / (df + 1)) + 1
-            vec[idx] += tf_val * idf
+            idf = math.log((self._doc_count - df + 0.5) / (df + 0.5) + 1)
+            vec[idx] += idf * bm25_tf
 
         # L2 归一化
         norm = math.sqrt(sum(v * v for v in vec))
@@ -85,7 +103,7 @@ class _SimpleTFIDF:
 
 
 class EmbeddingEngine:
-    """文本向量引擎 — API 优先，自动回退 TF-IDF。"""
+    """文本向量引擎 — API 优先，自动回退 BM25。"""
 
     def __init__(self, config: Any = None) -> None:
         self.api_url: str = ""
@@ -93,7 +111,7 @@ class EmbeddingEngine:
         self.api_key: str = ""
         self.dimension: int = 0
         self._use_api: bool = False
-        self._tfidf = _SimpleTFIDF()
+        self._bm25 = _SimpleBM25()
 
         self._total_embedding_tokens: int = 0
         self._total_embedding_prompt_tokens: int = 0
@@ -150,10 +168,10 @@ class EmbeddingEngine:
                 logger.info(f"✅ embedding 成功: {self.model_name}, dim={dim}")
                 return result
             except Exception as e:
-                logger.warning(f"API 嵌入失败，回退 TF-IDF: {e}")
-                return self._embed_tfidf(text)
+                logger.warning(f"API 嵌入失败，回退 BM25: {e}")
+                return self._embed_bm25(text)
         else:
-            return self._embed_tfidf(text)
+            return self._embed_bm25(text)
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """批量嵌入。API 模式尝试批量请求，TF-IDF 逐个处理。"""
@@ -165,8 +183,8 @@ class EmbeddingEngine:
                 )
                 return result
             except Exception as e:
-                logger.warning(f"API 批量嵌入失败，逐个 TF-IDF: {e}")
-        return [self._embed_tfidf(t) for t in texts]
+                logger.warning(f"API 批量嵌入失败，逐个 BM25: {e}")
+        return [self._embed_bm25(t) for t in texts]
 
     def _build_url(self) -> str:
         """构建 embeddings API URL。"""
@@ -252,18 +270,22 @@ class EmbeddingEngine:
 
         raise RuntimeError("API 批量返回格式异常")
 
+    def _embed_bm25(self, text: str) -> list[float]:
+        """BM25 文本向量化（API 不可用时的回退）。"""
+        return self._bm25.vectorize(text)
+
     def _embed_tfidf(self, text: str) -> list[float]:
-        """TF-IDF 文本向量化（API 不可用时的回退）。"""
-        return self._tfidf.vectorize(text)
+        """TF-IDF 文本向量化（兼容旧调用）。"""
+        return self._bm25.vectorize(text)
 
     def build_tfidf_vocabulary(self, texts: list[str]) -> None:
-        """用文本构建 TF-IDF 语料库（提升本地搜索质量）。"""
+        """用文本构建 BM25 语料库（提升本地搜索质量）。"""
         for t in texts:
             if t and t.strip():
-                self._tfidf.add_document(t.strip())
+                self._bm25.add_document(t.strip())
         logger.debug(
-            f"TF-IDF 词汇表: {self._tfidf._doc_count} 文档, "
-            f"{len(self._tfidf._doc_freq)} 特征"
+            f"BM25 语料库: {self._bm25._doc_count} 文档, "
+            f"{len(self._bm25._doc_freq)} 特征"
         )
 
     def cosine_similarity(self, a: list[float], b: list[float]) -> float:

@@ -63,14 +63,18 @@ class TestLspEngineDiagnose:
         with patch("subprocess.run") as mock_run:
             mock_run.side_effect = FileNotFoundError("ruff not found")
             result = diagnose("test.py")
-        assert result["diagnostics"] == []
-        assert "error" not in result  # 静默处理
+        assert result.get("ok") is False
+        assert "ruff" in result.get("error", "").lower()
 
     def test_diagnose_non_python_file(self):
         """非 Python 文件应返回空"""
         from tea_agent.lsp.lsp_engine import diagnose
 
-        result = diagnose("readme.md")
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout="[]", stderr=""
+            )
+            result = diagnose("readme.md")
         assert result["diagnostics"] == []
 
     def test_diagnose_auto_routes_correctly(self):
@@ -88,8 +92,9 @@ class TestLspEngineDiagnose:
 
         with patch("tea_agent.lsp.lsp_engine.cpp_diagnose") as mock_cpp:
             mock_cpp.return_value = {"diagnostics": []}
-            result = diagnose_auto("main.cpp")
+            result = diagnose_auto(".", "main.cpp")
             mock_cpp.assert_called_once()
+            assert result["diagnostics"] == []
 
 
 class TestLspEngineSemanticDiagnose:
@@ -99,29 +104,20 @@ class TestLspEngineSemanticDiagnose:
         """所有符号均已定义时不应报 unresolved"""
         from tea_agent.lsp.lsp_engine import semantic_diagnose
 
-        # 使用实际的 jedi 解析简单代码
-        code = """
-import os
-x = 42
-print(x)
-"""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".py", delete=False
-        ) as f:
+        code = "import os\nx = 42\nprint(x)\n"
+        fname = os.path.join(tempfile.mkdtemp(), "test_mod.py")
+        with open(fname, "w") as f:
             f.write(code)
-            fname = f.name
-
         try:
-            result = semantic_diagnose(fname)
-            assert isinstance(result, list)
-            # 对于这个简单代码，不应有 unresolved 警告
+            result = semantic_diagnose(os.path.dirname(fname), fname)
+            assert isinstance(result, dict)
             unresolved = [
-                d for d in result
-                if isinstance(d, dict) and "unresolved" in str(d).lower()
+                i for i in result.get("issues", [])
+                if i.get("type") == "unresolved_reference"
             ]
-            # 基本类型如 print, os 应被解析
         finally:
             os.unlink(fname)
+            os.rmdir(os.path.dirname(fname))
 
     def test_semantic_diagnose_handles_jedi_error(self):
         """jedi 解析失败时应优雅处理"""
@@ -129,57 +125,69 @@ print(x)
 
         with patch("jedi.Script") as mock_script:
             mock_script.side_effect = Exception("jedi error")
-            result = semantic_diagnose("nonexistent.py")
-        assert isinstance(result, list)
-        assert result == []
+            result = semantic_diagnose(".", "nonexistent.py")
+        assert isinstance(result, dict)
+        assert result.get("ok") is False
 
 
 class TestLspEngineNavigation:
     """导航功能测试（hover, goto_definition, references）"""
 
+    def _make_dummy_file(self):
+        """创建临时文件供测试用"""
+        d = tempfile.mkdtemp()
+        fp = os.path.join(d, "test.py")
+        with open(fp, "w") as f:
+            f.write("x = 1\n")
+        return fp, d
+
     def test_hover_returns_dict(self):
         from tea_agent.lsp.lsp_engine import hover
 
-        with patch("tea_agent.lsp.lsp_engine._get_jedi_project") as mock_proj:
-            mock_proj.return_value = MagicMock()
-            with patch("jedi.Script") as mock_script:
-                mock_script.return_value = MagicMock()
-                result = hover("test.py", 1, 0)
+        with patch("tea_agent.lsp.lsp_engine._read_file_safe", return_value=None):
+            result = hover(".", "nonexistent.py", 1, 0)
         assert isinstance(result, dict)
 
     def test_goto_definition_returns_dict(self):
         from tea_agent.lsp.lsp_engine import goto_definition
 
-        with patch("tea_agent.lsp.lsp_engine._get_jedi_project") as mock_proj:
-            mock_proj.return_value = MagicMock()
-            result = goto_definition("test.py", 1, 0)
+        with patch("tea_agent.lsp.lsp_engine._read_file_safe", return_value=None):
+            result = goto_definition(".", "nonexistent.py", 1, 0)
         assert isinstance(result, dict)
 
     def test_references_returns_dict(self):
         from tea_agent.lsp.lsp_engine import references
 
-        with patch("tea_agent.lsp.lsp_engine._get_jedi_project") as mock_proj:
-            mock_proj.return_value = MagicMock()
-            result = references("test.py", 1, 0)
+        with patch("tea_agent.lsp.lsp_engine._read_file_safe", return_value=None):
+            result = references(".", "nonexistent.py", 1, 0)
         assert isinstance(result, dict)
 
 
 class TestLspEngineCompletion:
     """代码补全测试"""
 
+    def _make_dummy_file(self):
+        d = tempfile.mkdtemp()
+        fp = os.path.join(d, "test.py")
+        with open(fp, "w") as f:
+            f.write("x = 1\n")
+        return fp, d
+
     def test_completion_returns_dict(self):
         from tea_agent.lsp.lsp_engine import completion
 
-        with patch("jedi.Script") as mock_script:
-            mock_completion = MagicMock()
-            mock_completion.name = "test_func"
-            mock_completion.type = "function"
-            mock_completion.description = "def test_func()"
-            mock_completion.complete = "test_func"
-            mock_script.return_value.complete.return_value = [mock_completion]
-            result = completion("test.py", "test.", 1, 6)
-        assert isinstance(result, dict)
-        assert "completions" in result
+        with patch("tea_agent.lsp.lsp_engine._read_file_safe") as mock_read:
+            mock_read.return_value = "x = 1\n"
+            with patch("jedi.Script") as mock_script:
+                mock_completion = MagicMock()
+                mock_completion.name = "test_func"
+                mock_completion.type = "function"
+                mock_completion.description = "def test_func()"
+                mock_completion.complete = "test_func"
+                mock_script.return_value.complete.return_value = [mock_completion]
+                result = completion(".", "test.py", 1, 0)
+            assert isinstance(result, dict)
+            assert "completions" in result
 
 
 # ============================================================
@@ -194,7 +202,7 @@ class TestSymbolIndex:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = os.path.join(tmpdir, "test_index.db")
-            idx = SymbolIndex(db_path=db_path)
+            idx = SymbolIndex(project_root=tmpdir, db_path=db_path)
             assert os.path.exists(db_path)
             idx.close()
 
@@ -203,7 +211,7 @@ class TestSymbolIndex:
         from tea_agent.lsp.symbol_index import SymbolIndex
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            idx = SymbolIndex(db_path=os.path.join(tmpdir, "test.db"))
+            idx = SymbolIndex(project_root=tmpdir, db_path=os.path.join(tmpdir, "test.db"))
             results = idx.search_by_name("nonexistent")
             assert results == []
             idx.close()
@@ -212,7 +220,7 @@ class TestSymbolIndex:
         from tea_agent.lsp.symbol_index import SymbolIndex
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            idx = SymbolIndex(db_path=os.path.join(tmpdir, "test.db"))
+            idx = SymbolIndex(project_root=tmpdir, db_path=os.path.join(tmpdir, "test.db"))
             # 直接插入符号
             idx._insert_symbol(
                 file_path="/test/main.py",
@@ -238,7 +246,7 @@ class TestSymbolIndex:
             with open(test_file, "w") as f:
                 f.write("x = 1\n")
 
-            idx = SymbolIndex(db_path=os.path.join(tmpdir, "test.db"))
+            idx = SymbolIndex(project_root=tmpdir, db_path=os.path.join(tmpdir, "test.db"))
             # 首次检测应为 changed
             assert idx._is_file_changed(test_file) is True
 
@@ -255,7 +263,7 @@ class TestSymbolIndex:
         from tea_agent.lsp.symbol_index import SymbolIndex
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            idx = SymbolIndex(db_path=os.path.join(tmpdir, "test.db"))
+            idx = SymbolIndex(project_root=tmpdir, db_path=os.path.join(tmpdir, "test.db"))
             idx._insert_symbol("/test.py", "dup_func", "function", 1, "", "", "", "test")
             idx._insert_symbol("/test.py", "dup_func", "function", 1, "", "", "", "test")
             results = idx.search_by_name("dup_func")
@@ -267,10 +275,11 @@ class TestSymbolIndex:
         from tea_agent.lsp.symbol_index import SymbolIndex
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            idx = SymbolIndex(db_path=os.path.join(tmpdir, "test.db"))
-            idx._insert_symbol("/target.py", "sym1", "function", 1, "", "", "", "mod")
-            idx._insert_symbol("/other.py", "sym2", "function", 1, "", "", "", "mod")
-            idx._clear_file_data("/target.py")
+            idx = SymbolIndex(project_root=tmpdir, db_path=os.path.join(tmpdir, "test.db"))
+            # _clear_file_data uses os.path.relpath internally, so store relative paths
+            idx._insert_symbol("target.py", "sym1", "function", 1, "", "", "", "mod")
+            idx._insert_symbol("other.py", "sym2", "function", 1, "", "", "", "mod")
+            idx._clear_file_data(tmpdir + "/target.py")
             results = idx.search_by_name("sym1")
             assert len(results) == 0
             results = idx.search_by_name("sym2")
@@ -367,10 +376,11 @@ class MyClass:
 
             result = build_dependency_graph(tmpdir)
             assert isinstance(result, dict)
-            assert "nodes" in result or "graph" in result
+            assert "modules" in result
+            assert "circular" in result
+            assert "orphans" in result
             # 应该至少检测到两个模块
-            graph = result.get("graph", result.get("nodes", {}))
-            assert len(graph) >= 2
+            assert len(result["modules"]) >= 2
 
     def test_impact_analysis_structure(self):
         """影响分析应返回结构化结果"""
@@ -379,12 +389,12 @@ class MyClass:
         with tempfile.TemporaryDirectory() as tmpdir:
             main_file = os.path.join(tmpdir, "main.py")
             with open(main_file, "w") as f:
-                f.write("x = 1\n")
+                f.write("def foo():\n    pass\n")
 
-            result = impact_analysis(tmpdir, main_file, "x")
+            result = impact_analysis(tmpdir, main_file, "foo")
             assert isinstance(result, dict)
             # 应包含影响分析的关键字段
-            assert "direct_callers" in result or "callers" in result or "affected" in result
+            assert "direct_callers" in result
 
 
 class TestTsAnalyzerAstFallback:

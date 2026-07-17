@@ -33,21 +33,11 @@ def _ensure_ts():
         return None
 
 def _get_text(source_bytes, node):
-    """Internal: get the text.
-
-    Args:
-        source_bytes: Description.
-        node: Description.
-    """
+    """从 source_bytes 中提取 node 对应的文本。"""
     return source_bytes[node.start_byte:node.end_byte].decode("utf-8")
 
 def _extract_docstring(source_bytes, body_node):
-    """Internal: extract docstring.
-
-    Args:
-        source_bytes: Description.
-        body_node: Description.
-    """
+    """从函数/类的 body 节点提取 docstring。"""
     for child in body_node.named_children:
         if child.type == "expression_statement":
             expr = child.children[0] if child.children else None
@@ -58,12 +48,7 @@ def _extract_docstring(source_bytes, body_node):
     return ""
 
 def _extract_calls(source_bytes, body_node):
-    """Internal: extract calls.
-
-    Args:
-        source_bytes: Description.
-        body_node: Description.
-    """
+    """从函数 body 中提取所有调用的函数名。"""
     calls = set()
     stack = [body_node]
     while stack:
@@ -82,12 +67,7 @@ def _extract_calls(source_bytes, body_node):
     return sorted(calls)
 
 def _extract_params(source_bytes, func_node):
-    """Internal: extract params.
-
-    Args:
-        source_bytes: Description.
-        func_node: Description.
-    """
+    """从函数节点提取参数名列表。"""
     params_node = func_node.child_by_field_name("parameters")
     if not params_node:
         return []
@@ -103,11 +83,7 @@ def _extract_params(source_bytes, func_node):
     return params
 
 def parse_file(filepath: str) -> dict | None:
-    """Parse file.
-
-    Args:
-        filepath: Description.
-    """
+    """解析 Python 文件，返回函数/类/导入/顶层符号的结构化信息。"""
     lang = _ensure_ts()
     if lang is None:
         return _parse_file_ast_fallback(filepath)
@@ -128,12 +104,7 @@ def parse_file(filepath: str) -> dict | None:
     result = {"file": filepath, "functions": [], "classes": [], "imports": [], "top_level": []}
 
     def _walk(node, depth=0):
-        """Internal: walk.
-
-        Args:
-            node: Description.
-            depth: Description.
-        """
+        """递归遍历 AST 节点，收集函数/类/导入信息。"""
         for child in node.named_children:
             if child.type == "function_definition":
                 name_node = child.child_by_field_name("name")
@@ -210,11 +181,7 @@ def parse_file(filepath: str) -> dict | None:
     return result
 
 def _parse_file_ast_fallback(filepath: str) -> dict | None:
-    """Internal: parse file ast fallback.
-
-    Args:
-        filepath: Description.
-    """
+    """Python ast 回退解析（当 tree-sitter 不可用时）。"""
     try:
         with open(filepath, encoding="utf-8", errors="replace") as f:
             source = f.read()
@@ -280,13 +247,7 @@ def _parse_file_ast_fallback(filepath: str) -> dict | None:
     return result
 
 def impact_analysis(project_root: str, filepath: str, symbol: str) -> dict:
-    """Impact analysis.
-
-    Args:
-        project_root: Description.
-        filepath: Description.
-        symbol: Description.
-    """
+    """影响分析：找出修改符号会影响的所有调用者（直接 + 间接）。"""
     parsed = parse_file(filepath)
     if not parsed:
         return {"ok": False, "error": f"无法解析: {filepath}"}
@@ -373,11 +334,7 @@ def impact_analysis(project_root: str, filepath: str, symbol: str) -> dict:
     }
 
 def build_dependency_graph(project_root: str) -> dict:
-    """Build dependency graph.
-
-    Args:
-        project_root: Description.
-    """
+    """构建模块级依赖图，检测循环依赖和孤立模块。"""
     graph = defaultdict(lambda: {"imports": [], "imported_by": [], "symbols": []})
     py_files = list(Path(project_root).rglob("*.py"))
 
@@ -405,11 +362,7 @@ def build_dependency_graph(project_root: str) -> dict:
     visited = set()
     path = []
     def _dfs(m):
-        """Internal: dfs.
-
-        Args:
-            m: Description.
-        """
+        """DFS 检测循环依赖。"""
         if m in path:
             cycle_start = path.index(m)
             circular.append(path[cycle_start:] + [m])

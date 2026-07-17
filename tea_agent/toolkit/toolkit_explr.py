@@ -53,11 +53,7 @@ logger = logging.getLogger("toolkit")
 _RUN_DIR = ".tea_agent_run"
 
 def _log(msg):
-    """Internal: log.
-
-    Args:
-        msg: Description.
-    """
+    """打印构建日志到 stdout。"""
     print(f"[explr] {msg}")
 
 def _build_ctags(directory, run_dir):
@@ -126,6 +122,34 @@ def _build_call_graph(directory):
     defs = {}
     classes = {}
 
+    class _CallVisitor(ast.NodeVisitor):
+        """AST 访问器：收集函数定义、调用关系和类定义。"""
+        def __init__(self, relpath, defs, calls, classes):
+            self.relpath = relpath
+            self._defs = defs
+            self._calls = calls
+            self._classes = classes
+
+        def visit_FunctionDef(self, node):
+            self._defs[node.name] = {'file': self.relpath, 'line': node.lineno}
+            called = set()
+            for child in ast.walk(node):
+                if isinstance(child, ast.Call):
+                    if isinstance(child.func, ast.Name):
+                        called.add(child.func.id)
+                    elif isinstance(child.func, ast.Attribute):
+                        called.add(child.func.attr)
+            if called:
+                self._calls[node.name] = sorted(called)
+            self.generic_visit(node)
+
+        def visit_AsyncFunctionDef(self, node):
+            self.visit_FunctionDef(node)
+
+        def visit_ClassDef(self, node):
+            self._classes[node.name] = {'file': self.relpath, 'line': node.lineno}
+            self.generic_visit(node)
+
     for root, dirs, files in os.walk(directory):
         dirs[:] = [d for d in dirs if d not in ('__pycache__', 'build', 'dist', '.git', '.tea_agent_run', 'tmp')]
         for fname in files:
@@ -141,44 +165,7 @@ def _build_call_graph(directory):
                 _log(f"⚠ 语法错误: {relpath}: {e}")
                 continue
 
-            class CallVisitor(ast.NodeVisitor):
-                """CallVisitor class."""
-                def visit_FunctionDef(self, node):
-                    """Visit FunctionDef.
-
-                    Args:
-                        node: Description.
-                    """
-                    defs[node.name] = {'file': relpath, 'line': node.lineno}
-                    called = set()
-                    for child in ast.walk(node):
-                        if isinstance(child, ast.Call):
-                            if isinstance(child.func, ast.Name):
-                                called.add(child.func.id)
-                            elif isinstance(child.func, ast.Attribute):
-                                called.add(child.func.attr)
-                    if called:
-                        calls[node.name] = sorted(called)
-                    self.generic_visit(node)
-
-                def visit_AsyncFunctionDef(self, node):
-                    """Visit AsyncFunctionDef.
-
-                    Args:
-                        node: Description.
-                    """
-                    self.visit_FunctionDef(node)
-
-                def visit_ClassDef(self, node):
-                    """Visit ClassDef.
-
-                    Args:
-                        node: Description.
-                    """
-                    classes[node.name] = {'file': relpath, 'line': node.lineno}
-                    self.generic_visit(node)
-
-            CallVisitor().visit(tree)
+            _CallVisitor(relpath, defs, calls, classes).visit(tree)
 
     _log(f"AST: {len(defs)} 函数, {len(classes)} 类, {sum(len(v) for v in calls.values())} 调用边")
     return calls, defs, classes
@@ -342,12 +329,7 @@ def _check_index_stale(directory, run_dir):
 
 
 def _action_build(directory, force):
-    """Internal: action build.
-
-    Args:
-        directory: Description.
-        force: Description.
-    """
+    """构建项目知识库：ctags + AST 调用图 + DOT 流程图 + kb.md + SymbolIndex。"""
     directory = os.path.abspath(directory)
     if not os.path.isdir(directory):
         return f"❌ 目录不存在: {directory}"
@@ -416,13 +398,7 @@ def _action_build(directory, force):
     return summary
 
 def _action_query(directory, symbol, query_type):
-    """Internal: action query.
-
-    Args:
-        directory: Description.
-        symbol: Description.
-        query_type: Description.
-    """
+    """查询知识库：symbol/callers/callees/module/semantic 五种查询类型。"""
     directory = os.path.abspath(directory)
     run_dir = os.path.join(directory, _RUN_DIR)
 
@@ -786,11 +762,7 @@ def _action_generate_docs(directory):
 
 
 def _action_status(directory):
-    """Internal: action status.
-
-    Args:
-        directory: Description.
-    """
+    """查看知识库状态：文件列表、大小、符号数、调用边数。"""
     directory = os.path.abspath(directory)
     run_dir = os.path.join(directory, _RUN_DIR)
     if not os.path.isdir(run_dir):
@@ -984,27 +956,7 @@ def _action_deps(directory):
     return '\n'.join(lines)
 
 def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol", force="false", filepath=None):
-    """Toolkit explr.
-
-    Args:
-        action: Description.
-        directory: Description.
-        symbol: Description.
-        query_type: Description.
-        force: Description.
-        filepath: Description.
-    """
-    logger.info(f"toolkit_explr called: action={action!r}, directory={repr(directory)[:80]}, symbol={symbol!r}, query_type={query_type!r}, force={force!r}")
-    """Toolkit explr.
-
-    Args:
-        action: Description.
-        directory: Description.
-        symbol: Description.
-        query_type: Description.
-        force: Description.
-        filepath: Description.
-    """
+    """项目知识库构建与查询。action=build 构建索引，action=generate_docs 生成文档，action=query 查询符号/调用者/影响分析/依赖图。"""
     logger.info(f"toolkit_explr called: action={action!r}, directory={repr(directory)[:80]}, symbol={symbol!r}, query_type={query_type!r}, force={force!r}")
     force_bool = force in ("true", "True", "1")
     if action == "build":

@@ -76,13 +76,7 @@ def _format_python(action: str, path: str, style: str) -> str:
         subprocess.run(["python", "-m", "black", "--version"],
                       capture_output=True, check=True)
     except (subprocess.CalledProcessError, FileNotFoundError):
-        # 尝试安装 black
-        logger.info("black 未安装，正在安装...")
-        try:
-            subprocess.run(["pip", "install", "black"],
-                          capture_output=True, check=True)
-        except:
-            return "❌ black 未安装，请运行: pip install black"
+        return "❌ black 未安装，请运行: pip install black"
 
     # 构建命令
     cmd = ["python", "-m", "black"]

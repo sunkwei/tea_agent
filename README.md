@@ -1,4 +1,4 @@
-# Tea Agent v0.12.3
+# Tea Agent v0.13.0
 
 > ⚠️ **这是一个 AI 写 AI 的实验项目，自行承担责任。**
 
@@ -6,9 +6,9 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.12.3-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.13.0-blue)](https://pypi.org/project/tea-agent)
 
-Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 75+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / Web / REST API / ACP Protocol** 四种界面形态。
+Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 81+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / Web / REST API / ACP Protocol** 四种界面形态。
 
 ---
 
@@ -17,7 +17,7 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 75+ 可调用
 
 - 🧠 **自进化引擎** — Agent 可以修改自身代码、创建新工具、优化提示词，实现自主进化
 - 🧭 **上下文感知** — 自动检测当前项目身份：在 tea_agent 自身项目中启用全部自进化能力，在外部项目中自动禁用自进化行为，专注完成用户任务
-- 🧰 **75+ 内置工具** — 涵盖文件操作、代码编辑、搜索、截图、OCR、包管理、Git 等
+- 🧰 **81+ 内置工具** — 涵盖文件操作、代码编辑、搜索、截图、OCR、包管理、Git 等
 - ⏱️ **智能命令超时** — 后台监控进程 CPU/MEM/IO，活跃进程自动延长超时至 4x，空闲进程及时终止
 - 🖥️ **多种界面** — GUI（Tkinter）、Web（Starlette + SSE）、REST API、ACP Protocol，按需选择
 - 🌐 **Web V2 实时流式界面** — 单页应用(SPA)，内存搜索、记忆管理、任务调度、历史会话，全部功能浏览器内完成
@@ -196,7 +196,7 @@ python-multipart>=0.0.7 # 文件上传解析
 | 解压后体积 | ~3 MB | ~1.2 MB |
 | 运行时依赖 | ~80 MB | ~5 MB |
 | Python 文件数 | ~420 | ~280 |
-| 工具数 | 75+ | 50+ |
+| 工具数 | 81+ | 50+ |
 
 ---
 
@@ -1384,6 +1384,47 @@ python demo/multi_agent/server.py --port 8083
 
 ---
 
+---
+
+## 🧪 测试
+
+### 🔬 API 外部黑盒测试
+
+`tests/test_server_api.py` 是一个**无依赖侵入的 HTTP 黑盒测试脚本**，模拟客户端对 Server 所有 API 端点进行全覆盖调用：
+
+```bash
+python tests/test_server_api.py [--host 127.0.0.1] [--port 8282]
+```
+
+**8 大测试套件（30+ 测试点）：**
+
+| # | 套件 | 覆盖 |
+|---|------|------|
+| ① | 健康检查 | `/health`、`/api/sessions` 连通性 |
+| ② | tuc- 主题管理 | 查询→创建→列表校验→详情验证 |
+| ③ | 配置&模型信息 | `/api/config`、`/api/model`、`/v1/config`、配置列表 |
+| ④ | 多主题切换 | 2 个独立主题同时聊天→SSE 流→内容隔离验证 |
+| ⑤ | 删除&重命名 | 创建→重命名→详情验证→删除→404 确认 |
+| ⑥ | PDF 导出 4 组合 | `latest/final`、`latest/full`、`full_topic/final`、`full_topic/full` |
+| ⑦ | 附属接口 | 工具列表(81)、文件树、v1 会话、todos |
+| ⑧ | 错误路径 | 404/400/500、空 topic_id、空 body、不存在端点 |
+
+**运行方式：** 先启动 Server（`python -m tea_agent.server`），再执行测试。
+
+### 📋 单元测试
+
+```bash
+# 运行全部测试
+pytest
+
+# 或
+python -m pytest
+```
+
+包含 ACP 协议、DAG 工作流、多 Agent、Server 路由等功能测试。
+
+---
+
 ## 🏗️ 项目结构
 
 ```
@@ -1407,7 +1448,7 @@ tea_agent/
 ├── evaluation/            # 任务评估
 ├── skills/                # 技能结晶（17+ 个 .md 技能）
 ├── _gui/                  # GUI 组件（12 模块）
-├── tests/                 # 29 个测试文件（546+ 用例）
+├── tests/                 # 30 个测试文件（576+ 用例）
 └── demo/                  # 演示：蛇/俄罗斯方块/沪深300
 ```
 

@@ -40,7 +40,7 @@ import contextlib  # noqa: E402
 from tea_agent.agent import Agent  # noqa: E402
 from tea_agent.store import Storage, get_storage  # noqa: E402
 
-__version__ = "0.2.0"
+__version__ = "0.13.0"
 
 # 全局：max_iter 确认请求存储（confirm_id -> {session, timestamp}）
 # 当工具轮达到上限时，后端等待前端用户确认后继续或终止
@@ -1623,44 +1623,7 @@ def create_app(api_key: str | None = None,
 
             await self.app(scope, receive, send)
 
-    # ── 请求日志中间件 ──
-    # 在每个 HTTP 请求完成时打印：METHOD /path → 状态码
-    class RequestLogMiddleware:
-        """ASGI middleware: 记录每个 HTTP 请求的 method、完整 URL 和耗时。"""
-        def __init__(self, app):
-            self.app = app
-
-        async def __call__(self, scope, receive, send):
-            if scope["type"] != "http":
-                await self.app(scope, receive, send)
-                return
-
-            path = scope.get("path", "")
-            method = scope.get("method", "?")
-            # 拼接 query string（如果有）
-            qs = scope.get("query_string", b"")
-            full_path = path + ("?" + qs.decode() if qs else "")
-            start = time.time()
-
-            # 包装 send 以捕获状态码
-            status_code = [None]
-
-            async def _send_wrapper(message):
-                if message["type"] == "http.response.start":
-                    status_code[0] = message.get("status", 0)
-                await send(message)
-
-            try:
-                await self.app(scope, receive, _send_wrapper)
-            finally:
-                elapsed = time.time() - start
-                sc = status_code[0] or "?"
-                # 使用 print 确保终端一定能看到（logger.info 可能因日志配置不输出）
-                print(f"→ {method} {full_path} → {sc} ({elapsed*1000:.0f}ms)")
-
     app = Starlette(debug=False, routes=routes)
-    # 请求日志中间件在最外层（最先执行，最后收尾）
-    app.add_middleware(RequestLogMiddleware)
     if server_api_key:
         app.add_middleware(AuthMiddleware, api_key=server_api_key)
         logger.info("API Key 认证中间件已启用")

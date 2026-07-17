@@ -666,91 +666,23 @@ async def handle_web_new_topic(request):
     return JSONResponse({"topic_id": tid, "title": title})
 
 
-# ═══════════════════════════════════════════════════════════════
-#  Batch check helpers (plans & todos status for multiple topics)
-# ═══════════════════════════════════════════════════════════════
-
-def _batch_check_plans_status(topic_ids: set[str]) -> dict[str, bool]:
-    """批量查询哪些 topic 有活跃的 plan（status 不是 done/failed）。
-
-    从 .tea_agent_run/plans/*.json 中读取计划状态。
-    """
-    result: dict[str, bool] = {tid: False for tid in topic_ids}
-    plans_dir = ".tea_agent_run/plans"
-    try:
-        if not os.path.isdir(plans_dir):
-            return result
-        for fname in os.listdir(plans_dir):
-            if not fname.endswith(".json"):
-                continue
-            fpath = os.path.join(plans_dir, fname)
-            try:
-                with open(fpath, encoding="utf-8") as f:
-                    p = json.load(f)
-            except Exception:
-                continue
-            tid = p.get("topic_id", "")
-            if tid not in topic_ids:
-                continue
-            plan_status = (p.get("status") or "").lower()
-            if plan_status not in ("done", "failed"):
-                result[tid] = True
-    except Exception as e:
-        logger.warning(f"_batch_check_plans_status error: {e}")
-    return result
-
-
-def _batch_check_todos_status(topic_ids: set[str]) -> dict[str, bool]:
-    """批量查询哪些 topic 有未完成的 TODO。
-
-    从 storage DB 的 todo_items 表中查询。
-    """
-    result: dict[str, bool] = {tid: False for tid in topic_ids}
-    try:
-        server = get_server()
-        storage = server._get_storage()
-        if not storage or not hasattr(storage, 'conn') or not storage.conn:
-            return result
-        c = storage.conn.cursor()
-        placeholders = ",".join("?" for _ in topic_ids)
-        c.execute(
-            f"SELECT topic_id, COUNT(*) as cnt FROM todo_items "
-            f"WHERE topic_id IN ({placeholders}) AND done=0 GROUP BY topic_id",
-            list(topic_ids),
-        )
-        for row in c.fetchall():
-            result[row[0]] = row[1] > 0
-        c.close()
-    except Exception as e:
-        logger.warning(f"_batch_check_todos_status error: {e}")
-    return result
-
-
 async def handle_web_sessions(request):
     """GET /api/sessions — 返回话题列表，包含每个话题的活跃状态。
 
     返回扩展字段：
       - is_active: 是否正在前台对话中
       - is_background: 是否在后台处理中（客户端断连后）
-      - has_active_plans: 是否有未完成的计划
-      - has_active_todos: 是否有未完成的 TODO
     """
     limit = int(request.query_params.get("limit", 20))
     sessions = get_server().list_sessions(limit)
 
-    # 批量查询状态（一次 IO，避免 N+1）
-    topic_ids = {s["id"] for s in sessions}
     active_set = set(_active_sessions.keys())
     bg_set = set(_background_sessions.keys())
-    plans_status = _batch_check_plans_status(topic_ids)
-    todos_status = _batch_check_todos_status(topic_ids)
 
     for s in sessions:
         tid = s["id"]
         s["is_active"] = tid in active_set
         s["is_background"] = tid in bg_set
-        s["has_active_plans"] = plans_status.get(tid, False)
-        s["has_active_todos"] = todos_status.get(tid, False)
 
     return JSONResponse({"sessions": sessions})
 

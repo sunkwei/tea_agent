@@ -1238,10 +1238,10 @@ async function refreshTopics() {
     html += topics.map(function(t) {
       const title = t.title || t.id.slice(0, 8);
       const cls = 'topic-item' + (t.id === currentTopicId ? ' active' : '');
-      // ⭐ 判断 topic 是否有活跃状态：前台对话中 / 后台处理中 / 有活跃Plan / 有未完成TODO
+      // ⭐ 判断 topic 是否有正在进行的后台处理
       //    增加客户端 isStreaming 检测：当前正在发的消息立即显示转圈圈
       const isCurrentlyStreaming = isStreaming && t.id === currentTopicId;
-      const hasActivity = isCurrentlyStreaming || t.is_active || t.is_background || t.has_active_plans || t.has_active_todos;
+      const hasActivity = isCurrentlyStreaming || t.is_active || t.is_background;
       const spinnerHtml = hasActivity ? '<span class="topic-spinner"></span>' : '';
       return '<div class="' + cls + '" onclick="openTopic(\'' + t.id + '\',\'' + esc(title) + '\')">'
         + spinnerHtml

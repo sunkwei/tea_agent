@@ -1,7 +1,28 @@
 ﻿# Changelog
 
 
-## [0.10.13] - 2026-07-07
+## [0.13.0] - 2026-07-17
+### Features
+- feat: 新增 `tests/test_server_api.py` — Server API 外部黑盒测试套件（398 行，8 套件）
+  - tuc- 主题管理（查询/创建/列表/详情）
+  - 配置 & 模型信息提取
+  - 多主题切换 & SSE 流式内容隔离验证
+  - 删除/重命名/404 确认
+  - PDF 导出 4 种组合（latest/full_topic × final/full）
+  - 附属接口（工具列表/文件树/v1会话/todo）
+  - 错误路径全覆盖（404/400/500）
+- feat: 工具总数增长至 81+（新增 toolkit_crosscut_scan、toolkit_hf_txt2img 等）
+- feat: Server 路由全面公开 — API 端点完整列表已集成到测试覆盖
+
+### Improvements
+- improve: 代码清理 — 移除 RequestLogMiddleware、stale plans/todos 引用
+- improve: Mini 版同步更新（50+ 核心工具保留）
+- docs: README.md 补充测试章节，含 8 套件表格和运行说明
+- docs: CHANGELOG 同步版本记录
+
+### Internal
+- version: 统一版本号 0.13.0（pyproject.toml / __init__.py / server.py）
+- test: 单元测试 12/13 通过，API 黑盒测试 8/8 套件通过
 ### Bug Fixes
 - 修复: 任务面板 TodoDialog 去掉 TOPMOST 属性，创建独立非模态窗口
 - 修复: 任务完成后不再自动关闭面板，等待用户手动关闭

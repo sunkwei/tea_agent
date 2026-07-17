@@ -1,7 +1,7 @@
 # 2026-05-06 gen by claude, 添加包版本号
 # 2026-05-29 refactor: 统一 Agent 类
 
-__version__ = "0.9.20"
+__version__ = "0.13.0"
 
 __all__ = [
     "Agent",

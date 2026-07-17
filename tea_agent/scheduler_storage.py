@@ -228,8 +228,7 @@ def _start_thread():
         [python, "-c", """
 import sys, json, os
 sys.path.insert(0, os.getcwd())
-from tea_agent.toolkit.toolkit_self_evolve_thread import toolkit_self_evolve_thread
-r = toolkit_self_evolve_thread("start")
+# (自进化引擎已移除)
 print(json.dumps(r))
 """],
         capture_output=True, text=True, timeout=15

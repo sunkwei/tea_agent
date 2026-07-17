@@ -437,7 +437,7 @@ TOOL_CATEGORIES = {
         "toolkit_browser_tab", "toolkit_js_fetch", "toolkit_mcp",
     ],
     "自进化": [
-        "toolkit_self_evolve", "toolkit_self_evolve_thread",
+        "toolkit_self_evolve",
         "toolkit_prompt_evolve", "toolkit_evolution_exp",
         "toolkit_experience_solidify",
     ],

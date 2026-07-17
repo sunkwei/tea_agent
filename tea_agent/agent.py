@@ -25,7 +25,7 @@ from tea_agent.logging_setup import setup_logging
 from tea_agent.onlinesession import OnlineToolSession
 from tea_agent.store import Storage
 
-from .agent_background import start_scheduler, start_self_evolve_thread
+from .agent_background import start_scheduler
 from .agent_pipeline import do_async_summaries
 from .memory import PRIORITY_MEDIUM
 
@@ -300,8 +300,7 @@ class Agent:
         )
 
     def _start_background_services(self) -> None:
-        """启动自进化引擎和定时任务调度器。"""
-        start_self_evolve_thread(self._toolkit.tool_dir)
+        """启动定时任务调度器。"""
         start_scheduler()
 
     def toolkit_save(self, name: str, meta: dict, pycode: str) -> bool:

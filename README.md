@@ -769,7 +769,7 @@ build_api_messages(context, system_prompt) 完整流程:
 
 ## 🔄 自进化引擎
 
-Tea Agent 的自进化体系由**五个层次**构成：工具热插拔（基础）→ 安全自修改 → 提示词进化 → 经验固化 → 后台进化线程。
+Tea Agent 的自进化体系由**四个层次**构成：工具热插拔（基础）→ 安全自修改 → 提示词进化 → 经验固化。
 
 ---
 
@@ -915,27 +915,6 @@ list       → 列出所有技能模式
 
 ---
 
-### 5. 后台进化线程：`toolkit_self_evolve_thread`
-
-每小时自动运行一轮三合一巡检：
-
-```
-1. 工具使用率分析 → 优化建议
-   - 统计各工具调用次数
-   - 识别低使用率工具（建议删除或合并）
-   - 识别高频组合（建议合并为复合工具）
-
-2. docs/TOOLS.md 同步
-   - 扫描 toolkit/ 目录
-   - 根据 meta 信息生成工具文档
-   - 按类别分组 + 参数表格
-
-3. 技能模式整理
-   - 清理过时技能
-   - 合并相似模式
-   - 更新模式评分
-```
-
 ---
 
 ### 自进化能力全景
@@ -946,7 +925,6 @@ list       → 列出所有技能模式
 | 修改源文件 | `toolkit_self_evolve` | 5层安全 | Git↔Bak↔编译↔LSP↔测试 |
 | 优化提示词 | `toolkit_prompt_evolve` | 版本回滚 | 基于反思+记忆 |
 | 固化经验 | `toolkit_experience_solidify` | 分类标签 | 成功→技能，失败→教训 |
-| 后台进化 | `toolkit_self_evolve_thread` | 每小时 | 工具分析+文档同步+技能整理 |
 | 代码智能 | `toolkit_lsp` | 只读 | diagnose/completion/definition/references |
 
 ---
@@ -970,10 +948,10 @@ list       → 列出所有技能模式
 | 🔌 MCP 集成 | `toolkit_mcp` |
 | 🌐 Web/GUI | `toolkit_browser_tab`, `toolkit_dump_topic`, `toolkit_export_last_pdf`, `toolkit_notify` |
 | 📤 导出 | `toolkit_dump_topic`, `toolkit_export_last_pdf` |
-| 🧬 自进化 | `toolkit_self_evolve`, `toolkit_self_evolve_thread`, `toolkit_prompt_evolve`, `toolkit_evolution_exp` |
+| 🧬 自进化 | `toolkit_self_evolve`, `toolkit_prompt_evolve`, `toolkit_evolution_exp` |
 | 🛠️ 其他 | `toolkit_question`, `toolkit_stream_save`, `toolkit_set_topic_title`, `toolkit_self_report`, `toolkit_comment`, `toolkit_toggle_reasoning`, `toolkit_get_config_path`, `toolkit_get_models`, `toolkit_list_provider_models`, `toolkit_ip_location_my`, `toolkit_custom_commands`, `toolkit_scheduler_storage`, `toolkit_mode` |
 
-> 完整工具列表见 [`docs/TOOLS.md`](docs/TOOLS.md)（每小时自动更新）
+> 完整工具列表见 [`docs/TOOLS.md`](docs/TOOLS.md)
 
 
 ## 🤖 多 Agent 系统（v0.11+）

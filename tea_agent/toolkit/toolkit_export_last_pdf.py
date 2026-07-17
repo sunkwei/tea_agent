@@ -602,17 +602,17 @@ def _render_inline(pdf, text, body_font, text_color=(50, 50, 50)):
         if m.start() > last_end:
             parts.append(("text", text[last_end : m.start()]))
 
-        if m.group(1) and m.group(1).startswith("**"):  # **bold**
+        if m.group(2) is not None:  # **bold**
             parts.append(("bold", m.group(2)))
-        elif m.group(1) and m.group(1).startswith("__"):  # __bold__
+        elif m.group(3) is not None:  # __bold__
             parts.append(("bold", m.group(3)))
-        elif m.group(4):  # *italic*
+        elif m.group(4) is not None:  # *italic*
             parts.append(("italic", m.group(4)))
-        elif m.group(5):  # _italic_
+        elif m.group(5) is not None:  # _italic_
             parts.append(("italic", m.group(5)))
-        elif m.group(6):  # `code`
+        elif m.group(6) is not None:  # `code`
             parts.append(("code", m.group(6)))
-        elif m.group(7):  # [link](url)
+        elif m.group(7) is not None:  # [link](url)
             parts.append(("link", m.group(7), m.group(8)))
 
         last_end = m.end()

@@ -1132,6 +1132,11 @@ window.sendMessage = async function() {
                 if (s.thinkContainer) s.thinkContainer.removeAttribute('id');
                 if (s.toolCallContainer) s.toolCallContainer.removeAttribute('id');
               }
+              // 对话完成 → 更新浏览器标签页标题
+              const ttEl = $('tt');
+              if (ttEl && ttEl.textContent) {
+                document.title = ttEl.textContent + '(已完成)';
+              }
               break;
 
             case 'dag_viz': {
@@ -1298,7 +1303,9 @@ window.openTopic = async function(id, title) {
     renderQueueList();
   }
   currentTopicId = id;
-  $('tt').textContent = title || id.slice(0, 8);
+  const resolvedTitle = title || id.slice(0, 8);
+  $('tt').textContent = resolvedTitle;
+  document.title = resolvedTitle;
   refreshTopics();
   // 清空旧的后台轮询
   _stopBackgroundPoll();
@@ -1679,6 +1686,7 @@ window.newTopic = function() {
   _userNearBottom = true;  // 新话题重置滚动状态
   _stopBackgroundPoll();   // 清除后台轮询
   $('tt').textContent = '新对话';
+  document.title = '新对话';
   $('msgs').innerHTML = '';
   // Restore welcome
   const welcome = document.createElement('div');

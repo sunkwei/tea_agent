@@ -65,6 +65,20 @@ const $ = id => document.getElementById(id);
 const esc = t => { if (!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
 const escAttr = t => String(t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
+// ── 标题管理 ──
+/** 同步设置工具栏标题 + 浏览器标签页标题 */
+function setTitle(title) {
+  $('tt').textContent = title;
+  document.title = title;
+}
+/** 标记当前对话已完成（浏览器标签页追加"(已完成)"，幂等） */
+function markTitleDone() {
+  const tt = $('tt');
+  if (!tt || !tt.textContent) return;
+  const base = tt.textContent.replace(/\(已完成\)$/, '');
+  document.title = base + '(已完成)';
+}
+
 function showModal(id) { $(id).classList.add('open'); }
 function closeModal(id) { $(id).classList.remove('open'); }
 // Close modals on Escape
@@ -1132,11 +1146,7 @@ window.sendMessage = async function() {
                 if (s.thinkContainer) s.thinkContainer.removeAttribute('id');
                 if (s.toolCallContainer) s.toolCallContainer.removeAttribute('id');
               }
-              // 对话完成 → 更新浏览器标签页标题
-              const ttEl = $('tt');
-              if (ttEl && ttEl.textContent) {
-                document.title = ttEl.textContent + '(已完成)';
-              }
+              markTitleDone();
               break;
 
             case 'dag_viz': {
@@ -1303,9 +1313,7 @@ window.openTopic = async function(id, title) {
     renderQueueList();
   }
   currentTopicId = id;
-  const resolvedTitle = title || id.slice(0, 8);
-  $('tt').textContent = resolvedTitle;
-  document.title = resolvedTitle;
+  setTitle(title || id.slice(0, 8));
   refreshTopics();
   // 清空旧的后台轮询
   _stopBackgroundPoll();
@@ -1653,7 +1661,7 @@ async function _reloadCurrentConversations() {
     if (!d.conversations) return;
     // 更新工具栏标题（后台处理期间可能 AI 已自动重命名）
     const newTitle = d.conversations.length > 0 ? (d.title || currentTopicId.slice(0, 8)) : '';
-    if (newTitle) $('tt').textContent = newTitle;
+    if (newTitle) setTitle(newTitle);
     // 保留用户当前是否在底部
     const wasNearBottom = _isNearBottom();
     $('msgs').innerHTML = '';
@@ -1685,8 +1693,7 @@ window.newTopic = function() {
   currentTopicId = null;
   _userNearBottom = true;  // 新话题重置滚动状态
   _stopBackgroundPoll();   // 清除后台轮询
-  $('tt').textContent = '新对话';
-  document.title = '新对话';
+  setTitle('新对话');
   $('msgs').innerHTML = '';
   // Restore welcome
   const welcome = document.createElement('div');
@@ -1782,7 +1789,7 @@ window.renameTopic = async function(topicId) {
       refreshTopics();
       // Update toolbar title if this is the current topic
       if (topicId === currentTopicId) {
-        $('tt').textContent = newTitle;
+        setTitle(newTitle);
       }
     } else {
       toast('修改失败: ' + (d.error || ''), 'error');

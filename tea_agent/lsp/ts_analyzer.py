@@ -6,6 +6,7 @@
 import ast as py_ast
 import logging
 import os
+import time
 from collections import defaultdict
 from pathlib import Path
 
@@ -13,6 +14,8 @@ logger = logging.getLogger("ts_analyzer")
 
 _TS_LANG = None
 _TS_LANG_LOADED = False
+_PARSE_CACHE: dict[str, tuple[float, dict | None]] = {}
+_PARSE_CACHE_TTL = 300  # 5 分钟缓存（结构分析不要求实时精确到秒）
 
 def _ensure_ts():
     """Internal: ensure ts."""
@@ -83,10 +86,27 @@ def _extract_params(source_bytes, func_node):
     return params
 
 def parse_file(filepath: str) -> dict | None:
-    """解析 Python 文件，返回函数/类/导入/顶层符号的结构化信息。"""
+    """解析 Python 文件，返回函数/类/导入/顶层符号的结构化信息。根据 mtime 缓存结果。"""
+    try:
+        mtime = os.path.getmtime(filepath)
+    except OSError:
+        return None
+
+    cached = _PARSE_CACHE.get(filepath)
+    if cached and cached[0] == mtime and (time.time() - cached[0]) < _PARSE_CACHE_TTL:
+        return cached[1]
+
     lang = _ensure_ts()
     if lang is None:
-        return _parse_file_ast_fallback(filepath)
+        result = _parse_file_ast_fallback(filepath)
+    else:
+        result = _parse_with_ts(filepath, lang)
+
+    _PARSE_CACHE[filepath] = (mtime, result)
+    return result
+
+
+def _parse_with_ts(filepath: str, lang) -> dict | None:
 
     try:
         with open(filepath, encoding="utf-8", errors="replace") as f:

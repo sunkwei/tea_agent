@@ -196,15 +196,21 @@ class Agent:
         self._db = Storage(db_path=str(db_path))
         logger.info(f"Storage 初始化 | db: {db_path}")
 
-    def _init_session(self) -> None:
-        """根据 behavior.session_class 选择 LiteSession 或 OnlineToolSession。"""
+    def _init_session(self, *, update_ref: bool = True) -> None:
+        """根据 behavior.session_class 选择 LiteSession 或 OnlineToolSession。
+
+        Args:
+            update_ref: 是否更新全局 session_ref（hot-switch 时若存在活跃流式会话，
+                        应跳过 ref 更新以避免工具函数引用错乱）。
+        """
         if self.behavior.session_class == "LiteSession":
             self._sess = self._build_lite_session()
         else:
             self._sess = self._build_online_session()
 
-        _sref.set_session(self._sess, setter=f"Agent({self.mode})")
-        _sref.set_agent(self, setter=f"Agent({self.mode})")
+        if update_ref:
+            _sref.set_session(self._sess, setter=f"Agent({self.mode})")
+            _sref.set_agent(self, setter=f"Agent({self.mode})")
 
         tools_on = self._use_tools or self.behavior.use_background_services
         # lightweight 模式可显式关闭工具

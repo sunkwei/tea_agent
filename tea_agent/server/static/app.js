@@ -18,6 +18,11 @@ let _pendingImages = [];
 let _userNearBottom = true;
 let _toolCallState = null; // tool call tracking during streaming
 let _messageQueue = []; // 排队消息队列：isStreaming 时入队，生成完后自动发送
+let _streamGeneration = 0; // 递增标记，防止过期流的 finally 干扰新流
+
+// ── 后台处理轮询 ──
+let _backgroundPollTimer = null; // polling interval id
+let _backgroundPollTopic = null; // topic being polled
 
 // ── Queue List Render ──
 function renderQueueList() {
@@ -854,6 +859,9 @@ window.sendMessage = async function() {
     return;
   }
 
+  // 如果后台轮询还在运行，停止它（用户发新消息了，不再需要轮询旧流）
+  _stopBackgroundPoll();
+
   const input = $('ci');
   const msg = input.value.trim();
   if (!msg && _pendingImages.length === 0) return;
@@ -870,12 +878,17 @@ window.sendMessage = async function() {
 
   // Create assistant message container and state
   const s = _createStreamState();
+  _streamGeneration++;
+  const myGen = _streamGeneration;
   isStreaming = true;
   _pendingUsage = null;
 
   // Hide old usage bar
   const oldUsageBar = $('usage-bar');
   if (oldUsageBar) oldUsageBar.style.display = 'none';
+
+  // 立即在 topic 列表显示转圈圈（当前主题正在对话中）
+  refreshTopics();
 
   abortController = new AbortController();
 
@@ -1174,9 +1187,12 @@ window.sendMessage = async function() {
       if (bt) bt.innerHTML = '<span style="color:var(--red)">网络错误: ' + esc(e.message) + '</span>';
     }
   } finally {
-    isStreaming = false;
-    abortController = null;
-    _processQueueAfterStream();
+    if (myGen === _streamGeneration) {
+      isStreaming = false;
+      abortController = null;
+      _processQueueAfterStream();
+    }
+    // else: 这是过期流（用户已切换主题），不做任何操作
   }
 };
 
@@ -1222,7 +1238,13 @@ async function refreshTopics() {
     html += topics.map(function(t) {
       const title = t.title || t.id.slice(0, 8);
       const cls = 'topic-item' + (t.id === currentTopicId ? ' active' : '');
+      // ⭐ 判断 topic 是否有活跃状态：前台对话中 / 后台处理中 / 有活跃Plan / 有未完成TODO
+      //    增加客户端 isStreaming 检测：当前正在发的消息立即显示转圈圈
+      const isCurrentlyStreaming = isStreaming && t.id === currentTopicId;
+      const hasActivity = isCurrentlyStreaming || t.is_active || t.is_background || t.has_active_plans || t.has_active_todos;
+      const spinnerHtml = hasActivity ? '<span class="topic-spinner"></span>' : '';
       return '<div class="' + cls + '" onclick="openTopic(\'' + t.id + '\',\'' + esc(title) + '\')">'
+        + spinnerHtml
         + esc(title)
         + '<span class="topic-menu-wrap">'
         + '<button class="more-btn" onclick="event.stopPropagation();showTopicMenu(this,\'' + t.id + '\')">⋯</button>'
@@ -1237,13 +1259,30 @@ async function refreshTopics() {
 }
 
 window.openTopic = async function(id, title) {
-  // 如果正在流式生成中，先中断
-  if (isStreaming) {
+  // 如果正在流式生成中且切换不同主题 → 不中断对话，仅分离 UI
+  // 后台线程会继续完成对话并自动保存到数据库
+  if (isStreaming && currentTopicId && currentTopicId !== id) {
+    // ⭐ 中断旧 SSE fetch → 服务器收到 CancelledError → session 移入 _background_sessions
     if (abortController) {
       abortController.abort();
       abortController = null;
     }
-    if (currentTopicId && currentTopicId !== id) {
+    _streamGeneration++; // 标记旧流为过期
+    isStreaming = false;
+    removeLoading();
+    _messageQueue = [];
+    renderQueueList();
+    const sendBtn = $('send-btn');
+    sendBtn.textContent = '发送';
+    sendBtn.className = 'btn btn-p primary';
+    sendBtn.disabled = false;
+  } else if (isStreaming) {
+    // 同一个主题或当前无主题：正常中断
+    if (abortController) {
+      abortController.abort();
+      abortController = null;
+    }
+    if (currentTopicId) {
       try {
         await fetch('/api/chat/abort', {
           method: 'POST',
@@ -1261,6 +1300,8 @@ window.openTopic = async function(id, title) {
   currentTopicId = id;
   $('tt').textContent = title || id.slice(0, 8);
   refreshTopics();
+  // 清空旧的后台轮询
+  _stopBackgroundPoll();
   try {
     const r = await fetch('/api/topic/' + id + '/conversations?limit=50');
     if (!r.ok) return;
@@ -1272,33 +1313,371 @@ window.openTopic = async function(id, title) {
       if (c.user_msg) addMessage('user', c.user_msg);
       if (c.ai_msg) addMessage('assistant', c.ai_msg);
     });
+    // ⭐ 检查 topic 是否在后台处理中，若是则启动轮询
+    _checkBackgroundAndPoll(id);
   } catch(e) {}
 };
 
+/**
+ * 检查 topic 是否有后台处理，如有则启动轮询等待完成
+ */
+async function _checkBackgroundAndPoll(topicId) {
+  try {
+    const r = await fetch('/api/topic/' + topicId + '/status');
+    if (!r.ok) return;
+    const status = await r.json();
+    if (status.background || status.active) {
+      _showBackgroundIndicator(topicId);
+      _startBackgroundPoll(topicId);
+    }
+  } catch(e) {}
+}
+
+function _showBackgroundIndicator(topicId) {
+  let banner = $('bg-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'bg-banner';
+    banner.className = 'bg-processing-banner';
+    banner.innerHTML = '<span class="bg-spinner"></span> ⏳ 后台正在处理中…';
+    $('msgs').prepend(banner);
+  }
+}
+
+function _removeBackgroundIndicator() {
+  const banner = $('bg-banner');
+  if (banner) banner.remove();
+}
+
+/**
+ * 在后台处理期间，尝试实时渲染缓冲区中的 SSE 事件
+ * 让用户看到 token 逐字输出，而不是只有"处理中"提示
+ */
+let _bufferSince = -1;
+let _bufferEventCount = 0;
+let _bufferStreamState = null; // 复用 _createStreamState 的结构
+
+function _ensureBufferStreamState() {
+  if (!_bufferStreamState) {
+    _bufferStreamState = {
+      bubbleText: null,
+      fullText: '',
+      thinkContainer: null,
+      thinkSummary: null,
+      thinkList: null,
+      thinkContent: null,
+      thinkCount: 0,
+      toolCallContainer: null,
+      toolCallList: null,
+      toolCallSummary: null,
+      toolCallBadge: null,
+      toolCallCount: 0,
+      toolDoneCount: 0,
+      activeToolItem: null,
+    };
+  }
+  return _bufferStreamState;
+}
+
+/** 渲染一个来自缓冲区的 SSE 事件到消息区 */
+function _renderBufferEvent(event) {
+  const s = _ensureBufferStreamState();
+  switch (event.type) {
+
+    case 'token':
+      s.fullText += event.text;
+      if (!s.bubbleText) {
+        // 首次 token：创建 AI 消息容器
+        const agentDiv = document.createElement('div');
+        agentDiv.className = 'msg assistant';
+        agentDiv.innerHTML = '<div class="msg-label">Tea Agent</div><div class="msg-bubble"><div class="bubble-text"></div></div>';
+        $('msgs').appendChild(agentDiv);
+        s.bubbleText = agentDiv.querySelector('.bubble-text');
+        _removeBackgroundIndicator(); // 有实际内容了，隐藏"处理中"提示
+      }
+      s.bubbleText.innerHTML = esc(s.fullText);
+      scrollBottom();
+      break;
+
+    case 'think_start':
+      if (!s.thinkContainer) {
+        s.thinkContainer = document.createElement('div');
+        s.thinkContainer.className = 'think-container collapsed';
+        // 找到最后一个 assistant 消息的 bubble 插入
+        const lastBubble = $('msgs').querySelector('.msg.assistant:last-child .msg-bubble');
+        if (lastBubble) {
+          lastBubble.insertBefore(s.thinkContainer, lastBubble.querySelector('.bubble-text'));
+        }
+        s.thinkSummary = document.createElement('div');
+        s.thinkSummary.className = 'think-summary';
+        s.thinkSummary.innerHTML = '<span class="think-summary-icon">🧠</span>'
+          + '<span class="think-summary-label">思考过程</span>'
+          + '<span class="think-summary-badge" id="bg-think-badge">0</span>'
+          + '<span class="think-summary-arrow">▸</span>';
+        s.thinkSummary.addEventListener('click', function() {
+          var list = s.thinkContainer.querySelector('.think-list');
+          if (list) {
+            var expanded = list.style.display !== 'none';
+            list.style.display = expanded ? 'none' : '';
+            s.thinkContainer.classList.toggle('collapsed', expanded);
+            s.thinkSummary.querySelector('.think-summary-arrow').textContent = expanded ? '▸' : '▾';
+          }
+        });
+        s.thinkContainer.appendChild(s.thinkSummary);
+        s.thinkList = document.createElement('div');
+        s.thinkList.className = 'think-list';
+        s.thinkList.style.display = 'none';
+        s.thinkContainer.appendChild(s.thinkList);
+      }
+      s.thinkCount++;
+      var badge = s.thinkContainer.querySelector('.think-summary-badge');
+      if (badge) badge.textContent = s.thinkCount;
+      var entry = document.createElement('details');
+      entry.className = 'think-entry';
+      entry.innerHTML = '<summary>思考 #' + s.thinkCount + '</summary><div class="think-content"></div>';
+      s.thinkList.appendChild(entry);
+      s.thinkContent = entry.querySelector('.think-content');
+      break;
+
+    case 'think':
+      if (s.thinkContent) {
+        s.thinkContent.textContent += event.text;
+      }
+      break;
+
+    case 'think_done':
+      if (s.thinkList) {
+        var lastEntry = s.thinkList.querySelector('.think-entry:last-child');
+        if (lastEntry) {
+          var summary = lastEntry.querySelector('summary');
+          var content = lastEntry.querySelector('.think-content');
+          if (summary) {
+            var preview = content ? content.textContent.trim().replace(/\s+/g, ' ').substring(0, 32) : '';
+            if (preview) preview = '：' + preview;
+            summary.textContent = '思考 #' + s.thinkCount + ' 完成' + preview;
+          }
+        }
+      }
+      break;
+
+    case 'tool_start': {
+      if (!s.toolCallContainer) {
+        s.toolCallContainer = document.createElement('div');
+        s.toolCallContainer.className = 'tool-call-container collapsed';
+        const lastBubble = $('msgs').querySelector('.msg.assistant:last-child .msg-bubble');
+        if (lastBubble) {
+          lastBubble.insertBefore(s.toolCallContainer, lastBubble.querySelector('.bubble-text'));
+        }
+        s.toolCallSummary = document.createElement('div');
+        s.toolCallSummary.className = 'tool-call-summary';
+        s.toolCallSummary.innerHTML = '<span class="tool-call-summary-icon">🛠</span>'
+          + '<span class="tool-call-summary-label">工具调用</span>'
+          + '<span class="tool-call-summary-badge" id="bg-tc-badge">0</span>'
+          + '<span class="tool-call-summary-arrow">▸</span>';
+        s.toolCallSummary.addEventListener('click', function() {
+          var list = s.toolCallContainer.querySelector('.tool-call-list');
+          if (list) {
+            var expanded = list.style.display !== 'none';
+            list.style.display = expanded ? 'none' : '';
+            s.toolCallContainer.classList.toggle('collapsed', expanded);
+            s.toolCallSummary.querySelector('.tool-call-summary-arrow').textContent = expanded ? '▸' : '▾';
+          }
+        });
+        s.toolCallContainer.appendChild(s.toolCallSummary);
+        s.toolCallList = document.createElement('div');
+        s.toolCallList.className = 'tool-call-list';
+        s.toolCallList.style.display = 'none';
+        s.toolCallContainer.appendChild(s.toolCallList);
+      }
+      s.toolCallCount++;
+      var badge = s.toolCallContainer.querySelector('.tool-call-summary-badge');
+      if (badge) badge.textContent = s.toolCallCount;
+      var item = document.createElement('details');
+      item.className = 'tool-call-item running';
+      item.innerHTML = '<summary class="tool-call-header">'
+        + '<span class="tool-call-icon">⚡</span>'
+        + '<span class="tool-call-name">' + esc(event.name || '工具') + '</span>'
+        + '<span class="tool-call-status status-running">运行中</span>'
+        + '</summary>'
+        + '<div class="tool-call-detail">'
+        + '<div class="tool-call-section"><div class="tool-call-section-label">参数</div><pre class="tool-call-args"></pre></div>'
+        + '<div class="tool-call-section"><div class="tool-call-section-label">结果</div><pre class="tool-call-result"></pre></div>'
+        + '</div>';
+      s.toolCallList.appendChild(item);
+      s.activeToolItem = item;
+      break;
+    }
+
+    case 'tool_args':
+      if (s.activeToolItem) {
+        var argsPre = s.activeToolItem.querySelector('.tool-call-args');
+        if (argsPre) argsPre.textContent += event.args;
+      }
+      break;
+
+    case 'tool_result':
+      if (s.activeToolItem) {
+        var resPre = s.activeToolItem.querySelector('.tool-call-result');
+        if (resPre) resPre.textContent += event.result;
+      }
+      break;
+
+    case 'tool_done':
+      s.toolDoneCount++;
+      if (s.activeToolItem) {
+        s.activeToolItem.classList.remove('running');
+        s.activeToolItem.classList.add('done');
+        var status = s.activeToolItem.querySelector('.tool-call-status');
+        if (status) {
+          status.textContent = '✅ 完成';
+          status.className = 'tool-call-status status-done';
+        }
+        var badge = s.toolCallContainer && s.toolCallContainer.querySelector('.tool-call-summary-badge');
+        if (badge) badge.textContent = s.toolDoneCount + '/' + s.toolCallCount;
+      }
+      s.activeToolItem = null;
+      break;
+
+    case 'status':
+      if (event.text) {
+        var oldStatus = document.getElementById('bg-stream-status');
+        if (!oldStatus) {
+          var statusDiv = document.createElement('div');
+          statusDiv.id = 'bg-stream-status';
+          statusDiv.className = 'stream-status';
+          var lastBubble = $('msgs').querySelector('.msg.assistant:last-child .msg-bubble');
+          if (lastBubble) {
+            lastBubble.appendChild(statusDiv);
+          }
+        }
+        var sd = $('bg-stream-status');
+        if (sd) sd.textContent = event.text;
+      }
+      break;
+
+    case 'done':
+      // 后台流结束，用 Markdown 重新渲染最终消息
+      if (event.ai_msg && s.bubbleText) {
+        s.bubbleText.innerHTML = formatMarkdown(event.ai_msg);
+      }
+      break;
+
+    case 'error':
+      if (s.bubbleText) {
+        s.bubbleText.innerHTML = '<span style="color:var(--red)">错误: ' + esc(event.error) + '</span>';
+      }
+      break;
+  }
+}
+
+function _startBackgroundPoll(topicId) {
+  _stopBackgroundPoll();
+  _backgroundPollTopic = topicId;
+  _bufferSince = -1;
+  _bufferEventCount = 0;
+  _bufferStreamState = null;
+
+  _backgroundPollTimer = setInterval(async function() {
+    try {
+      // 1) 同时拉取 status（判断是否结束）和 stream-buffer（实时事件）
+      const [statusResp, bufferResp] = await Promise.all([
+        fetch('/api/topic/' + topicId + '/status'),
+        fetch('/api/topic/' + topicId + '/stream-buffer?since=' + _bufferSince),
+      ]);
+
+      // 处理缓冲区事件
+      if (bufferResp.ok) {
+        const buf = await bufferResp.json();
+        if (buf.events && buf.events.length > 0) {
+          _bufferEventCount += buf.events.length;
+          buf.events.forEach(function(entry) {
+            _renderBufferEvent(entry.event);
+          });
+          _bufferSince = buf.next_index || 0;
+        }
+
+        // 流已完成 → 结束轮询，重新加载完整的最终会话
+        if (buf.done) {
+          _stopBackgroundPoll();
+          _removeBackgroundIndicator();
+          _reloadCurrentConversations();
+          refreshTopics();
+          return;
+        }
+      }
+
+      // 也检查 status （兜底）
+      if (statusResp.ok) {
+        const status = await statusResp.json();
+        if (!status.background && !status.active) {
+          // 后台已结束但 buffer 没标记 done（可能没有 buffer 或 buffer 已过期）
+          _stopBackgroundPoll();
+          _removeBackgroundIndicator();
+          _reloadCurrentConversations();
+          refreshTopics();
+          return;
+        }
+      }
+    } catch(e) {
+      _stopBackgroundPoll();
+    }
+  }, 1500); // 每 1.5 秒轮询一次（比之前 2 秒更密集，使实时性更好）
+}
+
+function _stopBackgroundPoll() {
+  if (_backgroundPollTimer) {
+    clearInterval(_backgroundPollTimer);
+    _backgroundPollTimer = null;
+  }
+  _backgroundPollTopic = null;
+  _removeBackgroundIndicator();
+}
+
+async function _reloadCurrentConversations() {
+  if (!currentTopicId) return;
+  // 重置缓冲区状态（避免与后续新流冲突）
+  _bufferStreamState = null;
+  _bufferSince = -1;
+  _bufferEventCount = 0;
+  try {
+    const r = await fetch('/api/topic/' + currentTopicId + '/conversations?limit=50');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.conversations) return;
+    // 更新工具栏标题（后台处理期间可能 AI 已自动重命名）
+    const newTitle = d.conversations.length > 0 ? (d.title || currentTopicId.slice(0, 8)) : '';
+    if (newTitle) $('tt').textContent = newTitle;
+    // 保留用户当前是否在底部
+    const wasNearBottom = _isNearBottom();
+    $('msgs').innerHTML = '';
+    d.conversations.forEach(function(c) {
+      if (c.user_msg) addMessage('user', c.user_msg);
+      if (c.ai_msg) addMessage('assistant', c.ai_msg);
+    });
+    if (wasNearBottom) scrollBottom();
+  } catch(e) {}
+}
+
 window.newTopic = function() {
-  // 如果正在流式生成中，先中断
+  // 如果正在流式生成中 → abort fetch 触发后台会话
   if (isStreaming) {
     if (abortController) {
       abortController.abort();
       abortController = null;
     }
-    if (currentTopicId) {
-      try {
-        fetch('/api/chat/abort', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ topic_id: currentTopicId }),
-          signal: AbortSignal.timeout(3000),
-        });
-      } catch(e) { /* ignore */ }
-    }
+    _streamGeneration++; // 标记旧流为过期
     isStreaming = false;
     removeLoading();
     _messageQueue = [];
     renderQueueList();
+    const sendBtn = $('send-btn');
+    sendBtn.textContent = '发送';
+    sendBtn.className = 'btn btn-p primary';
+    sendBtn.disabled = false;
   }
   currentTopicId = null;
   _userNearBottom = true;  // 新话题重置滚动状态
+  _stopBackgroundPoll();   // 清除后台轮询
   $('tt').textContent = '新对话';
   $('msgs').innerHTML = '';
   // Restore welcome
@@ -2012,6 +2391,8 @@ window.applyConfig = async function() {
     return;
   }
 
+  if (isStreaming && !confirm('当前正在生成回复中，切换配置可能导致会话异常。\n确定要切换吗？')) return;
+
   function nv(id) { const v = $(id).value.trim(); return v ? Number(v) : null; }
 
   showCfgStatus('正在应用...', 'info');
@@ -2228,6 +2609,7 @@ async function refreshConfigDropdown() {
 
 window.switchConfig = async function(path) {
   if (!path) return;
+  if (isStreaming && !confirm('当前正在生成回复中，切换配置可能导致会话异常。\n确定要切换吗？')) return;
   try {
     const r = await fetch('/api/model/config', {
       method: 'POST',

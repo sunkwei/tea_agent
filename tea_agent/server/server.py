@@ -54,12 +54,30 @@ _question_pending = {}  # type: dict[str, dict]
 # 用于中断请求通过 topic_id 找到对应 session 并调用 interrupt()
 _active_sessions: dict = {}
 
+# 全局：后台运行会话（topic_id -> session）
+# 用户断连后，后台线程仍在处理中的会话
+# 与 _active_sessions 互斥：同一 topic 不同时出现在两个集合中
+# 用于防止用户切回时启动重复会话，并让前端轮询状态
+_background_sessions: dict = {}
+_background_sessions_lock = threading.Lock()
+
 # 全局：消息队列（topic_id -> list[dict]）
 # 当某 topic 正在对话时，后续输入的消息进入排队队列
 # 当前对话完成后自动执行下一条排队消息（FIFO）
 # 每项: {"id": str, "message": str, "images": list, "timestamp": float}
 _message_queue: dict[str, list[dict]] = {}
 _message_queue_lock = threading.Lock()
+
+# 全局：后台会话 SSE 事件缓冲区（topic_id -> buffer_dict）
+# 当客户端断连后，后台线程仍在输出 SSE 事件，缓冲区存储这些事件
+# 供前端轮询获取实时流式内容（切换回进行中的主题时）
+# buffer_dict = {
+#   "events": [{"index": int, "event": dict}, ...],
+#   "done": bool,     # stream 是否已完成
+#   "created": float,  # 缓冲区创建时间
+# }
+_background_buffers: dict[str, dict] = {}
+_background_buffers_lock = threading.Lock()
 
 
 def _queue_add(topic_id: str, message: str, images: list | None = None) -> str:
@@ -112,8 +130,116 @@ def _queue_pop(topic_id: str) -> dict | None:
 
 
 def _is_topic_busy(topic_id: str) -> bool:
-    """检查 topic 是否正在对话中。"""
-    return topic_id in _active_sessions
+    """检查 topic 是否正在对话中（含前台活跃和后台运行）。"""
+    return topic_id in _active_sessions or topic_id in _background_sessions
+
+
+# ── 后台 SSE 事件缓冲区 ──
+
+def _create_background_buffer(topic_id: str) -> dict:
+    """创建后台会话 SSE 事件缓冲区。"""
+    buf = {"events": [], "done": False, "created": time.time()}
+    with _background_buffers_lock:
+        _background_buffers[topic_id] = buf
+    logger.debug(f"Background buffer created for topic={topic_id}")
+    return buf
+
+
+def _append_to_buffer(topic_id: str, event: dict, index: int) -> None:
+    """向后台缓冲区追加事件（线程安全）。"""
+    with _background_buffers_lock:
+        buf = _background_buffers.get(topic_id)
+        if buf is not None and not buf["done"]:
+            buf["events"].append({"index": index, "event": event})
+
+
+def _mark_buffer_done(topic_id: str) -> None:
+    """标记后台缓冲区为已完成。"""
+    with _background_buffers_lock:
+        buf = _background_buffers.get(topic_id)
+        if buf is not None:
+            buf["done"] = True
+
+
+def _read_buffer_since(topic_id: str, since: int) -> dict:
+    """读取缓冲区内从 since 索引之后的事件。
+
+    Returns:
+        {"events": [...], "done": bool, "next_index": int}
+    """
+    with _background_buffers_lock:
+        buf = _background_buffers.get(topic_id)
+        if buf is None:
+            return {"events": [], "done": True, "next_index": 0}
+        events_since = [e for e in buf["events"] if e["index"] > since]
+        next_index = (buf["events"][-1]["index"] + 1) if buf["events"] else 0
+        return {
+            "events": events_since,
+            "done": buf["done"],
+            "next_index": next_index,
+        }
+
+
+def _cleanup_buffer(topic_id: str) -> None:
+    """清理后台缓冲区。"""
+    with _background_buffers_lock:
+        _background_buffers.pop(topic_id, None)
+
+
+async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
+                                     event_loop: asyncio.AbstractEventLoop):
+    """后台缓冲区读取器：从 queue 消费事件并写入缓冲区。
+
+    当客户端断连后，SSE 生成器退出，但后台线程继续向 queue 推送事件。
+    此协程读取 queue 中的事件并存储到 _background_buffers，供前端轮询。
+    """
+    buffer = _create_background_buffer(topic_id)
+    index = 0
+    try:
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=300)
+                _append_to_buffer(topic_id, event, index)
+                index += 1
+                if event.get("type") in ("done", "error"):
+                    _mark_buffer_done(topic_id)
+                    break
+            except asyncio.TimeoutError:
+                # 检查后台会话是否还存活
+                with _background_sessions_lock:
+                    if topic_id not in _background_sessions:
+                        # 会话已结束（_chat_stream_sse_wrapper 的 finally 已清理）
+                        _mark_buffer_done(topic_id)
+                        break
+    except asyncio.CancelledError:
+        _mark_buffer_done(topic_id)
+    except Exception:
+        logger.exception(f"Background buffer reader error for topic={topic_id}")
+        _mark_buffer_done(topic_id)
+    finally:
+        # 流完成后再存活 30 秒供前端拉取剩余数据，然后清理
+        async def _delayed_cleanup():
+            await asyncio.sleep(30)
+            _cleanup_buffer(topic_id)
+        asyncio.ensure_future(_delayed_cleanup(), loop=event_loop)
+
+
+def _chat_stream_sse_wrapper(server, session, storage, msg, queue, topic_id, loop):
+    """chat_stream_sse 的包装函数，确保后台线程结束时清理 _background_sessions。
+
+    当客户端断连后，topic 被移入 _background_sessions，此包装函数在
+    线程结束时负责清理，避免 _background_sessions 无限膨胀。
+    """
+    try:
+        server.chat_stream_sse(session, storage, msg, queue, topic_id, loop)
+    finally:
+        # 标记缓冲区已完成（如果有）
+        _mark_buffer_done(topic_id)
+        # 清理后台会话标记
+        with _background_sessions_lock:
+            _background_sessions.pop(topic_id, None)
+        # 兜底：也从活跃会话中移除（正常情况下此时已不在 _active_sessions）
+        _active_sessions.pop(topic_id, None)
 
 
 # ── Server 模式下的 Question 处理器 ──
@@ -632,6 +758,11 @@ class APIServer:
                 _put({"type": "status", "text": status_msg})
 
         try:
+            # 将全局 session_ref 指向当前流式 Session，确保工具函数引用正确
+            from tea_agent import session_ref as _sess_ref
+            _saved_session = _sess_ref._current_session
+            _sess_ref._current_session = session
+
             # 新主题或已有主题
             if not topic_id:
                 topic_id = storage.create_topic("Web Session")
@@ -688,6 +819,8 @@ class APIServer:
         except Exception as e:
             logger.exception("Chat stream error")
             _put({"type": "error", "error": str(e)})
+        finally:
+            _sess_ref._current_session = _saved_session
     # ── Topic conversations (Web UI format) ──
 
     def get_topic_conversations(self, topic_id: str, limit: int = 0) -> list:
@@ -886,6 +1019,8 @@ class APIServer:
         """Hot-switch models (main + optional cheap) at runtime. Preserves current topic."""
         topic_id = self._agent.current_topic_id if self._agent else ""
 
+        has_active_streams = bool(_active_sessions)
+
         with self._lock:
             if self._agent and self._agent.sess:
                 self._agent.sess.close()
@@ -921,7 +1056,7 @@ class APIServer:
                 if cheap_options is not None:
                     cfg.cheap_model.options = cheap_options
 
-            agent._init_session()
+            agent._init_session(update_ref=not has_active_streams)
 
             if topic_id:
                 agent.current_topic_id = topic_id
@@ -1367,6 +1502,8 @@ def create_app(api_key: str | None = None,
         handle_web_topic_conversations,
         handle_web_topic_info,
         handle_web_topic_plans,
+        handle_web_topic_status,
+        handle_web_topic_stream_buffer,
         handle_web_topic_todo_update,
         handle_web_topic_todos,
         handle_web_update_config,
@@ -1393,6 +1530,8 @@ def create_app(api_key: str | None = None,
         Route("/api/new_topic", endpoint=handle_web_new_topic, methods=["POST"]),
         Route("/api/sessions", endpoint=handle_web_sessions),
         Route("/api/topic/{topic_id:str}", endpoint=handle_web_topic_info, methods=["GET", "PUT", "DELETE"]),
+        Route("/api/topic/{topic_id:str}/status", endpoint=handle_web_topic_status),
+        Route("/api/topic/{topic_id:str}/stream-buffer", endpoint=handle_web_topic_stream_buffer),
         Route("/api/topic/{topic_id:str}/conversations", endpoint=handle_web_topic_conversations),
         Route("/api/topic/{topic_id:str}/todos", endpoint=handle_web_topic_todos),
         Route("/api/topic/{topic_id:str}/todos/{idx:int}", endpoint=handle_web_topic_todo_update, methods=["PUT"]),
@@ -1484,7 +1623,44 @@ def create_app(api_key: str | None = None,
 
             await self.app(scope, receive, send)
 
+    # ── 请求日志中间件 ──
+    # 在每个 HTTP 请求完成时打印：METHOD /path → 状态码
+    class RequestLogMiddleware:
+        """ASGI middleware: 记录每个 HTTP 请求的 method、完整 URL 和耗时。"""
+        def __init__(self, app):
+            self.app = app
+
+        async def __call__(self, scope, receive, send):
+            if scope["type"] != "http":
+                await self.app(scope, receive, send)
+                return
+
+            path = scope.get("path", "")
+            method = scope.get("method", "?")
+            # 拼接 query string（如果有）
+            qs = scope.get("query_string", b"")
+            full_path = path + ("?" + qs.decode() if qs else "")
+            start = time.time()
+
+            # 包装 send 以捕获状态码
+            status_code = [None]
+
+            async def _send_wrapper(message):
+                if message["type"] == "http.response.start":
+                    status_code[0] = message.get("status", 0)
+                await send(message)
+
+            try:
+                await self.app(scope, receive, _send_wrapper)
+            finally:
+                elapsed = time.time() - start
+                sc = status_code[0] or "?"
+                # 使用 print 确保终端一定能看到（logger.info 可能因日志配置不输出）
+                print(f"→ {method} {full_path} → {sc} ({elapsed*1000:.0f}ms)")
+
     app = Starlette(debug=False, routes=routes)
+    # 请求日志中间件在最外层（最先执行，最后收尾）
+    app.add_middleware(RequestLogMiddleware)
     if server_api_key:
         app.add_middleware(AuthMiddleware, api_key=server_api_key)
         logger.info("API Key 认证中间件已启用")
@@ -1557,7 +1733,12 @@ def run_server(host: str = "127.0.0.1", port: int = 8282,
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     global _uvicorn_server
     _uvicorn_server = uvicorn.Server(config)
-    _uvicorn_server.run()
+    try:
+        _uvicorn_server.run()
+    except KeyboardInterrupt:
+        # Python 3.11+ 的 asyncio.run() 会将 CancelledError 转为 KeyboardInterrupt
+        # 此时 uvicorn 已完成内部清理，只需静默退出
+        print("\nServer stopped.")
 
 
 # ── CLI Entry ──

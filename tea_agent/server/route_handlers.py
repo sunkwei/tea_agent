@@ -24,6 +24,11 @@ from tea_agent.toolkit.toolkit_export_last_pdf import export_topic_pdf
 from .server import (
     __version__,
     _active_sessions,
+    _background_sessions,
+    _background_sessions_lock,
+    _background_buffer_reader,
+    _read_buffer_since,
+    _chat_stream_sse_wrapper,
     _max_iter_pending,
     _question_pending,
     _queue_add,
@@ -488,8 +493,8 @@ async def handle_web_chat(request):
             _active_sessions[topic_id] = session
 
             thread = threading.Thread(
-                target=server.chat_stream_sse,
-                args=(session, storage, msg_payload, queue, topic_id, loop),
+                target=_chat_stream_sse_wrapper,
+                args=(server, session, storage, msg_payload, queue, topic_id, loop),
                 daemon=True,
             )
             thread.start()
@@ -510,9 +515,21 @@ async def handle_web_chat(request):
                         break
                     # 线程还活着，继续等（5分钟间隔避免 busy-loop）
         except asyncio.CancelledError:
-            # 客户端断连 → 中断后台线程，避免空跑
-            logger.info("Web SSE client disconnected, interrupting session")
-            session.interrupt()
+            # 客户端断连 → 不中断 session（留给 /api/chat/abort 处理）
+            # 后台线程会继续完成对话并自动保存到数据库
+            logger.info("Web SSE client disconnected, session continues in background")
+            # ⭐ 移入后台会话追踪，防止用户切回时启动重复会话
+            # _chat_stream_sse_wrapper 的 finally 会在线程结束时清理
+            with _background_sessions_lock:
+                _background_sessions[topic_id] = session
+            # ⭐ 启动后台缓冲区读取器：消费 queue 中的后续 SSE 事件并缓存
+            # 供前端轮询获取实时流式内容
+            loop = asyncio.get_running_loop()
+            asyncio.ensure_future(
+                _background_buffer_reader(topic_id, queue, loop),
+                loop=loop,
+            )
+            # Don't call session.interrupt() — 让后台线程自然完成并保存结果
             raise
         except Exception:
             # 其他 SSE 异常 → 同样中断后台线程
@@ -520,7 +537,9 @@ async def handle_web_chat(request):
             session.interrupt()
             raise
         finally:
-            _active_sessions.pop(topic_id, None)
+            # 仅清理活跃会话中的条目（后台会话由 _chat_stream_sse_wrapper 清理）
+            if _active_sessions.get(topic_id) is session:
+                _active_sessions.pop(topic_id, None)
             # 当前对话结束（后续排队消息由前端驱动自动发送）
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -577,6 +596,9 @@ async def handle_chat_abort(request):
         return JSONResponse({"ok": False, "error": "topic_id 不能为空"}, status_code=400)
 
     session = _active_sessions.get(topic_id)
+    if not session:
+        # 也可能在后台会话中
+        session = _background_sessions.get(topic_id)
     if not session:
         logger.warning(f"Abort failed: no active session for topic_id={topic_id}")
         return JSONResponse({"ok": False, "error": "未找到活跃会话（可能已结束）"}, status_code=404)
@@ -644,10 +666,92 @@ async def handle_web_new_topic(request):
     return JSONResponse({"topic_id": tid, "title": title})
 
 
+# ═══════════════════════════════════════════════════════════════
+#  Batch check helpers (plans & todos status for multiple topics)
+# ═══════════════════════════════════════════════════════════════
+
+def _batch_check_plans_status(topic_ids: set[str]) -> dict[str, bool]:
+    """批量查询哪些 topic 有活跃的 plan（status 不是 done/failed）。
+
+    从 .tea_agent_run/plans/*.json 中读取计划状态。
+    """
+    result: dict[str, bool] = {tid: False for tid in topic_ids}
+    plans_dir = ".tea_agent_run/plans"
+    try:
+        if not os.path.isdir(plans_dir):
+            return result
+        for fname in os.listdir(plans_dir):
+            if not fname.endswith(".json"):
+                continue
+            fpath = os.path.join(plans_dir, fname)
+            try:
+                with open(fpath, encoding="utf-8") as f:
+                    p = json.load(f)
+            except Exception:
+                continue
+            tid = p.get("topic_id", "")
+            if tid not in topic_ids:
+                continue
+            plan_status = (p.get("status") or "").lower()
+            if plan_status not in ("done", "failed"):
+                result[tid] = True
+    except Exception as e:
+        logger.warning(f"_batch_check_plans_status error: {e}")
+    return result
+
+
+def _batch_check_todos_status(topic_ids: set[str]) -> dict[str, bool]:
+    """批量查询哪些 topic 有未完成的 TODO。
+
+    从 storage DB 的 todo_items 表中查询。
+    """
+    result: dict[str, bool] = {tid: False for tid in topic_ids}
+    try:
+        server = get_server()
+        storage = server._get_storage()
+        if not storage or not hasattr(storage, 'conn') or not storage.conn:
+            return result
+        c = storage.conn.cursor()
+        placeholders = ",".join("?" for _ in topic_ids)
+        c.execute(
+            f"SELECT topic_id, COUNT(*) as cnt FROM todo_items "
+            f"WHERE topic_id IN ({placeholders}) AND done=0 GROUP BY topic_id",
+            list(topic_ids),
+        )
+        for row in c.fetchall():
+            result[row[0]] = row[1] > 0
+        c.close()
+    except Exception as e:
+        logger.warning(f"_batch_check_todos_status error: {e}")
+    return result
+
+
 async def handle_web_sessions(request):
-    """GET /api/sessions"""
+    """GET /api/sessions — 返回话题列表，包含每个话题的活跃状态。
+
+    返回扩展字段：
+      - is_active: 是否正在前台对话中
+      - is_background: 是否在后台处理中（客户端断连后）
+      - has_active_plans: 是否有未完成的计划
+      - has_active_todos: 是否有未完成的 TODO
+    """
     limit = int(request.query_params.get("limit", 20))
     sessions = get_server().list_sessions(limit)
+
+    # 批量查询状态（一次 IO，避免 N+1）
+    topic_ids = {s["id"] for s in sessions}
+    active_set = set(_active_sessions.keys())
+    bg_set = set(_background_sessions.keys())
+    plans_status = _batch_check_plans_status(topic_ids)
+    todos_status = _batch_check_todos_status(topic_ids)
+
+    for s in sessions:
+        tid = s["id"]
+        s["is_active"] = tid in active_set
+        s["is_background"] = tid in bg_set
+        s["has_active_plans"] = plans_status.get(tid, False)
+        s["has_active_todos"] = todos_status.get(tid, False)
+
     return JSONResponse({"sessions": sessions})
 
 
@@ -750,6 +854,44 @@ async def handle_web_topic_plans(request):
     return JSONResponse({"data": plans, "total": len(plans)})
 
 
+async def handle_web_topic_status(request):
+    """GET /api/topic/{topic_id}/status — 查看 topic 后台处理状态
+
+    Returns:
+        background: bool — 是否正在后台处理中
+        active: bool — 是否正在前台活跃
+    """
+    topic_id = request.path_params.get("topic_id", "")
+    if not topic_id:
+        return JSONResponse({"error": "topic_id required"}, status_code=400)
+    return JSONResponse({
+        "topic_id": topic_id,
+        "background": topic_id in _background_sessions,
+        "active": topic_id in _active_sessions,
+    })
+
+
+async def handle_web_topic_stream_buffer(request):
+    """GET /api/topic/{topic_id}/stream-buffer — 获取后台缓冲区中的流式事件
+
+    Query params:
+        since: int — 上次获取的最后一个事件索引（从0开始），默认 -1
+    Returns:
+        events: list[dict] — 新的事件列表
+        done: bool — 流是否已结束
+        next_index: int — 下一个事件的索引（供下次请求使用）
+    """
+    topic_id = request.path_params.get("topic_id", "")
+    if not topic_id:
+        return JSONResponse({"error": "topic_id required"}, status_code=400)
+    try:
+        since = int(request.query_params.get("since", "-1"))
+    except (ValueError, TypeError):
+        since = -1
+    result = _read_buffer_since(topic_id, since)
+    return JSONResponse(result)
+
+
 async def handle_web_topic_info(request):
     """GET/PUT/DELETE /api/topic/{topic_id}"""
     topic_id = request.path_params.get("topic_id", "")
@@ -786,7 +928,10 @@ async def handle_web_topic_conversations(request):
     limit = int(request.query_params.get("limit", 0))
     try:
         convs = get_server().get_topic_conversations(topic_id, limit=limit)
-        return JSONResponse({"conversations": convs, "count": len(convs)})
+        # 同时返回 topic 标题（可能已通过 toolkit_set_topic_title 更新）
+        topic_info = get_server().get_topic_info(topic_id)
+        title = (topic_info or {}).get("title", "") or topic_id[:8]
+        return JSONResponse({"conversations": convs, "count": len(convs), "title": title})
     except Exception as e:
         logger.exception("get_topic_conversations failed")
         return JSONResponse({"error": str(e)}, status_code=500)

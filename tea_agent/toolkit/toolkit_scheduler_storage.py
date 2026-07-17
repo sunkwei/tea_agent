@@ -3,7 +3,7 @@
 
 def toolkit_scheduler_storage(action: str, **kwargs):
     """调度器存储管理 — 脚本与任务的统一管理。"""
-    from tea_agent.scheduler_storage import SchedulerStorage, save_evolve_script
+    from tea_agent.scheduler_storage import SchedulerStorage
 
     storage = SchedulerStorage()
 
@@ -31,9 +31,6 @@ def toolkit_scheduler_storage(action: str, **kwargs):
             return {"error": "需要 script_id"}
         return {"deleted": storage.delete_script(script_id)}
 
-    elif action == "save_evolve_script":
-        return save_evolve_script()
-
     elif action == "prepare_script":
         script_id = kwargs.get("script_id")
         if not script_id:
@@ -46,4 +43,4 @@ def toolkit_scheduler_storage(action: str, **kwargs):
 
 
 def meta_toolkit_scheduler_storage() -> dict:
-    return {"type": "function", "function": {"name": "toolkit_scheduler_storage", "description": "调度器存储管理 — 脚本与任务的统一管理。支持脚本存储在数据库中，便于备份、迁移。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["save_script", "get_script", "list_scripts", "delete_script", "save_evolve_script", "prepare_script"], "description": "操作类型"}}, "required": ["action"]}}}
+    return {"type": "function", "function": {"name": "toolkit_scheduler_storage", "description": "调度器存储管理 — 脚本与任务的统一管理。支持脚本存储在数据库中，便于备份、迁移。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["save_script", "get_script", "list_scripts", "delete_script", "prepare_script"], "description": "操作类型"}}, "required": ["action"]}}}

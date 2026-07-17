@@ -547,66 +547,10 @@ def toolkit_scheduler(action: str, **kwargs):
         _notify("⏰ 新增脚本任务", f"{name}\n脚本: {script_id}\n调度: {schedule}")
         return {"status": "added", "task_id": tid, "next_run": next_run.isoformat() if next_run else None}
 
-    elif action == "save_evolve_script":
-        """保存自进化守护脚本到数据库"""
-        script_content = '''#!/usr/bin/env python3
-"""
-确保自进化进程启动的守护脚本。
-从数据库动态加载执行，支持跨机器迁移。
-"""
-import sys, os, json, subprocess
-from pathlib import Path
-from datetime import datetime
-
-DATA_DIR = Path.home() / ".tea_agent"
-STATE_FILE = DATA_DIR / "self_evolve_state.json"
-
-def _log(msg):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
-
-def _read_state():
-    if STATE_FILE.exists():
-        try:
-            return json.loads(STATE_FILE.read_text())
-        except: pass
-    return {"running": False, "pid": None}
-
-def _start_thread():
-    python = sys.executable
-    result = subprocess.run(
-        [python, "-c", """
-import sys, json, os
-sys.path.insert(0, os.getcwd())
-# (自进化引擎已移除)
-print(json.dumps(r))
-"""],
-        capture_output=True, text=True, timeout=15
-    )
-    return result.returncode == 0
-
-def ensure_running():
-    state = _read_state()
-    if state.get("running"):
-        _log(f"🟢 运行中 (PID: {state.get('pid')})")
-        return True
-
-    _log("🔴 未启动，正在启动...")
-    if _start_thread():
-        _log("✅ 启动成功")
-        return True
-    _log("❌ 启动失败")
-    return False
-
-if __name__ == "__main__":
-    success = ensure_running()
-    sys.exit(0 if success else 1)
-'''
-        return _save_script_to_db("self_evolve_watchdog", "自进化守护", script_content, "每分钟检查自进化进程")
-
     else:
         return {"error": f"未知 action: {action}",
                 "supported": ["list","add","update","delete","enable","disable","run","start","stop","status","test_schedule",
-                              "save_script","get_script","list_scripts","delete_script","add_script_task","save_evolve_script"]}
+                              "save_script","get_script","list_scripts","delete_script","add_script_task"]}
 
 def _format_next(task: dict) -> str:
     """格式化下次执行时间为人可读"""

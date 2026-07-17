@@ -1291,6 +1291,103 @@ body {
   .modal-box { min-width: auto; margin: 16px; max-width: 100%; }
 }
 
+/* ═══════════════════════════════════════════════
+   Slash Command Menu (cmd-menu) — 输入 / 后弹出
+   ═══════════════════════════════════════════════ */
+.cmd-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 6px;
+  min-width: 280px;
+  max-width: 400px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 -4px 24px rgba(0,0,0,.35);
+  z-index: 500;
+  display: none;
+  padding: 4px 0;
+}
+.cmd-menu.show { display: block; }
+.cmd-menu-header {
+  padding: 6px 12px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  border-bottom: 1px solid var(--border2);
+  margin-bottom: 2px;
+}
+.cmd-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background var(--transition);
+  border-left: 3px solid transparent;
+}
+.cmd-item:hover,
+.cmd-item.active {
+  background: var(--surface2);
+  border-left-color: var(--primary);
+}
+.cmd-item.active {
+  background: var(--primary-bg);
+}
+.cmd-item-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  background: var(--surface3);
+  border-radius: var(--radius-sm);
+}
+.cmd-item-text {
+  flex: 1;
+  min-width: 0;
+}
+.cmd-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+.cmd-item-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmd-item-shortcut {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--surface3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+}
+.cmd-no-results {
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+#ia {
+  position: relative;
+}
+
 /* ── Screenshot dropup menu ── */
 .ss-dropup { position: relative; display: flex; }
 .ss-menu {

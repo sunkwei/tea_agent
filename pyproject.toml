@@ -46,12 +46,17 @@ tea-agent-api = "tea_agent.server:main"
 tea-agent-gui = "tea_agent.gui:main"
 tea-agent-mini = "tea_agent_mini.__main__:main"
 tea-agent-acp = "tea_agent.protocol:main"
+tea-agent-telegram = "tea_agent.channel.telegram_adapter:run_telegram_bot"
 
 [project.optional-dependencies]
 web = [
     "starlette>=0.37.0",
     "uvicorn>=0.27.0",
     "python-multipart>=0.0.7",
+]
+telegram = [
+    "python-telegram-bot>=20.0",
+    "httpx>=0.25.0",
 ]
 gui2 = []
 mini = [

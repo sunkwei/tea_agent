@@ -78,7 +78,7 @@
         </div>
       </div>
       <button id="img-btn" onclick="document.getElementById('file-input').click()" title="上传图片">🖼</button>
-      <textarea id="ci" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" onkeydown="onInputKeydown(event)"></textarea>
+      <textarea id="ci" rows="1" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" onkeydown="onInputKeydown(event)" oninput="onInput(event)"></textarea>
       <button id="send-btn" disabled onclick="sendMessage()">发送</button>
     </div>
     <input type="file" id="file-input" accept="image/*" multiple onchange="onFilesSelected(event)">

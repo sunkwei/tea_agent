@@ -133,19 +133,340 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
-// ── Input handler ──
+// ═══════════════════════════════════════════════
+//  SLASH COMMAND MENU — 输入 "/" 弹出候选命令
+// ═══════════════════════════════════════════════
+
+const _slashCommands = [
+  { name: '/help',       icon: '❓', desc: '显示快捷键帮助',         action: 'showHelp' },
+  { name: '/new',        icon: '➕', desc: '新对话',                 action: 'newTopic' },
+  { name: '/clear',      icon: '🗑', desc: '清空当前对话',           action: 'clearChat' },
+  { name: '/review',     icon: '🔎', desc: '代码审查 — 审查指定文件', action: 'review' },
+  { name: '/explain',    icon: '📖', desc: '解释代码 — 解释文件/代码片段', action: 'explain' },
+  { name: '/refactor',   icon: '🔧', desc: '重构建议 — 分析重构方案', action: 'refactor' },
+  { name: '/search',     icon: '🔍', desc: '搜索对话和记忆',         action: 'search', shortcut: 'Ctrl+K' },
+  { name: '/memory',     icon: '🧠', desc: '管理长期记忆',           action: 'memory', shortcut: 'Ctrl+Shift+M' },
+  { name: '/task',       icon: '📋', desc: '任务面板 (Plan/TODO)',   action: 'task',   shortcut: 'Ctrl+J' },
+  { name: '/export',     icon: '📄', desc: '导出 PDF',               action: 'export' },
+  { name: '/config',     icon: '⚙',  desc: '查看/切换配置',         action: 'config' },
+  { name: '/theme',      icon: '🌙', desc: '切换深色/浅色主题',      action: 'theme' },
+  { name: '/screenshot', icon: '📷', desc: '全屏截图发送',           action: 'screenshot' },
+  { name: '/plan',       icon: '📋', desc: '创建/查看执行计划',      action: 'plan' },
+  { name: '/todo',       icon: '✅', desc: '查看待办清单',           action: 'todo' },
+  { name: '/status',     icon: '📊', desc: '查看系统状态与模型信息',  action: 'status' },
+  { name: '/reload',     icon: '🔄', desc: '重新加载工具（新能力）',  action: 'reload' },
+  { name: '/models',     icon: '🤖', desc: '查看当前加载的模型',     action: 'models' },
+];
+
+let _cmdMenuActive = -1;   // 当前高亮索引
+let _cmdMenuVisible = false;
+
+function _getCmdInput() {
+  const el = $('ci');
+  const val = el ? el.value : '';
+  // 只在输入框开头是 "/" 且没有空格时触发（单命令模式）
+  const match = val.match(/^(\/\S*)$/);
+  return match ? match[1] : null;
+}
+
+function _filterCommands(query) {
+  if (!query || query === '/') return _slashCommands;
+  const q = query.toLowerCase();
+  return _slashCommands.filter(function(cmd) {
+    return cmd.name.toLowerCase().startsWith(q) || cmd.name.toLowerCase().indexOf(q) > 0;
+  });
+}
+
+function _renderCmdMenu(filtered) {
+  let menu = $('cmd-menu');
+  if (!menu) {
+    menu = document.createElement('div');
+    menu.id = 'cmd-menu';
+    menu.className = 'cmd-menu';
+    $('ia').appendChild(menu);
+  }
+
+  if (!filtered || filtered.length === 0) {
+    menu.innerHTML = '<div class="cmd-no-results">没有匹配的命令</div>';
+    menu.classList.add('show');
+    _cmdMenuActive = -1;
+    _cmdMenuVisible = true;
+    return;
+  }
+
+  let html = '<div class="cmd-menu-header">命令</div>';
+  filtered.forEach(function(cmd, i) {
+    const active = i === _cmdMenuActive ? ' active' : '';
+    const sc = cmd.shortcut ? '<span class="cmd-item-shortcut">' + cmd.shortcut + '</span>' : '';
+    html += '<div class="cmd-item' + active + '" data-index="' + i + '" onmouseenter="_cmdMenuActive=' + i + ';document.querySelector(\'.cmd-item.active\')?.classList.remove(\'active\');this.classList.add(\'active\');" onclick="_execSlashCmd(\'' + cmd.name + '\')">'
+      + '<span class="cmd-item-icon">' + cmd.icon + '</span>'
+      + '<span class="cmd-item-text">'
+      + '<div class="cmd-item-name">' + esc(cmd.name) + '</div>'
+      + '<div class="cmd-item-desc">' + esc(cmd.desc) + '</div>'
+      + '</span>'
+      + sc
+      + '</div>';
+  });
+  menu.innerHTML = html;
+  menu.classList.add('show');
+  _cmdMenuVisible = true;
+}
+
+function _closeCmdMenu() {
+  const menu = $('cmd-menu');
+  if (menu) menu.classList.remove('show');
+  _cmdMenuVisible = false;
+  _cmdMenuActive = -1;
+}
+
+/** 执行斜杠命令 */
+function _execSlashCmd(cmdName) {
+  _closeCmdMenu();
+  const input = $('ci');
+  if (input) {
+    input.value = '';
+    input.style.height = 'auto';
+    $('send-btn').disabled = true;
+  }
+
+  const cmd = _slashCommands.find(function(c) { return c.name === cmdName; });
+  if (!cmd) return;
+
+  switch (cmd.action) {
+    case 'showHelp':
+      // 在消息区域显示快捷键列表
+      const helpMsg = '**📖 Tea Agent GUI 快捷键**\n\n'
+        + '| 快捷键 | 功能 |\n|--------|------|\n'
+        + '| `Enter` | 发送消息 |\n| `Shift+Enter` | 换行 |\n'
+        + '| `Ctrl+N` | 新对话 |\n| `Ctrl+K` | 搜索 |\n'
+        + '| `Ctrl+Shift+M` | 记忆管理 |\n| `Ctrl+J` | 任务面板 |\n'
+        + '| `Escape` | 中断/关闭 |\n\n'
+        + '可用斜杠命令：\n'
+        + _slashCommands.map(function(c) {
+            const sc = c.shortcut ? ' (' + c.shortcut + ')' : '';
+            return '- `' + c.name + '` — ' + c.desc + sc;
+          }).join('\n');
+      addMessage('assistant', helpMsg);
+      toast('📖 已显示帮助信息', 'success');
+      break;
+    case 'newTopic':
+      window.newTopic();
+      break;
+    case 'clearChat':
+      window.clearChat();
+      break;
+    case 'search':
+      window.showSearchModal();
+      break;
+    case 'memory':
+      window.showMemoryModal();
+      break;
+    case 'task':
+      window.toggleTaskPanel();
+      break;
+    case 'export':
+      window.showExportModal();
+      break;
+    case 'config':
+      window.showConfigModal();
+      break;
+    case 'theme':
+      window.toggleTheme();
+      break;
+    case 'screenshot':
+      // 直接触发全屏截图
+      window.captureFullScreen();
+      break;
+    case 'review': {
+      // 弹出 prompt 让用户输入文件路径
+      const reviewPath = prompt('🔎 代码审查 — 输入文件路径（或粘贴代码）：', '');
+      if (reviewPath) {
+        _closeCmdMenu();
+        $('ci').value = '请审查以下代码：\n\n' + reviewPath;
+        $('ci').style.height = 'auto';
+        $('ci').style.height = Math.min($('ci').scrollHeight, 120) + 'px';
+        $('send-btn').disabled = false;
+        toast('🔎 补充说明后按 Enter 发送', 'info');
+      }
+      break;
+    }
+    case 'explain': {
+      const explainPath = prompt('📖 解释代码 — 输入文件路径（或粘贴代码片段）：', '');
+      if (explainPath) {
+        _closeCmdMenu();
+        $('ci').value = '请解释以下代码的工作原理：\n\n' + explainPath;
+        $('ci').style.height = 'auto';
+        $('ci').style.height = Math.min($('ci').scrollHeight, 120) + 'px';
+        $('send-btn').disabled = false;
+        toast('📖 补充问题后按 Enter 发送', 'info');
+      }
+      break;
+    }
+    case 'refactor': {
+      const refactorPath = prompt('🔧 重构建议 — 输入文件路径（或粘贴代码）：', '');
+      if (refactorPath) {
+        _closeCmdMenu();
+        $('ci').value = '请为以下代码提供重构建议：\n\n' + refactorPath;
+        $('ci').style.height = 'auto';
+        $('ci').style.height = Math.min($('ci').scrollHeight, 120) + 'px';
+        $('send-btn').disabled = false;
+        toast('🔧 补充要求后按 Enter 发送', 'info');
+      }
+      break;
+    }
+    case 'status':
+      // 发消息询问状态（AI 会调用 system tools 返回真实信息）
+      $('ci').value = '/status';
+      sendMessage();
+      toast('📊 正在获取系统状态...', 'info');
+      break;
+    case 'reload':
+      $('ci').value = '请执行 toolkit_reload() 重新加载工具';
+      sendMessage();
+      toast('🔄 已发送重载指令', 'info');
+      break;
+    case 'models':
+      $('ci').value = '/models';
+      sendMessage();
+      toast('🤖 正在获取模型信息...', 'info');
+      break;
+    case 'plan':
+      window.toggleTaskPanel();
+      toast('📋 请在任务面板查看 Plan', 'info');
+      break;
+    case 'todo':
+      window.toggleTaskPanel();
+      toast('✅ 请在任务面板查看 TODO', 'info');
+      break;
+    default:
+      break;
+  }
+}
+
+// ── Input handler (值变化后触发，解决 / 敲完不弹菜单) ──
+window.onInput = function(e) {
+  const val = e.target.value;
+  // 刚输入 "/" 时立即展示菜单（不依赖 setTimeout）
+  if (val === '/') {
+    _cmdMenuActive = -1;
+    _renderCmdMenu(_slashCommands);
+    _cmdMenuVisible = true;
+    return;
+  }
+  // 已输入 /xxx，更新过滤
+  if (val.startsWith('/') && !val.includes(' ')) {
+    _cmdMenuActive = -1;
+    _renderCmdMenu(_filterCommands(val));
+    _cmdMenuVisible = true;
+    return;
+  }
+  // 非命令模式
+  if (_cmdMenuVisible) _closeCmdMenu();
+};
+
+// ── Keydown handler (Enter/Send/Arrow keys) ──
 window.onInputKeydown = function(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
+  const el = e.target;
+  const val = el.value;
+  const isCmdMode = /^\/\S*$/.test(val);
+
+  // ── 斜杠命令模式 ──
+  if (isCmdMode) {
+    const query = _getCmdInput();
+    if (query !== null) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const filtered = _filterCommands(query);
+        if (filtered.length === 0) return;
+        _cmdMenuActive = Math.min(_cmdMenuActive + 1, filtered.length - 1);
+        _renderCmdMenu(filtered);
+        // 确保高亮项可见
+        const activeEl = document.querySelector('.cmd-item.active');
+        if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const filtered = _filterCommands(query);
+        if (filtered.length === 0) return;
+        _cmdMenuActive = Math.max(_cmdMenuActive - 1, 0);
+        _renderCmdMenu(filtered);
+        const activeEl = document.querySelector('.cmd-item.active');
+        if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
+        return;
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const filtered = _filterCommands(query);
+        if (_cmdMenuActive >= 0 && _cmdMenuActive < filtered.length) {
+          _execSlashCmd(filtered[_cmdMenuActive].name);
+          return;
+        }
+        // 如果没选中但输入了完整命令，也尝试执行
+        const exact = _slashCommands.find(function(c) { return c.name === val.trim(); });
+        if (exact) {
+          _execSlashCmd(exact.name);
+          return;
+        }
+        // 否则当作普通消息发送
+        _closeCmdMenu();
+        sendMessage();
+        return;
+      }
+      if (e.key === 'Escape') {
+        _closeCmdMenu();
+        e.preventDefault();
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const filtered = _filterCommands(query);
+        if (filtered.length === 1 && filtered[0].name !== val.trim()) {
+          // 自动补全唯一匹配
+          el.value = filtered[0].name;
+          el.style.height = 'auto';
+          el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+        }
+        return;
+      }
+      // 输入字符时更新过滤
+      setTimeout(function() {
+        const newQuery = _getCmdInput();
+        if (newQuery !== null) {
+          _cmdMenuActive = -1;
+          _renderCmdMenu(_filterCommands(newQuery));
+        } else {
+          _closeCmdMenu();
+        }
+      }, 0);
+    }
+  } else if (val.indexOf('/') === 0 && e.key === 'Backspace' && val.length === 1) {
+    // 只剩下 "/" 时退格 → 关闭菜单
+    _closeCmdMenu();
+  } else {
+    // 非命令模式，关闭菜单
+    _closeCmdMenu();
+  }
+
+  // ── Enter 发送 (非命令模式) ──
+  if (e.key === 'Enter' && !e.shiftKey && !isCmdMode) {
     e.preventDefault();
     sendMessage();
   }
+
   // Auto-resize
-  const el = e.target;
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
   // Enable/disable send button
   $('send-btn').disabled = !el.value.trim() && _pendingImages.length === 0;
 };
+
+// 点击其他地方关闭命令菜单
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#ci') && !e.target.closest('#cmd-menu')) {
+    _closeCmdMenu();
+  }
+});
 
 // ── Screenshot ──
 window.toggleScreenshotMenu = function(e) {

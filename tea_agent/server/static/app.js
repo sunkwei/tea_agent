@@ -78,6 +78,12 @@ function markTitleDone() {
   const base = tt.textContent.replace(/\(已完成\)$/, '');
   document.title = base + '(已完成)';
 }
+/** 清除浏览器标题的"(已完成)"后缀（仅影响浏览器标签页，不修改工具栏标题） */
+function clearTitleDone() {
+  const cur = document.title;
+  const clean = cur.replace(/\(已完成\)$/, '');
+  if (clean !== cur) document.title = clean;
+}
 
 function showModal(id) { $(id).classList.add('open'); }
 function closeModal(id) { $(id).classList.remove('open'); }
@@ -588,12 +594,15 @@ window.openImageOverlay = function(src) {
 //  ADD MESSAGE — with Markdown formatting
 // ══════════════════════════════════════════════════
 
+let _msgCounter = 0; // 全局递增消息计数器
+
 function addMessage(role, content, images) {
   const welcome = document.querySelector('.welcome');
   if (welcome) welcome.remove();
 
   const div = document.createElement('div');
   div.className = 'msg ' + (role === 'user' ? 'user' : 'assistant');
+  div.dataset.msgIdx = _msgCounter++; // 给每条消息一个唯一递增索引
 
   let html = '<div class="msg-label">' + (role === 'user' ? '你' : 'Tea Agent') + '</div>';
   html += '<div class="msg-bubble">';
@@ -635,6 +644,50 @@ function removeLoading() {
   if (el) el.remove();
 }
 
+// ── 历史会话跳转栏 ──
+/**
+ * 渲染跳转栏：遍历 #msgs 中的 .msg.user，生成可点击的 chip
+ * 每个 chip 显示用户消息的前 20 字摘要，点击滚动到对应消息
+ */
+function renderJumpBar() {
+  const bar = document.getElementById('jump-bar');
+  if (!bar) return;
+  const userMsgs = document.querySelectorAll('#msgs .msg.user');
+  // 少于 2 条用户消息时隐藏跳转栏
+  if (userMsgs.length < 2) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = '';
+  let html = '<span class="jump-bar-label">📜 跳转</span>';
+  userMsgs.forEach(function(msg) {
+    const idx = msg.dataset.msgIdx;
+    // 提取消息文本摘要（前 20 字）
+    const bubble = msg.querySelector('.msg-bubble');
+    let snippet = '';
+    if (bubble) {
+      snippet = bubble.textContent.replace(/\s+/g, ' ').trim();
+    }
+    // 去掉图片占位文字，截取前 20 字
+    snippet = snippet.replace(/\(图片\)/g, '').trim();
+    if (snippet.length > 20) snippet = snippet.slice(0, 20) + '…';
+    if (!snippet) snippet = '(图片)';
+    html += '<span class="jump-chip" onclick="jumpToMessage(' + idx + ')" title="' + escAttr(bubble ? bubble.textContent.trim().slice(0, 60) : '') + '">'
+      + esc(snippet) + '</span>';
+  });
+  bar.innerHTML = html;
+}
+
+/** 滚动到指定 data-msg-idx 的消息 */
+window.jumpToMessage = function jumpToMessage(idx) {
+  const el = document.querySelector('.msg[data-msg-idx="' + idx + '"]');
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // 高亮闪烁效果
+  el.classList.add('jump-highlight');
+  setTimeout(function() { el.classList.remove('jump-highlight'); }, 1500);
+}
+
 // ══════════════════════════════════════════════════
 //  FORMAT MARKDOWN
 // ══════════════════════════════════════════════════
@@ -664,6 +717,27 @@ function formatMarkdown(text) {
   // Inline code — 直接渲染原文，不做占位符保护
   html = html.replace(/`([^`]+)`/g, function(match, code) {
     return '<code class="md-inline-code">' + esc(code) + '</code>';
+  });
+
+  // 🆕 Protect existing markdown links [text](url) from URL auto-linking
+  const mdLinks = [];
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(match, text, url) {
+    const idx = mdLinks.length;
+    mdLinks.push('<a class="md-link" href="' + escAttr(url) + '" target="_blank" rel="noopener">' + text + '</a>');
+    return '\x00MDLINK' + idx + '\x00';
+  });
+
+  // 🆕 URL auto-linking — convert bare URLs to clickable links
+  html = html.replace(/(https?:\/\/[^\s<>"']+)/g, function(match, url) {
+    return '<a class="md-link md-autolink" href="' + escAttr(url) + '" target="_blank" rel="noopener">' + url + '</a>';
+  });
+
+  // 🆕 Restore protected markdown links
+  html = html.replace(/\x00MDLINK(\d+)\x00/g, function(m, idx) { return mdLinks[idx] || ''; });
+
+  // 🆕 #topic:UUID — convert to clickable topic link (e.g. #topic:abc12345-...)
+  html = html.replace(/#topic:([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})/gi, function(match, uuid) {
+    return '<a class="md-link md-topic-link" href="#" data-topic="' + uuid + '" onclick="openTopic(\'' + uuid + '\',\'\')">📌 ' + uuid.slice(0, 8) + '</a>';
   });
 
   // Headers
@@ -713,11 +787,10 @@ function formatMarkdown(text) {
   // Convert newlines to <br>
   html = html.replace(/\n/g, '<br>');
 
-  // Bold, italic, strikethrough, links
+  // Bold, italic, strikethrough (links already handled above)
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="md-strong">$1</strong>');
   html = html.replace(/\*([^*]+)\*/g, '<em class="md-em">$1</em>');
   html = html.replace(/~~([^~]+)~~/g, '<del class="md-del">$1</del>');
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a class="md-link" href="$2" target="_blank" rel="noopener">$1</a>');
 
   // Restore tables
   html = html.replace(/\x00TABLE(\d+)\x00/g, function(m, idx) { return tableBlocks[idx] || ''; });
@@ -726,6 +799,13 @@ function formatMarkdown(text) {
   html = html.replace(/\x00OLIST(\d+)\x00/g, function(m, idx) { return listBlocks[idx] || ''; });
   // Restore code blocks
   html = html.replace(/\x00CODE(\d+)\x00/g, function(m, idx) { return codeBlocks[idx] || ''; });
+
+  // 🆕 Download link icons — add emoji icon for .zip/.exe/.pdf/.7z/.rar/.msi/.dmg/.apk/.tar.gz
+  html = html.replace(/(<a\s[^>]*href="[^"]*\.(zip|exe|pdf|7z|rar|msi|dmg|apk|tar\.gz)"[^>]*>)([\s\S]*?)(<\/a>)/gi, function(match, openTag, ext, text, closeTag) {
+    const icons = { zip: '📦', exe: '⚙️', pdf: '📄', '7z': '📦', rar: '📦', msi: '⚙️', dmg: '💿', apk: '📱', 'tar.gz': '📦' };
+    const icon = icons[ext.toLowerCase()] || '📎';
+    return openTag + icon + ' ' + text + closeTag;
+  });
 
   return html;
 }
@@ -883,6 +963,8 @@ window.sendMessage = async function() {
 
   // Show user message
   addMessage('user', msg || '(图片)', _pendingImages.length > 0 ? _pendingImages : null);
+  renderJumpBar(); // 用户发出消息后立即更新跳转栏
+  clearTitleDone(); // 新会话开始，移除旧(已完成)后缀
   addLoading();
 
   // Collect images
@@ -1147,6 +1229,7 @@ window.sendMessage = async function() {
                 if (s.toolCallContainer) s.toolCallContainer.removeAttribute('id');
               }
               markTitleDone();
+              renderJumpBar(); // 新消息完成 -> 更新跳转栏
               break;
 
             case 'dag_viz': {
@@ -1323,11 +1406,15 @@ window.openTopic = async function(id, title) {
     const d = await r.json();
     if (!d.conversations) return;
     $('msgs').innerHTML = '';
+    _msgCounter = 0;  // 切换话题重置消息计数器
     _userNearBottom = true;  // 切换话题重置滚动状态
     d.conversations.forEach(function(c) {
       if (c.user_msg) addMessage('user', c.user_msg);
       if (c.ai_msg) addMessage('assistant', c.ai_msg);
     });
+    // 加载旧话题 → 滚动到底部（显示最新消息）
+    scrollBottom();
+    renderJumpBar(); // 加载历史后更新跳转栏
     // ⭐ 检查 topic 是否在后台处理中，若是则启动轮询
     _checkBackgroundAndPoll(id);
   } catch(e) {}
@@ -1665,10 +1752,12 @@ async function _reloadCurrentConversations() {
     // 保留用户当前是否在底部
     const wasNearBottom = _isNearBottom();
     $('msgs').innerHTML = '';
+    _msgCounter = 0;
     d.conversations.forEach(function(c) {
       if (c.user_msg) addMessage('user', c.user_msg);
       if (c.ai_msg) addMessage('assistant', c.ai_msg);
     });
+    renderJumpBar(); // 后台 buffer 刷新后更新跳转栏
     if (wasNearBottom) scrollBottom();
   } catch(e) {}
 }
@@ -1695,6 +1784,10 @@ window.newTopic = function() {
   _stopBackgroundPoll();   // 清除后台轮询
   setTitle('新对话');
   $('msgs').innerHTML = '';
+  _msgCounter = 0; // 重置消息计数器
+  // 隐藏跳转栏（新对话无历史）
+  var jb = document.getElementById('jump-bar');
+  if (jb) jb.style.display = 'none';
   // Restore welcome
   const welcome = document.createElement('div');
   welcome.className = 'welcome';

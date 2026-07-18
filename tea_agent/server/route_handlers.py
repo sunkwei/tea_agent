@@ -9,6 +9,7 @@ Imports:
 
 import asyncio
 import contextlib
+from datetime import datetime
 import json
 import os
 import threading
@@ -24,6 +25,7 @@ from tea_agent.toolkit.toolkit_export_last_pdf import export_topic_pdf
 from .server import (
     __version__,
     _active_sessions,
+    _active_sessions_lock,
     _background_sessions,
     _background_sessions_lock,
     _background_buffer_reader,
@@ -487,10 +489,11 @@ async def handle_web_chat(request):
 
         nonlocal topic_id
         if not topic_id:
-            topic_id = storage.create_topic("Web Session (进行中)")
+            topic_id = storage.create_topic(f"Web Session ({datetime.now().strftime('%m-%d %H:%M')})")
 
         try:
-            _active_sessions[topic_id] = session
+            with _active_sessions_lock:
+                _active_sessions[topic_id] = session
 
             thread = threading.Thread(
                 target=_chat_stream_sse_wrapper,
@@ -501,7 +504,7 @@ async def handle_web_chat(request):
 
             while True:
                 try:
-                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                    event = await asyncio.wait_for(queue.get(), timeout=15)
                     yield "data: " + json.dumps(event, ensure_ascii=False) + "\n\n"
                     if event.get("type") in ("done", "error"):
                         break
@@ -513,7 +516,8 @@ async def handle_web_chat(request):
                             "error": "服务器处理意外终止"
                         }) + "\n\n"
                         break
-                    # 线程还活着，继续等（30秒间隔避免 busy-loop）
+                    # 线程还活着 → 发送 SSE 心跳保活，防止中间代理/浏览器断开连接
+                    yield ":keepalive\n\n"
         except asyncio.CancelledError:
             # 客户端断连 → 不中断 session（留给 /api/chat/abort 处理）
             # 后台线程会继续完成对话并自动保存到数据库
@@ -524,10 +528,8 @@ async def handle_web_chat(request):
                 _background_sessions[topic_id] = session
             # ⭐ 启动后台缓冲区读取器：消费 queue 中的后续 SSE 事件并缓存
             # 供前端轮询获取实时流式内容
-            loop = asyncio.get_running_loop()
-            asyncio.ensure_future(
+            asyncio.create_task(
                 _background_buffer_reader(topic_id, queue, loop),
-                loop=loop,
             )
             # Don't call session.interrupt() — 让后台线程自然完成并保存结果
             raise
@@ -538,8 +540,9 @@ async def handle_web_chat(request):
             raise
         finally:
             # 仅清理活跃会话中的条目（后台会话由 _chat_stream_sse_wrapper 清理）
-            if _active_sessions.get(topic_id) is session:
-                _active_sessions.pop(topic_id, None)
+            with _active_sessions_lock:
+                if _active_sessions.get(topic_id) is session:
+                    _active_sessions.pop(topic_id, None)
             # 当前对话结束（后续排队消息由前端驱动自动发送）
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -595,7 +598,8 @@ async def handle_chat_abort(request):
     if not topic_id:
         return JSONResponse({"ok": False, "error": "topic_id 不能为空"}, status_code=400)
 
-    session = _active_sessions.get(topic_id)
+    with _active_sessions_lock:
+        session = _active_sessions.get(topic_id)
     if not session:
         # 也可能在后台会话中
         session = _background_sessions.get(topic_id)
@@ -676,7 +680,8 @@ async def handle_web_sessions(request):
     limit = int(request.query_params.get("limit", 20))
     sessions = get_server().list_sessions(limit)
 
-    active_set = set(_active_sessions.keys())
+    with _active_sessions_lock:
+        active_set = set(_active_sessions.keys())
     bg_set = set(_background_sessions.keys())
 
     for s in sessions:

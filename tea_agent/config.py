@@ -161,6 +161,8 @@ class AgentConfig:
     max_history: int = 10  # 最大历史消息数
     max_iterations: int = 50  # 最大工具调用迭代次数
     enable_thinking: bool = True  # 是否启用 thinking 功能
+    thinking_strength: float = 0.7  # 思考强度 0.0-1.0（0=最弱/最省token, 1=最强/最深度思考）
+    reasoning_effort: str = "auto"  # 推理努力程度: "auto"/"low"/"medium"/"high"，映射到 OpenAI reasoning_effort
 
     # Token 优化参数
     keep_turns: int = 5  # 保留最近N轮完整对话，更早的对话自动摘要
@@ -184,6 +186,8 @@ class AgentConfig:
         "max_history",
         "max_iterations",
         "enable_thinking",
+        "thinking_strength",
+        "reasoning_effort",
         "keep_turns",
         "max_tool_output",
         "max_assistant_content",
@@ -202,6 +206,8 @@ class AgentConfig:
         "max_history": int,
         "max_iterations": int,
         "enable_thinking": bool,
+        "thinking_strength": float,
+        "reasoning_effort": str,
         "keep_turns": int,
         "max_tool_output": int,
         "max_assistant_content": int,
@@ -295,6 +301,17 @@ class AgentConfig:
             for key in self._RUNTIME_CONFIG_KEYS
             if hasattr(self, key)
         }
+
+    def to_full_dict(self) -> dict:
+        """导出所有配置为字典（含模型/路径等完整配置）"""
+        data = {}
+        _prepare_model_data(self, data)
+        _prepare_embedding_data(self, data)
+        _prepare_paths_data(self, data)
+        _prepare_session_data(self, data)
+        _prepare_token_data(self, data)
+        _prepare_control_data(self, data)
+        return data
 
 
 _last_config_path = None
@@ -510,6 +527,8 @@ def _parse_session_params(cfg: AgentConfig, data: dict) -> None:
     cfg.max_history = int(data.get("max_history", cfg.max_history))
     cfg.max_iterations = int(data.get("max_iterations", cfg.max_iterations))
     cfg.enable_thinking = bool(data.get("enable_thinking", cfg.enable_thinking))
+    cfg.thinking_strength = float(data.get("thinking_strength", cfg.thinking_strength))
+    cfg.reasoning_effort = str(data.get("reasoning_effort", cfg.reasoning_effort))
 
 
 def _parse_token_params(cfg: AgentConfig, data: dict) -> None:
@@ -723,6 +742,8 @@ def _prepare_session_data(cfg: AgentConfig, data: dict) -> None:
     data["max_history"] = cfg.max_history
     data["max_iterations"] = cfg.max_iterations
     data["enable_thinking"] = cfg.enable_thinking
+    data["thinking_strength"] = cfg.thinking_strength
+    data["reasoning_effort"] = cfg.reasoning_effort
 
 
 def _prepare_token_data(cfg: AgentConfig, data: dict) -> None:
@@ -852,6 +873,11 @@ def _generate_config_template() -> str:
         "max_iterations: 50\n\n"
         "# 是否启用 thinking 功能（模型思考过程展示）\n"
         "enable_thinking: true\n\n"
+        "# 思考强度 0.0-1.0（0=最弱/最省token，1=最强/最深思考）\n"
+        "thinking_strength: 0.7\n\n"
+        "# 推理努力程度: auto/low/medium/high，映射到 OpenAI reasoning_effort 参数\n"
+        "# auto = 根据 thinking_strength 自动映射\n"
+        "reasoning_effort: auto\n\n"
         "# ──────────────────── Token 优化参数 ────────────────────\n"
         "# 保留最近 N 轮完整对话，更早的对话自动摘要（使用 cheap_model）\n"
         "keep_turns: 5\n\n"

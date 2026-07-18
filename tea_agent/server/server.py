@@ -16,6 +16,7 @@ Quick start:
 """
 
 import asyncio
+from datetime import datetime
 import json
 import logging
 import os
@@ -53,6 +54,7 @@ _question_pending = {}  # type: dict[str, dict]
 # 全局：活跃会话存储（topic_id -> session）
 # 用于中断请求通过 topic_id 找到对应 session 并调用 interrupt()
 _active_sessions: dict = {}
+_active_sessions_lock = threading.Lock()
 
 # 全局：后台运行会话（topic_id -> session）
 # 用户断连后，后台线程仍在处理中的会话
@@ -221,7 +223,7 @@ async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
         async def _delayed_cleanup():
             await asyncio.sleep(30)
             _cleanup_buffer(topic_id)
-        asyncio.ensure_future(_delayed_cleanup(), loop=event_loop)
+        asyncio.create_task(_delayed_cleanup())
 
 
 def _chat_stream_sse_wrapper(server, session, storage, msg, queue, topic_id, loop):
@@ -239,7 +241,8 @@ def _chat_stream_sse_wrapper(server, session, storage, msg, queue, topic_id, loo
         with _background_sessions_lock:
             _background_sessions.pop(topic_id, None)
         # 兜底：也从活跃会话中移除（正常情况下此时已不在 _active_sessions）
-        _active_sessions.pop(topic_id, None)
+        with _active_sessions_lock:
+            _active_sessions.pop(topic_id, None)
 
 
 # ── Server 模式下的 Question 处理器 ──
@@ -323,7 +326,9 @@ def _create_session_from_cfg(cfg, toolkit, storage=None):
         storage=storage,
         cheap_api_key=cheap_m.api_key, cheap_api_url=cheap_m.api_url,
         cheap_model=cheap_m.model_name,
-        enable_thinking=True,
+        enable_thinking=cfg.enable_thinking,
+        thinking_strength=cfg.thinking_strength,
+        reasoning_effort=cfg.reasoning_effort,
         supports_vision=supports_vision, supports_reasoning=supports_reasoning,
     )
     sess.context.interface_type = "web"
@@ -767,7 +772,8 @@ class APIServer:
 
             # 新主题或已有主题
             if not topic_id:
-                topic_id = storage.create_topic("Web Session")
+                _ts = datetime.now().strftime('%m-%d %H:%M')
+                topic_id = storage.create_topic(f"Web Session ({_ts})")
             # 同步 topic_id 到全局 Agent，使 toolkit_todo 等工具能正确持久化
             from tea_agent.session_ref import get_agent as _get_agent
             _ga = _get_agent() or self.get_agent()
@@ -795,6 +801,24 @@ class APIServer:
                 _save_chat_result(storage, session, topic_id, msg, ai_msg, used_tools)
             except Exception as save_err:
                 logger.exception(f"Save chat failed topic={topic_id}: {save_err}")
+
+            # 自动更新话题标题：根据用户消息生成有意义的标题，替代默认的"进行中"
+            try:
+                _tp = storage.get_topic(topic_id)
+                if _tp:
+                    _cur_title = (_tp.get("title") or "")
+                    # 只更新默认标题（不含自定义前缀 ※ 的）
+                    if _cur_title and not _cur_title.startswith("※"):
+                        _user_text = msg if isinstance(msg, str) else (
+                            msg.get("text", "") if isinstance(msg, dict) else str(msg)
+                        )
+                        if _user_text:
+                            _short = _user_text.strip().replace("\n", " ")[:28]
+                            if _short:
+                                _new_title = f"Web: {_short}{'…' if len(_user_text.strip()) > 28 else ''}"
+                                storage.update_topic_title(topic_id, _new_title)
+            except Exception as _t_err:
+                logger.debug(f"Topic title auto-update failed: {_t_err}")
 
             usage = session._last_usage or {}
             cheap_usage = getattr(session, '_last_cheap_usage', None) or {}

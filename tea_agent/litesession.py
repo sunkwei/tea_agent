@@ -22,6 +22,8 @@ class LiteSession:
         model: str,
         system_prompt: str = "",
         enable_thinking: bool = True,
+        thinking_strength: float = 0.7,
+        reasoning_effort: str = "auto",
         max_iterations: int = 50,
         supports_reasoning: bool = True,
         allowed_tools: list[str] | None = None,  # 已废弃，保留参数仅为兼容性
@@ -31,6 +33,8 @@ class LiteSession:
         self.model = model
         self.system_prompt = system_prompt or self._default_system_prompt()
         self.enable_thinking = enable_thinking
+        self.thinking_strength = thinking_strength
+        self.reasoning_effort = reasoning_effort
         self.max_iterations = max_iterations
         self.supports_reasoning = supports_reasoning
         self.interrupted = False
@@ -284,9 +288,24 @@ class LiteSession:
         if self.tools:
             kwargs["tools"] = self.tools
 
-        # thinking 模式
+        # thinking 模式（支持思考强度配置）
         if self.enable_thinking and self.supports_reasoning:
-            kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+            extra_body = {"thinking": {"type": "enabled"}}
+
+            # 映射 reasoning_effort
+            reasoning_effort = self.reasoning_effort
+            if reasoning_effort and reasoning_effort != "auto":
+                extra_body["reasoning_effort"] = reasoning_effort
+            else:
+                strength = max(0.0, min(1.0, self.thinking_strength))
+                if strength >= 0.3:
+                    extra_body["reasoning_effort"] = "medium" if strength < 0.7 else "high"
+                elif strength > 0:
+                    extra_body["reasoning_effort"] = "low"
+                else:
+                    extra_body["thinking"]["type"] = "disabled"
+
+            kwargs["extra_body"] = extra_body
 
         return self.api.chat.completions.create(**kwargs)
 

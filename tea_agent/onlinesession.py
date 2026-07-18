@@ -67,62 +67,214 @@ class APIComponent(SessionComponent):
     def initialize(self) -> None:
         pass
 
-    def _probe_thinking_support(self, client=None, model=None, is_cheap=False):
-        # 根据 is_cheap 选择要检查和更新的状态字段
-        if is_cheap:
-            if self.ctx._cheap_thinking_supported is not None:
-                return  # 已经检测过
-        else:
-            if self.ctx._thinking_supported is not None:
-                return  # 已经检测过
+    @staticmethod
+    def _match_model_family(model_name: str) -> dict:
+        """通过模型名称推测模型家族和能力。
 
-        target_client = client or self.ctx.client
-        target_model = model or self.ctx.model
+        使用模型名模式匹配，不依赖外部 API 调用。
+
+        Args:
+            model_name: 模型名称，如 "gpt-4o", "deepseek-chat", "claude-sonnet"
+
+        Returns:
+            dict: {supports_thinking, supports_reasoning_effort, family, confidence}
+        """
+        name = model_name.lower()
+
+        # ── OpenAI o-series / reasoning_effort 原生支持 ──
+        if any(kw in name for kw in ("o1", "o3", "o4", "o-mini", "o3-mini")):
+            return {"supports_thinking": True, "supports_reasoning_effort": True,
+                    "family": "openai_o", "confidence": 0.95}
+        if any(kw in name for kw in ("gpt-4o", "gpt-4.1", "gpt-4-turbo")):
+            return {"supports_thinking": True, "supports_reasoning_effort": False,
+                    "family": "openai_gpt4", "confidence": 0.85}
+
+        # ── DeepSeek 系列 ──
+        if "deepseek-reasoner" in name or "deepseek-r1" in name:
+            return {"supports_thinking": True, "supports_reasoning_effort": False,
+                    "family": "deepseek_reasoner", "confidence": 0.9}
+        if "deepseek-v4" in name:
+            return {"supports_thinking": True, "supports_reasoning_effort": False,
+                    "family": "deepseek_v4", "confidence": 0.8}
+        if "deepseek" in name:
+            return {"supports_thinking": True, "supports_reasoning_effort": False,
+                    "family": "deepseek", "confidence": 0.7}
+
+        # ── Anthropic Claude ──
+        if "claude" in name:
+            return {"supports_thinking": True, "supports_reasoning_effort": False,
+                    "family": "anthropic", "confidence": 0.9}
+
+        # ── Gemini ──
+        if "gemini" in name:
+            return {"supports_thinking": True, "supports_reasoning_effort": False,
+                    "family": "gemini", "confidence": 0.8}
+
+        # ── MiniMax ──
+        if any(kw in name for kw in ("minimax", "m2.5", "mimo")):
+            return {"supports_thinking": True, "supports_reasoning_effort": False,
+                    "family": "minimax", "confidence": 0.7}
+
+        # ── Qwen ──
+        if "qwen" in name:
+            return {"supports_thinking": True, "supports_reasoning_effort": False,
+                    "family": "qwen", "confidence": 0.6}
+
+        # ── Llama ──
+        if "llama" in name:
+            return {"supports_thinking": True, "supports_reasoning_effort": False,
+                    "family": "llama", "confidence": 0.5}
+
+        # ── GLM / 智谱 ──
+        if "glm" in name or "zhipu" in name:
+            return {"supports_thinking": True, "supports_reasoning_effort": False,
+                    "family": "glm", "confidence": 0.6}
+
+        # ── 未知模型 ──
+        return {"supports_thinking": True, "supports_reasoning_effort": False,
+                "family": "unknown", "confidence": 0.3}
+
+    def _auto_detect_thinking_config(self, is_cheap=False, force=False) -> dict:
+        """自动检测模型的最佳 thinking 配置（模型名匹配 + API 探测）。
+
+        策略（从快到慢）：
+        1. 模型名匹配：通过名称模式推测能力（无需 API 调用）
+        2. API探测：如果名称匹配不可靠，发送 probe 请求确认
+        3. 保存结果：探测到的配置自动保存到 config.yaml
+
+        Args:
+            is_cheap: True=检测便宜模型，False=检测主模型
+            force: True=强制重新探测（即使已缓存）
+
+        Returns:
+            dict: {
+                "supports_thinking": bool,
+                "supports_reasoning_effort": bool,
+                "recommended_strength": float,
+                "recommended_effort": str,
+                "method": str (检测方法: "model_match" / "api_probe" / "default")
+            }
+        """
+        # 检查缓存
+        cache_attr = "_cheap_thinking_supported" if is_cheap else "_thinking_supported"
+        cached = getattr(self.ctx, cache_attr, None)
+        if cached is not None and not force:
+            return {"supports_thinking": cached,
+                    "supports_reasoning_effort": self.ctx.reasoning_effort != "auto",
+                    "recommended_strength": self.ctx.thinking_strength,
+                    "recommended_effort": self.ctx.reasoning_effort,
+                    "method": "cached"}
+
+        target_client = self.ctx.cheap_client if is_cheap else self.ctx.client
+        target_model = self.ctx.cheap_model if is_cheap else self.ctx.model
 
         if not self.ctx.enable_thinking or not target_client:
-            return
+            return {"supports_thinking": False, "supports_reasoning_effort": False,
+                    "recommended_strength": 0.0, "recommended_effort": "auto",
+                    "method": "disabled"}
 
+        # ── Phase 1: 模型名匹配（零成本） ──
+        match = self._match_model_family(target_model)
+        if match["confidence"] >= 0.7:
+            # 高置信度匹配，直接使用
+            supports_re = match["supports_reasoning_effort"]
+            strength = 0.7
+            effort = "auto"
+
+            if supports_re:
+                effort = "medium"
+                strength = 0.7
+            elif match["family"] == "deepseek_reasoner":
+                effort = "auto"
+                strength = 0.8
+            elif match["family"] == "deepseek_v4":
+                effort = "auto"
+                strength = 0.6  # V4 flash 轻量模型，中等思考
+            elif match["family"] == "deepseek":
+                effort = "auto"
+                strength = 0.7
+            elif match["family"] == "openai_gpt4":
+                effort = "auto"
+                strength = 0.5  # GPT-4o 的 thinking 支持有限
+            elif match["family"] == "minimax":
+                effort = "auto"
+                strength = 0.6  # MiniMax 的 thinking 支持中等
+
+            # 更新缓存
+            setattr(self.ctx, cache_attr, match["supports_thinking"])
+            _tl = getattr(self.ctx, 'tool_log', None)
+            if _tl:
+                _tl(
+                    f"🧠 自动检测: [{target_model}] "
+                    f"家族={match['family']}, 置信度={match['confidence']:.0%}, "
+                    f"thinking={'✓' if match['supports_thinking'] else '✗'}"
+                )
+
+            return {
+                "supports_thinking": match["supports_thinking"],
+                "supports_reasoning_effort": supports_re,
+                "recommended_strength": strength,
+                "recommended_effort": effort,
+                "method": f"model_match({match['family']})"
+            }
+
+        # ── Phase 2: API 探测（低置信度匹配或未知模型） ──
+        _tl = getattr(self.ctx, 'tool_log', None)
+        if _tl:
+            _tl(f"🔍 低置信度模型匹配 ({match['confidence']:.0%})，启动 API 探测...")
+
+        result = {
+            "supports_thinking": True,
+            "supports_reasoning_effort": False,
+            "recommended_strength": 0.5,
+            "recommended_effort": "auto",
+            "method": "default"
+        }
+
+        # Probe 1: 测试 thinking.type = enabled
         try:
-            # 发送一个极简请求来检测 thinking 支持
             target_client.chat.completions.create(
                 model=target_model,
                 messages=[{"role": "user", "content": "Hi"}],
                 stream=False,
                 extra_body={"thinking": {"type": "enabled"}},
-                max_tokens=10,
+                max_tokens=5,
             )
+            result["supports_thinking"] = True
+            result["method"] = "api_probe"
 
-            # 更新对应的状态
-            if is_cheap:
-                self.ctx._cheap_thinking_supported = True
-            else:
-                self.ctx._thinking_supported = True
+            # Probe 2: 测试 reasoning_effort 支持（仅当 thinking 支持时）
+            try:
+                target_client.chat.completions.create(
+                    model=target_model,
+                    messages=[{"role": "user", "content": "Hi"}],
+                    stream=False,
+                    extra_body={"thinking": {"type": "enabled"}, "reasoning_effort": "medium"},
+                    max_tokens=5,
+                )
+                result["supports_reasoning_effort"] = True
+                result["recommended_strength"] = 0.7
+                result["recommended_effort"] = "medium"
+            except Exception:
+                result["supports_reasoning_effort"] = False
+                result["recommended_strength"] = 0.7
+                result["recommended_effort"] = "auto"
 
-            if self.ctx.tool_log:
-                model_type = "便宜模型" if is_cheap else "主模型"
-                self.ctx.tool_log(f"🧠 {model_type}支持 thinking，已启用")
         except Exception as e:
             err_str = str(e).lower()
-            if (
-                "thinking" in err_str
-                or "extra_body" in err_str
-                or "unsupported" in err_str
-                or "invalid" in err_str
-            ):
-                # 更新对应的状态
-                if is_cheap:
-                    self.ctx._cheap_thinking_supported = False
-                else:
-                    self.ctx._thinking_supported = False
-
-                if self.ctx.tool_log:
-                    model_type = "便宜模型" if is_cheap else "主模型"
-                    self.ctx.tool_log(f"⚠️ {model_type}不支持 thinking，已禁用")
+            if "thinking" in err_str or "extra_body" in err_str or "unsupported" in err_str or "invalid" in err_str:
+                result["supports_thinking"] = False
+                result["recommended_strength"] = 0.0
+                if _tl:
+                    _tl("⚠️ 模型不支持 thinking，已禁用")
             else:
-                # 其他错误，不影响 thinking 检测，保持 None 状态
-                if self.ctx.tool_log:
-                    model_type = "便宜模型" if is_cheap else "主模型"
-                    self.ctx.tool_log(f"⚠️ {model_type} thinking 检测时出错: {e}")
+                # 其他错误（如网络），保留默认值
+                if _tl:
+                    _tl(f"⚠️ thinking 探测出错（保留默认）: {e}")
+
+        # 更新缓存
+        setattr(self.ctx, cache_attr, result["supports_thinking"])
+        return result
 
     def _accumulate_usage(self, usage, is_cheap=False):
         """累加 token 用量到主模型或便宜模型的计数器。
@@ -169,6 +321,7 @@ class APIComponent(SessionComponent):
         temperature=None,
         max_tokens=None,
         top_p=None,
+        request_timeout: float | None = None,
     ):
         target_client = client or self.ctx.client
         target_model = model or self.ctx.model
@@ -186,6 +339,10 @@ class APIComponent(SessionComponent):
             if val is not None:
                 kwargs[param_name] = val
 
+        # 请求超时保护：防止 API hang 导致线程卡死
+        if request_timeout is not None:
+            kwargs["timeout"] = request_timeout
+
         # 根据模型能力决定是否传 stream_options
         if self.ctx.supports_reasoning:
             kwargs["stream_options"] = {"include_usage": True}
@@ -197,14 +354,46 @@ class APIComponent(SessionComponent):
             else self.ctx._thinking_supported
         )
 
-        # 构建 extra_body：合并 thinking + 模型 options（如 Ollama 的 num_ctx）
+        # ── 构建 extra_body：思维配置 + 模型 options ──
         extra_body = {}
-        if thinking_supported:
-            extra_body["thinking"] = {
-                "type": "enabled" if self.ctx.enable_thinking else "disabled"
-            }
+
+        # reasoning_effort 是独立参数（OpenAI o-series 使用），不受 thinking probe 影响
+        reasoning_effort = self.ctx.reasoning_effort
+        if reasoning_effort and reasoning_effort != "auto":
+            # 用户明确指定 effort 级别
+            extra_body["reasoning_effort"] = reasoning_effort
+            # 如果 thinking 也支持，同时启用 thinking（兼容模式）
+            if thinking_supported and self.ctx.enable_thinking:
+                extra_body["thinking"] = {"type": "enabled"}
+        elif self.ctx.enable_thinking:
+            # 根据 thinking_strength 自动映射 reasoning_effort
+            strength = max(0.0, min(1.0, self.ctx.thinking_strength))
+            if strength > 0 and thinking_supported:
+                extra_body["thinking"] = {"type": "enabled"}
+                # 将 strength 映射为推理努力程度（通用映射）
+                if strength < 0.3:
+                    extra_body["reasoning_effort"] = "low"
+                elif strength < 0.7:
+                    extra_body["reasoning_effort"] = "medium"
+                else:
+                    extra_body["reasoning_effort"] = "high"
+            elif strength > 0:
+                # thinking 不支持但 strength>0：尝试只传 reasoning_effort
+                if strength < 0.3:
+                    extra_body["reasoning_effort"] = "low"
+                elif strength < 0.7:
+                    extra_body["reasoning_effort"] = "medium"
+                else:
+                    extra_body["reasoning_effort"] = "high"
+            else:
+                if thinking_supported:
+                    extra_body["thinking"] = {"type": "disabled"}
+        elif thinking_supported:
+            # enable_thinking=False 时显式禁用
+            extra_body["thinking"] = {"type": "disabled"}
 
         # 从配置中获取模型 options（如 num_ctx）并合并到 extra_body
+        # 模型 options 优先级最高，可覆盖上述自动生成的参数
         try:
             from tea_agent.config import get_config
 
@@ -717,6 +906,8 @@ class OnlineToolSession(BaseChatSession):
         system_prompt: str = "",
         max_iterations: int = 50,
         enable_thinking: bool = True,
+        thinking_strength: float = 0.7,
+        reasoning_effort: str = "auto",
         storage=None,
         cheap_api_key: str = "",
         cheap_api_url: str = "",
@@ -744,6 +935,8 @@ class OnlineToolSession(BaseChatSession):
             system_prompt: 系统提示词（为空则使用压缩版）
             max_iterations: 最大工具调用迭代次数
             enable_thinking: 是否启用 thinking 功能
+            thinking_strength: 思考强度 0.0-1.0（0=最弱/最省token, 1=最强/最深思考）
+            reasoning_effort: 推理努力程度 "auto"/"low"/"medium"/"high"
             storage: Storage 实例，用于持久化存储
             cheap_api_key: 便宜模型 API密钥
             cheap_api_url: 便宜模型 API地址
@@ -773,6 +966,8 @@ class OnlineToolSession(BaseChatSession):
             toolkit=toolkit,
             model=model,
             enable_thinking=enable_thinking,
+            thinking_strength=thinking_strength,
+            reasoning_effort=reasoning_effort,
             main_client=main_client,
             cheap_client=cheap_client,
             cheap_model=cheap_model,
@@ -831,6 +1026,67 @@ class OnlineToolSession(BaseChatSession):
         # 步骤11: 初始化Pipeline
         self._init_pipeline()
 
+        # 步骤12: 自动探测并保存 thinking 配置（异步执行，不阻塞初始化）
+        self._auto_detect_and_save_thinking_config()
+
+    def _auto_detect_and_save_thinking_config(self):
+        """自动探测模型的 thinking 能力，并将优化值保存到 config.yaml。
+
+        检测策略：
+        1. 模型名匹配（零成本，高置信度）
+        2. API 探测（无需时跳过，避免延迟）
+        3. 若 config 中值为默认值，自动将探测结果持久化到配置文件
+
+        调用时机：会话初始化末尾，不阻塞对话启动。
+        """
+        try:
+            # 仅当 config 中的值为默认值时，才进行探测并保存
+            from tea_agent.config import get_active_config_path, get_config, save_config
+
+            cfg = get_config()
+            # 检查是否为用户显式设置的（非默认值则跳过自动保存）
+            is_default_strength = abs(cfg.thinking_strength - 0.7) < 0.01
+            is_default_effort = cfg.reasoning_effort == "auto"
+            should_auto_save = is_default_strength and is_default_effort
+
+            # 执行探测（同时更新主模型和便宜模型的 thinking 缓存）
+            main_detected = self.api._auto_detect_thinking_config(is_cheap=False)
+
+            if self._cheap_client and self._cheap_model_name:
+                self.api._auto_detect_thinking_config(is_cheap=True)
+            # cheap 模型的探测结果仅用于更新缓存，不保存到配置
+
+            if should_auto_save and main_detected.get("method") != "disabled":
+                # 更新配置对象
+                cfg.thinking_strength = main_detected["recommended_strength"]
+                if main_detected["recommended_effort"] != "auto":
+                    cfg.reasoning_effort = main_detected["recommended_effort"]
+
+                # 同时更新 ctx
+                self.context.thinking_strength = cfg.thinking_strength
+                self.context.reasoning_effort = cfg.reasoning_effort
+
+                # 保存到配置文件
+                config_path = get_active_config_path()
+                if config_path:
+                    save_config(cfg, config_path)
+                    logger.info(
+                        f"📝 thinking 配置自动保存: "
+                        f"strength={cfg.thinking_strength}, "
+                        f"effort={cfg.reasoning_effort!r} "
+                        f"(检测方法: {main_detected['method']})"
+                    )
+                    _tl = getattr(self.context, 'tool_log', None)
+                    if _tl:
+                        _tl(
+                            f"💾 thinking 配置已自动优化并保存: "
+                            f"强度={cfg.thinking_strength}, "
+                            f"努力={cfg.reasoning_effort} "
+                            f"(依据: {main_detected['method']})"
+                        )
+        except Exception as e:
+            logger.debug(f"Thinking 自动探测跳过（非阻塞）: {e}")
+
     def _create_api_clients(
         self,
         api_key: str,
@@ -853,7 +1109,7 @@ class OnlineToolSession(BaseChatSession):
         """
         import httpx
 
-        _http_client = httpx.Client(proxy=None)
+        _http_client = httpx.Client(proxy=None, timeout=httpx.Timeout(120.0, connect=30.0))
         main_client = OpenAI(
             api_key=api_key, base_url=api_url, http_client=_http_client
         )
@@ -863,7 +1119,7 @@ class OnlineToolSession(BaseChatSession):
             cheap_client = OpenAI(
                 api_key=cheap_api_key,
                 base_url=cheap_api_url,
-                http_client=httpx.Client(proxy=None),
+                http_client=httpx.Client(proxy=None, timeout=httpx.Timeout(120.0, connect=30.0)),
             )
 
         return _http_client, main_client, cheap_client
@@ -873,6 +1129,8 @@ class OnlineToolSession(BaseChatSession):
         toolkit,
         model: str,
         enable_thinking: bool,
+        thinking_strength: float,
+        reasoning_effort: str,
         main_client: OpenAI,
         cheap_client: OpenAI | None,
         cheap_model: str,
@@ -895,6 +1153,8 @@ class OnlineToolSession(BaseChatSession):
             toolkit: 工具库实例
             model: 模型名称
             enable_thinking: 是否启用思考
+            thinking_strength: 思考强度 0.0-1.0
+            reasoning_effort: 推理努力程度
             main_client: 主API客户端
             cheap_client: 便宜模型客户端
             cheap_model: 便宜模型名称
@@ -918,6 +1178,8 @@ class OnlineToolSession(BaseChatSession):
             messages=[],
             model=model,
             enable_thinking=enable_thinking,
+            thinking_strength=thinking_strength,
+            reasoning_effort=reasoning_effort,
             client=main_client,
             cheap_client=cheap_client,
             cheap_model=cheap_model,
@@ -1079,6 +1341,22 @@ class OnlineToolSession(BaseChatSession):
     @enable_thinking.setter
     def enable_thinking(self, v):
         self.context.enable_thinking = v
+
+    @property
+    def thinking_strength(self):
+        return self.context.thinking_strength
+
+    @thinking_strength.setter
+    def thinking_strength(self, v):
+        self.context.thinking_strength = v
+
+    @property
+    def reasoning_effort(self):
+        return self.context.reasoning_effort
+
+    @reasoning_effort.setter
+    def reasoning_effort(self, v):
+        self.context.reasoning_effort = v
 
     @property
     def tool_log(self):

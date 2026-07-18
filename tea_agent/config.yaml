@@ -15,3 +15,8 @@ cheap_model:
   model_name: zfujicute/OmniCoder-Qwen3.5-9B-Claude-4.6-Opus-Uncensored-v2-GGUF:latest
 
 keep_turns: 5
+
+# 思考模式强度配置（可运行时修改）
+enable_thinking: true
+thinking_strength: 0.7      # 0.0-1.0，思考深度强度
+reasoning_effort: auto      # auto/low/medium/high，映射到 OpenAI reasoning_effort

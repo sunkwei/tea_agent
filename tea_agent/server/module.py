@@ -19,7 +19,7 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger("hot_reload")
 
@@ -389,8 +389,218 @@ class ModuleRegistry:
 
 
 # ═══════════════════════════════════════════════════════════════
-# FileWatcher — 文件变更检测
+# _ModuleVersionManager — 模块文件版本管理 + 自动回退
 # ═══════════════════════════════════════════════════════════════
+
+class _ModuleVersionManager:
+    """模块文件版本管理器 — 在热重载前自动备份、失败时自动回退。
+
+    工作原理：
+    - 每次 reload 前自动备份当前文件内容（新版本）
+    - reload 成功后标记该版本为 last_good
+    - reload 失败时从 last_good 恢复文件并重试
+    - 每个文件保留 MAX_VERSIONS 个版本历史
+
+    版本备份存储在 .tea_agent_run/module_versions/ 目录。
+    """
+
+    _backup_dir: ClassVar[str] = ""
+    _last_good: ClassVar[dict[str, int]] = {}
+    MAX_VERSIONS: ClassVar[int] = 5
+
+    @classmethod
+    def _ensure_dir(cls) -> str:
+        if not cls._backup_dir:
+            cls._backup_dir = os.path.join(
+                str(Path(__file__).parent.parent.parent),
+                ".tea_agent_run", "module_versions"
+            )
+            os.makedirs(cls._backup_dir, exist_ok=True)
+        return cls._backup_dir
+
+    @classmethod
+    def _safe_name(cls, filepath: str) -> str:
+        """将文件路径转换为安全的备份文件名。"""
+        tea_agent_dir = str(Path(__file__).parent.parent.parent)
+        try:
+            rel = os.path.relpath(filepath, tea_agent_dir)
+        except ValueError:
+            rel = os.path.basename(filepath)
+        return rel.replace("\\", "_").replace("/", "_").replace(".py", "")
+
+    @classmethod
+    def _get_version_files(cls, filepath: str) -> list[int]:
+        """获取文件的所有已备份版本号（排序后）。"""
+        safe = cls._safe_name(filepath)
+        bdir = cls._ensure_dir()
+        versions = []
+        for f in Path(bdir).glob(f"{safe}.v*.bak"):
+            try:
+                v = int(f.name.split('.v')[1].split('.')[0])
+                versions.append(v)
+            except (ValueError, IndexError):
+                pass
+        return sorted(versions)
+
+    @classmethod
+    def backup_new_version(cls, filepath: str) -> int | None:
+        """备份当前文件内容为新版本。返回版本号，无变化时返回 None。"""
+        if not os.path.isfile(filepath):
+            return None
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except Exception as e:
+            logger.debug(f"Cannot read {filepath} for backup: {e}")
+            return None
+
+        existing = cls._get_version_files(filepath)
+        new_ver = (existing[-1] if existing else 0) + 1
+
+        safe = cls._safe_name(filepath)
+        bdir = cls._ensure_dir()
+        backup_path = os.path.join(bdir, f"{safe}.v{new_ver}.bak")
+
+        try:
+            with open(backup_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+        except Exception as e:
+            logger.warning(f"Backup write failed for {filepath}: {e}")
+            return None
+
+        # 限制版本数量，删除最旧的
+        while len(existing) >= cls.MAX_VERSIONS:
+            old_ver = existing.pop(0)
+            old_path = os.path.join(bdir, f"{safe}.v{old_ver}.bak")
+            try:
+                os.remove(old_path)
+            except OSError:
+                pass
+
+        return new_ver
+
+    @classmethod
+    def mark_last_good(cls, filepath: str, version: int) -> None:
+        """标记指定版本为最后可用版本。"""
+        cls._last_good[filepath] = version
+        safe = cls._safe_name(filepath)
+        bdir = cls._ensure_dir()
+        marker = os.path.join(bdir, f"{safe}.last_good")
+        try:
+            with open(marker, 'w') as f:
+                f.write(str(version))
+        except Exception:
+            pass
+
+    @classmethod
+    def get_last_good_version(cls, filepath: str) -> int | None:
+        """获取最后可用版本号（先查内存，再查磁盘标记）。"""
+        v = cls._last_good.get(filepath)
+        if v is not None:
+            return v
+        safe = cls._safe_name(filepath)
+        bdir = cls._ensure_dir()
+        marker = os.path.join(bdir, f"{safe}.last_good")
+        try:
+            with open(marker, 'r') as f:
+                v = int(f.read().strip())
+                cls._last_good[filepath] = v
+                return v
+        except (FileNotFoundError, ValueError):
+            # 没有 last_good → 如果有备份版本，取最新版本
+            versions = cls._get_version_files(filepath)
+            if versions:
+                v = versions[-1]
+                cls._last_good[filepath] = v
+                return v
+            return None
+
+    @classmethod
+    def get_last_good_path(cls, filepath: str) -> str | None:
+        """获取最后可用版本的备份文件路径。"""
+        v = cls.get_last_good_version(filepath)
+        if v is None:
+            return None
+        safe = cls._safe_name(filepath)
+        bdir = cls._ensure_dir()
+        return os.path.join(bdir, f"{safe}.v{v}.bak")
+
+    @classmethod
+    def restore_last_good(cls, filepath: str) -> bool:
+        """将文件恢复到最后可用版本。"""
+        last_good_path = cls.get_last_good_path(filepath)
+        if last_good_path is None or not os.path.isfile(last_good_path):
+            logger.warning(f"Cannot rollback {filepath}: no last_good backup")
+            return False
+
+        try:
+            with open(last_good_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(content)
+            logger.warning(f"🔄 Rolled back {os.path.basename(filepath)} → "
+                          f"v{cls.get_last_good_version(filepath)}")
+            return True
+        except Exception as e:
+            logger.error(f"Rollback failed for {filepath}: {e}")
+            return False
+
+    @classmethod
+    def list_versions(cls, filepath: str) -> list[dict]:
+        """列出文件的所有可回退版本。"""
+        versions = cls._get_version_files(filepath)
+        last_good = cls.get_last_good_version(filepath)
+        result = []
+        for v in versions:
+            safe = cls._safe_name(filepath)
+            bdir = cls._ensure_dir()
+            path = os.path.join(bdir, f"{safe}.v{v}.bak")
+            result.append({
+                "version": v,
+                "path": path,
+                "exists": os.path.isfile(path),
+                "is_last_good": v == last_good,
+            })
+        return result
+
+    @classmethod
+    def is_rollback_version(cls, filepath: str) -> bool:
+        """检查文件当前内容是否与 last_good 一致（即已处于回退状态）。"""
+        if not os.path.isfile(filepath):
+            return False
+        last_good_v = cls.get_last_good_version(filepath)
+        if last_good_v is None:
+            return False
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                current = f.read()
+            safe = cls._safe_name(filepath)
+            bdir = cls._ensure_dir()
+            backup_path = os.path.join(bdir, f"{safe}.v{last_good_v}.bak")
+            if not os.path.isfile(backup_path):
+                return False
+            with open(backup_path, 'r', encoding='utf-8') as f:
+                good = f.read()
+            return current == good
+        except Exception:
+            return False
+
+    @classmethod
+    def init_backup(cls, filepath: str) -> None:
+        """初始化备份（首次启动时调用）：备份当前文件并标记为 last_good。"""
+        if not os.path.isfile(filepath):
+            return
+        # 检查是否已有备份
+        existing = cls._get_version_files(filepath)
+        if existing:
+            # 已经有备份，只确保有 last_good 标记
+            if cls.get_last_good_version(filepath) is None:
+                cls.mark_last_good(filepath, existing[-1])
+            return
+        # 首次备份
+        v = cls.backup_new_version(filepath)
+        if v is not None:
+            cls.mark_last_good(filepath, v)
 
 class FileWatcher:
     """基于 polling 的文件变更检测器。"""
@@ -407,11 +617,11 @@ class FileWatcher:
         self._on_route_change = on_route_change  # callback for server.py/route_handlers.py changes
         # 核心 session 文件 → 目标模块名映射（文件变更时不经过 module_path 匹配，直接映射）
         self._core_file_map: dict[str, str] = self._build_core_file_map()
+
+        # ── 启动时初始化版本备份（确保每个监控文件有至少一个 last_good 版本） ──
         for fp in file_paths:
-            try:
-                self._mtimes[fp] = os.path.getmtime(fp)
-            except OSError:
-                pass
+            if fp.endswith('.py') and os.path.isfile(fp):
+                _ModuleVersionManager.init_backup(fp)
 
     def _build_core_file_map(self) -> dict[str, str]:
         """构建核心 session 文件到目标模块的映射。
@@ -497,20 +707,46 @@ class FileWatcher:
                     logger.error(f"Route rebuild failed: {e}")
                 return
 
+        # ── 所有 .py 文件变更 → 自动备份（reload 前确保有回退能力） ──
+        new_ver = None
+        if file_path.endswith('.py') and os.path.isfile(file_path):
+            new_ver = _ModuleVersionManager.backup_new_version(file_path)
+
+        # ── 辅助函数：带版本管理的 reload ──
+        def _reload_with_version(name: str) -> bool:
+            """执行 reload + 成功时标记/good，失败时自动回退。"""
+            basename = os.path.basename(file_path)
+            ok = self._registry.reload_module(name)
+            if ok:
+                if new_ver is not None:
+                    _ModuleVersionManager.mark_last_good(file_path, new_ver)
+                logger.info(f"✅ Hot-reload [{name}] ← {basename} (v{new_ver}) OK")
+                return True
+            # ── 失败：自动回退 ──
+            logger.warning(f"❌ Hot-reload [{name}] ← {basename} failed → rolling back")
+            if _ModuleVersionManager.restore_last_good(file_path):
+                logger.info(f"🔄 Retrying [{name}] reload after rollback...")
+                retry_ok = self._registry.reload_module(name)
+                if retry_ok:
+                    # 恢复成功后的版本也作为 last_good
+                    _ModuleVersionManager.mark_last_good(file_path, new_ver or 0)
+                    logger.info(f"✅ [{name}] recovered after rollback")
+                    return True
+                logger.error(f"🚨 [{name}] still broken after rollback!")
+            else:
+                logger.error(f"🚨 [{name}] rollback failed (no last_good backup)")
+            return False
+
         # ── 核心 session 文件 → 映射到热重载模块 ──
-        # 这些文件（basesession.py, session/context.py 等）本身不是 HotReloadModule，
-        # 但它们的变更需要触发对应模块的深度 reload
         target_module = self._core_file_map.get(file_path)
         if target_module:
-            logger.info(f"Core file changed: {os.path.basename(file_path)} → auto-reloading [{target_module}]")
-            self._registry.reload_module(target_module)
+            _reload_with_version(target_module)
             return
 
         for name, cls in self._registry._modules.items():
             mod_path = getattr(cls, '_module_path', '')
             if mod_path and os.path.normcase(os.path.normpath(mod_path)) == file_path:
-                logger.info(f"Auto-reloading [{name}] due to file change")
-                self._registry.reload_module(name)
+                _reload_with_version(name)
                 return
         for name, cls in self._registry._modules.items():
             mod_name = cls.__module__
@@ -519,7 +755,7 @@ class FileWatcher:
                 if spec and spec.origin:
                     spec_path = os.path.normcase(os.path.normpath(spec.origin))
                     if spec_path == file_path:
-                        self._registry.reload_module(name)
+                        _reload_with_version(name)
                         return
             except Exception:
                 pass

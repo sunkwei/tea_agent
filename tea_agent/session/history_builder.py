@@ -139,7 +139,7 @@ def to_multimodal(msg: dict, supports_vision: bool) -> dict:
 
 def _key_words(text: str) -> set:
     """提取文本中的关键词（中文2字+、英文3字母+）"""
-    cn = re.findall(r'[一-鿿]{2,}', text)
+    cn = re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]{2,}', text)
     en = re.findall(r'[a-zA-Z_]{3,}', text.lower())
     return set(cn + en)
 

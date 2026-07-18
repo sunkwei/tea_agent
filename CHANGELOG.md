@@ -1,6 +1,13 @@
 ﻿# Changelog
 
 
+## [0.13.2] - 2026-07-18
+### Improvements
+- chore: 版本号 0.13.1 → 0.13.2，同步文档版本引用
+- chore: 批量清理 Web Session 空标题，恢复话题列表可读性
+
+
+
 ## [0.13.0] - 2026-07-17
 ### Features
 - feat: 新增 `tests/test_server_api.py` — Server API 外部黑盒测试套件（398 行，8 套件）

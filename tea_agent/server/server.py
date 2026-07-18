@@ -198,7 +198,7 @@ async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
     try:
         while True:
             try:
-                event = await asyncio.wait_for(queue.get(), timeout=300)
+                event = await asyncio.wait_for(queue.get(), timeout=30)
                 _append_to_buffer(topic_id, event, index)
                 index += 1
                 if event.get("type") in ("done", "error"):
@@ -311,7 +311,7 @@ def _create_session_from_cfg(cfg, toolkit, storage=None):
     supports_vision = _options.get('supports_vision', False) if isinstance(_options, dict) else False
     supports_reasoning = _options.get('supports_reasoning', True) if isinstance(_options, dict) else True
 
-    return OnlineToolSession(
+    sess = OnlineToolSession(
         toolkit=toolkit,
         api_key=main_m.api_key, api_url=main_m.api_url, model=main_m.model_name,
         max_history=cfg.max_history, max_iterations=cfg.max_iterations,
@@ -326,6 +326,8 @@ def _create_session_from_cfg(cfg, toolkit, storage=None):
         enable_thinking=True,
         supports_vision=supports_vision, supports_reasoning=supports_reasoning,
     )
+    sess.context.interface_type = "web"
+    return sess
 
 
 class _ChatAgentProxy:

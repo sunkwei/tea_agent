@@ -501,7 +501,7 @@ async def handle_web_chat(request):
 
             while True:
                 try:
-                    event = await asyncio.wait_for(queue.get(), timeout=300)
+                    event = await asyncio.wait_for(queue.get(), timeout=30)
                     yield "data: " + json.dumps(event, ensure_ascii=False) + "\n\n"
                     if event.get("type") in ("done", "error"):
                         break
@@ -513,7 +513,7 @@ async def handle_web_chat(request):
                             "error": "服务器处理意外终止"
                         }) + "\n\n"
                         break
-                    # 线程还活着，继续等（5分钟间隔避免 busy-loop）
+                    # 线程还活着，继续等（30秒间隔避免 busy-loop）
         except asyncio.CancelledError:
             # 客户端断连 → 不中断 session（留给 /api/chat/abort 处理）
             # 后台线程会继续完成对话并自动保存到数据库

@@ -856,6 +856,10 @@ window.interruptChat = async function() {
     } catch(e) { /* ignore */ }
   }
   removeLoading();
+  // ⭐ 启动后台轮询，获取打断后的最终 AI 回复（后台线程继续运行至完成并写入 buffer）
+  if (currentTopicId) {
+    _startBackgroundPoll(currentTopicId);
+  }
   const bubbleText = document.getElementById('bubble-text');
   if (bubbleText && !bubbleText.innerHTML.trim()) {
     bubbleText.innerHTML = '(已中断)';
@@ -1279,6 +1283,11 @@ window.sendMessage = async function() {
       removeLoading();
       const bt = $('bubble-text');
       if (bt && !bt.innerHTML.trim()) bt.innerHTML = '(已中断)';
+      // ⭐ 安全网：后台线程仍在运行，启动轮询获取最终 AI 回复
+      //    覆盖场景：Escape 打断、网络闪断、用户切换主题（当前流是未过期的）
+      if (myGen === _streamGeneration && currentTopicId) {
+        _checkBackgroundAndPoll(currentTopicId);
+      }
     } else {
       removeLoading();
       const bt = $('bubble-text');

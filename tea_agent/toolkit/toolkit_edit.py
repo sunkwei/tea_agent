@@ -201,7 +201,7 @@ def _apply_patch(file_path: str, patch_content: str, preview: bool, backup: bool
                 try:
                     os.unlink(patch_file)
                 except OSError:
-                    logger.exception("operation failed")
+                    logger.exception('op_failed')
 
         else:
             return _apply_patch_python(file_path, original_content,

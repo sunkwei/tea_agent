@@ -1,4 +1,3 @@
-## llm generated tool func, created Tue Jun  2 08:03:14 2026
 # version: 1.0.2
 
 import logging
@@ -68,7 +67,7 @@ def _ocr_recognize(image_path: str, image_base64: str, lang: str, output: str):
         try:
             os.unlink(img_path)
         except:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
     # 保存结果
@@ -88,9 +87,9 @@ def _ocr_windows(image_path: str, lang: str):
     import sys
 
     # 将 winocr 所在目录添加到 sys.path
-    winocr_dir = r"C:\Users\Hetin\venv_work\Lib\site-packages"
-    if winocr_dir not in sys.path:
-        sys.path.insert(0, winocr_dir)
+    import site; winocr_dir = [p for p in site.getsitepackages() if 'site-packages' in p]
+    if winocr_dir and winocr_dir[0] not in sys.path:
+        sys.path.insert(0, winocr_dir[0])
 
     try:
         import winocr
@@ -199,7 +198,7 @@ def _ocr_screenshot(region: str, lang: str, output: str):
     try:
         os.unlink(tmp_path)
     except:
-        logger.exception("operation failed")
+        logger.exception('op_failed')
 
 
     # 添加截图信息

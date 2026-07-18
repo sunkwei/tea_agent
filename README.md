@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.13.2-blue)](https://pypi.org/project/tea-agent)
 
-Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 81+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / Web / REST API / ACP Protocol** 四种界面形态。
+Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 75+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / Web / REST API / ACP Protocol / Telegram** 五种界面形态。
 
 ---
 
@@ -17,7 +17,7 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 81+ 可调用
 
 - 🧠 **自进化引擎** — Agent 可以修改自身代码、创建新工具、优化提示词，实现自主进化
 - 🧭 **上下文感知** — 自动检测当前项目身份：在 tea_agent 自身项目中启用全部自进化能力，在外部项目中自动禁用自进化行为，专注完成用户任务
-- 🧰 **81+ 内置工具** — 涵盖文件操作、代码编辑、搜索、截图、OCR、包管理、Git 等
+- 🧰 **75+ 内置工具** — 涵盖文件操作、代码编辑、搜索、截图、OCR、包管理、Git 等
 - ⏱️ **智能命令超时** — 后台监控进程 CPU/MEM/IO，活跃进程自动延长超时至 4x，空闲进程及时终止
 - 🖥️ **多种界面** — GUI（Tkinter）、Web（Starlette + SSE）、REST API、ACP Protocol，按需选择
 - 🌐 **Web V2 实时流式界面** — 单页应用(SPA)，内存搜索、记忆管理、任务调度、历史会话，全部功能浏览器内完成
@@ -26,10 +26,16 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 81+ 可调用
 - 📋 **Plan / TODO** — 内置任务规划与追踪系统
 - 🌐 **MCP 协议** — 支持连接外部 MCP Server，扩展第三方工具
 - 🎯 **模式切换** — design / develop / test / review / docs / devops 六阶段工作流
-- 🤖 **多 Agent 系统** — 6 阶段全栈协作：RoleAgent 角色化 + FlowEngine 事件驱动 + MessageBus 通信 + Agent-as-Tool 互调 + ExecutionPool 并行 + WorkflowDAG 编排
+- 🤖 **多 Agent 系统** — 6 阶段全栈协作：RoleAgent 角色化 + FlowEngine 事件驱动 + MessageBus 通信 + Agent-as-Tool 互调 + ExecutionPool 并行 + WorkflowDAG 编排 + PatternMarket 模式市场
+- 📡 **消息渠道** — Telegram Bot 适配器，支持远程消息交互
 - 📊 **任务评估** — 自动评估任务质量，记录成功/失败经验
 - 💎 **技能结晶** — Plan 执行后自动结晶 → 新对话按语义匹配注入 → 技能自进化闭环
 - 🛡️ **LLM JSON 容错** — 智能修复截断JSON、控制字符、单引号、尾逗号等常见LLM输出问题
+- 🔄 **Toolkit 热加载** — `tlk.py` 引擎支持工具动态加载/卸载/重载，无需重启
+- 🏗️ **Server 模块热加载** — Agent/Toolkit/Storage/Pipeline 模块运行时热加载，零停机更新
+- 📡 **Telegram Bot** — 远程消息渠道，通过 Telegram 与 Agent 交互
+- 🧪 **41+ 测试文件** — 覆盖会话、工具、存储、多 Agent、LSP 等核心模块
+- 📦 **Mini 版独立分发包** — `tea_agent_mini` 仅依赖 7 个核心包（~5 MB）
 
 ---
 
@@ -98,6 +104,10 @@ build_mini.py 工作流程
   ├─ 2. 排除的包和文件:
   │     ├─ _gui/     — Tkinter 桌面 GUI
   │     ├─ gui.py / gui_dialogs.py — GUI 桌面入口
+  │     ├─ channel/  — Telegram Bot
+  │     ├─ protocol/ — ACP 协议
+  │     ├─ lsp/      — 代码智能
+  │     ├─ workflow/ — 工作流引擎
   │     └─ demo/ / tests/ / scripts/
   │
   ├─ 3. 排除的重型工具 (HEAVY_TOOLS):
@@ -170,7 +180,7 @@ python -m tea_agent.server
 tea-agent-mini    # 等效于 python -m tea_agent_mini.__main__
 ```
 
-浏览器访问 `http://127.0.0.1:8080` 即可使用完整的 Web 界面（对话、记忆管理、任务调度、搜索、PDF 导出等全部功能）。
+浏览器访问 `http://127.0.0.1:8282` 即可使用完整的 Web 界面（对话、记忆管理、任务调度、搜索、PDF 导出等全部功能）。
 
 ### 🧩 Mini 版依赖清单
 
@@ -196,38 +206,47 @@ python-multipart>=0.0.7 # 文件上传解析
 | 解压后体积 | ~3 MB | ~1.2 MB |
 | 运行时依赖 | ~80 MB | ~5 MB |
 | Python 文件数 | ~420 | ~280 |
-| 工具数 | 81+ | 50+ |
+| 工具数 | 75+ | 63 |
 
 ---
 
 ## 🚀 快速开始
 
 ```bash
-# Web V2 界面 — 单页应用，全功能浏览器体验（推荐）
-python -m tea_agent.server
+# REST API + Web V2 界面 — 单页应用，全功能浏览器体验（推荐）
+tea-agent-api
+python -m tea_agent.server          # 等效
 
 # GUI 桌面界面（Tkinter）
-tea_agent
+tea-agent-gui
+python -m tea_agent.gui             # 等效
 
 # ACP Protocol Server（VS Code 集成）
+tea-agent-acp
 python -m tea_agent.protocol --port 9090
+
+# Telegram Bot
+tea-agent-telegram
+
+# Mini 版 Web 界面
+tea-agent-mini
 ```
 
 ---
 
 ## 💻 界面形态
 
-Tea Agent 提供 **五种界面形态**，覆盖从桌面到 Web、从命令行到 API 的全部使用场景。
+Tea Agent 提供 **五种界面形态 + Telegram Bot**，覆盖从桌面到 Web、从命令行到 API 的全部使用场景。
 
 ---
 
-### 1. GUI 桌面界面 (`tea_agent`)
+### 1. GUI 桌面界面 (`tea-agent-gui`)
 
 基于 **Tkinter** 的原生桌面客户端，支持 Windows / Linux / macOS。
 
 **启动方式：**
 ```bash
-tea_agent                         # 入口命令
+tea-agent-gui                     # 入口命令
 python -m tea_agent.gui           # 模块方式
 ```
 
@@ -247,12 +266,12 @@ python -m tea_agent.gui           # 模块方式
 新一代单页应用（SPA），纯前端 HTML/JS + 后端 Starlette API，所有功能在浏览器中完成。
 
 > **注意**：`python -m tea_agent.server` 同时启动 REST API 和 Web V2 前端。
-> 浏览器访问 `http://127.0.0.1:8080` 即可使用完整 Web 界面。
+> 浏览器访问 `http://127.0.0.1:8282` 即可使用完整 Web 界面。
 
 **启动方式：**
 ```bash
-python -m tea_agent.server           # 默认端口 8080
-tea-agent-api                        # PyPI 入口
+tea-agent-api                        # 入口命令
+python -m tea_agent.server           # 模块方式，默认端口 8282
 python -m tea_agent.server --port 8099 --host 0.0.0.0
 ```
 
@@ -316,7 +335,7 @@ OpenAI 兼容的 HTTP API 服务器，方便第三方应用集成。
 
 **启动方式：**
 ```bash
-tea-agent-api                        # PyPI 入口
+tea-agent-api                        # 入口命令
 python -m tea_agent.server           # 模块方式
 python -m tea_agent.server --port 8081 --host 0.0.0.0
 ```
@@ -392,6 +411,21 @@ python -m tea_agent.protocol --port 9090
 - 🔒 **配置隔离** — 使用独立配置文件 `~/.tea_agent/config_acp.yaml` 和数据库 `chat_acp.db`，不影响主应用配置
 
 ---
+
+### 5. Telegram Bot (`tea-agent-telegram`)
+
+基于 `python-telegram-bot` 的 Telegram 消息适配器，通过 Telegram 远程交互。
+
+**启动方式：**
+```bash
+tea-agent-telegram                  # 入口命令
+python -m tea_agent.channel.telegram_adapter  # 模块方式
+```
+
+**功能特性：**
+- 💬 通过 Telegram 消息与 Agent 对话
+- 🔄 支持长对话的消息分片处理
+- 🔌 可与其他界面同时运行，互不干扰
 
 ---
 
@@ -933,23 +967,23 @@ list       → 列出所有技能模式
 
 | 类别 | 工具 |
 |------|------|
-| 📁 文件操作 | `toolkit_file`, `toolkit_save_file`, `toolkit_explr` |
-| ✏️ 代码编辑 | `toolkit_edit`, `toolkit_diff_edit`, `toolkit_diff`, `toolkit_self_evolve`, `toolkit_clean_comments`, `toolkit_format_code`, `toolkit_auto_fix`, `toolkit_comment` |
+| 📁 文件操作 | `toolkit_file`, `toolkit_save_file`, `toolkit_explr`, `toolkit_batch_process` |
+| ✏️ 代码编辑 | `toolkit_edit`, `toolkit_diff_edit`, `toolkit_diff`, `toolkit_self_evolve`, `toolkit_clean_comments`, `toolkit_format_code`, `toolkit_auto_fix`, `toolkit_comment`, `toolkit_code_review` |
 | 🔍 搜索 | `toolkit_search`, `toolkit_lsp`, `toolkit_query_chat_history` |
-| 📸 截图/OCR | `toolkit_screenshot`, `toolkit_ocr`, `toolkit_screen_read` |
+| 📸 截图/OCR | `toolkit_screenshot`, `toolkit_ocr`, `toolkit_screen_read`, `toolkit_screenshot_picker` |
 | 🖱️ 操控 | `toolkit_input`, `toolkit_browser_tab`, `toolkit_js_fetch` |
 | 📦 包管理 | `toolkit_pkg`, `toolkit_build`, `toolkit_read_pyproject` |
 | 🧪 测试 | `toolkit_run_tests`, `toolkit_test_gui` |
 | 🗓️ 工具 | `toolkit_lunar`, `toolkit_weather_my`, `toolkit_gettime`, `toolkit_date_diff` |
-| 🔧 系统 | `toolkit_exec`, `toolkit_config`, `toolkit_os_info`, `toolkit_sudo_gui` |
+| 🔧 系统 | `toolkit_exec`, `toolkit_config`, `toolkit_os_info`, `toolkit_sudo_gui`, `toolkit_clipboard` |
 | 🧠 记忆/知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_reflection`, `toolkit_proactive` |
-| 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_auto_pipeline` |
-| 📋 计划/任务 | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume` |
+| 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_auto_pipeline`, `toolkit_dynamic_skill` |
+| 📋 计划/任务 | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume`, `toolkit_topic_prompt` |
 | 🔌 MCP 集成 | `toolkit_mcp` |
-| 🌐 Web/GUI | `toolkit_browser_tab`, `toolkit_dump_topic`, `toolkit_export_last_pdf`, `toolkit_notify` |
+| 🌐 Web/GUI | `toolkit_dump_topic`, `toolkit_export_last_pdf`, `toolkit_notify` |
 | 📤 导出 | `toolkit_dump_topic`, `toolkit_export_last_pdf` |
-| 🧬 自进化 | `toolkit_self_evolve`, `toolkit_prompt_evolve`, `toolkit_evolution_exp` |
-| 🛠️ 其他 | `toolkit_question`, `toolkit_stream_save`, `toolkit_set_topic_title`, `toolkit_self_report`, `toolkit_comment`, `toolkit_toggle_reasoning`, `toolkit_get_config_path`, `toolkit_get_models`, `toolkit_list_provider_models`, `toolkit_ip_location_my`, `toolkit_custom_commands`, `toolkit_scheduler_storage`, `toolkit_mode` |
+| 🧬 自进化 | `toolkit_self_evolve`, `toolkit_prompt_evolve`, `toolkit_evolution_exp`, `toolkit_experience_solidify` |
+| 🛠️ 其他 | `toolkit_question`, `toolkit_stream_save`, `toolkit_set_topic_title`, `toolkit_self_report`, `toolkit_toggle_reasoning`, `toolkit_get_config_path`, `toolkit_get_models`, `toolkit_list_provider_models`, `toolkit_ip_location_my`, `toolkit_custom_commands`, `toolkit_scheduler_storage`, `toolkit_mode`, `toolkit_skills`, `toolkit_release_version`, `toolkit_harness_schema`, `toolkit_git_push_all_remotes` |
 
 > 完整工具列表见 [`docs/TOOLS.md`](docs/TOOLS.md)
 
@@ -1384,7 +1418,7 @@ python tests/test_server_api.py [--host 127.0.0.1] [--port 8282]
 | ④ | 多主题切换 | 2 个独立主题同时聊天→SSE 流→内容隔离验证 |
 | ⑤ | 删除&重命名 | 创建→重命名→详情验证→删除→404 确认 |
 | ⑥ | PDF 导出 4 组合 | `latest/final`、`latest/full`、`full_topic/final`、`full_topic/full` |
-| ⑦ | 附属接口 | 工具列表(81)、文件树、v1 会话、todos |
+| ⑦ | 附属接口 | 工具列表(75+)、文件树、v1 会话、todos |
 | ⑧ | 错误路径 | 404/400/500、空 topic_id、空 body、不存在端点 |
 
 **运行方式：** 先启动 Server（`python -m tea_agent.server`），再执行测试。
@@ -1407,27 +1441,44 @@ python -m pytest
 
 ```
 tea_agent/
-├── gui.py                 # GUI 桌面入口（Tkinter）
-├── server/                # REST API + Web V2 界面（Starlette + SSE）
-│   ├── server.py          # Starlette 路由 + SSE
-│   ├── route_handlers.py  # API 路由处理
-│   ├── static/            # HTML/CSS/JS 单页应用
-│   └── __main__.py        # python -m tea_agent.server
-├── protocol/              # ACP Protocol Server
-│   ├── acp_server.py      # ACP 协议实现
-│   └── __main__.py        # python -m tea_agent.protocol
-├── memory.py              # 长期记忆
+├── agent.py               # Agent 统一入口（三种模式）
+├── onlinesession.py       # 完整在线会话
+├── litesession.py         # 轻量会话
+├── basesession.py         # 会话基类 + JSON 容错
+├── tlk.py                 # 工具加载/注册/执行引擎
+├── memory.py              # 长期记忆系统
+├── config.py              # 配置管理
+├── providers.py           # 50+ LLM 提供商适配
 ├── prompt_manager.py      # 提示词版本管理
+├── reflection.py          # 元认知反思
+├── permission.py          # 工具权限管理
+├── pipeline/              # 后处理流水线
+├── gui.py                 # GUI 桌面入口（Tkinter）
+├── gui_dialogs.py         # GUI 对话框
+├── tui.py                 # 终端 TUI（Textual）
+├── server/                # REST API + Web V2（Starlette + SSE）
+│   ├── server.py          # 路由 + SSE
+│   ├── route_handlers.py  # API 路由处理
+│   ├── modules/           # 可热加载模块（Agent/Toolkit/Storage/Pipeline）
+│   ├── static/            # HTML/CSS/JS 单页应用
+│   └── __main__.py
+├── protocol/              # ACP 协议
+│   ├── acp_server.py
+│   ├── acp_jsonrpc.py     # JSON-RPC 2.0
+│   └── __main__.py
+├── channel/               # 消息渠道
+│   └── telegram_adapter.py# Telegram Bot
 ├── toolkit/               # 75+ 工具模块
-├── session/               # 会话管理（历史压缩/Token 裁剪）
-├── multi_agent/           # 多 Agent 系统（6阶段：角色/流程/通信/并行/编排/市场）
+├── session/               # 会话管理（历史/L1/L2/L3/JSON 校验）
+├── store/                 # 数据存储（10 子模块）
+├── multi_agent/           # 多 Agent 系统（6 阶段全栈）
 ├── lsp/                   # 代码智能（Jedi + Tree-sitter）
-├── store/                 # 数据存储（12 子模块）
+├── workflow/              # 工作流引擎
 ├── evaluation/            # 任务评估
-├── skills/                # 技能结晶（17+ 个 .md 技能）
+├── skills/                # 技能结晶（18+ 个技能）
 ├── _gui/                  # GUI 组件（12 模块）
-├── tests/                 # 30 个测试文件（576+ 用例）
-└── demo/                  # 演示：蛇/俄罗斯方块/沪深300
+├── tests/                 # 41+ 个测试文件（600+ 用例）
+└── demo/                  # 演示应用
 ```
 
 ---

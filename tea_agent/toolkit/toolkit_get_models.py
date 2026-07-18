@@ -1,4 +1,3 @@
-## llm generated tool func, created Fri May 15 13:15:33 2026
 # version: 1.0.0
 
 def toolkit_get_models():

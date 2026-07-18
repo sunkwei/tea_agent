@@ -112,7 +112,7 @@ def toolkit_scheduler(action: str, **kwargs):
             if s.startswith("cron:"):
                 return _parse_cron(s[5:].strip(), now)
         except (ValueError, IndexError):
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
         return None
 
@@ -171,7 +171,7 @@ def toolkit_scheduler(action: str, **kwargs):
                     f'display notification "{msg}" with title "{title}"'],
                     capture_output=True, timeout=5)
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
     # ── 脚本存储 ──

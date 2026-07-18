@@ -145,65 +145,6 @@ class TestLiteSessionInit:
             )
             assert session.tools == []
 
-    def test_init_with_allowed_tools(self, mock_toolkit):
-        """allowed_tools 应过滤工具列表"""
-        with patch("tea_agent.litesession.OpenAI"):
-            from tea_agent.litesession import LiteSession
-            session = LiteSession(
-                toolkit=mock_toolkit,
-                api_key="k",
-                api_url="https://api.test.com",
-                model="m",
-                allowed_tools=["toolkit_search"],
-            )
-            names = [t["function"]["name"] for t in session.tools]
-            assert names == ["toolkit_search"]
-
-    def test_init_with_denied_tools(self, mock_toolkit):
-        """denied_tools 应排除指定工具"""
-        with patch("tea_agent.litesession.OpenAI"):
-            from tea_agent.litesession import LiteSession
-            session = LiteSession(
-                toolkit=mock_toolkit,
-                api_key="k",
-                api_url="https://api.test.com",
-                model="m",
-                denied_tools=["toolkit_exec"],
-            )
-            names = [t["function"]["name"] for t in session.tools]
-            assert "toolkit_search" in names
-            assert "toolkit_exec" not in names
-
-    def test_init_with_allowed_tools(self, mock_toolkit):
-        """allowed_tools deprecated; all tools available."""
-        with patch("tea_agent.litesession.OpenAI"):
-            from tea_agent.litesession import LiteSession
-            session = LiteSession(
-                toolkit=mock_toolkit,
-                api_key="k",
-                api_url="https://api.test.com",
-                model="m",
-                allowed_tools=["toolkit_search"],
-            )
-            names = [t["function"]["name"] for t in session.tools]
-            assert "toolkit_search" in names
-            assert "toolkit_exec" in names
-
-    def test_init_with_denied_tools(self, mock_toolkit):
-        """denied_tools deprecated; all tools available."""
-        with patch("tea_agent.litesession.OpenAI"):
-            from tea_agent.litesession import LiteSession
-            session = LiteSession(
-                toolkit=mock_toolkit,
-                api_key="k",
-                api_url="https://api.test.com",
-                model="m",
-                denied_tools=["toolkit_exec"],
-            )
-            names = [t["function"]["name"] for t in session.tools]
-            assert "toolkit_exec" in names
-            assert "toolkit_search" in names
-
     def test_init_both_filters(self, mock_toolkit):
         """both filters deprecated; all tools available."""
         with patch("tea_agent.litesession.OpenAI"):

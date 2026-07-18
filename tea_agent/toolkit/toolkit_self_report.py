@@ -1,4 +1,3 @@
-## llm generated tool func, created Thu Apr 16 10:51:32 2026
 
 import logging
 
@@ -52,7 +51,7 @@ def toolkit_self_report() -> dict:
                 if f.startswith("toolkit_") and f.endswith(".py"):
                     tool_count += 1
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
     # 3. Strategy & Counter Info
@@ -63,7 +62,7 @@ def toolkit_self_report() -> dict:
         try:
             with open(counter_file, encoding='utf-8') as f: counter_data = json.load(f)
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
     return {

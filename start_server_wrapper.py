@@ -11,7 +11,6 @@ VENV_PATHS = [
     os.path.join(PROJECT_ROOT, "env"),
     os.path.join(PROJECT_ROOT, ".env"),
     # 全局虚拟环境
-    r"C:\Users\Hetin\venv_work",
     os.path.expanduser("~/venv_work"),
 ]
 

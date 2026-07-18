@@ -1,4 +1,3 @@
-## llm generated tool func, created Thu May 14 08:57:17 2026
 # version: 1.0.0
 
 import json

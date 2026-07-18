@@ -1,4 +1,3 @@
-## llm generated tool func, created Tue Jun  2 07:10:58 2026
 # version: 1.0.0
 
 """自动恢复机制 - 检查并恢复未完成的 TODO/Plan，含 docs/ 产物对照"""
@@ -19,7 +18,7 @@ def _get_topic_id() -> str | None:
         if agent is not None:
             return getattr(agent, 'current_topic_id', None)
     except Exception:
-        logger.exception("operation failed")
+        logger.exception('op_failed')
 
     return None
 

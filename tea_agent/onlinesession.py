@@ -8,6 +8,7 @@ from typing import Any
 
 from openai import OpenAI
 
+from tea_agent.agent_evolution import EvolutionTrigger
 from tea_agent.basesession import BaseChatSession, relaxed_json_loads
 
 # 组件导入（替代 Mixin）
@@ -615,6 +616,10 @@ class ToolComponent(SessionComponent):
 
         self.add_tool_result(call_id, result_str)
         self._record_tool_to_trace(func_name, success, error_msg, start_time)
+        # 进化触发器：采集工具调用信号
+        evolution_trigger = getattr(self.ctx, 'evolution_trigger', None)
+        if evolution_trigger:
+            evolution_trigger.on_tool_result(func_name, result, time.time() - start_time)
         return call_id, func_name, result_str
 
     def _record_tool_to_trace(
@@ -1015,13 +1020,18 @@ class OnlineToolSession(BaseChatSession):
         # 步骤9: 构建工具定义
         self._build_tools()
 
-        # 步骤10: 初始化反思和提示词管理器
+        # 步骤10: 初始化反思和提示词管理器 + 进化触发器
         self._init_reflection_and_prompt_manager(
             storage=storage,
             cheap_client=cheap_client,
             cheap_model=cheap_model,
             system_prompt=system_prompt,
         )
+
+        # 步骤11: 初始化进化触发器（上下文共享）
+        trigger = EvolutionTrigger()
+        self.context.evolution_trigger = trigger
+        self.evolution_trigger = trigger  # 便利引用
 
         # 步骤11: 初始化Pipeline
         self._init_pipeline()
@@ -1682,7 +1692,7 @@ class OnlineToolSession(BaseChatSession):
                 "toolkit_notify", title=title, message=message, duration=5000
             )
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
     def _notify_reflection_done(self, reflection_id: int):
         self._notify("🔍 元认知反思完成", f"反思 #{reflection_id} 已生成")
@@ -1809,7 +1819,7 @@ class OnlineToolSession(BaseChatSession):
         try:
             self.close()
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
 from tea_agent.session_memory_component import MemoryComponent  # noqa: E402

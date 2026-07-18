@@ -1,4 +1,3 @@
-## llm generated tool func, created Wed Jun  3 07:59:03 2026
 # version: 1.0.0
 
 def toolkit_scheduler_storage(action: str, **kwargs):

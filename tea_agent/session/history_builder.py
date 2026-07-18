@@ -179,7 +179,7 @@ def _extract_files_from_text(text: str) -> set:
                             if fp:
                                 files.add(fp)
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
     return files
 

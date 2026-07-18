@@ -1,4 +1,3 @@
-## llm generated tool func, created Thu Apr 16 21:15:45 2026
 
 import logging
 import re

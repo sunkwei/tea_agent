@@ -1,4 +1,3 @@
-## llm generated tool func, created Wed May 27 13:15:16 2026
 # version: 2.1.0 — Printer-friendly PDF export with table support
 
 import contextlib

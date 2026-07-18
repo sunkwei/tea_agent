@@ -1,4 +1,3 @@
-## llm generated tool func, created Fri May  1 09:48:55 2026
 # version: 1.0.1
 
 import logging
@@ -44,7 +43,7 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
             img.save(dst, quality=quality)
             return True
         except ImportError:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
         # fallback: ImageMagick convert
         cv = _find_tool("convert")
@@ -107,7 +106,7 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
                 if os.path.exists(out_path) and os.path.getsize(out_path) > 100:
                     return out_path
         except ImportError:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
         try:
@@ -120,7 +119,7 @@ def toolkit_screenshot(action: str, region: str = None, monitor: int = None, out
             if os.path.exists(out_path) and os.path.getsize(out_path) > 100:
                 return out_path
         except ImportError:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
         xs = _find_tool("xfce4-screenshooter")

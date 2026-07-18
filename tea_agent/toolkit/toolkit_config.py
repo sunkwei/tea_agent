@@ -73,7 +73,7 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
             try:
                 setattr(session, key, cfg.get(key))
             except Exception:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
 
         return f"✅ {key}: {old_val} → {new_val}"

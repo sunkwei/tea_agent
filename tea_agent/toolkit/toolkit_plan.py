@@ -67,7 +67,7 @@ def _get_topic_id() -> str | None:
         if agent is not None:
             return getattr(agent, 'current_topic_id', None)
     except Exception:
-        logger.exception("operation failed")
+        logger.exception('op_failed')
 
     return None
 
@@ -756,7 +756,7 @@ def _auto_solidify_skill(step: dict, plan: dict, cwd: str) -> str | None:
             t2 = dt.fromisoformat(finished)
             time_seconds = (t2 - t1).total_seconds()
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
     try:
@@ -804,7 +804,7 @@ def _auto_solidify_plan(plan: dict) -> str | None:
             from datetime import datetime as dt
             total_time = (dt.fromisoformat(last_finish) - dt.fromisoformat(first_start)).total_seconds()
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
     try:

@@ -144,7 +144,7 @@ def semantic_diagnose(project_root: str, filepath: str) -> dict:
                         "message": f"符号 '{name}' 无法解析到定义，可能是拼写错误或缺少导入",
                     })
             except Exception:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
 
         # 2. 检查导入
@@ -161,7 +161,7 @@ def semantic_diagnose(project_root: str, filepath: str) -> dict:
                             "message": f"导入 '{name.name}' 无法解析",
                         })
                 except Exception:
-                    logger.exception("operation failed")
+                    logger.exception('op_failed')
 
 
         hint = f"发现 {len(issues)} 个语义问题" if issues else "语义检查通过 ✓"

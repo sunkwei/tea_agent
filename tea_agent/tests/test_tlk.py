@@ -1,6 +1,5 @@
 """
-@2026-06-07 gen by deepseek, Toolkit 核心功能测试
-覆盖: 工具注册、调用、重载、版本管理、用户覆盖等核心链路
+Toolkit 核心功能测试 — 工具注册、调用、重载、版本管理
 """
 import pytest
 

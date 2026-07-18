@@ -1,4 +1,3 @@
-## llm generated tool func, created Fri May  1 09:50:24 2026
 # version: 1.0.0
 
 import logging
@@ -45,10 +44,10 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
                 import pkg_resources
                 return pkg_resources.get_distribution(name).version
             except:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
         except:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
         return None
 

@@ -44,7 +44,7 @@ def toolkit_mcp(action: str = "connect", server_name: str = "", command: str = "
     elif action == "status":
         return _mcp_status()
     else:
-        return (1, "", f"未知 action: {action}，支持: connect/list_tools/call_tool/disconnect/status")
+        return {"ok": False, "error": f"未知 action: {action}", "returncode": 1}
 
 # MCP 客户端全局状态
 _MCP_SERVERS = {}  # server_name → {"session": ..., "stdio": ..., "transport": ..., "keepalive": ...}
@@ -74,7 +74,6 @@ def _mcp_get_or_create_loop():
     return _MCP_LOOP
 
 def _mcp_run_async(coro, timeout: float = 30.0):
-    """在持久事件循环中运行协程，同步等待结果。返回 (rc, stdout, stderr)。"""
     import asyncio
 
     loop = _mcp_get_or_create_loop()
@@ -84,9 +83,9 @@ def _mcp_run_async(coro, timeout: float = 30.0):
         result = future.result(timeout=timeout)
         return result
     except asyncio.TimeoutError:
-        return (1, "", "⏰ MCP 操作超时")
+        return {"ok": False, "error": "MCP 操作超时", "returncode": 1}
     except Exception as e:
-        return (1, "", f"❌ MCP 操作异常: {e.__class__.__name__}: {str(e)}")
+        return {"ok": False, "error": f"MCP 操作异常: {e}", "returncode": 1}
 
 def _mcp_connect(server_name: str, command: str, args: list, transport: str, url: str):
     """连接 MCP Server（在持久事件循环中，保持 stdio context manager 活跃）"""
@@ -94,10 +93,10 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
     import json
 
     if not server_name:
-        return (1, "", "server_name 不能为空")
+        return {"ok": False, "error": "server_name 不能为空", "returncode": 1}
 
     if server_name in _MCP_SERVERS:
-        return (0, json.dumps({"status": "already_connected", "server": server_name}, ensure_ascii=False, indent=2), "")
+        return {"ok": True, "status": "already_connected", "server": server_name, "returncode": 0}
 
     try:
         from mcp import ClientSession, StdioServerParameters
@@ -108,7 +107,7 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
             """连接并创建一个永不退出的 keepalive 任务来保持 context manager 活跃"""
             if transport == "stdio":
                 if not command:
-                    return (1, "", "stdio 传输方式需要 command 参数")
+                    return {"ok": False, "error": "stdio 传输方式需要 command 参数", "returncode": 1}
 
                 server_params = StdioServerParameters(
                     command=command,
@@ -135,7 +134,7 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
 
             elif transport == "sse":
                 if not url:
-                    return (1, "", "sse 传输方式需要 url 参数")
+                    return {"ok": False, "error": "sse 传输方式需要 url 参数", "returncode": 1}
 
                 ctx = sse_client(url)
                 read_stream, write_stream = await ctx.__aenter__()
@@ -154,7 +153,7 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
                     "keepalive": keepalive,
                 }
             else:
-                return (1, "", f"不支持的传输方式: {transport}，支持: stdio/sse")
+                return {"ok": False, "error": f"不支持的传输方式: {transport}", "returncode": 1}
 
             # 阻塞直到 keepalive 事件被 set（disconnect 时）
             await keepalive.wait()
@@ -163,15 +162,15 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
             try:
                 await session_ctx.__aexit__(None, None, None)
             except Exception:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
             try:
                 await ctx.__aexit__(None, None, None)
             except Exception:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
 
-            return (0, "disconnected", "")
+            return {"ok": True, "status": "disconnected", "returncode": 0}
 
         # 在后台提交 keepalive 任务，不等待完成
         loop = _mcp_get_or_create_loop()
@@ -185,77 +184,56 @@ def _mcp_connect(server_name: str, command: str, args: list, transport: str, url
             deadline = time.time() + 15
             while time.time() < deadline:
                 if server_name in _MCP_SERVERS:
-                    return (0, f"✅ 已连接到 MCP Server: {server_name} (transport={transport})", "")
+                    return {"ok": True, "message": f"已连接到 MCP Server: {server_name}", "transport": transport, "returncode": 0}
                 time.sleep(0.05)
-            return (1, "", f"❌ 连接超时: {server_name}")
+            return {"ok": False, "error": f"连接超时: {server_name}", "returncode": 1}
         except Exception as e:
-            return (1, "", f"❌ 连接失败: {str(e)}")
+            return {"ok": False, "error": f"连接失败: {e}", "returncode": 1}
 
     except ImportError:
-        return (1, "", "❌ 缺少 mcp 库，请运行: pip install mcp")
+        return {"ok": False, "error": "缺少 mcp 库，请运行: pip install mcp", "returncode": 1}
     except Exception as e:
-        return (1, "", f"❌ 连接失败: {str(e)}")
+        return {"ok": False, "error": f"连接失败: {e}", "returncode": 1}
 
 def _mcp_list_tools(server_name: str):
-    """列出 MCP Server 可用工具（在持久事件循环中）"""
-    import json
-
     if not server_name:
-        return (1, "", "server_name 不能为空")
+        return {"ok": False, "error": "server_name 不能为空", "returncode": 1}
 
     if server_name not in _MCP_SERVERS:
-        return (1, "", f"Server '{server_name}' 未连接，请先调用 action='connect'")
+        return {"ok": False, "error": f"Server '{server_name}' 未连接", "returncode": 1}
 
     try:
         async def _list():
-            """Internal: list."""
             server_info = _MCP_SERVERS[server_name]
             session = server_info["session"]
-
             result = await session.list_tools()
             tools = result.tools
-
-            tools_info = []
-            for tool in tools:
-                tools_info.append({
-                    "name": tool.name,
-                    "description": tool.description or "",
-                    "input_schema": tool.inputSchema if hasattr(tool, 'inputSchema') else {},
-                })
-
-            return (0, json.dumps({
-                "server": server_name,
-                "tools_count": len(tools_info),
-                "tools": tools_info,
-            }, ensure_ascii=False, indent=2), "")
+            tools_info = [{"name": t.name, "description": t.description or "", "input_schema": t.inputSchema if hasattr(t, 'inputSchema') else {}} for t in tools]
+            return {"ok": True, "server": server_name, "tools_count": len(tools_info), "tools": tools_info, "returncode": 0}
 
         return _mcp_run_async(_list(), timeout=15.0)
 
     except Exception as e:
-        return (1, "", f"❌ 列出工具失败: {str(e)}")
+        return {"ok": False, "error": f"列出工具失败: {e}", "returncode": 1}
 
 def _mcp_call(server_name: str, tool_name: str, tool_args: dict):
     """调用 MCP 工具（在持久事件循环中）"""
     import json
 
     if not server_name:
-        return (1, "", "server_name 不能为空")
+        return {"ok": False, "error": "server_name 不能为空", "returncode": 1}
 
     if not tool_name:
-        return (1, "", "tool_name 不能为空")
+        return {"ok": False, "error": "tool_name 不能为空", "returncode": 1}
 
     if server_name not in _MCP_SERVERS:
-        return (1, "", f"Server '{server_name}' 未连接")
+        return {"ok": False, "error": f"Server '{server_name}' 未连接", "returncode": 1}
 
     try:
         async def _call():
-            """Internal: call."""
             server_info = _MCP_SERVERS[server_name]
             session = server_info["session"]
-
             result = await session.call_tool(tool_name, tool_args)
-
-            # 提取结果内容
             content_list = []
             for content in result.content:
                 if hasattr(content, 'text'):
@@ -264,44 +242,30 @@ def _mcp_call(server_name: str, tool_name: str, tool_args: dict):
                     content_list.append(str(content.data))
                 else:
                     content_list.append(str(content))
-
-            return (0, json.dumps({
-                "server": server_name,
-                "tool": tool_name,
-                "content": "\n".join(content_list),
-                "is_error": result.isError if hasattr(result, 'isError') else False,
-            }, ensure_ascii=False, indent=2), "")
+            return {"ok": True, "server": server_name, "tool": tool_name, "content": "\n".join(content_list), "is_error": result.isError if hasattr(result, 'isError') else False, "returncode": 0}
 
         return _mcp_run_async(_call(), timeout=120.0)
 
     except Exception as e:
-        return (1, "", f"❌ 调用工具失败: {str(e)}")
+        return {"ok": False, "error": f"调用工具失败: {e}", "returncode": 1}
 
 def _mcp_disconnect(server_name: str):
-    """断开 MCP Server 连接（设置 keepalive event 触发清理）"""
-    import asyncio
-    import json
-
     if not server_name:
-        return (1, "", "server_name 不能为空")
+        return {"ok": False, "error": "server_name 不能为空", "returncode": 1}
 
     if server_name not in _MCP_SERVERS:
-        return (0, json.dumps({"status": "not_connected", "server": server_name}), "")
+        return {"ok": True, "status": "not_connected", "server": server_name, "returncode": 0}
 
     try:
         server_info = _MCP_SERVERS[server_name]
         keepalive = server_info.get("keepalive")
-
         if keepalive is not None:
-            # 设置 keepalive event，让后台协程退出 context manager 并清理
             loop = _mcp_get_or_create_loop()
             asyncio.run_coroutine_threadsafe(_set_and_del(server_name, keepalive), loop)
-
         del _MCP_SERVERS[server_name]
-        return (0, f"✅ 已断开连接: {server_name}", "")
-
+        return {"ok": True, "message": f"已断开连接: {server_name}", "returncode": 0}
     except Exception as e:
-        return (1, "", f"❌ 断开连接失败: {str(e)}")
+        return {"ok": False, "error": f"断开连接失败: {e}", "returncode": 1}
 
 async def _set_and_del(server_name: str, keepalive):
     """设置 keepalive event 并清理 MCP_SERVERS 条目"""
@@ -311,25 +275,11 @@ async def _set_and_del(server_name: str, keepalive):
     await _asyncio.sleep(0.1)
 
 def _mcp_status():
-    """查看已连接服务器状态"""
-    import json
-
     if not _MCP_SERVERS:
-        return (0, json.dumps({"status": "no_connections", "servers": []}, ensure_ascii=False, indent=2), "")
+        return {"ok": True, "status": "no_connections", "servers": [], "returncode": 0}
 
-    servers_info = []
-    for name, info in _MCP_SERVERS.items():
-        servers_info.append({
-            "name": name,
-            "transport": info.get("transport", "unknown"),
-            "url": info.get("url", ""),
-        })
-
-    return (0, json.dumps({
-        "status": "connected",
-        "servers_count": len(servers_info),
-        "servers": servers_info,
-    }, ensure_ascii=False, indent=2), "")
+    servers_info = [{"name": n, "transport": i.get("transport", "unknown"), "url": i.get("url", "")} for n, i in _MCP_SERVERS.items()]
+    return {"ok": True, "status": "connected", "servers_count": len(servers_info), "servers": servers_info, "returncode": 0}
 
 def meta_toolkit_mcp() -> dict:
     """Meta toolkit mcp."""

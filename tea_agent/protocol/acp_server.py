@@ -240,7 +240,7 @@ class ACPProtocolServer:
                     lambda: queue.put_nowait(event)
                 )
             except Exception:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
         def cb(text: str):
             if not text or text.startswith("["):

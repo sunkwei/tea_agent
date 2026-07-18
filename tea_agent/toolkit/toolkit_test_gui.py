@@ -1,4 +1,3 @@
-## llm generated tool func, created 2026-05-20 by tea_agent
 ## toolkit_test_gui: 测试 python -m tea_agent.gui 能否正常加载 GUI 组件
 
 import logging

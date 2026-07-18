@@ -1,71 +1,75 @@
-## llm generated tool func, created Thu May 15 13:55:00 2026
-# version: 1.0.0
+# version: 2.0.0 — refactored: unified dict return, removed emoji from API
 
 """
-进化经验库管理工具 — toolkit_evolution_exp
-
-记录、查询和管理 Agent 的自主进化经验。
-经验库存储在 ~/.tea_agent/evolution_exp.json。
-
-action:
-  - record: 记录新的进化经验
-  - search: 根据关键词/标签搜索历史经验
-  - list: 列出最近的进化经验
+进化经验库管理
+记录、查询 Agent 的自主进化经验。存储于 ~/.tea_agent/evolution_exp.json。
 """
 
 import json
+import logging
 import os
 from datetime import datetime
 
+logger = logging.getLogger("toolkit.evolution_exp")
 
-def _get_exp_path():
-    """Internal: get the exp path."""
+
+def _get_exp_path() -> str:
     return os.path.join(os.path.expanduser("~"), ".tea_agent", "evolution_exp.json")
 
-def _load_exp_db():
-    """Internal: load exp db."""
+
+def _load_exp_db() -> list[dict]:
     path = _get_exp_path()
     if os.path.exists(path):
-        with open(path, encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(path, encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.exception(f"load_exp_failed:{e}")
     return []
 
-def _save_exp_db(data):
-    """Internal: save exp db.
 
-    Args:
-        data: Description.
-    """
+def _save_exp_db(data: list[dict]):
     path = _get_exp_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-def toolkit_evolution_exp(action="list", description="", category="", tags="", outcome="success", notes="", query="", limit=10):
-    """
-    管理进化经验库。
 
-    action:
-      - list: 列出最近经验
-      - record: 记录经验
-      - search: 搜索经验
+def toolkit_evolution_exp(
+    action: str = "list",
+    description: str = "",
+    category: str = "",
+    tags: str = "",
+    outcome: str = "success",
+    notes: str = "",
+    query: str = "",
+    limit: int = 10
+) -> dict:
+    """
+    进化经验库管理。
+
+    - action=list: 列出最近经验
+    - action=record: 记录新经验
+    - action=search: 搜索经验
     """
     db = _load_exp_db()
 
     if action == "list":
         if not db:
-            return "📚 经验库为空，开始记录进化经验吧！"
-
-        lines = [f"📚 最近 {min(limit, len(db))} 条进化经验:"]
+            return {"ok": True, "experiences": [], "total": 0}
+        result = []
         for exp in db[-limit:]:
-            tags_str = f" [{', '.join(exp.get('tags', []))}]" if exp.get('tags') else ""
-            lines.append(f"- **{exp.get('description', 'N/A')}** ({exp.get('timestamp', '')[:10]}) {tags_str}")
-        return "\n".join(lines)
+            result.append({
+                "description": exp.get("description", ""),
+                "category": exp.get("category", ""),
+                "outcome": exp.get("outcome", ""),
+                "date": exp.get("timestamp", "")[:10]
+            })
+        return {"ok": True, "experiences": result, "total": len(db)}
 
     elif action == "record":
         if not description:
-            return "❌ 记录经验需要提供 description 参数"
-
+            return {"ok": False, "error": "missing_description"}
         exp = {
             "timestamp": datetime.now().isoformat(),
             "description": description,
@@ -76,51 +80,36 @@ def toolkit_evolution_exp(action="list", description="", category="", tags="", o
         }
         db.append(exp)
         _save_exp_db(db)
-        return f"✅ 已记录经验: {description}"
+        return {"ok": True, "message": f"recorded:{description[:60]}"}
 
     elif action == "search":
         if not query:
-            return "❌ 搜索经验需要提供 query 参数"
-
-        results = []
+            return {"ok": False, "error": "missing_query"}
         q = query.lower()
-        for exp in db:
-            text = json.dumps(exp).lower()
-            if q in text:
-                results.append(exp)
-
-        if not results:
-            return f"🔍 未找到与 '{query}' 相关的经验"
-
-        lines = [f"🔍 找到 {len(results)} 条与 '{query}' 相关的经验:"]
-        for exp in results[-limit:]:
-            tags_str = f" [{', '.join(exp.get('tags', []))}]" if exp.get('tags') else ""
-            lines.append(f"- **{exp.get('description', 'N/A')}** ({exp.get('timestamp', '')[:10]}) {tags_str}")
-            if exp.get('notes'):
-                lines.append(f"  > {exp['notes']}")
-        return "\n".join(lines)
+        results = [exp for exp in db if q in json.dumps(exp, ensure_ascii=False).lower()]
+        return {"ok": True, "query": query, "results": results[-limit:], "total": len(results)}
 
     else:
-        return f"❌ 未知 action: {action}"
+        return {"ok": False, "error": f"unknown_action:{action}"}
+
 
 def meta_toolkit_evolution_exp() -> dict:
-    """Meta toolkit evolution exp."""
     return {
         "type": "function",
         "function": {
             "name": "toolkit_evolution_exp",
-            "description": "进化经验库管理。记录、查询和管理 Agent 的自主进化经验。action=list/record/search。",
+            "description": "进化经验库管理。记录/查询 Agent 的自主进化经验。action=list/record/search",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["list", "record", "search"], "description": "操作: list=列出, record=记录, search=搜索"},
-                    "description": {"type": "string", "description": "[record] 经验描述"},
-                    "category": {"type": "string", "description": "[record] 经验分类，如 dependency, architecture, ui"},
-                    "tags": {"type": "string", "description": "[record/search] 逗号分隔的标签"},
-                    "outcome": {"type": "string", "description": "[record] 结果: success/failure/partial", "default": "success"},
-                    "notes": {"type": "string", "description": "[record] 备注或教训"},
-                    "query": {"type": "string", "description": "[search] 搜索关键词"},
-                    "limit": {"type": "integer", "description": "返回数量上限", "default": 10}
+                    "action": {"type": "string", "enum": ["list", "record", "search"], "description": "list/record/search"},
+                    "description": {"type": "string", "description": "经验描述（record 时必需）"},
+                    "category": {"type": "string", "description": "分类"},
+                    "tags": {"type": "string", "description": "逗号分隔标签"},
+                    "outcome": {"type": "string", "description": "success/failure/partial"},
+                    "notes": {"type": "string", "description": "备注"},
+                    "query": {"type": "string", "description": "搜索关键词"},
+                    "limit": {"type": "integer", "description": "返回上限"}
                 },
                 "required": ["action"]
             }

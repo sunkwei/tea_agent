@@ -146,7 +146,7 @@ class ReflectionManager:
                 if current_count - last_conv_count >= 10:
                     return True
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
         return False
@@ -256,7 +256,7 @@ class ReflectionManager:
                             importance=mem.get("importance", 3),
                         )
                     except Exception:
-                        logger.exception("operation failed")
+                        logger.exception('op_failed')
 
 
             # 返回 prompt_adjustment 供 SystemPromptManager 使用

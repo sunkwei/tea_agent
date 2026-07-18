@@ -1,4 +1,3 @@
-## llm generated tool func, created Mon Jun  1 09:28:09 2026
 # version: 1.0.0
 
 """
@@ -287,7 +286,7 @@ def _ask_gui(
             try:
                 dialog.destroy()
             except:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
         dialog.after(timeout * 1000, _timeout)
 
@@ -334,7 +333,7 @@ def _ask_cli(
                     if 0 <= idx < len(options):
                         return options[idx]
                 except ValueError:
-                    logger.exception("operation failed")
+                    logger.exception('op_failed')
 
 
                 # 尝试匹配选项名称

@@ -1,5 +1,4 @@
-# llm generated tool func, created Wed Apr 15 13:13:26 2026
-# version: 1.1.0
+# version: 1.2.0 — cleaned: unified return dict, meaningful logger tags
 
 import json
 import logging
@@ -190,7 +189,7 @@ class _ProcessMonitor:
                         if cpu_pct > 0:
                             is_active = True
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        logger.exception("operation failed")
+                        logger.exception('op_failed')
 
 
                     # 内存检查（RSS 增长 > 1%）
@@ -200,7 +199,7 @@ class _ProcessMonitor:
                             is_active = True
                         self._last_rss = mem.rss
                     except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        logger.exception("operation failed")
+                        logger.exception('op_failed')
 
 
                     # IO 检查（读写字节增长）
@@ -212,7 +211,7 @@ class _ProcessMonitor:
                         self._last_io_read = io.read_bytes
                         self._last_io_write = io.write_bytes
                     except (psutil.AccessDenied, AttributeError):
-                        logger.exception("operation failed")
+                        logger.exception('op_failed')
 
 
                     # 子进程检查
@@ -224,10 +223,10 @@ class _ProcessMonitor:
                                         is_active = True
                                         break
                                 except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                    logger.exception("operation failed")
+                                    logger.exception('op_failed')
 
                         except (psutil.NoSuchProcess, psutil.AccessDenied):
-                            logger.exception("operation failed")
+                            logger.exception('op_failed')
 
 
                     if is_active:
@@ -236,7 +235,7 @@ class _ProcessMonitor:
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     break
         except psutil.NoSuchProcess:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
 def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
@@ -267,13 +266,13 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
             for line in iter(stream.readline, ""):
                 lines.append(line)
         except ValueError:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
         finally:
             try:
                 stream.close()
             except OSError:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
 
     t_out = threading.Thread(target=_reader, args=(process.stdout, stdout_lines), daemon=True)
@@ -305,10 +304,10 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
                     process.kill()
                     process.wait(timeout=5)
                 except Exception:
-                    logger.exception("operation failed")
+                    logger.exception('op_failed')
 
             except Exception:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
     finally:
         monitor.stop()
@@ -333,7 +332,7 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
         hint = f"⏰ 命令超过硬上限被强制终止 (>{timeout*4}s): {cmd_preview}"
         stderr = (stderr + "\n" + hint) if stderr else hint
 
-    return (retcode, stdout, stderr)
+    return {"ok": retcode == 0, "returncode": retcode, "stdout": stdout, "stderr": stderr}
 
 
 def _run_batch_with_monitor(idx, cmd, timeout):
@@ -362,13 +361,13 @@ def _run_batch_with_monitor(idx, cmd, timeout):
                 for line in iter(stream.readline, ""):
                     lines.append(line)
             except ValueError:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
             finally:
                 try:
                     stream.close()
                 except OSError:
-                    logger.exception("operation failed")
+                    logger.exception('op_failed')
 
 
         t_out = threading.Thread(target=_reader, args=(process.stdout, out_lines), daemon=True)
@@ -397,7 +396,7 @@ def _run_batch_with_monitor(idx, cmd, timeout):
                     process.kill()
                     process.wait(timeout=3)
                 except Exception:
-                    logger.exception("operation failed")
+                    logger.exception('op_failed')
 
 
         monitor.stop()
@@ -442,8 +441,8 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         - 有效解决长时间编译、下载等正常操作被误杀的问题
 
     返回:
-        single: (returncode, stdout, stderr)
-        batch: (0, json结果数组, "")
+        single: {"ok": bool, "returncode": int, "stdout": str, "stderr": str}
+        batch: {"ok": bool, "results": list, "success_rate": str, "total": int}
     """
     logger.info(f"toolkit_exec called: app={app!r}, args={repr(args)[:80]}, action={action!r}, commands={repr(commands)[:80]}, timeout={timeout!r}")
 
@@ -452,7 +451,7 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         dangerous, reason = _is_self_destructive(app, args or [])
         if dangerous:
             logger.warning(f"toolkit_exec blocked: {reason}")
-            return (-1, "", reason)
+            return {"ok": False, "error": reason, "returncode": -1}
     elif action == "batch" and commands:
         for cmd in commands:
             a = cmd.get("app", "")
@@ -461,7 +460,7 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                 dangerous, reason = _is_self_destructive(a, ar)
                 if dangerous:
                     logger.warning(f"toolkit_exec batch blocked: {reason}")
-                    return (-1, json.dumps([{"error": True, "stderr": reason}], ensure_ascii=False), "")
+                    return {"ok": False, "error": reason, "results": [{"error": True, "stderr": reason}]}
 
     _PY_CMD_THRESHOLD = 500  # -c 脚本超过此字符数则写入临时文件  # noqa: N806
     if action == "single" and app in ("python", "python3") and args:
@@ -486,20 +485,19 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                         try:
                             os.unlink(tmppath)
                         except OSError:
-                            logger.exception("operation failed")
+                            logger.exception('op_failed')
 
                     return result
                 break  # 只处理第一个 -c
 
     if action == "batch":
         if not commands:
-            return (0, "[]", "")
+            return {"ok": True, "results": [], "total": 0}
 
         results = [None] * len(commands)
         lock = threading.Lock()
 
         def _run_wrapper(idx, cmd):
-            """Batch 子任务包装器，集成 _ProcessMonitor 智能超时。"""
             result = _run_batch_with_monitor(idx, cmd, timeout)
             with lock:
                 results[idx] = result
@@ -511,8 +509,7 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                 f.result()
 
         success = sum(1 for r in results if r and not r.get("error"))
-        results.insert(0, {"summary": f"{success}/{len(commands)} 成功", "total": len(commands), "workers": workers})
-        return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+        return {"ok": True, "results": results, "success_rate": f"{success}/{len(commands)}", "total": len(commands)}
 
     else:  # action == "single"
         if args is None:
@@ -550,10 +547,10 @@ def _sudo_with_gui(app: str, args: list):
     if dialog_cmd:
         pwd_result = subprocess.run(dialog_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
         if pwd_result.returncode != 0:
-            return (126, "", "用户取消了密码输入")
+            return {"ok": False, "error": "用户取消了密码输入", "returncode": 126}
         password = pwd_result.stdout.strip()
         if not password:
-            return (1, "", "密码不能为空")
+            return {"ok": False, "error": "密码不能为空", "returncode": 1}
 
         try:
             process = subprocess.Popen(
@@ -567,15 +564,15 @@ def _sudo_with_gui(app: str, args: list):
                 input=password + "\n",
                 timeout=180,
             )
-            result = (process.returncode, stdout, stderr)
+            result = {"ok": process.returncode == 0, "returncode": process.returncode, "stdout": stdout, "stderr": stderr}
         except subprocess.TimeoutExpired:
             try:
                 process.kill()
                 process.wait(timeout=5)
             except Exception:
-                logger.exception("operation failed")
+                logger.exception("op_failed")
 
-            result = (-1, "", "⏰ sudo 命令超时被强制终止 (>180s)")        # 清除密码
+            result = {"ok": False, "error": "sudo超时", "returncode": -1}
         password = "\x00" * len(password)
         del password
         return result
@@ -590,15 +587,15 @@ def _sudo_with_gui(app: str, args: list):
                 text=True, encoding="utf-8", errors="replace",
             )
             stdout, stderr = process.communicate(timeout=120)
-            result = (process.returncode, stdout, stderr)
+            result = {"ok": process.returncode == 0, "returncode": process.returncode, "stdout": stdout, "stderr": stderr}
         except subprocess.TimeoutExpired:
             try:
                 process.kill()
                 process.wait(timeout=5)
             except Exception:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
-            result = (-1, "", "⏰ pkexec 命令超时被强制终止 (>120s)")
+            result = {"ok": False, "error": "pkexec超时", "returncode": -1}
         return result
 
     # 最后回退 — 可能失败（需要 tty）
@@ -610,15 +607,15 @@ def _sudo_with_gui(app: str, args: list):
             text=True, encoding="utf-8", errors="replace",
         )
         stdout, stderr = process.communicate(timeout=120)
-        result = (process.returncode, stdout, stderr)
+        result = {"ok": process.returncode == 0, "returncode": process.returncode, "stdout": stdout, "stderr": stderr}
     except subprocess.TimeoutExpired:
         try:
             process.kill()
             process.wait(timeout=5)
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
-        result = (-1, "", f"⏰ 命令超时被强制终止 (>120s): {app}")
+        result = {"ok": False, "error": f"命令超时:{app}", "returncode": -1}
     return result
 
 def meta_toolkit_exec() -> dict:

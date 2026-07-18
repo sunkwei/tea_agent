@@ -193,7 +193,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             if agent and hasattr(agent, "db"):
                 return MemoryManager(agent.db, extraction_threshold=1, dedup_threshold=0.3)
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
         return MemoryManager(Storage(), extraction_threshold=1, dedup_threshold=0.3)
 
@@ -256,65 +256,38 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
     # === 主逻辑 ===
     if action == "detect":
         detected = _detect_phase(text)
-        return (0, json.dumps({
-            "detected": detected,
-            "text_snippet": text[:100] if text else "",
-            "labels": _LABELS,
-        }, ensure_ascii=False, indent=2), "")
+        return {"ok": True, "detected": detected, "text_snippet": text[:100] if text else "", "labels": _LABELS, "returncode": 0}
 
     elif action == "switch":
         resolved = _resolve_mode(mode)
         if resolved == "develop" and mode not in ALL_MODES and mode not in MODE_ALIASES:
-            return (1, "", f"无效模式: {mode}。{_VALID_MSG}")
+            return {"ok": False, "error": f"无效模式: {mode}", "returncode": 1}
         mm = _get_memory_manager()
         old = _get_existing_mode_memory(mm)
         _set_mode(mm, resolved, old)
-        return (0, json.dumps({
-            "switched_to": resolved,
-            "requested": mode,
-            "instruction": MODE_INSTRUCTIONS.get(resolved, "")[:100] + "...",
-        }, ensure_ascii=False, indent=2), "")
+        return {"ok": True, "switched_to": resolved, "requested": mode, "instruction": MODE_INSTRUCTIONS.get(resolved, "")[:100] + "...", "returncode": 0}
 
     elif action == "auto":
         detected = _detect_phase(text)
         mm = _get_memory_manager()
         current = _current_mode(mm)
         if detected == current:
-            return (0, json.dumps({
-                "mode": detected, "switched": False, "reason": "模式未变化"
-            }, ensure_ascii=False), "")
+            return {"ok": True, "mode": detected, "switched": False, "reason": "模式未变化", "returncode": 0}
         old = _get_existing_mode_memory(mm)
         _set_mode(mm, detected, old)
-        return (0, json.dumps({
-            "mode": detected, "switched": True,
-            "from": current, "to": detected,
-            "instruction": MODE_INSTRUCTIONS.get(detected, "")[:100] + "...",
-        }, ensure_ascii=False, indent=2), "")
+        return {"ok": True, "mode": detected, "switched": True, "from": current, "to": detected, "instruction": MODE_INSTRUCTIONS.get(detected, "")[:100] + "...", "returncode": 0}
 
     elif action == "status":
         mm = _get_memory_manager()
         old = _get_existing_mode_memory(mm)
         if old:
             current = _current_mode(mm)
-            return (0, json.dumps({
-                "has_mode": True,
-                "mode": current,
-                "content": old["content"],
-                "priority": old["priority"],
-                "id": old["id"],
-                "labels": _LABELS,
-            }, ensure_ascii=False, indent=2), "")
+            return {"ok": True, "has_mode": True, "mode": current, "content": old["content"], "priority": old["priority"], "id": old["id"], "labels": _LABELS, "returncode": 0}
         else:
-            return (0, json.dumps({
-                "has_mode": False,
-                "mode": "develop (default)",
-                "message": "未设置模式，默认 develop（代码开发）。",
-                "tip": "使用 toolkit_mode(action='auto', text='用户输入') 自动检测并设置",
-                "valid_modes": list(_LABELS.keys()),
-            }, ensure_ascii=False, indent=2), "")
+            return {"ok": True, "has_mode": False, "mode": "develop (default)", "message": "未设置模式，默认 develop", "tip": "使用 toolkit_mode(action='auto', text='用户输入')", "valid_modes": list(_LABELS.keys()), "returncode": 0}
 
     else:
-        return (1, "", f"未知 action: {action}。支持: detect/switch/status/auto")
+        return {"ok": False, "error": f"未知 action: {action}", "returncode": 1}
 
 
 def meta_toolkit_mode() -> dict:

@@ -289,7 +289,7 @@ class TkGUI(Agent):
         try:
             os.chdir(_proj_root)
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
         try:
             from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
@@ -902,7 +902,7 @@ class TkGUI(Agent):
             dir_name = os.path.basename(self._initial_cwd or os.getcwd())
             title = f"{title}  [{dir_name}]"
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
         self.root.title(title)
 
@@ -1021,7 +1021,7 @@ class TkGUI(Agent):
                          and hasattr(self._cfg, 'main_model')
                          and self._cfg.main_model.supports_vision)
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
         if not vision_ok:
             return None
@@ -1188,7 +1188,7 @@ class TkGUI(Agent):
                             embedding_prompt_tokens=emb_p,
                         )
                 except Exception:
-                    logger.exception("operation failed")
+                    logger.exception('op_failed')
 
                 if usage and usage.get("total_tokens", 0) > 0:
                     self.root.after(0, lambda u=usage, cu=cheap_usage, et=emb_total, ep=emb_p:
@@ -1225,7 +1225,7 @@ class TkGUI(Agent):
                             rounds=rounds if rounds else None,
                         )
                     except Exception:
-                        logger.exception("operation failed")
+                        logger.exception('op_failed')
 
                 self.root.after(0, self._render_and_show_chat)
                 self.root.after(0, self._show_raw_check_btn)
@@ -1327,7 +1327,7 @@ class TkGUI(Agent):
                 self._current_round_view = None
                 self._render_and_show_chat()
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
     def _show_image_popup(self, idx):
@@ -1426,13 +1426,13 @@ class TkGUI(Agent):
                         try:
                             setattr(self.sess, key, val)
                         except Exception:
-                            logger.exception("operation failed")
+                            logger.exception('op_failed')
 
                 # max_context_tokens 从 main_model 读取（非全局配置）
                 try:
                     self.sess.max_context_tokens = cfg.main_model.max_context_tokens
                 except Exception:
-                    logger.exception("operation failed")
+                    logger.exception('op_failed')
 
             self._update_status("⚙️ 配置已更新")
 
@@ -1569,7 +1569,7 @@ class TkGUI(Agent):
                 try:
                     self.sess.close()
                 except Exception:
-                    logger.exception("operation failed")
+                    logger.exception('op_failed')
 
                 self.sess = None
 
@@ -1589,7 +1589,7 @@ class TkGUI(Agent):
                 try:
                     self.load_topic_history(topic_id)
                 except Exception:
-                    logger.exception("operation failed")
+                    logger.exception('op_failed')
 
 
             # 更新状态栏
@@ -1871,7 +1871,7 @@ def _set_app_icon(root):
             )
             root.iconbitmap(default=ico_path)
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
     # 跨平台：用 iconphoto(.png) 设置标题栏图标
@@ -1883,7 +1883,7 @@ def _set_app_icon(root):
             root.iconphoto(True, photo)
             root._icon_ref = photo  # 防止被 GC
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
 

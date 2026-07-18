@@ -166,7 +166,7 @@ class TopicManager:
                                 user_text = parsed.get("text", raw_user_msg)
                                 user_images = parsed.get("images", [])
                         except Exception:
-                            logger.exception("operation failed")
+                            logger.exception('op_failed')
 
                     render_items.append(("user", f"你：{user_text}", user_images))
 
@@ -342,6 +342,6 @@ class TopicManager:
             try:
                 gui._topic_tooltip.destroy()
             except Exception:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
             gui._topic_tooltip = None

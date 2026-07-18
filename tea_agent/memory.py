@@ -279,7 +279,7 @@ class MemoryManager:
             try:
                 self.storage.touch_memory(m["id"])
             except Exception:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
 
     # ------------------------------------------------------------------
@@ -767,7 +767,7 @@ importance 评分：
                     if key in data and isinstance(data[key], list):
                         return data[key]
         except (json.JSONDecodeError, ValueError):
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
         # 2. 处理 markdown 代码块

@@ -317,7 +317,7 @@ class SymbolIndex:
             if texts:
                 self._embedding_engine.build_tfidf_vocabulary(texts)
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
         return self._embedding_engine
 

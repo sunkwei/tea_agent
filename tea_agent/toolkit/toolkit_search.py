@@ -1,5 +1,4 @@
-# version: 1.3.0
-# 2026-06-01 gen by agent, 添加 GitHub 搜索能力（repos/code/issues）
+# version: 2.0.0 — unified dict return, cleaned gen artifacts
 
 import logging
 
@@ -117,16 +116,17 @@ def _search_duckduckgo(query: str, max_results: int, lang: str):
             })
 
     except requests.Timeout:
-        return (1, '', 'DuckDuckGo 搜索超时')
+        return {"ok": False, "error": "DuckDuckGo 搜索超时", "returncode": 1}
     except requests.ConnectionError:
-        return (1, '', '网络连接失败')
+        return {"ok": False, "error": "网络连接失败", "returncode": 1}
     except Exception as e:
-        return (1, '', f'DuckDuckGo 搜索出错: {str(e)}')
+        return {"ok": False, "error": f"DuckDuckGo 搜索出错: {e}", "returncode": 1}
 
     if not results:
-        return (0, '[]', '未找到相关结果')
+        return {"ok": True, "results": [], "message": "未找到相关结果", "returncode": 0}
 
-    return (0, json.dumps(results, ensure_ascii=False, indent=2), '')
+    return {"ok": True, "results": results, "returncode": 0}
+
 
 def _search_baidu(query: str, max_results: int):
     """Internal: search baidu.
@@ -198,7 +198,7 @@ def _search_baidu(query: str, max_results: int):
                     if encoded.startswith('http'):
                         real_url = encoded
             except Exception:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
 
             # 摘要
@@ -226,16 +226,16 @@ def _search_baidu(query: str, max_results: int):
             })
 
         if not results:
-            return (0, '[]', '未找到相关结果')
+            return {"ok": True, "results": [], "message": "未找到相关结果", "returncode": 0}
 
-        return (0, json.dumps(results, ensure_ascii=False, indent=2), '')
+        return {"ok": True, "results": results, "returncode": 0}
 
     except requests.Timeout:
-        return (1, '', '百度搜索超时')
+        return {"ok": False, "error": "百度搜索超时", "returncode": 1}
     except requests.ConnectionError:
-        return (1, '', '网络连接失败')
+        return {"ok": False, "error": "网络连接失败", "returncode": 1}
     except Exception as e:
-        return (1, '', f'百度搜索出错: {str(e)}')
+        return {"ok": False, "error": f"百度搜索出错: {e}", "returncode": 1}
 
 def meta_toolkit_search() -> dict:
     """Meta toolkit search."""
@@ -248,10 +248,10 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
     import subprocess
 
     if not root_path:
-        return (1, "", "root_path 不能为空（代码搜索需要）")
+        return {"ok": False, "error": "root_path 不能为空（代码搜索需要）", "returncode": 1}
 
     if not os.path.isdir(root_path):
-        return (1, "", f"目录不存在: {root_path}")
+        return {"ok": False, "error": f"目录不存在: {root_path}", "returncode": 1}
 
     results = []
 
@@ -296,7 +296,7 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
                 except json.JSONDecodeError:
                     continue
         except subprocess.TimeoutExpired:
-            return (1, "", "代码搜索超时")
+            return {"ok": False, "error": "代码搜索超时", "returncode": 1}
         except Exception as e:
             # ripgrep 失败，回退到 Python 实现
             logger.info(f"ripgrep 失败，回退到 Python 实现: {e}")
@@ -307,9 +307,9 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
         return _search_codebase_python(query, root_path, glob_pattern, max_results)
 
     if not results:
-        return (0, "[]", "未找到匹配的代码")
+        return {"ok": True, "results": [], "message": "未找到匹配的代码", "returncode": 0}
 
-    return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+    return {"ok": True, "results": results, "returncode": 0}
 
 def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_results: int):
     """Python 实现的代码全文搜索（ripgrep 不可用时的回退方案）"""
@@ -347,14 +347,14 @@ def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_r
                             "match": query,
                         })
                         if len(results) >= max_results:
-                            return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+                            return {"ok": True, "results": results, "returncode": 0}
             except Exception:
                 continue
 
     if not results:
-        return (0, "[]", "未找到匹配的代码")
+        return {"ok": True, "results": [], "message": "未找到匹配的代码", "returncode": 0}
 
-    return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+    return {"ok": True, "results": results, "returncode": 0}
 
 def _search_symbol(query: str, root_path: str, max_results: int):
     """符号搜索（查找函数/类定义）"""
@@ -363,10 +363,10 @@ def _search_symbol(query: str, root_path: str, max_results: int):
     import os
 
     if not root_path:
-        return (1, "", "root_path 不能为空（符号搜索需要）")
+        return {"ok": False, "error": "root_path 不能为空（符号搜索需要）", "returncode": 1}
 
     if not os.path.isdir(root_path):
-        return (1, "", f"目录不存在: {root_path}")
+        return {"ok": False, "error": f"目录不存在: {root_path}", "returncode": 1}
 
     results = []
     abs_root_path = os.path.abspath(root_path)
@@ -415,7 +415,7 @@ def _search_symbol(query: str, root_path: str, max_results: int):
                                     "args": args,
                                 })
                                 if len(results) >= max_results:
-                                    return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+                                    return {"ok": True, "results": results, "returncode": 0}
 
                 except Exception as e:
                     if isinstance(e, SyntaxError):
@@ -424,9 +424,9 @@ def _search_symbol(query: str, root_path: str, max_results: int):
                     continue
 
     if not results:
-        return (0, "[]", f"未找到符号: {query}")
+        return {"ok": True, "results": [], "message": f"未找到符号: {query}", "returncode": 0}
 
-    return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+    return {"ok": True, "results": results, "returncode": 0}
 
 def _extract_args(node):
     """从 AST 节点提取参数信息。兼容 FunctionDef 和 ClassDef。"""
@@ -535,23 +535,23 @@ def _search_github(query: str, search_type: str, max_results: int):
                 })
 
         if not results:
-            return (0, "[]", f"GitHub 未找到相关{api_type}结果")
+            return {"ok": True, "results": [], "message": f"GitHub 未找到相关{api_type}结果", "returncode": 0}
 
-        return (0, json.dumps(results, ensure_ascii=False, indent=2), "")
+        return {"ok": True, "results": results, "returncode": 0}
 
     except requests.Timeout:
-        return (1, "", "GitHub API 请求超时")
+        return {"ok": False, "error": "GitHub API 请求超时", "returncode": 1}
     except requests.ConnectionError:
-        return (1, "", "网络连接失败，请检查网络")
+        return {"ok": False, "error": "网络连接失败", "returncode": 1}
     except requests.HTTPError as e:
         if e.response.status_code == 403:
-            return (1, "", "GitHub API 速率限制，请稍后再试（未认证限制 10 次/分钟）")
+            return {"ok": False, "error": "GitHub API 速率限制", "returncode": 1}
         elif e.response.status_code == 401:
             if api_type == "code":
-                return (1, "", "GitHub 代码搜索需要认证。请使用仓库搜索(repos)或 Issues 搜索(issues)")
-            return (1, "", "GitHub API 认证失败")
+                return {"ok": False, "error": "GitHub 代码搜索需要认证", "returncode": 1}
+            return {"ok": False, "error": "GitHub API 认证失败", "returncode": 1}
         elif e.response.status_code == 422:
-            return (1, "", "GitHub 搜索语法错误，请简化关键词后重试")
-        return (1, "", f"GitHub API 错误: {e.response.status_code}")
+            return {"ok": False, "error": "GitHub 搜索语法错误", "returncode": 1}
+        return {"ok": False, "error": f"GitHub API 错误: {e.response.status_code}", "returncode": 1}
     except Exception as e:
-        return (1, "", f"GitHub 搜索出错: {str(e)}")
+        return {"ok": False, "error": f"GitHub 搜索出错: {e}", "returncode": 1}

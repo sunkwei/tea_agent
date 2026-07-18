@@ -15,7 +15,7 @@ def _get_db():
         if agent is not None and hasattr(agent, 'db'):
             return agent.db
     except Exception:
-        logger.exception("operation failed")
+        logger.exception('op_failed')
 
     return None
 
@@ -27,7 +27,7 @@ def _get_topic_id():
         if agent is not None:
             return getattr(agent, 'current_topic_id', None)
     except Exception:
-        logger.exception("operation failed")
+        logger.exception('op_failed')
 
     return None
 

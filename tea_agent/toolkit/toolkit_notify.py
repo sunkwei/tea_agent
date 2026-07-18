@@ -32,12 +32,11 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
             n.set_urgency(urgency_map.get(urgency, 1))
             n.set_timeout(duration)
             n.show()
-            return (0, f"通知已发送: {title}", "")
+            return {"ok": True, "message": f"通知已发送: {title}", "returncode": 0}
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
-        # 2) notify-send (D-Bus 标准通知，KDE Plasma 通知中心收录)
         try:
             subprocess.run(
                 ['notify-send', '--app-name=TeaAgent',
@@ -46,52 +45,47 @@ def toolkit_notify(title: str, message: str, urgency: str = "normal", duration: 
                  title, message],
                 timeout=5, capture_output=True,
             )
-            return (0, f"通知已发送: {title}", "")
+            return {"ok": True, "message": f"通知已发送: {title}", "returncode": 0}
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
-        # 3) kdialog (KDE)
         try:
             subprocess.run(
                 ['kdialog', '--passivepopup', message, str(duration // 1000), '--title', title],
                 timeout=5, capture_output=True,
             )
-            return (0, f"通知已发送: {title}", "")
+            return {"ok": True, "message": f"通知已发送: {title}", "returncode": 0}
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
-        # 4) zenity (GNOME/通用)
         try:
             subprocess.run(
                 ['zenity', '--notification', '--text', f'{title}\n{message}',
                  f'--timeout={duration // 1000}'],
                 timeout=5, capture_output=True,
             )
-            return (0, f"通知已发送: {title}", "")
+            return {"ok": True, "message": f"通知已发送: {title}", "returncode": 0}
         except Exception:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
-        # 5) wall 广播（最后手段）
         try:
             subprocess.run(['wall', f'[{title}] {message}'], timeout=3)
-            return (0, f"通知已广播: {title}", "")
+            return {"ok": True, "message": f"通知已广播: {title}", "returncode": 0}
         except Exception as e:
-            return (1, "", f"所有通知方式均失败: {e}")
+            return {"ok": False, "error": f"所有通知方式均失败: {e}", "returncode": 1}
 
     elif sys.platform == 'darwin':
         try:
             script = f'display notification "{message}" with title "{title}"'
             subprocess.run(['osascript', '-e', script], timeout=5)
-            return (0, f"通知已发送: {title}", "")
+            return {"ok": True, "message": f"通知已发送: {title}", "returncode": 0}
         except Exception as e:
-            return (1, "", f"macOS 通知失败: {e}")
+            return {"ok": False, "error": f"macOS 通知失败: {e}", "returncode": 1}
 
     elif sys.platform == 'win32':
-        # ── 系统通知区 Toast（主方案）──
-        # PowerShell + Windows.UI.Notifications，非阻塞通知栏弹出
         try:
             app_id = "TeaAgent.TeaAgent.TeaAgent"
             ps_register = '''
@@ -116,12 +110,12 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
 '''
             subprocess.run(['powershell', '-NoProfile', '-Command', ps_toast],
                            timeout=10, capture_output=True)
-            return (0, f"通知已发送: {title}", "")
+            return {"ok": True, "message": f"通知已发送: {title}", "returncode": 0}
         except Exception as e:
-            return (1, "", f"Windows 通知失败: {e}")
+            return {"ok": False, "error": f"Windows 通知失败: {e}", "returncode": 1}
 
     else:
-        return (1, "", f"不支持的操作系统: {sys.platform}")
+        return {"ok": False, "error": f"不支持的操作系统: {sys.platform}", "returncode": 1}
 
 def meta_toolkit_notify() -> dict:
     """Meta toolkit notify."""

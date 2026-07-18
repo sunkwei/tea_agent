@@ -1,4 +1,3 @@
-## llm generated tool func, created Fri May  1 07:47:45 2026
 # version: 1.0.4
 
 #!/usr/bin/env python3
@@ -124,7 +123,7 @@ def toolkit_kb(action, title="", content="", tags="", category="", query="", bri
                     if f"category:{category}" in text:
                         filtered.append(f)
                 except Exception:
-                    logger.exception("operation failed")
+                    logger.exception('op_failed')
 
             md_files = filtered
         if sort == "time":

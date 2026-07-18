@@ -26,6 +26,7 @@ from tea_agent.onlinesession import OnlineToolSession
 from tea_agent.store import Storage
 
 from .agent_background import start_scheduler
+from .agent_evolution import EvolutionAnalyzer, EvolutionActor
 from .agent_pipeline import do_async_summaries
 from .memory import PRIORITY_MEDIUM
 
@@ -554,6 +555,15 @@ class Agent:
             daemon=True,
         ).start()
 
+        # 启动自进化任务（触发→分析→执行）
+        ctx = getattr(self._sess, 'context', None)
+        if ctx and getattr(ctx, 'evolution_trigger', None):
+            threading.Thread(
+                target=self._do_evolution,
+                args=(topic_id,),
+                daemon=True,
+            ).start()
+
     def _do_async_summaries(
         self, topic_id: str, overflow_items: list = None, should_summarize: bool = False
     ):
@@ -599,6 +609,40 @@ class Agent:
 
         except Exception as e:
             logger.debug(f"任务评估异常 (非致命): {e}")
+
+    def _do_evolution(self, topic_id: str):
+        """后台线程：自进化闭环 — 触发→分析→执行。
+
+        只在累积了触发事件且 cheap_client 可用时执行。
+        """
+        try:
+            ctx = getattr(self._sess, 'context', None)
+            trigger = getattr(ctx, 'evolution_trigger', None) if ctx else None
+            if not trigger:
+                return
+            events = trigger.get_pending_events()
+            if not events:
+                return
+
+            cheap_client = getattr(self._sess, 'context', None) and self._sess.context.cheap_client
+            if not cheap_client:
+                return
+
+            cheap_model = getattr(self._sess.context, 'cheap_model', 'gpt-4o-mini')
+            analyzer = EvolutionAnalyzer(cheap_client, cheap_model)
+            actions = analyzer.analyze(events)
+            if not actions:
+                if trigger:
+                    trigger.clear_events()
+                return
+
+            actor = EvolutionActor(self._toolkit)
+            results = actor.execute(actions)
+            logger.info(f"evolution: 执行完成 {len(results)}/{len(actions)} 个行动")
+            if trigger:
+                trigger.clear_events()
+        except Exception as e:
+            logger.debug(f"evolution 异常 (非致命): {e}")
 
     def _extract_tools_used(self, rounds: list) -> list[str]:
         """从对话轮次中提取使用的工具列表。

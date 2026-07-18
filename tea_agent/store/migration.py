@@ -334,7 +334,7 @@ def migrate_int_to_uuid(c):
             try:
                 c.execute(f"DROP TABLE IF EXISTS {leftover}")
             except Exception:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
         _migrate_table("topics", [
             "topic_id TEXT PRIMARY KEY", "title TEXT NOT NULL",
@@ -453,7 +453,7 @@ def maybe_rotate_db(db_path):
         db_week = row[0] if row else None
         tmp_conn.close()
     except sqlite3.OperationalError:
-        logger.exception("operation failed")
+        logger.exception('op_failed')
 
     current_week = get_week_key()
     if db_week == current_week:
@@ -500,7 +500,7 @@ def auto_backup(db_path):
                 if now - float(last) < 3600:
                     return
             except ValueError:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
         backup_dir = os.path.join(
             os.path.dirname(os.path.abspath(db_path)), "backup"
@@ -534,7 +534,7 @@ def cleanup_backups(backup_dir: str, keep: int = 7):
             os.remove(p)
             logger.debug(f"清理旧备份: {p}")
     except Exception:
-        logger.exception("operation failed")
+        logger.exception('op_failed')
 
 
 def backup_now(db_path):
@@ -569,7 +569,7 @@ def meta_set(db_path, key: str, value: str):
         conn.commit()
         conn.close()
     except Exception:
-        logger.exception("operation failed")
+        logger.exception('op_failed')
 
 
 # ═══════════════════════════════════════════════
@@ -588,4 +588,4 @@ def protect_db(db_path):
                 f.write(f"# 数据库路径: {db_abs}\n")
                 f.write(f"# 创建时间: {datetime.now().isoformat()}\n")
     except Exception:
-        logger.exception("operation failed")
+        logger.exception('op_failed')

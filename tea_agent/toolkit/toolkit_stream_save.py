@@ -1,4 +1,3 @@
-## llm generated tool func, created Fri May 22 07:47:11 2026
 # version: 1.0.0
 
 
@@ -63,7 +62,7 @@ def toolkit_stream_save(stream_id=None, target_path=None, append=False):
             try:
                 bak.write_bytes(target.read_bytes())
             except Exception:
-                logger.exception("operation failed")
+                logger.exception('op_failed')
 
 
         if append:

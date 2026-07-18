@@ -1,4 +1,3 @@
-## llm generated tool func, created Sat May  2 10:20:05 2026
 # version: 1.0.1
 
 # version: 1.0.1
@@ -22,9 +21,9 @@ def toolkit_proactive(action: str, content: str = "", priority: int = 2, goal_id
         elif action == "list_goals":
             return _list_goals()
         else:
-            return (1, "", f"未知 action: {action}")
+            return {"ok": False, "error": f"未知 action: {action}", "returncode": 1}
     except Exception as e:
-        return (1, "", f"自主心跳出错: {str(e)}")
+        return {"ok": False, "error": f"自主心跳出错: {e}", "returncode": 1}
 
 def _get_memory_manager():
     """Internal: get the memory manager."""
@@ -78,9 +77,9 @@ def _check_proactive():
             top = goals[0]
             report["suggestion"] = f"最高优先级待办: {top['content'][:80]}"
 
-        return (0, json.dumps(report, ensure_ascii=False, indent=2), "")
+        return {"ok": True, "report": report, "returncode": 0}
     except Exception as e:
-        return (1, "", f"检查失败: {str(e)}")
+        return {"ok": False, "error": f"检查失败: {e}", "returncode": 1}
 
 def _add_goal(content: str, priority: int = 2):
     """Internal: add goal.
@@ -91,8 +90,7 @@ def _add_goal(content: str, priority: int = 2):
     """
     import json
     if not content or not content.strip():
-        return (1, "", "目标内容不能为空")
-    # 钳位 priority 到 0-3 范围
+        return {"ok": False, "error": "目标内容不能为空", "returncode": 1}
     priority = max(0, min(3, priority))
     try:
         mm = _get_memory_manager()
@@ -103,9 +101,9 @@ def _add_goal(content: str, priority: int = 2):
             importance=4,
             tags="goal,proactive",
         )
-        return (0, json.dumps({"status": "已设定", "content": content.strip()}), "")
+        return {"ok": True, "status": "已设定", "content": content.strip(), "returncode": 0}
     except Exception as e:
-        return (1, "", f"设定目标失败: {str(e)}")
+        return {"ok": False, "error": f"设定目标失败: {e}", "returncode": 1}
 
 def _complete_goal(goal_id: int):
     """Internal: complete goal.
@@ -115,13 +113,13 @@ def _complete_goal(goal_id: int):
     """
     import json
     if not goal_id:
-        return (1, "", "需要提供 goal_id")
+        return {"ok": False, "error": "需要提供 goal_id", "returncode": 1}
     try:
         mm = _get_memory_manager()
         mm.storage.delete_memory(goal_id)
-        return (0, json.dumps({"status": "已完成", "id": goal_id}), "")
+        return {"ok": True, "status": "已完成", "id": goal_id, "returncode": 0}
     except Exception as e:
-        return (1, "", f"完成目标失败: {str(e)}")
+        return {"ok": False, "error": f"完成目标失败: {e}", "returncode": 1}
 
 def _list_goals():
     """Internal: list goals."""
@@ -142,13 +140,9 @@ def _list_goals():
                     "created": m.get("created_at", ""),
                 })
         goals.sort(key=lambda x: x["priority"])
-        return (0, json.dumps(goals, ensure_ascii=False, indent=2), "")
+        return {"ok": True, "goals": goals, "returncode": 0}
     except Exception as e:
-        return (1, "", f"列出目标失败: {str(e)}")
+        return {"ok": False, "error": f"列出目标失败: {e}", "returncode": 1}
 
 def meta_toolkit_proactive() -> dict:
-    """Meta toolkit proactive."""
-    return {"type": "function", "function": {"name": "toolkit_proactive", "description": "自主心跳：Agent 的自我目标管理系统。action=check 检查待办目标/洞察，action=goal 设置目标，action=done 完成目标。实现 Agent 跨会话的自主行动能力。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["check", "goal", "done", "list_goals"], "description": "check=检查待办并返回建议, goal=设定新目标, done=标记目标完成, list_goals=列出所有目标"}, "content": {"type": "string", "description": "[goal] 目标内容"}, "priority": {"type": "integer", "description": "[goal] 优先级 0-3，默认 2", "default": 2}, "goal_id": {"type": "integer", "description": "[done] 目标ID"}}, "required": ["action"]}}}
-
-    """Meta toolkit proactive."""
-    return {"type": "function", "function": {"name": "toolkit_proactive", "description": "自主心跳：Agent 的自我目标管理系统。action=check 检查待办目标/洞察，action=goal 设置目标，action=done 完成目标。实现 Agent 跨会话的自主行动能力。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["check", "goal", "done", "list_goals"], "description": "check=检查待办并返回建议, goal=设定新目标, done=标记目标完成, list_goals=列出所有目标"}, "content": {"type": "string", "description": "[goal] 目标内容"}, "priority": {"type": "integer", "description": "[goal] 优先级 0-3，默认 2", "default": 2}, "goal_id": {"type": "integer", "description": "[done] 目标ID"}}, "required": ["action"]}}}
+    return {"type": "function", "function": {"name": "toolkit_proactive", "description": "自主心跳：Agent 的自我目标管理系统。action=check/goal/done/list_goals。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["check", "goal", "done", "list_goals"], "description": "check=检查待办, goal=设定目标, done=完成目标, list_goals=列出"}, "content": {"type": "string", "description": "[goal] 目标内容"}, "priority": {"type": "integer", "description": "[goal] 优先级 0-3", "default": 2}, "goal_id": {"type": "integer", "description": "[done] 目标ID"}}, "required": ["action"]}}}

@@ -1,4 +1,3 @@
-## llm generated tool func, created Mon May 11 20:34:01 2026
 # version: 1.0.1
 
 """
@@ -111,7 +110,7 @@ def _build_ctags(directory, run_dir):
                     'line': line_num,
                 })
         except json.JSONDecodeError:
-            logger.exception("operation failed")
+            logger.exception('op_failed')
 
 
     return ctags_path, index

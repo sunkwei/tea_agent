@@ -78,6 +78,9 @@ class SessionContext:
     # ── 额外迭代 ──
     extra_iterations_on_continue: int = 5
 
+    # ── 自进化 ──
+    evolution_trigger: Any = None
+
 
 class SessionComponent(ABC):
     """会话组件基类 — 所有功能组件继承此类。"""

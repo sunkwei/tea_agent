@@ -77,27 +77,33 @@ class TestSetupLogging:
                 assert h.baseFilename == os.path.abspath(expected)
 
     def test_default_level_is_info(self, mock_home):
-        """默认 root logger 级别为 INFO"""
+        """默认 root logger 为 DEBUG（handler 各自过滤）"""
         from tea_agent.logging_setup import setup_logging
         setup_logging()
         root = logging.getLogger()
-        assert root.level == logging.INFO
+        # root 全开，由 handler 过滤
+        assert root.level == logging.DEBUG
 
     def test_debug_mode_sets_debug_level(self, mock_home):
-        """debug=True 时 root logger 级别为 DEBUG"""
+        """debug=True 时控制台 handler 级别设为 DEBUG"""
         from tea_agent.logging_setup import setup_logging
         setup_logging(debug=True)
         root = logging.getLogger()
         assert root.level == logging.DEBUG
+        # 检查控制台 handler
+        for h in root.handlers:
+            if isinstance(h, logging.StreamHandler) \
+               and not isinstance(h, logging.handlers.TimedRotatingFileHandler):
+                assert h.level == logging.DEBUG
 
-    def test_handler_level_is_debug(self, mock_home):
-        """文件 handler 级别应为 DEBUG（不丢失任何消息）"""
+    def test_handler_level_is_warning(self, mock_home):
+        """文件 handler 级别应为 WARNING"""
         from tea_agent.logging_setup import setup_logging
         setup_logging()
         root = logging.getLogger()
         for h in root.handlers:
             if isinstance(h, logging.handlers.TimedRotatingFileHandler):
-                assert h.level == logging.DEBUG
+                assert h.level == logging.WARNING
 
     def test_formatter_format(self, mock_home):
         """formatter 应包含 asctime/levelname/filename/lineno/message"""
@@ -165,18 +171,19 @@ class TestDebugToggle:
     """debug 模式切换测试"""
 
     def test_debug_to_info_toggle(self, mock_home):
-        """从 debug 切换到非 debug 应更新 root 级别"""
+        """从 debug 切换到非 debug 应更新控制台 handler 级别"""
         from tea_agent.logging_setup import setup_logging
         setup_logging(debug=True)
+        # root 始终 DEBUG，控制台 handler 变化
         assert logging.getLogger().level == logging.DEBUG
         setup_logging(debug=False)
-        assert logging.getLogger().level == logging.INFO
+        assert logging.getLogger().level == logging.DEBUG  # root 不变
 
     def test_info_to_debug_toggle(self, mock_home):
-        """从非 debug 切换到 debug 应更新 root 级别"""
+        """从非 debug 切换到 debug 应更新控制台 handler 级别"""
         from tea_agent.logging_setup import setup_logging
         setup_logging(debug=False)
-        assert logging.getLogger().level == logging.INFO
+        assert logging.getLogger().level == logging.DEBUG  # root 始终 DEBUG
         setup_logging(debug=True)
         assert logging.getLogger().level == logging.DEBUG
 
@@ -194,20 +201,33 @@ class TestSetRootLevel:
     """_set_root_level() 测试"""
 
     def test_set_debug(self, mock_home):
-        """切换到 DEBUG 级别"""
-        from tea_agent.logging_setup import _set_root_level
+        """切换到 DEBUG 级别（控制台 handler 级别变化）"""
+        from tea_agent.logging_setup import setup_logging, _set_root_level
+        setup_logging()  # 先初始化，确保有 handler
         root = logging.getLogger()
-        root.setLevel(logging.INFO)
+        # 控制台 handler 初始为 INFO
         _set_root_level(True)
-        assert root.level == logging.DEBUG
+        for h in root.handlers:
+            if isinstance(h, logging.StreamHandler) \
+               and not isinstance(h, logging.handlers.TimedRotatingFileHandler):
+                assert h.level == logging.DEBUG
+                break
+        else:
+            pytest.fail("No console handler found")
 
     def test_set_info(self, mock_home):
-        """切换到 INFO 级别"""
-        from tea_agent.logging_setup import _set_root_level
+        """切换到 INFO 级别（控制台 handler 级别变化）"""
+        from tea_agent.logging_setup import setup_logging, _set_root_level
+        setup_logging(debug=True)  # 先设为 debug，控制台 handler 为 DEBUG
         root = logging.getLogger()
-        root.setLevel(logging.DEBUG)
         _set_root_level(False)
-        assert root.level == logging.INFO
+        for h in root.handlers:
+            if isinstance(h, logging.StreamHandler) \
+               and not isinstance(h, logging.handlers.TimedRotatingFileHandler):
+                assert h.level == logging.INFO
+                break
+        else:
+            pytest.fail("No console handler found")
 
 
 class TestModuleState:
@@ -233,12 +253,12 @@ class TestEdgeCases:
     """边界情况测试"""
 
     def test_actual_logging_works(self, mock_home):
-        """日志实际写入文件"""
+        """WARNING 级别日志实际写入文件（文件 handler 为 WARNING+）"""
         from tea_agent.logging_setup import setup_logging
         setup_logging()
         logger = logging.getLogger("test_logger")
         test_msg = "这是一条测试日志消息"
-        logger.info(test_msg)
+        logger.warning(test_msg)  # 文件 handler 只写 WARNING+
         # 刷新 handler
         for h in logging.getLogger().handlers:
             h.flush()
@@ -249,7 +269,7 @@ class TestEdgeCases:
             assert test_msg in content
 
     def test_logging_with_error(self, mock_home):
-        """WARNING/ERROR 级别也能写入"""
+        """WARNING/ERROR 级别写入文件"""
         from tea_agent.logging_setup import setup_logging
         setup_logging()
         logger = logging.getLogger("test_error")
@@ -263,11 +283,11 @@ class TestEdgeCases:
             assert "警告信息" in content or "WARNING" in content
 
     def test_unicode_logging(self, mock_home):
-        """中文字符应正确写入"""
+        """中文字符应正确写入（WARNING 级别）"""
         from tea_agent.logging_setup import setup_logging
         setup_logging()
         logger = logging.getLogger("test_unicode")
-        logger.info("中文日志测试 © 你好 🌟")
+        logger.warning("中文日志测试 © 你好 🌟")  # 使用 WARNING 才能写入文件
         for h in logging.getLogger().handlers:
             h.flush()
         log_file = mock_home / ".tea_agent" / "tea_agent.log"

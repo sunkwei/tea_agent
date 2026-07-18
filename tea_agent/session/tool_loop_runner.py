@@ -323,6 +323,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                 temperature=eff.get("temperature"),
                 max_tokens=eff.get("max_tokens"),
                 top_p=eff.get("top_p"),
+                request_timeout=120,
             )
             content, _, reasoning = session._process_stream_with_reasoning(response, callback)
             session.add_assistant_message(content, reasoning)
@@ -355,8 +356,8 @@ def execute_tool_loop(session, context: dict) -> dict:
             logger.info(f"call model: {session.context.model}, {msg}")
 
         # API 调用（含 429 重试 + 视觉回退）
-        _MAX_RETRIES = 3  # noqa: N806
-        _RETRY_BASE_DELAY = 5  # 秒，递增: 5s, 10s, 15s  # noqa: N806
+        _MAX_RETRIES = 6  # noqa: N806
+        _RETRY_BASE_DELAY = 1  # 指数退避: 1s, 2s, 4s, 8s, 16s, 32s  # noqa: N806
         response = None
         for _retry in range(_MAX_RETRIES + 1):
             try:
@@ -366,13 +367,14 @@ def execute_tool_loop(session, context: dict) -> dict:
                     temperature=eff.get("temperature"),
                     max_tokens=eff.get("max_tokens"),
                     top_p=eff.get("top_p"),
+                    request_timeout=120,
                 )
                 break
             except Exception as e:
                 err_str = str(e)
-                # 429 速率限制：等待后重试
+                # 429 速率限制：指数退避重试
                 if "429" in err_str and _retry < _MAX_RETRIES:
-                    wait_sec = _RETRY_BASE_DELAY * (_retry + 1)
+                    wait_sec = _RETRY_BASE_DELAY * (2 ** _retry)
                     logger.warning(f"⚠️ API 429 速率限制，{wait_sec}s 后重试 ({_retry+1}/{_MAX_RETRIES})")
                     callback(f"\n⚠️ 请求频率过高，{wait_sec}秒后自动重试 ({_retry+1}/{_MAX_RETRIES})...\n")
                     time.sleep(wait_sec)
@@ -389,6 +391,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                             temperature=eff.get("temperature"),
                             max_tokens=eff.get("max_tokens"),
                             top_p=eff.get("top_p"),
+                            request_timeout=120,
                         )
                     except Exception as e2:
                         error_msg = f"API调用错误: {e2}"

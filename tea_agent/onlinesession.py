@@ -744,8 +744,8 @@ class SummarizerComponent(SessionComponent):
         pass
 
     def summarize_old_history(self, api_component, get_summarize_client_fn) -> None:
-        # 检查是否禁用摘要
-        if self.ctx.disable_summary:
+        # 检查是否禁用摘要（disable_l3 或向后兼容的 disable_summary）
+        if self.ctx.disable_summary or getattr(self.ctx, 'disable_l3', False):
             return
 
         topic_id = getattr(self.ctx, "current_topic_id", None)
@@ -1612,9 +1612,14 @@ class OnlineToolSession(BaseChatSession):
         return None
 
     def _build_api_messages(self) -> list[dict]:
-        """三级历史拼接 — 优先使用主题级 system prompt，否则用进化版本。"""
+        """三级历史拼接 — 主题 SP 叠加到进化 SP 之上（不再二选一覆盖）。"""
         topic_sp = self._get_topic_system_prompt()
-        sp = topic_sp if topic_sp else self.system_prompt
+        if topic_sp:
+            # 主题 SP + 进化 SP 叠加：主题特有指令在前，进化优化在后
+            sp = topic_sp + "\n\n" + self.system_prompt
+            logger.info("使用主题 SP + 进化 SP 合并版")
+        else:
+            sp = self.system_prompt
         return build_api_messages(self.context, sp)
 
     # ──────────────────────────────────────────────

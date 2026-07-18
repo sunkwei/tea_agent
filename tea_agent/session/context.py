@@ -46,6 +46,8 @@ class SessionContext:
     supports_vision: bool = False
     supports_reasoning: bool = True
     disable_summary: bool = False
+    disable_l3: bool = False          # 仅禁用 Level 3（摘要）
+    disable_l2: bool = False          # 仅禁用 Level 2（相关历史）
     no_stream_chunk: bool = False
 
     # ── 运行时状态 ──
@@ -62,6 +64,7 @@ class SessionContext:
     })
     _injected_memories_text: str = ""
     _injected_memories: list[dict] = field(default_factory=list)
+    _last_l0_hash: int = 0            # L0 注入内容 hash，用于去重
     _injected_os_info_text: str = ""
     _os_info_injected: bool = False
     _history_summary: str = ""

@@ -693,49 +693,18 @@ class BaseChatSession(ABC):
 
         return result
 
-    def load_history(
-        self,
-        conversations: list[dict],
-        summary: str = "",
-        recent_turns: int = 10,
-        level2: list = None,
-        semantic_summary: str = "",
-        tool_chain_summary: str = "",
-    ):
-        """
-        三级历史加载：
-
-        Level 1: 最新一轮压缩对话（user + 工具调用链[参数/输出截断] + assistant(final)完整）
-        Level 2: 近期语义相关的 user+assistant 自然语言对
-        Level 3: 压缩摘要 — semantic_summary + tool_chain_summary
+    @staticmethod
+    def _load_single_conversation(conv: dict) -> list[dict]:
+        """加载单轮对话为 user + assistant/tool_calls 消息列表。
 
         Args:
-            conversations: 对话记录列表（时间正序）
-            summary: 兼容旧字段的摘要
-            recent_turns: 兼容旧参数（不再强制使用）
-            level2: Level 2 条目列表 [{"user": ..., "assistant": ...}, ...]
-            semantic_summary: 语义摘要（长期偏好、任务背景、关键结论）
-            tool_chain_summary: 工具链摘要（旧任务工具调用链、关键I/O、结论）
+            conv: 对话记录 {user_msg, ai_msg, rounds_json_parsed, is_func_calling}
+
+        Returns:
+            消息列表 [user_msg, ...tool_rounds/assistant_msg]
         """
-        self.messages = [{"role": "system", "content": self.system_prompt}]
-
-        # ── Level 3 摘要存储 ──
-        self._semantic_summary = semantic_summary or summary  # 兼容旧 summary
-        self._tool_chain_summary = tool_chain_summary
-
-        # ── Level 2 存储（用于 prompt 构建时直接拼入）──
-        self._level2 = level2 or []  # instance attribute; subclasses with context bridge to context._level2
-
-        # ── Level 1: 最新一轮压缩加载 ──
-        total = len(conversations)
-        if total == 0:
-            self._history_summary = ""  # 兼容旧代码
-            logger.info("加载历史 0条 (新主题)")
-            return
-
-        # 最新一条作为 Level 1（压缩工具链）
-        last_conv = conversations[-1]
-        raw_user_msg = last_conv["user_msg"]
+        msgs = []
+        raw_user_msg = conv["user_msg"]
         user_entry = {"role": "user"}
         if isinstance(raw_user_msg, str) and raw_user_msg.startswith("{"):
             try:
@@ -754,23 +723,72 @@ class BaseChatSession(ABC):
                 user_entry["content"] = raw_user_msg
         else:
             user_entry["content"] = str(raw_user_msg) if raw_user_msg else ""
-        self.messages.append(user_entry)
+        msgs.append(user_entry)
 
-        rounds = last_conv.get("rounds_json_parsed")
-        if rounds and last_conv.get("is_func_calling"):
+        rounds = conv.get("rounds_json_parsed")
+        if rounds and conv.get("is_func_calling"):
             repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
             compressed = BaseChatSession._compress_tool_rounds(repaired)
-            for rd in compressed:
-                self.messages.append(rd)
+            msgs.extend(compressed)
         else:
-            self.messages.append({"role": "assistant", "content": last_conv["ai_msg"]})
+            msgs.append({"role": "assistant", "content": conv["ai_msg"]})
+        return msgs
+
+    def load_history(
+        self,
+        conversations: list[dict],
+        summary: str = "",
+        recent_turns: int = 10,
+        level2: list = None,
+        semantic_summary: str = "",
+        tool_chain_summary: str = "",
+        history_turns: int = 3,
+    ):
+        """
+        三级历史加载（v2: L1 支持最近 N 轮）：
+
+        Level 1: 最近 history_turns 轮压缩对话（user + 工具调用链 + assistant(final)）
+        Level 2: 近期语义相关的 user+assistant 自然语言对
+        Level 3: 压缩摘要 — semantic_summary + tool_chain_summary
+
+        Args:
+            conversations: 对话记录列表（时间正序）
+            summary: 兼容旧字段的摘要
+            recent_turns: 兼容旧参数（不再强制使用）
+            level2: Level 2 条目列表 [{"user": ..., "assistant": ...}, ...]
+            semantic_summary: 语义摘要（长期偏好、任务背景、关键结论）
+            tool_chain_summary: 工具链摘要（旧任务工具调用链、关键I/O、结论）
+            history_turns: Level 1 保留的最近完整对话轮数（默认 3）
+        """
+        self.messages = [{"role": "system", "content": self.system_prompt}]
+
+        # ── Level 3 摘要存储 ──
+        self._semantic_summary = semantic_summary or summary  # 兼容旧 summary
+        self._tool_chain_summary = tool_chain_summary
+
+        # ── Level 2 存储（用于 prompt 构建时直接拼入）──
+        self._level2 = level2 or []  # instance attribute; subclasses with context bridge to context._level2
+
+        # ── Level 1: 最近 history_turns 轮加载 ──
+        total = len(conversations)
+        if total == 0:
+            self._history_summary = ""  # 兼容旧代码
+            logger.info("加载历史 0条 (新主题)")
+            return
+
+        # 加载最近 history_turns 轮（保留调用的上下文连续）
+        n_turns = min(history_turns, total)
+        for conv in conversations[-n_turns:]:
+            self.messages.extend(BaseChatSession._load_single_conversation(conv))
 
         # ── 旧轮次不再直接加载到 self.messages ──
         # Level 2 + Level 3 由 _build_api_messages 拼接
         self._history_summary = ""  # 旧字段，不再使用
         logger.info(
-            f"三级加载: L1=1轮压缩 , L2={len(self._level2)}对 , "
-            f"L3_semantic={len(self._semantic_summary)}chars , L3_tool={len(self._tool_chain_summary)}chars"
+            f"三级加载: L1={n_turns}轮压缩 (history_turns={history_turns}), "
+            f"L2={len(self._level2)}对 , "
+            f"L3_semantic={len(self._semantic_summary)}chars , "
+            f"L3_tool={len(self._tool_chain_summary)}chars"
         )
 
     def interrupt(self):

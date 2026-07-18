@@ -720,9 +720,13 @@ class Agent:
 
         all_light = self._db.get_conversations(topic_id, limit=-1, include_rounds=False)
         if all_light:
-            recent = self._db.get_conversations(topic_id, limit=1, include_rounds=True)
-            if recent:
-                all_light[-1] = recent[-1]
+            # 获取最近 history_turns 轮的完整数据（含 rounds）
+            history_turns = getattr(self._sess.context, 'keep_turns', 3)
+            recent_n = self._db.get_conversations(topic_id, limit=history_turns, include_rounds=True)
+            if recent_n:
+                # 用完整数据替换 all_light 中对应条目
+                for i, conv in enumerate(recent_n):
+                    all_light[-(len(recent_n) - i)] = conv
             level2 = self._db.get_level2(topic_id)
             semantic = self._db.get_semantic_summary(topic_id)
             tool_chain = self._db.get_tool_chain_summary(topic_id)
@@ -733,6 +737,7 @@ class Agent:
                 level2=level2,
                 semantic_summary=semantic,
                 tool_chain_summary=tool_chain,
+                history_turns=history_turns,
             )
         else:
             self._sess.messages = [

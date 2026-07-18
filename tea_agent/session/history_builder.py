@@ -1,4 +1,3 @@
-
 """
 历史消息构建模块
 
@@ -185,12 +184,31 @@ def _extract_files_from_text(text: str) -> set:
     return files
 
 
-def _progressive_trim(messages: list[dict], budget: int, context: Any) -> list[dict]:
+def _get_token_budget(context: Any) -> tuple[int, int]:
+    """获取 token 预算：返回 (input_budget, tool_prune_threshold)
+
+    根据 max_context_tokens 动态计算：
+    - input_budget = max_context_tokens * 0.8（预留 20% 给输出）
+    - tool_prune_threshold = max(500, input_budget * 0.02)  # 动态阈值，最低 500 字符
+    """
+    max_ctx = getattr(context, 'max_context_tokens', 0) or 0
+    if max_ctx > 0:
+        input_budget = int(max_ctx * 0.8)
+        # 动态工具裁剪阈值：预算的 2%，最低 500 字符
+        tool_prune_threshold = max(500, int(input_budget * 0.02))
+    else:
+        input_budget = 0
+        tool_prune_threshold = 500  # 默认值
+    return input_budget, tool_prune_threshold
+
+
+def _progressive_trim(messages: list[dict], budget: int, context: Any,
+                      tool_prune_threshold: int = 500) -> list[dict]:
     """渐进式裁剪消息以满足 token 预算。
 
     裁剪策略（按优先级从高到低）：
     1. 删除 [历史记录] 等标记的 L2 条目（最旧的先删）
-    2. 替换工具输出为占位符
+    2. 替换工具输出为占位符（使用动态阈值）
     3. 删除 reasoning_content
     4. 截断长文本（assistant/tool 消息）
     5. 删除 L1 旧轮次（保留最近 5 轮）
@@ -199,6 +217,7 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any) -> list[d
         messages: API 消息列表
         budget: token 预算
         context: SessionContext
+        tool_prune_threshold: 工具输出裁剪阈值（字符数）
 
     Returns:
         裁剪后的消息列表
@@ -220,7 +239,7 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any) -> list[d
         else:
             i += 1
 
-    # 策略2: 替换工具输出为占位符
+    # 策略2: 替换工具输出为占位符（使用动态阈值）
     if est > budget:
         for i in range(len(result) - 1, -1, -1):
             if est <= budget:
@@ -228,7 +247,7 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any) -> list[d
             msg = result[i]
             if msg.get("role") == "tool":
                 content = msg.get("content", "")
-                if isinstance(content, str) and len(content) > 100:
+                if isinstance(content, str) and len(content) > tool_prune_threshold:
                     n_chars = len(content)
                     msg["content"] = f"[工具结果已省略: {n_chars} 字符]"
                     est -= estimate_tokens(content) - 30
@@ -246,7 +265,7 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any) -> list[d
 
     # 策略4: 截断长文本（逐步收紧截断阈值）
     if est > budget:
-        for max_text_len in [4096, 2048, 1024, 512]:
+        for max_text_len in [8192, 4096, 2048, 1024]:
             if est <= budget:
                 break
             for msg in result:
@@ -262,7 +281,6 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any) -> list[d
 
     # 策略5: 删除 L1 旧轮次（保留最近 5 轮 user 消息）
     if est > budget:
-        # 找到最近 5 个 user 消息的位置
         user_positions = []
         for i in range(len(result) - 1, -1, -1):
             if result[i].get("role") == "user":
@@ -272,12 +290,8 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any) -> list[d
 
         if len(user_positions) >= 5:
             cutoff = min(user_positions)
-            # 删除 cutoff 之前的消息（保留 system 和记忆注入）
             new_result = [msg for msg in result[:cutoff]
-                         if msg.get("role") == "system"
-                         or "[系统记忆" in msg.get("content", "")
-                         or "记忆" in msg.get("content", "")[:20]]
-            # 加回最近 5 轮
+                         if msg.get("role") == "system"]
             new_result.extend(result[cutoff:])
             est = estimate_messages_tokens(new_result)
             result = new_result
@@ -288,7 +302,6 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any) -> list[d
         last = result[-1]
         content = last.get("content", "")
         if isinstance(content, str):
-            # 保留最后一条消息的前 1/3
             keep = len(content) // 3
             if keep > 256:
                 last["content"] = content[:keep] + f"\n... [紧急截断: 原长 {len(content)} 字符]"
@@ -362,13 +375,162 @@ def filter_level2_by_relevance(level2: list, current_msg: str) -> list:
     return result
 
 
-def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
-    """构建 API 消息列表 — 三级历史拼接。
+def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
+    """构建 L0 富化系统提示词 — 将所有辅助上下文合并到 system prompt 尾部。
 
-    Level 0: 系统提示词 + 潜意识状态 + 长期记忆注入
-    Level 3: 语义摘要 + 工具链摘要
-    Level 2: 按语义相关性筛选的 user+assistant 对
-    Level 1: 最新一轮压缩对话
+    相比之前每条注入都创建 user+assistant 假对话（浪费 2 条消息/项），
+    现在所有注入合并到 system prompt 尾部，消除假对话，并做 hash 去重。
+
+    Args:
+        context: SessionContext
+        system_prompt: 原始系统提示词
+
+    Returns:
+        富化后的系统提示词
+    """
+    enriched = system_prompt
+
+    # 小模型自动注入输出规范约束
+    try:
+        from tea_agent.session.prompts import SMALL_MODEL_CONSTRAINT, get_skill_validate_rules, is_small_model
+        _model_name = getattr(context, 'model', '') or ''
+        if is_small_model(_model_name):
+            enriched = enriched.rstrip('\n') + '\n\n' + SMALL_MODEL_CONSTRAINT
+            _rules = get_skill_validate_rules("output-format-constraint")
+            if _rules:
+                context._skill_validate_rules = _rules
+        else:
+            for _msg in reversed(getattr(context, 'messages', []) or []):
+                _c = _msg.get('content', '') or ''
+                if isinstance(_c, str) and 'toolkit_skills' in _c and 'load' in _c:
+                    _m = __import__('re').search(r'name["\']?\s*[:=]\s*["\']([^"\']+)', _c)
+                    if _m:
+                        _loaded_skill = _m.group(1)
+                        _rules = get_skill_validate_rules(_loaded_skill)
+                        if _rules:
+                            context._skill_validate_rules = _rules
+                    break
+    except Exception as _e:
+        logger.debug(f"Small model constraint injection failed: {_e}")
+
+    # ── 收集所有注入内容 ──
+    inject_parts = []
+
+    # 1. 技能推荐注入
+    try:
+        _current_user_msg = ""
+        for _i in range(len(context.messages) - 1, -1, -1):
+            if context.messages[_i].get("role") == "user":
+                _c = context.messages[_i].get("content", "")
+                _current_user_msg = (
+                    " ".join(_p.get("text", "") for _p in _c if _p.get("type") == "text")
+                    if isinstance(_c, list) else str(_c)
+                )
+                break
+        if _current_user_msg:
+            from tea_agent.skills.skill_registry import SkillRegistry as _SkillRegistry
+            _reg = _SkillRegistry()
+            _recommended = _reg.recommend(_current_user_msg, top_k=3)
+            if _recommended:
+                _parts = ["[经验技能参考]"]
+                for _idx, _sk in enumerate(_recommended, 1):
+                    _tools_str = ", ".join(_sk.tools[:5])
+                    _parts.append(f"{_idx}. {_sk.name} (置信度: {_sk.confidence:.0%}) 工具: {_tools_str}")
+                inject_parts.append("\n".join(_parts))
+    except Exception as _e:
+        logger.debug(f"Skill recommendation injection failed: {_e}")
+
+    # 2. 未完成任务检查注入
+    try:
+        from tea_agent.toolkit.toolkit_task_resume import toolkit_task_resume
+        resume_info = toolkit_task_resume(action="check")
+        if resume_info.get("has_pending"):
+            parts = ["[未完成任务提醒]"]
+            if resume_info.get("pending_todos"):
+                todos = resume_info["pending_todos"]
+                parts.append(f"有 {len(todos)} 个未完成的 TODO 项:")
+                for t in todos[:5]:
+                    parts.append(f"  - [{t['idx']}] {t['desc']}")
+                if len(todos) > 5:
+                    parts.append(f"  ... 还有 {len(todos)-5} 项")
+            if resume_info.get("pending_plans"):
+                plans = resume_info["pending_plans"]
+                parts.append(f"有 {len(plans)} 个未完成的 Plan:")
+                for p in plans[:3]:
+                    parts.append(f"  - [{p['plan_id']}] {p['goal']} (进度: {p['progress']})")
+            inject_parts.append("\n".join(parts))
+    except Exception as e:
+        logger.debug(f"task resume check failed: {e}")
+
+    # 3. 长期记忆注入（仅当 L3 禁用时，才注入到 system prompt）
+    #    如果 L3 启用，记忆会合并到 L3 块中，避免重复（见 _build_level3_block）
+    disable_l3 = getattr(context, 'disable_l3', False) or context.disable_summary
+    if disable_l3 and context._injected_memories_text:
+        inject_parts.append(context._injected_memories_text)
+
+    # 合并所有注入到 system prompt（带 hash 去重）
+    if inject_parts:
+        combined_inject = "\n\n---\n\n".join(inject_parts)
+        new_hash = hash(combined_inject)
+        if new_hash != getattr(context, '_last_l0_hash', 0):
+            enriched = enriched.rstrip('\n') + '\n\n' + combined_inject
+            context._last_l0_hash = new_hash
+
+    return enriched
+
+
+def _build_level3_block(context: Any) -> list[dict]:
+    """构建 Level 3 摘要消息块。
+
+    合并长期记忆 + 语义摘要 + 工具链摘要到一个消息中，
+    避免 L0 和 L3 重复携带相同信息。
+
+    Args:
+        context: SessionContext
+
+    Returns:
+        消息列表（0~2 条：user + 可选的 assistant 占位）
+    """
+    result = []
+    parts = []
+
+    # 合并长期记忆到 L3（避免 L0 和 L3 重复）
+    memory = context._injected_memories_text
+    sem = context._semantic_summary
+    tc = context._tool_chain_summary
+
+    if memory:
+        parts.append(f"## 长期记忆\n{memory}")
+    if sem:
+        parts.append(f"## 长期背景/偏好/关键结论\n{sem}")
+    if tc:
+        parts.append(f"## 历史工具调用链回顾\n{tc}")
+
+    # 兼容旧 _history_summary
+    if not parts and context._history_summary:
+        result.append({
+            "role": "user",
+            "content": f"这是我们之前对话的摘要：\n{context._history_summary}"
+        })
+        return result
+
+    if parts:
+        result.append({
+            "role": "user",
+            "content": "[系统记忆 — 以下为需要遵循的有效信息和规则]\n\n" + "\n\n---\n\n".join(parts)
+        })
+        # NOTE: 不再添加假 assistant 回复，节省 token
+
+    return result
+
+
+def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
+    """构建 API 消息列表 — 三级历史拼接（v2 改进版）。
+
+    Level 0: 系统提示词 + 所有辅助上下文（合并到 system prompt 尾部，消除假对话）
+    Level 3: 语义摘要 + 工具链摘要 + 长期记忆（合并以避免与 L0 重复）
+    Level 2: 按语义相关性筛选的 user+assistant 对（无假 assistant 回复）
+    Level 1: 最新对话（含动态工具输出裁剪）
 
     Args:
         context: SessionContext 实例
@@ -381,131 +543,23 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
 
     result: list[dict] = []
 
-    # ── Level 0: 系统提示词 ──
-    _base_system = system_prompt
-    # 小模型自动注入输出规范约束
-    try:
-        from tea_agent.session.prompts import SMALL_MODEL_CONSTRAINT, get_skill_validate_rules, is_small_model
-        _model_name = getattr(context, 'model', '') or ''
-        if is_small_model(_model_name):
-            _base_system = _base_system.rstrip('\n') + '\n\n' + SMALL_MODEL_CONSTRAINT
-            logger.info(f"🧩 小模型检测 ({_model_name})：已自动注入输出规范约束")
-            # 尝试加载默认约束 SKILL 的 validate 规则
-            _rules = get_skill_validate_rules("output-format-constraint")
-            if _rules:
-                context._skill_validate_rules = _rules
-        # 即使不是小模型，也检查用户是否显式加载了带 validate 的 SKILL.md
-        else:
-            # 扫描最近的 assistant 消息中是否有 SKILL.md 加载记录
-            for _msg in reversed(getattr(context, 'messages', []) or []):
-                _c = _msg.get('content', '') or ''
-                if isinstance(_c, str) and 'toolkit_skills' in _c and 'load' in _c:
-                    # 提取 SKILL 名称
-                    _m = __import__('re').search(r'name["\']?\s*[:=]\s*["\']([^"\']+)', _c)
-                    if _m:
-                        _loaded_skill = _m.group(1)
-                        _rules = get_skill_validate_rules(_loaded_skill)
-                        if _rules:
-                            context._skill_validate_rules = _rules
-                            logger.info(f"📋 加载 SKILL.md 验证规则: {_loaded_skill}")
-                    break
-    except Exception as _e:
-        logger.debug(f"Small model constraint injection failed: {_e}")
-    sys_msg = {"role": "system", "content": _base_system}
-    result.append(sys_msg)
+    # ═══════════════════════════════════════════════
+    # Level 0: 富化系统提示词（所有注入合并到尾部）
+    # ═══════════════════════════════════════════════
+    enriched = _build_l0_enriched_system(context, system_prompt)
+    result.append({"role": "system", "content": enriched})
 
-    # ── 技能推荐注入 ──
-    try:
-        _current_user_msg = ""
-        for _i in range(len(context.messages) - 1, -1, -1):
-            if context.messages[_i].get("role") == "user":
-                _c = context.messages[_i].get("content", "")
-                _current_user_msg = " ".join(_p.get("text", "") for _p in _c if _p.get("type") == "text") if isinstance(_c, list) else str(_c)
-                break
-        if _current_user_msg:
-            from tea_agent.skills.skill_registry import SkillRegistry as _SkillRegistry
-            _reg = _SkillRegistry()
-            _recommended = _reg.recommend(_current_user_msg, top_k=3)
-            if _recommended:
-                _parts = ["[经验技能参考 — 以下模式来自历史任务经验，可参考复用]"]
-                for _idx, _sk in enumerate(_recommended, 1):
-                    _tools_str = ", ".join(_sk.tools[:5])
-                    _parts.append(f"{_idx}. {_sk.name} (置信度: {_sk.confidence:.0%})")
-                    _parts.append(f"   工具: {_tools_str}")
-                result.append({"role": "user", "content": "\n".join(_parts)})
-                _dummy = {"role": "assistant", "content": "已阅，我会参考历史经验处理当前任务。"}
-                if getattr(context, 'supports_reasoning', False):
-                    _dummy["reasoning_content"] = ""
-                result.append(_dummy)
-    except Exception as _e:
-        logger.debug(f"Skill recommendation injection failed: {_e}")
+    # ═══════════════════════════════════════════════
+    # Level 3 + Level 2: 摘要与相关历史
+    # ═══════════════════════════════════════════════
+    # 向后兼容：disable_summary 等效于 disable_l3=True && disable_l2=True
+    disable_l3 = getattr(context, 'disable_l3', False) or context.disable_summary
+    disable_l2 = getattr(context, 'disable_l2', False) or context.disable_summary
 
-    # ── 未完成任务自动恢复检查 ──
-    try:
-        from tea_agent.toolkit.toolkit_task_resume import toolkit_task_resume
-        resume_info = toolkit_task_resume(action="check")
-        if resume_info.get("has_pending"):
-            parts = ["[未完成任务提醒]"]
-            if resume_info.get("pending_todos"):
-                todos = resume_info["pending_todos"]
-                parts.append(f"有 {len(todos)} 个未完成的 TODO 项:")
-                for t in todos[:5]:  # 最多显示 5 个
-                    parts.append(f"  - [{t['idx']}] {t['desc']}")
-                if len(todos) > 5:
-                    parts.append(f"  ... 还有 {len(todos)-5} 项")
-            if resume_info.get("pending_plans"):
-                plans = resume_info["pending_plans"]
-                parts.append(f"有 {len(plans)} 个未完成的 Plan:")
-                for p in plans[:3]:  # 最多显示 3 个
-                    parts.append(f"  - [{p['plan_id']}] {p['goal']} (进度: {p['progress']})")
-            parts.append("提示: 使用 toolkit_todo(action='show') 或 toolkit_plan(action='list') 查看详情")
-            result.append({"role": "user", "content": "\n".join(parts)})
-    except Exception as e:
-        logger.debug(f"task resume check failed: {e}")
+    if not disable_l3:
+        result.extend(_build_level3_block(context))
 
-    # ── 长期记忆注入 ──
-    if context._injected_memories_text:
-        result.append({
-            "role": "user",
-            "content": context._injected_memories_text
-        })
-
-    # NOTE: disable_summary 启用时跳过 L3/L2 历史构造
-    if not context.disable_summary:
-        # ── Level 3: 摘要 ──
-        has_level3 = False
-        parts = []
-        sem = context._semantic_summary
-        tc = context._tool_chain_summary
-        if sem:
-            parts.append(f"## 长期背景/偏好/关键结论\n{sem}")
-            has_level3 = True
-        if tc:
-            parts.append(f"## 历史工具调用链回顾\n{tc}")
-            has_level3 = True
-
-        if has_level3:
-            result.append({
-                "role": "user",
-                "content": "[系统记忆 — 以下为需要遵循的有效信息和规则]\n\n" + "\n\n---\n\n".join(parts)
-            })
-            _asst = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
-            if context.supports_reasoning:
-                _asst["reasoning_content"] = ""
-            result.append(_asst)
-
-        # ── 兼容旧 _history_summary ──
-        if not has_level3 and context._history_summary:
-            result.append({
-                "role": "user",
-                "content": f"这是我们之前对话的摘要：\n{context._history_summary}"
-            })
-            _asst2 = {"role": "assistant", "content": "好的，我已经了解了之前的对话背景。请问有什么我可以帮您的？"}
-            if context.supports_reasoning:
-                _asst2["reasoning_content"] = ""
-            result.append(_asst2)
-
-        # ── Level 2: 按语义相关性筛选 ──
+    if not disable_l2:
         level2 = context._level2
         if level2:
             current_user_msg = ""
@@ -530,30 +584,33 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
                 else:
                     user_text = item.get("user", "")
                     assistant_text = item.get("assistant", "")
-
-                    # L2 注入仅携带 user+assistant 最终问答对
-                    # thinking 保留在存储中，仅用于 L3 摘要生成
-                    user_content = f"[历史记录]\n用户: {user_text}"
-
-                    result.append({"role": "user", "content": user_content})
+                    result.append({
+                        "role": "user",
+                        "content": f"[历史记录]\n用户: {user_text}"
+                    })
                     _msg = {"role": "assistant", "content": assistant_text}
                     if context.supports_reasoning:
                         _msg["reasoning_content"] = ""
                     result.append(_msg)
 
-    # ── Level 1: 最新对话（含工具输出裁剪） ──
+    # ═══════════════════════════════════════════════
+    # Level 1: 最新对话（含动态工具输出裁剪）
+    # ═══════════════════════════════════════════════
     max_turns_limit = 30
     start_idx = 1
 
-    # P0: 工具输出裁剪 — 保留最近 3 轮完整结果，更早的替换为占位符
+    # 动态计算 token 预算和工具裁剪阈值
+    input_budget, tool_prune_threshold = _get_token_budget(context)
+
+    # 工具输出裁剪 — 保留最近 3 轮完整结果，更早的替换为占位符
     _tool_prune_cutoff = _find_prune_cutoff(context.messages, tail_turns=3)
 
+    # disable_summary 时：丢弃早期历史，只保留最近 30 轮
     if context.disable_summary:
         user_msg_indices = []
         for i in range(1, len(context.messages)):
             if context.messages[i].get("role") == "user":
                 user_msg_indices.append(i)
-
         if len(user_msg_indices) > max_turns_limit:
             start_idx = user_msg_indices[-max_turns_limit]
             logger.info(
@@ -565,11 +622,11 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
         msg = context.messages[i]
         msg_copy = dict(msg)
 
-        # P0: 裁剪旧工具输出 — 替换为占位符以节省 token
+        # 动态工具输出裁剪 — 使用动态阈值而非固定 100 字符
         if msg_copy["role"] == "tool" and i < _tool_prune_cutoff:
             raw = msg_copy.get("content", "")
             n_chars = len(raw) if isinstance(raw, str) else len(str(raw))
-            if n_chars > 100:
+            if n_chars > tool_prune_threshold:
                 msg_copy["content"] = f"[工具结果已省略: {n_chars} 字符]"
 
         if (msg_copy["role"] == "assistant" and context.supports_reasoning
@@ -588,14 +645,12 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
         result.append(msg_copy)
 
     # ── 渐进式 token 裁剪 ──
-    max_ctx = getattr(context, 'max_context_tokens', 0) or 0
-    if max_ctx > 0:
+    if input_budget > 0:
         est = estimate_messages_tokens(result)
-        # 预留 20% 给输出，实际输入预算 = 80%
-        input_budget = int(max_ctx * 0.8)
         if est > input_budget:
             logger.info(f"token 预估: {est} > 预算 {input_budget}，启动渐进式裁剪")
-            result = _progressive_trim(result, input_budget, context)
+            result = _progressive_trim(result, input_budget, context,
+                                       tool_prune_threshold=tool_prune_threshold)
             est_after = estimate_messages_tokens(result)
             logger.info(f"裁剪后: {est_after} tokens (节省 {est - est_after})")
 

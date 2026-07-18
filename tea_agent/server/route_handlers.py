@@ -22,7 +22,7 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Respon
 from tea_agent.multi_agent.workflow_viz import DagVizRegistry, get_viz_html
 from tea_agent.toolkit.toolkit_export_last_pdf import export_topic_pdf
 
-from .server import (
+from ._compat import (
     __version__,
     _active_sessions,
     _active_sessions_lock,
@@ -497,7 +497,7 @@ async def handle_web_chat(request):
 
             thread = threading.Thread(
                 target=_chat_stream_sse_wrapper,
-                args=(server, session, storage, msg_payload, queue, topic_id, loop),
+                args=(session, storage, msg_payload, queue, topic_id, loop),
                 daemon=True,
             )
             thread.start()
@@ -1574,3 +1574,58 @@ OPENAPI_SPEC = {
             "responses": {"200": {"description": "OK"}}}},
     }
 }
+
+# ================================================================
+#  Module Management API (hot-reload)
+# ================================================================
+
+async def handle_list_modules(request):
+    """GET /api/modules -- list all modules with status"""
+    return JSONResponse(get_server().list_modules())
+
+
+async def handle_get_module(request):
+    """GET /api/modules/{name} -- get module health"""
+    name = request.path_params.get("name", "")
+    info = get_server().get_module(name)
+    if info is None:
+        return JSONResponse({"error": f'Module "{name}" not found'}, status_code=404)
+    return JSONResponse(info)
+
+
+async def handle_reload_module(request):
+    """POST /api/modules/{name}/reload -- hot-reload a module"""
+    name = request.path_params.get("name", "")
+    result = get_server().reload_module(name)
+    status = 200 if result.get("ok") else 400
+    return JSONResponse(result, status_code=status)
+
+
+async def handle_reload_all_modules(request):
+    """POST /api/modules/reload -- reload all modules"""
+    result = get_server().reload_all_modules()
+    return JSONResponse(result)
+
+
+async def handle_start_watcher(request):
+    """POST /api/modules/watcher/start -- start file watcher"""
+    body = await request.json() if request.headers.get("content-length") else {}
+    interval = float(body.get("interval", 2.0))
+    result = get_server().start_watcher(interval)
+    return JSONResponse(result)
+
+
+async def handle_stop_watcher(request):
+    """POST /api/modules/watcher/stop -- stop file watcher"""
+    result = get_server().stop_watcher()
+    return JSONResponse(result)
+
+
+async def handle_reload_routes(request):
+    """POST /api/modules/reload-routes -- hot-reload routes without restart.
+
+    Reloads route_handlers.py and rebuilds all routes on the live
+    Starlette app. No server restart needed.
+    """
+    result = get_server().rebuild_routes()
+    return JSONResponse(result)

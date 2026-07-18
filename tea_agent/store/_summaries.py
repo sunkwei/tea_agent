@@ -277,7 +277,7 @@ class SummaryStore(StoreComponent):
 4. 直接输出摘要正文，无需额外解释"""
 
         try:
-            params = {"max_tokens": 4096, "temperature": 0.3}
+            params = {"max_tokens": 8192, "temperature": 0.3}
             if extra_params:
                 params.update(extra_params)
 

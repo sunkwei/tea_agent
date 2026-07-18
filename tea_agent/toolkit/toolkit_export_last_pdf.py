@@ -937,7 +937,7 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
         topic_id: Topic UUID.
         output_path: Output file path.
         db_path: Optional database path (auto-detect if None).
-        mode: 'latest' (last conversation only) or 'full_topic' (all conversations).
+        mode: 'latest' (single conversation) or 'full_topic' (all conversations).
         filter_mode: 'final' (user + AI final only) or 'full' (with reasoning).
 
     Returns:

@@ -10,6 +10,7 @@ import logging
 import os
 import platform
 import socket
+import sys
 
 logger = logging.getLogger("session.os_info_injector")
 
@@ -61,8 +62,67 @@ def _save_os_sig(topic_id: str, sig: str) -> None:
         logger.debug(f"保存 OS 签名失败: {e}")
 
 
+def _detect_interface_type() -> str:
+    """检测当前接口类型。
+
+    Returns:
+        'web' | 'gui' | 'cli' — 当前服务接口类型
+    """
+    # 环境变量覆盖（各入口点预置）
+    env_type = os.environ.get('TEA_AGENT_INTERFACE', '') or ''
+    if env_type.lower() in ('web', 'gui', 'cli', 'tui', 'mcp'):
+        return env_type.lower()
+
+    # 从已加载模块检测
+    if 'starlette' in sys.modules or 'uvicorn' in sys.modules:
+        return 'web'
+    if 'tkinter' in sys.modules:
+        return 'gui'
+
+    # 从 argv 推断
+    script = os.path.basename(sys.argv[0]) if sys.argv else ''
+    if any(x in script.lower() for x in ('server', 'web')):
+        return 'web'
+    if any(x in script.lower() for x in ('gui', 'tk')):
+        return 'gui'
+
+    return 'cli'
+
+
+def _get_interface_hints(interface_type: str) -> str:
+    """根据接口类型返回交互格式提示。"""
+    hints = {
+        "web": (
+            "【交互格式】响应中可用 Markdown + HTML 链接。\n"
+            "【话题链接】使用 #topic:UUID 格式引用其他会话（自动转为可点击链接）。\n"
+            "【下载链接】生成的 .zip/.exe/.pdf 等文件链接会自动添加下载图标。\n"
+            "【URL链接】裸 URL 自动转为可点击的超链接。"
+        ),
+        "gui": (
+            "【交互格式】响应中支持 Markdown 渲染。\n"
+            "【文件操作】桌面 GUI 支持文件拖拽和剪贴板图片粘贴。\n"
+            "【通知】长时间任务完成后可通过 toolkit_notify 发送桌面通知。"
+        ),
+        "cli": (
+            "【交互格式】纯文本响应，无 HTML 渲染。\n"
+            "【链接】使用裸 URL 文本，用户可手动复制。\n"
+            "【输出】避免依赖 HTML/富文本渲染。"
+        ),
+        "tui": (
+            "【交互格式】终端富文本，支持基本 Markdown。\n"
+            "【链接】使用裸 URL 文本。"
+        ),
+        "mcp": (
+            "【交互格式】纯文本/JSON 格式。\n"
+            "【链接】使用裸 URL 文本。"
+        ),
+    }
+    return hints.get(interface_type, "")
+
+
 def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
-                   supports_reasoning: bool = True) -> list[dict]:
+                   supports_reasoning: bool = True,
+                   interface_type: str | None = None) -> list[dict]:
     """注入操作系统环境信息轮次（放在用户消息之前）。
 
     根据实际运行的 OS 注入差异化的工具使用提示，
@@ -89,6 +149,9 @@ def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
     is_linux = os_name == "Linux"
     is_macos = os_name == "Darwin"
 
+    if interface_type is None:
+        interface_type = _detect_interface_type()
+
     # ── OS 概要 ──
     lines = [
         f"操作系统: {os_name} {os_release} ({os_version})",
@@ -96,6 +159,12 @@ def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
         f"主机名: {hostname}",
         f"Python: {py_ver}",
     ]
+
+    # ── 接口类型 ──
+    iface_labels = {"web": "Web 浏览器", "gui": "桌面 GUI (Tkinter)", "cli": "命令行终端",
+                    "tui": "终端 TUI", "mcp": "MCP 协议"}
+    iface_label = iface_labels.get(interface_type, interface_type)
+    lines.append(f"服务接口: {iface_label}" if iface_label else "")
 
     # ── 路径约定 ──
     lines.append("")
@@ -180,11 +249,17 @@ def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
 
     info_text = "[系统环境信息]\n" + "\n".join(lines)
 
+    # ── 接口类型说明（追加到 info_text 中） ──
+    if iface_label:
+        info_text += f"\n当前服务接口为「{iface_label}」。\n"
+        info_text += _get_interface_hints(interface_type)
+
     # 注入为用户轮次 + 助手确认
     messages.append({"role": "user", "content": info_text})
     ack = {
         "role": "assistant",
-        "content": f"✅ 已识别当前环境为 {os_name} {os_machine}，将遵循对应的路径约定和命令语法。"
+        "content": f"✅ 已识别当前环境为 {os_name} {os_machine}，"
+                    f"接口类型: {iface_label}。将遵循对应的路径约定、命令语法和交互格式。"
     }
     if supports_reasoning:
         ack["reasoning_content"] = ""

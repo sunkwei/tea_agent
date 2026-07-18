@@ -1264,6 +1264,7 @@ class OnlineToolSession(BaseChatSession):
             self.messages,
             toolkit_root_dir=self.toolkit.root_dir,
             supports_reasoning=self.context.supports_reasoning,
+            interface_type=getattr(self.context, 'interface_type', None),
         )
 
     def _setup_default_pipeline(self):

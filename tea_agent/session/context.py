@@ -47,6 +47,7 @@ class SessionContext:
     no_stream_chunk: bool = False
 
     # ── 运行时状态 ──
+    interface_type: str = ""
     _thinking_supported: bool | None = True
     _cheap_thinking_supported: bool | None = None
     _last_usage: dict[str, int] = field(default_factory=lambda: {

@@ -157,7 +157,8 @@ class ChatRenderer:
         if HAS_TKINTERWEB:
             self._html_render(html)
             self._switch_display("chat_view")
-            self.gui.root.after(200, self.scroll_to_bottom)
+            # 单轮视图 → 滚动到顶部（user 输入处），而非底部
+            self.gui.root.after(200, self.scroll_to_top)
         else:
             self.gui.chat_view.config(state=tk.NORMAL)
             self.gui.chat_view.delete("1.0", tk.END)
@@ -419,6 +420,11 @@ body {{ display:flex; align-items:center; justify-content:center; height:100vh;
     def scroll_to_bottom(self):
         """滚动聊天视图到最底部。"""
         self.gui.chat_view.yview_moveto(1.0)
+
+    # ── scroll_to_top ──
+    def scroll_to_top(self):
+        """滚动聊天视图到最顶部（用于单轮查看）。"""
+        self.gui.chat_view.yview_moveto(0.0)
 
     # ── _filtered_messages ──
     def _filtered_messages(self):

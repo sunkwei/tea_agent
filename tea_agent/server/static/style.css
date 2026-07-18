@@ -1233,9 +1233,56 @@ body {
 .md-table tr:nth-child(even) { background: var(--surface2); }
 .md-link { color: var(--primary); text-decoration: none; }
 .md-link:hover { text-decoration: underline; }
+
+/* 🆕 Auto-linked URL — 虚线微提示 */
+.md-autolink { color: var(--primary); text-decoration: none; border-bottom: 1px dashed var(--primary-dim); }
+.md-autolink:hover { text-decoration: underline; border-bottom-style: solid; }
+
+/* 🆕 Topic link — 黄色醒目，点击跳转话题 */
+.md-topic-link { color: var(--yellow); text-decoration: none; border-bottom: 1px dashed var(--yellow); cursor: pointer; font-weight: 600; }
+.md-topic-link:hover { text-decoration: underline; border-bottom-style: solid; background: var(--yellow-bg); border-radius: 2px; }
 .md-strong { font-weight: 700; }
 .md-em { font-style: italic; }
 .md-del { text-decoration: line-through; color: var(--text-muted); }
+
+/* ── 历史会话跳转栏 ── */
+.jump-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 12px; margin: 0 10px 4px;
+  background: var(--surface2); border-radius: 8px;
+  overflow-x: auto; white-space: nowrap;
+  flex-shrink: 0; min-height: 32px;
+  scrollbar-width: thin;
+}
+.jump-bar-label {
+  font-size: 12px; color: var(--text-dim);
+  flex-shrink: 0; margin-right: 4px;
+  user-select: none;
+}
+.jump-chip {
+  display: inline-block; padding: 2px 10px;
+  font-size: 12px; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; cursor: pointer;
+  transition: all 0.15s; flex-shrink: 0;
+  max-width: 140px; overflow: hidden; text-overflow: ellipsis;
+  user-select: none;
+}
+.jump-chip:hover {
+  background: var(--primary-bg); color: var(--primary);
+  border-color: var(--primary);
+}
+/* 跳转高亮闪烁 */
+@keyframes jump-blink {
+  0% { background: transparent; }
+  30% { background: var(--primary-bg); }
+  70% { background: var(--primary-bg); }
+  100% { background: transparent; }
+}
+.msg.jump-highlight {
+  animation: jump-blink 1.5s ease;
+  border-radius: 8px;
+}
 
 /* ── Modals ── */
 .modal {

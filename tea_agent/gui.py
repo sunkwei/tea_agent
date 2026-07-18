@@ -535,9 +535,20 @@ class TkGUI(Agent):
         return {"enable_thinking": sess.enable_thinking, "changed": True}
 
     def export_last_pdf(self, e=None):
-        """Ctrl+P: 导出当前 HtmlFrame 中渲染的轮次为 last.pdf（支持 Alt+Up/Down 切换轮次）"""
+        """Ctrl+P: 导出 PDF。
+        
+        - HtmlFrame 模式：导出当前渲染的轮次（Alt+Up/Down 切换）
+        - Console 模式（char area）：检测显示区最上方的 user 消息所属轮次
+        """
         import subprocess
         import tempfile
+
+        # ── console 模式下检测显示区最上方的轮次 ──
+        detected_idx = None
+        if self._show_mode == "console":
+            detected_idx = self._detect_round_from_console()
+            if detected_idx is not None:
+                self._update_status(f"📄 检测到第 {detected_idx+1} 轮（滚动位置）")
 
         # 捕获必要的状态到本地变量，避免 worker 线程与主线程竞争
         chat_rounds = list(self._chat_rounds)  # 复制列表
@@ -546,18 +557,20 @@ class TkGUI(Agent):
 
         def _do():
             try:
-                # ── 优先使用内存中当前渲染的轮次（与 HtmlFrame 一致）──
+                # ── 确定要导出的轮次 ──
                 rounds = chat_rounds
                 if not rounds:
                     self._update_status("⚠️ 无对话记录")
                     return
 
-                cur_view = current_round_view
-                if cur_view is None:
+                if detected_idx is not None:
+                    # console 模式：从滚动位置检测到的轮次
+                    active_idx = max(0, min(detected_idx, len(rounds) - 1))
+                elif current_round_view is None:
                     # 最新轮
                     active_idx = len(rounds) - 1
                 else:
-                    active_idx = max(0, min(cur_view, len(rounds) - 1))
+                    active_idx = max(0, min(current_round_view, len(rounds) - 1))
 
                 msgs = rounds[active_idx]
 
@@ -626,6 +639,42 @@ class TkGUI(Agent):
                 traceback.print_exc()
 
         threading.Thread(target=_do, daemon=True).start()
+
+    def _detect_round_from_console(self):
+        """检测 console（char area）显示区最上方的 user 消息，返回其轮次索引。
+
+        用户在 char area 滚动，当某个会话的 user input 显示在最上方时，
+        该会话即被视为"当前"会话，用于导出。
+        """
+        try:
+            top_pos = self.console.index("@0,0")
+
+            # 步骤 1: 若 top_pos 正好落在 "user" tag 区域内 → 用 tag_nextrange 获取范围
+            user_range = None
+            if "user" in self.console.tag_names(top_pos):
+                user_range = self.console.tag_nextrange("user", top_pos)
+            # 步骤 2: 否则从 top_pos 向前搜索最近的 "user" 消息
+            if not user_range:
+                user_range = self.console.tag_prevrange("user", top_pos)
+            if not user_range:
+                return None
+
+            user_text = self.console.get(user_range[0], user_range[1])
+
+            # 去掉 "你：" 前缀（console 中 user 消息的显示格式）
+            msg_content = user_text
+            if user_text.startswith("你："):
+                msg_content = user_text[2:]
+
+            # 在 chat_messages 中匹配，找到所属轮次
+            rounds = self._chat_rounds
+            for ri, round_msgs in enumerate(rounds):
+                for rm in round_msgs:
+                    if rm["role"] == "user" and msg_content in rm.get("content", ""):
+                        return ri
+            return None
+        except Exception:
+            return None
 
     def export_topic_pdf(self, topic_id: str = None, e=None):
         """导出完整主题为 PDF（当前主题或指定主题）"""

@@ -1,0 +1,5 @@
+# 基准任务：写排序函数
+name: "写排序函数"
+description: "用 Python 实现快速排序，中等复杂度"
+prompt: "用 Python 写一个快速排序函数 quick_sort(arr)，包含类型注解和 docstring"
+runs: 3

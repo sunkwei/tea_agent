@@ -255,13 +255,18 @@ class BaseChatSession(ABC):
     @staticmethod
     def _strip_reasoning_content(messages: list[dict]) -> None:
         """
-        原地清除消息列表中的 reasoning_content 字段。
+        清除非 assistant 消息中的 reasoning_content 字段。
 
-        注意：对于包含 tool_calls 的 assistant 消息，必须保留 reasoning_content，
-        否则 DeepSeek API 会返回 400 错误。
+        策略：只清除 assistant 以外角色的 reasoning_content（它们本就不该有该字段），
+        而保留所有 assistant 消息的 reasoning_content，原因如下：
+          - 含 tool_calls 的 assistant：DeepSeek API 要求 reasoning_content 必须回传
+          - 无 tool_calls 的 assistant：reasoning_content 传入 API 会被忽略，保留无害
+
+        若需节省 token，可改为只保留含 tool_calls 的 assistant 的 reasoning_content，
+        但当前策略优先保证安全性（多传无害、少传 400）。
         """
         for msg in messages:
-            # 如果是助手消息且包含工具调用，则保留 reasoning_content
+            # 保留所有 assistant 消息的 reasoning_content（含/不含 tool_calls 均安全）
             if msg.get("role") == "assistant":
                 continue
             msg.pop("reasoning_content", None)

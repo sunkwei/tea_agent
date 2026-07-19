@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING
 
 import requests
 
-from tea_agent.session.params import get_cheap_params
-
 from .session.context import SessionComponent
 
 if TYPE_CHECKING:
@@ -20,10 +18,6 @@ if TYPE_CHECKING:
 import logging
 
 logger = logging.getLogger("session.memory")
-
-# 向后兼容别名
-def _get_cheap_params():
-    return get_cheap_params("memory")
 
 class MemoryComponent(SessionComponent):
     """
@@ -112,94 +106,6 @@ class MemoryComponent(SessionComponent):
 
         return self.ctx.messages
 
-    def trigger_memory_extraction(self, topic_id: str) -> int:
-        """
-        从当前会话的未摘要对话中提取新记忆（使用便宜模型）。
-
-        Args:
-            topic_id: 当前主题 ID
-
-        Returns:
-            新增记忆数量，出错返回 -1
-        """
-        if not self.ctx.memory or not self.ctx.storage:
-            return -1
-
-        # 获取未摘要的对话
-        try:
-            unsummarized = self.ctx.storage.get_unsummarized_conversations(topic_id)
-        except Exception as e:
-            logger.warning(f"获取未摘要对话失败: {e}")
-            return -1
-
-        if not self.ctx.memory.is_extraction_needed(len(unsummarized)):
-            return 0
-
-        # 构建对话文本
-        conv_text = self._build_conversation_text(unsummarized)
-        if not conv_text.strip():
-            return 0
-
-        # 调用 LLM 提取
-        try:
-            client, model = self._get_summarize_client()
-            messages = self.ctx.memory.build_extraction_prompt(conv_text)
-
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                stream=False,
-                extra_body={"thinking": {"type": "disabled"}},
-                **_get_cheap_params(),
-            )
-
-            # 追踪 token
-            # 通过 context 上的 api 组件追踪（如果存在）
-            if hasattr(self, '_track_api_usage'):
-                self._track_api_usage(response, is_cheap=True)
-
-            result_text = response.choices[0].message.content or ""
-            extracted = self.ctx.memory.parse_extraction_result(result_text)
-
-            if extracted:
-                count = self.ctx.memory.ingest_extracted(extracted, topic_id)
-                # 标记已提取（避免重复提取）
-                self._mark_conversations_extracted(unsummarized)
-                logger.info(f"自动提取了 {count} 条新记忆")
-                return count
-
-        except Exception as e:
-            logger.warning(f"记忆提取失败: {e}")
-
-        return 0
-
-    def _mark_conversations_extracted(self, conversations: list[dict]):
-        """标记对话为已提取，避免重复处理。"""
-        if not conversations or not self.ctx.storage:
-            return
-        try:
-            storage = self.ctx.storage
-            for conv in conversations:
-                storage.mark_as_summarized(conv["id"])
-        except Exception as e:
-            logger.debug(f"标记已提取失败: {e}")
-
-    def _get_summarize_client(self):
-        """获取摘要使用的客户端和模型（便宜模型或主模型）"""
-        if self.ctx.cheap_client and self.ctx.cheap_model:
-            return self.ctx.cheap_client, self.ctx.cheap_model
-        return self.ctx.client, self.ctx.model
-
-    @staticmethod
-    def _build_conversation_text(conversations: list[dict]) -> str:
-        """将对话列表构建为纯文本"""
-        lines = []
-        for conv in conversations:
-            lines.append(f"用户: {conv.get('user_msg', '')}")
-            lines.append(f"助手: {conv.get('ai_msg', '')[:500]}")  # 截断长回复
-            lines.append("")
-        return "\n".join(lines)
-
     def get_injected_memories(self) -> list[dict]:
         """获取当前会话注入的记忆列表"""
         return list(self.ctx._injected_memories)
@@ -236,6 +142,12 @@ Format: [{"content": "...", "category": "...", "importance": 3, "tags": "..."}]"
 class AutoMemoryExtractor:
     """自动记忆提取器 v2 — 真实 LLM 调用 + 向量去重"""
 
+    # 冷却时间：同一 topic 多久内不重复提取（秒）
+    COOLDOWN_SECONDS = 3600  # 1 小时
+
+    # 类级别冷却记录: topic_id → 上次提取时间戳
+    _cooldowns: dict[str, float] = {}
+
     def __init__(self, storage):
         self.storage = storage
         self._model_config = None
@@ -256,6 +168,20 @@ class AutoMemoryExtractor:
 
     def extract_from_topic(self, topic_id: str, force: bool = False) -> dict:
         """从主题对话中自动提取记忆。"""
+        # 冷却检查：同一 topic 在 COOLDOWN_SECONDS 内不重复提取
+        if not force:
+            import time
+            now = time.time()
+            last = self._cooldowns.get(topic_id, 0)
+            if now - last < self.COOLDOWN_SECONDS:
+                remaining = int(self.COOLDOWN_SECONDS - (now - last))
+                return {
+                    "status": "cooldown",
+                    "extracted": 0,
+                    "message": f"冷却中，{remaining // 60} 分钟后可再次提取",
+                }
+            self._cooldowns[topic_id] = now
+
         try:
             conversations = self._get_unextracted_conversations(topic_id)
             if not conversations:
@@ -396,18 +322,6 @@ class AutoMemoryExtractor:
                     "importance": 3,
                     "tags": "auto_extracted,keyword_fallback",
                 })
-        if not memories and len(conversation_text) > 20:
-            for line in lines:
-                if line.startswith("User:") and len(line) > 20:
-                    content = line[5:].strip()[:150]
-                    if content:
-                        memories.append({
-                            "content": content,
-                            "category": "general",
-                            "importance": 2,
-                            "tags": "auto_extracted,fallback",
-                        })
-                        break
         return memories[:3]
 
     def _is_duplicate(self, content: str, threshold: float = 0.85) -> bool:

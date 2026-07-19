@@ -923,7 +923,7 @@ class OnlineToolSession(BaseChatSession):
         max_context_tokens: int = 0,
         extra_iterations_on_continue: int = 5,
         memory_extraction_threshold: int = 2,
-        memory_dedup_threshold: float = 0.3,
+        memory_dedup_threshold: float = 0.6,
         supports_vision: bool = False,
         supports_reasoning: bool = True,
         disable_summary: bool = False,

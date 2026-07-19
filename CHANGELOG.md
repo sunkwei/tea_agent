@@ -1,5 +1,23 @@
-﻿# Changelog
+# Changelog
 
+
+## [0.13.3] - 2026-07-19
+### Improvements
+- improve: 记忆系统全面审查与修复
+  - 删除 fallback 第二条路径 — LLM 提取失败时不再用用户原话制造无用记忆
+  - 去重阈值 0.3 → 0.6，新增 content_hash 精确去重（SHA256 前16位）
+  - CRITICAL 上限 15 → 30，减少关键指令误淘汰
+  - auto_extract 增加 1 小时冷却时间，防止频繁提取
+- improve: 删除未实现的 `toolkit_subconscious`（潜意识"Dream"线程）所有引用
+- feat: 新增 `CrossTopicSummarizer` — 每 3 轮会话后启动后台线程进行跨主题分析
+  - 读取最近 topic 列表 → 廉价 LLM 分析 → insight 记忆写入 DB
+  - 替代已删除的 subconscious 线程
+- fix: `toolkit_self_evolve._run_tests` glob 修复 — `test_*.py` → `tea_agent/tests/test_*.py`（Layer 3 此前永远不跑）
+- chore: 清理 ~230 行死代码（5 个未被调用的方法：trigger_memory_extraction、llm_adjust_priorities、reflect_and_summarize、_compute_embedding_similarity、_score_memory）
+
+### Internal
+- 记忆系统测试 15/15 通过
+- Agent 集成测试 9/9 通过
 
 ## [0.13.2] - 2026-07-18
 ### Improvements

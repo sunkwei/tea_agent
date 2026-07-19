@@ -78,7 +78,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         """运行测试，返回 (passed, total, failures)"""
         try:
             r = subprocess.run(
-                [os.sys.executable, "-m", "pytest", "test_*.py", "--tb=short", "-q"],
+                [os.sys.executable, "-m", "pytest", "tea_agent/tests/test_*.py", "--tb=short", "-q"],
                 capture_output=True, text=True, timeout=120, cwd=cwd
             )
             output = r.stdout + r.stderr

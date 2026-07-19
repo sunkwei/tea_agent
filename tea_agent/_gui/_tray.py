@@ -129,13 +129,6 @@ class TrayManager:
         """窗口关闭：清理托盘 + DB + Dream，然后 destroy"""
         self.gui._update_status("⏳ 正在清理资源...")
         self.stop()
-        # 停止 Dream
-        try:
-            from tea_agent.toolkit.toolkit_subconscious import toolkit_subconscious
-            toolkit_subconscious("stop")
-            logger.info("Dream 已停止")
-        except Exception as e:
-            logger.warning(f"停止 Dream 失败: {e}")
         # 停止定时任务调度器
         try:
             from tea_agent.toolkit.toolkit_scheduler import toolkit_scheduler

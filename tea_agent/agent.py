@@ -566,6 +566,12 @@ class Agent:
                 daemon=True,
             ).start()
 
+        # 启动跨主题汇总（每3轮触发一次）
+        threading.Thread(
+            target=self._do_cross_topic_summary,
+            daemon=True,
+        ).start()
+
     def _do_async_summaries(
         self, topic_id: str, overflow_items: list = None, should_summarize: bool = False
     ):
@@ -645,6 +651,22 @@ class Agent:
                 trigger.clear_events()
         except Exception as e:
             logger.debug(f"evolution 异常 (非致命): {e}")
+
+    def _do_cross_topic_summary(self):
+        """后台线程：跨主题汇总 — 每 3 轮触发一次分析。"""
+        try:
+            from tea_agent.cross_topic_summarizer import CrossTopicSummarizer
+            cheap_client = None
+            try:
+                from tea_agent.providers import get_cheap_client
+                from tea_agent.config import get_config
+                cheap_client = get_cheap_client(get_config())
+            except Exception:
+                pass
+            summarizer = CrossTopicSummarizer(self._db, cheap_client)
+            summarizer.on_session_complete()
+        except Exception:
+            logger.debug("cross_topic 汇总异常 (非致命)")
 
     def _extract_tools_used(self, rounds: list) -> list[str]:
         """从对话轮次中提取使用的工具列表。

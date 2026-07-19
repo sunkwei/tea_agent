@@ -1,4 +1,4 @@
-# Tea Agent v0.13.2
+# Tea Agent v0.13.3
 
 > ⚠️ **这是一个 AI 写 AI 的实验项目，自行承担责任。**
 
@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.13.2-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.13.3-blue)](https://pypi.org/project/tea-agent)
 
 Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 75+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / Web / REST API / ACP Protocol / Telegram** 五种界面形态。
 
@@ -536,13 +536,13 @@ score = 相关性(关键词匹配) × 重要度(importance/5) × 时效因子 ×
 每条新记忆：
   1. jieba 分词 → 关键词 Jaccard 相似度计算
   2. 同分类加权 10%
-  3. 相似度 ≥ 0.3 → 合并更新已有记忆：
+  3. 相似度 ≥ 0.6 → 合并更新已有记忆：
      - content: 保留更长的，或拼接
      - priority: 取较小值（更关键）
      - importance: 取较高值
      - tags: 并集去重
      - expires_at: 保留更早的过期时间
-  4. < 0.3 → 新增记录
+  4. < 0.6 → 新增记录
 ```
 
 **批量去重** (`detect_duplicates` / `auto_dedup`)：通过 embedding 余弦相似度（阈值 0.92）扫描全部活跃记忆，发现近似重复对自动合并提权。
@@ -551,7 +551,7 @@ score = 相关性(关键词匹配) × 重要度(importance/5) × 时效因子 ×
 
 ### 7. CRITICAL FIFO 淘汰
 
-CRITICAL 记忆上限 15 条，超出时软删除最旧的（FIFO），防止指令记忆无限膨胀。
+CRITICAL 记忆上限 30 条，超出时软删除最旧的（FIFO），防止指令记忆无限膨胀。
 
 ---
 
@@ -564,6 +564,22 @@ CRITICAL 记忆上限 15 条，超出时软删除最旧的（FIFO），防止指
   → 每类 ≥ 2 条 → 关键词频率生成摘要
   → 摘要作为 CRITICAL/importance=5 存储
   → 原始记忆 importance -1（降级）
+```
+
+---
+
+### 9. 跨主题汇总（v0.13.3+）
+
+每 3 轮会话结束后，后台线程自动执行跨主题分析：读取最近话题列表，用廉价 LLM 发现跨主题的模式/趋势/关联，产出 insight 类型记忆，帮助 Agent 构建全局认知。
+
+```
+每轮结束 → counter++ → count % 3 == 0？
+                           │
+                     yes → 读取最近 topic 列表
+                           │
+                         廉价 LLM 跨主题分析
+                           │
+                     insight 记忆写入 DB
 ```
 
 ---

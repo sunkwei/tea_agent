@@ -4,7 +4,6 @@ Memory 管理器
 负责记忆的选择、格式化注入和从对话中提取新记忆。
 """
 
-import contextlib
 import logging
 import re
 
@@ -40,13 +39,10 @@ CRITICAL_DEGRADE_DAYS = 30
 HIGH_DEGRADE_DAYS = 60
 MEDIUM_DEGRADE_DAYS = 90
 
-# LLM 精调上限
-MAX_LLM_ADJUSTMENTS = 3  # 每次最多调整条数
-
 class MemoryManager:
     """记忆管理器：选择、格式化、提取"""
 
-    def __init__(self, storage, extraction_threshold: int = 2, dedup_threshold: float = 0.3):
+    def __init__(self, storage, extraction_threshold: int = 2, dedup_threshold: float = 0.6):
         """
         Args:
             storage: Storage 实例，提供记忆 CRUD
@@ -156,15 +152,6 @@ class MemoryManager:
 
         self._touch_selected(selected)
         return selected
-
-    def _score_memory(self, memory: dict, topic_text: str) -> float:
-        """兼容旧接口，内部转调 _score_memory_cached。"""
-        engine = self._get_embedding_engine()
-        query_emb = None
-        if engine and topic_text:
-            with contextlib.suppress(Exception):
-                query_emb = engine.embed(topic_text)
-        return self._score_memory_cached(memory, topic_text, query_emb)
 
     def _score_memory_cached(self, memory: dict, topic_text: str, query_emb=None) -> float:
         """计算记忆与当前对话的相关性分数（Hybrid），复用预计算的查询向量。"""
@@ -298,54 +285,6 @@ class MemoryManager:
         except Exception:
             pass
         return None
-
-    def _compute_embedding_similarity(self, memory: dict, topic_text: str) -> float:
-        """
-        计算记忆与查询文本的 embedding 余弦相似度。
-
-        使用缓存避免重复计算。TF-IDF 回退始终可用。
-
-        Returns:
-            0.0 ~ 1.0 的相似度。engine 不可用或出错时返回 None（由调用方决定回退策略）。
-        """
-        if not topic_text or not topic_text.strip():
-            return None
-
-        engine = self._get_embedding_engine()
-        if engine is None:
-            return None
-
-        # 查询向量（不缓存，每次重新计算）
-        try:
-            query_emb = engine.embed(topic_text)
-        except Exception:
-            return None
-        if not query_emb:
-            return None
-
-        # 记忆向量（缓存）
-        mid = memory.get("id", "")
-        mem_emb = self._embedding_cache.get(mid)
-        if mem_emb is None:
-            try:
-                mem_emb = self.storage.memories.get_memory_embedding(mid)
-                if mem_emb:
-                    self._embedding_cache[mid] = mem_emb
-            except Exception:
-                pass
-
-        if not mem_emb or len(mem_emb) != len(query_emb):
-            return None
-
-        # 余弦相似度
-        import numpy as np
-        q_arr = np.array(query_emb, dtype=np.float32)
-        m_arr = np.array(mem_emb, dtype=np.float32)
-        q_norm = np.linalg.norm(q_arr)
-        m_norm = np.linalg.norm(m_arr)
-        if q_norm == 0 or m_norm == 0:
-            return None
-        return float(q_arr @ m_arr) / (q_norm * m_norm)
 
 
     # ------------------------------------------------------------------
@@ -523,133 +462,6 @@ class MemoryManager:
 
         if adjusted:
             logger.info(f"年龄衰减完成: {adjusted} 条记忆降级")
-        return adjusted
-
-    LLM_ADJUST_SYSTEM_PROMPT = """你是一个记忆优先级评估器。根据近期对话主题，判断哪些长期记忆的优先级需要调整。
-
-调整规则（非常重要）：
-1. 只提供与近期对话主题直接相关的调整
-2. 每次最多输出 {max_adjustments} 条调整建议
-3. 只能将优先级上下调整 1 级（如 CRITICAL⇄HIGH, HIGH⇄MEDIUM, MEDIUM⇄LOW）
-4. 优先级的含义：0=CRITICAL(必须遵循的指令), 1=HIGH(偏好/关键决策), 2=MEDIUM(经验教训), 3=LOW(一般参考)
-5. 近期对话中反复涉及的主题 → 相关记忆可升级
-6. 近期对话中完全未涉及 → 不操作（让年龄衰减处理）
-
-输出纯 JSON 数组：
-[{"memory_id": "xxx", "new_priority": 1, "reason": "近期大量讨论该主题，建议提升"}, ...]
-
-如果不需要调整，输出空数组 []。"""
-
-    def llm_adjust_priorities(
-        self,
-        recent_topics: str,
-        client=None,
-        model: str = "deepseek-v4-flash",
-    ) -> int:
-        """
-        使用便宜 LLM 评估近期对话主题，微调记忆优先级。
-
-        Args:
-            recent_topics: 近期对话主题摘要文本
-            client: OpenAI 客户端实例（由调用方注入，如 session.client）
-            model: 使用的模型名称
-
-        Returns:
-            调整的记忆条数。client 为 None 时返回 0。
-        """
-        if client is None:
-            logger.warning("llm_adjust_priorities: 未提供 client，跳过精调")
-            return 0
-        if not recent_topics or not recent_topics.strip():
-            return 0
-
-        all_memories = self.storage.get_active_memories(limit=500)
-        if len(all_memories) < 3:
-            return 0  # 太少不值得调
-
-        # 构建记忆摘要（不含内容细节，防 token 爆炸）
-        memory_summary_lines = []
-        for m in all_memories:
-            content_preview = (m.get("content") or "")[:80].replace("\n", " ")
-            memory_summary_lines.append(
-                f"  [{m['id']}] P{PRIORITY_LABELS.get(m['priority'], '?')}/I{m.get('importance',0)} "
-                f"cat={m.get('category','?')} tags={m.get('tags','')} | {content_preview}"
-            )
-        memory_summary = "\n".join(memory_summary_lines[:100])  # 最多100条
-
-        system_prompt = self.LLM_ADJUST_SYSTEM_PROMPT.format(
-            max_adjustments=MAX_LLM_ADJUSTMENTS
-        )
-        user_prompt = (
-            f"近期对话主题摘要：\n{recent_topics[:2000]}\n\n"
-            f"当前活跃记忆列表：\n{memory_summary}\n\n"
-            f"请判断哪些记忆的优先级需要调整（最多{MAX_LLM_ADJUSTMENTS}条）。"
-        )
-
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                stream=False,
-                extra_body={"thinking": {"type": "disabled"}},
-                temperature=0.3,
-                max_tokens=500,
-            )
-            result_text = response.choices[0].message.content or ""
-            adjustments = self.parse_extraction_result(result_text)
-        except Exception as e:
-            logger.warning(f"LLM 优先级精调失败: {e}")
-            return 0
-
-        adjusted = 0
-        for adj in adjustments:
-            try:
-                mid = adj.get("memory_id", "")
-                new_priority = adj.get("new_priority")
-                reason = adj.get("reason", "无说明")
-
-                if new_priority is None or not mid:
-                    continue
-                if new_priority not in (0, 1, 2, 3):
-                    continue
-
-                # 找到原始记忆
-                orig = next((m for m in all_memories if m["id"] == mid), None)
-                if not orig:
-                    continue
-                old_priority = orig["priority"]
-
-                # 只允许 ±1 级调整
-                if abs(new_priority - old_priority) > 1:
-                    logger.warning(
-                        f"LLM 建议跳级调整 #{mid}: {old_priority}→{new_priority}, 已忽略"
-                    )
-                    continue
-
-                if new_priority == old_priority:
-                    continue
-
-                # 升级时重置 created_at（重新计时年龄衰减）
-                updates = {"priority": new_priority}
-                if new_priority < old_priority:
-                    updates["created_at"] = "CURRENT_TIMESTAMP"
-
-                self.storage.update_memory(mid, **updates)
-                adjusted += 1
-                logger.info(
-                    f"LLM 精调: #{mid} priority "
-                    f"{PRIORITY_LABELS[old_priority]}→{PRIORITY_LABELS[new_priority]} "
-                    f"原因: {reason}"
-                )
-
-            except Exception as e:
-                logger.warning(f"LLM 精调单条失败: {e}")
-
-        if adjusted:
-            logger.info(f"LLM 优先级精调完成: {adjusted} 条调整")
         return adjusted
 
     # ------------------------------------------------------------------
@@ -833,6 +645,18 @@ importance 评分：
         Returns:
             找到的重复记忆 Dict；无重复返回 None
         """
+        # 0. content_hash 精确匹配（最快，O(n) 短路）
+        import hashlib
+        content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()[:16]
+        for mem in existing:
+            if mem.get("content_hash") == content_hash:
+                logger.info(
+                    f"发现重复记忆 #{mem['id']} (content_hash 精确匹配): "
+                    f"\"{content[:50]}...\""
+                )
+                return mem
+
+        # 1. Jaccard 关键词相似度
         best = None
         best_score = 0.0
 
@@ -1067,88 +891,6 @@ importance 评分：
             else:
                 errors += 1
         return {'scanned': len(pairs), 'merged': merged, 'errors': errors, 'threshold': threshold}
-
-    # ------------------------------------------------------------------
-    # 反思归纳（原 store._memories.MemoryStore 迁入）
-    # ------------------------------------------------------------------
-
-    def reflect_and_summarize(self, max_memories: int = 50, min_cluster_size: int = 2) -> dict:
-        """按类别聚类近期记忆，生成摘要并归档旧记忆。"""
-        from datetime import datetime
-
-        all_mems = self.storage.get_active_memories(limit=max_memories)
-        if not all_mems:
-            return {'summarized': 0, 'degraded': 0, 'summary_ids': []}
-
-        groups = {}
-        for m in all_mems:
-            cat = m.get('category') or 'general'
-            groups.setdefault(cat, []).append(m)
-
-        summary_ids = []
-        degraded = 0
-
-        for cat, mems in groups.items():
-            if len(mems) < min_cluster_size:
-                continue
-            texts = [m['content'] for m in mems if m.get('content')]
-            if not texts:
-                continue
-
-            summary = self._generate_summary(texts, cat)
-
-            sid = self.storage.add_memory(
-                content=summary,
-                category='reflection',
-                priority=0,
-                importance=5,
-                tags='summary,' + cat,
-            )
-            summary_ids.append(sid)
-
-            datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            for m in mems:
-                new_imp = max(1, (m.get('importance') or 3) - 1)
-                if new_imp != m.get('importance'):
-                    self.storage.update_memory(m['id'], importance=new_imp)
-                    degraded += 1
-
-            logger.info(f'归纳 [{cat}]: {len(mems)}条 -> 摘要 {sid[:8]}, 降级 {degraded}条')
-
-        return {'summarized': len(summary_ids), 'degraded': degraded, 'summary_ids': summary_ids}
-
-    @staticmethod
-    def _generate_summary(texts, category):
-        """基于关键词从同类记忆中生成摘要。"""
-        from collections import Counter
-        from datetime import datetime
-
-        if not texts:
-            return f"[{category}] 暂无内容"
-        if len(texts) == 1:
-            return f"[{category}] {texts[0][:200]}"
-
-        all_words = []
-        for t in texts:
-            all_words.extend(t.lower().split())
-
-        word_counts = Counter(all_words)
-        keywords = [w for w, c in word_counts.most_common(10) if len(w) > 1][:5]
-
-        date_info = datetime.now().strftime('%Y-%m-%d')
-        parts = [
-            f"[{category.upper()}] 反思归纳 ({date_info})",
-            f"涵盖 {len(texts)} 条相关记忆",
-        ]
-        if keywords:
-            parts.append(f"关键词: {', '.join(keywords)}")
-        parts.append("---")
-        for i, t in enumerate(texts[:5]):
-            parts.append(f"{i+1}. {t.strip()[:100]}")
-        if len(texts) > 5:
-            parts.append(f"... 及其他 {len(texts)-5} 条")
-
-        return '\n'.join(parts)
 
     def is_extraction_needed(self, unsummarized_count: int) -> bool:
         """判断是否需要触发记忆提取"""

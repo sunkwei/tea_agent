@@ -26,7 +26,7 @@ class MemoryStore(StoreComponent):
     ) -> str:
         """Add memory with optional embedding (auto-computes via embedding_engine)."""
         if priority == 0:
-            self._enforce_critical_limit(max_critical=15)
+            self._enforce_critical_limit(max_critical=30)
         # Auto-compute embedding if engine available
         if embedding is None and self.embedding_engine is not None:
             try:
@@ -56,7 +56,7 @@ class MemoryStore(StoreComponent):
         c.close()
         return mid
 
-    def _enforce_critical_limit(self, max_critical: int = 15):
+    def _enforce_critical_limit(self, max_critical: int = 30):
         """Internal: enforce critical limit.
 
         Args:
@@ -96,7 +96,7 @@ class MemoryStore(StoreComponent):
         if not updates:
             return False
         if updates.get("priority") == 0:
-            self._enforce_critical_limit(max_critical=15)
+            self._enforce_critical_limit(max_critical=30)
         from datetime import datetime
         updates["updated_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 

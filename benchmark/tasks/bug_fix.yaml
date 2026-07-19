@@ -1,0 +1,27 @@
+# 确定性基准任务：修复代码 Bug
+name: "修复代码Bug"
+description: "修复一段有 bug 的 Python 代码，测试调试能力"
+category: "调试修复"
+prompt: |
+  以下 Python 代码有 bug，请找出并修复：
+
+  ```python
+  def calculate_average(numbers):
+      total = 0
+      for n in numbers:
+          total += n
+      return total / len(numbers)
+
+  # 测试
+  print(calculate_average([]))  # 应该处理空列表
+  print(calculate_average([1, 2, 3]))  # 应该输出 2.0
+  ```
+
+  请输出修复后的完整代码（含类型注解和 docstring）。
+runs: 5
+fair_mode: true
+expected_patterns:
+  - "ZeroDivisionError"  # 或 "空" 说明空列表问题
+  - "def calculate_average"
+  - "len(numbers)"
+tool_allowlist: []

@@ -1,0 +1,27 @@
+# 确定性基准任务：JSON 解析
+name: "JSON 解析"
+description: "解析嵌套 JSON 并提取字段，测试数据处理准确性"
+category: "数据处理"
+prompt: |
+  请解析以下 JSON 并回答：
+  1. 一共有多少用户？
+  2. 年龄大于30的用户有哪些？
+  3. 所有用户的平均年龄是多少？
+
+  ```json
+  {"users": [
+    {"name": "Alice", "age": 28, "city": "Beijing"},
+    {"name": "Bob", "age": 35, "city": "Shanghai"},
+    {"name": "Charlie", "age": 32, "city": "Guangzhou"},
+    {"name": "Diana", "age": 25, "city": "Shenzhen"},
+    {"name": "Eve", "age": 40, "city": "Beijing"}
+  ]}
+  ```
+runs: 5
+fair_mode: true
+expected_patterns:
+  - "5"
+  - "Bob"
+  - "Charlie"  # 先检查名字
+  - "32"
+tool_allowlist: []

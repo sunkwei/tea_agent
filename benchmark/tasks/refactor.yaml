@@ -1,0 +1,26 @@
+# 确定性基准任务：代码重构
+name: "代码重构"
+description: "重构冗余代码，保持功能不变，测试重构准确性"
+category: "代码重构"
+prompt: |
+  请重构以下代码，保持功能完全不变，提高可读性：
+
+  ```python
+  def f(x):
+      r = []
+      for i in range(len(x)):
+          if x[i] % 2 == 0:
+              r.append(x[i] * x[i])
+          else:
+              r.append(x[i] * x[i] * x[i])
+      return r
+  ```
+
+  要求：有意义的变量名、类型注解、docstring、用 list comprehension。
+runs: 5
+fair_mode: true
+expected_patterns:
+  - "def "  # 函数定义
+  - "list["  # 或 "List[" 类型注解
+  - "even"  # 或 "square" 有意义的命名
+tool_allowlist: []

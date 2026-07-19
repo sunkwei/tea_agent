@@ -1,0 +1,13 @@
+# 确定性基准任务：搜索综合
+name: "搜索综合"
+description: "搜索信息并总结，测试搜索+分析综合能力"
+category: "搜索综合"
+prompt: |
+  请搜索 Python 3.12 相比 3.11 最重要的 3 个新特性，并简要总结每个特性（一句话）。
+runs: 3
+fair_mode: true
+expected_patterns:
+  - "PEP"  # 至少提到 PEP 编号
+  - "3.12"
+tool_allowlist:
+  - toolkit_search

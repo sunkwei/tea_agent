@@ -1,5 +1,9 @@
 # 基准任务：简单问候
 name: "简单问候"
 description: "最简对话，测量基础开销"
+category: "对话基础"
 prompt: "你好，请用一句话回复我"
-runs: 3
+runs: 5
+fair_mode: true
+expected_patterns: []
+tool_allowlist: []

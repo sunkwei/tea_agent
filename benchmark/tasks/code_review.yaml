@@ -1,6 +1,7 @@
 # 基准任务：代码审查
 name: "代码审查"
 description: "审查一段代码，测试分析类任务"
+category: "代码分析"
 prompt: |
   请审查以下 Python 代码，指出潜在问题：
 
@@ -12,4 +13,10 @@ prompt: |
               result.append(items[i] * 2)
       return result
   ```
-runs: 2
+runs: 5
+fair_mode: true
+expected_patterns:
+  - "enumerate"  # 或 "直接迭代" 建议
+  - "list comprehension"  # 或 "列表推导"
+  - "type"  # 或 "类型注解" 建议
+tool_allowlist: []

@@ -1,0 +1,21 @@
+# 确定性基准任务：文件读写
+name: "文件读写"
+description: "读取文件内容并写入新文件，测试文件操作准确性"
+category: "文件操作"
+prompt: |
+  请执行以下操作：
+  1. 创建一个文件 /tmp/benchmark_test.txt，内容为 "Hello Benchmark v1"
+  2. 读取该文件内容
+  3. 将内容改为 "Hello Benchmark v2" 后写回
+  4. 再次读取确认内容已更新
+  5. 最后删除该文件
+  请逐步执行，每步确认结果。
+runs: 5
+fair_mode: true
+expected_patterns:
+  - "Benchmark"
+  - "v2"
+  - "读取"  # 中文环境，至少有某种"确认"语义
+tool_allowlist:
+  - toolkit_file
+  - toolkit_exec

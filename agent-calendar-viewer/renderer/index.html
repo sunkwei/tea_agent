@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent 日历 · Zaker 风格</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <header id="header">
+        <div class="header-inner">
+            <div class="logo">
+                <span class="logo-icon">📅</span>
+                <span class="logo-text">Agent 日历</span>
+            </div>
+            <div class="header-actions">
+                <button id="btn-refresh" class="icon-btn" title="刷新">⟳</button>
+                <button id="btn-theme" class="icon-btn" title="切换主题">🌙</button>
+            </div>
+            <div class="tab-bar">
+                <span class="tab-item active" data-tab="calendar">📅 日历</span>
+                <span class="tab-item" data-tab="news">📰 新闻</span>
+            </div>
+        </div>
+        <!-- 日期标签导航 -->
+        <nav id="date-tabs" class="date-tabs">
+            <div class="tabs-scroll" id="tabs-scroll"></div>
+        </nav>
+    </header>
+
+    <!-- 主内容 -->
+    <main id="main-content">
+        <div class="loading" id="loading">
+            <div class="loading-spinner"></div>
+            <p>加载中...</p>
+        </div>
+        <div class="error" id="error" style="display:none">
+            <div class="error-icon">⚠️</div>
+            <h2 id="error-title">文件未找到</h2>
+            <p id="error-desc"></p>
+        </div>
+        <!-- 日历视图 -->
+        <div class="content-area" id="content-area">
+            <!-- 文章卡片网格 -->
+            <div class="card-grid" id="card-grid"></div>
+            <!-- 空状态 -->
+            <div class="empty" id="empty" style="display:none">
+                <div class="empty-icon">📭</div>
+                <p>暂无内容</p>
+            </div>
+        </div>
+        <!-- 新闻视图 -->
+        <div class="content-area" id="news-area" style="display:none">
+            <div class="section-header">
+                <span class="section-title">📰 今日热闻</span>
+                <button id="btn-refresh-news" class="icon-btn" title="刷新新闻">⟳</button>
+            </div>
+            <div class="news-grid" id="news-grid"></div>
+            <div class="empty" id="news-empty" style="display:none">
+                <div class="empty-icon">📡</div>
+                <p>新闻抓取中...</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- 底部状态 -->
+    <footer id="footer">
+        <span id="footer-info">共 0 篇文章</span>
+        <span id="footer-date">实时更新</span>
+    </footer>
+
+    <!-- ====== 阅读视图（浮动层） ====== -->
+    <div id="reader-overlay" class="reader-overlay" style="display:none">
+        <div class="reader-backdrop"></div>
+        <div class="reader-panel">
+            <!-- 标题栏 -->
+            <div class="reader-header">
+                <button id="reader-back" class="reader-btn" title="返回">← 返回</button>
+                <span id="reader-title" class="reader-title-text"></span>
+                <div class="reader-header-actions">
+                    <button id="reader-font-decrease" class="reader-btn reader-font-btn" title="缩小字体">A−</button>
+                    <span id="reader-font-indicator" class="reader-font-indicator">100%</span>
+                    <button id="reader-font-increase" class="reader-btn reader-font-btn" title="放大字体">A+</button>
+                    <button id="reader-font-reset" class="reader-btn reader-font-btn font-reset" title="重置字体大小">◉</button>
+                    <button id="reader-open-browser" class="reader-btn" title="在浏览器中打开">↗</button>
+                </div>
+            </div>
+            <!-- 加载状态 -->
+            <div id="reader-loading" class="reader-loading">
+                <div class="loading-spinner"></div>
+                <p>正在提取文章内容...</p>
+            </div>
+            <!-- 错误 -->
+            <div id="reader-error" class="reader-error" style="display:none">
+                <div class="error-icon">⚠️</div>
+                <p id="reader-error-text"></p>
+            </div>
+            <!-- 正文 -->
+            <div id="reader-content" class="reader-content" style="display:none">
+                <div class="reader-article">
+                    <h1 id="reader-article-title" class="reader-article-title"></h1>
+                    <div class="reader-meta">
+                        <span id="reader-site"></span>
+                        <span id="reader-byline"></span>
+                    </div>
+                    <div id="reader-article-body" class="reader-article-body"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

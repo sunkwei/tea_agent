@@ -1,0 +1,63 @@
+{
+  "name": "agent-calendar-viewer",
+  "version": "1.0.0",
+  "description": "Zaker-style viewer for Agent Calendar",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder build --win --config"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "cheerio": "^1.2.0"
+  },
+  "devDependencies": {
+    "electron-builder": "^26.15.3",
+    "electron": "^33.4.11"
+  },
+  "build": {
+    "appId": "com.agent.calendar-viewer",
+    "productName": "Agent日历",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": null,
+      "artifactName": "Agent日历-${version}-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Agent日历"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "reader-view.js",
+      "news-fetcher.js",
+      "renderer/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "main.js"
+    },
+    "asar": true,
+    "publish": null
+  },
+  "author": "Agent",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agent/calendar-viewer"
+  }
+}

@@ -30,7 +30,25 @@ class StorageModule(HotReloadModule):
 
     @classmethod
     def _load(cls, registry: ModuleRegistry) -> bool:
-        """加载 Storage 模块。"""
+        """加载 Storage 模块。
+
+        热重载时先重载 tea_agent.store 模块（仅 __init__.py），
+        确保对 get_storage() 等底层函数的修改立即生效，无需重启 server。
+        注意：不重载 _core / _component 等子模块——它们未变更，
+        重载会创建新的类对象，破坏已有 Storage 实例的 isinstance 检查。
+        """
+        import importlib
+        import sys as _sys
+
+        # 重载 tea_agent.store（仅 __init__.py），使 get_storage() 变更生效
+        _store_mod = _sys.modules.get('tea_agent.store')
+        if _store_mod is not None:
+            try:
+                importlib.reload(_store_mod)
+                logger.debug("Hot-reloaded tea_agent.store module")
+            except Exception as e:
+                logger.warning(f"Reload tea_agent.store failed (non-fatal): {e}")
+
         from tea_agent.store import get_storage
 
         storage = get_storage()

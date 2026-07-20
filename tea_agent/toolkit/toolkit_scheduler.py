@@ -268,19 +268,20 @@ def toolkit_scheduler(action: str, **kwargs):
         except Exception as e:
             return -2, str(e)[:500]
 
-    # ── 调度守护线程 ──
-    _scheduler_running = False
-    _scheduler_pid = None
+    # ── 调度守护线程（模块级全局变量，避免函数作用域隔离） ──
+    import __main__ as _main_mod
+    for _var in ['_tea_scheduler_running', '_tea_scheduler_pid', '_tea_scheduler_thread']:
+        if not hasattr(_main_mod, _var):
+            setattr(_main_mod, _var, None)
 
     def _scheduler_loop():
         """Internal: scheduler loop."""
-        nonlocal _scheduler_running, _scheduler_pid
-        _scheduler_running = True
-        _scheduler_pid = os.getpid()
-        logger.info(f"定时任务调度器已启动 (pid={_scheduler_pid})")
+        _main_mod._tea_scheduler_running = True
+        _main_mod._tea_scheduler_pid = os.getpid()
+        logger.info(f"定时任务调度器已启动 (pid={os.getpid()})")
         _notify("⏰ 定时任务调度器", f"已启动，每{CHECK_INTERVAL}秒检查")
 
-        while _scheduler_running:
+        while _main_mod._tea_scheduler_running:
             try:
                 conn = _get_conn()
                 due = conn.execute(
@@ -342,7 +343,7 @@ def toolkit_scheduler(action: str, **kwargs):
             t = dict(r)
             t["_next_label"] = _format_next(t)
             tasks.append(t)
-        return {"tasks": tasks, "count": len(tasks), "scheduler_running": _scheduler_running}
+        return {"tasks": tasks, "count": len(tasks), "scheduler_running": _main_mod._tea_scheduler_running}
 
     elif action == "add":
         name = kwargs.get("name", "")
@@ -444,21 +445,22 @@ def toolkit_scheduler(action: str, **kwargs):
         return {"status": "executed", "exit_code": exit_code, "output": output[:500]}
 
     elif action == "start":
-        if _scheduler_running:
-            return {"status": "already_running", "pid": _scheduler_pid}
+        if _main_mod._tea_scheduler_running:
+            return {"status": "already_running", "pid": _main_mod._tea_scheduler_pid}
         t = threading.Thread(target=_scheduler_loop, daemon=True)
         t.start()
+        _main_mod._tea_scheduler_thread = t
         time.sleep(0.3)
-        return {"status": "started", "pid": _scheduler_pid, "check_interval": CHECK_INTERVAL}
+        return {"status": "started", "pid": _main_mod._tea_scheduler_pid, "check_interval": CHECK_INTERVAL}
 
     elif action == "stop":
-        _scheduler_running = False
+        _main_mod._tea_scheduler_running = False
         return {"status": "stopped"}
 
     elif action == "status":
         return {
-            "running": _scheduler_running,
-            "pid": _scheduler_pid,
+            "running": _main_mod._tea_scheduler_running,
+            "pid": _main_mod._tea_scheduler_pid,
             "check_interval": CHECK_INTERVAL,
             "db_path": DB_PATH,
         }

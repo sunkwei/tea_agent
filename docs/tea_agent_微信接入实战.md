@@ -397,4 +397,10 @@ tea-agent-wechat
 
 ---
 
+### 参考文档
+
+- [📄 了解 iLink API 协议细节](tea_agent_了解iLNK%20API.pdf) — 微信 iLink Bot API 协议详解（PDF）
+
+---
+
 > **写在最后**：本文是 tea_agent 自我工作记录的真实产物——整个"写文章"的过程同样由 tea_agent 自主完成：查询对话历史、分析项目结构、输出结构化的 Markdown 文档。所见即所得。

@@ -8,7 +8,7 @@ All modules can be directly imported and used by AI Agents.
 - prompts           — 系统提示词常量与模板（HISTORY_SUMMARIZE_*, TOPIC_SUMMARY_*, ...）
 - history_builder   — L1/L2/L3 历史消息拼接（build_api_messages, estimate_tokens）
 - json_sanitizer    — JSON 校验与修复（sanitize_api_messages, try_fix_truncated_json）
-- os_info_injector  — 操作系统信息注入到会话提示词（inject_os_info）
+- os_info_injector  — 操作系统信息注入到会话提示词（generate_os_info_text / inject_os_info）
 - params            — 便宜模型参数提取（get_cheap_params）
 - tool_loop_runner  — 工具调用循环执行器（execute_tool_loop, LoopDetector）
 
@@ -19,7 +19,7 @@ All modules can be directly imported and used by AI Agents.
 from .context import SessionComponent, SessionContext
 from .history_builder import build_api_messages, estimate_tokens, to_multimodal
 from .json_sanitizer import sanitize_api_messages, try_fix_truncated_json
-from .os_info_injector import inject_os_info
+from .os_info_injector import generate_os_info_text, inject_os_info
 from .params import get_cheap_params
 from .prompts import (
     COMPACT_SYSTEM_PROMPT,
@@ -37,7 +37,7 @@ __all__ = [
     "COMPACT_SYSTEM_PROMPT",
     "build_api_messages", "estimate_tokens", "to_multimodal",
     "sanitize_api_messages", "try_fix_truncated_json",
-    "inject_os_info",
+    "generate_os_info_text", "inject_os_info",
     "get_cheap_params",
     "execute_tool_loop", "LoopDetector",
 ]

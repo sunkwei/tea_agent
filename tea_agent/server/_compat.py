@@ -87,6 +87,10 @@ async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
         mark_buffer_done(topic_id)
     finally:
         cleanup_buffer(topic_id)
+        # ⭐ 当缓冲区读取完毕（后台会话也结束了），清理 background_sessions
+        # 避免后续消息因 is_topic_busy 返回 True 被错误排队
+        with _background_sessions_lock:
+            _background_sessions.pop(topic_id, None)
 
 
 # ── 带下划前缀的别名（route_handlers.py 历史引用） ──

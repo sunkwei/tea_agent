@@ -1268,6 +1268,22 @@ window.sendMessage = async function() {
               break;
             }
 
+            case 'queued':
+              removeLoading();
+              isStreaming = false;
+              // 恢复发送按钮
+              var sb = document.getElementById('send-btn');
+              if (sb) { sb.textContent = '发送'; sb.className = 'btn btn-p'; sb.disabled = false; }
+              // 清理 DOM 避免残留
+              var oldMsg = document.getElementById('current-ai-msg');
+              if (oldMsg) { oldMsg.removeAttribute('id'); oldMsg.querySelector('.msg-bubble').removeAttribute('id'); }
+              toast('⏳ 消息已排队（第 ' + data.position + ' 位），完成后将自动显示', 'success');
+              // 启动后台轮询，等待队列处理完成
+              if (data.topic_id) {
+                _startBackgroundPoll(data.topic_id);
+              }
+              break;
+
             case 'error':
               removeLoading();
               s.bubbleText.innerHTML = '<span style="color:var(--red)">错误: ' + esc(data.error) + '</span>';

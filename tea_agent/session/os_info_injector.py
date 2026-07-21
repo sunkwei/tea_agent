@@ -120,21 +120,19 @@ def _get_interface_hints(interface_type: str) -> str:
     return hints.get(interface_type, "")
 
 
-def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
-                   supports_reasoning: bool = True,
-                   interface_type: str | None = None) -> list[dict]:
-    """注入操作系统环境信息轮次（放在用户消息之前）。
+def generate_os_info_text(toolkit_root_dir: str = "",
+                         interface_type: str | None = None) -> str:
+    """生成操作系统环境信息文本（纯文本，不修改消息列表）。
 
-    根据实际运行的 OS 注入差异化的工具使用提示，
-    指导 LLM 使用正确的命令、路径分隔符和工具策略。
+    为属性注入模式设计，返回 OS 信息文本，
+    由 _build_l0_enriched_system() 合并到 system prompt 尾部。
 
     Args:
-        messages: 当前消息列表（会被原地修改）
         toolkit_root_dir: toolkit 目录路径
-        supports_reasoning: 模型是否支持 reasoning
+        interface_type: 接口类型，None 则自动检测
 
     Returns:
-        修改后的消息列表
+        OS 环境信息文本字符串
     """
     os_name = platform.system()
     os_release = platform.release()
@@ -152,6 +150,10 @@ def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
     if interface_type is None:
         interface_type = _detect_interface_type()
 
+    iface_labels = {"web": "Web 浏览器", "gui": "桌面 GUI (Tkinter)", "cli": "命令行终端",
+                    "tui": "终端 TUI", "mcp": "MCP 协议"}
+    iface_label = iface_labels.get(interface_type, interface_type)
+
     # ── OS 概要 ──
     lines = [
         f"操作系统: {os_name} {os_release} ({os_version})",
@@ -161,9 +163,6 @@ def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
     ]
 
     # ── 接口类型 ──
-    iface_labels = {"web": "Web 浏览器", "gui": "桌面 GUI (Tkinter)", "cli": "命令行终端",
-                    "tui": "终端 TUI", "mcp": "MCP 协议"}
-    iface_label = iface_labels.get(interface_type, interface_type)
     lines.append(f"服务接口: {iface_label}" if iface_label else "")
 
     # ── 路径约定 ──
@@ -253,6 +252,44 @@ def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
     if iface_label:
         info_text += f"\n当前服务接口为「{iface_label}」。\n"
         info_text += _get_interface_hints(interface_type)
+
+    return info_text
+
+
+def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
+                   supports_reasoning: bool = True,
+                   interface_type: str | None = None) -> list[dict]:
+    """注入操作系统环境信息轮次（放在用户消息之前）。
+
+    ⚠️ 已弃用：请使用 generate_os_info_text() 纯函数 + 属性注入方式。
+    保留此函数仅为向后兼容。
+
+    根据实际运行的 OS 注入差异化的工具使用提示，
+    指导 LLM 使用正确的命令、路径分隔符和工具策略。
+
+    Args:
+        messages: 当前消息列表（会被原地修改）
+        toolkit_root_dir: toolkit 目录路径
+        supports_reasoning: 模型是否支持 reasoning
+
+    Returns:
+        修改后的消息列表
+    """
+    os_name = platform.system()
+    os_machine = platform.machine()
+
+    if interface_type is None:
+        interface_type = _detect_interface_type()
+
+    iface_labels = {"web": "Web 浏览器", "gui": "桌面 GUI (Tkinter)", "cli": "命令行终端",
+                    "tui": "终端 TUI", "mcp": "MCP 协议"}
+    iface_label = iface_labels.get(interface_type, interface_type)
+
+    # 使用纯函数生成文本（避免重复）
+    info_text = generate_os_info_text(
+        toolkit_root_dir=toolkit_root_dir,
+        interface_type=interface_type,
+    )
 
     # 注入为用户轮次 + 助手确认
     messages.append({"role": "user", "content": info_text})

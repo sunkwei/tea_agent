@@ -427,6 +427,9 @@ class AgentModule(HotReloadModule):
                 _viz_id = text[len("[DAG_VIZ:"):-1]
                 if _viz_id:
                     _put({"type": "dag_viz", "viz_id": _viz_id})
+            elif text.startswith("[TOOL_ARG:"):
+                _args = text[len("[TOOL_ARG:"):-1]
+                _put({"type": "tool_args", "args": _args})
             elif text == "[TOOL_DONE]":
                 if _tool_active:
                     _put({"type": "tool_done"})

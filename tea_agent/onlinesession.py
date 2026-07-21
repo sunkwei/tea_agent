@@ -14,7 +14,6 @@ from tea_agent.basesession import BaseChatSession, relaxed_json_loads
 # 组件导入（替代 Mixin）
 from tea_agent.session.context import SessionComponent, SessionContext
 from tea_agent.session.history_builder import build_api_messages
-from tea_agent.session.os_info_injector import inject_os_info
 from tea_agent.session.params import get_cheap_params
 from tea_agent.session.prompts import (
     COMPACT_SYSTEM_PROMPT,
@@ -1520,8 +1519,13 @@ class OnlineToolSession(BaseChatSession):
     # Pipeline 设置
     # ──────────────────────────────────────────────
 
-    def _inject_os_info(self, context: dict) -> list:
-        """注入操作系统环境信息 — 仅 OS 变化时重新注入。
+    def _inject_os_info(self, pipeline_ctx: dict) -> dict:
+        """检测 OS 变化并设置上下文属性（不再注入虚假消息轮次）。
+
+        [重构 2026-07] 从「虚假消息注入」改为「属性注入」：
+        - 不再调用 inject_os_info() 添加 user+assistant 假对话
+        - 改为设置 SessionContext._injected_os_info_text
+        - 由 _build_l0_enriched_system() 在 Level 0 合并到 system prompt 尾部
 
         跨会话持久化 OS 签名：同一 topic 在同一 OS 上只注入一次，
         切换主机（Windows↔Linux）时自动重新注入。
@@ -1530,6 +1534,7 @@ class OnlineToolSession(BaseChatSession):
             _get_os_signature,
             _load_persisted_os_sig,
             _save_os_sig,
+            generate_os_info_text,
         )
 
         current_sig = _get_os_signature()
@@ -1539,21 +1544,21 @@ class OnlineToolSession(BaseChatSession):
         if not self.context._os_info_injected and topic_id:
             self.context._os_info_injected = _load_persisted_os_sig(topic_id)
 
-        # OS 未变化 → 跳过
-        if self.context._os_info_injected == current_sig:
-            return self.messages
+        # OS 未变化且已有文本 → 跳过
+        if self.context._os_info_injected == current_sig and self.context._injected_os_info_text:
+            return pipeline_ctx
 
-        # OS 变化或首次注入
+        # OS 变化或首次 → 生成 OS 信息文本并写入上下文属性
+        self.context._injected_os_info_text = generate_os_info_text(
+            toolkit_root_dir=self.toolkit.root_dir,
+            interface_type=getattr(self.context, 'interface_type', None),
+        )
         self.context._os_info_injected = current_sig
         if topic_id:
             _save_os_sig(topic_id, current_sig)
-        logger.info(f"OS info injected: {current_sig} (topic={topic_id})")
-        return inject_os_info(
-            self.messages,
-            toolkit_root_dir=self.toolkit.root_dir,
-            supports_reasoning=self.context.supports_reasoning,
-            interface_type=getattr(self.context, 'interface_type', None),
-        )
+        logger.info(f"OS info set on context: {current_sig} (topic={topic_id})")
+
+        return pipeline_ctx
 
     def _setup_default_pipeline(self):
         """设置默认的 Pipeline 步骤"""

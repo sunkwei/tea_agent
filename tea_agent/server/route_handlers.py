@@ -437,17 +437,14 @@ async def handle_web_chat(request):
         # 新主题直接进入 SSE 流
         pass
     elif _is_topic_busy(topic_id):
-        # ⭐ 主题正忙 → 加入排队队列
+        # ⭐ 主题正忙 → 加入排队队列，返回 SSE 事件而非普通 JSON
+        # 让前端 SSE 解析器能正常接收并处理，避免卡死
         item_id = _queue_add(topic_id, message, images_b64)
         position = len(_queue_list(topic_id))
         logger.info(f"Topic busy, queued message: topic={topic_id} item={item_id} position={position}")
-        return JSONResponse({
-            "queued": True,
-            "item_id": item_id,
-            "topic_id": topic_id,
-            "position": position,
-            "message": f"已加入排队队列（第 {position} 位）",
-        })
+        async def _queued_sse():
+            yield f"data: {json.dumps({'type': 'queued', 'item_id': item_id, 'topic_id': topic_id, 'position': position})}\n\n"
+        return StreamingResponse(_queued_sse(), media_type="text/event-stream")
 
     image_paths = []
     if images_b64:
@@ -610,10 +607,26 @@ async def handle_chat_abort(request):
     try:
         session.interrupt()
         logger.info(f"User aborted session topic_id={topic_id}")
-        return JSONResponse({"ok": True, "message": "已发送中断信号"})
     except Exception as e:
         logger.exception(f"Abort session failed topic_id={topic_id}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    # ⭐ 立即清理会话追踪，避免中断后发送新消息时 is_topic_busy 仍返回 True
+    with _active_sessions_lock:
+        if _active_sessions.get(topic_id) is session:
+            _active_sessions.pop(topic_id, None)
+    with _background_sessions_lock:
+        if _background_sessions.get(topic_id) is session:
+            _background_sessions.pop(topic_id, None)
+    # 清理后台缓冲区（如果有）
+    try:
+        from .modules.state import cleanup_buffer, mark_buffer_done
+        cleanup_buffer(topic_id)
+        mark_buffer_done(topic_id)
+    except Exception:
+        pass
+
+    return JSONResponse({"ok": True, "message": "已发送中断信号并清理会话"})
 
 
 # ================================================================

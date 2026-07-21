@@ -462,7 +462,14 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     except Exception as e:
         logger.debug(f"task resume check failed: {e}")
 
-    # 3. 长期记忆注入（仅当 L3 禁用时，才注入到 system prompt）
+    # 3. 操作系统环境信息注入（属性注入模式）
+    #    OS 信息由 pipeline 步骤检测 OS 变化后写入 context._injected_os_info_text
+    #    取代了旧版注入虚假 user+assistant 消息轮次的做法
+    os_text = getattr(context, '_injected_os_info_text', '') or ''
+    if os_text:
+        inject_parts.append(os_text)
+
+    # 4. 长期记忆注入（仅当 L3 禁用时，才注入到 system prompt）
     #    如果 L3 启用，记忆会合并到 L3 块中，避免重复（见 _build_level3_block）
     disable_l3 = getattr(context, 'disable_l3', False) or context.disable_summary
     if disable_l3 and context._injected_memories_text:

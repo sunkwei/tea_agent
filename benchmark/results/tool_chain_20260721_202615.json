@@ -1,0 +1,64 @@
+{
+  "task_name": "多步骤工具链",
+  "task_category": "工具调用",
+  "version": "",
+  "total_runs": 1,
+  "passed_runs": 0,
+  "pass_rate": 0.0,
+  "l1_avg_match_rate": 0.0,
+  "l2_avg_overall": 65,
+  "l3_median_tokens": 100608,
+  "l3_median_duration": 28.5,
+  "l3_median_cost": 0.0525,
+  "l3_stddev_tokens": 0.0,
+  "l4_avg_accuracy": 1.0,
+  "composite_median": 51.2,
+  "composite_stddev": 0.0,
+  "individual_results": [
+    {
+      "run": 1,
+      "topic_id": "1dc10132-0513-4df0-95c8-0b56fff1d7a2",
+      "composite_score": 51.2,
+      "l1": {
+        "passed": false,
+        "match_rate": 0.0,
+        "details": [
+          "✗ substr: toolkit_gettime",
+          "✗ substr: Hello Benchmark",
+          "✗ substr: tmp/benchmark_result.txt",
+          "✗ substr: toolkit_save_file"
+        ]
+      },
+      "l2": {
+        "correctness": 80,
+        "completeness": 30,
+        "conciseness": 90,
+        "style": 60,
+        "overall": 65,
+        "issues": [
+          "输出过短"
+        ]
+      },
+      "l3": {
+        "prompt_tokens": 99157,
+        "completion_tokens": 1451,
+        "total_tokens": 100608,
+        "cheap_tokens": 0,
+        "duration_s": 28.5,
+        "token_efficiency": 1.0,
+        "estimated_cost_usd": 0.0525
+      },
+      "l4": {
+        "total_calls": 6,
+        "correct_calls": 6,
+        "param_correct": 0,
+        "accuracy": 1.0,
+        "param_accuracy": 0.0,
+        "redundancy_ratio": 0.0
+      },
+      "error": "",
+      "duration_s": 28.5
+    }
+  ],
+  "timestamp": "20260721_202615"
+}

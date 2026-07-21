@@ -1550,7 +1550,7 @@ class OnlineToolSession(BaseChatSession):
 
         # OS 变化或首次 → 生成 OS 信息文本并写入上下文属性
         self.context._injected_os_info_text = generate_os_info_text(
-            toolkit_root_dir=self.toolkit.root_dir,
+            toolkit_root_dir=self.context.toolkit.tool_dir if self.context.toolkit else "",
             interface_type=getattr(self.context, 'interface_type', None),
         )
         self.context._os_info_injected = current_sig

@@ -382,8 +382,13 @@ def evaluate_l4(
 
         # 参数正确性（启发式：非空）
         args = call.get("args", {})
-        if args and not any(v is None for v in args.values() if v is not None):
-            result.param_correct += 1
+        # args 可能为字符串（未解析的 JSON），跳过此类校验
+        if isinstance(args, dict) and args:
+            try:
+                if not any(v is None for v in args.values()):
+                    result.param_correct += 1
+            except Exception:
+                pass  # 参数校验失败不阻断流程
 
     result.accuracy = result.correct_calls / result.total_calls
     result.param_accuracy = result.param_correct / result.total_calls

@@ -1,0 +1,152 @@
+{
+  "task_name": "多步骤工具链",
+  "task_category": "工具调用",
+  "version": "",
+  "total_runs": 3,
+  "passed_runs": 0,
+  "pass_rate": 0.0,
+  "l1_avg_match_rate": 0.0,
+  "l2_avg_overall": 65,
+  "l3_median_tokens": 165319,
+  "l3_median_duration": 35.7,
+  "l3_median_cost": 0.0856,
+  "l3_stddev_tokens": 22125.0,
+  "l4_avg_accuracy": 0.93,
+  "composite_median": 48.5,
+  "composite_stddev": 1.6,
+  "individual_results": [
+    {
+      "run": 1,
+      "topic_id": "44082bf7-69b3-4c49-bc52-0b44173df029",
+      "composite_score": 48.5,
+      "l1": {
+        "passed": false,
+        "match_rate": 0.0,
+        "details": [
+          "✗ substr: toolkit_gettime",
+          "✗ substr: Hello Benchmark",
+          "✗ substr: tmp/benchmark_result.txt",
+          "✗ substr: toolkit_save_file"
+        ]
+      },
+      "l2": {
+        "correctness": 80,
+        "completeness": 30,
+        "conciseness": 90,
+        "style": 60,
+        "overall": 65,
+        "issues": [
+          "输出过短"
+        ]
+      },
+      "l3": {
+        "prompt_tokens": 163332,
+        "completion_tokens": 1987,
+        "total_tokens": 165319,
+        "cheap_tokens": 0,
+        "duration_s": 37.1,
+        "token_efficiency": 1.0,
+        "estimated_cost_usd": 0.0856
+      },
+      "l4": {
+        "total_calls": 9,
+        "correct_calls": 8,
+        "param_correct": 0,
+        "accuracy": 0.89,
+        "param_accuracy": 0.0,
+        "redundancy_ratio": 0.0
+      },
+      "error": "",
+      "duration_s": 37.1
+    },
+    {
+      "run": 2,
+      "topic_id": "03799ac9-5b30-4fdc-ac93-b3ee55ebf815",
+      "composite_score": 48.5,
+      "l1": {
+        "passed": false,
+        "match_rate": 0.0,
+        "details": [
+          "✗ substr: toolkit_gettime",
+          "✗ substr: Hello Benchmark",
+          "✗ substr: tmp/benchmark_result.txt",
+          "✗ substr: toolkit_save_file"
+        ]
+      },
+      "l2": {
+        "correctness": 80,
+        "completeness": 30,
+        "conciseness": 90,
+        "style": 60,
+        "overall": 65,
+        "issues": [
+          "输出过短"
+        ]
+      },
+      "l3": {
+        "prompt_tokens": 198812,
+        "completion_tokens": 1535,
+        "total_tokens": 200347,
+        "cheap_tokens": 0,
+        "duration_s": 35.7,
+        "token_efficiency": 1.0,
+        "estimated_cost_usd": 0.1025
+      },
+      "l4": {
+        "total_calls": 9,
+        "correct_calls": 8,
+        "param_correct": 0,
+        "accuracy": 0.89,
+        "param_accuracy": 0.0,
+        "redundancy_ratio": 0.0
+      },
+      "error": "",
+      "duration_s": 35.7
+    },
+    {
+      "run": 3,
+      "topic_id": "933d0749-bcc8-4d2c-94c9-85fad7fcda0c",
+      "composite_score": 51.2,
+      "l1": {
+        "passed": false,
+        "match_rate": 0.0,
+        "details": [
+          "✗ substr: toolkit_gettime",
+          "✗ substr: Hello Benchmark",
+          "✗ substr: tmp/benchmark_result.txt",
+          "✗ substr: toolkit_save_file"
+        ]
+      },
+      "l2": {
+        "correctness": 80,
+        "completeness": 30,
+        "conciseness": 90,
+        "style": 60,
+        "overall": 65,
+        "issues": [
+          "输出过短"
+        ]
+      },
+      "l3": {
+        "prompt_tokens": 157973,
+        "completion_tokens": 1443,
+        "total_tokens": 159416,
+        "cheap_tokens": 0,
+        "duration_s": 34.1,
+        "token_efficiency": 1.0,
+        "estimated_cost_usd": 0.0819
+      },
+      "l4": {
+        "total_calls": 7,
+        "correct_calls": 7,
+        "param_correct": 0,
+        "accuracy": 1.0,
+        "param_accuracy": 0.0,
+        "redundancy_ratio": 0.0
+      },
+      "error": "",
+      "duration_s": 34.1
+    }
+  ],
+  "timestamp": "20260721_200539"
+}

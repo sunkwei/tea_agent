@@ -1,0 +1,158 @@
+{
+  "task_name": "工具调用准确率",
+  "task_category": "工具调用",
+  "version": "",
+  "total_runs": 3,
+  "passed_runs": 0,
+  "pass_rate": 0.0,
+  "l1_avg_match_rate": 0.0,
+  "l2_avg_overall": 65,
+  "l3_median_tokens": 40642,
+  "l3_median_duration": 14.7,
+  "l3_median_cost": 0.0218,
+  "l3_stddev_tokens": 156.0,
+  "l4_avg_accuracy": 1.0,
+  "composite_median": 51.2,
+  "composite_stddev": 0.0,
+  "individual_results": [
+    {
+      "run": 1,
+      "topic_id": "cbcbef22-434d-4c13-81c1-d8a724931560",
+      "composite_score": 51.2,
+      "l1": {
+        "passed": false,
+        "match_rate": 0.0,
+        "details": [
+          "✗ substr: toolkit_file",
+          "✗ substr: pyproject.toml",
+          "✗ substr: python --version",
+          "✗ substr: python async",
+          "✗ substr: toolkit_gettime",
+          "✗ substr: toolkit_os_info"
+        ]
+      },
+      "l2": {
+        "correctness": 80,
+        "completeness": 30,
+        "conciseness": 90,
+        "style": 60,
+        "overall": 65,
+        "issues": [
+          "输出过短"
+        ]
+      },
+      "l3": {
+        "prompt_tokens": 39625,
+        "completion_tokens": 1017,
+        "total_tokens": 40642,
+        "cheap_tokens": 0,
+        "duration_s": 15.6,
+        "token_efficiency": 1.0,
+        "estimated_cost_usd": 0.0218
+      },
+      "l4": {
+        "total_calls": 5,
+        "correct_calls": 5,
+        "param_correct": 0,
+        "accuracy": 1.0,
+        "param_accuracy": 0.0,
+        "redundancy_ratio": 0.0
+      },
+      "error": "",
+      "duration_s": 15.6
+    },
+    {
+      "run": 2,
+      "topic_id": "58e97c26-fe13-4637-8b5d-bc617f6ad61a",
+      "composite_score": 51.2,
+      "l1": {
+        "passed": false,
+        "match_rate": 0.0,
+        "details": [
+          "✗ substr: toolkit_file",
+          "✗ substr: pyproject.toml",
+          "✗ substr: python --version",
+          "✗ substr: python async",
+          "✗ substr: toolkit_gettime",
+          "✗ substr: toolkit_os_info"
+        ]
+      },
+      "l2": {
+        "correctness": 80,
+        "completeness": 30,
+        "conciseness": 90,
+        "style": 60,
+        "overall": 65,
+        "issues": [
+          "输出过短"
+        ]
+      },
+      "l3": {
+        "prompt_tokens": 39596,
+        "completion_tokens": 1131,
+        "total_tokens": 40727,
+        "cheap_tokens": 0,
+        "duration_s": 14.7,
+        "token_efficiency": 1.0,
+        "estimated_cost_usd": 0.0221
+      },
+      "l4": {
+        "total_calls": 5,
+        "correct_calls": 5,
+        "param_correct": 0,
+        "accuracy": 1.0,
+        "param_accuracy": 0.0,
+        "redundancy_ratio": 0.0
+      },
+      "error": "",
+      "duration_s": 14.7
+    },
+    {
+      "run": 3,
+      "topic_id": "d712ebb4-481c-452e-95a3-63e88854e3ac",
+      "composite_score": 51.2,
+      "l1": {
+        "passed": false,
+        "match_rate": 0.0,
+        "details": [
+          "✗ substr: toolkit_file",
+          "✗ substr: pyproject.toml",
+          "✗ substr: python --version",
+          "✗ substr: python async",
+          "✗ substr: toolkit_gettime",
+          "✗ substr: toolkit_os_info"
+        ]
+      },
+      "l2": {
+        "correctness": 80,
+        "completeness": 30,
+        "conciseness": 90,
+        "style": 60,
+        "overall": 65,
+        "issues": [
+          "输出过短"
+        ]
+      },
+      "l3": {
+        "prompt_tokens": 39581,
+        "completion_tokens": 844,
+        "total_tokens": 40425,
+        "cheap_tokens": 0,
+        "duration_s": 11.9,
+        "token_efficiency": 1.0,
+        "estimated_cost_usd": 0.0215
+      },
+      "l4": {
+        "total_calls": 5,
+        "correct_calls": 5,
+        "param_correct": 0,
+        "accuracy": 1.0,
+        "param_accuracy": 0.0,
+        "redundancy_ratio": 0.0
+      },
+      "error": "",
+      "duration_s": 11.9
+    }
+  ],
+  "timestamp": "20260721_201410"
+}

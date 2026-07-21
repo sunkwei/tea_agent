@@ -1,0 +1,98 @@
+{
+  "task_name": "简单问候",
+  "task_category": "对话基础",
+  "version": "",
+  "total_runs": 2,
+  "passed_runs": 2,
+  "pass_rate": 1.0,
+  "l1_avg_match_rate": 1.0,
+  "l2_avg_overall": 65,
+  "l3_median_tokens": 19226.0,
+  "l3_median_duration": 4.6,
+  "l3_median_cost": 0.0097,
+  "l3_stddev_tokens": 6.0,
+  "l4_avg_accuracy": 1.0,
+  "composite_median": 81.2,
+  "composite_stddev": 0.0,
+  "individual_results": [
+    {
+      "run": 1,
+      "topic_id": "ca42ff14-2861-43f3-b26b-5ea593eecb53",
+      "composite_score": 81.2,
+      "l1": {
+        "passed": true,
+        "match_rate": 1.0,
+        "details": []
+      },
+      "l2": {
+        "correctness": 80,
+        "completeness": 30,
+        "conciseness": 90,
+        "style": 60,
+        "overall": 65,
+        "issues": [
+          "输出过短"
+        ]
+      },
+      "l3": {
+        "prompt_tokens": 19187,
+        "completion_tokens": 43,
+        "total_tokens": 19230,
+        "cheap_tokens": 0,
+        "duration_s": 5.4,
+        "token_efficiency": 1.0,
+        "estimated_cost_usd": 0.0097
+      },
+      "l4": {
+        "total_calls": 0,
+        "correct_calls": 0,
+        "param_correct": 0,
+        "accuracy": 1.0,
+        "param_accuracy": 1.0,
+        "redundancy_ratio": 0.0
+      },
+      "error": "",
+      "duration_s": 5.4
+    },
+    {
+      "run": 2,
+      "topic_id": "337a1154-83ff-4cd0-9769-1dd32c282e3b",
+      "composite_score": 81.2,
+      "l1": {
+        "passed": true,
+        "match_rate": 1.0,
+        "details": []
+      },
+      "l2": {
+        "correctness": 80,
+        "completeness": 30,
+        "conciseness": 90,
+        "style": 60,
+        "overall": 65,
+        "issues": [
+          "输出过短"
+        ]
+      },
+      "l3": {
+        "prompt_tokens": 19187,
+        "completion_tokens": 35,
+        "total_tokens": 19222,
+        "cheap_tokens": 0,
+        "duration_s": 3.8,
+        "token_efficiency": 1.0,
+        "estimated_cost_usd": 0.0097
+      },
+      "l4": {
+        "total_calls": 0,
+        "correct_calls": 0,
+        "param_correct": 0,
+        "accuracy": 1.0,
+        "param_accuracy": 1.0,
+        "redundancy_ratio": 0.0
+      },
+      "error": "",
+      "duration_s": 3.8
+    }
+  ],
+  "timestamp": "20260721_192152"
+}

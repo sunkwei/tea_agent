@@ -475,12 +475,12 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     if disable_l3 and context._injected_memories_text:
         inject_parts.append(context._injected_memories_text)
 
-    # 合并所有注入到 system prompt（带 hash 去重）
+    # 合并所有注入到 system prompt（将所有注入放在最前面，提高可见性）
     if inject_parts:
         combined_inject = "\n\n---\n\n".join(inject_parts)
         new_hash = hash(combined_inject)
         if new_hash != getattr(context, '_last_l0_hash', 0):
-            enriched = enriched.rstrip('\n') + '\n\n' + combined_inject
+            enriched = combined_inject + '\n\n' + enriched.rstrip('\n')
             context._last_l0_hash = new_hash
 
     return enriched

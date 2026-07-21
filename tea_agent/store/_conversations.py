@@ -85,13 +85,17 @@ class ConversationStore(StoreComponent):
         self, conversation_id: int, ai_msg: str, is_func_calling: bool,
         rounds: list[dict] | None = None,
     ):
-        """Update msg rounds.
+        """Update msg rounds and persist individual rounds to agent_rounds table.
+
+        Saves the full rounds as JSON in conversations.rounds_json (L0),
+        and also writes each individual round to agent_rounds table (L1)
+        for SQL-based tool calling analysis and benchmarking.
 
         Args:
-            conversation_id: Description.
-            ai_msg: Description.
-            is_func_calling: Description.
-            rounds: Description.
+            conversation_id: conversation id.
+            ai_msg: AI message text.
+            is_func_calling: whether tool calling was used.
+            rounds: list of round dicts with role/content/tool_calls.
         """
         rounds_json = json.dumps(rounds, ensure_ascii=False) if rounds else None
         c = self.conn.cursor()
@@ -99,6 +103,26 @@ class ConversationStore(StoreComponent):
             "UPDATE conversations SET ai_msg = ?, is_func_calling = ?, rounds_json = ? WHERE id = ?",
             (ai_msg, 1 if is_func_calling else 0, rounds_json, conversation_id),
         )
+
+        # Write individual rounds to agent_rounds table for SQL-based analysis
+        if rounds:
+            for i, r in enumerate(rounds):
+                role = r.get("role", "")
+                content = r.get("content", "")
+                tool_calls = r.get("tool_calls")
+                tool_call_id = r.get("tool_call_id")
+                reasoning = r.get("reasoning_content", "")
+                tc_json = json.dumps(tool_calls, ensure_ascii=False) if tool_calls else None
+                full_content = content
+                if reasoning:
+                    full_content = f"[思考] {reasoning}\n\n{content}" if content else f"[思考] {reasoning}"
+                c.execute(
+                    "INSERT INTO agent_rounds "
+                    "(id, conversation_id, round_num, role, content, tool_calls, tool_call_id, stamp) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
+                    (self._new_id(), conversation_id, i, role, full_content, tc_json, tool_call_id),
+                )
+
         self.conn.commit()
         c.close()
 

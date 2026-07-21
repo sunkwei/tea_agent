@@ -1,0 +1,33 @@
+# GAIA 风格基准：多步骤工具链
+# 测试 Agent 能否将多个工具串联完成复合任务
+name: "多步骤工具链"
+description: "GAIA 风格：将多个工具串行组合完成复合任务（文件读写+搜索+执行）"
+category: "工具调用"
+prompt: |-
+  请完成以下多步骤任务，每一步依赖上一步的结果：
+
+  步骤1: 用 toolkit_gettime 获取当前时间，记住当前日期。
+
+  步骤2: 用 toolkit_exec 执行 'echo "Hello Benchmark $((2+2))"'，确认 shell 计算正确。
+
+  步骤3: 用 toolkit_search 搜索 "tea_agent github"（max_results=3）。
+
+  步骤4: 结合以上信息，用 toolkit_save_file 将以下内容写入 tmp/benchmark_result.txt：
+    第1行: 当前日期（从步骤1获取）
+    第2行: Hello Benchmark - 计算结果
+    第3行: 搜索结果的标题（从步骤3获取）
+
+  请按顺序执行所有步骤，并输出最终写入的文件内容。
+runs: 5
+fair_mode: false
+expected_patterns:
+  - "toolkit_gettime"
+  - "Hello Benchmark"
+  - "tmp/benchmark_result.txt"
+  - "toolkit_save_file"
+tool_allowlist:
+  - "toolkit_gettime"
+  - "toolkit_exec"
+  - "toolkit_search"
+  - "toolkit_save_file"
+  - "toolkit_file"

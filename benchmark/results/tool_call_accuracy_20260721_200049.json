@@ -1,0 +1,19 @@
+{
+  "task_name": "工具调用准确率",
+  "task_category": "工具调用",
+  "version": "",
+  "total_runs": 0,
+  "passed_runs": 0,
+  "pass_rate": 0.0,
+  "l1_avg_match_rate": 0.0,
+  "l2_avg_overall": 0.0,
+  "l3_median_tokens": 0.0,
+  "l3_median_duration": 0.0,
+  "l3_median_cost": 0.0,
+  "l3_stddev_tokens": 0.0,
+  "l4_avg_accuracy": 0.0,
+  "composite_median": 0.0,
+  "composite_stddev": 0.0,
+  "individual_results": [],
+  "timestamp": "20260721_200049"
+}

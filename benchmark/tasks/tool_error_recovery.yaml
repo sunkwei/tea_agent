@@ -1,0 +1,30 @@
+# BFCL 风格基准：工具调用错误恢复
+# 测试 Agent 在工具调用失败时能否正确恢复
+name: "工具错误恢复"
+description: "BFCL 风格：测试工具调用失败后的错误恢复能力"
+category: "工具调用"
+prompt: |-
+  请完成以下任务，其中有些工具调用会失败，你需要正确处理：
+
+  任务1: 尝试用 toolkit_file 读取一个不存在的文件 /tmp/nonexistent_file_xyz.txt（action='read'）。
+        预期会失败，请捕获错误并输出友好的错误提示，然后继续下一步。
+
+  任务2: 用 toolkit_exec 执行一个错误的命令（app='nonexistent_cmd_xyz', args=['--version']）。
+        预期会失败，请捕获错误并输出友好的错误提示，然后继续下一步。
+
+  任务3: 现在用 toolkit_gettime 获取当前时间。这个应该成功。
+
+  任务4: 总结整个过程中遇到了几个错误，分别是什么，以及你是如何处理每个错误的。
+
+  请逐一执行所有任务，不要因为前面的失败就停止后续任务。
+runs: 5
+fair_mode: false
+expected_patterns:
+  - "nonexistent"
+  - "错误"  # 或 "失败"、"error" 等错误处理关键词
+  - "toolkit_gettime"
+  - "继续"  # 或 "下一个"、"后续" 等继续执行的表述
+tool_allowlist:
+  - "toolkit_file"
+  - "toolkit_exec"
+  - "toolkit_gettime"

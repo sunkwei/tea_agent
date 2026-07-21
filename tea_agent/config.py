@@ -174,7 +174,7 @@ class AgentConfig:
     memory_extraction_threshold: int = 2  # 触发记忆提取的最低未摘要消息数
     memory_dedup_threshold: float = 0.3  # 记忆去重相似度阈值 (0~1)，bigram Jaccard
     chat_page_size: int = 50  # GUI 单页加载的对话轮数（最多50条）
-    history_l2_max: int = 15  # L2最大保留轮数，超出时溢出 keep=10 条至 L3 摘要
+    history_l2_max: int = 8  # L2最大保留轮数，超出时溢出 keep=5 条至 L3 摘要
     history_l3_batch: int = 5  # L3摘要批处理：每次溢出至少 N 条才触发便宜模型摘要
     font_size: int = 16  # HtmlFrame 字体大小（px）
     app_font_size: int = (

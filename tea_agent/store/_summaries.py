@@ -146,13 +146,13 @@ class SummaryStore(StoreComponent):
 
     def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str,
                         files: list = None, rounds: list = None,
-                        max_level2: int = 15) -> tuple:
+                        max_level2: int = 8) -> tuple:
         """
         将一轮对话推入 Level 2，超过上限时溢出并触发 L3 摘要。
 
-        策略（v2）：
-        - L2 最多保留 max_level2 条（默认 15）
-        - 超出时：保留最新 keep_count 条（10），溢出剩余全部至 L3
+        策略（v3）：
+        - L2 最多保留 max_level2 条（默认 8，原 15）
+        - 超出时：保留最新 keep_count 条（5，原 10），溢出剩余全部至 L3
         - 每次溢出必触发 L3 摘要，不静默丢弃历史
 
         L2 条目包含完整 user + ai thinking + ai final msg（不含工具轮）。
@@ -164,7 +164,7 @@ class SummaryStore(StoreComponent):
             - overflow_items: 溢出的最老条目（待摘要），[] 表示无溢出
             - should_summarize: 是否需要触发 L2→L3 摘要
         """
-        keep_count = 10
+        keep_count = 5
         level2 = self.get_level2(topic_id)
 
         # 从 rounds 提取 thinking：所有带 tool_calls 的 assistant 消息

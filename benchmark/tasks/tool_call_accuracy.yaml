@@ -1,0 +1,34 @@
+# BFCL 风格基准：工具调用准确性
+# 测试 Agent 能否根据任务选择正确工具并传入正确参数
+name: "工具调用准确率"
+description: "BFCL 风格：测试工具选择与参数正确性（读文件/执行命令/搜索）"
+category: "工具调用"
+prompt: |-
+  请依次完成以下 5 个工具调用任务，每个任务独立执行：
+
+  任务1: 用 toolkit_file 读取当前目录下的 pyproject.toml 文件（action='read', filename='pyproject.toml'）。
+
+  任务2: 用 toolkit_exec 执行命令查看当前 Python 版本（app='python', args=['--version']）。
+
+  任务3: 用 toolkit_search 搜索关键词 "python async"（query='python async', engine='duckduckgo', max_results=3）。
+
+  任务4: 用 toolkit_gettime 获取当前时间（无需参数）。
+
+  任务5: 用 toolkit_os_info 获取操作系统信息（无需参数）。
+
+  请逐一执行以上 5 个任务，并输出每个任务的结果。
+runs: 5
+fair_mode: false
+expected_patterns:
+  - "toolkit_file"
+  - "pyproject.toml"
+  - "python --version"
+  - "python async"
+  - "toolkit_gettime"
+  - "toolkit_os_info"
+tool_allowlist:
+  - "toolkit_file"
+  - "toolkit_exec"
+  - "toolkit_search"
+  - "toolkit_gettime"
+  - "toolkit_os_info"

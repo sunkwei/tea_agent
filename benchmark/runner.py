@@ -499,6 +499,122 @@ def _save_regression_baseline(summaries: dict) -> None:
     print(f"\n📁 回归基准已保存: {VERSION_FILE}")
 
 
+# ── diff 对比 ──
+
+def cmd_diff(args) -> None:
+    """对比两个基准结果文件，显示每项指标的变化。"""
+    baseline_path = Path(args.baseline)
+    if not baseline_path.is_file():
+        print(f"❌ 基线文件不存在: {baseline_path}")
+        return
+
+    head_path = args.head
+    if head_path:
+        head_path = Path(head_path)
+        if not head_path.is_file():
+            print(f"❌ 对比文件不存在: {head_path}")
+            return
+    else:
+        # 默认：使用 regression/latest.json
+        head_path = VERSION_FILE
+        if not head_path.is_file():
+            print(f"❌ 未指定 head 且 regression/latest.json 不存在")
+            return
+
+    try:
+        with open(baseline_path, encoding="utf-8") as f:
+            baseline = json.load(f)
+        with open(head_path, encoding="utf-8") as f:
+            head = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON 解析失败: {e}")
+        return
+
+    # 支持两种格式：单任务汇总 vs 多任务汇总
+    if "tasks" in baseline:
+        base_tasks = baseline["tasks"]
+    elif "task_name" in baseline:
+        base_tasks = {baseline["task_name"]: baseline}
+    else:
+        base_tasks = baseline
+
+    if "tasks" in head:
+        head_tasks = head["tasks"]
+    elif "task_name" in head:
+        head_tasks = {head["task_name"]: head}
+    else:
+        head_tasks = head
+
+    threshold = args.threshold
+    all_tasks = sorted(set(list(base_tasks.keys()) + list(head_tasks.keys())))
+
+    print(f"\n{'='*90}")
+    print(f"  📊 基准对比: {baseline_path.name} → {head_path.name}")
+    print(f"  (阈值: Δ>{threshold} 视为显著)")
+    print(f"{'='*90}")
+
+    metrics = [
+        ("通过率", "pass_rate", "{:.0%}", True),
+        ("L2质量", "l2_avg_overall", "{:.0f}", False),
+        ("中位Tokens", "l3_median_tokens", "{:.0f}", False),
+        ("中位耗时", "l3_median_duration", "{:.1f}s", False),
+        ("L4工具准确率", "l4_avg_accuracy", "{:.0%}", True),
+        ("综合评分", "composite_median", "{:.0f}", False),
+        ("Tokens标准差", "l3_stddev_tokens", "{:.0f}", False),
+    ]
+    header = f"{'任务':<20}" + "".join(f"{m[0]:<14}" for m in metrics)
+    print(f"\n{header}")
+    print("-" * len(header))
+
+    regressions = []
+    improvements = []
+
+    for name in all_tasks:
+        b = base_tasks.get(name, {})
+        h = head_tasks.get(name, {})
+        row = f"{name:<20}"
+        for m_name, m_key, m_fmt, _ in metrics:
+            bv = b.get(m_key, 0) if b else 0
+            hv = h.get(m_key, 0) if h else 0
+            if b and h:
+                delta = hv - bv
+                if abs(delta) >= threshold and m_key in ("composite_median", "l2_avg_overall", "pass_rate"):
+                    if delta > 0:
+                        row += f"{m_fmt.format(hv)} ▲{m_fmt.format(abs(delta)):<8}"
+                    else:
+                        row += f"{m_fmt.format(hv)} ▼{m_fmt.format(abs(delta)):<8}"
+                else:
+                    row += f"{m_fmt.format(hv)} (Δ{m_fmt.format(delta):<7}"
+            elif b:
+                row += f"{m_fmt.format(bv):<14}"
+            elif h:
+                row += f"{m_fmt.format(hv):<14}"
+            else:
+                row += f"{'N/A':<14}"
+        print(row)
+
+        if b and h:
+            delta = h.get("composite_median", 0) - b.get("composite_median", 0)
+            if delta < -threshold:
+                regressions.append((name, delta))
+            elif delta > threshold:
+                improvements.append((name, delta))
+
+    if regressions:
+        print(f"\n  ⚠️ 退化 ({len(regressions)}):")
+        for name, delta in regressions:
+            print(f"     {name}: Δ={delta:+.1f}")
+    if improvements:
+        print(f"\n  🎉 提升 ({len(improvements)}):")
+        for name, delta in improvements:
+            print(f"     {name}: Δ={delta:+.1f}")
+    if not regressions and not improvements:
+        print(f"\n  ➡️ 无显著变化 (Δ≤{threshold})")
+
+    print(f"\n  📁 baseline: {baseline_path}")
+    print(f"  📁 head:     {head_path}")
+
+
 # ── 入口 ──
 
 def main():
@@ -528,6 +644,11 @@ def main():
     p_reg = sub.add_parser("regression", help="L5 回归检测")
     p_reg.add_argument("--config", help="配置文件路径")
 
+    p_diff = sub.add_parser("diff", help="对比两个基准结果文件，量化差异")
+    p_diff.add_argument("baseline", help="基线结果 JSON 文件路径")
+    p_diff.add_argument("head", nargs="?", help="对比结果 JSON 文件路径（不填则用 latest.json）")
+    p_diff.add_argument("--threshold", type=float, default=5.0, help="显著变化阈值（默认 5 分）")
+
     args = parser.parse_args()
 
     if args.cmd == "list":
@@ -540,6 +661,8 @@ def main():
         cmd_report(args)
     elif args.cmd == "regression":
         cmd_regression(args)
+    elif args.cmd == "diff":
+        cmd_diff(args)
     else:
         parser.print_help()
 

@@ -1,0 +1,33 @@
+name: AgentBench 综合
+description: AgentBench 风格：四域综合测试（OS命令+代码生成+搜索+文件操作）
+category: 工具调用
+prompt: '请依次完成以下 4 个不同类型的任务：
+
+
+  【OS系统】用 toolkit_exec 执行命令，查看当前工作目录的完整内容（Windows用dir /b，Linux用ls）。
+
+
+  【代码生成】用 Python 写一个脚本，计算 1 到 100 所有偶数的平方，输出以逗号分隔。保存为 tmp/even_squares.py 然后运行它查看结果。
+
+
+  【搜索综合】用 toolkit_search 搜索 "Python 3.13 new features"（engine=duckduckgo, max_results=5），总结前 3 个最重要的新特性。
+
+
+  【文件操作】用 toolkit_file 读取当前项目下的 pyproject.toml，找出项目名称和版本号。
+
+
+  请逐一完成所有任务并输出结果。'
+runs: 3
+fair_mode: false
+expected_patterns:
+- toolkit_exec
+- toolkit_search
+- toolkit_file
+- python
+- pyproject.toml
+tool_allowlist:
+- toolkit_exec
+- toolkit_search
+- toolkit_file
+- toolkit_save_file
+- toolkit_gettime

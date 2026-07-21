@@ -1,0 +1,155 @@
+{
+  "task_name": "AgentBench 综合",
+  "task_category": "工具调用",
+  "version": "",
+  "total_runs": 3,
+  "passed_runs": 0,
+  "pass_rate": 0.0,
+  "l1_avg_match_rate": 0.07,
+  "l2_avg_overall": 65,
+  "l3_median_tokens": 106763,
+  "l3_median_duration": 30.2,
+  "l3_median_cost": 0.0563,
+  "l3_stddev_tokens": 12282.0,
+  "l4_avg_accuracy": 0.8,
+  "composite_median": 47.7,
+  "composite_stddev": 1.6,
+  "individual_results": [
+    {
+      "run": 1,
+      "topic_id": "983a444d-7bb1-47b3-9458-bf860f13950a",
+      "composite_score": 50.1,
+      "l1": {
+        "passed": false,
+        "match_rate": 0.2,
+        "details": [
+          "✗ substr: toolkit_exec",
+          "✗ substr: toolkit_search",
+          "✗ substr: toolkit_file",
+          "✗ substr: python",
+          "✓ substr: pyproject.toml"
+        ]
+      },
+      "l2": {
+        "correctness": 80,
+        "completeness": 30,
+        "conciseness": 90,
+        "style": 60,
+        "overall": 65,
+        "issues": [
+          "输出过短"
+        ]
+      },
+      "l3": {
+        "prompt_tokens": 104795,
+        "completion_tokens": 1968,
+        "total_tokens": 106763,
+        "cheap_tokens": 0,
+        "duration_s": 30.2,
+        "token_efficiency": 1.0,
+        "estimated_cost_usd": 0.0563
+      },
+      "l4": {
+        "total_calls": 7,
+        "correct_calls": 5,
+        "param_correct": 0,
+        "accuracy": 0.71,
+        "param_accuracy": 0.0,
+        "redundancy_ratio": 0.0
+      },
+      "error": "",
+      "duration_s": 30.2
+    },
+    {
+      "run": 2,
+      "topic_id": "b3250b9d-a6c6-4a2a-ad63-7fac2a9977c7",
+      "composite_score": 47.7,
+      "l1": {
+        "passed": false,
+        "match_rate": 0.0,
+        "details": [
+          "✗ substr: toolkit_exec",
+          "✗ substr: toolkit_search",
+          "✗ substr: toolkit_file",
+          "✗ substr: python",
+          "✗ substr: pyproject.toml"
+        ]
+      },
+      "l2": {
+        "correctness": 80,
+        "completeness": 30,
+        "conciseness": 90,
+        "style": 60,
+        "overall": 65,
+        "issues": [
+          "输出过短"
+        ]
+      },
+      "l3": {
+        "prompt_tokens": 105369,
+        "completion_tokens": 1838,
+        "total_tokens": 107207,
+        "cheap_tokens": 0,
+        "duration_s": 31.6,
+        "token_efficiency": 1.0,
+        "estimated_cost_usd": 0.0564
+      },
+      "l4": {
+        "total_calls": 7,
+        "correct_calls": 6,
+        "param_correct": 0,
+        "accuracy": 0.86,
+        "param_accuracy": 0.0,
+        "redundancy_ratio": 0.0
+      },
+      "error": "",
+      "duration_s": 31.6
+    },
+    {
+      "run": 3,
+      "topic_id": "b9f3a1d2-a5dd-4f5b-8d50-9485293ca5ab",
+      "composite_score": 47.1,
+      "l1": {
+        "passed": false,
+        "match_rate": 0.0,
+        "details": [
+          "✗ substr: toolkit_exec",
+          "✗ substr: toolkit_search",
+          "✗ substr: toolkit_file",
+          "✗ substr: python",
+          "✗ substr: pyproject.toml"
+        ]
+      },
+      "l2": {
+        "correctness": 80,
+        "completeness": 30,
+        "conciseness": 90,
+        "style": 60,
+        "overall": 65,
+        "issues": [
+          "输出过短"
+        ]
+      },
+      "l3": {
+        "prompt_tokens": 84212,
+        "completion_tokens": 1504,
+        "total_tokens": 85716,
+        "cheap_tokens": 0,
+        "duration_s": 22.6,
+        "token_efficiency": 1.0,
+        "estimated_cost_usd": 0.0451
+      },
+      "l4": {
+        "total_calls": 6,
+        "correct_calls": 5,
+        "param_correct": 0,
+        "accuracy": 0.83,
+        "param_accuracy": 0.0,
+        "redundancy_ratio": 0.0
+      },
+      "error": "",
+      "duration_s": 22.6
+    }
+  ],
+  "timestamp": "20260721_200732"
+}

@@ -29,13 +29,15 @@ def _get_process_tree() -> set:
     if hasattr(os, "getppid"):
         pids.add(os.getppid())
     try:
-        import psutil
-        current = psutil.Process()
+        import psutil as _psutil
+        current = _psutil.Process()
         parent = current.parent()
         while parent is not None and parent.pid > 1:
             pids.add(parent.pid)
             parent = parent.parent()
-    except (ImportError, psutil.NoSuchProcess, psutil.AccessDenied):
+    except ImportError:
+        pass
+    except Exception:
         pass
 
     _process_tree_cache = pids
@@ -167,13 +169,13 @@ class _ProcessMonitor:
 
     def _run(self):
         try:
-            import psutil
+            import psutil as _psutil
         except ImportError:
             logger.warning("psutil 不可用，回退到基础超时机制")
             return
 
         try:
-            proc = psutil.Process(self.pid)
+            proc = _psutil.Process(self.pid)
             while not self._stop.is_set():
                 if self._stop.wait(self.check_interval):
                     break
@@ -188,7 +190,7 @@ class _ProcessMonitor:
                         cpu_pct = proc.cpu_percent(interval=0.2)
                         if cpu_pct > 0:
                             is_active = True
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    except (_psutil.NoSuchProcess, _psutil.AccessDenied):
                         logger.exception('op_failed')
 
 
@@ -198,7 +200,7 @@ class _ProcessMonitor:
                         if self._last_rss > 0 and mem.rss > self._last_rss * 1.01:
                             is_active = True
                         self._last_rss = mem.rss
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    except (_psutil.NoSuchProcess, _psutil.AccessDenied):
                         logger.exception('op_failed')
 
 
@@ -210,7 +212,7 @@ class _ProcessMonitor:
                             is_active = True
                         self._last_io_read = io.read_bytes
                         self._last_io_write = io.write_bytes
-                    except (psutil.AccessDenied, AttributeError):
+                    except (_psutil.AccessDenied, AttributeError):
                         logger.exception('op_failed')
 
 
@@ -222,19 +224,19 @@ class _ProcessMonitor:
                                     if child.cpu_percent(interval=0.1) > 0:
                                         is_active = True
                                         break
-                                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                except (_psutil.NoSuchProcess, _psutil.AccessDenied):
                                     logger.exception('op_failed')
 
-                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        except (_psutil.NoSuchProcess, _psutil.AccessDenied):
                             logger.exception('op_failed')
 
 
                     if is_active:
                         self.last_active_time = time.time()
 
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                except (_psutil.NoSuchProcess, _psutil.AccessDenied):
                     break
-        except psutil.NoSuchProcess:
+        except _psutil.NoSuchProcess:
             logger.exception('op_failed')
 
 

@@ -127,11 +127,11 @@ def meta_toolkit_list_provider_models() -> dict:
                     },
                     "api_url": {
                         "type": "string",
-                        "description": "[可选] 直接指定 API 端点，如 https://api.deepseek.com",
+                        "description": "直接指定 API 端点，如 https://api.deepseek.com",
                     },
                     "api_key": {
                         "type": "string",
-                        "description": "[可选] 直接指定 API Key",
+                        "description": "直接指定 API Key",
                     },
                 },
                 "required": [],

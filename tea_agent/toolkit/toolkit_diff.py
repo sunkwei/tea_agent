@@ -488,15 +488,15 @@ def meta_toolkit_diff():
         "type": "function",
         "function": {
             "name": "toolkit_diff",
-            "description": "Diff-first 代码编辑引擎。generate=生成unified diff, preview=预览+冲突检测, apply=git stash→多文件原子应用→lint/test, undo=恢复stash, verify=编译+lint+test。",
+            "description": "Diff-first 代码编辑引擎。generate/preview/apply/undo/verify。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {"type": "string", "enum": ["generate", "preview", "apply", "undo", "verify"]},
                     "files": {"type": "array", "items": {"type": "object"},
-                              "description": "[generate/preview/apply/verify] 文件列表: [{file_path, old_code, new_code}]"},
-                    "run_tests": {"type": "boolean", "description": "[apply/verify] 是否运行 pytest，默认 true"},
-                    "description": {"type": "string", "description": "[apply] 修改描述"},
+                              "description": "文件列表: "},
+                    "run_tests": {"type": "boolean", "description": "是否运行 pytest，默认 true"},
+                    "description": {"type": "string", "description": "修改描述"},
                 },
                 "required": ["action"],
             },

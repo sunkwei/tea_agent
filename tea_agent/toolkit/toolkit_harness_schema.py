@@ -366,7 +366,7 @@ def meta_toolkit_harness_schema() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["generate", "summary", "tools"],
-                        "description": "generate=完整 schema, summary=摘要, tools=仅工具列表"
+                        "description": "generate/summary/tools"
                     },
                     "format": {"type": "string", "description": "输出格式", "default": "json"},
                 },

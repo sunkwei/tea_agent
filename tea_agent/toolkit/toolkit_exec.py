@@ -633,16 +633,16 @@ def meta_toolkit_exec() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["single", "batch"],
-                        "description": "single=单条命令, batch=批量并行。默认 single",
+                        "description": "single/batch。默认 single",
                     },
                     "app": {
                         "type": "string",
-                        "description": "[single] 可执行程序路径",
+                        "description": "可执行程序路径",
                     },
                     "args": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "[single] 命令行参数列表",
+                        "description": "命令行参数列表",
                     },
                     "commands": {
                         "type": "array",
@@ -654,11 +654,11 @@ def meta_toolkit_exec() -> dict:
                             },
                             "required": ["app", "args"],
                         },
-                        "description": "[batch] 命令列表",
+                        "description": "命令列表",
                     },
                     "timeout": {
                         "type": "integer",
-                        "description": "[single] 基础超时秒数(默认120), [batch] 每个命令基础超时秒数(默认30)。进程活跃消耗资源时，最多延长 4x 时间；空闲超过 base_timeout 则终止。",
+                        "description": "基础超时秒数(默认120), 每个命令基础超时秒数(默认30)。进程活跃消耗资源时，最多延长 4x 时间；空闲超过 base_timeout 则终止。",
                     },
                 },
                 "required": [],

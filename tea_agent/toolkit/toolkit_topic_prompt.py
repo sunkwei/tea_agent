@@ -39,12 +39,12 @@ def meta_toolkit_topic_prompt() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["get", "set", "clear", "status"],
-                        "description": "操作类型：get=获取当前设置, set=设置新提示词, clear=清除自定义, status=查看来源",
+                        "description": "get/set/clear/status",
                         "default": "get"
                     },
                     "content": {
                         "type": "string",
-                        "description": "[set 操作时] 要设置的系统提示词内容"
+                        "description": "要设置的系统提示词内容"
                     }
                 },
                 "required": ["action"]

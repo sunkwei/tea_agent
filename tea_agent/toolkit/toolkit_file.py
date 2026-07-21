@@ -97,31 +97,31 @@ def meta_toolkit_file() -> dict:
                     },
                     "filename": {
                         "type": "string",
-                        "description": "[read/write] 文件路径",
+                        "description": "文件路径",
                     },
                     "content": {
                         "type": "string",
-                        "description": "[write] 要写入的内容",
+                        "description": "要写入的内容",
                     },
                     "path": {
                         "type": "string",
-                        "description": "[list] 目录路径，默认当前目录",
+                        "description": "目录路径，默认当前目录",
                     },
                     "recursive": {
                         "type": "boolean",
-                        "description": "[list] 是否递归列出子目录",
+                        "description": "是否递归列出子目录",
                     },
                     "show_hidden": {
                         "type": "boolean",
-                        "description": "[list] 是否显示隐藏文件",
+                        "description": "是否显示隐藏文件",
                     },
                     "offset": {
                         "type": "integer",
-                        "description": "[read] 起始行号(1-based)，0=从头开始",
+                        "description": "起始行号(1-based)，0=从头开始",
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "[read] 返回行数上限，0=不限",
+                        "description": "返回行数上限，0=不限",
                     },
                 },
                 "required": ["action"],

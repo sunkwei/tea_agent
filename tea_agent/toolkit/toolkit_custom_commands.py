@@ -359,29 +359,29 @@ def meta_toolkit_custom_commands():
                     },
                     "name": {
                         "type": "string",
-                        "description": "[add/show/run/delete] 命令名称"
+                        "description": "命令名称"
                     },
                     "content": {
                         "type": "string",
-                        "description": "[add] 命令 Markdown 内容（支持 YAML front matter 和 {{placeholder}}）"
+                        "description": "命令 Markdown 内容（支持 YAML front matter 和 {{placeholder}}）"
                     },
                     "args": {
                         "type": "object",
-                        "description": "[run] 参数键值对，如 {'file': 'main.py', 'title': 'code review'}"
+                        "description": "参数键值对，如 {'file': 'main.py', 'title': 'code review'}"
                     },
                     "scope": {
                         "type": "string",
                         "enum": ["user", "project"],
-                        "description": "[add] 存储范围: user=~/.tea_agent/commands/, project=.tea_commands/",
+                        "description": "存储范围: user=~/.tea_agent/commands/, project=.tea_commands/",
                         "default": "user"
                     },
                     "query": {
                         "type": "string",
-                        "description": "[search] 搜索关键词"
+                        "description": "搜索关键词"
                     },
                     "tag": {
                         "type": "string",
-                        "description": "[search] 按标签筛选"
+                        "description": "按标签筛选"
                     },
                 },
                 "required": ["action"],

@@ -294,7 +294,7 @@ def meta_toolkit_mcp() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["connect", "list_tools", "call_tool", "disconnect", "status"],
-                        "description": "操作类型: connect=连接服务器, list_tools=列出工具, call_tool=调用工具, disconnect=断开连接, status=查看状态",
+                        "description": "connect/list_tools/call_tool/disconnect/status",
                     },
                     "server_name": {
                         "type": "string",
@@ -302,29 +302,29 @@ def meta_toolkit_mcp() -> dict:
                     },
                     "command": {
                         "type": "string",
-                        "description": "[connect] 启动命令，如 'npx' 或 'python'",
+                        "description": "启动命令，如 'npx' 或 'python'",
                     },
                     "args": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "[connect] 启动命令参数列表",
+                        "description": "启动命令参数列表",
                     },
                     "transport": {
                         "type": "string",
                         "enum": ["stdio", "sse"],
-                        "description": "[connect] 传输方式，默认 stdio",
+                        "description": "传输方式，默认 stdio",
                     },
                     "url": {
                         "type": "string",
-                        "description": "[connect] SSE 传输方式的服务器 URL",
+                        "description": "SSE 传输方式的服务器 URL",
                     },
                     "tool_name": {
                         "type": "string",
-                        "description": "[call_tool] 要调用的工具名称",
+                        "description": "要调用的工具名称",
                     },
                     "tool_args": {
                         "type": "object",
-                        "description": "[call_tool] 工具参数",
+                        "description": "工具参数",
                     },
                 },
                 "required": ["action"],

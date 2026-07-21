@@ -361,11 +361,11 @@ def meta_toolkit_task_resume() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["check", "resume_todo", "resume_plan"],
-                        "description": "check=检查未完成任务, resume_todo=恢复TODO执行, resume_plan=恢复Plan执行"
+                        "description": "check/resume_todo/resume_plan"
                     },
                     "plan_id": {
                         "type": "string",
-                        "description": "[resume_plan] 计划ID"
+                        "description": "计划ID"
                     }
                 },
                 "required": ["action"]

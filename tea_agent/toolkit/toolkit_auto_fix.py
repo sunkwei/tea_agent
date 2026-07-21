@@ -130,22 +130,22 @@ def meta_toolkit_auto_fix():
                     },
                     "filepath": {
                         "type": "string",
-                        "description": "[scan/fix] 指定文件路径，不填扫描全项目"
+                        "description": "指定文件路径，不填扫描全项目"
                     },
                     "severity": {
                         "type": "string",
                         "enum": ["error", "warning", "info"],
-                        "description": "[fix_all] 最低严重级别",
+                        "description": "最低严重级别",
                         "default": "warning"
                     },
                     "dry_run": {
                         "type": "boolean",
-                        "description": "[fix_all/fix] True=仅预览不修改",
+                        "description": "True=仅预览不修改",
                         "default": True
                     },
                     "max_fixes": {
                         "type": "integer",
-                        "description": "[fix_all] 最大修复数量",
+                        "description": "最大修复数量",
                         "default": 5
                     }
                 },

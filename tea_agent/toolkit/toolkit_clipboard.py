@@ -351,7 +351,7 @@ def meta_toolkit_clipboard() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["read", "start", "stop", "status"],
-                        "description": "read=读取并分析, start=启动后台监听, stop=停止监听, status=查看状态"
+                        "description": "read/start/stop/status"
                     },
                     "format": {"type": "string", "description": "text/html", "default": "text"},
                 },

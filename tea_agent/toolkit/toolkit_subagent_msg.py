@@ -201,26 +201,26 @@ def meta_toolkit_subagent_msg() -> dict:
         "type": "function",
         "function": {
             "name": "toolkit_subagent_msg",
-            "description": "Sub-agent message passing. Send/receive/check messages between sub-agents. Use 'send' to send a message to another agent by ID, 'check_inbox' to read your own inbox, 'poll' for parent to collect all pending messages.",
+            "description": "子Agent消息通信。支持Agent间发送/接收/检查消息。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
                         "enum": ["send", "check_inbox", "poll", "clear"],
-                        "description": "send=send message to agent, check_inbox=read your inbox, poll=parent collects all, clear=clear inbox"
+                        "description": "send(发送)/check_inbox(收件箱)/poll(父代收集)/clear(清空)"
                     },
                     "to": {
                         "type": "string",
-                        "description": "[send] Target agent ID"
+                        "description": "Target agent ID"
                     },
                     "message": {
                         "type": "string",
-                        "description": "[send] Message text content"
+                        "description": "Message text content"
                     },
                     "agent_id": {
                         "type": "string",
-                        "description": "[check_inbox/clear] Your agent ID"
+                        "description": "Your agent ID"
                     },
                     "limit": {
                         "type": "integer",

@@ -266,16 +266,16 @@ def meta_toolkit_todo():
                     "action": {
                         "type": "string",
                         "enum": ["create", "check", "show", "clear", "restore"],
-                        "description": "create=开始清单, check=勾选完成, show=显示, clear=清除, restore=从DB恢复",
+                        "description": "create/check/show/clear/restore",
                     },
                     "items": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "[create] 任务列表",
+                        "description": "任务列表",
                     },
                     "index": {
                         "type": "integer",
-                        "description": "[check] 要勾选的任务序号",
+                        "description": "要勾选的任务序号",
                     },
                 },
                 "required": ["action"],

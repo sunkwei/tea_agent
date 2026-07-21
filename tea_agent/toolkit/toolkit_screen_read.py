@@ -143,20 +143,20 @@ def meta_toolkit_screen_read() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["read_tab", "read_region", "read_window"],
-                        "description": "read_tab=激活标签+截图+OCR, read_region=截取屏幕区域, read_window=截取当前窗口"
+                        "description": "read_tab/read_region/read_window"
                     },
                     "browser": {
                         "type": "string",
-                        "description": "[read_tab] 浏览器名称",
+                        "description": "浏览器名称",
                         "default": "firefox"
                     },
                     "tab_title": {
                         "type": "string",
-                        "description": "[read_tab] 标签标题（支持部分匹配）"
+                        "description": "标签标题（支持部分匹配）"
                     },
                     "region": {
                         "type": "string",
-                        "description": "[read_region] 区域 'x,y,w,h'"
+                        "description": "区域 'x,y,w,h'"
                     },
                     "lang": {
                         "type": "string",

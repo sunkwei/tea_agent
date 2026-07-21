@@ -91,7 +91,7 @@ def meta_toolkit_reflection() -> dict:
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "[list] 返回记录数，默认5"
+                        "description": "返回记录数，默认5"
                     }
                 },
                 "required": ["action"]

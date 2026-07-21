@@ -588,7 +588,7 @@ def meta_toolkit_scheduler() -> dict:
         "type": "function",
         "function": {
             "name": "toolkit_scheduler",
-            "description": "定时任务管理器 — 增删改查定时任务、启动停止调度线程、测试调度表达式。\n"
+            "description": "定时任务管理器 — 增删改查定时任务、启动停止调度线程、测试调度表达式。"
                            "schedule 格式: once:ISO单次 / daily:HH:MM每天 / hourly:MM每小时 / interval:SEC间隔 / weekly:mon:HH:MM每周 / cron:分 时 日 月 周",
             "parameters": {
                 "type": "object",
@@ -596,13 +596,13 @@ def meta_toolkit_scheduler() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["list", "add", "update", "delete", "enable", "disable", "run", "start", "stop", "status", "test_schedule"],
-                        "description": "list=列表, add=新增(需name/command/schedule), update=更新(需task_id), delete=删除, enable/disable=启停, run=立即执行, start/stop/status=调度线程, test_schedule=测试表达式"
+                        "description": "list/add/update/delete/enable/disable/run/start/stop/status/test_schedule"
                     },
-                    "task_id": {"type": "string", "description": "[update/delete/enable/disable/run] 任务ID"},
-                    "name": {"type": "string", "description": "[add/update] 任务名称"},
-                    "command": {"type": "string", "description": "[add/update] 命令行"},
-                    "schedule": {"type": "string", "description": "[add/update/test_schedule] 调度表达式"},
-                    "enabled": {"type": "boolean", "description": "[update] 是否启用"},
+                    "task_id": {"type": "string", "description": "任务ID"},
+                    "name": {"type": "string", "description": "任务名称"},
+                    "command": {"type": "string", "description": "命令行"},
+                    "schedule": {"type": "string", "description": "调度表达式"},
+                    "enabled": {"type": "boolean", "description": "是否启用"},
                 },
                 "required": ["action"],
             },

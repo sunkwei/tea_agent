@@ -537,22 +537,22 @@ def meta_toolkit_subagent() -> dict:
         "type": "function",
         "function": {
             "name": "toolkit_subagent",
-            "description": "Sub-agent generation system v2.1. Each sub-agent has an independent LiteSession, isolated from parent context. Supports sync/async spawn, concurrency, status query, result collection, context injection, tool permissions, and inter-agent messaging.",
+            "description": "多Agent生成系统。支持同步/异步生成子Agent、并发执行、状态查询、结果收集、上下文注入、工具权限和Agent间通信。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
                         "enum": ["spawn", "spawn_sync", "list", "status", "collect", "cancel", "check_notifications", "cleanup"],
-                        "description": "spawn=async, spawn_sync=sync blocking, list=all agents, status=query one, collect=completed results, cancel=stop, check_notifications=auto-wake check, cleanup=remove old"
+                        "description": "spawn(异步)/spawn_sync(同步)/list(列表)/status(状态)/collect(收集)/cancel(取消)/check_notifications(检查通知)/cleanup(清理)"
                     },
                     "goal": {
                         "type": "string",
-                        "description": "[spawn/spawn_sync] Sub-agent task description"
+                        "description": "Sub-agent task description"
                     },
                     "context": {
                         "type": "object",
-                        "description": "[spawn/spawn_sync] Injected context dict (key=title, value=content)"
+                        "description": "Injected context dict (key=title, value=content)"
                     },
                     "max_iterations": {
                         "type": "integer",
@@ -576,21 +576,21 @@ def meta_toolkit_subagent() -> dict:
                     },
                     "agent_id": {
                         "type": "string",
-                        "description": "[status/cancel] Sub-agent ID"
+                        "description": "Sub-agent ID"
                     },
                     "allowed_tools": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "[spawn/spawn_sync] Allowed tool names (None=all allowed)"
+                        "description": "Allowed tool names (None=all allowed)"
                     },
                     "denied_tools": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "[spawn/spawn_sync] Denied tool names (None=none denied)"
+                        "description": "Denied tool names (None=none denied)"
                     },
                     "parent_session_id": {
                         "type": "string",
-                        "description": "[spawn/spawn_sync] Parent session ID for auto-wake notifications"
+                        "description": "Parent session ID for auto-wake notifications"
                     },
                 },
                 "required": ["action"],

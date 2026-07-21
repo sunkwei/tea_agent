@@ -118,7 +118,7 @@ def meta_toolkit_config() -> dict:
                     },
                     "value": {
                         "type": "string",
-                        "description": "[set] 新值"
+                        "description": "新值"
                     }
                 },
                 "required": ["action"]

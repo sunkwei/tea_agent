@@ -126,7 +126,7 @@ def meta_toolkit_build() -> dict:
                     },
                     "directory": {
                         "type": "string",
-                        "description": "[fix] 项目目录路径，默认当前目录",
+                        "description": "项目目录路径，默认当前目录",
                         "default": ".",
                     },
                 },

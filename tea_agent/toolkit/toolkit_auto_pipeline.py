@@ -264,7 +264,7 @@ def meta_toolkit_auto_pipeline():
                     "task": {"type": "string", "description": "任务描述，如'审查代码'、'批量格式化后测试'"},
                     "inputs": {"type": "object", "description": "输入参数字典，如 {'filepath': 'main.py', 'dir': 'src/'}"},
                     "pipeline": {"type": "array", "items": {"type": "object"},
-                                "description": "自定义管线，格式: [{'tool': 'xxx', 'params': {...}, 'parallel': bool}]"},
+                                "description": "自定义管线，格式: "},
                 },
                 "required": ["action"],
             },

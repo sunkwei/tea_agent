@@ -309,11 +309,11 @@ def meta_toolkit_mode() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["detect", "switch", "status", "auto"],
-                        "description": "detect=根据text自动检测, switch=手动切换, status=查看当前, auto=检测+切换"
+                        "description": "detect/switch/status/auto"
                     },
                     "text": {
                         "type": "string",
-                        "description": "[detect/auto] 用户输入文本，用于自动检测模式"
+                        "description": "用户输入文本，用于自动检测模式"
                     },
                     "mode": {
                         "type": "string",

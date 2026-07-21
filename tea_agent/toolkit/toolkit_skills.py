@@ -340,14 +340,14 @@ def meta_toolkit_skills() -> dict:
                     "action": {
                         "type": "string",
                         "enum": ["scan", "list", "load", "search", "recommend", "add", "delete"],
-                        "description": "scan=重新扫描, list=列出, load=加载单个, search=搜索, recommend=推荐, add=添加, delete=删除"
+                        "description": "scan/list/load/search/recommend/add/delete"
                     },
-                    "query": {"type": "string", "description": "[search/recommend] 搜索关键词"},
-                    "category": {"type": "string", "description": "[search] 分类筛选: general/code/test/doc/browser/..."},
-                    "tags": {"type": "array", "items": {"type": "string"}, "description": "[search] 标签筛选（OR 匹配）"},
-                    "name": {"type": "string", "description": "[load/add/delete] 技能名称"},
-                    "content": {"type": "string", "description": "[add] 技能 Markdown 内容"},
-                    "description": {"type": "string", "description": "[add] 技能描述"},
+                    "query": {"type": "string", "description": "搜索关键词"},
+                    "category": {"type": "string", "description": "分类筛选: general/code/test/doc/browser/..."},
+                    "tags": {"type": "array", "items": {"type": "string"}, "description": "标签筛选（OR 匹配）"},
+                    "name": {"type": "string", "description": "技能名称"},
+                    "content": {"type": "string", "description": "技能 Markdown 内容"},
+                    "description": {"type": "string", "description": "技能描述"},
                 },
                 "required": ["action"],
             },

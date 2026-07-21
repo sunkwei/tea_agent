@@ -159,7 +159,7 @@ def meta_toolkit_input() -> dict:
                     },
                     "text": {
                         "type": "string",
-                        "description": "[type] 要输入的文本"
+                        "description": "要输入的文本"
                     },
                     "button": {
                         "type": "string",
@@ -172,19 +172,19 @@ def meta_toolkit_input() -> dict:
                     },
                     "dx": {
                         "type": "integer",
-                        "description": "[drag] X 偏移量"
+                        "description": "X 偏移量"
                     },
                     "dy": {
                         "type": "integer",
-                        "description": "[drag] Y 偏移量"
+                        "description": "Y 偏移量"
                     },
                     "keys": {
                         "type": "string",
-                        "description": "[press/hotkey] 按键或组合键（如 'enter'、'ctrl+c'）"
+                        "description": "按键或组合键（如 'enter'、'ctrl+c'）"
                     },
                     "amount": {
                         "type": "integer",
-                        "description": "[scroll] 滚动量，正=上滚 负=下滚"
+                        "description": "滚动量，正=上滚 负=下滚"
                     }
                 },
                 "required": ["action"]

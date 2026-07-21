@@ -112,11 +112,11 @@ def meta_toolkit_prompt_evolve() -> dict:
                     },
                     "version": {
                         "type": "string",
-                        "description": "[rollback] 目标版本号"
+                        "description": "目标版本号"
                     },
                     "content": {
                         "type": "string",
-                        "description": "[set] 新的完整系统提示词"
+                        "description": "新的完整系统提示词"
                     }
                 },
                 "required": ["action"]

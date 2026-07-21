@@ -234,7 +234,7 @@ def meta_toolkit_batch_process():
                 "properties": {
                     "action": {
                         "type": "string", "enum": ["compile", "lint", "format", "stats", "replace", "count_lines"],
-                        "description": "处理操作: compile=编译检查, lint=ruff检查, format=black格式化, stats=统计信息, replace=文本替换, count_lines=行数统计",
+                        "description": "compile/lint/format/stats/replace/count_lines",
                         "default": "compile"
                     },
                     "glob_pattern": {"type": "string", "description": "文件匹配模式，如 *.py, test_*.py", "default": "*.py"},

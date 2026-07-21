@@ -2,6 +2,10 @@
 
 > ⚠️ **这是一个 AI 写 AI 的实验项目，自行承担责任。**
 
+> 🌐 **[English Version](README.en.md)**
+
+
+
 > 一个自进化 AI 编程助手 — 工具驱动、自我进化、多界面形态
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)

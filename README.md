@@ -1,4 +1,4 @@
-# Tea Agent v0.13.3
+# Tea Agent v0.13.5
 
 > ⚠️ **这是一个 AI 写 AI 的实验项目，自行承担责任。**
 
@@ -6,7 +6,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.13.3-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.13.5-blue)](https://pypi.org/project/tea-agent)
 
 Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 75+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / Web / REST API / ACP Protocol / Telegram** 五种界面形态。
 
@@ -27,7 +27,7 @@ Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 75+ 可调用
 - 🌐 **MCP 协议** — 支持连接外部 MCP Server，扩展第三方工具
 - 🎯 **模式切换** — design / develop / test / review / docs / devops 六阶段工作流
 - 🤖 **多 Agent 系统** — 6 阶段全栈协作：RoleAgent 角色化 + FlowEngine 事件驱动 + MessageBus 通信 + Agent-as-Tool 互调 + ExecutionPool 并行 + WorkflowDAG 编排 + PatternMarket 模式市场
-- 📡 **消息渠道** — Telegram Bot 适配器，支持远程消息交互
+- 📡 **消息渠道** — Telegram Bot + 微信 iLink Bot 双适配器，支持多平台远程消息交互
 - 📊 **任务评估** — 自动评估任务质量，记录成功/失败经验
 - 💎 **技能结晶** — Plan 执行后自动结晶 → 新对话按语义匹配注入 → 技能自进化闭环
 - 🛡️ **LLM JSON 容错** — 智能修复截断JSON、控制字符、单引号、尾逗号等常见LLM输出问题
@@ -426,6 +426,25 @@ python -m tea_agent.channel.telegram_adapter  # 模块方式
 - 💬 通过 Telegram 消息与 Agent 对话
 - 🔄 支持长对话的消息分片处理
 - 🔌 可与其他界面同时运行，互不干扰
+
+### 6. 微信 Bot (`tea-agent-wechat`) 🆕
+
+基于腾讯官方 iLink Bot API 的微信消息适配器，将 tea_agent 接入微信个人号。
+
+**启动方式：**
+```bash
+tea-agent-wechat                    # 入口命令（首次运行自动弹出二维码）
+python -m tea_agent.channel.wechat_adapter  # 模块方式
+```
+
+**功能特性：**
+- 💬 通过微信消息与 Agent 对话（纯出站连接，无需公网 IP/端口）
+- 🔐 扫码登录，凭据持久化，重启免扫码
+- ⌨️ 显示"正在输入"状态
+- 👥 每个微信用户独立会话隔离
+- 🛠️ 内置命令系统（`/start`, `/new`, `/topic`, `/about`）
+
+📖 **实战案例**：👉 [从零到一：用 tea_agent 快速实现微信 Bot 接入](docs/tea_agent_微信接入实战.md) — 完整记录了一次 tea_agent 自主搜索 → 分析架构 → 编写适配器 → 注册部署的全过程。
 
 ---
 

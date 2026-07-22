@@ -41,3 +41,4 @@ private-key.asc
 uploads/
 test_concurrent_stream.py
 test_config_switch.py
+.env  

@@ -2,7 +2,6 @@
 toolkit_dynamic_skill 测试 — 技能记录与推荐
 """
 
-import pytest
 
 
 def test_meta_exists():

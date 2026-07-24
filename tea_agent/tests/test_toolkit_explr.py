@@ -1,14 +1,12 @@
 """Tests for toolkit_explr module."""
 
-import json
 import os
 import tempfile
-from collections import defaultdict
 
 from tea_agent.toolkit.toolkit_explr import (
+    _PYTHON_BUILTINS,
     _build_call_graph,
     _check_index_stale,
-    _PYTHON_BUILTINS,
 )
 
 

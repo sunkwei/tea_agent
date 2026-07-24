@@ -97,10 +97,7 @@ def parse_file(filepath: str) -> dict | None:
         return cached[1]
 
     lang = _ensure_ts()
-    if lang is None:
-        result = _parse_file_ast_fallback(filepath)
-    else:
-        result = _parse_with_ts(filepath, lang)
+    result = _parse_file_ast_fallback(filepath) if lang is None else _parse_with_ts(filepath, lang)
 
     _PARSE_CACHE[filepath] = (mtime, result)
     return result

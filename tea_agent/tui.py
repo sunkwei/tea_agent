@@ -31,11 +31,11 @@ Tea Agent TUI -- 增强版 Terminal User Interface (Textual-based).
 """
 
 import argparse
+import logging
 import os
 import sys
 import threading
 import time
-import logging
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
@@ -49,9 +49,9 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, ScrollableContainer
 from textual.css.query import NoMatches
-from textual.widgets import Label, RichLog, TextArea
-from textual.widget import Widget
 from textual.reactive import reactive
+from textual.widget import Widget
+from textual.widgets import Label, RichLog, TextArea
 
 from tea_agent import Agent
 

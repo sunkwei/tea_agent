@@ -26,7 +26,7 @@ from tea_agent.onlinesession import OnlineToolSession
 from tea_agent.store import Storage
 
 from .agent_background import start_scheduler
-from .agent_evolution import EvolutionAnalyzer, EvolutionActor
+from .agent_evolution import EvolutionActor, EvolutionAnalyzer
 from .agent_pipeline import do_async_summaries
 from .memory import PRIORITY_MEDIUM
 
@@ -658,8 +658,8 @@ class Agent:
             from tea_agent.cross_topic_summarizer import CrossTopicSummarizer
             cheap_client = None
             try:
-                from tea_agent.providers import get_cheap_client
                 from tea_agent.config import get_config
+                from tea_agent.providers import get_cheap_client
                 cheap_client = get_cheap_client(get_config())
             except Exception:
                 pass
@@ -731,7 +731,7 @@ class Agent:
         success: bool,
         usage: dict
     ) -> None:
-        """结晶技能模式。
+        """结晶技能模式（扩展点）。
 
         Args:
             user_text: 用户文本
@@ -740,20 +740,21 @@ class Agent:
             success: 是否成功
             usage: Token使用统计
         """
-        token_cost = usage.get("total_tokens", 0) if usage else 0
-
-        crystallizer = SkillCrystallizer()
-        skill = crystallizer.crystallize(
-            task=user_text,
-            tools_used=tools_used,
-            rounds=rounds,
-            success=success,
-            token_cost=token_cost,
-        )
-
-        registry = SkillRegistry()
-        registry.register(skill)
-        logger.info(f"✨ 技能结晶: {skill.name}")
+        try:
+            from tea_agent.toolkit.toolkit_experience_solidify import (
+                ExperienceSolidifier,
+            )
+            token_cost = usage.get("total_tokens", 0) if usage else 0
+            solidifier = ExperienceSolidifier()
+            solidifier.solidify(
+                task=user_text,
+                tools_used=tools_used,
+                rounds=rounds,
+                success=success,
+                token_cost=token_cost,
+            )
+        except ImportError:
+            logger.debug("技能结晶功能未启用（需要 ExperienceSolidifier）")
 
     def _save_lessons(self, lessons: list[str]) -> None:
         """保存经验教训到数据库。

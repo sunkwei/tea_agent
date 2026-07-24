@@ -4,10 +4,10 @@ import os
 import tempfile
 
 from tea_agent.toolkit.toolkit_diff import (
-    _generate_unified_diff,
+    _check_conflict,
     _colorize_diff,
     _generate_diff_stats,
-    _check_conflict,
+    _generate_unified_diff,
 )
 
 
@@ -52,7 +52,6 @@ def test_check_conflict_no_file():
 
 
 def test_check_conflict_match():
-    import tempfile
     fp = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False)
     fp.write("x = 1\ny = 2\n")
     fp.close()
@@ -64,7 +63,6 @@ def test_check_conflict_match():
 
 
 def test_check_conflict_not_found():
-    import tempfile
     fp = tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False)
     fp.write("x = 1\n")
     fp.close()

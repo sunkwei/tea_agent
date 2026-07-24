@@ -60,7 +60,7 @@ class TestGetCheapParams:
         from tea_agent.session.params import get_cheap_params
 
         result = get_cheap_params()
-        assert isinstance(result["temperature"], (int, float))
+        assert isinstance(result["temperature"], int | float)
 
     def test_max_tokens_is_int(self):
         """max_tokens 应为 int"""
@@ -266,5 +266,5 @@ class TestGetCheapParamsIntegration:
         assert isinstance(result, dict)
         assert "temperature" in result
         assert "max_tokens" in result
-        assert isinstance(result.get("temperature"), (int, float))
+        assert isinstance(result.get("temperature"), int | float)
         assert isinstance(result.get("max_tokens"), int)

@@ -2,7 +2,6 @@
 toolkit_self_evolve 测试 — 自进化核心链路
 """
 
-import pytest
 
 
 def test_meta_exists():

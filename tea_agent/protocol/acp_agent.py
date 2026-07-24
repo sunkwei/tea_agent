@@ -12,6 +12,9 @@ Protocol lifecycle:
   5. Agent may call client-side methods (fs/*, terminal/*, permissions)
 """
 
+from __future__ import annotations
+
+import contextlib
 import json
 import logging
 import os
@@ -20,7 +23,10 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from tea_agent.agent import Agent
 
 from tea_agent.protocol.acp_client_methods import AcpClientMethods
 from tea_agent.protocol.acp_jsonrpc import (
@@ -102,8 +108,8 @@ class AcpAgent:
 
     def __init__(
         self,
-        config_path: Optional[str] = None,
-        api_key: Optional[str] = None,
+        config_path: str | None = None,
+        api_key: str | None = None,
         agent_name: str = "tea-agent",
         agent_version: str = "0.3.0",
     ):
@@ -196,7 +202,7 @@ class AcpAgent:
             # Modify db_path in the new config
             import yaml as _yaml
 
-            with open(acp_path, "r", encoding="utf-8") as f:
+            with open(acp_path, encoding="utf-8") as f:
                 data = _yaml.safe_load(f) or {}
 
             if "paths" not in data or not isinstance(data["paths"], dict):
@@ -529,7 +535,7 @@ class AcpAgent:
                 storage = self._acp_storage
                 topic = storage.get_topic(session_id)
                 if topic:
-                    now = time.strftime(
+                    time.strftime(
                         "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
                     )
                     session = SessionState(
@@ -631,10 +637,8 @@ class AcpAgent:
         with self._sessions_lock:
             self._sessions.pop(session_id, None)
 
-        try:
+        with contextlib.suppress(Exception):
             self._acp_storage.delete_topic(session_id)
-        except Exception:
-            pass
 
         return {"success": True, "sessionId": session_id}
 
@@ -687,7 +691,7 @@ class AcpAgent:
                 storage = self._acp_storage
                 topic = storage.get_topic(session_id)
                 if topic:
-                    now = time.strftime(
+                    time.strftime(
                         "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
                     )
                     session = SessionState(
@@ -757,7 +761,7 @@ class AcpAgent:
         """
         session_id = (params or {}).get("sessionId", "")
         messages = (params or {}).get("messages", [])
-        tools = (params or {}).get("tools", [])
+        (params or {}).get("tools", [])
 
         # 调试：打印收到的参数（完整 JSON）
         logger.info(f"session/prompt raw_params type={type(params).__name__}: {json.dumps(params, ensure_ascii=False, default=str)[:500]}")
@@ -1402,7 +1406,7 @@ class AcpAgent:
     def _handle_ext_notification(self, params: Any):
         """Handle ``ext/notification`` — custom extension notification."""
         event = (params or {}).get("event", "")
-        data = (params or {}).get("data", {})
+        (params or {}).get("data", {})
         logger.info(f"ext/notification: event={event}")
 
     # ══════════════════════════════════════════════════════════════════════
@@ -1516,7 +1520,7 @@ class AcpAgent:
         except Exception as e:
             logger.exception(f"_replay_history failed: {e}")
 
-    def _get_session_agent(self, session_id: str) -> "Agent":
+    def _get_session_agent(self, session_id: str) -> Agent:
         """Get (or create) a per-session Agent instance.
 
         Each ACP session gets its own Agent with its own topic_id,
@@ -1549,7 +1553,7 @@ class AcpAgent:
             self._session_agents[session_id] = agent
         return agent
 
-    def _get_global_agent(self) -> "Agent":
+    def _get_global_agent(self) -> Agent:
         """Get the global fallback agent (for ext/* calls without session)."""
         if self._global_agent is not None:
             return self._global_agent
@@ -1777,10 +1781,10 @@ class SessionState:
         session_id: str,
         cwd: str = "",
         created_at: str = "",
-        mode: Optional[str] = None,
-        model: Optional[str] = None,
+        mode: str | None = None,
+        model: str | None = None,
         title: str = "",
-        additional_directories: Optional[list[str]] = None,
+        additional_directories: list[str] | None = None,
     ):
         self.session_id = session_id
         self.cwd = cwd

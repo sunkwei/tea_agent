@@ -83,7 +83,7 @@ class TestLspEngineDiagnose:
 
         with patch("tea_agent.lsp.lsp_engine.diagnose") as mock_diag:
             mock_diag.return_value = {"diagnostics": []}
-            result = diagnose_auto("main.py")
+            diagnose_auto("main.py")
             mock_diag.assert_called_once()
 
     def test_diagnose_auto_routes_cpp(self):
@@ -111,7 +111,7 @@ class TestLspEngineSemanticDiagnose:
         try:
             result = semantic_diagnose(os.path.dirname(fname), fname)
             assert isinstance(result, dict)
-            unresolved = [
+            [
                 i for i in result.get("issues", [])
                 if i.get("type") == "unresolved_reference"
             ]
@@ -254,7 +254,7 @@ class TestSymbolIndex:
             idx._record_file(test_file)
 
             # 再次检测应为 not changed
-            changed = idx._is_file_changed(test_file)
+            idx._is_file_changed(test_file)
             # 内容没变，应返回 False
             idx.close()
 

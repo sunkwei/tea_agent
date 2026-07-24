@@ -70,7 +70,7 @@ class Message:
         return {
             "id": self.id,
             "topic": self.topic,
-            "payload": self.payload if isinstance(self.payload, (str, int, float, bool, list, dict)) else str(self.payload),
+            "payload": self.payload if isinstance(self.payload, str | int | float | bool | list | dict) else str(self.payload),
             "sender": self.sender,
             "priority": self.priority.value,
             "timestamp": self.timestamp,
@@ -289,7 +289,7 @@ class MessageBus:
             for subscribers in self._subscriptions.values():
                 all_agents.update(subscribers)
 
-            for agent_id in all_agents:
+            for _agent_id in all_agents:
                 self.publish("broadcast", payload, sender=sender)
 
             return len(all_agents)

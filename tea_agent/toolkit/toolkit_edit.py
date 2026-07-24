@@ -93,7 +93,6 @@ def _verify_after_write(file_path: str, old_text: str = "",
 def _replace_text(file_path: str, old_text: str, new_text: str,
                   preview: bool, backup: bool):
     """Replace by exact text match — immune to line number drift."""
-    import json
     import shutil
 
     if not old_text:

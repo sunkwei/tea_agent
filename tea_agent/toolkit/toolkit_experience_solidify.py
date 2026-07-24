@@ -5,7 +5,6 @@
 成功任务→固化技能，失败任务→记录教训。
 """
 
-import json
 import logging
 from datetime import datetime
 

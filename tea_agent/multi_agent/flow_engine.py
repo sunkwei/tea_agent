@@ -389,7 +389,7 @@ class FlowEngine:
     def _find_root_steps(self) -> list[str]:
         """查找没有依赖的步骤（作为起始）。"""
         all_source_names = set()
-        for name, info in self._steps.items():
+        for _name, info in self._steps.items():
             sources = info.get("listen_sources", [])
             for src in sources:
                 src_name = self._resolve_source_name(src)
@@ -441,10 +441,7 @@ class FlowEngine:
         try:
             # 调用方法，注入 state
             sig = inspect.signature(method)
-            if any(p.name == "state" for p in sig.parameters.values()):
-                result = method(self.state)
-            else:
-                result = method()
+            result = method(self.state) if any(p.name == "state" for p in sig.parameters.values()) else method()
 
             elapsed = (datetime.now() - start).total_seconds()
             self._results[step_name] = result
@@ -533,7 +530,7 @@ class FlowEngine:
             "skipped_steps": skipped,
             "total_time_seconds": round(total_time, 1),
             "state": self.state.to_dict(),
-            "results": {k: v for k, v in self._results.items()},
+            "results": dict(self._results.items()),
             "errors": dict(self._errors),
             "timings": dict(self._timings),
             "execution_log": self._execution_log,

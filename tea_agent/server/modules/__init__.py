@@ -35,10 +35,10 @@ def register_all(registry: ModuleRegistry | None = None) -> ModuleRegistry:
         registry = get_registry()
 
     # 延迟导入，避免循环依赖
-    from .toolkit_module import ToolkitModule
-    from .storage_module import StorageModule
     from .agent_module import AgentModule
     from .pipeline_module import PipelineModule
+    from .storage_module import StorageModule
+    from .toolkit_module import ToolkitModule
 
     registry.register(ToolkitModule)
     registry.register(StorageModule)

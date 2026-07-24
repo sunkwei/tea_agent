@@ -16,6 +16,7 @@ DAG 缩略图 + 查看器 — 任务面板中的 DAG 工作流可视化组件。
 
 from __future__ import annotations
 
+import contextlib
 import html
 import io
 import logging
@@ -390,10 +391,8 @@ class DagThumbnailCard(ttk.Frame):
 
     def _set_thumbnail(self, photo):
         """主线程：设置缩略图。"""
-        try:
+        with contextlib.suppress(Exception):
             self._img_label.configure(image=photo, text="")
-        except Exception:
-            pass
 
     def _set_fallback(self):
         """Graphviz 不可用时的降级显示。"""

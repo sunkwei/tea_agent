@@ -31,7 +31,7 @@ def toolkit_git_commit(message, files=None, amend=False,
     result = {
         "success": False,
         "message": message,
-        "author": "%s <%s>" % (AUTHOR_NAME, AUTHOR_EMAIL),
+        "author": f"{AUTHOR_NAME} <{AUTHOR_EMAIL}>",
     }
 
     # 1. git add

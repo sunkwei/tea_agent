@@ -276,6 +276,7 @@ def test_enable_thinking_parsing():
 def test_config_cache_thread_safety():
     """并发调用 get_config() 不崩溃"""
     import threading
+
     from tea_agent.config import get_config
 
     errors = []

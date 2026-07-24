@@ -31,6 +31,7 @@ ToolRegistry — 统一工具注册与发现机制。
         print(t.name, t.description)
 """
 
+import contextlib
 import logging
 import threading
 import uuid
@@ -238,10 +239,8 @@ class ToolRegistry:
                     self._entries_by_tag[tag] = [n for n in self._entries_by_tag[tag] if n != name]
 
         for hook in self._on_unregister_hooks:
-            try:
+            with contextlib.suppress(Exception):
                 hook(entry)
-            except Exception:
-                pass
 
         logger.debug(f"🗑️ 注销: {name}")
         return True

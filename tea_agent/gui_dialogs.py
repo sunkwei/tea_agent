@@ -1691,10 +1691,8 @@ class TodoDialog(tk.Toplevel):
         self._refresh()
         # 通知 GUI 更新按钮状态（全部完成后变灰）
         if self._on_state_change:
-            try:
+            with contextlib.suppress(Exception):
                 self._on_state_change()
-            except Exception:
-                pass
 
     def _start_auto_refresh(self):
         """启动自动刷新定时器"""
@@ -1762,9 +1760,7 @@ class TodoDialog(tk.Toplevel):
         if self._timer_id:
             self.after_cancel(self._timer_id)
             self._timer_id = None
-        try:
+        with contextlib.suppress(Exception):
             self.destroy()
-        except Exception:
-            pass
 
 

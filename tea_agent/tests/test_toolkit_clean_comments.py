@@ -4,10 +4,10 @@ import os
 import tempfile
 
 from tea_agent.toolkit.toolkit_clean_comments import (
-    toolkit_clean_comments,
-    _scan_comments,
     _clean_comments,
     _enhance_comments,
+    _scan_comments,
+    toolkit_clean_comments,
 )
 
 

@@ -21,8 +21,8 @@ try:
 except ImportError:
     raise ImportError("pip install starlette uvicorn")
 
-from tea_agent.server.modules import load_all
 from tea_agent.server.module import get_registry
+from tea_agent.server.modules import load_all
 
 
 def _capture_and_encode(action, region=None):
@@ -32,10 +32,7 @@ def _capture_and_encode(action, region=None):
     try:
         from tea_agent.toolkit.toolkit_screenshot import toolkit_screenshot
         tmp = os.path.join(tempfile.gettempdir(), f"screenshot_{action}.png")
-        if region:
-            r = toolkit_screenshot(action=action, region=region, output=tmp)
-        else:
-            r = toolkit_screenshot(action=action, output=tmp)
+        r = toolkit_screenshot(action=action, region=region, output=tmp) if region else toolkit_screenshot(action=action, output=tmp)
         if not r.get("success"):
             return {"ok": False, "error": r.get("error", "failed")}
         p = r.get("path", "")
@@ -294,10 +291,10 @@ def _build_routes() -> list:
     Uses local imports so that each call captures the latest
     version of route_handlers — essential for hot-reload.
     """
-    from tea_agent.server import route_handlers as rh
-    from pathlib import Path
     from starlette.routing import Mount, Route
     from starlette.staticfiles import StaticFiles
+
+    from tea_agent.server import route_handlers as rh
 
     static_dir = str(Path(__file__).parent / "static")
 
@@ -456,13 +453,13 @@ def run_server(host="127.0.0.1", port=8282,
     print(f"  API Docs:      {server_url}/docs")
     print(f"  Config file:   {actual_config}")
     print(f"  API Key:       {'ENABLED' if api_key else 'DISABLED'}")
-    print(f"  Hot-Reload:    ENABLED  (/api/modules)")
+    print("  Hot-Reload:    ENABLED  (/api/modules)")
     print("=" * 56)
 
     if open_browser:
-        import webbrowser as _wb
         import threading as _th
         import time as _time
+        import webbrowser as _wb
         _th.Thread(target=lambda: (_time.sleep(1.5), _wb.open(server_url)),
                    daemon=True).start()
 

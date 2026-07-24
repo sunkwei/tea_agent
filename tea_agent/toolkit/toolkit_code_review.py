@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from tea_agent.lsp.lsp_engine import diagnose, semantic_diagnose
+from tea_agent.lsp.lsp_engine import semantic_diagnose
 
 logger = logging.getLogger("toolkit.code_review")
 

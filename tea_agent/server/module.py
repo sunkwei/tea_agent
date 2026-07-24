@@ -12,12 +12,12 @@ HotReloadModule — 热重载模块系统核心。
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import logging
 import os
 import sys
 import threading
-import time
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -50,7 +50,7 @@ class HotReloadModule:
     _error: str = ""
 
     @classmethod
-    def load(cls, registry: 'ModuleRegistry') -> bool:
+    def load(cls, registry: ModuleRegistry) -> bool:
         """加载模块。自动设置 _loaded / _version / _error。"""
         try:
             ok = cls._load(registry)
@@ -85,7 +85,7 @@ class HotReloadModule:
             return False
 
     @classmethod
-    def reload(cls, registry: 'ModuleRegistry') -> type['HotReloadModule'] | None:
+    def reload(cls, registry: ModuleRegistry) -> type[HotReloadModule] | None:
         """热重载模块：unload → importlib.reload → load。
 
         Returns:
@@ -127,7 +127,7 @@ class HotReloadModule:
         }
 
     @classmethod
-    def _load(cls, registry: 'ModuleRegistry') -> bool:
+    def _load(cls, registry: ModuleRegistry) -> bool:
         """子类实现：加载模块逻辑。"""
         raise NotImplementedError
 
@@ -167,7 +167,7 @@ class ModuleRegistry:
         self._modules: dict[str, type[HotReloadModule]] = {}
         self._loaded: dict[str, type[HotReloadModule]] = {}
         self._lock = threading.Lock()
-        self._watcher: 'FileWatcher | None' = None
+        self._watcher: FileWatcher | None = None
         self._loaded_order: list[str] = []
         self._versions: dict[str, int] = {}  # 跨重载持续递增的版本号
 
@@ -275,7 +275,6 @@ class ModuleRegistry:
 
     def reload_all(self) -> dict[str, bool]:
         """重载所有已加载模块。"""
-        results: dict[str, bool] = {}
         for name in reversed(self._loaded_order):
             cls = self._modules.get(name)
             if cls and cls._loaded:
@@ -448,7 +447,7 @@ class _ModuleVersionManager:
         if not os.path.isfile(filepath):
             return None
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, encoding='utf-8') as f:
                 content = f.read()
         except Exception as e:
             logger.debug(f"Cannot read {filepath} for backup: {e}")
@@ -472,10 +471,8 @@ class _ModuleVersionManager:
         while len(existing) >= cls.MAX_VERSIONS:
             old_ver = existing.pop(0)
             old_path = os.path.join(bdir, f"{safe}.v{old_ver}.bak")
-            try:
+            with contextlib.suppress(OSError):
                 os.remove(old_path)
-            except OSError:
-                pass
 
         return new_ver
 
@@ -502,7 +499,7 @@ class _ModuleVersionManager:
         bdir = cls._ensure_dir()
         marker = os.path.join(bdir, f"{safe}.last_good")
         try:
-            with open(marker, 'r') as f:
+            with open(marker) as f:
                 v = int(f.read().strip())
                 cls._last_good[filepath] = v
                 return v
@@ -534,7 +531,7 @@ class _ModuleVersionManager:
             return False
 
         try:
-            with open(last_good_path, 'r', encoding='utf-8') as f:
+            with open(last_good_path, encoding='utf-8') as f:
                 content = f.read()
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(content)
@@ -572,14 +569,14 @@ class _ModuleVersionManager:
         if last_good_v is None:
             return False
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, encoding='utf-8') as f:
                 current = f.read()
             safe = cls._safe_name(filepath)
             bdir = cls._ensure_dir()
             backup_path = os.path.join(bdir, f"{safe}.v{last_good_v}.bak")
             if not os.path.isfile(backup_path):
                 return False
-            with open(backup_path, 'r', encoding='utf-8') as f:
+            with open(backup_path, encoding='utf-8') as f:
                 good = f.read()
             return current == good
         except Exception:
@@ -668,10 +665,8 @@ class FileWatcher:
         for fp in paths:
             if fp not in self._file_paths:
                 self._file_paths.append(fp)
-                try:
+                with contextlib.suppress(OSError):
                     self._mtimes[fp] = os.path.getmtime(fp)
-                except OSError:
-                    pass
 
     def _run(self) -> None:
         while not self._stop_event.is_set():

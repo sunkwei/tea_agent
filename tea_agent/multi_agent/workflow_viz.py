@@ -22,6 +22,7 @@ WorkflowViz — DAG 工作流实时可视化引擎。
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import threading
@@ -196,10 +197,8 @@ class EventEmitter:
             listeners = list(self._listeners)
 
         for q in listeners:
-            try:
+            with contextlib.suppress(asyncio.QueueFull):
                 q.put_nowait(event)
-            except asyncio.QueueFull:
-                pass
 
 
 # ═══════════════════════════════════════════════
@@ -382,10 +381,8 @@ class WorkflowVisualizer:
         self._poll_thread.start()
 
         # 启动 HTTP + SSE 服务器
-        try:
+        with contextlib.suppress(KeyboardInterrupt):
             self._start_server(port, host)
-        except KeyboardInterrupt:
-            pass
 
         exec_thread.join(timeout=5)
         self._finished_at = time.time()
@@ -685,10 +682,8 @@ class WorkflowVisualizer:
                 daemon=True,
             ).start()
 
-        try:
+        with contextlib.suppress(KeyboardInterrupt):
             uvicorn.run(app, host=host, port=port, log_level="warning")
-        except KeyboardInterrupt:
-            pass
 
 
 # ═══════════════════════════════════════════════

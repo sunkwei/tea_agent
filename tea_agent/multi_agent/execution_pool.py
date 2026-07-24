@@ -30,6 +30,7 @@ ExecutionPool — 高性能双通道并行执行池。
 """
 
 import asyncio
+import contextlib
 import logging
 import queue
 import threading
@@ -446,7 +447,7 @@ class ExecutionPool:
                         future.cancel()
                     continue
 
-                def _run():
+                def _run(task=task, fn=fn, args=args, kwargs=kwargs, future=future):
                     task.state = TaskState.RUNNING
                     task.started_at = time.time()
                     self._current += 1
@@ -484,12 +485,10 @@ class ExecutionPool:
 
         # 关闭时清理残留 futures
         with self._lock:
-            for tid, future in list(self._futures.items()):
+            for _tid, future in list(self._futures.items()):
                 if not future.done():
-                    try:
+                    with contextlib.suppress(Exception):
                         future.cancel()
-                    except Exception:
-                        pass
 
     def _start_async_loop(self):
         """启动专用事件循环线程。"""
@@ -667,10 +666,8 @@ class LoadBalancer:
         if node:
             def _on_done(f, n=node):
                 n._current = max(0, n._current - 1)
-                try:
-                    result = f.result()
-                except Exception:
-                    result = None
+                with contextlib.suppress(Exception):
+                    f.result()
             future.add_done_callback(_on_done)
         return future
 

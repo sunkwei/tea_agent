@@ -2,7 +2,6 @@
 自进化流水线测试 — EvolutionTrigger / EvolutionAnalyzer / EvolutionActor
 """
 
-import pytest
 
 
 class TestEvolutionTrigger:

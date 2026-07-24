@@ -9,7 +9,6 @@ ToolkitModule — 热重载 Toolkit 模块。
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
@@ -125,7 +124,6 @@ class ToolkitModule(HotReloadModule):
     @classmethod
     def save_tool(cls, name: str, meta: dict, pycode: str) -> dict:
         """保存新工具。"""
-        from tea_agent import tlk
         if cls._instance:
             return cls._instance.save_func(name, meta, pycode)
         return {"ok": False, "error": "Toolkit not loaded"}

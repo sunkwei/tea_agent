@@ -22,7 +22,6 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
     """
     logger.info(f"toolkit_mode: action={action!r}, mode={mode!r}, text={repr(text)[:80]}")
 
-    import json
     import re
 
     # ── 各 phase 关键词 ──

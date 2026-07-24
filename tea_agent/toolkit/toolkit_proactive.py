@@ -34,7 +34,6 @@ def _get_memory_manager():
 
 def _check_proactive():
     """Internal: check proactive."""
-    import json
     try:
         mm = _get_memory_manager()
         all_mems = mm.storage.get_active_memories(limit=100)
@@ -88,7 +87,6 @@ def _add_goal(content: str, priority: int = 2):
         content: Description.
         priority: Description.
     """
-    import json
     if not content or not content.strip():
         return {"ok": False, "error": "目标内容不能为空", "returncode": 1}
     priority = max(0, min(3, priority))
@@ -111,7 +109,6 @@ def _complete_goal(goal_id: int):
     Args:
         goal_id: Description.
     """
-    import json
     if not goal_id:
         return {"ok": False, "error": "需要提供 goal_id", "returncode": 1}
     try:
@@ -123,7 +120,6 @@ def _complete_goal(goal_id: int):
 
 def _list_goals():
     """Internal: list goals."""
-    import json
     try:
         mm = _get_memory_manager()
         all_mems = mm.storage.get_active_memories(limit=100)

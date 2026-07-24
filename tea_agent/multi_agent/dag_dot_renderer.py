@@ -246,10 +246,7 @@ def render_viz_snapshot(viz: Any) -> dict:
             "dot_available": bool,
         }
     """
-    if viz._exec:
-        node_states = viz._exec.results
-    else:
-        node_states = {}
+    node_states = viz._exec.results if viz._exec else {}
 
     dot = dag_to_dot(viz.dag, node_states, viz.title)
     dot_avail = check_dot_available()
@@ -339,8 +336,9 @@ def render_dag_dict_to_png(dag_data: dict) -> bytes | None:
     if not check_dot_available():
         return None
 
-    from .workflow_engine import NodeType, WorkflowDAG, WorkflowNode
     from dataclasses import dataclass
+
+    from .workflow_engine import NodeType, WorkflowDAG, WorkflowNode
 
     dag = WorkflowDAG()
     for n in dag_data.get("nodes", []):

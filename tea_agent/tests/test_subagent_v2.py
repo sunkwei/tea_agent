@@ -224,7 +224,7 @@ class TestPersistence:
     def test_persist_flag(self):
         """Should not load from DB twice."""
         from tea_agent.toolkit.toolkit_subagent import _load_from_db
-        with patch('tea_agent.toolkit.toolkit_subagent._get_db') as mock_get:
+        with patch('tea_agent.toolkit.toolkit_subagent._get_db'):
             _load_from_db()  # first call
             _load_from_db()  # second call
             # _get_db should only be called by the first call

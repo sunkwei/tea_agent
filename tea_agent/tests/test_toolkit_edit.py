@@ -3,7 +3,7 @@
 import os
 import tempfile
 
-from tea_agent.toolkit.toolkit_edit import toolkit_edit, _verify_after_write
+from tea_agent.toolkit.toolkit_edit import _verify_after_write, toolkit_edit
 
 
 def _make_file(content="print('hello')\n"):

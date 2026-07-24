@@ -4,9 +4,9 @@ import os
 import tempfile
 
 from tea_agent.toolkit.toolkit_code_review import (
+    _assess_complexity,
     _check_compile,
     _check_security,
-    _assess_complexity,
     _check_style,
     _complexity_score,
     _generate_report,

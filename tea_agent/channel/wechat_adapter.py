@@ -258,10 +258,10 @@ class WeChatAdapter:
             print("❌ 二维码数据异常")
             return False
 
-        print(f"\n📱 请使用微信扫描以下二维码：")
+        print("\n📱 请使用微信扫描以下二维码：")
         print(f"  {qrcode_url}")
-        print(f"\n⏳ 等待扫码...（每 2 秒轮询）")
-        print(f"   🔴 按 Ctrl+C 取消\n")
+        print("\n⏳ 等待扫码...（每 2 秒轮询）")
+        print("   🔴 按 Ctrl+C 取消\n")
 
         # 尝试用 terminal 显示二维码图片（如果可用）
         self._display_qrcode(qrcode_url)
@@ -290,7 +290,7 @@ class WeChatAdapter:
                 if elapsed % 6 == 0:  # 每 6 秒提示一次
                     print(f"  ⏳ 等待扫码... ({elapsed}s)")
             elif status == "scaned":
-                print(f"  ✅ 已扫描！请在手机上确认登录")
+                print("  ✅ 已扫描！请在手机上确认登录")
             elif status == "confirmed":
                 # 登录成功！
                 self._bot_token = status_data.get("bot_token", "")
@@ -306,19 +306,19 @@ class WeChatAdapter:
                     return False
 
                 self._save_credentials()
-                print(f"\n🎉  登录成功！")
+                print("\n🎉  登录成功！")
                 print(f"  🤖 Bot ID: {self._ilink_bot_id}")
                 print(f"  👤 User ID: {self._ilink_user_id}")
                 print(f"  🌐 Base URL: {self._base_url}")
                 return True
             elif status == "expired":
-                print(f"  ⏰ 二维码已过期，请重新运行")
+                print("  ⏰ 二维码已过期，请重新运行")
                 return False
             else:
                 logger.debug(f"未知状态: {status}")
 
             if time.time() - start_time > 180:
-                print(f"  ⏰ 登录超时（3 分钟）")
+                print("  ⏰ 登录超时（3 分钟）")
                 return False
 
             time.sleep(POLL_INTERVAL)
@@ -330,12 +330,13 @@ class WeChatAdapter:
         """尝试用终端显示二维码。"""
         try:
             # 尝试使用 qr 库显示
-            import qrcode
-            from PIL import Image
             import io
 
+            import qrcode
+            from PIL import Image
+
             resp = httpx.get(url, timeout=10)
-            img = Image.open(io.BytesIO(resp.content))
+            Image.open(io.BytesIO(resp.content))
             # 在终端显示 ASCII 二维码（如果 qrcode 库可用）
             qr = qrcode.QRCode()
             qr.add_data(url)
@@ -452,10 +453,10 @@ class WeChatAdapter:
 
         from_user = msg.get("from_user_id", "")
         context_token = msg.get("context_token", "")
-        send_time = msg.get("send_time", 0)
+        msg.get("send_time", 0)
 
         if not from_user or not context_token:
-            logger.warning(f"消息缺少 from_user_id 或 context_token")
+            logger.warning("消息缺少 from_user_id 或 context_token")
             return
 
         # 提取文本内容
@@ -491,7 +492,7 @@ class WeChatAdapter:
         """处理以 / 开头的命令。"""
         parts = cmd_text.strip().split(maxsplit=1)
         cmd = parts[0].lower()
-        args = parts[1] if len(parts) > 1 else ""
+        parts[1] if len(parts) > 1 else ""
 
         if cmd == "/start" or cmd == "/help":
             reply = (
@@ -515,14 +516,11 @@ class WeChatAdapter:
                 del self._last_active[uid_key]
             reply = "✅ 已创建新话题"
             if old_topic:
-                reply += f"（旧话题已归档）"
+                reply += "（旧话题已归档）"
         elif cmd == "/topic":
             uid_key = str(user_id)
             current_id = self._sessions.get(uid_key, "")
-            if current_id:
-                reply = f"📌 当前话题 ID: `{current_id[:16]}...`"
-            else:
-                reply = "📌 暂无活跃话题，发送消息将自动创建。"
+            reply = f"📌 当前话题 ID: `{current_id[:16]}...`" if current_id else "📌 暂无活跃话题，发送消息将自动创建。"
         elif cmd == "/about":
             reply = (
                 "ℹ️ *Tea Agent 微信助手*\n\n"
@@ -767,10 +765,7 @@ class WeChatAdapter:
             data = resp.json()
 
             choices = data.get("choices", [])
-            if choices:
-                reply = choices[0].get("message", {}).get("content", "")
-            else:
-                reply = data.get("text", "") or str(data)
+            reply = choices[0].get("message", {}).get("content", "") if choices else data.get("text", "") or str(data)
 
             if not reply:
                 reply = "（无回复）"
@@ -833,14 +828,13 @@ class WeChatAdapter:
     def start(self):
         """启动 WeChat Bot（同步阻塞）。"""
         # 登录
-        if not self.is_logged_in:
-            if not self.login():
-                print("❌ 登录失败，退出")
-                return
+        if not self.is_logged_in and not self.login():
+            print("❌ 登录失败，退出")
+            return
 
         print("=" * 52)
         print("  🤖  Tea Agent 微信 Bot")
-        print(f"  📡  模式: Long Polling (出站连接，无需公网)")
+        print("  📡  模式: Long Polling (出站连接，无需公网)")
         print(f"  🔗  API: {self._api_base}")
         print(f"  📋  活跃会话: {len(self._sessions)}")
         print("=" * 52)

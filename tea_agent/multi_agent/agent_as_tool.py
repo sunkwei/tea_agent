@@ -112,10 +112,7 @@ class AgentTool:
                 else:
                     raw = self.agent.execute_sync(task)
             else:
-                if hasattr(self.agent, 'execute'):
-                    raw = self.agent.execute(task)
-                else:
-                    raw = self.agent.execute_sync(task)
+                raw = self.agent.execute(task) if hasattr(self.agent, 'execute') else self.agent.execute_sync(task)
 
             # 统一提取文本结果
             if isinstance(raw, dict) and 'output' in raw:
@@ -198,7 +195,7 @@ class AgentTool:
 
     def _async_worker(self, call_id: str, task: str, context: dict | None):
         """异步执行工作器。"""
-        result = self.call(task, context)
+        self.call(task, context)
         # 结果已记录到 _call_history
         pass
 

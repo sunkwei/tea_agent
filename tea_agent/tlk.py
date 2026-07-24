@@ -160,7 +160,7 @@ def _auto_generate_skill_doc(name: str, meta: dict, pycode: str, version: str, t
             tree = ast.parse(pycode)
             func_node = None
             for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
+                if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == name:
                     func_node = node
                     break
 

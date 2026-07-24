@@ -3,9 +3,10 @@
 
 # 自动加载 .env 文件（项目根目录）
 import os as _os
+
 _env_path = _os.path.join(_os.path.dirname(_os.path.dirname(__file__)), '.env')
 if _os.path.isfile(_env_path):
-    with open(_env_path, 'r', encoding='utf-8') as _f:
+    with open(_env_path, encoding='utf-8') as _f:
         for _line in _f:
             _line = _line.strip()
             if _line and not _line.startswith('#') and '=' in _line:

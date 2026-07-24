@@ -59,13 +59,11 @@ def _detect_content_type(content):
         if any(c in stripped for c in ("'", "True", "False", "None")):
             return "code"
     # Check if it's a Python repr tuple (common for toolkit_exec returns)
-    if stripped.startswith("(") and stripped.endswith(")"):
-        if any(c in stripped for c in (",", "'", '"')):
-            return "code"
+    if stripped.startswith("(") and stripped.endswith(")") and any(c in stripped for c in (",", "'", '"')):
+        return "code"
     # Check if it's a Python list literal
-    if stripped.startswith("[") and stripped.endswith("]"):
-        if "'" in stripped or '"' in stripped:
-            return "code"
+    if stripped.startswith("[") and stripped.endswith("]") and ("'" in stripped or '"' in stripped):
+        return "code"
     # Multi-line or long content
     if "\n" in content or len(content) > 200:
         return "code"
@@ -205,7 +203,7 @@ def _setup_fonts(pdf):
         ("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", "Noto"),
         ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "Noto"),
     ]
-    for fp, name in body_candidates:
+    for fp, _name in body_candidates:
         if os.path.exists(fp):
             try:
                 pdf.add_font("Body", "", fp)
@@ -230,7 +228,7 @@ def _setup_fonts(pdf):
         ("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", "DejaVu Mono"),
         ("/Library/Fonts/Arial Unicode.ttf", "Arial Unicode"),
     ]
-    for fp, name in code_candidates:
+    for fp, _name in code_candidates:
         if os.path.exists(fp):
             try:
                 pdf.add_font("Code", "", fp)
@@ -277,10 +275,7 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
             return
         code_text = "\n".join(code_buffer)
         try:
-            if code_lang:
-                lexer = get_lexer_by_name(code_lang, stripall=True)
-            else:
-                lexer = guess_lexer(code_text)
+            lexer = get_lexer_by_name(code_lang, stripall=True) if code_lang else guess_lexer(code_text)
         except Exception:
             lexer = PythonLexer()
 
@@ -314,7 +309,6 @@ def _render_markdown(pdf, text, body_font, code_font, indent=0, text_color=(50, 
                     pdf.get_string_width(safe_val)
                     pdf.write(line_h, safe_val)
                 except Exception:
-                    old_font = pdf.font_family
                     pdf.set_font(body_font, "", 8)
                     for ch in safe_val:
                         try:
@@ -550,7 +544,7 @@ def _flush_table(pdf, lines, start_idx, body_font, code_font):
         from fpdf import FontFace
 
         h_style = FontFace(family=body_font, emphasis="B", size_pt=9, color=(40, 40, 80))
-        c_style = FontFace(family=body_font, emphasis="", size_pt=9, color=(50, 50, 50))
+        FontFace(family=body_font, emphasis="", size_pt=9, color=(50, 50, 50))
 
         with pdf.table(
             col_widths=col_widths,
@@ -757,7 +751,6 @@ def _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path)
 def _draw_cover(pdf, title, stamp, body_font):
     """Draw a clean, printer-friendly cover page."""
     page_w = pdf.w
-    page_h = pdf.h
 
     # Thin decorative top line
     pdf.set_draw_color(200, 200, 220)
@@ -1006,7 +999,7 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
         if not conv:
             conn.close()
             raise ValueError(f"No conversations for topic {topic_id}")
-        conv_id, user_raw, ai_msg, stamp = conv["id"], conv["user_msg"], conv["ai_msg"], conv["stamp"]
+        _conv_id, user_raw, ai_msg, stamp = conv["id"], conv["user_msg"], conv["ai_msg"], conv["stamp"]
 
         try:
             data = json.loads(user_raw)

@@ -485,7 +485,7 @@ class TraceEngine:
     def _find_span(self, span_id: str) -> TraceSpan | None:
         """在所有缓冲区内查找 span。"""
         with self._buffer_lock:
-            for tid, spans in self._buffer.items():
+            for _tid, spans in self._buffer.items():
                 if span_id in spans:
                     return spans[span_id]
         return None

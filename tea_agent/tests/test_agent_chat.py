@@ -303,7 +303,7 @@ class TestAgentChatErrorHandling:
 
             # lightweight 模式下 API 异常会被 session 捕获，返回含 error 的 dict
             result = agent.chat("Hello")
-            assert isinstance(result, (list, dict))
+            assert isinstance(result, list | dict)
 
             agent.close()
 

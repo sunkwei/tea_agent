@@ -29,6 +29,7 @@ Telegram Bot Adapter - Long Polling 模式
 """
 
 import argparse
+import contextlib
 import json
 import logging
 import os
@@ -161,10 +162,7 @@ class TelegramAdapter:
             data = resp.json()
 
             choices = data.get("choices", [])
-            if choices:
-                reply = choices[0].get("message", {}).get("content", "")
-            else:
-                reply = data.get("text", "") or str(data)
+            reply = choices[0].get("message", {}).get("content", "") if choices else data.get("text", "") or str(data)
 
             if not reply:
                 reply = "（无回复）"
@@ -275,13 +273,11 @@ class TelegramAdapter:
         logger.info(f"📩 [{user_id}] {user_name}: {text[:80]}")
 
         # 显示"正在输入"状态
-        try:
+        with contextlib.suppress(Exception):
             await context.bot.send_chat_action(
                 chat_id=update.effective_chat.id,
                 action="typing",
             )
-        except Exception:
-            pass
 
         # 调用 tea_agent
         reply = self._call_tea_agent(user_id, text)
@@ -330,7 +326,7 @@ class TelegramAdapter:
         if uid in self._last_active:
             del self._last_active[int(uid)]
 
-        info = f"✅ 已创建新话题"
+        info = "✅ 已创建新话题"
         if old_topic:
             info += f"（旧话题 {old_topic[:8]}... 已归档）"
         await update.message.reply_text(info)
@@ -396,7 +392,7 @@ class TelegramAdapter:
                 )
         else:
             # 显示当前配置 + 可用配置列表
-            msg = f"📌 *当前配置*\n"
+            msg = "📌 *当前配置*\n"
             if model:
                 msg += f"  模型: `{model}`\n"
             if api_url:
@@ -418,8 +414,8 @@ class TelegramAdapter:
         for s in sessions:
             tid = s.get("id", "")[:8]
             title = s.get("title", "?") or "?"
-            updated = s.get("updated", "")[:10]
-            tokens = s.get("total_tokens", 0)
+            s.get("updated", "")[:10]
+            s.get("total_tokens", 0)
             lines.append(f"  `{tid}`  {title}")
         lines.append("")
         lines.append(f"共 {len(sessions)} 个会话")
@@ -501,8 +497,8 @@ class TelegramAdapter:
             sys.exit(1)
 
         print("=" * 52)
-        print(f"  🤖  Tea Agent Telegram Bot")
-        print(f"  📡  模式: Long Polling (出站连接，无需公网)")
+        print("  🤖  Tea Agent Telegram Bot")
+        print("  📡  模式: Long Polling (出站连接，无需公网)")
         print(f"  🔗  API: {self._api_base}")
         print(f"  ⏱   会话超时: {self._session_timeout // 60} 分钟")
         active = len([u for u, t in self._sessions.items() if t])

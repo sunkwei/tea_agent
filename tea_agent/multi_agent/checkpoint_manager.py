@@ -26,6 +26,7 @@ CheckpointManager — Agent 执行状态持久化与崩溃恢复。
         # 自动恢复执行
 """
 
+import contextlib
 import json
 import logging
 import sqlite3
@@ -277,10 +278,8 @@ class CheckpointManager:
         d = dict(row)
         # 解析 context JSON
         if isinstance(d.get('context'), str):
-            try:
+            with contextlib.suppress(json.JSONDecodeError, TypeError):
                 d['context'] = json.loads(d['context'])
-            except (json.JSONDecodeError, TypeError):
-                pass
         return d
 
     def close(self):

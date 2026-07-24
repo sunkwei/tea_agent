@@ -8,6 +8,8 @@ over HTTP + SSE.  Built with Starlette + Uvicorn.
    transport used by vscode-acp.  This HTTP server is kept for backward
    compatibility.
 """
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -15,8 +17,13 @@ import os
 import shutil
 import threading
 import time
-from pathlib import Path
 import uuid
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tea_agent.agent import Agent
+    from tea_agent.store import Storage
 
 logger = logging.getLogger("acp_server")
 
@@ -73,7 +80,7 @@ class ACPProtocolServer:
         try:
             shutil.copy2(str(default_path), str(acp_path))
             import yaml as _yaml
-            with open(acp_path, "r", encoding="utf-8") as f:
+            with open(acp_path, encoding="utf-8") as f:
                 data = _yaml.safe_load(f) or {}
             if "paths" not in data or not isinstance(data["paths"], dict):
                 data["paths"] = {}
@@ -88,7 +95,7 @@ class ACPProtocolServer:
 
         return str(acp_path)
 
-    def _get_storage(self) -> "Storage":
+    def _get_storage(self) -> Storage:
         """Lazy-init storage backend."""
         if self._storage is None:
             self._storage = get_storage()
@@ -151,7 +158,7 @@ class ACPProtocolServer:
                 "input_schema": {},
             }]
 
-    def _init_agent(self, session_id: str = "") -> "Agent":
+    def _init_agent(self, session_id: str = "") -> Agent:
         """Get (or create) a shared Agent instance, bound to *session_id*."""
         from tea_agent.agent import Agent
         if self._agent is None:

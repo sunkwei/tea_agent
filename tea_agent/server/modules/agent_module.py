@@ -23,8 +23,11 @@ from typing import Any
 from ..module import HotReloadModule, ModuleRegistry, _module_path_for
 from .state import (
     active_sessions,
-    max_iter_pending, question_pending,
     config_cache,
+    max_iter_pending,
+    question_pending,
+)
+from .state import (
     clear_all as clear_all_state,
 )
 
@@ -85,10 +88,8 @@ class AgentModule(HotReloadModule):
     def _unload(cls) -> None:
         """卸载 Agent 模块。"""
         if cls._instance:
-            try:
+            with contextlib.suppress(Exception):
                 cls._instance.sess.close()
-            except Exception:
-                pass
             cls._instance = None
         clear_all_state()
 
@@ -120,8 +121,8 @@ class AgentModule(HotReloadModule):
     @classmethod
     def create_session(cls, config_path: str | None = None):
         """为流式请求创建独立 Session。"""
-        from tea_agent.onlinesession import OnlineToolSession
         from tea_agent import tlk
+        from tea_agent.onlinesession import OnlineToolSession
 
         cfg = cls._load_config_cached(config_path or cls._config_path)
         tk = tlk.toolkit
@@ -203,11 +204,9 @@ class AgentModule(HotReloadModule):
         queue = asyncio.Queue()
         event_loop = asyncio.get_running_loop()
         def _put(event):
-            try:
+            with contextlib.suppress(Exception):
                 event_loop.call_soon_threadsafe(
                     lambda: queue.put_nowait(event))
-            except Exception:
-                pass
         def stream_cb(text):
             if text.startswith("["):
                 return
@@ -404,17 +403,15 @@ class AgentModule(HotReloadModule):
 
     @classmethod
     def chat_stream_sse(cls, session, storage, msg,
-                         queue: "asyncio.Queue", topic_id: str = "",
+                         queue: asyncio.Queue, topic_id: str = "",
                          event_loop=None):
         """在后台线程运行 SSE 流式对话。"""
         def _put(event: dict):
             if event_loop is None:
                 return
-            try:
+            with contextlib.suppress(Exception):
                 event_loop.call_soon_threadsafe(
                     lambda: queue.put_nowait(event))
-            except Exception:
-                pass
 
         _thinking_active = False
         _tool_active = False

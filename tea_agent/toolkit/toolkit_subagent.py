@@ -13,6 +13,7 @@ v2.1 新增（Phase 1）:
   支持同步/异步、并发、状态查询、结果收集、上下文注入。
 """
 
+import contextlib
 import json
 import logging
 import threading
@@ -355,16 +356,12 @@ def toolkit_subagent(
     global _executor
 
     # 确保 msg 工具已注册
-    try:
+    with contextlib.suppress(Exception):
         _ensure_toolkit_loaded()
-    except Exception:
-        pass
 
     # 尝试从 DB 恢复（仅在首次调用时）
-    try:
+    with contextlib.suppress(Exception):
         _load_from_db()
-    except Exception:
-        pass
 
     # ── 嵌套深度计算 ──────────────────────────────
     caller_depth = getattr(_thread_local, 'subagent_depth', -1)

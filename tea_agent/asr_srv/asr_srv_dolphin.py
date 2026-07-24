@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-#
 # @file: asr_srv_dolphin.py
 # @brief: 单文件 ASR WebSocket 服务 — 基于 Dolphin Base (DataoceanAI) ONNX 模型的流式语音识别
 #
@@ -51,26 +49,19 @@
 #  Copyright (C) 2026
 # ============================================================================
 
-from __future__ import absolute_import, division, print_function
+from __future__ import annotations
 
 import argparse
-import base64
 import gc
 import json
 import logging
 import math
-import os
 import os.path as osp
-import queue
-import re
-import struct
 import sys
 import threading
 import time
 import traceback
-from collections import defaultdict, deque
-from enum import Enum, IntEnum
-from typing import Dict, List, Optional, Tuple, Union
+from enum import Enum
 
 import numpy as np
 
@@ -94,11 +85,11 @@ except ImportError:
     HAVE_KNF = False
 
 try:
+    import tornado.gen
     import tornado.httpserver
     import tornado.ioloop
     import tornado.web
     import tornado.websocket
-    import tornado.gen
     HAVE_TORNADO = True
 except ImportError:
     HAVE_TORNADO = False
@@ -150,7 +141,7 @@ PUNC_FINAL_CHARS = {"。", "！", "？", ".", "!", "?", "、", "，"}
 def _read_yaml(yaml_path):
     """读取 YAML 文件。"""
     if not osp.exists(yaml_path):
-        raise FileExistsError("YAML not found: %s" % yaml_path)
+        raise FileExistsError(f"YAML not found: {yaml_path}")
     with open(yaml_path, "rb") as f:
         import yaml as _yaml
         return _yaml.load(f, Loader=_yaml.Loader)
@@ -207,30 +198,30 @@ class _VadDetectMode(Enum):
     kVadMutipleUtteranceDetectMode = 1
 
 
-class _VADXOptions(object):
+class _VADXOptions:
     """VAD 配置选项。"""
 
     def __init__(self, **kwargs):
-        defaults = dict(
-            sample_rate=16000, detect_mode=1, snr_mode=0,
-            max_end_silence_time=800, max_start_silence_time=3000,
-            do_start_point_detection=True, do_end_point_detection=True,
-            window_size_ms=200, sil_to_speech_time_thres=150,
-            speech_to_sil_time_thres=150, speech_2_noise_ratio=1.0,
-            do_extend=1, lookback_time_start_point=200,
-            lookahead_time_end_point=100, max_single_segment_time=60000,
-            snr_thres=-100, noise_frame_num_used_for_snr=100,
-            decibel_thres=-100, speech_noise_thres=0.6,
-            fe_prior_thres=1e-4, silence_pdf_num=1, sil_pdf_ids=[0],
-            speech_noise_thresh_low=-0.1, speech_noise_thresh_high=0.3,
-            output_frame_probs=False, frame_in_ms=10, frame_length_ms=25,
-        )
+        defaults = {
+            "sample_rate": 16000, "detect_mode": 1, "snr_mode": 0,
+            "max_end_silence_time": 800, "max_start_silence_time": 3000,
+            "do_start_point_detection": True, "do_end_point_detection": True,
+            "window_size_ms": 200, "sil_to_speech_time_thres": 150,
+            "speech_to_sil_time_thres": 150, "speech_2_noise_ratio": 1.0,
+            "do_extend": 1, "lookback_time_start_point": 200,
+            "lookahead_time_end_point": 100, "max_single_segment_time": 60000,
+            "snr_thres": -100, "noise_frame_num_used_for_snr": 100,
+            "decibel_thres": -100, "speech_noise_thres": 0.6,
+            "fe_prior_thres": 1e-4, "silence_pdf_num": 1, "sil_pdf_ids": [0],
+            "speech_noise_thresh_low": -0.1, "speech_noise_thresh_high": 0.3,
+            "output_frame_probs": False, "frame_in_ms": 10, "frame_length_ms": 25,
+        }
         defaults.update(kwargs)
         for k, v in defaults.items():
             setattr(self, k, v)
 
 
-class _E2EVadSpeechBufWithDoa(object):
+class _E2EVadSpeechBufWithDoa:
     """VAD 语音段缓冲区。"""
 
     def __init__(self):
@@ -245,7 +236,7 @@ class _E2EVadSpeechBufWithDoa(object):
         self.__init__()
 
 
-class _WindowDetector(object):
+class _WindowDetector:
     """滑窗状态检测器。"""
 
     def __init__(self, window_size_ms, sil_to_speech_time,
@@ -284,7 +275,7 @@ class _WindowDetector(object):
         return _AudioChangeState.kChangeStateSpeech2Speech
 
 
-class _E2EVadModel(object):
+class _E2EVadModel:
     """VAD 状态机 — FunASR E2EVad 兼容。"""
 
     def __init__(self, vad_post_args):
@@ -496,26 +487,18 @@ class _E2EVadModel(object):
                     _VadStateMachine.kVadInStateInSpeechSegment
                 for t in range(start + 1, cur_idx + 1):
                     self._on_voice_detected(t)
-        elif change == _AudioChangeState.kChangeStateSpeech2Sil:
+        elif change == _AudioChangeState.kChangeStateSpeech2Sil or change == _AudioChangeState.kChangeStateSpeech2Speech:
             self.continous_silence_frame_count = 0
             if self.vad_state_machine == \
-                    _VadStateMachine.kVadInStateInSpeechSegment:
-                if not is_final_frame:
-                    self._on_voice_detected(cur_idx)
-        elif change == _AudioChangeState.kChangeStateSpeech2Speech:
-            self.continous_silence_frame_count = 0
-            if self.vad_state_machine == \
-                    _VadStateMachine.kVadInStateInSpeechSegment:
-                if not is_final_frame:
-                    self._on_voice_detected(cur_idx)
+                    _VadStateMachine.kVadInStateInSpeechSegment and not is_final_frame:
+                self._on_voice_detected(cur_idx)
         elif change == _AudioChangeState.kChangeStateSil2Sil:
             self.continous_silence_frame_count += 1
             if self.vad_state_machine == \
-                    _VadStateMachine.kVadInStateInSpeechSegment:
-                if self.continous_silence_frame_count * frm_ms >= \
+                    _VadStateMachine.kVadInStateInSpeechSegment and self.continous_silence_frame_count * frm_ms >= \
                         self.max_end_sil_frame_cnt_thresh:
-                    self._on_voice_end(cur_idx - 3, False)
-                    self.vad_state_machine = \
+                self._on_voice_end(cur_idx - 3, False)
+                self.vad_state_machine = \
                         _VadStateMachine.kVadInStateEndPointDetected
 
         if self.vad_state_machine == \
@@ -525,7 +508,7 @@ class _E2EVadModel(object):
             self._reset_detection()
 
 
-class _WavFrontend(object):
+class _WavFrontend:
     """离线前端: fbank → LFR → CMVN → 560-dim features。"""
 
     def __init__(self, cmvn_file=None, fs=16000, window="hamming",
@@ -594,7 +577,7 @@ class _WavFrontend(object):
         return (inputs + means) * vars_
 
     def _load_cmvn(self):
-        with open(self.cmvn_file, "r", encoding="utf-8") as f:
+        with open(self.cmvn_file, encoding="utf-8") as f:
             lines = f.readlines()
         means_list, vars_list = [], []
         for i in range(len(lines)):
@@ -615,14 +598,14 @@ class _WavFrontend(object):
         return self._apply_cmvn(self._apply_lfr(fbank))
 
 
-class _VADImpl(object):
+class _VADImpl:
     """ONNX VAD 推理 + 在线状态机。"""
 
     def __init__(self, model_dir, max_end_sil=300):
         vad_dir = osp.join(str(model_dir), "vad")
         model_file = osp.join(vad_dir, "vad.onnx")
         if not osp.exists(model_file):
-            raise FileNotFoundError("VAD model not found: %s" % model_file)
+            raise FileNotFoundError(f"VAD model not found: {model_file}")
         config_file = osp.join(vad_dir, "config.yaml")
         cmvn_file = osp.join(vad_dir, "am.mvn")
         self.config = _read_yaml(config_file)
@@ -669,7 +652,7 @@ class _VADImpl(object):
                 inputs = [feats] + in_cache
                 scores, *out_caches = self.ort_infer.run(
                     None,
-                    {k: v for k, v in zip(self.ort_inp_keys, inputs)})
+                    dict(zip(self.ort_inp_keys, inputs, strict=False)))
                 self._param_dict["in_cache"] = out_caches
                 segments = self.vad_scorer(
                     scores, waveforms, is_final=is_final,
@@ -715,7 +698,7 @@ class _VADImpl(object):
 
 # ── Tokenizer ──────────────────────────────────────────────────────────
 
-class DolphinTokenizer(object):
+class DolphinTokenizer:
     """Dolphin BPE tokenizer (SentencePiece + symbol table)."""
 
     def __init__(self, model_dir):
@@ -723,7 +706,7 @@ class DolphinTokenizer(object):
         bpe_path = osp.join(model_dir, "bpe.model")
         self._id2token = {}
         self._token2id = {}
-        with open(units_path, "r", encoding="utf-8") as f:
+        with open(units_path, encoding="utf-8") as f:
             for line in f:
                 parts = line.strip().split()
                 if len(parts) >= 2:
@@ -828,7 +811,7 @@ def _load_onnx_models(model_dir, num_threads=4):
         frontend_path = osp.join(model_dir, "dolphin_base_frontend.onnx")
         if not osp.exists(frontend_path):
             raise FileNotFoundError(
-                "Frontend ONNX not found: %s" % frontend_path)
+                f"Frontend ONNX not found: {frontend_path}")
         _onnx_frontend = ort.InferenceSession(
             frontend_path, opts, providers=ORT_PROVIDERS)
         logger.info("Frontend ONNX loaded in %.1fs (shared)",
@@ -842,7 +825,7 @@ def _load_onnx_models(model_dir, num_threads=4):
         enc_path = osp.join(model_dir, enc_name)
         if not osp.exists(enc_path):
             raise FileNotFoundError(
-                "Encoder+CTC ONNX not found: %s" % enc_path)
+                f"Encoder+CTC ONNX not found: {enc_path}")
         _onnx_encoder = ort.InferenceSession(
             enc_path, opts, providers=ORT_PROVIDERS)
         logger.info("Encoder+CTC ONNX loaded in %.1fs (shared)",
@@ -859,7 +842,7 @@ def _load_onnx_models(model_dir, num_threads=4):
 
 # ── ASRSession — Dolphin ─────────────────────────────────────────────
 
-class ASRSession(object):
+class ASRSession:
     """Dolphin ASR streaming session.
 
     Provides ``update(chunk, last)`` → ``get_result()`` streaming API.
@@ -1030,14 +1013,13 @@ class ASRSession(object):
                 keep_segs.append(seg)
         self._vad_segs = keep_segs
 
-        if last:
-            if len(self._cached_pcm) > 0 and self._vad_ever_fired:
-                remaining_pcm = self._cached_pcm.copy()
-                begin_ms = int(self._pcm_trimmed_ms)
-                end_ms = int(self._pcm_trimmed_ms +
-                             len(remaining_pcm) * 1000 / SAMPLE_RATE)
-                self._do_asr_seg(None, forced_pcm=remaining_pcm)
-                self._completed_vad_segs.append((begin_ms, end_ms))
+        if last and len(self._cached_pcm) > 0 and self._vad_ever_fired:
+            remaining_pcm = self._cached_pcm.copy()
+            begin_ms = int(self._pcm_trimmed_ms)
+            end_ms = int(self._pcm_trimmed_ms +
+                         len(remaining_pcm) * 1000 / SAMPLE_RATE)
+            self._do_asr_seg(None, forced_pcm=remaining_pcm)
+            self._completed_vad_segs.append((begin_ms, end_ms))
 
     def get_result(self):
         """Return results in standard format.
@@ -1104,7 +1086,6 @@ class ASRSession(object):
         MAX_TOTAL_S = 12
         MIN_OVERLAP_S = 1.5
         MAX_CHARS_BEFORE_FORCE = 20
-        FRAME_GUARD = 2
 
         if forced_pcm is not None:
             seg_pcm = forced_pcm
@@ -1366,7 +1347,7 @@ class ASRSession(object):
 #  ═══════════════════════════════════════════════════════════════════════════
 # ============================================================================
 
-class DolphinStreamingProcessor(object):
+class DolphinStreamingProcessor:
     """流式 ASR 处理器。
 
     封装 ASRSession，管理 PCM 缓冲、VAD 分段、标点断句和结果去重。
@@ -1402,14 +1383,14 @@ class DolphinStreamingProcessor(object):
         self._sent_count = 0
         self._total_samples = 0
         # 保存构造参数以便 reset
-        self._init_args = dict(
-            model_dir=model_dir,
-            vad_model_dir=vad_model_dir,
-            num_threads=num_threads,
-            max_end_sil=max_end_sil,
-            max_seg_dur=max_seg_dur,
-            enable_partial=enable_partial,
-        )
+        self._init_args = {
+            "model_dir": model_dir,
+            "vad_model_dir": vad_model_dir,
+            "num_threads": num_threads,
+            "max_end_sil": max_end_sil,
+            "max_seg_dur": max_seg_dur,
+            "enable_partial": enable_partial,
+        }
 
     def feed(self, pcm_bytes, is_end=False):
         """输入 PCM S16LE 片段，返回识别结果列表。
@@ -1598,7 +1579,7 @@ class AsrWebSocketHandler(tornado.websocket.WebSocketHandler):
         else:
             self._send_json({
                 "type": "error",
-                "message": "unknown action: %s" % action,
+                "message": f"unknown action: {action}",
             })
 
     def check_origin(self, origin):
@@ -1682,7 +1663,7 @@ class AsrPostAudioHandler(tornado.web.RequestHandler):
             else:
                 self.write(json.dumps({
                     "status": "10002",
-                    "message": "unsupported format: %s" % audio_format,
+                    "message": f"unsupported format: {audio_format}",
                 }))
                 return
 
@@ -1748,7 +1729,7 @@ class AsrPostAudioHandler(tornado.web.RequestHandler):
 
 # ── ASR Server 主类 ──────────────────────────────────────────────────
 
-class AsrServer(object):
+class AsrServer:
     """ASR WebSocket + HTTP 服务。
 
     同时提供:
@@ -1808,7 +1789,7 @@ class AsrServer(object):
             (vad_model, "vad.onnx"),
         ]:
             if not osp.exists(path):
-                missing.append("%s (%s)" % (desc, path))
+                missing.append(f"{desc} ({path})")
 
         if missing:
             logger.warning("Model check: missing files: %s",

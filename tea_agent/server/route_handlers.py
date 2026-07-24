@@ -10,19 +10,16 @@ Imports:
 import asyncio
 import base64 as b64mod
 import contextlib
-from datetime import datetime
-import io
 import json
 import os
 import struct
 import threading
 import time
-import traceback
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
@@ -33,18 +30,17 @@ from ._compat import (
     __version__,
     _active_sessions,
     _active_sessions_lock,
+    _background_buffer_reader,
     _background_sessions,
     _background_sessions_lock,
-    _background_buffer_reader,
-    _read_buffer_since,
     _chat_stream_sse_wrapper,
+    _is_topic_busy,
     _max_iter_pending,
     _question_pending,
     _queue_add,
     _queue_list,
     _queue_remove,
-    _queue_pop,
-    _is_topic_busy,
+    _read_buffer_since,
     get_server,
     logger,
 )
@@ -484,8 +480,12 @@ def _get_asr_engine():
         try:
             # Import and warm up
             from tea_agent.asr_srv.asr_srv_dolphin import (
-                DolphinStreamingProcessor, _load_onnx_models, ASRSession,
-                SAMPLE_RATE, DEFAULT_MODEL_DIR, DEFAULT_VAD_PARENT_DIR,
+                DEFAULT_MODEL_DIR,
+                DEFAULT_VAD_PARENT_DIR,
+                SAMPLE_RATE,
+                ASRSession,
+                DolphinStreamingProcessor,
+                _load_onnx_models,
             )
             # Pre-warm models (module-level singleton)
             _load_onnx_models(model_dir, num_threads=4)
@@ -540,8 +540,8 @@ async def handle_asr_transcribe(request):
         return JSONResponse({"ok": False, "error": engine.get("reason", "ASR not available")},
                             status_code=503)
 
-    SAMPLE_RATE = engine["sample_rate"]
-    ASRSession = engine["_ASRSession"]
+    sample_rate = engine["sample_rate"]
+    asr_session_cls = engine["_ASRSession"]
     model_dir = engine["model_dir"]
     vad_model_dir = engine["vad_model_dir"]
 
@@ -577,16 +577,13 @@ async def handle_asr_transcribe(request):
                 else:
                     audio_bytes = b64mod.b64decode(audio_data)
                 audio_format = body.get("format", audio_format)
-            fmt = body.get("format", audio_format)
         except (json.JSONDecodeError, Exception):
             pass
 
     # Try raw binary body
     if audio_bytes is None:
-        try:
+        with contextlib.suppress(Exception):
             audio_bytes = await request.body()
-        except Exception:
-            pass
 
     if not audio_bytes or len(audio_bytes) < 100:
         return JSONResponse({"ok": False, "error": "未收到有效的音频数据"},
@@ -621,7 +618,7 @@ async def handle_asr_transcribe(request):
             import subprocess
             proc = await asyncio.create_subprocess_exec(
                 "ffmpeg", "-i", "pipe:0", "-f", "s16le", "-acodec", "pcm_s16le",
-                "-ar", str(SAMPLE_RATE), "-ac", "1", "pipe:1",
+                "-ar", str(sample_rate), "-ac", "1", "pipe:1",
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(
@@ -649,7 +646,7 @@ async def handle_asr_transcribe(request):
 
     # ── Run ASR ──
     try:
-        sess = ASRSession(
+        sess = asr_session_cls(
             model_dir=model_dir,
             vad_model_dir=vad_model_dir,
             num_threads=2,
@@ -672,7 +669,7 @@ async def handle_asr_transcribe(request):
             "ok": True,
             "text": full_text,
             "segments": segments,
-            "duration_ms": int(len(pcm_f32) / SAMPLE_RATE * 1000),
+            "duration_ms": int(len(pcm_f32) / sample_rate * 1000),
         })
 
     except Exception as e:
@@ -703,14 +700,14 @@ async def handle_asr_ws(websocket: WebSocket):
         await websocket.close()
         return
 
-    DolphinStreamingProcessor = engine["_DolphinStreamingProcessor"]
+    streaming_processor_cls = engine["_DolphinStreamingProcessor"]
     model_dir = engine["model_dir"]
     vad_model_dir = engine["vad_model_dir"]
 
     await websocket.accept()
     processor = None
     try:
-        processor = DolphinStreamingProcessor(
+        processor = streaming_processor_cls(
             model_dir=model_dir,
             vad_model_dir=vad_model_dir,
             num_threads=2,
@@ -754,10 +751,8 @@ async def handle_asr_ws(websocket: WebSocket):
         logger.info("ASR WebSocket disconnected")
     except Exception as e:
         logger.warning("ASR WebSocket error: %s", e)
-        try:
+        with contextlib.suppress(Exception):
             await websocket.send_json({"type": "error", "message": str(e)})
-        except Exception:
-            pass
     finally:
         if processor:
             try:
@@ -1652,7 +1647,6 @@ async def handle_dag_image(request):
     fmt = request.query_params.get("format", "svg")
 
     from tea_agent.multi_agent.dag_dot_renderer import (
-        check_dot_available,
         render_dag_dict_to_png,
         render_dag_dict_to_svg,
     )
@@ -1779,7 +1773,7 @@ async def handle_file_tree(request):
 
     req_path = request.query_params.get("path", "")
     root = _os.getcwd()
-    
+
     if req_path:
         target = _Path(root) / req_path
         # 安全检查：不能超出项目根目录
@@ -1800,15 +1794,15 @@ async def handle_file_tree(request):
         return JSONResponse({"ok": False, "error": "不是目录"}, status_code=400)
 
     # 忽略的目录模式
-    _IGNORED_DIRS = {
+    ignored_dirs = {
         ".git", "node_modules", "__pycache__", ".venv", "venv",
-        ".tea_agent_run", ".git", ".svn", ".hg", ".idea", ".vscode",
+        ".tea_agent_run", ".svn", ".hg", ".idea", ".vscode",
         "dist", "build", "build_mini_dist", "build_nuitka_dist",
-        ".egg-info", "__pycache__", ".mypy_cache", ".pytest_cache",
+        ".egg-info", ".mypy_cache", ".pytest_cache",
     }
-    _IGNORED_EXTS = {".pyc", ".pyo", ".egg", ".whl", ".jpg", ".jpeg",
-                     ".png", ".gif", ".ico", ".svg", ".webp", ".mp4",
-                     ".mp3", ".wav", ".ogg", ".pdf", ".zip", ".tar.gz"}
+    ignored_exts = {".pyc", ".pyo", ".egg", ".whl", ".jpg", ".jpeg",
+                    ".png", ".gif", ".ico", ".svg", ".webp", ".mp4",
+                    ".mp3", ".wav", ".ogg", ".pdf", ".zip", ".tar.gz"}
 
     items = []
     try:
@@ -1816,7 +1810,7 @@ async def handle_file_tree(request):
             name = entry.name
             if name.startswith(".") and name not in (".env", ".gitignore", ".dockerignore"):
                 continue
-            if entry.is_dir() and name in _IGNORED_DIRS:
+            if entry.is_dir() and name in ignored_dirs:
                 continue
 
             item = {
@@ -1831,7 +1825,7 @@ async def handle_file_tree(request):
                     item["size"] = entry.stat().st_size
                 except OSError:
                     item["size"] = 0
-                if ext in _IGNORED_EXTS:
+                if ext in ignored_exts:
                     continue
             items.append(item)
     except PermissionError:

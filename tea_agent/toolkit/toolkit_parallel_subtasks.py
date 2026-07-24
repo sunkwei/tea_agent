@@ -6,6 +6,7 @@
 将复杂问题分解为子任务，简单任务用 lite agent 并发执行。
 """
 
+import contextlib
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -169,15 +170,13 @@ def toolkit_parallel_subtasks(
                         errors.append(result)
                     # 更新 DAG 节点状态
                     if viz_id:
-                        try:
+                        with contextlib.suppress(Exception):
                             SimpleDagRegistry.update_node(
                                 viz_id, task.get("id", "unknown"),
                                 state="completed" if result["status"] == "success" else "failed",
                                 error=result.get("error"),
                                 duration=result.get("elapsed", 0),
                             )
-                        except Exception:
-                            pass
                 except Exception as e:
                     errors.append({
                         "task_id": task.get("id", "unknown"),
@@ -185,13 +184,11 @@ def toolkit_parallel_subtasks(
                         "error": str(e),
                     })
                     if viz_id:
-                        try:
+                        with contextlib.suppress(Exception):
                             SimpleDagRegistry.update_node(
                                 viz_id, task.get("id", "unknown"),
                                 state="failed", error=str(e),
                             )
-                        except Exception:
-                            pass
 
     total_elapsed = time.time() - start_time
 

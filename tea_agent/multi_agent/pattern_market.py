@@ -12,6 +12,8 @@ PatternMarket — Agent 模式市场（可复用模式仓库）。
 注意: 与 CheckpointManager / TraceEngine 共享同一个 DB。
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import sqlite3
@@ -100,7 +102,7 @@ class PatternMarket:
         self._seed_builtins()
 
     @classmethod
-    def get_instance(cls, db_path: str | None = None) -> "PatternMarket":
+    def get_instance(cls, db_path: str | None = None) -> PatternMarket:
         """获取单例实例。"""
         key = db_path or cls.DEFAULT_DB
         with cls._inst_lock:
@@ -383,7 +385,7 @@ class PatternMarket:
 
     # ── 实例化 ──────────────────────────────────
 
-    def instantiate(self, pattern_id: str, **overrides) -> "RoleAgent | None":
+    def instantiate(self, pattern_id: str, **overrides) -> RoleAgent | None:  # noqa: F821
         """
         从模式创建 RoleAgent 实例。
 
@@ -412,7 +414,7 @@ class PatternMarket:
         logger.info(f"🎭 从模式实例化: {pattern['name']} -> {agent.agent_id}")
         return agent
 
-    def instantiate_by_name(self, name: str, **overrides) -> "RoleAgent | None":
+    def instantiate_by_name(self, name: str, **overrides) -> RoleAgent | None:  # noqa: F821
         """按名称实例化模式。"""
         pattern = self.get_by_name(name)
         if not pattern:

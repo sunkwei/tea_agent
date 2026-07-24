@@ -247,7 +247,7 @@ class AgentConfig:
             try:
                 value = (
                     value.lower() in ("true", "1", "yes", "on")
-                    if expected_type == bool and isinstance(value, str)
+                    if expected_type is bool and isinstance(value, str)
                     else expected_type(value)
                 )
             except (ValueError, TypeError):

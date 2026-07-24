@@ -79,7 +79,7 @@ def test_loop():
         iters.__setitem__('n', iters['n']+1),
         {'continue': iters['n'] <= 2}
     )[1], config={'max_iterations': 5}))
-    wf = WorkflowExec(dag).run()
+    WorkflowExec(dag).run()
     assert iters['n'] >= 2, f'iters={iters["n"]}'
     print('  ✅ LOOP循环')
 

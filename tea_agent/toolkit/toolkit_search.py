@@ -1,5 +1,6 @@
 # version: 2.0.0 — unified dict return, cleaned gen artifacts
 
+import ast
 import logging
 
 logger = logging.getLogger("toolkit")
@@ -57,7 +58,6 @@ def _search_duckduckgo(query: str, max_results: int, lang: str):
         max_results: Description.
         lang: Description.
     """
-    import json
     import re
     from urllib.parse import parse_qs, unquote, urlparse
 
@@ -135,7 +135,6 @@ def _search_baidu(query: str, max_results: int):
         query: Description.
         max_results: Description.
     """
-    import json
     from urllib.parse import parse_qs, urlparse
 
     import requests
@@ -314,7 +313,6 @@ def _search_codebase(query: str, root_path: str, glob_pattern: str, max_results:
 def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_results: int):
     """Python 实现的代码全文搜索（ripgrep 不可用时的回退方案）"""
     import fnmatch
-    import json
     import os
     import re
 
@@ -359,7 +357,6 @@ def _search_codebase_python(query: str, root_path: str, glob_pattern: str, max_r
 def _search_symbol(query: str, root_path: str, max_results: int):
     """符号搜索（查找函数/类定义）"""
     import ast
-    import json
     import os
 
     if not root_path:
@@ -399,7 +396,7 @@ def _search_symbol(query: str, root_path: str, max_results: int):
                     tree = ast.parse(source, filename=filepath)
 
                     for node in ast.walk(tree):
-                        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
                             if node.name == query or query in node.name:
                                 # 相对于 abs_root_path 计算相对路径
                                 rel_path = os.path.relpath(filepath, abs_root_path)
@@ -461,7 +458,6 @@ def _search_github(query: str, search_type: str, max_results: int):
         search_type: repos/code/issues
         max_results: 最大结果数
     """
-    import json
 
     import requests
 

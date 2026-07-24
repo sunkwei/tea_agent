@@ -1,14 +1,13 @@
 # version: 1.0.0
 
+import logging
 import os
 import smtplib
 import ssl
-import logging
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
 from email import encoders
-from typing import Optional
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 logger = logging.getLogger('toolkit')
 
@@ -16,13 +15,13 @@ def toolkit_send_email(
     to: str,
     subject: str,
     body: str,
-    html: Optional[str] = None,
-    cc: Optional[str] = None,
-    bcc: Optional[str] = None,
-    attachments: Optional[list] = None,
+    html: str | None = None,
+    cc: str | None = None,
+    bcc: str | None = None,
+    attachments: list | None = None,
     smtp_server: str = 'smtp.gmail.com',
     smtp_port: int = 587,
-    sender: Optional[str] = None,
+    sender: str | None = None,
     email: str = '',
     password: str = '',
 ):
@@ -54,7 +53,7 @@ def toolkit_send_email(
     if attachments is None:
         attachments = []
 
-    if isinstance(attachments, (list, tuple)):
+    if isinstance(attachments, list | tuple):
         pass
     else:
         attachments = [attachments]

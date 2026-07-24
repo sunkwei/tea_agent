@@ -1,5 +1,6 @@
 # version: 1.0.0
 
+import asyncio
 import logging
 
 logger = logging.getLogger("toolkit")
@@ -90,7 +91,6 @@ def _mcp_run_async(coro, timeout: float = 30.0):
 def _mcp_connect(server_name: str, command: str, args: list, transport: str, url: str):
     """连接 MCP Server（在持久事件循环中，保持 stdio context manager 活跃）"""
     import asyncio
-    import json
 
     if not server_name:
         return {"ok": False, "error": "server_name 不能为空", "returncode": 1}
@@ -218,7 +218,6 @@ def _mcp_list_tools(server_name: str):
 
 def _mcp_call(server_name: str, tool_name: str, tool_args: dict):
     """调用 MCP 工具（在持久事件循环中）"""
-    import json
 
     if not server_name:
         return {"ok": False, "error": "server_name 不能为空", "returncode": 1}

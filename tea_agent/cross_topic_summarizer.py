@@ -12,7 +12,6 @@ import json
 import logging
 import os
 import threading
-from datetime import datetime
 
 logger = logging.getLogger("agent.cross_topic")
 
@@ -184,7 +183,7 @@ class CrossTopicSummarizer:
             return []
         # 简单的统计回退：工作密度趋势
         return [{
-            "content": f"最近 {len(topics)} 个会话涵盖了 {len(set(t[:20] for t in titles))} 个不同主题方向。"
+            "content": f"最近 {len(topics)} 个会话涵盖了 {len({t[:20] for t in titles})} 个不同主题方向。"
                        f"建议检查是否有偏离主要工作线的情况。",
             "importance": 2,
         }]

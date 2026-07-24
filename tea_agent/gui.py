@@ -66,10 +66,9 @@ _storage_ = None
 _toolkit_ = None
 
 # tlk 模块：toolkit 实例存放处，供 globals()["tlk"].toolkit 访问
-import tea_agent.tlk as tlk  # noqa: E402
-
 # ====================== 从 _gui 子包导入（组合模式） ======================
 import tea_agent._gui._fonts as _fonts_mod  # 模块引用，动态获取 _DEFAULT_FONT_SIZE  # noqa: E402
+import tea_agent.tlk as tlk  # noqa: E402
 from tea_agent._gui._fonts import (  # noqa: E402
     _init_fonts,
 )
@@ -514,7 +513,7 @@ class TkGUI(Agent):
 
     def export_last_pdf(self, e=None):
         """Ctrl+P: 导出 PDF。
-        
+
         - HtmlFrame 模式：导出当前渲染的轮次（Alt+Up/Down 切换）
         - Console 模式（char area）：检测显示区最上方的 user 消息所属轮次
         """

@@ -9,36 +9,46 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from typing import Any
 
 # ── 版本号（来自 server） ──
-from .server import __version__, get_server, logger as server_logger
+from .server import __version__, get_server
+from .server import logger as server_logger
+
 logger = server_logger
 
 # ── 共享状态（来自 modules.state） ──
-from .modules.state import (
-    active_sessions as _active_sessions,
-    active_sessions_lock as _active_sessions_lock,
-    background_sessions as _background_sessions,
-    background_sessions_lock as _background_sessions_lock,
-    background_buffers as _background_buffers,
-    background_buffers_lock as _background_buffers_lock,
-    max_iter_pending as _max_iter_pending,
-    question_pending as _question_pending,
-    message_queue as _message_queue,
-    message_queue_lock as _message_queue_lock,
-    is_topic_busy,
-    queue_add, queue_list, queue_remove, queue_pop,
-    read_buffer_since,
-    create_background_buffer, append_to_buffer,
-    mark_buffer_done, cleanup_buffer,
-    register_active, unregister_active,
-    register_background, unregister_background,
-    clear_all,
-)
-
 # ── AgentModule 方法（通过 get_registry 间接获取，确保热重载后仍有效） ──
 from .module import get_registry as _get_registry
+from .modules.state import (
+    active_sessions as _active_sessions,
+)
+from .modules.state import (
+    active_sessions_lock as _active_sessions_lock,
+)
+from .modules.state import (
+    append_to_buffer,
+    cleanup_buffer,
+    create_background_buffer,
+    is_topic_busy,
+    mark_buffer_done,
+    queue_add,
+    queue_list,
+    queue_pop,
+    queue_remove,
+    read_buffer_since,
+)
+from .modules.state import (
+    background_sessions as _background_sessions,
+)
+from .modules.state import (
+    background_sessions_lock as _background_sessions_lock,
+)
+from .modules.state import (
+    max_iter_pending as _max_iter_pending,
+)
+from .modules.state import (
+    question_pending as _question_pending,
+)
 
 
 def _call_agent_module(method_name: str, *args, **kwargs):
@@ -54,7 +64,7 @@ def _call_agent_module(method_name: str, *args, **kwargs):
 
 
 def _chat_stream_sse_wrapper(session, storage, msg,
-                              queue: "asyncio.Queue", topic_id: str = "",
+                              queue: asyncio.Queue, topic_id: str = "",
                               event_loop=None):
     """转发到 AgentModule.chat_stream_sse。"""
     return _call_agent_module("chat_stream_sse", session, storage, msg,
@@ -73,7 +83,7 @@ def _schedule_buffer_cleanup(topic_id: str, delay: float = 30.0) -> None:
 async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
                                       event_loop=None):
     """从 queue 消费事件并写入后台缓冲区供前端轮询。"""
-    buf = create_background_buffer(topic_id)
+    create_background_buffer(topic_id)
     index = 0
     try:
         while True:

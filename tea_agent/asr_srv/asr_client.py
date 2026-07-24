@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-#
 # @file: asr_client.py
 # @brief: ASR WebSocket 测试客户端 — 支持 WAV 文件测试和实时麦克风输入
 #
@@ -37,53 +35,30 @@
 #  Copyright (C) 2026
 # ============================================================================
 
-from __future__ import absolute_import, division, print_function
+from __future__ import annotations
 
 import argparse
+
+# ── 第三方库检测 ────────────────────────────────────────────────────
+import importlib.util
 import json
 import logging
-import os
-import os.path as osp
-import struct
 import sys
 import time
 import traceback
 
-# ── 第三方库检测 ────────────────────────────────────────────────────
-try:
-    import numpy as np
-    HAVE_NP = True
-except ImportError:
-    HAVE_NP = False
+HAVE_NP = importlib.util.find_spec("numpy") is not None
+HAVE_WS = importlib.util.find_spec("websockets") is not None
+HAVE_SOUNDFILE = importlib.util.find_spec("soundfile") is not None
+HAVE_PYAUDIO = importlib.util.find_spec("pyaudio") is not None
+HAVE_SOUNDDEVICE = importlib.util.find_spec("sounddevice") is not None
 
-try:
+if HAVE_WS:
     import websockets as ws_lib
     from websockets.sync.client import connect as ws_connect
-    HAVE_WS = True
-except ImportError:
-    HAVE_WS = False
 
-# ── 音频输入检测 ────────────────────────────────────────────────────
-HAVE_SOUNDFILE = False
-try:
-    import soundfile as sf
-    HAVE_SOUNDFILE = True
-except ImportError:
-    pass
-
-HAVE_PYAUDIO = False
-try:
-    import pyaudio as pa
-    HAVE_PYAUDIO = True
-except ImportError:
-    pass
-
-HAVE_SOUNDDEVICE = False
-try:
-    import sounddevice as sd
-    HAVE_SOUNDDEVICE = True
-except ImportError:
-    pass
+if HAVE_NP:
+    import numpy as np
 
 # ====================================================================
 #  日志
@@ -132,6 +107,7 @@ def read_wav(path):
 
 def _read_wav_soundfile(path):
     """使用 soundfile 读取 WAV"""
+    import soundfile as sf
     data, sr = sf.read(path, dtype='float32')
     if data.ndim > 1:
         data = data.mean(axis=1)  # 转 mono
@@ -210,7 +186,7 @@ def _resample(data, orig_sr, target_sr):
 # ====================================================================
 #  WebSocket 客户端
 # ====================================================================
-class AsrWsClient(object):
+class AsrWsClient:
     """ASR WebSocket 客户端
 
     连接到 ASR 服务器的 WebSocket 接口，发送 PCM 数据，接收识别结果。
@@ -314,7 +290,6 @@ class AsrWsClient(object):
                 print(f"\r  \033[34m[{begin_ms:>6d}ms → {end_ms:>6d}ms] \033[33m{text}\033[0m",
                       end="", flush=True)
             elif typ == "final":
-                dur = end_ms - begin_ms
                 print(f"\r  \033[32m[{begin_ms:>6d}ms → {end_ms:>6d}ms] {text}\033[0m")
             else:
                 print(f"  [{typ}] {text}")
@@ -436,10 +411,7 @@ def _run_mic_sounddevice(args, url):
         if status:
             logger.debug("Audio status: %s", status)
         # indata 是 float32 [-1, 1], shape (frames, channels)
-        if indata.ndim > 1 and indata.shape[1] > 1:
-            mono = indata.mean(axis=1)
-        else:
-            mono = indata.flatten()
+        mono = indata.mean(axis=1) if indata.ndim > 1 and indata.shape[1] > 1 else indata.flatten()
         # 转 S16LE
         pcm = (np.clip(mono, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
         try:
@@ -463,7 +435,7 @@ def _run_mic_sounddevice(args, url):
     except KeyboardInterrupt:
         logger.info("")
         logger.info("Stopped by user")
-    except Exception as e:
+    except Exception:
         logger.error("Audio error: %s", traceback.format_exc())
 
     # 结束
@@ -512,7 +484,7 @@ def _run_mic_pyaudio(args, url):
     except KeyboardInterrupt:
         logger.info("")
         logger.info("Stopped by user")
-    except Exception as e:
+    except Exception:
         logger.error("Error: %s", traceback.format_exc())
 
     stream.stop_stream()
@@ -564,7 +536,7 @@ Examples:
 
     # ── 音频参数 ──
     ap.add_argument("--chunk_ms", type=int, default=CHUNK_MS_DEFAULT,
-                    help="分片大小 (ms, default: %d)" % CHUNK_MS_DEFAULT)
+                    help=f"分片大小 (ms, default: {CHUNK_MS_DEFAULT})")
     ap.add_argument("--recv_timeout", type=float, default=0.05,
                     help="接收结果超时 (秒, default: 0.05)")
 

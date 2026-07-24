@@ -156,11 +156,6 @@ class TestSessionContextCustomInit:
 
         for f in fields(SessionContext):
             # 检查 default 或 default_factory
-            has_default = (
-                f.default is not None
-                or f.default_factory is not None
-                or f.default is not None
-            )
             # default 为 None 或 '' 或 False 也算有默认值
             if f.name == "_last_usage":
                 # field with default_factory

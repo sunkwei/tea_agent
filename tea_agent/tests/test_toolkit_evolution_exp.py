@@ -18,7 +18,7 @@ def test_list_empty():
 
 def test_record_and_search():
     """记录一条经验后应能搜到"""
-    from tea_agent.toolkit.toolkit_evolution_exp import toolkit_evolution_exp, _get_exp_path, _save_exp_db
+    from tea_agent.toolkit.toolkit_evolution_exp import _save_exp_db, toolkit_evolution_exp
     # 清空测试数据
     _save_exp_db([])
     result = toolkit_evolution_exp(action="record", description="test_exp", category="test")

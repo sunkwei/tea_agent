@@ -202,7 +202,7 @@ class TestSetRootLevel:
 
     def test_set_debug(self, mock_home):
         """切换到 DEBUG 级别（控制台 handler 级别变化）"""
-        from tea_agent.logging_setup import setup_logging, _set_root_level
+        from tea_agent.logging_setup import _set_root_level, setup_logging
         setup_logging()  # 先初始化，确保有 handler
         root = logging.getLogger()
         # 控制台 handler 初始为 INFO
@@ -217,7 +217,7 @@ class TestSetRootLevel:
 
     def test_set_info(self, mock_home):
         """切换到 INFO 级别（控制台 handler 级别变化）"""
-        from tea_agent.logging_setup import setup_logging, _set_root_level
+        from tea_agent.logging_setup import _set_root_level, setup_logging
         setup_logging(debug=True)  # 先设为 debug，控制台 handler 为 DEBUG
         root = logging.getLogger()
         _set_root_level(False)

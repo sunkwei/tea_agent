@@ -8,16 +8,23 @@ Imports:
 """
 
 import asyncio
+import base64 as b64mod
 import contextlib
 from datetime import datetime
+import io
 import json
 import os
+import struct
 import threading
 import time
+import traceback
 import uuid
 from pathlib import Path
 
+import numpy as np
+
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from tea_agent.multi_agent.workflow_viz import DagVizRegistry, get_viz_html
 from tea_agent.toolkit.toolkit_export_last_pdf import export_topic_pdf
@@ -417,6 +424,350 @@ async def handle_screenshot_interactive(request):
 # ================================================================
 #  Web UI API — SSE Chat
 # ================================================================
+
+# ================================================================
+#  ASR — 语音识别（语音输入支持）
+# ================================================================
+
+_ASR_ENGINE = None
+_ASR_ENGINE_LOCK = threading.Lock()
+
+def _get_asr_engine():
+    """Lazy-load the ASR engine (Dolphin Streaming ASR).
+
+    Returns a dict with 'status' and optionally 'processor' factory.
+    """
+    global _ASR_ENGINE
+    if _ASR_ENGINE is not None:
+        return _ASR_ENGINE
+
+    with _ASR_ENGINE_LOCK:
+        if _ASR_ENGINE is not None:
+            return _ASR_ENGINE
+
+        result = {"status": "unavailable", "reason": ""}
+        try:
+            import numpy as np
+            _ = np  # ensure numpy is available
+        except ImportError:
+            result["reason"] = "numpy not installed"
+            _ASR_ENGINE = result
+            return result
+
+        # Check for ONNX Runtime
+        try:
+            import onnxruntime as ort
+            _ = ort
+        except ImportError:
+            result["reason"] = "onnxruntime not installed (pip install onnxruntime)"
+            _ASR_ENGINE = result
+            return result
+
+        # Check for model files
+        asr_srv_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "asr_srv")
+        model_dir = os.path.join(asr_srv_dir, "model", "dolphin")
+        vad_model_dir = os.path.join(asr_srv_dir, "model")
+
+        required_files = [
+            ("Frontend", os.path.join(model_dir, "dolphin_base_frontend.onnx")),
+            ("Encoder", os.path.join(model_dir, "dolphin_base_encoder_ctc_u8.onnx")),
+            ("Tokenizer", os.path.join(model_dir, "bpe.model")),
+            ("Units", os.path.join(model_dir, "units.txt")),
+            ("VAD", os.path.join(vad_model_dir, "vad", "vad.onnx")),
+        ]
+        missing = [name for name, path in required_files if not os.path.exists(path)]
+        if missing:
+            result["reason"] = f"Missing model files: {', '.join(missing)}"
+            _ASR_ENGINE = result
+            return result
+
+        try:
+            # Import and warm up
+            from tea_agent.asr_srv.asr_srv_dolphin import (
+                DolphinStreamingProcessor, _load_onnx_models, ASRSession,
+                SAMPLE_RATE, DEFAULT_MODEL_DIR, DEFAULT_VAD_PARENT_DIR,
+            )
+            # Pre-warm models (module-level singleton)
+            _load_onnx_models(model_dir, num_threads=4)
+
+            result["status"] = "ready"
+            result["model_dir"] = model_dir
+            result["vad_model_dir"] = vad_model_dir
+            result["sample_rate"] = SAMPLE_RATE
+            result["SAMPLE_RATE"] = SAMPLE_RATE
+            result["_DolphinStreamingProcessor"] = DolphinStreamingProcessor
+            result["_ASRSession"] = ASRSession
+            result["_DEFAULT_MODEL_DIR"] = DEFAULT_MODEL_DIR
+            result["_DEFAULT_VAD_PARENT_DIR"] = DEFAULT_VAD_PARENT_DIR
+            _ASR_ENGINE = result
+            logger.info("ASR engine loaded successfully (model_dir=%s)", model_dir)
+        except Exception as e:
+            result["reason"] = f"ASR engine init failed: {e}"
+            logger.warning("ASR engine init failed: %s", e)
+            _ASR_ENGINE = result
+
+        return _ASR_ENGINE
+
+
+async def handle_asr_status(request):
+    """GET /api/asr/status — 查询 ASR 引擎状态"""
+    engine = _get_asr_engine()
+    if engine["status"] == "ready":
+        return JSONResponse({
+            "ok": True,
+            "status": "ready",
+            "sample_rate": engine.get("sample_rate", 16000),
+        })
+    return JSONResponse({
+        "ok": False,
+        "status": "unavailable",
+        "reason": engine.get("reason", "unknown"),
+    })
+
+
+async def handle_asr_transcribe(request):
+    """POST /api/asr/transcribe — 音频文件转文字
+
+    接受 multipart/form-data 或 JSON body:
+      - file: WAV/WebM/PCM 音频文件 (multipart)
+      - audio_data: base64 编码的音频 (JSON)
+      - format: "wav" | "pcm" | "webm" (默认自动检测)
+
+    返回: {"ok": true, "text": "识别的文字", "segments": [...]}
+    """
+    engine = _get_asr_engine()
+    if engine["status"] != "ready":
+        return JSONResponse({"ok": False, "error": engine.get("reason", "ASR not available")},
+                            status_code=503)
+
+    SAMPLE_RATE = engine["sample_rate"]
+    ASRSession = engine["_ASRSession"]
+    model_dir = engine["model_dir"]
+    vad_model_dir = engine["vad_model_dir"]
+
+    audio_bytes = None
+    audio_format = "auto"
+
+    # Try multipart file upload
+    content_type = request.headers.get("content-type", "")
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        file = form.get("file")
+        if file:
+            audio_bytes = await file.read()
+            fname = (file.filename or "").lower()
+            if fname.endswith(".wav"):
+                audio_format = "wav"
+            elif fname.endswith(".pcm") or fname.endswith(".raw"):
+                audio_format = "pcm"
+            elif fname.endswith(".webm"):
+                audio_format = "webm"
+        audio_format = form.get("format", audio_format)
+
+    # Try JSON body with base64
+    if audio_bytes is None:
+        try:
+            body = await request.json()
+            audio_data = body.get("audio_data") or body.get("audio", "")
+            if audio_data:
+                # Handle data URI
+                if audio_data.startswith("data:"):
+                    _, b64part = audio_data.split(",", 1)
+                    audio_bytes = b64mod.b64decode(b64part)
+                else:
+                    audio_bytes = b64mod.b64decode(audio_data)
+                audio_format = body.get("format", audio_format)
+            fmt = body.get("format", audio_format)
+        except (json.JSONDecodeError, Exception):
+            pass
+
+    # Try raw binary body
+    if audio_bytes is None:
+        try:
+            audio_bytes = await request.body()
+        except Exception:
+            pass
+
+    if not audio_bytes or len(audio_bytes) < 100:
+        return JSONResponse({"ok": False, "error": "未收到有效的音频数据"},
+                            status_code=400)
+
+    # ── Decode to PCM S16LE 16kHz mono ──
+    try:
+        if audio_format == "pcm" or audio_format == "auto":
+            # Assume raw PCM S16LE
+            pcm_bytes = audio_bytes
+        elif audio_format == "wav" or audio_format == "auto":
+            # Try to parse WAV header
+            if audio_bytes[:4] == b"RIFF" and audio_bytes[8:12] == b"WAVE":
+                # Extract PCM data, skip WAV header
+                # Find "data" chunk
+                offset = 12
+                pcm_bytes = None
+                while offset < len(audio_bytes) - 8:
+                    chunk_id = audio_bytes[offset:offset+4]
+                    chunk_size = struct.unpack_from("<I", audio_bytes, offset+4)[0]
+                    if chunk_id == b"data":
+                        pcm_bytes = audio_bytes[offset+8:offset+8+chunk_size]
+                        break
+                    offset += 8 + chunk_size
+                if pcm_bytes is None:
+                    pcm_bytes = audio_bytes[44:]  # fallback: skip standard 44-byte header
+            else:
+                # Not a WAV, try as raw PCM
+                pcm_bytes = audio_bytes
+        elif audio_format == "webm":
+            # WebM/Opus — try to decode via ffmpeg
+            import subprocess
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-i", "pipe:0", "-f", "s16le", "-acodec", "pcm_s16le",
+                "-ar", str(SAMPLE_RATE), "-ac", "1", "pipe:1",
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=audio_bytes), timeout=30)
+            if proc.returncode != 0:
+                return JSONResponse({"ok": False, "error": f"ffmpeg decode failed: {stderr.decode()[:200]}"},
+                                    status_code=400)
+            pcm_bytes = stdout
+        else:
+            return JSONResponse({"ok": False, "error": f"不支持的格式: {audio_format}"},
+                                status_code=400)
+
+        if not pcm_bytes or len(pcm_bytes) < 320:  # <10ms at 16kHz
+            return JSONResponse({"ok": False, "error": "音频数据太短"},
+                                status_code=400)
+
+        # Convert to float32 numpy array
+        pcm_f32 = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+        pcm_f32 = np.clip(pcm_f32, -1.0, 1.0)
+
+    except Exception as e:
+        logger.exception("Audio decode error")
+        return JSONResponse({"ok": False, "error": f"音频解码失败: {e}"},
+                            status_code=400)
+
+    # ── Run ASR ──
+    try:
+        sess = ASRSession(
+            model_dir=model_dir,
+            vad_model_dir=vad_model_dir,
+            num_threads=2,
+        )
+        sess.update(pcm_f32, last=True)
+        result = sess.get_result()
+        sess.close()
+
+        sentences = result.get("sentences", [])
+        segments = []
+        for begin_ms, end_ms, text in sentences:
+            segments.append({
+                "begin_ms": int(begin_ms),
+                "end_ms": int(end_ms),
+                "text": text.strip(),
+            })
+        full_text = "".join(s["text"] for s in segments)
+
+        return JSONResponse({
+            "ok": True,
+            "text": full_text,
+            "segments": segments,
+            "duration_ms": int(len(pcm_f32) / SAMPLE_RATE * 1000),
+        })
+
+    except Exception as e:
+        logger.exception("ASR transcription error")
+        return JSONResponse({"ok": False, "error": f"语音识别失败: {e}"},
+                            status_code=500)
+
+
+async def handle_asr_ws(websocket: WebSocket):
+    """WebSocket /api/asr/ws — 流式语音识别
+
+    协议:
+      Client → Server: binary 帧 (PCM S16LE, 16kHz, mono)
+      Server → Client: JSON 文本帧
+        {"type":"partial","text":"...","begin_ms":0,"end_ms":1200}
+        {"type":"final","text":"...","begin_ms":0,"end_ms":3200}
+        {"type":"error","message":"..."}
+      Client → Server: JSON 控制帧
+        {"action":"reset"}  — 重置会话
+    """
+    engine = _get_asr_engine()
+    if engine["status"] != "ready":
+        await websocket.accept()
+        await websocket.send_json({
+            "type": "error",
+            "message": "ASR engine not available: " + engine.get("reason", "unknown"),
+        })
+        await websocket.close()
+        return
+
+    DolphinStreamingProcessor = engine["_DolphinStreamingProcessor"]
+    model_dir = engine["model_dir"]
+    vad_model_dir = engine["vad_model_dir"]
+
+    await websocket.accept()
+    processor = None
+    try:
+        processor = DolphinStreamingProcessor(
+            model_dir=model_dir,
+            vad_model_dir=vad_model_dir,
+            num_threads=2,
+            enable_partial=True,
+        )
+        logger.info("ASR WebSocket connected")
+
+        while True:
+            message = await websocket.receive()
+
+            if message["type"] == "websocket.disconnect":
+                break
+
+            if message["type"] == "websocket.receive":
+                if "bytes" in message:
+                    # Binary PCM frame
+                    pcm_bytes = message["bytes"]
+                    if len(pcm_bytes) > 0:
+                        results = processor.feed(pcm_bytes, is_end=False)
+                        for r in results:
+                            await websocket.send_json({
+                                "type": r["type"],
+                                "text": r["text"],
+                                "begin_ms": r.get("begin_ms", 0),
+                                "end_ms": r.get("end_ms", 0),
+                            })
+                elif "text" in message:
+                    # JSON control frame
+                    try:
+                        cmd = json.loads(message["text"])
+                        action = cmd.get("action", "")
+                        if action == "reset":
+                            processor.reset()
+                            await websocket.send_json({"type": "ack", "action": "reset"})
+                        elif action == "ping":
+                            await websocket.send_json({"type": "pong"})
+                    except json.JSONDecodeError:
+                        await websocket.send_json({"type": "error", "message": "invalid JSON"})
+
+    except WebSocketDisconnect:
+        logger.info("ASR WebSocket disconnected")
+    except Exception as e:
+        logger.warning("ASR WebSocket error: %s", e)
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except Exception:
+            pass
+    finally:
+        if processor:
+            try:
+                # Flush remaining audio
+                results = processor.feed(b"", is_end=True)
+                processor.close()
+            except Exception:
+                pass
+        logger.info("ASR WebSocket closed")
+
 
 async def handle_web_chat(request):
     """POST /api/chat - SSE streaming chat for Web UI.

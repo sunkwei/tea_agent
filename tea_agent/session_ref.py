@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 logger = logging.getLogger("session_ref")
@@ -38,6 +39,7 @@ __all__ = [
 _current_session: Any = None
 _current_agent: Any = None
 _setter_info: str = ""
+_session_ref_lock = threading.Lock()
 
 
 def get_session() -> Any:
@@ -46,7 +48,8 @@ def get_session() -> Any:
     Returns:
         OnlineToolSession 或 LiteSession 实例，或 None
     """
-    return _current_session
+    with _session_ref_lock:
+        return _current_session
 
 
 def set_session(sess: Any, setter: str = "") -> None:
@@ -57,7 +60,8 @@ def set_session(sess: Any, setter: str = "") -> None:
         setter: 设置者标识字符串（用于调试），如 "Agent(lightweight)"
     """
     global _current_session
-    _current_session = sess
+    with _session_ref_lock:
+        _current_session = sess
     if sess is not None:
         logger.debug(f"会话已设置 | setter={setter or 'unknown'}")
     else:
@@ -70,7 +74,8 @@ def get_agent() -> Any:
     Returns:
         Agent 实例或 None
     """
-    return _current_agent
+    with _session_ref_lock:
+        return _current_agent
 
 
 def set_agent(agent: Any, setter: str = "") -> None:
@@ -81,7 +86,8 @@ def set_agent(agent: Any, setter: str = "") -> None:
         setter: 设置者标识字符串
     """
     global _current_agent
-    _current_agent = agent
+    with _session_ref_lock:
+        _current_agent = agent
     if agent is not None:
         logger.debug(
             f"Agent 已设置 | setter={setter or 'unknown'} | "
@@ -94,8 +100,9 @@ def set_agent(agent: Any, setter: str = "") -> None:
 def clear() -> None:
     """清除所有会话和 Agent 引用。Agent.close() 时调用。"""
     global _current_session, _current_agent
-    _current_session = None
-    _current_agent = None
+    with _session_ref_lock:
+        _current_session = None
+        _current_agent = None
     logger.debug("所有引用已清除")
 
 
@@ -105,7 +112,8 @@ def is_active() -> bool:
     Returns:
         True 表示有活跃会话
     """
-    return _current_session is not None
+    with _session_ref_lock:
+        return _current_session is not None
 
 
 def get_session_info() -> dict[str, Any]:
@@ -114,8 +122,9 @@ def get_session_info() -> dict[str, Any]:
     Returns:
         包含 has_session / has_agent / agent_mode / session_model 的字典
     """
-    current_session = _current_session
-    current_agent = _current_agent
+    with _session_ref_lock:
+        current_session = _current_session
+        current_agent = _current_agent
     return {
         "has_session": current_session is not None,
         "has_agent": current_agent is not None,

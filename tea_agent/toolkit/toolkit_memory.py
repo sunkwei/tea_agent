@@ -166,7 +166,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
                 pl = priority_labels.get(m["priority"], str(m["priority"]))
                 cat = m.get("category", "general")
                 lines.append(f"  #{m['id']} [{pl}/{cat}]: {m['content']}")
-            return "\n".join(results)
+            return "\n".join(lines)
         except Exception as e:
             return f"❌ 语义搜索失败: {e}"
 

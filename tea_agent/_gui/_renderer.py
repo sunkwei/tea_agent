@@ -22,6 +22,7 @@ from ._markdown import (
     _chat_to_markdown,
     _render_markdown,
     _sanitize_html_control_chars,
+    _sanitize_html_dangerous_tags,
     _validate_html_structure,
 )
 
@@ -62,6 +63,8 @@ class ChatRenderer:
         cleaned = _sanitize_html_control_chars(html)
         if cleaned != html:
             logger.debug(f"[_html_render] 移除了 {len(html) - len(cleaned)} 个控制字符")
+        # 1.5 清洗危险标签和事件处理器
+        cleaned = _sanitize_html_dangerous_tags(cleaned)
         # 2. 结构校验 + 自动修复
         ok, diag, unclosed = _validate_html_structure(cleaned)
         if not ok:

@@ -228,6 +228,10 @@ class AgentModule(HotReloadModule):
         """后台线程运行流式对话。"""
         from tea_agent.store import get_storage
         storage = get_storage()
+        _streamed_text_parts: list[str] = []
+        def _wrapped_cb(text):
+            _streamed_text_parts.append(text)
+            stream_cb(text)
         try:
             if topic_id:
                 cls._load_topic_history(storage, session, topic_id)
@@ -238,12 +242,13 @@ class AgentModule(HotReloadModule):
             if _ga:
                 _ga.current_topic_id = topic_id
             ai_msg, used_tools = session.chat_stream(
-                user_msg, callback=stream_cb, topic_id=topic_id)
-            cls._save_chat_result(storage, session, topic_id, user_msg, ai_msg, used_tools)
+                user_msg, callback=_wrapped_cb, topic_id=topic_id)
+            _effective_ai_msg = ai_msg if ai_msg else "".join(_streamed_text_parts)
+            cls._save_chat_result(storage, session, topic_id, user_msg, _effective_ai_msg, used_tools)
             _usage = getattr(session, '_last_usage', None) or {}
             _model = getattr(session.context, 'model', '')
             _cheap_model = getattr(session.context, 'cheap_model', '')
-            put({"type": "done", "ai_msg": ai_msg,
+            put({"type": "done", "ai_msg": _effective_ai_msg,
                  "tools_used": used_tools or [],
                  "usage": {
                      "total_tokens": _usage.get("total_tokens", 0),
@@ -413,9 +418,10 @@ class AgentModule(HotReloadModule):
 
         _thinking_active = False
         _tool_active = False
+        _streamed_text_parts: list[str] = []
 
         def stream_cb(text: str):
-            nonlocal _thinking_active, _tool_active
+            nonlocal _thinking_active, _tool_active, _streamed_text_parts
             if text.startswith("[TOOL_START:"):
                 _tool_name = text[len("[TOOL_START:"):-1]
                 _put({"type": "tool_start", "name": _tool_name})
@@ -444,6 +450,7 @@ class AgentModule(HotReloadModule):
                 _put({"type": "think", "text": text[7:]})
             else:
                 _put({"type": "token", "text": text})
+                _streamed_text_parts.append(text)
 
         def status_cb(status_msg: str):
             if status_msg.startswith("!MAX_ITER:"):
@@ -486,10 +493,11 @@ class AgentModule(HotReloadModule):
             finally:
                 tlk.toolkit._question_web_handler = None
 
-            if ai_msg is not None:
+            _effective_ai_msg = ai_msg if ai_msg else "".join(_streamed_text_parts)
+            if _effective_ai_msg is not None:
                 try:
                     cls._save_chat_result(storage, session, topic_id, msg,
-                                           ai_msg, used_tools)
+                                           _effective_ai_msg, used_tools)
                 except Exception as save_err:
                     logger.exception(f"Save chat failed: {save_err}")
 
@@ -527,7 +535,7 @@ class AgentModule(HotReloadModule):
                 usage_data["cheap_completion_tokens"] = cheap_usage.get("completion_tokens", 0)
             _put({
                 "type": "done",
-                "ai_msg": ai_msg,
+                "ai_msg": _effective_ai_msg,
                 "used_tools": used_tools,
                 "topic_id": topic_id,
                 "usage": usage_data,

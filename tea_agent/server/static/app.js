@@ -1226,8 +1226,9 @@ window.sendMessage = async function() {
                 refreshTopics();
               }
               // 用 Markdown 重新渲染 AI 最终消息（流式 token 只是 esc 纯文本）
-              if (data.ai_msg && s.bubbleText) {
-                s.bubbleText.innerHTML = formatMarkdown(data.ai_msg);
+              var finalMsg = data.ai_msg || s.fullText;
+              if (finalMsg && s.bubbleText) {
+                s.bubbleText.innerHTML = formatMarkdown(finalMsg);
                 // 移除 tool/think 容器中的 id，避免下次流式清理时误删
                 if (s.thinkContainer) s.thinkContainer.removeAttribute('id');
                 if (s.toolCallContainer) s.toolCallContainer.removeAttribute('id');
@@ -1684,8 +1685,9 @@ function _renderBufferEvent(event) {
 
     case 'done':
       // 后台流结束，用 Markdown 重新渲染最终消息
-      if (event.ai_msg && s.bubbleText) {
-        s.bubbleText.innerHTML = formatMarkdown(event.ai_msg);
+      var finalMsg = event.ai_msg || s.fullText;
+      if (finalMsg && s.bubbleText) {
+        s.bubbleText.innerHTML = formatMarkdown(finalMsg);
       }
       break;
 
@@ -1727,8 +1729,17 @@ function _startBackgroundPoll(topicId) {
         if (buf.done) {
           _stopBackgroundPoll();
           _removeBackgroundIndicator();
-          _reloadCurrentConversations();
-          refreshTopics();
+          // 如果缓冲区已经实时渲染了内容（包括 done 事件的 Markdown），
+          // 则不需要从 DB 重载（避免重载清空已渲染的消息，而 DB 可能尚未保存）
+          if (_bufferEventCount > 0 && _bufferStreamState && _bufferStreamState.bubbleText) {
+            _bufferStreamState = null;
+            _bufferSince = -1;
+            _bufferEventCount = 0;
+            refreshTopics();
+          } else {
+            _reloadCurrentConversations();
+            refreshTopics();
+          }
           return;
         }
       }
@@ -1740,8 +1751,15 @@ function _startBackgroundPoll(topicId) {
           // 后台已结束但 buffer 没标记 done（可能没有 buffer 或 buffer 已过期）
           _stopBackgroundPoll();
           _removeBackgroundIndicator();
-          _reloadCurrentConversations();
-          refreshTopics();
+          if (_bufferEventCount > 0 && _bufferStreamState && _bufferStreamState.bubbleText) {
+            _bufferStreamState = null;
+            _bufferSince = -1;
+            _bufferEventCount = 0;
+            refreshTopics();
+          } else {
+            _reloadCurrentConversations();
+            refreshTopics();
+          }
           return;
         }
       }
@@ -2988,6 +3006,442 @@ window.closeFileView = function(btn) {
   var view = btn.closest('.file-view');
   if (view) view.remove();
 };
+
+// ══════════════════════════════════════════════════
+//  VOICE INPUT — 语音输入支持
+// ══════════════════════════════════════════════════
+
+let _micStream = null;
+let _micContext = null;
+let _micProcessor = null;
+let _micWs = null;
+let _micRecording = false;
+let _micAudioChunks = [];
+let _micWsConnected = false;
+let _resampleBuf = [];  // 重采样累积缓冲区（Float32 样本）
+
+/** 切换麦克风录音状态 */
+window.toggleMic = async function() {
+  if (_micRecording) {
+    _stopRecording();
+    return;
+  }
+  await _startRecording();
+};
+
+/** 检查 ASR 引擎状态 */
+async function _checkAsrStatus() {
+  try {
+    const r = await fetch('/api/asr/status');
+    const d = await r.json();
+    return d.ok && d.status === 'ready';
+  } catch(e) {
+    return false;
+  }
+}
+
+/** 创建 ASR 状态栏 */
+function _ensureAsrStatusBar() {
+  let bar = $('asr-status-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'asr-status-bar';
+    bar.className = 'asr-status-bar';
+    bar.innerHTML = '<span class="asr-spinner" style="display:none"></span>'
+      + '<span class="asr-status-text"></span>'
+      + '<span class="asr-partial-text"></span>';
+    // 插入到消息区域下方、输入区域上方
+    const ia = $('ia');
+    ia.parentNode.insertBefore(bar, ia);
+  }
+  return bar;
+}
+
+function _setAsrStatus(text, type) {
+  const bar = _ensureAsrStatusBar();
+  bar.className = 'asr-status-bar' + (type ? ' ' + type : '');
+  const textEl = bar.querySelector('.asr-status-text');
+  if (textEl) textEl.textContent = text;
+  const spinner = bar.querySelector('.asr-spinner');
+  if (spinner) spinner.style.display = (type === 'listening' || type === 'transcribing') ? '' : 'none';
+}
+
+function _setAsrPartial(text) {
+  const bar = $('asr-status-bar');
+  if (!bar) return;
+  const el = bar.querySelector('.asr-partial-text');
+  if (el) el.textContent = text;
+}
+
+function _clearAsrStatus() {
+  const bar = $('asr-status-bar');
+  if (bar) bar.remove();
+}
+
+/** 开始录音 — 使用 Web Audio API 捕获 PCM 并通过 WebSocket 发送到 ASR 引擎 */
+async function _startRecording() {
+  const micBtn = $('mic-btn');
+  if (!micBtn) return;
+
+  // 先给即时视觉反馈
+  micBtn.classList.add('loading');
+  micBtn.textContent = '⏳';
+  _setAsrStatus('⏳ 连接语音识别服务…', 'transcribing');
+
+  // ── 1. 检测安全上下文 ──
+  if (!window.isSecureContext) {
+    toast('⚠️ 麦克风需要 HTTPS 或 localhost！\n当前页面不是安全上下文，浏览器禁止访问麦克风。', 'error');
+    _setAsrStatus('❌ 需要 HTTPS 或 localhost 才能使用麦克风', '');
+    micBtn.classList.remove('loading');
+    micBtn.textContent = '🎤';
+    setTimeout(_clearAsrStatus, 5000);
+    return;
+  }
+
+  // ── 2. 检测 getUserMedia 支持 ──
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast('⚠️ 您的浏览器不支持麦克风访问，请使用最新版 Chrome/Firefox/Edge', 'error');
+    _setAsrStatus('❌ 浏览器不支持麦克风 API', '');
+    micBtn.classList.remove('loading');
+    micBtn.textContent = '🎤';
+    return;
+  }
+
+  // ── 3. 请求麦克风权限（先于 ASR 连接，让用户立即看到权限弹窗） ──
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: { ideal: 1 },
+        // 不设 sampleRate 约束（浏览器可能忽略 ideal），
+        // 改为在 AudioContext 层强制 16kHz + JS 端重采样
+        echoCancellation: false,   // ASR 不需要回声消除（会引入伪影）
+        noiseSuppression: false,   // ASR 不需要噪声抑制（会损伤语音）
+        autoGainControl: false,    // ASR 不需要自动增益
+      }
+    });
+  } catch(e) {
+    micBtn.classList.remove('loading');
+    micBtn.textContent = '🎤';
+    if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+      toast('⚠️ 麦克风权限被拒绝\n请在浏览器地址栏左侧 🔒/ℹ️ → 网站设置 → 麦克风：允许', 'error');
+      _setAsrStatus('❌ 麦克风权限被拒绝，请在浏览器设置中允许', '');
+    } else if (e.name === 'NotFoundError') {
+      toast('⚠️ 未检测到麦克风设备\n请插入麦克风或检查系统音频设置', 'error');
+      _setAsrStatus('❌ 未检测到麦克风设备', '');
+    } else {
+      toast('⚠️ 麦克风访问失败: ' + e.message, 'error');
+      _setAsrStatus('❌ 麦克风访问失败: ' + e.message, '');
+    }
+    setTimeout(_clearAsrStatus, 5000);
+    return;
+  }
+
+  _micStream = stream;
+
+  // ── 4. 检查 ASR 引擎状态（后台进行） ──
+  const asrOk = await _checkAsrStatus();
+  if (!asrOk) {
+    toast('⚠️ 语音识别引擎未就绪\n请先确保 ASR 模型文件存在且依赖已安装', 'error');
+    _setAsrStatus('❌ 语音识别服务不可用', '');
+    stream.getTracks().forEach(function(t) { t.stop(); });
+    micBtn.classList.remove('loading');
+    micBtn.textContent = '🎤';
+    setTimeout(_clearAsrStatus, 5000);
+    return;
+  }
+
+  // ── 5. 创建 AudioContext（稳健降级：若指定采样率失败，使用默认） ──
+  let ctx;
+  try {
+    ctx = new (window.AudioContext || window.webkitAudioContext)({
+      sampleRate: 16000,
+    });
+  } catch(e) {
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch(e2) {
+      toast('⚠️ 音频上下文创建失败: ' + e2.message, 'error');
+      stream.getTracks().forEach(function(t) { t.stop(); });
+      micBtn.classList.remove('loading');
+      micBtn.textContent = '🎤';
+      return;
+    }
+  }
+  _micContext = ctx;
+
+  // 检测实际采样率，准备重采样系数（目标16kHz）
+  var _targetRate = 16000;
+  var _srcRate = ctx.sampleRate;
+  var _resampleRatio = _srcRate / _targetRate;  // e.g. 48000/16000 = 3.0
+  _resampleBuf = [];  // 重置重采样缓冲区
+  console.log('[ASR] AudioContext sampleRate:', _srcRate,
+    _resampleRatio === 1.0 ? '(native 16kHz ✓)' : '(resample ×' + _resampleRatio.toFixed(2) + ')');
+
+  const source = ctx.createMediaStreamSource(stream);
+  const processor = ctx.createScriptProcessor(4096, 1, 1);
+  _micProcessor = processor;
+
+  // ── 6. 连接 WebSocket ──
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = protocol + '//' + window.location.host + '/api/asr/ws';
+  const ws = new WebSocket(wsUrl);
+  _micWs = ws;
+  _micWsConnected = false;
+  _micAudioChunks = [];
+
+  ws.onopen = function() {
+    _micWsConnected = true;
+    micBtn.classList.remove('loading');
+    micBtn.classList.add('recording');
+    micBtn.textContent = '🔴';
+    _micRecording = true;
+
+    // 开始音频处理（含重采样到 16kHz）
+    processor.onaudioprocess = function(e) {
+      if (!_micWsConnected || !_micRecording) return;
+      var inputData = e.inputBuffer.getChannelData(0);
+      var nInput = inputData.length;
+
+      if (_resampleRatio === 1.0) {
+        // 采样率正好是16kHz，直接编码发送
+        var pcm = new Int16Array(nInput);
+        for (var i = 0; i < nInput; i++) {
+          var s = Math.round(inputData[i] * 32767);
+          pcm[i] = s < -32768 ? -32768 : (s > 32767 ? 32767 : s);
+        }
+        try { ws.send(pcm.buffer); } catch(err) {}
+      } else {
+        // 需要重采样：线性插值从 _srcRate → 16kHz
+        var outLen = Math.floor(nInput / _resampleRatio);
+        if (outLen > 0) {
+          var pcm = new Int16Array(outLen);
+          for (var k = 0; k < outLen; k++) {
+            var srcPos = k * _resampleRatio;
+            var idx0 = Math.floor(srcPos);
+            var idx1 = Math.min(idx0 + 1, nInput - 1);
+            var frac = srcPos - idx0;
+            var val = inputData[idx0] * (1.0 - frac) + inputData[idx1] * frac;
+            var s = Math.round(val * 32767);
+            pcm[k] = s < -32768 ? -32768 : (s > 32767 ? 32767 : s);
+          }
+          try { ws.send(pcm.buffer); } catch(err) {}
+        }
+      }
+    };
+
+    source.connect(processor);
+    processor.connect(ctx.destination);
+
+    _setAsrStatus('🎤 录音中… 再次点击 🎤 停止并识别', 'listening');
+    toast('🎤 录音开始，点击麦克风按钮停止', 'info');
+  };
+
+  ws.onmessage = function(event) {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'partial') {
+        _setAsrPartial('📝 ' + data.text);
+        const ci = $('ci');
+        if (ci && data.text) {
+          ci.placeholder = '🎤 ' + data.text + '…';
+        }
+      } else if (data.type === 'final') {
+        _setAsrPartial('');
+        const ci = $('ci');
+        if (ci && data.text) {
+          const currentText = ci.value.trim();
+          if (currentText) {
+            ci.value = currentText + ' ' + data.text;
+          } else {
+            ci.value = data.text;
+          }
+          ci.style.height = 'auto';
+          ci.style.height = Math.min(ci.scrollHeight, 120) + 'px';
+          ci.placeholder = '输入消息... (Enter 发送, Shift+Enter 换行; 🎤 语音输入)';
+          $('send-btn').disabled = false;
+        }
+      } else if (data.type === 'error') {
+        console.warn('ASR error:', data.message);
+      }
+    } catch(e) {}
+  };
+
+  ws.onerror = function() {
+    _setAsrStatus('⚠️ ASR WebSocket 连接失败', '');
+    toast('⚠️ 语音识别服务连接失败', 'error');
+    _cleanupMic();
+    micBtn.classList.remove('loading');
+    micBtn.textContent = '🎤';
+  };
+
+  ws.onclose = function() {
+    _micWsConnected = false;
+    if (_micRecording) {
+      _setAsrStatus('⚠️ WebSocket 断开，尝试 REST 方式…', 'transcribing');
+      _sendRestFallback();
+    }
+  };
+}
+
+/** 停止录音 */
+function _stopRecording() {
+  _micRecording = false;
+
+  const micBtn = $('mic-btn');
+  if (micBtn) {
+    micBtn.classList.remove('recording');
+    micBtn.textContent = '🎤';
+  }
+
+  _setAsrStatus('⏳ 识别中…', 'transcribing');
+
+  // 关闭音频处理器
+  if (_micProcessor && _micContext) {
+    try {
+      _micProcessor.disconnect();
+    } catch(e) {}
+  }
+
+  // 关闭 WebSocket
+  if (_micWs) {
+    _micWsConnected = false;
+    try {
+      // 先发送空 PCM 触发 flush
+      if (_micWs.readyState === WebSocket.OPEN) {
+        _micWs.send(new Int8Array(0).buffer);
+      }
+    } catch(e) {}
+    try {
+      _micWs.close();
+    } catch(e) {}
+  }
+
+  // 停止所有音轨
+  if (_micStream) {
+    _micStream.getTracks().forEach(function(t) { t.stop(); });
+  }
+
+  // 等待 ASR 处理结果（WebSocket 关闭前可能有 final 结果）
+  setTimeout(function() {
+    _clearAsrStatus();
+    _cleanupMic();
+  }, 2000);
+}
+
+/** REST 备选方案：如果 WebSocket 不可用，使用 REST API */
+async function _sendRestFallback() {
+  _cleanupMic();
+
+  const micBtn = $('mic-btn');
+  if (micBtn) {
+    micBtn.classList.remove('recording');
+    micBtn.textContent = '🎤';
+    micBtn.classList.add('loading');
+  }
+
+  _setAsrStatus('⏳ 正在处理音频…', 'transcribing');
+
+  try {
+    // 如果之前有 Pending 的音频块，合并后发送
+    if (_micAudioChunks.length === 0) {
+      toast('⚠️ 未录制到音频', 'error');
+      if (micBtn) micBtn.classList.remove('loading');
+      _clearAsrStatus();
+      return;
+    }
+
+    const blob = new Blob(_micAudioChunks, { type: 'audio/webm' });
+    const formData = new FormData();
+    formData.append('file', blob, 'recording.webm');
+    formData.append('format', 'webm');
+
+    const r = await fetch('/api/asr/transcribe', {
+      method: 'POST',
+      body: formData,
+    });
+    const d = await r.json();
+
+    if (d.ok && d.text) {
+      const ci = $('ci');
+      if (ci) {
+        const currentText = ci.value.trim();
+        if (currentText) {
+          ci.value = currentText + ' ' + d.text;
+        } else {
+          ci.value = d.text;
+        }
+        ci.style.height = 'auto';
+        ci.style.height = Math.min(ci.scrollHeight, 120) + 'px';
+        $('send-btn').disabled = false;
+      }
+      toast('🎤 语音识别完成', 'success');
+    } else {
+      toast('⚠️ 语音识别失败: ' + (d.error || '未知错误'), 'error');
+    }
+  } catch(e) {
+    toast('⚠️ 语音识别请求失败: ' + e.message, 'error');
+  }
+
+  if (micBtn) micBtn.classList.remove('loading');
+  _clearAsrStatus();
+}
+
+/** 清理麦克风资源 */
+function _cleanupMic() {
+  if (_micProcessor && _micContext) {
+    try { _micProcessor.disconnect(); } catch(e) {}
+    _micProcessor = null;
+  }
+  if (_micContext) {
+    try { _micContext.close(); } catch(e) {}
+    _micContext = null;
+  }
+  if (_micWs) {
+    _micWsConnected = false;
+    try { _micWs.close(); } catch(e) {}
+    _micWs = null;
+  }
+  if (_micStream) {
+    _micStream.getTracks().forEach(function(t) { t.stop(); });
+    _micStream = null;
+  }
+  _micRecording = false;
+  _micAudioChunks = [];
+  _resampleBuf = [];  // 清理重采样缓冲区
+
+  const micBtn = $('mic-btn');
+  if (micBtn) {
+    micBtn.classList.remove('recording');
+    micBtn.classList.remove('loading');
+    micBtn.textContent = '🎤';
+  }
+}
+
+/** 页面加载时检查 ASR 状态，模型不可用时隐藏 mic 按钮 */
+async function _initMicButton() {
+  const micBtn = $('mic-btn');
+  if (!micBtn) return;
+  try {
+    const r = await fetch('/api/asr/status');
+    const d = await r.json();
+    if (!(d.ok && d.status === 'ready')) {
+      micBtn.style.display = 'none';
+      console.log('[ASR] 模型未加载，已隐藏语音按钮:', d.reason || 'unavailable');
+    }
+  } catch(e) {
+    // 网络错误等不影响按钮显示（可能后续可用）
+    console.warn('[ASR] 状态检查失败:', e.message);
+  }
+}
+
+// 页面卸载时清理
+window.addEventListener('beforeunload', function() {
+  _cleanupMic();
+});
+
+// 页面加载时初始化
+_initMicButton();
 
 // Expose helpers globally
 window.showModal = showModal;

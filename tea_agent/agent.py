@@ -456,7 +456,7 @@ class Agent:
             user_text = self._extract_user_text(user_msg)
 
             # 步骤4: 推送到L2缓存（使用 config 中的 history_l2_max）
-            l2_max = getattr(self._config, 'history_l2_max', 8) if hasattr(self, '_config') else 8
+            l2_max = getattr(self._cfg, 'history_l2_max', 8) if hasattr(self, '_cfg') else 8
             l2_count, overflow_items, should_summarize = self._db.push_to_level2(
                 topic_id,
                 user_text,

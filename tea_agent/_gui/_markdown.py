@@ -161,11 +161,27 @@ a.chat-image-link { text-decoration: none; display: inline-block; }
 a.chat-image-link:hover { text-decoration: none; }
 </style>
 """)
+def _sanitize_html_dangerous_tags(html: str) -> str:
+    """移除 HTML 中的危险标签和 JS 事件处理器。
+
+    过滤范围:
+    - <script>, <iframe>, <object>, <embed>, <applet> 等执行标签
+    - on* 事件属性 (onclick, onload, onerror 等)
+    - javascript: 伪协议
+    """
+    html = re.sub(r'<(script|iframe|object|embed|applet|frame|frameset|portal)\b[^>]*>.*?</\1>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r'<(script|iframe|object|embed|applet|frame|frameset|portal)\b[^>]*/?>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'\s+on\w+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'javascript\s*:\s*', '', html, flags=re.IGNORECASE)
+    return html
+
+
 def _render_markdown(text: str, font_size: int = _DEFAULT_FONT_SIZE) -> str:
     """将 markdown 文本转换为带样式的 HTML 片段"""
     if not HAS_TKINTERWEB:
         return text
     html_body = markdown.markdown(text, extensions=["fenced_code", "tables", "codehilite", "md_in_html"])
+    html_body = _sanitize_html_dangerous_tags(html_body)
     # 修复全文双重转义（&amp;lt;→&lt; 等），再修复 <code> 块内彻底 unescape
     html_body = _fix_double_escape_all(html_body)
     html_body = _fix_double_escape_in_code(html_body)

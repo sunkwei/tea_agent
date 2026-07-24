@@ -1785,25 +1785,31 @@ class OnlineToolSession(BaseChatSession):
     def close(self):
         """关闭会话，释放资源"""
         try:
-            # 关闭所有HTTP客户端
+            # 关闭所有HTTP客户端（注意: OpenAI wrapper 内部也持有 httpx.Client，
+            # 已在 _http_clients 中关闭，避免重复关闭）
+            _closed_clients = set()
             for client in self._http_clients:
                 try:
                     if hasattr(client, "close"):
                         client.close()
+                        _closed_clients.add(id(client))
                 except Exception as e:
                     logger.debug(f"Close HTTP client failed: {e}")
+            self._http_clients.clear()
 
-            # 关闭OpenAI客户端
+            # 关闭OpenAI客户端（跳过已被 _http_clients 关闭的）
             if hasattr(self.context, "client") and self.context.client:
                 try:
-                    if hasattr(self.context.client, "close"):
+                    _internal = getattr(self.context.client, '_client', None)
+                    if (_internal is None or id(_internal) not in _closed_clients) and hasattr(self.context.client, "close"):
                         self.context.client.close()
                 except Exception as e:
                     logger.debug(f"Close main OpenAI client failed: {e}")
 
             if hasattr(self.context, "cheap_client") and self.context.cheap_client:
                 try:
-                    if hasattr(self.context.cheap_client, "close"):
+                    _internal = getattr(self.context.cheap_client, '_client', None)
+                    if (_internal is None or id(_internal) not in _closed_clients) and hasattr(self.context.cheap_client, "close"):
                         self.context.cheap_client.close()
                 except Exception as e:
                     logger.debug(f"Close cheap OpenAI client failed: {e}")

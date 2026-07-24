@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -315,6 +316,7 @@ class AgentConfig:
 
 
 _last_config_path = None
+_config_lock = threading.Lock()
 
 # ── 全局活跃配置路径（跨 GUI/Web/CLI 共享） ──
 _active_config_path: str | None = None
@@ -323,12 +325,14 @@ _active_config_path: str | None = None
 def set_active_config_path(config_path: str) -> None:
     """设置全局活跃配置路径（GUI/Web 切换配置时调用）。"""
     global _active_config_path
-    _active_config_path = os.path.abspath(config_path)
+    with _config_lock:
+        _active_config_path = os.path.abspath(config_path)
 
 
 def get_active_config_path() -> str | None:
     """获取全局活跃配置路径。优先返回此值，None 时回退到 _last_config_path。"""
-    return _active_config_path or _last_config_path
+    with _config_lock:
+        return _active_config_path or _last_config_path
 
 
 def load_config(config_path: str | None = None) -> AgentConfig:
@@ -396,10 +400,11 @@ def resolve_config_path(config_path: str | None = None) -> str | None:
     """
     global _last_config_path
 
-    if config_path is None:
-        config_path = _last_config_path
-    else:
-        _last_config_path = config_path
+    with _config_lock:
+        if config_path is None:
+            config_path = _last_config_path
+        else:
+            _last_config_path = config_path
 
     if config_path:
         return config_path
@@ -526,7 +531,11 @@ def _parse_session_params(cfg: AgentConfig, data: dict) -> None:
     """
     cfg.max_history = int(data.get("max_history", cfg.max_history))
     cfg.max_iterations = int(data.get("max_iterations", cfg.max_iterations))
-    cfg.enable_thinking = bool(data.get("enable_thinking", cfg.enable_thinking))
+    val = data.get("enable_thinking", cfg.enable_thinking)
+    if isinstance(val, str):
+        cfg.enable_thinking = val.lower() in ("true", "1", "yes")
+    else:
+        cfg.enable_thinking = bool(val)
     cfg.thinking_strength = float(data.get("thinking_strength", cfg.thinking_strength))
     cfg.reasoning_effort = str(data.get("reasoning_effort", cfg.reasoning_effort))
 
@@ -577,9 +586,10 @@ def _update_config_cache(cfg: AgentConfig, yaml_path: str | None) -> None:
     """
     global _config_cache, _active_config_path
 
-    _config_cache = cfg
-    if yaml_path:
-        _active_config_path = os.path.abspath(yaml_path)
+    with _config_lock:
+        _config_cache = cfg
+        if yaml_path:
+            _active_config_path = os.path.abspath(yaml_path)
 
 
 def ensure_config_dir() -> Path:
@@ -932,6 +942,7 @@ def get_config(reload: bool = False) -> AgentConfig:
         AgentConfig 实例
     """
     global _config_cache, _last_config_path
-    if _config_cache is None or reload:
-        _config_cache = load_config()
-    return _config_cache
+    with _config_lock:
+        if _config_cache is None or reload:
+            _config_cache = load_config()
+        return _config_cache

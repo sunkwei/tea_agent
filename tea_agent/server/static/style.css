@@ -1065,6 +1065,75 @@ body {
 }
 #ci:focus { border-color: var(--primary); }
 #ci::placeholder { color: var(--text-muted); }
+/* ── 语音输入按钮 ── */
+#mic-btn {
+  padding: 8px;
+  background: none; border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer; font-size: 18px; line-height: 1;
+  transition: all var(--transition);
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+#mic-btn:hover { background: var(--surface2); color: var(--text); border-color: var(--primary); }
+#mic-btn.recording {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: var(--red);
+  animation: mic-pulse 1s ease-in-out infinite;
+}
+#mic-btn.recording::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: calc(var(--radius) + 3px);
+  border: 2px solid var(--red);
+  animation: mic-ring 1.5s ease-out infinite;
+}
+#mic-btn.loading {
+  pointer-events: none;
+  opacity: 0.6;
+}
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248,81,73,0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(248,81,73,0); }
+}
+@keyframes mic-ring {
+  0% { opacity: 0.6; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+/* ── 语音转录状态提示 ── */
+.asr-status-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 12px; font-size: 12px;
+  color: var(--text-dim); flex-shrink: 0;
+  background: var(--surface); border-top: 1px solid var(--border2);
+  min-height: 28px;
+}
+.asr-status-bar.listening { color: var(--red); background: var(--red-bg); }
+.asr-status-bar.transcribing { color: var(--yellow); background: var(--yellow-bg); }
+.asr-spinner {
+  width: 12px; height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--red);
+  border-radius: 50%;
+  animation: spin .6s linear infinite;
+  flex-shrink: 0;
+}
+.asr-status-text { flex: 1; }
+.asr-partial-text {
+  color: var(--yellow);
+  font-style: italic;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
 #ss-btn, #img-btn {
   padding: 8px;
   background: none; border: 1px solid var(--border);

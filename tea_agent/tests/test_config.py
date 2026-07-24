@@ -256,3 +256,42 @@ class TestLoadSaveConfig:
         assert "cheap_model:" in content
         assert "paths:" in content
         assert "max_iterations: 50" in content
+
+
+def test_enable_thinking_parsing():
+    """_parse_session_params 正确处理 enable_thinking 的各种 YAML 输入"""
+    from tea_agent.config import AgentConfig, _parse_session_params
+
+    for raw_input, expected in [
+        (True, True), (False, False),
+        ("true", True), ("True", True), ("TRUE", True), ("1", True), ("yes", True),
+        ("false", False), ("False", False), ("FALSE", False), ("0", False), ("no", False),
+    ]:
+        cfg = AgentConfig()
+        data = {"enable_thinking": raw_input}
+        _parse_session_params(cfg, data)
+        assert cfg.enable_thinking is expected, f"enable_thinking={raw_input!r} 应解析为 {expected}, 得到 {cfg.enable_thinking}"
+
+
+def test_config_cache_thread_safety():
+    """并发调用 get_config() 不崩溃"""
+    import threading
+    from tea_agent.config import get_config
+
+    errors = []
+
+    def _access():
+        try:
+            for _ in range(20):
+                c = get_config()
+                assert c is not None
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=_access) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+
+    assert not errors, f"线程竞争导致异常: {errors}"

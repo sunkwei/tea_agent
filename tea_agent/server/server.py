@@ -16,7 +16,7 @@ logger = logging.getLogger("api_server")
 try:
     from starlette.applications import Starlette
     from starlette.responses import JSONResponse
-    from starlette.routing import Mount, Route
+    from starlette.routing import Mount, Route, WebSocketRoute
     from starlette.staticfiles import StaticFiles
 except ImportError:
     raise ImportError("pip install starlette uvicorn")
@@ -341,6 +341,9 @@ def _build_routes() -> list:
         Route("/api/restart", rh.handle_restart, methods=["POST"]),
         Route("/api/files", rh.handle_file_tree),
         Route("/api/file", rh.handle_file_read),
+        Route("/api/asr/status", rh.handle_asr_status),
+        Route("/api/asr/transcribe", rh.handle_asr_transcribe, methods=["POST"]),
+        WebSocketRoute("/api/asr/ws", rh.handle_asr_ws),
         Route("/health", rh.handle_health),
         Route("/v1/chat/completions", rh.handle_chat_completions, methods=["POST"]),
         Route("/v1/models", rh.handle_list_models),

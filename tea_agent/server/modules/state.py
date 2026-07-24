@@ -63,7 +63,11 @@ def unregister_background(topic_id: str) -> None:
 
 
 def is_topic_busy(topic_id: str) -> bool:
-    return topic_id in active_sessions or topic_id in background_sessions
+    with active_sessions_lock:
+        in_active = topic_id in active_sessions
+    with background_sessions_lock:
+        in_bg = topic_id in background_sessions
+    return in_active or in_bg
 
 
 def queue_add(topic_id: str, message: str, images: list | None = None) -> str:

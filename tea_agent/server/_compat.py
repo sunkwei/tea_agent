@@ -61,6 +61,15 @@ def _chat_stream_sse_wrapper(session, storage, msg,
                                queue, topic_id=topic_id, event_loop=event_loop)
 
 
+def _schedule_buffer_cleanup(topic_id: str, delay: float = 30.0) -> None:
+    """延迟清理后台缓冲区，给前端轮询留出读取时间。"""
+    try:
+        loop = asyncio.get_running_loop()
+        loop.call_later(delay, lambda: cleanup_buffer(topic_id))
+    except RuntimeError:
+        threading.Timer(delay, lambda: cleanup_buffer(topic_id)).start()
+
+
 async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
                                       event_loop=None):
     """从 queue 消费事件并写入后台缓冲区供前端轮询。"""
@@ -86,7 +95,7 @@ async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
         logger.exception(f"Background buffer reader error for topic={topic_id}")
         mark_buffer_done(topic_id)
     finally:
-        cleanup_buffer(topic_id)
+        _schedule_buffer_cleanup(topic_id)
         # ⭐ 当缓冲区读取完毕（后台会话也结束了），清理 background_sessions
         # 避免后续消息因 is_topic_busy 返回 True 被错误排队
         with _background_sessions_lock:

@@ -2653,11 +2653,14 @@ window.saveNewConfig = async function() {
     const d = await r.json();
     if (d.ok) {
       $('nc-status').className = 'status-msg success';
-      $('nc-status').textContent = '✓ 已保存: ' + d.filename;
+      $('nc-status').textContent = '✓ 已保存并切换: ' + d.filename;
       setTimeout(function() {
         closeModal('modal-new-config');
         closeModal('modal-config');
-      }, 1200);
+        refreshConfigDropdown();
+        // 刷新页面提示，让用户知道可以开始对话了
+        toast('☕ 配置完成！可以开始对话了', 'success', 4000);
+      }, 1500);
     } else {
       $('nc-status').className = 'status-msg error';
       $('nc-status').textContent = d.error || '保存失败';
@@ -2732,11 +2735,12 @@ function _formatModelName(modelName) {
 async function refreshConfigDropdown() {
   try {
     const r = await fetch('/api/configs');
-    if (!r.ok) return;
+    if (!r.ok) return { configs: [], any_valid: false };
     const d = await r.json();
     const sel = $('config-dropdown');
     const configs = d.data || d.configs || [];
     const activePath = d.active_config_path || '';
+    const anyValid = d.any_valid === true;
     sel.innerHTML = '<option value="">⚡ 切换配置</option>';
     configs.forEach(function(c) {
       const mainModel = c.main_model ? (c.main_model.model_name || '') : '';
@@ -2755,7 +2759,10 @@ async function refreshConfigDropdown() {
       const display = configName + ' — ' + modelDisplay;
       sel.innerHTML += '<option value="' + esc(c.path) + '"' + selected + '>' + esc(display) + '</option>';
     });
-  } catch(e) {}
+    return { configs: configs, any_valid: anyValid, count: configs.length };
+  } catch(e) {
+    return { configs: [], any_valid: false, count: 0, error: e.message };
+  }
 }
 
 window.switchConfig = async function(path) {
@@ -2873,6 +2880,38 @@ function showMaxIterConfirm(confirmId, text) {
 // ══════════════════════════════════════════════════
 //  BUTTON STYLES (re-export for HTML onclick)
 // ══════════════════════════════════════════════════
+//  FIRST RUN — 无配置时自动弹出配置窗口
+// ══════════════════════════════════════════════════
+
+window.checkAndShowFirstRunModal = function(result) {
+  // 由 refreshConfigDropdown().then() 调用
+  // 检查是否已有有效配置，若无则弹出新增配置模态框
+  // result: { configs, any_valid, count }
+  var hasValidConfig = result && result.any_valid === true;
+  // 如果 API 报错（网络问题），也不弹窗，避免误判
+  if (result && result.error) return;
+  if (hasValidConfig) return; // 已有有效配置，不打扰
+
+  // 弹出自定义欢迎/配置模态框（区别于普通新增配置，有更友好的提示）
+  toast('☕ 欢迎使用 Tea Agent！请先配置主模型', 'info');
+  showNewConfigModal();
+  // 修改模态框标题和说明
+  setTimeout(function() {
+    var titleEl = document.querySelector('#modal-new-config h3');
+    if (titleEl) titleEl.textContent = '☕ 欢迎使用！请配置主模型';
+    var statusEl = $('nc-status');
+    if (statusEl) {
+      statusEl.style.display = 'block';
+      statusEl.className = 'status-msg info';
+      statusEl.textContent = '首次使用，请填写主模型的 API 地址和密钥';
+    }
+    // 聚焦到第一个输入框
+    var nameInput = $('nc-main-name');
+    if (nameInput) nameInput.focus();
+  }, 100);
+};
+
+// ══════════════════════════════════════════════════
 
 // Ensure btn-g, btn-p, btn-sm classes exist in JS context
 // (CSS already has them)
@@ -2882,7 +2921,11 @@ function showMaxIterConfirm(confirmId, text) {
 // ══════════════════════════════════════════════════
 
 refreshTopics();
-refreshConfigDropdown();
+refreshConfigDropdown().then(function(result) {
+  // 🔍 检测是否有有效配置，如无则自动弹出新增配置窗口
+  // result: { configs, any_valid, count }
+  checkAndShowFirstRunModal(result);
+});
 refreshTaskPanel();
 
 // Auto-refresh topics every 30s

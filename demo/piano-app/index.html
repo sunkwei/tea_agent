@@ -16,6 +16,8 @@ body{background:linear-gradient(145deg,#1a1a2e,#16213e,#0f3460);min-height:100vh
 .controls button:hover{background:rgba(255,255,255,0.2);transform:translateY(-1px)}
 .controls button.active{background:#e94560;border-color:#e94560}
 .controls button:active{transform:scale(.96)}
+.controls button.sustain-pedal{background:rgba(100,150,200,0.2);border-color:rgba(100,150,200,0.3);min-width:72px}
+.controls button.sustain-pedal.active{background:#4a90d9;border-color:#4a90d9;box-shadow:0 0 16px rgba(74,144,217,0.5)}
 .controls label{color:rgba(255,255,255,0.7);font-size:14px;display:flex;align-items:center;gap:8px}
 .controls input[type=range]{-webkit-appearance:none;width:100px;height:4px;border-radius:2px;background:rgba(255,255,255,0.25);outline:none}
 .controls input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#f0c27f;cursor:pointer}
@@ -30,7 +32,7 @@ body{background:linear-gradient(145deg,#1a1a2e,#16213e,#0f3460);min-height:100vh
 .beat-dot.current.strong{background:#f0c27f;box-shadow:0 0 14px rgba(240,194,127,0.7)}
 .measure-info{color:rgba(255,255,255,0.5);font-size:13px}
 .measure-info strong{color:#f0c27f}
-.keyboard-wrapper{background:rgba(0,0,0,0.4);border-radius:16px;padding:16px 12px 10px;box-shadow:inset 0 2px 10px rgba(0,0,0,0.5),0 8px 30px rgba(0,0,0,0.3);overflow-x:auto;position:relative}
+.keyboard-wrapper{background:rgba(0,0,0,0.4);border-radius:16px;padding:16px 12px 10px;box-shadow:inset 0 2px 10px rgba(0,0,0,0.5),0 8px 30px rgba(0,0,0,0.3);overflow-x:auto;position:relative;touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .keyboard{display:flex;position:relative;height:180px;user-select:none;min-width:700px}
 .white-key{flex:1;min-width:44px;background:linear-gradient(180deg,#f8f8f8,#e8e8e8);border:1px solid #bbb;border-radius:0 0 6px 6px;cursor:pointer;position:relative;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;font-size:11px;color:#888;transition:all .08s;box-shadow:0 2px 4px rgba(0,0,0,0.15);z-index:1}
 .white-key:active,.white-key.pressed{background:linear-gradient(180deg,#f0f0f0,#d5d5d5);box-shadow:0 1px 2px rgba(0,0,0,0.1),inset 0 3px 6px rgba(0,0,0,0.15);transform:translateY(3px);color:#555}
@@ -52,12 +54,13 @@ body{background:linear-gradient(145deg,#1a1a2e,#16213e,#0f3460);min-height:100vh
 <div class="controls">
 <button id="playBtn">▶ 播放</button>
 <button id="resetBtn">⟲ 重置</button>
+<button id="sustainBtn" class="sustain-pedal" title="延音踏板（快捷键 P）">🔊 延音</button>
 <label>速度 <input type="range" id="tempoSlider" min="30" max="180" value="90"> <span class="tempo-val" id="tempoDisplay">90</span></label>
 </div></div>
 <div class="staff-wrapper"><canvas id="staffCanvas" width="1040" height="240"></canvas></div>
 <div class="beat-indicator"><div class="beat-dots" id="beatDots"></div><div class="measure-info">小节: <strong id="measureNum">1</strong> / <span id="totalMeasures">16</span></div></div>
 <div class="keyboard-wrapper"><div class="keyboard" id="keyboard"></div></div>
-<div class="footer-info"><div class="hint"><span>🖱 鼠标点击</span><span>⌨️ PC键盘弹奏</span><span>🎵 <span class="current-note-name" id="currentNoteName">—</span></span></div>
+<div class="footer-info"><div class="hint"><span>🖱 鼠标点击</span><span>⌨️ PC键盘</span><span>👆 多点触摸</span><span>🔊 P=延音</span><span>🎵 <span class="current-note-name" id="currentNoteName">—</span></span></div>
 <div style="display:flex;align-items:center;gap:10px">
 <span class="hint-link" id="mapToggle" style="cursor:pointer;color:rgba(255,255,255,0.4);font-size:12px;text-decoration:underline;text-decoration-style:dotted">📖 键位图</span>
 <span id="statusText">就绪 ✓</span>
@@ -121,6 +124,14 @@ const PC_KEY_MAP = {
 const NOTE_TO_PC_KEY = {};
 for (const [k, v] of Object.entries(PC_KEY_MAP)) NOTE_TO_PC_KEY[v] = k;
 let activePcKeys = {};
+// 触摸支持：触摸ID → 音符名 映射（支持多点触摸）
+let touchToPitchMap = {};
+// 是否触摸设备（用于跳过鼠标事件的重复触发）
+let isTouchDevice = false;
+// ===== 延音踏板 =====
+let sustainPedalActive = false;
+let sustainedNotes = {};   // { pitch: true } — 踏板激活时被释放的持续音
+let continuousNotes = {};  // { pitch: { osc1, osc2, gain1, gain2 } }
 function buildKeyboard() {
   keyboardEl.innerHTML = '';
   let blackIdx = 0;
@@ -165,7 +176,10 @@ function handleKeyPress(pitch, auto = false) {
   activeNotes[pitch] = true;
   const el = KEY_MAP[pitch];
   if (el) el.classList.add('pressed');
-  if (!auto) playNote(pitch, 0.5);
+  if (!auto) {
+    // 手动演奏：使用持续振荡器（支持延音踏板）
+    startContinuousNote(pitch);
+  }
   document.getElementById('currentNoteName').textContent = pitch;
 }
 function handleKeyRelease(pitch) {
@@ -173,8 +187,82 @@ function handleKeyRelease(pitch) {
   delete activeNotes[pitch];
   const el = KEY_MAP[pitch];
   if (el) el.classList.remove('pressed');
+  // 使用持续振荡器停止（延音踏板激活时仅标记，不停止声音）
+  stopContinuousNote(pitch);
 }
 function releaseAllKeys() { Object.keys(activeNotes).forEach(handleKeyRelease); }
+
+// ===== 持续振荡器（延音踏板所需） =====
+function startContinuousNote(pitch) {
+  ensureAudio();
+  if (continuousNotes[pitch]) return;
+  const freq = FREQS[pitch];
+  if (!freq) return;
+  const t = audioCtx.currentTime;
+  // 基频振荡器（正弦波）
+  const osc1 = audioCtx.createOscillator();
+  const gain1 = audioCtx.createGain();
+  osc1.type = 'sine';
+  osc1.frequency.setValueAtTime(freq, t);
+  gain1.gain.setValueAtTime(0, t);
+  gain1.gain.linearRampToValueAtTime(0.3, t + 0.008);
+  gain1.gain.linearRampToValueAtTime(0.2, t + 0.05);
+  osc1.connect(gain1);
+  gain1.connect(audioCtx.destination);
+  osc1.start(t);
+  // 泛音振荡器（三角波，高八度增加亮度）
+  const osc2 = audioCtx.createOscillator();
+  const gain2 = audioCtx.createGain();
+  osc2.type = 'triangle';
+  osc2.frequency.setValueAtTime(freq * 2, t);
+  gain2.gain.setValueAtTime(0, t);
+  gain2.gain.linearRampToValueAtTime(0.08, t + 0.01);
+  osc2.connect(gain2);
+  gain2.connect(audioCtx.destination);
+  osc2.start(t);
+  continuousNotes[pitch] = { osc1, osc2, gain1, gain2 };
+}
+
+function stopContinuousNote(pitch, force = false) {
+  const note = continuousNotes[pitch];
+  if (!note) return;
+  // 延音踏板激活时，不停止声音，仅标记为"延音中"
+  if (sustainPedalActive && !force) {
+    sustainedNotes[pitch] = true;
+    return;
+  }
+  // 淡出并清理
+  const t = audioCtx.currentTime;
+  try {
+    note.gain1.gain.cancelScheduledValues(t);
+    note.gain1.gain.setValueAtTime(note.gain1.gain.value || 0.2, t);
+    note.gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    note.gain2.gain.cancelScheduledValues(t);
+    note.gain2.gain.setValueAtTime(note.gain2.gain.value || 0.08, t);
+    note.gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    note.osc1.stop(t + 0.2);
+    note.osc2.stop(t + 0.2);
+  } catch (e) { /* 忽略已停止的振荡器错误 */ }
+  delete continuousNotes[pitch];
+  delete sustainedNotes[pitch];
+}
+
+function setSustainPedal(active) {
+  sustainPedalActive = active;
+  const btn = document.getElementById('sustainBtn');
+  if (btn) btn.classList.toggle('active', active);
+  // 踏板释放：淡出所有被延音的音符
+  if (!active) {
+    for (const pitch of Object.keys(sustainedNotes)) {
+      stopContinuousNote(pitch, true);
+    }
+    sustainedNotes = {};
+  }
+}
+
+function toggleSustainPedal() {
+  setSustainPedal(!sustainPedalActive);
+}
 function releaseChordKeys() {
   for (const p of Object.keys(activeChordNotes)) {
     const el = KEY_MAP[p];
@@ -205,6 +293,12 @@ function isInputFocused() {
 }
 document.addEventListener('keydown', (e) => {
   if (isInputFocused()) return;
+  // 'p' 键切换延音踏板
+  if (e.key === 'p' || e.key === 'P') {
+    e.preventDefault();
+    toggleSustainPedal();
+    return;
+  }
   ensureAudio();
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   const pitch = PC_KEY_MAP[key];
@@ -222,7 +316,105 @@ document.addEventListener('keyup', (e) => {
   }
 });
 // 窗口失焦时释放所有按键（避免卡键）
-window.addEventListener('blur', () => { releaseAllKeys(); activePcKeys = {}; releaseChordKeys(); });
+window.addEventListener('blur', () => {
+  // 释放所有持续音和延音（防止卡音）
+  for (const pitch of Object.keys(continuousNotes)) {
+    stopContinuousNote(pitch, true);
+  }
+  sustainedNotes = {};
+  sustainPedalActive = false;
+  const sBtn = document.getElementById('sustainBtn');
+  if (sBtn) sBtn.classList.remove('active');
+  releaseAllKeys();
+  activePcKeys = {};
+  releaseChordKeys();
+});
+
+// ===== 触摸事件支持（多点触摸） =====
+const keyboardWrapper = document.querySelector('.keyboard-wrapper');
+
+function getPitchFromTouch(touch) {
+  // 使用 elementFromPoint 精确获取触摸点下的琴键元素
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  if (el && el.dataset && el.dataset.pitch) return el.dataset.pitch;
+  // 如果触摸点在琴键边缘，尝试查找最近的琴键
+  if (el && el.closest) {
+    const keyEl = el.closest('.white-key, .black-key');
+    if (keyEl && keyEl.dataset && keyEl.dataset.pitch) return keyEl.dataset.pitch;
+  }
+  return null;
+}
+
+function handleTouchStart(e) {
+  e.preventDefault(); // 阻止滚动/缩放
+  isTouchDevice = true;
+  ensureAudio();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const touch = e.changedTouches[i];
+    const pitch = getPitchFromTouch(touch);
+    if (pitch && !touchToPitchMap[touch.identifier]) {
+      touchToPitchMap[touch.identifier] = pitch;
+      handleKeyPress(pitch);
+    }
+  }
+}
+
+function handleTouchEnd(e) {
+  e.preventDefault();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const touch = e.changedTouches[i];
+    const pitch = touchToPitchMap[touch.identifier];
+    if (pitch) {
+      handleKeyRelease(pitch);
+      delete touchToPitchMap[touch.identifier];
+    }
+  }
+}
+
+function handleTouchMove(e) {
+  e.preventDefault();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const touch = e.changedTouches[i];
+    const newPitch = getPitchFromTouch(touch);
+    const oldPitch = touchToPitchMap[touch.identifier];
+
+    if (newPitch && newPitch !== oldPitch) {
+      // 滑到了不同的琴键上
+      if (oldPitch) handleKeyRelease(oldPitch);
+      handleKeyPress(newPitch);
+      touchToPitchMap[touch.identifier] = newPitch;
+    } else if (!newPitch && oldPitch) {
+      // 滑出了琴键区域
+      handleKeyRelease(oldPitch);
+      delete touchToPitchMap[touch.identifier];
+    } else if (newPitch && !oldPitch) {
+      // 从外部滑入琴键
+      handleKeyPress(newPitch);
+      touchToPitchMap[touch.identifier] = newPitch;
+    }
+  }
+}
+
+function handleTouchCancel(e) {
+  e.preventDefault();
+  // 触摸中断（如系统弹窗），释放所有触摸按下的键
+  for (const id in touchToPitchMap) {
+    handleKeyRelease(touchToPitchMap[id]);
+  }
+  touchToPitchMap = {};
+}
+
+// 绑定触摸事件到键盘容器
+keyboardWrapper.addEventListener('touchstart', handleTouchStart, { passive: false });
+keyboardWrapper.addEventListener('touchend', handleTouchEnd, { passive: false });
+keyboardWrapper.addEventListener('touchmove', handleTouchMove, { passive: false });
+keyboardWrapper.addEventListener('touchcancel', handleTouchCancel, { passive: false });
+
+// 防止触摸设备上点击键盘时触发鼠标事件导致的重复
+keyboardWrapper.addEventListener('mousedown', (e) => {
+  if (isTouchDevice) { e.stopImmediatePropagation(); return; }
+}, true);
+
 buildKeyboard();
 // Position black keys after layout
 requestAnimationFrame(() => { requestAnimationFrame(positionBlackKeys); });
@@ -486,6 +678,7 @@ resetBtn.addEventListener('click', () => {
   drawStaff(currentBeat);
   updateBeatDots(currentBeat);
 });
+sustainBtn.addEventListener('click', toggleSustainPedal);
 // Start animation
 animId = requestAnimationFrame(animate);
 // 键位图切换

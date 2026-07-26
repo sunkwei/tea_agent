@@ -27,11 +27,8 @@ _project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_project_root))
 
 from tea_agent.onlinesession import OnlineToolSession
-from tea_agent.store import Storage, get_storage
-
-# ── 复用已有的配置缓存和 Session 工厂 ──
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "tea_agent" / "server"))
-from server import _load_config_cached, _create_session_from_cfg, _ChatAgentProxy
+from tea_agent.agent import Agent
+from tea_agent.config import load_config as _load_config
 
 logger = logging.getLogger("debate_server")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
@@ -61,33 +58,18 @@ class DebateServer:
     """双 Agent 辩论服务器"""
 
     def __init__(self):
-        self._storage: Optional[Storage] = None
-        self._toolkit = None
         self._debates: dict[str, "DebateSession"] = {}
 
-    def _get_storage(self) -> Storage:
-        if self._storage is None:
-            self._storage = get_storage()
-        return self._storage
-
-    def _get_toolkit(self):
-        if self._toolkit is None:
-            from tea_agent import tlk
-            cfg = _load_config_cached(None)
-            tool_dir = str(Path(cfg.paths.toolkit_dir_abs))
-            Path(tool_dir).mkdir(parents=True, exist_ok=True)
-            self._toolkit = tlk.Toolkit(tool_dir)
-            tlk.toolkit = self._toolkit
-            logger.info(f"Toolkit ready: {len(self._toolkit.func_map)} tools")
-        return self._toolkit
-
-    def create_session(self, config_path: Optional[str] = None):
-        """为辩论方创建独立的 OnlineToolSession"""
-        cfg = _load_config_cached(config_path)
-        toolkit = self._get_toolkit()
-        session = _create_session_from_cfg(cfg, toolkit, storage=None)
-        logger.info(f"Session created: {cfg.main_model.model_name} @ {cfg.main_model.api_url}")
-        return session
+    def create_session(self, config_path: Optional[str] = None) -> Agent:
+        """为辩论方创建独立的 Agent"""
+        agent = Agent(
+            mode="lightweight",
+            config_path=config_path,
+            use_tools=False,
+            disable_summary=True,
+        )
+        logger.info(f"Session created: {agent._cfg.main_model.model_name}")
+        return agent
 
     def list_config_files(self):
         """扫描可用的配置文件"""
@@ -97,7 +79,7 @@ class DebateServer:
         results = []
         for fpath in sorted(configs_dir.glob("*.yaml")):
             try:
-                cfg = _load_config_cached(str(fpath))
+                cfg = _load_config(str(fpath))
                 results.append({
                     "path": str(fpath),
                     "filename": fpath.name,
@@ -120,8 +102,10 @@ class DebateServer:
                 pass
 
         try:
-            left_session = self.create_session(debate.left_config)
-            right_session = self.create_session(debate.right_config)
+            left_agent = self.create_session(debate.left_config)
+            right_agent = self.create_session(debate.right_config)
+            left_session = left_agent.sess
+            right_session = right_agent.sess
 
             _put({"type": "status", "text": f"🟢 辩论开始！主题: {debate.topic}",
                   "round": 0, "max_rounds": MAX_ROUNDS})
@@ -191,11 +175,11 @@ class DebateServer:
             logger.exception(f"Debate error: {e}")
             _put({"type": "error", "error": str(e)})
         finally:
-            # 清理
-            for s in [left_session, right_session]:
+            # 清理 Agent
+            for a in [left_agent, right_agent]:
                 try:
-                    if hasattr(s, 'close'):
-                        s.close()
+                    if hasattr(a, 'close'):
+                        a.close()
                 except Exception:
                     pass
 
@@ -328,8 +312,8 @@ async def handle_start_debate(request):
     server = get_server()
 
     # 获取模型名用于显示
-    left_cfg = _load_config_cached(left_config) if left_config else _load_config_cached(None)
-    right_cfg = _load_config_cached(right_config) if right_config else _load_config_cached(None)
+    left_cfg = _load_config(left_config) if left_config else _load_config(None)
+    right_cfg = _load_config(right_config) if right_config else _load_config(None)
 
     debate = DebateSession(
         debate_id=debate_id, topic=topic,

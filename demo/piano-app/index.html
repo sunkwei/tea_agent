@@ -22,6 +22,11 @@ body{background:linear-gradient(145deg,#1a1a2e,#16213e,#0f3460);min-height:100vh
 .controls input[type=range]{-webkit-appearance:none;width:100px;height:4px;border-radius:2px;background:rgba(255,255,255,0.25);outline:none}
 .controls input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#f0c27f;cursor:pointer}
 .tempo-val{color:#f0c27f;font-weight:600;min-width:32px;text-align:center}
+.song-selector{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:6px 12px;border-radius:10px;font-size:14px;cursor:pointer;outline:none;max-width:170px}
+.song-selector option{background:#1a1a2e;color:#fff}
+.song-info{color:rgba(255,255,255,0.5);font-size:12px;margin-left:4px;white-space:nowrap}
+.song-selector option{background:#1a1a2e;color:#fff}
+.song-info{color:rgba(255,255,255,0.5);font-size:12px;margin-left:4px;white-space:nowrap}
 .staff-wrapper{background:rgba(0,0,0,0.35);border-radius:16px;padding:4px;margin-bottom:16px;box-shadow:inset 0 2px 10px rgba(0,0,0,0.4)}
 #staffCanvas{display:block;width:100%;height:auto;border-radius:12px;background:#faf6ed;cursor:pointer}
 .beat-indicator{display:flex;align-items:center;justify-content:space-between;color:rgba(255,255,255,0.6);font-size:13px;margin:8px 0 14px;padding:0 6px}
@@ -52,12 +57,13 @@ body{background:linear-gradient(145deg,#1a1a2e,#16213e,#0f3460);min-height:100vh
 <div class="app-container">
 <div class="header"><div class="logo"><h1>🎹 <span>钢琴</span>学习助手</h1></div>
 <div class="controls">
+<select id="songSelector" class="song-selector"></select>
+<span class="song-info" id="songInfo">1级·小星星</span>
 <button id="playBtn">▶ 播放</button>
 <button id="resetBtn">⟲ 重置</button>
 <button id="sustainBtn" class="sustain-pedal" title="延音踏板（快捷键 P）">🔊 延音</button>
 <label>速度 <input type="range" id="tempoSlider" min="30" max="180" value="90"> <span class="tempo-val" id="tempoDisplay">90</span></label>
-</div></div>
-<div class="staff-wrapper"><canvas id="staffCanvas" width="1040" height="240"></canvas></div>
+</div></div>iv class="staff-wrapper"><canvas id="staffCanvas" width="1040" height="240"></canvas></div>
 <div class="beat-indicator"><div class="beat-dots" id="beatDots"></div><div class="measure-info">小节: <strong id="measureNum">1</strong> / <span id="totalMeasures">16</span></div></div>
 <div class="keyboard-wrapper"><div class="keyboard" id="keyboard"></div></div>
 <div class="footer-info"><div class="hint"><span>🖱 鼠标点击</span><span>⌨️ PC键盘</span><span>👆 多点触摸</span><span>🔊 P=延音</span><span>🎵 <span class="current-note-name" id="currentNoteName">—</span></span></div>
@@ -419,41 +425,103 @@ buildKeyboard();
 // Position black keys after layout
 requestAnimationFrame(() => { requestAnimationFrame(positionBlackKeys); });
 window.addEventListener('resize', positionBlackKeys);
-// Song: Twinkle Twinkle Little Star
-const SONG = [
-  {pitch:'C4',beat:0,dur:1},{pitch:'C4',beat:1,dur:1},{pitch:'G4',beat:2,dur:1},{pitch:'G4',beat:3,dur:1},
-  {pitch:'A4',beat:4,dur:1},{pitch:'A4',beat:5,dur:1},{pitch:'G4',beat:6,dur:2},
-  {pitch:'F4',beat:8,dur:1},{pitch:'F4',beat:9,dur:1},{pitch:'E4',beat:10,dur:1},{pitch:'E4',beat:11,dur:1},
-  {pitch:'D4',beat:12,dur:1},{pitch:'D4',beat:13,dur:1},{pitch:'C4',beat:14,dur:2},
-  {pitch:'G4',beat:16,dur:1},{pitch:'G4',beat:17,dur:1},{pitch:'F4',beat:18,dur:1},{pitch:'F4',beat:19,dur:1},
-  {pitch:'E4',beat:20,dur:1},{pitch:'E4',beat:21,dur:1},{pitch:'D4',beat:22,dur:2},
-  {pitch:'G4',beat:24,dur:1},{pitch:'G4',beat:25,dur:1},{pitch:'F4',beat:26,dur:1},{pitch:'F4',beat:27,dur:1},
-  {pitch:'E4',beat:28,dur:1},{pitch:'E4',beat:29,dur:1},{pitch:'D4',beat:30,dur:2},
-  {pitch:'C4',beat:32,dur:1},{pitch:'C4',beat:33,dur:1},{pitch:'G4',beat:34,dur:1},{pitch:'G4',beat:35,dur:1},
-  {pitch:'A4',beat:36,dur:1},{pitch:'A4',beat:37,dur:1},{pitch:'G4',beat:38,dur:2},
-  {pitch:'F4',beat:40,dur:1},{pitch:'F4',beat:41,dur:1},{pitch:'E4',beat:42,dur:1},{pitch:'E4',beat:43,dur:1},
-  {pitch:'D4',beat:44,dur:1},{pitch:'D4',beat:45,dur:1},{pitch:'C4',beat:46,dur:2},
-];
-// 和弦数据（每小节一个和弦）
-const CHORDS = [
-  {notes:['C4','E4','G4'], name:'C',  beat:0,  dur:4},
-  {notes:['C4','E4','G4'], name:'C',  beat:4,  dur:4},
-  {notes:['F4','A4','C5'], name:'F',  beat:8,  dur:4},
-  {notes:['C4','E4','G4'], name:'C',  beat:12, dur:4},
-  {notes:['G4','B4','D5'], name:'G',  beat:16, dur:4},
-  {notes:['C4','E4','G4'], name:'C',  beat:20, dur:4},
-  {notes:['G4','B4','D5'], name:'G',  beat:24, dur:4},
-  {notes:['C4','E4','G4'], name:'C',  beat:28, dur:4},
-  {notes:['C4','E4','G4'], name:'C',  beat:32, dur:4},
-  {notes:['C4','E4','G4'], name:'C',  beat:36, dur:4},
-  {notes:['F4','A4','C5'], name:'F',  beat:40, dur:4},
-  {notes:['C4','E4','G4'], name:'C',  beat:44, dur:4},
-];
-const BEATS_PER_MEASURE = 4;
-const lastChord = CHORDS[CHORDS.length-1];
-const TOTAL_BEATS = Math.ceil(Math.max(SONG[SONG.length-1].beat + SONG[SONG.length-1].dur, lastChord.beat + lastChord.dur));
-const TOTAL_MEASURES = Math.ceil(TOTAL_BEATS / BEATS_PER_MEASURE);
-document.getElementById('totalMeasures').textContent = TOTAL_MEASURES;
+// ===== 曲库系统（1-10 级） =====
+const SONGS = {
+  '1':{name:'小星星',composer:'莫扎特',grade:1,bpmeas:4,
+    song:[{pitch:'C4',beat:0,dur:1},{pitch:'C4',beat:1,dur:1},{pitch:'G4',beat:2,dur:1},{pitch:'G4',beat:3,dur:1},{pitch:'A4',beat:4,dur:1},{pitch:'A4',beat:5,dur:1},{pitch:'G4',beat:6,dur:2},{pitch:'F4',beat:8,dur:1},{pitch:'F4',beat:9,dur:1},{pitch:'E4',beat:10,dur:1},{pitch:'E4',beat:11,dur:1},{pitch:'D4',beat:12,dur:1},{pitch:'D4',beat:13,dur:1},{pitch:'C4',beat:14,dur:2},{pitch:'G4',beat:16,dur:1},{pitch:'G4',beat:17,dur:1},{pitch:'F4',beat:18,dur:1},{pitch:'F4',beat:19,dur:1},{pitch:'E4',beat:20,dur:1},{pitch:'E4',beat:21,dur:1},{pitch:'D4',beat:22,dur:2},{pitch:'G4',beat:24,dur:1},{pitch:'G4',beat:25,dur:1},{pitch:'F4',beat:26,dur:1},{pitch:'F4',beat:27,dur:1},{pitch:'E4',beat:28,dur:1},{pitch:'E4',beat:29,dur:1},{pitch:'D4',beat:30,dur:2},{pitch:'C4',beat:32,dur:1},{pitch:'C4',beat:33,dur:1},{pitch:'G4',beat:34,dur:1},{pitch:'G4',beat:35,dur:1},{pitch:'A4',beat:36,dur:1},{pitch:'A4',beat:37,dur:1},{pitch:'G4',beat:38,dur:2},{pitch:'F4',beat:40,dur:1},{pitch:'F4',beat:41,dur:1},{pitch:'E4',beat:42,dur:1},{pitch:'E4',beat:43,dur:1},{pitch:'D4',beat:44,dur:1},{pitch:'D4',beat:45,dur:1},{pitch:'C4',beat:46,dur:2}],
+    chords:[{notes:['C4','E4','G4'],name:'C',beat:0,dur:4},{notes:['C4','E4','G4'],name:'C',beat:4,dur:4},{notes:['F4','A4','C5'],name:'F',beat:8,dur:4},{notes:['C4','E4','G4'],name:'C',beat:12,dur:4},{notes:['G4','B4','D5'],name:'G',beat:16,dur:4},{notes:['C4','E4','G4'],name:'C',beat:20,dur:4},{notes:['G4','B4','D5'],name:'G',beat:24,dur:4},{notes:['C4','E4','G4'],name:'C',beat:28,dur:4},{notes:['C4','E4','G4'],name:'C',beat:32,dur:4},{notes:['C4','E4','G4'],name:'C',beat:36,dur:4},{notes:['F4','A4','C5'],name:'F',beat:40,dur:4},{notes:['C4','E4','G4'],name:'C',beat:44,dur:4}]
+  },
+  '2':{name:'欢乐颂',composer:'贝多芬',grade:2,bpmeas:4,
+    song:[{pitch:'E4',beat:0,dur:1},{pitch:'E4',beat:1,dur:1},{pitch:'F4',beat:2,dur:1},{pitch:'G4',beat:3,dur:1},{pitch:'G4',beat:4,dur:1},{pitch:'F4',beat:5,dur:1},{pitch:'E4',beat:6,dur:1},{pitch:'D4',beat:7,dur:1},{pitch:'C4',beat:8,dur:1},{pitch:'C4',beat:9,dur:1},{pitch:'D4',beat:10,dur:1},{pitch:'E4',beat:11,dur:1},{pitch:'E4',beat:12,dur:1},{pitch:'D4',beat:13,dur:1},{pitch:'D4',beat:14,dur:2},{pitch:'E4',beat:16,dur:1},{pitch:'E4',beat:17,dur:1},{pitch:'F4',beat:18,dur:1},{pitch:'G4',beat:19,dur:1},{pitch:'G4',beat:20,dur:1},{pitch:'F4',beat:21,dur:1},{pitch:'E4',beat:22,dur:1},{pitch:'D4',beat:23,dur:1},{pitch:'C4',beat:24,dur:1},{pitch:'C4',beat:25,dur:1},{pitch:'D4',beat:26,dur:1},{pitch:'E4',beat:27,dur:1},{pitch:'D4',beat:28,dur:1},{pitch:'C4',beat:29,dur:1},{pitch:'C4',beat:30,dur:2}],
+    chords:[{notes:['C4','E4','G4'],name:'C',beat:0,dur:4},{notes:['G4','B4','D5'],name:'G',beat:4,dur:4},{notes:['C4','E4','G4'],name:'C',beat:8,dur:4},{notes:['G4','B4','D5'],name:'G',beat:12,dur:4},{notes:['C4','E4','G4'],name:'C',beat:16,dur:4},{notes:['G4','B4','D5'],name:'G',beat:20,dur:4},{notes:['C4','E4','G4'],name:'C',beat:24,dur:4},{notes:['C4','E4','G4'],name:'C',beat:28,dur:2}]
+  },
+  '3':{name:'多年以前',composer:'贝利',grade:3,bpmeas:4,
+    song:[{pitch:'D4',beat:0,dur:1},{pitch:'D4',beat:1,dur:1},{pitch:'E4',beat:2,dur:1},{pitch:'F4',beat:3,dur:1},{pitch:'G4',beat:4,dur:1},{pitch:'A4',beat:5,dur:1},{pitch:'B4',beat:6,dur:1},{pitch:'A4',beat:7,dur:1},{pitch:'G4',beat:8,dur:1},{pitch:'F4',beat:9,dur:1},{pitch:'E4',beat:10,dur:1},{pitch:'D4',beat:11,dur:1},{pitch:'E4',beat:12,dur:1},{pitch:'C4',beat:13,dur:1},{pitch:'D4',beat:14,dur:2},{pitch:'D4',beat:16,dur:1},{pitch:'D4',beat:17,dur:1},{pitch:'E4',beat:18,dur:1},{pitch:'F4',beat:19,dur:1},{pitch:'G4',beat:20,dur:1},{pitch:'A4',beat:21,dur:1},{pitch:'B4',beat:22,dur:1},{pitch:'A4',beat:23,dur:1},{pitch:'G4',beat:24,dur:1},{pitch:'F4',beat:25,dur:1},{pitch:'E4',beat:26,dur:1},{pitch:'D4',beat:27,dur:1},{pitch:'E4',beat:28,dur:1},{pitch:'D4',beat:29,dur:1},{pitch:'C4',beat:30,dur:2}],
+    chords:[{notes:['G4','B4','D5'],name:'G',beat:0,dur:4},{notes:['C4','E4','G4'],name:'C',beat:4,dur:4},{notes:['G4','B4','D5'],name:'G',beat:8,dur:4},{notes:['C4','E4','G4'],name:'C',beat:12,dur:4},{notes:['G4','B4','D5'],name:'G',beat:16,dur:4},{notes:['C4','E4','G4'],name:'C',beat:20,dur:4},{notes:['G4','B4','D5'],name:'G',beat:24,dur:4},{notes:['C4','E4','G4'],name:'C',beat:28,dur:2}]
+  },
+  '4':{name:'斯卡布罗集市',composer:'英国民歌',grade:4,bpmeas:3,
+    song:[{pitch:'D4',beat:0,dur:1},{pitch:'D4',beat:1,dur:1},{pitch:'G4',beat:2,dur:1},{pitch:'A4',beat:3,dur:1},{pitch:'A4',beat:4,dur:1},{pitch:'G4',beat:5,dur:2},{pitch:'D4',beat:7,dur:1},{pitch:'A4',beat:8,dur:1},{pitch:'G4',beat:9,dur:1},{pitch:'F4',beat:10,dur:1},{pitch:'E4',beat:11,dur:1},{pitch:'D4',beat:12,dur:2},{pitch:'A4',beat:15,dur:1},{pitch:'A4',beat:16,dur:1},{pitch:'F4',beat:17,dur:1},{pitch:'E4',beat:18,dur:1},{pitch:'D4',beat:19,dur:1},{pitch:'E4',beat:20,dur:1},{pitch:'F4',beat:21,dur:1},{pitch:'G4',beat:22,dur:1},{pitch:'A4',beat:23,dur:1},{pitch:'A4',beat:24,dur:1},{pitch:'G4',beat:25,dur:1},{pitch:'F4',beat:26,dur:1},{pitch:'E4',beat:27,dur:1},{pitch:'D4',beat:28,dur:2}],
+    chords:[{notes:['D4','F4','A4'],name:'Dm',beat:0,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:3,dur:3},{notes:['D4','F4','A4'],name:'Dm',beat:6,dur:3},{notes:['D4','F4','A4'],name:'Dm',beat:9,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:12,dur:3},{notes:['F4','A4','C5'],name:'F',beat:15,dur:3},{notes:['C4','E4','G4'],name:'C',beat:18,dur:3},{notes:['D4','F4','A4'],name:'Dm',beat:21,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:24,dur:3},{notes:['D4','F4','A4'],name:'Dm',beat:27,dur:2}]
+  },
+  '5':{name:'致爱丽丝',composer:'贝多芬',grade:5,bpmeas:3,
+    song:[{pitch:'E4',beat:0,dur:1},{pitch:'D#4',beat:1,dur:1},{pitch:'E4',beat:2,dur:1},{pitch:'D#4',beat:3,dur:1},{pitch:'E4',beat:4,dur:1},{pitch:'B4',beat:5,dur:1},{pitch:'D4',beat:6,dur:1},{pitch:'C4',beat:7,dur:1},{pitch:'A4',beat:8,dur:1},{pitch:'C4',beat:9,dur:1},{pitch:'E4',beat:10,dur:1},{pitch:'A4',beat:11,dur:1},{pitch:'B4',beat:12,dur:2},{pitch:'E4',beat:14,dur:1},{pitch:'D#4',beat:15,dur:1},{pitch:'E4',beat:16,dur:1},{pitch:'D#4',beat:17,dur:1},{pitch:'E4',beat:18,dur:1},{pitch:'B4',beat:19,dur:1},{pitch:'D4',beat:20,dur:1},{pitch:'C4',beat:21,dur:1},{pitch:'A4',beat:22,dur:1},{pitch:'C4',beat:23,dur:1},{pitch:'E4',beat:24,dur:1},{pitch:'A4',beat:25,dur:1},{pitch:'B4',beat:26,dur:2}],
+    chords:[{notes:['A4','C5','E5'],name:'Am',beat:0,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:3,dur:3},{notes:['D4','F4','A4'],name:'Dm',beat:6,dur:3},{notes:['E4','G#4','B4'],name:'E7',beat:9,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:12,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:15,dur:3},{notes:['D4','F4','A4'],name:'Dm',beat:18,dur:3},{notes:['E4','G#4','B4'],name:'E7',beat:21,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:24,dur:2}]
+  },
+  '6':{name:'绿袖子',composer:'英国民歌',grade:6,bpmeas:3,
+    song:[{pitch:'G4',beat:0,dur:1},{pitch:'A4',beat:1,dur:1},{pitch:'B4',beat:2,dur:1},{pitch:'C5',beat:3,dur:1},{pitch:'D5',beat:4,dur:1},{pitch:'E5',beat:5,dur:1},{pitch:'D5',beat:6,dur:1},{pitch:'C5',beat:7,dur:1},{pitch:'B4',beat:8,dur:1},{pitch:'A4',beat:9,dur:1},{pitch:'G4',beat:10,dur:2},{pitch:'G4',beat:12,dur:1},{pitch:'A4',beat:13,dur:1},{pitch:'B4',beat:14,dur:1},{pitch:'C5',beat:15,dur:1},{pitch:'D5',beat:16,dur:1},{pitch:'E5',beat:17,dur:1},{pitch:'D5',beat:18,dur:1},{pitch:'C5',beat:19,dur:1},{pitch:'B4',beat:20,dur:1},{pitch:'A4',beat:21,dur:1},{pitch:'G4',beat:22,dur:2}],
+    chords:[{notes:['A4','C5','E5'],name:'Am',beat:0,dur:3},{notes:['C4','E4','G4'],name:'C',beat:3,dur:3},{notes:['G4','B4','D5'],name:'G',beat:6,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:9,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:12,dur:3},{notes:['C4','E4','G4'],name:'C',beat:15,dur:3},{notes:['G4','B4','D5'],name:'G',beat:18,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:21,dur:2}]
+  },
+  '7':{name:'卡农',composer:'帕赫贝尔',grade:7,bpmeas:4,
+    song:[{pitch:'C4',beat:0,dur:1},{pitch:'G4',beat:1,dur:1},{pitch:'A4',beat:2,dur:1},{pitch:'E4',beat:3,dur:1},{pitch:'F4',beat:4,dur:1},{pitch:'C4',beat:5,dur:1},{pitch:'F4',beat:6,dur:1},{pitch:'G4',beat:7,dur:1},{pitch:'C4',beat:8,dur:1},{pitch:'G4',beat:9,dur:1},{pitch:'A4',beat:10,dur:1},{pitch:'E4',beat:11,dur:1},{pitch:'F4',beat:12,dur:1},{pitch:'C4',beat:13,dur:1},{pitch:'G4',beat:14,dur:1},{pitch:'C4',beat:15,dur:1}],
+    chords:[{notes:['C4','E4','G4'],name:'C',beat:0,dur:4},{notes:['G4','B4','D5'],name:'G',beat:4,dur:4},{notes:['A4','C5','E5'],name:'Am',beat:8,dur:4},{notes:['E4','G4','B4'],name:'Em',beat:12,dur:4},{notes:['F4','A4','C5'],name:'F',beat:16,dur:4},{notes:['C4','E4','G4'],name:'C',beat:20,dur:4},{notes:['F4','A4','C5'],name:'F',beat:24,dur:4},{notes:['G4','B4','D5'],name:'G',beat:28,dur:4}]
+  },
+  '8':{name:'梦中的婚礼',composer:'克莱德曼',grade:8,bpmeas:4,
+    song:[{pitch:'C4',beat:0,dur:1},{pitch:'D4',beat:1,dur:1},{pitch:'E4',beat:2,dur:1},{pitch:'G4',beat:3,dur:1},{pitch:'E4',beat:4,dur:1},{pitch:'D4',beat:5,dur:1},{pitch:'C4',beat:6,dur:1},{pitch:'D4',beat:7,dur:1},{pitch:'E4',beat:8,dur:1},{pitch:'G4',beat:9,dur:1},{pitch:'A4',beat:10,dur:1},{pitch:'G4',beat:11,dur:1},{pitch:'E4',beat:12,dur:1},{pitch:'D4',beat:13,dur:1},{pitch:'C4',beat:14,dur:2},{pitch:'C4',beat:16,dur:1},{pitch:'D4',beat:17,dur:1},{pitch:'E4',beat:18,dur:1},{pitch:'G4',beat:19,dur:1},{pitch:'E4',beat:20,dur:1},{pitch:'D4',beat:21,dur:1},{pitch:'C4',beat:22,dur:1},{pitch:'D4',beat:23,dur:1},{pitch:'E4',beat:24,dur:1},{pitch:'G4',beat:25,dur:1},{pitch:'A4',beat:26,dur:1},{pitch:'G4',beat:27,dur:1},{pitch:'E4',beat:28,dur:1},{pitch:'D4',beat:29,dur:1},{pitch:'C4',beat:30,dur:2}],
+    chords:[{notes:['C4','E4','G4'],name:'C',beat:0,dur:4},{notes:['G4','B4','D5'],name:'G',beat:4,dur:4},{notes:['A4','C5','E5'],name:'Am',beat:8,dur:4},{notes:['G4','B4','D5'],name:'G',beat:12,dur:4},{notes:['C4','E4','G4'],name:'C',beat:16,dur:4},{notes:['G4','B4','D5'],name:'G',beat:20,dur:4},{notes:['A4','C5','E5'],name:'Am',beat:24,dur:4},{notes:['G4','B4','D5'],name:'G',beat:28,dur:4}]
+  },
+  '9':{name:'天鹅',composer:'圣桑',grade:9,bpmeas:4,
+    song:[{pitch:'G4',beat:0,dur:1},{pitch:'D5',beat:1,dur:1},{pitch:'B4',beat:2,dur:1},{pitch:'G4',beat:3,dur:1},{pitch:'D5',beat:4,dur:1},{pitch:'G5',beat:5,dur:1},{pitch:'A5',beat:6,dur:1},{pitch:'B5',beat:7,dur:1},{pitch:'C5',beat:8,dur:1},{pitch:'G4',beat:9,dur:1},{pitch:'E4',beat:10,dur:1},{pitch:'C4',beat:11,dur:1},{pitch:'G4',beat:12,dur:1},{pitch:'C5',beat:13,dur:1},{pitch:'D5',beat:14,dur:1},{pitch:'E5',beat:15,dur:1},{pitch:'F#5',beat:16,dur:1},{pitch:'D5',beat:17,dur:1},{pitch:'A4',beat:18,dur:1},{pitch:'D5',beat:19,dur:1},{pitch:'E5',beat:20,dur:1},{pitch:'C5',beat:21,dur:1},{pitch:'A4',beat:22,dur:1},{pitch:'F#4',beat:23,dur:1},{pitch:'G4',beat:24,dur:1},{pitch:'D5',beat:25,dur:1},{pitch:'B4',beat:26,dur:1},{pitch:'G4',beat:27,dur:1},{pitch:'D5',beat:28,dur:1},{pitch:'G5',beat:29,dur:1},{pitch:'D5',beat:30,dur:2}],
+    chords:[{notes:['G4','B4','D5'],name:'G',beat:0,dur:4},{notes:['C4','E4','G4'],name:'C',beat:4,dur:4},{notes:['G4','B4','D5'],name:'G',beat:8,dur:4},{notes:['C4','E4','G4'],name:'C',beat:12,dur:4},{notes:['D4','F#4','A4'],name:'D',beat:16,dur:4},{notes:['G4','B4','D5'],name:'G',beat:20,dur:4},{notes:['C4','E4','G4'],name:'C',beat:24,dur:4},{notes:['G4','B4','D5'],name:'G',beat:28,dur:2}]
+  },
+  '10':{name:'梁祝',composer:'何占豪/陈钢',grade:10,bpmeas:4,
+    song:[{pitch:'C4',beat:0,dur:1},{pitch:'D4',beat:1,dur:1},{pitch:'E4',beat:2,dur:1},{pitch:'G4',beat:3,dur:1},{pitch:'A4',beat:4,dur:1},{pitch:'G4',beat:5,dur:1},{pitch:'E4',beat:6,dur:1},{pitch:'D4',beat:7,dur:1},{pitch:'C4',beat:8,dur:1},{pitch:'D4',beat:9,dur:1},{pitch:'E4',beat:10,dur:1},{pitch:'G4',beat:11,dur:1},{pitch:'A4',beat:12,dur:1},{pitch:'C5',beat:13,dur:1},{pitch:'B4',beat:14,dur:2},{pitch:'C5',beat:16,dur:1},{pitch:'B4',beat:17,dur:1},{pitch:'A4',beat:18,dur:1},{pitch:'G4',beat:19,dur:1},{pitch:'A4',beat:20,dur:1},{pitch:'C5',beat:21,dur:1},{pitch:'A4',beat:22,dur:1},{pitch:'G4',beat:23,dur:1},{pitch:'E4',beat:24,dur:1},{pitch:'D4',beat:25,dur:1},{pitch:'E4',beat:26,dur:1},{pitch:'G4',beat:27,dur:1},{pitch:'A4',beat:28,dur:1},{pitch:'G4',beat:29,dur:1},{pitch:'E4',beat:30,dur:2}],
+    chords:[{notes:['C4','E4','G4'],name:'C',beat:0,dur:4},{notes:['G4','B4','D5'],name:'G',beat:4,dur:4},{notes:['A4','C5','E5'],name:'Am',beat:8,dur:4},{notes:['G4','B4','D5'],name:'G',beat:12,dur:4},{notes:['C4','E4','G4'],name:'C',beat:16,dur:4},{notes:['G4','B4','D5'],name:'G',beat:20,dur:4},{notes:['A4','C5','E5'],name:'Am',beat:24,dur:4},{notes:['G4','B4','D5'],name:'G',beat:28,dur:4}]
+  },
+};
+let currentSongId = '1';
+function recalcTotals() {
+  if (!window.SONG) return;
+  const s = window.SONG, c = window.CHORDS;
+  const lastS = s[s.length-1], lastC = c[c.length-1];
+  window.TOTAL_BEATS = Math.ceil(Math.max(lastS.beat+lastS.dur, lastC?lastC.beat+lastC.dur:0));
+  window.TOTAL_MEASURES = Math.ceil(TOTAL_BEATS / BEATS_PER_MEASURE);
+}
+function switchSong(id) {
+  if (isPlaying) {
+    isPlaying = false;
+    document.getElementById('playBtn').textContent = '▶ 播放';
+    document.getElementById('playBtn').classList.remove('active');
+  }
+  for (const p of Object.keys(continuousNotes)) stopContinuousNote(p, true);
+  sustainedNotes = {};
+  releaseAllKeys(); releaseChordKeys();
+  currentSongId = id;
+  const src = SONGS[id];
+  window.SONG = src.song.slice();
+  window.CHORDS = src.chords.slice();
+  window.BEATS_PER_MEASURE = src.bpmeas;
+  recalcTotals();
+  document.getElementById('songInfo').textContent = id+'级·'+src.name;
+  document.getElementById('totalMeasures').textContent = TOTAL_MEASURES;
+  document.getElementById('measureNum').textContent = 1;
+  currentBeat = -2; lastTriggeredIdx = -1; lastChordTriggeredIdx = -1;
+  document.getElementById('statusText').textContent = '就绪 ✓';
+  drawStaff(currentBeat); updateBeatDots(currentBeat);
+}
+
+// Populate song selector
+(function() {
+  const sel = document.getElementById('songSelector');
+  for (const id of Object.keys(SONGS)) {
+    const s = SONGS[id];
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = id+'级 '+s.name+' - '+s.composer;
+    sel.appendChild(opt);
+  }
+  sel.value = '1';
+  sel.addEventListener('change', function() {
+    switchSong(this.value);
+  });
+})();
+// Init first song
+(function() {
+  const src = SONGS['1'];
+  window.SONG = src.song.slice();
+  window.CHORDS = src.chords.slice();
+  window.BEATS_PER_MEASURE = src.bpmeas;
+  recalcTotals();
+})();
 // Canvas setup
 const canvas = document.getElementById('staffCanvas');
 const ctx = canvas.getContext('2d');
@@ -492,7 +560,7 @@ function drawStaff(currentBeat) {
   ctx.fillStyle = '#8b7d6b'; ctx.font = 'bold 48px serif';
   ctx.fillText('\uD834\uDD1E', 36, STAFF_BOTTOM + 6);
   ctx.font = '18px serif'; ctx.fillStyle = '#5a4e3e';
-  ctx.fillText('4/4', 100, STAFF_TOP + STAFF_SPACING * 1.3);
+  ctx.fillText(BEATS_PER_MEASURE+'/4', 100, STAFF_TOP + STAFF_SPACING * 1.3);
   // Chord symbols
   for (const chord of CHORDS) {
     const x = PLAY_LINE_X + (chord.beat + chord.dur/2 - currentBeat) * PX_PER_BEAT;

@@ -378,3 +378,240 @@ class TestInjectOsInfoEdgeCases:
             assert result[0] == original_copy[0]
             # 返回值应与传入的是同一个 list 对象
             assert result is original
+
+# ============================================================
+# generate_os_info_text 纯函数测试
+# ============================================================
+
+class BaseGenerateTest:
+    """generate_os_info_text 测试基类"""
+
+    @staticmethod
+    def _call_generate(os_name: str = "Linux", **kwargs):
+        """使用 mock platform 调用 generate_os_info_text"""
+        with (
+            patch("tea_agent.session.os_info_injector.platform.system",
+                  return_value=os_name),
+            patch("tea_agent.session.os_info_injector.platform.release",
+                  return_value="test-release"),
+            patch("tea_agent.session.os_info_injector.platform.version",
+                  return_value="test-version"),
+            patch("tea_agent.session.os_info_injector.platform.machine",
+                  return_value="x86_64"),
+            patch("tea_agent.session.os_info_injector.platform.python_version",
+                  return_value="3.11.0"),
+            patch("tea_agent.session.os_info_injector.socket.gethostname",
+                  return_value="test-host"),
+            patch("tea_agent.session.os_info_injector.os.getcwd",
+                  return_value="/fake/workdir"),
+            patch("tea_agent.session.os_info_injector.os.sep",
+                  "\\" if os_name == "Windows" else "/"),
+            patch("tea_agent.session.os_info_injector.os.pathsep",
+                  ";" if os_name == "Windows" else ":"),
+        ):
+            from tea_agent.session.os_info_injector import generate_os_info_text
+            return generate_os_info_text(**kwargs)
+
+
+class TestGenerateOsInfoText:
+    """generate_os_info_text 纯函数测试"""
+
+    def test_returns_string(self):
+        """应返回字符串"""
+        result = BaseGenerateTest._call_generate("Linux")
+        assert isinstance(result, str)
+        assert len(result) > 100
+
+    def test_contains_os_section_header(self):
+        """应包含 [系统环境信息] 标记"""
+        result = BaseGenerateTest._call_generate("Linux")
+        assert result.startswith("[系统环境信息]")
+
+    def test_windows_specific_hints(self):
+        """Windows 应有 findstr 等提示"""
+        result = BaseGenerateTest._call_generate("Windows")
+        assert "Windows" in result
+        assert "findstr" in result
+        assert "%USERPROFILE%" in result
+
+    def test_linux_specific_hints(self):
+        """Linux 应有 grep 等提示"""
+        result = BaseGenerateTest._call_generate("Linux")
+        assert "Linux" in result
+        assert "grep" in result
+        assert "$HOME" in result
+
+    def test_macos_specific_hints(self):
+        """macOS 应有 macOS 提示"""
+        result = BaseGenerateTest._call_generate("Darwin")
+        assert "macOS" in result
+        assert "grep" in result
+
+    def test_contains_path_separator_info(self):
+        """应包含路径分隔符信息"""
+        result = BaseGenerateTest._call_generate("Linux")
+        assert "路径分隔符" in result
+
+    def test_contains_interface_hints(self):
+        """应包含接口类型提示"""
+        result = BaseGenerateTest._call_generate("Linux", interface_type="web")
+        assert "Web" in result or "链接" in result
+
+    def test_contains_toolkit_root_dir(self):
+        """toolkit_root_dir 应出现在结果中"""
+        result = BaseGenerateTest._call_generate("Linux", toolkit_root_dir="/opt/tools")
+        assert "/opt/tools" in result
+
+    def test_unknown_os_still_works(self):
+        """未知 OS 不应崩溃"""
+        result = BaseGenerateTest._call_generate("FreeBSD")
+        assert "FreeBSD" in result
+        assert "通用规则" in result
+
+    def test_interface_type_web(self):
+        """web 接口类型应包含对应提示"""
+        result = BaseGenerateTest._call_generate("Linux", interface_type="web")
+        assert "Web" in result or "链接" in result
+
+    def test_interface_type_cli(self):
+        """CLI 接口类型应包含对应提示"""
+        result = BaseGenerateTest._call_generate("Linux", interface_type="cli")
+        assert "纯文本" in result
+
+    def test_interface_type_gui(self):
+        """GUI 接口类型应包含对应提示"""
+        result = BaseGenerateTest._call_generate("Linux", interface_type="gui")
+        assert "桌面" in result or "GUI" in result or "Markdown" in result
+
+
+class TestGenerateOsInfoCrossPlatform:
+    """跨平台兼容性测试"""
+
+    def test_path_sep_correct_for_windows(self):
+        """Windows 路径分隔符应为反斜杠"""
+        result = BaseGenerateTest._call_generate("Windows")
+        assert "\\\\" in result  # 转义后的反斜杠
+
+    def test_path_sep_correct_for_linux(self):
+        """Linux 路径分隔符应为正斜杠"""
+        result = BaseGenerateTest._call_generate("Linux")
+        assert "Linux/macOS 使用 /" in result
+
+    def test_tool_hints_windows(self):
+        """Windows 工具提示应包含 cmd.exe"""
+        result = BaseGenerateTest._call_generate("Windows")
+        assert "cmd.exe" in result
+
+    def test_tool_hints_linux(self):
+        """Linux 工具提示应包含 toolbar 通用规则"""
+        result = BaseGenerateTest._call_generate("Linux")
+        assert "toolkit_file" in result
+
+    def test_no_cross_os_leakage(self):
+        """Windows 不应包含 Linux 特有提示"""
+        result = BaseGenerateTest._call_generate("Windows")
+        assert "sudo" not in result or "密码" not in result
+
+
+# ============================================================
+# _detect_interface_type 测试
+# ============================================================
+
+class TestDetectInterfaceType:
+    """_detect_interface_type 接口类型检测测试"""
+
+    def test_env_var_web(self):
+        """TEA_AGENT_INTERFACE=web 应返回 web"""
+        with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "web"}, clear=True):
+            from tea_agent.session.os_info_injector import _detect_interface_type
+            assert _detect_interface_type() == "web"
+
+    def test_env_var_gui(self):
+        """TEA_AGENT_INTERFACE=gui 应返回 gui"""
+        with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "gui"}, clear=True):
+            from tea_agent.session.os_info_injector import _detect_interface_type
+            assert _detect_interface_type() == "gui"
+
+    def test_env_var_cli(self):
+        """TEA_AGENT_INTERFACE=cli 应返回 cli"""
+        with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "cli"}, clear=True):
+            from tea_agent.session.os_info_injector import _detect_interface_type
+            assert _detect_interface_type() == "cli"
+
+    def test_env_var_case_insensitive(self):
+        """环境变量值不区分大小写"""
+        with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "WEB"}, clear=True):
+            from tea_agent.session.os_info_injector import _detect_interface_type
+            assert _detect_interface_type() == "web"
+
+    def test_env_var_tui(self):
+        """TEA_AGENT_INTERFACE=tui 应返回 tui"""
+        with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "tui"}, clear=True):
+            from tea_agent.session.os_info_injector import _detect_interface_type
+            assert _detect_interface_type() == "tui"
+
+    def test_env_var_mcp(self):
+        """TEA_AGENT_INTERFACE=mcp 应返回 mcp"""
+        with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "mcp"}, clear=True):
+            from tea_agent.session.os_info_injector import _detect_interface_type
+            assert _detect_interface_type() == "mcp"
+
+    def test_no_env_var_fallback(self):
+        """无环境变量时应通过模块检测回退到 cli"""
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("tea_agent.session.os_info_injector.sys.modules", {}):
+                with patch("tea_agent.session.os_info_injector.sys.argv", [""]):
+                    from tea_agent.session.os_info_injector import _detect_interface_type
+                    result = _detect_interface_type()
+                    assert result in ("web", "gui", "cli", "tui", "mcp")
+
+    def test_invalid_env_var_fallback(self):
+        """无效环境变量值应走正常检测流程"""
+        with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "invalid"}, clear=True):
+            from tea_agent.session.os_info_injector import _detect_interface_type
+            assert _detect_interface_type() != "invalid"
+
+
+# ============================================================
+# 接口类型提示测试
+# ============================================================
+
+class TestGetInterfaceHints:
+    """_get_interface_hints 测试"""
+
+    def test_web_hints(self):
+        """web 接口应返回 HTML/链接相关提示"""
+        from tea_agent.session.os_info_injector import _get_interface_hints
+        hints = _get_interface_hints("web")
+        assert "#topic:" in hints or "HTML" in hints
+        assert "Markdown" in hints or "链接" in hints
+
+    def test_gui_hints(self):
+        """GUI 接口应返回桌面通知提示"""
+        from tea_agent.session.os_info_injector import _get_interface_hints
+        hints = _get_interface_hints("gui")
+        assert "通知" in hints or "toolkit_notify" in hints
+
+    def test_cli_hints(self):
+        """CLI 接口应返回纯文本提示"""
+        from tea_agent.session.os_info_injector import _get_interface_hints
+        hints = _get_interface_hints("cli")
+        assert "纯文本" in hints
+
+    def test_tui_hints(self):
+        """TUI 接口应返回终端富文本提示"""
+        from tea_agent.session.os_info_injector import _get_interface_hints
+        hints = _get_interface_hints("tui")
+        assert "终端" in hints
+
+    def test_mcp_hints(self):
+        """MCP 接口应返回纯文本/JSON 提示"""
+        from tea_agent.session.os_info_injector import _get_interface_hints
+        hints = _get_interface_hints("mcp")
+        assert "纯文本" in hints or "JSON" in hints
+
+    def test_unknown_interface_empty(self):
+        """未知接口类型应返回空字符串"""
+        from tea_agent.session.os_info_injector import _get_interface_hints
+        hints = _get_interface_hints("nonexistent")
+        assert hints == ""

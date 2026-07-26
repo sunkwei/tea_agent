@@ -13,9 +13,9 @@ logger = logging.getLogger("session.params")
 
 # 各组件的默认参数
 _DEFAULTS = {
-    "api": {"temperature": 0.3, "max_tokens": 1000},
-    "summarizer": {"temperature": 0.1, "max_tokens": 500},
-    "memory": {"temperature": 0.3, "max_tokens": 1000},
+    "api": {"temperature": 0.3, "max_tokens": 4096},
+    "summarizer": {"temperature": 0.1, "max_tokens": 2048},
+    "memory": {"temperature": 0.3, "max_tokens": 4096},
 }
 
 

@@ -27,27 +27,29 @@ _project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_project_root))
 
 from tea_agent.onlinesession import OnlineToolSession
-from tea_agent.store import Storage, get_storage
-
-# ── 复用已有的配置缓存和 Session 工厂 ──
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "tea_agent" / "server"))
-from server import _load_config_cached, _create_session_from_cfg, _ChatAgentProxy
+from tea_agent.agent import Agent
+from tea_agent.config import load_config as _load_config
 
 logger = logging.getLogger("debate_server")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 
-MAX_ROUNDS = 50
-DEBATE_SYSTEM_PROMPT = """你是一个辩论赛选手。你将参与一场多轮辩论。
+MAX_ROUNDS = 5
+DEBATE_SYSTEM_PROMPT = """你是一场辩论赛的【{side_label}】。你的核心论点/立场是：{stance}
+
+辩论规则：
 - 对方刚才的发言会以 "[对方]" 前缀提供
 - 你需要针对对方观点进行反驳、补充或回应
+- 从你的立场出发，捍卫你的观点
 - 保持逻辑清晰、有理有据
 - 如果对方有逻辑漏洞，请指出
 - 如果同意对方某观点，可以承认并深化
 - 不要简单重复之前的论据
 - 回复控制在 300 字以内"""
 
-INIT_SYSTEM_PROMPT = """你是一个辩论赛选手。这是辩论的第一轮，你需要开篇立论。
-- 清晰陈述你的核心观点
+INIT_SYSTEM_PROMPT = """你是一场辩论赛的【{side_label}】。你的核心论点/立场是：{stance}
+
+这是辩论的第一轮，你需要开篇立论。
+- 清晰陈述你的核心观点（紧扣你的立场）
 - 给出 2-3 个支持论据
 - 回复控制在 300 字以内"""
 
@@ -56,33 +58,18 @@ class DebateServer:
     """双 Agent 辩论服务器"""
 
     def __init__(self):
-        self._storage: Optional[Storage] = None
-        self._toolkit = None
         self._debates: dict[str, "DebateSession"] = {}
 
-    def _get_storage(self) -> Storage:
-        if self._storage is None:
-            self._storage = get_storage()
-        return self._storage
-
-    def _get_toolkit(self):
-        if self._toolkit is None:
-            from tea_agent import tlk
-            cfg = _load_config_cached(None)
-            tool_dir = str(Path(cfg.paths.toolkit_dir_abs))
-            Path(tool_dir).mkdir(parents=True, exist_ok=True)
-            self._toolkit = tlk.Toolkit(tool_dir)
-            tlk.toolkit = self._toolkit
-            logger.info(f"Toolkit ready: {len(self._toolkit.func_map)} tools")
-        return self._toolkit
-
-    def create_session(self, config_path: Optional[str] = None):
-        """为辩论方创建独立的 OnlineToolSession"""
-        cfg = _load_config_cached(config_path)
-        toolkit = self._get_toolkit()
-        session = _create_session_from_cfg(cfg, toolkit, storage=None)
-        logger.info(f"Session created: {cfg.main_model.model_name} @ {cfg.main_model.api_url}")
-        return session
+    def create_session(self, config_path: Optional[str] = None) -> Agent:
+        """为辩论方创建独立的 Agent"""
+        agent = Agent(
+            mode="lightweight",
+            config_path=config_path,
+            use_tools=False,
+            disable_summary=True,
+        )
+        logger.info(f"Session created: {agent._cfg.main_model.model_name}")
+        return agent
 
     def list_config_files(self):
         """扫描可用的配置文件"""
@@ -92,7 +79,7 @@ class DebateServer:
         results = []
         for fpath in sorted(configs_dir.glob("*.yaml")):
             try:
-                cfg = _load_config_cached(str(fpath))
+                cfg = _load_config(str(fpath))
                 results.append({
                     "path": str(fpath),
                     "filename": fpath.name,
@@ -115,8 +102,10 @@ class DebateServer:
                 pass
 
         try:
-            left_session = self.create_session(debate.left_config)
-            right_session = self.create_session(debate.right_config)
+            left_agent = self.create_session(debate.left_config)
+            right_agent = self.create_session(debate.right_config)
+            left_session = left_agent.sess
+            right_session = right_agent.sess
 
             _put({"type": "status", "text": f"🟢 辩论开始！主题: {debate.topic}",
                   "round": 0, "max_rounds": MAX_ROUNDS})
@@ -129,7 +118,8 @@ class DebateServer:
 
             left_prompt = f"辩论主题: {debate.topic}\n\n请就以上主题发表你的开篇立论。"
 
-            left_text = _sync_chat(left_session, left_prompt, INIT_SYSTEM_PROMPT)
+            left_system = INIT_SYSTEM_PROMPT.format(side_label="🔵 甲方", stance=debate.left_stance)
+            left_text = _sync_chat(left_session, left_prompt, left_system)
             if left_text.startswith("API调用错误") or left_text.startswith("（发言失败"):
                 _put({"type": "error", "error": f"甲方发言失败: {left_text}"})
                 return
@@ -164,7 +154,11 @@ class DebateServer:
                 prompt = f"{history}\n\n[对方({opponent_name})刚才说]:\n{opponent_text}\n\n请针对以上发言进行反驳或回应。"
 
                 session = left_session if speaker == "left" else right_session
-                response_text = _sync_chat(session, prompt, DEBATE_SYSTEM_PROMPT)
+                if speaker == "left":
+                    system_prompt = DEBATE_SYSTEM_PROMPT.format(side_label="🔵 甲方", stance=debate.left_stance)
+                else:
+                    system_prompt = DEBATE_SYSTEM_PROMPT.format(side_label="🔴 乙方", stance=debate.right_stance)
+                response_text = _sync_chat(session, prompt, system_prompt)
                 if response_text.startswith("API调用错误") or response_text.startswith("（发言失败"):
                     _put({"type": "error",
                           "error": f"{'甲方' if speaker=='left' else '乙方'}发言失败 (第{rnd}轮): {response_text}"})
@@ -181,11 +175,11 @@ class DebateServer:
             logger.exception(f"Debate error: {e}")
             _put({"type": "error", "error": str(e)})
         finally:
-            # 清理
-            for s in [left_session, right_session]:
+            # 清理 Agent
+            for a in [left_agent, right_agent]:
                 try:
-                    if hasattr(s, 'close'):
-                        s.close()
+                    if hasattr(a, 'close'):
+                        a.close()
                 except Exception:
                     pass
 
@@ -234,13 +228,17 @@ class DebateSession:
 
     def __init__(self, debate_id: str, topic: str,
                  left_config: str, left_model_name: str,
-                 right_config: str, right_model_name: str):
+                 left_stance: str,
+                 right_config: str, right_model_name: str,
+                 right_stance: str):
         self.debate_id = debate_id
         self.topic = topic
         self.left_config = left_config
         self.left_model_name = left_model_name
+        self.left_stance = left_stance
         self.right_config = right_config
         self.right_model_name = right_model_name
+        self.right_stance = right_stance
         self.rounds: list = []
         self.cancelled = False
         self.created_at = time.time()
@@ -299,6 +297,13 @@ async def handle_start_debate(request):
     topic = (body.get("topic") or "").strip()
     left_config = body.get("left_config") or None
     right_config = body.get("right_config") or None
+    left_stance = (body.get("left_stance") or "").strip()
+    right_stance = (body.get("right_stance") or "").strip()
+    # 未指定立场时，自动根据主题生成缺省立场
+    if not left_stance:
+        left_stance = f"支持「{topic}」"
+    if not right_stance:
+        right_stance = f"反对「{topic}」"
 
     if not topic:
         return JSONResponse({"error": "请填写辩论主题"}, status_code=400)
@@ -307,13 +312,15 @@ async def handle_start_debate(request):
     server = get_server()
 
     # 获取模型名用于显示
-    left_cfg = _load_config_cached(left_config) if left_config else _load_config_cached(None)
-    right_cfg = _load_config_cached(right_config) if right_config else _load_config_cached(None)
+    left_cfg = _load_config(left_config) if left_config else _load_config(None)
+    right_cfg = _load_config(right_config) if right_config else _load_config(None)
 
     debate = DebateSession(
         debate_id=debate_id, topic=topic,
         left_config=left_config or "", left_model_name=left_cfg.main_model.model_name,
+        left_stance=left_stance,
         right_config=right_config or "", right_model_name=right_cfg.main_model.model_name,
+        right_stance=right_stance,
     )
     server._debates[debate_id] = debate
 

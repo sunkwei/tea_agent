@@ -46,7 +46,7 @@ class ModelConfig:
     model_name: str = ""
     options: dict[str, Any] = field(default_factory=dict)
     temperature: float = 0.7
-    max_tokens: int = 4096
+    max_tokens: int = 131072
     max_context_tokens: int = 0
     top_p: float = 0.9
 

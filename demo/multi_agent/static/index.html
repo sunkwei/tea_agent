@@ -62,7 +62,9 @@ body { font-family:var(--font); background:var(--bg); color:var(--text); height:
 <div class="header"><h1>⚔️ Multi-Agent 辩论赛</h1><span class="subtitle">双 AI 对抗 · 50轮辩论</span></div>
 <div class="control-bar">
     <label>🔵 甲方:</label><select id="left-config"></select>
+    <label>立场:</label><input type="text" id="left-stance" placeholder="自动=支持主题" style="min-width:140px;flex:none;width:180px">
     <label>🔴 乙方:</label><select id="right-config"></select>
+    <label>立场:</label><input type="text" id="right-stance" placeholder="自动=反对主题" style="min-width:140px;flex:none;width:180px">
     <input type="text" id="topic-input" placeholder="输入辩论主题，如：Python 是否应该使用类型注解？">
     <button class="btn" id="start-btn" onclick="startDebate()">▶ 开始辩论</button>
     <button class="btn stop" id="stop-btn" onclick="stopDebate()">⏹ 停止</button>
@@ -107,7 +109,7 @@ window.startDebate = async function() {
     const lf=$('left-config').selectedOptions[0], rf=$('right-config').selectedOptions[0];
     $('left-model-name').textContent = lf?lf.textContent.split(' — ')[1]||'':''; $('right-model-name').textContent = rf?rf.textContent.split(' — ')[1]||'':'';
     try {
-        const res=await fetch('/api/debate/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,left_config:$('left-config').value,right_config:$('right-config').value})});
+        const res=await fetch('/api/debate/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,left_config:$('left-config').value,right_config:$('right-config').value,left_stance:$('left-stance').value,right_stance:$('right-stance').value})});
         if(!res.ok){const e=await res.json();throw new Error(e.error);}
         const reader=res.body.getReader(), decoder=new TextDecoder(); let buf='';
         while(true){const{value,done}=await reader.read();if(done)break;buf+=decoder.decode(value,{stream:true});const lines=buf.split('\n');for(let i=0;i<lines.length-1;i++){const line=lines[i].trim();if(!line.startsWith('data: '))continue;try{handleEvent(JSON.parse(line.slice(6)))}catch(e){}}buf=lines[lines.length-1];}

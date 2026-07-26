@@ -91,11 +91,10 @@ SMALL_MODEL_CONSTRAINT = (
 
 # 匹配模式：模型名含以下关键词时视为小模型
 _SMALL_MODEL_PATTERNS = [
-    "1.3b", "1.5b", "2.7b", "3b", "3.8b", "4b", "7b",
+    "1.3b", "1.5b", "2.7b", "3.8b", "4b",
     "tiny", "small", "mini", "nano", "pico",
     "phi-1", "phi-2",
     "deepseek-coder-1.3b",
-    "qwen-1-", "qwen-2-",  # Qwen 系列小模型 (qwen2-0.5b/1.5b/7b)，避免误匹配 qwen-2.5
     "gemma-2b", "gemma-7b",
     "llama-2-7b", "llama-3.2-1b", "llama-3.2-3b",
     "mistral-7b",
@@ -130,13 +129,13 @@ def is_small_model(model_name: str) -> bool:
         if pattern in name_lower:
             return True
 
-    # 规则 2: 匹配 "Nb" 模式（N < 70 视为小模型）
+    # 规则 2: 匹配 "Nb" 模式（N < 14 视为小模型，即 14B 及以下）
     m = re.search(r'(\d+\.?\d*)b', name_lower)
     if m:
         try:
             param_count = float(m.group(1))
-            if param_count < 70:
-                # 70B 以下视为小模型
+            if param_count < 14:
+                # 14B 以下视为小模型
                 return True
         except ValueError:
             pass

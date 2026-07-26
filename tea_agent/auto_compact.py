@@ -95,7 +95,7 @@ def get_max_context_tokens(config) -> int:
         defaults = {
             "gpt-4": 128000,
             "claude": 200000,
-            "deepseek": 65536,
+            "deepseek": 1048576,
             "gemini": 1048576,
         }
         for k, v in defaults.items():

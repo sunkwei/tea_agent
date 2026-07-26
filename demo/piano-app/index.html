@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎹 钢琴学习助手</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:linear-gradient(145deg,#1a1a2e,#16213e,#0f3460);min-height:100vh;display:flex;justify-content:center;align-items:center;font-family:'Segoe UI',sans-serif;padding:20px}
+.app-container{background:rgba(255,255,255,0.06);backdrop-filter:blur(12px);border-radius:28px;padding:30px;max-width:1100px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.08)}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:12px}
+.logo h1{font-size:22px;color:#fff;font-weight:700}
+.logo span{color:#f0c27f}
+.controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.controls button{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:8px 20px;border-radius:12px;cursor:pointer;font-size:15px;transition:all .2s;font-weight:500}
+.controls button:hover{background:rgba(255,255,255,0.2);transform:translateY(-1px)}
+.controls button.active{background:#e94560;border-color:#e94560}
+.controls button:active{transform:scale(.96)}
+.controls button.sustain-pedal{background:rgba(100,150,200,0.2);border-color:rgba(100,150,200,0.3);min-width:72px}
+.controls button.sustain-pedal.active{background:#4a90d9;border-color:#4a90d9;box-shadow:0 0 16px rgba(74,144,217,0.5)}
+.controls label{color:rgba(255,255,255,0.7);font-size:14px;display:flex;align-items:center;gap:8px}
+.controls input[type=range]{-webkit-appearance:none;width:100px;height:4px;border-radius:2px;background:rgba(255,255,255,0.25);outline:none}
+.controls input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#f0c27f;cursor:pointer}
+.tempo-val{color:#f0c27f;font-weight:600;min-width:32px;text-align:center}
+.song-selector{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:6px 12px;border-radius:10px;font-size:14px;cursor:pointer;outline:none;max-width:170px}
+.song-selector option{background:#1a1a2e;color:#fff}
+.song-info{color:rgba(255,255,255,0.5);font-size:12px;margin-left:4px;white-space:nowrap}
+.song-selector option{background:#1a1a2e;color:#fff}
+.song-info{color:rgba(255,255,255,0.5);font-size:12px;margin-left:4px;white-space:nowrap}
+.staff-wrapper{background:rgba(0,0,0,0.35);border-radius:16px;padding:4px;margin-bottom:16px;box-shadow:inset 0 2px 10px rgba(0,0,0,0.4)}
+#staffCanvas{display:block;width:100%;height:auto;border-radius:12px;background:#faf6ed;cursor:pointer}
+.beat-indicator{display:flex;align-items:center;justify-content:space-between;color:rgba(255,255,255,0.6);font-size:13px;margin:8px 0 14px;padding:0 6px}
+.beat-dots{display:flex;gap:8px;align-items:center}
+.beat-dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.15);transition:all .15s}
+.beat-dot.current{background:#e94560;box-shadow:0 0 12px rgba(233,69,96,0.6)}
+.beat-dot.strong{background:rgba(255,255,255,0.35)}
+.beat-dot.current.strong{background:#f0c27f;box-shadow:0 0 14px rgba(240,194,127,0.7)}
+.measure-info{color:rgba(255,255,255,0.5);font-size:13px}
+.measure-info strong{color:#f0c27f}
+.keyboard-wrapper{background:rgba(0,0,0,0.4);border-radius:16px;padding:16px 12px 10px;box-shadow:inset 0 2px 10px rgba(0,0,0,0.5),0 8px 30px rgba(0,0,0,0.3);overflow-x:auto;position:relative;touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.keyboard{display:flex;position:relative;height:180px;user-select:none;min-width:700px}
+.white-key{flex:1;min-width:44px;background:linear-gradient(180deg,#f8f8f8,#e8e8e8);border:1px solid #bbb;border-radius:0 0 6px 6px;cursor:pointer;position:relative;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;font-size:11px;color:#888;transition:all .08s;box-shadow:0 2px 4px rgba(0,0,0,0.15);z-index:1}
+.white-key:active,.white-key.pressed{background:linear-gradient(180deg,#f0f0f0,#d5d5d5);box-shadow:0 1px 2px rgba(0,0,0,0.1),inset 0 3px 6px rgba(0,0,0,0.15);transform:translateY(3px);color:#555}
+.white-key .key-label{font-size:10px;opacity:.5;pointer-events:none}
+.white-key .pc-label{font-size:9px;opacity:.25;pointer-events:none;margin-top:1px}
+.black-key .pc-label{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:9px;color:rgba(255,255,255,0.3);pointer-events:none}
+.black-key{position:absolute;width:28px;height:110px;background:linear-gradient(180deg,#3a3a3a,#1a1a1a);border:1px solid #111;border-radius:0 0 5px 5px;cursor:pointer;z-index:2;top:0;transition:all .06s;box-shadow:0 3px 6px rgba(0,0,0,0.4)}
+.black-key:active,.black-key.pressed{background:linear-gradient(180deg,#555,#2a2a2a);box-shadow:0 1px 2px rgba(0,0,0,0.3),inset 0 3px 6px rgba(0,0,0,0.3);transform:translateY(4px);height:106px}
+.footer-info{display:flex;justify-content:space-between;align-items:center;margin-top:12px;color:rgba(255,255,255,0.4);font-size:13px}
+.footer-info .hint{display:flex;gap:16px}
+.current-note-name{color:#f0c27f;font-weight:600;font-size:18px;min-width:60px;text-align:center}
+.black-key[data-pos="0"]{left:calc(44px * 0 + 28px)}.black-key[data-pos="1"]{left:calc(44px * 1 + 28px)}.black-key[data-pos="2"]{left:calc(44px * 3 + 28px)}.black-key[data-pos="3"]{left:calc(44px * 4 + 28px)}.black-key[data-pos="4"]{left:calc(44px * 5 + 28px)}.black-key[data-pos="5"]{left:calc(44px * 7 + 28px)}.black-key[data-pos="6"]{left:calc(44px * 8 + 28px)}.black-key[data-pos="7"]{left:calc(44px * 10 + 28px)}.black-key[data-pos="8"]{left:calc(44px * 11 + 28px)}.black-key[data-pos="9"]{left:calc(44px * 12 + 28px)}
+@media(max-width:768px){.app-container{padding:16px}.keyboard{height:150px;min-width:560px}.white-key{min-width:36px;font-size:9px}.black-key{width:22px;height:90px}.black-key:active,.black-key.pressed{height:86px}.black-key[data-pos="0"]{left:calc(36px * 0 + 22px)}.black-key[data-pos="1"]{left:calc(36px * 1 + 22px)}.black-key[data-pos="2"]{left:calc(36px * 3 + 22px)}.black-key[data-pos="3"]{left:calc(36px * 4 + 22px)}.black-key[data-pos="4"]{left:calc(36px * 5 + 22px)}.black-key[data-pos="5"]{left:calc(36px * 7 + 22px)}.black-key[data-pos="6"]{left:calc(36px * 8 + 22px)}.black-key[data-pos="7"]{left:calc(36px * 10 + 22px)}.black-key[data-pos="8"]{left:calc(36px * 11 + 22px)}.black-key[data-pos="9"]{left:calc(36px * 12 + 22px)}}
+</style>
+</head>
+<body>
+<div class="app-container">
+<div class="header"><div class="logo"><h1>🎹 <span>钢琴</span>学习助手</h1></div>
+<div class="controls">
+<select id="songSelector" class="song-selector"></select>
+<span class="song-info" id="songInfo">1级·小星星</span>
+<button id="playBtn">▶ 播放</button>
+<button id="resetBtn">⟲ 重置</button>
+<button id="sustainBtn" class="sustain-pedal" title="延音踏板（快捷键 P）">🔊 延音</button>
+<label>速度 <input type="range" id="tempoSlider" min="30" max="180" value="90"> <span class="tempo-val" id="tempoDisplay">90</span></label>
+</div></div>iv class="staff-wrapper"><canvas id="staffCanvas" width="1040" height="240"></canvas></div>
+<div class="beat-indicator"><div class="beat-dots" id="beatDots"></div><div class="measure-info">小节: <strong id="measureNum">1</strong> / <span id="totalMeasures">16</span></div></div>
+<div class="keyboard-wrapper"><div class="keyboard" id="keyboard"></div></div>
+<div class="footer-info"><div class="hint"><span>🖱 鼠标点击</span><span>⌨️ PC键盘</span><span>👆 多点触摸</span><span>🔊 P=延音</span><span>🎵 <span class="current-note-name" id="currentNoteName">—</span></span></div>
+<div style="display:flex;align-items:center;gap:10px">
+<span class="hint-link" id="mapToggle" style="cursor:pointer;color:rgba(255,255,255,0.4);font-size:12px;text-decoration:underline;text-decoration-style:dotted">📖 键位图</span>
+<span id="statusText">就绪 ✓</span>
+</div></div>
+<div id="keyboardMap" style="display:none;margin-top:10px;background:rgba(0,0,0,0.3);border-radius:12px;padding:12px 16px;font-size:12px;color:rgba(255,255,255,0.6);overflow-x:auto">
+<div style="display:flex;gap:24px;flex-wrap:wrap;justify-content:center">
+<div><b style="color:#f0c27f">第一八度 (C4-B4)</b><br><span style="font-family:monospace">白键: Z X C V B N M<br>黑键: S D   G H J</span></div>
+<div><b style="color:#f0c27f">第二八度 (C5-B5)</b><br><span style="font-family:monospace">白键: Q W E R T Y U<br>黑键: 2 3   5 6 7</span></div>
+<div style="color:rgba(255,255,255,0.3);font-size:11px;align-self:center">🎹 同时按多键 = 和弦 ✓</div>
+</div></div>
+</div>
+<script>
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); if (audioCtx.state === 'suspended') audioCtx.resume(); }
+const FREQS = {};
+const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+for (let oct = 4; oct <= 5; oct++) {
+  for (let i = 0; i < 12; i++) {
+    const name = NOTE_NAMES[i] + oct;
+    const semitones = (oct - 4) * 12 + i;
+    FREQS[name] = 440 * Math.pow(2, (semitones - 9) / 12);
+  }
+}
+function playNote(pitch, duration = 0.4) {
+  ensureAudio();
+  const freq = FREQS[pitch];
+  if (!freq) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(freq, t);
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(0.3, t + 0.008);
+  gain.gain.linearRampToValueAtTime(0.2, t + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + duration + 0.05);
+  const osc2 = audioCtx.createOscillator();
+  const gain2 = audioCtx.createGain();
+  osc2.type = 'triangle';
+  osc2.frequency.setValueAtTime(freq * 2, t);
+  gain2.gain.setValueAtTime(0, t);
+  gain2.gain.linearRampToValueAtTime(0.08, t + 0.01);
+  gain2.gain.exponentialRampToValueAtTime(0.001, t + duration * 0.7);
+  osc2.connect(gain2); gain2.connect(audioCtx.destination);
+  osc2.start(t); osc2.stop(t + duration + 0.05);
+}
+const WHITE_KEYS = ['C','D','E','F','G','A','B'];
+const BLACK_KEYS_MAP = {0:'C#',1:'D#',3:'F#',4:'G#',5:'A#'};
+const keyboardEl = document.getElementById('keyboard');
+const KEY_MAP = {};
+// ===== PC 键盘映射表（两排=两个八度, 中排=黑键） =====
+const PC_KEY_MAP = {
+  'z':'C4','s':'C#4','x':'D4','d':'D#4','c':'E4',
+  'v':'F4','g':'F#4','b':'G4','h':'G#4','n':'A4','j':'A#4','m':'B4',
+  'q':'C5','2':'C#5','w':'D5','3':'D#5','e':'E5',
+  'r':'F5','5':'F#5','t':'G5','6':'G#5','y':'A5','7':'A#5','u':'B5'
+};
+const NOTE_TO_PC_KEY = {};
+for (const [k, v] of Object.entries(PC_KEY_MAP)) NOTE_TO_PC_KEY[v] = k;
+let activePcKeys = {};
+// 触摸支持：触摸ID → 音符名 映射（支持多点触摸）
+let touchToPitchMap = {};
+// 是否触摸设备（用于跳过鼠标事件的重复触发）
+let isTouchDevice = false;
+// ===== 延音踏板 =====
+let sustainPedalActive = false;
+let sustainedNotes = {};   // { pitch: true } — 踏板激活时被释放的持续音
+let continuousNotes = {};  // { pitch: { osc1, osc2, gain1, gain2 } }
+function buildKeyboard() {
+  keyboardEl.innerHTML = '';
+  let blackIdx = 0;
+  for (let oct = 4; oct <= 5; oct++) {
+    for (let wi = 0; wi < 7; wi++) {
+      const pitch = WHITE_KEYS[wi] + oct;
+      const key = document.createElement('div');
+      key.className = 'white-key';
+      key.dataset.pitch = pitch;
+      const pcKey = NOTE_TO_PC_KEY[pitch] || '';
+      if (pcKey) {
+        key.innerHTML = '<span class="key-label">' + pitch.replace('4','').replace('5','') + '</span><span class="pc-label">' + pcKey + '</span>';
+      } else {
+        key.innerHTML = '<span class="key-label">' + pitch.replace('4','').replace('5','') + '</span>';
+      }
+      key.addEventListener('mousedown', () => handleKeyPress(pitch));
+      key.addEventListener('mouseup', () => handleKeyRelease(pitch));
+      key.addEventListener('mouseleave', () => handleKeyRelease(pitch));
+      keyboardEl.appendChild(key);
+      KEY_MAP[pitch] = key;
+      if (BLACK_KEYS_MAP[wi] !== undefined) {
+        const bp = BLACK_KEYS_MAP[wi] + oct;
+        const bk = document.createElement('div');
+        bk.className = 'black-key';
+        bk.dataset.pitch = bp;
+        bk.dataset.pos = blackIdx;
+        const pcKeyB = NOTE_TO_PC_KEY[bp] || '';
+        if (pcKeyB) bk.innerHTML = '<span class="pc-label">' + pcKeyB + '</span>';
+        bk.addEventListener('mousedown', (e) => { e.stopPropagation(); handleKeyPress(bp); });
+        bk.addEventListener('mouseup', () => handleKeyRelease(bp));
+        bk.addEventListener('mouseleave', () => handleKeyRelease(bp));
+        keyboardEl.appendChild(bk);
+        KEY_MAP[bp] = bk;
+        blackIdx++;
+      }
+    }
+  }
+}
+let activeNotes = {};
+function handleKeyPress(pitch, auto = false) {
+  if (activeNotes[pitch]) return;
+  activeNotes[pitch] = true;
+  const el = KEY_MAP[pitch];
+  if (el) el.classList.add('pressed');
+  if (!auto) {
+    // 手动演奏：使用持续振荡器（支持延音踏板）
+    startContinuousNote(pitch);
+  }
+  document.getElementById('currentNoteName').textContent = pitch;
+}
+function handleKeyRelease(pitch) {
+  if (!activeNotes[pitch]) return;
+  delete activeNotes[pitch];
+  const el = KEY_MAP[pitch];
+  if (el) el.classList.remove('pressed');
+  // 使用持续振荡器停止（延音踏板激活时仅标记，不停止声音）
+  stopContinuousNote(pitch);
+}
+function releaseAllKeys() { Object.keys(activeNotes).forEach(handleKeyRelease); }
+
+// ===== 持续振荡器（延音踏板所需） =====
+function startContinuousNote(pitch) {
+  ensureAudio();
+  if (continuousNotes[pitch]) return;
+  const freq = FREQS[pitch];
+  if (!freq) return;
+  const t = audioCtx.currentTime;
+  // 基频振荡器（正弦波）
+  const osc1 = audioCtx.createOscillator();
+  const gain1 = audioCtx.createGain();
+  osc1.type = 'sine';
+  osc1.frequency.setValueAtTime(freq, t);
+  gain1.gain.setValueAtTime(0, t);
+  gain1.gain.linearRampToValueAtTime(0.3, t + 0.008);
+  gain1.gain.linearRampToValueAtTime(0.2, t + 0.05);
+  osc1.connect(gain1);
+  gain1.connect(audioCtx.destination);
+  osc1.start(t);
+  // 泛音振荡器（三角波，高八度增加亮度）
+  const osc2 = audioCtx.createOscillator();
+  const gain2 = audioCtx.createGain();
+  osc2.type = 'triangle';
+  osc2.frequency.setValueAtTime(freq * 2, t);
+  gain2.gain.setValueAtTime(0, t);
+  gain2.gain.linearRampToValueAtTime(0.08, t + 0.01);
+  osc2.connect(gain2);
+  gain2.connect(audioCtx.destination);
+  osc2.start(t);
+  continuousNotes[pitch] = { osc1, osc2, gain1, gain2 };
+}
+
+function stopContinuousNote(pitch, force = false) {
+  const note = continuousNotes[pitch];
+  if (!note) return;
+  // 延音踏板激活时，不停止声音，仅标记为"延音中"
+  if (sustainPedalActive && !force) {
+    sustainedNotes[pitch] = true;
+    return;
+  }
+  // 淡出并清理
+  const t = audioCtx.currentTime;
+  try {
+    note.gain1.gain.cancelScheduledValues(t);
+    note.gain1.gain.setValueAtTime(note.gain1.gain.value || 0.2, t);
+    note.gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    note.gain2.gain.cancelScheduledValues(t);
+    note.gain2.gain.setValueAtTime(note.gain2.gain.value || 0.08, t);
+    note.gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+    note.osc1.stop(t + 0.2);
+    note.osc2.stop(t + 0.2);
+  } catch (e) { /* 忽略已停止的振荡器错误 */ }
+  delete continuousNotes[pitch];
+  delete sustainedNotes[pitch];
+}
+
+function setSustainPedal(active) {
+  sustainPedalActive = active;
+  const btn = document.getElementById('sustainBtn');
+  if (btn) btn.classList.toggle('active', active);
+  // 踏板释放：淡出所有被延音的音符
+  if (!active) {
+    for (const pitch of Object.keys(sustainedNotes)) {
+      stopContinuousNote(pitch, true);
+    }
+    sustainedNotes = {};
+  }
+}
+
+function toggleSustainPedal() {
+  setSustainPedal(!sustainPedalActive);
+}
+function releaseChordKeys() {
+  for (const p of Object.keys(activeChordNotes)) {
+    const el = KEY_MAP[p];
+    if (el) el.classList.remove('pressed');
+  }
+  activeChordNotes = {};
+}
+function positionBlackKeys() {
+  const whiteKeys = keyboardEl.querySelectorAll('.white-key');
+  if (whiteKeys.length === 0) return;
+  const wk = whiteKeys[0];
+  const ww = wk.offsetWidth;
+  const blackOffset = ww * 0.6;
+  keyboardEl.querySelectorAll('.black-key').forEach(bk => {
+    const idx = parseInt(bk.dataset.pos);
+    const octaveOffset = Math.floor(idx / 5) * 7 * ww;
+    const pattern = [0,1,3,4,5];
+    const patIdx = pattern[idx % 5];
+    const withinOctave = [0, 1, 3, 4, 5].indexOf(patIdx);
+    let leftPos = octaveOffset + (patIdx * ww) + ww - blackOffset/2;
+    bk.style.left = leftPos + 'px';
+  });
+}
+// ===== PC 键盘事件监听 =====
+function isInputFocused() {
+  const t = document.activeElement;
+  return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+}
+document.addEventListener('keydown', (e) => {
+  if (isInputFocused()) return;
+  // 'p' 键切换延音踏板
+  if (e.key === 'p' || e.key === 'P') {
+    e.preventDefault();
+    toggleSustainPedal();
+    return;
+  }
+  ensureAudio();
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const pitch = PC_KEY_MAP[key];
+  if (pitch && !activePcKeys[key]) {
+    activePcKeys[key] = true;
+    handleKeyPress(pitch);
+  }
+});
+document.addEventListener('keyup', (e) => {
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const pitch = PC_KEY_MAP[key];
+  if (pitch) {
+    delete activePcKeys[key];
+    handleKeyRelease(pitch);
+  }
+});
+// 窗口失焦时释放所有按键（避免卡键）
+window.addEventListener('blur', () => {
+  // 释放所有持续音和延音（防止卡音）
+  for (const pitch of Object.keys(continuousNotes)) {
+    stopContinuousNote(pitch, true);
+  }
+  sustainedNotes = {};
+  sustainPedalActive = false;
+  const sBtn = document.getElementById('sustainBtn');
+  if (sBtn) sBtn.classList.remove('active');
+  releaseAllKeys();
+  activePcKeys = {};
+  releaseChordKeys();
+});
+
+// ===== 触摸事件支持（多点触摸） =====
+const keyboardWrapper = document.querySelector('.keyboard-wrapper');
+
+function getPitchFromTouch(touch) {
+  // 使用 elementFromPoint 精确获取触摸点下的琴键元素
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  if (el && el.dataset && el.dataset.pitch) return el.dataset.pitch;
+  // 如果触摸点在琴键边缘，尝试查找最近的琴键
+  if (el && el.closest) {
+    const keyEl = el.closest('.white-key, .black-key');
+    if (keyEl && keyEl.dataset && keyEl.dataset.pitch) return keyEl.dataset.pitch;
+  }
+  return null;
+}
+
+function handleTouchStart(e) {
+  e.preventDefault(); // 阻止滚动/缩放
+  isTouchDevice = true;
+  ensureAudio();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const touch = e.changedTouches[i];
+    const pitch = getPitchFromTouch(touch);
+    if (pitch && !touchToPitchMap[touch.identifier]) {
+      touchToPitchMap[touch.identifier] = pitch;
+      handleKeyPress(pitch);
+    }
+  }
+}
+
+function handleTouchEnd(e) {
+  e.preventDefault();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const touch = e.changedTouches[i];
+    const pitch = touchToPitchMap[touch.identifier];
+    if (pitch) {
+      handleKeyRelease(pitch);
+      delete touchToPitchMap[touch.identifier];
+    }
+  }
+}
+
+function handleTouchMove(e) {
+  e.preventDefault();
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const touch = e.changedTouches[i];
+    const newPitch = getPitchFromTouch(touch);
+    const oldPitch = touchToPitchMap[touch.identifier];
+
+    if (newPitch && newPitch !== oldPitch) {
+      // 滑到了不同的琴键上
+      if (oldPitch) handleKeyRelease(oldPitch);
+      handleKeyPress(newPitch);
+      touchToPitchMap[touch.identifier] = newPitch;
+    } else if (!newPitch && oldPitch) {
+      // 滑出了琴键区域
+      handleKeyRelease(oldPitch);
+      delete touchToPitchMap[touch.identifier];
+    } else if (newPitch && !oldPitch) {
+      // 从外部滑入琴键
+      handleKeyPress(newPitch);
+      touchToPitchMap[touch.identifier] = newPitch;
+    }
+  }
+}
+
+function handleTouchCancel(e) {
+  e.preventDefault();
+  // 触摸中断（如系统弹窗），释放所有触摸按下的键
+  for (const id in touchToPitchMap) {
+    handleKeyRelease(touchToPitchMap[id]);
+  }
+  touchToPitchMap = {};
+}
+
+// 绑定触摸事件到键盘容器
+keyboardWrapper.addEventListener('touchstart', handleTouchStart, { passive: false });
+keyboardWrapper.addEventListener('touchend', handleTouchEnd, { passive: false });
+keyboardWrapper.addEventListener('touchmove', handleTouchMove, { passive: false });
+keyboardWrapper.addEventListener('touchcancel', handleTouchCancel, { passive: false });
+
+// 防止触摸设备上点击键盘时触发鼠标事件导致的重复
+keyboardWrapper.addEventListener('mousedown', (e) => {
+  if (isTouchDevice) { e.stopImmediatePropagation(); return; }
+}, true);
+
+buildKeyboard();
+// Position black keys after layout
+requestAnimationFrame(() => { requestAnimationFrame(positionBlackKeys); });
+window.addEventListener('resize', positionBlackKeys);
+// ===== 曲库系统（1-10 级） =====
+const SONGS = {
+  '1':{name:'小星星',composer:'莫扎特',grade:1,bpmeas:4,
+    song:[{pitch:'C4',beat:0,dur:1},{pitch:'C4',beat:1,dur:1},{pitch:'G4',beat:2,dur:1},{pitch:'G4',beat:3,dur:1},{pitch:'A4',beat:4,dur:1},{pitch:'A4',beat:5,dur:1},{pitch:'G4',beat:6,dur:2},{pitch:'F4',beat:8,dur:1},{pitch:'F4',beat:9,dur:1},{pitch:'E4',beat:10,dur:1},{pitch:'E4',beat:11,dur:1},{pitch:'D4',beat:12,dur:1},{pitch:'D4',beat:13,dur:1},{pitch:'C4',beat:14,dur:2},{pitch:'G4',beat:16,dur:1},{pitch:'G4',beat:17,dur:1},{pitch:'F4',beat:18,dur:1},{pitch:'F4',beat:19,dur:1},{pitch:'E4',beat:20,dur:1},{pitch:'E4',beat:21,dur:1},{pitch:'D4',beat:22,dur:2},{pitch:'G4',beat:24,dur:1},{pitch:'G4',beat:25,dur:1},{pitch:'F4',beat:26,dur:1},{pitch:'F4',beat:27,dur:1},{pitch:'E4',beat:28,dur:1},{pitch:'E4',beat:29,dur:1},{pitch:'D4',beat:30,dur:2},{pitch:'C4',beat:32,dur:1},{pitch:'C4',beat:33,dur:1},{pitch:'G4',beat:34,dur:1},{pitch:'G4',beat:35,dur:1},{pitch:'A4',beat:36,dur:1},{pitch:'A4',beat:37,dur:1},{pitch:'G4',beat:38,dur:2},{pitch:'F4',beat:40,dur:1},{pitch:'F4',beat:41,dur:1},{pitch:'E4',beat:42,dur:1},{pitch:'E4',beat:43,dur:1},{pitch:'D4',beat:44,dur:1},{pitch:'D4',beat:45,dur:1},{pitch:'C4',beat:46,dur:2}],
+    chords:[{notes:['C4','E4','G4'],name:'C',beat:0,dur:4},{notes:['C4','E4','G4'],name:'C',beat:4,dur:4},{notes:['F4','A4','C5'],name:'F',beat:8,dur:4},{notes:['C4','E4','G4'],name:'C',beat:12,dur:4},{notes:['G4','B4','D5'],name:'G',beat:16,dur:4},{notes:['C4','E4','G4'],name:'C',beat:20,dur:4},{notes:['G4','B4','D5'],name:'G',beat:24,dur:4},{notes:['C4','E4','G4'],name:'C',beat:28,dur:4},{notes:['C4','E4','G4'],name:'C',beat:32,dur:4},{notes:['C4','E4','G4'],name:'C',beat:36,dur:4},{notes:['F4','A4','C5'],name:'F',beat:40,dur:4},{notes:['C4','E4','G4'],name:'C',beat:44,dur:4}]
+  },
+  '2':{name:'欢乐颂',composer:'贝多芬',grade:2,bpmeas:4,
+    song:[{pitch:'E4',beat:0,dur:1},{pitch:'E4',beat:1,dur:1},{pitch:'F4',beat:2,dur:1},{pitch:'G4',beat:3,dur:1},{pitch:'G4',beat:4,dur:1},{pitch:'F4',beat:5,dur:1},{pitch:'E4',beat:6,dur:1},{pitch:'D4',beat:7,dur:1},{pitch:'C4',beat:8,dur:1},{pitch:'C4',beat:9,dur:1},{pitch:'D4',beat:10,dur:1},{pitch:'E4',beat:11,dur:1},{pitch:'E4',beat:12,dur:1},{pitch:'D4',beat:13,dur:1},{pitch:'D4',beat:14,dur:2},{pitch:'E4',beat:16,dur:1},{pitch:'E4',beat:17,dur:1},{pitch:'F4',beat:18,dur:1},{pitch:'G4',beat:19,dur:1},{pitch:'G4',beat:20,dur:1},{pitch:'F4',beat:21,dur:1},{pitch:'E4',beat:22,dur:1},{pitch:'D4',beat:23,dur:1},{pitch:'C4',beat:24,dur:1},{pitch:'C4',beat:25,dur:1},{pitch:'D4',beat:26,dur:1},{pitch:'E4',beat:27,dur:1},{pitch:'D4',beat:28,dur:1},{pitch:'C4',beat:29,dur:1},{pitch:'C4',beat:30,dur:2}],
+    chords:[{notes:['C4','E4','G4'],name:'C',beat:0,dur:4},{notes:['G4','B4','D5'],name:'G',beat:4,dur:4},{notes:['C4','E4','G4'],name:'C',beat:8,dur:4},{notes:['G4','B4','D5'],name:'G',beat:12,dur:4},{notes:['C4','E4','G4'],name:'C',beat:16,dur:4},{notes:['G4','B4','D5'],name:'G',beat:20,dur:4},{notes:['C4','E4','G4'],name:'C',beat:24,dur:4},{notes:['C4','E4','G4'],name:'C',beat:28,dur:2}]
+  },
+  '3':{name:'多年以前',composer:'贝利',grade:3,bpmeas:4,
+    song:[{pitch:'D4',beat:0,dur:1},{pitch:'D4',beat:1,dur:1},{pitch:'E4',beat:2,dur:1},{pitch:'F4',beat:3,dur:1},{pitch:'G4',beat:4,dur:1},{pitch:'A4',beat:5,dur:1},{pitch:'B4',beat:6,dur:1},{pitch:'A4',beat:7,dur:1},{pitch:'G4',beat:8,dur:1},{pitch:'F4',beat:9,dur:1},{pitch:'E4',beat:10,dur:1},{pitch:'D4',beat:11,dur:1},{pitch:'E4',beat:12,dur:1},{pitch:'C4',beat:13,dur:1},{pitch:'D4',beat:14,dur:2},{pitch:'D4',beat:16,dur:1},{pitch:'D4',beat:17,dur:1},{pitch:'E4',beat:18,dur:1},{pitch:'F4',beat:19,dur:1},{pitch:'G4',beat:20,dur:1},{pitch:'A4',beat:21,dur:1},{pitch:'B4',beat:22,dur:1},{pitch:'A4',beat:23,dur:1},{pitch:'G4',beat:24,dur:1},{pitch:'F4',beat:25,dur:1},{pitch:'E4',beat:26,dur:1},{pitch:'D4',beat:27,dur:1},{pitch:'E4',beat:28,dur:1},{pitch:'D4',beat:29,dur:1},{pitch:'C4',beat:30,dur:2}],
+    chords:[{notes:['G4','B4','D5'],name:'G',beat:0,dur:4},{notes:['C4','E4','G4'],name:'C',beat:4,dur:4},{notes:['G4','B4','D5'],name:'G',beat:8,dur:4},{notes:['C4','E4','G4'],name:'C',beat:12,dur:4},{notes:['G4','B4','D5'],name:'G',beat:16,dur:4},{notes:['C4','E4','G4'],name:'C',beat:20,dur:4},{notes:['G4','B4','D5'],name:'G',beat:24,dur:4},{notes:['C4','E4','G4'],name:'C',beat:28,dur:2}]
+  },
+  '4':{name:'斯卡布罗集市',composer:'英国民歌',grade:4,bpmeas:3,
+    song:[{pitch:'D4',beat:0,dur:1},{pitch:'D4',beat:1,dur:1},{pitch:'G4',beat:2,dur:1},{pitch:'A4',beat:3,dur:1},{pitch:'A4',beat:4,dur:1},{pitch:'G4',beat:5,dur:2},{pitch:'D4',beat:7,dur:1},{pitch:'A4',beat:8,dur:1},{pitch:'G4',beat:9,dur:1},{pitch:'F4',beat:10,dur:1},{pitch:'E4',beat:11,dur:1},{pitch:'D4',beat:12,dur:2},{pitch:'A4',beat:15,dur:1},{pitch:'A4',beat:16,dur:1},{pitch:'F4',beat:17,dur:1},{pitch:'E4',beat:18,dur:1},{pitch:'D4',beat:19,dur:1},{pitch:'E4',beat:20,dur:1},{pitch:'F4',beat:21,dur:1},{pitch:'G4',beat:22,dur:1},{pitch:'A4',beat:23,dur:1},{pitch:'A4',beat:24,dur:1},{pitch:'G4',beat:25,dur:1},{pitch:'F4',beat:26,dur:1},{pitch:'E4',beat:27,dur:1},{pitch:'D4',beat:28,dur:2}],
+    chords:[{notes:['D4','F4','A4'],name:'Dm',beat:0,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:3,dur:3},{notes:['D4','F4','A4'],name:'Dm',beat:6,dur:3},{notes:['D4','F4','A4'],name:'Dm',beat:9,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:12,dur:3},{notes:['F4','A4','C5'],name:'F',beat:15,dur:3},{notes:['C4','E4','G4'],name:'C',beat:18,dur:3},{notes:['D4','F4','A4'],name:'Dm',beat:21,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:24,dur:3},{notes:['D4','F4','A4'],name:'Dm',beat:27,dur:2}]
+  },
+  '5':{name:'致爱丽丝',composer:'贝多芬',grade:5,bpmeas:3,
+    song:[{pitch:'E4',beat:0,dur:1},{pitch:'D#4',beat:1,dur:1},{pitch:'E4',beat:2,dur:1},{pitch:'D#4',beat:3,dur:1},{pitch:'E4',beat:4,dur:1},{pitch:'B4',beat:5,dur:1},{pitch:'D4',beat:6,dur:1},{pitch:'C4',beat:7,dur:1},{pitch:'A4',beat:8,dur:1},{pitch:'C4',beat:9,dur:1},{pitch:'E4',beat:10,dur:1},{pitch:'A4',beat:11,dur:1},{pitch:'B4',beat:12,dur:2},{pitch:'E4',beat:14,dur:1},{pitch:'D#4',beat:15,dur:1},{pitch:'E4',beat:16,dur:1},{pitch:'D#4',beat:17,dur:1},{pitch:'E4',beat:18,dur:1},{pitch:'B4',beat:19,dur:1},{pitch:'D4',beat:20,dur:1},{pitch:'C4',beat:21,dur:1},{pitch:'A4',beat:22,dur:1},{pitch:'C4',beat:23,dur:1},{pitch:'E4',beat:24,dur:1},{pitch:'A4',beat:25,dur:1},{pitch:'B4',beat:26,dur:2}],
+    chords:[{notes:['A4','C5','E5'],name:'Am',beat:0,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:3,dur:3},{notes:['D4','F4','A4'],name:'Dm',beat:6,dur:3},{notes:['E4','G#4','B4'],name:'E7',beat:9,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:12,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:15,dur:3},{notes:['D4','F4','A4'],name:'Dm',beat:18,dur:3},{notes:['E4','G#4','B4'],name:'E7',beat:21,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:24,dur:2}]
+  },
+  '6':{name:'绿袖子',composer:'英国民歌',grade:6,bpmeas:3,
+    song:[{pitch:'G4',beat:0,dur:1},{pitch:'A4',beat:1,dur:1},{pitch:'B4',beat:2,dur:1},{pitch:'C5',beat:3,dur:1},{pitch:'D5',beat:4,dur:1},{pitch:'E5',beat:5,dur:1},{pitch:'D5',beat:6,dur:1},{pitch:'C5',beat:7,dur:1},{pitch:'B4',beat:8,dur:1},{pitch:'A4',beat:9,dur:1},{pitch:'G4',beat:10,dur:2},{pitch:'G4',beat:12,dur:1},{pitch:'A4',beat:13,dur:1},{pitch:'B4',beat:14,dur:1},{pitch:'C5',beat:15,dur:1},{pitch:'D5',beat:16,dur:1},{pitch:'E5',beat:17,dur:1},{pitch:'D5',beat:18,dur:1},{pitch:'C5',beat:19,dur:1},{pitch:'B4',beat:20,dur:1},{pitch:'A4',beat:21,dur:1},{pitch:'G4',beat:22,dur:2}],
+    chords:[{notes:['A4','C5','E5'],name:'Am',beat:0,dur:3},{notes:['C4','E4','G4'],name:'C',beat:3,dur:3},{notes:['G4','B4','D5'],name:'G',beat:6,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:9,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:12,dur:3},{notes:['C4','E4','G4'],name:'C',beat:15,dur:3},{notes:['G4','B4','D5'],name:'G',beat:18,dur:3},{notes:['A4','C5','E5'],name:'Am',beat:21,dur:2}]
+  },
+  '7':{name:'卡农',composer:'帕赫贝尔',grade:7,bpmeas:4,
+    song:[{pitch:'C4',beat:0,dur:1},{pitch:'G4',beat:1,dur:1},{pitch:'A4',beat:2,dur:1},{pitch:'E4',beat:3,dur:1},{pitch:'F4',beat:4,dur:1},{pitch:'C4',beat:5,dur:1},{pitch:'F4',beat:6,dur:1},{pitch:'G4',beat:7,dur:1},{pitch:'C4',beat:8,dur:1},{pitch:'G4',beat:9,dur:1},{pitch:'A4',beat:10,dur:1},{pitch:'E4',beat:11,dur:1},{pitch:'F4',beat:12,dur:1},{pitch:'C4',beat:13,dur:1},{pitch:'G4',beat:14,dur:1},{pitch:'C4',beat:15,dur:1}],
+    chords:[{notes:['C4','E4','G4'],name:'C',beat:0,dur:4},{notes:['G4','B4','D5'],name:'G',beat:4,dur:4},{notes:['A4','C5','E5'],name:'Am',beat:8,dur:4},{notes:['E4','G4','B4'],name:'Em',beat:12,dur:4},{notes:['F4','A4','C5'],name:'F',beat:16,dur:4},{notes:['C4','E4','G4'],name:'C',beat:20,dur:4},{notes:['F4','A4','C5'],name:'F',beat:24,dur:4},{notes:['G4','B4','D5'],name:'G',beat:28,dur:4}]
+  },
+  '8':{name:'梦中的婚礼',composer:'克莱德曼',grade:8,bpmeas:4,
+    song:[{pitch:'C4',beat:0,dur:1},{pitch:'D4',beat:1,dur:1},{pitch:'E4',beat:2,dur:1},{pitch:'G4',beat:3,dur:1},{pitch:'E4',beat:4,dur:1},{pitch:'D4',beat:5,dur:1},{pitch:'C4',beat:6,dur:1},{pitch:'D4',beat:7,dur:1},{pitch:'E4',beat:8,dur:1},{pitch:'G4',beat:9,dur:1},{pitch:'A4',beat:10,dur:1},{pitch:'G4',beat:11,dur:1},{pitch:'E4',beat:12,dur:1},{pitch:'D4',beat:13,dur:1},{pitch:'C4',beat:14,dur:2},{pitch:'C4',beat:16,dur:1},{pitch:'D4',beat:17,dur:1},{pitch:'E4',beat:18,dur:1},{pitch:'G4',beat:19,dur:1},{pitch:'E4',beat:20,dur:1},{pitch:'D4',beat:21,dur:1},{pitch:'C4',beat:22,dur:1},{pitch:'D4',beat:23,dur:1},{pitch:'E4',beat:24,dur:1},{pitch:'G4',beat:25,dur:1},{pitch:'A4',beat:26,dur:1},{pitch:'G4',beat:27,dur:1},{pitch:'E4',beat:28,dur:1},{pitch:'D4',beat:29,dur:1},{pitch:'C4',beat:30,dur:2}],
+    chords:[{notes:['C4','E4','G4'],name:'C',beat:0,dur:4},{notes:['G4','B4','D5'],name:'G',beat:4,dur:4},{notes:['A4','C5','E5'],name:'Am',beat:8,dur:4},{notes:['G4','B4','D5'],name:'G',beat:12,dur:4},{notes:['C4','E4','G4'],name:'C',beat:16,dur:4},{notes:['G4','B4','D5'],name:'G',beat:20,dur:4},{notes:['A4','C5','E5'],name:'Am',beat:24,dur:4},{notes:['G4','B4','D5'],name:'G',beat:28,dur:4}]
+  },
+  '9':{name:'天鹅',composer:'圣桑',grade:9,bpmeas:4,
+    song:[{pitch:'G4',beat:0,dur:1},{pitch:'D5',beat:1,dur:1},{pitch:'B4',beat:2,dur:1},{pitch:'G4',beat:3,dur:1},{pitch:'D5',beat:4,dur:1},{pitch:'G5',beat:5,dur:1},{pitch:'A5',beat:6,dur:1},{pitch:'B5',beat:7,dur:1},{pitch:'C5',beat:8,dur:1},{pitch:'G4',beat:9,dur:1},{pitch:'E4',beat:10,dur:1},{pitch:'C4',beat:11,dur:1},{pitch:'G4',beat:12,dur:1},{pitch:'C5',beat:13,dur:1},{pitch:'D5',beat:14,dur:1},{pitch:'E5',beat:15,dur:1},{pitch:'F#5',beat:16,dur:1},{pitch:'D5',beat:17,dur:1},{pitch:'A4',beat:18,dur:1},{pitch:'D5',beat:19,dur:1},{pitch:'E5',beat:20,dur:1},{pitch:'C5',beat:21,dur:1},{pitch:'A4',beat:22,dur:1},{pitch:'F#4',beat:23,dur:1},{pitch:'G4',beat:24,dur:1},{pitch:'D5',beat:25,dur:1},{pitch:'B4',beat:26,dur:1},{pitch:'G4',beat:27,dur:1},{pitch:'D5',beat:28,dur:1},{pitch:'G5',beat:29,dur:1},{pitch:'D5',beat:30,dur:2}],
+    chords:[{notes:['G4','B4','D5'],name:'G',beat:0,dur:4},{notes:['C4','E4','G4'],name:'C',beat:4,dur:4},{notes:['G4','B4','D5'],name:'G',beat:8,dur:4},{notes:['C4','E4','G4'],name:'C',beat:12,dur:4},{notes:['D4','F#4','A4'],name:'D',beat:16,dur:4},{notes:['G4','B4','D5'],name:'G',beat:20,dur:4},{notes:['C4','E4','G4'],name:'C',beat:24,dur:4},{notes:['G4','B4','D5'],name:'G',beat:28,dur:2}]
+  },
+  '10':{name:'梁祝',composer:'何占豪/陈钢',grade:10,bpmeas:4,
+    song:[{pitch:'C4',beat:0,dur:1},{pitch:'D4',beat:1,dur:1},{pitch:'E4',beat:2,dur:1},{pitch:'G4',beat:3,dur:1},{pitch:'A4',beat:4,dur:1},{pitch:'G4',beat:5,dur:1},{pitch:'E4',beat:6,dur:1},{pitch:'D4',beat:7,dur:1},{pitch:'C4',beat:8,dur:1},{pitch:'D4',beat:9,dur:1},{pitch:'E4',beat:10,dur:1},{pitch:'G4',beat:11,dur:1},{pitch:'A4',beat:12,dur:1},{pitch:'C5',beat:13,dur:1},{pitch:'B4',beat:14,dur:2},{pitch:'C5',beat:16,dur:1},{pitch:'B4',beat:17,dur:1},{pitch:'A4',beat:18,dur:1},{pitch:'G4',beat:19,dur:1},{pitch:'A4',beat:20,dur:1},{pitch:'C5',beat:21,dur:1},{pitch:'A4',beat:22,dur:1},{pitch:'G4',beat:23,dur:1},{pitch:'E4',beat:24,dur:1},{pitch:'D4',beat:25,dur:1},{pitch:'E4',beat:26,dur:1},{pitch:'G4',beat:27,dur:1},{pitch:'A4',beat:28,dur:1},{pitch:'G4',beat:29,dur:1},{pitch:'E4',beat:30,dur:2}],
+    chords:[{notes:['C4','E4','G4'],name:'C',beat:0,dur:4},{notes:['G4','B4','D5'],name:'G',beat:4,dur:4},{notes:['A4','C5','E5'],name:'Am',beat:8,dur:4},{notes:['G4','B4','D5'],name:'G',beat:12,dur:4},{notes:['C4','E4','G4'],name:'C',beat:16,dur:4},{notes:['G4','B4','D5'],name:'G',beat:20,dur:4},{notes:['A4','C5','E5'],name:'Am',beat:24,dur:4},{notes:['G4','B4','D5'],name:'G',beat:28,dur:4}]
+  },
+};
+let currentSongId = '1';
+function recalcTotals() {
+  if (!window.SONG) return;
+  const s = window.SONG, c = window.CHORDS;
+  const lastS = s[s.length-1], lastC = c[c.length-1];
+  window.TOTAL_BEATS = Math.ceil(Math.max(lastS.beat+lastS.dur, lastC?lastC.beat+lastC.dur:0));
+  window.TOTAL_MEASURES = Math.ceil(TOTAL_BEATS / BEATS_PER_MEASURE);
+}
+function switchSong(id) {
+  if (isPlaying) {
+    isPlaying = false;
+    document.getElementById('playBtn').textContent = '▶ 播放';
+    document.getElementById('playBtn').classList.remove('active');
+  }
+  for (const p of Object.keys(continuousNotes)) stopContinuousNote(p, true);
+  sustainedNotes = {};
+  releaseAllKeys(); releaseChordKeys();
+  currentSongId = id;
+  const src = SONGS[id];
+  window.SONG = src.song.slice();
+  window.CHORDS = src.chords.slice();
+  window.BEATS_PER_MEASURE = src.bpmeas;
+  recalcTotals();
+  document.getElementById('songInfo').textContent = id+'级·'+src.name;
+  document.getElementById('totalMeasures').textContent = TOTAL_MEASURES;
+  document.getElementById('measureNum').textContent = 1;
+  currentBeat = -2; lastTriggeredIdx = -1; lastChordTriggeredIdx = -1;
+  document.getElementById('statusText').textContent = '就绪 ✓';
+  drawStaff(currentBeat); updateBeatDots(currentBeat);
+}
+
+// Populate song selector
+(function() {
+  const sel = document.getElementById('songSelector');
+  for (const id of Object.keys(SONGS)) {
+    const s = SONGS[id];
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = id+'级 '+s.name+' - '+s.composer;
+    sel.appendChild(opt);
+  }
+  sel.value = '1';
+  sel.addEventListener('change', function() {
+    switchSong(this.value);
+  });
+})();
+// Init first song
+(function() {
+  const src = SONGS['1'];
+  window.SONG = src.song.slice();
+  window.CHORDS = src.chords.slice();
+  window.BEATS_PER_MEASURE = src.bpmeas;
+  recalcTotals();
+})();
+// Canvas setup
+const canvas = document.getElementById('staffCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = 1040; canvas.height = 240;
+const STAFF_TOP = 60, STAFF_BOTTOM = 136;
+const STAFF_SPACING = (STAFF_BOTTOM - STAFF_TOP) / 4;
+const PLAY_LINE_X = 160;
+const VIEW_BEATS = 10;
+const PX_PER_BEAT = (canvas.width - PLAY_LINE_X - 40) / VIEW_BEATS;
+
+function getNoteY(pitch) {
+  const map = {
+    'C4': STAFF_BOTTOM + STAFF_SPACING, 'D4': STAFF_BOTTOM + STAFF_SPACING/2,
+    'E4': STAFF_BOTTOM, 'F4': STAFF_BOTTOM - STAFF_SPACING/2,
+    'G4': STAFF_BOTTOM - STAFF_SPACING, 'A4': STAFF_BOTTOM - STAFF_SPACING*1.5,
+    'B4': STAFF_BOTTOM - STAFF_SPACING*2, 'C5': STAFF_BOTTOM - STAFF_SPACING*2.5,
+    'D5': STAFF_BOTTOM - STAFF_SPACING*3, 'E5': STAFF_BOTTOM - STAFF_SPACING*3.5,
+    'F5': STAFF_BOTTOM - STAFF_SPACING*4, 'G5': STAFF_BOTTOM - STAFF_SPACING*4.5,
+    'A5': STAFF_BOTTOM - STAFF_SPACING*5, 'B5': STAFF_BOTTOM - STAFF_SPACING*5.5,
+  };
+  return map[pitch] !== undefined ? map[pitch] : STAFF_BOTTOM;
+}
+
+function drawStaff(currentBeat) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const grad = ctx.createLinearGradient(0,0,0,canvas.height);
+  grad.addColorStop(0, '#faf6ed'); grad.addColorStop(1, '#f5efe0');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#8b7d6b'; ctx.lineWidth = 1.5;
+  for (let i = 0; i < 5; i++) {
+    const y = STAFF_TOP + i * STAFF_SPACING;
+    ctx.beginPath(); ctx.moveTo(30,y); ctx.lineTo(canvas.width-20,y); ctx.stroke();
+  }
+  // Treble clef & time signature
+  ctx.fillStyle = '#8b7d6b'; ctx.font = 'bold 48px serif';
+  ctx.fillText('\uD834\uDD1E', 36, STAFF_BOTTOM + 6);
+  ctx.font = '18px serif'; ctx.fillStyle = '#5a4e3e';
+  ctx.fillText(BEATS_PER_MEASURE+'/4', 100, STAFF_TOP + STAFF_SPACING * 1.3);
+  // Chord symbols
+  for (const chord of CHORDS) {
+    const x = PLAY_LINE_X + (chord.beat + chord.dur/2 - currentBeat) * PX_PER_BEAT;
+    if (x < 40 || x > canvas.width - 20) continue;
+    ctx.fillStyle = '#6b8fb0'; ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(chord.name, x, STAFF_TOP - 30);
+    // Small bar indicating chord duration
+    const startX = PLAY_LINE_X + (chord.beat - currentBeat) * PX_PER_BEAT;
+    const endX = PLAY_LINE_X + (chord.beat + chord.dur - currentBeat) * PX_PER_BEAT;
+    ctx.strokeStyle = 'rgba(107,143,176,0.25)'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(Math.max(startX, 30), STAFF_TOP - 22);
+    ctx.lineTo(Math.min(endX, canvas.width-20), STAFF_TOP - 22);
+    ctx.stroke();
+  }
+  // Play line
+  ctx.strokeStyle = 'rgba(233,69,96,0.7)'; ctx.lineWidth = 2.5;
+  ctx.setLineDash([7,5]);
+  ctx.beginPath(); ctx.moveTo(PLAY_LINE_X, STAFF_TOP-15); ctx.lineTo(PLAY_LINE_X, STAFF_BOTTOM+20); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#e94560'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('▼ 当前位置', PLAY_LINE_X, STAFF_TOP-20);
+  // Draw notes
+  ctx.textAlign = 'left';
+  for (const note of SONG) {
+    const x = PLAY_LINE_X + (note.beat - currentBeat) * PX_PER_BEAT;
+    if (x < -60 || x > canvas.width + 20) continue;
+    const y = getNoteY(note.pitch);
+    const noteW = 12;
+    // Ledger lines for C4
+    if (note.pitch === 'C4') {
+      ctx.strokeStyle = '#8b7d6b'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(x-8, y); ctx.lineTo(x+8, y); ctx.stroke();
+    }
+    // Note head (filled ellipse)
+    ctx.fillStyle = '#2d2d2d';
+    ctx.beginPath();
+    ctx.ellipse(x, y, noteW/2, 7, -0.35, 0, Math.PI*2);
+    ctx.fill();
+    // Stem
+    if (note.pitch >= 'C5') {
+      ctx.beginPath(); ctx.moveTo(x+5, y); ctx.lineTo(x+5, y-36); ctx.stroke();
+    } else {
+      ctx.beginPath(); ctx.moveTo(x-5, y); ctx.lineTo(x-5, y+36); ctx.stroke();
+    }
+    // Pitch label
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.font = '10px sans-serif';
+    ctx.fillText(note.pitch, x+8, y+3);
+  }
+  // Measure bar lines
+  ctx.strokeStyle = '#8b7d6b'; ctx.lineWidth = 1;
+  for (let m = 0; m <= TOTAL_MEASURES; m++) {
+    const x = PLAY_LINE_X + (m * BEATS_PER_MEASURE - currentBeat) * PX_PER_BEAT;
+    if (x > 30 && x < canvas.width-20) {
+      ctx.beginPath(); ctx.moveTo(x, STAFF_TOP); ctx.lineTo(x, STAFF_BOTTOM); ctx.stroke();
+    }
+  }
+}// Beat indicator dots
+function updateBeatDots(beat) {
+  const container = document.getElementById('beatDots');
+  container.innerHTML = '';
+  const measureBeat = beat % BEATS_PER_MEASURE;
+  for (let i = 0; i < BEATS_PER_MEASURE; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'beat-dot' + (i === Math.floor(measureBeat) ? ' current' : '') + (i === 0 ? ' strong' : '');
+    container.appendChild(dot);
+  }
+}
+// State
+let isPlaying = false;
+let currentBeat = -2;  // Start 2 beats before first note
+let lastFrameTime = 0;
+let lastTriggeredIdx = -1;
+let lastChordTriggeredIdx = -1;
+let activeChordNotes = {};  // 当前按下的和弦音符
+let chordTimer = null;
+let animId = null;
+
+function getTempo() {
+  return parseInt(document.getElementById('tempoSlider').value);
+}
+
+getTempo(); // init
+document.getElementById('tempoSlider').addEventListener('input', function() {
+  document.getElementById('tempoDisplay').textContent = this.value;
+});
+function animate(timestamp) {
+  if (!isPlaying) {
+    drawStaff(currentBeat);
+    updateBeatDots(currentBeat);
+    animId = requestAnimationFrame(animate);
+    return;
+  }
+  if (!lastFrameTime) lastFrameTime = timestamp;
+  const dt = (timestamp - lastFrameTime) / 1000;
+  lastFrameTime = timestamp;
+  const bpm = getTempo();
+  const beatsPerSec = bpm / 60;
+  currentBeat += dt * beatsPerSec;
+  // Check for note triggers
+  for (let i = 0; i < SONG.length; i++) {
+    const n = SONG[i];
+    if (i <= lastTriggeredIdx) continue;
+    if (n.beat <= currentBeat && n.beat + n.dur > currentBeat - 0.05) {
+      lastTriggeredIdx = i;
+      handleKeyPress(n.pitch, true);
+      playNote(n.pitch, Math.min(n.dur * 0.9, 1.5));
+      setTimeout(() => handleKeyRelease(n.pitch), Math.min(n.dur * 300, 800));
+      break;
+    }
+  }
+  // Check chord triggers
+  for (let i = 0; i < CHORDS.length; i++) {
+    const c = CHORDS[i];
+    if (i <= lastChordTriggeredIdx) continue;
+    if (c.beat <= currentBeat && c.beat + c.dur > currentBeat - 0.05) {
+      lastChordTriggeredIdx = i;
+      releaseChordKeys();
+      // Press all notes of this chord
+      for (const p of c.notes) {
+        activeChordNotes[p] = true;
+        const el = KEY_MAP[p];
+        if (el) el.classList.add('pressed');
+        playNote(p, Math.min(c.dur * 0.7, 1.0));
+      }
+      break;
+    }
+  }
+  // End of song check
+  if (currentBeat > TOTAL_BEATS + 2) {
+    isPlaying = false;
+    document.getElementById('playBtn').textContent = '▶ 播放';
+    document.getElementById('playBtn').classList.remove('active');
+    releaseChordKeys();
+    document.getElementById('statusText').textContent = '播放完成 ✓';
+    setTimeout(() => {
+      if (!isPlaying) document.getElementById('statusText').textContent = '就绪 ✓';
+    }, 2000);
+  }
+  drawStaff(currentBeat);
+  updateBeatDots(currentBeat);
+  document.getElementById('measureNum').textContent = Math.min(Math.floor(currentBeat / BEATS_PER_MEASURE) + 1, TOTAL_MEASURES);
+  animId = requestAnimationFrame(animate);
+}
+// Controls
+const playBtn = document.getElementById('playBtn');
+const resetBtn = document.getElementById('resetBtn');
+playBtn.addEventListener('click', () => {
+  ensureAudio();
+  if (isPlaying) {
+    isPlaying = false;
+    playBtn.textContent = '▶ 播放';
+    playBtn.classList.remove('active');
+    // Release chord keys on pause
+    releaseChordKeys();
+    document.getElementById('statusText').textContent = '已暂停';
+  } else {
+    if (currentBeat > TOTAL_BEATS) {
+      currentBeat = -2;
+      lastTriggeredIdx = -1;
+      lastChordTriggeredIdx = -1;
+      releaseChordKeys();
+    }
+    isPlaying = true;
+    lastFrameTime = 0;
+    playBtn.textContent = '⏸ 暂停';
+    playBtn.classList.add('active');
+    document.getElementById('statusText').textContent = '播放中...';
+  }
+});
+resetBtn.addEventListener('click', () => {
+  isPlaying = false;
+  playBtn.textContent = '▶ 播放';
+  playBtn.classList.remove('active');
+  currentBeat = -2;
+  lastTriggeredIdx = -1;
+  lastChordTriggeredIdx = -1;
+  releaseChordKeys();
+  releaseAllKeys();
+  document.getElementById('statusText').textContent = '已重置';
+  document.getElementById('measureNum').textContent = 1;
+  drawStaff(currentBeat);
+  updateBeatDots(currentBeat);
+});
+sustainBtn.addEventListener('click', toggleSustainPedal);
+// Start animation
+animId = requestAnimationFrame(animate);
+// 键位图切换
+document.getElementById('mapToggle').addEventListener('click', function() {
+  const map = document.getElementById('keyboardMap');
+  const isHidden = map.style.display === 'none';
+  map.style.display = isHidden ? 'block' : 'none';
+  this.textContent = isHidden ? '📖 隐藏键位图' : '📖 键位图';
+});
+</script>
+</body>
+</html>

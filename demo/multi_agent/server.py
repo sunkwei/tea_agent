@@ -33,7 +33,7 @@ from tea_agent.config import load_config as _load_config
 logger = logging.getLogger("debate_server")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 
-MAX_ROUNDS = 50
+MAX_ROUNDS = 5
 DEBATE_SYSTEM_PROMPT = """你是一场辩论赛的【{side_label}】。你的核心论点/立场是：{stance}
 
 辩论规则：

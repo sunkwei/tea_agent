@@ -1,4 +1,4 @@
-# Tea Agent v0.13.8
+# Tea Agent v0.13.10
 
 > ⚠️ **这是一个 AI 写 AI 的实验项目，自行承担责任。**
 
@@ -10,7 +10,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.13.8-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.13.10-blue)](https://pypi.org/project/tea-agent)
 
 Tea Agent 是一款**会自我进化的 AI 编程助手**，拥有 75+ 可调用的工具，能自主编写代码、调试、搜索、文件操作、浏览器操控，并能在运行中动态加载新工具。支持 **GUI / Web / REST API / ACP Protocol / Telegram** 五种界面形态。
 
@@ -1016,7 +1016,7 @@ list       → 列出所有技能模式
 | 🗓️ 工具 | `toolkit_lunar`, `toolkit_weather_my`, `toolkit_gettime`, `toolkit_date_diff` |
 | 🔧 系统 | `toolkit_exec`, `toolkit_config`, `toolkit_os_info`, `toolkit_sudo_gui`, `toolkit_clipboard` |
 | 🧠 记忆/知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_reflection`, `toolkit_proactive` |
-| 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_auto_pipeline`, `toolkit_dynamic_skill` |
+| 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_auto_pipeline`, `toolkit_dynamic_skill`, `toolkit_remote_agent` |
 | 📋 计划/任务 | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume`, `toolkit_topic_prompt` |
 | 🔌 MCP 集成 | `toolkit_mcp` |
 | 🌐 Web/GUI | `toolkit_dump_topic`, `toolkit_export_last_pdf`, `toolkit_notify` |
@@ -1434,6 +1434,83 @@ python demo/multi_agent/server.py --port 8083
 - ⚙️ **依赖 LLM 质量** — 子 Agent 的任务理解能力取决于底层模型，小模型可能误解任务
 
 ---
+
+## 📡 远程设备 Agent（v0.13.10+）
+
+Tea Agent 通过 `toolkit_remote_agent` 工具可以连接**远程终端设备**上的 `tea_agent.server`，实现 PC 主机 Agent ↔ 设备 AI 的协同工作。
+
+### 适用场景
+
+- **嵌入式设备调试** — 在 RK3588 / BM1688 / X3 等设备上远程执行任务
+- **边缘节点管理** — 远程登录设备分析日志、检查服务状态
+- **分布式协同** — 主机 AI 分解任务，设备 AI 本地执行，结果汇总
+
+### 核心操作
+
+| 操作 | 说明 | 示例 |
+|------|------|------|
+| **register** | 注册远程设备（IP + 端口 + 工作目录） | 主机知道设备在哪、做什么 |
+| **exec** | 向设备 AI 下发任务 | 设备 AI 自主分析日志、调试代码 |
+| **status** | 检查设备是否在线 | 心跳检测 |
+| **list** | 列出已注册的所有设备 | 查看设备列表 |
+| **unregister** | 断开/移除远程设备 | 任务完成或设备下线后清理 |
+
+### 工作模式
+
+#### ① 注册设备
+
+```python
+toolkit_remote_agent(action="register",
+    device_id="bm1688-1",
+    host="172.16.1.49",
+    port=8282,
+    working_path="/app/zkfs/video_analyse/")
+```
+
+#### ② 下发任务（自动创建新主题）
+
+每次 `exec` 传入 `session_id` 控制远程上下文：
+
+- **不传 session_id** → 自动创建远程新主题
+- **同一个 session_id** → 追加到同一主题，远程 AI 保持上下文
+- **不同的 session_id** → 隔离的独立主题，互不干扰
+
+```python
+# 第一次执行 -> 创建新会话
+r = toolkit_remote_agent(action="exec",
+    device_id="terminal-49",
+    goal="分析 /record/dbs/log/ 今日日志")
+
+# session_id 从 r 中获取，后续继续同一会话
+r2 = toolkit_remote_agent(action="exec",
+    device_id="terminal-49",
+    goal="继续排查网络连接问题",
+    session_id=r["session_id"])
+```
+
+#### ③ 断开连接（remove agent）
+
+任务完成后或设备需下线时，使用 **unregister** 移除：
+
+```python
+toolkit_remote_agent(action="unregister",
+    device_id="terminal-49")
+```
+
+移除后设备从注册列表消失，下次使用需重新 register。这确保了设备资源不被长期占用，也避免已下线设备被误调用。
+
+### 通信架构
+
+```
+┌─────────────────┐         HTTP POST          ┌──────────────────┐
+│  PC 主机 Agent   │ ─────────────────────────→  │  终端设备 Server  │
+│  (tea_agent)     │  /v1/chat/completions      │  tea_agent.server │
+│                  │ ←─────────────────────────  │                  │
+│  分析结果→决策   │   { result, session_id }    │  执行任务→返回   │
+└─────────────────┘                              └──────────────────┘
+```
+
+> 远程通信使用 OpenAI 兼容接口，设备端只需运行 `python -m tea_agent.server`，无需额外配置。
 
 ---
 

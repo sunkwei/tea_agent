@@ -51,7 +51,15 @@ def create_demo_dag():
             "state": "completed",
             "duration": 0.6,
         },
-... [截断 1771B→943B] ...
+        {
+            "id": "type_check",
+            "label": "类型检查\nmypy/pyright",
+            "type": "task",
+            "state": "running",
+            "duration": 1.8,
+        },
+        {
+            "id": "report",
             "label": "最终报告\n汇总并评级",
             "type": "task",
             "state": "pending",

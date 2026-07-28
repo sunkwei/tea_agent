@@ -367,7 +367,7 @@ class TetrisGame:
         """Handle user input."""
         try:
             key = self.stdscr.getch()
-        except:
+        except Exception:
             return
 
         if key == -1:

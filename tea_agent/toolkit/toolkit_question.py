@@ -108,7 +108,7 @@ def toolkit_question(
         test_root.withdraw()
         test_root.destroy()
         gui_available = True
-    except:
+    except Exception:
         gui_available = False
 
     # 根据环境选择模式
@@ -124,7 +124,7 @@ def _is_gui_running() -> bool:
         import tkinter as tk
         # 检查是否有 Tk 根窗口
         return len(tk._default_root.children) > 0 if tk._default_root else False
-    except:
+    except Exception:
         return False
 
 
@@ -254,7 +254,7 @@ def _ask_gui(
         if answer == "__custom__":
             try:
                 answer = custom_entry.get()
-            except:
+            except Exception:
                 answer = ""
 
         if not answer:
@@ -285,7 +285,7 @@ def _ask_gui(
             _answer_event.set()
             try:
                 dialog.destroy()
-            except:
+            except Exception:
                 logger.exception('op_failed')
 
         dialog.after(timeout * 1000, _timeout)

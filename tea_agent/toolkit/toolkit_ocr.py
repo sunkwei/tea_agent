@@ -66,7 +66,7 @@ def _ocr_recognize(image_path: str, image_base64: str, lang: str, output: str):
     if image_base64 and img_path:
         try:
             os.unlink(img_path)
-        except:
+        except Exception:
             logger.exception('op_failed')
 
 
@@ -197,7 +197,7 @@ def _ocr_screenshot(region: str, lang: str, output: str):
     # 清理临时文件
     try:
         os.unlink(tmp_path)
-    except:
+    except Exception:
         logger.exception('op_failed')
 
 

@@ -32,7 +32,7 @@ def sample_file():
 import os
 import sys
 import json
-from typing import List, Optional
+from typing import Optional
 
 
 def foo():

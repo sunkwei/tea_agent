@@ -43,10 +43,10 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
             try:
                 import pkg_resources
                 return pkg_resources.get_distribution(name).version
-            except:
+            except Exception:
                 logger.exception('op_failed')
 
-        except:
+        except Exception:
             logger.exception('op_failed')
 
         return None

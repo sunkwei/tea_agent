@@ -187,7 +187,7 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
                 searcher = SemanticSearch(storage)
                 vec_stats = searcher.get_vector_stats()
                 lines.append(f"  向量索引: {vec_stats['indexed_memories']}/{vec_stats['total_memories']} ({vec_stats['coverage']:.1%})")
-            except:
+            except Exception:
                 logger.exception('op_failed')
 
 

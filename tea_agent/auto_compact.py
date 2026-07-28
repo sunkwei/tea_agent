@@ -1,19 +1,42 @@
 """
-Auto-Compact — 自动上下文压缩。监控 Token 用量，达到阈值时自动触发摘要折叠。
+Auto-Compact v3.0 — 自动上下文压缩系统（借鉴 Pi Agent Harness）
+
+增强功能：
+  - Retry with exponential backoff（压缩失败自动重试）
+  - Configurable compaction settings（可配置阈值/保留轮次/最大token）
+  - Branch summarization（分支摘要）
+  - CompactionPipeline 集成（可插入 agent pipeline）
+  - 更好的 token 估算和诊断
+
+使用：
+    from auto_compact import (
+        estimate_tokens, should_compact, compact_messages,
+        get_max_context_tokens, CompactionSettings, CompactionPipeline
+    )
+
+    settings = CompactionSettings(threshold=0.75, keep_recent=5)
+    pipeline = CompactionPipeline(settings=settings)
+    result = pipeline.run(messages, config)
 """
 
 import json
 import logging
+import random
 import re
+import time
+from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger("auto_compact")
 
+
+# ═══ Token 估算 ═════════════════════════════════════════
 
 def estimate_tokens(text: str) -> int:
     """估算 token 数。中文~1.5t/字, 英文~4t/字。"""
     if not text:
         return 0
-    cn = len(re.findall(r"[一-鿿㐀-䶿]", text))
+    cn = len(re.findall(r"[\u4e00-\u9fff\u3400-\u4dbf]", text))
     total = len(text)
     return int(cn / 1.5 + (total - cn) / 4.0) + 4
 
@@ -37,49 +60,6 @@ def estimate_messages_tokens(messages: list) -> int:
         if rc:
             total += estimate_tokens(rc)
     return total
-
-
-def should_compact(messages: list, max_tokens: int, threshold: float = 0.8):
-    """判断是否需要压缩。返回 (needs_compact, current_tokens)。"""
-    if max_tokens <= 0:
-        return False, 0
-    current = estimate_messages_tokens(messages)
-    if current >= max_tokens * threshold:
-        logger.warning(f"Auto-compact: {current}/{max_tokens} tok")
-        return True, current
-    return False, current
-
-
-def compact_messages(messages: list, keep_recent: int = 5, summary: str = ""):
-    """压缩历史：保留最近的 keep_recent 轮，合并旧消息到摘要。"""
-    if not messages:
-        return messages, summary
-    sys_msgs = [m for m in messages if m.get("role") == "system"]
-    others = [m for m in messages if m.get("role") != "system"]
-    if len(others) <= keep_recent * 2:
-        return messages, summary
-    recent = others[-keep_recent * 2 :] if keep_recent > 0 else []
-    older = others[: -keep_recent * 2] if keep_recent > 0 else others
-
-    older_text = ""
-    for m in older:
-        r = m.get("role", "")
-        c = m.get("content", "")
-        if isinstance(c, str) and c:
-            older_text += f"[{r}] {c[:200]}" + "\n"
-    if older_text and len(older_text) > 50:
-        summary = (
-            (summary + "\n---\n" + older_text[:500])[:1000]
-            if summary
-            else older_text[:500]
-        )
-
-    compressed = list(sys_msgs)
-    if summary:
-        compressed.append({"role": "system", "content": f"[历史摘要] {summary}"})
-    compressed.extend(recent)
-    logger.info(f"Compacted: {len(messages)} -> {len(compressed)} msgs")
-    return compressed, summary
 
 
 def get_max_context_tokens(config) -> int:
@@ -106,25 +86,357 @@ def get_max_context_tokens(config) -> int:
         return 128000
 
 
-class AutoCompactStep:
-    """可调用压缩步骤 — 用在 pipeline 中作为自动压缩节点。"""
+# ═══ 配置 ════════════════════════════════════════════════
 
-    def __init__(self, threshold: float = 0.8, keep_recent: int = 5):
-        self.threshold = threshold
-        self.keep_recent = keep_recent
-        self._summary = ""
+@dataclass
+class CompactionSettings:
+    """Compaction 配置 — 借鉴 Pi 的 DEFAULT_COMPACTION_SETTINGS。"""
+    threshold: float = 0.8          # 触发压缩的 token 阈值（占 max_context 的比例）
+    keep_recent: int = 5            # 保留的最新轮次数
+    max_summary_length: int = 1500  # 摘要最大字符数
+    min_messages_before_compact: int = 10  # 最少消息数才触发压缩
+    branch_summary_length: int = 800      # 分支摘要最大字符数
+    enabled: bool = True            # 是否启用自动压缩
 
-    def __call__(self, context, messages, **kw):
-        mt = get_max_context_tokens(context.config)
-        needs, cur = should_compact(messages, mt, self.threshold)
-        if needs:
-            compressed, self._summary = compact_messages(
-                messages, self.keep_recent, self._summary
+    # 重试配置
+    max_retries: int = 3            # 最大重试次数
+    retry_base_delay: float = 1.0   # 初始重试延迟（秒）
+    retry_max_delay: float = 30.0   # 最大重试延迟（秒）
+
+    def to_dict(self) -> dict:
+        return {
+            "threshold": self.threshold,
+            "keep_recent": self.keep_recent,
+            "max_summary_length": self.max_summary_length,
+            "enabled": self.enabled,
+            "max_retries": self.max_retries,
+        }
+
+
+DEFAULT_COMPACTION_SETTINGS = CompactionSettings()
+
+
+# ═══ 核心压缩逻辑 ═══════════════════════════════════════
+
+def should_compact(
+    messages: list,
+    max_tokens: int,
+    threshold: float = 0.8,
+    min_messages: int = 10,
+) -> tuple[bool, int]:
+    """判断是否需要压缩。
+
+    Args:
+        messages: 消息列表
+        max_tokens: 最大上下文 token 数
+        threshold: 触发阈值 (0~1)
+        min_messages: 最少消息数
+
+    Returns:
+        (needs_compact, current_tokens)
+    """
+    if max_tokens <= 0:
+        return False, 0
+    if len(messages) < min_messages:
+        return False, 0
+
+    current = estimate_messages_tokens(messages)
+    if current >= max_tokens * threshold:
+        logger.warning(f"🔔 Compaction trigger: {current}/{max_tokens} tok ({current/max_tokens*100:.0f}%)")
+        return True, current
+    return False, current
+
+
+def compact_messages(
+    messages: list,
+    keep_recent: int = 5,
+    summary: str = "",
+    max_summary_length: int = 1500,
+) -> tuple[list, str]:
+    """压缩历史消息。
+
+    保留最近的 keep_recent 轮，将旧消息合并到摘要。
+
+    Args:
+        messages: 完整消息列表
+        keep_recent: 保留的最近轮次数
+        summary: 已有的摘要文本
+        max_summary_length: 摘要最大长度
+
+    Returns:
+        (compressed_messages, new_summary)
+    """
+    if not messages:
+        return messages, summary
+
+    sys_msgs = [m for m in messages if m.get("role") == "system"]
+    others = [m for m in messages if m.get("role") != "system"]
+
+    if len(others) <= keep_recent * 2:
+        return messages, summary
+
+    recent = others[-keep_recent * 2:] if keep_recent > 0 else []
+    older = others[:-keep_recent * 2] if keep_recent > 0 else others
+
+    # 构建旧消息摘要
+    older_text = ""
+    for m in older:
+        r = m.get("role", "")
+        c = m.get("content", "")
+        if isinstance(c, str) and c:
+            # 只取关键内容的前 200 字符
+            older_text += f"[{r}] {c[:200]}\n"
+        elif isinstance(c, list):
+            for part in c:
+                if isinstance(part, dict) and part.get("type") == "text":
+                    older_text += f"[{r}] {part.get('text', '')[:200]}\n"
+                    break
+
+    # 合并摘要
+    if older_text and len(older_text) > 50:
+        new_text = older_text[:max_summary_length]
+        if summary:
+            summary = (summary + "\n---\n" + new_text)[:max_summary_length]
+        else:
+            summary = new_text
+
+    # 构建压缩后的消息列表
+    compressed = list(sys_msgs)
+    if summary:
+        compressed.append({"role": "system", "content": f"[历史摘要] {summary}"})
+    compressed.extend(recent)
+
+    before = len(messages)
+    after = len(compressed)
+    logger.info(f"📦 Compaction: {before} msgs → {after} msgs (keep_recent={keep_recent})")
+
+    return compressed, summary
+
+
+# ═══ 重试机制 ════════════════════════════════════════════
+
+def retry_with_backoff(
+    func: callable,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 30.0,
+    retryable_exceptions: tuple = (Exception,),
+) -> Any:
+    """带指数退避的重试装饰器/执行器。
+
+    Args:
+        func: 要执行的函数
+        max_retries: 最大重试次数
+        base_delay: 初始延迟（秒）
+        max_delay: 最大延迟（秒）
+        retryable_exceptions: 可重试的异常类型
+
+    Returns:
+        函数执行结果
+    """
+    last_exception = None
+    for attempt in range(max_retries + 1):
+        try:
+            return func()
+        except retryable_exceptions as e:
+            last_exception = e
+            if attempt < max_retries:
+                delay = min(base_delay * (2 ** attempt) + random.uniform(0, 0.5), max_delay)
+                logger.warning(
+                    f"🔄 Compaction retry {attempt + 1}/{max_retries} "
+                    f"after {delay:.1f}s: {e}"
+                )
+                time.sleep(delay)
+            else:
+                logger.error(f"✗ Compaction failed after {max_retries} retries: {e}")
+                raise
+    raise last_exception  # type: ignore
+
+
+# ═══ 分支摘要 ════════════════════════════════════════════
+
+def generate_branch_summary(
+    messages: list,
+    max_length: int = 800,
+) -> str:
+    """为分支生成摘要。
+
+    当会话在树中切换分支时，为离开的分支生成摘要，
+    以便在切换后保持上下文连续性（借鉴 Pi 的 branch-summarization）。
+
+    Args:
+        messages: 分支中的消息
+        max_length: 摘要最大长度
+
+    Returns:
+        摘要文本
+    """
+    if not messages:
+        return ""
+
+    # 提取关键信息：用户问题 + 关键决策 + 结论
+    key_points = []
+    for m in messages:
+        role = m.get("role", "")
+        content = m.get("content", "")
+        if isinstance(content, list):
+            content = " ".join(
+                p.get("text", "") for p in content
+                if isinstance(p, dict) and p.get("type") == "text"
             )
+
+        if role == "user" and content:
+            key_points.append(f"用户: {content[:300]}")
+        elif role == "assistant" and content:
+            # 只保留助理回复的前 200 字符
+            key_points.append(f"助理: {content[:200]}")
+
+    summary = "\n".join(key_points)
+    if len(summary) > max_length:
+        summary = summary[:max_length] + "..."
+
+    return summary
+
+
+# ═══ Compaction Pipeline ═════════════════════════════════
+
+class CompactionPipeline:
+    """可插入 pipeline 的自动压缩管线。
+
+    用法：
+        pipeline = CompactionPipeline(settings=CompactionSettings())
+        result = pipeline.run(messages, context)
+
+    返回：
+        {
+            "compacted": True/False,
+            "messages": compressed_messages,  # 仅 compacted=True 时
+            "tokens_before": int,
+            "tokens_after": int,
+            "stats": {...}                    # 统计信息
+        }
+    """
+
+    def __init__(self, settings: CompactionSettings | None = None):
+        self.settings = settings or DEFAULT_COMPACTION_SETTINGS
+        self._summary = ""  # 跨调用保持的摘要
+        self._compact_count = 0
+        self._last_compact_time = 0.0
+
+    def run(
+        self,
+        messages: list,
+        config: Any = None,
+        force: bool = False,
+    ) -> dict:
+        """执行一次压缩检查。
+
+        Args:
+            messages: 当前消息列表
+            config: 配置对象（从中读取 max_context_tokens）
+            force: 是否强制压缩（忽略阈值）
+
+        Returns:
+            压缩结果字典
+        """
+        if not self.settings.enabled and not force:
+            return {"compacted": False}
+
+        max_tokens = get_max_context_tokens(config) if config else 128000
+        needs, cur = should_compact(
+            messages, max_tokens,
+            self.settings.threshold if not force else 0.0,
+            self.settings.min_messages_before_compact if not force else 0,
+        )
+
+        if not needs and not force:
+            return {"compacted": False}
+
+        # 执行压缩（带重试）
+        def _do_compact():
+            compressed, new_summary = compact_messages(
+                messages,
+                keep_recent=self.settings.keep_recent,
+                summary=self._summary,
+                max_summary_length=self.settings.max_summary_length,
+            )
+            self._summary = new_summary
+            self._compact_count += 1
+            self._last_compact_time = time.time()
+            return compressed
+
+        try:
+            if self.settings.max_retries > 0:
+                compressed = retry_with_backoff(
+                    _do_compact,
+                    max_retries=self.settings.max_retries,
+                    base_delay=self.settings.retry_base_delay,
+                    max_delay=self.settings.retry_max_delay,
+                )
+            else:
+                compressed = _do_compact()
+
+            after_tokens = estimate_messages_tokens(compressed)
+
             return {
                 "compacted": True,
                 "messages": compressed,
+                "summary": self._summary,
                 "tokens_before": cur,
-                "tokens_after": estimate_messages_tokens(compressed),
+                "tokens_after": after_tokens,
+                "saved_tokens": cur - after_tokens,
+                "stats": {
+                    "compact_count": self._compact_count,
+                },
             }
-        return {"compacted": False}
+
+        except Exception as e:
+            logger.error(f"✗ CompactionPipeline failed: {e}")
+            return {
+                "compacted": False,
+                "error": str(e)[:300],
+                "tokens_before": cur,
+            }
+
+    def reset(self):
+        """重置 pipeline 状态。"""
+        self._summary = ""
+        self._compact_count = 0
+        self._last_compact_time = 0.0
+
+    @property
+    def summary(self) -> str:
+        """获取当前累积摘要。"""
+        return self._summary
+
+    @summary.setter
+    def summary(self, value: str):
+        self._summary = value
+
+
+# ═══ 兼容旧版 API ═══════════════════════════════════════
+
+class AutoCompactStep:
+    """兼容旧版的可调用压缩步骤。
+
+    用法与之前相同：
+        step = AutoCompactStep(threshold=0.8, keep_recent=5)
+        result = step(context, messages)
+    """
+
+    def __init__(self, threshold: float = 0.8, keep_recent: int = 5):
+        self._pipeline = CompactionPipeline(
+            settings=CompactionSettings(
+                threshold=threshold,
+                keep_recent=keep_recent,
+        ))
+
+    def __call__(self, context, messages, **kw):
+        return self._pipeline.run(messages, config=context.config if hasattr(context, 'config') else None)
+
+    @property
+    def summary(self) -> str:
+        return self._pipeline.summary
+
+    def reset(self):
+        self._pipeline.reset()

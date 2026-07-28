@@ -1,13 +1,182 @@
-"""工具调用循环执行器
+"""工具调用循环执行器 v4.0 — 支持并行工具执行（借鉴 Pi Agent Harness）
 
-- execute_tool_loop: 执行工具调用循环（核心对话引擎）
+新增:
+  - ParallelExecutor: 并行工具执行引擎，自动检测依赖关系
+  - 混合执行模式：有依赖的串行，无依赖的并行
+  - 智能依赖分析：基于工具名和参数推断
+  - 原有 LoopDetector 和工具执行逻辑保持不变
 """
 
 import json
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Callable
 
 logger = logging.getLogger("session.tool_loop_runner")
+
+
+# ═══ 并行工具执行引擎 ═══════════════════════════════════
+
+class ParallelExecutor:
+    """并行工具执行引擎。
+
+    借鉴 Pi Agent Harness 的并行模式：
+    - 自动检测工具调用间的依赖关系
+    - 无依赖的工具并行执行
+    - 有依赖的工具自动排队串行
+    - 混合模式：批次内若含 serial 工具则全批转为顺序
+    """
+
+    # 标记为"顺序执行"的工具（读写类，有副作用）
+    SERIAL_TOOLS = {
+        "toolkit_edit", "toolkit_diff_edit", "toolkit_self_evolve",
+        "toolkit_save_file", "toolkit_exec", "toolkit_git_commit",
+        "toolkit_save", "toolkit_reload", "toolkit_diff",
+    }
+
+    # 标记为"并行安全"的工具（只读查询类）
+    PARALLEL_SAFE = {
+        "toolkit_file", "toolkit_search", "toolkit_lsp",
+        "toolkit_gettime", "toolkit_os_info", "toolkit_config",
+        "toolkit_memory", "toolkit_kb", "toolkit_skills",
+        "toolkit_list_provider_models", "toolkit_get_models",
+        "toolkit_get_config_path", "toolkit_weather_my",
+        "toolkit_ip_location_my", "toolkit_lunar",
+        "toolkit_date_diff", "toolkit_self_report",
+        "toolkit_harness_schema", "toolkit_plan",
+        "toolkit_batch_process", "toolkit_code_review",
+    }
+
+    def __init__(self, max_workers: int = 4, serial_if_any_serial: bool = True):
+        """
+        Args:
+            max_workers: 最大并行线程数
+            serial_if_any_serial: 批次中若有 serial 工具，整批转为顺序
+        """
+        self.max_workers = max_workers
+        self.serial_if_any_serial = serial_if_any_serial
+
+    def analyze_dependencies(self, tool_calls: list) -> list[list]:
+        """分析工具调用间的依赖关系，分组为可并行执行的批次。
+
+        借鉴 Pi Agent Harness 的并行模式：
+        1. 如果批次中包含 SERIAL_TOOLS 中的工具，整批转为顺序（每个工具独立批次）
+        2. 如果全是 PARALLEL_SAFE 工具，合并为一批并行执行
+        3. 混合情况：有副作用的同名工具串行，其余并行
+
+        Args:
+            tool_calls: 工具调用列表
+
+        Returns:
+            批次列表：[[batch1_tools], [batch2_tools], ...]
+            同一批次内的工具可并行执行
+        """
+        if not tool_calls:
+            return []
+
+        # 检查是否需要全部顺序执行
+        has_serial = any(
+            tc.function.name in self.SERIAL_TOOLS
+            for tc in tool_calls
+        )
+
+        if has_serial and self.serial_if_any_serial:
+            return [[tc] for tc in tool_calls]  # 每个工具单独一批
+
+        # 检查是否全部是并行安全工具
+        all_parallel_safe = all(
+            tc.function.name in self.PARALLEL_SAFE
+            for tc in tool_calls
+        )
+
+        if all_parallel_safe:
+            # 全是只读查询，放一个批次并行执行
+            return [list(tool_calls)]
+
+        # 混合情况：按工具名分组
+        groups: dict[str, list] = {}
+        for tc in tool_calls:
+            name = tc.function.name
+            if name not in groups:
+                groups[name] = []
+            groups[name].append(tc)
+
+        # 并行安全的组合并到一个批次，有副作用的各自独立
+        batch_all = []
+        serial_batches = []
+        for name, calls in groups.items():
+            if name in self.PARALLEL_SAFE or len(calls) <= 1:
+                batch_all.extend(calls)
+            else:
+                # 多调用且有副作用的，每个单独一批
+                for tc in calls:
+                    serial_batches.append([tc])
+
+        result = []
+        if batch_all:
+            result.append(batch_all)
+        result.extend(serial_batches)
+        return result
+
+    @staticmethod
+    def is_serial_tool(tool_name: str) -> bool:
+        """判断是否是串行工具。"""
+        return tool_name in ParallelExecutor.SERIAL_TOOLS
+
+    @staticmethod
+    def is_parallel_safe(tool_name: str) -> bool:
+        """判断是否是并行安全工具。"""
+        return tool_name in ParallelExecutor.PARALLEL_SAFE
+
+
+def execute_tools_parallel(
+    tool_calls: list,
+    executor_func: Callable,
+    max_workers: int = 4,
+) -> list[dict]:
+    """并行执行一批工具调用。
+
+    使用 ThreadPoolExecutor 并行执行，保持结果顺序与输入一致。
+
+    Args:
+        tool_calls: 要执行的工具调用列表
+        executor_func: 执行单个工具的函数，接受 (tc) 参数，返回 (call_id, func_name, result_str)
+        max_workers: 最大并行度
+
+    Returns:
+        结果列表，与 tool_calls 顺序一致
+    """
+    results: list[dict | None] = [None] * len(tool_calls)
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        future_map = {}
+        for idx, tc in enumerate(tool_calls):
+            future = pool.submit(executor_func, tc)
+            future_map[future] = idx
+
+        for future in as_completed(future_map):
+            idx = future_map[future]
+            try:
+                call_id, func_name, result_str = future.result()
+                results[idx] = {
+                    "call_id": call_id,
+                    "func_name": func_name,
+                    "result_str": result_str,
+                    "success": True,
+                }
+            except Exception as e:
+                results[idx] = {
+                    "call_id": getattr(tool_calls[idx], 'id', 'unknown'),
+                    "func_name": getattr(tool_calls[idx], 'function.name', 'unknown'),
+                    "result_str": json.dumps({"error": str(e)}),
+                    "success": False,
+                    "error": str(e),
+                }
+
+    return results
+
+
+# ═══ 循环检测器 ═════════════════════════════════════════
 
 class LoopDetector:
     """循环检测器 - 检测 LLM 重复输出/工具调用。
@@ -26,14 +195,12 @@ class LoopDetector:
         """
         self.window = window
         self.threshold = similarity_threshold
-        self._tool_hashes: list[str] = []  # 工具调用 hash 序列
-        self._contents: list[str] = []     # 输出内容序列
-        self._tool_names: list[list[str]] = []  # 工具名序列
+        self._tool_hashes: list[str] = []
+        self._contents: list[str] = []
+        self._tool_names: list[list[str]] = []
 
     def _hash_tool_call(self, name: str, args: str) -> str:
-        """计算工具调用的 hash。"""
         import hashlib
-        # 规范化参数（排序 keys）
         try:
             args_dict = json.loads(args) if args else {}
             args_normalized = json.dumps(args_dict, sort_keys=True)
@@ -42,10 +209,8 @@ class LoopDetector:
         return hashlib.md5(f"{name}:{args_normalized}".encode()).hexdigest()[:12]
 
     def _text_similarity(self, a: str, b: str) -> float:
-        """简单的文本相似度（基于字符级 Jaccard）。"""
         if not a or not b:
             return 0.0
-        # 取较短文本的前 500 字符比较
         a, b = a[:500], b[:500]
         set_a = set(a)
         set_b = set(b)
@@ -56,23 +221,9 @@ class LoopDetector:
         return intersection / union if union > 0 else 0.0
 
     def check_and_record(self, content: str, tool_calls: list) -> dict:
-        """检查当前轮是否循环，并记录。
-
-        支持三种循环模式检测：
-        1. AAA..模式：连续相同的工具调用
-        2. ABABAB模式：两种工具调用交替
-        3. ABCABCABC模式：三种工具调用的循环
-
-        Args:
-            content: LLM 输出内容
-            tool_calls: 工具调用列表 [(name, args), ...]
-
-        Returns:
-            {"is_loop": bool, "type": str|None, "detail": str}
-        """
+        """检查当前轮是否循环，并记录。"""
         result = {"is_loop": False, "type": None, "detail": ""}
 
-        # 计算本轮的工具调用 hash
         current_hashes = []
         current_names = []
         for name, args in tool_calls:
@@ -80,14 +231,11 @@ class LoopDetector:
             current_names.append(name)
 
         # ── 检测 1: 工具调用完全重复 ──
-        # 注意：只与最近 window-1 轮比较（排除当前轮，且不与自身比较）
         if current_hashes:
             current_hash_str = "|".join(current_hashes)
-            # 取最近 window-1 轮（不包括当前轮，因为还没记录）
             compare_range = self._tool_hashes[-(self.window-1):] if self.window > 1 else []
             for i, prev_hash in enumerate(compare_range):
                 if current_hash_str == prev_hash:
-                    # 计算实际轮次索引
                     actual_idx = len(self._tool_hashes) - len(compare_range) + i
                     result = {
                         "is_loop": True,
@@ -111,14 +259,10 @@ class LoopDetector:
                     break
 
         # ── 检测 3: 工具序列循环 ──
-        # 支持三种模式：AAA.., ABABAB, ABCABCABC
-        # 注意：所有模式都要检查工具名和参数都相同（通过hash比较）
         if not result["is_loop"] and len(self._tool_hashes) >= 3:
-            # 将当前轮的工具调用hash转换为字符串
             current_hash_str = "|".join(current_hashes) if current_hashes else ""
 
-            # 模式1: AAA..模式（连续相同的工具调用，包括参数）
-            if len(self._tool_hashes) >= 3:
+            if not result["is_loop"] and len(self._tool_hashes) >= 3:
                 last_three_hashes = self._tool_hashes[-3:]
                 if (len(last_three_hashes) == 3 and
                     current_hash_str and
@@ -126,12 +270,11 @@ class LoopDetector:
                     result = {
                         "is_loop": True,
                         "type": "sequence_loop",
-                        "detail": f"检测到连续相同工具调用模式（含参数）: {'→'.join(current_names)}"
+                        "detail": f"检测到连续相同工具调用模式: {'→'.join(current_names)}"
                     }
 
-            # 模式2: ABABAB模式（两种工具调用交替，包括参数）
             if not result["is_loop"] and len(self._tool_hashes) >= 4:
-                recent_hashes = self._tool_hashes[-3:]  # 最近 3 轮 + 当前
+                recent_hashes = self._tool_hashes[-3:]
                 if (len(recent_hashes) == 3 and
                     current_hash_str and recent_hashes[0] and recent_hashes[1] and recent_hashes[2] and
                     current_hash_str == recent_hashes[0] and recent_hashes[1] == recent_hashes[2] and
@@ -139,22 +282,21 @@ class LoopDetector:
                     result = {
                         "is_loop": True,
                         "type": "sequence_loop",
-                        "detail": f"检测到交替循环模式（含参数）: {'→'.join(current_names)} ↔ {'→'.join(self._tool_names[-3])}"
+                        "detail": f"检测到交替循环模式: {'→'.join(current_names)} ↔ {'→'.join(self._tool_names[-3])}"
                     }
 
-            # 模式3: ABCABCABC模式（三种工具调用的循环，包括参数）
             if not result["is_loop"] and len(self._tool_hashes) >= 6:
-                recent_hashes = self._tool_hashes[-5:]  # 最近 5 轮 + 当前
+                recent_hashes = self._tool_hashes[-5:]
                 if (len(recent_hashes) == 5 and
                     current_hash_str and recent_hashes[0] and recent_hashes[1] and recent_hashes[2] and recent_hashes[3] and recent_hashes[4] and
                     current_hash_str == recent_hashes[0] == recent_hashes[3] and
                     recent_hashes[1] == recent_hashes[4] and
-                    recent_hashes[2] == current_hash_str and  # 第三个应该与当前相同
+                    recent_hashes[2] == current_hash_str and
                     current_hash_str != recent_hashes[1] and recent_hashes[1] != recent_hashes[2]):
                     result = {
                         "is_loop": True,
                         "type": "sequence_loop",
-                        "detail": f"检测到三元循环模式（含参数）: {'→'.join(current_names)} → {'→'.join(self._tool_names[-3])} → {'→'.join(self._tool_names[-2])}"
+                        "detail": f"检测到三元循环模式: {'→'.join(current_names)} → {'→'.join(self._tool_names[-3])} → {'→'.join(self._tool_names[-2])}"
                     }
 
         # ── 记录本轮 ──
@@ -162,7 +304,6 @@ class LoopDetector:
         self._contents.append(content or "")
         self._tool_names.append(current_names)
 
-        # 保持窗口大小
         if len(self._tool_hashes) > self.window * 2:
             self._tool_hashes = self._tool_hashes[-self.window:]
             self._contents = self._contents[-self.window:]
@@ -171,29 +312,15 @@ class LoopDetector:
         return result
 
     def reset(self):
-        """重置检测器状态（清空历史窗口）。"""
         self._tool_hashes.clear()
         self._contents.clear()
         self._tool_names.clear()
 
 
-
-
+# ═══ 工具摘要格式化 ═════════════════════════════════════
 
 def _format_tool_summary(tool_calls) -> str:
-    """构造多行工具调用摘要用于回调显示，含 TOOL_START/DONE 标记。
-
-    格式：
-        [TOOL_START:toolkit_exec]
-            app=python
-            args=["-c", "print('hello')"]
-        [TOOL_DONE]
-
-    Args:
-        tool_calls: 工具调用列表
-    Returns:
-        带标记的格式化字符串
-    """
+    """构造多行工具调用摘要用于回调显示。"""
     lines = []
     for tc in tool_calls:
         fn = tc.function.name
@@ -203,12 +330,11 @@ def _format_tool_summary(tool_calls) -> str:
             args_dict = json.loads(args_str)
             for k, v in args_dict.items():
                 v_str = str(v)
-                _MAX_PARAM_DISPLAY = 500  # noqa: N806
+                _MAX_PARAM_DISPLAY = 500
                 if len(v_str) > _MAX_PARAM_DISPLAY:
                     v_str = v_str[:_MAX_PARAM_DISPLAY] + f"… [剩余 {len(v_str) - _MAX_PARAM_DISPLAY} 字符]"
                 lines.append(f"\t{k}={v_str}")
         except (json.JSONDecodeError, TypeError):
-            # 非 JSON 参数，直接显示
             raw = args_str
             if len(raw) > 500:
                 raw = raw[:500] + f"… [剩余 {len(raw) - 500} 字符]"
@@ -217,102 +343,67 @@ def _format_tool_summary(tool_calls) -> str:
     return "\n".join(lines) + "\n\n"
 
 
-# ── SKILL 校验缓存 ──
+# ── SKILL 校验 ──
+
 _skill_validate_cache: dict = {}
 
-
 def _get_validate_rules(session) -> dict:
-    """从 session context 获取当前生效的校验规则（带缓存）。"""
     _rules = getattr(session.context, '_skill_validate_rules', None) or {}
-    if not _rules:
-        return {}
-    # 缓存 key：session id（如果有的话）
     return _rules
 
-
 def _validate_tool_call(tool_name: str, rules: dict) -> tuple:
-    """工具调用前校验。
-
-    检查：
-      - allowed_tools: 工具白名单
-      - forbidden_tools: 工具黑名单
-
-    Args:
-        tool_name: 工具函数名
-        rules: 校验规则 dict（来自 SKILL.md validate 字段）
-
-    Returns:
-        (allowed: bool, reason: str)
-        allowed=True 表示通过，False 表示违规
-    """
     if not rules:
         return True, ""
-
-    # 工具过滤已禁用，自由奔放模式
     return True, ""
 
-
 def _validate_output_format(content: str, rules: dict) -> tuple:
-    """输出格式校验。
-
-    检查：
-      - required_sections: 必须包含的段落
-      - forbidden_patterns: 禁止出现的模式
-      - output_format: 期望格式（json/text/markdown/code）
-
-    Args:
-        content: 模型输出的文本
-        rules: 校验规则 dict
-
-    Returns:
-        (valid: bool, warnings: list)
-    """
     if not rules or not content:
         return True, []
-
     warnings = []
-
-    # 1. 必含段落检查
     required_sections = rules.get("required_sections", [])
     for section in required_sections:
         if f"【{section}】" not in content and f"## {section}" not in content:
             warnings.append(f"⚠️ 缺少必含段落「{section}」")
-
-    # 2. 禁止模式检查
     forbidden = rules.get("forbidden_patterns", [])
     for pattern in forbidden:
         if pattern in content:
             warnings.append(f"⚠️ 包含禁止模式「{pattern}」")
-
-    # 3. JSON 格式校验
     if rules.get("output_format") == "json":
         try:
             import json as _json
             _json.loads(content)
         except (ValueError, TypeError):
             warnings.append("⚠️ 输出应为 JSON 格式但解析失败")
-
     return len(warnings) == 0, warnings
 
 
+# ═══ 主工具循环 ═════════════════════════════════════════
+
 def execute_tool_loop(session, context: dict) -> dict:
-    """执行工具调用循环。
+    """执行工具调用循环 v4.0 — 支持并行工具执行。
 
     核心对话引擎：调用 LLM → 解析工具调用 → 执行工具 → 循环直到无工具调用。
-    支持中断、最大迭代限制、续命机制。
+    新增并行执行：使用 ParallelExecutor 自动检测依赖并并行执行无冲突的工具。
 
     Args:
-        session: OnlineToolSession 实例（通过 self 传入）
-        context: Pipeline 上下文，包含 msg, callback, on_status 等
+        session: OnlineToolSession 实例
+        context: Pipeline 上下文
 
     Returns:
-        dict: {full_reply, used_tools, iterations, [interrupted], [error]}
+        dict: {full_reply, used_tools, iterations, ...}
     """
     msg = context.get("msg", "")
     callback = context.get("callback", lambda x: None)
     on_status = context.get("on_status")
 
-    # Level 1: 动态跳过（纯聊天意图，不走工具循环）
+    # 是否启用并行执行（默认启用）
+    enable_parallel = context.get("enable_parallel", True)
+    max_parallel_workers = context.get("max_parallel_workers", 4)
+
+    # 初始化并行执行器
+    parallel_executor = ParallelExecutor(max_workers=max_parallel_workers) if enable_parallel else None
+
+    # Level 1: 动态跳过
     if context.get("skip_tool_loop"):
         logger.info("[Pipe Dynamic] Skipping tool loop (chat intent)")
         try:
@@ -355,9 +446,9 @@ def execute_tool_loop(session, context: dict) -> dict:
             print(f"{asctime}: call model: {session.context.model}, {msg}")
             logger.info(f"call model: {session.context.model}, {msg}")
 
-        # API 调用（含 429 重试 + 视觉回退）
-        _MAX_RETRIES = 6  # noqa: N806
-        _RETRY_BASE_DELAY = 1  # 指数退避: 1s, 2s, 4s, 8s, 16s, 32s  # noqa: N806
+        # API 调用
+        _MAX_RETRIES = 6
+        _RETRY_BASE_DELAY = 1
         response = None
         for _retry in range(_MAX_RETRIES + 1):
             try:
@@ -372,7 +463,6 @@ def execute_tool_loop(session, context: dict) -> dict:
                 break
             except Exception as e:
                 err_str = str(e)
-                # 429 速率限制：指数退避重试
                 if "429" in err_str and _retry < _MAX_RETRIES:
                     wait_sec = _RETRY_BASE_DELAY * (2 ** _retry)
                     logger.warning(f"⚠️ API 429 速率限制，{wait_sec}s 后重试 ({_retry+1}/{_MAX_RETRIES})")
@@ -395,7 +485,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                         )
                     except Exception as e2:
                         error_msg = f"API调用错误: {e2}"
-                        logger.warning(f"API调用失败(重试): model={session.context.model}, error={e2}, iteration={iterations}")
+                        logger.warning(f"API调用失败: model={session.context.model}, error={e2}, iteration={iterations}")
                         callback(error_msg)
                         session.add_assistant_message(full_reply + error_msg)
                         session.tools_comp.collect_api_error_round(full_reply + error_msg)
@@ -409,7 +499,6 @@ def execute_tool_loop(session, context: dict) -> dict:
                     return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": e}
                 break
         else:
-            # 所有重试都失败（429 耗尽）
             error_msg = f"API调用错误: 429 速率限制，重试 {_MAX_RETRIES} 次后仍失败"
             logger.warning(error_msg)
             callback(error_msg)
@@ -421,7 +510,7 @@ def execute_tool_loop(session, context: dict) -> dict:
         full_reply += content
         logger.debug(
             f"model response: content_len={len(content)}, reasoning_len={len(reasoning_content)}, "
-            f"tool_calls_data={len(tool_calls_data)}, usage={session.context._last_usage}"
+            f"tool_calls_data={len(tool_calls_data)}"
         )
 
         valid_tool_calls = session.tools_comp.parse_tool_calls_from_stream(tool_calls_data)
@@ -454,72 +543,57 @@ def execute_tool_loop(session, context: dict) -> dict:
 
             has_reload = any(tc.function.name == "toolkit_reload" for tc in valid_tool_calls)
 
-            for call in valid_tool_calls:
-                _asctime = time.strftime("%Y-%m-%d %H:%M:%S")
-                # 发送 TOOL_START 标记（前端据此创建工具调用块）
-                callback(f"[TOOL_START:{call.function.name}]")
-                # 发送参数信息到工具块（[TOOL_ARG:json] 格式，避免泄露到聊天文本）
-                if call.function.arguments:
-                    try:
-                        import json as _json
-                        _args = _json.loads(call.function.arguments) if isinstance(call.function.arguments, str) else call.function.arguments
-                        if isinstance(_args, dict):
-                            _parts = []
-                            for _k, _v in _args.items():
-                                _vs = str(_v)
-                                _MAX_PARAM = 500  # noqa: N806
-                                if len(_vs) > _MAX_PARAM:
-                                    _vs = _vs[:_MAX_PARAM] + "…"
-                                _parts.append(f"{_k}: {_vs}")
-                            callback(f"[TOOL_ARG:{', '.join(_parts)}]")
-                        else:
-                            _vs = str(_args)
-                            if len(_vs) > 120:
-                                _vs = _vs[:120] + "…"
-                            callback(f"[TOOL_ARG:{_vs}]")
-                    except Exception:
-                        _raw = str(call.function.arguments)
-                        if len(_raw) > 120:
-                            _raw = _raw[:120] + "…"
-                        callback(f"[TOOL_ARG:{_raw}]")
-                logger.info(f"    tool call #{iterations+1}: {call.function.name}, args_len={len(call.function.arguments)}")
+            # ═══ 新：并行工具执行 ═══════════════════════
+            if enable_parallel and parallel_executor:
+                # 分析依赖，分组为可并行批次
+                batches = parallel_executor.analyze_dependencies(valid_tool_calls)
+                logger.info(f"🔀 工具执行计划: {len(batches)} 批次, "
+                           f"总 {len(valid_tool_calls)} 个工具调用")
 
-                # ── SKILL 校验：工具调用前检查白名单 ──
-                _rules = _get_validate_rules(session)
-                _allowed, _reason = _validate_tool_call(call.function.name, _rules)
-                if not _allowed:
-                    logger.warning(f"SKILL 校验拦截: {call.function.name} — {_reason}")
-                    callback(f"\n⚠️ {_reason}\n")
-                    # 注入虚假结果让模型知道被拦截了
-                    _blocked_result = json.dumps({
-                        "error": "tool_call_blocked",
-                        "reason": _reason,
-                        "message": "该工具调用被当前 SKILL.md 规则拦截。请检查 allowed_tools 配置。"
-                    })
-                    call_id, func_name = call.id, call.function.name
-                    result_str = _blocked_result
+                for batch_idx, batch in enumerate(batches):
+                    if len(batch) == 1:
+                        # 单工具 — 顺序执行
+                        tc = batch[0]
+                        call_id, func_name, result_str = _execute_single_tool(
+                            session, tc, callback, iterations, on_status
+                        )
+                        session.tools_comp.collect_tool_call_round(call_id, result_str)
+                        _emit_tool_results(callback, result_str)
+                    else:
+                        # 多工具 — 并行执行
+                        logger.info(f"⚡ 并行执行批次 {batch_idx + 1}: "
+                                   f"{[tc.function.name for tc in batch]}")
+                        callback(f"[PARALLEL:{','.join(tc.function.name for tc in batch)}]")
+
+                        results = execute_tools_parallel(
+                            batch,
+                            lambda tc: _execute_single_tool(
+                                session, tc, callback, iterations, on_status
+                            ),
+                            max_workers=parallel_executor.max_workers,
+                        )
+
+                        for r_idx, result in enumerate(results):
+                            if result["success"]:
+                                session.tools_comp.collect_tool_call_round(
+                                    result["call_id"], result["result_str"]
+                                )
+                                _emit_tool_results(callback, result["result_str"])
+                            else:
+                                session.tools_comp.collect_tool_call_round(
+                                    result["call_id"],
+                                    json.dumps({"error": result.get("error", "Unknown error")})
+                                )
+                                callback(f"[TOOL_RESULT:ERROR:{result.get('error', '')[:120]}]")
+                            callback("[TOOL_DONE]")
+            else:
+                # ═══ 旧版：顺序执行 ═══════════════════════
+                for tc in valid_tool_calls:
+                    call_id, func_name, result_str = _execute_single_tool(
+                        session, tc, callback, iterations, on_status
+                    )
                     session.tools_comp.collect_tool_call_round(call_id, result_str)
-                    callback("[TOOL_DONE]")
-                    continue  # 跳过执行
-
-                call_id, func_name, result_str = session.tools_comp.execute_tool_call(call)
-                logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")
-                session.tools_comp.collect_tool_call_round(call_id, result_str)
-                # 检测 DAG 可视化标识（在截断前检测，用完整 result_str）
-                try:
-                    import ast as _ast_mod
-                    _parsed = _ast_mod.literal_eval(result_str) if isinstance(result_str, str) else result_str
-                    if isinstance(_parsed, dict) and _parsed.get("dag_viz_id"):
-                        callback(f"[DAG_VIZ:{_parsed['dag_viz_id']}]")
-                except Exception:
-                    pass
-                # 发送 TOOL_RESULT（返回值，120 字节截断）
-                _res = result_str or ""
-                if len(_res) > 120:
-                    _res = _res[:120] + "…"
-                callback(f"[TOOL_RESULT:{_res}]")
-                # 发送 TOOL_DONE 标记
-                callback("[TOOL_DONE]")
+                    _emit_tool_results(callback, result_str)
 
             if has_reload:
                 session._build_tools()
@@ -533,7 +607,6 @@ def execute_tool_loop(session, context: dict) -> dict:
                 logger.warning(f"检测到循环: {loop_result['type']} - {loop_result['detail']} (连续第 {loop_count} 次)")
 
                 if loop_count >= 3:
-                    # 连续 3 次循环，强制跳出
                     warning = f"\n\n[循环检测] 检测到重复输出 ({loop_result['detail']})，已自动跳出"
                     callback(warning)
                     full_reply += warning
@@ -541,7 +614,6 @@ def execute_tool_loop(session, context: dict) -> dict:
                     session.tools_comp.collect_max_iterations_round(full_reply)
                     return {"full_reply": full_reply, "used_tools": used_tools, "loop_detected": True}
                 elif loop_count >= 2:
-                    # 第 2 次循环，注入提示
                     callback("\n⚠️ 检测到重复输出，请尝试不同方法...\n")
             else:
                 session._loop_count = 0
@@ -593,14 +665,13 @@ def execute_tool_loop(session, context: dict) -> dict:
         else:
             break
 
-    # ── SKILL 校验：最终输出格式检查 ──
+    # ── 最终输出格式检查 ──
     _rules = _get_validate_rules(session)
     if _rules and full_reply:
         _valid, _warnings = _validate_output_format(full_reply, _rules)
         if _warnings:
             _warn_text = "\n\n---\n⚠️ **输出规范提醒**：\n" + "\n".join(_warnings)
             logger.info(f"输出规范校验: {'通过' if _valid else '有警告'}, {len(_warnings)} 条")
-            # 警告附在回复末尾（不阻断，仅提醒）
             full_reply += _warn_text
             if on_status:
                 on_status(f"⏳ 输出规范校验完成 ({'✅' if _valid else '⚠️'})")
@@ -609,4 +680,77 @@ def execute_tool_loop(session, context: dict) -> dict:
         "full_reply": full_reply,
         "used_tools": used_tools,
         "iterations": iterations,
+        "parallel_enabled": enable_parallel,
     }
+
+
+# ═══ 辅助函数 ═══════════════════════════════════════════
+
+def _execute_single_tool(session, tc, callback, iterations, on_status) -> tuple:
+    """执行单个工具调用。"""
+    _asctime = time.strftime("%Y-%m-%d %H:%M:%S")
+    callback(f"[TOOL_START:{tc.function.name}]")
+
+    # 发送参数信息
+    if tc.function.arguments:
+        try:
+            import json as _json
+            _args = _json.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
+            if isinstance(_args, dict):
+                _parts = []
+                for _k, _v in _args.items():
+                    _vs = str(_v)
+                    _MAX_PARAM = 500
+                    if len(_vs) > _MAX_PARAM:
+                        _vs = _vs[:_MAX_PARAM] + "…"
+                    _parts.append(f"{_k}: {_vs}")
+                callback(f"[TOOL_ARG:{', '.join(_parts)}]")
+            else:
+                _vs = str(_args)
+                if len(_vs) > 120:
+                    _vs = _vs[:120] + "…"
+                callback(f"[TOOL_ARG:{_vs}]")
+        except Exception:
+            _raw = str(tc.function.arguments)
+            if len(_raw) > 120:
+                _raw = _raw[:120] + "…"
+            callback(f"[TOOL_ARG:{_raw}]")
+
+    logger.info(f"    tool call #{iterations+1}: {tc.function.name}, args_len={len(tc.function.arguments)}")
+
+    # SKILL 校验
+    _rules = _get_validate_rules(session)
+    _allowed, _reason = _validate_tool_call(tc.function.name, _rules)
+    if not _allowed:
+        logger.warning(f"SKILL 校验拦截: {tc.function.name} — {_reason}")
+        callback(f"\n⚠️ {_reason}\n")
+        _blocked_result = json.dumps({
+            "error": "tool_call_blocked",
+            "reason": _reason,
+            "message": "该工具调用被当前 SKILL.md 规则拦截。"
+        })
+        callback("[TOOL_DONE]")
+        return tc.id, tc.function.name, _blocked_result
+
+    call_id, func_name, result_str = session.tools_comp.execute_tool_call(tc)
+    logger.debug(f"tool result #{iterations+1}: {func_name}, result_len={len(result_str) if result_str else 0}")
+
+    # DAG 可视化检测
+    try:
+        import ast as _ast_mod
+        _parsed = _ast_mod.literal_eval(result_str) if isinstance(result_str, str) else result_str
+        if isinstance(_parsed, dict) and _parsed.get("dag_viz_id"):
+            callback(f"[DAG_VIZ:{_parsed['dag_viz_id']}]")
+    except Exception:
+        pass
+
+    return call_id, func_name, result_str
+
+
+def _emit_tool_results(callback, result_str):
+    """发送 TOOL_RESULT 标记。"""
+    _res = result_str or ""
+    if len(_res) > 120:
+        _res = _res[:120] + "…"
+    callback(f"[TOOL_RESULT:{_res}]")
+    callback("[TOOL_DONE]")

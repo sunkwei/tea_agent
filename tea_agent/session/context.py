@@ -78,6 +78,14 @@ class SessionContext:
     # ── 额外迭代 ──
     extra_iterations_on_continue: int = 5
 
+    # ── 消息队列（Steering/Follow-up） ──
+    message_queue: Any = None          # MessageQueue 实例（延迟初始化）
+    queue_mode: str = "one-at-a-time"  # one-at-a-time / all
+
+    # ── 并行执行 ──
+    enable_parallel: bool = True       # 是否启用并行工具执行
+    max_parallel_workers: int = 4      # 最大并行线程数
+
     # ── 自进化 ──
     evolution_trigger: Any = None
 

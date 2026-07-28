@@ -1,24 +1,34 @@
 """
 @2026-06-04 19:50:41 gen by glm-5,
-Custom Commands 系统 — 借鉴 OpenCode 的可复用命令模板
+Custom Commands 系统 — 借鉴 OpenCode + Pi 的可复用命令模板
+
+v3.0 新增：
+  - Pi-style 参数替换：$1, $@, $ARGUMENTS, ${@:N:L}
+  - argument-hint YAML front matter 支持
+  - 同时兼容 {{placeholder}} 风格
+  - 更好的位置参数解析
 
 功能:
   - 用户/项目级自定义命令（Markdown 模板 + YAML front matter）
-  - 支持 {{placeholder}} 参数插值
+  - 支持 {{placeholder}} 和 $N 参数插值
   - 内置命令: init, explain, test, review, plan
   - 命令可被 agent 在对话中自动识别并路由
 
 用法:
   # 添加命令
   toolkit_custom_commands(action='add', name='mycmd',
-    content='## {{title}}\n\n分析 {{file}} 的代码...')
+    content='## $1\n\n分析 $2 的代码...')
 
   # 列出命令
   toolkit_custom_commands(action='list')
 
-  # 执行命令
+  # 执行命令（用命名参数）
   toolkit_custom_commands(action='run', name='mycmd',
     args={'title': '代码审查', 'file': 'main.py'})
+
+  # 执行命令（用位置参数列表）
+  toolkit_custom_commands(action='run', name='mycmd',
+    args_list=['代码审查', 'main.py'])
 """
 
 import logging
@@ -69,6 +79,58 @@ def _scan_commands() -> list[dict]:
                 logger.warning(f"解析命令文件失败 {fpath}: {e}")
     return commands
 
+
+# ═══ Pi-style 参数替换 ═══════════════════════════════════
+
+def _substitute_args(content: str, args: list[str]) -> str:
+    """Pi-style 参数替换。
+
+    支持：
+      $1, $2, ...  — 位置参数（1-indexed）
+      $@           — 全部参数
+      $ARGUMENTS   — 全部参数（与 $@ 相同）
+      ${@:N}       — 从第 N 个参数开始（N 1-indexed）
+      ${@:N:L}     — 从第 N 个参数开始，取 L 个
+      {{name}}     — 兼容旧版命名占位符
+
+    Args:
+        content: 模板内容
+        args: 位置参数列表
+
+    Returns:
+        替换后的文本
+    """
+    result = content
+
+    # 1. 处理 ${@:N:L} — 带范围的位置参数
+    def _replace_range(m):
+        start_str = m.group(1)
+        length_str = m.group(2)
+        start = int(start_str) - 1
+        if start < 0:
+            start = 0
+        if length_str:
+            return " ".join(args[start:start + int(length_str)])
+        return " ".join(args[start:])
+
+    result = re.sub(r'\$\{@:(\d+)(?::(\d+))?\}', _replace_range, result)
+
+    # 2. 处理 $@ 和 $ARGUMENTS
+    all_args = " ".join(args)
+    result = result.replace("$@", all_args)
+    result = result.replace("$ARGUMENTS", all_args)
+
+    # 3. 处理 $1, $2, ...（先处理多位数避免误替换）
+    result = re.sub(r'\$(\d+)', lambda m: args[int(m.group(1)) - 1] if int(m.group(1)) <= len(args) else "", result)
+
+    # 4. 处理 {{placeholder}} — 保持兼容
+    # （注意：{{name}} 占位符需要在 run 时通过 args dict 替换）
+
+    return result
+
+
+# ═══ 解析器 ═══════════════════════════════════════════════
+
 def _parse_command_file(fpath: str) -> dict | None:
     """解析命令 Markdown 文件，提取 front matter 和正文"""
     with open(fpath, encoding="utf-8") as f:
@@ -77,7 +139,13 @@ def _parse_command_file(fpath: str) -> dict | None:
     name = os.path.splitext(os.path.basename(fpath))[0]
 
     # 解析 YAML front matter (简易版)
-    meta = {"description": "", "args": [], "tags": []}
+    meta = {
+        "description": "",
+        "args": [],
+        "args_def": [],
+        "tags": [],
+        "argument_hint": "",
+    }
     body = content
 
     if content.startswith("---"):
@@ -97,19 +165,30 @@ def _parse_command_file(fpath: str) -> dict | None:
                         meta["tags"] = [t.strip() for t in val.split(",")]
                     elif key == "args":
                         meta["args"] = [a.strip() for a in val.split(",")]
+                    elif key == "args_def":
+                        meta["args_def"] = [a.strip() for a in val.split(",")]
+                    elif key == "argument-hint":
+                        meta["argument_hint"] = val
 
     # 提取占位符
     placeholders = re.findall(r"\{\{(\w+)\}\}", body)
+    dollar_refs = re.findall(r'\$(\d+)', body)
+
+    # 合并 args_def（优先使用显式声明）
+    args_def = meta.get("args_def") or meta.get("args") or placeholders
 
     return {
         "name": name,
         "description": meta.get("description", ""),
         "tags": meta.get("tags", []),
-        "args_def": meta.get("args", placeholders),
+        "args_def": args_def,
         "placeholders": placeholders,
+        "dollar_refs": dollar_refs,
+        "argument_hint": meta.get("argument_hint", ""),
         "body": body,
         "content": content,
     }
+
 
 # ── 内置命令模板 ────────────────────────────────────────
 
@@ -118,10 +197,11 @@ _BUILTIN_COMMANDS = {
 description: 扫描项目上下文，构建初始理解
 tags: init, setup, context
 args: path
+argument-hint: <项目路径>
 ---
 ## /init — 项目上下文初始化
 
-扫描项目 {{path}}，分析结构、读取关键配置、构建初始上下文。
+扫描项目 $1，分析结构、读取关键配置、构建初始上下文。
 
 ### 执行流程：
 1. 使用 toolkit_explr 构建项目知识库
@@ -135,10 +215,11 @@ args: path
 description: 解释指定代码文件或函数
 tags: explain, code, analysis
 args: target
+argument-hint: <文件路径/函数名>
 ---
 ## /explain — 代码解释
 
-解释 {{target}} 的功能、结构和用法。
+解释 $1 的功能、结构和用法。
 
 ### 分析维度：
 1. 整体功能概述
@@ -151,10 +232,11 @@ args: target
 description: 运行测试并分析结果
 tags: test, verify
 args: pattern
+argument-hint: <测试模式>
 ---
 ## /test — 运行测试
 
-运行匹配 {{pattern}} 的测试，分析结果。
+运行匹配 $1 的测试，分析结果。
 
 ### 流程：
 - 使用 toolkit_run_tests 运行测试
@@ -165,10 +247,11 @@ args: pattern
 description: 审查代码变更
 tags: review, diff, code-quality
 args: file
+argument-hint: <文件路径>
 ---
 ## /review — 代码审查
 
-审查 {{file}} 的代码质量。
+审查 $1 的代码质量。
 
 ### 审查要点：
 1. 代码结构和可读性
@@ -181,10 +264,11 @@ args: file
 description: 根据目标创建执行计划
 tags: plan, execute
 args: goal
+argument-hint: <目标描述>
 ---
 ## /plan — 创建执行计划
 
-为目标 "{{goal}}" 创建分步执行计划。
+为目标 "$1" 创建分步执行计划。
 
 ### 流程：
 1. 使用 toolkit_plan(decompose) 智能分解目标
@@ -210,24 +294,30 @@ def toolkit_custom_commands(
     name: str = None,
     content: str = None,
     args: dict[str, str] = None,
+    args_list: list[str] = None,
     scope: str = "user",
     query: str = None,
     tag: str = None,
 ) -> dict:
     """
-    Custom Commands 系统 — OpenCode 式可复用命令模板。
+    Custom Commands 系统 v3.0 — OpenCode + Pi-style 可复用命令模板
+
+    支持：
+    - Pi-style $1, $@, $ARGUMENTS, ${@:N:L} 参数替换
+    - 传统 {{placeholder}} 参数插值
+    - argument-hint YAML front matter
 
     Args:
         action: add/list/show/run/delete/search/builtin
         name: 命令名称
         content: [add] 命令 Markdown 内容
-        args: [run] 参数键值对
+        args: [run] 命名参数键值对（用于 {{placeholder}} 替换）
+        args_list: [run] 位置参数列表（用于 $1, $@ 替换）
         scope: [add/delete] user/project
         query: [search] 搜索关键词
         tag: [search] 按标签筛选
     """
     try:
-        # 确保内置命令
         _ensure_builtins()
 
         if action == "add":
@@ -275,7 +365,11 @@ def toolkit_custom_commands(
             body = cmd["body"]
             resolved_args = args or {}
 
-            # 参数插值
+            # ── 1. Pi-style 位置参数替换 ($1, $@, ...) ──
+            pos_args = args_list or []
+            body = _substitute_args(body, pos_args)
+
+            # ── 2. 传统 {{placeholder}} 替换 ──
             for ph in cmd.get("placeholders", []):
                 val = resolved_args.get(ph, "")
                 if val:
@@ -283,15 +377,25 @@ def toolkit_custom_commands(
 
             # 检查未替换的占位符
             unresolved = re.findall(r"\{\{(\w+)\}\}", body)
+            # 检查未替换的 $ 引用
+            unresolved_dollar = re.findall(r'\$\d+', body)
+            # 检查 $@ 和 $ARGUMENTS
+            if "$@" in body or "$ARGUMENTS" in body:
+                if not pos_args:
+                    unresolved_dollar.append("$@")
+            # 检查 ${@: 模式
+            unresolved_range = re.findall(r'\$\{@:\d+(?::\d+)?\}', body)
+
+            all_unresolved = unresolved + unresolved_dollar + unresolved_range
 
             return {
                 "ok": True,
                 "name": name,
                 "description": cmd.get("description", ""),
                 "resolved_prompt": body,
-                "unresolved_placeholders": unresolved,
-                "hint": "将 resolved_prompt 作为指令执行" if not unresolved
-                        else f"请提供参数: {', '.join(unresolved)}",
+                "unresolved_placeholders": all_unresolved,
+                "hint": "将 resolved_prompt 作为指令执行" if not all_unresolved
+                        else f"请提供缺失的参数: {', '.join(all_unresolved)}",
             }
 
         elif action == "delete":
@@ -325,7 +429,6 @@ def toolkit_custom_commands(
             return {"ok": True, "total": len(results), "commands": results}
 
         elif action == "builtin":
-            """重新生成所有内置命令"""
             count = 0
             for name, content in _BUILTIN_COMMANDS.items():
                 fpath = os.path.join(_get_user_commands_dir(), f"{name}.md")
@@ -348,7 +451,7 @@ def meta_toolkit_custom_commands():
         "type": "function",
         "function": {
             "name": "toolkit_custom_commands",
-            "description": "Custom Commands 系统 — 借鉴 OpenCode 的可复用命令模板。支持 add(添加), list(列表), show(查看), run(执行), delete(删除), search(搜索), builtin(重置内置命令)。内置命令: init, explain, test, review, plan。",
+            "description": "Custom Commands 系统 v3.0 — 借鉴 OpenCode + Pi-style 的可复用命令模板。支持 add/list/show/run/delete/search/builtin。支持 $1, $@, $ARGUMENTS, ${@:N:L} 参数替换和 {{placeholder}}。内置命令: init, explain, test, review, plan。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -363,11 +466,16 @@ def meta_toolkit_custom_commands():
                     },
                     "content": {
                         "type": "string",
-                        "description": "命令 Markdown 内容（支持 YAML front matter 和 {{placeholder}}）"
+                        "description": "命令 Markdown 内容（支持 YAML front matter 和 {{placeholder}} / $1）"
                     },
                     "args": {
                         "type": "object",
-                        "description": "参数键值对，如 {'file': 'main.py', 'title': 'code review'}"
+                        "description": "命名参数键值对，如 {'file': 'main.py', 'title': 'code review'}"
+                    },
+                    "args_list": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "位置参数列表，用于 $1, $@ 替换"
                     },
                     "scope": {
                         "type": "string",

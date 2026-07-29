@@ -65,6 +65,26 @@ const $ = id => document.getElementById(id);
 const esc = t => { if (!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
 const escAttr = t => String(t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
+// 🆕 解码 HTML 实体（在 esc() 前使用，防止双重转义）
+// 多轮字符串替换，支持级联解码： &amp;lt; → &lt; → <
+// 纯文本替换而非 DOM（避免 < 被浏览器当标签吃掉）
+const decodeEntities = t => {
+  if (!t) return '';
+  let result = t;
+  for (let i = 0; i < 5; i++) {
+    const prev = result;
+    result = result
+      .replace(/&#39;/g, "'")
+      .replace(/&#x27;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&gt;/g, '>')
+      .replace(/&lt;/g, '<')
+      .replace(/&amp;/g, '&');
+    if (result === prev) break;
+  }
+  return result;
+};
+
 // ── 标题管理 ──
 /** 同步设置工具栏标题 + 浏览器标签页标题 */
 function setTitle(title) {
@@ -694,29 +714,32 @@ window.jumpToMessage = function jumpToMessage(idx) {
 
 function formatMarkdown(text) {
   if (!text) return '';
-  let html = esc(text).replace(/\r\n/g, '\n');
+  // 🆕 先解码已有 HTML 实体（如 &lt;→<），再 esc() 防双重转义
+  let html = esc(decodeEntities(text)).replace(/\r\n/g, '\n');
 
-  // Protect code blocks
+  // Protect code blocks — 内容已被 esc() 单次编码，不能再次 esc() 导致双重转义
   const codeBlocks = [];
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
     const idx = codeBlocks.length;
     const langLabel = lang ? '<span class="code-lang">' + esc(lang) + '</span>' : '';
     const trimmedCode = code.trimEnd();
+    // 还原原始文本给复制按钮
+    const originalCode = decodeEntities(trimmedCode);
     codeBlocks.push(
       '<div class="code-block-wrapper">'
       + '<div class="code-block-header">'
       + langLabel
-      + '<button class="copy-btn" onclick="copyCode(this)" data-code="' + escAttr(trimmedCode) + '">📋 复制</button>'
+      + '<button class="copy-btn" onclick="copyCode(this)" data-code="' + escAttr(originalCode) + '">📋 复制</button>'
       + '</div>'
-      + '<pre><code class="lang-' + esc(lang) + '">' + esc(trimmedCode) + '</code></pre>'
+      + '<pre><code class="lang-' + esc(lang) + '">' + trimmedCode + '</code></pre>'
       + '</div>'
     );
     return '\x00CODE' + idx + '\x00';
   });
 
-  // Inline code — 直接渲染原文，不做占位符保护
+  // 🆕 Inline code — 内容已被 esc() 编码一次，禁止再次 esc() 双重转义
   html = html.replace(/`([^`]+)`/g, function(match, code) {
-    return '<code class="md-inline-code">' + esc(code) + '</code>';
+    return '<code class="md-inline-code">' + code + '</code>';
   });
 
   // 🆕 Protect existing markdown links [text](url) from URL auto-linking
@@ -1032,7 +1055,7 @@ window.sendMessage = async function() {
             case 'token':
               removeLoading();
               s.fullText += data.text;
-              s.bubbleText.innerHTML = esc(s.fullText);
+              s.bubbleText.innerHTML = esc(decodeEntities(s.fullText));
               break;
 
             case 'think_start':
@@ -1523,7 +1546,7 @@ function _renderBufferEvent(event) {
         s.bubbleText = agentDiv.querySelector('.bubble-text');
         _removeBackgroundIndicator(); // 有实际内容了，隐藏"处理中"提示
       }
-      s.bubbleText.innerHTML = esc(s.fullText);
+      s.bubbleText.innerHTML = esc(decodeEntities(s.fullText));
       scrollBottom();
       break;
 

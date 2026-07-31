@@ -117,6 +117,10 @@ class _TUIAgentCore(Agent):
                     tui.call_from_thread(tui._flush_think_buffer)
                     think_started = False
                 return
+            if chunk.startswith("[PARALLEL:"):
+                names = chunk[len("[PARALLEL:"):-1]
+                tui.call_from_thread(tui._append_chat, f"⚡ 并行: {names}")
+                return
             if chunk.startswith("[TOOL_START:"):
                 tool_round[0] += 1
                 tool_name = chunk.split(":", 1)[1].rstrip("]")

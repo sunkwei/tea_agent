@@ -568,6 +568,7 @@ body {
   background: var(--primary-dim);
   color: #fff;
   border-bottom-right-radius: 2px;
+  white-space: pre-wrap; /* 保留 Shift+Enter 换行 */
 }
 .msg.assistant .msg-bubble {
   background: var(--surface);

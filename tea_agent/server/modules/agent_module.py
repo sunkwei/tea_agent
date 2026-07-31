@@ -419,7 +419,11 @@ class AgentModule(HotReloadModule):
 
         def stream_cb(text: str):
             nonlocal _thinking_active, _tool_active, _streamed_text_parts
-            if text.startswith("[TOOL_START:"):
+            if text.startswith("[PARALLEL:"):
+                # 并行工具批次标记：转为事件，避免作为 token 泄漏到聊天区
+                _names = text[len("[PARALLEL:"):-1]
+                _put({"type": "tool_parallel", "names": _names})
+            elif text.startswith("[TOOL_START:"):
                 _tool_name = text[len("[TOOL_START:"):-1]
                 _put({"type": "tool_start", "name": _tool_name})
                 _tool_active = True

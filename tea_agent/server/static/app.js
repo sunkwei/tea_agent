@@ -649,6 +649,57 @@ function addMessage(role, content, images) {
   return div.querySelector('.msg-bubble');
 }
 
+/** 确保工具调用折叠容器存在（tool_parallel 事件使用，不依赖 tool_start 先到达） */
+function _ensureToolCallContainer(s) {
+  if (s.toolCallContainer) return s.toolCallContainer;
+  s.toolCallContainer = document.createElement('div');
+  s.toolCallContainer.className = 'tool-call-container collapsed';
+  if (s.bubbleText && s.bubbleText.parentNode) {
+    // 插入到 bubble-text 之前（使 AI 消息出现在最底部）
+    s.bubbleText.parentNode.insertBefore(s.toolCallContainer, s.bubbleText);
+  } else {
+    const lastBubble = $('msgs').querySelector('.msg.assistant:last-child .msg-bubble');
+    if (lastBubble) lastBubble.insertBefore(s.toolCallContainer, lastBubble.querySelector('.bubble-text'));
+  }
+  s.toolCallSummary = document.createElement('div');
+  s.toolCallSummary.className = 'tool-call-summary';
+  s.toolCallSummary.innerHTML = '<span class="tool-call-summary-icon">🛠</span>'
+    + '<span class="tool-call-summary-label">工具调用</span>'
+    + '<span class="tool-call-summary-badge">0</span>'
+    + '<span class="tool-call-summary-arrow">▸</span>';
+  s.toolCallSummary.addEventListener('click', function() {
+    const list = s.toolCallContainer.querySelector('.tool-call-list');
+    if (list) {
+      const expanded = list.style.display !== 'none';
+      list.style.display = expanded ? 'none' : '';
+      s.toolCallContainer.classList.toggle('collapsed', expanded);
+      s.toolCallSummary.querySelector('.tool-call-summary-arrow').textContent = expanded ? '▸' : '▾';
+    }
+  });
+  s.toolCallContainer.appendChild(s.toolCallSummary);
+  s.toolCallList = document.createElement('div');
+  s.toolCallList.className = 'tool-call-list';
+  s.toolCallList.style.display = 'none';
+  s.toolCallContainer.appendChild(s.toolCallList);
+  return s.toolCallContainer;
+}
+
+/** 渲染"并行工具批次"聚合条目（避免 [PARALLEL:...] 标记泄漏为聊天文本） */
+function _renderToolParallel(s, namesStr) {
+  removeLoading();
+  _ensureToolCallContainer(s);
+  if (!s.toolCallList) return;
+  const names = (namesStr || '').split(',').map(function(n) { return n.trim(); }).filter(Boolean).join(', ');
+  const item = document.createElement('details');
+  item.className = 'tool-call-item parallel';
+  item.innerHTML = '<summary class="tool-call-header">'
+    + '<span class="tool-call-icon">⚡</span>'
+    + '<span class="tool-call-name">并行执行: ' + esc(names || '多工具') + '</span>'
+    + '<span class="tool-call-status status-done">并行</span>'
+    + '</summary>';
+  s.toolCallList.appendChild(item);
+}
+
 function addLoading() {
   const welcome = document.querySelector('.welcome');
   if (welcome) welcome.remove();
@@ -1119,6 +1170,11 @@ window.sendMessage = async function() {
                 }
               }
               break;
+
+            case 'tool_parallel': {
+              _renderToolParallel(s, data.names);
+              break;
+            }
 
             case 'tool_start': {
               removeLoading();
@@ -1610,6 +1666,11 @@ function _renderBufferEvent(event) {
         }
       }
       break;
+
+    case 'tool_parallel': {
+      _renderToolParallel(s, event.names);
+      break;
+    }
 
     case 'tool_start': {
       if (!s.toolCallContainer) {

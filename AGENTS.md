@@ -56,6 +56,8 @@ tea_agent/
 ├── tui.py                 # 终端 TUI（textual 框架）
 ├── cli.py                 # 命令行入口
 ├── config.py              # 配置加载与管理
+├── context_fragments.py   # ★ 上下文片段系统（Codex 风格：时间/预算/模式按需组装）
+├── agents_md_loader.py    # ★ AGENTS.md 分层指令加载（用户级+项目级+字节预算）
 ├── memory.py              # 长期记忆管理
 ├── prompt_manager.py      # 系统提示词管理
 ├── reflection.py          # 元认知反思

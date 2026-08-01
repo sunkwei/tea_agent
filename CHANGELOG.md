@@ -1,6 +1,17 @@
 # Changelog
 
 
+## [0.13.13] - 2026-08-01
+### Features
+- feat: 借鉴 OpenAI Codex Context Fragments 架构 — 上下文片段系统（context_fragments.py）
+  - Token 预算感知注入：让模型感知"已用 X/N token"，剩余不足时主动总结/请求压缩（对应 Codex TokenBudgetRemainingContext）
+  - 按需组装片段：当前时间 / 会话模式 / 环境 / AGENTS.md，取代单一静态提示词
+  - 片段注册表 + 自定义工厂 + 字节预算 + 失败隔离
+- feat: AGENTS.md 分层指令加载（agents_md_loader.py）— 用户级 ~/.tea_agent/AGENTS.md + 项目级（root→cwd 收集拼接）+ AGENTS.override.md 覆盖，带字节预算截断（对应 Codex agents_md.rs）
+- feat: 压缩 Hooks 扩展点（auto_compact.py）— register_pre/post_compact_hook，压缩前后可挂自定义逻辑（对应 Codex run_pre/post_compact_hooks），失败隔离
+- feat: 模型级 token budget 配置（config.py）— ModelConfig 新增 token_budget 字段（reminder_threshold/fallback_buffer_tokens），并修复 max_context_tokens 未从 YAML 解析的 bug
+- tests: 新增 29 项测试覆盖全部新能力（test_context_fragments.py）
+
 ## [0.13.12] - 2026-07-29
 ### Bug Fixes
 - fix: 修复 HTML 实体双重转义 — 聊天区特殊字符显示异常的历史遗留问题

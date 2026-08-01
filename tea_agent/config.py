@@ -49,6 +49,10 @@ class ModelConfig:
     max_tokens: int = 131072
     max_context_tokens: int = 0
     top_p: float = 0.9
+    # 模型级 token budget（借鉴 Codex model-owned token budget defaults）
+    # 支持键: reminder_threshold / reminder_message_template /
+    #         guidance_message / fallback_buffer_tokens / auto_compact_fallback_prompt
+    token_budget: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_configured(self) -> bool:
@@ -57,6 +61,18 @@ class ModelConfig:
     @property
     def supports_vision(self) -> bool:
         return self.options.get("supports_vision", False)
+
+    def get_token_budget(self, key: str, default: Any = None) -> Any:
+        """读取模型级 token budget 配置项。
+
+        Args:
+            key: 配置键名（reminder_threshold 等）
+            default: 缺省值
+
+        Returns:
+            配置值
+        """
+        return self.token_budget.get(key, default)
 
 
 @dataclass
@@ -480,6 +496,22 @@ def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
         target.temperature = float(m_data.get("temperature", target.temperature))
         target.max_tokens = int(m_data.get("max_tokens", target.max_tokens))
         target.top_p = float(m_data.get("top_p", target.top_p))
+        target.max_context_tokens = int(
+            m_data.get("max_context_tokens", target.max_context_tokens)
+        )
+        # 模型级 token budget 配置（Codex 风格：不同模型不同预算策略）
+        tb = m_data.get("token_budget")
+        if isinstance(tb, dict):
+            target.token_budget = {
+                k: v for k, v in tb.items()
+                if k in (
+                    "reminder_threshold",
+                    "reminder_message_template",
+                    "guidance_message",
+                    "fallback_buffer_tokens",
+                    "auto_compact_fallback_prompt",
+                )
+            }
 
 
 def _parse_embedding_config(cfg: AgentConfig, data: dict) -> None:
@@ -727,6 +759,10 @@ def _prepare_model_data(cfg: AgentConfig, data: dict) -> None:
                 m_data["top_p"] = target.top_p
             if target.options:
                 m_data["options"] = target.options
+            if target.max_context_tokens:
+                m_data["max_context_tokens"] = target.max_context_tokens
+            if target.token_budget:
+                m_data["token_budget"] = target.token_budget
             data[m_type] = m_data
 
 
@@ -856,6 +892,10 @@ def _generate_config_template() -> str:
         "  temperature: 0.7      # 温度 0~2，越高越随机发散\n"
         "  max_tokens: 4096      # 最大输出 token 数\n"
         "  top_p: 0.9            # 核采样阈值\n"
+        "  max_context_tokens: 0 # 模型上下文窗口（0=自动探测；Gemini/DeepSeek 大窗口可设 1048576）\n"
+        "  token_budget:         # 模型级 token 预算策略（可选，借鉴 Codex model-owned defaults）\n"
+        "    reminder_threshold: 0.15          # 剩余低于 15% 时提醒模型主动总结\n"
+        "    fallback_buffer_tokens: 20000     # 压缩前预留的缓冲 token\n"
         "  options:  # 可选参数，如 {extra_body: {thinking: {type: enabled}}}\n"
         "    key: value\n\n"
         "# 便宜模型配置（用于摘要生成、信息压缩等场景，建议低 temperature）\n"

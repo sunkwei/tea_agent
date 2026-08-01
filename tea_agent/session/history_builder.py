@@ -475,6 +475,18 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     if disable_l3 and context._injected_memories_text:
         inject_parts.append(context._injected_memories_text)
 
+    # 5. 上下文片段注入（借鉴 Codex Context Fragments）
+    #    按需组装：token 预算 / 当前时间 / 会话模式 / AGENTS.md 等
+    #    让模型感知剩余空间，自主决策"继续干活 or 先总结"
+    try:
+        from tea_agent.context_fragments import assemble_fragments
+
+        frag_text = assemble_fragments(context)
+        if frag_text:
+            inject_parts.append(frag_text)
+    except Exception as e:
+        logger.debug(f"context fragments injection failed: {e}")
+
     # 合并所有注入到 system prompt（将所有注入放在最前面，提高可见性）
     if inject_parts:
         combined_inject = "\n\n---\n\n".join(inject_parts)

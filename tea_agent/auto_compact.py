@@ -352,6 +352,15 @@ class CompactionPipeline:
         if not needs and not force:
             return {"compacted": False}
 
+        # ── 压缩前 hooks（可记录现场 / 修改消息）──
+        hook_ctx = {
+            "messages": list(messages),
+            "tokens_before": cur,
+            "reason": "force" if force else f"threshold_{self.settings.threshold}",
+            "settings": self.settings,
+        }
+        messages = run_pre_compact_hooks(hook_ctx)
+
         # 执行压缩（带重试）
         def _do_compact():
             compressed, new_summary = compact_messages(
@@ -378,7 +387,7 @@ class CompactionPipeline:
 
             after_tokens = estimate_messages_tokens(compressed)
 
-            return {
+            result = {
                 "compacted": True,
                 "messages": compressed,
                 "summary": self._summary,
@@ -389,6 +398,9 @@ class CompactionPipeline:
                     "compact_count": self._compact_count,
                 },
             }
+            # ── 压缩后 hooks（可校验 / 上报结果）──
+            result = run_post_compact_hooks(result)
+            return result
 
         except Exception as e:
             logger.error(f"✗ CompactionPipeline failed: {e}")
@@ -440,3 +452,96 @@ class AutoCompactStep:
 
     def reset(self):
         self._pipeline.reset()
+
+
+# ═══ 压缩 Hooks 扩展点（借鉴 Codex run_pre/post_compact_hooks）═══
+
+# 模块级 hook 注册表（全局共享，跨 CompactionPipeline 实例）
+_pre_compact_hooks: list[Callable[[dict], Any]] = []
+_post_compact_hooks: list[Callable[[dict], Any]] = []
+
+
+def register_pre_compact_hook(fn: Callable[[dict], Any]) -> None:
+    """注册压缩前 hook。
+
+    hook 签名: fn(ctx: dict) -> list | None
+      - ctx 含 messages/tokens_before/reason/settings
+      - 返回 list 可替换待压缩的消息；返回 None 表示不修改
+
+    Args:
+        fn: hook 函数
+    """
+    if fn not in _pre_compact_hooks:
+        _pre_compact_hooks.append(fn)
+
+
+def register_post_compact_hook(fn: Callable[[dict], Any]) -> None:
+    """注册压缩后 hook。
+
+    hook 签名: fn(result: dict) -> dict | None
+      - result 含 compacted/messages/summary/tokens_*/saved_tokens
+      - 返回 dict 可修改结果；返回 None 表示不修改
+
+    Args:
+        fn: hook 函数
+    """
+    if fn not in _post_compact_hooks:
+        _post_compact_hooks.append(fn)
+
+
+def unregister_pre_compact_hook(fn: Callable[[dict], Any]) -> None:
+    """注销压缩前 hook。"""
+    if fn in _pre_compact_hooks:
+        _pre_compact_hooks.remove(fn)
+
+
+def unregister_post_compact_hook(fn: Callable[[dict], Any]) -> None:
+    """注销压缩后 hook。"""
+    if fn in _post_compact_hooks:
+        _post_compact_hooks.remove(fn)
+
+
+def clear_compact_hooks() -> None:
+    """清空所有压缩 hooks。"""
+    _pre_compact_hooks.clear()
+    _post_compact_hooks.clear()
+
+
+def run_pre_compact_hooks(ctx: dict) -> list:
+    """执行所有压缩前 hooks（失败隔离，单个异常不影响整体）。
+
+    Args:
+        ctx: 压缩前上下文（messages/tokens_before/reason/settings）
+
+    Returns:
+        待压缩的消息列表（可能被 hook 修改）
+    """
+    messages = ctx.get("messages", [])
+    for fn in list(_pre_compact_hooks):
+        try:
+            result = fn(ctx)
+            if isinstance(result, list):
+                messages = result
+                ctx["messages"] = messages
+        except Exception as e:
+            logger.warning(f"pre_compact_hook {getattr(fn, '__name__', fn)} 失败: {e}")
+    return messages
+
+
+def run_post_compact_hooks(result: dict) -> dict:
+    """执行所有压缩后 hooks（失败隔离）。
+
+    Args:
+        result: 压缩结果字典
+
+    Returns:
+        可能被 hook 修改的结果字典
+    """
+    for fn in list(_post_compact_hooks):
+        try:
+            modified = fn(result)
+            if isinstance(modified, dict):
+                result = modified
+        except Exception as e:
+            logger.warning(f"post_compact_hook {getattr(fn, '__name__', fn)} 失败: {e}")
+    return result

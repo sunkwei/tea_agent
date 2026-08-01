@@ -1,6 +1,61 @@
 # Changelog
 
 
+## [0.13.12] - 2026-07-29
+### Bug Fixes
+- fix: 修复 HTML 实体双重转义 — 聊天区特殊字符显示异常的历史遗留问题
+- fix(web): 修复聊天区两个渲染问题 — Shift+Enter 多行换行丢失 + 并行工具 `[PARALLEL:]` 标记泄漏为聊天文本
+- fix: 代码审查问题修正 P0~P4（dag_demo 语法错误、12 处 bare except、extension_api 未使用 import）
+- fix: get_config 首次调用死锁 — 普通 Lock 重入导致 load_config 挂起，改为 RLock
+- fix: toolkit_clipboard.py 语法错误（d004a19 修改 except 块时丢失 pass/continue）
+- fix: start_server_wrapper.py 无效转义 `\p`（SyntaxWarning）
+- fix: 测试与实现契约对齐 — params 默认 max_tokens、store CRITICAL 阈值、get_storage 单例、_search_symbol 返回 dict
+- chore: 清理 51 个 .bak 残留 + 2 个误提交空文件（根目录 C、session_summarizer_component.py）
+
+## [0.13.11] - 2026-07-28
+### Features
+- feat: 借鉴 Pi Agent Harness 增强 7 大功能（toolkit_harness_schema、toolkit_skills、toolkit_categorize_tools、toolkit_git_branch_manager 等）
+
+## [0.13.10] - 2026-07-27
+### Features
+- feat: 新增内置工具 `toolkit_remote_agent` — 远程设备 Agent 控制（register/exec/status/list/unregister）
+- feat(server): 无配置文件时自动弹出主模型配置窗口
+- feat: 辩论赛支持双方分别指定立场/论点
+- feat(piano-app): 钢琴学习助手 Demo — 五线谱滚动 + 键盘交互 + 多点触摸 + 10 首经典曲库 + BPM 动态定时
+- docs: README 增加 Remote Agent 文档
+
+### Improvements
+- fix: 释放大模型能力 — 修正上下文窗口、默认 token 和小模型阈值（max_tokens 1000→4096）
+- chore: 辩论赛最大轮数 50→5，减少车轱辘话
+
+## [0.13.8] - 2026-07-22
+### Features
+- feat: 邮件发送功能 + .env 自动加载
+- feat: 精简工具集 — 删除 5 个冗余工具 + 压缩所有 schema 描述（-11.6%）
+
+## [0.13.7] - 2026-07-21
+### Improvements
+- refactor: OS 信息属性注入 + server 排队/中断修复
+- fix: 三基准测试框架修正 + OS 信息注入移到 system prompt 最前
+
+## [0.13.6] - 2026-07-21
+### Internal
+- 版本号 0.13.5 → 0.13.6
+
+## [0.13.5] - 2026-07-21
+### Documentation
+- docs: README.en.md 英文版 + 中英文双向链接
+- docs: 添加 tea_agent 微信接入实战总结文档
+- docs: 嵌入 iLNK API PDF 参考链接
+
+## [0.13.4] - 2026-07-20
+### Features
+- feat: 微信 iLink Bot 渠道适配器 — tea_agent 的微信远程接口
+- feat: 五层性能指标体系 v2.0 — 公平、可审计的 Agent 基准测试
+- fix(store): 数据库连接锁定 + Storage 模块热重载
+- fix(toolkit_scheduler): 修复调度器状态变量无法跨函数调用的 Bug
+- 🎯 agent-calendar-viewer: 宽屏布局优化 + 阅读视图字体缩放
+
 ## [0.13.3] - 2026-07-19
 ### Improvements
 - improve: 记忆系统全面审查与修复

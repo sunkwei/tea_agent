@@ -316,7 +316,9 @@ class AgentConfig:
 
 
 _last_config_path = None
-_config_lock = threading.Lock()
+# RLock 可重入：get_config 持锁后调用 load_config → resolve_config_path/_update_config_cache
+# 会再次取锁，普通 Lock 会导致首次 get_config() 死锁
+_config_lock = threading.RLock()
 
 # ── 全局活跃配置路径（跨 GUI/Web/CLI 共享） ──
 _active_config_path: str | None = None

@@ -13,7 +13,7 @@ if _os.path.isfile(_env_path):
                 _k, _v = _line.split('=', 1)
                 _os.environ.setdefault(_k.strip(), _v.strip())
 
-__version__ = "0.13.0"
+__version__ = "0.13.12"
 
 __all__ = [
     "Agent",

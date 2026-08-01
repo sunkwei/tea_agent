@@ -19,11 +19,9 @@ def test_search_symbol_found():
         fpath = os.path.join(dirpath, "test_mod.py")
         with open(fpath, "w") as f:
             f.write("def hello():\n    pass\n\ndef world():\n    pass\n")
-        rc, stdout, stderr = _search_symbol("hello", dirpath, 20)
-        assert rc == 0
-        import json
-        results = json.loads(stdout)
-        assert any(r["name"] == "hello" for r in results)
+        result = _search_symbol("hello", dirpath, 20)
+        assert result["ok"] is True
+        assert any(r["name"] == "hello" for r in result["results"])
     finally:
         import shutil
         shutil.rmtree(dirpath, ignore_errors=True)
@@ -35,9 +33,9 @@ def test_search_symbol_not_found():
         fpath = os.path.join(dirpath, "test_mod.py")
         with open(fpath, "w") as f:
             f.write("def foo():\n    pass\n")
-        rc, stdout, stderr = _search_symbol("nonexistent_symbol", dirpath, 20)
-        assert rc == 0
-        assert "未找到" in stderr
+        result = _search_symbol("nonexistent_symbol", dirpath, 20)
+        assert result["ok"] is True
+        assert "未找到" in result.get("message", "")
     finally:
         import shutil
         shutil.rmtree(dirpath, ignore_errors=True)
@@ -46,8 +44,8 @@ def test_search_symbol_not_found():
 def test_search_symbol_empty_directory():
     dirpath = tempfile.mkdtemp()
     try:
-        rc, stdout, stderr = _search_symbol("foo", dirpath, 20)
-        assert rc == 0
+        result = _search_symbol("foo", dirpath, 20)
+        assert result["ok"] is True
     finally:
         import shutil
         shutil.rmtree(dirpath, ignore_errors=True)
@@ -59,11 +57,10 @@ def test_search_symbol_class():
         fpath = os.path.join(dirpath, "test_mod.py")
         with open(fpath, "w") as f:
             f.write("class MyClass:\n    def method(self):\n        pass\n")
-        rc, stdout, stderr = _search_symbol("MyClass", dirpath, 20)
-        assert rc == 0, f"rc={rc}, stderr={stderr!r}"
-        import json
-        results = json.loads(stdout) if stdout else []
-        assert len(results) > 0, f"No class found. stderr={stderr!r}"
+        result = _search_symbol("MyClass", dirpath, 20)
+        assert result["ok"] is True, f"ok={result.get('ok')}, err={result.get('error')}"
+        results = result.get("results", [])
+        assert len(results) > 0, f"No class found. result={result}"
         assert results[0]["name"] == "MyClass"
         assert results[0]["type"] == "class"
     finally:

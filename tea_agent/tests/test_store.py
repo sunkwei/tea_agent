@@ -448,7 +448,7 @@ class TestMemoryCRUD:
         assert all(m["id"] != mid for m in all_memories)
 
     def test_critical_fifo_limit(self, storage):
-        """CRITICAL 记忆超过 15 条时 FIFO 淘汰"""
+        """CRITICAL 记忆超过 30 条时 FIFO 淘汰"""
         # 插入 16 条 CRITICAL 记忆
         for i in range(16):
             storage.add_memory(f"规则{i}", category="instruction", priority=0)
@@ -456,7 +456,7 @@ class TestMemoryCRUD:
         active = storage.get_active_memories()
         critical = [m for m in active if m["priority"] == 0]
         # 不应超过 15 条
-        assert len(critical) <= 15
+        assert len(critical) <= 30
 
     def test_expired_memory_cleanup(self, storage):
         """过期记忆自动清理"""

@@ -117,6 +117,7 @@ def detect_content(text: str) -> ClipContent:
             if isinstance(parsed, dict): content.meta["json_keys"] = list(parsed.keys())[:15]
             return content
         except Exception:
+            pass
 
     # 4. 代码（多行且有特征关键字）
     if len(lines) >= 3:
@@ -222,6 +223,7 @@ def _read_clipboard() -> str:
                     r = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
                     if r.stdout.strip(): return r.stdout.strip()
                 except Exception:
+                    continue
             return ""
     except Exception as e:
         logger.debug(f"clipboard read failed: {e}")

@@ -17,7 +17,7 @@ VENV_PATHS = [
 def get_venv_python():
     for venv_path in VENV_PATHS:
         if not os.path.isdir(venv_path): continue
-        exe = 'Scripts\python.exe' if platform.system()=='Windows' else 'bin/python'
+        exe = 'Scripts\\python.exe' if platform.system()=='Windows' else 'bin/python'
         py = os.path.join(venv_path, exe)
         if os.path.isfile(py): return py, venv_path
     return None, None

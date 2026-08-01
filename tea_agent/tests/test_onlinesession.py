@@ -13,6 +13,8 @@ OnlineSession 测试套件 — 模块级函数 + OnlineToolSession 核心方法�
 
 from unittest.mock import MagicMock, PropertyMock
 
+import pytest
+
 from tea_agent.onlinesession import APIComponent, OnlineToolSession, detect_mode, extract_mode
 from tea_agent.session.context import SessionContext
 
@@ -419,6 +421,14 @@ class TestBuildApiMessages:
 class TestCreateChatStreamParams:
     """create_chat_stream 参数传递测试"""
 
+    @pytest.fixture(autouse=True)
+    def _isolate_config(self, monkeypatch):
+        """隔离真实配置：避免 main_model.options 非空污染 extra_body 断言"""
+        mock_cfg = MagicMock()
+        mock_cfg.main_model.options = {}
+        mock_cfg.cheap_model.options = {}
+        monkeypatch.setattr("tea_agent.config.get_config", lambda: mock_cfg)
+
     def _make_api(self, **kwargs):
         ctx_kwargs = {
             "model": "test-model", "enable_thinking": False,
@@ -474,7 +484,9 @@ class TestCreateChatStreamParams:
         )
         api.create_chat_stream([{"role": "user", "content": "hi"}], [])
         _, kwargs = api.ctx.client.chat.completions.create.call_args
-        assert "extra_body" not in kwargs
+        # thinking 不支持时不应发送 thinking 参数（可发 reasoning_effort 兼容）
+        eb = kwargs.get("extra_body", {})
+        assert "thinking" not in eb
 
     def test_stream_options_included(self):
         """supports_reasoning=True 时传入 stream_options"""

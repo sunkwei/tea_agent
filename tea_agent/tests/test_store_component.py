@@ -93,16 +93,13 @@ class TestGetStorage:
         assert s1 is s2
         s1.close()
 
-    def test_different_db_path_returns_new_instance(self, tmp_db_path):
-        import os
-
+    def test_singleton_returns_same_instance(self, tmp_db_path):
+        """get_storage 为全局单例，重复调用返回同一实例"""
         from tea_agent.store import get_storage
         s1 = get_storage(db_path=tmp_db_path)
-        db2 = os.path.join(os.path.dirname(tmp_db_path), "other.db")
-        s2 = get_storage(db_path=db2)
-        assert s1 is not s2
+        s2 = get_storage(db_path=tmp_db_path)
+        assert s1 is s2
         s1.close()
-        s2.close()
 
 
 # ============================================================

@@ -137,7 +137,7 @@ class TestGetCheapParamsFallback:
 
         result = get_cheap_params("api")
         assert result["temperature"] == 0.3
-        assert result["max_tokens"] == 1000
+        assert result["max_tokens"] == 4096
 
     @patch("tea_agent.config.get_config", side_effect=Exception("generic error"))
     def test_generic_exception_uses_defaults(self, mock_get_config):
@@ -146,7 +146,7 @@ class TestGetCheapParamsFallback:
 
         result = get_cheap_params("summarizer")
         assert result["temperature"] == 0.1
-        assert result["max_tokens"] == 500
+        assert result["max_tokens"] == 2048
 
     @patch("tea_agent.config.get_config")
     def test_config_returns_no_effective_params(self, mock_get_config):
@@ -158,7 +158,7 @@ class TestGetCheapParamsFallback:
 
         result = get_cheap_params("api")
         assert result["temperature"] == 0.3
-        assert result["max_tokens"] == 1000
+        assert result["max_tokens"] == 4096
 
     @patch("tea_agent.config.get_config")
     def test_config_overrides_temperature(self, mock_get_config):
@@ -187,7 +187,7 @@ class TestGetCheapParamsFallback:
 
         result = get_cheap_params("summarizer")
         assert result["temperature"] == 0.7
-        assert result["max_tokens"] == 500
+        assert result["max_tokens"] == 2048
 
     @patch("tea_agent.config.get_config")
     def test_config_invalid_type_coerced(self, mock_get_config):

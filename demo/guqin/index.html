@@ -126,7 +126,7 @@ const strings = STRING_DEFS.map((def, i) => ({
   ...def,
   y: stringY(i),
   vibrating: false, startSec: 0, pluckPos: 0.3,
-  mode: 'open', harmonicN: 1, ampScale: 15,
+  mode: 'open', harmonicN: 1, ampScale: 11,
   pluckFx: null,   // 拨弦光效 {pos, y, t}
 }));
 
@@ -136,7 +136,7 @@ function ensureAudio() {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     master = audioCtx.createGain();
-    master.gain.value = 0.7;
+    master.gain.value = 0.55;
     const comp = audioCtx.createDynamicsCompressor();
     comp.threshold.value = -18; comp.ratio.value = 6;
     master.connect(comp); comp.connect(audioCtx.destination);
@@ -145,11 +145,27 @@ function ensureAudio() {
 }
 const nowSec = () => performance.now() / 1000;
 
+// 停止某根弦的全部音频（再次拨弦时立即止住旧声）
+function stopStringAudio(target) {
+  if (!target || !target.audioNodes || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  target.audioNodes.forEach(n => {
+    try {
+      n.g.gain.cancelScheduledValues(now);
+      n.g.gain.setValueAtTime(0.0001, now);
+      n.osc.stop(now + 0.05);
+    } catch (e) {}
+  });
+  target.audioNodes = [];
+}
+
 // 拨弦：多模态叠加（基频 + 谐波），振幅随拨弦位置变化（物理：A_n ∝ sin(nπp/L)）
-function pluckAudio(freq, pluckPos, gain = 0.55, pure = false) {
+function pluckAudio(freq, pluckPos, gain = 0.45, pure = false, target = null) {
   ensureAudio();
+  if (target) stopStringAudio(target);   // 同一根弦重复拨弦 → 先止旧声
   const t0 = audioCtx.currentTime;
   const harmonics = pure ? [1] : [1, 2, 3, 4, 5, 6, 7];
+  const nodes = [];
   harmonics.forEach(h => {
     // 拨弦点激励系数：拨弦位置 p 处该模态振幅
     const excite = Math.abs(Math.sin(Math.PI * h * pluckPos));
@@ -159,31 +175,33 @@ function pluckAudio(freq, pluckPos, gain = 0.55, pure = false) {
     osc.type = 'sine';
     osc.frequency.value = freq * h;
     const g = audioCtx.createGain();
-    const decay = 7 / Math.pow(h, 1.35);   // 高次谐波衰减更快
+    const decay = 4.5 / Math.pow(h, 1.35);   // 基频 ≤4.5s，高次谐波衰减更快
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(amp * gain, t0 + 0.004);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + decay);
     osc.connect(g); g.connect(master);
     osc.start(t0); osc.stop(t0 + decay + 0.1);
+    nodes.push({ osc, g });
   });
+  if (target) target.audioNodes = nodes;
 }
 
 // ---- 弦振动物理（驻波叠加）----
 // 模态表：{n: 谐波阶数, amp: 初始振幅, decay: 衰减时间常数(秒)}
 const OPEN_MODES = [
-  { n: 1, amp: 1.0, decay: 8.0 },
-  { n: 2, amp: 0.55, decay: 5.0 },
-  { n: 3, amp: 0.34, decay: 3.6 },
-  { n: 4, amp: 0.22, decay: 2.8 },
-  { n: 5, amp: 0.14, decay: 2.2 },
-  { n: 6, amp: 0.09, decay: 1.8 },
+  { n: 1, amp: 1.0, decay: 4.5 },
+  { n: 2, amp: 0.55, decay: 3.4 },
+  { n: 3, amp: 0.34, decay: 2.7 },
+  { n: 4, amp: 0.22, decay: 2.2 },
+  { n: 5, amp: 0.14, decay: 1.8 },
+  { n: 6, amp: 0.09, decay: 1.5 },
 ];
 function stringOffset(s, xf, t) {
   const tRel = t - s.startSec;
   if (tRel < 0) return 0;
   let y = 0;
   const modes = s.mode === 'harmonic'
-    ? [{ n: s.harmonicN, amp: 1, decay: 3.2 }]
+    ? [{ n: s.harmonicN, amp: 1, decay: 3.0 }]
     : OPEN_MODES;
   for (const m of modes) {
     const omega = 2 * Math.PI * s.freq * m.n;
@@ -202,7 +220,7 @@ function pluckString(idx, xf) {
   s.vibrating = true;
   s.mode = 'open';
   s.pluckFx = { pos: s.pluckPos, y: s.y, t: nowSec() };
-  pluckAudio(s.freq, s.pluckPos);
+  pluckAudio(s.freq, s.pluckPos, 0.45, false, s);
   vibrate(18);
 }
 function pluckHarmonic(idx, xf, mult) {
@@ -213,7 +231,7 @@ function pluckHarmonic(idx, xf, mult) {
   s.mode = 'harmonic';
   s.harmonicN = mult;
   s.pluckFx = { pos: s.pluckPos, y: s.y, t: nowSec() };
-  pluckAudio(s.freq * mult, 0.5, 0.42, true);
+  pluckAudio(s.freq * mult, 0.5, 0.36, true, s);
   vibrate(12);
 }
 function vibrate(ms) { if (navigator.vibrate) navigator.vibrate(ms); }

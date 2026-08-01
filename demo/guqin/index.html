@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>古琴 · 触摸拨弦</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: radial-gradient(ellipse at 50% 0%, #2a2118 0%, #16110b 70%);
+  color:#d8c9a3; font-family:'KaiTi','STKaiti','Noto Serif SC','SimSun',serif;
+  min-height:100vh; -webkit-user-select:none; user-select:none;
+}
+.container { max-width:920px; margin:0 auto; padding:14px 12px 30px; }
+header { text-align:center; padding:10px 0 6px; }
+header h1 { font-size:30px; letter-spacing:10px; color:#e9d6a8; text-shadow:0 2px 10px rgba(0,0,0,.6); margin-bottom:2px; }
+header .sub { font-size:13px; color:#a08f6c; letter-spacing:4px; }
+.stage {
+  background:#120d08; border-radius:20px; padding:12px;
+  box-shadow: inset 0 3px 16px rgba(0,0,0,.7), 0 12px 44px rgba(0,0,0,.55),
+              0 0 0 1px rgba(230,200,140,.08);
+}
+canvas { display:block; width:100%; height:auto; border-radius:14px; touch-action:none; cursor:pointer; }
+.info { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; justify-content:center; }
+.card {
+  background:rgba(255,255,255,.045); border:1px solid rgba(230,200,140,.12);
+  border-radius:14px; padding:12px 16px; flex:1; min-width:220px;
+  box-shadow:0 4px 18px rgba(0,0,0,.3);
+}
+.card h3 { font-size:13px; color:#c9a86a; letter-spacing:3px; margin-bottom:8px; border-bottom:1px solid rgba(230,200,140,.15); padding-bottom:6px; }
+.card table { width:100%; border-collapse:collapse; font-size:13px; }
+.card td { padding:3px 4px; }
+.card td:first-child { color:#b7a276; }
+.card td:last-child { text-align:right; font-family:Consolas,monospace; color:#e6d5a8; }
+.hint { font-size:12.5px; color:#8f7f5e; line-height:1.8; }
+.hint b { color:#c9a86a; font-weight:normal; }
+@media (max-width:600px){
+  header h1{font-size:24px;letter-spacing:6px;}
+  .card{min-width:100%;}
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>古 琴</h1>
+    <div class="sub">七弦 · 十三徽 · 物理振动模拟</div>
+  </header>
+  <div class="stage">
+    <canvas id="guqin"></canvas>
+  </div>
+  <div class="info">
+    <div class="card">
+      <h3>定弦 · 正调</h3>
+      <table id="tuningTable"></table>
+    </div>
+    <div class="card">
+      <h3>弹奏</h3>
+      <div class="hint">
+        <b>触摸琴弦</b> → 拨弦（散音）<br>
+        <b>触摸徽位</b> → 泛音（琴声清亮）<br>
+        <b>多指同拨</b> → 和弦<br>
+        弦振动按驻波物理模型实时模拟
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+'use strict';
+/* ============================================================
+ * 古琴 · 物理振动模拟
+ * 7 弦（正调定弦） × 13 徽位（泛音）
+ * 拨弦 → 弦以「驻波多模态叠加」振动：
+ *   y(x,t) = Σ A_n·sin(nπx/L)·sin(nπp/L)·cos(2πf·n·t)·e^(-t/τ_n)
+ * ============================================================ */
+const canvas = document.getElementById('guqin');
+const ctx = canvas.getContext('2d');
+
+// ---- 画布尺寸（逻辑像素）----
+const W = 880, H = 460;
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+canvas.width = W * DPR; canvas.height = H * DPR;
+canvas.style.aspectRatio = W + ' / ' + H;
+ctx.scale(DPR, DPR);
+
+// ---- 定弦（正调：一弦 → 七弦，从外到内）----
+const STRING_DEFS = [
+  { name:'一弦', note:'C3', freq: 130.81 },
+  { name:'二弦', note:'D3', freq: 146.83 },
+  { name:'三弦', note:'F3', freq: 174.61 },
+  { name:'四弦', note:'G3', freq: 196.00 },
+  { name:'五弦', note:'A3', freq: 220.00 },
+  { name:'六弦', note:'C4', freq: 261.63 },
+  { name:'七弦', note:'D4', freq: 293.66 },
+];
+const N = STRING_DEFS.length;
+
+// ---- 13 徽位（弦长比例，自岳山端起；倍率 = 泛音频率倍数）----
+const HUI = [
+  { idx: 1,  ratio: 1/8,  mult: 8 },
+  { idx: 2,  ratio: 1/6,  mult: 6 },
+  { idx: 3,  ratio: 1/5,  mult: 5 },
+  { idx: 4,  ratio: 1/4,  mult: 4 },
+  { idx: 5,  ratio: 1/3,  mult: 3 },
+  { idx: 6,  ratio: 2/5,  mult: 5 },
+  { idx: 7,  ratio: 1/2,  mult: 2 },
+  { idx: 8,  ratio: 3/5,  mult: 5 },
+  { idx: 9,  ratio: 2/3,  mult: 3 },
+  { idx: 10, ratio: 3/4,  mult: 4 },
+  { idx: 11, ratio: 4/5,  mult: 5 },
+  { idx: 12, ratio: 5/6,  mult: 6 },
+  { idx: 13, ratio: 7/8,  mult: 8 },
+];
+
+// ---- 琴身几何 ----
+const BODY_X1 = 46, BODY_X2 = W - 46;   // 龙龈(左) ~ 岳山(右)
+const BODY_L = BODY_X2 - BODY_X1;
+const BODY_TOP = 52, BODY_BOTTOM = H - 40;
+const BODY_H = BODY_BOTTOM - BODY_TOP;
+const STRING_GAP = BODY_H / (N + 1);
+// 每根弦的 y 坐标（顶部 = 一弦，底部 = 七弦）
+const stringY = i => BODY_TOP + STRING_GAP * (i + 1);
+
+// ---- 每根弦的振动状态 ----
+const strings = STRING_DEFS.map((def, i) => ({
+  ...def,
+  y: stringY(i),
+  vibrating: false, startSec: 0, pluckPos: 0.3,
+  mode: 'open', harmonicN: 1, ampScale: 15,
+  pluckFx: null,   // 拨弦光效 {pos, y, t}
+}));
+
+// ---- 音频引擎 ----
+let audioCtx = null, master = null;
+function ensureAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    master = audioCtx.createGain();
+    master.gain.value = 0.7;
+    const comp = audioCtx.createDynamicsCompressor();
+    comp.threshold.value = -18; comp.ratio.value = 6;
+    master.connect(comp); comp.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+const nowSec = () => performance.now() / 1000;
+
+// 拨弦：多模态叠加（基频 + 谐波），振幅随拨弦位置变化（物理：A_n ∝ sin(nπp/L)）
+function pluckAudio(freq, pluckPos, gain = 0.55, pure = false) {
+  ensureAudio();
+  const t0 = audioCtx.currentTime;
+  const harmonics = pure ? [1] : [1, 2, 3, 4, 5, 6, 7];
+  harmonics.forEach(h => {
+    // 拨弦点激励系数：拨弦位置 p 处该模态振幅
+    const excite = Math.abs(Math.sin(Math.PI * h * pluckPos));
+    if (excite < 0.02) return;
+    const amp = excite / Math.pow(h, 1.15);
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freq * h;
+    const g = audioCtx.createGain();
+    const decay = 7 / Math.pow(h, 1.35);   // 高次谐波衰减更快
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(amp * gain, t0 + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + decay);
+    osc.connect(g); g.connect(master);
+    osc.start(t0); osc.stop(t0 + decay + 0.1);
+  });
+}
+
+// ---- 弦振动物理（驻波叠加）----
+// 模态表：{n: 谐波阶数, amp: 初始振幅, decay: 衰减时间常数(秒)}
+const OPEN_MODES = [
+  { n: 1, amp: 1.0, decay: 8.0 },
+  { n: 2, amp: 0.55, decay: 5.0 },
+  { n: 3, amp: 0.34, decay: 3.6 },
+  { n: 4, amp: 0.22, decay: 2.8 },
+  { n: 5, amp: 0.14, decay: 2.2 },
+  { n: 6, amp: 0.09, decay: 1.8 },
+];
+function stringOffset(s, xf, t) {
+  const tRel = t - s.startSec;
+  if (tRel < 0) return 0;
+  let y = 0;
+  const modes = s.mode === 'harmonic'
+    ? [{ n: s.harmonicN, amp: 1, decay: 3.2 }]
+    : OPEN_MODES;
+  for (const m of modes) {
+    const omega = 2 * Math.PI * s.freq * m.n;
+    const excite = Math.sin(Math.PI * m.n * s.pluckPos);
+    y += m.amp * excite * Math.sin(Math.PI * m.n * xf)
+       * Math.cos(omega * tRel) * Math.exp(-tRel / m.decay);
+  }
+  return y * s.ampScale;
+}
+
+// ---- 拨弦动作 ----
+function pluckString(idx, xf) {
+  const s = strings[idx];
+  s.pluckPos = Math.min(0.95, Math.max(0.05, xf));
+  s.startSec = nowSec();
+  s.vibrating = true;
+  s.mode = 'open';
+  s.pluckFx = { pos: s.pluckPos, y: s.y, t: nowSec() };
+  pluckAudio(s.freq, s.pluckPos);
+  vibrate(18);
+}
+function pluckHarmonic(idx, xf, mult) {
+  const s = strings[idx];
+  s.pluckPos = Math.min(0.95, Math.max(0.05, xf));
+  s.startSec = nowSec();
+  s.vibrating = true;
+  s.mode = 'harmonic';
+  s.harmonicN = mult;
+  s.pluckFx = { pos: s.pluckPos, y: s.y, t: nowSec() };
+  pluckAudio(s.freq * mult, 0.5, 0.42, true);
+  vibrate(12);
+}
+function vibrate(ms) { if (navigator.vibrate) navigator.vibrate(ms); }
+
+// ---- 命中检测 ----
+function findString(screenY) {
+  let best = -1, bestD = 1e9;
+  for (let i = 0; i < N; i++) {
+    const d = Math.abs(strings[i].y - screenY);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return bestD < STRING_GAP * 0.75 ? best : -1;
+}
+function findHui(screenX) {
+  for (const h of HUI) {
+    const hx = BODY_X2 - h.ratio * BODY_L;
+    if (Math.abs(screenX - hx) < 9) return h;
+  }
+  return null;
+}
+
+function pluckAt(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const x = (clientX - rect.left) * (W / rect.width);
+  const y = (clientY - rect.top) * (H / rect.height);
+  const xf = (x - BODY_X1) / BODY_L;
+  if (xf < -0.02 || xf > 1.02) return;
+  const idx = findString(y);
+  if (idx < 0) return;
+  const hui = findHui(x);
+  if (hui) pluckHarmonic(idx, xf, hui.mult);
+  else pluckString(idx, xf);
+}
+
+// ---- 触摸 / 鼠标事件（支持多点）----
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  ensureAudio();
+  for (const t of e.changedTouches) pluckAt(t.clientX, t.clientY);
+}, { passive: false });
+canvas.addEventListener('mousedown', e => {
+  ensureAudio();
+  pluckAt(e.clientX, e.clientY);
+});
+
+// ---- 绘制 ----
+function drawBody() {
+  // 琴面
+  const g = ctx.createLinearGradient(0, BODY_TOP, 0, BODY_BOTTOM);
+  g.addColorStop(0, '#3a2c1a');
+  g.addColorStop(0.5, '#2a1f10');
+  g.addColorStop(1, '#1d150a');
+  ctx.fillStyle = g;
+  roundRect(BODY_X1, BODY_TOP, BODY_L, BODY_H, 10);
+  ctx.fill();
+  // 木纹
+  ctx.save();
+  ctx.globalAlpha = 0.10;
+  ctx.strokeStyle = '#000';
+  for (let i = 0; i < 24; i++) {
+    const yy = BODY_TOP + (i / 24) * BODY_H;
+    ctx.lineWidth = 1 + (i % 3);
+    ctx.beginPath();
+    ctx.moveTo(BODY_X1, yy);
+    ctx.quadraticCurveTo(BODY_X1 + BODY_L * 0.3, yy + 3, BODY_X1 + BODY_L * 0.6, yy - 2);
+    ctx.quadraticCurveTo(BODY_X1 + BODY_L * 0.85, yy + 2, BODY_X2, yy);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // 岳山（右）/ 龙龈（左）
+  ctx.fillStyle = '#0c0804';
+  ctx.fillRect(BODY_X2 - 5, BODY_TOP + 4, 6, BODY_H - 8);
+  ctx.fillRect(BODY_X1 - 1, BODY_TOP + 4, 6, BODY_H - 8);
+  // 琴轸（右侧调音钮）
+  ctx.fillStyle = '#5a4630';
+  for (let i = 0; i < N; i++) {
+    const cy = stringY(i);
+    ctx.beginPath(); ctx.arc(BODY_X2 + 14, cy, 3.4, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function drawHui(time) {
+  // 13 徽位：贝母色圆点
+  for (const h of HUI) {
+    const hx = BODY_X2 - h.ratio * BODY_L;
+    const cy = BODY_TOP + BODY_H / 2;
+    const r = (h.idx === 7) ? 5 : (h.idx % 2 === 1 ? 4 : 3.4);
+    const glow = 0.5 + 0.5 * Math.sin(time * 0.0012 + h.idx);
+    ctx.save();
+    ctx.shadowColor = 'rgba(240,220,180,0.5)';
+    ctx.shadowBlur = 6 * glow + 2;
+    ctx.fillStyle = 'rgba(238,226,200,0.9)';
+    ctx.beginPath(); ctx.arc(hx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // 徽号（小字，奇数徽标注）
+    if (h.idx % 2 === 1) {
+      ctx.fillStyle = 'rgba(200,180,140,0.55)';
+      ctx.font = '10px KaiTi, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(h.idx, hx, cy + 20);
+    }
+  }
+}
+function drawStrings(time) {
+  const t = nowSec();
+  for (let i = 0; i < N; i++) {
+    const s = strings[i];
+    const y = s.y;
+    // 弦（带振动偏移）
+    ctx.strokeStyle = i === 6 ? 'rgba(235,215,170,0.85)' : 'rgba(210,190,150,0.8)';
+    ctx.lineWidth = i === 0 ? 1.6 : (i === 6 ? 1.3 : 1.2);
+    ctx.beginPath();
+    ctx.moveTo(BODY_X1 + 8, y);
+    const steps = 72;
+    for (let k = 1; k <= steps; k++) {
+      const xf = k / steps;
+      const off = s.vibrating ? stringOffset(s, xf, t) : 0;
+      ctx.lineTo(BODY_X1 + xf * BODY_L, y + off);
+    }
+    ctx.lineTo(BODY_X2 - 8, y);
+    ctx.stroke();
+    // 弦名
+    ctx.fillStyle = 'rgba(200,178,132,0.8)';
+    ctx.font = '11px KaiTi, serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(s.name, 22, y + 4);
+    ctx.fillStyle = 'rgba(160,140,100,0.6)';
+    ctx.font = '9px Consolas, monospace';
+    ctx.fillText(s.note, 22, y + 16);
+    // 拨弦光效
+    if (s.pluckFx && t - s.pluckFx.t < 0.35) {
+      const k = (t - s.pluckFx.t) / 0.35;
+      const px = BODY_X1 + s.pluckFx.pos * BODY_L;
+      ctx.save();
+      ctx.globalAlpha = 1 - k;
+      ctx.strokeStyle = '#ffd98a';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(px, y, 4 + k * 16, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+function drawHeader() {
+  ctx.fillStyle = 'rgba(150,128,90,0.5)';
+  ctx.font = '11px KaiTi, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('龙 龈', BODY_X1 + 26, BODY_TOP - 8);
+  ctx.fillText('岳 山', BODY_X2 - 26, BODY_TOP - 8);
+}
+// ---- 动画循环 ----
+function animate(time) {
+  ctx.clearRect(0, 0, W, H);
+  drawBody();
+  drawHui(time);
+  drawStrings(time);
+  drawHeader();
+  requestAnimationFrame(animate);
+}
+// 填充定弦表
+(function fillTuning() {
+  const tb = document.getElementById('tuningTable');
+  tb.innerHTML = STRING_DEFS.map(s =>
+    `<tr><td>${s.name}</td><td>${s.note} · ${s.freq.toFixed(2)} Hz</td></tr>`
+  ).join('');
+})();
+
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>

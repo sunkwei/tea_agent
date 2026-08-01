@@ -598,12 +598,16 @@ function drawStaff(currentBeat) {
       ctx.beginPath(); ctx.moveTo(x-9, y); ctx.lineTo(x+9, y); ctx.stroke();
     }
     // Determine notation type from duration value
-    const isWhole = dur >= 3.5;       // 全音符: hollow, no stem
-    const isHalf = dur >= 1.5 && dur < 3.5;  // 二分音符: hollow, stem
-    const isQuarter = dur >= 0.75 && dur < 1.5; // 四分音符: filled, stem
-    const isEighth = dur >= 0.35 && dur < 0.75; // 八分音符: filled, stem, 1 flag
-    const isSixteenth = dur < 0.35;   // 十六分音符: filled, stem, 2 flags
-    const isDotted = dur === 1.5 || dur === 0.75 || dur === 3 || dur === 0.375;
+    // 值域分类：附点值（1.5/0.75/3/0.375）归入正确类别，
+    // 避免符点音符被误判为更大时值（如 1.5 被当成二分音符）
+    const isWhole = dur >= 3.5;                    // 全音符(4) & 附点全(6): hollow, no stem
+    const isHalf = dur >= 2.0 && dur < 3.5;        // 二分(2) & 附点二分(3): hollow, stem
+    const isQuarter = dur >= 1.0 && dur < 2.0;     // 四分(1) & 附点四分(1.5): filled, stem
+    const isEighth = dur >= 0.5 && dur < 1.0;      // 八分(0.5) & 附点八分(0.75): filled, 1 flag
+    const isSixteenth = dur >= 0.25 && dur < 0.5;  // 十六分(0.25) & 附点十六分(0.375): filled, 2 flags
+    const isThirtySecond = dur < 0.25;             // 三十二分(0.125) & 附点三十二分(0.1875): 2 flags
+    // 附点判定：dur 是基础时值 {0.125,0.25,0.5,1,2,4} 的 1.5 倍（容差比较，避免浮点误差）
+    const isDotted = [0.125,0.25,0.5,1,2,4].some(b => Math.abs(dur - b * 1.5) < 1e-6);
     // Note head
     ctx.beginPath();
     ctx.ellipse(x, y, noteW/2, 7, -0.35, 0, Math.PI*2);

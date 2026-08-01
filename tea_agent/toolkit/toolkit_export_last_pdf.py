@@ -1026,6 +1026,130 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
         return _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path)
 
 
+# ═══════════════════════════════════════════════════════════════
+#  Markdown export
+# ═══════════════════════════════════════════════════════════════
+
+def _build_markdown_doc(topic_title: str, stamp: str, user_msg: str,
+                        ai_msg: str, reasoning_text: str = "") -> str:
+    """Build a Markdown document from a single conversation."""
+    parts = [f"# {topic_title}\n", f"> 📅 导出时间: {stamp}\n", "---\n"]
+    parts.append("\n## 💬 用户请求\n")
+    parts.append(user_msg.rstrip() + "\n")
+    if reasoning_text.strip():
+        parts.append("\n## 💭 推理过程\n")
+        parts.append(reasoning_text.rstrip() + "\n")
+    parts.append("\n## 🤖 AI 回复\n")
+    parts.append(ai_msg.rstrip() + "\n")
+    return "\n".join(parts)
+
+
+def _build_full_topic_markdown(topic_title: str, conversations: list[dict]) -> str:
+    """Build a Markdown document from multiple conversations."""
+    parts = [f"# {topic_title}\n", f"> 共 {len(conversations)} 段对话\n", "---\n"]
+    for idx, conv in enumerate(conversations, 1):
+        stamp = conv.get("stamp", "")
+        parts.append(f"\n## 💬 对话 {idx} — {stamp}\n")
+        parts.append("**用户:**\n\n" + conv["user_msg"].rstrip() + "\n")
+        reasoning = conv.get("reasoning_text", "")
+        if reasoning.strip():
+            parts.append(f"\n**💭 推理过程:**\n\n{reasoning.rstrip()}\n")
+        parts.append("\n**🤖 AI 回复:**\n\n" + conv["ai_msg"].rstrip() + "\n")
+        parts.append("\n---\n")
+    return "\n".join(parts)
+
+
+def export_topic_markdown(topic_id: str, output_path: str = None,
+                          db_path: str = None, mode: str = "latest",
+                          filter_mode: str = "final") -> str:
+    """Export a topic's conversations as Markdown (.md).
+
+    Args:
+        topic_id: Topic UUID.
+        output_path: Output file path.
+        db_path: Optional database path (auto-detect if None).
+        mode: 'latest' (single conversation) or 'full_topic' (all conversations).
+        filter_mode: 'final' (user + AI final only) or 'full' (with reasoning).
+
+    Returns:
+        Path to the generated Markdown file.
+    """
+    if db_path is None:
+        db_path = _find_db_path()
+    if not db_path:
+        raise FileNotFoundError("chat_history.db not found")
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+
+    c.execute("SELECT title FROM topics WHERE topic_id = ?", (topic_id,))
+    row = c.fetchone()
+    if not row:
+        conn.close()
+        raise ValueError(f"Topic {topic_id} not found")
+    topic_title = _sanitize(row["title"] or "Untitled")
+
+    def _extract_user_msg(raw: str) -> str:
+        try:
+            data = json.loads(raw)
+            return data.get("text", raw) if isinstance(data, dict) else str(data)
+        except Exception:
+            return str(raw)
+
+    def _extract_reasoning(rounds_json_raw: str) -> str:
+        if filter_mode != "full" or not rounds_json_raw:
+            return ""
+        try:
+            rounds_data = json.loads(rounds_json_raw) if isinstance(rounds_json_raw, str) else rounds_json_raw
+            return _build_full_interactions_md(rounds_data)
+        except Exception:
+            return ""
+
+    if mode == "full_topic":
+        c.execute(
+            "SELECT * FROM conversations WHERE topic_id = ? ORDER BY stamp ASC",
+            (topic_id,),
+        )
+        all_conv = c.fetchall()
+        conn.close()
+        if not all_conv:
+            raise ValueError(f"No conversations for topic {topic_id}")
+
+        conversations = []
+        for conv in all_conv:
+            conversations.append({
+                "user_msg": _sanitize(_extract_user_msg(conv["user_msg"])),
+                "ai_msg": _sanitize(conv["ai_msg"]),
+                "stamp": conv["stamp"],
+                "reasoning_text": _extract_reasoning(conv["rounds_json"]),
+            })
+
+        md_text = _build_full_topic_markdown(topic_title, conversations)
+        output_path = output_path or f"export_{topic_id[:8]}_full.md"
+    else:
+        c.execute(
+            "SELECT * FROM conversations WHERE topic_id = ? ORDER BY stamp DESC LIMIT 1",
+            (topic_id,),
+        )
+        conv = c.fetchone()
+        conn.close()
+        if not conv:
+            raise ValueError(f"No conversations for topic {topic_id}")
+
+        user_msg = _sanitize(_extract_user_msg(conv["user_msg"]))
+        ai_msg = _sanitize(conv["ai_msg"])
+        reasoning_text = _extract_reasoning(conv["rounds_json"])
+
+        md_text = _build_markdown_doc(topic_title, conv["stamp"], user_msg,
+                                      ai_msg, reasoning_text)
+        output_path = output_path or f"export_{topic_id[:8]}.md"
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(md_text)
+    return output_path
+
+
 def toolkit_export_last_pdf(output_path="last.pdf", mode="latest", filter="final",
                             topic_id=None):
     """Toolkit: export topic conversation(s) as PDF.

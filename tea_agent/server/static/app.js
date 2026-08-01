@@ -192,7 +192,7 @@ const _slashCommands = [
   { name: '/search',     icon: '🔍', desc: '搜索对话和记忆',         action: 'search', shortcut: 'Ctrl+K' },
   { name: '/memory',     icon: '🧠', desc: '管理长期记忆',           action: 'memory', shortcut: 'Ctrl+Shift+M' },
   { name: '/task',       icon: '📋', desc: '任务面板 (Plan/TODO)',   action: 'task',   shortcut: 'Ctrl+J' },
-  { name: '/export',     icon: '📄', desc: '导出 PDF',               action: 'export' },
+  { name: '/export',     icon: '📄', desc: '导出 Markdown/PDF',       action: 'export' },
   { name: '/config',     icon: '⚙',  desc: '查看/切换配置',         action: 'config' },
   { name: '/theme',      icon: '🌙', desc: '切换深色/浅色主题',      action: 'theme' },
   { name: '/screenshot', icon: '📷', desc: '全屏截图发送',           action: 'screenshot' },
@@ -2878,6 +2878,8 @@ window.showExportModal = function() {
   showModal('modal-export');
   $('export-result').innerHTML = '';
   // Reset to defaults
+  const fmtRadios = document.querySelectorAll('input[name="export-format"]');
+  if (fmtRadios.length > 0) fmtRadios[0].checked = true;
   const modeRadios = document.querySelectorAll('input[name="export-mode"]');
   if (modeRadios.length > 0) modeRadios[0].checked = true;
   const filterRadios = document.querySelectorAll('input[name="export-filter"]');
@@ -2894,21 +2896,23 @@ window.doExport = async function() {
     return;
   }
   const el = $('export-result');
+  const fmtEl = document.querySelector('input[name="export-format"]:checked');
   const modeEl = document.querySelector('input[name="export-mode"]:checked');
   const filterEl = document.querySelector('input[name="export-filter"]:checked');
+  const format = fmtEl ? fmtEl.value : 'md';
   const mode = modeEl ? modeEl.value : 'latest';
   const filter = filterEl ? filterEl.value : 'final';
   el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px 0">导出中...</div>';
   try {
-    const url = '/v1/export/pdf/' + encodeURIComponent(currentTopicId)
+    const url = '/v1/export/' + format + '/' + encodeURIComponent(currentTopicId)
       + '?mode=' + encodeURIComponent(mode)
       + '&filter=' + encodeURIComponent(filter);
     const r = await fetch(url, { method: 'GET' });
     const ct = r.headers.get('Content-Type') || '';
-    if (ct.includes('application/pdf')) {
-      // Download PDF directly
+    if (ct.includes('application/pdf') || ct.includes('text/markdown')) {
+      // Download file directly
       const blob = await r.blob();
-      let filename = 'export.pdf';
+      let filename = format === 'pdf' ? 'export.pdf' : 'export.md';
       const disp = r.headers.get('Content-Disposition') || '';
       const match = disp.match(/filename\*?=(?:UTF-8'')?([^;\s]+)/i);
       if (match) filename = decodeURIComponent(match[1].replace(/"/g, ''));

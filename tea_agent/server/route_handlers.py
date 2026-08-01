@@ -23,7 +23,7 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Respon
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from tea_agent.multi_agent.workflow_viz import DagVizRegistry, get_viz_html
-from tea_agent.toolkit.toolkit_export_last_pdf import export_topic_pdf
+from tea_agent.toolkit.toolkit_export_last_pdf import export_topic_markdown, export_topic_pdf
 
 from ._compat import (
     __version__,
@@ -299,6 +299,48 @@ async def handle_export_pdf(request):
         ascii_name = "".join(c if ord(c) < 128 else '_' for c in filename) or "export.pdf"
         disposition = f'attachment; filename="{ascii_name}"; filename*=UTF-8''{urllib.parse.quote(filename)}'
         return FileResponse(result, media_type="application/pdf",
+            headers={"Content-Disposition": disposition})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def handle_export_md(request):
+    """GET /v1/export/md/{topic_id} — export topic as Markdown and download
+
+    Query params:
+        mode: 'latest' (default) = last conversation only, 'full_topic' = all conversations.
+        filter: 'final' (default) = user + AI final only, 'full' = with reasoning.
+    """
+    topic_id = request.path_params.get("topic_id", "")
+    if not topic_id:
+        return JSONResponse({"error": "topic_id required"}, status_code=400)
+    mode = request.query_params.get("mode", "latest")
+    if mode not in ("latest", "full_topic"):
+        mode = "latest"
+    filter_mode = request.query_params.get("filter", "final")
+    if filter_mode not in ("final", "full"):
+        filter_mode = "final"
+    try:
+        server = get_server()
+        db_path = server._get_storage().db_path
+        result = await asyncio.to_thread(
+            export_topic_markdown, topic_id, None, db_path, mode=mode, filter_mode=filter_mode)
+        # Get topic title for filename
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT title FROM topics WHERE topic_id = ?", (topic_id,))
+        row = cur.fetchone()
+        conn.close()
+        title = row["title"] if row else "Untitled"
+        safe_title = "".join(c if c.isalnum() or c in ' -_()[]' else '_' for c in title)
+        safe_title = safe_title.strip()[:80] or "export"
+        filename = safe_title + ".md"
+        # RFC 5987: use filename* for non-ASCII, fallback ASCII for latin-1 clients
+        ascii_name = "".join(c if ord(c) < 128 else '_' for c in filename) or "export.md"
+        disposition = f'attachment; filename="{ascii_name}"; filename*=UTF-8''{urllib.parse.quote(filename)}'
+        return FileResponse(result, media_type="text/markdown; charset=utf-8",
             headers={"Content-Disposition": disposition})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)

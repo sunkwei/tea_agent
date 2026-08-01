@@ -1,6 +1,14 @@
 # Changelog
 
 
+## [0.13.15] - 2026-08-01
+### Improvements & Changes
+- feat: Web 页面导出功能升级 — 默认导出 Markdown（新增格式选择：Markdown/PDF）
+  - 后端新增 /v1/export/md/{topic_id} 路由（export_topic_markdown），复用消息提取逻辑输出 .md
+  - 支持最新会话/完整话题 + 最终消息/含推理过程（推理过程复用 _build_full_interactions_md 时间线）
+  - 前端导出模态框新增"导出格式"单选（Markdown 默认 / PDF），doExport 按格式调对应 API
+  - PDF 导出保留可用（原 /v1/export/pdf 路由不变）
+
 ## [0.13.14] - 2026-08-01
 ### Features
 - feat: Skill 按需加载评估器（skill_loader.py）— 废除"知识结晶（潜意识）"，改为双维评估按需加载

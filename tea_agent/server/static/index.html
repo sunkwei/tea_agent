@@ -222,8 +222,13 @@
 
 <!-- Export Modal -->
 <div id="modal-export" class="modal"><div class="modal-box">
-  <h3>📄 导出 PDF</h3>
-  <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px">导出当前话题为 PDF 文件</p>
+  <h3>📄 导出</h3>
+  <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px">导出当前话题为 Markdown / PDF 文件</p>
+  <div class="modal-section-title">📦 导出格式</div>
+  <div class="form-inline">
+    <label><input type="radio" name="export-format" value="md" checked> Markdown</label>
+    <label><input type="radio" name="export-format" value="pdf"> PDF</label>
+  </div>
   <div class="modal-section-title">📋 导出范围</div>
   <div class="form-inline">
     <label><input type="radio" name="export-mode" value="latest" checked onchange="onExportModeChange()"> 仅最新会话</label>

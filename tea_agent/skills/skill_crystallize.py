@@ -1,8 +1,13 @@
 """
-Skill 结晶器 — 从任务执行过程中提取可复用技能。
+[DEPRECATED] Skill 结晶器 — 已废除，请使用 tea_agent/skill_loader.py 的按需加载评估。
 
-设计灵感:
+本模块曾用于"知识结晶（潜意识）"：任务执行后自动提取经验为 JSON 技能。
+已按用户要求废除：不再自动结晶经验，改为对话中按需加载静态 SKILL.md 技能包。
+保留此文件仅为兼容历史导入，不再被任何运行时路径调用。
+
+原设计灵感:
   GenericAgent 的 Skill 树系统 — "Don't preload skills, evolve them"
+"""
 
 工作流程:
   1. 任务完成 → 分析执行轨迹

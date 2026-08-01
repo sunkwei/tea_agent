@@ -416,29 +416,15 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     # ── 收集所有注入内容 ──
     inject_parts = []
 
-    # 1. 技能推荐注入
+    # 1. 按需技能加载（取代已废除的"知识结晶推荐"）
+    #    经过几轮对话后，评估各 skill 的必要性/充分性，决定是否注入 SKILL.md
     try:
-        _current_user_msg = ""
-        for _i in range(len(context.messages) - 1, -1, -1):
-            if context.messages[_i].get("role") == "user":
-                _c = context.messages[_i].get("content", "")
-                _current_user_msg = (
-                    " ".join(_p.get("text", "") for _p in _c if _p.get("type") == "text")
-                    if isinstance(_c, list) else str(_c)
-                )
-                break
-        if _current_user_msg:
-            from tea_agent.skills.skill_registry import SkillRegistry as _SkillRegistry
-            _reg = _SkillRegistry()
-            _recommended = _reg.recommend(_current_user_msg, top_k=3)
-            if _recommended:
-                _parts = ["[经验技能参考]"]
-                for _idx, _sk in enumerate(_recommended, 1):
-                    _tools_str = ", ".join(_sk.tools[:5])
-                    _parts.append(f"{_idx}. {_sk.name} (置信度: {_sk.confidence:.0%}) 工具: {_tools_str}")
-                inject_parts.append("\n".join(_parts))
+        from tea_agent.skill_loader import evaluate_and_load as _skill_eval
+        _skill_text = _skill_eval(context)
+        if _skill_text:
+            inject_parts.append(_skill_text)
     except Exception as _e:
-        logger.debug(f"Skill recommendation injection failed: {_e}")
+        logger.debug(f"Skill on-demand loading failed: {_e}")
 
     # 2. 未完成任务检查注入
     try:

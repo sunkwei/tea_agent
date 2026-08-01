@@ -1,6 +1,18 @@
 # Changelog
 
 
+## [0.13.14] - 2026-08-01
+### Features
+- feat: Skill 按需加载评估器（skill_loader.py）— 废除"知识结晶（潜意识）"，改为双维评估按需加载
+  - 必要性 (Necessity)：对话任务与 skill 能力相关度（强词命中权重2/弱词1，1强词或2弱词即触发）
+  - 充分性 (Sufficiency)：现有工具对任务领域覆盖度（covered_by 命中比例），已覆盖则不冗余加载
+  - 决策矩阵：必要且不充分 → 加载；必要但已覆盖 → 跳过；无关 → 跳过
+  - "经过几轮对话后"评估：收集最近 3 轮用户消息，≥2 轮证据才评估；已加载不重复注入
+  - 每轮最多加载 2 个 skill，单个注入上限 4000 字符，失败隔离
+- refactor: 废除知识结晶机制 — history_builder 移除 SkillRegistry.recommend 自动推荐注入；
+  skill_crystallize.py / skill_registry.py 标记 [DEPRECATED]（保留文件兼容导入）
+- tests: 新增 16 项测试覆盖评估器全部行为（test_skill_loader.py）
+
 ## [0.13.13] - 2026-08-01
 ### Features
 - feat: 借鉴 OpenAI Codex Context Fragments 架构 — 上下文片段系统（context_fragments.py）

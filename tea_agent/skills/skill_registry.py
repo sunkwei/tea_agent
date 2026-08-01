@@ -1,11 +1,10 @@
 """
-Skill 注册中心 — 管理、索引、推荐技能。
+[DEPRECATED] Skill 注册中心 — 已废除，请使用 tea_agent/skill_loader.py 的按需加载评估。
 
-功能:
-  - 注册/更新/删除技能
-  - 按关键词/分类/标签搜索
-  - 推荐相关技能 (基于任务描述)
-  - 维护全局索引
+本模块曾用于管理自动结晶的经验技能（~/.tea_agent/skills/*.json）。
+已按用户要求废除：不再自动推荐注入经验技能，改为对话中按需加载静态 SKILL.md 技能包。
+保留此文件仅为兼容历史导入，不再被任何运行时路径调用。
+"""
 
 用法:
     from tea_agent.skills import SkillRegistry

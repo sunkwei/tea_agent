@@ -13,7 +13,7 @@ import os
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 try:
     import yaml
@@ -141,21 +141,38 @@ class AgentConfig:
     paths: PathsConfig = field(default_factory=PathsConfig)
     mode_params: dict[str, dict[str, Any]] = field(default_factory=dict)
 
+    # 任务阶段 → 推荐温度（未显式配置时的智能默认；越低越确定，越高越发散）
+    PHASE_DEFAULT_TEMP: ClassVar[dict[str, float]] = {
+        "develop": 0.2,    # 代码生成/实现：确定性优先
+        "test": 0.2,       # 测试调试：精确可复现
+        "review": 0.15,    # 代码审查：事实判断
+        "devops": 0.3,     # 部署发布：严谨
+        "design": 0.45,    # 架构设计：严谨但需创意
+        "docs": 0.5,       # 文档撰写：适中
+        "creative": 0.8,   # 创意发散/进化方向：高随机探索
+        "mixed": 0.6,      # 自动均衡（默认）
+        "pragmatic": 0.2,  # 兼容旧名
+    }
+
     def get_effective_params(
         self, model_type: str = "main", mode: str = "mixed"
     ) -> dict[str, Any]:
-        """获取最终生效的模型推理参数。mode_params 覆盖 model 默认值。"""
+        """获取最终生效的模型推理参数。mode_params 覆盖 model 默认值；
+        未显式配置 temperature 时按任务阶段使用智能默认。"""
         model_cfg = self.main_model if model_type == "main" else self.cheap_model
         params = {
             "temperature": model_cfg.temperature,
             "max_tokens": model_cfg.max_tokens,
             "top_p": model_cfg.top_p,
         }
-        # 模式覆盖
+        # 1) 用户显式 mode_params 优先
         overrides = self.mode_params.get(mode, {})
         for k in ("temperature", "max_tokens", "top_p"):
             if k in overrides:
                 params[k] = overrides[k]
+        # 2) 未显式配置 temperature 时，按任务阶段用智能默认
+        if "temperature" not in overrides and mode in self.PHASE_DEFAULT_TEMP:
+            params["temperature"] = self.PHASE_DEFAULT_TEMP[mode]
         return params
 
     # 会话参数

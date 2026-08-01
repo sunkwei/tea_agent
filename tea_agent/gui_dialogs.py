@@ -1050,14 +1050,19 @@ class ConfigDialog(tk.Toplevel):
         """
         f = ttk.Frame(nb)
         nb.add(f, text="模式参数")
-        ttk.Label(f, text="不同人格模式下可覆盖 Temperature / Top-P（留空则使用模型默认值）",
+        ttk.Label(f, text="不同任务阶段可覆盖 Temperature / Top-P（留空则使用任务智能默认，见下表预填值）",
                   font=(SYSTEM_FONT, _fs(10)), foreground="#888").pack(anchor=tk.W, padx=10, pady=(10, 4))
 
         self._mode_params_vars = {}
         modes = [
-            ("pragmatic", "🎯 严谨模式", "代码开发 / Bug 排查 / 需求遵从", "0.3", "0.9"),
-            ("creative", "🎨 创意模式", "头脑风暴 / 异想天开 / 发散联想", "0.8", "0.95"),
-            ("mixed", "⚖️ 混合模式", "自动均衡", "0.6", "0.9"),
+            ("develop", "💻 代码开发", "代码生成 / 实现 / 重构", "0.2", "0.9"),
+            ("test", "🧪 测试调试", "测试 / 调试 / Bug 修复", "0.2", "0.9"),
+            ("review", "🔍 代码审查", "审查 / 评审 / 安全检查", "0.15", "0.9"),
+            ("devops", "🚀 部署发布", "构建 / 部署 / 版本发布", "0.3", "0.9"),
+            ("design", "🏗️ 架构设计", "方案 / 规划 / 技术选型", "0.45", "0.95"),
+            ("docs", "📝 文档撰写", "文档 / 注释 / 总结记录", "0.5", "0.9"),
+            ("creative", "🎨 创意发散", "头脑风暴 / 进化方向 / 异想天开", "0.8", "0.95"),
+            ("mixed", "⚖️ 混合模式", "自动均衡（默认）", "0.6", "0.9"),
         ]
         for m_key, m_label, m_desc, def_temp, def_topp in modes:
             frame = ttk.LabelFrame(f, text=m_label, padding=8)

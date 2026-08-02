@@ -209,6 +209,9 @@ class BaseChatSession(ABC):
         # 打断标志
         self.interrupted = False
 
+        # 打断知识闭环：最近一次打断的锚点（M1 内存级，供下一条消息注入）
+        self._last_interruption: dict | None = None
+
     @abstractmethod
     def chat_stream(
         self, msg: str, callback: Callable[[str], None]

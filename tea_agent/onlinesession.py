@@ -20,6 +20,10 @@ from tea_agent.session.prompts import (
     HISTORY_SUMMARIZE_SYSTEM,
     HISTORY_SUMMARIZE_USER,
 )
+from tea_agent.prompt_manager import (
+    INTERRUPT_ABANDONED_TMPL,
+    INTERRUPT_CORRECTED_TMPL,
+)
 from tea_agent.session.tool_loop_runner import execute_tool_loop
 from tea_agent.session_pipeline import SessionPipeline
 
@@ -32,6 +36,48 @@ logger = logging.getLogger("session")
 def analyze_intent(text: str) -> dict:
     """轻量级意图分析。"""
     return {"type": "general", "skip_tool_loop": False, "required_tools": None}
+
+
+# ── 打断知识闭环：信号分类（M2）──
+INTERRUPT_SIMILARITY_THRESHOLD = 0.6  # corrected/abandoned 判定阈值（默认，可由配置覆盖）
+
+
+def classify_interruption(
+    event: dict, user_msg: str, embedding_engine=None,
+    threshold: float = INTERRUPT_SIMILARITY_THRESHOLD,
+) -> tuple[str, float | None]:
+    """打断信号三分类：corrected / abandoned / silent。
+
+    打断是隐式负面反馈。用户下一条消息决定信号类型：
+    - silent：无下一条消息（用户沉默/关窗）→ 方向被放弃
+    - corrected：新消息与被打断内容语义相似（≥ 阈值）→ 方向修正
+    - abandoned：新消息语义漂移（< 阈值）→ 方向弃用（换话题）
+
+    Args:
+        event: 打断事件锚点（至少含 partial_reply）
+        user_msg: 用户下一条消息（可为空）
+        embedding_engine: EmbeddingEngine 实例；None 时降级为 corrected（宁缺毋滥）
+        threshold: 相似度阈值（M4 起可由配置覆盖）
+
+    Returns:
+        (classification, similarity)：similarity 为 None 表示未计算（降级/静默）
+    """
+    if not user_msg or not user_msg.strip():
+        return "silent", None
+    partial_reply = (event or {}).get("partial_reply") or ""
+    if not partial_reply or embedding_engine is None:
+        # 降级：有下一条消息但无法计算相似度 → 保守视为 corrected
+        return "corrected", None
+    try:
+        emb_u = embedding_engine.embed(user_msg[:500])
+        emb_p = embedding_engine.embed(partial_reply[:500])
+        sim = embedding_engine.cosine_similarity(emb_u, emb_p)
+        if sim >= threshold:
+            return "corrected", round(sim, 4)
+        return "abandoned", round(sim, 4)
+    except Exception:
+        logger.exception("classify_interruption embedding failed")
+        return "corrected", None
 
 
 _VALID_MODES = {"pragmatic", "creative", "mixed"}
@@ -900,6 +946,11 @@ class OnlineToolSession(BaseChatSession):
     # 压缩后的系统提示词
     _COMPACT_SYSTEM_PROMPT = COMPACT_SYSTEM_PROMPT
 
+    # ── 打断知识闭环（M2/M4）──
+    # 注入模板统一在 prompt_manager.py 管理（支持 prompt 进化）
+    _INTERRUPT_ABANDONED_TMPL = INTERRUPT_ABANDONED_TMPL
+    _INTERRUPT_CORRECTED_TMPL = INTERRUPT_CORRECTED_TMPL
+
     def __init__(
         self,
         toolkit,
@@ -1690,6 +1741,108 @@ class OnlineToolSession(BaseChatSession):
         self._max_iter_wait.clear()
         self._strip_reasoning_content(self.context.messages)
 
+    def _inject_interruption_knowledge(self, user_msg: str) -> bool:
+        """M2/M4: 上轮被打断 → 三分类（corrected/abandoned/silent）注入提示。
+
+        打断是隐式负面反馈：上轮方向被否定。用户下一条消息决定信号类型：
+        - corrected：语义相似 → 注入「按最新指令重新规划」
+        - abandoned：语义漂移 → 注入「不要回到被打断方向」
+        - silent：无消息 → 不注入（M3 后台沉淀）
+        注入为 system 消息（紧跟初始 system 之后），注入后清除锚点保证幂等。
+        分类结果回写 interruption_events 表（若有 storage）。
+
+        M4：读取 interruption.* 配置（enabled / similarity_threshold / partial_reply_max）。
+
+        Args:
+            user_msg: 本轮用户输入文本
+
+        Returns:
+            bool: 是否成功注入
+        """
+        ev = getattr(self, "_last_interruption", None)
+        if not ev:
+            return False
+        # M4: 总开关
+        try:
+            from tea_agent.config import get_config
+
+            icfg = get_config().interruption
+        except Exception:
+            icfg = {}
+        if not icfg.get("enabled", True):
+            self._last_interruption = None
+            return False
+        try:
+            # 1) 语义分类（embedding 不可用时降级 corrected）
+            engine = None
+            try:
+                from tea_agent.embedding_util import get_embedding_engine
+
+                engine = get_embedding_engine()
+            except Exception:
+                engine = None
+            threshold = float(icfg.get("similarity_threshold", INTERRUPT_SIMILARITY_THRESHOLD))
+            classification, similarity = classify_interruption(
+                ev, user_msg or "", embedding_engine=engine, threshold=threshold
+            )
+
+            # 2) silent：不注入，仅回写事件（若有 id）
+            if classification == "silent":
+                self._persist_classification(ev, classification, similarity, user_msg)
+                self._last_interruption = None
+                return False
+
+            # 3) 按分类选择模板（prompt_manager 统一管理）
+            if classification == "abandoned":
+                inject_text = self._INTERRUPT_ABANDONED_TMPL
+            else:
+                tool = ev.get("tool_name") or "未知工具"
+                iteration = ev.get("iteration", 0)
+                followup_max = min(int(icfg.get("partial_reply_max", 2000)), 300)
+                followup = (user_msg or "").strip()[:followup_max]
+                inject_text = self._INTERRUPT_CORRECTED_TMPL.format(
+                    tool_name=tool, iteration=iteration, followup=followup
+                )
+
+            # 4) 紧跟初始 system 消息之后插入（位置1），历史之前
+            self.context.messages.insert(1, {"role": "system", "content": inject_text})
+
+            # 5) 回写事件表 + 清除锚点（幂等）
+            self._persist_classification(ev, classification, similarity, user_msg)
+            self._last_interruption = None
+            logger.info(
+                f"[InterruptionKnowledge] 注入 {classification} 提示 "
+                f"(sim={similarity}, tool={ev.get('tool_name')}, "
+                f"iter={ev.get('iteration')}, followup={(user_msg or '')[:40]}...)"
+            )
+            return True
+        except Exception:
+            logger.exception("inject_interruption_knowledge failed")
+            return False
+
+    def _persist_classification(
+        self, ev: dict, classification: str, similarity: float | None, user_msg: str
+    ) -> None:
+        """M2: 打断事件分类结果回写事件表（失败仅记日志）。"""
+        event_id = ev.get("id")
+        if not event_id:
+            return
+        storage = getattr(self, "storage", None)
+        if storage is None:
+            return
+        try:
+            import time as _time
+
+            storage.update_interruption_classification(
+                event_id,
+                classification,
+                similarity,
+                (user_msg or "").strip()[:500],
+                _time.strftime("%Y-%m-%d %H:%M:%S"),
+            )
+        except Exception:
+            logger.exception("persist interruption classification failed")
+
     def _notify(self, title: str, message: str) -> None:
         """跨平台桌面通知（通过 toolkit_notify）。"""
         try:
@@ -1734,6 +1887,9 @@ class OnlineToolSession(BaseChatSession):
         self.current_topic_id = topic_id
         self.reset_interrupt()
         self.reset_session_state()
+
+        # M1: 打断知识注入 — 上轮被打断且本轮有新指令 → corrected 提示
+        self._inject_interruption_knowledge(_msg_text)
 
         self._auto_detect_mode(_msg_text)
 

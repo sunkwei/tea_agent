@@ -320,6 +320,7 @@ def _build_routes() -> list:
         Route("/api/topic/{topic_id:str}/todos/{idx:int}", rh.handle_web_topic_todo_update, methods=["PUT"]),
         Route("/api/topic/{topic_id:str}/plans", rh.handle_web_topic_plans),
         Route("/api/tools", rh.handle_web_tools),
+        Route("/api/interruptions", rh.handle_web_interruptions),
         Route("/api/config", rh.handle_web_config),
         Route("/api/config", rh.handle_web_update_config, methods=["PUT"]),
         Route("/api/configs", rh.handle_web_list_configs),

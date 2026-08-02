@@ -939,6 +939,38 @@ async def handle_web_tools(request):
     return JSONResponse({"tools": tools, "count": len(tools)})
 
 
+async def handle_web_interruptions(request):
+    """GET /api/interruptions — 打断知识闭环统计查询。
+
+    Query params:
+        since: ISO 时间戳，仅统计该时间之后的事件（默认近 7 天）
+        limit: 最近事件返回条数（默认 20）
+
+    Returns:
+        {stats: [{tool_name, count, last_ts}], recent: [...], total}
+    """
+    try:
+        query = request.query_params
+        since = query.get("since", "")
+        limit = int(query.get("limit", 20))
+        try:
+            from tea_agent.store import get_storage
+
+            storage = get_storage()
+        except Exception:
+            return JSONResponse({"stats": [], "recent": [], "total": 0})
+        stats = storage.stats_interruptions(since or None)
+        recent = storage.query_interruptions(since=since or None, limit=limit)
+        return JSONResponse({
+            "stats": stats,
+            "recent": recent,
+            "total": len(recent),
+            "count": sum(int(s.get("count", 0)) for s in stats),
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=503)
+
+
 async def handle_web_config(request):
     """GET /api/config"""
     try:

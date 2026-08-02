@@ -379,6 +379,53 @@ def _validate_output_format(content: str, rules: dict) -> tuple:
 
 # ═══ 主工具循环 ═════════════════════════════════════════
 
+def _record_interruption_anchor(session, iterations: int, last_tool_names: list, full_reply: str) -> None:
+    """M1/M2/M4: 记录打断锚点到内存（session._last_interruption）+ 持久化事件表。
+
+    供 chat_stream 下一条消息进入时注入「打断知识」：
+    - corrected（有后续指令） / abandoned（换话题） 的判定基础
+    - 内存级不阻塞打断返回路径；DB 写入失败仅记日志不冒泡。
+    - M2: 生成 event_id，若有 storage 则持久化到 interruption_events 表
+      （status='pending'，分类结果由下一条消息进入时回写）。
+    - M4: 读取 interruption.partial_reply_max（截断）与 persist_events（持久化开关）。
+    """
+    import uuid as _uuid
+
+    try:
+        # M4: 读配置（失败用默认值）
+        try:
+            from tea_agent.config import get_config
+
+            icfg = get_config().interruption
+            partial_max = int(icfg.get("partial_reply_max", 2000))
+            persist = bool(icfg.get("persist_events", True))
+        except Exception:
+            partial_max, persist = 2000, True
+
+        event_id = str(_uuid.uuid4())
+        topic_id = getattr(session, "current_topic_id", "") or ""
+        ev = {
+            "id": event_id,
+            "topic_id": topic_id,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "iteration": iterations,
+            "tool_name": ",".join(last_tool_names)[:200] if last_tool_names else None,
+            "partial_reply": (full_reply or "")[-partial_max:],
+            "phase": "tool_loop",
+            "status": "pending",
+        }
+        session._last_interruption = ev
+        # M2/M4: 持久化（persist_events=false 时跳过；失败仅记日志，不阻塞打断返回路径）
+        storage = getattr(session, "storage", None)
+        if storage is not None and persist:
+            try:
+                storage.insert_interruption_event(ev)
+            except Exception:
+                logger.exception("persist interruption event failed")
+    except Exception:
+        logger.exception("record_interruption_anchor failed")
+
+
 def execute_tool_loop(session, context: dict) -> dict:
     """执行工具调用循环 v4.0 — 支持并行工具执行。
 
@@ -427,12 +474,16 @@ def execute_tool_loop(session, context: dict) -> dict:
     used_tools = False
     iterations = 0
     loop_detector = LoopDetector(window=5, similarity_threshold=0.85)
+    # M1: 跟踪最近调用的工具名，供打断锚点记录
+    last_tool_names: list = []
 
     while iterations < session.max_iterations + session._extra_iterations:
         if session.interrupted:
             final_msg = full_reply + "\n[已打断]"
             session.add_assistant_message(final_msg)
             session.tools_comp.collect_interruption_round(final_msg)
+            # M1: 记录打断锚点，供下一条消息注入打断知识
+            _record_interruption_anchor(session, iterations, last_tool_names, full_reply)
             return {
                 "full_reply": final_msg,
                 "used_tools": used_tools,
@@ -514,6 +565,10 @@ def execute_tool_loop(session, context: dict) -> dict:
         )
 
         valid_tool_calls = session.tools_comp.parse_tool_calls_from_stream(tool_calls_data)
+
+        # M1: 记录最近调用的工具名，供打断锚点记录
+        if valid_tool_calls:
+            last_tool_names = [tc.function.name for tc in valid_tool_calls]
 
         if valid_tool_calls:
             used_tools = True
@@ -628,6 +683,8 @@ def execute_tool_loop(session, context: dict) -> dict:
                             final_msg = full_reply + "\n[已打断]"
                             session.add_assistant_message(final_msg)
                             session.tools_comp.collect_interruption_round(final_msg)
+                            # M1: 记录打断锚点，供下一条消息注入打断知识
+                            _record_interruption_anchor(session, iterations, last_tool_names, full_reply)
                             return {"full_reply": final_msg, "used_tools": used_tools, "interrupted": True}
                     if not session._continue_after_max:
                         warning = f"\n\n[用户选择终止，已执行 {iterations} 轮工具调用]"

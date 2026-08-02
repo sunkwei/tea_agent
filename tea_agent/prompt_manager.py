@@ -45,6 +45,45 @@ DEFAULT_SYSTEM_PROMPT = (
     "你不断进化，能力无上限。以最有效优雅的方式完成任务并持续增强自身。"
 )
 
+# ── 打断知识闭环：注入模板（M4 统一管理，支持 prompt 进化）──
+
+# corrected：上轮被打断 + 本轮有后续指令 → 方向修正
+INTERRUPT_CORRECTED_TMPL = (
+    "[系统] 上一轮生成已被用户打断（当时正在执行 {tool_name}，第 {iteration} 轮）。"
+    "用户接下来的指令为：「{followup}」。"
+    "请将这次打断视为对之前方向/方式的否定，按用户最新指令重新规划，不要继续被打断前的思路。"
+)
+
+# abandoned：上轮方向被弃用（用户转向新话题）→ 防止旧事重提
+INTERRUPT_ABANDONED_TMPL = (
+    "[系统] 上一轮生成的方向已被用户弃用（用户已转向新话题）。"
+    "后续回复请聚焦当前话题，不要主动回到上一轮被打断的内容。"
+)
+
+
+def build_interruption_system_msg(
+    classification: str,
+    tool_name: str = "",
+    iteration: int = 0,
+    followup: str = "",
+) -> str:
+    """构建打断知识注入模板文本。
+
+    Args:
+        classification: corrected / abandoned
+        tool_name: 打断时正在执行的工具名
+        iteration: 打断发生在第几轮工具循环
+        followup: 用户接下来的指令（corrected 时使用）
+
+    Returns:
+        注入模板文本
+    """
+    if classification == "abandoned":
+        return INTERRUPT_ABANDONED_TMPL
+    return INTERRUPT_CORRECTED_TMPL.format(
+        tool_name=tool_name or "未知工具", iteration=iteration, followup=followup
+    )
+
 class SystemPromptManager:
     """系统提示词版本管理器 — 多版本、自动进化、支持回滚。
 

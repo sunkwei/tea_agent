@@ -235,6 +235,22 @@ class AgentConfig:
         "app_font_size",  # App GUI 字体大小
     }
 
+    # 打断知识闭环配置（M4）
+    interruption: dict = field(
+        default_factory=lambda: {
+            "enabled": True,             # 总开关
+            "similarity_threshold": 0.6,  # corrected/abandoned 判定阈值
+            "partial_reply_max": 2000,    # 锚点 partial_reply 截断长度
+            "persist_events": True,       # 是否持久化事件表
+            "analyze_interval_h": 1.0,    # 后台分析周期（小时）
+            "keep_days": 30,              # 事件保留天数（超期清理）
+        }
+    )
+
+    def get_interruption(self, key: str, default=None):
+        """读取打断知识闭环配置项。"""
+        return self.interruption.get(key, default)
+
     # 类型映射
     _CONFIG_TYPES = {
         "max_history": int,
@@ -615,6 +631,9 @@ def _parse_control_params(cfg: AgentConfig, data: dict) -> None:
     cfg.extra_iterations_on_continue = int(
         data.get("extra_iterations_on_continue", cfg.extra_iterations_on_continue)
     )
+    # 打断知识闭环配置节（M4）：合并 yaml 覆盖默认值
+    if isinstance(data.get("interruption"), dict):
+        cfg.interruption = {**cfg.interruption, **data["interruption"]}
     cfg.memory_extraction_threshold = int(
         data.get("memory_extraction_threshold", cfg.memory_extraction_threshold)
     )
@@ -836,6 +855,7 @@ def _prepare_control_data(cfg: AgentConfig, data: dict) -> None:
     data["chat_page_size"] = cfg.chat_page_size
     data["history_l2_max"] = cfg.history_l2_max
     data["history_l3_batch"] = cfg.history_l3_batch
+    data["interruption"] = cfg.interruption
 
 
 def _write_yaml_file(yaml_path: str, data: dict) -> None:

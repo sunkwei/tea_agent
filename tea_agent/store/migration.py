@@ -199,6 +199,32 @@ def init_tables(db):
         )
     ''')
 
+    # ── 打断知识闭环（M2）：打断事件持久化 ──
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS interruption_events (
+            id TEXT PRIMARY KEY,
+            topic_id TEXT,
+            conversation_id TEXT,
+            timestamp TEXT,
+            iteration INTEGER,
+            tool_name TEXT,
+            tool_args_summary TEXT,
+            partial_reply TEXT,
+            phase TEXT DEFAULT 'tool_loop',
+            status TEXT DEFAULT 'pending',
+            classification TEXT,
+            similarity REAL,
+            followup_user_msg TEXT,
+            followup_ts TEXT
+        )
+    ''')
+    c.execute(
+        "CREATE INDEX IF NOT EXISTS idx_interrupt_topic ON interruption_events(topic_id)"
+    )
+    c.execute(
+        "CREATE INDEX IF NOT EXISTS idx_interrupt_status ON interruption_events(status)"
+    )
+
     c.connection.commit()
     c.close()
 

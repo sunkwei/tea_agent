@@ -30,6 +30,7 @@ import threading
 
 from ._component import DB, StoreComponent  # DB 短连接上下文管理器
 from ._conversations import ConversationStore
+from ._interruptions import InterruptionStore
 from ._memories import MemoryStore
 from ._scheduled_tasks import ScheduledTaskStore
 from ._summaries import SummaryStore
@@ -215,6 +216,7 @@ class Storage:
         self._config_history = ConfigHistoryStore(db_path)
         self._vectors = VectorStore(db_path)
         self._scheduled_tasks = ScheduledTaskStore(db_path)
+        self._interruptions = InterruptionStore(db_path)
 
         # ── conn 属性：兼容旧代码直接访问 storage.conn ──
         self._conn_lock = threading.Lock()
@@ -240,6 +242,7 @@ class Storage:
         self.config_history = self._config_history
         self.vectors = self._vectors
         self.scheduled_tasks = self._scheduled_tasks
+        self.interruptions = self._interruptions
 
     @property
     def conn(self):
@@ -533,6 +536,31 @@ class Storage:
     def search_by_keyword(self, query: str, limit: int = 10) -> list:
         """关键词搜索对话。"""
         return self._vectors.search_by_keyword(query, limit)
+
+    # ── 打断事件操作（打断知识闭环）──
+    def insert_interruption_event(self, ev: dict) -> str:
+        """插入一条打断事件。"""
+        return self._interruptions.insert_interruption_event(ev)
+
+    def update_interruption_classification(
+        self, event_id: str, classification: str, similarity: float | None,
+        followup_msg: str | None, followup_ts: str | None,
+    ) -> bool:
+        """打断事件分类后回写。"""
+        return self._interruptions.update_interruption_classification(
+            event_id, classification, similarity, followup_msg, followup_ts
+        )
+
+    def query_interruptions(
+        self, topic_id: str | None = None, status: str | None = None,
+        since: str | None = None, limit: int = 100,
+    ) -> list:
+        """查询打断事件。"""
+        return self._interruptions.query_interruptions(topic_id, status, since, limit)
+
+    def stats_interruptions(self, since: str | None = None) -> list:
+        """按 tool_name 聚合打断统计。"""
+        return self._interruptions.stats_interruptions(since)
 
     # ── Scheduled Task 操作 ──
     def add_task(self, name: str, command: str, schedule: str) -> str:

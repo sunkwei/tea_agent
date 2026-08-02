@@ -235,7 +235,7 @@ class AgentConfig:
         "app_font_size",  # App GUI 字体大小
     }
 
-    # 打断知识闭环配置（M4）
+    # 打断知识闭环配置（M4/M5）
     interruption: dict = field(
         default_factory=lambda: {
             "enabled": True,             # 总开关
@@ -244,6 +244,7 @@ class AgentConfig:
             "persist_events": True,       # 是否持久化事件表
             "analyze_interval_h": 1.0,    # 后台分析周期（小时）
             "keep_days": 30,              # 事件保留天数（超期清理）
+            "skill_min_count": 3,         # M5: 触发行为指导 skill 生成的打断阈值
         }
     )
 

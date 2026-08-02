@@ -646,3 +646,67 @@ class TestM4AnchorConfig:
         session.storage.insert_interruption_event.assert_called_once()
         args = session.storage.insert_interruption_event.call_args[0][0]
         assert args["status"] == "pending"
+
+
+# ════════════════════════════════════════════════════════════
+# M5: 记忆 → 主动 skill/行为改变闭环
+# ════════════════════════════════════════════════════════════
+
+from tea_agent.agent_background import _skill_name_for_tool, analyze_interruptions
+
+
+class TestM5SkillGeneration:
+    """M5: 高频打断模式 → 主动生成行为指导 skill（闭环最后一公里）"""
+
+    def _insert_classified(self, storage, tool, count):
+        for i in range(count):
+            storage.insert_interruption_event({
+                "event_id": f"{tool}-{i}",
+                "topic_id": "m5-topic",
+                "iteration": i + 1,
+                "tool_name": tool,
+                "partial_reply": "x",
+                "status": "classified",
+                "classification": "abandoned",
+            })
+
+    def test_skill_generated_above_threshold(self, inter_storage, tmp_path):
+        self._insert_classified(inter_storage, "toolkit_exec", 3)
+        out = analyze_interruptions(inter_storage, skill_min_count=3, skills_dir=str(tmp_path))
+        skill_file = tmp_path / "interrupt-avoid-exec" / "SKILL.md"
+        assert skill_file.exists()
+        content = skill_file.read_text(encoding="utf-8")
+        assert "interrupt-avoid-exec" in content
+        assert "行为准则" in content
+        assert "toolkit_exec" in content
+        assert any(w.startswith("[skill]") for w in out)
+
+    def test_skill_not_generated_below_threshold(self, inter_storage, tmp_path):
+        self._insert_classified(inter_storage, "toolkit_exec", 2)
+        out = analyze_interruptions(inter_storage, skill_min_count=3, skills_dir=str(tmp_path))
+        assert not (tmp_path / "interrupt-avoid-exec").exists()
+        assert not any(w.startswith("[skill]") for w in out)
+
+    def test_skill_idempotent(self, inter_storage, tmp_path):
+        self._insert_classified(inter_storage, "toolkit_exec", 3)
+        analyze_interruptions(inter_storage, skill_min_count=3, skills_dir=str(tmp_path))
+        skill_file = tmp_path / "interrupt-avoid-exec" / "SKILL.md"
+        before = skill_file.read_text(encoding="utf-8")
+        out = analyze_interruptions(inter_storage, skill_min_count=3, skills_dir=str(tmp_path))
+        assert skill_file.read_text(encoding="utf-8") == before  # 不覆盖
+        assert not any(w.startswith("[skill]") for w in out)
+
+    def test_skill_memory_tracked(self, inter_storage, tmp_path):
+        self._insert_classified(inter_storage, "toolkit_save_file", 3)
+        analyze_interruptions(inter_storage, skill_min_count=3, skills_dir=str(tmp_path))
+        mems = inter_storage.memories.search_memories(
+            category="preference", tags=["skill:interrupt-avoid-save-file"], limit=5
+        )
+        assert mems, "生成 skill 后应记录可追踪记忆"
+
+    def test_skill_name_mapping(self):
+        assert _skill_name_for_tool("toolkit_exec") == "interrupt-avoid-exec"
+        assert _skill_name_for_tool("toolkit_save_file") == "interrupt-avoid-save-file"
+
+    def test_config_skill_min_count_default(self):
+        assert get_config().interruption["skill_min_count"] == 3

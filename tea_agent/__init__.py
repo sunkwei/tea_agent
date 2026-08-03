@@ -13,7 +13,28 @@ if _os.path.isfile(_env_path):
                 _k, _v = _line.split('=', 1)
                 _os.environ.setdefault(_k.strip(), _v.strip())
 
-__version__ = "0.13.12"
+def _get_version() -> str:
+    """获取项目版本（单一来源）：优先 pyproject.toml，回退已安装包元数据。"""
+    _pp = _os.path.join(_os.path.dirname(_os.path.dirname(__file__)), 'pyproject.toml')
+    try:
+        if _os.path.isfile(_pp):
+            with open(_pp, encoding='utf-8') as _f:
+                for _line in _f:
+                    _line = _line.strip()
+                    if _line.startswith('version'):
+                        _v = _line.split('=', 1)[-1].strip().strip('"').strip("'")
+                        if _v:
+                            return _v
+    except Exception:
+        pass
+    try:
+        from importlib.metadata import version as _md_version
+        return _md_version("tea_agent")
+    except Exception:
+        return "0.0.0"
+
+
+__version__ = _get_version()
 
 __all__ = [
     "Agent",

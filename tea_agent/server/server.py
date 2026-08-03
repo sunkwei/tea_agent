@@ -21,6 +21,7 @@ try:
 except ImportError:
     raise ImportError("pip install starlette uvicorn")
 
+from tea_agent import __version__
 from tea_agent.server.module import get_registry
 from tea_agent.server.modules import load_all
 
@@ -50,8 +51,6 @@ def _capture_and_encode(action, region=None):
                 "path": p, "size": len(d)}
     except Exception as e:
         return {"ok": False, "error": str(e)}
-
-__version__ = "0.14.0"
 
 _server_instance = None
 _uvicorn_server = None

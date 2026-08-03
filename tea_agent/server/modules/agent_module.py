@@ -712,6 +712,7 @@ class AgentModule(HotReloadModule):
             "chat_page_size": cfg.chat_page_size,
             "history_l2_max": cfg.history_l2_max,
             "history_l3_batch": cfg.history_l3_batch,
+            "interruption": cfg.interruption,
             "tools_count": len(agent.toolkit.func_map),
             "server_version": cls._server_version,
         }

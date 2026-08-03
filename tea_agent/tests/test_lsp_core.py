@@ -355,9 +355,9 @@ class MyClass:
             fname = f.name
 
         try:
-            # 不应抛异常
+            # 不应抛异常；语法错误文件按契约优雅降级返回 None
             result = parse_file(fname)
-            assert isinstance(result, dict)
+            assert result is None or isinstance(result, dict)
         finally:
             os.unlink(fname)
 

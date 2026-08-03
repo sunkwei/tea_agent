@@ -1741,7 +1741,48 @@ class OnlineToolSession(BaseChatSession):
         self._max_iter_wait.clear()
         self._strip_reasoning_content(self.context.messages)
 
-    def _inject_interruption_knowledge(self, user_msg: str) -> bool:
+    def _restore_interruption_anchor(self, topic_id: str | None = None) -> dict | None:
+        """M2-fix(Web): 内存锚点丢失时从事件表恢复最新 pending 事件为锚点。
+
+        Web server 每次 /api/chat 都新建 session（create_session），
+        内存锚点 _last_interruption 在新 session 中丢失。事件表已持久化
+        pending 事件，这里将其恢复为锚点，保证换话题/纠正信号在 Web
+        场景下同样生效。
+
+        Args:
+            topic_id: 当前主题；无则无法定位（返回 None）
+
+        Returns:
+            恢复的锚点 dict（含 DB id 标记 restored）；无 pending 事件返回 None
+        """
+        if not topic_id:
+            return None
+        storage = getattr(self, "storage", None)
+        if storage is None:
+            return None
+        try:
+            rows = storage.query_interruptions(topic_id=topic_id, status="pending", limit=1)
+            if not rows:
+                return None
+            row = rows[0]
+            ev = {
+                "id": row.get("id"),
+                "tool_name": row.get("tool_name") or "",
+                "iteration": row.get("iteration") or 0,
+                "partial_reply": row.get("partial_reply") or "",
+                "topic_id": topic_id,
+                "restored": True,
+            }
+            self._last_interruption = ev
+            logger.info(
+                f"[InterruptionKnowledge] 从 DB 恢复打断锚点 event_id={ev['id']} tool={ev['tool_name']}"
+            )
+            return ev
+        except Exception:
+            logger.exception("restore interruption anchor failed")
+            return None
+
+    def _inject_interruption_knowledge(self, user_msg: str, topic_id: str | None = None) -> bool:
         """M2/M4: 上轮被打断 → 三分类（corrected/abandoned/silent）注入提示。
 
         打断是隐式负面反馈：上轮方向被否定。用户下一条消息决定信号类型：
@@ -1760,6 +1801,9 @@ class OnlineToolSession(BaseChatSession):
             bool: 是否成功注入
         """
         ev = getattr(self, "_last_interruption", None)
+        if not ev:
+            # M2-fix(Web): 新 session 内存锚点丢失 → 从事件表恢复 pending 事件
+            ev = self._restore_interruption_anchor(topic_id)
         if not ev:
             return False
         # M4: 总开关
@@ -1889,7 +1933,7 @@ class OnlineToolSession(BaseChatSession):
         self.reset_session_state()
 
         # M1: 打断知识注入 — 上轮被打断且本轮有新指令 → corrected 提示
-        self._inject_interruption_knowledge(_msg_text)
+        self._inject_interruption_knowledge(_msg_text, topic_id=topic_id)
 
         self._auto_detect_mode(_msg_text)
 

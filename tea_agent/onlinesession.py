@@ -684,6 +684,18 @@ class ToolComponent(SessionComponent):
         )
 
     def add_tool_result(self, tool_call_id: str, content: str):
+        # S2/缓存友好：入库即压缩到与裁剪阈值一致的定长，消息从出生起定型。
+        # 否则实时消息以原始大小（最高 max_tool_output=128KB）入库，滑出
+        # 3 轮窗口后被 _solidify_history 替换为占位符 → "完整→占位符"两阶段
+        # 翻转会破坏其后全部历史消息的前缀缓存命中。
+        try:
+            from tea_agent.session.history_builder import get_tool_prune_threshold
+            from tea_agent.basesession import BaseChatSession
+
+            max_chars = get_tool_prune_threshold(self.ctx)
+            content = BaseChatSession._compress_tool_content(content, max_chars=max_chars)
+        except Exception:
+            logger.debug("tool content compression failed, keeping raw", exc_info=True)
         self.ctx.messages.append(
             {"role": "tool", "tool_call_id": tool_call_id, "content": content}
         )

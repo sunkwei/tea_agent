@@ -244,6 +244,9 @@ class BaseChatSession(ABC):
         # 用户消息入库时一次性定格注入，而非每次构建 API 消息时注入 system prompt。
         # 这样 system prompt 前缀保持稳定，工具循环内多次请求可命中前缀缓存。
         self._append_runtime_status(entry)
+        # 缓存友好：超长用户文本入库定型，避免 _progressive_trim 二次改写已发送前缀
+        if isinstance(entry.get("content"), str):
+            entry["content"] = self._cap_message_text(entry["content"])
         # 新用户消息到来：失效动态上下文缓存（skill/TODO/记忆将按新状态重新计算）
         try:
             ctx = getattr(self, "context", None)
@@ -271,14 +274,48 @@ class BaseChatSession(ABC):
         except Exception as e:
             logger.debug(f"runtime status injection failed: {e}")
 
-    def add_assistant_message(self, msg: str):
-        """添加助手消息"""
-        self.messages.append({"role": "assistant", "content": msg})
+    def add_assistant_message(self, msg: str, reasoning: str = None):
+        """添加助手消息（reasoning 为可选思维链文本）。
+
+        缓存友好：超长文本入库定型（_cap_message_text），避免 _progressive_trim
+        在后续请求中二次改写已发送的前缀消息。
+        """
+        entry = {"role": "assistant", "content": self._cap_message_text(msg)}
+        if reasoning:
+            entry["reasoning_content"] = reasoning
+        self.messages.append(entry)
+
+    @staticmethod
+    def _cap_message_text(content: str, max_chars: int = 16384) -> str:
+        """长文本定型截断（缓存友好）。
+
+        超长 user/assistant 文本在入库时截断并加 [已截断 标记，使
+        _progressive_trim 策略4 的幂等守卫可识别，避免已发送前缀被二次改写。
+        """
+        if not content:
+            return content
+        if len(content) <= max_chars or "[已截断" in content:
+            return content
+        return content[:max_chars] + f"\n... [已截断: 原长 {len(content)} 字符]"
 
     def add_tool_result(self, tool_call_id: str, content: str):
-        """添加工具执行结果"""
+        """添加工具执行结果（缓存友好：入库即压缩定型，避免 full→占位符翻转）。
+
+        压缩上限与 history_builder 的裁剪阈值对齐（get_tool_prune_threshold），
+        消息从出生起定型，_solidify_history 永不触发二次改写。
+        """
+        max_chars = 2048
+        try:
+            from tea_agent.session.history_builder import get_tool_prune_threshold
+
+            ctx = getattr(self, "context", None)
+            if ctx is not None:
+                max_chars = get_tool_prune_threshold(ctx)
+        except Exception:
+            pass
         self.messages.append(
-            {"role": "tool", "tool_call_id": tool_call_id, "content": content}
+            {"role": "tool", "tool_call_id": tool_call_id,
+             "content": self._compress_tool_content(content, max_chars=max_chars)}
         )
 
     def get_recent_messages(self) -> list[dict]:

@@ -581,7 +581,7 @@ def execute_tool_loop(session, context: dict) -> dict:
 
             assistant_msg = {
                 "role": "assistant",
-                "content": content if content else None,
+                "content": session._cap_message_text(content) if content else None,
                 "tool_calls": [{
                     "id": tc.id,
                     "type": "function",
@@ -713,7 +713,7 @@ def execute_tool_loop(session, context: dict) -> dict:
 
         elif content:
             iterations += 1
-            assistant_msg = {"role": "assistant", "content": content}
+            assistant_msg = {"role": "assistant", "content": session._cap_message_text(content)}
             if reasoning_content:
                 assistant_msg["reasoning_content"] = reasoning_content
             session.context.messages.append(assistant_msg)

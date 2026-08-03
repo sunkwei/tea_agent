@@ -84,12 +84,14 @@ def estimate_messages_tokens(messages: list[dict]) -> int:
     return total
 
 
-def to_multimodal(msg: dict, supports_vision: bool) -> dict:
+def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None) -> dict:
     """如果消息包含 images 字段，将 content 转换为多模态格式。
 
     Args:
-        msg: 消息字典（会原地修改）
+        msg: 消息字典（会原地修改，images 会被 pop）
         supports_vision: 模型是否支持视觉输入
+        original: context.messages 中的原始消息（用于回写 base64 快照缓存；
+            A6: 同一图片文件被覆盖前各请求复用同一编码，避免前缀变化）
 
     Returns:
         处理后的消息字典
@@ -109,24 +111,33 @@ def to_multimodal(msg: dict, supports_vision: bool) -> dict:
     parts = []
     if text:
         parts.append({"type": "text", "text": text})
+    # A6: base64 快照缓存（写回原消息；图片文件未变化时复用同一编码）
+    b64_cache = (msg.get("_b64_cache") or {}) if original is not None else {}
     for img_path in images:
         if not os.path.isfile(img_path):
             continue
-        try:
-            with open(img_path, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode("utf-8")
-            ext = os.path.splitext(img_path)[1].lower()
-            mime_map = {
-                ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-                ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"
-            }
-            mime = mime_map.get(ext, "image/png")
-            parts.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime};base64,{b64}"}
-            })
-        except Exception as e:
-            logger.warning(f"图片编码失败 {img_path}: {e}")
+        b64 = b64_cache.get(img_path)
+        if b64 is None:
+            try:
+                with open(img_path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("utf-8")
+                if original is not None:
+                    b64_cache[img_path] = b64
+            except Exception as e:
+                logger.warning(f"图片编码失败 {img_path}: {e}")
+                continue
+        ext = os.path.splitext(img_path)[1].lower()
+        mime_map = {
+            ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"
+        }
+        mime = mime_map.get(ext, "image/png")
+        parts.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:{mime};base64,{b64}"}
+        })
+    if original is not None:
+        original["_b64_cache"] = b64_cache
     if not parts:
         msg["content"] = ""
         return msg
@@ -160,36 +171,46 @@ def _find_prune_cutoff(messages: list, tail_turns: int = 3) -> int:
     return 0
 
 
-def _persist_prune(messages: list, cutoff: int, threshold: int) -> int:
-    """将滑出最近窗口的大 tool 输出持久化裁剪为占位符。
+def _solidify_history(messages: list, cutoff: int, threshold: int,
+                      max_text_len: int = 16384) -> int:
+    """将滑出最近窗口的大消息持久化定型，确保历史前缀不再变化。
 
     缓存友好（DeepSeek 前缀缓存）：历史消息必须"定型"——一旦裁剪写入
-    context.messages 就不再改变。否则同一 tool 消息在每次请求构建时被
-    动态改写（完整→占位符），会破坏其之后所有消息的前缀缓存命中。
+    context.messages 就不再改变。否则同一消息在每次请求构建时被动态改写
+    （完整→占位符 / 长文本→截断），会破坏其之后所有消息的前缀缓存命中。
+
+    处理两类：
+    1. tool 消息 content > threshold → 占位符（幂等守卫 [工具结果已省略）
+    2. user/assistant 长文本 > max_text_len → 截断（幂等守卫 [已截断）
 
     Args:
         messages: context.messages（原地修改）
-        cutoff: 裁剪分界索引（此索引之前的 tool 消息可裁剪）
-        threshold: 字符数阈值
+        cutoff: 裁剪分界索引（此索引之前的消息可定型）
+        threshold: tool 输出字符数阈值
+        max_text_len: 长文本截断阈值（字符）
 
     Returns:
-        本次实际裁剪的消息数
+        本次实际定型的消息数
     """
     if cutoff <= 0:
         return 0
     pruned = 0
     for i in range(1, cutoff):
         msg = messages[i]
-        if msg.get("role") != "tool":
-            continue
+        role = msg.get("role")
         content = msg.get("content", "")
-        if not isinstance(content, str) or content.startswith("[工具结果已省略"):
-            continue
-        if len(content) > threshold:
-            msg["content"] = f"[工具结果已省略: {len(content)} 字符]"
-            pruned += 1
+        if role == "tool":
+            if (isinstance(content, str) and not content.startswith("[工具结果已省略")
+                    and len(content) > threshold):
+                msg["content"] = f"[工具结果已省略: {len(content)} 字符]"
+                pruned += 1
+        elif role in ("user", "assistant"):
+            if (isinstance(content, str) and content
+                    and "[已截断" not in content and len(content) > max_text_len):
+                msg["content"] = content[:max_text_len] + f"\n... [已截断: 原长 {len(content)} 字符]"
+                pruned += 1
     if pruned:
-        logger.debug(f"_persist_prune: 持久化裁剪 {pruned} 条 tool 消息 (cutoff={cutoff})")
+        logger.debug(f"_solidify_history: 持久化定型 {pruned} 条消息 (cutoff={cutoff})")
     return pruned
 
 
@@ -231,8 +252,27 @@ def _get_token_budget(context: Any) -> tuple[int, int]:
         tool_prune_threshold = max(500, int(input_budget * 0.02))
     else:
         input_budget = 0
-        tool_prune_threshold = 500  # 默认值
+        tool_prune_threshold = 2048  # 默认值（与入库压缩上限对齐）
     return input_budget, tool_prune_threshold
+
+
+def get_tool_prune_threshold(context: Any) -> int:
+    """工具内容统一压缩/裁剪阈值（字符数）。
+
+    缓存友好（DeepSeek 前缀缓存）核心不变式：
+        入库压缩上限 == _persist_prune / _solidify_history 裁剪阈值。
+    消息一旦入库即被压缩到该阈值以内 → 永不触发二次改写
+    （完整→占位符翻转），保证历史前缀逐字节稳定、可命中缓存。
+
+    取值 max(2048, input_budget * 0.02)：
+    - 128K 窗口 → 2048（与旧行为一致）
+    - 1M 窗口 → ~16.7K（保留更完整内容，仍稳定）
+    - 更小窗口 → 不低于 2048，防止过度压缩破坏工具信息
+    """
+    input_budget, _ = _get_token_budget(context)
+    if input_budget > 0:
+        return max(2048, int(input_budget * 0.02))
+    return 2048
 
 
 def _progressive_trim(messages: list[dict], budget: int, context: Any,
@@ -297,6 +337,8 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
                 est = max(est, 0)
 
     # 策略4: 截断长文本（逐步收紧截断阈值）
+    # 幂等守卫：已定型消息（含 [已截断 / [工具结果已省略 标记）不再二次改写，
+    # 避免已发送前缀在后续请求中被截得更短 → 前缀缓存级联失效。
     if est > budget:
         for max_text_len in [8192, 4096, 2048, 1024]:
             if est <= budget:
@@ -306,20 +348,31 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
                     break
                 if msg.get("role") in ("assistant", "tool", "user"):
                     content = msg.get("content", "")
-                    if isinstance(content, str) and len(content) > max_text_len:
+                    if (isinstance(content, str)
+                            and not content.startswith(("[工具结果已省略", "[已截断"))
+                            and "[已截断" not in content
+                            and len(content) > max_text_len):
                         trimmed = content[:max_text_len] + f"\n... [已截断: 原长 {len(content)} 字符]"
                         est -= estimate_tokens(content) - estimate_tokens(trimmed)
                         msg["content"] = trimmed
                         est = max(est, 0)
 
-    # 策略5: 删除 L1 旧轮次（保留最近 5 轮 user 消息）
+    # 策略5: 删除 L1 旧轮次（保留最近 5 轮真实对话轮次）
+    # A4: 只统计 L1 段真实 user 消息——L2/L3 块（[历史记录]/[历史相关对话摘要]/
+    # [系统记忆/[动态上下文 前缀）是临时构造，不算轮次，避免"保留 5 轮"
+    # 实际只剩更少真实轮次、且 cutoff 落在 L2 块中间造成前缀抖动。
     if est > budget:
         user_positions = []
         for i in range(len(result) - 1, -1, -1):
-            if result[i].get("role") == "user":
-                user_positions.append(i)
-                if len(user_positions) >= 5:
-                    break
+            if result[i].get("role") != "user":
+                continue
+            content = result[i].get("content", "")
+            if (isinstance(content, str) and content.startswith(
+                    ("[历史记录]", "[历史相关对话摘要]", "[系统记忆", "[动态上下文"))):
+                continue
+            user_positions.append(i)
+            if len(user_positions) >= 5:
+                break
 
         if len(user_positions) >= 5:
             cutoff = min(user_positions)
@@ -423,28 +476,31 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     """
     enriched = system_prompt
 
-    # 小模型自动注入输出规范约束
-    try:
-        from tea_agent.session.prompts import SMALL_MODEL_CONSTRAINT, get_skill_validate_rules, is_small_model
-        _model_name = getattr(context, 'model', '') or ''
-        if is_small_model(_model_name):
-            enriched = enriched.rstrip('\n') + '\n\n' + SMALL_MODEL_CONSTRAINT
-            _rules = get_skill_validate_rules("output-format-constraint")
-            if _rules:
-                context._skill_validate_rules = _rules
-        else:
-            for _msg in reversed(getattr(context, 'messages', []) or []):
-                _c = _msg.get('content', '') or ''
-                if isinstance(_c, str) and 'toolkit_skills' in _c and 'load' in _c:
-                    _m = __import__('re').search(r'name["\']?\s*[:=]\s*["\']([^"\']+)', _c)
-                    if _m:
-                        _loaded_skill = _m.group(1)
-                        _rules = get_skill_validate_rules(_loaded_skill)
-                        if _rules:
-                            context._skill_validate_rules = _rules
-                    break
-    except Exception as _e:
-        logger.debug(f"Small model constraint injection failed: {_e}")
+    # 小模型自动注入输出规范约束（A7: 一次性固化，不依赖消息扫描。
+    # 扫描结果可能随 L3 压缩/裁剪变化，导致规则在会话中途翻转。）
+    if not getattr(context, "_skill_rules_set", False):
+        try:
+            from tea_agent.session.prompts import SMALL_MODEL_CONSTRAINT, get_skill_validate_rules, is_small_model
+            _model_name = getattr(context, 'model', '') or ''
+            if is_small_model(_model_name):
+                enriched = enriched.rstrip('\n') + '\n\n' + SMALL_MODEL_CONSTRAINT
+                _rules = get_skill_validate_rules("output-format-constraint")
+                if _rules:
+                    context._skill_validate_rules = _rules
+            else:
+                for _msg in reversed(getattr(context, 'messages', []) or []):
+                    _c = _msg.get('content', '') or ''
+                    if isinstance(_c, str) and 'toolkit_skills' in _c and 'load' in _c:
+                        _m = __import__('re').search(r'name["\']?\s*[:=]\s*["\']([^"\']+)', _c)
+                        if _m:
+                            _loaded_skill = _m.group(1)
+                            _rules = get_skill_validate_rules(_loaded_skill)
+                            if _rules:
+                                context._skill_validate_rules = _rules
+                        break
+        except Exception as _e:
+            logger.debug(f"Small model constraint injection failed: {_e}")
+        context._skill_rules_set = True
 
     # ── 收集所有注入内容 ──
     inject_parts = []
@@ -474,9 +530,11 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
         # 它们每次请求必变（时间走秒、token 估算随 messages 增长、轮次递增），
         # 若注入 system prompt（消息前缀首元素）会导致整条前缀缓存 100% 失效。
         # 这些动态状态改由 add_user_message 在用户消息入库时一次性定格注入（见 basesession.py）。
+        # A2: OS 文本已在上方直接注入，排除 environment 片段避免重复
+        # （重复注入每请求浪费 ~1-2KB token，且放大缓存未命中成本）。
         frag_text = assemble_fragments(
             context,
-            exclude=["session_budget", "token_budget", "current_time"],
+            exclude=["session_budget", "token_budget", "current_time", "environment"],
         )
         if frag_text:
             inject_parts.append(frag_text)
@@ -490,7 +548,6 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     if inject_parts:
         combined_inject = "\n\n---\n\n".join(inject_parts)
         enriched = combined_inject + '\n\n' + enriched.rstrip('\n')
-        context._last_l0_hash = hash(combined_inject)
 
     return enriched
 
@@ -548,10 +605,12 @@ def _build_dynamic_context(context: Any) -> str:
     except Exception as e:
         logger.debug(f"task resume check failed: {e}")
 
-    # 3. 长期记忆（仅当 L3 禁用时注入；L3 启用时记忆在 _build_level3_block）
-    disable_l3 = getattr(context, 'disable_l3', False) or context.disable_summary
-    if disable_l3 and getattr(context, '_injected_memories_text', ''):
-        inject_parts.append(context._injected_memories_text)
+    # 3. 长期记忆（S3: 统一在尾部动态上下文注入，L3 块不再携带）
+    #    记忆随当前用户消息每轮变化，放在消息尾部（临时 user 消息，紧随最后一个
+    #    user 之前）不影响前缀稳定性，同时保持对模型的高可见性。
+    memories_text = getattr(context, '_injected_memories_text', '') or ''
+    if memories_text:
+        inject_parts.append(f"## 长期记忆\n{memories_text}")
 
     if not inject_parts:
         return ""
@@ -588,13 +647,13 @@ def _build_level3_block(context: Any) -> list[dict]:
     result = []
     parts = []
 
-    # 合并长期记忆到 L3（避免 L0 和 L3 重复）
-    memory = context._injected_memories_text
+    # S3: 长期记忆已移至尾部动态上下文（_build_dynamic_context）。
+    # 记忆随当前用户消息每轮变化，若放在 L3（消息前缀 result[1]），
+    # 每轮变化会导致其后全部 L1/L2 历史缓存失效；移到尾部后 L3 只含
+    # 低频变化的摘要，跨轮前缀（system + L3 + L2 + L1）可稳定命中缓存。
     sem = context._semantic_summary
     tc = context._tool_chain_summary
 
-    if memory:
-        parts.append(f"## 长期记忆\n{memory}")
     if sem:
         parts.append(f"## 长期背景/偏好/关键结论\n{sem}")
     if tc:
@@ -616,6 +675,28 @@ def _build_level3_block(context: Any) -> list[dict]:
         # NOTE: 不再添加假 assistant 回复，节省 token
 
     return result
+
+
+def _calibrated_estimate(context: Any, estimate: int) -> int:
+    """用上次 API 实际 usage 校准启发式 token 估算（A5）。
+
+    启发式估算（中文 1.5 字/token、英文 4 字符/token）与真实 tokenizer 存在偏差。
+    若上次实际 prompt_tokens 明显高于估算（低估超过 20%），按比例放大本次估算，
+    使预算"越线"时机提前、贴近真实，避免裁剪在工具循环中段才触发
+    （此时已发送消息可能被二次改写，破坏前缀缓存）。
+    只放大不缩小（保守，避免高估触发多余裁剪）。
+    """
+    try:
+        last = getattr(context, "_last_usage", None) or {}
+        actual = last.get("prompt_tokens", 0) or 0
+        if actual <= 0 or estimate <= 0:
+            return estimate
+        ratio = actual / estimate
+        if ratio > 1.2:
+            return int(estimate * ratio)
+    except Exception:
+        pass
+    return estimate
 
 
 def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
@@ -704,9 +785,9 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     # 工具输出裁剪 — 保留最近 3 轮完整结果，更早的替换为占位符
     _tool_prune_cutoff = _find_prune_cutoff(context.messages, tail_turns=3)
 
-    # 缓存友好：先持久化裁剪（写回 context.messages），确保历史消息定型。
-    # 否则每次请求构建时动态改写已发送过的 tool 消息，会破坏前缀缓存命中。
-    _persist_prune(context.messages, _tool_prune_cutoff, tool_prune_threshold)
+    # 缓存友好：先持久化定型（写回 context.messages），确保历史消息定型。
+    # 否则每次请求构建时动态改写已发送过的 tool/长文本消息，会破坏前缀缓存命中。
+    _solidify_history(context.messages, _tool_prune_cutoff, tool_prune_threshold)
 
     # disable_summary 时：丢弃早期历史，只保留最近 30 轮
     if context.disable_summary:
@@ -735,7 +816,8 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
         if (msg_copy["role"] == "assistant" and context.supports_reasoning
                 and "reasoning_content" not in msg_copy):
             msg_copy["reasoning_content"] = ""
-        msg_copy = to_multimodal(msg_copy, context.supports_vision)
+        msg_copy = to_multimodal(msg_copy, context.supports_vision, original=msg)
+        msg_copy.pop("_b64_cache", None)
         if isinstance(msg_copy.get("content"), list) and not context.supports_vision:
             text_parts = []
             for p in msg_copy["content"]:
@@ -750,12 +832,20 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     # ── 渐进式 token 裁剪 ──
     if input_budget > 0:
         est = estimate_messages_tokens(result)
-        if est > input_budget:
-            logger.info(f"token 预估: {est} > 预算 {input_budget}，启动渐进式裁剪")
+        # A5: 用上次 API 实际 usage 校准启发式估算（低估时放大），
+        # 避免预算"越线"时机与真实 tokenizer 偏差导致裁剪在循环中段才触发。
+        est_check = _calibrated_estimate(context, est)
+        if est_check > input_budget:
+            logger.info(f"token 预估: {est_check} (>预算 {input_budget}, 原始估算 {est})，启动渐进式裁剪")
             result = _progressive_trim(result, input_budget, context,
                                        tool_prune_threshold=tool_prune_threshold)
             est_after = estimate_messages_tokens(result)
             logger.info(f"裁剪后: {est_after} tokens (节省 {est - est_after})")
+
+    # 剥离内部字段（base64 快照缓存/图片路径），避免发送给 API
+    for _m in result:
+        _m.pop("_b64_cache", None)
+        _m.pop("images", None)
 
     # JSON 完整性校验
     result = sanitize_api_messages(result)

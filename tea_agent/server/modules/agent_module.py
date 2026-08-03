@@ -527,6 +527,8 @@ class AgentModule(HotReloadModule):
                 "total_tokens": usage.get("total_tokens", 0),
                 "prompt_tokens": usage.get("prompt_tokens", 0),
                 "completion_tokens": usage.get("completion_tokens", 0),
+                "prompt_cache_hit_tokens": usage.get("prompt_cache_hit_tokens", 0),
+                "prompt_cache_miss_tokens": usage.get("prompt_cache_miss_tokens", 0),
                 "model": model_name,
                 "cheap_model": cheap_model_name,
             }
@@ -534,6 +536,19 @@ class AgentModule(HotReloadModule):
                 usage_data["cheap_tokens"] = cheap_usage.get("total_tokens", 0)
                 usage_data["cheap_prompt_tokens"] = cheap_usage.get("prompt_tokens", 0)
                 usage_data["cheap_completion_tokens"] = cheap_usage.get("completion_tokens", 0)
+                usage_data["cheap_prompt_cache_hit_tokens"] = cheap_usage.get("prompt_cache_hit_tokens", 0)
+                usage_data["cheap_prompt_cache_miss_tokens"] = cheap_usage.get("prompt_cache_miss_tokens", 0)
+            # 缓存命中率描述（供前端直接展示）
+            try:
+                from tea_agent.session.cache_report import format_cache_hit_rate
+                _rate = format_cache_hit_rate(usage)
+                if _rate:
+                    usage_data["cache_hit_rate"] = _rate
+                _cheap_rate = format_cache_hit_rate(cheap_usage)
+                if _cheap_rate:
+                    usage_data["cheap_cache_hit_rate"] = _cheap_rate
+            except Exception:
+                pass
             _put({
                 "type": "done",
                 "ai_msg": _effective_ai_msg,

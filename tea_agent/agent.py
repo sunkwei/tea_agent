@@ -506,6 +506,19 @@ class Agent:
 
         self._db.add_topic_tokens(topic_id, **kwargs)
 
+        # 任务结束：输出 DeepSeek 前缀缓存命中率（依据官方 kv_cache 文档：
+        # usage.prompt_cache_hit_tokens / prompt_cache_miss_tokens）
+        try:
+            from tea_agent.session.cache_report import format_cache_hit_rate
+            _rate = format_cache_hit_rate(usage)
+            if _rate:
+                logger.info(f"[Cache] 主模型 {_rate}")
+            _cheap_rate = format_cache_hit_rate(cheap_usage)
+            if _cheap_rate:
+                logger.info(f"[Cache] 便宜模型 {_cheap_rate}")
+        except Exception:
+            pass
+
     def _extract_user_text(self, user_msg) -> str:
         """从用户消息中提取纯文本。
 

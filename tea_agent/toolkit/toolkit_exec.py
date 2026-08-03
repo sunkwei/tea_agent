@@ -189,9 +189,9 @@ class _ProcessMonitor:
                         cpu_pct = proc.cpu_percent(interval=0.2)
                         if cpu_pct > 0:
                             is_active = True
-                    except (_psutil.NoSuchProcess, _psutil.AccessDenied):
-                        logger.exception('op_failed')
-
+                    except (OSError, _psutil.NoSuchProcess, _psutil.AccessDenied):
+                        # 进程已退出（WSL2 下 psutil 可能抛原始 FileNotFoundError），监控结束
+                        break
 
                     # 内存检查（RSS 增长 > 1%）
                     try:
@@ -199,21 +199,18 @@ class _ProcessMonitor:
                         if self._last_rss > 0 and mem.rss > self._last_rss * 1.01:
                             is_active = True
                         self._last_rss = mem.rss
-                    except (_psutil.NoSuchProcess, _psutil.AccessDenied):
-                        logger.exception('op_failed')
-
+                    except (OSError, _psutil.NoSuchProcess, _psutil.AccessDenied):
+                        break
 
                     # IO 检查（读写字节增长）
                     try:
                         io = proc.io_counters()
-                        if (io.read_bytes > self._last_io_read or
-                                io.write_bytes > self._last_io_write):
+                        if io.read_bytes > self._last_io_read or io.write_bytes > self._last_io_write:
                             is_active = True
                         self._last_io_read = io.read_bytes
                         self._last_io_write = io.write_bytes
-                    except (_psutil.AccessDenied, AttributeError):
-                        logger.exception('op_failed')
-
+                    except (OSError, _psutil.AccessDenied, AttributeError):
+                        break
 
                     # 子进程检查
                     if not is_active:
@@ -223,20 +220,19 @@ class _ProcessMonitor:
                                     if child.cpu_percent(interval=0.1) > 0:
                                         is_active = True
                                         break
-                                except (_psutil.NoSuchProcess, _psutil.AccessDenied):
-                                    logger.exception('op_failed')
+                                except (OSError, _psutil.NoSuchProcess, _psutil.AccessDenied):
+                                    break
 
-                        except (_psutil.NoSuchProcess, _psutil.AccessDenied):
-                            logger.exception('op_failed')
-
+                        except (OSError, _psutil.NoSuchProcess, _psutil.AccessDenied):
+                            break
 
                     if is_active:
                         self.last_active_time = time.time()
 
-                except (_psutil.NoSuchProcess, _psutil.AccessDenied):
+                except (OSError, _psutil.NoSuchProcess, _psutil.AccessDenied):
                     break
-        except _psutil.NoSuchProcess:
-            logger.exception('op_failed')
+        except (OSError, _psutil.NoSuchProcess):
+            logger.debug("monitor: 进程 %s 已退出，监控线程结束", self.pid)
 
 
 def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:

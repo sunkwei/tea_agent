@@ -1124,6 +1124,14 @@ body {
   color: var(--purple);
   font-weight: 600;
 }
+#usage-bar .usage-cache {
+  color: var(--green);
+  font-weight: 600;
+}
+#usage-bar .usage-cache.cheap {
+  color: var(--purple);
+  opacity: 0.85;
+}
 #usage-bar:hover {
   background: var(--surface2);
   color: var(--text);

@@ -1409,10 +1409,21 @@ function updateUsage(usage) {
   if (usage.cheap_model) {
     cheapHtml = ' | <span class="usage-cheap">便宜模型: ' + usage.cheap_model + '</span>';
   }
+  // 缓存命中率（后端已在 cache_hit_rate / cheap_cache_hit_rate 预格式化好描述串）
+  var cacheHtml = '';
+  if (usage.cache_hit_rate) {
+    cacheHtml = ' | <span class="usage-cache">' + usage.cache_hit_rate + '</span>';
+  }
+  var cheapCacheHtml = '';
+  if (usage.cheap_cache_hit_rate && usage.cheap_cache_hit_rate !== usage.cache_hit_rate) {
+    cheapCacheHtml = ' | <span class="usage-cache cheap">' + usage.cheap_cache_hit_rate + '</span>';
+  }
   bar.innerHTML = '<span class="usage-tokens">📊 T:' + usage.total_tokens
     + '</span> <span class="usage-detail">(P:' + usage.prompt_tokens + '+C:' + usage.completion_tokens + ')</span>'
     + modelHtml
-    + cheapHtml;
+    + cheapHtml
+    + cacheHtml
+    + cheapCacheHtml;
   bar.className = 'usage-bar';
 }
 

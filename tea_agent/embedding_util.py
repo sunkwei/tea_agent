@@ -146,6 +146,10 @@ class EmbeddingEngine:
 
         self._use_api = bool(self.api_url and self.model_name and HAS_REQUESTS)
 
+        # BM25 回退维度与 API 维度保持一致，避免混合来源向量不可比
+        if self.dimension:
+            self._bm25 = _SimpleBM25(vector_dim=self.dimension)
+
     @property
     def mode(self) -> str:
         return "api" if self._use_api else "tfidf"
@@ -195,6 +199,12 @@ class EmbeddingEngine:
             return base + "/embeddings"
         return base + "/v1/embeddings"
 
+    def _set_dimension(self, dim: int) -> None:
+        """记录 API 实际向量维度，并让 BM25 回退保持一致。"""
+        self.dimension = dim
+        if self._bm25.vector_dim != dim:
+            self._bm25 = _SimpleBM25(vector_dim=dim)
+
     def _embed_api(self, text: str) -> list[float]:
         """通过远程 API 获取嵌入向量。"""
         url = self._build_url()
@@ -233,7 +243,7 @@ class EmbeddingEngine:
             emb = data_list[0].get("embedding", [])
             if emb:
                 if not self.dimension:
-                    self.dimension = len(emb)
+                    self._set_dimension(len(emb))
                 return emb
 
         raise RuntimeError(f"API 返回格式异常: {json.dumps(data)[:200]}")
@@ -265,13 +275,18 @@ class EmbeddingEngine:
             ]
             if embeddings:
                 if not self.dimension:
-                    self.dimension = len(embeddings[0])
+                    self._set_dimension(len(embeddings[0]))
                 return embeddings
 
         raise RuntimeError("API 批量返回格式异常")
 
     def _embed_bm25(self, text: str) -> list[float]:
-        """BM25 文本向量化（API 不可用时的回退）。"""
+        """BM25 文本向量化（API 不可用时的回退）。
+
+        若已知道 API 维度，则回退向量使用相同维度，避免混合来源向量不可比。
+        """
+        if self.dimension and self._bm25.vector_dim != self.dimension:
+            self._bm25 = _SimpleBM25(vector_dim=self.dimension)
         return self._bm25.vectorize(text)
 
     def _embed_tfidf(self, text: str) -> list[float]:
@@ -289,11 +304,18 @@ class EmbeddingEngine:
         )
 
     def cosine_similarity(self, a: list[float], b: list[float]) -> float:
-        """计算两个向量的余弦相似度。"""
+        """计算两个向量的余弦相似度。
+
+        向量来源可能不一致（API / BM25 混合），维度不同时降级为 0.0
+        而不是抛异常，避免下游嵌入中断。
+        """
         import numpy as np
 
         if len(a) != len(b):
-            raise ValueError(f"向量维度不匹配: {len(a)} vs {len(b)}")
+            logger.warning(
+                f"向量维度不匹配: {len(a)} vs {len(b)}，相似度降级为 0.0"
+            )
+            return 0.0
         aa = np.array(a, dtype=np.float32)
         bb = np.array(b, dtype=np.float32)
         dot = float(aa @ bb)

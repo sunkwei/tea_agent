@@ -231,15 +231,45 @@ class BaseChatSession(ABC):
     def add_user_message(self, msg):
         """添加用户消息，支持纯文本或含图片的结构化输入"""
         if isinstance(msg, str):
-            self.messages.append({"role": "user", "content": msg})
+            entry = {"role": "user", "content": msg}
         elif isinstance(msg, dict):
             entry = {"role": "user", "content": msg.get("text", "")}
             images = msg.get("images", [])
             if images:
                 entry["images"] = images
-            self.messages.append(entry)
         else:
-            self.messages.append({"role": "user", "content": str(msg)})
+            entry = {"role": "user", "content": str(msg)}
+
+        # 缓存友好（DeepSeek 前缀缓存）：动态运行状态（时间/token预算/轮次）在
+        # 用户消息入库时一次性定格注入，而非每次构建 API 消息时注入 system prompt。
+        # 这样 system prompt 前缀保持稳定，工具循环内多次请求可命中前缀缓存。
+        self._append_runtime_status(entry)
+        # 新用户消息到来：失效动态上下文缓存（skill/TODO/记忆将按新状态重新计算）
+        try:
+            ctx = getattr(self, "context", None)
+            if ctx is not None:
+                ctx._dynamic_ctx_cache = None
+        except Exception:
+            pass
+        self.messages.append(entry)
+
+    def _append_runtime_status(self, entry: dict):
+        """将动态运行状态合并到用户消息末尾（入库定格，一次定型）。"""
+        try:
+            ctx = getattr(self, "context", None)
+            if ctx is None or not entry.get("content"):
+                return
+            from tea_agent.context_fragments import assemble_fragments
+
+            status = assemble_fragments(
+                ctx,
+                names=["session_budget", "token_budget", "current_time"],
+                header="[运行状态 — 系统自动注入，供参考]",
+            )
+            if status:
+                entry["content"] = entry["content"] + "\n\n" + status
+        except Exception as e:
+            logger.debug(f"runtime status injection failed: {e}")
 
     def add_assistant_message(self, msg: str):
         """添加助手消息"""

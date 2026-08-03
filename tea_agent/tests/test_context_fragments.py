@@ -321,19 +321,40 @@ class TestTokenBudgetConfig:
 # ═══ 集成：history_builder 注入 ════════════════════════
 
 class TestHistoryBuilderIntegration:
-    def test_build_api_messages_injects_fragments(self):
+    def test_system_prompt_stable_no_dynamic_fragments(self):
+        """缓存友好：system prompt 不注入动态片段（时间/预算/轮次）。
+
+        动态片段（current_time/token_budget/session_budget）每次请求必变，
+        注入 system prompt 会导致 DeepSeek 前缀缓存 100% 失效。
+        """
         from tea_agent.session.history_builder import build_api_messages
 
         ctx = make_context()
         msgs = build_api_messages(ctx, "测试系统提示词")
         assert msgs[0]["role"] == "system"
-        assert "<token_budget>" in msgs[0]["content"]
         assert "测试系统提示词" in msgs[0]["content"]
+        assert "<token_budget>" not in msgs[0]["content"]
+        assert "<current_time>" not in msgs[0]["content"]
 
-    def test_disable_summary_still_injects(self):
+    def test_dynamic_status_injected_to_user_message(self):
+        """动态状态注入到 user 消息（add_user_message 入库定格）"""
+        from tea_agent.basesession import BaseChatSession
+
+        class _FS(BaseChatSession):
+            def chat_stream(self, msg, callback):
+                return "", False
+
+        ctx = make_context()
+        fs = _FS(model="test")
+        fs.context = ctx
+        fs.add_user_message("你好")
+        assert "[运行状态" in fs.messages[-1]["content"]
+        assert "<token_budget>" in fs.messages[-1]["content"]
+
+    def test_disable_summary_system_prompt_stable(self):
         from tea_agent.session.history_builder import build_api_messages
 
         ctx = make_context()
         ctx.disable_summary = True
         msgs = build_api_messages(ctx, "测试")
-        assert "<token_budget>" in msgs[0]["content"]
+        assert "<token_budget>" not in msgs[0]["content"]

@@ -160,6 +160,39 @@ def _find_prune_cutoff(messages: list, tail_turns: int = 3) -> int:
     return 0
 
 
+def _persist_prune(messages: list, cutoff: int, threshold: int) -> int:
+    """将滑出最近窗口的大 tool 输出持久化裁剪为占位符。
+
+    缓存友好（DeepSeek 前缀缓存）：历史消息必须"定型"——一旦裁剪写入
+    context.messages 就不再改变。否则同一 tool 消息在每次请求构建时被
+    动态改写（完整→占位符），会破坏其之后所有消息的前缀缓存命中。
+
+    Args:
+        messages: context.messages（原地修改）
+        cutoff: 裁剪分界索引（此索引之前的 tool 消息可裁剪）
+        threshold: 字符数阈值
+
+    Returns:
+        本次实际裁剪的消息数
+    """
+    if cutoff <= 0:
+        return 0
+    pruned = 0
+    for i in range(1, cutoff):
+        msg = messages[i]
+        if msg.get("role") != "tool":
+            continue
+        content = msg.get("content", "")
+        if not isinstance(content, str) or content.startswith("[工具结果已省略"):
+            continue
+        if len(content) > threshold:
+            msg["content"] = f"[工具结果已省略: {len(content)} 字符]"
+            pruned += 1
+    if pruned:
+        logger.debug(f"_persist_prune: 持久化裁剪 {pruned} 条 tool 消息 (cutoff={cutoff})")
+    return pruned
+
+
 def _extract_files_from_text(text: str) -> set:
     """从文本中提取文件路径和符号引用"""
     files = set()
@@ -416,6 +449,73 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     # ── 收集所有注入内容 ──
     inject_parts = []
 
+    # 动态注入（技能加载 / 未完成任务提醒 / 长期记忆）已移至消息尾部
+    # （见 _build_dynamic_context 与 build_api_messages 末尾插入），
+    # 确保 system prompt 前缀稳定，最大化 DeepSeek 前缀缓存命中率。
+    # 若这些内容随每轮请求变化却注入 system prompt（消息前缀首元素），
+    # 会导致整条前缀缓存 100% 失效（当前会话实测命中率仅 0.8%）。
+
+    # 3. 操作系统环境信息注入（属性注入模式）
+    #    OS 信息由 pipeline 步骤检测 OS 变化后写入 context._injected_os_info_text
+    #    取代了旧版注入虚假 user+assistant 消息轮次的做法
+    os_text = getattr(context, '_injected_os_info_text', '') or ''
+    if os_text:
+        inject_parts.append(os_text)
+
+    # 长期记忆（disable_l3 时）已移至 _build_dynamic_context（消息尾部注入）
+
+    # 2. 上下文片段注入（借鉴 Codex Context Fragments）
+    #    按需组装：token 预算 / 当前时间 / 会话模式 / AGENTS.md 等
+    #    让模型感知剩余空间，自主决策"继续干活 or 先总结"
+    try:
+        from tea_agent.context_fragments import assemble_fragments
+
+        # 缓存友好（DeepSeek 前缀缓存）：排除动态片段 current_time/token_budget/session_budget。
+        # 它们每次请求必变（时间走秒、token 估算随 messages 增长、轮次递增），
+        # 若注入 system prompt（消息前缀首元素）会导致整条前缀缓存 100% 失效。
+        # 这些动态状态改由 add_user_message 在用户消息入库时一次性定格注入（见 basesession.py）。
+        frag_text = assemble_fragments(
+            context,
+            exclude=["session_budget", "token_budget", "current_time"],
+        )
+        if frag_text:
+            inject_parts.append(frag_text)
+    except Exception as e:
+        logger.debug(f"context fragments injection failed: {e}")
+
+    # 合并所有注入到 system prompt（将所有注入放在最前面，提高可见性）
+    # 注意：enriched 每次从 system_prompt 重新初始化，因此只要存在注入就必须重新拼接，
+    # 不能用 hash 去重跳过——否则"注入内容不变"的后续请求会丢失注入（system prompt
+    # 在首次请求与后续请求之间不一致，同样会破坏前缀缓存命中）。
+    if inject_parts:
+        combined_inject = "\n\n---\n\n".join(inject_parts)
+        enriched = combined_inject + '\n\n' + enriched.rstrip('\n')
+        context._last_l0_hash = hash(combined_inject)
+
+    return enriched
+
+
+def _build_dynamic_context(context: Any) -> str:
+    """构建动态上下文文本（注入到消息尾部，不进入 system prompt）。
+
+    缓存友好（DeepSeek 前缀缓存）：system prompt 必须保持前缀稳定。
+    以下内容随对话/任务状态变化，若注入 system prompt（消息前缀首元素）
+    会导致整条前缀缓存失效，实测命中率仅 0.8%（569K 未命中 vs 4.6K 命中）：
+    - 按需技能加载（加载前后 system prompt 不一致）
+    - 未完成任务提醒（TODO/Plan 状态变化）
+    - 长期记忆（disable_l3 时，随注入时机变化）
+
+    这些内容作为临时 user 消息插入到消息尾部（build_api_messages 末尾），
+    不持久化到 context.messages，因此不影响历史前缀稳定性。
+
+    Args:
+        context: SessionContext
+
+    Returns:
+        动态上下文文本（无内容时返回空串）
+    """
+    inject_parts: list[str] = []
+
     # 1. 按需技能加载（取代已废除的"知识结晶推荐"）
     #    经过几轮对话后，评估各 skill 的必要性/充分性，决定是否注入 SKILL.md
     try:
@@ -426,7 +526,7 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     except Exception as _e:
         logger.debug(f"Skill on-demand loading failed: {_e}")
 
-    # 2. 未完成任务检查注入
+    # 2. 未完成任务检查
     try:
         from tea_agent.toolkit.toolkit_task_resume import toolkit_task_resume
         resume_info = toolkit_task_resume(action="check")
@@ -448,40 +548,29 @@ def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     except Exception as e:
         logger.debug(f"task resume check failed: {e}")
 
-    # 3. 操作系统环境信息注入（属性注入模式）
-    #    OS 信息由 pipeline 步骤检测 OS 变化后写入 context._injected_os_info_text
-    #    取代了旧版注入虚假 user+assistant 消息轮次的做法
-    os_text = getattr(context, '_injected_os_info_text', '') or ''
-    if os_text:
-        inject_parts.append(os_text)
-
-    # 4. 长期记忆注入（仅当 L3 禁用时，才注入到 system prompt）
-    #    如果 L3 启用，记忆会合并到 L3 块中，避免重复（见 _build_level3_block）
+    # 3. 长期记忆（仅当 L3 禁用时注入；L3 启用时记忆在 _build_level3_block）
     disable_l3 = getattr(context, 'disable_l3', False) or context.disable_summary
-    if disable_l3 and context._injected_memories_text:
+    if disable_l3 and getattr(context, '_injected_memories_text', ''):
         inject_parts.append(context._injected_memories_text)
 
-    # 5. 上下文片段注入（借鉴 Codex Context Fragments）
-    #    按需组装：token 预算 / 当前时间 / 会话模式 / AGENTS.md 等
-    #    让模型感知剩余空间，自主决策"继续干活 or 先总结"
-    try:
-        from tea_agent.context_fragments import assemble_fragments
+    if not inject_parts:
+        return ""
+    return "[动态上下文 — 由 tea_agent 自动注入，供参考]\n\n" + "\n\n---\n\n".join(inject_parts)
 
-        frag_text = assemble_fragments(context)
-        if frag_text:
-            inject_parts.append(frag_text)
-    except Exception as e:
-        logger.debug(f"context fragments injection failed: {e}")
 
-    # 合并所有注入到 system prompt（将所有注入放在最前面，提高可见性）
-    if inject_parts:
-        combined_inject = "\n\n---\n\n".join(inject_parts)
-        new_hash = hash(combined_inject)
-        if new_hash != getattr(context, '_last_l0_hash', 0):
-            enriched = combined_inject + '\n\n' + enriched.rstrip('\n')
-            context._last_l0_hash = new_hash
+def _get_dynamic_context(context: Any) -> str:
+    """获取动态上下文文本（带会话级缓存，工具循环内复用）。
 
-    return enriched
+    缓存友好（DeepSeek 前缀缓存）：动态上下文（skill 加载/TODO 状态/记忆）在
+    工具循环内若每轮重新计算，内容变化会导致尾部插入的动态消息变动，
+    其后的消息前缀无法命中缓存。因此首次构建时计算并缓存，
+    仅在新用户消息入库时失效（add_user_message 清除 _dynamic_ctx_cache）。
+    """
+    cached = getattr(context, "_dynamic_ctx_cache", None)
+    if cached is None:
+        cached = _build_dynamic_context(context)
+        context._dynamic_ctx_cache = cached
+    return cached
 
 
 def _build_level3_block(context: Any) -> list[dict]:
@@ -602,7 +691,12 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     # Level 1: 最新对话（含动态工具输出裁剪）
     # ═══════════════════════════════════════════════
     max_turns_limit = 30
+    # 自适应起始索引：真实会话中 messages[0] 为 system 消息（跳过）；
+    # 若调用方未提供 system 头（如部分测试/轻量场景），从 0 开始，
+    # 避免首条用户消息被误跳过。
     start_idx = 1
+    if not context.messages or context.messages[0].get("role") != "system":
+        start_idx = 0
 
     # 动态计算 token 预算和工具裁剪阈值
     input_budget, tool_prune_threshold = _get_token_budget(context)
@@ -610,10 +704,14 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     # 工具输出裁剪 — 保留最近 3 轮完整结果，更早的替换为占位符
     _tool_prune_cutoff = _find_prune_cutoff(context.messages, tail_turns=3)
 
+    # 缓存友好：先持久化裁剪（写回 context.messages），确保历史消息定型。
+    # 否则每次请求构建时动态改写已发送过的 tool 消息，会破坏前缀缓存命中。
+    _persist_prune(context.messages, _tool_prune_cutoff, tool_prune_threshold)
+
     # disable_summary 时：丢弃早期历史，只保留最近 30 轮
     if context.disable_summary:
         user_msg_indices = []
-        for i in range(1, len(context.messages)):
+        for i in range(start_idx, len(context.messages)):
             if context.messages[i].get("role") == "user":
                 user_msg_indices.append(i)
         if len(user_msg_indices) > max_turns_limit:
@@ -679,5 +777,25 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
         else:
             cleaned.append(msg)
     result = cleaned
+
+    # ── 动态上下文注入（缓存友好）──
+    # 技能加载 / 未完成任务提醒 / 长期记忆等动态内容作为临时 user 消息
+    # 插到最后一个 user 消息之前（消息尾部），不进入 system prompt，
+    # 保证前缀（system + 历史）稳定可命中。临时构造不持久化到 context.messages，
+    # 因此不影响下一轮请求的历史前缀连续性。
+    # 内容带会话级缓存（_get_dynamic_context），工具循环内复用同一版本，
+    # 避免 TODO/skill 状态变化导致尾部动态消息频繁变动破坏前缀。
+    dynamic_text = _get_dynamic_context(context)
+    if dynamic_text:
+        dyn_msg = {"role": "user", "content": dynamic_text}
+        _last_user = -1
+        for _i in range(len(result) - 1, -1, -1):
+            if result[_i].get("role") == "user":
+                _last_user = _i
+                break
+        if _last_user >= 0:
+            result.insert(_last_user, dyn_msg)
+        # 无 user 消息时跳过注入：避免破坏消息结构（如纯工具历史/精简场景），
+        # 此时动态上下文对模型价值也有限。
 
     return result

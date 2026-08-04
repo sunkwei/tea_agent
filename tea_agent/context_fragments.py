@@ -154,14 +154,45 @@ def list_fragments() -> list[str]:
 # ═══ 内置片段 ═══════════════════════════════════════════
 
 def _estimate_context_tokens(context: Any) -> int:
-    """估算当前上下文 token 用量（基于原始 messages，近似）。"""
-    try:
-        from tea_agent.session.history_builder import estimate_messages_tokens
+    """估算当前上下文 token 用量（消息 + tools 定义 + 已注入富化文本）。
 
+    修正 S1：此前仅基于 context.messages 估算，漏掉了：
+    - tools 定义（78 个工具 JSON Schema，实测约 14K tokens）
+    - system prompt 富化部分（OS 信息、记忆注入等）
+    导致 token_budget 报警显著低估实际请求用量。
+    """
+    total = 0
+    try:
+        from tea_agent.session.history_builder import estimate_messages_tokens, estimate_tokens
+
+        # 1. 消息本体
         msgs = getattr(context, "messages", None) or []
-        return estimate_messages_tokens(msgs)
+        total += estimate_messages_tokens(msgs)
     except Exception:
         return 0
+
+    # 2. tools 定义（每次请求都会携带全部工具 JSON Schema）
+    try:
+        toolkit = getattr(context, "toolkit", None)
+        meta_map = getattr(toolkit, "meta_map", None) if toolkit else None
+        if meta_map:
+            import json as _json
+
+            tools_json = _json.dumps(list(meta_map.values()), ensure_ascii=False, default=str)
+            total += estimate_tokens(tools_json)
+    except Exception:
+        pass
+
+    # 3. system prompt 富化注入（OS 信息 / 记忆文本等已注入片段）
+    try:
+        for attr in ("_injected_os_info_text", "_injected_memories_text"):
+            txt = getattr(context, attr, "") or ""
+            if txt:
+                total += estimate_tokens(txt)
+    except Exception:
+        pass
+
+    return total
 
 
 def _get_max_tokens(context: Any) -> int:

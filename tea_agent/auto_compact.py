@@ -93,6 +93,7 @@ def get_max_context_tokens(config) -> int:
 class CompactionSettings:
     """Compaction 配置 — 借鉴 Pi 的 DEFAULT_COMPACTION_SETTINGS。"""
     threshold: float = 0.8          # 触发压缩的 token 阈值（占 max_context 的比例）
+    budget_warn_ratio: float = 0.15  # token_budget 报警阈值（剩余空间占比低于此值即警告）
     keep_recent: int = 5            # 保留的最新轮次数
     max_summary_length: int = 1500  # 摘要最大字符数
     min_messages_before_compact: int = 10  # 最少消息数才触发压缩
@@ -107,6 +108,7 @@ class CompactionSettings:
     def to_dict(self) -> dict:
         return {
             "threshold": self.threshold,
+            "budget_warn_ratio": self.budget_warn_ratio,
             "keep_recent": self.keep_recent,
             "max_summary_length": self.max_summary_length,
             "enabled": self.enabled,

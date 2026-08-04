@@ -338,6 +338,11 @@ class APIComponent(SessionComponent):
         cache_hit = getattr(usage, "prompt_cache_hit_tokens", None)
         cache_miss = getattr(usage, "prompt_cache_miss_tokens", None)
 
+        # S3: 记录最近一次主模型请求的真实 prompt_tokens（单次值，非累计），
+        # 供 token_budget 片段校正启发式估算偏差。
+        if prompt is not None and not is_cheap:
+            self.ctx._last_request_prompt_tokens = int(prompt)
+
         if prompt is not None:
             u["prompt_tokens"] += prompt
         if completion is not None:
@@ -805,7 +810,17 @@ class SummarizerComponent(SessionComponent):
     def initialize(self) -> None:
         pass
 
-    def summarize_old_history(self, api_component, get_summarize_client_fn) -> None:
+    def summarize_old_history(
+        self, api_component, get_summarize_client_fn, force: bool = False
+    ) -> None:
+        """将旧对话历史压缩为摘要。
+
+        Args:
+            api_component: API 组件
+            get_summarize_client_fn: 获取摘要客户端的回调
+            force: S5 强制压缩标志 — token 预算已用尽时忽略 keep_turns
+                轮次阈值，无条件执行摘要（即使未摘要对话较少也压缩）。
+        """
         # 检查是否禁用摘要（disable_l3 或向后兼容的 disable_summary）
         if self.ctx.disable_summary or getattr(self.ctx, 'disable_l3', False):
             return
@@ -822,7 +837,7 @@ class SummarizerComponent(SessionComponent):
             logger.warning(f"Fetch unsaved conversations failed: {e}")
             return
 
-        if len(unsummarized) <= self.ctx.keep_turns:
+        if len(unsummarized) <= self.ctx.keep_turns and not force:
             return
 
         # 2. 确定需要摘要的范围
@@ -1671,8 +1686,23 @@ class OnlineToolSession(BaseChatSession):
     # ──────────────────────────────────────────────
 
     def _summarize_old_history(self, context: dict) -> dict:
-        """Pipeline 步骤：将旧对话历史压缩为摘要，返回更新后的 context。"""
-        self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client)
+        """Pipeline 步骤：将旧对话历史压缩为摘要，返回更新后的 context。
+
+        S5: token_budget 片段检测到上下文已用尽时（_frag_token_budget 置
+        context._token_exhausted=True），此处强制压缩（即便未达到 keep_turns
+        轮次阈值也执行），形成「报警 → 自动压缩」闭环。
+        """
+        force = bool(getattr(self.context, "_token_exhausted", False))
+        if force:
+            # 消费标志，避免后续轮次重复触发
+            self.context._token_exhausted = False
+            if self.context.tool_log:
+                self.context.tool_log("⚠️ 上下文已用尽，强制压缩历史…")
+            self.summarizer_comp.summarize_old_history(
+                self.api, self._get_summarize_client, force=True
+            )
+        else:
+            self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client)
         return context  # summarize_old_history 副作用修改 context，此处显式返回
 
     # ──────────────────────────────────────────────

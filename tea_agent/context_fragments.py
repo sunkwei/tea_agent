@@ -153,13 +153,20 @@ def list_fragments() -> list[str]:
 
 # ═══ 内置片段 ═══════════════════════════════════════════
 
-def _estimate_context_tokens(context: Any) -> int:
+def _estimate_context_tokens(context: Any) -> int | None:
     """估算当前上下文 token 用量（消息 + tools 定义 + 已注入富化文本）。
 
     修正 S1：此前仅基于 context.messages 估算，漏掉了：
     - tools 定义（78 个工具 JSON Schema，实测约 14K tokens）
     - system prompt 富化部分（OS 信息、记忆注入等）
     导致 token_budget 报警显著低估实际请求用量。
+
+    修正 S3：若最近一次 API 请求返回了真实 prompt_tokens，取其与
+    启发式估算的较大值（真实值含 tools/system 全量，作为下限参考），
+    缓解启发式算法（中文 1.5 字/token、英文 4 字符/token）的偏差。
+
+    Returns:
+        int | None: 估算的 token 数；估算失败返回 None（上层显示"未知"）。
     """
     total = 0
     try:
@@ -169,7 +176,7 @@ def _estimate_context_tokens(context: Any) -> int:
         msgs = getattr(context, "messages", None) or []
         total += estimate_messages_tokens(msgs)
     except Exception:
-        return 0
+        return None
 
     # 2. tools 定义（每次请求都会携带全部工具 JSON Schema）
     try:
@@ -189,6 +196,16 @@ def _estimate_context_tokens(context: Any) -> int:
             txt = getattr(context, attr, "") or ""
             if txt:
                 total += estimate_tokens(txt)
+    except Exception:
+        pass
+
+    # 4. S3: 用最近一次真实 prompt_tokens 校正（真实值作下限参考）
+    try:
+        last_real = getattr(context, "_last_request_prompt_tokens", 0) or 0
+        if last_real > 0 and last_real > total:
+            # 实际 API 用量比估算大（工具/系统开销或 tokenizer 差异），
+            # 采用真实值，避免报警过晚。
+            total = last_real
     except Exception:
         pass
 
@@ -232,18 +249,38 @@ def _frag_token_budget(context: Any) -> ContextFragment | None:
     used = _estimate_context_tokens(context)
     max_tokens = _get_max_tokens(context)
 
-    if max_tokens > 0:
+    if used is None:
+        # S6: 估算失败时明确显示"未知"，避免误导为 0。
+        body = "当前上下文 token 用量未知（估算失败），请按需节制使用。"
+    elif max_tokens > 0:
         remaining = max(0, max_tokens - used)
         pct = min(100.0, used / max_tokens * 100.0)
+        # S4: 报警阈值可配置（context 属性优先，回退 CompactionSettings 默认 0.15）
+        warn_ratio = getattr(context, "budget_warn_ratio", None)
+        if warn_ratio is None:
+            try:
+                from tea_agent.auto_compact import DEFAULT_COMPACTION_SETTINGS
+
+                warn_ratio = DEFAULT_COMPACTION_SETTINGS.budget_warn_ratio
+            except Exception:
+                warn_ratio = 0.15
+        warn_ratio = float(warn_ratio) if warn_ratio is not None else 0.15
+
         if remaining <= 0:
+            # S5: 已用尽 → 置强制压缩标志，pipeline summarize 步骤检测后立即压缩
+            try:
+                setattr(context, "_token_exhausted", True)
+            except Exception:
+                pass
             body = (
                 f"⚠️ 上下文已用尽（{used}/{max_tokens} token）。"
-                "请立即总结关键决策，并要求用户允许压缩历史后继续。"
+                "系统将自动压缩历史，请立即总结关键决策后继续。"
             )
-        elif remaining < max_tokens * 0.15:
+        elif remaining < max_tokens * warn_ratio:
             body = (
-                f"⚠️ 上下文剩余不足 15%（已用 {used}/{max_tokens} token，"
-                f"剩余 {remaining}）。建议先总结已完成的工作，再继续。"
+                f"⚠️ 上下文剩余不足 {warn_ratio * 100:.0f}%"
+                f"（已用 {used}/{max_tokens} token，剩余 {remaining}）。"
+                "建议先总结已完成的工作，再继续。"
             )
         else:
             body = (

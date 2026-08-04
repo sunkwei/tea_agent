@@ -141,6 +141,23 @@ def toolkit_scheduler(action: str, **kwargs):
                 return True
         return False
 
+    def _cron_wd_to_py(pattern: str) -> str:
+        """标准 cron 周字段 (0/7=周日,1=周一..6=周六) → Python weekday (0=周一..6=周日)。"""
+        if pattern == "*":
+            return pattern
+        out = []
+        for part in pattern.split(","):
+            part = part.strip()
+            if "/" in part:
+                base, step = part.split("/")
+                out.append(f"{(int(base) + 6) % 7}/{step}" if base != "*" else part)
+            elif "-" in part:
+                lo, hi = map(int, part.split("-"))
+                out.append(f"{(lo + 6) % 7}-{(hi + 6) % 7}")
+            else:
+                out.append(str((int(part) + 6) % 7))
+        return ",".join(out)
+
     def _parse_cron(expr: str, now: datetime):
         """Internal: parse cron.
 
@@ -151,6 +168,8 @@ def toolkit_scheduler(action: str, **kwargs):
         parts = expr.strip().split()
         if len(parts) != 5:
             return None
+        # 标准 cron 周字段: 0/7=周日, 1=周一...6=周六 → Python weekday: 0=周一
+        parts = [parts[0], parts[1], parts[2], parts[3], _cron_wd_to_py(parts[4])]
         dt = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
         for _ in range(7 * 24 * 60):
             if all(_match_cron(p, v) for p, v in zip(parts, [dt.minute, dt.hour, dt.day, dt.month, dt.weekday()], strict=False)):

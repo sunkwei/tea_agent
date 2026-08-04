@@ -178,21 +178,43 @@ class ScheduledTaskStore(StoreComponent):
         )
         self.conn.commit()
 
+def _cron_wd_to_py(pattern: str) -> str:
+    """标准 cron 周字段 (0/7=周日,1=周一..6=周六) → Python weekday (0=周一..6=周日)。"""
+    if pattern == "*":
+        return pattern
+    out = []
+    for part in pattern.split(","):
+        part = part.strip()
+        if "/" in part:
+            base, step = part.split("/")
+            out.append(f"{(int(base) + 6) % 7}/{step}" if base != "*" else part)
+        elif "-" in part:
+            lo, hi = map(int, part.split("-"))
+            out.append(f"{(lo + 6) % 7}-{(hi + 6) % 7}")
+        else:
+            out.append(str((int(part) + 6) % 7))
+    return ",".join(out)
+
+
 def _parse_cron(expr: str, now: datetime) -> datetime | None:
-    """简易 5 字段 cron 解析，返回下次匹配时间 (精度到分钟)。"""
+    """简易 5 字段 cron 解析，返回下次匹配时间 (精度到分钟)。
+
+    周字段遵循标准 cron 语义: 0/7=周日, 1=周一 ... 6=周六。
+    """
     try:
         parts = expr.strip().split()
         if len(parts) != 5:
             return None
         minute, hour, day, month, weekday = parts
+        weekday = _cron_wd_to_py(weekday)  # 转换为 Python weekday (0=周一)
         # 检查未来 7 天每分钟 (简单暴力但可靠)
         dt = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
         for _ in range(7 * 24 * 60):
-            if _match_cron_field(minute, dt.minute) and \
-               _match_cron_field(hour, dt.hour) and \
-               _match_cron_field(day, dt.day) and \
-               _match_cron_field(month, dt.month) and \
-               _match_cron_field(weekday, dt.weekday()):
+            if (_match_cron_field(minute, dt.minute)
+                    and _match_cron_field(hour, dt.hour)
+                    and _match_cron_field(day, dt.day)
+                    and _match_cron_field(month, dt.month)
+                    and _match_cron_field(weekday, dt.weekday())):
                 return dt
             dt += timedelta(minutes=1)
         return None

@@ -26,7 +26,7 @@ from tea_agent.onlinesession import OnlineToolSession
 from tea_agent.store import Storage
 
 from .agent_background import start_scheduler
-from .agent_evolution import EvolutionActor, EvolutionAnalyzer
+from .agent_evolution import EvolutionActor, EvolutionAnalyzer, EvolutionEvaluator
 from .agent_pipeline import do_async_summaries
 from .memory import PRIORITY_MEDIUM
 
@@ -658,8 +658,45 @@ class Agent:
                 return
 
             actor = EvolutionActor(self._toolkit)
+            evaluator = EvolutionEvaluator(self._toolkit)
+
+            # ── Evaluate 阶段（改进前）：对有 rubric 的行动打基线分 ──
+            eval_actions = evaluator.extract_eval_actions(actions)
+            baselines: dict[str, dict] = {}
+            for ea in eval_actions:
+                b = evaluator.evaluate_target(ea["target"], ea["rubric"])
+                if b and b.get("ok"):
+                    baselines[ea["target"]] = b
+                    logger.info(
+                        f"evolution: 基线评分 {ea['target']}: "
+                        f"{b.get('mean_score')}/{b.get('max_score')}"
+                    )
+
+            # ── Act 阶段：执行进化行动 ──
             results = actor.execute(actions)
             logger.info(f"evolution: 执行完成 {len(results)}/{len(actions)} 个行动")
+
+            # ── Evaluate 阶段（改进后）：重评 + keep-or-rollback 决策 ──
+            for ea in eval_actions:
+                target = ea["target"]
+                base = baselines.get(target)
+                if not base:
+                    continue
+                cand = evaluator.evaluate_target(target, ea["rubric"])
+                decision = evaluator.decide(base, cand, float(ea.get("threshold", 0.0)))
+                dec = decision.get("decision", "no_change")
+                if dec == "rollback":
+                    ok_rb = evaluator.rollback(target)
+                    logger.info(
+                        f"evolution: 回滚 {target} "
+                        f"(评分下降 {decision.get('delta', 0):+.2f}): ok={ok_rb}"
+                    )
+                else:
+                    logger.info(
+                        f"evolution: {target} 评估决策={dec} "
+                        f"delta={decision.get('delta', 0):+.2f}"
+                    )
+
             if trigger:
                 trigger.clear_events()
         except Exception as e:

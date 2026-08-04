@@ -94,8 +94,15 @@ class EvolutionAnalyzer:
 - solidify: 记录成功模式为技能。target 填技能名，reason 填任务描述
 - none: 无需行动
 
+可选评估字段（rubric）：若行动可量化评估（如 evolve_code），可附加 rubric 规则列表，
+系统会用它执行"改进前评分→改进→改进后重评→仅分数提升才保留"的闭环。
+rubric 格式（规则项支持 match: regex/contains/line/line_contains）：
+[{"pattern": "...", "match": "regex", "description": "检查点说明"}]
+示例：检查代码包含函数签名和文档字符串、避免硬编码路径等。
+不提供 rubric 则跳过评估，保持原流程。
+
 返回格式：
-{{"actions": [{{"action": "evolve_code", "target": "tea_agent/toolkit/toolkit_xxx.py", "reason": "..."}}]}}
+{{"actions": [{{"action": "evolve_code", "target": "tea_agent/toolkit/toolkit_xxx.py", "reason": "...", "rubric": [], "threshold": 0.0}}]}}
 
 只输出 JSON，不要额外说明。"""
 
@@ -203,3 +210,90 @@ class EvolutionActor:
             task=task,
             success=True,
         )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Evaluate — 评分闭环（借鉴 PenguinHarness self-evolve 机制）
+# ═══════════════════════════════════════════════════════════════
+
+class EvolutionEvaluator:
+    """进化评估器 — 在 Analyze → Act 之间插入 Evaluate 阶段。
+
+    借鉴 penguin-harness examples/self-improving-agent/self-evolve.ts：
+    改进前打基线分 → 执行改进 → 改进后重评 → 平均分提升才保留，否则回滚。
+
+    设计原则：
+    - 可选参与：仅当 Analyze 输出的 action 带 rubric 规则时才启用，
+      无 rubric 的流程行为完全不变（向后兼容）
+    - 轻量确定性：委托 toolkit_eval_loop（纯代码评分，无 LLM 参与）
+    - 决策：compare 返回 keep / rollback / no_change；rollback 用 git 恢复
+    """
+
+    def __init__(self, toolkit):
+        self.tk = toolkit
+
+    def available(self) -> bool:
+        """toolkit_eval_loop 是否已注册可用。"""
+        return bool(self.tk and "toolkit_eval_loop" in self.tk.func_map)
+
+    def _call_eval_loop(self, **kwargs) -> dict | None:
+        """调用 toolkit_eval_loop，失败返回 None（不阻断主流程）。"""
+        if not self.available():
+            return None
+        try:
+            return self.tk.call_tool("toolkit_eval_loop", **kwargs)
+        except Exception as e:
+            logger.warning(f"evolution: evaluate 调用失败: {e}")
+            return None
+
+    def extract_eval_actions(self, actions: list[dict]) -> list[dict]:
+        """从行动列表中提取带 rubric 的可评估行动（有 target + rubric）。"""
+        return [
+            a for a in actions
+            if a.get("action") not in ("none", "") and a.get("target") and a.get("rubric")
+        ]
+
+    def evaluate_target(self, target: str, rules, runs: int = 3) -> dict | None:
+        """读取目标文件内容并用 rubric 评分（改进前后通用）。
+
+        runs 轮文本重复取平均（对抗评分抖动）；实际改进前后各读一次文件。
+        """
+        try:
+            with open(target, encoding="utf-8") as f:
+                artifact = f.read()
+        except Exception as e:
+            logger.warning(f"evolution: 读取评估目标失败 {target}: {e}")
+            return None
+        return self._call_eval_loop(action="evaluate", texts=[artifact] * runs, rules=rules)
+
+    def decide(self, baseline: dict | None, candidate: dict | None, threshold: float = 0.0) -> dict:
+        """keep-or-rollback 决策。基线/候选不可用时保守返回 no_change。"""
+        if not baseline or not candidate or not baseline.get("ok") or not candidate.get("ok"):
+            return {"ok": False, "decision": "no_change", "verdict": "评估数据不可用，保持现状"}
+        r = self._call_eval_loop(
+            action="compare",
+            baseline={"mean_score": baseline.get("mean_score", 0.0)},
+            candidate={"mean_score": candidate.get("mean_score", 0.0)},
+            threshold=threshold,
+        )
+        return r or {"ok": False, "decision": "no_change", "verdict": "决策调用失败，保持现状"}
+
+    def rollback(self, target: str) -> bool:
+        """回滚目标文件到改进前（git checkout）。优先当前目录，失败则尝试目标目录。"""
+        try:
+            import subprocess
+            r = subprocess.run(
+                ["git", "checkout", "--", target],
+                capture_output=True, text=True, timeout=30,
+            )
+            if r.returncode != 0:
+                import os
+                d = os.path.dirname(os.path.abspath(target))
+                r = subprocess.run(
+                    ["git", "checkout", "--", os.path.basename(target)],
+                    capture_output=True, text=True, timeout=30, cwd=d,
+                )
+            return r.returncode == 0
+        except Exception as e:
+            logger.warning(f"evolution: 回滚失败 {target}: {e}")
+            return False

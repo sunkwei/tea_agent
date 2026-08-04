@@ -205,13 +205,8 @@ def _get_tools_schemas() -> list[dict]:
 
 
 def _get_skills_summary() -> list[dict]:
-    """获取技能摘要"""
-    try:
-        from tea_agent.toolkit.toolkit_skills import toolkit_skills
-        r = toolkit_skills(action="list")
-        return r.get("skills", [])
-    except Exception:
-        return []
+    """获取技能摘要（skills 功能已废弃，返回空）。"""
+    return []
 
 
 def _get_memory_info() -> dict:

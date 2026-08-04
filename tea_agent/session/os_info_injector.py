@@ -244,7 +244,7 @@ def generate_os_info_text(toolkit_root_dir: str = "",
     lines.append("• 路径字符串在 Python 中统一用正斜杠 /，Python 会自动适配底层 OS")
     if toolkit_root_dir:
         lines.append(f"• 当前 tool 目录: {toolkit_root_dir}")
-    lines.append("• 如需获取更详细的 OS 信息，可调用 toolkit_os_info() 工具")
+    lines.append("• 如需获取更详细的 OS 信息，可用 toolkit_exec 执行 python platform 查询")
 
     info_text = "[系统环境信息]\n" + "\n".join(lines)
 

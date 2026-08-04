@@ -160,3 +160,24 @@ def _run_picker(output_path: str) -> dict:
         return {"success": False, "error": "用户取消"}
 
     return result[0]
+
+
+def meta_toolkit_screenshot_picker() -> dict:
+    """OpenAI 工具 schema 元数据。"""
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_screenshot_picker",
+            "description": "系统级交互式截图选区 — 全屏显示截图，用户拖拽选择区域后返回裁剪图片路径。绕过浏览器坐标限制。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "output": {
+                        "type": "string",
+                        "description": "输出文件路径，默认临时文件",
+                    },
+                },
+                "required": [],
+            },
+        },
+    }

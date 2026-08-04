@@ -11,9 +11,9 @@ class TestToolkitRegistration:
         """reload() 应加载内置工具"""
         from tea_agent.tlk import Toolkit
         tk = Toolkit()
-        assert "toolkit_gettime" in tk.func_map, "gettime 应被加载"
         assert "toolkit_file" in tk.func_map, "file 应被加载"
         assert "toolkit_search" in tk.func_map, "search 应被加载"
+        assert "toolkit_exec" in tk.func_map, "exec 应被加载"
 
     def test_meta_map_matches_func_map(self):
         """每个工具都应有对应的 meta 注册"""
@@ -26,18 +26,19 @@ class TestToolkitRegistration:
         """call_tool 应返回非 None 结果"""
         from tea_agent.tlk import Toolkit
         tk = Toolkit()
-        result = tk.call_tool("toolkit_gettime")
-        assert result is not None, "gettime 返回 None"
+        result = tk.call_tool("toolkit_lunar")
+        assert result is not None, "lunar 返回 None"
 
-    def test_gettime_returns_date_fields(self):
-        """toolkit_gettime 应返回日期字段"""
+    def test_lunar_returns_date_fields(self):
+        """toolkit_lunar 应返回日期字段"""
+        import json
         from tea_agent.tlk import Toolkit
         tk = Toolkit()
-        result = tk.call_tool("toolkit_gettime")
-        assert isinstance(result, dict)
-        assert "year" in result, f"结果缺少 year: {result}"
-        assert "month" in result
-        assert "day" in result
+        result = tk.call_tool("toolkit_lunar", date_str="2024-01-01")
+        data = json.loads(result) if isinstance(result, str) else result
+        assert isinstance(data, dict)
+        assert "lunar_date" in data, f"结果缺少日期字段: {data}"
+        assert "solar_date" in data
 
 
 class TestToolkitUserOverride:

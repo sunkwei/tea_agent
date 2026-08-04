@@ -397,8 +397,8 @@ TOOL_CATEGORIES = {
     ],
     "代码编辑": [
         "toolkit_edit", "toolkit_diff_edit", "toolkit_diff",
-        "toolkit_self_evolve", "toolkit_clean_comments",
-        "toolkit_format_code", "toolkit_auto_fix", "toolkit_comment",
+        "toolkit_self_evolve",
+        "toolkit_format_code",
     ],
     "搜索": [
         "toolkit_search", "toolkit_lsp", "toolkit_query_chat_history",
@@ -408,7 +408,7 @@ TOOL_CATEGORIES = {
         "toolkit_screenshot", "toolkit_ocr", "toolkit_screen_read",
     ],
     "系统操作": [
-        "toolkit_exec", "toolkit_config", "toolkit_os_info",
+        "toolkit_exec", "toolkit_config",
         "toolkit_sudo_gui", "toolkit_input", "toolkit_clipboard",
     ],
     "包管理": [
@@ -442,8 +442,7 @@ TOOL_CATEGORIES = {
         "toolkit_experience_solidify",
     ],
     "工具": [
-        "toolkit_gettime", "toolkit_weather_my", "toolkit_lunar",
-        "toolkit_date_diff", "toolkit_ip_location_my",
+        "toolkit_weather_my", "toolkit_lunar",
     ],
     "导出与分享": [
         "toolkit_dump_topic", "toolkit_export_last_pdf",

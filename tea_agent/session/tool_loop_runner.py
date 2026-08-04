@@ -38,12 +38,12 @@ class ParallelExecutor:
     # 标记为"并行安全"的工具（只读查询类）
     PARALLEL_SAFE = {
         "toolkit_file", "toolkit_search", "toolkit_lsp",
-        "toolkit_gettime", "toolkit_os_info", "toolkit_config",
-        "toolkit_memory", "toolkit_kb", "toolkit_skills",
+        "toolkit_config",
+        "toolkit_memory", "toolkit_kb",
         "toolkit_list_provider_models", "toolkit_get_models",
         "toolkit_get_config_path", "toolkit_weather_my",
-        "toolkit_ip_location_my", "toolkit_lunar",
-        "toolkit_date_diff", "toolkit_self_report",
+        "toolkit_lunar",
+        "toolkit_self_report",
         "toolkit_harness_schema", "toolkit_plan",
         "toolkit_batch_process", "toolkit_code_review",
     }

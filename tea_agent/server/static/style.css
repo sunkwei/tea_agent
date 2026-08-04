@@ -547,6 +547,33 @@ body {
   flex: 1; overflow-y: auto; padding: 16px 24px;
   scroll-behavior: smooth;
 }
+/* 轮次分隔条：明显标识当前是第几轮对话 */
+.turn-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 14px 0 6px;
+}
+.turn-divider::before,
+.turn-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border, #444);
+  opacity: 0.35;
+}
+.turn-badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 3px 14px;
+  border-radius: 12px;
+  background: var(--primary-dim, rgba(0,122,255,0.15));
+  color: var(--primary, #4da3ff);
+  border: 1px solid var(--border, #444);
+  white-space: nowrap;
+  margin: 0 8px;
+}
 .msg { margin-bottom: 16px; max-width: var(--msg-max); }
 .msg.user { margin-left: auto; }
 .msg.assistant { margin-right: auto; }

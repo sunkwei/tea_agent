@@ -615,6 +615,7 @@ window.openImageOverlay = function(src) {
 // ══════════════════════════════════════════════════
 
 let _msgCounter = 0; // 全局递增消息计数器
+let _turnCounter = 0; // 对话轮次计数器（每条用户消息 = 1 轮）
 
 function addMessage(role, content, images) {
   const welcome = document.querySelector('.welcome');
@@ -623,6 +624,15 @@ function addMessage(role, content, images) {
   const div = document.createElement('div');
   div.className = 'msg ' + (role === 'user' ? 'user' : 'assistant');
   div.dataset.msgIdx = _msgCounter++; // 给每条消息一个唯一递增索引
+
+  // 轮次标记：每条用户消息视为一轮，插入明显的分隔条
+  if (role === 'user') {
+    _turnCounter++;
+    const divider = document.createElement('div');
+    divider.className = 'turn-divider';
+    divider.innerHTML = '<span class="turn-badge">第 ' + _turnCounter + ' 轮</span>';
+    $('msgs').appendChild(divider);
+  }
 
   let html = '<div class="msg-label">' + (role === 'user' ? '你' : 'Tea Agent') + '</div>';
   html += '<div class="msg-bubble">';
@@ -1523,6 +1533,7 @@ window.openTopic = async function(id, title) {
     if (!d.conversations) return;
     $('msgs').innerHTML = '';
     _msgCounter = 0;  // 切换话题重置消息计数器
+    _turnCounter = 0; // 切换话题重置轮次计数器
     _userNearBottom = true;  // 切换话题重置滚动状态
     d.conversations.forEach(function(c) {
       if (c.user_msg) addMessage('user', c.user_msg);
@@ -1891,6 +1902,7 @@ async function _reloadCurrentConversations() {
     const wasNearBottom = _isNearBottom();
     $('msgs').innerHTML = '';
     _msgCounter = 0;
+    _turnCounter = 0; // 重载会话时重置轮次计数器
     d.conversations.forEach(function(c) {
       if (c.user_msg) addMessage('user', c.user_msg);
       if (c.ai_msg) addMessage('assistant', c.ai_msg);
@@ -1923,6 +1935,7 @@ window.newTopic = function() {
   setTitle('新对话');
   $('msgs').innerHTML = '';
   _msgCounter = 0; // 重置消息计数器
+  _turnCounter = 0; // 重置轮次计数器
   // 隐藏跳转栏（新对话无历史）
   var jb = document.getElementById('jump-bar');
   if (jb) jb.style.display = 'none';

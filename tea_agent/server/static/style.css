@@ -568,8 +568,10 @@ body {
   letter-spacing: 1px;
   padding: 3px 14px;
   border-radius: 12px;
-  background: var(--primary-dim, rgba(0,122,255,0.15));
-  color: var(--primary, #4da3ff);
+  /* 背景用半透明 primary-bg，避免浅色主题下 --primary-dim == --primary
+     导致文字与背景同色不可见 */
+  background: var(--primary-bg, rgba(88,166,255,0.12));
+  color: var(--primary, #58a6ff);
   border: 1px solid var(--border, #444);
   white-space: nowrap;
   margin: 0 8px;

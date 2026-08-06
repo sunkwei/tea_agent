@@ -25,6 +25,9 @@ class SessionContext:
     client: OpenAI | None = None
     cheap_client: OpenAI | None = None
     cheap_model: str = ""
+    # 视觉模型客户端（会话输入含图片时自动切换；无图片时回退主模型）
+    vision_client: OpenAI | None = None
+    vision_model: str = ""
 
     # ── 工具相关 ──
     toolkit: Any = None

@@ -128,8 +128,11 @@ class AgentModule(HotReloadModule):
         tk = tlk.toolkit
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
+        vision_m = cfg.vision_model
         _options = getattr(main_m, 'options', {}) or {}
-        supports_vision = _options.get('supports_vision', False) if isinstance(_options, dict) else False
+        main_supports_vision = _options.get('supports_vision', False) if isinstance(_options, dict) else False
+        # 主模型或已配置视觉模型任一支持即可（会话含图片时自动切换 vision_model）
+        supports_vision = main_supports_vision or vision_m.is_configured
         supports_reasoning = _options.get('supports_reasoning', True) if isinstance(_options, dict) else True
 
         from tea_agent.store import get_storage as _get_storage
@@ -146,6 +149,8 @@ class AgentModule(HotReloadModule):
             storage=_storage,
             cheap_api_key=cheap_m.api_key, cheap_api_url=cheap_m.api_url,
             cheap_model=cheap_m.model_name,
+            vision_api_key=vision_m.api_key, vision_api_url=vision_m.api_url,
+            vision_model=vision_m.model_name,
             enable_thinking=cfg.enable_thinking,
             thinking_strength=cfg.thinking_strength,
             reasoning_effort=cfg.reasoning_effort,

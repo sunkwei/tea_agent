@@ -998,6 +998,9 @@ class OnlineToolSession(BaseChatSession):
         cheap_api_key: str = "",
         cheap_api_url: str = "",
         cheap_model: str = "",
+        vision_api_key: str = "",
+        vision_api_url: str = "",
+        vision_model: str = "",
         keep_turns: int = 5,
         max_tool_output: int = 128 * 1024,
         max_assistant_content: int = 128 * 1024,
@@ -1027,6 +1030,9 @@ class OnlineToolSession(BaseChatSession):
             cheap_api_key: 便宜模型 API密钥
             cheap_api_url: 便宜模型 API地址
             cheap_model: 便宜模型名称
+            vision_api_key: 视觉模型 API密钥（会话输入含图片时自动切换到此模型）
+            vision_api_url: 视觉模型 API地址
+            vision_model: 视觉模型名称
             keep_turns: 保留最近N轮完整对话
             max_tool_output: 工具输出截断字符数
             max_assistant_content: 助手回复截断字符数
@@ -1043,8 +1049,9 @@ class OnlineToolSession(BaseChatSession):
         sp = system_prompt or self._COMPACT_SYSTEM_PROMPT
 
         # 步骤2: 创建HTTP客户端和API客户端
-        _http_client, main_client, cheap_client = self._create_api_clients(
-            api_key, api_url, cheap_api_key, cheap_api_url, cheap_model
+        _http_client, main_client, cheap_client, vision_client = self._create_api_clients(
+            api_key, api_url, cheap_api_key, cheap_api_url, cheap_model,
+            vision_api_key, vision_api_url, vision_model,
         )
 
         # 步骤3: 创建共享上下文
@@ -1057,6 +1064,8 @@ class OnlineToolSession(BaseChatSession):
             main_client=main_client,
             cheap_client=cheap_client,
             cheap_model=cheap_model,
+            vision_client=vision_client,
+            vision_model=vision_model,
             storage=storage,
             keep_turns=keep_turns,
             max_tool_output=max_tool_output,
@@ -1076,6 +1085,7 @@ class OnlineToolSession(BaseChatSession):
 
         logger.info(
             f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}"
+            + (f", vision model: {vision_model}" if vision_model else "")
         )
 
         # 步骤5: 创建并初始化组件
@@ -1087,6 +1097,8 @@ class OnlineToolSession(BaseChatSession):
             storage=storage,
             cheap_client=cheap_client,
             cheap_model=cheap_model,
+            vision_client=vision_client,
+            vision_model=vision_model,
             supports_vision=supports_vision,
             supports_reasoning=supports_reasoning,
             disable_summary=disable_summary,
@@ -1096,7 +1108,7 @@ class OnlineToolSession(BaseChatSession):
         self._init_continue_control()
 
         # 步骤8: 管理HTTP客户端
-        self._manage_http_clients(_http_client, cheap_client)
+        self._manage_http_clients(_http_client, cheap_client, vision_client)
 
         # 步骤9: 构建工具定义
         self._build_tools()
@@ -1185,6 +1197,9 @@ class OnlineToolSession(BaseChatSession):
         cheap_api_key: str,
         cheap_api_url: str,
         cheap_model: str,
+        vision_api_key: str = "",
+        vision_api_url: str = "",
+        vision_model: str = "",
     ) -> tuple:
         """创建API客户端。
 
@@ -1194,9 +1209,12 @@ class OnlineToolSession(BaseChatSession):
             cheap_api_key: 便宜模型API密钥
             cheap_api_url: 便宜模型API地址
             cheap_model: 便宜模型名称
+            vision_api_key: 视觉模型API密钥（可选，会话含图片时自动切换）
+            vision_api_url: 视觉模型API地址
+            vision_model: 视觉模型名称
 
         Returns:
-            (http_client, main_client, cheap_client) 元组
+            (http_client, main_client, cheap_client, vision_client) 元组
         """
         import httpx
 
@@ -1213,7 +1231,15 @@ class OnlineToolSession(BaseChatSession):
                 http_client=httpx.Client(proxy=None, timeout=httpx.Timeout(120.0, connect=30.0)),
             )
 
-        return _http_client, main_client, cheap_client
+        vision_client: OpenAI | None = None
+        if vision_api_key and vision_api_url and vision_model:
+            vision_client = OpenAI(
+                api_key=vision_api_key,
+                base_url=vision_api_url,
+                http_client=httpx.Client(proxy=None, timeout=httpx.Timeout(120.0, connect=30.0)),
+            )
+
+        return _http_client, main_client, cheap_client, vision_client
 
     def _create_session_context(
         self,
@@ -1225,6 +1251,8 @@ class OnlineToolSession(BaseChatSession):
         main_client: OpenAI,
         cheap_client: OpenAI | None,
         cheap_model: str,
+        vision_client: OpenAI | None,
+        vision_model: str,
         storage,
         keep_turns: int,
         max_tool_output: int,
@@ -1249,6 +1277,8 @@ class OnlineToolSession(BaseChatSession):
             main_client: 主API客户端
             cheap_client: 便宜模型客户端
             cheap_model: 便宜模型名称
+            vision_client: 视觉模型客户端（可选）
+            vision_model: 视觉模型名称
             storage: 存储实例
             keep_turns: 保留轮数
             max_tool_output: 工具输出最大长度
@@ -1274,6 +1304,8 @@ class OnlineToolSession(BaseChatSession):
             client=main_client,
             cheap_client=cheap_client,
             cheap_model=cheap_model,
+            vision_client=vision_client,
+            vision_model=vision_model,
             toolkit=toolkit,
             storage=storage,
             keep_turns=keep_turns,
@@ -1305,6 +1337,8 @@ class OnlineToolSession(BaseChatSession):
         storage,
         cheap_client: OpenAI | None,
         cheap_model: str,
+        vision_client: OpenAI | None,
+        vision_model: str,
         supports_vision: bool,
         supports_reasoning: bool,
         disable_summary: bool,
@@ -1316,6 +1350,8 @@ class OnlineToolSession(BaseChatSession):
             storage: 存储实例
             cheap_client: 便宜模型客户端
             cheap_model: 便宜模型名称
+            vision_client: 视觉模型客户端（可选）
+            vision_model: 视觉模型名称
             supports_vision: 是否支持视觉
             supports_reasoning: 是否支持推理
             disable_summary: 是否禁用摘要
@@ -1324,6 +1360,8 @@ class OnlineToolSession(BaseChatSession):
         self.storage = storage
         self._cheap_client = cheap_client
         self._cheap_model_name = cheap_model
+        self._vision_client = vision_client
+        self._vision_model_name = vision_model
         self._current_mode = "mixed"
         self._supports_vision = supports_vision
         self._supports_reasoning = supports_reasoning
@@ -1340,19 +1378,23 @@ class OnlineToolSession(BaseChatSession):
     def _manage_http_clients(
         self,
         _http_client,
-        cheap_client: OpenAI | None
+        cheap_client: OpenAI | None,
+        vision_client: OpenAI | None = None,
     ) -> None:
         """管理HTTP客户端。
 
         Args:
             _http_client: 主HTTP客户端
             cheap_client: 便宜模型客户端
+            vision_client: 视觉模型客户端
         """
         self._http_clients = []
         if _http_client:
             self._http_clients.append(_http_client)
         if cheap_client and hasattr(cheap_client, "_client") and cheap_client._client:
             self._http_clients.append(cheap_client._client)
+        if vision_client and hasattr(vision_client, "_client") and vision_client._client:
+            self._http_clients.append(vision_client._client)
 
     def _build_tools(self) -> None:
         """构建工具定义。"""
@@ -1959,11 +2001,26 @@ class OnlineToolSession(BaseChatSession):
         _msg_text = msg if isinstance(msg, str) else msg.get("text", "")
         _msg_images = None if isinstance(msg, str) else msg.get("images", [])
 
-        if _msg_images and not self.context.supports_vision:
-            error_msg = f"⚠️ 当前模型 {self.context.model} 不支持图片输入，请更换支持视觉的模型或移除图片后重试。"
-            logger.warning(error_msg)
-            callback(error_msg)
-            return error_msg, False
+        # 视觉模型自动切换：会话输入含图片 → 使用 vision_model；无图片 → 使用主模型。
+        # 切换在回合开始时生效（含工具循环内多次请求），回合结束 finally 恢复主模型。
+        _switched_to_vision = False
+        _prev_client, _prev_model = None, None
+        if _msg_images:
+            if getattr(self, "_vision_client", None) is not None and getattr(
+                self, "_vision_model_name", ""
+            ):
+                _prev_client, _prev_model = self.context.client, self.context.model
+                self.context.client = self._vision_client
+                self.context.model = self._vision_model_name
+                _switched_to_vision = True
+                logger.info(
+                    f"👁️ 检测到图片输入，本回合切换视觉模型: {self._vision_model_name}"
+                )
+            elif not self.context.supports_vision:
+                error_msg = f"⚠️ 当前模型 {self.context.model} 不支持图片输入，请更换支持视觉的模型或移除图片后重试。"
+                logger.warning(error_msg)
+                callback(error_msg)
+                return error_msg, False
 
         logger.debug(
             f"chat_stream start: msg_len={len(str(msg))}, topic_id={topic_id}, model={self.context.model}, enable_thinking={self.context.enable_thinking}"
@@ -2007,8 +2064,17 @@ class OnlineToolSession(BaseChatSession):
         else:
             self.context._current_trace = None
 
-        # 执行 Pipeline
-        result = self.pipeline.execute(context)
+        try:
+            # 执行 Pipeline
+            result = self.pipeline.execute(context)
+        finally:
+            # 回合结束恢复主模型（视觉模型仅在本回合生效）
+            if _switched_to_vision and _prev_client is not None:
+                self.context.client = _prev_client
+                self.context.model = _prev_model
+                logger.info(
+                    f"👁️ 图片回合结束，恢复主模型: {_prev_model}"
+                )
 
         full_reply = result.get("full_reply", "")
         used_tools = result.get("used_tools", False)
@@ -2059,6 +2125,17 @@ class OnlineToolSession(BaseChatSession):
                         self.context.cheap_client.close()
                 except Exception as e:
                     logger.debug(f"Close cheap OpenAI client failed: {e}")
+
+            if (
+                hasattr(self.context, "vision_client")
+                and self.context.vision_client
+            ):
+                try:
+                    _internal = getattr(self.context.vision_client, '_client', None)
+                    if (_internal is None or id(_internal) not in _closed_clients) and hasattr(self.context.vision_client, "close"):
+                        self.context.vision_client.close()
+                except Exception as e:
+                    logger.debug(f"Close vision OpenAI client failed: {e}")
 
             # 关闭存储连接
             if hasattr(self, "storage") and self.storage:

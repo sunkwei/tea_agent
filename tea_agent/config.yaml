@@ -14,6 +14,17 @@ cheap_model:
   api_url: http://localhost:11434/v1
   model_name: zfujicute/OmniCoder-Qwen3.5-9B-Claude-4.6-Opus-Uncensored-v2-GGUF:latest
 
+# 视觉模型（可选）— 会话输入含图片时自动切换到此模型，无图片时使用主模型
+# 示例：小米 MiMo 视觉模型
+# vision_model:
+#   api_key: YOUR_API_KEY
+#   api_url: https://token-plan-cn.xiaomimimo.com/v1
+#   model_name: mimo-v2.5
+#   max_tokens: 128000
+#   options:
+#     supports_vision: true
+#     supports_reasoning: true
+
 keep_turns: 5
 
 # 思考模式强度配置（可运行时修改）

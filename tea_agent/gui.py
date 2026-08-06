@@ -991,12 +991,18 @@ class TkGUI(Agent):
         Returns:
             "break" 表示已处理（阻止默认文本粘贴），None 表示未处理（允许默认粘贴）。
         """
-        # 1. 检查模型是否支持视觉
+        # 1. 检查模型是否支持视觉（主模型或已配置的 vision_model 任一支持即可）
         vision_ok = False
         try:
-            vision_ok = (hasattr(self, '_cfg')
-                         and hasattr(self._cfg, 'main_model')
-                         and self._cfg.main_model.supports_vision)
+            vision_ok = (
+                hasattr(self, '_cfg')
+                and hasattr(self._cfg, 'main_model')
+                and (
+                    self._cfg.main_model.supports_vision
+                    or getattr(self._cfg, 'vision_model', None) is not None
+                    and self._cfg.vision_model.is_configured
+                )
+            )
         except Exception:
             logger.exception('op_failed')
 

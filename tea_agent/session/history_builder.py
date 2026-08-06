@@ -114,6 +114,10 @@ def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None
     # A6: base64 快照缓存（写回原消息；图片文件未变化时复用同一编码）
     b64_cache = (msg.get("_b64_cache") or {}) if original is not None else {}
     for img_path in images:
+        # 已是 data URL（如 API server 传入 data:image/...;base64,...）→ 直接透传
+        if isinstance(img_path, str) and img_path.startswith("data:"):
+            parts.append({"type": "image_url", "image_url": {"url": img_path}})
+            continue
         if not os.path.isfile(img_path):
             continue
         b64 = b64_cache.get(img_path)

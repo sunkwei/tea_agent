@@ -1044,4 +1044,122 @@ class TestLoopDetector:
         assert len(ld._tool_hashes) == 0
 
 
+# ════════════════════════════════════════════════════════════
+# 7. 视觉模型自动切换（vision_model）
+# ════════════════════════════════════════════════════════════
+
+class TestVisionModelAutoSwitch:
+    """会话输入含图片 → 自动切换 vision_model；无图片 → 主模型"""
+
+    def _make_session(self, **kwargs):
+        mock_tk = MagicMock()
+        mock_tk.meta_map = {}
+        mock_tk.call_tool.return_value = {}
+        defaults = dict(
+            toolkit=mock_tk, api_key="sk-main", api_url="https://main.api/v1",
+            model="main-model", enable_thinking=False, storage=None,
+            no_stream_chunk=True,
+            vision_api_key="sk-vision", vision_api_url="https://vision.api/v1",
+            vision_model="vision-model",
+            supports_vision=True,
+        )
+        defaults.update(kwargs)
+        return OnlineToolSession(**defaults)
+
+    def test_vision_client_created_when_configured(self):
+        """配置 vision_model 时创建 vision client 并写入 context"""
+        sess = self._make_session()
+        try:
+            assert sess.context.vision_client is not None
+            assert sess.context.vision_model == "vision-model"
+            assert sess._vision_client is not None
+            assert sess._vision_model_name == "vision-model"
+            # 主模型仍为 main-model
+            assert sess.context.model == "main-model"
+        finally:
+            sess.close()
+
+    def test_no_vision_client_when_not_configured(self):
+        """未配置 vision_model 时不创建 vision client"""
+        sess = self._make_session(
+            vision_api_key="", vision_api_url="", vision_model="",
+        )
+        try:
+            assert sess.context.vision_client is None
+            assert sess.context.vision_model == ""
+            assert sess._vision_client is None
+        finally:
+            sess.close()
+
+    def _prep_chat_stream(self, sess):
+        """mock chat_stream 的前置步骤，捕获 pipeline 执行时的 context 快照"""
+        captured = {}
+
+        def fake_pipeline_execute(context):
+            # pipeline 执行时快照会话级 context（模型切换发生在 sess.context 上）
+            captured["client"] = sess.context.client
+            captured["model"] = sess.context.model
+            return {"full_reply": "ok", "used_tools": False, "iterations": 0}
+
+        sess.pipeline = MagicMock()
+        sess.pipeline.execute.side_effect = fake_pipeline_execute
+        sess._inject_interruption_knowledge = MagicMock(return_value=False)
+        sess._auto_detect_mode = MagicMock()
+        sess._analyze_intent = MagicMock(return_value={})
+        sess._build_tools = MagicMock()
+        return captured
+
+    def test_switches_to_vision_on_image_and_restores(self):
+        """含图片输入：pipeline 期间用 vision 模型，回合结束恢复主模型"""
+        sess = self._make_session()
+        try:
+            captured = self._prep_chat_stream(sess)
+            main_client = sess.context.client
+            reply, used = sess.chat_stream(
+                {"text": "看看这张图", "images": ["/tmp/fake.png"]},
+                lambda x: None,
+            )
+            # pipeline 执行期间切换到了 vision 客户端/模型
+            assert captured["model"] == "vision-model"
+            assert captured["client"] is sess._vision_client
+            # 回合结束后恢复主模型
+            assert sess.context.model == "main-model"
+            assert sess.context.client is main_client
+            assert reply == "ok"
+            assert used is False
+        finally:
+            sess.close()
+
+    def test_keeps_main_model_without_image(self):
+        """纯文本输入：pipeline 期间仍用主模型，不切换"""
+        sess = self._make_session()
+        try:
+            captured = self._prep_chat_stream(sess)
+            main_client = sess.context.client
+            sess.chat_stream("普通文本问题", lambda x: None)
+            assert captured["model"] == "main-model"
+            assert captured["client"] is main_client
+            assert sess.context.model == "main-model"
+        finally:
+            sess.close()
+
+    def test_image_without_vision_returns_error(self):
+        """未配置视觉能力且主模型不支持视觉：图片输入返回错误提示"""
+        sess = self._make_session(
+            vision_api_key="", vision_api_url="", vision_model="",
+            supports_vision=False,
+        )
+        try:
+            errors = []
+            reply, used = sess.chat_stream(
+                {"text": "看看这张图", "images": ["/tmp/fake.png"]},
+                lambda x: errors.append(x),
+            )
+            assert used is False
+            assert "不支持图片输入" in reply
+            assert any("不支持图片输入" in e for e in errors)
+        finally:
+            sess.close()
+
+
 print("\n✅ OnlineSession 测试加载完成")

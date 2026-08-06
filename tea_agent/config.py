@@ -153,6 +153,7 @@ class AgentConfig:
 
     main_model: ModelConfig = field(default_factory=ModelConfig)
     cheap_model: ModelConfig = field(default_factory=ModelConfig)
+    vision_model: ModelConfig = field(default_factory=ModelConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
     mode_params: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -500,12 +501,17 @@ def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
         cfg: AgentConfig实例
         data: 配置数据字典
     """
-    for m_type in ["main_model", "cheap_model"]:
+    for m_type in ["main_model", "cheap_model", "vision_model"]:
         m_data = data.get(m_type, {})
         if not isinstance(m_data, dict):
             continue
 
-        target = cfg.main_model if m_type == "main_model" else cfg.cheap_model
+        if m_type == "main_model":
+            target = cfg.main_model
+        elif m_type == "cheap_model":
+            target = cfg.cheap_model
+        else:
+            target = cfg.vision_model
         target.api_key = m_data.get("api_key", "")
         target.api_url = m_data.get("api_url", "")
         target.model_name = m_data.get("model_name", "")
@@ -763,8 +769,13 @@ def _prepare_model_data(cfg: AgentConfig, data: dict) -> None:
         cfg: AgentConfig实例
         data: 配置数据字典（会被修改）
     """
-    for m_type in ["main_model", "cheap_model"]:
-        target = cfg.main_model if m_type == "main_model" else cfg.cheap_model
+    for m_type in ["main_model", "cheap_model", "vision_model"]:
+        if m_type == "main_model":
+            target = cfg.main_model
+        elif m_type == "cheap_model":
+            target = cfg.cheap_model
+        else:
+            target = cfg.vision_model
         if target.is_configured:
             m_data = {
                 "api_key": target.api_key,
@@ -928,6 +939,22 @@ def _generate_config_template() -> str:
         "  max_tokens: 1024      # 摘要通常较短\n"
         "  top_p: 0.9\n"
         "  options: {}\n\n"
+        "# 视觉模型配置（可选）— 会话输入含图片时自动切换到此模型，无图片时使用主模型。\n"
+        "# 示例（小米 MiMo 视觉模型）:\n"
+        "# vision_model:\n"
+        "#   api_key: YOUR_API_KEY\n"
+        "#   api_url: https://token-plan-cn.xiaomimimo.com/v1\n"
+        "#   model_name: mimo-v2.5\n"
+        "#   max_tokens: 128000\n"
+        "#   options:\n"
+        "#     supports_vision: true\n"
+        "#     supports_reasoning: true\n"
+        "vision_model:\n"
+        '  api_key: ""\n'
+        '  api_url: ""\n'
+        '  model_name: ""\n'
+        "  options:\n"
+        "    supports_vision: true\n\n"
         "# ──────────────────── 模式参数覆盖 ────────────────────\n"
         "# 不同人格模式下可覆盖 temperature/top_p，未配置则使用模型默认值。\n"
         "mode_params:\n"

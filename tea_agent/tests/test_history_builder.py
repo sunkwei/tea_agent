@@ -96,3 +96,22 @@ class TestToMultimodal:
         }
         result = to_multimodal(msg, supports_vision=True)
         assert "images" not in result
+
+    def test_data_url_passthrough(self):
+        """data URL 图片（API server 传入）应直接透传，不当作文件路径处理"""
+        from tea_agent.session.history_builder import to_multimodal
+        data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+        msg = {
+            "role": "user",
+            "content": "看看这张图",
+            "images": [data_url],
+        }
+        result = to_multimodal(msg, supports_vision=True)
+        parts = result["content"]
+        assert isinstance(parts, list)
+        assert len(parts) == 2  # text + image
+        assert parts[0]["type"] == "text"
+        assert parts[1]["type"] == "image_url"
+        assert parts[1]["image_url"]["url"] == data_url
+        assert "images" not in result

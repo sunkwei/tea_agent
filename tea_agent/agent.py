@@ -261,17 +261,24 @@ class Agent:
         )
 
     def _build_online_session(self) -> OnlineToolSession:
-        """构造 OnlineToolSession 实例（lightweight/full 共用）。"""
+        """构造 OnlineToolSession 实例（lightweight/full 共用）。
+
+        视觉模型策略：配置了 vision_model 且会话输入含图片时自动切换；
+        无图片时始终使用主模型。supports_vision 在「主模型支持」或
+        「已配置视觉模型」任一成立时开启，保证图片消息可被编码发送。
+        """
         cfg = self._cfg
         main_m = cfg.main_model
         cheap_m = cfg.cheap_model
+        vision_m = cfg.vision_model
 
         _options = getattr(main_m, "options", {}) or {}
-        supports_vision = (
+        main_supports_vision = (
             _options.get("supports_vision", False)
             if isinstance(_options, dict)
             else False
         )
+        supports_vision = main_supports_vision or vision_m.is_configured
         supports_reasoning = (
             _options.get("supports_reasoning", True)
             if isinstance(_options, dict)
@@ -296,6 +303,9 @@ class Agent:
             cheap_api_key=cast(str, cheap_m.api_key),
             cheap_api_url=cast(str, cheap_m.api_url),
             cheap_model=cast(str, cheap_m.model_name),
+            vision_api_key=cast(str, vision_m.api_key),
+            vision_api_url=cast(str, vision_m.api_url),
+            vision_model=cast(str, vision_m.model_name),
             enable_thinking=self._enable_thinking or cfg.enable_thinking,
             thinking_strength=cfg.thinking_strength,
             reasoning_effort=cfg.reasoning_effort,

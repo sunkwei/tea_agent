@@ -1,6 +1,16 @@
 # Changelog
 
 
+## [0.13.16] - 2026-08-07
+### Features
+- feat: 视觉模型自动切换（vision_model）— 会话输入含图片时自动使用视觉模型，无图片时使用主模型
+  - config: AgentConfig 新增 vision_model 配置节（复用 ModelConfig，支持解析/保存/模板），默认配置与包内置 config.yaml 均已加入
+  - session: OnlineToolSession 创建独立 vision client；chat_stream 检测到图片输入 → 本回合切换 context.client/model 到视觉模型（含工具循环内多次请求），回合结束 finally 恢复主模型
+  - agent/server: Agent._build_online_session 与 server agent_module.create_session 透传 vision 配置；supports_vision 在「主模型支持」或「已配置视觉模型」任一成立时开启
+  - GUI: 图片粘贴（Ctrl+V）判断同时考虑 vision_model
+  - history_builder: to_multimodal 支持 data URL 图片直接透传（API server 传入的 base64 图片可用）
+  - tests: 新增 5 项 vision 切换测试（test_onlinesession）+ 1 项 data URL 透传测试（test_history_builder）
+
 ## [0.13.15] - 2026-08-01
 ### Improvements & Changes
 - feat: Web 页面导出功能升级 — 默认导出 Markdown（新增格式选择：Markdown/PDF）

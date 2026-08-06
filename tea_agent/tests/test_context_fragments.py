@@ -63,26 +63,17 @@ def make_context(**kwargs) -> SessionContext:
 # ═══ #1 Token 预算感知 ═════════════════════════════════
 
 class TestTokenBudgetFragment:
-    def test_injects_usage(self):
+    """token_budget 片段已禁用（上下文 token 评估存在偏差，2026-08-04 用户要求关闭）。"""
+
+    def test_disabled_returns_none(self):
         ctx = make_context(max_context_tokens=1_000_000)
         frag = get_fragment("token_budget", ctx)
-        assert frag is not None
-        assert "token" in frag.body
-        assert "剩余" in frag.body
+        assert frag is None
 
-    def test_warns_when_low(self):
-        # 模拟几乎用尽：max=1000，消息很大
-        ctx = make_context(max_context_tokens=1000)
-        ctx.messages = [{"role": "user", "content": "字" * 2000}]
-        frag = get_fragment("token_budget", ctx)
-        assert frag is not None
-        assert "不足" in frag.body or "用尽" in frag.body
-
-    def test_handles_unknown_window(self):
-        ctx = make_context(max_context_tokens=0)
-        frag = get_fragment("token_budget", ctx)
-        assert frag is not None
-        assert "已用" in frag.body
+    def test_not_in_assemble_default(self):
+        ctx = make_context()
+        text = assemble_fragments(ctx)
+        assert "<token_budget>" not in text
 
 
 # ═══ #2 上下文片段系统 ═════════════════════════════════
@@ -91,7 +82,7 @@ class TestContextFragments:
     def test_assemble_includes_builtin(self):
         ctx = make_context()
         text = assemble_fragments(ctx)
-        assert "<token_budget>" in text
+        assert "<token_budget>" not in text
         assert "<current_time>" in text
         assert "[系统状态" in text
 
@@ -150,7 +141,7 @@ class TestContextFragments:
         register_fragment("test_tmp", lambda ctx: ContextFragment("test_tmp", "x"))
         clear_fragments()
         assert "test_tmp" not in list_fragments()
-        assert "token_budget" in list_fragments()
+        assert "token_budget" not in list_fragments()  # 已禁用
 
 
 # ═══ #3 压缩 Hooks ═════════════════════════════════════
@@ -349,7 +340,7 @@ class TestHistoryBuilderIntegration:
         fs.context = ctx
         fs.add_user_message("你好")
         assert "[运行状态" in fs.messages[-1]["content"]
-        assert "<token_budget>" in fs.messages[-1]["content"]
+        assert "<token_budget>" not in fs.messages[-1]["content"]
 
     def test_disable_summary_system_prompt_stable(self):
         from tea_agent.session.history_builder import build_api_messages

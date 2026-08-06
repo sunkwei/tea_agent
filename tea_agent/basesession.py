@@ -266,7 +266,7 @@ class BaseChatSession(ABC):
 
             status = assemble_fragments(
                 ctx,
-                names=["session_budget", "token_budget", "current_time"],
+                names=["session_budget", "current_time"],  # token_budget 已禁用（上下文评估偏差）
                 header="[运行状态 — 系统自动注入，供参考]",
             )
             if status:

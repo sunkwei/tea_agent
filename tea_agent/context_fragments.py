@@ -377,7 +377,7 @@ def _init_builtin_fragments() -> None:
     """注册内置片段（幂等）。"""
     builtin = {
         "session_budget": _frag_session_budget,
-        "token_budget": _frag_token_budget,
+        # "token_budget": _frag_token_budget,  # 已禁用：上下文 token 评估存在偏差，用户要求关闭（2026-08-04）
         "current_time": _frag_current_time,
         "session_mode": _frag_session_mode,
         "environment": _frag_environment,

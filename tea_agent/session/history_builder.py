@@ -243,16 +243,16 @@ def _get_token_budget(context: Any) -> tuple[int, int]:
 
     根据 max_context_tokens 动态计算：
     - input_budget = max_context_tokens * 0.8（预留 20% 给输出）
-    - tool_prune_threshold = max(500, input_budget * 0.02)  # 动态阈值，最低 500 字符
+    - tool_prune_threshold = max(65536, input_budget * 0.02)  # 动态阈值，最低 64K 字符
     """
     max_ctx = getattr(context, 'max_context_tokens', 0) or 0
     if max_ctx > 0:
         input_budget = int(max_ctx * 0.8)
-        # 动态工具裁剪阈值：预算的 2%，最低 500 字符
-        tool_prune_threshold = max(500, int(input_budget * 0.02))
+        # 动态工具裁剪阈值：预算的 2%，最低 64K 字符（保证读取代码/文件内容完整）
+        tool_prune_threshold = max(65536, int(input_budget * 0.02))
     else:
         input_budget = 0
-        tool_prune_threshold = 2048  # 默认值（与入库压缩上限对齐）
+        tool_prune_threshold = 65536  # 默认值（与入库压缩上限对齐）
     return input_budget, tool_prune_threshold
 
 
@@ -264,15 +264,15 @@ def get_tool_prune_threshold(context: Any) -> int:
     消息一旦入库即被压缩到该阈值以内 → 永不触发二次改写
     （完整→占位符翻转），保证历史前缀逐字节稳定、可命中缓存。
 
-    取值 max(2048, input_budget * 0.02)：
-    - 128K 窗口 → 2048（与旧行为一致）
-    - 1M 窗口 → ~16.7K（保留更完整内容，仍稳定）
-    - 更小窗口 → 不低于 2048，防止过度压缩破坏工具信息
+    取值 max(65536, input_budget * 0.02)：
+    - 128K 窗口 → 65536（64KB，足够容纳完整代码文件）
+    - 1M 窗口 → 65536（下限保障；更大窗口按预算 2% 上浮）
+    - 更小窗口 → 不低于 65536，确保读取代码/文件时内容完整
     """
     input_budget, _ = _get_token_budget(context)
     if input_budget > 0:
-        return max(2048, int(input_budget * 0.02))
-    return 2048
+        return max(65536, int(input_budget * 0.02))
+    return 65536
 
 
 def _progressive_trim(messages: list[dict], budget: int, context: Any,

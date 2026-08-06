@@ -115,8 +115,8 @@ class BaseChatSession(ABC):
     """
 
     _KB_THRESHOLD: int = 65536  # toolkit_kb 输出阈值: 64KB
-    _DEFAULT_TOOL_THRESHOLD: int = 2048  # 默认工具输出阈值: 2KB
-    _TEXT_FILE_THRESHOLD: int = 16384  # 文本/日志文件阈值: 16KB
+    _DEFAULT_TOOL_THRESHOLD: int = 65536  # 默认工具输出阈值: 64KB
+    _TEXT_FILE_THRESHOLD: int = 65536  # 文本/日志文件阈值: 64KB
     _SOURCE_EXTENSIONS = {
         ".py",
         ".java",
@@ -304,7 +304,7 @@ class BaseChatSession(ABC):
         压缩上限与 history_builder 的裁剪阈值对齐（get_tool_prune_threshold），
         消息从出生起定型，_solidify_history 永不触发二次改写。
         """
-        max_chars = 2048
+        max_chars = 65536
         try:
             from tea_agent.session.history_builder import get_tool_prune_threshold
 
@@ -342,7 +342,7 @@ class BaseChatSession(ABC):
             msg.pop("reasoning_content", None)
 
     @staticmethod
-    def _compress_tool_content(content: str, max_chars: int = 2048) -> str:
+    def _compress_tool_content(content: str, max_chars: int = 65536) -> str:
         """
         L1 工具输出压缩：首尾各 max_chars//2 字节，按换行对齐。
 
@@ -389,15 +389,17 @@ class BaseChatSession(ABC):
 
         head_bytes = raw[:head_end]
 
-        # 后半部分：从尾部 half 位置向后找最近换行
+        # 后半部分：从尾部 half 位置向后找第一个换行（对称 head 逻辑）
         tail_start = total_bytes - half
         if tail_start > 0:
-            nl = raw.rfind(b"\n", tail_start, total_bytes)
-            if nl != -1 and nl > tail_start - 256:
+            # 向后找第一个换行：tail 从该换行后开始，保留约 half 字节
+            nl = raw.find(b"\n", tail_start)
+            if nl != -1 and nl < tail_start + 256:
                 tail_start = nl + 1  # 从换行后开始
             else:
-                nl = raw.find(b"\n", tail_start)
-                if nl != -1 and nl < tail_start + 256:
+                # 向后无换行 → 向前找最近换行
+                nl = raw.rfind(b"\n", 0, tail_start)
+                if nl != -1 and nl > tail_start - 256:
                     tail_start = nl + 1
 
         tail_bytes = raw[tail_start:]

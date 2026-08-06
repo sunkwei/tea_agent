@@ -652,11 +652,15 @@ class ToolComponent(SessionComponent):
                 head_end = nl
             head_text = raw[:head_end].decode("utf-8", errors="replace")
 
-            # 后半部分
+            # 后半部分：向后找第一个换行，tail 保留约 half 字节
             tail_start = len(raw) - half
-            nl = raw.rfind(b"\n", tail_start, len(raw))
-            if nl != -1 and nl > tail_start - 256:
+            nl = raw.find(b"\n", tail_start)
+            if nl != -1 and nl < tail_start + 256:
                 tail_start = nl + 1
+            else:
+                nl = raw.rfind(b"\n", 0, tail_start)
+                if nl != -1 and nl > tail_start - 256:
+                    tail_start = nl + 1
             tail_text = raw[tail_start:].decode("utf-8", errors="replace")
 
             result_str = f"{head_text}\n\n... [工具输出截断: {result_bytes}B → {len(head_text.encode('utf-8')) + len(tail_text.encode('utf-8'))}B] ...\n\n{tail_text}"

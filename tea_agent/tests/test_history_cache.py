@@ -95,7 +95,7 @@ class TestPrefixStability:
         sess.add_user_message("读文件")
         sess.add_tool_result("t1", "x" * 10000)
         tool_msg = next(m for m in ctx.messages if m.get("role") == "tool")
-        assert len(tool_msg["content"]) <= 2048 + 200
+        assert len(tool_msg["content"]) <= 65536 + 200
         assert not tool_msg["content"].startswith("[工具结果已省略")
 
 

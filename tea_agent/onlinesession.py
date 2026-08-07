@@ -2170,4 +2170,5 @@ class OnlineToolSession(BaseChatSession):
             logger.exception('op_failed')
 
 
+# 延迟导入（避免循环依赖）：MemoryComponent 在 _initialize_components 中使用
 from tea_agent.session_memory_component import MemoryComponent  # noqa: E402

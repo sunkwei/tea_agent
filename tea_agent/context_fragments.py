@@ -35,7 +35,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
 logger = logging.getLogger("context_fragments")
@@ -52,12 +52,11 @@ __all__ = [
 ]
 
 # 默认片段组装顺序（小权重在前，weight 越小越靠前）
+# 注意：token_budget 已禁用（上下文评估偏差）；environment 已由 _build_l0_enriched_system 直接注入
 DEFAULT_FRAGMENT_ORDER = [
     "session_budget",
-    "token_budget",
     "current_time",
     "session_mode",
-    "environment",
     "agents_md",
 ]
 
@@ -334,19 +333,6 @@ def _frag_session_mode(context: Any) -> ContextFragment | None:
     )
 
 
-def _frag_environment(context: Any) -> ContextFragment | None:
-    """环境信息片段 — 复用已有 OS 注入（避免重复）。"""
-    os_text = getattr(context, "_injected_os_info_text", "") or ""
-    if not os_text:
-        return None
-    return ContextFragment(
-        name="environment",
-        body=os_text,
-        markers=("<environment>\n", "\n</environment>"),
-        weight=5,
-    )
-
-
 def _frag_agents_md(context: Any) -> ContextFragment | None:
     """AGENTS.md 分层指令片段 — 对应 Codex UserInstructions。
 
@@ -380,7 +366,6 @@ def _init_builtin_fragments() -> None:
         # "token_budget": _frag_token_budget,  # 已禁用：上下文 token 评估存在偏差，用户要求关闭（2026-08-04）
         "current_time": _frag_current_time,
         "session_mode": _frag_session_mode,
-        "environment": _frag_environment,
         "agents_md": _frag_agents_md,
     }
     for name, factory in builtin.items():

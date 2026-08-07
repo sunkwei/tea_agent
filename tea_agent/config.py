@@ -175,8 +175,18 @@ class AgentConfig:
         self, model_type: str = "main", mode: str = "mixed"
     ) -> dict[str, Any]:
         """获取最终生效的模型推理参数。mode_params 覆盖 model 默认值；
-        未显式配置 temperature 时按任务阶段使用智能默认。"""
-        model_cfg = self.main_model if model_type == "main" else self.cheap_model
+        未显式配置 temperature 时按任务阶段使用智能默认。
+
+        model_type 支持: "main" / "cheap" / "vision"。
+        "vision" 使用 vision_model 自己的配置（未配置时回退主模型）。
+        """
+        if model_type == "vision":
+            # vision 模型必须使用自己的配置，不能继承主模型的参数
+            model_cfg = (
+                self.vision_model if self.vision_model.is_configured else self.main_model
+            )
+        else:
+            model_cfg = self.main_model if model_type == "main" else self.cheap_model
         params = {
             "temperature": model_cfg.temperature,
             "max_tokens": model_cfg.max_tokens,

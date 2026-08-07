@@ -390,6 +390,20 @@ class APIComponent(SessionComponent):
                 target_client = vision_client
                 target_model = vision_model
                 logger.info(f"👁️ 请求级视觉切换: {vision_model}")
+                # 视觉模型必须使用自己的推理参数（max_tokens/temperature/top_p），
+                # 不能继承主模型的配置。vision 未配置时 get_effective_params 回退主模型。
+                try:
+                    from tea_agent.config import get_config
+
+                    vp = get_config().get_effective_params(
+                        "vision", getattr(self.ctx, "_current_mode", "mixed")
+                    )
+                    if vp:
+                        temperature = vp.get("temperature", temperature)
+                        max_tokens = vp.get("max_tokens", max_tokens)
+                        top_p = vp.get("top_p", top_p)
+                except Exception:
+                    pass
 
         kwargs = {
             "model": target_model,

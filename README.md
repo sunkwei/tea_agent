@@ -1,4 +1,4 @@
-# Tea Agent v0.13.15
+# Tea Agent v0.14.0
 
 > ⚠️ **AI 写 AI 的实验项目，自行承担责任。**
 
@@ -8,7 +8,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.13.15-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.14.0-blue)](https://pypi.org/project/tea-agent)
 
 ---
 
@@ -89,6 +89,15 @@ register → exec（下发任务，session_id 控制上下文） → status（�
 ### 6. 🏎️ Token 经济 — 四级历史压缩
 
 `L0 系统层 → L3 语义摘要 → L2 历史对 → L1 当前对话` 四级组装上下文，在有限 token 窗口内最大化信息密度，长对话不爆上下文。
+
+### 7. 👁️ 视觉模型自动切换（v0.13.16+）
+
+主模型不支持视觉？配置一个 `vision_model`，Agent 自动切换：
+
+- **请求级切换**：检测请求消息含图（当前轮或历史轮）→ 自动使用视觉模型
+- **回合级兜底**：覆盖「上一轮发图、本轮纯文本追问」场景，主模型不再收到无法处理的 `image_url` 内容
+- **`toolkit_vision_analyze`**：主模型「灵机一动」委托能力 — 遇到图片路径 / URL / data URL 主动调用视觉模型分析，返回文本结果继续推理
+- **无感恢复**：回合结束自动恢复主模型，零配置零打扰
 
 ---
 
@@ -275,9 +284,14 @@ cheap_model:               # 独立配置，用于摘要/记忆等廉价任务
 embedding:
   provider: openai
   model: text-embedding-3-small
+vision_model:             # 视觉模型（可选）：会话含图片时自动切换
+  api_key: "sk-xxx"
+  api_url: "https://api.openai.com/v1"
+  model_name: "gpt-4o-mini"    # 示例：也支持 mimo-v2.5 等视觉模型
 ```
 
 - **上下文窗口控制**：`max_context_tokens` 超预算时按 5 级渐进裁剪（删旧历史 → 工具输出占位 → 清 thinking → 截长文 → 删旧轮）
+- **视觉模型自动切换**：配置 `vision_model` 后，会话输入含图片时自动使用视觉模型（回合结束恢复主模型）；另提供 `toolkit_vision_analyze` 工具供主模型委托图片分析
 - **运行时调优**：Agent 可用 `toolkit_config` 自主调整参数
 - **Ruff 规范**：内置 `pyproject.toml` Ruff 配置（E/F/W/I/N/UP/B/C4/SIM），Python 3.10 类型注解
 

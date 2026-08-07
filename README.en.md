@@ -1,4 +1,4 @@
-# Tea Agent v0.13.12
+# Tea Agent v0.14.0
 
 > ⚠️ **Experimental project — AI writing AI. Use at your own risk.**
 
@@ -8,7 +8,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.13.12-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.14.0-blue)](https://pypi.org/project/tea-agent)
 
 ---
 
@@ -89,6 +89,15 @@ For **embedded debugging** (RK3588/BM1688/X3), **edge node management**, **distr
 ### 6. 🏎️ Token Economy — Four-Level History Compression
 
 `L0 System → L3 Semantic Summary → L2 History Pairs → L1 Current Conversation` builds context in four tiers, maximizing information density within a limited token window — long conversations never blow the context.
+
+### 7. 👁️ Vision Model Auto-Switch (v0.13.16+)
+
+Main model doesn't support vision? Configure a `vision_model` and the Agent switches automatically:
+
+- **Request-level switching**: detects images in the request messages (current or historical turns) → automatically uses the vision model
+- **Turn-level fallback**: covers "image sent last turn, plain-text follow-up this turn" — the main model never receives unprocessable `image_url` content
+- **`toolkit_vision_analyze`**: on-the-fly delegation — when the main model hits an image path / URL / data URL, it proactively calls the vision model to analyze and continue reasoning
+- **Seamless restore**: switches back to the main model after the turn ends — zero config, zero friction
 
 ---
 
@@ -275,9 +284,14 @@ cheap_model:               # separate config for summarization/memory cheap task
 embedding:
   provider: openai
   model: text-embedding-3-small
+vision_model:             # vision model (optional): auto-switch when images present
+  api_key: "sk-xxx"
+  api_url: "https://api.openai.com/v1"
+  model_name: "gpt-4o-mini"    # e.g. also supports mimo-v2.5 and other vision models
 ```
 
 - **Context window control**: when `max_context_tokens` is exceeded, 5-stage progressive trim (drop old history → tool output placeholders → clear thinking → truncate long text → drop old turns)
+- **Vision model auto-switch**: with `vision_model` configured, the session automatically uses the vision model when the input contains images (restores the main model after the turn); `toolkit_vision_analyze` also lets the main model delegate image analysis on the fly
 - **Runtime tuning**: Agent can self-tune parameters via `toolkit_config`
 - **Ruff lint**: built-in `pyproject.toml` Ruff config (E/F/W/I/N/UP/B/C4/SIM), Python 3.10 type annotations
 

@@ -1162,4 +1162,79 @@ class TestVisionModelAutoSwitch:
             sess.close()
 
 
+# ════════════════════════════════════════════════════════════
+# 8. 请求级视觉切换（create_chat_stream 兜底历史图片）
+# ════════════════════════════════════════════════════════════
+
+class TestRequestLevelVisionSwitch:
+    """create_chat_stream 请求消息含图片（历史轮）→ 自动切换视觉模型"""
+
+    def _make_api(self, vision_configured=True):
+        main_client = MagicMock()
+        vision_client = MagicMock() if vision_configured else None
+        ctx = SessionContext(
+            model="main-model",
+            enable_thinking=False,
+            client=main_client,
+            supports_reasoning=False,
+            no_stream_chunk=True,
+            _thinking_supported=None,
+            vision_client=vision_client,
+            vision_model="vision-model" if vision_configured else "",
+        )
+        return APIComponent(ctx), main_client, vision_client
+
+    def _image_msgs(self):
+        return [{"role": "user", "content": [
+            {"type": "text", "text": "看看这张图"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,fake"}},
+        ]}]
+
+    def _text_msgs(self):
+        return [{"role": "user", "content": "纯文本问题"}]
+
+    def test_image_messages_use_vision_client(self):
+        """含图请求（历史图片场景）应使用 vision client/model"""
+        api, main_client, vision_client = self._make_api()
+        vision_client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="图中内容", tool_calls=None))]
+        )
+        api.create_chat_stream(self._image_msgs(), [])
+        # 主客户端不应被调用，视觉客户端应被调用且 model 为 vision-model
+        main_client.chat.completions.create.assert_not_called()
+        vision_client.chat.completions.create.assert_called_once()
+        _, kwargs = vision_client.chat.completions.create.call_args
+        assert kwargs["model"] == "vision-model"
+
+    def test_text_messages_use_main_client(self):
+        """纯文本请求保持主客户端"""
+        api, main_client, vision_client = self._make_api()
+        main_client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
+        )
+        api.create_chat_stream(self._text_msgs(), [])
+        main_client.chat.completions.create.assert_called_once()
+        vision_client.chat.completions.create.assert_not_called()
+
+    def test_no_vision_client_uses_main(self):
+        """未配置视觉模型时，含图请求也走主客户端（不崩溃）"""
+        api, main_client, vision_client = self._make_api(vision_configured=False)
+        main_client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
+        )
+        api.create_chat_stream(self._image_msgs(), [])
+        main_client.chat.completions.create.assert_called_once()
+
+    def test_explicit_client_skips_switch(self):
+        """显式传入 client 时不做切换（如 cheap 摘要路径）"""
+        api, main_client, vision_client = self._make_api()
+        explicit = MagicMock()
+        explicit.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
+        )
+        api.create_chat_stream(self._image_msgs(), [], client=explicit)
+        explicit.chat.completions.create.assert_called_once()
+        vision_client.chat.completions.create.assert_not_called()
+
+
 print("\n✅ OnlineSession 测试加载完成")

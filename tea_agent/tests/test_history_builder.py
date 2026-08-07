@@ -115,3 +115,31 @@ class TestToMultimodal:
         assert parts[1]["type"] == "image_url"
         assert parts[1]["image_url"]["url"] == data_url
         assert "images" not in result
+
+    def test_messages_contain_images_detects_image_url(self):
+        """含 image_url 内容的消息应被识别为含图"""
+        from tea_agent.session.history_builder import messages_contain_images
+        msgs = [
+            {"role": "user", "content": "文本"},
+            {"role": "user", "content": [
+                {"type": "text", "text": "描述"},
+                {"type": "image_url", "image_url": {"url": "data:image/png;base64,xx"}},
+            ]},
+        ]
+        assert messages_contain_images(msgs) is True
+
+    def test_messages_contain_images_detects_images_field(self):
+        """含未转换 images 字段的消息应被识别为含图"""
+        from tea_agent.session.history_builder import messages_contain_images
+        msgs = [{"role": "user", "content": "文本", "images": ["/tmp/a.png"]}]
+        assert messages_contain_images(msgs) is True
+
+    def test_messages_contain_images_false_for_text(self):
+        """纯文本消息列表返回 False"""
+        from tea_agent.session.history_builder import messages_contain_images
+        msgs = [
+            {"role": "system", "content": "sys"},
+            {"role": "user", "content": "你好"},
+            {"role": "assistant", "content": "你好！"},
+        ]
+        assert messages_contain_images(msgs) is False

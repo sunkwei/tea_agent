@@ -1,6 +1,16 @@
 # Changelog
 
 
+## [0.13.17] - 2026-08-07
+### Features
+- feat: 视觉模型请求级自动切换 — create_chat_stream 检测请求消息含图（当前轮或历史轮）→ 自动使用 vision_model
+  - 兜底回合级切换：覆盖「上一轮发图、本轮纯文本追问」场景，主模型不再收到无法处理的 image_url 内容
+  - history_builder 新增 messages_contain_images 检测助手（image_url 内容 / images 字段），session 包导出
+- feat: 新增 toolkit_vision_analyze 工具 — 主模型"灵机一动"委托能力：遇到图片路径/URL/data URL 时主动调用
+  视觉模型分析，返回文本结果继续推理（支持本地文件/http(s)/data URL 三种输入，无视觉配置时清晰报错）
+- fix: 修复运行中旧进程 save_config 覆盖丢失 config.yaml 中 vision_model 节的问题（新代码保存/加载均保留）
+- tests: 新增 15 项（请求级切换 4 + messages_contain_images 3 + toolkit_vision_analyze 8），全量 1014 passed
+
 ## [0.13.16] - 2026-08-07
 ### Features
 - feat: 视觉模型自动切换（vision_model）— 会话输入含图片时自动使用视觉模型，无图片时使用主模型

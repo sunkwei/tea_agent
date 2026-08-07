@@ -13,7 +13,10 @@ from tea_agent.basesession import BaseChatSession, relaxed_json_loads
 
 # 组件导入（替代 Mixin）
 from tea_agent.session.context import SessionComponent, SessionContext
-from tea_agent.session.history_builder import build_api_messages
+from tea_agent.session.history_builder import (
+    build_api_messages,
+    messages_contain_images,
+)
 from tea_agent.session.params import get_cheap_params
 from tea_agent.session.prompts import (
     COMPACT_SYSTEM_PROMPT,
@@ -376,6 +379,17 @@ class APIComponent(SessionComponent):
     ):
         target_client = client or self.ctx.client
         target_model = model or self.ctx.model
+
+        # 请求级视觉自动切换：请求消息含图片（当前轮或历史轮）→ 使用视觉模型。
+        # 兜底 chat_stream 的回合级切换，覆盖「上一轮发图、本轮纯文本追问」等场景，
+        # 避免主模型（无视觉能力）收到 image_url 内容导致 API 报错或图片被忽略。
+        if client is None and model is None and not is_cheap:
+            vision_client = getattr(self.ctx, "vision_client", None)
+            vision_model = getattr(self.ctx, "vision_model", "") or ""
+            if vision_client and vision_model and messages_contain_images(api_messages):
+                target_client = vision_client
+                target_model = vision_model
+                logger.info(f"👁️ 请求级视觉切换: {vision_model}")
 
         kwargs = {
             "model": target_model,

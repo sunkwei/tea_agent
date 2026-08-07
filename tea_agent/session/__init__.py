@@ -17,7 +17,12 @@ All modules can be directly imported and used by AI Agents.
 """
 
 from .context import SessionComponent, SessionContext
-from .history_builder import build_api_messages, estimate_tokens, to_multimodal
+from .history_builder import (
+    build_api_messages,
+    estimate_tokens,
+    messages_contain_images,
+    to_multimodal,
+)
 from .json_sanitizer import sanitize_api_messages, try_fix_truncated_json
 from .os_info_injector import generate_os_info_text, inject_os_info
 from .params import get_cheap_params
@@ -36,6 +41,7 @@ __all__ = [
     "TOPIC_SUMMARY_SYSTEM", "TOPIC_SUMMARY_USER_TEMPLATE",
     "COMPACT_SYSTEM_PROMPT",
     "build_api_messages", "estimate_tokens", "to_multimodal",
+    "messages_contain_images",
     "sanitize_api_messages", "try_fix_truncated_json",
     "generate_os_info_text", "inject_os_info",
     "get_cheap_params",

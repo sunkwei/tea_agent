@@ -152,6 +152,29 @@ def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None
     return msg
 
 
+def messages_contain_images(messages: list[dict]) -> bool:
+    """检测 API 消息列表中是否含图片内容（image_url 或未转换的 images 字段）。
+
+    用于请求级视觉模型自动切换：只要请求中任一条消息带图（当前轮或历史轮），
+    就应使用支持视觉的模型，避免主模型（无视觉能力）收到 image_url 内容。
+
+    Args:
+        messages: 即将发送给 API 的消息列表
+
+    Returns:
+        True=含图片，False=纯文本
+    """
+    for msg in messages:
+        content = msg.get("content")
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "image_url":
+                    return True
+        if msg.get("images"):
+            return True
+    return False
+
+
 def _key_words(text: str) -> set:
     """提取文本中的关键词（中文2字+、英文3字母+）"""
     cn = re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]{2,}', text)

@@ -34,6 +34,17 @@ class MemoryStore(StoreComponent):
             except Exception as e:
                 logger.warning(f"compute embedding failed: {e}")
         content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()[:16]
+        # 去重：同一内容的活跃记忆已存在则跳过（防止自动提取/评估产生重复垃圾）
+        c = self.conn.cursor()
+        c.execute(
+            "SELECT id FROM memories WHERE content_hash = ? AND is_active = 1 LIMIT 1",
+            (content_hash,),
+        )
+        existing = c.fetchone()
+        if existing:
+            logger.debug(f"add_memory 去重: 跳过已存在记忆 (id={existing[0]})")
+            c.close()
+            return existing[0]
         embedding_blob = None
         if embedding:
             try:

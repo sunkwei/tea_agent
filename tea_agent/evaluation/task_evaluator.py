@@ -310,16 +310,29 @@ class TaskEvaluator:
     def _extract_lessons(
         self, rounds: list[dict], success: bool, issues: list[str]
     ) -> list[str]:
-        """提取经验教训"""
+        """提取经验教训（带具体上下文，避免空泛模板导致记忆库膨胀）。
+
+        原则：
+        - 失败教训必须携带失败原因/上下文，而非固定字符串
+        - 工具使用统计只记录显著高频（>10 次）且带次数
+        - 每条教训具备可执行价值，无信息量的模板不生成
+        """
         lessons = []
 
         if not success:
-            lessons.append("任务失败，需要分析失败原因")
+            # 携带失败上下文（从 issues 中提取具体错误）
+            err_detail = next(
+                (i for i in issues if i.startswith("执行错误")), ""
+            )
+            if err_detail:
+                lessons.append(f"任务失败: {err_detail}")
+            else:
+                lessons.append(f"任务失败: 未捕获具体原因 (问题数={len(issues)})")
 
         if len(issues) > 3:
-            lessons.append("执行过程中问题较多，建议简化任务或分步执行")
+            lessons.append(f"执行过程中问题较多 ({len(issues)} 个)，建议简化任务或分步执行")
 
-        # 检查工具使用模式
+        # 检查工具使用模式（仅记录显著高频，带统计数字）
         all_tools = []
         for round_data in rounds:
             for tc in round_data.get("tool_calls", []):
@@ -332,8 +345,10 @@ class TaskEvaluator:
             from collections import Counter
             tool_counts = Counter(all_tools)
             most_used = tool_counts.most_common(1)[0]
-            if most_used[1] > 5:
-                lessons.append(f"频繁使用 {most_used[0]}，考虑封装为 Skill")
+            if most_used[1] > 10:
+                lessons.append(
+                    f"本会话 {most_used[0]} 调用 {most_used[1]} 次（高频），考虑封装为 Skill"
+                )
 
         return lessons
 

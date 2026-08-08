@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚡ 雷电战机 Thunder Strike</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 20%, #06162e 0%, #01040a 70%);
+    font-family: 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  }
+  #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas {
+    display: block;
+    border: 1px solid #16305c;
+    border-radius: 6px;
+    box-shadow: 0 0 60px rgba(30, 120, 255, .28);
+    background: #000;
+  }
+  #hud {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 30px; align-items: center;
+    color: #9fd8ff; font-size: 15px; letter-spacing: 1px;
+    text-shadow: 0 0 8px rgba(80, 180, 255, .6);
+    z-index: 10; pointer-events: none; white-space: nowrap;
+  }
+  #hud b { color: #ffe27a; font-size: 19px; }
+  #hud .hearts { color: #ff5a5a; font-size: 16px; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 20; pointer-events: none;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: #dff1ff;
+    background: rgba(1, 6, 16, .35);
+  }
+  #overlay.hidden { display: none; }
+  #overlay h1 {
+    font-size: 54px; letter-spacing: 14px; font-weight: 800;
+    color: #7fd4ff;
+    text-shadow: 0 0 30px rgba(0, 160, 255, .95), 0 0 70px rgba(0, 120, 255, .55);
+    margin-bottom: 10px;
+  }
+  #overlay .sub { font-size: 16px; color: #9fb8d8; letter-spacing: 4px; margin-bottom: 38px; }
+  #overlay .tip { font-size: 14px; color: #8fb0d0; line-height: 2.3; }
+  .key {
+    display: inline-block; padding: 2px 10px; margin: 0 2px;
+    border: 1px solid #2a5a8a; border-radius: 6px;
+    background: #0a1a30; color: #bfe6ff; font-size: 13px;
+  }
+  #engineMark { display: none; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="gameCanvas"></canvas></div>
+<div id="hud">
+  <span>得分 <b id="score">0</b></span>
+  <span>最高 <b id="hi">0</b></span>
+  <span class="hearts" id="lives">❤ ❤ ❤</span>
+</div>
+<div id="overlay">
+  <h1 id="ovTitle">雷电战机</h1>
+  <div class="sub" id="ovSub">THUNDER STRIKE</div>
+  <div class="tip">
+    移动 <span class="key">↑</span><span class="key">↓</span><span class="key">←</span><span class="key">→</span>
+    <span style="color:#4a6a8a">或</span> <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span><br>
+    开火 <span class="key">空格</span>（按住连射）· 开始 / 重新开始 <span class="key">空格</span> 或 <span class="key">R</span>
+  </div>
+</div>
+<div id="engineMark"></div>
+<script src="game.js"></script>
+</body>
+</html>

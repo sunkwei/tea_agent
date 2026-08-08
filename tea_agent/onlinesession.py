@@ -2107,6 +2107,8 @@ class OnlineToolSession(BaseChatSession):
         full_reply = result.get("full_reply", "")
         used_tools = result.get("used_tools", False)
         iterations = result.get("iterations", 0)
+        # 记录本轮全部工具名（供 server 摘要输出）
+        self._last_tool_names = result.get("tool_names", []) or []
 
         # 完成追踪
         if (

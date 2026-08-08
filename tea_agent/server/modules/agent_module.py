@@ -34,6 +34,27 @@ from .state import (
 logger = logging.getLogger("hot_reload.agent")
 
 
+def _server_round_summary(model: str, user_msg, tool_names: list, ai_msg: str) -> None:
+    """server 每轮对话输出到控制台的摘要信息。
+
+    Args:
+        model: 使用的模型名称
+        user_msg: 用户输入（str 或 {"text": ..., "images": [...]}）
+        tool_names: 本轮调用的工具函数名列表
+        ai_msg: AI 最终回复
+    """
+    try:
+        _user = user_msg if isinstance(user_msg, str) else (
+            (user_msg or {}).get("text", "") if isinstance(user_msg, dict) else str(user_msg)
+        )
+        _user = (_user or "").replace("\n", " ")[:64]
+        _tools = ",".join(tool_names or [])
+        _ai = (ai_msg or "").replace("\n", " ")[:64]
+        print(f"[chat] model={model} | user={_user} | tools=[{_tools}] | ai={_ai}", flush=True)
+    except Exception:
+        pass
+
+
 class AgentModule(HotReloadModule):
     """Agent 热重载模块。"""
 
@@ -181,6 +202,12 @@ class AgentModule(HotReloadModule):
         ai_msg, used_tools = agent.sess.chat_stream(
             user_msg, callback=cb,
             topic_id=topic_id or agent.current_topic_id)
+        _server_round_summary(
+            getattr(agent.sess.context, "model", ""),
+            user_msg,
+            getattr(agent.sess, "_last_tool_names", []) or [],
+            ai_msg,
+        )
         agent._post_chat_pipeline(ai_msg, used_tools, user_msg,
                                    topic_id or agent.current_topic_id)
         full = "".join(collected) or ai_msg
@@ -248,6 +275,12 @@ class AgentModule(HotReloadModule):
             ai_msg, used_tools = session.chat_stream(
                 user_msg, callback=_wrapped_cb, topic_id=topic_id)
             _effective_ai_msg = ai_msg if ai_msg else "".join(_streamed_text_parts)
+            _server_round_summary(
+                getattr(session.context, "model", ""),
+                user_msg,
+                getattr(session, "_last_tool_names", []) or [],
+                _effective_ai_msg,
+            )
             cls._save_chat_result(storage, session, topic_id, user_msg, _effective_ai_msg, used_tools)
             _usage = getattr(session, '_last_usage', None) or {}
             _model = getattr(session.context, 'model', '')
@@ -500,6 +533,12 @@ class AgentModule(HotReloadModule):
                 tlk.toolkit._question_web_handler = None
 
             _effective_ai_msg = ai_msg if ai_msg else "".join(_streamed_text_parts)
+            _server_round_summary(
+                getattr(session.context, "model", ""),
+                msg,
+                getattr(session, "_last_tool_names", []) or [],
+                _effective_ai_msg,
+            )
             if _effective_ai_msg is not None:
                 try:
                     cls._save_chat_result(storage, session, topic_id, msg,

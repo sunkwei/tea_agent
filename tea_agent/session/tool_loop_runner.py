@@ -476,6 +476,8 @@ def execute_tool_loop(session, context: dict) -> dict:
     loop_detector = LoopDetector(window=5, similarity_threshold=0.85)
     # M1: 跟踪最近调用的工具名，供打断锚点记录
     last_tool_names: list = []
+    # 本轮全部调用过的工具名（去重保序），供 server 摘要输出
+    all_tool_names: list[str] = []
 
     while iterations < session.max_iterations + session._extra_iterations:
         if session.interrupted:
@@ -494,8 +496,7 @@ def execute_tool_loop(session, context: dict) -> dict:
 
         if iterations == 0:
             asctime = time.strftime("%Y-%m-%d %H:%M:%S")
-            print(f"{asctime}: call model: {session.context.model}, {msg}")
-            logger.info(f"call model: {session.context.model}, {msg}")
+            logger.debug(f"{asctime}: call model: {session.context.model}, {msg}")
 
         # API 调用
         _MAX_RETRIES = 6
@@ -569,6 +570,9 @@ def execute_tool_loop(session, context: dict) -> dict:
         # M1: 记录最近调用的工具名，供打断锚点记录
         if valid_tool_calls:
             last_tool_names = [tc.function.name for tc in valid_tool_calls]
+            for _name in last_tool_names:
+                if _name not in all_tool_names:
+                    all_tool_names.append(_name)
 
         if valid_tool_calls:
             used_tools = True
@@ -738,6 +742,7 @@ def execute_tool_loop(session, context: dict) -> dict:
         "used_tools": used_tools,
         "iterations": iterations,
         "parallel_enabled": enable_parallel,
+        "tool_names": all_tool_names,
     }
 
 

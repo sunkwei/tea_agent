@@ -165,7 +165,7 @@ def sanitize_api_messages(messages: list[dict]) -> list[dict]:
                 logger.warning(f"sanitize_api_messages: 修复截断JSON → {fixed[:80]}...")
             else:
                 removed_count += 1
-                logger.warning(
+                logger.debug(
                     f"sanitize_api_messages: 移除非法tool_call → "
                     f"func={func.get('name','?')}, args前80={raw_args[:80]}"
                 )
@@ -181,5 +181,5 @@ def sanitize_api_messages(messages: list[dict]) -> list[dict]:
             })
 
     if removed_count > 0:
-        logger.info(f"sanitize_api_messages: 共移除 {removed_count} 个非法 tool_call")
+        logger.debug(f"sanitize_api_messages: 共移除 {removed_count} 个非法 tool_call")
     return sanitized

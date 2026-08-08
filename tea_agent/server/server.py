@@ -363,6 +363,17 @@ def _build_routes() -> list:
         Route("/dag/{viz_id:str}/events", rh.handle_dag_sse),
         Route("/dag/{viz_id:str}/status", rh.handle_dag_status),
         Route("/dag/{viz_id:str}/image", rh.handle_dag_image),
+        # ── Pi Features（会话树/消息队列/手动压缩） ──
+        Route("/api/pi/tree/{topic_id:str}", rh.handle_pi_tree),
+        Route("/api/pi/tree/{topic_id:str}/branch", rh.handle_pi_tree_branch, methods=["POST"]),
+        Route("/api/pi/tree/{topic_id:str}/switch", rh.handle_pi_tree_switch, methods=["POST"]),
+        Route("/api/pi/tree/{topic_id:str}/summary", rh.handle_pi_tree_summary),
+        Route("/api/pi/tree/{topic_id:str}/append", rh.handle_pi_tree_append, methods=["POST"]),
+        Route("/api/pi/queue/{topic_id:str}", rh.handle_pi_queue_push, methods=["POST"]),
+        Route("/api/pi/queue/{topic_id:str}", rh.handle_pi_queue_status),
+        Route("/api/pi/queue/{topic_id:str}", rh.handle_pi_queue_clear, methods=["DELETE"]),
+        Route("/api/pi/compact/{topic_id:str}", rh.handle_pi_compact, methods=["POST"]),
+        Route("/api/pi/stats", rh.handle_pi_stats),
         Route("/docs", rh.handle_docs),
         Route("/openapi.json", rh.handle_openapi),
         Mount("/static", app=StaticFiles(directory=static_dir), name="static"),
@@ -382,6 +393,32 @@ def create_app(api_key=None, config_path=None):
     results = _server_instance.load_modules()
     ok_count = sum(1 for v in results.values() if v)
     logger.info(f"Modules loaded: {ok_count}/{len(results)}")
+    # server 控制台只保留 WARNING+（错误），INFO 类杂音（httpx/embedding/
+    # memory/session 等）不再输出；每轮对话摘要由 [chat] print 单独输出。
+    # Filter 必须加在 handler 上（子 logger 传播记录会绕过 logger.filter）。
+    _root = logging.getLogger()
+    if not getattr(_root, "_tea_server_quiet", False):
+        class _ServerQuietFilter(logging.Filter):
+            def filter(self, record: logging.LogRecord) -> bool:
+                return record.levelno >= logging.WARNING
+
+        for _h in list(_root.handlers):
+            if isinstance(_h, logging.StreamHandler):
+                _h.addFilter(_ServerQuietFilter())
+        _root._tea_server_quiet = True
+    logging.getLogger("api_server").setLevel(logging.INFO)
+
+    # 预热 jieba 分词器（首次调用会直接 print 到 stdout 污染控制台）
+    try:
+        import contextlib
+        import io as _io
+
+        with contextlib.redirect_stdout(_io.StringIO()):
+            import jieba
+
+            jieba.initialize()
+    except Exception:
+        pass
 
     routes = _build_routes()
 

@@ -3168,4 +3168,124 @@ window.showModal = showModal;
 window.closeModal = closeModal;
 window.toast = toast;
 
+// ═══════════════════════════════════════════════════════
+//   Pi Features — 会话树 / 消息队列 / 压缩 (server+web)
+//   借鉴 earendil-works/pi Agent Harness
+// ═══════════════════════════════════════════════════════
+
+function _piTopicId() {
+  if (!currentTopicId) { toast('请先选择/创建话题', 'warning'); return null; }
+  return currentTopicId;
+}
+
+window.showPiModal = function() {
+  showModal('modal-pi');
+  piRefresh();
+};
+
+function _piFetch(url, opts) {
+  return fetch(url, opts).then(function(r) { return r.json(); });
+}
+
+// 刷新面板：会话树 + 队列状态
+window.piRefresh = function() {
+  var tid = _piTopicId();
+  if (!tid) return;
+  var treeEl = $('pi-tree-view');
+  if (treeEl) treeEl.textContent = '加载中…';
+  _piFetch('/api/pi/tree/' + encodeURIComponent(tid)).then(function(d) {
+    if (!treeEl) return;
+    if (!d.ok) { treeEl.textContent = '错误: ' + (d.error || 'unknown'); return; }
+    var lines = [];
+    lines.push('📊 节点 ' + d.stats.total_nodes + ' | 分支 ' + d.stats.branch_count + ' | 深度 ' + d.stats.current_depth);
+    lines.push('── 当前路径 ──');
+    (d.current_path || []).forEach(function(n) {
+      lines.push('  [' + n.role + '] ' + (n.content || '').replace(/\n/g, ' ').slice(0, 50));
+    });
+    lines.push('── 分支 ──');
+    (d.branches || []).forEach(function(b) {
+      lines.push('  🌿 ' + b.node_id + ' 「' + b.label + '」' + (b.summary ? ' — ' + b.summary.slice(0, 40) : ''));
+    });
+    treeEl.textContent = lines.join('\n');
+  }).catch(function(e) { if (treeEl) treeEl.textContent = '加载失败: ' + e; });
+
+  _piFetch('/api/pi/queue/' + encodeURIComponent(tid)).then(function(d) {
+    var qEl = $('pi-queue-view');
+    if (!qEl) return;
+    if (!d.ok) { qEl.textContent = '错误'; return; }
+    var parts = [];
+    (d.steering || []).forEach(function(m) { parts.push('⚡steering: ' + m.content.slice(0, 40)); });
+    (d.followup || []).forEach(function(m) { parts.push('🔁followup: ' + m.content.slice(0, 40)); });
+    qEl.textContent = parts.length ? parts.join('\n') : '（队列为空）';
+  });
+};
+
+// 创建分支
+window.piBranch = function() {
+  var tid = _piTopicId(); if (!tid) return;
+  var content = ($('pi-branch-content') || {}).value || '';
+  var label = ($('pi-branch-label') || {}).value || '';
+  if (!content.trim()) { toast('请输入分支消息', 'warning'); return; }
+  _piFetch('/api/pi/tree/' + encodeURIComponent(tid) + '/branch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: content, label: label })
+  }).then(function(d) {
+    var el = $('pi-branch-result');
+    if (el) el.textContent = d.ok ? '✅ 分支已创建: ' + d.node_id + (d.label ? ' 「' + d.label + '」' : '') : '❌ ' + (d.error || '');
+    if ($('pi-branch-content')) $('pi-branch-content').value = '';
+    piRefresh();
+  });
+};
+
+// 推送队列消息
+window.piQueuePush = function() {
+  var tid = _piTopicId(); if (!tid) return;
+  var content = ($('pi-queue-content') || {}).value || '';
+  var type = ($('pi-queue-type') || {}).value || 'steering';
+  if (!content.trim()) { toast('请输入消息内容', 'warning'); return; }
+  _piFetch('/api/pi/queue/' + encodeURIComponent(tid), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: content, type: type })
+  }).then(function(d) {
+    if (d.ok) { toast('📨 ' + type + ' 已入队', 'success'); }
+    else toast('❌ ' + (d.error || '入队失败'), 'error');
+    if ($('pi-queue-content')) $('pi-queue-content').value = '';
+    piRefresh();
+  });
+};
+
+// 清空队列
+window.piQueueClear = function() {
+  var tid = _piTopicId(); if (!tid) return;
+  _piFetch('/api/pi/queue/' + encodeURIComponent(tid), { method: 'DELETE' })
+    .then(function(d) {
+      toast(d.ok ? '🗑 队列已清空' : '清空失败', d.ok ? 'success' : 'error');
+      piRefresh();
+    });
+};
+
+// 手动压缩
+window.piCompact = function() {
+  var tid = _piTopicId(); if (!tid) return;
+  var el = $('pi-compact-result');
+  if (el) el.textContent = '压缩中…';
+  _piFetch('/api/pi/compact/' + encodeURIComponent(tid), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force: true })
+  }).then(function(d) {
+    if (el) {
+      if (d.ok && d.compacted) {
+        el.textContent = '✅ 压缩完成: ' + d.tokens_before + '→' + d.tokens_after + ' tokens';
+      } else if (d.ok) {
+        el.textContent = 'ℹ️ 未触发压缩 ' + (d.tokens_before || 0) + ' tokens';
+      } else {
+        el.textContent = '❌ ' + (d.error || '压缩失败');
+      }
+    }
+  });
+};
+
 })();

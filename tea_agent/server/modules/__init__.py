@@ -36,6 +36,7 @@ def register_all(registry: ModuleRegistry | None = None) -> ModuleRegistry:
 
     # 延迟导入，避免循环依赖
     from .agent_module import AgentModule
+    from .pi_features_module import PiFeaturesModule
     from .pipeline_module import PipelineModule
     from .storage_module import StorageModule
     from .toolkit_module import ToolkitModule
@@ -44,6 +45,7 @@ def register_all(registry: ModuleRegistry | None = None) -> ModuleRegistry:
     registry.register(StorageModule)
     registry.register(AgentModule)
     registry.register(PipelineModule)
+    registry.register(PiFeaturesModule)
 
     logger.info(f"Registered {len(registry._modules)} modules: {list(registry._modules.keys())}")
     return registry

@@ -6,9 +6,18 @@ import logging
 import os
 import re
 import sqlite3
+import tempfile
 from pathlib import Path
 
 logger = logging.getLogger("export_pdf")
+
+# 默认导出目录：系统临时目录（Windows=%TEMP%，Linux/macOS=/tmp 或 /dev/shm）。
+# 避免 server 以服务方式运行时 CWD 无写权限导致导出失败。
+def _default_export_dir() -> str:
+    try:
+        return tempfile.gettempdir()
+    except Exception:
+        return str(Path.home())
 
 def _find_db_path():
     try:
@@ -986,7 +995,7 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
                 "reasoning_text": reasoning_text,
             })
 
-        output_path = output_path or f"export_{topic_id[:8]}_full.pdf"
+        output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}_full.pdf")
         return _make_full_topic_pdf(topic_title, conversations, output_path)
 
     else:
@@ -1022,7 +1031,7 @@ def export_topic_pdf(topic_id: str, output_path: str = None,
             reasoning_text = ""
 
         conn.close()
-        output_path = output_path or f"export_{topic_id[:8]}.pdf"
+        output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}.pdf")
         return _make_pdf(topic_title, stamp, user_msg, ai_msg, reasoning_text, output_path)
 
 
@@ -1126,7 +1135,7 @@ def export_topic_markdown(topic_id: str, output_path: str = None,
             })
 
         md_text = _build_full_topic_markdown(topic_title, conversations)
-        output_path = output_path or f"export_{topic_id[:8]}_full.md"
+        output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}_full.md")
     else:
         c.execute(
             "SELECT * FROM conversations WHERE topic_id = ? ORDER BY stamp DESC LIMIT 1",
@@ -1143,19 +1152,19 @@ def export_topic_markdown(topic_id: str, output_path: str = None,
 
         md_text = _build_markdown_doc(topic_title, conv["stamp"], user_msg,
                                       ai_msg, reasoning_text)
-        output_path = output_path or f"export_{topic_id[:8]}.md"
+        output_path = output_path or os.path.join(_default_export_dir(), f"export_{topic_id[:8]}.md")
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(md_text)
     return output_path
 
 
-def toolkit_export_last_pdf(output_path="last.pdf", mode="latest", filter="final",
+def toolkit_export_last_pdf(output_path=None, mode="latest", filter="final",
                             topic_id=None):
     """Toolkit: export topic conversation(s) as PDF.
 
     Args:
-        output_path: PDF output path, default 'last.pdf'.
+        output_path: PDF output path, default to system temp dir.
         mode: 'latest' = last conversation only, 'full_topic' = all conversations in topic.
         filter: 'final' = user + AI final msg only (no thinking),
                 'full' = include reasoning process.
@@ -1164,6 +1173,8 @@ def toolkit_export_last_pdf(output_path="last.pdf", mode="latest", filter="final
     Returns:
         dict with success/error info.
     """
+    if not output_path:
+        output_path = os.path.join(_default_export_dir(), "last.pdf")
     db_path = _find_db_path()
     if not db_path:
         return {"error": "chat_history.db not found"}

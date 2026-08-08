@@ -890,7 +890,8 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             if msg.get("tool_call_id") in valid_ids:
                 cleaned.append(msg)
             else:
-                logger.warning(f"build_api_messages: 移除孤立 tool 消息 (id={msg.get('tool_call_id')})")
+                # 孤立 tool 消息移除是预期清洗行为，非错误，仅 debug 记录
+                logger.debug(f"build_api_messages: 移除孤立 tool 消息 (id={msg.get('tool_call_id')})")
         else:
             cleaned.append(msg)
     result = cleaned

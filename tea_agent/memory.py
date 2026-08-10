@@ -28,6 +28,13 @@ MIN_HIGH_INJECT = 3   # HIGH 保底
 MIN_MEDIUM_INJECT = 2  # MEDIUM 保底
 MIN_LOW_INJECT = 1    # LOW 保底（至少1条）
 
+# 字符预算：注入记忆总字符数上限，防止记忆挤占上下文窗口。
+# 长记忆占预算多 → 实际条数自动减少；短记忆 → 条数增多（动态条数效果）。
+MAX_INJECT_CHARS = 4000
+# LOW 相关性门槛：LOW 优先级记忆相关性分数低于此值时不注入，
+# 避免无关的 LOW 记忆占用预算和上下文（保底 LOW 也只在过门槛者中挑选）。
+LOW_RELEVANCE_THRESHOLD = 0.15
+
 # 年龄衰减阈值（天）— 基础值，会被动态遗忘机制调整
 # 动态调整范围：基础值 × [0.3, 3.0]
 _BASE_CRITICAL_DEGRADE_DAYS = 30   # CRITICAL → HIGH
@@ -64,20 +71,23 @@ class MemoryManager:
         self,
         topic_text: str = "",
         limit: int = MAX_INJECT,
+        char_budget: int | None = None,
     ) -> list[dict]:
         """
-        从活跃记忆中选出最相关的若干条（上限 limit）。
+        从活跃记忆中选出最相关的若干条（上限 limit + 字符预算）。
 
         选择逻辑：
           1. 先执行年龄衰减（优先级降级）
           2. CRITICAL 指令优先入选（上限 MAX_CRITICAL_INJECT）
-          3. 按优先级分层保底：HIGH ≥3, MEDIUM ≥2, LOW ≥1
-          4. 剩余名额按 相关性×重要度×时效×优先级 排序填充
-          5. 更新入选记忆的 last_accessed_at
+          3. LOW 相关性门槛：LOW 优先级且相关性分数 < LOW_RELEVANCE_THRESHOLD 的记忆被过滤
+          4. 按优先级分层保底：HIGH ≥3, MEDIUM ≥2, LOW ≥1
+          5. 剩余名额按 相关性×重要度×时效×优先级 排序填充
+          6. 字符预算截断：总字符超过 char_budget 时从低分端剔除（CRITICAL 豁免）
 
         Args:
             topic_text: 当前对话上下文（用于相关性打分）
-            limit: 注入上限
+            limit: 注入条数上限
+            char_budget: 注入总字符预算；None 时使用 MAX_INJECT_CHARS。
 
         Returns:
             入选的记忆列表，优先级高的排在前面
@@ -85,10 +95,12 @@ class MemoryManager:
         # 先执行年龄衰减
         self.degrade_by_age()
 
-        all_memories = self.storage.get_active_memories(limit=100)
+        all_memories = self.storage.get_active_memories(limit=500)
 
         if not all_memories:
             return []
+
+        budget = char_budget if char_budget is not None else MAX_INJECT_CHARS
 
         # 按优先级分组
         critical = [m for m in all_memories if m["priority"] == PRIORITY_CRITICAL]
@@ -96,13 +108,13 @@ class MemoryManager:
         medium = [m for m in all_memories if m["priority"] == PRIORITY_MEDIUM]
         low = [m for m in all_memories if m["priority"] == PRIORITY_LOW]
 
-        # 1. CRITICAL 入选（上限 MAX_CRITICAL_INJECT, FIFO取最新）
+        # 1. CRITICAL 入选（上限 MAX_CRITICAL_INJECT, FIFO取最新），字符预算豁免
         critical_slots = min(limit, MAX_CRITICAL_INJECT)
-        selected = critical[-critical_slots:] if len(critical) > critical_slots else list(critical)
-        used = len(selected)
-        if used >= limit:
-            self._touch_selected(selected)
-            return selected
+        selected: list[tuple[float, dict]] = [
+            (1e9, m) for m in (
+                critical[-critical_slots:] if len(critical) > critical_slots else list(critical)
+            )
+        ]
 
         # 2. 非 CRITICAL 打分排序（预计算查询向量，避免每条记忆重复请求）
         query_emb = None
@@ -117,21 +129,23 @@ class MemoryManager:
         scored = []
         for m in others:
             score = self._score_memory_cached(m, topic_text, query_emb)
+            # LOW 相关性门槛：相关性过低直接过滤（不进入保底/竞争池）
+            if m["priority"] == PRIORITY_LOW and score < LOW_RELEVANCE_THRESHOLD:
+                continue
             scored.append((score, m))
         scored.sort(key=lambda x: x[0], reverse=True)
 
-        # 辅助函数：从已打分列表中按优先级取 top N
+        # 辅助函数：从已打分列表中按优先级取 top N，返回 (picked, remaining)
         def _pick_top_by_priority(scored_list, priority, count):
             """从 scored_list 中取出指定优先级的 top count 条，返回 (picked, remaining)"""
             candidates = [(s, m) for s, m in scored_list if m["priority"] == priority]
             picked = candidates[:count]
             picked_ids = {m["id"] for _, m in picked}
             remaining = [(s, m) for s, m in scored_list if m["id"] not in picked_ids]
-            return [m for _, m in picked], remaining
+            return picked, remaining
 
-        # 3. 分层保底
-        remaining_slots = limit - used
-        # 保底按优先级从高到低分配，但不超过剩余名额
+        # 3. 分层保底（在通过门槛的记忆中分配）
+        remaining_slots = limit - len(selected)
         high_quota = min(MIN_HIGH_INJECT, remaining_slots)
         medium_quota = min(MIN_MEDIUM_INJECT, max(0, remaining_slots - high_quota))
         low_quota = min(MIN_LOW_INJECT, max(0, remaining_slots - high_quota - medium_quota))
@@ -147,11 +161,20 @@ class MemoryManager:
         # 4. 剩余名额自由竞争（从还没选的里面取 top N）
         free_slots = limit - len(selected)
         if free_slots > 0:
-            for _, m in scored[:free_slots]:
-                selected.append(m)
+            selected.extend(scored[:free_slots])
 
-        self._touch_selected(selected)
-        return selected
+        # 5. 字符预算截断：从低分端剔除直到总字符 ≤ budget（CRITICAL score=1e9 豁免）
+        selected.sort(key=lambda x: x[0], reverse=True)
+        total_chars = sum(len(m["content"]) for _, m in selected)
+        while total_chars > budget and len(selected) > 1:
+            score, m = selected.pop()  # 末尾 = 最低分
+            if score >= 1e8:  # CRITICAL 不剔除
+                break
+            total_chars -= len(m["content"])
+
+        result = [m for _, m in selected]
+        self._touch_selected(result)
+        return result
 
     def _score_memory_cached(self, memory: dict, topic_text: str, query_emb=None) -> float:
         """计算记忆与当前对话的相关性分数（Hybrid），复用预计算的查询向量。"""

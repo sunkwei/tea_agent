@@ -95,6 +95,49 @@ for (let i = 0; i < 140; i++) {
   });
 }
 
+// ---------- 矢量战机造型库（SVG path → Path2D，加载时一次性构建） ----------
+// 参考 OpenGameArt CC0 素材风格设计，坐标以战机中心为原点、机头朝 -y
+const SHIP = {
+  player: { // 玩家战机 · 蓝白雷电涂装（约 44×54）
+    body:    new Path2D('M0,-28 C3.5,-28 6.5,-22 7.5,-15 C8.5,-8 9,-3 9,8 C9,17 7,24 4.5,28 C3,30.5 1.5,31 0,31 C-1.5,31 -3,30.5 -4.5,28 C-7,24 -9,17 -9,8 C-9,-3 -8.5,-8 -7.5,-15 C-6.5,-22 -3.5,-28 0,-28 Z'),
+    wingL:   new Path2D('M-5,2 C-12,1 -20,4 -27,9 C-28,10 -28,11 -27,12 C-22,15 -14,18 -7,19 C-6,15 -5,8 -5,2 Z'),
+    wingR:   new Path2D('M5,2 C12,1 20,4 27,9 C28,10 28,11 27,12 C22,15 14,18 7,19 C6,15 5,8 5,2 Z'),
+    canardL: new Path2D('M-3.5,-16 C-8,-17 -12,-14 -14,-11 C-13,-10 -9,-9 -4,-9.5 Z'),
+    canardR: new Path2D('M3.5,-16 C8,-17 12,-14 14,-11 C13,-10 9,-9 4,-9.5 Z'),
+    tailL:   new Path2D('M-4,14 C-7,13 -9,14 -9.5,18 C-9,21 -6,22 -3.5,20 Z'),
+    tailR:   new Path2D('M4,14 C7,13 9,14 9.5,18 C9,21 6,22 3.5,20 Z'),
+    canopy:  new Path2D('M0,-18 C3,-18 5,-13 5,-7 C5,-2 3,2 0,3 C-3,2 -5,-2 -5,-7 C-5,-13 -3,-18 0,-18 Z'),
+    nozzleL: new Path2D('M-4,28 L-3.5,31 L-0.5,31 L0,28 Z'),
+    nozzleR: new Path2D('M4,28 L3.5,31 L0.5,31 L0,28 Z'),
+    missileL:new Path2D('M-29,4 L-25.5,2.5 L-26,11 L-29.5,11.5 Z'),
+    missileR:new Path2D('M29,4 L25.5,2.5 L26,11 L29.5,11.5 Z'),
+  },
+  enemies: {
+    normal: { // 红色截击机（前掠翼）
+      body:   new Path2D('M0,-15 C4,-15 7,-9 8,-2 C8,5 6,11 3,15 C2,17 1,18 0,18 C-1,18 -2,17 -3,15 C-6,11 -8,5 -8,-2 C-7,-9 -4,-15 0,-15 Z'),
+      wingL:  new Path2D('M-4,-2 C-10,-4 -15,-1 -18,3 C-17,5 -11,7 -5,6 Z'),
+      wingR:  new Path2D('M4,-2 C10,-4 15,-1 18,3 C17,5 11,7 5,6 Z'),
+      tailL:  new Path2D('M-3,12 L-5,18 L-1,16 Z'),
+      tailR:  new Path2D('M3,12 L5,18 L1,16 Z'),
+      canopy: new Path2D('M0,-10 C2,-10 3,-6 3,-2 C3,1 2,3 0,3 C-2,3 -3,1 -3,-2 C-3,-6 -2,-10 0,-10 Z'),
+    },
+    fast: { // 橙色箭形截击机（大后掠三角翼）
+      body:   new Path2D('M0,-13 C3,-12 8,-5 12,0 C14,2 13,4 11,3 C6,2 1,4 -1,4 C-3,4 -8,2 -11,3 C-13,4 -14,2 -12,0 C-8,-5 -3,-12 0,-13 Z'),
+      canopy: new Path2D('M0,-7 C1.5,-7 2.5,-4 2.5,-1 C2.5,1 1.5,2 0,2 C-1.5,2 -2.5,1 -2.5,-1 C-2.5,-4 -1.5,-7 0,-7 Z'),
+    },
+    tank: { // 紫色重型轰炸机（平直翼 + 引擎短舱）
+      body:    new Path2D('M0,-20 C6,-20 10,-12 11,-2 C12,8 10,18 8,22 C6,25 3,26 0,26 C-3,26 -6,25 -8,22 C-10,18 -12,8 -11,-2 C-10,-12 -6,-20 0,-20 Z'),
+      wingL:   new Path2D('M-6,-6 C-14,-8 -24,-5 -27,-1 C-26,2 -16,4 -8,3 Z'),
+      wingR:   new Path2D('M6,-6 C14,-8 24,-5 27,-1 C26,2 16,4 8,3 Z'),
+      tailL:   new Path2D('M-7,14 C-11,13 -13,17 -12,21 C-9,20 -6,17 -5,15 Z'),
+      tailR:   new Path2D('M7,14 C11,13 13,17 12,21 C9,20 6,17 5,15 Z'),
+      canopy:  new Path2D('M0,-14 C3,-14 5,-10 5,-5 C5,-1 3,1 0,1 C-3,1 -5,-1 -5,-5 C-5,-10 -3,-14 0,-14 Z'),
+      engineL: new Path2D('M-12,-3 C-14,-4 -16,-2 -16,1 C-16,4 -14,5 -12,4 Z'),
+      engineR: new Path2D('M12,-3 C14,-4 16,-2 16,1 C16,4 14,5 12,4 Z'),
+    },
+  },
+};
+
 // ---------- 爆炸粒子系统 ----------
 const EXPLO_COLORS = ['#ff5722', '#ffc107', '#fff3e0', '#ff8a65', '#ffd54f'];
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -384,76 +427,114 @@ function render() {
   ctx.restore();
 }
 
-// ---------- 玩家战机绘制 ----------
+// ---------- 玩家战机绘制（矢量细节） ----------
 function drawPlayer() {
   if (!player.alive) return;
   // 无敌闪烁
   if (player.invincible > 0 && Math.floor(player.invincible * 12) % 2 === 0) return;
   ctx.save();
   ctx.translate(player.x, player.y);
+  ctx.shadowColor = '#4fc3f7'; ctx.shadowBlur = 16;
 
-  ctx.shadowColor = '#4fc3f7'; ctx.shadowBlur = 18;
-  // 机身
-  ctx.fillStyle = '#e0f7ff';
-  ctx.beginPath();
-  ctx.moveTo(0, -26); ctx.lineTo(-7, -12); ctx.lineTo(-17, 4);
-  ctx.lineTo(-9, 20); ctx.lineTo(9, 20); ctx.lineTo(17, 4); ctx.lineTo(7, -12);
-  ctx.closePath(); ctx.fill();
+  const S = SHIP.player;
+  // 翼尖导弹（最底层）
+  ctx.fillStyle = '#ff5252';
+  ctx.fill(S.missileL); ctx.fill(S.missileR);
+  // 主翼（浅蓝）+ 鸭翼
+  ctx.fillStyle = '#7ec8ff';
+  ctx.fill(S.wingL); ctx.fill(S.wingR);
+  ctx.fillStyle = 'rgba(126,200,255,0.65)';
+  ctx.fill(S.canardL); ctx.fill(S.canardR);
+  // 双垂尾
+  ctx.fillStyle = '#4fa8e8';
+  ctx.fill(S.tailL); ctx.fill(S.tailR);
+  // 机身（蓝白渐变）
+  const g = ctx.createLinearGradient(0, -28, 0, 31);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(0.55, '#d8f2ff');
+  g.addColorStop(1, '#9fd8f5');
+  ctx.fillStyle = g;
+  ctx.fill(S.body);
   ctx.shadowBlur = 0;
-  // 座舱
-  ctx.fillStyle = '#0288d1';
-  ctx.beginPath(); ctx.ellipse(0, -6, 4.5, 8, 0, 0, Math.PI * 2); ctx.fill();
-  // 机翼装饰
-  ctx.fillStyle = '#29b6f6';
-  ctx.beginPath(); ctx.moveTo(-17, 4); ctx.lineTo(-24, 10); ctx.lineTo(-9, 20); ctx.closePath(); ctx.fill();
-  ctx.beginPath(); ctx.moveTo(17, 4); ctx.lineTo(24, 10); ctx.lineTo(9, 20); ctx.closePath(); ctx.fill();
-  // 动态尾焰
-  const fl = 8 + Math.sin(performance.now() / 40) * 3;
-  ctx.fillStyle = '#ffab40';
-  ctx.beginPath(); ctx.moveTo(-5, 20); ctx.lineTo(0, 20 + fl); ctx.lineTo(5, 20); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.moveTo(-2.5, 20); ctx.lineTo(0, 20 + fl * 0.6); ctx.lineTo(2.5, 20); ctx.closePath(); ctx.fill();
+  // 机身中线细节
+  ctx.strokeStyle = 'rgba(20,80,140,0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, -22); ctx.lineTo(0, 26); ctx.stroke();
+  // 座舱玻璃 + 高光
+  ctx.fillStyle = '#0b3d91';
+  ctx.fill(S.canopy);
+  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(-1.6, -13); ctx.quadraticCurveTo(-2.6, -8, -1.8, -3); ctx.stroke();
+  // 双喷口 + 内部火光
+  ctx.fillStyle = '#546e7a';
+  ctx.fill(S.nozzleL); ctx.fill(S.nozzleR);
+  ctx.fillStyle = '#ff8f00';
+  ctx.beginPath(); ctx.arc(-2, 30, 1.6, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(2, 30, 1.6, 0, Math.PI * 2); ctx.fill();
+  // 动态尾焰（双喷）
+  const fl = 9 + Math.sin(performance.now() / 40) * 3.5;
+  ctx.fillStyle = 'rgba(255,171,64,0.9)';
+  ctx.beginPath(); ctx.moveTo(-4.5, 30); ctx.lineTo(0, 30 + fl); ctx.lineTo(4.5, 30); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.beginPath(); ctx.moveTo(-2, 30); ctx.lineTo(0, 30 + fl * 0.55); ctx.lineTo(2, 30); ctx.closePath(); ctx.fill();
+  // 机翼前缘红色饰条（雷电经典涂装）
+  ctx.strokeStyle = '#ff5252';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(-5, 2); ctx.lineTo(-27, 9); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(5, 2); ctx.lineTo(27, 9); ctx.stroke();
   ctx.restore();
 }
 
-// ---------- 敌机绘制 ----------
+// ---------- 敌机绘制（矢量细节） ----------
 function drawEnemy(e) {
   ctx.save();
   ctx.translate(e.x, e.y);
+  // 基准 r=16，按比例缩放
+  const sc = e.r / 16;
+  ctx.scale(sc, sc);
   ctx.shadowColor = e.color; ctx.shadowBlur = 12;
-  ctx.fillStyle = e.color;
+
   if (e.type === 'normal') {
-    // 菱形
-    ctx.beginPath();
-    ctx.moveTo(0, -e.r); ctx.lineTo(e.r, 0); ctx.lineTo(0, e.r); ctx.lineTo(-e.r, 0);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#7a1f1f';
-    ctx.beginPath();
-    ctx.moveTo(0, -e.r * 0.5); ctx.lineTo(e.r * 0.5, 0); ctx.lineTo(0, e.r * 0.5); ctx.lineTo(-e.r * 0.5, 0);
-    ctx.closePath(); ctx.fill();
+    const S = SHIP.enemies.normal;
+    ctx.fillStyle = '#d32f2f';
+    ctx.fill(S.wingL); ctx.fill(S.wingR);
+    ctx.fillStyle = e.color;
+    ctx.fill(S.body);
+    ctx.fillStyle = '#b71c1c';
+    ctx.fill(S.tailL); ctx.fill(S.tailR);
+    ctx.fillStyle = '#7f1d1d';
+    ctx.fill(S.canopy);
+    // 机翼前缘高光
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-4, -2); ctx.lineTo(-18, 3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(4, -2); ctx.lineTo(18, 3); ctx.stroke();
   } else if (e.type === 'fast') {
-    // 箭头
-    ctx.beginPath();
-    ctx.moveTo(-e.r, -e.r * 0.7); ctx.lineTo(e.r, 0); ctx.lineTo(-e.r, e.r * 0.7);
-    ctx.closePath(); ctx.fill();
+    const S = SHIP.enemies.fast;
+    ctx.fillStyle = e.color;
+    ctx.fill(S.body);
+    ctx.fillStyle = 'rgba(120,40,0,0.85)';
+    ctx.fill(S.canopy);
   } else {
-    // 六边形重甲
-    ctx.beginPath();
-    for (let k = 0; k < 6; k++) {
-      const a = k * Math.PI / 3;
-      ctx.lineTo(Math.cos(a) * e.r, Math.sin(a) * e.r);
-    }
-    ctx.closePath(); ctx.fill();
+    const S = SHIP.enemies.tank;
+    ctx.fillStyle = '#6a1b9a';
+    ctx.fill(S.wingL); ctx.fill(S.wingR);
+    ctx.fillStyle = '#9c27b0';
+    ctx.fill(S.engineL); ctx.fill(S.engineR);
+    ctx.fillStyle = e.color;
+    ctx.fill(S.body);
     ctx.fillStyle = '#4a148c';
-    ctx.beginPath(); ctx.arc(0, 0, e.r * 0.45, 0, Math.PI * 2); ctx.fill();
+    ctx.fill(S.tailL); ctx.fill(S.tailR);
+    ctx.fillStyle = 'rgba(10,0,40,0.8)';
+    ctx.fill(S.canopy);
   }
   ctx.shadowBlur = 0;
-  // tank 血条
+  // tank 血条（缩放坐标内绘制）
   if (e.type === 'tank') {
     ctx.fillStyle = 'rgba(0,0,0,.5)';
-    ctx.fillRect(-e.r, -e.r - 10, e.r * 2, 4);
+    ctx.fillRect(-16, -22, 32, 4);
     ctx.fillStyle = '#b06bff';
-    ctx.fillRect(-e.r, -e.r - 10, e.r * 2 * (e.hp / 4), 4);
+    ctx.fillRect(-16, -22, 32 * (e.hp / 4), 4);
   }
   ctx.restore();
 }

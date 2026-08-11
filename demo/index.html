@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>创意实验室 · Creative Lab</title>
+<style>
+/* ============ 基础 ============ */
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  background-image: var(--bg-image, none);
+  background-attachment: fixed;
+  background-size: cover;
+  color: var(--text);
+  min-height: 100vh;
+  transition: background .5s ease, color .4s ease;
+}
+a { color: var(--accent); text-decoration:none; }
+a:hover { filter: brightness(1.2); }
+
+/* ============ 头部 ============ */
+header {
+  text-align:center;
+  padding: 4rem 1rem 2rem;
+  position:relative;
+}
+header h1 {
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 800;
+  letter-spacing: .12em;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--accent);
+}
+header p.sub {
+  margin-top: .8rem;
+  color: var(--text-2);
+  font-size: 1.05rem;
+  letter-spacing: .3em;
+}
+
+/* ============ 风格选择器 ============ */
+.style-panel {
+  max-width: 900px;
+  margin: 1.2rem auto 0;
+  padding: 1rem;
+}
+.style-panel .label {
+  font-size: .8rem;
+  color: var(--text-2);
+  letter-spacing: .2em;
+  margin-bottom: .7rem;
+}
+.style-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  justify-content: center;
+}
+.style-btn {
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  color: var(--text);
+  padding: .45rem .9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: .85rem;
+  font-family: inherit;
+  transition: all .25s ease;
+  opacity: .75;
+}
+.style-btn:hover { opacity: 1; transform: translateY(-2px); }
+.style-btn.active {
+  opacity: 1;
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px var(--shadow);
+}
+
+/* ============ 卡片网格 ============ */
+.grid {
+  max-width: 1100px;
+  margin: 2rem auto;
+  padding: 0 1rem 3rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.2rem;
+}
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 1.4rem 1.4rem 1.2rem;
+  box-shadow: 0 4px 16px var(--shadow);
+  backdrop-filter: var(--card-blur, none);
+  -webkit-backdrop-filter: var(--card-blur, none);
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  transition: transform .25s ease, box-shadow .25s ease;
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--card-glow, transparent), transparent 60%);
+  opacity: 0;
+  transition: opacity .3s ease;
+  pointer-events: none;
+}
+.card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px var(--shadow); }
+.card:hover::before { opacity: 1; }
+.card .icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+.card h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: .05em;
+}
+.card p.desc {
+  color: var(--text-2);
+  font-size: .88rem;
+  line-height: 1.6;
+  flex-grow: 1;
+}
+.card .tags { display:flex; flex-wrap:wrap; gap:.35rem; }
+.card .tag {
+  font-size: .7rem;
+  padding: .15rem .6rem;
+  border-radius: 999px;
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  border: 1px solid var(--card-border);
+}
+.card .link {
+  margin-top: .4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-weight: 600;
+  font-size: .9rem;
+  color: var(--accent);
+}
+.card .link:hover { text-decoration: underline; }
+
+/* ============ 页脚 ============ */
+footer {
+  text-align:center;
+  padding: 2rem 1rem 3rem;
+  color: var(--text-2);
+  font-size: .8rem;
+  letter-spacing: .15em;
+  border-top: 1px solid var(--card-border);
+}
+
+/* ============ 16 种风格 ============ */
+/* 1. 极简白 */
+body.minimal {
+  --bg: #fafafa; --bg-image: none;
+  --card-bg: #ffffff; --card-border: #e5e5e5;
+  --text: #1a1a1a; --text-2: #666666;
+  --accent: #2563eb; --accent-2: #7c3aed;
+  --shadow: rgba(0,0,0,.08);
+  --radius: 12px; --font: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --tag-bg: #eef2ff; --tag-text: #3730a3;
+}
+/* 2. 暗夜极简 */
+body.dark {
+  --bg: #0d1117; --bg-image: none;
+  --card-bg: #161b22; --card-border: #30363d;
+  --text: #e6edf3; --text-2: #8b949e;
+  --accent: #58a6ff; --accent-2: #bc8cff;
+  --shadow: rgba(0,0,0,.4);
+  --radius: 12px; --font: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --tag-bg: #1f2937; --tag-text: #93c5fd;
+}
+/* 3. 赛博朋克 */
+body.cyberpunk {
+  --bg: #0a0a1a;
+  --bg-image: linear-gradient(160deg, #0a0a1a 0%, #1a0b2e 45%, #0a1a2e 100%);
+  --card-bg: rgba(20, 12, 44, .85); --card-border: #ff2ec4;
+  --text: #e8f6ff; --text-2: #9fb6c9;
+  --accent: #00f0ff; --accent-2: #ff2ec4;
+  --shadow: 0 0 24px rgba(0,240,255,.25);
+  --card-glow: rgba(255,46,196,.18);
+  --radius: 4px; --font: 'Orbitron','Segoe UI', 'Microsoft YaHei', sans-serif;
+  --tag-bg: #0f2440; --tag-text: #00f0ff;
+}
+/* 4. 霓虹之夜 */
+body.neon {
+  --bg: #000000;
+  --bg-image: radial-gradient(circle at 20% 20%, rgba(57,255,20,.08), transparent 40%), radial-gradient(circle at 80% 80%, rgba(255,0,180,.08), transparent 40%);
+  --card-bg: #0d0d0d; --card-border: #39ff14;
+  --text: #f0fff0; --text-2: #7c9a7c;
+  --accent: #39ff14; --accent-2: #ff00b4;
+  --shadow: 0 0 18px rgba(57,255,20,.3);
+  --radius: 2px; --font: 'Consolas','Courier New', monospace;
+  --tag-bg: #0a1f0a; --tag-text: #39ff14;
+}
+/* 5. 复古终端 */
+body.terminal {
+  --bg: #0c0c0c;
+  --bg-image: repeating-linear-gradient(0deg, rgba(0,255,0,.02) 0 1px, transparent 1px 3px);
+  --card-bg: #111; --card-border: #33ff33;
+  --text: #33ff33; --text-2: #1f8f1f;
+  --accent: #33ff33; --accent-2: #00ffaa;
+  --shadow: 0 0 12px rgba(51,255,51,.2);
+  --radius: 0px; --font: 'Consolas','Courier New', monospace;
+  --tag-bg: #0f2f0f; --tag-text: #7dff7d;
+}
+/* 6. 日式侘寂 */
+body.wabisabi {
+  --bg: #f5f0e8; --bg-image: none;
+  --card-bg: #faf6ef; --card-border: #d8cfc0;
+  --text: #3d3a34; --text-2: #8a8177;
+  --accent: #a0522d; --accent-2: #7a5230;
+  --shadow: rgba(80,60,40,.1);
+  --radius: 2px; --font: 'STKaiti','KaiTi','Microsoft YaHei', serif;
+  --tag-bg: #efe7da; --tag-text: #7a5230;
+}
+/* 7. 森野绿意 */
+body.forest {
+  --bg: #1e3a2b;
+  --bg-image: linear-gradient(180deg, #1e3a2b, #16301f);
+  --card-bg: rgba(34, 68, 48, .9); --card-border: #3f6b4f;
+  --text: #e8f5e9; --text-2: #a8c9ab;
+  --accent: #8bc34a; --accent-2: #ffb74d;
+  --shadow: rgba(0,0,0,.3);
+  --radius: 16px; --font: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --tag-bg: #274a36; --tag-text: #a5d6a7;
+}
+/* 8. 深海蓝调 */
+body.ocean {
+  --bg: #062b4a;
+  --bg-image: linear-gradient(180deg, #062b4a 0%, #04335c 50%, #03264a 100%);
+  --card-bg: rgba(6, 50, 84, .85); --card-border: #1e6091;
+  --text: #e0f7ff; --text-2: #9cc9e8;
+  --accent: #4fc3f7; --accent-2: #80deea;
+  --shadow: rgba(0,0,0,.35);
+  --radius: 18px; --font: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --tag-bg: #0a3a5f; --tag-text: #81d4fa;
+}
+/* 9. 樱花粉 */
+body.sakura {
+  --bg: #fdf2f6;
+  --bg-image: radial-gradient(circle at 90% 10%, rgba(255,182,193,.5), transparent 50%), radial-gradient(circle at 10% 90%, rgba(255,218,224,.6), transparent 50%);
+  --card-bg: rgba(255, 255, 255, .75); --card-border: #ffc9d6;
+  --text: #5c3a47; --text-2: #a07788;
+  --accent: #f48fb1; --accent-2: #ba68c8;
+  --shadow: rgba(244,143,177,.25);
+  --card-blur: blur(8px);
+  --radius: 20px; --font: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --tag-bg: #ffe4ec; --tag-text: #c96f8f;
+}
+/* 10. 水墨丹青 */
+body.inkwash {
+  --bg: #f2ede2; --bg-image: none;
+  --card-bg: #faf7f0; --card-border: #c9c0ae;
+  --text: #2b2b2b; --text-2: #6b675f;
+  --accent: #8f3b1d; --accent-2: #3a3a3a;
+  --shadow: rgba(60,50,40,.12);
+  --radius: 2px; --font: 'STKaiti','KaiTi','FangSong', serif;
+  --tag-bg: #ece5d8; --tag-text: #6b3f24;
+}
+/* 11. 浩瀚星空 */
+body.starry {
+  --bg: #0b1026;
+  --bg-image: radial-gradient(circle at 15% 30%, rgba(255,255,255,.06) 0 1px, transparent 2px), radial-gradient(circle at 75% 60%, rgba(255,255,255,.05) 0 1px, transparent 2px), radial-gradient(circle at 45% 80%, rgba(255,215,0,.05) 0 1px, transparent 2px), linear-gradient(180deg, #0b1026, #131a3a);
+  --card-bg: rgba(19, 26, 58, .85); --card-border: #2b3a6e;
+  --text: #eef3ff; --text-2: #8fa1c9;
+  --accent: #ffd700; --accent-2: #7aa2ff;
+  --shadow: 0 0 20px rgba(122,162,255,.2);
+  --radius: 14px; --font: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --tag-bg: #1c2753; --tag-text: #a9c0ff;
+}
+/* 12. 糖果乐园 */
+body.candy {
+  --bg: #fff0f5;
+  --bg-image: linear-gradient(135deg, #ffe3ee 0%, #e3f7ff 50%, #fff3d6 100%);
+  --card-bg: rgba(255, 255, 255, .8); --card-border: #ffd6e8;
+  --text: #5d4466; --text-2: #a88494;
+  --accent: #ff6fa5; --accent-2: #7ec8e3;
+  --shadow: rgba(255,111,165,.2);
+  --radius: 22px; --font: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --tag-bg: #fff0f7; --tag-text: #e05585;
+}
+/* 13. 复古报纸 */
+body.vintage {
+  --bg: #efe6cf;
+  --bg-image: repeating-linear-gradient(0deg, rgba(120,90,40,.03) 0 2px, transparent 2px 4px);
+  --card-bg: #f7f0dc; --card-border: #c9b784;
+  --text: #3d3226; --text-2: #7d6d52;
+  --accent: #8a6d1f; --accent-2: #5c4a1e;
+  --shadow: rgba(90,70,30,.12);
+  --radius: 2px; --font: 'Georgia','Times New Roman','Songti SC', serif;
+  --tag-bg: #e8dcc0; --tag-text: #6b5a24;
+}
+/* 14. 渐变流光 */
+body.gradient {
+  --bg: #0f0c29;
+  --bg-image: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+  --card-bg: rgba(255, 255, 255, .06); --card-border: rgba(255,255,255,.18);
+  --text: #ffffff; --text-2: #c3c0e8;
+  --accent: #a855f7; --accent-2: #06b6d4;
+  --shadow: rgba(168,85,247,.3);
+  --card-blur: blur(10px);
+  --radius: 16px; --font: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --tag-bg: rgba(255,255,255,.1); --tag-text: #e9d5ff;
+}
+/* 15. 玻璃拟态 */
+body.glass {
+  --bg: #4a90d9;
+  --bg-image: linear-gradient(120deg, #4a90d9 0%, #9b59b6 50%, #e74c3c 100%);
+  --card-bg: rgba(255, 255, 255, .14); --card-border: rgba(255,255,255,.35);
+  --text: #ffffff; --text-2: rgba(255,255,255,.75);
+  --accent: #ffffff; --accent-2: #ffeaa7;
+  --shadow: 0 8px 32px rgba(0,0,0,.25);
+  --card-blur: blur(14px);
+  --radius: 20px; --font: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  --tag-bg: rgba(255,255,255,.18); --tag-text: #fff;
+}
+/* 16. 像素游戏 */
+body.pixel {
+  --bg: #2d1b4e;
+  --bg-image: repeating-conic-gradient(rgba(255,255,255,.03) 0 25%, transparent 0 50%) 0 0/48px 48px;
+  --card-bg: #3a2566; --card-border: #00e5ff;
+  --text: #f0f0ff; --text-2: #b8a5e0;
+  --accent: #00e5ff; --accent-2: #ff2e88;
+  --shadow: 6px 6px 0 rgba(0,0,0,.4);
+  --radius: 0px; --font: '"Press Start 2P"', 'Courier New', monospace;
+  --tag-bg: #4b2e80; --tag-text: #a7f3ff;
+}
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr; }
+  header { padding-top: 2.5rem; }
+}
+</style></head>
+<body class="terminal">
+
+<header>
+  <h1>✦ 创意实验室 ✦</h1>
+  <p class="sub">CREATIVE&nbsp;LAB&nbsp;·&nbsp;个人作品集</p>
+
+  <div class="style-panel">
+    <div class="label">🎨 选择风格 &nbsp;·&nbsp; 共 16 种</div>
+    <div class="style-switcher" id="switcher"></div>
+  </div>
+</header>
+
+<main class="grid" id="grid"></main>
+
+<footer>
+  🛠 由 Tea Agent 构建 · 16 种风格 · 纯 HTML / CSS / JS<br>
+  <span style="opacity:.7">创意无界 · 风格由你</span>
+</footer>
+
+<script>
+/* ============ 16 种风格定义 ============ */
+const STYLES = [
+  { id:'minimal',    name:'极简白',      icon:'⬜' },
+  { id:'dark',       name:'暗夜极简',    icon:'🌑' },
+  { id:'cyberpunk',  name:'赛博朋克',    icon:'🤖' },
+  { id:'neon',       name:'霓虹之夜',    icon:'💡' },
+  { id:'terminal',   name:'复古终端',    icon:'🖥️' },
+  { id:'wabisabi',   name:'日式侘寂',    icon:'🍂' },
+  { id:'forest',     name:'森野绿意',    icon:'🌲' },
+  { id:'ocean',      name:'深海蓝调',    icon:'🌊' },
+  { id:'sakura',     name:'樱花粉',      icon:'🌸' },
+  { id:'inkwash',    name:'水墨丹青',    icon:'🖌️' },
+  { id:'starry',     name:'浩瀚星空',    icon:'🌌' },
+  { id:'candy',      name:'糖果乐园',    icon:'🍬' },
+  { id:'vintage',    name:'复古报纸',    icon:'📰' },
+  { id:'gradient',   name:'渐变流光',    icon:'🌈' },
+  { id:'glass',      name:'玻璃拟态',    icon:'🪟' },
+  { id:'pixel',      name:'像素游戏',    icon:'👾' },
+];
+
+/* ============ Demo 项目卡片 ============ */
+const PROJECTS = [
+  { icon:'🎬', name:'Animator', desc:'AI 动画生成引擎：输入一句文字描述，自动生成 Canvas 动画，支持播放与录制为 MP4。',
+    tags:['Python','CLI','动画'], href:'animator/', target:'' },
+  { icon:'📱', name:'Animator Studio', desc:'Web 动画工作室：REST API + Web UI，用自然语言创建、预览、录制动画，零代码零门槛。',
+    tags:['Web','API','动画'], href:'animator-studio/', target:'' },
+  { icon:'🌱', name:'康威生命游戏', desc:'Game of Life：四条简单规则构成的图灵完备宇宙，细胞自动机的经典之作。',
+    tags:['游戏','细胞自动机'], href:'game-of-life/index.html', target:'_blank' },
+  { icon:'🎼', name:'古琴 · 触摸拨弦', desc:'指尖轻触琴弦，模拟古琴拨弦的音色与韵味，在浏览器中奏响千年雅音。',
+    tags:['音乐','触控'], href:'guqin/index.html', target:'_blank' },
+  { icon:'🐍', name:'九头蛇游戏', desc:'Hydra Game：Kirby-Paris 数学奇观——看起来无限增长、实际上必然在有限步内被消灭。',
+    tags:['数学','博弈'], href:'hydra-game/index.html', target:'_blank' },
+  { icon:'🐜', name:"朗顿的蚂蚁", desc:"Langton's Ant：简单确定性规则下，从混沌走向秩序再走向混沌的涌现现象。",
+    tags:['涌现','自动机'], href:'langtons-ant/index.html', target:'_blank' },
+  { icon:'🥊', name:'Multi-Agent 辩论赛', desc:'双 AI Agent 对抗辩论服务器，实时多轮交锋，SSE 流式展示唇枪舌剑。',
+    tags:['多Agent','SSE'], href:'multi_agent/', target:'' },
+  { icon:'🎯', name:'尼姆游戏', desc:'Nim：组合博弈论的基石，一个由 XOR 决定胜负的数学游戏，附最优 AI 策略。',
+    tags:['数学','AI'], href:'nim-game/index.html', target:'_blank' },
+  { icon:'🎹', name:'钢琴学习助手', desc:'交互式钢琴学习工具：认识琴键、练习音阶，把音乐教室搬进浏览器。',
+    tags:['音乐','学习'], href:'piano-app/index.html', target:'_blank' },
+  { icon:'🎮', name:'Tetris 终端版', desc:'纯 Python 终端俄罗斯方块，零外部依赖，7 种标准方块 + Wall Kick + 分数系统。',
+    tags:['Python','终端'], href:'tetris/', target:'' },
+  { icon:'⚡', name:'雷电战机 Thunder Strike', desc:'经典纵版弹幕射击游戏，躲避敌机、收集火力、挑战高分。',
+    tags:['游戏','射击'], href:'thunder-plane/index.html', target:'_blank' },
+];
+
+/* ============ 渲染 ============ */
+const saved = localStorage.getItem('lab_style') || 'terminal';
+
+function renderSwitcher() {
+  const wrap = document.getElementById('switcher');
+  wrap.innerHTML = '';
+  STYLES.forEach(s => {
+    const b = document.createElement('button');
+    b.className = 'style-btn' + (s.id === saved ? ' active' : '');
+    b.textContent = s.icon + ' ' + s.name;
+    b.onclick = () => setStyle(s.id);
+    wrap.appendChild(b);
+  });
+}
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = PROJECTS.map(p => `
+    <div class="card">
+      <div class="icon">${p.icon}</div>
+      <h3>${p.name}</h3>
+      <p class="desc">${p.desc}</p>
+      <div class="tags">${p.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+      <a class="link" href="${p.href}" ${p.target ? 'target="'+p.target+'"' : ''}>打开项目 →</a>
+    </div>`).join('');
+}
+
+function setStyle(id) {
+  document.body.className = id;
+  localStorage.setItem('lab_style', id);
+  document.querySelectorAll('.style-btn').forEach(b => b.classList.toggle('active', b.textContent.includes(STYLES.find(s => s.id === id).name)));
+}
+
+renderSwitcher();
+renderGrid();
+setStyle(saved);
+</script>
+</body>
+</html>

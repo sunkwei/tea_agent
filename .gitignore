@@ -42,3 +42,7 @@ uploads/
 test_concurrent_stream.py
 test_config_switch.py
 .env  
+
+# nginx 运行时文件（logs/ 和 temp/ 不提交，仅提交配置）
+nginx/logs/
+nginx/temp/

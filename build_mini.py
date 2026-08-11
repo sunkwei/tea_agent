@@ -91,6 +91,53 @@ def patch_store(pkg_dir):
         fp.write_text(text, "utf-8")
         patches.append(fname)
     return patches
+
+def patch_server(pkg_dir):
+    """Remove dead `import numpy` from server route handlers (Mini has no numpy)."""
+    patches = []
+    for fname in ["route_handlers.py"]:
+        fp = pkg_dir / "server" / fname
+        if not fp.exists():
+            continue
+        text = fp.read_text("utf-8")
+        old = "import numpy as np\n"
+        if old in text:
+            text = text.replace(old, "")
+            fp.write_text(text, "utf-8")
+            patches.append(f"{fname} (remove dead numpy import)")
+    return patches
+
+def patch_memory(pkg_dir):
+    """Replace lazy numpy cosine-similarity in memory.py with math (pure Python)."""
+    patches = []
+    fp = pkg_dir / "memory.py"
+    if not fp.exists():
+        return patches
+    text = fp.read_text("utf-8")
+    subs = [
+        ("import numpy as np", "import math"),
+        ("q_arr = np.array(query_emb, dtype=np.float32)", "q_arr = query_emb"),
+        ("m_arr = np.array(mem_emb, dtype=np.float32)", "m_arr = mem_emb"),
+        ("q_norm = np.linalg.norm(q_arr)", "q_norm = math.sqrt(sum(x*x for x in q_arr))"),
+        ("m_norm = np.linalg.norm(m_arr)", "m_norm = math.sqrt(sum(x*x for x in m_arr))"),
+        ("return float(q_arr @ m_arr) / (q_norm * m_norm)",
+         "return float(sum(a*b for a,b in zip(q_arr, m_arr))) / (q_norm * m_norm)"),
+        ("arr_i = np.array(emb_i, dtype=np.float32)", "arr_i = emb_i"),
+        ("ni = np.linalg.norm(arr_i)", "ni = math.sqrt(sum(x*x for x in arr_i))"),
+        ("arr_j = np.array(emb_j, dtype=np.float32)", "arr_j = emb_j"),
+        ("sim = float(arr_i @ arr_j) / (ni * np.linalg.norm(arr_j))",
+         "sim = float(sum(a*b for a,b in zip(arr_i, arr_j))) / (ni * math.sqrt(sum(x*x for x in arr_j)))"),
+    ]
+    changed = False
+    for old, new in subs:
+        if old in text:
+            text = text.replace(old, new)
+            changed = True
+    if changed:
+        fp.write_text(text, "utf-8")
+        patches.append("memory.py (numpy -> math)")
+    return patches
+
 def build():
     src = ROOT/"tea_agent"; mini_src = ROOT/"tea_agent_mini"
     bd = ROOT/"build_mini_dist"; dd = bd/"dist"
@@ -105,6 +152,10 @@ def build():
     print("Patching store (removing numpy)...")
     patched = patch_store(pkg)
     print(f"   Patched: {', '.join(patched)}")
+
+    print("Patching server/memory (removing numpy)...")
+    patched2 = patch_server(pkg) + patch_memory(pkg)
+    print(f"   Patched: {', '.join(patched2) or '(none)'}")
 
     print("Copying mini wrapper...")
     for item in mini_src.rglob("*"):
@@ -188,8 +239,20 @@ exclude = {json.dumps(ep, indent=4)}
     pyc = len([n for n in names if n.endswith(".py")])
     print(f"Python files: {pyc}")
     has_np = any("numpy" in n for n in names)
-    print(f"numpy in wheel: {has_np}")
-    if not has_np: print("No numpy - good!")
+    print(f"numpy in wheel (filename): {has_np}")
+    # 内容级验证: 解压所有 .py 检查 import numpy
+    np_imports = []
+    with zipfile.ZipFile(w) as z:
+        for n in names:
+            if n.endswith(".py"):
+                content = z.read(n).decode("utf-8", errors="replace")
+                if "import numpy" in content or "from numpy" in content:
+                    np_imports.append(n)
+    print(f"numpy imports in wheel: {len(np_imports)}")
+    if np_imports:
+        print("   !! " + "; ".join(np_imports[:5]))
+    if not has_np and not np_imports:
+        print("No numpy - good!")
     print(f"\n pip install {w}")
 
 if __name__ == "__main__":

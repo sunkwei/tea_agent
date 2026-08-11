@@ -179,7 +179,7 @@ def toolkit_scheduler(action: str, **kwargs):
 
     # ── 通知 ──
     def _notify(title: str, msg: str):
-        """发送系统通知"""
+        """发送系统通知（失败静默，不打印 ERROR 堆栈到终端）"""
         try:
             import sys
             if sys.platform == 'linux':
@@ -189,8 +189,9 @@ def toolkit_scheduler(action: str, **kwargs):
                 subprocess.run(['osascript', '-e',
                     f'display notification "{msg}" with title "{title}"'],
                     capture_output=True, timeout=5)
-        except Exception:
-            logger.exception('op_failed')
+        except Exception as e:
+            # notify-send 超时/缺失时静默处理，避免 ERROR 堆栈污染终端
+            logger.debug('通知发送失败(忽略): %s', e)
 
 
     # ── 脚本存储 ──

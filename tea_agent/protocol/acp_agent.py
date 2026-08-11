@@ -37,6 +37,36 @@ from tea_agent.protocol.acp_jsonrpc import (
 
 logger = logging.getLogger("acp.agent")
 
+# ── Internal stream protocol markers (Tea Agent → ACP) ────────────────────
+# tool_loop_runner.py 通过 callback 发送这些标记供 GUI/Server 展示，
+# ACP 客户端（vscode-acp）不需要它们，应直接丢弃以免刷屏。
+# 参照: agent.py:369, server/modules/agent_module.py:464, _gui/_stream_manager.py:118
+
+_INTERNAL_PREFIXES = (
+    "[THINK]",
+    "[THINK_DONE]",
+    "[TOOL_START:",
+    "[TOOL_ARG:",
+    "[TOOL_RESULT:",
+    "[TOOL_DONE]",
+    "[DAG_VIZ:",
+)
+
+
+def _is_internal_marker(text: str) -> bool:
+    """判断流式文本是否为 Tea Agent 内部协议标记（不应转发给 ACP 客户端）。
+
+    Args:
+        text: 流式回调收到的文本片段。
+
+    Returns:
+        True 表示该片段是内部标记，应过滤。
+    """
+    if not text:
+        return False
+    return text.startswith(_INTERNAL_PREFIXES)
+
+
 # ── Protocol constants ────────────────────────────────────────────────────
 
 PROTOCOL_VERSION = 1
@@ -911,11 +941,10 @@ class AcpAgent:
                     return
                 if not text:
                     return
-                # 过滤内部协议标记 ([THINK], [THINK_DONE], [TOOL_DONE], [DAG_VIZ:]).
+                # 过滤内部协议标记 ([THINK], [TOOL_START:], [TOOL_ARG:],
+                # [TOOL_RESULT:], [TOOL_DONE], [DAG_VIZ:] 等)。
                 # 这些是 Tea Agent 内部的流式协议标记，不应发送给 ACP 客户端。
-                # 参照: agent.py:369, server/server.py:380, _gui/_stream_manager.py:118
-                if (text.startswith("[THINK]") or text == "[THINK_DONE]"
-                        or text == "[TOOL_DONE]" or text.startswith("[DAG_VIZ:")):
+                if _is_internal_marker(text):
                     stream_buffer.append(text)
                     return
                 stream_buffer.append(text)
@@ -1625,11 +1654,8 @@ class AcpAgent:
                 if not text:
                     return
                 # 过滤内部协议标记: [THINK] 剥离前缀后收集，其他标记不收集也不发送。
-                # 参照: agent.py:369, server/server.py:380, _gui/_stream_manager.py:118
-                is_internal = (
-                    text.startswith("[THINK]") or text == "[THINK_DONE]"
-                    or text == "[TOOL_DONE]" or text.startswith("[DAG_VIZ:")
-                )
+                # 参照: agent.py:369, server/modules/agent_module.py:464
+                is_internal = _is_internal_marker(text)
                 if is_internal:
                     if text.startswith("[THINK]"):
                         collected_text.append(text[7:])  # 剥离 [THINK] 前缀

@@ -84,6 +84,40 @@ class TestToolCallRepeatDetection:
         result = detector.check_and_record("", [("toolkit_exec", '{"command": "ls"}')])
         assert result["is_loop"] is True
 
+    def test_alternating_sequence_detected(self):
+        """A→B→A→B 交替循环应被 sequence_loop 捕获（不依赖相邻重复）"""
+        from tea_agent.session.tool_loop_runner import LoopDetector
+        detector = LoopDetector(window=4)
+
+        detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
+        detector.check_and_record("", [("toolkit_exec", '{"command": "ls"}')])
+        detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
+        result = detector.check_and_record("", [("toolkit_exec", '{"command": "ls"}')])
+        assert result["is_loop"] is True
+        assert result["type"] == "sequence_loop"
+
+    def test_non_adjacent_repeat_not_detected(self):
+        """隔轮相同（A→B→A）不应误报为循环 — 可能是合法重试/回退"""
+        from tea_agent.session.tool_loop_runner import LoopDetector
+        detector = LoopDetector(window=5)
+
+        detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
+        detector.check_and_record("", [("toolkit_exec", '{"command": "ls"}')])
+        # 第三轮与第一轮相同，但不与上一轮相邻 — 不应触发 tool_repeat
+        result = detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
+        assert result["is_loop"] is False
+
+    def test_three_adjacent_repeats_detected(self):
+        """连续三轮相同工具调用应触发（相邻重复累积）"""
+        from tea_agent.session.tool_loop_runner import LoopDetector
+        detector = LoopDetector(window=5)
+
+        detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
+        r1 = detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
+        r2 = detector.check_and_record("", [("toolkit_file", '{"action": "read"}')])
+        assert r1["is_loop"] is True
+        assert r2["is_loop"] is True
+
 
 class TestContentRepeatDetection:
     """输出内容重复检测"""

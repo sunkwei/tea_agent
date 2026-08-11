@@ -230,33 +230,26 @@ class LoopDetector:
             current_hashes.append(self._hash_tool_call(name, args))
             current_names.append(name)
 
-        # ── 检测 1: 工具调用完全重复 ──
+        # ── 检测 1: 工具调用完全重复（仅与上一轮比较） ──
+        # 至少两条相邻消息完全相同才判定循环，避免隔轮相同（A→B→A）被误判。
         if current_hashes:
             current_hash_str = "|".join(current_hashes)
-            compare_range = self._tool_hashes[-(self.window-1):] if self.window > 1 else []
-            for i, prev_hash in enumerate(compare_range):
-                if current_hash_str == prev_hash:
-                    actual_idx = len(self._tool_hashes) - len(compare_range) + i
-                    result = {
-                        "is_loop": True,
-                        "type": "tool_repeat",
-                        "detail": f"工具调用与第 {actual_idx + 1} 轮完全相同"
-                    }
-                    break
+            if self._tool_hashes and current_hash_str == self._tool_hashes[-1]:
+                result = {
+                    "is_loop": True,
+                    "type": "tool_repeat",
+                    "detail": "工具调用与上一轮完全相同（连续重复）"
+                }
 
-        # ── 检测 2: 输出内容高度相似 ──
-        if not result["is_loop"] and content:
-            compare_contents = self._contents[-(self.window-1):] if self.window > 1 else []
-            for i, prev_content in enumerate(compare_contents):
-                sim = self._text_similarity(content, prev_content)
-                if sim >= self.threshold:
-                    actual_idx = len(self._contents) - len(compare_contents) + i
-                    result = {
-                        "is_loop": True,
-                        "type": "content_repeat",
-                        "detail": f"输出内容与第 {actual_idx + 1} 轮相似度 {sim:.0%}"
-                    }
-                    break
+        # ── 检测 2: 输出内容与上一轮高度相似 ──
+        if not result["is_loop"] and content and self._contents:
+            sim = self._text_similarity(content, self._contents[-1])
+            if sim >= self.threshold:
+                result = {
+                    "is_loop": True,
+                    "type": "content_repeat",
+                    "detail": f"输出内容与上一轮相似度 {sim:.0%}"
+                }
 
         # ── 检测 3: 工具序列循环 ──
         if not result["is_loop"] and len(self._tool_hashes) >= 3:
@@ -273,12 +266,12 @@ class LoopDetector:
                         "detail": f"检测到连续相同工具调用模式: {'→'.join(current_names)}"
                     }
 
-            if not result["is_loop"] and len(self._tool_hashes) >= 4:
+            if not result["is_loop"] and len(self._tool_hashes) >= 3:
                 recent_hashes = self._tool_hashes[-3:]
                 if (len(recent_hashes) == 3 and
                     current_hash_str and recent_hashes[0] and recent_hashes[1] and recent_hashes[2] and
-                    current_hash_str == recent_hashes[0] and recent_hashes[1] == recent_hashes[2] and
-                    current_hash_str != recent_hashes[1]):
+                    current_hash_str == recent_hashes[1] and recent_hashes[0] == recent_hashes[2] and
+                    current_hash_str != recent_hashes[2]):
                     result = {
                         "is_loop": True,
                         "type": "sequence_loop",

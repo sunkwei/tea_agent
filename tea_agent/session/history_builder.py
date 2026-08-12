@@ -14,6 +14,13 @@ import os
 import re
 from typing import Any
 
+# 四级水位线分类（auto_compact 不反向依赖本模块，无循环导入）
+from tea_agent.auto_compact import (
+    DEFAULT_COMPACTION_SETTINGS,
+    classify_waterline,
+    waterline_name,
+)
+
 logger = logging.getLogger("session.history_builder")
 
 
@@ -302,6 +309,78 @@ def get_tool_prune_threshold(context: Any) -> int:
     return 65536
 
 
+def _snip_tier1(messages: list[dict], snip_threshold: int = 16384) -> list[dict]:
+    """Tier 1 Snip — 轻度截短老工具输出（0 LLM 成本，借鉴 MUR AI 四级水位线）。
+
+    上下文用量 60-80% 时预防性维护。截短规则：保留前几行（含工具名/头部信息）
+    + 一句省略标注。比 _progressive_trim 的占位符替换保留更多信息——
+    Snip 是"轻量记号"，Prune 是"彻底擦除"，能用 Snip 解决就不上 Prune。
+
+    只操作本次构建的 result 副本，不写回 context.messages（保持已发送前缀稳定）。
+    幂等守卫：已含省略标记的消息跳过，避免二次改写破坏前缀缓存。
+
+    Args:
+        messages: API 消息列表（副本，可原地修改）
+        snip_threshold: 工具输出字符数阈值（超过才截短）
+
+    Returns:
+        轻度截短后的消息列表
+    """
+    result = list(messages)
+    pruned = 0
+    for msg in result:
+        if msg.get("role") != "tool":
+            continue
+        content = msg.get("content", "")
+        if not isinstance(content, str) or not content:
+            continue
+        if "[已省略" in content or "[工具结果已省略" in content or "[已截断" in content:
+            continue
+        if len(content) <= snip_threshold:
+            continue
+        head = "\n".join(line[:200] for line in content.splitlines()[:5])
+        msg["content"] = (
+            f"{head}\n... [输出过长已省略: 原长 {len(content)} 字符，"
+            f"完整结果见会话日志]"
+        )
+        pruned += 1
+    if pruned:
+        logger.debug(f"_snip_tier1: 截短 {pruned} 条工具输出 (> {snip_threshold} 字符)")
+    return result
+
+
+def _find_token_cutoff(messages: list, protect_tokens: int) -> int:
+    """从后往前累计 token，找到最近 protect_tokens token 的分界索引。
+
+    保护区内的消息（索引 >= cutoff）在任何 tier 都不参与删除（共识六：保护"近端"）。
+    跳过 [历史记录]/[历史相关对话摘要]/[系统记忆/[动态上下文 等临时构造块
+    （不占保护区配额、不作为 cutoff 候选），避免 cutoff 落在 L2/L3 块中间
+    造成前缀抖动。
+
+    Args:
+        messages: 消息列表
+        protect_tokens: 保护区 token 预算
+
+    Returns:
+        分界索引（0=不裁剪；messages[cutoff:] 为保护区）
+    """
+    if protect_tokens <= 0:
+        return 0
+    acc = 0
+    for i in range(len(messages) - 1, -1, -1):
+        msg = messages[i]
+        if msg.get("role") == "system":
+            continue
+        content = msg.get("content", "")
+        if isinstance(content, str) and content.startswith(
+                ("[历史记录]", "[历史相关对话摘要]", "[系统记忆", "[动态上下文")):
+            continue
+        acc += estimate_messages_tokens([msg])
+        if acc >= protect_tokens:
+            return i
+    return 0
+
+
 def _progressive_trim(messages: list[dict], budget: int, context: Any,
                       tool_prune_threshold: int = 500) -> list[dict]:
     """渐进式裁剪消息以满足 token 预算。
@@ -366,6 +445,8 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
     # 策略4: 截断长文本（逐步收紧截断阈值）
     # 幂等守卫：已定型消息（含 [已截断 / [工具结果已省略 标记）不再二次改写，
     # 避免已发送前缀在后续请求中被截得更短 → 前缀缓存级联失效。
+    # 用户消息特权（共识五）：assistant/tool 正常截断；user 纯文本指令不参与
+    # 常规截断，仅超大文本（>64K 字符，通常是粘贴的代码）才截，保留意图主体。
     if est > budget:
         for max_text_len in [8192, 4096, 2048, 1024]:
             if est <= budget:
@@ -373,42 +454,48 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
             for msg in result:
                 if est <= budget:
                     break
-                if msg.get("role") in ("assistant", "tool", "user"):
-                    content = msg.get("content", "")
-                    if (isinstance(content, str)
-                            and not content.startswith(("[工具结果已省略", "[已截断"))
-                            and "[已截断" not in content
-                            and len(content) > max_text_len):
-                        trimmed = content[:max_text_len] + f"\n... [已截断: 原长 {len(content)} 字符]"
-                        est -= estimate_tokens(content) - estimate_tokens(trimmed)
-                        msg["content"] = trimmed
-                        est = max(est, 0)
+                if msg.get("role") not in ("assistant", "tool"):
+                    continue
+                content = msg.get("content", "")
+                if (isinstance(content, str)
+                        and not content.startswith(("[工具结果已省略", "[已截断"))
+                        and "[已截断" not in content
+                        and len(content) > max_text_len):
+                    trimmed = content[:max_text_len] + f"\n... [已截断: 原长 {len(content)} 字符]"
+                    est -= estimate_tokens(content) - estimate_tokens(trimmed)
+                    msg["content"] = trimmed
+                    est = max(est, 0)
 
-    # 策略5: 删除 L1 旧轮次（保留最近 5 轮真实对话轮次）
-    # A4: 只统计 L1 段真实 user 消息——L2/L3 块（[历史记录]/[历史相关对话摘要]/
-    # [系统记忆/[动态上下文 前缀）是临时构造，不算轮次，避免"保留 5 轮"
-    # 实际只剩更少真实轮次、且 cutoff 落在 L2 块中间造成前缀抖动。
+    # 策略4b: user 消息特权 — 仅超大文本（>64K 字符）才截断（保留指令主体）
     if est > budget:
-        user_positions = []
-        for i in range(len(result) - 1, -1, -1):
-            if result[i].get("role") != "user":
-                continue
-            content = result[i].get("content", "")
-            if (isinstance(content, str) and content.startswith(
-                    ("[历史记录]", "[历史相关对话摘要]", "[系统记忆", "[动态上下文"))):
-                continue
-            user_positions.append(i)
-            if len(user_positions) >= 5:
+        for msg in result:
+            if est <= budget:
                 break
+            if msg.get("role") != "user":
+                continue
+            content = msg.get("content", "")
+            if (isinstance(content, str)
+                    and "[已截断" not in content
+                    and len(content) > 65536):
+                trimmed = content[:65536] + f"\n... [已截断: 原长 {len(content)} 字符]"
+                est -= estimate_tokens(content) - estimate_tokens(trimmed)
+                msg["content"] = trimmed
+                est = max(est, 0)
 
-        if len(user_positions) >= 5:
-            cutoff = min(user_positions)
+    # 策略5: 删除 L1 旧轮次（token 保护区之外的旧对话轮次）
+    # A6: 借鉴社区共识六"保护近端"——用 token 保护区（默认预算的 25%，
+    # 最低 4096 token）替代固定"保留 5 轮"：长轮次保护更少、短轮次保护更多，
+    # 与模型短期连贯性对 token 量的依赖对齐。保护区内的消息不参与删除。
+    if est > budget:
+        protect_tokens = max(4096, int(budget * 0.25))
+        cutoff = _find_token_cutoff(result, protect_tokens)
+        if cutoff > 0:
             new_result = [msg for msg in result[:cutoff]
                          if msg.get("role") == "system"]
             new_result.extend(result[cutoff:])
             est = estimate_messages_tokens(new_result)
             result = new_result
-            logger.info(f"裁剪 L1 旧轮次: 保留最近 5 轮，估计 {est} tokens")
+            logger.info(f"裁剪 L1 旧轮次: token 保护区 {protect_tokens} tok，估计 {est} tokens")
 
     # 最终保护：如果还超，强制截断最后一条消息
     if est > budget and result:
@@ -712,10 +799,12 @@ def _calibrated_estimate(context: Any, estimate: int) -> int:
     使预算"越线"时机提前、贴近真实，避免裁剪在工具循环中段才触发
     （此时已发送消息可能被二次改写，破坏前缀缓存）。
     只放大不缩小（保守，避免高估触发多余裁剪）。
+
+    A6: 改用 _last_request_prompt_tokens（单次真实值）而非 _last_usage.prompt_tokens
+    （累计值）——累计值随会话增长不断放大，导致过度校准、过早触发裁剪。
     """
     try:
-        last = getattr(context, "_last_usage", None) or {}
-        actual = last.get("prompt_tokens", 0) or 0
+        actual = getattr(context, "_last_request_prompt_tokens", 0) or 0
         if actual <= 0 or estimate <= 0:
             return estimate
         ratio = actual / estimate
@@ -856,13 +945,45 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             msg_copy["content"] = "\n".join(text_parts) if text_parts else "[图片]"
         result.append(msg_copy)
 
-    # ── 渐进式 token 裁剪 ──
+    # ── 四级水位线 token 裁剪（借鉴 MUR AI 方案）──
+    # ratio = 校准后估算 / max_context：
+    #   < 0.60 → Tier0 不动；0.60-0.80 → Tier1 Snip（轻度截短工具输出）；
+    #   0.80-0.95 → Tier2 Prune（渐进式裁剪）；≥ 0.95 → Tier3 Summarize
+    #   （本地裁剪 + 置 _token_exhausted，由下一轮 summarize_old_history
+    #   步骤执行增量 LLM 摘要兜底）。
     if input_budget > 0:
         est = estimate_messages_tokens(result)
         # A5: 用上次 API 实际 usage 校准启发式估算（低估时放大），
         # 避免预算"越线"时机与真实 tokenizer 偏差导致裁剪在循环中段才触发。
+        # A6: 记录本次启发式估算，供 context_fragments 的 token_budget 片段
+        # 用 (真实值/上次估算) 比例校准——真实 usage 驱动的核心链路。
+        context._last_estimate_tokens = est
         est_check = _calibrated_estimate(context, est)
-        if est_check > input_budget:
+        max_ctx = int(getattr(context, "max_context_tokens", 0) or 0)
+        if max_ctx > 0:
+            ratio = est_check / max_ctx
+            tier = classify_waterline(ratio)
+            if tier >= 3:
+                # Tier 3: 先做本地裁剪（Tier1+2 累积），再置强制摘要标志
+                context._token_exhausted = True
+                result = _snip_tier1(result, DEFAULT_COMPACTION_SETTINGS.snip_threshold)
+                result = _progressive_trim(result, input_budget, context,
+                                           tool_prune_threshold=tool_prune_threshold)
+                logger.warning(
+                    f"💧 水位线 {waterline_name(tier)} (ratio={ratio:.0%}): "
+                    f"本地裁剪完成，置强制摘要标志，待增量 LLM 摘要"
+                )
+            elif tier == 2:
+                result = _progressive_trim(result, input_budget, context,
+                                           tool_prune_threshold=tool_prune_threshold)
+                logger.info(f"💧 水位线 {waterline_name(tier)} (ratio={ratio:.0%}): 渐进式裁剪")
+            elif tier == 1:
+                result = _snip_tier1(result, DEFAULT_COMPACTION_SETTINGS.snip_threshold)
+                logger.info(f"💧 水位线 {waterline_name(tier)} (ratio={ratio:.0%}): 轻度截短工具输出")
+            est_after = estimate_messages_tokens(result)
+            if est_after != est:
+                logger.info(f"裁剪后: {est_after} tokens (节省 {est - est_after})")
+        elif est_check > input_budget:
             logger.info(f"token 预估: {est_check} (>预算 {input_budget}, 原始估算 {est})，启动渐进式裁剪")
             result = _progressive_trim(result, input_budget, context,
                                        tool_prune_threshold=tool_prune_threshold)

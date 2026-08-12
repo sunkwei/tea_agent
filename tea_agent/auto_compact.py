@@ -100,6 +100,20 @@ class CompactionSettings:
     branch_summary_length: int = 800      # 分支摘要最大字符数
     enabled: bool = True            # 是否启用自动压缩
 
+    # 四级水位线（借鉴 MUR AI 方案，对齐社区共识）
+    #   ratio < tier1_ratio                → Tier 0：什么都不做
+    #   tier1_ratio ≤ ratio < tier2_ratio  → Tier 1：Snip（轻度截短老工具输出，0 成本）
+    #   tier2_ratio ≤ ratio < tier3_ratio  → Tier 2：Prune（占位符替换 + assistant 旧文本裁剪）
+    #   ratio ≥ tier3_ratio                → Tier 3：Summarize（增量 LLM 摘要兜底）
+    # ratio = 当前 token / max_context（用真实 usage 校准后的估算）
+    tier1_ratio: float = 0.60
+    tier2_ratio: float = 0.80
+    tier3_ratio: float = 0.95
+    # Tier 1 Snip 阈值：工具输出字符数超过该值才截短（保留头部摘要行）
+    snip_threshold: int = 16384
+    # Tier 2/3 删除旧轮次时的 token 保护区大小（最近 N token 内任何消息不参与删除）
+    protect_tokens: int = 4096
+
     # 重试配置
     max_retries: int = 3            # 最大重试次数
     retry_base_delay: float = 1.0   # 初始重试延迟（秒）
@@ -117,6 +131,32 @@ class CompactionSettings:
 
 
 DEFAULT_COMPACTION_SETTINGS = CompactionSettings()
+
+
+def classify_waterline(ratio: float, settings: CompactionSettings | None = None) -> int:
+    """按 token 水位线分类当前压力等级（借鉴 MUR AI 四级水位线）。
+
+    Args:
+        ratio: 当前 token 用量 / 上下文上限（0~1+，用真实 usage 校准后的估算）
+        settings: 水位线阈值配置（None=默认 0.6/0.8/0.95）
+
+    Returns:
+        0 = 安全（不操作） / 1 = Snip / 2 = Prune / 3 = Summarize
+    """
+    s = settings or DEFAULT_COMPACTION_SETTINGS
+    if ratio >= s.tier3_ratio:
+        return 3
+    if ratio >= s.tier2_ratio:
+        return 2
+    if ratio >= s.tier1_ratio:
+        return 1
+    return 0
+
+
+def waterline_name(tier: int) -> str:
+    """水位线等级名称（供日志/可观测性使用）。"""
+    names = {0: "Tier0-安全", 1: "Tier1-Snip", 2: "Tier2-Prune", 3: "Tier3-Summarize"}
+    return names.get(tier, "Tier" + str(tier))
 
 
 # ═══ 核心压缩逻辑 ═══════════════════════════════════════

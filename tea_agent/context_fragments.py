@@ -52,9 +52,12 @@ __all__ = [
 ]
 
 # 默认片段组装顺序（小权重在前，weight 越小越靠前）
-# 注意：token_budget 已禁用（上下文评估偏差）；environment 已由 _build_l0_enriched_system 直接注入
+# 注意：token_budget 已重新启用（2026-08-12：改用真实 usage 比例校准，
+# 修复启发式估算偏差——见 _estimate_context_tokens S3/A6）；
+# environment 已由 _build_l0_enriched_system 直接注入
 DEFAULT_FRAGMENT_ORDER = [
     "session_budget",
+    "token_budget",
     "current_time",
     "session_mode",
     "agents_md",
@@ -198,10 +201,19 @@ def _estimate_context_tokens(context: Any) -> int | None:
     except Exception:
         pass
 
-    # 4. S3: 用最近一次真实 prompt_tokens 校正（真实值作下限参考）
+    # 4. S3/A6: 用最近一次真实 usage 校正启发式估算。
+    # 优先用 (真实值/上次估算) 比例整体放大——修正 tokenizer 系统偏差
+    # （中文 1.5 字/token 等启发式与真实 BPE 的差异可达 30-50%），
+    # 且不低估后续新增消息；无上次估算基线时，真实值作下限参考。
     try:
         last_real = getattr(context, "_last_request_prompt_tokens", 0) or 0
-        if last_real > 0 and last_real > total:
+        last_est = getattr(context, "_last_estimate_tokens", 0) or 0
+        if last_real > 0 and last_est > 0 and last_real > last_est * 1.2:
+            # 真实/估算比例整体放大（真实 usage 驱动的核心链路，
+            # _last_estimate_tokens 由 build_api_messages 每次构建时记录）
+            scale = last_real / last_est
+            total = int(total * scale)
+        elif last_real > 0 and last_real > total:
             # 实际 API 用量比估算大（工具/系统开销或 tokenizer 差异），
             # 采用真实值，避免报警过晚。
             total = last_real
@@ -363,7 +375,7 @@ def _init_builtin_fragments() -> None:
     """注册内置片段（幂等）。"""
     builtin = {
         "session_budget": _frag_session_budget,
-        # "token_budget": _frag_token_budget,  # 已禁用：上下文 token 评估存在偏差，用户要求关闭（2026-08-04）
+        "token_budget": _frag_token_budget,  # 2026-08-12 重新启用：真实 usage 比例校准修复估算偏差
         "current_time": _frag_current_time,
         "session_mode": _frag_session_mode,
         "agents_md": _frag_agents_md,

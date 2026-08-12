@@ -63,17 +63,18 @@ def make_context(**kwargs) -> SessionContext:
 # ═══ #1 Token 预算感知 ═════════════════════════════════
 
 class TestTokenBudgetFragment:
-    """token_budget 片段已禁用（上下文 token 评估存在偏差，2026-08-04 用户要求关闭）。"""
+    """token_budget 片段已重新启用（2026-08-12：真实 usage 比例校准修复估算偏差）。"""
 
-    def test_disabled_returns_none(self):
+    def test_enabled_returns_fragment(self):
         ctx = make_context(max_context_tokens=1_000_000)
         frag = get_fragment("token_budget", ctx)
-        assert frag is None
+        assert frag is not None
+        assert "<token_budget>" in frag.render()
 
-    def test_not_in_assemble_default(self):
+    def test_in_assemble_default(self):
         ctx = make_context()
         text = assemble_fragments(ctx)
-        assert "<token_budget>" not in text
+        assert "<token_budget>" in text
 
 
 # ═══ #2 上下文片段系统 ═════════════════════════════════
@@ -82,7 +83,7 @@ class TestContextFragments:
     def test_assemble_includes_builtin(self):
         ctx = make_context()
         text = assemble_fragments(ctx)
-        assert "<token_budget>" not in text
+        assert "<token_budget>" in text
         assert "<current_time>" in text
         assert "[系统状态" in text
 
@@ -141,7 +142,7 @@ class TestContextFragments:
         register_fragment("test_tmp", lambda ctx: ContextFragment("test_tmp", "x"))
         clear_fragments()
         assert "test_tmp" not in list_fragments()
-        assert "token_budget" not in list_fragments()  # 已禁用
+        assert "token_budget" in list_fragments()  # 内置片段保留
 
 
 # ═══ #3 压缩 Hooks ═════════════════════════════════════

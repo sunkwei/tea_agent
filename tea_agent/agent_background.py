@@ -239,8 +239,11 @@ def start_interruption_analyzer(
         except Exception:
             interval_h = _INTERRUPT_ANALYZE_INTERVAL_H
 
+    # dispose 静止态：stop_event 供外部优雅停止（kill → await done）
+    stop_event = threading.Event()
+
     def _loop():
-        while True:
+        while not stop_event.is_set():
             try:
                 from tea_agent.store import get_storage
 
@@ -253,13 +256,44 @@ def start_interruption_analyzer(
                 )
             except Exception:
                 logger.exception("interruption analyzer iteration failed")
-            time.sleep(max(0.1, interval_h) * 3600)
+            # 可中断睡眠：stop_event 置位时立即退出，不等待剩余间隔
+            stop_event.wait(max(0.1, interval_h) * 3600)
 
     try:
         t = threading.Thread(target=_loop, name="interruption-analyzer", daemon=True)
+        t.stop = stop_event.set  # type: ignore[attr-defined]  # 停止句柄
+        t.stopped = stop_event.is_set  # type: ignore[attr-defined]  # 静止态查询
         t.start()
         logger.info(f"打断模式分析线程已启动 (interval={interval_h}h)")
         return t
     except Exception as e:
         logger.debug(f"打断模式分析线程启动失败: {e}")
+        return None
+
+
+def stop_interruption_analyzer(thread: threading.Thread | None, timeout: float = 5.0) -> bool:
+    """停止后台分析线程并等待其到达静止态（dispose 语义）。
+
+    防御模式：Dispose must reach quiescence, not just request it。
+    kill → await done：先置位 stop_event，再 join 等待线程退出；
+    超时返回 False（不阻塞调用方）。
+
+    Args:
+        thread: start_interruption_analyzer 返回的线程
+        timeout: 最大等待秒数
+
+    Returns:
+        线程是否已到达静止态（退出）
+    """
+    if thread is None or not thread.is_alive():
+        return True
+    try:
+        stop = getattr(thread, "stop", None)
+        if callable(stop):
+            stop()
+        thread.join(timeout=timeout)
+        return not thread.is_alive()
+    except Exception:
+        logger.exception("stop_interruption_analyzer failed")
+        return False
         return None

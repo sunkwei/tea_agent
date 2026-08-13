@@ -319,7 +319,10 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
         if process.poll() is None:
             killed_by_hardlimit = time.time() >= hard_deadline
             try:
-                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                if hasattr(os, "killpg") and hasattr(os, "getpgid"):
+                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                else:
+                    process.kill()  # Windows: 无 killpg，直接 kill 子进程
                 process.wait(timeout=5)
             except (ProcessLookupError, OSError):
                 try:
@@ -341,6 +344,15 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
     stderr = "".join(stderr_lines)
     retcode = process.returncode if process.returncode is not None else -1
 
+    # ── 正交结果独立报告（DeepSeek Harness 防御模式） ──
+    # 一个进程可能同时"超时"且"exit 0"（捕获了信号）。每个独立事实单独字段，
+    # 绝不嵌套报告，避免调用方把被截断的运行误读为干净成功。
+    timed_out = killed_by_monitor or killed_by_hardlimit
+    timeout_kind = "monitor" if killed_by_monitor else ("hardlimit" if killed_by_hardlimit else "")
+    exit_signal = None
+    if retcode < 0:
+        exit_signal = -retcode  # 被信号终止时 retcode 为负数
+
     if killed_by_monitor:
         cmd_preview = f"{app} {' '.join(args[:5])}"
         if len(args) > 5:
@@ -354,7 +366,16 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
         hint = f"⏰ 命令超过硬上限被强制终止 (>{timeout*4}s): {cmd_preview}"
         stderr = (stderr + "\n" + hint) if stderr else hint
 
-    return {"ok": retcode == 0, "returncode": retcode, "stdout": stdout, "stderr": stderr}
+    # ok 语义：超时被终止 = 失败（即使进程自身 exit 0）
+    return {
+        "ok": (retcode == 0) and not timed_out,
+        "returncode": retcode,
+        "timed_out": timed_out,
+        "timeout_kind": timeout_kind,
+        "signal": exit_signal,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
 
 
 def _run_batch_with_monitor(idx, cmd, timeout):
@@ -412,7 +433,10 @@ def _run_batch_with_monitor(idx, cmd, timeout):
 
         if process.poll() is None:
             try:
-                os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                if hasattr(os, "killpg") and hasattr(os, "getpgid"):
+                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                else:
+                    process.kill()  # Windows: 无 killpg，直接 kill 子进程
                 process.wait(timeout=3)
             except Exception:
                 try:
@@ -430,13 +454,26 @@ def _run_batch_with_monitor(idx, cmd, timeout):
         stderr = "".join(err_lines)
         retcode = process.returncode if process.returncode is not None else -1
 
+        # 正交结果独立报告：超时与 exit code 分开字段
+        timed_out = killed
+        timeout_kind = "monitor" if killed else ""
+        exit_signal = -retcode if retcode < 0 else None
+
         if killed:
             cmd_preview = f"{a} {' '.join(ar[:3])}"
             if len(ar) > 3:
                 cmd_preview += f" ... (+{len(ar)-3} args)"
             stderr = (stderr + "\n" if stderr else "") + f"⏰ 空闲超时({timeout}s): {cmd_preview}"
 
-        result.update({"returncode": retcode, "stdout": stdout, "stderr": stderr, "error": retcode != 0})
+        result.update({
+            "returncode": retcode,
+            "timed_out": timed_out,
+            "timeout_kind": timeout_kind,
+            "signal": exit_signal,
+            "stdout": stdout,
+            "stderr": stderr,
+            "error": (retcode != 0) or timed_out,
+        })
     except Exception as e:
         result["stderr"] = str(e)
 

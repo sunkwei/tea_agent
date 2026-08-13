@@ -28,6 +28,7 @@ from tea_agent.prompt_manager import (
     INTERRUPT_CORRECTED_TMPL,
 )
 from tea_agent.session.tool_loop_runner import execute_tool_loop
+from tea_agent.tool_hooks import tool_hooks
 from tea_agent.session_pipeline import SessionPipeline
 
 logger = logging.getLogger("session")
@@ -652,7 +653,21 @@ class ToolComponent(SessionComponent):
         success = True
         error_msg = ""
         try:
-            result = self.ctx.toolkit.call_tool(func_name, **args)
+            # ── pre-execute 瀑布（审批/权限/沙箱决策，默认放行） ──
+            allow, deny_reason = tool_hooks.run_pre(func_name, args)
+            if not allow:
+                result = f"⛔ 工具被拒绝执行: {deny_reason}"
+                logger.warning(f"tool blocked by pre-hook: {func_name}, reason={deny_reason}")
+                success = False
+                error_msg = deny_reason
+            else:
+                result = self.ctx.toolkit.call_tool(func_name, **args)
+                # ── post-execute 瀑布（结果改写 + additionalContexts） ──
+                final_result, extra_contexts = tool_hooks.run_post(func_name, args, result)
+                if extra_contexts:
+                    for ctx in extra_contexts:
+                        tool_hooks.inject_context(ctx)
+                result = final_result
             if self.ctx.tool_log:
                 self.ctx.tool_log(f"✅ 结果: {result}")
         except Exception as e:

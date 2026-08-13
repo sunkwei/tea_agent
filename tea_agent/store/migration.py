@@ -85,6 +85,27 @@ def init_tables(db):
         )
     ''')
 
+    # fork lineage：conversations 记录来源分支（session fork 支持）
+    for col, col_def in [
+        ("fork_source_id", "TEXT DEFAULT NULL"),
+        ("fork_stamp", "TEXT DEFAULT NULL"),
+    ]:
+        with contextlib.suppress(Exception):
+            c.execute(f"ALTER TABLE conversations ADD COLUMN {col} {col_def}")
+
+    # fork 元数据表：记录 fork 操作（源 topic → 目标 topic）
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS forks (
+            id TEXT PRIMARY KEY,
+            source_topic_id TEXT NOT NULL,
+            target_topic_id TEXT NOT NULL,
+            boundary_conv_id TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (source_topic_id) REFERENCES topics(topic_id),
+            FOREIGN KEY (target_topic_id) REFERENCES topics(topic_id)
+        )
+    ''')
+
     c.execute('''
         CREATE TABLE IF NOT EXISTS topic_token_stats (
             topic_id TEXT PRIMARY KEY,

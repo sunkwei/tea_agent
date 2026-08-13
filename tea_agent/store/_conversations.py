@@ -71,11 +71,18 @@ class ConversationStore(StoreComponent):
         c.close()
 
         if update_active_cb:
-            update_active_cb(topic_id)
+            # 回调异常隔离：用户回调抛异常不影响保存主流程
+            try:
+                update_active_cb(topic_id)
+            except Exception:
+                logger.exception("update_active_cb failed (isolated)")
 
         if user_msg_text and user_msg_text.strip():
             if auto_embed_cb:
-                auto_embed_cb(conv_id, user_msg_text.strip())
+                try:
+                    auto_embed_cb(conv_id, user_msg_text.strip())
+                except Exception:
+                    logger.exception("auto_embed_cb failed (isolated)")
             else:
                 self._auto_embed_async(conv_id, user_msg_text.strip())
 
@@ -421,3 +428,137 @@ class ConversationStore(StoreComponent):
         """
         self._ensure_embed_worker(self.conn)
         self._embed_queue.put((conv_id, text))
+
+    # ── Session Fork（分支实验，借鉴 DeepSeek Harness） ──
+
+    def fork_topic(self, source_topic_id: str, target_topic_id: str,
+                   title: str = "", boundary_conv_id: str = "") -> dict:
+        """将源 topic 的全部对话复制到目标 topic（session fork）。
+
+        分支语义：
+        - 复制 conversations 记录，新记录标记 fork_source_id=源会话ID
+        - 复制 agent_rounds（对话轮次细节）
+        - 记录 forks 元数据（源→目标 lineage）
+        - 目标 topic 需已存在（由调用方通过 topics.create_topic 创建）
+
+        Args:
+            source_topic_id: 源主题
+            target_topic_id: 目标主题（需已存在）
+            title: 目标主题标题（仅记录用）
+            boundary_conv_id: 边界会话 ID；非空时仅复制该会话之前的对话
+
+        Returns:
+            {"ok": bool, "copied": int, "source": str, "target": str,
+             "boundary": str, "error": str}
+        """
+        import uuid as _uuid
+
+        copied = 0
+        try:
+            c = self.conn.cursor()
+            if boundary_conv_id:
+                # 用 rowid（插入顺序）精确定位边界，避免随机 UUID 字符串比较失真
+                c.execute("SELECT rowid FROM conversations WHERE id = ?", (boundary_conv_id,))
+                brow = c.fetchone()
+                if brow:
+                    boundary_rowid = brow["rowid"]
+                    c.execute(
+                        "SELECT id, topic_id, user_msg, ai_msg, is_func_calling, is_summarized, "
+                        "stamp, rounds_json FROM conversations "
+                        "WHERE topic_id = ? AND rowid <= ? ORDER BY rowid ASC",
+                        (source_topic_id, boundary_rowid),
+                    )
+                else:
+                    # 边界会话不存在 → 全量复制
+                    c.execute(
+                        "SELECT id, topic_id, user_msg, ai_msg, is_func_calling, is_summarized, "
+                        "stamp, rounds_json FROM conversations "
+                        "WHERE topic_id = ? ORDER BY rowid ASC",
+                        (source_topic_id,),
+                    )
+            else:
+                c.execute(
+                    "SELECT id, topic_id, user_msg, ai_msg, is_func_calling, is_summarized, "
+                    "stamp, rounds_json FROM conversations "
+                    "WHERE topic_id = ? ORDER BY rowid ASC",
+                    (source_topic_id,),
+                )
+            rows = c.fetchall()
+            if not rows:
+                c.close()
+                return {"ok": True, "copied": 0, "source": source_topic_id,
+                        "target": target_topic_id, "boundary": boundary_conv_id, "error": ""}
+
+            # 记录旧 id → 新 id 映射（用于 agent_rounds 外键迁移）
+            id_map: dict[str, str] = {}
+            for r in rows:
+                new_id = _uuid.uuid4().hex
+                id_map[r["id"]] = new_id
+                c.execute(
+                    "INSERT INTO conversations (id, topic_id, user_msg, ai_msg, "
+                    "is_func_calling, is_summarized, stamp, rounds_json, "
+                    "fork_source_id, fork_stamp) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))",
+                    (new_id, target_topic_id, r["user_msg"], r["ai_msg"],
+                     r["is_func_calling"], r["is_summarized"], r["stamp"],
+                     r["rounds_json"], r["id"]),
+                )
+                copied += 1
+
+            # 复制 agent_rounds（保持轮次细节）
+            round_copied = 0
+            for old_id, new_id in id_map.items():
+                c.execute(
+                    "SELECT round_num, role, content, tool_calls, tool_call_id, stamp "
+                    "FROM agent_rounds WHERE conversation_id = ? ORDER BY round_num",
+                    (old_id,),
+                )
+                for rr in c.fetchall():
+                    rid = _uuid.uuid4().hex
+                    c.execute(
+                        "INSERT INTO agent_rounds (id, conversation_id, round_num, role, "
+                        "content, tool_calls, tool_call_id, stamp) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (rid, new_id, rr["round_num"], rr["role"], rr["content"],
+                         rr["tool_calls"], rr["tool_call_id"], rr["stamp"]),
+                    )
+                    round_copied += 1
+
+            # 记录 fork 元数据
+            fork_id = _uuid.uuid4().hex
+            c.execute(
+                "INSERT INTO forks (id, source_topic_id, target_topic_id, "
+                "boundary_conv_id, created_at) "
+                "VALUES (?, ?, ?, ?, datetime('now', 'localtime'))",
+                (fork_id, source_topic_id, target_topic_id, boundary_conv_id or None),
+            )
+            self.conn.commit()
+            c.close()
+            logger.info(
+                f"fork_topic: {source_topic_id} → {target_topic_id} "
+                f"(conversations={copied}, rounds={round_copied})"
+            )
+            return {"ok": True, "copied": copied, "rounds_copied": round_copied,
+                    "source": source_topic_id, "target": target_topic_id,
+                    "boundary": boundary_conv_id, "error": ""}
+        except Exception as e:
+            logger.exception("fork_topic failed")
+            return {"ok": False, "copied": copied, "source": source_topic_id,
+                    "target": target_topic_id, "boundary": boundary_conv_id,
+                    "error": str(e)}
+
+    def get_fork_lineage(self, topic_id: str, limit: int = 10) -> list[dict]:
+        """查询 topic 的 fork 血统（被谁 fork / 从谁 fork）。
+
+        返回按时间倒序的 fork 记录列表。
+        """
+        c = self.conn.cursor()
+        c.execute(
+            "SELECT id, source_topic_id, target_topic_id, boundary_conv_id, created_at "
+            "FROM forks WHERE source_topic_id = ? OR target_topic_id = ? "
+            "ORDER BY created_at DESC LIMIT ?",
+            (topic_id, topic_id, limit),
+        )
+        rows = c.fetchall()
+        c.close()
+        return [dict(r) for r in rows]

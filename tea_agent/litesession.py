@@ -7,6 +7,7 @@ from collections.abc import Callable
 from openai import OpenAI
 
 from tea_agent.basesession import relaxed_json_loads
+from tea_agent.tool_hooks import tool_hooks
 
 logger = logging.getLogger("session.lite")
 
@@ -406,12 +407,24 @@ class LiteSession:
 
         # 执行工具
         try:
-            result = self.toolkit.call_tool(func_name, **args)
-            result_str = (
-                json.dumps(result, ensure_ascii=False)
-                if isinstance(result, dict)
-                else str(result)
-            )
+            # ── pre-execute 瀑布（默认放行） ──
+            allow, deny_reason = tool_hooks.run_pre(func_name, args)
+            if not allow:
+                result_str = f"⛔ 工具被拒绝执行: {deny_reason}"
+                logger.warning(f"tool blocked by pre-hook: {func_name}, reason={deny_reason}")
+            else:
+                result = self.toolkit.call_tool(func_name, **args)
+                # ── post-execute 瀑布（结果改写 + additionalContexts） ──
+                final_result, extra_contexts = tool_hooks.run_post(func_name, args, result)
+                if extra_contexts:
+                    for ctx in extra_contexts:
+                        tool_hooks.inject_context(ctx)
+                result = final_result
+                result_str = (
+                    json.dumps(result, ensure_ascii=False)
+                    if isinstance(result, dict)
+                    else str(result)
+                )
         except Exception as e:
             result_str = f"工具执行错误: {e}"
             logger.warning(f"工具 {func_name} 执行失败: {e}")

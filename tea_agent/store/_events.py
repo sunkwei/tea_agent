@@ -155,11 +155,16 @@ class SessionEventStore(StoreComponent):
         c.close()
         return {"total": total, "by_type": by_type}
 
-    def fork_events(self, source_topic_id: str, target_topic_id: str) -> int:
+    def fork_events(self, source_topic_id: str, target_topic_id: str,
+                    boundary_conv_id: str = "") -> int:
         """fork 时复制事件流到目标 topic（保留审计血统）。
 
-        复制后目标 topic 的事件 seq 从 1 重新计数，payload 中记录
-        source_topic_id + source_seq，保证血统可追溯。
+        message fork 语义（借鉴 DeepSeek Harness）：
+        - 无 boundary：复制全部事件，目标 topic seq 从 1 重新计数
+        - 有 boundary_conv_id：仅复制"该会话（含）之前"的事件——
+          即 seq <= 该会话最后一条事件的 seq。boundary 之后的对话
+          从新分支重新开始，事件流在消息点精确分叉。
+        - payload 记录 _fork_source = {topic_id, seq}，血统可追溯。
 
         Returns:
             复制的事件数
@@ -167,10 +172,22 @@ class SessionEventStore(StoreComponent):
         events = self.query_events(source_topic_id, limit=0)
         if not events:
             return 0
+
+        cutoff_seq = None
+        if boundary_conv_id:
+            # 定位 boundary 会话的"最后一条事件 seq"（含该轮全部事件）
+            boundary_seqs = [
+                ev["seq"] for ev in events if ev.get("conversation_id") == boundary_conv_id
+            ]
+            if boundary_seqs:
+                cutoff_seq = max(boundary_seqs)
+
         copied = 0
         with self._get_connection() as conn:
             c = conn.cursor()
             for i, ev in enumerate(events, start=1):
+                if cutoff_seq is not None and ev["seq"] > cutoff_seq:
+                    break  # 只复制 boundary 之前（含）的事件
                 payload = dict(ev["payload"])
                 payload["_fork_source"] = {
                     "topic_id": source_topic_id,

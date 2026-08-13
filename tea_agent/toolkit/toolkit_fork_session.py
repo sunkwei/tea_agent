@@ -73,6 +73,19 @@ def toolkit_fork_session(source_topic_id: str = "", title: str = "fork", boundar
             boundary_conv_id=boundary_conv_id or "",
         )
 
+        # P2 事件溯源：复制事件流（message fork 时按 boundary 截断）
+        events_copied = 0
+        try:
+            events_copied = storage.events.fork_events(
+                source_topic_id,
+                target_id,
+                boundary_conv_id=boundary_conv_id or "",
+            )
+            result["events_copied"] = events_copied
+        except Exception:
+            logger.exception("fork_events failed (isolated)")
+            result["events_copied"] = 0
+
         # 血统信息
         lineage = storage.conversations.get_fork_lineage(target_id)
         result["target_topic_id"] = target_id

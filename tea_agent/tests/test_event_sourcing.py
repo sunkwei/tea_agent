@@ -122,3 +122,25 @@ def test_coexists_with_conversations(storage):
     assert len(convs) == 1
     assert len(events) == 4
     assert convs[0]["user_msg"] is not None
+
+
+def test_message_fork_boundary(storage):
+    """message fork：boundary 截断事件流到指定消息轮。"""
+    src = storage.topics.create_topic("源")
+    c1 = storage.conversations.save_msg(src, "轮1", "", False)
+    storage.conversations.update_msg_rounds(c1, "答1", False)
+    c2 = storage.conversations.save_msg(src, "轮2", "", False)
+    storage.conversations.update_msg_rounds(c2, "答2", False)
+    storage.events.append_event(src, "tool/call", {"name": "toolkit_x"})
+    assert storage.events.stats(src)["total"] == 9
+
+    storage.topics.create_topic("分支", topic_id="mf1")
+    n = storage.events.fork_events(src, "mf1", boundary_conv_id=c2)
+    evs = storage.events.replay("mf1")
+    assert n == 8  # 两轮 × 4 事件，tool/call(seq9) 被截断
+    assert not any(e["event_type"] == "tool/call" for e in evs)
+    assert all(e["payload"]["_fork_source"]["topic_id"] == src for e in evs)
+
+    # 无 boundary → 全量
+    storage.topics.create_topic("分支2", topic_id="mf2")
+    assert storage.events.fork_events(src, "mf2") == 9

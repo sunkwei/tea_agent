@@ -235,6 +235,30 @@ class _ProcessMonitor:
             logger.debug("monitor: 进程 %s 已退出，监控线程结束", self.pid)
 
 
+# ── 环境变量清洗（DeepSeek Harness 防御模式） ──
+_ENV_SECRET_PATTERNS = re.compile(
+    r"(KEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|AUTH)", re.IGNORECASE
+)
+
+
+def _build_scrubbed_env() -> dict:
+    """构建清洗后的子进程环境：丢弃含敏感关键词的变量，防止 harness 凭据泄入命令输出/日志。
+
+    参考 DeepSeek Harness 防御模式：
+    "Spawned commands get a scrubbed env (drop *KEY*/*SECRET*/*TOKEN*/*PASSWORD*) so
+    harness credentials cannot leak into output, env, or spill files."
+
+    若不清洗，模型执行 `echo $DEEPSEEK_API_KEY` 之类的命令时，
+    harness 凭据会直接泄进对话历史/日志。只删除敏感变量，其余（PATH/HOME 等）保留。
+    """
+    scrubbed = {}
+    for key, value in os.environ.items():
+        if _ENV_SECRET_PATTERNS.search(key):
+            continue
+        scrubbed[key] = value
+    return scrubbed
+
+
 def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
     """使用 _ProcessMonitor 智能超时执行单条命令。
 
@@ -250,6 +274,7 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
         stderr=subprocess.PIPE,
         text=True, encoding="utf-8", errors="replace",
         start_new_session=True,
+        env=_build_scrubbed_env(),
     )
 
     monitor = _ProcessMonitor(process.pid, base_timeout=timeout)
@@ -347,6 +372,7 @@ def _run_batch_with_monitor(idx, cmd, timeout):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="replace",
             start_new_session=True,
+            env=_build_scrubbed_env(),
         )
         monitor = _ProcessMonitor(process.pid, base_timeout=timeout)
         monitor.start()
@@ -542,7 +568,7 @@ def _sudo_with_gui(app: str, args: list):
         ]
 
     if dialog_cmd:
-        pwd_result = subprocess.run(dialog_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
+        pwd_result = subprocess.run(dialog_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, env=_build_scrubbed_env())
         if pwd_result.returncode != 0:
             return {"ok": False, "error": "用户取消了密码输入", "returncode": 126}
         password = pwd_result.stdout.strip()
@@ -556,6 +582,7 @@ def _sudo_with_gui(app: str, args: list):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True, encoding="utf-8", errors="replace",
+                env=_build_scrubbed_env(),
             )
             stdout, stderr = process.communicate(
                 input=password + "\n",
@@ -582,6 +609,7 @@ def _sudo_with_gui(app: str, args: list):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True, encoding="utf-8", errors="replace",
+                env=_build_scrubbed_env(),
             )
             stdout, stderr = process.communicate(timeout=120)
             result = {"ok": process.returncode == 0, "returncode": process.returncode, "stdout": stdout, "stderr": stderr}
@@ -602,6 +630,7 @@ def _sudo_with_gui(app: str, args: list):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="replace",
+            env=_build_scrubbed_env(),
         )
         stdout, stderr = process.communicate(timeout=120)
         result = {"ok": process.returncode == 0, "returncode": process.returncode, "stdout": stdout, "stderr": stderr}

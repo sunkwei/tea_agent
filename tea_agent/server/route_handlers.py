@@ -265,6 +265,45 @@ async def handle_search(request):
     return JSONResponse(results)
 
 
+# ================================================================
+#  Document download (toolkit_publish_doc 发布目录)
+# ================================================================
+
+def exports_dir() -> str:
+    """文档发布目录（~/.tea_agent/exports/），供 /v1/download 服务。"""
+    d = os.path.join(os.path.expanduser("~"), ".tea_agent", "exports")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+async def handle_file_download(request):
+    """GET /v1/download/{filename} — 下载发布的文档（工具/接口文档等）。
+
+    文件名必须为纯文件名（拒绝路径分隔符 / ../ 绝对路径），
+    解析后必须位于 exports_dir 内。返回 Content-Disposition: attachment
+    强制浏览器下载（而非预览）。
+    """
+    filename = request.path_params.get("filename", "")
+    if not filename:
+        return JSONResponse({"error": "filename required"}, status_code=400)
+    # 安全校验：仅允许纯文件名（防路径遍历）
+    if "/" in filename or "\\" in filename or ".." in filename or filename.startswith((".", "~")):
+        return JSONResponse({"error": "非法文件名"}, status_code=400)
+    try:
+        target = (Path(exports_dir()) / filename).resolve()
+        if not str(target).startswith(str(Path(exports_dir()).resolve())):
+            return JSONResponse({"error": "非法路径"}, status_code=403)
+        if not target.is_file():
+            return JSONResponse({"error": "文件不存在"}, status_code=404)
+        # RFC 5987：中文文件名用 filename*，ASCII 回退
+        ascii_name = "".join(c if ord(c) < 128 else "_" for c in filename) or "download"
+        disposition = f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{urllib.parse.quote(filename)}'
+        return FileResponse(str(target), media_type="application/octet-stream",
+                            headers={"Content-Disposition": disposition})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 async def handle_export_pdf(request):
     """GET /v1/export/pdf/{topic_id} — export topic as PDF and download
 

@@ -357,6 +357,7 @@ def _build_routes() -> list:
         Route("/v1/search", rh.handle_search),
         Route("/v1/export/pdf/{topic_id:str}", rh.handle_export_pdf),
         Route("/v1/export/md/{topic_id:str}", rh.handle_export_md),
+        Route("/v1/download/{filename:str}", rh.handle_file_download),
         Route("/v1/upload", rh.handle_upload, methods=["POST"]),
         Route("/api/dags", rh.handle_list_dags),
         Route("/dag/{viz_id:str}", rh.handle_dag_viz),

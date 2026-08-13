@@ -153,6 +153,20 @@ toolkit_reload()
 - **失败隔离**：`batch_process` 等并行工具需单个失败不影响整体
 - **幂等性优先**：重复调用不产生副作用
 
+### 文档创建规范（下载链接）
+
+当用户**明确要求创建文档**（接口文档、README、Markdown、设计文档等）时：
+
+1. 用 `toolkit_save_file` 保存文档到项目内合适路径（如 `docs/`）
+2. 调用 `toolkit_publish_doc(source_path=..., title=...)` 发布
+3. **final msg 必须包含 Markdown 下载链接**（toolkit_publish_doc 返回的 url）：
+   ```
+   📄 文档已生成：
+   [下载接口文档](/v1/download/接口文档.md)
+   ```
+
+规则：链接必须是可点击的 Markdown 格式；若无 server（GUI 模式）则给出本地路径。
+
 ## 代码风格
 
 ### Python 规范

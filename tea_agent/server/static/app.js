@@ -64,6 +64,16 @@ window.cancelQueuedMessage = function(index) {
 const $ = id => document.getElementById(id);
 const esc = t => { if (!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
 const escAttr = t => String(t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// 🆕 内联 JS 字符串参数转义（用于 onclick="fn('...')" 场景，如主题标题、文件路径）
+// 先做 JS 转义（\ ' ），再做 HTML 属性转义（" & < >）。
+// 浏览器先解码 HTML 实体（&quot;→"）再执行 JS，顺序不能反。
+const jsAttr = s => String(s)
+  .replace(/\\/g, '\\\\')
+  .replace(/'/g, "\\'")
+  .replace(/"/g, '&quot;')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;');
 
 // 🆕 解码 HTML 实体（在 esc() 前使用，防止双重转义）
 // 多轮字符串替换，支持级联解码： &amp;lt; → &lt; → <
@@ -1467,7 +1477,7 @@ async function refreshTopics() {
       const isCurrentlyStreaming = isStreaming && t.id === currentTopicId;
       const hasActivity = isCurrentlyStreaming || t.is_active || t.is_background;
       const spinnerHtml = hasActivity ? '<span class="topic-spinner"></span>' : '';
-      return '<div class="' + cls + '" onclick="openTopic(\'' + t.id + '\',\'' + esc(title) + '\')">'
+      return '<div class="' + cls + '" onclick="openTopic(\'' + t.id + '\',\'' + jsAttr(title) + '\')">'
         + spinnerHtml
         + esc(title)
         + '<span class="topic-menu-wrap">'
@@ -1522,7 +1532,7 @@ window.openTopic = async function(id, title) {
     renderQueueList();
   }
   currentTopicId = id;
-  setTitle(title || id.slice(0, 8));
+  setTitle(decodeEntities(title) || id.slice(0, 8));
   refreshTopics();
   // 清空旧的后台轮询
   _stopBackgroundPoll();

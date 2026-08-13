@@ -12,8 +12,10 @@ import base64 as b64mod
 import contextlib
 import json
 import os
+import tempfile
 import threading
 import time
+import urllib.parse
 import uuid
 from datetime import datetime
 from pathlib import Path

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tea_agent"
-version = "0.14.1"
+version = "0.14.3"
 description = "A self-evolving AI agent with dynamic toolkit management."
 readme = "README.md"
 license = "MIT"
@@ -38,6 +38,10 @@ dependencies = [
     "tree-sitter>=0.21.0",
     "tree-sitter-python>=0.21.0",
     "fpdf2>=2.8.0",
+    "pygments>=2.10.0",
+    "pydantic>=2.0.0",
+    "rich>=13.0.0",
+    "textual>=0.40.0",
 ]
 
 [project.scripts]
@@ -64,6 +68,19 @@ mini = [
     "starlette>=0.37.0",
     "uvicorn>=0.27.0",
     "python-multipart>=0.0.7",
+]
+# 进程监控（toolkit_exec 增强，有 try 保护）
+monitor = ["psutil>=5.9.0"]
+# Windows OCR（toolkit_ocr，有 try 保护，仅 Windows）
+ocr = ["winocr>=0.3.0"]
+# 微信渠道（wechat_adapter，有 try 保护）
+channel = ["qrcode>=7.0.0", "qrterm>=2.3.0"]
+# 演示脚本（demo/ 目录）
+demo = [
+    "matplotlib>=3.5.0",
+    "scikit-learn>=1.0.0",
+    "tensorflow>=2.0.0",
+    "tflite-runtime>=2.0.0",
 ]
 
 [tool.ruff]

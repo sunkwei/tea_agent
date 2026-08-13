@@ -934,7 +934,7 @@ def _generate_config_template() -> str:
         "  temperature: 0.7      # 温度 0~2，越高越随机发散\n"
         "  max_tokens: 4096      # 最大输出 token 数\n"
         "  top_p: 0.9            # 核采样阈值\n"
-        "  max_context_tokens: 0 # 模型上下文窗口（0=自动探测；Gemini/DeepSeek 大窗口可设 1048576）\n"
+        "  max_context_tokens: 0 # 模型上下文窗口（0=按模型名自动推断：deepseek/gemini→1048576, claude→200000, 未知→128000；建议显式配置真实值）\n"
         "  token_budget:         # 模型级 token 预算策略（可选，借鉴 Codex model-owned defaults）\n"
         "    reminder_threshold: 0.15          # 剩余低于 15% 时提醒模型主动总结\n"
         "    fallback_buffer_tokens: 20000     # 压缩前预留的缓冲 token\n"

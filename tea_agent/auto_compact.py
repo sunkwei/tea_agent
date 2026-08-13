@@ -64,15 +64,26 @@ def estimate_messages_tokens(messages: list) -> int:
 
 
 def get_max_context_tokens(config) -> int:
-    """从配置中获取最大上下文 token 数。未知模型默认 128K。"""
+    """获取最大上下文 token 数。未知模型默认 128K。
+
+    兼容两类入参：
+    - config 对象（有 main_model）→ 从 main_model.max_context_tokens / options 读取
+    - SessionContext 等（有 model 字符串）→ 模型名推断
+    均未配置时按模型名映射（deepseek/gemini→1M, claude→200K, gpt-4→128K），
+    未知模型保守默认 128K——保证任何情况下裁剪链都有可用上限。
+    """
     try:
-        main = config.main_model
-        if hasattr(main, "max_context_tokens") and main.max_context_tokens:
-            return int(main.max_context_tokens)
-        val = main.options.get("max_context_tokens", 0)
-        if val:
-            return int(val)
-        model = (main.model_name or "").lower()
+        main = getattr(config, "main_model", None)
+        if main is not None:
+            if hasattr(main, "max_context_tokens") and main.max_context_tokens:
+                return int(main.max_context_tokens)
+            val = getattr(main, "options", {}).get("max_context_tokens", 0)
+            if val:
+                return int(val)
+            model = (main.model_name or "").lower()
+        else:
+            # 直接传入 SessionContext / 任意带 model 属性的对象
+            model = (getattr(config, "model", "") or "").lower()
         defaults = {
             "gpt-4": 128000,
             "claude": 200000,

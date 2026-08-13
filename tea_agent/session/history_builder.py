@@ -272,21 +272,41 @@ def _extract_files_from_text(text: str) -> set:
     return files
 
 
+def _resolve_max_ctx(context: Any) -> int:
+    """解析上下文窗口上限：显式配置 → 模型名推断 → 128K 保守兜底。
+
+    A7 修复：max_context_tokens 未配置（=0/None）时也必须返回可用上限，
+    杜绝裁剪链跳过（input_budget=0）导致上下文无限增长溢出。
+    """
+    max_ctx = int(getattr(context, "max_context_tokens", 0) or 0)
+    if max_ctx <= 0:
+        try:
+            from tea_agent.auto_compact import get_max_context_tokens
+
+            max_ctx = int(get_max_context_tokens(context))
+        except Exception:
+            max_ctx = 0
+    if max_ctx <= 0:
+        max_ctx = 128000  # 未知模型保守默认
+    return max_ctx
+
+
 def _get_token_budget(context: Any) -> tuple[int, int]:
     """获取 token 预算：返回 (input_budget, tool_prune_threshold)
 
     根据 max_context_tokens 动态计算：
     - input_budget = max_context_tokens * 0.8（预留 20% 给输出）
     - tool_prune_threshold = max(65536, input_budget * 0.02)  # 动态阈值，最低 64K 字符
+
+    A7 修复：max_context_tokens 未配置（=0/None）时，回退到 _resolve_max_ctx
+    按模型名推断（deepseek/gemini→1M 等），仍为 0 时保守默认 128K——
+    **保证任何情况下 input_budget > 0**，杜绝"裁剪链完全跳过导致上下文
+    无限增长溢出"（2026-08-13 生产事故根因）。
     """
-    max_ctx = getattr(context, 'max_context_tokens', 0) or 0
-    if max_ctx > 0:
-        input_budget = int(max_ctx * 0.8)
-        # 动态工具裁剪阈值：预算的 2%，最低 64K 字符（保证读取代码/文件内容完整）
-        tool_prune_threshold = max(65536, int(input_budget * 0.02))
-    else:
-        input_budget = 0
-        tool_prune_threshold = 65536  # 默认值（与入库压缩上限对齐）
+    max_ctx = _resolve_max_ctx(context)
+    input_budget = int(max_ctx * 0.8)
+    # 动态工具裁剪阈值：预算的 2%，最低 64K 字符（保证读取代码/文件内容完整）
+    tool_prune_threshold = max(65536, int(input_budget * 0.02))
     return input_budget, tool_prune_threshold
 
 
@@ -792,24 +812,26 @@ def _build_level3_block(context: Any) -> list[dict]:
 
 
 def _calibrated_estimate(context: Any, estimate: int) -> int:
-    """用上次 API 实际 usage 校准启发式 token 估算（A5）。
+    """用上次 API 实际 usage 校准启发式 token 估算（A5/A7）。
 
-    启发式估算（中文 1.5 字/token、英文 4 字符/token）与真实 tokenizer 存在偏差。
-    若上次实际 prompt_tokens 明显高于估算（低估超过 20%），按比例放大本次估算，
-    使预算"越线"时机提前、贴近真实，避免裁剪在工具循环中段才触发
-    （此时已发送消息可能被二次改写，破坏前缀缓存）。
-    只放大不缩小（保守，避免高估触发多余裁剪）。
+    启发式估算（中文 1.5 字/token、英文 4 字符/token）与真实 tokenizer 存在偏差，
+    且不含 tools 定义与 system 富化开销（真实请求包含它们）。
 
-    A6: 改用 _last_request_prompt_tokens（单次真实值）而非 _last_usage.prompt_tokens
-    （累计值）——累计值随会话增长不断放大，导致过度校准、过早触发裁剪。
+    A7 修复：比例基准改为 _last_estimate_tokens（**上次**构建时的启发式估算）——
+    上次真实 prompt_tokens（含 tools/system 开销）与上次启发式估算的比值
+    即系统偏差系数，整体放大本次估算，使水位线贴近真实用量。
+    低估超过 20% 时校准（scale>1.2），只放大不缩小（保守，避免多余裁剪）。
+
+    注意：调用方须先校准、再更新 context._last_estimate_tokens 为本次估算，
+    否则本函数读到的基准已被本次值覆盖（语义错位）。
     """
     try:
         actual = getattr(context, "_last_request_prompt_tokens", 0) or 0
-        if actual <= 0 or estimate <= 0:
-            return estimate
-        ratio = actual / estimate
-        if ratio > 1.2:
-            return int(estimate * ratio)
+        last_est = getattr(context, "_last_estimate_tokens", 0) or 0
+        if actual > 0 and last_est > 0 and estimate > 0:
+            scale = actual / last_est
+            if scale > 1.2:
+                return int(estimate * scale)
     except Exception:
         pass
     return estimate
@@ -953,13 +975,11 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     #   步骤执行增量 LLM 摘要兜底）。
     if input_budget > 0:
         est = estimate_messages_tokens(result)
-        # A5: 用上次 API 实际 usage 校准启发式估算（低估时放大），
-        # 避免预算"越线"时机与真实 tokenizer 偏差导致裁剪在循环中段才触发。
-        # A6: 记录本次启发式估算，供 context_fragments 的 token_budget 片段
-        # 用 (真实值/上次估算) 比例校准——真实 usage 驱动的核心链路。
-        context._last_estimate_tokens = est
+        # A7: 先校准（用上次的 _last_estimate_tokens 基准），再记录本次估算——
+        # 顺序不可颠倒，否则 _calibrated_estimate 读到的基准被本次值覆盖。
         est_check = _calibrated_estimate(context, est)
-        max_ctx = int(getattr(context, "max_context_tokens", 0) or 0)
+        context._last_estimate_tokens = est
+        max_ctx = _resolve_max_ctx(context)
         if max_ctx > 0:
             ratio = est_check / max_ctx
             tier = classify_waterline(ratio)
@@ -983,6 +1003,14 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             est_after = estimate_messages_tokens(result)
             if est_after != est:
                 logger.info(f"裁剪后: {est_after} tokens (节省 {est - est_after})")
+            # 最后防线（A7）：本地裁剪后仍逼近上限 → 置强制摘要标志，
+            # 由下一轮 summarize_old_history 执行增量 LLM 摘要兜底。
+            if est_after > max_ctx * 0.95:
+                context._token_exhausted = True
+                logger.warning(
+                    f"🚨 裁剪后仍 {est_after} tok (>{max_ctx * 0.95:.0f})，"
+                    f"置强制摘要标志，下一轮增量 LLM 摘要兜底"
+                )
         elif est_check > input_budget:
             logger.info(f"token 预估: {est_check} (>预算 {input_budget}, 原始估算 {est})，启动渐进式裁剪")
             result = _progressive_trim(result, input_budget, context,

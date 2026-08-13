@@ -672,6 +672,21 @@ def execute_tool_loop(session, context: dict) -> dict:
 
             iterations += 1
 
+            # ── additionalContexts 消费（修复 S1：只存不取的断链） ──
+            # 工具执行的 post-hook 可注入上下文，这里在下一轮请求组装前
+            # 统一 drain（FIFO），作为 user 消息注入模型请求。
+            try:
+                pending_ctxs = session.tool_hooks.drain_contexts() if hasattr(session, "tool_hooks") else []
+            except Exception:
+                pending_ctxs = []
+            if pending_ctxs:
+                injected_text = "\n\n".join(
+                    f"[上下文注入] {c}" if isinstance(c, str) else f"[上下文注入] {c}"
+                    for c in pending_ctxs
+                )
+                session.context.messages.append({"role": "user", "content": injected_text})
+                logger.info(f"additionalContexts 注入 {len(pending_ctxs)} 条 → 下一轮模型请求")
+
             if iterations >= session.max_iterations + session._extra_iterations:
                 if on_status:
                     on_status(f"!MAX_ITER:已执行{iterations}轮，上限{session.max_iterations + session._extra_iterations}，是否继续？")

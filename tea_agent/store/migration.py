@@ -106,6 +106,28 @@ def init_tables(db):
         )
     ''')
 
+    # P2 事件溯源：append-only 会话事件日志（唯一事实源的渐进式改造）
+    # 事件类型: turn/start, user/message, assistant/chunk, assistant/message,
+    #           tool/call, tool/result, turn/end, compaction/*, session/fork
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS session_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic_id TEXT NOT NULL,
+            conversation_id TEXT DEFAULT NULL,
+            event_type TEXT NOT NULL,
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            seq INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
+            UNIQUE (topic_id, seq)
+        )
+    ''')
+    c.execute(
+        "CREATE INDEX IF NOT EXISTS idx_session_events_topic ON session_events(topic_id, seq)"
+    )
+    c.execute(
+        "CREATE INDEX IF NOT EXISTS idx_session_events_type ON session_events(event_type)"
+    )
+
     c.execute('''
         CREATE TABLE IF NOT EXISTS topic_token_stats (
             topic_id TEXT PRIMARY KEY,

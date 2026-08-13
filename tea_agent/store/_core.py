@@ -30,6 +30,7 @@ import threading
 
 from ._component import DB, StoreComponent  # DB 短连接上下文管理器
 from ._conversations import ConversationStore
+from ._events import SessionEventStore
 from ._interruptions import InterruptionStore
 from ._memories import MemoryStore
 from ._scheduled_tasks import ScheduledTaskStore
@@ -217,6 +218,7 @@ class Storage:
         self._vectors = VectorStore(db_path)
         self._scheduled_tasks = ScheduledTaskStore(db_path)
         self._interruptions = InterruptionStore(db_path)
+        self._events = SessionEventStore(db_path)
 
         # ── conn 属性：兼容旧代码直接访问 storage.conn ──
         self._conn_lock = threading.Lock()
@@ -243,6 +245,13 @@ class Storage:
         self.vectors = self._vectors
         self.scheduled_tasks = self._scheduled_tasks
         self.interruptions = self._interruptions
+        self.events = self._events
+
+        # ── 注入事件存储引用到 ConversationStore（供 _log_event 使用） ──
+        try:
+            self._conversations.events = self._events
+        except Exception:
+            logger.exception("inject events into ConversationStore failed (non-fatal)")
 
     @property
     def conn(self):

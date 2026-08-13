@@ -1401,6 +1401,7 @@ class OnlineToolSession(BaseChatSession):
         """
         self.max_iterations = max_iterations
         self.storage = storage
+        self.tool_hooks = tool_hooks  # post-hook 系统的上下文消费引用
         self._cheap_client = cheap_client
         self._cheap_model_name = cheap_model
         self._vision_client = vision_client

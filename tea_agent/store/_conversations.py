@@ -86,7 +86,33 @@ class ConversationStore(StoreComponent):
             else:
                 self._auto_embed_async(conv_id, user_msg_text.strip())
 
+        # P2 事件溯源：记录 turn/start + user/message（审计事实源）
+        self._log_event(topic_id, "turn/start", {}, conversation_id=conv_id)
+        self._log_event(topic_id, "user/message",
+                        {"content": user_msg_text, "raw": user_msg_json},
+                        conversation_id=conv_id)
+
         return conv_id
+
+    def _topic_of_conv(self, conversation_id: str) -> str:
+        """查询会话所属 topic（事件日志关联用）。"""
+        try:
+            c = self.conn.cursor()
+            c.execute("SELECT topic_id FROM conversations WHERE id = ?", (conversation_id,))
+            row = c.fetchone()
+            c.close()
+            return row["topic_id"] if row else ""
+        except Exception:
+            return ""
+
+    def _log_event(self, topic_id: str, event_type: str, payload: dict,
+                   conversation_id: str = "") -> None:
+        """P2 事件溯源：追加事件日志（失败仅告警，不影响主流程）。"""
+        try:
+            from ._events import SessionEventStore
+            self.events.append_event(topic_id, event_type, payload, conversation_id)
+        except Exception:
+            logger.exception("append event failed (isolated)")
 
     def update_msg_rounds(
         self, conversation_id: int, ai_msg: str, is_func_calling: bool,
@@ -132,6 +158,29 @@ class ConversationStore(StoreComponent):
 
         self.conn.commit()
         c.close()
+
+        # P2 事件溯源：assistant/message（含 tool_calls 概览）+ turn/end
+        try:
+            topic_id = self._topic_of_conv(conversation_id)
+            if topic_id:
+                tool_calls_summary = None
+                if rounds:
+                    tcs = [r.get("tool_calls") for r in rounds if r.get("tool_calls")]
+                    if tcs:
+                        tool_calls_summary = [
+                            {"name": tc.get("function", {}).get("name", ""),
+                             "arguments": tc.get("function", {}).get("arguments", "")}
+                            for tc_list in tcs for tc in (tc_list if isinstance(tc_list, list) else [tc_list])
+                        ][:20]
+                self._log_event(
+                    topic_id, "assistant/message",
+                    {"content": ai_msg, "tool_calls": tool_calls_summary},
+                    conversation_id=conversation_id,
+                )
+                self._log_event(topic_id, "turn/end",
+                                {"reason": "complete"}, conversation_id=conversation_id)
+        except Exception:
+            logger.exception("append assistant event failed (isolated)")
 
     def save_agent_round(
         self, conversation_id: int, round_num: int, role: str, content: str,
@@ -453,9 +502,20 @@ class ConversationStore(StoreComponent):
         """
         import uuid as _uuid
 
+        # ── S3 幂等守卫：禁止重复 fork（同一 source→target） ──
+        dup = self.conn.execute(
+            "SELECT 1 FROM forks WHERE source_topic_id = ? AND target_topic_id = ? LIMIT 1",
+            (source_topic_id, target_topic_id),
+        ).fetchone()
+        if dup:
+            return {"ok": False, "copied": 0, "source": source_topic_id,
+                    "target": target_topic_id, "boundary": boundary_conv_id,
+                    "error": "该分支已存在（禁止重复 fork，请换 target_topic_id 或复用现有分支）"}
+
         copied = 0
-        try:
-            c = self.conn.cursor()
+        # ── S2 事务包裹：全部 INSERT 在单事务内，异常自动 rollback，杜绝半 fork ──
+        with self._get_connection() as _tx:
+            c = _tx.cursor()
             if boundary_conv_id:
                 # 用 rowid（插入顺序）精确定位边界，避免随机 UUID 字符串比较失真
                 c.execute("SELECT rowid FROM conversations WHERE id = ?", (boundary_conv_id,))
@@ -485,7 +545,6 @@ class ConversationStore(StoreComponent):
                 )
             rows = c.fetchall()
             if not rows:
-                c.close()
                 return {"ok": True, "copied": 0, "source": source_topic_id,
                         "target": target_topic_id, "boundary": boundary_conv_id, "error": ""}
 
@@ -532,20 +591,15 @@ class ConversationStore(StoreComponent):
                 "VALUES (?, ?, ?, ?, datetime('now', 'localtime'))",
                 (fork_id, source_topic_id, target_topic_id, boundary_conv_id or None),
             )
-            self.conn.commit()
-            c.close()
-            logger.info(
-                f"fork_topic: {source_topic_id} → {target_topic_id} "
-                f"(conversations={copied}, rounds={round_copied})"
-            )
-            return {"ok": True, "copied": copied, "rounds_copied": round_copied,
-                    "source": source_topic_id, "target": target_topic_id,
-                    "boundary": boundary_conv_id, "error": ""}
-        except Exception as e:
-            logger.exception("fork_topic failed")
-            return {"ok": False, "copied": copied, "source": source_topic_id,
-                    "target": target_topic_id, "boundary": boundary_conv_id,
-                    "error": str(e)}
+            # 事务提交在 with 块退出时自动 commit；异常自动 rollback
+
+        logger.info(
+            f"fork_topic: {source_topic_id} → {target_topic_id} "
+            f"(conversations={copied}, rounds={round_copied})"
+        )
+        return {"ok": True, "copied": copied, "rounds_copied": round_copied,
+                "source": source_topic_id, "target": target_topic_id,
+                "boundary": boundary_conv_id, "error": ""}
 
     def get_fork_lineage(self, topic_id: str, limit: int = 10) -> list[dict]:
         """查询 topic 的 fork 血统（被谁 fork / 从谁 fork）。

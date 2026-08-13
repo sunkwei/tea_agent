@@ -89,6 +89,7 @@ def get_max_context_tokens(config) -> int:
             "claude": 200000,
             "deepseek": 1048576,
             "gemini": 1048576,
+            "mimo": 1048576,  # Xiaomi MiMo V2.5 (1M context)
         }
         for k, v in defaults.items():
             if k in model:

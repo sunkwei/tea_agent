@@ -144,3 +144,65 @@ def test_message_fork_boundary(storage):
     # 无 boundary → 全量
     storage.topics.create_topic("分支2", topic_id="mf2")
     assert storage.events.fork_events(src, "mf2") == 9
+
+
+def _mk_ctx_with_level2():
+    """构造带 L2 数据 + 一条用户消息的 SessionContext。"""
+    from tea_agent.session.context import SessionContext
+
+    ctx = SessionContext()
+    ctx._level2 = [
+        {"user": "讨论缓存命中率", "assistant": "缓存是前缀命中", "files": []},
+        {"user": "天气怎么样", "assistant": "晴天", "files": []},
+        {"user": "代码审查", "assistant": "有3个问题", "files": []},
+    ]
+    ctx.messages = [
+        {"role": "system", "content": "sys"},
+        {"role": "user", "content": "缓存命中率如何优化"},
+    ]
+    ctx.supports_reasoning = False
+    ctx.supports_vision = False
+    ctx.disable_summary = False
+    ctx.disable_l2 = False
+    ctx.disable_l3 = False
+    ctx.max_context_tokens = 0
+    ctx.model = "deepseek-v4"
+    ctx._last_estimate_tokens = 0
+    ctx._last_request_prompt_tokens = 0
+    return ctx
+
+
+def test_level2_solidify_stable_in_tool_loop():
+    """S1-A: L2 入库定型——工具循环内多轮请求复用同一版本（缓存稳定）。"""
+    from tea_agent.session.history_builder import build_api_messages
+
+    ctx = _mk_ctx_with_level2()
+    r1 = build_api_messages(ctx, "test")
+    l2_1 = [m for m in r1 if str(m.get("content", "")).startswith(("[历史", "[历史相关"))]
+    assert ctx._level2_dirty is False  # 首次构建即定型
+    assert ctx._level2_selected is not None
+
+    # 工具循环内追加 assistant 消息后再请求 → 必须复用定型版本
+    ctx.messages.append({"role": "assistant", "content": "答"})
+    r2 = build_api_messages(ctx, "test")
+    l2_2 = [m for m in r2 if str(m.get("content", "")).startswith(("[历史", "[历史相关"))]
+    assert len(l2_1) == len(l2_2), f"L2 必须稳定: {len(l2_1)} vs {len(l2_2)}"
+
+
+def test_level2_recompute_on_new_message():
+    """S1-A: 新用户消息边界置 dirty → 重算并重新定型。"""
+    from tea_agent.session.history_builder import _solidify_level2
+
+    ctx = _mk_ctx_with_level2()
+    first = _solidify_level2(ctx)
+    assert ctx._level2_dirty is False
+
+    # 新消息到来（add_user_message 会置 dirty）
+    ctx.messages.append({"role": "user", "content": "天气怎么样"})
+    ctx._level2_dirty = True
+    second = _solidify_level2(ctx)
+    assert ctx._level2_dirty is False
+    assert ctx._level2_selected is second  # 引用更新
+    # 新消息聚焦天气 → 选中集合应与首次不同（命中天气条目）
+    texts = [str(p.get("user", "") or p.get("content", "")) for p in second]
+    assert any("天气" in t for t in texts), f"应命中天气条目: {texts}"

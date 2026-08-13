@@ -248,10 +248,13 @@ class BaseChatSession(ABC):
         if isinstance(entry.get("content"), str):
             entry["content"] = self._cap_message_text(entry["content"])
         # 新用户消息到来：失效动态上下文缓存（skill/TODO/记忆将按新状态重新计算）
+        # 同时置 L2 过滤 dirty —— 新消息将作为"当前请求"重算一次并定型 L2 选中集合
+        # （对齐 DSH 派生确定性：只在新消息边界重算，工具循环内保持稳定）。
         try:
             ctx = getattr(self, "context", None)
             if ctx is not None:
                 ctx._dynamic_ctx_cache = None
+                ctx._level2_dirty = True
         except Exception:
             pass
         self.messages.append(entry)

@@ -79,6 +79,12 @@ class SessionContext:
     _semantic_summary: str = ""
     _tool_chain_summary: str = ""
     _level2: list[dict] = field(default_factory=list)
+    # L2 相关性过滤的"入库定型"结果（缓存友好，对齐 DSH 派生确定性）：
+    # _level2_selected 在 add_user_message 时置 dirty，构建 API 消息时一次性
+    # 计算并固化；工具循环内多轮请求复用同一版本，不随 current_msg 重算，
+    # 避免 L2 条目 full↔summary↔消失 翻转破坏其后 L1 历史的前缀缓存。
+    _level2_selected: list | None = None
+    _level2_dirty: bool = True
     _current_trace: Any = None
     reflection_manager: Any = None
     _current_mode: str = "mixed"

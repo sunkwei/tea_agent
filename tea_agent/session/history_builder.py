@@ -595,6 +595,47 @@ def filter_level2_by_relevance(level2: list, current_msg: str) -> list:
     return result
 
 
+def _solidify_level2(context: Any) -> list[dict]:
+    """L2 相关性过滤的入库定型（缓存友好，对齐 DSH 派生确定性）。
+
+    原则：派生只依赖事件流，绝不依赖"当前请求"——但 L2 过滤本质是查询相关
+    检索，必然依赖当前用户消息。折中方案（S1-A）：**只在新消息入库边界重算**，
+    工具循环内多轮请求复用同一定型版本，不再每轮按 current_msg 动态翻转。
+
+    触发时机：
+    - add_user_message 置 context._level2_dirty = True（新消息边界）
+    - 首次构建（_level2_selected is None）
+    其余请求直接读 context._level2_selected，L2 条数/顺序/形态保持稳定，
+    其后的 L1 历史（最长最贵段）前缀缓存可稳定命中。
+
+    Args:
+        context: SessionContext
+
+    Returns:
+        定型后的 L2 选中集合（list of dict，含 kind=full|summary）
+    """
+    if context._level2_dirty or context._level2_selected is None:
+        current_user_msg = ""
+        for i in range(len(context.messages) - 1, -1, -1):
+            if context.messages[i].get("role") == "user":
+                cur_content = context.messages[i].get("content", "")
+                if isinstance(cur_content, list):
+                    current_user_msg = "".join(
+                        p.get("text", "") for p in cur_content if p.get("type") == "text"
+                    )
+                else:
+                    current_user_msg = str(cur_content)
+                break
+        context._level2_selected = filter_level2_by_relevance(
+            context._level2, current_user_msg
+        )
+        context._level2_dirty = False
+        logger.debug(
+            f"L2 定型: {len(context._level2)} in -> {len(context._level2_selected)} out"
+        )
+    return context._level2_selected
+
+
 def _build_l0_enriched_system(context: Any, system_prompt: str) -> str:
     """构建 L0 富化系统提示词 — 将所有辅助上下文合并到 system prompt 尾部。
 
@@ -875,18 +916,11 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     if not disable_l2:
         level2 = context._level2
         if level2:
-            current_user_msg = ""
-            for i in range(len(context.messages) - 1, 0, -1):
-                if context.messages[i].get("role") == "user":
-                    cur_content = context.messages[i].get("content", "")
-                    if isinstance(cur_content, list):
-                        current_user_msg = "".join(
-                            p.get("text", "") for p in cur_content if p.get("type") == "text"
-                        )
-                    else:
-                        current_user_msg = str(cur_content)
-                    break
-            filtered = filter_level2_by_relevance(level2, current_user_msg)
+            # 缓存友好（S1-A）：读取入库定型结果，不在每轮请求动态重算。
+            # 定型时机 = 新用户消息入库边界（_solidify_level2），工具循环内
+            # 多轮请求复用同一版本，避免 L2 条数/顺序/形态翻转破坏其后
+            # L1 历史的前缀缓存命中（对齐 DSH：派生只依赖事件流）。
+            filtered = _solidify_level2(context)
             for item in filtered:
                 kind = item.get("kind", "full")
                 if kind == "summary":

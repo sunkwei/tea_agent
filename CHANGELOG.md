@@ -1,6 +1,27 @@
 # Changelog
 
 
+## [0.15.0] - 2026-08-14
+### Features
+- feat(cache): 前缀缓存稳定化（对齐 DeepSeek Harness「派生只依赖事件流」哲学）
+  - S1-A: L2 相关性过滤入库定型 — SessionContext 新增 _level2_selected/_level2_dirty，
+    新用户消息边界重算一次并固化；工具循环内多轮请求复用同一版本，L2 条目
+    不再 full↔summary↔消失翻转，保护其后 L1 历史（最长最贵段）前缀缓存
+  - S2: 水位线裁剪二次改写残留修复 — reasoning/注入消息入库定型（_cap_message_text）；
+    _progressive_trim 策略3 清空 reasoning 后回写 context.messages 定型，
+    预算波动不再导致「完整↔空」翻转（永不收敛问题）
+  - S2-B: 最终保护紧急截断回写定型 + 幂等守卫 [紧急截断，补齐残留翻转点
+  - 新增 docs/CACHE_PREFIX_STABILITY.md 缓存稳定性规范（铁律/检查清单/文件索引）
+- feat(eventsourcing): P2 append-only 会话事件日志 + message fork 边界截断
+- feat(harness): P1 三项能力落地 — post-hooks / fork / 防御模式
+- feat: get_max_context_tokens 增加 mimo 映射（Xiaomi MiMo V2.5 → 1M）
+- feat: 文档创建任务 final msg 带下载链接（toolkit_publish_doc + /v1/download）
+- fix(security): toolkit_exec 子进程环境变量清洗，防凭据泄露
+- fix: 修复 max_context_tokens 未配置时裁剪链完全失效导致上下文溢出（生产事故）
+- fix: 修复 web 导出 NameError 与主题切换引号 bug
+- feat: 四级水位线上下文压缩 + 真实 usage 驱动（借鉴 MUR AI 方案）
+- tests: 新增缓存定型/事件溯源/水位线测试，全量 1054 passed
+
 ## [0.13.17] - 2026-08-07
 ### Features
 - feat: 视觉模型请求级自动切换 — create_chat_stream 检测请求消息含图（当前轮或历史轮）→ 自动使用 vision_model

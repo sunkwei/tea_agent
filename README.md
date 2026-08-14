@@ -1,4 +1,4 @@
-# Tea Agent v0.14.0
+# Tea Agent v0.15.0
 
 > ⚠️ **AI 写 AI 的实验项目，自行承担责任。**
 
@@ -8,7 +8,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.14.0-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.15.0-blue)](https://pypi.org/project/tea-agent)
 
 ---
 
@@ -86,9 +86,17 @@ register → exec（下发任务，session_id 控制上下文） → status（�
 
 适用于**嵌入式调试**（RK3588/BM1688/X3）、**边缘节点管理**、**分布式协同**。
 
-### 6. 🏎️ Token 经济 — 四级历史压缩
+### 6. 🏎️ Token 经济 — 四级历史压缩 + 前缀缓存稳定化
 
 `L0 系统层 → L3 语义摘要 → L2 历史对 → L1 当前对话` 四级组装上下文，在有限 token 窗口内最大化信息密度，长对话不爆上下文。
+
+**v0.15.0 缓存前缀稳定化**（对齐 DeepSeek Harness「派生只依赖事件流」哲学）— 深度优化 LLM 前缀缓存命中率：
+
+- **入库定型**：消息一旦入库即决定最终形态（截断/占位符/清空），绝不逐轮重算
+- **L2 入库定型**：相关性过滤只在「新消息边界」重算一次，工具循环内多轮请求复用同一版本，消除 L2 条目翻转
+- **裁剪决策固化**：reasoning 清空 / 紧急截断等形态决策回写 `context.messages`，预算波动不再导致「完整版↔截断版」翻转
+- **动态内容尾部注入**：时间/token 预算/技能/记忆全部放消息尾部，不进 system prompt，保护最长最贵的前缀段
+- **可观测**：`cache_report.py` 输出 `prompt_cache_hit_tokens` 命中率，端到端可见
 
 ### 7. 👁️ 视觉模型自动切换（v0.13.16+）
 

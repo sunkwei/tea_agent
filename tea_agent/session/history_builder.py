@@ -527,16 +527,27 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
             result = new_result
             logger.info(f"裁剪 L1 旧轮次: token 保护区 {protect_tokens} tok，估计 {est} tokens")
 
-    # 最终保护：如果还超，强制截断最后一条消息
+    # 最终保护：如果还超，强制截断最后一条消息（S2-B：截断决策一次性固化）
+    # 幂等守卫 [紧急截断：已截断的消息不再二次改写，避免 keep 逐轮缩小翻转。
+    # 截断后回写 context.messages 定型（对齐 DSH"模型可见=已记录"），
+    # 后续请求读到截断版，形态收敛，不再从完整版重来破坏前缀缓存。
     if est > budget and result:
         last = result[-1]
         content = last.get("content", "")
-        if isinstance(content, str):
+        if isinstance(content, str) and "[紧急截断" not in content:
             keep = len(content) // 3
             if keep > 256:
                 last["content"] = content[:keep] + f"\n... [紧急截断: 原长 {len(content)} 字符]"
                 est = estimate_messages_tokens(result)
                 logger.warning(f"紧急截断最后一条消息至 {keep} 字符")
+                # S2-B: 回写定型（仅 L1 历史消息有 _src_idx；动态注入尾部消息不回写）
+                _src = last.get("_src_idx")
+                if _src is not None and context is not None:
+                    _msgs = getattr(context, "messages", None)
+                    if _msgs and 0 <= _src < len(_msgs):
+                        _orig = _msgs[_src].get("content", "")
+                        if isinstance(_orig, str) and "[紧急截断" not in _orig:
+                            _msgs[_src]["content"] = last["content"]
 
     return result
 

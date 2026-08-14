@@ -255,3 +255,31 @@ def test_trim_reasoning_solidified():
         200, ctx2, tool_prune_threshold=100,
     )
     assert [m["reasoning_content"] for m in r4 if m.get("reasoning_content")][0] == rc2
+
+
+def test_emergency_trim_solidified():
+    """S2-B: 最终保护紧急截断回写 context 定型，预算波动不翻转。"""
+    from tea_agent.session.context import SessionContext
+    from tea_agent.session.history_builder import _progressive_trim
+
+    ctx = SessionContext()
+    long_user = "字" * 3000  # 超长最后一条消息(如粘贴代码)
+    ctx.messages = [{"role": "system", "content": "s"}, {"role": "user", "content": long_user}]
+
+    def _build_result():
+        return [dict(ctx.messages[i], **{"_src_idx": i}) for i in range(1, len(ctx.messages))]
+
+    # 请求1: 极小预算 → 触发最终保护紧急截断 + 回写
+    _progressive_trim(_build_result(), 50, ctx, tool_prune_threshold=100)
+    ctx_c = ctx.messages[1]["content"]
+    assert "[紧急截断" in ctx_c, "紧急截断必须回写 context"
+
+    # 请求2: 预算恢复 → 必须读截断版, 不再从完整版重来
+    r2 = _progressive_trim(_build_result(), 50000, ctx, tool_prune_threshold=100)
+    r2_c = [m["content"] for m in r2 if m.get("role") == "user"][0]
+    assert "[紧急截断" in r2_c and len(r2_c) < 1500, "回写后不得恢复完整版"
+
+    # 请求3: 仍紧张 → 幂等守卫不再二次截断
+    r3 = _progressive_trim(_build_result(), 50, ctx, tool_prune_threshold=100)
+    r3_c = [m["content"] for m in r3 if m.get("role") == "user"][0]
+    assert r3_c == r2_c, "幂等守卫失败: 截断版被二次改写"

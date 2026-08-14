@@ -452,15 +452,25 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
                     est -= estimate_tokens(content) - 30
                     est = max(est, 0)
 
-    # 策略3: 删除 reasoning_content
+    # 策略3: 删除 reasoning_content（S2：清空决策一次性固化）
+    # 清空后回写 context.messages 定型——否则预算波动导致"完整↔空"翻转，
+    # 服务端前缀缓存从该条起全部失效。回写后后续请求读到空版本，形态收敛。
+    # 已定型（含 [已截断 标记）的 reasoning 不参与清空。
     if est > budget:
         for msg in result:
             if est <= budget:
                 break
-            if "reasoning_content" in msg and msg["reasoning_content"]:
-                est -= estimate_tokens(msg["reasoning_content"])
+            rc = msg.get("reasoning_content", "")
+            if rc and "[已截断" not in rc:
+                est -= estimate_tokens(rc)
                 msg["reasoning_content"] = ""
                 est = max(est, 0)
+                # 回写定型：把清空决策固化到源消息
+                _src = msg.get("_src_idx")
+                if _src is not None and context is not None:
+                    _msgs = getattr(context, "messages", None)
+                    if _msgs and 0 <= _src < len(_msgs) and _msgs[_src].get("reasoning_content"):
+                        _msgs[_src]["reasoning_content"] = ""
 
     # 策略4: 截断长文本（逐步收紧截断阈值）
     # 幂等守卫：已定型消息（含 [已截断 / [工具结果已省略 标记）不再二次改写，
@@ -977,6 +987,8 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     for i in range(start_idx, len(context.messages)):
         msg = context.messages[i]
         msg_copy = dict(msg)
+        # S2: 记录源索引，供 _progressive_trim 策略3 清空 reasoning 时回写定型
+        msg_copy["_src_idx"] = i
 
         # 动态工具输出裁剪 — 使用动态阈值而非固定 100 字符
         if msg_copy["role"] == "tool" and i < _tool_prune_cutoff:
@@ -1052,10 +1064,11 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             est_after = estimate_messages_tokens(result)
             logger.info(f"裁剪后: {est_after} tokens (节省 {est - est_after})")
 
-    # 剥离内部字段（base64 快照缓存/图片路径），避免发送给 API
+    # 剥离内部字段（base64 快照缓存/图片路径/源索引），避免发送给 API
     for _m in result:
         _m.pop("_b64_cache", None)
         _m.pop("images", None)
+        _m.pop("_src_idx", None)
 
     # JSON 完整性校验
     result = sanitize_api_messages(result)

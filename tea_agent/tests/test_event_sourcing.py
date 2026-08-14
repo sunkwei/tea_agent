@@ -206,3 +206,52 @@ def test_level2_recompute_on_new_message():
     # 新消息聚焦天气 → 选中集合应与首次不同（命中天气条目）
     texts = [str(p.get("user", "") or p.get("content", "")) for p in second]
     assert any("天气" in t for t in texts), f"应命中天气条目: {texts}"
+
+
+def test_trim_reasoning_solidified():
+    """S2: 策略3 清空 reasoning 时回写 context 定型，预算波动不翻转。"""
+    from tea_agent.session.context import SessionContext
+    from tea_agent.session.history_builder import _progressive_trim
+
+    ctx = SessionContext()
+    rc = "思考" * 300
+    ctx.messages = [
+        {"role": "system", "content": "s"},
+        {"role": "assistant", "content": "a" * 200, "reasoning_content": rc},
+        {"role": "user", "content": "再来"},
+    ]
+
+    def build(start_idx=1):
+        out = []
+        for i in range(start_idx, len(ctx.messages)):
+            mc = dict(ctx.messages[i])
+            mc["_src_idx"] = i
+            out.append(mc)
+        return out
+
+    # 预算宽松 → 完整 reasoning 发送
+    r1 = _progressive_trim(build(), 5000, ctx, tool_prune_threshold=100)
+    assert [m["reasoning_content"] for m in r1 if m.get("reasoning_content")][0] == rc
+    assert ctx.messages[1]["reasoning_content"] == rc  # 源不被误清空
+
+    # 预算紧张 → 清空 + 回写 context 定型
+    _progressive_trim(build(), 200, ctx, tool_prune_threshold=100)
+    assert not [m for m in ctx.messages if m.get("reasoning_content")]
+
+    # 预算恢复宽松 → 读到的已是空，形态收敛（不发完整版）
+    r3 = _progressive_trim(build(), 5000, ctx, tool_prune_threshold=100)
+    assert not [m for m in r3 if m.get("reasoning_content")]
+
+    # 已定型截断版 reasoning 不被清空
+    ctx2 = SessionContext()
+    rc2 = "x" * 9000 + "\n... [已截断: 原长 10000 字符]"
+    ctx2.messages = [
+        {"role": "system", "content": "s"},
+        {"role": "assistant", "content": "a", "reasoning_content": rc2},
+        {"role": "user", "content": "再来"},
+    ]
+    r4 = _progressive_trim(
+        [dict(ctx2.messages[i], **{"_src_idx": i}) for i in range(1, len(ctx2.messages))],
+        200, ctx2, tool_prune_threshold=100,
+    )
+    assert [m["reasoning_content"] for m in r4 if m.get("reasoning_content")][0] == rc2

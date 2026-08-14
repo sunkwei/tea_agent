@@ -589,7 +589,9 @@ def execute_tool_loop(session, context: dict) -> dict:
                 } for tc in valid_tool_calls]
             }
             if reasoning_content:
-                assistant_msg["reasoning_content"] = reasoning_content
+                # S2: 入库定型 — reasoning 也是发送给 API 的前缀内容，
+                # 超长时同样会进入 _progressive_trim 的二次改写候选。
+                assistant_msg["reasoning_content"] = session._cap_message_text(reasoning_content)
 
             session.context.messages.append(assistant_msg)
 
@@ -684,7 +686,11 @@ def execute_tool_loop(session, context: dict) -> dict:
                     f"[上下文注入] {c}" if isinstance(c, str) else f"[上下文注入] {c}"
                     for c in pending_ctxs
                 )
-                session.context.messages.append({"role": "user", "content": injected_text})
+                # S2: 注入文本入库定型，防止超长注入进入 _progressive_trim 二次改写候选
+                session.context.messages.append({
+                    "role": "user",
+                    "content": session._cap_message_text(injected_text) if injected_text else injected_text,
+                })
                 logger.info(f"additionalContexts 注入 {len(pending_ctxs)} 条 → 下一轮模型请求")
 
             if iterations >= session.max_iterations + session._extra_iterations:
@@ -727,7 +733,8 @@ def execute_tool_loop(session, context: dict) -> dict:
             iterations += 1
             assistant_msg = {"role": "assistant", "content": session._cap_message_text(content)}
             if reasoning_content:
-                assistant_msg["reasoning_content"] = reasoning_content
+                # S2: reasoning 入库定型，避免二次改写破坏前缀
+                assistant_msg["reasoning_content"] = session._cap_message_text(reasoning_content)
             session.context.messages.append(assistant_msg)
             session.tools_comp.collect_assistant_text_round(content, reasoning_content)
             break

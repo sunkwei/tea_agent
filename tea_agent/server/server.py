@@ -525,8 +525,18 @@ def main():
         os.path.expanduser("~"), ".tea_agent", "config.yaml")
 
     if not os.path.isfile(config_path):
-        print(f"Error: Config file not found: {config_path}")
-        sys.exit(1)
+        if args.config:
+            # 用户显式指定路径但不存在 → 报错，不启动向导
+            print(f"Error: Config file not found: {config_path}")
+            sys.exit(1)
+        # 首次运行：启动交互式配置向导引导输入主模型 url/key 等
+        from tea_agent.setup_wizard import run_setup_wizard
+        print("\n检测到首次运行：未找到配置文件，启动配置向导...\n")
+        created = run_setup_wizard(config_path)
+        if not created:
+            print("\n配置向导已取消，Server 退出。")
+            sys.exit(1)
+        config_path = created
 
     from tea_agent.config import load_config
     try:

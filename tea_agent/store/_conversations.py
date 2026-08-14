@@ -92,6 +92,9 @@ class ConversationStore(StoreComponent):
                         {"content": user_msg_text, "raw": user_msg_json},
                         conversation_id=conv_id)
 
+        # 会话树同步：记录用户消息（Pi 功能；异常隔离）
+        self._sync_tree(topic_id, "user", user_msg_text)
+
         return conv_id
 
     def _topic_of_conv(self, conversation_id: str) -> str:
@@ -104,6 +107,23 @@ class ConversationStore(StoreComponent):
             return row["topic_id"] if row else ""
         except Exception:
             return ""
+
+    def _sync_tree(self, topic_id: str, role: str, content: str) -> None:
+        """同步更新会话树（Pi 功能）。
+
+        对话保存时把 user / assistant 消息 append 进会话树。
+        树未初始化时跳过，由 _get_tree 的 _import_history 统一导入，
+        避免重复节点。异常完全隔离，不影响对话保存主流程。
+        """
+        if not topic_id or not content or not content.strip():
+            return
+        try:
+            from tea_agent.server.modules.pi_features_module import PiFeaturesModule
+            if not PiFeaturesModule.has_tree(topic_id):
+                return
+            PiFeaturesModule.tree_append(topic_id, role, content.strip())
+        except Exception:
+            logger.debug("sync session tree skipped: role=%s topic=%s", role, topic_id)
 
     def _log_event(self, topic_id: str, event_type: str, payload: dict,
                    conversation_id: str = "") -> None:
@@ -179,6 +199,9 @@ class ConversationStore(StoreComponent):
                 )
                 self._log_event(topic_id, "turn/end",
                                 {"reason": "complete"}, conversation_id=conversation_id)
+                # 会话树同步：记录 AI 回复（Pi 功能；异常隔离）
+                if ai_msg and ai_msg.strip():
+                    self._sync_tree(topic_id, "assistant", ai_msg)
         except Exception:
             logger.exception("append assistant event failed (isolated)")
 

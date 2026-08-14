@@ -100,9 +100,52 @@ class PiFeaturesModule(HotReloadModule):
             except Exception as e:
                 logger.warning(f"会话树加载失败 {topic_id}: {e}")
         tree = SessionTree(tree_id=topic_id[:8])
+        cls._import_history(topic_id, tree)
         with _cache_lock:
             _trees[topic_id] = tree
         return tree
+
+    @classmethod
+    def _import_history(cls, topic_id: str, tree: Any) -> None:
+        """首次创建树时，从 storage 导入该 topic 的历史对话。
+
+        使已有话题也能在 PI 面板看到会话树（而非永远 0 节点）。
+        异常完全隔离：导入失败不影响树创建。
+        """
+        try:
+            from ..modules.storage_module import StorageModule
+            storage = StorageModule.get_storage()
+            if storage is None:
+                return
+            convs = storage.get_conversations(topic_id, limit=0, include_rounds=False)
+            messages = []
+            for c in convs:
+                um = c.get("user_msg")
+                am = c.get("ai_msg")
+                if isinstance(um, dict):
+                    um = um.get("text", "")
+                if isinstance(um, str) and um.strip():
+                    messages.append({"role": "user", "content": um.strip()})
+                if isinstance(am, str) and am.strip():
+                    messages.append({"role": "assistant", "content": am.strip()})
+            if messages:
+                tree.import_linear_messages(messages)
+                cls._persist_tree(topic_id, tree)
+                logger.info(f"🌳 会话树导入历史: {topic_id} ({len(messages)} 条消息)")
+        except Exception as e:
+            logger.warning(f"会话树导入历史失败 {topic_id}: {e}")
+
+    @classmethod
+    def has_tree(cls, topic_id: str) -> bool:
+        """判断该 topic 的会话树是否已初始化（内存缓存或 JSONL 存在）。
+
+        供 _sync_tree 增量同步判断：树未初始化时跳过追加，
+        由 _get_tree 的 _import_history 统一导入历史，避免重复节点。
+        """
+        with _cache_lock:
+            if topic_id in _trees:
+                return True
+        return cls._tree_path(topic_id).exists()
 
     @classmethod
     def tree_get(cls, topic_id: str) -> dict:

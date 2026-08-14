@@ -3194,13 +3194,40 @@ window.showPiModal = function() {
 };
 
 function _piFetch(url, opts) {
+  // 8s 超时兜底：任何情况下都不得让面板永远停在"加载中…"
+  opts = opts || {};
+  if (!opts.signal) opts.signal = AbortSignal.timeout(8000);
   return fetch(url, opts).then(function(r) { return r.json(); });
 }
 
 // 刷新面板：会话树 + 队列状态
 window.piRefresh = function() {
-  var tid = _piTopicId();
-  if (!tid) return;
+  if (!currentTopicId) {
+    // 无当前话题（页面刷新/新对话后）→ 自动选择最近活跃话题，
+    // 避免面板永远停留在"加载中…"
+    fetch('/api/sessions').then(function(r) { return r.json(); }).then(function(d) {
+      var topics = d.sessions || d.data || [];
+      var best = topics[0] || null;
+      if (best && best.id) {
+        currentTopicId = best.id;
+        openTopic(best.id, best.title || '');
+        piRefresh();
+      } else {
+        var treeEl = $('pi-tree-view');
+        if (treeEl) treeEl.textContent = '⚠️ 暂无会话。请先发送消息或选择左侧话题。';
+      }
+    }).catch(function() {
+      var treeEl = $('pi-tree-view');
+      if (treeEl) treeEl.textContent = '⚠️ 请先选择/创建话题';
+    });
+    return;
+  }
+  _piRenderTree(currentTopicId);
+  _piRenderQueue(currentTopicId);
+};
+
+// 渲染会话树视图
+function _piRenderTree(tid) {
   var treeEl = $('pi-tree-view');
   if (treeEl) treeEl.textContent = '加载中…';
   _piFetch('/api/pi/tree/' + encodeURIComponent(tid)).then(function(d) {
@@ -3218,7 +3245,10 @@ window.piRefresh = function() {
     });
     treeEl.textContent = lines.join('\n');
   }).catch(function(e) { if (treeEl) treeEl.textContent = '加载失败: ' + e; });
+}
 
+// 渲染消息队列状态
+function _piRenderQueue(tid) {
   _piFetch('/api/pi/queue/' + encodeURIComponent(tid)).then(function(d) {
     var qEl = $('pi-queue-view');
     if (!qEl) return;
@@ -3228,7 +3258,7 @@ window.piRefresh = function() {
     (d.followup || []).forEach(function(m) { parts.push('🔁followup: ' + m.content.slice(0, 40)); });
     qEl.textContent = parts.length ? parts.join('\n') : '（队列为空）';
   });
-};
+}
 
 // 创建分支
 window.piBranch = function() {

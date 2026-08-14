@@ -102,7 +102,7 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
         with open(file_path, encoding='utf-8') as f:
             original = f.read()
 
-        # normalize line endings
+        # normalize line endings（匹配与替换统一在规范化串上进行，避免 CRLF 索引错位）
         original_norm = original.replace('\r\n', '\n').replace('\r', '\n')
         old_norm = old_text.replace('\r\n', '\n').replace('\r', '\n')
         new_norm = new_text.replace('\r\n', '\n').replace('\r', '\n')
@@ -125,8 +125,13 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
                 f"(位置 {idx} 和 {second})"
             )
 
-        # perform replacement (preserve original line endings style)
-        new_text_raw = original[:idx] + new_norm + original[idx + len(old_norm):]
+        # 在规范化串上执行替换（idx 与切片基于同一份串，杜绝 CRLF 索引错位）
+        replaced = original_norm[:idx] + new_norm + original_norm[idx + len(old_norm):]
+
+        # 恢复原始换行风格（CRLF 为主则转回 CRLF，否则保持 LF）
+        crlf_count = original.count('\r\n')
+        lone_lf = original.count('\n') - crlf_count
+        new_text_raw = replaced.replace('\n', '\r\n') if crlf_count > lone_lf else replaced
 
         if preview:
             diff_preview = _generate_diff(original, new_text_raw)

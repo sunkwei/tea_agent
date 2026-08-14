@@ -46,9 +46,10 @@ def test_colorize_diff():
 
 
 def test_check_conflict_no_file():
+    # 修复 #30：绝对路径不在 cwd 内 → 路径逃逸被拦截（安全优先于"文件不存在"提示）
     result = _check_conflict("/nonexistent/file.py", "old_code", "/tmp")
     assert result is not None
-    assert "不存在" in result
+    assert "逃逸" in result
 
 
 def test_check_conflict_match():

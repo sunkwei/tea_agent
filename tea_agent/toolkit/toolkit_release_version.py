@@ -92,9 +92,9 @@ def toolkit_release_version(version: str, changes: list, changelog_section: str 
         if len(changes) > 0:
             commit_title += f" - {changes[0][:50]}"
 
-        commit_msg_parts = [f"'{commit_title}'"]
+        commit_msg_parts = ["-m", commit_title]
         for change in changes:
-            commit_msg_parts.append(f"-m '{change}'")
+            commit_msg_parts.extend(["-m", change])
 
         proc = subprocess.run(["git", "commit"] + commit_msg_parts, capture_output=True, text=True)
         if proc.returncode == 0:

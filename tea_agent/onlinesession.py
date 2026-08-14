@@ -490,8 +490,8 @@ class APIComponent(SessionComponent):
             kwargs["extra_body"] = extra_body
 
         if target_model in ("mimo-v2.5-pro", "mimo-v2.5", "mimo-v2.0"):
-            kwargs.pop("stream_options")
-            kwargs.pop("extra_body")
+            kwargs.pop("stream_options", None)
+            kwargs.pop("extra_body", None)
 
         stream = target_client.chat.completions.create(**kwargs)
         return stream
@@ -705,6 +705,11 @@ class ToolComponent(SessionComponent):
                 if nl != -1 and nl > tail_start - 256:
                     tail_start = nl + 1
             tail_text = raw[tail_start:].decode("utf-8", errors="replace")
+
+            # 防止 head/tail 窗口重叠（内容仅略大于 max_output 时）
+            if head_end > tail_start:
+                tail_start = head_end
+                tail_text = raw[tail_start:].decode("utf-8", errors="replace")
 
             result_str = f"{head_text}\n\n... [工具输出截断: {result_bytes}B → {len(head_text.encode('utf-8')) + len(tail_text.encode('utf-8'))}B] ...\n\n{tail_text}"
             logger.info(
@@ -1974,7 +1979,7 @@ class OnlineToolSession(BaseChatSession):
             else:
                 tool = ev.get("tool_name") or "未知工具"
                 iteration = ev.get("iteration", 0)
-                followup_max = min(int(icfg.get("partial_reply_max", 2000)), 300)
+                followup_max = max(int(icfg.get("partial_reply_max", 2000)), 0)
                 followup = (user_msg or "").strip()[:followup_max]
                 inject_text = self._INTERRUPT_CORRECTED_TMPL.format(
                     tool_name=tool, iteration=iteration, followup=followup

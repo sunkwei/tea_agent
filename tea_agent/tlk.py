@@ -600,12 +600,12 @@ class Toolkit:
             return (3, f"Function '{name}' not found in pycode")
 
         # 3. 版本管理
-        # 如果文件已存在，备份旧版本
+        # 如果文件已存在，备份旧版本到 .v<旧版本>.bak.py（供 rollback / list_versions 使用）
         if osp.exists(filename):
-            # 读取现有文件的版本号
             with open(filename, encoding="utf-8") as f:
                 old_content = f.read()
 
+            old_version = None
             # 自动提取版本号并递增
             if not version:
                 version_match = re.search(r'# version:\s*([\d.]+)', old_content)
@@ -618,8 +618,15 @@ class Toolkit:
                 else:
                     version = "1.0.0"
 
-            # 版本历史通过 git (内置) 或手动备份 (用户) 管理
-            pass
+            # 写版本备份文件（.v<旧版本>.bak.py）
+            if old_version:
+                backup_name = f"{name}.v{old_version}.bak.py"
+                backup_path = osp.join(toolkit_path, backup_name)
+                try:
+                    with open(backup_path, "w", encoding="utf-8") as bf:
+                        bf.write(old_content)
+                except OSError:
+                    logger.warning(f"写入版本备份失败: {backup_path}")
 
         # 如果没有提供版本号，使用默认的 "1.0.0"
         if not version:

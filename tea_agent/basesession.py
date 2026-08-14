@@ -28,7 +28,7 @@ def relaxed_json_loads(raw: str):
     s = re.sub(r"\bTrue\b", "true", s)
     s = re.sub(r"\bFalse\b", "false", s)
     s = re.sub(r"\bNone\b", "null", s)
-    s = re.sub(r"//[^\n]*", "", s)
+    s = re.sub(r"(?m)^\s*//[^\n]*", "", s)  # 仅剥离行首注释，避免截断字符串内 URL 的 //
     s = re.sub(r"/\*.*?\*/", "", s, flags=re.DOTALL)
     s = re.sub(r",\s*}", "}", s)
     s = re.sub(r",\s*]", "]", s)
@@ -38,7 +38,9 @@ def relaxed_json_loads(raw: str):
     except json.JSONDecodeError:
         pass
 
-    s = re.sub(r"\\([a-zA-Z])", r"\\\\\1", s)
+    # 仅对非 JSON 标准转义（\" \\ \/ \b \f \n \r \t \uXXXX）的反斜杠序列补转义，
+    # 避免把合法 \n \t 二次转义破坏内容
+    s = re.sub(r"\\([^\"\\/bfnrtu])", r"\\\\\1", s)
 
     try:
         return json.loads(s)
@@ -269,7 +271,9 @@ class BaseChatSession(ABC):
 
             status = assemble_fragments(
                 ctx,
-                names=["session_budget", "current_time"],  # token_budget 已禁用（上下文评估偏差）
+                # token_budget 已重新启用（2026-08-12，见 context_fragments.py），
+                # 此处按需选择片段；如需预算片段可加入 "token_budget"
+                names=["session_budget", "current_time"],
                 header="[运行状态 — 系统自动注入，供参考]",
             )
             if status:
@@ -404,6 +408,10 @@ class BaseChatSession(ABC):
                 nl = raw.rfind(b"\n", 0, tail_start)
                 if nl != -1 and nl > tail_start - 256:
                     tail_start = nl + 1
+
+        # 防止 head/tail 窗口重叠（内容仅略大于 max_chars 时，两侧换行搜索可能越界相交）
+        if head_end > tail_start:
+            tail_start = head_end
 
         tail_bytes = raw[tail_start:]
 

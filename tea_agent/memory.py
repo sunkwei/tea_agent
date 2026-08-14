@@ -167,9 +167,10 @@ class MemoryManager:
         selected.sort(key=lambda x: x[0], reverse=True)
         total_chars = sum(len(m["content"]) for _, m in selected)
         while total_chars > budget and len(selected) > 1:
-            score, m = selected.pop()  # 末尾 = 最低分
-            if score >= 1e8:  # CRITICAL 不剔除
+            score, m = selected[-1]  # 末尾 = 最低分
+            if score >= 1e8:  # CRITICAL 不剔除（先判断再弹出，避免误删）
                 break
+            selected.pop()
             total_chars -= len(m["content"])
 
         result = [m for _, m in selected]
@@ -192,7 +193,10 @@ class MemoryManager:
         else:
             relevance = keyword_relevance
 
-        importance = max(memory.get("importance", 3), 1) / 5.0
+        imp = memory.get("importance", 3)
+        if imp is None:  # 数据库 NULL 保护，避免 max(None, 1) TypeError
+            imp = 3
+        importance = max(imp, 1) / 5.0
         recency = self._compute_recency(memory)
         priority_factor = (4 - memory.get("priority", 2)) / 4.0
 
@@ -288,8 +292,8 @@ class MemoryManager:
         for m in memories:
             try:
                 self.storage.touch_memory(m["id"])
-            except Exception:
-                logger.exception('op_failed')
+            except Exception as e:
+                logger.exception(f"touch_memory #{m.get('id')} 失败: {e}")
 
 
     # ------------------------------------------------------------------
@@ -457,7 +461,12 @@ class MemoryManager:
             try:
                 # SQLite 时间戳兼容 ISO 和 SQLite 格式
                 if "T" in str(created):
-                    age = now - datetime.fromisoformat(str(created).replace("Z", "+00:00").split("+")[0].split(".")[0])
+                    # 统一转 naive datetime：先解析 aware，再剥离时区，
+                    # 避免 -05:00 等负偏移剥不掉导致 naive/aware TypeError
+                    dt = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+                    if dt.tzinfo is not None:
+                        dt = dt.replace(tzinfo=None)
+                    age = now - dt
                 else:
                     age = now - datetime.strptime(str(created), "%Y-%m-%d %H:%M:%S")
             except (ValueError, TypeError):
@@ -715,12 +724,12 @@ importance 评分：
         old_content = existing.get("content", "")
         new_content = new_item.get("content", "").strip()
 
-        # 内容合并：若新内容更长且不包含在旧内容中，拼接
+        # 内容合并：旧内容较短时拼接保留全部信息；否则保留更完整（更长）的一方
         if new_content and new_content not in old_content:
-            if len(new_content) > len(old_content):
-                merged_content = new_content
-            elif len(old_content) < 200 and len(new_content) > 10:
+            if len(old_content) < 200 and len(new_content) > 10:
                 merged_content = f"{old_content}；{new_content}"
+            elif len(new_content) > len(old_content):
+                merged_content = new_content
             else:
                 merged_content = old_content
         else:

@@ -58,7 +58,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             "文档", "说明", "readme", "changelog", "注释", "手册",
             "documentation", "docs", "docstring", "guide", "tutorial",
             "记录", "record", "总结", "summary", "撰写", "编写",
-            "toolkit_read_pyproject", "toolkit_kb",
+            "toolkit_publish_doc", "toolkit_kb",
         ],
         "devops": [
             "部署", "发布", "构建", "打包", "上线", "回滚",
@@ -108,7 +108,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             "2. 更新 README / CHANGELOG / 注释\n"
             "3. ❌ 不修改功能代码\n"
             "4. 输出：Markdown 文档，清晰、结构好\n"
-            "5. 优先使用：toolkit_file / toolkit_read_pyproject / toolkit_kb"
+            "5. 优先使用：toolkit_file / toolkit_kb / toolkit_publish_doc"
         ),
         "devops": (
             "🚀 当前处于【部署发布模式】。你的角色是 DevOps 工程师：\n"

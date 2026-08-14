@@ -107,14 +107,14 @@ class TestInjectInterruptionKnowledge:
         assert len(sess.context.messages) == 1  # 仅初始 system
         sess.close()
 
-    def test_followup_truncated_to_300(self):
+    def test_followup_respects_config(self):
         sess = self._make_session()
         sess._last_interruption = {"iteration": 1, "tool_name": "t", "partial_reply": "p"}
         ok = sess._inject_interruption_knowledge("长指令" * 200)
         assert ok is True
-        # 300 字符截断：恰好 100 个"长指令"，再多一个就不应出现
-        assert "长指令" * 100 in sess.context.messages[1]["content"]
-        assert "长指令" * 101 not in sess.context.messages[1]["content"]
+        # 修复 #4：followup 尊重 partial_reply_max 配置（默认 2000），
+        # 不再被 300 硬截断；600 字符应完整保留
+        assert "长指令" * 200 in sess.context.messages[1]["content"]
         sess.close()
 
     def test_reset_session_state_keeps_anchor(self):

@@ -131,8 +131,6 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
 
     # ── action: auto_extract ──
     elif action == "auto_extract":
-        topic_id = kwargs.get("topic_id", "")
-        force = kwargs.get("force", False)
         if not topic_id:
             return "❌ auto_extract 操作需要 topic_id 参数"
         try:
@@ -148,10 +146,8 @@ def toolkit_memory(action: str, content: str = "", category: str = "general", pr
 
     # ── action: semantic_search ──
     elif action == "semantic_search":
-        query = kwargs.get("query", "")
         if not query:
             return "❌ semantic_search 操作需要 query 参数"
-        top_k = kwargs.get("top_k", 10)
         try:
             from ..store._semantic_search import SemanticSearch
             searcher = SemanticSearch(storage)

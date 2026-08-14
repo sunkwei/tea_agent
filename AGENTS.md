@@ -20,8 +20,8 @@ pip install -e .                    # 可编辑安装
 python -m build                      # 构建分发包
 
 # ── 运行 ──
-tea_agent                            # 启动 GUI（默认入口）
-tea_agent-cli                        # 启动 CLI 模式
+tea_agent                            # 启动 Web/API 服务器（默认入口，等价 tea-agent-api）
+tea-agent-gui                        # 启动桌面 GUI
 tea-agent-api                        # 启动 API 服务器
 tea-agent-mini                       # 启动 Mini 版
 tea-agent-acp                        # 启动 ACP 协议
@@ -65,14 +65,14 @@ tea_agent/
 ├── providers.py           # LLM 提供商适配层
 ├── permission.py          # 工具权限管理
 │
-├── toolkit/               # ★ 工具注册中心（50+ 工具）
+├── toolkit/               # ★ 工具注册中心（70+ 工具）
 │   ├── __init__.py        # 自动扫描注册
 │   ├── toolkit_exec.py
 │   ├── toolkit_save.py
 │   ├── toolkit_save_file.py
 │   ├── toolkit_edit.py
 │   ├── toolkit_diff.py
-│   ├── ... (50+ 工具)
+│   ├── ... (70+ 工具)
 │
 ├── session/               # 会话管理子模块
 ├── store/                 # 存储层
@@ -104,7 +104,7 @@ tea_agent/
 │  Agent (统一入口)                        │
 │  ├─ mode='full'     → OnlineToolSession │  ← 完整能力：存储、后台、摘要
 │  ├─ mode='lite'     → LiteSession       │  ← 轻量：单轮、廉价模型、无状态
-│  └─ mode='lightweight' → 上下文管理器    │  ← 极简：无存储、无后台
+│  └─ mode='lightweight' → OnlineToolSession │  ← 极简：仅关闭存储/后台，无独立会话类
 ├─────────────────────────────────────────┤
 │  Sub-agent 系统                          │
 │  ├─ spawn/spawn_sync → 独立 LiteSession │  ← 隔离上下文、独立迭代
@@ -121,7 +121,7 @@ tea_agent/
 ### 关键约束
 
 1. **不得循环导入**：`agent.py` 不反向导入任何子模块；子模块只导入 `agent.py` 或同级模块
-2. **工具注册**：新工具必须放在 `tea_agent/toolkit/` 目录，以 `toolkit_` 前缀命名，通过 `toolkit_save` 注册或直接在 `__init__.py` 中注册
+2. **工具注册**：新工具必须放在 `tea_agent/toolkit/` 目录，以 `toolkit_` 前缀命名，通过 `toolkit_save` 注册（实际由 `tlk.py` 按 `toolkit_*.py` 扫描+exec 加载；`__init__.py` 为空文件，无需手工导入）
 3. **自进化边界**：后台自进化线程可优化工具代码、整理技能、调整提示词，但**不得修改用户对话历史**
 4. **GUI 线程安全**：所有 GUI 操作必须在主线程执行；后台线程用 `after()` 回发
 
@@ -188,12 +188,13 @@ toolkit_reload()
 
 ## 自进化规则
 
-### 五层安全护栏（toolkit_self_evolve）
+### 六级安全护栏（toolkit_self_evolve）
 
 | 层级 | 保护 | 描述 |
 |------|------|------|
 | L0 | git 快照 | 仅在工作区干净时自动创建 |
 | L1 | 时间戳 .bak | 每次修改备份，不覆盖历史 |
+| L1.5 | 语法严格检查 | ast.parse 严格语法校验 |
 | L2 | 编译验证 | 修改后 `compile()` 检查语法 |
 | L2.5 | LSP 检查 | 影响分析 + lint + 签名对比 |
 | L3 | 测试回滚 | 测试失败自动 `git reset --hard` |
@@ -265,7 +266,7 @@ A: 在 `tea_agent/toolkit/` 创建 `toolkit_xxx.py`，实现函数后用 `toolki
 A: 每小时自动：工具使用率分析 & 优化建议 → `docs/TOOLS.md` 同步 → 技能模式整理 → 跨主题记忆提取。
 
 **Q: 如何调试 GUI？**
-A: 运行 `python -m tea_agent.gui --debug`，GUI 超时检测用 `toolkit_test_gui`。
+A: 运行 `python -m tea_agent.gui --debug`。
 
 **Q: 三种 Agent 模式怎么选？**
 A: `lightweight` 用于孤立任务；`full` 用于完整交互会话；`lite` 用于子 Agent 内部调用。

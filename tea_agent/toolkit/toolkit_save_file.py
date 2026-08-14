@@ -20,6 +20,9 @@ def toolkit_save_file(path=None, content=None, chunks=None, append=False, encodi
             assembled = base64.b64decode(assembled).decode(encoding)
 
         target = pathlib.Path(path)
+        # 安全：拒绝路径遍历（.. 目录跳转）；绝对路径仍允许（文档导出等场景）
+        if any(part == ".." for part in target.parts):
+            return {"status": "error", "error": f"路径逃逸被拒绝: {path!r}（不允许 .. 目录跳转）"}
         target.parent.mkdir(parents=True, exist_ok=True)
 
         if target.exists() and not append:

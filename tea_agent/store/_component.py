@@ -97,13 +97,26 @@ class StoreComponent:
 
     @property
     def conn(self):
-        """Thread-local connection. Returns same connection within a thread."""
-        if not hasattr(self._thread_local, 'conn') or self._thread_local.conn is None:
+        """Thread-local connection. Returns same connection within a thread.
+
+        校验 db_path：不同 Storage 实例（不同数据库文件）在同一线程内
+        切换时重建连接，避免复用指向旧数据库的连接（会丢 schema / 串库）。
+        """
+        tl = self._thread_local
+        cur = getattr(tl, "conn", None)
+        cur_path = getattr(tl, "conn_db_path", None)
+        if cur is None or cur_path != self.db_path:
+            if cur is not None:
+                try:
+                    cur.close()
+                except Exception:
+                    pass
             c = sqlite3.connect(self.db_path)
             c.row_factory = sqlite3.Row
             c.execute("PRAGMA journal_mode=WAL")
-            self._thread_local.conn = c
-        return self._thread_local.conn
+            tl.conn = c
+            tl.conn_db_path = self.db_path
+        return tl.conn
 
     @classmethod
     def close_thread_conn(cls):
@@ -116,6 +129,7 @@ class StoreComponent:
             except Exception:
                 pass
             cls._thread_local.conn = None
+            cls._thread_local.conn_db_path = None
 
     @contextmanager
     def _db(self):

@@ -131,14 +131,26 @@ elif content:
 
 **修复文件**：`tea_agent/onlinesession.py` - `_execute_tool_loop` 方法中的 `elif content:` 分支
 
-### 诊断工具
+### 诊断方法
 
-可使用 `toolkit_diag_reasoning` 诊断消息列表中的 RC 问题：
+可用 `toolkit_exec` 运行一段临时 Python 脚本诊断消息列表中的 RC 问题（`toolkit_diag_reasoning` 工具不存在，勿调用）：
 
 ```python
-from toolkit_diag_reasoning import toolkit_diag_reasoning
-report = toolkit_diag_reasoning(json.dumps(messages))
-print(report)
+import json
+
+def diag_reasoning(messages: list[dict]) -> list[str]:
+    """检测相邻重复 assistant 消息 / tool_calls 缺失 reasoning_content。"""
+    issues = []
+    for i in range(1, len(messages)):
+        if messages[i].get("role") == "assistant" and messages[i-1].get("role") == "assistant":
+            if messages[i].get("content") == messages[i-1].get("content"):
+                issues.append(f"相邻重复 assistant 消息 @ {i}")
+        tc = messages[i].get("tool_calls")
+        if tc and messages[i].get("reasoning_content") is None:
+            issues.append(f"tool_calls 消息缺失 reasoning_content @ {i}")
+    return issues
+
+print(json.dumps(diag_reasoning(messages), ensure_ascii=False, indent=2))
 ```
 
 该工具会检测：

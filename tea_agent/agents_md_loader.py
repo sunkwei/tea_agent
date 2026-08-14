@@ -13,8 +13,8 @@ AGENTS.md 分层指令加载器 — 借鉴 OpenAI Codex agents_md.rs
     from tea_agent.agents_md_loader import load_agents_md, find_project_root
 
     loaded = load_agents_md(cwd=".", max_bytes=16*1024)
-    text = loaded["text"]          # 拼接后的文本
-    sources = loaded["sources"]    # 来源文件列表
+    text = loaded.text          # 拼接后的文本（LoadedAgentsMd.text 属性）
+    sources = loaded.sources    # 来源文件列表（LoadedAgentsMd.sources 属性）
 """
 
 from __future__ import annotations
@@ -177,21 +177,26 @@ def load_agents_md(
         if not content:
             continue
         # 带来源标记，便于模型理解指令层级
-        label = os.path.relpath(path, os.getcwd()) if os.path.commonpath(
-            [path, os.getcwd()]
-        ) else path
+        # 相对路径标签；跨盘（Windows）时 os.path.relpath 抛 ValueError，回退为原始路径
+        try:
+            label = os.path.relpath(path, os.getcwd())
+        except ValueError:
+            label = path
         block = f"### [{label}]\n{content}"
-        if max_bytes > 0 and total + len(block) > max_bytes:
-            # 截断当前块（保留头部）
+        # 预算按 UTF-8 字节计数（中文 1 字 3 字节，len() 字符数会低估 ~3x）
+        block_bytes = len(block.encode("utf-8"))
+        if max_bytes > 0 and total + block_bytes > max_bytes:
+            # 截断当前块（保留头部，UTF-8 安全切字节）
             remaining = max_bytes - total
             if remaining > 100:
-                parts.append(block[:remaining] + "\n... [已截断: 超出字节预算]")
-                total += remaining
+                truncated_block = block.encode("utf-8")[:remaining].decode("utf-8", errors="ignore")
+                parts.append(truncated_block + "\n... [已截断: 超出字节预算]")
+                total += len(truncated_block.encode("utf-8"))
                 truncated = True
                 used_sources.append(path)
             break
         parts.append(block)
-        total += len(block)
+        total += block_bytes
         used_sources.append(path)
 
     text = "\n\n".join(parts)

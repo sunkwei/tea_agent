@@ -268,14 +268,18 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
     3. 主循环以 1s 间隔轮询：进程结束 → 返回；监控器 idle 超时 → 杀进程
     4. 硬保护：最多等待 timeout × 4 秒
     """
-    process = subprocess.Popen(
-        [app] + list(args),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True, encoding="utf-8", errors="replace",
-        start_new_session=True,
-        env=_build_scrubbed_env(),
-    )
+    try:
+        process = subprocess.Popen(
+            [app] + list(args),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True, encoding="utf-8", errors="replace",
+            start_new_session=True,
+            env=_build_scrubbed_env(),
+        )
+    except (FileNotFoundError, PermissionError, OSError) as e:
+        # 命令不存在/无权限等启动失败：返回结构化错误而非抛出（与批量分支一致）
+        return 127, f"命令启动失败: {app}\n{str(e)}", ""
 
     monitor = _ProcessMonitor(process.pid, base_timeout=timeout)
     monitor.start()

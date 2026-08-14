@@ -6,9 +6,22 @@ Agent 后处理流水线模块 — 语义摘要、主题摘要、工具链摘要
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
 logger = logging.getLogger("agent.pipeline")
+
+# 保护 agent._pending_cheap_tokens 的并发合并（多个后台摘要线程可能同时写）
+_pending_tokens_lock = threading.Lock()
+
+
+def _merge_pending_tokens(agent: Any, usage: dict[str, int]) -> None:
+    """加锁合并 token 计数到 agent._pending_cheap_tokens，避免并发覆盖丢失。"""
+    with _pending_tokens_lock:
+        cur = getattr(agent, "_pending_cheap_tokens", None) or {}
+        merged = dict(cur)
+        _merge_usage(merged, usage)
+        agent._pending_cheap_tokens = merged
 
 
 def _empty_usage() -> dict[str, int]:
@@ -40,7 +53,7 @@ def do_async_summaries(
         logger.warning(f"异步摘要失败: {e}")
     finally:
         if pending.get("total_tokens", 0) > 0:
-            agent._pending_cheap_tokens = pending
+            _merge_pending_tokens(agent, pending)
 
 
 def l2_to_l3_summary(
@@ -120,7 +133,7 @@ def auto_summary(
     if not _HAVE_GUI_TOPIC_SUMMARY:
         return None, _empty_usage()
     tp = agent._db.get_topic(topic_id)
-    if tp and (tp.get("title") or "").startswith("‛"):
+    if tp and (tp.get("title") or "").startswith("※"):
         return None, _empty_usage()
     recent = agent._db.get_recent_conversations(topic_id, limit=3)
     if not recent:

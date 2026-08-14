@@ -426,18 +426,20 @@ def assemble_fragments(
     # 按 weight 排序
     fragments.sort(key=lambda f: f.weight)
 
-    # 组装 + 字节预算
+    # 组装 + 字节预算（按 UTF-8 字节计数，中文 1 字 3 字节）
     parts: list[str] = []
     total = 0
     for frag in fragments:
         rendered = frag.render()
         if not rendered:
             continue
-        if total + len(rendered) > max_chars:
+        rendered_bytes = len(rendered.encode("utf-8"))
+        if total + rendered_bytes > max_chars:
+            # 跳过超预算的单个片段，但继续尝试更低权重片段（不整体截断）
             logger.debug(f"片段预算耗尽，跳过 {frag.name}")
-            break
+            continue
         parts.append(rendered)
-        total += len(rendered)
+        total += rendered_bytes
 
     if not parts:
         return ""

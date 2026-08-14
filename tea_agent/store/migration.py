@@ -285,7 +285,8 @@ def migrate(db):
     c = db.cursor()
     migrate_int_to_uuid(c)
 
-    for col in ["rounds_json TEXT", "is_summarized INTEGER DEFAULT 0"]:
+    for col in ["rounds_json TEXT", "is_summarized INTEGER DEFAULT 0",
+                "memory_extracted INTEGER DEFAULT 0"]:
         try:
             c.execute(f"ALTER TABLE conversations ADD COLUMN {col}")
             c.connection.commit()

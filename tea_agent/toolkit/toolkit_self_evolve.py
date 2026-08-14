@@ -31,7 +31,10 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     from datetime import datetime
 
     cwd = os.getcwd()
-    full_path = os.path.join(cwd, file_path)
+    full_path = os.path.abspath(os.path.join(cwd, file_path))
+    # 安全：拒绝路径逃逸（.. 跳转 / 外部绝对路径），修改必须位于项目目录内
+    if not full_path.startswith(os.path.abspath(cwd) + os.sep):
+        return {"ok": False, "error": f"路径逃逸被拒绝: {file_path!r}（必须位于项目目录内）"}
 
     if not os.path.exists(full_path):
         return {"ok": False, "error": f"文件不存在: {file_path}"}
@@ -77,8 +80,16 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
     def _run_tests():
         """运行测试，返回 (passed, total, failures)"""
         try:
+            # glob 显式展开测试文件（subprocess 无 shell，`test_*.py` 不展开）
+            import glob as _glob
+            test_files = sorted(set(
+                _glob.glob("test_*.py") + _glob.glob("tea_agent/tests/test_*.py")
+            ))
+            test_files = [t for t in test_files if os.path.exists(t)]
+            if not test_files:
+                return -1, 0, "no tests found"
             r = subprocess.run(
-                [os.sys.executable, "-m", "pytest", "tea_agent/tests/test_*.py", "--tb=short", "-q"],
+                [os.sys.executable, "-m", "pytest", *test_files, "--tb=short", "-q"],
                 capture_output=True, text=True, timeout=120, cwd=cwd
             )
             output = r.stdout + r.stderr
@@ -89,8 +100,11 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
             passed = int(m.group(1)) if m else 0
             m = re.search(r'(\d+)\s+failed', output)
             failed = int(m.group(1)) if m else 0
-            total = passed + failed
-            return passed, total, output[-500:] if failed > 0 else None
+            # pytest 的 errors（集内/夹具设置错误）也要计入 total，避免 0/0 误判通过
+            m = re.search(r'(\d+)\s+errors', output)
+            errors = int(m.group(1)) if m else 0
+            total = passed + failed + errors
+            return passed, total, output[-500:] if (failed > 0 or errors > 0) else None
         except subprocess.TimeoutExpired:
             return 0, 0, "test timeout (>120s)"
         except Exception as e:
@@ -114,7 +128,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                                             "risk": imp.get("risk", "unknown"),
                                             "hint": imp.get("hint", "")}
                 except Exception:
-                    logger.exception('op_failed')
+                    logger.exception("LSP 检查失败")
 
 
             # 2. Ruff lint: before
@@ -129,12 +143,12 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                     import json
                     result["lint_before"] = len(json.loads(r.stdout))
             except Exception:
-                logger.exception('op_failed')
+                logger.exception("LSP 检查失败")
 
             finally:
                 try: os.unlink(tmp_b)
                 except Exception:
-                    logger.exception('op_failed')
+                    logger.exception("LSP 检查失败")
 
             # 3. Ruff lint: after
             try:
@@ -148,12 +162,12 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                     result["lint_after"] = len(json.loads(r.stdout))
                 result["lint_new"] = max(0, result["lint_after"] - result["lint_before"])
             except Exception:
-                logger.exception('op_failed')
+                logger.exception("LSP 检查失败")
 
             finally:
                 try: os.unlink(tmp_a)
                 except Exception:
-                    logger.exception('op_failed')
+                    logger.exception("LSP 检查失败")
 
             # 4. 签名对比
             if symbol:
@@ -167,7 +181,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
                     if result["old_sig"] and result["new_sig"] and result["old_sig"] != result["new_sig"]:
                         result["sig_changed"] = True
                 except Exception:
-                    logger.exception('op_failed')
+                    logger.exception("LSP 检查失败")
 
 
             # 5. 语义诊断（jedi）

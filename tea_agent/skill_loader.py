@@ -178,7 +178,7 @@ SKILL_DOMAINS: dict[str, SkillDomain] = {
     "write-better-commits": SkillDomain(
         strong_keywords=["提交信息优化", "commit message", "规范提交", "写提交信息"],
         weak_keywords=["提交", "commit", "git 提交", "changelog"],
-        covered_by=["toolkit_git_commit", "toolkit_git_branch_manager"],
+        covered_by=["toolkit_git_commit", "toolkit_git_push_all_remotes"],
     ),
     "writing-style": SkillDomain(
         strong_keywords=["写作风格", "语气调整", "风格模板", "文风", "文章风格"],
@@ -400,9 +400,7 @@ class SkillLoadEvaluator:
             logger.info(f"🎯 按需加载 skill: {dec.name} "
                         f"(necessity={dec.necessity:.0%}, sufficiency={dec.sufficiency:.0%})")
 
-        if loaded and not getattr(context, "_skill_loaded", None):
-            context._skill_loaded = loaded
-        elif loaded:
+        if loaded:
             context._skill_loaded = loaded
 
         return "\n\n".join(parts) if parts else None

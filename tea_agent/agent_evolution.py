@@ -182,15 +182,15 @@ class EvolutionActor:
         if not self.tk or "toolkit_self_evolve" not in self.tk.func_map:
             return {"ok": False, "error": "toolkit_self_evolve 不可用"}
         try:
-            content = self.tk.call_tool("toolkit_file", file_path=file_path)
+            content = self.tk.call_tool("toolkit_file", action="read", filename=file_path)
         except Exception:
             content = ""
-        return self.tk.call_tool("toolkit_self_evolve",
-            file_path=file_path,
-            description=reason,
-            old_code=content if isinstance(content, str) else "",
-            new_code="<!-- evolution: 等待 LLM 在下轮修复 -->",
-        )
+        if not isinstance(content, str) or not content.strip():
+            return {"ok": False, "error": f"读取文件失败或内容为空: {file_path}"}
+        if content.startswith("Error:") or content.startswith("❌"):
+            return {"ok": False, "error": f"读取文件失败: {content[:200]}"}
+        # 缺少 LLM 生成的新代码时，不得提交占位符（HTML 注释非合法 Python）
+        return {"ok": False, "error": "evolve_code 需要 LLM 生成 new_code，当前无有效新代码，已跳过"}
 
     def _evolve_prompt(self, suggestion: str) -> dict:
         """优化提示词 — 委托给 toolkit_prompt_evolve。"""
@@ -198,7 +198,6 @@ class EvolutionActor:
             return {"ok": False, "error": "toolkit_prompt_evolve 不可用"}
         return self.tk.call_tool("toolkit_prompt_evolve",
             action="evolve",
-            suggestion=suggestion,
         )
 
     def _solidify(self, task: str) -> dict:

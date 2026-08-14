@@ -15,6 +15,7 @@ toolkit_diff — Diff-first 代码编辑引擎
   - 冲突检测：apply 前验证 old_code 是否仍匹配
 """
 
+import glob
 import json
 import logging
 import os
@@ -77,13 +78,21 @@ def _generate_diff_stats(diff_text: str) -> dict:
 
 # ── Git Stash 集成 ──────────────────────────────────────
 
-def _git_stash_push(cwd: str) -> tuple[bool, str]:
-    """保存当前工作区到 stash，返回 (ok, stash_ref)"""
+def _git_stash_push(cwd: str, files: list[str] | None = None) -> tuple[bool, str]:
+    """暂存本次编辑的文件到 stash，返回 (ok, stash_ref)。
+
+    只暂存 files 指定的文件，避免把用户其他未提交改动一并压栈；
+    无改动时返回 (False, "no changes")，不创建 stash（干净工作区不误报）。
+    """
     try:
-        r = subprocess.run(["git", "stash", "push", "-m", "toolkit_diff auto-save"],
-                           capture_output=True, text=True, timeout=15, cwd=cwd)
-        ok = r.returncode == 0 and "No local changes" not in r.stdout
-        return True, r.stdout.strip() if ok else "no changes"
+        cmd = ["git", "stash", "push", "-m", "toolkit_diff auto-save"]
+        if files:
+            cmd.append("--")
+            cmd.extend(files)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=15, cwd=cwd)
+        if r.returncode != 0 or "No local changes" in r.stdout:
+            return False, "no changes"
+        return True, r.stdout.strip()
     except Exception as e:
         return False, str(e)
 
@@ -105,9 +114,21 @@ def _git_stash_drop(cwd: str) -> bool:
 
 # ── 冲突检测 ────────────────────────────────────────────
 
+def _resolve_within(cwd: str, file_path: str) -> str:
+    """将 file_path 安全解析为 cwd 内的绝对路径；拒绝 `..` 逃逸与外部绝对路径。"""
+    full = os.path.abspath(os.path.join(cwd, file_path))
+    cwd_abs = os.path.abspath(cwd)
+    if full == cwd_abs or not full.startswith(cwd_abs + os.sep):
+        raise ValueError(f"路径逃逸被拒绝: {file_path!r}（必须位于 {cwd_abs} 内）")
+    return full
+
+
 def _check_conflict(file_path: str, old_code: str, cwd: str) -> str | None:
     """检查 old_code 是否仍存在于文件。返回 None=无冲突, 否则返回错误信息"""
-    full = os.path.join(cwd, file_path)
+    try:
+        full = _resolve_within(cwd, file_path)
+    except ValueError as e:
+        return str(e)
     if not os.path.exists(full):
         return f"文件不存在: {file_path}"
     with open(full, encoding="utf-8", errors="replace") as f:
@@ -158,17 +179,23 @@ def _verify_all(files: list[str], cwd: str, run_tests: bool = True) -> dict:
             except Exception:
                 results["semantic"][fp] = {"ok": True, "issues": [], "hint": "skipped"}
 
-    # pytest    if run_tests:
+    # 可选测试（run_tests=False 时跳过；glob 显式展开避免无 shell 时不匹配）
+    if run_tests:
         try:
-            r = subprocess.run(
-                [os.sys.executable, "-m", "pytest", "test_*.py", "-q", "--tb=short"],
-                capture_output=True, text=True, timeout=60, cwd=cwd,
-            )
-            output = r.stdout + r.stderr
-            results["test"] = {
-                "returncode": r.returncode,
-                "output": output[-500:],
-            }
+            test_files = sorted(set(glob.glob("test_*.py") + glob.glob("tea_agent/tests/test_*.py")))
+            test_files = [t for t in test_files if os.path.exists(t)]
+            if test_files:
+                r = subprocess.run(
+                    [os.sys.executable, "-m", "pytest", *test_files, "-q", "--tb=short"],
+                    capture_output=True, text=True, timeout=60, cwd=cwd,
+                )
+                output = r.stdout + r.stderr
+                results["test"] = {
+                    "returncode": r.returncode,
+                    "output": output[-500:],
+                }
+            else:
+                results["test"] = {"returncode": 0, "output": "no tests found"}
         except subprocess.TimeoutExpired:
             results["test"] = {"returncode": -1, "output": "timeout (>60s)"}
         except Exception as e:
@@ -187,7 +214,10 @@ def _apply_one(file_path: str, old_code: str, new_code: str, cwd: str, descripti
     """应用单个修改，返回 {ok, file, error, bak_path}"""
     import shutil
 
-    full = os.path.join(cwd, file_path)
+    try:
+        full = _resolve_within(cwd, file_path)
+    except ValueError as e:
+        return {"ok": False, "file": file_path, "error": str(e)}
 
     # 冲突检测
     conflict = _check_conflict(file_path, old_code, cwd)
@@ -301,8 +331,9 @@ def toolkit_diff(
                 if conflict:
                     return {"ok": False, "error": f"pre-check 失败: {conflict}", "phase": "conflict_check"}
 
-            # Step 1: git stash
-            stashed, stash_msg = _git_stash_push(cwd)
+            # Step 1: 不 git stash（避免卷入/丢弃用户未提交改动）；
+            #         备份由 _apply_one 的 .bak.<ts> 完成，undo 用备份恢复
+            stashed = False
             stash_applied = False
             try:
                 # Step 2: 逐个应用
@@ -352,16 +383,14 @@ def toolkit_diff(
                         "results": results,
                     }
 
-                # Step 4: 成功，丢弃 stash
-                if stashed:
-                    _git_stash_drop(cwd)
-
+                # Step 4: 成功 — 无 stash 操作，.bak.<ts> 备份保留供 undo
                 return {
                     "ok": True,
                     "files_modified": len(results),
                     "results": results,
                     "verify": verify,
-                    "stashed": stashed,
+                    "stashed": False,
+                    "stash_msg": "backup-based (no git stash)",
                 }
 
             except Exception as e:
@@ -370,6 +399,28 @@ def toolkit_diff(
                 return {"ok": False, "error": str(e)[:300], "phase": "exception"}
 
         elif action == "undo":
+            if files:
+                # 从 .bak.<ts> 备份恢复（apply 已不使用 git stash）
+                import shutil
+                restored, errors = [], []
+                for f in files:
+                    fp = f.get("file_path") if isinstance(f, dict) else f
+                    if not fp:
+                        continue
+                    try:
+                        full = _resolve_within(cwd, fp)
+                    except ValueError as e:
+                        errors.append(str(e))
+                        continue
+                    baks = sorted(glob.glob(full + ".bak.*"), reverse=True)
+                    if baks:
+                        shutil.copy2(baks[0], full)
+                        restored.append(fp)
+                    else:
+                        errors.append(f"无备份可恢复: {fp}")
+                return {"ok": len(errors) == 0, "restored": restored,
+                        "errors": errors,
+                        "hint": f"已恢复 {len(restored)} 个文件" if restored else "无备份可恢复"}
             ok, msg = _git_stash_pop(cwd)
             return {"ok": ok, "message": msg, "hint": "git stash pop 完成" if ok else "stash 恢复失败"}
 
@@ -412,10 +463,10 @@ TOOL_CATEGORIES = {
         "toolkit_sudo_gui", "toolkit_input", "toolkit_clipboard",
     ],
     "包管理": [
-        "toolkit_pkg", "toolkit_build", "toolkit_read_pyproject",
+        "toolkit_pkg", "toolkit_build",
     ],
     "测试": [
-        "toolkit_run_tests", "toolkit_test_gui",
+        "toolkit_run_tests",
     ],
     "记忆与知识": [
         "toolkit_memory", "toolkit_kb", "toolkit_reflection",
@@ -431,7 +482,6 @@ TOOL_CATEGORIES = {
     ],
     "Git版本控制": [
         "toolkit_git_commit", "toolkit_git_push_all_remotes",
-        "toolkit_git_branch_manager",
     ],
     "Web与网络": [
         "toolkit_browser_tab", "toolkit_js_fetch", "toolkit_mcp",

@@ -137,16 +137,21 @@ class ReflectionManager:
         if len(self._pending_traces) >= 3:
             return True
 
-        # 距离上次反思超过 10 条对话
+        # 距离上次反思超过 1 小时才再次触发
+        # （原"超过10条对话"依赖不存在的 get_conversation_count API，已改为时间间隔）
         try:
-            last_reflections = self.storage.get_reflections(limit=1)
+            last_reflections = self.storage.get_recent_reflections(limit=1)
             if last_reflections:
-                last_conv_count = last_reflections[0].get("conversation_count", 0)
-                current_count = self.storage.get_conversation_count()
-                if current_count - last_conv_count >= 10:
-                    return True
-        except Exception:
-            logger.exception('op_failed')
+                last_time = last_reflections[0].get("created_at", "")
+                if last_time:
+                    import datetime as _dt
+                    last_dt = _dt.datetime.fromisoformat(str(last_time).replace("Z", "+00:00"))
+                    if last_dt.tzinfo is not None:
+                        last_dt = last_dt.replace(tzinfo=None)
+                    if (_dt.datetime.now() - last_dt).total_seconds() < 3600:
+                        return False
+        except Exception as e:
+            logger.warning(f"反思时间检查失败: {e}")
 
 
         return False

@@ -232,13 +232,13 @@ class Agent:
 
         # 根据 use_cheap_model 选择模型
         if self._use_cheap_model and cheap_m.api_key:
-            model_key = cast(str, cheap_m.api_key)
-            model_url = cast(str, cheap_m.api_url)
+            api_key = cast(str, cheap_m.api_key)
+            api_url = cast(str, cheap_m.api_url)
             model_name = cast(str, cheap_m.model_name)
             logger.info(f"Lite 模式使用便宜模型: {model_name}")
         else:
-            model_key = cast(str, main_m.api_key)
-            model_url = cast(str, main_m.api_url)
+            api_key = cast(str, main_m.api_key)
+            api_url = cast(str, main_m.api_url)
             model_name = cast(str, main_m.model_name)
 
         _options = getattr(main_m, "options", {}) or {}
@@ -250,8 +250,8 @@ class Agent:
 
         return LiteSession(
             toolkit=self._toolkit,
-            api_key=model_key,
-            api_url=model_url,
+            api_key=api_key,
+            api_url=api_url,
             model=model_name,
             enable_thinking=self._enable_thinking or cfg.enable_thinking,
             thinking_strength=cfg.thinking_strength,
@@ -387,7 +387,10 @@ class Agent:
         """chat 的内部实现（lightweight/full 模式）。"""
 
         def stream_cb(text: str):
-            if text.startswith("[THINK]"):
+            # 先精确匹配 [THINK_DONE] 刷新标记，避免被 [THINK] 前缀误判为思考文本
+            if text == "[THINK_DONE]":
+                self._notify({"type": "think_done"})
+            elif text.startswith("[THINK]"):
                 self._notify({"type": "thinking", "text": text[7:]})
             else:
                 self._notify({"type": "token", "text": text})
@@ -396,7 +399,8 @@ class Agent:
             if status_msg.startswith("!MAX_ITER:"):
                 self._sess._continue_after_max = True
                 extra = getattr(self._sess.context, "extra_iterations_on_continue", 10)
-                self._sess._extra_iterations += extra
+                # 注意：_extra_iterations 累加由 tool_loop_runner 负责（唯一累加点），
+                # 此处只通知，避免同一次续命被双倍累加
                 self._sess._max_iter_wait.set()
                 self._notify(
                     {"type": "status", "text": f"已达最大轮次，自动续命 {extra} 轮..."}
@@ -883,6 +887,11 @@ class Agent:
     def close(self) -> None:
         """安全关闭 Agent，释放资源。"""
         _sref.clear()
+        if self._sess is not None:
+            try:
+                self._sess.close()
+            except Exception as e:
+                logger.warning(f"关闭会话资源失败: {e}")
         self._sess = None
         self._toolkit = None
         self._db = None

@@ -52,7 +52,7 @@ class LiteSession:
 
     def _default_system_prompt(self) -> str:
         """默认系统提示词。"""
-        return """你是可自我扩展的智能Agent。拥有工具库toolkit，可通过toolkit_save(name,meta,pycode)保存新工具、toolkit_reload()重载获得新能力。内置工具：toolkit_exec(执行命令)、toolkit_load_file(读文件)、toolkit_save_file(写文件)。
+        return """你是可自我扩展的智能Agent。拥有工具库toolkit，可通过toolkit_save(name,meta,pycode)保存新工具、toolkit_reload()重载获得新能力。内置工具：toolkit_exec(执行命令)、toolkit_file(读写文件)、toolkit_save_file(写文件)。
 
 核心行为：主动分析任务需求，自主创建/优化/组合工具。工具须为纯Python、可执行、有明确输入输出、通用可复用。可自由设计单函数/多函数/工具套件等结构。
 
@@ -160,9 +160,21 @@ class LiteSession:
             state: 对话状态（会被修改）
             callback: 回调函数
         """
-        while state["iterations"] < self.max_iterations:
+        while True:
             # 中断检查
             if self.interrupted:
+                break
+
+            # 已达工具轮上限：再执行一次模型回合（最终总结文本）后结束，
+            # 避免回复停在上一个工具结果
+            if state["iterations"] >= self.max_iterations:
+                response = self._call_api(messages)
+                content, tool_calls_data, reasoning = self._process_response(
+                    response, callback
+                )
+                state["full_reply"] += content
+                if reasoning:
+                    state["thinking_content"] += reasoning
                 break
 
             # 调用 API
@@ -191,7 +203,6 @@ class LiteSession:
                 continue
             else:
                 # 无工具调用，对话结束
-                state["iterations"] += 1
                 break
 
     def _handle_tool_calls(
@@ -222,6 +233,16 @@ class LiteSession:
                 "tool_call_id": call_id,
                 "content": result_str,
             })
+
+        # 立即排空本会话注入的 additionalContexts 并作为 user 消息消费，
+        # 避免泄漏到全局 tool_hooks 单例、污染下一个会话的工具循环
+        extra_ctxs = tool_hooks.drain_contexts()
+        for ctx in extra_ctxs:
+            ctx_text = ctx.get("text") if isinstance(ctx, dict) else None
+            if not ctx_text:
+                ctx_text = ctx.get("content") if isinstance(ctx, dict) else None
+            ctx_text = ctx_text or str(ctx)
+            messages.append({"role": "user", "content": f"[附加上下文]\n{ctx_text}"})
 
     def _build_assistant_message(
         self,

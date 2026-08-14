@@ -9,11 +9,14 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
+
+logger = logging.getLogger("tea_agent.config")
 
 try:
     import yaml
@@ -442,7 +445,9 @@ def load_config(config_path: str | None = None) -> AgentConfig:
                 # 解析交互控制参数
                 _parse_control_params(cfg, data)
         except Exception:
-            pass  # 加载失败时使用默认空配置
+            # 单字段坏值不应静默丢弃整个配置：记录日志，保留已解析的部分
+            import traceback
+            logger.warning(f"配置文件解析部分失败，已回退默认值: {yaml_path}\n{traceback.format_exc(limit=2)}")
 
     # 步骤4: 更新全局缓存
     _update_config_cache(cfg, yaml_path)
@@ -461,13 +466,14 @@ def resolve_config_path(config_path: str | None = None) -> str | None:
     Returns:
         实际使用的配置文件路径，找不到返回 None
     """
-    global _last_config_path
+    global _last_config_path, _active_config_path
 
     with _config_lock:
         if config_path is None:
-            config_path = _last_config_path
+            config_path = _last_config_path or _active_config_path
         else:
             _last_config_path = config_path
+            _active_config_path = config_path
 
     if config_path:
         return config_path
@@ -676,7 +682,11 @@ def _update_config_cache(cfg: AgentConfig, yaml_path: str | None) -> None:
     with _config_lock:
         _config_cache = cfg
         if yaml_path:
-            _active_config_path = os.path.abspath(yaml_path)
+            src = os.path.abspath(yaml_path)
+            _active_config_path = src
+            _last_config_path = src
+            # 记录配置来源，供 get_config 检测路径切换并自动重载
+            cfg._config_source = src
 
 
 def ensure_config_dir() -> Path:
@@ -794,7 +804,7 @@ def _prepare_model_data(cfg: AgentConfig, data: dict) -> None:
             }
             if target.temperature != 0.7:
                 m_data["temperature"] = target.temperature
-            if target.max_tokens != 4096:
+            if target.max_tokens != 131072:  # 与 dataclass 默认一致，避免模板 4096 被写漏
                 m_data["max_tokens"] = target.max_tokens
             if target.top_p != 0.9:
                 m_data["top_p"] = target.top_p
@@ -1058,8 +1068,15 @@ def get_config(reload: bool = False) -> AgentConfig:
     Returns:
         AgentConfig 实例
     """
-    global _config_cache, _last_config_path
+    global _config_cache, _last_config_path, _active_config_path
     with _config_lock:
-        if _config_cache is None or reload:
+        current = _last_config_path or _active_config_path
+        cached_src = (
+            getattr(_config_cache, "_config_source", None) if _config_cache else None
+        )
+        path_changed = bool(
+            current and cached_src and os.path.abspath(current) != os.path.abspath(cached_src)
+        )
+        if _config_cache is None or reload or path_changed:
             _config_cache = load_config()
         return _config_cache

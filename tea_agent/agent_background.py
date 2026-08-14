@@ -251,7 +251,7 @@ def start_interruption_analyzer(
                 icfg = _get_icfg()
                 analyze_interruptions(
                     days=7,
-                    min_count=_INTERRUPT_ANALYZE_MIN_COUNT,
+                    min_count=int(icfg.get("min_count", _INTERRUPT_ANALYZE_MIN_COUNT)),
                     skill_min_count=int(icfg.get("skill_min_count", _INTERRUPT_SKILL_MIN_COUNT)),
                 )
             except Exception:
@@ -296,4 +296,3 @@ def stop_interruption_analyzer(thread: threading.Thread | None, timeout: float =
     except Exception:
         logger.exception("stop_interruption_analyzer failed")
         return False
-        return None

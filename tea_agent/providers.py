@@ -214,8 +214,9 @@ def switch_provider(config_path: str, provider_name: str, api_key: str,
     cfg.main_model.api_key = api_key
     cfg.main_model.api_url = provider["api_url"]
     cfg.main_model.model_name = model or provider["default_model"]
-    cfg.main_model.options["supports_vision"] = str(provider.get("supports_vision", False)).lower()
-    cfg.main_model.options["supports_reasoning"] = str(provider.get("supports_thinking", False)).lower()
+    # 写真布尔值，避免 "false" 字符串在 supports_vision 判定里恒真
+    cfg.main_model.options["supports_vision"] = bool(provider.get("supports_vision", False))
+    cfg.main_model.options["supports_reasoning"] = bool(provider.get("supports_thinking", False))
 
     if cheap_provider:
         cp = get_provider(cheap_provider)
@@ -223,8 +224,8 @@ def switch_provider(config_path: str, provider_name: str, api_key: str,
             cfg.cheap_model.api_key = cheap_api_key or api_key
             cfg.cheap_model.api_url = cp["api_url"]
             cfg.cheap_model.model_name = cheap_model or cp["default_model"]
-            cfg.cheap_model.options["supports_vision"] = str(cp.get("supports_vision", False)).lower()
-            cfg.cheap_model.options["supports_reasoning"] = str(cp.get("supports_thinking", False)).lower()
+            cfg.cheap_model.options["supports_vision"] = bool(cp.get("supports_vision", False))
+            cfg.cheap_model.options["supports_reasoning"] = bool(cp.get("supports_thinking", False))
 
     save_config(cfg, config_path)
     return {"ok": True, "provider": provider_name, "model": cfg.main_model.model_name}

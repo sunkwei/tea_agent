@@ -225,7 +225,7 @@ class AutoMemoryExtractor:
         c = self.storage.conn.cursor()
         c.execute(
             "SELECT id, user_msg, ai_msg, stamp FROM conversations "
-            "WHERE topic_id = ? AND is_summarized = 0 ORDER BY stamp ASC",
+            "WHERE topic_id = ? AND memory_extracted = 0 ORDER BY stamp ASC",
             (topic_id,),
         )
         rows = c.fetchall()
@@ -353,9 +353,11 @@ class AutoMemoryExtractor:
             return False
 
     def _mark_conversations_extracted(self, conversations: list[dict]):
+        # 使用独立的 memory_extracted 列标记记忆提取进度，
+        # 避免与 L3 摘要器的 is_summarized 互斥（谁先跑谁独占对话）
         c = self.storage.conn.cursor()
         for conv in conversations:
-            c.execute("UPDATE conversations SET is_summarized = 1 WHERE id = ?", (conv["id"],))
+            c.execute("UPDATE conversations SET memory_extracted = 1 WHERE id = ?", (conv["id"],))
         self.storage.conn.commit()
         c.close()
 
@@ -377,10 +379,10 @@ class AutoMemoryExtractor:
         return {"total_memories": total, "from_topic": from_topic, "by_category": by_category}
 
     def get_memory_stats(self) -> dict:
-        """获取记忆统计"""
-        if not self.ctx.memory or not self.ctx.storage:
+        """获取记忆统计（AutoMemoryExtractor 使用 self.storage，而非 MemoryComponent 的 self.ctx）"""
+        if not self.storage:
             return {"total": 0, "by_category": {}, "by_priority": {}}
         try:
-            return self.ctx.storage.get_memory_stats()
+            return self.storage.get_memory_stats()
         except Exception:
             return {"total": 0, "by_category": {}, "by_priority": {}}

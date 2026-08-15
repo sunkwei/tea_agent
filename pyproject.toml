@@ -46,6 +46,7 @@ dependencies = [
 
 [project.scripts]
 tea_agent = "tea_agent.server:main"
+tea_agent_api = "tea_agent.server:main"
 tea-agent-api = "tea_agent.server:main"
 tea-agent-gui = "tea_agent.gui:main"
 tea-agent-mini = "tea_agent_mini.__main__:main"

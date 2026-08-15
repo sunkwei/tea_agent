@@ -21,6 +21,7 @@ python -m build                      # 构建分发包
 
 # ── 运行 ──
 tea_agent                            # 启动 Web/API 服务器（默认入口，等价 tea-agent-api）
+tea_agent_api                        # 启动 API 服务器（下划线别名，等价 tea-agent-api）
 tea-agent-gui                        # 启动桌面 GUI
 tea-agent-api                        # 启动 API 服务器
 tea-agent-mini                       # 启动 Mini 版

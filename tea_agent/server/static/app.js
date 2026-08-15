@@ -1279,6 +1279,7 @@ window.sendMessage = async function() {
             }
 
             case 'tool_start': {
+              s.activeToolName = data.name;
               removeLoading();
               if (!s.toolCallContainer) {
                 s.toolCallContainer = document.createElement('div');
@@ -1371,6 +1372,7 @@ window.sendMessage = async function() {
                 }
               }
               s.activeToolItem = null;
+              _throttledTaskRefresh();   // 工具完成 → 刷新任务面板 TODO
               break;
 
             case 'status':
@@ -1416,6 +1418,7 @@ window.sendMessage = async function() {
               }
               markTitleDone();
               renderJumpBar(); // 新消息完成 -> 更新跳转栏
+              _throttledTaskRefresh(); // 流结束 → 刷新任务面板 TODO
               break;
 
             case 'dag_viz': {
@@ -1710,6 +1713,15 @@ function _ensureBufferStreamState() {
   return _bufferStreamState;
 }
 
+/* 节流刷新任务面板：Agent 工具调用完成时更新 TODO 勾选状态（1s 内最多一次） */
+let _lastTaskRefreshTs = 0;
+function _throttledTaskRefresh() {
+  const now = Date.now();
+  if (now - _lastTaskRefreshTs < 1000) return;
+  _lastTaskRefreshTs = now;
+  refreshTaskPanel();
+}
+
 /** 渲染一个来自缓冲区的 SSE 事件到消息区 */
 function _renderBufferEvent(event) {
   const s = _ensureBufferStreamState();
@@ -1872,6 +1884,7 @@ function _renderBufferEvent(event) {
         if (badge) badge.textContent = s.toolDoneCount + '/' + s.toolCallCount;
       }
       s.activeToolItem = null;
+      _throttledTaskRefresh();   // 工具完成 → 刷新任务面板 TODO
       break;
 
     case 'status':
@@ -1897,6 +1910,7 @@ function _renderBufferEvent(event) {
       if (finalMsg && s.bubbleText) {
         s.bubbleText.innerHTML = formatMarkdown(finalMsg);
       }
+      _throttledTaskRefresh(); // 流结束 → 刷新任务面板 TODO
       break;
 
     case 'error':

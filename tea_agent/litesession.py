@@ -41,7 +41,21 @@ class LiteSession:
         self.interrupted = False
 
         # API 客户端
-        self.api = OpenAI(api_key=api_key, base_url=api_url)
+        # API 弹性：从配置读取超时与重试次数（网络中断/睡眠恢复容错）
+        try:
+            from tea_agent.config import get_config as _get_cfg
+            _cfg = _get_cfg()
+            _req_to = float(getattr(_cfg, "api_request_timeout", 120.0))
+            _conn_to = float(getattr(_cfg, "api_connect_timeout", 30.0))
+            _max_retries = int(getattr(_cfg, "api_max_retries", 3))
+        except Exception:
+            _req_to, _conn_to, _max_retries = 120.0, 30.0, 3
+
+        self.api = OpenAI(
+            api_key=api_key, base_url=api_url,
+            timeout=_req_to,
+            max_retries=_max_retries,
+        )
 
         # 构建工具定义（全部工具，无过滤）
         self.tools = self._build_tools()
@@ -329,7 +343,22 @@ class LiteSession:
 
             kwargs["extra_body"] = extra_body
 
-        return self.api.chat.completions.create(**kwargs)
+        # API 弹性：请求建立阶段失败（网络中断/睡眠恢复）自动重试
+        from tea_agent.api_retry import call_with_retry
+        try:
+            from tea_agent.config import get_config as _get_cfg
+            _cfg = _get_cfg()
+            _mr = int(getattr(_cfg, "api_max_retries", 3))
+            _bf = float(getattr(_cfg, "api_retry_backoff", 2.0))
+            _sw = float(getattr(_cfg, "api_sleep_recovery_wait", 5.0))
+        except Exception:
+            _mr, _bf, _sw = 3, 2.0, 5.0
+
+        return call_with_retry(
+            self.api.chat.completions.create,
+            max_retries=_mr, backoff=_bf, sleep_recovery_wait=_sw,
+            **kwargs,
+        )
 
     def _process_response(self, response, callback: Callable | None) -> tuple:
         """处理流式响应。"""

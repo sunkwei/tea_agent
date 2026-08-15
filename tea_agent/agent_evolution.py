@@ -118,11 +118,14 @@ rubric 格式（规则项支持 match: regex/contains/line/line_contains）：
             return []
 
         try:
+            from tea_agent.api_retry import call_with_retry
+
             prompt = self.ANALYZE_PROMPT.format(
                 events_json=json.dumps(events, ensure_ascii=False),
                 memory_summary=memory_summary or "(无)",
             )
-            resp = self._cheap_client.chat.completions.create(
+            resp = call_with_retry(
+                self._cheap_client.chat.completions.create,
                 model=self._cheap_model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},

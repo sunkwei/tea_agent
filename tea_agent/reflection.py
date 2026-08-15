@@ -215,7 +215,10 @@ class ReflectionManager:
             return None
 
         try:
-            response = self._cheap_client.chat.completions.create(
+            from tea_agent.api_retry import call_with_retry
+
+            response = call_with_retry(
+                self._cheap_client.chat.completions.create,
                 model=self._cheap_model,
                 messages=messages,
                 temperature=0.3,

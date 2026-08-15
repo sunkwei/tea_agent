@@ -493,7 +493,26 @@ class APIComponent(SessionComponent):
             kwargs.pop("stream_options", None)
             kwargs.pop("extra_body", None)
 
-        stream = target_client.chat.completions.create(**kwargs)
+        # API 弹性：网络中断/睡眠恢复时自动重试（仅重试可恢复错误，指数退避）
+        from tea_agent.api_retry import call_with_retry
+        from tea_agent.config import get_config as _get_cfg
+
+        try:
+            _api_cfg = _get_cfg()
+            _mr = int(getattr(_api_cfg, "api_max_retries", 3))
+            _bf = float(getattr(_api_cfg, "api_retry_backoff", 2.0))
+            _sw = float(getattr(_api_cfg, "api_sleep_recovery_wait", 5.0))
+        except Exception:
+            _mr, _bf, _sw = 3, 2.0, 5.0
+
+        stream = call_with_retry(
+            target_client.chat.completions.create,
+            max_retries=_mr, backoff=_bf, sleep_recovery_wait=_sw,
+            on_retry=lambda a, e, w: logger.warning(
+                f"⚠️ 接口中断，第 {a} 次重试中（{type(e).__name__}），等待 {w:.0f}s…"
+            ),
+            **kwargs,
+        )
         return stream
 
     def call_summarize_api(self, cli, mdl, messages, temperature=0.1, max_tokens=500):
@@ -501,11 +520,25 @@ class APIComponent(SessionComponent):
 
         logger = logging.getLogger("session.api")
 
+        # 摘要调用同样支持网络重试（睡眠恢复场景）
+        from tea_agent.api_retry import call_with_retry
+        from tea_agent.config import get_config as _get_cfg
+
+        try:
+            _cfg = _get_cfg()
+            _mr = int(getattr(_cfg, "api_max_retries", 3))
+            _bf = float(getattr(_cfg, "api_retry_backoff", 2.0))
+            _sw = float(getattr(_cfg, "api_sleep_recovery_wait", 5.0))
+        except Exception:
+            _mr, _bf, _sw = 3, 2.0, 5.0
+
         try:
             logger.debug(
                 f"summarize API request: model={mdl}, msgs={len(messages)}, temperature={temperature}, max_tokens={max_tokens}"
             )
-            return cli.chat.completions.create(
+            return call_with_retry(
+                cli.chat.completions.create,
+                max_retries=_mr, backoff=_bf, sleep_recovery_wait=_sw,
                 model=mdl,
                 messages=messages,
                 temperature=temperature,
@@ -519,7 +552,9 @@ class APIComponent(SessionComponent):
                 logger.debug(
                     "summarize API: thinking disabled not supported, retrying without extra_body"
                 )
-                return cli.chat.completions.create(
+                return call_with_retry(
+                    cli.chat.completions.create,
+                    max_retries=_mr, backoff=_bf, sleep_recovery_wait=_sw,
                     model=mdl,
                     messages=messages,
                     temperature=temperature,
@@ -1265,10 +1300,23 @@ class OnlineToolSession(BaseChatSession):
             (http_client, main_client, cheap_client, vision_client) 元组
         """
         import httpx
+        from tea_agent.config import get_config
 
-        _http_client = httpx.Client(proxy=None, timeout=httpx.Timeout(120.0, connect=30.0))
+        # API 弹性参数（网络中断/睡眠恢复容错）：超时与 SDK 内置重试次数
+        try:
+            _cfg = get_config()
+            _req_to = float(getattr(_cfg, "api_request_timeout", 120.0))
+            _conn_to = float(getattr(_cfg, "api_connect_timeout", 30.0))
+            _max_retries = int(getattr(_cfg, "api_max_retries", 3))
+        except Exception:
+            _req_to, _conn_to, _max_retries = 120.0, 30.0, 3
+
+        _http_client = httpx.Client(
+            proxy=None, timeout=httpx.Timeout(_req_to, connect=_conn_to)
+        )
         main_client = OpenAI(
-            api_key=api_key, base_url=api_url, http_client=_http_client
+            api_key=api_key, base_url=api_url, http_client=_http_client,
+            max_retries=_max_retries,
         )
 
         cheap_client: OpenAI | None = None
@@ -1276,7 +1324,10 @@ class OnlineToolSession(BaseChatSession):
             cheap_client = OpenAI(
                 api_key=cheap_api_key,
                 base_url=cheap_api_url,
-                http_client=httpx.Client(proxy=None, timeout=httpx.Timeout(120.0, connect=30.0)),
+                http_client=httpx.Client(
+                    proxy=None, timeout=httpx.Timeout(_req_to, connect=_conn_to)
+                ),
+                max_retries=_max_retries,
             )
 
         vision_client: OpenAI | None = None
@@ -1284,7 +1335,10 @@ class OnlineToolSession(BaseChatSession):
             vision_client = OpenAI(
                 api_key=vision_api_key,
                 base_url=vision_api_url,
-                http_client=httpx.Client(proxy=None, timeout=httpx.Timeout(120.0, connect=30.0)),
+                http_client=httpx.Client(
+                    proxy=None, timeout=httpx.Timeout(_req_to, connect=_conn_to)
+                ),
+                max_retries=_max_retries,
             )
 
         return _http_client, main_client, cheap_client, vision_client

@@ -229,6 +229,13 @@ class AgentConfig:
         12  # App GUI 字体大小（pt，控制 label/input/treeview 等原生组件）
     )
 
+    # API 弹性参数（网络中断 / PC 睡眠恢复等瞬时故障的容错）
+    api_request_timeout: float = 120.0   # 单次请求超时（秒）
+    api_connect_timeout: float = 30.0    # 连接建立超时（秒）
+    api_max_retries: int = 3             # 接口中断最大重试次数（不含首次尝试）
+    api_retry_backoff: float = 2.0       # 指数退避基数（秒）：重试等待 = backoff * 2^n
+    api_sleep_recovery_wait: float = 5.0 # 连接类错误额外等待（睡眠恢复后网络栈重建）
+
     # 可运行时修改的配置键白名单
     _RUNTIME_CONFIG_KEYS = {
         "max_history",
@@ -668,6 +675,21 @@ def _parse_control_params(cfg: AgentConfig, data: dict) -> None:
     cfg.history_l3_batch = int(data.get("history_l3_batch", cfg.history_l3_batch))
     cfg.font_size = int(data.get("font_size", cfg.font_size))
     cfg.app_font_size = int(data.get("app_font_size", cfg.app_font_size))
+
+    # API 弹性参数（网络中断/睡眠恢复容错）
+    cfg.api_request_timeout = float(
+        data.get("api_request_timeout", cfg.api_request_timeout)
+    )
+    cfg.api_connect_timeout = float(
+        data.get("api_connect_timeout", cfg.api_connect_timeout)
+    )
+    cfg.api_max_retries = int(data.get("api_max_retries", cfg.api_max_retries))
+    cfg.api_retry_backoff = float(
+        data.get("api_retry_backoff", cfg.api_retry_backoff)
+    )
+    cfg.api_sleep_recovery_wait = float(
+        data.get("api_sleep_recovery_wait", cfg.api_sleep_recovery_wait)
+    )
 
 
 def _update_config_cache(cfg: AgentConfig, yaml_path: str | None) -> None:

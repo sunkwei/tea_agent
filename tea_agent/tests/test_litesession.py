@@ -119,7 +119,7 @@ class TestLiteSessionInit:
             assert "可自我扩展的智能Agent" in session.system_prompt
 
     def test_init_creates_openai_client(self, mock_toolkit):
-        """应创建 OpenAI 客户端"""
+        """应创建 OpenAI 客户端（含 API 弹性参数：timeout + max_retries）"""
         with patch("tea_agent.litesession.OpenAI") as mock_openai:
             from tea_agent.litesession import LiteSession
             LiteSession(
@@ -131,6 +131,8 @@ class TestLiteSessionInit:
             mock_openai.assert_called_once_with(
                 api_key="custom-key",
                 base_url="https://custom.api.com",
+                timeout=120.0,
+                max_retries=3,
             )
 
     def test_init_without_toolkit(self):

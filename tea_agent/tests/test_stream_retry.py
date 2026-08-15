@@ -33,11 +33,16 @@ from tea_agent.onlinesession import OnlineToolSession  # noqa: E402
 
 
 class _FakeSession:
-    """最小 session 桩：绑定真实 _process_stream_with_reasoning 方法。"""
+    """最小 session 桩：绑定真实 _process_stream_with_reasoning 方法。
 
-    def __init__(self):
+    可选 storage/topic_id：传入后验证事件实时落盘；不传则静默跳过。
+    """
+
+    def __init__(self, storage=None, topic_id=""):
         self.context = SimpleNamespace(no_stream_chunk=False)
         self.api = SimpleNamespace(_accumulate_usage=lambda usage: None)
+        self.storage = storage
+        self.current_topic_id = topic_id
 
         def _accumulate_tool_calls(delta, tool_calls_data):
             """等价于 APIComponent.accumulate_tool_calls_from_delta（按 index 累积）。"""
@@ -57,7 +62,10 @@ class _FakeSession:
 
         self.api.accumulate_tool_calls_from_delta = _accumulate_tool_calls
 
+    # 绑定真实方法（未绑定方式，调用时 self 为 fake 实例）
     _process_stream_with_reasoning = OnlineToolSession._process_stream_with_reasoning
+    _log_assistant_chunk = OnlineToolSession._log_assistant_chunk
+    _log_turn_end_marker = OnlineToolSession._log_turn_end_marker
 
 
 def _make_chunk(content: str = "", reasoning: str = "", tool_call=None):
@@ -219,3 +227,74 @@ def test_stream_normal_no_retry(fake):
     )
     assert content == "hello world"
     assert calls == []
+
+
+# ════════════════════════════════════════════════════════════
+# AI 回复增量实时落盘（借鉴 DeepSeek Harness append-only log）
+# 不等 final msg：流式 chunk 边收边写 session_events(assistant/chunk)
+# ════════════════════════════════════════════════════════════
+
+@pytest.fixture
+def event_storage():
+    """临时数据库 Storage（验证事件真实落盘）。"""
+    from tea_agent.store._core import Storage
+    db_path = os.path.join(tempfile.mkdtemp(), "test_stream_chunk.db")
+    st = Storage(db_path)
+    yield st
+    try:
+        st.close()
+    except Exception:
+        pass
+
+
+def test_stream_chunk_realtime_persist(event_storage):
+    """AI 回复增量边收边落盘：超 800 字符阈值即写 assistant/chunk。"""
+    tid = event_storage.topics.create_topic("CHK")
+    fake = _FakeSession(storage=event_storage, topic_id=tid)
+    # 800 字符 chunk 达阈值立即落盘；第二个 100 字符在结束 flush
+    stream = _Stream([_make_chunk("x" * 800), _make_chunk("x" * 100)])
+    fake._process_stream_with_reasoning(stream, MagicMock())
+    events = event_storage.events.replay(tid)
+    chunks = [e for e in events if e["event_type"] == "assistant/chunk"]
+    assert len(chunks) == 2
+    assert chunks[0]["payload"]["content"] == "x" * 800
+    assert chunks[1]["payload"]["content"] == "x" * 100
+
+
+def test_stream_chunk_flush_on_complete(event_storage):
+    """不足阈值的内容在流正常结束时也落盘（不丢尾）。"""
+    tid = event_storage.topics.create_topic("CHK")
+    fake = _FakeSession(storage=event_storage, topic_id=tid)
+    stream = _Stream([_make_chunk("hello"), _make_chunk(" world")])
+    fake._process_stream_with_reasoning(stream, MagicMock())
+    events = event_storage.events.replay(tid)
+    chunks = [e for e in events if e["event_type"] == "assistant/chunk"]
+    assert len(chunks) == 1
+    assert chunks[0]["payload"]["content"] == "hello world"
+
+
+def test_stream_interrupt_persists_partial(event_storage):
+    """不可重试异常中断：已收部分落盘 + turn/end(interrupted) 标记。"""
+    tid = event_storage.topics.create_topic("CHK")
+    fake = _FakeSession(storage=event_storage, topic_id=tid)
+
+    class Boom(Exception):
+        pass
+
+    stream = _Stream([_make_chunk("partial reply")], fail_at=1, exc=Boom("boom"))
+    with pytest.raises(Boom):
+        fake._process_stream_with_reasoning(stream, MagicMock())
+    events = event_storage.events.replay(tid)
+    chunks = [e for e in events if e["event_type"] == "assistant/chunk"]
+    ends = [e for e in events if e["event_type"] == "turn/end"]
+    assert len(chunks) == 1
+    assert chunks[0]["payload"]["content"] == "partial reply"
+    assert ends and ends[0]["payload"]["reason"] == "interrupted"
+
+
+def test_stream_chunk_no_storage_silent():
+    """无 storage/topic 时实时落盘静默跳过（不影响主流程）。"""
+    fake = _FakeSession()  # 无 storage
+    stream = _Stream([_make_chunk("hello")])
+    content, _, _ = fake._process_stream_with_reasoning(stream, MagicMock())
+    assert content == "hello"

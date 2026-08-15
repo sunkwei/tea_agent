@@ -1753,6 +1753,60 @@ class OnlineToolSession(BaseChatSession):
     # 流式处理（委派给 API 组件）
     # ──────────────────────────────────────────────
 
+    def _log_assistant_chunk(self, content: str, reasoning: str = "") -> None:
+        """P2 事件溯源：AI 回复增量**实时落盘**（assistant/chunk，append-only）。
+
+        设计动机（借鉴 DeepSeek Harness append-only log）：
+        不要等 AI final msg 收到后才落盘 —— 流式输出中途被中断（Esc/断连/
+        进程终止）时，已生成的回复内容也必须可追溯。assistant/chunk 事件
+        在流式消费过程中实时写入，中断后从事件流仍能重建"AI 当时说到哪"。
+
+        异常隔离：无 topic/storage 时静默跳过，不影响主流程。
+
+        Args:
+            content: 本段内容增量（已按节流阈值分批）
+            reasoning: 本段思考链增量（可选）
+        """
+        if not content and not reasoning:
+            return
+        try:
+            topic_id = getattr(self, "current_topic_id", None)
+            storage = getattr(self, "storage", None) or getattr(self.ctx, "storage", None)
+            if not (topic_id and storage):
+                return
+            events = getattr(storage, "events", None)
+            if events is None:
+                return
+            payload = {}
+            if content:
+                payload["content"] = content
+            if reasoning:
+                payload["reasoning"] = reasoning
+            events.append_event(topic_id, "assistant/chunk", payload)
+        except Exception:
+            logger.debug("append assistant/chunk event failed (isolated)", exc_info=True)
+
+    def _log_turn_end_marker(self, reason: str) -> None:
+        """P2 事件溯源：记录 turn/end 标记（流式中断时用，审计"这轮未完成"）。
+
+        正常完成时 turn/end 由 update_msg_rounds 写入；只有中断路径（不可重试
+        异常/重试耗尽）才在此补记，保证事件流闭合。
+
+        Args:
+            reason: 中断原因，如 "interrupted" / "stream_error"
+        """
+        try:
+            topic_id = getattr(self, "current_topic_id", None)
+            storage = getattr(self, "storage", None) or getattr(self.ctx, "storage", None)
+            if not (topic_id and storage):
+                return
+            events = getattr(storage, "events", None)
+            if events is None:
+                return
+            events.append_event(topic_id, "turn/end", {"reason": reason})
+        except Exception:
+            logger.debug("append turn/end marker failed (isolated)", exc_info=True)
+
     def _process_stream_with_reasoning(
         self, response, callback,
         retry_factory=None, max_stream_retries=3,
@@ -1802,8 +1856,21 @@ class OnlineToolSession(BaseChatSession):
             reasoning_content = "".join(reasoning_parts)
             return content, tool_calls_data, reasoning_content
 
-        # 流式模式（带断流重试：RemoteProtocolError 等可重试异常 → 重新发起请求）
+        # 流式模式（带断流重试 + AI 回复增量实时落盘）
+        # 借鉴 DeepSeek Harness append-only log：不等 final msg，边收边落盘，
+        # 中断时已生成的回复内容仍可从 session_events 重建。
         stream_retries = 0
+        _chunk_buf: list[str] = []
+        _chunk_chars = 0
+        _CHUNK_FLUSH_CHARS = 800  # 节流阈值：累计 800 字符落盘一次（避免每 chunk 一次 SQLite 写）
+
+        def _flush_chunk_buf() -> None:
+            nonlocal _chunk_buf, _chunk_chars
+            if _chunk_buf:
+                self._log_assistant_chunk("".join(_chunk_buf))
+                _chunk_buf = []
+                _chunk_chars = 0
+
         while True:
             try:
                 for chunk in response:
@@ -1822,16 +1889,29 @@ class OnlineToolSession(BaseChatSession):
                     if delta.content:
                         content_parts.append(delta.content)
                         callback(delta.content)
+                        # 实时落盘：节流累积，达阈值即 append assistant/chunk 事件
+                        _chunk_buf.append(delta.content)
+                        _chunk_chars += len(delta.content)
+                        if _chunk_chars >= _CHUNK_FLUSH_CHARS:
+                            _flush_chunk_buf()
 
                     if delta.tool_calls:
                         self.api.accumulate_tool_calls_from_delta(delta, tool_calls_data)
+                _flush_chunk_buf()  # 正常结束：flush 剩余增量
                 break  # 正常消费完成
             except Exception as e:
                 if retry_factory is None or stream_retries >= max_stream_retries:
+                    # 不可重试异常 / 重试耗尽：flush 已收部分 + 标记中断（审计"这轮未完成"）
+                    _flush_chunk_buf()
+                    self._log_turn_end_marker("interrupted")
                     raise
                 from tea_agent.api_retry import _is_retryable
                 if not _is_retryable(e):
+                    _flush_chunk_buf()
+                    self._log_turn_end_marker("stream_error")
                     raise
+                # 可重试断流：先落盘"断流前已生成的部分"（审计发生了什么），再重置重试
+                _flush_chunk_buf()
                 stream_retries += 1
                 logger.warning(
                     f"stream interrupted (attempt {stream_retries}/{max_stream_retries}): "

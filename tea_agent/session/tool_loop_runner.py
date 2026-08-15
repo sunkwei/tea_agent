@@ -456,7 +456,16 @@ def execute_tool_loop(session, context: dict) -> dict:
                 top_p=eff.get("top_p"),
                 request_timeout=120,
             )
-            content, _, reasoning = session._process_stream_with_reasoning(response, callback)
+            content, _, reasoning = session._process_stream_with_reasoning(
+                response, callback,
+                retry_factory=lambda: session.api.create_chat_stream(
+                    api_messages, tools=[],
+                    temperature=eff.get("temperature"),
+                    max_tokens=eff.get("max_tokens"),
+                    top_p=eff.get("top_p"),
+                    request_timeout=120,
+                ),
+            )
             session.add_assistant_message(content, reasoning)
             session.tools_comp.collect_assistant_text_round(content, reasoning)
             return {"full_reply": content, "used_tools": False, "iterations": 1}
@@ -551,7 +560,16 @@ def execute_tool_loop(session, context: dict) -> dict:
             session.tools_comp.collect_api_error_round(full_reply + error_msg)
             return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": "429 rate limit exhausted"}
 
-        content, tool_calls_data, reasoning_content = session._process_stream_with_reasoning(response, callback)
+        content, tool_calls_data, reasoning_content = session._process_stream_with_reasoning(
+            response, callback,
+            retry_factory=lambda: session.api.create_chat_stream(
+                api_messages, session.tools,
+                temperature=eff.get("temperature"),
+                max_tokens=eff.get("max_tokens"),
+                top_p=eff.get("top_p"),
+                request_timeout=120,
+            ),
+        )
         full_reply += content
         logger.debug(
             f"model response: content_len={len(content)}, reasoning_len={len(reasoning_content)}, "

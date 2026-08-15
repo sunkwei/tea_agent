@@ -1754,9 +1754,22 @@ class OnlineToolSession(BaseChatSession):
     # ──────────────────────────────────────────────
 
     def _process_stream_with_reasoning(
-        self, response, callback
+        self, response, callback,
+        retry_factory=None, max_stream_retries=3,
     ) -> tuple[str, list[dict], str]:
-        """处理流式/非流式响应，收集内容、工具调用数据和 reasoning_content。"""
+        """处理流式/非流式响应，收集内容、工具调用数据和 reasoning_content。
+
+        Args:
+            response: OpenAI 流式/非流式响应对象
+            callback: 流式增量回调（UI 实时展示）
+            retry_factory: 可选；流迭代中断（断流，如 incomplete chunked read）时
+                重新创建 stream 的可调用对象。断流重试会丢弃已收部分重新生成，
+                保证工具调用参数完整（工具调用增量是流式的，半截参数不可用）。
+            max_stream_retries: 断流最大重试次数（默认 3，指数退避）
+
+        Returns:
+            (content, tool_calls_data, reasoning_content)
+        """
         content_parts = []
         tool_calls_data = []
         reasoning_parts = []
@@ -1789,26 +1802,49 @@ class OnlineToolSession(BaseChatSession):
             reasoning_content = "".join(reasoning_parts)
             return content, tool_calls_data, reasoning_content
 
-        # 流式模式
-        for chunk in response:
-            if hasattr(chunk, "usage") and chunk.usage:
-                self.api._accumulate_usage(chunk.usage)
+        # 流式模式（带断流重试：RemoteProtocolError 等可重试异常 → 重新发起请求）
+        stream_retries = 0
+        while True:
+            try:
+                for chunk in response:
+                    if hasattr(chunk, "usage") and chunk.usage:
+                        self.api._accumulate_usage(chunk.usage)
 
-            if not hasattr(chunk, "choices") or not chunk.choices:
-                continue
+                    if not hasattr(chunk, "choices") or not chunk.choices:
+                        continue
 
-            delta = chunk.choices[0].delta
+                    delta = chunk.choices[0].delta
 
-            if hasattr(delta, "reasoning_content") and delta.reasoning_content:
-                reasoning_parts.append(delta.reasoning_content)
-                callback(f"[THINK]{delta.reasoning_content}")
+                    if hasattr(delta, "reasoning_content") and delta.reasoning_content:
+                        reasoning_parts.append(delta.reasoning_content)
+                        callback(f"[THINK]{delta.reasoning_content}")
 
-            if delta.content:
-                content_parts.append(delta.content)
-                callback(delta.content)
+                    if delta.content:
+                        content_parts.append(delta.content)
+                        callback(delta.content)
 
-            if delta.tool_calls:
-                self.api.accumulate_tool_calls_from_delta(delta, tool_calls_data)
+                    if delta.tool_calls:
+                        self.api.accumulate_tool_calls_from_delta(delta, tool_calls_data)
+                break  # 正常消费完成
+            except Exception as e:
+                if retry_factory is None or stream_retries >= max_stream_retries:
+                    raise
+                from tea_agent.api_retry import _is_retryable
+                if not _is_retryable(e):
+                    raise
+                stream_retries += 1
+                logger.warning(
+                    f"stream interrupted (attempt {stream_retries}/{max_stream_retries}): "
+                    f"{e}, retrying..."
+                )
+                # 丢弃已收部分重新生成（流式工具调用增量半截参数不可用）
+                content_parts = []
+                tool_calls_data = []
+                reasoning_parts = []
+                callback("\n⚠️ 连接中断，正在自动重试…\n")
+                import time
+                time.sleep(1.5 * (2 ** (stream_retries - 1)))
+                response = retry_factory()
 
         content = "".join(content_parts)
         reasoning_content = "".join(reasoning_parts)

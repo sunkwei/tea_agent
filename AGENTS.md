@@ -8,7 +8,7 @@ Tea Agent 是一个 **自进化的 AI Agent 框架**。核心能力：
 - **动态工具管理**：Agent 可通过 `toolkit_save` 运行时创建新工具，调用 `toolkit_reload` 立即生效
 - **多会话模式**：轻量级 (LiteSession)、完整 (OnlineToolSession)、子 Agent (Sub-agent)
 - **多层自进化**：工具使用分析 → 技能固化 → 系统提示词进化 → 后台线程自动优化
-- **多样交互界面**：GUI 桌面（tkinter）、TUI 终端（textual）、Web/API 服务器、ACP/Telegram/微信 适配器
+- **多样交互界面**：Web/API 服务器、ACP/Telegram/微信 适配器
 
 ## 快速命令
 
@@ -22,7 +22,6 @@ python -m build                      # 构建分发包
 # ── 运行 ──
 tea_agent                            # 启动 Web/API 服务器（默认入口，等价 tea-agent-api）
 tea_agent_api                        # 启动 API 服务器（下划线别名，等价 tea-agent-api）
-tea-agent-gui                        # 启动桌面 GUI
 tea-agent-api                        # 启动 API 服务器
 tea-agent-mini                       # 启动 Mini 版
 tea-agent-acp                        # 启动 ACP 协议
@@ -52,9 +51,6 @@ tea_agent/
 ├── onlinesession.py       # OnlineToolSession — 完整在线会话
 ├── litesession.py         # LiteSession — 轻量会话（子 Agent 用）
 ├── basesession.py         # 会话基类 + 容错 JSON 解析
-├── gui.py                 # 桌面 GUI（tkinter + tkinterweb）
-├── gui_dialogs.py         # GUI 对话框（TodoDialog 等）
-├── tui.py                 # 终端 TUI（textual 框架）
 ├── config.py              # 配置加载与管理
 ├── context_fragments.py   # ★ 上下文片段系统（Codex 风格：时间/预算/模式按需组装）
 ├── agents_md_loader.py    # ★ AGENTS.md 分层指令加载（用户级+项目级+字节预算）
@@ -110,10 +106,6 @@ tea_agent/
 │  ├─ spawn/spawn_sync → 独立 LiteSession │  ← 隔离上下文、独立迭代
 │  ├─ subagent_msg     → 消息传递          │  ← Agent 间通信
 │  └─ collect/cancel   → 结果收集          │
-├─────────────────────────────────────────┤
-│  GUI / TUI 桌面+终端界面                  │
-│  ├─ gui.py (tkinter)                    │  ← 桌面窗口 + 浏览器组件
-│  └─ tui.py (textual)                    │  ← 终端交互
 └─────────────────────────────────────────┘
 ```
 
@@ -122,7 +114,6 @@ tea_agent/
 1. **不得循环导入**：`agent.py` 不反向导入任何子模块；子模块只导入 `agent.py` 或同级模块
 2. **工具注册**：新工具必须放在 `tea_agent/toolkit/` 目录，以 `toolkit_` 前缀命名，通过 `toolkit_save` 注册（实际由 `tlk.py` 按 `toolkit_*.py` 扫描+exec 加载；`__init__.py` 为空文件，无需手工导入）
 3. **自进化边界**：后台自进化线程可优化工具代码、整理技能、调整提示词，但**不得修改用户对话历史**
-4. **GUI 线程安全**：所有 GUI 操作必须在主线程执行；后台线程用 `after()` 回发
 
 ## 工具系统规范
 
@@ -164,7 +155,7 @@ toolkit_reload()
    [下载接口文档](/v1/download/接口文档.md)
    ```
 
-规则：链接必须是可点击的 Markdown 格式；若无 server（GUI 模式）则给出本地路径。
+规则：链接必须是可点击的 Markdown 格式；若无 server 则给出本地路径。
 
 ## 代码风格
 
@@ -203,10 +194,9 @@ toolkit_reload()
 | ✅ 可修改 | ❌ 不可修改 |
 |-----------|-------------|
 | `toolkit/*.py` — 工具代码 | `.chat_history_protected` — 对话历史 |
-| `tea_agent/gui*.py` — GUI | `chat_history.db` — 数据库 |
-| `config.yaml` — 配置 | 用户 `~/.tea_agent/` 个人配置 |
-| `prompt_manager.py` — 提示词 | 版本发布后的 CHANGELOG 只追加不修改 |
-| 自进化生成的 `skills/` | |
+| `config.yaml` — 配置 | `chat_history.db` — 数据库 |
+| `prompt_manager.py` — 提示词 | 用户 `~/.tea_agent/` 个人配置 |
+| 自进化生成的 `skills/` | 版本发布后的 CHANGELOG 只追加不修改 |
 
 ## 提交规范
 
@@ -263,9 +253,6 @@ A: 在 `tea_agent/toolkit/` 创建 `toolkit_xxx.py`，实现 `toolkit_xxx()` 与
 
 **Q: 自进化线程做了什么？**
 A: 每小时自动：工具使用率分析 & 优化建议 → `docs/TOOLS.md` 同步 → 技能模式整理 → 跨主题记忆提取。
-
-**Q: 如何调试 GUI？**
-A: 运行 `python -m tea_agent.gui --debug`。
 
 **Q: 三种 Agent 模式怎么选？**
 A: `lightweight` 用于孤立任务；`full` 用于完整交互会话；`lite` 用于子 Agent 内部调用。

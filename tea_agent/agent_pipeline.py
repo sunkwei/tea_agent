@@ -100,14 +100,14 @@ def l2_to_l3_summary(
         return "", _empty_usage()
 
 
-# ── 尝试导入 GUI 主题摘要（精简版可能没有 _gui 模块）──
+# ── 自动主题摘要（精简版可能没有 topic_summary 模块）──
 try:
-    from tea_agent._gui._topic_summary import _generate_topic_summary  # noqa: F811
+    from tea_agent.session.topic_summary import generate_topic_summary  # noqa: F811
 
-    _HAVE_GUI_TOPIC_SUMMARY = True
+    _HAVE_TOPIC_SUMMARY = True
 except ImportError:
-    _HAVE_GUI_TOPIC_SUMMARY = False
-    logger.debug("tea_agent._gui._topic_summary 不可用，自动主题摘要将被跳过")
+    _HAVE_TOPIC_SUMMARY = False
+    logger.debug("tea_agent.session.topic_summary 不可用，自动主题摘要将被跳过")
 
 
 def auto_summary(
@@ -117,7 +117,7 @@ def auto_summary(
     """自动生成主题摘要（基于最近 3 条对话生成主题标题）。
 
     条件：
-    - 需要 GUI 模块可用（_HAVE_GUI_TOPIC_SUMMARY）
+    - 需要 topic_summary 模块可用（_HAVE_TOPIC_SUMMARY）
     - 跳过已有自定义标题的主题（不以特殊前缀开头）
     - 需要至少 1 条最近对话
 
@@ -130,7 +130,7 @@ def auto_summary(
             - summary: 生成的标题摘要字符串，无条件或失败时返回 None
             - usage: token 消耗统计
     """
-    if not _HAVE_GUI_TOPIC_SUMMARY:
+    if not _HAVE_TOPIC_SUMMARY:
         return None, _empty_usage()
     tp = agent._db.get_topic(topic_id)
     if tp and (tp.get("title") or "").startswith("※"):
@@ -140,7 +140,7 @@ def auto_summary(
         return None, _empty_usage()
     try:
         cli, mdl = agent._sess._get_summarize_client()
-        summary, usage = _generate_topic_summary(
+        summary, usage = generate_topic_summary(
             client=cli, model=mdl, conversations=recent
         )
         if summary:

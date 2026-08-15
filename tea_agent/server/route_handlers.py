@@ -1344,7 +1344,7 @@ async def handle_dag_viz(request):
         return HTMLResponse(html)
 
     # 回退到 SimpleDagRegistry
-    from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+    from tea_agent.workflow.dag_registry import SimpleDagRegistry
     simple = SimpleDagRegistry._instances.get(viz_id)
     if simple:
         html = get_viz_html(simple, simple.get("title", "DAG"), viz_id=viz_id)
@@ -1427,7 +1427,7 @@ async def handle_dag_status(request):
         return JSONResponse(snapshot)
 
     # 回退到 SimpleDagRegistry
-    from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+    from tea_agent.workflow.dag_registry import SimpleDagRegistry
     simple = SimpleDagRegistry._instances.get(viz_id)
     if simple:
         return JSONResponse(simple)
@@ -1472,7 +1472,7 @@ async def handle_dag_image(request):
 
     # ── 数据源 2：SimpleDagRegistry ──
     try:
-        from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+        from tea_agent.workflow.dag_registry import SimpleDagRegistry
         entry = SimpleDagRegistry._instances.get(viz_id) if hasattr(SimpleDagRegistry, '_instances') else None
         if entry:
             dag_dict = {
@@ -1530,7 +1530,7 @@ async def handle_list_dags(request):
 
     # 2) SimpleDagRegistry
     try:
-        from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+        from tea_agent.workflow.dag_registry import SimpleDagRegistry
         for entry in SimpleDagRegistry.list_all():
             result.append({
                 "viz_id": entry.get("viz_id", ""),

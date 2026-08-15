@@ -1,5 +1,9 @@
 """
-从 gui.py L477-572 提取：LLM 生成不超过20字的主题摘要标题
+自动主题摘要 — LLM 生成不超过 20 字的对话摘要标题。
+
+原位于 `tea_agent/_gui/_topic_summary.py`（历史上从 gui.py 提取），是核心能力，
+与 GUI 界面无关。随「删除 gui/tui 接口」迁移到核心 session 目录，供
+`agent_pipeline.auto_summary` 使用。
 """
 
 import json as _json_gs
@@ -29,7 +33,7 @@ def _extract_usage(response):
         return _empty_usage()
 
 
-def _generate_topic_summary(client, model: str, conversations: list[dict]) -> tuple:
+def generate_topic_summary(client, model: str, conversations: list[dict]) -> tuple:
     """
     根据最近1～2条用户消息通过 LLM 生成不超过20字的摘要。
 
@@ -90,33 +94,32 @@ def _generate_topic_summary(client, model: str, conversations: list[dict]) -> tu
         if not content:
             content = getattr(response.choices[0].message, 'reasoning_content', None)
         if not content or not isinstance(content, str):
-            logger.warning(f"_generate_topic_summary: API 返回空 content, model={model}")
+            logger.warning(f"generate_topic_summary: API 返回空 content, model={model}")
             return None, _empty_usage()
 
         raw = content.strip()
         # 调试日志：记录 LLM 原始返回
-        logger.info(f"_generate_topic_summary 原始返回: model={model}, raw_len={len(raw)}, raw={repr(raw[:80])}")
+        logger.info(f"generate_topic_summary 原始返回: model={model}, raw_len={len(raw)}, raw={repr(raw[:80])}")
         # 去掉各种引号包裹（中英文全角半角）
         raw = re.sub(r'^[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+', '', raw)
         raw = re.sub(r'[\'"\u201c\u201d\u2018\u2019\u300c\u300d\uff02\uff07]+$', '', raw)
         raw = raw.strip()
 
         if not raw:
-            logger.warning(f"_generate_topic_summary: 清洗后 raw 为空, content={repr(content[:80])}")
+            logger.warning(f"generate_topic_summary: 清洗后 raw 为空, content={repr(content[:80])}")
             return None, _empty_usage()
 
-        # NOTE: 2026-06-22 硬过滤：禁止输出废词标题
+        # 硬过滤：禁止输出废词标题
         forbidden = ['我们', '用户', '您', '对话', '消息', '根据', '以下', '上文',
                      '主题', '这个', '输入', '生成']
         for word in forbidden:
             if word in raw:
-                logger.warning(f"_generate_topic_summary: 标题含禁词'{word}'被拒: {repr(raw)}")
+                logger.warning(f"generate_topic_summary: 标题含禁词'{word}'被拒: {repr(raw)}")
                 return None, _empty_usage()
 
-        # NOTE: 2026-05-01 08:17:32, min_length调整为4
         # 拒绝过短的摘要（<4个字符）
         if len(raw) < 4:
-            logger.warning(f"_generate_topic_summary: 摘要过短被拒, len={len(raw)}, raw={repr(raw)}")
+            logger.warning(f"generate_topic_summary: 摘要过短被拒, len={len(raw)}, raw={repr(raw)}")
             return None, _empty_usage()
 
         if len(raw) > 20:
@@ -124,5 +127,5 @@ def _generate_topic_summary(client, model: str, conversations: list[dict]) -> tu
 
         return (raw, _extract_usage(response)) if raw else (None, _extract_usage(response))
     except Exception as e:
-        logger.warning(f"_generate_topic_summary 失败: {type(e).__name__}: {e}, model={model}")
+        logger.warning(f"generate_topic_summary 失败: {type(e).__name__}: {e}, model={model}")
         return None, _empty_usage()

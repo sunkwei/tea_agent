@@ -18,7 +18,7 @@
 |---|---|
 | 🧠 **自进化** | AI 写 AI —— 能改自己的代码、造新工具、优化提示词，任务越多越强 |
 | 🧰 **工具驱动** | 75+ 内置工具（文件/代码/搜索/截图/浏览器/包管理/Git），运行时热插拔 |
-| 🖥️ **多形态** | GUI / Web V2 / REST API / ACP / Telegram / 微信 六种界面，一套引擎 |
+| 🖥️ **多形态** | Web V2 / REST API / ACP / Telegram / 微信 界面，一套引擎 |
 | 🧠 **真记忆** | 类人长期记忆：分层优先级、语义检索、自然衰减、去重合并，跨会话不忘 |
 | 🤖 **多 Agent** | 6 阶段全栈协作：角色化 Agent + 事件流 + 消息总线 + 并行执行 + DAG 编排 |
 | 📡 **远程协同** | `toolkit_remote_agent` 连接边缘设备（RK3588/BM1688），主机 ↔ 设备协同 |
@@ -132,7 +132,6 @@ tea-agent-api
 | 界面 | 启动方式 | 适用场景 |
 |------|---------|---------|
 | **Web V2**（推荐） | `tea-agent-api` | 单页应用 SPA，全功能浏览器体验：聊天 + 记忆 + 调度 + 历史 |
-| **GUI 桌面** | `tea-agent-gui` | Tkinter 原生桌面窗口，离线可用 |
 | **REST API** | `python -m tea_agent.server --port 8081` | OpenAI 兼容接口，第三方集成 |
 | **ACP 协议** | `tea-agent-acp` | VS Code / IDE 集成（JSON-RPC 2.0） |
 | **Telegram** | `tea-agent-telegram` | 手机远程对话 |
@@ -270,7 +269,7 @@ python build_nuitka.py            # 或编译为单文件可执行文件（无�
 
 | 剔除内容 | 说明 |
 |---------|------|
-| GUI / ACP / Telegram | 桌面与协议层 |
+| ACP / Telegram | 协议与渠道层 |
 | NumPy 向量 | 替换为纯 Python `math+struct` |
 | Playwright / PyAutoGUI / MSS | 可选自行安装 |
 | 12 个重型工具 | JS 渲染、截图、OCR、LSP 等按需启用 |

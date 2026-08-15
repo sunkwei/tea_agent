@@ -18,7 +18,7 @@
 |---|---|
 | 🧠 **Self-Evolving** | AI writing AI — modifies its own code, builds new tools, optimizes prompts. Stronger with every task |
 | 🧰 **Tool-Driven** | 75+ built-in tools (files/code/search/screenshot/browser/package/Git), hot-pluggable at runtime |
-| 🖥️ **Multi-Interface** | GUI / Web V2 / REST API / ACP / Telegram / WeChat — six front-ends, one engine |
+| 🖥️ **Multi-Interface** | Web V2 / REST API / ACP / Telegram / WeChat front-ends, one engine |
 | 🧠 **Real Memory** | Human-like long-term memory: tiered priority, semantic retrieval, natural decay, dedup & merge |
 | 🤖 **Multi-Agent** | 6-stage full-stack collaboration: role agents + event flows + message bus + parallel execution + DAG orchestration |
 | 📡 **Remote Sync** | `toolkit_remote_agent` connects edge devices (RK3588/BM1688), host ↔ device collaboration |
@@ -124,7 +124,6 @@ A config dialog pops up on first launch — fill in your LLM API Key and start c
 | Interface | Launch | Use Case |
 |-----------|--------|----------|
 | **Web V2** (recommended) | `tea-agent-api` | SPA, full browser experience: chat + memory + scheduler + history |
-| **GUI Desktop** | `tea-agent-gui` | Native Tkinter window, offline-capable |
 | **REST API** | `python -m tea_agent.server --port 8081` | OpenAI-compatible, third-party integration |
 | **ACP Protocol** | `tea-agent-acp` | VS Code / IDE integration (JSON-RPC 2.0) |
 | **Telegram** | `tea-agent-telegram` | Remote chat from phone |

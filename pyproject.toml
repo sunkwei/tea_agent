@@ -25,7 +25,6 @@ dependencies = [
     "numpy>=1.24.0",
     "PyYAML>=6.0",
     "markdown>=3.4.0",
-    "tkinterweb>=3.10",
     "pyautogui>=0.9.0",
     "mss>=9.0.0",
     "Pillow>=10.0.0",
@@ -41,14 +40,12 @@ dependencies = [
     "pygments>=2.10.0",
     "pydantic>=2.0.0",
     "rich>=13.0.0",
-    "textual>=0.40.0",
 ]
 
 [project.scripts]
 tea_agent = "tea_agent.server:main"
 tea_agent_api = "tea_agent.server:main"
 tea-agent-api = "tea_agent.server:main"
-tea-agent-gui = "tea_agent.gui:main"
 tea-agent-mini = "tea_agent_mini.__main__:main"
 tea-agent-acp = "tea_agent.protocol:main"
 tea-agent-telegram = "tea_agent.channel.telegram_adapter:run_telegram_bot"
@@ -64,7 +61,6 @@ telegram = [
     "python-telegram-bot>=20.0",
     "httpx>=0.25.0",
 ]
-gui2 = []
 mini = [
     "starlette>=0.37.0",
     "uvicorn>=0.27.0",
@@ -96,7 +92,6 @@ ignore = ["E501"]
 include-package-data = true
 
 [tool.setuptools.package-data]
-"tea_agent._gui" = ["*.png", "*.ico"]
 "tea_agent.server" = ["*.py", "static/*.html", "static/*.js", "static/*.css"]
 "tea_agent.skills" = ["**/*.md"]
 

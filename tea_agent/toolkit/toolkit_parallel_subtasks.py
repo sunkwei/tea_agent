@@ -128,7 +128,7 @@ def toolkit_parallel_subtasks(
     # ── 注册 DAG 可视化（任务面板缩略图）──
     viz_id = None
     try:
-        from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+        from tea_agent.workflow.dag_registry import SimpleDagRegistry
         dag_nodes = []
         for t in parallel_tasks:
             dag_nodes.append({

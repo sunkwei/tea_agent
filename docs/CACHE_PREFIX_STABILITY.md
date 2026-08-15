@@ -93,7 +93,24 @@ build_api_messages → _solidify_level2() 重算一次并定型
 只允许裁剪**本轮新增**的消息。已发送过（已进入前缀）的消息必须在入库时定型
 （R2），确保裁剪不会翻转"上一轮完整版 → 本轮占位符"。
 
+**落地实现（2026-08 修复，命中率根因）**：
+- **首建即定型**：水位线裁剪只在**本轮首次** `build_api_messages` 执行，并把每个
+  裁剪决定（工具占位符 / 文本截断 / L2 剔除）**写回 `context.messages` 定性**
+  （`_src_idx` 写回 + L2 `_level2_selected` 收敛）。随后同一工具循环内的请求
+  **跳过裁剪**（`context._loop_trim_done` 守卫），仅追加新工具结果 →
+  **已发送前缀逐字节不变，全命中缓存**。
+- **单调 clamp**：`context._loop_max_ratio` 取当前轮已到达的最大 ratio，防止
+  `_calibrated_estimate` 的 scale 在相邻请求间振荡导致 tier 0↔1↔2 反复翻转、
+  同一工具消息 full↔snipped 交替（曾实测每大工具结果破坏一次前缀缓存）。
+- **重定位禁令**：尾部动态上下文消息锚定在 `_l1_start`（L0+L3+L2 之后），
+  而非"最后一个 user 之前"——避免 additionalContexts 中途追加 user 使动态消息
+  在已发送的 L1 历史上移动（曾为潜在灾难级：全部 L1 前缀失效）。
+- **压缩真阈值**：`_compress_tool_content` 为标记行预留 96 字节，保证压缩结果
+  **≤ 阈值**（65536），杜绝"入库压缩后仍超阈值 → 滑出窗口又被替换为占位符"
+  的两阶段翻转。
+
 - ✅ `add_tool_result` 入库即压缩 → 永不二次改写
+- ✅ `_loop_trim_done` / `_loop_max_ratio` 由 `add_user_message` 在每回合边界清零
 - ⚠️ `tool_loop_runner` 直接 `context.messages.append` 的 assistant 消息
      应走 `_cap_message_text` 定型；策略3 清空 reasoning 时回写 context 定型（S2 已落地）
 

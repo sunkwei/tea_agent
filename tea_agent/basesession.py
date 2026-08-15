@@ -257,6 +257,10 @@ class BaseChatSession(ABC):
             if ctx is not None:
                 ctx._dynamic_ctx_cache = None
                 ctx._level2_dirty = True
+                # 新用户消息边界：重置水位线单调 clamp 与"首建即定型"标志，
+                # 允许本轮按新状态重新评估一次
+                ctx._loop_max_ratio = 0.0
+                ctx._loop_trim_done = False
         except Exception:
             pass
         self.messages.append(entry)
@@ -289,7 +293,9 @@ class BaseChatSession(ABC):
         """
         entry = {"role": "assistant", "content": self._cap_message_text(msg)}
         if reasoning:
-            entry["reasoning_content"] = reasoning
+            # 缓存友好（R2）：reasoning 文本入库即定型，避免进入前缀后仍超长、
+            # 被 _progressive_trim 策略3 二次清空改写（完整→空翻转破坏前缀缓存）。
+            entry["reasoning_content"] = self._cap_message_text(reasoning)
         self.messages.append(entry)
 
     @staticmethod
@@ -379,7 +385,12 @@ class BaseChatSession(ABC):
         if total_bytes <= max_chars:
             return content
 
-        half = max_chars // 2
+        # 压缩必须满足"结果 ≤ max_chars"，否则会被 _solidify_history/水位线
+        # 判定为"超阈值"而二次替换为占位符（R2 翻转：完整→占位符，破坏前缀缓存）。
+        # 为标记行（压缩说明 + 省略标注）预留字节，使 head+tail ≤ max_chars。
+        MARKER_RESERVE = 96
+        effective_max = max(128, max_chars - MARKER_RESERVE)
+        half = effective_max // 2
 
         # 前半部分：从 half 位置向前找最近换行
         head_end = half

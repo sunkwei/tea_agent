@@ -412,3 +412,49 @@ AGENTS.md:255 声明“文件操作工具校验路径，禁止 `../` 逃逸”�
 3. **`toolkit_exec`** 单条失败返回 dict（API 一致性）、批量 `timeout_kind`/整批中断/恒 `ok:True`、docstring 120/30 矛盾。
 4. **self_evolve** 单数 `error` 解析 + 用 `ast.parse` 替换启发式语法预检。
 5. 清理文档残留：`docs/*` 幽灵工具表、AGENTS.md 的 `cli.py`/`__init__.py`/FAQ 矛盾。
+
+---
+
+# 附：上下文 >80% 时压缩是否生效 —— 专项审查结论（2026）
+
+> 审查对象：`tea_agent/session/history_builder.py` 水位线裁剪 +
+> `auto_compact.py` CompactionPipeline + `onlinesession.summarize_old_history` 增量摘要。
+> 方法：源码追踪 + 驱动真实 `build_api_messages` 构造 >80% / >95% 场景实证。
+
+## 结论：会生效，但要区分"两种压缩"
+
+超过 80% 生效的是**本地规则裁剪（水位线 Tier2）**，**不是 LLM 摘要压缩**；
+LLM 摘要压缩要到 ≥95%（置 `_token_exhausted`）或攒够未摘要轮次才触发。
+
+## 触发机制（实证确认）
+
+水位线由 `build_api_messages` 里的**预裁剪校准估算** `est × scale` 决定
+（`_calibrated_estimate` 用上轮真实 usage 校准，scale 可 >1.2 放大）：
+
+| 水位线 | 生效动作 |
+|---|---|
+| ≥60%（Tier1） | `_snip_tier1`：截短旧工具输出为头部摘要 |
+| ≥80%（Tier2） | `_progressive_trim`：剔除 L2、工具输出→占位符、截长文本、删旧轮（0 LLM 成本） |
+| ≥95%（Tier3） | 本地裁剪 + 置 `context._token_exhausted=True` |
+
+真正的 LLM 历史摘要压缩走每轮 pipeline 的 `summarize_old_history` 步骤
+（`onlinesession.py` position=40，默认启用 `disable_summary=False`），触发条件：
+- **正常路径**：未摘要会话数 > `keep_turns`（按轮次触发，与 ratio 无关）
+- **force 路径**：仅当 `_token_exhausted=True`（≈Tier3 ≥95%）
+
+## 关键缺口（发现）
+
+1. **`CompactionPipeline`（`threshold=0.8` / `should_compact`）未接入自动流程**
+   —— 只在手动 `/api/pi/compact` 端点被调用（`pi_features_module.py`）。
+   所以"0.8 阈值触发 LLM 摘要压缩"这套管线在自动对话中**并未生效**；
+   自动流程真正用的是水位线本地裁剪 + `summarize_old_history`。
+2. **80%-95% 区间无 LLM 摘要** —— 只有本地规则裁剪；上下文语义历史不会被改写收拢，
+   若本地裁剪能力用尽仍可继续逼近上限。
+3. 与"首建即定型"缓存修复的取舍：单次工具循环中途突破 80% 不会立刻被裁剪
+   （`_loop_trim_done` 让裁剪只在每轮首次请求执行以保缓存），压缩响应延迟一拍。
+
+## 是否修复
+按设计语义，Tier2 本地裁剪 + Tier3/轮次 LLM 摘要已是可接受的默认行为，**不建议**为"80%
+立即 LLM 压缩"强行改动（会干扰前缀缓存与既有摘要时机）。若确需让 80% 触发 LLM 压缩，
+可把 `CompactionPipeline` 接入自动 pipeline 或用 `budget_warn_ratio` 提前置
+`_token_exhausted`——属增量增强，可按需另行实现。

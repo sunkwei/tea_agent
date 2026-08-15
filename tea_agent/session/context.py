@@ -85,6 +85,13 @@ class SessionContext:
     # 避免 L2 条目 full↔summary↔消失 翻转破坏其后 L1 历史的前缀缓存。
     _level2_selected: list | None = None
     _level2_dirty: bool = True
+    # 水位线裁剪的"单调 clamp"（缓存友好）：当前轮已到达的最大 ratio，
+    # 用于防止校准 scale 振荡导致 tier 反复翻转破坏前缀缓存；add_user_message 时清零。
+    _loop_max_ratio: float = 0.0
+    # 水位线裁剪的"首建即定型"标志（缓存友好）：一旦本轮的首次构建完成裁剪并
+    # 写回定型，后续同一工具循环的请求不再重复裁剪（前缀已定型），
+    # 仅追加新工具结果 → 全命中前缀缓存。add_user_message 时清零。
+    _loop_trim_done: bool = False
     _current_trace: Any = None
     reflection_manager: Any = None
     _current_mode: str = "mixed"

@@ -401,6 +401,33 @@ def _find_token_cutoff(messages: list, protect_tokens: int) -> int:
     return 0
 
 
+def _writeback_content(context: Any, msg: dict) -> None:
+    """缓存友好（DSH：Model-visible means logged）：把裁剪后的消息内容持久化回
+    context.messages，使后续请求读到已定型（含幂等标记）版本，前缀收敛稳定。
+
+    仅当消息带 _src_idx 且源消息仍是完整未定型版本时写回；幂等守卫由读侧
+    （各裁剪函数的 [已截断 / [工具结果已省略 标记判断）保证不会二次改写。
+    """
+    if context is None:
+        return
+    _src = msg.get("_src_idx")
+    if _src is None:
+        return
+    _msgs = getattr(context, "messages", None)
+    if not _msgs or not (0 <= _src < len(_msgs)):
+        return
+    _orig = _msgs[_src]
+    # 仅当源消息未被定型过才写回，避免越写越短导致反复翻转
+    if _orig.get("role") != msg.get("role"):
+        return
+    orig_content = _orig.get("content", "")
+    if isinstance(orig_content, str) and (
+            "[已截断" in orig_content or "[工具结果已省略" in orig_content
+            or "[输出过长已省略" in orig_content or "[紧急截断" in orig_content):
+        return
+    _orig["content"] = msg.get("content", orig_content)
+
+
 def _progressive_trim(messages: list[dict], budget: int, context: Any,
                       tool_prune_threshold: int = 500) -> list[dict]:
     """渐进式裁剪消息以满足 token 预算。
@@ -426,17 +453,28 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
     if est <= budget:
         return result
 
-    # 策略1: 删除 [历史记录] 标记的 L2 条目
+    # 策略1: 删除 [历史记录] 标记的 L2 条目（最旧的先删）
+    # 缓存友好（DSH：Model-visible means logged）：从 result 删除时同步从
+    # context._level2_selected 剔除对应条目（前 removed_l2 条，与派生顺序一致），
+    # 使后续循环请求从"已缩小的 L2 集"起步，删除决定一次性生效并收敛，
+    # 不再因 est 增长逐轮多删破坏已发送前缀。
     i = 0
+    removed_l2 = 0
     while i < len(result) and est > budget:
         msg = result[i]
         content = msg.get("content", "")
         if isinstance(content, str) and "[历史记录]" in content:
             est -= estimate_tokens(content) + 4
             result.pop(i)
+            removed_l2 += 1
             logger.debug(f"裁剪 L2 条目: {content[:50]}...")
         else:
             i += 1
+    if removed_l2 and context is not None:
+        selected = getattr(context, "_level2_selected", None)
+        if isinstance(selected, list) and len(selected) >= removed_l2:
+            context._level2_selected = selected[removed_l2:]
+            logger.debug(f"裁剪 L2 定型集: 剔除前 {removed_l2} 条，剩 {len(context._level2_selected)} 条")
 
     # 策略2: 替换工具输出为占位符（使用动态阈值）
     if est > budget:
@@ -451,6 +489,9 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
                     msg["content"] = f"[工具结果已省略: {n_chars} 字符]"
                     est -= estimate_tokens(content) - 30
                     est = max(est, 0)
+                    # 缓存友好（DSH：Model-visible means logged）：持久化定型，
+                    # 使后续请求读到占位符版本（幂等守卫跳过），前缀收敛稳定。
+                    _writeback_content(context, msg)
 
     # 策略3: 删除 reasoning_content（S2：清空决策一次性固化）
     # 清空后回写 context.messages 定型——否则预算波动导致"完整↔空"翻转，
@@ -495,6 +536,8 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
                     est -= estimate_tokens(content) - estimate_tokens(trimmed)
                     msg["content"] = trimmed
                     est = max(est, 0)
+                    # 缓存友好：持久化定型，后续请求读到截断版，前缀收敛
+                    _writeback_content(context, msg)
 
     # 策略4b: user 消息特权 — 仅超大文本（>64K 字符）才截断（保留指令主体）
     if est > budget:
@@ -511,6 +554,8 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
                 est -= estimate_tokens(content) - estimate_tokens(trimmed)
                 msg["content"] = trimmed
                 est = max(est, 0)
+                # 缓存友好：持久化定型
+                _writeback_content(context, msg)
 
     # 策略5: 删除 L1 旧轮次（token 保护区之外的旧对话轮次）
     # A6: 借鉴社区共识六"保护近端"——用 token 保护区（默认预算的 25%，
@@ -961,6 +1006,9 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
                         _msg["reasoning_content"] = ""
                     result.append(_msg)
 
+    # L1 起点（动态上下文锚定于此）：仅依赖 L0+L3+L2 数量，工具循环内稳定
+    _l1_start = len(result)
+
     # ═══════════════════════════════════════════════
     # Level 1: 最新对话（含动态工具输出裁剪）
     # ═══════════════════════════════════════════════
@@ -1030,7 +1078,12 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     #   0.80-0.95 → Tier2 Prune（渐进式裁剪）；≥ 0.95 → Tier3 Summarize
     #   （本地裁剪 + 置 _token_exhausted，由下一轮 summarize_old_history
     #   步骤执行增量 LLM 摘要兜底）。
-    if input_budget > 0:
+    # 缓存友好（DSH：Model-visible means logged）：裁剪只在**本轮首次构建**执行并
+    # 写回定型（_loop_trim_done），工具循环内后续请求**跳过裁剪**、仅追加新工具
+    # 结果。否则随 est 增长逐轮重新裁剪已发送前缀（full→占位符渐进加深），
+    # 每次都破坏其后全部历史缓存 —— 这是命中率低的根因。
+    _first_trim = not getattr(context, "_loop_trim_done", False)
+    if input_budget > 0 and _first_trim:
         est = estimate_messages_tokens(result)
         # A7: 先校准（用上次的 _last_estimate_tokens 基准），再记录本次估算——
         # 顺序不可颠倒，否则 _calibrated_estimate 读到的基准被本次值覆盖。
@@ -1039,6 +1092,17 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
         max_ctx = _resolve_max_ctx(context)
         if max_ctx > 0:
             ratio = est_check / max_ctx
+            # 缓存友好（DSH：派生只依赖事件流）——水位线裁剪**单调不减**：
+            # 校准 scale 可能因"post-trim actual vs pre-trim estimate"在相邻请求间
+            # 振荡，导致 tier 0↔1↔2 反复翻转、同一工具消息 full↔snipped 交替，
+            # 破坏其后全部前缀缓存。用一个"当前轮已到达的最大 ratio"夹住，
+            # 保证 tier 只能升级不能回退，裁剪决策一次收敛。
+            max_ratio = getattr(context, "_loop_max_ratio", 0.0)
+            new_ratio = max(max_ratio, ratio)
+            if abs(new_ratio - ratio) > 1e-9:
+                logger.debug(f"水位线 ratio 单调收紧: {ratio:.3f} -> {new_ratio:.3f}")
+            ratio = new_ratio
+            context._loop_max_ratio = ratio
             tier = classify_waterline(ratio)
             if tier >= 3:
                 # Tier 3: 先做本地裁剪（Tier1+2 累积），再置强制摘要标志
@@ -1075,6 +1139,16 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             est_after = estimate_messages_tokens(result)
             logger.info(f"裁剪后: {est_after} tokens (节省 {est - est_after})")
 
+    # 本轮首次构建已完成裁剪并定型 → 工具循环内后续请求跳过裁剪，前缀保持稳定
+    context._loop_trim_done = True
+
+    # 缓存友好（DSH：Model-visible means logged）——统一把裁剪后已定型的结果
+    # 写回 context.messages，使后续循环请求读到逐字节相同的已发送前缀。
+    # _writeback_content 内含幂等守卫，只写回尚未定型（无标记）的源消息，
+    # 保证"完整→裁剪"翻转最多发生一次、随后收敛。
+    for _m in result:
+        _writeback_content(context, _m)
+
     # 剥离内部字段（base64 快照缓存/图片路径/源索引），避免发送给 API
     for _m in result:
         _m.pop("_b64_cache", None)
@@ -1104,23 +1178,18 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     result = cleaned
 
     # ── 动态上下文注入（缓存友好）──
-    # 技能加载 / 未完成任务提醒 / 长期记忆等动态内容作为临时 user 消息
-    # 插到最后一个 user 消息之前（消息尾部），不进入 system prompt，
-    # 保证前缀（system + 历史）稳定可命中。临时构造不持久化到 context.messages，
-    # 因此不影响下一轮请求的历史前缀连续性。
-    # 内容带会话级缓存（_get_dynamic_context），工具循环内复用同一版本，
-    # 避免 TODO/skill 状态变化导致尾部动态消息频繁变动破坏前缀。
+    # 技能加载 / 未完成任务提醒 / 长期记忆等动态内容作为临时 user 消息注入。
+    # 缓存友好（R6/DSH：事件流派生确定性）：插入位置锚定在 L1 起点
+    # （即 L0+L3+L2 之后、当前轮真实对话之前）。该位置只依赖 L3/L2 数量，
+    # 而 L3/L2 在用户消息边界定型、工具循环内不变 —— 因此动态消息在整个循环内
+    # 位置固定，不随 additionalContexts 追加的中途 user 消息移动，
+    # 避免其后全部 L1 历史前缀缓存失效。
+    # 内容带会话级缓存（_get_dynamic_context），工具循环内复用同一版本。
     dynamic_text = _get_dynamic_context(context)
-    if dynamic_text:
-        dyn_msg = {"role": "user", "content": dynamic_text}
-        _last_user = -1
-        for _i in range(len(result) - 1, -1, -1):
-            if result[_i].get("role") == "user":
-                _last_user = _i
-                break
-        if _last_user >= 0:
-            result.insert(_last_user, dyn_msg)
-        # 无 user 消息时跳过注入：避免破坏消息结构（如纯工具历史/精简场景），
-        # 此时动态上下文对模型价值也有限。
+    if dynamic_text and _l1_start is not None:
+        _ins = min(_l1_start, len(result))
+        if _ins <= len(result):
+            dyn_msg = {"role": "user", "content": dynamic_text}
+            result.insert(_ins, dyn_msg)
 
     return result

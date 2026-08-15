@@ -1161,6 +1161,17 @@ body {
   color: var(--purple);
   opacity: 0.85;
 }
+#usage-bar .usage-context {
+  color: var(--primary);
+  font-weight: 600;
+}
+#usage-bar .usage-context.warn {
+  color: var(--orange);
+}
+#usage-bar .usage-context.danger {
+  color: var(--red);
+  font-weight: 700;
+}
 #usage-bar:hover {
   background: var(--surface2);
   color: var(--text);

@@ -55,6 +55,65 @@ def _server_round_summary(model: str, user_msg, tool_names: list, ai_msg: str) -
         pass
 
 
+def _context_usage_estimate(context: Any) -> int | None:
+    """估算当前上下文字符→token 用量；估算失败返回 None。
+
+    复用 context_fragments 的 _estimate_context_tokens，其覆盖消息本体、
+    tools 定义 JSON Schema 与 system 富化注入（与真实请求口径接近）。
+    """
+    try:
+        from tea_agent.context_fragments import _estimate_context_tokens
+
+        used = _estimate_context_tokens(context)
+        return int(used) if used else 0
+    except Exception:
+        return None
+
+
+def _compute_context_usage(context: Any, prompt_tokens: int) -> dict:
+    """计算"当前上下文已用 xx%"信息，供后端 usage_data / 前端展示。
+
+    组合两个口径：
+    - 实际用量：优先用最近一次请求的真实 prompt_tokens（= 当前上下文大小，
+      含前缀缓存命中），缺失时回退到 context_fragments 的启发式估算。
+    - 窗口上限：get_max_context_tokens（显式配置 > 模型名推断 > 128K 兜底）。
+
+    Returns:
+        {"context_used_tokens", "context_max_tokens", "context_pct", "context_used"}
+        （max 未知时 context_pct=None、context_used 显示估算值字样）
+    """
+    from tea_agent.auto_compact import get_max_context_tokens
+
+    used = 0
+    if prompt_tokens and prompt_tokens > 0:
+        used = int(prompt_tokens)
+    else:
+        est = _context_usage_estimate(context)
+        if est is not None:
+            used = est
+
+    max_tokens = 0
+    try:
+        max_tokens = int(get_max_context_tokens(context) or 0)
+    except Exception:
+        max_tokens = 0
+
+    pct = None
+    if max_tokens > 0:
+        pct = round(min(100.0, used / max_tokens * 100.0), 1)
+
+    if max_tokens > 0:
+        text = f"上下文已用 {pct}% ({used:,}/{max_tokens:,} tok)"
+    else:
+        text = f"上下文已用 {used:,} tok"
+    return {
+        "context_used_tokens": used,
+        "context_max_tokens": max_tokens,
+        "context_pct": pct,
+        "context_used": text,
+    }
+
+
 class AgentModule(HotReloadModule):
     """Agent 热重载模块。"""
 
@@ -593,6 +652,18 @@ class AgentModule(HotReloadModule):
                     usage_data["cheap_cache_hit_rate"] = _cheap_rate
             except Exception:
                 pass
+            # 当前上下文已用 xx%（供前端展示；优先用真实 prompt_tokens 口径）
+            try:
+                _ctx_usage = _compute_context_usage(
+                    getattr(session, "context", None),
+                    usage.get("prompt_tokens", 0) or 0,
+                )
+                usage_data["context_used_tokens"] = _ctx_usage["context_used_tokens"]
+                usage_data["context_max_tokens"] = _ctx_usage["context_max_tokens"]
+                usage_data["context_pct"] = _ctx_usage["context_pct"]
+                usage_data["context_used"] = _ctx_usage["context_used"]
+            except Exception:
+                logger.exception("context usage compute failed")
             _put({
                 "type": "done",
                 "ai_msg": _effective_ai_msg,

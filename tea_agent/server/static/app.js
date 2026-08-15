@@ -1420,7 +1420,7 @@ window.sendMessage = async function() {
 };
 
 function updateUsage(usage) {
-  if (!usage || !usage.total_tokens) return;
+  if (!usage || (!usage.total_tokens && !usage.context_used)) return;
   var bar = $('usage-bar');
   if (!bar) return;
   bar.style.display = '';
@@ -1438,12 +1438,22 @@ function updateUsage(usage) {
   if (usage.cheap_cache_hit_rate && usage.cheap_cache_hit_rate !== usage.cache_hit_rate) {
     cheapCacheHtml = ' | <span class="usage-cache cheap">' + usage.cheap_cache_hit_rate + '</span>';
   }
+  // 当前上下文已用 xx%（后端预格式化 context_used 文案，供直接展示）
+  var contextHtml = '';
+  if (usage.context_used) {
+    var _ctxPct = (usage.context_pct == null) ? '' : usage.context_pct;
+    var _ctxCls = 'usage-context';
+    if (_ctxPct !== '' && _ctxPct >= 80) _ctxCls += ' warn';
+    if (_ctxPct !== '' && _ctxPct >= 95) _ctxCls += ' danger';
+    contextHtml = ' | <span class="' + _ctxCls + '" title="' + esc(usage.context_used) + '">' + esc(usage.context_used) + '</span>';
+  }
   bar.innerHTML = '<span class="usage-tokens">📊 T:' + usage.total_tokens
     + '</span> <span class="usage-detail">(P:' + usage.prompt_tokens + '+C:' + usage.completion_tokens + ')</span>'
     + modelHtml
     + cheapHtml
     + cacheHtml
-    + cheapCacheHtml;
+    + cheapCacheHtml
+    + contextHtml;
   bar.className = 'usage-bar';
 }
 

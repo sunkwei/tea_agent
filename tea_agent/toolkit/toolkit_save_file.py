@@ -40,6 +40,16 @@ def toolkit_save_file(path=None, content=None, chunks=None, append=False, encodi
         if assembled and not assembled.endswith('\n'):
             lines += 1
 
+        # 写入成功后自动 git 快照（杜绝"改了没存盘"；失败不影响结果）
+        snap_hash = ""
+        try:
+            from tea_agent.toolkit._git_snapshot import maybe_snapshot
+            snap = maybe_snapshot([str(target)], f"save_file {target.name}")
+            if snap.get("snapshotted"):
+                snap_hash = snap.get("hash", "")
+        except Exception:
+            pass
+
         return {
             "status": "ok",
             "path": str(target.resolve()),
@@ -47,7 +57,8 @@ def toolkit_save_file(path=None, content=None, chunks=None, append=False, encodi
             "chars": len(assembled),
             "lines": lines,
             "chunks_used": len(chunks) if chunks else 1,
-            "appended": append
+            "appended": append,
+            "git_snapshot": snap_hash or None
         }
     except Exception as e:
         return {"status": "error", "error": str(e)}

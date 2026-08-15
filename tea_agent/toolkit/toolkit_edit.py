@@ -44,7 +44,16 @@ def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
     result = fn()
     # 统一为 dict 返回格式（内部函数仍可能返回 tuple 以兼容旧调用者）
     if isinstance(result, tuple) and len(result) == 3:
-        return _tuple_to_dict(result)
+        result = _tuple_to_dict(result)
+    # 修改成功后自动 git 快照（杜绝"改了没存盘"；preview 不落盘，失败不影响结果）
+    if result.get("ok") and not preview:
+        try:
+            from tea_agent.toolkit._git_snapshot import maybe_snapshot
+            snap = maybe_snapshot([file_path], f"edit {action} {os.path.basename(file_path)}")
+            if snap.get("snapshotted"):
+                result["git_snapshot"] = snap.get("hash", "")
+        except Exception:
+            pass
     return result
 
 

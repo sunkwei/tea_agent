@@ -384,6 +384,15 @@ def toolkit_diff(
                     }
 
                 # Step 4: 成功 — 无 stash 操作，.bak.<ts> 备份保留供 undo
+                # Step 4: 成功 — 自动 git 快照（杜绝"改了没存盘"；失败不影响结果）
+                snap_hash = ""
+                try:
+                    from tea_agent.toolkit._git_snapshot import maybe_snapshot
+                    snap = maybe_snapshot(modified_files, description)
+                    if snap.get("snapshotted"):
+                        snap_hash = snap.get("hash", "")
+                except Exception:
+                    pass
                 return {
                     "ok": True,
                     "files_modified": len(results),
@@ -391,6 +400,7 @@ def toolkit_diff(
                     "verify": verify,
                     "stashed": False,
                     "stash_msg": "backup-based (no git stash)",
+                    "git_snapshot": snap_hash or None,
                 }
 
             except Exception as e:

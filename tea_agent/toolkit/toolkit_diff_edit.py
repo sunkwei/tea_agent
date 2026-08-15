@@ -171,10 +171,21 @@ def toolkit_diff_edit(
             "error": f"写入失败: {e}",
         }
 
+    # 8. 修改成功后自动 git 快照（杜绝"改了没存盘"；失败不影响结果）
+    snap_hash = ""
+    try:
+        from tea_agent.toolkit._git_snapshot import maybe_snapshot
+        snap = maybe_snapshot([full_path], f"diff_edit {os.path.basename(full_path)}")
+        if snap.get("snapshotted"):
+            snap_hash = snap.get("hash", "")
+    except Exception:
+        pass
+
     return {
         "ok": True, "diff": diff, "summary": summary,
         "file_path": file_path, "applied": True,
         "bak_path": bak_path, "error": None,
+        "git_snapshot": snap_hash or None,
     }
 
 

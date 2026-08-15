@@ -352,3 +352,63 @@ AGENTS.md:255 声明“文件操作工具校验路径，禁止 `../` 逃逸”�
   - **LLM 会被带偏**：#6 幽灵工具引用；#50 工具 schema/描述与实现矛盾。**安全**：#30 路径遍历未拦截（与 AGENTS.md 声明矛盾）。
 - **中优先**：#5 `commonpath` 跨盘崩溃；#4 followup 硬截断；#19 `kwargs.pop` KeyError；#20 relaxed_json_loads 破坏 URL；#21 Agent.close 资源泄漏；#11 switch_provider 布尔字符串化；#12 config max_tokens 回环丢失；#13 memory None-importance 崩溃；#14 reflection 死代码；#28 run_tests 脚本式；#29 exec 未捕获；#31 config 单字段坏值丢整配置；#32 set_active_config_path 不生效；#34 memory 时区偏移只剥正偏移；#36 LiteSession hooks 泄漏；#37 lite 末回合 off-by-one；#38 压缩参数首尾重叠；#39 `[THINK_DONE]` 标记丢失；#44 语法预检误报；#46 toolkit_todo 全局态；#47 query_chat_history NULL 崩溃；#48 parallel_subtasks 超时未终止；#49 exec 批量中断。
 - **文档**：把 AGENTS.md 从“给人看的项目介绍”重构为“给 LLM 的指令契约”，统一工具清单/阈值/入口命令口径，修正全部幽灵工具与错误示例（#6、#16、DOC-1~5），补齐泄漏的路径校验实现，并把“字节预算”改为真字节计数（#33）。
+
+---
+
+# 复审结论（fix commit `331b491` 之后）
+
+> 逐项核对了修复提交（含 HEAD `4d95bdf`，无后续代码改动）。代码修复整体准确、大多数到位；但发现 **2 个新引入的回归** 与若干 **未修复的遗留项**。
+
+## ✅ 已正确修复（本人核对 + 子 Agent 复核 + 实测）
+
+| 类别 | 原问题 | 结论 |
+|---|---|---|
+| 数据安全 | `#1` toolkit_edit `_replace_text` CRLF 索引错位写坏文件 | ✅ 规范化串上匹配+切片，再恢复 CRLF（`toolkit_edit.py:105-134`） |
+| 数据安全 | `#2c` toolkit_diff stash-drop 丢弃用户改动 | ✅ 改为 `.bak.<ts>` 备份式 undo，不再 stash（`toolkit_diff.py:334-337,401-423`） |
+| 数据安全 | `#10` memory CRITICAL 先弹后判误删 | ✅ 先判再弹（`memory.py:169-174`） |
+| 校验 | `#3` self_evolve glob 不展开 + 漏 errors | ✅ glob 显式展开 + 复数 errors 计入 total（`self_evolve.py:84-106`） |
+| 校验 | `#23` 标题守卫字符错乱 | ✅ 已修 |
+| 工具可用 | `#25` release_version git commit 参数错位 | ✅ `-m` + 逐条 `-m`（`release_version.py:95-99`） |
+| 工具可用 | `#26` toolkit_save 从不写版本备份 | ✅ 自动递增路径写 `.v<old>.bak.py`（`tlk.py:621-629`） |
+| 工具可用 | `#9` agent_evolution Act 层参数错 | ✅ 改用正确签名，且不再提交非法 HTML 注释占位（`agent_evolution.py:185-201`） |
+| 工具可用 | `#27` toolkit_memory kwargs 死代码 | ✅ 直接读具名参数（`toolkit_memory.py:133-167`） |
+| 会话核心 | `#17`续命双倍累加 / `#19` kwargs.pop / `#20` URL regex / `#21` Agent.close / `#36` hooks 泄漏 / `#37` lite 末回合 / `#38` 压缩重叠 / `#39` THINK_DONE / `#40` 摘要竞态 / `#18` is_summarized / `#24` ctx 死路径 | ✅ 全部修复（逐一核对源码） |
+| 配置存储 | `#5` commonpath / `#11` bool 字符串 / `#12` max_tokens / `#13` importance None / `#14` reflection / `#31` config 静默丢弃 / `#32` _active_config_path / `#33` 字节预算 / `#34` tz / `#35` merge_memory | ✅ 全部修复 |
+| 安全 | `#30` 路径遍历（diff/self_evolve/save_file） | ✅ 均拒绝 `..`（实测） |
+
+## ⚠️ 部分修复 / 单例正则死角
+
+1. **`#3`（self_evolve）单数 error 仍漏判**：`(\d+)\s+errors` 匹配不到 pytest 的 **“1 error”**（单数）。实测 `"3 passed, 1 error"` → `passed=3,total=3` → 不回滚；`"1 error"` 单独出现 → `0/0` → **L3 仍形同虚设**于恰有一次错误时（`toolkit_self_evolve.py:104`）。超时也返回 `0,0` → 不回滚。
+2. **`#44` self_evolve 语法预检误报未修**：`_check_python_syntax` 仍拒合法代码——`if x:  # comment`（缺冒号误报）、注释内括号（未闭合误报）、非 4 倍数缩进（`self_evolve.py:248-252,304-313`）。
+3. **`#5` toolkit_save 显式 `version=` 不写备份**：自动递增路径有备份，但 `save(..., version="9.9.9")` 直接传版本号时不写旧版备份（`tlk.py:610-629`）。
+4. **`#45` `_git_revert` 仍 `reset --hard HEAD~1`**，仅在成功快照后触发，但会随回滚清掉回滚前新增的未提交改动（危害已收窄）。
+5. **`#8`_merge_memory / 相关**：已修。
+
+## ❌ 未修复（toolkit_edit 深层编辑 bug —— 修复提交只改了 `_replace_text`）
+
+`git show 331b491 -- toolkit_edit.py` 证实该文件仅改动 `_replace_text`（CRLF），其余三个函数一字未动：
+
+1. **`_replace_lines` 末行缺 `\n`**（`toolkit_edit.py:402`）：`"[l + '\n' for l in insert_list[:-1]] + [insert_list[-1]]"` → 替换块与下一行熔接。实测 `X\ny` 替换 → `line1\nX\nyline4\n`。
+2. **`_insert_lines` 用文件末行判换行**（`toolkit_edit.py:308`）：`lines[-1].endswith('\n')` → 应看插入点，实测 `a\nb` 插到行1 → `a\nbline1...` 熔接。
+3. **`_apply_patch_python` 忽略 context 行**（`toolkit_edit.py:244-265`，即原 `#42`）：context 行既不跳过也不用于对齐，实测正确头 + context 的 diff 会误删 `l3`、漏删 `l4`；windows 无 patch 二进制时必踩。
+
+## 🔴 新引入的回归（修复提交引入，比修复前更糟）
+
+1. **`toolkit_run_tests` 已注销（severity 最高）**：`toolkit_run_tests.py` 完整重写为 `python -m pytest`（正确），但 **`meta_toolkit_run_tests` 被误删**。`tlk.py:462-472` 要求 `meta_<name>` 必须 callable，否则跳过 → 实测 `"toolkit_run_tests" not in func_map`。所有下游引用（`toolkit_plan.py:720-724` 校验步骤、`toolkit_auto_pipeline.py:33,88`、`workflow/builder.py`、`toolkit_mode` 提示、skill 注册）都会运行时报“未知工具”。**必须补回 `meta_toolkit_run_tests`。**
+2. **`toolkit_exec` 单条 `Popen` 失败返回元组而非 dict**（`toolkit_exec.py:280-282`）：命令不存在时返回 `(127, "命令启动失败…", "")`，与正常路径 dict 及 docstring 承诺不符；会被 `onlinesession.py:681` `str(result)` 序列化成无结构 `"(127,...)"`。
+
+## 🔶 文档残留（phantom tools / cli.py）
+
+- 5 个幽灵工具**已从全部代码/指令清除**（`toolkit_diff` 分类表、`toolkit_mode`、`skill_loader`、litesession/prompt_manager 默认 prompt 均已改正确）。✅
+- **残留**：`docs/使用手册.md`、`docs/模块概览.md`、`docs/TOOLS.md` 仍把 `toolkit_read_pyproject`/`toolkit_test_gui`/`toolkit_git_branch_manager` 当真实工具写进工具表；`scripts/build_mini.py:22`、`scripts/compact_tool_descriptions.py:6` 有死排除条目。
+- **`cli.py` 本身是幽灵**：AGENTS.md:11/57/117 仍列 `cli.py` 并声称“GUI/TUI/CLI 三套交互界面”，但 `tea_agent/cli.py` 已在 cleanup 提交 `721ec1a` 删除（仅存于 build 残留）。`tui.py` 仍在。
+- AGENTS.md 内部两处矛盾：:69“`__init__.py` 自动扫描注册” vs :124“空文件，无需手工导入”；FAQ :263“可直接修改 `__init__.py`” vs tlk 扫描机制。
+- DEEPSEEK_REASONING_SUPPORT.md 注意事项 item2 仍写“加载时清除 reasoning_content”，与上文“保留 assistant RC”矛盾（仅诊断段被改动）。
+
+## 🔴 待优先处理（按优先级）
+
+1. **补回 `meta_toolkit_run_tests`**（回归，工具整体不可用）。
+2. **`toolkit_edit`** `_replace_lines`/`_insert_lines` 末尾换行、`_apply_patch_python` context 对齐（会写坏文件）。
+3. **`toolkit_exec`** 单条失败返回 dict（API 一致性）、批量 `timeout_kind`/整批中断/恒 `ok:True`、docstring 120/30 矛盾。
+4. **self_evolve** 单数 `error` 解析 + 用 `ast.parse` 替换启发式语法预检。
+5. 清理文档残留：`docs/*` 幽灵工具表、AGENTS.md 的 `cli.py`/`__init__.py`/FAQ 矛盾。

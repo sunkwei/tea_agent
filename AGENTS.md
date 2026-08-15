@@ -8,7 +8,7 @@ Tea Agent 是一个 **自进化的 AI Agent 框架**。核心能力：
 - **动态工具管理**：Agent 可通过 `toolkit_save` 运行时创建新工具，调用 `toolkit_reload` 立即生效
 - **多会话模式**：轻量级 (LiteSession)、完整 (OnlineToolSession)、子 Agent (Sub-agent)
 - **多层自进化**：工具使用分析 → 技能固化 → 系统提示词进化 → 后台线程自动优化
-- **GUI/TUI/CLI** 三套交互界面
+- **多样交互界面**：GUI 桌面（tkinter）、TUI 终端（textual）、Web/API 服务器、ACP/Telegram/微信 适配器
 
 ## 快速命令
 
@@ -54,7 +54,6 @@ tea_agent/
 ├── gui.py                 # 桌面 GUI（tkinter + tkinterweb）
 ├── gui_dialogs.py         # GUI 对话框（TodoDialog 等）
 ├── tui.py                 # 终端 TUI（textual 框架）
-├── cli.py                 # 命令行入口
 ├── config.py              # 配置加载与管理
 ├── context_fragments.py   # ★ 上下文片段系统（Codex 风格：时间/预算/模式按需组装）
 ├── agents_md_loader.py    # ★ AGENTS.md 分层指令加载（用户级+项目级+字节预算）
@@ -66,7 +65,7 @@ tea_agent/
 ├── permission.py          # 工具权限管理
 │
 ├── toolkit/               # ★ 工具注册中心（70+ 工具）
-│   ├── __init__.py        # 自动扫描注册
+│   ├── __init__.py        # 空文件（无手工注册；工具由 tlk.py 扫描加载）
 │   ├── toolkit_exec.py
 │   ├── toolkit_save.py
 │   ├── toolkit_save_file.py
@@ -91,9 +90,9 @@ tea_agent/
 │   ├── test_subagent_v2.py
 │   ├── test_tool_build.py
 │   ├── ...
-│
-├── mini/                  # Mini 构建独立包
 ```
+
+> 注：`tea_agent_mini/` 是仓库根下的独立顶层子包（见「Mini 构建」），不在 `tea_agent/` 目录内。
 
 ## 架构边界
 
@@ -111,10 +110,9 @@ tea_agent/
 │  ├─ subagent_msg     → 消息传递          │  ← Agent 间通信
 │  └─ collect/cancel   → 结果收集          │
 ├─────────────────────────────────────────┤
-│  GUI / TUI / CLI 三界面                  │
+│  GUI / TUI 桌面+终端界面                  │
 │  ├─ gui.py (tkinter)                    │  ← 桌面窗口 + 浏览器组件
-│  ├─ tui.py (textual)                    │  ← 终端交互
-│  └─ cli.py (argparse)                   │  ← 命令行模式
+│  └─ tui.py (textual)                    │  ← 终端交互
 └─────────────────────────────────────────┘
 ```
 
@@ -260,7 +258,7 @@ toolkit_release_version(
 ## FAQ
 
 **Q: 如何添加新工具？**
-A: 在 `tea_agent/toolkit/` 创建 `toolkit_xxx.py`，实现函数后用 `toolkit_save` 注册，调用 `toolkit_reload()` 生效。或直接修改 `__init__.py` 加入导入。
+A: 在 `tea_agent/toolkit/` 创建 `toolkit_xxx.py`，实现 `toolkit_xxx()` 与 `meta_toolkit_xxx()` 后即可（`tlk.py` 自动按 `toolkit_*.py` 扫描+exec 加载，`__init__.py` 为空无需手工导入）；或用 `toolkit_save` 运行时注册，调用 `toolkit_reload()` 生效。
 
 **Q: 自进化线程做了什么？**
 A: 每小时自动：工具使用率分析 & 优化建议 → `docs/TOOLS.md` 同步 → 技能模式整理 → 跨主题记忆提取。

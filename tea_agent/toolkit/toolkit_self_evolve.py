@@ -100,15 +100,18 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
             passed = int(m.group(1)) if m else 0
             m = re.search(r'(\d+)\s+failed', output)
             failed = int(m.group(1)) if m else 0
-            # pytest 的 errors（集内/夹具设置错误）也要计入 total，避免 0/0 误判通过
-            m = re.search(r'(\d+)\s+errors', output)
+            # pytest 的 errors（集内/夹具设置错误）也要计入 total，避免 0/0 误判通过。
+            # 同时匹配复数 "errors" 与单数 "1 error"。
+            m = re.search(r'(\d+)\s+error', output)
             errors = int(m.group(1)) if m else 0
             total = passed + failed + errors
             return passed, total, output[-500:] if (failed > 0 or errors > 0) else None
         except subprocess.TimeoutExpired:
-            return 0, 0, "test timeout (>120s)"
+            # 测试超时按失败处理（0/1 使 test_passed < test_total 成立，触发回滚）
+            return 0, 1, "test timeout (>120s)"
         except Exception as e:
-            return 0, 0, str(e)[:200]
+            # 执行异常按失败处理
+            return 0, 1, str(e)[:200]
 
     # ── LSP 辅助函数 ── @2026-05-19 gen by claude
     def _run_lsp_checks(full_path, symbol, old_code, new_code, content):
@@ -215,118 +218,36 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         Returns:
             {"ok": bool, "error": str, "details": dict}
         """
+        import ast
         import re
 
         details = {"checks": []}
 
-        # 1. 检查换行符一致性
-        has_crlf = "\r\n" in content
-        has_lf = "\n" in content.replace("\r\n", "")
+        # ── 权威语法校验：ast.parse 捕获一切真实语法错误（缺冒号/括号/字符串/缩进混合）──
+        # 不再用启发式正则逐条拼凑，避免 `if x:  # comment`、注释内括号等合法代码被误伤。
+        try:
+            ast.parse(new_code)
+        except SyntaxError as e:
+            return {
+                "ok": False,
+                "error": f"Python 语法错误: {e.msg} (第 {e.lineno} 行, 列 {e.offset})",
+                "details": {
+                    "issue": f"synError:{getattr(e, 'msg', '').lower().replace(' ', '_')}",
+                    "line": e.lineno,
+                    "offset": e.offset,
+                    "col_offset": e.offset,
+                },
+                "suggestion": "请检查括号/冒号/引号是否闭合",
+            }
+        details["checks"].append("ast_parse: ok")
 
-        if has_crlf and has_lf:
-            # 混用换行符
-            # 但只在新代码中检查，因为旧文件可能已有混用
-            new_has_crlf = "\r\n" in new_code
-            new_has_lf = "\n" in new_code.replace("\r\n", "")
-            if new_has_crlf and new_has_lf:
-                return {"ok": False, "error": "新代码中混用了 CRLF 和 LF 换行符",
-                        "details": {"issue": "mixed_newlines", "suggestion": "统一使用 LF (\\n)"}}
-            details["checks"].append("newline_consistency: ok")
-        else:
-            details["checks"].append("newline_consistency: ok")
-
-        # 2. 检查缩进一致性
-        lines = new_code.split("\n")
-        indent_issues = []
-        for i, line in enumerate(lines):
-            if not line.strip():
-                continue
-            # 检查是否混用 Tab 和空格
-            leading = line[:len(line) - len(line.lstrip())]
-            if "\t" in leading and " " in leading:
-                indent_issues.append(f"行 {i+1}: 混用 Tab 和空格")
-            # 检查缩进是否是 4 的倍数（Python 标准）
-            if leading and " " in leading and "\t" not in leading:
-                spaces = len(leading)
-                if spaces % 4 != 0:
-                    indent_issues.append(f"行 {i+1}: 缩进 {spaces} 空格，不是 4 的倍数")
-
-        if indent_issues:
-            return {"ok": False, "error": f"缩进问题: {indent_issues[0]}",
-                    "details": {"issue": "indentation", "problems": indent_issues[:3]}}
-        details["checks"].append("indentation: ok")
-
-        # 3. 检查括号匹配
-        brackets = {"(": ")", "[": "]", "{": "}"}
-        stack = []
-        in_string = False
-        string_char = None
-        line_num = 1
-
-        for i, char in enumerate(new_code):
-            if char == "\n":
-                line_num += 1
-
-            # 处理字符串
-            if char in ('"', "'") and not in_string:
-                in_string = True
-                string_char = char
-                # 检查三引号
-                if new_code[i:i+3] in ('"""', "'''"):
-                    string_char = new_code[i:i+3]
-            elif in_string:
-                if char == string_char[0] and new_code[i:i+len(string_char)] == string_char:
-                    in_string = False
-                    string_char = None
-                continue
-
-            if not in_string:
-                if char in brackets:
-                    stack.append((char, line_num))
-                elif char in brackets.values():
-                    if not stack:
-                        return {"ok": False, "error": f"行 {line_num}: 多余的闭合括号 '{char}'",
-                                "details": {"issue": "bracket_mismatch", "line": line_num}}
-                    open_char, open_line = stack.pop()
-                    if brackets[open_char] != char:
-                        return {"ok": False, "error": f"行 {line_num}: 括号不匹配，'{open_char}' (行 {open_line}) 与 '{char}'",
-                                "details": {"issue": "bracket_mismatch", "line": line_num}}
-
-        if stack:
-            open_char, open_line = stack[-1]
-            return {"ok": False, "error": f"行 {open_line}: 未闭合的括号 '{open_char}'",
-                    "details": {"issue": "unclosed_bracket", "line": open_line}}
-        details["checks"].append("brackets: ok")
-
-        # 4. 检查明显的语法错误模式
-        # 检查行尾是否有冒号缺失（def, class, if, for, while 等）
-        control_patterns = [
-            (r'^\s*(def|class|if|elif|else|for|while|with|try|except|finally)\s+.*[^:]\s*$', "控制语句后缺少冒号"),
-        ]
-
-        for pattern, msg in control_patterns:
-            for i, line in enumerate(lines):
-                if re.match(pattern, line) and not line.strip().endswith(":"):
-                    # 排除多行情况
-                    if not line.strip().endswith("\\"):
-                        return {"ok": False, "error": f"行 {i+1}: {msg}",
-                                "details": {"issue": "missing_colon", "line": i+1}}
-        details["checks"].append("syntax_patterns: ok")
-
-        # 5. 检查新代码是否有明显的换行问题
-        # 检查是否有应该换行但没有换行的情况（如多条语句在同一行）
-        for i, line in enumerate(lines):
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            # 检查是否有分号分隔的多条语句（不推荐）
-            if ";" in stripped and not stripped.startswith("print"):
-                # 排除字符串中的分号
-                parts = stripped.split(";")
-                if len(parts) > 1 and all(p.strip() for p in parts):
-                    return {"ok": False, "error": f"行 {i+1}: 使用分号分隔多条语句，建议分行书写",
-                            "details": {"issue": "multiple_statements", "line": i+1}}
-        details["checks"].append("line_statements: ok")
+        # 1. 检查换行符一致性（仅新代码，避免误报旧文件历史混用）
+        new_has_crlf = "\r\n" in new_code
+        new_has_lf = "\n" in new_code.replace("\r\n", "")
+        if new_has_crlf and new_has_lf:
+            return {"ok": False, "error": "新代码中混用了 CRLF 和 LF 换行符",
+                    "details": {"issue": "mixed_newlines", "suggestion": "统一使用 LF (\\n)"}}
+        details["checks"].append("newline_consistency: ok")
 
         return {"ok": True, "error": None, "details": details}
 

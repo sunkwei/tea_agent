@@ -38,7 +38,8 @@ def toolkit_run_tests(pattern: str = "test_*.py") -> dict:
         passed = int(m.group(1)) if m else 0
         m = re.search(r'(\d+)\s+failed', output)
         failed = int(m.group(1)) if m else 0
-        m = re.search(r'(\d+)\s+errors', output)
+        # pytest 统计可能是复数 "errors" 也可能是单数 "1 error"
+        m = re.search(r'(\d+)\s+error', output)
         errors = int(m.group(1)) if m else 0
         return {
             "ok": r.returncode == 0,
@@ -52,3 +53,24 @@ def toolkit_run_tests(pattern: str = "test_*.py") -> dict:
         return {"ok": False, "error": "测试超时 (>300s)"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+def meta_toolkit_run_tests() -> dict:
+    """Meta toolkit run tests."""
+    return {
+        "type": "function",
+        "function": {
+            "name": "toolkit_run_tests",
+            "description": "运行项目测试套件（python -m pytest）。glob 显式展开当前目录与 tea_agent/tests/ 下的测试文件。返回 passed/failed/errors/total。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {
+                        "type": "string",
+                        "description": "测试文件匹配模式，默认 'test_*.py' 运行所有测试",
+                        "default": "test_*.py",
+                    }
+                },
+            },
+        },
+    }

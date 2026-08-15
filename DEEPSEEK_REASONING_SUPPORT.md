@@ -95,7 +95,7 @@ self.messages.append(assistant_msg)
 ## 注意事项
 
 1. **持久化保留**：rounds_json 中保留 reasoning_content，用于调试和历史回放
-2. **加载清除**：从 DB 加载时自动清除，确保新会话不受旧状态影响
+2. **加载保留 assistant RC**：从 DB 加载历史时**保留** assistant 消息的 reasoning_content（同一 chat_stream 内 tool_calls 的 RC 必须回传），仅由 `_strip_reasoning_content` 清除非 assistant 消息的残留 RC；跨 API 会话的旧 RC 由 DeepSeek 本身判定失效，无需手动清除
 3. **兼容性**：其他模型无 reasoning_content，pop 操作无副作用
 4. **tool_loop 完整性**：同一 chat_stream 内的多轮 tool_loop 正确回传 reasoning_content
 

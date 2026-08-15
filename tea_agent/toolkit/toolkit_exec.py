@@ -259,7 +259,7 @@ def _build_scrubbed_env() -> dict:
     return scrubbed
 
 
-def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
+def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
     """使用 _ProcessMonitor 智能超时执行单条命令。
 
     流程：
@@ -278,8 +278,16 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> tuple:
             env=_build_scrubbed_env(),
         )
     except (FileNotFoundError, PermissionError, OSError) as e:
-        # 命令不存在/无权限等启动失败：返回结构化错误而非抛出（与批量分支一致）
-        return 127, f"命令启动失败: {app}\n{str(e)}", ""
+        # 命令不存在/无权限等启动失败：返回结构化 dict，与正常路径及 tool 契约一致
+        return {
+            "ok": False,
+            "returncode": 127,
+            "timed_out": False,
+            "timeout_kind": "",
+            "signal": None,
+            "stdout": "",
+            "stderr": f"命令启动失败: {app}\n{str(e)}",
+        }
 
     monitor = _ProcessMonitor(process.pid, base_timeout=timeout)
     monitor.start()
@@ -573,7 +581,13 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                 f.result()
 
         success = sum(1 for r in results if r and not r.get("error"))
-        return {"ok": True, "results": results, "success_rate": f"{success}/{len(commands)}", "total": len(commands)}
+        # ok 反映是否有任一命令成功（避免全失败仍报 ok:True 误导 LLM）；成功比例见 success_rate
+        return {
+            "ok": success > 0,
+            "results": results,
+            "success_rate": f"{success}/{len(commands)}",
+            "total": len(commands),
+        }
 
     else:  # action == "single"
         if args is None:
@@ -723,7 +737,7 @@ def meta_toolkit_exec() -> dict:
                     },
                     "timeout": {
                         "type": "integer",
-                        "description": "基础超时秒数(默认120), 每个命令基础超时秒数(默认30)。进程活跃消耗资源时，最多延长 4x 时间；空闲超过 base_timeout 则终止。",
+                        "description": "基础超时秒数, 默认 30。单条命令有效超时 = timeout 或 120(未指定时); 进程活跃消耗资源时最多延长 4x，空闲超过 base_timeout 则终止。",
                     },
                 },
                 "required": [],

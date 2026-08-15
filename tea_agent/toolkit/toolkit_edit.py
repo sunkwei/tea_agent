@@ -253,16 +253,41 @@ def _apply_patch_python(file_path: str, original_content: str,
         new_lines = lines[:]
         for hunk in reversed(hunks):
             old_start = hunk['old_start']
-            delete_lines = [l[1:] for l in hunk['lines'] if l.startswith('-')]
-            insert_lines = [l[1:] for l in hunk['lines'] if l.startswith('+')]
+            # 新建文件 hunk（@@ -0,0 +1,N @@）：无旧行可匹配，仅可插入
+            is_new_file = old_start == 0
+            if is_new_file:
+                newfile_lines = [l[1:] for l in hunk['lines'] if l.startswith('+')]
+                for l in hunk['lines']:
+                    if l.startswith('-') or l.startswith(' '):
+                        return (1, "", "❌ 新建文件 patch 不应包含删除/上下文行")
+                # 按 patch 顺序在文件开头原样插入
+                for i, nl in enumerate(newfile_lines):
+                    new_lines.insert(i, nl)
+                continue
+
             start_idx = old_start - 1
-            if start_idx < 0 or start_idx >= len(new_lines):
+            if start_idx < 0 or start_idx > len(new_lines):
                 return (1, "", f"❌ patch 行号超出范围: {old_start}")
-            for _ in delete_lines:
-                if start_idx < len(new_lines):
-                    new_lines.pop(start_idx)
-            for i, il in enumerate(insert_lines):
-                new_lines.insert(start_idx + i, il)
+
+            # 逐行按顺序应用，正确处理 context(空格) / 删除(-) / 插入(+) 的穿插
+            # pos 指向 new_lines 中当前应处理的旧行位置
+            pos = start_idx
+            for l in hunk['lines']:
+                if l.startswith('+'):
+                    # 插入：纯新增，不消费旧行
+                    new_lines.insert(pos, l[1:])
+                    pos += 1
+                elif l.startswith('-'):
+                    # 删除：校验旧行匹配后移除
+                    if pos >= len(new_lines) or new_lines[pos] != l[1:]:
+                        return (1, "", f"❌ patch 删除行不匹配: {l[1:]!r}")
+                    new_lines.pop(pos)
+                elif l.startswith(' '):
+                    # context：校验旧行匹配后保留
+                    if pos >= len(new_lines) or new_lines[pos] != l[1:]:
+                        return (1, "", f"❌ patch 上下文不匹配: {l[1:]!r}")
+                    pos += 1
+                # "\ No newline at end of file" 等其余行忽略
 
         new_text = '\n'.join(new_lines)
 
@@ -300,17 +325,21 @@ def _insert_lines(file_path: str, start_line: int, new_text: str,
         original_content = ''.join(lines)
         new_text = new_text.replace('\r\n', '\n').replace('\r', '\n')
         insert_lines_list = new_text.split('\n')
+        insert_index = start_line - 1
+        # 最后一段插入文本是否需补 \n 分隔：
+        # 若插入点之后还有行，或其后紧跟的原有行本身带 \n（行式拼接习惯），则补；
+        # 仅当插到文件最末尾且原末行无 \n 时不补（让插入文本成为真正末行）。
+        last_needs_nl = (
+            insert_index < len(lines)  # 插入点后还有后续行
+            or (lines and lines[-1].endswith('\n'))  # 原文件行均以 \n 结束
+        )
         insert_with_nl = []
         for i, line in enumerate(insert_lines_list):
             if i < len(insert_lines_list) - 1:
                 insert_with_nl.append(line + '\n')
             else:
-                if lines and lines[-1].endswith('\n'):
-                    insert_with_nl.append(line + '\n')
-                else:
-                    insert_with_nl.append(line)
+                insert_with_nl.append(line + '\n' if last_needs_nl else line)
 
-        insert_index = start_line - 1
         new_lines = (lines[:insert_index] + insert_with_nl +
                      lines[insert_index:])
         new_text_joined = ''.join(new_lines)
@@ -399,7 +428,16 @@ def _replace_lines(file_path: str, start_line: int, end_line: int,
         old_text = ''.join(old_lines)
         new_text = new_text.replace('\r\n', '\n').replace('\r', '\n')
         insert_list = new_text.split('\n')
-        insert_with_nl = [l + '\n' for l in insert_list[:-1]] + [insert_list[-1]]
+
+        # 每个插入行都补 \n，保证替换块与后续行分隔；除非文件恰好以插入行结尾（无后续行）
+        insert_with_nl = []
+        for i, line in enumerate(insert_list):
+            is_last_insert = (i == len(insert_list) - 1)
+            after_block_has_more = end_line < len(lines)  # 替换块后还有后续行
+            if not is_last_insert or after_block_has_more:
+                insert_with_nl.append(line + '\n')
+            else:
+                insert_with_nl.append(line)
 
         new_lines = (lines[:start_line - 1] + insert_with_nl +
                      lines[end_line:])

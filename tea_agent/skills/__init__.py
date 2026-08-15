@@ -1,28 +1,9 @@
 """
-Skill 树系统 — 自动结晶任务经验为可复用技能。
+Skill 系统 — 按需加载静态 SKILL.md 技能包（skill_loader）。
 
-核心理念:
-  每次成功完成任务 → 自动提取 Skill → 形成个人技能树
-  下次遇到类似任务 → 自动推荐 → 降低 token 消耗
+本包仅承载内置静态 SKILL.md 技能包目录（见各 `<name>/SKILL.md`），供
+`tea_agent.skill_loader` 的按需加载评估器扫描。
 
-用法:
-    from tea_agent.skills import SkillRegistry, SkillCrystallizer
-
-    # 结晶新技能
-    crystallizer = SkillCrystallizer()
-    skill = crystallizer.crystallize(task="重构 gui.py 添加类型注解",
-                                     tools_used=["toolkit_file", "toolkit_edit", "toolkit_lsp"],
-                                     result="成功添加了 45 个函数的类型注解")
-
-    # 注册到技能库
-    registry = SkillRegistry()
-    registry.register(skill)
-
-    # 推荐相关技能
-    skills = registry.recommend("帮我给 cli.py 添加类型提示")
+知识结晶机制（SkillCrystallizer / SkillRegistry）已于 v0.13 废除，
+本包不再导出任何类，仅作为技能包的占位命名空间。
 """
-
-from .skill_crystallize import SkillCrystallizer
-from .skill_registry import SkillRegistry
-
-__all__ = ["SkillRegistry", "SkillCrystallizer"]

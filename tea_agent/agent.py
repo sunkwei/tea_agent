@@ -671,7 +671,7 @@ class Agent:
                     trigger.clear_events()
                 return
 
-            actor = EvolutionActor(self._toolkit)
+            actor = EvolutionActor(self._toolkit, cheap_client, cheap_model)
             evaluator = EvolutionEvaluator(self._toolkit)
 
             # ── Evaluate 阶段（改进前）：对有 rubric 的行动打基线分 ──

@@ -2,6 +2,42 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
+
+def _cleanup_old_backups(full_path, keep: int = 3):
+    """清理同一文件过旧的 time-stamped .bak 备份（保留最近 keep 份）。
+
+    自进化的 Layer 1 每次修改都会生成 `.bak.YYYYMMDD_HHMMSS` 时间戳备份，
+    长时间累积会污染仓库。此函数保留最近 keep 份（按时间戳名排序），
+    删除更早的备份，只删除本文件前缀下的 `.bak.<ts>` 形态，且幂等安全。
+    失败仅记日志，不影响主流程。
+
+    Args:
+        full_path: 被修改文件的绝对路径
+        keep: 保留的最近备份份数（默认 3）
+    """
+    try:
+        import os
+        import re
+
+        directory = os.path.dirname(full_path)
+        base = os.path.basename(full_path)
+        # 匹配 `<file>.bak.<YYYYMMDD_HHMMSS>`（如 foo.py.bak.20260814_210000）
+        pat = re.compile(r"^" + re.escape(base) + r"\.bak\.\d{8}_\d{6}$")
+        backup = []
+        for entry in os.listdir(directory):
+            if entry.startswith(base + ".bak.") and pat.match(entry):
+                backup.append(entry)
+        if len(backup) <= keep:
+            return
+        for old in sorted(backup)[:-keep]:
+            try:
+                os.remove(os.path.join(directory, old))
+                logger.info(f"self_evolve: 清理旧备份 {old}")
+            except OSError:
+                logger.debug(f"self_evolve: 清理备份失败 {old}")
+    except Exception as e:
+        logger.debug(f"self_evolve: 清理旧备份跳过: {e}")
+
 def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_code: str, verify: bool = True, backup: bool = True, git_snapshot: bool = True, run_tests: bool = True, symbol: str = None, lsp_checks: bool = True) -> dict:
     """@2026-05-19 gen by claude, 集成LSP检查层(Layer2.5: 影响分析+lint+签名对比)    五层安全自进化 + LSP 智能增强。
 
@@ -281,6 +317,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         bak_path = f"{full_path}.bak.{ts}"
         shutil.copy2(full_path, bak_path)
+        _cleanup_old_backups(full_path)  # 自我修剪：保留最近几份，清掉更早的
 
     # 临时备份（用于快速回滚）
     tmp_bak = full_path + ".tmp_bak"

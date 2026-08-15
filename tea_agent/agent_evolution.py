@@ -145,10 +145,17 @@ rubric 格式（规则项支持 match: regex/contains/line/line_contains）：
 # ═══════════════════════════════════════════════════════════════
 
 class EvolutionActor:
-    """进化执行器 — 调用已有 toolkit_* 工具执行分析建议。"""
+    """进化执行器 — 调用已有 toolkit_* 工具执行分析建议。
 
-    def __init__(self, toolkit):
+    evolve_code 用廉价 LLM 生成修复后的新代码，经 toolkit_self_evolve 的
+    5 层安全护栏（git 快照 → .bak → 语法 → 编译 → LSP → 测试）执行，
+    把「AI 写 AI」真正闭环：缺了 LLM 就保守跳过，绝不提交占位符。
+    """
+
+    def __init__(self, toolkit, cheap_client=None, cheap_model: str = ""):
         self.tk = toolkit
+        self._cheap_client = cheap_client
+        self._cheap_model = cheap_model or "gpt-4o-mini"
 
     def execute(self, actions: list[dict]) -> list[dict]:
         """执行行动列表，返回执行结果。"""
@@ -180,8 +187,57 @@ class EvolutionActor:
             return self._solidify(reason)
         return {"ok": False, "error": f"unknown_action:{action_type}"}
 
+    # ── LLM 修代码 — 生成修复后的新代码全文 ──
+    EVOLVE_PROMPT = """你是一个自进化 Agent 修码器。下面是一个工具源的当前全文，它被报告反复失败。
+请修复根本问题，输出**修复后的完整新文件内容**（保持其余代码不变，仅做必要修改）。
+
+当前文件 {file_path}：
+```python
+{content}
+```
+
+修复目标：{reason}
+
+要求：
+- 只输出新文件的 Python 代码全文，不要 Markdown 围栏，不要任何解释。
+- 保持原有函数签名、参数名、返回结构不变（避免破坏调用方）。
+- 若 {file_path} 不是 .py 文件，或无法确定修复点，输出原样内容。"""
+
+    def _generate_new_code(self, file_path: str, content: str, reason: str) -> str | None:
+        """用廉价 LLM 生成修复后的完整文件内容；不可用/失败返回 None。"""
+        if not self._cheap_client:
+            return None
+        try:
+            from tea_agent.api_retry import call_with_retry
+
+            prompt = self.EVOLVE_PROMPT.format(file_path=file_path, content=content, reason=reason)
+            resp = call_with_retry(
+                self._cheap_client.chat.completions.create,
+                model=self._cheap_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+            )
+            new_code = resp.choices[0].message.content
+            if not new_code or not new_code.strip():
+                logger.warning(f"evolution: LLM 未返回修复代码 for {file_path}")
+                return None
+            # 去掉可能的 Markdown 围栏
+            lines = new_code.strip().splitlines()
+            if lines and lines[0].strip().startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip().startswith("```"):
+                lines = lines[:-1]
+            return "\n".join(lines)
+        except Exception as e:
+            logger.warning(f"evolution: LLM 生成修复代码失败 {file_path}: {e}")
+            return None
+
     def _evolve_code(self, file_path: str, reason: str) -> dict:
-        """修复工具代码 — 委托给 toolkit_self_evolve 的 5 层安全机制。"""
+        """修复工具代码 — LLM 生成新代码 + toolkit_self_evolve 5 层护栏。
+
+        从文件全文 diff：把旧全文替换为新全文交给 self_evolve 的护栏执行，
+        直到满足最小变化量（绝不提交含义不变的占位符）。
+        """
         if not self.tk or "toolkit_self_evolve" not in self.tk.func_map:
             return {"ok": False, "error": "toolkit_self_evolve 不可用"}
         try:
@@ -192,8 +248,25 @@ class EvolutionActor:
             return {"ok": False, "error": f"读取文件失败或内容为空: {file_path}"}
         if content.startswith("Error:") or content.startswith("❌"):
             return {"ok": False, "error": f"读取文件失败: {content[:200]}"}
-        # 缺少 LLM 生成的新代码时，不得提交占位符（HTML 注释非合法 Python）
-        return {"ok": False, "error": "evolve_code 需要 LLM 生成 new_code，当前无有效新代码，已跳过"}
+
+        # 缺 LLM → 保守跳过，绝不提交占位符（HTML 注释非合法 Python）
+        if not self._cheap_client:
+            return {"ok": False, "error": "evolve_code 需要 cheap LLM 生成 new_code，当前无客户端，已跳过"}
+
+        new_code = self._generate_new_code(file_path, content, reason)
+        if not new_code or new_code.strip() == content.strip():
+            return {"ok": False, "error": "LLM 未产出有效变更，已跳过（避免无效自改）"}
+
+        return self.tk.call_tool(
+            "toolkit_self_evolve",
+            file_path=file_path,
+            description=f"self-evolve: {reason}",
+            old_code=content,
+            new_code=new_code,
+            run_tests=True,
+            symbol=None,
+            lsp_checks=True,
+        )
 
     def _evolve_prompt(self, suggestion: str) -> dict:
         """优化提示词 — 委托给 toolkit_prompt_evolve。"""

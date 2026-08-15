@@ -769,6 +769,88 @@ function renderJumpBar() {
   bar.innerHTML = html;
 }
 
+/* ════════════════════════════════════════════════════════════
+ * 轨迹视图 — 借鉴 DeepSeek Harness Trajectory
+ * 从 session_events 重建 Agent 执行过程：用户输入 → 思考链 →
+ * 工具调用(参数) → 工具结果 → AI 回复，彩色时间线展示。
+ * ════════════════════════════════════════════════════════════ */
+let _trajectoryOpen = false;
+
+/** 切换轨迹面板显示 */
+window.toggleTrajectory = function () {
+  const panel = document.getElementById('trajectory-panel');
+  if (!panel) return;
+  _trajectoryOpen = !_trajectoryOpen;
+  panel.style.display = _trajectoryOpen ? 'block' : 'none';
+  if (_trajectoryOpen) loadTrajectory();
+};
+
+/** 加载当前 topic 的轨迹数据 */
+async function loadTrajectory() {
+  const panel = document.getElementById('trajectory-panel');
+  if (!panel) return;
+  if (!currentTopicId) {
+    panel.innerHTML = '<div class="traj-empty">暂无会话，先发送一条消息吧</div>';
+    return;
+  }
+  panel.innerHTML = '<div class="traj-loading">⏳ 加载轨迹…</div>';
+  try {
+    const r = await fetch('/api/topic/' + currentTopicId + '/trajectory');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    renderTrajectory(panel, d.timeline || []);
+  } catch (e) {
+    panel.innerHTML = '<div class="traj-error">⚠ 轨迹加载失败: ' + esc(e.message) + '</div>';
+  }
+}
+
+/** 渲染彩色轨迹时间线 */
+function renderTrajectory(panel, timeline) {
+  if (!timeline.length) {
+    panel.innerHTML = '<div class="traj-empty">暂无轨迹数据 —— 工具调用事件将在新会话中记录（旧会话仅有对话记录）</div>';
+    return;
+  }
+  let html = '<div class="traj-header">🛤 执行轨迹'
+    + '<span class="traj-count">' + timeline.length + ' 步</span>'
+    + '<button class="traj-close" onclick="toggleTrajectory()" title="关闭">✕</button></div>';
+  html += '<div class="traj-list">';
+  timeline.forEach(function (item) {
+    const t = item.type || '';
+    let cls = 'traj-item traj-' + t;
+    if (t === 'tool_result' && !item.success) cls += ' traj-fail';
+    html += '<div class="' + cls + '">';
+    if (t === 'user') {
+      html += '<div class="traj-icon">👤</div><div class="traj-body">'
+        + '<div class="traj-title">用户输入</div>'
+        + '<div class="traj-content">' + esc(item.content) + '</div></div>';
+    } else if (t === 'thinking') {
+      html += '<div class="traj-icon">💭</div><div class="traj-body">'
+        + '<div class="traj-title">思考</div>'
+        + '<div class="traj-content traj-thinking-text">' + esc(item.content) + '</div></div>';
+    } else if (t === 'tool_call') {
+      html += '<div class="traj-icon">⚡</div><div class="traj-body">'
+        + '<div class="traj-title">工具调用 · ' + esc(item.name) + '</div>'
+        + '<details class="traj-details"><summary>参数</summary><pre>' + esc(item.args) + '</pre></details></div>';
+    } else if (t === 'tool_result') {
+      const ok = item.success ? '✅' : '❌';
+      const dur = item.duration_ms ? ' · <span class="traj-dur">' + item.duration_ms + 'ms</span>' : '';
+      html += '<div class="traj-icon">' + ok + '</div><div class="traj-body">'
+        + '<div class="traj-title">' + esc(item.name) + (item.success ? ' 成功' : ' 失败') + dur + '</div>';
+      if (item.error) html += '<div class="traj-content traj-error-text">' + esc(item.error) + '</div>';
+      html += '<details class="traj-details"><summary>结果</summary><pre>' + esc(item.result || '') + '</pre></details></div>';
+    } else if (t === 'assistant') {
+      html += '<div class="traj-icon">🤖</div><div class="traj-body">'
+        + '<div class="traj-title">AI 回复</div>'
+        + '<div class="traj-content">' + esc(item.content) + '</div></div>';
+    } else {
+      html += '<div class="traj-icon">•</div><div class="traj-body"><div class="traj-content">' + esc(item.content || '') + '</div></div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  panel.innerHTML = html;
+}
+
 /** 滚动到指定 data-msg-idx 的消息 */
 window.jumpToMessage = function jumpToMessage(idx) {
   const el = document.querySelector('.msg[data-msg-idx="' + idx + '"]');

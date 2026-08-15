@@ -982,6 +982,26 @@ async def handle_web_topic_conversations(request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+async def handle_web_topic_trajectory(request):
+    """GET /api/topic/{topic_id}/trajectory — 轨迹时间线（Agent 工作过程可视化）。
+
+    借鉴 DeepSeek Harness Trajectory：按事件流重建 Agent 的执行轨迹，
+    含 用户输入 / 思考链 / 工具调用(参数) / 工具结果 / AI 回复。
+    """
+    topic_id = request.path_params.get("topic_id", "")
+    if not topic_id:
+        return JSONResponse({"error": "topic_id required"}, status_code=400)
+    limit = int(request.query_params.get("limit", 0))
+    try:
+        data = get_server().get_topic_trajectory(topic_id, limit=limit)
+        topic_info = get_server().get_topic_info(topic_id)
+        data["title"] = (topic_info or {}).get("title", "") or topic_id[:8]
+        return JSONResponse(data)
+    except Exception as e:
+        logger.exception("get_topic_trajectory failed")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 async def handle_web_tools(request):
     """GET /api/tools"""
     tools = get_server().list_tools()

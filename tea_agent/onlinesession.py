@@ -107,6 +107,26 @@ def extract_mode(result: dict):
     return None
 
 
+def _summarize_json(value: Any, limit: int = 800) -> str:
+    """工具事件摘要：任意值 → 紧凑 JSON 字符串并截断（审计用途，防事件表膨胀）。
+
+    Args:
+        value: 任意可序列化值（dict/list/str 等）
+        limit: 最大字符数（默认 800，足够 UI 展示且不撑爆事件表）
+
+    Returns:
+        截断后的字符串；超长时首尾各保留一半并标注截断信息
+    """
+    try:
+        text = json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:
+        text = str(value)
+    if len(text) <= limit:
+        return text
+    half = max(limit // 2, 1)
+    return f"{text[:half]}...[截断 {len(text)}B→{limit}B]...{text[-half:]}"
+
+
 class APIComponent(SessionComponent):
     """LLM API 通信组件。"""
 
@@ -657,11 +677,22 @@ class ToolComponent(SessionComponent):
         call_id = call.id
         start_time = time.time()
 
+        # P2 事件溯源：记录工具调用（所有路径，含失败；args 用原始串摘要）
+        self._log_tool_event("tool/call", {
+            "name": func_name,
+            "call_id": call_id,
+            "args": _summarize_json(call.function.arguments),
+        })
+
         if self.ctx.toolkit is None:
             err = "错误：toolkit 未设置"
             logger.error(err)
             self.add_tool_result(call_id, err)
             self._record_tool_to_trace(func_name, False, err, start_time)
+            self._log_tool_event("tool/result", {
+                "name": func_name, "call_id": call_id,
+                "success": False, "error": err,
+            })
             return call_id, func_name, err
 
         if func_name not in self.ctx.toolkit.func_map:
@@ -669,6 +700,10 @@ class ToolComponent(SessionComponent):
             logger.warning(f"tool call failed: unknown function '{func_name}'")
             self.add_tool_result(call_id, err)
             self._record_tool_to_trace(func_name, False, err, start_time)
+            self._log_tool_event("tool/result", {
+                "name": func_name, "call_id": call_id,
+                "success": False, "error": err,
+            })
             return call_id, func_name, err
 
         try:
@@ -680,6 +715,10 @@ class ToolComponent(SessionComponent):
             )
             self.add_tool_result(call_id, err)
             self._record_tool_to_trace(func_name, False, err, start_time)
+            self._log_tool_event("tool/result", {
+                "name": func_name, "call_id": call_id,
+                "success": False, "error": err,
+            })
             return call_id, func_name, err
 
         if self.ctx.tool_log:
@@ -751,6 +790,16 @@ class ToolComponent(SessionComponent):
                 f"tool output truncated: {func_name}, {result_bytes}B → {len(result_str.encode('utf-8'))}B"
             )
 
+        # P2 事件溯源：记录工具结果（成功标志/错误/结果摘要/耗时）
+        self._log_tool_event("tool/result", {
+            "name": func_name,
+            "call_id": call_id,
+            "success": success,
+            "error": error_msg or None,
+            "result": _summarize_json(result_str, limit=2000),
+            "duration_ms": round((time.time() - start_time) * 1000, 1),
+        })
+
         self.add_tool_result(call_id, result_str)
         self._record_tool_to_trace(func_name, success, error_msg, start_time)
         # 进化触发器：采集工具调用信号
@@ -774,6 +823,29 @@ class ToolComponent(SessionComponent):
         reflection_mgr.record_tool_call(
             trace, func_name, success, error_msg, duration_ms
         )
+
+    def _log_tool_event(self, event_type: str, payload: dict) -> None:
+        """P2 事件溯源：记录 tool/call 或 tool/result 事件（异常隔离，不影响主流程）。
+
+        数据来源：session_events 表（append-only），供轨迹视图/审计重放使用。
+
+        Args:
+            event_type: "tool/call" | "tool/result"（其他类型忽略）
+            payload: 事件负载（name/call_id/args/result 等，已摘要截断）
+        """
+        if event_type not in ("tool/call", "tool/result"):
+            return
+        try:
+            topic_id = getattr(self, "current_topic_id", None)
+            storage = getattr(self.ctx, "storage", None)
+            if not (topic_id and storage):
+                return
+            events = getattr(storage, "events", None)
+            if events is None:
+                return
+            events.append_event(topic_id, event_type, payload)
+        except Exception:
+            logger.debug("append tool event failed (isolated)", exc_info=True)
 
     def add_tool_result(self, tool_call_id: str, content: str):
         # S2/缓存友好：入库即压缩到与裁剪阈值一致的定长，消息从出生起定型。

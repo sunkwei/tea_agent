@@ -45,6 +45,7 @@
       <button class="tb-btn" onclick="toggleTaskPanel()" title="任务面板 (Ctrl+J)">📋</button>
       <button class="tb-btn" onclick="showExportModal()" title="导出">📄</button>
       <button class="tb-btn" onclick="showPiModal()" title="Pi 功能：会话树/消息队列/压缩">🧩</button>
+      <button class="tb-btn" onclick="toggleTrajectory()" title="轨迹视图：Agent 执行过程时间线">🛤</button>
       <button class="tb-btn" onclick="clearChat()" title="清空">🗑</button>
       <button id="theme-btn" onclick="toggleTheme()" title="切换主题">🌙</button>
     </div>
@@ -72,6 +73,9 @@
 
     <!-- ═══ 历史会话跳转栏 ═══ -->
     <div id="jump-bar" class="jump-bar" style="display:none"></div>
+
+    <!-- ═══ 轨迹视图（借鉴 DeepSeek Harness Trajectory）═══ -->
+    <div id="trajectory-panel" class="trajectory-panel" style="display:none"></div>
 
     <div id="ia">
       <div class="ss-dropup">

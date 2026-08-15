@@ -208,6 +208,10 @@ class MinimalServer:
         from .modules.storage_module import StorageModule
         return StorageModule.get_topic_conversations(topic_id, limit)
 
+    def get_topic_trajectory(self, topic_id, limit=0):
+        from .modules.storage_module import StorageModule
+        return StorageModule.get_topic_trajectory(topic_id, limit)
+
     def get_session_messages(self, topic_id, limit=50):
         from .modules.storage_module import StorageModule
         return StorageModule.get_session_messages(topic_id, limit)
@@ -315,6 +319,7 @@ def _build_routes() -> list:
         Route("/api/topic/{topic_id:str}/status", rh.handle_web_topic_status),
         Route("/api/topic/{topic_id:str}/stream-buffer", rh.handle_web_topic_stream_buffer),
         Route("/api/topic/{topic_id:str}/conversations", rh.handle_web_topic_conversations),
+        Route("/api/topic/{topic_id:str}/trajectory", rh.handle_web_topic_trajectory),
         Route("/api/topic/{topic_id:str}/todos", rh.handle_web_topic_todos),
         Route("/api/topic/{topic_id:str}/todos/{idx:int}", rh.handle_web_topic_todo_update, methods=["PUT"]),
         Route("/api/topic/{topic_id:str}/plans", rh.handle_web_topic_plans),

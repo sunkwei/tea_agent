@@ -167,6 +167,92 @@ class StorageModule(HotReloadModule):
         return result
 
     @classmethod
+    def get_topic_trajectory(cls, topic_id: str, limit: int = 0) -> dict:
+        """聚合 topic 轨迹时间线：事件流（tool/call, tool/result, user, assistant）+ 思考链轮次。
+
+        借鉴 DeepSeek Harness Trajectory 思路，从 session_events（append-only 事实源）
+        按 seq 全局有序重建 Agent 工作轨迹，并在 assistant 回复前插入该轮的
+        思考链（来自 conversations.rounds_json 的 reasoning_content）。
+
+        Args:
+            topic_id: 主题 ID
+            limit: 时间线条目上限（0=不限，默认取全部）
+
+        Returns:
+            {"timeline": [entry...], "count": N}
+            entry 字段: {seq, type, created_at, ...}
+              type ∈ user | thinking | tool_call | tool_result | assistant
+        """
+        storage = cls._instance
+        if storage is None:
+            return {"timeline": [], "count": 0}
+        try:
+            events = storage.events.query_events(topic_id, limit=0)
+        except Exception:
+            events = []
+        # 思考链：conversation_id -> [reasoning_content, ...]（来自 rounds_json）
+        thinking_by_conv: dict[str, list[str]] = {}
+        try:
+            convs = storage.get_conversations(topic_id, limit=0, include_rounds=True)
+            for cv in convs:
+                rounds = cv.get("rounds_json_parsed") or []
+                thinks = [
+                    r.get("reasoning_content", "")
+                    for r in rounds if r.get("reasoning_content")
+                ]
+                if thinks:
+                    thinking_by_conv[cv["id"]] = thinks
+        except Exception:
+            pass
+
+        timeline: list[dict] = []
+        for ev in events:
+            et = ev["event_type"]
+            payload = ev["payload"] or {}
+            seq = ev["seq"]
+            created = str(ev.get("created_at", ""))
+            if et == "user/message":
+                timeline.append({
+                    "seq": seq, "type": "user", "created_at": created,
+                    "content": payload.get("content", ""),
+                })
+            elif et == "tool/call":
+                timeline.append({
+                    "seq": seq, "type": "tool_call", "created_at": created,
+                    "name": payload.get("name", ""),
+                    "call_id": payload.get("call_id", ""),
+                    "args": payload.get("args", ""),
+                })
+            elif et == "tool/result":
+                timeline.append({
+                    "seq": seq, "type": "tool_result", "created_at": created,
+                    "name": payload.get("name", ""),
+                    "call_id": payload.get("call_id", ""),
+                    "success": payload.get("success", True),
+                    "error": payload.get("error"),
+                    "result": payload.get("result", ""),
+                    "duration_ms": payload.get("duration_ms", 0),
+                })
+            elif et == "assistant/message":
+                cv_id = ev.get("conversation_id") or ""
+                # 思考链插入到 AI 回复之前（同一 seq 上下文，index 区分顺序）
+                for i, t in enumerate(thinking_by_conv.get(cv_id, [])):
+                    timeline.append({
+                        "seq": seq, "type": "thinking", "index": i,
+                        "created_at": created, "content": t,
+                    })
+                timeline.append({
+                    "seq": seq, "type": "assistant", "created_at": created,
+                    "content": payload.get("content", ""),
+                    "tool_calls": payload.get("tool_calls"),
+                })
+            # turn/start、turn/end 为结构性标记，轨迹视图不展示（保持时间线紧凑）
+
+        if limit > 0 and len(timeline) > limit:
+            timeline = timeline[-limit:]
+        return {"timeline": timeline, "count": len(timeline)}
+
+    @classmethod
     def get_topic_info(cls, topic_id: str) -> dict | None:
         """获取话题概要信息。"""
         storage = cls._instance

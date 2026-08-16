@@ -35,7 +35,7 @@ logger = logging.getLogger("hot_reload.agent")
 
 
 def _server_round_summary(model: str, user_msg, tool_names: list, ai_msg: str) -> None:
-    """server 每轮对话输出到控制台的摘要信息。
+    """server 每轮对话的摘要信息（DEBUG 级别，默认不输出到终端）。
 
     Args:
         model: 使用的模型名称
@@ -50,7 +50,9 @@ def _server_round_summary(model: str, user_msg, tool_names: list, ai_msg: str) -
         _user = (_user or "").replace("\n", " ")[:64]
         _tools = ",".join(tool_names or [])
         _ai = (ai_msg or "").replace("\n", " ")[:64]
-        print(f"[chat] model={model} | user={_user} | tools=[{_tools}] | ai={_ai}", flush=True)
+        # 终端仅保留启动 banner（见 server.py run_server）；每轮对话摘要降为
+        # DEBUG 级别，需要时可用 set_debug(True) 临时打开。
+        logger.debug(f"[chat] model={model} | user={_user} | tools=[{_tools}] | ai={_ai}")
     except Exception:
         pass
 

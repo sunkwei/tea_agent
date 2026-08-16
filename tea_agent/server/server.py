@@ -393,15 +393,19 @@ def create_app(api_key=None, config_path=None):
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("api_server").setLevel(logging.INFO)
 
-    global _server_instance
-    _server_instance = MinimalServer(api_key=api_key or "",
-                                     config_path=config_path or "")
-    results = _server_instance.load_modules()
-    ok_count = sum(1 for v in results.values() if v)
-    logger.info(f"Modules loaded: {ok_count}/{len(results)}")
-    # server 控制台只保留 WARNING+（错误），INFO 类杂音（httpx/embedding/
-    # memory/session 等）不再输出；每轮对话摘要由 [chat] print 单独输出。
-    # Filter 必须加在 handler 上（子 logger 传播记录会绕过 logger.filter）。
+    # ── 终端静音：控制台只保留 WARNING+，INFO 类杂音（模块加载/httpx/embedding/
+    #    memory/session 等）不再输出；文件日志（~/.tea_agent/tea_agent.log）不受影响。
+    #    实现要点：
+    #    1) 必须先 setup_logging() 确保 console handler 已创建——Agent 初始化
+    #       （load_modules 内）才创建 handler，届时再加 filter 就太晚了；
+    #    2) Filter 必须加在 handler 上——子 logger 传播的记录只经过 handler 的
+    #       filter，root logger 的 filter 仅过滤 root 自身 emit 的记录，对传播无效；
+    #    3) 排除 TimedRotatingFileHandler（继承自 StreamHandler），避免误伤文件日志。
+    try:
+        from tea_agent.logging_setup import setup_logging
+        setup_logging(debug=False)
+    except Exception:
+        pass
     _root = logging.getLogger()
     if not getattr(_root, "_tea_server_quiet", False):
         class _ServerQuietFilter(logging.Filter):
@@ -409,17 +413,25 @@ def create_app(api_key=None, config_path=None):
                 return record.levelno >= logging.WARNING
 
         for _h in list(_root.handlers):
-            if isinstance(_h, logging.StreamHandler):
+            if isinstance(_h, logging.StreamHandler) \
+               and not isinstance(_h, logging.handlers.TimedRotatingFileHandler):
                 _h.addFilter(_ServerQuietFilter())
         _root._tea_server_quiet = True
     logging.getLogger("api_server").setLevel(logging.INFO)
 
-    # 预热 jieba 分词器（首次调用会直接 print 到 stdout 污染控制台）
+    global _server_instance
+    _server_instance = MinimalServer(api_key=api_key or "",
+                                     config_path=config_path or "")
+    results = _server_instance.load_modules()
+    ok_count = sum(1 for v in results.values() if v)
+    logger.info(f"Modules loaded: {ok_count}/{len(results)}")
+
+    # 预热 jieba 分词器（首次调用会直接 print 到 stdout/stderr 污染控制台）
     try:
         import contextlib
         import io as _io
 
-        with contextlib.redirect_stdout(_io.StringIO()):
+        with contextlib.redirect_stdout(_io.StringIO()), contextlib.redirect_stderr(_io.StringIO()):
             import jieba
 
             jieba.initialize()
@@ -486,14 +498,15 @@ def run_server(host="127.0.0.1", port=8282,
     app = create_app(api_key=api_key, config_path=config_path)
 
     server_url = f"http://{host}:{port}"
-    print("=" * 56)
-    print(f"  Tea Agent Server v{__version__}")
-    print(f"  Listening on:  {server_url}")
-    print(f"  API Docs:      {server_url}/docs")
-    print(f"  Config file:   {actual_config}")
-    print(f"  API Key:       {'ENABLED' if api_key else 'DISABLED'}")
-    print("  Hot-Reload:    ENABLED  (/api/modules)")
-    print("=" * 56)
+    # banner 是 server 唯一终端输出；flush=True 确保非 TTY（管道/重定向）下立即可见
+    print("=" * 56, flush=True)
+    print(f"  Tea Agent Server v{__version__}", flush=True)
+    print(f"  Listening on:  {server_url}", flush=True)
+    print(f"  API Docs:      {server_url}/docs", flush=True)
+    print(f"  Config file:   {actual_config}", flush=True)
+    print(f"  API Key:       {'ENABLED' if api_key else 'DISABLED'}", flush=True)
+    print("  Hot-Reload:    ENABLED  (/api/modules)", flush=True)
+    print("=" * 56, flush=True)
 
     if open_browser:
         import threading as _th

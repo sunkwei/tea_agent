@@ -64,11 +64,54 @@ def toolkit_self_report() -> dict:
         except Exception:
             logger.exception('op_failed')
 
+    # 4. Evolution 摘要（B: 进化可观测 — 近期行动/成功回滚统计）
+    evolution = _build_evolution_summary(limit=20)
 
     return {
         "status": "online",
         "tool_count": tool_count,
-        "current_chat_count": counter_data.get("count", 0)
+        "current_chat_count": counter_data.get("count", 0),
+        "evolution": evolution,
+    }
+
+
+def _build_evolution_summary(limit: int = 20) -> dict:
+    """从进化日志聚合可审查摘要：近期行动、类型统计、成功/回滚统计。"""
+    try:
+        from tea_agent.agent_evolution import _evolution_log_path, _load_evolution_log
+        log = _load_evolution_log()
+    except Exception:
+        return {"available": False, "reason": "evolution_log 不可用"}
+    if not log:
+        return {"available": True, "total": 0, "recent": [], "by_action": {}, "ok_rate": None}
+
+    recent = log[-limit:]
+    by_action: dict[str, int] = {}
+    total = len(log)
+    ok = 0
+    for e in log:
+        act = e.get("action") or e.get("type") or "unknown"
+        by_action[act] = by_action.get(act, 0) + 1
+        if e.get("ok"):
+            ok += 1
+    # 脱敏：最近记录去掉敏感字段
+    clean = []
+    for e in recent:
+        clean.append({
+            "ts": e.get("timestamp", e.get("ts", "")),
+            "action": e.get("action", ""),
+            "ok": bool(e.get("ok", False)),
+            "target": e.get("target", ""),
+            "detail": (e.get("error") or e.get("detail") or "")[:120],
+            "decision": e.get("decision", ""),
+            "delta": e.get("delta"),
+        })
+    return {
+        "available": True,
+        "total": total,
+        "ok_rate": round(ok / total, 2) if total else None,
+        "by_action": by_action,
+        "recent": clean,
     }
 
 def meta_toolkit_self_report() -> dict:

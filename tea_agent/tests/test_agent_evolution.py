@@ -158,3 +158,203 @@ class TestEvolutionActorEvolveCode:
         r = actor._evolve_code("ui.py", "fix")
         assert r["ok"] is False
         assert "toolkit_self_evolve" in r["error"]
+
+
+class TestEvolutionActorAutoExtend:
+    """A/C/B：自主造工具 + 修剪 + 进化日志可观测。"""
+
+    def _make_toolkit(self):
+        """带 save/self_evolve 的假 toolkit。不写盘。"""
+        class _Tk:
+            saved = []
+            func_map = {"toolkit_self_evolve": object()}
+            def call_tool(self, name, **kwargs):
+                if name == "toolkit_self_evolve":
+                    return {"ok": True}
+                if name == "toolkit_file":
+                    return "def foo():\n    return 1\n"
+                raise KeyError(name)
+            def save(self, name, meta, pycode):
+                self.saved.append((name, meta, pycode))
+                return (0, "ok")
+        return _Tk()
+
+    def _fake_llm_json(self, payload: str):
+        """fake LLM 返回给定 JSON 文本。"""
+        class _Msg: content = payload
+        class _Choice: message = _Msg()
+        class _Resp: choices = [_Choice()]
+        class _C:
+            def create(self, **kwargs): return _Resp()
+        class _Chat: completions = _C()
+        class _Client: chat = _Chat()
+        return _Client()
+
+    def test_create_tool_valid_flow(self):
+        """LLM 返回合法工具定义 → toolkit.save 被调用并返回 ok。"""
+        import json as _json
+        from tea_agent.agent_evolution import EvolutionActor
+        tk = self._make_toolkit()
+        payload = _json.dumps({
+            "name": "toolkit_parse_table",
+            "description": "解析表格",
+            "properties": {"path": {"type": "string", "description": "路径"}},
+            "required": ["path"],
+            "pycode": (
+                "def toolkit_parse_table(path=''):\n"
+                "    if not path:\n"
+                "        return {'ok': False, 'error': 'no path'}\n"
+                "    return {'ok': True, 'parsed': True}\n"
+                "\n\n"
+                "def meta_toolkit_parse_table():\n"
+                "    return {'type': 'function', 'function': {'name': 'toolkit_parse_table', 'description': '', 'parameters': {'type': 'object', 'properties': {}, 'required': []}}}\n"
+            ),
+        })
+        actor = EvolutionActor(tk, self._fake_llm_json(payload))
+        r = actor._create_tool("需要解析表格数据")
+        assert r["ok"] is True, r
+        assert r["tool"] == "toolkit_parse_table"
+        assert len(tk.saved) == 1
+        name, meta, pycode = tk.saved[0]
+        assert name == "toolkit_parse_table"
+        assert meta["type"] == "function"
+        assert "def toolkit_parse_table" in pycode
+
+    def test_create_tool_illegal_name_skips(self):
+        """工具名不合法（非 toolkit_ 前缀）→ 不调 save。"""
+        import json as _json
+        from tea_agent.agent_evolution import EvolutionActor
+        tk = self._make_toolkit()
+        payload = _json.dumps({
+            "name": "bad_name",
+            "description": "x",
+            "properties": {},
+            "required": [],
+            "pycode": "def bad_name():\n    return {'ok': True}\n",
+        })
+        actor = EvolutionActor(tk, self._fake_llm_json(payload))
+        r = actor._create_tool("缺口")
+        assert r["ok"] is False
+        assert "非法工具名" in r["error"]
+        assert tk.saved == []
+
+    def test_create_tool_syntax_error_skips(self):
+        """LLM 生成的 pycode 语法错误 → 跳过，不污染工具目录。"""
+        import json as _json
+        from tea_agent.agent_evolution import EvolutionActor
+        tk = self._make_toolkit()
+        payload = _json.dumps({
+            "name": "toolkit_bad_syntax",
+            "description": "x",
+            "properties": {},
+            "required": [],
+            "pycode": "def toolkit_bad_syntax(:\n    return 1\n",
+        })
+        actor = EvolutionActor(tk, self._fake_llm_json(payload))
+        r = actor._create_tool("缺口")
+        assert r["ok"] is False
+        assert "语法错误" in r["error"]
+        assert tk.saved == []
+
+    def test_create_tool_no_llm_skips(self):
+        """无 cheap LLM → 保守跳过。"""
+        from tea_agent.agent_evolution import EvolutionActor
+        actor = EvolutionActor(self._make_toolkit())
+        r = actor._create_tool("缺口")
+        assert r["ok"] is False
+
+    def test_execute_distributes_create_tool_and_prune(self, monkeypatch):
+        """execute() 正确分发 create_tool / prune 到对应处理函数。"""
+        import json as _json
+        import os
+        from tea_agent.agent_evolution import EvolutionActor
+        # 日志写到工作区临时文件，避免污染 ~/.tea_agent
+        monkeypatch.setenv("TEA_AGENT_EVOLUTION_LOG",
+                           os.path.abspath("evlog_tmp_dist.json"))
+        tk = self._make_toolkit()
+        payload = _json.dumps({
+            "name": "toolkit_new_a",
+            "description": "d",
+            "properties": {},
+            "required": [],
+            "pycode": "def toolkit_new_a():\n    return {'ok': True}\n",
+        })
+        actor = EvolutionActor(tk, self._fake_llm_json(payload))
+        results = actor.execute([
+            {"action": "create_tool", "target": "", "reason": "造一个工具"},
+            {"action": "prune", "target": "no_such", "reason": ""},
+            {"action": "none", "target": "", "reason": ""},
+        ])
+        acts = [r["action"] for r in results]
+        assert acts == ["create_tool", "prune"]
+        assert results[0]["ok"] is True
+        assert results[1]["ok"] is True
+        monkeypatch.delenv("TEA_AGENT_EVOLUTION_LOG", raising=False)
+
+    def test_record_and_load_evolution_log(self, monkeypatch):
+        """B: 进化日志追加与裁剪（注入环境变量指向临时文件）。
+
+        关注：数据层 append/load/prune 逻辑。写文件系统，需本地环境执行。
+        """
+        import json as _json
+        import tempfile, os, shutil
+        from tea_agent import agent_evolution as ae
+        # 用工作区临时文件（避 tmp_path sandbox 限制），走环境变量
+        d = "evlog_test"
+        os.makedirs(d, exist_ok=True)
+        logpath = os.path.join(d, "evolution_log.json")
+        monkeypatch.setenv("TEA_AGENT_EVOLUTION_LOG", os.path.abspath(logpath))
+        try:
+            ae._append_evolution_log({"action": "create_tool", "ok": True})
+            ae._append_evolution_log({"action": "prune", "ok": True})
+            log = ae._load_evolution_log()
+            assert len(log) == 2
+            assert log[0]["action"] == "create_tool"
+            # 裁剪到 1 条
+            r = ae._prune_evolution_log(1)
+            assert r["ok"] is True and r["pruned"] == 1
+            assert len(ae._load_evolution_log()) == 1
+            assert ae._load_evolution_log()[0]["action"] == "prune"
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+            monkeypatch.delenv("TEA_AGENT_EVOLUTION_LOG", raising=False)
+
+    def test_prune_unknown_target_returns_ok(self):
+        """prune 未知 target → 不删除任何东西，返回 ok。"""
+        from tea_agent.agent_evolution import EvolutionActor
+        actor = EvolutionActor(self._make_toolkit())
+        r = actor._prune("something_else", "reason")
+        assert r["ok"] is True and r["pruned"] == 0
+
+    def test_prune_skills_keeps_recent(self, monkeypatch):
+        """prune skills → 只删超龄 interrupt 技能，保留最近 keep 份。"""
+        import os
+        import shutil
+        from tea_agent.agent_evolution import EvolutionActor
+        d = "pruneskills_test"
+        os.makedirs(d, exist_ok=True)
+        # 造 5 个自动打断技能目录（含 SKILL.md 内容文件，模拟可删目录）
+        for name in ("interrupt-avoid-toolkit_exec",
+                     "interrupt-avoid-toolkit_edit",
+                     "interrupt-avoid-toolkit_file",
+                     "interrupt-avoid-toolkit_diff",
+                     "interrupt-avoid-toolkit_search"):
+            os.makedirs(os.path.join(d, name), exist_ok=True)
+            open(os.path.join(d, name, "SKILL.md"), "w", encoding="utf-8").write("x\n")
+        # 一个人工技能目录，不应被删
+        os.makedirs(os.path.join(d, "writing-style"), exist_ok=True)
+        open(os.path.join(d, "writing-style", "SKILL.md"), "w", encoding="utf-8").write("y\n")
+
+        monkeypatch.setenv("TEA_AGENT_SKILLS_DIR", os.path.abspath(d))
+        try:
+            actor = EvolutionActor(self._make_toolkit())
+            r = actor._prune("skills", "keep=3")
+            assert r["ok"] is True
+            # 5 个自动技能保留最晚 3 个（名字序），删除最早的 2 个
+            assert r["pruned"] == 2, r
+            remaining = [n for n in os.listdir(d) if n.startswith("interrupt-avoid-")]
+            assert len(remaining) == 3
+            assert "writing-style" in os.listdir(d)  # 人工技能不受影响
+        finally:
+            monkeypatch.delenv("TEA_AGENT_SKILLS_DIR", raising=False)
+            shutil.rmtree(d, ignore_errors=True)

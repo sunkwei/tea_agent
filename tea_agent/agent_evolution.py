@@ -10,10 +10,65 @@
 
 import json
 import logging
+import os
 import time
 from typing import Any
 
 logger = logging.getLogger("agent.evolution")
+
+# 进化日志：可用环境变量 TEA_AGENT_EVOLUTION_LOG 覆盖路径（测试/自定义用）
+_EVOLUTION_LOG_DEFAULT = os.path.join(
+    os.path.expanduser("~"), ".tea_agent", "evolution_log.json")
+_EVOLUTION_LOG_MAX = 100  # 日志保留条数上限
+
+
+def _evolution_log_path() -> str:
+    return os.environ.get("TEA_AGENT_EVOLUTION_LOG", _EVOLUTION_LOG_DEFAULT)
+
+
+def _load_evolution_log() -> list[dict]:
+    path = _evolution_log_path()
+    if os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except Exception:
+            return []
+    return []
+
+
+def _append_evolution_log(entry: dict) -> None:
+    """追加一条进化记录（带保留条数上限裁剪），失败抛异常交给调用方。"""
+    path = _evolution_log_path()
+    log = _load_evolution_log()
+    log.append(entry)
+    log = log[-_EVOLUTION_LOG_MAX:]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(log, f, indent=2, ensure_ascii=False)
+
+
+def _prune_evolution_log(keep: int) -> dict:
+    """裁剪进化日志到最近 keep 条。keep<=0 或 keep>=len 时不做删除。"""
+    log = _load_evolution_log()
+    if not log:
+        return {"ok": True, "pruned": 0, "detail": "进化日志为空"}
+    keep = max(0, keep or 0)
+    if keep >= len(log) or keep == 0:
+        return {"ok": True, "pruned": 0, "detail": f"无需裁剪 ({len(log)} 条)"}
+    trimmed = log[-keep:]
+    path = _evolution_log_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(trimmed, f, indent=2, ensure_ascii=False)
+    return {"ok": True, "pruned": len(log) - keep, "detail": f"裁到最近 {keep} 条"}
+
+
+def _rmtree(path: str) -> None:
+    """递归删除目录（跨平台）。"""
+    import shutil
+    shutil.rmtree(path)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -92,6 +147,8 @@ class EvolutionAnalyzer:
 - evolve_code: 修复高频报错的工具代码。target 填工具文件路径，reason 说明修复方向
 - evolve_prompt: 优化系统提示词。target 填 "system_prompt"，reason 填优化建议
 - solidify: 记录成功模式为技能。target 填技能名，reason 填任务描述
+- create_tool: 出现反复无法满足的能力缺口时，自主生成新工具。target 填 "auto"，reason 填能力缺口描述（如「需要工具解析 XML」）
+- prune: 清理废弃/超龄的自进化产物。target 填 "skills" 或 "evolution_log"，reason 填 keep=N（保留份数，默认 3）
 - none: 无需行动
 
 可选评估字段（rubric）：若行动可量化评估（如 evolve_code），可附加 rubric 规则列表，
@@ -170,11 +227,26 @@ class EvolutionActor:
 
             try:
                 result = self._execute_one(action_type, target, reason)
-                results.append({"action": action_type, "target": target, "ok": result.get("ok", False)})
-                logger.info(f"evolution: 执行 {action_type} -> {target}: ok={result.get('ok')}")
+                ok = bool(result.get("ok", False))
             except Exception as e:
-                results.append({"action": action_type, "target": target, "ok": False, "error": str(e)})
+                result = {"ok": False, "error": str(e)}
+                ok = False
                 logger.warning(f"evolution: 执行 {action_type} 失败: {e}")
+            # B: 记录每次进化行动到持久化日志（可审查）
+            self._record_evolution({
+                "timestamp": time.time(),
+                "action": action_type,
+                "target": target,
+                "reason": reason[:120],
+                "ok": ok,
+                "error": result.get("error", "")[:200],
+                "detail": result.get("detail", ""),
+                "decision": result.get("decision", ""),
+                "delta": result.get("delta"),
+            })
+            results.append({"action": action_type, "target": target, "ok": ok,
+                            "error": result.get("error", "")[:200]})
+            logger.info(f"evolution: 执行 {action_type} -> {target}: ok={ok}")
 
         return results
 
@@ -185,6 +257,10 @@ class EvolutionActor:
             return self._evolve_prompt(reason)
         elif action_type == "solidify":
             return self._solidify(reason)
+        elif action_type == "create_tool":
+            return self._create_tool(reason)
+        elif action_type == "prune":
+            return self._prune(target, reason)
         return {"ok": False, "error": f"unknown_action:{action_type}"}
 
     # ── LLM 修代码 — 生成修复后的新代码全文 ──
@@ -285,6 +361,187 @@ class EvolutionActor:
             task=task,
             success=True,
         )
+
+    # ── A: 自主造工具 — 缺能力缺口 → LLM 生成新工具 → 验证 → 注册 ──
+    CREATE_TOOL_PROMPT = """你是一个自进化 Agent 的造工具器。当前有未满足的能力缺口，请生成一个新的 toolkit 工具。
+缺能力缺口：{gap}
+
+输出 **JSON**，schema：
+{{
+  "name": "toolkit_<snake_case动作名>",
+  "description": "一句话工具说明",
+  "properties": {{ "参数名": {{"type": "string", "description": "说明"}} }},
+  "required": ["参数名"],
+  "pycode": "完整可运行的工具函数源码"
+}}
+
+要求：
+- name 以 toolkit_ 前缀，小写下划线
+- pycode 是一个纯 Python 文件，内含 `def toolkit_<名>(...)` 函数返回结构化 dict
+  （成功 {"ok": true, ...}，失败 {"ok": false, "error": "..."}），以及 `def meta_toolkit_<名>()` 注册函数
+- 不准 import 外部非标准可执行文件；参数用 JSON Schema 描述
+- 只输出 JSON 本身，不要 Markdown 围栏，不要解释"""
+
+    def _create_tool(self, capability_gap: str) -> dict:
+        """自主造工具闭环：LLM 生成新工具源码 + meta → toolkit.save 落盘注册。
+
+        验证护栏：ast.parse 语法校验 → save（含 meta 校验/写入/注册）。
+        缺 LLM 或解析失败则保守跳过，绝不污染工具目录。
+        """
+        if not self._cheap_client or not self.tk:
+            return {"ok": False, "error": "create_tool 需要 cheap LLM 与 toolkit"}
+        if not capability_gap:
+            return {"ok": False, "error": "缺少能力缺口描述"}
+        # toolkit.save 是否可用（动态注册通道）
+        if not hasattr(self.tk, "save"):
+            return {"ok": False, "error": "toolkit 无 save 方法，无法造工具"}
+
+        try:
+            import ast as _ast
+            import json as _json
+
+            from tea_agent.api_retry import call_with_retry
+
+            prompt = self.CREATE_TOOL_PROMPT.replace("{gap}", capability_gap)
+            resp = call_with_retry(
+                self._cheap_client.chat.completions.create,
+                model=self._cheap_model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.3,
+            )
+            text = resp.choices[0].message.content
+            if not text:
+                return {"ok": False, "error": "LLM 未返回工具定义"}
+            # 去掉可能的围栏
+            t = text.strip()
+            if t.startswith("```"):
+                t = t.split("\n", 1)[1] if "\n" in t else t
+                if t.rstrip().endswith("```"):
+                    t = t.rstrip()[:-3]
+            data = _json.loads(t)
+        except Exception as e:
+            return {"ok": False, "error": f"create_tool 生成/解析失败: {e}"}
+
+        name = str(data.get("name", "")).strip()
+        pycode = str(data.get("pycode", "")).strip()
+        desc = str(data.get("description", "")).strip()
+        if not name.startswith("toolkit_") or not name.isidentifier():
+            return {"ok": False, "error": f"非法工具名: {name!r}"}
+        if not pycode:
+            return {"ok": False, "error": "LLM 未生成 pycode"}
+
+        # Layer 1.5: 语法校验（复用 self_evolve 的严格校验思路）
+        try:
+            _ast.parse(pycode)
+        except SyntaxError as e:
+            return {"ok": False, "error": f"新工具语法错误: {e.msg} (L{e.lineno})"}
+
+        # 组装 meta（JSON Schema）
+        props = data.get("properties") if isinstance(data.get("properties"), dict) else {}
+        req = data.get("required") if isinstance(data.get("required"), list) else []
+        meta = {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": desc or f"由自进化生成的工具：{capability_gap[:60]}",
+                "parameters": {
+                    "type": "object",
+                    "properties": props or {},
+                    "required": req,
+                },
+            },
+        }
+
+        try:
+            code, msg = self.tk.save(name, meta, pycode)
+            if code != 0:
+                return {"ok": False, "error": f"toolkit.save 失败 ({code}): {msg}"}
+        except Exception as e:
+            return {"ok": False, "error": f"toolkit.save 异常: {e}"}
+
+        return {"ok": True, "tool": name, "message": f"新工具已创建并注册: {name}"}
+
+    # ── C: 自进化修剪 — 清理废弃/超龄的自进化产物 ──
+    def _prune(self, target: str, reason: str) -> dict:
+        """运行时修剪：清理长期不用的自进化产物。
+
+        目标：
+        - "skills": 清理 user 技能目录里超龄的自动打断技能（interrupt-avoid-*）
+                  与空目录，保留最近 keep 份（默认 3）
+        - "evolution_log": 清理进化日志超出保留条数的旧条目（默认保留 100）
+        - 其它 target：不删除，返回 ok（避免误删）
+        """
+        keep = 3
+        try:
+            keep = max(0, int(reason.split("keep=")[1].split()[0])) if "keep=" in reason else keep  # type: ignore[union-attr]
+        except Exception:
+            keep = 3
+
+        if target == "skills":
+            return self._prune_skills(keep, reason)
+        elif target == "evolution_log":
+            return _prune_evolution_log(keep)
+        return {"ok": True, "pruned": 0, "detail": f"target={target} 无需修剪"}
+
+    def _prune_skills(self, keep: int, reason: str) -> dict:
+        """删除用户技能目录 `~/.tea_agent/skills/` 中由打断闭环自动生成的
+        `interrupt-avoid-*` 技能（超龄），并清理空目录。
+
+        幂等安全：仅删自动生成的前缀目录，不碰人工/历史 SKILL.md，
+        不删未匹配目录。可用 TEA_AGENT_SKILLS_DIR 覆盖目录（测试/自定义）。
+        """
+        import os
+
+        skills_dir = os.environ.get(
+            "TEA_AGENT_SKILLS_DIR",
+            os.path.join(os.path.expanduser("~"), ".tea_agent", "skills"))
+        if not os.path.isdir(skills_dir):
+            return {"ok": True, "pruned": 0, "detail": "技能目录不存在"}
+        removed = 0
+        removed_names = []
+        try:
+            auto_dirs = sorted(
+                d for d in os.listdir(skills_dir)
+                if d.startswith("interrupt-avoid-")
+                and os.path.isdir(os.path.join(skills_dir, d)))
+            if not auto_dirs:
+                return {"ok": True, "pruned": 0, "detail": "无自动打断技能"}
+            # 保留最近 keep 个（按名字序 = 创建序近似），删除更早的
+            for old in auto_dirs[:-keep] if len(auto_dirs) > keep else []:
+                target = os.path.join(skills_dir, old)
+                try:
+                    _rmtree(target)
+                    removed += 1
+                    removed_names.append(old)
+                except OSError:
+                    logger.debug(f"prune: 删除技能失败 {old}")
+            # 清理空目录
+            for d in os.listdir(skills_dir):
+                full = os.path.join(skills_dir, d)
+                if os.path.isdir(full) and not os.listdir(full):
+                    try:
+                        os.rmdir(full)
+                    except OSError:
+                        pass
+        except Exception as e:
+            return {"ok": False, "error": f"prune_skills 失败: {e}"}
+        return {"ok": True, "pruned": removed, "removed": removed_names,
+                "detail": f"清理自动打断技能保留最近 {keep} 份"}
+
+    # ── B: 进化可观测 — 结构化记录每次进化行动 ──
+    def _record_evolution(self, entry: dict) -> dict:
+        """把一次进化行动写入持久化进化日志（B 数据层）。
+
+        写 ~/.tea_agent/evolution_log.json（追加，附带保留条数上限）。
+        失败仅记日志，不影响主流程。
+        """
+        try:
+            _append_evolution_log(entry)
+            return {"ok": True}
+        except Exception as e:
+            logger.warning(f"evolution: 记录日志失败: {e}")
+            return {"ok": False, "error": str(e)}
 
 
 # ═══════════════════════════════════════════════════════════════

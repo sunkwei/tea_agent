@@ -5,7 +5,7 @@
 import os, sys, json
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+from tea_agent.workflow.dag_registry import SimpleDagRegistry
 from tea_agent.multi_agent.dag_dot_renderer import (
     render_dag_dict_to_svg,
     render_dag_dict_to_png,

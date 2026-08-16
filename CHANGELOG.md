@@ -1,6 +1,23 @@
 # Changelog
 
 
+## [0.15.1] - 2026-08-16
+### Features
+- feat: 自进化三闭环 — A(自主造工具) / B(可观测审查) / C(自适应修剪)，进化流水线接入 Evaluate 评分闭环（keep-or-rollback）
+- feat: self-evolve 闭环 + 备份自修剪；工具修改自动 git 快照（杜绝"改了没存盘"）
+- feat: 新增 toolkit_eval_loop 确定性 Rubric 评分闭环
+
+### Refactoring
+- refactor: 移除 GUI/TUI 接口，回归引擎核心（Web/API + 协议适配器）
+  - 删除 tkinter 桌面端 gui.py/gui_dialogs.py 与 textual TUI（tui.py）、_gui/ 前端子包
+  - SimpleDagRegistry 迁移至 workflow/dag_registry.py（server 路由 + toolkit_parallel_subtasks 依赖，保留）
+  - _topic_summary 迁移至 session/topic_summary.py；pyproject.toml 移除 tea-agent-gui 入口与 GUI 依赖
+- refactor: 删除已废除的知识结晶机制（skill_crystallize/skill_registry）
+
+### Bug Fixes
+- fix: 根目录 e2e/demo 脚本同步更新 SimpleDagRegistry 导入路径（_gui → workflow.dag_registry），
+  恢复 pytest 可收集性；清理无关 ASR 脚本 test_asr_vad.py
+
 ## [0.15.0] - 2026-08-14
 ### Features
 - feat(cache): 前缀缓存稳定化（对齐 DeepSeek Harness「派生只依赖事件流」哲学）

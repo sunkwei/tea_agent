@@ -16,7 +16,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+from tea_agent.workflow.dag_registry import SimpleDagRegistry
 
 
 def create_demo_dag():

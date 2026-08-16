@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # ═══════════════════════════════════════════════
 # 1. 注册 DAG 工作流
 # ═══════════════════════════════════════════════
-from tea_agent._gui._dag_thumbnail import SimpleDagRegistry
+from tea_agent.workflow.dag_registry import SimpleDagRegistry
 
 nodes = [
     {"id":"init","label":"初始化审查\n扫描代码库","type":"task","state":"completed","duration":0.8},
@@ -40,8 +40,8 @@ print(f"✅ DAG 已注册: {viz_id}")
 print(f"   节点: {len(nodes)}, 边: {len(edges)}")
 
 # 验证 SVG 渲染
-from tea_agent._gui._dag_thumbnail import render_dag_svg_text
-svg = render_dag_svg_text(dag_data=SimpleDagRegistry._instances.get(viz_id))
+from tea_agent.multi_agent.dag_dot_renderer import render_dag_dict_to_svg
+svg = render_dag_dict_to_svg(SimpleDagRegistry._instances.get(viz_id))
 if svg:
     print(f"✅ SVG 渲染成功: {len(svg)} chars")
 else:

@@ -35,7 +35,7 @@ logger = logging.getLogger("hot_reload.agent")
 
 
 def _server_round_summary(model: str, user_msg, tool_names: list, ai_msg: str) -> None:
-    """server 每轮对话输出到控制台的摘要信息。
+    """server 每轮对话的摘要信息（DEBUG 级别，默认不输出到终端）。
 
     Args:
         model: 使用的模型名称
@@ -50,7 +50,9 @@ def _server_round_summary(model: str, user_msg, tool_names: list, ai_msg: str) -
         _user = (_user or "").replace("\n", " ")[:64]
         _tools = ",".join(tool_names or [])
         _ai = (ai_msg or "").replace("\n", " ")[:64]
-        print(f"[chat] model={model} | user={_user} | tools=[{_tools}] | ai={_ai}", flush=True)
+        # 终端仅保留启动 banner（见 server.py run_server）；每轮对话摘要降为
+        # DEBUG 级别，需要时可用 set_debug(True) 临时打开。
+        logger.debug(f"[chat] model={model} | user={_user} | tools=[{_tools}] | ai={_ai}")
     except Exception:
         pass
 
@@ -74,8 +76,11 @@ def _compute_context_usage(context: Any, prompt_tokens: int) -> dict:
     """计算"当前上下文已用 xx%"信息，供后端 usage_data / 前端展示。
 
     组合两个口径：
-    - 实际用量：优先用最近一次请求的真实 prompt_tokens（= 当前上下文大小，
-      含前缀缓存命中），缺失时回退到 context_fragments 的启发式估算。
+    - 实际用量：优先用最近一次请求的真实 prompt_tokens（单次值 = 当前上下文大小，
+      含前缀缓存命中）。注意：调用方传入的 prompt_tokens 参数来自
+      session._last_usage，是会话累计值（所有请求之和），不能作为"当前上下文大小"，
+      故优先取 context._last_request_prompt_tokens（S3 记录的单次值）；
+      缺失时回退到 context_fragments 的启发式估算，最后才用累计值兜底。
     - 窗口上限：get_max_context_tokens（显式配置 > 模型名推断 > 128K 兜底）。
 
     Returns:
@@ -85,12 +90,18 @@ def _compute_context_usage(context: Any, prompt_tokens: int) -> dict:
     from tea_agent.auto_compact import get_max_context_tokens
 
     used = 0
-    if prompt_tokens and prompt_tokens > 0:
-        used = int(prompt_tokens)
+    # 单次值优先：_last_request_prompt_tokens 是最近一次主模型请求的
+    # prompt_tokens（= 当前上下文大小）。prompt_tokens 参数是累计值，
+    # 仅作最后兜底（避免显示 0）。
+    last_real = getattr(context, "_last_request_prompt_tokens", 0) or 0
+    if last_real and last_real > 0:
+        used = int(last_real)
     else:
         est = _context_usage_estimate(context)
         if est is not None:
             used = est
+        elif prompt_tokens and prompt_tokens > 0:
+            used = int(prompt_tokens)
 
     max_tokens = 0
     try:
@@ -362,12 +373,12 @@ class AgentModule(HotReloadModule):
     async def _generate_sse(cls, queue, model):
         cid = "chatcmpl-" + uuid.uuid4().hex[:12]
         now = int(time.time())
-        NL2 = "\n\n"
+        nl2 = "\n\n"
         init_data = {"id": cid, "object": "chat.completion.chunk",
                      "created": now, "model": model,
                      "choices": [{"index": 0, "delta": {"role": "assistant"},
                                   "finish_reason": None}]}
-        yield "data: " + json.dumps(init_data) + NL2
+        yield "data: " + json.dumps(init_data) + nl2
         while True:
             event = await queue.get()
             t = event["type"]

@@ -1862,7 +1862,7 @@ class OnlineToolSession(BaseChatSession):
         stream_retries = 0
         _chunk_buf: list[str] = []
         _chunk_chars = 0
-        _CHUNK_FLUSH_CHARS = 800  # 节流阈值：累计 800 字符落盘一次（避免每 chunk 一次 SQLite 写）
+        chunk_flush_chars = 800  # 节流阈值：累计 800 字符落盘一次（避免每 chunk 一次 SQLite 写）
 
         def _flush_chunk_buf() -> None:
             nonlocal _chunk_buf, _chunk_chars

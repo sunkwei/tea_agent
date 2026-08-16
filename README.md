@@ -8,7 +8,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.15.0-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.15.1-blue)](https://pypi.org/project/tea-agent)
 
 ---
 

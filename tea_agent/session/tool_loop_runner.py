@@ -501,10 +501,10 @@ def execute_tool_loop(session, context: dict) -> dict:
             logger.debug(f"{asctime}: call model: {session.context.model}, {msg}")
 
         # API 调用
-        _MAX_RETRIES = 6
-        _RETRY_BASE_DELAY = 1
+        max_retries = 6
+        retry_base_delay = 1
         response = None
-        for _retry in range(_MAX_RETRIES + 1):
+        for _retry in range(max_retries + 1):
             try:
                 eff = session._get_effective_params("main")
                 response = session.api.create_chat_stream(

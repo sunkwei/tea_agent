@@ -594,7 +594,7 @@ def run_telegram_bot():
         print("❌ 错误：未指定 Telegram Bot Token")
         print()
         print("   请通过以下方式提供：")
-        print("   1. 环境变量: export TELEGRAM_BOT_TOKEN='123456:ABC-DEF...'")
+        print("   1. 环境变量: export TELEGRAM_BOT_TOKEN='your_token_here'")
         print("   2. CLI 参数: --token '123456:ABC-DEF...'")
         print()
         print("   如何获取 Token：")

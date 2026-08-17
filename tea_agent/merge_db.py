@@ -126,7 +126,15 @@ class DbMerger:
         if table not in _ALLOWED_TABLES:
             raise ValueError(f"不允许的表名: {table}")
         cur = conn.execute(f"PRAGMA table_info({table})")
-        return [row[1] for row in cur.fetchall()]
+        columns = []
+        for row in cur.fetchall():
+            col_name = row[1]
+            # 验证列名只包含字母、数字和下划线，防止SQL注入
+            if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', col_name):
+                logger.warning(f"表 {table} 的列名 '{col_name}' 包含非法字符，跳过")
+                continue
+            columns.append(col_name)
+        return columns
 
     # ------------------------------------------------------------------
     # 步骤 1: 合并 _meta

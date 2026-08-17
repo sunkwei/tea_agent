@@ -10,8 +10,8 @@
 import json
 import logging
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable
 
 logger = logging.getLogger("session.tool_loop_runner")
 
@@ -323,9 +323,9 @@ def _format_tool_summary(tool_calls) -> str:
             args_dict = json.loads(args_str)
             for k, v in args_dict.items():
                 v_str = str(v)
-                _MAX_PARAM_DISPLAY = 500
-                if len(v_str) > _MAX_PARAM_DISPLAY:
-                    v_str = v_str[:_MAX_PARAM_DISPLAY] + f"… [剩余 {len(v_str) - _MAX_PARAM_DISPLAY} 字符]"
+                max_param_display = 500
+                if len(v_str) > max_param_display:
+                    v_str = v_str[:max_param_display] + f"… [剩余 {len(v_str) - max_param_display} 字符]"
                 lines.append(f"\t{k}={v_str}")
         except (json.JSONDecodeError, TypeError):
             raw = args_str

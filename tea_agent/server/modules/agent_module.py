@@ -373,12 +373,12 @@ class AgentModule(HotReloadModule):
     async def _generate_sse(cls, queue, model):
         cid = "chatcmpl-" + uuid.uuid4().hex[:12]
         now = int(time.time())
-        NL2 = "\n\n"
+        nl2 = "\n\n"
         init_data = {"id": cid, "object": "chat.completion.chunk",
                      "created": now, "model": model,
                      "choices": [{"index": 0, "delta": {"role": "assistant"},
                                   "finish_reason": None}]}
-        yield "data: " + json.dumps(init_data) + NL2
+        yield "data: " + json.dumps(init_data) + nl2
         while True:
             event = await queue.get()
             t = event["type"]

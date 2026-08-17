@@ -285,7 +285,7 @@ main_model:
   api_key: "sk-xxx"
   api_url: "https://api.openai.com/v1"
   model_name: "gpt-4o"
-  max_context_tokens: 0    # 0=不限制，>0 启用渐进式 token 裁剪
+  max_context_tokens: 0    # 0=默认 1M(1048576)，>0 显式指定窗口上限并启用渐进式 token 裁剪
 cheap_model:               # 独立配置，用于摘要/记忆等廉价任务
   max_context_tokens: 0
 embedding:
@@ -297,7 +297,7 @@ vision_model:             # 视觉模型（可选）：会话含图片时自动�
   model_name: "gpt-4o-mini"    # 示例：也支持 mimo-v2.5 等视觉模型
 ```
 
-- **上下文窗口控制**：`max_context_tokens` 超预算时按 5 级渐进裁剪（删旧历史 → 工具输出占位 → 清 thinking → 截长文 → 删旧轮）
+- **上下文窗口控制**：`max_context_tokens` 作为"上下文已用"百分比的分母（窗口上限），超预算时按 5 级渐进裁剪（删旧历史 → 工具输出占位 → 清 thinking → 截长文 → 删旧轮）。未显式配置时默认 1M（1048576），**不做模型名推断**，避免模型名不匹配导致窗口上限误判。
 - **视觉模型自动切换**：配置 `vision_model` 后，会话输入含图片时自动使用视觉模型（回合结束恢复主模型）；另提供 `toolkit_vision_analyze` 工具供主模型委托图片分析
 - **运行时调优**：Agent 可用 `toolkit_config` 自主调整参数
 - **Ruff 规范**：内置 `pyproject.toml` Ruff 配置（E/F/W/I/N/UP/B/C4/SIM），Python 3.10 类型注解

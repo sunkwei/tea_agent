@@ -388,8 +388,8 @@ class BaseChatSession(ABC):
         # 压缩必须满足"结果 ≤ max_chars"，否则会被 _solidify_history/水位线
         # 判定为"超阈值"而二次替换为占位符（R2 翻转：完整→占位符，破坏前缀缓存）。
         # 为标记行（压缩说明 + 省略标注）预留字节，使 head+tail ≤ max_chars。
-        MARKER_RESERVE = 96
-        effective_max = max(128, max_chars - MARKER_RESERVE)
+        marker_reserve = 96
+        effective_max = max(128, max_chars - marker_reserve)
         half = effective_max // 2
 
         # 前半部分：从 half 位置向前找最近换行

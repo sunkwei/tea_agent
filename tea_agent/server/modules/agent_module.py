@@ -76,8 +76,11 @@ def _compute_context_usage(context: Any, prompt_tokens: int) -> dict:
     """计算"当前上下文已用 xx%"信息，供后端 usage_data / 前端展示。
 
     组合两个口径：
-    - 实际用量：优先用最近一次请求的真实 prompt_tokens（= 当前上下文大小，
-      含前缀缓存命中），缺失时回退到 context_fragments 的启发式估算。
+    - 实际用量：优先用最近一次请求的真实 prompt_tokens（单次值 = 当前上下文大小，
+      含前缀缓存命中）。注意：调用方传入的 prompt_tokens 参数来自
+      session._last_usage，是会话累计值（所有请求之和），不能作为"当前上下文大小"，
+      故优先取 context._last_request_prompt_tokens（S3 记录的单次值）；
+      缺失时回退到 context_fragments 的启发式估算，最后才用累计值兜底。
     - 窗口上限：get_max_context_tokens（显式配置 > 模型名推断 > 128K 兜底）。
 
     Returns:
@@ -87,12 +90,18 @@ def _compute_context_usage(context: Any, prompt_tokens: int) -> dict:
     from tea_agent.auto_compact import get_max_context_tokens
 
     used = 0
-    if prompt_tokens and prompt_tokens > 0:
-        used = int(prompt_tokens)
+    # 单次值优先：_last_request_prompt_tokens 是最近一次主模型请求的
+    # prompt_tokens（= 当前上下文大小）。prompt_tokens 参数是累计值，
+    # 仅作最后兜底（避免显示 0）。
+    last_real = getattr(context, "_last_request_prompt_tokens", 0) or 0
+    if last_real and last_real > 0:
+        used = int(last_real)
     else:
         est = _context_usage_estimate(context)
         if est is not None:
             used = est
+        elif prompt_tokens and prompt_tokens > 0:
+            used = int(prompt_tokens)
 
     max_tokens = 0
     try:

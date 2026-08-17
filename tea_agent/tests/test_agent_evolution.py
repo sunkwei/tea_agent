@@ -193,6 +193,7 @@ class TestEvolutionActorAutoExtend:
     def test_create_tool_valid_flow(self):
         """LLM 返回合法工具定义 → toolkit.save 被调用并返回 ok。"""
         import json as _json
+
         from tea_agent.agent_evolution import EvolutionActor
         tk = self._make_toolkit()
         payload = _json.dumps({
@@ -223,6 +224,7 @@ class TestEvolutionActorAutoExtend:
     def test_create_tool_illegal_name_skips(self):
         """工具名不合法（非 toolkit_ 前缀）→ 不调 save。"""
         import json as _json
+
         from tea_agent.agent_evolution import EvolutionActor
         tk = self._make_toolkit()
         payload = _json.dumps({
@@ -241,6 +243,7 @@ class TestEvolutionActorAutoExtend:
     def test_create_tool_syntax_error_skips(self):
         """LLM 生成的 pycode 语法错误 → 跳过，不污染工具目录。"""
         import json as _json
+
         from tea_agent.agent_evolution import EvolutionActor
         tk = self._make_toolkit()
         payload = _json.dumps({
@@ -267,6 +270,7 @@ class TestEvolutionActorAutoExtend:
         """execute() 正确分发 create_tool / prune 到对应处理函数。"""
         import json as _json
         import os
+
         from tea_agent.agent_evolution import EvolutionActor
         # 日志写到工作区临时文件，避免污染 ~/.tea_agent
         monkeypatch.setenv("TEA_AGENT_EVOLUTION_LOG",
@@ -296,8 +300,9 @@ class TestEvolutionActorAutoExtend:
 
         关注：数据层 append/load/prune 逻辑。写文件系统，需本地环境执行。
         """
-        import json as _json
-        import tempfile, os, shutil
+        import os
+        import shutil
+
         from tea_agent import agent_evolution as ae
         # 用工作区临时文件（避 tmp_path sandbox 限制），走环境变量
         d = "evlog_test"
@@ -330,6 +335,7 @@ class TestEvolutionActorAutoExtend:
         """prune skills → 只删超龄 interrupt 技能，保留最近 keep 份。"""
         import os
         import shutil
+
         from tea_agent.agent_evolution import EvolutionActor
         d = "pruneskills_test"
         os.makedirs(d, exist_ok=True)

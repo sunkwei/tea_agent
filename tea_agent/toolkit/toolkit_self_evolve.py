@@ -255,7 +255,6 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
             {"ok": bool, "error": str, "details": dict}
         """
         import ast
-        import re
 
         details = {"checks": []}
 

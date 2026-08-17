@@ -35,8 +35,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger("context_fragments")
 
@@ -280,7 +281,7 @@ def _frag_token_budget(context: Any) -> ContextFragment | None:
         if remaining <= 0:
             # S5: 已用尽 → 置强制压缩标志，pipeline summarize 步骤检测后立即压缩
             try:
-                setattr(context, "_token_exhausted", True)
+                context._token_exhausted = True
             except Exception:
                 pass
             body = (

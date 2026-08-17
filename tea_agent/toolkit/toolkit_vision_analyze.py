@@ -106,7 +106,6 @@ def toolkit_vision_analyze(image: str, prompt: str = "请描述这张图片的�
         return {"ok": False, "error": f"无法解析图片输入（路径不存在或格式不支持）: {str(image)[:100]}"}
 
     try:
-        import json
 
         messages = [{
             "role": "user",

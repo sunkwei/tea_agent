@@ -13,7 +13,6 @@ PiFeaturesModule — 借鉴 Pi Agent Harness 的功能模块（热重载）。
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import threading
@@ -306,7 +305,8 @@ class PiFeaturesModule(HotReloadModule):
         从 storage 拉取对话 → 跑 CompactionPipeline → 返回压缩结果。
         """
         try:
-            from tea_agent.auto_compact import CompactionSettings, CompactionPipeline
+            from tea_agent.auto_compact import CompactionPipeline, CompactionSettings
+
             from ..modules.storage_module import StorageModule
 
             storage = StorageModule.get_storage()

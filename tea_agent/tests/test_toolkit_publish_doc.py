@@ -8,7 +8,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tea_agent.tlk import Toolkit
-from tea_agent.toolkit.toolkit_publish_doc import toolkit_publish_doc, _clean_filename
+from tea_agent.toolkit.toolkit_publish_doc import _clean_filename, toolkit_publish_doc
 
 
 class TestPublishDocTool:

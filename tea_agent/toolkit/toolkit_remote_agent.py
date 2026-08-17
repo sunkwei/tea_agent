@@ -15,8 +15,8 @@ import logging
 import threading
 import time
 from datetime import datetime
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
-from urllib.error import URLError, HTTPError
 
 logger = logging.getLogger("toolkit.remote_agent")
 

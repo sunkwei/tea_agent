@@ -8,7 +8,6 @@ Imports:
 """
 
 import asyncio
-import base64 as b64mod
 import contextlib
 import json
 import os
@@ -20,9 +19,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
-from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from tea_agent.multi_agent.workflow_viz import DagVizRegistry, get_viz_html
 from tea_agent.toolkit.toolkit_export_last_pdf import export_topic_markdown, export_topic_pdf

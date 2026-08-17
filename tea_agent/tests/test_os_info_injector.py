@@ -558,12 +558,11 @@ class TestDetectInterfaceType:
 
     def test_no_env_var_fallback(self):
         """无环境变量时应通过模块检测回退到 cli"""
-        with patch.dict(os.environ, {}, clear=True):
-            with patch("tea_agent.session.os_info_injector.sys.modules", {}):
-                with patch("tea_agent.session.os_info_injector.sys.argv", [""]):
-                    from tea_agent.session.os_info_injector import _detect_interface_type
-                    result = _detect_interface_type()
-                    assert result in ("web", "gui", "cli", "tui", "mcp")
+        with patch.dict(os.environ, {}, clear=True), patch("tea_agent.session.os_info_injector.sys.modules", {}):
+            with patch("tea_agent.session.os_info_injector.sys.argv", [""]):
+                from tea_agent.session.os_info_injector import _detect_interface_type
+                result = _detect_interface_type()
+                assert result in ("web", "gui", "cli", "tui", "mcp")
 
     def test_invalid_env_var_fallback(self):
         """无效环境变量值应走正常检测流程"""

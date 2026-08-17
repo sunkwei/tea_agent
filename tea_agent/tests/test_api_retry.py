@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from tea_agent.api_retry import call_with_retry, _is_retryable
+from tea_agent.api_retry import _is_retryable, call_with_retry
 
 # 动态创建与 openai SDK 同名的异常类，模拟真实可重试/不可重试错误
 APIConnectionError = type("APIConnectionError", (Exception,), {})

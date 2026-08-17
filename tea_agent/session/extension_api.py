@@ -32,11 +32,11 @@ Extension API + 生命周期事件系统 — 借鉴 Pi Agent Harness 的扩展�
 import importlib
 import importlib.util
 import logging
-import os
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger("session.extension_api")
 

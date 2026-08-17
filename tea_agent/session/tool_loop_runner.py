@@ -795,9 +795,9 @@ def _execute_single_tool(session, tc, callback, iterations, on_status) -> tuple:
                 _parts = []
                 for _k, _v in _args.items():
                     _vs = str(_v)
-                    _MAX_PARAM = 500
-                    if len(_vs) > _MAX_PARAM:
-                        _vs = _vs[:_MAX_PARAM] + "…"
+                    max_param = 500
+                    if len(_vs) > max_param:
+                        _vs = _vs[:max_param] + "…"
                     _parts.append(f"{_k}: {_vs}")
                 callback(f"[TOOL_ARG:{', '.join(_parts)}]")
             else:

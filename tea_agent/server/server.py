@@ -446,7 +446,7 @@ def create_app(api_key=None, config_path=None):
     # API Key auth
     server_api_key = _server_instance._api_key
     if server_api_key:
-        _SKIP_PATHS = {"/health", "/docs", "/openapi.json", "/", "/static"}
+        skip_paths = {"/health", "/docs", "/openapi.json", "/", "/static"}
 
         class AuthMiddleware:
             def __init__(self, app, api_key):

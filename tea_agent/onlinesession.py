@@ -893,7 +893,9 @@ class ToolComponent(SessionComponent):
             "content": content if content else "",
             "tool_calls": tc_list_for_collector,
         }
-        if reasoning_content:
+        if self.ctx.supports_reasoning:
+            # 与 tool_loop_runner 存储一致：RC 字段含空串也必须保留入库，
+            # 否则 DB 回放/历史加载后 tool_calls 消息缺 key → 下轮请求 400。
             entry["reasoning_content"] = reasoning_content
         self.ctx._rounds_collector.append(entry)
 
@@ -902,7 +904,7 @@ class ToolComponent(SessionComponent):
             "role": "assistant",
             "content": content,
         }
-        if reasoning_content:
+        if self.ctx.supports_reasoning:
             entry["reasoning_content"] = reasoning_content
         self.ctx._rounds_collector.append(entry)
 

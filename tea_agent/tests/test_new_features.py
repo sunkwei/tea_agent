@@ -96,10 +96,12 @@ class TestProgressiveTrim:
         ]
         budget = estimate_tokens(messages[2]["content"]) + 50
         result = _progressive_trim(messages, budget, None)
-        # reasoning_content 被清除
+        # DeepSeek V4 thinking 模式要求 reasoning_content 完整回传（截断/清空触发 400），
+        # 因此裁剪策略不再清空 reasoning_content，只裁剪正文/工具输出/旧轮次。
         for m in result:
             if m.get("role") == "assistant":
-                assert m.get("reasoning_content", "") == ""
+                assert m.get("reasoning_content") == "x" * 5000, \
+                    "reasoning_content 必须原样保留，不得被裁剪"
 
     def test_trim_old_user_turns(self):
         from tea_agent.session.history_builder import _progressive_trim

@@ -285,7 +285,7 @@ main_model:
   api_key: "sk-xxx"
   api_url: "https://api.openai.com/v1"
   model_name: "gpt-4o"
-  max_context_tokens: 0    # 0=不限制，>0 启用渐进式 token 裁剪
+  max_context_tokens: 0    # 0=默认 1M(1048576)，>0 显式指定窗口上限并启用渐进式 token 裁剪
 cheap_model:               # 独立配置，用于摘要/记忆等廉价任务
   max_context_tokens: 0
 embedding:

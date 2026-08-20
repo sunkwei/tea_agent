@@ -92,6 +92,12 @@ class MemoryManager:
         Returns:
             入选的记忆列表，优先级高的排在前面
         """
+        # 防御：多模态/异常类型输入归一为 str（修复 dict.lower WARN）
+        if isinstance(topic_text, dict):
+            topic_text = topic_text.get("text", "") or topic_text.get("content", "") or topic_text.get("msg", "") or ""
+        elif not isinstance(topic_text, str):
+            topic_text = str(topic_text) if topic_text is not None else ""
+
         # 先执行年龄衰减
         self.degrade_by_age()
 

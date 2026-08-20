@@ -1843,9 +1843,20 @@ class OnlineToolSession(BaseChatSession):
                 self.api._accumulate_usage(response.usage)
             if response.choices:
                 msg = response.choices[0].message
-                if hasattr(msg, "reasoning_content") and msg.reasoning_content:
+                _has_rc = hasattr(msg, "reasoning_content") and msg.reasoning_content
+                if _has_rc:
                     reasoning_parts.append(msg.reasoning_content)
                     callback(f"[THINK]{msg.reasoning_content}")
+                # B: Muse inline-thinking 兼容 — 无 reasoning_content 时合成
+                _is_muse_ns = "muse" in (self.context.model or "").lower() or "spark" in (self.context.model or "").lower()
+                if not _has_rc and _is_muse_ns and msg.content:
+                    _budget_ns = 1600
+                    _syn = msg.content[:_budget_ns] if len(msg.content) > _budget_ns else msg.content
+                    # 仅当内容含思考痕迹或足够长时才合成，避免短回答误判
+                    if len(msg.content) > 200 or any(k in msg.content for k in ("思考", "推理", "逐步", "分析", "think")):
+                        reasoning_parts.append(_syn)
+                        callback(f"[THINK]{_syn}")
+                        callback("[THINK_DONE]")
                 if msg.content:
                     content_parts.append(msg.content)
                     callback(msg.content)
@@ -1868,6 +1879,8 @@ class OnlineToolSession(BaseChatSession):
         # 流式模式（带断流重试 + AI 回复增量实时落盘）
         # 借鉴 DeepSeek Harness append-only log：不等 final msg，边收边落盘，
         # 中断时已生成的回复内容仍可从 session_events 重建。
+        self._muse_syn_done = False
+        self._muse_syn_active = False
         stream_retries = 0
         _chunk_buf: list[str] = []
         _chunk_chars = 0
@@ -1894,6 +1907,42 @@ class OnlineToolSession(BaseChatSession):
                     if hasattr(delta, "reasoning_content") and delta.reasoning_content:
                         reasoning_parts.append(delta.reasoning_content)
                         callback(f"[THINK]{delta.reasoning_content}")
+
+                    # B: Muse inline-thinking 流式合成 — 首段 content 合成思考预览
+                    # Muse Spark 经 opencode 代理不提供 delta.reasoning_content，思考写在 content 里。
+                    # 仅当启用思考、用 Muse 模型、且无原生 reasoning 时，用首 ~1600 字符合成 [THINK]。
+                    _already_syn = getattr(self, "_muse_syn_done", False)
+                    _is_muse_model = "muse" in (self.context.model or "").lower() or "spark" in (self.context.model or "").lower()
+                    _can_syn = (not _already_syn and self.context.enable_thinking and _is_muse_model
+                                and delta.content and len("".join(reasoning_parts)) < 1600
+                                and len("".join(content_parts)) < 2200)
+                    # 已有原生 reasoning 则永不合成；已合成首段后继续追加直到 1600
+                    _has_real_rc = bool(reasoning_parts) and not getattr(self, "_muse_syn_active", False) and len("".join(content_parts)) == 0
+                    # 区分：若 reasoning_parts 来自真实 RC（首包前已有），则 _has_real_rc 已可判定；
+                    # 更稳妥：检查首包是否走过原生分支
+                    if _can_syn:
+                        # 若已有原生 reasoning（非合成），跳过
+                        if reasoning_parts and not getattr(self, "_muse_syn_active", False):
+                            # reasoning_parts 非空但非合成期 → 说明是真实 RC，禁止合成
+                            pass
+                        else:
+                            _peek = delta.content
+                            _has_marker = _peek.lstrip().startswith("### 思考") or "思考" in _peek[:160] or "逐步推理" in _peek[:160] or "推理" in _peek[:80]
+                            _is_early = len("".join(content_parts)) < 600
+                            _should_syn = _has_marker or (_is_early and len(_peek) > 20) or getattr(self, "_muse_syn_active", False)
+                            if _should_syn:
+                                self._muse_syn_active = True
+                                _budget_left = 1600 - len("".join(reasoning_parts))
+                                _take = _peek[:max(0, _budget_left)] if _budget_left > 0 else ""
+                                if _take:
+                                    reasoning_parts.append(_take)
+                                    callback(f"[THINK]{_take}")
+                                    if len("".join(reasoning_parts)) >= 1200 or "### 第一步" in _peek or len("".join(reasoning_parts)) >= 1600:
+                                        callback("[THINK_DONE]")
+                                        self._muse_syn_done = True
+                                    # 仍保留原文在 content 中（不截断），思考面板为合成预览
+                    # 流结束兜底闭合（保证有 THINK 就有 DONE）
+                    # 在循环外处理，见下方 _flush 后
 
                     if delta.content:
                         content_parts.append(delta.content)
@@ -1937,6 +1986,15 @@ class OnlineToolSession(BaseChatSession):
 
         content = "".join(content_parts)
         reasoning_content = "".join(reasoning_parts)
+        # B 兜底：Muse 合成思考若未闭合，补一次 DONE，避免前端悬挂
+        if reasoning_parts and "muse" in (self.context.model or "").lower():
+            # 检查是否已发过 DONE：若 reasoning 已合成但未标记 done，补闭合
+            if not getattr(self, "_muse_syn_done", False):
+                callback("[THINK_DONE]")
+                self._muse_syn_done = True
+        # 下一轮重置
+        self._muse_syn_done = False
+        self._muse_syn_active = False
         return content, tool_calls_data, reasoning_content
 
     # ──────────────────────────────────────────────

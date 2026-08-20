@@ -64,13 +64,13 @@ def estimate_messages_tokens(messages: list) -> int:
 
 
 def get_max_context_tokens(config) -> int:
-    """获取最大上下文 token 数。未知模型默认 128K。
+    """获取最大上下文 token 数。未显式配置时默认 1M（1048576）。
 
     兼容两类入参：
     - config 对象（有 main_model）→ 从 main_model.max_context_tokens / options 读取
-    - SessionContext 等（有 model 字符串）→ 模型名推断
-    均未配置时按模型名映射（deepseek/gemini→1M, claude→200K, gpt-4→128K），
-    未知模型保守默认 128K——保证任何情况下裁剪链都有可用上限。
+    - SessionContext 等（有 model 字符串）→ 同样只读显式配置
+    均未显式配置时统一默认 1048576（1M）——保证任何情况下裁剪链都有可用上限。
+    不做模型名推断，避免因模型名不匹配导致窗口上限误判。
     """
     try:
         main = getattr(config, "main_model", None)
@@ -80,23 +80,10 @@ def get_max_context_tokens(config) -> int:
             val = getattr(main, "options", {}).get("max_context_tokens", 0)
             if val:
                 return int(val)
-            model = (main.model_name or "").lower()
-        else:
-            # 直接传入 SessionContext / 任意带 model 属性的对象
-            model = (getattr(config, "model", "") or "").lower()
-        defaults = {
-            "gpt-4": 128000,
-            "claude": 200000,
-            "deepseek": 1048576,
-            "gemini": 1048576,
-            "mimo": 1048576,  # Xiaomi MiMo V2.5 (1M context)
-        }
-        for k, v in defaults.items():
-            if k in model:
-                return v
-        return 128000
+        # 未显式配置 → 默认 1M
+        return 1048576
     except Exception:
-        return 128000
+        return 1048576
 
 
 # ═══ 配置 ════════════════════════════════════════════════

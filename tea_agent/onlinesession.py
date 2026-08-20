@@ -506,6 +506,13 @@ class APIComponent(SessionComponent):
         except Exception:
             pass
 
+        # ⚠️ 思考模式下不发送 temperature/top_p（DeepSeek V4 文档明确不支持；
+        # 官方端点会忽略，但第三方代理可能直接 400）。凡启用 thinking 或
+        # 显式传 reasoning_effort 即视为思考模式，从 kwargs 移除这两个参数。
+        if "thinking" in extra_body or "reasoning_effort" in extra_body:
+            kwargs.pop("temperature", None)
+            kwargs.pop("top_p", None)
+
         if extra_body:
             kwargs["extra_body"] = extra_body
 

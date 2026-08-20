@@ -16,6 +16,42 @@ from typing import Any, Callable
 logger = logging.getLogger("session.tool_loop_runner")
 
 
+def _extract_api_error_detail(exc: Exception) -> str:
+    """提取 API 异常中的完整错误体，用于定位 4xx 具体原因。
+
+    OpenAI SDK / httpx 异常通常携带 response 对象，其 body 含服务端返回的
+    具体错误信息（如 DeepSeek 400 "must be passed back" / context length /
+    invalid tool_calls）。仅 str(exc) 会丢失这些关键细节，导致无法区分
+    4xx 类型。此函数尽力提取 status_code + response body，提取失败时
+    回退到 str(exc)。
+
+    Args:
+        exc: 捕获到的异常对象
+
+    Returns:
+        格式化后的错误详情字符串
+    """
+    parts = [f"{type(exc).__name__}: {exc}"]
+    try:
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            status = getattr(resp, "status_code", None)
+            if status is not None:
+                parts.append(f"status={status}")
+            # 优先结构化 body，其次原始文本
+            body = getattr(resp, "text", None)
+            if not body:
+                body = getattr(resp, "body", None)
+            if body:
+                body_str = body.decode("utf-8", errors="replace") if isinstance(body, (bytes, bytearray)) else str(body)
+                if len(body_str) > 2000:
+                    body_str = body_str[:2000] + "...[截断]"
+                parts.append(f"body={body_str}")
+    except Exception:
+        pass
+    return " | ".join(parts)
+
+
 # ═══ 并行工具执行引擎 ═══════════════════════════════════
 
 class ParallelExecutor:
@@ -539,14 +575,20 @@ def execute_tool_loop(session, context: dict) -> dict:
                         )
                     except Exception as e2:
                         error_msg = f"API调用错误: {e2}"
-                        logger.warning(f"API调用失败: model={session.context.model}, error={e2}, iteration={iterations}")
+                        logger.warning(
+                            f"API调用失败: model={session.context.model}, iteration={iterations}, "
+                            f"detail={_extract_api_error_detail(e2)}"
+                        )
                         callback(error_msg)
                         session.add_assistant_message(full_reply + error_msg)
                         session.tools_comp.collect_api_error_round(full_reply + error_msg)
                         return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": e2}
                 else:
                     error_msg = f"API调用错误: {e}"
-                    logger.warning(f"API调用失败: model={session.context.model}, error={e}, iteration={iterations}")
+                    logger.warning(
+                        f"API调用失败: model={session.context.model}, iteration={iterations}, "
+                        f"detail={_extract_api_error_detail(e)}"
+                    )
                     callback(error_msg)
                     session.add_assistant_message(full_reply + error_msg)
                     session.tools_comp.collect_api_error_round(full_reply + error_msg)

@@ -211,7 +211,7 @@ class LiteSession:
                 state["tool_calls_count"] += len(valid_tool_calls)
 
                 # 处理工具调用
-                self._handle_tool_calls(messages, valid_tool_calls, content)
+                self._handle_tool_calls(messages, valid_tool_calls, content, reasoning)
 
                 state["iterations"] += 1
                 continue
@@ -223,7 +223,8 @@ class LiteSession:
         self,
         messages: list[dict],
         valid_tool_calls: list,
-        content: str
+        content: str,
+        reasoning_content: str = ""
     ) -> None:
         """处理工具调用。
 
@@ -231,9 +232,13 @@ class LiteSession:
             messages: 消息列表（会被修改）
             valid_tool_calls: 有效的工具调用列表
             content: 助手回复内容
+            reasoning_content: 本轮的思维链内容（可能为空字符串，仍需保留字段，
+                见 _build_assistant_message 注释——DeepSeek V4 思考模式要求回传）
         """
         # 添加 assistant 消息到上下文
-        assistant_msg = self._build_assistant_message(content, valid_tool_calls)
+        assistant_msg = self._build_assistant_message(
+            content, valid_tool_calls, reasoning_content
+        )
         messages.append(assistant_msg)
 
         # 执行工具调用
@@ -261,18 +266,20 @@ class LiteSession:
     def _build_assistant_message(
         self,
         content: str,
-        valid_tool_calls: list
+        valid_tool_calls: list,
+        reasoning_content: str = ""
     ) -> dict:
         """构建助手消息。
 
         Args:
             content: 助手回复内容
             valid_tool_calls: 工具调用列表
+            reasoning_content: 本轮的思维链内容
 
         Returns:
             助手消息字典
         """
-        return {
+        msg = {
             "role": "assistant",
             "content": content if content else None,
             "tool_calls": [
@@ -287,6 +294,12 @@ class LiteSession:
                 for tc in valid_tool_calls
             ],
         }
+        if self.supports_reasoning:
+            # DeepSeek V4 思考模式：带 tools 的请求必须回传 reasoning_content 字段，
+            # **含空字符串**——V4 部分 tool_call 轮次返回 reasoning_content=""，
+            # 因值为空而丢弃该字段会在下一轮请求触发 400 "must be passed back"。
+            msg["reasoning_content"] = reasoning_content
+        return msg
 
     def _build_chat_result(
         self,

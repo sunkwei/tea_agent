@@ -1185,15 +1185,17 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             result.insert(_ins, dyn_msg)
 
     # 防御性校验（DeepSeek V4 thinking 模式）：含 tool_calls 的 assistant 消息
-    # 必须携带非空 reasoning_content，否则 API 会返回 400 "must be passed back"。
+    # 必须**携带 reasoning_content 字段**（值可为空字符串——V4 在部分 tool_call
+    # 轮次会返回 reasoning_content=""，该空串同样必须原样回传），否则 API 会返回
+    # 400 "must be passed back"。字段缺失才是风险；空串是合法值，不算缺失。
     # 此处仅告警以便定位根因，不修改消息（RC 无法凭空构造）。
     if context.supports_reasoning:
         for _i, _m in enumerate(result):
             if _m.get("role") == "assistant" and _m.get("tool_calls"):
-                if not _m.get("reasoning_content"):
+                if "reasoning_content" not in _m:
                     logger.warning(
                         f"build_api_messages: 含 tool_calls 的 assistant 消息 "
-                        f"缺少 reasoning_content (index={_i}, tool={_m['tool_calls'][0].get('function', {}).get('name', '?') if _m['tool_calls'] else '?'})"
+                        f"缺少 reasoning_content 字段 (index={_i}, tool={_m['tool_calls'][0].get('function', {}).get('name', '?') if _m['tool_calls'] else '?'})"
                         f" — DeepSeek 思考模式将返回 400，请检查该轮 RC 采集"
                     )
 

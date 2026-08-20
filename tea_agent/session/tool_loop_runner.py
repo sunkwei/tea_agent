@@ -606,10 +606,14 @@ def execute_tool_loop(session, context: dict) -> dict:
                     }
                 } for tc in valid_tool_calls]
             }
-            if reasoning_content:
+            if session.context.supports_reasoning:
                 # DeepSeek V4 思考模式要求：带 tools 的请求必须把 reasoning_content
                 # 完整回传，否则 400 ("must be passed back")。因此**不得截断/改写**——
                 # 截断后的 RC 与原值不一致同样会触发 400。
+                # 注意：V4 在部分 tool_call 轮次会返回 reasoning_content=""（空字符串），
+                # 若因值为空而丢弃该字段（旧实现 `if reasoning_content:`），下轮请求
+                # 会触发 400，且 build_api_messages 防御校验会持续告警。
+                # 正确做法：字段只要模型返回过就必须保留（含空串），原样入库回传。
                 assistant_msg["reasoning_content"] = reasoning_content
 
             session.context.messages.append(assistant_msg)
@@ -751,8 +755,10 @@ def execute_tool_loop(session, context: dict) -> dict:
         elif content:
             iterations += 1
             assistant_msg = {"role": "assistant", "content": session._cap_message_text(content)}
-            if reasoning_content:
-                # 完整回传 reasoning_content（DeepSeek V4 thinking 模式要求，截断会 400）
+            if session.context.supports_reasoning:
+                # 完整回传 reasoning_content（DeepSeek V4 thinking 模式要求，截断会 400）。
+                # 含空串也原样保留，与工具调用轮一致（API 对无 tool_calls 的 assistant
+                # 忽略 RC，保留无害且保证 DB 回放一致）。
                 assistant_msg["reasoning_content"] = reasoning_content
             session.context.messages.append(assistant_msg)
             session.tools_comp.collect_assistant_text_round(content, reasoning_content)

@@ -435,9 +435,9 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
     裁剪策略（按优先级从高到低）：
     1. 删除 [历史记录] 等标记的 L2 条目（最旧的先删）
     2. 替换工具输出为占位符（使用动态阈值）
-    3. 删除 reasoning_content
+    3. ~~删除 reasoning_content~~（已废弃：DeepSeek V4 要求完整回传，清空会触发 400）
     4. 截断长文本（assistant/tool 消息）
-    5. 删除 L1 旧轮次（保留最近 5 轮）
+    5. 删除 L1 旧轮次（保留最近 N 轮）
 
     Args:
         messages: API 消息列表
@@ -493,25 +493,13 @@ def _progressive_trim(messages: list[dict], budget: int, context: Any,
                     # 使后续请求读到占位符版本（幂等守卫跳过），前缀收敛稳定。
                     _writeback_content(context, msg)
 
-    # 策略3: 删除 reasoning_content（S2：清空决策一次性固化）
-    # 清空后回写 context.messages 定型——否则预算波动导致"完整↔空"翻转，
-    # 服务端前缀缓存从该条起全部失效。回写后后续请求读到空版本，形态收敛。
-    # 已定型（含 [已截断 标记）的 reasoning 不参与清空。
-    if est > budget:
-        for msg in result:
-            if est <= budget:
-                break
-            rc = msg.get("reasoning_content", "")
-            if rc and "[已截断" not in rc:
-                est -= estimate_tokens(rc)
-                msg["reasoning_content"] = ""
-                est = max(est, 0)
-                # 回写定型：把清空决策固化到源消息
-                _src = msg.get("_src_idx")
-                if _src is not None and context is not None:
-                    _msgs = getattr(context, "messages", None)
-                    if _msgs and 0 <= _src < len(_msgs) and _msgs[_src].get("reasoning_content"):
-                        _msgs[_src]["reasoning_content"] = ""
+    # 策略3: 不再删除/清空 reasoning_content（原策略已废弃，见下方说明）
+    # ⚠️ DeepSeek V4 思考模式硬性要求：凡携带 `tools` 参数的请求，assistant 消息的
+    # reasoning_content 必须**完整回传**，否则 API 返回 400
+    #   "The reasoning_content in the thinking mode must be passed back to the API."
+    # 因此任何 assistant 的 reasoning_content 都不能被清空或改写（截断同样会触发）。
+    # 若需压 token，应依赖策略 4/5（截断正文、删除旧轮次，连同其 RC 一起移除）。
+    # 保留该注释块避免后续实现者误以为可删除 RC 省 token。
 
     # 策略4: 截断长文本（逐步收紧截断阈值）
     # 幂等守卫：已定型消息（含 [已截断 / [工具结果已省略 标记）不再二次改写，
@@ -1056,7 +1044,11 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             if n_chars > tool_prune_threshold:
                 msg_copy["content"] = f"[工具结果已省略: {n_chars} 字符]"
 
-        if (msg_copy["role"] == "assistant" and context.supports_reasoning
+        # 缓存友好/兼容：supports_reasoning 时为普通 assistant 消息补空 reasoning_content
+        # 字段。注意：含 tool_calls 的 assistant 消息**不**补空值——DeepSeek V4 要求其
+        # reasoning_content 必须完整回传，凭空补 "" 等价于"未回传"，会触发 400。
+        if (msg_copy["role"] == "assistant" and not msg_copy.get("tool_calls")
+                and context.supports_reasoning
                 and "reasoning_content" not in msg_copy):
             msg_copy["reasoning_content"] = ""
         msg_copy = to_multimodal(msg_copy, context.supports_vision, original=msg)
@@ -1191,5 +1183,18 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
         if _ins <= len(result):
             dyn_msg = {"role": "user", "content": dynamic_text}
             result.insert(_ins, dyn_msg)
+
+    # 防御性校验（DeepSeek V4 thinking 模式）：含 tool_calls 的 assistant 消息
+    # 必须携带非空 reasoning_content，否则 API 会返回 400 "must be passed back"。
+    # 此处仅告警以便定位根因，不修改消息（RC 无法凭空构造）。
+    if context.supports_reasoning:
+        for _i, _m in enumerate(result):
+            if _m.get("role") == "assistant" and _m.get("tool_calls"):
+                if not _m.get("reasoning_content"):
+                    logger.warning(
+                        f"build_api_messages: 含 tool_calls 的 assistant 消息 "
+                        f"缺少 reasoning_content (index={_i}, tool={_m['tool_calls'][0].get('function', {}).get('name', '?') if _m['tool_calls'] else '?'})"
+                        f" — DeepSeek 思考模式将返回 400，请检查该轮 RC 采集"
+                    )
 
     return result

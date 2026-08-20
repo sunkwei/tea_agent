@@ -293,9 +293,9 @@ class BaseChatSession(ABC):
         """
         entry = {"role": "assistant", "content": self._cap_message_text(msg)}
         if reasoning:
-            # 缓存友好（R2）：reasoning 文本入库即定型，避免进入前缀后仍超长、
-            # 被 _progressive_trim 策略3 二次清空改写（完整→空翻转破坏前缀缓存）。
-            entry["reasoning_content"] = self._cap_message_text(reasoning)
+            # DeepSeek V4 思考模式：带 tools 的请求必须完整回传 reasoning_content，
+            # 截断/改写会触发 400 ("must be passed back")。因此此处保持原样入库。
+            entry["reasoning_content"] = reasoning
         self.messages.append(entry)
 
     @staticmethod

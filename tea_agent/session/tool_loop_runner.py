@@ -607,9 +607,10 @@ def execute_tool_loop(session, context: dict) -> dict:
                 } for tc in valid_tool_calls]
             }
             if reasoning_content:
-                # S2: 入库定型 — reasoning 也是发送给 API 的前缀内容，
-                # 超长时同样会进入 _progressive_trim 的二次改写候选。
-                assistant_msg["reasoning_content"] = session._cap_message_text(reasoning_content)
+                # DeepSeek V4 思考模式要求：带 tools 的请求必须把 reasoning_content
+                # 完整回传，否则 400 ("must be passed back")。因此**不得截断/改写**——
+                # 截断后的 RC 与原值不一致同样会触发 400。
+                assistant_msg["reasoning_content"] = reasoning_content
 
             session.context.messages.append(assistant_msg)
 
@@ -751,8 +752,8 @@ def execute_tool_loop(session, context: dict) -> dict:
             iterations += 1
             assistant_msg = {"role": "assistant", "content": session._cap_message_text(content)}
             if reasoning_content:
-                # S2: reasoning 入库定型，避免二次改写破坏前缀
-                assistant_msg["reasoning_content"] = session._cap_message_text(reasoning_content)
+                # 完整回传 reasoning_content（DeepSeek V4 thinking 模式要求，截断会 400）
+                assistant_msg["reasoning_content"] = reasoning_content
             session.context.messages.append(assistant_msg)
             session.tools_comp.collect_assistant_text_round(content, reasoning_content)
             break

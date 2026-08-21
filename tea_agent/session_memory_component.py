@@ -63,7 +63,13 @@ class MemoryComponent(SessionComponent):
         if not self.ctx.memory:
             return self.ctx.messages
 
-        user_msg = context.get("user_msg", "") or context.get("msg", "")
+        raw_msg = context.get("user_msg", "") or context.get("msg", "")
+        if isinstance(raw_msg, dict):
+            user_msg = raw_msg.get("text", "") or raw_msg.get("msg", "") or raw_msg.get("content", "") or ""
+        elif not isinstance(raw_msg, str):
+            user_msg = str(raw_msg) if raw_msg is not None else ""
+        else:
+            user_msg = raw_msg
         all_memory_texts = []
 
         # ── 用户记忆 ──

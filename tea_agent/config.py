@@ -991,6 +991,16 @@ def _generate_config_template() -> str:
         "#   options:\n"
         "#     supports_vision: true\n"
         "#     supports_reasoning: true\n"
+        "# 示例（DeepSeek 视觉模型 deepseek-v4-flash-vision-exp）:\n"
+        "# 参考: https://api-docs.deepseek.com/zh-cn/guides/vision\n"
+        "# vision_model:\n"
+        "#   api_key: YOUR_API_KEY\n"
+        "#   api_url: https://api.deepseek.com\n"
+        "#   model_name: deepseek-v4-flash-vision-exp\n"
+        "#   options:\n"
+        "#     supports_vision: true\n"
+        "#     supports_reasoning: true\n"
+        "#     detail: high      # 图片细节级别: low/high/original/auto\n"
         "vision_model:\n"
         '  api_key: ""\n'
         '  api_url: ""\n'

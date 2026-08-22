@@ -81,13 +81,27 @@ def _to_data_url(image: str) -> str | None:
     return None
 
 
-def toolkit_vision_analyze(image: str, prompt: str = "请描述这张图片的内容", max_tokens: int = 1024) -> dict:
+def _build_image_block(data_url: str, detail: str = "") -> dict:
+    """构造 OpenAI 兼容的 image_url 内容块。
+
+    detail 为 DeepSeek/OpenAI 视觉 API 的细节级别参数（low/high/original/auto），
+    仅在显式提供且取值合法时附带，否则省略（服务端按 auto 处理）。
+    """
+    block = {"type": "image_url", "image_url": {"url": data_url}}
+    if detail and detail.lower() in ("low", "high", "original", "auto"):
+        block["image_url"]["detail"] = detail.lower()
+    return block
+
+
+def toolkit_vision_analyze(image: str, prompt: str = "请描述这张图片的内容", max_tokens: int = 1024, detail: str = "") -> dict:
     """调用已配置的视觉模型分析图片，返回文本结果。
 
     Args:
         image: 图片路径 / http(s) URL / data URL
         prompt: 分析指令
         max_tokens: 最大输出 token 数
+        detail: 图片细节级别（DeepSeek/OpenAI 视觉 API）: low/high/original/auto。
+            空字符串时回退 vision_model.options.detail；再缺省不传（服务端默认）。
 
     Returns:
         {'ok': True, 'text': str, 'model': str} 或 {'ok': False, 'error': str}
@@ -106,13 +120,12 @@ def toolkit_vision_analyze(image: str, prompt: str = "请描述这张图片的�
         return {"ok": False, "error": f"无法解析图片输入（路径不存在或格式不支持）: {str(image)[:100]}"}
 
     try:
-        import json
-
+        detail_opt = (options or {}).get("detail", "") if options else ""
         messages = [{
             "role": "user",
             "content": [
                 {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": data_url}},
+                _build_image_block(data_url, detail or detail_opt),
             ],
         }]
         kwargs = {"model": model_name, "messages": messages, "max_tokens": max_tokens}
@@ -162,6 +175,11 @@ def meta_toolkit_vision_analyze() -> dict:
                         "type": "integer",
                         "description": "最大输出 token 数，默认 1024",
                         "default": 1024,
+                    },
+                    "detail": {
+                        "type": "string",
+                        "description": "图片细节级别（DeepSeek/OpenAI 视觉 API）: low/high/original/auto。默认空=用 vision_model.options.detail 或服务端默认",
+                        "default": "",
                     },
                 },
                 "required": ["image"],

@@ -30,7 +30,6 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger("session.session_tree")
 
@@ -435,7 +434,7 @@ class SessionTree:
         path = Path(path)
         tree = cls()
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             lines = f.readlines()
 
         if not lines:

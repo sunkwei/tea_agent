@@ -32,6 +32,7 @@ class TestToolkitRegistration:
     def test_lunar_returns_date_fields(self):
         """toolkit_lunar 应返回日期字段"""
         import json
+
         from tea_agent.tlk import Toolkit
         tk = Toolkit()
         result = tk.call_tool("toolkit_lunar", date_str="2024-01-01")

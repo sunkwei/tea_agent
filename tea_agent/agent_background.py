@@ -9,7 +9,6 @@ Agent 后台服务模块
 
 import logging
 import threading
-import time
 
 logger = logging.getLogger("agent.background")
 

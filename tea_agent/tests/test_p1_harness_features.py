@@ -8,15 +8,11 @@ import importlib.util
 import os
 import sys
 import tempfile
-import threading
 import time
-
-import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from tea_agent.tool_hooks import tool_hooks  # noqa: E402
-
 
 # ═══ 1. post-hooks 系统 ═══════════════════════════════════
 

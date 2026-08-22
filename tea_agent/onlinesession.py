@@ -10,6 +10,10 @@ from openai import OpenAI
 
 from tea_agent.agent_evolution import EvolutionTrigger
 from tea_agent.basesession import BaseChatSession, relaxed_json_loads
+from tea_agent.prompt_manager import (
+    INTERRUPT_ABANDONED_TMPL,
+    INTERRUPT_CORRECTED_TMPL,
+)
 
 # 组件导入（替代 Mixin）
 from tea_agent.session.context import SessionComponent, SessionContext
@@ -23,13 +27,9 @@ from tea_agent.session.prompts import (
     HISTORY_SUMMARIZE_SYSTEM,
     HISTORY_SUMMARIZE_USER,
 )
-from tea_agent.prompt_manager import (
-    INTERRUPT_ABANDONED_TMPL,
-    INTERRUPT_CORRECTED_TMPL,
-)
 from tea_agent.session.tool_loop_runner import execute_tool_loop
-from tea_agent.tool_hooks import tool_hooks
 from tea_agent.session_pipeline import SessionPipeline
+from tea_agent.tool_hooks import tool_hooks
 
 logger = logging.getLogger("session")
 
@@ -43,11 +43,15 @@ def analyze_intent(text: str) -> dict:
 
 
 # ── 打断知识闭环：信号分类（M2）──
-INTERRUPT_SIMILARITY_THRESHOLD = 0.6  # corrected/abandoned 判定阈值（默认，可由配置覆盖）
+INTERRUPT_SIMILARITY_THRESHOLD = (
+    0.6  # corrected/abandoned 判定阈值（默认，可由配置覆盖）
+)
 
 
 def classify_interruption(
-    event: dict, user_msg: str, embedding_engine=None,
+    event: dict,
+    user_msg: str,
+    embedding_engine=None,
     threshold: float = INTERRUPT_SIMILARITY_THRESHOLD,
 ) -> tuple[str, float | None]:
     """打断信号三分类：corrected / abandoned / silent。
@@ -153,56 +157,104 @@ class APIComponent(SessionComponent):
 
         # ── OpenAI o-series / reasoning_effort 原生支持 ──
         if any(kw in name for kw in ("o1", "o3", "o4", "o-mini", "o3-mini")):
-            return {"supports_thinking": True, "supports_reasoning_effort": True,
-                    "family": "openai_o", "confidence": 0.95}
+            return {
+                "supports_thinking": True,
+                "supports_reasoning_effort": True,
+                "family": "openai_o",
+                "confidence": 0.95,
+            }
         if any(kw in name for kw in ("gpt-4o", "gpt-4.1", "gpt-4-turbo")):
-            return {"supports_thinking": True, "supports_reasoning_effort": False,
-                    "family": "openai_gpt4", "confidence": 0.85}
+            return {
+                "supports_thinking": True,
+                "supports_reasoning_effort": False,
+                "family": "openai_gpt4",
+                "confidence": 0.85,
+            }
 
         # ── DeepSeek 系列 ──
         if "deepseek-reasoner" in name or "deepseek-r1" in name:
-            return {"supports_thinking": True, "supports_reasoning_effort": False,
-                    "family": "deepseek_reasoner", "confidence": 0.9}
+            return {
+                "supports_thinking": True,
+                "supports_reasoning_effort": False,
+                "family": "deepseek_reasoner",
+                "confidence": 0.9,
+            }
         if "deepseek-v4" in name:
-            return {"supports_thinking": True, "supports_reasoning_effort": False,
-                    "family": "deepseek_v4", "confidence": 0.8}
+            return {
+                "supports_thinking": True,
+                "supports_reasoning_effort": False,
+                "family": "deepseek_v4",
+                "confidence": 0.8,
+            }
         if "deepseek" in name:
-            return {"supports_thinking": True, "supports_reasoning_effort": False,
-                    "family": "deepseek", "confidence": 0.7}
+            return {
+                "supports_thinking": True,
+                "supports_reasoning_effort": False,
+                "family": "deepseek",
+                "confidence": 0.7,
+            }
 
         # ── Anthropic Claude ──
         if "claude" in name:
-            return {"supports_thinking": True, "supports_reasoning_effort": False,
-                    "family": "anthropic", "confidence": 0.9}
+            return {
+                "supports_thinking": True,
+                "supports_reasoning_effort": False,
+                "family": "anthropic",
+                "confidence": 0.9,
+            }
 
         # ── Gemini ──
         if "gemini" in name:
-            return {"supports_thinking": True, "supports_reasoning_effort": False,
-                    "family": "gemini", "confidence": 0.8}
+            return {
+                "supports_thinking": True,
+                "supports_reasoning_effort": False,
+                "family": "gemini",
+                "confidence": 0.8,
+            }
 
         # ── MiniMax ──
         if any(kw in name for kw in ("minimax", "m2.5", "mimo")):
-            return {"supports_thinking": True, "supports_reasoning_effort": False,
-                    "family": "minimax", "confidence": 0.7}
+            return {
+                "supports_thinking": True,
+                "supports_reasoning_effort": False,
+                "family": "minimax",
+                "confidence": 0.7,
+            }
 
         # ── Qwen ──
         if "qwen" in name:
-            return {"supports_thinking": True, "supports_reasoning_effort": False,
-                    "family": "qwen", "confidence": 0.6}
+            return {
+                "supports_thinking": True,
+                "supports_reasoning_effort": False,
+                "family": "qwen",
+                "confidence": 0.6,
+            }
 
         # ── Llama ──
         if "llama" in name:
-            return {"supports_thinking": True, "supports_reasoning_effort": False,
-                    "family": "llama", "confidence": 0.5}
+            return {
+                "supports_thinking": True,
+                "supports_reasoning_effort": False,
+                "family": "llama",
+                "confidence": 0.5,
+            }
 
         # ── GLM / 智谱 ──
         if "glm" in name or "zhipu" in name:
-            return {"supports_thinking": True, "supports_reasoning_effort": False,
-                    "family": "glm", "confidence": 0.6}
+            return {
+                "supports_thinking": True,
+                "supports_reasoning_effort": False,
+                "family": "glm",
+                "confidence": 0.6,
+            }
 
         # ── 未知模型 ──
-        return {"supports_thinking": True, "supports_reasoning_effort": False,
-                "family": "unknown", "confidence": 0.3}
+        return {
+            "supports_thinking": True,
+            "supports_reasoning_effort": False,
+            "family": "unknown",
+            "confidence": 0.3,
+        }
 
     def _auto_detect_thinking_config(self, is_cheap=False, force=False) -> dict:
         """自动检测模型的最佳 thinking 配置（模型名匹配 + API 探测）。
@@ -229,19 +281,25 @@ class APIComponent(SessionComponent):
         cache_attr = "_cheap_thinking_supported" if is_cheap else "_thinking_supported"
         cached = getattr(self.ctx, cache_attr, None)
         if cached is not None and not force:
-            return {"supports_thinking": cached,
-                    "supports_reasoning_effort": self.ctx.reasoning_effort != "auto",
-                    "recommended_strength": self.ctx.thinking_strength,
-                    "recommended_effort": self.ctx.reasoning_effort,
-                    "method": "cached"}
+            return {
+                "supports_thinking": cached,
+                "supports_reasoning_effort": self.ctx.reasoning_effort != "auto",
+                "recommended_strength": self.ctx.thinking_strength,
+                "recommended_effort": self.ctx.reasoning_effort,
+                "method": "cached",
+            }
 
         target_client = self.ctx.cheap_client if is_cheap else self.ctx.client
         target_model = self.ctx.cheap_model if is_cheap else self.ctx.model
 
         if not self.ctx.enable_thinking or not target_client:
-            return {"supports_thinking": False, "supports_reasoning_effort": False,
-                    "recommended_strength": 0.0, "recommended_effort": "auto",
-                    "method": "disabled"}
+            return {
+                "supports_thinking": False,
+                "supports_reasoning_effort": False,
+                "recommended_strength": 0.0,
+                "recommended_effort": "auto",
+                "method": "disabled",
+            }
 
         # ── Phase 1: 模型名匹配（零成本） ──
         match = self._match_model_family(target_model)
@@ -272,7 +330,7 @@ class APIComponent(SessionComponent):
 
             # 更新缓存
             setattr(self.ctx, cache_attr, match["supports_thinking"])
-            _tl = getattr(self.ctx, 'tool_log', None)
+            _tl = getattr(self.ctx, "tool_log", None)
             if _tl:
                 _tl(
                     f"🧠 自动检测: [{target_model}] "
@@ -285,11 +343,11 @@ class APIComponent(SessionComponent):
                 "supports_reasoning_effort": supports_re,
                 "recommended_strength": strength,
                 "recommended_effort": effort,
-                "method": f"model_match({match['family']})"
+                "method": f"model_match({match['family']})",
             }
 
         # ── Phase 2: API 探测（低置信度匹配或未知模型） ──
-        _tl = getattr(self.ctx, 'tool_log', None)
+        _tl = getattr(self.ctx, "tool_log", None)
         if _tl:
             _tl(f"🔍 低置信度模型匹配 ({match['confidence']:.0%})，启动 API 探测...")
 
@@ -298,7 +356,7 @@ class APIComponent(SessionComponent):
             "supports_reasoning_effort": False,
             "recommended_strength": 0.5,
             "recommended_effort": "auto",
-            "method": "default"
+            "method": "default",
         }
 
         # Probe 1: 测试 thinking.type = enabled
@@ -319,7 +377,10 @@ class APIComponent(SessionComponent):
                     model=target_model,
                     messages=[{"role": "user", "content": "Hi"}],
                     stream=False,
-                    extra_body={"thinking": {"type": "enabled"}, "reasoning_effort": "medium"},
+                    extra_body={
+                        "thinking": {"type": "enabled"},
+                        "reasoning_effort": "medium",
+                    },
                     max_tokens=5,
                 )
                 result["supports_reasoning_effort"] = True
@@ -332,7 +393,12 @@ class APIComponent(SessionComponent):
 
         except Exception as e:
             err_str = str(e).lower()
-            if "thinking" in err_str or "extra_body" in err_str or "unsupported" in err_str or "invalid" in err_str:
+            if (
+                "thinking" in err_str
+                or "extra_body" in err_str
+                or "unsupported" in err_str
+                or "invalid" in err_str
+            ):
                 result["supports_thinking"] = False
                 result["recommended_strength"] = 0.0
                 if _tl:
@@ -506,6 +572,13 @@ class APIComponent(SessionComponent):
         except Exception:
             pass
 
+        # ⚠️ 思考模式下不发送 temperature/top_p（DeepSeek V4 文档明确不支持；
+        # 官方端点会忽略，但第三方代理可能直接 400）。凡启用 thinking 或
+        # 显式传 reasoning_effort 即视为思考模式，从 kwargs 移除这两个参数。
+        if "thinking" in extra_body or "reasoning_effort" in extra_body:
+            kwargs.pop("temperature", None)
+            kwargs.pop("top_p", None)
+
         if extra_body:
             kwargs["extra_body"] = extra_body
 
@@ -527,7 +600,9 @@ class APIComponent(SessionComponent):
 
         stream = call_with_retry(
             target_client.chat.completions.create,
-            max_retries=_mr, backoff=_bf, sleep_recovery_wait=_sw,
+            max_retries=_mr,
+            backoff=_bf,
+            sleep_recovery_wait=_sw,
             on_retry=lambda a, e, w: logger.warning(
                 f"⚠️ 接口中断，第 {a} 次重试中（{type(e).__name__}），等待 {w:.0f}s…"
             ),
@@ -558,7 +633,9 @@ class APIComponent(SessionComponent):
             )
             return call_with_retry(
                 cli.chat.completions.create,
-                max_retries=_mr, backoff=_bf, sleep_recovery_wait=_sw,
+                max_retries=_mr,
+                backoff=_bf,
+                sleep_recovery_wait=_sw,
                 model=mdl,
                 messages=messages,
                 temperature=temperature,
@@ -574,7 +651,9 @@ class APIComponent(SessionComponent):
                 )
                 return call_with_retry(
                     cli.chat.completions.create,
-                    max_retries=_mr, backoff=_bf, sleep_recovery_wait=_sw,
+                    max_retries=_mr,
+                    backoff=_bf,
+                    sleep_recovery_wait=_sw,
                     model=mdl,
                     messages=messages,
                     temperature=temperature,
@@ -678,21 +757,29 @@ class ToolComponent(SessionComponent):
         start_time = time.time()
 
         # P2 事件溯源：记录工具调用（所有路径，含失败；args 用原始串摘要）
-        self._log_tool_event("tool/call", {
-            "name": func_name,
-            "call_id": call_id,
-            "args": _summarize_json(call.function.arguments),
-        })
+        self._log_tool_event(
+            "tool/call",
+            {
+                "name": func_name,
+                "call_id": call_id,
+                "args": _summarize_json(call.function.arguments),
+            },
+        )
 
         if self.ctx.toolkit is None:
             err = "错误：toolkit 未设置"
             logger.error(err)
             self.add_tool_result(call_id, err)
             self._record_tool_to_trace(func_name, False, err, start_time)
-            self._log_tool_event("tool/result", {
-                "name": func_name, "call_id": call_id,
-                "success": False, "error": err,
-            })
+            self._log_tool_event(
+                "tool/result",
+                {
+                    "name": func_name,
+                    "call_id": call_id,
+                    "success": False,
+                    "error": err,
+                },
+            )
             return call_id, func_name, err
 
         if func_name not in self.ctx.toolkit.func_map:
@@ -700,10 +787,15 @@ class ToolComponent(SessionComponent):
             logger.warning(f"tool call failed: unknown function '{func_name}'")
             self.add_tool_result(call_id, err)
             self._record_tool_to_trace(func_name, False, err, start_time)
-            self._log_tool_event("tool/result", {
-                "name": func_name, "call_id": call_id,
-                "success": False, "error": err,
-            })
+            self._log_tool_event(
+                "tool/result",
+                {
+                    "name": func_name,
+                    "call_id": call_id,
+                    "success": False,
+                    "error": err,
+                },
+            )
             return call_id, func_name, err
 
         try:
@@ -715,10 +807,15 @@ class ToolComponent(SessionComponent):
             )
             self.add_tool_result(call_id, err)
             self._record_tool_to_trace(func_name, False, err, start_time)
-            self._log_tool_event("tool/result", {
-                "name": func_name, "call_id": call_id,
-                "success": False, "error": err,
-            })
+            self._log_tool_event(
+                "tool/result",
+                {
+                    "name": func_name,
+                    "call_id": call_id,
+                    "success": False,
+                    "error": err,
+                },
+            )
             return call_id, func_name, err
 
         if self.ctx.tool_log:
@@ -731,13 +828,17 @@ class ToolComponent(SessionComponent):
             allow, deny_reason = tool_hooks.run_pre(func_name, args)
             if not allow:
                 result = f"⛔ 工具被拒绝执行: {deny_reason}"
-                logger.warning(f"tool blocked by pre-hook: {func_name}, reason={deny_reason}")
+                logger.warning(
+                    f"tool blocked by pre-hook: {func_name}, reason={deny_reason}"
+                )
                 success = False
                 error_msg = deny_reason
             else:
                 result = self.ctx.toolkit.call_tool(func_name, **args)
                 # ── post-execute 瀑布（结果改写 + additionalContexts） ──
-                final_result, extra_contexts = tool_hooks.run_post(func_name, args, result)
+                final_result, extra_contexts = tool_hooks.run_post(
+                    func_name, args, result
+                )
                 if extra_contexts:
                     for ctx in extra_contexts:
                         tool_hooks.inject_context(ctx)
@@ -791,21 +892,26 @@ class ToolComponent(SessionComponent):
             )
 
         # P2 事件溯源：记录工具结果（成功标志/错误/结果摘要/耗时）
-        self._log_tool_event("tool/result", {
-            "name": func_name,
-            "call_id": call_id,
-            "success": success,
-            "error": error_msg or None,
-            "result": _summarize_json(result_str, limit=2000),
-            "duration_ms": round((time.time() - start_time) * 1000, 1),
-        })
+        self._log_tool_event(
+            "tool/result",
+            {
+                "name": func_name,
+                "call_id": call_id,
+                "success": success,
+                "error": error_msg or None,
+                "result": _summarize_json(result_str, limit=2000),
+                "duration_ms": round((time.time() - start_time) * 1000, 1),
+            },
+        )
 
         self.add_tool_result(call_id, result_str)
         self._record_tool_to_trace(func_name, success, error_msg, start_time)
         # 进化触发器：采集工具调用信号
-        evolution_trigger = getattr(self.ctx, 'evolution_trigger', None)
+        evolution_trigger = getattr(self.ctx, "evolution_trigger", None)
         if evolution_trigger:
-            evolution_trigger.on_tool_result(func_name, result, time.time() - start_time)
+            evolution_trigger.on_tool_result(
+                func_name, result, time.time() - start_time
+            )
         return call_id, func_name, result_str
 
     def _record_tool_to_trace(
@@ -853,11 +959,13 @@ class ToolComponent(SessionComponent):
         # 3 轮窗口后被 _solidify_history 替换为占位符 → "完整→占位符"两阶段
         # 翻转会破坏其后全部历史消息的前缀缓存命中。
         try:
-            from tea_agent.session.history_builder import get_tool_prune_threshold
             from tea_agent.basesession import BaseChatSession
+            from tea_agent.session.history_builder import get_tool_prune_threshold
 
             max_chars = get_tool_prune_threshold(self.ctx)
-            content = BaseChatSession._compress_tool_content(content, max_chars=max_chars)
+            content = BaseChatSession._compress_tool_content(
+                content, max_chars=max_chars
+            )
         except Exception:
             logger.debug("tool content compression failed, keeping raw", exc_info=True)
         self.ctx.messages.append(
@@ -893,7 +1001,9 @@ class ToolComponent(SessionComponent):
             "content": content if content else "",
             "tool_calls": tc_list_for_collector,
         }
-        if reasoning_content:
+        if self.ctx.supports_reasoning:
+            # 与 tool_loop_runner 存储一致：RC 字段含空串也必须保留入库，
+            # 否则 DB 回放/历史加载后 tool_calls 消息缺 key → 下轮请求 400。
             entry["reasoning_content"] = reasoning_content
         self.ctx._rounds_collector.append(entry)
 
@@ -902,7 +1012,7 @@ class ToolComponent(SessionComponent):
             "role": "assistant",
             "content": content,
         }
-        if reasoning_content:
+        if self.ctx.supports_reasoning:
             entry["reasoning_content"] = reasoning_content
         self.ctx._rounds_collector.append(entry)
 
@@ -981,7 +1091,7 @@ class SummarizerComponent(SessionComponent):
                 轮次阈值，无条件执行摘要（即使未摘要对话较少也压缩）。
         """
         # 检查是否禁用摘要（disable_l3 或向后兼容的 disable_summary）
-        if self.ctx.disable_summary or getattr(self.ctx, 'disable_l3', False):
+        if self.ctx.disable_summary or getattr(self.ctx, "disable_l3", False):
             return
 
         topic_id = getattr(self.ctx, "current_topic_id", None)
@@ -1204,9 +1314,17 @@ class OnlineToolSession(BaseChatSession):
         sp = system_prompt or self._COMPACT_SYSTEM_PROMPT
 
         # 步骤2: 创建HTTP客户端和API客户端
-        _http_client, main_client, cheap_client, vision_client = self._create_api_clients(
-            api_key, api_url, cheap_api_key, cheap_api_url, cheap_model,
-            vision_api_key, vision_api_url, vision_model,
+        _http_client, main_client, cheap_client, vision_client = (
+            self._create_api_clients(
+                api_key,
+                api_url,
+                cheap_api_key,
+                cheap_api_url,
+                cheap_model,
+                vision_api_key,
+                vision_api_url,
+                vision_model,
+            )
         )
 
         # 步骤3: 创建共享上下文
@@ -1334,7 +1452,7 @@ class OnlineToolSession(BaseChatSession):
                         f"effort={cfg.reasoning_effort!r} "
                         f"(检测方法: {main_detected['method']})"
                     )
-                    _tl = getattr(self.context, 'tool_log', None)
+                    _tl = getattr(self.context, "tool_log", None)
                     if _tl:
                         _tl(
                             f"💾 thinking 配置已自动优化并保存: "
@@ -1372,6 +1490,7 @@ class OnlineToolSession(BaseChatSession):
             (http_client, main_client, cheap_client, vision_client) 元组
         """
         import httpx
+
         from tea_agent.config import get_config
 
         # API 弹性参数（网络中断/睡眠恢复容错）：超时与 SDK 内置重试次数
@@ -1387,7 +1506,9 @@ class OnlineToolSession(BaseChatSession):
             proxy=None, timeout=httpx.Timeout(_req_to, connect=_conn_to)
         )
         main_client = OpenAI(
-            api_key=api_key, base_url=api_url, http_client=_http_client,
+            api_key=api_key,
+            base_url=api_url,
+            http_client=_http_client,
             max_retries=_max_retries,
         )
 
@@ -1568,7 +1689,11 @@ class OnlineToolSession(BaseChatSession):
             self._http_clients.append(_http_client)
         if cheap_client and hasattr(cheap_client, "_client") and cheap_client._client:
             self._http_clients.append(cheap_client._client)
-        if vision_client and hasattr(vision_client, "_client") and vision_client._client:
+        if (
+            vision_client
+            and hasattr(vision_client, "_client")
+            and vision_client._client
+        ):
             self._http_clients.append(vision_client._client)
 
     def _build_tools(self) -> None:
@@ -1771,7 +1896,9 @@ class OnlineToolSession(BaseChatSession):
             return
         try:
             topic_id = getattr(self, "current_topic_id", None)
-            storage = getattr(self, "storage", None) or getattr(self.ctx, "storage", None)
+            storage = getattr(self, "storage", None) or getattr(
+                self.ctx, "storage", None
+            )
             if not (topic_id and storage):
                 return
             events = getattr(storage, "events", None)
@@ -1784,7 +1911,9 @@ class OnlineToolSession(BaseChatSession):
                 payload["reasoning"] = reasoning
             events.append_event(topic_id, "assistant/chunk", payload)
         except Exception:
-            logger.debug("append assistant/chunk event failed (isolated)", exc_info=True)
+            logger.debug(
+                "append assistant/chunk event failed (isolated)", exc_info=True
+            )
 
     def _log_turn_end_marker(self, reason: str) -> None:
         """P2 事件溯源：记录 turn/end 标记（流式中断时用，审计"这轮未完成"）。
@@ -1797,7 +1926,9 @@ class OnlineToolSession(BaseChatSession):
         """
         try:
             topic_id = getattr(self, "current_topic_id", None)
-            storage = getattr(self, "storage", None) or getattr(self.ctx, "storage", None)
+            storage = getattr(self, "storage", None) or getattr(
+                self.ctx, "storage", None
+            )
             if not (topic_id and storage):
                 return
             events = getattr(storage, "events", None)
@@ -1808,8 +1939,11 @@ class OnlineToolSession(BaseChatSession):
             logger.debug("append turn/end marker failed (isolated)", exc_info=True)
 
     def _process_stream_with_reasoning(
-        self, response, callback,
-        retry_factory=None, max_stream_retries=3,
+        self,
+        response,
+        callback,
+        retry_factory=None,
+        max_stream_retries=3,
     ) -> tuple[str, list[dict], str]:
         """处理流式/非流式响应，收集内容、工具调用数据和 reasoning_content。
 
@@ -1834,9 +1968,20 @@ class OnlineToolSession(BaseChatSession):
                 self.api._accumulate_usage(response.usage)
             if response.choices:
                 msg = response.choices[0].message
-                if hasattr(msg, "reasoning_content") and msg.reasoning_content:
+                _has_rc = hasattr(msg, "reasoning_content") and msg.reasoning_content
+                if _has_rc:
                     reasoning_parts.append(msg.reasoning_content)
                     callback(f"[THINK]{msg.reasoning_content}")
+                # B: Muse inline-thinking 兼容 — 无 reasoning_content 时合成
+                _is_muse_ns = "muse" in (self.context.model or "").lower() or "spark" in (self.context.model or "").lower()
+                if not _has_rc and _is_muse_ns and msg.content:
+                    _budget_ns = 1600
+                    _syn = msg.content[:_budget_ns] if len(msg.content) > _budget_ns else msg.content
+                    # 仅当内容含思考痕迹或足够长时才合成，避免短回答误判
+                    if len(msg.content) > 200 or any(k in msg.content for k in ("思考", "推理", "逐步", "分析", "think")):
+                        reasoning_parts.append(_syn)
+                        callback(f"[THINK]{_syn}")
+                        callback("[THINK_DONE]")
                 if msg.content:
                     content_parts.append(msg.content)
                     callback(msg.content)
@@ -1859,10 +2004,14 @@ class OnlineToolSession(BaseChatSession):
         # 流式模式（带断流重试 + AI 回复增量实时落盘）
         # 借鉴 DeepSeek Harness append-only log：不等 final msg，边收边落盘，
         # 中断时已生成的回复内容仍可从 session_events 重建。
+        self._muse_syn_done = False
+        self._muse_syn_active = False
         stream_retries = 0
         _chunk_buf: list[str] = []
         _chunk_chars = 0
-        _CHUNK_FLUSH_CHARS = 800  # 节流阈值：累计 800 字符落盘一次（避免每 chunk 一次 SQLite 写）
+        chunk_flush_chars = (
+            800  # 节流阈值：累计 800 字符落盘一次（避免每 chunk 一次 SQLite 写）
+        )
 
         def _flush_chunk_buf() -> None:
             nonlocal _chunk_buf, _chunk_chars
@@ -1886,6 +2035,42 @@ class OnlineToolSession(BaseChatSession):
                         reasoning_parts.append(delta.reasoning_content)
                         callback(f"[THINK]{delta.reasoning_content}")
 
+                    # B: Muse inline-thinking 流式合成 — 首段 content 合成思考预览
+                    # Muse Spark 经 opencode 代理不提供 delta.reasoning_content，思考写在 content 里。
+                    # 仅当启用思考、用 Muse 模型、且无原生 reasoning 时，用首 ~1600 字符合成 [THINK]。
+                    _already_syn = getattr(self, "_muse_syn_done", False)
+                    _is_muse_model = "muse" in (self.context.model or "").lower() or "spark" in (self.context.model or "").lower()
+                    _can_syn = (not _already_syn and self.context.enable_thinking and _is_muse_model
+                                and delta.content and len("".join(reasoning_parts)) < 1600
+                                and len("".join(content_parts)) < 2200)
+                    # 已有原生 reasoning 则永不合成；已合成首段后继续追加直到 1600
+                    _has_real_rc = bool(reasoning_parts) and not getattr(self, "_muse_syn_active", False) and len("".join(content_parts)) == 0
+                    # 区分：若 reasoning_parts 来自真实 RC（首包前已有），则 _has_real_rc 已可判定；
+                    # 更稳妥：检查首包是否走过原生分支
+                    if _can_syn:
+                        # 若已有原生 reasoning（非合成），跳过
+                        if reasoning_parts and not getattr(self, "_muse_syn_active", False):
+                            # reasoning_parts 非空但非合成期 → 说明是真实 RC，禁止合成
+                            pass
+                        else:
+                            _peek = delta.content
+                            _has_marker = _peek.lstrip().startswith("### 思考") or "思考" in _peek[:160] or "逐步推理" in _peek[:160] or "推理" in _peek[:80]
+                            _is_early = len("".join(content_parts)) < 600
+                            _should_syn = _has_marker or (_is_early and len(_peek) > 20) or getattr(self, "_muse_syn_active", False)
+                            if _should_syn:
+                                self._muse_syn_active = True
+                                _budget_left = 1600 - len("".join(reasoning_parts))
+                                _take = _peek[:max(0, _budget_left)] if _budget_left > 0 else ""
+                                if _take:
+                                    reasoning_parts.append(_take)
+                                    callback(f"[THINK]{_take}")
+                                    if len("".join(reasoning_parts)) >= 1200 or "### 第一步" in _peek or len("".join(reasoning_parts)) >= 1600:
+                                        callback("[THINK_DONE]")
+                                        self._muse_syn_done = True
+                                    # 仍保留原文在 content 中（不截断），思考面板为合成预览
+                    # 流结束兜底闭合（保证有 THINK 就有 DONE）
+                    # 在循环外处理，见下方 _flush 后
+
                     if delta.content:
                         content_parts.append(delta.content)
                         callback(delta.content)
@@ -1896,7 +2081,9 @@ class OnlineToolSession(BaseChatSession):
                             _flush_chunk_buf()
 
                     if delta.tool_calls:
-                        self.api.accumulate_tool_calls_from_delta(delta, tool_calls_data)
+                        self.api.accumulate_tool_calls_from_delta(
+                            delta, tool_calls_data
+                        )
                 _flush_chunk_buf()  # 正常结束：flush 剩余增量
                 break  # 正常消费完成
             except Exception as e:
@@ -1906,6 +2093,7 @@ class OnlineToolSession(BaseChatSession):
                     self._log_turn_end_marker("interrupted")
                     raise
                 from tea_agent.api_retry import _is_retryable
+
                 if not _is_retryable(e):
                     _flush_chunk_buf()
                     self._log_turn_end_marker("stream_error")
@@ -1923,11 +2111,21 @@ class OnlineToolSession(BaseChatSession):
                 reasoning_parts = []
                 callback("\n⚠️ 连接中断，正在自动重试…\n")
                 import time
+
                 time.sleep(1.5 * (2 ** (stream_retries - 1)))
                 response = retry_factory()
 
         content = "".join(content_parts)
         reasoning_content = "".join(reasoning_parts)
+        # B 兜底：Muse 合成思考若未闭合，补一次 DONE，避免前端悬挂
+        if reasoning_parts and "muse" in (self.context.model or "").lower():
+            # 检查是否已发过 DONE：若 reasoning 已合成但未标记 done，补闭合
+            if not getattr(self, "_muse_syn_done", False):
+                callback("[THINK_DONE]")
+                self._muse_syn_done = True
+        # 下一轮重置
+        self._muse_syn_done = False
+        self._muse_syn_active = False
         return content, tool_calls_data, reasoning_content
 
     # ──────────────────────────────────────────────
@@ -1960,13 +2158,18 @@ class OnlineToolSession(BaseChatSession):
             self.context._os_info_injected = _load_persisted_os_sig(topic_id)
 
         # OS 未变化且已有文本 → 跳过
-        if self.context._os_info_injected == current_sig and self.context._injected_os_info_text:
+        if (
+            self.context._os_info_injected == current_sig
+            and self.context._injected_os_info_text
+        ):
             return pipeline_ctx
 
         # OS 变化或首次 → 生成 OS 信息文本并写入上下文属性
         self.context._injected_os_info_text = generate_os_info_text(
-            toolkit_root_dir=self.context.toolkit.tool_dir if self.context.toolkit else "",
-            interface_type=getattr(self.context, 'interface_type', None),
+            toolkit_root_dir=(
+                self.context.toolkit.tool_dir if self.context.toolkit else ""
+            ),
+            interface_type=getattr(self.context, "interface_type", None),
         )
         self.context._os_info_injected = current_sig
         if topic_id:
@@ -2039,7 +2242,9 @@ class OnlineToolSession(BaseChatSession):
                 self.api, self._get_summarize_client, force=True
             )
         else:
-            self.summarizer_comp.summarize_old_history(self.api, self._get_summarize_client)
+            self.summarizer_comp.summarize_old_history(
+                self.api, self._get_summarize_client
+            )
         return context  # summarize_old_history 副作用修改 context，此处显式返回
 
     # ──────────────────────────────────────────────
@@ -2140,7 +2345,9 @@ class OnlineToolSession(BaseChatSession):
         if storage is None:
             return None
         try:
-            rows = storage.query_interruptions(topic_id=topic_id, status="pending", limit=1)
+            rows = storage.query_interruptions(
+                topic_id=topic_id, status="pending", limit=1
+            )
             if not rows:
                 return None
             row = rows[0]
@@ -2161,7 +2368,9 @@ class OnlineToolSession(BaseChatSession):
             logger.exception("restore interruption anchor failed")
             return None
 
-    def _inject_interruption_knowledge(self, user_msg: str, topic_id: str | None = None) -> bool:
+    def _inject_interruption_knowledge(
+        self, user_msg: str, topic_id: str | None = None
+    ) -> bool:
         """M2/M4: 上轮被打断 → 三分类（corrected/abandoned/silent）注入提示。
 
         打断是隐式负面反馈：上轮方向被否定。用户下一条消息决定信号类型：
@@ -2204,7 +2413,9 @@ class OnlineToolSession(BaseChatSession):
                 engine = get_embedding_engine()
             except Exception:
                 engine = None
-            threshold = float(icfg.get("similarity_threshold", INTERRUPT_SIMILARITY_THRESHOLD))
+            threshold = float(
+                icfg.get("similarity_threshold", INTERRUPT_SIMILARITY_THRESHOLD)
+            )
             classification, similarity = classify_interruption(
                 ev, user_msg or "", embedding_engine=engine, threshold=threshold
             )
@@ -2273,7 +2484,7 @@ class OnlineToolSession(BaseChatSession):
                 "toolkit_notify", title=title, message=message, duration=5000
             )
         except Exception:
-            logger.exception('op_failed')
+            logger.exception("op_failed")
 
     def _notify_reflection_done(self, reflection_id: int):
         self._notify("🔍 元认知反思完成", f"反思 #{reflection_id} 已生成")
@@ -2363,9 +2574,7 @@ class OnlineToolSession(BaseChatSession):
             if _switched_to_vision and _prev_client is not None:
                 self.context.client = _prev_client
                 self.context.model = _prev_model
-                logger.info(
-                    f"👁️ 图片回合结束，恢复主模型: {_prev_model}"
-                )
+                logger.info(f"👁️ 图片回合结束，恢复主模型: {_prev_model}")
 
         full_reply = result.get("full_reply", "")
         used_tools = result.get("used_tools", False)
@@ -2405,27 +2614,30 @@ class OnlineToolSession(BaseChatSession):
             # 关闭OpenAI客户端（跳过已被 _http_clients 关闭的）
             if hasattr(self.context, "client") and self.context.client:
                 try:
-                    _internal = getattr(self.context.client, '_client', None)
-                    if (_internal is None or id(_internal) not in _closed_clients) and hasattr(self.context.client, "close"):
+                    _internal = getattr(self.context.client, "_client", None)
+                    if (
+                        _internal is None or id(_internal) not in _closed_clients
+                    ) and hasattr(self.context.client, "close"):
                         self.context.client.close()
                 except Exception as e:
                     logger.debug(f"Close main OpenAI client failed: {e}")
 
             if hasattr(self.context, "cheap_client") and self.context.cheap_client:
                 try:
-                    _internal = getattr(self.context.cheap_client, '_client', None)
-                    if (_internal is None or id(_internal) not in _closed_clients) and hasattr(self.context.cheap_client, "close"):
+                    _internal = getattr(self.context.cheap_client, "_client", None)
+                    if (
+                        _internal is None or id(_internal) not in _closed_clients
+                    ) and hasattr(self.context.cheap_client, "close"):
                         self.context.cheap_client.close()
                 except Exception as e:
                     logger.debug(f"Close cheap OpenAI client failed: {e}")
 
-            if (
-                hasattr(self.context, "vision_client")
-                and self.context.vision_client
-            ):
+            if hasattr(self.context, "vision_client") and self.context.vision_client:
                 try:
-                    _internal = getattr(self.context.vision_client, '_client', None)
-                    if (_internal is None or id(_internal) not in _closed_clients) and hasattr(self.context.vision_client, "close"):
+                    _internal = getattr(self.context.vision_client, "_client", None)
+                    if (
+                        _internal is None or id(_internal) not in _closed_clients
+                    ) and hasattr(self.context.vision_client, "close"):
                         self.context.vision_client.close()
                 except Exception as e:
                     logger.debug(f"Close vision OpenAI client failed: {e}")
@@ -2446,7 +2658,7 @@ class OnlineToolSession(BaseChatSession):
         try:
             self.close()
         except Exception:
-            logger.exception('op_failed')
+            logger.exception("op_failed")
 
 
 # 延迟导入（避免循环依赖）：MemoryComponent 在 _initialize_components 中使用

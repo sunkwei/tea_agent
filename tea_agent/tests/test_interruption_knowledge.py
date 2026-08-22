@@ -517,7 +517,6 @@ from tea_agent.prompt_manager import (
     INTERRUPT_CORRECTED_TMPL,
     build_interruption_system_msg,
 )
-from tea_agent.session.tool_loop_runner import _record_interruption_anchor
 
 
 class TestInterruptionConfig:
@@ -652,7 +651,7 @@ class TestM4AnchorConfig:
 # M5: 记忆 → 主动 skill/行为改变闭环
 # ════════════════════════════════════════════════════════════
 
-from tea_agent.agent_background import _skill_name_for_tool, analyze_interruptions
+from tea_agent.agent_background import _skill_name_for_tool
 
 
 class TestM5SkillGeneration:

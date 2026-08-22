@@ -10,9 +10,6 @@
 
 import os
 import sys
-import tempfile
-
-import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
@@ -22,7 +19,6 @@ from tea_agent.agents_md_loader import (  # noqa: E402
     collect_project_agents_md,
     find_project_root,
     load_agents_md,
-    load_user_agents_md,
 )
 from tea_agent.auto_compact import (  # noqa: E402
     CompactionPipeline,
@@ -31,7 +27,6 @@ from tea_agent.auto_compact import (  # noqa: E402
     register_pre_compact_hook,
     run_post_compact_hooks,
     run_pre_compact_hooks,
-    unregister_post_compact_hook,
     unregister_pre_compact_hook,
 )
 from tea_agent.config import ModelConfig, load_config  # noqa: E402
@@ -45,7 +40,6 @@ from tea_agent.context_fragments import (  # noqa: E402
     unregister_fragment,
 )
 from tea_agent.session.context import SessionContext  # noqa: E402
-
 
 # ═══ Fixtures ═════════════════════════════════════════
 

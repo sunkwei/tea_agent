@@ -32,6 +32,7 @@ def test_cleanup_removes_old_timestamped_backups():
     """_cleanup_old_backups 保留最近 keep 份，删除更早的时间戳备份。"""
     import os
     import shutil
+
     from tea_agent.toolkit.toolkit_self_evolve import _cleanup_old_backups
 
     d = "cleabt_test"
@@ -64,6 +65,7 @@ def test_cleanup_noop_below_threshold():
     """备份数不超过 keep 时不删除任何文件。"""
     import os
     import shutil
+
     from tea_agent.toolkit.toolkit_self_evolve import _cleanup_old_backups
 
     d = "cleabt2_test"

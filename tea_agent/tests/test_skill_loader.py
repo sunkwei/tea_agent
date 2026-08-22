@@ -15,16 +15,15 @@ import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
+from tea_agent.session.context import SessionContext
 from tea_agent.skill_loader import (
     NECESSITY_THRESHOLD,
-    SUFFICIENCY_THRESHOLD,
     SKILL_DOMAINS,
+    SUFFICIENCY_THRESHOLD,
     SkillLoadEvaluator,
     clear_cache,
     evaluate_and_load,
-    get_evaluator,
 )
-from tea_agent.session.context import SessionContext
 
 # 真实 skills 目录（17 个内置 SKILL.md）
 SKILLS_DIR = os.path.abspath(

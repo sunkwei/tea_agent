@@ -19,8 +19,8 @@ api_key / model_name 等，生成 config.yaml 后继续启动。
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from tea_agent.config import AgentConfig, save_config
 from tea_agent.providers import get_provider

@@ -9,7 +9,6 @@
 - A6: 无 _b64_cache/images 内部字段泄漏到 API 消息
 """
 
-import pytest
 
 from tea_agent.basesession import BaseChatSession
 from tea_agent.session.context import SessionContext
@@ -151,7 +150,7 @@ class TestNoInternalFieldLeak:
 class TestCacheReport:
     def test_format_cache_hit_rate(self):
         """cache_report 命中率格式化。"""
-        from tea_agent.session.cache_report import format_cache_hit_rate, cache_hit_rate_number
+        from tea_agent.session.cache_report import cache_hit_rate_number, format_cache_hit_rate
 
         assert format_cache_hit_rate({"prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0}) == ""
         assert format_cache_hit_rate({}) == ""

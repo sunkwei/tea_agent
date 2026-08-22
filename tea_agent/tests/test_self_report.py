@@ -23,7 +23,6 @@ def _teardown_log_dir(d: str):
 
 
 def test_summary_empty_db():
-    from tea_agent.agent_evolution import _append_evolution_log
     d = _setup_log_dir()
     try:
         from tea_agent.toolkit.toolkit_self_report import _build_evolution_summary

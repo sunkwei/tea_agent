@@ -78,7 +78,7 @@ def toolkit_self_report() -> dict:
 def _build_evolution_summary(limit: int = 20) -> dict:
     """从进化日志聚合可审查摘要：近期行动、类型统计、成功/回滚统计。"""
     try:
-        from tea_agent.agent_evolution import _evolution_log_path, _load_evolution_log
+        from tea_agent.agent_evolution import _load_evolution_log
         log = _load_evolution_log()
     except Exception:
         return {"available": False, "reason": "evolution_log 不可用"}

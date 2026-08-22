@@ -176,8 +176,15 @@ class TestGenerateConfig:
 
     def test_generate_without_vision(self):
         """不支持 vision 的 Provider 应生成 supports_vision: false"""
-        config = generate_config("DeepSeek", "sk-key")
+        config = generate_config("Baidu", "sk-key")
         assert "supports_vision: false" in config
+
+    def test_deepseek_has_vision_model(self):
+        """DeepSeek provider 应声明视觉能力并列出 deepseek-v4-flash-vision-exp"""
+        p = get_provider("DeepSeek")
+        assert p["supports_vision"] is True
+        assert "deepseek-v4-flash-vision-exp" in p["models"]
+        assert "deepseek-v4-flash" in p["models"]
 
     def test_generate_unknown_provider_raises(self):
         """未知 Provider 应抛出 ValueError"""

@@ -22,7 +22,6 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger("agents_md_loader")
 
@@ -59,7 +58,7 @@ class LoadedAgentsMd:
 
 
 def find_project_root(
-    cwd: Optional[str] = None,
+    cwd: str | None = None,
     markers: tuple[str, ...] = DEFAULT_PROJECT_ROOT_MARKERS,
 ) -> str:
     """从 cwd 向上查找项目根目录（含 markers 的最深祖先）。
@@ -88,14 +87,14 @@ def find_project_root(
 def _read_file(path: str) -> str:
     """读取文本文件（UTF-8，失败返回空串）。"""
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return f.read()
     except Exception as e:
         logger.debug(f"读取 {path} 失败: {e}")
         return ""
 
 
-def collect_project_agents_md(cwd: Optional[str] = None) -> list[str]:
+def collect_project_agents_md(cwd: str | None = None) -> list[str]:
     """收集项目级 AGENTS.md（项目根 → cwd 路径上所有）。
 
     Args:
@@ -142,7 +141,7 @@ def load_user_agents_md() -> list[str]:
 
 
 def load_agents_md(
-    cwd: Optional[str] = None,
+    cwd: str | None = None,
     max_bytes: int = DEFAULT_MAX_BYTES,
     include_user: bool = True,
     include_project: bool = True,

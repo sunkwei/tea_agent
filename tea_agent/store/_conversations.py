@@ -129,7 +129,6 @@ class ConversationStore(StoreComponent):
                    conversation_id: str = "") -> None:
         """P2 事件溯源：追加事件日志（失败仅告警，不影响主流程）。"""
         try:
-            from ._events import SessionEventStore
             self.events.append_event(topic_id, event_type, payload, conversation_id)
         except Exception:
             logger.exception("append event failed (isolated)")

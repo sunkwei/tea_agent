@@ -293,9 +293,9 @@ class BaseChatSession(ABC):
         """
         entry = {"role": "assistant", "content": self._cap_message_text(msg)}
         if reasoning:
-            # 缓存友好（R2）：reasoning 文本入库即定型，避免进入前缀后仍超长、
-            # 被 _progressive_trim 策略3 二次清空改写（完整→空翻转破坏前缀缓存）。
-            entry["reasoning_content"] = self._cap_message_text(reasoning)
+            # DeepSeek V4 思考模式：带 tools 的请求必须完整回传 reasoning_content，
+            # 截断/改写会触发 400 ("must be passed back")。因此此处保持原样入库。
+            entry["reasoning_content"] = reasoning
         self.messages.append(entry)
 
     @staticmethod
@@ -388,8 +388,8 @@ class BaseChatSession(ABC):
         # 压缩必须满足"结果 ≤ max_chars"，否则会被 _solidify_history/水位线
         # 判定为"超阈值"而二次替换为占位符（R2 翻转：完整→占位符，破坏前缀缓存）。
         # 为标记行（压缩说明 + 省略标注）预留字节，使 head+tail ≤ max_chars。
-        MARKER_RESERVE = 96
-        effective_max = max(128, max_chars - MARKER_RESERVE)
+        marker_reserve = 96
+        effective_max = max(128, max_chars - marker_reserve)
         half = effective_max // 2
 
         # 前半部分：从 half 位置向前找最近换行
@@ -486,7 +486,19 @@ class BaseChatSession(ABC):
 
             head_text = raw[:head_end].decode("utf-8", errors="replace")
             tail_text = raw[tail_start:].decode("utf-8", errors="replace")
-            return head_text + f"\n... [L1截断: {args_bytes}B 参数] ...\n" + tail_text
+            # ⚠️ 必须返回**合法 JSON**：tool_calls.function.arguments 若为非法 JSON，
+            # 会话重载后回传给 DeepSeek V4 会触发 400 invalid tool_calls。
+            # 旧实现直接拼接 head+标记+tail 产生非法 JSON（生产 4xx 根因之一）。
+            # 改为包装成合法 JSON 对象，保证 API 接受（历史上下文不再重放该工具）。
+            return _json.dumps(
+                {
+                    "_truncated": True,
+                    "original_bytes": args_bytes,
+                    "head": head_text,
+                    "tail": tail_text,
+                },
+                ensure_ascii=False,
+            )
 
         # Step 2: 递归压缩超长 string value
         HALF = 512  # 每个 value 的首尾保留字节数  # noqa: N806

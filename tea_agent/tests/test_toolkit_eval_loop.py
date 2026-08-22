@@ -7,7 +7,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from tea_agent.toolkit.toolkit_eval_loop import toolkit_eval_loop as el
 
-
 RULES = [
     {"pattern": r"<!-- ACME -->", "match": "line", "description": "[convention] marker"},
     {"pattern": r"^# Report:", "match": "regex", "description": "[convention] title"},

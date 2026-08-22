@@ -10,10 +10,46 @@
 import json
 import logging
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Callable
 
 logger = logging.getLogger("session.tool_loop_runner")
+
+
+def _extract_api_error_detail(exc: Exception) -> str:
+    """提取 API 异常中的完整错误体，用于定位 4xx 具体原因。
+
+    OpenAI SDK / httpx 异常通常携带 response 对象，其 body 含服务端返回的
+    具体错误信息（如 DeepSeek 400 "must be passed back" / context length /
+    invalid tool_calls）。仅 str(exc) 会丢失这些关键细节，导致无法区分
+    4xx 类型。此函数尽力提取 status_code + response body，提取失败时
+    回退到 str(exc)。
+
+    Args:
+        exc: 捕获到的异常对象
+
+    Returns:
+        格式化后的错误详情字符串
+    """
+    parts = [f"{type(exc).__name__}: {exc}"]
+    try:
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            status = getattr(resp, "status_code", None)
+            if status is not None:
+                parts.append(f"status={status}")
+            # 优先结构化 body，其次原始文本
+            body = getattr(resp, "text", None)
+            if not body:
+                body = getattr(resp, "body", None)
+            if body:
+                body_str = body.decode("utf-8", errors="replace") if isinstance(body, (bytes, bytearray)) else str(body)
+                if len(body_str) > 2000:
+                    body_str = body_str[:2000] + "...[截断]"
+                parts.append(f"body={body_str}")
+    except Exception:
+        pass
+    return " | ".join(parts)
 
 
 # ═══ 并行工具执行引擎 ═══════════════════════════════════
@@ -323,9 +359,9 @@ def _format_tool_summary(tool_calls) -> str:
             args_dict = json.loads(args_str)
             for k, v in args_dict.items():
                 v_str = str(v)
-                _MAX_PARAM_DISPLAY = 500
-                if len(v_str) > _MAX_PARAM_DISPLAY:
-                    v_str = v_str[:_MAX_PARAM_DISPLAY] + f"… [剩余 {len(v_str) - _MAX_PARAM_DISPLAY} 字符]"
+                max_param_display = 500
+                if len(v_str) > max_param_display:
+                    v_str = v_str[:max_param_display] + f"… [剩余 {len(v_str) - max_param_display} 字符]"
                 lines.append(f"\t{k}={v_str}")
         except (json.JSONDecodeError, TypeError):
             raw = args_str
@@ -501,10 +537,10 @@ def execute_tool_loop(session, context: dict) -> dict:
             logger.debug(f"{asctime}: call model: {session.context.model}, {msg}")
 
         # API 调用
-        _MAX_RETRIES = 6
-        _RETRY_BASE_DELAY = 1
+        max_retries = 6
+        retry_base_delay = 1
         response = None
-        for _retry in range(_MAX_RETRIES + 1):
+        for _retry in range(max_retries + 1):
             try:
                 eff = session._get_effective_params("main")
                 response = session.api.create_chat_stream(
@@ -539,14 +575,20 @@ def execute_tool_loop(session, context: dict) -> dict:
                         )
                     except Exception as e2:
                         error_msg = f"API调用错误: {e2}"
-                        logger.warning(f"API调用失败: model={session.context.model}, error={e2}, iteration={iterations}")
+                        logger.warning(
+                            f"API调用失败: model={session.context.model}, iteration={iterations}, "
+                            f"detail={_extract_api_error_detail(e2)}"
+                        )
                         callback(error_msg)
                         session.add_assistant_message(full_reply + error_msg)
                         session.tools_comp.collect_api_error_round(full_reply + error_msg)
                         return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": e2}
                 else:
                     error_msg = f"API调用错误: {e}"
-                    logger.warning(f"API调用失败: model={session.context.model}, error={e}, iteration={iterations}")
+                    logger.warning(
+                        f"API调用失败: model={session.context.model}, iteration={iterations}, "
+                        f"detail={_extract_api_error_detail(e)}"
+                    )
                     callback(error_msg)
                     session.add_assistant_message(full_reply + error_msg)
                     session.tools_comp.collect_api_error_round(full_reply + error_msg)
@@ -606,10 +648,15 @@ def execute_tool_loop(session, context: dict) -> dict:
                     }
                 } for tc in valid_tool_calls]
             }
-            if reasoning_content:
-                # S2: 入库定型 — reasoning 也是发送给 API 的前缀内容，
-                # 超长时同样会进入 _progressive_trim 的二次改写候选。
-                assistant_msg["reasoning_content"] = session._cap_message_text(reasoning_content)
+            if session.context.supports_reasoning:
+                # DeepSeek V4 思考模式要求：带 tools 的请求必须把 reasoning_content
+                # 完整回传，否则 400 ("must be passed back")。因此**不得截断/改写**——
+                # 截断后的 RC 与原值不一致同样会触发 400。
+                # 注意：V4 在部分 tool_call 轮次会返回 reasoning_content=""（空字符串），
+                # 若因值为空而丢弃该字段（旧实现 `if reasoning_content:`），下轮请求
+                # 会触发 400，且 build_api_messages 防御校验会持续告警。
+                # 正确做法：字段只要模型返回过就必须保留（含空串），原样入库回传。
+                assistant_msg["reasoning_content"] = reasoning_content
 
             session.context.messages.append(assistant_msg)
 
@@ -750,9 +797,11 @@ def execute_tool_loop(session, context: dict) -> dict:
         elif content:
             iterations += 1
             assistant_msg = {"role": "assistant", "content": session._cap_message_text(content)}
-            if reasoning_content:
-                # S2: reasoning 入库定型，避免二次改写破坏前缀
-                assistant_msg["reasoning_content"] = session._cap_message_text(reasoning_content)
+            if session.context.supports_reasoning:
+                # 完整回传 reasoning_content（DeepSeek V4 thinking 模式要求，截断会 400）。
+                # 含空串也原样保留，与工具调用轮一致（API 对无 tool_calls 的 assistant
+                # 忽略 RC，保留无害且保证 DB 回放一致）。
+                assistant_msg["reasoning_content"] = reasoning_content
             session.context.messages.append(assistant_msg)
             session.tools_comp.collect_assistant_text_round(content, reasoning_content)
             break
@@ -795,9 +844,9 @@ def _execute_single_tool(session, tc, callback, iterations, on_status) -> tuple:
                 _parts = []
                 for _k, _v in _args.items():
                     _vs = str(_v)
-                    _MAX_PARAM = 500
-                    if len(_vs) > _MAX_PARAM:
-                        _vs = _vs[:_MAX_PARAM] + "…"
+                    max_param = 500
+                    if len(_vs) > max_param:
+                        _vs = _vs[:max_param] + "…"
                     _parts.append(f"{_k}: {_vs}")
                 callback(f"[TOOL_ARG:{', '.join(_parts)}]")
             else:

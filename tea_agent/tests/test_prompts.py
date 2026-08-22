@@ -7,9 +7,7 @@
 - SMALL_MODEL_CONSTRAINT: 内容完整性
 """
 
-from unittest.mock import patch
 
-import pytest
 
 
 # ============================================================

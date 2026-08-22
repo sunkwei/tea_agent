@@ -209,7 +209,7 @@ def test_level2_recompute_on_new_message():
 
 
 def test_trim_reasoning_solidified():
-    """S2: 策略3 清空 reasoning 时回写 context 定型，预算波动不翻转。"""
+    """S2 修订: reasoning_content 永不清空（DeepSeek V4 要求完整回传，否则 400）。"""
     from tea_agent.session.context import SessionContext
     from tea_agent.session.history_builder import _progressive_trim
 
@@ -234,13 +234,14 @@ def test_trim_reasoning_solidified():
     assert [m["reasoning_content"] for m in r1 if m.get("reasoning_content")][0] == rc
     assert ctx.messages[1]["reasoning_content"] == rc  # 源不被误清空
 
-    # 预算紧张 → 清空 + 回写 context 定型
-    _progressive_trim(build(), 200, ctx, tool_prune_threshold=100)
-    assert not [m for m in ctx.messages if m.get("reasoning_content")]
+    # 预算紧张 → reasoning 仍必须完整保留（清空/截断会触发 DeepSeek 400）
+    r2 = _progressive_trim(build(), 200, ctx, tool_prune_threshold=100)
+    assert [m["reasoning_content"] for m in r2 if m.get("reasoning_content")][0] == rc
+    assert ctx.messages[1]["reasoning_content"] == rc  # 源保持完整
 
-    # 预算恢复宽松 → 读到的已是空，形态收敛（不发完整版）
+    # 预算恢复宽松 → 读到的仍是完整版（形态收敛：完整版从未被改写）
     r3 = _progressive_trim(build(), 5000, ctx, tool_prune_threshold=100)
-    assert not [m for m in r3 if m.get("reasoning_content")]
+    assert [m["reasoning_content"] for m in r3 if m.get("reasoning_content")][0] == rc
 
     # 已定型截断版 reasoning 不被清空
     ctx2 = SessionContext()

@@ -47,9 +47,16 @@ PROVIDERS = {
     "DeepSeek": {
         "api_url": "https://api.deepseek.com",
         "default_model": "deepseek-chat",
-        "models": ["deepseek-chat", "deepseek-reasoner", "deepseek-chat-v3-0324"],
+        "models": [
+            "deepseek-chat",
+            "deepseek-reasoner",
+            "deepseek-chat-v3-0324",
+            "deepseek-v4-flash",
+            "deepseek-v4-flash-vision-exp",
+        ],
         "supports_thinking": True,
-        "description": "DeepSeek 系列模型",
+        "supports_vision": True,
+        "description": "DeepSeek 系列模型（deepseek-v4-flash-vision-exp 为视觉模型）",
     },
     "Fireworks": {
         "api_url": "https://api.fireworks.ai/inference/v1",

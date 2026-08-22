@@ -91,3 +91,56 @@ def test_analyze_api_error():
         result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
         assert result["ok"] is False
         assert "视觉模型调用失败" in result["error"]
+
+
+def test_analyze_detail_passthrough():
+    """detail 参数应透传到 image_url 内容块（DeepSeek 视觉 API）"""
+    mock_client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.choices[0].message.content = "蓝色"
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
+               return_value=(mock_client, "deepseek-v4-flash-vision-exp", {})):
+        from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+        result = toolkit_vision_analyze(image="data:image/png;base64,AAAA", detail="high")
+        assert result["ok"] is True
+        _, kwargs = mock_client.chat.completions.create.call_args
+        content = kwargs["messages"][0]["content"]
+        assert content[1]["type"] == "image_url"
+        assert content[1]["image_url"]["url"] == "data:image/png;base64,AAAA"
+        assert content[1]["image_url"]["detail"] == "high"
+
+
+def test_analyze_detail_from_options():
+    """detail 未显式传参时回退 options.detail"""
+    mock_client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.choices[0].message.content = "红色"
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
+               return_value=(mock_client, "deepseek-v4-flash-vision-exp", {"detail": "low"})):
+        from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+        result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
+        assert result["ok"] is True
+        _, kwargs = mock_client.chat.completions.create.call_args
+        content = kwargs["messages"][0]["content"]
+        assert content[1]["image_url"]["detail"] == "low"
+
+
+def test_analyze_detail_invalid_omitted():
+    """非法 detail 值应被省略（不发送给 API）"""
+    mock_client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.choices[0].message.content = "OK"
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
+               return_value=(mock_client, "m", {})):
+        from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+        result = toolkit_vision_analyze(image="data:image/png;base64,AAAA", detail="bogus")
+        assert result["ok"] is True
+        _, kwargs = mock_client.chat.completions.create.call_args
+        content = kwargs["messages"][0]["content"]
+        assert "detail" not in content[1]["image_url"]

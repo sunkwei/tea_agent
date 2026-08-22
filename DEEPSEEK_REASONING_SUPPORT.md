@@ -8,26 +8,46 @@ DeepSeek 推理模型在 thinking 模式下返回 `reasoning_content`（思维�
 
 > Error code: 400 - {'error': {'message': 'The reasoning_content in the thinking mode must be passed back to the API.'}}
 
-## 当前策略：生命周期管理
+## 当前策略：生命周期管理 + 完整回传
 
 reasoning_content 的生命周期 = 一个 `chat_stream` 调用（即一个 API 会话）。
+
+> **DeepSeek V4（thinking 模式）硬性要求**（官方文档 Tool Calls 章节）：
+> 「for requests carrying the `tools` parameter, the `reasoning_content` must be **fully passed back** to the API in all subsequent requests. If your code does not correctly pass back `reasoning_content`, the API will return a 400 error.」
+>
+> 即：凡是携带 `tools` 的请求（本 Agent 工具循环内每轮都携带），所有 assistant 消息的
+> `reasoning_content` 必须**逐字完整回传**。**缺失、清空、截断**都会触发
+> `Error code: 400 - ...'The reasoning_content in the thinking mode must be passed back to the API.'`
 
 ### 生命周期边界
 
 | 阶段 | 操作 | reasoning_content |
 |------|------|-------------------|
-| **加载历史** | `load_history()` → `_load_single_conversation()` → `_repair_incomplete_tool_chains()` | ✅ 保留（assistant 消息的 RC 全部保留，API 会忽略无 tool_calls 的 RC） |
-| **新一轮开始** | `reset_session_state()` | ✅ 保留（assistant 消息的 RC 不清除，同一 chat_stream 内 tool_calls 的 RC 必须保留） |
-| **tool_loop 期间** | `_build_api_messages()` | ✅ 保留（当前 API 会话内，必须回传） |
+| **加载历史** | `load_history()` → `_load_single_conversation()` → `_repair_incomplete_tool_chains()` | ✅ 保留（assistant 消息的 RC 全部保留） |
+| **新一轮开始** | `reset_session_state()` | ✅ 保留（assistant 消息的 RC 不清除） |
+| **tool_loop 期间** | `_build_api_messages()` | ✅ 保留（当前 API 会话内，必须完整回传） |
 | **持久化** | `_rounds_collector` → DB | ✅ 保留（完整记录，供回放分析） |
 
-### 关键设计说明
+### 关键设计说明（2026-08 修订）
 
 `_strip_reasoning_content()` **只清除 assistant 以外角色的 reasoning_content**（非 assistant 消息本就不该有此字段），而**保留所有 assistant 消息的 reasoning_content**，原因：
-- 含 `tool_calls` 的 assistant：DeepSeek API 要求 `reasoning_content` **必须**回传，否则 400
+- 含 `tool_calls` 的 assistant：DeepSeek V4 要求 `reasoning_content` **必须完整回传**，否则 400
 - 无 `tool_calls` 的 assistant：`reasoning_content` 传入 API **会被忽略**（官网文档明确说明），保留无害
 
-> **结论**：保留所有 assistant 的 RC 是安全的 —— 多传了 API 会忽略，少传了 API 会 400。
+> **结论**：保留所有 assistant 的 RC 是安全的 —— 多传了 API 会忽略，少传/清空/截断了 API 会 400。
+
+### 本次修复要点（杜绝 400 的三处来源）
+
+1. **不再截断 RC**：`tool_loop_runner.py` / `basesession.py` 中曾用 `_cap_message_text()`
+   把 RC 截断到 16K 字符并追加 `[已截断...]` 标记。截断后的 RC 与原值不一致，
+   DeepSeek 判定为"未完整回传" → 400。现改为原样入库、原样回传。
+2. **不再清空 RC**：`_progressive_trim` 原"策略3：删除 reasoning_content"会清空 RC 省 token。
+   对 DeepSeek V4 而言这等价于未回传 → 400。已废弃该策略，压 token 改由
+   策略 4/5（截断正文、删除旧轮次连同其 RC）承担。
+3. **不再给 tool_calls 消息补空 RC**：`build_api_messages` L1 循环曾给缺失 RC 的
+   assistant 消息补 `reasoning_content: ""`。对含 `tool_calls` 的消息，补空等价于
+   未回传 → 400。现仅对无 tool_calls 的普通 assistant 消息补空字段。
+   另新增防御性校验：发送前扫描含 `tool_calls` 但缺少非空 RC 的消息并告警。
 
 ### 原理
 

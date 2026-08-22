@@ -367,15 +367,18 @@ def test_progressive_trim():
         # 可能预算够大没被替换
         print(f"  ℹ️  策略2: 工具输出未替换 (预算可能足够)")
 
-    # 4.4 策略3: 删除 reasoning_content
+    # 4.4 策略3: reasoning_content 保留（DeepSeek V4 要求完整回传，不可清空/截断）
     msgs = [
         make_msg("user", "hi"),
         make_msg("assistant", "hello", reasoning_content="这是很长的思考过程 " * 200),
     ]
     result = _progressive_trim(msgs, 10, ctx)
     for m in result:
+        if m.get("role") != "assistant":
+            continue
         rc = m.get("reasoning_content", "")
-        assert_true(rc == "" or len(rc) < 100, "reasoning_content 被清空或截断")
+        assert_true(rc == "这是很长的思考过程 " * 200,
+                    "reasoning_content 必须原样保留（清空/截断会触发 DeepSeek 400）")
 
     # 4.5 策略4: 长文本截断
     long_text = "word " * 10000

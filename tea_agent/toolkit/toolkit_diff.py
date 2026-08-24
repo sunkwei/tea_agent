@@ -454,10 +454,10 @@ def toolkit_diff(
 
 TOOL_CATEGORIES = {
     "文件操作": [
-        "toolkit_file", "toolkit_save_file", "toolkit_explr",
+        "toolkit_file", "toolkit_explr",
     ],
     "代码编辑": [
-        "toolkit_edit", "toolkit_diff_edit", "toolkit_diff",
+        "toolkit_edit", "toolkit_diff",
         "toolkit_self_evolve",
         "toolkit_format_code",
     ],
@@ -466,7 +466,7 @@ TOOL_CATEGORIES = {
         "toolkit_js_fetch",
     ],
     "截图与OCR": [
-        "toolkit_screenshot", "toolkit_ocr", "toolkit_screen_read",
+        "toolkit_screenshot", "toolkit_ocr", "toolkit_vision_analyze",
     ],
     "系统操作": [
         "toolkit_exec", "toolkit_config",
@@ -484,28 +484,25 @@ TOOL_CATEGORIES = {
     ],
     "多Agent协作": [
         "toolkit_parallel_subtasks", "toolkit_subagent",
-        "toolkit_subagent_msg", "toolkit_auto_pipeline",
+        "toolkit_subagent_msg",
     ],
     "计划与任务": [
         "toolkit_plan", "toolkit_todo", "toolkit_scheduler",
         "toolkit_task_resume",
     ],
     "Git版本控制": [
-        "toolkit_git_commit", "toolkit_git_push_all_remotes",
+        "toolkit_git_commit",
     ],
     "Web与网络": [
         "toolkit_browser_tab", "toolkit_js_fetch", "toolkit_mcp",
     ],
     "自进化": [
         "toolkit_self_evolve",
-        "toolkit_prompt_evolve", "toolkit_evolution_exp",
+        "toolkit_prompt_evolve",
         "toolkit_experience_solidify",
     ],
-    "工具": [
-        "toolkit_weather_my", "toolkit_lunar",
-    ],
     "导出与分享": [
-        "toolkit_dump_topic", "toolkit_export_last_pdf",
+        "toolkit_export_last_pdf",
         "toolkit_notify",
     ],
     "MCP集成": [
@@ -536,8 +533,7 @@ def toolkit_get_categorized_tools() -> dict:
     }
 
 
-# ── 注册到全局工具分类元数据 ──
-# 让 toolkit_self_report 也能读取此分类
+# ── 全局工具分类元数据 ──
 
 # ── Meta ────────────────────────────────────────────────
 
@@ -551,11 +547,10 @@ def meta_toolkit_diff():
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["generate", "preview", "apply", "undo", "verify"]},
-                    "files": {"type": "array", "items": {"type": "object"},
-                              "description": "文件列表: "},
-                    "run_tests": {"type": "boolean", "description": "是否运行 pytest，默认 true"},
-                    "description": {"type": "string", "description": "修改描述"},
+                    "action": {"type": "string", "enum": ["generate", "preview", "apply", "undo", "verify"], "description": "generate=仅生成 unified diff（不改文件）; preview=生成 diff+冲突检测（不改文件）; apply=多文件原子应用修改并做编译/lint/可选 pytest 验证,失败自动回滚; undo=从 .bak 备份恢复已应用的文件; verify=仅运行编译/lint/test 验证"},
+                    "files": {"type": "array", "items": {"type": "object", "properties": {"file_path": {"type": "string", "description": "目标文件路径"}, "old_code": {"type": "string", "description": "要替换的旧代码（必须精确匹配）"}, "new_code": {"type": "string", "description": "替换后的新代码"}}, "required": ["file_path", "old_code", "new_code"]}, "description": "文件修改列表: [{'file_path': '路径', 'old_code': '旧代码', 'new_code': '新代码'}]"},
+                    "run_tests": {"type": "boolean", "description": "apply/verify 时是否运行 pytest，默认 true"},
+                    "description": {"type": "string", "description": "本次修改的描述（apply 时用于 git 快照记录）"},
                 },
                 "required": ["action"],
             },

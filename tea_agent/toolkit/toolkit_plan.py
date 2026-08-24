@@ -697,7 +697,7 @@ def _extract_step_tools(step: dict) -> list:
 
     action_tool_map = {
         "self_evolve": "toolkit_self_evolve",
-        "create_file": "toolkit_save_file",
+        "create_file": "toolkit_file",
         "exec": "toolkit_exec",
         "verify_only": "toolkit_run_tests",
         "analyze": "toolkit_explr",
@@ -1023,11 +1023,11 @@ def meta_toolkit_plan():
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["create", "decompose", "show", "review", "canvas", "step", "verify", "run", "resume", "list", "delete", "insert", "replace", "delete_step", "replan"]},
-                    "goal": {"type": "string", "description": "计划目标"},
-                    "steps": {"type": "array", "items": {"type": "object"}, "description": "步骤列表"},
-                    "plan_id": {"type": "string", "description": "计划ID"},
-                    "step_id": {"type": "string", "description": "指定步骤ID"},
+                    "action": {"type": "string", "enum": ["create", "decompose", "show", "review", "canvas", "step", "verify", "run", "resume", "list", "delete", "insert", "replace", "delete_step", "replan"], "description": "create=创建计划(需 goal+steps); decompose=把目标拆分为步骤; show=查看计划详情; review=画布审阅(不修改文件); canvas=创建空白画布; step=执行指定一步; verify=验证指定步; run=全量执行计划; resume=继续未完成计划; list=计划列表; delete=删除计划; insert=在 step_id 后插入步骤(需 steps); replace=替换 step_id 步骤(需 steps); delete_step=删除 step_id; replan=重新规划计划"},
+                    "goal": {"type": "string", "description": "计划目标（create/decompose/canvas 必需）"},
+                    "steps": {"type": "array", "items": {"type": "object"}, "description": "步骤列表: [{'id': str, 'desc': str, 'action': 'self_evolve|create_file|exec|verify_only', 'params': {...}, 'depends_on': [id...], 'verify': str}]"},
+                    "plan_id": {"type": "string", "description": "计划 ID（show/step/verify/run/resume/review/delete/insert/replace/delete_step/replan 必需）"},
+                    "step_id": {"type": "string", "description": "步骤 ID（step/verify/insert/replace/delete_step 使用）"},
                 },
                 "required": ["action"],
             },

@@ -64,7 +64,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             "部署", "发布", "构建", "打包", "上线", "回滚",
             "deploy", "release", "build", "package", "publish", "rollback",
             "版本", "version", "bump", "ci/cd", "pipeline", "docker",
-            "toolkit_build", "toolkit_release_version", "toolkit_git_push_all_remotes",
+            "toolkit_build", "toolkit_release_version",
         ],
     }
 
@@ -116,7 +116,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             "2. 处理 CI/CD、依赖管理、环境配置\n"
             "3. ❌ 不修改业务逻辑代码\n"
             "4. 输出：构建日志 + 发布说明 + 验证结果\n"
-            "5. 优先使用：toolkit_build / toolkit_release_version / toolkit_git_push_all_remotes"
+            "5. 优先使用：toolkit_build / toolkit_release_version / toolkit_git_commit"
         ),
         # 兼容旧模式
         "pragmatic": (

@@ -5,11 +5,12 @@ import logging
 
 logger = logging.getLogger("toolkit")
 
-def toolkit_file(action: str, filename: str = "", content: str = "", path: str = ".", recursive: bool = False, show_hidden: bool = False, offset: int = 0, limit: int = 0):
+def toolkit_file(action: str, filename: str = "", content: str = "", path: str = ".", recursive: bool = False, show_hidden: bool = False, offset: int = 0, limit: int = 0, chunks: list = None, append: bool = False):
     """
     统一文件操作。
     - action="read": 读取文件内容。offset=起始行号(1-based), limit=行数上限。均为0则读全文。需 filename。
     - action="write": 将 content 写入 filename。需 filename + content。
+      大内容用 chunks（字符串列表，自动拼接，免去单次超长参数）；append=True 追加而非覆盖。
     - action="list": 列出目录内容 (跨平台 dir/ls)。可选 path/recursive/show_hidden。
     """
     logger.info(f"toolkit_file called: action={action!r}, filename={filename!r}, content={repr(content)[:80]}, path={path!r}, offset={offset!r}, limit={limit!r}")
@@ -30,16 +31,24 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
 
     elif action == "write":
         try:
-            # 检查数据库保护标记：若目标文件所在目录有 .chat_history_protected，拒绝覆盖
-            # target_abs = _os.path.abspath(filename)
-            # target_dir = _os.path.dirname(target_abs)
-            # marker = _os.path.join(target_dir, ".chat_history_protected")
-            #     logger.warning(f"toolkit_file write BLOCKED: 目标目录受保护 ({marker}), 拒绝写入 {filename}")
-
+            # chunks 模式：列表按序拼接（大文件分块写入，避免单次超长参数）
+            if chunks:
+                content = "\n".join(str(c) for c in chunks if c is not None)
             # 归一化换行符：\r\n → \n，确保始终使用 LF
             normalized = content.replace('\r\n', '\n').replace('\r', '\n')
-            with open(filename, 'w', encoding='utf-8') as f:
+            mode = 'a' if append else 'w'
+            with open(filename, mode, encoding='utf-8') as f:
                 f.write(normalized)
+            # 修改成功后自动 git 快照（继承原 toolkit_save_file 的"改了没存盘"保护；
+            # 非 git 环境静默跳过，失败不影响结果）
+            try:
+                import os as _os
+
+                from tea_agent.toolkit._git_snapshot import maybe_snapshot
+
+                maybe_snapshot([filename], f"file write {_os.path.basename(filename)}")
+            except Exception:
+                pass
             return 0
         except Exception as e:
             return f"Error: {str(e)}"
@@ -102,6 +111,15 @@ def meta_toolkit_file() -> dict:
                     "content": {
                         "type": "string",
                         "description": "要写入的内容",
+                    },
+                    "chunks": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "[write] 内容分块列表，按序拼接写入（大文件用，避免单次超长参数；与 content 二选一）",
+                    },
+                    "append": {
+                        "type": "boolean",
+                        "description": "[write] 是否追加而非覆盖，默认 false",
                     },
                     "path": {
                         "type": "string",

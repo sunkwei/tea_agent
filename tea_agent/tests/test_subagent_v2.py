@@ -65,20 +65,19 @@ class TestAgentId:
 class TestMetaSchema:
     """Meta schema includes Phase 1 parameters."""
 
-    def test_meta_has_allowed_tools(self):
-        """Meta should include allowed_tools parameter."""
+    def test_meta_excludes_deprecated_allowed_tools(self):
+        """Meta 不应包含已废弃且被忽略的 allowed_tools（避免误导模型与浪费 schema token）。"""
         from tea_agent.toolkit.toolkit_subagent import meta_toolkit_subagent
         meta = meta_toolkit_subagent()
         props = meta['function']['parameters']['properties']
-        assert 'allowed_tools' in props
-        assert props['allowed_tools']['type'] == 'array'
+        assert 'allowed_tools' not in props
 
-    def test_meta_has_denied_tools(self):
-        """Meta should include denied_tools parameter."""
+    def test_meta_excludes_deprecated_denied_tools(self):
+        """Meta 不应包含已废弃且被忽略的 denied_tools。"""
         from tea_agent.toolkit.toolkit_subagent import meta_toolkit_subagent
         meta = meta_toolkit_subagent()
         props = meta['function']['parameters']['properties']
-        assert 'denied_tools' in props
+        assert 'denied_tools' not in props
 
     def test_meta_has_parent_session_id(self):
         """Meta should include parent_session_id."""

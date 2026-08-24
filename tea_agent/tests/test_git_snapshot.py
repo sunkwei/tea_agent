@@ -1,6 +1,6 @@
 """Git 快照（修改工具自动"存盘"）回归测试。
 
-背景: 修改工具（toolkit_edit/diff/save_file）修改成功后自动 git commit，
+背景: 修改工具（toolkit_edit/diff/file）修改成功后自动 git commit，
 杜绝"改了没存盘"（会话中断导致已做修改丢失）。
 
 覆盖:
@@ -8,7 +8,7 @@
 - git_snapshot: 无变更/非仓库时静默跳过（不产生空 commit）
 - toolkit_edit 修改成功后自动快照（返回 git_snapshot hash）
 - toolkit_edit preview 不落盘
-- toolkit_save_file 写新文件后自动快照
+- toolkit_file 写新文件后自动快照（原 toolkit_save_file 行为）
 """
 
 import os
@@ -112,24 +112,27 @@ def test_toolkit_edit_preview_no_snapshot(git_repo):
     assert count.strip() == "1"
 
 
-def test_toolkit_save_file_auto_snapshot(git_repo):
-    """toolkit_save_file 写新文件后自动快照（含未跟踪文件）。"""
-    from tea_agent.toolkit.toolkit_save_file import toolkit_save_file
+def test_toolkit_file_write_auto_snapshot(git_repo):
+    """toolkit_file 写新文件后自动快照（含未跟踪文件）。"""
+    from tea_agent.toolkit.toolkit_file import toolkit_file
 
-    r = toolkit_save_file(path="b.py", content="y = 2\n")
-    assert r.get("status") == "ok"
-    assert r.get("git_snapshot"), "期望自动快照 hash"
+    r = toolkit_file(action="write", filename="b.py", content="y = 2\n")
+    assert r == 0  # write 成功返回 0
     count = _run(["git", "rev-list", "--count", "HEAD"], str(git_repo))
     assert count.strip() == "2"
 
 
-def test_toolkit_diff_edit_auto_snapshot(git_repo):
-    """toolkit_diff_edit 修改成功后自动快照。"""
-    from tea_agent.toolkit.toolkit_diff_edit import toolkit_diff_edit
+def test_toolkit_edit_replace_text_auto_snapshot(git_repo):
+    """toolkit_edit replace_text 修改成功后自动快照（原 toolkit_diff_edit 能力）。"""
+    from tea_agent.toolkit.toolkit_edit import toolkit_edit
 
-    r = toolkit_diff_edit(file_path="a.py", old_text="x = 1", new_text="x = 7")
+    r = toolkit_edit(
+        file_path="a.py", action="replace_text",
+        old_text="x = 1", new_text="x = 7", return_diff=True,
+    )
     assert r.get("ok") is True
     assert r.get("git_snapshot"), "期望自动快照 hash"
+    assert r.get("diff"), "return_diff=True 应返回 unified diff"
     count = _run(["git", "rev-list", "--count", "HEAD"], str(git_repo))
     assert count.strip() == "2"
 

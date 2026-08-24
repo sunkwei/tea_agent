@@ -26,20 +26,27 @@ class TestToolkitRegistration:
         """call_tool 应返回非 None 结果"""
         from tea_agent.tlk import Toolkit
         tk = Toolkit()
-        result = tk.call_tool("toolkit_lunar")
-        assert result is not None, "lunar 返回 None"
+        result = tk.call_tool("toolkit_file", action="list", path=".")
+        assert result is not None, "file 返回 None"
 
-    def test_lunar_returns_date_fields(self):
-        """toolkit_lunar 应返回日期字段"""
-        import json
-
-        from tea_agent.tlk import Toolkit
+    def test_llm_tool_excludes_non_llm_tools(self):
+        """harness_schema/export_last_pdf 注册但不暴露给 LLM"""
+        from tea_agent.tlk import Toolkit, llm_tool_names
         tk = Toolkit()
-        result = tk.call_tool("toolkit_lunar", date_str="2024-01-01")
-        data = json.loads(result) if isinstance(result, str) else result
-        assert isinstance(data, dict)
-        assert "lunar_date" in data, f"结果缺少日期字段: {data}"
-        assert "solar_date" in data
+        assert "toolkit_harness_schema" in tk.func_map, "harness_schema 仍应注册（供外部消费）"
+        assert "toolkit_export_last_pdf" in tk.func_map, "export_last_pdf 仍应注册（供 server 使用）"
+        names = llm_tool_names(tk.func_map.keys())
+        assert "toolkit_harness_schema" not in names
+        assert "toolkit_export_last_pdf" not in names
+        assert "toolkit_file" in names
+        # 顺序稳定（排序）
+        assert names == sorted(names)
+
+    def test_llm_tool_names_sorted(self):
+        """llm_tool_names 返回排序结果（工具 Schema 顺序稳定 = 缓存命中前提）"""
+        from tea_agent.tlk import llm_tool_names
+        names = llm_tool_names({"toolkit_b", "toolkit_a", "toolkit_c"})
+        assert names == ["toolkit_a", "toolkit_b", "toolkit_c"]
 
 
 class TestToolkitUserOverride:

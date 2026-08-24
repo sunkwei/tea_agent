@@ -17,7 +17,7 @@ EXCLUDED_TOP = ["gui.py","gui_dialogs.py"]
 
 HEAVY_TOOLS = [
     "toolkit_js_fetch.py","toolkit_input.py","toolkit_screenshot.py",
-    "toolkit_screen_read.py","toolkit_ocr.py","toolkit_lsp.py",
+    "toolkit_ocr.py","toolkit_lsp.py",
     "toolkit_browser_tab.py","toolkit_clipboard.py","toolkit_sudo_gui.py",
     "toolkit_test_gui.py","toolkit_explr.py","toolkit_pkg.py"]
 

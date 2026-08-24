@@ -133,7 +133,7 @@ class WorkflowBuilder:
             "steps": [
                 ("analyze", "分析代码结构", ["toolkit_file", "toolkit_explr"]),
                 ("draft", "草拟文档", []),
-                ("write", "编写文档", ["toolkit_save_file"]),
+                ("write", "编写文档", ["toolkit_file"]),
                 ("format", "格式化文档", ["toolkit_format_code"]),
             ]
         },
@@ -144,7 +144,7 @@ class WorkflowBuilder:
                 ("design", "设计方案", []),
                 ("implement", "实现功能", ["toolkit_edit"]),
                 ("test", "编写测试", ["toolkit_run_tests"]),
-                ("doc", "编写文档", ["toolkit_save_file"]),
+                ("doc", "编写文档", ["toolkit_file"]),
             ]
         },
         "search": {

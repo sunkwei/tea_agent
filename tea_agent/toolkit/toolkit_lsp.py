@@ -69,12 +69,12 @@ def meta_toolkit_lsp():
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "action": {"type": "string", "enum": ["diagnose", "completion", "definition", "hover", "references", "context"]},
-                    "filepath": {"type": "string"},
-                    "line": {"type": "integer", "default": 1},
-                    "col": {"type": "integer", "default": 0},
-                    "project_root": {"type": "string"},
-                    "symbol": {"type": "string"},
+                    "action": {"type": "string", "enum": ["diagnose", "completion", "definition", "hover", "references", "context"], "description": "diagnose=ruff 诊断错误, completion=补全建议, definition=跳转到定义, hover=悬停信息, references=查找引用, context=收集符号相关上下文"},
+                    "filepath": {"type": "string", "description": "目标文件路径"},
+                    "line": {"type": "integer", "default": 1, "description": "光标行号（1-based），completion/definition/hover/references 使用"},
+                    "col": {"type": "integer", "default": 0, "description": "光标列号（0-based），completion/definition/hover/references 使用"},
+                    "project_root": {"type": "string", "description": "项目根目录（含 pyproject.toml 或 .git），默认从文件路径向上自动检测"},
+                    "symbol": {"type": "string", "description": "[context] 要收集上下文的符号名（函数/类名）"},
                 },
                 "required": ["action", "filepath"],
             },

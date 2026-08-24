@@ -1,13 +1,13 @@
 """
-session_tools_builder 单元测试 — 自由奔放模式：filter_tools 不再过滤。
+session_tools_builder 单元测试 — filter_tools 核心集常驻 + 按需过滤。
 
 关键契约：
-- filter_tools 始终返回全部工具（忽略 tool_filter 参数）
+- tool_filter=None/[] → 返回全部工具（默认行为不变）
+- tool_filter 指定 → 返回 核心集 + 意图集（核心工具永不缺席）
 - has_tool 行为不变
-- ESSENTIAL_TOOLS 已废弃（保留仅为兼容性）
 """
 
-from tea_agent.onlinesession import filter_tools, has_tool
+from tea_agent.onlinesession import CORE_TOOLS, filter_tools, has_tool
 
 SAMPLE_TOOLS = [
     {"function": {"name": "toolkit_file", "description": "文件操作"}},
@@ -21,15 +21,10 @@ SAMPLE_TOOLS = [
 
 
 class TestFilterToolsNoFilter:
-    """自由奔放模式：始终返回全部工具"""
+    """未指定过滤：返回全部工具（默认行为）"""
 
     def test_no_filter_keeps_all(self):
         result = filter_tools(SAMPLE_TOOLS)
-        assert len(result) == len(SAMPLE_TOOLS)
-
-    def test_filter_ignored_keeps_all(self):
-        """即使指定 tool_filter，仍返回全部工具"""
-        result = filter_tools(SAMPLE_TOOLS, tool_filter=["toolkit_file"])
         assert len(result) == len(SAMPLE_TOOLS)
 
     def test_filter_none_keeps_all(self):
@@ -40,9 +35,33 @@ class TestFilterToolsNoFilter:
         result = filter_tools(SAMPLE_TOOLS, tool_filter=[])
         assert len(result) == len(SAMPLE_TOOLS)
 
-    def test_filter_nonexistent_keeps_all(self):
+
+class TestFilterToolsWithFilter:
+    """指定意图工具集：核心集常驻 + 意图集追加"""
+
+    def test_filter_narrows_to_core_plus_intent(self):
+        """tool_filter 指定时只保留 核心集 + 意图集"""
+        result = filter_tools(SAMPLE_TOOLS, tool_filter=["toolkit_pkg"])
+        names = {t["function"]["name"] for t in result}
+        # 意图工具
+        assert "toolkit_pkg" in names
+        # 核心工具常驻（exec/file/search 等均在 CORE_TOOLS 中）
+        for core in ("toolkit_exec", "toolkit_file", "toolkit_search"):
+            assert core in names
+        # 非核心非意图工具被过滤
+        assert "toolkit_gettime" not in names
+
+    def test_filter_nonexistent_only_keeps_core(self):
+        """意图工具不存在时仅保留核心集"""
         result = filter_tools(SAMPLE_TOOLS, tool_filter=["toolkit_ghost"])
-        assert len(result) == len(SAMPLE_TOOLS)
+        names = {t["function"]["name"] for t in result}
+        assert "toolkit_ghost" not in names
+        assert "toolkit_exec" in names
+
+    def test_core_tools_defined(self):
+        """CORE_TOOLS 应包含最基础的原语"""
+        for t in ("toolkit_exec", "toolkit_file", "toolkit_edit", "toolkit_search"):
+            assert t in CORE_TOOLS
 
 
 class TestFilterToolsEdgeCases:

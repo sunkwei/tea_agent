@@ -100,13 +100,13 @@ SKILL_DOMAINS: dict[str, SkillDomain] = {
         strong_keywords=["浏览器自动化", "browser automation", "填表", "表单", "点击按钮", "爬取网页",
                          "scrape", "网页截图", "自动化浏览器", "登录网站", "web 测试", "网页测试"],
         weak_keywords=["浏览器", "browser", "网页", "website", "web", "网址", "form", "click"],
-        covered_by=["toolkit_browser_tab", "toolkit_js_fetch", "toolkit_screen_read",
-                    "toolkit_input", "toolkit_screenshot", "toolkit_ocr"],
+        covered_by=["toolkit_browser_tab", "toolkit_js_fetch", "toolkit_ocr",
+                    "toolkit_input", "toolkit_screenshot"],
     ),
     "ai-elements": SkillDomain(
         strong_keywords=["聊天界面组件", "chat ui", "shadcn", "消息组件", "对话组件"],
         weak_keywords=["界面", "组件", "ui", "前端", "frontend", "聊天界面", "聊天框"],
-        covered_by=["toolkit_save_file", "toolkit_file", "toolkit_exec"],
+        covered_by=["toolkit_file", "toolkit_exec"],
     ),
     "analyze-pdf": SkillDomain(
         strong_keywords=["pdf 报表", "pdf 提取", "报表提取", "表格提取", "提取表格", "pdf 分析"],
@@ -121,7 +121,7 @@ SKILL_DOMAINS: dict[str, SkillDomain] = {
     "browser-trace": SkillDomain(
         strong_keywords=["浏览器追踪", "browser trace", "devtools", "cdp", "调试失败用例"],
         weak_keywords=["追踪", "trace", "调试浏览器", "dom 转储"],
-        covered_by=["toolkit_browser_tab", "toolkit_screenshot", "toolkit_screen_read"],
+        covered_by=["toolkit_browser_tab", "toolkit_screenshot", "toolkit_ocr"],
     ),
     "caveman": SkillDomain(
         strong_keywords=["省 token", "省token", "原始人模式", "caveman", "极简回复", "压缩回复"],
@@ -177,7 +177,7 @@ SKILL_DOMAINS: dict[str, SkillDomain] = {
     "write-better-commits": SkillDomain(
         strong_keywords=["提交信息优化", "commit message", "规范提交", "写提交信息"],
         weak_keywords=["提交", "commit", "git 提交", "changelog"],
-        covered_by=["toolkit_git_commit", "toolkit_git_push_all_remotes"],
+        covered_by=["toolkit_git_commit"],
     ),
     "writing-style": SkillDomain(
         strong_keywords=["写作风格", "语气调整", "风格模板", "文风", "文章风格"],

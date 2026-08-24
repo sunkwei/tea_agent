@@ -636,16 +636,6 @@ def meta_toolkit_subagent() -> dict:
                         "type": "string",
                         "description": "Sub-agent ID"
                     },
-                    "allowed_tools": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Allowed tool names (None=all allowed)"
-                    },
-                    "denied_tools": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Denied tool names (None=none denied)"
-                    },
                     "parent_session_id": {
                         "type": "string",
                         "description": "Parent session ID for auto-wake notifications"

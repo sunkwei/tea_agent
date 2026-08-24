@@ -39,7 +39,7 @@ BUILTIN_PATTERNS = [
         "role": "高级软件工程师",
         "goal": "高效实现功能需求和代码修改",
         "backstory": "你擅长编写高质量、可维护的 Python 代码，熟悉 SOLID 原则。",
-        "tools": ["toolkit_exec", "toolkit_file", "toolkit_edit", "toolkit_diff_edit"],
+        "tools": ["toolkit_exec", "toolkit_file", "toolkit_edit"],
         "tags": ["development", "coding", "refactor"],
     },
     {
@@ -76,7 +76,7 @@ def get_pattern_market():
 # ── 预定义工具集 ──────────────────────────────
 
 COMMON_TOOLS = {
-    "code": ["toolkit_exec", "toolkit_file", "toolkit_edit", "toolkit_diff_edit", "toolkit_search"],
+    "code": ["toolkit_exec", "toolkit_file", "toolkit_edit", "toolkit_search"],
     "analysis": ["toolkit_exec", "toolkit_file", "toolkit_search", "toolkit_code_review"],
     "testing": ["toolkit_exec", "toolkit_file", "toolkit_run_tests"],
     "all": None,  # 全部可用

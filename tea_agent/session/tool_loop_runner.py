@@ -66,8 +66,8 @@ class ParallelExecutor:
 
     # 标记为"顺序执行"的工具（读写类，有副作用）
     SERIAL_TOOLS = {
-        "toolkit_edit", "toolkit_diff_edit", "toolkit_self_evolve",
-        "toolkit_save_file", "toolkit_exec", "toolkit_git_commit",
+        "toolkit_edit", "toolkit_self_evolve",
+        "toolkit_file", "toolkit_exec", "toolkit_git_commit",
         "toolkit_save", "toolkit_reload", "toolkit_diff",
     }
 
@@ -76,11 +76,8 @@ class ParallelExecutor:
         "toolkit_file", "toolkit_search", "toolkit_lsp",
         "toolkit_config",
         "toolkit_memory", "toolkit_kb",
-        "toolkit_list_provider_models", "toolkit_get_models",
-        "toolkit_get_config_path", "toolkit_weather_my",
-        "toolkit_lunar",
-        "toolkit_self_report",
-        "toolkit_harness_schema", "toolkit_plan",
+        "toolkit_list_provider_models",
+        "toolkit_plan",
         "toolkit_batch_process", "toolkit_code_review",
     }
 

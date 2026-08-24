@@ -24,7 +24,7 @@ def toolkit_publish_doc(source_path: str = "", title: str = "") -> dict:
     """将已保存的文档发布到可下载目录，返回下载链接。
 
     典型流程（创建文档类任务）：
-        1. toolkit_save_file 保存文档到项目内路径
+        1. toolkit_file 保存文档到项目内路径（action='write'）
         2. toolkit_publish_doc 发布 → 拿到 /v1/download/xxx.md 链接
         3. final msg 输出 Markdown 下载链接：[📄 下载文档](/v1/download/xxx.md)
 
@@ -81,7 +81,7 @@ def meta_toolkit_publish_doc() -> dict:
             "description": (
                 "发布文档到可下载目录并返回下载链接。"
                 "当用户明确要求创建文档（接口文档、README、md 等）并已用 "
-                "toolkit_save_file 保存后，调用此工具发布，"
+                "toolkit_file 保存后，调用此工具发布，"
                 "然后在最终回复中输出 Markdown 下载链接 [📄 下载xxx](/v1/download/文件名)。"
             ),
             "parameters": {

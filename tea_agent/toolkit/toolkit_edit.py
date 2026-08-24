@@ -7,7 +7,8 @@ logger = logging.getLogger("toolkit")
 
 def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
                  start_line: int = 0, end_line: int = 0, new_text: str = "",
-                 old_text: str = "", preview: bool = False, backup: bool = True):
+                 old_text: str = "", preview: bool = False, backup: bool = True,
+                 return_diff: bool = False, strict: bool = False):
     """
     高级代码编辑工具。推荐使用 replace_text（文本匹配）代替 replace_lines（行号匹配）。
 
@@ -15,6 +16,8 @@ def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
         toolkit_edit(file_path='x.py', action='replace_text',
                     old_text='def foo():\\n    pass',
                     new_text='def foo():\\n    return 42')
+        return_diff=True 时返回 unified diff 原文；strict=True 时旧文本多处匹配则拒绝
+        （吸收已合并的 toolkit_diff_edit 能力）。
 
     action='replace_lines': 替换指定行范围（注意：连续多次编辑会行号漂移）
     action='insert_lines': 在指定行插入
@@ -34,7 +37,7 @@ def toolkit_edit(file_path: str, action: str = "apply_patch", content: str = "",
         "insert_lines": lambda: _insert_lines(file_path, start_line, new_text, preview, backup),
         "delete_lines": lambda: _delete_lines(file_path, start_line, end_line, preview, backup),
         "replace_lines": lambda: _replace_lines(file_path, start_line, end_line, new_text, preview, backup),
-        "replace_text": lambda: _replace_text(file_path, old_text, new_text, preview, backup),
+        "replace_text": lambda: _replace_text(file_path, old_text, new_text, preview, backup, return_diff, strict),
         "preview_patch": lambda: _preview_patch(file_path, content),
     }
     fn = _actions.get(action)
@@ -100,7 +103,8 @@ def _verify_after_write(file_path: str, old_text: str = "",
 # ═══════════════════════════════════════════════════════════════
 
 def _replace_text(file_path: str, old_text: str, new_text: str,
-                  preview: bool, backup: bool):
+                  preview: bool, backup: bool, return_diff: bool = False,
+                  strict: bool = False):
     """Replace by exact text match — immune to line number drift."""
     import shutil
 
@@ -129,6 +133,10 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
         # check for duplicate matches
         second = original_norm.find(old_norm, idx + len(old_norm))
         if second != -1:
+            if strict:
+                # 严格模式（原 toolkit_diff_edit 语义）：多处匹配 → 拒绝，避免改错位置
+                return {"ok": False, "error": "❌ 冲突: old_text 在文件中出现多次，无法唯一确定。"
+                                               "请提供更长的上下文片段（含行首缩进/相邻行）", "returncode": 1}
             logger.warning(
                 f"⚠️ old_text 在文件中出现多次，将替换第一个匹配 "
                 f"(位置 {idx} 和 {second})"
@@ -142,10 +150,11 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
         lone_lf = original.count('\n') - crlf_count
         new_text_raw = replaced.replace('\n', '\r\n') if crlf_count > lone_lf else replaced
 
+        diff_text = _generate_diff(original, new_text_raw)
+
         if preview:
-            diff_preview = _generate_diff(original, new_text_raw)
             return {"ok": True, "status": "preview", "file": file_path, "action": "replace_text",
-                    "match_at": idx, "duplicate": second != -1, "diff": diff_preview, "returncode": 0}
+                    "match_at": idx, "duplicate": second != -1, "diff": diff_text, "returncode": 0}
 
         # backup
         if backup:
@@ -163,7 +172,12 @@ def _replace_text(file_path: str, old_text: str, new_text: str,
         msg = f"✅ 成功替换（文本匹配，位置 {idx}）"
         if vrf:
             msg += f" {vrf}"
-        return {"ok": True, "message": msg, "returncode": 0}
+        result = {"ok": True, "message": msg, "returncode": 0}
+        if return_diff:
+            # 返回 unified diff 原文（原 toolkit_diff_edit 的能力）
+            result["diff"] = diff_text
+            result["summary"] = f"1 file changed, {diff_text.count(chr(10)+'+') - (1 if diff_text.startswith('+++') else 0)} additions"
+        return result
 
     except Exception as e:
         return {"ok": False, "error": f"❌ replace_text 失败: {str(e)}", "returncode": 1}
@@ -534,6 +548,14 @@ def meta_toolkit_edit() -> dict:
                     "backup": {
                         "type": "boolean",
                         "description": "是否备份（默认 True）",
+                    },
+                    "return_diff": {
+                        "type": "boolean",
+                        "description": "[replace_text] 是否返回 unified diff 原文（默认 False；取代 toolkit_diff_edit）",
+                    },
+                    "strict": {
+                        "type": "boolean",
+                        "description": "[replace_text] 严格冲突检测：old_text 多处匹配时拒绝修改（默认 False 只警告并替换第一个）",
                     },
                 },
                 "required": ["file_path", "action"],

@@ -61,14 +61,14 @@ tea_agent/
 ├── providers.py           # LLM 提供商适配层
 ├── permission.py          # 工具权限管理
 │
-├── toolkit/               # ★ 工具注册中心（70+ 工具）
+├── toolkit/               # ★ 工具注册中心（60+ 工具）
 │   ├── __init__.py        # 空文件（无手工注册；工具由 tlk.py 扫描加载）
 │   ├── toolkit_exec.py
 │   ├── toolkit_save.py
-│   ├── toolkit_save_file.py
+│   ├── toolkit_file.py
 │   ├── toolkit_edit.py
 │   ├── toolkit_diff.py
-│   ├── ... (70+ 工具)
+│   ├── ... (60+ 工具)
 │
 ├── session/               # 会话管理子模块
 ├── store/                 # 存储层
@@ -147,7 +147,7 @@ toolkit_reload()
 
 当用户**明确要求创建文档**（接口文档、README、Markdown、设计文档等）时：
 
-1. 用 `toolkit_save_file` 保存文档到项目内合适路径（如 `docs/`）
+1. 用 `toolkit_file`（action='write'）保存文档到项目内合适路径（如 `docs/`）
 2. 调用 `toolkit_publish_doc(source_path=..., title=...)` 发布
 3. **final msg 必须包含 Markdown 下载链接**（toolkit_publish_doc 返回的 url）：
    ```

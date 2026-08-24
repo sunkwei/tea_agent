@@ -89,8 +89,8 @@ def test_necessity_low_for_unrelated_task():
 
 def test_sufficiency_covered_by_tools():
     ev = SkillLoadEvaluator(skills_dir=SKILLS_DIR)
-    tools = {"toolkit_browser_tab", "toolkit_js_fetch", "toolkit_screen_read",
-             "toolkit_input", "toolkit_screenshot", "toolkit_ocr"}
+    tools = {"toolkit_browser_tab", "toolkit_js_fetch", "toolkit_ocr",
+             "toolkit_input", "toolkit_screenshot"}
     s = ev._sufficiency("agent-browser", tools)
     assert s >= SUFFICIENCY_THRESHOLD
 
@@ -112,8 +112,8 @@ def test_decision_load_when_necessary_and_insufficient():
 
 def test_decision_no_load_when_already_covered():
     ev = SkillLoadEvaluator(skills_dir=SKILLS_DIR)
-    tools = {"toolkit_browser_tab", "toolkit_js_fetch", "toolkit_screen_read",
-             "toolkit_input", "toolkit_screenshot", "toolkit_ocr"}
+    tools = {"toolkit_browser_tab", "toolkit_js_fetch", "toolkit_ocr",
+             "toolkit_input", "toolkit_screenshot"}
     decs = ev.evaluate("帮我在浏览器里自动填表并截图", available_tools=tools)
     by_name = {d.name: d for d in decs}
     assert by_name["agent-browser"].action == "no_load"

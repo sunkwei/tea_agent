@@ -268,19 +268,20 @@ def meta_toolkit_eval_loop() -> dict:
                         "description": "[evaluate] 多轮执行结果文本列表(取平均)",
                     },
                     "rules": {
-                        "type": ["array", "object", "string"],
+                        "type": "array",
+                        "items": {"type": "object", "properties": {"pattern": {"type": "string"}, "match": {"type": "string", "enum": ["regex", "contains", "line", "line_contains"]}, "description": {"type": "string"}}, "required": ["pattern", "match"]},
                         "description": (
-                            "评分规则。推荐列表: [{\"pattern\": \"...\", \"match\": \"regex|contains|line|line_contains\", \"description\": \"...\"}]。"
-                            "也支持字符串行'pattern|match|description'或字典。"
+                            "评分规则列表: [{\"pattern\": \"...\", \"match\": \"regex|contains|line|line_contains\", \"description\": \"...\"}]。"
+                            "（运行时也接受单个对象或 'pattern|match|description' 字符串行）"
                         ),
                     },
                     "baseline": {
-                        "type": ["number", "object"],
-                        "description": "[compare] 基线分数(float 或 evaluate 返回的 dict)",
+                        "type": "object",
+                        "description": "[compare] 基线分数：evaluate/score 返回的 dict，或直接传数字（JSON 数字亦接受）",
                     },
                     "candidate": {
-                        "type": ["number", "object"],
-                        "description": "[compare] 改进后分数(float 或 dict)",
+                        "type": "object",
+                        "description": "[compare] 改进后分数：evaluate/score 返回的 dict，或直接传数字（JSON 数字亦接受）",
                     },
                     "threshold": {
                         "type": "number",

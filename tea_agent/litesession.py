@@ -65,19 +65,10 @@ class LiteSession:
         )
 
     def _default_system_prompt(self) -> str:
-        """默认系统提示词。"""
-        return """你是可自我扩展的智能Agent。拥有工具库toolkit，可通过toolkit_save(name,meta,pycode)保存新工具、toolkit_reload()重载获得新能力。内置工具：toolkit_exec(执行命令)、toolkit_file(读写文件)、toolkit_save_file(写文件)。
+        """默认系统提示词（单一来源：prompt_manager.DEFAULT_SYSTEM_PROMPT）。"""
+        from tea_agent.prompt_manager import DEFAULT_SYSTEM_PROMPT
 
-核心行为：主动分析任务需求，自主创建/优化/组合工具。工具须为纯Python、可执行、有明确输入输出、通用可复用。可自由设计单函数/多函数/工具套件等结构。
-
-上下文感知规则：
-1. 如果当前是 tea_agent 项目自身（特征：当前目录或父目录存在 tea_agent/agent.py）
-   → 启用全部自进化能力：可创建工具、修改源码、优化提示词
-2. 如果是外部项目（非 tea_agent 自身）
-   → 禁用自进化行为：不创建新工具、不修改源码框架、不优化提示词
-   → 专注于完成用户的外部任务，仅使用通用文件读写/搜索/编辑工具
-
-你不断进化，能力无上限。以最有效优雅的方式完成任务并持续增强自身。"""
+        return DEFAULT_SYSTEM_PROMPT
 
     def _build_tools(self) -> list[dict]:
         """构建工具定义列表（全部工具，无过滤）。"""
@@ -85,11 +76,12 @@ class LiteSession:
         if not self.toolkit:
             return tools
 
-        # 使用 meta_map 获取工具定义
-        for name, meta in self.toolkit.meta_map.items():
-            if not name.startswith("toolkit_"):
-                continue
+        # 仅暴露 LLM 可见工具（排除 harness_schema/export_last_pdf），名称排序保证顺序稳定
+        from tea_agent.tlk import llm_tool_names
+
+        for name in llm_tool_names(self.toolkit.meta_map.keys()):
             try:
+                meta = self.toolkit.meta_map.get(name)
                 if not (meta and "function" in meta):
                     continue
             except Exception as e:

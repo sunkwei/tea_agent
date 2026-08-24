@@ -155,6 +155,31 @@ class SessionEventStore(StoreComponent):
         c.close()
         return {"total": total, "by_type": by_type}
 
+    def cleanup_old_events(self, keep_days: int = 90) -> int:
+        """清理超过保留期的旧事件（append-only 日志无界增长的兜底）。
+
+        Args:
+            keep_days: 保留天数（默认 90），超过则删除
+
+        Returns:
+            删除的事件数
+        """
+        try:
+            with self._get_connection() as conn:
+                c = conn.cursor()
+                c.execute(
+                    "DELETE FROM session_events WHERE created_at < "
+                    "datetime('now', 'localtime', ?)",
+                    (f"-{int(keep_days)} days",),
+                )
+                deleted = c.rowcount
+            if deleted:
+                logger.info(f"清理过期 session_events {deleted} 条 (keep_days={keep_days})")
+            return deleted or 0
+        except Exception:
+            logger.exception("cleanup session_events failed")
+            return 0
+
     def fork_events(self, source_topic_id: str, target_topic_id: str,
                     boundary_conv_id: str = "") -> int:
         """fork 时复制事件流到目标 topic（保留审计血统）。

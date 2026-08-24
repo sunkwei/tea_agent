@@ -215,6 +215,12 @@ def _cleanup_old_events(storage) -> None:
             logger.info(f"[InterruptionKnowledge] 清理过期打断事件 {deleted} 条 (keep_days={keep_days})")
     except Exception:
         logger.exception("cleanup old interruption events failed")
+    # append-only 会话事件日志同样设置保留窗口（默认 90 天），防无界增长
+    try:
+        if hasattr(storage, "events") and hasattr(storage.events, "cleanup_old_events"):
+            storage.events.cleanup_old_events(keep_days=90)
+    except Exception:
+        logger.exception("cleanup old session_events failed")
 
 
 def start_interruption_analyzer(

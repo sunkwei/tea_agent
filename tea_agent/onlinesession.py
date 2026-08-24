@@ -716,12 +716,29 @@ logger = logging.getLogger("session.tool")
 
 # ── 模块级纯函数（原 session_tools_builder）──
 
-# ESSENTIAL_TOOLS 已废弃，保留仅为兼容性
+# 核心工具集：任何任务都可能需要的常驻原语。
+# 当意图分析（未来）给出 required_tools 时，暴露 = 核心集 + 意图集，
+# 保证关键能力永不缺席，同时大幅缩小工具尾部（缓存未命中区）。
+CORE_TOOLS = [
+    "toolkit_exec", "toolkit_file", "toolkit_edit", "toolkit_diff",
+    "toolkit_search", "toolkit_lsp", "toolkit_question",
+    "toolkit_todo", "toolkit_plan", "toolkit_memory", "toolkit_kb",
+    "toolkit_subagent", "toolkit_subagent_msg",
+    "toolkit_config", "toolkit_mode",
+    "toolkit_save", "toolkit_reload", "toolkit_rollback", "toolkit_list_versions",
+]
 
 
 def filter_tools(tools: list, tool_filter: list = None) -> list:
-    """工具过滤已禁用，返回全部工具。自由奔放！"""
-    return tools
+    """按需过滤工具集：核心集常驻，tool_filter 指定时追加意图命中的工具。
+
+    意图分析未提供 required_tools（当前 analyze_intent 恒返回 None）时，
+    返回全部工具（保持既有行为）；提供时缩小工具集以降低每请求 token 成本。
+    """
+    if not tool_filter:
+        return tools
+    wanted = set(tool_filter) | set(CORE_TOOLS)
+    return [t for t in tools if t.get("function", {}).get("name") in wanted]
 
 
 def has_tool(tools: list, name: str) -> bool:
@@ -745,8 +762,14 @@ class ToolComponent(SessionComponent):
             logger.warning("toolkit not set, cannot build tool list")
             return tools
 
-        for _name, meta in self.ctx.toolkit.meta_map.items():
-            tools.append(meta)
+        # 仅暴露 LLM 可见工具（排除 harness_schema/export_last_pdf 等人类/外部消费者工具），
+        # 名称排序保证工具 Schema 顺序稳定（DeepSeek 前缀缓存命中前提）。
+        from tea_agent.tlk import llm_tool_names
+
+        for name in llm_tool_names(self.ctx.toolkit.meta_map.keys()):
+            meta = self.ctx.toolkit.meta_map.get(name)
+            if meta:
+                tools.append(meta)
         return tools
 
     def execute_tool_call(self, call) -> tuple[str, str, str]:

@@ -37,6 +37,25 @@ logger = logging.getLogger("toolkit")
 # 历史命名 _toolkit_ 已废弃；新代码请使用 tlk.toolkit。
 toolkit = None
 
+# 不暴露给 LLM 的工具（供人类/服务器/外部消费者使用，注册但不出现在 tool 列表）：
+# - toolkit_harness_schema: 机器可读能力清单，消费方是 MCP/CI，不是 Agent 自身
+# - toolkit_export_last_pdf: 重型 PDF 导出，消费方是人（server 仍直接 import 其函数）
+LLM_TOOL_EXCLUDES = {
+    "toolkit_harness_schema",
+    "toolkit_export_last_pdf",
+}
+
+
+def llm_tool_names(func_map_keys) -> list[str]:
+    """返回应暴露给 LLM 的工具名列表（排序稳定，供 build_tools 使用）。
+
+    排序保证工具 JSON Schema 顺序跨进程稳定——这是 DeepSeek 前缀缓存命中的前提。
+    """
+    return sorted(
+        k for k in func_map_keys
+        if k.startswith("toolkit_") and k not in LLM_TOOL_EXCLUDES
+    )
+
 
 def meta_toolkit_reload():
     """Meta toolkit reload."""
@@ -258,17 +277,18 @@ def _auto_generate_skill_doc(name: str, meta: dict, pycode: str, version: str, t
 class Toolkit:
     """动态工具加载器 — 管理 75+ 内置工具，支持运行时热加载和版本回滚。"""
     _CACHE_TTL = 30  # 默认缓存 30 秒
-    _CACHE_BLACKLIST = {
-        # 有外部副作用的工具不缓存
-        'toolkit_exec', 'toolkit_self_evolve', 'toolkit_save',
-        'toolkit_build', 'toolkit_release_version',
-        'toolkit_pkg', 'toolkit_memory', 'toolkit_kb', 'toolkit_reflection',
-        'toolkit_proactive', 'toolkit_dump_topic',
-        'toolkit_mode', 'toolkit_prompt_evolve', 'toolkit_input',
-        'toolkit_notify', 'toolkit_run_tests', 'toolkit_toggle_reasoning',
-        'toolkit_set_topic_title', 'toolkit_sudo_gui', 'toolkit_git_push_all_remotes',
-        'toolkit_git_commit',
-        'toolkit_reload',  # reload 必须真实执行，不能缓存
+    # 工具结果缓存改为**白名单**：仅缓存纯函数（只读、无副作用、30s 内结果可视为不变）。
+    # 其余工具一律真实执行——旧黑名单制（默认全缓存）会让 question/todo/screenshot/ocr/
+    # clipboard/scheduler 等副作用或时间敏感工具在 TTL 内返回陈旧结果（如 question 重复
+    # 返回第一次的答案、screenshot 拿到 30s 前的屏幕）。
+    _CACHE_WHITELIST = {
+        'toolkit_file',          # read/list（write 单独绕过）
+        'toolkit_lsp',           # 静态代码分析（jedi/ruff）
+        'toolkit_search',        # 只读搜索（web/code）
+        'toolkit_query_chat_history',  # 只读 DB 查询
+        'toolkit_list_provider_models',  # 只读 API 查询
+        'toolkit_eval_loop',     # 确定性规则评分（无 LLM）
+        'toolkit_task_resume',   # 只读状态检查
     }
 
     def __init__(self, tool_dir=None):
@@ -296,9 +316,9 @@ class Toolkit:
     def call_tool(self, func_name: str, **kwargs):
         """带缓存的工具调用代理。
 
-        对非黑名单工具缓存结果，TTL 默认 30 秒。
+        仅对**白名单**纯函数缓存结果，TTL 默认 30 秒。
         相同工具+相同参数在 TTL 内重复调用直接返回缓存结果。
-        用户通过 toolkit_save 创建的工具默认不缓存。
+        用户通过 toolkit_save 创建的工具一律不缓存。
 
         Args:
             func_name: 工具函数名
@@ -307,8 +327,8 @@ class Toolkit:
         Returns:
             工具函数返回值
         """
-        # 黑名单 + 用户创建的工具不缓存
-        if func_name in self._CACHE_BLACKLIST or func_name in self._user_created_tools:
+        # 白名单之外 + 用户创建的工具不缓存（真实执行）
+        if func_name not in self._CACHE_WHITELIST or func_name in self._user_created_tools:
             if func_name not in self.func_map:
                 raise KeyError(f"Unknown tool: {func_name}")
             return self.func_map[func_name](**kwargs)
@@ -438,7 +458,9 @@ class Toolkit:
         temp_metas = {}
 
         for source, d in dirs_to_load:
-            for filename in os.listdir(d):
+            # 排序遍历：工具 JSON Schema 的顺序是 DeepSeek 前缀缓存的一部分，
+            # os.listdir 返回文件系统顺序（跨进程不稳定），必须排序保证逐字节稳定。
+            for filename in sorted(os.listdir(d)):
                 if not (filename.endswith(".py") and filename.startswith("toolkit_")):
                     continue
 

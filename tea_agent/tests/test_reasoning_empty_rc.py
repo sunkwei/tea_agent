@@ -10,7 +10,8 @@ anything-llm #5683、langchain #35094 等生态证据）。
 本测试锁定修复后的行为：
 1. build_api_messages 对「字段存在但为空串」的 tool_calls 消息不再误告警（空串是
    模型返回的合法值，必须原样回传；只有字段缺失才是 400 风险）
-2. build_api_messages 对「字段缺失」的 tool_calls 消息仍然告警（定位根因）
+2. build_api_messages 对「字段缺失」的 tool_calls 消息**自动补空串**（字段缺失即
+   触发 400 "must be passed back"；补空串满足"字段存在"，杜绝 400 且不再告警）
 3. rounds 收集器 / lite 会话构建器同样保留空串 RC 字段（DB 回放一致）
 """
 import logging
@@ -86,14 +87,17 @@ class TestBuildApiMessagesDefensiveCheck:
         assert tc["reasoning_content"] == ""    # 空串原样回传
         assert _warnings(caplog) == []
 
-    def test_missing_rc_still_warns(self, caplog):
-        """字段缺失 → 400 风险，仍然告警以定位根因。"""
+    def test_missing_rc_auto_filled(self, caplog):
+        """字段缺失 → 自动补空串（杜绝 400），不再告警（DeepSeek V4 字段缺失即 400）。"""
         ctx, sess = _make_session()
         sess.add_user_message("执行工具")
         ctx.messages.append(_tool_call_msg(rc=None))
         with caplog.at_level(logging.WARNING):
-            build_api_messages(ctx, "测试")
-        assert len(_warnings(caplog)) == 1
+            msgs = build_api_messages(ctx, "测试")
+        tc = [m for m in msgs if m.get("role") == "assistant" and m.get("tool_calls")][0]
+        assert "reasoning_content" in tc       # 字段自动补全
+        assert tc["reasoning_content"] == ""   # 空串（满足"字段存在"）
+        assert _warnings(caplog) == []         # 已修复 → 不再告警
 
     def test_non_reasoning_model_no_warning(self, caplog):
         """supports_reasoning=False（普通模型）时不做该校验，不告警。"""

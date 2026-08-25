@@ -33,7 +33,7 @@ from tea_agent.tool_hooks import tool_hooks
 
 logger = logging.getLogger("session")
 
-
+_CHUNK_FLUSH_CHARS = 128
 # 模块级函数
 
 

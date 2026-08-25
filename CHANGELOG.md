@@ -1,6 +1,16 @@
 # Changelog
 
 
+## [0.15.2] - 2026-08-25
+### Bug Fixes
+- fix: DeepSeek V4 thinking 模式 400 「reasoning_content must be passed back」根治
+  - build_api_messages：所有缺失 reasoning_content 字段的 assistant 消息（含 tool_calls）统一补空串，
+    原实现仅补普通 assistant、对 tool_calls 消息只告警照发 → 严格端点直接 400
+  - add_assistant_message：`if reasoning:` 改为 `if reasoning is not None:`，空串 RC 不再因 falsy 误删字段
+  - sync: 同步修复已安装的 site-packages 版本（venv_work 0.15.2），立即生效
+- docs: DEEPSEEK_REASONING_SUPPORT.md 修正「跨 API 会话 RC 失效」错误假设 —
+  官方要求所有携带 tools 的后续轮次永久回传 RC（实测确认，2026-08-25）
+
 ## [0.15.1] - 2026-08-16
 ### Features
 - feat: 自进化三闭环 — A(自主造工具) / B(可观测审查) / C(自适应修剪)，进化流水线接入 Evaluate 评分闭环（keep-or-rollback）

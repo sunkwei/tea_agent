@@ -1044,10 +1044,15 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             if n_chars > tool_prune_threshold:
                 msg_copy["content"] = f"[工具结果已省略: {n_chars} 字符]"
 
-        # 缓存友好/兼容：supports_reasoning 时为普通 assistant 消息补空 reasoning_content
-        # 字段。注意：含 tool_calls 的 assistant 消息**不**补空值——DeepSeek V4 要求其
-        # reasoning_content 必须完整回传，凭空补 "" 等价于"未回传"，会触发 400。
-        if (msg_copy["role"] == "assistant" and not msg_copy.get("tool_calls")
+        # DeepSeek V4 thinking 模式硬性要求：携带 tools 的请求中，**所有** assistant
+        # 消息必须携带 reasoning_content 字段（值可为空字符串）——V4 部分 tool_call
+        # 轮次返回 reasoning_content=""，空串同样必须原样回传；字段缺失即触发
+        # 400 "The reasoning_content in the thinking mode must be passed back to the API"。
+        # 因此对缺失该字段的 assistant 消息（无论是否含 tool_calls）统一补空串：
+        # - 无 tool_calls 的普通 assistant：补空串被 API 忽略，无害（官方文档）；
+        # - 含 tool_calls 的 assistant：若 RC 因历史数据残缺/链路丢失而缺失，补空串
+        #   至少满足"字段存在"；完整 RC 的保留由源头保证（tool_loop_runner 无条件存储）。
+        if (msg_copy["role"] == "assistant"
                 and context.supports_reasoning
                 and "reasoning_content" not in msg_copy):
             msg_copy["reasoning_content"] = ""

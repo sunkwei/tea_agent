@@ -3,8 +3,15 @@
 ## 核心问题
 
 DeepSeek 推理模型在 thinking 模式下返回 `reasoning_content`（思维链内容）。API 要求：
-- **同一 API 会话内**：后续请求必须将前一轮的 `reasoning_content` 原样传回
-- **跨 API 会话**：上一会话的 `reasoning_content` 在新会话中无效，传回会导致 400 错误
+- **携带 tools 的所有请求**：只要某轮 assistant 消息产出过 `reasoning_content`，
+  后续**所有**带 tools 的用户交互轮次都必须将其**逐字完整回传**（官方文档 Tool Calls 章节），
+  **即使该轮未执行工具调用**（"all subsequent user interaction turns — even if the
+  model did not perform a tool call in that turn"）
+- **字段缺失 / 清空 / 截断均触发 400**；空字符串 `""` 是模型返回的合法值，
+  同样必须保留字段回传（2026-08 实测确认，见 `test_reasoning_empty_rc.py`）
+- ~~跨 API 会话失效~~（错误假设，2026-08-25 实测修正）：所谓"跨会话失效"源于社区
+  客户端把旧会话 RC 删除/截断导致的服务端 400。只要消息仍在 messages 列表中，
+  RC 就必须一直存在并原样回传——**保留所有 assistant 的 RC 是正确且必须的**。
 
 > Error code: 400 - {'error': {'message': 'The reasoning_content in the thinking mode must be passed back to the API.'}}
 
@@ -49,11 +56,30 @@ reasoning_content 的生命周期 = 一个 `chat_stream` 调用（即一个 API 
    未回传 → 400。现仅对无 tool_calls 的普通 assistant 消息补空字段。
    另新增防御性校验：发送前扫描含 `tool_calls` 但缺少非空 RC 的消息并告警。
 
+### 本次修复要点（2026-08-25：统一字段补全 + 空串保留）
+
+官方文档（Thinking Mode → Tool Calls）明确定义了 400 触发条件为**字段缺失**；
+实测确认 V4 返回的空串 RC **是合法字段值**，必须保留。据此修正两处：
+
+1. **`_build_api_messages`：所有缺失 RC 字段的 assistant 消息统一补空串**
+   （`history_builder.py`）。原实现只给"无 tool_calls 的普通 assistant"补 "",
+   对含 `tool_calls` 的消息缺 RC 时**仅告警、照发** → 严格端点直接 400。
+   现改为：无论是否含 tool_calls，只要 `supports_reasoning` 且缺失字段就补 ""。
+   - 无 tool_calls 的 assistant：补空串被 API 忽略，无害
+   - 含 tool_calls 的 assistant：数据残缺时补 "" 至少满足"字段存在"；
+     完整 RC 由源头（tool_loop_runner 无条件存储）保证
+2. **`add_assistant_message`：`if reasoning:` → `if reasoning is not None:`**
+   （`basesession.py`）。空串 RC 因 falsy 被误删字段，现改为保留字段原样入库。
+3. **防御校验降级**：原"缺 RC 只告警"现已不可能发生（已被统一补全兜底），
+   对应测试 `test_missing_rc_still_warns` → `test_missing_rc_auto_filled`。
+
 ### 原理
 
-DeepSeek API 是**无状态**的，但 reasoning_content 是**会话内状态**：
+DeepSeek API 对 messages 列表做**上下文连续性校验**：
 - 同一 `chat_stream` 内可能多次调用 API（tool_loop），reasoning_content 必须回传
-- 不同 `chat_stream` 是新 API 会话，旧的 reasoning_content 已失效
+- 不同 `chat_stream`（新一轮用户消息）同样必须携带历史 assistant 的
+  reasoning_content 回传——官方要求 "all subsequent user interaction turns"
+  （2026-08-25 实测修正：此前误以为跨会话失效；只要消息仍在列表中就须保留）
 
 ## 实现
 

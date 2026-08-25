@@ -292,9 +292,12 @@ class BaseChatSession(ABC):
         在后续请求中二次改写已发送的前缀消息。
         """
         entry = {"role": "assistant", "content": self._cap_message_text(msg)}
-        if reasoning:
+        if reasoning is not None:
             # DeepSeek V4 思考模式：带 tools 的请求必须完整回传 reasoning_content，
             # 截断/改写会触发 400 ("must be passed back")。因此此处保持原样入库。
+            # 注意：V4 部分 tool_call 轮次返回 reasoning_content=""（空字符串），
+            # 空串同样必须保留字段原样回传——`if reasoning:` 会因空串 falsy 而
+            # 误删该字段，故用 `is not None` 判断。
             entry["reasoning_content"] = reasoning
         self.messages.append(entry)
 

@@ -3753,4 +3753,25 @@ async function deleteProvider() {
   }
 }
 
+// ── 导出到 window（HTML 内联 onclick/oninput 需要全局可见） ──
+// 注：IIFE 内 function/let 声明不在全局作用域；不导出则
+// onclick="renderProviders()" 等全部 ReferenceError，控件失效。
+window._mmStatus = _mmStatus;
+window.refreshCurrentModel = refreshCurrentModel;
+window.loadProviders = loadProviders;
+window.renderProviders = renderProviders;
+window.selectProvider = selectProvider;
+window.loadModels = loadModels;
+window.selectModel = selectModel;
+window.showEditProviderForm = showEditProviderForm;
+window.showAddProviderForm = showAddProviderForm;
+window.hideAddProviderForm = hideAddProviderForm;
+window.submitProvider = submitProvider;
+window.applyProvider = applyProvider;
+window.testConnection = testConnection;
+window.deleteProvider = deleteProvider;
+// 变量用 getter 导出（let 重新赋值不改变 window 属性引用，getter 保证实时读取）
+Object.defineProperty(window, 'mmSelectedProvider', { get: () => mmSelectedProvider });
+Object.defineProperty(window, 'mmSelectedModel', { get: () => mmSelectedModel });
+
 })();

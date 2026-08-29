@@ -124,6 +124,9 @@ class ProviderService:
         self._custom_cache: dict[str, dict] | None = None
         self._custom_mtime: float = 0.0
         self._lock = threading.Lock()
+        # 模型查询结果 TTL 缓存: {provider:api_key -> (timestamp, result)}
+        self._models_cache: dict[str, tuple[float, dict]] = {}
+        self._models_cache_ttl: float = 300.0  # 5 分钟
 
     # ── 自定义供应商持久化 ──────────────────────────────────────
 
@@ -361,11 +364,20 @@ class ProviderService:
 
     # ── 模型查询 ──────────────────────────────────────────────
 
-    def query_models(self, name: str, api_key: str = "", refresh: bool = True) -> dict:
+    def query_models(self, name: str, api_key: str = "", refresh: bool = False) -> dict:
         """查询某提供商的可用模型。
 
         实时调用 {api_url}/v1/models（需 api_key）；失败或未提供 key 时
         自动 fallback 到静态 models 列表，响应标注 source: live/static。
+
+        Args:
+            name: 提供商名称（内置或自定义）
+            api_key: API Key（自定义供应商通常必需）
+            refresh: True=强制实时查询并更新缓存；
+                     False=5 分钟内优先返回缓存，过期自动实时。
+
+        响应字段: provider / source(live|static|cache) / models / total /
+                  endpoint / needs_key / error_hint / cached_at
         """
         provider = self.get_provider(name)
         if provider is None:
@@ -385,8 +397,17 @@ class ProviderService:
                 result["needs_key"] = True
                 result["error_hint"] = "custom provider needs api_key to query live models"
             return result
+
+        cache_key = f"{provider['name']}:{api_key}"
+        now = time.time()
         if not refresh:
-            return result
+            cached = self._models_cache.get(cache_key)
+            if cached and now - cached[0] < self._models_cache_ttl:
+                hit = dict(cached[1])
+                hit["source"] = "cache"
+                hit["cached_at"] = cached[0]
+                return hit
+
         live = self._query_live(api_url, api_key)
         if live.get("ok"):
             result["source"] = "live"
@@ -394,6 +415,7 @@ class ProviderService:
             result["total"] = live["total"]
             result["endpoint"] = live["endpoint"]
             result.pop("error_hint", None)
+            self._models_cache[cache_key] = (now, result)
         else:
             result["error_hint"] = live.get("error", "live query failed, showing static list")
         return result

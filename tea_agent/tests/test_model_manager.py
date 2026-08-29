@@ -223,14 +223,51 @@ def test_query_models_live_success(svc, monkeypatch):
     assert "error_hint" not in result
 
 
-def test_query_models_refresh_false(svc, monkeypatch):
+def test_query_models_refresh_false_cache_hit(svc, monkeypatch):
+    """refresh=False 且缓存命中时不触发实时查询，返回 cache 标注。"""
     called = []
     def fake_live(api_url, api_key):
         called.append(api_url)
-        return {"ok": True, "models": [], "total": 0, "endpoint": ""}
+        return {"ok": True, "models": [{"id": "a"}], "total": 1, "endpoint": ""}
     monkeypatch.setattr(svc, "_query_live", fake_live)
-    svc.query_models("DeepSeek", api_key="sk-test", refresh=False)
-    assert called == []  # refresh=False 不触发实时查询
+    svc.query_models("DeepSeek", api_key="sk-test", refresh=True)  # 首次实时写缓存
+    assert len(called) == 1
+    result = svc.query_models("DeepSeek", api_key="sk-test", refresh=False)  # 缓存命中
+    assert len(called) == 1  # 未再实时查询
+    assert result["source"] == "cache"
+    assert result["total"] == 1
+    assert "cached_at" in result
+
+
+def test_query_models_cache_expired(svc, monkeypatch):
+    """缓存超过 TTL 后 refresh=False 自动重新实时查询。"""
+    called = []
+    def fake_live(api_url, api_key):
+        called.append(api_url)
+        return {"ok": True, "models": [{"id": "a"}], "total": 1, "endpoint": ""}
+    monkeypatch.setattr(svc, "_query_live", fake_live)
+    svc.query_models("DeepSeek", api_key="sk-test", refresh=True)
+    assert len(called) == 1
+    # 把缓存时间戳推到过期（TTL=300s 之前）
+    import time as _t
+    key = "DeepSeek:sk-test"
+    ts, _ = svc._models_cache[key]
+    svc._models_cache[key] = (ts - svc._models_cache_ttl - 1, _)
+    result = svc.query_models("DeepSeek", api_key="sk-test", refresh=False)
+    assert len(called) == 2  # 缓存过期 → 重新实时
+    assert result["source"] == "live"
+
+
+def test_query_models_refresh_force(svc, monkeypatch):
+    """refresh=True 即使有缓存也强制实时查询并更新缓存。"""
+    called = []
+    def fake_live(api_url, api_key):
+        called.append(api_url)
+        return {"ok": True, "models": [{"id": "a"}], "total": 1, "endpoint": ""}
+    monkeypatch.setattr(svc, "_query_live", fake_live)
+    svc.query_models("DeepSeek", api_key="sk-test", refresh=True)
+    svc.query_models("DeepSeek", api_key="sk-test", refresh=True)  # 强制刷新
+    assert len(called) == 2
 
 
 # ── 配置应用 ─────────────────────────────────────────────────

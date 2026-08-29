@@ -3443,6 +3443,7 @@ window.piCompact = function() {
 let mmProviders = [];
 let mmSelectedProvider = '';
 let mmSelectedModel = '';
+let mmEditingProvider = null;  // null=新增模式；字符串=正在编辑的提供商名
 
 function _mmStatus(msg, type) {
   const el = $('mm-status');
@@ -3528,12 +3529,37 @@ async function selectProvider(name) {
   mmSelectedModel = '';
   renderProviders();
   const p = mmProviders.find(x => x.name === name);
-  // 回填能力/删除按钮
+  // 回填能力/编辑/删除按钮
   const cap = $('mm-cap');
   if (cap) cap.textContent = p ? (p.description || '') + (p.supports_vision || p.supports_thinking ? ' | 能力: ' + [p.supports_vision && '视觉', p.supports_thinking && '思考'].filter(Boolean).join('+') : '') : '';
+  const isCustom = !!(p && p.source === 'custom');
   const del = $('mm-del-btn');
-  if (del) del.style.display = (p && p.source === 'custom') ? 'block' : 'none';
+  if (del) del.style.display = isCustom ? 'block' : 'none';
+  const editBtn = $('mm-edit-btn');
+  if (editBtn) editBtn.style.display = isCustom ? 'block' : 'none';
   await loadModels(name, false);
+}
+
+// 编辑自定义供应商（复用新增表单）
+function showEditProviderForm(name) {
+  const p = mmProviders.find(x => x.name === name);
+  if (!p) return;
+  mmEditingProvider = name;
+  const form = $('mm-add-form');
+  if (form) form.style.display = 'block';
+  const title = $('mm-add-title');
+  if (title) title.textContent = '✏️ 编辑自定义供应商: ' + name;
+  const nameInput = $('mm-add-name');
+  if (nameInput) nameInput.disabled = true;
+  $('mm-add-name').value = name;
+  $('mm-add-url').value = p.api_url || '';
+  $('mm-add-default').value = p.default_model || '';
+  $('mm-add-models').value = (p.models || []).join(', ');
+  $('mm-add-vision').checked = !!p.supports_vision;
+  $('mm-add-thinking').checked = !!p.supports_thinking;
+  $('mm-add-desc').value = p.description || '';
+  const btn = $('mm-add-save');
+  if (btn) btn.textContent = '💾 保存修改';
 }
 
 async function loadModels(name, refresh) {
@@ -3548,9 +3574,14 @@ async function loadModels(name, refresh) {
     if (!r.ok) throw new Error((await r.json()).error || 'HTTP ' + r.status);
     const d = await r.json();
     if (hint) {
-      const src = d.source === 'live' ? '实时' : '静态';
-      hint.textContent = d.source === 'live' ? '🟢 实时查询 (' + (d.endpoint || '') + ')' :
-        (d.error_hint ? '⚠️ ' + d.error_hint : '📋 内置静态列表' + (d.needs_key ? '（填 key 后可实时查询）' : ''));
+      if (d.source === 'live') {
+        hint.textContent = '🟢 实时查询 (' + (d.endpoint || '') + ')';
+      } else if (d.source === 'cache') {
+        hint.textContent = '🕐 缓存 (' + (d.total || 0) + ' 个模型，5 分钟内有效) — 点「🔄 实时刷新」获取最新';
+      } else {
+        hint.textContent = d.error_hint ? '⚠️ ' + d.error_hint :
+          '📋 内置静态列表' + (d.needs_key ? '（填 key 后可实时查询）' : '');
+      }
     }
     if (!d.models || !d.models.length) {
       box.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim,#888)">暂无模型 — 点击「🔄 实时刷新」或填 key 后查询</div>';
@@ -3590,9 +3621,19 @@ function selectModel(id) {
 }
 
 function showAddProviderForm() {
+  mmEditingProvider = null;
+  const title = $('mm-add-title');
+  if (title) title.textContent = '➕ 新增自定义供应商';
+  const nameInput = $('mm-add-name');
+  if (nameInput) nameInput.disabled = false;
+  const btn = $('mm-add-save');
+  if (btn) btn.textContent = '💾 保存新增';
   $('mm-add-form').style.display = 'block';
 }
 function hideAddProviderForm() {
+  mmEditingProvider = null;
+  const nameInput = $('mm-add-name');
+  if (nameInput) nameInput.disabled = false;
   $('mm-add-form').style.display = 'none';
 }
 
@@ -3613,15 +3654,17 @@ async function submitProvider() {
     description: ($('mm-add-desc').value || '').trim(),
   };
   try {
-    const r = await fetch('/api/providers', {
-      method: 'POST',
+    const editing = mmEditingProvider;
+    const url = editing ? '/api/providers/' + encodeURIComponent(editing) : '/api/providers';
+    const r = await fetch(url, {
+      method: editing ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
     hideAddProviderForm();
-    _mmStatus('✅ 自定义供应商 ' + name + ' 已保存', 'success');
+    _mmStatus(editing ? '✅ 自定义供应商 ' + editing + ' 已更新' : '✅ 自定义供应商 ' + name + ' 已保存', 'success');
     // 清空表单
     ['mm-add-name', 'mm-add-url', 'mm-add-default', 'mm-add-models', 'mm-add-desc'].forEach(id => { $(id).value = ''; });
     $('mm-add-vision').checked = false;

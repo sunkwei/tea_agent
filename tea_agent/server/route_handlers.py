@@ -1730,6 +1730,74 @@ OPENAPI_SPEC = {
         "/v1/config/switch": {"post": {
             "summary": "Switch config", "tags": ["Config"],
             "responses": {"200": {"description": "OK"}}}},
+        "/api/providers": {"get": {
+            "summary": "List providers (builtin + custom)", "tags": ["Model Management"],
+            "responses": {"200": {"description": "Provider list with source/capabilities/active"}}},
+            "post": {
+                "summary": "Add custom provider", "tags": ["Model Management"],
+                "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                    "type": "object",
+                    "required": ["name", "api_url", "default_model"],
+                    "properties": {
+                        "name": {"type": "string", "description": "2-32 chars, [A-Za-z0-9_-]"},
+                        "api_url": {"type": "string"},
+                        "default_model": {"type": "string"},
+                        "models": {"type": "array", "items": {"type": "string"}},
+                        "supports_thinking": {"type": "boolean"},
+                        "supports_vision": {"type": "boolean"},
+                        "description": {"type": "string"},
+                    }}}}},
+                "responses": {"200": {"description": "Created"}, "409": {"description": "Duplicate name"}}}},
+        "/api/providers/{name}": {"put": {
+            "summary": "Update custom provider", "tags": ["Model Management"],
+            "parameters": [{"name": "name", "in": "path", "required": True,
+                            "schema": {"type": "string"}}],
+            "responses": {"200": {"description": "Updated"}, "403": {"description": "Builtin cannot be modified"},
+                          "404": {"description": "Not found"}}},
+            "delete": {
+                "summary": "Delete custom provider", "tags": ["Model Management"],
+                "parameters": [{"name": "name", "in": "path", "required": True,
+                                "schema": {"type": "string"}}],
+                "responses": {"200": {"description": "Deleted"}, "403": {"description": "Builtin cannot be deleted"}}}},
+        "/api/providers/{name}/models": {"get": {
+            "summary": "Query provider models (cache-first, live + static fallback)",
+            "tags": ["Model Management"],
+            "parameters": [
+                {"name": "name", "in": "path", "required": True, "schema": {"type": "string"}},
+                {"name": "refresh", "in": "query", "required": False,
+                 "schema": {"type": "boolean", "default": False},
+                 "description": "true=force live query"},
+                {"name": "api_key", "in": "query", "required": False,
+                 "schema": {"type": "string"}, "description": "for live query (custom provider)"}],
+            "responses": {"200": {"description": "Models (source: live|cache|static)"}}}},
+        "/api/providers/{name}/apply": {"post": {
+            "summary": "Apply provider to model config (one-click)", "tags": ["Model Management"],
+            "parameters": [{"name": "name", "in": "path", "required": True,
+                            "schema": {"type": "string"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                "type": "object",
+                "properties": {
+                    "api_key": {"type": "string"},
+                    "model": {"type": "string", "description": "defaults to provider default_model"},
+                    "role": {"type": "string", "enum": ["main", "cheap", "vision"], "default": "main"},
+                    "temperature": {"type": "number"},
+                    "max_tokens": {"type": "integer"},
+                    "top_p": {"type": "number"},
+                }}}}},
+            "responses": {"200": {"description": "Applied to config.yaml (main hot-swaps)"},
+                          "404": {"description": "Provider not found"}}}},
+        "/api/model/test": {"post": {
+            "summary": "Test connection (endpoint + key + model)", "tags": ["Model Management"],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                "type": "object",
+                "required": ["api_url", "api_key"],
+                "properties": {
+                    "api_url": {"type": "string"},
+                    "api_key": {"type": "string"},
+                    "model": {"type": "string"},
+                }}}}},
+            "responses": {"200": {"description": "Connection test result (latency_ms)"},
+                          "400": {"description": "Missing params"}}}},
     }
 }
 
@@ -1952,14 +2020,14 @@ async def handle_providers_list(request):
 
 
 async def handle_provider_models(request):
-    """GET /api/providers/{name}/models — 查询提供商可用模型（实时+静态 fallback）。
+    """GET /api/providers/{name}/models — 查询提供商可用模型（缓存优先，实时 fallback）。
 
     Query params:
-        refresh: true/false（默认 true；false 仅返回静态列表）
+        refresh: true=强制实时查询并更新缓存；false/缺省=5 分钟内优先返回缓存
         api_key: 可选，实时查询所需（自定义供应商必填）
     """
     name = request.path_params.get("name", "")
-    refresh = request.query_params.get("refresh", "true").lower() in ("1", "true", "yes")
+    refresh = request.query_params.get("refresh", "false").lower() in ("1", "true", "yes")
     api_key = request.query_params.get("api_key", "") or ""
     try:
         result = _model_service().query_models(name, api_key=api_key, refresh=refresh)

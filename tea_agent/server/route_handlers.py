@@ -2036,13 +2036,19 @@ async def handle_provider_apply(request):
             max_context_tokens=body.get("max_context_tokens"),
             options=body.get("options"),
         )
-        # 热生效：main 角色重建会话使新模型立即生效
-        # （api_key 留空时 switch_model 内部复用运行中 Agent 的现有 key）
+        # 热生效：main 角色重建会话使新模型立即生效。
+        # api_key 留空时回退到运行中 Agent 的现有 key（与 /api/model 语义一致），
+        # 避免空 key 覆盖内存配置。
         if result.get("ok") and role == "main":
             try:
-                get_server().switch_model(
-                    api_key, result["api_url"], result["model"]
-                )
+                server = get_server()
+                agent = server._agent if hasattr(server, "_agent") else None
+                current_key = ""
+                try:
+                    current_key = agent._cfg.main_model.api_key if agent else ""
+                except Exception:
+                    current_key = ""
+                server.switch_model(api_key or current_key, result["api_url"], result["model"])
             except Exception as e:
                 logger.warning("hot-switch after apply failed (config saved): %s", e)
         return JSONResponse(result)

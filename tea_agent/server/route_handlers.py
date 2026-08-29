@@ -1137,7 +1137,7 @@ async def handle_web_model_switch(request):
     """POST /api/model - hot-switch model at runtime."""
     body = await request.json()
     server = get_server()
-    agent = server._agent
+    agent = getattr(server, "_agent", None) or server.get_agent()
     current_key = agent._cfg.main_model.api_key if agent else ""
 
     api_key = (body.get("api_key") or current_key or "").strip()
@@ -1179,7 +1179,8 @@ async def handle_web_model_switch(request):
     try:
         server.switch_model(
             api_key, api_url, model_name,
-            cheap_api_key, cheap_api_url, cheap_model_name,
+            cheap_api_key=cheap_api_key, cheap_api_url=cheap_api_url,
+            cheap_model_name=cheap_model_name,
             temperature=temperature, max_tokens=max_tokens,
             top_p=top_p, max_context_tokens=max_context_tokens,
             options=options,
@@ -1187,6 +1188,19 @@ async def handle_web_model_switch(request):
             cheap_top_p=cheap_top_p, cheap_max_context_tokens=cheap_max_context_tokens,
             cheap_options=cheap_options,
         )
+        # 落盘 + 失效配置缓存：switch_model 只改长驻 Agent 内存，
+        # Web 聊天走 create_session → config_cache，若不落盘+失效，
+        # 新会话仍读磁盘旧配置（热切换对 Web 聊天无效的根因）。
+        try:
+            from tea_agent.config import save_config
+            from .modules.agent_module import AgentModule
+
+            agent = getattr(server, "_agent", None) or server.get_agent()
+            if agent is not None:
+                save_config(agent._cfg, server.get_config_path())
+            AgentModule.invalidate_config_cache(server.get_config_path())
+        except Exception as e:
+            logger.warning("persist/invalidate after model switch failed: %s", e)
         masked_key = (api_key[:6] + "..." + api_key[-4:]) if len(api_key) > 12 else "***"
         result = {"ok": True, "model": model_name, "api_url": api_url,
                   "api_key_masked": masked_key}
@@ -2104,7 +2118,16 @@ async def handle_provider_apply(request):
             max_context_tokens=body.get("max_context_tokens"),
             options=body.get("options"),
         )
-        # 热生效：main 角色重建会话使新模型立即生效。
+        # 配置已落盘 → 必须失效会话配置缓存，否则 create_session
+        # 命中启动时的旧配置，聊天会话仍用老模型（热生效失效的根因）。
+        # 无论 role 都要失效（cheap/vision 的新会话同样读取缓存）。
+        if result.get("ok"):
+            try:
+                from .modules.agent_module import AgentModule
+                AgentModule.invalidate_config_cache(get_server().get_config_path())
+            except Exception as e:
+                logger.warning("invalidate config cache failed: %s", e)
+        # 热生效：main 角色重建长驻 Agent 会话使新模型立即生效。
         # api_key 留空时回退到运行中 Agent 的现有 key（与 /api/model 语义一致），
         # 避免空 key 覆盖内存配置。
         if result.get("ok") and role == "main":

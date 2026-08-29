@@ -344,13 +344,14 @@
       </div>
       <div id="mm-cap" style="font-size:11px;color:var(--text-dim,#888);margin:6px 0"></div>
       <button class="btn btn-p" style="width:100%;margin-top:10px" onclick="applyProvider()">✔ 一键应用</button>
+      <button id="mm-edit-btn" class="btn" style="width:100%;margin-top:6px;display:none;background:#f0ad4e;color:#fff" onclick="showEditProviderForm(mmSelectedProvider)">✏️ 编辑自定义供应商</button>
       <button id="mm-del-btn" class="btn" style="width:100%;margin-top:6px;display:none;background:#e74c3c;color:#fff" onclick="deleteProvider()">🗑 删除自定义供应商</button>
     </div>
   </div>
 
   <!-- 新增自定义供应商表单 -->
   <div id="mm-add-form" style="display:none;margin-top:12px;padding:12px;border:1px dashed var(--border,#ddd);border-radius:10px">
-    <div class="modal-section-title">➕ 新增自定义供应商</div>
+    <div class="modal-section-title" id="mm-add-title">➕ 新增自定义供应商</div>
     <div class="form-row">
       <div class="form-group"><label>名称（唯一）</label><input id="mm-add-name" placeholder="My-Gateway"></div>
       <div class="form-group"><label>API URL</label><input id="mm-add-url" placeholder="https://my-gateway.example.com/v1"></div>
@@ -368,7 +369,7 @@
     </div>
     <div class="modal-actions" style="margin-top:8px">
       <button class="btn btn-g" onclick="hideAddProviderForm()">取消</button>
-      <button class="btn btn-p" onclick="submitProvider()">✓ 保存供应商</button>
+      <button id="mm-add-save" class="btn btn-p" onclick="submitProvider()">💾 保存新增</button>
     </div>
   </div>
 </div></div>

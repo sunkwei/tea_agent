@@ -550,6 +550,8 @@ def execute_tool_loop(session, context: dict) -> dict:
                 break
             except Exception as e:
                 err_str = str(e)
+                _MAX_RETRIES = 3
+                _RETRY_BASE_DELAY = 5
                 if "429" in err_str and _retry < _MAX_RETRIES:
                     wait_sec = _RETRY_BASE_DELAY * (2 ** _retry)
                     logger.warning(f"⚠️ API 429 速率限制，{wait_sec}s 后重试 ({_retry+1}/{_MAX_RETRIES})")

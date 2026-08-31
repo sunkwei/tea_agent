@@ -208,7 +208,7 @@ def normalize_tool_args(func_name: str, raw: str) -> str | None:
     s = raw.strip()
     try:
         json.loads(s)
-        return s  # 已是合法 JSON，原样返回（逐字节一致，前缀缓存友好）
+        return raw  # 已是合法 JSON，原样返回（逐字节一致，前缀缓存友好）
     except json.JSONDecodeError:
         pass
 

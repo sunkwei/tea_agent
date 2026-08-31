@@ -52,6 +52,52 @@ def _extract_api_error_detail(exc: Exception) -> str:
     return " | ".join(parts)
 
 
+def _is_rc_passed_back_error(err_str: str) -> bool:
+    """识别 DeepSeek thinking 模式 RC 回传 400。
+
+    错误签名（官方/社区一致）：`The reasoning_content in the thinking mode
+    must be passed back to the API.` 附带 invalid_request_error / 400。
+    err_str 是 str(exc)，SDK 通常把服务端 message 原样带出；同时兼容只含
+    message 片段的情况（部分代理网关只透传 message）。
+    """
+    if not err_str:
+        return False
+    return (
+        "reasoning_content" in err_str
+        and "passed back" in err_str
+        and "400" in err_str
+    )
+
+
+def _log_rc_diagnostic(session, api_messages: list[dict]) -> None:
+    """输出 400 现场诊断：逐条列出 assistant 消息的 RC 状态，定位哪条消息异常。
+
+    覆盖两类风险：
+    - 字段缺失（None）→ 发送前防御补全已兜底，但若仍出现说明补全门控未命中
+    - 值为空/异常 → 可能是值被改写/截断（如代理网关截断长思考），客户端无法还原
+    """
+    try:
+        lines = [f"  role=assistant 消息清单 (共 {len(api_messages)} 条):"]
+        for _i, _m in enumerate(api_messages):
+            if _m.get("role") != "assistant":
+                continue
+            rc = _m.get("reasoning_content")
+            _tc = bool(_m.get("tool_calls"))
+            _content = _m.get("content") or ""
+            if rc is None:
+                lines.append(
+                    f"  [{_i}] tool_calls={_tc} RC=缺失 content_len={len(_content) if isinstance(_content, str) else '?'}"
+                )
+            else:
+                lines.append(
+                    f"  [{_i}] tool_calls={_tc} RC_len={len(rc)}"
+                    f" RC_head={rc[:40]!r} content_len={len(_content) if isinstance(_content, str) else '?'}"
+                )
+        logger.warning("DeepSeek RC 回传 400 现场诊断:\n" + "\n".join(lines))
+    except Exception:
+        logger.warning("RC 400 现场诊断生成失败", exc_info=True)
+
+
 # ═══ 并行工具执行引擎 ═══════════════════════════════════
 
 class ParallelExecutor:
@@ -513,6 +559,10 @@ def execute_tool_loop(session, context: dict) -> dict:
     last_tool_names: list = []
     # 本轮全部调用过的工具名（去重保序），供 server 摘要输出
     all_tool_names: list[str] = []
+    # 本回合已触发过 RC 400 自愈（关闭 thinking 重试）。声明在 while 循环层，
+    # 使自愈后**所有**工具轮次（含后续 iteration）都显式带 disable_thinking；
+    # 与 ctx._rc400_recovery 内部兜底互为冗余，保证降级彻底生效。
+    rc_recovery_used = False
 
     while iterations < session.max_iterations + session._extra_iterations:
         if session.interrupted:
@@ -546,14 +596,15 @@ def execute_tool_loop(session, context: dict) -> dict:
                     max_tokens=eff.get("max_tokens"),
                     top_p=eff.get("top_p"),
                     request_timeout=120,
+                    disable_thinking=rc_recovery_used,
                 )
                 break
             except Exception as e:
                 err_str = str(e)
-                if "429" in err_str and _retry < _MAX_RETRIES:
-                    wait_sec = _RETRY_BASE_DELAY * (2 ** _retry)
-                    logger.warning(f"⚠️ API 429 速率限制，{wait_sec}s 后重试 ({_retry+1}/{_MAX_RETRIES})")
-                    callback(f"\n⚠️ 请求频率过高，{wait_sec}秒后自动重试 ({_retry+1}/{_MAX_RETRIES})...\n")
+                if "429" in err_str and _retry < max_retries:
+                    wait_sec = retry_base_delay * (2 ** _retry)
+                    logger.warning(f"⚠️ API 429 速率限制，{wait_sec}s 后重试 ({_retry+1}/{max_retries})")
+                    callback(f"\n⚠️ 请求频率过高，{wait_sec}秒后自动重试 ({_retry+1}/{max_retries})...\n")
                     time.sleep(wait_sec)
                     continue
                 if "image input" in err_str.lower() and session.context.supports_vision:
@@ -569,6 +620,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                             max_tokens=eff.get("max_tokens"),
                             top_p=eff.get("top_p"),
                             request_timeout=120,
+                            disable_thinking=rc_recovery_used,
                         )
                     except Exception as e2:
                         error_msg = f"API调用错误: {e2}"
@@ -580,6 +632,22 @@ def execute_tool_loop(session, context: dict) -> dict:
                         session.add_assistant_message(full_reply + error_msg)
                         session.tools_comp.collect_api_error_round(full_reply + error_msg)
                         return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": e2}
+                elif _is_rc_passed_back_error(err_str) and not rc_recovery_used:
+                    # DeepSeek thinking 模式 RC 回传 400 自愈：
+                    # 历史 assistant 消息的 reasoning_content 值一旦丢失/被改写，
+                    # 客户端无法凭空还原精确值，继续 thinking 会反复 400。
+                    # 策略：记录诊断 → 强制关闭 thinking 重试一次（DeepSeek 不再
+                    # 要求 RC 回传），并置 ctx._rc400_recovery 让本回合剩余请求
+                    # 全部降级；下一用户回合 reset_session_state 自动恢复。
+                    _log_rc_diagnostic(session, api_messages)
+                    rc_recovery_used = True
+                    session.context._rc400_recovery = True
+                    logger.warning(
+                        f"DeepSeek RC 回传 400 (iteration={iterations})："
+                        f"自动降级为无思考重试（本回合剩余请求保持 thinking 关闭）"
+                    )
+                    callback("\n⚠️ DeepSeek 思考模式 RC 校验失败，已自动降级为无思考模式重试…\n")
+                    continue
                 else:
                     error_msg = f"API调用错误: {e}"
                     logger.warning(
@@ -592,7 +660,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                     return {"full_reply": full_reply + error_msg, "used_tools": used_tools, "error": e}
                 break
         else:
-            error_msg = f"API调用错误: 429 速率限制，重试 {_MAX_RETRIES} 次后仍失败"
+            error_msg = f"API调用错误: 429 速率限制，重试 {max_retries} 次后仍失败"
             logger.warning(error_msg)
             callback(error_msg)
             session.add_assistant_message(full_reply + error_msg)
@@ -607,6 +675,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                 max_tokens=eff.get("max_tokens"),
                 top_p=eff.get("top_p"),
                 request_timeout=120,
+                disable_thinking=rc_recovery_used,
             ),
         )
         full_reply += content

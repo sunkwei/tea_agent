@@ -1,6 +1,30 @@
 # Changelog
 
 
+## [0.15.4] - 2026-08-28
+### Features
+- fix(cache): 动态上下文改为**追加到请求消息末尾**，对齐 DSH append-only 架构
+  - 原实现把技能/TODO/记忆动态消息插在 L1 历史**之前**（`_l1_start`），内容随
+    用户消息边界重算 → 变化时其后的**全部 L1 历史**前缀缓存失效
+    （实测命中率 99% → ~62%，见 `scripts/diag_cache_prefix.py`）
+  - 现改为 `result.append` 追加到末尾：L0+L3+L2+L1 前缀跨回合逐字节稳定，
+    与 DSH `dsh-time-context`（时间消息追加到消息列表末尾）同构
+  - 实测同会话跨回合前缀命中率 67.8% → 99.2%（+31.3pp）
+  - tests: 更新 test_history_cache / test_onlinesession 的位置断言
+### Bug Fixes
+- fix: DeepSeek V4 thinking 模式 400 「reasoning_content must be passed back」残留三缺口
+  - `_load_single_conversation`：不再按 is_func_calling 区分加载 rounds —— 纯文本轮
+    （思考模式同样产出 RC）按 ai_msg 重建会丢 RC，恢复会话后带 tools 请求 400；
+    rounds 存在即优先加载（完整保真，含 RC），无 rounds 才回退 ai_msg
+  - `create_chat_stream`：发送前防御性补全 —— thinking 启用（type=enabled 或带
+    reasoning_effort）且携带 tools 时，所有缺 reasoning_content 字段的 assistant
+    消息自动补空串；兜底 supports_reasoning 与 thinking 探测门控不一致的旁路
+  - `tool_loop_runner`：RC 400 自愈 —— 检测到「must be passed back」400 后输出
+    现场诊断、以 disable_thinking=True 自动重试一次并置 ctx._rc400_recovery，
+    本回合剩余请求保持 thinking 关闭（下回合 reset 恢复），对话不再中断
+- tests: 新增 test_reasoning_rc_roundtrip.py（16 项：恢复链路 RC 保真 / 发送前补全 /
+  400 自愈 / 错误识别）
+
 ## [0.15.2] - 2026-08-25
 ### Bug Fixes
 - fix: DeepSeek V4 thinking 模式 400 「reasoning_content must be passed back」根治

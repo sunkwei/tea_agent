@@ -39,7 +39,14 @@ class _FakeSession:
     """
 
     def __init__(self, storage=None, topic_id=""):
-        self.context = SimpleNamespace(no_stream_chunk=False)
+        # context 需提供 model/enable_thinking：_process_stream_with_reasoning
+        # 中的 Muse inline-thinking 检测会访问它们（SimpleNamespace 缺属性
+        # 会抛 AttributeError，2026-08-31 回归暴露）。
+        self.context = SimpleNamespace(
+            no_stream_chunk=False,
+            model="",
+            enable_thinking=False,
+        )
         self.api = SimpleNamespace(_accumulate_usage=lambda usage: None)
         self.storage = storage
         self.current_topic_id = topic_id

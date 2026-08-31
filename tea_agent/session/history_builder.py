@@ -994,9 +994,6 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
                         _msg["reasoning_content"] = ""
                     result.append(_msg)
 
-    # L1 起点（动态上下文锚定于此）：仅依赖 L0+L3+L2 数量，工具循环内稳定
-    _l1_start = len(result)
-
     # ═══════════════════════════════════════════════
     # Level 1: 最新对话（含动态工具输出裁剪）
     # ═══════════════════════════════════════════════
@@ -1174,20 +1171,20 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             cleaned.append(msg)
     result = cleaned
 
-    # ── 动态上下文注入（缓存友好）──
+    # ── 动态上下文注入（缓存友好，对齐 DSH append-only 架构）──
     # 技能加载 / 未完成任务提醒 / 长期记忆等动态内容作为临时 user 消息注入。
-    # 缓存友好（R6/DSH：事件流派生确定性）：插入位置锚定在 L1 起点
-    # （即 L0+L3+L2 之后、当前轮真实对话之前）。该位置只依赖 L3/L2 数量，
-    # 而 L3/L2 在用户消息边界定型、工具循环内不变 —— 因此动态消息在整个循环内
-    # 位置固定，不随 additionalContexts 追加的中途 user 消息移动，
-    # 避免其后全部 L1 历史前缀缓存失效。
+    # ⚠️ 插入位置必须选**消息末尾**（紧随最后一条真实消息之后），而非 L1 起点：
+    # 这些内容随用户消息边界重算（TODO 状态/记忆/技能评估每回合变化），若插在
+    # L1 历史之前，任一变化都会使其后的**全部 L1 历史**前缀缓存失效（实测
+    # 命中率从 99% 跌到 ~62%，见 scripts/diag_cache_prefix.py）。
+    # 追加到末尾后：L0+L3+L2+L1 前缀跨回合逐字节稳定，只有末尾新增的
+    # 动态消息与工具结果作为新 token 未命中 —— 与 DeepSeek Harness 的时间
+    # 上下文注入（dsh-time-context 把时间消息追加到消息列表末尾）同构。
     # 内容带会话级缓存（_get_dynamic_context），工具循环内复用同一版本。
+    # 注：user 消息后跟另一条 user 消息是合法结构（DSH 同款形态），API 接受。
     dynamic_text = _get_dynamic_context(context)
-    if dynamic_text and _l1_start is not None:
-        _ins = min(_l1_start, len(result))
-        if _ins <= len(result):
-            dyn_msg = {"role": "user", "content": dynamic_text}
-            result.insert(_ins, dyn_msg)
+    if dynamic_text:
+        result.append({"role": "user", "content": dynamic_text})
 
     # 防御性校验（DeepSeek V4 thinking 模式）：含 tool_calls 的 assistant 消息
     # 必须**携带 reasoning_content 字段**（值可为空字符串——V4 在部分 tool_call

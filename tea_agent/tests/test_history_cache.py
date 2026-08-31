@@ -56,7 +56,11 @@ def _common_prefix_len(a: list[dict], b: list[dict]) -> int:
 
 class TestPrefixStability:
     def test_tool_loop_prefix_byte_identical(self):
-        """S1: 工具循环内相邻请求的公共前缀逐字节相同（仅允许末尾新增）。"""
+        """S1: 工具循环内相邻请求的公共前缀逐字节相同（仅允许末尾新增）。
+
+        动态上下文追加在**消息末尾**（对齐 DSH append-only），因此允许
+        最后一条动态消息随工具结果增长而移位；其之前的 L1 历史必须逐字节相同。
+        """
         ctx, sess = _make_session()
         sp = "你是一个智能助手"
         sess.add_user_message("帮我审查代码并修复")
@@ -83,7 +87,8 @@ class TestPrefixStability:
 
         for i in range(len(reqs) - 1):
             n = _common_prefix_len(reqs[i], reqs[i + 1])
-            assert n == len(reqs[i]), (
+            # 允许最后一条（尾部动态上下文）移位；其余前缀必须逐字节相同
+            assert n >= len(reqs[i]) - 1, (
                 f"Req{i + 1}->Req{i + 2} 公共前缀被改写: {n}/{len(reqs[i])} "
                 f"首处不同: {reqs[i][n] if n < len(reqs[i]) else 'EOF'}"
             )
@@ -117,7 +122,13 @@ class TestSystemPromptStable:
 
 class TestMemoryPlacement:
     def test_l3_without_memory_dynamic_with_memory(self):
-        """S3: L3 块不含记忆；记忆在尾部动态上下文（紧随最后一个 user 之前）。"""
+        """S3: L3 块不含记忆；记忆在尾部动态上下文（**追加在消息末尾**）。
+
+        缓存友好（对齐 DSH append-only）：动态上下文（技能/TODO/记忆）随用户
+        消息边界重算，必须追加在请求末尾 —— 若插在 L1 历史之前，内容变化会让
+        其后全部 L1 历史前缀缓存失效（实测命中率 99% → ~62%，见
+        scripts/diag_cache_prefix.py）。
+        """
         ctx, sess = _make_session()
         # 模拟 inject_memories pipeline 步骤（pos=20）已注入记忆
         ctx._injected_memories_text = "记忆：用户偏好直接修改而非仅输出文本。"
@@ -128,10 +139,9 @@ class TestMemoryPlacement:
         # 仅检查非 system 消息（system 的 AGENTS.md 片段本身可能含"长期记忆"字样）
         dyn_texts = [m.get("content", "") for m in msgs[1:] if isinstance(m.get("content"), str)]
         assert any("## 长期记忆" in t for t in dyn_texts)
-        # 动态上下文插在最后一个 user 之前
-        last_user_idx = max(i for i, m in enumerate(msgs) if m.get("role") == "user")
-        assert any("## 长期记忆" in (msgs[i].get("content", "") or "")
-                   for i in range(last_user_idx - 2, last_user_idx + 1))
+        # 动态上下文必须是**最后一条**消息（追加在末尾，历史前缀不受影响）
+        assert "## 长期记忆" in (msgs[-1].get("content", "") or "")
+        assert msgs[-1]["role"] == "user"
 
 
 class TestNoInternalFieldLeak:

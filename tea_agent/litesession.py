@@ -416,6 +416,8 @@ class LiteSession:
         """解析工具调用数据。"""
         from dataclasses import dataclass
 
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
         @dataclass
         class SimpleFunction:
             name: str
@@ -431,21 +433,23 @@ class LiteSession:
         for idx in sorted(tool_calls_data.keys()):
             data = tool_calls_data[idx]
             if data["id"] and data["name"]:
-                try:
-                    # 验证 JSON 参数（使用容错解析）
-                    relaxed_json_loads(data["arguments"])
-                    valid_calls.append(
-                        SimpleToolCall(
-                            id=data["id"],
-                            function=SimpleFunction(
-                                name=data["name"], arguments=data["arguments"]
-                            ),
-                        )
-                    )
-                except json.JSONDecodeError:
+                # 源头规范化：截断/非法 arguments 修复为完整 JSON 后再入库，
+                # 避免截断参数进入历史 → 每轮 build_api_messages 重复修复刷屏。
+                # 无法修复时返回 None，丢弃该 tool_call。
+                args = normalize_tool_args(data["name"], data["arguments"])
+                if args is None:
                     logger.warning(
                         f"工具 {data['name']} 参数 JSON 无效: {data['arguments'][:100]}"
                     )
+                    continue
+                valid_calls.append(
+                    SimpleToolCall(
+                        id=data["id"],
+                        function=SimpleFunction(
+                            name=data["name"], arguments=args
+                        ),
+                    )
+                )
 
         return valid_calls
 

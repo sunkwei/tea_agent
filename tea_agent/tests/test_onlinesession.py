@@ -247,7 +247,7 @@ class TestBuildApiMessages:
         return sess
 
     def test_basic_structure(self):
-        """基础结构：system + 用户消息"""
+        """基础结构：system + 用户消息（动态上下文在消息末尾，不影响正文）"""
         ctx = self._make_context()
         ctx.messages = [
             {"role": "user", "content": "Hello"},
@@ -259,12 +259,15 @@ class TestBuildApiMessages:
         # 第一个是 system
         assert result[0]["role"] == "system"
         assert "test assistant" in result[0]["content"]
-        # 最后一个应该是 assistant
-        assert result[-1]["role"] == "assistant"
-        assert result[-1]["content"] == "Hi there!"
+        # 去掉末尾的尾部动态上下文后，最后一条应为 assistant
+        real_msgs = [m for m in result
+                     if not (m.get("role") == "user"
+                             and str(m.get("content", "")).startswith("[动态上下文"))]
+        assert real_msgs[-1]["role"] == "assistant"
+        assert real_msgs[-1]["content"] == "Hi there!"
 
     def test_includes_recent_history(self):
-        """L1: 最新对话出现在结果末尾"""
+        """L1: 最新对话出现在结果末尾（动态上下文除外）"""
         ctx = self._make_context()
         ctx.messages = [
             {"role": "user", "content": "Q1"},
@@ -274,11 +277,14 @@ class TestBuildApiMessages:
         ]
         sess = self._make_session_from_ctx(ctx)
         result = sess._build_api_messages()
-        # 最后两条应为 Q2 / A2
-        assert result[-2]["role"] == "user"
-        assert result[-2]["content"] == "Q2"
-        assert result[-1]["role"] == "assistant"
-        assert result[-1]["content"] == "A2"
+        # 去掉末尾的尾部动态上下文后，最后两条应为 Q2 / A2
+        real_msgs = [m for m in result
+                     if not (m.get("role") == "user"
+                             and str(m.get("content", "")).startswith("[动态上下文"))]
+        assert real_msgs[-2]["role"] == "user"
+        assert real_msgs[-2]["content"] == "Q2"
+        assert real_msgs[-1]["role"] == "assistant"
+        assert real_msgs[-1]["content"] == "A2"
 
     def test_with_semantic_summary(self):
         """L3: 语义摘要注入"""

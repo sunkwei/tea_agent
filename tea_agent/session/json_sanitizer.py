@@ -184,3 +184,53 @@ def sanitize_api_messages(messages: list[dict]) -> list[dict]:
     if removed_count > 0:
         logger.debug(f"sanitize_api_messages: 共移除 {removed_count} 个非法 tool_call")
     return sanitized
+
+
+def normalize_tool_args(func_name: str, raw: str) -> str | None:
+    """源头规范化 tool_call arguments：合法 JSON 原样返回；截断/非法 JSON 尝试修复。
+
+    修复优先级：严格 json.loads（逐字节保留）→ try_fix_truncated_json（补全闭合括号）
+    → relaxed_json_loads（容错解析后重新序列化）。全部失败返回 None（调用方丢弃）。
+
+    目标：LLM 流式累计的截断参数在入库前修复为完整 JSON，避免污染
+    context.messages → 每轮 build_api_messages 重复 sanitize 修复（WARNING 刷屏）。
+
+    Args:
+        func_name: 工具名（仅用于日志）
+        raw: 原始 arguments 字符串
+
+    Returns:
+        规范化后的 JSON 字符串；无法修复返回 None
+    """
+    if not isinstance(raw, str) or not raw.strip():
+        return raw
+
+    s = raw.strip()
+    try:
+        json.loads(s)
+        return s  # 已是合法 JSON，原样返回（逐字节一致，前缀缓存友好）
+    except json.JSONDecodeError:
+        pass
+
+    # 截断 JSON：先尝试补全闭合括号
+    try:
+        fixed = try_fix_truncated_json(s)
+        if fixed is not None:
+            return fixed
+    except Exception:
+        pass
+
+    # 容错解析（单引号 / 尾逗号 / Python 布尔等），成功后规范化为标准 JSON
+    try:
+        from tea_agent.basesession import relaxed_json_loads
+
+        parsed = relaxed_json_loads(s)
+        if isinstance(parsed, (dict, list)):
+            return json.dumps(parsed, ensure_ascii=False)
+    except Exception:
+        pass
+
+    logger.warning(
+        f"tool call failed: {func_name} 参数 JSON 无法修复，已丢弃: {raw[:100]}"
+    )
+    return None

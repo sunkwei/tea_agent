@@ -3436,4 +3436,342 @@ window.piCompact = function() {
   });
 };
 
+// ══════════════════════════════════════════════════
+//  MODEL MANAGEMENT (providers / models / apply)
+// ══════════════════════════════════════════════════
+
+let mmProviders = [];
+let mmSelectedProvider = '';
+let mmSelectedModel = '';
+let mmEditingProvider = null;  // null=新增模式；字符串=正在编辑的提供商名
+
+function _mmStatus(msg, type) {
+  const el = $('mm-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+  if (msg) {
+    el.className = 'status-msg';
+    if (type === 'error') el.style.color = '#e74c3c';
+    else if (type === 'success') el.style.color = '#2ecc71';
+    else el.style.color = '';
+  }
+}
+
+window.showModelModal = async function() {
+  showModal('modal-model');
+  _mmStatus('');
+  await loadProviders();
+  await refreshCurrentModel();
+};
+
+async function refreshCurrentModel() {
+  try {
+    const r = await fetch('/api/model');
+    const d = await r.json();
+    const cfg = d.data || d;
+    const el = $('mm-current-text');
+    if (el) {
+      const parts = [];
+      if (cfg.model) parts.push('主: ' + cfg.model);
+      if (cfg.cheap_model && cfg.cheap_model.model) parts.push('cheap: ' + cfg.cheap_model.model);
+      el.textContent = parts.length ? '当前: ' + parts.join(' | ') : '当前: 未配置';
+    }
+  } catch (e) { /* 静默 */ }
+}
+
+async function loadProviders() {
+  try {
+    const r = await fetch('/api/providers');
+    if (!r.ok) throw new Error((await r.json()).error || 'HTTP ' + r.status);
+    const d = await r.json();
+    mmProviders = d.providers || [];
+    renderProviders();
+    // 自动选中当前使用的提供商
+    const current = mmProviders.find(p => p.is_configured);
+    if (current) selectProvider(current.name);
+    else if (mmProviders.length) selectProvider(mmProviders[0].name);
+  } catch (e) {
+    _mmStatus('加载提供商失败: ' + e.message, 'error');
+  }
+}
+
+function renderProviders() {
+  const box = $('mm-providers');
+  if (!box) return;
+  const q = ($('mm-search')?.value || '').trim().toLowerCase();
+  const list = mmProviders.filter(p => !q || p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q));
+  if (!list.length) {
+    box.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim,#888);font-size:13px">无匹配提供商</div>';
+    return;
+  }
+  box.innerHTML = list.map(p => {
+    const active = p.name === mmSelectedProvider;
+    const badges = [];
+    if (p.source === 'custom') badges.push('<span style="background:#f39c12;color:#fff;border-radius:4px;padding:0 4px;font-size:10px">自定义</span>');
+    if (p.supports_vision) badges.push('<span style="background:#8e44ad;color:#fff;border-radius:4px;padding:0 4px;font-size:10px">视觉</span>');
+    if (p.supports_thinking) badges.push('<span style="background:#2980b9;color:#fff;border-radius:4px;padding:0 4px;font-size:10px">思考</span>');
+    return '<div class="mm-provider" onclick="selectProvider(\'' + escAttr(p.name) + '\')" ' +
+      'style="padding:8px 10px;margin-bottom:6px;border-radius:8px;cursor:pointer;border:1px solid ' +
+      (active ? 'var(--primary,#4a90d9)' : 'var(--border,#ddd)') + ';' +
+      (active ? 'background:rgba(74,144,217,0.1)' : '') + '">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center">' +
+      '<b style="font-size:13px">' + esc(p.name) + '</b>' + badges.join('') +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--text-dim,#888);margin-top:2px;word-break:break-all">' + esc(p.api_url) + '</div>' +
+      (p.is_configured ? '<div style="font-size:10px;color:#2ecc71;margin-top:2px">● 当前使用</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+async function selectProvider(name) {
+  mmSelectedProvider = name;
+  mmSelectedModel = '';
+  renderProviders();
+  const p = mmProviders.find(x => x.name === name);
+  // 回填能力/编辑/删除按钮
+  const cap = $('mm-cap');
+  if (cap) cap.textContent = p ? (p.description || '') + (p.supports_vision || p.supports_thinking ? ' | 能力: ' + [p.supports_vision && '视觉', p.supports_thinking && '思考'].filter(Boolean).join('+') : '') : '';
+  const isCustom = !!(p && p.source === 'custom');
+  const del = $('mm-del-btn');
+  if (del) del.style.display = isCustom ? 'block' : 'none';
+  const editBtn = $('mm-edit-btn');
+  if (editBtn) editBtn.style.display = isCustom ? 'block' : 'none';
+  await loadModels(name, false);
+}
+
+// 编辑自定义供应商（复用新增表单）
+function showEditProviderForm(name) {
+  const p = mmProviders.find(x => x.name === name);
+  if (!p) return;
+  mmEditingProvider = name;
+  const form = $('mm-add-form');
+  if (form) form.style.display = 'block';
+  const title = $('mm-add-title');
+  if (title) title.textContent = '✏️ 编辑自定义供应商: ' + name;
+  const nameInput = $('mm-add-name');
+  if (nameInput) nameInput.disabled = true;
+  $('mm-add-name').value = name;
+  $('mm-add-url').value = p.api_url || '';
+  $('mm-add-default').value = p.default_model || '';
+  $('mm-add-models').value = (p.models || []).join(', ');
+  $('mm-add-vision').checked = !!p.supports_vision;
+  $('mm-add-thinking').checked = !!p.supports_thinking;
+  $('mm-add-desc').value = p.description || '';
+  const btn = $('mm-add-save');
+  if (btn) btn.textContent = '💾 保存修改';
+}
+
+async function loadModels(name, refresh) {
+  if (!name) return;
+  const box = $('mm-models');
+  const hint = $('mm-model-hint');
+  if (box) box.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim,#888)">⏳ 加载模型…</div>';
+  if (hint) hint.textContent = '';
+  try {
+    const url = '/api/providers/' + encodeURIComponent(name) + '/models' + (refresh ? '?refresh=true' : '');
+    const r = await fetch(url);
+    if (!r.ok) throw new Error((await r.json()).error || 'HTTP ' + r.status);
+    const d = await r.json();
+    if (hint) {
+      if (d.source === 'live') {
+        hint.textContent = '🟢 实时查询 (' + (d.endpoint || '') + ')';
+      } else if (d.source === 'cache') {
+        hint.textContent = '🕐 缓存 (' + (d.total || 0) + ' 个模型，5 分钟内有效) — 点「🔄 实时刷新」获取最新';
+      } else {
+        hint.textContent = d.error_hint ? '⚠️ ' + d.error_hint :
+          '📋 内置静态列表' + (d.needs_key ? '（填 key 后可实时查询）' : '');
+      }
+    }
+    if (!d.models || !d.models.length) {
+      box.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim,#888)">暂无模型 — 点击「🔄 实时刷新」或填 key 后查询</div>';
+      return;
+    }
+    box.innerHTML = d.models.map(m => {
+      const mid = m.id || m;
+      const active = mid === mmSelectedModel;
+      return '<div class="mm-model" onclick="selectModel(\'' + escAttr(mid) + '\')" ' +
+        'style="padding:7px 10px;margin-bottom:4px;border-radius:6px;cursor:pointer;border:1px solid ' +
+        (active ? 'var(--primary,#4a90d9)' : 'var(--border,#ddd)') + ';font-size:12px;word-break:break-all">' +
+        esc(mid) +
+        (m.owned_by ? '<span style="color:var(--text-dim,#888);font-size:10px;margin-left:6px">by ' + esc(m.owned_by) + '</span>' : '') +
+        '</div>';
+    }).join('');
+    // 默认选中 default_model
+    const p = mmProviders.find(x => x.name === name);
+    if (p && p.default_model && !mmSelectedModel) {
+      if (d.models.some(m => (m.id || m) === p.default_model)) selectModel(p.default_model);
+    }
+  } catch (e) {
+    if (box) box.innerHTML = '<div style="padding:16px;text-align:center;color:#e74c3c">❌ ' + esc(e.message) + '</div>';
+  }
+}
+
+function selectModel(id) {
+  mmSelectedModel = id;
+  // 高亮
+  const box = $('mm-models');
+  if (box) {
+    box.querySelectorAll('.mm-model').forEach(el => {
+      const on = el.textContent.trim().startsWith(id);
+      el.style.borderColor = on ? 'var(--primary,#4a90d9)' : 'var(--border,#ddd)';
+      el.style.background = on ? 'rgba(74,144,217,0.1)' : '';
+    });
+  }
+}
+
+function showAddProviderForm() {
+  mmEditingProvider = null;
+  const title = $('mm-add-title');
+  if (title) title.textContent = '➕ 新增自定义供应商';
+  const nameInput = $('mm-add-name');
+  if (nameInput) nameInput.disabled = false;
+  const btn = $('mm-add-save');
+  if (btn) btn.textContent = '💾 保存新增';
+  $('mm-add-form').style.display = 'block';
+}
+function hideAddProviderForm() {
+  mmEditingProvider = null;
+  const nameInput = $('mm-add-name');
+  if (nameInput) nameInput.disabled = false;
+  $('mm-add-form').style.display = 'none';
+}
+
+async function submitProvider() {
+  const name = ($('mm-add-name').value || '').trim();
+  const api_url = ($('mm-add-url').value || '').trim();
+  const default_model = ($('mm-add-default').value || '').trim();
+  if (!name || !api_url || !default_model) {
+    _mmStatus('名称 / API URL / 默认模型 均为必填', 'error');
+    return;
+  }
+  const models = ($('mm-add-models').value || '').split(',').map(s => s.trim()).filter(Boolean);
+  const payload = {
+    name, api_url, default_model,
+    models,
+    supports_vision: $('mm-add-vision').checked,
+    supports_thinking: $('mm-add-thinking').checked,
+    description: ($('mm-add-desc').value || '').trim(),
+  };
+  try {
+    const editing = mmEditingProvider;
+    const url = editing ? '/api/providers/' + encodeURIComponent(editing) : '/api/providers';
+    const r = await fetch(url, {
+      method: editing ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    hideAddProviderForm();
+    _mmStatus(editing ? '✅ 自定义供应商 ' + editing + ' 已更新' : '✅ 自定义供应商 ' + name + ' 已保存', 'success');
+    // 清空表单
+    ['mm-add-name', 'mm-add-url', 'mm-add-default', 'mm-add-models', 'mm-add-desc'].forEach(id => { $(id).value = ''; });
+    $('mm-add-vision').checked = false;
+    $('mm-add-thinking').checked = false;
+    await loadProviders();
+  } catch (e) {
+    _mmStatus('保存失败: ' + e.message, 'error');
+  }
+}
+
+async function applyProvider() {
+  if (!mmSelectedProvider) { _mmStatus('请先选择提供商', 'error'); return; }
+  if (!mmSelectedModel) { _mmStatus('请先选择模型', 'error'); return; }
+  const role = $('mm-role').value;
+  const payload = {
+    api_key: ($('mm-key').value || '').trim(),
+    model: mmSelectedModel,
+    role,
+  };
+  const temp = parseFloat($('mm-temp').value);
+  const mt = parseInt($('mm-max-tokens').value, 10);
+  const tp = parseFloat($('mm-top-p').value);
+  if (!isNaN(temp)) payload.temperature = temp;
+  if (!isNaN(mt)) payload.max_tokens = mt;
+  if (!isNaN(tp)) payload.top_p = tp;
+  try {
+    const r = await fetch('/api/providers/' + encodeURIComponent(mmSelectedProvider) + '/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    _mmStatus('✅ 已应用 ' + mmSelectedProvider + ' / ' + mmSelectedModel + (role === 'main' ? '（热生效）' : '（下次会话生效）'), 'success');
+    $('mm-key').value = '';
+    await refreshCurrentModel();
+    // 刷新顶部配置信息
+    if (typeof loadConfigForm === 'function') loadConfigForm();
+    toast('🎯 已切换到 ' + mmSelectedModel, 'success');
+  } catch (e) {
+    _mmStatus('应用失败: ' + e.message, 'error');
+  }
+}
+
+async function testConnection() {
+  const api_url = (mmProviders.find(p => p.name === mmSelectedProvider) || {}).api_url;
+  const api_key = ($('mm-key').value || '').trim();
+  if (!api_url || !api_key) {
+    _mmStatus('测试连接需要 api_key（请填写 API Key）', 'error');
+    return;
+  }
+  const btn = document.querySelector('#mm-current .btn-g');
+  const old = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 测试中…'; }
+  try {
+    const r = await fetch('/api/model/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_url, api_key, model: mmSelectedModel || undefined }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      _mmStatus('✅ 连接正常 ' + d.latency_ms + 'ms' + (d.model_reported ? ' | 模型: ' + d.model_reported : ''), 'success');
+    } else {
+      _mmStatus('❌ 连接失败: ' + (d.error || '未知错误'), 'error');
+    }
+  } catch (e) {
+    _mmStatus('❌ 测试异常: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = old; }
+  }
+}
+
+async function deleteProvider() {
+  if (!mmSelectedProvider) return;
+  if (!confirm('确定删除自定义供应商 ' + mmSelectedProvider + ' 吗？')) return;
+  try {
+    const r = await fetch('/api/providers/' + encodeURIComponent(mmSelectedProvider), { method: 'DELETE' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
+    _mmStatus('🗑 已删除 ' + mmSelectedProvider, 'success');
+    mmSelectedProvider = '';
+    await loadProviders();
+  } catch (e) {
+    _mmStatus('删除失败: ' + e.message, 'error');
+  }
+}
+
+// ── 导出到 window（HTML 内联 onclick/oninput 需要全局可见） ──
+// 注：IIFE 内 function/let 声明不在全局作用域；不导出则
+// onclick="renderProviders()" 等全部 ReferenceError，控件失效。
+window._mmStatus = _mmStatus;
+window.refreshCurrentModel = refreshCurrentModel;
+window.loadProviders = loadProviders;
+window.renderProviders = renderProviders;
+window.selectProvider = selectProvider;
+window.loadModels = loadModels;
+window.selectModel = selectModel;
+window.showEditProviderForm = showEditProviderForm;
+window.showAddProviderForm = showAddProviderForm;
+window.hideAddProviderForm = hideAddProviderForm;
+window.submitProvider = submitProvider;
+window.applyProvider = applyProvider;
+window.testConnection = testConnection;
+window.deleteProvider = deleteProvider;
+// 变量用 getter 导出（let 重新赋值不改变 window 属性引用，getter 保证实时读取）
+Object.defineProperty(window, 'mmSelectedProvider', { get: () => mmSelectedProvider });
+Object.defineProperty(window, 'mmSelectedModel', { get: () => mmSelectedModel });
+
 })();

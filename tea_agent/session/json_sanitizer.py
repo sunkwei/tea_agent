@@ -162,7 +162,8 @@ def sanitize_api_messages(messages: list[dict]) -> list[dict]:
                 tc_copy["function"] = dict(func)
                 tc_copy["function"]["arguments"] = fixed
                 valid_calls.append(tc_copy)
-                logger.warning(f"sanitize_api_messages: 修复截断JSON → {fixed[:80]}...")
+                # 修复成功是防御性兜底（预期内行为），无需 WARNING 刷屏
+                logger.debug(f"sanitize_api_messages: 修复截断JSON → {fixed[:80]}...")
             else:
                 removed_count += 1
                 logger.debug(

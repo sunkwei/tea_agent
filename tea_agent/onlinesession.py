@@ -1114,6 +1114,14 @@ class ToolComponent(SessionComponent):
                 logger.warning(f"tool call failed: invalid data format, data={tc_data}")
                 continue
 
+            # 源头 JSON 校验：截断/非法的 arguments 在入库前修复为完整 JSON，
+            # 避免污染 context.messages → 每轮 build_api_messages 重复修复刷屏
+            # （对齐 litesession._parse_tool_calls 的 relaxed_json_loads 校验）。
+            if isinstance(func_args, str) and func_args.strip():
+                func_args = _normalize_tool_args(func_name, func_args)
+                if func_args is None:
+                    continue  # 无法修复的参数，丢弃该 tool_call
+
             valid_tool_calls.append(
                 SimpleNamespace(
                     id=func_id,

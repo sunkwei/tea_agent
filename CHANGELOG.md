@@ -1,6 +1,20 @@
 # Changelog
 
 
+## [Unreleased]
+### Features
+- feat: 会话期间插话（steering）— 工具循环每轮边界消费排队消息并注入下一轮模型请求
+  - `POST /api/chat/steering` 端点：流式生成中用户输入即时入队（含图片），无需等待会话结束
+  - `tool_loop_runner` 循环顶部注入 `[即时指令]` user 消息（持久化进 context.messages，
+    与 additionalContexts 注入模式一致），下一轮 API 请求生效；不打断执行中的工具批次
+  - SSE `steering_injected` 事件闭环：前端从本地排队列表移除已生效项并渲染到聊天区，
+    防止流结束后重复发送；取消排队时同步删除服务端排队项
+  - `topic_ready` 事件：首次对话尽早下发 topic_id，保证插话投递有确定的目标主题
+  - `chat_stream` 启动时清理上个会话遗留的排队消息，防止跨回合重复注入
+  - 接线了长期闲置的 `session/message_queue.py`（MessageQueue steering 队列亦会被消费）
+- sync: 修正已安装 site-packages 中 `session.json_sanitizer` 的
+  `sanitize_api_messages: 修复截断JSON` WARNING 刷屏（工作区已降为 debug，重装 editable 生效）
+
 ## [0.15.4] - 2026-08-28
 ### Features
 - fix(cache): 动态上下文改为**追加到请求消息末尾**，对齐 DSH append-only 架构

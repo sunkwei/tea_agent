@@ -309,6 +309,7 @@ def _build_routes() -> list:
     return [
         Route("/", rh.handle_web_root),
         Route("/api/chat", rh.handle_web_chat, methods=["POST"]),
+        Route("/api/chat/steering", rh.handle_web_chat_steering, methods=["POST"]),
         Route("/api/chat/continue", rh.handle_chat_continue, methods=["POST"]),
         Route("/api/chat/question", rh.handle_chat_question, methods=["POST"]),
         Route("/api/chat/abort", rh.handle_chat_abort, methods=["POST"]),

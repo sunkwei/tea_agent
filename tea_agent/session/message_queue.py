@@ -338,3 +338,104 @@ def check_followup_messages(session) -> list:
 
     logger.info(f"📨 投递 {len(followup)} 条 follow-up 消息")
     return contents
+
+
+def drain_steering_items(session) -> list[dict]:
+    """从所有插话来源收集待注入消息（消费队列，幂等调用即取走）。
+
+    来源：
+      1. Web 服务端排队队列（state.message_queue，topic_id 键控）——
+         通过 session._steering_provider 注入（由 chat_stream_sse 挂载，
+         解耦 session 层与 server 层，避免循环导入）。
+      2. session.context.message_queue（MessageQueue steering 队列，
+         Pi 特性等模块可 push_steering 入队）。
+
+    Args:
+        session: OnlineToolSession 实例
+
+    Returns:
+        待注入的插话消息列表，每项为 dict：
+        {"id", "message", "images", "source", ...}
+    """
+    items: list[dict] = []
+
+    # 来源 1：Web 服务端排队队列（挂载的 provider 负责按 topic 消费）
+    provider = getattr(session, "_steering_provider", None)
+    if provider is not None:
+        try:
+            drained = provider()
+            if drained:
+                for it in drained:
+                    if isinstance(it, dict) and not it.get("source"):
+                        it = dict(it)
+                        it["source"] = "server_queue"
+                    items.append(it)
+        except Exception:
+            logger.exception("steering provider drain failed")
+
+    # 来源 2：session.context.message_queue（MessageQueue steering 队列）
+    queue = getattr(getattr(session, "context", None), "message_queue", None)
+    if queue is not None:
+        try:
+            for m in queue.get_steering():
+                items.append({
+                    "id": m.id,
+                    "message": m.content,
+                    "images": [],
+                    "metadata": m.metadata,
+                    "source": "message_queue",
+                })
+        except Exception:
+            logger.exception("message_queue steering drain failed")
+
+    if items:
+        logger.info(f"📨 插话消费 {len(items)} 条（来源: {[i.get('source') for i in items]}）")
+    return items
+
+
+def inject_steering_messages(session, items: list) -> int:
+    """将插话消息注入 session.context.messages（持久化），供下一轮模型请求携带。
+
+    注入为 user 消息（前缀 [即时指令]，与 additionalContexts 注入模式一致）；
+    带图时保留 images 字段，由 _build_api_messages → to_multimodal 转换。
+    注入后通过 session._steering_notify 通知前端（SSE steering_injected），
+    前端据此从本地排队列表移除该项，避免流结束后重复发送。
+
+    Args:
+        session: OnlineToolSession 实例
+        items: drain_steering_items 返回的插话消息列表
+
+    Returns:
+        实际注入条数
+    """
+    if not items:
+        return 0
+
+    injected = 0
+    for item in items:
+        text = str(item.get("message") or "").strip()
+        images = item.get("images") or []
+        if not text and not images:
+            continue
+
+        cap = getattr(session, "_cap_message_text", None)
+        if text and callable(cap):
+            text = cap(text)
+
+        content = f"[即时指令] {text}" if text else "[图片]"
+        user_msg: dict = {"role": "user", "content": content}
+        if images:
+            user_msg["images"] = list(images)
+
+        session.context.messages.append(user_msg)
+        injected += 1
+        logger.info(f"📨 插话注入下一轮: [{item.get('id', '')}] {text[:80]}...")
+
+        notify = getattr(session, "_steering_notify", None)
+        if notify is not None:
+            try:
+                notify(item)
+            except Exception:
+                logger.exception("steering notify failed")
+
+    return injected

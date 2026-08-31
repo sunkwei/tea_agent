@@ -13,6 +13,11 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from tea_agent.session.message_queue import (
+    drain_steering_items,
+    inject_steering_messages,
+)
+
 logger = logging.getLogger("session.tool_loop_runner")
 
 
@@ -576,6 +581,17 @@ def execute_tool_loop(session, context: dict) -> dict:
                 "used_tools": used_tools,
                 "interrupted": True,
             }
+
+        # ⭐ 插话注入：消费排队内容 → 注入下一轮模型请求（steering，不打断当前批次）
+        # 用户在当前工具执行期间输入的消息，在此轮边界生效，无需等待会话结束。
+        try:
+            _steering_items = drain_steering_items(session)
+            if _steering_items:
+                _n = inject_steering_messages(session, _steering_items)
+                if _n and on_status:
+                    on_status(f"⚡ 已注入 {_n} 条插话，下一轮生效")
+        except Exception:
+            logger.exception("steering injection failed")
 
         api_messages = session._build_api_messages()
 

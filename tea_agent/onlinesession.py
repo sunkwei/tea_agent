@@ -2606,6 +2606,22 @@ class OnlineToolSession(BaseChatSession):
         )
 
         self.current_topic_id = topic_id
+
+        # ⭐ 插话：清理上个会话遗留的排队消息（未在上一轮被消费的 steering 项）。
+        # 这些项要么已由前端在流结束后作为新消息重新发送（内容在 POST body 中），
+        # 要么已失效；若不清理，会在本回合工具循环中被误注入造成重复。
+        try:
+            _stale_provider = getattr(self, "_steering_provider", None)
+            if _stale_provider is not None:
+                _stale = _stale_provider() or []
+                if _stale:
+                    logger.info(
+                        f"插话: 清理 {len(_stale)} 条遗留排队消息（上轮未消费，"
+                        f"{[(i.get('id') or '')[:8] for i in _stale]}）"
+                    )
+        except Exception:
+            logger.exception("steering stale cleanup failed")
+
         self.reset_interrupt()
         self.reset_session_state()
 

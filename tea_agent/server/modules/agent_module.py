@@ -30,6 +30,9 @@ from .state import (
 from .state import (
     clear_all as clear_all_state,
 )
+from .state import (
+    queue_pop,
+)
 
 logger = logging.getLogger("hot_reload.agent")
 
@@ -594,6 +597,9 @@ class AgentModule(HotReloadModule):
             if not topic_id:
                 _ts = datetime.now().strftime('%m-%d %H:%M')
                 topic_id = storage.create_topic(f"Web Session ({_ts})")
+            # ⭐ 尽早通知前端主题 ID（首次对话时前端尚未持有 topic_id，
+            # 拿到后才能正确投递插话消息 /api/chat/steering）
+            _put({"type": "topic_ready", "topic_id": topic_id})
 
             from tea_agent.session_ref import get_agent as _get_agent
             _ga = _get_agent() or cls._instance
@@ -606,6 +612,33 @@ class AgentModule(HotReloadModule):
             tlk.toolkit._question_web_handler = lambda t, q, o, d, to: cls._server_question_handler(
                 t, q, o, d, to, _put, event_loop,
             )
+
+            # ⭐ 插话（steering）接线：
+            #   - _steering_provider: 按 topic 消费服务端排队队列（state.message_queue）
+            #   - _steering_notify:   注入后通过 SSE 通知前端（steering_injected），
+            #                         前端据此从本地排队列表移除该项
+            def _steering_provider():
+                _tid = getattr(session, "current_topic_id", "") or topic_id
+                if not _tid:
+                    return []
+                _items = []
+                while True:
+                    _item = queue_pop(_tid)
+                    if _item is None:
+                        break
+                    _items.append(_item)
+                return _items
+
+            def _steering_notify(item):
+                _put({
+                    "type": "steering_injected",
+                    "item_id": (item or {}).get("id", ""),
+                    "text": (item or {}).get("message", ""),
+                })
+
+            session._steering_provider = _steering_provider
+            session._steering_notify = _steering_notify
+
             ai_msg = None
             used_tools = None
             try:

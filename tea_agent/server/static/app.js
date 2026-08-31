@@ -48,14 +48,11 @@ window.cancelQueuedMessage = function(index) {
   const removed = _messageQueue[index];
   _messageQueue.splice(index, 1);
   renderQueueList();
-  // 更新按钮显示
-  const sendBtn = $('send-btn');
-  if (_messageQueue.length > 0) {
-    sendBtn.textContent = '⏳ 排队 ' + _messageQueue.length;
-    sendBtn.className = 'btn btn-p warning';
-  } else {
-    sendBtn.textContent = '⏹ 中断';
-    sendBtn.className = 'btn btn-p danger';
+  _updateQueueButton();
+  // 同步移除服务端排队项，避免工具循环仍注入已取消的消息
+  if (removed.item_id && currentTopicId) {
+    fetch('/api/queue/' + encodeURIComponent(currentTopicId) + '/' + encodeURIComponent(removed.item_id),
+      { method: 'DELETE' }).catch(function(){});
   }
   toast('🗑 已取消: ' + (removed.text || '(图片)'), 'success');
 };
@@ -1044,16 +1041,84 @@ window.interruptChat = async function() {
 
 // ── Helper: 流式生成中入队排队 ──
 function _enqueueMessage(msg, images) {
-  _messageQueue.push({ text: msg, images: [...images] });
+  const item = { text: msg, images: [...images], item_id: null };
+  _messageQueue.push(item);
   _pendingImages = [];
   updateImagePreview();
   renderQueueList();
+  _updateQueueButton();
+  toast(`⏳ 消息已排队（队列中 ${_messageQueue.length} 条），将在下一轮工具处理时生效`, 'success');
+  // 立即投递到服务端插话队列：工具循环在下一轮边界消费并注入
+  _sendSteering(item);
+}
+
+// ── Helper: 发送按钮状态（排队数 / 中断 / 发送） ──
+function _updateQueueButton() {
+  const btn = $('send-btn');
+  if (!btn) return;
   const qlen = _messageQueue.length;
-  const sendBtn = $('send-btn');
-  sendBtn.textContent = `⏳ 排队 ${qlen}`;
-  sendBtn.className = 'btn btn-p warning';
-  sendBtn.disabled = false;
-  toast(`⏳ 消息已排队（队列中 ${qlen} 条）`, 'success');
+  if (qlen > 0) {
+    btn.textContent = `⏳ 排队 ${qlen}`;
+    btn.className = 'btn btn-p warning';
+  } else if (isStreaming) {
+    btn.textContent = '⏹ 中断';
+    btn.className = 'btn btn-p danger';
+  } else {
+    btn.textContent = '发送';
+    btn.className = 'btn btn-p';
+  }
+  btn.disabled = false;
+}
+
+// ── Helper: 投递插话到服务端队列（steering） ──
+function _sendSteering(item) {
+  if (item.item_id || item._sending) return; // 已投递或投递中
+  if (!currentTopicId) return; // 尚未拿到 topic_id（首次对话）：留在本地队列，流结束后按普通消息发送
+  item._sending = true;
+  const body = { topic_id: currentTopicId, message: item.text };
+  if (item.images && item.images.length > 0) body.images = item.images;
+  fetch('/api/chat/steering', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function(data) {
+    item._sending = false;
+    if (data && data.ok) {
+      item.item_id = data.item_id;
+    } else {
+      throw new Error((data && data.error) || 'steering failed');
+    }
+  }).catch(function() {
+    item._sending = false;
+    // 投递失败：留在本地队列，流结束后按普通消息重发（不阻塞用户）
+    toast('⚠️ 插话投递失败，将排队到本次对话结束后发送', 'warning');
+  });
+}
+
+// ── Helper: 处理插话生效事件（从本地队列移除 + 渲染到聊天区） ──
+function _handleSteeringInjected(data) {
+  const sid = data.item_id;
+  let removed = false;
+  if (sid) {
+    for (let i = 0; i < _messageQueue.length; i++) {
+      if (_messageQueue[i].item_id === sid) {
+        const it = _messageQueue.splice(i, 1)[0];
+        removed = true;
+        if (it.text) addMessage('user', it.text, it.images && it.images.length > 0 ? it.images : null);
+        break;
+      }
+    }
+  }
+  if (!removed && data.text) {
+    // 来自其它标签页/客户端的插话：无本地项，直接渲染
+    addMessage('user', data.text);
+  }
+  renderQueueList();
+  _updateQueueButton();
+  toast('⚡ 插话已生效，将在下一轮处理', 'success');
 }
 
 // ── Helper: 创建流式消息容器和状态对象 ──
@@ -1101,6 +1166,12 @@ function _processQueueAfterStream() {
   if (_messageQueue.length > 0) {
     const next = _messageQueue.shift();
     renderQueueList();
+    // 若该项曾投递到服务端插话队列但未被注入（流已结束），先删除服务端
+    // 排队项，避免下轮对话的工具循环重复注入（内容随后经 /api/chat 重发）
+    if (next.item_id && currentTopicId) {
+      fetch('/api/queue/' + encodeURIComponent(currentTopicId) + '/' + encodeURIComponent(next.item_id),
+        { method: 'DELETE' }).catch(function(){});
+    }
     const input = $('ci');
     input.value = next.text;
     input.style.height = 'auto';
@@ -1454,6 +1525,22 @@ window.sendMessage = async function() {
               break;
             }
 
+            case 'topic_ready':
+              // 首次对话：尽早拿到 topic_id（用于投递插话 /api/chat/steering）
+              if (data.topic_id && data.topic_id !== currentTopicId) {
+                currentTopicId = data.topic_id;
+                refreshTopics();
+                // 之前因无 topic_id 未投递的本地排队项，现在补投
+                _messageQueue.forEach(function(it) {
+                  if (!it.item_id && !it._sending) _sendSteering(it);
+                });
+              }
+              break;
+
+            case 'steering_injected':
+              _handleSteeringInjected(data);
+              break;
+
             case 'queued':
               removeLoading();
               isStreaming = false;
@@ -1463,7 +1550,7 @@ window.sendMessage = async function() {
               // 清理 DOM 避免残留
               var oldMsg = document.getElementById('current-ai-msg');
               if (oldMsg) { oldMsg.removeAttribute('id'); oldMsg.querySelector('.msg-bubble').removeAttribute('id'); }
-              toast('⏳ 消息已排队（第 ' + data.position + ' 位），完成后将自动显示', 'success');
+              toast('⏳ 消息已入插话队列，将在当前对话的下一轮生效', 'success');
               // 启动后台轮询，等待队列处理完成
               if (data.topic_id) {
                 _startBackgroundPoll(data.topic_id);
@@ -1904,6 +1991,22 @@ function _renderBufferEvent(event) {
         var sd = $('bg-stream-status');
         if (sd) sd.textContent = event.text;
       }
+      break;
+
+    case 'steering_injected':
+      // 后台轮询模式下收到插话生效事件：从本地排队列表移除并渲染
+      if (event.item_id) {
+        for (let i = 0; i < _messageQueue.length; i++) {
+          if (_messageQueue[i].item_id === event.item_id) {
+            _messageQueue.splice(i, 1);
+            break;
+          }
+        }
+        renderQueueList();
+        _updateQueueButton();
+      }
+      if (event.text) addMessage('user', event.text);
+      toast('⚡ 插话已生效，将在下一轮处理', 'success');
       break;
 
     case 'done':

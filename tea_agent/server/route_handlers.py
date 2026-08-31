@@ -533,7 +533,15 @@ async def handle_web_chat(request):
     elif _is_topic_busy(topic_id):
         # ⭐ 主题正忙 → 加入排队队列，返回 SSE 事件而非普通 JSON
         # 让前端 SSE 解析器能正常接收并处理，避免卡死
-        item_id = _queue_add(topic_id, message, images_b64)
+        # 图片统一转 data URL（该队列项会被工具循环作为插话消费注入，
+        # to_multimodal 对 data: 前缀直接透传）
+        _steer_images = []
+        for _img in images_b64:
+            if isinstance(_img, str) and _img.startswith("data:"):
+                _steer_images.append(_img)
+            else:
+                _steer_images.append(f"data:image/png;base64,{_img}")
+        item_id = _queue_add(topic_id, message, _steer_images)
         position = len(_queue_list(topic_id))
         logger.info(f"Topic busy, queued message: topic={topic_id} item={item_id} position={position}")
         async def _queued_sse():
@@ -637,6 +645,80 @@ async def handle_web_chat(request):
             # 当前对话结束（后续排队消息由前端驱动自动发送）
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+async def handle_web_chat_steering(request):
+    """POST /api/chat/steering — 会话进行期间插话入队（steering）。
+
+    当前会话的工具循环在下一轮边界消费该队列并注入模型请求，使使用者的
+    新输入无需等待会话结束即可生效（软插话，不打断执行中的工具批次）。
+
+    Returns:
+        JSONResponse: {ok, item_id, topic_id, position}
+        item_id 用于前端在收到 steering_injected SSE 事件时，从本地排队
+        列表移除对应项，避免流结束后重复发送。
+    """
+    body = await request.json()
+    message = body.get("message", "").strip()
+    topic_id = body.get("topic_id", "").strip()
+    images_b64 = body.get("images", [])
+
+    if not message and not images_b64:
+        return JSONResponse({"error": "message required"}, status_code=400)
+
+    if not topic_id:
+        # 首次对话时前端可能尚未拿到 topic_id：活跃会话唯一则按主题解析
+        with _active_sessions_lock:
+            _keys = list(_active_sessions.keys())
+        if len(_keys) == 1:
+            topic_id = _keys[0]
+        else:
+            return JSONResponse(
+                {"error": "topic_id 不能为空（无法唯一确定当前会话）"},
+                status_code=400,
+            )
+
+    image_paths = []
+    if images_b64:
+        import base64 as b64mod
+        upload_dir = Path("uploads")
+        upload_dir.mkdir(exist_ok=True)
+        for idx, img_b64 in enumerate(images_b64):
+            try:
+                if img_b64.startswith("data:"):
+                    header, data = img_b64.split(",", 1)
+                    ext_map = {
+                        "image/png": ".png",
+                        "image/jpeg": ".jpg",
+                        "image/gif": ".gif",
+                        "image/webp": ".webp",
+                        "image/bmp": ".bmp",
+                    }
+                    mime = header.split(";")[0].replace("data:", "")
+                    ext = ext_map.get(mime, ".png")
+                else:
+                    data = img_b64
+                    ext = ".png"
+                img_bytes = b64mod.b64decode(data)
+                fname = f"steer_{uuid.uuid4().hex[:8]}_{idx}{ext}"
+                fpath = upload_dir / fname
+                fpath.write_bytes(img_bytes)
+                image_paths.append(str(fpath))
+            except Exception as e:
+                logger.warning(f"Steering image base64 decode failed: {e}")
+
+    item_id = _queue_add(topic_id, message, image_paths)
+    position = len(_queue_list(topic_id))
+    logger.info(
+        f"Steering queued: topic={topic_id} item={item_id} "
+        f"position={position} images={len(image_paths)}"
+    )
+    return JSONResponse({
+        "ok": True,
+        "item_id": item_id,
+        "topic_id": topic_id,
+        "position": position,
+    })
 
 
 async def handle_chat_continue(request):

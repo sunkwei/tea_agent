@@ -463,6 +463,7 @@ class APIComponent(SessionComponent):
         max_tokens=None,
         top_p=None,
         request_timeout: float | None = None,
+        disable_thinking: bool = False,
     ):
         target_client = client or self.ctx.client
         target_model = model or self.ctx.model
@@ -585,6 +586,42 @@ class APIComponent(SessionComponent):
         if target_model in ("mimo-v2.5-pro", "mimo-v2.5", "mimo-v2.0"):
             kwargs.pop("stream_options", None)
             kwargs.pop("extra_body", None)
+
+        # ── 400 自愈降级（disable_thinking）──
+        # 本回合先前请求已触发 DeepSeek 400 "reasoning_content must be passed back"
+        # （tool_loop_runner 检测后置位 ctx._rc400_recovery）。此时历史 assistant 消息
+        # 的 RC 值已无法由客户端还原/校验，继续开启 thinking 会反复 400；强制关闭
+        # thinking 后 DeepSeek 不再要求 RC 回传，对话可继续。下一用户回合
+        # reset_session_state() 清除该标志，thinking 自动恢复。
+        if disable_thinking or getattr(self.ctx, "_rc400_recovery", False):
+            if target_model not in ("mimo-v2.5-pro", "mimo-v2.5", "mimo-v2.0"):
+                extra_body = {"thinking": {"type": "disabled"}}
+                kwargs["extra_body"] = extra_body
+                kwargs.pop("stream_options", None)
+                logger.warning(
+                    f"⚠️ RC 400 自愈：本回合剩余请求强制关闭 thinking (model={target_model})"
+                )
+
+        # ── 防御性 RC 字段补全（DeepSeek thinking 模式硬性要求）──
+        # 凡 thinking **启用**（extra_body.thinking.type=enabled 或携带
+        # reasoning_effort）且请求携带 tools，**每个** assistant 消息都必须携带
+        # reasoning_content 字段（值可为空串）——字段缺失即触发 400
+        # "The reasoning_content in the thinking mode must be passed back to
+        # the API"。此处兜底任何绕过 build_api_messages 的旁路（如
+        # supports_reasoning=False 但 thinking 探测开启的不一致配置），
+        # 保证发送前结构完整。api_messages 是副本，原地补全不影响会话历史。
+        _thinking_enabled = (
+            extra_body.get("thinking", {}).get("type") == "enabled"
+            or "reasoning_effort" in extra_body
+        )
+        if tools and _thinking_enabled:
+            _filled = 0
+            for _m in api_messages:
+                if _m.get("role") == "assistant" and "reasoning_content" not in _m:
+                    _m["reasoning_content"] = ""
+                    _filled += 1
+            if _filled:
+                logger.debug(f"create_chat_stream: 为 {_filled} 条 assistant 消息补全空 reasoning_content")
 
         # API 弹性：网络中断/睡眠恢复时自动重试（仅重试可恢复错误，指数退避）
         from tea_agent.api_retry import call_with_retry
@@ -2346,6 +2383,8 @@ class OnlineToolSession(BaseChatSession):
         self._rounds_collector = []
         self._extra_iterations = 0
         self._max_iter_wait.clear()
+        # RC 400 自愈标志只在本回合生效：新用户回合清除，thinking 恢复正常
+        self.context._rc400_recovery = False
         self._strip_reasoning_content(self.context.messages)
 
     def _restore_interruption_anchor(self, topic_id: str | None = None) -> dict | None:

@@ -840,7 +840,13 @@ class BaseChatSession(ABC):
         msgs.append(user_entry)
 
         rounds = conv.get("rounds_json_parsed")
-        if rounds and conv.get("is_func_calling"):
+        if isinstance(rounds, list) and rounds:
+            # rounds 是完整保真记录（含 reasoning_content）。**不按 is_func_calling
+            # 区分加载**：思考模式下纯文本轮（无工具调用）同样产出 reasoning_content，
+            # 若仅按 ai_msg 重建会丢失 RC —— 恢复会话后带 tools 的请求触发 DeepSeek
+            # 400 "The reasoning_content in the thinking mode must be passed back to
+            # the API"（RC 值必须原样回传）。rounds 缺省（旧数据/非思考模型）时
+            # 才回退 ai_msg。
             repaired = BaseChatSession._repair_incomplete_tool_chains(rounds)
             compressed = BaseChatSession._compress_tool_rounds(repaired)
             msgs.extend(compressed)

@@ -66,6 +66,9 @@ class SessionContext:
     _last_request_prompt_tokens: int = 0
     # S5: token 预算已用尽标志，pipeline 的 summarize 步骤检测后强制压缩。
     _token_exhausted: bool = False
+    # RC 400 自愈标志：本回合曾触发 DeepSeek "reasoning_content must be passed back"
+    # 400，剩余请求强制关闭 thinking（reset_session_state 清除）。
+    _rc400_recovery: bool = False
     _last_cheap_usage: dict[str, int] = field(default_factory=lambda: {
         "total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
         "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0,

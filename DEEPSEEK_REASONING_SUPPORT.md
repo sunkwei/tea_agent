@@ -73,6 +73,33 @@ reasoning_content 的生命周期 = 一个 `chat_stream` 调用（即一个 API 
 3. **防御校验降级**：原"缺 RC 只告警"现已不可能发生（已被统一补全兜底），
    对应测试 `test_missing_rc_still_warns` → `test_missing_rc_auto_filled`。
 
+### 本次修复要点（2026-08-28：恢复链路保真 + 发送前兜底 + 400 自愈）
+
+针对「已安装 0.15.2 后仍偶发 400」的三处残留缺口（经 opencode zen 网关 +
+deepseek-v4-flash 实测路径排查）：
+
+1. **`_load_single_conversation` 不再按 is_func_calling 区分加载**
+   （`basesession.py`）。旧实现只有 `is_func_calling=True` 才加载 rounds，
+   纯文本轮（思考模式同样产出 RC）被 ai_msg 重建 → **RC 值丢失** → 恢复会话后
+   带 tools 的请求 400。现改为 rounds 存在即优先加载（rounds 是完整保真记录，
+   含 RC）；无 rounds 才回退 ai_msg。`rounds_json_parsed` 非列表脏数据安全回退。
+2. **`create_chat_stream` 发送前防御性补全**（`onlinesession.py`）。
+   `build_api_messages` 的补全门控是 `supports_reasoning`，而 thinking 启用的
+   门控是 `_thinking_supported`（探测）+ `enable_thinking` —— 两者解耦，
+   `supports_reasoning=False` 但 thinking 实际开启时（配置不一致/探测漂移）
+   旁路不补全 → 400。现于发送前兜底：凡 thinking 启用（`thinking.type=enabled`
+   或带 `reasoning_effort`）且请求携带 tools，所有缺 RC 字段的 assistant 消息
+   自动补空串。api_messages 为副本，原地补全不影响会话历史。
+3. **`tool_loop_runner` RC 400 自愈**。一旦收到
+   `reasoning_content must be passed back` 400（RC 值被代理网关截断/改写时
+   客户端无法凭空还原精确值）：
+   - `_log_rc_diagnostic` 输出现场消息清单（每条 assistant 的 RC 长度/缺失/工具轮）
+   - 自动以 `disable_thinking=True` 重试一次（关闭 thinking 后 DeepSeek 不再要求
+     RC 回传，对话不中断），并置 `ctx._rc400_recovery`
+   - 本回合剩余请求（含后续工具轮次）全部保持 thinking 关闭；
+     `reset_session_state()` 在新用户回合清除标志，thinking 自动恢复
+   - 新增参数 `create_chat_stream(..., disable_thinking=False)`
+
 ### 原理
 
 DeepSeek API 对 messages 列表做**上下文连续性校验**：

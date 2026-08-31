@@ -453,3 +453,46 @@ class TestSanitizeApiMessages:
         ]
         result = sanitize_api_messages(messages)
         assert result[0].get("reasoning_content") == "my reasoning"
+
+
+# ============================================================
+# 3. normalize_tool_args — 源头规范化（截断参数入库前修复）
+# ============================================================
+
+class TestNormalizeToolArgs:
+    """normalize_tool_args 源头规范化测试"""
+
+    def test_valid_json_returned_unchanged(self):
+        """合法 JSON 应原样返回（逐字节一致，前缀缓存友好）"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        raw = '{"app": "bash", "args": ["-c", "echo hi"]}'
+        assert normalize_tool_args("toolkit_exec", raw) == raw
+
+    def test_truncated_json_fixed(self):
+        """截断 JSON 应修复为完整 JSON"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        # 缺少右括号的截断参数（对应线上常驻 WARNING 示例）
+        raw = '{"app": "bash", "args": ["-c"]'
+        fixed = normalize_tool_args("toolkit_exec", raw)
+        assert fixed is not None
+        parsed = json.loads(fixed)
+        assert parsed["app"] == "bash"
+        assert parsed["args"] == ["-c"]
+
+    def test_broken_json_returns_none(self):
+        """无法修复的 JSON 应返回 None（调用方丢弃该 tool_call）"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        assert normalize_tool_args("toolkit_exec", "invalid json{{{") is None
+
+    def test_empty_returns_as_is(self):
+        """空字符串/None 原样返回"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        assert normalize_tool_args("toolkit_exec", "") == ""
+        assert normalize_tool_args("toolkit_exec", "   ") == "   "
+        assert normalize_tool_args("toolkit_exec", None) is None
+
+    def test_dict_arguments_passthrough(self):
+        """非字符串 arguments（dict）原样透传"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        obj = {"a": 1}
+        assert normalize_tool_args("toolkit_exec", obj) is obj

@@ -43,6 +43,8 @@ from ._compat import (
     logger,
 )
 
+from tea_agent.model_manager import ProviderError
+
 # ================================================================
 #  System / Health
 # ================================================================
@@ -1135,7 +1137,7 @@ async def handle_web_model_switch(request):
     """POST /api/model - hot-switch model at runtime."""
     body = await request.json()
     server = get_server()
-    agent = server._agent
+    agent = getattr(server, "_agent", None) or server.get_agent()
     current_key = agent._cfg.main_model.api_key if agent else ""
 
     api_key = (body.get("api_key") or current_key or "").strip()
@@ -1177,7 +1179,8 @@ async def handle_web_model_switch(request):
     try:
         server.switch_model(
             api_key, api_url, model_name,
-            cheap_api_key, cheap_api_url, cheap_model_name,
+            cheap_api_key=cheap_api_key, cheap_api_url=cheap_api_url,
+            cheap_model_name=cheap_model_name,
             temperature=temperature, max_tokens=max_tokens,
             top_p=top_p, max_context_tokens=max_context_tokens,
             options=options,
@@ -1185,6 +1188,19 @@ async def handle_web_model_switch(request):
             cheap_top_p=cheap_top_p, cheap_max_context_tokens=cheap_max_context_tokens,
             cheap_options=cheap_options,
         )
+        # 落盘 + 失效配置缓存：switch_model 只改长驻 Agent 内存，
+        # Web 聊天走 create_session → config_cache，若不落盘+失效，
+        # 新会话仍读磁盘旧配置（热切换对 Web 聊天无效的根因）。
+        try:
+            from tea_agent.config import save_config
+            from .modules.agent_module import AgentModule
+
+            agent = getattr(server, "_agent", None) or server.get_agent()
+            if agent is not None:
+                save_config(agent._cfg, server.get_config_path())
+            AgentModule.invalidate_config_cache(server.get_config_path())
+        except Exception as e:
+            logger.warning("persist/invalidate after model switch failed: %s", e)
         masked_key = (api_key[:6] + "..." + api_key[-4:]) if len(api_key) > 12 else "***"
         result = {"ok": True, "model": model_name, "api_url": api_url,
                   "api_key_masked": masked_key}
@@ -1728,6 +1744,74 @@ OPENAPI_SPEC = {
         "/v1/config/switch": {"post": {
             "summary": "Switch config", "tags": ["Config"],
             "responses": {"200": {"description": "OK"}}}},
+        "/api/providers": {"get": {
+            "summary": "List providers (builtin + custom)", "tags": ["Model Management"],
+            "responses": {"200": {"description": "Provider list with source/capabilities/active"}}},
+            "post": {
+                "summary": "Add custom provider", "tags": ["Model Management"],
+                "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                    "type": "object",
+                    "required": ["name", "api_url", "default_model"],
+                    "properties": {
+                        "name": {"type": "string", "description": "2-32 chars, [A-Za-z0-9_-]"},
+                        "api_url": {"type": "string"},
+                        "default_model": {"type": "string"},
+                        "models": {"type": "array", "items": {"type": "string"}},
+                        "supports_thinking": {"type": "boolean"},
+                        "supports_vision": {"type": "boolean"},
+                        "description": {"type": "string"},
+                    }}}}},
+                "responses": {"200": {"description": "Created"}, "409": {"description": "Duplicate name"}}}},
+        "/api/providers/{name}": {"put": {
+            "summary": "Update custom provider", "tags": ["Model Management"],
+            "parameters": [{"name": "name", "in": "path", "required": True,
+                            "schema": {"type": "string"}}],
+            "responses": {"200": {"description": "Updated"}, "403": {"description": "Builtin cannot be modified"},
+                          "404": {"description": "Not found"}}},
+            "delete": {
+                "summary": "Delete custom provider", "tags": ["Model Management"],
+                "parameters": [{"name": "name", "in": "path", "required": True,
+                                "schema": {"type": "string"}}],
+                "responses": {"200": {"description": "Deleted"}, "403": {"description": "Builtin cannot be deleted"}}}},
+        "/api/providers/{name}/models": {"get": {
+            "summary": "Query provider models (cache-first, live + static fallback)",
+            "tags": ["Model Management"],
+            "parameters": [
+                {"name": "name", "in": "path", "required": True, "schema": {"type": "string"}},
+                {"name": "refresh", "in": "query", "required": False,
+                 "schema": {"type": "boolean", "default": False},
+                 "description": "true=force live query"},
+                {"name": "api_key", "in": "query", "required": False,
+                 "schema": {"type": "string"}, "description": "for live query (custom provider)"}],
+            "responses": {"200": {"description": "Models (source: live|cache|static)"}}}},
+        "/api/providers/{name}/apply": {"post": {
+            "summary": "Apply provider to model config (one-click)", "tags": ["Model Management"],
+            "parameters": [{"name": "name", "in": "path", "required": True,
+                            "schema": {"type": "string"}}],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                "type": "object",
+                "properties": {
+                    "api_key": {"type": "string"},
+                    "model": {"type": "string", "description": "defaults to provider default_model"},
+                    "role": {"type": "string", "enum": ["main", "cheap", "vision"], "default": "main"},
+                    "temperature": {"type": "number"},
+                    "max_tokens": {"type": "integer"},
+                    "top_p": {"type": "number"},
+                }}}}},
+            "responses": {"200": {"description": "Applied to config.yaml (main hot-swaps)"},
+                          "404": {"description": "Provider not found"}}}},
+        "/api/model/test": {"post": {
+            "summary": "Test connection (endpoint + key + model)", "tags": ["Model Management"],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                "type": "object",
+                "required": ["api_url", "api_key"],
+                "properties": {
+                    "api_url": {"type": "string"},
+                    "api_key": {"type": "string"},
+                    "model": {"type": "string"},
+                }}}}},
+            "responses": {"200": {"description": "Connection test result (latency_ms)"},
+                          "400": {"description": "Missing params"}}}},
     }
 }
 
@@ -1923,3 +2007,171 @@ async def handle_pi_stats(request):
     if mod is None:
         return JSONResponse({"error": "pi_features module not loaded"}, status_code=500)
     return JSONResponse(mod.stats())
+
+# ================================================================
+#  Model Management (providers / models / custom providers)
+# ================================================================
+
+def _model_service():
+    """获取 ProviderService 单例（绑定 server 当前配置路径）。"""
+    from tea_agent.model_manager import get_provider_service
+
+    return get_provider_service(get_server().get_config_path())
+
+
+def _provider_error_response(e) -> JSONResponse:
+    """ProviderError → 统一错误 JSON。"""
+    return JSONResponse({"ok": False, "error": str(e), "code": e.code}, status_code=e.status)
+
+
+async def handle_providers_list(request):
+    """GET /api/providers — 提供商列表（内置+自定义，含来源/能力/当前使用状态）。"""
+    try:
+        return JSONResponse(_model_service().list_providers())
+    except Exception as e:
+        logger.exception("list providers failed")
+        return JSONResponse({"ok": False, "error": str(e), "code": "SERVER_ERROR"}, status_code=500)
+
+
+async def handle_provider_models(request):
+    """GET /api/providers/{name}/models — 查询提供商可用模型（缓存优先，实时 fallback）。
+
+    Query params:
+        refresh: true=强制实时查询并更新缓存；false/缺省=5 分钟内优先返回缓存
+        api_key: 可选，实时查询所需（自定义供应商必填）
+    """
+    name = request.path_params.get("name", "")
+    refresh = request.query_params.get("refresh", "false").lower() in ("1", "true", "yes")
+    api_key = request.query_params.get("api_key", "") or ""
+    try:
+        result = _model_service().query_models(name, api_key=api_key, refresh=refresh)
+        return JSONResponse(result)
+    except ProviderError as e:
+        return _provider_error_response(e)
+    except Exception as e:
+        logger.exception("query provider models failed: %s", name)
+        return JSONResponse({"ok": False, "error": str(e), "code": "QUERY_FAILED"}, status_code=502)
+
+
+async def handle_provider_create(request):
+    """POST /api/providers — 新增自定义供应商（持久化到 custom_providers.yaml）。"""
+    body = await request.json()
+    try:
+        provider = _model_service().add_custom_provider(body)
+        return JSONResponse({"ok": True, "provider": provider})
+    except ProviderError as e:
+        return _provider_error_response(e)
+    except Exception as e:
+        logger.exception("create custom provider failed")
+        return JSONResponse({"ok": False, "error": str(e), "code": "SERVER_ERROR"}, status_code=500)
+
+
+async def handle_provider_update(request):
+    """PUT /api/providers/{name} — 更新自定义供应商（内置拒绝修改）。"""
+    name = request.path_params.get("name", "")
+    body = await request.json()
+    try:
+        provider = _model_service().update_custom_provider(name, body)
+        return JSONResponse({"ok": True, "provider": provider})
+    except ProviderError as e:
+        return _provider_error_response(e)
+    except Exception as e:
+        logger.exception("update custom provider failed: %s", name)
+        return JSONResponse({"ok": False, "error": str(e), "code": "SERVER_ERROR"}, status_code=500)
+
+
+async def handle_provider_delete(request):
+    """DELETE /api/providers/{name} — 删除自定义供应商（内置拒绝删除）。"""
+    name = request.path_params.get("name", "")
+    try:
+        return JSONResponse(_model_service().delete_custom_provider(name))
+    except ProviderError as e:
+        return _provider_error_response(e)
+    except Exception as e:
+        logger.exception("delete custom provider failed: %s", name)
+        return JSONResponse({"ok": False, "error": str(e), "code": "SERVER_ERROR"}, status_code=500)
+
+
+async def handle_provider_apply(request):
+    """POST /api/providers/{name}/apply — 一键应用提供商到模型配置（main/cheap/vision）。
+
+    Body:
+        api_key: 可选，留空复用该角色现有 key
+        model:   可选，默认提供商 default_model
+        role:    main | cheap | vision，默认 main
+        temperature / max_tokens / top_p / max_context_tokens / options: 可选覆盖
+    """
+    name = request.path_params.get("name", "")
+    body = await request.json() if request.headers.get("content-length") else {}
+    api_key = (body.get("api_key") or "").strip()
+    role = (body.get("role") or "main").strip()
+    try:
+        result = _model_service().apply_provider(
+            name,
+            api_key=api_key,
+            model=(body.get("model") or "").strip(),
+            role=role,
+            config_path=get_server().get_config_path(),
+            temperature=body.get("temperature"),
+            max_tokens=body.get("max_tokens"),
+            top_p=body.get("top_p"),
+            max_context_tokens=body.get("max_context_tokens"),
+            options=body.get("options"),
+        )
+        # 配置已落盘 → 必须失效会话配置缓存，否则 create_session
+        # 命中启动时的旧配置，聊天会话仍用老模型（热生效失效的根因）。
+        # 无论 role 都要失效（cheap/vision 的新会话同样读取缓存）。
+        if result.get("ok"):
+            try:
+                from .modules.agent_module import AgentModule
+                AgentModule.invalidate_config_cache(get_server().get_config_path())
+            except Exception as e:
+                logger.warning("invalidate config cache failed: %s", e)
+        # 热生效：main 角色重建长驻 Agent 会话使新模型立即生效。
+        # api_key 留空时回退到运行中 Agent 的现有 key（与 /api/model 语义一致），
+        # 避免空 key 覆盖内存配置。
+        if result.get("ok") and role == "main":
+            try:
+                server = get_server()
+                agent = server._agent if hasattr(server, "_agent") else None
+                current_key = ""
+                try:
+                    current_key = agent._cfg.main_model.api_key if agent else ""
+                except Exception:
+                    current_key = ""
+                server.switch_model(api_key or current_key, result["api_url"], result["model"])
+            except Exception as e:
+                logger.warning("hot-switch after apply failed (config saved): %s", e)
+        return JSONResponse(result)
+    except ProviderError as e:
+        return _provider_error_response(e)
+    except Exception as e:
+        logger.exception("apply provider failed: %s", name)
+        return JSONResponse({"ok": False, "error": str(e), "code": "SERVER_ERROR"}, status_code=500)
+
+
+async def handle_model_test(request):
+    """POST /api/model/test — 测试连接（最小请求验证端点+key+模型）。
+
+    Body:
+        api_url:  必填
+        api_key:  必填
+        model:    可选
+    """
+    body = await request.json() if request.headers.get("content-length") else {}
+    api_url = (body.get("api_url") or "").strip()
+    api_key = (body.get("api_key") or "").strip()
+    model = (body.get("model") or "").strip()
+    if not api_url or not api_key:
+        return JSONResponse(
+            {"ok": False, "error": "api_url and api_key required", "code": "BAD_REQUEST"},
+            status_code=400,
+        )
+    try:
+        result = _model_service().test_connection(api_url, api_key, model)
+        return JSONResponse(result)
+    except ProviderError as e:
+        return _provider_error_response(e)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e), "code": "TEST_FAILED"}, status_code=502)
+

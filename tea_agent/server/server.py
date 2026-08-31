@@ -180,6 +180,11 @@ class MinimalServer:
         from .modules.agent_module import AgentModule
         return AgentModule.switch_model(*args, **kwargs)
 
+    def get_model_service(self):
+        """ProviderService 单例（模型管理：提供商/模型查询/自定义供应商）。"""
+        from tea_agent.model_manager import get_provider_service
+        return get_provider_service(self.get_config_path())
+
     def list_sessions(self, limit=20):
         from .modules.storage_module import StorageModule
         return StorageModule.list_topics(limit)
@@ -332,6 +337,13 @@ def _build_routes() -> list:
         Route("/api/model", rh.handle_web_model_info),
         Route("/api/model", rh.handle_web_model_switch, methods=["POST"]),
         Route("/api/model/config", rh.handle_web_model_config, methods=["POST"]),
+        Route("/api/model/test", rh.handle_model_test, methods=["POST"]),
+        Route("/api/providers", rh.handle_providers_list),
+        Route("/api/providers", rh.handle_provider_create, methods=["POST"]),
+        Route("/api/providers/{name:str}", rh.handle_provider_update, methods=["PUT"]),
+        Route("/api/providers/{name:str}", rh.handle_provider_delete, methods=["DELETE"]),
+        Route("/api/providers/{name:str}/models", rh.handle_provider_models),
+        Route("/api/providers/{name:str}/apply", rh.handle_provider_apply, methods=["POST"]),
         Route("/api/config/upload", rh.handle_web_upload_config, methods=["POST"]),
         Route("/api/modules", rh.handle_list_modules),
         Route("/api/modules/{name:str}", rh.handle_get_module),

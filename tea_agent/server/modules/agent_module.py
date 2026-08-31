@@ -207,6 +207,20 @@ class AgentModule(HotReloadModule):
             config_cache[key] = load_config(config_path)
         return config_cache[key]
 
+    @classmethod
+    def invalidate_config_cache(cls, config_path: str | None = None):
+        """使会话配置缓存失效（模型 apply/switch 后调用）。
+
+        配置被外部修改（如 /api/providers/{name}/apply 落盘新模型）后，
+        必须清除 config_cache 才能让 create_session 读到最新配置；
+        否则缓存永久命中启动时的旧配置，聊天会话始终使用老模型。
+        """
+        if config_path:
+            config_cache.pop(config_path, None)
+        config_cache.pop("__default__", None)
+        if getattr(cls, "_config_path", None):
+            config_cache.pop(cls._config_path, None)
+
     # ── 会话创建 ──
 
     @classmethod

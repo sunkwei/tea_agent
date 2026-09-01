@@ -163,7 +163,7 @@ class APIComponent(SessionComponent):
                 "family": "openai_o",
                 "confidence": 0.95,
             }
-        if any(kw in name for kw in ("gpt-4o", "gpt-4.1", "gpt-4-turbo")):
+        if any(kw in name for kw in ("gpt-4o", "gpt-4.1", "gpt-4-turbo", "qwen3")):
             return {
                 "supports_thinking": True,
                 "supports_reasoning_effort": False,
@@ -543,7 +543,7 @@ class APIComponent(SessionComponent):
                 elif strength < 0.7:
                     extra_body["reasoning_effort"] = "medium"
                 else:
-                    extra_body["reasoning_effort"] = "high"
+                    extra_body["reasoning_effort"] = "auto"
             elif strength > 0:
                 # thinking 不支持但 strength>0：尝试只传 reasoning_effort
                 if strength < 0.3:
@@ -551,7 +551,7 @@ class APIComponent(SessionComponent):
                 elif strength < 0.7:
                     extra_body["reasoning_effort"] = "medium"
                 else:
-                    extra_body["reasoning_effort"] = "high"
+                    extra_body["reasoning_effort"] = "auto"
             else:
                 if thinking_supported:
                     extra_body["thinking"] = {"type": "disabled"}

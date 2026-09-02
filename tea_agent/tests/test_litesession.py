@@ -521,3 +521,57 @@ class TestChatEdgeCases:
         lite_session.api.chat.completions.create.return_value = [mock_chunk]
         result = lite_session.chat("hi")
         assert result["tool_calls"] == 0
+
+
+# ── _call_api reasoning_effort 值域钳制测试 ──
+
+class TestCallApiReasoningEffort:
+    """_call_api reasoning_effort 值域钳制（400 回归：qwen3.8 仅接受 xhigh/medium/low）"""
+
+    def _make_session(self, **kwargs):
+        with patch("tea_agent.litesession.OpenAI") as mock_openai:
+            mock_openai.return_value = MagicMock()
+            from tea_agent.litesession import LiteSession
+
+            tk = MagicMock()
+            tk.meta_map = {}
+            base = dict(
+                toolkit=tk,
+                api_key="test-key",
+                api_url="https://test.api.com/v1",
+                model="qwen3.8-27b",
+                enable_thinking=True,
+                supports_reasoning=True,
+            )
+            base.update(kwargs)
+            return LiteSession(**base)
+
+    def _call(self, session):
+        """拦截 call_with_retry，捕获实际下发的 kwargs"""
+        captured = {}
+
+        def fake_call_with_retry(fn, **kw):
+            captured.update(kw)
+            return MagicMock()
+
+        with patch("tea_agent.api_retry.call_with_retry", side_effect=fake_call_with_retry):
+            session._call_api([{"role": "user", "content": "hi"}])
+        return captured
+
+    def test_qwen38_strength_high_clamped_to_xhigh(self):
+        """strength 0.7 → high → 对 qwen3.8 钳制为 xhigh"""
+        session = self._make_session()
+        captured = self._call(session)
+        assert captured["extra_body"]["reasoning_effort"] == "xhigh"
+
+    def test_qwen38_explicit_medium_passthrough(self):
+        """qwen3.8 值域内的显式 medium 不钳制"""
+        session = self._make_session(reasoning_effort="medium")
+        captured = self._call(session)
+        assert captured["extra_body"]["reasoning_effort"] == "medium"
+
+    def test_deepseek_v4_high_not_clamped(self):
+        """deepseek-v4 接受全值域：high 原样通过"""
+        session = self._make_session(model="deepseek-v4-flash")
+        captured = self._call(session)
+        assert captured["extra_body"]["reasoning_effort"] == "high"

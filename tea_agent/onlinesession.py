@@ -10,6 +10,7 @@ from openai import OpenAI
 
 from tea_agent.agent_evolution import EvolutionTrigger
 from tea_agent.basesession import BaseChatSession, relaxed_json_loads
+from tea_agent.config import REASONING_EFFORT_VALUES, clamp_reasoning_effort
 from tea_agent.prompt_manager import (
     INTERRUPT_ABANDONED_TMPL,
     INTERRUPT_CORRECTED_TMPL,
@@ -94,7 +95,7 @@ _VALID_MODES = {"pragmatic", "creative", "mixed"}
 def detect_mode(call_tool_fn, user_text: str) -> dict:
     """根据用户输入自动检测并返回建议的模式。"""
     try:
-        result = call_tool_fn(action="auto", text=user_text)
+        result = call_tool_fn(action="high", text=user_text)
         if isinstance(result, dict):
             return result
         return {"switched": False, "mode": None}
@@ -159,11 +160,15 @@ class APIComponent(SessionComponent):
         if any(kw in name for kw in ("o1", "o3", "o4", "o-mini", "o3-mini")):
             return {
                 "supports_thinking": True,
-                "supports_reasoning_effort": True,
+                "supports_reasoning_effort": False,
                 "family": "openai_o",
+                "supported_efforts": ["none", "low", "medium", "high"],
                 "confidence": 0.95,
             }
-        if any(kw in name for kw in ("gpt-4o", "gpt-4.1", "gpt-4-turbo", "qwen3")):
+        if any(kw in name for kw in ("gpt-4o", "gpt-4.1", "gpt-4-turbo")):
+            # 注意 qwen3 不归此组：qwen 系列有原生思考且接受 xhigh，
+            # 曾被误分到此组（supports_reasoning_effort=False），
+            # 导致 qwen 的 effort 值域/推荐值全部失效。
             return {
                 "supports_thinking": True,
                 "supports_reasoning_effort": False,
@@ -172,26 +177,13 @@ class APIComponent(SessionComponent):
             }
 
         # ── DeepSeek 系列 ──
-        if "deepseek-reasoner" in name or "deepseek-r1" in name:
-            return {
-                "supports_thinking": True,
-                "supports_reasoning_effort": False,
-                "family": "deepseek_reasoner",
-                "confidence": 0.9,
-            }
         if "deepseek-v4" in name:
             return {
                 "supports_thinking": True,
-                "supports_reasoning_effort": False,
+                "supports_reasoning_effort": True,
                 "family": "deepseek_v4",
+                "supported_efforts": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
                 "confidence": 0.8,
-            }
-        if "deepseek" in name:
-            return {
-                "supports_thinking": True,
-                "supports_reasoning_effort": False,
-                "family": "deepseek",
-                "confidence": 0.7,
             }
 
         # ── Anthropic Claude ──
@@ -222,12 +214,15 @@ class APIComponent(SessionComponent):
             }
 
         # ── Qwen ──
+        # 值域按 qwen3.8 实际报错确认：仅 xhigh（默认）/ medium / low。
+        # 注：o 系列之外的 qwen 端点若放宽值域，更新此列表即可。
         if "qwen" in name:
             return {
                 "supports_thinking": True,
-                "supports_reasoning_effort": False,
+                "supports_reasoning_effort": True,
                 "family": "qwen",
-                "confidence": 0.6,
+                "supported_efforts": ["low", "medium", "xhigh"],
+                "confidence": 0.8,
             }
 
         # ── Llama ──
@@ -283,7 +278,7 @@ class APIComponent(SessionComponent):
         if cached is not None and not force:
             return {
                 "supports_thinking": cached,
-                "supports_reasoning_effort": self.ctx.reasoning_effort != "auto",
+                "supports_reasoning_effort": self.ctx.reasoning_effort != "xhigh",
                 "recommended_strength": self.ctx.thinking_strength,
                 "recommended_effort": self.ctx.reasoning_effort,
                 "method": "cached",
@@ -297,7 +292,7 @@ class APIComponent(SessionComponent):
                 "supports_thinking": False,
                 "supports_reasoning_effort": False,
                 "recommended_strength": 0.0,
-                "recommended_effort": "auto",
+                "recommended_effort": "medium",
                 "method": "disabled",
             }
 
@@ -307,26 +302,23 @@ class APIComponent(SessionComponent):
             # 高置信度匹配，直接使用
             supports_re = match["supports_reasoning_effort"]
             strength = 0.7
-            effort = "auto"
+            effort = "medium"
 
             if supports_re:
                 effort = "medium"
                 strength = 0.7
-            elif match["family"] == "deepseek_reasoner":
-                effort = "auto"
-                strength = 0.8
             elif match["family"] == "deepseek_v4":
-                effort = "auto"
+                effort = "xhigh"
                 strength = 0.6  # V4 flash 轻量模型，中等思考
-            elif match["family"] == "deepseek":
-                effort = "auto"
-                strength = 0.7
             elif match["family"] == "openai_gpt4":
-                effort = "auto"
+                effort = "xhigh"
                 strength = 0.5  # GPT-4o 的 thinking 支持有限
             elif match["family"] == "minimax":
-                effort = "auto"
+                effort = "xhigh"
                 strength = 0.6  # MiniMax 的 thinking 支持中等
+            elif match["family"] == "qwen":
+                effort = "xhigh"
+                strength = 0.8
 
             # 更新缓存
             setattr(self.ctx, cache_attr, match["supports_thinking"])
@@ -355,7 +347,7 @@ class APIComponent(SessionComponent):
             "supports_thinking": True,
             "supports_reasoning_effort": False,
             "recommended_strength": 0.5,
-            "recommended_effort": "auto",
+            "recommended_effort": "high",
             "method": "default",
         }
 
@@ -383,13 +375,13 @@ class APIComponent(SessionComponent):
                     },
                     max_tokens=5,
                 )
-                result["supports_reasoning_effort"] = True
+                result["supports_reasoning_effort"] = False
                 result["recommended_strength"] = 0.7
                 result["recommended_effort"] = "medium"
             except Exception:
                 result["supports_reasoning_effort"] = False
                 result["recommended_strength"] = 0.7
-                result["recommended_effort"] = "auto"
+                result["recommended_effort"] = "high"
 
         except Exception as e:
             err_str = str(e).lower()
@@ -524,9 +516,15 @@ class APIComponent(SessionComponent):
         # ── 构建 extra_body：思维配置 + 模型 options ──
         extra_body = {}
 
-        # reasoning_effort 是独立参数（OpenAI o-series 使用），不受 thinking probe 影响
+        # reasoning_effort 是独立参数（OpenAI o-series 使用），不受 thinking probe 影响。
+        # 仅当取值合法且非 "auto"（"auto"=自动推导，不显式下发）时才发送；
+        # 否则回退到 thinking_strength 自动映射。
         reasoning_effort = self.ctx.reasoning_effort
-        if reasoning_effort and reasoning_effort != "auto":
+        if (
+            reasoning_effort
+            and reasoning_effort in REASONING_EFFORT_VALUES
+            and reasoning_effort != "auto"
+        ):
             # 用户明确指定 effort 级别
             extra_body["reasoning_effort"] = reasoning_effort
             # 如果 thinking 也支持，同时启用 thinking（兼容模式）
@@ -537,13 +535,13 @@ class APIComponent(SessionComponent):
             strength = max(0.0, min(1.0, self.ctx.thinking_strength))
             if strength > 0 and thinking_supported:
                 extra_body["thinking"] = {"type": "enabled"}
-                # 将 strength 映射为推理努力程度（通用映射）
+                # 将 strength 映射为推理努力程度（通用映射；API 不接受 "auto"）
                 if strength < 0.3:
                     extra_body["reasoning_effort"] = "low"
                 elif strength < 0.7:
                     extra_body["reasoning_effort"] = "medium"
                 else:
-                    extra_body["reasoning_effort"] = "auto"
+                    extra_body["reasoning_effort"] = "high"
             elif strength > 0:
                 # thinking 不支持但 strength>0：尝试只传 reasoning_effort
                 if strength < 0.3:
@@ -551,7 +549,7 @@ class APIComponent(SessionComponent):
                 elif strength < 0.7:
                     extra_body["reasoning_effort"] = "medium"
                 else:
-                    extra_body["reasoning_effort"] = "auto"
+                    extra_body["reasoning_effort"] = "high"
             else:
                 if thinking_supported:
                     extra_body["thinking"] = {"type": "disabled"}
@@ -572,6 +570,28 @@ class APIComponent(SessionComponent):
                 extra_body.update(model_opts)
         except Exception:
             pass
+
+        # ── reasoning_effort 终末校验 ──
+        # options 合并可能注入非法值（如 "auto"），API 只接受
+        # none/minimal/low/medium/high/xhigh/max；"auto" 语义=自动推导，
+        # 直接移除该参数，避免 400。
+        _eff = extra_body.get("reasoning_effort")
+        if _eff is not None:
+            if _eff not in REASONING_EFFORT_VALUES or _eff == "auto":
+                extra_body.pop("reasoning_effort", None)
+
+        # ── reasoning_effort 值域钳制（按模型家族）──
+        # 各模型接受的值域不同（如 qwen3.8 仅 xhigh/medium/low，
+        # 而 strength 映射会产出 high）。不在值域内时钳制到最接近的支持值，
+        # 避免 400。显式配置值与 strength 映射结果在此统一兜底。
+        _eff = extra_body.get("reasoning_effort")
+        if _eff:
+            _match = self._match_model_family(target_model)
+            _supported = _match.get("supported_efforts")
+            if _supported and _eff not in _supported:
+                _clamped = clamp_reasoning_effort(_eff, _supported)
+                logger.info(f"🔧 reasoning_effort 钳制: {_eff} → {_clamped} (模型: {target_model})")
+                extra_body["reasoning_effort"] = _clamped
 
         # ⚠️ 思考模式下不发送 temperature/top_p（DeepSeek V4 文档明确不支持；
         # 官方端点会忽略，但第三方代理可能直接 400）。凡启用 thinking 或
@@ -1328,7 +1348,7 @@ class OnlineToolSession(BaseChatSession):
         max_iterations: int = 50,
         enable_thinking: bool = True,
         thinking_strength: float = 0.7,
-        reasoning_effort: str = "auto",
+        reasoning_effort: str = "xhigh",
         storage=None,
         cheap_api_key: str = "",
         cheap_api_url: str = "",
@@ -1360,7 +1380,7 @@ class OnlineToolSession(BaseChatSession):
             max_iterations: 最大工具调用迭代次数
             enable_thinking: 是否启用 thinking 功能
             thinking_strength: 思考强度 0.0-1.0（0=最弱/最省token, 1=最强/最深思考）
-            reasoning_effort: 推理努力程度 "auto"/"low"/"medium"/"high"
+            reasoning_effort: 推理努力程度 "none"/"low"/"medium"/"high"/"xhigh"/"max"
             storage: Storage 实例，用于持久化存储
             cheap_api_key: 便宜模型 API密钥
             cheap_api_url: 便宜模型 API地址
@@ -1492,7 +1512,7 @@ class OnlineToolSession(BaseChatSession):
             cfg = get_config()
             # 检查是否为用户显式设置的（非默认值则跳过自动保存）
             is_default_strength = abs(cfg.thinking_strength - 0.7) < 0.01
-            is_default_effort = cfg.reasoning_effort == "auto"
+            is_default_effort = cfg.reasoning_effort == "xhigh"
             should_auto_save = is_default_strength and is_default_effort
 
             # 执行探测（同时更新主模型和便宜模型的 thinking 缓存）
@@ -1505,7 +1525,7 @@ class OnlineToolSession(BaseChatSession):
             if should_auto_save and main_detected.get("method") != "disabled":
                 # 更新配置对象
                 cfg.thinking_strength = main_detected["recommended_strength"]
-                if main_detected["recommended_effort"] != "auto":
+                if main_detected["recommended_effort"] != "none":
                     cfg.reasoning_effort = main_detected["recommended_effort"]
 
                 # 同时更新 ctx

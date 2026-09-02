@@ -7,6 +7,7 @@ from collections.abc import Callable
 from openai import OpenAI
 
 from tea_agent.basesession import relaxed_json_loads
+from tea_agent.config import REASONING_EFFORT_VALUES, clamp_reasoning_effort
 from tea_agent.tool_hooks import tool_hooks
 
 logger = logging.getLogger("session.lite")
@@ -24,7 +25,7 @@ class LiteSession:
         system_prompt: str = "",
         enable_thinking: bool = True,
         thinking_strength: float = 0.7,
-        reasoning_effort: str = "auto",
+        reasoning_effort: str = "auto",  # "auto"=自动推导不发送 / none/minimal/low/medium/high/xhigh/max
         max_iterations: int = 50,
         supports_reasoning: bool = True,
         allowed_tools: list[str] | None = None,  # 已废弃，保留参数仅为兼容性
@@ -333,9 +334,13 @@ class LiteSession:
         if self.enable_thinking and self.supports_reasoning:
             extra_body = {"thinking": {"type": "enabled"}}
 
-            # 映射 reasoning_effort
+            # 映射 reasoning_effort（"auto"=自动推导不发送；非法值回退自动映射）
             reasoning_effort = self.reasoning_effort
-            if reasoning_effort and reasoning_effort != "auto":
+            if (
+                reasoning_effort
+                and reasoning_effort in REASONING_EFFORT_VALUES
+                and reasoning_effort != "auto"
+            ):
                 extra_body["reasoning_effort"] = reasoning_effort
             else:
                 strength = max(0.0, min(1.0, self.thinking_strength))
@@ -345,6 +350,18 @@ class LiteSession:
                     extra_body["reasoning_effort"] = "low"
                 else:
                     extra_body["thinking"]["type"] = "disabled"
+
+            # 值域钳制：各模型接受的 reasoning_effort 值域不同
+            # （如 qwen3.8 仅 xhigh/medium/low，strength 映射会产出 high），
+            # 不在值域内时钳制到最接近的支持值，避免 400。
+            _eff = extra_body.get("reasoning_effort")
+            if _eff:
+                from tea_agent.onlinesession import APIComponent  # 延迟导入防循环
+
+                _match = APIComponent._match_model_family(self.model)
+                _supported = _match.get("supported_efforts")
+                if _supported and _eff not in _supported:
+                    extra_body["reasoning_effort"] = clamp_reasoning_effort(_eff, _supported)
 
             kwargs["extra_body"] = extra_body
 

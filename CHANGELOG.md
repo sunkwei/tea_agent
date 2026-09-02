@@ -3,6 +3,26 @@
 
 ## [Unreleased]
 ### Features
+- fix: `reasoning_effort` 不再下发非法值 `auto`（修复 API 400 `unknown variant auto`）
+  - 原因：默认配置 `reasoning_effort: auto` + `thinking_strength: 0.7` 时，strength 自动映射分支
+    将 `auto` 作为值写入 `extra_body`，而 API 只接受 `none/minimal/low/medium/high/xhigh/max`
+  - `onlinesession.py`/`litesession.py`：strength≥0.7 映射为 `high`；显式值经白名单校验，
+    非法值回退自动映射；`model options` 合并后追加终末校验，杜绝注入 `auto`
+  - `config.py`：新增 `REASONING_EFFORT_VALUES` 常量，配置解析时值域校验（非法值回退 `auto`）
+  - 新增 5 条回归测试（`test_reasoning_effort_*`）
+- fix: `reasoning_effort` 值域按模型家族钳制（修复 qwen3.8 400 `Unexpected reasoning effort high`）
+  - 根因：不同模型接受的 effort 值域不同（qwen3.8 仅 `xhigh/medium/low`），
+    而 strength 映射统一产出 `high`；且 `qwen3` 前缀曾被误分到 `openai_gpt4` 家族
+    （`supports_reasoning_effort=False`），qwen 的推荐值/值域全部失效
+  - `onlinesession.py`：`_match_model_family` 将 `qwen3` 归回 `qwen` 家族，
+    家族表新增 `supported_efforts`（qwen=`low/medium/xhigh`，deepseek_v4=全 7 档，
+    openai_o=`none/low/medium/high`）；`create_chat_stream` 终末校验后按值域钳制
+  - `config.py`：新增 `REASONING_EFFORT_RANKS` + `clamp_reasoning_effort()`
+    （按强度序取最接近支持值，等距取更强档：`high`→`xhigh`）
+  - `litesession.py`：`_call_api` 同样钳制（子 Agent 廉价模型同路径）
+  - 新增 14 条回归测试（onlinesession 7 / litesession 3 / config 4）
+- fix(test): `test_ruff_deep_scan` 断言随 store 目录 lint 状态演进更新
+  （硬编码期望 F401/W293 已随目录清理失效 → 接受已知规则集；全量测试 1182 通过）
 - feat: 会话期间插话（steering）— 工具循环每轮边界消费排队消息并注入下一轮模型请求
   - `POST /api/chat/steering` 端点：流式生成中用户输入即时入队（含图片），无需等待会话结束
   - `tool_loop_runner` 循环顶部注入 `[即时指令]` user 消息（持久化进 context.messages，

@@ -30,6 +30,9 @@ __all__ = [
     "PathsConfig",
     "EmbeddingConfig",
     "AgentConfig",
+    "REASONING_EFFORT_VALUES",
+    "REASONING_EFFORT_RANKS",
+    "clamp_reasoning_effort",
     "load_config",
     "save_config",
     "get_config",
@@ -38,6 +41,47 @@ __all__ = [
     "set_active_config_path",
     "get_active_config_path",
 ]
+
+# reasoning_effort 合法取值（OpenAI o 系列 / DeepSeek 兼容端点）。
+# "auto" 仅为配置占位值：表示"自动推导、不显式下发该参数"，
+# 不是合法的 API 值（API 只接受 none/minimal/low/medium/high/xhigh/max）。
+REASONING_EFFORT_VALUES: frozenset[str] = frozenset(
+    {"auto", "none", "minimal", "low", "medium", "high", "xhigh", "max"}
+)
+
+# reasoning_effort 强度序（数值越大思考越深），用于值域钳制
+REASONING_EFFORT_RANKS: dict[str, int] = {
+    "none": 0,
+    "minimal": 1,
+    "low": 2,
+    "medium": 3,
+    "high": 4,
+    "xhigh": 5,
+    "max": 6,
+}
+
+
+def clamp_reasoning_effort(value: str, supported: list[str] | None) -> str:
+    """把 reasoning_effort 钳制到模型接受的值域内（避免 400）。
+
+    不同模型接受的值域不同：如 qwen3.8 仅接受 xhigh/medium/low，
+    而 strength 映射会产出 high。值不在 supported 内时，
+    按 REASONING_EFFORT_RANKS 取最接近的支持值（同距时取更强档）。
+
+    Args:
+        value: 候选 effort 值（"auto" 等占位值原样返回，由调用方先过滤）
+        supported: 模型接受的值域列表；None/空 = 未知值域，不钳制
+
+    Returns:
+        钳制后的值（原值在值域内或未提供值域时原样返回）
+    """
+    if not value or not supported or value in supported:
+        return value
+    target = REASONING_EFFORT_RANKS.get(value, 3)
+    return min(
+        supported,
+        key=lambda v: (abs(REASONING_EFFORT_RANKS.get(v, 3) - target), -REASONING_EFFORT_RANKS.get(v, 3)),
+    )
 
 
 @dataclass
@@ -210,7 +254,7 @@ class AgentConfig:
     max_iterations: int = 50  # 最大工具调用迭代次数
     enable_thinking: bool = True  # 是否启用 thinking 功能
     thinking_strength: float = 0.7  # 思考强度 0.0-1.0（0=最弱/最省token, 1=最强/最深度思考）
-    reasoning_effort: str = "auto"  # 推理努力程度: "auto"/"low"/"medium"/"high"，映射到 OpenAI reasoning_effort
+    reasoning_effort: str = "auto"  # 推理努力: "auto"=自动推导不发送 / none/minimal/low/medium/high/xhigh/max
 
     # Token 优化参数
     keep_turns: int = 5  # 保留最近N轮完整对话，更早的对话自动摘要
@@ -314,7 +358,12 @@ class AgentConfig:
             return False
 
         expected_type = self._CONFIG_TYPES.get(key)
-        if expected_type:
+        if key == "reasoning_effort":
+            # 值域白名单：仅接受 REASONING_EFFORT_VALUES（含 "auto" 占位值）
+            value = str(value).strip().lower()
+            if value not in REASONING_EFFORT_VALUES:
+                return False
+        elif expected_type:
             try:
                 value = (
                     value.lower() in ("true", "1", "yes", "on")
@@ -634,7 +683,9 @@ def _parse_session_params(cfg: AgentConfig, data: dict) -> None:
     else:
         cfg.enable_thinking = bool(val)
     cfg.thinking_strength = float(data.get("thinking_strength", cfg.thinking_strength))
-    cfg.reasoning_effort = str(data.get("reasoning_effort", cfg.reasoning_effort))
+    # reasoning_effort 值域校验：非法值回退 "auto"（自动推导，不显式下发）
+    _effort = str(data.get("reasoning_effort", cfg.reasoning_effort)).strip().lower()
+    cfg.reasoning_effort = _effort if _effort in REASONING_EFFORT_VALUES else "auto"
 
 
 def _parse_token_params(cfg: AgentConfig, data: dict) -> None:
@@ -1044,7 +1095,7 @@ def _generate_config_template() -> str:
         "enable_thinking: true\n\n"
         "# 思考强度 0.0-1.0（0=最弱/最省token，1=最强/最深思考）\n"
         "thinking_strength: 0.7\n\n"
-        "# 推理努力程度: auto/low/medium/high，映射到 OpenAI reasoning_effort 参数\n"
+        "# 推理努力程度: auto=自动推导不发送 / none/minimal/low/medium/high/xhigh/max\n"
         "# auto = 根据 thinking_strength 自动映射\n"
         "reasoning_effort: auto\n\n"
         "# ──────────────────── Token 优化参数 ────────────────────\n"

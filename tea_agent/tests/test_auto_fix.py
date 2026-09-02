@@ -245,7 +245,9 @@ class TestIntegration:
             assert len(issues) >= 0, f"store 目录应发现至少 0 个问题, 实际: {len(issues)}"
             if issues:
                 codes = {i["rule"] for i in issues}
-                assert "F401" in codes or "W293" in codes, f"应包含常见 ruff 规则: {codes}"
+                # 随 store 目录 lint 状态演进同步（此前为 F401/W293，清理后为 F841/S101）
+                known = {"F401", "W293", "F841", "S101", "E902", "F821", "F823"}
+                assert codes & known, f"应包含已知 ruff 规则: {codes}"
 
     def test_scan_result_structure(self, agent, sample_file):
         """扫描结果应包含完整字段。"""

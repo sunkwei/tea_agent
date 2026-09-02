@@ -8,6 +8,40 @@ from pathlib import Path
 import pytest
 
 
+class TestClampReasoningEffort:
+    """clamp_reasoning_effort 值域钳制测试"""
+
+    def test_passthrough_when_in_range(self):
+        from tea_agent.config import clamp_reasoning_effort
+
+        assert clamp_reasoning_effort("xhigh", ["low", "medium", "xhigh"]) == "xhigh"
+        full = ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
+        assert clamp_reasoning_effort("high", full) == "high"
+        assert clamp_reasoning_effort("minimal", full) == "minimal"
+
+    def test_high_clamped_to_nearest_supported(self):
+        from tea_agent.config import clamp_reasoning_effort
+
+        # qwen3.8 值域：high 与 medium/xhigh 等距 → 取更强档 xhigh
+        assert clamp_reasoning_effort("high", ["low", "medium", "xhigh"]) == "xhigh"
+        # 单值域 → 唯一候选
+        assert clamp_reasoning_effort("high", ["low"]) == "low"
+
+    def test_nearest_by_rank(self):
+        from tea_agent.config import clamp_reasoning_effort
+
+        assert clamp_reasoning_effort("max", ["low", "medium", "xhigh"]) == "xhigh"
+        assert clamp_reasoning_effort("none", ["low", "medium", "xhigh"]) == "low"
+        assert clamp_reasoning_effort("minimal", ["low", "medium", "xhigh"]) == "low"
+
+    def test_no_supported_set_means_no_clamp(self):
+        from tea_agent.config import clamp_reasoning_effort
+
+        assert clamp_reasoning_effort("high", None) == "high"
+        assert clamp_reasoning_effort("high", []) == "high"
+        assert clamp_reasoning_effort("", ["low"]) == ""
+
+
 class TestModelConfig:
     """ModelConfig 测试"""
 

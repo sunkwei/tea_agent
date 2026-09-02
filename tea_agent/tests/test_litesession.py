@@ -523,6 +523,66 @@ class TestChatEdgeCases:
         assert result["tool_calls"] == 0
 
 
+# ── reasoning 字段兼容（vLLM 思考模式 `reasoning` 字段）──
+
+class TestReasoningFieldCompat:
+    """思考字段兼容：vLLM 思考模式（Qwen3.8 等）返回 `reasoning`，
+    兼容端点返回 `reasoning_content`，两者都应被提取（回归：此前 vLLM 的
+    `reasoning` 字段被静默丢弃，UI 看不到思考过程）"""
+
+    def test_chat_reasoning_field_vllm(self, lite_session):
+        """delta 只有 `reasoning` 字段 → 累积进 thinking 且回调输出"""
+        calls: list = []
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock()]
+        mock_chunk.choices[0].delta.content = "17×23=391"
+        mock_chunk.choices[0].delta.reasoning_content = None
+        mock_chunk.choices[0].delta.reasoning = "让我思考: 17*20=340, 17*3=51"
+        mock_chunk.choices[0].delta.tool_calls = None
+        lite_session.api.chat.completions.create.return_value = [mock_chunk]
+        result = lite_session.chat("17*23=?", callback=lambda t: calls.append(t))
+        assert result["thinking"] == "让我思考: 17*20=340, 17*3=51"
+        assert any("让我思考" in c for c in calls)
+        assert result["assistant"] == "17×23=391"
+        assert result["error"] is None
+
+    def test_chat_reasoning_content_field_still_works(self, lite_session):
+        """`reasoning_content` 字段（DeepSeek 等）不受影响"""
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock()]
+        mock_chunk.choices[0].delta.content = "Hi"
+        mock_chunk.choices[0].delta.reasoning_content = "深度思考过程"
+        mock_chunk.choices[0].delta.tool_calls = None
+        lite_session.api.chat.completions.create.return_value = [mock_chunk]
+        result = lite_session.chat("Hi")
+        assert result["thinking"] == "深度思考过程"
+
+    def test_chat_reasoning_prefers_reasoning_content(self, lite_session):
+        """两字段同时存在时优先 reasoning_content"""
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock()]
+        mock_chunk.choices[0].delta.content = ""
+        mock_chunk.choices[0].delta.reasoning_content = "来自 RC"
+        mock_chunk.choices[0].delta.reasoning = "来自 reasoning"
+        mock_chunk.choices[0].delta.tool_calls = None
+        lite_session.api.chat.completions.create.return_value = [mock_chunk]
+        result = lite_session.chat("Hi")
+        assert result["thinking"] == "来自 RC"
+
+    def test_chat_unmocked_reasoning_attr_no_false_positive(self, lite_session):
+        """MagicMock 自动生成的非字符串属性不得误判为思考（防止拼接崩溃）"""
+        mock_chunk = MagicMock()
+        mock_chunk.choices = [MagicMock()]
+        mock_chunk.choices[0].delta.content = "直接回复"
+        # 不显式设置 reasoning_content/reasoning
+        mock_chunk.choices[0].delta.tool_calls = None
+        lite_session.api.chat.completions.create.return_value = [mock_chunk]
+        result = lite_session.chat("Hi")
+        assert result["thinking"] == ""
+        assert result["error"] is None
+        assert result["assistant"] == "直接回复"
+
+
 # ── _call_api reasoning_effort 值域钳制测试 ──
 
 class TestCallApiReasoningEffort:

@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 from openai import OpenAI
 
-from tea_agent.basesession import relaxed_json_loads
+from tea_agent.basesession import extract_reasoning, relaxed_json_loads
 from tea_agent.config import REASONING_EFFORT_VALUES, clamp_reasoning_effort
 from tea_agent.tool_hooks import tool_hooks
 
@@ -397,11 +397,13 @@ class LiteSession:
 
             delta = chunk.choices[0].delta
 
-            # 处理推理内容
-            if hasattr(delta, "reasoning_content") and delta.reasoning_content:
-                reasoning_content += delta.reasoning_content
+            # 处理推理内容（兼容端点为 `reasoning_content`，
+            # vLLM 思考模式（Qwen3.8 等）为 `reasoning`）
+            _rc = extract_reasoning(delta)
+            if _rc:
+                reasoning_content += _rc
                 if callback:
-                    callback(delta.reasoning_content)
+                    callback(_rc)
 
             # 处理普通内容
             if delta.content:

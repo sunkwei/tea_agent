@@ -5,8 +5,33 @@ import os
 import sys
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("basesession")
+
+
+def extract_reasoning(obj: Any) -> str:
+    """从 API 响应对象（message / delta）提取思考过程文本。
+
+    不同 OpenAI 兼容端点对思考字段的命名不同：
+    - DeepSeek / OpenAI o 系列等: ``reasoning_content``
+    - vLLM 思考模式（如 Qwen3.8）: ``reasoning``
+
+    按 ``reasoning_content`` → ``reasoning`` 顺序取第一个非空字符串值；
+    字段缺失、None 或非字符串（如 mock 对象的自动属性）一律视为无思考，
+    返回空串，避免误判。
+
+    Args:
+        obj: API 响应对象（openai SDK 的 message 或 delta）
+
+    Returns:
+        思考过程文本；无可提取时返回空字符串
+    """
+    for key in ("reasoning_content", "reasoning"):
+        value = getattr(obj, key, None)
+        if isinstance(value, str) and value:
+            return value
+    return ""
 
 
 def relaxed_json_loads(raw: str):

@@ -30,4 +30,4 @@ keep_turns: 5
 # 思考模式强度配置（可运行时修改）
 enable_thinking: true
 thinking_strength: 0.7      # 0.0-1.0，思考深度强度
-reasoning_effort: auto      # auto/low/medium/high，映射到 OpenAI reasoning_effort
+reasoning_effort: medium      # auto=自动推导不发送 / none/minimal/low/medium/high/xhigh/max

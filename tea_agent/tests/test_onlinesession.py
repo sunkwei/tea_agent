@@ -494,6 +494,153 @@ class TestCreateChatStreamParams:
         eb = kwargs.get("extra_body", {})
         assert "thinking" not in eb
 
+    def test_reasoning_effort_auto_never_sent_default(self):
+        """默认配置（auto + strength=0.7）不得下发 reasoning_effort=auto（API 400 回归）"""
+        api = self._make_api(
+            enable_thinking=True, supports_reasoning=True, _thinking_supported=True
+        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
+        )
+        api.create_chat_stream([{"role": "user", "content": "hi"}], [])
+        _, kwargs = api.ctx.client.chat.completions.create.call_args
+        eb = kwargs["extra_body"]
+        assert eb.get("reasoning_effort") != "auto"
+        # strength=0.7 → 映射为 high
+        assert eb.get("reasoning_effort") == "high"
+
+    def test_reasoning_effort_strength_mapping(self):
+        """thinking_strength=0.5 → reasoning_effort=medium"""
+        api = self._make_api(
+            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+            thinking_strength=0.5,
+        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
+        )
+        api.create_chat_stream([{"role": "user", "content": "hi"}], [])
+        _, kwargs = api.ctx.client.chat.completions.create.call_args
+        assert kwargs["extra_body"].get("reasoning_effort") == "medium"
+
+    def test_reasoning_effort_explicit_valid(self):
+        """显式合法值 xhigh 原样下发"""
+        api = self._make_api(
+            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+            reasoning_effort="xhigh",
+        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
+        )
+        api.create_chat_stream([{"role": "user", "content": "hi"}], [])
+        _, kwargs = api.ctx.client.chat.completions.create.call_args
+        assert kwargs["extra_body"].get("reasoning_effort") == "xhigh"
+
+    def test_reasoning_effort_invalid_falls_back(self):
+        """非法显式值回退到 strength 自动映射，绝不发送 auto"""
+        api = self._make_api(
+            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+            reasoning_effort="banana",
+        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
+        )
+        api.create_chat_stream([{"role": "user", "content": "hi"}], [])
+        _, kwargs = api.ctx.client.chat.completions.create.call_args
+        assert kwargs["extra_body"].get("reasoning_effort") != "auto"
+        assert kwargs["extra_body"].get("reasoning_effort") == "high"
+
+    def test_reasoning_effort_auto_in_options_stripped(self, monkeypatch):
+        """model options 注入 reasoning_effort=auto 时终末校验必须移除"""
+        mock_cfg = MagicMock()
+        mock_cfg.main_model.options = {"reasoning_effort": "auto"}
+        mock_cfg.cheap_model.options = {}
+        monkeypatch.setattr("tea_agent.config.get_config", lambda: mock_cfg)
+        api = self._make_api(
+            enable_thinking=True, supports_reasoning=True, _thinking_supported=True
+        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
+        )
+        api.create_chat_stream([{"role": "user", "content": "hi"}], [])
+        _, kwargs = api.ctx.client.chat.completions.create.call_args
+        eb = kwargs["extra_body"]
+        assert "reasoning_effort" not in eb or eb["reasoning_effort"] != "auto"
+
+    def test_qwen38_effort_high_clamped_to_xhigh(self):
+        """qwen3.8 仅接受 xhigh/medium/low：strength 0.7 → high 必须钳制为 xhigh（400 回归）"""
+        api = self._make_api(
+            model="qwen3.8-27b",
+            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
+        )
+        api.create_chat_stream([{"role": "user", "content": "hi"}], [])
+        _, kwargs = api.ctx.client.chat.completions.create.call_args
+        assert kwargs["extra_body"].get("reasoning_effort") == "xhigh"
+
+    def test_qwen38_explicit_high_clamped(self):
+        """显式 high 对 qwen3.8 同样越界 → 钳制为 xhigh"""
+        api = self._make_api(
+            model="qwen3.8-27b",
+            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+            reasoning_effort="high",
+        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
+        )
+        api.create_chat_stream([{"role": "user", "content": "hi"}], [])
+        _, kwargs = api.ctx.client.chat.completions.create.call_args
+        assert kwargs["extra_body"].get("reasoning_effort") == "xhigh"
+
+    def test_qwen38_effort_medium_passthrough(self):
+        """qwen3.8 值域内的显式值 medium 不钳制"""
+        api = self._make_api(
+            model="qwen3.8-27b",
+            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+            reasoning_effort="medium",
+        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
+        )
+        api.create_chat_stream([{"role": "user", "content": "hi"}], [])
+        _, kwargs = api.ctx.client.chat.completions.create.call_args
+        assert kwargs["extra_body"].get("reasoning_effort") == "medium"
+
+    def test_deepseek_v4_effort_high_not_clamped(self):
+        """deepseek-v4 接受全值域：high 原样通过"""
+        api = self._make_api(
+            model="deepseek-v4-flash",
+            enable_thinking=True, supports_reasoning=True, _thinking_supported=True,
+        )
+        api.ctx.client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="ok", tool_calls=None))]
+        )
+        api.create_chat_stream([{"role": "user", "content": "hi"}], [])
+        _, kwargs = api.ctx.client.chat.completions.create.call_args
+        assert kwargs["extra_body"].get("reasoning_effort") == "high"
+
+    def test_match_model_family_qwen3_is_qwen(self):
+        """qwen3.8-27b 应归 qwen 家族（曾误分 openai_gpt4）且带值域"""
+        match = APIComponent._match_model_family("qwen3.8-27b")
+        assert match["family"] == "qwen"
+        assert match["supports_reasoning_effort"] is True
+        assert match.get("supported_efforts") == ["low", "medium", "xhigh"]
+
+    def test_match_model_family_gpt4_no_longer_catches_qwen3(self):
+        """gpt4 关键词组不得再捕获 qwen3 前缀"""
+        match = APIComponent._match_model_family("gpt-4o")
+        assert match["family"] == "openai_gpt4"
+        assert "qwen3" not in str(match)
+
+    def test_match_model_family_deepseek_full_range(self):
+        """deepseek-v4 值域为完整 7 档"""
+        match = APIComponent._match_model_family("deepseek-v4-flash")
+        assert match["family"] == "deepseek_v4"
+        assert match.get("supported_efforts") == [
+            "none", "minimal", "low", "medium", "high", "xhigh", "max",
+        ]
+
     def test_stream_options_included(self):
         """supports_reasoning=True 时传入 stream_options"""
         api = self._make_api(supports_reasoning=True)

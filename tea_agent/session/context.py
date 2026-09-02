@@ -19,7 +19,7 @@ class SessionContext:
     model: str = ""
     enable_thinking: bool = True
     thinking_strength: float = 0.7  # 思考强度 0.0-1.0
-    reasoning_effort: str = "auto"  # "auto"/"low"/"medium"/"high"
+    reasoning_effort: str = "auto"  # "auto"=自动推导不发送 / none/minimal/low/medium/high/xhigh/max
 
     # ── 客户端 ──
     client: OpenAI | None = None

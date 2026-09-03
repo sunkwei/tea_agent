@@ -192,11 +192,19 @@ def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S")
 
 
+def _resolve_path(path: str | Path | None = None) -> Path:
+    """解析配置文件路径：显式参数 > 环境变量 TEA_MODEL_CONFIG > ~/.tea_agent/model_config.json。"""
+    if path:
+        return Path(path)
+    env = os.environ.get("TEA_MODEL_CONFIG", "").strip()
+    return Path(env) if env else DEFAULT_CONFIG_FILE
+
+
 class ModelConfigStore:
     """~/.tea_agent/model_config.json 读写服务（providers/models/roles）。"""
 
     def __init__(self, path: str | Path | None = None):
-        self._path = Path(path) if path else DEFAULT_CONFIG_FILE
+        self._path = _resolve_path(path)
         self._lock = threading.RLock()
         self._data: dict | None = None
         self._mtime: float = 0.0
@@ -228,12 +236,15 @@ class ModelConfigStore:
             if data is None:
                 data = self._bootstrap()
                 self._write_unlocked(data)
-                self._data, self._mtime = data, self._stat_mtime()
+            # 所有加载路径都必须回填缓存，否则 save() 读到 _data=None 会写空覆盖文件
+            self._data, self._mtime = data, self._stat_mtime()
             return data
 
     def save(self) -> dict:
         """原子落盘（临时文件 + os.replace，旧文件时间戳 .bak 备份）。"""
         with self._lock:
+            if self._data is None:
+                self.load()
             data = self._data or {}
             self._write_unlocked(data)
             self._mtime = self._stat_mtime()
@@ -559,9 +570,10 @@ _store_lock = threading.Lock()
 
 
 def get_model_config_store(path: str | Path | None = None) -> ModelConfigStore:
-    """获取 ModelConfigStore 单例；显式传 path 时重建（测试/多实例场景）。"""
+    """获取 ModelConfigStore 单例；解析路径变化时自动重建（测试可用 TEA_MODEL_CONFIG 隔离）。"""
     global _store
+    target = _resolve_path(path)
     with _store_lock:
-        if _store is None or (path is not None and _store.file_path != Path(path)):
-            _store = ModelConfigStore(path)
+        if _store is None or _store.file_path != target:
+            _store = ModelConfigStore(target)
         return _store

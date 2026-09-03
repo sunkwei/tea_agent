@@ -218,11 +218,96 @@ def _resolve_path(path: str | Path | None = None) -> Path:
     return Path(env) if env else DEFAULT_CONFIG_FILE
 
 
+def _builtin_caps_for_url(api_url: str) -> dict | None:
+    """按 api_url 匹配内置注册表，取提供商级能力（仅作能力参考，不再作为面板提供商源）。"""
+    want = _normalize_url(api_url)
+    if not want:
+        return None
+    try:
+        from tea_agent.providers import PROVIDERS
+        for info in PROVIDERS.values():
+            if _normalize_url(info.get("api_url", "")) == want:
+                return {"supports_thinking": bool(info.get("supports_thinking", False)),
+                        "supports_vision": bool(info.get("supports_vision", False))}
+    except Exception:
+        pass
+    return None
+
+
+def scan_config_profiles(agent_dir: str | Path | None = None) -> dict[str, dict]:
+    """扫描 ~/.tea_agent/config*.yaml，把每个 profile 文件派生为一个提供商。
+
+    命名：config.yaml → "default"；config_xxx.yaml → "xxx"。
+    提供商模型列表 = 文件内 main/cheap/vision 各角色的 model_name（去重）；
+    model_meta 记录每个模型的来源 api_url/角色；api_key_masked 仅存展示用掩码，
+    真实密钥永不写入 model_config.json（query/apply 时从 profile 文件内存回读）。
+    """
+    base = Path(agent_dir) if agent_dir else CONFIG_DIR
+    profiles: dict[str, dict] = {}
+    try:
+        files = sorted(list(base.glob("config*.yaml")) + list(base.glob("config*.yml")))
+    except OSError as e:  # pragma: no cover
+        logger.warning("profile scan failed in %s: %s", base, e)
+        return profiles
+    import yaml
+    for f in files:
+        try:
+            raw = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
+        except Exception as e:
+            logger.warning("profile scan skipped %s: %s", f.name, e)
+            continue
+        if not isinstance(raw, dict):
+            continue
+        stem = f.stem
+        name = ("default" if stem == "config" else
+                stem[len("config_"):] if stem.startswith("config_") else stem)
+        models: list[str] = []
+        meta: dict[str, dict] = {}
+        main_url = main_model = ""
+        for role in ROLES:
+            block = raw.get(f"{role}_model")
+            if not isinstance(block, dict):
+                continue
+            mid = str(block.get("model_name") or "").strip()
+            if not mid:
+                continue
+            url = str(block.get("api_url") or "").strip()
+            if role == "main":
+                main_url, main_model = url, mid
+            entry = meta.setdefault(mid, {"api_url": url, "roles": []})
+            if role not in entry["roles"]:
+                entry["roles"].append(role)
+            if mid not in models:
+                models.append(mid)
+        if not models:
+            continue
+        mb = raw.get("main_model") if isinstance(raw.get("main_model"), dict) else {}
+        key = str(mb.get("api_key") or "")
+        caps = _builtin_caps_for_url(main_url) or {}
+        profiles[name] = {
+            "source": "config",
+            "api_url": main_url,
+            "default_model": main_model or models[0],
+            "description": f"profile · {f.name}",
+            "supports_thinking": bool(caps.get("supports_thinking", False)),
+            "supports_vision": bool(caps.get("supports_vision", False)),
+            "models": models,
+            "model_meta": meta,
+            "config_path": str(f),
+            "api_key_masked": ((key[:6] + "****" + key[-4:]) if len(key) > 12
+                               else ("***" if key else "")),
+        }
+    return profiles
+
+
 class ModelConfigStore:
     """~/.tea_agent/model_config.json 读写服务（providers/models/roles）。"""
 
-    def __init__(self, path: str | Path | None = None):
+    def __init__(self, path: str | Path | None = None,
+                 agent_dir: str | Path | None = None):
         self._path = _resolve_path(path)
+        # profile 扫描目录（~/.tea_agent）；测试可注入 tmp 隔离
+        self.agent_dir = Path(agent_dir) if agent_dir else None
         self._lock = threading.RLock()
         self._data: dict | None = None
         self._mtime: float = 0.0
@@ -297,13 +382,19 @@ class ModelConfigStore:
     # ── bootstrap ───────────────────────────────────────────
 
     def _merged_registry(self) -> dict[str, dict]:
-        """内置 PROVIDERS ⊕ custom_providers.yaml（直接读文件，不依赖 model_manager）。"""
-        from tea_agent.providers import PROVIDERS
+        """提供商注册（面板默认源）：
 
+        1. config profile：扫描 ~/.tea_agent/config*.yaml 派生（source="config"）
+        2. custom_providers.yaml（source="custom"）
+        3. 两者皆无（全新安装）才回退预置 PROVIDERS，避免空面板；
+           预置表平时仅作 api_url/模型名能力启发参考，不再进面板列表。
+        """
         merged: dict[str, dict] = {}
-        for name, info in PROVIDERS.items():
-            merged[name] = {**info, "source": "builtin"}
-        custom_file = CONFIG_DIR / "custom_providers.yaml"
+        try:
+            merged.update(scan_config_profiles(self.agent_dir))
+        except Exception as e:  # pragma: no cover
+            logger.warning("config profile scan failed: %s", e)
+        custom_file = (self.agent_dir or CONFIG_DIR) / "custom_providers.yaml"
         if custom_file.exists():
             try:
                 import yaml
@@ -315,6 +406,10 @@ class ModelConfigStore:
                         merged[str(name)] = {**info, "source": "custom"}
             except Exception as e:
                 logger.warning("custom_providers.yaml read failed: %s", e)
+        if not merged:
+            from tea_agent.providers import PROVIDERS
+            for name, info in PROVIDERS.items():
+                merged[name] = {**info, "source": "builtin"}
         return merged
 
     def _bootstrap(self) -> dict:
@@ -328,7 +423,7 @@ class ModelConfigStore:
             for mid in ids:
                 if mid:
                     models[mid] = guess_model_config(mid, caps)
-            data["providers"][name] = {
+            entry = {
                 "source": info.get("source", "builtin"),
                 "api_url": info.get("api_url", ""),
                 "default_model": info.get("default_model", ""),
@@ -337,6 +432,10 @@ class ModelConfigStore:
                 "supports_vision": bool(info.get("supports_vision", False)),
                 "models": models,
             }
+            for extra in ("model_meta", "config_path", "api_key_masked"):
+                if info.get(extra):
+                    entry[extra] = info[extra]
+            data["providers"][name] = entry
         # 角色绑定：读取当前 config.yaml
         try:
             from tea_agent.config import load_config
@@ -399,19 +498,50 @@ class ModelConfigStore:
                 if bool(p.get(cap, False)) != caps[cap]:
                     p[cap] = caps[cap]
                     changed = True
+            for extra in ("config_path", "api_key_masked"):
+                if (p.get(extra) or "") != (info.get(extra) or ""):
+                    if info.get(extra):
+                        p[extra] = info[extra]
+                        changed = True
+            if info.get("model_meta") is not None and p.get("model_meta") != info["model_meta"]:
+                p["model_meta"] = info["model_meta"]
+                changed = True
             for mid in [*(info.get("models") or []), info.get("default_model", "")]:
                 if mid and mid not in p["models"]:
                     p["models"][mid] = guess_model_config(mid, caps)
                     changed = True
-        # 清理已不存在的自定义 provider（内置 provider 不会出现在删除场景）
+        # 清理：源已不存在的 provider（config profile 文件被删 / custom 被删）；
+        # 迁移：存在真实 profile 时，清除历史 bootstrap 进来的预置 builtin 条目
+        registry_lower = {k.lower() for k in registry}
+        has_profile = any(v.get("source") == "config" for v in registry.values())
         for name in list(providers):
-            if providers[name].get("source") == "custom" and name not in registry:
+            src = providers[name].get("source")
+            if name in registry or name.lower() in registry_lower:
+                continue
+            if src in ("custom", "config") or (src == "builtin" and has_profile):
                 providers.pop(name, None)
                 changed = True
                 for role, r in list(data.get("roles", {}).items()):
-                    if (r or {}).get("provider", "") == name:
+                    if (r or {}).get("provider", "").lower() == name.lower():
                         data["roles"].pop(role, None)
                         changed = True
+        # 悬空角色重绑：按 api_url 或模型名在存活 provider 中找回新家
+        for role, r in list(data.get("roles", {}).items()):
+            if not isinstance(r, dict):
+                continue
+            prov = str(r.get("provider", ""))
+            if prov and any(k.lower() == prov.lower() for k in providers):
+                continue
+            newp = self._find_provider(data, r.get("api_url", ""))
+            if not newp and r.get("model"):
+                newp = next((k for k, pp in providers.items()
+                             if r["model"] in (pp.get("models") or {})), "")
+            if newp:
+                r["provider"] = newp
+                changed = True
+            else:
+                data["roles"].pop(role, None)
+                changed = True
         return changed
 
     # ── 查询 ────────────────────────────────────────────────
@@ -486,13 +616,19 @@ class ModelConfigStore:
         for name in sorted(data.get("providers", {}), key=str.lower):
             p = data["providers"][name]
             models = []
+            pmeta = p.get("model_meta") or {}
             for mid in sorted(p.get("models", {}), key=str.lower):
                 cfg = _blank_config()
                 cfg.update({k: v for k, v in p["models"][mid].items() if k in CFG_FIELDS})
-                models.append({"id": mid, "config": cfg,
-                               "is_default": mid == p.get("default_model", "")})
+                row: dict[str, Any] = {"id": mid, "config": cfg,
+                                       "is_default": mid == p.get("default_model", "")}
+                mm = pmeta.get(mid)
+                if isinstance(mm, dict):
+                    row["api_url"] = mm.get("api_url", "")
+                    row["roles"] = mm.get("roles", [])
+                models.append(row)
             total_models += len(models)
-            providers.append({
+            pp: dict[str, Any] = {
                 "name": name,
                 "source": p.get("source", "builtin"),
                 "api_url": p.get("api_url", ""),
@@ -502,7 +638,11 @@ class ModelConfigStore:
                 "supports_vision": bool(p.get("supports_vision", False)),
                 "models": models,
                 "model_count": len(models),
-            })
+            }
+            for extra in ("config_path", "api_key_masked"):
+                if p.get(extra):
+                    pp[extra] = p[extra]
+            providers.append(pp)
         return {
             "ok": True,
             "version": data.get("version", SCHEMA_VERSION),
@@ -538,6 +678,9 @@ class ModelConfigStore:
         p["description"] = meta.get("description", p.get("description", ""))
         p["supports_thinking"] = caps["supports_thinking"]
         p["supports_vision"] = caps["supports_vision"]
+        for extra in ("model_meta", "config_path", "api_key_masked"):
+            if meta.get(extra):
+                p[extra] = meta[extra]
         ids = list(dict.fromkeys([*(meta.get("models") or []),
                                   meta.get("default_model", "")]))
         for mid in ids:
@@ -636,11 +779,13 @@ _store: ModelConfigStore | None = None
 _store_lock = threading.Lock()
 
 
-def get_model_config_store(path: str | Path | None = None) -> ModelConfigStore:
-    """获取 ModelConfigStore 单例；解析路径变化时自动重建（测试可用 TEA_MODEL_CONFIG 隔离）。"""
+def get_model_config_store(path: str | Path | None = None,
+                           agent_dir: str | Path | None = None) -> ModelConfigStore:
+    """获取 ModelConfigStore 单例；path/agent_dir 变化自动重建（测试可用 TEA_MODEL_CONFIG 隔离）。"""
     global _store
     target = _resolve_path(path)
+    adir = Path(agent_dir) if agent_dir else None
     with _store_lock:
-        if _store is None or _store.file_path != target:
-            _store = ModelConfigStore(target)
+        if _store is None or _store.file_path != target or _store.agent_dir != adir:
+            _store = ModelConfigStore(target, agent_dir=agent_dir)
         return _store

@@ -47,9 +47,11 @@ _KNOWN_MODELS: dict[str, dict] = {
     "deepseek-chat-v3-0324": {"max_context_tokens": 128_000, "max_output_tokens": 8_192},
     "deepseek-reasoner": {"max_context_tokens": 128_000, "max_output_tokens": 64_000,
                           "supports_thinking": True},
-    "deepseek-v4-flash": {"max_context_tokens": 128_000, "max_output_tokens": 384_000,
+    "deepseek-v4-flash": {"max_context_tokens": 1_000_000, "max_output_tokens": 384_000,
                           "supports_thinking": True},
-    "deepseek-v4-flash-vision-exp": {"max_context_tokens": 128_000, "max_output_tokens": 384_000,
+    "deepseek-v4-pro": {"max_context_tokens": 1_000_000, "max_output_tokens": 384_000,
+                        "supports_thinking": True},
+    "deepseek-v4-flash-vision-exp": {"max_context_tokens": 1_000_000, "max_output_tokens": 384_000,
                                      "supports_thinking": True, "supports_vision": True},
     # OpenAI
     "gpt-4o": {"max_context_tokens": 128_000, "max_output_tokens": 16_384, "supports_vision": True},
@@ -93,6 +95,17 @@ _VISION_RE = re.compile(
     r"|minicpm-v)", re.I)
 _CTX_SUFFIX_RE = re.compile(r"[-_](\d+(?:\.\d+)?)(k|m)\b", re.I)
 
+# 家族级上下文窗口默认（按序匹配；仅当速查表与名称后缀均未命中时生效）
+_FAMILY_CTX: list[tuple[re.Pattern, int]] = [
+    (re.compile(r"gemini", re.I), 1_048_576),
+    (re.compile(r"deepseek-v4|v4-pro|v4-flash", re.I), 1_000_000),
+    (re.compile(r"claude", re.I), 200_000),
+    (re.compile(r"^(o1|o3|o4)", re.I), 200_000),
+    (re.compile(r"kimi|moonshot", re.I), 131_072),
+    (re.compile(r"qwen", re.I), 131_072),
+    (re.compile(r"deepseek", re.I), 128_000),
+]
+
 _DEFAULT_CTX = 128_000
 _DEFAULT_OUT = 8_192
 
@@ -127,6 +140,11 @@ def guess_model_config(model_id: str, provider_caps: dict | None = None) -> dict
     if m and not known:
         n, unit = float(m.group(1)), m.group(2).lower()
         cfg["max_context_tokens"] = int(n * (1_048_576 if unit == "m" else 1024))
+    elif not known:
+        for pat, fam_ctx in _FAMILY_CTX:
+            if pat.search(low):
+                cfg["max_context_tokens"] = fam_ctx
+                break
     if _THINK_RE.search(low):
         cfg["supports_thinking"] = True
     if _VISION_RE.search(low):

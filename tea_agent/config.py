@@ -124,10 +124,18 @@ class ModelConfig:
 
 @dataclass
 class PathsConfig:
-    """路径配置。相对路径相对于 config.yaml 所在目录。"""
+    """路径配置。相对路径相对于 config.yaml 所在目录。
+
+    存储作用域（storage_scope，取值 auto/project/user，默认 auto）：
+    - 主题/会话/记忆库（db_path）默认落在「启动目录 .tea_agent_run/」项目级 db，
+      用户级 db（~/.tea_agent）保留作为回退层；
+    - 启动目录不可写（无法创建 .tea_agent_run）→ 回退用户级 db；
+    - 显式指定 data_dir 或绝对 db_path → 尊重显式配置（自定义存储根）。
+    """
 
     data_dir: str = ""
     db_path: str = ""
+    storage_scope: str = ""  # auto/project/user；空=auto（项目级优先，回退用户级）
     toolkit_dir: str = ""
     kb_dir: str = ""
     skills_dir: str = ""
@@ -159,13 +167,50 @@ class PathsConfig:
                 return os.path.abspath(expanded)
             return os.path.abspath(os.path.join(self._data_dir_abs, expanded))
 
+        # 用户级 db（保留，作为回退层 / 显式存储根）
         self._db_path_abs = _resolve(self.db_path, "chat_history.db")
         self._toolkit_dir_abs = _resolve(self.toolkit_dir, "toolkit")
         self._kb_dir_abs = _resolve(self.kb_dir, "kb")
+        # active db 路径惰性缓存（由 active_db_path_abs 属性填充）
+        self._active_db_path_abs: str | None = None
 
     @property
     def db_path_abs(self) -> str:
         return self._db_path_abs
+
+    @property
+    def user_db_path_abs(self) -> str:
+        """用户级 db 绝对路径（~/.tea_agent/... 或显式 data_dir/db_path）。"""
+        return self._db_path_abs
+
+    @property
+    def active_db_path_abs(self) -> str:
+        """会话库实际使用路径（项目级优先，用户级回退）。
+
+        storage_scope：
+        - auto（默认）/project：启动目录可写 → <启动目录>/.tea_agent_run/ 下；
+        - 不可写 / user / 显式 data_dir 或绝对 db_path → 用户级 db。
+
+        会话库打开点（Agent._init_storage / store.get_storage）使用此属性，
+        使主题/会话/记忆默认随项目目录隔离，同时保留用户级 db 作为回退。
+        """
+        cached = getattr(self, "_active_db_path_abs", None)
+        if cached is not None:
+            return cached
+        # 显式自定义存储根（data_dir 或绝对 db_path）→ 尊重用户配置，不自动项目化
+        if self.data_dir or (
+            self.db_path and os.path.isabs(os.path.expanduser(self.db_path))
+        ):
+            self._active_db_path_abs = self._db_path_abs
+        else:
+            from tea_agent.storage_scope import resolve_db_path
+
+            self._active_db_path_abs = resolve_db_path(
+                user_db_abs=self._db_path_abs,
+                db_path_cfg=self.db_path,
+                storage_scope_cfg=self.storage_scope,
+            )
+        return self._active_db_path_abs
 
     @property
     def toolkit_dir_abs(self) -> str:
@@ -659,6 +704,9 @@ def _parse_paths_config(cfg: AgentConfig, data: dict, yaml_path: str) -> None:
     if isinstance(paths_data, dict):
         cfg.paths.data_dir = str(paths_data.get("data_dir", cfg.paths.data_dir))
         cfg.paths.db_path = str(paths_data.get("db_path", cfg.paths.db_path))
+        cfg.paths.storage_scope = str(
+            paths_data.get("storage_scope", cfg.paths.storage_scope)
+        ).strip().lower()
         cfg.paths.toolkit_dir = str(paths_data.get("toolkit_dir", cfg.paths.toolkit_dir))
         cfg.paths.kb_dir = str(paths_data.get("kb_dir", cfg.paths.kb_dir))
         cfg.paths.skills_dir = str(paths_data.get("skills_dir", cfg.paths.skills_dir))
@@ -915,6 +963,7 @@ def _prepare_paths_data(cfg: AgentConfig, data: dict) -> None:
     data["paths"] = {
         "data_dir": cfg.paths.data_dir,
         "db_path": cfg.paths.db_path,
+        "storage_scope": cfg.paths.storage_scope,
         "toolkit_dir": cfg.paths.toolkit_dir,
         "kb_dir": cfg.paths.kb_dir,
         "skills_dir": cfg.paths.skills_dir,

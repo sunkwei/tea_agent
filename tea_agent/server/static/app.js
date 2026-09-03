@@ -3585,10 +3585,12 @@ function _modelBadges(m) {
   return parts.join('');
 }
 
-window.showModelModal = async function() {
-  showModal('modal-model');
-  _mmStatus('');
-  await loadModelConfig();
+// 独立供应商/模型配置界面（provider.yaml 唯一事实源，与 configxxx.yaml 无关）
+window.openProvidersPage = function() {
+  window.open('/static/providers.html', '_blank', 'noopener');
+};
+window.showModelModal = async function() {  // 兼容旧入口：模型切换面板已删除 → 跳独立界面
+  window.openProvidersPage();
 };
 
 // 面板数据源：GET /api/model-config（统一模型配置中心 model_config.json）

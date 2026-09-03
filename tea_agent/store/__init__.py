@@ -15,6 +15,10 @@ def get_storage(db_path: str = "") -> Storage:
     首次调用时锁定数据库路径，后续配置切换不影响已建立的数据库连接。
     这样在 Web 界面切换配置时，正在进行的主题仍写入同一个数据库，
     用户可临时切换到支持多模态输入的模型配置，而数据库不切换。
+
+    db_path 为空时使用「活动会话库」（storage_scope auto/project → 启动目录
+    .tea_agent_run/ 下；不可写或 user → 用户级 ~/.tea_agent）。显式传 db_path
+    时尊重调用方。
     """
     global _storage_instance
     if _storage_instance is not None:
@@ -22,7 +26,10 @@ def get_storage(db_path: str = "") -> Storage:
     if not db_path:
         try:
             from tea_agent.config import get_config
-            db_path = get_config().paths.db_path_abs
+            cfg = get_config()
+            db_path = (
+                getattr(cfg.paths, "active_db_path_abs", "") or cfg.paths.db_path_abs
+            )
         except Exception:
             db_path = "chat_history.db"
     _storage_instance = Storage(db_path)

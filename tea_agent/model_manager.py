@@ -582,6 +582,10 @@ class ProviderService:
                 self._annotate_models(provider["name"], hit.get("models") or [])
                 return hit
 
+        # 目录元数据索引：id -> 富条目，供实时列表补齐 context_window/能力等字段
+        catalog_by_id: dict[str, dict] = {
+            m["id"]: m for m in static_models if isinstance(m, dict) and m.get("id")
+        }
         live = self._query_live(api_url, api_key)
         if live.get("ok"):
             result["source"] = "live"
@@ -708,6 +712,11 @@ class ProviderService:
             target.temperature = float(temperature)
         if top_p is not None:
             target.top_p = float(top_p)
+        # 目录中该模型的元数据（窗口/输出上限/能力）。来自富目录 _catalog，
+        # 其已实现「模型级显式值覆盖、缺省继承提供商级」，故 per-model 能力以 meta 为准。
+        meta: dict = {
+            m["id"]: m for m in self._catalog(provider) if isinstance(m, dict) and m.get("id")
+        }.get(model) or {}
         # 目录自动填充：显式传入 > 模型目录默认
         eff_max_tokens = (
             int(max_tokens)
@@ -724,11 +733,18 @@ class ProviderService:
         merged_options = dict(getattr(target, "options", None) or {})
         if options:
             merged_options.update(options)
-        # 能力标记：提供商级 ⊕ 逐模型级取并集（模型专属能力也能在提供商未声明时生效）
-        merged_options["supports_vision"] = bool(
-            provider.get("supports_vision", False) or mcfg.get("supports_vision"))
-        merged_options["supports_reasoning"] = bool(
-            provider.get("supports_thinking", False) or mcfg.get("supports_thinking"))
+        # 能力标记：以模型目录条目（meta）为准，再与统一配置中心逐模型配置取并集；
+        # 目录未命中该模型（如自定义简写串）时才回退提供商聚合值。
+        if meta:
+            merged_options["supports_vision"] = bool(
+                meta.get("supports_vision") or mcfg.get("supports_vision"))
+            merged_options["supports_reasoning"] = bool(
+                meta.get("supports_thinking") or mcfg.get("supports_thinking"))
+        else:
+            merged_options["supports_vision"] = bool(
+                provider.get("supports_vision", False) or mcfg.get("supports_vision"))
+            merged_options["supports_reasoning"] = bool(
+                provider.get("supports_thinking", False) or mcfg.get("supports_thinking"))
         target.options = merged_options
 
         save_config(cfg, cfg_path)
@@ -747,8 +763,8 @@ class ProviderService:
             "api_url": target.api_url,
             "max_tokens": eff_max_tokens,
             "max_context_tokens": eff_max_context,
-            "supports_vision": supports_vision,
-            "supports_reasoning": supports_reasoning,
+            "supports_vision": merged_options["supports_vision"],
+            "supports_reasoning": merged_options["supports_reasoning"],
             "options": merged_options,
             "config_path": str(Path(cfg_path).resolve()) if cfg_path else "",
         }

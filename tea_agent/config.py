@@ -100,6 +100,9 @@ class ModelConfig:
     # 支持键: reminder_threshold / reminder_message_template /
     #         guidance_message / fallback_buffer_tokens / auto_compact_fallback_prompt
     token_budget: dict[str, Any] = field(default_factory=dict)
+    # 引用式来源（config*.yaml 只存 p_name + m_name 组合时记录；空=传统完整内嵌块）
+    provider: str = ""   # p_name（provider.yaml 中的供应商名）
+    ref_model: str = ""  # m_name（provider.yaml 中该供应商下的模型 id）
 
     @property
     def is_configured(self) -> bool:
@@ -108,6 +111,11 @@ class ModelConfig:
     @property
     def supports_vision(self) -> bool:
         return self.options.get("supports_vision", False)
+
+    @property
+    def is_reference(self) -> bool:
+        """是否为 p_name+m_name 引用式（可在 config 层直接写引用，不内嵌密钥）。"""
+        return bool(self.provider and self.ref_model)
 
     def get_token_budget(self, key: str, default: Any = None) -> Any:
         """读取模型级 token budget 配置项。
@@ -124,10 +132,18 @@ class ModelConfig:
 
 @dataclass
 class PathsConfig:
-    """路径配置。相对路径相对于 config.yaml 所在目录。"""
+    """路径配置。相对路径相对于 config.yaml 所在目录。
+
+    存储作用域（storage_scope，取值 auto/project/user，默认 auto）：
+    - 主题/会话/记忆库（db_path）默认落在「启动目录 .tea_agent_run/」项目级 db，
+      用户级 db（~/.tea_agent）保留作为回退层；
+    - 启动目录不可写（无法创建 .tea_agent_run）→ 回退用户级 db；
+    - 显式指定 data_dir 或绝对 db_path → 尊重显式配置（自定义存储根）。
+    """
 
     data_dir: str = ""
     db_path: str = ""
+    storage_scope: str = ""  # auto/project/user；空=auto（项目级优先，回退用户级）
     toolkit_dir: str = ""
     kb_dir: str = ""
     skills_dir: str = ""
@@ -159,13 +175,50 @@ class PathsConfig:
                 return os.path.abspath(expanded)
             return os.path.abspath(os.path.join(self._data_dir_abs, expanded))
 
+        # 用户级 db（保留，作为回退层 / 显式存储根）
         self._db_path_abs = _resolve(self.db_path, "chat_history.db")
         self._toolkit_dir_abs = _resolve(self.toolkit_dir, "toolkit")
         self._kb_dir_abs = _resolve(self.kb_dir, "kb")
+        # active db 路径惰性缓存（由 active_db_path_abs 属性填充）
+        self._active_db_path_abs: str | None = None
 
     @property
     def db_path_abs(self) -> str:
         return self._db_path_abs
+
+    @property
+    def user_db_path_abs(self) -> str:
+        """用户级 db 绝对路径（~/.tea_agent/... 或显式 data_dir/db_path）。"""
+        return self._db_path_abs
+
+    @property
+    def active_db_path_abs(self) -> str:
+        """会话库实际使用路径（项目级优先，用户级回退）。
+
+        storage_scope：
+        - auto（默认）/project：启动目录可写 → <启动目录>/.tea_agent_run/ 下；
+        - 不可写 / user / 显式 data_dir 或绝对 db_path → 用户级 db。
+
+        会话库打开点（Agent._init_storage / store.get_storage）使用此属性，
+        使主题/会话/记忆默认随项目目录隔离，同时保留用户级 db 作为回退。
+        """
+        cached = getattr(self, "_active_db_path_abs", None)
+        if cached is not None:
+            return cached
+        # 显式自定义存储根（data_dir 或绝对 db_path）→ 尊重用户配置，不自动项目化
+        if self.data_dir or (
+            self.db_path and os.path.isabs(os.path.expanduser(self.db_path))
+        ):
+            self._active_db_path_abs = self._db_path_abs
+        else:
+            from tea_agent.storage_scope import resolve_db_path
+
+            self._active_db_path_abs = resolve_db_path(
+                user_db_abs=self._db_path_abs,
+                db_path_cfg=self.db_path,
+                storage_scope_cfg=self.storage_scope,
+            )
+        return self._active_db_path_abs
 
     @property
     def toolkit_dir_abs(self) -> str:
@@ -534,6 +587,11 @@ def resolve_config_path(config_path: str | None = None) -> str | None:
     if config_path:
         return config_path
 
+    # 测试/隔离环境：TEA_CONFIG 指向的配置文件（server/agent_module 同语义）
+    tea_cfg = os.environ.get("TEA_CONFIG", "").strip()
+    if tea_cfg and os.path.isfile(tea_cfg):
+        return tea_cfg
+
     # 优先级1: $HOME/.tea_agent/config.yaml
     default_path = str(Path.home() / ".tea_agent" / "config.yaml")
     if os.path.isfile(default_path):
@@ -566,8 +624,33 @@ def _load_yaml_data(yaml_path: str) -> dict | None:
         return None
 
 
+def _resolve_ref_model(provider: str, model: str) -> dict | None:
+    """从 provider.yaml 解析 p_name + m_name 组合（延迟 import 避免循环依赖）。
+
+    Args:
+        provider: 供应商名（p_name）
+        model: 模型 id（m_name）
+
+    Returns:
+        扁平元数据 {api_url, api_key, model, max_context_tokens,
+                    max_output_tokens, options, reasoning_effort}；失败返回 None
+    """
+    try:
+        from tea_agent.provider_store import get_provider_store
+
+        return get_provider_store().resolve(provider, model)
+    except Exception as e:
+        logger.debug("provider ref resolve skipped (%s/%s): %s", provider, model, e)
+        return None
+
+
 def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
     """解析模型配置。
+
+    支持两种形态（每角色可独立混用）：
+      1) 传统内嵌：main_model: {api_key, api_url, model_name, options, ...}
+      2) 引用式（推荐）：main_model: {provider: <p_name>, model: <m_name>[, 覆盖字段]}
+         密钥/端点/能力从 ~/.tea_agent/provider.yaml 解析，config 不内嵌密钥。
 
     Args:
         cfg: AgentConfig实例
@@ -584,16 +667,63 @@ def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
             target = cfg.cheap_model
         else:
             target = cfg.vision_model
-        target.api_key = m_data.get("api_key", "")
-        target.api_url = m_data.get("api_url", "")
-        target.model_name = m_data.get("model_name", "")
-        target.options = m_data.get("options", {})
+
+        # 引用式：provider/p_name + model/m_name/model_name
+        p_name = str(m_data.get("provider") or m_data.get("p_name") or "").strip()
+        m_name = str(m_data.get("model") or m_data.get("m_name") or "").strip()
+        is_ref = bool(p_name and m_name)
+        target.provider = p_name if is_ref else ""
+        target.ref_model = m_name if is_ref else ""
+
+        if is_ref:
+            resolved = _resolve_ref_model(p_name, m_name)
+            if resolved:
+                target.api_key = str(resolved.get("api_key") or "")
+                target.api_url = str(resolved.get("api_url") or "")
+                target.model_name = str(resolved.get("model") or m_name)
+                target.options = dict(resolved.get("options") or {})
+                if resolved.get("max_context_tokens"):
+                    target.max_context_tokens = int(resolved["max_context_tokens"])
+                if resolved.get("max_output_tokens"):
+                    target.max_tokens = int(resolved["max_output_tokens"])
+                eff = resolved.get("reasoning_effort") or "auto"
+                if isinstance(eff, str) and eff and eff != "auto":
+                    target.options.setdefault("reasoning_effort", eff)
+            else:
+                # provider.yaml 缺失/未收录：退化为仅内嵌（允许 config 自带 url/key 兜底）
+                target.api_key = str(m_data.get("api_key") or "")
+                target.api_url = str(m_data.get("api_url") or "")
+                target.model_name = m_name
+                target.options = (
+                    dict(m_data["options"]) if isinstance(m_data.get("options"), dict) else {}
+                )
+        else:
+            target.api_key = str(m_data.get("api_key") or "")
+            target.api_url = str(m_data.get("api_url") or "")
+            target.model_name = str(m_data.get("model_name") or "")
+            target.options = (
+                dict(m_data["options"]) if isinstance(m_data.get("options"), dict) else {}
+            )
+
         target.temperature = float(m_data.get("temperature", target.temperature))
         target.max_tokens = int(m_data.get("max_tokens", target.max_tokens))
         target.top_p = float(m_data.get("top_p", target.top_p))
         target.max_context_tokens = int(
             m_data.get("max_context_tokens", target.max_context_tokens)
         )
+        # 引用式下允许内联 options 覆盖（合并而非整体替换，避免丢 resolve 能力标记）
+        if is_ref and isinstance(m_data.get("options"), dict):
+            target.options.update(
+                {k: v for k, v in m_data["options"].items() if v is not None}
+            )
+        # 引用式下内联 api_key/api_url/model_name 显式覆盖（少用；供 provider 未收录时兜底）
+        if is_ref:
+            if m_data.get("api_key"):
+                target.api_key = str(m_data["api_key"])
+            if m_data.get("api_url"):
+                target.api_url = str(m_data["api_url"])
+            if m_data.get("model_name"):
+                target.model_name = str(m_data["model_name"])
         # 模型级 token budget 配置（Codex 风格：不同模型不同预算策略）
         tb = m_data.get("token_budget")
         if isinstance(tb, dict):
@@ -659,6 +789,9 @@ def _parse_paths_config(cfg: AgentConfig, data: dict, yaml_path: str) -> None:
     if isinstance(paths_data, dict):
         cfg.paths.data_dir = str(paths_data.get("data_dir", cfg.paths.data_dir))
         cfg.paths.db_path = str(paths_data.get("db_path", cfg.paths.db_path))
+        cfg.paths.storage_scope = str(
+            paths_data.get("storage_scope", cfg.paths.storage_scope)
+        ).strip().lower()
         cfg.paths.toolkit_dir = str(paths_data.get("toolkit_dir", cfg.paths.toolkit_dir))
         cfg.paths.kb_dir = str(paths_data.get("kb_dir", cfg.paths.kb_dir))
         cfg.paths.skills_dir = str(paths_data.get("skills_dir", cfg.paths.skills_dir))
@@ -858,6 +991,11 @@ def _prepare_config_data(cfg: AgentConfig) -> dict:
 def _prepare_model_data(cfg: AgentConfig, data: dict) -> None:
     """准备模型配置数据。
 
+    引用式模型（provider+model）保存为 p_name+m_name 组合，密钥/端点不内嵌；
+    传统完整块保持原样写回（向后兼容）。用户对引用式模型的本地覆盖
+    （temperature/top_p/max_tokens/max_context/options 与 provider.yaml 默认不同者）
+    会以覆盖字段保留；api_key 若被修改则同步回写 provider.yaml。
+
     Args:
         cfg: AgentConfig实例
         data: 配置数据字典（会被修改）
@@ -869,6 +1007,11 @@ def _prepare_model_data(cfg: AgentConfig, data: dict) -> None:
             target = cfg.cheap_model
         else:
             target = cfg.vision_model
+        if target.is_reference:
+            m_data = _prepare_ref_model_data(target)
+            if m_data is not None:
+                data[m_type] = m_data
+            continue
         if target.is_configured:
             m_data = {
                 "api_key": target.api_key,
@@ -888,6 +1031,64 @@ def _prepare_model_data(cfg: AgentConfig, data: dict) -> None:
             if target.token_budget:
                 m_data["token_budget"] = target.token_budget
             data[m_type] = m_data
+
+
+def _prepare_ref_model_data(target: ModelConfig) -> dict | None:
+    """把引用式 ModelConfig 序列化为 {provider, model, ...覆盖}。
+
+    规则：
+      - 基础键 provider/model 恒写；
+      - temperature/top_p 与 dataclass 默认不同才写；
+      - max_tokens/max_context_tokens/options 与 provider.yaml 解析默认不同才写（覆盖）；
+      - api_key 若与 provider.yaml 默认不同 → 同步回写 provider.yaml（config 永不内嵌密钥）；
+      - provider.yaml 无法解析该组合时（provider 被删/未收录）→ 返回 None，由调用方走完整块。
+
+    Args:
+        target: 引用式 ModelConfig
+
+    Returns:
+        dict | None
+    """
+    resolved = _resolve_ref_model(target.provider, target.ref_model)
+    if resolved is None:
+        # provider 已从 provider.yaml 移除 → 退化完整块保留既有密钥（不丢配置）
+        if target.is_configured:
+            return None
+        return {"provider": target.provider, "model": target.ref_model}
+
+    m_data: dict[str, Any] = {
+        "provider": target.provider,
+        "model": target.ref_model,
+    }
+    if target.temperature != 0.7:
+        m_data["temperature"] = target.temperature
+    if target.top_p != 0.9:
+        m_data["top_p"] = target.top_p
+    # 与 provider.yaml 解析默认对比，仅保留差异覆盖
+    if target.max_tokens != int(resolved.get("max_output_tokens") or 131072):
+        m_data["max_tokens"] = target.max_tokens
+    if target.max_context_tokens and int(resolved.get("max_context_tokens") or 0) != target.max_context_tokens:
+        m_data["max_context_tokens"] = target.max_context_tokens
+    res_opts = resolved.get("options") or {}
+    diff_opts = {
+        k: v for k, v in (target.options or {}).items()
+        if res_opts.get(k) != v
+    }
+    if diff_opts:
+        m_data["options"] = diff_opts
+    if target.token_budget:
+        m_data["token_budget"] = target.token_budget
+    # api_key 差异 → 同步 provider.yaml（引用式下密钥归属 provider 条目）
+    if target.api_key and target.api_key != (resolved.get("api_key") or ""):
+        try:
+            from tea_agent.provider_store import get_provider_store
+
+            get_provider_store().upsert_provider(
+                target.provider, {"api_key": target.api_key}
+            )
+        except Exception as e:
+            logger.warning("api_key sync to provider.yaml failed: %s", e)
+    return m_data
 
 
 def _prepare_embedding_data(cfg: AgentConfig, data: dict) -> None:
@@ -915,6 +1116,7 @@ def _prepare_paths_data(cfg: AgentConfig, data: dict) -> None:
     data["paths"] = {
         "data_dir": cfg.paths.data_dir,
         "db_path": cfg.paths.db_path,
+        "storage_scope": cfg.paths.storage_scope,
         "toolkit_dir": cfg.paths.toolkit_dir,
         "kb_dir": cfg.paths.kb_dir,
         "skills_dir": cfg.paths.skills_dir,

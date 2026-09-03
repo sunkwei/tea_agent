@@ -519,12 +519,10 @@ class ModelConfigStore:
             if name in registry or name.lower() in registry_lower:
                 continue
             if src in ("custom", "config") or (src == "builtin" and has_profile):
+                # 不在此处动角色绑定：悬空角色统一由下方重绑循环处理
+                # （按 api_url/模型名找回新家，找不回才删除），切 profile 不丢角色
                 providers.pop(name, None)
                 changed = True
-                for role, r in list(data.get("roles", {}).items()):
-                    if (r or {}).get("provider", "").lower() == name.lower():
-                        data["roles"].pop(role, None)
-                        changed = True
         # 悬空角色重绑：按 api_url 或模型名在存活 provider 中找回新家
         for role, r in list(data.get("roles", {}).items()):
             if not isinstance(r, dict):

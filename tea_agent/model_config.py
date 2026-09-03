@@ -414,11 +414,16 @@ class ModelConfigStore:
 
     def _bootstrap(self) -> dict:
         """从注册表构建全量配置，并按当前 config.yaml 写入角色绑定。"""
+        from tea_agent.providers import model_ids
+
         data: dict = {"version": SCHEMA_VERSION, "roles": {}, "providers": {}}
         for name, info in self._merged_registry().items():
             caps = {k: info.get(k, False) for k in ("supports_thinking", "supports_vision")}
             models: dict[str, dict] = {}
-            ids = list(dict.fromkeys([*(info.get("models") or []),
+            # info["models"] 可能是富条目 dict 列表（内置/自定义目录）或字符串列表，
+            # 统一用 model_ids() 归一化为字符串 id，避免 dict 进入 dict.fromkeys
+            # 触发 unhashable type（面板加载 GET /api/model-config 500 根因）。
+            ids = list(dict.fromkeys([*model_ids(info),
                                       info.get("default_model", "")]))
             for mid in ids:
                 if mid:
@@ -477,6 +482,7 @@ class ModelConfigStore:
         Returns: True 表示 data 被修改，需要落盘。
         """
         changed = False
+        from tea_agent.providers import model_ids
         registry = self._merged_registry()
         providers = data.setdefault("providers", {})
         for name, info in registry.items():
@@ -506,7 +512,7 @@ class ModelConfigStore:
             if info.get("model_meta") is not None and p.get("model_meta") != info["model_meta"]:
                 p["model_meta"] = info["model_meta"]
                 changed = True
-            for mid in [*(info.get("models") or []), info.get("default_model", "")]:
+            for mid in [*(model_ids(info)), info.get("default_model", "")]:
                 if mid and mid not in p["models"]:
                     p["models"][mid] = guess_model_config(mid, caps)
                     changed = True

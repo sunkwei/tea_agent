@@ -123,7 +123,7 @@ def test_profile_file_added_incremental(pstore, agent_dir):
     data = pstore.load(force=True)
     assert "qwen" in data["providers"]                # 新 profile 自动发现
     assert "qwen3.8-flash" in data["providers"]["qwen"]["models"]
-    assert set(data["providers"]) == {"ds", "qwen"}   # default 被删除后的清理仍在
+    assert set(data["providers"]) == {"default", "ds", "qwen"}   # 原有 profile 保留
 
 
 def test_panel_exposes_profile_meta(pstore):

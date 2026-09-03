@@ -3583,6 +3583,7 @@ async function loadModelConfig() {
     models: (p.models || []).map(m => m.id),
     supports_thinking: p.supports_thinking, supports_vision: p.supports_vision,
     description: p.description, is_configured: p.is_configured,
+    api_key_masked: p.api_key_masked || '',
   }));
   renderProviders();
   refreshCurrentModel();
@@ -3631,7 +3632,8 @@ function renderProviders() {
   box.innerHTML = list.map(p => {
     const active = p.name === mmSelectedProvider;
     const badges = [];
-    if (p.source === 'custom') badges.push('<span style="background:#f39c12;color:#fff;border-radius:4px;padding:0 4px;font-size:10px">自定义</span>');
+    if (p.source === 'config') badges.push('<span style="background:#16a085;color:#fff;border-radius:4px;padding:0 4px;font-size:10px" title="由 ~/.tea_agent/config_*.yaml 派生的真实配置 profile">profile</span>');
+    else if (p.source === 'custom') badges.push('<span style="background:#f39c12;color:#fff;border-radius:4px;padding:0 4px;font-size:10px">自定义</span>');
     if (p.supports_vision) badges.push('<span style="background:#8e44ad;color:#fff;border-radius:4px;padding:0 4px;font-size:10px">视觉</span>');
     if (p.supports_thinking) badges.push('<span style="background:#2980b9;color:#fff;border-radius:4px;padding:0 4px;font-size:10px">思考</span>');
     return '<div class="mm-provider" onclick="selectProvider(\'' + escAttr(p.name) + '\')" ' +
@@ -3641,7 +3643,7 @@ function renderProviders() {
       '<div style="display:flex;justify-content:space-between;align-items:center">' +
       '<b style="font-size:13px">' + esc(p.name) + '</b>' + badges.join('') +
       '</div>' +
-      '<div style="font-size:11px;color:var(--text-dim,#888);margin-top:2px;word-break:break-all">' + esc(p.api_url) + '</div>' +
+      '<div style="font-size:11px;color:var(--text-dim,#888);margin-top:2px;word-break:break-all">' + esc(p.api_url) + (p.api_key_masked ? ' · ' + esc(p.api_key_masked) : '') + '</div>' +
       (p.is_configured ? '<div style="font-size:10px;color:#2ecc71;margin-top:2px">● 当前使用</div>' : '') +
       '</div>';
   }).join('');

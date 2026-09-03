@@ -243,6 +243,32 @@ class ProviderService:
                 return {"name": pname, **info, "source": info.get("source", "builtin")}
         return None
 
+    # ── 统一模型配置中心（~/.tea_agent/model_config.json） ────
+
+    @staticmethod
+    def _store():
+        """ModelConfigStore 单例；失败返回 None（best-effort 增强，不阻塞主流程）。"""
+        try:
+            from tea_agent.model_config import get_model_config_store
+
+            return get_model_config_store()
+        except Exception as e:  # pragma: no cover - 防御性
+            logger.debug("model config store unavailable: %s", e)
+            return None
+
+    def _annotate_models(self, provider_name: str, models: list[dict]) -> None:
+        """给模型查询结果附加统一配置的逐模型能力（最大上下文/最大输出/思考/视觉）。"""
+        store = self._store()
+        if store is None:
+            return
+        try:
+            for m in models:
+                mid = m.get("id") if isinstance(m, dict) else None
+                if mid:
+                    m["config"] = store.get_model_config(provider_name, str(mid))
+        except Exception as e:
+            logger.debug("annotate model configs skipped: %s", e)
+
     # ── 自定义供应商 CRUD ──────────────────────────────────────
 
     def _validate_name(self, name: str) -> str:
@@ -317,6 +343,11 @@ class ProviderService:
         }
         custom[name] = entry
         self._save_custom(custom)
+        if (store := self._store()) is not None:
+            try:
+                store.ensure_provider(name, {**entry, "source": "custom"})
+            except Exception as e:
+                logger.debug("mirror provider to model_config failed: %s", e)
         logger.info("custom provider added: %s (%s)", name, entry.get("api_url", ""))
         return self._provider_out(name, {**entry, "source": "custom"})
 
@@ -341,6 +372,11 @@ class ProviderService:
         merged["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
         custom[target] = merged
         self._save_custom(custom)
+        if (store := self._store()) is not None:
+            try:
+                store.ensure_provider(target, {**merged, "source": "custom"})
+            except Exception as e:
+                logger.debug("mirror provider update failed: %s", e)
         logger.info("custom provider updated: %s", target)
         return self._provider_out(target, {**merged, "source": "custom"})
 
@@ -359,6 +395,11 @@ class ProviderService:
             raise ProviderNotFoundError(name)
         del custom[target]
         self._save_custom(custom)
+        if (store := self._store()) is not None:
+            try:
+                store.remove_provider(target)
+            except Exception as e:
+                logger.debug("mirror provider delete failed: %s", e)
         logger.info("custom provider deleted: %s", target)
         return {"ok": True, "deleted": target}
 
@@ -392,6 +433,7 @@ class ProviderService:
             "endpoint": _models_endpoint(api_url),
             "needs_key": False,
         }
+        self._annotate_models(provider["name"], result["models"])
         if not api_url or not api_key:
             if provider.get("source") == "custom" and not api_key:
                 result["needs_key"] = True
@@ -406,6 +448,7 @@ class ProviderService:
                 hit = dict(cached[1])
                 hit["source"] = "cache"
                 hit["cached_at"] = cached[0]
+                self._annotate_models(provider["name"], hit.get("models") or [])
                 return hit
 
         live = self._query_live(api_url, api_key)
@@ -415,6 +458,7 @@ class ProviderService:
             result["total"] = live["total"]
             result["endpoint"] = live["endpoint"]
             result.pop("error_hint", None)
+            self._annotate_models(provider["name"], result["models"])
             self._models_cache[cache_key] = (now, result)
         else:
             result["error_hint"] = live.get("error", "live query failed, showing static list")
@@ -487,6 +531,19 @@ class ProviderService:
         target = {"main": cfg.main_model, "cheap": cfg.cheap_model, "vision": cfg.vision_model}[role]
         if not api_key:
             api_key = getattr(target, "api_key", "") or ""
+        # ── 统一模型配置中心：逐模型配置作默认值（显式传参优先；面板是唯一事实源）──
+        store = self._store()
+        mcfg: dict = {}
+        if store is not None:
+            try:
+                store.ensure_provider(provider["name"], {**provider})
+                mcfg = store.get_model_config(provider["name"], model)
+            except Exception as e:
+                logger.debug("model_config lookup skipped: %s", e)
+        if max_tokens is None and int(mcfg.get("max_output_tokens") or 0) > 0:
+            max_tokens = int(mcfg["max_output_tokens"])
+        if max_context_tokens is None and int(mcfg.get("max_context_tokens") or 0) > 0:
+            max_context_tokens = int(mcfg["max_context_tokens"])
         target.api_key = api_key
         target.api_url = provider.get("api_url", "")
         target.model_name = model
@@ -501,11 +558,20 @@ class ProviderService:
         merged_options = dict(getattr(target, "options", None) or {})
         if options:
             merged_options.update(options)
-        merged_options["supports_vision"] = bool(provider.get("supports_vision", False))
-        merged_options["supports_reasoning"] = bool(provider.get("supports_thinking", False))
+        # 能力标记：提供商级 ⊕ 逐模型级取并集（模型专属能力也能在提供商未声明时生效）
+        merged_options["supports_vision"] = bool(
+            provider.get("supports_vision", False) or mcfg.get("supports_vision"))
+        merged_options["supports_reasoning"] = bool(
+            provider.get("supports_thinking", False) or mcfg.get("supports_thinking"))
         target.options = merged_options
 
         save_config(cfg, cfg_path)
+        # 角色绑定回写统一配置中心（面板展示“当前使用”的单一事实源）
+        if store is not None:
+            try:
+                store.set_role(role, provider["name"], model, api_url=target.api_url)
+            except Exception as e:
+                logger.debug("role binding to model_config skipped: %s", e)
         logger.info("applied provider %s → %s/%s (config=%s)", name, role, model, cfg_path or "default")
         return {
             "ok": True,

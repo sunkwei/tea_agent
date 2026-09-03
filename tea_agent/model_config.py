@@ -38,7 +38,7 @@ SCHEMA_VERSION = 1
 _INT_FIELDS = {"max_context_tokens": (1024, 200_000_000), "max_output_tokens": (1, 64_000_000)}
 _BOOL_FIELDS = {"supports_thinking", "supports_vision", "supports_tools"}
 _STR_FIELDS = {"note": 200}
-CFG_FIELDS = set(_INT_FIELDS) | _BOOL_FIELDS | _STR_FIELDS
+CFG_FIELDS = set(_INT_FIELDS) | set(_BOOL_FIELDS) | set(_STR_FIELDS)
 
 # 常用模型能力速查表（bootstrap 与 heuristic 兜底；单位=token）
 _KNOWN_MODELS: dict[str, dict] = {

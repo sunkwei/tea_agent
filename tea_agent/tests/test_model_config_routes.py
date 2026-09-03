@@ -45,7 +45,9 @@ def env(tmp_path, monkeypatch):
     from tea_agent.server.server import create_app
     from starlette.testclient import TestClient
 
-    client = TestClient(create_app())
+    # 显式传 config_path：避免 create_app 默认空路径导致 apply/save 走
+    # config.py 模块级粘滞全局（_last_config_path），跨测试互相污染
+    client = TestClient(create_app(config_path=str(cfg)))
     yield client, cfg, state, AgentModule
     state.active_sessions.clear()
     state.background_sessions.clear()

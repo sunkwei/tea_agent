@@ -24,6 +24,8 @@ def store(tmp_path, monkeypatch):
     """指向 tmp_path 的隔离单例。"""
     f = tmp_path / "model_config.json"
     monkeypatch.setenv("TEA_MODEL_CONFIG", str(f))
+    # profile 扫描隔离：空目录（无 config_*.yaml）→ store 回退预置注册表，断言稳定
+    monkeypatch.setattr(mc, "CONFIG_DIR", tmp_path / "agent")
     monkeypatch.setattr(mc, "_store", None)
     s = get_model_config_store()
     assert s.file_path == f

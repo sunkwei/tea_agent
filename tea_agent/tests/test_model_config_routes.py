@@ -35,6 +35,8 @@ def env(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mc_mod, "_store", None)
     monkeypatch.setattr(mm_mod, "_service", None)
+    # profile 扫描隔离：空目录 → 无 config_*.yaml → 回退预置注册表（面板测试断言稳定）
+    monkeypatch.setattr(mc_mod, "CONFIG_DIR", tmp_path / "agent")
     state.config_cache.clear()
     state.active_sessions.clear()
     state.background_sessions.clear()

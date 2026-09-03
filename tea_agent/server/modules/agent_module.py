@@ -23,6 +23,7 @@ from typing import Any
 from ..module import HotReloadModule, ModuleRegistry, _module_path_for
 from .state import (
     active_sessions,
+    background_sessions,
     config_cache,
     max_iter_pending,
     question_pending,

@@ -236,6 +236,9 @@ class ModelConfigStore:
             if data is None:
                 data = self._bootstrap()
                 self._write_unlocked(data)
+            elif self._sync_registry(data):
+                # 注册表(内置⊕自定义)有新增 provider/model 或自定义被删除 → 增量同步落盘
+                self._write_unlocked(data)
             # 所有加载路径都必须回填缓存，否则 save() 读到 _data=None 会写空覆盖文件
             self._data, self._mtime = data, self._stat_mtime()
             return data
@@ -346,6 +349,52 @@ class ModelConfigStore:
             if _normalize_url(p.get("api_url", "")) == want:
                 return name
         return ""
+
+    def _sync_registry(self, data: dict) -> bool:
+        """把注册表(内置 PROVIDERS ⊕ custom_providers.yaml)增量并入 data：
+
+        - 缺失的 provider/model → 按启发式补齐（用户已编辑的条目永不覆盖）
+        - provider 元信息(api_url/default_model/description/capabilities) → 以注册表为准刷新
+        - 已从 custom_providers.yaml 删除的自定义 provider → 清理（连带其角色绑定）
+
+        Returns: True 表示 data 被修改，需要落盘。
+        """
+        changed = False
+        registry = self._merged_registry()
+        providers = data.setdefault("providers", {})
+        for name, info in registry.items():
+            caps = {"supports_thinking": bool(info.get("supports_thinking", False)),
+                    "supports_vision": bool(info.get("supports_vision", False))}
+            p = providers.get(name)
+            if p is None:
+                p = {"source": info.get("source", "builtin"), "models": {}}
+                providers[name] = p
+                changed = True
+            for field in ("source", "api_url", "default_model", "description"):
+                val = info.get(field, "") or ""
+                if field == "source":
+                    val = info.get("source", "builtin")
+                if p.get(field, "") != val:
+                    p[field] = val
+                    changed = True
+            for cap in ("supports_thinking", "supports_vision"):
+                if bool(p.get(cap, False)) != caps[cap]:
+                    p[cap] = caps[cap]
+                    changed = True
+            for mid in [*(info.get("models") or []), info.get("default_model", "")]:
+                if mid and mid not in p["models"]:
+                    p["models"][mid] = guess_model_config(mid, caps)
+                    changed = True
+        # 清理已不存在的自定义 provider（内置 provider 不会出现在删除场景）
+        for name in list(providers):
+            if providers[name].get("source") == "custom" and name not in registry:
+                providers.pop(name, None)
+                changed = True
+                for role, r in list(data.get("roles", {}).items()):
+                    if (r or {}).get("provider", "") == name:
+                        data["roles"].pop(role, None)
+                        changed = True
+        return changed
 
     # ── 查询 ────────────────────────────────────────────────
 

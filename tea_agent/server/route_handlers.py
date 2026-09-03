@@ -1900,6 +1900,50 @@ OPENAPI_SPEC = {
                 }}}}},
             "responses": {"200": {"description": "Connection test result (latency_ms)"},
                           "400": {"description": "Missing params"}}}},
+        "/api/model-config": {"get": {
+            "summary": "Unified model config panel (model_config.json single source)",
+            "tags": ["Model Config Panel"],
+            "responses": {"200": {"description":
+                "providers→models→per-model config + roles + active + pending_switch"}}}},
+        "/api/model-config/model": {
+            "put": {"summary": "Update per-model config (max_context/max_output/thinking/vision/tools/note)",
+                    "tags": ["Model Config Panel"],
+                    "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                        "type": "object", "required": ["provider", "model"],
+                        "properties": {"provider": {"type": "string"},
+                                       "model": {"type": "string"},
+                                       "config": {"type": "object"}}}}}},
+                    "responses": {"200": {"description": "Updated entry"}}},
+            "post": {"summary": "Add model to provider (config optional, heuristic defaults)",
+                     "tags": ["Model Config Panel"],
+                     "responses": {"200": {"description": "Created entry"}}},
+            "delete": {"summary": "Delete model config entry",
+                       "tags": ["Model Config Panel"],
+                       "parameters": [
+                           {"name": "provider", "in": "query", "required": True,
+                            "schema": {"type": "string"}},
+                           {"name": "model", "in": "query", "required": True,
+                            "schema": {"type": "string"}}],
+                       "responses": {"200": {"description": "Deleted"},
+                                     "404": {"description": "Not found"}}}},
+        "/api/model-config/sync": {"post": {
+            "summary": "Sync live /v1/models into model_config.json (new only, keep user edits)",
+            "tags": ["Model Config Panel"],
+            "responses": {"200": {"description": "added/kept/total"}}}},
+        "/api/model-config/switch": {"post": {
+            "summary": "Switch model & continue current session (deferred when a turn is in progress)",
+            "tags": ["Model Config Panel"],
+            "requestBody": {"required": True, "content": {"application/json": {"schema": {
+                "type": "object", "required": ["provider", "model"],
+                "properties": {
+                    "provider": {"type": "string"}, "model": {"type": "string"},
+                    "role": {"type": "string", "enum": ["main", "cheap", "vision"], "default": "main"},
+                    "api_key": {"type": "string"},
+                    "continue_session": {"type": "boolean", "default": True},
+                    "temperature": {"type": "number"}, "max_tokens": {"type": "integer"},
+                    "top_p": {"type": "number"}}}}}},
+            "responses": {"200": {"description":
+                "apply result + switch mode: applied|pending_next_turn|next_message"}}}},
     }
 }
 
@@ -2215,19 +2259,19 @@ async def handle_provider_apply(request):
                 AgentModule.invalidate_config_cache(get_server().get_config_path())
             except Exception as e:
                 logger.warning("invalidate config cache failed: %s", e)
-        # 热生效：main 角色重建长驻 Agent 会话使新模型立即生效。
-        # api_key 留空时回退到运行中 Agent 的现有 key（与 /api/model 语义一致），
-        # 避免空 key 覆盖内存配置。
+        # 会话续用切换：配置已落盘（apply_provider 含逐模型配置注入），
+        # 读盘后交给 AgentModule.request_model_switch —— 空闲立即热切（保留当前
+        # 主题历史）；对话进行中则挂起，本轮结束后自动应用，绝不中断流式回复。
         if result.get("ok") and role == "main":
             try:
-                server = get_server()
-                agent = server._agent if hasattr(server, "_agent") else None
-                current_key = ""
-                try:
-                    current_key = agent._cfg.main_model.api_key if agent else ""
-                except Exception:
-                    current_key = ""
-                server.switch_model(api_key or current_key, result["api_url"], result["model"])
+                from tea_agent.config import load_config
+                from .modules.agent_module import AgentModule
+                mc = load_config(get_server().get_config_path() or None).main_model
+                AgentModule.request_model_switch(
+                    mc.api_key, mc.api_url, mc.model_name,
+                    temperature=mc.temperature, max_tokens=mc.max_tokens,
+                    top_p=mc.top_p, max_context_tokens=mc.max_context_tokens,
+                    options=mc.options)
             except Exception as e:
                 logger.warning("hot-switch after apply failed (config saved): %s", e)
         return JSONResponse(result)
@@ -2262,4 +2306,161 @@ async def handle_model_test(request):
         return _provider_error_response(e)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e), "code": "TEST_FAILED"}, status_code=502)
+
+
+# ================================================================
+#  Unified Model Config Panel — ~/.tea_agent/model_config.json
+#  提供商→模型→逐模型配置（最大上下文/最大输出/思考/多模态）单一事实源
+# ================================================================
+
+def _model_store():
+    """ModelConfigStore 单例（统一模型配置中心）。"""
+    from tea_agent.model_config import get_model_config_store
+    return get_model_config_store()
+
+
+def _mc_error_response(e) -> JSONResponse:
+    """ModelConfigError → 统一错误 JSON（无 code/status 属性时当 400）。"""
+    code = getattr(e, "code", "BAD_REQUEST")
+    status = getattr(e, "status", 400)
+    return JSONResponse({"ok": False, "error": str(e), "code": code}, status_code=status)
+
+
+async def handle_model_config_get(request):
+    """GET /api/model-config — 面板全量视图：providers→models→逐模型配置 + roles + active + pending_switch。"""
+    server = get_server()
+    try:
+        from .modules.agent_module import AgentModule
+        data = _model_store().panel(config_path=server.get_config_path() or "")
+        data["pending_switch"] = AgentModule.get_pending_switch()
+        return JSONResponse(data)
+    except Exception as e:
+        logger.exception("model config panel failed")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+async def handle_model_config_model_put(request):
+    """PUT /api/model-config/model — 更新逐模型配置。
+
+    Body: {provider, model, config: {max_context_tokens, max_output_tokens,
+           supports_thinking, supports_vision, supports_tools, note}}
+    """
+    body = await request.json()
+    try:
+        entry = _model_store().update_model_config(
+            body.get("provider", ""), body.get("model", ""), body.get("config") or {})
+        return JSONResponse({"ok": True, **entry})
+    except Exception as e:
+        return _mc_error_response(e)
+
+
+async def handle_model_config_model_add(request):
+    """POST /api/model-config/model — 新增模型 {provider, model, config?}；config 缺省用启发式默认值。"""
+    body = await request.json()
+    try:
+        cfg = body.get("config") or None
+        entry = _model_store().upsert_model(
+            body.get("provider", ""), body.get("model", ""), cfg)
+        return JSONResponse({"ok": True, **entry})
+    except Exception as e:
+        return _mc_error_response(e)
+
+
+async def handle_model_config_model_del(request):
+    """DELETE /api/model-config/model?provider=X&model=Y — 删除模型配置条目（模型 id 可含 /，故用 query）。"""
+    provider = request.query_params.get("provider", "")
+    model = request.query_params.get("model", "")
+    try:
+        if not _model_store().delete_model(provider, model):
+            return JSONResponse({"ok": False, "error": f"model '{model}' not found",
+                                 "code": "NOT_FOUND"}, status_code=404)
+        return JSONResponse({"ok": True, "deleted": {"provider": provider, "model": model}})
+    except Exception as e:
+        return _mc_error_response(e)
+
+
+async def handle_model_config_sync(request):
+    """POST /api/model-config/sync — 在线模型列表写回 model_config.json。
+
+    Body: {provider, api_key?, refresh?} — 新模型按启发式默认入库，已有条目（用户编辑）不覆盖。
+    """
+    body = await request.json() if request.headers.get("content-length") else {}
+    try:
+        res = _model_service().query_models(
+            body.get("provider", ""),
+            api_key=(body.get("api_key") or "").strip(),
+            refresh=bool(body.get("refresh", True)))
+    except ProviderError as e:
+        return _provider_error_response(e)
+    try:
+        ids = [m.get("id") for m in res.get("models", [])
+               if isinstance(m, dict) and m.get("id")]
+        synced = _model_store().sync_live_models(res["provider"], ids)
+        return JSONResponse({"ok": True, "query_source": res.get("source"), **synced})
+    except Exception as e:
+        return _mc_error_response(e)
+
+
+async def handle_model_config_switch(request):
+    """POST /api/model-config/switch — 切换模型并继续当前会话（面板核心切换 API）。
+
+    Body: {provider, model, role=main|cheap|vision, api_key?, continue_session=true,
+           temperature?, max_tokens?, top_p?, max_context_tokens?, options?}
+    流程：
+      1. apply_provider → 逐模型配置自动注入（最大输出/最大上下文/思考/视觉），
+         落盘 config.yaml + roles 回写 model_config.json；
+      2. role=main 且 continue_session → AgentModule.request_model_switch：
+         空闲立即热切（主题历史保留）；对话进行中→挂起，本轮结束自动应用；
+         无长驻 Agent→下一条消息自然生效。
+    """
+    body = await request.json() if request.headers.get("content-length") else {}
+    server = get_server()
+    role = (body.get("role") or "main").strip()
+    continue_session = bool(body.get("continue_session", True))
+
+    def _num(key, cast):
+        v = body.get(key)
+        if v is None or str(v).strip() == "":
+            return None
+        try:
+            return cast(v)
+        except (TypeError, ValueError):
+            return None
+
+    try:
+        result = _model_service().apply_provider(
+            body.get("provider", ""),
+            api_key=(body.get("api_key") or "").strip(),
+            model=(body.get("model") or "").strip(),
+            role=role,
+            config_path=server.get_config_path(),
+            temperature=_num("temperature", float),
+            max_tokens=_num("max_tokens", int),
+            top_p=_num("top_p", float),
+            max_context_tokens=_num("max_context_tokens", int),
+            options=body.get("options"),
+        )
+    except ProviderError as e:
+        return _provider_error_response(e)
+    except Exception as e:
+        logger.exception("model-config switch apply failed")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+    switch = {"mode": "config_only"}
+    if result.get("ok") and role == "main" and continue_session:
+        try:
+            from tea_agent.config import load_config
+            from .modules.agent_module import AgentModule
+            AgentModule.invalidate_config_cache(server.get_config_path())
+            mc = load_config(server.get_config_path() or None).main_model
+            switch = AgentModule.request_model_switch(
+                mc.api_key, mc.api_url, mc.model_name,
+                temperature=mc.temperature, max_tokens=mc.max_tokens,
+                top_p=mc.top_p, max_context_tokens=mc.max_context_tokens,
+                options=mc.options)
+        except Exception as e:
+            logger.warning("session-continue switch failed (config saved): %s", e)
+            switch = {"mode": "error", "error": str(e)}
+    result["switch"] = switch
+    return JSONResponse(result)
 

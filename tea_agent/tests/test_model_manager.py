@@ -29,6 +29,8 @@ def svc(tmp_path, monkeypatch):
 
     monkeypatch.setenv("TEA_MODEL_CONFIG", str(tmp_path / "model_config.json"))
     monkeypatch.setattr(mc_mod, "_store", None)
+    # profile 扫描隔离：空目录（无 config_*.yaml）→ store 回退预置注册表
+    monkeypatch.setattr(mc_mod, "CONFIG_DIR", tmp_path / "agent")
     svc = mm.ProviderService(config_path="")
     svc._custom_cache = None
     svc._custom_mtime = 0.0

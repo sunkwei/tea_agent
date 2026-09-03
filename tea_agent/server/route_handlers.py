@@ -642,7 +642,13 @@ async def handle_web_chat(request):
             with _active_sessions_lock:
                 if _active_sessions.get(topic_id) is session:
                     _active_sessions.pop(topic_id, None)
-            # 当前对话结束（后续排队消息由前端驱动自动发送）
+            # ⭐ 当前对话结束（后续排队消息由前端驱动自动发送）；
+            # 尝试应用挂起的模型切换 —— 会话续用：不中断本轮，结束后自动以新模型继续
+            try:
+                from .modules.agent_module import AgentModule
+                AgentModule.try_apply_pending_switch()
+            except Exception as e:
+                logger.debug("apply queued model switch skipped: %s", e)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

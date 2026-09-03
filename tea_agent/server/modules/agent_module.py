@@ -23,6 +23,7 @@ from typing import Any
 from ..module import HotReloadModule, ModuleRegistry, _module_path_for
 from .state import (
     active_sessions,
+    background_sessions,
     config_cache,
     max_iter_pending,
     question_pending,
@@ -808,6 +809,71 @@ class AgentModule(HotReloadModule):
         if topic_id:
             agent.current_topic_id = topic_id
             agent.load_topic_history(topic_id)
+
+    # ── 会话续用切换（当前轮不中断，结束后自动应用新模型） ──
+
+    _pending_switch: dict | None = None
+    _switch_lock = threading.Lock()
+
+    @classmethod
+    def request_model_switch(cls, api_key: str, api_url: str, model_name: str,
+                             **kwargs) -> dict:
+        """请求切换模型并继续当前会话（统一模型面板「应用并继续会话」入口）。
+
+        语义（配置须已由调用方落盘，如 ProviderService.apply_provider）：
+          - 对话进行中（active/background）→ 仅挂起，本轮结束后由
+            try_apply_pending_switch 自动应用，绝不打断正在流式输出的回复；
+          - 空闲且长驻 Agent 存在 → 立即热切换（重建会话并恢复当前主题历史）；
+          - 无长驻 Agent（纯 Web/API 模式）→ 下一条消息 create_session 读盘，
+            自动以新模型继续同一 topic。
+        """
+        busy = bool(active_sessions) or bool(background_sessions)
+        if busy:
+            with cls._switch_lock:
+                cls._pending_switch = {"api_key": api_key, "api_url": api_url,
+                                       "model_name": model_name, "kwargs": dict(kwargs),
+                                       "at": time.time()}
+            logger.info("model switch queued (turn in progress): %s", model_name)
+            return {"mode": "pending_next_turn", "model": model_name}
+        if cls._instance is None:
+            return {"mode": "next_message", "model": model_name}
+        cls.switch_model(api_key, api_url, model_name, **kwargs)
+        return {"mode": "applied", "model": model_name}
+
+    @classmethod
+    def try_apply_pending_switch(cls) -> dict | None:
+        """回合结束钩子（chat finally / 后台缓冲读取 finally 调用）：
+
+        有挂起的模型切换且已无进行中对话 → 应用之；当前主题历史无缝续接。
+        """
+        with cls._switch_lock:
+            pending = cls._pending_switch
+            if not pending:
+                return None
+            if bool(active_sessions) or bool(background_sessions):
+                return None  # 仍有其他会话进行中，等它的回合结束再应用
+            cls._pending_switch = None
+        if cls._instance is None:
+            # 纯 Web 模式：落盘配置已生效，下一条消息自然使用新模型
+            return {"mode": "next_message", "model": pending["model_name"]}
+        try:
+            cls.switch_model(pending["api_key"], pending["api_url"],
+                             pending["model_name"], **pending["kwargs"])
+            logger.info("pending model switch applied: %s (session continues)",
+                        pending["model_name"])
+            return {"mode": "applied_after_turn", "model": pending["model_name"]}
+        except Exception as e:
+            logger.warning("apply pending model switch failed: %s", e)
+            return None
+
+    @classmethod
+    def get_pending_switch(cls) -> dict | None:
+        """查询挂起中的模型切换（面板展示“待本轮结束后生效”状态）。"""
+        with cls._switch_lock:
+            p = cls._pending_switch
+            if not p:
+                return None
+            return {"model_name": p["model_name"], "api_url": p["api_url"], "at": p["at"]}
 
     @classmethod
     def switch_config(cls, config_path: str) -> dict:

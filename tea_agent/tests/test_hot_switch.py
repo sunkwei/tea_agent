@@ -29,6 +29,12 @@ def hot_switch_env(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setenv("TEA_CONFIG", str(cfg))
+    # 隔离统一模型配置中心（apply 会回写 roles），避免污染真实 ~/.tea_agent
+    import tea_agent.model_config as mc_mod
+    import tea_agent.model_manager as mm_mod
+    monkeypatch.setenv("TEA_MODEL_CONFIG", str(tmp_path / "model_config.json"))
+    monkeypatch.setattr(mc_mod, "_store", None, raising=False)
+    monkeypatch.setattr(mm_mod, "_service", None, raising=False)
     import tea_agent.config as cfg_mod
     from tea_agent.server.modules.agent_module import AgentModule
     from tea_agent.server.modules.state import config_cache

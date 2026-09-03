@@ -298,6 +298,7 @@
     <button class="tb-btn" style="float:right" onclick="closeModal('modal-model')" title="关闭">✕</button>
   </h3>
   <div id="mm-status" class="status-msg" style="display:none"></div>
+  <div id="mm-pending" style="display:none;margin:6px 0;padding:8px 12px;border-radius:8px;background:#fff3cd;color:#856404;font-size:12px"></div>
 
   <!-- 当前状态 -->
   <div id="mm-current" style="margin-bottom:12px;padding:8px 12px;border-radius:8px;background:var(--bg2,#f5f5f5);font-size:13px">
@@ -318,7 +319,10 @@
     <!-- ② 模型（富目录：每模型自带能力/上下文/输出） -->
     <div style="border:1px solid var(--border,#ddd);border-radius:10px;padding:10px">
       <div class="modal-section-title">② 选择模型
-        <button class="btn btn-g" style="float:right;padding:2px 8px;font-size:11px" onclick="loadModels(mmSelectedProvider, true)" title="实时查询 /v1/models">🔄 实时刷新</button>
+        <span style="float:right;display:inline-flex;gap:4px">
+          <button class="btn btn-g" style="padding:2px 8px;font-size:11px" onclick="loadModels(mmSelectedProvider, true)" title="实时查询 /v1/models（不落盘）">🔄 实时查询</button>
+          <button class="btn btn-g" style="padding:2px 8px;font-size:11px" onclick="syncModels()" title="在线列表写回 ~/.tea_agent/model_config.json，新模型自动启发式默认配置">⇊ 同步入库</button>
+        </span>
       </div>
       <div id="mm-model-hint" style="font-size:11px;color:var(--text-dim,#888);margin:6px 0"></div>
       <input id="mm-model-search" placeholder="🔍 搜索模型" style="width:100%;padding:6px 8px;border:1px solid var(--border,#ddd);border-radius:6px;font-size:12px;margin:4px 0 8px;box-sizing:border-box" oninput="renderModels()">
@@ -337,10 +341,38 @@
         </div>
         <div id="mm-sel" style="font-size:11px;color:var(--text-dim,#888);margin-top:4px">未选择模型</div>
       </div>
+      <div id="mm-cap" style="font-size:11px;color:var(--text-dim,#888);margin:6px 0"></div>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px;margin-top:8px">
+        <input type="checkbox" id="mm-continue" checked> 继续当前会话（对话中自动挂起，本轮结束后生效）
+      </label>
+      <button class="btn btn-p" style="width:100%;margin-top:6px" onclick="applyProvider()">✔ 应用并继续会话</button>
+      <button id="mm-edit-btn" class="btn" style="width:100%;margin-top:6px;display:none;background:#f0ad4e;color:#fff" onclick="showEditProviderForm(mmSelectedProvider)">✏️ 编辑自定义供应商</button>
+      <button id="mm-del-btn" class="btn" style="width:100%;margin-top:6px;display:none;background:#e74c3c;color:#fff" onclick="deleteProvider()">🗑 删除自定义供应商</button>
     </div>
   </div>
 
-  <!-- 新增/编辑自定义供应商表单 -->
+  <!-- ④ 逐模型配置（统一模型配置中心 model_config.json） -->
+  <div id="mm-cfg" style="display:none;margin-top:12px;padding:12px;border:1px solid var(--border,#ddd);border-radius:10px">
+    <div class="modal-section-title">④ 模型配置 — <span id="mm-cfg-name" style="color:var(--primary,#4a90d9)"></span>
+      <span style="float:right;font-size:11px;font-weight:normal;color:var(--text-dim,#888)">保存至 ~/.tea_agent/model_config.json</span>
+    </div>
+    <div class="form-row" style="margin-top:8px">
+      <div class="form-group"><label>最大上下文长度</label><input id="mm-cfg-ctx" type="number" min="1024" step="1024" placeholder="如 128000"></div>
+      <div class="form-group"><label>最大输出长度</label><input id="mm-cfg-out" type="number" min="1" placeholder="如 8192"></div>
+      <div class="form-group" style="flex:2"><label>备注</label><input id="mm-cfg-note" placeholder="可选，如：价格/后缀说明"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;margin-top:4px">
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="mm-cfg-think"> 支持思考(reasoning)</label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="mm-cfg-vision"> 多模态输入(视觉)</label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" id="mm-cfg-tools" checked> 支持工具调用</label>
+      <span style="margin-left:auto;display:inline-flex;gap:6px">
+        <button class="btn btn-g" style="padding:4px 10px;font-size:12px;color:#e74c3c" onclick="delModelConfig()">🗑 删除条目</button>
+        <button class="btn btn-p" style="padding:4px 12px;font-size:12px" onclick="saveModelConfig()">💾 保存模型配置</button>
+      </span>
+    </div>
+  </div>
+
+  <!-- 新增自定义供应商表单 -->
   <div id="mm-add-form" style="display:none;margin-top:12px;padding:12px;border:1px dashed var(--border,#ddd);border-radius:10px">
     <div class="modal-section-title" id="mm-add-title">➕ 新增自定义供应商</div>
     <div class="form-row">
@@ -365,7 +397,7 @@
   </div>
 </div></div>
 
-<script src="/static/app.js?v=1786900001"></script>
+<script src="/static/app.js?v=20260903_profiles"></script>
 <!-- ═══ DAG 灯箱（双击放大） ═══ -->
 <div id="dag-lightbox" class="dag-lightbox" onclick="closeDagLightbox()">
   <span class="dag-lightbox-close" onclick="closeDagLightbox()">&times;</span>

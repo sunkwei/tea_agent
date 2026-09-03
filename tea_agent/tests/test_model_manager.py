@@ -21,9 +21,16 @@ import tea_agent.model_manager as mm
 
 @pytest.fixture
 def svc(tmp_path, monkeypatch):
-    """隔离的 ProviderService 实例：自定义供应商文件 → tmp_path。"""
+    """隔离的 ProviderService 实例：自定义供应商文件 + 统一模型配置 → tmp_path。"""
     custom_file = tmp_path / "custom_providers.yaml"
     monkeypatch.setattr(mm, "_CUSTOM_FILE", custom_file)
+    # 隔离 ModelConfigStore 单例，避免测试读写真实 ~/.tea_agent/model_config.json
+    import tea_agent.model_config as mc_mod
+
+    monkeypatch.setenv("TEA_MODEL_CONFIG", str(tmp_path / "model_config.json"))
+    monkeypatch.setattr(mc_mod, "_store", None)
+    # profile 扫描隔离：空目录（无 config_*.yaml）→ store 回退预置注册表
+    monkeypatch.setattr(mc_mod, "CONFIG_DIR", tmp_path / "agent")
     svc = mm.ProviderService(config_path="")
     svc._custom_cache = None
     svc._custom_mtime = 0.0

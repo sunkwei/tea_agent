@@ -110,6 +110,11 @@ async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
         # 避免后续消息因 is_topic_busy 返回 True 被错误排队
         with _background_sessions_lock:
             _background_sessions.pop(topic_id, None)
+        # ⭐ 后台回合结束：尝试应用挂起的模型切换（会话续用切换）
+        try:
+            _call_agent_module("try_apply_pending_switch")
+        except Exception:
+            pass
 
 
 # ── 带下划前缀的别名（route_handlers.py 历史引用） ──

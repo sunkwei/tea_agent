@@ -2333,6 +2333,12 @@ async def handle_model_config_get(request):
         from .modules.agent_module import AgentModule
         data = _model_store().panel(config_path=server.get_config_path() or "")
         data["pending_switch"] = AgentModule.get_pending_switch()
+        # 标注「当前使用中」：提供商 api_url 与 main_model 一致 → is_configured（面板高亮）
+        main = (data.get("active") or {}).get("main") or {}
+        main_url = (main.get("api_url") or "").strip().rstrip("/").lower()
+        for p in data.get("providers", []):
+            p_url = (p.get("api_url") or "").strip().rstrip("/").lower()
+            p["is_configured"] = bool(main_url) and p_url == main_url
         return JSONResponse(data)
     except Exception as e:
         logger.exception("model config panel failed")

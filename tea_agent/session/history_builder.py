@@ -291,20 +291,99 @@ def _resolve_max_ctx(context: Any) -> int:
     return max_ctx
 
 
+def _budget_margin(max_ctx: int) -> int:
+    """token 预算安全余量：窗口的 2%，最低 1024（吸收 tokenizer 估算误差）。"""
+    return max(1024, int(max_ctx * 0.02))
+
+
+def solve_token_budget(max_ctx: int, requested_max_tokens: int = 0) -> tuple[int, int]:
+    """求解能放进模型窗口的 (input_budget, output_cap)。
+
+    A8（上下文溢出防线）：API 在 `输入 + max_tokens > 窗口` 时返回 400
+    （"maximum context length is N tokens. However, you requested M output
+    tokens and your prompt contains at least P input tokens"）。此前的
+    `input_budget = max_ctx * 0.8` 是"预留 20% 给输出"的粗估——用户显式配置
+    更大的 max_tokens（如 150K 窗口配 65536 输出）时，84465 的输入虽低于
+    120K 预算，但 84465+65536=150001 > 150000 照样溢出。
+
+    这里按**实际请求的输出**求解，保证 输入 + 输出 + 余量 ≤ 窗口：
+    - margin：2% 安全余量（最低 1024）
+    - min_input：10% 窗口（最低 2048）——保证模型总有基本工作空间
+    - requested > 80% 窗口 → 输出钳制到 50% 窗口（请求侧过大，无法原样满足）
+    - requested 未知（0）→ 预留 20%（旧行为基线，保守不变）
+
+    Args:
+        max_ctx: 上下文窗口上限（≤0 时按 128K 保守兜底）
+        requested_max_tokens: 配置/模式请求的输出 token 数（0=未知）
+
+    Returns:
+        (input_budget, output_cap)：请求应满足 输入≤input_budget 且
+        max_tokens≤output_cap；两者之和 + margin 恒 ≤ max_ctx。
+    """
+    if max_ctx <= 0:
+        max_ctx = 128000
+    margin = _budget_margin(max_ctx)
+    min_input = max(2048, int(max_ctx * 0.10))
+
+    if requested_max_tokens and requested_max_tokens > 0:
+        if requested_max_tokens > int(max_ctx * 0.8):
+            # 请求输出超过窗口 80% → 钳制到 50%（原值在数学上无法与任何
+            # 非平凡输入共存，继续原样发送必然 400）
+            out_cap = max(1024, int(max_ctx * 0.5))
+        else:
+            out_cap = int(requested_max_tokens)
+    else:
+        # 未知 → 20% 基线（旧行为）
+        out_cap = max(1024, int(max_ctx * 0.2))
+
+    input_budget = max(min_input, max_ctx - out_cap - margin)
+    # 下限介入后仍超窗口（极端小窗口）→ 再收缩输出，恒保证总和 ≤ 窗口
+    if input_budget + out_cap + margin > max_ctx:
+        out_cap = max(1024, max_ctx - input_budget - margin)
+    return input_budget, out_cap
+
+
+def _get_effective_max_tokens(context: Any) -> int:
+    """读取主模型实际请求的输出 token 数（max_tokens，含 mode_params 覆盖）。
+
+    A8：预算求解需要真实输出请求而非粗估。读取失败（无配置/测试环境）
+    返回 0，求解器回退 20% 基线（与旧行为一致）。
+    """
+    try:
+        from tea_agent.config import get_config
+
+        cfg = get_config()
+        if cfg is None:
+            return 0
+        params = cfg.get_effective_params("main", getattr(context, "_current_mode", "mixed"))
+        return int(params.get("max_tokens") or 0)
+    except Exception:
+        return 0
+
+
+def _get_output_cap(context: Any) -> int:
+    """求解当前会话的输出 token 上限（供 build_api_messages 记录到 context）。"""
+    max_ctx = _resolve_max_ctx(context)
+    return solve_token_budget(max_ctx, _get_effective_max_tokens(context))[1]
+
+
 def _get_token_budget(context: Any) -> tuple[int, int]:
     """获取 token 预算：返回 (input_budget, tool_prune_threshold)
 
-    根据 max_context_tokens 动态计算：
-    - input_budget = max_context_tokens * 0.8（预留 20% 给输出）
-    - tool_prune_threshold = max(65536, input_budget * 0.02)  # 动态阈值，最低 64K 字符
+    A8：input_budget 由 `solve_token_budget` 求解——
+    `max_context_tokens - 实际请求的 max_tokens - 2% 安全余量`（下限 10% 窗口），
+    取代旧版固定 `max_ctx * 0.8` 粗估：当配置 max_tokens 较大（>20% 窗口）时
+    **更早、更积极**地触发裁剪，从源头杜绝 输入+输出 > 窗口 的 400 溢出；
+    配置 max_tokens 较小时预算相应放宽（更精确，不再多裁）。
 
-    A7 修复：max_context_tokens 未配置（=0/None）时，回退到 _resolve_max_ctx
-    按模型名推断（deepseek/gemini→1M 等），仍为 0 时保守默认 128K——
-    **保证任何情况下 input_budget > 0**，杜绝"裁剪链完全跳过导致上下文
-    无限增长溢出"（2026-08-13 生产事故根因）。
+    tool_prune_threshold = max(65536, input_budget * 0.02)（动态阈值，最低 64K 字符）。
+
+    A7 修复（保留）：max_context_tokens 未配置（=0/None）时，回退到
+    _resolve_max_ctx（默认 1M 等），**保证任何情况下 input_budget > 0**，
+    杜绝"裁剪链完全跳过导致上下文无限增长溢出"（2026-08-13 生产事故根因）。
     """
     max_ctx = _resolve_max_ctx(context)
-    input_budget = int(max_ctx * 0.8)
+    input_budget, _ = solve_token_budget(max_ctx, _get_effective_max_tokens(context))
     # 动态工具裁剪阈值：预算的 2%，最低 64K 字符（保证读取代码/文件内容完整）
     tool_prune_threshold = max(65536, int(input_budget * 0.02))
     return input_budget, tool_prune_threshold
@@ -1066,8 +1145,24 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             msg_copy["content"] = "\n".join(text_parts) if text_parts else "[图片]"
         result.append(msg_copy)
 
+    # A8: 每次构建记录求解器给出的输出上限——工具循环据此把请求的
+    # max_tokens 钳制到 窗口-输入-余量 之内，是"输入+输出 ≤ 窗口"的关键
+    # （见 solve_token_budget）。
+    try:
+        context._output_cap = _get_output_cap(context)
+    except Exception:
+        context._output_cap = 0
+
+    # A8: 消费 400 溢出自愈设置的一次性紧急输入预算（更积极的防线：
+    # 错误揭示的真实输入规模驱动更深裁剪，用后即焚，下一轮恢复常规预算）。
+    _emergency = int(getattr(context, "_emergency_input_budget", 0) or 0)
+    if _emergency > 0:
+        input_budget = min(input_budget, _emergency)
+        context._emergency_input_budget = 0
+
     # ── 四级水位线 token 裁剪（借鉴 MUR AI 方案）──
-    # ratio = 校准后估算 / max_context：
+    # ratio = 校准后估算 / input_budget（A8：改为对"输出感知输入预算"而非
+    # 窗口本身——输出占窗口较大时更早触发，更积极防溢出）：
     #   < 0.60 → Tier0 不动；0.60-0.80 → Tier1 Snip（轻度截短工具输出）；
     #   0.80-0.95 → Tier2 Prune（渐进式裁剪）；≥ 0.95 → Tier3 Summarize
     #   （本地裁剪 + 置 _token_exhausted，由下一轮 summarize_old_history
@@ -1085,7 +1180,10 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
         context._last_estimate_tokens = est
         max_ctx = _resolve_max_ctx(context)
         if max_ctx > 0:
-            ratio = est_check / max_ctx
+            ratio = est_check / input_budget if input_budget > 0 else 1.0
+            # A8: 紧急预算生效 → 直接按满水位处理（强制最深裁剪档）
+            if _emergency > 0:
+                ratio = max(ratio, 1.0)
             # 缓存友好（DSH：派生只依赖事件流）——水位线裁剪**单调不减**：
             # 校准 scale 可能因"post-trim actual vs pre-trim estimate"在相邻请求间
             # 振荡，导致 tier 0↔1↔2 反复翻转、同一工具消息 full↔snipped 交替，
@@ -1118,12 +1216,13 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             est_after = estimate_messages_tokens(result)
             if est_after != est:
                 logger.info(f"裁剪后: {est_after} tokens (节省 {est - est_after})")
-            # 最后防线（A7）：本地裁剪后仍逼近上限 → 置强制摘要标志，
-            # 由下一轮 summarize_old_history 执行增量 LLM 摘要兜底。
-            if est_after > max_ctx * 0.95:
+            # 最后防线（A7→A8）：裁剪后 输入 + 输出上限 + 安全余量 仍超窗口 →
+            # 置强制摘要标志，由下一轮 summarize_old_history 执行增量 LLM 摘要兜底。
+            _ocap = int(getattr(context, "_output_cap", 0) or 0)
+            if est_after + _ocap + _budget_margin(max_ctx) > max_ctx:
                 context._token_exhausted = True
                 logger.warning(
-                    f"🚨 裁剪后仍 {est_after} tok (>{max_ctx * 0.95:.0f})，"
+                    f"🚨 裁剪后 输入 {est_after} + 输出 {_ocap} + 余量 仍超窗口 {max_ctx}，"
                     f"置强制摘要标志，下一轮增量 LLM 摘要兜底"
                 )
         elif est_check > input_budget:

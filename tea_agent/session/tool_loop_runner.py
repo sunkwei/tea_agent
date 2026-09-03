@@ -9,6 +9,7 @@
 
 import json
 import logging
+import re
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -101,6 +102,210 @@ def _log_rc_diagnostic(session, api_messages: list[dict]) -> None:
         logger.warning("DeepSeek RC 回传 400 现场诊断:\n" + "\n".join(lines))
     except Exception:
         logger.warning("RC 400 现场诊断生成失败", exc_info=True)
+
+
+# ═══ A8: 上下文溢出防线（max_context_tokens × max_tokens 感知）═══
+
+def _parse_context_overflow(err_str: str) -> dict | None:
+    """解析"模型上下文溢出" 400 错误体（输入 + 输出 > 窗口）。
+
+    A8: API（OpenAI/DeepSeek 兼容）在 `input + max_tokens > window` 时返回：
+      "This model's maximum context length is {N} tokens. However, you
+       requested {M} output tokens and your prompt contains at least {P}
+       input tokens, for a total of at least {T} tokens."
+    错误同时揭示三件自愈所需的关键信息：模型真实窗口 N、请求的输出 M、
+    实际输入 P。部分网关/SDK 只透传片段或通用措辞
+    （"maximum context length exceeded" / "context_length_exceeded" /
+    "prompt is too long"），命中 400 + 上下文长度签名即视为溢出
+    （字段为 None，自愈按配置窗口兜底）。
+
+    Args:
+        err_str: str(exc)（SDK 通常原样带出服务端 message）
+
+    Returns:
+        None: 非上下文溢出错误（调用方继续原有 4xx 分类）；
+        dict: {"max_ctx": int|None, "requested_out": int|None,
+               "prompt_tokens": int|None}
+    """
+    if not err_str:
+        return None
+    s = err_str.lower()
+    is_overflow = (
+        "maximum context length" in s
+        or "context length exceeded" in s
+        or "context_length_exceeded" in s
+        or "prompt is too long" in s
+        or ("context length" in s and "400" in s)
+    )
+    if not is_overflow:
+        return None
+    info: dict = {"max_ctx": None, "requested_out": None, "prompt_tokens": None}
+    m = re.search(r"maximum context length is\s+(\d+)\s*tokens?", s)
+    if m:
+        info["max_ctx"] = int(m.group(1))
+    m = re.search(r"requested\s+(\d+)\s*output tokens", s)
+    if m:
+        info["requested_out"] = int(m.group(1))
+    m = re.search(r"contains (?:at least )?(\d+)\s*input tokens", s)
+    if m:
+        info["prompt_tokens"] = int(m.group(1))
+    return info
+
+
+def _request_max_tokens(session, eff: dict) -> int | None:
+    """实际发送的请求 max_tokens（A8：按求解器输出上限钳制）。
+
+    - 求解器已给出上限（context._output_cap，由 build_api_messages 记录）：
+      配置 max_tokens 被钳制到其内——窗口小、配置输出大时自动收缩
+      （如 150K 窗口 + 65536 输出），保证 输入+输出+余量 ≤ 窗口；
+    - 配置 max_tokens 缺失/0：发送求解器上限（而非"不限"），防止
+      输出侧无界增长顶爆窗口；
+    - 求解器无上限（预算不可解）：回退配置值（原行为）。
+
+    Args:
+        session: OnlineToolSession
+        eff: session._get_effective_params() 返回的参数 dict
+
+    Returns:
+        实际请求的 max_tokens（None=不传，由服务端默认）
+    """
+    cfg_mt = eff.get("max_tokens") or 0
+    cap = int(getattr(session.context, "_output_cap", 0) or 0)
+    if cap <= 0:
+        return cfg_mt or None
+    if cfg_mt <= 0:
+        return cap
+    return min(int(cfg_mt), cap)
+
+
+def _ensure_within_output_budget(session) -> None:
+    """发送前护栏（A8 主动）：预计 输入+输出 将超窗口时，强制重新裁剪。
+
+    工具循环每轮追加新工具结果，而缓存友好的 _loop_trim_done 使同回合
+    后续构建跳过裁剪——一旦输入越过 窗口-输出上限-余量，请求就会 400
+    溢出。此处发送前检查：越过安全线即重置"首建即定型"标志，让下一次
+    build_api_messages 执行完整裁剪（裁剪决策幂等、前缀仍收敛，仅在
+    真的超预算时才破缓存）；若合计已超窗口，再置 _token_exhausted
+    让下一回合强制 LLM 增量摘要兜底。
+
+    异常隔离：估算/护栏失败不影响主流程（最坏退回原行为）。
+    """
+    ctx = session.context
+    try:
+        from tea_agent.session.history_builder import (
+            _budget_margin,
+            _resolve_max_ctx,
+            estimate_messages_tokens,
+        )
+
+        max_ctx = _resolve_max_ctx(ctx)
+        out_cap = int(getattr(ctx, "_output_cap", 0) or 0)
+        if max_ctx <= 0 or out_cap <= 0:
+            return
+        est = estimate_messages_tokens(getattr(ctx, "messages", None) or [])
+        # 取三源最大值：本轮消息估算 / 上次构建估算 / 上次真实 prompt_tokens
+        # （S3 单次值，含 tools/system 全量开销）
+        est = max(
+            est,
+            int(getattr(ctx, "_last_estimate_tokens", 0) or 0),
+            int(getattr(ctx, "_last_request_prompt_tokens", 0) or 0),
+        )
+        if est + out_cap + _budget_margin(max_ctx) <= max_ctx:
+            return
+        ratio = est / max_ctx
+        ctx._loop_max_ratio = max(float(getattr(ctx, "_loop_max_ratio", 0.0)), ratio)
+        ctx._loop_trim_done = False
+        if est + out_cap >= max_ctx:
+            ctx._token_exhausted = True
+        logger.warning(
+            f"A8 发送前护栏: 估算输入 {est} + 输出 {out_cap} + 余量 > 窗口 {max_ctx}，"
+            f"强制重新裁剪"
+        )
+    except Exception:
+        logger.debug("A8 发送前护栏失败（隔离）", exc_info=True)
+
+
+def _apply_context_overflow_recovery(session, info: dict) -> None:
+    """400 上下文溢出自愈（A8）：修正窗口 → 收紧输出 → 强制深裁剪。
+
+    错误揭示模型真实窗口小于配置的 max_context_tokens（如未配置按 1M
+    默认 vs 模型实际 150K）时，全部裁剪链（基于配置窗口）全部失效。
+    自愈步骤（积极但全部隔离、不阻塞重试）：
+
+    1. 修正窗口：session context + 内存 config（记录日志 + 提示用户把
+       修正持久化到 config.yaml——自动改用户文件过于激进，不做）；
+    2. 按修正后窗口重新求解 (input_budget, output_cap)；错误揭示的真实
+       输入规模若大于求解预算 → 取其一半作为一次性紧急输入预算
+       （已知溢出的输入直接腰斩，保证落回安全线）；
+    3. 重置水位线单调 clamp 与首建即定型标志 → 下一次构建执行最深
+       本地裁剪（Tier3：Snip + 渐进式 Prune）；
+    4. 置 _token_exhausted → 下一用户回合强制 LLM 增量摘要；
+    5. 尽力立即调用 summarizer 强制摘要（隔离，失败不阻塞重试）。
+    """
+    ctx = session.context
+    max_ctx_reported = int(info.get("max_ctx") or 0)
+
+    # 1) 修正窗口（仅当错误揭示的真实窗口小于配置值时）
+    if max_ctx_reported > 0:
+        configured = int(getattr(ctx, "max_context_tokens", 0) or 0)
+        if configured == 0 or max_ctx_reported < configured:
+            if configured > 0:
+                logger.warning(
+                    f"A8 溢出自愈: 模型真实窗口 {max_ctx_reported} < 配置的 "
+                    f"max_context_tokens {configured}（误配/未配会使裁剪链失效），"
+                    f"本会话已自动修正，请同步更新 config.yaml"
+                )
+            else:
+                logger.warning(
+                    f"A8 溢出自愈: max_context_tokens 未配置，"
+                    f"改用模型真实窗口 {max_ctx_reported}"
+                )
+            ctx.max_context_tokens = max_ctx_reported
+            try:
+                from tea_agent.config import get_config
+
+                cfg = get_config()
+                mm = getattr(cfg, "main_model", None) if cfg is not None else None
+                if mm is not None:
+                    mm_max = int(getattr(mm, "max_context_tokens", 0) or 0)
+                    if mm_max == 0 or max_ctx_reported < mm_max:
+                        mm.max_context_tokens = max_ctx_reported
+            except Exception:
+                logger.debug("A8 内存 config 修正失败（隔离）", exc_info=True)
+
+    # 2) 按修正后窗口求解新预算
+    from tea_agent.session.history_builder import (
+        _get_effective_max_tokens,
+        _resolve_max_ctx,
+        solve_token_budget,
+    )
+
+    max_ctx = _resolve_max_ctx(ctx)
+    requested = int(info.get("requested_out") or 0) or _get_effective_max_tokens(ctx)
+    input_budget, out_cap = solve_token_budget(max_ctx, requested)
+    prompt_tokens = int(info.get("prompt_tokens") or 0)
+    if prompt_tokens > input_budget:
+        # 失败的"真实输入"比求解预算还大（估算失准）→ 取一半作紧急预算
+        input_budget = max(2048, int(prompt_tokens * 0.5))
+    ctx._emergency_input_budget = input_budget
+    ctx._output_cap = out_cap
+
+    # 3) 重置单调 clamp 与首建即定型 → 强制下一次构建走最深裁剪
+    ctx._loop_max_ratio = max(float(getattr(ctx, "_loop_max_ratio", 0.0)), 1.0)
+    ctx._loop_trim_done = False
+
+    # 4) 下一回合强制 LLM 增量摘要（最终兜底）
+    ctx._token_exhausted = True
+
+    # 5) 尽力立即强制摘要（隔离：无 storage/topic 时内部直接返回）
+    try:
+        summarizer = getattr(session, "summarizer_comp", None)
+        if summarizer is not None:
+            summarizer.summarize_old_history(
+                session.api, session._get_summarize_client, force=True
+            )
+    except Exception:
+        logger.debug("A8 紧急强制摘要失败（隔离）", exc_info=True)
 
 
 # ═══ 并行工具执行引擎 ═══════════════════════════════════
@@ -536,7 +741,7 @@ def execute_tool_loop(session, context: dict) -> dict:
             response = session.api.create_chat_stream(
                 api_messages, tools=[],
                 temperature=eff.get("temperature"),
-                max_tokens=eff.get("max_tokens"),
+                max_tokens=_request_max_tokens(session, eff),
                 top_p=eff.get("top_p"),
                 request_timeout=120,
             )
@@ -545,7 +750,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                 retry_factory=lambda: session.api.create_chat_stream(
                     api_messages, tools=[],
                     temperature=eff.get("temperature"),
-                    max_tokens=eff.get("max_tokens"),
+                    max_tokens=_request_max_tokens(session, eff),
                     top_p=eff.get("top_p"),
                     request_timeout=120,
                 ),
@@ -568,6 +773,9 @@ def execute_tool_loop(session, context: dict) -> dict:
     # 使自愈后**所有**工具轮次（含后续 iteration）都显式带 disable_thinking；
     # 与 ctx._rc400_recovery 内部兜底互为冗余，保证降级彻底生效。
     rc_recovery_used = False
+    # A8: 本回合已触发过 400 溢出自愈（修正窗口 + 强制深裁剪 + 钳制 max_tokens
+    # 重试）。只自愈一次，再次溢出说明本地手段用尽，走错误返回并附处置提示。
+    ctx_overflow_recovery_used = False
 
     while iterations < session.max_iterations + session._extra_iterations:
         if session.interrupted:
@@ -593,6 +801,9 @@ def execute_tool_loop(session, context: dict) -> dict:
         except Exception:
             logger.exception("steering injection failed")
 
+        # A8 发送前护栏：构建前检查"估算输入 + 输出上限"，越过安全线时强制
+        # 重新裁剪（比"等 400 再处理"更积极；未越线时零成本 no-op）
+        _ensure_within_output_budget(session)
         api_messages = session._build_api_messages()
 
         if iterations == 0:
@@ -609,7 +820,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                 response = session.api.create_chat_stream(
                     api_messages, session.tools,
                     temperature=eff.get("temperature"),
-                    max_tokens=eff.get("max_tokens"),
+                    max_tokens=_request_max_tokens(session, eff),
                     top_p=eff.get("top_p"),
                     request_timeout=120,
                     disable_thinking=rc_recovery_used,
@@ -623,6 +834,20 @@ def execute_tool_loop(session, context: dict) -> dict:
                     callback(f"\n⚠️ 请求频率过高，{wait_sec}秒后自动重试 ({_retry+1}/{max_retries})...\n")
                     time.sleep(wait_sec)
                     continue
+                ovf = _parse_context_overflow(err_str)
+                if ovf is not None and not ctx_overflow_recovery_used:
+                    # A8: 400 上下文溢出自愈：修正误配窗口 → 收紧输出上限 →
+                    # 一次性紧急输入预算（强制最深本地裁剪）+ 强制摘要，
+                    # 重建消息并以钳制后的 max_tokens 重试。
+                    ctx_overflow_recovery_used = True
+                    _apply_context_overflow_recovery(session, ovf)
+                    _cap = int(getattr(session.context, "_output_cap", 0) or 0)
+                    callback(
+                        f"\n⚠️ 上下文溢出（输入+输出超过模型窗口）："
+                        f"已自动修正窗口并激进压缩历史，max_tokens 钳制到 {_cap} 重试…\n"
+                    )
+                    api_messages = session._build_api_messages()
+                    continue
                 if "image input" in err_str.lower() and session.context.supports_vision:
                     logger.warning(f"模型端点不支持图片输入，自动回退纯文本模式: {e}")
                     callback("\n⚠️ 当前 API 端点不支持图片输入，已自动切换为纯文本模式。\n")
@@ -633,7 +858,7 @@ def execute_tool_loop(session, context: dict) -> dict:
                         response = session.api.create_chat_stream(
                             api_messages, session.tools,
                             temperature=eff.get("temperature"),
-                            max_tokens=eff.get("max_tokens"),
+                            max_tokens=_request_max_tokens(session, eff),
                             top_p=eff.get("top_p"),
                             request_timeout=120,
                             disable_thinking=rc_recovery_used,
@@ -666,6 +891,15 @@ def execute_tool_loop(session, context: dict) -> dict:
                     continue
                 else:
                     error_msg = f"API调用错误: {e}"
+                    if (
+                        _parse_context_overflow(err_str) is not None
+                        and ctx_overflow_recovery_used
+                    ):
+                        # 自愈后仍溢出：本地裁剪手段已用尽，给出可操作的处置提示
+                        error_msg += (
+                            "（上下文溢出自愈后仍失败：请调小 config 的 max_tokens / "
+                            "max_context_tokens，或开启新会话继续）"
+                        )
                     logger.warning(
                         f"API调用失败: model={session.context.model}, iteration={iterations}, "
                         f"detail={_extract_api_error_detail(e)}"
@@ -688,7 +922,7 @@ def execute_tool_loop(session, context: dict) -> dict:
             retry_factory=lambda: session.api.create_chat_stream(
                 api_messages, session.tools,
                 temperature=eff.get("temperature"),
-                max_tokens=eff.get("max_tokens"),
+                max_tokens=_request_max_tokens(session, eff),
                 top_p=eff.get("top_p"),
                 request_timeout=120,
                 disable_thinking=rc_recovery_used,

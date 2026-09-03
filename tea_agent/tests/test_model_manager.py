@@ -305,6 +305,7 @@ def test_apply_provider_unknown_provider(svc):
 
 
 def test_apply_provider_merges_capabilities(svc, monkeypatch):
+    """apply 默认模型 deepseek-chat：能力来自该模型目录条目（思考 ✓ 视觉 ✗）。"""
     captured = {}
 
     def fake_save(cfg, path):
@@ -313,8 +314,85 @@ def test_apply_provider_merges_capabilities(svc, monkeypatch):
     monkeypatch.setattr(mm, "load_config", lambda path: mm._default_cfg())
     monkeypatch.setattr(mm, "save_config", fake_save)
     svc.apply_provider("DeepSeek", api_key="sk-x", role="main")
-    assert captured["options"]["supports_vision"] is True
+    # 模型级：deepseek-chat 思考模型，非视觉
     assert captured["options"]["supports_reasoning"] is True
+    assert captured["options"]["supports_vision"] is False
+
+
+# ── 目录驱动切换（供应商 → 模型，窗口/输出自动填充） ────────────
+
+def test_apply_provider_autofills_caps_from_catalog(svc, monkeypatch):
+    """apply 未显式传窗口/输出时自动取目录内该模型上限写入配置。"""
+    saved = {}
+
+    def fake_save(cfg, path):
+        saved["max_context_tokens"] = cfg.main_model.max_context_tokens
+        saved["max_tokens"] = cfg.main_model.max_tokens
+        saved["model_name"] = cfg.main_model.model_name
+
+    monkeypatch.setattr(mm, "load_config", lambda path: mm._default_cfg())
+    monkeypatch.setattr(mm, "save_config", fake_save)
+    result = svc.apply_provider("DeepSeek", api_key="sk-x", model="deepseek-chat", role="main")
+    assert result["max_context_tokens"] > 0
+    assert result["max_tokens"] > 0
+    assert saved["max_context_tokens"] == result["max_context_tokens"]
+    assert saved["max_tokens"] == result["max_tokens"]
+
+
+def test_apply_provider_explicit_caps_override_catalog(svc, monkeypatch):
+    """显式传入 max_tokens / max_context_tokens 优先于目录默认。"""
+    saved = {}
+
+    def fake_save(cfg, path):
+        saved["max_tokens"] = cfg.main_model.max_tokens
+        saved["max_context_tokens"] = cfg.main_model.max_context_tokens
+
+    monkeypatch.setattr(mm, "load_config", lambda path: mm._default_cfg())
+    monkeypatch.setattr(mm, "save_config", fake_save)
+    svc.apply_provider(
+        "DeepSeek", api_key="sk-x", model="deepseek-chat", role="main",
+        max_tokens=4096, max_context_tokens=32768,
+    )
+    assert saved["max_tokens"] == 4096
+    assert saved["max_context_tokens"] == 32768
+
+
+def test_apply_vision_model_merges_model_level_caps(svc, monkeypatch):
+    """选视觉模型条目 → options.supports_vision=True（目录模型级能力）。"""
+    captured = {}
+
+    def fake_save(cfg, path):
+        captured["options"] = dict(cfg.main_model.options)
+        captured["model_name"] = cfg.main_model.model_name
+
+    monkeypatch.setattr(mm, "load_config", lambda path: mm._default_cfg())
+    monkeypatch.setattr(mm, "save_config", fake_save)
+    svc.apply_provider("DeepSeek", api_key="sk-x", model="deepseek-v4-flash-vision-exp", role="main")
+    assert captured["model_name"] == "deepseek-v4-flash-vision-exp"
+    assert captured["options"]["supports_vision"] is True
+
+
+def test_query_models_static_entries_carry_catalog_meta(svc):
+    """目录静态列表应带上下文窗口/输出上限/能力，供 UI 两步展示。"""
+    result = svc.query_models("DeepSeek", api_key="", refresh=True)
+    assert result["source"] == "static"
+    by_id = {m["id"]: m for m in result["models"]}
+    chat = by_id.get("deepseek-chat")
+    assert chat is not None
+    assert chat.get("context_window", 0) > 0
+    assert chat.get("max_output_tokens", 0) > 0
+    assert isinstance(chat.get("supports_vision"), bool)
+
+
+def test_list_providers_emits_catalog(svc):
+    """list_providers 应为每个供应商附 catalog 富目录（含默认模型条目）。"""
+    result = svc.list_providers()
+    by_name = {p["name"]: p for p in result["providers"]}
+    deepseek = by_name["DeepSeek"]
+    assert deepseek["default_model"] in deepseek["models"]  # 模型 id 列表兼容旧前端
+    cat_ids = {m["id"] for m in deepseek["catalog"]}
+    assert deepseek["default_model"] in cat_ids
+    assert all(m["id"] in deepseek["models"] for m in deepseek["catalog"])
 
 
 def test_apply_provider_reuses_existing_key(svc, monkeypatch):

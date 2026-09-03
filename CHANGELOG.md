@@ -3,6 +3,32 @@
 
 ## [Unreleased]
 ### Features
+- fix(context): A8 上下文溢出防线 — 输出感知预算 + 400 溢出自愈（150K 窗口 + max_tokens=65536 生产 400 事故）
+  - 根因：输入预算固定 `max_ctx * 0.8`（"预留 20% 给输出"粗估）——用户配置较大
+    max_tokens（如 65536，占 150K 窗口 43.7%）时，84465 输入 < 120000 预算不触发裁剪，
+    但 84465+65536=150001 > 150000 → 400 "maximum context length is 150000 tokens"；
+    且 max_context_tokens 未配置时默认 1M，裁剪链对小窗口完全失效
+  - `history_builder.py`：`solve_token_budget(max_ctx, requested_max_tokens)` —
+    输入预算 = 窗口 − 实际请求输出 − 2% 安全余量（下限 10% 窗口）；
+    请求输出 > 80% 窗口 → 钳制 50%；输出未知 → 保持 20% 基线（旧行为）；
+    `build_api_messages` 每次构建记录 `_output_cap`，末道防线从"裁剪后 > 95% 窗口"
+    收紧为"裁剪后 输入+输出上限+余量 > 窗口"
+  - `tool_loop_runner.py`：① 发送前护栏 `_ensure_within_output_budget` —
+    估算 输入+输出+余量 超窗口 → 强制重新裁剪（重置首建即定型；未越线零成本 no-op）；
+    ② 全部请求点 `max_tokens` 按求解器输出上限钳制（`_request_max_tokens`，
+    含 skip_tool_loop / 视觉回退 / 重试工厂）；
+    ③ 400 溢出自愈 — `_parse_context_overflow` 解析错误（真实窗口/请求输出/实际输入），
+    修正误配的 `max_context_tokens`（本会话+内存 config；日志提示同步到 config.yaml），
+    置一次性紧急输入预算（错误揭示的真实输入腰斩）强制最深本地裁剪，
+    置 `_token_exhausted` 使下一轮强制 LLM 增量摘要，重建消息并以钳制 max_tokens 重试；
+    每回合只自愈一次，再次溢出返回错误并附可操作处置提示
+  - `context_fragments.py`：token_budget 片段输出感知（剩余 = 窗口 − 输出上限 − 已用），
+    模型更早收到压缩预警
+  - `context.py`/`onlinesession.py`：新增 `_output_cap`/`_emergency_input_budget` 共享字段，
+    回合边界（reset_session_state）清零
+  - tests: 新增 `test_overflow_guard.py`（21 项：求解器不变式 / 400 解析（事故原文+
+    通用签名+非溢出误判防护）/ max_tokens 钳制 / 发送前护栏 / 构建裁剪与紧急预算消费 /
+    工具循环自愈成功与自愈用尽）
 - fix: `reasoning_effort` 不再下发非法值 `auto`（修复 API 400 `unknown variant auto`）
   - 原因：默认配置 `reasoning_effort: auto` + `thinking_strength: 0.7` 时，strength 自动映射分支
     将 `auto` 作为值写入 `extra_body`，而 API 只接受 `none/minimal/low/medium/high/xhigh/max`

@@ -265,7 +265,12 @@ def _frag_token_budget(context: Any) -> ContextFragment | None:
         # S6: 估算失败时明确显示"未知"，避免误导为 0。
         body = "当前上下文 token 用量未知（估算失败），请按需节制使用。"
     elif max_tokens > 0:
-        remaining = max(0, max_tokens - used)
+        # A8 输出感知：可用输入空间 = 窗口 - 输出上限（求解器已为 max_tokens
+        # 输出预留空间）——否则"已用 < 窗口"但 输入+输出 其实已溢出，模型
+        # 却收不到任何预警（2026-08 150K 窗口 + 65536 输出 400 事故的根因）
+        out_cap = int(getattr(context, "_output_cap", 0) or 0)
+        input_capacity = max(0, max_tokens - out_cap)
+        remaining = max(0, input_capacity - used)
         pct = min(100.0, used / max_tokens * 100.0)
         # S4: 报警阈值可配置（context 属性优先，回退 CompactionSettings 默认 0.15）
         warn_ratio = getattr(context, "budget_warn_ratio", None)

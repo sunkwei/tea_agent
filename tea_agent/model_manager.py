@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from tea_agent.config import load_config, save_config
-from tea_agent.providers import PROVIDERS
+from tea_agent.providers import PROVIDERS, model_entries, model_ids
 
 logger = logging.getLogger("tea_agent.model_manager")
 
@@ -207,8 +207,45 @@ class ProviderService:
 
             return AgentConfig()
 
+    def _catalog(self, info: dict) -> list[dict]:
+        """从 Provider 信息抽取富模型目录（id + 元数据），供 UI 两步选择。
+
+        兼容旧形态：内置 Provider 的 models 是富条目对象；自定义/简写字符串
+        也会被统一归一化为 {id, ...}。能力标记缺省继承 Provider 级默认。
+
+        Args:
+            info: Provider 原始信息（含 models）
+
+        Returns:
+            [{id, context_window, max_output_tokens, supports_vision,
+              supports_thinking, description}, ...]
+        """
+        out = []
+        for entry in model_entries(info):
+            mid = entry["id"]
+            merged = {
+                "id": mid,
+                "context_window": entry.get("context_window", 0) or 0,
+                "max_output_tokens": entry.get("max_output_tokens", 0) or 0,
+                "supports_vision": bool(
+                    entry.get("supports_vision", info.get("supports_vision", False))
+                ),
+                "supports_thinking": bool(
+                    entry.get("supports_thinking", info.get("supports_thinking", False))
+                ),
+                "description": entry.get("description", "") or "",
+            }
+            out.append(merged)
+        return out
+
     def list_providers(self) -> dict:
-        """提供商列表（内置+自定义），标注来源与当前使用状态。"""
+        """提供商列表（内置+自定义），标注来源与当前使用状态。
+
+        每个提供商含：
+          - models: 模型 id 列表（兼容旧前端）
+          - catalog: 富模型目录 [{id, context_window, max_output_tokens, ...}]
+            —— 切换模型时 UI 只需 provider + model 两步，窗口/输出上限自动填充。
+        """
         cfg = self._load_cfg()
         main_url = _normalize_url(getattr(cfg.main_model, "api_url", ""))
         active = {
@@ -218,15 +255,18 @@ class ProviderService:
         }
         providers = []
         for name, info in sorted(self._merged().items()):
+            ids = model_ids(info)
+            catalog = self._catalog(info)
             providers.append(
                 {
                     "name": name,
                     "source": info.get("source", "builtin"),
                     "api_url": info.get("api_url", ""),
                     "default_model": info.get("default_model", ""),
-                    "models": info.get("models") or [],
-                    "supports_thinking": bool(info.get("supports_thinking", False)),
-                    "supports_vision": bool(info.get("supports_vision", False)),
+                    "models": ids,
+                    "catalog": catalog,
+                    "supports_thinking": any(m.get("supports_thinking") for m in catalog),
+                    "supports_vision": any(m.get("supports_vision") for m in catalog),
                     "description": info.get("description", ""),
                     "is_configured": bool(
                         main_url and main_url == _normalize_url(info.get("api_url", ""))
@@ -236,11 +276,21 @@ class ProviderService:
         return {"providers": providers, "total": len(providers), "active": active}
 
     def get_provider(self, name: str) -> dict | None:
-        """合并后按名称查找（不区分大小写）。"""
+        """合并后按名称查找（不区分大小写）。
+
+        Returns:
+            {name, **info, models: [id...], catalog: 富目录, source}
+        """
         name_lower = (name or "").strip().lower()
         for pname, info in self._merged().items():
             if pname.lower() == name_lower:
-                return {"name": pname, **info, "source": info.get("source", "builtin")}
+                return {
+                    "name": pname,
+                    **info,
+                    "models": model_ids(info),
+                    "catalog": self._catalog(info),
+                    "source": info.get("source", "builtin"),
+                }
         return None
 
     # ── 自定义供应商 CRUD ──────────────────────────────────────
@@ -254,6 +304,48 @@ class ProviderService:
                 400,
             )
         return name
+
+    def _normalize_models_input(self, value: list) -> list:
+        """规范化自定义供应商的 models 输入。
+
+        接受两种元素形态：
+          - 简写字符串: "gpt-4o"                 → {"id": "gpt-4o"}
+          - 富条目: {"id": "...", "context_window": 200000,
+                     "max_output_tokens": 32768, ...}
+        富条目的窗口/输出上限与内置目录同构，切换时可自动填充。
+
+        Args:
+            value: 原始 models 列表
+
+        Returns:
+            规范化后的富条目列表
+        """
+        if not isinstance(value, list):
+            raise ProviderError("'models' must be a list", "BAD_REQUEST", 400)
+        out = []
+        for item in value:
+            if isinstance(item, str):
+                item = item.strip()
+                if item:
+                    out.append({"id": item})
+                continue
+            if isinstance(item, dict) and item.get("id"):
+                entry = {"id": str(item["id"]).strip()}
+                for key in ("context_window", "max_output_tokens"):
+                    val = item.get(key)
+                    if isinstance(val, (int, float)) and int(val) > 0:
+                        entry[key] = int(val)
+                for flag in ("supports_vision", "supports_thinking"):
+                    if isinstance(item.get(flag), bool):
+                        entry[flag] = item[flag]
+                if item.get("description"):
+                    entry["description"] = str(item["description"]).strip()
+                out.append(entry)
+                continue
+            raise ProviderError(
+                "model entries must be strings or dicts with 'id'", "BAD_REQUEST", 400
+            )
+        return out
 
     def _validate_payload(self, data: dict, partial: bool = False) -> dict:
         """校验并规范化供应商字段。partial=True 时仅校验提供的字段。"""
@@ -273,6 +365,9 @@ class ProviderService:
                 continue
             value = data[key]
             if typ is list:
+                if key == "models":
+                    clean[key] = self._normalize_models_input(value)
+                    continue
                 if not isinstance(value, list) or not all(isinstance(m, str) for m in value):
                     raise ProviderError(f"'{key}' must be a list of strings", "BAD_REQUEST", 400)
                 clean[key] = [m.strip() for m in value if m.strip()]
@@ -291,14 +386,16 @@ class ProviderService:
 
     def _provider_out(self, name: str, info: dict) -> dict:
         """规范化输出单个供应商（供 API 返回）。"""
+        catalog = self._catalog(info)
         return {
             "name": name,
             "source": info.get("source", "custom"),
             "api_url": info.get("api_url", ""),
             "default_model": info.get("default_model", ""),
-            "models": info.get("models") or [],
-            "supports_thinking": bool(info.get("supports_thinking", False)),
-            "supports_vision": bool(info.get("supports_vision", False)),
+            "models": model_ids(info),
+            "catalog": catalog,
+            "supports_thinking": any(m.get("supports_thinking") for m in catalog),
+            "supports_vision": any(m.get("supports_vision") for m in catalog),
             "description": info.get("description", ""),
             "created_at": info.get("created_at", ""),
             "updated_at": info.get("updated_at", ""),
@@ -368,7 +465,10 @@ class ProviderService:
         """查询某提供商的可用模型。
 
         实时调用 {api_url}/v1/models（需 api_key）；失败或未提供 key 时
-        自动 fallback 到静态 models 列表，响应标注 source: live/static。
+        自动 fallback 到目录 models 列表，响应标注 source: live/static。
+
+        每个模型条目尽量携带目录元数据（context_window / max_output_tokens /
+        supports_vision / supports_thinking），供 UI 两步切换展示能力。
 
         Args:
             name: 提供商名称（内置或自定义）
@@ -383,11 +483,12 @@ class ProviderService:
         if provider is None:
             raise ProviderNotFoundError(name)
         api_url = provider.get("api_url", "")
-        static_models = provider.get("models") or []
+        catalog_by_id = {m["id"]: m for m in provider.get("catalog") or []}
+        static_models = list(catalog_by_id.values())
         result = {
             "provider": provider["name"],
             "source": "static",
-            "models": [{"id": m, "owned_by": provider["name"]} for m in static_models],
+            "models": static_models,
             "total": len(static_models),
             "endpoint": _models_endpoint(api_url),
             "needs_key": False,
@@ -411,7 +512,7 @@ class ProviderService:
         live = self._query_live(api_url, api_key)
         if live.get("ok"):
             result["source"] = "live"
-            result["models"] = live["models"]
+            result["models"] = self._merge_catalog_meta(live["models"], catalog_by_id)
             result["total"] = live["total"]
             result["endpoint"] = live["endpoint"]
             result.pop("error_hint", None)
@@ -419,6 +520,21 @@ class ProviderService:
         else:
             result["error_hint"] = live.get("error", "live query failed, showing static list")
         return result
+
+    @staticmethod
+    def _merge_catalog_meta(live_models: list[dict], catalog_by_id: dict) -> list[dict]:
+        """实时列表 + 目录元数据合并：id 命中目录时补齐窗口/输出/能力。"""
+        out = []
+        for item in live_models:
+            mid = item.get("id")
+            meta = catalog_by_id.get(mid) if mid else None
+            if meta:
+                merged = {**meta}
+                merged.setdefault("owned_by", item.get("owned_by", ""))
+                out.append(merged)
+            else:
+                out.append(item)
+        return out
 
     def _query_live(self, api_url: str, api_key: str) -> dict:
         """实时查询 OpenAI 兼容 /v1/models 端点。"""
@@ -467,11 +583,13 @@ class ProviderService:
         max_context_tokens: int | None = None,
         options: dict | None = None,
     ) -> dict:
-        """一键应用提供商到模型配置（main/cheap/vision），落盘到 config.yaml。
+        """按「供应商 → 模型」两步应用模型配置（main/cheap/vision），落盘 config.yaml。
 
         - api_key 留空时复用该角色现有 key
         - model 留空时使用提供商 default_model
-        - 提供商能力（supports_vision/supports_reasoning）自动合并进 options
+        - 模型能力/窗口/输出上限自动取自目录（model catalog）：
+            选择 deepseek-chat → max_context_tokens=131072、max_tokens=8192 自动写入；
+            显式传入的 max_tokens / max_context_tokens 优先级更高。
         """
         provider = self.get_provider(name)
         if provider is None:
@@ -481,6 +599,24 @@ class ProviderService:
         model = (model or "").strip() or provider.get("default_model", "")
         if not model:
             raise ProviderError("model required (no default_model on provider)", "BAD_REQUEST", 400)
+
+        # 目录元数据（含模型级能力，未声明时继承 Provider 级）
+        meta = next(
+            (m for m in provider.get("catalog") or [] if m["id"] == model), None
+        )
+        if meta is None:
+            meta = {}
+        # 模型不在目录（如自定义供应商手填模型）→ 能力回退供应商级标记
+        supports_vision = bool(
+            meta.get("supports_vision")
+            if meta
+            else provider.get("supports_vision", False)
+        )
+        supports_reasoning = bool(
+            meta.get("supports_thinking")
+            if meta
+            else provider.get("supports_thinking", False)
+        )
 
         cfg_path = config_path or self._config_path or None
         cfg = load_config(cfg_path)
@@ -492,17 +628,26 @@ class ProviderService:
         target.model_name = model
         if temperature is not None:
             target.temperature = float(temperature)
-        if max_tokens is not None:
-            target.max_tokens = int(max_tokens)
         if top_p is not None:
             target.top_p = float(top_p)
-        if max_context_tokens is not None:
-            target.max_context_tokens = int(max_context_tokens)
+        # 目录自动填充：显式传入 > 模型目录默认
+        eff_max_tokens = (
+            int(max_tokens)
+            if max_tokens is not None
+            else (int(meta["max_output_tokens"]) if meta.get("max_output_tokens") else target.max_tokens)
+        )
+        eff_max_context = (
+            int(max_context_tokens)
+            if max_context_tokens is not None
+            else (int(meta["context_window"]) if meta.get("context_window") else target.max_context_tokens)
+        )
+        target.max_tokens = eff_max_tokens
+        target.max_context_tokens = eff_max_context
         merged_options = dict(getattr(target, "options", None) or {})
         if options:
             merged_options.update(options)
-        merged_options["supports_vision"] = bool(provider.get("supports_vision", False))
-        merged_options["supports_reasoning"] = bool(provider.get("supports_thinking", False))
+        merged_options["supports_vision"] = supports_vision
+        merged_options["supports_reasoning"] = supports_reasoning
         target.options = merged_options
 
         save_config(cfg, cfg_path)
@@ -513,6 +658,11 @@ class ProviderService:
             "provider": provider["name"],
             "model": model,
             "api_url": target.api_url,
+            "max_tokens": eff_max_tokens,
+            "max_context_tokens": eff_max_context,
+            "supports_vision": supports_vision,
+            "supports_reasoning": supports_reasoning,
+            "options": merged_options,
             "config_path": str(Path(cfg_path).resolve()) if cfg_path else "",
         }
 

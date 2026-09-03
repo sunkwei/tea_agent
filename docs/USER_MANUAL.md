@@ -307,6 +307,27 @@ SSE 事件类型:
 
 切换过程: 保存当前 topic_id → 关闭旧 session → 更新配置 → 重新初始化 session → 恢复 topic。无需重启服务器。
 
+**提供商目录切换（推荐，仿 dsh 两级选择）**:
+Web GUI 🤖 弹窗内置大型预置供应商目录（providers.py），每个供应商包含多个模型条目，
+每条模型自带最大上下文（context_window）、最大输出（max_output_tokens）与能力标记
+（视觉/思考）。切换只需两步：选供应商 → 选模型，窗口/输出上限自动写入配置并热生效。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/providers` | 供应商列表（内置 + 自定义，含模型目录 catalog） |
+| POST | `/api/providers` | 新增自定义供应商（models 可为 id 字符串或富条目对象） |
+| PUT | `/api/providers/{name}` | 更新自定义供应商 |
+| DELETE | `/api/providers/{name}` | 删除自定义供应商 |
+| GET | `/api/providers/{name}/models` | 查询模型（实时 /v1/models + 静态目录兜底） |
+| POST | `/api/providers/{name}/apply` | 两级应用：body `{"model": "deepseek-chat"}`，窗口/输出自动填充 |
+| POST | `/api/model/test` | 测试连接（端点 + key + 模型） |
+
+`POST /api/providers/{name}/apply` 最小请求示例：
+```json
+{ "model": "deepseek-v4-flash" }
+```
+未显式传 `max_tokens`/`max_context_tokens` 时自动取该模型目录值；传了则以传入为准。
+
 #### 4.2.4 截图功能
 
 | 方法 | 路径 | 说明 |

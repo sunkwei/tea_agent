@@ -2418,6 +2418,10 @@ class OnlineToolSession(BaseChatSession):
         self._max_iter_wait.clear()
         # RC 400 自愈标志只在本回合生效：新用户回合清除，thinking 恢复正常
         self.context._rc400_recovery = False
+        # A8: 溢出自愈的一次性紧急预算只在本回合生效；输出上限由下次
+        # build_api_messages 按最新配置重新求解
+        self.context._emergency_input_budget = 0
+        self.context._output_cap = 0
         self._strip_reasoning_content(self.context.messages)
 
     def _restore_interruption_anchor(self, topic_id: str | None = None) -> dict | None:

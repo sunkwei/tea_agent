@@ -3540,12 +3540,16 @@ window.piCompact = function() {
 };
 
 // ══════════════════════════════════════════════════
-//  MODEL MANAGEMENT (providers / models / apply)
+//  MODEL SWITCH (供应商 → 模型 两级切换，模型自带窗口/输出上限)
 // ══════════════════════════════════════════════════
 
 let mmProviders = [];
 let mmSelectedProvider = '';
 let mmSelectedModel = '';
+let mmSelectedMeta = null;   // 选中模型的富元数据（context_window/max_output_tokens/...）
+let mmCurrentModels = [];    // 当前供应商的模型列表（富条目）
+let mmActiveModel = '';      // 当前配置生效的主模型 id
+let mmActiveUrl = '';        // 当前配置生效的 api_url
 let mmEditingProvider = null;  // null=新增模式；字符串=正在编辑的提供商名
 
 function _mmStatus(msg, type) {
@@ -3561,6 +3565,25 @@ function _mmStatus(msg, type) {
   }
 }
 
+function _fmtTokens(n) {
+  if (!n || n <= 0) return '';
+  if (n >= 1000000) return (n / 1000000).toFixed(n % 1000000 ? 1 : 0).replace(/\.0$/, '') + 'M';
+  if (n >= 1000) return Math.round(n / 1000) + 'K';
+  return String(n);
+}
+
+// 模型条目富信息 → 徽章串（上下文/输出/视觉/思考）
+function _modelBadges(m) {
+  const parts = [];
+  const ctx = _fmtTokens(m && m.context_window);
+  const out = _fmtTokens(m && m.max_output_tokens);
+  if (ctx) parts.push('<span style="background:var(--bg2,#eee);border-radius:4px;padding:0 5px;font-size:10px;color:var(--text-dim,#888)">📏 ' + ctx + '</span>');
+  if (out) parts.push('<span style="background:var(--bg2,#eee);border-radius:4px;padding:0 5px;font-size:10px;color:var(--text-dim,#888)">↗ ' + out + '</span>');
+  if (m && m.supports_vision) parts.push('<span style="background:#8e44ad;color:#fff;border-radius:4px;padding:0 5px;font-size:10px">🖼 视觉</span>');
+  if (m && m.supports_thinking) parts.push('<span style="background:#2980b9;color:#fff;border-radius:4px;padding:0 5px;font-size:10px">🧠 思考</span>');
+  return parts.join('');
+}
+
 window.showModelModal = async function() {
   showModal('modal-model');
   _mmStatus('');
@@ -3573,12 +3596,24 @@ async function refreshCurrentModel() {
     const r = await fetch('/api/model');
     const d = await r.json();
     const cfg = d.data || d;
+    mmActiveModel = cfg.model || '';
+    mmActiveUrl = cfg.api_url || '';
     const el = $('mm-current-text');
     if (el) {
-      const parts = [];
-      if (cfg.model) parts.push('主: ' + cfg.model);
-      if (cfg.cheap_model && cfg.cheap_model.model) parts.push('cheap: ' + cfg.cheap_model.model);
-      el.textContent = parts.length ? '当前: ' + parts.join(' | ') : '当前: 未配置';
+      const model = cfg.model || '';
+      const url = cfg.api_url || '';
+      const ctx = _fmtTokens(cfg.max_context_tokens);
+      const out = _fmtTokens(cfg.max_tokens);
+      const meta = [ctx && ('📏 ' + ctx), out && ('↗ ' + out)].filter(Boolean).join(' · ');
+      el.textContent = model
+        ? '当前模型: ' + model + (url ? ' @ ' + url : '') + (meta ? '  (' + meta + ')' : '')
+        : '未配置';
+    }
+    // 高亮当前使用的供应商
+    if (mmProviders.length) {
+      const current = mmProviders.find(p => p.is_configured || (p.api_url && mmActiveUrl && p.api_url === mmActiveUrl));
+      if (current && current.name !== mmSelectedProvider) selectProvider(current.name);
+      else if (current && current.name === mmSelectedProvider) loadModels(current.name, false);
     }
   } catch (e) { /* 静默 */ }
 }
@@ -3590,12 +3625,12 @@ async function loadProviders() {
     const d = await r.json();
     mmProviders = d.providers || [];
     renderProviders();
-    // 自动选中当前使用的提供商
+    // 自动选中当前使用的提供商（refreshCurrentModel 已设置 mmActiveModel）
     const current = mmProviders.find(p => p.is_configured);
     if (current) selectProvider(current.name);
     else if (mmProviders.length) selectProvider(mmProviders[0].name);
   } catch (e) {
-    _mmStatus('加载提供商失败: ' + e.message, 'error');
+    _mmStatus('加载供应商失败: ' + e.message, 'error');
   }
 }
 
@@ -3603,9 +3638,12 @@ function renderProviders() {
   const box = $('mm-providers');
   if (!box) return;
   const q = ($('mm-search')?.value || '').trim().toLowerCase();
-  const list = mmProviders.filter(p => !q || p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q));
+  const list = mmProviders.filter(p => !q
+    || p.name.toLowerCase().includes(q)
+    || (p.description || '').toLowerCase().includes(q)
+    || (p.catalog || []).some(m => String(m.id).toLowerCase().includes(q)));
   if (!list.length) {
-    box.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim,#888);font-size:13px">无匹配提供商</div>';
+    box.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim,#888);font-size:13px">无匹配供应商</div>';
     return;
   }
   box.innerHTML = list.map(p => {
@@ -3614,6 +3652,7 @@ function renderProviders() {
     if (p.source === 'custom') badges.push('<span style="background:#f39c12;color:#fff;border-radius:4px;padding:0 4px;font-size:10px">自定义</span>');
     if (p.supports_vision) badges.push('<span style="background:#8e44ad;color:#fff;border-radius:4px;padding:0 4px;font-size:10px">视觉</span>');
     if (p.supports_thinking) badges.push('<span style="background:#2980b9;color:#fff;border-radius:4px;padding:0 4px;font-size:10px">思考</span>');
+    const nModels = (p.catalog && p.catalog.length) ? p.catalog.length : (p.models || []).length;
     return '<div class="mm-provider" onclick="selectProvider(\'' + escAttr(p.name) + '\')" ' +
       'style="padding:8px 10px;margin-bottom:6px;border-radius:8px;cursor:pointer;border:1px solid ' +
       (active ? 'var(--primary,#4a90d9)' : 'var(--border,#ddd)') + ';' +
@@ -3621,8 +3660,18 @@ function renderProviders() {
       '<div style="display:flex;justify-content:space-between;align-items:center">' +
       '<b style="font-size:13px">' + esc(p.name) + '</b>' + badges.join('') +
       '</div>' +
-      '<div style="font-size:11px;color:var(--text-dim,#888);margin-top:2px;word-break:break-all">' + esc(p.api_url) + '</div>' +
+      '<div style="font-size:11px;color:var(--text-dim,#888);margin-top:2px;word-break:break-all">' + esc(p.api_url || '') + '</div>' +
+      '<div style="font-size:10px;color:var(--text-dim,#888);margin-top:2px">' +
+      (nModels ? nModels + ' 个模型' : '') +
+      (p.max_context_window ? ' · 最大上下文 ' + _fmtTokens(p.max_context_window) : '') +
+      '</div>' +
       (p.is_configured ? '<div style="font-size:10px;color:#2ecc71;margin-top:2px">● 当前使用</div>' : '') +
+      (p.source === 'custom'
+        ? '<div style="margin-top:4px;display:flex;gap:6px">' +
+          '<button class="btn" style="padding:1px 8px;font-size:11px;background:#f0ad4e;color:#fff" onclick="event.stopPropagation();showEditProviderForm(\'' + escAttr(p.name) + '\')">✏️ 编辑</button>' +
+          '<button class="btn" style="padding:1px 8px;font-size:11px;background:#e74c3c;color:#fff" onclick="event.stopPropagation();deleteProvider(\'' + escAttr(p.name) + '\')">🗑 删除</button>' +
+          '</div>'
+        : '') +
       '</div>';
   }).join('');
 }
@@ -3630,16 +3679,10 @@ function renderProviders() {
 async function selectProvider(name) {
   mmSelectedProvider = name;
   mmSelectedModel = '';
+  mmSelectedMeta = null;
+  const ms = $('mm-model-search');
+  if (ms) ms.value = '';
   renderProviders();
-  const p = mmProviders.find(x => x.name === name);
-  // 回填能力/编辑/删除按钮
-  const cap = $('mm-cap');
-  if (cap) cap.textContent = p ? (p.description || '') + (p.supports_vision || p.supports_thinking ? ' | 能力: ' + [p.supports_vision && '视觉', p.supports_thinking && '思考'].filter(Boolean).join('+') : '') : '';
-  const isCustom = !!(p && p.source === 'custom');
-  const del = $('mm-del-btn');
-  if (del) del.style.display = isCustom ? 'block' : 'none';
-  const editBtn = $('mm-edit-btn');
-  if (editBtn) editBtn.style.display = isCustom ? 'block' : 'none';
   await loadModels(name, false);
 }
 
@@ -3657,7 +3700,7 @@ function showEditProviderForm(name) {
   $('mm-add-name').value = name;
   $('mm-add-url').value = p.api_url || '';
   $('mm-add-default').value = p.default_model || '';
-  $('mm-add-models').value = (p.models || []).join(', ');
+  $('mm-add-models').value = (p.catalog && p.catalog.length ? p.catalog : (p.models || [])).map(m => m && m.id !== undefined ? m.id : m).join(', ');
   $('mm-add-vision').checked = !!p.supports_vision;
   $('mm-add-thinking').checked = !!p.supports_thinking;
   $('mm-add-desc').value = p.description || '';
@@ -3669,57 +3712,96 @@ async function loadModels(name, refresh) {
   if (!name) return;
   const box = $('mm-models');
   const hint = $('mm-model-hint');
+  const provider = mmProviders.find(p => p.name === name);
   if (box) box.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim,#888)">⏳ 加载模型…</div>';
   if (hint) hint.textContent = '';
+  // 目录里已带富元数据时直接渲染（免请求），refresh 才走实时查询
+  let models = [];
+  let source = 'catalog';
   try {
-    const url = '/api/providers/' + encodeURIComponent(name) + '/models' + (refresh ? '?refresh=true' : '');
-    const r = await fetch(url);
-    if (!r.ok) throw new Error((await r.json()).error || 'HTTP ' + r.status);
-    const d = await r.json();
-    if (hint) {
-      if (d.source === 'live') {
-        hint.textContent = '🟢 实时查询 (' + (d.endpoint || '') + ')';
-      } else if (d.source === 'cache') {
-        hint.textContent = '🕐 缓存 (' + (d.total || 0) + ' 个模型，5 分钟内有效) — 点「🔄 实时刷新」获取最新';
-      } else {
-        hint.textContent = d.error_hint ? '⚠️ ' + d.error_hint :
-          '📋 内置静态列表' + (d.needs_key ? '（填 key 后可实时查询）' : '');
+    if (!refresh && provider && provider.catalog && provider.catalog.length) {
+      models = provider.catalog;
+      source = 'catalog';
+    } else {
+      const url = '/api/providers/' + encodeURIComponent(name) + '/models' + (refresh ? '?refresh=true' : '');
+      const r = await fetch(url);
+      if (!r.ok) throw new Error((await r.json()).error || 'HTTP ' + r.status);
+      const d = await r.json();
+      models = d.models || [];
+      source = d.source || 'catalog';
+      if (hint) {
+        if (source === 'live') hint.textContent = '🟢 实时查询 (' + (d.endpoint || '') + ')';
+        else if (source === 'cache') hint.textContent = '🕐 缓存（5 分钟有效）— 点「🔄 实时刷新」获取最新';
+        else if (d.error_hint) hint.textContent = '⚠️ ' + d.error_hint;
+        else if (d.needs_key) hint.textContent = '自定义供应商需填 key 后实时查询';
       }
-    }
-    if (!d.models || !d.models.length) {
-      box.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim,#888)">暂无模型 — 点击「🔄 实时刷新」或填 key 后查询</div>';
-      return;
-    }
-    box.innerHTML = d.models.map(m => {
-      const mid = m.id || m;
-      const active = mid === mmSelectedModel;
-      return '<div class="mm-model" onclick="selectModel(\'' + escAttr(mid) + '\')" ' +
-        'style="padding:7px 10px;margin-bottom:4px;border-radius:6px;cursor:pointer;border:1px solid ' +
-        (active ? 'var(--primary,#4a90d9)' : 'var(--border,#ddd)') + ';font-size:12px;word-break:break-all">' +
-        esc(mid) +
-        (m.owned_by ? '<span style="color:var(--text-dim,#888);font-size:10px;margin-left:6px">by ' + esc(m.owned_by) + '</span>' : '') +
-        '</div>';
-    }).join('');
-    // 默认选中 default_model
-    const p = mmProviders.find(x => x.name === name);
-    if (p && p.default_model && !mmSelectedModel) {
-      if (d.models.some(m => (m.id || m) === p.default_model)) selectModel(p.default_model);
     }
   } catch (e) {
     if (box) box.innerHTML = '<div style="padding:16px;text-align:center;color:#e74c3c">❌ ' + esc(e.message) + '</div>';
+    return;
   }
+  if (!models || !models.length) {
+    if (box) box.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim,#888)">暂无模型 — 点击「🔄 实时刷新」或填 key 后查询</div>';
+    return;
+  }
+  // 兜底：实时查询缺省 owned_by
+  models = models.map(m => (typeof m === 'string') ? { id: m } : m);
+  mmCurrentModels = models;
+  renderModels();
+  // 默认选中：当前生效模型（同供应商）> default_model
+  const p = mmProviders.find(x => x.name === name);
+  let preselect = '';
+  if (p && p.is_configured && mmActiveModel && models.some(m => m.id === mmActiveModel)) {
+    preselect = mmActiveModel;
+  } else if (p && p.default_model && models.some(m => m.id === p.default_model)) {
+    preselect = p.default_model;
+  }
+  if (preselect && !mmSelectedModel) selectModel(preselect);
+}
+
+function renderModels() {
+  const box = $('mm-models');
+  if (!box) return;
+  const q = ($('mm-model-search')?.value || '').trim().toLowerCase();
+  const list = mmCurrentModels.filter(m => !q || String(m.id || '').toLowerCase().includes(q));
+  if (!list.length) {
+    box.innerHTML = '<div style="padding:14px;text-align:center;color:var(--text-dim,#888)">无匹配模型</div>';
+    return;
+  }
+  box.innerHTML = list.map(m => {
+    const mid = m.id;
+    const active = mid === mmSelectedModel;
+    const meta = m && (m.context_window || m.max_output_tokens || m.supports_vision || m.supports_thinking)
+      ? _modelBadges(m) : '';
+    return '<div class="mm-model" onclick="selectModel(\'' + escAttr(mid) + '\')" ' +
+      'style="padding:6px 10px;margin-bottom:4px;border-radius:6px;cursor:pointer;border:1px solid ' +
+      (active ? 'var(--primary,#4a90d9)' : 'var(--border,#ddd)') + ';' +
+      (active ? 'background:rgba(74,144,217,0.1)' : '') + ';font-size:12px;word-break:break-all">' +
+      '<span style="font-weight:' + (active ? '600' : '400') + '">' + esc(mid) + '</span>' +
+      (meta ? '<span style="margin-left:6px;display:inline-flex;gap:4px;flex-wrap:wrap">' + meta + '</span>' : '') +
+      '</div>';
+  }).join('');
 }
 
 function selectModel(id) {
   mmSelectedModel = id;
-  // 高亮
-  const box = $('mm-models');
-  if (box) {
-    box.querySelectorAll('.mm-model').forEach(el => {
-      const on = el.textContent.trim().startsWith(id);
-      el.style.borderColor = on ? 'var(--primary,#4a90d9)' : 'var(--border,#ddd)';
-      el.style.background = on ? 'rgba(74,144,217,0.1)' : '';
-    });
+  mmSelectedMeta = mmCurrentModels.find(m => m.id === id) || null;
+  renderModels();
+  // 右侧摘要
+  const sel = $('mm-sel');
+  if (sel) {
+    const p = mmProviders.find(x => x.name === mmSelectedProvider) || {};
+    const meta = mmSelectedMeta || {};
+    const caps = [];
+    if (meta.context_window) caps.push('上下文 ' + _fmtTokens(meta.context_window) + ' (' + meta.context_window + ')');
+    if (meta.max_output_tokens) caps.push('最大输出 ' + _fmtTokens(meta.max_output_tokens) + ' (' + meta.max_output_tokens + ')');
+    const cap = [];
+    if (meta.supports_vision) cap.push('🖼 视觉');
+    if (meta.supports_thinking) cap.push('🧠 思考');
+    sel.innerHTML = '<b>' + esc(p.name || '') + ' / ' + esc(id) + '</b>' +
+      (caps.length ? '<br>' + caps.join(' · ') : '') +
+      (cap.length ? ' · ' + cap.join(' ') : '') +
+      (meta.description ? '<br><span style="color:var(--text-dim)">' + esc(meta.description) + '</span>' : '');
   }
 }
 
@@ -3748,7 +3830,20 @@ async function submitProvider() {
     _mmStatus('名称 / API URL / 默认模型 均为必填', 'error');
     return;
   }
-  const models = ($('mm-add-models').value || '').split(',').map(s => s.trim()).filter(Boolean);
+  // 支持逗号分隔 id 或 JSON 富条目（如 [{"id":"gpt-4o","context_window":200000}]）
+  const raw = ($('mm-add-models').value || '').trim();
+  let models = [];
+  try {
+    if (raw.startsWith('[')) {
+      const parsed = JSON.parse(raw);
+      models = Array.isArray(parsed) ? parsed : [];
+    } else {
+      models = raw.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  } catch (e) {
+    _mmStatus('模型列表 JSON 解析失败: ' + e.message, 'error');
+    return;
+  }
   const payload = {
     name, api_url, default_model,
     models,
@@ -3779,20 +3874,15 @@ async function submitProvider() {
 }
 
 async function applyProvider() {
-  if (!mmSelectedProvider) { _mmStatus('请先选择提供商', 'error'); return; }
+  if (!mmSelectedProvider) { _mmStatus('请先选择供应商', 'error'); return; }
   if (!mmSelectedModel) { _mmStatus('请先选择模型', 'error'); return; }
-  const role = $('mm-role').value;
   const payload = {
     api_key: ($('mm-key').value || '').trim(),
     model: mmSelectedModel,
-    role,
   };
-  const temp = parseFloat($('mm-temp').value);
-  const mt = parseInt($('mm-max-tokens').value, 10);
-  const tp = parseFloat($('mm-top-p').value);
-  if (!isNaN(temp)) payload.temperature = temp;
-  if (!isNaN(mt)) payload.max_tokens = mt;
-  if (!isNaN(tp)) payload.top_p = tp;
+  const meta = mmSelectedMeta || {};
+  if (meta.max_output_tokens) payload.max_tokens = meta.max_output_tokens;
+  if (meta.context_window) payload.max_context_tokens = meta.context_window;
   try {
     const r = await fetch('/api/providers/' + encodeURIComponent(mmSelectedProvider) + '/apply', {
       method: 'POST',
@@ -3801,12 +3891,12 @@ async function applyProvider() {
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
-    _mmStatus('✅ 已应用 ' + mmSelectedProvider + ' / ' + mmSelectedModel + (role === 'main' ? '（热生效）' : '（下次会话生效）'), 'success');
+    _mmStatus('✅ 已切换 ' + mmSelectedProvider + ' / ' + mmSelectedModel + '（热生效）', 'success');
     $('mm-key').value = '';
     await refreshCurrentModel();
     // 刷新顶部配置信息
-    if (typeof loadConfigForm === 'function') loadConfigForm();
-    toast('🎯 已切换到 ' + mmSelectedModel, 'success');
+    if (typeof refreshConfigDropdown === 'function') refreshConfigDropdown();
+    toast('🎯 已切换到 ' + mmSelectedProvider + ' / ' + mmSelectedModel, 'success');
   } catch (e) {
     _mmStatus('应用失败: ' + e.message, 'error');
   }
@@ -3841,15 +3931,16 @@ async function testConnection() {
   }
 }
 
-async function deleteProvider() {
-  if (!mmSelectedProvider) return;
-  if (!confirm('确定删除自定义供应商 ' + mmSelectedProvider + ' 吗？')) return;
+async function deleteProvider(name) {
+  const target = name || mmSelectedProvider;
+  if (!target) return;
+  if (!confirm('确定删除自定义供应商 ' + target + ' 吗？')) return;
   try {
-    const r = await fetch('/api/providers/' + encodeURIComponent(mmSelectedProvider), { method: 'DELETE' });
+    const r = await fetch('/api/providers/' + encodeURIComponent(target), { method: 'DELETE' });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'HTTP ' + r.status);
-    _mmStatus('🗑 已删除 ' + mmSelectedProvider, 'success');
-    mmSelectedProvider = '';
+    _mmStatus('🗑 已删除 ' + target, 'success');
+    if (mmSelectedProvider === target) { mmSelectedProvider = ''; mmSelectedModel = ''; }
     await loadProviders();
   } catch (e) {
     _mmStatus('删除失败: ' + e.message, 'error');
@@ -3865,6 +3956,7 @@ window.loadProviders = loadProviders;
 window.renderProviders = renderProviders;
 window.selectProvider = selectProvider;
 window.loadModels = loadModels;
+window.renderModels = renderModels;
 window.selectModel = selectModel;
 window.showEditProviderForm = showEditProviderForm;
 window.showAddProviderForm = showAddProviderForm;

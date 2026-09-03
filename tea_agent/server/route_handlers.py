@@ -1838,7 +1838,21 @@ OPENAPI_SPEC = {
                         "name": {"type": "string", "description": "2-32 chars, [A-Za-z0-9_-]"},
                         "api_url": {"type": "string"},
                         "default_model": {"type": "string"},
-                        "models": {"type": "array", "items": {"type": "string"}},
+                        "models": {"type": "array", "items": {
+                            "oneOf": [
+                                {"type": "string"},
+                                {"type": "object",
+                                 "properties": {
+                                     "id": {"type": "string"},
+                                     "context_window": {"type": "integer"},
+                                     "max_output_tokens": {"type": "integer"},
+                                     "supports_vision": {"type": "boolean"},
+                                     "supports_thinking": {"type": "boolean"},
+                                 },
+                                 "required": ["id"]},
+                            ],
+                            "description": "string 简写或含 id/窗口/输出的富条目"},
+                        },
                         "supports_thinking": {"type": "boolean"},
                         "supports_vision": {"type": "boolean"},
                         "description": {"type": "string"},
@@ -2211,7 +2225,7 @@ async def handle_provider_apply(request):
                 logger.warning("invalidate config cache failed: %s", e)
         # 热生效：main 角色重建长驻 Agent 会话使新模型立即生效。
         # api_key 留空时回退到运行中 Agent 的现有 key（与 /api/model 语义一致），
-        # 避免空 key 覆盖内存配置。
+        # 避免空 key 覆盖内存配置。窗口/输出上限一并透传，保证内存 cfg 与磁盘一致。
         if result.get("ok") and role == "main":
             try:
                 server = get_server()
@@ -2221,7 +2235,17 @@ async def handle_provider_apply(request):
                     current_key = agent._cfg.main_model.api_key if agent else ""
                 except Exception:
                     current_key = ""
-                server.switch_model(api_key or current_key, result["api_url"], result["model"])
+                server.switch_model(
+                    api_key or current_key,
+                    result["api_url"],
+                    result["model"],
+                    max_tokens=result.get("max_tokens"),
+                    max_context_tokens=result.get("max_context_tokens"),
+                    options=result.get("options") or {
+                        "supports_vision": result.get("supports_vision", False),
+                        "supports_reasoning": result.get("supports_reasoning", False),
+                    },
+                )
             except Exception as e:
                 logger.warning("hot-switch after apply failed (config saved): %s", e)
         return JSONResponse(result)

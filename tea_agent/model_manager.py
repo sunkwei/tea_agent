@@ -1,8 +1,10 @@
 """
 模型管理服务 — 提供商合并 / 模型查询 / 自定义供应商 CRUD / 配置应用。
 
-将内置 PROVIDERS（providers.py 静态注册表）与用户自定义供应商
-（~/.tea_agent/custom_providers.yaml）合并，为 Web/API 层提供统一支撑：
+默认提供商源（面板）：扫描 ~/.tea_agent/config_*.yaml 派生的真实 profile
+（model_config.scan_config_profiles）⊕ 用户自定义供应商（custom_providers.yaml），
+内置 PROVIDERS（providers.py 静态注册表）仅作能力匹配参考与空环境兑底。
+本服务为 Web/API 层提供统一支撑：
 
   - list_providers():   内置+自定义提供商列表（含来源、能力、是否当前使用）
   - query_models():     实时 /v1/models + 静态 fallback（双层保证 UI 永远有数据）
@@ -236,14 +238,50 @@ class ProviderService:
         return {"providers": providers, "total": len(providers), "active": active}
 
     def get_provider(self, name: str) -> dict | None:
-        """合并后按名称查找（不区分大小写）。"""
+        """合并后按名称查找（不区分大小写）；注册表未命中时回退 config profile。
+
+        profile 提供商（source="config"）由 ~/.tea_agent/config_*.yaml 派生：
+        api_url/models/model_meta/config_path 均来自真实配置文件；密钥不外传。
+        """
         name_lower = (name or "").strip().lower()
         for pname, info in self._merged().items():
             if pname.lower() == name_lower:
                 return {"name": pname, **info, "source": info.get("source", "builtin")}
+        try:
+            from tea_agent.model_config import scan_config_profiles
+
+            for pname, info in scan_config_profiles().items():
+                if pname.lower() == name_lower:
+                    return {"name": pname, **info, "source": "config"}
+        except Exception as e:  # pragma: no cover - 防御性
+            logger.debug("profile provider lookup skipped: %s", e)
         return None
 
     # ── 统一模型配置中心（~/.tea_agent/model_config.json） ────
+
+    @staticmethod
+    def _profile_secret(config_path: str, model: str = "") -> str:
+        """从 profile 配置文件回读 api_key（仅内存使用，绝不写进 model_config.json）。
+
+        指定 model 时优先取 model_name 匹配的角色块；否则回退 main_model 的 key。
+        """
+        if not config_path:
+            return ""
+        try:
+            import yaml
+            from pathlib import Path as _Path
+
+            raw = yaml.safe_load(_Path(config_path).read_text(encoding="utf-8")) or {}
+            if model:
+                for role in ROLES:
+                    block = raw.get(f"{role}_model")
+                    if isinstance(block, dict) and str(block.get("model_name") or "") == model:
+                        return str(block.get("api_key") or "")
+            main = raw.get("main_model")
+            return str(main.get("api_key") or "") if isinstance(main, dict) else ""
+        except Exception as e:
+            logger.debug("profile secret read failed: %s", e)
+            return ""
 
     @staticmethod
     def _store():
@@ -425,6 +463,9 @@ class ProviderService:
             raise ProviderNotFoundError(name)
         api_url = provider.get("api_url", "")
         static_models = provider.get("models") or []
+        # profile 提供商：未显式传 key 时用配置文件真实 key 查在线列表（不落盘）
+        if provider.get("source") == "config" and not api_key:
+            api_key = self._profile_secret(provider.get("config_path", ""), "")
         result = {
             "provider": provider["name"],
             "source": "static",
@@ -526,9 +567,18 @@ class ProviderService:
         if not model:
             raise ProviderError("model required (no default_model on provider)", "BAD_REQUEST", 400)
 
+        # profile 提供商：逐模型解析 api_url（同一 profile 内不同角色可能不同网关）
+        api_url = provider.get("api_url", "")
+        if provider.get("source") == "config":
+            mmeta = (provider.get("model_meta") or {}).get(model) or {}
+            api_url = mmeta.get("api_url") or api_url
+
         cfg_path = config_path or self._config_path or None
         cfg = load_config(cfg_path)
         target = {"main": cfg.main_model, "cheap": cfg.cheap_model, "vision": cfg.vision_model}[role]
+        if not api_key and provider.get("source") == "config":
+            # 优先级：显式传参 > profile 文件对应角色块 key > 该角色现有 key
+            api_key = self._profile_secret(provider.get("config_path", ""), model)
         if not api_key:
             api_key = getattr(target, "api_key", "") or ""
         # ── 统一模型配置中心：逐模型配置作默认值（显式传参优先；面板是唯一事实源）──
@@ -545,7 +595,7 @@ class ProviderService:
         if max_context_tokens is None and int(mcfg.get("max_context_tokens") or 0) > 0:
             max_context_tokens = int(mcfg["max_context_tokens"])
         target.api_key = api_key
-        target.api_url = provider.get("api_url", "")
+        target.api_url = api_url
         target.model_name = model
         if temperature is not None:
             target.temperature = float(temperature)

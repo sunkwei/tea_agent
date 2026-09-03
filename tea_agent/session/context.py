@@ -66,6 +66,14 @@ class SessionContext:
     _last_request_prompt_tokens: int = 0
     # S5: token 预算已用尽标志，pipeline 的 summarize 步骤检测后强制压缩。
     _token_exhausted: bool = False
+    # A8: 输出感知预算（上下文溢出防线）——
+    # _output_cap: 求解器（history_builder.solve_token_budget）解析出的输出 token 上限，
+    #   build_api_messages 每次构建时刷新；工具循环把请求的 max_tokens 钳制到该值，
+    #   保证 输入 + 输出 + 安全余量 ≤ max_context_tokens。
+    _output_cap: int = 0
+    # _emergency_input_budget: 400 溢出自愈后的一次性紧急输入预算（错误中揭示的
+    #   真实输入规模驱动），build_api_messages 消费后即清零，触发最深本地裁剪。
+    _emergency_input_budget: int = 0
     # RC 400 自愈标志：本回合曾触发 DeepSeek "reasoning_content must be passed back"
     # 400，剩余请求强制关闭 thinking（reset_session_state 清除）。
     _rc400_recovery: bool = False

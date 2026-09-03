@@ -9,7 +9,7 @@ from typing import Any
 from openai import OpenAI
 
 from tea_agent.agent_evolution import EvolutionTrigger
-from tea_agent.basesession import BaseChatSession, relaxed_json_loads
+from tea_agent.basesession import BaseChatSession, extract_reasoning, relaxed_json_loads
 from tea_agent.config import REASONING_EFFORT_VALUES, clamp_reasoning_effort
 from tea_agent.prompt_manager import (
     INTERRUPT_ABANDONED_TMPL,
@@ -2058,10 +2058,13 @@ class OnlineToolSession(BaseChatSession):
                 self.api._accumulate_usage(response.usage)
             if response.choices:
                 msg = response.choices[0].message
-                _has_rc = hasattr(msg, "reasoning_content") and msg.reasoning_content
+                # vLLM 思考模式（Qwen3.8 等）返回 `reasoning` 字段，
+                # OpenAI/DeepSeek 兼容端点为 `reasoning_content`；统一提取
+                _rc = extract_reasoning(msg)
+                _has_rc = bool(_rc)
                 if _has_rc:
-                    reasoning_parts.append(msg.reasoning_content)
-                    callback(f"[THINK]{msg.reasoning_content}")
+                    reasoning_parts.append(_rc)
+                    callback(f"[THINK]{_rc}")
                 # B: Muse inline-thinking 兼容 — 无 reasoning_content 时合成
                 _is_muse_ns = "muse" in (self.context.model or "").lower() or "spark" in (self.context.model or "").lower()
                 if not _has_rc and _is_muse_ns and msg.content:
@@ -2099,9 +2102,6 @@ class OnlineToolSession(BaseChatSession):
         stream_retries = 0
         _chunk_buf: list[str] = []
         _chunk_chars = 0
-        chunk_flush_chars = (
-            800  # 节流阈值：累计 800 字符落盘一次（避免每 chunk 一次 SQLite 写）
-        )
 
         def _flush_chunk_buf() -> None:
             nonlocal _chunk_buf, _chunk_chars
@@ -2121,9 +2121,12 @@ class OnlineToolSession(BaseChatSession):
 
                     delta = chunk.choices[0].delta
 
-                    if hasattr(delta, "reasoning_content") and delta.reasoning_content:
-                        reasoning_parts.append(delta.reasoning_content)
-                        callback(f"[THINK]{delta.reasoning_content}")
+                    # 推理内容：兼容端点为 `reasoning_content`，
+                    # vLLM 思考模式（Qwen3.8 等）为 `reasoning`；统一提取
+                    _rc = extract_reasoning(delta)
+                    if _rc:
+                        reasoning_parts.append(_rc)
+                        callback(f"[THINK]{_rc}")
 
                     # B: Muse inline-thinking 流式合成 — 首段 content 合成思考预览
                     # Muse Spark 经 opencode 代理不提供 delta.reasoning_content，思考写在 content 里。
@@ -2415,6 +2418,10 @@ class OnlineToolSession(BaseChatSession):
         self._max_iter_wait.clear()
         # RC 400 自愈标志只在本回合生效：新用户回合清除，thinking 恢复正常
         self.context._rc400_recovery = False
+        # A8: 溢出自愈的一次性紧急预算只在本回合生效；输出上限由下次
+        # build_api_messages 按最新配置重新求解
+        self.context._emergency_input_budget = 0
+        self.context._output_cap = 0
         self._strip_reasoning_content(self.context.messages)
 
     def _restore_interruption_anchor(self, topic_id: str | None = None) -> dict | None:

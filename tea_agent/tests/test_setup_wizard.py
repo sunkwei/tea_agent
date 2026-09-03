@@ -110,7 +110,7 @@ class TestRunSetupWizard:
             data["vision_model"]["api_url"]
             == "https://generativelanguage.googleapis.com/v1beta/openai"
         )
-        assert data["vision_model"]["model_name"] == "gemini-2.5-pro-exp-03-25"
+        assert data["vision_model"]["model_name"] == "gemini-2.5-pro"
         assert data["vision_model"]["api_key"] == "sk-main"
 
     def test_wizard_cancel_returns_none(self, tmp_path):

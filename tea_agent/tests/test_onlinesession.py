@@ -891,6 +891,99 @@ class TestProcessStreamWithReasoning:
         assert '"weather"' in tool_calls[0]["arguments"]
         sess.close()
 
+    def test_streaming_vllm_reasoning_field(self):
+        """vLLM 思考模式（Qwen3.8 等）：delta 只有 `reasoning` 字段（无 reasoning_content）
+        → [THINK] 回调 + 返回思考文本（回归：此前该字段被静默丢弃，UI 看不到思考过程）"""
+        sess = self._make_session(no_stream_chunk=False, enable_thinking=True)
+
+        def make_chunk(reasoning_text):
+            delta = MagicMock()
+            delta.content = None
+            delta.reasoning_content = None
+            delta.reasoning = reasoning_text
+            delta.tool_calls = None
+            choice = MagicMock()
+            choice.delta = delta
+            chunk = MagicMock()
+            chunk.choices = [choice]
+            chunk.usage = None
+            return chunk
+
+        chunks = [
+            make_chunk("让我思考一下: "),
+            make_chunk("17*20=340, 17*3=51"),
+            make_chunk(" 合计 391"),
+        ]
+        class MockStream:
+            def __init__(self, items): self._items = items; self._idx = 0
+            def __iter__(self): return self
+            def __next__(self):
+                if self._idx >= len(self._items): raise StopIteration
+                item = self._items[self._idx]; self._idx += 1
+                return item
+
+        cb = MagicMock()
+        content, tool_calls, reasoning = sess._process_stream_with_reasoning(MockStream(chunks), cb)
+        assert reasoning == "让我思考一下: 17*20=340, 17*3=51 合计 391"
+        think_calls = [c for c in cb.call_args_list if c.args and c.args[0].startswith("[THINK]")]
+        assert len(think_calls) == 3
+        assert content == ""
+        sess.close()
+
+    def test_non_streaming_vllm_reasoning_field(self):
+        """vLLM 思考模式非流式：message 只有 `reasoning` 字段"""
+        sess = self._make_session(enable_thinking=True)
+        mock_msg = MagicMock()
+        mock_msg.content = "17×23=391"
+        mock_msg.tool_calls = None
+        mock_msg.reasoning_content = None
+        mock_msg.reasoning = "用户问了道数学题"
+        mock_choice = MagicMock()
+        mock_choice.message = mock_msg
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_response.usage = None
+        cb = MagicMock()
+
+        content, tool_calls, reasoning = sess._process_stream_with_reasoning(mock_response, cb)
+        assert content == "17×23=391"
+        assert reasoning == "用户问了道数学题"
+        cb.assert_any_call("[THINK]用户问了道数学题")
+        sess.close()
+
+    def test_unmocked_reasoning_attr_not_false_positive(self):
+        """MagicMock 自动生成的非字符串 reasoning/reasoning_content 属性不得误判为思考
+        （回归：extract_reasoning 若返回 mock 对象会导致字符串拼接崩溃）"""
+        sess = self._make_session(no_stream_chunk=False, enable_thinking=True)
+
+        def make_chunk(content_text):
+            delta = MagicMock()
+            delta.content = content_text
+            # 不显式设置 reasoning_content/reasoning：MagicMock 自动属性非字符串
+            delta.tool_calls = None
+            choice = MagicMock()
+            choice.delta = delta
+            chunk = MagicMock()
+            chunk.choices = [choice]
+            chunk.usage = None
+            return chunk
+
+        chunks = [make_chunk("直接回复")]
+        class MockStream:
+            def __init__(self, items): self._items = items; self._idx = 0
+            def __iter__(self): return self
+            def __next__(self):
+                if self._idx >= len(self._items): raise StopIteration
+                item = self._items[self._idx]; self._idx += 1
+                return item
+
+        cb = MagicMock()
+        content, tool_calls, reasoning = sess._process_stream_with_reasoning(MockStream(chunks), cb)
+        assert content == "直接回复"
+        assert reasoning == ""
+        assert not any(c.args and c.args[0].startswith("[THINK]") for c in cb.call_args_list)
+        sess.close()
+
     def test_non_streaming_empty_response(self):
         """非流式模式：空回复"""
         sess = self._make_session()

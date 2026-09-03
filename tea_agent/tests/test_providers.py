@@ -13,8 +13,11 @@ import pytest
 from tea_agent.providers import (
     PROVIDERS,
     generate_config,
+    get_model,
     get_provider,
     list_providers,
+    model_entries,
+    model_ids,
 )
 
 
@@ -39,13 +42,38 @@ class TestProvidersData:
             assert url.startswith("http"), f"Provider '{name}' api_url 无效: {url}"
 
     def test_providers_default_model_in_models_list(self):
-        """default_model 应出现在 models 列表中（如果有 models 字段）"""
+        """default_model 应出现在模型 id 列表中（目录化后 models 为富条目）"""
         for name, info in PROVIDERS.items():
-            if "models" in info:
-                assert info["default_model"] in info["models"], (
-                    f"Provider '{name}' default_model '{info['default_model']}' "
-                    f"不在 models 列表中"
+            ids = model_ids(info)
+            assert info["default_model"] in ids, (
+                f"Provider '{name}' default_model '{info['default_model']}' "
+                f"不在 models 列表中: {ids}"
+            )
+
+    def test_providers_model_entries_have_id(self):
+        """models 条目应为富对象（id + 窗口/输出上限）"""
+        for name, info in PROVIDERS.items():
+            for entry in model_entries(info):
+                assert "id" in entry, f"Provider '{name}' 有条目缺 id: {entry}"
+                assert isinstance(entry["id"], str) and entry["id"], (
+                    f"Provider '{name}' 模型 id 无效: {entry.get('id')!r}"
                 )
+                assert entry.get("context_window", 0) > 0, (
+                    f"Provider '{name}' 模型 {entry['id']} 缺 context_window"
+                )
+                assert entry.get("max_output_tokens", 0) > 0, (
+                    f"Provider '{name}' 模型 {entry['id']} 缺 max_output_tokens"
+                )
+
+    def test_get_model_merges_provider_fallback(self):
+        """get_model 应返回模型级能力（未声明时继承供应商级）"""
+        entry = get_model(PROVIDERS["DeepSeek"], "deepseek-chat")
+        assert entry is not None
+        assert entry["id"] == "deepseek-chat"
+        assert entry["context_window"] > 0
+        assert isinstance(entry.get("supports_vision"), bool)
+        assert isinstance(entry.get("supports_thinking"), bool)
+        assert get_model(PROVIDERS["DeepSeek"], "no-such-model") is None
 
     def test_providers_without_models_have_default_model(self):
         """没有 models 列表的 Provider 必须有 default_model"""

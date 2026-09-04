@@ -737,6 +737,53 @@ class ProviderStore:
         return {"provider": pkey, "added": added, "kept": kept, "total": len(models)}
 
 
+# ── 迁移入口（config*.yaml 供应商信息 → provider.yaml） ──────
+
+def migrate_from_configs(config_dir: str | Path | None = None,
+                         target: str | Path | None = None) -> dict:
+    """把既有 config*.yaml 的供应商信息（api_url/api_key/模型）写入 provider.yaml。
+
+    供「配置迁移」入口与首次 bootstrap 复用。重复执行幂等（同 url 多 key 保留一个，
+    以 config.yaml 主模型 key 优先；模型目录合并去重）。
+
+    Args:
+        config_dir: config*.yaml 所在目录，默认 ~/.tea_agent
+        target: 目标 provider.yaml 路径，默认 ~/.tea_agent/provider.yaml
+
+    Returns:
+        {"ok": True, "providers": N, "models": N, "profiles_scanned": N, "file": ...}
+    """
+    base = Path(config_dir) if config_dir else CONFIG_DIR
+    store = get_provider_store(target)
+    data = store.load()  # 触发 bootstrap（含内置 + custom + config 迁移）
+    profiles = sorted(list(base.glob("config*.yaml")) + list(base.glob("config*.yml")))
+    # 重新扫描以统计（_bootstrap 已合并；此处确保 config 目录与 target 目录一致时幂等）
+    url_key: dict[str, str] = {}
+    for f in profiles:
+        try:
+            import yaml as _y
+
+            raw = _y.safe_load(f.read_text(encoding="utf-8")) or {}
+            mb = raw.get("main_model") if isinstance(raw.get("main_model"), dict) else {}
+            url = str(mb.get("api_url") or "").strip().rstrip("/").lower()
+            key = str(mb.get("api_key") or "").strip()
+            if url and key and (url not in url_key or f.name == "config.yaml"):
+                url_key[url] = key
+        except Exception:
+            continue
+    providers = data.setdefault("providers", {})
+    total_models = sum(len(p.get("models") or {}) for p in providers.values())
+    store.save()
+    return {
+        "ok": True,
+        "providers": len(providers),
+        "models": total_models,
+        "profiles_scanned": len(profiles),
+        "distinct_keys": len(url_key),
+        "file": str(store.file_path),
+    }
+
+
 # ── 模块级单例 ──────────────────────────────────────────────
 
 _store: ProviderStore | None = None

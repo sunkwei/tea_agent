@@ -759,7 +759,7 @@ def migrate_from_configs(config_dir: str | Path | None = None,
     Returns:
         {"ok": True, "providers": N, "models": N, "profiles_scanned": N, "file": ...}
     """
-    store = get_provider_store(target)
+    store = get_provider_store(target, agent_dir=config_dir)
     base = Path(config_dir) if config_dir else store._cfg_dir()
     data = store.load()  # 触发 bootstrap（含内置 + custom + config 迁移）
     profiles = sorted(list(base.glob("config*.yaml")) + list(base.glob("config*.yml")))

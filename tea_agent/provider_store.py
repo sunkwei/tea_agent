@@ -369,7 +369,7 @@ class ProviderStore:
         同一 api_url 出现多个不同 api_key 时保留一个（优先 config.yaml 主模型 key），
         模型合并去重；无法按 url 归属内置的（自定义网关）以 profile 名为 p_name 新增。
         """
-        base = CONFIG_DIR
+        base = self._cfg_dir()
         try:
             files = sorted(list(base.glob("config*.yaml")) + list(base.glob("config*.yml")))
         except OSError:

@@ -790,6 +790,133 @@ def migrate_from_configs(config_dir: str | Path | None = None,
     }
 
 
+    # ── 在线模型查询 / 端点推断 ──────────────────────────────
+
+    @staticmethod
+    def _models_endpoint(api_url: str) -> str:
+        """根据 api_url 推断 OpenAI 兼容 /v1/models 端点。"""
+        url = (api_url or "").strip().rstrip("/")
+        if not url:
+            return ""
+        if url.endswith("/v1") or url.endswith("/v1beta/openai"):
+            return url + "/models"
+        return url + "/v1/models"
+
+    @staticmethod
+    def _chat_endpoint(api_url: str) -> str:
+        """根据 api_url 推断 OpenAI 兼容 /chat/completions 端点。"""
+        url = (api_url or "").strip().rstrip("/")
+        if not url:
+            return ""
+        if url.endswith("/v1") or url.endswith("/v1beta/openai"):
+            return url + "/chat/completions"
+        return url + "/v1/chat/completions"
+
+    def query_live_models(self, provider: str, api_key: str = "",
+                          timeout: int = 15) -> dict:
+        """实时查询某供应商的 /v1/models 在线模型列表（需已配置 api_key）。
+
+        Args:
+            provider: 供应商名（p_name）
+            api_key: 可选覆盖；留空使用 provider.yaml 中已存的 key
+            timeout: 请求超时秒数
+
+        Returns:
+            {"ok": True, "provider", "endpoint", "models": [{"id", "owned_by"?}]}
+            或 {"ok": False, "error"}
+        """
+        p = self.get_provider(provider)
+        if p is None:
+            return {"ok": False, "error": f"provider '{provider}' not found"}
+        key = api_key or (p.get("api_key") or "")
+        api_url = p.get("api_url") or ""
+        if not key:
+            return {"ok": False, "error": f"provider '{provider}' 未配置 api_key，无法查询在线模型"}
+        endpoint = self._models_endpoint(api_url)
+        if not endpoint:
+            return {"ok": False, "error": f"invalid api_url: {api_url!r}"}
+        import json
+        import urllib.error as _err
+        import urllib.request as _req
+
+        req = _req.Request(
+            endpoint,
+            headers={"Authorization": f"Bearer {key}",
+                     "Content-Type": "application/json"},
+        )
+        try:
+            with _req.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+                data = json.loads(resp.read().decode("utf-8"))
+        except _err.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")[:300] if e.fp else ""
+            return {"ok": False, "error": f"HTTP {e.code}: {e.reason}"
+                    + (f" — {body}" if body else "")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        models = []
+        for item in (data.get("data") or []) if isinstance(data, dict) else []:
+            if isinstance(item, dict) and item.get("id"):
+                models.append({"id": item["id"],
+                               "owned_by": item.get("owned_by", "")})
+        return {"ok": True, "provider": p["name"], "endpoint": endpoint,
+                "models": models, "total": len(models)}
+
+    def test_connection(self, provider: str, model: str = "",
+                        api_key: str = "", timeout: int = 15) -> dict:
+        """最小 chat/completions 请求验证「端点 + key + 模型」三重有效。
+
+        Args:
+            provider: 供应商名（p_name）
+            model: 目标模型 id；留空用 default_model
+            api_key: 可选覆盖；留空使用 provider.yaml 已存 key
+            timeout: 请求超时秒数
+
+        Returns:
+            {"ok": True, "latency_ms", "model_reported"} 或 {"ok": False, "error"}
+        """
+        p = self.get_provider(provider)
+        if p is None:
+            return {"ok": False, "error": f"provider '{provider}' not found"}
+        key = api_key or (p.get("api_key") or "")
+        api_url = p.get("api_url") or ""
+        model = model or (p.get("default_model") or "")
+        if not key:
+            return {"ok": False, "error": f"provider '{provider}' 未配置 api_key"}
+        endpoint = self._chat_endpoint(api_url)
+        if not endpoint:
+            return {"ok": False, "error": f"invalid api_url: {api_url!r}"}
+        import json
+        import time as _time
+        import urllib.error as _err
+        import urllib.request as _req
+
+        payload = {"model": model or "default",
+                   "messages": [{"role": "user", "content": "ping"}],
+                   "max_tokens": 1, "stream": False}
+        req = _req.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Authorization": f"Bearer {key}",
+                     "Content-Type": "application/json"},
+            method="POST",
+        )
+        t0 = _time.time()
+        try:
+            with _req.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+                data = json.loads(resp.read().decode("utf-8"))
+        except _err.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")[:300] if e.fp else ""
+            return {"ok": False, "error": f"HTTP {e.code}: {e.reason}"
+                    + (f" — {body}" if body else "")}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        latency_ms = round((_time.time() - t0) * 1000, 1)
+        if isinstance(data, dict) and data.get("error"):
+            return {"ok": False, "error": str(data["error"])}
+        reported = str(data.get("model", "")) if isinstance(data, dict) else ""
+        return {"ok": True, "latency_ms": latency_ms, "model_reported": reported}
+
+
 # ── 模块级单例 ──────────────────────────────────────────────
 
 _store: ProviderStore | None = None

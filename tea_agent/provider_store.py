@@ -411,13 +411,16 @@ class ProviderStore:
                 pname = self._find_by_url(data, url) or self._builtin_name_for_url(url)
                 if pname is None:
                     pname = profile_name
+                opts_block = block.get("options")
+                if not isinstance(opts_block, dict):
+                    opts_block = {}
                 p = data.setdefault(pname, {
                     "api_url": url,
                     "api_key": "",
                     "default_model": model,
                     "description": f"profile · {f.name}",
-                    "supports_vision": bool(block.get("options", {}).get("supports_vision", False)),
-                    "supports_thinking": bool(block.get("options", {}).get("supports_reasoning", False)),
+                    "supports_vision": bool(opts_block.get("supports_vision", False)),
+                    "supports_thinking": bool(opts_block.get("supports_reasoning", False)),
                     "source": "builtin" if pname in self._builtin_registry() else "config",
                     "models": {},
                 })

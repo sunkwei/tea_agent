@@ -759,9 +759,10 @@ def migrate_from_configs(config_dir: str | Path | None = None,
     Returns:
         {"ok": True, "providers": N, "models": N, "profiles_scanned": N, "file": ...}
     """
-    base = Path(config_dir) if config_dir else CONFIG_DIR
-    base = Path(config_dir) if config_dir else store._cfg_dir()
     store = get_provider_store(target)
+    base = Path(config_dir) if config_dir else store._cfg_dir()
+    data = store.load()  # 触发 bootstrap（含内置 + custom + config 迁移）
+    profiles = sorted(list(base.glob("config*.yaml")) + list(base.glob("config*.yml")))
     # 重新扫描以统计（_bootstrap 已合并；此处确保 config 目录与 target 目录一致时幂等）
     url_key: dict[str, str] = {}
     for f in profiles:

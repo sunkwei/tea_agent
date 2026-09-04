@@ -174,11 +174,17 @@ def _clean_provider(raw: dict) -> dict:
 class ProviderStore:
     """~/.tea_agent/provider.yaml 读写服务（供应商 CRUD + 模型目录 + resolve）。"""
 
-    def __init__(self, path: str | Path | None = None):
+    def __init__(self, path: str | Path | None = None,
+                 agent_dir: str | Path | None = None):
         self._path = _resolve_path(path)
+        # config*.yaml 扫描目录（~/.tea_agent）；测试可注入 tmp 隔离
+        self.agent_dir = Path(agent_dir) if agent_dir else None
         self._lock = threading.RLock()
         self._data: dict | None = None
         self._mtime: float = 0.0
+
+    def _cfg_dir(self) -> Path:
+        return self.agent_dir if self.agent_dir is not None else CONFIG_DIR
 
     # ── 基础读写 ─────────────────────────────────────────────
 

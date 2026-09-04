@@ -796,11 +796,13 @@ _store: ProviderStore | None = None
 _store_lock = threading.Lock()
 
 
-def get_provider_store(path: str | Path | None = None) -> ProviderStore:
-    """ProviderStore 单例；path 变化自动重建（测试可用 TEA_PROVIDER_FILE 隔离）。"""
+def get_provider_store(path: str | Path | None = None,
+                       agent_dir: str | Path | None = None) -> ProviderStore:
+    """ProviderStore 单例；path/agent_dir 变化自动重建（测试可用 TEA_PROVIDER_FILE + tmp 目录隔离）。"""
     global _store
     target = _resolve_path(path)
+    adir = Path(agent_dir) if agent_dir else None
     with _store_lock:
-        if _store is None or _store.file_path != target:
-            _store = ProviderStore(target)
+        if _store is None or _store.file_path != target or _store.agent_dir != adir:
+            _store = ProviderStore(target, agent_dir=adir)
         return _store

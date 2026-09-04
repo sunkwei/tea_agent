@@ -100,6 +100,9 @@ class ModelConfig:
     # 支持键: reminder_threshold / reminder_message_template /
     #         guidance_message / fallback_buffer_tokens / auto_compact_fallback_prompt
     token_budget: dict[str, Any] = field(default_factory=dict)
+    # 引用式来源（config*.yaml 只存 p_name + m_name 组合时记录；空=传统完整内嵌块）
+    provider: str = ""   # p_name（provider.yaml 中的供应商名）
+    ref_model: str = ""  # m_name（provider.yaml 中该供应商下的模型 id）
 
     @property
     def is_configured(self) -> bool:
@@ -108,6 +111,11 @@ class ModelConfig:
     @property
     def supports_vision(self) -> bool:
         return self.options.get("supports_vision", False)
+
+    @property
+    def is_reference(self) -> bool:
+        """是否为 p_name+m_name 引用式（可在 config 层直接写引用，不内嵌密钥）。"""
+        return bool(self.provider and self.ref_model)
 
     def get_token_budget(self, key: str, default: Any = None) -> Any:
         """读取模型级 token budget 配置项。

@@ -986,6 +986,11 @@ def _prepare_config_data(cfg: AgentConfig) -> dict:
 def _prepare_model_data(cfg: AgentConfig, data: dict) -> None:
     """准备模型配置数据。
 
+    引用式模型（provider+model）保存为 p_name+m_name 组合，密钥/端点不内嵌；
+    传统完整块保持原样写回（向后兼容）。用户对引用式模型的本地覆盖
+    （temperature/top_p/max_tokens/max_context/options 与 provider.yaml 默认不同者）
+    会以覆盖字段保留；api_key 若被修改则同步回写 provider.yaml。
+
     Args:
         cfg: AgentConfig实例
         data: 配置数据字典（会被修改）
@@ -997,6 +1002,11 @@ def _prepare_model_data(cfg: AgentConfig, data: dict) -> None:
             target = cfg.cheap_model
         else:
             target = cfg.vision_model
+        if target.is_reference:
+            m_data = _prepare_ref_model_data(target)
+            if m_data is not None:
+                data[m_type] = m_data
+            continue
         if target.is_configured:
             m_data = {
                 "api_key": target.api_key,
@@ -1016,6 +1026,64 @@ def _prepare_model_data(cfg: AgentConfig, data: dict) -> None:
             if target.token_budget:
                 m_data["token_budget"] = target.token_budget
             data[m_type] = m_data
+
+
+def _prepare_ref_model_data(target: ModelConfig) -> dict | None:
+    """把引用式 ModelConfig 序列化为 {provider, model, ...覆盖}。
+
+    规则：
+      - 基础键 provider/model 恒写；
+      - temperature/top_p 与 dataclass 默认不同才写；
+      - max_tokens/max_context_tokens/options 与 provider.yaml 解析默认不同才写（覆盖）；
+      - api_key 若与 provider.yaml 默认不同 → 同步回写 provider.yaml（config 永不内嵌密钥）；
+      - provider.yaml 无法解析该组合时（provider 被删/未收录）→ 返回 None，由调用方走完整块。
+
+    Args:
+        target: 引用式 ModelConfig
+
+    Returns:
+        dict | None
+    """
+    resolved = _resolve_ref_model(target.provider, target.ref_model)
+    if resolved is None:
+        # provider 已从 provider.yaml 移除 → 退化完整块保留既有密钥（不丢配置）
+        if target.is_configured:
+            return None
+        return {"provider": target.provider, "model": target.ref_model}
+
+    m_data: dict[str, Any] = {
+        "provider": target.provider,
+        "model": target.ref_model,
+    }
+    if target.temperature != 0.7:
+        m_data["temperature"] = target.temperature
+    if target.top_p != 0.9:
+        m_data["top_p"] = target.top_p
+    # 与 provider.yaml 解析默认对比，仅保留差异覆盖
+    if target.max_tokens != int(resolved.get("max_output_tokens") or 131072):
+        m_data["max_tokens"] = target.max_tokens
+    if target.max_context_tokens and int(resolved.get("max_context_tokens") or 0) != target.max_context_tokens:
+        m_data["max_context_tokens"] = target.max_context_tokens
+    res_opts = resolved.get("options") or {}
+    diff_opts = {
+        k: v for k, v in (target.options or {}).items()
+        if res_opts.get(k) != v
+    }
+    if diff_opts:
+        m_data["options"] = diff_opts
+    if target.token_budget:
+        m_data["token_budget"] = target.token_budget
+    # api_key 差异 → 同步 provider.yaml（引用式下密钥归属 provider 条目）
+    if target.api_key and target.api_key != (resolved.get("api_key") or ""):
+        try:
+            from tea_agent.provider_store import get_provider_store
+
+            get_provider_store().upsert_provider(
+                target.provider, {"api_key": target.api_key}
+            )
+        except Exception as e:
+            logger.warning("api_key sync to provider.yaml failed: %s", e)
+    return m_data
 
 
 def _prepare_embedding_data(cfg: AgentConfig, data: dict) -> None:

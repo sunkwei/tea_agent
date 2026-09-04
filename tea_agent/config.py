@@ -587,6 +587,11 @@ def resolve_config_path(config_path: str | None = None) -> str | None:
     if config_path:
         return config_path
 
+    # 测试/隔离环境：TEA_CONFIG 指向的配置文件（server/agent_module 同语义）
+    tea_cfg = os.environ.get("TEA_CONFIG", "").strip()
+    if tea_cfg and os.path.isfile(tea_cfg):
+        return tea_cfg
+
     # 优先级1: $HOME/.tea_agent/config.yaml
     default_path = str(Path.home() / ".tea_agent" / "config.yaml")
     if os.path.isfile(default_path):

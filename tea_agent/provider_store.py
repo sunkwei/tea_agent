@@ -293,14 +293,16 @@ class ProviderStore:
         return out
 
     def _bootstrap(self) -> dict:
-        """首启 bootstrap：内置目录 ⊕ 自定义供应商 ⊕ 既有 config*.yaml 供应商信息。"""
+        """首启 bootstrap：仅保留真实配置过的供应商，不预置无 key 内置目录。
+
+        数据源：custom_providers.yaml（带 key 的自定义）⊕ 既有 config*.yaml 引用的供应商。
+        内置静态目录仅作命名匹配（config api_url 命中内置端点 → 用内置 p_name）与
+        能力速查（guess_model_cfg 引用 model_config 速查表），绝不整体写入 provider.yaml。
+        """
         data: dict[str, dict] = {}
-        # 1) 内置静态目录
-        for name, p in self._builtin_registry().items():
-            data[name] = p
-        # 2) 旧 custom_providers.yaml（含 api_key 时一并并入）
+        # 1) 旧 custom_providers.yaml（含 api_key 时一并并入）
         try:
-            cp = Path.home() / ".tea_agent" / "custom_providers.yaml"
+            cp = self._cfg_dir() / "custom_providers.yaml"
             if cp.exists():
                 raw = yaml.safe_load(cp.read_text(encoding="utf-8")) or {}
                 for name, info in (raw.get("providers") or {}).items():
@@ -308,11 +310,11 @@ class ProviderStore:
                         self._merge_provider(data, name, self._convert_custom(info), source="custom")
         except Exception as e:
             logger.debug("custom_providers.yaml merge skipped: %s", e)
-        # 3) 既有 config*.yaml 供应商信息（api_key/api_url/模型）
+        # 2) 既有 config*.yaml 供应商信息（api_url/api_key/模型）——核心来源
         self._merge_config_profiles(data)
-        # 4) 旧 model_config.json 逐模型能力（覆盖启发式默认）
+        # 3) 旧 model_config.json 逐模型能力（覆盖启发式默认）
         try:
-            mc = Path.home() / ".tea_agent" / "model_config.json"
+            mc = self._cfg_dir() / "model_config.json"
             if mc.exists():
                 import json
 
@@ -900,6 +902,38 @@ class ProviderStore:
         return {"ok": True, "latency_ms": latency_ms, "model_reported": reported}
 
 
+
+    # ── 清理：剔除未配置的内置占位 ───────────────────────────
+
+    def prune_unconfigured(self, keep_models: bool = True) -> dict:
+        """删除「无 api_key 且非 config/custom 来源」的内置占位条目。
+
+        用户诉求：provider.yaml 只保留真实配置过的供应商（来自 config*.yaml /
+        custom_providers.yaml / 手动填入过 key 的），不要把 providers.py 静态目录
+        里没有 key 的 27 家候选全部占位。config 文件引用的内置端点（如 DeepSeek）
+        因已并入 api_key 而保留；纯参考候选（OpenAI/Anthropic/... 无 key）被清除。
+
+        Args:
+            keep_models: 是否同时清理仅存在于被删供应商下的孤儿模型（默认 True）
+
+        Returns:
+            {"removed": [name...]}
+        """
+        data = self.load()
+        providers = data.get("providers", {})
+        removed = []
+        for name in list(providers):
+            p = providers[name]
+            src = p.get("source", "builtin")
+            has_key = bool((p.get("api_key") or "").strip())
+            if src == "builtin" and not has_key:
+                removed.append(name)
+                providers.pop(name, None)
+        if removed:
+            self.save()
+            logger.info("pruned unconfigured builtin placeholders: %s", removed)
+        return {"removed": removed}
+
 # ── 迁移入口（config*.yaml 供应商信息 → provider.yaml） ──────
 
 def migrate_from_configs(config_dir: str | Path | None = None,
@@ -937,12 +971,19 @@ def migrate_from_configs(config_dir: str | Path | None = None,
     providers = data.setdefault("providers", {})
     total_models = sum(len(p.get("models") or {}) for p in providers.values())
     store.save()
+    # 迁移后自动清理无 key 内置占位：provider.yaml 只保留真实配置过的供应商
+    try:
+        pruned = store.prune_unconfigured()
+    except Exception as e:  # pragma: no cover - 防御性
+        pruned = {"removed": [], "error": str(e)}
     return {
         "ok": True,
-        "providers": len(providers),
-        "models": total_models,
+        "providers": len(store.load().get("providers", {})),
+        "models": sum(len(p.get("models") or {})
+                     for p in store.load().get("providers", {}).values()),
         "profiles_scanned": len(profiles),
         "distinct_keys": len(url_key),
+        "pruned": pruned.get("removed", []),
         "file": str(store.file_path),
     }
 

@@ -846,9 +846,6 @@ class ProviderStore:
 
     def test_connection(self, provider: str, model: str = "",
                         api_key: str = "", timeout: int = 15) -> dict:
-
-    def test_connection(self, provider: str, model: str = "",
-                        api_key: str = "", timeout: int = 15) -> dict:
         """最小 chat/completions 请求验证「端点 + key + 模型」三重有效。
 
         Args:

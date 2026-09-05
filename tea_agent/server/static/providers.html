@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>供应商与模型配置 — Tea Agent</title>
+<link rel="stylesheet" href="/static/style.css"/>
+<style>
+  :root { --bg1:#101216; --bg2:#1a1d24; --bg3:#22262f; --border:#333a45;
+          --text:#e6e8ee; --text-dim:#8a93a3; --primary:#4a90d9; --green:#2ecc71;
+          --warn:#f0ad4e; --danger:#e74c3c; }
+  body { background:var(--bg1); color:var(--text); margin:0; font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  * { box-sizing:border-box; }
+  .top { position:sticky; top:0; z-index:10; background:var(--bg2); border-bottom:1px solid var(--border);
+         padding:10px 18px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .top h1 { font-size:16px; margin:0; }
+  .top .hint { font-size:12px; color:var(--text-dim); }
+  .top .spacer { flex:1; }
+  .btn { border:1px solid var(--border); background:var(--bg3); color:var(--text); border-radius:6px;
+         padding:6px 12px; cursor:pointer; font-size:13px; }
+  .btn:hover { filter:brightness(1.15); }
+  .btn-p { background:var(--primary); border-color:var(--primary); color:#fff; }
+  .btn-g { background:transparent; border-color:var(--border); }
+  .btn-r { background:transparent; border-color:var(--border); color:var(--danger); }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .wrap { padding:16px 18px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
+  .card { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .card h3 { margin:0 0 8px; font-size:15px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .badge { font-size:11px; border-radius:4px; padding:1px 6px; }
+  .badge.builtin { background:#2c3e50; color:#a8c6e8; }
+  .badge.custom  { background:#1e8449; color:#d5f5e3; }
+  .badge.config  { background:#7d3c98; color:#f4ecf7; }
+  .kv { font-size:12px; color:var(--text-dim); word-break:break-all; margin:2px 0; }
+  .kv b { color:var(--text); font-weight:600; }
+  .meta { display:flex; gap:10px; flex-wrap:wrap; font-size:11px; color:var(--text-dim); margin:6px 0; }
+  .cap { border:1px solid var(--border); border-radius:6px; padding:1px 6px; }
+  .cap.vision { border-color:#8e44ad; color:#c39bd3; }
+  .cap.think  { border-color:#2980b9; color:#85c1e9; }
+  .actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .actions .btn { padding:4px 9px; font-size:12px; }
+  .models { margin-top:10px; border-top:1px dashed var(--border); padding-top:8px; }
+  .models .title { font-size:12px; color:var(--text-dim); margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+  .model-row { display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid var(--border); font-size:12px; }
+  .model-row .mid { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:ui-monospace,Consolas,monospace; }
+  .model-row .toks { color:var(--text-dim); white-space:nowrap; }
+  .model-row .toks b { color:var(--text); }
+  .model-row button { padding:1px 6px; font-size:11px; }
+  .status { padding:6px 10px; border-radius:6px; font-size:12px; margin-bottom:12px; display:none; }
+  .status.ok { display:block; background:rgba(46,204,113,.12); color:var(--green); border:1px solid rgba(46,204,113,.3); }
+  .status.err { display:block; background:rgba(231,76,60,.12); color:var(--danger); border:1px solid rgba(231,76,60,.3); }
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:50; }
+  .overlay.show { display:flex; }
+  .dialog { background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:16px; width:min(560px,92vw); max-height:88vh; overflow:auto; }
+  .dialog h3 { margin:0 0 12px; font-size:15px; }
+  .form-row { display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+  .form-group { flex:1; min-width:200px; }
+  .form-group label { display:block; font-size:12px; color:var(--text-dim); margin-bottom:3px; }
+  .form-group input, .form-group textarea, .form-group select { width:100%; padding:6px 8px; border:1px solid var(--border);
+      border-radius:6px; background:var(--bg1); color:var(--text); font-size:13px; }
+  .dialog .actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+  .cfg-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:8px 0; }
+  .cfg-grid .form-group { min-width:0; }
+  .checks { display:flex; gap:14px; align-items:center; font-size:12px; margin:6px 0; }
+  .checks label { display:flex; align-items:center; gap:4px; }
+  .live-box { margin-top:8px; border:1px dashed var(--primary); border-radius:6px; padding:8px; max-height:220px; overflow:auto; font-size:12px; }
+  .live-box .row { display:flex; align-items:center; gap:6px; padding:3px 0; }
+  .empty { color:var(--text-dim); text-align:center; padding:30px 0; font-size:13px; }
+  a.back { color:var(--primary); text-decoration:none; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>🏭 供应商与模型配置</h1>
+  <span class="hint">provider.yaml 唯一事实源 · 与 configxxx.yaml 无关</span>
+  <span class="spacer"></span>
+  <span id="file" class="hint"></span>
+  <a class="back" href="/" onclick="event.preventDefault();history.length>1?history.back():location.href='/'">← 返回主界面</a>
+</div>
+
+<div class="wrap">
+  <div id="status" class="status"></div>
+  <div class="actions" style="margin-bottom:14px">
+    <input id="q" placeholder="🔍 搜索供应商 / 模型 id" style="flex:1;min-width:220px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:13px" oninput="render()">
+    <button class="btn btn-g" onclick="refresh(true)" title="重新加载 provider.yaml">🔄 刷新</button>
+    <button class="btn btn-p" onclick="openForm()">➕ 新增供应商</button>
+  </div>
+  <div id="grid" class="grid"></div>
+  <div id="empty" class="empty" style="display:none">暂无供应商 — 点击「➕ 新增供应商」创建，或在主界面配置中切换 profile 后自动迁移。</div>
+</div>
+
+<!-- 供应商编辑对话框 -->
+<div id="dlg-provider" class="overlay"><div class="dialog">
+  <h3 id="pdlg-title">➕ 新增供应商</h3>
+  <div class="form-row"><div class="form-group"><label>名称（p_name，唯一）</label><input id="p-name" placeholder="My-Gateway"></div></div>
+  <div class="form-row">
+    <div class="form-group"><label>OpenAI 兼容 URL</label><input id="p-url" placeholder="https://api.example.com/v1"></div>
+    <div class="form-group"><label>API Key（留空不覆盖）</label><input id="p-key" type="password" placeholder="sk-..."></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>默认模型</label><input id="p-default" placeholder="gpt-4o-mini"></div>
+    <div class="form-group"><label>描述（可选）</label><input id="p-desc" placeholder="私有中转站"></div>
+  </div>
+  <div class="form-row"><div class="form-group"><label>静态模型列表（逗号分隔，可选）</label><input id="p-models" placeholder="gpt-4o, gpt-4o-mini"></div></div>
+  <div class="checks">
+    <label><input type="checkbox" id="p-vision"> 支持视觉</label>
+    <label><input type="checkbox" id="p-think"> 支持思考</label>
+  </div>
+  <div class="actions">
+    <button class="btn btn-g" onclick="closeForm()">取消</button>
+    <button class="btn btn-p" onclick="saveProvider()">💾 保存</button>
+  </div>
+</div></div>
+
+<!-- 模型能力对话框 -->
+<div id="dlg-model" class="overlay"><div class="dialog">
+  <h3>⚙ 模型能力 — <span id="mdl-name" style="color:var(--primary)"></span></h3>
+  <input type="hidden" id="m-provider">
+  <input type="hidden" id="m-id">
+  <div class="cfg-grid">
+    <div class="form-group"><label>最大上下文 (tokens)</label><input id="m-ctx" type="number" min="0" step="1024" placeholder="0=未知"></div>
+    <div class="form-group"><label>最大输出 (tokens)</label><input id="m-out" type="number" min="0" placeholder="0=未知"></div>
+  </div>
+  <div class="form-group"><label>默认 reasoning_effort（可选）</label>
+    <select id="m-effort">
+      <option value="">auto（不显式下发）</option>
+      <option>none</option><option>minimal</option><option>low</option>
+      <option>medium</option><option>high</option><option>xhigh</option><option>max</option>
+    </select>
+  </div>
+  <div class="checks">
+    <label><input type="checkbox" id="m-vision"> 多模态输入(视觉)</label>
+    <label><input type="checkbox" id="m-reason"> 支持思考(reasoning)</label>
+  </div>
+  <div class="form-group"><label>备注</label><input id="m-note" placeholder="可选"></div>
+  <div class="actions">
+    <button class="btn btn-g" onclick="closeModelDlg()">取消</button>
+    <button class="btn btn-p" onclick="saveModelCfg()">💾 保存</button>
+  </div>
+</div></div>
+
+<script>
+let DATA = null;   // {ok, providers:[...], total}
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function status(msg, ok) {
+  const el = $('status');
+  el.className = 'status ' + (ok ? 'ok' : 'err');
+  el.textContent = msg;
+  setTimeout(() => { el.className = 'status'; }, ok ? 2500 : 5000);
+}
+
+async function refresh(showMsg) {
+  try {
+    const r = await fetch('/api/provider-store');
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    DATA = d;
+    $('file').textContent = '📍 ' + d.file;
+    if (showMsg) status('已加载 ' + d.total + ' 个供应商 / ' + d.total_models + ' 个模型条目', true);
+    render();
+  } catch (e) {
+    status('加载失败: ' + e.message, false);
+  }
+}
+
+function fmtTok(n) {
+  if (!n) return '—';
+  if (n >= 1048576) return (n / 1048576).toFixed(1).replace(/\.0$/,'') + 'M';
+  if (n >= 1024) return (n / 1024).toFixed(0) + 'K';
+  return String(n);
+}
+
+function badges(p) {
+  const src = {builtin:'内置', custom:'自定义', config:'profile'}[p.source] || p.source || '';
+  const b = '<span class="badge ' + (p.source || 'custom') + '">' + esc(src) + '</span>';
+  const caps = [];
+  if (p.supports_vision) caps.push('<span class="cap vision">🖼 视觉</span>');
+  if (p.supports_reasoning) caps.push('<span class="cap think">🧠 思考</span>');
+  return b + ' ' + caps.join(' ');
+}
+
+function modelRows(p) {
+  const q = ($('q').value || '').trim().toLowerCase();
+  const list = (p.catalog || []).filter(m => !q || String(m.id).toLowerCase().includes(q));
+  return list.map(m => {
+    const e = m.reasoning_effort ? ' · effort=' + esc(m.reasoning_effort) : '';
+    const cap = (m.supports_vision ? '🖼' : '') + (m.supports_reasoning ? '🧠' : '');
+    return '<div class="model-row">' +
+      '<span class="mid" title="' + esc(m.id) + '">' + esc(m.id) + ' <span style="color:var(--text-dim)">' + cap + '</span></span>' +
+      '<span class="toks">📏<b>' + fmtTok(m.max_context_tokens) + '</b> ↗<b>' + fmtTok(m.max_output_tokens) + '</b>' + e + '</span>' +
+      '<button class="btn btn-g" onclick="openModelCfg(\'' + esc(p.name) + '\',\'' + esc(m.id).replace(/'/g,"\\'") + '\')" title="编辑能力">✏️</button>' +
+      '<button class="btn btn-r" onclick="delModel(\'' + esc(p.name) + '\',\'' + esc(m.id).replace(/'/g,"\\'") + '\')" title="删除模型">🗑</button>' +
+      '</div>';
+  }).join('');
+}
+
+function render() {
+  const grid = $('grid');
+  if (!DATA || !DATA.providers || !DATA.providers.length) { $('empty').style.display='block'; grid.innerHTML=''; return; }
+  $('empty').style.display='none';
+  const q = ($('q').value || '').trim().toLowerCase();
+  const list = DATA.providers.filter(p => !q
+    || p.name.toLowerCase().includes(q)
+    || String(p.api_url || '').toLowerCase().includes(q)
+    || (p.catalog || []).some(m => String(m.id).toLowerCase().includes(q)));
+  grid.innerHTML = list.map(p => {
+    const rows = modelRows(p);
+    return '<div class="card">' +
+      '<h3>' + esc(p.name) + ' ' + badges(p) +
+        (p.is_configured ? '<span class="badge config" title="当前配置使用中">● 使用中</span>' : '') +
+      '</h3>' +
+      '<div class="kv">URL: <b>' + esc(p.api_url || '—') + '</b></div>' +
+      '<div class="kv">API Key: <b>' + esc(p.api_key_masked || '未设置') + '</b>' +
+        (p.has_key ? '' : ' <span style="color:var(--warn)">(无 key，在线查询需手动填入)</span>') + '</div>' +
+      (p.description ? '<div class="kv">' + esc(p.description) + '</div>' : '') +
+      '<div class="meta">默认模型: <b>' + esc(p.default_model || '—') + '</b> · 模型数: <b>' + (p.model_count || 0) + '</b></div>' +
+      '<div class="actions">' +
+        '<button class="btn btn-p" onclick="openForm(\'' + esc(p.name).replace(/'/g,"\\'") + '\')">✏️ 编辑</button>' +
+        '<button class="btn btn-g" onclick="liveModels(\'' + esc(p.name).replace(/'/g,"\\'") + '\')" title="实时查询 /v1/models">🔍 查询支持的模型</button>' +
+        '<button class="btn btn-g" onclick="syncLive(\'' + esc(p.name).replace(/'/g,"\\'") + '\')" title="在线列表写回 provider.yaml">⇊ 同步入库</button>' +
+        (p.source !== 'builtin'
+          ? '<button class="btn btn-r" onclick="delProvider(\'' + esc(p.name).replace(/'/g,"\\'") + '\')">🗑 删除</button>'
+          : '') +
+      '</div>' +
+      '<div class="models"><div class="title">模型目录</div>' + (rows || '<div style="color:var(--text-dim);font-size:12px">（无）</div>') + '</div>' +
+      '<div id="live-' + esc(p.name) + '"></div>' +
+      '</div>';
+  }).join('');
+}
+
+// ── 供应商编辑 ──
+let editingProvider = null;
+function openForm(name) {
+  editingProvider = name || null;
+  const p = name ? (DATA.providers.find(x => x.name === name) || {}) : {};
+  $('pdlg-title').textContent = name ? '✏️ 编辑供应商：' + name : '➕ 新增供应商';
+  $('p-name').value = p.name || '';  $('p-name').disabled = !!name;
+  $('p-url').value = p.api_url || ''; $('p-key').value = '';
+  $('p-default').value = p.default_model || '';
+  $('p-desc').value = p.description || '';
+  $('p-models').value = (p.catalog || []).map(m => m.id).join(', ');
+  $('p-vision').checked = !!p.supports_vision;
+  $('p-think').checked = !!p.supports_reasoning;
+  $('dlg-provider').classList.add('show');
+}
+function closeForm() { $('dlg-provider').classList.remove('show'); }
+
+async function saveProvider() {
+  const name = $('p-name').value.trim();
+  if (!name) return status('供应商名称必填', false);
+  const models = $('p-models').value.split(',').map(s => s.trim()).filter(Boolean);
+  const payload = {
+    name,
+    api_url: $('p-url').value.trim(),
+    api_key: $('p-key').value.trim(),
+    default_model: $('p-default').value.trim(),
+    description: $('p-desc').value.trim(),
+    supports_vision: $('p-vision').checked,
+    supports_reasoning: $('p-think').checked,
+    models,
+  };
+  try {
+    const r = await fetch('/api/provider-store', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    closeForm(); status('已保存供应商 ' + name, true); refresh();
+  } catch (e) { status('保存失败: ' + e.message, false); }
+}
+
+async function delProvider(name) {
+  if (!confirm('确认删除供应商 ' + name + '？其模型目录一并删除。')) return;
+  try {
+    const r = await fetch('/api/provider-store/' + encodeURIComponent(name), {method:'DELETE'});
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    status('已删除 ' + name, true); refresh();
+  } catch (e) { status('删除失败: ' + e.message, false); }
+}
+
+// ── 模型能力编辑 ──
+async function openModelCfg(provider, model) {
+  $('m-provider').value = provider; $('m-id').value = model;
+  $('mdl-name').textContent = provider + ' / ' + model;
+  // 从目录取现有能力；未命中则启发式空
+  const p = DATA.providers.find(x => x.name === provider);
+  const m = (p && (p.catalog || []).find(x => x.id === model)) || {};
+  $('m-ctx').value = m.max_context_tokens || '';
+  $('m-out').value = m.max_output_tokens || '';
+  $('m-vision').checked = !!m.supports_vision;
+  $('m-reason').checked = !!m.supports_reasoning;
+  $('m-effort').value = m.reasoning_effort || '';
+  $('m-note').value = m.note || '';
+  $('dlg-model').classList.add('show');
+}
+function closeModelDlg() { $('dlg-model').classList.remove('show'); }
+
+async function saveModelCfg() {
+  const provider = $('m-provider').value, model = $('m-id').value;
+  const config = {
+    max_context_tokens: parseInt($('m-ctx').value || '0', 10) || 0,
+    max_output_tokens: parseInt($('m-out').value || '0', 10) || 0,
+    supports_vision: $('m-vision').checked,
+    supports_reasoning: $('m-reason').checked,
+    reasoning_effort: $('m-effort').value,
+    note: $('m-note').value.trim(),
+  };
+  try {
+    const r = await fetch('/api/provider-store/' + encodeURIComponent(provider) + '/model', {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({model, config}),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    closeModelDlg(); status('已保存模型能力 ' + model, true); refresh();
+  } catch (e) { status('保存失败: ' + e.message, false); }
+}
+
+async function delModel(provider, model) {
+  if (!confirm('删除模型 ' + provider + '/' + model + '？')) return;
+  try {
+    const r = await fetch('/api/provider-store/' + encodeURIComponent(provider) + '/model?model=' + encodeURIComponent(model), {method:'DELETE'});
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    status('已删除模型 ' + model, true); refresh();
+  } catch (e) { status('删除失败: ' + e.message, false); }
+}
+
+// ── 在线查询 / 同步 ──
+let liveState = {};
+async function liveModels(provider) {
+  const box = $('live-' + provider);
+  if (box) box.innerHTML = '<div style="font-size:12px;color:var(--text-dim)">查询中…</div>';
+  try {
+    const r = await fetch('/api/provider-store/' + encodeURIComponent(provider) + '/models?refresh=true');
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    const models = d.models || [];
+    if (!box) return;
+    box.className = 'live-box';
+    box.innerHTML = '<div style="margin-bottom:6px">🔍 在线模型 (' + (d.source || 'live') + ' · ' + models.length + ')</div>' +
+      (models.length ? models.map(m =>
+        '<div class="row"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,monospace">' + esc(m.id) + '</span>' +
+        '<button class="btn btn-g" onclick="addToCatalog(\'' + esc(provider) + '\',\'' + esc(m.id).replace(/'/g,"\\'") + '\')">入库</button></div>'
+      ).join('') : '<div style="color:var(--text-dim)">（无结果，可能需要 api_key）</div>');
+  } catch (e) {
+    if (box) { box.className = 'live-box'; box.innerHTML = '<div style="color:var(--danger)">查询失败: ' + esc(e.message) + '</div>'; }
+  }
+}
+
+async function syncLive(provider) {
+  try {
+    const r = await fetch('/api/provider-store/' + encodeURIComponent(provider) + '/models/sync', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}',
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    status('同步完成：新增 ' + (d.added||[]).length + ' 个模型', true); refresh();
+  } catch (e) { status('同步失败: ' + e.message, false); }
+}
+
+async function addToCatalog(provider, model) {
+  try {
+    const r = await fetch('/api/provider-store/' + encodeURIComponent(provider) + '/model', {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({model}),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    status('已入库 ' + model, true); refresh();
+  } catch (e) { status('入库失败: ' + e.message, false); }
+}
+
+$('q').addEventListener('input', render);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeForm(); closeModelDlg(); } });
+refresh();
+</script>
+</body>
+</html>

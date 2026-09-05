@@ -248,6 +248,11 @@ class Agent:
             else True
         )
 
+        # 工具档位与窗口：按实际所用模型（cheap/main）传递，供 LiteSession 精简工具集
+        _used = cheap_m if (self._use_cheap_model and cheap_m.api_key) else main_m
+        _used_ctx = int(getattr(_used, "max_context_tokens", 0) or 0)
+        _used_profile = str(getattr(_used, "tool_profile", "auto") or "auto")
+
         return LiteSession(
             toolkit=self._toolkit,
             api_key=api_key,
@@ -258,6 +263,8 @@ class Agent:
             reasoning_effort=cfg.reasoning_effort,
             max_iterations=cfg.max_iterations,
             supports_reasoning=supports_reasoning,
+            max_context_tokens=_used_ctx,
+            tool_profile=_used_profile,
         )
 
     def _build_online_session(self) -> OnlineToolSession:
@@ -296,6 +303,7 @@ class Agent:
             max_tool_output=cfg.max_tool_output,
             max_assistant_content=cfg.max_assistant_content,
             max_context_tokens=main_m.max_context_tokens,
+            tool_profile=main_m.tool_profile,
             extra_iterations_on_continue=cfg.extra_iterations_on_continue,
             memory_extraction_threshold=cfg.memory_extraction_threshold,
             memory_dedup_threshold=cfg.memory_dedup_threshold,

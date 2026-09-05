@@ -96,6 +96,9 @@ class ModelConfig:
     max_tokens: int = 131072
     max_context_tokens: int = 0
     top_p: float = 0.9
+    # 工具暴露档位（auto=按 max_context_tokens 推导 / full/standard/core/minimal/nano 显式）。
+    # 上下文受限模型（如 max_context_tokens<200K）时自动精简工具集，降低每请求固定开销。
+    tool_profile: str = "auto"
     # 模型级 token budget（借鉴 Codex model-owned token budget defaults）
     # 支持键: reminder_threshold / reminder_message_template /
     #         guidance_message / fallback_buffer_tokens / auto_compact_fallback_prompt
@@ -711,6 +714,10 @@ def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
         target.max_context_tokens = int(
             m_data.get("max_context_tokens", target.max_context_tokens)
         )
+        # 工具暴露档位（auto=按窗口推导；显式档位优先）
+        tp_val = m_data.get("tool_profile")
+        if isinstance(tp_val, str) and tp_val.strip():
+            target.tool_profile = tp_val.strip().lower()
         # 引用式下允许内联 options 覆盖（合并而非整体替换，避免丢 resolve 能力标记）
         if is_ref and isinstance(m_data.get("options"), dict):
             target.options.update(
@@ -1028,6 +1035,8 @@ def _prepare_model_data(cfg: AgentConfig, data: dict) -> None:
                 m_data["options"] = target.options
             if target.max_context_tokens:
                 m_data["max_context_tokens"] = target.max_context_tokens
+            if target.tool_profile and target.tool_profile != "auto":
+                m_data["tool_profile"] = target.tool_profile
             if target.token_budget:
                 m_data["token_budget"] = target.token_budget
             data[m_type] = m_data
@@ -1069,6 +1078,9 @@ def _prepare_ref_model_data(target: ModelConfig) -> dict | None:
         m_data["max_tokens"] = target.max_tokens
     if target.max_context_tokens and int(resolved.get("max_context_tokens") or 0) != target.max_context_tokens:
         m_data["max_context_tokens"] = target.max_context_tokens
+    # tool_profile 为使用侧配置（非 provider 能力）：显式设置才写入覆盖
+    if target.tool_profile and target.tool_profile != "auto":
+        m_data["tool_profile"] = target.tool_profile
     res_opts = resolved.get("options") or {}
     diff_opts = {
         k: v for k, v in (target.options or {}).items()
@@ -1220,6 +1232,7 @@ def _generate_config_template() -> str:
         "  max_tokens: 4096      # 最大输出 token 数\n"
         "  top_p: 0.9            # 核采样阈值\n"
         "  max_context_tokens: 0 # 模型上下文窗口（0=未配置时统一默认 1048576/1M，见 auto_compact.get_max_context_tokens；建议显式配置真实值）\n"
+        '  tool_profile: auto # 工具暴露档位 auto=按max_context_tokens推导 / full / standard / core / minimal / nano（上下文受限模型自动精简工具集，见 tea_agent.tool_profiles）\n'
         "  token_budget:         # 模型级 token 预算策略（可选，借鉴 Codex model-owned defaults）\n"
         "    reminder_threshold: 0.15          # 剩余低于 15% 时提醒模型主动总结\n"
         "    fallback_buffer_tokens: 20000     # 压缩前预留的缓冲 token\n"

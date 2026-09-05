@@ -55,14 +55,29 @@ def pstore(tmp_path: pathlib.Path, monkeypatch, agent_dir):
 
 # ── bootstrap / 迁移 ─────────────────────────────────────
 
-def test_bootstrap_builtins_plus_profiles(pstore):
+def test_bootstrap_config_profiles_only(pstore):
+    """bootstrap 只保留 config*.yaml 引用的供应商，不预置无 key 内置目录。"""
     data = pstore.load()
     provs = data["providers"]
-    assert "DeepSeek" in provs
-    assert "OpenAI" in provs  # 内置目录 bootstrap
+    assert "DeepSeek" in provs  # config.yaml/config_ds.yaml 引用
+    assert "OpenAI" not in provs  # 未配置的内置候选不再占位
     # config_ds 的模型并入 DeepSeek（同 url）；key 保留主 config 的（同 url 多 key 保留一个）
     assert "deepseek-chat" in provs["DeepSeek"]["models"]
     assert provs["DeepSeek"]["api_key"] == DS_MAIN
+
+
+def test_prune_unconfigured_builtins(pstore):
+    """prune_unconfigured：删除无 key 的内置占位，保留已配置（带 key）条目。"""
+    data = pstore.load()
+    data["providers"].setdefault("OpenAI", {
+        "api_url": "https://api.openai.com/v1", "api_key": "",
+        "source": "builtin", "models": {}})
+    data["providers"]["DeepSeek"]["api_key"] = DS_MAIN
+    pstore.save()
+    res = pstore.prune_unconfigured()
+    assert "OpenAI" in res["removed"]
+    provs = pstore.load()["providers"]
+    assert "OpenAI" not in provs and "DeepSeek" in provs
 
 
 def test_list_masks_key(pstore):

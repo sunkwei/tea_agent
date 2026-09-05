@@ -742,54 +742,6 @@ class ProviderStore:
             self.save()
         return {"provider": pkey, "added": added, "kept": kept, "total": len(models)}
 
-
-# ── 迁移入口（config*.yaml 供应商信息 → provider.yaml） ──────
-
-def migrate_from_configs(config_dir: str | Path | None = None,
-                         target: str | Path | None = None) -> dict:
-    """把既有 config*.yaml 的供应商信息（api_url/api_key/模型）写入 provider.yaml。
-
-    供「配置迁移」入口与首次 bootstrap 复用。重复执行幂等（同 url 多 key 保留一个，
-    以 config.yaml 主模型 key 优先；模型目录合并去重）。
-
-    Args:
-        config_dir: config*.yaml 所在目录，默认 ~/.tea_agent
-        target: 目标 provider.yaml 路径，默认 ~/.tea_agent/provider.yaml
-
-    Returns:
-        {"ok": True, "providers": N, "models": N, "profiles_scanned": N, "file": ...}
-    """
-    store = get_provider_store(target, agent_dir=config_dir)
-    base = Path(config_dir) if config_dir else store._cfg_dir()
-    data = store.load()  # 触发 bootstrap（含内置 + custom + config 迁移）
-    profiles = sorted(list(base.glob("config*.yaml")) + list(base.glob("config*.yml")))
-    # 重新扫描以统计（_bootstrap 已合并；此处确保 config 目录与 target 目录一致时幂等）
-    url_key: dict[str, str] = {}
-    for f in profiles:
-        try:
-            import yaml as _y
-
-            raw = _y.safe_load(f.read_text(encoding="utf-8")) or {}
-            mb = raw.get("main_model") if isinstance(raw.get("main_model"), dict) else {}
-            url = str(mb.get("api_url") or "").strip().rstrip("/").lower()
-            key = str(mb.get("api_key") or "").strip()
-            if url and key and (url not in url_key or f.name == "config.yaml"):
-                url_key[url] = key
-        except Exception:
-            continue
-    providers = data.setdefault("providers", {})
-    total_models = sum(len(p.get("models") or {}) for p in providers.values())
-    store.save()
-    return {
-        "ok": True,
-        "providers": len(providers),
-        "models": total_models,
-        "profiles_scanned": len(profiles),
-        "distinct_keys": len(url_key),
-        "file": str(store.file_path),
-    }
-
-
     # ── 在线模型查询 / 端点推断 ──────────────────────────────
 
     @staticmethod
@@ -813,28 +765,57 @@ def migrate_from_configs(config_dir: str | Path | None = None,
         return url + "/v1/chat/completions"
 
     def query_live_models(self, provider: str, api_key: str = "",
-                          timeout: int = 15) -> dict:
-        """实时查询某供应商的 /v1/models 在线模型列表（需已配置 api_key）。
+                          refresh: bool = False, timeout: int = 15) -> dict:
+        """实时查询某供应商的 /v1/models 在线模型列表；失败/无 key 时静态 fallback。
 
         Args:
             provider: 供应商名（p_name）
             api_key: 可选覆盖；留空使用 provider.yaml 中已存的 key
+            refresh: True=强制实时查询并更新缓存；False=5 分钟内优先返回缓存
             timeout: 请求超时秒数
 
         Returns:
-            {"ok": True, "provider", "endpoint", "models": [{"id", "owned_by"?}]}
-            或 {"ok": False, "error"}
+            {"ok": True, "provider", "endpoint", "source": live|static|cache,
+             "models": [...], "total": N} 或 {"ok": False, "error"}
         """
         p = self.get_provider(provider)
         if p is None:
-            return {"ok": False, "error": f"provider '{provider}' not found"}
+            return {"ok": False, "error": f"provider '{provider}' not found",
+                    "code": "NOT_FOUND"}
+        # 静态目录 fallback 视图（含逐模型能力，来自 models dict）
+        models_map = p.get("models") or {}
+        static_models = []
+        for mid in sorted(models_map, key=str.lower):
+            cfg = models_map[mid]
+            static_models.append({
+                "id": mid,
+                "max_context_tokens": int(cfg.get("max_context_tokens") or 0),
+                "max_output_tokens": int(cfg.get("max_output_tokens") or 0),
+                "supports_vision": bool(cfg.get("supports_vision", False)),
+                "supports_reasoning": bool(cfg.get("supports_reasoning", False)),
+                "note": cfg.get("note", ""),
+            })
+        base = {"provider": p["name"], "models": static_models,
+                "total": len(static_models), "endpoint": self._models_endpoint(p.get("api_url") or "")}
         key = api_key or (p.get("api_key") or "")
         api_url = p.get("api_url") or ""
-        if not key:
-            return {"ok": False, "error": f"provider '{provider}' 未配置 api_key，无法查询在线模型"}
+        if not key or not api_url:
+            base.update({"source": "static", "needs_key": not key})
+            return {"ok": True, **base}
+
+        cache_key = f"{p['name']}:{key}"
+        now = time.time()
+        cache = getattr(self, "_live_cache", None)
+        if cache is None:
+            cache = {}
+            self._live_cache = cache
+        if not refresh:
+            hit = cache.get(cache_key)
+            if hit and now - hit[0] < 300.0:
+                res = dict(hit[1])
+                res["source"] = "cache"
+                return {"ok": True, **res}
         endpoint = self._models_endpoint(api_url)
-        if not endpoint:
-            return {"ok": False, "error": f"invalid api_url: {api_url!r}"}
         import json
         import urllib.error as _err
         import urllib.request as _req
@@ -847,19 +828,24 @@ def migrate_from_configs(config_dir: str | Path | None = None,
         try:
             with _req.urlopen(req, timeout=timeout) as resp:  # noqa: S310
                 data = json.loads(resp.read().decode("utf-8"))
-        except _err.HTTPError as e:
-            body = e.read().decode("utf-8", errors="replace")[:300] if e.fp else ""
-            return {"ok": False, "error": f"HTTP {e.code}: {e.reason}"
-                    + (f" — {body}" if body else "")}
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
-        models = []
+        except Exception as e:  # 网络失败 → 静态 fallback（UI 永远有数据）
+            base.update({"source": "static", "error_hint": str(e)})
+            return {"ok": True, **base}
+        live_models = []
         for item in (data.get("data") or []) if isinstance(data, dict) else []:
             if isinstance(item, dict) and item.get("id"):
-                models.append({"id": item["id"],
-                               "owned_by": item.get("owned_by", "")})
-        return {"ok": True, "provider": p["name"], "endpoint": endpoint,
-                "models": models, "total": len(models)}
+                live_models.append({"id": item["id"],
+                                    "owned_by": item.get("owned_by", "")})
+        if not live_models and isinstance(data, dict) and data.get("error"):
+            base.update({"source": "static", "error_hint": str(data["error"])})
+            return {"ok": True, **base}
+        result = {"provider": p["name"], "endpoint": endpoint, "source": "live",
+                  "models": live_models, "total": len(live_models)}
+        cache[cache_key] = (now, result)
+        return {"ok": True, **result}
+
+    def test_connection(self, provider: str, model: str = "",
+                        api_key: str = "", timeout: int = 15) -> dict:
 
     def test_connection(self, provider: str, model: str = "",
                         api_key: str = "", timeout: int = 15) -> dict:

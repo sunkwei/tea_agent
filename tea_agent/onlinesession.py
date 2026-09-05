@@ -31,6 +31,7 @@ from tea_agent.session.prompts import (
 from tea_agent.session.tool_loop_runner import execute_tool_loop
 from tea_agent.session_pipeline import SessionPipeline
 from tea_agent.tool_hooks import tool_hooks
+from tea_agent.tool_profiles import filter_tools_by_profile, resolve_tool_profile
 
 logger = logging.getLogger("session")
 
@@ -1360,6 +1361,7 @@ class OnlineToolSession(BaseChatSession):
         max_tool_output: int = 128 * 1024,
         max_assistant_content: int = 128 * 1024,
         max_context_tokens: int = 0,
+        tool_profile: str = "auto",
         extra_iterations_on_continue: int = 5,
         memory_extraction_threshold: int = 2,
         memory_dedup_threshold: float = 0.6,
@@ -1445,6 +1447,9 @@ class OnlineToolSession(BaseChatSession):
 
         # 步骤4: 调用基类初始化
         BaseChatSession.__init__(self, model, max_history, sp)
+
+        # 工具暴露档位（auto=按窗口推导；显式档位优先）
+        self.tool_profile = (tool_profile or "auto").strip().lower()
 
         logger.info(
             f"OnlineToolSession init ok: main model: {model}, cheap model: {cheap_model}"
@@ -2378,13 +2383,30 @@ class OnlineToolSession(BaseChatSession):
         return execute_tool_loop(self, context)
 
     def _build_tools(self, tool_filter: list = None):
-        """构建工具定义列表。"""
-        # from tea_agent.session_tool_component import filter_tools
+        """构建工具定义列表。
+
+        Args:
+            tool_filter: 意图注入的 required_tools（None=常规路径）。
+                提供时暴露 = 核心集 ∪ 意图集（动态注入）；未提供时按
+                tool_profile 档位过滤（auto=按 max_context_tokens 推导），
+                控制每请求固定 token 开销（见 tea_agent.tool_profiles）。
+        """
         all_tools = self.tools_comp.build_tools()
-        self.tools = filter_tools(all_tools, tool_filter)
         if tool_filter:
+            self.tools = filter_tools(all_tools, tool_filter)
             logger.info(
                 f"[Pipe Dynamic] Tool Injection: enabled {len(self.tools)} tools based on intent"
+            )
+            return
+        # 常规路径：按工具档位过滤（档位在会话启动时解析，保持会话内稳定）
+        profile = resolve_tool_profile(
+            getattr(self.context, "max_context_tokens", 0) or 0,
+            explicit=getattr(self, "tool_profile", "auto"),
+        )
+        self.tools = filter_tools_by_profile(all_tools, profile)
+        if profile != "full":
+            logger.info(
+                f"[Tool Profile] {profile}: enabled {len(self.tools)}/{len(all_tools)} tools"
             )
 
     def update_tools(self):

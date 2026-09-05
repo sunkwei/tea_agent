@@ -253,6 +253,7 @@ class AgentModule(HotReloadModule):
             keep_turns=cfg.keep_turns, max_tool_output=cfg.max_tool_output,
             max_assistant_content=cfg.max_assistant_content,
             max_context_tokens=main_m.max_context_tokens,
+            tool_profile=main_m.tool_profile,
             extra_iterations_on_continue=cfg.extra_iterations_on_continue,
             memory_extraction_threshold=cfg.memory_extraction_threshold,
             storage=_storage,

@@ -30,6 +30,8 @@ class LiteSession:
         supports_reasoning: bool = True,
         allowed_tools: list[str] | None = None,  # 已废弃，保留参数仅为兼容性
         denied_tools: list[str] | None = None,  # 已废弃，保留参数仅为兼容性
+        max_context_tokens: int = 0,
+        tool_profile: str = "auto",
     ):
         self.toolkit = toolkit
         self.model = model
@@ -40,6 +42,8 @@ class LiteSession:
         self.max_iterations = max_iterations
         self.supports_reasoning = supports_reasoning
         self.interrupted = False
+        self.max_context_tokens = int(max_context_tokens or 0)
+        self.tool_profile = (tool_profile or "auto").strip().lower()
 
         # API 客户端
         # API 弹性：从配置读取超时与重试次数（网络中断/睡眠恢复容错）
@@ -72,14 +76,23 @@ class LiteSession:
         return DEFAULT_SYSTEM_PROMPT
 
     def _build_tools(self) -> list[dict]:
-        """构建工具定义列表（全部工具，无过滤）。"""
+        """构建工具定义列表（按 tool_profile 档位过滤）。
+
+        档位在会话启动时解析一次（resolve_tool_profile 由 max_context_tokens +
+        tool_profile 推导），保持会话内稳定，避免中途收缩破坏前缀缓存。
+        """
         tools = []
         if not self.toolkit:
             return tools
 
         # 仅暴露 LLM 可见工具（排除 harness_schema/export_last_pdf），名称排序保证顺序稳定
         from tea_agent.tlk import llm_tool_names
+        from tea_agent.tool_profiles import filter_tools_by_profile, resolve_tool_profile
 
+        profile = resolve_tool_profile(
+            self.max_context_tokens,
+            explicit=self.tool_profile,
+        )
         for name in llm_tool_names(self.toolkit.meta_map.keys()):
             try:
                 meta = self.toolkit.meta_map.get(name)
@@ -91,7 +104,12 @@ class LiteSession:
 
             tools.append(meta)
 
-        return tools
+        if profile == "full":
+            return tools
+        filtered = filter_tools_by_profile(tools, profile)
+        if len(filtered) != len(tools):
+            logger.info(f"[Tool Profile] {profile}: enabled {len(filtered)}/{len(tools)} tools")
+        return filtered
 
     def chat(
         self, user_input: str, callback: Callable[[str], None] | None = None

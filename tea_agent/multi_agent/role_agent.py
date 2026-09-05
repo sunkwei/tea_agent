@@ -202,6 +202,8 @@ class RoleAgent:
                 system_prompt=system_prompt,
                 enable_thinking=self.enable_thinking,
                 max_iterations=self.max_iterations,
+                max_context_tokens=int(getattr(main_m, "max_context_tokens", 0) or 0),
+                tool_profile=str(getattr(main_m, "tool_profile", "auto") or "auto"),
             )
             self._session = sess
 

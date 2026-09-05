@@ -40,74 +40,14 @@ _BOOL_FIELDS = {"supports_thinking", "supports_vision", "supports_tools"}
 _STR_FIELDS = {"note": 200}
 CFG_FIELDS = set(_INT_FIELDS) | set(_BOOL_FIELDS) | set(_STR_FIELDS)
 
-# 常用模型能力速查表（bootstrap 与 heuristic 兜底；单位=token）
-_KNOWN_MODELS: dict[str, dict] = {
-    # DeepSeek
-    "deepseek-chat": {"max_context_tokens": 128_000, "max_output_tokens": 8_192},
-    "deepseek-chat-v3-0324": {"max_context_tokens": 128_000, "max_output_tokens": 8_192},
-    "deepseek-reasoner": {"max_context_tokens": 128_000, "max_output_tokens": 64_000,
-                          "supports_thinking": True},
-    "deepseek-v4-flash": {"max_context_tokens": 1_000_000, "max_output_tokens": 384_000,
-                          "supports_thinking": True},
-    "deepseek-v4-pro": {"max_context_tokens": 1_000_000, "max_output_tokens": 384_000,
-                        "supports_thinking": True},
-    "deepseek-v4-flash-vision-exp": {"max_context_tokens": 1_000_000, "max_output_tokens": 384_000,
-                                     "supports_thinking": True, "supports_vision": True},
-    # OpenAI
-    "gpt-4o": {"max_context_tokens": 128_000, "max_output_tokens": 16_384, "supports_vision": True},
-    "gpt-4o-mini": {"max_context_tokens": 128_000, "max_output_tokens": 16_384, "supports_vision": True},
-    "gpt-4-turbo": {"max_context_tokens": 128_000, "max_output_tokens": 4_096, "supports_vision": True},
-    "gpt-4.1": {"max_context_tokens": 1_000_000, "max_output_tokens": 32_768, "supports_vision": True},
-    "gpt-4.1-mini": {"max_context_tokens": 1_000_000, "max_output_tokens": 32_768, "supports_vision": True},
-    "o3": {"max_context_tokens": 200_000, "max_output_tokens": 100_000, "supports_thinking": True},
-    "o4-mini": {"max_context_tokens": 200_000, "max_output_tokens": 100_000, "supports_thinking": True},
-    # Anthropic
-    "claude-sonnet-4-20250514": {"max_context_tokens": 200_000, "max_output_tokens": 64_000,
-                                 "supports_thinking": True, "supports_vision": True},
-    "claude-4-opus-20250514": {"max_context_tokens": 200_000, "max_output_tokens": 32_000,
-                               "supports_thinking": True, "supports_vision": True},
-    "claude-3-5-sonnet-20241022": {"max_context_tokens": 200_000, "max_output_tokens": 8_192,
-                                   "supports_vision": True},
-    # Google
-    "gemini-2.5-pro-exp-03-25": {"max_context_tokens": 1_048_576, "max_output_tokens": 65_536,
-                                 "supports_thinking": True, "supports_vision": True},
-    "gemini-2.5-flash-preview-04-17": {"max_context_tokens": 1_048_576, "max_output_tokens": 65_536,
-                                       "supports_thinking": True, "supports_vision": True},
-    "gemini-2.0-flash": {"max_context_tokens": 1_048_576, "max_output_tokens": 8_192,
-                         "supports_vision": True},
-    "gemini-2.0-flash-lite": {"max_context_tokens": 1_048_576, "max_output_tokens": 8_192,
-                              "supports_vision": True},
-    # Qwen / Moonshot
-    "qwen-max": {"max_context_tokens": 32_768, "max_output_tokens": 8_192},
-    "qwen-plus": {"max_context_tokens": 128_000, "max_output_tokens": 8_192},
-    "qwen3-235b-a22b": {"max_context_tokens": 128_000, "max_output_tokens": 16_384,
-                        "supports_thinking": True},
-    "moonshot-v1-8k": {"max_context_tokens": 8_192, "max_output_tokens": 4_096},
-    "moonshot-v1-32k": {"max_context_tokens": 32_768, "max_output_tokens": 4_096},
-    "moonshot-v1-128k": {"max_context_tokens": 128_000, "max_output_tokens": 4_096},
-}
+# ── 已删除：内置模型能力速查表/家族窗口/名称正则推断（2026-09-06）──
+# 模型属性（max_context_tokens / max_output_tokens / 能力标记）一律以
+# ~/.tea_agent/provider.yaml 为唯一事实源；代码不再内置/猜测任何模型属性，
+# 避免「未收录模型被猜出错误窗口」误导上下文预算与 tool_profile 分档。
 
-_THINK_RE = re.compile(
-    r"(reason|r1|thinking|o1-|o3|o4|qwen3|qwq|kimi-k2|deepseek-v4|v4-pro|v4-flash|gemini-2\.5"
-    r"|glm-4\.[56]|seed.*thinking)", re.I)
-_VISION_RE = re.compile(
-    r"(vision|\bvl\b|omni|gemini|gpt-4o|claude-(3|4)|qwen-vl|glm-4v|internvl|kimi-vision"
-    r"|minicpm-v)", re.I)
-_CTX_SUFFIX_RE = re.compile(r"[-_](\d+(?:\.\d+)?)(k|m)\b", re.I)
-
-# 家族级上下文窗口默认（按序匹配；仅当速查表与名称后缀均未命中时生效）
-_FAMILY_CTX: list[tuple[re.Pattern, int]] = [
-    (re.compile(r"gemini", re.I), 1_048_576),
-    (re.compile(r"deepseek-v4|v4-pro|v4-flash", re.I), 1_000_000),
-    (re.compile(r"claude", re.I), 200_000),
-    (re.compile(r"^(o1|o3|o4)", re.I), 200_000),
-    (re.compile(r"kimi|moonshot", re.I), 131_072),
-    (re.compile(r"qwen", re.I), 131_072),
-    (re.compile(r"deepseek", re.I), 128_000),
-]
-
-_DEFAULT_CTX = 128_000
-_DEFAULT_OUT = 8_192
+# 中性默认（未知模型配置的占位；非模型属性猜测）
+_DEFAULT_CTX = 0
+_DEFAULT_OUT = 0
 
 
 def _blank_config() -> dict:
@@ -122,37 +62,30 @@ def _blank_config() -> dict:
 
 
 def guess_model_config(model_id: str, provider_caps: dict | None = None) -> dict:
-    """按模型名启发式猜测能力配置（速查表 → 名称 pattern → 全局默认）。
+    """返回模型配置：不再内置/猜测任何模型属性（2026-09-06 起仅以 provider.yaml 为准）。
+
+    背景：provider.yaml 是唯一事实源；运行期模型属性（max_context_tokens /
+    max_output_tokens / 能力标记）一律从 provider.yaml 的模型条目解析。
+    代码不再维护速查表 / 家族窗口 / 名称 pattern 推断，以免「未收录模型被猜出
+    错误窗口（如 qwen→131K）」误导上下文预算与 tool_profile 分档。
+
+    本函数仅用于：provider.yaml 无该模型时返回「全未知/中性」配置，
+    能力标记只继承 provider_caps（提供商在 provider.yaml 声明的能力）。
+    如需能力与窗口，请在该 provider 的 models.<m_name> 显式配置。
 
     Args:
-        model_id: 模型 id，如 deepseek-chat / gemini-2.5-pro
-        provider_caps: 提供商级能力 {supports_thinking: bool, supports_vision: bool}，
-                       模型名无线索时作为兜底（提供商声明能力一般对其主力模型成立）。
+        model_id: 模型 id（保留入参仅为兼容签名，不再参与任何推断）
+        provider_caps: 提供商级能力 {supports_thinking: bool, supports_vision: bool}
+
+    Returns:
+        中性配置 dict（max_context_tokens/max_output_tokens=0 表示未知）
     """
     cfg = _blank_config()
-    mid = (model_id or "").strip()
-    low = mid.lower()
-    known = _KNOWN_MODELS.get(low)
-    if known:
-        cfg.update(known)
-    # 名称后缀上下文标记：moonshot-v1-32k / ernie-4.5-8k / llama-3.1-70b-128k
-    m = _CTX_SUFFIX_RE.search(low)
-    if m and not known:
-        n, unit = float(m.group(1)), m.group(2).lower()
-        cfg["max_context_tokens"] = int(n * (1_048_576 if unit == "m" else 1024))
-    elif not known:
-        for pat, fam_ctx in _FAMILY_CTX:
-            if pat.search(low):
-                cfg["max_context_tokens"] = fam_ctx
-                break
-    if _THINK_RE.search(low):
-        cfg["supports_thinking"] = True
-    if _VISION_RE.search(low):
-        cfg["supports_vision"] = True
     if provider_caps:
-        if provider_caps.get("supports_thinking") and not _KNOWN_MODELS.get(low):
+        # 仅继承提供商在 provider.yaml 显式声明的能力；不再按模型名启发
+        if provider_caps.get("supports_thinking"):
             cfg["supports_thinking"] = True
-        if provider_caps.get("supports_vision") and not _KNOWN_MODELS.get(low):
+        if provider_caps.get("supports_vision"):
             cfg["supports_vision"] = True
     return cfg
 

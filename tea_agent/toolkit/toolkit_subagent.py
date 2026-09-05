@@ -262,6 +262,8 @@ def _execute_subagent(
             max_iterations=max_iterations,
             allowed_tools=allowed_tools,
             denied_tools=denied_tools,
+            max_context_tokens=int(getattr(main_m, "max_context_tokens", 0) or 0),
+            tool_profile=str(getattr(main_m, "tool_profile", "auto") or "auto"),
         )
 
         # 执行

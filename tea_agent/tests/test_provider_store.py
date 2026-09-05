@@ -116,12 +116,16 @@ def test_model_crud_and_sync(pstore):
 
 
 def test_resolve_flat_metadata(pstore):
+    # 属性来自 provider.yaml（先显式写入模型条目再 resolve；代码不内置属性）
+    pstore.upsert_model("DeepSeek", "deepseek-v4-pro", {
+        "max_context_tokens": 1_000_000, "max_output_tokens": 384_000,
+        "supports_vision": True, "supports_reasoning": True})
     r = pstore.resolve("DeepSeek", "deepseek-v4-pro")
     assert r and r["provider"] == "DeepSeek"
     assert r["model"] == "deepseek-v4-pro"
     assert r["api_url"] == "https://api.deepseek.com"
     assert r["api_key"] == DS_MAIN  # 主 config key 保留
-    assert int(r["max_output_tokens"]) > 0
+    assert int(r["max_output_tokens"]) == 384_000  # 属性来自 provider.yaml 显式条目
     assert "supports_vision" in r and "supports_reasoning" in r
 
 

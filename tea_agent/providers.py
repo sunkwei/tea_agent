@@ -1,22 +1,19 @@
-"""LLM Provider 目录 — 仿 DeepSeek Harness 的「供应商 → 模型」两级模型库
+"""LLM Provider 目录 — 纯引导目录（模型属性唯一来源 = provider.yaml）
 
-每个 Provider（供应商）包含：
-  - api_url:         OpenAI 兼容端点
-  - default_model:   默认模型 id（必须存在于 models 内）
-  - supports_*:      供应商级能力兜底（某模型未单独声明时继承）
-  - models:          模型条目列表。每条可写成两种形态：
-       1) 简写字符串：{"models": ["deepseek-chat"]}              ← 仅 id，无元数据
-       2) 富条目对象：{"models": [{"id": "...", "context_window": ...}]}  ← 推荐
-     富条目字段：
-       - id:                  模型 id（必填）
-       - context_window:      最大上下文窗口（tokens）
-       - max_output_tokens:   最大单次输出（tokens）→ 对应 config 的 max_tokens
-       - supports_vision:     视觉能力（缺省继承供应商级）
-       - supports_thinking:   思考/推理能力（缺省继承供应商级）
-       - description:         一句话说明（UI 展示用）
+自 2026-09-06 起，代码内**不再内置任何模型属性**（context_window /
+max_output_tokens / supports_vision / supports_thinking 等）。本文件的
+PROVIDERS 仅作「新装引导/面板端点参考」：
 
-目录数据为「预置参考值」：上下文窗口/输出上限/能力标记随厂商发布而演进，
-切换后仍可在 config.yaml 或「配置」弹窗内细调，不会写死运行时行为。
+  - api_url / default_model / description：供应商端点的静态引导信息
+  - models: 纯 id 字符串列表（仅 id，无任何能力/窗口元数据）
+
+模型运行期属性（max_context_tokens / max_output_tokens / 能力标记）一律从
+~/.tea_agent/provider.yaml 的 models.<m_name> 条目解析；未收录模型 → 0=未知，
+需在 provider.yaml 显式配置（tool_profile 分档等据此保守处理）。
+
+兼容说明：model_entries()/get_model() 仍接受外部传入的富条目 dict
+（来自 provider.yaml / custom / config profile 迁移），以支持历史数据；
+但内置 PROVIDERS 自身不再携带富条目。
 """
 
 from __future__ import annotations
@@ -25,32 +22,6 @@ from typing import Any
 
 
 # ── 模型条目小工具 ──────────────────────────────────────────
-
-
-def _m(
-    model_id: str,
-    context_window: int = 0,
-    max_output_tokens: int = 0,
-    supports_vision: bool | None = None,
-    supports_thinking: bool | None = None,
-    description: str = "",
-) -> dict[str, Any]:
-    """构造富模型条目；0 / None / 空 的字段自动省略。
-
-    返回字段与 config.ModelConfig / options 一一对应，避免切换时映射错位。
-    """
-    entry: dict[str, Any] = {"id": model_id}
-    if context_window:
-        entry["context_window"] = context_window
-    if max_output_tokens:
-        entry["max_output_tokens"] = max_output_tokens
-    if supports_vision is not None:
-        entry["supports_vision"] = supports_vision
-    if supports_thinking is not None:
-        entry["supports_thinking"] = supports_thinking
-    if description:
-        entry["description"] = description
-    return entry
 
 
 def _normalize_model_entry(entry: str | dict[str, Any]) -> dict[str, Any] | None:
@@ -131,16 +102,16 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "OpenAI GPT / o 系列",
         "models": [
-            _m("gpt-4o", 128000, 16384, True, False, "均衡旗舰，支持视觉"),
-            _m("gpt-4o-mini", 128000, 16384, True, False, "轻量便宜，支持视觉"),
-            _m("gpt-4-turbo", 128000, 4096, True, False, "旧代大窗口"),
-            _m("gpt-4.1", 1047576, 32768, True, False, "超长上下文旗舰"),
-            _m("gpt-4.1-mini", 1047576, 32768, True, False, "超长上下文轻量"),
-            _m("gpt-4.1-nano", 1047576, 32768, True, False, "超长上下文极轻"),
-            _m("o3", 200000, 100000, False, True, "深度推理"),
-            _m("o3-mini", 200000, 100000, False, True, "轻量推理"),
-            _m("o4-mini", 200000, 100000, False, True, "新一代小推理"),
-            _m("o1", 200000, 100000, False, True, "旧代推理"),
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4-turbo",
+            "gpt-4.1",
+            "gpt-4.1-mini",
+            "gpt-4.1-nano",
+            "o3",
+            "o3-mini",
+            "o4-mini",
+            "o1",
         ],
     },
     # ═══════════════ Anthropic ═══════════════
@@ -151,14 +122,14 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "Anthropic Claude",
         "models": [
-            _m("claude-sonnet-4-20250514", 200000, 64000, True, True, "均衡旗舰（默认）"),
-            _m("claude-4-opus-20250514", 200000, 32000, True, True, "最强旗舰"),
-            _m("claude-opus-4-20250514", 200000, 32000, True, True, "Opus 4 别名"),
-            _m("claude-3-5-sonnet-20241022", 200000, 8192, True, True, "旧代 Sonnet"),
-            _m("claude-3-opus-20240229", 200000, 8192, True, False, "旧代 Opus"),
-            _m("claude-3-haiku-20240307", 200000, 8192, True, False, "旧代快模型"),
-            _m("claude-sonnet-4-5", 200000, 64000, True, True, "Sonnet 4.5"),
-            _m("claude-opus-4-5", 200000, 64000, True, True, "Opus 4.5"),
+            "claude-sonnet-4-20250514",
+            "claude-4-opus-20250514",
+            "claude-opus-4-20250514",
+            "claude-3-5-sonnet-20241022",
+            "claude-3-opus-20240229",
+            "claude-3-haiku-20240307",
+            "claude-sonnet-4-5",
+            "claude-opus-4-5",
         ],
     },
     # ═══════════════ Google Gemini ═══════════════
@@ -169,13 +140,13 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "Google Gemini（OpenAI 兼容端点）",
         "models": [
-            _m("gemini-2.5-pro", 1048576, 65536, True, True, "旗舰，1M 窗口"),
-            _m("gemini-2.5-pro-exp-03-25", 1048576, 65536, True, True, "Pro 实验版"),
-            _m("gemini-2.5-flash", 1048576, 65536, True, True, "快速，1M 窗口"),
-            _m("gemini-2.5-flash-preview-04-17", 1048576, 65536, True, True, "Flash 预览"),
-            _m("gemini-2.0-flash", 1048576, 8192, True, True, "旧代 Flash"),
-            _m("gemini-2.0-flash-lite", 1048576, 8192, True, False, "旧代极轻"),
-            _m("gemini-2.5-flash-lite", 1048576, 65536, True, True, "极轻 Flash"),
+            "gemini-2.5-pro",
+            "gemini-2.5-pro-exp-03-25",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-preview-04-17",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
+            "gemini-2.5-flash-lite",
         ],
     },
     # ═══════════════ DeepSeek ═══════════════
@@ -186,12 +157,12 @@ PROVIDERS = {
         "supports_vision": True,
         "description": "DeepSeek（deepseek-v4-flash-vision-exp 为视觉模型）",
         "models": [
-            _m("deepseek-chat", 131072, 8192, False, True, "对话/工具主力"),
-            _m("deepseek-reasoner", 131072, 65536, False, True, "深度推理（R1 系）"),
-            _m("deepseek-chat-v3-0324", 131072, 8192, False, True, "V3.2 快照"),
-            _m("deepseek-v4-flash", 1048576, 131072, False, True, "V4 轻旗舰，1M 窗口"),
-            _m("deepseek-v4-flash-vision-exp", 1048576, 131072, True, True, "V4 视觉实验"),
-            _m("deepseek-v4-pro", 1048576, 131072, False, True, "V4 旗舰"),
+            "deepseek-chat",
+            "deepseek-reasoner",
+            "deepseek-chat-v3-0324",
+            "deepseek-v4-flash",
+            "deepseek-v4-flash-vision-exp",
+            "deepseek-v4-pro",
         ],
     },
     # ═══════════════ Alibaba / Qwen ═══════════════
@@ -202,17 +173,17 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "阿里云百炼（Qwen）",
         "models": [
-            _m("qwen-max", 131072, 8192, False, False, "Max 档"),
-            _m("qwen-plus", 131072, 8192, False, False, "Plus 档"),
-            _m("qwen-turbo", 131072, 8192, False, False, "Turbo 快档"),
-            _m("qwen-long", 10000000, 8192, False, False, "长文档档"),
-            _m("qwen-vl-max", 32768, 8192, True, False, "视觉 Max"),
-            _m("qwen-vl-plus", 32768, 8192, True, False, "视觉 Plus"),
-            _m("qwen3-max", 262144, 8192, False, True, "Qwen3 旗舰"),
-            _m("qwen3-235b-a22b", 262144, 16384, False, True, "Qwen3 MoE 大杯"),
-            _m("qwen3-30b-a3b", 131072, 16384, False, True, "Qwen3 MoE 小杯"),
-            _m("qwen3-flash", 131072, 8192, False, True, "Qwen3 快档"),
-            _m("qwen3.5-max", 262144, 16384, False, True, "Qwen3.5 旗舰"),
+            "qwen-max",
+            "qwen-plus",
+            "qwen-turbo",
+            "qwen-long",
+            "qwen-vl-max",
+            "qwen-vl-plus",
+            "qwen3-max",
+            "qwen3-235b-a22b",
+            "qwen3-30b-a3b",
+            "qwen3-flash",
+            "qwen3.5-max",
         ],
     },
     # ═══════════════ Zhipu / GLM ═══════════════
@@ -223,14 +194,14 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "智谱 GLM",
         "models": [
-            _m("GLM-5.2-Flash", 262144, 16384, True, True, "新旗舰快档"),
-            _m("GLM-5.2-Plus", 262144, 32768, True, True, "新旗舰 Plus"),
-            _m("GLM-5-Flash", 131072, 8192, True, True, "5 代快档"),
-            _m("GLM-4-Plus", 131072, 8192, False, False, "4 代 Plus"),
-            _m("GLM-4-Air", 131072, 8192, False, False, "4 代轻量"),
-            _m("GLM-4V-Plus", 131072, 8192, True, False, "4 代视觉"),
-            _m("glm-4.5", 131072, 8192, True, True, "4.5 快档"),
-            _m("glm-4.6", 131072, 8192, True, True, "4.6 快档"),
+            "GLM-5.2-Flash",
+            "GLM-5.2-Plus",
+            "GLM-5-Flash",
+            "GLM-4-Plus",
+            "GLM-4-Air",
+            "GLM-4V-Plus",
+            "glm-4.5",
+            "glm-4.6",
         ],
     },
     # ═══════════════ Moonshot / Kimi ═══════════════
@@ -240,12 +211,12 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "月之暗面 Kimi",
         "models": [
-            _m("kimi-k2", 131072, 16384, False, True, "K2 主力"),
-            _m("kimi-k2-thinking", 131072, 16384, False, True, "K2 推理增强"),
-            _m("kimi-latest", 131072, 16384, False, False, "最新快档"),
-            _m("moonshot-v1-8k", 8192, 4096, False, False, "V1 8K"),
-            _m("moonshot-v1-32k", 32768, 4096, False, False, "V1 32K"),
-            _m("moonshot-v1-128k", 131072, 4096, False, False, "V1 128K"),
+            "kimi-k2",
+            "kimi-k2-thinking",
+            "kimi-latest",
+            "moonshot-v1-8k",
+            "moonshot-v1-32k",
+            "moonshot-v1-128k",
         ],
     },
     # ═══════════════ Groq ═══════════════
@@ -255,13 +226,13 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "极速推理 API",
         "models": [
-            _m("llama-4-scout-17b-16e-instruct", 1048576, 8192, True, False, "Llama4 Scout"),
-            _m("llama-4-maverick-17b-128e-instruct", 1048576, 8192, True, False, "Llama4 Maverick"),
-            _m("llama-3.3-70b-versatile", 131072, 32768, False, False, "Llama3.3 70B"),
-            _m("llama-3.1-8b-instant", 131072, 8192, False, False, "Llama3.1 8B"),
-            _m("deepseek-r1-distill-llama-70b", 131072, 32768, False, True, "R1 蒸馏 70B"),
-            _m("qwen-2.5-coder-32b", 131072, 8192, False, False, "Qwen 编程 32B"),
-            _m("mixtral-8x7b-32768", 32768, 8192, False, False, "Mixtral MoE"),
+            "llama-4-scout-17b-16e-instruct",
+            "llama-4-maverick-17b-128e-instruct",
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+            "deepseek-r1-distill-llama-70b",
+            "qwen-2.5-coder-32b",
+            "mixtral-8x7b-32768",
         ],
     },
     # ═══════════════ Mistral ═══════════════
@@ -271,12 +242,12 @@ PROVIDERS = {
         "supports_vision": True,
         "description": "Mistral AI",
         "models": [
-            _m("mistral-large-latest", 131072, 32768, False, False, "Large 旗舰"),
-            _m("mistral-medium-latest", 32768, 8192, False, False, "Medium"),
-            _m("mistral-small-latest", 32768, 8192, False, False, "Small 轻量"),
-            _m("mistral-moderation-latest", 32768, 1024, False, False, "审核"),
-            _m("codestral-latest", 131072, 32768, False, False, "编程专用"),
-            _m("pixtral-large-latest", 131072, 32768, True, False, "视觉 Large"),
+            "mistral-large-latest",
+            "mistral-medium-latest",
+            "mistral-small-latest",
+            "mistral-moderation-latest",
+            "codestral-latest",
+            "pixtral-large-latest",
         ],
     },
     # ═══════════════ xAI ═══════════════
@@ -287,12 +258,12 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "xAI Grok",
         "models": [
-            _m("grok-4", 262144, 131072, True, True, "Grok 4 旗舰"),
-            _m("grok-4-fast", 262144, 131072, True, True, "Grok 4 快档"),
-            _m("grok-3", 131072, 65536, True, True, "Grok 3"),
-            _m("grok-3-mini", 131072, 32768, True, True, "Grok 3 轻量"),
-            _m("grok-2", 131072, 32768, True, False, "Grok 2"),
-            _m("grok-beta", 131072, 8192, False, False, "Beta"),
+            "grok-4",
+            "grok-4-fast",
+            "grok-3",
+            "grok-3-mini",
+            "grok-2",
+            "grok-beta",
         ],
     },
     # ═══════════════ Cohere ═══════════════
@@ -301,10 +272,10 @@ PROVIDERS = {
         "default_model": "command-a",
         "description": "Cohere Command",
         "models": [
-            _m("command-a", 262144, 8192, False, False, "旗舰"),
-            _m("command-r-plus", 131072, 4096, False, False, "R+"),
-            _m("command-r", 131072, 4096, False, False, "R"),
-            _m("command-r7b", 131072, 4096, False, False, "7B 轻量"),
+            "command-a",
+            "command-r-plus",
+            "command-r",
+            "command-r7b",
         ],
     },
     # ═══════════════ Perplexity ═══════════════
@@ -314,9 +285,9 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "Perplexity Sonar（联网搜索）",
         "models": [
-            _m("sonar-pro", 200000, 16384, False, True, "Pro"),
-            _m("sonar", 131072, 8192, False, False, "标准"),
-            _m("sonar-reasoning", 131072, 8192, False, True, "推理档"),
+            "sonar-pro",
+            "sonar",
+            "sonar-reasoning",
         ],
     },
     # ═══════════════ OpenRouter ═══════════════
@@ -327,19 +298,19 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "300+ 模型统一接口",
         "models": [
-            _m("anthropic/claude-sonnet-4", 200000, 64000, True, True, "Claude Sonnet 4"),
-            _m("anthropic/claude-opus-4", 200000, 32000, True, True, "Claude Opus 4"),
-            _m("anthropic/claude-3.5-sonnet", 200000, 8192, True, True, "Claude 3.5"),
-            _m("openai/gpt-4o", 128000, 16384, True, False, "GPT-4o"),
-            _m("openai/o3-mini", 200000, 100000, False, True, "o3-mini"),
-            _m("google/gemini-2.5-pro", 1048576, 65536, True, True, "Gemini 2.5 Pro"),
-            _m("deepseek/deepseek-chat", 131072, 8192, False, False, "DeepSeek Chat"),
-            _m("deepseek/deepseek-r1", 131072, 65536, False, True, "DeepSeek R1"),
-            _m("meta-llama/llama-4-scout", 1048576, 8192, True, False, "Llama4 Scout"),
-            _m("qwen/qwen-3-235b-a22b", 262144, 16384, False, True, "Qwen3 235B"),
-            _m("mistral/mistral-large", 131072, 32768, False, False, "Mistral Large"),
-            _m("cohere/command-r-plus", 131072, 4096, False, False, "Command R+"),
-            _m("x-ai/grok-3", 131072, 65536, True, True, "Grok 3"),
+            "anthropic/claude-sonnet-4",
+            "anthropic/claude-opus-4",
+            "anthropic/claude-3.5-sonnet",
+            "openai/gpt-4o",
+            "openai/o3-mini",
+            "google/gemini-2.5-pro",
+            "deepseek/deepseek-chat",
+            "deepseek/deepseek-r1",
+            "meta-llama/llama-4-scout",
+            "qwen/qwen-3-235b-a22b",
+            "mistral/mistral-large",
+            "cohere/command-r-plus",
+            "x-ai/grok-3",
         ],
     },
     # ═══════════════ SiliconFlow ═══════════════
@@ -350,14 +321,14 @@ PROVIDERS = {
         "supports_vision": True,
         "description": "硅基流动（开源模型托管）",
         "models": [
-            _m("Qwen/Qwen3-235B-A22B", 262144, 16384, False, True, "Qwen3 MoE"),
-            _m("Qwen/Qwen3-30B-A3B", 131072, 16384, False, True, "Qwen3 轻 MoE"),
-            _m("Qwen/Qwen3-8B", 131072, 16384, False, True, "Qwen3 8B"),
-            _m("deepseek-ai/DeepSeek-V3.2", 131072, 8192, False, True, "DeepSeek V3.2"),
-            _m("deepseek-ai/DeepSeek-R1", 131072, 65536, False, True, "DeepSeek R1"),
-            _m("meta-llama/Llama-4-Scout-17B-16E-Instruct", 1048576, 8192, True, False, "Llama4 Scout"),
-            _m("THUDM/GLM-4.6", 131072, 8192, True, True, "GLM 4.6"),
-            _m("Pro/Qwen/Qwen2.5-VL-7B-Instruct", 32768, 8192, True, False, "Qwen VL 7B"),
+            "Qwen/Qwen3-235B-A22B",
+            "Qwen/Qwen3-30B-A3B",
+            "Qwen/Qwen3-8B",
+            "deepseek-ai/DeepSeek-V3.2",
+            "deepseek-ai/DeepSeek-R1",
+            "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+            "THUDM/GLM-4.6",
+            "Pro/Qwen/Qwen2.5-VL-7B-Instruct",
         ],
     },
     # ═══════════════ Together ═══════════════
@@ -368,12 +339,12 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "Together AI（开源模型云）",
         "models": [
-            _m("meta-llama/Llama-4-Scout-17B-16E-Instruct", 1048576, 8192, True, False, "Llama4 Scout"),
-            _m("meta-llama/Llama-3.3-70B-Instruct-Turbo", 131072, 32768, False, False, "Llama3.3 70B"),
-            _m("meta-llama/Llama-3.1-405B-Instruct-Turbo", 131072, 8192, False, False, "Llama3.1 405B"),
-            _m("deepseek-ai/DeepSeek-V3.2", 131072, 8192, False, True, "DeepSeek V3.2"),
-            _m("Qwen/Qwen3-235B-A22B", 262144, 16384, False, True, "Qwen3 MoE"),
-            _m("mistralai/Mixtral-8x22B-Instruct-v0.1", 65536, 8192, False, False, "Mixtral 8x22B"),
+            "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+            "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+            "meta-llama/Llama-3.1-405B-Instruct-Turbo",
+            "deepseek-ai/DeepSeek-V3.2",
+            "Qwen/Qwen3-235B-A22B",
+            "mistralai/Mixtral-8x22B-Instruct-v0.1",
         ],
     },
     # ═══════════════ Fireworks ═══════════════
@@ -383,17 +354,10 @@ PROVIDERS = {
         "supports_vision": True,
         "description": "Fireworks AI 快速推理",
         "models": [
-            _m("accounts/fireworks/models/llama-v4-scout-17b-16e-instruct", 1048576, 8192, True, False, "Llama4 Scout"),
-            _m(
-                "accounts/fireworks/models/llama-v4-maverick-17b-128e-instruct",
-                1048576,
-                8192,
-                True,
-                False,
-                "Llama4 Maverick",
-            ),
-            _m("accounts/fireworks/models/llama-v3p1-70b-instruct", 131072, 8192, False, False, "Llama3.3 70B"),
-            _m("accounts/fireworks/models/qwen3-235b-a22b-instruct", 262144, 16384, False, True, "Qwen3 MoE"),
+            "accounts/fireworks/models/llama-v4-scout-17b-16e-instruct",
+            "accounts/fireworks/models/llama-v4-maverick-17b-128e-instruct",
+            "accounts/fireworks/models/llama-v3p1-70b-instruct",
+            "accounts/fireworks/models/qwen3-235b-a22b-instruct",
         ],
     },
     # ═══════════════ DeepInfra ═══════════════
@@ -404,10 +368,10 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "DeepInfra 托管推理",
         "models": [
-            _m("meta-llama/Llama-4-Scout-17B-16E-Instruct", 1048576, 8192, True, False, "Llama4 Scout"),
-            _m("meta-llama/Llama-3.3-70B-Instruct", 131072, 8192, False, False, "Llama3.3 70B"),
-            _m("deepseek-ai/DeepSeek-R1", 131072, 65536, False, True, "DeepSeek R1"),
-            _m("Qwen/Qwen3-235B-A22B", 262144, 16384, False, True, "Qwen3 MoE"),
+            "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+            "meta-llama/Llama-3.3-70B-Instruct",
+            "deepseek-ai/DeepSeek-R1",
+            "Qwen/Qwen3-235B-A22B",
         ],
     },
     # ═══════════════ Ollama（本地） ═══════════════
@@ -418,17 +382,17 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "本地 Ollama（需安装并拉取模型）",
         "models": [
-            _m("llama3.1", 131072, 8192, False, False, "Llama3.1"),
-            _m("llama3.2", 131072, 8192, False, False, "Llama3.2"),
-            _m("llama3.3", 131072, 8192, False, False, "Llama3.3"),
-            _m("llama4", 1048576, 8192, True, False, "Llama4"),
-            _m("qwen3", 131072, 16384, False, True, "Qwen3"),
-            _m("qwen3.5", 131072, 16384, False, True, "Qwen3.5"),
-            _m("qwen2.5", 131072, 8192, False, False, "Qwen2.5"),
-            _m("deepseek-r1", 131072, 65536, False, True, "DeepSeek R1"),
-            _m("deepseek-v4-flash", 1048576, 131072, False, True, "DeepSeek V4 Flash"),
-            _m("mistral", 32768, 8192, False, False, "Mistral"),
-            _m("gemma3", 131072, 8192, True, False, "Gemma3"),
+            "llama3.1",
+            "llama3.2",
+            "llama3.3",
+            "llama4",
+            "qwen3",
+            "qwen3.5",
+            "qwen2.5",
+            "deepseek-r1",
+            "deepseek-v4-flash",
+            "mistral",
+            "gemma3",
         ],
     },
     # ═══════════════ MiniMax ═══════════════
@@ -439,10 +403,10 @@ PROVIDERS = {
         "supports_vision": True,
         "description": "MiniMax 大模型",
         "models": [
-            _m("MiniMax-M2", 1048576, 131072, True, True, "M2 旗舰"),
-            _m("MiniMax-M1", 1048576, 32768, True, True, "M1"),
-            _m("MiniMax-Text-01", 1048576, 8192, False, False, "Text-01"),
-            _m("minimax-text-01", 1048576, 8192, False, False, "Text-01 别名"),
+            "MiniMax-M2",
+            "MiniMax-M1",
+            "MiniMax-Text-01",
+            "minimax-text-01",
         ],
     },
     # ═══════════════ Baidu 文心 ═══════════════
@@ -452,12 +416,12 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "百度文心千帆",
         "models": [
-            _m("ernie-4.5-8k", 8192, 8192, False, True, "4.5 标准"),
-            _m("ernie-4.5-128k", 131072, 8192, False, True, "4.5 长窗"),
-            _m("ernie-4.0-8k", 8192, 2048, False, False, "4.0"),
-            _m("ernie-3.5-8k", 8192, 2048, False, False, "3.5"),
-            _m("ernie-x1-32k", 32768, 8192, False, True, "X1 推理"),
-            _m("ernie-4.5-vl-8k", 8192, 8192, True, True, "4.5 视觉"),
+            "ernie-4.5-8k",
+            "ernie-4.5-128k",
+            "ernie-4.0-8k",
+            "ernie-3.5-8k",
+            "ernie-x1-32k",
+            "ernie-4.5-vl-8k",
         ],
     },
     # ═══════════════ Volcengine 豆包 ═══════════════
@@ -468,12 +432,12 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "火山方舟（豆包 / Seed）",
         "models": [
-            _m("doubao-1.6-pro-256k", 262144, 8192, False, True, "Pro 长窗"),
-            _m("doubao-1.6-pro-32k", 32768, 8192, False, True, "Pro 标准"),
-            _m("doubao-seed-1.6-flash", 131072, 8192, False, False, "Seed Flash"),
-            _m("doubao-1.5-vision-pro-32k", 32768, 8192, True, True, "视觉 Pro"),
-            _m("doubao-pro-32k", 32768, 8192, False, False, "旧 Pro"),
-            _m("doubao-seed-1.6-thinking", 131072, 8192, False, True, "Seed 推理"),
+            "doubao-1.6-pro-256k",
+            "doubao-1.6-pro-32k",
+            "doubao-seed-1.6-flash",
+            "doubao-1.5-vision-pro-32k",
+            "doubao-pro-32k",
+            "doubao-seed-1.6-thinking",
         ],
     },
     # ═══════════════ NVIDIA NIM ═══════════════
@@ -484,11 +448,11 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "NVIDIA NIM 托管推理",
         "models": [
-            _m("meta/llama-3.3-70b-instruct", 131072, 8192, False, False, "Llama3.3 70B"),
-            _m("meta/llama-4-scout-17b-16e-instruct", 1048576, 8192, True, False, "Llama4 Scout"),
-            _m("deepseek-ai/deepseek-r1", 131072, 65536, False, True, "DeepSeek R1"),
-            _m("qwen/qwen2.5-72b-instruct", 131072, 8192, False, False, "Qwen2.5 72B"),
-            _m("nvidia/llama-3.1-nemotron-70b-instruct", 131072, 8192, False, False, "Nemotron 70B"),
+            "meta/llama-3.3-70b-instruct",
+            "meta/llama-4-scout-17b-16e-instruct",
+            "deepseek-ai/deepseek-r1",
+            "qwen/qwen2.5-72b-instruct",
+            "nvidia/llama-3.1-nemotron-70b-instruct",
         ],
     },
     # ═══════════════ Cerebras ═══════════════
@@ -498,10 +462,10 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "Cerebras 极速推理",
         "models": [
-            _m("llama-3.3-70b", 131072, 32768, False, False, "Llama3.3 70B"),
-            _m("llama-3.1-8b", 131072, 8192, False, False, "Llama3.1 8B"),
-            _m("llama4-scout", 1048576, 8192, True, False, "Llama4 Scout"),
-            _m("deepseek-r1-distill-llama-70b", 131072, 32768, False, True, "R1 蒸馏"),
+            "llama-3.3-70b",
+            "llama-3.1-8b",
+            "llama4-scout",
+            "deepseek-r1-distill-llama-70b",
         ],
     },
     # ═══════════════ Hyperbolic ═══════════════
@@ -512,10 +476,10 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "Hyperbolic 开源云",
         "models": [
-            _m("meta-llama/Llama-3.3-70B-Instruct", 131072, 8192, False, False, "Llama3.3 70B"),
-            _m("meta-llama/Llama-4-Scout-17B-16E-Instruct", 1048576, 8192, True, False, "Llama4 Scout"),
-            _m("deepseek-ai/DeepSeek-R1", 131072, 65536, False, True, "DeepSeek R1"),
-            _m("Qwen/Qwen3-235B-A22B", 262144, 16384, False, True, "Qwen3 MoE"),
+            "meta-llama/Llama-3.3-70B-Instruct",
+            "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+            "deepseek-ai/DeepSeek-R1",
+            "Qwen/Qwen3-235B-A22B",
         ],
     },
     # ═══════════════ 阶跃星辰 StepFun ═══════════════
@@ -526,11 +490,11 @@ PROVIDERS = {
         "supports_thinking": True,
         "description": "阶跃星辰 Step",
         "models": [
-            _m("step-2-16k", 16384, 4096, False, False, "Step-2 16K"),
-            _m("step-2-32k", 32768, 4096, False, False, "Step-2 32K"),
-            _m("step-2-256k", 262144, 4096, False, False, "Step-2 256K"),
-            _m("step-1v-32k", 32768, 2048, True, False, "视觉"),
-            _m("step-2-mini", 32768, 4096, False, False, "Mini"),
+            "step-2-16k",
+            "step-2-32k",
+            "step-2-256k",
+            "step-1v-32k",
+            "step-2-mini",
         ],
     },
     # ═══════════════ 零一万物 01.AI ═══════════════
@@ -539,9 +503,9 @@ PROVIDERS = {
         "default_model": "yi-lightning",
         "description": "零一万物 Yi",
         "models": [
-            _m("yi-lightning", 131072, 8192, False, False, "Lightning"),
-            _m("yi-large", 32768, 4096, False, False, "Large"),
-            _m("yi-medium", 32768, 4096, False, False, "Medium"),
+            "yi-lightning",
+            "yi-large",
+            "yi-medium",
         ],
     },
     # ═══════════════ 智谱兼容网关（自定义示例保留区） ═══════════════

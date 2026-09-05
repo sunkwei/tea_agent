@@ -351,16 +351,38 @@ def _frag_session_mode(context: Any) -> ContextFragment | None:
     )
 
 
+def _agents_md_budget(max_tokens: int) -> int:
+    """按模型上下文窗口缩放 AGENTS.md 字节预算（上下文受限模型用更小预算）。
+
+    Args:
+        max_tokens: 模型最大上下文 token 数（0=未知）
+
+    Returns:
+        字节预算（默认 16KB，窗口越小预算越小，为小窗口释放上下文空间）。
+    """
+    if max_tokens and max_tokens > 0:
+        if max_tokens < 16_000:
+            return 2 * 1024
+        if max_tokens < 32_000:
+            return 4 * 1024
+        if max_tokens < 64_000:
+            return 8 * 1024
+        if max_tokens < 128_000:
+            return 12 * 1024
+    return 16 * 1024
+
+
 def _frag_agents_md(context: Any) -> ContextFragment | None:
     """AGENTS.md 分层指令片段 — 对应 Codex UserInstructions。
 
     从项目根到 cwd 收集 AGENTS.md + 用户级 ~/.tea_agent/AGENTS.md，
-    带字节预算截断（默认 16KB）。
+    带字节预算截断（默认 16KB；上下文受限模型按窗口缩放）。
     """
     try:
         from tea_agent.agents_md_loader import load_agents_md
 
-        loaded = load_agents_md(max_bytes=16 * 1024)
+        budget = _agents_md_budget(_get_max_tokens(context))
+        loaded = load_agents_md(max_bytes=budget)
         text = loaded.text if loaded else ""
         if not text:
             return None

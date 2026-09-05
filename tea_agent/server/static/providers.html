@@ -8,6 +8,9 @@
   :root { --bg1:#101216; --bg2:#1a1d24; --bg3:#22262f; --border:#333a45;
           --text:#e6e8ee; --text-dim:#8a93a3; --primary:#4a90d9; --green:#2ecc71;
           --warn:#f0ad4e; --danger:#e74c3c; }
+  /* 覆盖全局 style.css 的 html,body{height:100%;overflow:hidden}（主界面全屏布局规则），
+     本页是独立可滚动文档，须允许纵向滚动查看全部设置 */
+  html, body { height: auto !important; min-height: 100vh; overflow: auto !important; }
   body { background:var(--bg1); color:var(--text); margin:0; font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; }
   * { box-sizing:border-box; }
   .top { position:sticky; top:0; z-index:10; background:var(--bg2); border-bottom:1px solid var(--border);

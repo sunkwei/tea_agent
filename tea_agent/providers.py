@@ -98,8 +98,6 @@ PROVIDERS = {
     "OpenAI": {
         "api_url": "https://api.openai.com/v1",
         "default_model": "gpt-4o",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "OpenAI GPT / o 系列",
         "models": [
             "gpt-4o",
@@ -118,8 +116,6 @@ PROVIDERS = {
     "Anthropic": {
         "api_url": "https://api.anthropic.com",
         "default_model": "claude-sonnet-4-20250514",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "Anthropic Claude",
         "models": [
             "claude-sonnet-4-20250514",
@@ -136,8 +132,6 @@ PROVIDERS = {
     "Gemini": {
         "api_url": "https://generativelanguage.googleapis.com/v1beta/openai",
         "default_model": "gemini-2.5-pro",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "Google Gemini（OpenAI 兼容端点）",
         "models": [
             "gemini-2.5-pro",
@@ -153,8 +147,6 @@ PROVIDERS = {
     "DeepSeek": {
         "api_url": "https://api.deepseek.com",
         "default_model": "deepseek-chat",
-        "supports_thinking": True,
-        "supports_vision": True,
         "description": "DeepSeek（deepseek-v4-flash-vision-exp 为视觉模型）",
         "models": [
             "deepseek-chat",
@@ -169,8 +161,6 @@ PROVIDERS = {
     "Alibaba": {
         "api_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "default_model": "qwen-max",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "阿里云百炼（Qwen）",
         "models": [
             "qwen-max",
@@ -190,8 +180,6 @@ PROVIDERS = {
     "ZhipuAI": {
         "api_url": "https://open.bigmodel.cn/api/paas/v4",
         "default_model": "GLM-5.2-Flash",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "智谱 GLM",
         "models": [
             "GLM-5.2-Flash",
@@ -208,7 +196,6 @@ PROVIDERS = {
     "Moonshot": {
         "api_url": "https://api.moonshot.cn/v1",
         "default_model": "kimi-k2",
-        "supports_thinking": True,
         "description": "月之暗面 Kimi",
         "models": [
             "kimi-k2",
@@ -223,7 +210,6 @@ PROVIDERS = {
     "Groq": {
         "api_url": "https://api.groq.com/openai/v1",
         "default_model": "llama-4-scout-17b-16e-instruct",
-        "supports_thinking": True,
         "description": "极速推理 API",
         "models": [
             "llama-4-scout-17b-16e-instruct",
@@ -239,7 +225,6 @@ PROVIDERS = {
     "Mistral": {
         "api_url": "https://api.mistral.ai/v1",
         "default_model": "mistral-large-latest",
-        "supports_vision": True,
         "description": "Mistral AI",
         "models": [
             "mistral-large-latest",
@@ -254,8 +239,6 @@ PROVIDERS = {
     "xAI": {
         "api_url": "https://api.x.ai/v1",
         "default_model": "grok-3",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "xAI Grok",
         "models": [
             "grok-4",
@@ -282,7 +265,6 @@ PROVIDERS = {
     "Perplexity": {
         "api_url": "https://api.perplexity.ai",
         "default_model": "sonar-pro",
-        "supports_thinking": True,
         "description": "Perplexity Sonar（联网搜索）",
         "models": [
             "sonar-pro",
@@ -294,8 +276,6 @@ PROVIDERS = {
     "OpenRouter": {
         "api_url": "https://openrouter.ai/api/v1",
         "default_model": "anthropic/claude-sonnet-4",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "300+ 模型统一接口",
         "models": [
             "anthropic/claude-sonnet-4",
@@ -317,8 +297,6 @@ PROVIDERS = {
     "SiliconFlow": {
         "api_url": "https://api.siliconflow.cn/v1",
         "default_model": "Qwen/Qwen3-235B-A22B",
-        "supports_thinking": True,
-        "supports_vision": True,
         "description": "硅基流动（开源模型托管）",
         "models": [
             "Qwen/Qwen3-235B-A22B",
@@ -335,8 +313,6 @@ PROVIDERS = {
     "Together": {
         "api_url": "https://api.together.xyz/v1",
         "default_model": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "Together AI（开源模型云）",
         "models": [
             "meta-llama/Llama-4-Scout-17B-16E-Instruct",
@@ -351,7 +327,6 @@ PROVIDERS = {
     "Fireworks": {
         "api_url": "https://api.fireworks.ai/inference/v1",
         "default_model": "accounts/fireworks/models/llama-v4-scout-17b-16e-instruct",
-        "supports_vision": True,
         "description": "Fireworks AI 快速推理",
         "models": [
             "accounts/fireworks/models/llama-v4-scout-17b-16e-instruct",
@@ -364,8 +339,6 @@ PROVIDERS = {
     "DeepInfra": {
         "api_url": "https://api.deepinfra.com/v1/openai",
         "default_model": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "DeepInfra 托管推理",
         "models": [
             "meta-llama/Llama-4-Scout-17B-16E-Instruct",
@@ -378,8 +351,6 @@ PROVIDERS = {
     "Ollama": {
         "api_url": "http://127.0.0.1:11434/v1",
         "default_model": "llama3.1",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "本地 Ollama（需安装并拉取模型）",
         "models": [
             "llama3.1",
@@ -399,8 +370,6 @@ PROVIDERS = {
     "MiniMax": {
         "api_url": "https://api.minimax.chat/v1",
         "default_model": "MiniMax-M2",
-        "supports_thinking": True,
-        "supports_vision": True,
         "description": "MiniMax 大模型",
         "models": [
             "MiniMax-M2",
@@ -413,7 +382,6 @@ PROVIDERS = {
     "Baidu": {
         "api_url": "https://qianfan.baidubce.com/v2",
         "default_model": "ernie-4.5-8k",
-        "supports_thinking": True,
         "description": "百度文心千帆",
         "models": [
             "ernie-4.5-8k",
@@ -428,8 +396,6 @@ PROVIDERS = {
     "Volcengine": {
         "api_url": "https://ark.cn-beijing.volces.com/api/v3",
         "default_model": "doubao-1.6-pro-256k",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "火山方舟（豆包 / Seed）",
         "models": [
             "doubao-1.6-pro-256k",
@@ -444,8 +410,6 @@ PROVIDERS = {
     "NVIDIA": {
         "api_url": "https://integrate.api.nvidia.com/v1",
         "default_model": "meta/llama-3.3-70b-instruct",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "NVIDIA NIM 托管推理",
         "models": [
             "meta/llama-3.3-70b-instruct",
@@ -459,7 +423,6 @@ PROVIDERS = {
     "Cerebras": {
         "api_url": "https://api.cerebras.ai/v1",
         "default_model": "llama-3.3-70b",
-        "supports_thinking": True,
         "description": "Cerebras 极速推理",
         "models": [
             "llama-3.3-70b",
@@ -472,8 +435,6 @@ PROVIDERS = {
     "Hyperbolic": {
         "api_url": "https://api.hyperbolic.xyz/v1",
         "default_model": "meta-llama/Llama-3.3-70B-Instruct",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "Hyperbolic 开源云",
         "models": [
             "meta-llama/Llama-3.3-70B-Instruct",
@@ -486,8 +447,6 @@ PROVIDERS = {
     "StepFun": {
         "api_url": "https://api.stepfun.com/v1",
         "default_model": "step-2-16k",
-        "supports_vision": True,
-        "supports_thinking": True,
         "description": "阶跃星辰 Step",
         "models": [
             "step-2-16k",

@@ -51,26 +51,25 @@ class TestProvidersData:
             )
 
     def test_providers_model_entries_have_id(self):
-        """models 条目应为富对象（id + 窗口/输出上限）"""
+        """models 条目应为纯 id 字符串（代码不再内置窗口/能力属性）"""
         for name, info in PROVIDERS.items():
             for entry in model_entries(info):
                 assert "id" in entry, f"Provider '{name}' 有条目缺 id: {entry}"
                 assert isinstance(entry["id"], str) and entry["id"], (
                     f"Provider '{name}' 模型 id 无效: {entry.get('id')!r}"
                 )
-                assert entry.get("context_window", 0) > 0, (
-                    f"Provider '{name}' 模型 {entry['id']} 缺 context_window"
-                )
-                assert entry.get("max_output_tokens", 0) > 0, (
-                    f"Provider '{name}' 模型 {entry['id']} 缺 max_output_tokens"
+                # 2026-09-06 起属性唯一来源 provider.yaml；内置目录不再含 context_window
+                assert "context_window" not in entry or not entry.get("context_window"), (
+                    f"Provider '{name}' 模型 {entry['id']} 仍内置 context_window"
                 )
 
     def test_get_model_merges_provider_fallback(self):
-        """get_model 应返回模型级能力（未声明时继承供应商级）"""
+        """get_model 返回 id + 供应商级能力继承（属性本身来自 provider.yaml）"""
         entry = get_model(PROVIDERS["DeepSeek"], "deepseek-chat")
         assert entry is not None
         assert entry["id"] == "deepseek-chat"
-        assert entry["context_window"] > 0
+        # 不再内置窗口；能力标记继承自供应商级声明（如有）
+        assert "context_window" not in entry
         assert isinstance(entry.get("supports_vision"), bool)
         assert isinstance(entry.get("supports_thinking"), bool)
         assert get_model(PROVIDERS["DeepSeek"], "no-such-model") is None

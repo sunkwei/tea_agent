@@ -12,7 +12,8 @@ provider.yaml schema (v1):
     providers:
       <p_name>:                       # 供应商名（内置或自定义，唯一）
         api_url: "https://..."        # OpenAI 兼容端点
-        api_key: "sk-..."             # API Key（用户级，明文；展示时掩码）
+        api_keys: ["sk-..."]       # API Keys 列表（首个=主 key；多 key 时保留全部，加载仅用首个）
+        api_key: "sk-..."             # 兼容字段 = api_keys[0]（主 key）
         default_model: "..."          # 默认模型 id（须存在于 models）
         description: "..."            # 一句话说明
         supports_vision: false        # 供应商级能力兜底
@@ -63,7 +64,7 @@ _INT_FIELDS = {"max_context_tokens", "max_output_tokens"}
 _BOOL_FIELDS = {"supports_vision", "supports_reasoning", "supports_tools"}
 _STR_FIELDS = {"note", "reasoning_effort"}
 MODEL_FIELDS = _INT_FIELDS | _BOOL_FIELDS | _STR_FIELDS
-PROVIDER_FIELDS = {"api_url", "api_key", "default_model", "description",
+PROVIDER_FIELDS = {"api_url", "api_key", "api_keys", "default_model", "description",
                    "supports_vision", "supports_thinking", "source"}
 
 NAME_RE = re.compile(r"^[A-Za-z0-9_.:/-]{1,64}$")
@@ -114,23 +115,13 @@ def _blank_model_cfg() -> dict:
 
 
 def guess_model_cfg(model_id: str) -> dict:
-    """按模型名给出启发式能力默认（无内置元数据时的兜底）。"""
-    cfg = _blank_model_cfg()
-    low = (model_id or "").strip().lower()
-    if not low:
-        return cfg
-    try:
-        from tea_agent.model_config import guess_model_config as _gmc
+    """返回中性模型配置（2026-09-06 起不再按名猜测任何属性）。
 
-        g = _gmc(low) or {}
-        cfg["max_context_tokens"] = int(g.get("max_context_tokens") or 0)
-        cfg["max_output_tokens"] = int(g.get("max_output_tokens") or 0)
-        cfg["supports_vision"] = bool(g.get("supports_vision"))
-        cfg["supports_reasoning"] = bool(g.get("supports_thinking"))
-        cfg["supports_tools"] = bool(g.get("supports_tools", True))
-    except Exception:  # pragma: no cover - 防御性
-        pass
-    return cfg
+    模型属性唯一来源 = provider.yaml 的 models.<m_name> 条目；未收录 →
+    全 0=未知，由调用方提示用户在 provider.yaml 显式补配。model_id 入参
+    仅为兼容签名，不参与任何推断。
+    """
+    return _blank_model_cfg()
 
 
 def _clean_model_entry(raw: dict) -> dict:
@@ -168,6 +159,19 @@ def _clean_provider(raw: dict) -> dict:
     for k in ("supports_vision", "supports_thinking"):
         if k in raw:
             p[k] = bool(raw[k])
+    # api_keys：多 key 支持（首个=主 key，保留顺序去重去空）
+    keys: list[str] = []
+    if isinstance(raw.get("api_keys"), list):
+        for k in raw["api_keys"]:
+            kk = str(k or "").strip()
+            if kk and kk not in keys:
+                keys.append(kk)
+    single = str(raw.get("api_key") or "").strip()
+    if single and single not in keys:
+        keys.insert(0, single)
+    if keys:
+        p["api_keys"] = keys
+        p["api_key"] = keys[0]
     return p
 
 
@@ -219,6 +223,7 @@ class ProviderStore:
             if data is None:
                 data = self._bootstrap()
                 self._write_unlocked(data)
+            self._normalize_keys(data)
             self._data, self._mtime = data, self._stat_mtime()
             return data
 
@@ -250,6 +255,31 @@ class ProviderStore:
         logger.info("provider.yaml saved: %d providers", len(data.get("providers", {})))
 
     # ── bootstrap / 迁移 ─────────────────────────────────────
+
+    @staticmethod
+    def _normalize_keys(data: dict) -> None:
+        """归一化 api_key/api_keys：api_keys 首位恒等于 api_key；去空去重保序。"""
+        providers = data.get("providers")
+        if not isinstance(providers, dict):
+            return
+        for pv in providers.values():
+            if not isinstance(pv, dict):
+                continue
+            keys: list[str] = []
+            raw = pv.get("api_keys")
+            if isinstance(raw, list):
+                for k in raw:
+                    kk = str(k or "").strip()
+                    if kk and kk not in keys:
+                        keys.append(kk)
+            single = str(pv.get("api_key") or "").strip()
+            if single and single not in keys:
+                keys.insert(0, single)
+            if keys:
+                pv["api_keys"] = keys
+                pv["api_key"] = keys[0]
+            elif "api_keys" in pv:
+                pv.pop("api_keys")
 
     def _builtin_registry(self) -> dict[str, dict]:
         """内置静态目录（providers.py PROVIDERS），转换为 provider.yaml 模型字段。"""
@@ -368,16 +398,29 @@ class ProviderStore:
     def _merge_config_profiles(self, data: dict[str, dict]) -> None:
         """搜集 config*.yaml 的 main/cheap/vision 供应商信息并入目录。
 
-        同一 api_url 出现多个不同 api_key 时保留一个（优先 config.yaml 主模型 key），
-        模型合并去重；无法按 url 归属内置的（自定义网关）以 profile 名为 p_name 新增。
+        同一 api_url 出现多个不同 api_key 时全部保留（config.yaml 主模型 key
+        优先排首 = 主 key）；模型合并去重；无法按 url 归属内置的（自定义网关）
+        以 profile 名为 p_name 新增。
         """
         base = self._cfg_dir()
         try:
             files = sorted(list(base.glob("config*.yaml")) + list(base.glob("config*.yml")))
         except OSError:
             return
-        # 第一遍：统计 url → 优先 key（config.yaml 主模型优先）
-        url_key: dict[str, str] = {}
+
+        def _push_key(store: dict[str, list[str]], url: str, key: str, primary: bool = False) -> None:
+            if not url or not key:
+                return
+            keys = store.setdefault(url, [])
+            if key in keys:
+                return
+            if primary:
+                keys.insert(0, key)
+            else:
+                keys.append(key)
+
+        # 第一遍：统计 url → 全部 key（有序；config.yaml 主模型 key 置首）
+        url_keys: dict[str, list[str]] = {}
         for f in files:
             try:
                 raw = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
@@ -385,15 +428,17 @@ class ProviderStore:
                 continue
             if not isinstance(raw, dict):
                 continue
-            mb = raw.get("main_model")
-            if not isinstance(mb, dict):
-                continue
-            url = str(mb.get("api_url") or "").strip().rstrip("/").lower()
-            key = str(mb.get("api_key") or "").strip()
-            if not url or not key:
-                continue
-            if url not in url_key or f.name == "config.yaml":
-                url_key[url] = key
+            for role in ("main_model", "cheap_model", "vision_model"):
+                blk = raw.get(role)
+                if not isinstance(blk, dict):
+                    continue
+                url = str(blk.get("api_url") or "").strip().rstrip("/").lower()
+                key = str(blk.get("api_key") or "").strip()
+                if not url:
+                    continue
+                # 未显式区分 provider 时，任何 role 的 url+key 都纳入该 url 的 key 池
+                _push_key(url_keys, url, key, primary=(f.name == "config.yaml" and role == "main_model"))
+
         # 第二遍：按文件合并
         for f in files:
             try:
@@ -433,11 +478,12 @@ class ProviderStore:
                     "models": {},
                 })
                 p["api_url"] = url
-                # key：url_key 优先（同 url 多 key 保留一个），文件自己 key 与目录一致才写入
-                kept = url_key.get(url.rstrip("/").lower(), "")
-                if kept and (not p.get("api_key") or p.get("api_key") == kept):
-                    p["api_key"] = kept
-                elif not p.get("api_key"):
+                # 多 key：全量写入该 url 的 key 池（已含主 key 置首）
+                all_keys = url_keys.get(url.rstrip("/").lower(), [])
+                if all_keys:
+                    p["api_keys"] = list(all_keys)
+                    p["api_key"] = all_keys[0]
+                elif key and not p.get("api_key"):
                     p["api_key"] = key
                 if model:
                     self._ensure_model_entry(data, pname, model, block)
@@ -567,10 +613,15 @@ class ProviderStore:
                     "reasoning_effort": cfg.get("reasoning_effort", "auto"),
                     "note": cfg.get("note", ""),
                 })
+            keys = list(p.get("api_keys") or [])
+            if not keys and p.get("api_key"):
+                keys = [str(p["api_key"])]
             out.append({
                 "name": name,
                 "api_url": p.get("api_url", ""),
-                "api_key_masked": _mask_key(p.get("api_key", "")),
+                "api_key_masked": _mask_key(keys[0] if keys else p.get("api_key", "")),
+                "api_keys_masked": [_mask_key(k) for k in keys if k],
+                "key_count": len(keys),
                 "default_model": p.get("default_model", ""),
                 "description": p.get("description", ""),
                 "source": p.get("source", "builtin"),

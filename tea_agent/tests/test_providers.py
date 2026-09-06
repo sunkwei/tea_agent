@@ -206,10 +206,10 @@ class TestGenerateConfig:
         config = generate_config("Baidu", "sk-key")
         assert "supports_vision: false" in config
 
-    def test_deepseek_has_vision_model(self):
-        """DeepSeek provider 应声明视觉能力并列出 deepseek-v4-flash-vision-exp"""
+    def test_deepseek_lists_models_without_caps(self):
+        """DeepSeek 引导目录列出模型 id；能力不内置（需 provider.yaml 声明）。"""
         p = get_provider("DeepSeek")
-        assert p["supports_vision"] is True
+        assert "supports_vision" not in p  # 2026-09-06 起代码不再声明能力
         assert "deepseek-v4-flash-vision-exp" in p["models"]
         assert "deepseek-v4-flash" in p["models"]
 

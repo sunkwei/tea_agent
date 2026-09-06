@@ -30,11 +30,49 @@ def env(tmp_path, monkeypatch):
     import tea_agent.config as cfg_mod
     import tea_agent.model_config as mc_mod
     import tea_agent.model_manager as mm_mod
+    import tea_agent.provider_store as ps_mod
     from tea_agent.server.modules import state
     from tea_agent.server.modules.agent_module import AgentModule
 
     monkeypatch.setattr(mc_mod, "_store", None)
     monkeypatch.setattr(mm_mod, "_service", None)
+    monkeypatch.setattr(ps_mod, "_store", None)
+    # provider.yaml 隔离：能力唯一来源（apply/switch 从 provider_store 读模型属性）
+    provider_file = tmp_path / "provider.yaml"
+    monkeypatch.setenv("TEA_PROVIDER_FILE", str(provider_file))
+    import yaml
+
+    provider_file.write_text(yaml.safe_dump({
+        "version": 1,
+        "providers": {
+            "DeepSeek": {
+                "api_url": "https://api.deepseek.com",
+                "api_key": "sk-test1234567890",
+                "default_model": "deepseek-chat",
+                "source": "builtin",
+                "models": {
+                    "deepseek-chat": {
+                        "max_context_tokens": 131072,
+                        "max_output_tokens": 8192,
+                        "supports_reasoning": True,
+                        "supports_vision": False,
+                        "supports_tools": True,
+                        "reasoning_effort": "auto",
+                        "note": "",
+                    },
+                    "deepseek-reasoner": {
+                        "max_context_tokens": 131072,
+                        "max_output_tokens": 65536,
+                        "supports_reasoning": True,
+                        "supports_vision": False,
+                        "supports_tools": True,
+                        "reasoning_effort": "auto",
+                        "note": "",
+                    },
+                },
+            },
+        },
+    }, allow_unicode=True, sort_keys=False), encoding="utf-8")
     # profile 扫描隔离：空目录 → 无 config_*.yaml → 回退预置注册表（面板测试断言稳定）
     monkeypatch.setattr(mc_mod, "CONFIG_DIR", tmp_path / "agent")
     state.config_cache.clear()

@@ -31,6 +31,43 @@ def svc(tmp_path, monkeypatch):
     monkeypatch.setattr(mc_mod, "_store", None)
     # profile 扫描隔离：空目录（无 config_*.yaml）→ store 回退预置注册表
     monkeypatch.setattr(mc_mod, "CONFIG_DIR", tmp_path / "agent")
+    # 隔离 provider.yaml（模型属性唯一事实源）：提供 DeepSeek 目录能力供 catalog 回填
+    import tea_agent.provider_store as ps_mod
+    import yaml
+
+    pfile = tmp_path / "provider.yaml"
+    pfile.write_text(yaml.safe_dump({
+        "version": 1,
+        "providers": {
+            "DeepSeek": {
+                "api_url": "https://api.deepseek.com",
+                "api_key": "sk-test-deepseek",
+                "default_model": "deepseek-chat",
+                "source": "builtin",
+                "supports_thinking": True,
+                "supports_vision": False,
+                "models": {
+                    "deepseek-chat": {
+                        "max_context_tokens": 131072, "max_output_tokens": 8192,
+                        "supports_reasoning": True, "supports_vision": False,
+                        "supports_tools": True, "reasoning_effort": "auto",
+                    },
+                    "deepseek-reasoner": {
+                        "max_context_tokens": 131072, "max_output_tokens": 65536,
+                        "supports_reasoning": True, "supports_vision": False,
+                        "supports_tools": True, "reasoning_effort": "auto",
+                    },
+                    "deepseek-v4-flash-vision-exp": {
+                        "max_context_tokens": 1000000, "max_output_tokens": 384000,
+                        "supports_reasoning": True, "supports_vision": True,
+                        "supports_tools": True, "reasoning_effort": "auto",
+                    },
+                },
+            },
+        },
+    }, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    monkeypatch.setenv("TEA_PROVIDER_FILE", str(pfile))
+    monkeypatch.setattr(ps_mod, "_store", None)
     svc = mm.ProviderService(config_path="")
     svc._custom_cache = None
     svc._custom_mtime = 0.0

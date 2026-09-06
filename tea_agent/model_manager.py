@@ -209,11 +209,45 @@ class ProviderService:
 
             return AgentConfig()
 
+    def _provider_yaml_catalog(self, provider_name: str) -> dict[str, dict]:
+        """从 provider.yaml（provider_store）读该 provider 的目录能力（唯一属性源）。
+
+        2026-09-06 起代码不再内置模型属性；UI catalog / apply 自动填窗口的能力
+        一律来自 ~/.tea_agent/provider.yaml 的 models.<m_name> 条目。provider.yaml
+        未收录该 provider/model 时返回空 dict（=未知，不再由代码猜测）。
+
+        Returns: {model_id: {context_window, max_output_tokens, supports_vision,
+                             supports_thinking, description}}
+        """
+        try:
+            from tea_agent.provider_store import get_provider_store
+
+            p = get_provider_store().get_provider(provider_name)
+            if not p:
+                return {}
+            out: dict[str, dict] = {}
+            for mid, cfg in (p.get("models") or {}).items():
+                out[str(mid)] = {
+                    "context_window": int(cfg.get("max_context_tokens") or 0),
+                    "max_output_tokens": int(cfg.get("max_output_tokens") or 0),
+                    "supports_vision": bool(
+                        cfg.get("supports_vision", p.get("supports_vision", False))
+                    ),
+                    "supports_thinking": bool(
+                        cfg.get("supports_reasoning", p.get("supports_thinking", False))
+                    ),
+                    "description": str(cfg.get("note") or "") or "",
+                }
+            return out
+        except Exception:  # pragma: no cover - 防御性
+            return {}
+
     def _catalog(self, info: dict) -> list[dict]:
         """从 Provider 信息抽取富模型目录（id + 元数据），供 UI 两步选择。
 
-        兼容旧形态：内置 Provider 的 models 是富条目对象；自定义/简写字符串
-        也会被统一归一化为 {id, ...}。能力标记缺省继承 Provider 级默认。
+        内置 PROVIDERS 仅含纯 id 模型清单（不内置任何属性）；目录能力字段
+        （context_window / max_output_tokens / supports_*）优先从 provider.yaml
+        同名 provider 条目回填；provider.yaml 未收录时置 0/False=未知。
 
         Args:
             info: Provider 原始信息（含 models）
@@ -222,22 +256,32 @@ class ProviderService:
             [{id, context_window, max_output_tokens, supports_vision,
               supports_thinking, description}, ...]
         """
+        # provider.yaml 目录能力（唯一属性源）按 id 索引
+        pname = info.get("name") or info.get("provider") or ""
+        yaml_cat = self._provider_yaml_catalog(pname) if pname else {}
         out = []
         for entry in model_entries(info):
             mid = entry["id"]
-            merged = {
+            y = yaml_cat.get(mid) or {}
+            out.append({
                 "id": mid,
-                "context_window": entry.get("context_window", 0) or 0,
-                "max_output_tokens": entry.get("max_output_tokens", 0) or 0,
+                "context_window": y.get("context_window")
+                                  or (entry.get("context_window") or 0),
+                "max_output_tokens": y.get("max_output_tokens")
+                                     or (entry.get("max_output_tokens") or 0),
                 "supports_vision": bool(
-                    entry.get("supports_vision", info.get("supports_vision", False))
+                    y.get("supports_vision",
+                          entry.get("supports_vision",
+                                    info.get("supports_vision", False)))
                 ),
                 "supports_thinking": bool(
-                    entry.get("supports_thinking", info.get("supports_thinking", False))
+                    y.get("supports_thinking",
+                          entry.get("supports_thinking",
+                                    info.get("supports_thinking", False)))
                 ),
-                "description": entry.get("description", "") or "",
-            }
-            out.append(merged)
+                "description": y.get("description")
+                               or (entry.get("description") or ""),
+            })
         return out
 
     def list_providers(self) -> dict:

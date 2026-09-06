@@ -196,10 +196,10 @@ class TestGenerateConfig:
         config = generate_config("DeepSeek", "sk-key", model="deepseek-reasoner")
         assert 'model_name: "deepseek-reasoner"' in config
 
-    def test_generate_with_vision_provider(self):
-        """支持 vision 的 Provider 应生成 supports_vision: true"""
+    def test_generate_vision_neutral_without_provider_yaml(self):
+        """2026-09-06 起能力不内置：无 provider.yaml 支撑时生成中性 false。"""
         config = generate_config("OpenAI", "sk-key")
-        assert "supports_vision: true" in config
+        assert "supports_vision: false" in config  # 视觉能力需在 provider.yaml 声明
 
     def test_generate_without_vision(self):
         """不支持 vision 的 Provider 应生成 supports_vision: false"""

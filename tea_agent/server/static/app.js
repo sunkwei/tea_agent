@@ -1461,6 +1461,13 @@ window.sendMessage = async function() {
               }
               break;
 
+            case 'usage':
+              // 实时 token 用量 / 命中率 / 上下文占用（每轮 LLM 调用后推送）
+              if (data.usage && currentTopicId === (data.topic_id || currentTopicId)) {
+                updateUsage(data.usage);
+              }
+              break;
+
             case 'max_iter_confirm':
               removeLoading();
               showMaxIterConfirm(data.confirm_id, data.text);

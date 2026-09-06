@@ -52,3 +52,5 @@ test_config_switch.py
 # nginx 运行时文件（logs/ 和 temp/ 不提交，仅提交配置）
 nginx/logs/
 nginx/temp/
+
+evlog_tmp_dist.json

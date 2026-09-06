@@ -768,6 +768,7 @@ def execute_tool_loop(session, context: dict) -> dict:
             )
             session.add_assistant_message(content, reasoning)
             session.tools_comp.collect_assistant_text_round(content, reasoning)
+            _emit_usage()
             return {"full_reply": content, "used_tools": False, "iterations": 1}
         except Exception as e:
             logger.warning(f"Direct answer failed, falling back: {e}")

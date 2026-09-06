@@ -54,3 +54,8 @@ nginx/logs/
 nginx/temp/
 
 evlog_tmp_dist.json
+
+# CI 工作流（.github 需入库，解除 `.*` 通配忽略）
+!.github/
+!.github/workflows/
+!.github/workflows/ci.yml

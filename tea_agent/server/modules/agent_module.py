@@ -129,6 +129,64 @@ def _compute_context_usage(context: Any, prompt_tokens: int) -> dict:
     }
 
 
+def _build_usage_data(session: Any) -> dict:
+    """从会话累计 usage 组装前端展示数据（tokens/命中率/上下文占用）。
+
+    供实时推送（SSE usage 事件，每轮 LLM 调用后）与流结束 done 复用，
+    避免两处重复组装逻辑漂移。
+
+    Args:
+        session: OnlineToolSession 实例（含 _last_usage/_last_cheap_usage/context）
+
+    Returns:
+        dict: 含 total/prompt/completion、cache_hit_rate、context_used 等字段
+    """
+    usage = getattr(session, "_last_usage", None) or {}
+    cheap_usage = getattr(session, "_last_cheap_usage", None) or {}
+    model_name = getattr(getattr(session, "context", None), "model", "")
+    cheap_model_name = getattr(getattr(session, "context", None), "cheap_model", "")
+    usage_data: dict = {
+        "total_tokens": usage.get("total_tokens", 0),
+        "prompt_tokens": usage.get("prompt_tokens", 0),
+        "completion_tokens": usage.get("completion_tokens", 0),
+        "prompt_cache_hit_tokens": usage.get("prompt_cache_hit_tokens", 0),
+        "prompt_cache_miss_tokens": usage.get("prompt_cache_miss_tokens", 0),
+        "model": model_name,
+        "cheap_model": cheap_model_name,
+    }
+    if cheap_usage.get("total_tokens", 0) > 0:
+        usage_data["cheap_tokens"] = cheap_usage.get("total_tokens", 0)
+        usage_data["cheap_prompt_tokens"] = cheap_usage.get("prompt_tokens", 0)
+        usage_data["cheap_completion_tokens"] = cheap_usage.get("completion_tokens", 0)
+        usage_data["cheap_prompt_cache_hit_tokens"] = cheap_usage.get("prompt_cache_hit_tokens", 0)
+        usage_data["cheap_prompt_cache_miss_tokens"] = cheap_usage.get("prompt_cache_miss_tokens", 0)
+    # 缓存命中率描述（供前端直接展示）
+    try:
+        from tea_agent.session.cache_report import format_cache_hit_rate
+
+        _rate = format_cache_hit_rate(usage)
+        if _rate:
+            usage_data["cache_hit_rate"] = _rate
+        _cheap_rate = format_cache_hit_rate(cheap_usage)
+        if _cheap_rate:
+            usage_data["cheap_cache_hit_rate"] = _cheap_rate
+    except Exception:
+        pass
+    # 当前上下文已用 xx%（供前端展示；优先用真实 prompt_tokens 口径）
+    try:
+        _ctx_usage = _compute_context_usage(
+            getattr(session, "context", None),
+            usage.get("prompt_tokens", 0) or 0,
+        )
+        usage_data["context_used_tokens"] = _ctx_usage["context_used_tokens"]
+        usage_data["context_max_tokens"] = _ctx_usage["context_max_tokens"]
+        usage_data["context_pct"] = _ctx_usage["context_pct"]
+        usage_data["context_used"] = _ctx_usage["context_used"]
+    except Exception:
+        logger.exception("context usage compute failed")
+    return usage_data
+
+
 class AgentModule(HotReloadModule):
     """Agent 热重载模块。"""
 

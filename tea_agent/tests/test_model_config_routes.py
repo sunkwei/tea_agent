@@ -143,7 +143,7 @@ def test_sync_live_models_into_store(env, monkeypatch):
     d2 = client.get("/api/model-config").json()
     ds = next(p for p in d2["providers"] if p["name"] == "DeepSeek")
     new = next(x for x in ds["models"] if x["id"] == "gw-only-model")
-    assert new["config"]["max_context_tokens"] > 0  # 启发式默认已补齐
+    assert new["config"]["max_context_tokens"] == 0  # 未在 provider.yaml 收录→未知，需显式配置
 
 
 # ── 4. 切换并继续会话（空闲路径） ─────────────────────────

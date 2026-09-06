@@ -170,8 +170,9 @@ def test_sync_live_models_preserves_user_edits(store):
     assert r["total"] >= len(r["added"]) + len(r["kept"])
     # 用户编辑未被覆盖
     assert store.get_model_config("DeepSeek", "deepseek-chat")["max_context_tokens"] == 777_777
-    # 新模型获得启发式配置
-    assert store.get_model_config("DeepSeek", "brand-new-live")["max_context_tokens"] > 0
+    # 新模型未在 provider.yaml 收录 → 属性中性（0=未知），代码不再内置猜测
+    got = store.get_model_config("DeepSeek", "brand-new-live")
+    assert got["max_context_tokens"] == 0 and got["max_output_tokens"] == 0
 
 
 # ── 角色绑定 ──────────────────────────────────────────────
@@ -208,25 +209,17 @@ def test_panel_shape(store):
 
 # ── 启发式 ────────────────────────────────────────────────
 
-@pytest.mark.parametrize("mid,expect", [
-    ("deepseek-reasoner", {"supports_thinking": True}),
-    ("gpt-4o", {"supports_vision": True}),
-    ("gemini-2.5-pro", {"supports_thinking": True, "supports_vision": True}),
-    ("qwen3-32b", {"supports_thinking": True}),
-    ("moonshot-v1-32k", {"max_context_tokens": 32 * 1024}),
-    ("llama-suffix-1m", {"max_context_tokens": 1_048_576}),
-])
-def test_guess_heuristics(mid, expect):
-    cfg = guess_model_config(mid)
-    for k, v in expect.items():
-        assert cfg[k] == v, (mid, k)
-
-
-def test_guess_family_ctx():
-    assert guess_model_config("gemini-turbo-x")["max_context_tokens"] == 1_048_576
-    assert guess_model_config("claude-new-thing")["max_context_tokens"] == 200_000
-    # 已知条目优先于家族规则
-    assert guess_model_config("deepseek-reasoner")["max_context_tokens"] == 128_000
+def test_guess_neutral_no_builtin_attrs():
+    """不再内置/猜测模型属性：未在 provider.yaml 收录 → 0=未知（2026-09-06 起）。"""
+    for mid in ("deepseek-reasoner", "gpt-4o", "gemini-2.5-pro",
+                "qwen3-32b", "moonshot-v1-32k", "llama-suffix-1m"):
+        cfg = guess_model_config(mid)
+        assert cfg["max_context_tokens"] == 0
+        assert cfg["max_output_tokens"] == 0
+    # provider_caps（provider.yaml 声明的提供商能力）仍可继承
+    cfg = guess_model_config("x-model", {"supports_thinking": True, "supports_vision": True})
+    assert cfg["supports_thinking"] is True and cfg["supports_vision"] is True
+    assert cfg["max_context_tokens"] == 0  # 窗口需 provider.yaml 模型条目显式配置
 
 
 # ── 备份 ──────────────────────────────────────────────────

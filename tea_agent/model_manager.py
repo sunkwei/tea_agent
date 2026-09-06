@@ -596,7 +596,9 @@ class ProviderService:
         if provider is None:
             raise ProviderNotFoundError(name)
         api_url = provider.get("api_url", "")
-        static_models = provider.get("models") or []
+        # 目录 = provider.yaml 能力回填后的富条目（纯 id PROVIDERS 不再裸返回字符串）
+        catalog = self._catalog(provider)
+        static_models = catalog
         # profile 提供商：未显式传 key 时用配置文件真实 key 查在线列表（不落盘）
         if provider.get("source") == "config" and not api_key:
             api_key = self._profile_secret(provider.get("config_path", ""), "")

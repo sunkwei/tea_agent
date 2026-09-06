@@ -232,6 +232,11 @@ class AgentModule(HotReloadModule):
         from tea_agent.agent import Agent
         cls._start_time = time.time()
         cfg_path = cls._config_path or os.environ.get("TEA_CONFIG", "")
+        if not cfg_path:
+            # 无显式 config / 无 TEA_CONFIG → 使用项目记忆的最后 config（若有）
+            cfg_path = cls._load_last_config() or ""
+            if cfg_path:
+                logger.info(f"Using remembered config: {cfg_path}")
         cls._instance = Agent(mode="full", config_path=cfg_path or None)
         cls._config_path = cfg_path or getattr(cls._instance, '_config_path', '')
         logger.info(f"Agent loaded | model={cls._get_model_name()}")

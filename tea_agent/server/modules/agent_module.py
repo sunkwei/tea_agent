@@ -261,6 +261,49 @@ class AgentModule(HotReloadModule):
     def set_config_path(cls, config_path: str) -> None:
         cls._config_path = config_path
 
+    # ── 最后使用 config 记忆（项目 .tea_agent_run/last_config.json）──
+    _LAST_CONFIG_FILENAME = "last_config.json"
+
+    @classmethod
+    def _remember_last_config(cls, config_path: str) -> None:
+        """把最后成功使用的 config 路径记入项目 .tea_agent_run/last_config.json。
+
+        下次启动（AgentModule._load）未显式指定 config 时默认使用该配置。
+        项目运行目录不可用（如启动目录=用户主目录）时静默跳过。
+        """
+        if not config_path:
+            return
+        try:
+            from tea_agent.storage_scope import project_run_dir
+            run_dir = project_run_dir()
+            if not run_dir:
+                return
+            target = os.path.join(run_dir, cls._LAST_CONFIG_FILENAME)
+            with open(target, "w", encoding="utf-8") as f:
+                json.dump({"config_path": os.path.abspath(config_path)}, f,
+                          ensure_ascii=False, indent=2)
+            logger.debug(f"remember last config: {config_path}")
+        except Exception:
+            logger.debug(f"remember last config failed: {config_path}", exc_info=True)
+
+    @classmethod
+    def _load_last_config(cls) -> str | None:
+        """读取项目记忆的最后 config 路径；文件缺失/已删除返回 None。"""
+        try:
+            from tea_agent.storage_scope import project_run_dir
+            run_dir = project_run_dir()
+            if not run_dir:
+                return None
+            target = os.path.join(run_dir, cls._LAST_CONFIG_FILENAME)
+            if not os.path.isfile(target):
+                return None
+            with open(target, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            p = ((data or {}).get("config_path") or "").strip()
+            return p if p and os.path.isfile(p) else None
+        except Exception:
+            return None
+
     @classmethod
     def _load_config_cached(cls, config_path: str | None = None):
         key = config_path or "__default__"

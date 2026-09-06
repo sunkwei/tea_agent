@@ -1,22 +1,19 @@
-"""LLM Provider 目录 — 仿 DeepSeek Harness 的「供应商 → 模型」两级模型库
+"""LLM Provider 目录 — 纯引导目录（模型属性唯一来源 = provider.yaml）
 
-每个 Provider（供应商）包含：
-  - api_url:         OpenAI 兼容端点
-  - default_model:   默认模型 id（必须存在于 models 内）
-  - supports_*:      供应商级能力兜底（某模型未单独声明时继承）
-  - models:          模型条目列表。每条可写成两种形态：
-       1) 简写字符串：{"models": ["deepseek-chat"]}              ← 仅 id，无元数据
-       2) 富条目对象：{"models": [{"id": "...", "context_window": ...}]}  ← 推荐
-     富条目字段：
-       - id:                  模型 id（必填）
-       - context_window:      最大上下文窗口（tokens）
-       - max_output_tokens:   最大单次输出（tokens）→ 对应 config 的 max_tokens
-       - supports_vision:     视觉能力（缺省继承供应商级）
-       - supports_thinking:   思考/推理能力（缺省继承供应商级）
-       - description:         一句话说明（UI 展示用）
+自 2026-09-06 起，代码内**不再内置任何模型属性**（context_window /
+max_output_tokens / supports_vision / supports_thinking 等）。本文件的
+PROVIDERS 仅作「新装引导/面板端点参考」：
 
-目录数据为「预置参考值」：上下文窗口/输出上限/能力标记随厂商发布而演进，
-切换后仍可在 config.yaml 或「配置」弹窗内细调，不会写死运行时行为。
+  - api_url / default_model / description：供应商端点的静态引导信息
+  - models: 纯 id 字符串列表（仅 id，无任何能力/窗口元数据）
+
+模型运行期属性（max_context_tokens / max_output_tokens / 能力标记）一律从
+~/.tea_agent/provider.yaml 的 models.<m_name> 条目解析；未收录模型 → 0=未知，
+需在 provider.yaml 显式配置（tool_profile 分档等据此保守处理）。
+
+兼容说明：model_entries()/get_model() 仍接受外部传入的富条目 dict
+（来自 provider.yaml / custom / config profile 迁移），以支持历史数据；
+但内置 PROVIDERS 自身不再携带富条目。
 """
 
 from __future__ import annotations

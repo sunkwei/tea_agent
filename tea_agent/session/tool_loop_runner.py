@@ -724,6 +724,17 @@ def execute_tool_loop(session, context: dict) -> dict:
     msg = context.get("msg", "")
     callback = context.get("callback", lambda x: None)
     on_status = context.get("on_status")
+    # 实时 usage 推送：每次 LLM 调用完成即回调（chat_stream_sse 组装后 SSE 推送）
+    on_usage = context.get("on_usage")
+
+    def _emit_usage() -> None:
+        """每轮 LLM 调用完成后推送一次累计 usage（失败不影响主流程）。"""
+        if on_usage is None:
+            return
+        try:
+            on_usage(session)
+        except Exception:
+            logger.exception("on_usage callback failed")
 
     # 是否启用并行执行（默认启用）
     enable_parallel = context.get("enable_parallel", True)
@@ -757,6 +768,7 @@ def execute_tool_loop(session, context: dict) -> dict:
             )
             session.add_assistant_message(content, reasoning)
             session.tools_comp.collect_assistant_text_round(content, reasoning)
+            _emit_usage()
             return {"full_reply": content, "used_tools": False, "iterations": 1}
         except Exception as e:
             logger.warning(f"Direct answer failed, falling back: {e}")
@@ -933,6 +945,7 @@ def execute_tool_loop(session, context: dict) -> dict:
             f"model response: content_len={len(content)}, reasoning_len={len(reasoning_content)}, "
             f"tool_calls_data={len(tool_calls_data)}"
         )
+        _emit_usage()  # 每轮 LLM 响应完成 → 实时推送累计 usage
 
         valid_tool_calls = session.tools_comp.parse_tool_calls_from_stream(tool_calls_data)
 

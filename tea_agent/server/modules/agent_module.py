@@ -129,6 +129,64 @@ def _compute_context_usage(context: Any, prompt_tokens: int) -> dict:
     }
 
 
+def _build_usage_data(session: Any) -> dict:
+    """从会话累计 usage 组装前端展示数据（tokens/命中率/上下文占用）。
+
+    供实时推送（SSE usage 事件，每轮 LLM 调用后）与流结束 done 复用，
+    避免两处重复组装逻辑漂移。
+
+    Args:
+        session: OnlineToolSession 实例（含 _last_usage/_last_cheap_usage/context）
+
+    Returns:
+        dict: 含 total/prompt/completion、cache_hit_rate、context_used 等字段
+    """
+    usage = getattr(session, "_last_usage", None) or {}
+    cheap_usage = getattr(session, "_last_cheap_usage", None) or {}
+    model_name = getattr(getattr(session, "context", None), "model", "")
+    cheap_model_name = getattr(getattr(session, "context", None), "cheap_model", "")
+    usage_data: dict = {
+        "total_tokens": usage.get("total_tokens", 0),
+        "prompt_tokens": usage.get("prompt_tokens", 0),
+        "completion_tokens": usage.get("completion_tokens", 0),
+        "prompt_cache_hit_tokens": usage.get("prompt_cache_hit_tokens", 0),
+        "prompt_cache_miss_tokens": usage.get("prompt_cache_miss_tokens", 0),
+        "model": model_name,
+        "cheap_model": cheap_model_name,
+    }
+    if cheap_usage.get("total_tokens", 0) > 0:
+        usage_data["cheap_tokens"] = cheap_usage.get("total_tokens", 0)
+        usage_data["cheap_prompt_tokens"] = cheap_usage.get("prompt_tokens", 0)
+        usage_data["cheap_completion_tokens"] = cheap_usage.get("completion_tokens", 0)
+        usage_data["cheap_prompt_cache_hit_tokens"] = cheap_usage.get("prompt_cache_hit_tokens", 0)
+        usage_data["cheap_prompt_cache_miss_tokens"] = cheap_usage.get("prompt_cache_miss_tokens", 0)
+    # 缓存命中率描述（供前端直接展示）
+    try:
+        from tea_agent.session.cache_report import format_cache_hit_rate
+
+        _rate = format_cache_hit_rate(usage)
+        if _rate:
+            usage_data["cache_hit_rate"] = _rate
+        _cheap_rate = format_cache_hit_rate(cheap_usage)
+        if _cheap_rate:
+            usage_data["cheap_cache_hit_rate"] = _cheap_rate
+    except Exception:
+        pass
+    # 当前上下文已用 xx%（供前端展示；优先用真实 prompt_tokens 口径）
+    try:
+        _ctx_usage = _compute_context_usage(
+            getattr(session, "context", None),
+            usage.get("prompt_tokens", 0) or 0,
+        )
+        usage_data["context_used_tokens"] = _ctx_usage["context_used_tokens"]
+        usage_data["context_max_tokens"] = _ctx_usage["context_max_tokens"]
+        usage_data["context_pct"] = _ctx_usage["context_pct"]
+        usage_data["context_used"] = _ctx_usage["context_used"]
+    except Exception:
+        logger.exception("context usage compute failed")
+    return usage_data
+
+
 class AgentModule(HotReloadModule):
     """Agent 热重载模块。"""
 
@@ -174,6 +232,11 @@ class AgentModule(HotReloadModule):
         from tea_agent.agent import Agent
         cls._start_time = time.time()
         cfg_path = cls._config_path or os.environ.get("TEA_CONFIG", "")
+        if not cfg_path:
+            # 无显式 config / 无 TEA_CONFIG → 使用项目记忆的最后 config（若有）
+            cfg_path = cls._load_last_config() or ""
+            if cfg_path:
+                logger.info(f"Using remembered config: {cfg_path}")
         cls._instance = Agent(mode="full", config_path=cfg_path or None)
         cls._config_path = cfg_path or getattr(cls._instance, '_config_path', '')
         logger.info(f"Agent loaded | model={cls._get_model_name()}")
@@ -202,6 +265,49 @@ class AgentModule(HotReloadModule):
     @classmethod
     def set_config_path(cls, config_path: str) -> None:
         cls._config_path = config_path
+
+    # ── 最后使用 config 记忆（项目 .tea_agent_run/last_config.json）──
+    _LAST_CONFIG_FILENAME = "last_config.json"
+
+    @classmethod
+    def _remember_last_config(cls, config_path: str) -> None:
+        """把最后成功使用的 config 路径记入项目 .tea_agent_run/last_config.json。
+
+        下次启动（AgentModule._load）未显式指定 config 时默认使用该配置。
+        项目运行目录不可用（如启动目录=用户主目录）时静默跳过。
+        """
+        if not config_path:
+            return
+        try:
+            from tea_agent.storage_scope import project_run_dir
+            run_dir = project_run_dir()
+            if not run_dir:
+                return
+            target = os.path.join(run_dir, cls._LAST_CONFIG_FILENAME)
+            with open(target, "w", encoding="utf-8") as f:
+                json.dump({"config_path": os.path.abspath(config_path)}, f,
+                          ensure_ascii=False, indent=2)
+            logger.debug(f"remember last config: {config_path}")
+        except Exception:
+            logger.debug(f"remember last config failed: {config_path}", exc_info=True)
+
+    @classmethod
+    def _load_last_config(cls) -> str | None:
+        """读取项目记忆的最后 config 路径；文件缺失/已删除返回 None。"""
+        try:
+            from tea_agent.storage_scope import project_run_dir
+            run_dir = project_run_dir()
+            if not run_dir:
+                return None
+            target = os.path.join(run_dir, cls._LAST_CONFIG_FILENAME)
+            if not os.path.isfile(target):
+                return None
+            with open(target, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            p = ((data or {}).get("config_path") or "").strip()
+            return p if p and os.path.isfile(p) else None
+        except Exception:
+            return None
 
     @classmethod
     def _load_config_cached(cls, config_path: str | None = None):
@@ -643,10 +749,21 @@ class AgentModule(HotReloadModule):
 
             ai_msg = None
             used_tools = None
+
+            # ⭐ 实时 usage 推送：每轮 LLM 调用完成（execute_tool_loop 挂钩）即
+            # 推送 {type:"usage"} 事件，前端 updateUsage 即时刷新 usage-bar。
+            def _usage_cb(_sess):
+                try:
+                    _ud = _build_usage_data(_sess)
+                    if _ud.get("total_tokens") or _ud.get("context_used"):
+                        _put({"type": "usage", "usage": _ud})
+                except Exception:
+                    logger.exception("usage push failed")
+
             try:
                 ai_msg, used_tools = session.chat_stream(
                     msg, callback=stream_cb, topic_id=topic_id,
-                    on_status=status_cb,
+                    on_status=status_cb, on_usage=_usage_cb,
                 )
             finally:
                 tlk.toolkit._question_web_handler = None
@@ -682,48 +799,7 @@ class AgentModule(HotReloadModule):
             except Exception:
                 pass
 
-            usage = session._last_usage or {}
-            cheap_usage = getattr(session, '_last_cheap_usage', None) or {}
-            model_name = getattr(session.context, 'model', '')
-            cheap_model_name = getattr(session.context, 'cheap_model', '')
-            usage_data = {
-                "total_tokens": usage.get("total_tokens", 0),
-                "prompt_tokens": usage.get("prompt_tokens", 0),
-                "completion_tokens": usage.get("completion_tokens", 0),
-                "prompt_cache_hit_tokens": usage.get("prompt_cache_hit_tokens", 0),
-                "prompt_cache_miss_tokens": usage.get("prompt_cache_miss_tokens", 0),
-                "model": model_name,
-                "cheap_model": cheap_model_name,
-            }
-            if cheap_usage.get("total_tokens", 0) > 0:
-                usage_data["cheap_tokens"] = cheap_usage.get("total_tokens", 0)
-                usage_data["cheap_prompt_tokens"] = cheap_usage.get("prompt_tokens", 0)
-                usage_data["cheap_completion_tokens"] = cheap_usage.get("completion_tokens", 0)
-                usage_data["cheap_prompt_cache_hit_tokens"] = cheap_usage.get("prompt_cache_hit_tokens", 0)
-                usage_data["cheap_prompt_cache_miss_tokens"] = cheap_usage.get("prompt_cache_miss_tokens", 0)
-            # 缓存命中率描述（供前端直接展示）
-            try:
-                from tea_agent.session.cache_report import format_cache_hit_rate
-                _rate = format_cache_hit_rate(usage)
-                if _rate:
-                    usage_data["cache_hit_rate"] = _rate
-                _cheap_rate = format_cache_hit_rate(cheap_usage)
-                if _cheap_rate:
-                    usage_data["cheap_cache_hit_rate"] = _cheap_rate
-            except Exception:
-                pass
-            # 当前上下文已用 xx%（供前端展示；优先用真实 prompt_tokens 口径）
-            try:
-                _ctx_usage = _compute_context_usage(
-                    getattr(session, "context", None),
-                    usage.get("prompt_tokens", 0) or 0,
-                )
-                usage_data["context_used_tokens"] = _ctx_usage["context_used_tokens"]
-                usage_data["context_max_tokens"] = _ctx_usage["context_max_tokens"]
-                usage_data["context_pct"] = _ctx_usage["context_pct"]
-                usage_data["context_used"] = _ctx_usage["context_used"]
-            except Exception:
-                logger.exception("context usage compute failed")
+            usage_data = _build_usage_data(session)
             _put({
                 "type": "done",
                 "ai_msg": _effective_ai_msg,
@@ -907,6 +983,8 @@ class AgentModule(HotReloadModule):
         cls._config_path = config_path
         if agent and hasattr(agent, '_config_path'):
             agent._config_path = config_path
+        # 记住最后成功使用的 config（下次启动默认使用）
+        cls._remember_last_config(config_path)
         return {"ok": True, "config_path": config_path}
 
     # ── 配置信息 ──

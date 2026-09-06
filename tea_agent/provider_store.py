@@ -282,7 +282,11 @@ class ProviderStore:
                 pv.pop("api_keys")
 
     def _builtin_registry(self) -> dict[str, dict]:
-        """内置静态目录（providers.py PROVIDERS），转换为 provider.yaml 模型字段。"""
+        """内置静态目录（providers.py PROVIDERS），转换为 provider.yaml 模型字段。
+
+        2026-09-06 起 PROVIDERS 仅含纯 id 模型清单（不内置任何属性）；
+        模型属性一律由 provider.yaml 显式配置，未收录 → 0=未知。
+        """
         out: dict[str, dict] = {}
         try:
             from tea_agent.providers import PROVIDERS
@@ -298,23 +302,10 @@ class ProviderStore:
                     "source": "builtin",
                     "models": {},
                 }
+                # models 均为纯 id 字符串（providers.py 不再含富条目）
                 for entry in info.get("models") or []:
                     if isinstance(entry, str):
                         p["models"][entry] = guess_model_cfg(entry)
-                    elif isinstance(entry, dict) and entry.get("id"):
-                        mid = str(entry["id"])
-                        cfg = guess_model_cfg(mid)
-                        if entry.get("context_window"):
-                            cfg["max_context_tokens"] = int(entry["context_window"])
-                        if entry.get("max_output_tokens"):
-                            cfg["max_output_tokens"] = int(entry["max_output_tokens"])
-                        if entry.get("supports_vision") is not None:
-                            cfg["supports_vision"] = bool(entry["supports_vision"])
-                        if entry.get("supports_thinking") is not None:
-                            cfg["supports_reasoning"] = bool(entry["supports_thinking"])
-                        if entry.get("description"):
-                            cfg["note"] = str(entry["description"])
-                        p["models"][mid] = cfg
                 if not p["models"] and p["default_model"]:
                     p["models"][p["default_model"]] = guess_model_cfg(p["default_model"])
                 out[name] = p

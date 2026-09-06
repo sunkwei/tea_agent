@@ -701,10 +701,21 @@ class AgentModule(HotReloadModule):
 
             ai_msg = None
             used_tools = None
+
+            # ⭐ 实时 usage 推送：每轮 LLM 调用完成（execute_tool_loop 挂钩）即
+            # 推送 {type:"usage"} 事件，前端 updateUsage 即时刷新 usage-bar。
+            def _usage_cb(_sess):
+                try:
+                    _ud = _build_usage_data(_sess)
+                    if _ud.get("total_tokens") or _ud.get("context_used"):
+                        _put({"type": "usage", "usage": _ud})
+                except Exception:
+                    logger.exception("usage push failed")
+
             try:
                 ai_msg, used_tools = session.chat_stream(
                     msg, callback=stream_cb, topic_id=topic_id,
-                    on_status=status_cb,
+                    on_status=status_cb, on_usage=_usage_cb,
                 )
             finally:
                 tlk.toolkit._question_web_handler = None

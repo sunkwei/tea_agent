@@ -1542,6 +1542,8 @@ class OnlineToolSession(BaseChatSession):
             "callback": callback,
             "on_status": on_status,
         }
+        if on_usage is not None:
+            context["on_usage"] = on_usage
 
         if intent.get("skip_tool_loop"):
             context["skip_tool_loop"] = True

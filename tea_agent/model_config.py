@@ -122,37 +122,30 @@ def _blank_config() -> dict:
 
 
 def guess_model_config(model_id: str, provider_caps: dict | None = None) -> dict:
-    """按模型名启发式猜测能力配置（速查表 → 名称 pattern → 全局默认）。
+    """返回模型配置：不再内置/猜测任何模型属性（2026-09-06 起仅以 provider.yaml 为准）。
+
+    背景：provider.yaml 是唯一事实源；运行期模型属性（max_context_tokens /
+    max_output_tokens / 能力标记）一律从 provider.yaml 的模型条目解析。
+    代码不再维护速查表 / 家族窗口 / 名称 pattern 推断，以免「未收录模型被猜出
+    错误窗口（如 qwen→131K）」误导上下文预算与 tool_profile 分档。
+
+    本函数仅用于：provider.yaml 无该模型时返回「全未知/中性」配置，
+    能力标记只继承 provider_caps（提供商在 provider.yaml 声明的能力）。
+    如需能力与窗口，请在该 provider 的 models.<m_name> 显式配置。
 
     Args:
-        model_id: 模型 id，如 deepseek-chat / gemini-2.5-pro
-        provider_caps: 提供商级能力 {supports_thinking: bool, supports_vision: bool}，
-                       模型名无线索时作为兜底（提供商声明能力一般对其主力模型成立）。
+        model_id: 模型 id（保留入参仅为兼容签名，不再参与任何推断）
+        provider_caps: 提供商级能力 {supports_thinking: bool, supports_vision: bool}
+
+    Returns:
+        中性配置 dict（max_context_tokens/max_output_tokens=0 表示未知）
     """
     cfg = _blank_config()
-    mid = (model_id or "").strip()
-    low = mid.lower()
-    known = _KNOWN_MODELS.get(low)
-    if known:
-        cfg.update(known)
-    # 名称后缀上下文标记：moonshot-v1-32k / ernie-4.5-8k / llama-3.1-70b-128k
-    m = _CTX_SUFFIX_RE.search(low)
-    if m and not known:
-        n, unit = float(m.group(1)), m.group(2).lower()
-        cfg["max_context_tokens"] = int(n * (1_048_576 if unit == "m" else 1024))
-    elif not known:
-        for pat, fam_ctx in _FAMILY_CTX:
-            if pat.search(low):
-                cfg["max_context_tokens"] = fam_ctx
-                break
-    if _THINK_RE.search(low):
-        cfg["supports_thinking"] = True
-    if _VISION_RE.search(low):
-        cfg["supports_vision"] = True
     if provider_caps:
-        if provider_caps.get("supports_thinking") and not _KNOWN_MODELS.get(low):
+        # 仅继承提供商在 provider.yaml 显式声明的能力；不再按模型名启发
+        if provider_caps.get("supports_thinking"):
             cfg["supports_thinking"] = True
-        if provider_caps.get("supports_vision") and not _KNOWN_MODELS.get(low):
+        if provider_caps.get("supports_vision"):
             cfg["supports_vision"] = True
     return cfg
 

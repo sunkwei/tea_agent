@@ -490,14 +490,16 @@ class APIComponent(SessionComponent):
         # 的 RC 值已无法由客户端还原/校验，继续开启 thinking 会反复 400；强制关闭
         # thinking 后 DeepSeek 不再要求 RC 回传，对话可继续。下一用户回合
         # reset_session_state() 清除该标志，thinking 自动恢复。
-        if disable_thinking or getattr(self.ctx, "_rc400_recovery", False):
-            if target_model not in ("mimo-v2.5-pro", "mimo-v2.5", "mimo-v2.0"):
-                extra_body = {"thinking": {"type": "disabled"}}
-                kwargs["extra_body"] = extra_body
-                kwargs.pop("stream_options", None)
-                logger.warning(
-                    f"⚠️ RC 400 自愈：本回合剩余请求强制关闭 thinking (model={target_model})"
-                )
+        if (
+            (disable_thinking or getattr(self.ctx, "_rc400_recovery", False))
+            and target_model not in ("mimo-v2.5-pro", "mimo-v2.5", "mimo-v2.0")
+        ):
+            extra_body = {"thinking": {"type": "disabled"}}
+            kwargs["extra_body"] = extra_body
+            kwargs.pop("stream_options", None)
+            logger.warning(
+                f"⚠️ RC 400 自愈：本回合剩余请求强制关闭 thinking (model={target_model})"
+            )
 
         # ── 防御性 RC 字段补全（DeepSeek thinking 模式硬性要求）──
         # 凡 thinking **启用**（extra_body.thinking.type=enabled 或携带

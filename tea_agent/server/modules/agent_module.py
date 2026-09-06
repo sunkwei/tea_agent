@@ -983,6 +983,8 @@ class AgentModule(HotReloadModule):
         cls._config_path = config_path
         if agent and hasattr(agent, '_config_path'):
             agent._config_path = config_path
+        # 记住最后成功使用的 config（下次启动默认使用）
+        cls._remember_last_config(config_path)
         return {"ok": True, "config_path": config_path}
 
     # ── 配置信息 ──

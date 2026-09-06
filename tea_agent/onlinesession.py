@@ -12,6 +12,12 @@ from tea_agent.prompt_manager import (
     INTERRUPT_ABANDONED_TMPL,
     INTERRUPT_CORRECTED_TMPL,
 )
+from tea_agent.session.components import (  # noqa: F401  拆分自本文件，re-export 兼容
+    APIComponent,
+    SummarizerComponent,
+    ToolComponent,
+)
+from tea_agent.session.components.tool import _summarize_json  # noqa: F401  re-export 兼容
 
 # 组件导入（替代 Mixin）
 from tea_agent.session.context import SessionContext
@@ -22,12 +28,6 @@ from tea_agent.session.prompts import (
     COMPACT_SYSTEM_PROMPT,
 )
 from tea_agent.session.tool_loop_runner import execute_tool_loop
-from tea_agent.session.components import (  # noqa: F401  拆分自本文件，re-export 兼容
-    APIComponent,
-    SummarizerComponent,
-    ToolComponent,
-)
-from tea_agent.session.components.tool import _summarize_json  # noqa: F401  re-export 兼容
 from tea_agent.session_pipeline import SessionPipeline
 from tea_agent.tool_hooks import tool_hooks
 from tea_agent.tool_profiles import filter_tools_by_profile, resolve_tool_profile
@@ -1054,11 +1054,13 @@ class OnlineToolSession(BaseChatSession):
         content = "".join(content_parts)
         reasoning_content = "".join(reasoning_parts)
         # B 兜底：Muse 合成思考若未闭合，补一次 DONE，避免前端悬挂
-        if reasoning_parts and "muse" in (self.context.model or "").lower():
-            # 检查是否已发过 DONE：若 reasoning 已合成但未标记 done，补闭合
-            if not getattr(self, "_muse_syn_done", False):
-                callback("[THINK_DONE]")
-                self._muse_syn_done = True
+        if (
+            reasoning_parts
+            and "muse" in (self.context.model or "").lower()
+            and not getattr(self, "_muse_syn_done", False)
+        ):
+            callback("[THINK_DONE]")
+            self._muse_syn_done = True
         # 下一轮重置
         self._muse_syn_done = False
         self._muse_syn_active = False

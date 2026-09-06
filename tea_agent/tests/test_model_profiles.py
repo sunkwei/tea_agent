@@ -96,8 +96,8 @@ def test_store_bootstrap_uses_profiles_only(pstore):
     # 预置表不再注入面板；仅 profile（+custom）
     assert set(data["providers"]) == {"default", "ds"}
     assert data["providers"]["ds"]["config_path"].endswith("config_ds.yaml")
-    # 启发能力表对 profile 模型仍生效（deepseek-v4-pro → 1M ctx）
-    assert data["providers"]["ds"]["models"]["deepseek-v4-pro"]["max_context_tokens"] == 1_000_000
+    # 模型属性不再由代码内置表推断（provider.yaml 未收录该模型 → 0=未知）
+    assert data["providers"]["ds"]["models"]["deepseek-v4-pro"]["max_context_tokens"] == 0
     # bootstrap 角色绑定：读 TEA_CONFIG（伪造 config.yaml）→ main=deepseek-chat
     assert data["roles"].get("main", {}).get("model") == "deepseek-chat"
     assert data["roles"]["main"]["provider"] == "default"

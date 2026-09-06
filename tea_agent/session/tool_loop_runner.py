@@ -945,6 +945,7 @@ def execute_tool_loop(session, context: dict) -> dict:
             f"model response: content_len={len(content)}, reasoning_len={len(reasoning_content)}, "
             f"tool_calls_data={len(tool_calls_data)}"
         )
+        _emit_usage()  # 每轮 LLM 响应完成 → 实时推送累计 usage
 
         valid_tool_calls = session.tools_comp.parse_tool_calls_from_stream(tool_calls_data)
 

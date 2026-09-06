@@ -79,6 +79,23 @@ demo = [
     "tensorflow>=2.0.0",
     "tflite-runtime>=2.0.0",
 ]
+# 测试与开发（CI 用 `pip install -e .[dev]` 后 `pytest -n auto`）
+dev = [
+    "pytest>=8.0.0",
+    "pytest-xdist>=3.6.0",
+    "pytest-timeout>=2.3.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.6.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tea_agent/tests"]
+timeout = 180          # 单个测试超时保护（防网络/LLM 挂死）
+timeout_method = "thread"
+addopts = "-ra --durations=15"
+markers = [
+    "slow: 慢速集成测试（默认 CI 并行跑，本地可 -m 'not slow'）",
+]
 
 [tool.ruff]
 line-length = 150

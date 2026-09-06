@@ -1459,8 +1459,18 @@ class OnlineToolSession(BaseChatSession):
         callback: Callable[[str], None],
         topic_id: str = "",
         on_status: Callable[[str], None] | None = None,
+        on_usage: Callable[[Any], None] | None = None,
     ) -> tuple[str, bool]:
-        """流式对话，支持工具调用。使用 Pipeline 执行可配置的步骤。"""
+        """流式对话，支持工具调用。使用 Pipeline 执行可配置的步骤。
+
+        Args:
+            msg: 用户消息（str 或 {"text","images"}）
+            callback: 流式增量回调
+            topic_id: 主题 ID
+            on_status: 状态文本回调（如"生成中…"）
+            on_usage: 每轮 LLM 调用完成后回调，参数为 OnlineToolSession 实例
+                （用于实时推送 token 用量/命中率/上下文占用）。见 execute_tool_loop。
+        """
         _msg_text = msg if isinstance(msg, str) else msg.get("text", "")
         _msg_images = None if isinstance(msg, str) else msg.get("images", [])
 

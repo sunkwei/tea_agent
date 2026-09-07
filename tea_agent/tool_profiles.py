@@ -116,13 +116,11 @@ _PROFILE_TOOLSETS: dict[str, list[str]] = {
         "toolkit_format_code",
         "toolkit_code_review",
         "toolkit_run_tests",
-        "toolkit_git_commit",
         "toolkit_build",
         "toolkit_publish_doc",
         "toolkit_task_resume",
         "toolkit_custom_commands",
         "toolkit_self_evolve",
-        "toolkit_reflection",
     ],
 }
 

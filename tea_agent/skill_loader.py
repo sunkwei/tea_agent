@@ -177,7 +177,7 @@ SKILL_DOMAINS: dict[str, SkillDomain] = {
     "write-better-commits": SkillDomain(
         strong_keywords=["提交信息优化", "commit message", "规范提交", "写提交信息"],
         weak_keywords=["提交", "commit", "git 提交", "changelog"],
-        covered_by=["toolkit_git_commit"],
+        covered_by=["toolkit_exec"],
     ),
     "writing-style": SkillDomain(
         strong_keywords=["写作风格", "语气调整", "风格模板", "文风", "文章风格"],

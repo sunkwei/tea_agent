@@ -479,7 +479,7 @@ TOOL_CATEGORIES = {
         "toolkit_run_tests",
     ],
     "记忆与知识": [
-        "toolkit_memory", "toolkit_kb", "toolkit_reflection",
+        "toolkit_memory", "toolkit_kb",
         "toolkit_proactive",
     ],
     "多Agent协作": [
@@ -489,9 +489,6 @@ TOOL_CATEGORIES = {
     "计划与任务": [
         "toolkit_plan", "toolkit_todo", "toolkit_scheduler",
         "toolkit_task_resume",
-    ],
-    "Git版本控制": [
-        "toolkit_git_commit",
     ],
     "Web与网络": [
         "toolkit_browser_tab", "toolkit_js_fetch", "toolkit_mcp",

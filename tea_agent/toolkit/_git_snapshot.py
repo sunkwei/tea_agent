@@ -1,4 +1,4 @@
-"""Git 快照 — 修改工具自动"存盘"（借鉴 toolkit_self_evolve L0 + toolkit_git_commit）。
+"""Git 快照 — 修改工具自动"存盘"（借鉴 toolkit_self_evolve L0 的 git 快照机制）。
 
 目的：杜绝"改了没存盘"——任何文件修改工具（toolkit_edit / toolkit_diff /
 toolkit_file 等）修改成功后自动 git commit 该文件，会话中断也不丢失。

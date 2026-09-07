@@ -323,7 +323,7 @@ class ParallelExecutor:
     # 标记为"顺序执行"的工具（读写类，有副作用）
     SERIAL_TOOLS = {
         "toolkit_edit", "toolkit_self_evolve",
-        "toolkit_file", "toolkit_exec", "toolkit_git_commit",
+        "toolkit_file", "toolkit_exec",
         "toolkit_save", "toolkit_reload", "toolkit_diff",
     }
 

@@ -987,9 +987,9 @@ POST /api/model/config
 | 文件操作 | `toolkit_file`, `toolkit_save_file`, `toolkit_edit` | 读写编辑文件 |
 | 代码智能 | `toolkit_lsp`, `toolkit_search`, `toolkit_code_review` | LSP/搜索/审查 |
 | 系统操作 | `toolkit_exec`, `toolkit_os_info`, `toolkit_screenshot` | 命令执行/截图 |
-| 版本控制 | `toolkit_git_commit`, `toolkit_diff`, `toolkit_diff_edit` | Git 操作 |
+| 版本控制 | `toolkit_exec`(git), `toolkit_diff`, `toolkit_diff_edit` | Git 操作 |
 | 知识管理 | `toolkit_kb`, `toolkit_memory`, `toolkit_skills` | 知识库/记忆/技能 |
-| 自我进化 | `toolkit_self_evolve`, `toolkit_reflection`, `toolkit_prompt_evolve` | 自我优化 |
+| 自我进化 | `toolkit_self_evolve`, `toolkit_prompt_evolve` | 自我优化 |
 | 任务管理 | `toolkit_todo`, `toolkit_plan`, `toolkit_scheduler` | TODO/计划/调度 |
 | Multi-Agent | `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_parallel_subtasks` | 子 Agent |
 | 构建发布 | `toolkit_build`, `toolkit_release_version`, `toolkit_format_code` | 构建/发布 |

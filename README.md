@@ -47,10 +47,10 @@ toolkit_experience_solidify → 成功→技能，失败→教训，自动结晶
 | 📁 文件 / 代码 | `toolkit_file`, `toolkit_edit`, `toolkit_diff`, `toolkit_code_review`, `toolkit_format_code` |
 | 🔍 搜索 / 智能 | `toolkit_search`, `toolkit_lsp`, `toolkit_explr`, `toolkit_query_chat_history` |
 | 🖥️ 屏幕 / 浏览器 | `toolkit_screenshot`, `toolkit_ocr`, `toolkit_input`, `toolkit_js_fetch`, `toolkit_browser_tab` |
-| 🧠 记忆 / 反思 | `toolkit_memory`, `toolkit_kb`, `toolkit_reflection`, `toolkit_proactive` |
+| 🧠 记忆 / 知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_proactive` |
 | 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_remote_agent` |
 | 📋 规划 / 调度 | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume` |
-| 🔧 系统 / 工程 | `toolkit_exec`, `toolkit_pkg`, `toolkit_build`, `toolkit_git_commit`, `toolkit_config` |
+| 🔧 系统 / 工程 | `toolkit_exec`(含 git), `toolkit_pkg`, `toolkit_build`, `toolkit_config` |
 
 工具引擎（`tlk.py`）支持**动态加载/卸载/重载** — 对话中创建一个新工具，下一轮就能用。
 

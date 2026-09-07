@@ -1,6 +1,6 @@
 # 工具清单
 
-注册工具总数: 59（LLM 可见: 57）
+注册工具总数: 57（LLM 可见: 55）
 
 | 工具 | 说明 |
 |------|------|
@@ -21,7 +21,6 @@
 | \toolkit_file\ | 统一文件读写与目录列表。action='read' 读取文件；action='write' 写入文件；action='list' 列出目录 (跨平台 dir/ls)。 |
 | \toolkit_fork_session\ | 创建会话分支（Session Fork）：复制源主题全部对话到新主题，用于分支实验/回滚测试。借鉴 DeepSeek Harness fork 能力，fork lineage 持久... |
 | \toolkit_format_code\ | 代码格式化工具。支持 Python (black) 和 C/C++ (clang-format) 格式化。 功能： - 格式化单个文件或目录 - 检查格式是否符合规范 - 自动检测... |
-| \toolkit_git_commit\ | Git commit — 固定 author: tea_agent <sunkwei@gmail.com>，不受全局 git 配置影响。支持 add/commit/amend。 |
 | \toolkit_harness_schema\ | Harness JSON Schema — Tea Agent 机器可读能力清单。生成符合标准格式的能力描述，含 Agent 信息、15+ 能力矩阵、工具列表、技能、记忆、子 Ag... |
 | \toolkit_input\ | 模拟鼠标和键盘操作 — Agent 的'手'。可移动鼠标、点击、拖拽、滚动、输入文本、按快捷键。配合 toolkit_screenshot 可实现「看→分析→操作」闭环。 |
 | \toolkit_js_fetch\ | 用 Playwright 无头浏览器抓取 JS 动态渲染的页面内容。跨平台自动选浏览器(Windows→Edge/Linux→Chromium→Firefox)。解决 mcp-se... |
@@ -42,7 +41,6 @@
 | \toolkit_publish_doc\ | 发布文档到可下载目录并返回下载链接。当用户明确要求创建文档（接口文档、README、md 等）并已用 toolkit_file 保存后，调用此工具发布，然后在最终回复中输出 Mar... |
 | \toolkit_query_chat_history\ | 查询 chat_history.db 中的 conversations 表。action=schema查看表结构, query按UUID查记录, topic按topic_id列所有... |
 | \toolkit_question\ | 执行过程中向用户提问。支持选项列表和自定义输入。 使用场景： - 收集用户偏好或需求 - 澄清模糊的指令 - 获取实现方案的决策 - 提供方向选择的选项 返回：用户选择的答案字符串 |
-| \toolkit_reflection\ | 元认知反思工具。trigger=触发自我分析反思，list=查看最近反思，stats=查看统计。Agent 可在任务完成后用此工具反思自己的表现。 |
 | \toolkit_release_version\ | 自动化版本发布工具。更新版本号、CHANGELOG，并构建项目。 |
 | \toolkit_reload\ | 重新加载所有工具函数，并注册为全局可用的方法，所有方法使用 toolkit_ 为前缀 |
 | \toolkit_remote_agent\ | 远程设备Agent控制工具。与终端设备(BM1688/RK3588/X3等)上的tea_agent.server通信，向设备AI发送任务，获取AI的最终回答。主机AI基于回答决策下... |

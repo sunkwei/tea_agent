@@ -200,6 +200,18 @@ toolkit_reload()
 
 ## 提交规范
 
+### 提交命令（固定 author）
+
+所有 git commit 通过 `toolkit_exec` 执行，并用 `-c` 注入固定 author（不受全局/本地 git 配置影响）：
+
+```bash
+git add <files>
+git -c user.name=tea_agent -c user.email=sunkwei@gmail.com commit -m "类型: 简短描述"
+```
+
+- `--amend` / `--no-verify` / `--allow-empty` 按需追加
+- 只 add 相关文件，避免把无关改动带进提交
+
 ### 提交信息格式
 ```
 <类型>: <简短描述>
@@ -222,7 +234,7 @@ toolkit_release_version(
 # 或手动
 # 1. 更新 pyproject.toml version
 # 2. 更新 CHANGELOG.md
-# 3. git commit -m "release: vx.y.z"
+# 3. 固定 author 提交: git -c user.name=tea_agent -c user.email=sunkwei@gmail.com commit -m "release: vx.y.z"
 # 4. git push
 ```
 

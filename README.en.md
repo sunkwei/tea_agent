@@ -47,10 +47,10 @@ toolkit_experience_solidify → Success→skills, failure→lessons, auto-crysta
 | 📁 Files / Code | `toolkit_file`, `toolkit_edit`, `toolkit_diff`, `toolkit_code_review`, `toolkit_format_code` |
 | 🔍 Search / Intelligence | `toolkit_search`, `toolkit_lsp`, `toolkit_explr`, `toolkit_query_chat_history` |
 | 🖥️ Screen / Browser | `toolkit_screenshot`, `toolkit_ocr`, `toolkit_input`, `toolkit_js_fetch`, `toolkit_browser_tab` |
-| 🧠 Memory / Reflection | `toolkit_memory`, `toolkit_kb`, `toolkit_reflection`, `toolkit_proactive` |
+| 🧠 Memory / Knowledge | `toolkit_memory`, `toolkit_kb`, `toolkit_proactive` |
 | 🤖 Multi-Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_remote_agent` |
 | 📋 Planning / Scheduling | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume` |
-| 🔧 System / Engineering | `toolkit_exec`, `toolkit_pkg`, `toolkit_build`, `toolkit_git_commit`, `toolkit_config` |
+| 🔧 System / Engineering | `toolkit_exec` (incl. git), `toolkit_pkg`, `toolkit_build`, `toolkit_config` |
 
 The tool engine (`tlk.py`) supports **dynamic load/unload/reload** — create a new tool mid-conversation, use it in the next turn.
 

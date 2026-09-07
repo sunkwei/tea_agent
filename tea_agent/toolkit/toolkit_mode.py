@@ -116,7 +116,7 @@ def toolkit_mode(action: str, text: str = "", mode: str = ""):
             "2. 处理 CI/CD、依赖管理、环境配置\n"
             "3. ❌ 不修改业务逻辑代码\n"
             "4. 输出：构建日志 + 发布说明 + 验证结果\n"
-            "5. 优先使用：toolkit_build / toolkit_release_version / toolkit_git_commit"
+            "5. 优先使用：toolkit_build / toolkit_release_version / toolkit_exec"
         ),
         # 兼容旧模式
         "pragmatic": (

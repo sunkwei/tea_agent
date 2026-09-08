@@ -24,6 +24,7 @@ all_defined = collections.Counter()
 references = collections.Counter()
 file_of_def = {}
 modpath_of_file = {}
+module_defs = collections.Counter()  # (module, name) -> 1
 
 for fp in all_files:
     try:

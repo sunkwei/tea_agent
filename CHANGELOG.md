@@ -3,6 +3,19 @@
 
 ## [Unreleased]
 ### Features
+- fix: `get_max_context_tokens` 识别 SessionContext 直挂 `max_context_tokens`（修复 Web 界面窗口上限误显示 1M 兜底值）
+  - 根因：该函数只识别 `AgentConfig.main_model`；而 Web 界面 `_compute_context_usage`、
+    `history_builder._resolve_max_ctx`、`auto_compact.compact` 的调用方传入的都是
+    `SessionContext`（无 `main_model` 属性）→ 查询必然失败、一律回退 1M 默认值，
+    导致 provider.yaml 配的 250K 窗口（62/qwen3.8-27b）在 Web 界面显示成
+    "1,048,576"（1M 兜底值）
+  - `auto_compact.py`：三级解析优先级 — ① AgentConfig.main_model（原行为不变）→
+    ② 对象直挂 `max_context_tokens` 字段（SessionContext）→ ③ `config`/`context`
+    包装属性递归（防自引用）；均未配置仍回退 1M
+  - 影响面：Web 界面"上下文已用 x%"分母、token_budget 片段、压缩触发阈值、
+    输出感知预算求解的窗口上限
+  - tests: `test_context_fragments`/`test_overflow_guard`/`test_onlinesession`/
+    `test_litesession`/`test_agent` 共 198 项回归通过
 - fix(context): A8 上下文溢出防线 — 输出感知预算 + 400 溢出自愈（150K 窗口 + max_tokens=65536 生产 400 事故）
   - 根因：输入预算固定 `max_ctx * 0.8`（"预留 20% 给输出"粗估）——用户配置较大
     max_tokens（如 65536，占 150K 窗口 43.7%）时，84465 输入 < 120000 预算不触发裁剪，

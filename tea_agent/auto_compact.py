@@ -66,20 +66,39 @@ def estimate_messages_tokens(messages: list) -> int:
 def get_max_context_tokens(config) -> int:
     """获取最大上下文 token 数。未显式配置时默认 1M（1048576）。
 
-    兼容两类入参：
-    - config 对象（有 main_model）→ 从 main_model.max_context_tokens / options 读取
-    - SessionContext 等（有 model 字符串）→ 同样只读显式配置
+    兼容三类入参（按优先级）：
+    1. AgentConfig（有 main_model）→ 从 main_model.max_context_tokens / options 读取
+    2. SessionContext 等（对象直挂 max_context_tokens 字段）→ 直接读取
+    3. 包装对象（有 config / context 属性，如 LiteSession/OnlineToolSession）→ 递归内层
     均未显式配置时统一默认 1048576（1M）——保证任何情况下裁剪链都有可用上限。
     不做模型名推断，避免因模型名不匹配导致窗口上限误判。
+
+    2026-09-08 修复：此前只识别 main_model（AgentConfig）；而 Web 界面
+    _compute_context_usage / history_builder._resolve_max_ctx / auto_compact.compact
+    的调用方传入的都是 SessionContext（无 main_model 属性）→ 查询必然失败、
+    一律回退 1M 默认值，导致 provider.yaml 配的 250K 窗口在 Web 界面
+    显示成 "1,048,576"（1M 兜底值）。
     """
     try:
-        main = getattr(config, "main_model", None)
-        if main is not None:
-            if hasattr(main, "max_context_tokens") and main.max_context_tokens:
-                return int(main.max_context_tokens)
-            val = getattr(main, "options", {}).get("max_context_tokens", 0)
+        obj = config
+        if obj is not None:
+            # 1) AgentConfig：从 main_model（ModelConfig）子对象读取
+            main = getattr(obj, "main_model", None)
+            if main is not None:
+                if hasattr(main, "max_context_tokens") and main.max_context_tokens:
+                    return int(main.max_context_tokens)
+                val = getattr(main, "options", {}).get("max_context_tokens", 0)
+                if val:
+                    return int(val)
+            # 2) SessionContext 等：对象直挂 max_context_tokens 字段
+            val = getattr(obj, "max_context_tokens", 0)
             if val:
                 return int(val)
+            # 3) 间接层：包装对象的 config / context 属性（防自引用递归）
+            for attr in ("config", "context"):
+                inner = getattr(obj, attr, None)
+                if inner is not None and inner is not obj:
+                    return get_max_context_tokens(inner)
         # 未显式配置 → 默认 1M
         return 1048576
     except Exception:

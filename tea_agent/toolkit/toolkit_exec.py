@@ -259,6 +259,50 @@ def _build_scrubbed_env() -> dict:
     return scrubbed
 
 
+def _wait_with_monitor(process, monitor, timeout: int, kill_wait: float = 5.0) -> str:
+    """轮询等待子进程结束，处理空闲/硬上限超时，必要时强制终止（single/batch 共用）。
+
+    返回终止原因字符串：
+        ""          — 进程正常结束
+        "monitor"   — 空闲超时（超过 timeout 秒无资源消耗）被监控器终止
+        "hardlimit" — 超过硬上限（timeout × 4 秒）被强制终止
+
+    该函数统一了 _run_single_with_monitor 与 _run_batch_with_monitor 中重复的
+    hard_deadline 等待/终止逻辑，避免两处行为漂移。始终在 finally 中停止监控器。
+    """
+    hard_deadline = time.time() + timeout * 4
+    kill_reason = ""
+    try:
+        while time.time() < hard_deadline:
+            if process.poll() is not None:
+                return ""  # 进程正常结束
+            if monitor.should_kill():
+                kill_reason = "monitor"
+                break
+            time.sleep(1)
+
+        if process.poll() is None:  # 仍在运行 → 需要强制终止
+            if not kill_reason:
+                kill_reason = "hardlimit"
+            try:
+                if hasattr(os, "killpg") and hasattr(os, "getpgid"):
+                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                else:
+                    process.kill()  # Windows: 无 killpg，直接 kill 子进程
+                process.wait(timeout=kill_wait)
+            except (ProcessLookupError, OSError):
+                try:
+                    process.kill()
+                    process.wait(timeout=kill_wait)
+                except Exception:
+                    logger.exception('op_failed')
+            except Exception:
+                logger.exception('op_failed')
+    finally:
+        monitor.stop()
+    return kill_reason
+
+
 def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
     """使用 _ProcessMonitor 智能超时执行单条命令。
 
@@ -314,40 +358,9 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
     t_out.start()
     t_err.start()
 
-    hard_deadline = time.time() + timeout * 4
-    killed_by_monitor = False
-    killed_by_hardlimit = False
-
-    try:
-        while time.time() < hard_deadline:
-            retcode = process.poll()
-            if retcode is not None:
-                break
-            if monitor.should_kill():
-                killed_by_monitor = True
-                break
-            time.sleep(1)
-
-        if process.poll() is None:
-            killed_by_hardlimit = time.time() >= hard_deadline
-            try:
-                if hasattr(os, "killpg") and hasattr(os, "getpgid"):
-                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                else:
-                    process.kill()  # Windows: 无 killpg，直接 kill 子进程
-                process.wait(timeout=5)
-            except (ProcessLookupError, OSError):
-                try:
-                    process.kill()
-                    process.wait(timeout=5)
-                except Exception:
-                    logger.exception('op_failed')
-
-            except Exception:
-                logger.exception('op_failed')
-
-    finally:
-        monitor.stop()
+    kill_reason = _wait_with_monitor(process, monitor, timeout, kill_wait=5)
+    killed_by_monitor = kill_reason == "monitor"
+    killed_by_hardlimit = kill_reason == "hardlimit"
 
     t_out.join(timeout=3)
     t_err.join(timeout=3)

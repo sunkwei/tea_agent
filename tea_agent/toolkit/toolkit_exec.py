@@ -445,9 +445,7 @@ def _run_batch_with_monitor(idx, cmd, timeout):
         t_err.start()
 
         kill_reason = _wait_with_monitor(process, monitor, timeout, kill_wait=3)
-        killed = kill_reason != ""
-
-        monitor.stop()
+        # 注意：_wait_with_monitor 内部 finally 已调用 monitor.stop()
         t_out.join(timeout=2)
         t_err.join(timeout=2)
 

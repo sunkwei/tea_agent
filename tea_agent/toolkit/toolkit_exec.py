@@ -456,15 +456,19 @@ def _run_batch_with_monitor(idx, cmd, timeout):
         retcode = process.returncode if process.returncode is not None else -1
 
         # 正交结果独立报告：超时与 exit code 分开字段
-        timed_out = killed
-        timeout_kind = "monitor" if killed else ""
+        timed_out = kill_reason != ""
+        timeout_kind = kill_reason  # "monitor"/"hardlimit"/""（正常）
         exit_signal = -retcode if retcode < 0 else None
 
-        if killed:
+        if kill_reason:
             cmd_preview = f"{a} {' '.join(ar[:3])}"
             if len(ar) > 3:
                 cmd_preview += f" ... (+{len(ar)-3} args)"
-            stderr = (stderr + "\n" if stderr else "") + f"⏰ 空闲超时({timeout}s): {cmd_preview}"
+            if kill_reason == "monitor":
+                hint = f"⏰ 空闲超时({timeout}s): {cmd_preview}"
+            else:
+                hint = f"⏰ 硬上限超时(>{timeout*4}s): {cmd_preview}"
+            stderr = (stderr + "\n" if stderr else "") + hint
 
         result.update({
             "returncode": retcode,

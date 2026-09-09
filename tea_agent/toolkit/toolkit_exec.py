@@ -444,32 +444,8 @@ def _run_batch_with_monitor(idx, cmd, timeout):
         t_out.start()
         t_err.start()
 
-        hard_deadline = time.time() + timeout * 4
-        killed = False
-
-        while time.time() < hard_deadline:
-            retcode = process.poll()
-            if retcode is not None:
-                break
-            if monitor.should_kill():
-                killed = True
-                break
-            time.sleep(1)
-
-        if process.poll() is None:
-            try:
-                if hasattr(os, "killpg") and hasattr(os, "getpgid"):
-                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                else:
-                    process.kill()  # Windows: 无 killpg，直接 kill 子进程
-                process.wait(timeout=3)
-            except Exception:
-                try:
-                    process.kill()
-                    process.wait(timeout=3)
-                except Exception:
-                    logger.exception('op_failed')
-
+        kill_reason = _wait_with_monitor(process, monitor, timeout, kill_wait=3)
+        killed = kill_reason != ""
 
         monitor.stop()
         t_out.join(timeout=2)

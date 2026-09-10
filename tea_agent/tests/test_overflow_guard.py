@@ -354,3 +354,80 @@ class TestExecuteToolLoopOverflowRecovery:
         assert "上下文溢出自愈后仍失败" in result["full_reply"]
         assert len(notes) >= 1  # 至少一次自愈提示
         sess.close()
+
+
+# ════════════════════════════════════════════════════════════
+# 7. B1/B2: 诚实水位线（计入 tools 开销）+ 15% 弹性预留提前裁剪
+# ════════════════════════════════════════════════════════════
+
+class TestHeadroomBudget:
+    """B1/B2 回归：裁剪目标从 400 线（max_ctx-max_tokens）前移到
+    (1-budget_warn_ratio) 线（默认 85% 窗口），水位线估算计入 tools schema 开销。
+    """
+
+    def test_solve_with_headroom(self):
+        """15% 弹性预留：输入预算 = 窗口 - 输出 - 2% 余量 - 15% headroom"""
+        inb, out = solve_token_budget(150000, 65536, headroom_ratio=0.15)
+        assert out == 65536
+        assert inb == 150000 - 65536 - 3000 - 22500  # 58964
+        assert inb + out + 3000 + 22500 <= 150000
+        # headroom=0 默认 → 旧行为逐字节不变（向后兼容）
+        inb0, _ = solve_token_budget(150000, 65536)
+        assert inb0 == 150000 - 65536 - 3000
+
+    def test_estimate_tools_tokens(self):
+        """B1: tools JSON schema 固定开销可被估算，空/无 toolkit 为 0"""
+        from tea_agent.session.history_builder import _estimate_tools_tokens
+
+        tk = MagicMock()
+        tk.meta_map = {
+            "toolkit_a": {
+                "name": "toolkit_a", "description": "工具A：读取并解析文件内容",
+                "parameters": {"type": "object",
+                               "properties": {"x": {"type": "string"}}},
+            },
+            "toolkit_b": {
+                "name": "toolkit_b",
+                "description": "tool b: a fairly long description text for estimation purposes",
+                "parameters": {"type": "object",
+                               "properties": {"y": {"type": "integer"}}},
+            },
+        }
+        val = _estimate_tools_tokens(SessionContext(toolkit=tk))
+        assert val > 20  # 明显大于空 map（"[]" ≈ 4）
+        empty = _estimate_tools_tokens(SessionContext(toolkit=MagicMock(meta_map={})))
+        assert empty < val
+        assert _estimate_tools_tokens(SessionContext()) == 0
+
+    def test_build_trims_at_headroom_line(self, monkeypatch):
+        """改动前：est≈62K < 旧预算 81464（ratio 0.76 → Tier1）→ 按 92% 窗口发送；
+        改动后：预算 58964（=85% 线减输出余量）→ ratio≈1.1 → Tier3 深度裁剪，
+        裁剪后总量落回弹性区，不再贴着 400 线。"""
+        monkeypatch.setattr("tea_agent.config.get_config", lambda: _fake_config(65536))
+        ctx = SessionContext(model="test-model", enable_thinking=False,
+                             supports_reasoning=False)
+        ctx.max_context_tokens = 150000
+        for _i in range(142):  # ~62k tokens（仅消息体；tools 空）
+            ctx.messages.append({"role": "user", "content": "Q" * 200})
+            ctx.messages.append({"role": "assistant", "content": "A" * 500})
+            ctx.messages.append({"role": "tool", "content": "R" * 1000})
+        sess = _make_session_from_ctx(ctx)
+        result = sess._build_api_messages()
+
+        budget, out_cap = solve_token_budget(150000, 65536, headroom_ratio=0.15)
+        assert out_cap == 65536 and budget == 58964
+        # 构建记录求解器输出上限（弹性区口径）
+        assert ctx._output_cap == out_cap
+        # 裁剪目标 = 弹性区线：总量 ≤ 输入预算
+        assert estimate_messages_tokens(result) <= budget
+        # 总账（消息 + 输出 + 2% 余量）≤ 85% 窗口 → 在 400 线之前完成裁剪
+        assert estimate_messages_tokens(result) + out_cap + 3000 <= int(150000 * 0.85)
+        # Tier3 触发 → 下一轮强制增量 LLM 摘要
+        assert ctx._token_exhausted is True
+        # 最近用户轮次保留（过滤末尾自动注入的动态上下文）
+        real_msgs = [m for m in result
+                     if not (m.get("role") == "user"
+                             and str(m.get("content", "")).startswith("[动态上下文"))]
+        last_user = [m for m in real_msgs if m.get("role") == "user"]
+        assert last_user and str(last_user[-1]["content"]).startswith("Q")
+        sess.close()

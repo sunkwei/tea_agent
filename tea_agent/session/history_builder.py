@@ -1225,8 +1225,13 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     _first_trim = not getattr(context, "_loop_trim_done", False)
     if input_budget > 0 and _first_trim:
         est = estimate_messages_tokens(result)
+        # B1: 水位线计入 tools schema 固定开销（~14K+ tokens，此前漏计 →
+        # ratio 系统性低估 10-20%，裁剪拖到 400 线才触发）。
+        est += _estimate_tools_tokens(context)
         # A7: 先校准（用上次的 _last_estimate_tokens 基准），再记录本次估算——
         # 顺序不可颠倒，否则 _calibrated_estimate 读到的基准被本次值覆盖。
+        # B1: 记录的是"含 tools 开销"的值，与 last_real（真实 prompt 含
+        # tools/system 全量）同一口径 → 校准 scale 收敛到 ~1，不再虚高。
         est_check = _calibrated_estimate(context, est)
         context._last_estimate_tokens = est
         max_ctx = _resolve_max_ctx(context)
@@ -1247,6 +1252,20 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             ratio = new_ratio
             context._loop_max_ratio = ratio
             tier = classify_waterline(ratio)
+            # B2: 提前裁剪线——B1 校准后的真实用量（含 tools 开销）+ 输出
+            # 已越过 (1-warn_ratio) 窗口（默认 85%）而 ratio 档位不够深时，
+            # 强制升到 Tier2 渐进裁剪。裁剪目标本身也已在 headroom 收紧的
+            # 预算内（= (1-warn_ratio) 线），不再贴着 max_ctx - max_tokens
+            # （400 线）才动手。
+            _ocap_pre = int(getattr(context, "_output_cap", 0) or 0)
+            _warn_ratio = _get_headroom_ratio(context)
+            _headroom_line = int(max_ctx * (1.0 - _warn_ratio))
+            if tier < 2 and est_check + _ocap_pre + _budget_margin(max_ctx) > _headroom_line:
+                tier = 2
+                logger.info(
+                    f"💧 提前裁剪线: 输入 {est_check} + 输出 {_ocap_pre} 超过 "
+                    f"{(1.0 - _warn_ratio) * 100:.0f}% 窗口（{_headroom_line}），提前执行渐进裁剪"
+                )
             if tier >= 3:
                 # Tier 3: 先做本地裁剪（Tier1+2 累积），再置强制摘要标志
                 context._token_exhausted = True
@@ -1267,7 +1286,7 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             est_after = estimate_messages_tokens(result)
             if est_after != est:
                 logger.info(f"裁剪后: {est_after} tokens (节省 {est - est_after})")
-            # 最后防线（A7→A8）：裁剪后 输入 + 输出上限 + 安全余量 仍超窗口 →
+            # 最后防线（A7→A8）：裁剪后 输入 + 输出上限 + 安全余量 仍超 400 线 →
             # 置强制摘要标志，由下一轮 summarize_old_history 执行增量 LLM 摘要兜底。
             _ocap = int(getattr(context, "_output_cap", 0) or 0)
             if est_after + _ocap + _budget_margin(max_ctx) > max_ctx:

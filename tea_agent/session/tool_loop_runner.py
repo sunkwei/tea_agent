@@ -274,15 +274,18 @@ def _apply_context_overflow_recovery(session, info: dict) -> None:
                 logger.debug("A8 内存 config 修正失败（隔离）", exc_info=True)
 
     # 2) 按修正后窗口求解新预算
+    # B2: 与常规构建同一 headroom 弹性区（budget_warn_ratio），紧急预算
+    # 与常规预算同口径——恢复后直接落在 400 线之前的弹性区内
     from tea_agent.session.history_builder import (
         _get_effective_max_tokens,
+        _get_headroom_ratio,
         _resolve_max_ctx,
         solve_token_budget,
     )
 
     max_ctx = _resolve_max_ctx(ctx)
     requested = int(info.get("requested_out") or 0) or _get_effective_max_tokens(ctx)
-    input_budget, out_cap = solve_token_budget(max_ctx, requested)
+    input_budget, out_cap = solve_token_budget(max_ctx, requested, _get_headroom_ratio(ctx))
     prompt_tokens = int(info.get("prompt_tokens") or 0)
     if prompt_tokens > input_budget:
         # 失败的"真实输入"比求解预算还大（估算失准）→ 取一半作紧急预算

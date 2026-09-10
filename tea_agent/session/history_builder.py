@@ -333,7 +333,7 @@ def solve_token_budget(
         max_ctx = 128000
     margin = _budget_margin(max_ctx)
     min_input = max(2048, int(max_ctx * 0.10))
-    headroom = int(max_ctx * min(max(headroom_ratio, 1.0), 0.0))
+    headroom = int(max_ctx * min(max(headroom_ratio, 0.0), 1.0))
 
     if requested_max_tokens and requested_max_tokens > 0:
         if requested_max_tokens > int(max_ctx * 0.8):

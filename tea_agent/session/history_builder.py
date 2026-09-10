@@ -371,10 +371,46 @@ def _get_effective_max_tokens(context: Any) -> int:
         return 0
 
 
+def _get_headroom_ratio(context: Any) -> float:
+    """B2 裁剪弹性空间比例（默认 15% = CompactionSettings.budget_warn_ratio）。
+
+    与 token_budget 片段共用同一报警阈值语义：输入超过 (1-ratio)×窗口
+    即进入"警戒区"，水位线在该线前完成裁剪，不再贴着 400 线才动手。
+    context.budget_warn_ratio 可运行时覆盖（None/0=用默认 15%）。
+    """
+    warn = getattr(context, "budget_warn_ratio", None)
+    if warn is not None and warn > 0:
+        return float(warn)
+    return DEFAULT_COMPACTION_SETTINGS.budget_warn_ratio
+
+
 def _get_output_cap(context: Any) -> int:
-    """求解当前会话的输出 token 上限（供 build_api_messages 记录到 context）。"""
+    """求解当前会话的输出 token 上限（供 build_api_messages 记录到 context）。
+
+    B2：传入 headroom_ratio——输出与输入共同避让 (1-15%) 弹性区。
+    """
     max_ctx = _resolve_max_ctx(context)
-    return solve_token_budget(max_ctx, _get_effective_max_tokens(context))[1]
+    return solve_token_budget(
+        max_ctx, _get_effective_max_tokens(context), _get_headroom_ratio(context)
+    )[1]
+
+
+def _estimate_tools_tokens(context: Any) -> int:
+    """估算 tools JSON Schema 的固定开销（每次请求都携带全量定义）。
+
+    B1：水位线/预算此前只统计消息（含 L0 富化 system），漏掉 ~14K+ tokens
+    的工具 schema（context_fragments._estimate_context_tokens S1 已计入，
+    build 链路漏计）→ ratio 系统性低估 10-20%（小窗口更甚），深度裁剪
+    往往拖到输入达到 max_ctx - max_tokens（400 线）才触发。
+    """
+    try:
+        toolkit = getattr(context, "toolkit", None)
+        meta_map = getattr(toolkit, "meta_map", None) if toolkit else None
+        if not meta_map:
+            return 0
+        return estimate_tokens(json.dumps(list(meta_map.values()), ensure_ascii=False, default=str))
+    except Exception:
+        return 0
 
 
 def _get_token_budget(context: Any) -> tuple[int, int]:
@@ -386,6 +422,9 @@ def _get_token_budget(context: Any) -> tuple[int, int]:
     **更早、更积极**地触发裁剪，从源头杜绝 输入+输出 > 窗口 的 400 溢出；
     配置 max_tokens 较小时预算相应放宽（更精确，不再多裁）。
 
+    B2：再减去 headroom（默认 15% 窗口）——裁剪目标从 400 线前移到
+    (1-15%) 线；水位 ratio 与渐进裁剪目标随之更积极。
+
     tool_prune_threshold = max(65536, input_budget * 0.02)（动态阈值，最低 64K 字符）。
 
     A7 修复（保留）：max_context_tokens 未配置（=0/None）时，回退到
@@ -393,7 +432,9 @@ def _get_token_budget(context: Any) -> tuple[int, int]:
     杜绝"裁剪链完全跳过导致上下文无限增长溢出"（2026-08-13 生产事故根因）。
     """
     max_ctx = _resolve_max_ctx(context)
-    input_budget, _ = solve_token_budget(max_ctx, _get_effective_max_tokens(context))
+    input_budget, _ = solve_token_budget(
+        max_ctx, _get_effective_max_tokens(context), _get_headroom_ratio(context)
+    )
     # 动态工具裁剪阈值：预算的 2%，最低 64K 字符（保证读取代码/文件内容完整）
     tool_prune_threshold = max(65536, int(input_budget * 0.02))
     return input_budget, tool_prune_threshold

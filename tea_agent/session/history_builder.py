@@ -296,7 +296,11 @@ def _budget_margin(max_ctx: int) -> int:
     return max(1024, int(max_ctx * 0.02))
 
 
-def solve_token_budget(max_ctx: int, requested_max_tokens: int = 0) -> tuple[int, int]:
+def solve_token_budget(
+    max_ctx: int,
+    requested_max_tokens: int = 0,
+    headroom_ratio: float = 0.0,
+) -> tuple[int, int]:
     """求解能放进模型窗口的 (input_budget, output_cap)。
 
     A8（上下文溢出防线）：API 在 `输入 + max_tokens > 窗口` 时返回 400
@@ -311,19 +315,25 @@ def solve_token_budget(max_ctx: int, requested_max_tokens: int = 0) -> tuple[int
     - min_input：10% 窗口（最低 2048）——保证模型总有基本工作空间
     - requested > 80% 窗口 → 输出钳制到 50% 窗口（请求侧过大，无法原样满足）
     - requested 未知（0）→ 预留 20%（旧行为基线，保守不变）
+    - headroom（B2）：额外预留 headroom_ratio×窗口 的弹性空间（默认调用方传
+      budget_warn_ratio=15%）——裁剪目标从 400 线（max_ctx - max_tokens）
+      前移到 (1-headroom) 线，让"输入填满到 400 线才发现超限"不再发生，
+      也给新轮次/工具结果/估算偏差留出缓冲（0=旧行为，向后兼容）
 
     Args:
         max_ctx: 上下文窗口上限（≤0 时按 128K 保守兜底）
         requested_max_tokens: 配置/模式请求的输出 token 数（0=未知）
+        headroom_ratio: 输入预算之外额外保留的窗口比例（0≤r<1）
 
     Returns:
         (input_budget, output_cap)：请求应满足 输入≤input_budget 且
-        max_tokens≤output_cap；两者之和 + margin 恒 ≤ max_ctx。
+        max_tokens≤output_cap；输入+输出+margin 恒 ≤ max_ctx - headroom。
     """
     if max_ctx <= 0:
         max_ctx = 128000
     margin = _budget_margin(max_ctx)
     min_input = max(2048, int(max_ctx * 0.10))
+    headroom = int(max_ctx * min(max(headroom_ratio, 1.0), 0.0))
 
     if requested_max_tokens and requested_max_tokens > 0:
         if requested_max_tokens > int(max_ctx * 0.8):
@@ -336,10 +346,10 @@ def solve_token_budget(max_ctx: int, requested_max_tokens: int = 0) -> tuple[int
         # 未知 → 20% 基线（旧行为）
         out_cap = max(1024, int(max_ctx * 0.2))
 
-    input_budget = max(min_input, max_ctx - out_cap - margin)
-    # 下限介入后仍超窗口（极端小窗口）→ 再收缩输出，恒保证总和 ≤ 窗口
-    if input_budget + out_cap + margin > max_ctx:
-        out_cap = max(1024, max_ctx - input_budget - margin)
+    input_budget = max(min_input, max_ctx - out_cap - margin - headroom)
+    # 下限介入后仍超窗口（极端小窗口）→ 再收缩输出，恒保证总和 ≤ 窗口-headroom
+    if input_budget + out_cap + margin + headroom > max_ctx:
+        out_cap = max(1024, max_ctx - input_budget - margin - headroom)
     return input_budget, out_cap
 
 

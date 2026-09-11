@@ -296,7 +296,11 @@ def _budget_margin(max_ctx: int) -> int:
     return max(1024, int(max_ctx * 0.02))
 
 
-def solve_token_budget(max_ctx: int, requested_max_tokens: int = 0) -> tuple[int, int]:
+def solve_token_budget(
+    max_ctx: int,
+    requested_max_tokens: int = 0,
+    headroom_ratio: float = 0.0,
+) -> tuple[int, int]:
     """求解能放进模型窗口的 (input_budget, output_cap)。
 
     A8（上下文溢出防线）：API 在 `输入 + max_tokens > 窗口` 时返回 400
@@ -311,19 +315,25 @@ def solve_token_budget(max_ctx: int, requested_max_tokens: int = 0) -> tuple[int
     - min_input：10% 窗口（最低 2048）——保证模型总有基本工作空间
     - requested > 80% 窗口 → 输出钳制到 50% 窗口（请求侧过大，无法原样满足）
     - requested 未知（0）→ 预留 20%（旧行为基线，保守不变）
+    - headroom（B2）：额外预留 headroom_ratio×窗口 的弹性空间（默认调用方传
+      budget_warn_ratio=15%）——裁剪目标从 400 线（max_ctx - max_tokens）
+      前移到 (1-headroom) 线，让"输入填满到 400 线才发现超限"不再发生，
+      也给新轮次/工具结果/估算偏差留出缓冲（0=旧行为，向后兼容）
 
     Args:
         max_ctx: 上下文窗口上限（≤0 时按 128K 保守兜底）
         requested_max_tokens: 配置/模式请求的输出 token 数（0=未知）
+        headroom_ratio: 输入预算之外额外保留的窗口比例（0≤r<1）
 
     Returns:
         (input_budget, output_cap)：请求应满足 输入≤input_budget 且
-        max_tokens≤output_cap；两者之和 + margin 恒 ≤ max_ctx。
+        max_tokens≤output_cap；输入+输出+margin 恒 ≤ max_ctx - headroom。
     """
     if max_ctx <= 0:
         max_ctx = 128000
     margin = _budget_margin(max_ctx)
     min_input = max(2048, int(max_ctx * 0.10))
+    headroom = int(max_ctx * min(max(headroom_ratio, 0.0), 1.0))
 
     if requested_max_tokens and requested_max_tokens > 0:
         if requested_max_tokens > int(max_ctx * 0.8):
@@ -336,10 +346,10 @@ def solve_token_budget(max_ctx: int, requested_max_tokens: int = 0) -> tuple[int
         # 未知 → 20% 基线（旧行为）
         out_cap = max(1024, int(max_ctx * 0.2))
 
-    input_budget = max(min_input, max_ctx - out_cap - margin)
-    # 下限介入后仍超窗口（极端小窗口）→ 再收缩输出，恒保证总和 ≤ 窗口
-    if input_budget + out_cap + margin > max_ctx:
-        out_cap = max(1024, max_ctx - input_budget - margin)
+    input_budget = max(min_input, max_ctx - out_cap - margin - headroom)
+    # 下限介入后仍超窗口（极端小窗口）→ 再收缩输出，恒保证总和 ≤ 窗口-headroom
+    if input_budget + out_cap + margin + headroom > max_ctx:
+        out_cap = max(1024, max_ctx - input_budget - margin - headroom)
     return input_budget, out_cap
 
 
@@ -361,10 +371,46 @@ def _get_effective_max_tokens(context: Any) -> int:
         return 0
 
 
+def _get_headroom_ratio(context: Any) -> float:
+    """B2 裁剪弹性空间比例（默认 15% = CompactionSettings.budget_warn_ratio）。
+
+    与 token_budget 片段共用同一报警阈值语义：输入超过 (1-ratio)×窗口
+    即进入"警戒区"，水位线在该线前完成裁剪，不再贴着 400 线才动手。
+    context.budget_warn_ratio 可运行时覆盖（None/0=用默认 15%）。
+    """
+    warn = getattr(context, "budget_warn_ratio", None)
+    if warn is not None and warn > 0:
+        return float(warn)
+    return DEFAULT_COMPACTION_SETTINGS.budget_warn_ratio
+
+
 def _get_output_cap(context: Any) -> int:
-    """求解当前会话的输出 token 上限（供 build_api_messages 记录到 context）。"""
+    """求解当前会话的输出 token 上限（供 build_api_messages 记录到 context）。
+
+    B2：传入 headroom_ratio——输出与输入共同避让 (1-15%) 弹性区。
+    """
     max_ctx = _resolve_max_ctx(context)
-    return solve_token_budget(max_ctx, _get_effective_max_tokens(context))[1]
+    return solve_token_budget(
+        max_ctx, _get_effective_max_tokens(context), _get_headroom_ratio(context)
+    )[1]
+
+
+def _estimate_tools_tokens(context: Any) -> int:
+    """估算 tools JSON Schema 的固定开销（每次请求都携带全量定义）。
+
+    B1：水位线/预算此前只统计消息（含 L0 富化 system），漏掉 ~14K+ tokens
+    的工具 schema（context_fragments._estimate_context_tokens S1 已计入，
+    build 链路漏计）→ ratio 系统性低估 10-20%（小窗口更甚），深度裁剪
+    往往拖到输入达到 max_ctx - max_tokens（400 线）才触发。
+    """
+    try:
+        toolkit = getattr(context, "toolkit", None)
+        meta_map = getattr(toolkit, "meta_map", None) if toolkit else None
+        if not meta_map:
+            return 0
+        return estimate_tokens(json.dumps(list(meta_map.values()), ensure_ascii=False, default=str))
+    except Exception:
+        return 0
 
 
 def _get_token_budget(context: Any) -> tuple[int, int]:
@@ -376,6 +422,9 @@ def _get_token_budget(context: Any) -> tuple[int, int]:
     **更早、更积极**地触发裁剪，从源头杜绝 输入+输出 > 窗口 的 400 溢出；
     配置 max_tokens 较小时预算相应放宽（更精确，不再多裁）。
 
+    B2：再减去 headroom（默认 15% 窗口）——裁剪目标从 400 线前移到
+    (1-15%) 线；水位 ratio 与渐进裁剪目标随之更积极。
+
     tool_prune_threshold = max(65536, input_budget * 0.02)（动态阈值，最低 64K 字符）。
 
     A7 修复（保留）：max_context_tokens 未配置（=0/None）时，回退到
@@ -383,7 +432,9 @@ def _get_token_budget(context: Any) -> tuple[int, int]:
     杜绝"裁剪链完全跳过导致上下文无限增长溢出"（2026-08-13 生产事故根因）。
     """
     max_ctx = _resolve_max_ctx(context)
-    input_budget, _ = solve_token_budget(max_ctx, _get_effective_max_tokens(context))
+    input_budget, _ = solve_token_budget(
+        max_ctx, _get_effective_max_tokens(context), _get_headroom_ratio(context)
+    )
     # 动态工具裁剪阈值：预算的 2%，最低 64K 字符（保证读取代码/文件内容完整）
     tool_prune_threshold = max(65536, int(input_budget * 0.02))
     return input_budget, tool_prune_threshold
@@ -1174,8 +1225,13 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     _first_trim = not getattr(context, "_loop_trim_done", False)
     if input_budget > 0 and _first_trim:
         est = estimate_messages_tokens(result)
+        # B1: 水位线计入 tools schema 固定开销（~14K+ tokens，此前漏计 →
+        # ratio 系统性低估 10-20%，裁剪拖到 400 线才触发）。
+        est += _estimate_tools_tokens(context)
         # A7: 先校准（用上次的 _last_estimate_tokens 基准），再记录本次估算——
         # 顺序不可颠倒，否则 _calibrated_estimate 读到的基准被本次值覆盖。
+        # B1: 记录的是"含 tools 开销"的值，与 last_real（真实 prompt 含
+        # tools/system 全量）同一口径 → 校准 scale 收敛到 ~1，不再虚高。
         est_check = _calibrated_estimate(context, est)
         context._last_estimate_tokens = est
         max_ctx = _resolve_max_ctx(context)
@@ -1196,6 +1252,20 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             ratio = new_ratio
             context._loop_max_ratio = ratio
             tier = classify_waterline(ratio)
+            # B2: 提前裁剪线——B1 校准后的真实用量（含 tools 开销）+ 输出
+            # 已越过 (1-warn_ratio) 窗口（默认 85%）而 ratio 档位不够深时，
+            # 强制升到 Tier2 渐进裁剪。裁剪目标本身也已在 headroom 收紧的
+            # 预算内（= (1-warn_ratio) 线），不再贴着 max_ctx - max_tokens
+            # （400 线）才动手。
+            _ocap_pre = int(getattr(context, "_output_cap", 0) or 0)
+            _warn_ratio = _get_headroom_ratio(context)
+            _headroom_line = int(max_ctx * (1.0 - _warn_ratio))
+            if tier < 2 and est_check + _ocap_pre + _budget_margin(max_ctx) > _headroom_line:
+                tier = 2
+                logger.info(
+                    f"💧 提前裁剪线: 输入 {est_check} + 输出 {_ocap_pre} 超过 "
+                    f"{(1.0 - _warn_ratio) * 100:.0f}% 窗口（{_headroom_line}），提前执行渐进裁剪"
+                )
             if tier >= 3:
                 # Tier 3: 先做本地裁剪（Tier1+2 累积），再置强制摘要标志
                 context._token_exhausted = True
@@ -1216,7 +1286,7 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             est_after = estimate_messages_tokens(result)
             if est_after != est:
                 logger.info(f"裁剪后: {est_after} tokens (节省 {est - est_after})")
-            # 最后防线（A7→A8）：裁剪后 输入 + 输出上限 + 安全余量 仍超窗口 →
+            # 最后防线（A7→A8）：裁剪后 输入 + 输出上限 + 安全余量 仍超 400 线 →
             # 置强制摘要标志，由下一轮 summarize_old_history 执行增量 LLM 摘要兜底。
             _ocap = int(getattr(context, "_output_cap", 0) or 0)
             if est_after + _ocap + _budget_margin(max_ctx) > max_ctx:

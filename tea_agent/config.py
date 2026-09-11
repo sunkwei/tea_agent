@@ -313,7 +313,10 @@ class AgentConfig:
     reasoning_effort: str = "auto"  # 推理努力: "auto"=自动推导不发送 / none/minimal/low/medium/high/xhigh/max
 
     # Token 优化参数
-    keep_turns: int = 20  # 保留最近N轮完整对话，更早的对话自动摘要
+    # 2026-09 上下文填充治理：默认从 20 回落到 5（与 SessionContext /
+    # OnlineToolSession / 配置模板一致）。L1 每轮都带完整工具链与思考链，
+    # 20 轮会让会话一启动就逼近窗口上限。
+    keep_turns: int = 5  # 保留最近N轮完整对话，更早的对话自动摘要
     max_tool_output: int = 128 * 1024  # 工具输出截断字符数
     max_assistant_content: int = 128 * 1024  # 助手回复截断字符数
 
@@ -324,6 +327,21 @@ class AgentConfig:
     chat_page_size: int = 50  # GUI 单页加载的对话轮数（最多50条）
     history_l2_max: int = 8  # L2最大保留轮数，超出时溢出 keep=5 条至 L3 摘要
     history_l3_batch: int = 5  # L3摘要批处理：每次溢出至少 N 条才触发便宜模型摘要
+    # 单条 L2 条目 thinking（本轮全部工具步的 reasoning_content 拼接）上限（字符）。
+    # 不限幅时单轮 thinking 可达 1.5MB（实测），既撑爆 L2 存储又让 L2→L3 摘要
+    # 输入无谓膨胀；截断只影响"回顾用"的 thinking，不影响 API 回传的 L1 RC。
+    l2_thinking_max_chars: int = 6000
+    # L2 总量上限（字符，user+thinking+assistant 之和）：达到即视同"溢出"，
+    # 保留最新 keep=5 条并把其余交给 L3 摘要。此前只看条数（history_l2_max），
+    # 条数没到就永不摘要，历史全量堆在 L2 里空转。
+    l2_max_chars: int = 120000
+    # L1 消息里 reasoning_content 分块限步回传：以 N 步为一块，只保留最近一块
+    # 的全文，更早的块整体置为空串字段值（字段保留 → 满足 DeepSeek V4 "必须
+    # 回传" 的字段存在性要求；空串是官方合法值，仓库既有兜底路径同样补空串）。
+    # 0=关闭（旧行为：全量回传）。分块而非滑窗：只跨块时改写一次，避免每步都
+    # 让其后 N 步内容缓存未命中。
+    # 背景：单轮 200 步的 RC 可达 37.5 万 token，是上下文被迅速打满的第一主因。
+    rc_keep_steps: int = 8
     font_size: int = 16  # HtmlFrame 字体大小（px）
     app_font_size: int = (
         12  # App GUI 字体大小（pt，控制 label/input/treeview 等原生组件）
@@ -352,6 +370,9 @@ class AgentConfig:
         "chat_page_size",
         "history_l2_max",
         "history_l3_batch",  # 2026-05-20 gen by Tea Agent, L2/L3分层压缩
+        "l2_thinking_max_chars",  # L2 单条 thinking 限幅（上下文填充治理）
+        "l2_max_chars",           # L2 总量触发摘要阈值（字符）
+        "rc_keep_steps",          # L1 只保留最近 N 步 reasoning_content 全文
         "font_size",  # HtmlFrame 字体大小
         "app_font_size",  # App GUI 字体大小
     }
@@ -389,6 +410,9 @@ class AgentConfig:
         "chat_page_size": int,
         "history_l2_max": int,
         "history_l3_batch": int,
+        "l2_thinking_max_chars": int,
+        "l2_max_chars": int,
+        "rc_keep_steps": int,
         "font_size": int,
         "app_font_size": int,
     }
@@ -627,6 +651,32 @@ def _load_yaml_data(yaml_path: str) -> dict | None:
         return None
 
 
+# provider.yaml 的 max_output_tokens 是"模型能力上限"，不是每次请求都应该
+# 预留的输出量。直接把能力上限写进 ModelConfig.max_tokens 会让 solve_token_budget
+# 把整块窗口预留给输出（实测 1M 窗口 / 384K 输出 → 输入预算只剩 446K，上下文
+# 迅速"打满"）。自动填充时按窗口比例限幅，显式配置 max_tokens 仍然优先。
+AUTO_MAX_TOKENS_WINDOW_RATIO = 0.25
+AUTO_MAX_TOKENS_FLOOR = 8192
+
+
+def auto_max_tokens_cap(max_context_tokens: int) -> int:
+    """自动填充 max_tokens 时的限幅上限（=窗口的 25%，下限 8192）。
+
+    Args:
+        max_context_tokens: 模型窗口（≤0 表示未知 → 返回下限）
+
+    Returns:
+        max_tokens 自动填充上限
+    """
+    try:
+        ctx = int(max_context_tokens or 0)
+    except (TypeError, ValueError):
+        ctx = 0
+    if ctx <= 0:
+        return AUTO_MAX_TOKENS_FLOOR
+    return max(AUTO_MAX_TOKENS_FLOOR, int(ctx * AUTO_MAX_TOKENS_WINDOW_RATIO))
+
+
 def _resolve_ref_model(provider: str, model: str) -> dict | None:
     """从 provider.yaml 解析 p_name + m_name 组合（延迟 import 避免循环依赖）。
 
@@ -688,7 +738,14 @@ def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
                 if resolved.get("max_context_tokens"):
                     target.max_context_tokens = int(resolved["max_context_tokens"])
                 if resolved.get("max_output_tokens"):
-                    target.max_tokens = int(resolved["max_output_tokens"])
+                    # 自动填充按窗口比例限幅（显式 max_tokens 在下方覆盖，仍优先）
+                    _ctx_for_cap = int(
+                        resolved.get("max_context_tokens")
+                        or target.max_context_tokens
+                        or 0
+                    )
+                    _auto_cap = auto_max_tokens_cap(_ctx_for_cap)
+                    target.max_tokens = min(int(resolved["max_output_tokens"]), _auto_cap)
                 eff = resolved.get("reasoning_effort") or "auto"
                 if isinstance(eff, str) and eff and eff != "auto":
                     target.options.setdefault("reasoning_effort", eff)
@@ -840,6 +897,7 @@ def _parse_token_params(cfg: AgentConfig, data: dict) -> None:
     cfg.max_assistant_content = int(
         data.get("max_assistant_content", cfg.max_assistant_content)
     )
+    cfg.rc_keep_steps = int(data.get("rc_keep_steps", cfg.rc_keep_steps))
 
 
 def _parse_control_params(cfg: AgentConfig, data: dict) -> None:
@@ -864,6 +922,10 @@ def _parse_control_params(cfg: AgentConfig, data: dict) -> None:
     cfg.chat_page_size = int(data.get("chat_page_size", cfg.chat_page_size))
     cfg.history_l2_max = int(data.get("history_l2_max", cfg.history_l2_max))
     cfg.history_l3_batch = int(data.get("history_l3_batch", cfg.history_l3_batch))
+    cfg.l2_thinking_max_chars = int(
+        data.get("l2_thinking_max_chars", cfg.l2_thinking_max_chars)
+    )
+    cfg.l2_max_chars = int(data.get("l2_max_chars", cfg.l2_max_chars))
     cfg.font_size = int(data.get("font_size", cfg.font_size))
     cfg.app_font_size = int(data.get("app_font_size", cfg.app_font_size))
 
@@ -1159,6 +1221,7 @@ def _prepare_token_data(cfg: AgentConfig, data: dict) -> None:
     data["keep_turns"] = cfg.keep_turns
     data["max_tool_output"] = cfg.max_tool_output
     data["max_assistant_content"] = cfg.max_assistant_content
+    data["rc_keep_steps"] = cfg.rc_keep_steps
 
 
 def _prepare_control_data(cfg: AgentConfig, data: dict) -> None:
@@ -1174,6 +1237,8 @@ def _prepare_control_data(cfg: AgentConfig, data: dict) -> None:
     data["chat_page_size"] = cfg.chat_page_size
     data["history_l2_max"] = cfg.history_l2_max
     data["history_l3_batch"] = cfg.history_l3_batch
+    data["l2_thinking_max_chars"] = cfg.l2_thinking_max_chars
+    data["l2_max_chars"] = cfg.l2_max_chars
     data["interruption"] = cfg.interruption
 
 
@@ -1305,7 +1370,7 @@ def _generate_config_template() -> str:
         "# 最大历史消息数（保留的对话历史条数）\n"
         "max_history: 10\n\n"
         "# 最大工具调用迭代次数（单次对话中最多允许的工具调用循环数）\n"
-        "max_iterations: 50\n\n"
+        "max_iterations: 200\n\n"
         "# 是否启用 thinking 功能（模型思考过程展示）\n"
         "enable_thinking: true\n\n"
         "# 思考强度 0.0-1.0（0=最弱/最省token，1=最强/最深思考）\n"
@@ -1333,7 +1398,15 @@ def _generate_config_template() -> str:
         "# L2 最大保留轮数（用户+助手对，不含工具轮次）\n"
         "history_l2_max: 30\n\n"
         "# L3 摘要批处理：每攒够 N 条L2溢出，触发便宜模型摘要合并\n"
-        "history_l3_batch: 10\n"
+        "history_l3_batch: 10\n\n"
+        "# ── 上下文填充治理（2026-09 新增：多轮对话迅速打满窗口的修复）──\n"
+        "# L2 单条 thinking 字符上限（本轮所有工具步 reasoning_content 拼接；0=不限）\n"
+        "l2_thinking_max_chars: 6000\n\n"
+        "# L2 总字符上限（user+thinking+assistant 之和），达到即触发 L3 摘要\n"
+        "l2_max_chars: 120000\n\n"
+        "# L1 reasoning_content 分块限步：每 N 步一块，只保留最近一块全文，\n"
+        "# 更早的块置空（字段保留，满足 V4 回传要求）；0=关闭（全量回传）\n"
+        "rc_keep_steps: 8\n"
     )
 
 

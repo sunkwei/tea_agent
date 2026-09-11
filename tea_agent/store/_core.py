@@ -466,11 +466,15 @@ class Storage:
 
     def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str,
                        files: list = None, rounds: list = None,
-                       max_level2: int = 50) -> tuple:
-        """将一轮对话推入 Level 2。"""
+                       max_level2: int = 50,
+                       thinking_max_chars: int = 6000,
+                       max_level2_chars: int = 120000) -> tuple:
+        """将一轮对话推入 Level 2（条数或总字符数超限即溢出至 L3）。"""
         return self._summaries.push_to_level2(
             topic_id, user_msg, ai_msg,
             files=files, rounds=rounds, max_level2=max_level2,
+            thinking_max_chars=thinking_max_chars,
+            max_level2_chars=max_level2_chars,
         )
 
     def generate_l2_to_l3_summary(self, topic_id: str, level2_items: list,

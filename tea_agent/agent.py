@@ -479,12 +479,26 @@ class Agent:
 
             # 步骤4: 推送到L2缓存（使用 config 中的 history_l2_max）
             l2_max = getattr(self._cfg, 'history_l2_max', 8) if hasattr(self, '_cfg') else 8
+            # 上下文填充治理：单条 thinking 限幅 + 总量字符阈值（溢出即摘要）
+            _cfg = getattr(self, '_cfg', None)
+
+            def _cfg_int(_name, _default):
+                _raw = getattr(_cfg, _name, _default)
+                # 只接受真正的 int（MagicMock 等替身会被 int() 静默转成 1）
+                if isinstance(_raw, int) and not isinstance(_raw, bool):
+                    return _raw
+                return _default
+
+            l2_thinking_max = _cfg_int('l2_thinking_max_chars', 6000) or 6000
+            l2_max_chars = _cfg_int('l2_max_chars', 120000)
             l2_count, overflow_items, should_summarize = self._db.push_to_level2(
                 topic_id,
                 user_text,
                 ai_msg,
                 rounds=rounds if rounds else None,
                 max_level2=l2_max,
+                thinking_max_chars=l2_thinking_max,
+                max_level2_chars=l2_max_chars,
             )
             logger.debug(
                 f"L2 push: count={l2_count}, overflow={len(overflow_items)}, "

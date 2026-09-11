@@ -44,6 +44,12 @@ class SessionContext:
     max_tool_output: int = 128 * 1024
     max_assistant_content: int = 128 * 1024
     max_context_tokens: int = 0
+    # L1 最多保留的用户轮数（0=不额外限制，仅按 token 水位裁剪）。
+    # 对应 config.max_history：此前只存不用，历史只能靠 token 裁剪收敛。
+    max_history: int = 0
+    # L1 消息里 reasoning_content 只保留最近 N 步全文，更早的置空（字段保留）。
+    # 0=读 config.rc_keep_steps（默认 8）；<0=显式关闭该优化（全量回传）。
+    rc_keep_steps: int = 0
     memory_extraction_threshold: int = 2
     memory_dedup_threshold: float = 0.3
     supports_vision: bool = False

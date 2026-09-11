@@ -307,13 +307,13 @@ class AgentConfig:
 
     # 会话参数
     max_history: int = 10  # 最大历史消息数
-    max_iterations: int = 50  # 最大工具调用迭代次数
+    max_iterations: int = 200  # 最大工具调用迭代次数
     enable_thinking: bool = True  # 是否启用 thinking 功能
     thinking_strength: float = 0.7  # 思考强度 0.0-1.0（0=最弱/最省token, 1=最强/最深度思考）
     reasoning_effort: str = "auto"  # 推理努力: "auto"=自动推导不发送 / none/minimal/low/medium/high/xhigh/max
 
     # Token 优化参数
-    keep_turns: int = 5  # 保留最近N轮完整对话，更早的对话自动摘要
+    keep_turns: int = 20  # 保留最近N轮完整对话，更早的对话自动摘要
     max_tool_output: int = 128 * 1024  # 工具输出截断字符数
     max_assistant_content: int = 128 * 1024  # 助手回复截断字符数
 

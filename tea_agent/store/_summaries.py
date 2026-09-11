@@ -146,14 +146,21 @@ class SummaryStore(StoreComponent):
 
     def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str,
                         files: list = None, rounds: list = None,
-                        max_level2: int = 8) -> tuple:
+                        max_level2: int = 8,
+                        thinking_max_chars: int = 6000,
+                        max_level2_chars: int = 120000) -> tuple:
         """
         将一轮对话推入 Level 2，超过上限时溢出并触发 L3 摘要。
 
-        策略（v3）：
-        - L2 最多保留 max_level2 条（默认 8，原 15）
-        - 超出时：保留最新 keep_count 条（5，原 10），溢出剩余全部至 L3
-        - 每次溢出必触发 L3 摘要，不静默丢弃历史
+        策略（v4，2026-09 上下文填充治理）：
+        - L2 最多保留 max_level2 条（默认 8）
+        - 单条 thinking（本轮全部工具步 reasoning_content 拼接）截断到
+          thinking_max_chars（默认 6000 字符）——此前无上限，实测单条 1.5MB，
+          既撑爆存储又让 L2→L3 摘要输入无谓膨胀
+        - **总量触发**：所有条目 user+thinking+assistant 字符之和 ≥
+          max_level2_chars（默认 12 万字符 ≈ 3 万 token）即视同溢出 ——
+          此前只看条数，条数没到就永不摘要，历史全量堆在 L2 空转
+        - 溢出时：保留最新 keep_count 条（5），其余全部交给 L3 摘要
 
         L2 条目包含完整 user + ai thinking + ai final msg（不含工具轮）。
         thinking 从 rounds 中提取所有带 tool_calls 的 assistant content。
@@ -182,7 +189,13 @@ class SummaryStore(StoreComponent):
 
         entry = {"user": user_msg, "assistant": ai_msg}
         if thinking_parts:
-            entry["thinking"] = "\n\n".join(thinking_parts)
+            thinking = "\n\n".join(thinking_parts)
+            if thinking_max_chars > 0 and len(thinking) > thinking_max_chars:
+                thinking = (
+                    thinking[:thinking_max_chars]
+                    + f"\n... [思考链已截断: 原长 {len(thinking)} 字符]"
+                )
+            entry["thinking"] = thinking
         if files:
             entry["files"] = files
         level2.append(entry)
@@ -190,11 +203,29 @@ class SummaryStore(StoreComponent):
         overflow_items = []
         should_summarize = False
 
-        if len(level2) >= max_level2:
-            overflow_count = len(level2) - keep_count
+        total_chars = sum(
+            len(e.get("user", "") or "")
+            + len(e.get("thinking", "") or "")
+            + len(e.get("assistant", "") or "")
+            for e in level2
+        )
+        over_count = len(level2) >= max_level2
+        over_chars = max_level2_chars > 0 and total_chars >= max_level2_chars
+        if over_count or over_chars:
+            # 条数触发：保留最新 keep_count 条；总量触发（条数还很少）：
+            # 至少溢出 1 条（否则阈值永远无法收敛，历史继续堆在 L2）
+            keep = keep_count if over_count else min(keep_count, max(1, len(level2) - 1))
+            overflow_count = max(0, len(level2) - keep)
             overflow_items = level2[:overflow_count]
-            level2 = level2[-keep_count:]
-            should_summarize = True
+            level2 = level2[-keep:]
+            should_summarize = bool(overflow_items)
+            if should_summarize:
+                logger.info(
+                    f"L2 溢出→L3: 触发原因={'条数' if over_count else ''}"
+                    f"{'/总量' if over_chars else ''} "
+                    f"(count={len(level2) + len(overflow_items)}, "
+                    f"chars={total_chars}), 溢出 {len(overflow_items)} 条"
+                )
 
         self.set_level2(topic_id, level2)
         return len(level2), overflow_items, should_summarize

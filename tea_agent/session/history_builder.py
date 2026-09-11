@@ -395,6 +395,207 @@ def _get_output_cap(context: Any) -> int:
     )[1]
 
 
+# ── 上下文填充治理（2026-09）：L1 reasoning_content / L2 重复 / 轮数上限 ──
+
+# rc_keep_steps 的最终兜底（配置不可读时使用）
+DEFAULT_RC_KEEP_STEPS = 8
+
+
+def _get_rc_keep_steps(context: Any) -> int:
+    """解析 L1 reasoning_content 的分块大小（每 N 步一块，0=关闭该优化）。
+
+    优先级：context.rc_keep_steps（>0 生效 / <0 显式关闭）→ config.rc_keep_steps。
+    背景：DeepSeek V4 thinking 模式要求 assistant 消息**携带** reasoning_content
+    字段（空串是官方合法值，仓库既有兜底路径同样补空串）；但把整轮 200 步的
+    RC 全文回传会让单轮上下文达到数十万 token（实测单轮 1.5M 字符 ≈ 37.5 万
+    token）。这里以 N 步为一块，只保留最近一块全文，更早的块置为空串（字段保留）。
+
+    Args:
+        context: SessionContext
+
+    Returns:
+        分块大小（=保留全文的最近一块规模）；0 表示不做该优化（全量回传，旧行为）
+    """
+    raw = getattr(context, "rc_keep_steps", 0)
+    val = raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
+    if val > 0:
+        return val
+    if val < 0:
+        return 0
+    try:
+        from tea_agent.config import get_config
+
+        cfg = get_config()
+        if cfg is not None:
+            raw_cfg = getattr(cfg, "rc_keep_steps", DEFAULT_RC_KEEP_STEPS)
+            # 只接受真正的 int（MagicMock 等替身对象会被 int() 静默转成 1）
+            if isinstance(raw_cfg, int) and not isinstance(raw_cfg, bool):
+                return max(0, raw_cfg)
+            return DEFAULT_RC_KEEP_STEPS
+    except Exception:
+        pass
+    return DEFAULT_RC_KEEP_STEPS
+
+
+def _writeback_reasoning(context: Any, msg: dict) -> None:
+    """把已置空的 reasoning_content 回写源消息，保证前缀一次定型后不再翻转。
+
+    与 _writeback_content 同构：只在源消息仍是"非空 RC"时写回（幂等），
+    避免同一条消息在后续请求中反复 full→"" 变化破坏前缀缓存。
+
+    Args:
+        context: SessionContext
+        msg: 已处理的 API 消息副本（含 _src_idx）
+    """
+    if context is None:
+        return
+    _src = msg.get("_src_idx")
+    if _src is None:
+        return
+    _msgs = getattr(context, "messages", None)
+    if not _msgs or not (0 <= _src < len(_msgs)):
+        return
+    _orig = _msgs[_src]
+    if _orig.get("role") != "assistant":
+        return
+    if isinstance(_orig.get("reasoning_content"), str) and _orig.get("reasoning_content"):
+        _orig["reasoning_content"] = ""
+
+
+def _blank_stale_reasoning(context: Any, messages: list[dict], keep_steps: int) -> int:
+    """按"N 步分块"保留最近一块的 reasoning_content 全文，更早的置空并回写定型。
+
+    步（step）= 一条**带 reasoning_content 字段**的 assistant 消息（含已置空的
+    历史步）。为什么按"块"而不是"滑动最近 N 步"：DeepSeek 前缀缓存按块哈希做
+    前缀匹配，任何一条消息被改写都会让其**之后的全部内容**变为缓存未命中。滑窗
+    方案每步都要改写"第 N+1 步"→ 每步重付其后 N 步（含工具结果）的缓存；分块
+    方案只在跨越块边界时一次性改写上一块，平均每步缓存代价降到约 1/N。
+
+    幂等：已置空的步不重复写回；消息只追加，故块序号稳定，同一块内多次构建
+    形态逐字节一致（不会反复翻转已发送前缀）。
+
+    Args:
+        context: SessionContext（用于回写定型）
+        messages: 本次构建的 API 消息列表（原地修改）
+        keep_steps: 每个块的步数（=保留全文的最近一块规模）；≤0 时不做任何修改
+
+    Returns:
+        本次置空的 reasoning_content 条数
+    """
+    if keep_steps <= 0 or not messages:
+        return 0
+    # 只统计真实 L1 消息（带 _src_idx）：L2 注入的 assistant 占位消息也带
+    # reasoning_content 字段，把它们计入会让块序号随 L2 选中集合漂移。
+    carriers = [
+        m for m in messages
+        if m.get("role") == "assistant"
+        and "reasoning_content" in m
+        and "_src_idx" in m
+    ]
+    total = len(carriers)
+    if total <= keep_steps:
+        return 0
+    # 最后一个块（含当前最新步）保留全文，其余块置空
+    boundary = ((total - 1) // keep_steps) * keep_steps
+    blanked = 0
+    for msg in carriers[:boundary]:
+        rc = msg.get("reasoning_content")
+        if isinstance(rc, str) and rc:
+            msg["reasoning_content"] = ""
+            blanked += 1
+            _writeback_reasoning(context, msg)
+    if blanked:
+        logger.info(
+            f"🧠 reasoning_content 分块保留: 每块 {keep_steps} 步，"
+            f"保留最近一块（{total - boundary} 步），置空 {blanked} 条历史思考链"
+        )
+    return blanked
+
+
+def _get_max_history_turns(context: Any) -> int:
+    """解析 L1 最多保留的用户轮数（0=不额外限制，仅按 token 水位裁剪）。
+
+    优先级：context.max_history（>0 生效 / <0 显式关闭）→ config.max_history。
+    背景：config.max_history 此前只存不用，长会话的 L1 只能靠 token 水位收敛。
+
+    Args:
+        context: SessionContext
+
+    Returns:
+        保留的最近用户轮数；0 表示不限制
+    """
+    raw = getattr(context, "max_history", 0)
+    val = raw if isinstance(raw, int) and not isinstance(raw, bool) else 0
+    if val > 0:
+        return val
+    if val < 0:
+        return 0
+    try:
+        from tea_agent.config import get_config
+
+        cfg = get_config()
+        if cfg is not None:
+            raw_cfg = getattr(cfg, "max_history", 0)
+            # 只接受真正的 int（MagicMock 等替身对象会被 int() 静默转成 1，
+            # 导致测试/替身环境下 L1 被误裁到 1 轮）
+            if isinstance(raw_cfg, int) and not isinstance(raw_cfg, bool):
+                return max(0, raw_cfg)
+            return 0
+    except Exception:
+        pass
+    return 0
+
+
+def _level2_user_prefixes(context: Any, start_idx: int) -> list[str]:
+    """收集 L1 窗口内 user 消息文本（用于 L2 去重比对）。"""
+    out: list[str] = []
+    msgs = getattr(context, "messages", []) or []
+    for i in range(max(0, start_idx), len(msgs)):
+        if msgs[i].get("role") != "user":
+            continue
+        content = msgs[i].get("content")
+        if isinstance(content, str) and content.strip():
+            out.append(content.strip())
+    return out
+
+
+def _drop_level2_duplicates(context: Any, filtered: list[dict], start_idx: int) -> list[dict]:
+    """剔除与 L1 最近历史重复的 L2 条目（同一轮被两层同时注入）。
+
+    L1 载入最近 keep_turns 轮（含完整工具链），L2 又保存了同样几轮的
+    user+assistant —— 不去重时同一轮内容会被注入两遍。判定方式：L2 条目的
+    user 文本是 L1 某条 user 消息的前缀（L1 的 user 内容末尾会附加"运行状态"
+    片段，故用前缀匹配；长度 <4 的短文本不做判定，避免误杀中文短指令）。
+
+    Args:
+        context: SessionContext
+        filtered: 已定型的 L2 选中集合
+        start_idx: L1 窗口起点（system 之后/轮数上限之后）
+
+    Returns:
+        去重后的 L2 条目列表
+    """
+    if not filtered:
+        return filtered
+    recent_user = _level2_user_prefixes(context, start_idx)
+    if not recent_user:
+        return filtered
+    out: list[dict] = []
+    dropped = 0
+    for item in filtered:
+        if item.get("kind") == "summary":
+            out.append(item)
+            continue
+        user_text = str(item.get("user", "") or "").strip()
+        if len(user_text) >= 4 and any(ru.startswith(user_text) for ru in recent_user):
+            dropped += 1
+            continue
+        out.append(item)
+    if dropped:
+        logger.debug(f"L2 去重: 剔除 {dropped} 条与 L1 重叠的历史轮次")
+    return out
+
+
 def _estimate_tools_tokens(context: Any) -> int:
     """估算 tools JSON Schema 的固定开销（每次请求都携带全量定义）。
 
@@ -1094,6 +1295,24 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     disable_l3 = getattr(context, 'disable_l3', False) or context.disable_summary
     disable_l2 = getattr(context, 'disable_l2', False) or context.disable_summary
 
+    # L1 窗口起点：跳过 system 头（部分测试/轻量场景无 system 头则从 0 开始），
+    # 并按 max_history 限制最多保留的最近用户轮数（0=不额外限制）。
+    start_idx = 1
+    if not context.messages or context.messages[0].get("role") != "system":
+        start_idx = 0
+    _max_history_turns = _get_max_history_turns(context)
+    if _max_history_turns > 0:
+        _user_idx = [
+            i for i in range(start_idx, len(context.messages))
+            if context.messages[i].get("role") == "user"
+        ]
+        if len(_user_idx) > _max_history_turns:
+            start_idx = _user_idx[-_max_history_turns]
+            logger.info(
+                f"max_history={_max_history_turns}: L1 丢弃更早的 "
+                f"{len(_user_idx) - _max_history_turns} 轮（共 {len(_user_idx)} 轮）"
+            )
+
     if not disable_l3:
         result.extend(_build_level3_block(context))
 
@@ -1105,6 +1324,8 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
             # 多轮请求复用同一版本，避免 L2 条数/顺序/形态翻转破坏其后
             # L1 历史的前缀缓存命中（对齐 DSH：派生只依赖事件流）。
             filtered = _solidify_level2(context)
+            # 去重：L1 已完整载入最近 keep_turns 轮，L2 不再重复注入同一轮
+            filtered = _drop_level2_duplicates(context, filtered, start_idx)
             for item in filtered:
                 kind = item.get("kind", "full")
                 if kind == "summary":
@@ -1127,13 +1348,9 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
     # ═══════════════════════════════════════════════
     # Level 1: 最新对话（含动态工具输出裁剪）
     # ═══════════════════════════════════════════════
+    # start_idx 已在上方（max_history 限轮处）解析；此处仅保留 disable_summary
+    # 的额外收紧（丢弃早期历史，只保留最近 max_turns_limit 轮）。
     max_turns_limit = 30
-    # 自适应起始索引：真实会话中 messages[0] 为 system 消息（跳过）；
-    # 若调用方未提供 system 头（如部分测试/轻量场景），从 0 开始，
-    # 避免首条用户消息被误跳过。
-    start_idx = 1
-    if not context.messages or context.messages[0].get("role") != "system":
-        start_idx = 0
 
     # 动态计算 token 预算和工具裁剪阈值
     input_budget, tool_prune_threshold = _get_token_budget(context)
@@ -1195,6 +1412,17 @@ def build_api_messages(context: Any, system_prompt: str) -> list[dict]:
                         text_parts.append("[图片]")
             msg_copy["content"] = "\n".join(text_parts) if text_parts else "[图片]"
         result.append(msg_copy)
+
+    # ── reasoning_content 分块限步回传（上下文填充治理，2026-09）──
+    # 单轮 200 步的 thinking 全文可达 37.5 万 token（实测 1.5M 字符），是上下文
+    # 被迅速打满的第一主因。以 rc_keep_steps 为块，只保留最近一块全文，更早的
+    # 块整体置空（字段保留 → 满足 V4 "必须携带"要求；空串是官方合法值），并
+    # 回写定型。分块而非滑窗：只在跨块边界改写一次，避免每步都让其后 N 步内容
+    # 缓存未命中。必须在裁剪链之前执行：先缩体积，再按缩小后的体积决定水位线档位。
+    try:
+        _blank_stale_reasoning(context, result, _get_rc_keep_steps(context))
+    except Exception as _rc_err:  # 异常隔离：限步失败不得影响构建
+        logger.debug(f"reasoning_content 限步失败（隔离）: {_rc_err}")
 
     # A8: 每次构建记录求解器给出的输出上限——工具循环据此把请求的
     # max_tokens 钳制到 窗口-输入-余量 之内，是"输入+输出 ≤ 窗口"的关键

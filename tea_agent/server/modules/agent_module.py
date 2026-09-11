@@ -618,9 +618,28 @@ class AgentModule(HotReloadModule):
         except Exception:
             logger.exception("add_topic_tokens failed")
         try:
+            # 上下文填充治理：与 agent.py 同一套 L2 参数（此前 Web 路径未传
+            # max_level2 → 落到 _core 默认 50 条，L3 摘要更难触发）
+            try:
+                from tea_agent.config import get_config as _get_cfg
+
+                _cfg = _get_cfg()
+            except Exception:
+                _cfg = None
+
+            def _cfg_int(name, default):
+                raw = getattr(_cfg, name, default)
+                # 只接受真正的 int（MagicMock 等替身会被 int() 静默转成 1）
+                if isinstance(raw, int) and not isinstance(raw, bool):
+                    return raw
+                return default
+
             l2_count, overflow_items, should_summarize = storage.push_to_level2(
                 topic_id, user_text, ai_msg,
                 rounds=rounds if rounds else None,
+                max_level2=_cfg_int("history_l2_max", 8) or 8,
+                thinking_max_chars=_cfg_int("l2_thinking_max_chars", 6000) or 6000,
+                max_level2_chars=_cfg_int("l2_max_chars", 120000),
             )
         except Exception:
             logger.exception("push_to_level2 failed")

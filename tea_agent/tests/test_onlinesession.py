@@ -1088,13 +1088,12 @@ class TestToolLoopAndCompression:
 
     def test_compress_tool_content_threshold(self):
         """不同工具类型的阈值适配"""
-        import sys
-
         from tea_agent.basesession import BaseChatSession
 
-        # 源码文件 → sys.maxsize（不截断）
+        # 源码文件 → 64KB 上限（2026-09：此前 sys.maxsize 不截断，
+        # 整份源码随 keep_turns 反复回放会迅速打满上下文）
         threshold = BaseChatSession._guess_tool_threshold("toolkit_file", '{"filename": "main.py"}')
-        assert threshold == sys.maxsize
+        assert threshold == BaseChatSession._SOURCE_FILE_THRESHOLD
 
         # 日志文件 → 16KB
         threshold = BaseChatSession._guess_tool_threshold("toolkit_file", '{"filename": "app.log"}')

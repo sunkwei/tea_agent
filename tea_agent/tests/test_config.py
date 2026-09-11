@@ -184,7 +184,7 @@ class TestAgentConfig:
     def test_default_values(self, default_agent_config):
         """验证默认值"""
         cfg = default_agent_config
-        assert cfg.max_iterations == 50
+        assert cfg.max_iterations == 200
         assert cfg.max_history == 10
         assert cfg.keep_turns == 5
         assert cfg.chat_page_size == 50
@@ -193,7 +193,7 @@ class TestAgentConfig:
 
     def test_get_method(self, default_agent_config):
         """get() 方法读取配置"""
-        assert default_agent_config.get("max_iterations") == 50
+        assert default_agent_config.get("max_iterations") == 200
         assert default_agent_config.get("no_such_key", "default") == "default"
 
     def test_set_valid_key(self, default_agent_config):
@@ -234,7 +234,7 @@ class TestAgentConfig:
         """导出运行时配置字典"""
         d = default_agent_config.to_dict()
         assert isinstance(d, dict)
-        assert d["max_iterations"] == 50
+        assert d["max_iterations"] == 200
         assert "keep_turns" in d
 
     def test_reload_from_dict(self, default_agent_config):
@@ -255,7 +255,7 @@ class TestLoadSaveConfig:
             from tea_agent.config import AgentConfig, load_config
             cfg = load_config(config_path=tmp_yaml_config)  # 文件不存在时返回默认值
             assert isinstance(cfg, AgentConfig)
-            assert cfg.max_iterations == 50
+            assert cfg.max_iterations == 200
 
     def test_load_and_save_roundtrip(self, tmp_yaml_config):
         """加载-保存-再加载 一致性"""
@@ -289,7 +289,7 @@ class TestLoadSaveConfig:
         assert "main_model:" in content
         assert "cheap_model:" in content
         assert "paths:" in content
-        assert "max_iterations: 50" in content
+        assert "max_iterations: 200" in content
 
 
 def test_enable_thinking_parsing():

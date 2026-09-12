@@ -176,6 +176,20 @@ HARD_TASKS += [
          "n = metrics()['dangling_imports']; "
          "assert n == 0, '悬空导入 %d 处（指向不存在模块，会掩盖重构残留）' % n"
      )}]},
+    {"id": "hard-no-dangling-symbols", "kind": "integrity",
+     "title": "无悬空符号引用 / 悬空 __all__ 声明（实测 0）",
+     "checks": [{"type": "python", "expr": (
+         "m = metrics(); a = m['dangling_symbol_imports']; b = m['dangling_all_exports']; "
+         "assert a == 0 and b == 0, "
+         "'悬空符号导入 %d 处 / 悬空 __all__ 名 %d 个（引用不存在的符号即静默死路径）' % (a, b)"
+     )}]},
+    {"id": "hard-public-api-resolvable", "kind": "integrity",
+     "title": "公开 API 契约：__all__ 声明的名字运行时可用（实证）",
+     "checks": [{"type": "python", "expr": (
+         "import importlib; m = importlib.import_module('tea_agent'); "
+         "missing = [n for n in m.__all__ if not hasattr(m, n)]; "
+         "assert missing == [], '__all__ 声明但运行时不可用: %s' % missing"
+     )}]},
     {"id": "hard-no-delegation-drift", "kind": "integrity",
      "title": "Storage 纯委托层调用点与实现兼容（运行时实证）",
      "checks": [{"type": "python", "expr": (

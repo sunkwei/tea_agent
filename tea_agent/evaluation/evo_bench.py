@@ -264,12 +264,16 @@ def _module_level_nodes(tree):
     stack = list(tree.body)
     while stack:
         node = stack.pop()
+        # 必须先 yield 再决定是否下潜：顶层 def/class 节点**本身**是模块级的
+        # （其名字绑定发生在导入期），只是其**体内**语句不在此列。
+        # 早期版本把 yield 放在 continue 之后，导致顶层函数/类从不产出，
+        # 造成「符号表里没有函数名」→ 悬空符号指标虚报 427 处。
+        yield node
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
                              ast.ClassDef, ast.Lambda)):
             continue
         if isinstance(node, ast.If) and _is_type_checking_guard(node):
             continue
-        yield node
         stack.extend(ast.iter_child_nodes(node))
 
 
@@ -361,6 +365,105 @@ def _count_import_cycles(graph: dict) -> tuple:
     return len(comps), sum(len(c) for c in comps)
 
 
+def _resolve_import_target(mod: str, is_pkg: bool, node) -> str | None:
+    """ImportFrom → 目标模块名（相对导入按 __package__ 语义解析）。"""
+    if node.level:
+        base = mod if is_pkg else (mod.rsplit(".", 1)[0] if "." in mod else "")
+        for _ in range(node.level - 1):
+            base = base.rsplit(".", 1)[0] if "." in base else ""
+        if node.module:
+            return f"{base}.{node.module}" if base else node.module
+        return base or None
+    if node.module and node.module.startswith("tea_agent"):
+        return node.module
+    return None
+
+
+def _dangling_symbol_stats(root=".") -> tuple:
+    """静态扫描悬空符号引用 → (悬空导入符号数, 悬空 __all__ 名数)。
+
+    「引用了不存在的符号」是静默死路径的高发形态：真实实例是 agent.py 曾
+    `from ...toolkit_experience_solidify import ExperienceSolidifier` 而该类并不存在，
+    被 except ImportError 吞掉，功能长期死亡。__all__ 声明了却拿不到，同属
+    「承诺未兜现」，一并度量。
+
+    判据要点（此前两处假阳性已修正）：
+    - `from PKG import NAME` 中 NAME 为子模块（PKG/NAME.py 存在）时合法，
+      不能只在 PKG/__init__.py 顶层找同名绑定；
+    - `__all__` 校验必须两遍扫描（先收全符号再比对），单遍会误报；
+    - 目标模块含 `from X import *` 时不可判定，跳过；
+    - 模块定义 PEP 562 `__getattr__` 时，未绑定名可在运行时惰性解析
+      （tea_agent/__init__.py 即用此机制兜现 __all__），静态符号表不可判定，跳过。
+    """
+    entries: dict = {}
+    for rel, src in _pyfiles(root, subdir="tea_agent"):
+        mod = _module_name(rel)
+        if mod:
+            entries[mod] = (rel, src, rel.endswith("__init__.py"))
+
+    trees, syms = {}, {}
+    for mod, (_rel, src, _is_pkg) in entries.items():
+        try:
+            tree = ast.parse(src)
+        except SyntaxError:
+            continue
+        trees[mod] = tree
+        names: set = set()
+        star = False
+        has_getattr = False
+        for node in _module_level_nodes(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                names.add(node.name)
+                # PEP 562：模块级 __getattr__ 使未绑定名可在运行时惰性解析
+                if node.name == "__getattr__":
+                    has_getattr = True
+            elif isinstance(node, ast.Assign):
+                names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                names.add(node.target.id)
+            elif isinstance(node, ast.Import):
+                names.update(a.asname or a.name.split(".")[0] for a in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                for a in node.names:
+                    if a.name == "*":
+                        star = True
+                    else:
+                        names.add(a.asname or a.name)
+        syms[mod] = (names, star, has_getattr)
+
+    n_import = n_all = 0
+    for mod, tree in trees.items():
+        is_pkg = entries[mod][2]
+        names = syms[mod][0]
+        lazy_exports = syms[mod][2]
+        for node in _module_level_nodes(tree):
+            if isinstance(node, ast.ImportFrom):
+                tgt = _resolve_import_target(mod, is_pkg, node)
+                if not tgt or tgt not in syms or syms[tgt][1] or syms[tgt][2]:
+                    continue  # 目标有 star import 或 __getattr__ → 不可判定
+                avail = syms[tgt][0]
+                for a in node.names:
+                    if a.name == "*" or a.name in avail:
+                        continue
+                    if f"{tgt}.{a.name}" in entries:  # 子模块导入，合法
+                        continue
+                    n_import += 1
+                    logger.debug("evo_bench: 悬空符号 %s:%d %s", entries[mod][0],
+                                 node.lineno, f"{tgt}.{a.name}")
+            elif isinstance(node, ast.Assign):
+                if lazy_exports:
+                    continue  # 有 __getattr__：__all__ 由运行时解析，静态不可判定
+                for t in node.targets:
+                    if (isinstance(t, ast.Name) and t.id == "__all__"
+                            and isinstance(node.value, (ast.List, ast.Tuple))):
+                        for el in node.value.elts:
+                            if (isinstance(el, ast.Constant)
+                                    and isinstance(el.value, str)
+                                    and el.value not in names):
+                                n_all += 1
+    return n_import, n_all
+
+
 def _bench_metrics(root=".") -> dict:
     """AST 扫描项目源码 → 量化指标（进程内缓存；跳过 tests/demo 以反映库代码质量）。
 
@@ -375,7 +478,8 @@ def _bench_metrics(root=".") -> dict:
          "long_functions": 0, "toolkit_files": 0, "missing_meta": 0,
          "agent_reverse_imports": 0, "shell_true_toolkit": 0,
          "import_cycles": 0, "cycle_modules": 0, "docstring_missing": 0,
-         "big_files": 0, "dangling_imports": 0, "except_pass_security": 0}
+         "big_files": 0, "dangling_imports": 0, "except_pass_security": 0,
+         "dangling_symbol_imports": 0, "dangling_all_exports": 0}
     _graph: dict = {}
     for rel, src in _pyfiles(root, subdir="tea_agent"):
         if any(s in rel for s in _METRIC_SKIP):
@@ -451,6 +555,7 @@ def _bench_metrics(root=".") -> dict:
                 logger.debug("evo_bench: 悬空导入 %s -> %s", _mod, _t)
         _edges[_mod] = _kept
     m["import_cycles"], m["cycle_modules"] = _count_import_cycles(_edges)
+    m["dangling_symbol_imports"], m["dangling_all_exports"] = _dangling_symbol_stats(root)
     ap = Path(root) / "tea_agent" / "agent.py"
     if ap.exists():
         # AST 级：统计 agent.py 中「绝对包内导入」数量（应统一为相对导入 from .）

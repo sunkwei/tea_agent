@@ -190,9 +190,21 @@ class Agent:
         )
 
     def _init_storage(self) -> None:
-        """初始化 Storage 数据库。"""
+        """初始化 Storage 数据库。
+
+        使用 active_db_path_abs（会话库实际路径），而非 db_path_abs（用户级回退层）：
+        后者仅在 storage_scope=user 或显式 data_dir/绝对 db_path 时才与前者相同。
+        若此处用 db_path_abs，**会话（Agent）与工具（store.get_storage）会打开两个
+        不同的数据库** —— 而 toolkit_memory 走 get_storage() 删除记忆时会「报告成功、
+        实则删在另一个库」，会话侧那条记忆仍被每轮注入：记忆不可靠，且每轮白烧 token
+        （实测：删除返回「已彻底删除」，注入却持续 5+ 轮不停）。
+        active_db_path_abs 的文档已声明「Agent._init_storage / store.get_storage
+        使用此属性」——本方法此前违背了该约定。
+        """
         cfg = self._cfg
-        db_path = Path(cfg.paths.db_path_abs)
+        db_path = Path(
+            getattr(cfg.paths, "active_db_path_abs", "") or cfg.paths.db_path_abs
+        )
         self._db = Storage(db_path=str(db_path))
         logger.info(f"Storage 初始化 | db: {db_path}")
 

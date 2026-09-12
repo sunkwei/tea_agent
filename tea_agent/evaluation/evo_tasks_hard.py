@@ -5,8 +5,8 @@
 - R 棘轮（ratchet）：不得比实测基线更差 → 当前 PASS，检测未来退化
 - I 不变量（含运行时实证）：结构性事实 → 当前 PASS
 
-实测基线（tea_agent/，排除 tests/demo；199 文件）：
-    except_pass=116  broad_except=747  print=161  todo=24  长函数(>150行)=26
+实测基线（tea_agent/，排除 tests/demo；201 文件）：
+    except_pass=97（上轮由 116 修复后收紧）  broad_except=749  print=161  todo=24  长函数(>150行)=26
     导入环=0（判据修正后确认无环）  缺失 docstring=374  >800 行文件=20
     fstring_sql=0  shell_true=0  agent 反向导入=0  语法错误=0  缺 meta=0
 """
@@ -58,14 +58,19 @@ HARD_TASKS: list = [
     # ── R 棘轮：基线=实测，不得更差 ──
     # 口径必须与 metrics() 一致：tea_agent/，排除 tests 与 demo（实测 198 文件）
     {"id": "hard-except-pass-ratchet", "kind": "quality",
-     "title": "静默吞异常不超过基线（实测 116）",
+     "title": "静默吞异常不超过基线（实测 97，已从 116 收紧）",
      "checks": [{"type": "python", "expr": (
-         "n = metrics()['except_pass']; assert n <= 116, 'except: pass 增至 %d（基线 116）' % n"
+         "n = metrics()['except_pass']; assert n <= 97, 'except: pass 增至 %d（基线 97）' % n"
      )}]},
+    # 基线 747 → 749：新增 api_smoke 的 2 处**语义必需**边界（异常分类桶 + 工具
+    # 边界，后者与 toolkit_approve / toolkit_evo_bench 既有惯例一致）；另 3 处已
+    # 收窄为精确类型（sqlite3.Error / OSError / ValueError / KeyError）。
+    # 本指标是**绝对计数**：任何新增含边界的模块都会抬高它，故只用于防「无意
+    # 识蔓延」，不代表质量下降 —— 记账须显式，不可悄悄放过。
     {"id": "hard-broad-except-ratchet", "kind": "quality",
-     "title": "裸捕获 Exception 不超过基线（实测 747）",
+     "title": "裸捕获 Exception 不超过基线（实测 749）",
      "checks": [{"type": "python", "expr": (
-         "n = metrics()['broad_except']; assert n <= 747, '裸捕获增至 %d（基线 747）' % n"
+         "n = metrics()['broad_except']; assert n <= 749, '裸捕获增至 %d（基线 749）' % n"
      )}]},
     {"id": "hard-print-ratchet", "kind": "quality",
      "title": "print 日志不超过基线（实测 161）",
@@ -189,6 +194,14 @@ HARD_TASKS += [
          "import importlib; m = importlib.import_module('tea_agent'); "
          "missing = [n for n in m.__all__ if not hasattr(m, n)]; "
          "assert missing == [], '__all__ 声明但运行时不可用: %s' % missing"
+     )}]},
+    {"id": "hard-api-smoke-no-fatal", "kind": "integrity",
+     "title": "公共 API 入口冒烟无致命失败（运行时实证，覆盖全部入口）",
+     "checks": [{"type": "python", "expr": (
+         "from tea_agent.evaluation.api_smoke import run; o = run(scope='all'); "
+         "assert o['checked'] >= 40, '仅调用 %d 个入口（冒烟可能空转）' % o['checked']; "
+         "assert o['failures'] == [], "
+         "'入口级致命失败 %d 处: %s' % (len(o['failures']), o['failures'][:3])"
      )}]},
     {"id": "hard-no-delegation-drift", "kind": "integrity",
      "title": "Storage 纯委托层调用点与实现兼容（运行时实证）",

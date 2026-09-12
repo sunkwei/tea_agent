@@ -547,11 +547,11 @@ class Storage:
         return self._config_history.get_config_history(key, limit)
 
     # ── Vector 操作 ──
-    def store_embedding(self, conversation_id: str, embedding: bytes, dimension: int = 0, model_name: str = ""):
+    def store_embedding(self, conversation_id: str, embedding: list, dimension: int = 0, model_name: str = ""):
         """存储对话嵌入向量。"""
         return self._vectors.store_embedding(conversation_id, embedding, dimension, model_name)
 
-    def get_msg_embedding(self, conversation_id: str) -> bytes:
+    def get_msg_embedding(self, conversation_id: str) -> list | None:
         """获取对话嵌入向量。"""
         return self._vectors.get_msg_embedding(conversation_id)
 

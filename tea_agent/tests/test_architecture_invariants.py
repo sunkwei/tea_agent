@@ -61,3 +61,27 @@ def test_agent_module_imports_cleanly_in_fresh_process():
         cwd=str(ROOT), capture_output=True, text=True, timeout=180,
     )
     assert r.returncode == 0, f"导入 tea_agent.agent 失败:\n{r.stderr[-800:]}"
+
+
+# ── 导入环检测（Tarjan SCC）──────────────────────────────────────
+def test_cycle_detector_finds_synthetic_cycle():
+    """算法正确性：合成 A⇄B 环必须被检出，无环图为 0。"""
+    from tea_agent.evaluation.evo_bench import _count_import_cycles
+
+    assert _count_import_cycles({"a": {"b"}, "b": {"a"}, "c": set()})[0] == 1
+    assert _count_import_cycles({"a": {"b"}, "b": {"c"}, "c": set()})[0] == 0
+    # 3 模块环 + 自引用（自环不计入 size>1 的强连通分量）
+    assert _count_import_cycles({"a": {"b"}, "b": {"c"}, "c": {"a"}, "d": {"d"}})[0] == 1
+
+
+def test_no_new_import_cycles_at_package_level():
+    """不变量：包内**导入期**不得存在导入环（当前 0，判据已修正）。
+
+    判据要点：只计模块级（导入期）执行的导入边 —— 函数内惰性导入是合法的
+    破环手段，`if TYPE_CHECKING:` 块运行时不执行；相对导入按 ``__package__``
+    语义解析（包的 ``__init__`` 其 ``__package__`` 即自身）。
+    """
+    from tea_agent.evaluation.evo_bench import _bench_metrics
+
+    n = _bench_metrics(str(ROOT))["import_cycles"]
+    assert n == 0, f"包内检测到 {n} 个导入环（期望 0）"

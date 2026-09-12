@@ -59,27 +59,29 @@ def test_each_regression_maps_to_expected_task(experiment):
 def test_all_improvements_kept_and_coverage_grows(experiment):
     s = experiment["summary"]
     assert s["improvement_kept"] == s["improvement_rounds"] == 6
-    # 覆盖 7 → 13，分数保持满值（更强的保证，不是更弱的）
-    assert s["coverage_start"] == 7
-    assert s["coverage_end"] == 7 + len(IMPROVEMENTS) == 13
-    assert s["score_start"] == 1.0 and s["score_end"] == 1.0
+    # 覆盖按探针数增长；分数不得下降（难度任务集下基线非满值 → 分数应同步上升）
+    assert s["coverage_end"] == s["coverage_start"] + len(IMPROVEMENTS)
+    assert s["score_end"] >= s["score_start"]
 
 
 def test_pass_ratio_blindspot_is_measured(experiment):
-    """核心发现：只用 pass ratio 的 compare_with_history 看不见「同分但覆盖扩大」的改进。
+    """核心发现：pass-ratio 盲区**只在基线饱和时**出现。
 
-    6 轮改进中 ship 口径全部判 no_change（→ 应回滚），
-    而覆盖感知口径判 keep；分歧恰为 6 次。
+    基线满值（score=1.0）时，加一条通过的探针不改变 ratio → 旧口径误判 no_change；
+    难度任务集打破天花板后（基线 ≈0.78），加通过探针同时抬高 ratio → 两口径一致。
+    饱和情形的盲区由 test_evo_bench.py::test_compare_coverage_only_improvement_is_keep 直接覆盖。
     """
     s = experiment["summary"]
-    assert s["legacy_vs_shipped_disagreements"] == len(IMPROVEMENTS) == 6
+    if s["score_start"] >= 1.0:  # 饱和：盲区显现，6 轮全部分歧
+        assert s["legacy_vs_shipped_disagreements"] == len(IMPROVEMENTS) == 6
+    else:  # 非饱和：两口径一致，盲区潜伏
+        assert s["legacy_vs_shipped_disagreements"] == 0, s
     for r in experiment["rounds"]:
         if r["kind"] != "improvement" or r.get("status") != "ok":
             continue
-        assert r["score"] == 1.0 and r["total"] > 7
-        # 修复前：纯 ratio 口径判 no_change（真实增益会被回滚）
-        assert r["legacy_decision"] == "no_change", r
-        # 修复后：真实发货的 compare_with_history 覆盖感知 → keep
+        b = s["baseline"]
+        assert r["score"] >= b["score"] and r["total"] > b["total"], r
+        # 无论饱和与否：真实增益都必须被保留，不得回滚
         assert r["shipped_decision"] == "keep", r
         assert r["coverage_decision"] == "keep"
         assert r["action"] == "keep"
@@ -99,13 +101,13 @@ def test_curve_artifact_written(experiment):
     assert p.exists(), f"曲线文件未落盘: {p}"
     data = json.loads(p.read_text(encoding="utf-8"))
     assert len(data["rounds"]) == 20 and data["ok"] is True
-    # 曲线可复现性锚点：baseline 与 summary 一致
-    assert data["summary"]["baseline"]["score"] == 1.0
-    assert data["summary"]["coverage_start"] == 7
+    # 曲线可复现性锚点：起始值自洽（与任务集规模解耦，兼容难度任务集）
+    assert data["summary"]["baseline"]["score"] == data["summary"]["score_start"]
+    assert data["summary"]["coverage_start"] == data["summary"]["baseline"]["total"]
 
 
 def test_probes_persisted_and_pass(experiment):
-    """实验产出的 6 条运行时探针落盘，且真实基准加载后全绿（7+6=13）。"""
+    """实验产出的 6 条运行时探针落盘，且在真实基准中全部通过。"""
     assert experiment["summary"].get("probes_written") == 6
     assert probes_path().exists()
     data = json.loads(probes_path().read_text(encoding="utf-8"))
@@ -114,8 +116,11 @@ def test_probes_persisted_and_pass(experiment):
 
     res = _run_bench()
     assert "error" not in res, res.get("error")
-    assert res["total"] == 13, res
-    assert res["score"] == 1.0 and res["failed"] == []
+    probe_ids = {m[0] for m in IMPROVEMENTS}
+    # 注意：_run_bench（子进程）的 failed 是 id 字符串列表，与 run_bench 的 dict 列表不同形态
+    failed_ids = set(res.get("failed") or [])
+    assert not (probe_ids & failed_ids), f"探针未通过: {probe_ids & failed_ids}"
+    assert res["total"] >= 7 + len(IMPROVEMENTS), res["total"]
 
 
 def test_all_regression_targets_restored(experiment):

@@ -23,6 +23,7 @@ check 形态（task["checks"] 每项）：
 
 from __future__ import annotations
 
+import ast
 import json
 import logging
 import os
@@ -60,6 +61,96 @@ def check(name: str):
 def _scrubbed_env() -> dict:
     """基准命令同样使用清洗后环境（与 toolkit_exec 一致，杜绝凭据泄入基准输出）。"""
     return {k: v for k, v in os.environ.items() if not _SECRET_RE.search(k)}
+
+
+_SKIP_DIRS = {"__pycache__", "build", "dist", "node_modules", ".git",
+              "build_mini_dist", "build_nuitka_dist", "uploads", "demo"}
+
+
+def _pyfiles(root, subdir: str = "tea_agent", limit: int = 0):
+    """列出项目内 Python 源文件 → [(相对路径, 源码)]（跳过构建产物）。
+
+    供难度任务集做 **AST 级**检查：正则无法可靠判断代码结构
+    （如「except 块体是否为单个 pass」），AST 可以。
+
+    Args:
+        root: 项目根目录
+        subdir: 相对 root 的子目录（默认只扫 tea_agent/，避免构建产物噪声）
+        limit: 最多返回文件数（0 = 不限）
+
+    Returns:
+        [(posix 风格相对路径, 文件源码)]
+    """
+    base = Path(root) / subdir if subdir else Path(root)
+    out: list = []
+    if not base.is_dir():
+        return out
+    for p in sorted(base.rglob("*.py")):
+        if any(seg in _SKIP_DIRS for seg in p.parts):
+            continue
+        try:
+            out.append((str(p.relative_to(root)).replace("\\", "/"),
+                        p.read_text(encoding="utf-8", errors="replace")))
+        except OSError:
+            continue
+        if limit and len(out) >= limit:
+            break
+    return out
+
+
+_BENCH_METRIC_CACHE: dict = {}
+_METRIC_SKIP = ("/tests/", "/demo/")
+_FSQL_RE = re.compile(r'f["\']\s*(SELECT|INSERT|UPDATE|DELETE)\b', re.IGNORECASE)
+
+
+def _bench_metrics(root=".") -> dict:
+    """AST 扫描项目源码 → 量化指标（进程内缓存；跳过 tests/demo 以反映库代码质量）。
+
+    供难度任务集使用：正则无法可靠判断代码结构（如「except 块体是否只有 pass」），AST 可以。
+    阈值均来自实测基线，不做主观设定。
+    """
+    key = str(Path(root).resolve())
+    if key in _BENCH_METRIC_CACHE:
+        return _BENCH_METRIC_CACHE[key]
+    m = {"files": 0, "syntax_errors": 0, "except_pass": 0, "broad_except": 0,
+         "fstring_sql": 0, "print_calls": 0, "todos": 0, "long_functions": 0,
+         "toolkit_files": 0, "missing_meta": 0, "agent_reverse_imports": 0}
+    for rel, src in _pyfiles(root, subdir="tea_agent"):
+        if any(s in rel for s in _METRIC_SKIP):
+            continue
+        m["files"] += 1
+        m["fstring_sql"] += len(_FSQL_RE.findall(src))
+        m["todos"] += len(re.findall(r"\b(TODO|FIXME|XXX)\b", src))
+        try:
+            tree = ast.parse(src)
+        except SyntaxError:
+            m["syntax_errors"] += 1
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ExceptHandler):
+                body = [b for b in node.body if not isinstance(b, ast.Expr)]
+                if len(body) == 1 and isinstance(body[0], ast.Pass):
+                    m["except_pass"] += 1
+                t = node.type
+                nm = getattr(t, "id", "") or getattr(t, "attr", "")
+                if t is None or nm == "Exception":
+                    m["broad_except"] += 1
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print":
+                m["print_calls"] += 1
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if (getattr(node, "end_lineno", 0) or 0) - node.lineno > 150:
+                    m["long_functions"] += 1
+        name = rel.rsplit("/", 1)[-1]
+        if name.startswith("toolkit_") and "/toolkit/" in rel:
+            m["toolkit_files"] += 1
+            if f"def meta_{name[:-3]}" not in src:
+                m["missing_meta"] += 1
+    ap = Path(root) / "tea_agent" / "agent.py"
+    if ap.exists():
+        txt = ap.read_text(encoding="utf-8", errors="replace")
+        m["agent_reverse_imports"] = len(re.findall(r"^\s*from\s+tea_agent\.", txt, re.M))
+    _BENCH_METRIC_CACHE[key] = m
+    return m
 
 
 @check("command")
@@ -112,7 +203,8 @@ def _check_python(c: dict, root: Path, timeout: int) -> tuple:
         return p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
 
     ns = {"root": root, "read": read, "os": os, "re": re, "json": json,
-          "Path": Path, "__name__": "evo_check"}
+          "Path": Path, "ast": ast, "pyfiles": _pyfiles,
+          "metrics": (lambda _r=root: _bench_metrics(_r)), "__name__": "evo_check"}
     try:
         # 先尝试按「表达式」编译；含赋值/多语句的断言串会编译失败 → 回退 exec
         try:
@@ -228,6 +320,16 @@ def load_tasks(root: str = ".", kind: str | None = None) -> list:
         if tid and tid not in seen:
             seen.add(tid)
             tasks.append(t)
+    try:  # 难度任务集（违规/棘轮/不变量）；模块不可用时降级为仅内置任务
+        from tea_agent.evaluation.evo_tasks_hard import HARD_TASKS
+
+        for t in HARD_TASKS:
+            tid = t.get("id")
+            if tid and tid not in seen:
+                seen.add(tid)
+                tasks.append(t)
+    except ImportError:
+        logger.debug("evo_bench: 难度任务集不可用，跳过")
     for d in TASK_DIRS:
         try:
             if not d.is_dir():
@@ -315,6 +417,7 @@ def run_bench(tasks: list = None, root: str = ".", kind: str = None, timeout: in
         "tasks_ok": sum(1 for r in results if r["ok"]),
         "ok": bool(results) and all(r["ok"] for r in results),
         "kind": kind or "all",
+        "metrics": _bench_metrics(root),
         "results": results,
         "failed": [
             {"id": r["id"], "title": r["title"],

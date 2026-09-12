@@ -27,10 +27,10 @@ HARD_TASKS: list = [
          "assert not os.path.exists(str(root.parent.parent / '__escape_probe.txt')), '逃逸文件被创建'"
      )}]},
     {"id": "hard-agent-no-reverse-import", "kind": "architecture",
-     "title": "agent.py 不反向导入子模块（AGENTS.md: 不得循环导入）",
+     "title": "agent.py 包内导入统一用相对形式（AST 级，避免与包内循环导入纠缠）",
      "checks": [{"type": "python", "expr": (
          "n = metrics()['agent_reverse_imports']; "
-         "assert n == 0, 'agent.py 反向导入 %d 处（AGENTS.md 明文：不反向导入任何子模块）' % n"
+         "assert n == 0, 'agent.py 包内绝对导入 %d 处（应改为 from . 相对导入）' % n"
      )}]},
     {"id": "hard-fstring-sql-zero", "kind": "security",
      "title": "SQL 插值均经校验（AST 语义级：值参数化 + 标识符白名单）",

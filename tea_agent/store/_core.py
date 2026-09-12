@@ -580,6 +580,10 @@ class Storage:
         """查询打断事件。"""
         return self._interruptions.query_interruptions(topic_id, status, since, limit)
 
+    def mark_interruptions_precipitated(self, event_ids: list) -> int:
+        """标记打断事件已沉淀（不再参与聚合，使已删记忆不被重建）。"""
+        return self._interruptions.mark_precipitated(event_ids)
+
     def stats_interruptions(self, since: str | None = None) -> list:
         """按 tool_name 聚合打断统计。"""
         return self._interruptions.stats_interruptions(since)

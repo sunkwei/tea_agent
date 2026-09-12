@@ -152,15 +152,16 @@ def analyze_interruptions(
         evs = storage.query_interruptions(status="classified")
         if not evs:
             return []
-        # 按 tool_name 聚合
-        tool_counts: dict[str, int] = {}
+        # 按 tool_name 聚合（保留事件 id，使沉淀后可标记退出聚合池）
+        tool_events: dict[str, list[str]] = {}
         for ev in evs:
             tool = (ev.get("tool_name") or "").strip()
             if tool:
-                tool_counts[tool] = tool_counts.get(tool, 0) + 1
+                tool_events.setdefault(tool, []).append(str(ev.get("id") or ""))
 
         written: list[str] = []
-        for tool, cnt in sorted(tool_counts.items(), key=lambda x: -x[1]):
+        for tool, ev_ids in sorted(tool_events.items(), key=lambda x: -len(x[1])):
+            cnt = len(ev_ids)
             if cnt < min_count:
                 continue
             # M3: 幂等去重——已有该工具的打断偏好记忆则跳过
@@ -182,6 +183,14 @@ def analyze_interruptions(
                 )
                 written.append(content)
                 logger.info(f"[InterruptionKnowledge] 沉淀打断模式记忆: tool={tool}, count={cnt}")
+
+            # 可靠记忆（关键）：把这些事件标记为已沉淀，移出后续聚合池。
+            # 否则幂等仅靠「是否已有同名记忆」——用户删除后下一轮会**重建**它，
+            # 删除永不生效，且每轮注入白烧 token（实测连续 20+ 轮仍被注入）。
+            marked = storage.mark_interruptions_precipitated(ev_ids)
+            if marked:
+                logger.debug(
+                    f"[InterruptionKnowledge] 标记 {marked} 条事件已沉淀: tool={tool}")
 
             # M5: 持续高频（≥ skill 阈值）→ 主动生成行为指导 skill
             if cnt >= skill_min_count:
@@ -238,9 +247,16 @@ def start_interruption_analyzer(
     Returns:
         启动的线程对象；失败返回 None
     """
+    icfg = _get_icfg()
+    if not bool(icfg.get("enabled", True)):
+        # 进化暂停开关（interruption.enabled=false）：不启动分析线程。
+        # 该线程是「后台自动沉淀记忆」的唯一入口；禁用后可确保记忆
+        # 只由用户显式增删（这是「可靠记忆」的开关侧面）。
+        logger.info("打断模式分析线程未启动（interruption.enabled=false）")
+        return None
     if interval_h is None:
         try:
-            interval_h = float(_get_icfg().get("analyze_interval_h", _INTERRUPT_ANALYZE_INTERVAL_H))
+            interval_h = float(icfg.get("analyze_interval_h", _INTERRUPT_ANALYZE_INTERVAL_H))
         except Exception:
             interval_h = _INTERRUPT_ANALYZE_INTERVAL_H
 

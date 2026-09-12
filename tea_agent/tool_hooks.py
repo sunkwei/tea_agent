@@ -80,11 +80,12 @@ class ToolHookRegistry:
             self._post_hooks.setdefault(tool_name or "*", []).append(fn)
 
     def clear(self) -> None:
-        """清空全部钩子（测试/重置用）。"""
+        """清空全部钩子（测试/重置用）。内建审批/审计钩子随后自动重挂。"""
         with self._lock:
             self._pre_hooks.clear()
             self._post_hooks.clear()
             self._additional_contexts.clear()
+            self._builtin_installed = False
 
     # ── 执行 API ──
 
@@ -93,6 +94,7 @@ class ToolHookRegistry:
 
         任一钩子拒绝即整体拒绝；钩子异常被隔离（记录并继续）。
         """
+        _ensure_builtin_hooks(self)
         hooks = list(self._pre_hooks.get("*", [])) + list(self._pre_hooks.get(tool_name, []))
         for fn in hooks:
             try:
@@ -152,3 +154,27 @@ class ToolHookRegistry:
 
 # 全局单例 — 各会话共享（工具级 hook）
 tool_hooks = ToolHookRegistry()
+
+
+def _ensure_builtin_hooks(registry) -> None:
+    """惰性挂载内建审批 + 审计钩子（幂等；clear() 后自动重挂）。
+
+    挂载点放在 run_pre 内部而非模块导入时，原因：
+    1. 避免模块导入期的循环导入（tool_approval → config → ...）
+    2. tool_hooks.clear() 后无需手工恢复，下一次工具调用自动重挂
+    3. 未启用审批（mode=off）时零额外开销，仅保留高风险动作审计
+    """
+    if getattr(registry, "_builtin_installed", False):
+        return
+    try:
+        from tea_agent.tool_approval import install_builtin_hooks
+
+        install_builtin_hooks(registry)
+    except Exception as e:  # noqa: BLE001 — 安全钩子不可用不得阻断工具执行
+        logger.debug("tool_hooks: 内建审批/审计钩子挂载跳过: %s", e)
+    try:
+        from tea_agent.evolution_gate import install_evolution_gate
+
+        install_evolution_gate(registry)
+    except Exception as e:  # noqa: BLE001 — 进化闸门不可用不得阻断工具执行
+        logger.debug("tool_hooks: 进化闸门钩子挂载跳过: %s", e)

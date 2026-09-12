@@ -13,6 +13,8 @@
 
 import logging
 
+from ._sql_safety import safe_placeholders
+
 logger = logging.getLogger("Storage.SemanticSearch")
 
 
@@ -180,7 +182,7 @@ class SemanticSearch:
         if not top_ids:
             return []
 
-        placeholders = ",".join(["?" for _ in top_ids])
+        placeholders = safe_placeholders(len(top_ids))
         c = self.storage.conn.cursor()
         c.execute(
             f"SELECT * FROM memories WHERE id IN ({placeholders}) AND is_active = 1",

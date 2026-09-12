@@ -4,6 +4,7 @@
 import numpy as np
 
 from ._component import StoreComponent
+from ._sql_safety import safe_placeholders
 
 
 class VectorStore(StoreComponent):
@@ -130,7 +131,7 @@ class VectorStore(StoreComponent):
         # 批量补充 ai_msg
         c = self.conn.cursor()
         cids = tuple(s["conversation_id"] for s in top)
-        placeholders = ",".join("?" for _ in cids)
+        placeholders = safe_placeholders(len(cids))
         c.execute(
             f"SELECT id, ai_msg FROM conversations WHERE id IN ({placeholders})", cids
         )

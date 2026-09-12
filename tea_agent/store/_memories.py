@@ -7,6 +7,7 @@ import logging
 import numpy as np
 
 from ._component import StoreComponent
+from ._sql_safety import safe_set_clause, safe_where_clause
 
 logger = logging.getLogger("Storage.Memories")
 
@@ -111,16 +112,13 @@ class MemoryStore(StoreComponent):
         from datetime import datetime
         updates["updated_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-        # 动态构建 SET 子句：全部使用参数化查询，消除 SQL 函数拼接
-        set_parts = []
-        values = []
-        for k, v in updates.items():
-            set_parts.append(f"{k} = ?")
-            values.append(v)
+        # 列名经 safe_set_clause 校验，值全部参数化
+        set_clause = safe_set_clause(updates.keys())
+        values = list(updates.values())
 
         c = self.conn.cursor()
         c.execute(
-            f"UPDATE memories SET {', '.join(set_parts)} WHERE id = ?", values + [memory_id]
+            f"UPDATE memories SET {set_clause} WHERE id = ?", values + [memory_id]
         )
         self.conn.commit()
         affected = c.rowcount
@@ -202,7 +200,7 @@ class MemoryStore(StoreComponent):
         if min_importance:
             conditions.append("importance >= ?")
             params.append(min_importance)
-        where = " AND ".join(conditions)
+        where = safe_where_clause(conditions)
         c = self.conn.cursor()
         c.execute(
             f"SELECT * FROM memories WHERE {where} "

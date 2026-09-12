@@ -13,11 +13,18 @@
 HARD_TASKS: list = [
     # ── V 违规：AGENTS.md 明文要求，当前未兑现 ──
     {"id": "hard-file-path-escape", "kind": "security",
-     "title": "toolkit_file 路径逃逸防护（AGENTS.md: 禁止 ../ 逃逸）",
+     "title": "toolkit_file 路径逃逸防护（运行时实证）",
      "checks": [{"type": "python", "expr": (
-         "src = read('tea_agent/toolkit/toolkit_file.py'); "
-         "assert ('realpath' in src or 'is_relative_to' in src or 'normpath' in src), "
-         "'toolkit_file 无路径逃逸防护：read/write 直接 open(filename)'"
+         "from tea_agent.toolkit.toolkit_file import _resolve_path as rp, toolkit_file as tf; "
+         "ok1, m1 = rp('../../etc/passwd'); "
+         "assert not ok1, '../ 逃逸未被拒绝: %r' % (m1,); "
+         "ok2, m2 = rp('docs/probe.md'); "
+         "assert ok2, '项目内相对路径被误拒: %r' % (m2,); "
+         "ok3, _ = rp('/tmp/abs_probe.txt'); "
+         "assert ok3, '显式绝对路径应放行（Agent 有意识指定）'; "
+         "out = tf(action='write', filename='../../__escape_probe.txt', content='x'); "
+         "assert isinstance(out, str) and 'Error' in out, '逃逸写入未阻断: %r' % (out,); "
+         "assert not os.path.exists(str(root.parent.parent / '__escape_probe.txt')), '逃逸文件被创建'"
      )}]},
     {"id": "hard-agent-no-reverse-import", "kind": "architecture",
      "title": "agent.py 不反向导入子模块（AGENTS.md: 不得循环导入）",

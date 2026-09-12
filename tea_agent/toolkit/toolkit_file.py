@@ -2,8 +2,44 @@
 # version: 1.1.0
 
 import logging
+import os
+from pathlib import Path as _Path
 
 logger = logging.getLogger("toolkit")
+
+
+def _resolve_path(filename: str):
+    """校验并规范化路径 —— 禁止相对路径 `../` 逃逸出项目目录。
+
+    规则（对齐 AGENTS.md「路径遍历：文件操作工具校验路径，禁止 ../ 逃逸」）：
+    - 显式绝对路径：放行（调用方有意识指定，且 toolkit_exec 本可执行任意命令，
+      单禁绝对路径无实际安全增益）
+    - 相对路径：解析后必须位于当前工作目录内，否则拒绝
+    - 环境变量 ``TEA_FILE_ALLOW_OUTSIDE=1`` 可放宽（跨项目操作场景）
+
+    Returns:
+        (ok, resolved_path_or_error_msg)
+    """
+    if filename is None or not str(filename).strip():
+        return False, "filename 为空"
+    raw = str(filename).strip()
+    p = _Path(raw)
+    # 显式绝对/有根路径视为调用方有意指定：
+    # Windows 下 "/tmp/x" 与 "\\x" 属「有根无盘符」路径，is_absolute() 为 False，
+    # 需用 p.root 兜底，否则会被误判为相对路径而拒绝（跨平台行为不一致）。
+    if p.is_absolute() or p.root:
+        return True, str(p)
+    if os.environ.get("TEA_FILE_ALLOW_OUTSIDE", "").strip().lower() in ("1", "true", "yes"):
+        return True, str(p)
+    cwd = _Path.cwd().resolve()
+    resolved = (cwd / p).resolve()
+    try:
+        resolved.relative_to(cwd)
+    except ValueError:
+        return False, (f"路径逃逸被拒绝: {raw}（解析为 {resolved}，超出项目目录 {cwd}）；"
+                       f"如需跨目录操作请显式使用绝对路径或设 TEA_FILE_ALLOW_OUTSIDE=1")
+    return True, str(resolved)
+
 
 def toolkit_file(action: str, filename: str = "", content: str = "", path: str = ".", recursive: bool = False, show_hidden: bool = False, offset: int = 0, limit: int = 0, chunks: list = None, append: bool = False):
     """
@@ -16,8 +52,11 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
     logger.info(f"toolkit_file called: action={action!r}, filename={filename!r}, content={repr(content)[:80]}, path={path!r}, offset={offset!r}, limit={limit!r}")
 
     if action == "read":
+        ok, resolved = _resolve_path(filename)
+        if not ok:
+            return f"Error: {resolved}"
         try:
-            with open(filename, encoding='utf-8') as f:
+            with open(resolved, encoding='utf-8') as f:
                 if offset > 0 or limit > 0:
                     lines = f.readlines()
                     start = max(0, offset - 1) if offset > 0 else 0
@@ -30,6 +69,9 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
             return f"Error: {str(e)}"
 
     elif action == "write":
+        ok, resolved = _resolve_path(filename)
+        if not ok:
+            return f"Error: {resolved}"
         try:
             # chunks 模式：列表按序拼接（大文件分块写入，避免单次超长参数）
             if chunks:
@@ -53,8 +95,10 @@ def toolkit_file(action: str, filename: str = "", content: str = "", path: str =
         except Exception as e:
             return f"Error: {str(e)}"
     elif action == "list":
-        from pathlib import Path
-        target = Path(path).resolve()
+        ok, resolved = _resolve_path(path)
+        if not ok:
+            return f"❌ Error: {resolved}"
+        target = _Path(resolved)
         if not target.exists():
             return f"❌ Error: The path '{path}' does not exist."
 

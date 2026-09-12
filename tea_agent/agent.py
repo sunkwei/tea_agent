@@ -15,20 +15,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
 if TYPE_CHECKING:
-    from tea_agent.config import AgentConfig
+    from .config import AgentConfig
 
-import tea_agent.session_ref as _sref
-from tea_agent import tlk
-from tea_agent.config import load_config, resolve_config_path
-from tea_agent.litesession import LiteSession
-from tea_agent.logging_setup import setup_logging
-from tea_agent.onlinesession import OnlineToolSession
-from tea_agent.store import Storage
-
+from . import session_ref as _sref
+from . import tlk
 from .agent_background import start_scheduler
 from .agent_evolution import EvolutionActor, EvolutionAnalyzer, EvolutionEvaluator
 from .agent_pipeline import do_async_summaries
+from .config import load_config, resolve_config_path
+from .litesession import LiteSession
+from .logging_setup import setup_logging
 from .memory import PRIORITY_MEDIUM
+from .onlinesession import OnlineToolSession
+from .store import Storage
 
 logger = logging.getLogger("agent")
 
@@ -545,7 +544,7 @@ class Agent:
         # 任务结束：输出 DeepSeek 前缀缓存命中率（依据官方 kv_cache 文档：
         # usage.prompt_cache_hit_tokens / prompt_cache_miss_tokens）
         try:
-            from tea_agent.session.cache_report import format_cache_hit_rate
+            from .session.cache_report import format_cache_hit_rate
             _rate = format_cache_hit_rate(usage)
             if _rate:
                 logger.info(f"[Cache] 主模型 {_rate}")
@@ -741,11 +740,11 @@ class Agent:
     def _do_cross_topic_summary(self):
         """后台线程：跨主题汇总 — 每 3 轮触发一次分析。"""
         try:
-            from tea_agent.cross_topic_summarizer import CrossTopicSummarizer
+            from .cross_topic_summarizer import CrossTopicSummarizer
             cheap_client = None
             try:
-                from tea_agent.config import get_config
-                from tea_agent.providers import get_cheap_client
+                from .config import get_config
+                from .providers import get_cheap_client
                 cheap_client = get_cheap_client(get_config())
             except Exception:
                 pass
@@ -817,7 +816,7 @@ class Agent:
         success: bool,
         usage: dict
     ) -> None:
-        """结晶技能模式（扩展点）。
+        """结晶技能模式（扩展点）— 当前未接线，仅保留调用点。
 
         Args:
             user_text: 用户文本
@@ -826,21 +825,15 @@ class Agent:
             success: 是否成功
             usage: Token使用统计
         """
-        try:
-            from tea_agent.toolkit.toolkit_experience_solidify import (
-                ExperienceSolidifier,
-            )
-            token_cost = usage.get("total_tokens", 0) if usage else 0
-            solidifier = ExperienceSolidifier()
-            solidifier.solidify(
-                task=user_text,
-                tools_used=tools_used,
-                rounds=rounds,
-                success=success,
-                token_cost=token_cost,
-            )
-        except ImportError:
-            logger.debug("技能结晶功能未启用（需要 ExperienceSolidifier）")
+        # 未接线说明：原实现引用的 ExperienceSolidifier 类与其下游
+        # toolkit_dynamic_skill 均不存在，该路径长期静默失效且被 except ImportError 掩盖。
+        # 此处不再引用不存在的符号；待接入真实落盘后端
+        # （如 multi_agent.pattern_market.PatternMarket.save）后启用。
+        logger.debug(
+            "技能结晶未接线，跳过: task=%r tools=%s rounds=%d success=%s tokens=%s",
+            user_text[:60], tools_used, len(rounds or []), success,
+            (usage or {}).get("total_tokens", 0),
+        )
 
     def _save_lessons(self, lessons: list[str]) -> None:
         """保存经验教训到数据库。

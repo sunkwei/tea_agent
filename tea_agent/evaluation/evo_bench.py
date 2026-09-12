@@ -281,8 +281,16 @@ def _bench_metrics(root=".") -> dict:
                 m["missing_meta"] += 1
     ap = Path(root) / "tea_agent" / "agent.py"
     if ap.exists():
-        txt = ap.read_text(encoding="utf-8", errors="replace")
-        m["agent_reverse_imports"] = len(re.findall(r"^\s*from\s+tea_agent\.", txt, re.M))
+        # AST 级：统计 agent.py 中「绝对包内导入」数量（应统一为相对导入 from .）
+        try:
+            atree = ast.parse(ap.read_text(encoding="utf-8", errors="replace"))
+            m["agent_reverse_imports"] = sum(
+                1 for n in ast.walk(atree)
+                if isinstance(n, ast.ImportFrom) and n.level == 0
+                and (n.module or "").startswith("tea_agent")
+            )
+        except SyntaxError:
+            m["agent_reverse_imports"] = -1  # 语法错误由 syntax_errors 指标单独报告
     _BENCH_METRIC_CACHE[key] = m
     return m
 

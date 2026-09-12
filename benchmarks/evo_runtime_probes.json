@@ -1,0 +1,70 @@
+{
+  "tasks": [
+    {
+      "id": "P1-env-runtime-drop",
+      "kind": "safety",
+      "title": "凭据隔离（运行时实证）",
+      "checks": [
+        {
+          "type": "python",
+          "expr": "\nimport os\nfrom tea_agent.toolkit.toolkit_exec import _build_scrubbed_env as f\nos.environ['BENCH_FAKE_API_KEY'] = 'sk-abcdefghijklmnop'\nenv = f()\nos.environ.pop('BENCH_FAKE_API_KEY', None)\nassert 'BENCH_FAKE_API_KEY' not in env, '清洗环境未剔除伪造密钥变量'\n"
+        }
+      ]
+    },
+    {
+      "id": "P2-approval-enforce-block",
+      "kind": "safety",
+      "title": "enforce 模式真实拦截（运行时实证）",
+      "checks": [
+        {
+          "type": "python",
+          "expr": "\nimport os\nimport tea_agent.tool_approval as ta\nta._allow_path = lambda: None\nta._has_token = lambda: False\nos.environ['TEA_APPROVAL_MODE'] = 'enforce'\ntry:\n    assert not ta.is_granted('toolkit_exec'), '预期无授权'\n    d = ta.make_pre_hook()('toolkit_exec', {'app': 'git', 'args': ['status']})\n    assert isinstance(d, dict) and d.get('deny'), 'enforce 未拦截未授权高风险工具: %r' % (d,)\nfinally:\n    os.environ['TEA_APPROVAL_MODE'] = ''\n"
+        }
+      ]
+    },
+    {
+      "id": "P3-audit-tamper-detect",
+      "kind": "safety",
+      "title": "审计链篡改可检出（运行时实证）",
+      "checks": [
+        {
+          "type": "python",
+          "expr": "\nimport json, os, tempfile\nfrom tea_agent.audit_log import AuditLog\nd = tempfile.mkdtemp()\nal = AuditLog(directory=d)\nal.record('e1')\nal.record('e2')\nassert al.verify()['ok'], '未篡改却校验失败'\np = [os.path.join(d, n) for n in os.listdir(d) if n.endswith('.jsonl')][0]\nls = open(p, encoding='utf-8').read().splitlines()\nr = json.loads(ls[0])\nr['status'] = 'tampered'\nnl = chr(10)\nopen(p, 'w', encoding='utf-8').write(json.dumps(r, ensure_ascii=False) + nl + ls[1] + nl)\nassert not al.verify()['ok'], '篡改未被检出'\n"
+        }
+      ]
+    },
+    {
+      "id": "P4-gate-decision-both-ways",
+      "kind": "safety",
+      "title": "闸门双向决策（keep / rollback）",
+      "checks": [
+        {
+          "type": "python",
+          "expr": "\nfrom tea_agent.evaluation.evo_bench import compare_with_history as c\nr = c(baseline={'score': 1.0}, candidate={'score': 0.5}, threshold=0.0)\nassert r['decision'] == 'rollback', r\nr2 = c(baseline={'score': 0.5}, candidate={'score': 1.0}, threshold=0.0)\nassert r2['decision'] == 'keep', r2\n"
+        }
+      ]
+    },
+    {
+      "id": "P5-audit-mask-value-shapes",
+      "kind": "safety",
+      "title": "密钥值形态脱敏（多前缀）",
+      "checks": [
+        {
+          "type": "python",
+          "expr": "\nfrom tea_agent.audit_log import mask_secrets as m\nassert m({'token': 'x'})['token'] == '***MASKED***', '键名脱敏失效'\nassert 'ghp_' not in str(m('t=ghp_abcdefghijklmnopqrst')), 'GitHub token 值形态未脱敏'\nassert 'AKIA' not in str(m('k=AKIAIOSFODNN7EXAMPLE')), 'AWS key 未脱敏'\n"
+        }
+      ]
+    },
+    {
+      "id": "P6-history-roundtrip",
+      "kind": "safety",
+      "title": "进化曲线写入/读取闭环",
+      "checks": [
+        {
+          "type": "python",
+          "expr": "\nimport os, tempfile\nfrom tea_agent.evaluation import evo_bench as eb\np = os.path.join(tempfile.mkdtemp(), 'h.jsonl')\nold = eb.history_path\neb.history_path = lambda: p\ntry:\n    ok = eb.record_run({'score': 0.5, 'passed': 1, 'total': 2, 'tasks': 1,\n                        'tasks_ok': 0, 'ok': False, 'kind': 't'}, tag='probe')\n    assert ok, '历史写入失败'\n    assert len(eb.history()) == 1, '历史读取未闭环'\nfinally:\n    eb.history_path = old\n"
+        }
+      ]
+    }
+  ]
+}

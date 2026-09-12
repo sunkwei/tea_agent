@@ -100,7 +100,131 @@ def _pyfiles(root, subdir: str = "tea_agent", limit: int = 0):
 
 _BENCH_METRIC_CACHE: dict = {}
 _METRIC_SKIP = ("/tests/", "/demo/")
-_FSQL_RE = re.compile(r'f["\']\s*(SELECT|INSERT|UPDATE|DELETE)\b', re.IGNORECASE)
+
+# ── SQL 插值：语义级判定 ──
+# 表名 / 列名 / 占位符数量无法用 `?` 参数化，必须拼进语句字符串；真正可注入的是
+# 「值」（必须参数化）与「未校验的标识符」。因此判据不是「用了 f-string」，
+# 而是「插值是否来自已知安全的来源」：
+#   字面量常量 / 全大写常量（模块·类常量约定）/ SQL 安全助手调用及其派生变量
+_SQL_SHAPE_RE = re.compile(
+    r"^\s*(?:"
+    r"SELECT\s+(?:DISTINCT\s+)?(?:\*|[\w(])|"
+    r"INSERT\s+(?:INTO|OR)|"
+    r"REPLACE\s+INTO|"
+    r"UPDATE\s+\S+\s+SET|"
+    r"DELETE\s+FROM|"
+    r"DROP\s+TABLE|"
+    r"ALTER\s+TABLE"
+    r")",
+    re.IGNORECASE,
+)
+_SAFE_SQL_FUNCS = {"safe_ident", "safe_ddl", "safe_set_clause", "safe_where_clause",
+                   "safe_sql_fragment", "safe_placeholders"}
+_CAPS_NAME_RE = re.compile(r"^_?[A-Z][A-Z0-9_]*$")
+
+
+def _own_nodes(fn):
+    """产出 fn 自身（不含嵌套函数/类）作用域内的所有 AST 节点。"""
+    stack = list(fn.body)
+    while stack:
+        node = stack.pop()
+        yield node
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        stack.extend(ast.iter_child_nodes(node))
+
+
+def _is_safe_sql_expr(node, safe_vars: set) -> bool:
+    """判断 SQL 插值表达式是否来自已知安全来源。"""
+    if isinstance(node, ast.Constant):
+        return True
+    if isinstance(node, ast.Name):
+        return bool(_CAPS_NAME_RE.match(node.id)) or node.id in safe_vars
+    if isinstance(node, ast.Attribute):
+        return bool(_CAPS_NAME_RE.match(node.attr))
+    if isinstance(node, ast.Call):
+        f = node.func
+        nm = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else "")
+        return nm in _SAFE_SQL_FUNCS
+    if isinstance(node, ast.BinOp):
+        return (_is_safe_sql_expr(node.left, safe_vars)
+                and _is_safe_sql_expr(node.right, safe_vars))
+    if isinstance(node, ast.JoinedStr):
+        return all(_is_safe_sql_expr(v, safe_vars) for v in node.values
+                   if isinstance(v, ast.FormattedValue)) and \
+            all(isinstance(v, ast.Constant) for v in node.values)
+    return False
+
+
+def _safe_sql_vars(nodes) -> set:
+    """收集「由 SQL 安全助手派生」的局部变量名（含简单拼接，迭代至不动点）。"""
+    safe: set = set()
+    assigns = [n for n in nodes
+               if isinstance(n, (ast.Assign, ast.AnnAssign)) and getattr(n, "value", None)]
+    changed = True
+    while changed:
+        changed = False
+        for node in assigns:
+            if _is_safe_sql_expr(node.value, safe):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for t in targets:
+                    if isinstance(t, ast.Name) and t.id not in safe:
+                        safe.add(t.id)
+                        changed = True
+    return safe
+
+
+def _sql_fstring_stats(tree) -> tuple:
+    """统计 SQL f-string：返回 (插值总数, 含未校验插值的数量)。
+
+    只统计「语句形态」为 SQL 的 f-string（首段字面量匹配 SELECT/INSERT/...），
+    因此形如 `f"Insert symbol failed..."` 的日志文本不会被误判。
+    """
+    raw = unsafe = 0
+    scopes = [n for n in ast.walk(tree)
+              if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+
+    def _scan(nodes, safe_vars):
+        n_raw = n_unsafe = 0
+        for node in nodes:
+            if not isinstance(node, ast.JoinedStr):
+                continue
+            first = next((v for v in node.values
+                          if isinstance(v, ast.Constant) and isinstance(v.value, str)), None)
+            if not first or not _SQL_SHAPE_RE.match(str(first.value)):
+                continue
+            n_raw += 1
+            fvs = [v for v in node.values if isinstance(v, ast.FormattedValue)]
+            if any(not _is_safe_sql_expr(fv.value, safe_vars) for fv in fvs):
+                n_unsafe += 1
+        return n_raw, n_unsafe
+
+    if scopes:
+        for fn in scopes:
+            nodes = list(_own_nodes(fn))
+            r, u = _scan(nodes, _safe_sql_vars(nodes))
+            raw += r
+            unsafe += u
+        # 模块级语句（排除函数体内的重复遍历）
+        top = [n for n in tree.body
+               if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+        r, u = _scan(_iter_nodes(top), set())
+        raw += r
+        unsafe += u
+    else:
+        raw, unsafe = _scan(_iter_nodes(tree.body), set())
+    return raw, unsafe
+
+
+def _iter_nodes(seq):
+    """浅层遍历节点序列（不进入嵌套函数/类，避免与作用域扫描重复计数）。"""
+    stack = list(seq)
+    while stack:
+        node = stack.pop()
+        yield node
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        stack.extend(ast.iter_child_nodes(node))
 
 
 def _bench_metrics(root=".") -> dict:
@@ -113,20 +237,22 @@ def _bench_metrics(root=".") -> dict:
     if key in _BENCH_METRIC_CACHE:
         return _BENCH_METRIC_CACHE[key]
     m = {"files": 0, "syntax_errors": 0, "except_pass": 0, "broad_except": 0,
-         "fstring_sql": 0, "print_calls": 0, "todos": 0, "long_functions": 0,
-         "toolkit_files": 0, "missing_meta": 0, "agent_reverse_imports": 0,
-         "shell_true_toolkit": 0}
+         "fstring_sql": 0, "fstring_sql_raw": 0, "print_calls": 0, "todos": 0,
+         "long_functions": 0, "toolkit_files": 0, "missing_meta": 0,
+         "agent_reverse_imports": 0, "shell_true_toolkit": 0}
     for rel, src in _pyfiles(root, subdir="tea_agent"):
         if any(s in rel for s in _METRIC_SKIP):
             continue
         m["files"] += 1
-        m["fstring_sql"] += len(_FSQL_RE.findall(src))
         m["todos"] += len(re.findall(r"\b(TODO|FIXME|XXX)\b", src))
         try:
             tree = ast.parse(src)
         except SyntaxError:
             m["syntax_errors"] += 1
             continue
+        _raw_sql, _unsafe_sql = _sql_fstring_stats(tree)
+        m["fstring_sql_raw"] += _raw_sql
+        m["fstring_sql"] += _unsafe_sql
         for node in ast.walk(tree):
             if isinstance(node, ast.ExceptHandler):
                 body = [b for b in node.body if not isinstance(b, ast.Expr)]

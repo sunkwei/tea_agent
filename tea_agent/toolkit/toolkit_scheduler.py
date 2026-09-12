@@ -3,6 +3,8 @@
 import logging
 import os
 
+from tea_agent.store._sql_safety import safe_set_clause
+
 logger = logging.getLogger("toolkit")
 
 
@@ -449,10 +451,10 @@ def toolkit_scheduler(action: str, **kwargs):
             updates["next_run"] = parse_schedule(updates["schedule"])
             updates["next_run"] = updates["next_run"].isoformat() if updates["next_run"] else None
         if updates:
-            set_parts = [f"{k}=?" for k in updates]
+            set_clause = safe_set_clause(updates.keys())
             vals = list(updates.values()) + [tid]
             conn.execute(
-                f"UPDATE scheduled_tasks SET {', '.join(set_parts)}, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                f"UPDATE scheduled_tasks SET {set_clause}, updated_at=CURRENT_TIMESTAMP WHERE id=?",
                 vals
             )
             conn.commit()

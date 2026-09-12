@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta
 
 from ._component import StoreComponent
+from ._sql_safety import safe_set_clause
 
 logger = logging.getLogger("Storage.ScheduledTasks")
 
@@ -122,9 +123,8 @@ class ScheduledTaskStore(StoreComponent):
         _ALLOWED_COLUMNS = {"name", "command", "schedule", "enabled", "updated_at"}  # noqa: N806
         for k in updates:
             assert k in _ALLOWED_COLUMNS, f"invalid column: {k}"
-        set_clause = ", ".join(
-            f"{k}=?" if k != "updated_at" else f"{k}=CURRENT_TIMESTAMP"
-            for k in updates
+        set_clause = safe_set_clause(
+            updates.keys(), raw={"updated_at": "CURRENT_TIMESTAMP"}
         )
         values = [v for k, v in updates.items() if k != "updated_at"]
         values.append(task_id)

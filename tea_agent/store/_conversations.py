@@ -9,6 +9,7 @@ import sqlite3
 import threading
 
 from ._component import StoreComponent
+from ._sql_safety import safe_placeholders, safe_where_clause
 
 logger = logging.getLogger("Storage.Conversations")
 
@@ -344,7 +345,7 @@ class ConversationStore(StoreComponent):
             conditions.append("c.stamp <= ?")
             params.append(f"{date_to} 23:59:59")
 
-        where = " OR ".join(f"({cond})" for cond in conditions)
+        where = safe_where_clause(conditions, joiner=" OR ", wrap=True)
 
         sql = f'''
             SELECT c.id as conversation_id, c.topic_id, t.title as topic_title,
@@ -377,7 +378,7 @@ class ConversationStore(StoreComponent):
                 existing_ids = {r["conversation_id"] for r in conv_results}
                 missing_ids = round_conv_ids - existing_ids
                 if missing_ids:
-                    placeholders = ",".join("?" for _ in missing_ids)
+                    placeholders = safe_placeholders(len(missing_ids))
                     rc2 = self.conn.cursor()
                     rc2.execute(f'''
                         SELECT c.id as conversation_id, c.topic_id, t.title as topic_title,

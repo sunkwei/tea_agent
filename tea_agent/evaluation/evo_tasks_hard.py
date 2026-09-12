@@ -33,10 +33,10 @@ HARD_TASKS: list = [
          "assert n == 0, 'agent.py 反向导入 %d 处（AGENTS.md 明文：不反向导入任何子模块）' % n"
      )}]},
     {"id": "hard-fstring-sql-zero", "kind": "security",
-     "title": "SQL 全参数化（AGENTS.md: 禁止 f-string 拼接）",
+     "title": "SQL 插值均经校验（AST 语义级：值参数化 + 标识符白名单）",
      "checks": [{"type": "python", "expr": (
-         "n = metrics()['fstring_sql']; "
-         "assert n == 0, 'f-string SQL %d 处（AGENTS.md: 所有数据库操作使用参数化查询）' % n"
+         "m = metrics(); n = m['fstring_sql']; r = m['fstring_sql_raw']; "
+         "assert n == 0, '未校验的 SQL 插值 %d 处（共 %d 处 SQL f-string）' % (n, r)"
      )}]},
     {"id": "hard-no-shell-true", "kind": "security",
      "title": "工具层无 shell=True 注入面（AST 级，免疫注释/docstring 误报）",

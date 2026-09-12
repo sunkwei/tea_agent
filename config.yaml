@@ -1,16 +1,1 @@
-# tea_agent 配置
-#
-# 说明：本文件此前为空（仅空白），所有设置走代码默认值。
-# 下面按用户要求显式声明「暂停进化」相关开关。
-
-# ── 打断模式后台分析（自动沉淀记忆 + 生成 skill）──
-# enabled: false → 不启动后台分析线程，记忆只由用户显式增删（可靠记忆）。
-# 背景：该线程每小时聚合打断事件并自动写入 preference 记忆；其幂等此前仅看
-# 「是否已有同名记忆」，导致用户删除后被**重建**（删除永不生效、每轮注入白烧 token）。
-# 已修复为「沉淀后标记 precipitated 移出聚合池」，此处再显式关闭以求稳妥。
-interruption:
-  enabled: false
-  analyze_interval_h: 1.0
-  min_count: 2
-  skill_min_count: 3
-  keep_days: 30
+ 

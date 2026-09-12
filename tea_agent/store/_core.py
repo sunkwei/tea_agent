@@ -477,11 +477,20 @@ class Storage:
             max_level2_chars=max_level2_chars,
         )
 
-    def generate_l2_to_l3_summary(self, topic_id: str, level2_items: list,
-                                   cheap_model: object = None) -> tuple:
-        """将 Level 2 摘要为 Level 3。"""
+    def generate_l2_to_l3_summary(
+        self, topic_id: str, overflow_items: list, existing_l3: str,
+        summarize_client, summarize_model: str, extra_params: dict = None,
+    ) -> tuple:
+        """将 L2 溢出条目与现有 L3 摘要合并，生成新的 L3 语义摘要。
+
+        签名必须与 SummaryStore.generate_l2_to_l3_summary 保持一致：本方法为
+        纯委托层，历史上曾停留在旧签名（只收 3 参），而调用方按 6 参调用，
+        导致每次触发都 TypeError 并被上层 except 吞成 WARNING —— L3 摘要长期
+        静默失效。纯委托层的参数应与真实实现一一对应。
+        """
         return self._summaries.generate_l2_to_l3_summary(
-            topic_id, level2_items, cheap_model=cheap_model,
+            topic_id, overflow_items, existing_l3, summarize_client,
+            summarize_model, extra_params=extra_params,
         )
 
     # ── Prompt 操作 ──

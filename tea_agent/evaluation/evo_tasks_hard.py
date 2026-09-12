@@ -176,6 +176,15 @@ HARD_TASKS += [
          "n = metrics()['dangling_imports']; "
          "assert n == 0, '悬空导入 %d 处（指向不存在模块，会掩盖重构残留）' % n"
      )}]},
+    {"id": "hard-no-delegation-drift", "kind": "integrity",
+     "title": "Storage 纯委托层调用点与实现兼容（运行时实证）",
+     "checks": [{"type": "python", "expr": (
+         "import tempfile as T; from tea_agent.store import Storage; "
+         "db = Storage(T.mkdtemp() + '/probe.db'); "
+         "r = db.generate_l2_to_l3_summary('t', [], 'x', None, 'm', extra_params={}); "
+         "assert isinstance(r, tuple) and len(r) == 2, '委托层返回形态异常: %r' % (r,); "
+         "assert r[0] == 'x', '空溢出应原样返回既有 L3 摘要: %r' % (r[0],)"
+     )}]},
     {"id": "hard-docstring-ratchet", "kind": "quality",
      "title": "缺失 docstring 的公共符号不超过基线（实测 374）",
      "checks": [{"type": "python", "expr": (

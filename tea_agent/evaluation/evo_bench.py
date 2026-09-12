@@ -114,7 +114,8 @@ def _bench_metrics(root=".") -> dict:
         return _BENCH_METRIC_CACHE[key]
     m = {"files": 0, "syntax_errors": 0, "except_pass": 0, "broad_except": 0,
          "fstring_sql": 0, "print_calls": 0, "todos": 0, "long_functions": 0,
-         "toolkit_files": 0, "missing_meta": 0, "agent_reverse_imports": 0}
+         "toolkit_files": 0, "missing_meta": 0, "agent_reverse_imports": 0,
+         "shell_true_toolkit": 0}
     for rel, src in _pyfiles(root, subdir="tea_agent"):
         if any(s in rel for s in _METRIC_SKIP):
             continue
@@ -135,8 +136,15 @@ def _bench_metrics(root=".") -> dict:
                 nm = getattr(t, "id", "") or getattr(t, "attr", "")
                 if t is None or nm == "Exception":
                     m["broad_except"] += 1
-            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "print":
-                m["print_calls"] += 1
+            elif isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id == "print":
+                    m["print_calls"] += 1
+                # shell=True 只认「真实关键字参数」，不匹配注释/docstring 中的同名文本
+                if "/toolkit/" in rel and any(
+                    kw.arg == "shell" and isinstance(kw.value, ast.Constant)
+                    and kw.value.value is True for kw in node.keywords
+                ):
+                    m["shell_true_toolkit"] += 1
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 if (getattr(node, "end_lineno", 0) or 0) - node.lineno > 150:
                     m["long_functions"] += 1

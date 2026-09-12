@@ -1,8 +1,37 @@
 # version: 1.0.0
 
 import logging
+import os
 
 logger = logging.getLogger("toolkit")
+
+
+def _split_command(cmd: str) -> list:
+    """把命令行字符串拆为 argv 列表（跨平台，不经过 shell）。
+
+    用途：消除 `shell=True` 带来的命令注入面。代价是不再解释管道 / 重定向 /
+    通配符等 shell 语法 —— 需要这些能力时请改用 ``script:`` 形式（Python 脚本）。
+
+    Windows 下 shlex 需 posix=False 以保留反斜杠路径，但 token 可能保留成对
+    引号，故再剥离一次。
+
+    Args:
+        cmd: 命令行字符串
+
+    Returns:
+        argv 列表（首个元素为可执行文件）
+
+    Raises:
+        ValueError: 引号不配对等无法解析的情况
+    """
+    import shlex
+
+    posix = os.name != "nt"
+    parts = shlex.split(cmd, posix=posix)
+    if not posix:
+        parts = [p[1:-1] if len(p) >= 2 and p[0] == p[-1] == '"' else p for p in parts]
+    return parts
+
 
 def toolkit_scheduler(action: str, **kwargs):
     """定时任务管理工具。
@@ -30,6 +59,7 @@ def toolkit_scheduler(action: str, **kwargs):
     import os
     import sqlite3
     import subprocess
+    import sys
     import threading
     import time
     from datetime import datetime, timedelta
@@ -263,23 +293,39 @@ def toolkit_scheduler(action: str, **kwargs):
 
     # ── 执行任务 ──
     def _execute_task(task: dict):
-        """执行命令行任务，支持从数据库加载脚本"""
+        """执行命令行任务，支持从数据库加载脚本。
+
+        安全：不使用 shell 执行（消除命令注入面）。命令经 shlex 拆为 argv 后直接
+        运行，因此**不解释管道 / 重定向 / 通配符**等 shell 语法；需要复杂逻辑时
+        请使用 ``script:`` 形式（Python 脚本）。
+        """
         cmd = task["command"]
+        argv = None
 
         # 如果命令是 script:xxx 格式，从数据库加载脚本
         if cmd.startswith("script:"):
             script_id = cmd[7:]
             script_path = _prepare_script(script_id)
             if script_path:
-                cmd = f"python {script_path}"
+                argv = [sys.executable, script_path]
                 logger.info(f"从数据库加载脚本: {script_id} -> {script_path}")
             else:
                 return -3, f"脚本不存在: {script_id}"
 
-        logger.info(f"执行定时任务: {task['name']} -> {cmd}")
+        if argv is None:
+            if not str(cmd).strip():
+                return -4, "命令为空"
+            try:
+                argv = _split_command(cmd)
+            except ValueError as e:
+                return -4, f"命令解析失败: {e}"
+            if not argv:
+                return -4, "命令解析为空"
+
+        logger.info(f"执行定时任务: {task['name']} -> {argv}")
         try:
             result = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True, timeout=300, cwd=os.getcwd()
+                argv, shell=False, capture_output=True, text=True, timeout=300, cwd=os.getcwd()
             )
             output = (result.stdout + result.stderr)[:2000]
             return result.returncode, output

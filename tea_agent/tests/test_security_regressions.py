@@ -194,3 +194,41 @@ def test_no_unsafe_sql_interpolation_in_store():
                             and not eb._is_safe_sql_expr(v.value, safe)):
                         offenders.append(f"{rel}:{node.lineno}")
     assert offenders == [], f"未校验 SQL 插值: {offenders}"
+
+
+def test_exec_does_not_hang_on_stdin_reading_command():
+    """toolkit_exec 必须给子进程 DEVNULL 而非继承 stdin。
+
+    交互式命令（ssh/git/sudo 的密码对话）会阻塞等输入；若继承 stdin，命令会
+    一直等到空闲超时（单条 timeout、硬上限 timeout×4）才被杀，表现为「无输出假死」。
+    DEVNULL 使其立即 EOF 快速失败。此处用 reading-stdin 的 python 子进程验证：
+    必须在远小于 timeout 的墙钟时间内返回，而不是拖到超时。
+    """
+    import sys as _sys
+    import time as _t
+
+    from tea_agent.toolkit.toolkit_exec import _run_single_with_monitor
+
+    t0 = _t.time()
+    res = _run_single_with_monitor(
+        _sys.executable,
+        ["-c", "import sys; sys.stdin.read() or print('reached-eof')"],
+        timeout=30,
+    )
+    elapsed = _t.time() - t0
+    assert elapsed < 15, f"命令未在 stdin EOF 后立即结束，耗时 {elapsed:.1f}s（疑似继承 stdin 阻塞）"
+    assert not res["timed_out"], f"命令被超时终止（应因 EOF 立即退出）: {res}"
+    assert res["returncode"] == 0, f"退出码异常: {res}"
+
+
+def test_no_silent_exception_sinks_in_security_modules():
+    """安全模块（审批/审计/权限/钩子）不得静默吞异常。
+
+    这些模块的静默失败意味着闸门失效而无人知晓；本测试要求其静默吞异常为 0
+    （即失败至少记 warning，使问题在常规日志级别可见）。与 toolkit_exec 的 env
+    清洗、audit 链同属「失败必须可诊断」的安全底座。
+    """
+    from tea_agent.evaluation.evo_bench import _bench_metrics
+
+    n = _bench_metrics(str(ROOT))["except_pass_security"]
+    assert n == 0, f"安全模块存在 {n} 处静默吞异常（应至少记 warning）"

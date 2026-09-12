@@ -101,6 +101,15 @@ def _pyfiles(root, subdir: str = "tea_agent", limit: int = 0):
 _BENCH_METRIC_CACHE: dict = {}
 _METRIC_SKIP = ("/tests/", "/demo/")
 
+# 安全相关模块：审批/审计/权限/钩子的静默失败 = 闸门失效而无人知晓，
+# 故其静默吞异常单独计数（要求为 0，而非仅受全局棘轮约束）。
+_SECURITY_RELEVANT = (
+    "tea_agent/audit_log.py",
+    "tea_agent/tool_approval.py",
+    "tea_agent/permission.py",
+    "tea_agent/tool_hooks.py",
+)
+
 # ── SQL 插值：语义级判定 ──
 # 表名 / 列名 / 占位符数量无法用 `?` 参数化，必须拼进语句字符串；真正可注入的是
 # 「值」（必须参数化）与「未校验的标识符」。因此判据不是「用了 f-string」，
@@ -227,6 +236,131 @@ def _iter_nodes(seq):
         stack.extend(ast.iter_child_nodes(node))
 
 
+def _module_name(rel: str) -> str:
+    """相对路径 → 包内模块名（tea_agent/a/b.py → tea_agent.a.b；__init__ 归并到包）。"""
+    parts = rel[:-3].split("/")
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
+def _is_type_checking_guard(node) -> bool:
+    """`if TYPE_CHECKING:` 守卫判断（其块内导入运行时不执行）。"""
+    test = getattr(node, "test", None)
+    if isinstance(test, ast.Name):
+        return test.id == "TYPE_CHECKING"
+    if isinstance(test, ast.Attribute):
+        return test.attr == "TYPE_CHECKING"
+    return False
+
+
+def _module_level_nodes(tree):
+    """模块级（**导入期**执行）的 AST 节点。
+
+    导入环只在导入期成环：函数/类体内的惰性导入不构成环（那正是破环手段），
+    `if TYPE_CHECKING:` 块运行时不执行，故其导入边也不参与判定。
+    仅在模块级建图，才能避免把「允许的惰性导入」误报为环。
+    """
+    stack = list(tree.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                             ast.ClassDef, ast.Lambda)):
+            continue
+        if isinstance(node, ast.If) and _is_type_checking_guard(node):
+            continue
+        yield node
+        stack.extend(ast.iter_child_nodes(node))
+
+
+def _import_targets(mod: str, tree, is_package: bool = False) -> set:
+    """该模块在**导入期**对包内模块的导入目标（未过滤存在性）。
+
+    支持绝对（from tea_agent.x）与相对（from .x / from . import y）两种写法。
+    相对导入按 ``__package__`` 语义解析：包的 ``__init__`` 其 ``__package__``
+    即自身，普通模块则需先去掉模块名 —— 混淆二者会把 ``from ._core import X``
+    （在 __init__.py 内）错算成 ``tea_agent._core``，凭空指向不存在的模块。
+    """
+    pkg = mod if is_package else mod.rsplit(".", 1)[0]
+    pkg_parts = pkg.split(".") if pkg else []
+
+    def _base(level: int) -> str:
+        # level=1 → __package__ 自身；level=2 → 其父包，依此类推
+        return ".".join(pkg_parts[: max(0, len(pkg_parts) - (level - 1))])
+
+    out: set = set()
+    for node in _module_level_nodes(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.level:
+                base = _base(node.level)
+                if node.module:
+                    out.add(f"{base}.{node.module}" if base else node.module)
+                else:
+                    for a in node.names:
+                        out.add(f"{base}.{a.name}" if base else a.name)
+            elif node.module and node.module.startswith("tea_agent"):
+                out.add(node.module)
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                if a.name.startswith("tea_agent"):
+                    out.add(a.name)
+    return out
+
+
+def _count_import_cycles(graph: dict) -> tuple:
+    """Tarjan SCC → (环数, 涉及模块数)；只计 size>1 的强连通分量。
+
+    为什么单独立指标：其余指标看「单点」（某行、某函数），本项看「结构」。
+    导入环使导入顺序敏感、阻碍模块化，且无法靠局部改写发现。
+    纯 AST + 图算法，不引入第三方依赖（grimp / import-linter 可作交叉验证）。
+    """
+    index: dict = {}
+    low: dict = {}
+    on_stack: set = set()
+    stack: list = []
+    comps: list = []
+    counter = [0]
+
+    for root in graph:
+        if root in index:
+            continue
+        work = [(root, iter(sorted(graph.get(root, ()))))]
+        index[root] = low[root] = counter[0]
+        counter[0] += 1
+        stack.append(root)
+        on_stack.add(root)
+        while work:
+            v, it = work[-1]
+            advanced = False
+            for w in it:
+                if w not in index:
+                    index[w] = low[w] = counter[0]
+                    counter[0] += 1
+                    stack.append(w)
+                    on_stack.add(w)
+                    work.append((w, iter(sorted(graph.get(w, ())))))
+                    advanced = True
+                    break
+                if w in on_stack:
+                    low[v] = min(low[v], index[w])
+            if advanced:
+                continue
+            work.pop()
+            if work:
+                low[work[-1][0]] = min(low[work[-1][0]], low[v])
+            if low[v] == index[v]:
+                comp = []
+                while True:
+                    w = stack.pop()
+                    on_stack.discard(w)
+                    comp.append(w)
+                    if w == v:
+                        break
+                if len(comp) > 1:
+                    comps.append(comp)
+    return len(comps), sum(len(c) for c in comps)
+
+
 def _bench_metrics(root=".") -> dict:
     """AST 扫描项目源码 → 量化指标（进程内缓存；跳过 tests/demo 以反映库代码质量）。
 
@@ -239,17 +373,26 @@ def _bench_metrics(root=".") -> dict:
     m = {"files": 0, "syntax_errors": 0, "except_pass": 0, "broad_except": 0,
          "fstring_sql": 0, "fstring_sql_raw": 0, "print_calls": 0, "todos": 0,
          "long_functions": 0, "toolkit_files": 0, "missing_meta": 0,
-         "agent_reverse_imports": 0, "shell_true_toolkit": 0}
+         "agent_reverse_imports": 0, "shell_true_toolkit": 0,
+         "import_cycles": 0, "cycle_modules": 0, "docstring_missing": 0,
+         "big_files": 0, "dangling_imports": 0, "except_pass_security": 0}
+    _graph: dict = {}
     for rel, src in _pyfiles(root, subdir="tea_agent"):
         if any(s in rel for s in _METRIC_SKIP):
             continue
         m["files"] += 1
         m["todos"] += len(re.findall(r"\b(TODO|FIXME|XXX)\b", src))
+        if src.count("\n") > 800:
+            m["big_files"] += 1
         try:
             tree = ast.parse(src)
         except SyntaxError:
             m["syntax_errors"] += 1
             continue
+        _mod = _module_name(rel)
+        if _mod:
+            _graph[_mod] = _import_targets(_mod, tree,
+                                           is_package=rel.endswith("__init__.py"))
         _raw_sql, _unsafe_sql = _sql_fstring_stats(tree)
         m["fstring_sql_raw"] += _raw_sql
         m["fstring_sql"] += _unsafe_sql
@@ -258,6 +401,8 @@ def _bench_metrics(root=".") -> dict:
                 body = [b for b in node.body if not isinstance(b, ast.Expr)]
                 if len(body) == 1 and isinstance(body[0], ast.Pass):
                     m["except_pass"] += 1
+                    if rel in _SECURITY_RELEVANT:
+                        m["except_pass_security"] += 1
                 t = node.type
                 nm = getattr(t, "id", "") or getattr(t, "attr", "")
                 if t is None or nm == "Exception":
@@ -271,14 +416,41 @@ def _bench_metrics(root=".") -> dict:
                     and kw.value.value is True for kw in node.keywords
                 ):
                     m["shell_true_toolkit"] += 1
-            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if (getattr(node, "end_lineno", 0) or 0) - node.lineno > 150:
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if (isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and (getattr(node, "end_lineno", 0) or 0) - node.lineno > 150):
                     m["long_functions"] += 1
+                if not node.name.startswith("_") and ast.get_docstring(node) is None:
+                    m["docstring_missing"] += 1
         name = rel.rsplit("/", 1)[-1]
         if name.startswith("toolkit_") and "/toolkit/" in rel:
             m["toolkit_files"] += 1
             if f"def meta_{name[:-3]}" not in src:
                 m["missing_meta"] += 1
+    # 包内导入图 → 环检测（Tarjan SCC）：其余指标看「单点」，本项看「结构」。
+    # 边 = 目标模块**真实存在**的导入。指向不存在模块的导入不构成环（那是悬空
+    # 导入，由 dangling_imports 单独度量）；若把未知目标归并到父包，会凭空造出
+    # 假边（实测曾把 `from ._core import X` 解成 `tea_agent._core` 再归并成
+    # `store → tea_agent`，产出幻影环）。
+    _known = set(_graph)
+
+    def _exists(t: str) -> bool:
+        p = Path(root)
+        for part in t.split("."):
+            p = p / part
+        return p.with_suffix(".py").exists() or (p / "__init__.py").exists()
+
+    _edges: dict = {}
+    for _mod, _tg in _graph.items():
+        _kept: set = set()
+        for _t in _tg:
+            if _t in _known or _exists(_t):
+                _kept.add(_t)
+            else:
+                m["dangling_imports"] += 1
+                logger.debug("evo_bench: 悬空导入 %s -> %s", _mod, _t)
+        _edges[_mod] = _kept
+    m["import_cycles"], m["cycle_modules"] = _count_import_cycles(_edges)
     ap = Path(root) / "tea_agent" / "agent.py"
     if ap.exists():
         # AST 级：统计 agent.py 中「绝对包内导入」数量（应统一为相对导入 from .）

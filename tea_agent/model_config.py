@@ -162,8 +162,8 @@ def _builtin_caps_for_url(api_url: str) -> dict | None:
             if _normalize_url(info.get("api_url", "")) == want:
                 return {"supports_thinking": bool(info.get("supports_thinking", False)),
                         "supports_vision": bool(info.get("supports_vision", False))}
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("model_config.py._builtin_caps_for_url: Exception 已忽略: %s", e)
     return None
 
 
@@ -256,8 +256,8 @@ class ModelConfigStore:
         mtime = 0.0
         try:
             mtime = self._path.stat().st_mtime
-        except OSError:
-            pass
+        except OSError as e:
+            logger.debug("model_config.py.load: OSError 已忽略: %s", e)
         with self._lock:
             if not force and self._data is not None and mtime == self._mtime:
                 return self._data
@@ -304,8 +304,8 @@ class ModelConfigStore:
                 f"model_config.json.bak.{time.strftime('%Y%m%d_%H%M%S')}")
             try:
                 shutil.copy2(self._path, bak)
-            except OSError:
-                pass
+            except OSError as e:
+                logger.debug("model_config.py._write_unlocked: OSError 已忽略: %s", e)
         tmp = self._path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp, self._path)

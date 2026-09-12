@@ -5,9 +5,10 @@
 - R 棘轮（ratchet）：不得比实测基线更差 → 当前 PASS，检测未来退化
 - I 不变量（含运行时实证）：结构性事实 → 当前 PASS
 
-实测基线（tea_agent/，排除 tests/demo）：
-    except_pass=122  broad_except=756  print=181  todo=28  长函数=26
-    fstring_sql=16   agent 反向导入=11  语法错误=0  缺 meta=0
+实测基线（tea_agent/，排除 tests/demo；199 文件）：
+    except_pass=116  broad_except=747  print=161  todo=24  长函数(>150行)=26
+    导入环=0（判据修正后确认无环）  缺失 docstring=374  >800 行文件=20
+    fstring_sql=0  shell_true=0  agent 反向导入=0  语法错误=0  缺 meta=0
 """
 
 HARD_TASKS: list = [
@@ -141,5 +142,49 @@ HARD_TASKS += [
          "al.record('t/sec', tool='x', detail={'api_key': 'sk-abcdefghijklmnop'}); "
          "txt = open(al.files()[0], encoding='utf-8').read(); "
          "assert 'sk-abcdefghijklmnop' not in txt, '审计日志泄露明文密钥'"
+     )}]},
+
+    # ── V 违规（新增）：结构性缺陷 / AGENTS.md 明文要求 → 当前 FAIL，构成曲线的上升空间 ──
+    {"id": "hard-no-import-cycles", "kind": "architecture",
+     "title": "包内无导入环（Tarjan SCC 只计导入期边；历史 4 个误报已修正）",
+     "checks": [{"type": "python", "expr": (
+         "m = metrics(); n = m['import_cycles']; k = m['cycle_modules']; "
+         "assert n == 0, '包内导入环 %d 个（涉 %d 模块）：循环依赖使导入顺序敏感、阻碍模块化' % (n, k)"
+     )}]},
+    {"id": "hard-except-pass-target", "kind": "quality",
+     "title": "静默吞异常降至 100 以下（AGENTS.md: 避免 except: pass，实测 116）",
+     "checks": [{"type": "python", "expr": (
+         "n = metrics()['except_pass']; "
+         "assert n <= 100, 'except: pass %d 处（目标 <=100，实测基线 116）' % n"
+     )}]},
+    {"id": "hard-no-silent-sinks-in-security", "kind": "security",
+     "title": "安全模块不得静默吞异常（审批/审计/权限失效须可见）",
+     "checks": [{"type": "python", "expr": (
+         "n = metrics()['except_pass_security']; "
+         "assert n == 0, '安全模块静默吞异常 %d 处（失败须至少记 warning）' % n"
+     )}]},
+
+    # ── R 棘轮（新增）：冻结结构指标，检测未来退化 ──
+    {"id": "hard-cycle-ratchet", "kind": "architecture",
+     "title": "导入环数量不增加（实测 0，判据修正后）",
+     "checks": [{"type": "python", "expr": (
+         "n = metrics()['import_cycles']; assert n == 0, '导入环增至 %d（基线 0）' % n"
+     )}]},
+    {"id": "hard-no-dangling-imports", "kind": "integrity",
+     "title": "无指向不存在模块的导入（实测 0）",
+     "checks": [{"type": "python", "expr": (
+         "n = metrics()['dangling_imports']; "
+         "assert n == 0, '悬空导入 %d 处（指向不存在模块，会掩盖重构残留）' % n"
+     )}]},
+    {"id": "hard-docstring-ratchet", "kind": "quality",
+     "title": "缺失 docstring 的公共符号不超过基线（实测 374）",
+     "checks": [{"type": "python", "expr": (
+         "n = metrics()['docstring_missing']; "
+         "assert n <= 374, '缺 docstring 的公共符号增至 %d（基线 374）' % n"
+     )}]},
+    {"id": "hard-bigfile-ratchet", "kind": "quality",
+     "title": "超大文件(>800行)不超过基线（实测 20）",
+     "checks": [{"type": "python", "expr": (
+         "n = metrics()['big_files']; assert n <= 20, '>800 行文件增至 %d（基线 20）' % n"
      )}]},
 ]

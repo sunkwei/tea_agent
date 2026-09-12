@@ -323,8 +323,8 @@ class AuditLog:
         for p in files:
             try:
                 size += os.path.getsize(p)
-            except OSError:
-                pass
+            except OSError as e:
+                logger.warning("audit_log.py.stats: OSError 已忽略: %s", e)
             recs = self._read(p, limit=None)
             records += len(recs)
             if recs:

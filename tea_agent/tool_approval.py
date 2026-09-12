@@ -99,8 +99,8 @@ def approval_mode() -> str:
             val = getattr(raw, "approval_mode", None)
         if isinstance(val, str) and val.strip().lower() in _VALID_MODES:
             return val.strip().lower()
-    except Exception:  # noqa: BLE001 — 配置不可用时保持默认
-        pass
+    except Exception as e:  # noqa: BLE001 — 配置不可用时保持默认
+        logger.warning("tool_approval.py.approval_mode: Exception 已忽略: %s", e)
     return "off"
 
 
@@ -117,8 +117,8 @@ def _require_at() -> str:
             val = getattr(raw, "approval_require_at", None)
         if isinstance(val, str) and val.strip().lower() in RISK_LEVELS:
             return val.strip().lower()
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as e:  # noqa: BLE001
+        logger.warning("tool_approval.py._require_at: Exception 已忽略: %s", e)
     return _DEFAULT_REQUIRE_AT
 
 

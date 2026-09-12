@@ -315,6 +315,11 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
     try:
         process = subprocess.Popen(
             [app] + list(args),
+            # stdin=DEVNULL：子进程不得继承父进程 stdin。否则交互式提示
+            # （ssh/git/sudo 的密码对话）会阻塞至超时（硬上限 timeout×4）
+            # 才被监控器视为「空闲」杀掉，表现为长时间无输出假死。
+            # 工具本无 stdin 入参，故 DEVNULL 使这类命令立即 EOF 快速失败。
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="replace",
@@ -415,6 +420,8 @@ def _run_batch_with_monitor(idx, cmd, timeout):
     try:
         process = subprocess.Popen(
             [a] + list(ar),
+            # 同 _run_single_with_monitor：禁止继承 stdin，避免交互提示假死
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding="utf-8", errors="replace",
             start_new_session=True,

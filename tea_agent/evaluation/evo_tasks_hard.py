@@ -39,10 +39,10 @@ HARD_TASKS: list = [
          "assert n == 0, 'f-string SQL %d 处（AGENTS.md: 所有数据库操作使用参数化查询）' % n"
      )}]},
     {"id": "hard-no-shell-true", "kind": "security",
-     "title": "工具层无 shell=True 注入面",
+     "title": "工具层无 shell=True 注入面（AST 级，免疫注释/docstring 误报）",
      "checks": [{"type": "python", "expr": (
-         "bad = [r for r, s in pyfiles(root, 'tea_agent/toolkit') if 'shell=True' in s]; "
-         "assert bad == [], 'shell=True 注入面: %s' % bad"
+         "n = metrics()['shell_true_toolkit']; "
+         "assert n == 0, '工具层 shell=True 注入面 %d 处（应改用 argv 列表 + shell=False）' % n"
      )}]},
     {"id": "hard-version-sync", "kind": "docs",
      "title": "README 版本徽章与 pyproject 一致",

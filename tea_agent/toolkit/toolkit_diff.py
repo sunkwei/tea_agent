@@ -465,8 +465,8 @@ TOOL_CATEGORIES = {
         "toolkit_search", "toolkit_lsp", "toolkit_query_chat_history",
         "toolkit_js_fetch",
     ],
-    "截图与OCR": [
-        "toolkit_screenshot", "toolkit_ocr", "toolkit_vision_analyze",
+    "截图与视觉": [
+        "toolkit_screenshot", "toolkit_vision_analyze",
     ],
     "系统操作": [
         "toolkit_exec", "toolkit_config",

@@ -48,3 +48,34 @@ __all__ = [
 ]
 
 from tea_agent.agent import Agent, TeaAgent
+
+# ── 惰性导出（PEP 562）──────────────────────────────────────────────
+# `__all__` 声明的其余公开名都定义在较重的子模块中。若在此处急切导入，会把
+# `import tea_agent` 与这些子模块的导入顺序绑死、并增加包导入开销；而完全不
+# 导入则会让 `from tea_agent import Storage` 抛 ImportError —— 即 `__all__`
+# 承诺了却拿不到（运行时实证曾确认 8 个公开名仅 2 个可用）。
+# 模块级 __getattr__ 兼顾两者：首次访问时导入并缓存进 globals()。
+_LAZY_EXPORTS = {
+    "BaseChatSession": ".basesession",
+    "OnlineToolSession": ".onlinesession",
+    "Storage": ".store",
+    "load_config": ".config",
+    "get_config": ".config",
+    "save_config": ".config",
+}
+
+
+def __getattr__(name: str):
+    """PEP 562：按 _LAZY_EXPORTS 惰性解析 __all__ 中的公开名。"""
+    mod_name = _LAZY_EXPORTS.get(name)
+    if mod_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    import importlib
+
+    value = getattr(importlib.import_module(mod_name, __package__), name)
+    globals()[name] = value  # 缓存：后续访问不再经过 __getattr__
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_LAZY_EXPORTS))

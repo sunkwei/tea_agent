@@ -25,14 +25,24 @@ logger = logging.getLogger("toolkit")
 _client_cache = {}
 
 
+def _client_for(model_cfg):
+    """按模型配置获取（带缓存的）OpenAI 客户端。"""
+    from openai import OpenAI
+
+    key = (model_cfg.api_key, model_cfg.api_url)
+    client = _client_cache.get(key)
+    if client is None:
+        client = OpenAI(api_key=model_cfg.api_key, base_url=model_cfg.api_url)
+        _client_cache[key] = client
+    return client
+
+
 def _get_vision_client():
     """从配置获取视觉模型（优先 vision_model，回退支持视觉的主模型）。
 
     Returns:
         (client, model_name, model_options) 或 (None, None, None)
     """
-    from openai import OpenAI
-
     from tea_agent.config import get_config
 
     cfg = get_config()
@@ -44,12 +54,7 @@ def _get_vision_client():
     else:
         return None, None, None
 
-    key = (model_cfg.api_key, model_cfg.api_url)
-    client = _client_cache.get(key)
-    if client is None:
-        client = OpenAI(api_key=model_cfg.api_key, base_url=model_cfg.api_url)
-        _client_cache[key] = client
-    return client, model_cfg.model_name, model_cfg.options or {}
+    return _client_for(model_cfg), model_cfg.model_name, model_cfg.options or {}
 
 
 def _to_data_url(image: str) -> str | None:
@@ -119,32 +124,69 @@ def toolkit_vision_analyze(image: str, prompt: str = "请描述这张图片的�
     if data_url is None:
         return {"ok": False, "error": f"无法解析图片输入（路径不存在或格式不支持）: {str(image)[:100]}"}
 
-    try:
-        detail_opt = (options or {}).get("detail", "") if options else ""
-        messages = [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": prompt},
-                _build_image_block(data_url, detail or detail_opt),
-            ],
-        }]
-        kwargs = {"model": model_name, "messages": messages, "max_tokens": max_tokens}
-        # 透传模型 options（如 supports_reasoning 需要的 extra_body）
-        if options:
-            extra_body = {}
-            if options.get("supports_reasoning"):
-                extra_body["thinking"] = {"type": "enabled"}
-            if extra_body:
-                kwargs["extra_body"] = extra_body
+    def _attempt(client_obj, model, opts) -> dict:
+        """单次视觉调用尝试；失败转结构化错误（不自抛，便于回退重试）。"""
+        try:
+            detail_opt = (opts or {}).get("detail", "") if opts else ""
+            messages = [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    _build_image_block(data_url, detail or detail_opt),
+                ],
+            }]
+            kwargs = {"model": model, "messages": messages, "max_tokens": max_tokens}
+            # 透传模型 options（如 supports_reasoning 需要的 extra_body）
+            if opts:
+                extra_body = {}
+                if opts.get("supports_reasoning"):
+                    extra_body["thinking"] = {"type": "enabled"}
+                if extra_body:
+                    kwargs["extra_body"] = extra_body
 
-        resp = client.chat.completions.create(**kwargs)
+            resp = client_obj.chat.completions.create(**kwargs)
+        except Exception as e:  # noqa: BLE001 — 失败隔离：转结构化错误供上层决策
+            logger.warning(f"视觉模型分析失败({model}): {e}")
+            return {"ok": False, "error": f"视觉模型调用失败: {e}", "model": model}
+
         text = ""
+        finish = ""
         if resp.choices and resp.choices[0].message:
             text = resp.choices[0].message.content or ""
-        return {"ok": True, "text": text, "model": model_name}
-    except Exception as e:
-        logger.warning(f"视觉模型分析失败: {e}")
-        return {"ok": False, "error": f"视觉模型调用失败: {e}"}
+            finish = resp.choices[0].finish_reason or ""
+        if not text:
+            # 静默失效防护（实测复现）：推理型视觉模型会先把 max_tokens 预算用于
+            # reasoning，预算耗尽时 content 为空且 finish_reason='length'。
+            # 若仍返回 ok=True，调用方会误判为「图中无内容」而错过整张图。
+            hint = ("推理(reasoning)已耗尽 max_tokens 预算，请增大 max_tokens 重试"
+                    if finish == "length" else "模型返回空内容，请调整 prompt 或重试")
+            return {"ok": False,
+                    "error": f"视觉模型输出为空（finish_reason={finish or 'unknown'}）：{hint}",
+                    "model": model, "finish_reason": finish}
+        return {"ok": True, "text": text, "model": model}
+
+    result = _attempt(client, model_name, options)
+    if result.get("ok"):
+        return result
+
+    # 韧性回退：首选视觉模型不可用（配额耗尽/服务故障）时，改用支持视觉的主模型。
+    # 动机（实测）：vision_model 所在 provider 月度配额用尽后，工具此前直接失败，
+    # 而主模型本可完成同一任务 —— 单点故障不该废掉整条「截图→多模态分析」能力。
+    from tea_agent.config import get_config
+
+    mm = getattr(get_config(), "main_model", None)
+    fb_name = getattr(mm, "model_name", "") if mm is not None else ""
+    if (mm is not None and getattr(mm, "supports_vision", False)
+            and getattr(mm, "is_configured", False) and fb_name and fb_name != model_name):
+        fb = _attempt(_client_for(mm), fb_name, getattr(mm, "options", None) or {})
+        if fb.get("ok"):
+            fb["fallback_from"] = model_name
+            logger.info(f"视觉分析回退成功: {model_name} → {fb_name}")
+            return fb
+        logger.warning(f"视觉分析回退亦失败({fb_name}): {fb.get('error')}")
+
+    # 两者皆失败：返回首选错误（更可能指向根因）
+    return result
 
 
 def meta_toolkit_vision_analyze() -> dict:

@@ -548,6 +548,10 @@ def run_bench(tasks: list = None, root: str = ".", kind: str = None, timeout: in
     """
     if tasks is None:
         tasks = load_tasks(root=root, kind=kind)
+    # 每次运行都重新扫描源码：_bench_metrics 的进程内缓存若跨运行复用，
+    # 同一会话内「改前 vs 改后」两次测量会返回相同分数，
+    # 而 keep-or-rollback 的前提正是两次独立测量。
+    _BENCH_METRIC_CACHE.clear()
     results = [run_task(t, root=root, timeout=timeout) for t in tasks]
     total = sum(r["total"] for r in results)
     passed = sum(r["passed"] for r in results)

@@ -56,6 +56,8 @@ _server_instance = None
 _uvicorn_server = None
 _restart_args: list[str] = []
 _restart_requested = False
+# 重启锁的陈旧阈值（秒）：超过后视为上次重启已失败，允许重新发起
+_RESTART_LOCK_TTL = 600.0
 
 
 def _build_restart_args(host: str, port: int, config_path: str | None = None,
@@ -162,20 +164,49 @@ def _inflight_turns() -> int:
     return count
 
 
-def _drain_then_exit(wait_seconds: float) -> None:
-    """等待在途回合结束（有界）后置 should_exit，避免中途切断 SSE 流。"""
+def _inflight_topics() -> set:
+    """当前在途回合的 topic 集合（活跃 + 后台），供排空与诊断使用。"""
+    try:
+        from tea_agent.server.modules import state
+    except ImportError:
+        return set()
+    with state.active_sessions_lock:
+        topics = set(state.active_sessions)
+    with state.background_sessions_lock:
+        topics |= set(state.background_sessions)
+    return topics
+
+
+def _drain_then_exit(wait_seconds: float, wait_for: set | None = None) -> None:
+    """等待在途回合结束（有界）后置 should_exit，避免中途切断 SSE 流。
+
+    只等待**发起重启时已存在**的回合（wait_for）：set_draining(True) 之后新回合
+    一律排队，不会再新增在途项；若改为等待「全部会话归零」，在有后台会话或残留
+    条目时永远等不到，重启会白等满 wait_seconds（实测：143s）。
+
+    可靠性：用 try/finally 保证 should_exit **一定**被置位 —— drain 线程是
+    daemon，一旦异常而未置位，重启会静默不生效且无任何外部症状。
+    """
     import time
 
     if _uvicorn_server is None:
         return
     deadline = time.monotonic() + max(0.0, wait_seconds)
-    drained = _inflight_turns() == 0
-    while not drained and time.monotonic() < deadline:
-        time.sleep(0.2)
-        drained = _inflight_turns() == 0
-    if not drained:
-        logger.warning("restart: 等待在途回合超时（%ss），强制退出", wait_seconds)
-    _uvicorn_server.should_exit = True
+    try:
+        while True:
+            # wait_for=None（未指定）→ 沿用旧语义「等全部在途回合归零」
+            pending = (_inflight_topics() if wait_for is None
+                       else (_inflight_topics() & wait_for))
+            if not pending or time.monotonic() >= deadline:
+                break
+            time.sleep(0.2)
+        if pending:
+            logger.warning("restart: 等待在途回合超时（%ss，仍在途：%s），强制退出",
+                           wait_seconds, ", ".join(sorted(pending)))
+        else:
+            logger.info("restart: 在途回合已排空，退出旧进程")
+    finally:
+        _uvicorn_server.should_exit = True
 
 
 def restart_server(graceful: bool = True, wait_seconds: float = 120.0) -> dict:
@@ -196,11 +227,18 @@ def restart_server(graceful: bool = True, wait_seconds: float = 120.0) -> dict:
         {"ok": True, ...} 或 {"ok": False, "error": ...}（同时仅允许一个重启在途）。
     """
     global _restart_requested
+    import time
+
     if _uvicorn_server is None:
         return {"ok": False, "error": "Server not running"}
-    if _restart_requested:
-        return {"ok": False, "error": "Restart already in progress"}
-    _restart_requested = True
+    # _restart_requested 存的是「发起时刻」（monotonic），0 表示未在重启中。
+    # 带超时的意义：若某次重启因 should_exit 未能真正退出而卡住（旧进程仍在跑），
+    # 该标记会永久残留 → 之后每次请求都被拒为「already in progress」，重启能力
+    # 被永久锁死。超过 TTL 即视为陈旧、允许重试。
+    if _restart_requested and (time.monotonic() - _restart_requested) < _RESTART_LOCK_TTL:
+        return {"ok": False, "error": "Restart already in progress",
+                "since_seconds": round(time.monotonic() - _restart_requested, 1)}
+    _restart_requested = time.monotonic()
 
     if graceful:
         import threading
@@ -213,8 +251,10 @@ def restart_server(graceful: bool = True, wait_seconds: float = 120.0) -> dict:
         except ImportError:
             logger.warning("restart: 无法置位 draining 标志（state 模块缺失）")
 
-        in_flight = _inflight_turns()
-        threading.Thread(target=_drain_then_exit, args=(wait_seconds,),
+        # 只等「此刻已在途」的回合：draining 已挡住新回合，其余无需等
+        wait_for = _inflight_topics()
+        in_flight = len(wait_for)
+        threading.Thread(target=_drain_then_exit, args=(wait_seconds, wait_for),
                          daemon=True, name="tea-restart-drain").start()
         return {"ok": True, "message": "Restart initiated (graceful)",
                 "mode": "graceful", "draining": True,
@@ -459,6 +499,10 @@ def _build_routes() -> list:
     static_dir = str(Path(__file__).parent / "static")
 
     return [
+        # 就绪探测端点。handle_health 早已存在、也列入了鉴权 skip_paths 与
+        # OpenAPI 声明，但此处从未注册 → 实际访问恒为 404（实测确认）。
+        # 重启的就绪探测（_wait_ready）依赖它，缺失会导致新进程被误判失败。
+        Route("/health", rh.handle_health),
         Route("/", rh.handle_web_root),
         Route("/api/chat", rh.handle_web_chat, methods=["POST"]),
         Route("/api/chat/steering", rh.handle_web_chat_steering, methods=["POST"]),

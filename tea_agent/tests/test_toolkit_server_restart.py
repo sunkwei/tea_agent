@@ -150,7 +150,7 @@ class TestEndToEndWithRealRestartServer:
                 r = tsr.toolkit_server_restart(wait_seconds=7)
             assert r["ok"] is True
             assert r["wait_seconds"] == 7.0
-            assert srv._restart_requested is True
+            assert srv._restart_requested  # 现记为发起时刻(monotonic)，非 0 即「重启中」
             assert srv._uvicorn_server.should_exit is False  # 不立即切断
         finally:
             srv._uvicorn_server = None

@@ -358,7 +358,16 @@ def rebuild_buffers(path: str | None = None, ttl: float = DEFAULT_TTL,
                 if isinstance(idx, int) and isinstance(ev, dict):
                     state_module.append_to_buffer(topic_id, ev, idx)
             next_idx = int(snap.get("seen") or 0)
-            if snap.get("partial_text"):
+            # partial_text 是由 content/token 事件累积出来的 —— 若恢复的事件里
+            # 已含 content，再补一条会造成**文本重复渲染**（端到端实测踩中：
+            # 事件流为 甲 / 乙 / 甲乙，用户会看到内容出现两遍）。
+            # 仅当事件被裁剪或缺失、partial_text 是唯一残留文本时才用它兜底。
+            _has_content = any(
+                isinstance(item.get("event"), dict)
+                and item["event"].get("type") == "content"
+                for item in snap["events"]
+            )
+            if snap.get("partial_text") and not _has_content:
                 state_module.append_to_buffer(
                     topic_id,
                     {"type": "content", "text": snap["partial_text"], "recovered": True},

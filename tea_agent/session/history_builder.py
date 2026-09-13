@@ -1161,7 +1161,12 @@ def _build_dynamic_context(context: Any) -> str:
                 parts.append(f"有 {len(plans)} 个未完成的 Plan:")
                 for p in plans[:3]:
                     parts.append(f"  - [{p['plan_id']}] {p['goal']} (进度: {p['progress']})")
-            inject_parts.append("\n".join(parts))
+            # 仅当确有内容才注入。has_pending 的判据还包含 orphan_docs /
+            # unfulfilled_steps，而这里只渲染 TODO/Plan —— 若两者皆空，parts 里
+            # 只剩一个标题，会每轮注入**无信息的空标题**（实测：24 个孤儿文档使
+            # has_pending 恒为 True）→ 纯 token 浪费，且误导模型「有未完成任务」。
+            if len(parts) > 1:
+                inject_parts.append("\n".join(parts))
     except Exception as e:
         logger.debug(f"task resume check failed: {e}")
 
@@ -1177,18 +1182,42 @@ def _build_dynamic_context(context: Any) -> str:
     return "[动态上下文 — 由 tea_agent 自动注入，供参考]\n\n" + "\n\n---\n\n".join(inject_parts)
 
 
+def _dynamic_state_token() -> tuple:
+    """动态上下文所依赖的外部状态指纹（用于缓存失效判定）。
+
+    背景（实测）：``_dynamic_ctx_cache`` 原先只在新用户消息入库时失效
+    （``add_user_message`` 清除）。因此**同一回合内** Plan/TODO 发生变化时
+    （如 create 后又 delete），陈旧内容会被反复复用 —— 实测现象：已删除的
+    Plan 仍每轮注入「有 1 个未完成的 Plan (进度: 0/11)」，既误导模型又浪费
+    token（与用户「不浪费 tokens」要求相悖）。
+
+    这里用轻量指纹（Plan 文件数 + mtime 之和）在读取时校验：
+    指纹不变则复用（工具循环内前缀稳定），一变即重算（反映真实状态）。
+    """
+    try:
+        import glob
+        import os as _os
+
+        plans = glob.glob(_os.path.join(".tea_agent_run", "plans", "*.json"))
+        return (len(plans), sum(int(_os.path.getmtime(f)) for f in plans))
+    except OSError:
+        return (0, 0)
+
+
 def _get_dynamic_context(context: Any) -> str:
-    """获取动态上下文文本（带会话级缓存，工具循环内复用）。
+    """获取动态上下文文本（带状态指纹 + 会话级缓存，工具循环内复用）。
 
     缓存友好（DeepSeek 前缀缓存）：动态上下文（skill 加载/TODO 状态/记忆）在
     工具循环内若每轮重新计算，内容变化会导致尾部插入的动态消息变动，
     其后的消息前缀无法命中缓存。因此首次构建时计算并缓存，
-    仅在新用户消息入库时失效（add_user_message 清除 _dynamic_ctx_cache）。
+    仅在新用户消息入库（add_user_message 清除）或**外部状态指纹变化**时重算。
     """
+    token = _dynamic_state_token()
     cached = getattr(context, "_dynamic_ctx_cache", None)
-    if cached is None:
+    if cached is None or getattr(context, "_dynamic_ctx_token", None) != token:
         cached = _build_dynamic_context(context)
         context._dynamic_ctx_cache = cached
+        context._dynamic_ctx_token = token
     return cached
 
 

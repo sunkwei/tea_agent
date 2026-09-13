@@ -255,10 +255,14 @@ class TestRecovery:
         assert resumed == ["t1"]
         assert "t1" in fake.buffers
         types = [e["event"]["type"] for e in fake.buffers["t1"]]
-        # 原始事件保留 + partial_text 补齐 + done 收尾
+        # 原始事件完整保留 + done 收尾
         assert types[:2] == ["content", "tool_start"]
-        assert types[-2:] == ["content", "done"]
-        assert fake.buffers["t1"][-2]["event"]["recovered"] is True
+        # 原实现**无条件**补发 partial_text，此处曾期望 ['content','done']
+        # （即同一文本渲染两遍）—— 端到端实测踩中后修正为：已含 content 事件
+        # 时不再补发。
+        assert types[-1] == "done"
+        assert types.count("content") == 1, f"内容重复补发：{types}"
+        assert fake.buffers["t1"][-1]["event"]["recovered"] is True
         assert "t1" in fake.done
         # 恢复后标记为 abandoned，不会反复恢复
         assert ts.read_snapshot("t1")["status"] == "abandoned"
@@ -279,10 +283,23 @@ class TestRecovery:
         ts.record_event("t1", {"type": "content", "text": "abc"}, 0, force=True)
         fake = _FakeState()
         ts.rebuild_buffers(state_module=fake)
+        # 断言**全部** content 事件（不只是 recovered 的）。
+        # 曾因只筛 recovered=True 而漏掉「partial_text 重复补发」缺陷：
+        # 原实现无条件再补一条累积文本，导致同一内容出现两遍（端到端实测踩中）。
         texts = [e["event"].get("text") for e in fake.buffers["t1"]
-                 if e["event"].get("type") == "content"
-                 and e["event"].get("recovered")]
-        assert texts == ["abc"]
+                 if e["event"].get("type") == "content"]
+        assert texts == ["abc"], f"内容重复或丢失：{texts}"
+
+    def test_partial_text_used_when_no_content_events(self, db):
+        """事件被裁剪/缺失时，partial_text 仍是唯一文本来源 → 应兜底补发。"""
+        ts.begin_turn("t1")
+        # token 事件计入 partial_text，但事件类型不是 content
+        ts.record_event("t1", {"type": "token", "text": "xyz"}, 0, force=True)
+        fake = _FakeState()
+        ts.rebuild_buffers(state_module=fake)
+        texts = [e["event"].get("text") for e in fake.buffers["t1"]
+                 if e["event"].get("type") == "content"]
+        assert texts == ["xyz"], f"partial_text 兜底失效：{texts}"
 
 
 # ── 5. 健壮性（fail-open）───────────────────────────────────────

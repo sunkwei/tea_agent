@@ -155,7 +155,7 @@ class TestRestartServer:
 
     def test_already_in_progress_is_rejected(self):
         srv._uvicorn_server = _FakeUvicornServer()
-        srv._restart_requested = True
+        srv._restart_requested = __import__("time").monotonic()  # 新鲜锁(未超 TTL)
         r = srv.restart_server()
         assert r["ok"] is False
         assert "progress" in r["error"].lower()
@@ -171,7 +171,7 @@ class TestRestartServer:
     def test_graceful_spawns_drain_and_does_not_exit_now(self):
         fake = _FakeUvicornServer()
         srv._uvicorn_server = fake
-        with patch.object(srv, "_inflight_turns", return_value=1), \
+        with patch.object(srv, "_inflight_topics", return_value={"t1"}), \
              patch.object(srv, "_drain_then_exit") as drain, \
              patch("threading.Thread") as thread:
             r = srv.restart_server(graceful=True, wait_seconds=0.01)
@@ -184,11 +184,11 @@ class TestRestartServer:
 
     def test_graceful_marks_requested_once(self):
         srv._uvicorn_server = _FakeUvicornServer()
-        with patch.object(srv, "_inflight_turns", return_value=0), \
+        with patch.object(srv, "_inflight_topics", return_value=set()), \
              patch.object(srv, "_drain_then_exit"), \
              patch("threading.Thread"):
             assert srv.restart_server(graceful=True)["ok"] is True
-            assert srv._restart_requested is True
+            assert srv._restart_requested  # 现记为发起时刻(monotonic)，非 0 即「重启中」
             # 第二次请求被拒（避免并发拉起多个新进程）
             assert srv.restart_server(graceful=True)["ok"] is False
 
@@ -207,7 +207,7 @@ class TestDrainAndSpawn:
     def test_drain_exits_when_idle(self):
         fake = _FakeUvicornServer()
         srv._uvicorn_server = fake
-        with patch.object(srv, "_inflight_turns", return_value=0):
+        with patch.object(srv, "_inflight_topics", return_value=set()):
             srv._drain_then_exit(1.0)
         assert fake.should_exit is True
 
@@ -215,7 +215,7 @@ class TestDrainAndSpawn:
         """在途回合始终不结束 → 到点强制退出（避免永久挂起）。"""
         fake = _FakeUvicornServer()
         srv._uvicorn_server = fake
-        with patch.object(srv, "_inflight_turns", return_value=1):
+        with patch.object(srv, "_inflight_topics", return_value={"t1"}):
             srv._drain_then_exit(0.3)
         assert fake.should_exit is True
 

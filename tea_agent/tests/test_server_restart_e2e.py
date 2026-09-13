@@ -151,3 +151,71 @@ def test_restart_replaces_process_e2e(tmp_path):
             proc.terminate()
         except OSError:
             pass
+
+
+def test_inflight_events_survive_restart_no_loss_no_dup(tmp_path):
+    """重启后，进程死亡前已产出的流式事件必须可续读 —— 不丢、不重。
+
+    这是「无感重启」对用户的最终承诺：对话中断处的内容既不能凭空消失，
+    也不能重复渲染。单元测试只验证了 rebuild_buffers 的内存行为；此处走
+    真实进程 + 真实 REST 接口，验证「重启 → 续读」这条完整链路。
+
+    手法（不依赖 LLM，确定性）：先把一份「在途回合快照」写进临时状态库 ——
+    模拟进程被杀死前的状态（3 条事件，**不**调用 finish_turn）；再拉起真实
+    server，其启动恢复（rebuild_buffers）应把这些事件重建为后台缓冲区。
+    """
+    import json
+
+    from tea_agent.server import turn_snapshot as ts
+
+    db = tmp_path / "server_state.db"
+    topic = "e2e-resume-topic"
+
+    # ── 模拟「进程被杀死」：写入事件但不标记回合结束 ──
+    os.environ["TEA_SERVER_STATE_DB"] = str(db)
+    ts.begin_turn(topic)
+    ts.record_event(topic, {"type": "content", "text": "甲"}, 0, force=True)
+    ts.record_event(topic, {"type": "content", "text": "乙"}, 1, force=True)
+    ts.record_event(topic, {"type": "usage", "total_tokens": 7}, 2, force=True)
+    assert ts.read_snapshot(topic)["status"] == "active", "快照应处于在途状态"
+
+    port = _free_port()
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("main_model:\n  provider: DeepSeek\n  model: deepseek-v4-flash\n",
+                   encoding="utf-8")
+    env = dict(os.environ)
+    env["TEA_SERVER_STATE_DB"] = str(db)
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "tea_agent.server", "--host", "127.0.0.1",
+         "--port", str(port), "--config", str(cfg)],
+        cwd=PROJECT_ROOT, env=env,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    pid = None
+    try:
+        assert _wait_health(port, timeout=90), "server 未在 90s 内就绪"
+        pid = _listener_pid(port)
+
+        url = f"http://127.0.0.1:{port}/api/topic/{topic}/stream-buffer?since=-1"
+        with urllib.request.urlopen(url, timeout=30) as r:
+            buf = json.loads(r.read().decode("utf-8"))
+
+        events = buf.get("events") or []
+        idxs = [e["index"] for e in events]
+        types = [e["event"].get("type") for e in events]
+
+        # 不丢：崩溃前的 3 条事件全部可续读
+        assert len(events) == 3, f"事件丢失或多余：idxs={idxs} types={types}"
+        # 序号连续无空洞 —— 前端按 since=N 增量拉取，空洞会导致错位
+        assert idxs == [0, 1, 2], f"序号不连续（续读会错位）：{idxs}"
+        # 不重：索引唯一
+        assert len(set(idxs)) == len(idxs), f"事件重复：{idxs}"
+        # 不重：内容事件恰好各出现一次
+        texts = [e["event"].get("text") for e in events
+                 if e["event"].get("type") == "content"]
+        assert texts == ["甲", "乙"], f"内容重复或丢失：{texts}"
+        # 回合已死 → 必须标记完成，否则前端会无限轮询
+        assert buf.get("done") is True, "恢复的回合未标记 done（前端将无限轮询）"
+    finally:
+        _kill(_listener_pid(port))
+        _kill(pid)

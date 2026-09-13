@@ -24,6 +24,7 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Respon
 from tea_agent.multi_agent.workflow_viz import DagVizRegistry, get_viz_html
 from tea_agent.toolkit.toolkit_export_last_pdf import export_topic_markdown, export_topic_pdf
 
+from . import turn_snapshot as _snapshot
 from ._compat import (
     __version__,
     _active_sessions,
@@ -32,6 +33,7 @@ from ._compat import (
     _background_sessions,
     _background_sessions_lock,
     _chat_stream_sse_wrapper,
+    _is_draining,
     _is_topic_busy,
     _max_iter_pending,
     _question_pending,
@@ -527,10 +529,15 @@ async def handle_web_chat(request):
     if not message and not images_b64:
         return JSONResponse({"error": "message required"}, status_code=400)
 
+    if _is_draining() and not topic_id:
+        # 重启排空期且无 topic_id（无法排队）：提示客户端稍后重试，
+        # 避免刚启动的回合随即被 should_exit 切断
+        return JSONResponse({"error": "server restarting, please retry",
+                             "retry_after": 2}, status_code=503)
     if not topic_id:
         # 新主题直接进入 SSE 流
         pass
-    elif _is_topic_busy(topic_id):
+    elif _is_topic_busy(topic_id) or _is_draining():
         # ⭐ 主题正忙 → 加入排队队列，返回 SSE 事件而非普通 JSON
         # 让前端 SSE 解析器能正常接收并处理，避免卡死
         # 图片统一转 data URL（该队列项会被工具循环作为插话消费注入，
@@ -590,6 +597,9 @@ async def handle_web_chat(request):
         if not topic_id:
             topic_id = storage.create_topic(f"Web Session ({datetime.now().strftime('%m-%d %H:%M')})")
 
+        # 在途快照：登记本回合，使 server 意外重启后可恢复已产出内容
+        _snapshot.begin_turn(topic_id)
+
         try:
             with _active_sessions_lock:
                 _active_sessions[topic_id] = session
@@ -604,8 +614,13 @@ async def handle_web_chat(request):
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=15)
+                    # 在途快照：节流落盘（终态强制），server 重启后据此续读
+                    _terminal = event.get("type") in ("done", "error")
+                    _snapshot.record_event(topic_id, event, force=_terminal)
+                    if _terminal:
+                        _snapshot.finish_turn(topic_id, status=event["type"])
                     yield "data: " + json.dumps(event, ensure_ascii=False) + "\n\n"
-                    if event.get("type") in ("done", "error"):
+                    if _terminal:
                         break
                 except asyncio.TimeoutError:
                     # 线程已死但没发 done/error → 强制终结（防止按钮卡红）
@@ -1649,13 +1664,25 @@ async def handle_list_dags(request):
 
 
 async def handle_restart(request):
-    """POST /api/restart — spawn 新进程 + graceful shutdown 当前进程。
+    """POST /api/restart — 重启 server（默认 graceful，不切断在途回合）。
+
+    Query:
+        mode: graceful(默认) | immediate
+        wait: graceful 等待在途回合的上限秒数（默认 120）
 
     用于 server 自我更新后重启，无需人工介入。
     """
     from .server import restart_server
 
-    result = restart_server()
+    mode = (request.query_params.get("mode") or "graceful").strip().lower()
+    if mode not in ("graceful", "immediate"):
+        return JSONResponse({"ok": False, "error": "mode 仅支持 graceful|immediate"},
+                            status_code=400)
+    try:
+        wait = float(request.query_params.get("wait", "120") or 120)
+    except (TypeError, ValueError):
+        wait = 120.0
+    result = restart_server(graceful=(mode == "graceful"), wait_seconds=wait)
     status = 200 if result.get("ok") else 500
     return JSONResponse(result, status_code=status)
 

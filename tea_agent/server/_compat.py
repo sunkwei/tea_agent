@@ -11,6 +11,7 @@ import asyncio
 import threading
 
 # ── 版本号（来自 server） ──
+from . import turn_snapshot as _snapshot
 from .server import __version__, get_server
 from .server import logger as server_logger
 
@@ -29,6 +30,7 @@ from .modules.state import (
     append_to_buffer,
     cleanup_buffer,
     create_background_buffer,
+    is_draining,
     is_topic_busy,
     mark_buffer_done,
     queue_add,
@@ -84,6 +86,8 @@ async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
                                       event_loop=None):
     """从 queue 消费事件并写入后台缓冲区供前端轮询。"""
     create_background_buffer(topic_id)
+    # 接管前台已开始的回合：保留已累积内容（不清空），序号由快照自动递增
+    _snapshot.ensure_turn(topic_id)
     index = 0
     try:
         while True:
@@ -91,7 +95,10 @@ async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
                 event = await asyncio.wait_for(queue.get(), timeout=300)
                 append_to_buffer(topic_id, event, index)
                 index += 1
-                if event.get("type") in ("done", "error"):
+                _terminal = event.get("type") in ("done", "error")
+                _snapshot.record_event(topic_id, event, force=_terminal)
+                if _terminal:
+                    _snapshot.finish_turn(topic_id, status=event["type"])
                     mark_buffer_done(topic_id)
                     break
             except asyncio.TimeoutError:
@@ -105,6 +112,9 @@ async def _background_buffer_reader(topic_id: str, queue: asyncio.Queue,
         logger.exception(f"Background buffer reader error for topic={topic_id}")
         mark_buffer_done(topic_id)
     finally:
+        # 收尾幂等：正常/异常结束都标记回合已完成。进程崩溃时本行不会执行，
+        # 该回合仍为 active → 下次启动由 rebuild_buffers 恢复已产出内容。
+        _snapshot.finish_turn(topic_id)
         _schedule_buffer_cleanup(topic_id)
         # ⭐ 当缓冲区读取完毕（后台会话也结束了），清理 background_sessions
         # 避免后续消息因 is_topic_busy 返回 True 被错误排队
@@ -124,6 +134,7 @@ _queue_list = queue_list
 _queue_remove = queue_remove
 _queue_pop = queue_pop
 _is_topic_busy = is_topic_busy
+_is_draining = is_draining
 
 # 显式导出（与原始 route_handlers.py import 匹配）
 __all__ = [
@@ -141,6 +152,7 @@ __all__ = [
     "_queue_list",
     "_queue_remove",
     "_queue_pop",
+    "_is_draining",
     "_is_topic_busy",
     "get_server",
     "logger",

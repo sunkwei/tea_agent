@@ -204,17 +204,20 @@ def test_inflight_events_survive_restart_no_loss_no_dup(tmp_path):
         idxs = [e["index"] for e in events]
         types = [e["event"].get("type") for e in events]
 
-        # 不丢：崩溃前的 3 条事件全部可续读
-        assert len(events) == 3, f"事件丢失或多余：idxs={idxs} types={types}"
+        # 不丢：崩溃前的 3 条事件原样可续读（其后是恢复时补的 done 收尾）
+        assert types[:3] == ["content", "content", "usage"], \
+            f"原始事件丢失或错序：types={types}"
         # 序号连续无空洞 —— 前端按 since=N 增量拉取，空洞会导致错位
-        assert idxs == [0, 1, 2], f"序号不连续（续读会错位）：{idxs}"
+        assert idxs == [0, 1, 2, 3], f"序号不连续（续读会错位）：{idxs}"
         # 不重：索引唯一
         assert len(set(idxs)) == len(idxs), f"事件重复：{idxs}"
-        # 不重：内容事件恰好各出现一次
+        # 不重：内容事件恰好「甲、乙」各一次 —— 绝不能再出现累积的「甲乙」。
+        # 原实现无条件补发 partial_text，同一内容会渲染两遍，此处即其回归防护。
         texts = [e["event"].get("text") for e in events
                  if e["event"].get("type") == "content"]
         assert texts == ["甲", "乙"], f"内容重复或丢失：{texts}"
-        # 回合已死 → 必须标记完成，否则前端会无限轮询
+        # 收尾：回合已死 → 必须补 done 并标记完成，否则前端无限轮询
+        assert types[-1] == "done", f"缺少收尾事件：{types}"
         assert buf.get("done") is True, "恢复的回合未标记 done（前端将无限轮询）"
     finally:
         _kill(_listener_pid(port))

@@ -23,6 +23,7 @@ let _streamGeneration = 0; // 递增标记，防止过期流的 finally 干扰�
 // ── 后台处理轮询 ──
 let _backgroundPollTimer = null; // polling interval id
 let _backgroundPollTopic = null; // topic being polled
+let _bgPollFailures = 0;         // 连续轮询失败次数（server 重启窗口内容忍重试）
 
 // ── Queue List Render ──
 function renderQueueList() {
@@ -1584,6 +1585,12 @@ window.sendMessage = async function() {
       if (myGen === _streamGeneration && currentTopicId) {
         _checkBackgroundAndPoll(currentTopicId);
       }
+    } else if (myGen === _streamGeneration && currentTopicId) {
+      // 非主动取消的流中断（网络闪断 / server 正在重启）→ 进入重连续读：
+      // 由后台缓冲区补齐已产出内容；服务端重启后会把在途回合快照重建为缓冲区，
+      // 因此「已产出的内容」不会丢失。
+      removeLoading();
+      _enterReconnectMode(currentTopicId);
     } else {
       removeLoading();
       const bt = $('bubble-text');
@@ -1762,15 +1769,33 @@ async function _checkBackgroundAndPoll(topicId) {
   } catch(e) {}
 }
 
-function _showBackgroundIndicator(topicId) {
+function _showBackgroundIndicator(topicId, label) {
   let banner = $('bg-banner');
+  const text = label || '后台正在处理中…';
   if (!banner) {
     banner = document.createElement('div');
     banner.id = 'bg-banner';
     banner.className = 'bg-processing-banner';
-    banner.innerHTML = '<span class="bg-spinner"></span> ⏳ 后台正在处理中…';
+    banner.innerHTML = '<span class="bg-spinner"></span> ⏳ ' + esc(text);
     $('msgs').prepend(banner);
+  } else {
+    banner.innerHTML = '<span class="bg-spinner"></span> ⏳ ' + esc(text);
   }
+}
+
+/**
+ * 进入「重连续读」模式：网络中断常见于 server 正在重启。
+ *
+ * 处理要点：
+ *  1) 移除未完成的助手气泡 —— 续读由 _renderBufferEvent 统一重建，避免重复渲染；
+ *  2) 改用后台缓冲区轮询（/api/topic/{id}/stream-buffer?since=N）补齐已产出内容；
+ *     服务端重启后会把崩溃前的在途回合快照重建成缓冲区，所以内容不丢。
+ */
+function _enterReconnectMode(topicId) {
+  const partial = $('current-ai-msg');
+  if (partial) partial.remove();          // 去重：交给续读渲染
+  _showBackgroundIndicator(topicId, '连接中断，正在重连并补齐内容…');
+  _startBackgroundPoll(topicId);          // 内部重置 since / count / state
 }
 
 function _removeBackgroundIndicator() {

@@ -10,6 +10,8 @@ This module is NOT hot-reloadable (it's pure state).
 
 from __future__ import annotations
 
+import json
+import os
 import threading
 import time
 from typing import Any
@@ -29,6 +31,11 @@ message_queue_lock = threading.Lock()
 # 后台 SSE 事件缓冲区（topic_id -> buffer_dict）
 background_buffers: dict[str, dict] = {}
 background_buffers_lock = threading.Lock()
+
+# 重启排空标志：graceful restart 置位后，新回合不再启动（改为排队），
+# 等待在途回合自然结束，避免 should_exit 直接切断在途 SSE 流。
+draining = False
+draining_lock = threading.Lock()
 
 # max_iter 确认请求（confirm_id -> {session, timestamp}）
 max_iter_pending: dict[str, dict] = {}
@@ -70,6 +77,19 @@ def is_topic_busy(topic_id: str) -> bool:
     return in_active or in_bg
 
 
+def set_draining(flag: bool) -> None:
+    """置位/清除重启排空标志。"""
+    global draining
+    with draining_lock:
+        draining = bool(flag)
+
+
+def is_draining() -> bool:
+    """是否处于重启排空期（新回合应排队而非启动）。"""
+    with draining_lock:
+        return draining
+
+
 def queue_add(topic_id: str, message: str, images: list | None = None) -> str:
     import uuid
     item_id = uuid.uuid4().hex[:12]
@@ -80,6 +100,7 @@ def queue_add(topic_id: str, message: str, images: list | None = None) -> str:
             "id": item_id, "message": message,
             "images": images or [], "timestamp": time.time(),
         })
+    _persist_queues()
     return item_id
 
 
@@ -96,6 +117,7 @@ def queue_remove(topic_id: str, item_id: str) -> bool:
                 items.pop(i)
                 if not items:
                     message_queue.pop(topic_id, None)
+                _persist_queues()
                 return True
     return False
 
@@ -107,8 +129,60 @@ def queue_pop(topic_id: str) -> dict | None:
             item = items.pop(0)
             if not items:
                 message_queue.pop(topic_id, None)
+            _persist_queues()
             return item
     return None
+
+
+# ── 消息队列持久化（重启后排队消息不丢）─────────────────────────
+# 队列原本只在内存里，重启即丢 —— 用户「已排队但未开始」的消息会静默消失。
+# 这里落一份快照（原子写），启动时由 restore_queues() 还原。
+
+def _queue_store_path() -> str:
+    override = os.environ.get("TEA_SERVER_STATE_DB", "").strip()
+    base = override or os.path.join(os.path.expanduser("~"), ".tea_agent",
+                                    "server_state.db")
+    return base + "_queues.json"
+
+
+def _persist_queues() -> int:
+    """把当前排队消息落盘（原子写）。返回条数；失败返回 -1（fail-open）。"""
+    try:
+        with message_queue_lock:
+            data = {tid: list(items) for tid, items in message_queue.items() if items}
+        path = _queue_store_path()
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+        os.replace(tmp, path)
+        return sum(len(v) for v in data.values())
+    except (OSError, ValueError, TypeError):
+        return -1
+
+
+def restore_queues() -> int:
+    """启动时恢复上次未消费的排队消息。返回恢复条数（fail-open 返回 0）。"""
+    try:
+        path = _queue_store_path()
+        if not os.path.isfile(path):
+            return 0
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return 0
+        restored = 0
+        with message_queue_lock:
+            for tid, items in data.items():
+                if not isinstance(tid, str) or not isinstance(items, list) or not items:
+                    continue
+                kept = [it for it in items
+                        if isinstance(it, dict) and it.get("message")]
+                if kept:
+                    message_queue.setdefault(tid, []).extend(kept)
+                    restored += len(kept)
+        return restored
+    except (OSError, ValueError, TypeError):
+        return 0
 
 
 def create_background_buffer(topic_id: str) -> dict:

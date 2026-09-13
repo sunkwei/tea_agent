@@ -1161,7 +1161,12 @@ def _build_dynamic_context(context: Any) -> str:
                 parts.append(f"有 {len(plans)} 个未完成的 Plan:")
                 for p in plans[:3]:
                     parts.append(f"  - [{p['plan_id']}] {p['goal']} (进度: {p['progress']})")
-            inject_parts.append("\n".join(parts))
+            # 仅当确有内容才注入。has_pending 的判据还包含 orphan_docs /
+            # unfulfilled_steps，而这里只渲染 TODO/Plan —— 若两者皆空，parts 里
+            # 只剩一个标题，会每轮注入**无信息的空标题**（实测：24 个孤儿文档使
+            # has_pending 恒为 True）→ 纯 token 浪费，且误导模型「有未完成任务」。
+            if len(parts) > 1:
+                inject_parts.append("\n".join(parts))
     except Exception as e:
         logger.debug(f"task resume check failed: {e}")
 

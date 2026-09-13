@@ -279,10 +279,23 @@ class TestRecovery:
         ts.record_event("t1", {"type": "content", "text": "abc"}, 0, force=True)
         fake = _FakeState()
         ts.rebuild_buffers(state_module=fake)
+        # 断言**全部** content 事件（不只是 recovered 的）。
+        # 曾因只筛 recovered=True 而漏掉「partial_text 重复补发」缺陷：
+        # 原实现无条件再补一条累积文本，导致同一内容出现两遍（端到端实测踩中）。
         texts = [e["event"].get("text") for e in fake.buffers["t1"]
-                 if e["event"].get("type") == "content"
-                 and e["event"].get("recovered")]
-        assert texts == ["abc"]
+                 if e["event"].get("type") == "content"]
+        assert texts == ["abc"], f"内容重复或丢失：{texts}"
+
+    def test_partial_text_used_when_no_content_events(self, db):
+        """事件被裁剪/缺失时，partial_text 仍是唯一文本来源 → 应兜底补发。"""
+        ts.begin_turn("t1")
+        # token 事件计入 partial_text，但事件类型不是 content
+        ts.record_event("t1", {"type": "token", "text": "xyz"}, 0, force=True)
+        fake = _FakeState()
+        ts.rebuild_buffers(state_module=fake)
+        texts = [e["event"].get("text") for e in fake.buffers["t1"]
+                 if e["event"].get("type") == "content"]
+        assert texts == ["xyz"], f"partial_text 兜底失效：{texts}"
 
 
 # ── 5. 健壮性（fail-open）───────────────────────────────────────

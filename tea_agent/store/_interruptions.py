@@ -90,6 +90,32 @@ class InterruptionStore(StoreComponent):
             logger.exception("update_interruption_classification failed")
             return False
 
+    def mark_precipitated(self, event_ids: list[str]) -> int:
+        """标记打断事件已沉淀（移出后续聚合池），返回受影响行数。
+
+        为什么必须这么做（可靠记忆）：analyze_interruptions 的幂等此前只看
+        「是否已有同名记忆」——用户删除该记忆后，下一轮聚合会**重新创建**它，
+        于是删除永不生效，且每轮注入白烧 token（实测删除后连续 20+ 轮仍在注入）。
+        事件一旦标记为 precipitated 即不再参与聚合，删除随之长期生效。
+        """
+        ids = [str(i) for i in (event_ids or []) if str(i)]
+        if not ids:
+            return 0
+        try:
+            c = self.conn.cursor()
+            marks = ",".join("?" * len(ids))
+            c.execute(
+                f"UPDATE {self._TABLE} SET status='precipitated' "
+                f"WHERE id IN ({marks})", ids,
+            )
+            n = c.rowcount
+            c.connection.commit()
+            c.close()
+            return n
+        except Exception:
+            logger.exception("mark_precipitated failed")
+            return 0
+
     def get_interruption_event(self, event_id: str) -> dict | None:
         """按 id 查询事件。"""
         try:

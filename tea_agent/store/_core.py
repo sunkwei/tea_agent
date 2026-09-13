@@ -466,18 +466,31 @@ class Storage:
 
     def push_to_level2(self, topic_id: str, user_msg: str, ai_msg: str,
                        files: list = None, rounds: list = None,
-                       max_level2: int = 50) -> tuple:
-        """将一轮对话推入 Level 2。"""
+                       max_level2: int = 50,
+                       thinking_max_chars: int = 6000,
+                       max_level2_chars: int = 120000) -> tuple:
+        """将一轮对话推入 Level 2（条数或总字符数超限即溢出至 L3）。"""
         return self._summaries.push_to_level2(
             topic_id, user_msg, ai_msg,
             files=files, rounds=rounds, max_level2=max_level2,
+            thinking_max_chars=thinking_max_chars,
+            max_level2_chars=max_level2_chars,
         )
 
-    def generate_l2_to_l3_summary(self, topic_id: str, level2_items: list,
-                                   cheap_model: object = None) -> tuple:
-        """将 Level 2 摘要为 Level 3。"""
+    def generate_l2_to_l3_summary(
+        self, topic_id: str, overflow_items: list, existing_l3: str,
+        summarize_client, summarize_model: str, extra_params: dict = None,
+    ) -> tuple:
+        """将 L2 溢出条目与现有 L3 摘要合并，生成新的 L3 语义摘要。
+
+        签名必须与 SummaryStore.generate_l2_to_l3_summary 保持一致：本方法为
+        纯委托层，历史上曾停留在旧签名（只收 3 参），而调用方按 6 参调用，
+        导致每次触发都 TypeError 并被上层 except 吞成 WARNING —— L3 摘要长期
+        静默失效。纯委托层的参数应与真实实现一一对应。
+        """
         return self._summaries.generate_l2_to_l3_summary(
-            topic_id, level2_items, cheap_model=cheap_model,
+            topic_id, overflow_items, existing_l3, summarize_client,
+            summarize_model, extra_params=extra_params,
         )
 
     # ── Prompt 操作 ──
@@ -534,11 +547,11 @@ class Storage:
         return self._config_history.get_config_history(key, limit)
 
     # ── Vector 操作 ──
-    def store_embedding(self, conversation_id: str, embedding: bytes, dimension: int = 0, model_name: str = ""):
+    def store_embedding(self, conversation_id: str, embedding: list, dimension: int = 0, model_name: str = ""):
         """存储对话嵌入向量。"""
         return self._vectors.store_embedding(conversation_id, embedding, dimension, model_name)
 
-    def get_msg_embedding(self, conversation_id: str) -> bytes:
+    def get_msg_embedding(self, conversation_id: str) -> list | None:
         """获取对话嵌入向量。"""
         return self._vectors.get_msg_embedding(conversation_id)
 
@@ -566,6 +579,10 @@ class Storage:
     ) -> list:
         """查询打断事件。"""
         return self._interruptions.query_interruptions(topic_id, status, since, limit)
+
+    def mark_interruptions_precipitated(self, event_ids: list) -> int:
+        """标记打断事件已沉淀（不再参与聚合，使已删记忆不被重建）。"""
+        return self._interruptions.mark_precipitated(event_ids)
 
     def stats_interruptions(self, since: str | None = None) -> list:
         """按 tool_name 聚合打断统计。"""

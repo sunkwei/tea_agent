@@ -55,22 +55,214 @@ def _capture_and_encode(action, region=None):
 _server_instance = None
 _uvicorn_server = None
 _restart_args: list[str] = []
+_restart_requested = False
+# 重启锁的陈旧阈值（秒）：超过后视为上次重启已失败，允许重新发起
+_RESTART_LOCK_TTL = 600.0
 
 
-def restart_server() -> dict:
-    """Graceful restart: spawn new process, then signal current to stop."""
-    global _uvicorn_server
-    if _uvicorn_server is None:
-        return {"ok": False, "error": "Server not running"}
+def _build_restart_args(host: str, port: int, config_path: str | None = None,
+                        api_key: str | None = None) -> list[str]:
+    """构建重启子进程的参数列表（成对构建，避免空值留下悬空 flag）。
+
+    回归背景（实测）：旧实现用
+    ``[m for m in [... "--config", config_path or "", "--api-key", api_key or ""] if m]``
+    过滤空串 —— flag 被保留而值被丢弃，config/api_key 为空时产生
+    ``--config --api-key``，新进程 argparse 直接报错退出，重启静默失效。
+    """
+    args = ["-m", "tea_agent.server", "--host", str(host), "--port", str(port)]
+    if config_path:
+        args += ["--config", str(config_path)]
+    if api_key:
+        args += ["--api-key", str(api_key)]
+    return args
+
+
+def _port_free(host: str, port: int) -> bool:
+    """端口是否已释放（能 bind 即视为空闲）。"""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind((host or "127.0.0.1", int(port)))
+        except OSError:
+            return False
+    return True
+
+
+def _wait_port_free(host: str, port: int, timeout: float = 10.0) -> bool:
+    """等待端口释放，超时返回 False。"""
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if _port_free(host, port):
+            return True
+        time.sleep(0.1)
+    return _port_free(host, port)
+
+
+def _wait_ready(host: str, port: int, timeout: float = 20.0) -> bool:
+    """轮询 /health 直到新进程返回 2xx，判定就绪。"""
+    import time
+    import urllib.error
+    import urllib.request
+
+    url = f"http://{host or '127.0.0.1'}:{port}/health"
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=2) as resp:
+                if 200 <= resp.status < 300:
+                    return True
+        except (urllib.error.URLError, OSError, ValueError):
+            pass
+        time.sleep(0.25)
+    return False
+
+
+def _spawn_successor(host: str, port: int, attempts: int = 3,
+                     wait_ready: float = 20.0) -> bool:
+    """端口释放后拉起新进程并探测就绪；未就绪则终止子进程重试。"""
     import subprocess
     import sys
+
+    args = list(_restart_args) or ["-m", "tea_agent.server"]
+    for attempt in range(1, attempts + 1):
+        if not _wait_port_free(host, port, timeout=10.0):
+            logger.error("restart: 端口 %s:%s 未释放（第 %d 次尝试）", host, port, attempt)
+            continue
+        try:
+            proc = subprocess.Popen(
+                [sys.executable, *args],
+                creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+            )
+        except OSError as e:
+            logger.error("restart: 拉起新进程失败（第 %d 次）：%s", attempt, e)
+            continue
+        if _wait_ready(host, port, timeout=wait_ready):
+            logger.info("restart: 新进程就绪 pid=%s（第 %d 次尝试）", proc.pid, attempt)
+            return True
+        logger.error("restart: 新进程未就绪 pid=%s，终止并重试", proc.pid)
+        try:
+            proc.terminate()
+        except OSError:
+            pass
+    logger.error("restart: 连续 %d 次拉起失败，服务可能未恢复", attempts)
+    return False
+
+
+def _inflight_turns() -> int:
+    """当前在途回合数（活跃会话 + 后台会话）。"""
     try:
-        subprocess.Popen([sys.executable, *(_restart_args or ["-m", "tea_agent.server"])],
-                         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+        from tea_agent.server.modules import state
+    except ImportError:
+        return 0
+    with state.active_sessions_lock:
+        count = len(state.active_sessions)
+    with state.background_sessions_lock:
+        count += len(state.background_sessions)
+    return count
+
+
+def _inflight_topics() -> set:
+    """当前在途回合的 topic 集合（活跃 + 后台），供排空与诊断使用。"""
+    try:
+        from tea_agent.server.modules import state
+    except ImportError:
+        return set()
+    with state.active_sessions_lock:
+        topics = set(state.active_sessions)
+    with state.background_sessions_lock:
+        topics |= set(state.background_sessions)
+    return topics
+
+
+def _drain_then_exit(wait_seconds: float, wait_for: set | None = None) -> None:
+    """等待在途回合结束（有界）后置 should_exit，避免中途切断 SSE 流。
+
+    只等待**发起重启时已存在**的回合（wait_for）：set_draining(True) 之后新回合
+    一律排队，不会再新增在途项；若改为等待「全部会话归零」，在有后台会话或残留
+    条目时永远等不到，重启会白等满 wait_seconds（实测：143s）。
+
+    可靠性：用 try/finally 保证 should_exit **一定**被置位 —— drain 线程是
+    daemon，一旦异常而未置位，重启会静默不生效且无任何外部症状。
+    """
+    import time
+
+    if _uvicorn_server is None:
+        return
+    deadline = time.monotonic() + max(0.0, wait_seconds)
+    try:
+        while True:
+            # wait_for=None（未指定）→ 沿用旧语义「等全部在途回合归零」
+            pending = (_inflight_topics() if wait_for is None
+                       else (_inflight_topics() & wait_for))
+            if not pending or time.monotonic() >= deadline:
+                break
+            time.sleep(0.2)
+        if pending:
+            logger.warning("restart: 等待在途回合超时（%ss，仍在途：%s），强制退出",
+                           wait_seconds, ", ".join(sorted(pending)))
+        else:
+            logger.info("restart: 在途回合已排空，退出旧进程")
+    finally:
+        _uvicorn_server.should_exit = True
+
+
+def restart_server(graceful: bool = True, wait_seconds: float = 120.0) -> dict:
+    """请求重启当前进程：旧进程先退出释放端口，再由 run_server 收尾拉起新进程。
+
+    旧实现的缺陷（实测）：先 Popen 新进程、后置 should_exit —— 新进程在旧进程仍
+    占用端口时 bind 失败即退出；重启参数又用 [m for m in [...] if m] 构造，config/
+    api_key 为空时留下悬空 flag，新进程 argparse 直接报错。两者叠加使重启静默失效。
+
+    本实现：graceful 时先等待在途回合结束（上限 wait_seconds）再退出，端口经
+    _wait_port_free 确认释放后才拉起新进程，并做 /health 就绪探测与失败重试。
+
+    Args:
+        graceful: True=等在途回合结束再退出；False=立即退出。
+        wait_seconds: graceful 模式下等待在途回合的上限秒数。
+
+    Returns:
+        {"ok": True, ...} 或 {"ok": False, "error": ...}（同时仅允许一个重启在途）。
+    """
+    global _restart_requested
+    import time
+
+    if _uvicorn_server is None:
+        return {"ok": False, "error": "Server not running"}
+    # _restart_requested 存的是「发起时刻」（monotonic），0 表示未在重启中。
+    # 带超时的意义：若某次重启因 should_exit 未能真正退出而卡住（旧进程仍在跑），
+    # 该标记会永久残留 → 之后每次请求都被拒为「already in progress」，重启能力
+    # 被永久锁死。超过 TTL 即视为陈旧、允许重试。
+    if _restart_requested and (time.monotonic() - _restart_requested) < _RESTART_LOCK_TTL:
+        return {"ok": False, "error": "Restart already in progress",
+                "since_seconds": round(time.monotonic() - _restart_requested, 1)}
+    _restart_requested = time.monotonic()
+
+    if graceful:
+        import threading
+
+        # 排空期间新回合改为排队，避免「刚启动的回合」被 should_exit 切断
+        try:
+            from tea_agent.server.modules.state import set_draining
+
+            set_draining(True)
+        except ImportError:
+            logger.warning("restart: 无法置位 draining 标志（state 模块缺失）")
+
+        # 只等「此刻已在途」的回合：draining 已挡住新回合，其余无需等
+        wait_for = _inflight_topics()
+        in_flight = len(wait_for)
+        threading.Thread(target=_drain_then_exit, args=(wait_seconds, wait_for),
+                         daemon=True, name="tea-restart-drain").start()
+        return {"ok": True, "message": "Restart initiated (graceful)",
+                "mode": "graceful", "draining": True,
+                "wait_seconds": wait_seconds, "inflight_turns": in_flight}
+
     _uvicorn_server.should_exit = True
-    return {"ok": True, "message": "Restart initiated"}
+    return {"ok": True, "message": "Restart initiated (immediate)",
+            "mode": "immediate", "draining": False}
 
 
 class MinimalServer:
@@ -307,6 +499,10 @@ def _build_routes() -> list:
     static_dir = str(Path(__file__).parent / "static")
 
     return [
+        # 就绪探测端点。handle_health 早已存在、也列入了鉴权 skip_paths 与
+        # OpenAPI 声明，但此处从未注册 → 实际访问恒为 404（实测确认）。
+        # 重启的就绪探测（_wait_ready）依赖它，缺失会导致新进程被误判失败。
+        Route("/health", rh.handle_health),
         Route("/", rh.handle_web_root),
         Route("/api/chat", rh.handle_web_chat, methods=["POST"]),
         Route("/api/chat/steering", rh.handle_web_chat_steering, methods=["POST"]),
@@ -548,13 +744,31 @@ def run_server(host="127.0.0.1", port=8282,
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     global _uvicorn_server, _restart_args
     _uvicorn_server = uvicorn.Server(config)
-    _restart_args = [m for m in ["-m", "tea_agent.server", "--host", str(host),
-                                  "--port", str(port), "--config", config_path or "",
-                                  "--api-key", api_key or ""] if m]
+    _restart_args = _build_restart_args(host, port, config_path, api_key)
+
+    # 启动恢复：上次崩溃/重启时仍在途的回合 → 重建缓冲区供前端续读；
+    # 已排队但未开始的消息 → 重新入队，避免重启丢消息
+    try:
+        from tea_agent.server.modules import state as _state
+        from tea_agent.server.turn_snapshot import rebuild_buffers
+
+        _resumed = rebuild_buffers(state_module=_state)
+        if _resumed:
+            logger.warning("restart recovery: %d in-flight turn(s) restored: %s",
+                           len(_resumed), ", ".join(_resumed))
+        _requeued = _state.restore_queues()
+        if _requeued:
+            logger.info("restart recovery: %d queued message(s) restored", _requeued)
+    except ImportError:
+        logger.warning("restart recovery skipped (modules unavailable)")
     try:
         _uvicorn_server.run()
     except KeyboardInterrupt:
         print("\nServer stopped.")
+    finally:
+        # 端口随 uvicorn 退出而释放，此处再拉起新进程（顺序反了会 bind 失败）
+        if _restart_requested:
+            _spawn_successor(host, port)
 
 
 def main():

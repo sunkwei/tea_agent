@@ -46,7 +46,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         Layer 1: 时间戳 .bak 文件
         Layer 2: py_compile 编译验证（失败自动回滚）
         Layer 2.5: LSP 检查 — 影响分析 + ruff lint + 签名对比（非阻塞警告）
-        Layer 3: 运行测试套件（失败自动 git reset --hard）
+        Layer 3: 运行测试套件（失败自动按快照回滚目标文件）
 
     Args:
         file_path: 要修改的文件路径（相对于项目根目录）
@@ -90,24 +90,33 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         except Exception:
             return False
 
+    _snap_rev = {}
+
     def _git_snap(desc):
-        """创建 git 快照，返回 (ok, error)"""
+        """创建 git 快照（写入独立 ref，不动当前分支），返回 (ok, error)"""
         try:
-            subprocess.run(["git", "add", file_path],
-                           capture_output=True, timeout=10, cwd=cwd, check=True)
-            subprocess.run(["git", "commit", "-m",
-                           f"snapshot: pre-evolve -- {desc}"],
-                           capture_output=True, timeout=10, cwd=cwd, check=True)
-            return True, None
-        except subprocess.CalledProcessError as e:
-            return False, str(e.stderr)[:200]
+            from tea_agent.toolkit._git_snapshot import git_snapshot as _gs
+
+            r = _gs([file_path], f"pre-evolve -- {desc}")
+            if r.get("snapshotted"):
+                _snap_rev["rev"] = r.get("rev")
+                return True, None
+            return False, r.get("error", "snapshot skipped")
         except Exception as e:
             return False, str(e)[:200]
 
     def _git_revert():
-        """硬回滚最近一次 git 提交"""
+        """把目标文件恢复到快照点。
+
+        不再用 ``git reset --hard HEAD~1`` —— 那个会把「HEAD 之前的一个提交」
+        整个抹掉，若快照并未真正落在 HEAD 上（例如已改为独立 ref）就会误删
+        真实提交。改为按快照 sha 只恢复目标文件。
+        """
         try:
-            subprocess.run(["git", "reset", "--hard", "HEAD~1"],
+            rev = _snap_rev.get("rev")
+            if not rev:
+                return False
+            subprocess.run(["git", "checkout", rev, "--", file_path],
                            capture_output=True, timeout=10, cwd=cwd, check=True)
             return True
         except Exception:
@@ -438,7 +447,7 @@ def meta_toolkit_self_evolve():
                     "verify": {"type": "boolean", "description": "是否验证编译通过，默认 true。失败自动回滚"},
                     "backup": {"type": "boolean", "description": "是否创建时间戳 .bak 备份，默认 true。不覆盖历史备份"},
                     "git_snapshot": {"type": "boolean", "description": "是否创建 git 快照，默认 true。仅在 git 工作区干净时生效"},
-                    "run_tests": {"type": "boolean", "description": "编译通过后是否运行测试，默认 true。测试失败自动 git reset --hard 回滚"},
+                    "run_tests": {"type": "boolean", "description": "编译通过后是否运行测试，默认 true。测试失败自动按快照回滚目标文件"},
                     "symbol": {"type": "string", "description": "被修改的函数/类名，用于影响分析和签名对比"},
                     "lsp_checks": {"type": "boolean", "description": "是否启用 LSP 检查，默认 true"},
                 },

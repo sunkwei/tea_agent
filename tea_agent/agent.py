@@ -15,20 +15,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
 if TYPE_CHECKING:
-    from tea_agent.config import AgentConfig
+    from .config import AgentConfig
 
-import tea_agent.session_ref as _sref
-from tea_agent import tlk
-from tea_agent.config import load_config, resolve_config_path
-from tea_agent.litesession import LiteSession
-from tea_agent.logging_setup import setup_logging
-from tea_agent.onlinesession import OnlineToolSession
-from tea_agent.store import Storage
-
+from . import session_ref as _sref
+from . import tlk
 from .agent_background import start_scheduler
 from .agent_evolution import EvolutionActor, EvolutionAnalyzer, EvolutionEvaluator
 from .agent_pipeline import do_async_summaries
+from .config import load_config, resolve_config_path
+from .litesession import LiteSession
+from .logging_setup import setup_logging
 from .memory import PRIORITY_MEDIUM
+from .onlinesession import OnlineToolSession
+from .store import Storage
 
 logger = logging.getLogger("agent")
 
@@ -191,9 +190,21 @@ class Agent:
         )
 
     def _init_storage(self) -> None:
-        """初始化 Storage 数据库。"""
+        """初始化 Storage 数据库。
+
+        使用 active_db_path_abs（会话库实际路径），而非 db_path_abs（用户级回退层）：
+        后者仅在 storage_scope=user 或显式 data_dir/绝对 db_path 时才与前者相同。
+        若此处用 db_path_abs，**会话（Agent）与工具（store.get_storage）会打开两个
+        不同的数据库** —— 而 toolkit_memory 走 get_storage() 删除记忆时会「报告成功、
+        实则删在另一个库」，会话侧那条记忆仍被每轮注入：记忆不可靠，且每轮白烧 token
+        （实测：删除返回「已彻底删除」，注入却持续 5+ 轮不停）。
+        active_db_path_abs 的文档已声明「Agent._init_storage / store.get_storage
+        使用此属性」——本方法此前违背了该约定。
+        """
         cfg = self._cfg
-        db_path = Path(cfg.paths.db_path_abs)
+        db_path = Path(
+            getattr(cfg.paths, "active_db_path_abs", "") or cfg.paths.db_path_abs
+        )
         self._db = Storage(db_path=str(db_path))
         logger.info(f"Storage 初始化 | db: {db_path}")
 
@@ -479,12 +490,26 @@ class Agent:
 
             # 步骤4: 推送到L2缓存（使用 config 中的 history_l2_max）
             l2_max = getattr(self._cfg, 'history_l2_max', 8) if hasattr(self, '_cfg') else 8
+            # 上下文填充治理：单条 thinking 限幅 + 总量字符阈值（溢出即摘要）
+            _cfg = getattr(self, '_cfg', None)
+
+            def _cfg_int(_name, _default):
+                _raw = getattr(_cfg, _name, _default)
+                # 只接受真正的 int（MagicMock 等替身会被 int() 静默转成 1）
+                if isinstance(_raw, int) and not isinstance(_raw, bool):
+                    return _raw
+                return _default
+
+            l2_thinking_max = _cfg_int('l2_thinking_max_chars', 6000) or 6000
+            l2_max_chars = _cfg_int('l2_max_chars', 120000)
             l2_count, overflow_items, should_summarize = self._db.push_to_level2(
                 topic_id,
                 user_text,
                 ai_msg,
                 rounds=rounds if rounds else None,
                 max_level2=l2_max,
+                thinking_max_chars=l2_thinking_max,
+                max_level2_chars=l2_max_chars,
             )
             logger.debug(
                 f"L2 push: count={l2_count}, overflow={len(overflow_items)}, "
@@ -531,7 +556,7 @@ class Agent:
         # 任务结束：输出 DeepSeek 前缀缓存命中率（依据官方 kv_cache 文档：
         # usage.prompt_cache_hit_tokens / prompt_cache_miss_tokens）
         try:
-            from tea_agent.session.cache_report import format_cache_hit_rate
+            from .session.cache_report import format_cache_hit_rate
             _rate = format_cache_hit_rate(usage)
             if _rate:
                 logger.info(f"[Cache] 主模型 {_rate}")
@@ -727,11 +752,11 @@ class Agent:
     def _do_cross_topic_summary(self):
         """后台线程：跨主题汇总 — 每 3 轮触发一次分析。"""
         try:
-            from tea_agent.cross_topic_summarizer import CrossTopicSummarizer
+            from .cross_topic_summarizer import CrossTopicSummarizer
             cheap_client = None
             try:
-                from tea_agent.config import get_config
-                from tea_agent.providers import get_cheap_client
+                from .config import get_config
+                from .providers import get_cheap_client
                 cheap_client = get_cheap_client(get_config())
             except Exception:
                 pass
@@ -803,7 +828,7 @@ class Agent:
         success: bool,
         usage: dict
     ) -> None:
-        """结晶技能模式（扩展点）。
+        """结晶技能模式（扩展点）— 当前未接线，仅保留调用点。
 
         Args:
             user_text: 用户文本
@@ -812,21 +837,15 @@ class Agent:
             success: 是否成功
             usage: Token使用统计
         """
-        try:
-            from tea_agent.toolkit.toolkit_experience_solidify import (
-                ExperienceSolidifier,
-            )
-            token_cost = usage.get("total_tokens", 0) if usage else 0
-            solidifier = ExperienceSolidifier()
-            solidifier.solidify(
-                task=user_text,
-                tools_used=tools_used,
-                rounds=rounds,
-                success=success,
-                token_cost=token_cost,
-            )
-        except ImportError:
-            logger.debug("技能结晶功能未启用（需要 ExperienceSolidifier）")
+        # 未接线说明：原实现引用的 ExperienceSolidifier 类与其下游
+        # toolkit_dynamic_skill 均不存在，该路径长期静默失效且被 except ImportError 掩盖。
+        # 此处不再引用不存在的符号；待接入真实落盘后端
+        # （如 multi_agent.pattern_market.PatternMarket.save）后启用。
+        logger.debug(
+            "技能结晶未接线，跳过: task=%r tools=%s rounds=%d success=%s tokens=%s",
+            user_text[:60], tools_used, len(rounds or []), success,
+            (usage or {}).get("total_tokens", 0),
+        )
 
     def _save_lessons(self, lessons: list[str]) -> None:
         """保存经验教训到数据库。

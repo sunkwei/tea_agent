@@ -100,7 +100,7 @@ SKILL_DOMAINS: dict[str, SkillDomain] = {
         strong_keywords=["浏览器自动化", "browser automation", "填表", "表单", "点击按钮", "爬取网页",
                          "scrape", "网页截图", "自动化浏览器", "登录网站", "web 测试", "网页测试"],
         weak_keywords=["浏览器", "browser", "网页", "website", "web", "网址", "form", "click"],
-        covered_by=["toolkit_browser_tab", "toolkit_js_fetch", "toolkit_ocr",
+        covered_by=["toolkit_browser_tab", "toolkit_js_fetch",
                     "toolkit_input", "toolkit_screenshot"],
     ),
     "ai-elements": SkillDomain(
@@ -111,7 +111,7 @@ SKILL_DOMAINS: dict[str, SkillDomain] = {
     "analyze-pdf": SkillDomain(
         strong_keywords=["pdf 报表", "pdf 提取", "报表提取", "表格提取", "提取表格", "pdf 分析"],
         weak_keywords=["pdf", "报表", "图表", "表格", "报告"],
-        covered_by=["toolkit_ocr", "toolkit_exec", "toolkit_file"],
+        covered_by=["toolkit_exec", "toolkit_file"],
     ),
     "autoresearch": SkillDomain(
         strong_keywords=["自主迭代", "autoresearch", "迭代实验", "指标优化循环", "自动实验"],
@@ -121,7 +121,7 @@ SKILL_DOMAINS: dict[str, SkillDomain] = {
     "browser-trace": SkillDomain(
         strong_keywords=["浏览器追踪", "browser trace", "devtools", "cdp", "调试失败用例"],
         weak_keywords=["追踪", "trace", "调试浏览器", "dom 转储"],
-        covered_by=["toolkit_browser_tab", "toolkit_screenshot", "toolkit_ocr"],
+        covered_by=["toolkit_browser_tab", "toolkit_screenshot"],
     ),
     "caveman": SkillDomain(
         strong_keywords=["省 token", "省token", "原始人模式", "caveman", "极简回复", "压缩回复"],

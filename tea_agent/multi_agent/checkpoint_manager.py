@@ -35,6 +35,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from tea_agent.store._sql_safety import safe_sql_fragment
+
 logger = logging.getLogger("multi_agent.checkpoint")
 
 
@@ -233,8 +235,9 @@ class CheckpointManager:
                 params.append(extra[key])
 
         params.append(agent_id)
+        set_clause = safe_sql_fragment(", ".join(updates))
         conn.execute(
-            f"UPDATE checkpoints SET {', '.join(updates)} "
+            f"UPDATE checkpoints SET {set_clause} "
             "WHERE agent_id=? AND updated_at=("
             "  SELECT MAX(updated_at) FROM checkpoints WHERE agent_id=?"
             ")",

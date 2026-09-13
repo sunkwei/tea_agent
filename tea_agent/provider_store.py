@@ -136,8 +136,8 @@ def _clean_model_entry(raw: dict) -> dict:
         if k in _INT_FIELDS:
             try:
                 cfg[k] = max(0, int(v))
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as e:
+                logger.debug("provider_store.py._clean_model_entry: (TypeError, ValueError) 已忽略: %s", e)
         elif k in _BOOL_FIELDS:
             cfg[k] = bool(v)
         elif k == "reasoning_effort":
@@ -245,8 +245,8 @@ class ProviderStore:
             bak = self._path.with_name(f"provider.yaml.bak.{time.strftime('%Y%m%d_%H%M%S')}")
             try:
                 shutil.copy2(self._path, bak)
-            except OSError:  # pragma: no cover
-                pass
+            except OSError as e:  # pragma: no cover
+                logger.debug("provider_store.py._write_unlocked: OSError 已忽略: %s", e)
         tmp = self._path.with_suffix(".yaml.tmp")
         tmp.write_text(
             yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
@@ -522,13 +522,13 @@ class ProviderStore:
         if block.get("max_tokens"):
             try:
                 m["max_output_tokens"] = int(block["max_tokens"])
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as e:
+                logger.debug("provider_store.py._ensure_model_entry: (TypeError, ValueError) 已忽略: %s", e)
         if block.get("max_context_tokens"):
             try:
                 m["max_context_tokens"] = int(block["max_context_tokens"])
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as e:
+                logger.debug("provider_store.py._ensure_model_entry: (TypeError, ValueError) 已忽略: %s", e)
         if block.get("reasoning_effort"):
             m["reasoning_effort"] = str(block["reasoning_effort"])
 
@@ -541,8 +541,8 @@ class ProviderStore:
             for name, info in PROVIDERS.items():
                 if (info.get("api_url") or "").strip().rstrip("/").lower() == want:
                     return name
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("provider_store.py._builtin_name_for_url: Exception 已忽略: %s", e)
         return None
 
     def _find_by_url(self, data: dict[str, dict], url: str) -> str | None:

@@ -11,6 +11,7 @@ import sqlite3
 from datetime import datetime
 
 from ._component import Cursor
+from ._sql_safety import safe_ddl, safe_ident, safe_sql_fragment
 
 logger = logging.getLogger("Storage")
 
@@ -56,7 +57,7 @@ def init_tables(db):
         ("system_prompt", "TEXT DEFAULT NULL"),
     ]:
         with contextlib.suppress(Exception):
-            c.execute(f"ALTER TABLE topics ADD COLUMN {col} {col_def}")
+            c.execute(f"ALTER TABLE topics ADD COLUMN {safe_ident(col)} {safe_ddl(col_def)}")
 
     c.execute('''
         CREATE TABLE IF NOT EXISTS conversations (
@@ -91,7 +92,7 @@ def init_tables(db):
         ("fork_stamp", "TEXT DEFAULT NULL"),
     ]:
         with contextlib.suppress(Exception):
-            c.execute(f"ALTER TABLE conversations ADD COLUMN {col} {col_def}")
+            c.execute(f"ALTER TABLE conversations ADD COLUMN {safe_ident(col)} {safe_ddl(col_def)}")
 
     # fork 元数据表：记录 fork 操作（源 topic → 目标 topic）
     c.execute('''
@@ -174,7 +175,7 @@ def init_tables(db):
                            ('content_hash', "TEXT DEFAULT ''"),
                            ('embedding', 'BLOB')]:
         with contextlib.suppress(Exception):
-            c.execute(f"ALTER TABLE memories ADD COLUMN {col} {col_def}")
+            c.execute(f"ALTER TABLE memories ADD COLUMN {safe_ident(col)} {safe_ddl(col_def)}")
 
     c.execute('''
         CREATE TABLE IF NOT EXISTS system_prompts (
@@ -288,7 +289,7 @@ def migrate(db):
     for col in ["rounds_json TEXT", "is_summarized INTEGER DEFAULT 0",
                 "memory_extracted INTEGER DEFAULT 0"]:
         try:
-            c.execute(f"ALTER TABLE conversations ADD COLUMN {col}")
+            c.execute(f"ALTER TABLE conversations ADD COLUMN {safe_ddl(col)}")
             c.connection.commit()
         except sqlite3.OperationalError:
             pass
@@ -305,7 +306,7 @@ def migrate(db):
         ("total_cheap_completion_tokens", "INTEGER DEFAULT 0"),
     ]:
         try:
-            c.execute(f"ALTER TABLE topic_token_stats ADD COLUMN {col} {col_type}")
+            c.execute(f"ALTER TABLE topic_token_stats ADD COLUMN {safe_ident(col)} {safe_ddl(col_type)}")
             c.connection.commit()
         except sqlite3.OperationalError:
             pass
@@ -315,7 +316,7 @@ def migrate(db):
         ("total_embedding_prompt_tokens", "INTEGER DEFAULT 0"),
     ]:
         try:
-            c.execute(f"ALTER TABLE topic_token_stats ADD COLUMN {col} {col_type}")
+            c.execute(f"ALTER TABLE topic_token_stats ADD COLUMN {safe_ident(col)} {safe_ddl(col_type)}")
             c.connection.commit()
         except sqlite3.OperationalError:
             pass
@@ -391,9 +392,9 @@ def migrate_int_to_uuid(c):
         # SAFETY: `old_name`/`new_name` come from _next_table_name() which uses internal counter
         # `select_sql` is built from column names discovered via PRAGMA table_info
         # Neither involves user input - safe for f-string SQL construct
-        c.execute(f"INSERT INTO {new_name} SELECT {select_sql} FROM {old_name}")
-        c.execute(f"DROP TABLE {old_name}")
-        c.execute(f"ALTER TABLE {new_name} RENAME TO {old_name}")
+        c.execute(f"INSERT INTO {safe_ident(new_name)} SELECT {safe_sql_fragment(select_sql)} FROM {safe_ident(old_name)}")
+        c.execute(f"DROP TABLE {safe_ident(old_name)}")
+        c.execute(f"ALTER TABLE {safe_ident(new_name)} RENAME TO {safe_ident(old_name)}")
         log.info(f"  迁移表 {old_name}")
 
     try:
@@ -402,7 +403,7 @@ def migrate_int_to_uuid(c):
                          "msg_vectors_new","system_prompts_new","reflections_new",
                          "config_history_new"]:
             try:
-                c.execute(f"DROP TABLE IF EXISTS {leftover}")
+                c.execute(f"DROP TABLE IF EXISTS {safe_ident(leftover)}")
             except Exception:
                 logger.exception('op_failed')
 

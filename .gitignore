@@ -59,3 +59,6 @@ evlog_tmp_dist.json
 !.github/
 !.github/workflows/
 !.github/workflows/ci.yml
+*.db-shm
+*.db-wal
+*.db-journal

@@ -46,8 +46,8 @@ def relaxed_json_loads(raw: str):
 
     try:
         return json.loads(s)
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        logger.debug("basesession.py.relaxed_json_loads: json.JSONDecodeError 已忽略: %s", e)
 
     s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", s)
     s = re.sub(r"\bTrue\b", "true", s)
@@ -60,8 +60,8 @@ def relaxed_json_loads(raw: str):
 
     try:
         return json.loads(s)
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        logger.debug("basesession.py.relaxed_json_loads: json.JSONDecodeError 已忽略: %s", e)
 
     # 仅对非 JSON 标准转义（\" \\ \/ \b \f \n \r \t \uXXXX）的反斜杠序列补转义，
     # 避免把合法 \n \t 二次转义破坏内容
@@ -69,8 +69,8 @@ def relaxed_json_loads(raw: str):
 
     try:
         return json.loads(s)
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        logger.debug("basesession.py.relaxed_json_loads: json.JSONDecodeError 已忽略: %s", e)
 
     # Step 6: 单引号 → 双引号
     def _fix_single_quotes(text):
@@ -101,24 +101,24 @@ def relaxed_json_loads(raw: str):
 
     try:
         return json.loads(s)
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        logger.debug("basesession.py.relaxed_json_loads: json.JSONDecodeError 已忽略: %s", e)
 
     # Step 7: 为未引号包裹的 key 添加引号
     s = re.sub(r"([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:", r'\1"\2":', s)
 
     try:
         return json.loads(s)
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        logger.debug("basesession.py.relaxed_json_loads: json.JSONDecodeError 已忽略: %s", e)
 
     # Step 8: 尝试从文本中提取 JSON 对象
     brace_match = re.search(r"\{.*\}|\[.*\]", s, re.DOTALL)
     if brace_match:
         try:
             return json.loads(brace_match.group())
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            logger.debug("basesession.py.relaxed_json_loads: json.JSONDecodeError 已忽略: %s", e)
 
     # Step 9: 尝试修复被截断的 JSON
     # 延迟导入避免循环依赖
@@ -144,6 +144,10 @@ class BaseChatSession(ABC):
     _KB_THRESHOLD: int = 65536  # toolkit_kb 输出阈值: 64KB
     _DEFAULT_TOOL_THRESHOLD: int = 65536  # 默认工具输出阈值: 64KB
     _TEXT_FILE_THRESHOLD: int = 65536  # 文本/日志文件阈值: 64KB
+    # 源码文件回放阈值（2026-09）：此前为 sys.maxsize（完全不截断），导致
+    # keep_turns 轮里的整份源码被反复回放（单文件几十万字符）→ 会话一启动
+    # 就接近窗口上限。64KB 覆盖绝大多数源码文件；更大的文件保留首尾。
+    _SOURCE_FILE_THRESHOLD: int = 65536
     _SOURCE_EXTENSIONS = {
         ".py",
         ".java",
@@ -286,8 +290,8 @@ class BaseChatSession(ABC):
                 # 允许本轮按新状态重新评估一次
                 ctx._loop_max_ratio = 0.0
                 ctx._loop_trim_done = False
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("basesession.py.add_user_message: Exception 已忽略: %s", e)
         self.messages.append(entry)
 
     def _append_runtime_status(self, entry: dict):
@@ -352,8 +356,8 @@ class BaseChatSession(ABC):
             ctx = getattr(self, "context", None)
             if ctx is not None:
                 max_chars = get_tool_prune_threshold(ctx)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("basesession.py.add_tool_result: Exception 已忽略: %s", e)
         self.messages.append(
             {"role": "tool", "tool_call_id": tool_call_id,
              "content": self._compress_tool_content(content, max_chars=max_chars)}
@@ -591,7 +595,8 @@ class BaseChatSession(ABC):
 
         策略：
         - toolkit_kb → 64KB
-        - toolkit_file read 源码文件 → 不截断 (sys.maxsize)
+        - toolkit_file read 源码文件 → 64KB（2026-09：此前 sys.maxsize 不截断，
+          整份源码随 keep_turns 反复回放会迅速打满上下文）
         - toolkit_file read 文本/日志 → 16KB
         - 其他 → 2KB 默认
         """
@@ -630,7 +635,7 @@ class BaseChatSession(ABC):
         basename = os.path.basename(filepath).lower()
 
         if ext in BaseChatSession._SOURCE_EXTENSIONS:
-            return sys.maxsize  # 源码文件：不截断
+            return BaseChatSession._SOURCE_FILE_THRESHOLD  # 源码文件：64KB 上限
         if ext in BaseChatSession._TEXT_EXTENSIONS:
             return BaseChatSession._TEXT_FILE_THRESHOLD  # 文本/日志：16KB
         # 无扩展名的常见文本文件

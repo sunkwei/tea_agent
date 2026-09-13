@@ -80,6 +80,43 @@ def test_analyze_success():
         assert content[1]["image_url"]["url"] == "data:image/png;base64,AAAA"
 
 
+def test_analyze_empty_content_on_length():
+    """回归：reasoning 耗尽 max_tokens 时不得静默返回 ok=True + 空文本。
+
+    实测：max_tokens=300 时推理占满 300，content 为空、finish_reason='length'。
+    旧实现返回 ok=True，调用方会误判为「图中无内容」。
+    """
+    mock_client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.choices[0].message.content = ""
+    mock_resp.choices[0].finish_reason = "length"
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
+               return_value=(mock_client, "deepseek-v4-flash-vision-exp", {})):
+        from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+        result = toolkit_vision_analyze(image="data:image/png;base64,AAAA", max_tokens=300)
+        assert result["ok"] is False, "空文本不得伪装成功"
+        assert "max_tokens" in result["error"]
+        assert result["finish_reason"] == "length"
+
+
+def test_analyze_empty_content_on_stop():
+    """通用：任何空输出都报错（区分 finish_reason）"""
+    mock_client = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.choices[0].message.content = ""
+    mock_resp.choices[0].finish_reason = "stop"
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
+               return_value=(mock_client, "m", {})):
+        from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+        result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
+        assert result["ok"] is False
+        assert "输出为空" in result["error"]
+
+
 def test_analyze_api_error():
     """视觉模型调用失败时返回错误（失败隔离）"""
     mock_client = MagicMock()
@@ -144,3 +181,100 @@ def test_analyze_detail_invalid_omitted():
         _, kwargs = mock_client.chat.completions.create.call_args
         content = kwargs["messages"][0]["content"]
         assert "detail" not in content[1]["image_url"]
+
+
+# ── 韧性回退（首选视觉模型不可用时改用主模型）──
+
+
+def _cfg_with_main(model_name: str, supports_vision: bool = True):
+    """构造带 main_model 的配置 mock。"""
+    cfg = MagicMock()
+    cfg.main_model.supports_vision = supports_vision
+    cfg.main_model.is_configured = True
+    cfg.main_model.model_name = model_name
+    cfg.main_model.options = {}
+    return cfg
+
+
+def test_fallback_to_main_model_when_vision_fails():
+    """韧性回退：首选视觉模型失败（如配额耗尽）时改用支持视觉的主模型。
+
+    实测动机：vision_model 所在 provider 月度配额用尽后，工具此前直接失败，
+    而主模型本可完成同一任务 —— 单点故障不该废掉整条「截图→分析」能力。
+    """
+    primary = MagicMock()
+    primary.chat.completions.create.side_effect = RuntimeError("429 quota exceeded")
+    fallback = MagicMock()
+    fb_resp = MagicMock()
+    fb_resp.choices[0].message.content = "回退模型识别出的内容"
+    fallback.chat.completions.create.return_value = fb_resp
+
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
+               return_value=(primary, "primary-vision", {})):
+        with patch("tea_agent.toolkit.toolkit_vision_analyze._client_for",
+                   return_value=fallback):
+            with patch("tea_agent.config.get_config",
+                       return_value=_cfg_with_main("main-vision-model")):
+                from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+                result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
+                assert result["ok"] is True
+                assert result["text"] == "回退模型识别出的内容"
+                assert result["model"] == "main-vision-model"
+                assert result["fallback_from"] == "primary-vision"
+
+
+def test_fallback_on_empty_output():
+    """首选返回空内容（reasoning 耗尽预算）时同样触发回退。"""
+    primary = MagicMock()
+    empty = MagicMock()
+    empty.choices[0].message.content = ""
+    empty.choices[0].finish_reason = "length"
+    primary.chat.completions.create.return_value = empty
+
+    fallback = MagicMock()
+    fb_resp = MagicMock()
+    fb_resp.choices[0].message.content = "回退成功"
+    fb_resp.choices[0].finish_reason = "stop"
+    fallback.chat.completions.create.return_value = fb_resp
+
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
+               return_value=(primary, "primary-vision", {})):
+        with patch("tea_agent.toolkit.toolkit_vision_analyze._client_for",
+                   return_value=fallback):
+            with patch("tea_agent.config.get_config",
+                       return_value=_cfg_with_main("main-vision-model")):
+                from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+                result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
+                assert result["ok"] is True
+                assert result["text"] == "回退成功"
+
+
+def test_no_fallback_when_same_model():
+    """首选与主模型同名时不重复调用（避免无谓重试与重复计费）。"""
+    primary = MagicMock()
+    primary.chat.completions.create.side_effect = RuntimeError("boom")
+
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
+               return_value=(primary, "same-model", {})):
+        with patch("tea_agent.config.get_config",
+                   return_value=_cfg_with_main("same-model")):
+            from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+            result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
+            assert result["ok"] is False
+            assert "视觉模型调用失败" in result["error"]
+            assert primary.chat.completions.create.call_count == 1
+
+
+def test_no_fallback_when_main_lacks_vision():
+    """主模型不支持视觉时不做回退，直接返回首选错误。"""
+    primary = MagicMock()
+    primary.chat.completions.create.side_effect = RuntimeError("boom")
+
+    with patch("tea_agent.toolkit.toolkit_vision_analyze._get_vision_client",
+               return_value=(primary, "primary-vision", {})):
+        with patch("tea_agent.config.get_config",
+                   return_value=_cfg_with_main("text-only", supports_vision=False)):
+            from tea_agent.toolkit.toolkit_vision_analyze import toolkit_vision_analyze
+            result = toolkit_vision_analyze(image="data:image/png;base64,AAAA")
+            assert result["ok"] is False
+            assert "未配置视觉模型" not in result["error"]

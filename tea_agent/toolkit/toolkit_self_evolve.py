@@ -90,24 +90,33 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         except Exception:
             return False
 
+    _snap_rev = {}
+
     def _git_snap(desc):
-        """创建 git 快照，返回 (ok, error)"""
+        """创建 git 快照（写入独立 ref，不动当前分支），返回 (ok, error)"""
         try:
-            subprocess.run(["git", "add", file_path],
-                           capture_output=True, timeout=10, cwd=cwd, check=True)
-            subprocess.run(["git", "commit", "-m",
-                           f"snapshot: pre-evolve -- {desc}"],
-                           capture_output=True, timeout=10, cwd=cwd, check=True)
-            return True, None
-        except subprocess.CalledProcessError as e:
-            return False, str(e.stderr)[:200]
+            from tea_agent.toolkit._git_snapshot import git_snapshot as _gs
+
+            r = _gs([file_path], f"pre-evolve -- {desc}")
+            if r.get("snapshotted"):
+                _snap_rev["rev"] = r.get("rev")
+                return True, None
+            return False, r.get("error", "snapshot skipped")
         except Exception as e:
             return False, str(e)[:200]
 
     def _git_revert():
-        """硬回滚最近一次 git 提交"""
+        """把目标文件恢复到快照点。
+
+        不再用 ``git reset --hard HEAD~1`` —— 那个会把「HEAD 之前的一个提交」
+        整个抹掉，若快照并未真正落在 HEAD 上（例如已改为独立 ref）就会误删
+        真实提交。改为按快照 sha 只恢复目标文件。
+        """
         try:
-            subprocess.run(["git", "reset", "--hard", "HEAD~1"],
+            rev = _snap_rev.get("rev")
+            if not rev:
+                return False
+            subprocess.run(["git", "checkout", rev, "--", file_path],
                            capture_output=True, timeout=10, cwd=cwd, check=True)
             return True
         except Exception:

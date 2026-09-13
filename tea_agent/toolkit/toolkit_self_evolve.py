@@ -46,7 +46,7 @@ def toolkit_self_evolve(file_path: str, description: str, old_code: str, new_cod
         Layer 1: 时间戳 .bak 文件
         Layer 2: py_compile 编译验证（失败自动回滚）
         Layer 2.5: LSP 检查 — 影响分析 + ruff lint + 签名对比（非阻塞警告）
-        Layer 3: 运行测试套件（失败自动 git reset --hard）
+        Layer 3: 运行测试套件（失败自动按快照回滚目标文件）
 
     Args:
         file_path: 要修改的文件路径（相对于项目根目录）
@@ -447,7 +447,7 @@ def meta_toolkit_self_evolve():
                     "verify": {"type": "boolean", "description": "是否验证编译通过，默认 true。失败自动回滚"},
                     "backup": {"type": "boolean", "description": "是否创建时间戳 .bak 备份，默认 true。不覆盖历史备份"},
                     "git_snapshot": {"type": "boolean", "description": "是否创建 git 快照，默认 true。仅在 git 工作区干净时生效"},
-                    "run_tests": {"type": "boolean", "description": "编译通过后是否运行测试，默认 true。测试失败自动 git reset --hard 回滚"},
+                    "run_tests": {"type": "boolean", "description": "编译通过后是否运行测试，默认 true。测试失败自动按快照回滚目标文件"},
                     "symbol": {"type": "string", "description": "被修改的函数/类名，用于影响分析和签名对比"},
                     "lsp_checks": {"type": "boolean", "description": "是否启用 LSP 检查，默认 true"},
                 },

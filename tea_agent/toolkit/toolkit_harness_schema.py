@@ -267,7 +267,7 @@ def _get_security() -> dict:
             {"name": "Layer 1", "detail": "File backup — 时间戳 .bak 备份"},
             {"name": "Layer 2", "detail": "Compile verify — 编译验证，失败自动回滚"},
             {"name": "Layer 2.5", "detail": "LSP check — 影响分析 + lint + 签名对比"},
-            {"name": "Layer 3", "detail": "Test rollback — 测试失败自动 git reset --hard"},
+            {"name": "Layer 3", "detail": "Test rollback — 测试失败自动按快照回滚目标文件"},
         ],
         "sudo_elevation": "Cross-platform GUI password prompt",
         "tool_permissions": "Multi-level accessory control",

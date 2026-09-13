@@ -255,10 +255,14 @@ class TestRecovery:
         assert resumed == ["t1"]
         assert "t1" in fake.buffers
         types = [e["event"]["type"] for e in fake.buffers["t1"]]
-        # 原始事件保留 + partial_text 补齐 + done 收尾
+        # 原始事件完整保留 + done 收尾
         assert types[:2] == ["content", "tool_start"]
-        assert types[-2:] == ["content", "done"]
-        assert fake.buffers["t1"][-2]["event"]["recovered"] is True
+        # 原实现**无条件**补发 partial_text，此处曾期望 ['content','done']
+        # （即同一文本渲染两遍）—— 端到端实测踩中后修正为：已含 content 事件
+        # 时不再补发。
+        assert types[-1] == "done"
+        assert types.count("content") == 1, f"内容重复补发：{types}"
+        assert fake.buffers["t1"][-1]["event"]["recovered"] is True
         assert "t1" in fake.done
         # 恢复后标记为 abandoned，不会反复恢复
         assert ts.read_snapshot("t1")["status"] == "abandoned"

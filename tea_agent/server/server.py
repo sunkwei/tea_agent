@@ -459,6 +459,10 @@ def _build_routes() -> list:
     static_dir = str(Path(__file__).parent / "static")
 
     return [
+        # 就绪探测端点。handle_health 早已存在、也列入了鉴权 skip_paths 与
+        # OpenAPI 声明，但此处从未注册 → 实际访问恒为 404（实测确认）。
+        # 重启的就绪探测（_wait_ready）依赖它，缺失会导致新进程被误判失败。
+        Route("/health", rh.handle_health),
         Route("/", rh.handle_web_root),
         Route("/api/chat", rh.handle_web_chat, methods=["POST"]),
         Route("/api/chat/steering", rh.handle_web_chat_steering, methods=["POST"]),

@@ -128,13 +128,21 @@ def test_restart_replaces_process_e2e(tmp_path):
         assert result.get("ok") is True, f"restart 未受理: {result}"
         assert result.get("mode") == "immediate"
 
-        # 旧进程退出 → 鉴权/连接失败窗口 → 新进程就绪
-        assert _wait_health(port, timeout=90), "重启后服务未在 90s 内恢复"
-        pid_after = _listener_pid(port)
+        # 轮询等待「监听进程被替换」这一状态收敛。
+        # 注意：should_exit 只是置标志，uvicorn 需数十~数百 ms 才真正退出并释放
+        # 端口；期间 /health 仍由**旧进程**应答。若 POST 后立即断言 PID 变化，
+        # 会得到「PID 未变」的假失败（实测踩中）。故此处必须轮询而非即刻断言。
+        deadline = time.monotonic() + 90
+        pid_after = None
+        while time.monotonic() < deadline:
+            pid = _listener_pid(port)
+            if pid and pid != old_pid and _health(port):
+                pid_after = pid
+                break
+            time.sleep(1)
 
-        assert pid_after, "重启后未能识别监听进程 PID"
-        assert pid_after != old_pid, (
-            f"端口仍由旧进程监听（PID {old_pid}）→ 重启未真正替换进程")
+        assert pid_after, (
+            f"重启后端口仍由旧进程监听（PID {old_pid}）→ 重启未真正替换进程")
     finally:
         _kill(_listener_pid(port))
         _kill(old_pid)

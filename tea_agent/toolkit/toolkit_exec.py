@@ -44,6 +44,143 @@ def _get_process_tree() -> set:
     return pids
 
 
+# ── 提权拒绝（产品决策）──────────────────────────────────────
+# Agent **不允许**获取管理员/root 权限执行任何命令：需要提权的操作必须由用户
+# 自己手动执行。因此这里做硬拒绝，不再弹 GUI 密码框、不再调用 pkexec、
+# 也不把 sudo 直接交给子进程（免密 NOPASSWD 环境下会真的提权成功）。
+_ELEVATION_APPS = frozenset(
+    {
+        "sudo",
+        "sudoedit",
+        "sudo-rs",
+        "su",
+        "doas",
+        "pkexec",
+        "gksudo",
+        "gksu",
+        "beesu",
+        "runas",
+        "gsudo",
+        "psexec",
+        "psexec64",
+    }
+)
+
+# shell 包装下的提权（powershell/cmd/bash -c "..."）：
+# 只认 UAC 明确标记与"命令首 token 就是提权程序"，避免误伤普通文本参数
+_ELEVATION_UAC_RE = re.compile(r"-verb\s+runas", re.IGNORECASE)
+
+_SHELL_APPS = frozenset({"sh", "bash", "zsh", "dash", "ksh", "cmd", "cmd.exe", "powershell", "pwsh"})
+
+# 常见命令包装器：跳过它们才能看到真正的命令名（env sudo ... / timeout 5 sudo ...）
+_CMD_WRAPPERS = frozenset({"env", "command", "nice", "nohup", "setsid", "time", "timeout", "xargs"})
+
+# shell 命令分隔符（用于定位所有"命令位置"）
+_SHELL_SEP_RE = re.compile(r"\|\||&&|[;|&\n]|\$\(|`")
+
+# VAR=value 前缀
+_ENV_ASSIGN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=\S*")
+
+
+def _command_words(cmd: str) -> list[str]:
+    """提取 shell 命令串中**每个命令位置**的可执行名（小写 basename）。
+
+    按 ``;`` ``&&`` ``||`` ``|`` 换行等分隔符切段，跳过 ``VAR=value`` 前缀与
+    ``env`` / ``timeout`` 之类的包装器，返回各段的命令名。
+    这样 ``echo a; sudo rm`` 能识别出 ``sudo``，而 ``grep sudo /var/log`` 不会
+    被误判（那里 sudo 只是参数）。
+    """
+    words: list[str] = []
+    for segment in _SHELL_SEP_RE.split(cmd):
+        tokens = segment.strip().split()
+        for _ in range(4):  # 最多跳过 4 层前缀，避免病态输入
+            if not tokens:
+                break
+            head = tokens[0]
+            if _ENV_ASSIGN_RE.fullmatch(head):
+                tokens = tokens[1:]
+                continue
+            if os.path.basename(head).lower() in _CMD_WRAPPERS:
+                tokens = tokens[1:]
+                # timeout 需要一个时长参数；nice 可能带 -n N
+                if tokens and (tokens[0].startswith("-") or tokens[0].isdigit()):
+                    tokens = tokens[1:]
+                    if tokens and tokens[0].isdigit() and head.lower() == "nice":
+                        tokens = tokens[1:]
+                continue
+            break
+        if tokens:
+            words.append(os.path.basename(tokens[0]).lower())
+    return words
+
+
+def _elevation_message(app: str = "", args: list | None = None, command_text: str = "") -> str:
+    """生成拒绝提权的提示（含完整命令，便于用户手动复制执行）。"""
+    cmd = command_text.strip() or " ".join([str(app)] + [str(a) for a in (args or [])]).strip()
+    return (
+        f"⛔ 已拒绝提权执行：Agent 不允许获取管理员/root 权限。\n"
+        f"需要管理员权限的操作请由**用户手动执行**（复制以下命令到终端自行运行）：\n"
+        f"    {cmd}"
+    )
+
+
+def elevation_refusal_for_command(command: str) -> dict | None:
+    """对**命令字符串**做提权检测；供定时任务等非 argv 入口复用。
+
+    Args:
+        command: 完整命令行文本（如 ``sudo apt install nginx``）
+
+    Returns:
+        拒绝结果 dict 或 None（无需提权）
+    """
+    text = str(command or "").strip()
+    if not text:
+        return None
+    if _ELEVATION_UAC_RE.search(text) or any(w in _ELEVATION_APPS for w in _command_words(text)):
+        return {"ok": False, "error": _elevation_message(command_text=text), "returncode": 126}
+    return None
+
+
+def _elevation_refusal(app: str, args: list) -> dict | None:
+    """检测提权请求；需要提权时返回拒绝结果，否则返回 None。
+
+    识别范围：
+    1. 可执行文件本身是提权工具（sudo / su / pkexec / doas / runas / gsudo ...），
+       含 ``/usr/bin/sudo`` 这类绝对路径写法；
+    2. PowerShell ``Start-Process ... -Verb RunAs``（Windows UAC 提权）；
+    3. shell 包装（``bash -c "sudo ..."`` / ``cmd /c "runas ..."``）中，
+       内层命令的**首个 token** 是提权工具。
+
+    Args:
+        app: 可执行程序
+        args: 参数列表
+
+    Returns:
+        拒绝结果 dict（ok=False / error / returncode=126）或 None
+    """
+    name = os.path.basename(str(app or "").strip()).lower()
+    arg_list = [str(a) for a in (args or [])]
+    if name in _ELEVATION_APPS:
+        return {"ok": False, "error": _elevation_message(app, arg_list), "returncode": 126}
+
+    joined = " ".join(arg_list)
+    if _ELEVATION_UAC_RE.search(joined):
+        return {"ok": False, "error": _elevation_message(app, arg_list), "returncode": 126}
+
+    # shell 包装：不只看首 token，而是检查**所有命令位置**，
+    # 否则 `bash -c "echo x; sudo rm -rf /"` 这种拼接会被漏放。
+    if name in _SHELL_APPS and arg_list:
+        inner = ""
+        for i, token in enumerate(arg_list):
+            if token.lower() in ("-c", "/c", "-command", "-cmd", "/k"):
+                inner = " ".join(arg_list[i + 1 :])
+                break
+        if inner and any(word in _ELEVATION_APPS for word in _command_words(inner)):
+            return {"ok": False, "error": _elevation_message(app, arg_list), "returncode": 126}
+
+    return None
+
+
 def _is_self_destructive(app: str, args: list) -> tuple:
     """检查命令是否可能终止当前进程或其祖先进程。
 
@@ -412,6 +549,17 @@ def _run_batch_with_monitor(idx, cmd, timeout):
     """Batch 子任务执行器，集成 _ProcessMonitor 智能超时。"""
     a = cmd.get("app", "")
     ar = cmd.get("args", [])
+    # 与 toolkit_exec 入口同源的入参归一化：小模型可能把 app 写成数组、args 写成字符串
+    if isinstance(a, (list, tuple)):
+        a = next((x for x in a if isinstance(x, str) and x), "")
+    if a and not isinstance(a, str):
+        a = str(a)
+    if isinstance(ar, str):
+        ar = [ar]
+    elif ar is None:
+        ar = []
+    elif not isinstance(ar, list):
+        ar = list(ar)
     result = {"index": idx, "returncode": -1, "stdout": "", "stderr": "", "error": True}
     if not a:
         result["stderr"] = "app为空"
@@ -516,6 +664,59 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
     """
     logger.info(f"toolkit_exec called: app={app!r}, args={repr(args)[:80]}, action={action!r}, commands={repr(commands)[:80]}, timeout={timeout!r}")
 
+    # ── 入参类型归一化 ──
+    # 小模型常把 app 写成单元素数组（{"app": ["bash"]}）或把 args 写成字符串，
+    # 直接进入 .lower()/list() 会抛 "'list' object has no attribute 'lower'" 这类
+    # 无从诊断的异常。这里做保守归一化，并在无法归一化时返回明确错误。
+    if isinstance(app, (list, tuple)):
+        _coerced = next((x for x in app if isinstance(x, str) and x), "")
+        if not _coerced and app:
+            # 数组里没有可用的字符串元素 → 明确报错，不要带着错误类型继续执行
+            err = f"toolkit_exec 参数错误：app 需要可执行程序路径字符串，收到 {type(app).__name__}"
+            logger.warning(err)
+            return {"ok": False, "error": err, "returncode": -1}
+        app = _coerced
+    if isinstance(args, str):
+        args = [args]
+    elif isinstance(args, tuple):
+        args = list(args)
+    if app and not isinstance(app, str):
+        app = str(app)
+    if args is not None and not isinstance(args, list):
+        err = f"toolkit_exec 参数错误：args 需要字符串数组，收到 {type(args).__name__}"
+        logger.warning(err)
+        return {"ok": False, "error": err, "returncode": -1}
+    if not isinstance(app, str):
+        err = f"toolkit_exec 参数错误：app 需要可执行程序路径字符串，收到 {type(app).__name__}"
+        logger.warning(err)
+        return {"ok": False, "error": err, "returncode": -1}
+
+    # ── 提权拒绝：Agent 不得获取管理员/root 权限 ──
+    # 需要管理员权限的操作必须由**用户自己手动执行**；这里硬拒绝，
+    # 不再尝试弹密码框 / 调 pkexec / 直接跑 sudo（NOPASSWD 下会真的提权成功）。
+    if action == "single" and app:
+        refusal = _elevation_refusal(app, args or [])
+        if refusal:
+            logger.warning(f"toolkit_exec refused elevation: {app} {' '.join(map(str, args or []))[:120]}")
+            return refusal
+    elif action == "batch" and commands:
+        for cmd in commands:
+            a = cmd.get("app", "")
+            ar = cmd.get("args", [])
+            if isinstance(a, (list, tuple)):
+                a = next((x for x in a if isinstance(x, str) and x), "")
+            if isinstance(ar, str):
+                ar = [ar]
+            if a:
+                refusal = _elevation_refusal(a, ar or [])
+                if refusal:
+                    logger.warning(f"toolkit_exec batch refused elevation: {a}")
+                    return {
+                        "ok": False,
+                        "error": refusal["error"],
+                        "results": [{"error": True, "stderr": refusal["error"]}],
+                    }
+
     # ── 自杀检测：阻止可能终止自身进程的危险命令 ──
     if action == "single" and app:
         dangerous, reason = _is_self_destructive(app, args or [])
@@ -526,6 +727,10 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         for cmd in commands:
             a = cmd.get("app", "")
             ar = cmd.get("args", [])
+            if isinstance(a, (list, tuple)):
+                a = next((x for x in a if isinstance(x, str) and x), "")
+            if isinstance(ar, str):
+                ar = [ar]
             if a:
                 dangerous, reason = _is_self_destructive(a, ar)
                 if dangerous:
@@ -591,118 +796,17 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         if args is None:
             args = []
 
-        # ── sudo 命令 → 弹出 GUI 密码框（保持原有逻辑） ──
-        if app == "sudo" or app.endswith("/sudo"):
-            return _sudo_with_gui(app, args)
-
         # 使用智能超时：监控进程资源使用，动态延长超时
         effective_timeout = timeout if timeout else 120
         result = _run_single_with_monitor(app, args, effective_timeout)
         return result
-
-def _sudo_with_gui(app: str, args: list):
-    """sudo 命令通过 GUI 对话框获取密码 — 显示完整命令信息"""
-    import shutil
-    import subprocess
-
-    cmd_text = " ".join(args) if args else "(无参数)"
-    title = "🔐 管理员权限请求"
-    prompt = f"Tea Agent 需要执行一条管理员命令：\n\n{cmd_text}\n\n请输入管理员密码："
-
-    # 尝试顺序: kdialog → zenity → pkexec → 回退到普通执行
-    dialog_cmd = None
-
-    if shutil.which("kdialog"):
-        dialog_cmd = ["kdialog", "--title", title, "--password", prompt]
-    elif shutil.which("zenity"):
-        dialog_cmd = [
-            "zenity", "--password", "--title", title,
-            "--text", prompt,
-        ]
-
-    if dialog_cmd:
-        pwd_result = subprocess.run(dialog_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30, env=_build_scrubbed_env())
-        if pwd_result.returncode != 0:
-            return {"ok": False, "error": "用户取消了密码输入", "returncode": 126}
-        password = pwd_result.stdout.strip()
-        if not password:
-            return {"ok": False, "error": "密码不能为空", "returncode": 1}
-
-        try:
-            process = subprocess.Popen(
-                ["sudo", "-S"] + list(args),
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True, encoding="utf-8", errors="replace",
-                env=_build_scrubbed_env(),
-            )
-            stdout, stderr = process.communicate(
-                input=password + "\n",
-                timeout=180,
-            )
-            result = {"ok": process.returncode == 0, "returncode": process.returncode, "stdout": stdout, "stderr": stderr}
-        except subprocess.TimeoutExpired:
-            try:
-                process.kill()
-                process.wait(timeout=5)
-            except Exception:
-                logger.exception("op_failed")
-
-            result = {"ok": False, "error": "sudo超时", "returncode": -1}
-        password = "\x00" * len(password)
-        del password
-        return result
-
-    # 无 GUI 工具 → 回退到 pkexec（自带弹框）或直接 sudo
-    if shutil.which("pkexec"):
-        try:
-            process = subprocess.Popen(
-                ["pkexec"] + list(args),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True, encoding="utf-8", errors="replace",
-                env=_build_scrubbed_env(),
-            )
-            stdout, stderr = process.communicate(timeout=120)
-            result = {"ok": process.returncode == 0, "returncode": process.returncode, "stdout": stdout, "stderr": stderr}
-        except subprocess.TimeoutExpired:
-            try:
-                process.kill()
-                process.wait(timeout=5)
-            except Exception:
-                logger.exception('op_failed')
-
-            result = {"ok": False, "error": "pkexec超时", "returncode": -1}
-        return result
-
-    # 最后回退 — 可能失败（需要 tty）
-    try:
-        process = subprocess.Popen(
-            [app] + list(args),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True, encoding="utf-8", errors="replace",
-            env=_build_scrubbed_env(),
-        )
-        stdout, stderr = process.communicate(timeout=120)
-        result = {"ok": process.returncode == 0, "returncode": process.returncode, "stdout": stdout, "stderr": stderr}
-    except subprocess.TimeoutExpired:
-        try:
-            process.kill()
-            process.wait(timeout=5)
-        except Exception:
-            logger.exception('op_failed')
-
-        result = {"ok": False, "error": f"命令超时:{app}", "returncode": -1}
-    return result
 
 def meta_toolkit_exec() -> dict:
     """Meta toolkit exec."""
     return {
         "type": "function",
         "function": {
-            "description": "执行系统命令。action='single' 执行单条；action='batch' 并行批量执行多条。执行 sudo 命令时自动弹出 GUI 密码框。智能超时(v2.0)：后台 _ProcessMonitor 监控 CPU/MEM/IO，进程活跃时最多延长 4x 超时，空闲时按时终止。",
+            "description": "执行系统命令。action='single' 执行单条；action='batch' 并行批量执行多条。注意：不接受提权命令（sudo/su/pkexec/runas 等一律拒绝）——需要管理员权限的操作必须提示用户手动执行。智能超时(v2.0)：后台 _ProcessMonitor 监控 CPU/MEM/IO，进程活跃时最多延长 4x 超时，空闲时按时终止。",
             "name": "toolkit_exec",
             "parameters": {
                 "type": "object",

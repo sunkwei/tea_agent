@@ -21,6 +21,24 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+@contextlib.contextmanager
+def _mock_openai_client():
+    """patch 所有 OpenAI 客户端构造点，yield 同一个 mock 类供测试设置 return_value。
+
+    为什么不能只 ``patch("openai.OpenAI")``：``onlinesession`` / ``litesession``
+    在 **模块 import 时** 就执行了 ``from openai import OpenAI``，模块内的名字已绑定
+    为原类；之后再 patch ``openai.OpenAI`` 不会影响它们，测试于是用**真实客户端**
+    发请求、白等几十秒网络重试（用例本身只断言本地消息记录，所以"看起来还过"）。
+
+    这里把三处构造点指向同一个 mock，使 ``MockOpenAI.return_value = mock_client``
+    对所有调用点生效。
+    """
+    with patch("openai.OpenAI") as mock_cls, \
+         patch("tea_agent.onlinesession.OpenAI", new=mock_cls), \
+         patch("tea_agent.litesession.OpenAI", new=mock_cls):
+        yield mock_cls
+
+
 @pytest.fixture
 def tmp_dir():
     """创建临时目录"""
@@ -101,7 +119,7 @@ class TestAgentChatIntegration:
         mock_response.usage.prompt_tokens = 50
         mock_response.usage.completion_tokens = 50
 
-        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
+        with _mock_openai_client() as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_response
             MockOpenAI.return_value = mock_client
@@ -132,7 +150,7 @@ class TestAgentChatIntegration:
         mock_response.usage.prompt_tokens = 50
         mock_response.usage.completion_tokens = 50
 
-        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
+        with _mock_openai_client() as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_response
             MockOpenAI.return_value = mock_client
@@ -168,7 +186,7 @@ class TestAgentChatIntegration:
         def callback(data):
             callback_data.append(data)
 
-        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
+        with _mock_openai_client() as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_response
             MockOpenAI.return_value = mock_client
@@ -188,7 +206,7 @@ class TestAgentChatIntegration:
 
         _write_config(tmp_yaml_config)
 
-        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
+        with _mock_openai_client() as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             MockOpenAI.return_value = mock_client
 
@@ -216,7 +234,7 @@ class TestAgentChatIntegration:
         mock_response.usage.prompt_tokens = 25
         mock_response.usage.completion_tokens = 25
 
-        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
+        with _mock_openai_client() as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             mock_client.chat.completions.create.return_value = mock_response
             MockOpenAI.return_value = mock_client
@@ -237,7 +255,7 @@ class TestAgentChatIntegration:
         os.makedirs(os.path.dirname(tmp_db_path) or ".", exist_ok=True)
         _write_config(tmp_yaml_config, db_path=tmp_db_path.replace("\\", "/"))
 
-        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
+        with _mock_openai_client() as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             MockOpenAI.return_value = mock_client
 
@@ -265,7 +283,7 @@ class TestAgentChatIntegration:
         os.makedirs(os.path.dirname(tmp_db_path) or ".", exist_ok=True)
         _write_config(tmp_yaml_config, db_path=tmp_db_path.replace("\\", "/"))
 
-        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
+        with _mock_openai_client() as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             MockOpenAI.return_value = mock_client
 
@@ -294,7 +312,7 @@ class TestAgentChatErrorHandling:
 
         _write_config(tmp_yaml_config)
 
-        with patch("openai.OpenAI") as MockOpenAI:  # noqa: N806
+        with _mock_openai_client() as MockOpenAI:  # noqa: N806
             mock_client = MagicMock()
             mock_client.chat.completions.create.side_effect = Exception("API Error")
             MockOpenAI.return_value = mock_client

@@ -15,11 +15,16 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tea_agent.session.message_queue import (
+    drain_followup_items,
     drain_steering_items,
+    inject_followup_messages,
     inject_steering_messages,
 )
 
 logger = logging.getLogger("session.tool_loop_runner")
+
+# follow-up 投递的最大轮数：队列被持续灌入时避免无限生成（超出后只提示不再继续）
+MAX_FOLLOWUP_ROUNDS = 3
 
 
 def _extract_api_error_detail(exc: Exception) -> str:
@@ -711,6 +716,20 @@ def _record_interruption_anchor(session, iterations: int, last_tool_names: list,
         logger.exception("record_interruption_anchor failed")
 
 
+def _deliver_followups(session) -> int:
+    """本轮工作完成后投递 follow-up 消息（消费队列 → 注入 [后续任务]）。
+
+    Returns:
+        实际投递条数（0 表示无待投递内容）
+    """
+    try:
+        items = drain_followup_items(session)
+        return inject_followup_messages(session, items) if items else 0
+    except Exception:
+        logger.exception("followup delivery failed")
+        return 0
+
+
 def execute_tool_loop(session, context: dict) -> dict:
     """执行工具调用循环 v4.0 — 支持并行工具执行。
 
@@ -791,6 +810,8 @@ def execute_tool_loop(session, context: dict) -> dict:
     # A8: 本回合已触发过 400 溢出自愈（修正窗口 + 强制深裁剪 + 钳制 max_tokens
     # 重试）。只自愈一次，再次溢出说明本地手段用尽，走错误返回并附处置提示。
     ctx_overflow_recovery_used = False
+    # follow-up 已投递轮数（见 MAX_FOLLOWUP_ROUNDS）
+    followup_rounds = 0
 
     while iterations < session.max_iterations + session._extra_iterations:
         if session.interrupted:
@@ -1126,6 +1147,33 @@ def execute_tool_loop(session, context: dict) -> dict:
                 callback("")
             continue
 
+        elif tool_calls_data:
+            # 模型本轮返回了工具调用，但参数全部非法且无法修复 → 该轮被丢弃。
+            # 此时 content 通常为空，旧实现会落到下面的裸 else 静默 break，
+            # 用户只看到"没有回复就结束了"。这里显式给出原因并标记 error，
+            # 让调用方（server / ACP / 适配器）能向用户呈现可诊断的信息。
+            dropped = len(tool_calls_data)
+            names = "、".join(
+                str(tc.get("name") or tc.get("function", {}).get("name") or "?") for tc in tool_calls_data
+            )
+            warn = (
+                f"\n\n⚠️ 本轮 {dropped} 个工具调用（{names}）的参数不是合法 JSON，"
+                f"自动修复失败已丢弃，本轮未执行任何工具。"
+                f"请重新发起该操作，或改用更简单的单行命令参数。"
+            )
+            logger.warning(f"全部 tool_call 参数不可修复，已丢弃 {dropped} 个: {names}")
+            callback(warn)
+            full_reply += warn
+            session.add_assistant_message(full_reply)
+            session.tools_comp.collect_api_error_round(full_reply)
+            return {
+                "full_reply": full_reply,
+                "used_tools": used_tools,
+                "iterations": iterations,
+                "tool_names": all_tool_names,
+                "error": "invalid_tool_call_args",
+            }
+
         elif content:
             iterations += 1
             assistant_msg = {"role": "assistant", "content": session._cap_message_text(content)}
@@ -1136,6 +1184,15 @@ def execute_tool_loop(session, context: dict) -> dict:
                 assistant_msg["reasoning_content"] = reasoning_content
             session.context.messages.append(assistant_msg)
             session.tools_comp.collect_assistant_text_round(content, reasoning_content)
+
+            # ⭐ follow-up 投递：本轮工作已完成 → 投递排队中的"后续任务"再跑一轮。
+            # 语义为"所有工作完成后投递"（区别于工具轮边界注入的 steering）。
+            # 轮数上限防止队列被持续灌入导致无限生成。
+            if followup_rounds < MAX_FOLLOWUP_ROUNDS and _deliver_followups(session):
+                followup_rounds += 1
+                if on_status:
+                    on_status(f"📨 已投递后续任务，继续处理（{followup_rounds}/{MAX_FOLLOWUP_ROUNDS}）")
+                continue
             break
         else:
             break

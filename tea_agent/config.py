@@ -308,6 +308,11 @@ class AgentConfig:
     # 会话参数
     max_history: int = 10  # 最大历史消息数
     max_iterations: int = 200  # 最大工具调用迭代次数
+    # 出站 LLM 请求附加 HTTP 头，供自建网关/反代使用（按 host 匹配，避免泄露给其它 provider）
+    # 形式: {"*" | "host" | "*.suffix": {Header-Name: value}}；value 支持 ${ENV_VAR}
+    api_headers: dict[str, dict[str, str]] = field(default_factory=dict)
+    # 是否给 OpenCode Go/Zen 端点自动注入 x-opencode-session（默认开；缺失该头网关会 400）
+    opencode_session_header: bool = True
     enable_thinking: bool = True  # 是否启用 thinking 功能
     thinking_strength: float = 0.7  # 思考强度 0.0-1.0（0=最弱/最省token, 1=最强/最深度思考）
     reasoning_effort: str = "auto"  # 推理努力: "auto"=自动推导不发送 / none/minimal/low/medium/high/xhigh/max
@@ -874,6 +879,22 @@ def _parse_session_params(cfg: AgentConfig, data: dict) -> None:
     """
     cfg.max_history = int(data.get("max_history", cfg.max_history))
     cfg.max_iterations = int(data.get("max_iterations", cfg.max_iterations))
+
+    # 出站附加请求头：{host 模式: {头名: 值}}；非法条目在注入时被丢弃（见 api_headers）
+    _raw_headers = data.get("api_headers")
+    if isinstance(_raw_headers, dict):
+        cfg.api_headers = {
+            str(pattern): dict(headers) for pattern, headers in _raw_headers.items() if isinstance(headers, dict)
+        }
+    elif _raw_headers is not None:
+        logger.warning("config: api_headers 需要是 {host: {header: value}} 映射，已忽略")
+
+    # opencode_session_header 开关（字符串 "false"/"0"/"no" 也视为关闭）
+    _oc = data.get("opencode_session_header", cfg.opencode_session_header)
+    if isinstance(_oc, str):
+        cfg.opencode_session_header = _oc.strip().lower() in ("true", "1", "yes", "on")
+    else:
+        cfg.opencode_session_header = bool(_oc)
     val = data.get("enable_thinking", cfg.enable_thinking)
     if isinstance(val, str):
         cfg.enable_thinking = val.lower() in ("true", "1", "yes")

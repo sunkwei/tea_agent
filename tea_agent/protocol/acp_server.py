@@ -330,6 +330,12 @@ class ACPProtocolServer:
         """Run chat_stream in a background thread and feed the asyncio queue."""
         try:
             agent = self._init_agent(session_id)
+            # ⭐ 插话（steering）接线：ACP 回合同样要能消费排队插话。
+            # 插话经 POST /v1/sessions/{id}/steering 入队（见 handle_session_steering），
+            # 与本进程服务端排队队列同源，工具循环在轮边界注入。
+            # 注意：不传 notify —— ACP 客户端投递后不需要前端那种"从本地队列移除"的
+            # 通知，且 ACP 流只识别 content/done/error 三种事件。
+            self._wire_steering(agent.sess)
             ai_msg, used = agent.sess.chat_stream(
                 user_msg,
                 callback=cb,
@@ -338,6 +344,29 @@ class ACPProtocolServer:
             put({"type": "done", "ai_msg": ai_msg, "tools_used": used or []})
         except Exception as e:
             put({"type": "error", "error": str(e)})
+
+    @staticmethod
+    def _wire_steering(session, put=None) -> None:
+        """给 ACP 回合挂上插话来源（复用 server 层实现，避免逻辑重复）。
+
+        优先取热重载注册表里的最新 AgentModule；注册表未初始化（纯 ACP 进程）时
+        退回直接导入。挂接失败不影响本回合正常对话。
+        """
+        try:
+            from tea_agent.server.module import get_registry
+
+            agent_cls = get_registry().get("agent")
+            if agent_cls is not None:
+                agent_cls._wire_steering(session, put=put)
+                return
+        except Exception:
+            logger.exception("acp steering wiring (registry) failed")
+        try:
+            from tea_agent.server.modules.agent_module import AgentModule
+
+            AgentModule._wire_steering(session, put=put)
+        except Exception:
+            logger.exception("acp steering wiring (direct import) failed")
 
     def list_sessions(self, limit: int = 50) -> dict:
         """List sessions from storage."""
@@ -420,6 +449,37 @@ async def handle_discover_agents(request):
 async def handle_agent_info(request):
     return JSONResponse(get_server().get_agent_info())
 
+async def handle_session_steering(request):
+    """POST /v1/sessions/{session_id}/steering — 会话进行期间插话入队（steering）。
+
+    工具循环在下一轮工具边界消费并注入（与 Web 端 /api/chat/steering 同源），
+    因此 ACP 客户端无需等待当前回合结束即可让新指令生效（软插话，不打断执行中
+    的工具批次）。
+
+    Body: {"message": "..."}
+    """
+    session_id = str(request.path_params.get("session_id") or "").strip()
+    if not session_id:
+        return JSONResponse({"error": "session_id required"}, status_code=400)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    message = str((body or {}).get("message") or "").strip()
+    if not message:
+        return JSONResponse({"error": "message required"}, status_code=400)
+
+    from tea_agent.server.modules.state import queue_add, queue_list
+
+    item_id = queue_add(session_id, message, [])
+    return JSONResponse({
+        "ok": True,
+        "item_id": item_id,
+        "position": len(queue_list(session_id)),
+        "session_id": session_id,
+    })
+
+
 async def handle_agent_chat(request):
     body = await request.json()
     messages = body.get("messages", [])
@@ -467,6 +527,7 @@ def create_app(config_path=None):
         Route("/v1/sessions/{session_id:str}", endpoint=handle_get_session),
         Route("/v1/sessions/{session_id:str}", endpoint=handle_delete_session, methods=["DELETE"]),
         Route("/v1/sessions/{session_id:str}/messages", endpoint=handle_get_messages),
+        Route("/v1/sessions/{session_id:str}/steering", endpoint=handle_session_steering, methods=["POST"]),
     ]
     return Starlette(debug=False, routes=routes)
 

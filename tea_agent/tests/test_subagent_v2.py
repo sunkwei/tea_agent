@@ -459,3 +459,80 @@ class TestMsgToolRegistration:
         mock_tlk.toolkit.func_map = {}
         with patch('tea_agent.tlk', mock_tlk, create=True):
             _ensure_toolkit_loaded()  # Should not raise
+
+
+# ── 注册表锁不得自死锁（回归）────────────────────────────────
+
+class TestRegistryLockNoDeadlock:
+    """子 Agent 启动路径曾在持锁状态下调用同样取锁的 _save_to_db() → 自死锁。
+
+    关键点：``_save_to_db()`` 在没有 DB 时会提前返回，**根本不取锁**，所以本地无
+    存储的测试永远发现不了；生产（有 storage）表现为子 Agent 一启动就永久卡住，
+    并且锁被占住后 list/save 等操作全部阻塞。这里用假 DB 让锁真正被二次获取。
+    """
+
+    @staticmethod
+    def _run_with_timeout(fn, timeout: float = 5.0):
+        import threading
+
+        box: dict = {}
+
+        def _target():
+            box["result"] = fn()
+
+        th = threading.Thread(target=_target, daemon=True)
+        th.start()
+        th.join(timeout=timeout)
+        return (not th.is_alive()), box.get("result")
+
+    def test_nested_registry_update_and_save_does_not_hang(self):
+        """复刻 _execute_subagent 的「持锁更新 + 落盘」写法，必须不卡死。"""
+        from tea_agent.toolkit.toolkit_subagent import (
+            _registry_lock,
+            _save_to_db,
+            _subagent_registry,
+        )
+
+        _subagent_registry["sub-nested"] = {"agent_id": "sub-nested", "status": "pending"}
+
+        def _work():
+            with _registry_lock:
+                if "sub-nested" in _subagent_registry:
+                    _subagent_registry["sub-nested"]["status"] = "running"
+                    _save_to_db()   # ← 有 DB 时会二次取锁
+            return _subagent_registry["sub-nested"]["status"]
+
+        with patch("tea_agent.toolkit.toolkit_subagent._get_db", return_value=MagicMock()):
+            done, status = self._run_with_timeout(_work)
+        assert done, "注册表更新+落盘自死锁（_registry_lock 必须可重入）"
+        assert status == "running"
+
+    def test_execute_subagent_full_path_finishes(self):
+        """整条 _execute_subagent 路径（含落盘）必须能跑完并更新状态。"""
+        from tea_agent.toolkit.toolkit_subagent import _execute_subagent, _subagent_registry
+
+        _subagent_registry["sub-e2e"] = {
+            "agent_id": "sub-e2e", "status": "pending", "goal": "test",
+        }
+
+        fake_sess = MagicMock()
+        fake_sess.chat.return_value = {"assistant": "done", "tool_calls": 1}
+        fake_cfg = MagicMock()
+        fake_cfg.main_model.api_key = "k"
+        fake_cfg.main_model.api_url = "https://api.test.com/v1"
+        fake_cfg.main_model.model_name = "m"
+        fake_cfg.main_model.max_context_tokens = 0
+
+        with patch("tea_agent.toolkit.toolkit_subagent._get_db", return_value=MagicMock()), \
+             patch("tea_agent.litesession.LiteSession", return_value=fake_sess), \
+             patch("tea_agent.config.load_config", return_value=fake_cfg), \
+             patch("tea_agent.tlk.toolkit", MagicMock(), create=True), \
+             patch("tea_agent.toolkit.toolkit_subagent_msg.inject_messages_into_context",
+                   return_value={}, create=True):
+            done, result = self._run_with_timeout(
+                lambda: _execute_subagent("sub-e2e", "goal", None, 3, False, 30)
+            )
+
+        assert done, "子 Agent 执行路径卡死（注册表锁自死锁）"
+        assert result and result.get("status") == "completed", result
+        assert _subagent_registry["sub-e2e"]["status"] == "completed"

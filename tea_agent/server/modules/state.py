@@ -26,7 +26,10 @@ background_sessions_lock = threading.Lock()
 
 # 消息排队队列（topic_id -> list[dict]）
 message_queue: dict[str, list[dict]] = {}
-message_queue_lock = threading.Lock()
+# 用 RLock：队列辅助函数会在持锁期间调用同样取锁的 _persist_queues，
+# 非重入锁会自死锁（曾导致插话消费把整个回合卡死）。RLock 作为兜底，
+# 但正确做法仍是"锁内只改内存、锁外落盘"。
+message_queue_lock = threading.RLock()
 
 # 后台 SSE 事件缓冲区（topic_id -> buffer_dict）
 background_buffers: dict[str, dict] = {}
@@ -110,6 +113,7 @@ def queue_list(topic_id: str) -> list[dict]:
 
 
 def queue_remove(topic_id: str, item_id: str) -> bool:
+    removed = False
     with message_queue_lock:
         items = message_queue.get(topic_id, [])
         for i, item in enumerate(items):
@@ -117,21 +121,26 @@ def queue_remove(topic_id: str, item_id: str) -> bool:
                 items.pop(i)
                 if not items:
                     message_queue.pop(topic_id, None)
-                _persist_queues()
-                return True
-    return False
+                removed = True
+                break
+    # 落盘必须在锁外：_persist_queues 自己会获取同一把锁，锁内调用会自死锁
+    if removed:
+        _persist_queues()
+    return removed
 
 
 def queue_pop(topic_id: str) -> dict | None:
+    item = None
     with message_queue_lock:
         items = message_queue.get(topic_id, [])
         if items:
             item = items.pop(0)
             if not items:
                 message_queue.pop(topic_id, None)
-            _persist_queues()
-            return item
-    return None
+    # 落盘必须在锁外（同上）：否则插话消费会让整个回合卡死并锁住全部队列操作
+    if item is not None:
+        _persist_queues()
+    return item
 
 
 # ── 消息队列持久化（重启后排队消息不丢）─────────────────────────

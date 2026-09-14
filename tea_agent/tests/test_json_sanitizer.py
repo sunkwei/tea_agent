@@ -496,3 +496,242 @@ class TestNormalizeToolArgs:
         from tea_agent.session.json_sanitizer import normalize_tool_args
         obj = {"a": 1}
         assert normalize_tool_args("toolkit_exec", obj) is obj
+
+
+# ============================================================
+# 4. 裸控制字符 / 裸标量值修复 — 嵌入式小模型线上回归
+#    线上 WARNING 样本: {"app": bash, "args": ["-lc", "set -u\necho ..."]}
+# ============================================================
+
+class TestEscapeRawControlChars:
+    """escape_raw_control_chars：字符串内裸控制字符转义"""
+
+    def test_real_newline_inside_string_is_escaped(self):
+        """字符串内的真实换行应转义为 \\n 且内容不变"""
+        from tea_agent.session.json_sanitizer import escape_raw_control_chars
+        s = '{"cmd": "echo a\necho b"}'
+        fixed = escape_raw_control_chars(s)
+        assert json.loads(fixed)["cmd"] == "echo a\necho b"
+
+    def test_tab_and_cr_escaped(self):
+        """制表符 / 回车同样转义"""
+        from tea_agent.session.json_sanitizer import escape_raw_control_chars
+        fixed = escape_raw_control_chars('{"cmd": "a\tb\rc"}')
+        assert json.loads(fixed)["cmd"] == "a\tb\rc"
+
+    def test_newline_outside_string_preserved(self):
+        """字符串外部的换行是合法空白，必须原样保留（格式化 JSON）"""
+        from tea_agent.session.json_sanitizer import escape_raw_control_chars
+        s = '{\n  "a": 1\n}'
+        assert escape_raw_control_chars(s) == s
+        assert json.loads(escape_raw_control_chars(s)) == {"a": 1}
+
+    def test_clean_input_unchanged_byte_for_byte(self):
+        """无裸控制字符时逐字节返回（前缀缓存友好）"""
+        from tea_agent.session.json_sanitizer import escape_raw_control_chars
+        s = '{"a": "x\\ny"}'
+        assert escape_raw_control_chars(s) is s
+
+    def test_empty_input(self):
+        """空输入安全返回"""
+        from tea_agent.session.json_sanitizer import escape_raw_control_chars
+        assert escape_raw_control_chars("") == ""
+
+
+class TestQuoteBareValues:
+    """quote_bare_values：未加引号的裸标量值补引号"""
+
+    def test_bare_value_quoted(self):
+        """{"app": bash} → {"app": "bash"}"""
+        from tea_agent.session.json_sanitizer import quote_bare_values
+        fixed = quote_bare_values('{"app": bash, "n": 2}')
+        assert json.loads(fixed) == {"app": "bash", "n": 2}
+
+    def test_array_element_bare_value(self):
+        """数组元素裸值也补引号"""
+        from tea_agent.session.json_sanitizer import quote_bare_values
+        fixed = quote_bare_values('{"args": [bash, -lc]}')
+        assert json.loads(fixed) == {"args": ["bash", "-lc"]}
+
+    def test_json_literals_untouched(self):
+        """true/false/null 与数字不能加引号"""
+        from tea_agent.session.json_sanitizer import quote_bare_values
+        fixed = quote_bare_values('{"a": true, "b": false, "c": null, "d": 12}')
+        assert json.loads(fixed) == {"a": True, "b": False, "c": None, "d": 12}
+
+    def test_string_content_not_touched(self):
+        """字符串内容里的 "x: y," 形态不能被误改"""
+        from tea_agent.session.json_sanitizer import quote_bare_values
+        s = '{"cmd": "sed -n 1,5p x: y, z"}'
+        assert quote_bare_values(s) == s
+        assert json.loads(quote_bare_values(s))["cmd"] == "sed -n 1,5p x: y, z"
+
+    def test_escaped_quote_in_string_not_touched(self):
+        """含转义引号的字符串不破坏扫描状态"""
+        from tea_agent.session.json_sanitizer import quote_bare_values
+        s = '{"cmd": "echo \\"a: b,\\""}'
+        assert quote_bare_values(s) == s
+
+    def test_already_quoted_unchanged(self):
+        """已合法 JSON 原样返回"""
+        from tea_agent.session.json_sanitizer import quote_bare_values
+        s = '{"app": "bash", "args": ["-lc", "echo hi"]}'
+        assert quote_bare_values(s) == s
+
+
+class TestEscapeUnescapedInnerQuotes:
+    """escape_unescaped_inner_quotes：字符串内未转义的裸引号"""
+
+    def test_inner_quotes_escaped(self):
+        """echo "x" 形式的裸引号应转义，结构引号保留"""
+        from tea_agent.session.json_sanitizer import escape_unescaped_inner_quotes
+        s = '{"cmd": "echo "hello" && ls"}'
+        fixed = escape_unescaped_inner_quotes(s)
+        assert json.loads(fixed)["cmd"] == 'echo "hello" && ls'
+
+    def test_noop_on_valid_json(self):
+        """合法 JSON（内层引号已转义）必须逐字节不变"""
+        from tea_agent.session.json_sanitizer import escape_unescaped_inner_quotes
+        for s in (
+            '{"cmd": "echo \\"hi\\""}',
+            '{"a": "x,", "b": "y:", "c": "z[1]"}',
+            '{"a": "", "b": ["p", "q"]}',
+            '{"a": "line1\\nline2", "b": {"c": 1}}',
+        ):
+            assert escape_unescaped_inner_quotes(s) == s
+
+    def test_no_quote_fast_path(self):
+        """不含引号或空输入原样返回"""
+        from tea_agent.session.json_sanitizer import escape_unescaped_inner_quotes
+        assert escape_unescaped_inner_quotes("no quotes here") == "no quotes here"
+        assert escape_unescaped_inner_quotes("") == ""
+
+    def test_escaped_quote_content_not_double_escaped(self):
+        """已转义的引号不得被二次转义"""
+        from tea_agent.session.json_sanitizer import escape_unescaped_inner_quotes
+        s = '{"cmd": "a \\"b\\" c"}'
+        assert escape_unescaped_inner_quotes(s) == s
+        assert json.loads(s)["cmd"] == 'a "b" c'
+
+
+class TestReportedEmbeddedModelFailures:
+    """线上嵌入式小模型 WARNING 样本的端到端修复回归"""
+
+    def test_bare_value_truncated_repaired(self):
+        """裸值 + 截断：修复为完整 JSON（原实现直接丢弃）"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        raw = '{"app": bash, "args": ["-lc", "echo hello'
+        fixed = normalize_tool_args("toolkit_exec", raw)
+        assert fixed is not None
+        assert json.loads(fixed) == {"app": "bash", "args": ["-lc", "echo hello"]}
+
+    def test_bare_value_complete_repaired(self):
+        """裸值 + 完整：修复为完整 JSON（原实现直接丢弃）"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        raw = '{"app": bash, "args": ["-lc", "echo hi"]}'
+        fixed = normalize_tool_args("toolkit_exec", raw)
+        assert fixed is not None
+        assert json.loads(fixed) == {"app": "bash", "args": ["-lc", "echo hi"]}
+
+    def test_bare_value_with_real_newlines_repaired(self):
+        """裸值 + 多行脚本（真实换行）：两者同时出现也能修复"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        raw = '{"app": bash, "args": ["-lc", "echo a\necho b"]}'
+        fixed = normalize_tool_args("toolkit_exec", raw)
+        assert fixed is not None
+        assert json.loads(fixed)["args"][1] == "echo a\necho b"
+
+    def test_real_newline_truncated_keeps_full_command(self):
+        """真实换行 + 截断：不得退化成"从尾部删除"而丢掉已完整的命令内容"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        raw = '{"app": "bash", "args": ["-lc", "set -u\ncd /data/app\necho hello'
+        fixed = normalize_tool_args("toolkit_exec", raw)
+        assert fixed is not None
+        parsed = json.loads(fixed)
+        assert parsed["app"] == "bash"
+        # 关键回归点：旧实现返回 args == ["-lc"]，命令内容被静默丢弃
+        assert parsed["args"] == ["-lc", "set -u\ncd /data/app\necho hello"]
+
+    def test_real_newline_complete_repaired(self):
+        """完整 JSON 但字符串内是真实换行：原实现判为不可修复并丢弃"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        raw = '{"app": "bash", "args": ["-lc", "echo a\necho b"]}'
+        fixed = normalize_tool_args("toolkit_exec", raw)
+        assert fixed is not None
+        assert json.loads(fixed)["args"][1] == "echo a\necho b"
+
+    def test_valid_json_still_byte_identical(self):
+        """合法 JSON 仍逐字节原样返回（不得因新步骤被重写）"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        raw = '{"app": "bash", "args": ["-lc", "echo hi"], "timeout": 30}'
+        assert normalize_tool_args("toolkit_exec", raw) == raw
+
+    def test_relaxed_json_loads_handles_bare_value(self):
+        """relaxed_json_loads 同样能解析裸值"""
+        from tea_agent.basesession import relaxed_json_loads
+        assert relaxed_json_loads('{"app": bash, "args": ["-lc"]}') == {
+            "app": "bash", "args": ["-lc"]
+        }
+
+    def test_relaxed_json_loads_handles_real_newline(self):
+        """relaxed_json_loads 保留真实换行内容"""
+        from tea_agent.basesession import relaxed_json_loads
+        assert relaxed_json_loads('{"cmd": "echo a\necho b"}')["cmd"] == "echo a\necho b"
+
+    def test_raw_inner_quotes_complete_repaired(self):
+        """完整 JSON 但脚本里有未转义的裸引号（echo "x"）：原实现直接丢弃"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        raw = '{"app": bash, "args": ["-lc", "echo "=== start ===" && ls -l"]}'
+        fixed = normalize_tool_args("toolkit_exec", raw)
+        assert fixed is not None
+        assert json.loads(fixed) == {
+            "app": "bash", "args": ["-lc", 'echo "=== start ===" && ls -l']
+        }
+
+    def test_raw_inner_quotes_truncated_keeps_full_command(self):
+        """裸引号 + 截断：不得退化成砍掉后半段（args 只剩 ["-lc"]）"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        raw = '{"app": "bash", "args": ["-lc", "set -u\necho "=== start ==="\ncd /data/app'
+        fixed = normalize_tool_args("toolkit_exec", raw)
+        assert fixed is not None
+        parsed = json.loads(fixed)
+        assert len(parsed["args"]) == 2
+        assert parsed["args"][1] == 'set -u\necho "=== start ==="\ncd /data/app'
+
+    def test_embedded_sample_bare_value_truncated(self):
+        """线上日志样本（前 100 字符）：裸值 + 截断，必须修复且内容完整"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+        raw = (
+            r'{"app": bash, "args": ["-lc", "set -u\nR=/userdata/zonekey/sunkw/zk_analysis_rk'
+            r'\nT=/tmp/pkgtest\nZ=$'
+        )
+        fixed = normalize_tool_args("toolkit_exec", raw)
+        assert fixed is not None
+        parsed = json.loads(fixed)
+        assert parsed["app"] == "bash"
+        assert len(parsed["args"]) == 2
+        assert "zk_analysis_rk" in parsed["args"][1]
+        assert parsed["args"][1].endswith("Z=$")
+
+    def test_sanitize_repairs_instead_of_dropping(self):
+        """历史消息 sanitize 也应修复裸值参数，而不是移除该 tool_call"""
+        from tea_agent.session.json_sanitizer import sanitize_api_messages
+        messages = [{
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{
+                "id": "c1",
+                "type": "function",
+                "function": {
+                    "name": "toolkit_exec",
+                    "arguments": '{"app": bash, "args": ["-lc", "df -h"]}',
+                },
+            }],
+        }]
+        result = sanitize_api_messages(messages)
+        assert len(result) == 1
+        calls = result[0].get("tool_calls")
+        assert calls and len(calls) == 1
+        assert json.loads(calls[0]["function"]["arguments"]) == {
+            "app": "bash", "args": ["-lc", "df -h"]
+        }

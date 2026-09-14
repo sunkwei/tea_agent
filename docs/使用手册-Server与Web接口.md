@@ -363,6 +363,7 @@ data: [DONE]
 | `/v1/sessions/{topic_id}` | GET | 获取会话详情（含对话历史） |
 | `/v1/sessions/{topic_id}` | DELETE | 删除会话 |
 | `/v1/sessions/{topic_id}/messages` | GET | 获取消息列表 `?limit=50` |
+| `/v1/sessions/{topic_id}/steering` | POST | 会话进行中插话 `{"message": "..."}`，工具循环在下一轮工具边界注入（软插话，不打断工具批次） |
 
 #### 创建会话示例
 

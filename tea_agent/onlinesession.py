@@ -1,6 +1,7 @@
 """在线工具调用会话 — Token 优化版（组合模式，支持 OpenAI Function Calling）。"""
 
 import logging
+import uuid
 from collections.abc import Callable
 from typing import Any
 
@@ -424,6 +425,7 @@ class OnlineToolSession(BaseChatSession):
         """
         import httpx
 
+        from tea_agent.api_headers import build_http_client, request_event_hooks
         from tea_agent.config import get_config
 
         # API 弹性参数（网络中断/睡眠恢复容错）：超时与 SDK 内置重试次数
@@ -435,9 +437,23 @@ class OnlineToolSession(BaseChatSession):
         except Exception:
             _req_to, _conn_to, _max_retries = 120.0, 30.0, 3
 
-        _http_client = httpx.Client(
-            proxy=None, timeout=httpx.Timeout(_req_to, connect=_conn_to)
-        )
+        # OpenCode Go/Zen 要求每次会话带稳定的 x-opencode-session，缺失直接 400。
+        # 一个 session 对象会服务多个 topic，故用「请求时动态解析」的钩子：
+        # 优先当前 topic id（跨进程重启仍稳定 → prompt 缓存可复用）。
+        # 同时按 config.yaml 的 api_headers 注入自建网关所需的附加头。
+        self._opencode_fallback_session = uuid.uuid4().hex
+
+        def _oc_session_id() -> str:
+            return str(getattr(self, "current_topic_id", "") or self._opencode_fallback_session)
+
+        def _make_client(base_url: str):
+            # build_http_client 对畸形代理环境变量（NO_PROXY 含 [::1] 等）做降级容错
+            return build_http_client(
+                httpx.Timeout(_req_to, connect=_conn_to),
+                request_event_hooks(base_url, session_id_provider=_oc_session_id),
+            )
+
+        _http_client = _make_client(api_url)
         main_client = OpenAI(
             api_key=api_key,
             base_url=api_url,
@@ -450,9 +466,7 @@ class OnlineToolSession(BaseChatSession):
             cheap_client = OpenAI(
                 api_key=cheap_api_key,
                 base_url=cheap_api_url,
-                http_client=httpx.Client(
-                    proxy=None, timeout=httpx.Timeout(_req_to, connect=_conn_to)
-                ),
+                http_client=_make_client(cheap_api_url),
                 max_retries=_max_retries,
             )
 
@@ -461,9 +475,7 @@ class OnlineToolSession(BaseChatSession):
             vision_client = OpenAI(
                 api_key=vision_api_key,
                 base_url=vision_api_url,
-                http_client=httpx.Client(
-                    proxy=None, timeout=httpx.Timeout(_req_to, connect=_conn_to)
-                ),
+                http_client=_make_client(vision_api_url),
                 max_retries=_max_retries,
             )
 

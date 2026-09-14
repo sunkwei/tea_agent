@@ -26,7 +26,11 @@ logger = logging.getLogger("toolkit.subagent")
 
 # ── 全局子 agent 注册表 ────────────────────────────
 _subagent_registry: dict[str, dict] = {}
-_registry_lock = threading.Lock()
+# RLock 必需：多处采用「持锁更新注册表 + 落盘」的写法，而 _save_to_db() 自己也会取
+# 这把锁（它在锁内快照、锁外写库）。用非重入 Lock 会自死锁 —— 且只在**有 DB** 时
+# 触发（_save_to_db 无 DB 会提前返回），所以本地无存储的测试永远发现不了，
+# 生产上表现为子 Agent 一启动就永久卡住、锁被占住后 list/save 全部阻塞。
+_registry_lock = threading.RLock()
 _executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="subagent")
 
 # 自动唤醒通知: {parent_session_id: [sub_agent_id, ...]}

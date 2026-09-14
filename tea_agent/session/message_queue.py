@@ -93,9 +93,11 @@ class MessageQueue:
         self._message_id_counter = 0
 
     def _next_id(self) -> str:
-        """生成递增消息 ID。"""
-        self._message_id_counter += 1
-        return f"msg_{self._message_id_counter}_{datetime.now().strftime('%H%M%S')}"
+        """生成递增消息 ID（自增在锁内，避免并发 push 拿到重复 id）。"""
+        with self._lock:
+            self._message_id_counter += 1
+            counter = self._message_id_counter
+        return f"msg_{counter}_{datetime.now().strftime('%H%M%S')}"
 
     # ── 推送 ──────────────────────────────────────────────
 
@@ -257,6 +259,34 @@ class MessageQueue:
 
 # ═══ Session 集成辅助 ═══════════════════════════════════
 
+def attach_steering_provider(session, drain, notify=None) -> None:
+    """把"按 topic 消费插话"的能力挂到 session 上（provider / notify）。
+
+    任何**回合入口**都必须调用本函数，否则该回合的工具循环拿不到插话来源：
+    ``drain_steering_items`` 只在 provider 存在时才能消费服务端排队消息，
+    漏挂的后果是插话静默滞留（不注入、也拿不到 steering_injected 通知）。
+
+    Args:
+        session: OnlineToolSession 实例
+        drain: 回调 ``drain(topic_id) -> list[dict]``，每项 ``{id, message, images?}``
+        notify: 注入后的通知回调（SSE steering_injected），可为 None
+    """
+
+    def _provider():
+        topic_id = str(getattr(session, "current_topic_id", "") or "")
+        if not topic_id:
+            return []
+        try:
+            return list(drain(topic_id) or [])
+        except Exception:
+            logger.exception("steering drain failed")
+            return []
+
+    session._steering_provider = _provider
+    if notify is not None:
+        session._steering_notify = notify
+
+
 def create_message_queue(session) -> MessageQueue:
     """为 session 创建并挂载消息队列。
 
@@ -311,33 +341,98 @@ def inject_queued_messages(messages: list, session) -> list:
     return inserted
 
 
-def check_followup_messages(session) -> list:
-    """检查是否有 follow-up 消息待处理。
+def attach_followup_provider(session, drain) -> None:
+    """挂载"按 topic 消费 follow-up 消息"的来源（与 steering 对称）。
 
-    在工具循环结束后调用，返回待处理的 follow-up 消息列表。
+    follow-up 的语义是"本轮所有工作完成后再投递"，由工具循环在自然收尾时消费
+    （见 tool_loop_runner 的 deliver_followups）。
+    """
 
-    Args:
-        session: OnlineToolSession 实例
+    def _provider():
+        topic_id = str(getattr(session, "current_topic_id", "") or "")
+        if not topic_id:
+            return []
+        try:
+            return list(drain(topic_id) or [])
+        except Exception:
+            logger.exception("followup drain failed")
+            return []
+
+    session._followup_provider = _provider
+
+
+def drain_followup_items(session) -> list[dict]:
+    """收集所有来源的 follow-up 消息（消费式）。
+
+    来源：
+      1. ``session._followup_provider``（由服务端回合入口挂载，如 /api/pi/queue）
+      2. ``session.context.message_queue`` 的 followup 队列
 
     Returns:
-        follow-up 消息内容列表
+        每项 ``{"id", "message", ...}``；无则空列表
     """
-    queue = getattr(session.context, 'message_queue', None)
-    if not queue:
-        return []
+    items: list[dict] = []
 
-    followup = queue.get_followup()
-    if not followup:
-        return []
+    provider = getattr(session, "_followup_provider", None)
+    if provider is not None:
+        for it in provider() or []:
+            if isinstance(it, dict):
+                items.append(it)
 
-    contents = [{
-        "role": "user",
-        "content": f"[后续任务] {msg.content}",
-        "metadata": msg.metadata,
-    } for msg in followup]
+    queue = getattr(getattr(session, "context", None), "message_queue", None)
+    if queue is not None:
+        try:
+            for m in queue.get_followup():
+                items.append({
+                    "id": m.id,
+                    "message": m.content,
+                    "metadata": m.metadata,
+                    "source": "message_queue",
+                })
+        except Exception:
+            logger.exception("message_queue followup drain failed")
 
-    logger.info(f"📨 投递 {len(followup)} 条 follow-up 消息")
-    return contents
+    if items:
+        logger.info(f"📨 follow-up 消费 {len(items)} 条")
+    return items
+
+
+def inject_followup_messages(session, items: list) -> int:
+    """把 follow-up 消息注入 session.context.messages（前缀 [后续任务]）。
+
+    Returns:
+        实际注入条数
+    """
+    if not items:
+        return 0
+    injected = 0
+    cap = getattr(session, "_cap_message_text", None)
+    for item in items:
+        text = str(item.get("message") or "").strip()
+        if not text:
+            continue
+        if callable(cap):
+            text = cap(text)
+        session.context.messages.append({"role": "user", "content": f"[后续任务] {text}"})
+        injected += 1
+        logger.info(f"📨 follow-up 注入: [{item.get('id', '')}] {text[:80]}...")
+    return injected
+
+
+def check_followup_messages(session) -> list:
+    """（保留的兼容入口）返回待投递的 follow-up 消息 dict 列表（消费式）。
+
+    新代码请用 :func:`drain_followup_items` + :func:`inject_followup_messages`：
+    本函数只读 ``session.context.message_queue``，覆盖不到服务端/Pi 队列来源。
+    """
+    return [
+        {
+            "role": "user",
+            "content": f"[后续任务] {item.get('message', '')}",
+            "metadata": item.get("metadata", {}),
+        }
+        for item in drain_followup_items(session)
+    ]
 
 
 def drain_steering_items(session) -> list[dict]:

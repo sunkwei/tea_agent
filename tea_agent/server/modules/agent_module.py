@@ -34,6 +34,7 @@ from .state import (
 from .state import (
     queue_pop,
 )
+from tea_agent.session.message_queue import attach_followup_provider, attach_steering_provider
 
 logger = logging.getLogger("hot_reload.agent")
 
@@ -375,6 +376,120 @@ class AgentModule(HotReloadModule):
         sess.context.interface_type = "web"
         return sess, _storage
 
+    # ── 插话（steering）接线 ───────────────────────────────
+    @staticmethod
+    def _pi_module():
+        """取 Pi 模块类：优先热重载注册表（拿最新类），未注册则退回直接导入。
+
+        回退很重要：进程内直接跑回合（如 ACP/脚本）时服务端注册表可能尚未初始化，
+        此时若直接放弃，/api/pi/queue 入队的插话/后续任务会静默丢失。
+        """
+        try:
+            from tea_agent.server.module import get_registry
+
+            pi = get_registry().get("pi_features")
+            if pi is not None:
+                return pi
+        except Exception:
+            logger.exception("pi module registry lookup failed")
+        try:
+            from tea_agent.server.modules.pi_features_module import PiFeaturesModule
+
+            return PiFeaturesModule
+        except Exception:
+            logger.exception("pi module import failed")
+            return None
+
+    @staticmethod
+    def _steering_drain(topic_id: str) -> list[dict]:
+        """按 topic 消费**所有**插话来源，返回待注入项 [{id, message, images?}]。
+
+        来源：
+          1. 服务端排队队列 ``state.message_queue``（/api/chat/steering、/api/queue）
+          2. Pi 队列 ``pi_features_module``（/api/pi/queue）——它用的是模块私有
+             ``_queues``，与来源 1 不是同一个队列；此处一并对接，否则该接口入队的
+             插话永远到不了模型。
+        """
+        items: list[dict] = []
+        if not topic_id:
+            return items
+
+        # 来源 1：服务端排队队列
+        try:
+            while True:
+                item = queue_pop(topic_id)
+                if item is None:
+                    break
+                items.append(item)
+        except Exception:
+            logger.exception("steering drain (server queue) failed")
+
+        # 来源 2：Pi 队列
+        try:
+            pi = AgentModule._pi_module()
+            if pi is not None:
+                drained = pi.queue_drain(topic_id, "steering") or {}
+                for msg in drained.get("messages", []):
+                    items.append({
+                        "id": msg.get("id", ""),
+                        "message": msg.get("content", ""),
+                        "images": [],
+                        "source": "pi_queue",
+                    })
+        except Exception:
+            logger.exception("steering drain (pi queue) failed")
+
+        return items
+
+    @staticmethod
+    def _followup_drain(topic_id: str) -> list[dict]:
+        """按 topic 消费 follow-up 消息（Pi 队列的 type=followup）。
+
+        follow-up 与 steering 共用 Pi 队列，但投递时机不同：steering 在工具轮边界
+        注入；follow-up 在"本轮所有工作完成后"由工具循环投递。
+        """
+        items: list[dict] = []
+        if not topic_id:
+            return items
+        try:
+            pi = AgentModule._pi_module()
+            if pi is not None:
+                drained = pi.queue_drain(topic_id, "followup") or {}
+                for msg in drained.get("messages", []):
+                    items.append({
+                        "id": msg.get("id", ""),
+                        "message": msg.get("content", ""),
+                        "source": "pi_queue",
+                    })
+        except Exception:
+            logger.exception("followup drain (pi queue) failed")
+        return items
+
+    @classmethod
+    def _wire_steering(cls, session, put=None) -> None:
+        """给一个回合入口挂上插话/后续任务的来源与通知（**每个 chat_stream 入口都必须调用**）。
+
+        漏挂的后果：该回合的工具循环消费不到插话（消息静默滞留服务端队列），
+        前端也收不到 steering_injected。历史上只有 chat_stream_sse 挂过，
+        /v1/chat/completions 两条路径与 ACP 均漏挂。
+
+        ``put`` 为空时（如非流式 chat_completion）没有事件通道，注入照常生效，
+        但不会发 steering_injected —— 这类客户端本地没有排队列表，不会重复发送。
+        """
+
+        def _notify(item):
+            if put is None:
+                return
+            with contextlib.suppress(Exception):
+                put({
+                    "type": "steering_injected",
+                    "item_id": (item or {}).get("id", ""),
+                    "text": (item or {}).get("message", ""),
+                })
+
+        attach_steering_provider(session, cls._steering_drain, _notify)
+        attach_followup_provider(session, cls._followup_drain)
+
     @classmethod
     def chat_completion(cls, model: str, messages: list[dict],
                          stream: bool = False, temperature: float = 0.7,
@@ -394,6 +509,8 @@ class AgentModule(HotReloadModule):
         def cb(text: str):
             if text and not text.startswith("["):
                 collected.append(text)
+        # ⭐ 插话接线：非流式 API 回合同样要能消费插话（否则 /api/chat/steering 静默滞留）
+        cls._wire_steering(agent.sess)
         ai_msg, used_tools = agent.sess.chat_stream(
             user_msg, callback=cb,
             topic_id=topic_id or agent.current_topic_id)
@@ -467,6 +584,8 @@ class AgentModule(HotReloadModule):
             _ga = get_agent() or cls._instance
             if _ga:
                 _ga.current_topic_id = topic_id
+            # ⭐ 插话接线：/v1/chat/completions 流式路径
+            cls._wire_steering(session, put=put)
             ai_msg, used_tools = session.chat_stream(
                 user_msg, callback=_wrapped_cb, topic_id=topic_id)
             _effective_ai_msg = ai_msg if ai_msg else "".join(_streamed_text_parts)
@@ -513,19 +632,19 @@ class AgentModule(HotReloadModule):
                         "choices": [{"index": 0,
                                      "delta": {"content": event["text"]},
                                      "finish_reason": None}]}
-                yield "data: " + json.dumps(data) + NL2
+                yield "data: " + json.dumps(data) + nl2
             elif t == "done":
                 done_data = {"id": cid, "object": "chat.completion.chunk",
                             "created": now, "model": model,
                             "choices": [{"index": 0, "delta": {},
                                          "finish_reason": "stop"}],
                             "tools_used": event.get("tools_used", [])}
-                yield "data: " + json.dumps(done_data) + NL2
-                yield "data: [DONE]" + NL2
+                yield "data: " + json.dumps(done_data) + nl2
+                yield "data: [DONE]" + nl2
                 break
             elif t == "error":
-                yield "data: " + json.dumps({"error": event["error"]}) + NL2
-                yield "data: [DONE]" + NL2
+                yield "data: " + json.dumps({"error": event["error"]}) + nl2
+                yield "data: [DONE]" + nl2
                 break
 
     @staticmethod
@@ -740,31 +859,8 @@ class AgentModule(HotReloadModule):
                 t, q, o, d, to, _put, event_loop,
             )
 
-            # ⭐ 插话（steering）接线：
-            #   - _steering_provider: 按 topic 消费服务端排队队列（state.message_queue）
-            #   - _steering_notify:   注入后通过 SSE 通知前端（steering_injected），
-            #                         前端据此从本地排队列表移除该项
-            def _steering_provider():
-                _tid = getattr(session, "current_topic_id", "") or topic_id
-                if not _tid:
-                    return []
-                _items = []
-                while True:
-                    _item = queue_pop(_tid)
-                    if _item is None:
-                        break
-                    _items.append(_item)
-                return _items
-
-            def _steering_notify(item):
-                _put({
-                    "type": "steering_injected",
-                    "item_id": (item or {}).get("id", ""),
-                    "text": (item or {}).get("message", ""),
-                })
-
-            session._steering_provider = _steering_provider
-            session._steering_notify = _steering_notify
+            # ⭐ 插话（steering）接线：所有回合入口共用 _wire_steering
+            cls._wire_steering(session, put=_put)
 
             ai_msg = None
             used_tools = None

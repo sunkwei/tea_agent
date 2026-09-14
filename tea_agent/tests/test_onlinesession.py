@@ -1207,6 +1207,29 @@ class TestExecuteToolLoop:
         assert result["full_reply"] == "直接回复"
         sess.close()
 
+    def test_all_tool_calls_dropped_reports_error(self):
+        """模型返回了工具调用但参数全部不可修复：必须显式报错，不得静默结束本轮。
+
+        回归：旧实现在 content 为空时落到裸 else → break，
+        用户只看到"没有回复就结束了"（嵌入式小模型输出非法 JSON 时高发）。
+        """
+        sess = self._make_session_with_api_mock()
+        sess._process_stream_with_reasoning.return_value = (
+            "",
+            [{"id": "c1", "type": "function",
+              "function": {"name": "toolkit_exec", "arguments": '{"app": bash'}}],
+            "",
+        )
+        sess.tools_comp.parse_tool_calls_from_stream.return_value = []
+        collected = []
+
+        result = execute_tool_loop(sess, {"msg": "test", "callback": collected.append})
+
+        assert result.get("error") == "invalid_tool_call_args"
+        assert "toolkit_exec" in result["full_reply"]
+        assert result["used_tools"] is False
+        sess.close()
+
     def test_max_iterations_reached(self):
         """达到最大迭代次数终止"""
         sess = self._make_session_with_api_mock(max_iterations=3)

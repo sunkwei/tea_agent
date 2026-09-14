@@ -56,11 +56,34 @@ class LiteSession:
         except Exception:
             _req_to, _conn_to, _max_retries = 120.0, 30.0, 3
 
-        self.api = OpenAI(
-            api_key=api_key, base_url=api_url,
-            timeout=_req_to,
-            max_retries=_max_retries,
-        )
+        # OpenCode Go/Zen 要求稳定的 x-opencode-session；子 Agent 与对话一一对应，
+        # 构造期即确定 id（无 topic id 时用随机 id）。另按 config.yaml 的 api_headers
+        # 注入自建网关附加头。无任何头可注入时不传该参数，保持原调用形态。
+        from tea_agent.api_headers import default_headers_for
+
+        _client_kwargs = {
+            "api_key": api_key,
+            "base_url": api_url,
+            "timeout": _req_to,
+            "max_retries": _max_retries,
+        }
+        _api_headers = default_headers_for(api_url)
+        if _api_headers:
+            _client_kwargs["default_headers"] = _api_headers
+        try:
+            self.api = OpenAI(**_client_kwargs)
+        except Exception as e:
+            # 环境代理变量畸形（NO_PROXY 含 [::1] 等）会让 SDK 内部建 httpx 客户端失败，
+            # 这里降级为忽略环境代理，避免子 Agent 完全无法创建。
+            logger.warning(
+                "LiteSession: OpenAI 客户端初始化失败（疑似代理环境变量畸形），回退为忽略环境代理: %s", e
+            )
+            import httpx
+
+            _client_kwargs["http_client"] = httpx.Client(
+                timeout=httpx.Timeout(_req_to), proxy=None, trust_env=False
+            )
+            self.api = OpenAI(**_client_kwargs)
 
         # 构建工具定义（全部工具，无过滤）
         self.tools = self._build_tools()

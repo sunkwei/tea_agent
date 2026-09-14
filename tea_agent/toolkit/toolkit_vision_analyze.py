@@ -29,10 +29,31 @@ def _client_for(model_cfg):
     """按模型配置获取（带缓存的）OpenAI 客户端。"""
     from openai import OpenAI
 
+    from tea_agent.api_headers import default_headers_for
+
     key = (model_cfg.api_key, model_cfg.api_url)
     client = _client_cache.get(key)
     if client is None:
-        client = OpenAI(api_key=model_cfg.api_key, base_url=model_cfg.api_url)
+        # OpenCode Go/Zen 需要 x-opencode-session + 自有 UA，否则 400 MissingSessionID；
+        # config.yaml 的 api_headers 也可为自建网关补充附加头。
+        # 无头可注入时保持原始调用形态（不传 default_headers）。
+        _headers = default_headers_for(model_cfg.api_url)
+        _kwargs = {"api_key": model_cfg.api_key, "base_url": model_cfg.api_url}
+        if _headers:
+            _kwargs["default_headers"] = _headers
+        try:
+            client = OpenAI(**_kwargs)
+        except Exception as e:
+            # 环境代理变量畸形（NO_PROXY 含 [::1] 等）会让 SDK 内部建 httpx 客户端失败，
+            # 降级为忽略环境代理，避免视觉分析整体不可用。
+            logger.warning(
+                "toolkit_vision_analyze: OpenAI 客户端初始化失败（疑似代理环境变量畸形），回退为忽略环境代理: %s",
+                e,
+            )
+            import httpx
+
+            _kwargs["http_client"] = httpx.Client(timeout=httpx.Timeout(120.0), proxy=None, trust_env=False)
+            client = OpenAI(**_kwargs)
         _client_cache[key] = client
     return client
 

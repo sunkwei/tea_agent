@@ -35,7 +35,7 @@ def extract_reasoning(obj: Any) -> str:
 
 
 def relaxed_json_loads(raw: str):
-    """容错 JSON 解析：处理 LLM 常见无效输出（单引号/尾逗号/Python布尔/反斜杠/注释/控制字符/截断）。"""
+    """容错 JSON 解析：处理 LLM 常见无效输出（单引号/尾逗号/Python布尔/反斜杠/注释/控制字符/截断/裸值）。"""
     import json
     import re
 
@@ -49,6 +49,28 @@ def relaxed_json_loads(raw: str):
     except json.JSONDecodeError as e:
         logger.debug("basesession.py.relaxed_json_loads: json.JSONDecodeError 已忽略: %s", e)
 
+    # Step 2: 字符串内的裸控制字符（真实换行/制表符）先转义为 \\n \\t 保留内容，
+    # 其余不可打印字符再剔除。顺序不可颠倒：先删会把换行直接吃掉，
+    # 导致多行脚本被静默改写成单行。
+    # 延迟导入避免循环依赖（同 Step 9）。
+    _escape_raw_control_chars = None
+    _quote_bare_values = None
+    _escape_unescaped_inner_quotes = None
+    try:
+        from tea_agent.session.json_sanitizer import (
+            escape_raw_control_chars,
+            escape_unescaped_inner_quotes,
+            quote_bare_values,
+        )
+
+        _escape_raw_control_chars = escape_raw_control_chars
+        _quote_bare_values = quote_bare_values
+        _escape_unescaped_inner_quotes = escape_unescaped_inner_quotes
+    except Exception as e:
+        logger.debug("basesession.py.relaxed_json_loads: 修复工具导入失败: %s", e)
+
+    if _escape_raw_control_chars is not None:
+        s = _escape_raw_control_chars(s)
     s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", s)
     s = re.sub(r"\bTrue\b", "true", s)
     s = re.sub(r"\bFalse\b", "false", s)
@@ -111,6 +133,32 @@ def relaxed_json_loads(raw: str):
         return json.loads(s)
     except json.JSONDecodeError as e:
         logger.debug("basesession.py.relaxed_json_loads: json.JSONDecodeError 已忽略: %s", e)
+
+    # Step 7.5: 为未引号包裹的**值**补引号（小模型常见：{"app": bash, "args": [...]}
+    # 值两侧引号一起丢失）。必须在 Step 7 之后执行，否则裸 key 会被误判为值；
+    # Step 9 的截断补全依赖此步，否则带裸值的截断 JSON 永远无法修复。
+    if _quote_bare_values is not None:
+        quoted = _quote_bare_values(s)
+        if quoted != s:
+            s = quoted
+            try:
+                return json.loads(s)
+            except json.JSONDecodeError as e:
+                logger.debug("basesession.py.relaxed_json_loads: json.JSONDecodeError 已忽略: %s", e)
+
+    # Step 7.7: 内容里有未转义的裸引号（shell 脚本常写 echo "=== x ==="）。
+    # 这类文本的字符串状态从裸引号处就已经错了，必须先转义再重新尝试；
+    # 转义后再补一次裸值引号（字符串边界变化可能暴露新的裸值）。
+    if _escape_unescaped_inner_quotes is not None:
+        unquoted = _escape_unescaped_inner_quotes(s)
+        if unquoted != s:
+            s = unquoted
+            if _quote_bare_values is not None:
+                s = _quote_bare_values(s)
+            try:
+                return json.loads(s)
+            except json.JSONDecodeError as e:
+                logger.debug("basesession.py.relaxed_json_loads: json.JSONDecodeError 已忽略: %s", e)
 
     # Step 8: 尝试从文本中提取 JSON 对象
     brace_match = re.search(r"\{.*\}|\[.*\]", s, re.DOTALL)

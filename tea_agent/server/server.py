@@ -684,7 +684,7 @@ def create_app(api_key=None, config_path=None):
                     await self.app(scope, receive, send)
                     return
                 path = scope.get("path", "")
-                if path in _SKIP_PATHS or path.startswith("/static"):
+                if path in skip_paths or path.startswith("/static"):
                     await self.app(scope, receive, send)
                     return
                 headers = dict(scope.get("headers", []))

@@ -11,42 +11,36 @@
 
 import logging
 import logging.handlers
-import os
 from pathlib import Path
 
 _logging_initialized = False
 _logging_debug = False
+_file_warning_logged = False  # 文件日志降级告警只提示一次
 
-def setup_logging(debug: bool = False, force: bool = False) -> None:
-    """初始化双通道日志系统（幂等，多次调用安全）。
+def _ensure_file_handler(root_logger: logging.Logger) -> None:
+    """(重)尝试挂载文件 handler；HOME 不可写时降级为"仅终端"，绝不抛异常。
 
-    在 AgentCore.__init__ 或 server 启动时尽早调用。
+    为什么每次 setup_logging 都重试而不是记住失败：HOME 不可写（只读 rootfs /
+    权限受限 / 磁盘暂时满）在嵌入式设备上是**运行时状态**，之后可能恢复可写；
+    一旦把失败也标记为"已初始化"，恢复后再也不会补上文件日志。
 
-    Args:
-        debug: True 时终端输出 DEBUG 级别（否则 INFO），文件始终 WARNING
-        force: 强制重新初始化（允许覆盖已有 handler）
+    去重规则是"已有任何文件 handler 就不再挂载"（而非比较当前 HOME 路径）：
+    后者会在 HOME 变化时叠加 handler，导致同一条日志写进多个文件并持续泄漏
+    handler。
     """
-    global _logging_initialized, _logging_debug
-    if _logging_initialized and not force:
-        if debug != _logging_debug:
-            _set_root_level(debug)
+    global _file_warning_logged
+    existing = [
+        h for h in root_logger.handlers if isinstance(h, logging.handlers.TimedRotatingFileHandler)
+    ]
+    if existing:
+        for h in existing:
+            h.setLevel(logging.WARNING)
         return
 
-    _logging_debug = debug
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)  # root 全开，由 handler 各自过滤
-
     log_dir = Path.home() / ".tea_agent"
-    log_dir.mkdir(parents=True, exist_ok=True)
     log_file = str(log_dir / "tea_agent.log")
-
-    # ── 文件 handler（WARNING+，写入文件） ──
-    _file_handler_exists = any(
-        isinstance(h, logging.handlers.TimedRotatingFileHandler)
-        and h.baseFilename == os.path.abspath(log_file)
-        for h in root_logger.handlers
-    )
-    if not _file_handler_exists:
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
         file_handler = logging.handlers.TimedRotatingFileHandler(
             filename=log_file,
             when='D',
@@ -60,10 +54,43 @@ def setup_logging(debug: bool = False, force: bool = False) -> None:
             datefmt='%Y-%m-%d %H:%M:%S',
         ))
         root_logger.addHandler(file_handler)
-    else:
-        for h in root_logger.handlers:
-            if isinstance(h, logging.handlers.TimedRotatingFileHandler):
-                h.setLevel(logging.WARNING)
+        _file_warning_logged = False  # 恢复成功后允许再次告警
+    except Exception as e:
+        # 只告警一次，避免每次 Agent 创建都刷屏
+        if not _file_warning_logged:
+            logging.getLogger("logging_setup").warning(
+                "文件日志不可用，已降级为仅终端输出 | path=%s | error=%s: %s",
+                log_file, type(e).__name__, e,
+            )
+            _file_warning_logged = True
+
+
+def setup_logging(debug: bool = False, force: bool = False) -> None:
+    """初始化双通道日志系统（幂等，多次调用安全）。
+
+    在 AgentCore.__init__ 或 server 启动时尽早调用。文件日志不可写时
+    自动降级为"仅终端"（不会抛出，不阻塞 Agent 启动），并在后续调用中重试。
+
+    Args:
+        debug: True 时终端输出 DEBUG 级别（否则 INFO），文件始终 WARNING
+        force: 强制重新初始化（允许覆盖已有 handler）
+    """
+    global _logging_initialized, _logging_debug
+    if _logging_initialized and not force:
+        if debug != _logging_debug:
+            _set_root_level(debug)
+        # 文件 handler 可能因 HOME 暂不可写而缺失，这里补挂
+        _ensure_file_handler(logging.getLogger())
+        return
+
+    _logging_debug = debug
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)  # root 全开，由 handler 各自过滤
+
+    # ── 文件 handler（WARNING+，写入文件） ──
+    # HOME 不可写（只读 rootfs / 权限受限 / 磁盘满）在嵌入式设备上很常见。
+    # 日志失败**绝不能**阻止 Agent 启动，因此降级为"仅终端"而不是抛异常。
+    _ensure_file_handler(root_logger)
 
     # ── 控制台 handler（INFO+ 或 DEBUG+，输出到终端） ──
     _console_handler_exists = any(

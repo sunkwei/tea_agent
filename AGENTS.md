@@ -255,7 +255,7 @@ toolkit_release_version(
 1. **工具沙箱**：`toolkit_exec` 执行系统命令，权限由 `permission.py` 控制
 2. **SQL 注入**：所有数据库操作使用参数化查询，禁止 f-string 拼接
 3. **路径遍历**：文件操作工具校验路径，禁止 `../` 逃逸
-4. **提权操作**：`toolkit_sudo_gui` 弹出 GUI 密码框，不缓存密码
+4. **提权操作**：Agent **不允许**获取管理员/root 权限——`sudo`/`su`/`pkexec`/`runas` 等一律硬拒绝（`toolkit_exec` 与 `toolkit_scheduler` 两条执行路径都拦截）；需要提权的操作必须提示用户**手动执行**
 5. **Sub-agent 隔离**：每个子 Agent 拥有独立 LiteSession，上下文隔离
 
 ## FAQ

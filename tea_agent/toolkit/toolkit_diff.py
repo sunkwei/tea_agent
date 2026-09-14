@@ -470,7 +470,7 @@ TOOL_CATEGORIES = {
     ],
     "系统操作": [
         "toolkit_exec", "toolkit_config",
-        "toolkit_sudo_gui", "toolkit_input", "toolkit_clipboard",
+        "toolkit_input", "toolkit_clipboard",
     ],
     "包管理": [
         "toolkit_pkg", "toolkit_build",

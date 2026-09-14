@@ -35,6 +35,33 @@ def _split_command(cmd: str) -> list:
     return parts
 
 
+def _elevation_refusal_for_command(command: str) -> dict | None:
+    """命令字符串是否需要提权（是则返回拒绝结果）。
+
+    定时任务绕过了 toolkit_exec，必须复用同一套提权检测，否则 Agent 可以通过
+    "建一个 sudo 定时任务"变相获取管理员权限。
+    """
+    from tea_agent.toolkit.toolkit_exec import elevation_refusal_for_command
+
+    return elevation_refusal_for_command(command)
+
+
+def _task_elevation_guard(argv: list) -> tuple[int, str] | None:
+    """执行前对定时任务 argv 做提权检查。
+
+    Returns:
+        ``(126, 拒绝提示)`` 或 None（可执行）
+    """
+    if not argv:
+        return None
+    from tea_agent.toolkit.toolkit_exec import _elevation_refusal
+
+    refusal = _elevation_refusal(argv[0], list(argv[1:]))
+    if not refusal:
+        return None
+    return 126, refusal["error"]
+
+
 def toolkit_scheduler(action: str, **kwargs):
     """定时任务管理工具。
 
@@ -324,6 +351,13 @@ def toolkit_scheduler(action: str, **kwargs):
             if not argv:
                 return -4, "命令解析为空"
 
+        # ── 提权拒绝：定时任务同样是执行路径，Agent 不得借此获取管理员权限 ──
+        # 这里也覆盖历史遗留（DB 里已存在的 sudo 任务）——提权一律由用户手动执行。
+        _guarded = _task_elevation_guard(argv)
+        if _guarded:
+            logger.warning(f"定时任务提权被拒绝: {argv}")
+            return _guarded
+
         logger.info(f"执行定时任务: {task['name']} -> {argv}")
         try:
             result = subprocess.run(
@@ -419,6 +453,9 @@ def toolkit_scheduler(action: str, **kwargs):
         schedule = kwargs.get("schedule", "")
         if not name or not command or not schedule:
             return {"error": "需要 name, command, schedule 参数"}
+        _refusal = _elevation_refusal_for_command(command)
+        if _refusal:
+            return {"error": _refusal["error"]}
         next_run = parse_schedule(schedule)
         conn = _get_conn()
         tid = str(__import__('uuid').uuid4())
@@ -445,6 +482,11 @@ def toolkit_scheduler(action: str, **kwargs):
         for field in ["name", "command", "schedule"]:
             if field in kwargs:
                 updates[field] = kwargs[field]
+        if "command" in updates:
+            _refusal = _elevation_refusal_for_command(updates["command"])
+            if _refusal:
+                conn.close()
+                return {"error": _refusal["error"]}
         if "enabled" in kwargs:
             updates["enabled"] = 1 if kwargs["enabled"] else 0
         if "schedule" in updates:

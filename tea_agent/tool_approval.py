@@ -56,7 +56,8 @@ _TOKEN_ENV = "TEA_APPROVAL_TOKEN"
 _VALID_MODES = ("off", "advisory", "enforce")
 
 # 高风险工具集合（含动作级细分见 classify_risk）
-_CRITICAL_TOOLS = {"toolkit_sudo_gui", "toolkit_self_evolve"}
+# 注：toolkit_sudo_gui 已删除——Agent 不允许获取管理员权限，提权一律由用户手动执行
+_CRITICAL_TOOLS = {"toolkit_self_evolve"}
 _HIGH_TOOLS = {
     "toolkit_save", "toolkit_rollback", "toolkit_prompt_evolve", "toolkit_reload",
     "toolkit_config", "toolkit_send_email", "toolkit_scheduler",

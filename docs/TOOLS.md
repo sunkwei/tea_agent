@@ -1,6 +1,6 @@
 # 工具清单
 
-注册工具总数: 57（LLM 可见: 55）
+注册工具总数: 56（LLM 可见: 54）
 
 | 工具 | 说明 |
 |------|------|
@@ -14,7 +14,7 @@
 | \toolkit_diff\ | Diff-first 代码编辑引擎。generate/preview/apply/undo/verify。 |
 | \toolkit_edit\ | 高级代码编辑工具。推荐 replace_text（文本匹配）免疫行号漂移。 |
 | \toolkit_eval_loop\ | 确定性 Rubric 评分闭环（借鉴 PenguinHarness self-evolve）。score=单文本按规则打分; evaluate=多轮结果取平均(对抗随机性); co... |
-| \toolkit_exec\ | 执行系统命令。action='single' 执行单条；action='batch' 并行批量执行多条。执行 sudo 命令时自动弹出 GUI 密码框。智能超时(v2.0)：后台 ... |
+| \toolkit_exec\ | 执行系统命令。action='single' 执行单条；action='batch' 并行批量执行多条。不接受提权命令（sudo/su/pkexec/runas 等一律拒绝）——需要管理员权限的操作必须提示用户手动执行。智能超时(v2.0)：后台 ... |
 | \toolkit_experience_solidify\ | 经验固化 + 进化经验库（合并原 toolkit_evolution_exp）。solidify=成功→技能库, lesson=失败→教训库, auto=按成功与否自动固化/记录,... |
 | \toolkit_explr\ | 项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=generate_docs 生成结构化项目文档到docs/；actio... |
 | \toolkit_export_last_pdf\ | 导出指定主题的对话为 PDF。支持选择完整主题/最新对话，仅含 user+AI 最终消息（无思考过程）。 |
@@ -56,7 +56,6 @@
 | \toolkit_set_topic_title\ | 手动设置当前主题的标题。设置后标题显示为「※自定义标题」，该主题将不再自动生成摘要。 |
 | \toolkit_subagent\ | 多Agent生成系统 v2.2。支持同步/异步生成子Agent、并发执行、状态查询、结果收集、上下文注入、嵌套深度限制、Agent间通信。 |
 | \toolkit_subagent_msg\ | 子Agent消息通信。支持Agent间发送/接收/检查消息。 |
-| \toolkit_sudo_gui\ | 跨平台提权执行命令。Linux弹出GUI密码框（显示完整命令）+sudo，Windows弹出UAC对话框。自动检测OS。sudo 命令可直接用 toolkit_exec。 |
 | \toolkit_task_resume\ | 检查当前主题未完成的 TODO 和 Plan，扫描 docs/ 产物并进行交叉对照（孤儿文档/未落实步骤/待落盘步骤），返回恢复提示。对话开始时自动调用。 |
 | \toolkit_todo\ | TODO checklist: create before modifying code, check off step by step. Persisted to DB per-... |
 | \toolkit_topic_prompt\ | 管理当前主题的自定义系统提示词（system prompt）。可获取/设置/清除/查看状态。设置后该主题的后续对话将使用自定义提示词，清除后恢复使用全局进化版本。 |

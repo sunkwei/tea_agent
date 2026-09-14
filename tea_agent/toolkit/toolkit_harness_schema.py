@@ -153,7 +153,8 @@ def _get_capabilities() -> dict:
             "supported": True,
             "detail": "五层安全体系",
             "layers": ["git snapshot", "file backup", "compile verify", "LSP check", "test rollback"],
-            "sudo_elevation": True,
+            "privilege_elevation": False,
+            "privilege_policy": "denied — user must run privileged commands manually",
         },
         "custom_commands": {
             "supported": True,
@@ -269,7 +270,7 @@ def _get_security() -> dict:
             {"name": "Layer 2.5", "detail": "LSP check — 影响分析 + lint + 签名对比"},
             {"name": "Layer 3", "detail": "Test rollback — 测试失败自动按快照回滚目标文件"},
         ],
-        "sudo_elevation": "Cross-platform GUI password prompt",
+        "privilege_elevation": "Denied — privileged commands must be run by the user manually",
         "tool_permissions": "Multi-level accessory control",
     }
 

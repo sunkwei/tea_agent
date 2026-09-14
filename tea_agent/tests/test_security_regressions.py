@@ -232,3 +232,84 @@ def test_no_silent_exception_sinks_in_security_modules():
 
     n = _bench_metrics(str(ROOT))["except_pass_security"]
     assert n == 0, f"安全模块存在 {n} 处静默吞异常（应至少记 warning）"
+
+
+# ── 提权能力移除（Agent 不得获取管理员权限）──────────────────────
+
+def test_sudo_gui_tool_removed():
+    """toolkit_sudo_gui 必须彻底移除：提权一律交给用户手动执行。"""
+    import importlib.util
+
+    assert not (ROOT / "tea_agent" / "toolkit" / "toolkit_sudo_gui.py").exists(), "toolkit_sudo_gui.py 仍存在"
+    assert importlib.util.find_spec("tea_agent.toolkit.toolkit_sudo_gui") is None, "toolkit_sudo_gui 仍可被导入"
+
+
+def test_no_gui_elevation_helper_in_exec():
+    """toolkit_exec 不得保留任何 GUI/pkexec 提权实现（只允许在拒绝清单里出现这些名字）。"""
+    from tea_agent.toolkit import toolkit_exec as te
+
+    assert not hasattr(te, "_sudo_with_gui"), "toolkit_exec 仍保留 _sudo_with_gui 提权实现"
+    src = (ROOT / "tea_agent" / "toolkit" / "toolkit_exec.py").read_text(encoding="utf-8")
+    # GUI 密码框启动器：应彻底消失
+    for launcher in ("kdialog", "zenity"):
+        assert launcher not in src, f"toolkit_exec 仍引用 GUI 提权启动器 {launcher}"
+    # 提权程序的**调用形态**：argv 字面量 / which() 探测都不允许
+    for invocation in (
+        '["pkexec"',
+        "['pkexec'",
+        '["sudo", "-S"',
+        "['sudo', '-S'",
+        'shutil.which("pkexec")',
+        "shutil.which('pkexec')",
+    ):
+        assert invocation not in src, f"toolkit_exec 仍在调用提权程序: {invocation}"
+
+
+def test_approval_critical_tools_no_sudo_gui():
+    """审批分级里不得再出现已删除的提权工具。"""
+    from tea_agent.tool_approval import _CRITICAL_TOOLS
+
+    assert "toolkit_sudo_gui" not in _CRITICAL_TOOLS, _CRITICAL_TOOLS
+    assert "toolkit_self_evolve" in _CRITICAL_TOOLS, "自身进化仍应保持 critical"
+
+
+def test_harness_schema_declares_no_privilege_elevation():
+    """对外能力声明不得再声称支持提权。"""
+    from tea_agent.toolkit.toolkit_harness_schema import _get_capabilities, _get_security
+
+    assert _get_capabilities()["permission_control"].get("privilege_elevation") is False
+    assert "sudo_elevation" not in _get_security()
+    assert not any("sudo_elevation" in str(v) for v in _get_security().values())
+
+
+def test_scheduler_cannot_smuggle_elevation():
+    """定时任务是另一条执行路径，必须同样拒绝提权。
+
+    否则 Agent 可以"建一个 sudo 定时任务"变相拿到管理员权限；
+    执行期拦截同时覆盖数据库里历史遗留的提权任务。
+    """
+    from tea_agent.toolkit.toolkit_scheduler import (
+        _elevation_refusal_for_command,
+        _task_elevation_guard,
+    )
+
+    # 执行期（argv）
+    guarded = _task_elevation_guard(["sudo", "ls"])
+    assert guarded and guarded[0] == 126, guarded
+    assert "手动执行" in guarded[1]
+    assert _task_elevation_guard(["echo", "hi"]) is None
+    assert _task_elevation_guard([]) is None
+
+    # 创建/更新期（命令字符串）
+    assert _elevation_refusal_for_command("sudo apt install nginx") is not None
+    assert _elevation_refusal_for_command("echo x; sudo rm -rf /") is not None
+    assert _elevation_refusal_for_command("python3 /opt/backup.py") is None
+
+
+def test_scheduler_execute_path_wires_the_guard():
+    """结构性回归：_execute_task 必须在 subprocess 之前调用提权守卫。"""
+    src = (ROOT / "tea_agent" / "toolkit" / "toolkit_scheduler.py").read_text(encoding="utf-8")
+    assert "_task_elevation_guard(argv)" in src, "定时任务执行路径未接提权守卫"
+    guard_at = src.index("_task_elevation_guard(argv)")
+    run_at = src.index("result = subprocess.run(")
+    assert guard_at < run_at, "提权守卫必须位于 subprocess.run 之前"

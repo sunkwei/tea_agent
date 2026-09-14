@@ -215,7 +215,7 @@ def generate_os_info_text(toolkit_root_dir: str = "",
             "  或在 Python 中直接用 open() 读取（推荐）",
             "",
             "【路径环境】可用环境变量：$HOME, $PWD, $SHELL, $PATH",
-            "【权限】部分操作需 sudo，将自动弹出 GUI 密码框",
+            "【权限】需要 sudo 的操作不会自动执行：请提示用户手动运行（Agent 无提权能力）",
         ])
     elif is_macos:
         lines.extend([

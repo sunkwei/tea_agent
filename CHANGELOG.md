@@ -89,6 +89,76 @@
 - sync: 修正已安装 site-packages 中 `session.json_sanitizer` 的
   `sanitize_api_messages: 修复截断JSON` WARNING 刷屏（工作区已降为 debug，重装 editable 生效）
 
+### Bug Fixes
+- fix(toolkit): `toolkit_exec` 入参形态容错（消除设备端高频 `app 需要可执行程序路径字符串，收到 bool`
+  与 `unexpected keyword argument 'command'/'arguments'`）
+  - 根因：模型给的是**等价参数形态**而非错误命令。旧归一化只处理 list/tuple，bool/None 直接
+    落到出口校验；且报错文本不含正确用法，模型无从自纠，只能反复换写法试错
+  - 新增 `_normalize_exec_inputs` 收敛层：等价参数名（command/cmd/executable→app、argv→args、
+    mode→action…）、整行命令自动拆分（`app='ls -la'`）、包装层展开（`arguments={'app':...}`）、
+    形态收敛（`["bash"]`→`bash`）。**宽松入口、严格出口**：语义歧义一律拒绝执行
+    （`app` 与 `command` 值冲突报语义冲突，绝不猜——猜错即执行错命令）
+  - 提权/自杀检测移到归一化**之后**：别名与包装层写法（`command='sudo ls'`）同样无法绕过护栏
+- fix(toolkit): 上述归一化层复审修正 —— 修掉为容错畸形输入而**破坏合法输入**的 3 处回归
+  - 🔴 含空格的合法可执行路径被按空白错拆：`C:/Program Files/7-Zip/7z.exe` 拆成
+    `C:/Program` + 余部，端到端返回 `ok=True` 而 stdout 为空（靠 CreateProcess 前缀匹配
+    侥幸成功）。**静默执行错目标，比崩溃更危险** → 仅当「整串是存在的文件」时保留原样，
+    确认是「程序 + 参数」形态才允许拆分
+  - `timeout=0/None/''` 原回落 120，被无脑改成 30 → 长命令（编译/下载）会被空闲监控误杀
+    → 恢复旧语义（垃圾值才回落 30，两者分列）
+  - `app=[[1,2]]` 嵌套容器被 `json.dumps` 成 `"[1, 2]"` 当程序名**实际执行** → 结构性元素
+    改为置空保留占位（不可用作程序名）
+  - `app=["echo", None, "-n"]` 旧实现过滤 None 造成参数整体左移，等价于执行另一条命令
+    → 改为保留位置；另为包装层展开加深度上限防 RecursionError
+- feat(toolkit): `Toolkit.call_tool` 入参绑定预检 —— 把「意外关键字 TypeError」降级为可自纠错误
+  - 那类报错不是 `toolkit_exec` 独有，而是**全部 51 个工具的共性风险**（`call_tool(func, **args)`
+    透传模型给的任意键）。逐个工具加 `**kwargs` 是打 51 次补丁，在唯一汇聚点修一次才是根因
+  - 报错文本点名出错键 / 缺失必填参数，并列出该工具真实参数名；取不到签名时放行（宁放勿误杀）
+  - 新增签名缓存并在 `reload()`/`save()` 失效：否则工具改签名后仍按旧签名校验，
+    会把合法调用误判为非法（最坏的一种失败）
+- fix(sdk): 修复 SDK **自引入起完全不可用**的两处必崩缺陷
+  - `Request(method, url, headers=..., data=...)` 位置写反（真实签名
+    `Request(url, data=None, headers={}, method=None)`）→ 每个方法都
+    `TypeError: got multiple values for argument 'data'`
+  - `chat()` 里 `{messages: ...}` 把键名写成裸变量 → `NameError`；叠加后**没有一个方法能跑通**
+  - 附带修正：`if data` 把 `{}` 当无 body（`run_tool(..., {})` 静默丢 body）、
+    `json.loads` 异常穿透让 4xx 被伪装成 500、`stream=True` 从未真正发出
+    （新增 `assemble_sse()` 拼装分帧）
+  - 新增 `test_sdk_client.py` 27 项：**用真实 HTTP 服务打全链路而非 mock**
+    （mock 恰恰会放过参数错位；此前 1663 个测试无一触达该文件）
+- fix(audit): 审计哈希链在多进程下**必然断裂** + 目录探测并发误判导致静默丢记录
+  - `_chain_head` 的内存缓存永不过期：本进程写过一次后，即使其它进程又追加记录，仍拿旧哈希
+    当链头 → 新记录 `prev` 跳过中间记录，append-only 防篡改链被判「记录被删除/插入/重排」。
+    设备端跑 `tea_agent_api`（server + 子 Agent + 测试并发写同一日文件）正是必现场景
+  - `_chain_head` 增加过期判定（文件尺寸变化）+「末行必须是合法 JSON 且含 h」校验；
+    `record()` 的「读末行 → 追加」由 `<文件>.lock` 跨进程互斥（不嵌套进 `message_queue_lock`）
+  - 目录探测所有进程共用同一个 `.write_probe`：并发下互相删对方文件，`FileNotFoundError`
+    被 `except OSError` 当成「该目录不可写」→ 该进程**静默改写到别的候选目录**（实测 6×15
+    只剩 75 条，子进程退出码全 0）。探测文件改为按 pid 唯一，且「清理失败」不再判为不可写
+  - `safety-audit-chain` 基准改为校验**机制**而非生产文件历史状态（旧断言等价于断言
+    「这台机器这份共享可变产物的整段历史完好」—— 并发写入即可使其失败、历史损坏则永久红），
+    并新增反向断言「改一个字符必须被检出」；历史损坏改为显式标记（不删数据、不静默放行）
+- fix(server): `turn_snapshot` 节流不再丢事件 —— 在途回合恢复此前形同虚设
+  - `record_event` 的节流分支在读写**之前**就 `return`，而状态只活在 sqlite 里 →
+    0.5s 窗口内的 token 被整条丢弃（不是攒着稍后写）。实测 360 条只读回 1 条（**丢 99.7%**）；
+    生产路径只在 done/error 才 `force=True`，故每个回合只有终止事件落盘 —— 模块文档写着
+    节流是为了「避免每个 token 都落一次盘」、`partial_text` 是为了「重启后不让用户丢内容」，
+    实现却把内容丢了
+  - 改为「内存累积 + 节流落盘」：事件无 I/O 入 pending，到点/force/回合结束时才落盘；
+    `_flush_locked` 与 DB 现状按 index **归并去重**（多进程写同一 topic 时覆盖式写入会让
+    后落盘一方抹掉先落盘一方）；`finish_turn` 先 flush（回合尾部 token 正是用户最关心的内容）；
+    `begin_turn`/`ensure_turn`/`clear` 同步重置进程内缓存，否则旧 pending 跨回合成串
+  - `test_throttle_skips_rapid_writes` 原断言 `events == [0, 2]`，即**把「事件被永久丢弃」
+    固化为契约**（这正是该缺陷未被发现的原因）→ 重写为 `test_throttle_saves_io_but_keeps_every_event`
+    并新增 `test_tail_tokens_survive_throttle`
+- fix(server): 队列落盘加版本守卫 —— 已撤回插话被旧快照复活到磁盘
+  - `_persist_queues` 是「锁内取快照、锁外写文件」，两个并发落盘的**完成顺序可能与快照顺序
+    相反**：A 取到含该消息的快照，B 删除并落盘完成，A 才写 → 已删除的消息写回磁盘。
+    内存干净、只有磁盘错，重启后用户早已撤回的消息死灰复燃
+  - 队列每次变更在持锁下递增 `_queue_version`；落盘带上快照版本，不比已落盘更新则跳过写入
+  - 新增 `test_state_queue_persist.py` 6 项，并已做**元验证**：把守卫还原成旧实现后同一场景
+    确实复活消息（`{}` → `{'t1': [...]}`），证明该回归不是空跑
+
 ## [0.15.4] - 2026-08-28
 ### Features
 - fix(cache): 动态上下文改为**追加到请求消息末尾**，对齐 DSH append-only 架构

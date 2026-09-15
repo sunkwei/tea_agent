@@ -735,3 +735,156 @@ class TestReportedEmbeddedModelFailures:
         assert json.loads(calls[0]["function"]["arguments"]) == {
             "app": "bash", "args": ["-lc", "df -h"]
         }
+
+
+# ============================================================
+# fix_invalid_escapes — JSON 非法转义序列修复
+# ============================================================
+# 实测依据：~/.tea_agent/tea_agent.log 中 toolkit_exec 长参数被丢弃的首要原因是
+# json.loads 报 Invalid \escape —— 模型把 Python/路径字面量里的单引号按母语习惯
+# 转义为 \'，而 JSON 仅允许 9 种转义前导字符。
+# 注：用 chr() 构造反斜杠，使本文件源码不含裸转义序列，便于审阅与维护。
+
+_BS = chr(92)   # 单个反斜杠
+_SQ = chr(39)   # 单引号
+_DQ = chr(34)   # 双引号
+
+
+class TestFixInvalidEscapes:
+    """非法转义序列（\' 等）的修复。"""
+
+    def test_invalid_quote_escape_repaired(self):
+        """\' 属非法转义，去掉多余反斜杠后应可解析。"""
+        from tea_agent.session.json_sanitizer import fix_invalid_escapes
+
+        raw = '{"code": "os.chdir(r' + _BS + _SQ + 'C:' + _BS + _BS + 'Users' + _BS + _SQ + ')"}'
+        obj = json.loads(fix_invalid_escapes(raw))
+        assert obj == {"code": "os.chdir(r'C:" + _BS + "Users')"}
+
+    def test_raw_backslash_before_letter_repaired(self):
+        """反斜杠 + 普通字母（非 JSON 合法转义）应补成字面反斜杠。"""
+        from tea_agent.session.json_sanitizer import fix_invalid_escapes
+
+        raw = '{"p": "C:' + _BS + 'Users"}'
+        obj = json.loads(fix_invalid_escapes(raw))
+        assert obj == {"p": "C:" + _BS + "Users"}
+
+    def test_regex_backslash_d_repaired(self):
+        from tea_agent.session.json_sanitizer import fix_invalid_escapes
+
+        raw = '{"re": "' + _BS + 'd+"}'
+        obj = json.loads(fix_invalid_escapes(raw))
+        assert obj == {"re": _BS + "d+"}
+
+    def test_valid_escapes_byte_identical(self):
+        """9 种合法转义必须逐字节保持不变（前缀缓存友好）。"""
+        from tea_agent.session.json_sanitizer import fix_invalid_escapes
+
+        samples = [
+            '{"a": "x' + _BS + 'ny"}',            # \n
+            '{"a": "x' + _BS + 'ty"}',            # \t
+            '{"a": "x' + _BS + 'ry"}',            # \r
+            '{"a": "x' + _BS + _BS + 'y"}',        # 字面反斜杠
+            '{"a": "x' + _BS + _DQ + 'y"}',        # \"
+            '{"a": "x' + _BS + 'u4e2dy"}',         # \uXXXX
+            '{"a": "x' + _BS + '/y"}',             # \/
+            '{"a": "x' + _BS + 'by"}',             # \b
+            '{"a": "x' + _BS + 'fy"}',             # \f
+        ]
+        for s in samples:
+            assert fix_invalid_escapes(s) == s, s
+
+    def test_no_backslash_fast_path(self):
+        from tea_agent.session.json_sanitizer import fix_invalid_escapes
+
+        s = '{"a": "b"}'
+        assert fix_invalid_escapes(s) == s
+
+    def test_empty_and_plain_inputs(self):
+        from tea_agent.session.json_sanitizer import fix_invalid_escapes
+
+        assert fix_invalid_escapes("") == ""
+        assert fix_invalid_escapes("abc") == "abc"
+
+    def test_idempotent(self):
+        from tea_agent.session.json_sanitizer import fix_invalid_escapes
+
+        raw = '{"code": "a' + _BS + _SQ + 'b"}'
+        once = fix_invalid_escapes(raw)
+        assert fix_invalid_escapes(once) == once
+        assert json.loads(once)
+
+    def test_normalize_tool_args_repairs_invalid_escape(self):
+        """端到端：曾直接 DROP 的真实载荷，现在必须修复成功。"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
+        raw = (
+            '{"app": "python", "args": ["-c", "import subprocess,os' + _BS + 'n'
+            + 'os.chdir(r' + _BS + _SQ + 'C:' + _BS + _BS + 'Users' + _BS + _SQ + ')"' + ']}'
+        )
+        fixed = normalize_tool_args("toolkit_exec", raw)
+        assert fixed is not None, "不应再被丢弃"
+        obj = json.loads(fixed)
+        assert obj["app"] == "python"
+        assert "os.chdir" in obj["args"][1]
+
+    def test_normalize_keeps_full_command_not_truncated(self):
+        """关键安全属性：修复必须保留完整命令，禁止退化成「从尾部删除」静默截断。"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
+        tail = "MARKER_TAIL_SHOULD_SURVIVE"
+        raw = (
+            '{"app": "python", "args": ["-c", "import os' + _BS + 'n'
+            + 'os.chdir(r' + _BS + _SQ + 'C:' + _BS + _BS + 'x' + _BS + _SQ + ')"' + _BS + 'n'
+            + tail + '"]}'
+        )
+        fixed = normalize_tool_args("toolkit_exec", raw)
+        assert fixed is not None
+        assert tail in fixed, "命令尾部被静默截断"
+
+    def test_normalize_bare_value_with_invalid_escape(self):
+        """裸值 + 非法转义 组合缺陷（日志 08:56 形态）。"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
+        raw = (
+            '{"app": python, "args": ["-c", "p=r' + _BS + _SQ + 'C:' + _BS + _BS + 'Users' + _SQ
+            + _BS + 'n' + 'print(p)"]}'
+        )
+        fixed = normalize_tool_args("toolkit_exec", raw)
+        assert fixed is not None
+        obj = json.loads(fixed)
+        assert obj["app"] == "python"
+
+    def test_sanitize_api_messages_repairs_invalid_escape(self):
+        """历史脏参数（已入库）同样应被修复而非移除。"""
+        from tea_agent.session.json_sanitizer import sanitize_api_messages
+
+        raw = '{"cmd": "echo ' + _BS + _SQ + 'hi' + _BS + _SQ + '"}'
+        msgs = [{
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{
+                "id": "1",
+                "type": "function",
+                "function": {"name": "toolkit_exec", "arguments": raw},
+            }],
+        }]
+        out = sanitize_api_messages(msgs)
+        calls = out[0].get("tool_calls")
+        assert calls, "tool_call 不应被移除"
+        json.loads(calls[0]["function"]["arguments"])
+
+    def test_try_fix_truncated_handles_invalid_escape(self):
+        from tea_agent.session.json_sanitizer import try_fix_truncated_json
+
+        raw = '{"a": "x' + _BS + _SQ + 'y"}'
+        fixed = try_fix_truncated_json(raw)
+        assert fixed is not None
+        assert json.loads(fixed) == {"a": "x'y"}
+
+    def test_valid_json_still_byte_identical_end_to_end(self):
+        """合法 JSON 经 normalize 必须原样返回（不重排、不重编码）。"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
+        raw = '{"app": "python", "args": ["-c", "print(1)"]}'
+        assert normalize_tool_args("toolkit_exec", raw) == raw

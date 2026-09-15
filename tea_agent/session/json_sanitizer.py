@@ -17,6 +17,10 @@ logger = logging.getLogger("session.json_sanitizer")
 # 字符串字面量内部允许转义的控制字符（语义等价，故可安全补转义）
 _CTRL_ESCAPE_MAP = {"\n": "\\n", "\r": "\\r", "\t": "\\t", "\b": "\\b", "\f": "\\f"}
 
+# JSON 字符串内合法的转义前导字符（RFC 8259 §7）；
+# 其余形如 \' \d \U 的序列均属非法转义，json.loads 直接报 Invalid \escape
+_VALID_JSON_ESCAPES = frozenset('"\\/bfnrtu')
+
 # 裸标量值 token（不含空白/引号等结构字符；允许前导 '-' 以覆盖 "-lc" 这类命令行选项）
 _BARE_VALUE_RE = re.compile(r"-?[A-Za-z_][A-Za-z0-9_.\-/]*")
 
@@ -133,6 +137,74 @@ def escape_raw_control_chars(s: str) -> str:
                 continue
         out.append(ch)
     return "".join(out)
+
+
+def fix_invalid_escapes(s: str) -> str:
+    r'''修复 JSON 字符串内部的**非法转义序列**（典型为 \'）。
+
+    LLM 把 Python / shell 字面量写进 JSON 时，常按母语习惯转义单引号，
+    但 JSON 只允许 \' \" \/ \b \f \n \r \t \u 这 9 种转义前导字符，
+    \' 属非法转义，json.loads 直接报 Invalid \escape，
+    导致整个 tool_call 参数被判为不可修复而丢弃。实测这是 toolkit_exec
+    长参数（内含多行 Python 代码）被丢弃的首要原因。
+
+    修复策略（仅在字符串字面量内部生效）：
+
+    1. \' → '：单引号在 JSON 中本无需转义，去掉多余反斜杠即为原意；
+    2. 其他非法序列 \X → \\X：按“字面反斜杠 + X”解读，
+       可正确还原 Windows 路径与正则表达式等常见写法；
+    3. 合法转义序列原样透传，不做任何改动。
+
+    对合法 JSON 是恒等变换（逐字节不变），故可安全前置到修复链。
+
+    Args:
+        s: 原始 JSON 文本
+
+    Returns:
+        非法转义已修复的文本；无需修改时原样返回
+    '''
+    if not s or "\\" not in s:
+        return s
+
+    out: list[str] = []
+    in_str = False
+    i = 0
+    n = len(s)
+    changed = False
+    while i < n:
+        ch = s[i]
+        if not in_str:
+            if ch == '"':
+                in_str = True
+            out.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            in_str = False
+            out.append(ch)
+            i += 1
+            continue
+        if ch != "\\":
+            out.append(ch)
+            i += 1
+            continue
+        # 字符串内部遇到反斜杠：检查其后的前导字符
+        nxt = s[i + 1] if i + 1 < n else ""
+        if not nxt:
+            # 结尾孤立反斜杠，属截断场景，交给 try_fix_truncated_json 处理
+            out.append(ch)
+            i += 1
+            continue
+        if nxt in _VALID_JSON_ESCAPES:
+            out.append(s[i : i + 2])
+        elif nxt == "'":
+            out.append("'")
+            changed = True
+        else:
+            out.append("\\\\" + nxt)  # 补成字面反斜杠
+            changed = True
+        i += 2
+    return "".join(out) if changed else s
 
 
 def quote_bare_values(s: str) -> str:
@@ -315,8 +387,9 @@ def try_fix_truncated_json(s: str) -> str | None:
 
         return None
 
-    # 裸控制字符（真实换行）先转义，否则补全括号也无法通过 json.loads
-    s = escape_raw_control_chars(s.strip())
+    # 裸控制字符（真实换行）与非法转义序列（\' 等）先归一化：
+    # 两者都会让 json.loads 必然失败，进而退化成「从尾部删除」静默砍掉参数内容。
+    s = escape_raw_control_chars(fix_invalid_escapes(s.strip()))
 
     # 内容里有未转义的裸引号（echo "x"）时，原始文本的字符串状态从该引号起就是错的，
     # 直接修复会走进"从尾部删除"兜底、把命令内容静默砍掉。此时优先按转义后的解读修复。
@@ -373,7 +446,15 @@ def sanitize_api_messages(messages: list[dict]) -> list[dict]:
             except json.JSONDecodeError:
                 pass
 
-            fixed = try_fix_truncated_json(raw_args)
+            # 非法转义（\' 等）先归一化，否则 json.loads 必失败、
+            # 且 try_fix_truncated_json 会退化成「从尾部删除」静默砍掉参数内容。
+            normalized = escape_raw_control_chars(fix_invalid_escapes(raw_args))
+            if normalized != raw_args:
+                try:
+                    json.loads(normalized)
+                except json.JSONDecodeError:
+                    normalized = raw_args
+            fixed = try_fix_truncated_json(normalized)
             if fixed is None:
                 # 截断补全失败 → 再走容错解析（裸值/裸 key/单引号/真实换行），
                 # 成功后重新序列化为标准 JSON。与 normalize_tool_args 保持同一套修复能力，
@@ -441,6 +522,18 @@ def normalize_tool_args(func_name: str, raw: str) -> str | None:
     except json.JSONDecodeError:
         pass
 
+    # 非法转义序列（\' 等）与裸控制字符先归一化：
+    # 这是 toolkit_exec 长参数（内含多行 Python 代码 / Windows 路径）被丢弃的
+    # 首要原因 —— 二者都会让 json.loads 必然失败，且使 try_fix_truncated_json
+    # 退化为「从尾部删除」而静默截断参数内容。
+    normalized = escape_raw_control_chars(fix_invalid_escapes(s))
+    if normalized != s:
+        try:
+            json.loads(normalized)
+            return normalized
+        except json.JSONDecodeError:
+            s = normalized
+
     # 截断 JSON：先尝试补全闭合括号
     try:
         fixed = try_fix_truncated_json(s)
@@ -448,6 +541,27 @@ def normalize_tool_args(func_name: str, raw: str) -> str | None:
             return fixed
     except Exception:
         pass
+
+    # 兜底变换链：逐个变换后经严格 json.loads 校验，成功即返回（顺序即优先级）。
+    # 覆盖裸标量值（{"app": python}）、单引号、裸 key 等弱模型常见畸形写法。
+    for transform in (
+        fix_invalid_escapes,
+        escape_raw_control_chars,
+        quote_bare_values,
+        lambda x: quote_bare_values(escape_raw_control_chars(fix_invalid_escapes(x))),
+        lambda x: try_fix_truncated_json(quote_bare_values(escape_raw_control_chars(fix_invalid_escapes(x)))),
+    ):
+        try:
+            cand = transform(s)
+        except Exception:
+            continue
+        if not cand or cand == s:
+            continue
+        try:
+            json.loads(cand)
+            return cand
+        except json.JSONDecodeError:
+            continue
 
     # 容错解析（单引号 / 尾逗号 / Python 布尔等），成功后规范化为标准 JSON
     try:

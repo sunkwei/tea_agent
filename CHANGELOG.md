@@ -3,6 +3,21 @@
 
 ## [Unreleased]
 ### Features
+- fix(session): JSON 非法转义序列（\' 等）导致 tool_call 参数被整体丢弃
+  - 根因：模型把 Python/shell 字面量写进 JSON 时习惯性转义单引号（如
+    \'），但 JSON 仅允许 9 种转义前导字符（\" \\ \/ \b \f \n \r \t \u），
+    \' 属非法转义，json.loads 直接抛 Invalid \escape；
+    实测为 toolkit_exec 长参数（内含多行 Python 代码 / Windows 路径）被丢弃的首要原因
+  - 更隐蔽的次生危害：try_fix_truncated_json 依赖 json.loads 判定括号补全是否成功，
+    非法转义使其必然失败 → 退化为「从尾部删除」兜底 → 命令内容被静默截断而非明确报错
+  - 修复：新增 fix_invalid_escapes()——字符串内 \' → '（去多余反斜杠）；
+    其他非法序列 \X → \\X（按字面反斜杠解读，正确还原 Windows 路径）；
+    合法转义原样透传，对合法 JSON 逐字节恒等（前缀缓存友好）
+  - 接入三处：normalize_tool_args（源头入库前）、sanitize_api_messages（历史脏参数）、
+    try_fix_truncated_json（解析前归一化）；并为 normalize_tool_args 增加带 json.loads
+    校验的兜底变换链，覆盖裸标量值等弱模型畸形写法
+  - tests: 新增 TestFixInvalidEscapes 13 项（含「命令尾部不得被静默截断」安全断言），
+    全量 1641 项回归通过
 - fix: `get_max_context_tokens` 识别 SessionContext 直挂 `max_context_tokens`（修复 Web 界面窗口上限误显示 1M 兜底值）
   - 根因：该函数只识别 `AgentConfig.main_model`；而 Web 界面 `_compute_context_usage`、
     `history_builder._resolve_max_ctx`、`auto_compact.compact` 的调用方传入的都是

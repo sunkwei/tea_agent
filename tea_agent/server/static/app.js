@@ -1285,17 +1285,17 @@ window.sendMessage = async function() {
 
             case 'think_start':
               if (!s.thinkContainer) {
-                // 创建容器（类似 tool-call-container）— 默认展开，方便直接看到思考
+                // 创建容器（类似 tool-call-container）— 默认折叠，与工具调用一致
                 s.thinkContainer = document.createElement('div');
-                s.thinkContainer.className = 'think-container';
+                s.thinkContainer.className = 'think-container collapsed';
                 s.bubbleText.parentNode.insertBefore(s.thinkContainer, s.bubbleText);
-                // 摘要栏（默认展开）
+                // 摘要栏（默认折叠）
                 s.thinkSummary = document.createElement('div');
                 s.thinkSummary.className = 'think-summary';
                 s.thinkSummary.innerHTML = '<span class="think-summary-icon">🧠</span>'
                   + '<span class="think-summary-label">思考过程</span>'
                   + '<span class="think-summary-badge" id="think-badge">0</span>'
-                  + '<span class="think-summary-arrow">▾</span>';
+                  + '<span class="think-summary-arrow">▸</span>';
                 s.thinkSummary.addEventListener('click', function() {
                   var list = s.thinkContainer.querySelector('.think-list');
                   if (list) {
@@ -1306,10 +1306,10 @@ window.sendMessage = async function() {
                   }
                 });
                 s.thinkContainer.appendChild(s.thinkSummary);
-                // 列表容器（默认展开）
+                // 列表容器（默认折叠，与工具调用一致）
                 s.thinkList = document.createElement('div');
                 s.thinkList.className = 'think-list';
-                s.thinkList.style.display = '';
+                s.thinkList.style.display = 'none';
                 s.thinkContainer.appendChild(s.thinkList);
               }
               // 每次新的思考轮次创建独立条目
@@ -1318,7 +1318,7 @@ window.sendMessage = async function() {
               if (badge) badge.textContent = s.thinkCount;
               var entry = document.createElement('details');
               entry.className = 'think-entry';
-              entry.open = true;
+              // 默认不 open：折叠状态，与工具调用条目一致
               entry.innerHTML = '<summary>思考 #' + s.thinkCount + '</summary><div class="think-content"></div>';
               s.thinkList.appendChild(entry);
               s.thinkContent = entry.querySelector('.think-content');
@@ -1331,7 +1331,7 @@ window.sendMessage = async function() {
               break;
 
             case 'think_done':
-              // 更新 title，不关闭 details（保持展开可见）
+              // 更新 title 摘要，保持折叠状态不变（与工具调用一致）
               if (s.thinkList) {
                 var lastEntry = s.thinkList.querySelector('.think-entry:last-child');
                 if (lastEntry) {
@@ -1865,7 +1865,7 @@ function _renderBufferEvent(event) {
     case 'think_start':
       if (!s.thinkContainer) {
         s.thinkContainer = document.createElement('div');
-        s.thinkContainer.className = 'think-container';
+        s.thinkContainer.className = 'think-container collapsed';
         // 找到最后一个 assistant 消息的 bubble 插入
         const lastBubble = $('msgs').querySelector('.msg.assistant:last-child .msg-bubble');
         if (lastBubble) {
@@ -1876,7 +1876,7 @@ function _renderBufferEvent(event) {
         s.thinkSummary.innerHTML = '<span class="think-summary-icon">🧠</span>'
           + '<span class="think-summary-label">思考过程</span>'
           + '<span class="think-summary-badge" id="bg-think-badge">0</span>'
-          + '<span class="think-summary-arrow">▾</span>';
+          + '<span class="think-summary-arrow">▸</span>';
         s.thinkSummary.addEventListener('click', function() {
           var list = s.thinkContainer.querySelector('.think-list');
           if (list) {
@@ -1889,7 +1889,7 @@ function _renderBufferEvent(event) {
         s.thinkContainer.appendChild(s.thinkSummary);
         s.thinkList = document.createElement('div');
         s.thinkList.className = 'think-list';
-        s.thinkList.style.display = '';
+        s.thinkList.style.display = 'none';
         s.thinkContainer.appendChild(s.thinkList);
       }
       s.thinkCount++;
@@ -1897,7 +1897,7 @@ function _renderBufferEvent(event) {
       if (badge) badge.textContent = s.thinkCount;
       var entry = document.createElement('details');
       entry.className = 'think-entry';
-      entry.open = true;
+      // 默认不 open：折叠状态，与工具调用条目一致
       entry.innerHTML = '<summary>思考 #' + s.thinkCount + '</summary><div class="think-content"></div>';
       s.thinkList.appendChild(entry);
       s.thinkContent = entry.querySelector('.think-content');

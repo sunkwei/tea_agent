@@ -20,6 +20,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -27,12 +28,80 @@ import os
 import re
 import tempfile
 import threading
+import time
 from datetime import datetime
 from typing import Any
+
+try:  # POSIX 跨进程文件锁
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None
+
+try:  # Windows 跨进程文件锁
+    import msvcrt
+except ImportError:  # pragma: no cover - POSIX
+    msvcrt = None
 
 logger = logging.getLogger("tea_agent.audit")
 
 __all__ = ["AuditLog", "audit_log", "mask_secrets", "GENESIS_HASH"]
+
+
+def _file_size(path: str) -> int:
+    """文件当前字节数；不存在/不可访问返回 -1（作为「不可比较」的哨兵值）。"""
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return -1
+
+
+@contextlib.contextmanager
+def _cross_process_lock(path: str, timeout: float = 3.0):
+    """对 ``<path>.lock`` 加互斥，使「读末行 → 追加」在进程间原子。
+
+    取不到锁时**仍然继续写入**：审计的可用性优先于链的绝对严格，
+    为写日志而阻塞主流程的代价远高于偶发链断裂（且下一条记录会自愈式恢复链头）。
+    """
+    handle = None
+    try:
+        handle = open(path + ".lock", "a+", encoding="utf-8")
+    except OSError as e:  # 锁文件都建不了 → 退化为无锁
+        logger.debug("audit: 锁文件不可用(%s)，按无锁继续: %s", path, e)
+        yield
+        return
+
+    acquired = False
+    deadline = time.time() + timeout
+    try:
+        while True:
+            try:
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                elif msvcrt is not None:
+                    handle.seek(0)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                else:  # pragma: no cover - 无可用锁机制
+                    break
+                acquired = True
+                break
+            except OSError:
+                if time.time() >= deadline:
+                    logger.debug("audit: 等待锁超时，无锁继续写入: %s", path)
+                    break
+                time.sleep(0.01)
+        yield
+    finally:
+        try:
+            if acquired:
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                elif msvcrt is not None:
+                    handle.seek(0)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError as e:
+            logger.debug("audit: 释放锁失败: %s", e)
+        with contextlib.suppress(OSError):
+            handle.close()
 
 # 链首哈希（每条链的第一条记录以此为 prev）
 GENESIS_HASH = "0" * 64
@@ -88,10 +157,11 @@ def _canonical(obj: Any) -> str:
 
 
 class AuditLog:
-    """append-only 审计日志（线程安全）。
+    """append-only 审计日志（线程安全 + 进程间加锁）。
 
     链规则：**每条链对应一个日文件**，链首用 GENESIS_HASH。
-    同一天内跨进程追加时，从文件末行恢复链头，保持连续。
+    同一天内跨进程追加时，凭「文件尺寸是否变化」判断内存链头是否过期，
+    过期则回读文件末行恢复链头；读末行与追加由 <文件>.lock 互斥保护。
     """
 
     def __init__(self, directory: str | None = None, enabled: bool = True,
@@ -103,6 +173,8 @@ class AuditLog:
         self._resolved_dir: str | None = None
         self._last_hash: str | None = None
         self._last_day: str | None = None
+        # 上次由**本进程**写入后的文件字节数：用于判断链头缓存是否仍可信。
+        self._last_size: int = -1
 
     # ── 开关与目录 ──
 
@@ -139,18 +211,37 @@ class AuditLog:
             candidates.append(os.path.join(tempfile.gettempdir(), "tea_agent_audit"))
 
             for cand in candidates:
-                try:
-                    os.makedirs(cand, exist_ok=True)
-                    probe = os.path.join(cand, ".write_probe")
-                    with open(probe, "a", encoding="utf-8"):
-                        pass
-                    os.remove(probe)
+                if self._probe_writable(cand):
                     self._resolved_dir = cand
                     return cand
-                except OSError:
-                    continue
             logger.debug("audit: 无可用审计目录，审计静默关闭")
             return None
+
+    @staticmethod
+    def _probe_writable(cand: str) -> bool:
+        """探测目录是否可创建/可写。
+
+        ⚠️ 探测文件名必须**按进程唯一**。旧实现所有进程共用同一个 `.write_probe`：
+        并发启动时 A 建完删掉，B 的 ``os.remove`` 随即抛 FileNotFoundError，被
+        ``except OSError`` 误判为「该目录不可写」→ B 静默改写到下一个候选目录。
+        实测多进程压测下稳定丢整段记录（90 条只剩 75），而审计日志一旦落到意外
+        目录就等于丢失 —— verify() 还看不出问题（两处各自成链）。
+
+        同理，探测本身的失败才是唯一需要换目录的信号；清理失败不该影响判定。
+        """
+        probe = os.path.join(cand, f".write_probe.{os.getpid()}.{id(cand) & 0xFFFF:04x}")
+        try:
+            os.makedirs(cand, exist_ok=True)
+            with open(probe, "a", encoding="utf-8"):
+                pass
+        except OSError as e:
+            logger.debug("audit: 目录不可写(%s): %s", cand, e)
+            return False
+        finally:
+            # 清理失败只是留个临时文件，不代表目录不可用 → 不得影响判定
+            with contextlib.suppress(OSError):
+                os.remove(probe)
+        return True
 
     # ── 写入 ──
 
@@ -197,41 +288,123 @@ class AuditLog:
             if v is not None:
                 rec[k] = mask_secrets(v)
 
-        with self._lock:
-            directory = self.directory()
-            if directory is None:
-                return None
-            day = datetime.now().strftime("%Y%m%d")
-            path = os.path.join(directory, f"audit-{day}.jsonl")
-            prev = self._chain_head(path, day)
-            rec["prev"] = prev
-            rec["h"] = hashlib.sha256((prev + _canonical(rec)).encode("utf-8")).hexdigest()
-            line = json.dumps(rec, ensure_ascii=False, sort_keys=True, default=str)
-            try:
-                with open(path, "a", encoding="utf-8") as f:
-                    f.write(line + "\n")
-            except OSError as e:  # 审计失败绝不阻断主流程
-                logger.debug("audit: 写入失败 %s: %s", path, e)
-                return None
-            self._last_hash = rec["h"]
-            self._last_day = day
+        directory = self.directory()
+        if directory is None:
+            return None
+        day = datetime.now().strftime("%Y%m%d")
+        path = os.path.join(directory, f"audit-{day}.jsonl")
+
+        # 进程间互斥：必须让「读链头 → 算哈希 → 追加」成为跨进程原子操作，
+        # 否则两个并发进程会读到同一个末行、各自算出相同的 prev，追加后直接断链。
+        # 先释放进程内锁再拿 OS 锁（OS 锁会阻塞，不可持 Python 锁等待）。
+        with _cross_process_lock(path):
+            with self._lock:
+                prev = self._chain_head(path, day)
+                rec["prev"] = prev
+                rec["h"] = hashlib.sha256((prev + _canonical(rec)).encode("utf-8")).hexdigest()
+                line = json.dumps(rec, ensure_ascii=False, sort_keys=True, default=str)
+                try:
+                    with open(path, "a", encoding="utf-8") as f:
+                        f.write(line + "\n")
+                        # flush 即可让其它进程读到这行（写入 OS 页缓存）；
+                        # 刻意不用 fsync —— 审计在每次工具调用都会写，强制落盘会把
+                        # 崩溃级持久性保证的成本摊到热路径上，而链完整性并不需要它。
+                        f.flush()
+                except OSError as e:  # 审计失败绝不阻断主流程
+                    logger.debug("audit: 写入失败 %s: %s", path, e)
+                    self._last_size = _file_size(path)
+                    return None
+                self._last_hash = rec["h"]
+                self._last_day = day
+                # 必须与 _chain_head 里的 _file_size() 同源取值：若改用 f.tell()
+                # 之类不同口径，两者永不相等 → 每次写入都退化成全文件扫描，
+                # 在千条级审计文件上会把热路径拖成 O(n)。
+                self._last_size = _file_size(path)
         return rec
 
     def _chain_head(self, path: str, day: str) -> str:
-        """取当前日文件的链头：内存缓存优先，否则回读文件末行恢复。"""
-        if self._last_day == day and self._last_hash:
+        """取当前日文件的链头 —— 必须是**文件真实末行**的哈希。
+
+        缓存不可直接信：本进程写入后，其它进程可能又追加过记录，此时内存里的
+        `_last_hash` 已过期，继续沿用会让新记录的 `prev` 回指旧哈希（跳过中间
+        记录），从而把 append-only 可信链判定为「被删除/插入/重排」。
+
+        判定方式很轻量：比较文件当前字节数与上次写入后记录的字节数。只有完全
+        一致才说明链头仍可信；一旦变大（他进程追加）或读不到（被轮转/清空）
+        就回读末行。稳态下这只是一次 getsize + 一次 open-append，无额外读盘。
+        """
+        if self._last_day == day and self._last_hash and self._last_size == _file_size(path):
             return self._last_hash
         last = GENESIS_HASH
         try:
             if os.path.exists(path):
-                with open(path, encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if line:
-                            last = json.loads(line).get("h") or GENESIS_HASH
+                tail = self._read_last_line(path)
+                if tail is not None:
+                    try:
+                        last = json.loads(tail).get("h") or GENESIS_HASH
+                    except ValueError:
+                        # 末行残缺（写入中断）：退回全量扫描找最后一条完整记录
+                        with open(path, encoding="utf-8") as f:
+                            for line in f:
+                                line = line.strip()
+                                if not line:
+                                    continue
+                                with contextlib.suppress(ValueError):
+                                    last = json.loads(line).get("h") or GENESIS_HASH
         except (OSError, ValueError):
             return GENESIS_HASH
+        self._last_hash = last
+        self._last_day = day
+        # 同步尺寸：否则 _last_size 停留在旧值，下一次写入又会误判「链头已过期」
+        # 而重复回读末行（正确但不必要）。
+        self._last_size = _file_size(path)
         return last
+
+    @staticmethod
+    def _read_last_line(path: str) -> str | None:
+        """倒序读最后一个非空行（避免 O(n) 全文件扫描），不做解码替换。
+
+        Returns:
+            末行文本；文件为空返回 ""；无法可靠定位单行起点（块内不足或首行
+            仍未找到换行）返回 None，交调用方退回全量扫描。
+        """
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            return None
+        if size == 0:
+            return ""
+        block = 8192
+        with open(path, "rb") as f:
+            offset = size
+            buf = b""
+            while offset > 0:
+                read = min(block, offset)
+                offset -= read
+                try:
+                    f.seek(offset)
+                    chunk = f.read(read)
+                except OSError:
+                    return None
+                if not chunk:
+                    break
+                # 用 rstrip 只处理块右端（含文件末尾换行），不吞行内空白
+                buf = chunk + buf
+                if b"\n" in buf.rstrip():
+                    stripped = buf.rstrip()
+                    lines = stripped.split(b"\n")
+                    candidate = stripped if len(lines) == 1 else lines[-1]
+                    try:
+                        return candidate.decode("utf-8")
+                    except UnicodeDecodeError:
+                        # 跨块切到多字节字符中间：退回全量扫描
+                        return None
+            if buf.strip():
+                try:
+                    return buf.strip().split(b"\n")[-1].decode("utf-8")
+                except UnicodeDecodeError:
+                    return None
+            return ""
 
     # ── 读取与校验 ──
 

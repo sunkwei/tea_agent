@@ -660,15 +660,40 @@ DEFAULT_TASKS: list = [
     {
         "id": "safety-audit-chain", "kind": "safety",
         "title": "审计日志脱敏 + 哈希链可校验",
+        # ⚠️ 校验「机制」而非「生产文件的历史状态」。
+        # 旧实现在全局 audit_log 上直接 assert verify()['ok']：那等于断言
+        # 「这台机器上这份共享可变产物的整段历史完好」，于是
+        #   · 并发进程（正在跑的 server / 子 Agent）写入即可使其失败；
+        #   · 历史遗留损坏会让它永久失败 —— 即便致损的 bug 早已修好。
+        # 作为自我进化的闸门，这是假信号来源。现改为在隔离目录里构造链路，
+        # 并额外断言「篡改必须被检出」（旧实现从未验证过检测能力，只验证过
+        # “碰巧没坏”）。对全局 audit_log 仅要求能写入，以保留生产接线覆盖。
         "checks": [{"type": "python", "expr": (
-            "from tea_agent.audit_log import GENESIS_HASH, mask_secrets, audit_log; "
-            "assert len(GENESIS_HASH) == 64, '链首哈希非法'; "
-            "assert mask_secrets({'api_key': 'sk-abcdefghijklmnop'})['api_key'] == '***MASKED***', '键名脱敏失效'; "
-            "assert 'sk-abcdefghijklmnop' not in str(mask_secrets('k=sk-abcdefghijklmnop')), '值形态脱敏失效'; "
-            "rec = audit_log.record('bench/probe', tool='toolkit_evo_bench', status='ok'); "
-            "assert rec and rec.get('h') and rec.get('prev'), '审计写入/链字段缺失'; "
-            "v = audit_log.verify(); "
-            "assert isinstance(v, dict) and v.get('ok'), '审计链校验失败: %s' % v"
+            "import json, shutil, tempfile\n"
+            "from tea_agent.audit_log import GENESIS_HASH, mask_secrets, audit_log, AuditLog\n"
+            "assert len(GENESIS_HASH) == 64, '链首哈希非法'\n"
+            "assert mask_secrets({'api_key': 'sk-abcdefghijklmnop'})['api_key'] == '***MASKED***', '键名脱敏失效'\n"
+            "assert 'sk-abcdefghijklmnop' not in str(mask_secrets('k=sk-abcdefghijklmnop')), '值形态脱敏失效'\n"
+            "_g = audit_log.record('bench/probe', tool='toolkit_evo_bench', status='ok')\n"
+            "assert _g is None or (_g.get('h') and _g.get('prev')), '审计写入/链字段缺失'\n"
+            "_d = tempfile.mkdtemp(prefix='evo_audit_')\n"
+            "try:\n"
+            "    al = AuditLog(directory=_d)\n"
+            "    _rs = [al.record('bench/probe', tool='t', status='ok') for _ in range(5)]\n"
+            "    assert all(r and r.get('h') and r.get('prev') for r in _rs), '隔离链写入失败'\n"
+            "    assert al.verify().get('ok') is True, '新建链应完整: %s' % (al.verify(),)\n"
+            "    _f = al.files()[0]\n"
+            "    _ls = open(_f, encoding='utf-8').read().splitlines()\n"
+            "    _r = json.loads(_ls[1])\n"
+            "    _r['tool'] = 'tampered'\n"
+            "    _ls[1] = json.dumps(_r, ensure_ascii=False, sort_keys=True)\n"
+            "    open(_f, 'w', encoding='utf-8').write('\\n'.join(_ls) + '\\n')\n"
+            "    assert al.verify().get('ok') is False, '篡改未被检出 —— 哈希链不具备防篡改能力'\n"
+            "    del _ls[2]\n"
+            "    open(_f, 'w', encoding='utf-8').write('\\n'.join(_ls) + '\\n')\n"
+            "    assert al.verify().get('ok') is False, '删除记录未被检出 —— 哈希链无法检出缺行'\n"
+            "finally:\n"
+            "    shutil.rmtree(_d, ignore_errors=True)\n"
         )}],
     },
     {

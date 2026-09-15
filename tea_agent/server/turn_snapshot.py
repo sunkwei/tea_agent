@@ -43,6 +43,22 @@ _TEXT_EVENT_TYPES = ("content", "token")
 
 _lock = threading.RLock()
 _last_write: dict[str, float] = {}
+# ── 节流期间的内存累积（**关键**：节流=少写盘，不是丢数据）──────────────
+# 本模块的状态原本只活在 sqlite 里，而 record_event 的节流分支在读写之前
+# 就 return —— 于是 0.5s 窗口内的 token 事件被**整条丢弃**。实测 40 条快速
+# 事件只落盘 1 条（丢 97.5%），而 partial_text 的用途恰是「重启后不让用户
+# 丢内容」，等于该功能在最需要它的流式场景下形同虚设。
+# 因此改为：事件先进内存（无 I/O，代价可忽略），到点再合并落盘。
+#   _pending[topic]     尚未写盘的事件（按到达顺序）
+#   _next_index[topic]  自增序号游标：前台 SSE 与后台接管共享 → 单调不倒退
+#   _begun             本进程已知存在的 topic（避免每条事件都回读一次 DB）
+_pending: dict[str, list] = {}
+_next_index: dict[str, int] = {}
+_begun: set[str] = set()
+# partial_text 上限（字符）：只保尾部，避免长回合把快照撑爆
+_MAX_PARTIAL_CHARS = 200000
+# 极端场景（长时间不 flush）下 pending 的内存上限
+_MAX_PENDING_EVENTS = 4000
 
 
 def db_path() -> str:
@@ -123,7 +139,7 @@ def begin_turn(topic_id: str, conv_id: str = "", path: str | None = None) -> Non
                 conn.commit()
             finally:
                 conn.close()
-            _last_write.pop(topic_id, None)
+            _drop_turn_caches(topic_id)
     except (sqlite3.Error, OSError, ValueError):
         pass
 
@@ -156,9 +172,110 @@ def ensure_turn(topic_id: str, conv_id: str = "", path: str | None = None) -> No
                 conn.commit()
             finally:
                 conn.close()
-            _last_write.pop(topic_id, None)
+            _drop_turn_caches(topic_id)
     except (sqlite3.Error, OSError, ValueError):
         pass
+
+
+def _drop_turn_caches(topic_id: str) -> None:
+    """清掉某个 topic 的全部进程内缓存（**必须在持有 _lock 时调用**）。"""
+    for _c in (_pending, _next_index, _last_write):
+        _c.pop(topic_id, None)
+    _begun.discard(topic_id)
+
+
+def _merge_events(existing: list, incoming: list, max_events: int) -> list:
+    """按 index 归并去重，保留最近 max_events 条。
+
+    落盘时与 DB 现状归并（而非整体覆盖）：多进程同时写同一 topic 时，
+    各自的 pending 互不可见，覆盖式写入会让后落盘的一方抹掉先落盘的一方。
+    """
+    merged: dict[int, dict] = {}
+    for item in list(existing) + list(incoming):
+        if not isinstance(item, dict):
+            continue
+        try:
+            idx = int(item.get("index"))
+        except (TypeError, ValueError):
+            continue
+        merged[idx] = item
+    if not merged:
+        return []
+    ordered = [merged[k] for k in sorted(merged)]
+    return ordered[-max_events:] if max_events > 0 else ordered
+
+
+def _flush_locked(topic_id: str, conn, status: str, when: float,
+                  max_events: int, max_field: int) -> None:
+    """把内存累积落盘（**必须在持有 _lock 时调用**）。"""
+    pending = _pending.get(topic_id) or []
+    row = conn.execute(
+        "SELECT partial_text, events_json, seen, last_event_index, conv_id"
+        " FROM turn_snapshots WHERE topic_id=?", (topic_id,)
+    ).fetchone()
+    if row is None:
+        _pending[topic_id] = []
+        return
+    db_partial, db_events_json, db_seen, db_idx, conv_id = row
+    try:
+        db_events = json.loads(db_events_json or "[]")
+        if not isinstance(db_events, list):
+            db_events = []
+    except (ValueError, TypeError):
+        db_events = []
+
+    incoming = [{"index": i, "event": _shrink(e, max_field)} for i, e in pending]
+    events = _merge_events(db_events, incoming, max_events)
+
+    # partial_text 只追加**本次新增**内容：DB 里已有的部分不重复累加，
+    # 且按 _MAX_PARTIAL_CHARS 截尾，避免长回合把快照撑爆。
+    new_text = "".join(_extract_text(e) for i, e in pending
+                       if _is_text_event(e))
+    partial = ((db_partial or "") + new_text)
+    if len(partial) > _MAX_PARTIAL_CHARS:
+        partial = partial[-_MAX_PARTIAL_CHARS:]
+
+    max_index = max([i for i, _ in pending] + [int(db_idx if db_idx is not None else -1)])
+    conn.execute(
+        "UPDATE turn_snapshots SET partial_text=?, events_json=?,"
+        " seen=?, last_event_index=?, status=?, updated_at=?"
+        " WHERE topic_id=?",
+        (partial, json.dumps(events, ensure_ascii=False),
+         max(int(db_seen or 0), max_index + 1), max_index, status, when, topic_id),
+    )
+    conn.commit()
+    _pending[topic_id] = []
+
+
+def flush_pending(topic_id: str, path: str | None = None,
+                  max_events: int = DEFAULT_MAX_EVENTS,
+                  max_field: int = DEFAULT_MAX_FIELD) -> bool:
+    """立即把该回合节流窗口内积压的事件落盘。返回是否执行了写入。fail-open。
+
+    供「读之前先对齐磁盘」与测试使用；正常路径由 record_event 的节流判定
+    与 finish_turn 负责刷盘。
+    """
+    if not topic_id:
+        return False
+    try:
+        with _lock:
+            if not _pending.get(topic_id):
+                return False
+            conn = _connect(path)
+            try:
+                _flush_locked(topic_id, conn, _STATUS_ACTIVE, time.time(),
+                              max_events, max_field)
+            finally:
+                conn.close()
+            _last_write[topic_id] = time.time()
+        return True
+    except (sqlite3.Error, OSError, ValueError, TypeError):
+        return False
+
+
+def _is_text_event(event: Any) -> bool:
+    """是否计入助手正文（content/token，不含 reasoning/tool）。"""
+    return isinstance(event, dict) and event.get("type") in _TEXT_EVENT_TYPES
 
 
 def record_event(topic_id: str, event: Any, index: int | None = None,
@@ -168,65 +285,107 @@ def record_event(topic_id: str, event: Any, index: int | None = None,
                  max_events: int = DEFAULT_MAX_EVENTS,
                  max_field: int = DEFAULT_MAX_FIELD,
                  now: float | None = None) -> bool:
-    """记录一条流式事件（节流写盘）。返回是否真正落盘。fail-open。
+    """记录一条流式事件。返回是否**已接收**（不是"是否已写盘"）。fail-open。
+
+    节流只作用于**磁盘写入**，事件本身一律先入内存：0.5s 窗口内的 token 若
+    直接丢弃，恢复出来的 partial_text 与 events 就会缺一大段 —— 而本模块的
+    存在理由正是"重启后不让用户丢内容"。
 
     Args:
-        index: 事件序号；``None`` 时自动取 ``last_event_index + 1``，保证
-            前台 SSE 与后台接管两条写入路径的序号单调（互不倒退）。
+        index: 事件序号；``None`` 时自动取上一个序号 +1，保证前台 SSE 与
+            后台接管两条写入路径的序号单调（互不倒退）。
+        force: 跳过节流立即落盘（终止事件用）。
     """
     if not topic_id:
         return False
-    ts = time.time() if now is None else now
+    ts_now = time.time() if now is None else now
     try:
         with _lock:
-            if not force and ts - _last_write.get(topic_id, 0.0) < min_interval:
+            if topic_id not in _begun and not _adopt_locked(topic_id, path):
+                # 未 begin 过的回合（如无 topic 的临时对话）：静默跳过
                 return False
-            conn = _connect(path)
+            if index is None:
+                index = _next_index.get(topic_id, 0)
             try:
-                row = conn.execute(
-                    "SELECT partial_text, events_json, seen, last_event_index, conv_id"
-                    " FROM turn_snapshots WHERE topic_id=?", (topic_id,)
-                ).fetchone()
-                if row is None:
-                    # 未 begin 过的回合（如无 topic 的临时对话）：静默跳过
-                    return False
-                partial, events_json, seen, last_idx, conv_id = row
-                if index is None:
-                    index = int(last_idx if last_idx is not None else -1) + 1
+                index = int(index)
+            except (TypeError, ValueError):
+                return False
+            _pending.setdefault(topic_id, []).append((index, event))
+            # 序号游标前进（显式传入更大 index 时接管后续自增值）
+            _next_index[topic_id] = max(_next_index.get(topic_id, index + 1), index + 1)
+            # 极端场景（长时间不 flush，如客户端挂住）下限制内存占用
+            _cap = min(max(max_events * 2, 1), _MAX_PENDING_EVENTS)
+            if len(_pending[topic_id]) > _cap:
+                _pending[topic_id] = _pending[topic_id][-_cap:]
+
+            if force or (ts_now - _last_write.get(topic_id, 0.0)) >= min_interval:
+                conn = _connect(path)
                 try:
-                    events = json.loads(events_json or "[]")
-                    if not isinstance(events, list):
-                        events = []
-                except (ValueError, TypeError):
-                    events = []
-                events.append({"index": index, "event": _shrink(event, max_field)})
-                if len(events) > max_events:
-                    events = events[-max_events:]
-                partial = (partial or "") + _extract_text(event)
-                conn.execute(
-                    "UPDATE turn_snapshots SET partial_text=?, events_json=?,"
-                    " seen=?, last_event_index=?, status=?, updated_at=?"
-                    " WHERE topic_id=?",
-                    (partial, json.dumps(events, ensure_ascii=False),
-                     max(int(seen or 0), index + 1), index, _STATUS_ACTIVE, ts,
-                     topic_id),
-                )
-                conn.commit()
-            finally:
-                conn.close()
-            _last_write[topic_id] = ts
+                    _flush_locked(topic_id, conn, _STATUS_ACTIVE, ts_now,
+                                  max_events, max_field)
+                finally:
+                    conn.close()
+                _last_write[topic_id] = ts_now
         return True
     except (sqlite3.Error, OSError, ValueError, TypeError):
         return False
 
 
+def _adopt_locked(topic_id: str, path: str | None) -> bool:
+    """进程重启/接管时把 DB 中已存在的回合载入内存缓存；返回该 topic 是否存在。
+
+    **必须在持有 _lock 时调用**。只在首次遇到未知 topic 时走一次 SELECT，
+    稳态路径不额外读盘。
+    """
+    conn = _connect(path)
+    try:
+        row = conn.execute(
+            "SELECT events_json, last_event_index, partial_text"
+            " FROM turn_snapshots WHERE topic_id=?", (topic_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return False
+    try:
+        events = json.loads(row[0] or "[]")
+        if not isinstance(events, list):
+            events = []
+    except (ValueError, TypeError):
+        events = []
+    _pending.setdefault(topic_id, [])
+    last_idx = int(row[1] if row[1] is not None else -1)
+    _next_index[topic_id] = last_idx + 1
+    _begun.add(topic_id)
+    return True
+
+
 def finish_turn(topic_id: str, status: str = _STATUS_DONE,
-                path: str | None = None) -> None:
-    """标记回合结束（done/error/abandoned）。fail-open。"""
+                path: str | None = None,
+                max_events: int = DEFAULT_MAX_EVENTS,
+                max_field: int = DEFAULT_MAX_FIELD) -> None:
+    """标记回合结束（done/error/abandoned），并把节流窗口内残留的事件**先落盘**。
+
+    不 flush 就结束，会让回合尾部的 token 永久丢失 —— 而那正是用户最关心的
+    最后一段内容。fail-open。
+    """
     if not topic_id:
         return
     try:
         with _lock:
+            if topic_id in _begun:
+                conn = _connect(path)
+                try:
+                    _flush_locked(topic_id, conn, status, time.time(),
+                                  max_events, max_field)
+                    conn.execute(
+                        "UPDATE turn_snapshots SET status=?, updated_at=?"
+                        " WHERE topic_id=?", (status, time.time(), topic_id))
+                    conn.commit()
+                finally:
+                    conn.close()
+                _drop_turn_caches(topic_id)
+                return
             conn = _connect(path)
             try:
                 conn.execute(
@@ -236,7 +395,7 @@ def finish_turn(topic_id: str, status: str = _STATUS_DONE,
                 conn.commit()
             finally:
                 conn.close()
-            _last_write.pop(topic_id, None)
+            _drop_turn_caches(topic_id)
     except (sqlite3.Error, OSError, ValueError):
         pass
 
@@ -267,10 +426,37 @@ def read_snapshot(topic_id: str, path: str | None = None) -> dict | None:
         events = json.loads(row[6] or "[]")
     except (ValueError, TypeError):
         events = []
+    if not isinstance(events, list):
+        events = []
+
+    # 合并尚未落盘的事件（节流窗口内的 token 只在内存里）。不合并的话，
+    # 「记录了但读不到」会被误读成丢数据，且重启续读拿到的是残缺内容。
+    with _lock:
+        pending = list(_pending.get(topic_id) or [])
+    if pending:
+        events = _merge_events(
+            events, [{"index": i, "event": e} for i, e in pending], DEFAULT_MAX_EVENTS)
+    last_idx = int(row[3] if row[3] is not None else -1)
+    if pending:
+        last_idx = max(last_idx, max(i for i, _ in pending))
+    seen = int(row[4] or 0)
+    if pending:
+        seen = max(seen, last_idx + 1)
+
+    # partial_text 同样要合并 pending 正文：只补事件不补文本，等于换个地方丢内容
+    partial = row[5] or ""
+    if pending:
+        extra = "".join(_extract_text(e) for i, e in pending
+                        if _is_text_event(e))
+        if extra:
+            partial = (partial + extra)
+            if len(partial) > _MAX_PARTIAL_CHARS:
+                partial = partial[-_MAX_PARTIAL_CHARS:]
+
     return {
         "topic_id": row[0], "conv_id": row[1], "status": row[2],
-        "last_event_index": row[3], "seen": row[4], "partial_text": row[5],
-        "events": events if isinstance(events, list) else [],
+        "last_event_index": last_idx, "seen": seen, "partial_text": partial,
+        "events": events,
         "created_at": row[7], "updated_at": row[8],
     }
 
@@ -324,9 +510,16 @@ def clear(path: str | None = None) -> int:
             try:
                 cur = conn.execute("DELETE FROM turn_snapshots")
                 conn.commit()
-                return int(cur.rowcount or 0)
+                n = int(cur.rowcount or 0)
             finally:
                 conn.close()
+            # 进程内缓存必须同步清空：否则被清掉的回合仍会从 _pending 里把旧事件
+            # 合并进后续读取（DB 已空却仍读得到内容），跨回合/跨测试成串。
+            _pending.clear()
+            _next_index.clear()
+            _begun.clear()
+            _last_write.clear()
+        return n
     except (sqlite3.Error, OSError, ValueError):
         return 0
 

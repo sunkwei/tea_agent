@@ -155,15 +155,64 @@ class TestPartialText:
 
 
 class TestThrottleAndBounds:
-    def test_throttle_skips_rapid_writes(self, db):
+    def test_throttle_saves_io_but_keeps_every_event(self, db):
+        """节流只应减少**磁盘写入**，不得丢事件。
+
+        旧断言是 `events == [0, 2]` —— 即"未达间隔的那条被永久丢弃"。这把
+        错误语义固化成了契约：本模块存在的意义就是「重启后不让用户丢内容」，
+        而 0.5s 节流窗口内的 token 恰恰是最密集的正文（实测 40 条只剩 1 条）。
+        现在 record_event 返回「是否已接收」，落盘时机与数据保留解耦。
+        """
         ts.begin_turn("t1")
         assert ts.record_event("t1", {"type": "content", "text": "a"}, 0, now=100.0) is True
-        # 同一时间戳（未达间隔）→ 跳过
-        assert ts.record_event("t1", {"type": "content", "text": "b"}, 1, now=100.1) is False
-        # 超过间隔 → 写入
+        snap_after_a = ts.read_snapshot("t1")
+
+        # 未达间隔：接收成功，但**不产生新的磁盘写入**（updated_at 不变）
+        assert ts.record_event("t1", {"type": "content", "text": "b"}, 1, now=100.1) is True
+        assert ts.read_snapshot("t1")["updated_at"] == snap_after_a["updated_at"], \
+            "节流未生效：不该落盘的也落了"
+
+        # 超过间隔：这次才真正写盘
         assert ts.record_event("t1", {"type": "content", "text": "c"}, 2,
                                now=100.0 + ts.DEFAULT_MIN_INTERVAL + 0.01) is True
-        assert [e["index"] for e in ts.read_snapshot("t1")["events"]] == [0, 2]
+        assert ts.read_snapshot("t1")["updated_at"] != snap_after_a["updated_at"]
+
+        snap = ts.read_snapshot("t1")
+        # 三条全部保留，且正文完整
+        assert [e["index"] for e in snap["events"]] == [0, 1, 2]
+        assert [e["event"]["text"] for e in snap["events"]] == ["a", "b", "c"]
+        assert snap["partial_text"] == "abc"
+        assert snap["last_event_index"] == 2
+        assert snap["seen"] == 3
+
+    def test_tail_tokens_survive_throttle(self, db):
+        """回合末尾的 token 必须被 finish_turn 刷出，不得留在内存里丢掉。"""
+        ts.begin_turn("t1")
+        for i in range(30):
+            ts.record_event("t1", {"type": "content", "text": str(i)}, i, now=100.0 + i * 0.001)
+        ts.finish_turn("t1")
+        snap = ts.read_snapshot("t1")
+        assert snap["partial_text"] == "".join(str(i) for i in range(30))
+        assert len(snap["events"]) == 30
+
+    def test_unflushed_events_are_still_visible_to_reader(self, db):
+        """尚未落盘的事件对读取路径必须可见（否则同进程内看起来像丢数据）。"""
+        ts.begin_turn("t1")
+        ts.record_event("t1", {"type": "content", "text": "a"}, 0, now=100.0)
+        ts.record_event("t1", {"type": "content", "text": "b"}, 1, now=100.0)  # 节流，不落盘
+        snap = ts.read_snapshot("t1")
+        assert [e["event"]["text"] for e in snap["events"]] == ["a", "b"]
+        assert snap["partial_text"] == "ab"
+
+    def test_no_double_count_after_flush(self, db):
+        """落盘后不得重复计算正文（pending 必须在写盘时清空）。"""
+        ts.begin_turn("t1")
+        ts.record_event("t1", {"type": "content", "text": "abc"}, 0, now=100.0)
+        ts.record_event("t1", {"type": "content", "text": "def"}, 1, now=100.0)
+        ts.flush_pending("t1")
+        assert ts.read_snapshot("t1")["partial_text"] == "abcdef"
+        # 再读一次仍应是 abcdef，不是翻倍
+        assert ts.read_snapshot("t1")["partial_text"] == "abcdef"
 
     def test_force_bypasses_throttle(self, db):
         ts.begin_turn("t1")

@@ -32,6 +32,7 @@ from tea_agent.session.tool_loop_runner import execute_tool_loop
 from tea_agent.session_pipeline import SessionPipeline
 from tea_agent.tool_hooks import tool_hooks
 from tea_agent.tool_profiles import filter_tools_by_profile, resolve_tool_profile
+from tea_agent.tool_shield import apply_shield
 
 logger = logging.getLogger("session")
 
@@ -1260,6 +1261,10 @@ class OnlineToolSession(BaseChatSession):
             logger.info(
                 f"[Tool Profile] {profile}: enabled {len(self.tools)}/{len(all_tools)} tools"
             )
+        # 长期未使用的工具默认屏蔽（数据源：项目 db 的 tool_usage 表）。
+        # 只在常规路径生效：上面的 tool_filter 是意图驱动的临时注入，模型此刻
+        # 明确需要那些工具，不该被历史使用数据否决。
+        self.tools, _ = apply_shield(self.tools)
 
     def update_tools(self):
         """重新加载并刷新工具定义"""

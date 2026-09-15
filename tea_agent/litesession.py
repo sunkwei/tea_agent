@@ -111,6 +111,7 @@ class LiteSession:
         # 仅暴露 LLM 可见工具（排除 harness_schema/export_last_pdf），名称排序保证顺序稳定
         from tea_agent.tlk import llm_tool_names
         from tea_agent.tool_profiles import filter_tools_by_profile, resolve_tool_profile
+        from tea_agent.tool_shield import apply_shield
 
         profile = resolve_tool_profile(
             self.max_context_tokens,
@@ -127,12 +128,15 @@ class LiteSession:
 
             tools.append(meta)
 
-        if profile == "full":
-            return tools
-        filtered = filter_tools_by_profile(tools, profile)
-        if len(filtered) != len(tools):
-            logger.info(f"[Tool Profile] {profile}: enabled {len(filtered)}/{len(tools)} tools")
-        return filtered
+        if profile != "full":
+            filtered = filter_tools_by_profile(tools, profile)
+            if len(filtered) != len(tools):
+                logger.info(f"[Tool Profile] {profile}: enabled {len(filtered)}/{len(tools)} tools")
+            tools = filtered
+        # 长期未使用的工具默认屏蔽（数据源：项目 db 的 tool_usage 表）。
+        # 与 profile 档位是两层独立收缩：档位按上下文窗口裁剪，屏蔽按真实使用裁剪。
+        tools, _shielded = apply_shield(tools)
+        return tools
 
     def chat(
         self, user_input: str, callback: Callable[[str], None] | None = None

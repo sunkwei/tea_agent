@@ -3,6 +3,36 @@
 
 ## [Unreleased]
 ### Features
+- feat(tools): 工具使用次数统计表 + 长期未使用工具默认屏蔽
+  - 新增项目 db（`$pwd/.tea_agent_run/` 会话库）表 `tool_usage`：一行一工具，
+    记 uses / first_used / last_used / pin；记录点为 `Toolkit.call_tool`
+    （唯一汇聚点，且在缓存判定**之前**——命中缓存同样是真实调用，记在之后就少算，
+    长期会把常用工具误判成"没用过"而屏蔽掉）
+  - 新增 `tool_shield.py`：构建工具列表时剔除长期未使用者，与 `tool_profiles`
+    的窗口档位是两层独立收缩（档位按上下文窗口裁剪，屏蔽按真实使用裁剪）
+  - 三条安全不变式（屏蔽会让 Agent 失去能力，故"何时绝不屏蔽"比"何时屏蔽"更要紧）：
+    ① 无数据不屏蔽（空表=尚未观测，否则新装机首次启动即屏蔽全部工具、Agent 瘫痪）
+    ② 观测期未满不屏蔽零使用工具（"刚装上"不等于"长期不用"）
+    ③ 自愈通路永不屏蔽（config/save/reload/exec/file 等 11 个；屏蔽后 Agent
+      就失去解除屏蔽的能力，故障无法自救）
+  - 读路径用 `peek_storage()` 而非 `get_storage()`：后者会在裸用 Toolkit 的进程里
+    为"决定不屏蔽任何东西"而顺手建库（读路径不该有写副作用）
+  - 统计写入 best-effort：建表失败隐式建一次再重试（热路径不跑 DDL），
+    写失败只记 debug，绝不把工具调用带崩
+  - 逃生阀：`TEA_TOOL_SHIELD=0` 关闭；`TEA_TOOL_SHIELD_IDLE_DAYS=N` 调阈值
+    （非数值/非正数出声告警，不再静默回退）；单工具 `toolkit_tool_usage`
+    的 pin/unpin/auto 覆盖，`reset` 清空重观测
+  - 新增工具 `toolkit_tool_usage`（report/pin/unpin/auto/reset）。其 known 集合
+    取注册表而非统计表 —— 以统计表为集合时「从未被调用的工具」永不参与判定，
+    而它们恰是唯一该屏蔽的对象，功能会静默地什么都不做
+  - 判定为纯函数 `evaluate(usage, known_tools, idle_days, now, oldest_observed)`，
+    时间相关分支可在秒级单测中覆盖；屏蔽集合排序稳定（工具列表顺序是 DeepSeek
+    前缀缓存的一部分，抖动会导致每轮缓存失效）
+  - tests: 新增 `test_tool_shield.py` 54 项（三条不变式各多组、边界含"恰好等于
+    阈值即屏蔽"与"差一天不屏蔽"、并发累加不丢计数、未观测工具可预先 pin、
+    无库环境不建库不炸、存储异常 fail-open 全放开、判定确定性）；
+    端到端实证 7 组（临时库：真实调用入库 → 63 工具收缩到 12、7 个自愈通路恒在、
+    空表/保护期不屏蔽、pin/unpin 与逃生阀生效、无库不建库）
 - fix(session): JSON 非法转义序列（\' 等）导致 tool_call 参数被整体丢弃
   - 根因：模型把 Python/shell 字面量写进 JSON 时习惯性转义单引号（如
     \'），但 JSON 仅允许 9 种转义前导字符（\" \\ \/ \b \f \n \r \t \u），

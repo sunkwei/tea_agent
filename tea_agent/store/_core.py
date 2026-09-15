@@ -32,6 +32,7 @@ from ._component import DB, StoreComponent  # DB 短连接上下文管理器
 from ._conversations import ConversationStore
 from ._events import SessionEventStore
 from ._interruptions import InterruptionStore
+from ._tool_usage import ToolUsageStore
 from ._memories import MemoryStore
 from ._scheduled_tasks import ScheduledTaskStore
 from ._summaries import SummaryStore
@@ -219,6 +220,7 @@ class Storage:
         self._scheduled_tasks = ScheduledTaskStore(db_path)
         self._interruptions = InterruptionStore(db_path)
         self._events = SessionEventStore(db_path)
+        self._tool_usage = ToolUsageStore(db_path)
 
         # ── conn 属性：兼容旧代码直接访问 storage.conn ──
         self._conn_lock = threading.Lock()
@@ -246,6 +248,7 @@ class Storage:
         self.scheduled_tasks = self._scheduled_tasks
         self.interruptions = self._interruptions
         self.events = self._events
+        self.tool_usage = self._tool_usage
 
         # ── 注入事件存储引用到 ConversationStore（供 _log_event 使用） ──
         try:

@@ -11,6 +11,7 @@ import sqlite3
 from datetime import datetime
 
 from ._component import Cursor
+from ._tool_usage import CREATE_SQL as _TOOL_USAGE_CREATE
 from ._sql_safety import safe_ddl, safe_ident, safe_sql_fragment
 
 logger = logging.getLogger("Storage")
@@ -242,6 +243,9 @@ def init_tables(db):
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # ── 工具使用统计（tool_shield 的数据源）：一行一工具，只增计数 ──
+    c.execute(_TOOL_USAGE_CREATE)
 
     # ── 打断知识闭环（M2）：打断事件持久化 ──
     c.execute('''

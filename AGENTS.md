@@ -60,6 +60,7 @@ tea_agent/
 ├── reflection.py          # 元认知反思
 ├── providers.py           # LLM 提供商适配层
 ├── permission.py          # 工具权限管理
+├── tool_shield.py         # ★ 长期未使用工具自动屏蔽（读 tool_usage 统计）
 │
 ├── toolkit/               # ★ 工具注册中心（60+ 工具）
 │   ├── __init__.py        # 空文件（无手工注册；工具由 tlk.py 扫描加载）
@@ -71,7 +72,7 @@ tea_agent/
 │   ├── ... (60+ 工具)
 │
 ├── session/               # 会话管理子模块
-├── store/                 # 存储层
+├── store/                 # 存储层（含 _tool_usage.py 工具使用统计）
 ├── compaction/            # 上下文压缩
 ├── multi_agent/           # 多 Agent 协作
 ├── protocol/              # ACP 协议实现
@@ -134,6 +135,23 @@ from tea_agent.toolkit.toolkit_xxx import toolkit_xxx
 toolkit_save(name="toolkit_new_tool", meta={...}, pycode="...")
 toolkit_reload()
 ```
+
+### 工具暴露与使用统计
+
+工具调用统计落在**项目 db**（`$pwd/.tea_agent_run/` 的会话库）`tool_usage` 表，
+记录点在 `Toolkit.call_tool`（唯一汇聚点，覆盖缓存/非缓存两条路径）。
+`tool_shield` 据此在构建工具列表时屏蔽长期未使用者，与 `tool_profiles` 的窗口
+档位是两层独立收缩。
+
+三条不可妥协的不变式（屏蔽会让 Agent 失去能力）：
+
+1. **无数据 = 不屏蔽** —— 空表只代表"尚未观测"，否则新装机首次启动即屏蔽全部工具
+2. **观测期未满不屏蔽零使用工具** —— 判"长期不用"必须先有"长期"
+3. **自愈通路永不屏蔽** —— `toolkit_config/save/reload/exec/file/edit/diff/
+   approve/tool_usage/rollback/list_versions` 屏蔽后 Agent 将无法解除屏蔽
+
+应急：`TEA_TOOL_SHIELD=0` 关闭自动屏蔽；`TEA_TOOL_SHIELD_IDLE_DAYS=N` 调阈值；
+单个工具用 `toolkit_tool_usage(action='pin'|'unpin'|'auto', tool=...)` 覆盖。
 
 ### 工具开发原则
 

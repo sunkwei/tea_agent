@@ -363,6 +363,22 @@ class Toolkit:
             return " | ".join(hints)
         return None
 
+    def _record_usage(self, func_name: str) -> None:
+        """累加工具使用次数（写项目 db 的 tool_usage 表）。
+
+        刻意做成 best-effort 且**不创建 db**：见 store.peek_storage 的说明。
+        统计是辅助能力，一次写失败绝不能把工具调用带崩，也不能改变裸用
+        Toolkit（无会话/无库）时的建库行为。
+        """
+        try:
+            from tea_agent.store import peek_storage
+
+            st = peek_storage()
+            if st is not None:
+                st.tool_usage.record_use(func_name)
+        except Exception as e:  # noqa: BLE001 — 统计失败不影响调用
+            logger.debug("record_usage(%s) 跳过: %s", func_name, e)
+
     def call_tool(self, func_name: str, **kwargs):
         """带缓存的工具调用代理。
 
@@ -390,6 +406,10 @@ class Toolkit:
         if bind_err is not None:
             logger.warning("toolkit 入参绑定失败: %s", bind_err)
             raise TypeError(bind_err)
+
+        # 使用统计（tool_shield 的数据源）：放在缓存判定**之前**——命中缓存同样是
+        # 一次真实调用，记在缓存之后就少算，长期会把常用工具误判成"没用过"而屏蔽。
+        self._record_usage(func_name)
 
         # 白名单之外 + 用户创建的工具不缓存（真实执行）
         if func_name not in self._CACHE_WHITELIST or func_name in self._user_created_tools:

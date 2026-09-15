@@ -3,7 +3,7 @@
 """
 from ._core import Storage
 
-__all__ = ["Storage"]
+__all__ = ["Storage", "get_storage", "peek_storage"]
 
 # ── 模块级单例 ──
 
@@ -33,4 +33,15 @@ def get_storage(db_path: str = "") -> Storage:
         except Exception:
             db_path = "chat_history.db"
     _storage_instance = Storage(db_path)
+    return _storage_instance
+
+
+def peek_storage():
+    """返回**已存在**的 Storage 单例；尚未创建则返回 None（绝不触发创建）。
+
+    存在的理由：工具调用统计这类辅助写入若走 get_storage()，会在「裸用
+    Toolkit（无会话、无库）」的进程里因第一次调用工具就建出数据库文件 ——
+    改变原有行为，且在只读目录/测试环境下引入无谓失败。统计只在库本来就
+    存在时顺带记录。
+"""
     return _storage_instance

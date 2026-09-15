@@ -31,6 +31,17 @@ message_queue: dict[str, list[dict]] = {}
 # 但正确做法仍是"锁内只改内存、锁外落盘"。
 message_queue_lock = threading.RLock()
 
+# ⚠️ "锁内取快照、锁外写文件"带来另一类缺陷：两个并发 persist 的**完成顺序
+# 可能与快照顺序相反** —— 旧快照后落盘会把已删除/已消费的消息复活到磁盘
+# （内存是干净的，只有磁盘错，于是重启后消息死灰复燃）。
+# 因此每次队列变更递增 _queue_version；落盘时带上快照对应的版本，
+# 版本不比已落盘的新就直接跳过写入。
+_queue_version = 0
+_persisted_version = -1
+_persisted_path: str | None = None
+# 只序列化文件写入本身（不保护内存，内存由 message_queue_lock 负责）
+_queue_write_lock = threading.Lock()
+
 # 后台 SSE 事件缓冲区（topic_id -> buffer_dict）
 background_buffers: dict[str, dict] = {}
 background_buffers_lock = threading.Lock()
@@ -93,6 +104,12 @@ def is_draining() -> bool:
         return draining
 
 
+def _bump_queue_version() -> None:
+    """标记队列已变更。**必须在持有 message_queue_lock 时调用**。"""
+    global _queue_version
+    _queue_version += 1
+
+
 def queue_add(topic_id: str, message: str, images: list | None = None) -> str:
     import uuid
     item_id = uuid.uuid4().hex[:12]
@@ -103,6 +120,7 @@ def queue_add(topic_id: str, message: str, images: list | None = None) -> str:
             "id": item_id, "message": message,
             "images": images or [], "timestamp": time.time(),
         })
+        _bump_queue_version()
     _persist_queues()
     return item_id
 
@@ -123,6 +141,8 @@ def queue_remove(topic_id: str, item_id: str) -> bool:
                     message_queue.pop(topic_id, None)
                 removed = True
                 break
+        if removed:
+            _bump_queue_version()
     # 落盘必须在锁外：_persist_queues 自己会获取同一把锁，锁内调用会自死锁
     if removed:
         _persist_queues()
@@ -137,6 +157,8 @@ def queue_pop(topic_id: str) -> dict | None:
             item = items.pop(0)
             if not items:
                 message_queue.pop(topic_id, None)
+        if item is not None:
+            _bump_queue_version()
     # 落盘必须在锁外（同上）：否则插话消费会让整个回合卡死并锁住全部队列操作
     if item is not None:
         _persist_queues()
@@ -155,15 +177,29 @@ def _queue_store_path() -> str:
 
 
 def _persist_queues() -> int:
-    """把当前排队消息落盘（原子写）。返回条数；失败返回 -1（fail-open）。"""
+    """把当前排队消息落盘（原子写）。返回条数；失败返回 -1（fail-open）。
+
+    版本守卫：快照在 message_queue_lock 内取（连同当时的 _queue_version），
+    写文件在 _queue_write_lock 内做。若一个**更晚的快照**已经落过盘，本次这个
+    过期快照就直接跳过写入 —— 否则会出现「删除已落盘 → 旧快照把它写回磁盘」，
+    重启后已撤回/已消费的插话复活。
+    """
+    global _persisted_version, _persisted_path
     try:
         with message_queue_lock:
+            version = _queue_version
             data = {tid: list(items) for tid, items in message_queue.items() if items}
         path = _queue_store_path()
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False)
-        os.replace(tmp, path)
+        with _queue_write_lock:
+            if version <= _persisted_version and path == _persisted_path:
+                # 已有同版本或更新的快照落盘，本次为过期写入
+                return sum(len(v) for v in data.values())
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+            os.replace(tmp, path)
+            _persisted_version = version
+            _persisted_path = path
         return sum(len(v) for v in data.values())
     except (OSError, ValueError, TypeError):
         return -1
@@ -189,6 +225,10 @@ def restore_queues() -> int:
                 if kept:
                     message_queue.setdefault(tid, []).extend(kept)
                     restored += len(kept)
+            if restored:
+                # 内存已变，必须推进版本：否则后续 _persist_queues 可能因
+                # 版本未超过 _persisted_version 而跳过落盘，恢复结果再度丢失。
+                _bump_queue_version()
         return restored
     except (OSError, ValueError, TypeError):
         return 0

@@ -558,10 +558,13 @@ def _run_batch_with_monitor(idx, cmd, timeout):
     ar = cmd.get("args", [])
     result = {"index": idx, "returncode": -1, "stdout": "", "stderr": "", "error": True}
     if not a:
-        # 逐项失败隔离；错误信息带正确用法，便于模型下轮自纠
+        # 逐项失败隔离；错误信息带正确用法 + 模型实际写的未知键，便于下轮自纠
+        unknown = cmd.get("_unknown_keys")
+        hint = f"该条目含无法识别的键 {unknown}（每项只接受 app / args）。" if unknown else ""
         result["stderr"] = (
-            "app 为空或类型不可用（需要可执行程序路径字符串）。"
-            f"正确用法：commands=[{{'app': 'ls', 'args': ['-la']}}]。收到：{_describe(cmd)}"
+            f"{hint}app 为空或类型不可用（需要可执行程序路径字符串）。"
+            "正确用法：commands=[{'app': 'ls', 'args': ['-la']}]。"
+            f"收到：{_describe({k: v for k, v in cmd.items() if k != '_unknown_keys'})}"
         )
         return result
 
@@ -661,6 +664,10 @@ _ACTION_ALIASES = ("mode", "kind", "type")
 _TIMEOUT_ALIASES = ("timeout_seconds", "time_limit", "deadline")
 _ACTIONS = ("single", "batch")
 
+# 参数包装层展开的最大深度：args/arguments 里再套 args 的畸形输入若不加限制，
+# 归一化的自递归会把栈打爆（RecursionError 不会被工具层捕获成友好错误）。
+_MAX_UNWRAP_DEPTH = 8
+
 # 这些字符串不是可执行程序名（模型把布尔/空值写成了字符串）
 _FAKE_APP_TOKENS = frozenset(
     {"true", "false", "null", "none", "nil", "undefined", "nan", "bool", "string"}
@@ -725,31 +732,76 @@ def _split_command_line(text: str) -> tuple[str, list[str]]:
     return _strip_wrapping_quotes(parts[0]), [_strip_wrapping_quotes(p) for p in parts[1:]]
 
 
+def _is_file_path(text: str) -> bool:
+    """整串是否为「一个真实存在的文件」。Windows 同时接受正/反斜杠。"""
+    if not text:
+        return False
+    try:
+        return os.path.isfile(text)
+    except (OSError, ValueError):  # 路径含 NUL / 过长等
+        return False
+
+
+def _prog_resolves(prog: str) -> bool:
+    """程序名能否被定位：存在的文件，或 PATH 中能解析到。"""
+    return _is_file_path(prog) or bool(shutil.which(prog))
+
+
 def _coerce_app(value) -> tuple[str, list[str]]:
     """把 app 收敛为 (可执行程序, 从 app 里拆出的额外参数)；无法收敛返回 ("", [])。
 
     覆盖形态：字符串、整行命令 bash -c "ls"、["bash"]、["ls", "-la"]、带包裹引号的值，
     以及 true/false/null 这类「伪程序名」字符串（直接判为不可用）。
+
+    ⚠️ 含空格的真实路径**绝不可拆分**：把 "C:/Program Files/x/7z.exe" 拆成
+    "C:/Program" + 参数，会让 CreateProcess 按前缀逐步匹配，产生「ok=True 却什么都没
+    执行」的静默错误（比直接报错更危险）。只有确认拆出的首段确实是个可执行程序才拆。
     """
     if isinstance(value, str):
         text = _strip_wrapping_quotes(value)
         if not text or text.lower() in _FAKE_APP_TOKENS:
             return "", []
         if re.search(r"\s", text):
-            return _split_command_line(text)
+            if _is_file_path(text):
+                return text, []  # 合法含空格路径：整体保留
+            prog, rest = _split_command_line(text)
+            has_sep = "/" in text or "\\" in text
+            if has_sep and (not prog or not _prog_resolves(prog)):
+                # 带分隔符却定位不到首段 → 极可能是被错拆的单一路径，交回整串
+                # 让系统给出诚实的 FileNotFoundError，而不是静默跑错目标。
+                return text, []
+            return prog, rest
         return text, []
     if isinstance(value, (list, tuple)):
-        items = [x for x in value if isinstance(x, str) and x.strip()]
-        if not items:
+        # 位置必须保留：丢掉不可用元素会让后续参数整体左移，从而造出另一条命令
+        # （["echo", None, "-n"] 变成 ["echo", "-n"]，语义完全不同）。
+        norm: list[str] = []
+        for x in value:
+            if isinstance(x, str):
+                norm.append(_strip_wrapping_quotes(x))
+            elif x is None:
+                norm.append("")  # 不可用作参数值，但保留占位
+            elif isinstance(x, bool):
+                norm.append(str(x).lower())  # 与 _coerce_args 保持同一口径
+            elif isinstance(x, (int, float)):
+                norm.append(str(x))
+            else:
+                # 嵌套容器不可解释为参数：整体放弃，绝不把 "[1, 2]" 当程序名去执行
+                return "", []
+        head = next((i for i, x in enumerate(norm) if x.strip()), None)
+        if head is None:
             return "", []
-        prog, extra = _coerce_app(items[0])
+        if head:
+            # app 位置就是 app；前导空位无法解释，保守拒绝
+            return "", []
+        prog, extra = _coerce_app(norm[0])
         if not prog:
             return "", []
-        return prog, extra + [_strip_wrapping_quotes(x) for x in items[1:]]
+        return prog, extra + norm[1:]
     return "", []
 
 
-def _coerce_args(value) -> list | None:
+def _coerce_args(value, _depth: int = 0) -> list | None:
     """把 args 收敛为字符串列表；无法安全解释时返回 None（由调用方报错）。"""
     if value is None:
         return []
@@ -757,10 +809,11 @@ def _coerce_args(value) -> list | None:
         text = value.strip()
         if not text:
             return []
-        if text[0] in "[{":
+        # 深度上限：args 里套 JSON 字符串再套 args 的畸形输入会直接递归爆栈
+        if text[0] in "[{" and _depth < _MAX_UNWRAP_DEPTH:
             parsed = _parse_json_blob(text)
             if parsed is not None:
-                return _coerce_args(parsed)
+                return _coerce_args(parsed, _depth + 1)
         return [value]
     if isinstance(value, (list, tuple)):
         out = []
@@ -828,26 +881,45 @@ def _take_alias(extra: dict, names: tuple, current, label: str) -> tuple:
 
 
 def _coerce_timeout(value) -> int:
-    """收敛 timeout：布尔/不可解析一律回落默认 30；<=0 视作未指定；上限一天。"""
-    default = 30
-    if isinstance(value, bool) or value is None:
-        return default
+    """收敛 timeout。
+
+    ⚠️ 必须区分两种回落，否则会引入行为回归：
+      - 显式 0 / 负数 / None / 空串 → **120**，沿用改造前
+        ``effective_timeout = timeout if timeout else 120`` 的语义。这些值表达的是
+        "我没数"，给宽上限；若回落成 30，长命令（编译/下载）会被空闲监控误杀。
+      - 不可解析的字符串、布尔等垃圾值 → 30（与签名默认一致）。
+    上限一天，避免模型填入离谱值导致回合永久挂起。
+    """
+    _UNSET, _BLANK = 30, 120
+    if value is None or value == "":
+        return _BLANK
+    if isinstance(value, bool):
+        return _UNSET
     if isinstance(value, str):
         try:
             value = int(float(value.strip()))
-        except ValueError:
-            return default
+        except (ValueError, AttributeError):
+            return _UNSET
     elif isinstance(value, float):
         value = int(value)
     elif not isinstance(value, int):
-        return default
+        return _UNSET
     if value <= 0:
-        return default
+        return _BLANK
     return min(value, 86400)
 
 
+_ENTRY_KNOWN_KEYS = frozenset(
+    ("app", "args", "_unknown_keys") + _APP_ALIASES + _ARGS_ALIASES + ("arguments",)
+)
+
+
 def _normalize_commands(commands):
-    """把命令清单收敛为 [{'app': str, 'args': [str]}…]（逐项失败隔离，空 app 留给执行层报错）。"""
+    """把命令清单收敛为 [{'app': str, 'args': [str]}…]（逐项失败隔离，空 app 留给执行层报错）。
+
+    对含未知键的条目记录 _unknown_keys：错误信息必须回报模型**实际写的键名**，
+    否则它会看到规范化后的 keys=['app','args']，误以为"我明明写了 app"而无从自纠。
+    """
     if commands is None:
         return None
     if isinstance(commands, (dict, str)):
@@ -861,8 +933,9 @@ def _normalize_commands(commands):
             out.append({"app": prog, "args": rest})
             continue
         if not isinstance(item, dict):
-            out.append({"app": "", "args": []})
+            out.append({"app": "", "args": [], "_unknown_keys": [type(item).__name__]})
             continue
+        unknown = sorted(str(k) for k in item if k not in _ENTRY_KNOWN_KEYS)
         e_app = item.get("app")
         if not e_app:
             for key in _APP_ALIASES:
@@ -882,7 +955,13 @@ def _normalize_commands(commands):
                 [json.dumps(e_args, ensure_ascii=False, default=str)]
                 if isinstance(e_args, dict) else [str(e_args)]
             )
-        out.append({"app": prog, "args": extra + coerced})
+        entry = {"app": prog, "args": extra + coerced}
+        # 透传：主入口与 _run_batch_with_monitor 会各规范化一次，丢失该字段会让
+        # 错误信息退回「显示规范化后的键名」而误导模型。
+        carried = item.get("_unknown_keys")
+        if unknown or carried:
+            entry["_unknown_keys"] = unknown or carried
+        out.append(entry)
     return out
 
 
@@ -906,13 +985,17 @@ def _infer_app_from_args(args: list) -> tuple[str, list[str]]:
     return "", []
 
 
-def _normalize_exec_inputs(app, args, action, commands, timeout, extra):
+def _normalize_exec_inputs(app, args, action, commands, timeout, extra, _depth: int = 0):
     """把 toolkit_exec 的等价入参形态收敛为内部形态。
 
     Returns:
         (app, args, action, commands, timeout, error)：error 非 None 时调用方必须
         直接返回，不得继续执行（避免在退化参数上跑出错误命令）。
     """
+    if _depth > _MAX_UNWRAP_DEPTH:
+        return "", [], action, None, timeout, _exec_arg_error(
+            "参数包装层嵌套过深，已停止解析（避免递归爆栈）",
+            received={"args": args}, example=_EXEC_USAGE)
     extra = dict(extra or {})
     app_received, args_received = app, args
 
@@ -973,7 +1056,8 @@ def _normalize_exec_inputs(app, args, action, commands, timeout, extra):
         if any(k in args for k in ("app", "action", "commands", "args", "command")):
             for k, v in args.items():
                 extra.setdefault(k, v)
-            return _normalize_exec_inputs(app, None, action, commands, timeout, extra)
+            return _normalize_exec_inputs(app, None, action, commands, timeout, extra,
+                                          _depth + 1)
         return "", [], action, None, timeout, _exec_arg_error(
             f"args 需要字符串数组，收到 dict(keys={sorted(map(str, args))[:8]})",
             received={"args": args, "app": app_received}, example=_EXEC_USAGE)

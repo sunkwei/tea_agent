@@ -1,8 +1,11 @@
-# version: 1.2.0 — cleaned: unified return dict, meaningful logger tags
+# version: 1.3.0 — tolerant input contract (alias/wrapping coercion + self-correcting errors)
 
+import json
 import logging
 import os
 import re
+import shlex
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -547,22 +550,19 @@ def _run_single_with_monitor(app: str, args: list, timeout: int) -> dict:
 
 def _run_batch_with_monitor(idx, cmd, timeout):
     """Batch 子任务执行器，集成 _ProcessMonitor 智能超时。"""
+    # 与 toolkit_exec 入口共用同一套归一化：主入口已归一化，这里兜底
+    # （_run_batch_with_monitor 也可能被内部其它路径直接调用）。
+    _norm = _normalize_commands([cmd])
+    cmd = _norm[0] if _norm else {"app": "", "args": []}
     a = cmd.get("app", "")
     ar = cmd.get("args", [])
-    # 与 toolkit_exec 入口同源的入参归一化：小模型可能把 app 写成数组、args 写成字符串
-    if isinstance(a, (list, tuple)):
-        a = next((x for x in a if isinstance(x, str) and x), "")
-    if a and not isinstance(a, str):
-        a = str(a)
-    if isinstance(ar, str):
-        ar = [ar]
-    elif ar is None:
-        ar = []
-    elif not isinstance(ar, list):
-        ar = list(ar)
     result = {"index": idx, "returncode": -1, "stdout": "", "stderr": "", "error": True}
     if not a:
-        result["stderr"] = "app为空"
+        # 逐项失败隔离；错误信息带正确用法，便于模型下轮自纠
+        result["stderr"] = (
+            "app 为空或类型不可用（需要可执行程序路径字符串）。"
+            f"正确用法：commands=[{{'app': 'ls', 'args': ['-la']}}]。收到：{_describe(cmd)}"
+        )
         return result
 
     try:
@@ -638,9 +638,394 @@ def _run_batch_with_monitor(idx, cmd, timeout):
     return result
 
 
-def toolkit_exec(app: str = "", args: list = None, action: str = "single", commands: list = None, timeout: int = 30):
+# ── 入参归一化：等价形态收敛 + 可自纠错误 ──────────────────────────────
+# 背景（设备端 tea_agent_api 日志高频出现）：
+#   "toolkit_exec 参数错误：app 需要可执行程序路径字符串，收到 bool"
+#   "toolkit_exec() got an unexpected keyword argument 'command'/'arguments'"
+# 两者都是**参数形态**问题（模型/客户端换了个等价写法），而原实现要么直接失败，
+# 要么报错信息对模型毫无指导性（"收到 bool"不知道该改成什么）。这里统一收敛：
+#   - 等价参数名：command / cmd / executable / program … → app；argv / options → args
+#   - 整行命令：app='ls -la'、commands=['ls -la'] 自动拆分
+#   - 包装层：{'arguments': {'app': ..., 'args': [...]}} 展开
+#   - 形态：["bash"] → "bash"；args="x" → ["x"]；数字/布尔元素转 str
+# 不能安全解释的一律返回「原因 + 正确用法 + 实际收到的参数形态」，绝不在退化参数上
+# 继续执行（宁可报错，不可执行错命令）。
+_APP_ALIASES = (
+    "command", "cmd", "executable", "program", "program_path", "binary",
+    "exe", "process", "script", "shell_command", "shell", "run",
+)
+_ARGS_ALIASES = ("argv", "arguments_list", "options", "flags", "params_list")
+_COMMANDS_ALIASES = ("cmds", "command_list", "cmd_list", "batch", "tasks", "jobs")
+_BLOB_KEYS = ("arguments", "params", "parameters", "kwargs", "input", "payload", "body")
+_ACTION_ALIASES = ("mode", "kind", "type")
+_TIMEOUT_ALIASES = ("timeout_seconds", "time_limit", "deadline")
+_ACTIONS = ("single", "batch")
+
+# 这些字符串不是可执行程序名（模型把布尔/空值写成了字符串）
+_FAKE_APP_TOKENS = frozenset(
+    {"true", "false", "null", "none", "nil", "undefined", "nan", "bool", "string"}
+)
+
+_EXEC_USAGE = (
+    "toolkit_exec(app='ls', args=['-la']) 或 "
+    "toolkit_exec(action='batch', commands=[{'app': 'ls', 'args': ['-la']}])"
+)
+
+
+def _describe(value, limit: int = 160) -> str:
+    """把任意值渲染成简短的「类型 + 值」描述，用于参数错误消息。"""
+    if isinstance(value, str):
+        shown = value if len(value) <= limit else value[:limit] + "…"
+        return f"str={shown!r}"
+    if value is None or isinstance(value, (bool, int, float)):
+        return f"{type(value).__name__}={value!r}"
+    if isinstance(value, (list, tuple)):
+        return f"{type(value).__name__}[{len(value)}]={repr(value)[:limit]}"
+    if isinstance(value, dict):
+        return f"dict(keys={sorted(map(str, value))[:8]})"
+    return type(value).__name__
+
+
+def _exec_arg_error(reason: str, received: dict | None = None, example: str = "") -> dict:
+    """构造 toolkit_exec 参数错误结果：原因 + 正确用法 + 实际收到的参数形态。
+
+    「收到 bool」这类信息不足以让模型自纠，必须同时给出正确用法与收到的原始形态。
+    """
+    parts = [f"toolkit_exec 参数错误：{reason}"]
+    if example:
+        parts.append(f"正确用法：{example}")
+    shown = ", ".join(f"{k}={_describe(v)}" for k, v in (received or {}).items())
+    if shown:
+        parts.append(f"实际收到：{shown}")
+    logger.warning("toolkit_exec 参数错误：%s | 收到: %s", reason, shown)
+    return {"ok": False, "error": "\n".join(parts), "returncode": -1}
+
+
+def _strip_wrapping_quotes(text: str) -> str:
+    """去掉整体包裹的引号（内部含同类引号时不动）。"""
+    s = text.strip()
+    if len(s) >= 2 and s[0] in "\"'" and s[-1] == s[0] and s[0] not in s[1:-1]:
+        return s[1:-1]
+    return s
+
+
+def _split_command_line(text: str) -> tuple[str, list[str]]:
+    """把一整行命令文本拆成 (可执行程序, 参数列表)。"""
+    line = (text or "").strip()
+    if not line:
+        return "", []
+    try:
+        # Windows 下不做 POSIX 反转义，否则 C:\Program Files\x.exe 这类路径的
+        # 反斜杠会被吃掉；非 Windows 保持 POSIX 语义以正确处理引号。
+        parts = shlex.split(line, posix=(os.name != "nt"))
+    except ValueError:
+        parts = line.split()
+    if not parts:
+        return "", []
+    return _strip_wrapping_quotes(parts[0]), [_strip_wrapping_quotes(p) for p in parts[1:]]
+
+
+def _coerce_app(value) -> tuple[str, list[str]]:
+    """把 app 收敛为 (可执行程序, 从 app 里拆出的额外参数)；无法收敛返回 ("", [])。
+
+    覆盖形态：字符串、整行命令 bash -c "ls"、["bash"]、["ls", "-la"]、带包裹引号的值，
+    以及 true/false/null 这类「伪程序名」字符串（直接判为不可用）。
+    """
+    if isinstance(value, str):
+        text = _strip_wrapping_quotes(value)
+        if not text or text.lower() in _FAKE_APP_TOKENS:
+            return "", []
+        if re.search(r"\s", text):
+            return _split_command_line(text)
+        return text, []
+    if isinstance(value, (list, tuple)):
+        items = [x for x in value if isinstance(x, str) and x.strip()]
+        if not items:
+            return "", []
+        prog, extra = _coerce_app(items[0])
+        if not prog:
+            return "", []
+        return prog, extra + [_strip_wrapping_quotes(x) for x in items[1:]]
+    return "", []
+
+
+def _coerce_args(value) -> list | None:
+    """把 args 收敛为字符串列表；无法安全解释时返回 None（由调用方报错）。"""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if text[0] in "[{":
+            parsed = _parse_json_blob(text)
+            if parsed is not None:
+                return _coerce_args(parsed)
+        return [value]
+    if isinstance(value, (list, tuple)):
+        out = []
+        for item in value:
+            if item is None:
+                out.append("")
+            elif isinstance(item, str):
+                out.append(item)
+            elif isinstance(item, bool):
+                out.append(str(item).lower())
+            elif isinstance(item, (int, float)):
+                out.append(str(item))
+            else:
+                out.append(json.dumps(item, ensure_ascii=False, default=str))
+        return out
+    return None
+
+
+def _parse_json_blob(text: str):
+    """尽力把字符串解析成 JSON 对象/数组（arguments/params 包装字符串）。"""
+    s = (text or "").strip()
+    if len(s) < 2 or s[0] not in "[{":
+        return None
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError as e:
+        logger.debug("toolkit_exec: 参数字符串非严格 JSON（%s），尝试容错修复", e)
+    try:
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
+        fixed = normalize_tool_args("toolkit_exec", s)
+        return json.loads(fixed) if fixed else None
+    except Exception as e:  # noqa: BLE001 — 容错解析失败不阻断主流程
+        logger.debug("toolkit_exec: 参数字符串容错解析失败: %s", e)
+        return None
+
+
+def _equivalent(a, b) -> bool:
+    """判断两个候选参数值是否等价（用于识别同一参数的重复/冲突写法）。"""
+    if a is None or b is None:
+        return False
+    if isinstance(a, str) and isinstance(b, str):
+        return a.strip() == b.strip()
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        return list(a) == list(b)
+    return a == b
+
+
+def _take_alias(extra: dict, names: tuple, current, label: str) -> tuple:
+    """从 extra 中取出第一个命中的等价参数；返回 (value, conflict_reason)。
+
+    命中即移除该键（避免误报「未知参数」）；当前值已绑定且新值不等价时返回冲突原因，
+    由调用方报错 —— 同一参数给出两个不同值属语义歧义，猜错就会执行错命令。
+    """
+    for key in names:
+        if key not in extra:
+            continue
+        value = extra.pop(key)
+        if current is None or current == "" or current == []:
+            return value, ""
+        if value not in (None, "", []) and not _equivalent(current, value):
+            return current, f"{label} 同时给出 {_describe(current)} 与 {_describe(value)}（键 {key}），语义冲突"
+        return current, ""
+    return current, ""
+
+
+def _coerce_timeout(value) -> int:
+    """收敛 timeout：布尔/不可解析一律回落默认 30；<=0 视作未指定；上限一天。"""
+    default = 30
+    if isinstance(value, bool) or value is None:
+        return default
+    if isinstance(value, str):
+        try:
+            value = int(float(value.strip()))
+        except ValueError:
+            return default
+    elif isinstance(value, float):
+        value = int(value)
+    elif not isinstance(value, int):
+        return default
+    if value <= 0:
+        return default
+    return min(value, 86400)
+
+
+def _normalize_commands(commands):
+    """把命令清单收敛为 [{'app': str, 'args': [str]}…]（逐项失败隔离，空 app 留给执行层报错）。"""
+    if commands is None:
+        return None
+    if isinstance(commands, (dict, str)):
+        commands = [commands]
+    if not isinstance(commands, (list, tuple)):
+        return None
+    out = []
+    for item in commands:
+        if isinstance(item, str):
+            prog, rest = _split_command_line(item)
+            out.append({"app": prog, "args": rest})
+            continue
+        if not isinstance(item, dict):
+            out.append({"app": "", "args": []})
+            continue
+        e_app = item.get("app")
+        if not e_app:
+            for key in _APP_ALIASES:
+                if item.get(key):
+                    e_app = item[key]
+                    break
+        e_args = item.get("args")
+        if e_args is None:
+            for key in ("arguments",) + _ARGS_ALIASES:
+                if item.get(key) is not None:
+                    e_args = item[key]
+                    break
+        prog, extra = _coerce_app(e_app)
+        coerced = _coerce_args(e_args)
+        if coerced is None:
+            coerced = (
+                [json.dumps(e_args, ensure_ascii=False, default=str)]
+                if isinstance(e_args, dict) else [str(e_args)]
+            )
+        out.append({"app": prog, "args": extra + coerced})
+    return out
+
+
+def _infer_app_from_args(args: list) -> tuple[str, list[str]]:
+    """app 缺失/不可用时，从 args 首项推断可执行程序（仅接受「明显像程序」的首项）。
+
+    只认可：存在的文件路径，或 PATH 中能解析到的命令名。像 /c、-la 这类选项一律
+    不推断 —— 宁可报错，也不执行一条错误的命令。
+    """
+    if not isinstance(args, list) or not args or not isinstance(args[0], str):
+        return "", []
+    cand = _strip_wrapping_quotes(args[0])
+    if not cand or re.search(r"\s", cand) or cand.startswith("-"):
+        return "", []
+    if cand.startswith("/") and not os.path.exists(cand):
+        return "", []
+    if "/" in cand or "\\" in cand:
+        return (cand, args[1:]) if os.path.isfile(cand) else ("", [])
+    if shutil.which(cand):
+        return cand, args[1:]
+    return "", []
+
+
+def _normalize_exec_inputs(app, args, action, commands, timeout, extra):
+    """把 toolkit_exec 的等价入参形态收敛为内部形态。
+
+    Returns:
+        (app, args, action, commands, timeout, error)：error 非 None 时调用方必须
+        直接返回，不得继续执行（避免在退化参数上跑出错误命令）。
+    """
+    extra = dict(extra or {})
+    app_received, args_received = app, args
+
+    # ── 0. 参数包装层：arguments/params 里塞着真实参数（客户端多包了一层）──
+    for key in list(extra.keys()):
+        if key not in _BLOB_KEYS:
+            continue
+        blob = extra.pop(key)
+        if isinstance(blob, str):
+            blob = _parse_json_blob(blob)
+        if isinstance(blob, dict):
+            for k, v in blob.items():
+                extra.setdefault(k, v)
+        elif isinstance(blob, (list, tuple)) and not args and not commands:
+            args = list(blob)
+        else:
+            # 无法解释的包装层不得静默丢弃（静默丢弃会让模型以为参数已生效）
+            return "", [], action, None, timeout, _exec_arg_error(
+                f"{key} 无法解析为参数对象（需要 dict 或 JSON 对象字符串）",
+                received={key: blob}, example=_EXEC_USAGE)
+
+    # ── 1. 等价参数名收敛（规范名优先；同义名重复且不等价 → 报冲突）──
+    app, conflict = _take_alias(extra, ("app",) + _APP_ALIASES, app, "app")
+    if conflict:
+        return "", [], action, None, timeout, _exec_arg_error(
+            conflict, received={"app": app_received, "args": args_received}, example=_EXEC_USAGE)
+    args, conflict = _take_alias(extra, ("args",) + _ARGS_ALIASES, args, "args")
+    if conflict:
+        return "", [], action, None, timeout, _exec_arg_error(
+            conflict, received={"args": args_received, "app": app_received}, example=_EXEC_USAGE)
+    commands, conflict = _take_alias(extra, ("commands",) + _COMMANDS_ALIASES, commands, "commands")
+    if conflict:
+        return "", [], action, None, timeout, _exec_arg_error(
+            conflict, received={"commands": commands, "app": app_received}, example=_EXEC_USAGE)
+    for key in ("action",) + _ACTION_ALIASES:
+        if key in extra:
+            _v = extra.pop(key)
+            _v_low = _v.strip().lower() if isinstance(_v, str) else ""
+            # 显式 batch 不被别名改回；别名只负责把默认 single 纠正为 batch
+            if _v_low in _ACTIONS and (action != "batch" or _v_low == "batch"):
+                action = _v_low
+            break
+    for key in ("timeout",) + _TIMEOUT_ALIASES:
+        if key in extra:
+            _v = extra.pop(key)
+            if not timeout:
+                timeout = _v
+            break
+
+    # 剩余未知键：明确指出（静默忽略会让模型误以为参数已生效）
+    if extra:
+        return "", [], action, None, timeout, _exec_arg_error(
+            f"不支持参数 {sorted(map(str, extra))}；该工具只接受 app / args / action / commands / timeout",
+            received=dict(extra), example=_EXEC_USAGE)
+
+    # ── 2. args 里塞着完整参数对象 → 展开为真实参数后重新收敛 ──
+    if isinstance(args, dict):
+        if any(k in args for k in ("app", "action", "commands", "args", "command")):
+            for k, v in args.items():
+                extra.setdefault(k, v)
+            return _normalize_exec_inputs(app, None, action, commands, timeout, extra)
+        return "", [], action, None, timeout, _exec_arg_error(
+            f"args 需要字符串数组，收到 dict(keys={sorted(map(str, args))[:8]})",
+            received={"args": args, "app": app_received}, example=_EXEC_USAGE)
+
+    # ── 3. app / args 形态归一 ──
+    app, app_inline_args = _coerce_app(app)
+    coerced_args = _coerce_args(args)
+    if coerced_args is None:
+        return "", [], action, None, timeout, _exec_arg_error(
+            f"args 需要字符串数组，收到 {type(args).__name__}",
+            received={"args": args, "app": app_received}, example=_EXEC_USAGE)
+    args = app_inline_args + coerced_args if app_inline_args else coerced_args
+
+    # ── 4. action / timeout / commands 归一 ──
+    action = action if action in _ACTIONS else "single"
+    timeout = _coerce_timeout(timeout)
+    commands = _normalize_commands(commands)
+
+    # ── 5. 出口校验：绝不带着不可用的 app 继续执行 ──
+    if not commands and not app:
+        inferred, inferred_args = _infer_app_from_args(args)
+        if inferred:
+            logger.info("toolkit_exec: app 缺失/不可用，从 args 推断可执行程序 %r", inferred)
+            app, args = inferred, inferred_args
+    if action == "batch" and not commands:
+        if app:
+            # 声明了 batch 却只给了单条 app：按 single 执行（原先静默返回 results=[]）
+            logger.info("toolkit_exec: action=batch 但无 commands 清单 → 按 single 执行")
+            action = "single"
+        else:
+            return "", [], action, None, timeout, _exec_arg_error(
+                "action=batch 需要 commands 清单（形如 [{'app': 'ls', 'args': ['-la']}]）",
+                received={"action": action, "app": app_received, "commands": commands},
+                example=_EXEC_USAGE)
+    if action == "single" and not app:
+        return "", [], action, commands, timeout, _exec_arg_error(
+            "app 缺失或类型不可用（需要可执行程序路径字符串；布尔值/空值均不可用）",
+            received={"app": app_received, "args": args_received}, example=_EXEC_USAGE)
+    return app, args, action, commands, timeout, None
+
+
+def toolkit_exec(app: str = "", args: list = None, action: str = "single",
+                 commands: list = None, timeout: int = 30, **extra):
     """
     执行系统命令（单条或批量并行）。
+
+    入参容错（宽松入口，严格出口）:
+        - 等价参数名: command / cmd / executable / program → app；argv / options → args
+        - 整行命令: app='ls -la' 或 commands=['ls -la'] 会被自动拆分
+        - 包装层: 形如 arguments={'app': ..., 'args': [...]} 会被展开
+        - app/args 形态: ["bash"] → "bash"；args='x' → ['x']；数字/布尔元素转字符串
+        - 无法安全收敛时返回「原因 + 正确用法 + 实际收到」，并拒绝执行（不猜）
 
     action='single' (默认): 执行单条命令
         toolkit_exec(action='single', app='python', args=['--version'])
@@ -662,34 +1047,16 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         single: {"ok": bool, "returncode": int, "stdout": str, "stderr": str}
         batch: {"ok": bool, "results": list, "success_rate": str, "total": int}
     """
-    logger.info(f"toolkit_exec called: app={app!r}, args={repr(args)[:80]}, action={action!r}, commands={repr(commands)[:80]}, timeout={timeout!r}")
+    logger.info(f"toolkit_exec called: app={app!r}, args={repr(args)[:80]}, action={action!r}, commands={repr(commands)[:80]}, timeout={timeout!r}, extra={sorted(map(str, extra))}")
 
-    # ── 入参类型归一化 ──
-    # 小模型常把 app 写成单元素数组（{"app": ["bash"]}）或把 args 写成字符串，
-    # 直接进入 .lower()/list() 会抛 "'list' object has no attribute 'lower'" 这类
-    # 无从诊断的异常。这里做保守归一化，并在无法归一化时返回明确错误。
-    if isinstance(app, (list, tuple)):
-        _coerced = next((x for x in app if isinstance(x, str) and x), "")
-        if not _coerced and app:
-            # 数组里没有可用的字符串元素 → 明确报错，不要带着错误类型继续执行
-            err = f"toolkit_exec 参数错误：app 需要可执行程序路径字符串，收到 {type(app).__name__}"
-            logger.warning(err)
-            return {"ok": False, "error": err, "returncode": -1}
-        app = _coerced
-    if isinstance(args, str):
-        args = [args]
-    elif isinstance(args, tuple):
-        args = list(args)
-    if app and not isinstance(app, str):
-        app = str(app)
-    if args is not None and not isinstance(args, list):
-        err = f"toolkit_exec 参数错误：args 需要字符串数组，收到 {type(args).__name__}"
-        logger.warning(err)
-        return {"ok": False, "error": err, "returncode": -1}
-    if not isinstance(app, str):
-        err = f"toolkit_exec 参数错误：app 需要可执行程序路径字符串，收到 {type(app).__name__}"
-        logger.warning(err)
-        return {"ok": False, "error": err, "returncode": -1}
+    # ── 入参归一化（等价参数名/整行命令/包装层/形态收敛，详见 _normalize_exec_inputs）──
+    # 归一化失败必须直接返回：绝不带着退化的 app/args 继续执行，否则会跑出错误命令。
+    app, args, action, commands, timeout, _norm_err = _normalize_exec_inputs(
+        app, args, action, commands, timeout, extra)
+    if _norm_err is not None:
+        return _norm_err
+    if args is None:
+        args = []
 
     # ── 提权拒绝：Agent 不得获取管理员/root 权限 ──
     # 需要管理员权限的操作必须由**用户自己手动执行**；这里硬拒绝，
@@ -703,10 +1070,6 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         for cmd in commands:
             a = cmd.get("app", "")
             ar = cmd.get("args", [])
-            if isinstance(a, (list, tuple)):
-                a = next((x for x in a if isinstance(x, str) and x), "")
-            if isinstance(ar, str):
-                ar = [ar]
             if a:
                 refusal = _elevation_refusal(a, ar or [])
                 if refusal:
@@ -727,10 +1090,6 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
         for cmd in commands:
             a = cmd.get("app", "")
             ar = cmd.get("args", [])
-            if isinstance(a, (list, tuple)):
-                a = next((x for x in a if isinstance(x, str) and x), "")
-            if isinstance(ar, str):
-                ar = [ar]
             if a:
                 dangerous, reason = _is_self_destructive(a, ar)
                 if dangerous:
@@ -738,7 +1097,38 @@ def toolkit_exec(app: str = "", args: list = None, action: str = "single", comma
                     return {"ok": False, "error": reason, "results": [{"error": True, "stderr": reason}]}
 
     _PY_CMD_THRESHOLD = 500  # -c 脚本超过此字符数则写入临时文件  # noqa: N806
-    if action == "single" and app in ("python", "python3") and args:
+    _PY_APP_RE = re.compile(r"^python(3(\.\d+)?)?(\.exe)?$", re.IGNORECASE)  # noqa: N806
+    _py_app = bool(app) and bool(_PY_APP_RE.match(os.path.basename(str(app))))
+    if action == "single" and _py_app and args:
+        # 检测 python -c "很长的代码" 模式
+        for i, arg in enumerate(args):
+            if arg == "-c" and i + 1 < len(args):
+                script = args[i + 1]
+                if isinstance(script, str) and len(script) > _PY_CMD_THRESHOLD:
+                    # 写入临时 .py 文件
+                    tmpfd, tmppath = tempfile.mkstemp(suffix=".py", prefix="tea_exec_")
+                    try:
+                        with os.fdopen(tmpfd, "w", encoding="utf-8") as f:
+                            f.write(script)
+                        # 重建 args：用临时文件路径替换 -c + script
+                        new_args = list(args[:i]) + [tmppath] + list(args[i+2:])
+                        logger.info(f"toolkit_exec: -c脚本{len(script)}字符→临时文件 {tmppath}")
+                        # 递归调用但跳过重检测（临时文件路径不含-c，不会再触发）
+                        result = toolkit_exec(app=app, args=new_args, action="single",
+                                             commands=None, timeout=timeout)
+                    finally:
+                        # 清理临时文件
+                        try:
+                            os.unlink(tmppath)
+                        except OSError:
+                            logger.exception('op_failed')
+
+                    return result
+                break  # 只处理第一个 -c
+
+    if action == "batch":
+        if not commands:
+            return {"ok": True, "results": [], "total": 0}
         # 检测 python -c "很长的代码" 模式
         for i, arg in enumerate(args):
             if arg == "-c" and i + 1 < len(args):
@@ -806,7 +1196,7 @@ def meta_toolkit_exec() -> dict:
     return {
         "type": "function",
         "function": {
-            "description": "执行系统命令。action='single' 执行单条；action='batch' 并行批量执行多条。注意：不接受提权命令（sudo/su/pkexec/runas 等一律拒绝）——需要管理员权限的操作必须提示用户手动执行。智能超时(v2.0)：后台 _ProcessMonitor 监控 CPU/MEM/IO，进程活跃时最多延长 4x 超时，空闲时按时终止。",
+            "description": "执行系统命令。action='single' 执行单条（app + args）；action='batch' 并行批量执行多条（commands）。等价写法（command/cmd/executable、整行命令 app='ls -la'、arguments 包装）会被自动归一化。注意：不接受提权命令（sudo/su/pkexec/runas 等一律拒绝）——需要管理员权限的操作必须提示用户手动执行。智能超时(v2.0)：后台 _ProcessMonitor 监控 CPU/MEM/IO，进程活跃时最多延长 4x 超时，空闲时按时终止。",
             "name": "toolkit_exec",
             "parameters": {
                 "type": "object",
@@ -818,12 +1208,12 @@ def meta_toolkit_exec() -> dict:
                     },
                     "app": {
                         "type": "string",
-                        "description": "可执行程序路径",
+                        "description": "可执行程序名或路径（不含参数）。整行命令请写进 args，例如 app='ls', args=['-la']",
                     },
                     "args": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "命令行参数列表",
+                        "description": "命令行参数列表，每个参数一项（如 ['-la', '/tmp']）",
                     },
                     "commands": {
                         "type": "array",

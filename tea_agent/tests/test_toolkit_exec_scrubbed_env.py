@@ -238,3 +238,164 @@ class TestPrivilegeElevationRefused:
         assert tk_exec._command_words("echo a; sudo rm") == ["echo", "sudo"]
         assert tk_exec._command_words("grep -rn sudo /var/log") == ["grep"]
         assert tk_exec._command_words("env FOO=1 sudo ls") == ["sudo"]
+
+
+class TestEquivalentParamForms:
+    """等价参数名 / 整行命令 / 包装层归一化。
+
+    回归（设备端 tea_agent_api 日志高频）：
+    - "toolkit_exec() got an unexpected keyword argument 'command'" / "'arguments'"
+    - "app 需要可执行程序路径字符串，收到 bool"
+    前者是等价参数名（模型换了写法），后者是形态问题；两者都不该让工具整体失败。
+    """
+
+    def test_app_as_bool_returns_self_correcting_error(self, tk_exec):
+        """app 传布尔不得抛异常，且错误信息要给出正确用法供模型自纠。"""
+        r = tk_exec.toolkit_exec(app=True, args=["x"], timeout=10)
+        assert r["ok"] is False
+        assert "正确用法" in r["error"], r["error"]
+
+    def test_error_message_lists_received_values(self, tk_exec):
+        """错误信息必须包含实际收到的参数形态（否则模型无从自查）。"""
+        r = tk_exec.toolkit_exec(app=True, args=["x"], timeout=10)
+        assert "实际收到" in r["error"] and "bool" in r["error"], r["error"]
+
+    def test_command_alias(self, tk_exec):
+        """command= 整行命令：自动拆成 app + args 并执行。"""
+        r = tk_exec.toolkit_exec(command="echo alias-ok", timeout=10)
+        assert r["ok"], r
+        assert r["stdout"].strip() == "alias-ok"
+
+    def test_executable_argv_aliases(self, tk_exec):
+        """executable= / argv= 等价键。"""
+        r = tk_exec.toolkit_exec(executable="echo", argv=["argv-ok"], timeout=10)
+        assert r["ok"], r
+        assert r["stdout"].strip() == "argv-ok"
+
+    def test_arguments_dict_unwrapped(self, tk_exec):
+        """arguments={...} 多包一层时应展开为真实参数。"""
+        r = tk_exec.toolkit_exec(arguments={"app": "echo", "args": ["unwrapped"]}, timeout=10)
+        assert r["ok"], r
+        assert r["stdout"].strip() == "unwrapped"
+
+    def test_arguments_json_string_unwrapped(self, tk_exec):
+        """arguments 是 JSON 字符串时也应展开。"""
+        r = tk_exec.toolkit_exec(
+            arguments='{"app": "echo", "args": ["str-unwrapped"]}', timeout=10)
+        assert r["ok"], r
+        assert r["stdout"].strip() == "str-unwrapped"
+
+    def test_app_whole_command_line_split(self, tk_exec):
+        """app='echo x' 整行命令自动拆分（不再被当成不存在的可执行文件）。"""
+        r = tk_exec.toolkit_exec(app="echo line-split", timeout=10)
+        assert r["ok"], r
+        assert r["stdout"].strip() == "line-split"
+
+    def test_app_list_with_multiple_items(self, tk_exec):
+        """app=['echo', 'x'] 首项为程序，其余并入 args。"""
+        r = tk_exec.toolkit_exec(app=["echo", "from-list"], timeout=10)
+        assert r["ok"], r
+        assert r["stdout"].strip() == "from-list"
+
+    def test_numeric_and_bool_arg_elements(self, tk_exec):
+        """args 里的数字/布尔/None 元素转字符串，不得抛异常。"""
+        r = tk_exec.toolkit_exec(app="echo", args=[1, True, None], timeout=10)
+        assert r["ok"], r
+        assert r["stdout"].strip() == "1 true"
+
+    def test_conflicting_alias_values_refused(self, tk_exec):
+        """app 与 command 给出不同值属语义歧义 → 报冲突，不许猜。"""
+        r = tk_exec.toolkit_exec(app="ls", command="rm -rf /", timeout=10)
+        assert r["ok"] is False
+        assert "语义冲突" in r["error"], r["error"]
+
+    def test_unknown_kwarg_names_the_key(self, tk_exec):
+        """未知参数要指明键名（静默忽略会让模型误以为参数生效）。"""
+        r = tk_exec.toolkit_exec(app="echo", args=["x"], foo=1, timeout=10)
+        assert r["ok"] is False
+        assert "foo" in r["error"], r["error"]
+
+    def test_unparseable_arguments_blob_errors(self, tk_exec):
+        """arguments 无法解析时不得静默丢弃（否则模型以为参数已生效）。"""
+        r = tk_exec.toolkit_exec(arguments="not json at all", timeout=10)
+        assert r["ok"] is False
+        assert "arguments" in r["error"], r["error"]
+
+    def test_arguments_blob_with_unknown_keys_errors(self, tk_exec):
+        """包装层里的未知键要冒泡成明确报错，而不是被吞掉。"""
+        r = tk_exec.toolkit_exec(arguments={"app": "echo", "args": ["x"], "bogus": 1}, timeout=10)
+        assert r["ok"] is False
+        assert "bogus" in r["error"], r["error"]
+
+
+class TestBatchFormTolerance:
+    """batch 模式的形态容错与出口校验。"""
+
+    def test_commands_alias_keys(self, tk_exec):
+        """commands 条目内的等价键（command=）也要归一化。"""
+        r = tk_exec.toolkit_exec(
+            action="batch",
+            commands=[{"command": "echo b-alias"}, {"app": ["echo"], "args": "b-coerced"}],
+            timeout=10,
+        )
+        assert r["ok"], r
+        outs = sorted(x["stdout"].strip() for x in r["results"])
+        assert outs == ["b-alias", "b-coerced"], outs
+
+    def test_commands_string_entries_split(self, tk_exec):
+        """commands 直接给整行命令字符串也要能跑。"""
+        r = tk_exec.toolkit_exec(action="batch", commands=["echo line-a"], timeout=10)
+        assert r["ok"], r
+        assert r["results"][0]["stdout"].strip() == "line-a"
+
+    def test_batch_with_only_app_runs_as_single(self, tk_exec):
+        """action=batch 却只给 app：按 single 执行，不再静默返回空 results。"""
+        r = tk_exec.toolkit_exec(action="batch", app="echo", args=["fallback"], timeout=10)
+        assert r["ok"], r
+        assert r["stdout"].strip() == "fallback"
+
+    def test_batch_without_commands_errors(self, tk_exec):
+        """batch 缺 commands 时必须报错，不能静默成功。"""
+        r = tk_exec.toolkit_exec(action="batch", timeout=10)
+        assert r["ok"] is False
+        assert "commands" in r["error"], r["error"]
+
+    def test_batch_entry_error_names_usage(self, tk_exec):
+        """单个条目 app 无法解析时，该条目报错要带正确用法（失败隔离）。"""
+        r = tk_exec.toolkit_exec(
+            action="batch",
+            commands=[{"args": ["-la"]}, {"app": "echo", "args": ["survivor"]}],
+            timeout=10,
+        )
+        assert any(x and "survivor" in (x.get("stdout") or "") for x in r["results"]), r
+        bad = [x for x in r["results"] if x and not (x.get("stdout") or "").strip()]
+        assert bad and "正确用法" in bad[0]["stderr"], bad
+
+
+class TestSafetyAfterNormalization:
+    """归一化不得绕过安全护栏：提权/自杀检测要在归一化**之后**仍然生效。"""
+
+    def test_elevation_refused_via_alias(self, tk_exec):
+        """经 command= 别名传入的 sudo 仍被拒绝。"""
+        r = tk_exec.toolkit_exec(command="sudo ls", timeout=10)
+        assert r["ok"] is False
+        assert "手动执行" in r["error"], r["error"]
+
+    def test_elevation_refused_via_arguments_wrapper(self, tk_exec):
+        """经 arguments 包装层传入的 sudo 仍被拒绝。"""
+        r = tk_exec.toolkit_exec(
+            arguments={"app": "sudo", "args": ["apt", "install", "-y", "nginx"]}, timeout=10)
+        assert r["ok"] is False
+        assert "手动执行" in r["error"], r["error"]
+
+    def test_elevation_refused_in_batch_via_alias(self, tk_exec):
+        """batch 条目里经 command= 传入的 sudo 仍被拒绝。"""
+        r = tk_exec.toolkit_exec(action="batch", commands=[{"command": "sudo id"}], timeout=10)
+        assert r["ok"] is False
+        assert "手动执行" in (r.get("error") or ""), r
+
+    def test_self_destructive_blocked_after_split(self, tk_exec):
+        """整行形态的 kill 自杀命令仍被拦（归一化后要重新过检测）。"""
+        r = tk_exec.toolkit_exec(app=f"kill -9 {os.getpid()}", timeout=10)
+        assert r["ok"] is False
+        assert "阻止自杀" in r["error"], r["error"]

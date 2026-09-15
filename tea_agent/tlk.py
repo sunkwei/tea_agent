@@ -14,6 +14,7 @@ Toolkit 系统核心 — 工具加载/注册/执行引擎。
 """
 import ast
 import importlib.util
+import inspect
 import json
 import logging
 import os
@@ -296,6 +297,9 @@ class Toolkit:
         self.func_map: dict[str, Callable] = {}
         self.meta_map: dict[str, dict] = {}
         self._cache: dict[tuple, tuple] = {}  # (key, ttl) → (result, expire_time)
+        # 工具签名缓存：供 call_tool 入参预检。必须在 reload()/save() 后清空，
+        # 否则工具改了签名仍按旧签名校验，会把合法调用误判为非法。
+        self._sig_cache: dict = {}
         self._user_created_tools: set[str] = set()  # 用户通过 toolkit_save 创建的工具，默认不缓存
 
         # User directory for saving and overriding tools
@@ -313,6 +317,52 @@ class Toolkit:
         self.reload()
         logger.info(f"Loaded {len(self.func_map)} toolkit functions from {self.tool_dir}")
 
+    def _binding_error(self, func_name: str, func, kwargs: dict) -> str | None:
+        """预检 kwargs 能否绑定到工具签名；不可绑定时返回可自纠的错误文本。
+
+        模型常给工具传「等价但实际不存在」的关键字（线上高频：toolkit_exec 的
+        command / arguments）。此前这类调用直接抛
+        ``TypeError: got an unexpected keyword argument 'command'`` —— 该文本不含
+        合法参数名，模型无从改对，只能反复换写法试错，于是每个畸形形态都再产生
+        一条新 warning。51 个工具都可能有此问题，逐个加 **kwargs 是打 51 次补丁；
+        在本项目的唯一调用汇聚点检查一次才是修根因。
+
+        ⚠️ 刻意**不静默丢弃**未知参数：丢弃会让「filename 为空」这类莫名错误
+        顶替真正的根因（模型写了 file_path 却被悄悄扔掉），比异常更难诊断。
+
+        Args:
+            func_name: 工具名（仅用于错误文本）
+            func: 工具函数对象
+            kwargs: 待绑定参数
+
+        Returns:
+            错误文本；None 表示可正常绑定（含取不到签名的内建可调用对象）
+        """
+        sig = self._sig_cache.get(func_name)
+        if sig is None:
+            try:
+                sig = inspect.signature(func)
+            except (TypeError, ValueError):
+                return None  # 取不到签名：不拦截，保持原行为
+            self._sig_cache[func_name] = sig
+        try:
+            sig.bind(**kwargs)
+        except TypeError as e:
+            named = [n for n, p in sig.parameters.items()
+                     if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)]
+            required = [n for n, p in sig.parameters.items()
+                        if p.default is inspect.Parameter.empty
+                        and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)]
+            unknown = sorted(set(map(str, kwargs)) - set(named))
+            hints = [f"调用 {func_name} 失败：{e}"]
+            if unknown:
+                hints.append(f"不支持的参数 {unknown}；该工具只接受: {', '.join(named) or '(无)'}")
+            if required:
+                hints.append(f"其中必填: {', '.join(required)}")
+            hints.append(f"实际收到参数: {sorted(map(str, kwargs))}")
+            return " | ".join(hints)
+        return None
+
     def call_tool(self, func_name: str, **kwargs):
         """带缓存的工具调用代理。
 
@@ -326,11 +376,23 @@ class Toolkit:
 
         Returns:
             工具函数返回值
+
+        Raises:
+            KeyError: 工具不存在
+            TypeError: 参数无法绑定到工具签名（消息点名非法参数并列出合法参数）
         """
+        if func_name not in self.func_map:
+            raise KeyError(f"Unknown tool: {func_name}")
+
+        # 入参绑定预检：放在最前面，覆盖缓存与非缓存两条路径
+        # （toolkit_file 等白名单工具走缓存分支，只检查非缓存分支会恰好漏掉它们）
+        bind_err = self._binding_error(func_name, self.func_map[func_name], kwargs)
+        if bind_err is not None:
+            logger.warning("toolkit 入参绑定失败: %s", bind_err)
+            raise TypeError(bind_err)
+
         # 白名单之外 + 用户创建的工具不缓存（真实执行）
         if func_name not in self._CACHE_WHITELIST or func_name in self._user_created_tools:
-            if func_name not in self.func_map:
-                raise KeyError(f"Unknown tool: {func_name}")
             return self.func_map[func_name](**kwargs)
 
         if func_name == 'toolkit_file' and kwargs.get('action') == 'write':
@@ -349,8 +411,6 @@ class Toolkit:
                 del self._cache[cache_key]
 
         # 执行工具
-        if func_name not in self.func_map:
-            raise KeyError(f"Unknown tool: {func_name}")
         result = self.func_map[func_name](**kwargs)
 
         # 存入缓存
@@ -509,6 +569,9 @@ class Toolkit:
 
         self.func_map.clear()
         self.meta_map.clear()
+        # 工具集已换，签名缓存必须同步失效：否则同名工具改了参数后，
+        # call_tool 仍按旧签名做预检，会把合法调用误判为非法（或反之）。
+        self._sig_cache.clear()
         for k, v in temp_funcs.items():
             self.func_map[k] = v
             self.meta_map[k] = temp_metas[k]
@@ -673,6 +736,8 @@ class Toolkit:
 
         # 标记为用户创建的工具，后续调用不缓存
         self._user_created_tools.add(name)
+        # 该工具的签名即将随 reload 改变，丢弃旧签名缓存避免误判
+        self._sig_cache.pop(name, None)
 
         return (0, result_msg)
 

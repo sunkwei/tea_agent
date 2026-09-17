@@ -188,6 +188,42 @@
   - 队列每次变更在持锁下递增 `_queue_version`；落盘带上快照版本，不比已落盘更新则跳过写入
   - 新增 `test_state_queue_persist.py` 6 项，并已做**元验证**：把守卫还原成旧实现后同一场景
     确实复活消息（`{}` → `{'t1': [...]}`），证明该回归不是空跑
+- fix(web): 前端 Markdown 列表渲染出幽灵条目 —— 「两条数据，三个序号」
+  - 根因：`formatMarkdown` 用单条正则识别列表，而正则里的 `\s` **匹配换行**；列表前的空行
+    （标题/段落与列表之间的标准写法）被吞进匹配串，匹配串因此以 `\n` 开头，
+    `match.split('\n')` 后首元素是空串却仍被包成 `<li>` → 凭空多出一个空条目，
+    且 `<ol>` 自动编号整体后移：源码 `1./2.` 显示成 `2./3.`。实测真实会话
+    （`## 两点观察` + 两条目）渲染出 3 个序号，第 1 个为空
+  - 改为逐行扫描：标记匹配限定 `[ \t]`（不跨行）、空行只作列表分隔（松散列表不再插入
+    空条目）、裸编号行（`1.` 后无内容）不再吞掉下一行；并保留源起编号
+    （`2.` 起 → `<ol start="2">`），显示序号不再被 `<ol>` 重排
+  - 同类缺陷一并修掉引用块 `^&gt;\s`：`\s` 会把引用行与下一行并成一条引用
+  - 新增 `test_web_markdown_lists.py` 14 项（node 执行真实 `formatMarkdown`，钉
+    「条目数守恒 / 无空条目 / 源序号不被改写」三条契约）；已做**元验证**：
+    还原旧实现后同一组用例 11/14 变红
+  - `index.html` 的 app.js 缓存串同步更新（`?v=20260917_md_list_fix`）
+- fix(vision): 多模态数组 content 被端点拒绝的 400 → 当轮自愈（整轮硬失败降级为丢图有答案）
+  - 现象（生产日志）：`model=deepseek-flash, iteration=1, BadRequestError: 400 -
+    Failed to deserialize the JSON body into the target type: messages[175]:
+    invalid type: sequence, expected a string` —— 整轮对话直接失败，不是降级
+  - 该 400 的含义是"某条消息里出现了本该是字符串的数组"；`to_multimodal` 是唯一会产出
+    数组的路径，故与既有 `"image input"` 合成一条自愈分支：新增
+    `_is_multimodal_content_rejected` 识别签名 → 本会话关 vision → 重建消息
+    （数组拼回纯文本、图片跳过）→ 重试一次；严格只认"序列当字符串用"签名，溢出 / RC
+    回传 / 工具参数类 400 一概不受影响（宁可报错，不可静默丢图能力）
+  - **明确不做**端点级永久降级：实测 `deepseek-flash` 官方端点**接受**
+    `content: [{type:text},{type:image_url}]`（HTTP 200，prompt_tokens 221 vs 纯文本 35，
+    图片 token 正常计入）。因此不能由一次 400 推断"端点不支持视觉"而把该端点的图片永久
+    关掉 —— 该反向契约由 `test_next_session_still_sends_multimodal` 钉住
+  - 新增 `_log_content_type_diagnostic` 现场诊断：端点只回 `messages[N]` 下标，而这下标
+    指的是**我们发出去的 payload** —— 日志把它翻译成该条的 role + 字段类型清单 +
+    含 image_url 的下标，下一次出现即可直接定位（本次就是卡在"只有下标、没有现场"）
+  - 待办：该 400 的真实触发源尚未定位（用真实加载路径重建该话题历史只有 94 条消息 /
+    96 KB 且全部为字符串，而报错请求是 175 条 / 448 KB，体量对不上），需要现场 payload
+    才能收口；诊断日志已就位
+  - tests: 新增 `test_multimodal_content_400_recovery.py` 18 项（分类器正负样本、
+    现场诊断（下标解析 / 越界 / 干净 payload 如实记录 / 不抛异常）、当轮自愈、
+    非多模态 400 不得误降级、未声明 vision 时不自愈、不永久降级反向契约）
 
 ### Documentation
 - docs(readme): 同步 v0.16.x 近期变更 —— 版本号 0.16.6；工具数口径改为 56 个工具模块 /

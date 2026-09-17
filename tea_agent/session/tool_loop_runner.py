@@ -80,6 +80,95 @@ def _is_rc_passed_back_error(err_str: str) -> bool:
     )
 
 
+def _is_multimodal_content_rejected(err_str: str) -> bool:
+    """识别"content 必须是字符串、却收到数组"的 400（消息里有多模态块被拒）。
+
+    实测签名（DeepSeek 官方端点，Rust serde 反序列化）：
+      Failed to deserialize the JSON body into the target type:
+      messages[175]: invalid type: sequence, expected a string at line 1 column 448698
+
+    与既有的 "image input" 报错是同一后果的两种措辞（端点这次不吃图片/多模态块），
+    按同一条自愈分支处理：本会话关 vision → 重建消息（数组拼回纯文本）→ 重试一次。
+
+    注意（2026-09-17 实测修正）：**不能**由这条 400 推断"端点不支持视觉" ——
+    `deepseek-flash` 官方端点接受 `content: [{type:text},{type:image_url}]`
+    （实测 HTTP 200，图片 token 正常计入）。它只说明"这一次请求里某个数组字段
+    没被接受"，因此自愈仅作用于本回合，不做端点级永久降级。
+
+    保守匹配：只认明确的"序列当字符串用"签名，避免吞掉溢出/RC/工具参数等其他 400。
+    """
+    if not err_str:
+        return False
+    s = err_str.lower()
+    return (
+        "invalid type: sequence" in s
+        or ("expected a string" in s and "messages[" in s)
+        or "content must be a string" in s
+        or "expected string, got array" in s
+    )
+
+
+_MESSAGES_INDEX_RE = re.compile(r"messages\[(\d+)\]")
+
+
+def _parse_messages_index(err_str: str) -> int | None:
+    """从 400 错误体里取出 `messages[N]` 的下标 N（无则 None）。"""
+    if not err_str:
+        return None
+    m = _MESSAGES_INDEX_RE.search(err_str)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
+
+
+def _log_content_type_diagnostic(api_messages: list[dict], err_str: str) -> None:
+    """400「content 类型不符」现场诊断：把"哪条消息的哪个字段是数组"钉死。
+
+    端点只回一句 `messages[175]: invalid type: sequence, expected a string`，而下标
+    指的是**我们发出去的 payload** —— 这行日志把该下标对应的 role 与字段类型补上，
+    下次再出现就能直接定位（否则只能靠猜，2026-09-17 那次就卡在这里）。
+
+    纯诊断，fail-open：任何异常都不得影响重试。
+    """
+    try:
+        idx = _parse_messages_index(err_str)
+        anomalies: list[str] = []
+        image_msgs: list[int] = []
+        for i, m in enumerate(api_messages):
+            weird = [
+                f"{f}={type(m[f]).__name__}"
+                for f in ("content", "reasoning_content", "name", "tool_call_id", "prefix")
+                if f in m and not isinstance(m[f], (str, type(None)))
+            ]
+            for tc in (m.get("tool_calls") or []):
+                fn = tc.get("function") or {}
+                if not isinstance(fn.get("arguments"), (str, type(None))):
+                    weird.append(f"tool_calls.arguments={type(fn['arguments']).__name__}")
+            if weird:
+                anomalies.append(f"  [{i}] role={m.get('role')} {' '.join(weird)}")
+            content = m.get("content")
+            if isinstance(content, list) and any(
+                isinstance(p, dict) and p.get("type") == "image_url" for p in content
+            ):
+                image_msgs.append(i)
+
+        lines = [f"  错误下标 messages[{idx}]（payload 共 {len(api_messages)} 条）"
+                 if idx is not None else f"  错误未给出下标（payload 共 {len(api_messages)} 条）"]
+        if idx is not None and 0 <= idx < len(api_messages):
+            m = api_messages[idx]
+            fields = {k: type(v).__name__ for k, v in m.items()}
+            lines.append(f"  messages[{idx}]: role={m.get('role')} 字段类型={fields}")
+        lines.append("  含 image_url 数组的消息下标: " + (str(image_msgs) if image_msgs else "无"))
+        lines.append("  非字符串字段清单:")
+        lines.extend(anomalies or ["  （无 —— payload 里没有类型异常的字段）"])
+        logger.warning("400 content 类型不符 现场诊断:\n" + "\n".join(lines))
+    except Exception:
+        logger.debug("content 类型诊断生成失败（隔离）", exc_info=True)
+
+
 def _log_rc_diagnostic(session, api_messages: list[dict]) -> None:
     """输出 400 现场诊断：逐条列出 assistant 消息的 RC 状态，定位哪条消息异常。
 
@@ -884,9 +973,20 @@ def execute_tool_loop(session, context: dict) -> dict:
                     )
                     api_messages = session._build_api_messages()
                     continue
-                if "image input" in err_str.lower() and session.context.supports_vision:
-                    logger.warning(f"模型端点不支持图片输入，自动回退纯文本模式: {e}")
-                    callback("\n⚠️ 当前 API 端点不支持图片输入，已自动切换为纯文本模式。\n")
+                if (
+                    "image input" in err_str.lower()
+                    or _is_multimodal_content_rejected(err_str)
+                ) and session.context.supports_vision:
+                    logger.warning(
+                        f"请求被端点拒绝（多模态 content 类型不符），"
+                        f"本次按纯文本重建重试: {_extract_api_error_detail(e)}"
+                    )
+                    # 现场诊断：把 400 只给的下标翻译成 role + 字段类型，下次可直接定位
+                    _log_content_type_diagnostic(api_messages, err_str)
+                    callback(
+                        "\n⚠️ 本次请求因多模态内容被端点拒绝，已按纯文本重建后重试"
+                        "（图片内容本次跳过）。\n"
+                    )
                     session.context.supports_vision = False
                     api_messages = session._build_api_messages()
                     try:

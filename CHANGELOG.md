@@ -197,6 +197,16 @@
   目标文件）与 EvolutionBench 进化闸门；Mini 重型工具 12→11；项目结构补 `tool_shield.py` /
   `evolution_gate.py` / `evaluation/` 并修正 providers 与 store 口径；测试口径 870+→1800+；
   新增「安全边界」小节；中英文 README 保持对等
+- docs(agents): 同步 AGENTS.md 到当前实现 —— 项目结构实测（40 顶层模块 + 15 子包、56 个
+  `toolkit_*.py` → 60 注册 / 58 可见、store 13 功能子模块、95 测试文件）并补齐缺失模块
+  （`tool_approval` / `tool_hooks` / `tool_profiles` / `evolution_gate` / `storage_scope` /
+  `audit_log` / `evaluation` / `sdk`）；关键约束补「下划线模块不注册」「工具列表顺序稳定性」
+  「存储作用域」；工具规范补入参绑定预检与 `toolkit_exec` 归一化层、读路径无写副作用、
+  fail-open；自进化章节更新为快照独立 ref（`refs/tea/snapshots`）与按目标文件回滚，新增
+  进化闸门三档模式；新增「环境变量与开关」总表（22 项）与「文档同步规范」；提交规范补
+  合并到 master 的 ff-only 流程与「推送是远端副作用」约定；安全注意事项改为按真实现状
+  陈述（`permission.py` 已禁用、真实闸门为 `tool_approval`、提权硬拒绝、SQL 校验助手、
+  审计 hash 链）
 
 ## [0.15.4] - 2026-08-28
 ### Features

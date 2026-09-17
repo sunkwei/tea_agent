@@ -933,28 +933,55 @@ function formatMarkdown(text) {
     return '\x00TABLE' + idx + '\x00';
   });
 
-  // Lists (unordered)
+  // Lists (unordered / ordered) — 逐行扫描，禁止 \s 跨行匹配
+  //   旧写法 `^(\s*\d+\.\s+.+...)$` 里的 \s 会吞掉列表前的空行（标题/段落与列表之间
+  //   按 Markdown 惯例有空行），匹配串因此以 '\n' 开头，split('\n') 后首元素为空串
+  //   → 凭空多出一个空 <li>：两条数据渲染成「1. / 2. / 3.」，且 <ol> 自动编号整体后移，
+  //   显示序号与源码序号错位（列表前的空行越多，幽灵条目越多）。
   const listBlocks = [];
-  html = html.replace(/^(\s*[-*+]\s+.+(?:\n\s*[-*+]\s+.+)*)$/gm, function(match) {
-    const items = match.split('\n').map(function(line) {
-      return '<li class="md-li">' + line.replace(/^\s*[-*+]\s+/, '') + '</li>';
+  const LIST_MARKER = /^[ \t]*([-*+]|\d+\.)[ \t]+(\S.*)$/;
+  const isOrderedMarker = m => m !== '-' && m !== '*' && m !== '+';
+  const listLines = html.split('\n');
+  const listOut = [];
+  for (let i = 0; i < listLines.length; i++) {
+    const first = LIST_MARKER.exec(listLines[i]);
+    if (!first) { listOut.push(listLines[i]); continue; }
+    const ordered = isOrderedMarker(first[1]);
+    const items = [first[2]];
+    const start = ordered ? parseInt(first[1], 10) : 1;
+    let j = i + 1;
+    while (j < listLines.length) {
+      const next = LIST_MARKER.exec(listLines[j]);
+      if (next) {
+        if (isOrderedMarker(next[1]) !== ordered) break;   // 类型切换 → 另起一个列表
+        items.push(next[2]);
+        j++;
+        continue;
+      }
+      // 松散列表：条目之间的空行不结束列表（旧实现把它变成一个空条目）
+      if (listLines[j].trim() === '') {
+        let k = j;
+        while (k < listLines.length && listLines[k].trim() === '') k++;
+        const after = k < listLines.length ? LIST_MARKER.exec(listLines[k]) : null;
+        if (after && isOrderedMarker(after[1]) === ordered) { j = k; continue; }
+      }
+      break;
+    }
+    const tag = ordered ? 'ol' : 'ul';
+    // 保留源起编号（如从 2. 开始）—— 否则 <ol> 一律从 1 重排，与原文序号对不上
+    const startAttr = ordered && start > 1 ? ' start="' + start + '"' : '';
+    const itemsHtml = items.map(function(t) {
+      return '<li class="md-li">' + t + '</li>';
     }).join('');
     const idx = listBlocks.length;
-    listBlocks.push('<ul class="md-ul">' + items + '</ul>');
-    return '\x00ULIST' + idx + '\x00';
-  });
-  // Lists (ordered)
-  html = html.replace(/^(\s*\d+\.\s+.+(?:\n\s*\d+\.\s+.+)*)$/gm, function(match) {
-    const items = match.split('\n').map(function(line) {
-      return '<li class="md-li">' + line.replace(/^\s*\d+\.\s+/, '') + '</li>';
-    }).join('');
-    const idx = listBlocks.length;
-    listBlocks.push('<ol class="md-ol">' + items + '</ol>');
-    return '\x00OLIST' + idx + '\x00';
-  });
+    listBlocks.push('<' + tag + ' class="md-' + tag + '"' + startAttr + '>' + itemsHtml + '</' + tag + '>');
+    listOut.push('\x00LIST' + idx + '\x00');
+    i = j - 1;
+  }
+  html = listOut.join('\n');
 
-  // Blockquotes
-  html = html.replace(/^&gt;\s(.+)$/gm, '<blockquote class="md-blockquote">$1</blockquote>');
+  // Blockquotes（同样只吃空格/制表符：`\s` 会把引用行与下一行并成一条引用）
+  html = html.replace(/^&gt;[ \t](.+)$/gm, '<blockquote class="md-blockquote">$1</blockquote>');
   // Horizontal rules
   html = html.replace(/^---$/gm, '<hr class="md-hr">');
 
@@ -969,8 +996,7 @@ function formatMarkdown(text) {
   // Restore tables
   html = html.replace(/\x00TABLE(\d+)\x00/g, function(m, idx) { return tableBlocks[idx] || ''; });
   // Restore lists
-  html = html.replace(/\x00ULIST(\d+)\x00/g, function(m, idx) { return listBlocks[idx] || ''; });
-  html = html.replace(/\x00OLIST(\d+)\x00/g, function(m, idx) { return listBlocks[idx] || ''; });
+  html = html.replace(/\x00LIST(\d+)\x00/g, function(m, idx) { return listBlocks[idx] || ''; });
   // Restore code blocks
   html = html.replace(/\x00CODE(\d+)\x00/g, function(m, idx) { return codeBlocks[idx] || ''; });
 

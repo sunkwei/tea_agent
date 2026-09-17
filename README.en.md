@@ -1,4 +1,4 @@
-# Tea Agent v0.15.0
+# Tea Agent v0.16.6
 
 > ⚠️ **Experimental project — AI writing AI. Use at your own risk.**
 
@@ -8,7 +8,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.15.0-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.16.6-blue)](https://pypi.org/project/tea-agent)
 
 ---
 
@@ -17,7 +17,9 @@
 | | |
 |---|---|
 | 🧠 **Self-Evolving** | AI writing AI — modifies its own code, builds new tools, optimizes prompts. Stronger with every task |
-| 🧰 **Tool-Driven** | 75+ built-in tools (files/code/search/screenshot/browser/package/Git), hot-pluggable at runtime |
+| 🧰 **Tool-Driven** | 60+ built-in tools (files/code/search/screenshot/browser/package/Git), hot-pluggable at runtime |
+| 🛡️ **Tool Self-Pruning** | Shrinks the exposed tool set using real usage data (idle tools auto-shielded), three invariants + escape hatches |
+| ♻️ **Resilient Service** | Seamless self-restart (in-flight turn resumes from snapshot, no lost messages) + mid-generation steering |
 | 🖥️ **Multi-Interface** | Web V2 / REST API / ACP / Telegram / WeChat front-ends, one engine |
 | 🧠 **Real Memory** | Human-like long-term memory: tiered priority, semantic retrieval, natural decay, dedup & merge |
 | 🤖 **Multi-Agent** | 6-stage full-stack collaboration: role agents + event flows + message bus + parallel execution + DAG orchestration |
@@ -40,19 +42,37 @@ toolkit_experience_solidify → Success→skills, failure→lessons, auto-crysta
 
 > ⚠️ **Context-Aware**: self-evolution activates **only inside tea_agent's own project**; in external projects it's auto-disabled, focusing on your tasks without harmful changes.
 
-### 2. 🧰 Tool-Driven — 75+ Built-in Tools
+### 2. 🧰 Tool-Driven — 60+ Built-in Tools
 
 | Category | Representative Tools |
 |----------|---------------------|
 | 📁 Files / Code | `toolkit_file`, `toolkit_edit`, `toolkit_diff`, `toolkit_code_review`, `toolkit_format_code` |
 | 🔍 Search / Intelligence | `toolkit_search`, `toolkit_lsp`, `toolkit_explr`, `toolkit_query_chat_history` |
-| 🖥️ Screen / Browser | `toolkit_screenshot`, `toolkit_ocr`, `toolkit_input`, `toolkit_js_fetch`, `toolkit_browser_tab` |
+| 🖥️ Screen / Vision | `toolkit_screenshot`, `toolkit_input`, `toolkit_js_fetch`, `toolkit_browser_tab`, `toolkit_vision_analyze` |
 | 🧠 Memory / Knowledge | `toolkit_memory`, `toolkit_kb`, `toolkit_proactive` |
 | 🤖 Multi-Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_remote_agent` |
 | 📋 Planning / Scheduling | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume` |
-| 🔧 System / Engineering | `toolkit_exec` (incl. git), `toolkit_pkg`, `toolkit_build`, `toolkit_config` |
+| 🔧 System / Engineering | `toolkit_exec` (incl. git), `toolkit_pkg`, `toolkit_build`, `toolkit_config`, `toolkit_server_restart`, `toolkit_approve` |
 
 The tool engine (`tlk.py`) supports **dynamic load/unload/reload** — create a new tool mid-conversation, use it in the next turn.
+Currently **56 tool modules / 60 registered tools**, of which 58 are exposed to the model (2 internal tools stay hidden).
+
+#### Tool exposure self-pruning (v0.16.6+)
+
+Sending every tool in every request burns tokens and dilutes attention. `tool_shield.py` shrinks the exposed set based on **real usage data**:
+
+- **Stats**: one row per tool in the project DB `tool_usage` table (`uses / first_used / last_used / pin`).
+  The recording point is `Toolkit.call_tool` and sits **before** the cache check — a cache hit is still a real call,
+  and missing it would make frequently used tools look "never used" and eventually get shielded
+- **Shielding**: long-idle tools are dropped when building the tool list. Independent from `tool_profiles`
+  window tiers (tiers trim by context window, shielding trims by real usage); the shielded set is order-stable
+  so DeepSeek prefix caching does not thrash
+- **Three invariants** (shielding costs the Agent real capability, so "when never to shield" matters more than "when to"):
+  ① **no data → no shielding** (an empty table only means "not yet observed"; otherwise a fresh install would shield everything on first boot);
+  ② **no shielding of zero-use tools before the observation window is complete** ("just installed" ≠ "long unused");
+  ③ **self-healing paths are never shielded** (`config/save/reload/exec/file/edit/diff/approve/tool_usage/rollback/list_versions`, 11 tools — shielding them removes the ladder used to unshield)
+- **Escape hatches**: `TEA_TOOL_SHIELD=0` to disable; `TEA_TOOL_SHIELD_IDLE_DAYS=N` to tune the idle threshold;
+  per-tool override via `toolkit_tool_usage(action='pin'|'unpin'|'auto'|'reset')`
 
 ### 3. 🧠 Human-like Long-Term Memory
 
@@ -98,6 +118,21 @@ Main model doesn't support vision? Configure a `vision_model` and the Agent swit
 - **Turn-level fallback**: covers "image sent last turn, plain-text follow-up this turn" — the main model never receives unprocessable `image_url` content
 - **`toolkit_vision_analyze`**: on-the-fly delegation — when the main model hits an image path / URL / data URL, it proactively calls the vision model to analyze and continue reasoning
 - **Seamless restore**: switches back to the main model after the turn ends — zero config, zero friction
+
+### 8. ♻️ Resilient Service — Seamless Restart + Mid-Generation Steering (v0.16.x)
+
+**Seamless restart** (`toolkit_server_restart`) — after editing server code or config, the Agent can restart itself:
+
+- `defer` (default): finishes the current turn first, then swaps in a new process; queued messages survive, users barely notice
+- `immediate`: only for a wedged/unresponsive server (cuts the current turn)
+- **In-flight turn snapshot resume**: a half-generated answer is recovered from an on-disk snapshot — nothing lost, nothing duplicated; `/health` reports liveness and queue state
+
+**Mid-generation steering** — no need to wait for the turn to end:
+
+- `POST /api/chat/steering` queues input (images included); the tool loop consumes it at **each round boundary**
+  and injects a `[即时指令]` user message for the next model request, without interrupting running tool batches
+- SSE `steering_injected` closes the loop: the front-end removes applied items from its local queue and renders
+  them in the chat area, preventing duplicate sends after the stream ends
 
 ---
 
@@ -186,12 +221,12 @@ L3 injection format (`[System Memory]` block) carries **long-term background/pre
 Five protection layers when modifying its own code, auto-rollback on any failure:
 
 ```
-Layer 0  Git snapshot (clean working dir only)
-Layer 1  Timestamp .bak (never overwrites)
+Layer 0  Git snapshot (clean working dir only; lands on refs/tea/snapshots, never pollutes branch history)
+Layer 1  Timestamp .bak (history never overwritten)
 Layer 1.5  Strict syntax check (newlines/indent/brackets/colons)
 Layer 2  py_compile verification → rollback on failure
 Layer 2.5  LSP checks (impact analysis + lint diff + signature comparison)
-Layer 3  pytest verification → git reset --hard on failure
+Layer 3  pytest verification → restore the target file from snapshot on failure (no more workspace-wide git reset --hard)
 ```
 
 | Capability | Tool | Safety |
@@ -199,8 +234,15 @@ Layer 3  pytest verification → git reset --hard on failure
 | Create new tools | `toolkit_save` + `toolkit_reload` | Version rollback |
 | Modify source | `toolkit_self_evolve` | Five-layer safety |
 | Optimize prompts | `toolkit_prompt_evolve` | Version rollback |
+| Score evolution | `toolkit_evo_bench` / `toolkit_eval_loop` | keep-or-rollback decision |
 | Crystallize experience | `toolkit_experience_solidify` | Category tags |
 | Code intelligence | `toolkit_lsp` | Read-only |
+
+**Evolution gate (EvolutionBench)**: `toolkit_self_evolve` used to gate only on "compiles + tests pass",
+which cannot answer "is this version actually better?". Each applied change now runs a deterministic
+benchmark (pure-code checks, no LLM), records the score on the evolution curve, and compares it with the
+previous data point to suggest keep / rollback. With `evolution.gate=enforce` a non-improving change is
+rolled back from `.bak` automatically (`off` = zero overhead, `advisory` = default, advise only).
 
 </details>
 
@@ -264,7 +306,7 @@ python build_nuitka.py            # or compile to single-file executable (no Pyt
 | GUI / ACP / Telegram | Desktop & protocol layers |
 | NumPy vectors | replaced with pure Python `math+struct` |
 | Playwright / PyAutoGUI / MSS | optional manual install |
-| 12 heavy tools | JS rendering, screenshot, OCR, LSP etc. on demand |
+| 11 heavy tools | JS rendering, screenshot, input simulation, browser tabs, clipboard, LSP, code explorer, package manager etc. on demand (the OCR tool was removed — image understanding now goes through `toolkit_vision_analyze` and the vision model) |
 
 ---
 
@@ -291,6 +333,8 @@ vision_model:             # vision model (optional): auto-switch when images pre
 
 - **Context window control**: when `max_context_tokens` is exceeded, 5-stage progressive trim (drop old history → tool output placeholders → clear thinking → truncate long text → drop old turns)
 - **Vision model auto-switch**: with `vision_model` configured, the session automatically uses the vision model when the input contains images (restores the main model after the turn); `toolkit_vision_analyze` also lets the main model delegate image analysis on the fly
+- **Evolution gate**: `evolution.gate = off | advisory | enforce` (env `TEA_EVOLVE_GATE`, threshold `TEA_EVOLVE_GATE_THRESHOLD`, default 0.0 = must strictly improve to be kept); under `enforce`, a self-modification that does not raise the EvolutionBench score is rolled back from `.bak` — upgrading "tests pass" to "provably better"
+- **Tool exposure self-pruning**: `TEA_TOOL_SHIELD=0` disables auto-shielding of long-idle tools; `TEA_TOOL_SHIELD_IDLE_DAYS=N` tunes the idle threshold (default 30 days, never before the observation window completes)
 - **Runtime tuning**: Agent can self-tune parameters via `toolkit_config`
 - **Ruff lint**: built-in `pyproject.toml` Ruff config (E/F/W/I/N/UP/B/C4/SIM), Python 3.10 type annotations
 
@@ -299,7 +343,7 @@ vision_model:             # vision model (optional): auto-switch when images pre
 ## 🧪 Testing
 
 ```bash
-pytest                    # all unit tests (870+ cases)
+pytest                    # all unit tests (1800+ cases)
 python tests/test_server_api.py --port 8282   # Server API black-box tests (8 suites, 30+ points)
 ```
 
@@ -314,22 +358,39 @@ tea_agent/
 ├── agent.py           # Agent unified entry
 ├── onlinesession.py   # Online session (tool loop + streaming)
 ├── litesession.py     # Lightweight session
-├── tlk.py             # Tool load/register/execute engine (75+ tools)
+├── tlk.py             # Tool load/register/execute engine (60 tools)
 ├── memory.py          # Long-term memory system
 ├── config.py          # Configuration management
-├── providers.py       # 50+ LLM provider adapters
+├── providers.py       # 26 LLM provider bootstrap catalog (model attrs live in provider.yaml)
+├── tool_shield.py     # Auto-shield long-idle tools (three invariants + escape hatches)
+├── evolution_gate.py  # Evolution gate: EvolutionBench score → keep-or-rollback
+├── skill_loader.py    # On-demand skill loading (necessity/sufficiency scoring)
+├── context_fragments.py # Context fragments assembled on demand (time/budget/mode/memory)
 ├── server/            # REST API + Web V2 (Starlette + SSE)
 ├── protocol/          # ACP protocol
 ├── channel/           # Telegram / WeChat adapters
-├── toolkit/           # 75+ tool modules
+├── toolkit/           # 56 tool modules
 ├── session/           # History compression / L1/L2/L3 / JSON validation
-├── store/             # Data storage (10 sub-modules)
+├── store/             # Data storage (13 feature sub-modules + migration: sessions/memory/vectors/tool usage/interruptions…)
 ├── multi_agent/       # Multi-agent system
-├── lsp/               # Code intelligence (Jedi + Tree-sitter)
+├── evaluation/        # EvolutionBench deterministic benchmarks
+├── lsp/               # Code intelligence (Jedi + Ruff)
 ├── skills/            # Skill crystallization
-├── tests/             # 870+ test cases
+├── tests/             # 1800+ test cases (95 test files)
 └── demo/              # Demos (debate / piano / DAG)
 ```
+
+---
+
+## 🔐 Security Boundaries
+
+- **Privilege escalation is always refused**: `sudo` / `su` / `pkexec` / `runas` are hard-blocked on both execution paths (`toolkit_exec` and `toolkit_scheduler`) — operations needing admin rights must be run by the user manually
+- **Approval gate**: with `TEA_APPROVAL_MODE=enforce`, high-risk tools (`toolkit_exec` / `toolkit_self_evolve` …) require `toolkit_approve` authorization, granted per project
+- **Path fence**: file tools default to project scope, `../` escapes rejected; cross-directory work needs an explicit absolute path or `TEA_FILE_ALLOW_OUTSIDE=1`
+- **SQL safety**: all database access is parameterized, guarded by a self-check test that forbids f-string SQL interpolation
+- **Snapshot isolation**: self-evolution git snapshots land on a dedicated ref (`refs/tea/snapshots`, override with `TEA_SNAPSHOT_REF`) instead of polluting branch history; `TEA_GIT_SNAPSHOT_MODE=off|side|branch`
+- **Evolution gate**: `TEA_EVOLVE_GATE=off|advisory|enforce` decides whether the EvolutionBench score can block a self-modification (under `enforce` a non-improving change is rolled back)
+- **Self-evolution boundary**: background evolution may optimize tools / skills / prompts, but must **never touch user conversation history**
 
 ---
 

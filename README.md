@@ -1,4 +1,4 @@
-# Tea Agent v0.15.0
+# Tea Agent v0.16.6
 
 > ⚠️ **AI 写 AI 的实验项目，自行承担责任。**
 
@@ -8,7 +8,7 @@
 
 [![Python](https://img.shields.io/badge/Python-%3E%3D3.10-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.16.5-blue)](https://pypi.org/project/tea-agent)
+[![Version](https://img.shields.io/badge/version-0.16.6-blue)](https://pypi.org/project/tea-agent)
 
 ---
 
@@ -17,7 +17,9 @@
 | | |
 |---|---|
 | 🧠 **自进化** | AI 写 AI —— 能改自己的代码、造新工具、优化提示词，任务越多越强 |
-| 🧰 **工具驱动** | 75+ 内置工具（文件/代码/搜索/截图/浏览器/包管理/Git），运行时热插拔 |
+| 🧰 **工具驱动** | 60+ 内置工具（文件/代码/搜索/截图/浏览器/包管理/Git），运行时热插拔 |
+| 🛡️ **工具自净化** | 按真实使用统计收缩工具暴露面（长期闲置自动屏蔽），三条不变式保底 + 逃生阀 |
+| ♻️ **服务韧性** | 无感重启（在途回合快照续跑、消息不丢）+ 生成中插话（steering） |
 | 🖥️ **多形态** | Web V2 / REST API / ACP / Telegram / 微信 界面，一套引擎 |
 | 🧠 **真记忆** | 类人长期记忆：分层优先级、语义检索、自然衰减、去重合并，跨会话不忘 |
 | 🤖 **多 Agent** | 6 阶段全栈协作：角色化 Agent + 事件流 + 消息总线 + 并行执行 + DAG 编排 |
@@ -40,19 +42,36 @@ toolkit_experience_solidify → 成功→技能，失败→教训，自动结晶
 
 > ⚠️ **上下文感知**：自进化能力**只在 tea_agent 自身项目内激活**；在外部项目中自动禁用，专注完成你的任务，不做有害改动。
 
-### 2. 🧰 工具驱动 — 75+ 内置工具
+### 2. 🧰 工具驱动 — 60+ 内置工具
 
 | 类别 | 代表工具 |
 |------|---------|
 | 📁 文件 / 代码 | `toolkit_file`, `toolkit_edit`, `toolkit_diff`, `toolkit_code_review`, `toolkit_format_code` |
 | 🔍 搜索 / 智能 | `toolkit_search`, `toolkit_lsp`, `toolkit_explr`, `toolkit_query_chat_history` |
-| 🖥️ 屏幕 / 浏览器 | `toolkit_screenshot`, `toolkit_ocr`, `toolkit_input`, `toolkit_js_fetch`, `toolkit_browser_tab` |
+| 🖥️ 屏幕 / 视觉 | `toolkit_screenshot`, `toolkit_input`, `toolkit_js_fetch`, `toolkit_browser_tab`, `toolkit_vision_analyze` |
 | 🧠 记忆 / 知识 | `toolkit_memory`, `toolkit_kb`, `toolkit_proactive` |
 | 🤖 多 Agent | `toolkit_parallel_subtasks`, `toolkit_subagent`, `toolkit_subagent_msg`, `toolkit_remote_agent` |
 | 📋 规划 / 调度 | `toolkit_plan`, `toolkit_todo`, `toolkit_scheduler`, `toolkit_task_resume` |
-| 🔧 系统 / 工程 | `toolkit_exec`(含 git), `toolkit_pkg`, `toolkit_build`, `toolkit_config` |
+| 🔧 系统 / 工程 | `toolkit_exec`(含 git), `toolkit_pkg`, `toolkit_build`, `toolkit_config`, `toolkit_server_restart`, `toolkit_approve` |
 
 工具引擎（`tlk.py`）支持**动态加载/卸载/重载** — 对话中创建一个新工具，下一轮就能用。
+当前 **56 个工具模块 / 60 个注册工具**，其中 58 个对模型可见（2 个内部工具不暴露）。
+
+#### 工具暴露自缩减（v0.16.6+）
+
+把全部工具塞进每次请求既烧 token 也稀释注意力。`tool_shield.py` 按**真实使用数据**收缩暴露面：
+
+- **统计**：项目库 `tool_usage` 表，一行一工具（`uses / first_used / last_used / pin`）。
+  记录点是 `Toolkit.call_tool`，且在缓存判定**之前** —— 命中缓存同样是一次真实调用，
+  漏记会把常用工具长期误判成"没用过"而屏蔽
+- **屏蔽**：构建工具列表时剔除长期未使用者。与 `tool_profiles` 的窗口档位是**两层独立收缩**
+  （档位按上下文窗口裁、屏蔽按真实使用裁）；屏蔽集合排序稳定，不抖动 DeepSeek 前缀缓存
+- **三条不变式**（屏蔽会让 Agent 失去能力，故"何时绝不屏蔽"比"何时屏蔽"更要紧）：
+  ① **无数据不屏蔽** —— 空表只代表"尚未观测"，否则新装机首启即屏蔽全部工具、Agent 瘫痪；
+  ② **观测期未满不屏蔽零使用工具** —— 判"长期不用"必须先有"长期"，"刚装上"不等于"长期不用"；
+  ③ **自愈通路永不屏蔽** —— `config/save/reload/exec/file/edit/diff/approve/tool_usage/rollback/list_versions` 共 11 个，屏蔽它们等于拆掉解除屏蔽的梯子
+- **逃生阀**：`TEA_TOOL_SHIELD=0` 关闭；`TEA_TOOL_SHIELD_IDLE_DAYS=N` 调闲置阈值；
+  单工具用 `toolkit_tool_usage(action='pin'|'unpin'|'auto'|'reset')` 覆盖
 
 ### 3. 🧠 类人长期记忆系统
 
@@ -106,6 +125,20 @@ register → exec（下发任务，session_id 控制上下文） → status（�
 - **回合级兜底**：覆盖「上一轮发图、本轮纯文本追问」场景，主模型不再收到无法处理的 `image_url` 内容
 - **`toolkit_vision_analyze`**：主模型「灵机一动」委托能力 — 遇到图片路径 / URL / data URL 主动调用视觉模型分析，返回文本结果继续推理
 - **无感恢复**：回合结束自动恢复主模型，零配置零打扰
+
+### 8. ♻️ 服务韧性 — 无感重启 + 生成中插话（v0.16.x）
+
+**无感重启**（`toolkit_server_restart`）— Agent 改完 server 代码 / 配置可自行重启生效：
+
+- `defer`（默认）：等当前回合回答完再换新进程，新消息排队不丢，用户几乎无感
+- `immediate`：仅服务卡死 / 失控时使用（会切断当前回合）
+- **在途回合快照续读**：重启期间生成到一半的回答从磁盘快照恢复，不丢不重；`/health` 暴露存活与排队状态
+
+**生成中插话（steering）** — 不必等会话结束，随时补充指令：
+
+- `POST /api/chat/steering` 入队（支持图片），工具循环**每轮边界**消费并注入 `[即时指令]`，
+  下一轮模型请求生效，不打断执行中的工具批次
+- SSE `steering_injected` 事件闭环：前端从本地排队列表移除已生效项并渲染到聊天区，避免流结束后重复发送
 
 ---
 
@@ -194,12 +227,12 @@ L3 注入格式（`[System Memory]` 区）包含**长期背景/偏好/关键结�
 修改自身代码时五层防护，任一层失败自动回滚：
 
 ```
-Layer 0  Git 快照（仅工作区干净时）
-Layer 1  时间戳 .bak（永不覆盖）
+Layer 0  Git 快照（仅工作区干净时；落点 refs/tea/snapshots，不污染分支历史）
+Layer 1  时间戳 .bak（永不覆盖历史）
 Layer 1.5  语法严格检查（换行/缩进/括号/冒号）
 Layer 2  py_compile 编译验证 → 失败回滚
 Layer 2.5  LSP 智能检查（影响分析 + lint 对比 + 签名对比）
-Layer 3  pytest 测试验证 → 失败 git reset --hard
+Layer 3  pytest 测试验证 → 失败按快照恢复目标文件（不再 git reset --hard 波及整个工作区）
 ```
 
 | 能力 | 工具 | 安全 |
@@ -207,8 +240,14 @@ Layer 3  pytest 测试验证 → 失败 git reset --hard
 | 创建新工具 | `toolkit_save` + `toolkit_reload` | 版本回滚 |
 | 修改源码 | `toolkit_self_evolve` | 五层安全 |
 | 优化提示词 | `toolkit_prompt_evolve` | 版本回滚 |
+| 进化评分 | `toolkit_evo_bench` / `toolkit_eval_loop` | keep-or-rollback 决策 |
 | 固化经验 | `toolkit_experience_solidify` | 分类标签 |
 | 代码智能 | `toolkit_lsp` | 只读 |
+
+**进化闸门（EvolutionBench）**：`toolkit_self_evolve` 原有的门槛只有「编译过 + 测试过」，
+回答不了「这版是否真的更好」。现在改动落地后会自动跑确定性基准（纯代码 check，无 LLM）并写入
+进化曲线，与上一数据点比较给出 keep / rollback 建议；`evolution.gate=enforce` 时分数未提升
+自动按 `.bak` 回滚（`off` 零开销 / `advisory` 默认只建议）。
 
 </details>
 
@@ -272,7 +311,7 @@ python build_nuitka.py            # 或编译为单文件可执行文件（无�
 | ACP / Telegram | 协议与渠道层 |
 | NumPy 向量 | 替换为纯 Python `math+struct` |
 | Playwright / PyAutoGUI / MSS | 可选自行安装 |
-| 12 个重型工具 | JS 渲染、截图、OCR、LSP 等按需启用 |
+| 11 个重型工具 | JS 渲染、截图、输入模拟、浏览器标签、剪贴板、LSP、代码探索、包管理等按需启用（OCR 工具已移除，图片理解改由 `toolkit_vision_analyze` 走视觉模型） |
 
 ---
 
@@ -300,6 +339,8 @@ vision_model:             # 视觉模型（可选）：会话含图片时自动�
 - **上下文窗口控制**：`max_context_tokens` 作为"上下文已用"百分比的分母（窗口上限），超预算时按 5 级渐进裁剪（删旧历史 → 工具输出占位 → 清 thinking → 截长文 → 删旧轮）。未显式配置时默认 1M（1048576），**不做模型名推断**，避免模型名不匹配导致窗口上限误判。输入预算与 `max_tokens` 联动求解（窗口 − 输出请求 − 2% 安全余量），从源头防止"输入+输出 > 窗口"的 400 溢出；API 真返回 400 时自动修正窗口、激进压缩历史、钳制 max_tokens 后重试。
 - **上下文填充治理（2026-09）**：修复"多轮对话迅速打满窗口"。`provider.yaml` 的 `max_output_tokens` 自动填充时按窗口 25% 限幅（不再把 384K 输出预留算进预算，1M 窗口的输入预算从 446K 回到 580K）；L1 的 `reasoning_content` 以 `rc_keep_steps`（默认 8）分块，只保留最近一块全文、更早的块置空（字段保留，满足 DeepSeek V4 回传要求），单轮 200 步的思考链不再全量重放；L2 单条 `thinking` 限幅 `l2_thinking_max_chars`（默认 6000 字符）且总字符数达到 `l2_max_chars`（默认 120000）即触发 L3 摘要；L2 与 L1 重叠的轮次自动去重；源码文件回放上限 64KB（此前不截断）；`keep_turns` 默认回落 5 并让 `max_history` 真正生效（限制 L1 保留的最近用户轮数）。
 - **视觉模型自动切换**：配置 `vision_model` 后，会话输入含图片时自动使用视觉模型（回合结束恢复主模型）；另提供 `toolkit_vision_analyze` 工具供主模型委托图片分析
+- **自我进化闸门**：`evolution.gate = off | advisory | enforce`（环境变量 `TEA_EVOLVE_GATE`，阈值 `TEA_EVOLVE_GATE_THRESHOLD` 默认 0.0 即"必须严格提升才算 keep"）；`enforce` 下修改自身代码后自动跑 EvolutionBench，分数未提升即按 `.bak` 回滚 —— 把"测试通过"升级为"确实更好"
+- **工具暴露自缩减**：`TEA_TOOL_SHIELD=0` 关闭长期未使用工具自动屏蔽；`TEA_TOOL_SHIELD_IDLE_DAYS=N` 调整闲置阈值（默认 30 天，观测期未满不屏蔽）
 - **运行时调优**：Agent 可用 `toolkit_config` 自主调整参数
 - **Ruff 规范**：内置 `pyproject.toml` Ruff 配置（E/F/W/I/N/UP/B/C4/SIM），Python 3.10 类型注解
 
@@ -308,7 +349,7 @@ vision_model:             # 视觉模型（可选）：会话含图片时自动�
 ## 🧪 测试
 
 ```bash
-pytest                    # 全部单元测试（870+ 用例）
+pytest                    # 全部单元测试（1800+ 用例）
 python tests/test_server_api.py --port 8282   # Server API 黑盒测试（8 套件 30+ 测试点）
 ```
 
@@ -323,22 +364,39 @@ tea_agent/
 ├── agent.py           # Agent 统一入口
 ├── onlinesession.py   # 在线会话（工具循环 + 流式）
 ├── litesession.py     # 轻量会话
-├── tlk.py             # 工具加载/注册/执行引擎（75+ 工具）
+├── tlk.py             # 工具加载/注册/执行引擎（60 工具）
 ├── memory.py          # 长期记忆系统
 ├── config.py          # 配置管理
-├── providers.py       # 50+ LLM 提供商适配
+├── providers.py       # 26 家 LLM 供应商引导目录（模型属性来自 provider.yaml）
+├── tool_shield.py     # 长期未使用工具自动屏蔽（三条不变式 + 逃生阀）
+├── evolution_gate.py  # 进化闸门：EvolutionBench 评分 → keep-or-rollback
+├── skill_loader.py    # Skill 按需加载（必要性/充分性双维评估）
+├── context_fragments.py # 上下文片段按需组装（时间/预算/模式/记忆）
 ├── server/            # REST API + Web V2（Starlette + SSE）
 ├── protocol/          # ACP 协议
 ├── channel/           # Telegram / 微信适配器
-├── toolkit/           # 75+ 工具模块
+├── toolkit/           # 56 个工具模块
 ├── session/           # 历史压缩 / L1/L2/L3 / JSON 校验
-├── store/             # 数据存储（10 子模块）
+├── store/             # 数据存储（13 个功能子模块 + migration：会话/记忆/向量/工具用量/中断…）
 ├── multi_agent/       # 多 Agent 系统
-├── lsp/               # 代码智能（Jedi + Tree-sitter）
+├── evaluation/        # EvolutionBench 确定性基准
+├── lsp/               # 代码智能（Jedi + Ruff）
 ├── skills/            # 技能结晶
-├── tests/             # 870+ 测试用例
+├── tests/             # 1800+ 测试用例（95 个测试文件）
 └── demo/              # 演示应用（辩论赛 / 钢琴 / DAG）
 ```
+
+---
+
+## 🔐 安全边界
+
+- **提权一律拒绝**：`sudo` / `su` / `pkexec` / `runas` 等硬拒绝（`toolkit_exec` 与 `toolkit_scheduler` 两条执行路径都拦截）—— 需要管理员权限的操作必须由用户手动执行
+- **审批闸门**：`TEA_APPROVAL_MODE=enforce` 时高风险工具（`toolkit_exec` / `toolkit_self_evolve` 等）须经 `toolkit_approve` 授权，授权按项目持久生效
+- **路径围栏**：文件工具默认限制在项目内，禁止 `../` 逃逸；跨目录操作需显式绝对路径或 `TEA_FILE_ALLOW_OUTSIDE=1`
+- **SQL 安全**：数据库操作一律参数化查询，项目自带「禁止 f-string 拼接 SQL」的自检测试把守
+- **快照隔离**：自进化 git 快照提交到独立 ref（`refs/tea/snapshots`，可用 `TEA_SNAPSHOT_REF` 覆盖），不再污染分支历史；`TEA_GIT_SNAPSHOT_MODE=off|side|branch`
+- **进化闸门**：`TEA_EVOLVE_GATE=off|advisory|enforce` 决定 EvolutionBench 评分是否阻断自我修改（`enforce` 下分数未提升自动回滚）
+- **自进化边界**：后台自进化线程可优化工具 / 技能 / 提示词，但**不得改动用户对话历史**
 
 ---
 

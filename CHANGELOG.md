@@ -189,6 +189,15 @@
   - 新增 `test_state_queue_persist.py` 6 项，并已做**元验证**：把守卫还原成旧实现后同一场景
     确实复活消息（`{}` → `{'t1': [...]}`），证明该回归不是空跑
 
+### Documentation
+- docs(readme): 同步 v0.16.x 近期变更 —— 版本号 0.16.6；工具数口径改为 56 个工具模块 /
+  60 个注册工具（58 个对模型可见），删除已移除的 `toolkit_ocr` 引用；新增「工具暴露自缩减」
+  小节（统计点、三条不变式、逃生阀）与「服务韧性」小节（无感重启 + 在途回合快照续读 +
+  生成中插话 steering）；自进化章节补快照独立 ref（`refs/tea/snapshots`，回滚改为按快照恢复
+  目标文件）与 EvolutionBench 进化闸门；Mini 重型工具 12→11；项目结构补 `tool_shield.py` /
+  `evolution_gate.py` / `evaluation/` 并修正 providers 与 store 口径；测试口径 870+→1800+；
+  新增「安全边界」小节；中英文 README 保持对等
+
 ## [0.15.4] - 2026-08-28
 ### Features
 - fix(cache): 动态上下文改为**追加到请求消息末尾**，对齐 DSH append-only 架构

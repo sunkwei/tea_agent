@@ -1,6 +1,7 @@
 """在线工具调用会话 — Token 优化版（组合模式，支持 OpenAI Function Calling）。"""
 
 import logging
+import time
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -884,6 +885,61 @@ class OnlineToolSession(BaseChatSession):
         except Exception:
             logger.debug("append turn/end marker failed (isolated)", exc_info=True)
 
+    def _record_decode_sample(self, usage, streaming: bool = True,
+                              t_first: float | None = None,
+                              t_end: float | None = None,
+                              est_text: str = "",
+                              clock=None) -> None:
+        """旁路记录一次模型调用的解码速率样本。
+
+        纯观测用途：任何异常一律 debug 级吞掉，绝不把主调用带崩
+        （见 AGENTS.md「辅助能力不绑架主流程」）。
+        ⚠️ 不要从消费循环里直接 self. 调用 —— 须经
+        _process_stream_with_reasoning 内的 _sample 闭包触发，理由见该闭包注释。
+
+        Args:
+            usage: 端点返回的 usage 对象（取 completion_tokens）
+            streaming: False=非流式，无首 token 概念，只记总耗时、不参与 tok/s
+            t_first: 首个产出内容的 chunk 到达时刻（monotonic）
+            t_end: 流读完时刻（monotonic）；None 则由 clock 取
+            est_text: usage 缺失时用于本地估算 token 的文本（正文+思考）
+            clock: 与 t_first **同源**的单调时钟（time.monotonic）。t_end 缺省时
+                必须由它取值：让 decode_speed 自行取时会跨模块混用时间源，
+                算出的窗口毫无意义（会被合理性护栏判为坏样本而静默丢弃）
+        """
+        try:
+            from tea_agent.session.decode_speed import MAX_SAMPLES, make_sample
+
+            # 端点没回 usage 时退到文本估算（第三方代理不带 include_usage 很常见）
+            est = 0
+            if usage is None and est_text:
+                try:
+                    from tea_agent.session.history_builder import estimate_tokens
+
+                    est = max(0, estimate_tokens(est_text) - 4)  # 扣掉消息结构开销
+                except Exception:
+                    est = 0
+            sample = make_sample(
+                t_request=getattr(self.context, "_stream_t_request", None),
+                t_first=t_first,
+                t_end=t_end,
+                completion_tokens=getattr(usage, "completion_tokens", None),
+                streaming=streaming,
+                est_tokens=est,
+                clock=clock,
+            )
+            if sample is None:
+                return
+            samples = getattr(self.context, "_decode_samples", None)
+            if samples is None:  # 兼容未声明该字段的旧 context 实例
+                samples = []
+                self.context._decode_samples = samples
+            samples.append(sample)
+            if len(samples) > MAX_SAMPLES:
+                del samples[: len(samples) - MAX_SAMPLES]
+        except Exception as e:
+            logger.debug(f"解码速率样本记录失败（已忽略）: {e}")
+
     def _process_stream_with_reasoning(
         self,
         response,
@@ -908,10 +964,46 @@ class OnlineToolSession(BaseChatSession):
         tool_calls_data = []
         reasoning_parts = []
 
+        # ── 解码速率采样的安全入口（见 _record_decode_sample 文档）──
+        # 必须是**闭包**而非 self 上的方法：采样调用点在断流重试的 try 内，
+        # 任何在调用点抛出的异常（含 self 上属性查找失败 —— 鸭子类型的 session
+        # 替身、部分构造的对象）都会被误判为网络断流并触发指数退避重试。
+        # 局部函数名的查找不可能失败，内部异常一律 debug 级吞掉。
+        #
+        # 先在重试 try **之外**绑定时钟：若 time 将来又被函数内的 import time
+        # 遮蔽，异常会在这里响亮爆出（真正的编程错误），而不是在循环里被当成
+        # 一次"网络断流"悄悄重试三次。
+        _monotonic = time.monotonic
+
+        def _now() -> float:
+            """取单调时刻；时钟本身异常时返回 0.0。
+
+            取值发生在消费循环内（即在重试 try 内），因此这个调用**绝不允许**
+            抛出 —— 否则控制流被观测代码改写。时钟坏掉 → 样本退化为
+            decode=0 → 被有效性检查丢弃：表现为「不显示速率」而非「对话重试」。
+            """
+            try:
+                return _monotonic()
+            except Exception:  # pragma: no cover - 时钟被破坏的极端环境
+                return 0.0
+
+        def _sample(usage, streaming: bool, t_first=None,
+                    est_text: str = "") -> None:
+            try:
+                self._record_decode_sample(
+                    usage, streaming=streaming, t_first=t_first,
+                    t_end=_now(), est_text=est_text, clock=_monotonic,
+                )
+            except Exception as e:  # pragma: no cover - 防御性旁路
+                logger.debug(f"解码速率采样未生效（已忽略）: {e}")
+
         # 非流式模式
         if self.context.no_stream_chunk:
             if hasattr(response, "usage") and response.usage:
                 self.api._accumulate_usage(response.usage)
+                # 非流式拿不到首 token：只记总耗时，decode_seconds=None
+                # 使其不参与 tok/s，避免把排队/prefill 冒充成解码速度
+                _sample(response.usage, streaming=False)
             if response.choices:
                 msg = response.choices[0].message
                 # vLLM 思考模式（Qwen3.8 等）返回 `reasoning` 字段，
@@ -958,6 +1050,12 @@ class OnlineToolSession(BaseChatSession):
         stream_retries = 0
         _chunk_buf: list[str] = []
         _chunk_chars = 0
+        # ── 解码速率打点（旁路观测，不影响主流程序列）──
+        # _t_first: 首个「有产出」chunk 的到达时刻。思考模型的首 token 就是
+        #   reasoning，必须一起算，否则 TTFT 被错误推迟到正文首字。
+        # _stream_usage: 端点在最后一个 chunk 上报的 usage（include_usage）。
+        _t_first: float | None = None
+        _stream_usage = None
 
         def _flush_chunk_buf() -> None:
             nonlocal _chunk_buf, _chunk_chars
@@ -971,6 +1069,7 @@ class OnlineToolSession(BaseChatSession):
                 for chunk in response:
                     if hasattr(chunk, "usage") and chunk.usage:
                         self.api._accumulate_usage(chunk.usage)
+                        _stream_usage = chunk.usage
 
                     if not hasattr(chunk, "choices") or not chunk.choices:
                         continue
@@ -980,6 +1079,8 @@ class OnlineToolSession(BaseChatSession):
                     # 推理内容：兼容端点为 `reasoning_content`，
                     # vLLM 思考模式（Qwen3.8 等）为 `reasoning`；统一提取
                     _rc = extract_reasoning(delta)
+                    if _t_first is None and (_rc or delta.content or delta.tool_calls):
+                        _t_first = _now()   # 永不抛错：见 _now 文档
                     if _rc:
                         reasoning_parts.append(_rc)
                         callback(f"[THINK]{_rc}")
@@ -1034,6 +1135,14 @@ class OnlineToolSession(BaseChatSession):
                             delta, tool_calls_data
                         )
                 _flush_chunk_buf()  # 正常结束：flush 剩余增量
+                # ── 解码速率：单次模型调用结束即采样（t_end 就地取时）──
+                _sample(
+                    _stream_usage,
+                    streaming=True,
+                    t_first=_t_first,
+                    # 端点未回 usage 时的兜底口径（标记为估算，不与实测混淆）
+                    est_text="".join(reasoning_parts) + "".join(content_parts),
+                )
                 break  # 正常消费完成
             except Exception as e:
                 if retry_factory is None or stream_retries >= max_stream_retries:
@@ -1058,9 +1167,11 @@ class OnlineToolSession(BaseChatSession):
                 content_parts = []
                 tool_calls_data = []
                 reasoning_parts = []
+                # 速率样本同步作废：断流重试走 sleep(1.5*2**n) 指数退避，若沿用旧的
+                # _t_first / usage，退避时间会被算进解码窗口 → 得出荒谬的低速率。
+                _t_first = None
+                _stream_usage = None
                 callback("\n⚠️ 连接中断，正在自动重试…\n")
-                import time
-
                 time.sleep(1.5 * (2 ** (stream_retries - 1)))
                 response = retry_factory()
 
@@ -1292,6 +1403,10 @@ class OnlineToolSession(BaseChatSession):
         """重置会话状态。"""
         self.api.reset_usage()
         self.api.reset_cheap_usage()
+        # 解码速率样本按「回合」聚合下发，必须随回合清零，否则上一回合的速率
+        # 会串进本回合的显示（同一 session 对象被复用时尤其明显）。
+        self.context._decode_samples = []
+        self.context._stream_t_request = None
         self._rounds_collector = []
         self._extra_iterations = 0
         self._max_iter_wait.clear()

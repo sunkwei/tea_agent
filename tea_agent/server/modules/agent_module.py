@@ -185,6 +185,19 @@ def _build_usage_data(session: Any) -> dict:
         usage_data["context_used"] = _ctx_usage["context_used"]
     except Exception:
         logger.exception("context usage compute failed")
+    # ── 解码速率（tok/s）──
+    # 本回合各次模型调用的聚合值：Σ completion_tokens / Σ 解码窗口秒。
+    # 观测性数据，任何异常只降级为「不显示」，绝不把 usage 事件带崩。
+    try:
+        from tea_agent.session.decode_speed import summarize
+
+        _samples = getattr(getattr(session, "context", None), "_decode_samples", None)
+        _spd = summarize(_samples) if _samples else None
+        if _spd:
+            # 只下发数值，格式化交给展示层（前端/C 端各自渲染，避免两处文案漂移）
+            usage_data["speed"] = _spd
+    except Exception as e:
+        logger.debug(f"解码速率聚合失败（已忽略）: {e}")
     return usage_data
 
 
@@ -212,6 +225,7 @@ class AgentModule(HotReloadModule):
         _core_modules = [
             'tea_agent.session.context',
             'tea_agent.session.history_builder',
+            'tea_agent.session.decode_speed',
             'tea_agent.session.os_info_injector',
             'tea_agent.session.params',
             'tea_agent.session.prompts',

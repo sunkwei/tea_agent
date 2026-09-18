@@ -1148,6 +1148,56 @@ function _handleSteeringInjected(data) {
   toast('⚡ 插话已生效，将在下一轮处理', 'success');
 }
 
+// ── 实时解码速率（回合进行中）──
+// 服务端只能在一次流读完后才知道 completion_tokens，因此**生成过程中**的
+// 速率只能由前端估算：按与后端 estimate_tokens 相同的启发式
+// （中文 1.5 字/tok、其它 4 字符/tok）累计字符，除以「首 token → 当前」的窗口。
+// 口径与实测值不同，因此：① 用 ⏱ 前缀 + 独立样式标记为估算；② 实测值一到就覆盖。
+function _countCnChars(str) {
+  let n = 0;
+  for (const ch of str) {
+    const c = ch.codePointAt(0);
+    if ((c >= 0x4e00 && c <= 0x9fff) || (c >= 0x3400 && c <= 0x4dbf)) n++;
+  }
+  return n;
+}
+
+function _noteStreamChars(s, text) {
+  if (!text) return;
+  s.speedChars += text.length;
+  s.speedCn += _countCnChars(text);
+  const now = Date.now();
+  if (!s.speedT0) s.speedT0 = now;   // 首 token 才起算：排队/prefill 不属于解码
+  s.speedT1 = now;
+}
+
+function _updateLiveSpeed(s, force) {
+  const el = $('speed-live');
+  if (!el) return;
+  const now = Date.now();
+  if (!force) {
+    if (now - _lastLiveSpeedRender < 250) return;   // 节流：每 token 刷 DOM 会拖慢流式
+    _lastLiveSpeedRender = now;
+  }
+  const win = s.speedT0 ? (s.speedT1 - s.speedT0) / 1000 : 0;
+  const toks = s.speedCn / 1.5 + (s.speedChars - s.speedCn) / 4.0;
+  // 样本太少时速率毫无统计意义（首包抖动就能翻倍），宁可空着
+  if (!s.speedT0 || win < 0.8 || toks < 12) {
+    if (force) { el.style.display = 'none'; el.textContent = ''; }
+    return;
+  }
+  const tps = toks / win;
+  if (!isFinite(tps) || tps <= 0) return;
+  el.textContent = '⏱ ~' + tps.toFixed(1) + ' tok/s';
+  el.title = '实时估算：按字符启发式换算，与回合结束后的实测值（⚡）口径不同';
+  el.style.display = '';
+}
+
+function _hideLiveSpeed() {
+  const el = $('speed-live');
+  if (el) { el.style.display = 'none'; el.textContent = ''; }
+}
+
 // ── Helper: 创建流式消息容器和状态对象 ──
 function _createStreamState() {
   const agentDiv = document.createElement('div');
@@ -1171,6 +1221,11 @@ function _createStreamState() {
     toolCallCount: 0,
     toolDoneCount: 0,
     activeToolItem: null,
+    // 实时速率估算计数（字符/中文字数/首末 token 时刻）
+    speedChars: 0,
+    speedCn: 0,
+    speedT0: 0,
+    speedT1: 0,
   };
 }
 
@@ -1256,6 +1311,8 @@ window.sendMessage = async function() {
   const myGen = _streamGeneration;
   isStreaming = true;
   _pendingUsage = null;
+  _lastLiveSpeedRender = 0;
+  _hideLiveSpeed();   // 清掉上一回合残留的估算值
 
   // Hide old usage bar
   const oldUsageBar = $('usage-bar');
@@ -1306,6 +1363,8 @@ window.sendMessage = async function() {
             case 'token':
               removeLoading();
               s.fullText += data.text;
+              _noteStreamChars(s, data.text);
+              _updateLiveSpeed(s);
               s.bubbleText.innerHTML = esc(decodeEntities(s.fullText));
               break;
 
@@ -1354,6 +1413,8 @@ window.sendMessage = async function() {
               if (s.thinkContent) {
                 s.thinkContent.textContent += data.text;
               }
+              _noteStreamChars(s, data.text);   // 思考 token 也占解码时间
+              _updateLiveSpeed(s);
               break;
 
             case 'think_done':
@@ -1507,6 +1568,8 @@ window.sendMessage = async function() {
 
             case 'done':
               removeLoading();
+              _updateLiveSpeed(s, true);   // 收尾：按最终字符数定格一次
+              _hideLiveSpeed();            // 实测值（⚡）随后接管，估算（⏱ ~）退场
               // 记录 token 用量（延迟显示，等流结束后才更新 UI）
               if (data.usage) _pendingUsage = data.usage;
               // 更新 topic_id（首次消息后更新）
@@ -1577,6 +1640,7 @@ window.sendMessage = async function() {
 
             case 'queued':
               removeLoading();
+              _hideLiveSpeed();
               isStreaming = false;
               // 恢复发送按钮
               var sb = document.getElementById('send-btn');
@@ -1593,6 +1657,7 @@ window.sendMessage = async function() {
 
             case 'error':
               removeLoading();
+              _hideLiveSpeed();
               s.bubbleText.innerHTML = '<span style="color:var(--red)">错误: ' + esc(data.error) + '</span>';
               break;
           }
@@ -1604,6 +1669,7 @@ window.sendMessage = async function() {
   } catch(e) {
     if (e.name === 'AbortError') {
       removeLoading();
+      _hideLiveSpeed();
       const bt = $('bubble-text');
       if (bt && !bt.innerHTML.trim()) bt.innerHTML = '(已中断)';
       // ⭐ 安全网：后台线程仍在运行，启动轮询获取最终 AI 回复
@@ -1612,6 +1678,7 @@ window.sendMessage = async function() {
         _checkBackgroundAndPoll(currentTopicId);
       }
     } else if (myGen === _streamGeneration && currentTopicId) {
+      _hideLiveSpeed();
       // 非主动取消的流中断（网络闪断 / server 正在重启）→ 进入重连续读：
       // 由后台缓冲区补齐已产出内容；服务端重启后会把在途回合快照重建为缓冲区，
       // 因此「已产出的内容」不会丢失。
@@ -1660,8 +1727,52 @@ function updateUsage(usage) {
     if (_ctxPct !== '' && _ctxPct >= 95) _ctxCls += ' danger';
     contextHtml = ' | <span class="' + _ctxCls + '" title="' + esc(usage.context_used) + '">' + esc(usage.context_used) + '</span>';
   }
+  // ── 解码速率 tok/s ──
+  // 后端每轮 LLM 调用结束时采样：Σ completion_tokens / Σ 解码窗口秒
+  // （解码窗口 = 首 token 到达 → 该次流读完；排队/prefill 不计入，另列为 TTFT）。
+  // 无实测数据时整段隐藏 —— 显示 0 或估算冒充实测都会误导判断。
+  // 数值一律 Number() 兜底：本函数在 SSE 回调里无 try/catch 保护，
+  // 一个畸形字段不该让整条用量条（含 P/C）一起消失。
+  var speedHtml = '';
+  var sp = usage.speed;
+  var _tps = sp ? Number(sp.tok_per_sec) : NaN;
+  if (isFinite(_tps) && _tps > 0) {
+    var _est = !!sp.estimated;
+    // 账本摊开。⚡ 只量「首 token → 流结束」的解码窗口；长上下文回合里
+    // 排队 + prefill 常常是解码的好几倍，不写出来就会被读成"整个回合计这么多时间"。
+    var _tip = '⚡ 仅解码速度：' + sp.completion_tokens + ' tok / ' + sp.decode_seconds + 's'
+      + (_est ? '（端点未上报 usage，按文本估算）' : '');
+    // 等待合计只以「比值」出现：它就是 Σ 每次首 token 等待（同一量的另一种聚合），
+    // 与 ⏳ 并列为两个绝对秒数会被误当成两笔开销相加。
+    if (sp.wait_seconds && Number(sp.decode_seconds) > 0) {
+      _tip += '\n本回合排队+prefill 合计 ' + sp.wait_seconds + 's，'
+        + '含等待共 ' + sp.request_seconds + 's —— 即真实体感比 ⚡ 显示的慢 '
+        + (Number(sp.request_seconds) / Number(sp.decode_seconds)).toFixed(1) + ' 倍';
+    }
+    if (sp.streams > 1) _tip += '\n' + sp.streams + ' 次模型调用合计（含工具循环各轮）';
+    if (sp.ttft_seconds) {
+      _tip += '\n⚡ 高但 ⏳ 大 = 上下文太长/前缀没命中，不是模型解码慢。';
+    }
+    speedHtml = ' | <span class="usage-speed' + (_est ? ' est' : '')
+      + '" title="' + esc(_tip) + '">⚡'
+      // 标签内写明"解码"：口径自明，不必 hover 才不会误读成整体速度。
+      // ~ 紧贴数字（它修饰的是数值精度，不是 ⚡ 这个图标）
+      + ' 解码 ' + (_est ? '~' : '') + _tps.toFixed(1) + ' tok/s</span>';
+    // ⏳ 每次调用的平均首 token 等待 —— ⚡ 刻意排除的那段（API 与自部署的分水岭）。
+    // 用 ⏳ 而非 ⏱：⏱ 已表示生成过程中的实时估算速率，同一条里不能一个符号两个意思。
+    if (sp.ttft_seconds) {
+      var _tmax = Number(sp.ttft_max_seconds);
+      var _ttftTip = '⏳ 平均每次调用等 ' + sp.ttft_seconds + 's 才出第一个 token'
+        + '（含网络排队与 prefill，不计入 ⚡）'
+        + (sp.streams > 1 && isFinite(_tmax) && _tmax !== Number(sp.ttft_seconds)
+          ? '\n最慢一次 ' + _tmax + 's' : '');
+      speedHtml += ' | <span class="usage-ttft" title="' + esc(_ttftTip)
+        + '">⏳ 首token ' + Number(sp.ttft_seconds).toFixed(1) + 's</span>';
+    }
+  }
   bar.innerHTML = '<span class="usage-tokens">📊 T:' + usage.total_tokens
     + '</span> <span class="usage-detail">(P:' + usage.prompt_tokens + '+C:' + usage.completion_tokens + ')</span>'
+    + speedHtml
     + modelHtml
     + cheapHtml
     + cacheHtml
@@ -1854,10 +1965,16 @@ function _ensureBufferStreamState() {
       toolCallCount: 0,
       toolDoneCount: 0,
       activeToolItem: null,
+      speedChars: 0,
+      speedCn: 0,
+      speedT0: 0,
+      speedT1: 0,
     };
   }
   return _bufferStreamState;
 }
+
+let _lastLiveSpeedRender = 0;   // 实时速率 DOM 刷新节流时间戳
 
 /* 节流刷新任务面板：Agent 工具调用完成时更新 TODO 勾选状态（1s 内最多一次） */
 let _lastTaskRefreshTs = 0;
@@ -2067,12 +2184,18 @@ function _renderBufferEvent(event) {
       toast('⚡ 插话已生效，将在下一轮处理', 'success');
       break;
 
+    case 'usage':
+      // 后台/重连续读模式同样刷新用量条（含 tok/s），否则切回会话时数字缺失
+      if (event.usage) updateUsage(event.usage);
+      break;
+
     case 'done':
       // 后台流结束，用 Markdown 重新渲染最终消息
       var finalMsg = event.ai_msg || s.fullText;
       if (finalMsg && s.bubbleText) {
         s.bubbleText.innerHTML = formatMarkdown(finalMsg);
       }
+      if (event.usage) updateUsage(event.usage);
       _throttledTaskRefresh(); // 流结束 → 刷新任务面板 TODO
       break;
 

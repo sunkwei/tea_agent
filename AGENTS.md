@@ -34,7 +34,7 @@ tea-agent-telegram                   # Telegram 适配器
 tea-agent-wechat                     # 微信适配器
 
 # ── 测试 ──
-pytest                               # 运行全部测试（当前 95 个测试文件）
+pytest                               # 运行全部测试（100 个测试文件，截至 2026-09-18）
 pytest tea_agent/tests/test_xxx.py   # 运行单文件测试
 pytest -k "test_name" -xvs           # 按名匹配+详细输出
 pytest --collect-only -q             # 只收集用例（确认总数与新增文件已被发现）
@@ -89,7 +89,7 @@ tea_agent/                          # 40 个顶层模块 + 15 个子包
 │   ├── _git_snapshot.py            # 下划线前缀 → 不注册为工具（快照基础设施）
 │   └── ... (56 个 toolkit_*.py)
 │
-├── session/                        # 会话组装（历史压缩 / L1·L2·L3 / JSON 校验 / os 信息注入）
+├── session/                        # 会话组装（历史压缩 / L1·L2·L3 / JSON 校验 / os 信息注入 / 解码速率）
 ├── store/                          # 存储层（13 个功能子模块 + migration）
 ├── server/                         # REST API + Web V2（Starlette + SSE，含 turn_snapshot）
 ├── multi_agent/                    # 多 Agent 协作
@@ -102,7 +102,7 @@ tea_agent/                          # 40 个顶层模块 + 15 个子包
 ├── sdk/                            # 对外 SDK
 ├── demo/                           # 演示应用（辩论赛 / 钢琴 / DAG）
 │
-└── tests/                          # 95 个测试文件（大模块必须有对应 test_ 文件）
+└── tests/                          # 100 个测试文件（大模块必须有对应 test_ 文件）
 ```
 
 > 注：`tea_agent_mini/` 是仓库根下的独立顶层子包（见「Mini 构建」），不在 `tea_agent/` 目录内。
@@ -194,6 +194,9 @@ toolkit_reload()
 - **幂等性优先**：重复调用不产生副作用
 - **读路径无写副作用**：只读查询（如工具屏蔽判定）用 `peek_storage()`，不要用会在裸进程里隐式建库的 `get_storage()`
 - **辅助能力不绑架主流程**：统计/审计/快照一类旁路写入失败一律静默降级（fail-open），绝不把主调用带崩
+- **旁路代码不得改写控制流**：若观测调用点落在「异常=重试/降级」的 `try` 内，则连**属性查找**
+  都不能在该 `try` 里发生（`self._new_hook()` 对鸭子类型替身即抛 `AttributeError` → 被误判为
+  业务异常触发重试）。取时/取名一律放 `try` 外，或包成不可能抛错的局部闭包
 
 ### 文档创建规范（下载链接）
 
@@ -223,7 +226,7 @@ toolkit_reload()
 
 ### 测试规范
 
-- 测试文件：`tea_agent/tests/test_*.py`（当前 95 个）
+- 测试文件：`tea_agent/tests/test_*.py`（100 个，截至 2026-09-18）
 - 使用 `pytest`，fixture 集中在 `conftest.py`
 - 测试函数名：`test_<功能>_<场景>`
 - 重要模块须有 `test_` 文件覆盖；修复缺陷必须**带回归测试**，且回归测试要能真的失败（必要时做元验证：把实现还原成旧版，确认测试确实变红）

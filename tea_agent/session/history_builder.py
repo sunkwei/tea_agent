@@ -255,19 +255,23 @@ def _extract_files_from_text(text: str) -> set:
         files.add(m.group())
     symbols = set(re.findall(r'\b[a-zA-Z_]\w{2,}\b', text))
     if symbols:
+        # 符号索引是纯旁路增强：文件缺失/损坏（写入被中断、半截 JSON、带 BOM）
+        # 一律静默降级为「没有索引」，绝不打断历史构建，也不该每次启动刷 ERROR。
+        # 读法用 utf-8-sig 吞掉 BOM，与 os_info_injector 保持一致。
         try:
             idx_path = os.path.join('.tea_agent_run', 'symbol_index.json')
             if os.path.exists(idx_path):
-                with open(idx_path, encoding='utf-8') as _f:
+                with open(idx_path, encoding='utf-8-sig', errors='replace') as _f:
                     sym_index = json.load(_f)
-                for sym in symbols:
-                    if sym in sym_index:
-                        for entry in sym_index[sym]:
-                            fp = entry.get('path', '')
-                            if fp:
-                                files.add(fp)
-        except Exception:
-            logger.exception('op_failed')
+                if isinstance(sym_index, dict):
+                    for sym in symbols:
+                        for entry in sym_index.get(sym) or []:
+                            if isinstance(entry, dict):
+                                fp = entry.get('path', '')
+                                if fp:
+                                    files.add(fp)
+        except Exception as e:
+            logger.debug(f"符号索引不可用，已跳过文件符号解析: {e}")
 
     return files
 

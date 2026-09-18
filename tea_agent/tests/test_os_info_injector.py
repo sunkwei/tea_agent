@@ -7,7 +7,9 @@
 - 参数行为: toolkit_root_dir, supports_reasoning
 """
 
+import json
 import os
+import tempfile
 from unittest.mock import patch
 
 import pytest
@@ -123,6 +125,160 @@ class TestPersistOsSig:
 
         loaded = _load_persisted_os_sig("topic_x")
         assert loaded == ""
+
+
+# ============================================================
+# 状态文件健壮性（Linux/Windows 真实故障回归）
+# ============================================================
+
+class TestStateFileRobustness:
+    """~/.tea_agent/os_state.json 是纯旁路缓存，必须 fail-open + 自愈。
+
+    回归背景（Linux 启动报错）：设备上该文件变成空文件/带 BOM/半截 JSON，
+    旧实现 ① 用 utf-8 读 → BOM 触发 JSONDecodeError；② 捕获后
+    logger.exception 打 ERROR + traceback 刷屏；③ _save_os_sig 也先
+    json.load，抛错即跳过整个写入 → 坏文件永不自愈，每次启动重复报错。
+    """
+
+    @pytest.fixture(autouse=True)
+    def _reset_warn_flag(self):
+        """每条测试重置「只提示一次」节流标志，避免相互串扰。"""
+        import tea_agent.session.os_info_injector as mod
+        mod._bad_state_warned = False
+        yield
+        mod._bad_state_warned = False
+
+    @pytest.fixture
+    def state_file(self, monkeypatch, tmp_path):
+        fake_path = str(tmp_path / ".tea_agent" / "os_state.json")
+        monkeypatch.setattr("tea_agent.session.os_info_injector._OS_STATE_FILE", fake_path)
+        monkeypatch.delenv("TEA_OS_STATE_FILE", raising=False)
+        return fake_path
+
+    @staticmethod
+    def _write_raw(path, content, encoding="utf-8"):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding=encoding, newline="") as f:
+            f.write(content)
+
+    # ── 读端：坏文件一律降级为空，且绝不冒泡 ERROR ──
+
+    def test_empty_file_returns_empty_without_error_log(self, state_file, caplog):
+        """0 字节文件（写入被中断）应返回 ""，且不得产生 ERROR/traceback。"""
+        import logging
+        self._write_raw(state_file, "")
+        with caplog.at_level(logging.WARNING, logger="session.os_info_injector"):
+            from tea_agent.session.os_info_injector import _load_persisted_os_sig
+            assert _load_persisted_os_sig("topic_x") == ""
+        assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+    def test_bom_prefixed_json_is_still_read(self, state_file):
+        """带 UTF-8 BOM 的合法 JSON 应能正常读出签名（utf-8-sig 兼容）。
+
+        旧实现用 encoding='utf-8' 读，BOM 会让 json.load 在 char 0 抛
+        'Expecting value' —— 与线上报错完全一致。
+        """
+        self._write_raw(state_file, '{"topics": {"t1": "Linux-6.8.0-arm64"}}',
+                        encoding="utf-8-sig")
+        # 前置检查：确认文件字节确实以 BOM 开头（否则这条测试就没测到 BOM）
+        with open(state_file, "rb") as f:
+            assert f.read(3) == b"\xef\xbb\xbf"
+
+        from tea_agent.session.os_info_injector import _load_persisted_os_sig
+        assert _load_persisted_os_sig("t1") == "Linux-6.8.0-arm64"
+
+    @pytest.mark.parametrize("bad_content", [
+        "{invalid json",
+        "not json at all",
+        "[1, 2, 3]",                       # 顶层不是对象
+        '{"topics": "oops"}',              # topics 不是对象
+        '{"topics": {"t1": 123}}',         # 值不是字符串
+    ])
+    def test_malformed_content_degrades_to_empty(self, state_file, bad_content):
+        """各种畸形内容都应安全返回 ""，不抛异常。"""
+        self._write_raw(state_file, bad_content)
+        from tea_agent.session.os_info_injector import _load_persisted_os_sig
+        assert _load_persisted_os_sig("t1") == ""
+
+    def test_unreadable_file_is_swallowed(self, state_file, monkeypatch):
+        """权限错误等 OSError 也必须静默降级（fail-open）。"""
+        import builtins
+        import tea_agent.session.os_info_injector as mod
+
+        real_open = builtins.open
+
+        def _deny_open(file, *a, **kw):
+            if str(file).endswith("os_state.json"):
+                raise PermissionError(13, "Permission denied", str(file))
+            return real_open(file, *a, **kw)
+
+        monkeypatch.setattr(builtins, "open", _deny_open)
+        monkeypatch.setattr(os, "makedirs", lambda *a, **kw: None)
+        assert mod._load_persisted_os_sig("t1") == ""
+        assert mod._save_os_sig("t1", "Linux-1-x86_64") is None  # 不得抛出
+
+    # ── 写端：坏文件必须自愈 ──
+
+    def test_corrupted_file_self_heals_on_save(self, state_file):
+        """坏文件经一次 _save_os_sig 后应变回合法 JSON 并可读回。
+
+        这是本次故障的关键回归：旧实现保存前先 json.load，抛错即整体跳过，
+        坏文件永远留在原地 → 每次启动重复报错。
+        """
+        self._write_raw(state_file, "{corrupted")
+        from tea_agent.session.os_info_injector import _load_persisted_os_sig, _save_os_sig
+
+        assert _load_persisted_os_sig("t1") == ""
+        _save_os_sig("t1", "Linux-6.8.0-aarch64")
+
+        with open(state_file, encoding="utf-8") as f:
+            data = json.loads(f.read())          # 现在是合法 JSON
+        assert data["topics"]["t1"] == "Linux-6.8.0-aarch64"
+        assert _load_persisted_os_sig("t1") == "Linux-6.8.0-aarch64"
+
+    def test_save_keeps_other_topics_and_leaves_no_temp_files(self, state_file, tmp_path):
+        """保存应保留既有 topic，且原子写不在目录留下 .tmp 残留。"""
+        from tea_agent.session.os_info_injector import _load_persisted_os_sig, _save_os_sig
+
+        _save_os_sig("t_keep", "Windows-10-AMD64")
+        _save_os_sig("t_new", "Linux-6.8.0-x86_64")
+
+        assert _load_persisted_os_sig("t_keep") == "Windows-10-AMD64"
+        assert _load_persisted_os_sig("t_new") == "Linux-6.8.0-x86_64"
+        leftovers = [p.name for p in os.listdir(os.path.dirname(state_file))
+                     if p.endswith(".tmp") or p.startswith(".os_state.")]
+        assert leftovers == []
+
+    def test_topics_capped_to_prevent_unbounded_growth(self, state_file, monkeypatch):
+        """topic 数应有上限（嵌入式设备存储有限），旧条目被裁剪。"""
+        import tea_agent.session.os_info_injector as mod
+        monkeypatch.setattr(mod, "_MAX_TRACKED_TOPICS", 5)
+
+        for i in range(12):
+            mod._save_os_sig(f"topic_{i}", f"sig-{i}")
+
+        with open(state_file, encoding="utf-8") as f:
+            topics = json.load(f)["topics"]
+        assert len(topics) <= 5
+        assert topics.get("topic_11") == "sig-11"   # 最新的必须留下
+
+    def test_env_override_takes_effect(self, tmp_path, monkeypatch):
+        """TEA_OS_STATE_FILE 可改道（容器里 HOME 不可写时的逃生门）。"""
+        alt = tmp_path / "elsewhere" / "os_state.json"
+        monkeypatch.setenv("TEA_OS_STATE_FILE", str(alt))
+        from tea_agent.session.os_info_injector import _load_persisted_os_sig, _save_os_sig
+
+        _save_os_sig("t_env", "Linux-5.10-armv7l")
+        assert alt.exists()
+        assert _load_persisted_os_sig("t_env") == "Linux-5.10-armv7l"
+
+    def test_state_file_path_is_usable_without_home(self, monkeypatch):
+        """HOME 解析失败时退回临时目录，不得抛异常。"""
+        import tea_agent.session.os_info_injector as mod
+        monkeypatch.setattr(mod.os.path, "expanduser", lambda p: "~")
+        path = mod._default_state_file()
+        assert path.endswith(os.path.join("tea_agent", "os_state.json"))
+        assert tempfile.gettempdir() in path
 
 
 # ============================================================

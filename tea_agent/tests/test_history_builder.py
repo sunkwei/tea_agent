@@ -3,8 +3,12 @@
 
 测试范围:
 - to_multimodal: 支持视觉 / 不支持视觉 / 有图片 / 无图片
+- _extract_files_from_text: 符号索引损坏时的静默降级
 """
 
+import logging
+
+import pytest
 
 
 # ============================================================
@@ -143,3 +147,69 @@ class TestToMultimodal:
             {"role": "assistant", "content": "你好！"},
         ]
         assert messages_contain_images(msgs) is False
+
+
+# ============================================================
+# _extract_files_from_text — 符号索引容错（Linux 启动报错同源回归）
+# ============================================================
+
+class TestExtractFilesFromSymbolIndex:
+    """.tea_agent_run/symbol_index.json 损坏时必须静默降级。
+
+    回归背景：与 os_info_injector 同一模式 —— 旁路缓存文件被中断写入留下
+    空文件/半截 JSON，旧实现宽捕获后用 logger.exception 打成 ERROR + traceback，
+    在 Linux(RK 设备) 上每次启动刷屏。索引只用于「多找几个相关文件」，
+    坏了就当没有，不得冒泡。
+    """
+
+    @staticmethod
+    def _make_index(tmp_path, content: str, encoding="utf-8"):
+        run_dir = tmp_path / ".tea_agent_run"
+        run_dir.mkdir(exist_ok=True)
+        (run_dir / "symbol_index.json").write_text(content, encoding=encoding)
+        return run_dir
+
+    def test_valid_index_resolves_symbol_to_path(self, tmp_path, monkeypatch):
+        """正常索引应把符号映射到文件路径。"""
+        monkeypatch.chdir(tmp_path)
+        self._make_index(tmp_path, '{"build_history": [{"path": "tea_agent/session/history_builder.py"}]}')
+        from tea_agent.session.history_builder import _extract_files_from_text
+
+        files = _extract_files_from_text("请检查 build_history 的实现")
+        assert "tea_agent/session/history_builder.py" in files
+
+    def test_bom_prefixed_index_is_read(self, tmp_path, monkeypatch):
+        """带 UTF-8 BOM 的索引应能正常读出（旧实现用 utf-8 读会抛 char 0 错误）。"""
+        monkeypatch.chdir(tmp_path)
+        self._make_index(
+            tmp_path,
+            '{"build_history": [{"path": "a/b.py"}]}',
+            encoding="utf-8-sig",
+        )
+        from tea_agent.session.history_builder import _extract_files_from_text
+
+        assert "a/b.py" in _extract_files_from_text("build_history")
+
+    @pytest.mark.parametrize("bad", [
+        "",                       # 0 字节：上次写入被中断
+        "{incomplete",            # 半截 JSON
+        "[]",                     # 顶层不是对象
+        '{"sym": "not-a-list"}',  # 值类型不对
+        '{"sym": ["not-a-dict"]}',  # 元素类型不对
+    ])
+    def test_corrupted_index_degrades_silently(self, tmp_path, monkeypatch, caplog, bad):
+        """索引损坏应只返回正则提取到的路径，不抛异常、不打 ERROR。"""
+        import logging
+        monkeypatch.chdir(tmp_path)
+        self._make_index(tmp_path, bad)
+        with caplog.at_level(logging.WARNING):
+            from tea_agent.session.history_builder import _extract_files_from_text
+            files = _extract_files_from_text("看看 build_history 和 a/b.py")
+        assert "a/b.py" in files                 # 正则通路不受影响
+        assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+    def test_missing_index_is_fine(self, tmp_path, monkeypatch):
+        """没有索引文件时正常工作（裸进程/新装环境）。"""
+        monkeypatch.chdir(tmp_path)
+        from tea_agent.session.history_builder import _extract_files_from_text
+        assert "x/y.py" in _extract_files_from_text("参考 x/y.py 里的 build_history")

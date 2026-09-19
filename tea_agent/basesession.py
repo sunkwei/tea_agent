@@ -44,6 +44,17 @@ def relaxed_json_loads(raw: str):
 
     s = raw.strip()
 
+    # Windows 路径保护必须在**任何 json.loads 之前**（含下面的快速路径）：
+    # 路径里的 \t \f 属**合法 JSON 转义**，json.loads 会解析成功并返回被改写的值
+    # （C:\foo → C:<换页>oo）—— 一旦提前 return，后面的保护步骤永远执行不到。
+    # 放在最前，语义才闭合。失败时静默跳过（纯增强，绝不影响主流程）。
+    try:
+        from tea_agent.session.json_sanitizer import escape_path_backslashes
+
+        s = escape_path_backslashes(s)
+    except ImportError:
+        pass
+
     try:
         return json.loads(s)
     except json.JSONDecodeError as e:
@@ -84,7 +95,6 @@ def relaxed_json_loads(raw: str):
         return json.loads(s)
     except json.JSONDecodeError as e:
         logger.debug("basesession.py.relaxed_json_loads: json.JSONDecodeError 已忽略: %s", e)
-
     # 仅对非 JSON 标准转义（\" \\ \/ \b \f \n \r \t \uXXXX）的反斜杠序列补转义，
     # 避免把合法 \n \t 二次转义破坏内容
     s = re.sub(r"\\([^\"\\/bfnrtu])", r"\\\\\1", s)

@@ -33,6 +33,90 @@ _TRAILING_BACKSLASH_RE = re.compile(r"\\+$")
 # 闭合引号之后允许出现的结构字符（出现这些说明该引号是字符串的合法结束）
 _STRUCTURAL_AFTER_QUOTE = ",}]:"
 
+# ── Windows 路径字面量保护 ────────────────────────────────────────────
+#
+# 问题：t f n r b 都是**合法 JSON 转义**，但在 Windows 路径里应读作「字面反斜杠
+# + 字母」——`"C:\test"` 的本意是路径，而非「C: + 制表符 + est」。修复链若按 JSON
+# 语义透传，最终解析会把路径静默改写（C:\test → C:<TAB>est），用户拿到一个
+# 不存在的路径且毫无提示。
+#
+# 这是**根本无法自动消解的根本歧义**（`"a\tb"` 里确实是制表符），因此只对
+# 「可识别为 Windows 路径」的字面量按字面反斜杠处理，其余一律保持 JSON 语义。
+_PATH_AMBIGUOUS_ESCAPES = frozenset("tfnrb")
+
+_BACKSLASH = chr(92)  # 反斜杠：用 chr() 取值，避免源码里层层转义写错
+
+
+def _is_path_literal(s: str, start: int) -> bool:
+    """字符串字面量是否为 Windows 路径（盘符 ``X:`` + 分隔符，或 UNC ``\\\\`` 开头）。
+
+    只认**该字面量自身**的前缀，不做全局扫描 —— 确保只影响路径值本身，不波及
+    同一 JSON 里的其它字段。识别不出即返回 False（保持既有 JSON 语义，绝不误改）。
+
+    Args:
+        s: 原始 JSON 文本
+        start: 字面量内容的起始下标（即开引号之后一位）
+    """
+    seg = s[start : start + 4]
+    if len(seg) >= 3 and seg[1] == ":" and seg[0].isalpha() and seg[2] in (_BACKSLASH, "/"):
+        return True
+    return seg.startswith(_BACKSLASH * 2)
+
+
+def escape_path_backslashes(s: str) -> str:
+    """把 Windows 路径字面量内的**歧义转义**补成字面反斜杠（如 ``\\t`` 变 ``\\\\t``）。
+
+    与 ``fix_invalid_escapes`` 同为修复链的**前置步骤**，唯一实现在此，
+    ``basesession.relaxed_json_loads`` 亦复用，避免两处口径漂移。
+
+    只处理 ``t f n r b`` 这 5 个歧义字母，且仅在 ``_is_path_literal`` 判定为路径的
+    字面量内生效；``\\\\``、``\\/``、``\\uXXXX`` 等语义明确的转义、非路径字面量、
+    字符串**外部**的反斜杠一律不动 —— 宁可少支持一种写法，不可误改正常内容。
+
+    Args:
+        s: 原始 JSON 文本
+
+    Returns:
+        路径字面量内歧义转义已补偿的文本；无需修改时**原样返回**（逐字节一致）。
+    """
+    if not s or _BACKSLASH not in s:
+        return s
+    out: list[str] = []
+    in_str = False
+    str_start = 0
+    i = 0
+    n = len(s)
+    while i < n:
+        ch = s[i]
+        if not in_str:
+            if ch == '"':
+                in_str = True
+                str_start = i + 1
+            out.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            in_str = False
+            out.append(ch)
+            i += 1
+            continue
+        if ch != _BACKSLASH:
+            out.append(ch)
+            i += 1
+            continue
+        nxt = s[i + 1] if i + 1 < n else ""
+        if nxt in _PATH_AMBIGUOUS_ESCAPES and _is_path_literal(s, str_start):
+            out.append(_BACKSLASH * 2 + nxt)  # 补成字面反斜杠 + 字母
+            i += 2
+            continue
+        out.append(ch)  # 其余序列原样保留，交后续步骤处理
+        if nxt:
+            out.append(nxt)
+            i += 2
+        else:
+            i += 1
+    return "".join(out)
+
 
 def escape_unescaped_inner_quotes(s: str) -> str:
     """把 JSON 字符串**内部未转义的双引号**转义为 ``\\"``。
@@ -165,6 +249,11 @@ def fix_invalid_escapes(s: str) -> str:
     '''
     if not s or "\\" not in s:
         return s
+
+    # 前置：路径保护（唯一实现在 escape_path_backslashes，basesession 亦复用）。
+    # 先补偿路径字面量内的歧义转义，再走常规非法转义修复 —— 顺序不可反：
+    # 若先做常规修复，"C:\test" 的 \t 会被当作合法转义原样保留，最终解析成制表符。
+    s = escape_path_backslashes(s)
 
     out: list[str] = []
     in_str = False
@@ -516,9 +605,18 @@ def normalize_tool_args(func_name: str, raw: str) -> str | None:
         return raw
 
     s = raw.strip()
+
+    # 路径保护必须先于快速路径：路径里的 \t \f 属**合法 JSON 转义**，下方 json.loads
+    # 会成功并直接 `return raw`，从而完全绕过修复链 —— 下游解析得到被改写的路径
+    # （C:\foo → C:<换页>oo）。故先保护，再判断是否已是合法 JSON。
+    protected = escape_path_backslashes(s)
+    if protected != s:
+        s = protected
+
     try:
         json.loads(s)
-        return raw  # 已是合法 JSON，原样返回（逐字节一致，前缀缓存友好）
+        # 未被保护改动时返回原始 raw（逐字节一致，前缀缓存友好）；改动过返回修正文本
+        return raw if s == raw.strip() else s
     except json.JSONDecodeError:
         pass
 

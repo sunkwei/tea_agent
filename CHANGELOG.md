@@ -183,6 +183,28 @@
     默认 `pytest` 不收集 → 长期无人察觉。本次已纳入验证。
   - tests: 相关 7 个文件 244 项通过。
 
+- fix(session): Windows 路径在 JSON 修复链中被静默改写（`\t`→制表符 / `\f`→换页符）
+  - 根因：`\t \f \n \b \r` 都是**合法 JSON 转义**，而修复链刻意「不二次转义合法转义」
+    （`basesession.py` 原注释：避免破坏正常的 `\n \t`）—— 代价正是路径被按转义解开：
+    `C:\foo` → `C:<换页>oo`、`C:\tea_agent` → `C:<制表>ea_agent`。
+    语法上无可指摘，但用户拿到一个**不存在的路径且毫无提示**。
+  - 影响面：**执行路径**的 `normalize_tool_args`（工具参数修复器）与解析用的
+    `relaxed_json_loads` 都受影响。
+  - 修法（**窄条件**，不做全局改动）：新增 `escape_path_backslashes`，仅当字面量
+    **自身**以盘符（`X:\` / `X:/`）或 UNC（`\\`）开头时，才把其中的歧义转义按
+    字面反斜杠处理。于是 `"a\tb"`（真制表符）与 `"C:\temp"`（路径）被正确区分 ——
+    既不破坏合法转义，也不误改非路径字段。
+  - **位置是关键**：必须置于**所有 `json.loads` 之前**（含快速路径）。路径里的
+    `\t`/`\f` 是合法转义，`json.loads` 会解析成功并提前 `return`，保护步骤放后面
+    永远执行不到 —— 首版即踩此坑（实测 10/10 用例失败后定位）。
+  - 唯一实现、两处复用：`json_sanitizer.fix_invalid_escapes` 的前置步骤，
+    以及 `basesession.relaxed_json_loads` 入口，避免两处口径漂移。
+  - tests: `test_json_sanitizer.py` 新增 `TestWindowsPathProtection` 8 项
+    （路径各形态 / UNC / **反向防误改** / 恒等性 / 同一 JSON 内路径与制表符并存）；
+    `tests/test_basesession_utils.py` 中原「已知限制」转为**真断言**（回归闭环）。
+    相关 4 文件 196 项通过。
+  - 未做（明确留白）：`_compress_json_args` 的保留量/阈值改造 —— 见该函数注释，
+    涉及历史消息行为，需单独评估。
 - fix(session): JSON 非法转义序列（\' 等）导致 tool_call 参数被整体丢弃
   - 根因：模型把 Python/shell 字面量写进 JSON 时习惯性转义单引号（如
     \'），但 JSON 仅允许 9 种转义前导字符（\" \\ \/ \b \f \n \r \t \u），

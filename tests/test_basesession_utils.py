@@ -185,21 +185,32 @@ def test_relaxed_json_loads():
         "从文本提取 JSON 数组"
     )
 
-    # 1.12 反斜杠路径 —— ⚠️ **已知限制**（2026-09-19 记录在案，不是「已修复」）
+    # 1.12 反斜杠路径 —— 2026-09-19 **已修复**（原为已知限制，现转为回归断言）
     #
-    # 输入 '{"path": "C:\Users\test\file.txt"}' 中 \U 属非法转义（因此进入修复链），
-    # 但 \t \f 是**合法 JSON 转义**，修复链按 JSON 语义把它们解成制表符/换页符：
+    # 背景：`\t \f \n \b \r` 都是**合法 JSON 转义**，但 Windows 路径里应读作
+    # 「字面反斜杠 + 字母」。此前修复链按 JSON 语义透传，路径被静默改写：
     #     C:\Users\test\file.txt   →   C:\Users<TAB>est<FORMFEED>ile.txt
-    # 解析器视角无可指摘（合法转义本就该这么解），但模型的本意是 Windows 路径。
+    # 语法上无可指摘，但模型的本意是路径 —— 用户拿到一个不存在的路径且毫无提示。
     #
-    # 为何不修：「\t 是制表符还是路径分隔符」在 "a\tb"（真制表符）与 "C:\temp"
-    # （路径）之间存在根本歧义，无法无副作用地自动判定；强行按字面反斜杠处理会
-    # 反向破坏合法转义。修复需先定设计口径（例如：检测到盘符 [A-Za-z]:\ 时整体
-    # 按字面反斜杠处理），并配套回归测试。
-    #
-    # 此处**显式打印**而非静默跳过：已知限制必须可见，不能伪装成通过。
+    # 修法（窄条件，不做全局改动）：仅当字面量**自身**以盘符（`X:\` / `X:/`）或
+    # UNC（`\\`）开头时，才把其中的歧义转义按字面反斜杠处理。这样
+    # `"a\tb"`（真制表符）与 `"C:\temp"`（路径）就被正确区分开。
     result = relaxed_json_loads('{"path": "C:\\Users\\test\\file.txt"}')
-    print(f"  ℹ️  已知限制（未修复）：反斜杠路径被解为控制字符 -> {result['path']!r}")
+    assert_eq(result["path"], "C:\\Users\\test\\file.txt",
+              "反斜杠路径必须原样保留（不得解为制表符/换页符）")
+
+    # 反斜杠路径的完整形态（\t \f \n \b \r 各一，覆盖全部歧义字母）
+    assert_eq(relaxed_json_loads('{"p": "C:\\tea_agent"}')["p"], "C:\\tea_agent",
+              "路径含 \\t 段（\\tea_agent）")
+    assert_eq(relaxed_json_loads('{"p": "C:\\foo\\file.py"}')["p"], "C:\\foo\\file.py",
+              "路径含 \\f 段（\\foo\\file）")
+
+    # 反向：**非**路径字面量里的转义必须保持 JSON 语义（路径保护不得越界）
+    assert_eq(relaxed_json_loads('{"a": "x\\ty"}'), {"a": "x\ty"},
+              "非路径字面量的 \\t 仍为制表符（保护未越界）")
+    assert_eq(relaxed_json_loads('{"path": "C:\\foo", "note": "a\\tb"}'),
+              {"path": "C:\\foo", "note": "a\tb"},
+              "同一 JSON 内路径与制表符并存，各自正确")
 
     # 1.13 空对象
     assert_eq(relaxed_json_loads("{}"), {}, "空对象")

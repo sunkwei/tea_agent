@@ -888,3 +888,85 @@ class TestFixInvalidEscapes:
 
         raw = '{"app": "python", "args": ["-c", "print(1)"]}'
         assert normalize_tool_args("toolkit_exec", raw) == raw
+
+
+# ============================================================
+# Windows 路径字面量保护（2026-09-19）
+# ============================================================
+
+class TestWindowsPathProtection:
+    """`\\t \\f \\n \\b \\r` 在 Windows 路径里应读作「字面反斜杠 + 字母」。
+
+    修复链按 JSON 语义透传时，路径会被静默改写（``C:\\foo`` → ``C:<换页>oo``）：
+    语法上无可指摘，但用户拿到一个不存在的路径且毫无提示。
+    修法为**窄条件** —— 仅当字面量自身以盘符（``X:\\`` / ``X:/``）或 UNC（``\\\\``）
+    开头时才保护，故 ``"a\\tb"``（真制表符）与 ``"C:\\temp"``（路径）能各得其所。
+    """
+
+    def test_path_backslash_t_preserved(self):
+        """路径里的 \\t 不得解为制表符。"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
+        raw = '{"filename": "C:' + _BS + 'tea_agent"}'
+        got = json.loads(normalize_tool_args("toolkit_file", raw))
+        assert got == {"filename": "C:" + _BS + "tea_agent"}, got
+
+    def test_path_backslash_f_preserved(self):
+        """路径里的 \\f 不得解为换页符。"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
+        raw = '{"path": "C:' + _BS + 'foo' + _BS + 'file.py"}'
+        got = json.loads(normalize_tool_args("toolkit_file", raw))
+        assert got == {"path": "C:" + _BS + "foo" + _BS + "file.py"}, got
+
+    def test_path_backslash_n_b_r_preserved(self):
+        """\\n \\b \\r 在路径里同样保持字面。"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
+        raw = '{"p": "C:' + _BS + 'new' + _BS + 'backup' + _BS + 'repo"}'
+        got = json.loads(normalize_tool_args("t", raw))
+        assert got == {"p": "C:" + _BS + "new" + _BS + "backup" + _BS + "repo"}, got
+
+    def test_unc_path_ambiguous_escape_preserved(self):
+        """UNC 形态：歧义转义保持字面。
+
+        注：JSON 文本里的前导 ``\\\\`` 按规范就是**一个**字面反斜杠，
+        故期望值是 1 个前导反斜杠 —— 与保护逻辑无关，是 JSON 语义本身。
+        """
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
+        raw = '{"p": "' + _BS * 2 + 'srv' + _BS + 'share' + _BS + 'f.txt"}'
+        got = json.loads(normalize_tool_args("t", raw))
+        assert got == {"p": _BS + "srv" + _BS + "share" + _BS + "f.txt"}, got
+
+    def test_non_path_tab_keeps_semantics(self):
+        """非路径字面量里的 \\t 仍须是制表符 —— 保护不得越界。"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
+        raw = '{"a": "x' + _BS + 'ty"}'
+        got = json.loads(normalize_tool_args("t", raw))
+        assert got == {"a": "x\ty"}, got
+
+    def test_path_and_tab_coexist_in_one_json(self):
+        """同一 JSON 内路径与制表符并存，各自正确（窄范围的关键证据）。"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
+        raw = '{"path": "C:' + _BS + 'foo", "note": "a' + _BS + 'tb"}'
+        got = json.loads(normalize_tool_args("t", raw))
+        assert got == {"path": "C:" + _BS + "foo", "note": "a\tb"}, got
+
+    def test_valid_double_backslash_not_double_escaped(self):
+        """已是合法 JSON 的双反斜杠路径不得被二次转义。"""
+        from tea_agent.session.json_sanitizer import normalize_tool_args
+
+        raw = '{"p": "C:' + _BS * 2 + 'Users' + _BS * 2 + 'x"}'
+        assert normalize_tool_args("t", raw) == raw
+
+    def test_escape_path_backslashes_identity(self):
+        """非路径输入必须**逐字节不变**（前缀缓存友好，且绝不误改）。"""
+        from tea_agent.session.json_sanitizer import escape_path_backslashes
+
+        for t in ('{"a": 1}', '{"a": "x' + _BS + 'ty"}', '{"p": "/unix/path/t"}',
+                  '{"url": "https://x.test/a"}', '{"a": "a' + _BS * 2 + 'b"}', "", "no backslash"):
+            assert escape_path_backslashes(t) == t, repr(t)
+

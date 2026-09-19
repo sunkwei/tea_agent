@@ -74,25 +74,30 @@ SYSTEM_MSG = {
 passed = 0
 failed = 0
 
+# 断言助手（2026-09-19 修正）：旧实现只 print 不 raise，pytest 收集到这些
+# test_* 函数后无论断言真假一律 PASS（脚本入口的 sys.exit 只在 __main__ 下触发）。
+# 现改为真正断言，失败即抛 AssertionError。
+def _fail(desc, detail):
+    global failed
+    failed += 1
+    print(f"  ❌ {desc}: {detail}")
+    raise AssertionError(f"{desc}: {detail}")
+
 def assert_eq(actual, expected, desc):
-    global passed, failed
+    global passed
     if actual == expected:
         passed += 1
         print(f"  ✅ {desc}")
     else:
-        failed += 1
-        print(f"  ❌ {desc}: 期望 {expected!r}, 实际 {actual!r}")
+        _fail(desc, f"期望 {expected!r}, 实际 {actual!r}")
 
 def assert_true(cond, desc):
-    global passed, failed
+    global passed
     if cond:
         passed += 1
         print(f"  ✅ {desc}")
     else:
-        failed += 1
-        print(f"  ❌ {desc}: 条件不成立")
-        import traceback
-        traceback.print_stack()
+        _fail(desc, "条件不成立")
 
 
 def test_strip_reasoning_content():

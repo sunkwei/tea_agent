@@ -159,6 +159,30 @@
     断言前先剥离注释——否则注释里提及类名会误报），并用 node 跑真实 _usageBarHtml
     做 19 项行为验证（顺序 / 字段 / 省略行为 / XSS 转义）；相关 4 个文件 162 项通过。
 
+- fix(tests): 修 2 个「永不失败」的假测试 —— 断言助手改为真断言
+  - 根因：`tests/test_basesession_utils.py` 与 `tests/test_reasoning_content.py` 的
+    断言助手（assert_eq/assert_ne/assert_true/assert_in/assert_raises）**只 print 不 raise**，
+    失败仅 `failed += 1`。pytest 收集其中的 `test_*` 函数后，无论断言真假一律 PASS
+    （脚本入口的 `sys.exit(0 if failed == 0 else 1)` 只在 `__main__` 下触发）。
+    实测用「必然为假」的断言验证：四个助手全都不抛异常 —— 这些断言永不失败。
+  - 改成真断言后**立刻暴露 5 项被吞掉的真问题**（此前全部静默「通过」）：
+    · `test_relaxed_json_loads` 在 pytest 下**一直 NameError** —— 该名字只在
+      `if __name__ == "__main__"` 块内 import，pytest 导入模块时未绑定（已提到模块级）。
+    · `_compress_json_args` 断言 `"[L1截断"` —— 实现早已改为返回**合法 JSON**
+      （`{"_truncated": true, "head":…, "tail":…}`），旧标记不复存在。
+    · `_progressive_trim` 断言 `"已截断"` —— 标记已改名为「紧急截断」。
+    · `build_api_messages` 的测试 ctx 缺 `_level2_dirty` / `_level2_selected`。
+    · 行尾 `//` 注释不再被剥离（`basesession.py:78` **有意收窄**为仅行首，以免
+      截断 URL 里的 `//`）—— 断言改为钉住真实契约，并**新增** URL 完整性回归断言。
+  - **未修的已知限制（显式记录，不伪装通过）**：`{"path": "C:\Users\test\file.txt"}`
+    中 `\t \f` 是**合法 JSON 转义**，解析器按语义解为制表符/换页符。语法视角无可
+    指摘，但模型本意是 Windows 路径。「`\t` 是制表符还是路径分隔符」在 `"a\tb"` 与
+    `"C:\temp"` 之间是**根本歧义**，无法无副作用地自动判定 —— 修复需先定设计口径
+    （如检测到盘符 `[A-Za-z]:\` 时整体按字面反斜杠处理）。故记录而不擅改。
+  - 注：这两个文件在**根目录 `tests/`**，不在 `tea_agent/tests/` 的 95 个测试内，
+    默认 `pytest` 不收集 → 长期无人察觉。本次已纳入验证。
+  - tests: 相关 7 个文件 244 项通过。
+
 - fix(session): JSON 非法转义序列（\' 等）导致 tool_call 参数被整体丢弃
   - 根因：模型把 Python/shell 字面量写进 JSON 时习惯性转义单引号（如
     \'），但 JSON 仅允许 9 种转义前导字符（\" \\ \/ \b \f \n \r \t \u），

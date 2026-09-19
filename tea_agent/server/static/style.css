@@ -1140,28 +1140,15 @@ body {
   background: var(--surface);
   transition: background var(--transition), color var(--transition);
 }
-#usage-bar .usage-tokens {
-  color: var(--yellow);
-  font-weight: 600;
-}
-#usage-bar .usage-detail {
-  color: var(--text-muted);
-}
+/* 注：.usage-tokens / .usage-detail / .usage-cheap / .usage-cache.cheap 已随
+   状态栏精简（去掉 T:(P+C) 明细与便宜模型段）一并移除，避免留下死类。 */
 #usage-bar .usage-model {
   color: var(--primary);
-  font-weight: 600;
-}
-#usage-bar .usage-cheap {
-  color: var(--purple);
   font-weight: 600;
 }
 #usage-bar .usage-cache {
   color: var(--green);
   font-weight: 600;
-}
-#usage-bar .usage-cache.cheap {
-  color: var(--purple);
-  opacity: 0.85;
 }
 /* 解码速度（tok/s）：流式期间为前端估算（虚线区分），流结束后为服务端实测值 */
 #usage-bar .usage-tps {

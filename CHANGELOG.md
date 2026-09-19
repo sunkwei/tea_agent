@@ -141,6 +141,21 @@
   - 基准：40/41 → **41/42**（唯一失败项即新增的 bigfile 目标，属设计内上升空间）。
   - tests: 复用同组 6 个文件 81 项（本次为行为等价改动——只补日志，未新增用例）。
 
+- feat(web): 状态栏精简为「tok/s | 主模型 Provider·name | 命中率 | 上下文用量」
+  - 展示顺序固定为上述四段。移除 T:(P+C) 令牌明细、便宜模型、便宜模型命中率 ——
+    令牌明细噪音大且量级可由上下文用量推知，便宜模型属内部调度细节。
+  - 主模型改为「Provider · model」并排（如「DeepSeek · deepseek-v4-flash」）。
+    provider 取自 Agent 配置的 main_model.provider（provider.yaml 的 p_name）；
+    取不到时只显示模型名 —— 显示一个错的提供商比不显示更糟。
+  - 命中率只显示百分比（如「命中率 87.5%」），hit/miss 明细挪进 tooltip（悬停仍可查）。
+    服务端新增数值字段 cache_hit_pct 与明细字段 cache_hit_detail，与既有 cache_hit_rate
+    同源（均由 cache_report 计算，无第二实现），旧字段保留向后兼容。
+  - 省略首段时不再残留前导「 | 」（新增 _stripLeadingSep）；随之下岗的死代码一并清理：
+    app.js 的 _fmtNum、style.css 的 .usage-tokens / .usage-detail / .usage-cheap。
+  - tests: test_decode_rate.py 新增 2 项静态契约（段顺序与精简不得回退、样式表无死类，
+    断言前先剥离注释——否则注释里提及类名会误报），并用 node 跑真实 _usageBarHtml
+    做 19 项行为验证（顺序 / 字段 / 省略行为 / XSS 转义）；相关 4 个文件 162 项通过。
+
 - fix(session): JSON 非法转义序列（\' 等）导致 tool_call 参数被整体丢弃
   - 根因：模型把 Python/shell 字面量写进 JSON 时习惯性转义单引号（如
     \'），但 JSON 仅允许 9 种转义前导字符（\" \\ \/ \b \f \n \r \t \u），

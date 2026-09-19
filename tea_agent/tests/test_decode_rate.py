@@ -14,11 +14,15 @@
    - 有数据 → decode_tps_text 字段；无数据 → **不带字段**（前端据此隐藏，
      而不是把 0 读成「速度为零」）。
 
-另覆盖「前端 usage-bar 必须包含 tok/s 段」的契约（静态断言 app.js / style.css /
-index.html 三者一致，防止只改后端不改 UI 的静默失效）。
+另覆盖「前端 usage-bar 契约」的静态断言（app.js / style.css / index.html 三者一致，
+防止只改后端不改 UI 的静默失效）：
+- tok/s 段与实时估算接线（decode_tps_text / _paintLiveTps）；
+- 状态栏**段顺序与精简**（2026-09-19 改版）：tok/s → 主模型(Provider · name) →
+  命中率(仅百分比) → 上下文用量；T:(P+C) 明细与便宜模型段已移除且不得复活。
 """
 
 import pathlib
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -433,6 +437,18 @@ class TestServerUsagePayload:
 _STATIC = pathlib.Path(__file__).resolve().parents[1] / "server" / "static"
 
 
+def _strip_comments(text: str) -> str:
+    """剥离 CSS/JS 注释后再做「不得出现」断言。
+
+    理由：说明性注释里**提及**被移除的类名是正常且有价值的文档（「X 已移除」），
+    只有真正的规则/代码才构成死代码。拿裸子串去查会因注释而误报 —— 实测踩过：
+    注释写「.usage-tokens 已移除」→ 断言 exactly 因此翻转。
+    """
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)      # 块注释
+    text = re.sub(r"(?<!:)//[^\n]*", "", text)             # 行注释（(?!:) 避免误伤 http://）
+    return text
+
+
 class TestFrontendWiring:
     def test_app_js_renders_tps_segment(self):
         js = (_STATIC / "app.js").read_text(encoding="utf-8")
@@ -465,3 +481,29 @@ class TestFrontendWiring:
         assert "app.js?v=" in html
         # 版本号必须晚于上一版（md_list_fix），否则浏览器会用缓存里的旧 app.js
         assert "md_list_fix" not in html
+
+    def test_usage_bar_order_and_slimming(self):
+        """状态栏改版契约（2026-09-19）：顺序 + 精简 + 新字段消费。
+
+        顺序：tok/s → 主模型(Provider · name) → 命中率(仅百分比) → 上下文用量。
+        精简：去掉 T:(P+C) 令牌明细、便宜模型、便宜模型命中率。
+        静态断言只能钉住「存在/顺序/不出现」，渲染行为由 node 侧用例覆盖。
+        """
+        js = _strip_comments((_STATIC / "app.js").read_text(encoding="utf-8"))
+        i = js.index("function _usageBarHtml")
+        seg = js[i: js.index("\nfunction updateUsage", i)]
+        join = seg[seg.index("_stripLeadingSep("):]
+        assert join.index("tpsHtml") < join.index("modelHtml") < join.index("cacheHtml") \
+            < join.index("contextHtml"), "状态栏段顺序被改动"
+        # 已移除的段（保留类名会变成死代码，也会让旧字段悄悄复活）
+        for gone in ("usage-tokens", "usage-detail", "usage-cheap", "cheap_model"):
+            assert gone not in seg, f"状态栏仍含已移除段 {gone}"
+        # 新字段被消费
+        assert "cache_hit_pct" in seg, "命中率未改用数值字段（会退回显示 hit/miss 长串）"
+        assert "model_provider" in seg, "主模型未显示 Provider"
+
+    def test_style_drops_removed_bar_classes(self):
+        """样式表不得留下已移除段的死类（注释里提及不算）。"""
+        css = _strip_comments((_STATIC / "style.css").read_text(encoding="utf-8"))
+        for gone in (".usage-tokens", ".usage-detail", ".usage-cheap"):
+            assert gone not in css, f"样式表残留死类 {gone}"

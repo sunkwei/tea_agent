@@ -1645,11 +1645,8 @@ window.sendMessage = async function() {
   }
 };
 
-function _fmtNum(v) {
-  var n = Number(v);
-  if (!isFinite(n)) return '0';
-  return n.toLocaleString('en-US');
-}
+/* 注：原 _fmtNum（千分位格式化）随 T:(P+C) 令牌明细一起移除 —— 明细已不再显示，
+   保留会变成无引用的死代码。若将来重新展示原始 token 数，可一并恢复。 */
 
 /**
  * 后端 usage 事件 → usage-bar 的 HTML 片段（纯函数，便于单独验证与复用）。
@@ -1659,19 +1656,30 @@ function _fmtNum(v) {
  * 两者都可能是空串 —— 此时该段整体不渲染，而不是显示 0 tok/s。
  */
 function _usageBarHtml(usage, liveTpsText) {
-  var modelHtml = ' | <span class="usage-model">主模型: ' + esc(usage.model || '?') + '</span>';
-  var cheapHtml = '';
-  if (usage.cheap_model) {
-    cheapHtml = ' | <span class="usage-cheap">便宜模型: ' + usage.cheap_model + '</span>';
+  // 展示顺序（2026-09-19 起）：tok/s → 主模型 Provider+model → 命中率 → 上下文用量。
+  // 已移除：T:(P+C) 明细、便宜模型、便宜模型命中率 —— 令牌明细噪音大且可从
+  // 上下文用量推知量级，便宜模型属内部调度细节、用户无需在状态栏盯。
+  //
+  // 主模型：Provider 与 model 名并排（如「DeepSeek · deepseek-v4-flash」）。
+  // provider 缺失时只显示 model —— 显示错的提供商比不显示更糟。
+  var modelHtml = '';
+  if (usage.model || usage.model_provider) {
+    var _prov = usage.model_provider || '';
+    var _mdl = usage.model || '?';
+    var _label = _prov ? (_prov + ' · ' + _mdl) : _mdl;
+    var _mtitle = _prov ? ('主模型 — 提供商: ' + _prov + ' / 模型: ' + _mdl) : ('主模型: ' + _mdl);
+    modelHtml = ' | <span class="usage-model" title="' + esc(_mtitle) + '">主模型: '
+      + esc(_label) + '</span>';
   }
-  // 缓存命中率（后端已在 cache_hit_rate / cheap_cache_hit_rate 预格式化好描述串）
+  // 缓存命中率：**只显示百分比**（hit/miss 明细挪进 tooltip，需要时悬停可看）
   var cacheHtml = '';
-  if (usage.cache_hit_rate) {
-    cacheHtml = ' | <span class="usage-cache">' + esc(usage.cache_hit_rate) + '</span>';
-  }
-  var cheapCacheHtml = '';
-  if (usage.cheap_cache_hit_rate && usage.cheap_cache_hit_rate !== usage.cache_hit_rate) {
-    cheapCacheHtml = ' | <span class="usage-cache cheap">' + esc(usage.cheap_cache_hit_rate) + '</span>';
+  var _cachePct = (usage.cache_hit_pct == null) ? null : usage.cache_hit_pct;
+  if (_cachePct !== null) {
+    var _cacheTitle = usage.cache_hit_detail
+      ? ('前缀缓存命中率：' + usage.cache_hit_detail)
+      : '前缀缓存命中率（命中 token / 总输入 token）';
+    cacheHtml = ' | <span class="usage-cache" title="' + esc(_cacheTitle) + '">'
+      + '命中率 ' + esc(String(_cachePct)) + '%</span>';
   }
   // 解码速度：服务端实测优先，其次前端实时估算
   var tpsHtml = '';
@@ -1693,15 +1701,12 @@ function _usageBarHtml(usage, liveTpsText) {
     if (_ctxPct !== '' && _ctxPct >= 95) _ctxCls += ' danger';
     contextHtml = ' | <span class="' + _ctxCls + '" title="' + esc(usage.context_used) + '">' + esc(usage.context_used) + '</span>';
   }
-  return '<span class="usage-tokens">📊 T:' + _fmtNum(usage.total_tokens) + '</span>'
-    + ' <span class="usage-detail" title="P=输入 token, C=输出 token">(P:' + _fmtNum(usage.prompt_tokens)
-    + '+C:' + _fmtNum(usage.completion_tokens) + ')</span>'
-    + tpsHtml
-    + modelHtml
-    + cheapHtml
-    + cacheHtml
-    + cheapCacheHtml
-    + contextHtml;
+  return _stripLeadingSep(tpsHtml + modelHtml + cacheHtml + contextHtml);
+}
+
+/** 去掉首段残留的前导分隔符「 | 」（首段被省略时会剩下）。 */
+function _stripLeadingSep(html) {
+  return String(html || '').replace(/^\s*\|\s*/, '');
 }
 
 function updateUsage(usage) {

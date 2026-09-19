@@ -130,6 +130,24 @@ def _compute_context_usage(context: Any, prompt_tokens: int) -> dict:
     }
 
 
+def _get_main_provider_name() -> str:
+    """当前主模型的提供商名（provider.yaml 中的 p_name，如 "DeepSeek"）。
+
+    取不到时返回 ""（而非猜一个），前端据此省略 Provider 段 —— 显示一个错的
+    提供商比不显示更糟（用户会据此判断自己在用谁的服务）。
+
+    来源是 Agent 实例的 config（与 AgentModule._get_model_name 同一入口），
+    因为 SessionContext 只带 model 名、不带 provider。
+    """
+    try:
+        inst = AgentModule._instance
+        cfg = getattr(inst, "config", None) if inst is not None else None
+        main = getattr(cfg, "main_model", None) if cfg is not None else None
+        return str(getattr(main, "provider", "") or "")
+    except Exception:  # noqa: BLE001 — 纯展示字段，失败即省略，绝不影响主流程
+        return ""
+
+
 def _build_usage_data(session: Any) -> dict:
     """从会话累计 usage 组装前端展示数据（tokens/命中率/上下文占用）。
 
@@ -153,6 +171,7 @@ def _build_usage_data(session: Any) -> dict:
         "prompt_cache_hit_tokens": usage.get("prompt_cache_hit_tokens", 0),
         "prompt_cache_miss_tokens": usage.get("prompt_cache_miss_tokens", 0),
         "model": model_name,
+        "model_provider": _get_main_provider_name(),
         "cheap_model": cheap_model_name,
     }
     if cheap_usage.get("total_tokens", 0) > 0:
@@ -161,18 +180,23 @@ def _build_usage_data(session: Any) -> dict:
         usage_data["cheap_completion_tokens"] = cheap_usage.get("completion_tokens", 0)
         usage_data["cheap_prompt_cache_hit_tokens"] = cheap_usage.get("prompt_cache_hit_tokens", 0)
         usage_data["cheap_prompt_cache_miss_tokens"] = cheap_usage.get("prompt_cache_miss_tokens", 0)
-    # 缓存命中率描述（供前端直接展示）
+    # 缓存命中率：既给**数值**（前端只需显示百分比），也给描述串（供 tooltip 展开
+    # hit/miss 明细）。数值口径与描述串同源，均由 cache_report 计算，无第二实现。
     try:
-        from tea_agent.session.cache_report import format_cache_hit_rate
+        from tea_agent.session.cache_report import cache_hit_rate_number, format_cache_hit_rate
 
         _rate = format_cache_hit_rate(usage)
         if _rate:
             usage_data["cache_hit_rate"] = _rate
+            usage_data["cache_hit_detail"] = _rate
+        _pct = cache_hit_rate_number(usage)
+        if _pct is not None:
+            usage_data["cache_hit_pct"] = round(_pct, 1)
         _cheap_rate = format_cache_hit_rate(cheap_usage)
         if _cheap_rate:
             usage_data["cheap_cache_hit_rate"] = _cheap_rate
     except Exception:
-        pass
+        logger.debug("cache hit rate fields unavailable", exc_info=True)
     # 当前上下文已用 xx%（供前端展示；优先用真实 prompt_tokens 口径）
     try:
         _ctx_usage = _compute_context_usage(

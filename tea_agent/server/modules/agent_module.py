@@ -185,6 +185,15 @@ def _build_usage_data(session: Any) -> dict:
         usage_data["context_used"] = _ctx_usage["context_used"]
     except Exception:
         logger.exception("context usage compute failed")
+    # 解码速度 tok/s（会话层实测：本轮输出 token / (首个增量 → 流结束)，
+    # 排除首 token 等待）。无数据时**不带字段**下发 —— 下发 0 会被前端读成
+    # 「速度为零」而不是「尚未测量」。
+    try:
+        from tea_agent.session.decode_rate import decode_usage_fields
+
+        usage_data.update(decode_usage_fields(getattr(session, "context", None)))
+    except Exception:
+        logger.debug("decode speed fields unavailable", exc_info=True)
     return usage_data
 
 

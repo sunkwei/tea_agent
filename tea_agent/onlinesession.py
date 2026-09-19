@@ -1,6 +1,7 @@
 """在线工具调用会话 — Token 优化版（组合模式，支持 OpenAI Function Calling）。"""
 
 import logging
+import time
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -22,8 +23,14 @@ from tea_agent.session.components.tool import _summarize_json  # noqa: F401  re-
 
 # 组件导入（替代 Mixin）
 from tea_agent.session.context import SessionContext
+from tea_agent.session.decode_rate import (
+    completion_tokens_total,
+    record_decode_stats,
+    reset_decode_stats,
+)
 from tea_agent.session.history_builder import (
     build_api_messages,
+    estimate_tokens,
 )
 from tea_agent.session.prompts import (
     COMPACT_SYSTEM_PROMPT,
@@ -908,6 +915,54 @@ class OnlineToolSession(BaseChatSession):
         tool_calls_data = []
         reasoning_parts = []
 
+        # ── 解码速度（tok/s）计时锚点 ──
+        # _decode_start_ts: 请求发出（进入本方法）时刻，用于首 token 等待（TTFT）；
+        # _decode_first_ts: 首个**输出增量**（content 或 reasoning）到达时刻；
+        #   解码速度 = 本轮输出 token / (first_ts → 流结束)，**排除 prefill**，
+        #   与 llama.cpp / vLLM 的 decode speed 口径一致（否则长上下文下读数被
+        #   首 token 等待拖低数倍，跨模型不可比）。
+        # 两者都用 time.monotonic()：墙上时钟跳变（NTP 校时/夏令时）会让除法
+        # 产出天文数字，单调钟不会。
+        self._decode_start_ts = time.monotonic()
+        self._decode_first_ts: float | None = None
+        # 本轮输出 token 的计数基线（usage.completion_tokens 累计值）。
+        # 断流重试会丢弃已收内容重新生成，此时基线一并前移，保证统计的是
+        # 最终成功那一版输出，而不是「两次尝试之和 / 一次尝试的耗时」。
+        _dec_tokens_base = completion_tokens_total(self.context)
+
+        def _mark_first_output() -> None:
+            nonlocal _first_out_marked
+            if not _first_out_marked:
+                self._decode_first_ts = time.monotonic()
+                _first_out_marked = True
+
+        _first_out_marked = False
+
+        def _record_decode_speed() -> None:
+            """落盘本轮解码速度（旁路统计，失败绝不影响主流程）。"""
+            try:
+                _end_ts = time.monotonic()
+                _tokens = max(0, completion_tokens_total(self.context) - _dec_tokens_base)
+                _estimated = False
+                if _tokens <= 0:
+                    # 供应商未回传 usage（未开 include_usage / 兼容端点省略）
+                    # → 退化为字符启发式估算，并标记为估算值，避免前端把
+                    # 一个凭空数字当成实测。
+                    _text = "".join(content_parts) + "".join(reasoning_parts)
+                    if _text:
+                        _estimated = True
+                        _tokens = max(1, estimate_tokens(_text) - 4)  # 去掉 +4 结构开销
+                record_decode_stats(
+                    self.context,
+                    _tokens,
+                    getattr(self, "_decode_start_ts", None),
+                    getattr(self, "_decode_first_ts", None),
+                    _end_ts,
+                    estimated=_estimated,
+                )
+            except Exception:
+                logger.debug("decode speed record failed", exc_info=True)
+
         # 非流式模式
         if self.context.no_stream_chunk:
             if hasattr(response, "usage") and response.usage:
@@ -948,6 +1003,8 @@ class OnlineToolSession(BaseChatSession):
                         )
             content = "".join(content_parts)
             reasoning_content = "".join(reasoning_parts)
+            # 非流式模式无「解码阶段」可言（整段一次性返回），不做 tok/s 测量：
+            # 用总耗时算出来的数字既非 prefill 也非 decode，展示只会误导。
             return content, tool_calls_data, reasoning_content
 
         # 流式模式（带断流重试 + AI 回复增量实时落盘）
@@ -981,6 +1038,7 @@ class OnlineToolSession(BaseChatSession):
                     # vLLM 思考模式（Qwen3.8 等）为 `reasoning`；统一提取
                     _rc = extract_reasoning(delta)
                     if _rc:
+                        _mark_first_output()
                         reasoning_parts.append(_rc)
                         callback(f"[THINK]{_rc}")
 
@@ -1021,6 +1079,7 @@ class OnlineToolSession(BaseChatSession):
                     # 在循环外处理，见下方 _flush 后
 
                     if delta.content:
+                        _mark_first_output()
                         content_parts.append(delta.content)
                         callback(delta.content)
                         # 实时落盘：节流累积，达阈值即 append assistant/chunk 事件
@@ -1058,14 +1117,20 @@ class OnlineToolSession(BaseChatSession):
                 content_parts = []
                 tool_calls_data = []
                 reasoning_parts = []
+                # 解码速度计时同步前移：重试产出的 token 只统计最终那一版，
+                # 且首个增量时刻重新判定（上一版的首包不属于本版输出）。
+                self._decode_start_ts = time.monotonic()
+                self._decode_first_ts = None
+                _first_out_marked = False
+                _dec_tokens_base = completion_tokens_total(self.context)
                 callback("\n⚠️ 连接中断，正在自动重试…\n")
-                import time
 
                 time.sleep(1.5 * (2 ** (stream_retries - 1)))
                 response = retry_factory()
 
         content = "".join(content_parts)
         reasoning_content = "".join(reasoning_parts)
+        _record_decode_speed()
         # B 兜底：Muse 合成思考若未闭合，补一次 DONE，避免前端悬挂
         if (
             reasoning_parts
@@ -1292,6 +1357,9 @@ class OnlineToolSession(BaseChatSession):
         """重置会话状态。"""
         self.api.reset_usage()
         self.api.reset_cheap_usage()
+        # 解码速度属于「本回合实测值」：清零后若本回合未成功产出，前端不会
+        # 沿用上一回合的数字（数字为真但归属错误，比不显示更有害）。
+        reset_decode_stats(self.context)
         self._rounds_collector = []
         self._extra_iterations = 0
         self._max_iter_wait.clear()

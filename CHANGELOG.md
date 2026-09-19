@@ -3,6 +3,33 @@
 
 ## [Unreleased]
 ### Features
+- feat(web): 页面底部显示解码速度 tok/s（usage-bar 新增实时 + 实测两段式）
+  - 口径对齐 llama.cpp / vLLM 的 *decode speed*：`本轮输出 token / (首个输出增量 → 流结束)`，
+    **刻意排除首 token 等待（prefill/TTFT）**。若把 prefill 计入，长上下文下同一次生成的
+    读数会被拖低数倍、跨模型不可比；TTFT 单独作为 tooltip 字段上报
+  - 新增叶子模块 `session/decode_rate.py`（全部纯函数、时间戳由调用方注入）：
+    `compute_decode_tps / compute_decode_stats / record_decode_stats / decode_usage_fields`；
+    窗口 < 50ms、token ≤ 0、时钟回拨、> 5000 tok/s 一律返回 None —— **不下发可疑数字**，
+    UI 侧据此隐藏该段而不是显示 `0 tok/s`（0 会被读成「速度为零」而非「尚未测量」）
+  - 计时用 `time.monotonic()`：墙上时钟跳变（NTP 校时/夏令时）会让除法产出天文数字
+  - 实测锚点接在 `_process_stream_with_reasoning`：首个 **content 或 reasoning** 增量到达时
+    打点（推理 token 同属 completion_tokens，不能漏）；token 数取 `usage.completion_tokens`
+    调用前后差值，不依赖供应商是否逐块回传 usage；供应商完全不回传时退化为字符启发式估算
+    并标记 `estimated`（前端显示 `≈`），避免把凭空数字当实测值
+  - **断流重试**：计时常量随「丢弃已收部分重新生成」一并前移 —— 统计最终成功那一版，
+    而不是「两次尝试之和 / 一次尝试的耗时」
+  - 服务端：`_build_usage_data` 追加 `decode_tps_text / decode_tps / ttft_text` 等字段
+    （实时 SSE `usage` 事件 + 流结束 `done` 两条路径共用同一组装点，无第二实现漂移）
+  - 前端：usage-bar 拆出纯函数 `_usageBarHtml(usage, liveTps)`；流式期间用本地估算值
+    **即时反馈**（虚线 + `≈`，节流 250ms，口径与后端 `estimate_tokens` 一致：中文 1.5 字/token、
+    英文 4 字符/token），服务端实测值到达后覆盖。**续读/后台轮询路径刻意不做估算**：
+    缓冲区是重放的，按重放节奏计时得到的是「回放速度」而非解码速度
+  - 归属正确性：`reset_decode_stats` 在每用户回合入口清零，`_liveTpsReset` 同时作废上一回合
+    的 usage 载荷 —— 数字为真但归属错误，比不显示更有害
+  - tests: 新增 `test_decode_rate.py` 40 项（口径/边界/时钟异常/断流重试/服务端字段有无/
+    `_build_usage_data` 与前端静态接线契约）；含元验证（把「首增量」改回「请求发出」、
+    去掉重试后的基线前移，确认对应测试确实变红）；另用真实 app.js 函数在 node 下做
+    14 项行为验证（渲染/优先级/XSS 转义/阈值/实时估算）
 - feat(tools): 工具使用次数统计表 + 长期未使用工具默认屏蔽
   - 新增项目 db（`$pwd/.tea_agent_run/` 会话库）表 `tool_usage`：一行一工具，
     记 uses / first_used / last_used / pin；记录点为 `Toolkit.call_tool`

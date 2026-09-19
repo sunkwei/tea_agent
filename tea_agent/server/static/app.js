@@ -1176,9 +1176,18 @@ function _createStreamState() {
 
 // ── Helper: 流结束后清理并发送排队消息 ──
 function _processQueueAfterStream() {
+  _liveTpsStop();   // 流已结束：实时估算值失效，改用服务端实测值
+  _liveTps.text = '';
   if (_pendingUsage) {
     updateUsage(_pendingUsage);
     _pendingUsage = null;
+  } else if (_lastUsageData) {
+    // 无最终 usage 载荷（如错误/中断）：至少把实时估算段从上一版渲染里去掉
+    var bar = $('usage-bar');
+    if (bar) {
+      bar.innerHTML = _usageBarHtml(_lastUsageData, '');
+      bar.className = 'usage-bar';
+    }
   }
   // 清理 DOM ID，避免下一轮消息 ID 重复
   const oldMsg = $('current-ai-msg');
@@ -1256,6 +1265,7 @@ window.sendMessage = async function() {
   const myGen = _streamGeneration;
   isStreaming = true;
   _pendingUsage = null;
+  _liveTpsReset();   // 重置实时解码速度采样（首增量到达后才开始计时）
 
   // Hide old usage bar
   const oldUsageBar = $('usage-bar');
@@ -1307,6 +1317,7 @@ window.sendMessage = async function() {
               removeLoading();
               s.fullText += data.text;
               s.bubbleText.innerHTML = esc(decodeEntities(s.fullText));
+              if (_liveTpsTick(data.text)) _paintLiveTps();
               break;
 
             case 'think_start':
@@ -1354,6 +1365,8 @@ window.sendMessage = async function() {
               if (s.thinkContent) {
                 s.thinkContent.textContent += data.text;
               }
+              // 推理 token 同样计入解码速度（服务端口径为 completion_tokens 全体）
+              if (_liveTpsTick(data.text)) _paintLiveTps();
               break;
 
             case 'think_done':
@@ -1632,12 +1645,21 @@ window.sendMessage = async function() {
   }
 };
 
-function updateUsage(usage) {
-  if (!usage || (!usage.total_tokens && !usage.context_used)) return;
-  var bar = $('usage-bar');
-  if (!bar) return;
-  bar.style.display = '';
-  var modelHtml = ' | <span class="usage-model">主模型: ' + (usage.model || '?') + '</span>';
+function _fmtNum(v) {
+  var n = Number(v);
+  if (!isFinite(n)) return '0';
+  return n.toLocaleString('en-US');
+}
+
+/**
+ * 后端 usage 事件 → usage-bar 的 HTML 片段（纯函数，便于单独验证与复用）。
+ *
+ * 解码速度（tok/s）取自服务端实测值（decode_tps_text，口径 = 本轮输出 token /
+ * 首增量→流结束）；服务端未提供时回退到前端本地实时估算（_liveTpsText），
+ * 两者都可能是空串 —— 此时该段整体不渲染，而不是显示 0 tok/s。
+ */
+function _usageBarHtml(usage, liveTpsText) {
+  var modelHtml = ' | <span class="usage-model">主模型: ' + esc(usage.model || '?') + '</span>';
   var cheapHtml = '';
   if (usage.cheap_model) {
     cheapHtml = ' | <span class="usage-cheap">便宜模型: ' + usage.cheap_model + '</span>';
@@ -1645,11 +1667,22 @@ function updateUsage(usage) {
   // 缓存命中率（后端已在 cache_hit_rate / cheap_cache_hit_rate 预格式化好描述串）
   var cacheHtml = '';
   if (usage.cache_hit_rate) {
-    cacheHtml = ' | <span class="usage-cache">' + usage.cache_hit_rate + '</span>';
+    cacheHtml = ' | <span class="usage-cache">' + esc(usage.cache_hit_rate) + '</span>';
   }
   var cheapCacheHtml = '';
   if (usage.cheap_cache_hit_rate && usage.cheap_cache_hit_rate !== usage.cache_hit_rate) {
-    cheapCacheHtml = ' | <span class="usage-cache cheap">' + usage.cheap_cache_hit_rate + '</span>';
+    cheapCacheHtml = ' | <span class="usage-cache cheap">' + esc(usage.cheap_cache_hit_rate) + '</span>';
+  }
+  // 解码速度：服务端实测优先，其次前端实时估算
+  var tpsHtml = '';
+  var tpsText = usage.decode_tps_text || liveTpsText || '';
+  if (tpsText) {
+    var _tpsTitle = '解码速度：最近一次模型调用的输出 token / (首增量→流结束)，不含首 token 等待';
+    if (usage.decode_estimated) _tpsTitle += '，供应商未返回 usage，数值为估算';
+    if (usage.ttft_text) _tpsTitle += '；' + usage.ttft_text;
+    var _estMark = usage.decode_estimated ? ' ≈' : '';
+    tpsHtml = ' | <span class="usage-tps" title="' + esc(_tpsTitle) + '">'
+      + esc(tpsText) + _estMark + '</span>';
   }
   // 当前上下文已用 xx%（后端预格式化 context_used 文案，供直接展示）
   var contextHtml = '';
@@ -1660,14 +1693,96 @@ function updateUsage(usage) {
     if (_ctxPct !== '' && _ctxPct >= 95) _ctxCls += ' danger';
     contextHtml = ' | <span class="' + _ctxCls + '" title="' + esc(usage.context_used) + '">' + esc(usage.context_used) + '</span>';
   }
-  bar.innerHTML = '<span class="usage-tokens">📊 T:' + usage.total_tokens
-    + '</span> <span class="usage-detail">(P:' + usage.prompt_tokens + '+C:' + usage.completion_tokens + ')</span>'
+  return '<span class="usage-tokens">📊 T:' + _fmtNum(usage.total_tokens) + '</span>'
+    + ' <span class="usage-detail" title="P=输入 token, C=输出 token">(P:' + _fmtNum(usage.prompt_tokens)
+    + '+C:' + _fmtNum(usage.completion_tokens) + ')</span>'
+    + tpsHtml
     + modelHtml
     + cheapHtml
     + cacheHtml
     + cheapCacheHtml
     + contextHtml;
+}
+
+function updateUsage(usage) {
+  if (!usage || (!usage.total_tokens && !usage.context_used)) return;
+  var bar = $('usage-bar');
+  if (!bar) return;
+  _lastUsageData = usage;
+  bar.style.display = '';
+  // 流式过程中已显示实时估算值 → 保留它（服务端实测值在下一轮 usage/done 到达）
+  bar.innerHTML = _usageBarHtml(usage, _liveTps.text);
   bar.className = 'usage-bar';
+}
+
+/* ══════════════════════════════════════════════════════
+   实时解码速度（前端估算，仅用于流式过程中即时反馈）
+   口径与服务端一致：输出 token / (首增量 → 现在)，排除首 token 等待。
+   服务端在每轮 LLM 调用结束后用供应商 usage 计算实测值并下发，
+   届时覆盖此估算 —— 估算仅填补「首轮尚未结束」这段空窗。
+   ══════════════════════════════════════════════════════ */
+var _lastUsageData = null;      // 最近一次服务端 usage 载荷（实时估算要复用它渲染其它字段）
+var _liveTps = { active: false, firstTs: 0, cnChars: 0, otherChars: 0, text: '' };
+var _liveTpsLastPaint = 0;
+
+/** 与后端 session.history_builder.estimate_tokens 同口径的启发式 token 估算。 */
+function _estTokensFromCounts(cnChars, otherChars) {
+  return cnChars / 1.5 + otherChars / 4.0;
+}
+
+/** 统计文本的中文字符数（其余按非中文计）。 */
+function _countCJK(text) {
+  var m = String(text || '').match(/[\u4e00-\u9fff\u3400-\u4dbf]/g);
+  return m ? m.length : 0;
+}
+
+function _liveTpsReset() {
+  _liveTps = { active: true, firstTs: 0, cnChars: 0, otherChars: 0, text: '' };
+  _liveTpsLastPaint = 0;
+  // 上一回合的 usage 载荷作废：本轮在首个 usage 事件到达前应显示「生成中」，
+  // 而不是拿上一回合的 T:/模型/tok/s 拼出新数字（归属错误的数比没有数更糟）。
+  _lastUsageData = null;
+}
+
+function _liveTpsStop() {
+  _liveTps.active = false;
+  _liveTps.text = '';
+}
+
+/** 采样一个输出增量；返回 true 表示 usage-bar 需要重绘。 */
+function _liveTpsTick(text) {
+  if (!_liveTps.active) return false;
+  var s = String(text || '');
+  if (!s) return false;
+  var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if (!_liveTps.firstTs) _liveTps.firstTs = now;
+  _liveTps.cnChars += _countCJK(s);
+  _liveTps.otherChars += (s.length - _countCJK(s));
+  var elapsed = (now - _liveTps.firstTs) / 1000;
+  var tokens = _estTokensFromCounts(_liveTps.cnChars, _liveTps.otherChars);
+  // 窗口过短 / 样本过少时除法噪声极大（首个增量与此刻几乎同时），
+  // 与后端 MIN_DECODE_SECONDS 同策略：宁可不显示，也不显示抖动数字。
+  if (elapsed < 0.5 || tokens < 8) return false;
+  _liveTps.text = '⚡ ' + (tokens / elapsed).toFixed(1) + ' tok/s';
+  if (now - _liveTpsLastPaint < 250) return false;   // 节流：token 事件可能每秒上百条
+  _liveTpsLastPaint = now;
+  return true;
+}
+
+/** 把实时估算值画进底部 usage-bar（尚无服务端 usage 时也能显示）。 */
+function _paintLiveTps() {
+  if (!_liveTps.text) return;
+  var bar = $('usage-bar');
+  if (!bar) return;
+  bar.style.display = '';
+  if (_lastUsageData) {
+    bar.innerHTML = _usageBarHtml(_lastUsageData, _liveTps.text);
+  } else {
+    bar.innerHTML = '<span class="usage-live">⏳ 生成中</span>'
+      + ' | <span class="usage-tps" title="解码速度（输出 token / 首增量→现在，不含首 token 等待），流结束后替换为服务端实测值">'
+      + esc(_liveTps.text) + ' ≈</span>';
+  }
+  bar.className = 'usage-bar live';
 }
 
 // ══════════════════════════════════════════════════
@@ -1820,6 +1935,7 @@ function _showBackgroundIndicator(topicId, label) {
 function _enterReconnectMode(topicId) {
   const partial = $('current-ai-msg');
   if (partial) partial.remove();          // 去重：交给续读渲染
+  _liveTpsStop();                         // 缓冲区是重放的，不能按重放节奏估算 tok/s
   _showBackgroundIndicator(topicId, '连接中断，正在重连并补齐内容…');
   _startBackgroundPoll(topicId);          // 内部重置 since / count / state
 }
@@ -1885,6 +2001,7 @@ function _renderBufferEvent(event) {
         _removeBackgroundIndicator(); // 有实际内容了，隐藏"处理中"提示
       }
       s.bubbleText.innerHTML = esc(decodeEntities(s.fullText));
+      if (_liveTpsTick(event.text)) _paintLiveTps();
       scrollBottom();
       break;
 
@@ -1933,6 +2050,7 @@ function _renderBufferEvent(event) {
       if (s.thinkContent) {
         s.thinkContent.textContent += event.text;
       }
+      if (_liveTpsTick(event.text)) _paintLiveTps();
       break;
 
     case 'think_done':
@@ -2051,6 +2169,13 @@ function _renderBufferEvent(event) {
       }
       break;
 
+    case 'usage':
+      // 续读/后台轮询路径：服务端实测 usage（含 decode_tps_text）同样刷新底部栏。
+      // ⚠️ 此处**不做**实时估算：缓冲区是重放的，按重放节奏计时得到的是
+      //    「回放速度」而非解码速度，展示出来就是编造数据。
+      if (event.usage) updateUsage(event.usage);
+      break;
+
     case 'steering_injected':
       // 后台轮询模式下收到插话生效事件：从本地排队列表移除并渲染
       if (event.item_id) {
@@ -2086,6 +2211,7 @@ function _renderBufferEvent(event) {
 
 function _startBackgroundPoll(topicId) {
   _stopBackgroundPoll();
+  _liveTpsStop();        // 后台/续读模式不做实时估算（见 _renderBufferEvent 'usage'）
   _backgroundPollTopic = topicId;
   _bufferSince = -1;
   _bufferEventCount = 0;

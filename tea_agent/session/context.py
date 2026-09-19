@@ -87,6 +87,16 @@ class SessionContext:
         "total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
         "prompt_cache_hit_tokens": 0, "prompt_cache_miss_tokens": 0,
     })
+    # 解码速度（tok/s）：最近一次主模型流式调用的实测值，由
+    # session.decode_rate.record_decode_stats 在流消费结束时写入。
+    # 口径 = 本轮输出 token / (首个输出增量 → 流结束)，排除首 token 等待；
+    # 0 表示「尚未测量」（非「速度为零」），前端据此隐藏该段。
+    _decode_tps: float = 0.0
+    _decode_tokens: int = 0
+    _decode_seconds: float = 0.0
+    _ttft_ms: float = 0.0
+    _decode_estimated: bool = False
+    _decode_tps_text: str = ""
     _injected_memories_text: str = ""
     _injected_memories: list[dict] = field(default_factory=list)
     _last_l0_hash: int = 0            # L0 注入内容 hash，用于去重

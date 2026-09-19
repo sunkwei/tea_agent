@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import ast
 import contextlib
+import io
 import json
 import logging
 import os
@@ -34,6 +35,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import tokenize
 from datetime import datetime
 from pathlib import Path
 
@@ -469,6 +471,27 @@ def _dangling_symbol_stats(root=".") -> tuple:
     return n_import, n_all
 
 
+def _todo_marker_count(src: str) -> int:
+    """只统计**注释里**的 TODO/FIXME/XXX 债务标记。
+
+    旧实现拿裸正则扫全文，把非债务一起计入：
+      · 字符串字面量：``toolkit_todo`` 的 ``"TODO checklist: ..."`` 是工具**描述**；
+      · UI 文案：``'DONE' if t["done"] else 'TODO'`` 是渲染值；
+      · 功能名引用：docstring 里讲「TODO 清单 / TODO/Plan 状态」是在说功能本身。
+    实测 26 处里真正的注释标记远少于此 —— 指标量的是噪声，涨跌不含信息，
+    于是「不许增长」这个棘轮对**任何**改名/新增文档都会误报。
+    改为按 ``tokenize`` 只认 COMMENT token：这才是「债务标记」的定义。
+    """
+    n = 0
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(src).readline):
+            if tok.type == tokenize.COMMENT:
+                n += len(re.findall(r"\b(TODO|FIXME|XXX)\b", tok.string))
+    except (tokenize.TokenError, IndentationError, SyntaxError, ValueError):
+        return n  # 词法失败：返回已计数部分，不因坏文件丢掉整份统计
+    return n
+
+
 def _bench_metrics(root=".") -> dict:
     """AST 扫描项目源码 → 量化指标（进程内缓存；跳过 tests/demo 以反映库代码质量）。
 
@@ -490,7 +513,7 @@ def _bench_metrics(root=".") -> dict:
         if any(s in rel for s in _METRIC_SKIP):
             continue
         m["files"] += 1
-        m["todos"] += len(re.findall(r"\b(TODO|FIXME|XXX)\b", src))
+        m["todos"] += _todo_marker_count(src)
         if src.count("\n") > 800:
             m["big_files"] += 1
         try:

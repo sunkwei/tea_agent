@@ -22,6 +22,12 @@ from tea_agent.evaluation.evo_experiment import (
     run_experiment,
 )
 
+# 本文件是一次确定性本地实验（20 轮 × 子进程真实基准），实测 module 级 fixture
+# 约 150-190s（随机器负载浮动）。全局 `timeout = 180` 是为「防网络/LLM 挂死」设的，
+# 对这里偏低：实际会在跑完前被掐断，并留下未还原的变异污染工作区（2026-09-19 实测）。
+# 故单独放宽到 480s —— 仍能抓住真正挂死，又给足这台机器跑完的余量。
+pytestmark = pytest.mark.timeout(480)
+
 
 @pytest.fixture(scope="module")
 def experiment():
@@ -124,7 +130,7 @@ def test_probes_persisted_and_pass(experiment):
 
 
 def test_all_regression_targets_restored(experiment):
-    """实验结束后仓库必须干净：回归变异不得残留（DEFAULT_TASKS 回到 7 条以内）。"""
+    """实验结束后仓库必须干净：回归变异不得残留（DEFAULT_TASKS 不含实验探针）。"""
     from tea_agent.evaluation.evo_bench import DEFAULT_TASKS
 
     assert not any("R1-env-scrub-remove" in str(t) for t in DEFAULT_TASKS)
@@ -137,5 +143,12 @@ def test_all_regression_targets_restored(experiment):
     assert src.count("env=_build_scrubbed_env") >= 2, "toolkit_exec 环境清洗接入被实验残留破坏"
     assert "env=os.environ.copy()" not in src, "回归变异 R1 残留未恢复"
 
-    # 内置任务集应恢复原始 7 条（探针走独立 JSON，不改 DEFAULT_TASKS）
-    assert len(DEFAULT_TASKS) == 7, len(DEFAULT_TASKS)
+    # 内置任务集不得残留实验插入的探针（探针走独立 JSON，不改 DEFAULT_TASKS）。
+    #
+    # 判据用「探针 id 不得出现」而非硬编码条数：条数会随合法新增任务过期
+    # （新增 safety 任务即须改测试），而残留是**必然要抓**的缺陷 —— 2026-09-19
+    # 实测：实验被 pytest-timeout 打断时，P1 探针留在 DEFAULT_TASKS 里没被还原，
+    # 且因实验自身也用 P1..P6 命名，残留会静默顶掉同名改进轮的插入。
+    probe_ids = {m[0] for m in IMPROVEMENTS} | {r[0] for r in REGRESSIONS}
+    leaked = [t.get("id") for t in DEFAULT_TASKS if t.get("id") in probe_ids]
+    assert not leaked, f"实验探针残留未清理: {leaked}"

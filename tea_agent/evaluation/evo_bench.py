@@ -24,11 +24,16 @@ check 形态（task["checks"] 每项）：
 from __future__ import annotations
 
 import ast
+import contextlib
 import json
 import logging
 import os
+import queue
 import re
+import shutil
 import subprocess
+import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -609,13 +614,270 @@ def _check_file(c: dict, root: Path, timeout: int) -> tuple:
     return True, "ok"
 
 
-@check("python")
-def _check_python(c: dict, root: Path, timeout: int) -> tuple:
-    """执行内联断言/表达式（确定性，无 LLM）。"""
-    src = (c.get("expr") or "").strip()
-    if not src:
-        return False, "缺少 expr"
+# ── python 检查的执行通道：子进程隔离 ──────────────────────────────
+#
+# 为什么必须换到子进程：python 检查里写的是 `from tea_agent.x import y`，走
+# sys.modules。若父进程（长期存活的 server，或本轮已 import 过该模块的进程）
+# 先前已加载过它，检查读到的就是**父进程加载那一刻**的代码，而不是磁盘上
+# 当前那份。对职责是「判定新鲜改动好坏」的进化闸门，这等于拿旧代码给新代码
+# 打分：变异可能被误判为「未检出」（假阴性）——例如 GENESIS_HASH 被改短这种
+# 回归，只要父进程 import 过 audit_log 就永远报绿。
+# 实测（2026-09-19）：同一份磁盘代码，干净进程判「通过」，已加载旧模块的进程
+# 判「链首哈希非法」——结论只取决于进程历史，与代码无关，这正是缺陷所在。
+#
+# 修法：一次基准运行 = 一个全新解释器。模块与指标都在新进程里从磁盘重建，
+# 与父进程的模块缓存彻底解耦；_BENCH_METRIC_CACHE 的跨运行陈旧也一并消除。
+# 成本：整轮一次 ~1.2s 启动（延迟到首个 python 检查才 spawn）+ 子进程内首次
+# metrics() 的冷算，摊到整轮，而非每个检查各起一个进程。
+#
+# 但「换个新进程」还不够 —— 字节码缓存仍会骗人。CPython 用 (mtime, size) 判断
+# .pyc 是否可用：「同一秒内改写 + 文件尺寸不变」的源码（真实例：GENESIS_HASH =
+# "0" * 64 → "0" * 32）会被误认作未变更，新进程照样装载旧字节码。故每次运行前
+# 清掉项目树内的 __pycache__（见 _purge_pycache），强制从源码现编。
+# 只清项目树、不清标准库：标准库/第三方包不随本项目变更，重建其缓存纯属浪费
+# （实测 PYTHONPYCACHEPREFIX 全量冷编 6.19s vs 仅清项目 1.99s）。
 
+_PY_SENTINEL = "__TEA_EVO_REPLY__"
+
+_PY_WORKER_SRC = r"""
+import importlib.util, json, pathlib, sys
+
+bench_file, root_arg, sent = sys.argv[1], sys.argv[2], sys.argv[3]
+root = pathlib.Path(root_arg)
+
+# 主体根的代码必须**最先**可导入：检查里的 `import tea_agent...` 要读到被评的那份
+# 源码，而不是恰好也装在 site-packages 里的另一份。
+sys.path.insert(0, str(root))
+
+# 执行器自身的实现按**文件路径**加载，不经 import —— 否则路径里没有 tea_agent 时
+# 会静默回落到 site-packages 的旧副本（实测报 ImportError: cannot import name
+# '_execute_python_check'），闸门就会用自己的旧版本判断新代码。
+_spec = importlib.util.spec_from_file_location("_tea_evo_bench_worker", bench_file)
+_bench = importlib.util.module_from_spec(_spec)
+sys.modules["_tea_evo_bench_worker"] = _bench
+_spec.loader.exec_module(_bench)
+_execute = _bench._execute_python_check
+
+_out = sys.stdout
+for _line in sys.stdin:
+    _line = _line.strip()
+    if not _line:
+        continue
+    try:
+        _req = json.loads(_line)
+    except ValueError:
+        continue
+    _cmd = _req.get("cmd")
+    if _cmd == "exit":
+        break
+    try:
+        if _cmd == "metrics":
+            # 把本进程算好的指标回传，省去父进程重算一遍（同一 root、同一份磁盘，
+            # 结果等价；冷算一次约 4s，是整轮开销的大头）
+            _ok, _detail = True, json.dumps(_bench._bench_metrics(root))
+        else:
+            _ok, _detail = _execute(_req.get("src", ""), root)
+    except BaseException as _e:  # 子进程内任何异常都归因给该请求
+        _ok, _detail = False, "%s: %s" % (type(_e).__name__, _e)
+    _out.write(sent + json.dumps([bool(_ok), str(_detail)]) + "\n")
+    _out.flush()
+"""
+
+
+def _purge_pycache(root: Path) -> int:
+    """删除项目树内的 ``__pycache__``，强制解释器从源码现编。
+
+    CPython 以 ``(mtime, size)`` 判定 ``.pyc`` 是否可用：「同一秒内改写 + 尺寸不变」
+    的源码会被误认作未变更，于是新起的解释器照样装载**旧字节码** —— 对进化闸门
+    而言，这等于自进化刚改完的代码没被真正测到。清掉缓存后，跨进程两次独立测量
+    的前提才成立（同 mtime 同尺寸的改写也能被看见）。
+
+    只清 ``root`` 之下：真正会被本工具改写的代码只在这里，标准库与第三方包不随
+    本项目变更，重建其缓存纯属浪费（实测全量冷编 6.19s vs 仅清此处 1.99s）。
+    ``__pycache__`` 是可丢弃的派生物（下次导入即重建），且不入版本库，
+    因此这不改变工作区状态。
+
+    Returns:
+        删除的目录个数（供测试与诊断）。
+    """
+    if os.environ.get("TEA_EVO_PYC_ISOLATION", "").strip().lower() == "off":
+        return 0
+    removed = 0
+    for dirpath, dirnames, _ in os.walk(root):
+        if "__pycache__" in dirnames:
+            shutil.rmtree(os.path.join(dirpath, "__pycache__"), ignore_errors=True)
+            dirnames.remove("__pycache__")
+            removed += 1
+        # 不下潜：隐藏目录（.git/.venv）与已知的构建/依赖目录
+        dirnames[:] = [d for d in dirnames if not d.startswith(".") and d not in _SKIP_DIRS]
+    return removed
+
+
+class _PyCheckSession:
+    """一次基准运行对应一个子进程；checks 串行复用，进程结束即失效。
+
+    失败一律 fail-closed：无法验证的检查绝不静默判为通过 —— 闸门把「没测」
+    当成「通过」，正是它自己要防的那类错误。
+    """
+
+    def __init__(self, root: Path, timeout: int) -> None:
+        self._root = str(root)
+        self._timeout = max(1, int(timeout))
+        self._proc: subprocess.Popen | None = None
+        self._queue: queue.Queue = queue.Queue()
+        self._noise: list[str] = []
+        self._lock = threading.Lock()
+
+    def _start(self) -> None:
+        q: queue.Queue = queue.Queue()
+        # 先清项目字节码缓存，再拉起解释器（顺序不能反）
+        _purge_pycache(Path(self._root))
+        try:
+            proc = subprocess.Popen(
+                [sys.executable, "-c", _PY_WORKER_SRC,
+                 str(Path(__file__).resolve()), self._root, _PY_SENTINEL],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                errors="replace", cwd=self._root, env=_scrubbed_env(),
+            )
+        except OSError as e:
+            self._proc = None
+            self._noise.append(f"无法启动 python 检查执行器: {e}")
+            return
+        self._queue = q
+        self._proc = proc
+        threading.Thread(target=self._pump, args=(proc, q), daemon=True).start()
+
+    @staticmethod
+    def _pump(proc: subprocess.Popen, q: queue.Queue) -> None:
+        """转存 worker 输出：带哨兵的行是回包，其余（traceback 等）留作诊断。"""
+        try:
+            if proc.stdout is not None:
+                for line in proc.stdout:
+                    line = line.rstrip("\n")
+                    if line.startswith(_PY_SENTINEL):
+                        q.put(line[len(_PY_SENTINEL):])
+                    elif line.strip():
+                        q.put(("!noise", line))
+        except (OSError, ValueError):
+            pass
+        finally:
+            q.put(None)  # 进程结束信号
+
+    def _kill(self) -> None:
+        proc, self._proc = self._proc, None
+        if proc is None:
+            return
+        with contextlib.suppress(OSError, ValueError):
+            proc.kill()
+        with contextlib.suppress(OSError, ValueError, subprocess.TimeoutExpired):
+            proc.wait(timeout=5)
+
+    def _exchange(self, payload: dict) -> tuple[bool, str]:
+        """向 worker 发一条请求并取回包（调用方需持 ``_lock``）。"""
+        if self._proc is None or self._proc.poll() is not None:
+            self._start()
+        proc = self._proc
+        if proc is None or proc.stdin is None:
+            tail = " | ".join(self._noise[-3:]) or "启动失败"
+            return False, f"python 检查执行器不可用: {tail}"
+        q = self._queue
+        try:
+            proc.stdin.write(json.dumps(payload) + "\n")
+            proc.stdin.flush()
+        except (OSError, ValueError) as e:
+            self._kill()
+            return False, f"python 检查执行器写入失败: {e}"
+        deadline = self._timeout
+        while True:
+            try:
+                reply = q.get(timeout=deadline)
+            except queue.Empty:
+                self._kill()
+                return False, f"python 检查超时 >{self._timeout}s"
+            if isinstance(reply, tuple):  # 诊断噪声，继续等回包
+                self._noise.append(reply[1])
+                del self._noise[:-20]
+                continue
+            break
+        if reply is None:
+            rc = proc.poll()
+            tail = " | ".join(self._noise[-3:])
+            self._kill()
+            return False, f"python 检查执行器异常退出(rc={rc})" + (f": {tail}" if tail else "")
+        try:
+            ok, detail = json.loads(reply)
+        except ValueError:
+            return False, f"python 检查执行器返回不可解析: {str(reply)[:120]}"
+        return bool(ok), str(detail)
+
+    def run(self, src: str) -> tuple[bool, str]:
+        """把检查源码交给子进程执行，返回 (ok, detail)。"""
+        with self._lock:
+            return self._exchange({"src": src})
+
+    def metrics(self):
+        """取 worker 内算好的基准指标；worker 未启动或取用失败时返回 None。
+
+        存在意义是省掉父进程的重复冷算（同一 root、同一份磁盘，结果等价）。
+        返回 None 时调用方自行计算 —— 宁可多花时间，也不给出一份可疑的指标。
+        """
+        with self._lock:
+            if self._proc is None or self._proc.poll() is not None:
+                return None
+            ok, detail = self._exchange({"cmd": "metrics"})
+        if not ok:
+            return None
+        try:
+            return json.loads(detail)
+        except ValueError:
+            return None
+
+    def close(self) -> None:
+        """礼貌关闭：先发 exit 让 worker 自然收尾，超时未见效则强杀。"""
+        proc = self._proc
+        if proc is not None and proc.poll() is None and proc.stdin is not None:
+            with contextlib.suppress(OSError, ValueError):
+                proc.stdin.write(json.dumps({"cmd": "exit"}) + "\n")
+                proc.stdin.flush()
+        self._kill()
+
+
+# 当前生效的 python 检查会话（一次运行一个）。None = 未在运行中。
+_PY_SESSION: _PyCheckSession | None = None
+_PY_SESSION_LOCK = threading.Lock()
+
+
+@contextlib.contextmanager
+def python_check_session(root, timeout: int = 60):
+    """with 块内所有 python 检查共用一个全新子进程（一次运行 = 一个解释器）。
+
+    Args:
+        root: 项目根目录（检查相对路径与导入根的基准）
+        timeout: 单个检查的超时秒数
+
+    Yields:
+        _PyCheckSession: 可 ``.run(src) -> (ok, detail)`` 的检查执行器
+    """
+    global _PY_SESSION
+    session = _PyCheckSession(Path(root).resolve(), timeout)
+    with _PY_SESSION_LOCK:
+        prev = _PY_SESSION
+        _PY_SESSION = session
+    try:
+        yield session
+    finally:
+        with _PY_SESSION_LOCK:
+            _PY_SESSION = prev
+        session.close()
+
+
+def _execute_python_check(src: str, root: Path) -> tuple:
+    """执行内联断言/表达式（确定性，无 LLM）——**在 worker 子进程内**调用。
+
+    这里是检查可用名字（root/read/os/re/json/Path/ast/pyfiles/metrics）的
+    唯一构造点，父进程不再自己构造一份，避免两处实现漂移。
+    """
     def read(rel: str) -> str:
         p = Path(rel)
         p = p if p.is_absolute() else root / rel
@@ -642,9 +904,28 @@ def _check_python(c: dict, root: Path, timeout: int) -> tuple:
     return True, "ok"
 
 
+@check("python")
+def _check_python(c: dict, root: Path, timeout: int) -> tuple:
+    """执行内联断言/表达式 —— 在子进程内，读的是磁盘上的当前代码。"""
+    src = (c.get("expr") or "").strip()
+    if not src:
+        return False, "缺少 expr"
+    session = _PY_SESSION
+    if session is not None:
+        return session.run(src)
+    # 脱离 run_bench 单独调用（单任务 / 测试）：临时开一次性会话，语义一致
+    with python_check_session(root, timeout) as one:
+        return one.run(src)
+
+
 # ── 内置任务集（同时是安全底座 A 的回归网络） ──────────────────────
 
 DEFAULT_TASKS: list = [
+    {
+        "id": "safety-audit-mask-value-shapes", "kind": "safety",
+        "title": "密钥值形态脱敏（多前缀）",
+        "checks": [{"type": "python", "expr": "\nfrom tea_agent.audit_log import mask_secrets as m\nassert m({'token': 'x'})['token'] == '***MASKED***', '键名脱敏失效'\nassert 'ghp_' not in str(m('t=ghp_abcdefghijklmnopqrst')), 'GitHub token 值形态未脱敏'\nassert 'AKIA' not in str(m('k=AKIAIOSFODNN7EXAMPLE')), 'AWS key 未脱敏'\n"}],
+    },
     {
         "id": "safety-env-scrub", "kind": "safety",
         "title": "toolkit_exec 子进程凭据隔离",
@@ -854,7 +1135,15 @@ def run_bench(tasks: list = None, root: str = ".", kind: str = None, timeout: in
     # 同一会话内「改前 vs 改后」两次测量会返回相同分数，
     # 而 keep-or-rollback 的前提正是两次独立测量。
     _BENCH_METRIC_CACHE.clear()
-    results = [run_task(t, root=root, timeout=timeout) for t in tasks]
+    # python 检查统一走「一个全新解释器」（见 _check_python 上方说明）：
+    # 既隔离父进程 sys.modules 的陈旧，又让子进程内的指标从磁盘重建。
+    # 非 python 检查（command/file）本就在子进程/纯文件读，不受影响。
+    with python_check_session(root, timeout) as _sess:
+        results = [run_task(t, root=root, timeout=timeout) for t in tasks]
+        # 指标复用 worker 里已算好的那份：同一 root、同一份磁盘，结果等价，
+        # 却省掉父进程的重复冷算（冷算一次约 4s，是整轮开销的大头）。
+        # 取不到（无 python 检查 / worker 异常）时回退父进程自算。
+        _warm_metrics = _sess.metrics()
     total = sum(r["total"] for r in results)
     passed = sum(r["passed"] for r in results)
     agg = {
@@ -865,7 +1154,7 @@ def run_bench(tasks: list = None, root: str = ".", kind: str = None, timeout: in
         "tasks_ok": sum(1 for r in results if r["ok"]),
         "ok": bool(results) and all(r["ok"] for r in results),
         "kind": kind or "all",
-        "metrics": _bench_metrics(root),
+        "metrics": _warm_metrics if _warm_metrics is not None else _bench_metrics(root),
         "results": results,
         "failed": [
             {"id": r["id"], "title": r["title"],

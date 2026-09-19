@@ -60,6 +60,39 @@
     无库环境不建库不炸、存储异常 fail-open 全放开、判定确定性）；
     端到端实证 7 组（临时库：真实调用入库 → 63 工具收缩到 12、7 个自愈通路恒在、
     空表/保护期不屏蔽、pin/unpin 与逃生阀生效、无库不建库）
+- fix(evo): 基准的 python 检查改子进程执行 —— 消除「拿旧代码给新代码打分」
+  - 根因：`_check_python` 原先在**父进程内** `exec`，检查里的 `from tea_agent.x import y`
+    命中 `sys.modules` 缓存。长期存活的 server 若已加载过该模块，检查读到的就是**加载
+    那一刻**的代码。对职责是「判定新鲜改动好坏」的进化闸门，这等于拿旧代码打分：磁盘上
+    真实的回归会被判「未检出」。实测 2026-09-19：server 08:19 启动后，磁盘上已还原为
+    `"0"*64` 的 `GENESIS_HASH` 仍被读出启动时的短值 → `safety-audit-chain` 假失败
+    （10/11, score 0.9091）；同一份代码在新进程里则 11/11（1.0）—— 结论只取决于进程历史。
+    该假分数还直接喂给了 `toolkit_self_evolve` 的 evolution_gate（decision=rollback）。
+  - 修复：一次基准运行 = 一个全新解释器（`python_check_session`，首个 python 检查时懒启动）。
+    模块与指标都在新进程里从磁盘重建，与父进程模块缓存彻底解耦，`_BENCH_METRIC_CACHE`
+    的跨运行陈旧一并消除。成本是整轮一次 ~1.2s 启动，而非每个检查各起一个进程；
+    非 python 检查（command/file）本就在子进程/纯文件读，不受影响。
+  - 附带第二个陈旧向量：CPython 以 `(mtime, size)` 判定 `.pyc` 是否可用，「同一秒内改写 +
+    尺寸不变」的源码（真实例：`GENESIS_HASH = "0" * 64` → `"0" * 32`）会被误认作未变更，
+    新起的解释器照样装载旧字节码。故每次运行前清掉项目树内的 `__pycache__`
+    （`_purge_pycache`，可用 `TEA_EVO_PYC_ISOLATION=off` 关闭）。只清项目树、不清标准库：
+    实测全量冷编 6.19s vs 仅清项目 1.99s。`__pycache__` 是可丢弃派生物且不入版本库，
+    因此不改变工作区状态。
+  - 执行器自身的实现按**文件路径**加载（`importlib.util.spec_from_file_location`），不经
+    import —— 否则 root 路径不含 `tea_agent` 时会静默回落到 site-packages 里的旧副本
+    （实测 `ImportError: cannot import name '_execute_python_check'`），闸门又变成用自己的
+    旧版本判断新代码。
+  - 失败一律 fail-closed：执行器硬退出 / 超时 / 写失败 → 该检查判失败，绝不静默通过
+    （闸门把「没测」当成「通过」正是它自己要防的错误）；下一个检查会重启执行器继续。
+  - 配套新增 `safety` 任务 `safety-audit-mask-value-shapes`：钉住密钥**值形态**脱敏
+    （`ghp_` / `AKIA` 前缀），补上原先只覆盖「键名命中」的空档。
+    （命名刻意避开实验探针的 `P1..P6` 命名空间 —— 长期任务用 `P5-*` 会与
+    `evo_experiment.IMPROVEMENTS` 同名，实验插入探针时被静默顶掉、改进轮判 no_change。
+    同类撞名的 `P1-env-runtime-drop` 是实验被打断留下的残留，已清理。）
+  - tests: 新增 `test_evo_bench_subprocess_isolation.py` 4 项，含**元验证**——关闭
+    `TEA_EVO_PYC_ISOLATION` 或把 `_check_python` 换回进程内 `exec`，对应断言立刻变红
+    （已实测确认，避免把测试写成花架子）。相关 5 个测试文件 72 项通过。
+
 - fix(session): JSON 非法转义序列（\' 等）导致 tool_call 参数被整体丢弃
   - 根因：模型把 Python/shell 字面量写进 JSON 时习惯性转义单引号（如
     \'），但 JSON 仅允许 9 种转义前导字符（\" \\ \/ \b \f \n \r \t \u），

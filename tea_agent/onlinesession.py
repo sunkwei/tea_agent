@@ -900,8 +900,15 @@ class OnlineToolSession(BaseChatSession):
 
         纯观测用途：任何异常一律 debug 级吞掉，绝不把主调用带崩
         （见 AGENTS.md「辅助能力不绑架主流程」）。
-        ⚠️ 不要从消费循环里直接 self. 调用 —— 须经
-        _process_stream_with_reasoning 内的 _sample 闭包触发，理由见该闭包注释。
+
+        ⚠️ 当前**未接线**：master 的解码速率展示走 ``session/decode_rate.py``
+        （usage-bar 的 decode_tps_text，由本文件 _record_decode_sample 之外的
+        _mark_first_output/_record_decode_speed 产出）。本采集器与
+        ``session/decode_speed.py`` 一并保留备用；若要重新接回流式消费循环，
+        绝不可直接写 ``self._record_decode_sample(...)`` —— 调用点在「断流重试」
+        的 try 内，属性查找/取时的异常会被误判为网络断流并触发指数退避重试。
+        必须像 ca1482d 那样包成不可能抛错的局部闭包（_monotonic/_now/_sample），
+        且取时留在闭包内部（参数位置求值不在其 try 内）。
 
         Args:
             usage: 端点返回的 usage 对象（取 completion_tokens）
@@ -1022,9 +1029,6 @@ class OnlineToolSession(BaseChatSession):
         if self.context.no_stream_chunk:
             if hasattr(response, "usage") and response.usage:
                 self.api._accumulate_usage(response.usage)
-                # 非流式拿不到首 token：只记总耗时，decode_seconds=None
-                # 使其不参与 tok/s，避免把排队/prefill 冒充成解码速度
-                _sample(response.usage, streaming=False)
             if response.choices:
                 msg = response.choices[0].message
                 # vLLM 思考模式（Qwen3.8 等）返回 `reasoning` 字段，
@@ -1073,12 +1077,6 @@ class OnlineToolSession(BaseChatSession):
         stream_retries = 0
         _chunk_buf: list[str] = []
         _chunk_chars = 0
-        # ── 解码速率打点（旁路观测，不影响主流程序列）──
-        # _t_first: 首个「有产出」chunk 的到达时刻。思考模型的首 token 就是
-        #   reasoning，必须一起算，否则 TTFT 被错误推迟到正文首字。
-        # _stream_usage: 端点在最后一个 chunk 上报的 usage（include_usage）。
-        _t_first: float | None = None
-        _stream_usage = None
 
         def _flush_chunk_buf() -> None:
             nonlocal _chunk_buf, _chunk_chars
@@ -1092,7 +1090,6 @@ class OnlineToolSession(BaseChatSession):
                 for chunk in response:
                     if hasattr(chunk, "usage") and chunk.usage:
                         self.api._accumulate_usage(chunk.usage)
-                        _stream_usage = chunk.usage
 
                     if not hasattr(chunk, "choices") or not chunk.choices:
                         continue
@@ -1102,8 +1099,6 @@ class OnlineToolSession(BaseChatSession):
                     # 推理内容：兼容端点为 `reasoning_content`，
                     # vLLM 思考模式（Qwen3.8 等）为 `reasoning`；统一提取
                     _rc = extract_reasoning(delta)
-                    if _t_first is None and (_rc or delta.content or delta.tool_calls):
-                        _t_first = _now()   # 永不抛错：见 _now 文档
                     if _rc:
                         _mark_first_output()
                         reasoning_parts.append(_rc)
@@ -1160,14 +1155,6 @@ class OnlineToolSession(BaseChatSession):
                             delta, tool_calls_data
                         )
                 _flush_chunk_buf()  # 正常结束：flush 剩余增量
-                # ── 解码速率：单次模型调用结束即采样（t_end 就地取时）──
-                _sample(
-                    _stream_usage,
-                    streaming=True,
-                    t_first=_t_first,
-                    # 端点未回 usage 时的兜底口径（标记为估算，不与实测混淆）
-                    est_text="".join(reasoning_parts) + "".join(content_parts),
-                )
                 break  # 正常消费完成
             except Exception as e:
                 if retry_factory is None or stream_retries >= max_stream_retries:

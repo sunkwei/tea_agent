@@ -1,12 +1,15 @@
-"""解码速率（tok/s）功能测试。
+"""解码速率（tok/s）库函数测试（session/decode_speed.py）。
 
-覆盖三层，重点在**静默失效**类缺陷：
-- decode_speed 纯函数：度量定义（Σ/Σ 聚合、TTFT 分离）、样本有效性、口径纯度
-- OnlineToolSession 采集：从假 chunk 流到 context._decode_samples 的接线
-- agent_module._build_usage_data：下发给前端的 speed 字段
+覆盖：
+- 纯函数：度量定义（Σ/Σ 聚合、TTFT 分离）、样本有效性、口径纯度
+- 采集器 ``OnlineToolSession._record_decode_sample`` 的旁路隔离（异常必须被吞）
 
-回归背景：采集点必须能在 time.monotonic 被函数级 ``import time`` 遮蔽时变红
-（该 bug 会让整个采样静默失效，且不影响任何现有测试）。
+历史：本文件曾覆盖「假 chunk 流 → context._decode_samples → agent_module 下发
+speed 字段」的整条接线。2026-09-20 的 master 合并（b3e5ebf）在两条并行的解码
+速率实现中选定 ``session/decode_rate.py``（usage-bar 的 decode_tps_text），
+decode_speed 的流式接线与前端徽章随之退役 —— 相关接线用例已删除，库函数与
+采集器保留备用（重新接线时必须沿用「不可能抛错的局部闭包」写法，见
+onlinesession.py ``_record_decode_sample`` 文档）。
 """
 
 from __future__ import annotations
@@ -18,7 +21,6 @@ from types import SimpleNamespace
 import pytest
 
 from tea_agent.session.decode_speed import (
-    MAX_SAMPLES,
     format_speed,
     make_sample,
     summarize,
@@ -224,100 +226,23 @@ class TestFormatSpeed:
 
 
 # ============================================================
-# OnlineToolSession 采集接线（假 chunk 流）
+# 采集器旁路隔离（_record_decode_sample）
 # ============================================================
 
 
-def _delta(content=None, reasoning=None, tool_calls=None):
-    return SimpleNamespace(content=content, reasoning_content=reasoning,
-                           tool_calls=tool_calls)
-
-
-def _chunk(content=None, reasoning=None, usage=None, tool_calls=None, no_choices=False):
-    if no_choices:
-        return SimpleNamespace(usage=usage, choices=[])
-    return SimpleNamespace(
-        usage=usage,
-        choices=[SimpleNamespace(delta=_delta(content, reasoning, tool_calls))],
-    )
-
-
 def _make_bare_session():
-    """绕过 __init__ 构造 OnlineToolSession，只装配被测通路所需属性。"""
+    """绕过 __init__ 构造 OnlineToolSession —— 采集器只触碰 context。"""
     from tea_agent.onlinesession import OnlineToolSession
     from tea_agent.session.context import SessionContext
 
     sess = OnlineToolSession.__new__(OnlineToolSession)
     sess.context = SessionContext()
-    sess.context.no_stream_chunk = False
     sess.context.model = "test-model"
-    sess._accumulated = []
-    sess.api = SimpleNamespace(
-        _accumulate_usage=lambda u: sess._accumulated.append(u),
-        accumulate_tool_calls_from_delta=lambda d, out: None,
-        reset_usage=lambda: setattr(sess.context, "_last_usage", {"total_tokens": 0}),
-        reset_cheap_usage=lambda: setattr(sess.context, "_last_cheap_usage", {}),
-    )
-    sess._log_assistant_chunk = lambda _t: None
-    # reset_session_state 直接操作这些字段；__new__ 绕过了 __init__，需手工补齐
-    import threading as _th
-    sess._max_iter_wait = _th.Event()
-    sess._rounds_collector = []
-    sess._extra_iterations = 0
-    # __del__/close 通路的最小字段，避免 GC 时报属性缺失干扰其它用例输出
-    sess._http_clients = {}
-    sess.current_topic_id = None
     return sess
 
 
-class TestSessionSampling:
-    def test_stream_sample_with_advancing_clock(self, monkeypatch):
-        """流式采集主路径：时钟递增时样本数值 = tokens / 解码窗口。"""
-        # 该测试同时是「time 被函数级 import 遮蔽 → UnboundLocalError」的回归防线。
-        import tea_agent.onlinesession as mod
-
-        sess = _make_bare_session()
-        sess.context._stream_t_request = 1000.0
-        # 该路径只有两次取时：首个有产出 chunk → t_first；流读完 → t_end
-        seq = iter([1002.0, 1013.0])
-        monkeypatch.setattr(mod, "time",
-                            SimpleNamespace(monotonic=lambda: next(seq, 1013.0),
-                                            sleep=lambda _s: None))
-
-        chunks = [
-            _chunk(content="让我想想"),
-            _chunk(content="你好"),
-            _chunk(usage=SimpleNamespace(completion_tokens=220, prompt_tokens=10,
-                                         total_tokens=230), no_choices=True),
-        ]
-        sess._process_stream_with_reasoning(iter(chunks), lambda _t: None)
-
-        samples = sess.context._decode_samples
-        assert len(samples) == 1
-        s = samples[0]
-        assert s["completion_tokens"] == 220
-        assert s["decode_seconds"] == pytest.approx(11.0)   # 1013 - 1002
-        assert s["ttft_seconds"] == pytest.approx(2.0)      # 1002 - 1000
-        assert summarize(samples)["tok_per_sec"] == pytest.approx(20.0)
-
-    def test_usage_less_endpoint_falls_back_to_estimate(self, monkeypatch):
-        """端点不回 usage（不带 include_usage 的代理）→ 用文本估算并标记口径。"""
-        import tea_agent.onlinesession as mod
-
-        sess = _make_bare_session()
-        sess.context._stream_t_request = 0.0
-        seq = iter([1.0, 11.0])
-        monkeypatch.setattr(mod, "time",
-                            SimpleNamespace(monotonic=lambda: next(seq, 11.0),
-                                            sleep=lambda _s: None))
-
-        chunks = [_chunk(content="x" * 400)]  # 无 usage chunk
-        sess._process_stream_with_reasoning(iter(chunks), lambda _t: None)
-
-        samples = sess.context._decode_samples
-        assert len(samples) == 1
-        assert samples[0]["estimated"] is True
-        assert samples[0]["completion_tokens"] > 0
+class TestRecorderIsolation:
+    """采集器是纯旁路：内部异常一律 debug 级吞掉，绝不外泄给调用方。"""
 
     def test_record_failure_does_not_raise(self, monkeypatch):
         """采集是旁路：内部异常必须被吞（绝不把对话主流程带崩）。"""
@@ -330,7 +255,7 @@ class TestSessionSampling:
             raise RuntimeError("collector exploded")
 
         monkeypatch.setattr(ds, "make_sample", _boom)
-        with caplog_handler() as records:
+        with _CaplogCapture() as records:
             assert sess._record_decode_sample(
                 SimpleNamespace(completion_tokens=10), t_first=1.0, t_end=2.0) is None
         assert records, "应以 debug 级留痕"
@@ -350,17 +275,8 @@ class TestSessionSampling:
                                        t_first=float(i), t_end=float(i) + 5)
         assert len(sess.context._decode_samples) <= 3
 
-    def test_reset_session_state_clears_samples(self):
-        """回合开始必须清零 —— 否则上一回合的速率会串进本回合显示。"""
-        sess = _make_bare_session()
-        sess.context._decode_samples = [{"completion_tokens": 1, "decode_seconds": 1}]
-        sess.context._stream_t_request = 123.0
-        sess.reset_session_state()
-        assert sess.context._decode_samples == []
-        assert sess.context._stream_t_request is None
 
-
-class caplog_handler:
+class _CaplogCapture:
     """捕获 session 记录器的日志（含 DEBUG），且恢复原级别。"""
 
     def __init__(self):
@@ -379,160 +295,6 @@ class caplog_handler:
         self._lg.removeHandler(self._h)
         self._lg.setLevel(self._old_level)
         return False
-# ============================================================
-# 观测不得影响主流程序列（重构回归）
-# ============================================================
-
-
-class TestSamplingCannotBreakStreaming:
-    """采样代码位于「断流重试」的 try 内 —— 在那里抛错等于伪造一次网络断流。
-
-    真实踩过的坑（本次开发过程）：把 ``self._record_decode_sample(...)`` 直接
-    写进消费循环，鸭子类型的 session 替身（test_stream_retry 的 _FakeSession）
-    没有该方法 → 属性查找抛 AttributeError → 被外层 except 判为断流 → 指数退避
-    重试 → 3 个无关用例真的走了重试路径、1 个耗尽重试把回复变成错误文案。
-    6 个用例同时变红才暴露。
-
-    现在的契约：采样只经 ``_sample`` 闭包触发 —— 函数局部名查找不可能失败，
-    异常一律在其 try 内被 debug 级吞掉。
-    """
-
-    @staticmethod
-    def _chunks():
-        return [
-            _chunk(content="你好世界"),
-            _chunk(usage=SimpleNamespace(completion_tokens=50, prompt_tokens=5,
-                                         total_tokens=55), no_choices=True),
-        ]
-
-    def test_duck_typed_session_without_collector(self):
-        """采集能力完全缺失时，流必须正常返回内容且不触发任何重试。"""
-        sess = _make_bare_session()
-
-        def _missing(*_a, **_kw):
-            raise AttributeError("_record_decode_sample 不存在")
-
-        # 用实例属性遮蔽类方法，模拟替身/部分构造对象缺少该能力
-        sess.__dict__["_record_decode_sample"] = _missing
-
-        retried = []
-        content, _tools, _rc = sess._process_stream_with_reasoning(
-            iter(self._chunks()), lambda _t: None,
-            retry_factory=lambda: retried.append(1) or iter(self._chunks()),
-        )
-        assert content == "你好世界"
-        assert retried == [], "观测能力缺失绝不能被误判为断流而重试"
-
-    def test_collector_raising_is_swallowed(self, monkeypatch):
-        """采集内部抛任何异常都必须被吞掉，主流程照常返回完整内容。"""
-        import tea_agent.onlinesession as mod
-
-        sess = _make_bare_session()
-
-        def _boom(*_a, **_kw):
-            raise RuntimeError("collector exploded")
-
-        monkeypatch.setattr(mod.OnlineToolSession, "_record_decode_sample", _boom)
-
-        retried = []
-        content, _t, _r = sess._process_stream_with_reasoning(
-            iter(self._chunks()), lambda _t: None,
-            retry_factory=lambda: retried.append(1) or iter(self._chunks()))
-        assert content == "你好世界"
-        assert retried == []
-
-    def test_broken_clock_is_not_mistaken_for_interruption(self, monkeypatch, caplog):
-        """时钟失效属观测通路，必须静默降级，不得走重试。
-
-        这条同时锁死一个陷阱实现：若把取时写在 ``_sample(...)`` 的**参数位置**，
-        异常发生在闭包的 try 之外 → 会被判为断流。t_end 的求值必须留在闭包内部。
-        """
-        import logging
-
-        import tea_agent.onlinesession as mod
-
-        sess = _make_bare_session()
-
-        def _bad_monotonic():
-            raise RuntimeError("clock unavailable")
-
-        monkeypatch.setattr(mod, "time",
-                            SimpleNamespace(monotonic=_bad_monotonic,
-                                            sleep=lambda _s: None))
-        retried = []
-        with caplog.at_level(logging.DEBUG, logger="session"):
-            content, _t, _r = sess._process_stream_with_reasoning(
-                iter(self._chunks()), lambda _t: None,
-                retry_factory=lambda: retried.append(1) or iter(self._chunks()))
-        assert content == "你好世界"
-        assert retried == [], "时钟失效不是网络断流"
-        assert sess.context._decode_samples == []
-
-    def test_normal_path_still_collects(self, monkeypatch):
-        """反向保险：上述防御不能把正常采集一并吞掉（否则功能静默失效）。"""
-        import tea_agent.onlinesession as mod
-
-        sess = _make_bare_session()
-        sess.context._stream_t_request = 0.0
-        seq = iter([1.0, 11.0])
-        monkeypatch.setattr(mod, "time",
-                            SimpleNamespace(monotonic=lambda: next(seq, 11.0),
-                                            sleep=lambda _s: None))
-        sess._process_stream_with_reasoning(iter(self._chunks()), lambda _t: None)
-        assert len(sess.context._decode_samples) == 1
-        assert summarize(sess.context._decode_samples)["tok_per_sec"] == pytest.approx(5.0)
-
-
-# ============================================================
-# server 下发通路
-# ============================================================
-
-
-class TestUsageDataSurfacing:
-    @staticmethod
-    def _fake_session(samples):
-        ctx = SimpleNamespace(model="m", cheap_model="", _decode_samples=samples,
-                              _last_request_prompt_tokens=0, messages=[])
-        return SimpleNamespace(_last_usage={"total_tokens": 70, "prompt_tokens": 10,
-                                            "completion_tokens": 60},
-                               _last_cheap_usage={}, context=ctx)
-
-    def test_speed_field_present_when_measured(self):
-        from tea_agent.server.modules.agent_module import _build_usage_data
-
-        samples = [make_sample(0.0, 2.0, 12.0, 100)]
-        data = _build_usage_data(self._fake_session(samples))
-        assert data["speed"]["tok_per_sec"] == pytest.approx(10.0)
-        assert data["speed"]["streams"] == 1
-        assert data["speed"]["ttft_seconds"] == pytest.approx(2.0)
-
-    def test_speed_absent_without_samples(self):
-        """没有可测样本时不塞 speed 字段（前端据缺失隐藏，不显示 0）。"""
-        from tea_agent.server.modules.agent_module import _build_usage_data
-
-        for samples in ([], None):
-            data = _build_usage_data(self._fake_session(samples))
-            assert "speed" not in data
-            assert data["total_tokens"] == 70  # 主体 usage 不受影响
-
-    def test_broken_samples_do_not_break_usage(self):
-        """样本内容畸形 → usage 仍正常返回（旁路失败降级）。"""
-        from tea_agent.server.modules.agent_module import _build_usage_data
-
-        junk = [{"completion_tokens": None, "decode_seconds": "x"}, 42, None]
-        data = _build_usage_data(self._fake_session(junk))
-        assert "speed" not in data
-        assert data["completion_tokens"] == 60
-
-    def test_missing_context_attribute_is_tolerated(self):
-        """老式/替身 session 没有 _decode_samples 属性时不得抛 AttributeError。"""
-        from tea_agent.server.modules.agent_module import _build_usage_data
-
-        ctx = SimpleNamespace(model="m", cheap_model="", messages=[])
-        sess = SimpleNamespace(_last_usage={"total_tokens": 1, "prompt_tokens": 1,
-                                            "completion_tokens": 1},
-                               _last_cheap_usage={}, context=ctx)
-        assert "speed" not in _build_usage_data(sess)
 
 
 # ============================================================

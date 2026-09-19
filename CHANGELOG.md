@@ -306,6 +306,23 @@
   `sanitize_api_messages: 修复截断JSON` WARNING 刷屏（工作区已降为 debug，重装 editable 生效）
 
 ### Bug Fixes
+- fix(session): 合并后 `NameError: name '_now' is not defined` —— 首轮对话即崩、服务器报
+  `hot_reload.agent: Chat stream error`
+  - 根因：b3e5ebf 合并了两条**并行**的「解码 tok/s」实现 —— master 的 `session/decode_rate.py`
+    （usage-bar 的 `decode_tps_text`）与 sunkw_dev 的 `session/decode_speed.py`（`usage["speed"]`
+    徽章）。冲突解决在后端 `agent_module.py` 与前端 `app.js` 都选了 decode_rate，但
+    `onlinesession.py` 里只删掉了 decode_speed 的闭包**定义**（`_monotonic`/`_now`/`_sample`），
+    三处调用点（非流式 `_sample`、流式首增量 `_now`、流结束 `_sample`）留在原地 ——
+    语法合法、`compile()` 与默认 lint 都通过，直到首次真实流式对话才在消费循环里抛 NameError
+  - 处置：按 decode_rate 收尾 —— 删除三处孤儿调用及 `_t_first`/`_stream_usage` 局部量
+    （避免每轮收集无人消费的样本）；`_record_decode_sample` 与 `session/decode_speed.py`
+    保留备用，并在文档里写清重新接线的硬约束：调用点位于「断流重试」的 try 内，
+    必须包成不可能抛错的局部闭包、取时留在闭包内部，否则观测异常会被误判为网络断流
+  - 随之退役 decode_speed 的流式接线/前端徽章测试（`test_decode_speed.py` 6 项、
+    `test_decode_speed_web.py` 整个文件）—— 它们钉的实现已不在 master 上；
+    纯函数库测试与前端实时估算测试（`test_decode_speed_live.py`）保持全绿
+  - tests: 新增 `test_no_undefined_names.py`（ruff F821 全包静态门禁）。元验证：
+    同一测试在 b3e5ebf 上报 3 处 F821（`_sample`×2、`_now`），修复后全绿
 - fix(toolkit): `toolkit_exec` 入参形态容错（消除设备端高频 `app 需要可执行程序路径字符串，收到 bool`
   与 `unexpected keyword argument 'command'/'arguments'`）
   - 根因：模型给的是**等价参数形态**而非错误命令。旧归一化只处理 list/tuple，bool/None 直接

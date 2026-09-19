@@ -11,11 +11,127 @@ import os
 import platform
 import socket
 import sys
+import tempfile
 
 logger = logging.getLogger("session.os_info_injector")
 
-# 持久化 OS 签名文件，跨会话跟踪执行环境变化
-_OS_STATE_FILE = os.path.join(os.path.expanduser("~"), ".tea_agent", "os_state.json")
+# ── OS 签名持久化文件 ─────────────────────────────────────────────────
+# 这是一条纯旁路缓存：只用于「同一 topic 在同一主机上别重复注入环境信息」。
+# 因此读写任何失败都必须静默降级（fail-open），绝不冒泡成 ERROR ——
+# 见 AGENTS.md「辅助能力不绑架主流程」。
+# 路径可用 TEA_OS_STATE_FILE 覆盖（测试 / 排障 / HOME 不可写的容器环境）。
+_MAX_TRACKED_TOPICS = 500  # 防止用户级状态文件随 topic 数无界增长
+
+# 同一进程内只对「文件已损坏」提示一次，避免每次会话都刷日志
+_bad_state_warned = False
+
+
+def _default_state_file() -> str:
+    """默认状态文件路径；HOME 不可解析时退回临时目录（绝不抛异常）。"""
+    try:
+        home = os.path.expanduser("~")
+        if not home or home == "~":
+            raise RuntimeError(f"HOME 不可解析: {home!r}")
+        return os.path.join(home, ".tea_agent", "os_state.json")
+    except Exception as e:  # pragma: no cover - 仅在 HOME 异常的环境触发
+        logger.debug("无法解析用户主目录，OS 签名改存临时目录: %s", e)
+        return os.path.join(tempfile.gettempdir(), "tea_agent", "os_state.json")
+
+
+_OS_STATE_FILE = _default_state_file()
+
+
+def _state_file_path() -> str:
+    """当前生效的状态文件路径（环境变量优先）。"""
+    override = os.environ.get("TEA_OS_STATE_FILE", "").strip()
+    return override or _OS_STATE_FILE
+
+
+def _warn_bad_state(path: str, reason: str) -> None:
+    """状态文件不可用时提示一次；warning 级别、无 traceback。"""
+    global _bad_state_warned
+    if _bad_state_warned:
+        logger.debug("OS 签名文件仍不可用（%s）: %s", reason, path)
+        return
+    _bad_state_warned = True
+    logger.warning(
+        "OS 签名缓存文件不可用（%s），已忽略其内容，下次写入时自动重建: %s "
+        "（该缓存只用于避免重复注入环境信息，不影响功能）",
+        reason, path,
+    )
+
+
+def _read_state_file(path: str) -> dict:
+    """健壮读取状态文件，任何异常都降级为 {}。
+
+    覆盖现实中所有「坏文件」形态：
+      - 0 字节（上次写入被中断 / 设备断电）
+      - UTF-8 BOM（被其他工具或 Windows 编辑器改写过 → 用 utf-8-sig 吞掉）
+      - 非 JSON 文本、JSON 顶层不是对象
+      - 权限不足、路径被目录占据、非法字节
+    """
+    try:
+        # utf-8-sig: 有 BOM 就读掉、无 BOM 也兼容；errors=replace 防坏字节抛错
+        with open(path, "r", encoding="utf-8-sig", errors="replace") as f:
+            raw = f.read()
+    except FileNotFoundError:
+        return {}
+    except IsADirectoryError as e:
+        _warn_bad_state(path, f"路径是目录: {e}")
+        return {}
+    except OSError as e:
+        logger.debug("OS 签名文件不可读，已忽略: %s (%s)", path, e)
+        return {}
+
+    if not raw.strip():
+        _warn_bad_state(path, "文件为空，疑似上次写入被中断")
+        return {}
+
+    try:
+        data = json.loads(raw)
+    except ValueError as e:  # JSONDecodeError 继承自 ValueError
+        _warn_bad_state(path, f"JSON 解析失败(偏移 {getattr(e, 'pos', '?')}): {raw[:60]!r}")
+        return {}
+
+    if not isinstance(data, dict):
+        _warn_bad_state(path, f"顶层应为对象，实为 {type(data).__name__}")
+        return {}
+
+    return data
+
+
+def _write_state_file(data: dict, path: str) -> bool:
+    """原子写入状态文件（临时文件 + os.replace）。
+
+    旧实现直接 ``open(path, 'w')`` 截断再写：进程被 kill 或磁盘满时就会留下
+    空文件/半截 JSON —— 正是本次线上报错的来源。改为先写同目录临时文件、
+    fsync 后原子改名，读者永远只能看到完整文件；同时这次改名会直接覆盖掉
+    已有的坏文件，实现自愈。
+    """
+    global _bad_state_warned
+
+    directory = os.path.dirname(path) or "."
+    tmp_path = None
+    try:
+        os.makedirs(directory, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(prefix=".os_state.", suffix=".tmp", dir=directory)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)  # POSIX rename / Windows 覆盖改名，两者皆原子
+        tmp_path = None
+        _bad_state_warned = False  # 已成功重建，恢复提示配额
+        return True
+    except (OSError, TypeError, ValueError) as e:
+        logger.debug("保存 OS 签名失败，已忽略: %s (%s)", path, e)
+        return False
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 def _get_os_signature() -> str:
@@ -24,42 +140,52 @@ def _get_os_signature() -> str:
     格式: "system-release-machine"，如 "Windows-10-AMD64" / "Linux-6.8.0-x86_64"
     """
     try:
-        import platform as _plat
-        return f"{_plat.system()}-{_plat.release()}-{_plat.machine()}"
+        return f"{platform.system()}-{platform.release()}-{platform.machine()}"
     except Exception:
         return "unknown"
 
 
 def _load_persisted_os_sig(topic_id: str) -> str:
-    """从持久化文件加载指定 topic 的上次 OS 签名。"""
+    """从持久化文件加载指定 topic 的上次 OS 签名。
+
+    文件缺失/损坏一律返回 ""（视为「未注入过」）—— 调用方会重新生成文本并
+    回写，回写采用原子改名，顺手把坏文件修好。此处绝不抛异常、不打 ERROR。
+    """
     if not topic_id:
         return ""
     try:
-        if os.path.exists(_OS_STATE_FILE):
-            with open(_OS_STATE_FILE, encoding='utf-8') as f:
-                data = json.load(f)
-            return data.get("topics", {}).get(topic_id, "")
-    except Exception:
-        logger.exception('op_failed')
-
-    return ""
+        topics = _read_state_file(_state_file_path()).get("topics")
+        if not isinstance(topics, dict):
+            return ""
+        value = topics.get(topic_id)
+        return value if isinstance(value, str) else ""
+    except Exception as e:  # pragma: no cover - 双保险，旁路不得影响主流程
+        logger.debug("读取 OS 签名失败，按未注入处理: %s", e)
+        return ""
 
 
 def _save_os_sig(topic_id: str, sig: str) -> None:
-    """持久化指定 topic 的当前 OS 签名。"""
+    """持久化指定 topic 的当前 OS 签名（坏文件自动重建）。
+
+    旧实现先 ``json.load`` 再写：一旦文件损坏，load 抛错被外层吞掉，整个保存
+    被跳过 → 坏文件永不自愈，每次启动重复报错。现在读取端已降级为 {}，
+    这里必定能把干净的 JSON 原子写回去。
+    """
     if not topic_id:
         return
-    try:
-        os.makedirs(os.path.dirname(_OS_STATE_FILE), exist_ok=True)
-        data = {}
-        if os.path.exists(_OS_STATE_FILE):
-            with open(_OS_STATE_FILE, encoding='utf-8') as f:
-                data = json.load(f)
-        data.setdefault("topics", {})[topic_id] = sig
-        with open(_OS_STATE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False)
-    except Exception as e:
-        logger.debug(f"保存 OS 签名失败: {e}")
+    path = _state_file_path()
+    data = _read_state_file(path)
+
+    topics = data.get("topics")
+    if not isinstance(topics, dict):
+        topics = {}
+    topics.pop(topic_id, None)      # 重插到末尾 → dict 顺序即最近使用时间
+    topics[topic_id] = sig
+    while len(topics) > _MAX_TRACKED_TOPICS:  # 裁剪最久未更新的 topic
+        topics.pop(next(iter(topics)))
+    data["topics"] = topics
+
+    _write_state_file(data, path)
 
 
 def _detect_interface_type() -> str:

@@ -91,6 +91,8 @@
       <button id="send-btn" disabled onclick="sendMessage()">发送</button>
     </div>
     <input type="file" id="file-input" accept="image/*" multiple onchange="onFilesSelected(event)">
+    <!-- 实时解码速率（回合进行中，前端估算）；实测值见下方 usage-bar 的 ⚡ -->
+    <div id="speed-live" class="speed-live" style="display:none"></div>
     <div id="usage-bar"></div>
   </main>
 

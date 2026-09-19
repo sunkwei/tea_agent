@@ -1177,6 +1177,23 @@ body {
   background: var(--surface2);
   color: var(--text);
 }
+
+/* 实时解码速率（回合进行中，前端按字符估算；输入框正下方）*/
+.speed-live {
+  padding: 2px 12px 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: right;
+  flex-shrink: 0;
+  background: var(--surface);
+  font-variant-numeric: tabular-nums;  /* 数字等宽，避免每 250ms 刷新时左右抖动 */
+  cursor: help;
+  transition: color var(--transition), background var(--transition);
+}
+.speed-live:hover {
+  color: var(--text);
+}
 /* ── File View Panel ── */
 .file-view {
   border: 1px solid var(--border);

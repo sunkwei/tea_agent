@@ -70,6 +70,14 @@ class SessionContext:
     # S3: 最近一次主模型请求的真实 prompt_tokens（单次值，非累计），
     # 用于校正 token_budget 启发式估算偏差（实际/估算 平滑校正）。
     _last_request_prompt_tokens: int = 0
+    # ── 解码速率（tok/s）测量 ──
+    # _stream_t_request: 本次主模型请求发出时刻（time.monotonic），由
+    #   APIComponent.create_chat_stream 在真正发请求前打点（所有主模型请求的
+    #   唯一汇聚点）；_process_stream_with_reasoning 据此算 TTFT。
+    # _decode_samples: 本回合各次模型调用的速率样本（decode_speed.make_sample 产出），
+    #   回合开始 reset_session_state 清零，_build_usage_data 聚合成 speed 字段下发前端。
+    _stream_t_request: float | None = None
+    _decode_samples: list = field(default_factory=list)
     # S5: token 预算已用尽标志，pipeline 的 summarize 步骤检测后强制压缩。
     _token_exhausted: bool = False
     # A8: 输出感知预算（上下文溢出防线）——

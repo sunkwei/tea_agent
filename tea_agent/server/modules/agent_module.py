@@ -245,6 +245,7 @@ class AgentModule(HotReloadModule):
         _core_modules = [
             'tea_agent.session.context',
             'tea_agent.session.history_builder',
+            'tea_agent.session.decode_speed',
             'tea_agent.session.os_info_injector',
             'tea_agent.session.params',
             'tea_agent.session.prompts',

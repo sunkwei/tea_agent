@@ -1,6 +1,7 @@
 """{name} —— 从 onlinesession.py 拆分（2026-09-06，保持 API 兼容）。"""
 
 import logging
+import time
 
 from tea_agent.config import REASONING_EFFORT_VALUES, clamp_reasoning_effort
 from tea_agent.session.context import SessionComponent
@@ -533,6 +534,12 @@ class APIComponent(SessionComponent):
             _sw = float(getattr(_api_cfg, "api_sleep_recovery_wait", 5.0))
         except Exception:
             _mr, _bf, _sw = 3, 2.0, 5.0
+
+        # 解码速率打点：贴着真正发请求的那一刻记 t_request（本方法是所有主模型
+        # 请求的唯一汇聚点，断流重试重建流时会自然刷新，无需在各调用点重复打点）。
+        # 便宜模型/摘要不计入主对话的 tok/s 口径。
+        if not is_cheap:
+            self.ctx._stream_t_request = time.monotonic()
 
         stream = call_with_retry(
             target_client.chat.completions.create,

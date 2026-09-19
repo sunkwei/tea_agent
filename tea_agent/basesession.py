@@ -9,6 +9,52 @@ from typing import Any
 
 logger = logging.getLogger("basesession")
 
+# ── tool_calls 参数压缩阈值（原先散落在签名默认值与调用点两处字面量）──────────
+#
+# 为什么抽成常量 + env：这两个数字此前以**独立字面量**出现在
+# `_compress_json_args(args_str, args_bytes, max_bytes=2048)` 与调用点
+# `if args_bytes > 2048:`，改一处另一处静默失效 —— 属于「配置双源」缺陷。
+# 现统一由 _args_compress_threshold() / _args_keep_bytes() 提供单一事实源。
+#
+# 默认值**与原行为完全一致**（2048 / 1024），故不改任何现有语义；
+# 提供 env 覆盖是为了让「保留量偏小」这一已知取舍可在运行时调整，
+# 而不必改动代码 —— 是否上调默认值涉及历史消息成本，留给部署侧决定。
+_ARGS_COMPRESS_BYTES_DEFAULT = 2048  # 整个 arguments JSON 超过此字节数即触发压缩
+_ARGS_KEEP_BYTES_DEFAULT = 1024      # 单个 string 值超过此字节数即压缩（首尾各半）
+
+
+def _int_env(name: str, default: int) -> int:
+    """读取正整数 env 覆盖；缺失/非法/非正数一律回落默认值（绝不抛异常）。"""
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        v = int(raw)
+    except ValueError:
+        logger.debug("%s=%r 非整数，回落默认 %d", name, raw, default)
+        return default
+    if v <= 0:
+        logger.debug("%s=%d 非正数，回落默认 %d", name, v, default)
+        return default
+    return v
+
+
+def _args_compress_threshold() -> int:
+    """参数压缩触发阈值（字节）。``TEA_ARGS_COMPRESS_BYTES`` 可覆盖。"""
+    return _int_env("TEA_ARGS_COMPRESS_BYTES", _ARGS_COMPRESS_BYTES_DEFAULT)
+
+
+def _args_keep_bytes() -> int:
+    """单个 string 值触发压缩的阈值（字节）。``TEA_ARGS_KEEP_BYTES`` 可覆盖。
+
+    提高它（如 4096）可让历史里的长参数（代码/ diff / 命令）保住更多内容；
+    实测真代码在默认 1024 下只剩约 566B，往往连一个函数的意图都保不住。
+    """
+    return _int_env("TEA_ARGS_KEEP_BYTES", _ARGS_KEEP_BYTES_DEFAULT)
+
+
+logger = logging.getLogger("basesession")
+
 
 def extract_reasoning(obj: Any) -> str:
     """从 API 响应对象（message / delta）提取思考过程文本。
@@ -529,29 +575,33 @@ class BaseChatSession(ABC):
 
     @staticmethod
     def _compress_json_args(
-        args_str: str, args_bytes: int, max_bytes: int = 2048
+        args_str: str, args_bytes: int, max_bytes: int | None = None
     ) -> str:
         """
         JSON 感知截断 tool_calls 参数。
 
         策略：
         1. 尝试 json.loads 解析 → 成功则递归压缩超长 string value
-        2. 解析失败 → 回退到字节截断（首尾各1024B，按换行对齐）
+        2. 解析失败 → 回退到字节截断（首尾各 max_bytes//2，按换行对齐）
 
         递归压缩规则（对 dict 和 list 中的值）：
-        - string > 1024 字节：截为首512B+尾512B，标记 [截断]
+        - string > TEA_ARGS_KEEP_BYTES（默认 1024）字节：截为首尾各半，标记 [截断]
         - 其他类型（number/bool/null）：原样保留
         - 嵌套 dict/list：递归处理
 
         Args:
             args_str: 原始 arguments JSON 字符串
             args_bytes: 原始字节数（用于截断标记）
-            max_bytes: 触发压缩的阈值
+            max_bytes: 触发压缩的阈值；None 时取 _args_compress_threshold()
+                （默认 2048，TEA_ARGS_COMPRESS_BYTES 可覆盖）
 
         Returns:
             压缩后的合法 JSON 字符串
         """
         import json as _json
+
+        if max_bytes is None:  # 单一事实源：默认值与 env 覆盖统一在 _args_compress_threshold()
+            max_bytes = _args_compress_threshold()
 
         # Step 1: 尝试解析
         try:
@@ -591,13 +641,14 @@ class BaseChatSession(ABC):
             )
 
         # Step 2: 递归压缩超长 string value
-        HALF = 512  # 每个 value 的首尾保留字节数  # noqa: N806
+        _keep = _args_keep_bytes()  # 单值触发阈值（默认 1024；TEA_ARGS_KEEP_BYTES 可覆盖）
+        HALF = _keep // 2           # 首尾各保留半量（默认 512）  # noqa: N806
 
         def _compress_value(val, path=""):
             """递归压缩值，返回 (compressed_val, truncated_count)"""
             if isinstance(val, str):
                 vbytes = len(val.encode("utf-8"))
-                if vbytes > 1024:
+                if vbytes > _keep:
                     raw = val.encode("utf-8")
                     # 按换行对齐
                     head_end = HALF
@@ -717,7 +768,8 @@ class BaseChatSession(ABC):
         规则：
         - user 消息：完整保留
         - assistant 含 tool_calls（中间步骤）：保留 reasoning_content，
-          对每个 tool_call 的 function.arguments 若 >2048 字节则截断
+          对每个 tool_call 的 function.arguments 若超过 _args_compress_threshold()
+          （默认 2048 字节，TEA_ARGS_COMPRESS_BYTES 可覆盖）则截断
         - tool 消息：调用 _compress_tool_content 压缩输出
         - 最终 assistant 消息（末尾无 tool_calls）：完整保留，不压缩
 
@@ -768,7 +820,7 @@ class BaseChatSession(ABC):
                             args_str = func.get("arguments", "")
                             if isinstance(args_str, str):
                                 args_bytes = len(args_str.encode("utf-8"))
-                                if args_bytes > 2048:
+                                if args_bytes > _args_compress_threshold():
                                     func["arguments"] = (
                                         BaseChatSession._compress_json_args(
                                             args_str, args_bytes

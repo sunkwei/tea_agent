@@ -205,6 +205,20 @@
     相关 4 文件 196 项通过。
   - 未做（明确留白）：`_compress_json_args` 的保留量/阈值改造 —— 见该函数注释，
     涉及历史消息行为，需单独评估。
+- refactor(session): 参数压缩阈值抽为单一事实源 + env 可覆盖（默认行为不变）
+  - 原状：`_compress_json_args(args_str, args_bytes, max_bytes=2048)` 与调用点
+    `if args_bytes > 2048:` 是**两处独立字面量**，改一处另一处静默失效（配置双源）。
+    单值阈值 `1024` / `HALF = 512` 亦是散落的魔数。
+  - 现统一为 `_args_compress_threshold()` / `_args_keep_bytes()`，并支持
+    `TEA_ARGS_COMPRESS_BYTES` / `TEA_ARGS_KEEP_BYTES` 覆盖（接入项目既有 `TEA_*` 惯例）。
+  - **默认值与原行为完全一致**（2048 / 1024），故这是纯重构，不改任何现有语义；
+    非法 env（非整数/非正数）一律回落默认并记 debug，绝不抛异常。
+  - 为什么只做「可调」而不直接提高默认值：参数压缩涉及**历史消息**的 token 成本，
+    提高保留量的收益/代价取决于部署形态，应由部署侧按需设定，而非替用户决定。
+    实测参考：默认 1024 下真代码仅剩约 566B（往往保不住一个函数的意图）。
+  - tests: `test_basesession.py` 新增 `TestToolArgsCompressThresholds` 9 项
+    （默认不变 / env 生效 / **提高后确实保留更多** / 5 种非法值回落 / 阈值下不变）。
+    相关 5 文件 212 项通过。
 - fix(session): JSON 非法转义序列（\' 等）导致 tool_call 参数被整体丢弃
   - 根因：模型把 Python/shell 字面量写进 JSON 时习惯性转义单引号（如
     \'），但 JSON 仅允许 9 种转义前导字符（\" \\ \/ \b \f \n \r \t \u），

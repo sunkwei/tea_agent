@@ -87,3 +87,57 @@ class TestLiteSession:
             enable_thinking=False,
         )
         assert sess.model == "test-model"
+
+
+class TestToolArgsCompressThresholds:
+    """tool_calls 参数压缩阈值：单一事实源 + env 可覆盖 + 默认行为不变。
+
+    背景：阈值原先以**独立字面量**散落在签名默认值与调用点两处（`2048` / `1024`），
+    改一处另一处静默失效。抽成 `_args_compress_threshold()` / `_args_keep_bytes()`
+    作为唯一来源；默认值与原行为完全一致，仅新增 env 覆盖能力。
+    """
+
+    def test_defaults_unchanged(self):
+        """默认值必须与改造前一致（2048 / 1024）——否则是行为变更而非重构。"""
+        from tea_agent.basesession import _args_compress_threshold, _args_keep_bytes
+
+        assert _args_compress_threshold() == 2048
+        assert _args_keep_bytes() == 1024
+
+    def test_env_override_compress_threshold(self, monkeypatch):
+        import tea_agent.basesession as B
+
+        monkeypatch.setenv("TEA_ARGS_COMPRESS_BYTES", "512")
+        assert B._args_compress_threshold() == 512
+
+    def test_env_override_keep_bytes_actually_keeps_more(self, monkeypatch):
+        """提高保留量后，超长参数确实保留更多内容（不只是数字变了）。"""
+        import json
+
+        import tea_agent.basesession as B
+
+        args = json.dumps({"content": "x" * 20000})
+        n = len(args.encode("utf-8"))
+        low = json.loads(B.BaseChatSession._compress_json_args(args, n))["content"]
+        monkeypatch.setenv("TEA_ARGS_KEEP_BYTES", "4096")
+        high = json.loads(B.BaseChatSession._compress_json_args(args, n))["content"]
+        assert len(high) > len(low) * 3, (len(low), len(high))
+
+    @pytest.mark.parametrize("bad", ["abc", "0", "-5", "  ", "3.5"])
+    def test_invalid_env_falls_back_to_default(self, monkeypatch, bad):
+        """非法 env 必须回落默认，绝不抛异常（配置错误不该拖垮主流程）。"""
+        import tea_agent.basesession as B
+
+        monkeypatch.setenv("TEA_ARGS_KEEP_BYTES", bad)
+        assert B._args_keep_bytes() == 1024
+
+    def test_below_threshold_untouched(self):
+        """未超阈值时内容逐字节不变。"""
+        import json
+
+        from tea_agent.basesession import BaseChatSession
+
+        args = json.dumps({"content": "x" * 300})
+        out = BaseChatSession._compress_json_args(args, len(args.encode("utf-8")))
+        assert json.loads(out)["content"] == "x" * 300
+

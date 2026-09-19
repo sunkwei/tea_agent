@@ -439,8 +439,12 @@ class RoleAgent:
         try:
             data = json.loads(text)
             return model.model_validate(data).model_dump()
-        except (json.JSONDecodeError, Exception):
-            pass
+        except Exception as e:
+            # 原为 `except (json.JSONDecodeError, Exception): pass` —— 元组冗余
+            # （Exception 已含前者），且把失败原因整个丢掉：三条策略全败时只
+            # raise「无法提取有效的结构化数据」，而「模型输出长什么样」这唯一
+            # 线索就此消失，线上只能靠猜。行为不变（继续下一策略），仅留痕。
+            logger.debug("structured parse 策略1(直接解析) 未命中: %s", e)
 
         # 策略 2: json 代码块
         import re
@@ -449,8 +453,8 @@ class RoleAgent:
             try:
                 data = json.loads(json_match.group(1).strip())
                 return model.model_validate(data).model_dump()
-            except (json.JSONDecodeError, Exception):
-                pass
+            except Exception as e:
+                logger.debug("structured parse 策略2(json 代码块) 未命中: %s", e)
 
         # 策略 3: 尝试提取第一对 {} 或 []
         brace_match = re.search(r'(\{.*\}|\[.*\])', text, re.DOTALL)
@@ -458,8 +462,8 @@ class RoleAgent:
             try:
                 data = json.loads(brace_match.group(0))
                 return model.model_validate(data).model_dump()
-            except (json.JSONDecodeError, Exception):
-                pass
+            except Exception as e:
+                logger.debug("structured parse 策略3(花括号提取) 未命中: %s", e)
 
         raise ValueError(f"无法从输出中提取有效的结构化数据（{model.__name__}）")
 

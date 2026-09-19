@@ -316,7 +316,9 @@ class MemoryManager:
                 self._embedding_engine = engine
                 return engine
         except Exception:
-            pass
+            # 探测失败 = 语义检索静默退化为纯关键词匹配（用户只感觉「记忆好像不太
+            # 准」）。留痕才能区分「未配置」（正常）与「配置了但坏了」（故障）。
+            logger.debug("embedding 引擎探测失败，语义检索降级", exc_info=True)
         return None
 
 

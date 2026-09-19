@@ -1274,7 +1274,9 @@ class OnlineToolSession(BaseChatSession):
             try:
                 return self.storage.get_topic_system_prompt(topic_id)
             except Exception:
-                pass
+                # 存储读失败会让**用户自定义提示词静默失效**（表现为「我明明设了
+                # 但没生效」），属行为性故障，须留痕才能区分「没设」与「设了读不出」。
+                logger.debug("读取主题自定义提示词失败 topic=%s", topic_id, exc_info=True)
         return None
 
     def _build_api_messages(self) -> list[dict]:

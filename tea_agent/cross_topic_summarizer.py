@@ -27,7 +27,9 @@ def _load_counter() -> dict:
             with open(path, encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
-            pass
+            # 「文件存在但读不出」（损坏/权限）与「文件不存在」是两回事：前者按空
+            # 计数继续会**重复触发**跨主题汇总。留痕以便区分这两种情形。
+            logger.debug("跨主题计数器读取失败，按空计数继续: %s", path, exc_info=True)
     return {"count": 0, "last_triggered_topics": []}
 
 

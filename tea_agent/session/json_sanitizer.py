@@ -540,7 +540,9 @@ def normalize_tool_args(func_name: str, raw: str) -> str | None:
         if fixed is not None:
             return fixed
     except Exception:
-        pass
+        # 该函数内部自带有界保护；此处抛异常说明它自身出了 bug（递归/类型假设被
+        # 新畸形输入打破）。静默会把这个 bug 永久藏起来，只表现为「修复率莫名下降」。
+        logger.debug("try_fix_truncated_json 异常，回落兜底变换链", exc_info=True)
 
     # 兜底变换链：逐个变换后经严格 json.loads 校验，成功即返回（顺序即优先级）。
     # 覆盖裸标量值（{"app": python}）、单引号、裸 key 等弱模型常见畸形写法。

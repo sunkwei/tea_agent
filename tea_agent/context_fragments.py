@@ -288,7 +288,9 @@ def _frag_token_budget(context: Any) -> ContextFragment | None:
             try:
                 context._token_exhausted = True
             except Exception:
-                pass
+                # 置不上标志 → 强制压缩不会触发，上下文会继续超额增长。
+                # 这是**行为性故障**（不只是少统计一个数），不能静默。
+                logger.debug("置 _token_exhausted 失败，强制压缩可能不触发", exc_info=True)
             body = (
                 f"⚠️ 上下文已用尽（{used}/{max_tokens} token）。"
                 "系统将自动压缩历史，请立即总结关键决策后继续。"

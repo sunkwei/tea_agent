@@ -116,6 +116,31 @@
     V 违规（`hard-except-pass-target`，AGENTS.md 类型问题，构成进化曲线的上升空间）。
   - tests: 相关 6 个文件 81 项通过（含 20 轮自进化实验）。
 
+- fix(quality): 8 处「静默掩盖真实故障」的 except: pass 补上可诊断性（AGENTS.md 目标达成）
+  - 甄别口径：只改**静默会掩盖真实故障**的站点，不动 AGENTS.md 明文要求的 fail-open
+    （「辅助能力不绑架主流程：统计/审计/快照一类旁路写入失败一律静默降级」）。
+    手段统一为 `logger.debug(..., exc_info=True)` —— 行为完全不变，只补可诊断性；
+    用 debug 而非 warning/error，避免为「本就可降级」的路径制造噪声。
+  - 改了 8 处：`multi_agent/role_agent.py` 结构化解析三条策略（原先连失败原因都丢，
+    三条全败只报「无法提取」，唯一线索就此消失）、`context_fragments.py` 置
+    `_token_exhausted` 失败（会导致**强制压缩不触发**）、`onlinesession.py` 读主题自定义
+    提示词失败（表现为「我明明设了却不生效」）、`session/json_sanitizer.py`
+    `try_fix_truncated_json` 抛异常（说明它自身有 bug，静默只会表现为「修复率莫名下降」）、
+    `memory.py` embedding 引擎探测失败（语义检索静默降级）、
+    `cross_topic_summarizer.py` 计数器读取失败（会**重复触发**跨主题汇总）。
+  - 效果：`except_pass` **106 → 98**，AGENTS.md 的「降至 100 以下」目标**首次达成**；
+    棘轮随之向下收紧到 98（锁住收益，而非放宽）。
+  - 记账：`broad_except` 785 → **788**（+3）。三处原写
+    `except (json.JSONDecodeError, Exception): pass` —— 元组冗余（Exception 已含前者），
+    **语义上本就是裸捕获**，只是旧判据只认 Name 节点、没数到；改写后计数归真。
+  - 安全零容忍未受影响：`except_pass_security == 0`（审批/审计/权限模块）保持全绿。
+  - 补一条 V 目标 `hard-bigfile-target`（>800 行文件 23 → 目标 ≤20）：except_pass 目标
+    达成后任务集曾短暂全绿（score=1.0），而**不增加检查**的改进在满分下 score 与 coverage
+    都不动 → `compare_with_history` 判 `no_change` → enforce 模式会把真实改进回滚掉。
+    按本文件既有惯例把真实存在的结构性债务立为上升空间（阈值 20 = 6816d8e 的健康水位）。
+  - 基准：40/41 → **41/42**（唯一失败项即新增的 bigfile 目标，属设计内上升空间）。
+  - tests: 复用同组 6 个文件 81 项（本次为行为等价改动——只补日志，未新增用例）。
+
 - fix(session): JSON 非法转义序列（\' 等）导致 tool_call 参数被整体丢弃
   - 根因：模型把 Python/shell 字面量写进 JSON 时习惯性转义单引号（如
     \'），但 JSON 仅允许 9 种转义前导字符（\" \\ \/ \b \f \n \r \t \u），

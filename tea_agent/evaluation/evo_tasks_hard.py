@@ -67,15 +67,19 @@ HARD_TASKS: list = [
     # 其余站点按 AGENTS.md「辅助能力不绑架主流程：旁路写入失败一律静默降级」保留，
     # 不做批量改写。棘轮**向下收紧**到实测 98，锁住这次收益。
     {"id": "hard-broad-except-ratchet", "kind": "quality",
-     "title": "裸捕获 Exception 不超过基线（实测 788）",
+     "title": "裸捕获 Exception 不超过基线（实测 789）",
      "checks": [{"type": "python", "expr": (
-         "n = metrics()['broad_except']; assert n <= 788, '裸捕获增至 %d（基线 788）' % n"
+         "n = metrics()['broad_except']; assert n <= 789, '裸捕获增至 %d（基线 789）' % n"
      )}]},
     # 785 → 788（2026-09-19，+3）。三处都在 multi_agent/role_agent.py 的结构化解析
     # 策略链：原写 `except (json.JSONDecodeError, Exception): pass` —— 元组冗余
     # （Exception 已含前者），**语义上本就是裸捕获**，只是旧判据只认 Name 节点、
     # 没把它数进去。现改写为 `except Exception as e:` 并留痕，计数由此归真 +3。
     # 即：这不是新增裸捕获，是把**本来就存在的**纳入统计。
+    # 788 → 789（+1，同日）：agent_module._get_main_provider_name 的防御性边界 ——
+    # 该函数只拼一个展示用 provider 名，取值链跨 Agent 实例与配置对象，异常必须
+    # 兜住（失败即省略该段），否则一个展示字段会把整份 usage 载荷带崩。
+    # 按本指标口径这类「语义必需的边界」正是要显式过账的对象。
     {"id": "hard-print-ratchet", "kind": "quality",
      "title": "print 日志不超过基线（实测 161）",
      "checks": [{"type": "python", "expr": (

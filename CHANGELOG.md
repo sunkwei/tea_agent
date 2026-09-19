@@ -152,6 +152,9 @@
     同源（均由 cache_report 计算，无第二实现），旧字段保留向后兼容。
   - 省略首段时不再残留前导「 | 」（新增 _stripLeadingSep）；随之下岗的死代码一并清理：
     app.js 的 _fmtNum、style.css 的 .usage-tokens / .usage-detail / .usage-cheap。
+  - 记账：`broad_except` 788 → **789**（+1）。新增的 `_get_main_provider_name` 需兜住
+    取值链异常（只拼展示字段，失败即省略该段，绝不能让展示字段带崩 usage 载荷），
+    属语义必需的边界，按棘轮约定显式过账。
   - tests: test_decode_rate.py 新增 2 项静态契约（段顺序与精简不得回退、样式表无死类，
     断言前先剥离注释——否则注释里提及类名会误报），并用 node 跑真实 _usageBarHtml
     做 19 项行为验证（顺序 / 字段 / 省略行为 / XSS 转义）；相关 4 个文件 162 项通过。

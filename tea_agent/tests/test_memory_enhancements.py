@@ -3,8 +3,8 @@
 """
 测试记忆系统增强功能：
 - AutoMemoryExtractor
-- SemanticSearch
-- 新的 toolkit_memory actions
+- 向量/语义搜索已下线（TestVectorSearchRemoved 钉住其不再复活）
+- toolkit_memory actions
 """
 
 import contextlib
@@ -110,103 +110,38 @@ class TestAutoMemoryExtractor:
         assert extractor._is_duplicate("完全不同的内容", threshold=0.9) is False
 
 
-class TestSemanticSearch:
-    """测试语义搜索"""
+class TestVectorSearchRemoved:
+    """向量/语义搜索已下线 —— 钉住「模块与 action 都不得复活」。
 
-    def test_searcher_init(self, storage):
-        """测试搜索器初始化"""
-        from tea_agent.store._semantic_search import SemanticSearch
+    原 TestSemanticSearch 覆盖 SemanticSearch 的索引/检索/余弦相似度。
+    向量能力整体移除后，这些入口不应再存在（保留半套会造成「能调但结果恒空」）。
+    """
 
-        searcher = SemanticSearch(storage)
-        assert searcher.storage == storage
+    def test_semantic_search_module_removed(self):
+        import importlib.util
 
-    def test_index_memory(self, storage):
-        """测试记忆索引"""
-        from tea_agent.store._semantic_search import SemanticSearch
+        assert importlib.util.find_spec("tea_agent.store._semantic_search") is None
 
-        memory_id = storage.add_memory("测试记忆内容", category="fact")
+    def test_vector_store_module_removed(self):
+        import importlib.util
 
-        searcher = SemanticSearch(storage)
-        result = searcher.index_memory(memory_id, "测试记忆内容")
-        assert result is True
+        assert importlib.util.find_spec("tea_agent.store._vectors") is None
 
-        # 验证 embedding 已存储到 memories 表
-        c = storage.conn.cursor()
-        c.execute("SELECT embedding FROM memories WHERE id = ?", (memory_id,))
-        row = c.fetchone()
-        c.close()
-        assert row is not None
-        assert row["embedding"] is not None
+    def test_storage_has_no_vectors_attribute(self, storage):
+        """Storage 不应再暴露 vectors 委派（公开属性也随之下线）。"""
+        assert not hasattr(storage, "vectors")
 
-    def test_index_all_memories(self, storage):
-        """测试批量索引"""
-        from tea_agent.store._semantic_search import SemanticSearch
+    def test_storage_has_no_embedding_methods(self, storage):
+        for name in ("store_embedding", "get_msg_embedding", "search_by_vector"):
+            assert not hasattr(storage, name), f"Storage 不应再有 {name}"
 
-        storage.add_memory("记忆1", category="general")
-        storage.add_memory("记忆2", category="fact")
-        storage.add_memory("记忆3", category="instruction")
+    def test_toolkit_memory_rejects_semantic_search(self, storage):
+        """已下线的 action 应明确报「未知 action」，而不是静默返回空结果。"""
+        from tea_agent.toolkit.toolkit_memory import toolkit_memory
 
-        searcher = SemanticSearch(storage)
-        count = searcher.index_all_memories()
-        # 可能为 0（如果 embedding 引擎不可用）或 3
-        assert count >= 0
-
-    def test_semantic_search(self, storage):
-        """测试语义搜索"""
-        from tea_agent.store._semantic_search import SemanticSearch
-
-        storage.add_memory("Python编程技巧", category="fact")
-        storage.add_memory("JavaScript开发", category="fact")
-        storage.add_memory("用户喜欢蓝色", category="preference")
-
-        searcher = SemanticSearch(storage)
-        searcher.index_all_memories()
-
-        results = searcher.semantic_search("编程", top_k=2)
-        assert len(results) <= 2
-
-    def test_hybrid_search(self, storage):
-        """测试混合搜索"""
-        from tea_agent.store._semantic_search import SemanticSearch
-
-        storage.add_memory("Python是编程语言", category="fact")
-        storage.add_memory("用户偏好", category="preference")
-
-        searcher = SemanticSearch(storage)
-        searcher.index_all_memories()
-
-        results = searcher.hybrid_search("Python", top_k=2)
-        assert len(results) <= 2
-
-    def test_get_vector_stats(self, storage):
-        """测试向量统计"""
-        from tea_agent.store._semantic_search import SemanticSearch
-
-        storage.add_memory("测试1", category="general")
-        storage.add_memory("测试2", category="general")
-
-        searcher = SemanticSearch(storage)
-        searcher.index_all_memories()
-
-        stats = searcher.get_vector_stats()
-        assert stats["indexed_memories"] == 2
-        assert stats["total_memories"] == 2
-        assert stats["coverage"] == 1.0
-
-    def test_cosine_similarity(self, storage):
-        """测试余弦相似度"""
-        from tea_agent.store._semantic_search import SemanticSearch
-
-        searcher = SemanticSearch(storage)
-
-        vec1 = [1.0, 0.0, 0.0]
-        vec2 = [1.0, 0.0, 0.0]
-        sim = searcher._cosine_similarity(vec1, vec2)
-        assert sim == 1.0
-
-        vec3 = [0.0, 1.0, 0.0]
-        sim2 = searcher._cosine_similarity(vec1, vec3)
-        assert sim2 == 0.0
+        with patch("tea_agent.store.get_storage", lambda: storage):
+            out = toolkit_memory(action="semantic_search", query="任意")
+        assert "未知 action" in out, out
 
 
 class TestToolkitMemoryEnhancements:
@@ -223,20 +158,6 @@ class TestToolkitMemoryEnhancements:
             result = toolkit_memory(action="auto_extract", topic_id=topic_id)
         assert isinstance(result, str)
 
-    def test_semantic_search_action(self, storage):
-        """测试 semantic_search action"""
-        from tea_agent.toolkit.toolkit_memory import toolkit_memory
-
-        storage.add_memory("Python编程技巧", category="fact")
-
-        from tea_agent.store._semantic_search import SemanticSearch
-        searcher = SemanticSearch(storage)
-        searcher.index_all_memories()
-
-        with patch("tea_agent.store.get_storage", _mock_get_storage(storage)):
-            result = toolkit_memory(action="semantic_search", query="编程")
-        assert isinstance(result, str)
-
     def test_stats_action(self, storage):
         """测试 stats action"""
         from tea_agent.toolkit.toolkit_memory import toolkit_memory
@@ -248,3 +169,64 @@ class TestToolkitMemoryEnhancements:
             result = toolkit_memory(action="stats")
         assert "记忆统计" in result
         assert "总数:" in result
+        # 向量索引统计行应随向量能力下线一起消失
+        assert "向量索引" not in result
+
+
+class TestJiebaRemoved:
+    """jieba 分词器已移除 —— 关键词提取改纯正则，且不得被悄悄加回来。
+
+    移除理由：``import jieba`` ≈0.5s、``initialize()`` ≈0.7s（构建前缀词典），
+    是启动关键路径上的固定成本，却只服务记忆相关性打分/去重相似度两个用途；
+    而这两处只需「哪几个词同时出现在两边」的粗粒度信号。
+    """
+
+    def test_no_jieba_import_in_memory_module(self):
+        """源码层面不得再出现 jieba（防止依赖被顺手加回）。"""
+        import inspect
+
+        from tea_agent import memory
+
+        src = inspect.getsource(memory)
+        code_lines = [
+            ln for ln in src.splitlines()
+            if ln.strip().startswith(("import ", "from ")) and "jieba" in ln
+        ]
+        assert not code_lines, f"memory.py 不应再 import jieba: {code_lines}"
+
+    def test_no_jieba_warmup_in_server(self):
+        from tea_agent.server import server
+
+        assert not hasattr(server, "_warmup_jieba")
+        assert not hasattr(server, "_schedule_jieba_warmup")
+
+    def test_chinese_bigram_extraction(self):
+        import re as _re
+
+        from tea_agent.memory import MemoryManager
+
+        kws = MemoryManager._extract_keywords("重构存储层")
+        for bg in ("重构", "构存", "存储", "储层"):
+            assert bg in kws, f"缺少中文 bigram {bg}: {sorted(kws)}"
+
+    def test_no_cross_punctuation_bigram(self):
+        """按连续汉字段切分：跨标点不得产出假 bigram（「甲。乙」≠「甲乙」）。"""
+        from tea_agent.memory import MemoryManager
+
+        kws = MemoryManager._extract_keywords("甲。乙")
+        assert "甲乙" not in kws, f"跨标点产生了假 bigram: {sorted(kws)}"
+
+    def test_english_words_lowercased(self):
+        from tea_agent.memory import MemoryManager
+
+        kws = MemoryManager._extract_keywords("Refactor Storage Layer")
+        assert "refactor" in kws and "storage" in kws
+        # 3 字母以下不取（与旧实现一致）
+        assert "of" not in kws
+
+    def test_empty_and_ascii_only_inputs_safe(self):
+        from tea_agent.memory import MemoryManager
+
+        assert MemoryManager._extract_keywords("") == set()
+        assert MemoryManager._extract_keywords("   ") == set()
+        assert MemoryManager._extract_keywords("!!!，。") == set()

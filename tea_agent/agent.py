@@ -308,6 +308,7 @@ class Agent:
             api_key=cast(str, main_m.api_key),
             api_url=cast(str, main_m.api_url),
             model=cast(str, main_m.model_name),
+            provider=cast(str, main_m.provider or ""),
             max_history=cfg.max_history,
             max_iterations=cfg.max_iterations,
             keep_turns=cfg.keep_turns,

@@ -56,13 +56,6 @@ class TestRecordInterruptionAnchor:
 class TestInjectInterruptionKnowledge:
     """OnlineToolSession._inject_interruption_knowledge"""
 
-    @pytest.fixture(autouse=True)
-    def _no_embedding(self, monkeypatch):
-        """M1 测试确定性：模拟 embedding 不可用 → 降级 corrected"""
-        monkeypatch.setattr(
-            "tea_agent.embedding_util.get_embedding_engine", lambda: None
-        )
-
     def _make_session(self, **kwargs):
         mock_tk = MagicMock()
         mock_tk.meta_map = {}
@@ -81,11 +74,11 @@ class TestInjectInterruptionKnowledge:
             "timestamp": "2026-08-03 06:00:00",
             "iteration": 2,
             "tool_name": "toolkit_exec",
-            "partial_reply": "I'll refactor the store",
+            "partial_reply": "重构存储层",
             "phase": "tool_loop",
             "status": "pending",
         }
-        ok = sess._inject_interruption_knowledge("不是这样，重新做")
+        ok = sess._inject_interruption_knowledge("不是这样，重新重构存储层")
         assert ok is True
         # 幂等：注入后清除锚点
         assert sess._last_interruption is None
@@ -109,7 +102,11 @@ class TestInjectInterruptionKnowledge:
 
     def test_followup_respects_config(self):
         sess = self._make_session()
-        sess._last_interruption = {"iteration": 1, "tool_name": "t", "partial_reply": "p"}
+        # partial_reply 与后续消息同话题（否则按换话题走 abandoned 模板，
+        # 而本用例断言的是 followup 指令内容是否被完整保留、不被截断）
+        sess._last_interruption = {
+            "iteration": 1, "tool_name": "t", "partial_reply": "长指令",
+        }
         ok = sess._inject_interruption_knowledge("长指令" * 200)
         assert ok is True
         # 修复 #4：followup 尊重 partial_reply_max 配置（默认 2000），
@@ -131,7 +128,7 @@ class TestInjectInterruptionKnowledge:
         sess = self._make_session()
         sess._last_interruption = {
             "iteration": 1, "tool_name": "toolkit_exec",
-            "partial_reply": "old direction", "phase": "tool_loop",
+            "partial_reply": "旧方向：重构存储层", "phase": "tool_loop",
         }
         # mock pipeline 与依赖，跳过真实 API 调用
         mock_pipeline = MagicMock()
@@ -146,14 +143,14 @@ class TestInjectInterruptionKnowledge:
         sess._build_tools = MagicMock()
 
         cb = MagicMock()
-        reply, used = sess.chat_stream("请按我说的重新做", cb)
+        reply, used = sess.chat_stream("请按我说的重新重构存储层", cb)
         assert reply == "ok"
         assert used is False
         # 注入已发生：位置1是打断知识 system 消息
         sys_msg = sess.context.messages[1]
         assert sys_msg["role"] == "system"
         assert "toolkit_exec" in sys_msg["content"]
-        assert "请按我说的重新做" in sys_msg["content"]
+        assert "请按我说的重新重构存储层" in sys_msg["content"]
         # 锚点已消费
         assert sess._last_interruption is None
         sess.close()
@@ -175,68 +172,67 @@ from tea_agent.onlinesession import (
 from tea_agent.store._interruptions import InterruptionStore
 
 
-class FakeEmbeddingEngine:
-    """可控相似度的假 embedding 引擎。"""
-
-    def __init__(self, sim: float = 0.9):
-        self._sim = sim
-        self.calls = 0
-
-    def embed(self, text: str) -> list:
-        self.calls += 1
-        return [1.0, 0.0]
-
-    def cosine_similarity(self, a: list, b: list) -> float:
-        return self._sim
-
-
 class TestClassifyInterruption:
-    """classify_interruption: 三分类信号判定"""
+    """classify_interruption: 三分类信号判定。
+
+    相似度口径已从 embedding 余弦改为**关键词 Jaccard**（向量能力下线），
+    因此不再注入假引擎，而是用真实文本对（同方向措辞 vs 换话题）驱动判定。
+    """
 
     def test_silent_when_no_message(self):
         assert classify_interruption({"partial_reply": "x"}, "") == ("silent", None)
         assert classify_interruption({"partial_reply": "x"}, "   ") == ("silent", None)
 
-    def test_fallback_corrected_without_engine(self):
-        """无 embedding → 降级 corrected（宁缺毋滥）"""
-        cls, sim = classify_interruption({"partial_reply": "x"}, "继续")
+    def test_fallback_corrected_without_partial(self):
+        """无被打断内容可比 → 降级 corrected（宁缺毋滥）。"""
+        cls, sim = classify_interruption({}, "继续")
         assert cls == "corrected"
         assert sim is None
 
-    def test_fallback_corrected_without_partial(self):
-        cls, sim = classify_interruption({}, "继续", FakeEmbeddingEngine())
-        assert cls == "corrected"
-
-    def test_corrected_when_high_similarity(self):
+    def test_corrected_when_topic_continues(self):
+        """同方向继续（关键词大幅重叠）→ corrected 且给出真实相似度。"""
         cls, sim = classify_interruption(
-            {"partial_reply": "重构存储层"}, "继续重构存储层", FakeEmbeddingEngine(0.92)
+            {"partial_reply": "继续重构存储层"}, "继续重构存储层，但换种方式"
         )
         assert cls == "corrected"
-        assert sim == pytest.approx(0.92)
+        assert sim is not None and 0.0 < sim <= 1.0
 
-    def test_abandoned_when_low_similarity(self):
+    def test_abandoned_when_topic_switches(self):
+        """换话题（关键词几乎不重叠）→ abandoned。"""
         cls, sim = classify_interruption(
-            {"partial_reply": "重构存储层"}, "今天天气怎么样", FakeEmbeddingEngine(0.3)
+            {"partial_reply": "重构存储层"}, "今天天气怎么样"
         )
         assert cls == "abandoned"
-        assert sim == pytest.approx(0.3)
+        assert sim == pytest.approx(0.0)
 
-    def test_threshold_boundary(self):
-        """边界：恰好等于阈值 → corrected"""
-        cls, _ = classify_interruption(
-            {"partial_reply": "x"}, "y", FakeEmbeddingEngine(INTERRUPT_SIMILARITY_THRESHOLD)
+    def test_threshold_boundary_is_inclusive(self):
+        """边界：相似度恰好等于阈值 → corrected（>= 判定）。"""
+        text = "重构存储层"
+        # 相同文本 → Jaccard = 1.0，取 threshold=1.0 命中边界
+        cls, sim = classify_interruption(
+            {"partial_reply": text}, text, threshold=1.0
         )
         assert cls == "corrected"
+        assert sim == pytest.approx(1.0)
 
-    def test_embedding_exception_falls_back(self, monkeypatch):
-        class BoomEngine:
-            def embed(self, text):
-                raise RuntimeError("api down")
+    def test_configurable_threshold_flips_verdict(self):
+        """同一对文本：阈值调高后判定从 corrected 翻转为 abandoned。
 
-        cls, sim = classify_interruption(
-            {"partial_reply": "x"}, "继续", BoomEngine()
+        这是 M4「阈值可由配置覆盖」的契约 —— 若阈值失效，两条断言不可能同时成立。
+        """
+        event = {"partial_reply": "重构存储层并补充测试"}
+        msg = "重构存储层并补充测试文档"
+        low, sim_low = classify_interruption(event, msg, threshold=0.1)
+        high, _ = classify_interruption(event, msg, threshold=0.99)
+        assert low == "corrected", f"低阈值应判 corrected（sim={sim_low}）"
+        assert high == "abandoned", "高阈值应判 abandoned"
+
+    def test_returns_none_similarity_only_when_uncomparable(self):
+        """similarity=None 只表示「未计算」，不得用于「算出来是 0」。"""
+        _, sim_zero = classify_interruption(
+            {"partial_reply": "重构存储层"}, "今天天气怎么样"
         )
-        assert cls == "corrected"  # 异常降级
+        assert sim_zero == 0.0, "算得 0 也要返回 0，不能退化成 None"
 
 
 class TestInterruptionStore:
@@ -340,18 +336,14 @@ class TestM2Injection:
     def _anchor(self, **kw):
         a = {
             "id": "ev-1", "topic_id": "t1", "iteration": 2,
-            "tool_name": "toolkit_exec", "partial_reply": "重构存储层",
+            "tool_name": "toolkit_exec", "partial_reply": "重构存储层并补充测试",
             "phase": "tool_loop", "status": "pending",
         }
         a.update(kw)
         return a
 
-    def test_abandoned_injection(self, monkeypatch):
-        """低相似度 → abandoned 模板注入（不回旧话题）"""
-        monkeypatch.setattr(
-            "tea_agent.embedding_util.get_embedding_engine",
-            lambda: FakeEmbeddingEngine(0.3),
-        )
+    def test_abandoned_injection(self):
+        """换话题（关键词不重叠）→ abandoned 模板注入（不回旧话题）。"""
         sess = self._make_session()
         sess._last_interruption = self._anchor()
         ok = sess._inject_interruption_knowledge("今天天气怎么样")
@@ -362,11 +354,8 @@ class TestM2Injection:
         assert "重构存储层" not in content  # 不引用旧方向细节
         sess.close()
 
-    def test_corrected_injection_with_high_similarity(self, monkeypatch):
-        monkeypatch.setattr(
-            "tea_agent.embedding_util.get_embedding_engine",
-            lambda: FakeEmbeddingEngine(0.91),
-        )
+    def test_corrected_injection_on_same_topic(self):
+        """同方向继续（关键词重叠）→ corrected 模板注入。"""
         sess = self._make_session()
         sess._last_interruption = self._anchor()
         ok = sess._inject_interruption_knowledge("继续重构存储层，但换种方式")
@@ -376,22 +365,19 @@ class TestM2Injection:
         assert "toolkit_exec" in content
         sess.close()
 
-    def test_persist_classification_called(self, monkeypatch):
-        """分类结果回写事件表（storage 有值且锚点有 id）"""
-        monkeypatch.setattr(
-            "tea_agent.embedding_util.get_embedding_engine",
-            lambda: FakeEmbeddingEngine(0.91),
-        )
+    def test_persist_classification_called(self):
+        """分类结果回写事件表（storage 有值且锚点有 id）。"""
         mock_storage = MagicMock()
         sess = self._make_session(storage=mock_storage)
-        sess._last_interruption = self._anchor()
-        ok = sess._inject_interruption_knowledge("继续重构")
+        sess._last_interruption = self._anchor(partial_reply="重构存储层")
+        ok = sess._inject_interruption_knowledge("继续重构存储层")
         assert ok is True
         mock_storage.update_interruption_classification.assert_called_once()
         args = mock_storage.update_interruption_classification.call_args[0]
         assert args[0] == "ev-1"
         assert args[1] == "corrected"
-        assert args[2] == pytest.approx(0.91)
+        # 相似度为真实关键词 Jaccard（不再是假引擎注入的固定值）
+        assert 0.0 < args[2] <= 1.0
         sess.close()
 
     def test_silent_no_injection_but_persisted(self, monkeypatch):
@@ -580,7 +566,6 @@ class TestM4InjectionConfig:
         monkeypatch.setattr(cfg, "interruption", dict(cfg.interruption))
 
     def test_disabled_skips_injection(self, monkeypatch):
-        monkeypatch.setattr("tea_agent.embedding_util.get_embedding_engine", lambda: None)
         cfg = get_config()
         cfg.interruption["enabled"] = False
         sess = self._make_session()
@@ -592,15 +577,15 @@ class TestM4InjectionConfig:
         sess.close()
 
     def test_threshold_from_config(self, monkeypatch):
-        # threshold 0.9 → 相似 0.8 判 abandoned（默认 0.6 会判 corrected）
-        monkeypatch.setattr(
-            "tea_agent.embedding_util.get_embedding_engine",
-            lambda: FakeEmbeddingEngine(0.8),
-        )
+        """阈值来自配置：调高到 1.0 后，同一对文本从 corrected 翻为 abandoned。"""
         cfg = get_config()
-        cfg.interruption["similarity_threshold"] = 0.9
+        cfg.interruption["similarity_threshold"] = 1.0
         sess = self._make_session()
-        sess._last_interruption = {"iteration": 1, "tool_name": "toolkit_exec", "partial_reply": "重构存储层"}
+        sess._last_interruption = {
+            "iteration": 1, "tool_name": "toolkit_exec",
+            "partial_reply": "重构存储层",
+        }
+        # 措辞相近但非完全相同 → Jaccard < 1.0 → 在阈值 1.0 下判 abandoned
         ok = sess._inject_interruption_knowledge("重构存储层方案")
         assert ok is True
         assert "弃用" in sess.context.messages[1]["content"]  # abandoned 模板

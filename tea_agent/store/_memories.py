@@ -1,10 +1,11 @@
 """
-# @2026-06-07 gen by deepseek-v4-pro, Step 1: 记忆写入时自动计算并存储 embedding
+长期记忆存储 —— 增删改查、去重、过期清理、CRITICAL FIFO 淘汰。
+
+注：原「记忆 embedding 存取 + 向量相似度检索」已随向量能力整体下线移除；
+相似度判断改由关键词 Jaccard / content_hash 精确匹配承担。
 """
 import hashlib
 import logging
-
-import numpy as np
 
 from ._component import StoreComponent
 from ._sql_safety import safe_set_clause, safe_where_clause
@@ -12,10 +13,7 @@ from ._sql_safety import safe_set_clause, safe_where_clause
 logger = logging.getLogger("Storage.Memories")
 
 class MemoryStore(StoreComponent):
-    """长期记忆管理：增删改查、嵌入存取、过期清理、CRITICAL FIFO 淘汰。"""
-
-    # 嵌入引擎（由 Storage 在初始化后注入）
-    embedding_engine = None
+    """长期记忆管理：增删改查、过期清理、CRITICAL FIFO 淘汰。"""
 
     # ── CRUD ──
 
@@ -23,17 +21,24 @@ class MemoryStore(StoreComponent):
         self, content: str, category: str = "general", priority: int = 2,
         importance: int = 3, expires_at: str | None = None, tags: str = "",
         source_topic_id: str | None = None, pinned: int = 0,
-        embedding: list[float] | None = None,
     ) -> str:
-        """Add memory with optional embedding (auto-computes via embedding_engine)."""
+        """Add a memory (dedup by content_hash).
+
+        Args:
+            content: 记忆正文
+            category: 分类
+            priority: 优先级（0=CRITICAL）
+            importance: 重要度 1-5
+            expires_at: 过期时间，None=永不过期
+            tags: 逗号分隔标签
+            source_topic_id: 来源主题
+            pinned: 是否固定
+
+        Returns:
+            记忆 id（命中 content_hash 去重时返回已存在的 id）
+        """
         if priority == 0:
             self._enforce_critical_limit(max_critical=30)
-        # Auto-compute embedding if engine available
-        if embedding is None and self.embedding_engine is not None:
-            try:
-                embedding = self.embedding_engine.embed(content)
-            except Exception as e:
-                logger.warning(f"compute embedding failed: {e}")
         content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()[:16]
         # 去重：同一内容的活跃记忆已存在则跳过（防止自动提取/评估产生重复垃圾）
         c = self.conn.cursor()
@@ -46,23 +51,16 @@ class MemoryStore(StoreComponent):
             logger.debug(f"add_memory 去重: 跳过已存在记忆 (id={existing[0]})")
             c.close()
             return existing[0]
-        embedding_blob = None
-        if embedding:
-            try:
-                arr = np.array(embedding, dtype=np.float32)
-                embedding_blob = arr.tobytes()
-            except Exception as e:
-                logger.warning(f"serialize embedding failed: {e}")
         c = self.conn.cursor()
         mid = self._new_id()
         c.execute(
             "INSERT INTO memories (id, content, category, priority, importance, "
-            "expires_at, tags, source_topic_id, pinned, content_hash, embedding, "
+            "expires_at, tags, source_topic_id, pinned, content_hash, "
             "created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, "
             "datetime('now', 'localtime'), datetime('now', 'localtime'))",
             (mid, content, category, priority, importance, expires_at, tags,
-             source_topic_id, pinned, content_hash, embedding_blob),
+             source_topic_id, pinned, content_hash),
         )
         self.conn.commit()
         c.close()
@@ -243,88 +241,6 @@ class MemoryStore(StoreComponent):
         )
         self.conn.commit()
         c.close()
-
-    # ── Embedding 存取 ──
-
-    def get_memory_embedding(self, memory_id: str) -> list[float] | None:
-        """读取记忆的 embedding 向量。"""
-        c = self.conn.cursor()
-        c.execute("SELECT embedding FROM memories WHERE id = ?", (memory_id,))
-        row = c.fetchone()
-        c.close()
-        if row and row["embedding"]:
-            try:
-                arr = np.frombuffer(row["embedding"], dtype=np.float32)
-                return arr.tolist()
-            except Exception:
-                return None
-        return None
-
-    def batch_get_embeddings(self, limit: int = 500, offset: int = 0) -> list[dict]:
-        """批量获取有 embedding 的活跃记忆（用于相似度扫描，支持分页）。
-
-        Args:
-            limit: 每批数量，默认 500
-            offset: 偏移量，用于分页
-        """
-        c = self.conn.cursor()
-        c.execute(
-            "SELECT id, content, embedding, priority, importance FROM memories "
-            "WHERE is_active = 1 AND embedding IS NOT NULL "
-            "ORDER BY created_at DESC LIMIT ? OFFSET ?", (limit, offset)
-        )
-        rows = c.fetchall()
-        c.close()
-        results = []
-        for row in rows:
-            d = dict(row)
-            blob = d.pop("embedding", None)
-            if blob:
-                try:
-                    d["embedding"] = np.frombuffer(blob, dtype=np.float32).tolist()
-                except Exception:
-                    d["embedding"] = None
-            else:
-                d["embedding"] = None
-            results.append(d)
-        return results
-
-    def search_by_vector(self, query_embedding: list[float], top_k: int = 10,
-                          min_similarity: float = 0.3,
-                          scan_limit: int = 5000) -> list[dict]:
-        """基于向量相似度搜索记忆（分页扫描，突破 200 硬限制）。
-
-        Args:
-            query_embedding: 查询向量
-            top_k: 返回 Top-K 结果
-            min_similarity: 最低相似度阈值
-            scan_limit: 最大扫描记忆数，默认 5000
-        """
-        query_arr = np.array(query_embedding, dtype=np.float32)
-        q_norm = np.linalg.norm(query_arr)
-        if q_norm == 0:
-            return []
-
-        batch_size = 500
-        scored = []
-        offset = 0
-
-        while offset < scan_limit:
-            batch = self.batch_get_embeddings(limit=batch_size, offset=offset)
-            if not batch:
-                break
-            for mem in batch:
-                emb = mem.get("embedding")
-                if not emb or len(emb) != len(query_embedding):
-                    continue
-                mem_arr = np.array(emb, dtype=np.float32)
-                sim = float(mem_arr @ query_arr) / (q_norm * np.linalg.norm(mem_arr))
-                if sim >= min_similarity:
-                    scored.append({**mem, "similarity": round(sim, 4)})
-            offset += batch_size
-
-        scored.sort(key=lambda x: x["similarity"], reverse=True)
-        return scored[:top_k]
 
     def get_memory_stats(self) -> dict:
         """Get the memory stats."""

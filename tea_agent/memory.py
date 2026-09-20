@@ -59,9 +59,6 @@ class MemoryManager:
         self.storage = storage
         self._extraction_threshold = extraction_threshold
         self._dedup_threshold = dedup_threshold
-        # embedding 缓存（惰性加载）
-        self._embedding_engine = None
-        self._embedding_cache = {}  # memory_id → embedding vector
 
     # ------------------------------------------------------------------
     # 记忆选择
@@ -122,19 +119,11 @@ class MemoryManager:
             )
         ]
 
-        # 2. 非 CRITICAL 打分排序（预计算查询向量，避免每条记忆重复请求）
-        query_emb = None
-        engine = self._get_embedding_engine()
-        if engine and topic_text:
-            try:
-                query_emb = engine.embed(topic_text)
-            except Exception:
-                query_emb = None
-
+        # 2. 非 CRITICAL 打分排序（关键词相关性 + 重要度/时效/优先级）
         others = high + medium + low
         scored = []
         for m in others:
-            score = self._score_memory_cached(m, topic_text, query_emb)
+            score = self._score_memory(m, topic_text)
             # LOW 相关性门槛：相关性过低直接过滤（不进入保底/竞争池）
             if m["priority"] == PRIORITY_LOW and score < LOW_RELEVANCE_THRESHOLD:
                 continue
@@ -183,21 +172,15 @@ class MemoryManager:
         self._touch_selected(result)
         return result
 
-    def _score_memory_cached(self, memory: dict, topic_text: str, query_emb=None) -> float:
-        """计算记忆与当前对话的相关性分数（Hybrid），复用预计算的查询向量。"""
-        # 关键词得分
-        keyword_relevance = self._compute_relevance(memory, topic_text)
+    def _score_memory(self, memory: dict, topic_text: str) -> float:
+        """计算记忆与当前对话的相关性分数。
 
-        # embedding 语义得分（使用预计算向量）
-        if query_emb is not None:
-            emb_sim = self._compute_embedding_similarity_cached(memory, query_emb)
-            if emb_sim is not None:
-                kw = max(keyword_relevance, 0.1)
-                relevance = 0.4 * kw + 0.6 * emb_sim
-            else:
-                relevance = keyword_relevance
-        else:
-            relevance = keyword_relevance
+        相关性 = 关键词匹配率（``_compute_relevance``）。原实现叠加了 embedding
+        余弦相似度的加权混合（0.4*kw + 0.6*emb），随向量能力一并下线：embedding
+        模型未配置时该分支本就不生效，而关键词路径已能覆盖「同一件事换说法」以外
+        的场景。上下文缺失（topic_text 为空）时 ``_compute_relevance`` 返回 0.5。
+        """
+        relevance = self._compute_relevance(memory, topic_text)
 
         imp = memory.get("importance", 3)
         if imp is None:  # 数据库 NULL 保护，避免 max(None, 1) TypeError
@@ -236,24 +219,27 @@ class MemoryManager:
 
     @staticmethod
     def _extract_keywords(text: str) -> set:
-        """从文本中提取关键词（jieba 中文分词 + 英文单词）"""
-        keywords = set()
-        try:
-            import jieba
-            # jieba 精确模式分词，过滤单字和纯空白
-            words = jieba.lcut(text)
-            for w in words:
-                w = w.strip()
-                if len(w) >= 2 and not w.isspace():
-                    keywords.add(w)
-        except ImportError:
-            # 降级：bigram 滑动窗口
-            chinese_chars = re.findall(r'[\u4e00-\u9fff]', text)
-            for i in range(len(chinese_chars) - 1):
-                keywords.add(chinese_chars[i] + chinese_chars[i+1])
-        # 英文单词（3字母以上）
-        english = re.findall(r'[a-zA-Z]{3,}', text)
-        keywords.update(w.lower() for w in english)
+        """从文本中提取关键词（纯正则：中文 bigram + 英文单词）。
+
+        原实现用 jieba 中文分词。移除分词器的原因：
+        1. ``import jieba`` ≈0.5s、``initialize()`` ≈0.7s，是启动关键路径上的固定
+           成本，却只服务本函数（记忆相关性打分 / 去重相似度）；
+        2. 本函数只需「哪几个词同时出现在两边」的粗粒度信号 —— 相关性是
+           ``matched / len(keywords)`` 的比值、去重是关键词 Jaccard，整词召回与
+           bigram 召回对这些比值的排序影响可忽略；
+        3. 按**连续汉字段**切分而非全篇取字，避免跨标点产生假 bigram
+           （「甲。乙」不再产出「甲乙」）。
+
+        Returns:
+            关键词集合（中文 bigram + 小写英文词）
+        """
+        keywords: set[str] = set()
+        # 中文：对每个连续汉字段做相邻字 bigram
+        for run in re.findall(r"[\u4e00-\u9fff]+", text):
+            for i in range(len(run) - 1):
+                keywords.add(run[i:i + 2])
+        # 英文单词（3 字母以上）
+        keywords.update(w.lower() for w in re.findall(r"[a-zA-Z]{3,}", text))
         return keywords
 
     @staticmethod
@@ -303,26 +289,6 @@ class MemoryManager:
 
 
     # ------------------------------------------------------------------
-    # Hybrid 检索：Embedding 相似度 + 缓存
-    # ------------------------------------------------------------------
-
-    def _get_embedding_engine(self):
-        """惰性获取 embedding 引擎（通过 storage.memories.embedding_engine）"""
-        if self._embedding_engine is not None:
-            return self._embedding_engine
-        try:
-            engine = getattr(self.storage.memories, 'embedding_engine', None)
-            if engine is not None and engine.configured:
-                self._embedding_engine = engine
-                return engine
-        except Exception:
-            # 探测失败 = 语义检索静默退化为纯关键词匹配（用户只感觉「记忆好像不太
-            # 准」）。留痕才能区分「未配置」（正常）与「配置了但坏了」（故障）。
-            logger.debug("embedding 引擎探测失败，语义检索降级", exc_info=True)
-        return None
-
-
-    # ------------------------------------------------------------------
     # 优先级自动调整
     # ------------------------------------------------------------------
 
@@ -330,33 +296,6 @@ class MemoryManager:
     # 动态遗忘：根据记忆插入频率调整衰减阈值
     # ------------------------------------------------------------------
 
-
-    def _compute_embedding_similarity_cached(self, memory: dict, query_emb):
-        """使用预计算的查询向量计算余弦相似度（避免重复 embedding 请求）。"""
-        if query_emb is None:
-            return None
-
-        mid = memory.get("id", "")
-        mem_emb = self._embedding_cache.get(mid)
-        if mem_emb is None:
-            try:
-                mem_emb = self.storage.memories.get_memory_embedding(mid)
-                if mem_emb:
-                    self._embedding_cache[mid] = mem_emb
-            except Exception:
-                pass
-
-        if not mem_emb or len(mem_emb) != len(query_emb):
-            return None
-
-        import numpy as np
-        q_arr = np.array(query_emb, dtype=np.float32)
-        m_arr = np.array(mem_emb, dtype=np.float32)
-        q_norm = np.linalg.norm(q_arr)
-        m_norm = np.linalg.norm(m_arr)
-        if q_norm == 0 or m_norm == 0:
-            return None
-        return float(q_arr @ m_arr) / (q_norm * m_norm)
 
     def _update_dynamic_thresholds(self):
         """
@@ -852,29 +791,30 @@ importance 评分：
     # ------------------------------------------------------------------
 
     def detect_duplicates(self, threshold: float = 0.92) -> list[tuple]:
-        """通过 embedding 余弦相似度扫描活跃记忆中的近似重复对。"""
-        mems = self.storage.memories.batch_get_embeddings(limit=500)
+        """扫描活跃记忆中的近似重复对（关键词 Jaccard 相似度）。
+
+        原实现比对 embedding 余弦相似度；向量能力下线后改用
+        ``_compute_similarity``（中文 bigram + 英文词的关键词 Jaccard）。
+        ``threshold`` 参数语义不变（0~1，越高越严格），但**量纲不可直接沿用**：
+        Jaccard 取值整体低于余弦，实践中若要获得与旧版相近的召回，应显式传更低的
+        阈值（如 0.5~0.8）。默认值保持 0.92 以免静默改变既有调用行为。
+        """
+        mems = self.storage.get_active_memories(limit=500)
         if len(mems) < 2:
             return []
 
-        import numpy as np
         pairs = []
         for i in range(len(mems)):
-            emb_i = mems[i].get('embedding')
-            if emb_i is None:
-                continue
-            arr_i = np.array(emb_i, dtype=np.float32)
-            ni = np.linalg.norm(arr_i)
-            if ni == 0:
+            text_i = mems[i].get("content") or ""
+            if not text_i:
                 continue
             for j in range(i + 1, len(mems)):
-                emb_j = mems[j].get('embedding')
-                if emb_j is None or len(emb_j) != len(emb_i):
+                text_j = mems[j].get("content") or ""
+                if not text_j:
                     continue
-                arr_j = np.array(emb_j, dtype=np.float32)
-                sim = float(arr_i @ arr_j) / (ni * np.linalg.norm(arr_j))
+                sim = self._compute_similarity(text_i, text_j)
                 if sim >= threshold:
-                    pairs.append((mems[i]['id'], mems[j]['id'], round(sim, 4)))
+                    pairs.append((mems[i]["id"], mems[j]["id"], round(sim, 4)))
 
         pairs.sort(key=lambda x: x[2], reverse=True)
         return pairs

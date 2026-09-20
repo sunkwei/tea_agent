@@ -31,21 +31,18 @@ logger = logging.getLogger("merge_db")
 # ============================================================
 
 def _extract_keywords(text: str) -> set:
-    """从文本中提取关键词（与 memory.py 一致的 jieba/降级策略）"""
-    keywords = set()
-    try:
-        import jieba
-        words = jieba.lcut(text)
-        for w in words:
-            w = w.strip()
-            if len(w) >= 2 and not w.isspace():
-                keywords.add(w)
-    except ImportError:
-        chinese_chars = re.findall(r'[\u4e00-\u9fff]', text)
-        for i in range(len(chinese_chars) - 1):
-            keywords.add(chinese_chars[i] + chinese_chars[i + 1])
-    english = re.findall(r'[a-zA-Z]{3,}', text)
-    keywords.update(w.lower() for w in english)
+    """从文本中提取关键词（纯正则：中文 bigram + 英文单词）。
+
+    与 ``tea_agent/memory.py::MemoryManager._extract_keywords`` 保持同一策略，
+    确保脚本与运行时对「相似」的判定口径一致（原 jieba 分词已移除）。
+    """
+    keywords: set[str] = set()
+    # 中文：对每个连续汉字段做相邻字 bigram
+    for run in re.findall(r"[\u4e00-\u9fff]+", text):
+        for i in range(len(run) - 1):
+            keywords.add(run[i:i + 2])
+    # 英文单词（3 字母以上）
+    keywords.update(w.lower() for w in re.findall(r"[a-zA-Z]{3,}", text))
     return keywords
 
 def _jaccard_similarity(text_a: str, text_b: str) -> float:

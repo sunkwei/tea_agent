@@ -214,7 +214,7 @@ def _get_memory_info() -> dict:
     """获取记忆系统详情"""
     return {
         "engine": "memory.py + session_memory_component.py",
-        "storage": "SQLite + Embedding vectors",
+        "storage": "SQLite",
         "search_modes": ["keyword", "semantic", "hybrid"],
         "extraction": "auto_extract from conversations",
         "reflection": "元认知反思",

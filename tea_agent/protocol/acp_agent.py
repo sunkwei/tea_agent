@@ -433,7 +433,7 @@ class AcpAgent:
             providers = []
 
             # Try to discover configured models
-            for key in ["main_model", "cheap_model", "embedding_model"]:
+            for key in ["main_model", "cheap_model"]:
                 model_name = getattr(config, key, None)
                 if model_name:
                     providers.append({

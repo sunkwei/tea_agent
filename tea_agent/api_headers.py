@@ -40,6 +40,8 @@ from __future__ import annotations
 import logging
 import os
 import re
+import ssl
+import threading
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -294,6 +296,56 @@ def default_headers_for(
     return headers
 
 
+# ═══════════════════════════════════════════════════════════════
+# SSL 上下文共享（启动性能；调用点见下方 build_http_client）
+# ═══════════════════════════════════════════════════════════════
+
+# Windows OpenSSL 下 ``load_verify_locations(certifi 的 cacert.pem)`` 单次约 0.5s
+# （293KB CA 包，纯 CPU），而 httpx 每构造一个 Client 就要为 sync/async/proxy
+# 各建一个 SSLContext —— 于是「多建一个 client」≈ 多付 3 次证书加载。
+# 冷启动建 main+cheap 两个 client = 6 次 ≈ 3.0s，占 8.25s 冷启动的 36%
+# （cProfile 实测：load_verify_locations 2.997s，为唯一热点）。
+# SSLContext 只读、可跨连接与线程共享，故进程级复用一份。
+_SSL_CTX_LOCK = threading.Lock()
+_SSL_CTX_CACHE: dict[bool, ssl.SSLContext | None] = {}
+
+
+def _create_ssl_context(http2: bool) -> ssl.SSLContext:
+    """构造与 ``httpx.Client(verify=True)`` 等价的 SSLContext。
+
+    刻意复用 httpx 自己的工厂（而非手搓 ``ssl.create_default_context``）：CA 包
+    选择（尊重 ``SSL_CERT_FILE``/``SSL_CERT_DIR``）、TLS 最低版本、cipher 白名单、
+    ALPN 等细节与 httpx 内部路径完全一致，不给校验强度留口径偏差。
+    单独抽成函数是为了让测试能替换它。
+    """
+    from httpx import create_ssl_context
+
+    return create_ssl_context(verify=True, http2=http2)
+
+
+def shared_ssl_context(http2: bool = False) -> ssl.SSLContext | None:
+    """返回进程级复用的 SSLContext；无法构造时返回 ``None``。
+
+    ``None`` 的语义是「放弃这项优化，让 httpx 走它默认的 verify 路径」。本函数
+    纯粹是启动性能优化，任何异常都必须 fail-open —— 绝不能因为取不到上下文而
+    让会话建不起来（与 build_http_client 的代理降级容错同一原则）。构造失败的
+    结论一并缓存，避免每次建 client 都重试一遍昂贵的失败路径。
+
+    Args:
+        http2: 是否协商 HTTP/2（ALPN 列表不同，故按此分桶缓存）
+    """
+    if http2 in _SSL_CTX_CACHE:
+        return _SSL_CTX_CACHE[http2]
+    ctx: ssl.SSLContext | None = None
+    try:
+        ctx = _create_ssl_context(http2)
+    except Exception as e:  # noqa: BLE001 — 优化失败不影响功能
+        logger.debug("共享 SSLContext 构造失败，回退 httpx 默认 verify: %s", e)
+    with _SSL_CTX_LOCK:
+        # 并发首建时先到者为准，避免多份 context 并存
+        return _SSL_CTX_CACHE.setdefault(http2, ctx)
+
+
 def build_http_client(timeout: Any, event_hooks: Any = None, **kwargs: Any):
     """构建出站 httpx 客户端，对**畸形代理环境变量**做降级容错。
 
@@ -303,10 +355,22 @@ def build_http_client(timeout: Any, event_hooks: Any = None, **kwargs: Any):
     ``InvalidURL: Invalid port: ':1]'``，导致**会话根本无法建立**
     （不是慢，是起不来）。这里先按原样构造；失败则回退为
     ``trust_env=False``（忽略环境代理与 netrc），保证会话可用。
+
+    启动性能：未显式指定 verify/cert/trust_env 时注入
+    :func:`shared_ssl_context` 的进程级 SSLContext，省掉每个 client 重建
+    SSLContext 的证书加载开销。以下情况一律**不注入**，以保持调用方语义：
+      - ``verify``：显式校验策略（如 ``verify=False`` 关闭校验）；
+      - ``cert``：客户端证书会被 httpx 的 ``_load_client_certs`` 写进 context，
+        共享 context 会把私钥串给其它连接；
+      - ``trust_env``：显式要求忽略/尊重环境变量。
     """
     import httpx
 
     base: dict[str, Any] = {"timeout": timeout, "proxy": None, **kwargs}
+    if not ({"verify", "cert", "trust_env"} & set(base)):
+        _ctx = shared_ssl_context(bool(base.get("http2", False)))
+        if _ctx is not None:
+            base["verify"] = _ctx
     if event_hooks:
         base["event_hooks"] = event_hooks
     try:

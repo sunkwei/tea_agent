@@ -17,7 +17,7 @@ class ConversationStore(StoreComponent):
     """对话管理：保存消息、更新轮次、查询对话历史、Agent 轮次记录。"""
 
     def save_msg(self, topic_id: str, user_msg, ai_msg: str, is_func: bool,
-                 update_active_cb=None, auto_embed_cb=None) -> str:
+                 update_active_cb=None) -> str:
         """
         新增一条对话，返回 conversation_id。
         若 user_msg 含图片，自动读取文件存入 images 表并转为 Base64。
@@ -77,15 +77,6 @@ class ConversationStore(StoreComponent):
                 update_active_cb(topic_id)
             except Exception:
                 logger.exception("update_active_cb failed (isolated)")
-
-        if user_msg_text and user_msg_text.strip():
-            if auto_embed_cb:
-                try:
-                    auto_embed_cb(conv_id, user_msg_text.strip())
-                except Exception:
-                    logger.exception("auto_embed_cb failed (isolated)")
-            else:
-                self._auto_embed_async(conv_id, user_msg_text.strip())
 
         # P2 事件溯源：记录 turn/start + user/message（审计事实源）
         self._log_event(topic_id, "turn/start", {}, conversation_id=conv_id)
@@ -431,75 +422,6 @@ class ConversationStore(StoreComponent):
             snippet = snippet + "..."
         snippet = snippet.replace("\n", " ").replace("\r", " ").strip()
         return snippet
-
-    # ── 自动嵌入（队列 + 单后台线程，独立连接）──
-
-    _embed_queue = queue.Queue()
-    _embed_worker_started = False
-
-    @classmethod
-    def _ensure_embed_worker(cls, conn):
-        """Ensure a single background worker thread is running."""
-        if cls._embed_worker_started:
-            return
-        cls._embed_worker_started = True
-
-        def _worker():
-            """Background worker with its own connection."""
-            db_path = None
-            try:
-                db_path = conn.execute("PRAGMA database_list").fetchone()[2]
-            except Exception:
-                return
-            if not db_path:
-                return
-            try:
-                worker_conn = sqlite3.connect(db_path, check_same_thread=False)
-                worker_conn.row_factory = sqlite3.Row
-                import numpy as np
-
-                from tea_agent.embedding_util import get_embedding_engine
-                engine = get_embedding_engine()
-                while True:
-                    try:
-                        conv_id, text = cls._embed_queue.get(timeout=1)
-                    except queue.Empty:
-                        continue
-                    if conv_id is None:
-                        break
-                    try:
-                        vec = engine.embed(text)
-                        if vec:
-                            arr = np.array(vec, dtype=np.float32)
-                            blob = arr.tobytes()
-                            c = worker_conn.cursor()
-                            c.execute(
-                                "INSERT OR REPLACE INTO msg_vectors "
-                                "(conversation_id, embedding, dimension, model_name, created_at) "
-                                "VALUES (?, ?, ?, ?, datetime('now', 'localtime'))",
-                                (conv_id, blob, len(vec), engine.model_name),
-                            )
-                            worker_conn.commit()
-                            c.close()
-                    except Exception as e:
-                        logging.getLogger("store").warning(
-                            f"自动嵌入失败 (conv_id={conv_id}): {e}"
-                        )
-                worker_conn.close()
-            except Exception:
-                logging.getLogger("store").exception("嵌入工作线程异常退出")
-
-        t = threading.Thread(target=_worker, daemon=True, name="auto-embed-worker")
-        t.start()
-
-    def _auto_embed_async(self, conv_id: str, text: str):
-        """Enqueue embedding request for async processing.
-
-        Uses a single daemon worker thread with its own connection,
-        avoiding thread-safety issues.
-        """
-        self._ensure_embed_worker(self.conn)
-        self._embed_queue.put((conv_id, text))
 
     # ── Session Fork（分支实验，借鉴 DeepSeek Harness） ──
 

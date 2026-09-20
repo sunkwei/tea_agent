@@ -1,6 +1,9 @@
 """
 # @2026-06-07 gen by deepseek-v4-pro, SymbolIndex — 持久化符号索引系统
-基于 ts_analyzer 的 AST 解析 + SQLite 持久化 + 嵌入向量搜索。
+基于 ts_analyzer 的 AST 解析 + SQLite 持久化 + 关键词搜索。
+
+注：原「嵌入向量搜索」已移除 —— 向量能力整体下线，语义查询改由
+符号名/关键词匹配承担（见 ``search_natural``）。
 """
 
 import contextlib
@@ -8,6 +11,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sqlite3
 from pathlib import Path
 
@@ -15,7 +19,7 @@ logger = logging.getLogger("SymbolIndex")
 
 
 class SymbolIndex:
-    """持久化符号索引 — 全量扫描、增量更新、语义搜索。"""
+    """持久化符号索引 — 全量扫描、增量更新、关键词搜索。"""
 
     def __init__(self, project_root: str, db_path: str | None = None):
         self.project_root = Path(project_root).resolve()
@@ -24,7 +28,6 @@ class SymbolIndex:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._init_tables()
-        self._embedding_engine = None
 
     def _init_tables(self):
         c = self._conn.cursor()
@@ -69,14 +72,6 @@ class SymbolIndex:
                 mtime REAL NOT NULL,
                 hash TEXT NOT NULL,
                 last_indexed TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS symbol_vectors (
-                symbol_id INTEGER PRIMARY KEY,
-                embedding BLOB,
-                dimension INTEGER DEFAULT 0,
-                FOREIGN KEY (symbol_id) REFERENCES symbols(id) ON DELETE CASCADE
             )
         """)
         self._conn.commit()
@@ -226,100 +221,59 @@ class SymbolIndex:
         return rows
 
     def search_natural(self, query: str, top_k: int = 10) -> list[dict]:
-        engine = self._get_embedding_engine()
-        if engine is None:
-            return self.search_by_name(query, limit=top_k)
-        query_emb = engine.embed(query)
-        if not query_emb:
-            return self.search_by_name(query, limit=top_k)
-        c = self._conn.cursor()
-        c.execute("SELECT s.id, s.name, s.kind, s.file_path, s.line, s.docstring, s.parent, "
-                  "v.embedding, v.dimension FROM symbols s JOIN symbol_vectors v ON s.id=v.symbol_id")
-        rows = c.fetchall()
-        c.close()
-        import numpy as np
-        q = np.array(query_emb, dtype=np.float32)
-        qn = np.linalg.norm(q)
-        if qn == 0:
+        """按查询串搜索符号（关键词匹配；替代原向量语义搜索）。
+
+        打分（纯确定性，无网络、无向量、无额外依赖）：
+        - 符号名与 query 完全相同 +1000；符号名整体包含 query +500
+        - query 的每个 token（按非标识符字符切分）在 name 命中 +60
+        - token 在 parent 命中 +25、在 docstring 命中 +20
+
+        ``similarity`` 字段为归一化分值（score/1000，上限 1.0），保持与旧调用方
+        的字段契约；排序优先分值、同分取更短的符号名（越短越可能是本体）。
+
+        Args:
+            query: 查询串（符号名或其片段）
+            top_k: 返回条数上限
+
+        Returns:
+            [{id,name,kind,file_path,line,docstring,parent,similarity}, ...]
+        """
+        if not query or not query.strip():
             return []
-        scored = []
-        for row in rows:
-            d = dict(row)
-            blob = d.pop("embedding", None)
-            if not blob:
-                continue
-            try:
-                emb = np.frombuffer(blob, dtype=np.float32)
-                if len(emb) != len(query_emb):
-                    continue
-                sim = float(emb @ q) / (qn * np.linalg.norm(emb))
-                if sim >= 0.3:
-                    scored.append({**d, "similarity": round(sim, 4)})
-            except Exception:
-                continue
-        scored.sort(key=lambda x: x["similarity"], reverse=True)
-        return scored[:top_k]
+        raw = query.strip()
+        tokens = [t for t in re.split(r"[^0-9A-Za-z_\u4e00-\u9fff]+", raw) if t] or [raw]
+        low = raw.lower()
 
-    # ── 向量索引 ──
-
-    def build_vector_index(self) -> int:
-        engine = self._get_embedding_engine()
-        if engine is None:
-            return 0
         c = self._conn.cursor()
-        c.execute("SELECT s.id, s.name, s.docstring, s.kind, s.parent FROM symbols s "
-                  "LEFT JOIN symbol_vectors v ON s.id=v.symbol_id WHERE v.symbol_id IS NULL")
+        c.execute("SELECT id, name, kind, file_path, line, docstring, parent FROM symbols")
         rows = c.fetchall()
         c.close()
-        count = 0
-        import numpy as np
+
+        scored: list[dict] = []
         for row in rows:
             d = dict(row)
-            text = d["name"]
-            if d.get("docstring"):
-                text += ": " + d["docstring"]
-            if d.get("parent"):
-                text = d["parent"] + "." + text
-            try:
-                emb = engine.embed(text)
-                if emb:
-                    blob = np.array(emb, dtype=np.float32).tobytes()
-                    cc = self._conn.cursor()
-                    cc.execute("INSERT OR REPLACE INTO symbol_vectors (symbol_id, embedding, dimension) VALUES (?, ?, ?)",
-                              (d["id"], blob, len(emb)))
-                    self._conn.commit()
-                    cc.close()
-                    count += 1
-            except Exception as e:
-                logger.debug(f"Vectorize {d['name']} failed: {e}")
-        return count
+            lname = (d.get("name") or "").lower()
+            doc = (d.get("docstring") or "").lower()
+            parent = (d.get("parent") or "").lower()
+            score = 0.0
+            if lname == low:
+                score += 1000.0
+            elif low in lname:
+                score += 500.0
+            for t in tokens:
+                lt = t.lower()
+                if lt in lname:
+                    score += 60.0
+                if lt in parent:
+                    score += 25.0
+                if lt in doc:
+                    score += 20.0
+            if score <= 0:
+                continue
+            scored.append({**d, "similarity": round(min(1.0, score / 1000.0), 4)})
 
-    def _get_embedding_engine(self):
-        if self._embedding_engine is not None:
-            return self._embedding_engine
-        # Use local TF-IDF for code (fast, no API call)
-        from tea_agent.embedding_util import EmbeddingEngine
-        self._embedding_engine = EmbeddingEngine()
-        # Build vocabulary from existing symbols for better results
-        try:
-            c = self._conn.cursor()
-            c.execute('SELECT name, docstring, parent FROM symbols')
-            rows = c.fetchall()
-            c.close()
-            texts = []
-            for r in rows:
-                t = r['name']
-                if r['docstring']:
-                    t += ' ' + r['docstring'][:200]
-                if r['parent']:
-                    t = r['parent'] + ' ' + t
-                texts.append(t)
-            if texts:
-                self._embedding_engine.build_tfidf_vocabulary(texts)
-        except Exception:
-            logger.exception('op_failed')
-
-        return self._embedding_engine
+        scored.sort(key=lambda x: (-x["similarity"], len(x.get("name") or "")))
+        return scored[:top_k]
 
     def get_symbol_count(self) -> int:
         c = self._conn.cursor()
@@ -334,13 +288,11 @@ class SymbolIndex:
         by_kind = {r["kind"]: r["cnt"] for r in c.fetchall()}
         c.execute("SELECT COUNT(*) as cnt FROM calls")
         calls = c.fetchone()["cnt"]
-        c.execute("SELECT COUNT(*) as cnt FROM symbol_vectors")
-        vectors = c.fetchone()["cnt"]
         c.execute("SELECT COUNT(*) as cnt FROM file_tracking")
         files = c.fetchone()["cnt"]
         c.close()
         return {"symbols": dict(by_kind), "total_symbols": sum(by_kind.values()),
-                "call_edges": calls, "vectors": vectors, "tracked_files": files}
+                "call_edges": calls, "tracked_files": files}
 
     def close(self):
         with contextlib.suppress(Exception):

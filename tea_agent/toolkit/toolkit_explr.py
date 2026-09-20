@@ -375,12 +375,11 @@ def _action_build(directory, force):
     _build_dot_flow(calls, defs, run_dir)
     _build_kb_md(directory, index, calls, defs, classes, run_dir)
 
-    # Build SymbolIndex (SQLite + TF-IDF 向量)
+    # Build SymbolIndex (SQLite 持久化符号/调用图索引，关键词检索)
     try:
         from tea_agent.lsp.symbol_index import SymbolIndex
         si = SymbolIndex(directory)
         si.build_index(force=True)
-        si.build_vector_index()
         si.close()
         _log(f"SymbolIndex: {si.get_symbol_count()} 符号已索引 (SQLite)")
     except Exception as e:
@@ -397,7 +396,11 @@ def _action_build(directory, force):
     return summary
 
 def _action_query(directory, symbol, query_type):
-    """查询知识库：symbol/callers/callees/module/semantic 五种查询类型。"""
+    """查询知识库：symbol/callers/callees/module/semantic 等查询类型。
+
+    ``semantic`` 原为向量语义搜索，现为**关键词模糊匹配**（向量能力已下线）；
+    需要精确按名查找时优先用 ``symbol``。
+    """
     directory = os.path.abspath(directory)
     run_dir = os.path.join(directory, _RUN_DIR)
 
@@ -454,21 +457,23 @@ def _action_query(directory, symbol, query_type):
     defs = cg.get('functions', {})
 
     if query_type == 'semantic':
+        # 向量语义搜索已下线；此分支保留为**关键词模糊匹配**（向后兼容老调用，
+        # 避免模型传 semantic 时报「未知类型」）。精确按名查请用 symbol。
         try:
             from tea_agent.lsp.symbol_index import SymbolIndex
             si = SymbolIndex(directory)
             results = si.search_natural(symbol, top_k=10)
             si.close()
             if not results:
-                return f"Semantic search no results: {symbol}"
-            parts = [f"## Semantic search: {symbol}"]
+                return f"关键词搜索无结果: {symbol}（可改用 query_type=symbol 精确查找）"
+            parts = [f"## 关键词搜索: {symbol}"]
             for r in results:
                 p = r.get('parent', '')
                 name = f'{p}.{r["name"]}' if p else r['name']
-                parts.append(f"- [sim={r['similarity']:.3f}] {name} ({r['file_path']}:{r['line']})")
+                parts.append(f"- [score={r['similarity']:.3f}] {name} ({r['file_path']}:{r['line']})")
             return chr(10).join(parts)
         except Exception as e:
-            return f"Semantic search failed: {e}"
+            return f"关键词搜索失败: {e}"
 
     if query_type == 'callers':
         callers = defaultdict(list)
@@ -978,4 +983,4 @@ def toolkit_explr(action="build", directory=".", symbol=None, query_type="symbol
 # @2026-05-19 gen by claude, 新增 impact(影响分析) / deps(依赖图) 查询类型 + filepath 参数
 def meta_toolkit_explr() -> dict:
     """Meta toolkit explr."""
-    return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=generate_docs 生成结构化项目文档到docs/；action=query 查询符号位置/调用者/被调用者/影响分析/依赖图；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "generate_docs", "query", "status"], "description": "build/generate_docs/query/status"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "semantic", "arch_context", "impact", "deps"], "description": "查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, arch_context=架构上下文, impact=影响分析, deps=模块依赖图", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "true=强制重建，忽略已有索引", "default": "false"}, "filepath": {"type": "string", "description": "符号所在的文件路径"}}, "required": ["action"]}}}
+    return {"type": "function", "function": {"name": "toolkit_explr", "description": "项目知识库构建与查询。action=build 构建符号索引+AST调用图+流程图+kb.md；action=generate_docs 生成结构化项目文档到docs/；action=query 查询符号位置/调用者/被调用者/影响分析/依赖图；action=status 查看知识库状态。默认存储于当前目录 .tea_agent_run/。", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["build", "generate_docs", "query", "status"], "description": "build/generate_docs/query/status"}, "directory": {"type": "string", "description": "项目目录，默认当前目录", "default": "."}, "symbol": {"type": "string", "description": "要查询的符号名"}, "query_type": {"type": "string", "enum": ["symbol", "callers", "callees", "module", "semantic", "arch_context", "impact", "deps"], "description": "查询类型：symbol=符号定位, callers=谁调此函数, callees=此函数调谁, module=模块概览, semantic=关键词模糊匹配（向量语义已下线）, arch_context=架构上下文, impact=影响分析, deps=模块依赖图", "default": "symbol"}, "force": {"type": "string", "enum": ["true", "false"], "description": "true=强制重建，忽略已有索引", "default": "false"}, "filepath": {"type": "string", "description": "符号所在的文件路径"}}, "required": ["action"]}}}

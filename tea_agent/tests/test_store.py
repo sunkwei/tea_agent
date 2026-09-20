@@ -41,10 +41,10 @@ class TestStorageInit:
             "_meta", "topics", "conversations", "agent_rounds",
             "topic_token_stats", "t_conv_summary", "memories",
             "system_prompts", "reflections", "config_history",
-            "msg_vectors",
         }
         missing = expected - tables
         assert not missing, f"缺少表: {missing}"
+        assert "msg_vectors" not in tables, "msg_vectors 表应随向量能力下线"
 
     def test_init_enables_wal_mode(self, storage):
         """WAL 模式应启用"""

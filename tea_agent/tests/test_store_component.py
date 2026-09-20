@@ -44,7 +44,8 @@ class TestStorageDelegation:
         assert storage.prompts is not None
         assert storage.reflections is not None
         assert storage.config_history is not None
-        assert storage.vectors is not None
+        # 向量存储随向量能力整体下线（原 VectorStore 委派已移除）
+        assert not hasattr(storage, "vectors"), "vectors 委派应随向量能力下线移除"
 
     def test_getattr_routes_to_delegate(self, storage):
         """__getattr__ 将方法调用路由到委派组件"""

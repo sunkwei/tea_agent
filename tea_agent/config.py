@@ -28,7 +28,6 @@ except ImportError:
 __all__ = [
     "ModelConfig",
     "PathsConfig",
-    "EmbeddingConfig",
     "AgentConfig",
     "REASONING_EFFORT_VALUES",
     "REASONING_EFFORT_RANKS",
@@ -237,27 +236,12 @@ class PathsConfig:
 
 
 @dataclass
-class EmbeddingConfig:
-    """文本向量模型配置。"""
-
-    api_url: str = ""
-    model_name: str = ""
-    api_key: str = ""
-    dimension: int = 0
-
-    @property
-    def is_configured(self) -> bool:
-        return bool(self.api_url and self.model_name)
-
-
-@dataclass
 class AgentConfig:
     """Agent 全局配置"""
 
     main_model: ModelConfig = field(default_factory=ModelConfig)
     cheap_model: ModelConfig = field(default_factory=ModelConfig)
     vision_model: ModelConfig = field(default_factory=ModelConfig)
-    embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
     mode_params: dict[str, dict[str, Any]] = field(default_factory=dict)
 
@@ -386,7 +370,11 @@ class AgentConfig:
     interruption: dict = field(
         default_factory=lambda: {
             "enabled": True,             # 总开关
-            "similarity_threshold": 0.6,  # corrected/abandoned 判定阈值
+            # corrected/abandoned 判定阈值。0.25 是针对**关键词 Jaccard** 口径
+            # 实测标定的：同话题续说 0.31~0.82、换话题恒为 0.0，两组完全可分。
+            # 余弦时代的 0.6 照搬过来会让 corrected 分支近乎不可达。
+            # 口径与标定依据见 onlinesession.INTERRUPT_SIMILARITY_THRESHOLD。
+            "similarity_threshold": 0.25,
             "partial_reply_max": 2000,    # 锚点 partial_reply 截断长度
             "persist_events": True,       # 是否持久化事件表
             "analyze_interval_h": 1.0,    # 后台分析周期（小时）
@@ -512,7 +500,6 @@ class AgentConfig:
         """导出所有配置为字典（含模型/路径等完整配置）"""
         data = {}
         _prepare_model_data(self, data)
-        _prepare_embedding_data(self, data)
         _prepare_paths_data(self, data)
         _prepare_session_data(self, data)
         _prepare_token_data(self, data)
@@ -567,9 +554,6 @@ def load_config(config_path: str | None = None) -> AgentConfig:
             if data:
                 # 解析模型配置
                 _parse_model_configs(cfg, data)
-
-                # 解析嵌入模型配置
-                _parse_embedding_config(cfg, data)
 
                 # 解析模式参数
                 _parse_mode_params(cfg, data)
@@ -808,23 +792,6 @@ def _parse_model_configs(cfg: AgentConfig, data: dict) -> None:
             }
 
 
-def _parse_embedding_config(cfg: AgentConfig, data: dict) -> None:
-    """解析嵌入模型配置。
-
-    Args:
-        cfg: AgentConfig实例
-        data: 配置数据字典
-    """
-    emb_data = data.get("embedding_model", {})
-    if not isinstance(emb_data, dict):
-        return
-
-    cfg.embedding.api_url = str(emb_data.get("api_url", cfg.embedding.api_url))
-    cfg.embedding.model_name = str(emb_data.get("model_name", cfg.embedding.model_name))
-    cfg.embedding.api_key = str(emb_data.get("api_key", cfg.embedding.api_key))
-    cfg.embedding.dimension = int(emb_data.get("dimension", cfg.embedding.dimension))
-
-
 def _parse_mode_params(cfg: AgentConfig, data: dict) -> None:
     """解析模式参数配置。
 
@@ -1056,9 +1023,6 @@ def _prepare_config_data(cfg: AgentConfig) -> dict:
     # 准备模型配置
     _prepare_model_data(cfg, data)
 
-    # 准备嵌入模型配置
-    _prepare_embedding_data(cfg, data)
-
     # 准备模式参数
     if cfg.mode_params:
         data["mode_params"] = cfg.mode_params
@@ -1184,21 +1148,6 @@ def _prepare_ref_model_data(target: ModelConfig) -> dict | None:
         except Exception as e:
             logger.warning("api_key sync to provider.yaml failed: %s", e)
     return m_data
-
-
-def _prepare_embedding_data(cfg: AgentConfig, data: dict) -> None:
-    """准备嵌入模型配置数据。
-
-    Args:
-        cfg: AgentConfig实例
-        data: 配置数据字典（会被修改）
-    """
-    data["embedding_model"] = {
-        "api_url": cfg.embedding.api_url,
-        "model_name": cfg.embedding.model_name,
-        "api_key": cfg.embedding.api_key,
-        "dimension": cfg.embedding.dimension,
-    }
 
 
 def _prepare_paths_data(cfg: AgentConfig, data: dict) -> None:
@@ -1380,13 +1329,6 @@ def _generate_config_template() -> str:
         '  toolkit_dir: ""       # 自定义工具目录，默认 data_dir/toolkit\n'
         '  kb_dir: ""            # 知识库目录，默认 data_dir/kb\n'
         '  # skills_dir: ""     # <已废弃>\n'
-        "# ──────────────────── 向量模型配置 ────────────────────\n"
-        "# 用于主题搜索的文本向量生成。api_url 为空时自动使用本地 TF-IDF 回退。\n"
-        "embedding_model:\n"
-        '  api_url: ""          # Embedding API 地址，如 http://localhost:11434/v1\n'
-        '  model_name: ""       # 嵌入模型，如 text-embedding-3-small / bge-m3\n'
-        '  api_key: ""          # 为空则复用 main_model.api_key\n'
-        "  dimension: 0          # 向量维度，0=自动检测\n\n"
         "# ──────────────────── 会话参数 ────────────────────\n"
         "# 最大历史消息数（保留的对话历史条数）\n"
         "max_history: 10\n\n"

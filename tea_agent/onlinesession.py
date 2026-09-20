@@ -1,6 +1,7 @@
 """在线工具调用会话 — Token 优化版（组合模式，支持 OpenAI Function Calling）。"""
 
 import logging
+import re
 import time
 import uuid
 from collections.abc import Callable
@@ -53,28 +54,58 @@ def analyze_intent(text: str) -> dict:
 
 
 # ── 打断知识闭环：信号分类（M2）──
-INTERRUPT_SIMILARITY_THRESHOLD = (
-    0.6  # corrected/abandoned 判定阈值（默认，可由配置覆盖）
-)
+# corrected/abandoned 判定阈值（默认，可由配置 interruption.similarity_threshold 覆盖）。
+#
+# 0.25 是针对**关键词 Jaccard** 口径实测标定的，不能沿用余弦时代的 0.6：
+# 余弦对「同话题换措辞」普遍给 0.8+，而 Jaccard 量纲整体更低 —— 同一批样本上
+#   · 同话题续说：0.31 ~ 0.82（中位 0.44）
+#   · 换话题：   全部 0.0
+# 两组完全可分。若继续用 0.6，7 个同话题样本里会有 3 个被误判为 abandoned，
+# 即 corrected 分支近乎不可达 —— 打断知识会退化成「一律按弃用处理」。
+INTERRUPT_SIMILARITY_THRESHOLD = 0.25
+
+
+def _keyword_similarity(text_a: str, text_b: str) -> float:
+    """中文 bigram + 英文词的关键词 Jaccard 相似度（0~1，纯本地、确定性）。
+
+    替代原 embedding 余弦相似度。顺带修掉一个静默失效：``EmbeddingEngine``
+    从未提供 ``cosine_similarity`` 方法，旧实现在引擎可用时会抛
+    ``AttributeError`` 并被兜底成 corrected —— 即该分支实际上从未真正生效过。
+    """
+    def _tokens(text: str) -> set[str]:
+        text = text or ""
+        toks: set[str] = set()
+        for run in re.findall(r"[\u4e00-\u9fff]+", text):
+            for i in range(len(run) - 1):
+                toks.add(run[i:i + 2])
+        toks.update(w.lower() for w in re.findall(r"[a-zA-Z]{3,}", text))
+        return toks
+
+    ta, tb = _tokens(text_a), _tokens(text_b)
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / len(ta | tb)
 
 
 def classify_interruption(
     event: dict,
     user_msg: str,
-    embedding_engine=None,
     threshold: float = INTERRUPT_SIMILARITY_THRESHOLD,
 ) -> tuple[str, float | None]:
     """打断信号三分类：corrected / abandoned / silent。
 
     打断是隐式负面反馈。用户下一条消息决定信号类型：
     - silent：无下一条消息（用户沉默/关窗）→ 方向被放弃
-    - corrected：新消息与被打断内容语义相似（≥ 阈值）→ 方向修正
-    - abandoned：新消息语义漂移（< 阈值）→ 方向弃用（换话题）
+    - corrected：新消息与被打断内容相似（≥ 阈值）→ 方向修正
+    - abandoned：新消息漂移（< 阈值）→ 方向弃用（换话题）
+
+    相似度口径：**关键词 Jaccard**（原 embedding 余弦已随向量能力下线）。
+    ``threshold`` 数值沿用历史默认，但两种口径的量纲不可直接互换 —— Jaccard
+    整体低于余弦，如需恢复旧版判定分布，可下调该阈值（如 0.3~0.4）。
 
     Args:
         event: 打断事件锚点（至少含 partial_reply）
         user_msg: 用户下一条消息（可为空）
-        embedding_engine: EmbeddingEngine 实例；None 时降级为 corrected（宁缺毋滥）
         threshold: 相似度阈值（M4 起可由配置覆盖）
 
     Returns:
@@ -83,18 +114,16 @@ def classify_interruption(
     if not user_msg or not user_msg.strip():
         return "silent", None
     partial_reply = (event or {}).get("partial_reply") or ""
-    if not partial_reply or embedding_engine is None:
-        # 降级：有下一条消息但无法计算相似度 → 保守视为 corrected
+    if not partial_reply:
+        # 降级：有下一条消息但无被打断内容可比较 → 保守视为 corrected
         return "corrected", None
     try:
-        emb_u = embedding_engine.embed(user_msg[:500])
-        emb_p = embedding_engine.embed(partial_reply[:500])
-        sim = embedding_engine.cosine_similarity(emb_u, emb_p)
+        sim = _keyword_similarity(user_msg[:500], partial_reply[:500])
         if sim >= threshold:
             return "corrected", round(sim, 4)
         return "abandoned", round(sim, 4)
     except Exception:
-        logger.exception("classify_interruption embedding failed")
+        logger.exception("classify_interruption similarity failed")
         return "corrected", None
 
 
@@ -191,6 +220,7 @@ class OnlineToolSession(BaseChatSession):
         api_key: str,
         api_url: str,
         model: str = "glm-5",
+        provider: str = "",
         max_history: int = 10,
         system_prompt: str = "",
         max_iterations: int = 50,
@@ -270,6 +300,7 @@ class OnlineToolSession(BaseChatSession):
         self.context = self._create_session_context(
             toolkit=toolkit,
             model=model,
+            provider=provider,
             enable_thinking=enable_thinking,
             thinking_strength=thinking_strength,
             reasoning_effort=reasoning_effort,
@@ -493,6 +524,7 @@ class OnlineToolSession(BaseChatSession):
         self,
         toolkit,
         model: str,
+        provider: str,
         enable_thinking: bool,
         thinking_strength: float,
         reasoning_effort: str,
@@ -546,6 +578,7 @@ class OnlineToolSession(BaseChatSession):
         return SessionContext(
             messages=[],
             model=model,
+            provider=provider,
             enable_thinking=enable_thinking,
             thinking_strength=thinking_strength,
             reasoning_effort=reasoning_effort,
@@ -1515,19 +1548,12 @@ class OnlineToolSession(BaseChatSession):
             self._last_interruption = None
             return False
         try:
-            # 1) 语义分类（embedding 不可用时降级 corrected）
-            engine = None
-            try:
-                from tea_agent.embedding_util import get_embedding_engine
-
-                engine = get_embedding_engine()
-            except Exception:
-                engine = None
+            # 1) 关键词相似度分类（纯本地，无外部依赖）
             threshold = float(
                 icfg.get("similarity_threshold", INTERRUPT_SIMILARITY_THRESHOLD)
             )
             classification, similarity = classify_interruption(
-                ev, user_msg or "", embedding_engine=engine, threshold=threshold
+                ev, user_msg or "", threshold=threshold
             )
 
             # 2) silent：不注入，仅回写事件（若有 id）

@@ -130,15 +130,30 @@ def _compute_context_usage(context: Any, prompt_tokens: int) -> dict:
     }
 
 
-def _get_main_provider_name() -> str:
+def _get_main_provider_name(session: Any = None) -> str:
     """当前主模型的提供商名（provider.yaml 中的 p_name，如 "DeepSeek"）。
 
     取不到时返回 ""（而非猜一个），前端据此省略 Provider 段 —— 显示一个错的
     提供商比不显示更糟（用户会据此判断自己在用谁的服务）。
 
-    来源是 Agent 实例的 config（与 AgentModule._get_model_name 同一入口），
-    因为 SessionContext 只带 model 名、不带 provider。
+    取值优先级：
+
+    1. 传入 ``session`` 的 ``context.provider`` —— 与会话里的 ``model``
+       **同源同生命周期**。状态栏把二者并排展示（「主模型: <prov> · <model>」），
+       必须来自同一对象，否则会出现「旧提供商 · 新模型」的错配。
+       真实事故：早期实现固定读长驻 Agent 的 ``config.main_model.provider``，
+       而 ``switch_model`` / ``switch_config`` 只更新 api_url/api_key/model_name，
+       从不更新 provider —— 于是模型面板切换后，provider 永久停留在进程首次
+       加载配置文件时的值。
+    2. 长驻 Agent 的 ``config.main_model.provider``（无会话时的兜底）。
     """
+    try:
+        ctx = getattr(session, "context", None) if session is not None else None
+        prov = str(getattr(ctx, "provider", "") or "")
+        if prov:
+            return prov
+    except Exception:  # noqa: BLE001 — 纯展示字段，失败即降级到兜底来源
+        pass
     try:
         inst = AgentModule._instance
         cfg = getattr(inst, "config", None) if inst is not None else None
@@ -171,7 +186,7 @@ def _build_usage_data(session: Any) -> dict:
         "prompt_cache_hit_tokens": usage.get("prompt_cache_hit_tokens", 0),
         "prompt_cache_miss_tokens": usage.get("prompt_cache_miss_tokens", 0),
         "model": model_name,
-        "model_provider": _get_main_provider_name(),
+        "model_provider": _get_main_provider_name(session),
         "cheap_model": cheap_model_name,
     }
     if cheap_usage.get("total_tokens", 0) > 0:
@@ -390,6 +405,7 @@ class AgentModule(HotReloadModule):
         sess = OnlineToolSession(
             toolkit=tk,
             api_key=main_m.api_key, api_url=main_m.api_url, model=main_m.model_name,
+            provider=str(getattr(main_m, "provider", "") or ""),
             max_history=cfg.max_history, max_iterations=cfg.max_iterations,
             keep_turns=cfg.keep_turns, max_tool_output=cfg.max_tool_output,
             max_assistant_content=cfg.max_assistant_content,
@@ -995,8 +1011,15 @@ class AgentModule(HotReloadModule):
 
     @classmethod
     def switch_model(cls, api_key: str, api_url: str, model_name: str,
+                     provider: str | None = None, ref_model: str | None = None,
                      **kwargs) -> None:
-        """热切换模型。"""
+        """热切换模型。
+
+        ``provider`` / ``ref_model`` 必须与 model_name 一起更新：它们是状态栏
+        「主模型: <provider> · <model>」与 /api/providers 的 active 展示来源。
+        早期实现漏更新二者，切换后 provider 永久停留在进程启动时加载的配置上
+        （表现为「qwen · deepseek-v4-flash」这类明显错配）。
+        """
         agent = cls._instance
         if agent is None:
             return
@@ -1008,6 +1031,12 @@ class AgentModule(HotReloadModule):
         cfg.main_model.api_key = api_key
         cfg.main_model.api_url = api_url
         cfg.main_model.model_name = model_name
+        # None 表示「本次调用未提供」→ 保持原值（不用空串覆盖，避免把已知的
+        # provider 抹掉；显式传空串才是清空）
+        if provider is not None:
+            cfg.main_model.provider = provider
+        if ref_model is not None:
+            cfg.main_model.ref_model = ref_model
         if kwargs.get("temperature") is not None:
             cfg.main_model.temperature = kwargs["temperature"]
         if kwargs.get("max_tokens") is not None:
@@ -1113,6 +1142,7 @@ class AgentModule(HotReloadModule):
         cc = new_cfg.cheap_model
         cls.switch_model(
             cm.api_key, cm.api_url, cm.model_name,
+            provider=cm.provider, ref_model=cm.ref_model,
             cheap_api_key=(cc.api_key or "") if cc else "",
             cheap_api_url=(cc.api_url or "") if cc else "",
             cheap_model_name=(cc.model_name or "") if cc else "",
@@ -1127,7 +1157,6 @@ class AgentModule(HotReloadModule):
             cfg = agent._cfg
             for key in AgentConfig._RUNTIME_CONFIG_KEYS:
                 setattr(cfg, key, getattr(new_cfg, key))
-            cfg.embedding = new_cfg.embedding
             cfg.mode_params = new_cfg.mode_params
         cls._config_path = config_path
         if agent and hasattr(agent, '_config_path'):
@@ -1312,13 +1341,6 @@ class AgentModule(HotReloadModule):
             lines.append("    supports_vision: false")
             lines.append("    supports_reasoning: true")
             lines.append("")
-
-        lines.append("embedding_model:")
-        lines.append("  api_url: https://api.siliconflow.cn")
-        lines.append("  model_name: Qwen/Qwen3-Embedding-4B")
-        lines.append("  api_key: " + main_api_key)
-        lines.append("  dimension: 2560")
-        lines.append("")
 
         lines.append("max_history: 10")
         lines.append("max_iterations: 100")

@@ -162,20 +162,41 @@ class TestPathsConfig:
         assert pc.toolkit_dir_abs == pc.toolkit_dir_abs
 
 
-class TestEmbeddingConfig:
-    """EmbeddingConfig 测试"""
+class TestEmbeddingRemoved:
+    """向量/嵌入配置已整体下线 —— 钉住「不得被半途重新引入」。
 
-    def test_default_not_configured(self):
-        """测试: Default not configured"""
-        from tea_agent.config import EmbeddingConfig
-        ec = EmbeddingConfig()
-        assert not ec.is_configured
+    背景：``EmbeddingConfig``、config.yaml 的 ``embedding_model`` 段、
+    ``EmbeddingEngine``、``VectorStore`` / ``SemanticSearch`` 与 msg_vectors /
+    symbol_vectors 在本次一并移除，检索改由关键词（中文 bigram + 英文词）与
+    grep/符号名匹配承担。
 
-    def test_configured_when_url_and_model_set(self):
-        """测试: Configured when url and model set"""
-        from tea_agent.config import EmbeddingConfig
-        ec = EmbeddingConfig(api_url="http://localhost:11434/v1", model_name="bge-m3")
-        assert ec.is_configured
+    这些断言防的是**半恢复**：有人把配置字段加回 AgentConfig 却没有消费者，
+    于是「配置看起来支持」但实际无声失效 —— 配置项存在但没有任何代码读取，
+    比彻底没有更难排查。
+    """
+
+    def test_agent_config_has_no_embedding_field(self):
+        from tea_agent.config import AgentConfig
+
+        assert not hasattr(AgentConfig(), "embedding"), \
+            "AgentConfig 不应再有 embedding 字段（向量能力已下线）"
+
+    def test_embedding_config_symbol_removed(self):
+        import tea_agent.config as _cfg
+
+        assert not hasattr(_cfg, "EmbeddingConfig")
+
+    def test_embedding_util_module_removed(self):
+        import importlib.util
+
+        assert importlib.util.find_spec("tea_agent.embedding_util") is None, \
+            "tea_agent.embedding_util 应已删除"
+
+    def test_embedding_model_key_not_serialized(self):
+        """to_full_dict / 模板都不得再产出 embedding_model 段。"""
+        from tea_agent.config import AgentConfig
+
+        assert "embedding_model" not in AgentConfig().to_full_dict()
 
 
 class TestAgentConfig:

@@ -2310,6 +2310,7 @@ async def handle_provider_apply(request):
                 mc = load_config(get_server().get_config_path() or None).main_model
                 AgentModule.request_model_switch(
                     mc.api_key, mc.api_url, mc.model_name,
+                    provider=mc.provider, ref_model=mc.ref_model,
                     temperature=mc.temperature, max_tokens=mc.max_tokens,
                     top_p=mc.top_p, max_context_tokens=mc.max_context_tokens,
                     options=mc.options)

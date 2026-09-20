@@ -17,6 +17,9 @@ class SessionContext:
     # ── 核心状态 ──
     messages: list[dict] = field(default_factory=list)
     model: str = ""
+    # 主模型所属提供商（provider.yaml 的 p_name）。与 model 同源、同生命周期：
+    # 供状态栏「主模型: <provider> · <model>」成对展示。
+    provider: str = ""
     enable_thinking: bool = True
     thinking_strength: float = 0.7  # 思考强度 0.0-1.0
     reasoning_effort: str = "auto"  # "auto"=自动推导不发送 / none/minimal/low/medium/high/xhigh/max

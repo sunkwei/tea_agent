@@ -1,5 +1,5 @@
 """
-Storage 核心模块 — 数据库连接生命周期管理 + 9 个子组件委派。
+Storage 核心模块 — 数据库连接生命周期管理 + 8 个子组件委派。
 
 设计要点：
 - Storage 类管理：连接生命周期、数据库迁移/备份/轮转、表初始化
@@ -12,12 +12,11 @@ Storage 核心模块 — 数据库连接生命周期管理 + 9 个子组件委�
 - TopicStore: 主题管理
 - SummaryStore: 摘要存储（L1/L2/L3）
 - ScheduledTaskStore: 定时任务
-- VectorStore: 向量存储
 - ConfigHistoryStore: 配置变更历史
 - ReflectionStore: 反思记录
 
-扩展功能（独立模块，未挂载到 Storage）：
-- SemanticSearch: 语义搜索
+注：VectorStore（向量存储）与 SemanticSearch（语义搜索）已随向量能力整体下线移除；
+检索改由关键词/正则与 grep 承担。
 """
 
 from __future__ import annotations
@@ -37,7 +36,6 @@ from ._memories import MemoryStore
 from ._scheduled_tasks import ScheduledTaskStore
 from ._summaries import SummaryStore
 from ._topics import TopicStore
-from ._vectors import VectorStore
 from .migration import (
     backup_now,
     init_tables,
@@ -216,7 +214,6 @@ class Storage:
         self._prompts = PromptStore(db_path)
         self._reflections = ReflectionStore(db_path)
         self._config_history = ConfigHistoryStore(db_path)
-        self._vectors = VectorStore(db_path)
         self._scheduled_tasks = ScheduledTaskStore(db_path)
         self._interruptions = InterruptionStore(db_path)
         self._events = SessionEventStore(db_path)
@@ -224,17 +221,6 @@ class Storage:
 
         # ── conn 属性：兼容旧代码直接访问 storage.conn ──
         self._conn_lock = threading.Lock()
-
-        # ── 注入 EmbeddingEngine 到 MemoryStore ──
-        try:
-            from tea_agent.config import get_config
-            from tea_agent.embedding_util import EmbeddingEngine
-            cfg = get_config()
-            engine = EmbeddingEngine(cfg.embedding)
-            self._memories.embedding_engine = engine
-            logger.info("EmbeddingEngine injected into MemoryStore")
-        except Exception as e:
-            logger.warning(f"Inject EmbeddingEngine failed (non-fatal): {e}")
 
         # ── 显式公开属性，便于 IDE 跳转和代码导航 ──
         self.topics = self._topics
@@ -244,7 +230,6 @@ class Storage:
         self.prompts = self._prompts
         self.reflections = self._reflections
         self.config_history = self._config_history
-        self.vectors = self._vectors
         self.scheduled_tasks = self._scheduled_tasks
         self.interruptions = self._interruptions
         self.events = self._events
@@ -317,8 +302,7 @@ class Storage:
 
     def add_topic_tokens(self, topic_id: str, **kwargs):
         """累加主题 token 统计。支持 total_tokens, prompt_tokens, completion_tokens,
-        cheap_tokens, cheap_prompt_tokens, cheap_completion_tokens,
-        embedding_tokens, embedding_prompt_tokens 等关键字参数。"""
+        cheap_tokens, cheap_prompt_tokens, cheap_completion_tokens 等关键字参数。"""
         return self._topics.add_topic_tokens(topic_id, **kwargs)
 
     def accumulate_pending_cheap_tokens(self, topic_id: str, usage: dict):
@@ -372,19 +356,17 @@ class Storage:
         return self._conversations.save_msg(
             topic_id, user_msg, ai_msg, is_func,
             update_active_cb=self._topics.update_topic_active,
-            auto_embed_cb=None,  # 使用 _conversations 内置的 _auto_embed_async
         )
 
     # ── Memory 操作 ──
     def add_memory(self, content: str, category: str = "general", priority: int = 2,
                    importance: int = 3, expires_at: str = None, tags: str = "",
-                   source_topic_id: str = None, pinned: int = 0,
-                   embedding: list = None) -> str:
+                   source_topic_id: str = None, pinned: int = 0) -> str:
         """添加记忆。"""
         return self._memories.add_memory(content, category, priority, importance,
                                          expires_at=expires_at, tags=tags,
                                          source_topic_id=source_topic_id,
-                                         pinned=pinned, embedding=embedding)
+                                         pinned=pinned)
 
     def get_active_memories(self, limit: int = 50) -> list:
         """获取活跃记忆。"""
@@ -548,19 +530,6 @@ class Storage:
     def get_config_history(self, key: str = "", limit: int = 20) -> list:
         """获取配置变更历史。"""
         return self._config_history.get_config_history(key, limit)
-
-    # ── Vector 操作 ──
-    def store_embedding(self, conversation_id: str, embedding: list, dimension: int = 0, model_name: str = ""):
-        """存储对话嵌入向量。"""
-        return self._vectors.store_embedding(conversation_id, embedding, dimension, model_name)
-
-    def get_msg_embedding(self, conversation_id: str) -> list | None:
-        """获取对话嵌入向量。"""
-        return self._vectors.get_msg_embedding(conversation_id)
-
-    def search_by_keyword(self, query: str, limit: int = 10) -> list:
-        """关键词搜索对话。"""
-        return self._vectors.search_by_keyword(query, limit)
 
     # ── 打断事件操作（打断知识闭环）──
     def insert_interruption_event(self, ev: dict) -> str:

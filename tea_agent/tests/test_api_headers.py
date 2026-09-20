@@ -380,3 +380,124 @@ def test_hooks_not_shared_between_clients(url):
     b = request_event_hooks(url, session_id="b")
     assert a is not b
     assert a["request"] is not b["request"]
+
+
+class TestSharedSslContext:
+    """进程级共享 SSLContext —— 启动性能优化，且**不得**改变校验语义。
+
+    回归背景：httpx 每构造一个 Client 都要为 sync/async/proxy 各建一个
+    SSLContext，Windows OpenSSL 下单次 ``load_verify_locations(certifi CA)``
+    ≈ 0.5s。冷启动建 main+cheap 两个 client = 6 次 ≈ 3.0s，是那次 8.25s 冷启动
+    中唯一的 CPU 热点（cProfile 实测 2.997s，占 36%）。修复：进程级复用一份。
+    """
+
+    @pytest.fixture
+    def fresh(self, monkeypatch):
+        """清空共享缓存 —— 模块级 dict 必须隔离，否则用例互相串扰。"""
+        import tea_agent.api_headers as ah
+
+        monkeypatch.setattr(ah, "_SSL_CTX_CACHE", {})
+        return ah
+
+    @staticmethod
+    def _spy_client(monkeypatch) -> dict:
+        """记录传给 httpx.Client 的构造参数。"""
+        seen: dict = {}
+        real = httpx.Client
+
+        def _spy(**kwargs):
+            seen.update(kwargs)
+            return real(**kwargs)
+
+        monkeypatch.setattr("httpx.Client", _spy)
+        return seen
+
+    def test_two_clients_build_context_once(self, fresh, monkeypatch):
+        """核心契约：N 个 client 只应构造 1 次 SSLContext（省下的就是那 2.5s）。"""
+        calls: list = []
+        real = fresh._create_ssl_context
+
+        def _counting(http2=False):
+            calls.append(http2)
+            return real(http2)
+
+        monkeypatch.setattr(fresh, "_create_ssl_context", _counting)
+        c1 = build_http_client(5.0)
+        c2 = build_http_client(5.0)
+        try:
+            assert len(calls) == 1, f"两个 client 应只建一次 SSLContext，实际 {len(calls)} 次"
+        finally:
+            c1.close()
+            c2.close()
+
+    def test_verify_is_the_shared_context(self, fresh, monkeypatch):
+        """契约：共享 context 确实作为 verify 传给了 httpx（否则优化并未生效）。"""
+        seen = self._spy_client(monkeypatch)
+        ctx = fresh.shared_ssl_context()
+        assert ctx is not None, "本机应能构造 SSLContext"
+        c = build_http_client(5.0)
+        try:
+            assert seen.get("verify") is ctx
+        finally:
+            c.close()
+
+    def test_shared_context_still_verifies(self, fresh):
+        """安全契约：共享 context 必须仍是「校验证书 + 校验主机名」。
+
+        防止未来某次「优化」把它换成不校验的 context —— 那会让所有出站请求
+        静默失去 TLS 保护，且不会有任何测试变红。
+        """
+        import ssl as _ssl
+
+        ctx = fresh.shared_ssl_context()
+        assert ctx is not None
+        assert ctx.verify_mode == _ssl.CERT_REQUIRED
+        assert ctx.check_hostname is True
+
+    @pytest.mark.parametrize("explicit", [
+        {"verify": False},
+        {"cert": ("/nonexistent/cli.pem", "/nonexistent/cli.key")},
+        {"trust_env": True},
+    ])
+    def test_explicit_tls_kwargs_are_not_overridden(self, fresh, monkeypatch, explicit):
+        """显式 TLS 参数必须原样透传，不得被共享 context 顶掉。
+
+        cert 尤其重要：httpx 会把客户端证书写进 context，共享出去等于把私钥
+        串给其它连接。
+        """
+        seen = self._spy_client(monkeypatch)
+        try:
+            build_http_client(5.0, **explicit)
+        except Exception:
+            pass  # cert 指向不存在的文件时 httpx 会报错，此处只关心 verify 是否被注入
+        if "verify" in explicit:
+            assert seen.get("verify") is False
+        else:
+            assert "verify" not in seen, f"显式 {list(explicit)} 时不应注入共享 context"
+
+    def test_fail_open_when_context_unavailable(self, fresh, monkeypatch):
+        """取不到共享 context 时必须 fail-open，绝不能阻断开会话。"""
+
+        def _boom(http2=False):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(fresh, "_create_ssl_context", _boom)
+        seen = self._spy_client(monkeypatch)
+        c = build_http_client(5.0)
+        try:
+            assert "verify" not in seen, "优化失败应退回 httpx 默认 verify 路径"
+        finally:
+            c.close()
+
+    def test_construction_failure_is_cached(self, fresh, monkeypatch):
+        """失败的结论也要缓存，避免每次建 client 重试昂贵的失败路径。"""
+        calls: list = []
+
+        def _boom(http2=False):
+            calls.append(http2)
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(fresh, "_create_ssl_context", _boom)
+        assert fresh.shared_ssl_context() is None
+        assert fresh.shared_ssl_context() is None
+        assert len(calls) == 1, f"失败结论应缓存，实际重试 {len(calls)} 次"

@@ -164,7 +164,6 @@ def init_tables(db):
             tags TEXT DEFAULT '',
             source_topic_id TEXT,
             content_hash TEXT DEFAULT '',
-            embedding BLOB,
             created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
             updated_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
             last_accessed_at TIMESTAMP,
@@ -173,8 +172,7 @@ def init_tables(db):
         )
     ''')
     for col, col_def in [('pinned', 'INTEGER NOT NULL DEFAULT 0'),
-                           ('content_hash', "TEXT DEFAULT ''"),
-                           ('embedding', 'BLOB')]:
+                           ('content_hash', "TEXT DEFAULT ''")]:
         with contextlib.suppress(Exception):
             c.execute(f"ALTER TABLE memories ADD COLUMN {safe_ident(col)} {safe_ddl(col_def)}")
 
@@ -213,18 +211,6 @@ def init_tables(db):
             reason TEXT DEFAULT '',
             source_reflection_id TEXT,
             created_at TIMESTAMP DEFAULT (datetime('now', 'localtime'))
-        )
-    ''')
-
-    migrate_msg_vectors(c)
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS msg_vectors (
-            conversation_id TEXT PRIMARY KEY,
-            embedding BLOB NOT NULL,
-            dimension INTEGER DEFAULT 0,
-            model_name TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT (datetime('now', 'localtime')),
-            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
         )
     ''')
 
@@ -315,16 +301,6 @@ def migrate(db):
         except sqlite3.OperationalError:
             pass
 
-    for col, col_type in [
-        ("total_embedding_tokens", "INTEGER DEFAULT 0"),
-        ("total_embedding_prompt_tokens", "INTEGER DEFAULT 0"),
-    ]:
-        try:
-            c.execute(f"ALTER TABLE topic_token_stats ADD COLUMN {safe_ident(col)} {safe_ddl(col_type)}")
-            c.connection.commit()
-        except sqlite3.OperationalError:
-            pass
-
     try:
         c.execute("ALTER TABLE topic_token_stats ADD COLUMN pending_cheap_tokens_json TEXT DEFAULT ''")
         c.connection.commit()
@@ -404,7 +380,7 @@ def migrate_int_to_uuid(c):
     try:
         for leftover in ["topics_new","conversations_new","topic_token_stats_new",
                          "t_conv_summary_new","memories_new","agent_rounds_new",
-                         "msg_vectors_new","system_prompts_new","reflections_new",
+                         "system_prompts_new","reflections_new",
                          "config_history_new"]:
             try:
                 c.execute(f"DROP TABLE IF EXISTS {safe_ident(leftover)}")
@@ -430,7 +406,6 @@ def migrate_int_to_uuid(c):
             "conversation_count INTEGER DEFAULT 0", "last_update TIMESTAMP DEFAULT (datetime('now','localtime'))",
             "total_cheap_tokens INTEGER DEFAULT 0", "total_cheap_prompt_tokens INTEGER DEFAULT 0",
             "total_cheap_completion_tokens INTEGER DEFAULT 0",
-            "total_embedding_tokens INTEGER DEFAULT 0", "total_embedding_prompt_tokens INTEGER DEFAULT 0",
         ], cast_cols={"topic_id"})
 
         _migrate_table("t_conv_summary", [
@@ -453,12 +428,6 @@ def migrate_int_to_uuid(c):
             "content TEXT", "tool_calls TEXT", "tool_call_id TEXT",
             "stamp TIMESTAMP DEFAULT (datetime('now','localtime'))",
         ], cast_cols={"id", "conversation_id"})
-
-        _migrate_table("msg_vectors", [
-            "conversation_id TEXT PRIMARY KEY", "embedding BLOB NOT NULL",
-            "dimension INTEGER DEFAULT 0", "model_name TEXT DEFAULT ''",
-            "created_at TIMESTAMP DEFAULT (datetime('now','localtime'))",
-        ], cast_cols={"conversation_id"})
 
         _migrate_table("system_prompts", [
             "id TEXT PRIMARY KEY", "version TEXT NOT NULL", "content TEXT NOT NULL",
@@ -488,22 +457,6 @@ def migrate_int_to_uuid(c):
     finally:
         c.connection.execute("PRAGMA foreign_keys = ON")
         c.connection.execute("PRAGMA legacy_alter_table = OFF")
-
-
-def migrate_msg_vectors(c):
-    """Migrate msg_vectors from TEXT to BLOB format if needed."""
-    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='msg_vectors'")
-    if not c.fetchone():
-        return
-    c.execute("PRAGMA table_info(msg_vectors)")
-    cols = {row[1]: row[2] for row in c.fetchall()}
-    if cols.get("embedding", "").upper() == "BLOB":
-        return
-    logging.getLogger("Store").info(
-        "msg_vectors 表从 TEXT 迁移到 BLOB 格式，旧数据将被丢弃"
-    )
-    c.execute("DROP TABLE IF EXISTS msg_vectors")
-    c.connection.commit()
 
 
 # ═══════════════════════════════════════════════

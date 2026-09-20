@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from pathlib import Path
 
 logger = logging.getLogger("api_server")
@@ -278,6 +279,13 @@ class MinimalServer:
     def load_modules(self):
         if self._loaded:
             return {}
+        # 必须在 load_all 之前 set_config_path：AgentModule._load 在 load_all 内部执行，
+        # 此刻 _config_path 若为空，它会退回项目记忆的 last_config.json，导致命令行
+        # --config 被记忆配置覆盖（表现为：指定了配置文件，Agent 却用了另一个）。
+        if self._config_path:
+            _early_agent = self._registry.get("agent")
+            if _early_agent is not None:
+                _early_agent.set_config_path(self._config_path)
         results = load_all(self._registry)
         self._loaded = True
         agent_mod = self._registry.get_loaded("agent")
@@ -651,18 +659,6 @@ def create_app(api_key=None, config_path=None):
     results = _server_instance.load_modules()
     ok_count = sum(1 for v in results.values() if v)
     logger.info(f"Modules loaded: {ok_count}/{len(results)}")
-
-    # 预热 jieba 分词器（首次调用会直接 print 到 stdout/stderr 污染控制台）
-    try:
-        import contextlib
-        import io as _io
-
-        with contextlib.redirect_stdout(_io.StringIO()), contextlib.redirect_stderr(_io.StringIO()):
-            import jieba
-
-            jieba.initialize()
-    except Exception:
-        pass
 
     routes = _build_routes()
 

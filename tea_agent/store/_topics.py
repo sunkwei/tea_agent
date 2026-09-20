@@ -185,34 +185,23 @@ class TopicStore(StoreComponent):
         self, topic_id: str,
         total_tokens: int = 0, prompt_tokens: int = 0, completion_tokens: int = 0,
         cheap_tokens: int = 0, cheap_prompt_tokens: int = 0, cheap_completion_tokens: int = 0,
-        embedding_tokens: int = 0, embedding_prompt_tokens: int = 0,
     ):
-        """Add topic tokens.
+        """累加主题 token 统计（主模型 / 便宜模型两路）。
 
-        Args:
-            topic_id: Description.
-            total_tokens: Description.
-            prompt_tokens: Description.
-            completion_tokens: Description.
-            cheap_tokens: Description.
-            cheap_prompt_tokens: Description.
-            cheap_completion_tokens: Description.
-            embedding_tokens: Description.
-            embedding_prompt_tokens: Description.
+        注：原 embedding 模型 token 计数已随向量能力下线移除 —— 移除后不再有
+        任何写入方，保留这些列只会留下「永远为 0」的误导性字段。
         """
         has_main = total_tokens > 0 or prompt_tokens > 0 or completion_tokens > 0
         has_cheap = cheap_tokens > 0 or cheap_prompt_tokens > 0 or cheap_completion_tokens > 0
-        has_embedding = embedding_tokens > 0 or embedding_prompt_tokens > 0
-        if not has_main and not has_cheap and not has_embedding:
+        if not has_main and not has_cheap:
             return
         c = self.conn.cursor()
         c.execute('''
             INSERT INTO topic_token_stats (
                 topic_id, total_tokens, total_prompt_tokens, total_completion_tokens,
                 total_cheap_tokens, total_cheap_prompt_tokens, total_cheap_completion_tokens,
-                total_embedding_tokens, total_embedding_prompt_tokens,
                 conversation_count, last_update
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now', 'localtime'))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, datetime('now', 'localtime'))
             ON CONFLICT(topic_id) DO UPDATE SET
                 total_tokens = total_tokens + excluded.total_tokens,
                 total_prompt_tokens = total_prompt_tokens + excluded.total_prompt_tokens,
@@ -220,13 +209,10 @@ class TopicStore(StoreComponent):
                 total_cheap_tokens = total_cheap_tokens + excluded.total_cheap_tokens,
                 total_cheap_prompt_tokens = total_cheap_prompt_tokens + excluded.total_cheap_prompt_tokens,
                 total_cheap_completion_tokens = total_cheap_completion_tokens + excluded.total_cheap_completion_tokens,
-                total_embedding_tokens = total_embedding_tokens + excluded.total_embedding_tokens,
-                total_embedding_prompt_tokens = total_embedding_prompt_tokens + excluded.total_embedding_prompt_tokens,
                 conversation_count = conversation_count + 1,
                 last_update = datetime('now', 'localtime')
         ''', (topic_id, total_tokens, prompt_tokens, completion_tokens,
-              cheap_tokens, cheap_prompt_tokens, cheap_completion_tokens,
-              embedding_tokens, embedding_prompt_tokens))
+              cheap_tokens, cheap_prompt_tokens, cheap_completion_tokens))
         self.conn.commit()
         c.close()
 
@@ -297,6 +283,5 @@ class TopicStore(StoreComponent):
             "topic_id": topic_id,
             "total_tokens": 0, "total_prompt_tokens": 0, "total_completion_tokens": 0,
             "total_cheap_tokens": 0, "total_cheap_prompt_tokens": 0, "total_cheap_completion_tokens": 0,
-            "total_embedding_tokens": 0, "total_embedding_prompt_tokens": 0,
             "conversation_count": 0,
         }

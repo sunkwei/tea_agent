@@ -331,18 +331,12 @@ class AutoMemoryExtractor:
         return memories[:3]
 
     def _is_duplicate(self, content: str, threshold: float = 0.85) -> bool:
-        """使用 embedding 余弦相似度或 content_hash 检测重复。"""
-        try:
-            engine = getattr(self.storage._memories, 'embedding_engine', None)
-            if engine is not None:
-                emb = engine.embed(content)
-                if emb:
-                    similar = self.storage._memories.search_by_vector(
-                        emb, top_k=3, min_similarity=threshold
-                    )
-                    if similar:
-                        return True
+        """按 content_hash 精确去重（原 embedding 相似度分支随向量能力下线）。
 
+        ``threshold`` 保留在签名中以兼容既有调用方；精确匹配下它不参与判定
+        （同一哈希即同一内容，不存在「相近程度」）。
+        """
+        try:
             import hashlib
             h = hashlib.sha256(content.encode('utf-8')).hexdigest()[:16]
             c = self.storage.conn.cursor()

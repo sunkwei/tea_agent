@@ -120,6 +120,70 @@ class TestToMultimodal:
         assert parts[1]["image_url"]["url"] == data_url
         assert "images" not in result
 
+    def test_reentrant_content_list_is_flattened(self):
+        """content 已是多模态 parts 列表时再次转换应幂等（不嵌套、不重复图片）
+
+        回归：历史回写 + images 键仍在导致重复转换，旧实现把 list 再包一层，
+        产出 {"type": "text", "text": [...]}，服务端 pydantic 报 400。
+        """
+        from tea_agent.session.history_builder import to_multimodal
+        data_url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+
+        msg = {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "看看这张图"},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ],
+            "images": [data_url],  # 同一张图仍在 → 旧实现会自动发两遍
+        }
+        result = to_multimodal(msg, supports_vision=True)
+        parts = result["content"]
+        assert isinstance(parts, list)
+        assert isinstance(parts[0]["text"], str), "text 段必须是字符串，不能是嵌套 list"
+        assert parts[0]["text"] == "看看这张图"
+        assert [p["type"] for p in parts] == ["text", "image_url"], "同一 URL 不应重复出现"
+        assert parts[1]["image_url"]["url"] == data_url
+        assert "images" not in result
+
+    def test_reentrant_is_idempotent_after_writeback(self, tmp_path):
+        """回写后的 parts 再次过一遍 to_multimodal，结构不应继续变形"""
+        from tea_agent.session.history_builder import to_multimodal
+        img = tmp_path / "pic.png"
+        img.write_bytes(b"fake png data")
+
+        msg = {"role": "user", "content": "看图", "images": [str(img)]}
+        first = to_multimodal(msg, supports_vision=True)
+
+        # 模拟历史回写：把 parts 塞回 content，images 键被重新附上
+        msg2 = {"role": "user", "content": list(first["content"]), "images": [str(img)]}
+        second = to_multimodal(msg2, supports_vision=True)
+
+        assert [p["type"] for p in second["content"]] == [p["type"] for p in first["content"]]
+        assert isinstance(second["content"][0]["text"], str)
+
+    def test_reentrant_nested_text_list_flattened(self):
+        """历史里已嵌套的 text 列表应被递归展平，保持原有顺序"""
+        from tea_agent.session.history_builder import to_multimodal
+        data_url = "data:image/png;base64,AAA"
+        msg = {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": [
+                        {"type": "text", "text": "第一段"},
+                        {"type": "text", "text": [{"type": "text", "text": "第二段"}]},
+                    ],
+                },
+            ],
+            "images": [data_url],
+        }
+        result = to_multimodal(msg, supports_vision=True)
+        parts = result["content"]
+        assert parts[0]["text"] == "第一段\n第二段"
+        assert parts[1]["type"] == "image_url"
+
     def test_messages_contain_images_detects_image_url(self):
         """含 image_url 内容的消息应被识别为含图"""
         from tea_agent.session.history_builder import messages_contain_images

@@ -115,14 +115,54 @@ def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None
         return msg
 
     text = msg.get("content", "")
+    if isinstance(text, list):
+        # ★ 可重入防护: content 已是多模态 parts 列表 (历史回写 + images 仍在
+        # 导致重复转换)。不展平直接再包一层会产生
+        # {"type":"text","text":[...]}, 服务端 pydantic 报 400
+        # "3 validation errors for GPT3Message"。
+        # 展平规则: 文本段拼接、image_url 段并入 images, 再走下方统一构建
+        # ⇒ 重复调用幂等, 结构恒合法。
+        def _hb_flatten(content):
+            segs, imgs = [], []
+            for p in content:
+                if not isinstance(p, dict):
+                    continue
+                ptype = p.get("type")
+                if ptype == "text":
+                    t = p.get("text", "")
+                    if isinstance(t, list):          # 任意层嵌套递归展平
+                        s2, i2 = _hb_flatten(t)
+                        segs += s2
+                        imgs += i2
+                    elif isinstance(t, str) and t:
+                        segs.append(t)
+                elif ptype == "image_url":
+                    u = p.get("image_url")
+                    url = u.get("url", "") if isinstance(u, dict) else (u if isinstance(u, str) else "")
+                    if url:
+                        imgs.append(url)
+            return segs, imgs
+        _segs, _imgs = _hb_flatten(text)
+        text = "\n".join(_segs)
+        _merged = list(images) + _imgs
+        _seen = set()
+        # URL 去重: 否则 pop 的 images 与回写 parts 里内联回来的同一张图会发两遍
+        images = [u for u in _merged if not (u in _seen or _seen.add(u))]
     parts = []
     if text:
         parts.append({"type": "text", "text": text})
     # A6: base64 快照缓存（写回原消息；图片文件未变化时复用同一编码）
     b64_cache = (msg.get("_b64_cache") or {}) if original is not None else {}
+    # ★ 去重必须比较「最终编码后的 URL」而非入参字符串: 同一张图在回写的
+    # parts 里是 data: URL、在 images 键里是文件路径, 字符串不等却是同一张图。
+    # 只比入参 → 同一张图发两遍, 图像 token 白白翻倍。
+    _seen_url: set[str] = set()
     for img_path in images:
         # 已是 data URL（如 API server 传入 data:image/...;base64,...）→ 直接透传
         if isinstance(img_path, str) and img_path.startswith("data:"):
+            if img_path in _seen_url:
+                continue
+            _seen_url.add(img_path)
             parts.append({"type": "image_url", "image_url": {"url": img_path}})
             continue
         if not os.path.isfile(img_path):
@@ -143,9 +183,13 @@ def to_multimodal(msg: dict, supports_vision: bool, original: dict | None = None
             ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp"
         }
         mime = mime_map.get(ext, "image/png")
+        url = f"data:{mime};base64,{b64}"
+        if url in _seen_url:      # 与回写 parts 中内联的同一张图重复 → 只发一次
+            continue
+        _seen_url.add(url)
         parts.append({
             "type": "image_url",
-            "image_url": {"url": f"data:{mime};base64,{b64}"}
+            "image_url": {"url": url}
         })
     if original is not None:
         original["_b64_cache"] = b64_cache

@@ -36,8 +36,11 @@
   <main id="main">
     <div id="tb">
       <span id="tt">☕ 欢迎使用 Tea Agent</span>
-      <select id="config-dropdown" onchange="switchConfig(this.value)" title="切换配置">
-        <option value="">— 加载配置 —</option>
+      <select id="main-model-select" onchange="onModelSelect('main', this.value)" title="主模型（provider / model）">
+        <option value="">— 主模型 —</option>
+      </select>
+      <select id="cheap-model-select" onchange="onModelSelect('cheap', this.value)" title="便宜模型（provider / model，可选）">
+        <option value="">— 便宜模型 —</option>
       </select>
       <button class="tb-btn" onclick="showSearchModal()" title="搜索 (Ctrl+K)">🔍</button>
       <button class="tb-btn" onclick="showMemoryModal()" title="记忆 (Ctrl+Shift+M)">🧠</button>
@@ -167,8 +170,12 @@
   <div id="cfg-status" class="status-msg" style="display:none"></div>
 
   <div class="form-group">
-    <label>配置文件</label>
-    <select id="cfg-select" onchange="onConfigSelect(this.value)"><option value="">— 加载中 —</option></select>
+    <label>主模型（provider / model）</label>
+    <select id="cfg-main-select" onchange="onModelSelect('main', this.value)"><option value="">— 加载中 —</option></select>
+  </div>
+  <div class="form-group">
+    <label>便宜模型（provider / model，可选）</label>
+    <select id="cfg-cheap-select" onchange="onModelSelect('cheap', this.value)"><option value="">— 加载中 —</option></select>
   </div>
 
   <div class="modal-section-title" style="color:var(--primary)">📌 主模型</div>

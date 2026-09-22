@@ -1340,9 +1340,6 @@ window.sendMessage = async function() {
   try {
     const body = { message: msg, topic_id: currentTopicId };
     if (imagesToSend.length > 0) body.images = imagesToSend;
-    // Include current config path if set
-    const cfgSel = $('config-dropdown');
-    if (cfgSel && cfgSel.value) body.config_path = cfgSel.value;
 
     const res = await fetch('/api/chat', {
       method: 'POST',
@@ -3047,83 +3044,89 @@ window.deleteMemory = async function(id) {
 window.showConfigModal = async function() {
   showModal('modal-config');
   $('cfg-status').style.display = 'none';
-  await loadConfigForm();
+  await refreshModelSelects();
 };
 
-async function loadConfigForm() {
+// ── 主/便宜模型下拉（provider / model 组合）──
+function _shortModelLabel(label, maxLen) {
+  // 超长 provider/model（如 local / ericli1018/Hermes3.6-35B-…）截断显示，
+  // 避免 select 宽度被最长 option 撑爆；完整值仍在 option.value / title 中。
+  maxLen = maxLen || 38;
+  label = String(label || '');
+  if (label.length <= maxLen) return label;
+  var idx = label.indexOf(' / ');
+  if (idx > 0 && idx < maxLen - 8) {
+    var head = label.slice(0, idx + 3);
+    var tail = label.slice(idx + 3);
+    return head + tail.slice(0, maxLen - head.length - 1) + '…';
+  }
+  return label.slice(0, maxLen - 1) + '…';
+}
+
+async function refreshModelSelects() {
+  var selIds = {
+    main: ['main-model-select', 'cfg-main-select'],
+    cheap: ['cheap-model-select', 'cfg-cheap-select'],
+  };
   try {
-    // Load current config
-    const r1 = await fetch('/api/config');
-    if (r1.ok) {
-      const d = await r1.json();
-      const cfg = d.data || d;
-      $('cfg-model').value = cfg.model || '';
-      $('cfg-url').value = cfg.api_url || '';
-      $('cfg-key').value = '';
-      $('cfg-temp').value = cfg.temperature != null ? cfg.temperature : '';
-      $('cfg-max-tokens').value = cfg.max_tokens != null ? cfg.max_tokens : '';
-      $('cfg-top-p').value = cfg.top_p != null ? cfg.top_p : '';
-      $('cfg-max-ctx').value = cfg.max_context_tokens != null ? cfg.max_context_tokens : '';
-      const opts = cfg.options || {};
-      $('cfg-vision').checked = !!opts.supports_vision;
-      $('cfg-reasoning').checked = opts.supports_reasoning !== false;
-      // Cheap model
-      if (cfg.cheap_model) {
-        $('cfg-cheap-model').value = cfg.cheap_model.model || '';
-        $('cfg-cheap-url').value = cfg.cheap_model.api_url || '';
-        $('cfg-cheap-key').value = '';
-      }
-      // Runtime
-      $('cfg-max-iter').value = cfg.max_iterations != null ? cfg.max_iterations : '';
-      $('cfg-keep-turns').value = cfg.keep_turns != null ? cfg.keep_turns : '';
-      $('cfg-thinking').checked = cfg.enable_thinking !== false;
-    }
-    // Load config file list
-    const r2 = await fetch('/api/configs');
-    if (r2.ok) {
-      const d2 = await r2.json();
-      const sel = $('cfg-select');
-      const configs = d2.data || d2.configs || [];
-      sel.innerHTML = '<option value="">-- 请选择 --</option>';
-      const activePath = d2.active_config_path || '';
-      configs.forEach(function(c) {
-        const mainModel = c.main_model ? (c.main_model.model_name || '') : '';
-        const cheapModel = c.cheap_model ? (c.cheap_model.model_name || '') : '';
-        const selected = c.path === activePath ? ' selected' : '';
-
-        const mainFormatted = _formatModelName(mainModel);
-        const cheapFormatted = _formatModelName(cheapModel);
-
-        let modelDisplay = mainFormatted || '?';
-        if (cheapFormatted && cheapFormatted !== mainFormatted) {
-          modelDisplay = mainFormatted + ' / ' + cheapFormatted;
-        }
-
-        const configName = (c.filename || '').replace(/\.(yaml|yml)$/i, '');
-        const display = configName + ' — ' + modelDisplay;
-        sel.innerHTML += '<option value="' + esc(c.path) + '"' + selected + '>' + esc(display) + '</option>';
+    var r = await fetch('/api/model-options');
+    if (!r.ok) return { any_valid: false, error: 'http ' + r.status };
+    var d = await r.json();
+    if (!d.ok) return { any_valid: false, error: d.error || 'load failed' };
+    var options = d.options || [];
+    Object.keys(selIds).forEach(function(role) {
+      selIds[role].forEach(function(id) {
+        var sel = $(id);
+        if (!sel) return;
+        var cur = (d[role] || {}).value || '';
+        sel.innerHTML = '';
+        var first = document.createElement('option');
+        first.value = '';
+        first.textContent = role === 'main' ? '— 主模型 —' : '— 便宜模型（可选）—';
+        sel.appendChild(first);
+        options.forEach(function(o) {
+          var op = document.createElement('option');
+          op.value = o.value;
+          op.textContent = _shortModelLabel(o.label);
+          op.title = o.label;
+          if (o.value === cur) op.selected = true;
+          sel.appendChild(op);
+        });
       });
-    }
+    });
+    return { any_valid: !!(d.main && d.main.value), main: d.main, cheap: d.cheap };
   } catch(e) {
-    showCfgStatus('加载配置失败: ' + e.message, 'error');
+    return { any_valid: false, error: e.message };
   }
 }
 
-function onConfigSelect(path) {
-  if (!path) return;
-  fetch('/api/configs').then(function(r) { return r.json(); }).then(function(d2) {
-    const configs = d2.data || d2.configs || [];
-    const cfg = configs.find(function(c) { return c.path === path; });
-    if (cfg && cfg.main_model) {
-      $('cfg-model').value = cfg.main_model.model_name || '';
-      $('cfg-url').value = cfg.main_model.api_url || '';
-      if (cfg.cheap_model) {
-        $('cfg-cheap-model').value = cfg.cheap_model.model_name || '';
-        $('cfg-cheap-url').value = cfg.cheap_model.api_url || '';
-      }
+window.onModelSelect = async function(role, value) {
+  if (!value) return;
+  var m = value.split('::');
+  if (m.length < 2) return;
+  var provider = m[0], model = m[1];
+  if (role === 'main' && isStreaming &&
+      !confirm('当前正在生成回复中，切换主模型可能影响当前会话。继续？')) return;
+  try {
+    var r = await fetch('/api/model-select', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: role, provider: provider, model: model }),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      toast('✓ 已切换' + (role === 'main' ? '主模型' : '便宜模型') + ': ' + model, 'success');
+      var inp = $(role === 'main' ? 'cfg-model' : 'cfg-cheap-model');
+      if (inp) inp.value = model;
+      refreshModelSelects();
+    } else {
+      toast('✗ 切换失败: ' + (d.error || '未知错误'), 'error');
+      refreshModelSelects();
     }
-  }).catch(function(){});
-}
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+};
 
 window.applyConfig = async function() {
   const apiKey = $('cfg-key').value.trim();
@@ -3325,59 +3328,13 @@ function _formatModelName(modelName) {
   return formattedWords.join(' ');
 }
 
+// 保留向后兼容入口：委托 refreshModelSelects（主/便宜模型下拉）。
+// 返回 {any_valid, main, cheap, error}；checkAndShowFirstRunModal 仅依赖 any_valid/error。
 async function refreshConfigDropdown() {
-  try {
-    const r = await fetch('/api/configs');
-    if (!r.ok) return { configs: [], any_valid: false };
-    const d = await r.json();
-    const sel = $('config-dropdown');
-    const configs = d.data || d.configs || [];
-    const activePath = d.active_config_path || '';
-    const anyValid = d.any_valid === true;
-    sel.innerHTML = '<option value="">⚡ 切换配置</option>';
-    configs.forEach(function(c) {
-      const mainModel = c.main_model ? (c.main_model.model_name || '') : '';
-      const cheapModel = c.cheap_model ? (c.cheap_model.model_name || '') : '';
-      const selected = c.path === activePath ? ' selected' : '';
-
-      const mainFormatted = _formatModelName(mainModel);
-      const cheapFormatted = _formatModelName(cheapModel);
-
-      let modelDisplay = mainFormatted || '?';
-      if (cheapFormatted && cheapFormatted !== mainFormatted) {
-        modelDisplay = mainFormatted + ' / ' + cheapFormatted;
-      }
-
-      const configName = (c.filename || '').replace(/\.(yaml|yml)$/i, '');
-      const display = configName + ' — ' + modelDisplay;
-      sel.innerHTML += '<option value="' + esc(c.path) + '"' + selected + '>' + esc(display) + '</option>';
-    });
-    return { configs: configs, any_valid: anyValid, count: configs.length };
-  } catch(e) {
-    return { configs: [], any_valid: false, count: 0, error: e.message };
-  }
+  return await refreshModelSelects();
 }
 
-window.switchConfig = async function(path) {
-  if (!path) return;
-  if (isStreaming && !confirm('当前正在生成回复中，切换配置可能导致会话异常。\n确定要切换吗？')) return;
-  try {
-    const r = await fetch('/api/model/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config_path: path }),
-    });
-    const d = await r.json();
-    if (d.ok) {
-      toast('✓ 已切换到配置', 'success');
-      refreshConfigDropdown();
-    } else {
-      toast('✗ 切换失败', 'error');
-    }
-  } catch(e) {
-    toast('Error: ' + e.message, 'error');
-  }
-};
+// 配置切换已由 onModelSelect（主/便宜模型下拉）统一处理；旧的"配置文件切换"已移除。
 
 // ══════════════════════════════════════════════════
 //  EXPORT
@@ -4312,8 +4269,8 @@ async function applyProvider() {
     _mmStatus(msgs[sw.mode] || msgs.config_only, sw.mode === 'error' ? 'error' : 'success');
     $('mm-key').value = '';
     await loadModelConfig();
-    // 刷新顶部配置信息
-    if (typeof loadConfigForm === 'function') loadConfigForm();
+    // 刷新顶部模型下拉
+    if (typeof refreshModelSelects === 'function') refreshModelSelects();
     toast('🎯 ' + d.model, 'success');
   } catch (e) {
     _mmStatus('应用失败: ' + e.message, 'error');

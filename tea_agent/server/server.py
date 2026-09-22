@@ -556,6 +556,8 @@ def _build_routes() -> list:
         Route("/api/model-config/model", rh.handle_model_config_model_del, methods=["DELETE"]),
         Route("/api/model-config/sync", rh.handle_model_config_sync, methods=["POST"]),
         Route("/api/model-config/switch", rh.handle_model_config_switch, methods=["POST"]),
+        Route("/api/model-options", rh.handle_model_options),
+        Route("/api/model-select", rh.handle_model_select, methods=["POST"]),
         Route("/api/config/upload", rh.handle_web_upload_config, methods=["POST"]),
         # ── Provider Store（~/.tea_agent/provider.yaml 独立供应商/模型目录）──
         Route("/api/provider-store", rh.handle_provider_store_list),

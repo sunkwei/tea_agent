@@ -195,7 +195,7 @@ body {
   transition: all var(--transition);
 }
 #theme-btn:hover { background: var(--surface2); color: var(--text); }
-#config-dropdown {
+#config-dropdown, #main-model-select, #cheap-model-select {
   padding: 4px 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -204,9 +204,17 @@ body {
   font-size: 12px;
   cursor: pointer;
   outline: none;
+  /* select 宽度默认 = 最宽 option 的宽度：如 local / ericli1018/Hermes3.6-35B-…
+     可达 500px+，会把工具栏挤成一整行。这里夹紧到 110~180px 并省略溢出。 */
+  width: auto;
+  min-width: 110px;
   max-width: 180px;
+  flex: 0 0 auto;
+  text-overflow: ellipsis;
 }
-#config-dropdown:focus { border-color: var(--primary); }
+#config-dropdown:focus, #main-model-select:focus, #cheap-model-select:focus {
+  border-color: var(--primary);
+}
 .tb-btn {
   padding: 4px 8px; font-size: 12px;
   background: none; border: none; border-radius: var(--radius-sm);

@@ -2514,6 +2514,191 @@ async def handle_model_config_switch(request):
 
 
 # ================================================================
+#  Model Select — 主/便宜模型双下拉（provider.yaml 为唯一事实源）
+#  工具栏/配置弹窗用：选项 = "provider / model" 组合，切换即时生效。
+# ================================================================
+
+def _provider_option_list() -> list[dict]:
+    """从 provider.yaml 派生 provider/model 组合列表（下拉框数据源）。
+
+    value = "provider::model"（:: 分隔；provider 名不含 :）；
+    label = "provider / model"。去重后按 (provider, model) 排序。
+    """
+    from tea_agent.provider_store import get_provider_store
+
+    seen: set[str] = set()
+    opts: list[dict] = []
+    try:
+        providers = get_provider_store().list_providers()
+    except Exception as e:
+        logger.warning("provider option list failed: %s", e)
+        return opts
+    for p in providers:
+        pname = (p.get("name") or "").strip()
+        if not pname:
+            continue
+        models = [m.get("id") for m in (p.get("catalog") or []) if m.get("id")]
+        if not models and p.get("default_model"):
+            models = [p["default_model"]]
+        for mid in models:
+            mid = (mid or "").strip()
+            if not mid:
+                continue
+            value = f"{pname}::{mid}"
+            if value in seen:
+                continue
+            seen.add(value)
+            opts.append({"value": value, "provider": pname, "model": mid,
+                         "label": f"{pname} / {mid}"})
+    opts.sort(key=lambda o: (o["provider"].lower(), o["model"].lower()))
+    return opts
+
+
+def _role_selection(mc) -> dict:
+    """把 ModelConfig 解析为下拉选中值 {value, provider, model, label}。
+
+    优先引用式 provider+ref_model；无 provider 时按 api_url 回查
+    provider.yaml 名字（传统内嵌配置也能被选中），再兜底用 url。
+    """
+    provider = str(getattr(mc, "provider", "") or "").strip()
+    model = str(getattr(mc, "ref_model", "") or "") or str(getattr(mc, "model_name", "") or "").strip()
+    if not provider and mc.api_url:
+        from tea_agent.provider_store import get_provider_store
+
+        norm = (mc.api_url or "").strip().rstrip("/").lower()
+        for p in get_provider_store().list_providers():
+            if (p.get("api_url") or "").strip().rstrip("/").lower() == norm:
+                provider = (p.get("name") or "").strip()
+                break
+    if not provider and mc.api_url:
+        provider = mc.api_url
+    if provider and model:
+        value = f"{provider}::{model}"
+        label = f"{provider} / {model}"
+    else:
+        value, label = "", (model or "")
+    return {"value": value, "provider": provider, "model": model, "label": label}
+
+
+def _ensure_selected_option(options: list[dict], sel: dict) -> None:
+    """当前选中值不在选项列表时补入（provider.yaml 尚未收录该组合）。"""
+    if not sel.get("value"):
+        return
+    if any(o.get("value") == sel["value"] for o in options):
+        return
+    options.append({"value": sel["value"], "provider": sel.get("provider", ""),
+                    "model": sel.get("model", ""),
+                    "label": sel.get("label") or sel["value"]})
+
+
+async def handle_model_options(request):
+    """GET /api/model-options — 主/便宜模型下拉框数据源。
+
+    返回 provider.yaml 全部 provider+model 组合 + 当前 active config 的
+    main/cheap 各自选中值。前端据此填充主模型/便宜模型两个 <select>。
+    """
+    server = get_server()
+    try:
+        from tea_agent.config import load_config
+
+        options = _provider_option_list()
+        cfg = load_config(server.get_config_path() or None)
+        main_sel = _role_selection(cfg.main_model)
+        cheap_sel = _role_selection(cfg.cheap_model)
+        _ensure_selected_option(options, main_sel)
+        _ensure_selected_option(options, cheap_sel)
+        return JSONResponse({
+            "ok": True,
+            "options": options,
+            "main": main_sel,
+            "cheap": cheap_sel,
+            "active_config_path": server.get_config_path() or "",
+        })
+    except Exception as e:
+        logger.exception("model-options failed")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+async def handle_model_select(request):
+    """POST /api/model-select — 选择主/便宜/视觉模型（provider+model 引用式）。
+
+    Body: {role: "main"|"cheap"|"vision", provider, model}
+    流程：
+      1. resolve provider.yaml → api_key/api_url/max_context/max_output/能力；
+      2. 写回 active config 对应角色块（引用式，save_config 只落 provider+model 不内嵌密钥）；
+      3. 缓存失效；role==main 时热切换（对话中挂起、空闲立即生效）；
+      4. roles 回写 model_config.json（面板"使用中"单一事实源）。
+    """
+    body = await request.json() if request.headers.get("content-length") else {}
+    role = (body.get("role") or "main").strip()
+    if role not in ("main", "cheap", "vision"):
+        return JSONResponse({"ok": False, "error": f"invalid role '{role}'",
+                             "code": "BAD_REQUEST"}, status_code=400)
+    provider = (body.get("provider") or "").strip()
+    model = (body.get("model") or "").strip()
+    if not model:
+        return JSONResponse({"ok": False, "error": "model required",
+                             "code": "BAD_REQUEST"}, status_code=400)
+    server = get_server()
+    try:
+        from tea_agent.config import load_config, save_config
+        from tea_agent.provider_store import get_provider_store
+        from .modules.agent_module import AgentModule
+
+        store = get_provider_store()
+        resolved = store.resolve(provider, model)
+        if resolved is None:
+            return JSONResponse({"ok": False, "error": f"provider '{provider}' not found",
+                                 "code": "NOT_FOUND"}, status_code=404)
+        cfg_path = server.get_config_path() or ""
+        cfg = load_config(cfg_path)
+        target = {"main": cfg.main_model, "cheap": cfg.cheap_model,
+                  "vision": cfg.vision_model}[role]
+        target.provider = resolved["provider"]
+        target.ref_model = resolved["model"]
+        target.api_key = resolved.get("api_key", "")
+        target.api_url = resolved.get("api_url", "")
+        target.model_name = resolved.get("model", model)
+        target.max_context_tokens = int(resolved.get("max_context_tokens") or target.max_context_tokens)
+        if int(resolved.get("max_output_tokens") or 0) > 0:
+            target.max_tokens = int(resolved["max_output_tokens"])
+        opts = dict(target.options or {})
+        opts["supports_vision"] = bool(resolved.get("supports_vision", False))
+        opts["supports_reasoning"] = bool(resolved.get("supports_reasoning", False))
+        if resolved.get("reasoning_effort"):
+            opts["reasoning_effort"] = resolved["reasoning_effort"]
+        target.options = opts
+        save_config(cfg, cfg_path)
+
+        AgentModule.invalidate_config_cache(cfg_path)
+        switch = {"mode": "config_only"}
+        if role == "main":
+            try:
+                mc = load_config(cfg_path or None).main_model
+                switch = AgentModule.request_model_switch(
+                    mc.api_key, mc.api_url, mc.model_name,
+                    temperature=mc.temperature, max_tokens=mc.max_tokens,
+                    top_p=mc.top_p, max_context_tokens=mc.max_context_tokens,
+                    options=mc.options)
+            except Exception as e:
+                logger.warning("model-select hot-switch failed (config saved): %s", e)
+                switch = {"mode": "error", "error": str(e)}
+
+        try:
+            _model_store().set_role(role, resolved["provider"], resolved["model"],
+                                    api_url=resolved.get("api_url", ""))
+        except Exception as e:
+            logger.debug("model-select role binding skipped: %s", e)
+
+        return JSONResponse({"ok": True, "role": role,
+                             "provider": resolved["provider"], "model": resolved["model"],
+                             "config_path": cfg_path, "switch": switch})
+    except Exception as e:
+        logger.exception("model-select failed")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+# ================================================================
 #  Provider Store — ~/.tea_agent/provider.yaml 独立供应商/模型目录
 #  与 configxxx.yaml 解耦：本组接口只读写 provider.yaml，供独立配置界面使用。
 # ================================================================

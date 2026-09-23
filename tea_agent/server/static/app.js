@@ -3045,7 +3045,58 @@ window.showConfigModal = async function() {
   showModal('modal-config');
   $('cfg-status').style.display = 'none';
   await refreshModelSelects();
+  await fillConfigForm();
 };
+
+// 当前配置的 options 快照（apply 时合并，避免整体替换丢键）
+var _cfgCurOptions = {}, _cfgCurCheapOptions = {};
+
+// 回填配置对话框：url/key/模型名只读展示（提交时忽略），参数可编辑
+async function fillConfigForm() {
+  try {
+    var r = await fetch('/api/model');
+    if (!r.ok) return;
+    var d = await r.json();
+    if (d.error) return;
+    // ── 主模型 ──
+    $('cfg-model').value = d.model || '';
+    $('cfg-url').value = d.api_url || '';
+    $('cfg-key').value = d.api_key_masked || '';   // 掩码回填（readonly，提交被忽略）
+    if (d.temperature != null) $('cfg-temp').value = d.temperature;
+    if (d.max_tokens != null) $('cfg-max-tokens').value = d.max_tokens;
+    if (d.top_p != null) $('cfg-top-p').value = d.top_p;
+    if (d.max_context_tokens != null) $('cfg-max-ctx').value = d.max_context_tokens;
+    _cfgCurOptions = d.options || {};
+    $('cfg-vision').checked = !!_cfgCurOptions.supports_vision;
+    $('cfg-reasoning').checked = _cfgCurOptions.supports_reasoning !== false;
+    _setEffort('cfg-effort', _cfgCurOptions.reasoning_effort);
+    // ── 运行时 ──
+    if (d.max_iterations != null) $('cfg-max-iter').value = d.max_iterations;
+    if (d.keep_turns != null) $('cfg-keep-turns').value = d.keep_turns;
+    $('cfg-thinking').checked = d.enable_thinking !== false;
+    // ── 便宜模型 ──
+    var cm = d.cheap_model || null;
+    $('cfg-cheap-model').value = cm ? (cm.model || '') : '';
+    $('cfg-cheap-url').value = cm ? (cm.api_url || '') : '';
+    $('cfg-cheap-key').value = cm ? (cm.api_key_masked || '') : '';
+    if (cm && cm.temperature != null) $('cfg-cheap-temp').value = cm.temperature;
+    if (cm && cm.max_tokens != null) $('cfg-cheap-max-tokens').value = cm.max_tokens;
+    if (cm && cm.top_p != null) $('cfg-cheap-top-p').value = cm.top_p;
+    if (cm && cm.max_context_tokens != null) $('cfg-cheap-max-ctx').value = cm.max_context_tokens;
+    _cfgCurCheapOptions = (cm && cm.options) || {};
+    $('cfg-cheap-vision').checked = !!_cfgCurCheapOptions.supports_vision;
+    $('cfg-cheap-reasoning').checked = _cfgCurCheapOptions.supports_reasoning !== false;
+    _setEffort('cfg-cheap-effort', _cfgCurCheapOptions.reasoning_effort);
+  } catch (e) { /* 回填失败不阻断对话框（placeholder 兜底） */ }
+}
+
+// reasoning_effort 兼容 str / list（provider.yaml 允许多值，取首项）
+function _setEffort(id, eff) {
+  var el = $(id);
+  if (!el) return;
+  if (Array.isArray(eff)) eff = eff[0];
+  el.value = (typeof eff === 'string' && eff) ? eff : 'auto';
+}
 
 // ── 主/便宜模型下拉（provider / model 组合）──
 function _shortModelLabel(label, maxLen) {
@@ -3129,15 +3180,6 @@ window.onModelSelect = async function(role, value) {
 };
 
 window.applyConfig = async function() {
-  const apiKey = $('cfg-key').value.trim();
-  const apiUrl = $('cfg-url').value.trim();
-  const modelName = $('cfg-model').value.trim();
-
-  if (!apiUrl || !modelName) {
-    showCfgStatus('请填写 API URL 和 模型名称', 'error');
-    return;
-  }
-
   if (isStreaming && !confirm('当前正在生成回复中，切换配置可能导致会话异常。\n确定要切换吗？')) return;
 
   function nv(id) { const v = $(id).value.trim(); return v ? Number(v) : null; }
@@ -3145,27 +3187,28 @@ window.applyConfig = async function() {
   showCfgStatus('正在应用...', 'info');
 
   try {
+    // 语义：url / key / 模型名只读，不提交 —— 后端缺省兑底当前值；
+    // 本对话框只提交「参数」（采样/窗口/能力），并写回 provider.yaml（后端完成）。
     const body = {};
-    if (apiKey) body.api_key = apiKey;
-    body.api_url = apiUrl;
-    body.model_name = modelName;
     body.temperature = nv('cfg-temp');
     body.max_tokens = nv('cfg-max-tokens');
     body.top_p = nv('cfg-top-p');
     body.max_context_tokens = nv('cfg-max-ctx');
-    body.options = {
+    body.options = Object.assign({}, _cfgCurOptions, {
       supports_vision: $('cfg-vision').checked,
       supports_reasoning: $('cfg-reasoning').checked,
-    };
-
-    const cheapName = $('cfg-cheap-model').value.trim();
-    const cheapUrl = $('cfg-cheap-url').value.trim();
-    if (cheapName && cheapUrl) {
-      const cheapKey = $('cfg-cheap-key').value.trim();
-      if (cheapKey) body.cheap_api_key = cheapKey;
-      body.cheap_api_url = cheapUrl;
-      body.cheap_model_name = cheapName;
-    }
+      reasoning_effort: $('cfg-effort').value || 'auto',
+    });
+    // 便宜模型参数（后端对 cheap url/name 兑底当前值后应用）
+    body.cheap_temperature = nv('cfg-cheap-temp');
+    body.cheap_max_tokens = nv('cfg-cheap-max-tokens');
+    body.cheap_top_p = nv('cfg-cheap-top-p');
+    body.cheap_max_context_tokens = nv('cfg-cheap-max-ctx');
+    body.cheap_options = Object.assign({}, _cfgCurCheapOptions, {
+      supports_vision: $('cfg-cheap-vision').checked,
+      supports_reasoning: $('cfg-cheap-reasoning').checked,
+      reasoning_effort: $('cfg-cheap-effort').value || 'auto',
+    });
 
     const r = await fetch('/api/model', {
       method: 'POST',

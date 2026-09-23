@@ -62,8 +62,10 @@ SCHEMA_VERSION = 1
 # 模型能力字段（与 model_config.json / ModelConfig.options 对齐）
 _INT_FIELDS = {"max_context_tokens", "max_output_tokens"}
 _BOOL_FIELDS = {"supports_vision", "supports_reasoning", "supports_tools"}
+# 采样默认值：配置对话框可改并写回（0.0 是有效值，不可当"空"过滤）
+_FLOAT_FIELDS = {"temperature", "top_p"}
 _STR_FIELDS = {"note", "reasoning_effort"}
-MODEL_FIELDS = _INT_FIELDS | _BOOL_FIELDS | _STR_FIELDS
+MODEL_FIELDS = _INT_FIELDS | _BOOL_FIELDS | _FLOAT_FIELDS | _STR_FIELDS
 PROVIDER_FIELDS = {"api_url", "api_key", "api_keys", "default_model", "description",
                    "supports_vision", "supports_thinking", "source"}
 
@@ -110,6 +112,8 @@ def _blank_model_cfg() -> dict:
         "supports_reasoning": False,
         "supports_tools": True,
         "reasoning_effort": "auto",
+        "temperature": 0.7,
+        "top_p": 0.9,
         "note": "",
     }
 
@@ -140,6 +144,14 @@ def _clean_model_entry(raw: dict) -> dict:
                 logger.debug("provider_store.py._clean_model_entry: (TypeError, ValueError) 已忽略: %s", e)
         elif k in _BOOL_FIELDS:
             cfg[k] = bool(v)
+        elif k in _FLOAT_FIELDS:
+            try:
+                fv = float(v)
+            except (TypeError, ValueError) as e:
+                logger.debug("provider_store.py._clean_model_entry float 忽略 %s=%r: %s", k, v, e)
+            else:
+                lo, hi = (0.0, 2.0) if k == "temperature" else (0.0, 1.0)
+                cfg[k] = min(max(fv, lo), hi)
         elif k == "reasoning_effort":
             if isinstance(v, list):
                 cfg[k] = [str(x) for x in v if str(x).strip()]
@@ -742,7 +754,18 @@ class ProviderStore:
         p = providers[key]
         cfg = p.setdefault("models", {}).setdefault(model, guess_model_cfg(model))
         if config:
-            cfg.update({k: v for k, v in _clean_model_entry(config).items() if v not in ("", [], 0, False) or k in ("supports_tools",)})
+            cleaned = _clean_model_entry(config)
+            # 只回写调用方显式提供的键（blank 默认不得覆盖既有值）；
+            # float(0.0)/bool(False) 是有效采样/能力值，必须可写入
+            #（旧过滤 `v not in ("", [], 0, False)` 会把 0.0/False 当空值丢弃）。
+            for k in config:
+                if k not in cleaned:
+                    continue
+                v = cleaned[k]
+                if k in _FLOAT_FIELDS or k in _BOOL_FIELDS:
+                    cfg[k] = v
+                elif v not in ("", [], 0, False):
+                    cfg[k] = v
         if not p.get("default_model"):
             p["default_model"] = model
         self.save()

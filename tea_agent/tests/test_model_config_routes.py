@@ -249,3 +249,69 @@ def test_session_continue_deferred_switch(env, monkeypatch):
     assert out and out["mode"] == "applied_after_turn"
     assert calls and calls[0][0][2] == "deepseek-v4-flash"  # 新模型名
     assert AgentModule.get_pending_switch() is None
+
+
+# ── 6. 下一轮读新配置（config_cache 必须失效，钉行为契约） ──────
+#
+# 回归场景：invalidate_config_cache 曾被锁在 role=="main" and continue_session
+# 分支里 → cheap/vision 切换、continue_session=false 的 main 切换只落盘、
+# 不失效缓存 → 同一进程内下一轮 create_session 仍读旧配置（重启才恢复）。
+
+def _next_turn_models(env):
+    """模拟下一轮对话：create_session 读到的 main/cheap 模型。"""
+    _client, cfg, _state, am = env
+    sess, _ = am.create_session(str(cfg))
+    ctx = sess.context
+    return str(getattr(ctx, "model", "")), str(getattr(ctx, "cheap_model", ""))
+
+
+def test_switch_cheap_next_turn_reads_new_model(env):
+    """role=cheap 切换后，下一轮必须读到新便宜模型（缓存已失效）。"""
+    client, _cfg, _state, am = env
+    # 先跑一轮 create_session，让 config_cache 被旧配置填充（模拟已对话过）。
+    # fixture 未配置 cheap_model 初始块 → 切换前 cheap 为空串；
+    # 旧缺陷下切换后仍读旧缓存得空串，断言失败 → 测试能真的变红。
+    _, cheap_before = _next_turn_models(env)
+    assert "deepseek-reasoner" not in cheap_before
+
+    r = client.post("/api/model-config/switch", json={
+        "provider": "DeepSeek", "model": "deepseek-reasoner",
+        "role": "cheap", "api_key": "sk-cheap-test1234567",
+        "continue_session": True,
+    })
+    assert r.status_code == 200 and r.json()["ok"], r.text
+
+    _, cheap_after = _next_turn_models(env)
+    assert "deepseek-reasoner" in cheap_after, f"stale cheap model: {cheap_after}"
+
+
+def test_switch_main_no_continue_next_turn_reads_new_model(env):
+    """continue_session=false 的 main 切换同样要失效缓存（落盘即下一轮生效）。"""
+    client, _cfg, _state, am = env
+    main_before, _ = _next_turn_models(env)
+    assert "deepseek-chat" in main_before
+
+    r = client.post("/api/model-config/switch", json={
+        "provider": "DeepSeek", "model": "deepseek-reasoner",
+        "role": "main", "api_key": "sk-nocontinue123456",
+        "continue_session": False,
+    })
+    assert r.status_code == 200 and r.json()["ok"], r.text
+    assert r.json()["switch"]["mode"] == "config_only"
+
+    main_after, _ = _next_turn_models(env)
+    assert "deepseek-reasoner" in main_after, f"stale main model: {main_after}"
+
+
+def test_provider_store_apply_next_turn_reads_new_model(env):
+    """provider-store apply 落盘后必须失效缓存（原先完全没调 invalidate）。"""
+    client, cfg, _state, am = env
+    main_before, _ = _next_turn_models(env)
+    assert "deepseek-chat" in main_before
+
+    r = client.post("/api/provider-store/DeepSeek/apply",
+                    json={"model": "deepseek-reasoner", "role": "main"})
+    assert r.status_code == 200 and r.json()["ok"], r.text
+
+    main_after, _ = _next_turn_models(env)
+    assert "deepseek-reasoner" in main_after, f"stale main model: {main_after}"

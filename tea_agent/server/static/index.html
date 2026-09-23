@@ -179,9 +179,9 @@
   </div>
 
   <div class="modal-section-title" style="color:var(--primary)">📌 主模型</div>
-  <div class="form-group"><label>模型名称</label><input id="cfg-model" placeholder="deepseek-chat"></div>
-  <div class="form-group"><label>API URL</label><input id="cfg-url" placeholder="https://api.deepseek.com"></div>
-  <div class="form-group"><label>API Key</label><input id="cfg-key" type="password" placeholder="sk-..."></div>
+  <div class="form-group"><label>模型名称（只读 · 切换请用顶部下拉）</label><input id="cfg-model" readonly placeholder="deepseek-chat"></div>
+  <div class="form-group"><label>API URL（只读 · 由🏭供应商页修改）</label><input id="cfg-url" readonly placeholder="https://api.deepseek.com"></div>
+  <div class="form-group"><label>API Key（只读 · 由🏭供应商页修改）</label><input id="cfg-key" type="password" readonly placeholder="sk-..."></div>
   <div class="form-row">
     <div class="form-group"><label>Temperature</label><input id="cfg-temp" type="number" step="0.01" min="0" max="2" placeholder="0.7"></div>
     <div class="form-group"><label>Max Tokens</label><input id="cfg-max-tokens" type="number" min="1" placeholder="4096"></div>
@@ -190,15 +190,55 @@
     <div class="form-group"><label>Top-P</label><input id="cfg-top-p" type="number" step="0.01" min="0" max="1" placeholder="0.9"></div>
     <div class="form-group"><label>Max Context</label><input id="cfg-max-ctx" type="number" min="0" placeholder="0=不限制"></div>
   </div>
+  <div class="form-row">
+    <div class="form-group" style="flex:1"><label>Reasoning Effort</label>
+      <select id="cfg-effort">
+        <option value="auto">auto（自动）</option>
+        <option value="none">none</option>
+        <option value="minimal">minimal</option>
+        <option value="low">low</option>
+        <option value="medium">medium</option>
+        <option value="high">high</option>
+        <option value="xhigh">xhigh</option>
+        <option value="max">max</option>
+      </select>
+    </div>
+  </div>
   <div class="form-inline">
-    <label><input id="cfg-vision" type="checkbox"> 👁️ 视觉</label>
-    <label><input id="cfg-reasoning" type="checkbox" checked> 🧠 推理</label>
+    <label><input id="cfg-vision" type="checkbox"> 👁️ 视觉（enable vision）</label>
+    <label><input id="cfg-reasoning" type="checkbox" checked> 🧠 思考（enable thinking）</label>
   </div>
 
   <div class="modal-section-title" style="color:var(--green)">🔄 便宜模型（可选）</div>
-  <div class="form-group"><label>模型名称</label><input id="cfg-cheap-model" placeholder="deepseek-v4-flash"></div>
-  <div class="form-group"><label>API URL</label><input id="cfg-cheap-url" placeholder="https://api.deepseek.com"></div>
-  <div class="form-group"><label>API Key（不填则用主模型 Key）</label><input id="cfg-cheap-key" type="password" placeholder="sk-..."></div>
+  <div class="form-group"><label>模型名称（只读 · 切换请用顶部下拉）</label><input id="cfg-cheap-model" readonly placeholder="deepseek-v4-flash"></div>
+  <div class="form-group"><label>API URL（只读 · 由🏭供应商页修改）</label><input id="cfg-cheap-url" readonly placeholder="https://api.deepseek.com"></div>
+  <div class="form-group"><label>API Key（只读 · 由🏭供应商页修改）</label><input id="cfg-cheap-key" type="password" readonly placeholder="sk-..."></div>
+  <div class="form-row">
+    <div class="form-group"><label>Temperature</label><input id="cfg-cheap-temp" type="number" step="0.01" min="0" max="2" placeholder="0.7"></div>
+    <div class="form-group"><label>Max Tokens</label><input id="cfg-cheap-max-tokens" type="number" min="1" placeholder="4096"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Top-P</label><input id="cfg-cheap-top-p" type="number" step="0.01" min="0" max="1" placeholder="0.9"></div>
+    <div class="form-group"><label>Max Context</label><input id="cfg-cheap-max-ctx" type="number" min="0" placeholder="0=不限制"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group" style="flex:1"><label>Reasoning Effort</label>
+      <select id="cfg-cheap-effort">
+        <option value="auto">auto（自动）</option>
+        <option value="none">none</option>
+        <option value="minimal">minimal</option>
+        <option value="low">low</option>
+        <option value="medium">medium</option>
+        <option value="high">high</option>
+        <option value="xhigh">xhigh</option>
+        <option value="max">max</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-inline">
+    <label><input id="cfg-cheap-vision" type="checkbox"> 👁️ 视觉（enable vision）</label>
+    <label><input id="cfg-cheap-reasoning" type="checkbox" checked> 🧠 思考（enable thinking）</label>
+  </div>
 
   <div class="modal-section-title" style="color:var(--yellow)">⚡ 运行时</div>
   <div class="form-row">

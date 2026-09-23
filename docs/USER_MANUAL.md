@@ -37,14 +37,14 @@ Tea Agent 是一个可自我扩展的智能 Agent 框架，核心理念是 **"Ag
 ### 技术栈
 
 ```
-Python 3.11+ / Starlette + Uvicorn / OpenAI SDK / SQLite / Tkinter (可选)
+Python 3.11+ / Starlette + Uvicorn / OpenAI SDK / SQLite
 ```
 
 ---
 
 ## 2. 启动入口与使用模式
 
-### 2.1 九种启动入口一览
+### 2.1 启动入口一览
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -52,8 +52,6 @@ Python 3.11+ / Starlette + Uvicorn / OpenAI SDK / SQLite / Tkinter (可选)
 ├──────────────┬──────────────────┬────────────────────────────┤
 │   类型       │   命令            │   说明                     │
 ├──────────────┼──────────────────┼────────────────────────────┤
-│ CLI 脚本     │ tea-agent-cli    │ 命令行交互模式              │
-│              │ tea_agent        │ 老 GUI (tkinter)           │
 │              │ tea-agent-api    │ HTTP API 服务               │
 │              │ tea-agent-mini   │ 迷你版 Agent               │
 │              │ tea-agent-acp    │ ACP 协议服务器              │
@@ -83,12 +81,6 @@ python -m tea_agent.server --api-key YOUR_SECRET_KEY
 python -m tea_agent.server --config ~/.tea_agent/my_config.yaml --port 9090
 ```
 
-**CLI 交互模式**:
-```bash
-tea-agent-cli
-# 进入终端交互式对话
-```
-
 ---
 
 ## 3. 系统架构总览
@@ -98,9 +90,9 @@ tea-agent-cli
 ```
                     ┌─────────────────────────────────┐
                     │         用户界面层               │
-                    │   Web UI (static/)  │  CLI/GUI   │
+                    │   Web UI (static/)  │  ACP/IM    │
                     └────────────┬────────────────────┘
-                                 │ HTTP / stdin
+                                 │ HTTP / SSE  
                     ┌────────────▼────────────────────┐
                     │         接入层                   │
                     │  Starlette Router (route_handlers)│
@@ -128,7 +120,7 @@ tea-agent-cli
              │                  │                  │
     ┌────────▼──────────────────▼──────────────────▼───────┐
     │                    Toolkit 层                         │
-    │  tlk.py (工具引擎) ── toolkit/ (70+ 工具函数)        │
+    │  tlk.py (工具引擎) ── toolkit/ (64 工具函数)         │
     │  · 动态加载/注册/执行  · 版本管理  · self-evolve      │
     └─────────────────────┬────────────────────────────────┘
                           │
@@ -755,7 +747,7 @@ print(f"活跃: {stats['active']}, 等待: {stats['pending']}")
 | 模式 | 存储 | 后台服务 | Session 类 | 用途 |
 |------|------|---------|-----------|------|
 | `lightweight` | ❌ | ❌ | OnlineToolSession | 孤立任务 |
-| `full` | ✅ | ✅ | OnlineToolSession | CLI/GUI/Server |
+| `full` | ✅ | ✅ | OnlineToolSession | Server / ACP / 渠道 |
 | `lite` | ❌ | ❌ | LiteSession | 子 Agent |
 
 ```python
@@ -901,8 +893,8 @@ pipeline.register_step("history_build", build_history, position=2)
     │            │            │
     ▼            ▼            ▼
 ┌─────────┐ ┌─────────┐ ┌──────────┐
-│ gui.py  │ │ server/ │ │ multi_   │
-│ (Tkinter)│ │ (HTTP)  │ │ agent/   │
+│ server/ │ │protocol/│ │ multi_   │
+│ (HTTP)  │ │  (ACP)  │ │ agent/   │
 └─────────┘ └─────────┘ └──────────┘
 ```
 
@@ -1032,7 +1024,6 @@ toolkit_reload()  # 重载后立即可用
 | 场景 | 推荐方式 |
 |------|----------|
 | 日常使用 | `python -m tea_agent.server` (Web UI) |
-| 终端交互 | `tea-agent-cli` |
 | 集成到其他系统 | `tea-agent-api` + `/v1/chat/completions` |
 | 嵌入式/轻量 | `tea-agent-mini` |
 

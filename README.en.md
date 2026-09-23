@@ -17,7 +17,7 @@
 | | |
 |---|---|
 | 🧠 **Self-Evolving** | AI writing AI — modifies its own code, builds new tools, optimizes prompts. Stronger with every task |
-| 🧰 **Tool-Driven** | 60+ built-in tools (files/code/search/screenshot/browser/package/Git), hot-pluggable at runtime |
+| 🧰 **Tool-Driven** | 64 built-in tools (files/code/search/screenshot/browser/package/Git), hot-pluggable at runtime |
 | 🛡️ **Tool Self-Pruning** | Shrinks the exposed tool set using real usage data (idle tools auto-shielded), three invariants + escape hatches |
 | ♻️ **Resilient Service** | Seamless self-restart (in-flight turn resumes from snapshot, no lost messages) + mid-generation steering |
 | 🖥️ **Multi-Interface** | Web V2 / REST API / ACP / Telegram / WeChat front-ends, one engine |
@@ -42,7 +42,7 @@ toolkit_experience_solidify → Success→skills, failure→lessons, auto-crysta
 
 > ⚠️ **Context-Aware**: self-evolution activates **only inside tea_agent's own project**; in external projects it's auto-disabled, focusing on your tasks without harmful changes.
 
-### 2. 🧰 Tool-Driven — 60+ Built-in Tools
+### 2. 🧰 Tool-Driven — 64 Built-in Tools
 
 | Category | Representative Tools |
 |----------|---------------------|
@@ -55,7 +55,7 @@ toolkit_experience_solidify → Success→skills, failure→lessons, auto-crysta
 | 🔧 System / Engineering | `toolkit_exec` (incl. git), `toolkit_pkg`, `toolkit_build`, `toolkit_config`, `toolkit_server_restart`, `toolkit_approve` |
 
 The tool engine (`tlk.py`) supports **dynamic load/unload/reload** — create a new tool mid-conversation, use it in the next turn.
-Currently **56 tool modules / 60 registered tools**, of which 58 are exposed to the model (2 internal tools stay hidden).
+Currently **55 tool modules / 64 registered tools**, of which 62 are exposed to the model (2 internal tools stay hidden).
 
 #### Tool exposure self-pruning (v0.16.6+)
 
@@ -303,7 +303,7 @@ python build_nuitka.py            # or compile to single-file executable (no Pyt
 
 | Removed | Note |
 |---------|------|
-| GUI / ACP / Telegram | Desktop & protocol layers |
+| ACP / Telegram | Protocol & channel layers |
 | NumPy vectors | replaced with pure Python `math+struct` |
 | Playwright / PyAutoGUI / MSS | optional manual install |
 | 11 heavy tools | JS rendering, screenshot, input simulation, browser tabs, clipboard, LSP, code explorer, package manager etc. on demand (the OCR tool was removed — image understanding now goes through `toolkit_vision_analyze` and the vision model) |
@@ -358,7 +358,7 @@ tea_agent/
 ├── agent.py           # Agent unified entry
 ├── onlinesession.py   # Online session (tool loop + streaming)
 ├── litesession.py     # Lightweight session
-├── tlk.py             # Tool load/register/execute engine (60 tools)
+├── tlk.py             # Tool load/register/execute engine (64 tools)
 ├── memory.py          # Long-term memory system
 ├── config.py          # Configuration management
 ├── providers.py       # 26 LLM provider bootstrap catalog (model attrs live in provider.yaml)
@@ -369,7 +369,7 @@ tea_agent/
 ├── server/            # REST API + Web V2 (Starlette + SSE)
 ├── protocol/          # ACP protocol
 ├── channel/           # Telegram / WeChat adapters
-├── toolkit/           # 56 tool modules
+├── toolkit/           # 55 tool modules
 ├── session/           # History compression / L1/L2/L3 / JSON validation
 ├── store/             # Data storage (13 feature sub-modules + migration: sessions/memory/vectors/tool usage/interruptions…)
 ├── multi_agent/       # Multi-agent system

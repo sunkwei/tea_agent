@@ -156,7 +156,7 @@ frag_text = assemble_fragments(
 ## 5. 缓存命中率观测
 
 - **工具**：`cache_report.py`（`format_cache_hit_rate` / `cache_hit_rate_number`）
-- **入口**：`agent.py` / `agent_module.py` / `gui.py` 任务结束输出
+- **入口**：`agent.py` / `agent_module.py` 任务结束输出
   `缓存命中率: xx.x% (hit X / miss Y)`
 - **依据**：`usage.prompt_cache_hit_tokens` / `prompt_cache_miss_tokens`
 

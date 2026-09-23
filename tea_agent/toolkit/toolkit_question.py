@@ -3,24 +3,20 @@
 """
 问题工具 - 执行过程中向用户提问
 
-支持四种模式（按优先级）：
+交互路径（按优先级）：
 1. Web 模式：通过 tlk.toolkit._question_web_handler 回调（由 server.py 设置）
 2. 静默模式（Server/Headless）：无交互时自动返回 default 值
-3. GUI 模式：tkinter 弹窗
-4. CLI 模式：终端输入
 
 关键设计：通过 tlk.toolkit 共享单例传递 handler，规避 exec() 变量隔离问题。
+
+注：GUI（tkinter 弹窗）与 CLI（终端 input）两条路径已随 GUI/CLI 接口废弃移除 ——
+交互面收敛为 Web；非 Web 环境一律返回默认值，绝不阻塞在 stdin 上。
 """
 
 import logging
 import os
-import threading
 
 logger = logging.getLogger("toolkit.question")
-
-# 全局状态：存储用户回答
-_answer_result = None
-_answer_event = threading.Event()
 
 
 def _get_web_handler():
@@ -86,282 +82,12 @@ def toolkit_question(
         except Exception as e:
             logger.warning(f"Web question handler failed, fallback: {e}")
 
-    # ── 优先级 2: 静默模式（Server 后台 / 无头环境） ──
-    if _is_headless_context():
-        logger.info(
-            f"Headless/server mode: auto-return default={default!r} "
-            f"for question: {title}"
-        )
-        return default or ""
-
-    global _answer_result, _answer_event
-
-    # 重置状态
-    _answer_result = None
-    _answer_event.clear()
-
-    # 检测是否在 GUI 环境中
-    try:
-        import tkinter as tk
-        # 尝试创建隐藏窗口测试 GUI 可用性
-        test_root = tk.Tk()
-        test_root.withdraw()
-        test_root.destroy()
-        gui_available = True
-    except Exception:
-        gui_available = False
-
-    # 根据环境选择模式
-    if gui_available and _is_gui_running():
-        return _ask_gui(title, question, options, default, timeout)
-    else:
-        return _ask_cli(title, question, options, default, timeout)
-
-
-def _is_gui_running() -> bool:
-    """检测是否有 GUI 主窗口正在运行。"""
-    try:
-        import tkinter as tk
-        # 检查是否有 Tk 根窗口
-        return len(tk._default_root.children) > 0 if tk._default_root else False
-    except Exception:
-        return False
-
-
-def _ask_gui(
-    title: str,
-    question: str,
-    options: list[str] = None,
-    default: str = "",
-    timeout: int = 0
-) -> str:
-    """GUI 模式提问。"""
-    global _answer_result, _answer_event
-
-    import tkinter as tk
-    from tkinter import ttk
-
-    # 创建弹窗 - 根据选项数量动态调整窗口高度
-    base_height = 300
-    option_height = 32 if options else 0
-    window_height = base_height + (len(options) * option_height if options else 60)
-    window_height = min(window_height, 600)  # 限制最大高度
-    window_width = 500
-
-    dialog = tk.Toplevel()
-    dialog.title(f"❓ {title}")
-    dialog.minsize(400, 280)  # 保证按钮可见的最小尺寸
-    dialog.geometry(f"{window_width}x{window_height}")
-    dialog.resizable(True, True)  # 允许调整大小
-    dialog.transient()
-    dialog.grab_set()
-
-    # 居中显示
-    dialog.update_idletasks()
-    x = (dialog.winfo_screenwidth() - window_width) // 2
-    y = (dialog.winfo_screenheight() - window_height) // 2
-    dialog.geometry(f"+{x}+{y}")
-
-    # 字体配置 - Windows 使用微软雅黑，其他平台使用系统默认
-    import platform
-    if platform.system() == "Windows":
-        font_family = "Microsoft YaHei UI"  # 微软雅黑 UI 版，更清晰
-    else:
-        font_family = "System"  # Linux/macOS 使用系统字体
-
-    # 标题
-    title_label = ttk.Label(
-        dialog,
-        text=title,
-        font=(font_family, 16, "bold"),
-        anchor="center"
+    # ── 优先级 2: 无交互通道 → 返回默认值（绝不阻塞 main thread 等 stdin） ──
+    logger.info(
+        "No interactive channel (headless=%s): auto-return default=%r for question: %s",
+        _is_headless_context(), default, title,
     )
-    title_label.pack(pady=(15, 5))
-
-    # 问题描述
-    question_label = ttk.Label(
-        dialog,
-        text=question,
-        font=(font_family, 12),
-        wraplength=450,
-        anchor="center",
-        justify="center"
-    )
-    question_label.pack(pady=(0, 15))
-
-    # 答案变量
-    answer_var = tk.StringVar(value=default)
-
-    if options and len(options) > 0:
-        # 选项模式
-        options_frame = ttk.Frame(dialog)
-        options_frame.pack(fill=tk.BOTH, expand=True, padx=20)
-
-        for opt in options:
-            rb = tk.Radiobutton(
-                options_frame,
-                text=opt,
-                variable=answer_var,
-                value=opt,
-                font=(font_family, 12)
-            )
-            rb.pack(anchor="w", pady=4)
-
-        # 自定义输入选项
-        custom_frame = tk.Frame(dialog)
-        custom_frame.pack(fill=tk.X, padx=20, pady=(10, 0))
-
-        tk.Radiobutton(
-            custom_frame,
-            text="自定义:",
-            variable=answer_var,
-            value="__custom__",
-            font=(font_family, 12)
-        ).pack(side=tk.LEFT)
-
-        custom_entry = tk.Entry(custom_frame, width=30, font=(font_family, 12))
-        custom_entry.pack(side=tk.LEFT, padx=(5, 0))
-
-        def on_custom_focus(event):
-            answer_var.set("__custom__")
-        custom_entry.bind("<FocusIn>", on_custom_focus)
-    else:
-        # 自由输入模式
-        input_frame = tk.Frame(dialog)
-        input_frame.pack(fill=tk.X, padx=20)
-
-        entry = tk.Entry(input_frame, width=50, font=(font_family, 12))
-        entry.pack(fill=tk.X)
-        entry.insert(0, default)
-        entry.select_range(0, tk.END)
-        entry.focus_set()
-
-        # 回车提交
-        def on_enter(event):
-            answer_var.set(entry.get())
-            _submit()
-        entry.bind("<Return>", on_enter)
-
-    # 按钮区域
-    button_frame = ttk.Frame(dialog)
-    button_frame.pack(fill=tk.X, padx=20, pady=15)
-
-    def _submit():
-        global _answer_result
-        answer = answer_var.get()
-
-        # 处理自定义输入
-        if answer == "__custom__":
-            try:
-                answer = custom_entry.get()
-            except Exception:
-                answer = ""
-
-        if not answer:
-            answer = default
-
-        _answer_result = answer
-        _answer_event.set()
-        dialog.destroy()
-
-    def _cancel():
-        global _answer_result
-        _answer_result = default or ""
-        _answer_event.set()
-        dialog.destroy()
-
-    # 使用 tk.Button 以支持 font 参数
-    submit_btn = tk.Button(button_frame, text="确定", command=_submit, font=(font_family, 12))
-    submit_btn.pack(side=tk.RIGHT, padx=5)
-
-    cancel_btn = tk.Button(button_frame, text="取消", command=_cancel, font=(font_family, 12))
-    cancel_btn.pack(side=tk.RIGHT, padx=5)
-
-    # 超时处理
-    if timeout > 0:
-        def _timeout():
-            global _answer_result
-            _answer_result = default or ""
-            _answer_event.set()
-            try:
-                dialog.destroy()
-            except Exception:
-                logger.exception('op_failed')
-
-        dialog.after(timeout * 1000, _timeout)
-
-    # 等待用户回答
-    dialog.wait_window()
-
-    return _answer_result or default or ""
-
-
-def _ask_cli(
-    title: str,
-    question: str,
-    options: list[str] = None,
-    default: str = "",
-    timeout: int = 0
-) -> str:
-    """CLI 模式提问。"""
-    print(f"\n{'='*50}")
-    print(f"❓ {title}")
-    print(f"{'='*50}")
-    print(f"\n{question}\n")
-
-    if options and len(options) > 0:
-        # 选项模式
-        for i, opt in enumerate(options, 1):
-            marker = "→" if opt == default else " "
-            print(f"  {marker} {i}. {opt}")
-
-        if default:
-            print(f"\n  默认: {default}")
-
-        print()
-
-        while True:
-            try:
-                user_input = input("请选择 (输入序号或选项名称): ").strip()
-
-                if not user_input and default:
-                    return default
-
-                # 尝试解析为序号
-                try:
-                    idx = int(user_input) - 1
-                    if 0 <= idx < len(options):
-                        return options[idx]
-                except ValueError:
-                    logger.exception('op_failed')
-
-
-                # 尝试匹配选项名称
-                for opt in options:
-                    if user_input.lower() == opt.lower():
-                        return opt
-
-                # 模糊匹配
-                matches = [opt for opt in options if user_input.lower() in opt.lower()]
-                if len(matches) == 1:
-                    return matches[0]
-
-                print("❌ 无效选择，请重试")
-
-            except (EOFError, KeyboardInterrupt):
-                return default or ""
-    else:
-        # 自由输入模式
-        if default:
-            print(f"  默认: {default}")
-
-        print()
-
-        try:
-            user_input = input("请输入: ").strip()
-            return user_input if user_input else default
-        except (EOFError, KeyboardInterrupt):
-            return default or ""
+    return default or ""
 
 
 # 工具元信息

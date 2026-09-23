@@ -1,7 +1,7 @@
 """
 配置向导 (setup wizard) — 首次运行引导用户完成基础配置。
 
-当 $HOME/.tea_agent/config.yaml 不存在时，各入口（server / cli / gui）可调用
+当 $HOME/.tea_agent/config.yaml 不存在时，各入口（server / ACP / 渠道）可调用
 ``run_setup_wizard()`` 启动交互式向导，引导用户输入主模型的 api_url /
 api_key / model_name 等，生成 config.yaml 后继续启动。
 

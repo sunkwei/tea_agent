@@ -236,23 +236,6 @@ def toolkit_scheduler(action: str, **kwargs):
             dt += timedelta(minutes=1)
         return None
 
-    # ── 通知 ──
-    def _notify(title: str, msg: str):
-        """发送系统通知（失败静默，不打印 ERROR 堆栈到终端）"""
-        try:
-            import sys
-            if sys.platform == 'linux':
-                subprocess.run(['notify-send', '--app-name=TeaAgent', title, msg],
-                               capture_output=True, timeout=5)
-            elif sys.platform == 'darwin':
-                subprocess.run(['osascript', '-e',
-                    f'display notification "{msg}" with title "{title}"'],
-                    capture_output=True, timeout=5)
-        except Exception as e:
-            # notify-send 超时/缺失时静默处理，避免 ERROR 堆栈污染终端
-            logger.debug('通知发送失败(忽略): %s', e)
-
-
     # ── 脚本存储 ──
     def _get_script_db_path():
         """获取脚本存储的数据库路径（与调度器同库）"""
@@ -381,7 +364,6 @@ def toolkit_scheduler(action: str, **kwargs):
         _main_mod._tea_scheduler_running = True
         _main_mod._tea_scheduler_pid = os.getpid()
         logger.info(f"定时任务调度器已启动 (pid={os.getpid()})")
-        _notify("⏰ 定时任务调度器", f"已启动，每{CHECK_INTERVAL}秒检查")
 
         while _main_mod._tea_scheduler_running:
             try:
@@ -419,12 +401,6 @@ def toolkit_scheduler(action: str, **kwargs):
                     conn2.commit()
                     conn2.close()
 
-                    # 通知执行结果
-                    icon = "✅" if exit_code == 0 else "❌"
-                    _notify(
-                        f"{icon} 定时任务: {task['name']}",
-                        f"退出码: {exit_code}\n{output[:200]}"
-                    )
 
             except Exception as e:
                 logger.warning(f"调度器循环异常: {e}")
@@ -466,7 +442,6 @@ def toolkit_scheduler(action: str, **kwargs):
         )
         conn.commit()
         conn.close()
-        _notify("⏰ 新增定时任务", f"{name}\n调度: {schedule}")
         return {"status": "added", "task_id": tid, "next_run": next_run.isoformat() if next_run else None}
 
     elif action == "update":
@@ -548,10 +523,6 @@ def toolkit_scheduler(action: str, **kwargs):
         )
         conn2.commit()
         conn2.close()
-        _notify(
-            f"{'✅' if exit_code == 0 else '❌'} 手动执行: {task['name']}",
-            f"退出码: {exit_code}\n{output[:200]}"
-        )
         return {"status": "executed", "exit_code": exit_code, "output": output[:500]}
 
     elif action == "start":
@@ -656,7 +627,6 @@ def toolkit_scheduler(action: str, **kwargs):
         )
         conn.commit()
         conn.close()
-        _notify("⏰ 新增脚本任务", f"{name}\n脚本: {script_id}\n调度: {schedule}")
         return {"status": "added", "task_id": tid, "next_run": next_run.isoformat() if next_run else None}
 
     else:

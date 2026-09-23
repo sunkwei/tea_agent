@@ -1,6 +1,10 @@
 # Tea Agent 进化路线图
 
 > 调研日期：2026-06-27
+> ⚠️ **历史快照**：界面相关的「现状」与规划已被后续版本推翻 ——
+> GUI（Tkinter）/ TUI（Textual）/ CLI 三种交互界面已于 v0.16.x **移除**，
+> 交互面收敛为 Web V2 + REST API（另有 ACP 与 Telegram/微信渠道适配器）。
+> 下文涉 GUI/TUI/CLI 的现状描述与优先级均已过期，保留原貌仅供追溯。
 > 比对项目：**OpenCode** (anomalyco/opencode, 179k⭐) · **OpenCode Go** (opencode-ai/opencode, 13k⭐ → Crush) · **ZCode** (智谱 GLM-5.2 桌面端)
 > 当前版本：**Tea Agent v0.9.36** (Python)
 
@@ -13,9 +17,9 @@
 | **语言** | Python | TypeScript | Go | JS/Electron |
 | **Stars** | ~? | **179,190** | 13,100 | 非开源 |
 | **架构** | 单体+工具库 | **Monorepo (30+ packages)** | 单体 | 桌面应用 |
-| **界面** | Web/GUI/TUI/CLI | Terminal/Desktop/Web | TUI | Desktop |
+| **界面** | Web/API (+ACP/渠道) | Terminal/Desktop/Web | TUI | Desktop |
 | **自进化** | ✅ **核心特性** | ❌ 无 | ❌ 无 | ❌ 无 |
-| **工具数量** | **60+** | 有限内置 | 10+ | 有限 |
+| **工具数量** | **64** | 有限内置 | 10+ | 有限 |
 | **插件系统** | MCP协议 | ✅ Plugin + SDK | MCP | Natroc插件市场 |
 | **多Agent** | ✅ 分治并发 | ✅ Sub-agent | ✅ Agent tool | ❌ |
 | **企业版** | ❌ | ✅ Enterprise包 | ❌ | ❌ |
@@ -55,9 +59,9 @@
 | 能力 | Tea Agent | OpenCode(TS) | OpenCode(Go) | ZCode | 优先级 |
 |------|:---:|:---:|:---:|:---:|:---:|
 | Web界面 | ✅ Starlette+SSE | ✅ Web包 | ❌ | ❌ | 已有 |
-| GUI桌面 | ✅ Tkinter | ✅ Desktop(Electron) | ❌ | ✅ Electron | 🔺 **GUI质量待提升** |
-| TUI终端 | ✅ Textual | ✅ Ink/React | ✅ Bubble Tea | ❌ | 已有 |
-| CLI模式 | ✅ | ✅ CLI包 | ✅ | ❌ | 已有 |
+| GUI桌面 | ❌ 已放弃 | ✅ Desktop(Electron) | ❌ | ✅ Electron | — |
+| TUI终端 | ❌ 已放弃 | ✅ Ink/React | ✅ Bubble Tea | ❌ | — |
+| CLI模式 | ❌ 已放弃 | ✅ CLI包 | ✅ | ❌ | — |
 | **移动端** | ❌ | ❌ | ❌ | ❌ | 🔮 远期 |
 | **IDE集成** | ❌ | ✅ VS Code ext计划 | ✅ ACP/Bridge | ✅ ACP | 🔺 **急需** |
 | **Slack/团队协作** | ❌ | ✅ Slack包 | ❌ | ❌ | 🔮 远期 |
@@ -124,7 +128,7 @@
 
 | # | 能力 | 当前状态 | 目标 | 借鉴来源 | 难度 |
 |---|------|---------|------|---------|:---:|
-| 1 | **GUI 现代化重构** | Tkinter 基础 | Electron/Tauri 或 WebView2 现代化桌面 | OpenCode(TS) Desktop, ZCode | ⭐⭐⭐⭐ |
+| ~~1~~ | ~~**GUI 现代化重构**~~ | ~~Tkinter 基础~~ | **已放弃**（GUI 整体移除） | OpenCode(TS) Desktop, ZCode | — |
 | 2 | **插件市场** | MCP(通用) | 专用插件注册/发现/一键安装 | OpenCode(TS) Plugin, Natroc | ⭐⭐⭐ |
 | 3 | **多语言国际化** | 中/英 | i18n 框架，支持 20+ 语言 | OpenCode(TS) 多语言 | ⭐⭐ |
 | 4 | **身份认证系统** | ❌ 无 | 用户登录/API Key 管理/多租户 | OpenCode(TS) Identity | ⭐⭐⭐ |
@@ -139,7 +143,7 @@
 | 2 | **Slack/飞书集成** | ❌ 无 | 团队共享 Agent 会话和工具 | OpenCode(TS) Slack | ⭐⭐⭐ |
 | 3 | **遥测与统计** | ❌ 无 | 工具使用率、性能监控、用量分析 | OpenCode(TS) Stats | ⭐⭐ |
 | 4 | **CI/CD 自动流水线** | 基础 | 自动测试/构建/PyPI 发布/GitHub Actions | OpenCode(TS) CI | ⭐⭐ |
-| 5 | **桌面原生应用** | Tkinter | Electron/Tauri 打包，自动更新 | OpenCode(TS) Desktop | ⭐⭐⭐⭐ |
+| ~~5~~ | ~~**桌面原生应用**~~ | ~~Tkinter~~ | **已放弃**（GUI 整体移除） | OpenCode(TS) Desktop | — |
 
 ---
 
@@ -164,10 +168,7 @@ tea_agent/
 tea_agent/
 ├── packages/
 │   ├── core/            ← 核心引擎(自进化/工具管理)
-│   ├── cli/             ← CLI入口
 │   ├── web/             ← Web界面 (已有)
-│   ├── gui/             ← GUI界面 (重构)
-│   ├── tui/             ← TUI界面 (已有)
 │   ├── server/          ← ★ HTTP API Server (Phase 1)
 │   ├── sdk/             ← ★ Python SDK (Phase 1)
 │   ├── protocol/        ← ★ ACP/MCP协议层 (Phase 1)
@@ -185,7 +186,7 @@ tea_agent/
 ## 五、Top 5 关键差距分析
 
 ### 1️⃣ HTTP API Server ⭐⭐⭐⭐⭐
-- **现状**: 只能通过 CLI/GUI/Web 本地使用
+- **现状**: （2026-06 快照）当时只能本地使用
 - **影响**: 无法被 CI/CD、外部工具、远程调用
 - **方案**: 基于 Starlette 构建 REST API，复用现有 Agent 引擎
 - **参考**: OpenCode(TS) 有完整 server/ 包，支持 HTTP + SSE

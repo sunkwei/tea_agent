@@ -630,14 +630,16 @@ class TestGenerateOsInfoText:
         assert "Web" in result or "链接" in result
 
     def test_interface_type_cli(self):
-        """CLI 接口类型应包含对应提示"""
+        """已废弃的 cli 接口类型回退 web 口径（不再是纯文本提示）"""
         result = BaseGenerateTest._call_generate("Linux", interface_type="cli")
-        assert "纯文本" in result
+        assert "纯文本" not in result
+        assert "Web 浏览器" in result, "cli 应回退为 Web 浏览器标签"
 
     def test_interface_type_gui(self):
-        """GUI 接口类型应包含对应提示"""
+        """已废弃的 gui 接口类型回退 web 口径（不再宣传桌面端能力）"""
         result = BaseGenerateTest._call_generate("Linux", interface_type="gui")
-        assert "桌面" in result or "GUI" in result or "Markdown" in result
+        assert "Tkinter" not in result
+        assert "Web 浏览器" in result
 
 
 class TestGenerateOsInfoCrossPlatform:
@@ -682,29 +684,11 @@ class TestDetectInterfaceType:
             from tea_agent.session.os_info_injector import _detect_interface_type
             assert _detect_interface_type() == "web"
 
-    def test_env_var_gui(self):
-        """TEA_AGENT_INTERFACE=gui 应返回 gui"""
-        with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "gui"}, clear=True):
-            from tea_agent.session.os_info_injector import _detect_interface_type
-            assert _detect_interface_type() == "gui"
-
-    def test_env_var_cli(self):
-        """TEA_AGENT_INTERFACE=cli 应返回 cli"""
-        with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "cli"}, clear=True):
-            from tea_agent.session.os_info_injector import _detect_interface_type
-            assert _detect_interface_type() == "cli"
-
     def test_env_var_case_insensitive(self):
         """环境变量值不区分大小写"""
         with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "WEB"}, clear=True):
             from tea_agent.session.os_info_injector import _detect_interface_type
             assert _detect_interface_type() == "web"
-
-    def test_env_var_tui(self):
-        """TEA_AGENT_INTERFACE=tui 应返回 tui"""
-        with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "tui"}, clear=True):
-            from tea_agent.session.os_info_injector import _detect_interface_type
-            assert _detect_interface_type() == "tui"
 
     def test_env_var_mcp(self):
         """TEA_AGENT_INTERFACE=mcp 应返回 mcp"""
@@ -713,18 +697,17 @@ class TestDetectInterfaceType:
             assert _detect_interface_type() == "mcp"
 
     def test_no_env_var_fallback(self):
-        """无环境变量时应通过模块检测回退到 cli"""
+        """无环境变量且无特征时回退 web —— 不得回退到已废弃的 cli"""
         with patch.dict(os.environ, {}, clear=True), patch("tea_agent.session.os_info_injector.sys.modules", {}):
             with patch("tea_agent.session.os_info_injector.sys.argv", [""]):
                 from tea_agent.session.os_info_injector import _detect_interface_type
-                result = _detect_interface_type()
-                assert result in ("web", "gui", "cli", "tui", "mcp")
+                assert _detect_interface_type() == "web"
 
     def test_invalid_env_var_fallback(self):
         """无效环境变量值应走正常检测流程"""
         with patch.dict(os.environ, {"TEA_AGENT_INTERFACE": "invalid"}, clear=True):
             from tea_agent.session.os_info_injector import _detect_interface_type
-            assert _detect_interface_type() != "invalid"
+            assert _detect_interface_type() == "web"
 
 
 # ============================================================
@@ -741,23 +724,17 @@ class TestGetInterfaceHints:
         assert "#topic:" in hints or "HTML" in hints
         assert "Markdown" in hints or "链接" in hints
 
-    def test_gui_hints(self):
-        """GUI 接口应返回桌面通知提示"""
-        from tea_agent.session.os_info_injector import _get_interface_hints
-        hints = _get_interface_hints("gui")
-        assert "通知" in hints or "toolkit_notify" in hints
+    def test_removed_interfaces_fall_back_to_web_hints(self):
+        """已废弃的 gui/cli/tui 与任意未知值一律回退 web 提示，不得返回空串。
 
-    def test_cli_hints(self):
-        """CLI 接口应返回纯文本提示"""
+        回退空串会让模型失去全部格式约定（旧实现 `hints.get(t, "")` 即如此）；
+        Web 是当前唯一内置交互面，故未知类型按 web 口径组装提示。
+        """
         from tea_agent.session.os_info_injector import _get_interface_hints
-        hints = _get_interface_hints("cli")
-        assert "纯文本" in hints
-
-    def test_tui_hints(self):
-        """TUI 接口应返回终端富文本提示"""
-        from tea_agent.session.os_info_injector import _get_interface_hints
-        hints = _get_interface_hints("tui")
-        assert "终端" in hints
+        web = _get_interface_hints("web")
+        assert web, "web 提示不得为空"
+        for legacy in ("gui", "cli", "tui", "invalid", ""):
+            assert _get_interface_hints(legacy) == web, f"{legacy!r} 未回退 web 提示"
 
     def test_mcp_hints(self):
         """MCP 接口应返回纯文本/JSON 提示"""
@@ -765,8 +742,9 @@ class TestGetInterfaceHints:
         hints = _get_interface_hints("mcp")
         assert "纯文本" in hints or "JSON" in hints
 
-    def test_unknown_interface_empty(self):
-        """未知接口类型应返回空字符串"""
+    def test_unknown_interface_falls_back_to_web(self):
+        """未知接口类型回退 web 提示，而非空串（空串会让模型失去全部格式约定）"""
         from tea_agent.session.os_info_injector import _get_interface_hints
         hints = _get_interface_hints("nonexistent")
-        assert hints == ""
+        assert hints != ""
+        assert hints == _get_interface_hints("web")

@@ -69,13 +69,13 @@ category: system
 
 ```
 【分析】
-用户需要修改 cli.py 的参数解析逻辑，从 argparse 改为 click。
+用户需要重构某个 Python 脚本的参数解析逻辑，从手写解析改为 argparse。
 关键约束：保持向后兼容。
 可能陷阱：--verbose 短选项冲突。
 
 【方案】
 - 方案A: 整体替换为 click decorator 风格（推荐）
-- 方案B: 在 argparse 上层包装 click 接口
+- 方案B: 保留手写解析，仅补齐缺失选项
 
 【执行】
 → 方案A，开始实施。

@@ -312,7 +312,7 @@ class AgentConfig:
     # 交互与控制参数
     memory_extraction_threshold: int = 2  # 触发记忆提取的最低未摘要消息数
     memory_dedup_threshold: float = 0.3  # 记忆去重相似度阈值 (0~1)，bigram Jaccard
-    chat_page_size: int = 50  # GUI 单页加载的对话轮数（最多50条）
+    chat_page_size: int = 50  # 单页加载的对话轮数（最多50条）
     history_l2_max: int = 8  # L2最大保留轮数，超出时溢出 keep=5 条至 L3 摘要
     history_l3_batch: int = 5  # L3摘要批处理：每次溢出至少 N 条才触发便宜模型摘要
     # 单条 L2 条目 thinking（本轮全部工具步的 reasoning_content 拼接）上限（字符）。
@@ -330,10 +330,6 @@ class AgentConfig:
     # 让其后 N 步内容缓存未命中。
     # 背景：单轮 200 步的 RC 可达 37.5 万 token，是上下文被迅速打满的第一主因。
     rc_keep_steps: int = 8
-    font_size: int = 16  # HtmlFrame 字体大小（px）
-    app_font_size: int = (
-        12  # App GUI 字体大小（pt，控制 label/input/treeview 等原生组件）
-    )
 
     # API 弹性参数（网络中断 / PC 睡眠恢复等瞬时故障的容错）
     api_request_timeout: float = 120.0   # 单次请求超时（秒）
@@ -360,8 +356,6 @@ class AgentConfig:
         "l2_thinking_max_chars",  # L2 单条 thinking 限幅（上下文填充治理）
         "l2_max_chars",           # L2 总量触发摘要阈值（字符）
         "rc_keep_steps",          # L1 只保留最近 N 步 reasoning_content 全文
-        "font_size",  # HtmlFrame 字体大小
-        "app_font_size",  # App GUI 字体大小
     }
 
     # 打断知识闭环配置（M4/M5）
@@ -403,8 +397,6 @@ class AgentConfig:
         "l2_thinking_max_chars": int,
         "l2_max_chars": int,
         "rc_keep_steps": int,
-        "font_size": int,
-        "app_font_size": int,
     }
 
     def get(self, key: str, default=None):
@@ -509,12 +501,12 @@ _last_config_path = None
 # 会再次取锁，普通 Lock 会导致首次 get_config() 死锁
 _config_lock = threading.RLock()
 
-# ── 全局活跃配置路径（跨 GUI/Web/CLI 共享） ──
+# ── 全局活跃配置路径（Web / ACP / 渠道等各入口共享） ──
 _active_config_path: str | None = None
 
 
 def set_active_config_path(config_path: str) -> None:
-    """设置全局活跃配置路径（GUI/Web 切换配置时调用）。"""
+    """设置全局活跃配置路径（Web 切换配置时调用）。"""
     global _active_config_path
     with _config_lock:
         _active_config_path = os.path.abspath(config_path)
@@ -981,8 +973,6 @@ def _parse_control_params(cfg: AgentConfig, data: dict) -> None:
         data.get("l2_thinking_max_chars", cfg.l2_thinking_max_chars)
     )
     cfg.l2_max_chars = int(data.get("l2_max_chars", cfg.l2_max_chars))
-    cfg.font_size = int(data.get("font_size", cfg.font_size))
-    cfg.app_font_size = int(data.get("app_font_size", cfg.app_font_size))
 
     # API 弹性参数（网络中断/睡眠恢复容错）
     cfg.api_request_timeout = float(
@@ -1419,7 +1409,7 @@ def _generate_config_template() -> str:
         "memory_extraction_threshold: 2\n\n"
         "# 记忆去重相似度阈值，超过此值视为重复并合并(0~1)\n"
         "memory_dedup_threshold: 0.3\n\n"
-        "# GUI 单页加载的最大对话轮数（超过则省略更早的对话）\n"
+        "# 单页加载的最大对话轮数（超过则省略更早的对话）\n"
         "chat_page_size: 50\n\n"
         "# 2026-05-20 gen by Tea Agent, L2/L3分层压缩参数\n"
         "# L2 最大保留轮数（用户+助手对，不含工具轮次）\n"

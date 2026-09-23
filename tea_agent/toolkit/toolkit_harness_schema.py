@@ -166,9 +166,8 @@ def _get_capabilities() -> dict:
         },
         "monitoring": {
             "supported": True,
-            "detail": "后台监控 + 桌面通知",
+            "detail": "后台监控 + 定时任务调度",
             "background_thread": True,
-            "system_notifications": True,
             "scheduler_support": True,
         },
     }

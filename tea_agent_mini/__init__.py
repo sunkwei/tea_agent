@@ -4,17 +4,18 @@ tea_agent_mini — Tea Agent 精简版，面向嵌入式设备。
 核心特性：
 - ✅ Agent（lightweight / full / lite 三种模式）
 - ✅ Storage（SQLite 持久化存储）
-- ✅ Toolkit（70+ 内置工具函数）
+- ✅ Toolkit（64 内置工具函数）
 - ✅ LiteSession / LiteAgent（轻量级会话和子任务执行）
 - ✅ Server（REST API + Web UI + OpenAI 兼容接口）
 
 不包含（需用完整版 tea_agent）：
-- ❌ GUI（Tkinter / pywebview）
-- ❌ TUI / CLI
 - ❌ ACP Protocol
 - ❌ LSP 支持
 - ❌ SDK
 - ❌ 调度器存储 / 自动修复
+
+注：GUI（Tkinter）/ TUI / CLI 三种交互界面已于 v0.16.x 从**整个项目**移除
+（不只是精简版），交互面统一为 Web + REST API。
 
 用法：
     # 启动 Web 服务器

@@ -191,32 +191,37 @@ def _save_os_sig(topic_id: str, sig: str) -> None:
 def _detect_interface_type() -> str:
     """检测当前接口类型。
 
+    交互面已收敛为 Web（GUI / CLI / TUI 入口废弃），故检测不到特征时回退
+    ``'web'`` 而非旧的 ``'cli'`` —— 回退 cli 会让提示词按「纯文本、无 HTML
+    渲染」组装，与实际 Web 渲染能力相反。
+
     Returns:
-        'web' | 'gui' | 'cli' — 当前服务接口类型
+        'web' | 'mcp' — 当前服务接口类型
     """
     # 环境变量覆盖（各入口点预置）
     env_type = os.environ.get('TEA_AGENT_INTERFACE', '') or ''
-    if env_type.lower() in ('web', 'gui', 'cli', 'tui', 'mcp'):
+    if env_type.lower() in ('web', 'mcp'):
         return env_type.lower()
 
     # 从已加载模块检测
     if 'starlette' in sys.modules or 'uvicorn' in sys.modules:
         return 'web'
-    if 'tkinter' in sys.modules:
-        return 'gui'
 
     # 从 argv 推断
     script = os.path.basename(sys.argv[0]) if sys.argv else ''
     if any(x in script.lower() for x in ('server', 'web')):
         return 'web'
-    if any(x in script.lower() for x in ('gui', 'tk')):
-        return 'gui'
 
-    return 'cli'
+    return 'web'
 
 
 def _get_interface_hints(interface_type: str) -> str:
-    """根据接口类型返回交互格式提示。"""
+    """根据接口类型返回交互格式提示。
+
+    未知值（含已废弃的 ``gui`` / ``cli`` / ``tui`` 与任意拼写错误）一律回退
+    **web** 提示：旧实现 ``hints.get(interface_type, "")`` 返回空串，会让模型
+    失去全部格式约定；而 Web 是当前唯一的内置交互面。
+    """
     hints = {
         "web": (
             "【交互格式】响应中可用 Markdown + HTML 链接。\n"
@@ -224,26 +229,12 @@ def _get_interface_hints(interface_type: str) -> str:
             "【下载链接】生成的 .zip/.exe/.pdf 等文件链接会自动添加下载图标。\n"
             "【URL链接】裸 URL 自动转为可点击的超链接。"
         ),
-        "gui": (
-            "【交互格式】响应中支持 Markdown 渲染。\n"
-            "【文件操作】桌面 GUI 支持文件拖拽和剪贴板图片粘贴。\n"
-            "【通知】长时间任务完成后可通过 toolkit_notify 发送桌面通知。"
-        ),
-        "cli": (
-            "【交互格式】纯文本响应，无 HTML 渲染。\n"
-            "【链接】使用裸 URL 文本，用户可手动复制。\n"
-            "【输出】避免依赖 HTML/富文本渲染。"
-        ),
-        "tui": (
-            "【交互格式】终端富文本，支持基本 Markdown。\n"
-            "【链接】使用裸 URL 文本。"
-        ),
         "mcp": (
             "【交互格式】纯文本/JSON 格式。\n"
             "【链接】使用裸 URL 文本。"
         ),
     }
-    return hints.get(interface_type, "")
+    return hints.get(interface_type) or hints["web"]
 
 
 def generate_os_info_text(toolkit_root_dir: str = "",
@@ -276,9 +267,10 @@ def generate_os_info_text(toolkit_root_dir: str = "",
     if interface_type is None:
         interface_type = _detect_interface_type()
 
-    iface_labels = {"web": "Web 浏览器", "gui": "桌面 GUI (Tkinter)", "cli": "命令行终端",
-                    "tui": "终端 TUI", "mcp": "MCP 协议"}
-    iface_label = iface_labels.get(interface_type, interface_type)
+    # 已废弃的 gui / cli / tui 与任意未知值一律按 web 呈现
+    # （与 _get_interface_hints 同一口径，避免「标签说 CLI、提示却是 Web」的自相矛盾）
+    iface_labels = {"web": "Web 浏览器", "mcp": "MCP 协议"}
+    iface_label = iface_labels.get(interface_type) or iface_labels["web"]
 
     # ── OS 概要 ──
     lines = [
@@ -407,9 +399,10 @@ def inject_os_info(messages: list[dict], toolkit_root_dir: str = "",
     if interface_type is None:
         interface_type = _detect_interface_type()
 
-    iface_labels = {"web": "Web 浏览器", "gui": "桌面 GUI (Tkinter)", "cli": "命令行终端",
-                    "tui": "终端 TUI", "mcp": "MCP 协议"}
-    iface_label = iface_labels.get(interface_type, interface_type)
+    # 已废弃的 gui / cli / tui 与任意未知值一律按 web 呈现
+    # （与 _get_interface_hints 同一口径，避免「标签说 CLI、提示却是 Web」的自相矛盾）
+    iface_labels = {"web": "Web 浏览器", "mcp": "MCP 协议"}
+    iface_label = iface_labels.get(interface_type) or iface_labels["web"]
 
     # 使用纯函数生成文本（避免重复）
     info_text = generate_os_info_text(

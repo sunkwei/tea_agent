@@ -498,9 +498,8 @@ TOOL_CATEGORIES = {
         "toolkit_prompt_evolve",
         "toolkit_experience_solidify",
     ],
-    "导出与分享": [
+    "导出": [
         "toolkit_export_last_pdf",
-        "toolkit_notify",
     ],
     "MCP集成": [
         "toolkit_mcp",

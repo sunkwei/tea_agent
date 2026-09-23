@@ -234,13 +234,13 @@ class TestChat:
 
 class TestRunToolAndSession:
     def test_run_tool_sends_arguments(self, sdk, server):
-        out = sdk.run_tool("toolkit_notify", {"title": "t"})
-        assert server.last_body == {"arguments": {"title": "t"}}
+        out = sdk.run_tool("toolkit_todo", {"action": "show"})
+        assert server.last_body == {"arguments": {"action": "show"}}
         assert out["ok"] is True
 
     def test_run_tool_with_empty_arguments_still_posts_body(self, sdk, server):
         """arguments={} 是合法入参，不得被 `if data` 判空后丢掉 body 变成 GET。"""
-        sdk.run_tool("toolkit_notify", {})
+        sdk.run_tool("toolkit_todo", {})
         assert server.last_body == {"arguments": {}}
 
     def test_create_session(self, sdk):

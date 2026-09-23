@@ -1615,21 +1615,6 @@ class OnlineToolSession(BaseChatSession):
         except Exception:
             logger.exception("persist interruption classification failed")
 
-    def _notify(self, title: str, message: str) -> None:
-        """跨平台桌面通知（通过 toolkit_notify）。"""
-        try:
-            self.context.toolkit.call_tool(
-                "toolkit_notify", title=title, message=message, duration=5000
-            )
-        except Exception:
-            logger.exception("op_failed")
-
-    def _notify_reflection_done(self, reflection_id: int):
-        self._notify("🔍 元认知反思完成", f"反思 #{reflection_id} 已生成")
-
-    def _notify_prompt_evolved(self, version: int):
-        self._notify("📝 提示词进化", f"系统提示词已进化到 v{version}")
-
     def chat_stream(
         self,
         msg: str,

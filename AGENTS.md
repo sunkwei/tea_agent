@@ -34,7 +34,7 @@ tea-agent-telegram                   # Telegram 适配器
 tea-agent-wechat                     # 微信适配器
 
 # ── 测试 ──
-pytest                               # 运行全部测试（100 个测试文件，截至 2026-09-18）
+pytest                               # 运行全部测试（105 个测试文件，截至 2026-09-23）
 pytest tea_agent/tests/test_xxx.py   # 运行单文件测试
 pytest -k "test_name" -xvs           # 按名匹配+详细输出
 pytest --collect-only -q             # 只收集用例（确认总数与新增文件已被发现）
@@ -83,11 +83,11 @@ tea_agent/                          # 40 个顶层模块 + 15 个子包
 ├── permission.py                   # 工具权限管理（已禁用，恒放行；真实闸门见 tool_approval）
 ├── tlk.py                          # ★ 工具加载/注册/执行引擎（call_tool 为唯一汇聚点）
 │
-├── toolkit/                        # ★ 工具注册中心：toolkit_*.py 共 56 个 → 注册 60 个工具（58 个对模型可见）
+├── toolkit/                        # ★ 工具注册中心：toolkit_*.py 共 55 个 → 注册 64 个工具（62 个对模型可见）
 │   ├── __init__.py                 # 空文件（无手工注册；工具由 tlk.py 扫描加载）
 │   ├── toolkit_exec.py / toolkit_file.py / toolkit_edit.py / toolkit_diff.py
 │   ├── _git_snapshot.py            # 下划线前缀 → 不注册为工具（快照基础设施）
-│   └── ... (56 个 toolkit_*.py)
+│   └── ... (55 个 toolkit_*.py)
 │
 ├── session/                        # 会话组装（历史压缩 / L1·L2·L3 / JSON 校验 / os 信息注入 / 解码速率）
 ├── store/                          # 存储层（13 个功能子模块 + migration）
@@ -102,7 +102,7 @@ tea_agent/                          # 40 个顶层模块 + 15 个子包
 ├── sdk/                            # 对外 SDK
 ├── demo/                           # 演示应用（辩论赛 / 钢琴 / DAG）
 │
-└── tests/                          # 100 个测试文件（大模块必须有对应 test_ 文件）
+└── tests/                          # 105 个测试文件（大模块必须有对应 test_ 文件）
 ```
 
 > 注：`tea_agent_mini/` 是仓库根下的独立顶层子包（见「Mini 构建」），不在 `tea_agent/` 目录内。
@@ -226,7 +226,7 @@ toolkit_reload()
 
 ### 测试规范
 
-- 测试文件：`tea_agent/tests/test_*.py`（100 个，截至 2026-09-18）
+- 测试文件：`tea_agent/tests/test_*.py`（105 个，截至 2026-09-23）
 - 使用 `pytest`，fixture 集中在 `conftest.py`
 - 测试函数名：`test_<功能>_<场景>`
 - 重要模块须有 `test_` 文件覆盖；修复缺陷必须**带回归测试**，且回归测试要能真的失败（必要时做元验证：把实现还原成旧版，确认测试确实变红）
@@ -346,12 +346,12 @@ toolkit_release_version(
 
 `tea_agent_mini/` 是独立子包，精简依赖构建。规则：
 
-- 只包含核心会话能力（无 GUI、无 TUI、无 LSP）
+- 只包含核心会话能力（无 LSP、无重型工具）
 - 通过 `build_mini.py` 脚本构建；依赖仅 7 个核心包
 - 剔除范围由脚本内 `EXCLUDED_PKGS` / `EXCLUDED_TOP` / `HEAVY_TOOLS` 三个白/黑名单决定
   （`HEAVY_TOOLS` 当前 11 项：JS 渲染、截图、输入模拟、浏览器标签、剪贴板、LSP、
   `explr`、`pkg` 等），**增删工具后须同步该名单**
-- 入口：`tea-agent-mini` CLI
+- 入口：`tea-agent-mini` 命令行脚本
 
 ## 环境变量与开关
 
@@ -375,7 +375,7 @@ toolkit_release_version(
 | `TEA_AUDIT_DISABLED` | 关闭审计写入 | `1`/`true`/`yes` 关闭 |
 | `TEA_AUDIT_DIR` | 审计日志目录 | 默认项目 run 目录 |
 | `TEA_HEADLESS` | 无人值守（`toolkit_question` 不阻塞） | `1`/`true`/`yes` |
-| `TEA_AGENT_INTERFACE` | 声明运行界面（影响注入的环境描述） | `web`/`gui`/`cli`/`tui`/`mcp` |
+| `TEA_AGENT_INTERFACE` | 声明运行界面（影响注入的环境描述） | `web`(默认)/`mcp` |
 | `TEA_BENCH_HISTORY` | EvolutionBench 曲线文件覆盖 | 路径 |
 | `TEA_AGENT_EVOLUTION_LOG` | 自进化日志路径 | 默认项目 run 目录 |
 | `TEA_API_KEY` | ACP/Server 侧 API 鉴权 Key | 非空启用 |

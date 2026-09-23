@@ -226,6 +226,84 @@ def messages_contain_images(messages: list[dict]) -> bool:
     return False
 
 
+# 合成 user 消息前缀（非真实用户轮）：动态上下文注入在结果尾部、L2/L3 摘要在
+# L1 之前 —— 定位"当前轮"时必须跳过它们，否则尾部的 [动态上下文 user 会被
+# 误判为当前轮，把真实当前轮的图一并剥掉。
+_SYNTH_USER_PREFIXES = ("[动态上下文", "[历史记录]", "[历史相关对话摘要]")
+
+
+def _is_real_user(msg: dict) -> bool:
+    """是否真实用户轮消息（排除尾部动态上下文/L2·L3 合成 user）。"""
+    if msg.get("role") != "user":
+        return False
+    c = msg.get("content")
+    if isinstance(c, str) and c.startswith(_SYNTH_USER_PREFIXES):
+        return False
+    return True
+
+
+def strip_historical_images(messages: list[dict]) -> list[dict]:
+    """剥离历史轮消息中的图像数据结构（构造 API 历史的最后一步）。
+
+    历史轮 = 最后一条 role=user 消息**之前**的消息；当前轮（最后一条 user
+    及其后的 assistant/tool 中间消息）原样保留 —— 当前轮的图由回合级/请求级
+    视觉切换路由到 vision 模型处理，一旦该轮滑为历史，下次构建即被剥离。
+
+    剥离三类结构（残留任一都可能触发 API 400）：
+      - ``images`` 键（文件路径列表，非 OpenAI 标准字段，严格端点直接拒绝）
+      - ``_b64_cache`` 私有键（base64 快照缓存，绝不该出网）
+      - content 数组中的 ``image_url`` 段（非视觉端点 / cheap 摘要路径收到
+        → 400 "image input"；DeepSeek 端点对数组 content 亦会 400）
+
+    附带收益：``messages_contain_images`` 不再被历史图误触发 ——
+    「上一轮发图、本轮纯文本追问」会正确回落主模型而非一直锁在 vision。
+
+    幂等；直接修改并返回传入列表。调用方（onlinesession._build_api_messages）
+    传入的是构建期 msg_copy，**不污染** context.messages 原始历史（存储/回溯
+    用的仍是完整版本），每次构建重新剥离，结果确定性收敛。
+
+    Args:
+        messages: build_api_messages 产出的 API 消息列表
+
+    Returns:
+        同一列表（历史轮已剥离图像结构）
+    """
+    last_user = -1
+    for i in range(len(messages) - 1, -1, -1):
+        if _is_real_user(messages[i]):
+            last_user = i
+            break
+    if last_user <= 0:
+        return messages  # 无历史轮（无 user 或 user 即首条）
+    for i in range(last_user):
+        msg = messages[i]
+        msg.pop("images", None)
+        msg.pop("_b64_cache", None)
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        kept, texts, has_img = [], [], False
+        for p in content:
+            if isinstance(p, dict) and p.get("type") == "image_url":
+                has_img = True
+                continue
+            if isinstance(p, dict) and p.get("type") == "text":
+                t = p.get("text", "")
+                if isinstance(t, str) and t:
+                    texts.append(t)
+                continue
+            kept.append(p)
+        if not has_img:
+            continue  # 无图 parts：形态原样保留（不制造无谓前缀变化）
+        body = "\n".join(texts)
+        if kept:
+            # 混合形态（理论少见）：其他段保留，文本归一到首段
+            msg["content"] = ([{"type": "text", "text": body}] if body else []) + kept
+        else:
+            msg["content"] = body if body else "[图片]"
+    return messages
+
+
 def _key_words(text: str) -> set:
     """提取文本中的关键词（中文2字+、英文3字母+）"""
     cn = re.findall(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]{2,}', text)

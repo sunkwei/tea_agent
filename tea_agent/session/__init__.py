@@ -21,6 +21,7 @@ from .history_builder import (
     build_api_messages,
     estimate_tokens,
     messages_contain_images,
+    strip_historical_images,
     to_multimodal,
 )
 from .json_sanitizer import sanitize_api_messages, try_fix_truncated_json
@@ -41,7 +42,7 @@ __all__ = [
     "TOPIC_SUMMARY_SYSTEM", "TOPIC_SUMMARY_USER_TEMPLATE",
     "COMPACT_SYSTEM_PROMPT",
     "build_api_messages", "estimate_tokens", "to_multimodal",
-    "messages_contain_images",
+    "messages_contain_images", "strip_historical_images",
     "sanitize_api_messages", "try_fix_truncated_json",
     "generate_os_info_text", "inject_os_info",
     "get_cheap_params",

@@ -277,3 +277,76 @@ class TestExtractFilesFromSymbolIndex:
         monkeypatch.chdir(tmp_path)
         from tea_agent.session.history_builder import _extract_files_from_text
         assert "x/y.py" in _extract_files_from_text("参考 x/y.py 里的 build_history")
+
+
+# ============================================================
+# strip_historical_images — 历史轮图像剥离（400 回归）
+# ============================================================
+
+class TestStripHistoricalImages:
+    """历史轮图像剥离：构造 API 历史的最后一步。
+
+    回归场景：历史轮发送过图像后，images/_b64_cache/image_url 残留回传
+    非视觉端点（或 cheap 摘要路径）→ API 400；且历史图会让
+    messages_contain_images 持续命中，把后续纯文本轮锁死在 vision 模型。
+    """
+
+    @staticmethod
+    def _msgs():
+        return [
+            {"role": "system", "content": "sp"},
+            {"role": "user", "content": "看这张图",
+             "images": ["/old.png"], "_b64_cache": {"/old.png": "xxxx"}},
+            {"role": "assistant", "content": "图里是一只猫"},
+            {"role": "user",
+             "content": [{"type": "text", "text": "再看这张"},
+                          {"type": "image_url",
+                           "image_url": {"url": "data:image/png;base64,QQ=="}}]},
+            {"role": "assistant",
+             "content": [{"type": "text", "text": "回复"},
+                          {"type": "image_url",
+                           "image_url": {"url": "data:image/png;base64,QQ=="}}]},
+            {"role": "user", "content": "当前轮纯文本追问"},
+            {"role": "user", "content": "[动态上下文] 时间: 2026-09-23"},
+        ]
+
+    def test_strips_old_turns_keeps_current(self):
+        from tea_agent.session.history_builder import strip_historical_images
+        out = strip_historical_images(self._msgs())
+        # 历史 user：images / _b64_cache 私有键被剥
+        assert "images" not in out[1]
+        assert "_b64_cache" not in out[1]
+        # 历史 content=parts：image_url 段剥掉、文本归一为 str
+        assert out[3]["content"] == "再看这张"
+        assert out[4]["content"] == "回复"
+        # 真实当前轮（尾部 [动态上下文 之前的最后一条真实 user）原样
+        assert out[5]["content"] == "当前轮纯文本追问"
+        # 尾部合成动态上下文不受影响（且不参与当前轮定位）
+        assert out[6]["content"].startswith("[动态上下文")
+
+    def test_current_turn_with_image_kept(self):
+        """当前轮（最后一条真实 user）带图必须原样保留（交给视觉切换）。"""
+        from tea_agent.session.history_builder import strip_historical_images
+        msgs = self._msgs()
+        msgs[5] = {"role": "user", "content": "看这张", "images": ["/new.png"]}
+        out = strip_historical_images(msgs)
+        assert out[5].get("images") == ["/new.png"]   # 当前轮保留
+        assert "images" not in out[1]                  # 历史仍剥
+
+    def test_idempotent(self):
+        """幂等：重复剥离结果不变。"""
+        import copy
+        from tea_agent.session.history_builder import strip_historical_images
+        once = strip_historical_images(self._msgs())
+        snap = copy.deepcopy(once)
+        assert strip_historical_images(once) == snap
+
+    def test_no_real_user_returns_unchanged(self):
+        """无真实 user 轮（仅 system/合成消息）→ 原样返回，不误剥。"""
+        from tea_agent.session.history_builder import strip_historical_images
+        msgs = [
+            {"role": "system", "content": "sp"},
+            {"role": "user", "content": "[动态上下文] x", "images": ["y"]},
+        ]
+        out = strip_historical_images(msgs)
+        assert out[1].get("images") == ["y"]

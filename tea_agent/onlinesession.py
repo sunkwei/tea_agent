@@ -32,6 +32,7 @@ from tea_agent.session.decode_rate import (
 from tea_agent.session.history_builder import (
     build_api_messages,
     estimate_tokens,
+    strip_historical_images,
 )
 from tea_agent.session.prompts import (
     COMPACT_SYSTEM_PROMPT,
@@ -1379,7 +1380,11 @@ class OnlineToolSession(BaseChatSession):
             logger.info("使用主题 SP + 进化 SP 合并版")
         else:
             sp = self.system_prompt
-        return build_api_messages(self.context, sp)
+        # 历史轮图像剥离：最后一条 user（当前轮）之前的 images/_b64_cache/
+        # image_url parts 一律剥掉 —— 残留会让非视觉端点/cheap 摘要路径 400，
+        # 也会让历史图把后续纯文本轮持续锁在 vision 模型上。当前轮保留，
+        # 由回合级/请求级视觉切换处理。见 history_builder.strip_historical_images。
+        return strip_historical_images(build_api_messages(self.context, sp))
 
     # ──────────────────────────────────────────────
     # 意图分析与工具循环

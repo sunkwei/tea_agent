@@ -1506,3 +1506,70 @@ class TestRequestLevelVisionSwitch:
 
 
 print("\n✅ OnlineSession 测试加载完成")
+
+
+# ════════════════════════════════════════════════════════════
+# 4. 历史轮图像剥离（onlinesession 接线契约，400 回归）
+# ════════════════════════════════════════════════════════════
+
+class TestStripHistoricalImagesWired:
+    """_build_api_messages 必须剥离历史轮图像结构、保留当前轮。
+
+    元验证锚点：旧实现（未接 strip_historical_images）下，
+    result[1]/result[2] 的 content 仍是含 image_url 的 parts 数组 → 红。
+    """
+
+    def test_history_images_stripped_current_kept(self, tmp_path):
+        ctx = SessionContext(model="test-model", enable_thinking=False,
+                             supports_reasoning=False, disable_summary=False,
+                             supports_vision=True)
+        old_img = tmp_path / "old.png"
+        old_img.write_bytes(b"old")
+        new_img = tmp_path / "new.png"
+        new_img.write_bytes(b"new")
+        ctx.messages = [
+            {"role": "user", "content": "看这张图",
+             "images": [str(old_img)],
+             "_b64_cache": {str(old_img): "b3Zs"}},
+            {"role": "assistant",
+             "content": [{"type": "text", "text": "图里是猫"},
+                          {"type": "image_url",
+                           "image_url": {"url": "data:image/png;base64,QQ=="}}]},
+            {"role": "user", "content": "当前轮也带图", "images": [str(new_img)]},
+        ]
+        mock_tk = MagicMock()
+        mock_tk.meta_map = {}
+        sess = OnlineToolSession(
+            toolkit=mock_tk, api_key="sk-test", api_url="https://api.test.com/v1",
+            model="test-model", enable_thinking=False, storage=None,
+            supports_vision=True, supports_reasoning=False, disable_summary=False,
+        )
+        sess.context = ctx
+        sess.system_prompt = "You are a test assistant."
+        result = sess._build_api_messages()
+
+        # 实锤锚点：历史轮两条消息的 parts 已归一为 str（旧实现=含 image_url 的 list）
+        assert result[1]["content"] == "看这张图"
+        assert result[2]["content"] == "图里是猫"
+        assert "images" not in result[1]
+        assert "_b64_cache" not in result[1]
+
+        # 真实当前轮定位（跳过尾部 [动态上下文 合成 user）
+        real_users = [i for i, m in enumerate(result)
+                      if m["role"] == "user"
+                      and not str(m.get("content", "")).startswith("[动态上下文")]
+        last_real = real_users[-1]
+        assert last_real == 3, f"当前轮定位漂移: {last_real}"
+
+        # 当前轮带图原样保留（to_multimodal 已转 parts，image_url 仍在 → 视觉切换可路由）
+        cur = result[last_real]
+        assert isinstance(cur["content"], list)
+        assert any(isinstance(p, dict) and p.get("type") == "image_url"
+                   for p in cur["content"])
+
+        # 全历史（当前轮之前）绝无 image_url 残留
+        for m in result[:last_real]:
+            c = m.get("content")
+            if isinstance(c, list):
+                assert all(not (isinstance(p, dict) and p.get("type") == "image_url")
+                           for p in c), m

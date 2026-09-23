@@ -242,6 +242,12 @@ class ToolComponent(SessionComponent):
 
         数据来源：session_events 表（append-only），供轨迹视图/审计重放使用。
 
+        ⚠️ topic_id 必须取 ``ctx.topic_id``（回合入口在 ``chat_stream`` 里同步）。
+        Component **不持有 session**，早期版本写成 ``getattr(self, "current_topic_id")``
+        恒为 None → 工具事件静默不落库（轨迹视图只剩 user/assistant，工具调用永远空白）。
+        该缺陷曾被 ``test_tool_trace_events.py`` 的替身掩盖：替身手动设了
+        ``self.current_topic_id``，而真实组件没有这个属性。
+
         Args:
             event_type: "tool/call" | "tool/result"（其他类型忽略）
             payload: 事件负载（name/call_id/args/result 等，已摘要截断）
@@ -249,8 +255,12 @@ class ToolComponent(SessionComponent):
         if event_type not in ("tool/call", "tool/result"):
             return
         try:
-            topic_id = getattr(self, "current_topic_id", None)
-            storage = getattr(self.ctx, "storage", None)
+            ctx = getattr(self, "ctx", None)
+            # 主源：共享上下文（Component 唯一持有的状态载体）
+            topic_id = getattr(ctx, "topic_id", "") or getattr(
+                self, "current_topic_id", None
+            )
+            storage = getattr(ctx, "storage", None)
             if not (topic_id and storage):
                 return
             events = getattr(storage, "events", None)

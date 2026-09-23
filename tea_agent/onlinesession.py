@@ -1697,6 +1697,9 @@ class OnlineToolSession(BaseChatSession):
         )
 
         self.current_topic_id = topic_id
+        # 同步到共享上下文：Component 只持有 ctx，不持有 session，
+        # 它们记录事件（如 tool/call）时靠 ctx.topic_id 定位主题。
+        self.context.topic_id = topic_id
 
         # ⭐ 插话：清理上个会话遗留的排队消息（未在上一轮被消费的 steering 项）。
         # 这些项要么已由前端在流结束后作为新消息重新发送（内容在 POST body 中），

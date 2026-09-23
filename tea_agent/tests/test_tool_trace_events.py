@@ -9,7 +9,6 @@
 import os
 import sys
 import tempfile
-from types import SimpleNamespace
 
 import pytest
 
@@ -32,17 +31,38 @@ def storage():
         pass
 
 
-class _FakeSession:
-    """模拟 OnlineToolSession 的最小对象（仅含 _log_tool_event 依赖的属性）。"""
+def _make_comp(storage, topic_id):
+    """构造**真实** ToolComponent（配真实 SessionContext）。
 
-    def __init__(self, storage, topic_id):
-        self.current_topic_id = topic_id
-        self.ctx = SimpleNamespace(storage=storage)
+    刻意不用替身。历史缺陷：本文件原先的 ``_FakeSession`` 手动设了
+    ``self.current_topic_id``，而真实 ToolComponent **没有**该属性
+    （topic_id 在 session 上，Component 只持有 ctx）—— 于是
+    ``_log_tool_event`` 里 ``getattr(self, "current_topic_id", None)`` 恒为 None，
+    工具事件**从不落库**（轨迹视图只剩 user/assistant，工具段永远空白），
+    而测试因替身属性齐全始终为绿。
+
+    现在 topic_id 走 ``ctx.topic_id``（回合入口 ``chat_stream`` 每轮同步的字段），
+    测试必须走同一条路 —— 否则又会把缺陷固化成绿色契约。
+
+    Args:
+        storage: Storage 实例
+        topic_id: 当前主题 ID（空串模拟"无 topic"场景）
+
+    Returns:
+        真实的 ToolComponent 实例
+    """
+    from tea_agent.session.components.tool import ToolComponent as _TC
+    from tea_agent.session.context import SessionContext
+
+    ctx = SessionContext()
+    ctx.storage = storage
+    ctx.topic_id = topic_id
+    return _TC(ctx)
 
 
-def _log_event(fake, event_type, payload):
-    """以未绑定方法方式调用真实 _log_tool_event（ToolComponent 方法）。"""
-    ToolComponent._log_tool_event(fake, event_type, payload)
+def _log_event(comp, event_type, payload):
+    """调用真实 _log_tool_event。"""
+    comp._log_tool_event(event_type, payload)
 
 
 # ── _summarize_json ──
@@ -84,8 +104,8 @@ def test_tool_event_types_registered():
 def test_log_tool_call_event(storage):
     """tool/call 事件写入 session_events，payload 含 name/call_id/args。"""
     tid = storage.topics.create_topic("TT")
-    fake = _FakeSession(storage, tid)
-    _log_event(fake, "tool/call", {
+    comp = _make_comp(storage, tid)
+    _log_event(comp, "tool/call", {
         "name": "toolkit_search",
         "call_id": "call_1",
         "args": '{"query": "test"}',
@@ -101,8 +121,8 @@ def test_log_tool_call_event(storage):
 def test_log_tool_result_event(storage):
     """tool/result 事件写入 session_events，payload 含 success/result/duration。"""
     tid = storage.topics.create_topic("TT")
-    fake = _FakeSession(storage, tid)
-    _log_event(fake, "tool/result", {
+    comp = _make_comp(storage, tid)
+    _log_event(comp, "tool/result", {
         "name": "toolkit_search",
         "call_id": "call_1",
         "success": True,
@@ -121,11 +141,11 @@ def test_log_tool_result_event(storage):
 def test_log_tool_event_seq_increments(storage):
     """tool/call 与 tool/result 交替写入，seq 严格递增。"""
     tid = storage.topics.create_topic("TT")
-    fake = _FakeSession(storage, tid)
-    _log_event(fake, "tool/call", {"name": "a", "call_id": "c1", "args": "{}"})
-    _log_event(fake, "tool/result", {"name": "a", "call_id": "c1", "success": True, "result": "r1"})
-    _log_event(fake, "tool/call", {"name": "b", "call_id": "c2", "args": "{}"})
-    _log_event(fake, "tool/result", {"name": "b", "call_id": "c2", "success": False, "error": "boom"})
+    comp = _make_comp(storage, tid)
+    _log_event(comp, "tool/call", {"name": "a", "call_id": "c1", "args": "{}"})
+    _log_event(comp, "tool/result", {"name": "a", "call_id": "c1", "success": True, "result": "r1"})
+    _log_event(comp, "tool/call", {"name": "b", "call_id": "c2", "args": "{}"})
+    _log_event(comp, "tool/result", {"name": "b", "call_id": "c2", "success": False, "error": "boom"})
     events = storage.events.replay(tid)
     assert [e["seq"] for e in events] == [1, 2, 3, 4]
     assert [e["event_type"] for e in events] == [
@@ -135,8 +155,8 @@ def test_log_tool_event_seq_increments(storage):
 
 def test_log_tool_event_isolated_on_no_topic(storage):
     """无 topic_id 时静默跳过（异常隔离，不抛错）。"""
-    fake = _FakeSession(storage, "")  # 空 topic
-    _log_event(fake, "tool/call", {"name": "x", "call_id": "c", "args": "{}"})
+    comp = _make_comp(storage, "")  # 空 topic
+    _log_event(comp, "tool/call", {"name": "x", "call_id": "c", "args": "{}"})
     # 不应抛异常，也不产生事件
     assert storage.events.stats()["total"] == 0
 
@@ -144,6 +164,77 @@ def test_log_tool_event_isolated_on_no_topic(storage):
 def test_log_tool_event_rejects_unknown_type(storage):
     """非 tool/* 事件类型被忽略。"""
     tid = storage.topics.create_topic("TT")
-    fake = _FakeSession(storage, tid)
-    _log_event(fake, "turn/start", {})  # 应被忽略
+    comp = _make_comp(storage, tid)
+    _log_event(comp, "turn/start", {})  # 应被忽略
     assert storage.events.stats(tid)["total"] == 0
+
+
+# ── 回合入口同步（ctx.topic_id 的来源）────────────────────────
+
+def _make_real_session(topic_id):
+    """构造真实 OnlineToolSession（API 客户端指向假地址，不发起请求）。
+
+    Returns:
+        (session, storage) —— storage 为 None 时表示未启用存储
+    """
+    from unittest.mock import MagicMock
+
+    from tea_agent.onlinesession import OnlineToolSession
+
+    tk = MagicMock()
+    tk.meta_map = {}
+    sess = OnlineToolSession(
+        toolkit=tk, api_key="sk-test", api_url="https://api.test.invalid/v1",
+        model="test-model", max_history=5, enable_thinking=False, storage=None,
+    )
+    return sess
+
+
+def test_chat_stream_syncs_ctx_topic_id():
+    """chat_stream 必须把 topic_id 写进 ctx（否则工具事件落不到正确主题）。
+
+    这是端到端的接线契约：``_log_tool_event`` 读 ``ctx.topic_id``，
+    而该字段只有回合入口会写。若此处漏写，工具事件会静默丢弃 ——
+    轨迹视图只剩 user/assistant，工具调用段永远空白。
+    """
+    sess = _make_real_session("t-sync")
+    try:
+        # 用空 pipeline 结果短路真实 LLM 调用：同步发生在 pipeline 之前
+        sess.pipeline.execute = lambda ctx: {"full_reply": "ok", "used_tools": False}
+        sess.chat_stream("hi", callback=lambda s: None, topic_id="topic-abc")
+        assert sess.context.topic_id == "topic-abc", (
+            f"ctx.topic_id 未同步: {sess.context.topic_id!r}"
+        )
+    finally:
+        sess.close()
+
+
+def test_ctx_topic_id_used_by_log_tool_event():
+    """串联验证：chat_stream 同步的 topic_id 能被 _log_tool_event 消费并落库。"""
+    import tempfile
+
+    from tea_agent.store._core import Storage
+
+    db = os.path.join(tempfile.mkdtemp(), "sync.db")
+    st = Storage(db)
+    tid = st.topics.create_topic("同步验证")
+
+    sess = _make_real_session(tid)
+    try:
+        sess.context.storage = st  # 接入真实 storage
+        sess.pipeline.execute = lambda ctx: {"full_reply": "ok", "used_tools": False}
+        sess.chat_stream("hi", callback=lambda s: None, topic_id=tid)
+
+        # 回合入口已同步 → 组件记录工具事件应落到该 topic
+        sess.tools_comp._log_tool_event(
+            "tool/call", {"name": "toolkit_exec", "call_id": "c1", "args": "{}"}
+        )
+        evs = st.events.query_events(tid, event_type="tool/call")
+        assert len(evs) == 1, f"工具事件未落库（轨迹工具段将空白）: {len(evs)} 条"
+        assert evs[0]["payload"]["name"] == "toolkit_exec"
+    finally:
+        sess.close()
+        try:
+            st.close()
+        except Exception:
+            pass

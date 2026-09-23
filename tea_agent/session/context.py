@@ -64,6 +64,11 @@ class SessionContext:
 
     # ── 运行时状态 ──
     interface_type: str = ""
+    # 当前回合的主题 ID。回合入口（OnlineToolSession.chat_stream）每轮同步写入，
+    # 供各 Component 记录事件/落库时定位 topic —— Component 自身**没有**
+    # current_topic_id（那在 session 上），历史上有组件直接 getattr(self, ...)
+    # 取到 None，导致工具事件静默不落库（见 session/components/tool.py）。
+    topic_id: str = ""
     _thinking_supported: bool | None = True
     _cheap_thinking_supported: bool | None = None
     _last_usage: dict[str, int] = field(default_factory=lambda: {

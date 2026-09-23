@@ -921,6 +921,36 @@ class OnlineToolSession(BaseChatSession):
         except Exception:
             logger.debug("append turn/end marker failed (isolated)", exc_info=True)
 
+    def _emit_storage_notice(self, callback: Callable[[str], None]) -> None:
+        """临时目录回退时，向用户明示 db 路径并要求手动备份。
+
+        仅当 storage.db 落在**系统临时目录**（启动目录不可写）时发声 —— 这是
+        唯一会让用户丢数据的情形（重启 / 清理临时文件即消失）。
+
+        ⚠️ 经 ``callback`` 发出而**不并入 full_reply**：full_reply 会被 server
+        持久化进对话历史（见 agent_module._save_chat_result 用 ``ai_msg``），
+        每轮追加会污染上下文并挤占 token；callback 只到 UI，不入库。
+
+        纯旁路：任何异常一律吞掉，绝不把主流程带崩（见 AGENTS.md
+        「辅助能力不绑架主流程」）。
+        """
+        try:
+            from tea_agent.storage_scope import storage_notice
+
+            db_path = ""
+            storage = getattr(self, "storage", None)
+            if storage is not None:
+                db_path = getattr(storage, "db_path", "") or ""
+            if not db_path:
+                from tea_agent.config import get_config
+
+                db_path = getattr(get_config().paths, "active_db_path_abs", "") or ""
+            notice = storage_notice(db_path)
+            if notice:
+                callback(notice)
+        except Exception:
+            logger.debug("storage notice emit failed (isolated)", exc_info=True)
+
     def _record_decode_sample(self, usage, streaming: bool = True,
                               t_first: float | None = None,
                               t_end: float | None = None,
@@ -1745,6 +1775,34 @@ class OnlineToolSession(BaseChatSession):
                 interrupted=result.get("interrupted", False),
                 error=str(result.get("error", "")) if result.get("error") else None,
             )
+        return self._finalize_turn_reply(full_reply, used_tools, callback)
+
+    def _finalize_turn_reply(
+        self,
+        full_reply: str,
+        used_tools: bool,
+        callback: Callable[[str], None],
+    ) -> tuple[str, bool]:
+        """回合收尾：发存储提示并原样返回回复。
+
+        **不变式**：本方法对 ``full_reply`` 只读不写 —— 返回值必须与入参逐字相等。
+        原因见 ``_emit_storage_notice``：回复会被 server 持久化进对话历史
+        （``agent_module._save_chat_result`` 的 ``ai_msg``），一旦把运维提示拼进去，
+        每轮都会往历史写一段、污染上下文并挤占 token。
+
+        单独抽成方法是为了让这条不变式**可被动态验证**：早前的静态 AST 检查
+        （只看 ``_emit_storage_notice`` 函数体）抓不住「在调用点拼接」的写法，
+        经元验证确认是假绿守卫。现在测试直接断言返回值 == 入参。
+
+        Args:
+            full_reply: 本回合回复正文
+            used_tools: 是否用过工具
+            callback: 流式增量回调（提示经此直达 UI，不入库）
+
+        Returns:
+            ``(full_reply, used_tools)``，其中 full_reply 与入参逐字相同
+        """
+        self._emit_storage_notice(callback)
         return full_reply, used_tools
 
     def close(self):

@@ -189,12 +189,16 @@ class PromptStore(StoreComponent):
 class Storage:
     """主存储类 — 组合 9 个委派组件，管理数据库连接与生命周期。"""
 
-    def __init__(self, db_path="chat_history.db"):
+    def __init__(self, db_path=""):
         """初始化存储，每次操作独立连接（短连接模式）。
 
         Args:
-            db_path: 数据库文件路径。
+            db_path: 数据库文件路径。空则用默认名（storage.db）。
         """
+        if not db_path:
+            from tea_agent.storage_scope import DEFAULT_DB_NAME
+
+            db_path = DEFAULT_DB_NAME
         self.db_path = db_path
         maybe_rotate_db(db_path)
         logger.info(f"load database {db_path}")

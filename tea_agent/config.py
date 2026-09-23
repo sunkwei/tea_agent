@@ -137,10 +137,11 @@ class PathsConfig:
     """路径配置。相对路径相对于 config.yaml 所在目录。
 
     存储作用域（storage_scope，取值 auto/project/user，默认 auto）：
-    - 主题/会话/记忆库（db_path）默认落在「启动目录 .tea_agent_run/」项目级 db，
-      用户级 db（~/.tea_agent）保留作为回退层；
-    - 启动目录不可写（无法创建 .tea_agent_run）→ 回退用户级 db；
-    - 显式指定 data_dir 或绝对 db_path → 尊重显式配置（自定义存储根）。
+    - 主题/会话/记忆库（db_path）默认落在「启动目录 .tea_agent_run/storage.db」；
+    - 启动目录不可写（无权限 / 无磁盘空间）→ 回退**系统临时目录**，并在每轮
+      会话结束提示用户手动复制（见 storage_scope.storage_notice）；
+    - 启动目录 == 用户主目录 → 用户级 ~/.tea_agent/storage.db（主目录即项目）；
+    - 显式 storage_scope=user 或 data_dir / 绝对 db_path → 尊重显式配置。
     """
 
     data_dir: str = ""
@@ -178,7 +179,9 @@ class PathsConfig:
             return os.path.abspath(os.path.join(self._data_dir_abs, expanded))
 
         # 用户级 db（保留，作为回退层 / 显式存储根）
-        self._db_path_abs = _resolve(self.db_path, "chat_history.db")
+        from tea_agent.storage_scope import DEFAULT_DB_NAME
+
+        self._db_path_abs = _resolve(self.db_path, DEFAULT_DB_NAME)
         self._toolkit_dir_abs = _resolve(self.toolkit_dir, "toolkit")
         self._kb_dir_abs = _resolve(self.kb_dir, "kb")
         # active db 路径惰性缓存（由 active_db_path_abs 属性填充）
@@ -1381,7 +1384,7 @@ def _generate_config_template() -> str:
         "# 支持多 agent 隔离：每个 agent 使用独立的 config.yaml，指向独立的数据库和目录。\n"
         "paths:\n"
         '  data_dir: ""          # 数据根目录，默认 ~/.tea_agent\n'
-        '  db_path: ""           # 数据库文件，默认 data_dir/chat_history.db\n'
+        '  db_path: ""           # 数据库文件，默认 storage.db（落在启动目录 .tea_agent_run/）\n'
         '  toolkit_dir: ""       # 自定义工具目录，默认 data_dir/toolkit\n'
         '  kb_dir: ""            # 知识库目录，默认 data_dir/kb\n'
         '  # skills_dir: ""     # <已废弃>\n'

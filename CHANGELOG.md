@@ -2,6 +2,28 @@
 
 
 ## [Unreleased]
+### Breaking Changes
+- 存储位置改为**启动目录** `.tea_agent_run/storage.db`，不可写时回退系统临时目录并提示备份
+  - **db 改名**：`chat_history.db` → `storage.db`。同名目录下若存在旧库而新名不存在，
+    启动时**自动迁移**（连带 `-wal` / `-shm`，避免留下半套 WAL 导致数据不一致）；
+    迁移失败时**沿用旧路径**而不是新建空库 —— 宁可名字旧，也不能让用户以为历史丢了
+  - **临时目录回退**（本次需求核心）：启动目录无法创建 `.tea_agent_run`（无权限 /
+    无磁盘空间 / 只读）时，db 落到 `<tempdir>/tea_agent_<项目名>_<hash8>.db`，
+    并**每轮会话结束明确提示**具体路径与「需要手动复制到可靠位置」
+  - **提示只走 callback，绝不并入 `full_reply`**：回复会被 server 持久化进对话历史
+    （`agent_module._save_chat_result` 的 `ai_msg`），并入即等于每轮往历史写一段运维
+    提示 → 污染上下文、挤占 token。为此抽出 `_finalize_turn_reply()` 并钉住不变式
+    「返回值与入参逐字相等」
+  - 优先级：显式 `user` / 绝对 `db_path` / `data_dir` 一律尊重用户配置，不自动项目化；
+    启动目录 == 用户主目录 → 用户级（主目录即项目，不另建 `.tea_agent_run`）
+  - tests: 新增 `test_storage_scope_temp_fallback.py` 24 项。**元验证暴露并修正了一个
+    假绿守卫**：初版用静态 AST 检查「提示未写入 full_reply」，但只扫描
+    `_emit_storage_notice` 函数体，抓不住「在调用点拼接」的真实错误写法（元验证确认
+    破坏后测试仍绿）→ 改为**动态断言**「收尾方法返回值 == 入参」，无法被绕过。
+    测试替身也从 `_FakeSession` 换成 `__new__` 构造的真实实例（替身缺
+    `_emit_storage_notice` 会 AttributeError，测到的是替身缺陷而非产品逻辑）
+  - 文档同步：AGENTS.md（存储作用域不变式）/ USER_MANUAL / 使用手册 ×2 / 设计文档 ×2 / TOOLS.md
+
 ### Bug Fixes
 - fix(paths): 项目树扫描统一排除第三方依赖与构建产物（新增 `tea_agent/path_filters.py`）
   - **根因是「各自维护」**：多个扫描器各自内联一份目录排除列表，且普遍漏掉

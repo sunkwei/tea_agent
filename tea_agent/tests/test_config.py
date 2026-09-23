@@ -70,6 +70,8 @@ class TestModelConfig:
         assert mc.options == {}
 
 
+from tea_agent.storage_scope import DEFAULT_DB_NAME
+
 class TestPathsConfig:
     """PathsConfig 路径解析测试"""
 
@@ -81,7 +83,7 @@ class TestPathsConfig:
 
         home = str(Path.home())
         assert pc.data_dir_abs == os.path.join(home, ".tea_agent")
-        assert pc.db_path_abs == os.path.join(home, ".tea_agent", "chat_history.db")
+        assert pc.db_path_abs == os.path.join(home, ".tea_agent", DEFAULT_DB_NAME)
         assert pc.toolkit_dir_abs == os.path.join(home, ".tea_agent", "toolkit")
         assert pc.kb_dir_abs == os.path.join(home, ".tea_agent", "kb")
 
@@ -102,7 +104,7 @@ class TestPathsConfig:
 
             exp_data = _os.path.join(config_dir, "my_agent_data")
             assert pc.data_dir_abs == _os.path.abspath(exp_data)
-            exp_db = _os.path.join(exp_data, "chat_history.db")
+            exp_db = _os.path.join(exp_data, DEFAULT_DB_NAME)
             assert pc.db_path_abs == _os.path.abspath(exp_db)
         finally:
             _shutil.rmtree(tmpd, ignore_errors=True)
@@ -118,7 +120,7 @@ class TestPathsConfig:
         pc.resolve(_os.path.abspath("/tmp"))
 
         assert pc.data_dir_abs == abs_dir
-        exp_db = _os.path.join(abs_dir, "chat_history.db")
+        exp_db = _os.path.join(abs_dir, DEFAULT_DB_NAME)
         assert pc.db_path_abs == exp_db
 
     def test_resolve_tilde_expansion(self):

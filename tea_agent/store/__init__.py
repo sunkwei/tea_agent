@@ -31,7 +31,9 @@ def get_storage(db_path: str = "") -> Storage:
                 getattr(cfg.paths, "active_db_path_abs", "") or cfg.paths.db_path_abs
             )
         except Exception:
-            db_path = "chat_history.db"
+            from tea_agent.storage_scope import DEFAULT_DB_NAME
+
+            db_path = DEFAULT_DB_NAME
     _storage_instance = Storage(db_path)
     return _storage_instance
 

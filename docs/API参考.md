@@ -1,2013 +1,2052 @@
 # tea_agent API 参考
 
-> 自动生成: 2026-07-11 09:13  |  函数: 2187  |  类: 239  |  符号: 3774
+> 自动生成: 2026-09-23 15:08  |  函数: 4752  |  类: 631  |  符号: 6406
 
-## 模块 `build_mini_dist`
-
-### 函数
-
-| 函数名 | 文件:行号 | 类型 |
-|--------|----------|------|
-| `Tea Agent Mini` | `build_mini_dist\README.mini.md:1` | chapter |
-
-## 模块 `build_mini_dist\tea_agent`
+## 模块 `benchmark`
 
 ### 类
 
 | 类名 | 文件:行号 | 类型 |
 |------|----------|------|
-| `APIComponent` | `build_mini_dist\tea_agent\onlinesession.py:76` | class |
-| `Agent` | `build_mini_dist\tea_agent\agent.py:106` | class |
-| `AgentConfig` | `build_mini_dist\tea_agent\config.py:142` | class |
-| `AutoFixAgent` | `build_mini_dist\tea_agent\auto_fix.py:32` | class |
-| `AutoMemoryExtractor` | `build_mini_dist\tea_agent\session_memory_component.py:238` | class |
-| `BaseChatSession` | `build_mini_dist\tea_agent\basesession.py:125` | class |
-| `EmbeddingConfig` | `build_mini_dist\tea_agent\config.py:122` | class |
-| `FixResult` | `build_mini_dist\tea_agent\auto_fix.py:23` | class |
-| `LiteSession` | `build_mini_dist\tea_agent\litesession.py:22` | class |
-| `MemoryComponent` | `build_mini_dist\tea_agent\session_memory_component.py:28` | class |
-| `MemoryManager` | `build_mini_dist\tea_agent\memory.py:46` | class |
-| `ModelConfig` | `build_mini_dist\tea_agent\config.py:28` | class |
-| `OnlineToolSession` | `build_mini_dist\tea_agent\onlinesession.py:662` | class |
-| `PathsConfig` | `build_mini_dist\tea_agent\config.py:50` | class |
-| `PipelineStep` | `build_mini_dist\tea_agent\session_pipeline.py:20` | class |
-| `ProjectMemoryManager` | `build_mini_dist\tea_agent\project_memory.py:14` | class |
-| `ReflectionManager` | `build_mini_dist\tea_agent\reflection.py:53` | class |
-| `SchedulerStorage` | `build_mini_dist\tea_agent\scheduler_storage.py:16` | class |
-| `SessionPipeline` | `build_mini_dist\tea_agent\session_pipeline.py:28` | class |
-| `SessionTrace` | `build_mini_dist\tea_agent\reflection.py:28` | class |
-| `SimpleFunction` | `build_mini_dist\tea_agent\litesession.py:271` | class |
-| `SimpleToolCall` | `build_mini_dist\tea_agent\litesession.py:276` | class |
-| `SummarizerComponent` | `build_mini_dist\tea_agent\onlinesession.py:515` | class |
-| `SystemPromptManager` | `build_mini_dist\tea_agent\prompt_manager.py:28` | class |
-| `ToolCallRecord` | `build_mini_dist\tea_agent\reflection.py:20` | class |
-| `ToolComponent` | `build_mini_dist\tea_agent\onlinesession.py:319` | class |
-| `Toolkit` | `build_mini_dist\tea_agent\tlk.py:258` | class |
-| `_ModeBehavior` | `build_mini_dist\tea_agent\agent.py:57` | class |
-| `__del__` | `build_mini_dist\tea_agent\onlinesession.py:1197` | member |
-| `__enter__` | `build_mini_dist\tea_agent\agent.py:624` | member |
-| `__exit__` | `build_mini_dist\tea_agent\agent.py:627` | member |
-| `__init__` | `build_mini_dist\tea_agent\agent.py:113` | member |
-| `__init__` | `build_mini_dist\tea_agent\auto_fix.py:24` | member |
-| `__init__` | `build_mini_dist\tea_agent\auto_fix.py:33` | member |
-| `__init__` | `build_mini_dist\tea_agent\basesession.py:144` | member |
-| `__init__` | `build_mini_dist\tea_agent\litesession.py:32` | member |
-| `__init__` | `build_mini_dist\tea_agent\memory.py:49` | member |
-| `__init__` | `build_mini_dist\tea_agent\onlinesession.py:676` | member |
-| `__init__` | `build_mini_dist\tea_agent\project_memory.py:20` | member |
-| `__init__` | `build_mini_dist\tea_agent\prompt_manager.py:47` | member |
-| `__init__` | `build_mini_dist\tea_agent\reflection.py:79` | member |
-| `__init__` | `build_mini_dist\tea_agent\scheduler_storage.py:25` | member |
-| `__init__` | `build_mini_dist\tea_agent\session_memory_component.py:241` | member |
-| `__init__` | `build_mini_dist\tea_agent\session_pipeline.py:38` | member |
-| `__init__` | `build_mini_dist\tea_agent\tlk.py:273` | member |
-| `_accumulate_usage` | `build_mini_dist\tea_agent\onlinesession.py:139` | member |
-| `_analyze_intent` | `build_mini_dist\tea_agent\onlinesession.py:1035` | member |
-| `_apply` | `build_mini_dist\tea_agent\auto_fix.py:221` | member |
-| `_auto_detect_mode` | `build_mini_dist\tea_agent\onlinesession.py:1056` | member |
-| `_build_api_messages` | `build_mini_dist\tea_agent\onlinesession.py:1027` | member |
-| `_build_conversation_text` | `build_mini_dist\tea_agent\session_memory_component.py:196` | member |
-| `_build_lite_session` | `build_mini_dist\tea_agent\agent.py:285` | member |
-| `_build_online_session` | `build_mini_dist\tea_agent\agent.py:315` | member |
-| `_build_tool_stats` | `build_mini_dist\tea_agent\reflection.py:279` | member |
-| `_build_tools` | `build_mini_dist\tea_agent\litesession.py:80` | member |
-| `_build_tools` | `build_mini_dist\tea_agent\onlinesession.py:1043` | member |
-| `_calculate_similarity` | `build_mini_dist\tea_agent\session_memory_component.py:319` | member |
-| `_call_api` | `build_mini_dist\tea_agent\litesession.py:201` | member |
-| `_chat_impl` | `build_mini_dist\tea_agent\agent.py:419` | member |
-| `_check_dependencies` | `build_mini_dist\tea_agent\tlk.py:351` | member |
-| `_compress_json_args` | `build_mini_dist\tea_agent\basesession.py:300` | member |
-| `_compress_tool_content` | `build_mini_dist\tea_agent\basesession.py:228` | member |
-| `_compress_tool_rounds` | `build_mini_dist\tea_agent\basesession.py:459` | member |
-| `_compute_embedding_similarity` | `build_mini_dist\tea_agent\memory.py:302` | member |
-| `_compute_embedding_similarity_cached` | `build_mini_dist\tea_agent\memory.py:360` | member |
-| `_compute_recency` | `build_mini_dist\tea_agent\memory.py:240` | member |
-| `_compute_relevance` | `build_mini_dist\tea_agent\memory.py:191` | member |
-| `_compute_similarity` | `build_mini_dist\tea_agent\memory.py:805` | member |
-| `_conversations_to_text` | `build_mini_dist\tea_agent\onlinesession.py:620` | member |
-| `_default_system_prompt` | `build_mini_dist\tea_agent\litesession.py:72` | member |
-| `_do_async_summaries` | `build_mini_dist\tea_agent\agent.py:517` | member |
-| `_do_task_evaluation` | `build_mini_dist\tea_agent\agent.py:522` | member |
-| `_ensure_store` | `build_mini_dist\tea_agent\project_memory.py:30` | member |
-| `_ensure_tables` | `build_mini_dist\tea_agent\scheduler_storage.py:31` | member |
-| `_execute_tool` | `build_mini_dist\tea_agent\litesession.py:300` | member |
-| `_execute_tool_loop` | `build_mini_dist\tea_agent\onlinesession.py:1039` | member |
-| `_extract_keywords` | `build_mini_dist\tea_agent\memory.py:218` | member |
-| `_extract_with_llm` | `build_mini_dist\tea_agent\session_memory_component.py:337` | member |
-| `_fallback_extract` | `build_mini_dist\tea_agent\session_memory_component.py:388` | member |
-| `_find_duplicate` | `build_mini_dist\tea_agent\memory.py:824` | member |
-| `_find_recent_boundary` | `build_mini_dist\tea_agent\onlinesession.py:648` | member |
-| `_fix_ast` | `build_mini_dist\tea_agent\auto_fix.py:158` | member |
-| `_fix_llm` | `build_mini_dist\tea_agent\auto_fix.py:182` | member |
-| `_fix_ruff` | `build_mini_dist\tea_agent\auto_fix.py:131` | member |
-| `_generate_summary` | `build_mini_dist\tea_agent\memory.py:1121` | member |
-| `_get_effective_params` | `build_mini_dist\tea_agent\onlinesession.py:892` | member |
-| `_get_embedding_engine` | `build_mini_dist\tea_agent\memory.py:289` | member |
-| `_get_summarize_client` | `build_mini_dist\tea_agent\onlinesession.py:886` | member |
-| `_get_summarize_client` | `build_mini_dist\tea_agent\session_memory_component.py:189` | member |
-| `_get_unextracted_conversations` | `build_mini_dist\tea_agent\session_memory_component.py:300` | member |
-| `_guess_tool_threshold` | `build_mini_dist\tea_agent\basesession.py:409` | member |
-| `_history_summary` | `build_mini_dist\tea_agent\onlinesession.py:868` | member |
-| `_history_summary` | `build_mini_dist\tea_agent\onlinesession.py:870` | member |
-| `_init_llm` | `build_mini_dist\tea_agent\auto_fix.py:39` | member |
-| `_init_session` | `build_mini_dist\tea_agent\agent.py:264` | member |
-| `_init_session_info_str` | `build_mini_dist\tea_agent\agent.py:179` | member |
-| `_init_storage` | `build_mini_dist\tea_agent\agent.py:254` | member |
-| `_init_toolkit` | `build_mini_dist\tea_agent\agent.py:235` | member |
-| `_inject_os_info` | `build_mini_dist\tea_agent\onlinesession.py:965` | member |
-| `_is_duplicate` | `build_mini_dist\tea_agent\session_memory_component.py:415` | member |
-| `_last_cheap_usage` | `build_mini_dist\tea_agent\onlinesession.py:863` | member |
-| `_last_cheap_usage` | `build_mini_dist\tea_agent\onlinesession.py:865` | member |
-| `_last_usage` | `build_mini_dist\tea_agent\onlinesession.py:858` | member |
-| `_last_usage` | `build_mini_dist\tea_agent\onlinesession.py:860` | member |
-| `_load_config` | `build_mini_dist\tea_agent\agent.py:192` | member |
-| `_load_config` | `build_mini_dist\tea_agent\session_memory_component.py:246` | member |
-| `_load_topic_history_into_session` | `build_mini_dist\tea_agent\agent.py:185` | member |
-| `_mark_conversations_extracted` | `build_mini_dist\tea_agent\session_memory_component.py:176` | member |
-| `_mark_conversations_extracted` | `build_mini_dist\tea_agent\session_memory_component.py:443` | member |
-| `_merge_conversations` | `build_mini_dist\tea_agent\session_memory_component.py:311` | member |
-| `_merge_memory` | `build_mini_dist\tea_agent\memory.py:856` | member |
-| `_new_id` | `build_mini_dist\tea_agent\project_memory.py:103` | member |
-| `_notify` | `build_mini_dist\tea_agent\agent.py:375` | member |
-| `_notify` | `build_mini_dist\tea_agent\onlinesession.py:1082` | member |
-| `_notify_prompt_evolved` | `build_mini_dist\tea_agent\onlinesession.py:1095` | member |
-| `_notify_reflection_done` | `build_mini_dist\tea_agent\onlinesession.py:1092` | member |
-| `_parse_tool_calls` | `build_mini_dist\tea_agent\litesession.py:266` | member |
-| `_post_chat_pipeline` | `build_mini_dist\tea_agent\agent.py:467` | member |
-| `_prefix_for` | `build_mini_dist\tea_agent\memory.py:688` | member |
-| `_probe_thinking_support` | `build_mini_dist\tea_agent\onlinesession.py:86` | member |
-| `_process_response` | `build_mini_dist\tea_agent\litesession.py:219` | member |
-| `_process_stream_with_reasoning` | `build_mini_dist\tea_agent\onlinesession.py:904` | member |
-| `_purge_cache` | `build_mini_dist\tea_agent\tlk.py:342` | member |
-| `_read` | `build_mini_dist\tea_agent\project_memory.py:36` | member |
-| `_record_tool_to_trace` | `build_mini_dist\tea_agent\onlinesession.py:416` | member |
-| `_repair_incomplete_tool_chains` | `build_mini_dist\tea_agent\basesession.py:548` | member |
-| `_rounds_collector` | `build_mini_dist\tea_agent\onlinesession.py:853` | member |
-| `_rounds_collector` | `build_mini_dist\tea_agent\onlinesession.py:855` | member |
-| `_scan_ast_docstring` | `build_mini_dist\tea_agent\auto_fix.py:83` | member |
-| `_scan_ruff` | `build_mini_dist\tea_agent\auto_fix.py:59` | member |
-| `_score_memory` | `build_mini_dist\tea_agent\memory.py:160` | member |
-| `_score_memory_cached` | `build_mini_dist\tea_agent\memory.py:169` | member |
-| `_semantic_summary` | `build_mini_dist\tea_agent\onlinesession.py:873` | member |
-| `_semantic_summary` | `build_mini_dist\tea_agent\onlinesession.py:875` | member |
-| `_setup_default_pipeline` | `build_mini_dist\tea_agent\onlinesession.py:998` | member |
-| `_start_background_services` | `build_mini_dist\tea_agent\agent.py:352` | member |
-| `_strip_reasoning_content` | `build_mini_dist\tea_agent\basesession.py:214` | member |
-| `_tool_chain_summary` | `build_mini_dist\tea_agent\onlinesession.py:878` | member |
-| `_tool_chain_summary` | `build_mini_dist\tea_agent\onlinesession.py:880` | member |
-| `_touch_selected` | `build_mini_dist\tea_agent\memory.py:276` | member |
-| `_track_api_usage` | `build_mini_dist\tea_agent\onlinesession.py:170` | member |
-| `_trim_messages` | `build_mini_dist\tea_agent\basesession.py:718` | member |
-| `_update_dynamic_thresholds` | `build_mini_dist\tea_agent\memory.py:387` | member |
-| `_write` | `build_mini_dist\tea_agent\project_memory.py:47` | member |
-| `accumulate_tool_calls_from_delta` | `build_mini_dist\tea_agent\onlinesession.py:254` | member |
-| `add` | `build_mini_dist\tea_agent\project_memory.py:52` | member |
-| `add_assistant_message` | `build_mini_dist\tea_agent\basesession.py:197` | member |
-| `add_tool_result` | `build_mini_dist\tea_agent\basesession.py:201` | member |
-| `add_tool_result` | `build_mini_dist\tea_agent\onlinesession.py:427` | member |
-| `add_user_message` | `build_mini_dist\tea_agent\basesession.py:184` | member |
-| `apply_changes` | `build_mini_dist\tea_agent\config.py:247` | member |
-| `auto_dedup` | `build_mini_dist\tea_agent\memory.py:1054` | member |
-| `build_evolve_prompt` | `build_mini_dist\tea_agent\prompt_manager.py:115` | member |
-| `build_extraction_prompt` | `build_mini_dist\tea_agent\memory.py:734` | member |
-| `build_reflection_prompt` | `build_mini_dist\tea_agent\reflection.py:154` | member |
-| `build_tools` | `build_mini_dist\tea_agent\onlinesession.py:329` | member |
-| `call_summarize_api` | `build_mini_dist\tea_agent\onlinesession.py:227` | member |
-| `call_tool` | `build_mini_dist\tea_agent\tlk.py:294` | member |
-| `chat` | `build_mini_dist\tea_agent\agent.py:386` | member |
-| `chat` | `build_mini_dist\tea_agent\litesession.py:97` | member |
-| `chat_stream` | `build_mini_dist\tea_agent\basesession.py:171` | member |
-| `chat_stream` | `build_mini_dist\tea_agent\onlinesession.py:1098` | member |
-| `close` | `build_mini_dist\tea_agent\agent.py:616` | member |
-| `close` | `build_mini_dist\tea_agent\auto_fix.py:278` | member |
-| `close` | `build_mini_dist\tea_agent\litesession.py:325` | member |
-| `close` | `build_mini_dist\tea_agent\onlinesession.py:1160` | member |
-| `collect_api_error_round` | `build_mini_dist\tea_agent\onlinesession.py:469` | member |
-| `collect_assistant_text_round` | `build_mini_dist\tea_agent\onlinesession.py:460` | member |
-| `collect_assistant_tool_calls_round` | `build_mini_dist\tea_agent\onlinesession.py:441` | member |
-| `collect_interruption_round` | `build_mini_dist\tea_agent\onlinesession.py:481` | member |
-| `collect_max_iterations_round` | `build_mini_dist\tea_agent\onlinesession.py:475` | member |
-| `collect_tool_call_round` | `build_mini_dist\tea_agent\onlinesession.py:434` | member |
-| `config` | `build_mini_dist\tea_agent\agent.py:636` | member |
-| `create_chat_stream` | `build_mini_dist\tea_agent\onlinesession.py:174` | member |
-| `current_prompt` | `build_mini_dist\tea_agent\prompt_manager.py:90` | member |
-| `current_prompt_id` | `build_mini_dist\tea_agent\prompt_manager.py:102` | member |
-| `current_topic_id` | `build_mini_dist\tea_agent\agent.py:653` | member |
-| `current_topic_id` | `build_mini_dist\tea_agent\agent.py:657` | member |
-| `current_version` | `build_mini_dist\tea_agent\prompt_manager.py:97` | member |
-| `data_dir_abs` | `build_mini_dist\tea_agent\config.py:118` | member |
-| `db` | `build_mini_dist\tea_agent\agent.py:650` | member |
-| `db_path_abs` | `build_mini_dist\tea_agent\config.py:103` | member |
-| `degrade_by_age` | `build_mini_dist\tea_agent\memory.py:465` | member |
-| `delete_script` | `build_mini_dist\tea_agent\scheduler_storage.py:110` | member |
-| `detect_duplicates` | `build_mini_dist\tea_agent\memory.py:990` | member |
-| `disable_step` | `build_mini_dist\tea_agent\session_pipeline.py:83` | member |
-| `duration_seconds` | `build_mini_dist\tea_agent\reflection.py:49` | member |
-| `enable_step` | `build_mini_dist\tea_agent\session_pipeline.py:78` | member |
-| `enable_thinking` | `build_mini_dist\tea_agent\onlinesession.py:848` | member |
-| `enable_thinking` | `build_mini_dist\tea_agent\onlinesession.py:850` | member |
-| `evolve` | `build_mini_dist\tea_agent\prompt_manager.py:167` | member |
-| `execute` | `build_mini_dist\tea_agent\session_pipeline.py:107` | member |
-| `execute_tool_call` | `build_mini_dist\tea_agent\onlinesession.py:339` | member |
-| `extract_from_topic` | `build_mini_dist\tea_agent\session_memory_component.py:259` | member |
-| `finish_trace` | `build_mini_dist\tea_agent\reflection.py:110` | member |
-| `fix` | `build_mini_dist\tea_agent\auto_fix.py:113` | member |
-| `fix_all` | `build_mini_dist\tea_agent\auto_fix.py:237` | member |
-| `format_memories` | `build_mini_dist\tea_agent\memory.py:660` | member |
-| `format_memories` | `build_mini_dist\tea_agent\project_memory.py:115` | member |
-| `generate_reflection` | `build_mini_dist\tea_agent\reflection.py:194` | member |
-| `get` | `build_mini_dist\tea_agent\config.py:217` | member |
-| `get_all` | `build_mini_dist\tea_agent\project_memory.py:81` | member |
-| `get_cheap_usage` | `build_mini_dist\tea_agent\onlinesession.py:288` | member |
-| `get_effective_params` | `build_mini_dist\tea_agent\config.py:151` | member |
-| `get_enabled_steps` | `build_mini_dist\tea_agent\session_pipeline.py:100` | member |
-| `get_extraction_stats` | `build_mini_dist\tea_agent\session_memory_component.py:450` | member |
-| `get_injected_memories` | `build_mini_dist\tea_agent\session_memory_component.py:205` | member |
-| `get_last_usage` | `build_mini_dist\tea_agent\onlinesession.py:285` | member |
-| `get_memory_stats` | `build_mini_dist\tea_agent\session_memory_component.py:467` | member |
-| `get_recent_messages` | `build_mini_dist\tea_agent\basesession.py:209` | member |
-| `get_script` | `build_mini_dist\tea_agent\scheduler_storage.py:86` | member |
-| `get_stats` | `build_mini_dist\tea_agent\prompt_manager.py:266` | member |
-| `get_stats` | `build_mini_dist\tea_agent\reflection.py:300` | member |
-| `get_total_usage` | `build_mini_dist\tea_agent\onlinesession.py:291` | member |
-| `ingest_extracted` | `build_mini_dist\tea_agent\memory.py:924` | member |
-| `initialize` | `build_mini_dist\tea_agent\onlinesession.py:83` | member |
-| `initialize` | `build_mini_dist\tea_agent\onlinesession.py:326` | member |
-| `initialize` | `build_mini_dist\tea_agent\onlinesession.py:522` | member |
-| `initialize` | `build_mini_dist\tea_agent\prompt_manager.py:62` | member |
-| `initialize` | `build_mini_dist\tea_agent\session_memory_component.py:40` | member |
-| `inject_memories` | `build_mini_dist\tea_agent\session_memory_component.py:59` | member |
-| `interrupt` | `build_mini_dist\tea_agent\basesession.py:710` | member |
-| `interrupt` | `build_mini_dist\tea_agent\litesession.py:321` | member |
-| `is_configured` | `build_mini_dist\tea_agent\config.py:40` | member |
-| `is_configured` | `build_mini_dist\tea_agent\config.py:137` | member |
-| `is_extraction_needed` | `build_mini_dist\tea_agent\memory.py:1153` | member |
-| `kb_dir_abs` | `build_mini_dist\tea_agent\config.py:113` | member |
-| `last_prompt_suggestion` | `build_mini_dist\tea_agent\reflection.py:296` | member |
-| `list_scripts` | `build_mini_dist\tea_agent\scheduler_storage.py:98` | member |
-| `list_steps` | `build_mini_dist\tea_agent\session_pipeline.py:159` | member |
-| `list_tasks` | `build_mini_dist\tea_agent\scheduler_storage.py:138` | member |
-| `list_versions` | `build_mini_dist\tea_agent\prompt_manager.py:262` | member |
-| `list_versions` | `build_mini_dist\tea_agent\tlk.py:666` | member |
-| `list_versions_for_llm` | `build_mini_dist\tea_agent\tlk.py:701` | member |
-| `llm_adjust_priorities` | `build_mini_dist\tea_agent\memory.py:543` | member |
-| `load_history` | `build_mini_dist\tea_agent\basesession.py:639` | member |
-| `load_topic_history` | `build_mini_dist\tea_agent\agent.py:586` | member |
-| `manual_set` | `build_mini_dist\tea_agent\prompt_manager.py:275` | member |
-| `merge_duplicates` | `build_mini_dist\tea_agent\memory.py:1018` | member |
-| `messages` | `build_mini_dist\tea_agent\onlinesession.py:843` | member |
-| `messages` | `build_mini_dist\tea_agent\onlinesession.py:845` | member |
-| `name` | `build_mini_dist\tea_agent\onlinesession.py:80` | member |
-| `name` | `build_mini_dist\tea_agent\onlinesession.py:323` | member |
-| `name` | `build_mini_dist\tea_agent\onlinesession.py:519` | member |
-| `name` | `build_mini_dist\tea_agent\session_memory_component.py:36` | member |
-| `parse_extraction_result` | `build_mini_dist\tea_agent\memory.py:742` | member |
-| `parse_reflection_result` | `build_mini_dist\tea_agent\reflection.py:183` | member |
-| `parse_tool_calls_from_stream` | `build_mini_dist\tea_agent\onlinesession.py:487` | member |
-| `prepare_script_for_execution` | `build_mini_dist\tea_agent\scheduler_storage.py:152` | member |
-| `record_tool_call` | `build_mini_dist\tea_agent\reflection.py:101` | member |
-| `reflect_and_summarize` | `build_mini_dist\tea_agent\memory.py:1075` | member |
-| `register_step` | `build_mini_dist\tea_agent\session_pipeline.py:43` | member |
-| `reload` | `build_mini_dist\tea_agent\prompt_manager.py:106` | member |
-| `reload` | `build_mini_dist\tea_agent\tlk.py:405` | member |
-| `reload_from_dict` | `build_mini_dist\tea_agent\config.py:270` | member |
-| `remove_step` | `build_mini_dist\tea_agent\session_pipeline.py:94` | member |
-| `report` | `build_mini_dist\tea_agent\auto_fix.py:270` | member |
-| `reset_cheap_usage` | `build_mini_dist\tea_agent\onlinesession.py:281` | member |
-| `reset_interrupt` | `build_mini_dist\tea_agent\basesession.py:714` | member |
-| `reset_session_state` | `build_mini_dist\tea_agent\onlinesession.py:1073` | member |
-| `reset_usage` | `build_mini_dist\tea_agent\onlinesession.py:277` | member |
-| `resolve` | `build_mini_dist\tea_agent\config.py:67` | member |
-| `rollback` | `build_mini_dist\tea_agent\prompt_manager.py:232` | member |
-| `rollback` | `build_mini_dist\tea_agent\tlk.py:636` | member |
-| `rollback_for_llm` | `build_mini_dist\tea_agent\tlk.py:694` | member |
-| `save` | `build_mini_dist\tea_agent\tlk.py:504` | member |
-| `save_script` | `build_mini_dist\tea_agent\scheduler_storage.py:70` | member |
-| `save_task` | `build_mini_dist\tea_agent\scheduler_storage.py:122` | member |
-| `scan` | `build_mini_dist\tea_agent\auto_fix.py:49` | member |
-| `search` | `build_mini_dist\tea_agent\project_memory.py:86` | member |
-| `select_memories` | `build_mini_dist\tea_agent\memory.py:67` | member |
-| `sess` | `build_mini_dist\tea_agent\agent.py:642` | member |
-| `sess` | `build_mini_dist\tea_agent\agent.py:644` | member |
-| `session` | `build_mini_dist\tea_agent\agent.py:647` | member |
-| `set` | `build_mini_dist\tea_agent\config.py:223` | member |
-| `set_step_position` | `build_mini_dist\tea_agent\session_pipeline.py:88` | member |
-| `should_reflect` | `build_mini_dist\tea_agent\reflection.py:119` | member |
-| `start_trace` | `build_mini_dist\tea_agent\reflection.py:91` | member |
-| `success_rate` | `build_mini_dist\tea_agent\reflection.py:41` | member |
-| `summarize_old_history` | `build_mini_dist\tea_agent\onlinesession.py:525` | member |
-| `supports_vision` | `build_mini_dist\tea_agent\config.py:45` | member |
-| `to_dict` | `build_mini_dist\tea_agent\auto_fix.py:27` | member |
-| `to_dict` | `build_mini_dist\tea_agent\config.py:276` | member |
-| `toolkit` | `build_mini_dist\tea_agent\agent.py:639` | member |
-| `toolkit_dir_abs` | `build_mini_dist\tea_agent\config.py:108` | member |
-| `toolkit_reload` | `build_mini_dist\tea_agent\agent.py:365` | member |
-| `toolkit_save` | `build_mini_dist\tea_agent\agent.py:360` | member |
-| `trigger_memory_extraction` | `build_mini_dist\tea_agent\session_memory_component.py:115` | member |
-| `update_script_result` | `build_mini_dist\tea_agent\scheduler_storage.py:180` | member |
-| `update_tools` | `build_mini_dist\tea_agent\onlinesession.py:1051` | member |
-| `verify` | `build_mini_dist\tea_agent\auto_fix.py:258` | member |
+| `BenchmarkResult` | `benchmark\metrics.py:89` | class |
+| `BenchmarkSummary` | `benchmark\metrics.py:154` | class |
+| `L1Result` | `benchmark\metrics.py:30` | class |
+| `L2Result` | `benchmark\metrics.py:41` | class |
+| `L3Result` | `benchmark\metrics.py:53` | class |
+| `L4Result` | `benchmark\metrics.py:66` | class |
+| `L5Result` | `benchmark\metrics.py:78` | class |
+| `composite_score` | `benchmark\metrics.py:104` | member |
+| `to_dict` | `benchmark\metrics.py:113` | member |
+| `to_dict` | `benchmark\metrics.py:184` | member |
 
 ### 函数
 
 | 函数名 | 文件:行号 | 类型 |
 |--------|----------|------|
-| `CRITICAL_DEGRADE_DAYS` | `build_mini_dist\tea_agent\memory.py:39` | variable |
-| `DEFAULT_SYSTEM_PROMPT` | `build_mini_dist\tea_agent\prompt_manager.py:17` | variable |
-| `ESSENTIAL_TOOLS` | `build_mini_dist\tea_agent\onlinesession.py:303` | variable |
-| `EVOLVE_SYSTEM_PROMPT` | `build_mini_dist\tea_agent\prompt_manager.py:31` | variable |
-| `EXTRACTION_PROMPT` | `build_mini_dist\tea_agent\session_memory_component.py:215` | variable |
-| `EXTRACTION_SYSTEM_PROMPT` | `build_mini_dist\tea_agent\memory.py:713` | variable |
-| `FIX_PROMPT` | `build_mini_dist\tea_agent\auto_fix.py:15` | variable |
-| `HAS_YAML` | `build_mini_dist\tea_agent\config.py:23` | variable |
-| `HAS_YAML` | `build_mini_dist\tea_agent\config.py:25` | variable |
-| `HIGH_DEGRADE_DAYS` | `build_mini_dist\tea_agent\memory.py:40` | variable |
-| `LLM_ADJUST_SYSTEM_PROMPT` | `build_mini_dist\tea_agent\memory.py:528` | variable |
-| `MAX_CRITICAL_INJECT` | `build_mini_dist\tea_agent\memory.py:27` | variable |
-| `MAX_ENTRIES` | `build_mini_dist\tea_agent\project_memory.py:17` | variable |
-| `MAX_INJECT` | `build_mini_dist\tea_agent\memory.py:26` | variable |
-| `MAX_LLM_ADJUSTMENTS` | `build_mini_dist\tea_agent\memory.py:44` | variable |
-| `MEDIUM_DEGRADE_DAYS` | `build_mini_dist\tea_agent\memory.py:41` | variable |
-| `MIN_HIGH_INJECT` | `build_mini_dist\tea_agent\memory.py:28` | variable |
-| `MIN_LOW_INJECT` | `build_mini_dist\tea_agent\memory.py:30` | variable |
-| `MIN_MEDIUM_INJECT` | `build_mini_dist\tea_agent\memory.py:29` | variable |
-| `PRIORITY_CRITICAL` | `build_mini_dist\tea_agent\memory.py:14` | variable |
-| `PRIORITY_HIGH` | `build_mini_dist\tea_agent\memory.py:15` | variable |
-| `PRIORITY_LABELS` | `build_mini_dist\tea_agent\memory.py:19` | variable |
-| `PRIORITY_LOW` | `build_mini_dist\tea_agent\memory.py:17` | variable |
-| `PRIORITY_MEDIUM` | `build_mini_dist\tea_agent\memory.py:16` | variable |
-| `PROVIDERS` | `build_mini_dist\tea_agent\providers.py:12` | variable |
-| `PROVIDERS` | `build_mini_dist\tea_agent\providers.py:14` | variable |
-| `REFLECTION_SYSTEM_PROMPT` | `build_mini_dist\tea_agent\reflection.py:56` | variable |
-| `RUFF_SELECT` | `build_mini_dist\tea_agent\auto_fix.py:14` | variable |
-| `SCRIPTS_DIR` | `build_mini_dist\tea_agent\scheduler_storage.py:23` | variable |
-| `STATE_FILE` | `build_mini_dist\tea_agent\scheduler_storage.py:20` | variable |
-| `STORE_FILE` | `build_mini_dist\tea_agent\project_memory.py:18` | variable |
-| `TeaAgent` | `build_mini_dist\tea_agent\agent.py:665` | function |
-| `_BASE_CRITICAL_DEGRADE_DAYS` | `build_mini_dist\tea_agent\memory.py:34` | variable |
-| `_BASE_HIGH_DEGRADE_DAYS` | `build_mini_dist\tea_agent\memory.py:35` | variable |
-| `_BASE_MEDIUM_DEGRADE_DAYS` | `build_mini_dist\tea_agent\memory.py:36` | variable |
-| `_CACHE_BLACKLIST` | `build_mini_dist\tea_agent\tlk.py:261` | variable |
-| `_CACHE_TTL` | `build_mini_dist\tea_agent\tlk.py:260` | variable |
-| `_COMPACT_SYSTEM_PROMPT` | `build_mini_dist\tea_agent\onlinesession.py:674` | variable |
-| `_CONFIG_TYPES` | `build_mini_dist\tea_agent\config.py:207` | variable |
-| `_DEFAULT_TOOL_THRESHOLD` | `build_mini_dist\tea_agent\basesession.py:132` | variable |
-| `_HAVE_GUI_TOPIC_SUMMARY` | `build_mini_dist\tea_agent\agent_pipeline.py:76` | variable |
-| `_HAVE_GUI_TOPIC_SUMMARY` | `build_mini_dist\tea_agent\agent_pipeline.py:78` | variable |
-| `_KB_THRESHOLD` | `build_mini_dist\tea_agent\basesession.py:131` | variable |
-| `_MODE_BEHAVIORS` | `build_mini_dist\tea_agent\agent.py:69` | variable |
-| `_RUNTIME_CONFIG_KEYS` | `build_mini_dist\tea_agent\config.py:196` | variable |
-| `_SOURCE_EXTENSIONS` | `build_mini_dist\tea_agent\basesession.py:134` | variable |
-| `_TEXT_EXTENSIONS` | `build_mini_dist\tea_agent\basesession.py:141` | variable |
-| `_TEXT_FILE_THRESHOLD` | `build_mini_dist\tea_agent\basesession.py:133` | variable |
-| `_VALID_MODES` | `build_mini_dist\tea_agent\agent.py:99` | variable |
-| `_VALID_MODES` | `build_mini_dist\tea_agent\onlinesession.py:52` | variable |
-| `__all__` | `build_mini_dist\tea_agent\__init__.py:6` | variable |
-| `__version__` | `build_mini_dist\tea_agent\__init__.py:4` | variable |
-| `_active_config_path` | `build_mini_dist\tea_agent\config.py:283` | variable |
-| `_auto_generate_skill_doc` | `build_mini_dist\tea_agent\tlk.py:129` | function |
-| `_compress_value` | `build_mini_dist\tea_agent\basesession.py:355` | function |
-| `_config_cache` | `build_mini_dist\tea_agent\config.py:587` | variable |
-| `_current_agent` | `build_mini_dist\tea_agent\session_ref.py:20` | variable |
-| `_current_session` | `build_mini_dist\tea_agent\session_ref.py:19` | variable |
-| `_data_dir_abs` | `build_mini_dist\tea_agent\config.py:62` | variable |
-| `_db_path_abs` | `build_mini_dist\tea_agent\config.py:63` | variable |
-| `_empty_usage` | `build_mini_dist\tea_agent\agent_pipeline.py:16` | function |
-| `_fix_single_quotes` | `build_mini_dist\tea_agent\basesession.py:74` | function |
-| `_get_cheap_params` | `build_mini_dist\tea_agent\session_memory_component.py:25` | function |
-| `_json` | `build_mini_dist\tea_agent\basesession.py:321` | namespace |
-| `_json_gt` | `build_mini_dist\tea_agent\basesession.py:419` | namespace |
-| `_json_lh` | `build_mini_dist\tea_agent\basesession.py:678` | namespace |
-| `_kb_dir_abs` | `build_mini_dist\tea_agent\config.py:65` | variable |
-| `_last_config_path` | `build_mini_dist\tea_agent\config.py:280` | variable |
-| `_logging_debug` | `build_mini_dist\tea_agent\logging_setup.py:18` | variable |
-| `_logging_initialized` | `build_mini_dist\tea_agent\logging_setup.py:17` | variable |
-| `_merge_usage` | `build_mini_dist\tea_agent\agent_pipeline.py:20` | function |
-| `_pick_top_by_priority` | `build_mini_dist\tea_agent\memory.py:128` | function |
-| `_resolve` | `build_mini_dist\tea_agent\config.py:89` | function |
-| `_set_root_level` | `build_mini_dist\tea_agent\logging_setup.py:78` | function |
-| `_setter_info` | `build_mini_dist\tea_agent\session_ref.py:21` | variable |
-| `_sref` | `build_mini_dist\tea_agent\agent.py:30` | namespace |
-| `_toolkit_dir_abs` | `build_mini_dist\tea_agent\config.py:64` | variable |
-| `analyze_intent` | `build_mini_dist\tea_agent\onlinesession.py:47` | function |
-| `api_key` | `build_mini_dist\tea_agent\config.py:30` | variable |
-| `api_key` | `build_mini_dist\tea_agent\config.py:133` | variable |
-| `api_url` | `build_mini_dist\tea_agent\config.py:31` | variable |
-| `api_url` | `build_mini_dist\tea_agent\config.py:131` | variable |
-| `app_font_size` | `build_mini_dist\tea_agent\config.py:193` | variable |
-| `auto_summary` | `build_mini_dist\tea_agent\agent_pipeline.py:82` | function |
-| `chat_page_size` | `build_mini_dist\tea_agent\config.py:189` | variable |
-| `cheap_model` | `build_mini_dist\tea_agent\config.py:145` | variable |
-| `check_meta` | `build_mini_dist\tea_agent\tlk.py:412` | function |
-| `clear` | `build_mini_dist\tea_agent\session_ref.py:64` | function |
-| `create_default_config` | `build_mini_dist\tea_agent\config.py:491` | function |
-| `data_dir` | `build_mini_dist\tea_agent\config.py:56` | variable |
-| `db_path` | `build_mini_dist\tea_agent\config.py:57` | variable |
-| `description` | `build_mini_dist\tea_agent\session_pipeline.py:25` | variable |
-| `detect_mode` | `build_mini_dist\tea_agent\onlinesession.py:55` | function |
-| `dimension` | `build_mini_dist\tea_agent\config.py:134` | variable |
-| `do_async_summaries` | `build_mini_dist\tea_agent\agent_pipeline.py:26` | function |
-| `duration_ms` | `build_mini_dist\tea_agent\reflection.py:25` | variable |
-| `embedding` | `build_mini_dist\tea_agent\config.py:146` | variable |
-| `enable_thinking` | `build_mini_dist\tea_agent\config.py:178` | variable |
-| `enabled` | `build_mini_dist\tea_agent\session_pipeline.py:24` | variable |
-| `end_time` | `build_mini_dist\tea_agent\reflection.py:38` | variable |
-| `ensure_config_dir` | `build_mini_dist\tea_agent\config.py:404` | function |
-| `error` | `build_mini_dist\tea_agent\reflection.py:24` | variable |
-| `error` | `build_mini_dist\tea_agent\reflection.py:36` | variable |
-| `extract_mode` | `build_mini_dist\tea_agent\onlinesession.py:67` | function |
-| `filter_tools` | `build_mini_dist\tea_agent\onlinesession.py:306` | function |
-| `font_size` | `build_mini_dist\tea_agent\config.py:192` | variable |
-| `function` | `build_mini_dist\tea_agent\litesession.py:279` | variable |
-| `generate_config` | `build_mini_dist\tea_agent\providers.py:183` | function |
-| `get_active_config_path` | `build_mini_dist\tea_agent\config.py:290` | function |
-| `get_agent` | `build_mini_dist\tea_agent\session_ref.py:44` | function |
-| `get_bigrams` | `build_mini_dist\tea_agent\session_memory_component.py:325` | function |
-| `get_config` | `build_mini_dist\tea_agent\config.py:589` | function |
-| `get_provider` | `build_mini_dist\tea_agent\providers.py:172` | function |
-| `get_scheduler_storage` | `build_mini_dist\tea_agent\scheduler_storage.py:194` | function |
-| `get_session` | `build_mini_dist\tea_agent\session_ref.py:24` | function |
-| `get_session_info` | `build_mini_dist\tea_agent\session_ref.py:77` | function |
-| `has_tool` | `build_mini_dist\tea_agent\onlinesession.py:314` | function |
-| `history_l2_max` | `build_mini_dist\tea_agent\config.py:190` | variable |
-| `history_l3_batch` | `build_mini_dist\tea_agent\config.py:191` | variable |
-| `interrupted` | `build_mini_dist\tea_agent\reflection.py:35` | variable |
-| `is_active` | `build_mini_dist\tea_agent\session_ref.py:72` | function |
-| `kb_dir` | `build_mini_dist\tea_agent\config.py:59` | variable |
-| `keep_turns` | `build_mini_dist\tea_agent\config.py:181` | variable |
-| `l2_to_l3_summary` | `build_mini_dist\tea_agent\agent_pipeline.py:45` | function |
-| `list_providers` | `build_mini_dist\tea_agent\providers.py:156` | function |
-| `load_config` | `build_mini_dist\tea_agent\config.py:294` | function |
-| `logger` | `build_mini_dist\tea_agent\agent.py:48` | variable |
-| `logger` | `build_mini_dist\tea_agent\agent_background.py:13` | variable |
-| `logger` | `build_mini_dist\tea_agent\agent_pipeline.py:13` | variable |
-| `logger` | `build_mini_dist\tea_agent\auto_fix.py:13` | variable |
-| `logger` | `build_mini_dist\tea_agent\basesession.py:12` | variable |
-| `logger` | `build_mini_dist\tea_agent\litesession.py:19` | variable |
-| `logger` | `build_mini_dist\tea_agent\memory.py:11` | variable |
-| `logger` | `build_mini_dist\tea_agent\onlinesession.py:42` | variable |
-| `logger` | `build_mini_dist\tea_agent\onlinesession.py:299` | variable |
-| `logger` | `build_mini_dist\tea_agent\onlinesession.py:513` | variable |
-| `logger` | `build_mini_dist\tea_agent\project_memory.py:12` | variable |
-| `logger` | `build_mini_dist\tea_agent\prompt_manager.py:14` | variable |
-| `logger` | `build_mini_dist\tea_agent\reflection.py:17` | variable |
-| `logger` | `build_mini_dist\tea_agent\session_memory_component.py:22` | variable |
-| `logger` | `build_mini_dist\tea_agent\session_pipeline.py:17` | variable |
-| `logger` | `build_mini_dist\tea_agent\session_ref.py:17` | variable |
-| `logger` | `build_mini_dist\tea_agent\tlk.py:33` | variable |
-| `main_model` | `build_mini_dist\tea_agent\config.py:144` | variable |
-| `max_assistant_content` | `build_mini_dist\tea_agent\config.py:183` | variable |
-| `max_context_tokens` | `build_mini_dist\tea_agent\config.py:36` | variable |
-| `max_history` | `build_mini_dist\tea_agent\config.py:176` | variable |
-| `max_iterations` | `build_mini_dist\tea_agent\config.py:177` | variable |
-| `max_tokens` | `build_mini_dist\tea_agent\config.py:35` | variable |
-| `max_tool_output` | `build_mini_dist\tea_agent\config.py:182` | variable |
-| `memory_dedup_threshold` | `build_mini_dist\tea_agent\config.py:188` | variable |
-| `memory_extraction_threshold` | `build_mini_dist\tea_agent\config.py:187` | variable |
-| `meta_toolkit_list_versions` | `build_mini_dist\tea_agent\tlk.py:107` | function |
-| `meta_toolkit_reload` | `build_mini_dist\tea_agent\tlk.py:41` | function |
-| `meta_toolkit_rollback` | `build_mini_dist\tea_agent\tlk.py:83` | function |
-| `meta_toolkit_save` | `build_mini_dist\tea_agent\tlk.py:56` | function |
-| `mode_params` | `build_mini_dist\tea_agent\config.py:149` | variable |
-| `model_name` | `build_mini_dist\tea_agent\config.py:32` | variable |
-| `model_name` | `build_mini_dist\tea_agent\config.py:132` | variable |
-| `np` | `build_mini_dist\tea_agent\memory.py:341` | namespace |
-| `np` | `build_mini_dist\tea_agent\memory.py:378` | namespace |
-| `np` | `build_mini_dist\tea_agent\memory.py:996` | namespace |
-| `options` | `build_mini_dist\tea_agent\config.py:33` | variable |
-| `osp` | `build_mini_dist\tea_agent\tlk.py:20` | namespace |
-| `paths` | `build_mini_dist\tea_agent\config.py:147` | variable |
-| `position` | `build_mini_dist\tea_agent\session_pipeline.py:26` | variable |
-| `relaxed_json_loads` | `build_mini_dist\tea_agent\basesession.py:15` | function |
-| `save_config` | `build_mini_dist\tea_agent\config.py:414` | function |
-| `save_evolve_script` | `build_mini_dist\tea_agent\scheduler_storage.py:199` | function |
-| `set_active_config_path` | `build_mini_dist\tea_agent\config.py:285` | function |
-| `set_agent` | `build_mini_dist\tea_agent\session_ref.py:49` | function |
-| `set_debug` | `build_mini_dist\tea_agent\logging_setup.py:84` | function |
-| `set_session` | `build_mini_dist\tea_agent\session_ref.py:29` | function |
-| `setup_logging` | `build_mini_dist\tea_agent\logging_setup.py:20` | function |
-| `skills_dir` | `build_mini_dist\tea_agent\config.py:60` | variable |
-| `start_scheduler` | `build_mini_dist\tea_agent\agent_background.py:42` | function |
-| `start_self_evolve_thread` | `build_mini_dist\tea_agent\agent_background.py:16` | function |
-| `start_time` | `build_mini_dist\tea_agent\reflection.py:37` | variable |
-| `status_cb` | `build_mini_dist\tea_agent\agent.py:433` | function |
-| `storage` | `build_mini_dist\tea_agent\scheduler_storage.py:269` | variable |
-| `stream_cb` | `build_mini_dist\tea_agent\agent.py:410` | function |
-| `stream_cb` | `build_mini_dist\tea_agent\agent.py:427` | function |
-| `switch_provider` | `build_mini_dist\tea_agent\providers.py:204` | function |
-| `temperature` | `build_mini_dist\tea_agent\config.py:34` | variable |
-| `tool_calls` | `build_mini_dist\tea_agent\reflection.py:32` | variable |
-| `toolkit` | `build_mini_dist\tea_agent\tlk.py:38` | variable |
-| `toolkit_dir` | `build_mini_dist\tea_agent\config.py:58` | variable |
-| `top_p` | `build_mini_dist\tea_agent\config.py:37` | variable |
-| `topic_id` | `build_mini_dist\tea_agent\reflection.py:30` | variable |
-| `total_iterations` | `build_mini_dist\tea_agent\reflection.py:33` | variable |
-| `type` | `build_mini_dist\tea_agent\litesession.py:278` | variable |
-| `used_tools` | `build_mini_dist\tea_agent\reflection.py:34` | variable |
-| `user_msg` | `build_mini_dist\tea_agent\reflection.py:31` | variable |
+| `REGRESSION_DIR` | `benchmark\regression.py:22` | variable |
+| `REGRESSION_DIR` | `benchmark\runner.py:43` | variable |
+| `RESULTS_DIR` | `benchmark\regression.py:23` | variable |
+| `RESULTS_DIR` | `benchmark\runner.py:42` | variable |
+| `TASKS_DIR` | `benchmark\runner.py:41` | variable |
+| `TASK_CATEGORIES` | `benchmark\metrics.py:470` | variable |
+| `TOKEN_COST_TABLE` | `benchmark\metrics.py:399` | variable |
+| `VERSION_FILE` | `benchmark\regression.py:24` | variable |
+| `VERSION_FILE` | `benchmark\runner.py:44` | variable |
+| `_extract_tool_calls` | `benchmark\runner.py:176` | function |
+| `_l2_llm_evaluate` | `benchmark\metrics.py:305` | function |
+| `_print_compact_report` | `benchmark\runner.py:382` | function |
+| `_save_global_report` | `benchmark\runner.py:459` | function |
+| `_save_regression_baseline` | `benchmark\runner.py:474` | function |
+| `accuracy` | `benchmark\metrics.py:72` | variable |
+| `ai_output` | `benchmark\metrics.py:99` | variable |
+| `auto_evaluated` | `benchmark\metrics.py:49` | variable |
+| `cheap_tokens` | `benchmark\metrics.py:58` | variable |
+| `cmd_diff` | `benchmark\runner.py:504` | function |
+| `cmd_info` | `benchmark\run_swe_bench.py:43` | function |
+| `cmd_list` | `benchmark\run_swe_bench.py:32` | function |
+| `cmd_list` | `benchmark\runner.py:275` | function |
+| `cmd_regression` | `benchmark\runner.py:397` | function |
+| `cmd_report` | `benchmark\runner.py:348` | function |
+| `cmd_run` | `benchmark\run_swe_bench.py:138` | function |
+| `cmd_run` | `benchmark\runner.py:291` | function |
+| `cmd_run_all` | `benchmark\runner.py:319` | function |
+| `cmd_solve` | `benchmark\run_swe_bench.py:68` | function |
+| `cmd_verify` | `benchmark\run_swe_bench.py:103` | function |
+| `completeness` | `benchmark\metrics.py:44` | variable |
+| `completion_tokens` | `benchmark\metrics.py:56` | variable |
+| `composite_median` | `benchmark\metrics.py:179` | variable |
+| `composite_stddev` | `benchmark\metrics.py:180` | variable |
+| `conciseness` | `benchmark\metrics.py:45` | variable |
+| `correct_calls` | `benchmark\metrics.py:69` | variable |
+| `correctness` | `benchmark\metrics.py:43` | variable |
+| `current_score` | `benchmark\metrics.py:82` | variable |
+| `delta` | `benchmark\metrics.py:83` | variable |
+| `details` | `benchmark\metrics.py:36` | variable |
+| `detect_regressions` | `benchmark\regression.py:51` | function |
+| `duration_s` | `benchmark\metrics.py:59` | variable |
+| `duration_s` | `benchmark\metrics.py:101` | variable |
+| `error` | `benchmark\metrics.py:100` | variable |
+| `estimate_cost` | `benchmark\metrics.py:410` | function |
+| `estimated_cost_usd` | `benchmark\metrics.py:62` | variable |
+| `evaluate_l1` | `benchmark\metrics.py:208` | function |
+| `evaluate_l2` | `benchmark\metrics.py:252` | function |
+| `evaluate_l4` | `benchmark\metrics.py:351` | function |
+| `get_dataset` | `benchmark\run_swe_bench.py:26` | function |
+| `individual_results` | `benchmark\metrics.py:182` | variable |
+| `issues` | `benchmark\metrics.py:48` | variable |
+| `l1` | `benchmark\metrics.py:94` | variable |
+| `l1_avg_match_rate` | `benchmark\metrics.py:164` | variable |
+| `l2` | `benchmark\metrics.py:95` | variable |
+| `l2_avg_overall` | `benchmark\metrics.py:167` | variable |
+| `l3` | `benchmark\metrics.py:96` | variable |
+| `l3_median_cost` | `benchmark\metrics.py:172` | variable |
+| `l3_median_duration` | `benchmark\metrics.py:171` | variable |
+| `l3_median_tokens` | `benchmark\metrics.py:170` | variable |
+| `l3_stddev_tokens` | `benchmark\metrics.py:173` | variable |
+| `l4` | `benchmark\metrics.py:97` | variable |
+| `l4_avg_accuracy` | `benchmark\metrics.py:176` | variable |
+| `l5` | `benchmark\metrics.py:98` | variable |
+| `load_baseline` | `benchmark\regression.py:27` | function |
+| `load_latest_results` | `benchmark\regression.py:34` | function |
+| `load_tasks` | `benchmark\runner.py:49` | function |
+| `logger` | `benchmark\runner.py:39` | variable |
+| `main` | `benchmark\regression.py:150` | function |
+| `main` | `benchmark\run_swe_bench.py:160` | function |
+| `main` | `benchmark\runner.py:620` | function |
+| `match_rate` | `benchmark\metrics.py:35` | variable |
+| `matched_patterns` | `benchmark\metrics.py:34` | variable |
+| `overall` | `benchmark\metrics.py:47` | variable |
+| `param_accuracy` | `benchmark\metrics.py:73` | variable |
+| `param_correct` | `benchmark\metrics.py:70` | variable |
+| `pass_rate` | `benchmark\metrics.py:161` | variable |
+| `passed` | `benchmark\metrics.py:32` | variable |
+| `passed_runs` | `benchmark\metrics.py:160` | variable |
+| `previous_score` | `benchmark\metrics.py:81` | variable |
+| `print_all_summaries` | `benchmark\runner.py:233` | function |
+| `print_regression_report` | `benchmark\regression.py:85` | function |
+| `print_summary` | `benchmark\runner.py:204` | function |
+| `prompt_tokens` | `benchmark\metrics.py:55` | variable |
+| `redundancy_ratio` | `benchmark\metrics.py:74` | variable |
+| `redundant_calls` | `benchmark\metrics.py:71` | variable |
+| `regressed` | `benchmark\metrics.py:84` | variable |
+| `regression_check` | `benchmark\metrics.py:451` | function |
+| `run` | `benchmark\metrics.py:92` | variable |
+| `run_benchmark_v2` | `benchmark\runner.py:62` | function |
+| `save_summary` | `benchmark\runner.py:260` | function |
+| `score` | `benchmark\metrics.py:37` | variable |
+| `show_history` | `benchmark\regression.py:119` | function |
+| `significant` | `benchmark\metrics.py:85` | variable |
+| `style` | `benchmark\metrics.py:46` | variable |
+| `summarize_runs` | `benchmark\metrics.py:419` | function |
+| `task_category` | `benchmark\metrics.py:157` | variable |
+| `task_name` | `benchmark\metrics.py:91` | variable |
+| `task_name` | `benchmark\metrics.py:156` | variable |
+| `token_efficiency` | `benchmark\metrics.py:61` | variable |
+| `topic_id` | `benchmark\metrics.py:93` | variable |
+| `total_calls` | `benchmark\metrics.py:68` | variable |
+| `total_patterns` | `benchmark\metrics.py:33` | variable |
+| `total_runs` | `benchmark\metrics.py:159` | variable |
+| `total_tokens` | `benchmark\metrics.py:57` | variable |
+| `version` | `benchmark\metrics.py:80` | variable |
+| `version` | `benchmark\metrics.py:158` | variable |
 
-## 模块 `build_mini_dist\tea_agent\evaluation`
+## 模块 `demo`
+
+### 函数
+
+| 函数名 | 文件:行号 | 类型 |
+|--------|----------|------|
+| `_do_record` | `demo\main.py:116` | function |
+| `_generate_and_play` | `demo\main.py:66` | function |
+| `_play_file` | `demo\main.py:137` | function |
+| `_record_file` | `demo\main.py:147` | function |
+| `_show_config` | `demo\main.py:164` | function |
+| `main` | `demo\main.py:19` | function |
+
+## 模块 `demo\animator`
 
 ### 类
 
 | 类名 | 文件:行号 | 类型 |
 |------|----------|------|
-| `EvalResult` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:37` | class |
-| `TaskEvaluator` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:65` | class |
-| `__init__` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:90` | member |
-| `_compute_quality_score` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:215` | member |
-| `_compute_time_efficiency` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:274` | member |
-| `_compute_token_efficiency` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:264` | member |
-| `_determine_success` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:178` | member |
-| `_estimate_complexity` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:204` | member |
-| `_extract_issues` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:284` | member |
-| `_extract_lessons` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:310` | member |
-| `_generate_suggestions` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:340` | member |
-| `_generate_summary` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:410` | member |
-| `_should_crystallize` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:368` | member |
-| `_should_retry` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:395` | member |
-| `evaluate` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:93` | member |
-| `to_dict` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:50` | member |
+| `AnimationGenerator` | `demo\animator\html_generator.py:15` | class |
+| `Recorder` | `demo\animator\recorder.py:25` | class |
+| `WebviewPlayer` | `demo\animator\player.py:15` | class |
+| `__init__` | `demo\animator\html_generator.py:97` | member |
+| `__init__` | `demo\animator\player.py:18` | member |
+| `__init__` | `demo\animator\recorder.py:31` | member |
+| `_find_ffmpeg` | `demo\animator\recorder.py:45` | member |
+| `_frames_to_mp4` | `demo\animator\recorder.py:204` | member |
+| `_get_html_url` | `demo\animator\recorder.py:70` | member |
+| `_open_browser` | `demo\animator\player.py:70` | member |
+| `_parse_text` | `demo\animator\html_generator.py:102` | member |
+| `cleanup` | `demo\animator\recorder.py:253` | member |
+| `generate` | `demo\animator\html_generator.py:139` | member |
+| `generate_story` | `demo\animator\html_generator.py:164` | member |
+| `play` | `demo\animator\player.py:27` | member |
+| `play_async` | `demo\animator\player.py:58` | member |
+| `record` | `demo\animator\recorder.py:77` | member |
 
 ### 函数
 
 | 函数名 | 文件:行号 | 类型 |
 |--------|----------|------|
-| `COMPLEXITY_KEYWORDS` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:69` | variable |
-| `FAILURE_SIGNALS` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:85` | variable |
-| `SUCCESS_SIGNALS` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:79` | variable |
-| `__all__` | `build_mini_dist\tea_agent\evaluation\__init__.py:19` | variable |
-| `issues` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:43` | variable |
-| `lessons` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:44` | variable |
-| `logger` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:33` | variable |
-| `quality_score` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:40` | variable |
-| `should_crystallize` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:46` | variable |
-| `should_retry` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:47` | variable |
-| `suggestions` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:45` | variable |
-| `summary` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:48` | variable |
-| `time_efficiency` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:42` | variable |
-| `token_efficiency` | `build_mini_dist\tea_agent\evaluation\task_evaluator.py:41` | variable |
+| `COLOR_MAP` | `demo\animator\html_generator.py:31` | variable |
+| `FFMPEG_CMD` | `demo\animator\recorder.py:29` | variable |
+| `KEYWORD_MAP` | `demo\animator\html_generator.py:18` | variable |
+| `PHONE_STORY_SCENES` | `demo\animator\html_generator.py:34` | variable |
+| `_TEMPLATE_DIR` | `demo\animator\html_generator.py:11` | variable |
+| `_TEMPLATE_FILE` | `demo\animator\html_generator.py:12` | variable |
+| `__all__` | `demo\animator\__init__.py:6` | variable |
+| `args` | `demo\animator\recorder.py:276` | variable |
+| `parser` | `demo\animator\recorder.py:266` | variable |
+| `path` | `demo\animator\player.py:81` | variable |
+| `path` | `demo\animator\recorder.py:280` | variable |
+| `player` | `demo\animator\player.py:86` | variable |
+| `rec` | `demo\animator\recorder.py:278` | variable |
 
-## 模块 `build_mini_dist\tea_agent\multi_agent`
+## 模块 `demo\animator-studio\src`
 
 ### 类
 
 | 类名 | 文件:行号 | 类型 |
 |------|----------|------|
-| `Dispatcher` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:50` | class |
-| `LiteAgent` | `build_mini_dist\tea_agent\multi_agent\lite_agent.py:22` | class |
-| `SubTask` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:37` | class |
-| `TaskStatus` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:29` | class |
-| `__init__` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:99` | member |
-| `__init__` | `build_mini_dist\tea_agent\multi_agent\lite_agent.py:30` | member |
-| `_build_summary` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:316` | member |
-| `_build_system_prompt` | `build_mini_dist\tea_agent\multi_agent\lite_agent.py:126` | member |
-| `_execute_layers` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:195` | member |
-| `_execute_single_task` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:240` | member |
-| `_generate_tasks` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:155` | member |
-| `_get_config` | `build_mini_dist\tea_agent\multi_agent\lite_agent.py:120` | member |
-| `_identify_pattern` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:140` | member |
-| `_merge_results` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:289` | member |
-| `_topological_sort` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:173` | member |
-| `dispatch` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:102` | member |
-| `execute_sync` | `build_mini_dist\tea_agent\multi_agent\lite_agent.py:46` | member |
-| `execute_with_context` | `build_mini_dist\tea_agent\multi_agent\lite_agent.py:93` | member |
-| `visualize` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:322` | member |
+| `Config` | `demo\animator-studio\src\config.py:30` | class |
+| `__getattr__` | `demo\animator-studio\src\config.py:47` | member |
+| `__init__` | `demo\animator-studio\src\config.py:33` | member |
+| `__setattr__` | `demo\animator-studio\src\config.py:52` | member |
+| `as_dict` | `demo\animator-studio\src\config.py:58` | member |
+| `ensure_dirs` | `demo\animator-studio\src\config.py:61` | member |
 
 ### 函数
 
 | 函数名 | 文件:行号 | 类型 |
 |--------|----------|------|
-| `COMPLETED` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:32` | variable |
-| `FAILED` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:33` | variable |
-| `PATTERNS` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:58` | variable |
-| `PENDING` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:30` | variable |
-| `RUNNING` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:31` | variable |
-| `__all__` | `build_mini_dist\tea_agent\multi_agent\__init__.py:23` | variable |
-| `dependencies` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:43` | variable |
-| `error` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:46` | variable |
-| `logger` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:26` | variable |
-| `logger` | `build_mini_dist\tea_agent\multi_agent\lite_agent.py:19` | variable |
-| `result` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:45` | variable |
-| `status` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:44` | variable |
-| `time_seconds` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:47` | variable |
-| `tools` | `build_mini_dist\tea_agent\multi_agent\dispatcher.py:42` | variable |
+| `ANIMATIONS_DIR` | `demo\animator-studio\src\config.py:10` | variable |
+| `DATA_DIR` | `demo\animator-studio\src\config.py:9` | variable |
+| `DEFAULTS` | `demo\animator-studio\src\config.py:14` | variable |
+| `PROJECT_ROOT` | `demo\animator-studio\src\config.py:8` | variable |
+| `VIDEOS_DIR` | `demo\animator-studio\src\config.py:11` | variable |
+| `_detect_llm_needed` | `demo\animator-studio\src\cli.py:111` | function |
+| `api_router` | `demo\animator-studio\src\app.py:22` | unknown |
+| `app` | `demo\animator-studio\src\app.py:25` | variable |
+| `config` | `demo\animator-studio\src\config.py:68` | variable |
+| `index` | `demo\animator-studio\src\app.py:44` | function |
+| `main` | `demo\animator-studio\src\app.py:77` | function |
+| `main` | `demo\animator-studio\src\cli.py:16` | function |
+| `player` | `demo\animator-studio\src\app.py:53` | function |
+| `serve` | `demo\animator-studio\src\cli.py:44` | unknown |
+| `static_dir` | `demo\animator-studio\src\app.py:35` | variable |
+| `studio` | `demo\animator-studio\src\app.py:69` | function |
+| `templates_dir` | `demo\animator-studio\src\app.py:40` | variable |
 
-## 模块 `build_mini_dist\tea_agent\server`
+## 模块 `demo\animator-studio\src\api`
 
 ### 类
 
 | 类名 | 文件:行号 | 类型 |
 |------|----------|------|
-| `APIServer` | `build_mini_dist\tea_agent\server\server.py:176` | class |
-| `_ChatAgentProxy` | `build_mini_dist\tea_agent\server\server.py:91` | class |
-| `__init__` | `build_mini_dist\tea_agent\server\server.py:96` | member |
-| `__init__` | `build_mini_dist\tea_agent\server\server.py:186` | member |
-| `_extract_user_message` | `build_mini_dist\tea_agent\server\server.py:380` | member |
-| `_generate_sse` | `build_mini_dist\tea_agent\server\server.py:349` | member |
-| `_get_configs_dir` | `build_mini_dist\tea_agent\server\server.py:874` | member |
-| `_get_storage` | `build_mini_dist\tea_agent\server\server.py:201` | member |
-| `_get_toolkit` | `build_mini_dist\tea_agent\server\server.py:207` | member |
-| `_run_stream` | `build_mini_dist\tea_agent\server\server.py:333` | member |
-| `_sanitize` | `build_mini_dist\tea_agent\server\server.py:634` | member |
-| `chat_completion` | `build_mini_dist\tea_agent\server\server.py:264` | member |
-| `chat_completion_stream` | `build_mini_dist\tea_agent\server\server.py:303` | member |
-| `chat_stream_sse` | `build_mini_dist\tea_agent\server\server.py:418` | member |
-| `create_config_file` | `build_mini_dist\tea_agent\server\server.py:931` | member |
-| `create_memory` | `build_mini_dist\tea_agent\server\server.py:647` | member |
-| `create_session` | `build_mini_dist\tea_agent\server\server.py:243` | member |
-| `create_task` | `build_mini_dist\tea_agent\server\server.py:664` | member |
-| `create_topic_session` | `build_mini_dist\tea_agent\server\server.py:585` | member |
-| `delete_memory` | `build_mini_dist\tea_agent\server\server.py:651` | member |
-| `delete_session` | `build_mini_dist\tea_agent\server\server.py:608` | member |
-| `delete_task` | `build_mini_dist\tea_agent\server\server.py:668` | member |
-| `get_agent` | `build_mini_dist\tea_agent\server\server.py:223` | member |
-| `get_config` | `build_mini_dist\tea_agent\server\server.py:1052` | member |
-| `get_config_info` | `build_mini_dist\tea_agent\server\server.py:993` | member |
-| `get_session` | `build_mini_dist\tea_agent\server\server.py:593` | member |
-| `get_session_messages` | `build_mini_dist\tea_agent\server\server.py:623` | member |
-| `get_topic_conversations` | `build_mini_dist\tea_agent\server\server.py:517` | member |
-| `get_topic_info` | `build_mini_dist\tea_agent\server\server.py:532` | member |
-| `health` | `build_mini_dist\tea_agent\server\server.py:259` | member |
-| `list_config_files` | `build_mini_dist\tea_agent\server\server.py:878` | member |
-| `list_memories` | `build_mini_dist\tea_agent\server\server.py:643` | member |
-| `list_sessions` | `build_mini_dist\tea_agent\server\server.py:572` | member |
-| `list_tasks` | `build_mini_dist\tea_agent\server\server.py:661` | member |
-| `list_tools` | `build_mini_dist\tea_agent\server\server.py:549` | member |
-| `rename_topic` | `build_mini_dist\tea_agent\server\server.py:615` | member |
-| `reset_agent` | `build_mini_dist\tea_agent\server\server.py:230` | member |
-| `run_tool` | `build_mini_dist\tea_agent\server\server.py:559` | member |
-| `screenshot_full` | `build_mini_dist\tea_agent\server\server.py:728` | member |
-| `screenshot_region` | `build_mini_dist\tea_agent\server\server.py:677` | member |
-| `search` | `build_mini_dist\tea_agent\server\server.py:671` | member |
-| `switch_config` | `build_mini_dist\tea_agent\server\server.py:832` | member |
-| `switch_model` | `build_mini_dist\tea_agent\server\server.py:774` | member |
-| `update_config` | `build_mini_dist\tea_agent\server\server.py:1055` | member |
+| `GenerateRequest` | `demo\animator-studio\src\api\routes.py:16` | class |
+| `LLMGenerateRequest` | `demo\animator-studio\src\api\routes.py:23` | class |
+| `RecordRequest` | `demo\animator-studio\src\api\routes.py:29` | class |
 
 ### 函数
 
 | 函数名 | 文件:行号 | 类型 |
 |--------|----------|------|
-| `OPENAPI_SPEC` | `build_mini_dist\tea_agent\server\route_handlers.py:866` | variable |
-| `__all__` | `build_mini_dist\tea_agent\server\__init__.py:10` | variable |
-| `__version__` | `build_mini_dist\tea_agent\server\__init__.py:11` | variable |
-| `__version__` | `build_mini_dist\tea_agent\server\server.py:43` | variable |
-| `_active_sessions` | `build_mini_dist\tea_agent\server\server.py:51` | variable |
-| `_config_cache` | `build_mini_dist\tea_agent\server\server.py:54` | variable |
-| `_create_session_from_cfg` | `build_mini_dist\tea_agent\server\server.py:65` | function |
-| `_float_or_none` | `build_mini_dist\tea_agent\server\route_handlers.py:672` | function |
-| `_int_or_none` | `build_mini_dist\tea_agent\server\route_handlers.py:675` | function |
-| `_load_config_cached` | `build_mini_dist\tea_agent\server\server.py:56` | function |
-| `_load_topic_history` | `build_mini_dist\tea_agent\server\server.py:102` | function |
-| `_max_iter_pending` | `build_mini_dist\tea_agent\server\server.py:47` | variable |
-| `_put` | `build_mini_dist\tea_agent\server\server.py:316` | function |
-| `_put` | `build_mini_dist\tea_agent\server\server.py:430` | function |
-| `_safe_handle` | `build_mini_dist\tea_agent\server\route_handlers.py:847` | function |
-| `_save_chat_result` | `build_mini_dist\tea_agent\server\server.py:129` | function |
-| `_server_instance` | `build_mini_dist\tea_agent\server\server.py:1087` | variable |
-| `_sys` | `build_mini_dist\tea_agent\server\route_handlers.py:311` | namespace |
-| `_uuid_mod` | `build_mini_dist\tea_agent\server\server.py:470` | namespace |
-| `b64mod` | `build_mini_dist\tea_agent\server\route_handlers.py:392` | namespace |
-| `cb` | `build_mini_dist\tea_agent\server\server.py:278` | function |
-| `create_app` | `build_mini_dist\tea_agent\server\server.py:1096` | function |
-| `event_stream` | `build_mini_dist\tea_agent\server\route_handlers.py:425` | function |
-| `get_server` | `build_mini_dist\tea_agent\server\server.py:1089` | function |
-| `get_server_version` | `build_mini_dist\tea_agent\server\server.py:172` | function |
-| `handle_chat_abort` | `build_mini_dist\tea_agent\server\route_handlers.py:477` | function |
-| `handle_chat_completions` | `build_mini_dist\tea_agent\server\route_handlers.py:63` | function |
-| `handle_chat_continue` | `build_mini_dist\tea_agent\server\route_handlers.py:453` | function |
-| `handle_create_memory` | `build_mini_dist\tea_agent\server\route_handlers.py:195` | function |
-| `handle_create_session` | `build_mini_dist\tea_agent\server\route_handlers.py:132` | function |
-| `handle_create_task` | `build_mini_dist\tea_agent\server\route_handlers.py:221` | function |
-| `handle_delete_memory` | `build_mini_dist\tea_agent\server\route_handlers.py:204` | function |
-| `handle_delete_session` | `build_mini_dist\tea_agent\server\route_handlers.py:149` | function |
-| `handle_delete_task` | `build_mini_dist\tea_agent\server\route_handlers.py:229` | function |
-| `handle_docs` | `build_mini_dist\tea_agent\server\route_handlers.py:39` | function |
-| `handle_export_pdf` | `build_mini_dist\tea_agent\server\route_handlers.py:250` | function |
-| `handle_get_config` | `build_mini_dist\tea_agent\server\route_handlers.py:167` | function |
-| `handle_get_session` | `build_mini_dist\tea_agent\server\route_handlers.py:141` | function |
-| `handle_get_session_messages` | `build_mini_dist\tea_agent\server\route_handlers.py:155` | function |
-| `handle_health` | `build_mini_dist\tea_agent\server\route_handlers.py:35` | function |
-| `handle_list_memory` | `build_mini_dist\tea_agent\server\route_handlers.py:189` | function |
-| `handle_list_models` | `build_mini_dist\tea_agent\server\route_handlers.py:84` | function |
-| `handle_list_sessions` | `build_mini_dist\tea_agent\server\route_handlers.py:122` | function |
-| `handle_list_tasks` | `build_mini_dist\tea_agent\server\route_handlers.py:215` | function |
-| `handle_list_tools` | `build_mini_dist\tea_agent\server\route_handlers.py:101` | function |
-| `handle_openapi` | `build_mini_dist\tea_agent\server\route_handlers.py:55` | function |
-| `handle_run_tool` | `build_mini_dist\tea_agent\server\route_handlers.py:110` | function |
-| `handle_screenshot_full` | `build_mini_dist\tea_agent\server\route_handlers.py:299` | function |
-| `handle_screenshot_interactive` | `build_mini_dist\tea_agent\server\route_handlers.py:307` | function |
-| `handle_screenshot_region` | `build_mini_dist\tea_agent\server\route_handlers.py:281` | function |
-| `handle_search` | `build_mini_dist\tea_agent\server\route_handlers.py:240` | function |
-| `handle_switch_config` | `build_mini_dist\tea_agent\server\route_handlers.py:174` | function |
-| `handle_upload` | `build_mini_dist\tea_agent\server\route_handlers.py:263` | function |
-| `handle_web_chat` | `build_mini_dist\tea_agent\server\route_handlers.py:379` | function |
-| `handle_web_config` | `build_mini_dist\tea_agent\server\route_handlers.py:567` | function |
-| `handle_web_create_config` | `build_mini_dist\tea_agent\server\route_handlers.py:609` | function |
-| `handle_web_list_configs` | `build_mini_dist\tea_agent\server\route_handlers.py:585` | function |
-| `handle_web_model_config` | `build_mini_dist\tea_agent\server\route_handlers.py:726` | function |
-| `handle_web_model_info` | `build_mini_dist\tea_agent\server\route_handlers.py:650` | function |
-| `handle_web_model_switch` | `build_mini_dist\tea_agent\server\route_handlers.py:658` | function |
-| `handle_web_new_topic` | `build_mini_dist\tea_agent\server\route_handlers.py:502` | function |
-| `handle_web_root` | `build_mini_dist\tea_agent\server\route_handlers.py:834` | function |
-| `handle_web_sessions` | `build_mini_dist\tea_agent\server\route_handlers.py:512` | function |
-| `handle_web_tools` | `build_mini_dist\tea_agent\server\route_handlers.py:561` | function |
-| `handle_web_topic_conversations` | `build_mini_dist\tea_agent\server\route_handlers.py:547` | function |
-| `handle_web_topic_info` | `build_mini_dist\tea_agent\server\route_handlers.py:519` | function |
-| `handle_web_update_config` | `build_mini_dist\tea_agent\server\route_handlers.py:575` | function |
-| `handle_web_upload_config` | `build_mini_dist\tea_agent\server\route_handlers.py:739` | function |
-| `logger` | `build_mini_dist\tea_agent\server\server.py:27` | variable |
-| `main` | `build_mini_dist\tea_agent\server\server.py:1227` | function |
-| `run_server` | `build_mini_dist\tea_agent\server\server.py:1208` | function |
-| `status_cb` | `build_mini_dist\tea_agent\server\server.py:468` | function |
-| `stream_cb` | `build_mini_dist\tea_agent\server\server.py:321` | function |
-| `stream_cb` | `build_mini_dist\tea_agent\server\server.py:441` | function |
+| `api_generate` | `demo\animator-studio\src\api\routes.py:40` | function |
+| `api_get_animation` | `demo\animator-studio\src\api\routes.py:99` | function |
+| `api_list_animations` | `demo\animator-studio\src\api\routes.py:87` | function |
+| `api_list_videos` | `demo\animator-studio\src\api\routes.py:93` | function |
+| `api_llm_generate` | `demo\animator-studio\src\api\routes.py:56` | function |
+| `api_record` | `demo\animator-studio\src\api\routes.py:71` | function |
+| `duration` | `demo\animator-studio\src\api\routes.py:18` | variable |
+| `duration` | `demo\animator-studio\src\api\routes.py:25` | variable |
+| `duration` | `demo\animator-studio\src\api\routes.py:31` | variable |
+| `fps` | `demo\animator-studio\src\api\routes.py:34` | variable |
+| `height` | `demo\animator-studio\src\api\routes.py:33` | variable |
+| `html_path` | `demo\animator-studio\src\api\routes.py:30` | variable |
+| `router` | `demo\animator-studio\src\api\routes.py:11` | variable |
+| `story` | `demo\animator-studio\src\api\routes.py:20` | variable |
+| `text` | `demo\animator-studio\src\api\routes.py:17` | variable |
+| `text` | `demo\animator-studio\src\api\routes.py:24` | variable |
+| `tts` | `demo\animator-studio\src\api\routes.py:19` | variable |
+| `tts` | `demo\animator-studio\src\api\routes.py:26` | variable |
+| `width` | `demo\animator-studio\src\api\routes.py:32` | variable |
 
-## 模块 `build_mini_dist\tea_agent\server\static`
+## 模块 `demo\animator-studio\src\core`
 
 ### 类
 
 | 类名 | 文件:行号 | 类型 |
 |------|----------|------|
-| `#config-switcher .btn-ghost.btn-sm` | `build_mini_dist\tea_agent\server\static\style.css:326` | class |
-| `#config-switcher .btn-ghost.btn-sm:hover` | `build_mini_dist\tea_agent\server\static\style.css:332` | class |
-| `#sidebar-splitter.active` | `build_mini_dist\tea_agent\server\static\style.css:514` | class |
-| `#toast.show` | `build_mini_dist\tea_agent\server\static\style.css:588` | class |
-| `#vsplitter.active` | `build_mini_dist\tea_agent\server\static\style.css:544` | class |
-| `.btn` | `build_mini_dist\tea_agent\server\static\style.css:382` | class |
-| `.btn-block` | `build_mini_dist\tea_agent\server\static\style.css:404` | class |
-| `.btn-danger` | `build_mini_dist\tea_agent\server\static\style.css:395` | class |
-| `.btn-danger:hover:not(:disabled)` | `build_mini_dist\tea_agent\server\static\style.css:396` | class |
-| `.btn-ghost` | `build_mini_dist\tea_agent\server\static\style.css:401` | class |
-| `.btn-ghost:hover` | `build_mini_dist\tea_agent\server\static\style.css:402` | class |
-| `.btn-primary` | `build_mini_dist\tea_agent\server\static\style.css:393` | class |
-| `.btn-primary:hover:not(:disabled)` | `build_mini_dist\tea_agent\server\static\style.css:394` | class |
-| `.btn-sm` | `build_mini_dist\tea_agent\server\static\style.css:403` | class |
-| `.btn:disabled` | `build_mini_dist\tea_agent\server\static\style.css:392` | class |
-| `.cs-label` | `build_mini_dist\tea_agent\server\static\style.css:335` | class |
-| `.form-group` | `build_mini_dist\tea_agent\server\static\style.css:451` | class |
-| `.loading` | `build_mini_dist\tea_agent\server\static\style.css:300` | class |
-| `.max-iter-overlay` | `build_mini_dist\tea_agent\server\static\style.css:591` | class |
-| `.max-iter-overlay .mi-actions` | `build_mini_dist\tea_agent\server\static\style.css:627` | class |
-| `.max-iter-overlay .mi-actions .btn` | `build_mini_dist\tea_agent\server\static\style.css:628` | class |
-| `.max-iter-overlay .mi-box` | `build_mini_dist\tea_agent\server\static\style.css:608` | class |
-| `.max-iter-overlay .mi-desc` | `build_mini_dist\tea_agent\server\static\style.css:625` | class |
-| `.max-iter-overlay .mi-icon` | `build_mini_dist\tea_agent\server\static\style.css:623` | class |
-| `.max-iter-overlay .mi-title` | `build_mini_dist\tea_agent\server\static\style.css:624` | class |
-| `.md-table` | `build_mini_dist\tea_agent\server\static\style.css:479` | class |
-| `.memory-item` | `build_mini_dist\tea_agent\server\static\style.css:465` | class |
-| `.memory-item .meta` | `build_mini_dist\tea_agent\server\static\style.css:473` | class |
-| `.memory-item .text` | `build_mini_dist\tea_agent\server\static\style.css:472` | class |
-| `.modal` | `build_mini_dist\tea_agent\server\static\style.css:407` | class |
-| `.modal-actions` | `build_mini_dist\tea_agent\server\static\style.css:445` | class |
-| `.modal-box` | `build_mini_dist\tea_agent\server\static\style.css:416` | class |
-| `.msg` | `build_mini_dist\tea_agent\server\static\style.css:150` | class |
-| `.msg-bubble` | `build_mini_dist\tea_agent\server\static\style.css:154` | class |
-| `.msg-label` | `build_mini_dist\tea_agent\server\static\style.css:153` | class |
-| `.msg.agent` | `build_mini_dist\tea_agent\server\static\style.css:152` | class |
-| `.msg.agent .msg-bubble` | `build_mini_dist\tea_agent\server\static\style.css:163` | class |
-| `.msg.user` | `build_mini_dist\tea_agent\server\static\style.css:151` | class |
-| `.msg.user .msg-bubble` | `build_mini_dist\tea_agent\server\static\style.css:162` | class |
-| `.param-key` | `build_mini_dist\tea_agent\server\static\style.css:250` | class |
-| `.param-key::after` | `build_mini_dist\tea_agent\server\static\style.css:254` | class |
-| `.result-label` | `build_mini_dist\tea_agent\server\static\style.css:272` | class |
-| `.sb-actions` | `build_mini_dist\tea_agent\server\static\style.css:41` | class |
-| `.sb-footer` | `build_mini_dist\tea_agent\server\static\style.css:42` | class |
-| `.sb-header` | `build_mini_dist\tea_agent\server\static\style.css:38` | class |
-| `.sb-logo` | `build_mini_dist\tea_agent\server\static\style.css:39` | class |
-| `.sb-title` | `build_mini_dist\tea_agent\server\static\style.css:40` | class |
-| `.search-item` | `build_mini_dist\tea_agent\server\static\style.css:474` | class |
-| `.search-item .sp` | `build_mini_dist\tea_agent\server\static\style.css:476` | class |
-| `.search-item .st` | `build_mini_dist\tea_agent\server\static\style.css:475` | class |
-| `.spinner` | `build_mini_dist\tea_agent\server\static\style.css:308` | class |
-| `.status-msg` | `build_mini_dist\tea_agent\server\static\style.css:454` | class |
-| `.status-msg.error` | `build_mini_dist\tea_agent\server\static\style.css:461` | class |
-| `.status-msg.info` | `build_mini_dist\tea_agent\server\static\style.css:462` | class |
-| `.status-msg.success` | `build_mini_dist\tea_agent\server\static\style.css:460` | class |
-| `.task-item` | `build_mini_dist\tea_agent\server\static\style.css:465` | class |
-| `.task-item .meta` | `build_mini_dist\tea_agent\server\static\style.css:473` | class |
-| `.task-item .text` | `build_mini_dist\tea_agent\server\static\style.css:472` | class |
-| `.think-block` | `build_mini_dist\tea_agent\server\static\style.css:166` | class |
-| `.think-content` | `build_mini_dist\tea_agent\server\static\style.css:176` | class |
-| `.tool-call-container` | `build_mini_dist\tea_agent\server\static\style.css:179` | class |
-| `.tool-call-container.done .tool-call-summary` | `build_mini_dist\tea_agent\server\static\style.css:217` | class |
-| `.tool-call-container.done .tool-call-summary .badge` | `build_mini_dist\tea_agent\server\static\style.css:218` | class |
-| `.tool-call-item` | `build_mini_dist\tea_agent\server\static\style.css:221` | class |
-| `.tool-call-item .status-icon` | `build_mini_dist\tea_agent\server\static\style.css:231` | class |
-| `.tool-call-item .tool-name` | `build_mini_dist\tea_agent\server\static\style.css:232` | class |
-| `.tool-call-item.done` | `build_mini_dist\tea_agent\server\static\style.css:235` | class |
-| `.tool-call-item.done .status-icon` | `build_mini_dist\tea_agent\server\static\style.css:236` | class |
-| `.tool-call-item.running` | `build_mini_dist\tea_agent\server\static\style.css:234` | class |
-| `.tool-call-summary` | `build_mini_dist\tea_agent\server\static\style.css:193` | class |
-| `.tool-call-summary .badge` | `build_mini_dist\tea_agent\server\static\style.css:207` | class |
-| `.tool-call-summary .icon` | `build_mini_dist\tea_agent\server\static\style.css:206` | class |
-| `.tool-call-summary:hover` | `build_mini_dist\tea_agent\server\static\style.css:205` | class |
-| `.tool-param-row` | `build_mini_dist\tea_agent\server\static\style.css:242` | class |
-| `.tool-params` | `build_mini_dist\tea_agent\server\static\style.css:239` | class |
-| `.tool-result` | `build_mini_dist\tea_agent\server\static\style.css:265` | class |
-| `.tool-spinner` | `build_mini_dist\tea_agent\server\static\style.css:287` | class |
-| `.toolbar-actions` | `build_mini_dist\tea_agent\server\static\style.css:135` | class |
-| `.topic-actions-btn` | `build_mini_dist\tea_agent\server\static\style.css:71` | class |
-| `.topic-actions-btn:hover` | `build_mini_dist\tea_agent\server\static\style.css:87` | class |
-| `.topic-actions-menu` | `build_mini_dist\tea_agent\server\static\style.css:90` | class |
-| `.topic-actions-menu-item` | `build_mini_dist\tea_agent\server\static\style.css:104` | class |
-| `.topic-actions-menu-item.danger` | `build_mini_dist\tea_agent\server\static\style.css:120` | class |
-| `.topic-actions-menu-item.danger:hover` | `build_mini_dist\tea_agent\server\static\style.css:121` | class |
-| `.topic-actions-menu-item:hover` | `build_mini_dist\tea_agent\server\static\style.css:119` | class |
-| `.topic-actions-menu.show` | `build_mini_dist\tea_agent\server\static\style.css:103` | class |
-| `.topic-item` | `build_mini_dist\tea_agent\server\static\style.css:46` | class |
-| `.topic-item-title` | `build_mini_dist\tea_agent\server\static\style.css:61` | class |
-| `.topic-item.active` | `build_mini_dist\tea_agent\server\static\style.css:60` | class |
-| `.topic-item.active .topic-item-title` | `build_mini_dist\tea_agent\server\static\style.css:68` | class |
-| `.topic-item:hover` | `build_mini_dist\tea_agent\server\static\style.css:59` | class |
-| `.topic-item:hover .topic-actions-btn` | `build_mini_dist\tea_agent\server\static\style.css:86` | class |
-| `.topic-list` | `build_mini_dist\tea_agent\server\static\style.css:45` | class |
-| `.welcome` | `build_mini_dist\tea_agent\server\static\style.css:140` | class |
-| `.welcome-icon` | `build_mini_dist\tea_agent\server\static\style.css:145` | class |
+| `DSLValidationError` | `demo\animator-studio\src\core\animation_dsl.py:95` | class |
+| `Generator` | `demo\animator-studio\src\core\generator.py:33` | class |
+| `LLMClient` | `demo\animator-studio\src\core\llm_client.py:55` | class |
+| `Recorder` | `demo\animator-studio\src\core\recorder.py:13` | class |
+| `ScriptEngine` | `demo\animator-studio\src\core\script_engine.py:41` | class |
+| `__init__` | `demo\animator-studio\src\core\generator.py:44` | member |
+| `__init__` | `demo\animator-studio\src\core\llm_client.py:58` | member |
+| `__init__` | `demo\animator-studio\src\core\recorder.py:23` | member |
+| `__init__` | `demo\animator-studio\src\core\script_engine.py:44` | member |
+| `_detect_story` | `demo\animator-studio\src\core\generator.py:119` | member |
+| `_endpoint` | `demo\animator-studio\src\core\llm_client.py:78` | member |
+| `_ensure_gen` | `demo\animator-studio\src\core\generator.py:48` | member |
+| `_ensure_rec` | `demo\animator-studio\src\core\recorder.py:27` | member |
+| `_headers` | `demo\animator-studio\src\core\llm_client.py:72` | member |
+| `chat` | `demo\animator-studio\src\core\llm_client.py:81` | member |
+| `chat_stream` | `demo\animator-studio\src\core\llm_client.py:128` | member |
+| `cleanup` | `demo\animator-studio\src\core\recorder.py:93` | member |
+| `close` | `demo\animator-studio\src\core\llm_client.py:167` | member |
+| `generate` | `demo\animator-studio\src\core\generator.py:59` | member |
+| `get` | `demo\animator-studio\src\core\generator.py:127` | member |
+| `get_by_path` | `demo\animator-studio\src\core\generator.py:130` | member |
+| `list_animations` | `demo\animator-studio\src\core\generator.py:124` | member |
+| `list_jobs` | `demo\animator-studio\src\core\recorder.py:90` | member |
+| `record` | `demo\animator-studio\src\core\recorder.py:42` | member |
+| `render` | `demo\animator-studio\src\core\script_engine.py:53` | member |
+| `template` | `demo\animator-studio\src\core\script_engine.py:48` | member |
 
 ### 函数
 
 | 函数名 | 文件:行号 | 类型 |
 |--------|----------|------|
-| `#app` | `build_mini_dist\tea_agent\server\static\style.css:27` | id |
-| `#chat-input` | `build_mini_dist\tea_agent\server\static\style.css:365` | id |
-| `#chat-input:focus` | `build_mini_dist\tea_agent\server\static\style.css:379` | id |
-| `#config-switcher` | `build_mini_dist\tea_agent\server\static\style.css:320` | id |
-| `#cs-select` | `build_mini_dist\tea_agent\server\static\style.css:342` | id |
-| `#cs-select:focus` | `build_mini_dist\tea_agent\server\static\style.css:354` | id |
-| `#input-row` | `build_mini_dist\tea_agent\server\static\style.css:356` | id |
-| `#main` | `build_mini_dist\tea_agent\server\static\style.css:124` | id |
-| `#messages` | `build_mini_dist\tea_agent\server\static\style.css:138` | id |
-| `#sidebar` | `build_mini_dist\tea_agent\server\static\style.css:30` | id |
-| `#sidebar-splitter` | `build_mini_dist\tea_agent\server\static\style.css:504` | id |
-| `#sidebar-splitter::after` | `build_mini_dist\tea_agent\server\static\style.css:517` | id |
-| `#sidebar-splitter:hover` | `build_mini_dist\tea_agent\server\static\style.css:513` | id |
-| `#sidebar-splitter:hover::after` | `build_mini_dist\tea_agent\server\static\style.css:530` | id |
-| `#toast` | `build_mini_dist\tea_agent\server\static\style.css:571` | id |
-| `#toolbar` | `build_mini_dist\tea_agent\server\static\style.css:127` | id |
-| `#topic-title` | `build_mini_dist\tea_agent\server\static\style.css:134` | id |
-| `#vsplitter` | `build_mini_dist\tea_agent\server\static\style.css:534` | id |
-| `#vsplitter::after` | `build_mini_dist\tea_agent\server\static\style.css:547` | id |
-| `#vsplitter:hover` | `build_mini_dist\tea_agent\server\static\style.css:543` | id |
-| `#vsplitter:hover::after` | `build_mini_dist\tea_agent\server\static\style.css:560` | id |
-| `$` | `build_mini_dist\tea_agent\server\static\app.js:16` | function |
-| `*` | `build_mini_dist\tea_agent\server\static\style.css:17` | selector |
-| `.max-iter-overlay .mi-desc strong` | `build_mini_dist\tea_agent\server\static\style.css:626` | selector |
-| `.md-table tbody tr:hover` | `build_mini_dist\tea_agent\server\static\style.css:499` | selector |
-| `.md-table td` | `build_mini_dist\tea_agent\server\static\style.css:486` | selector |
-| `.md-table td` | `build_mini_dist\tea_agent\server\static\style.css:496` | selector |
-| `.md-table th` | `build_mini_dist\tea_agent\server\static\style.css:485` | selector |
-| `.md-table th` | `build_mini_dist\tea_agent\server\static\style.css:491` | selector |
-| `.modal-box h3` | `build_mini_dist\tea_agent\server\static\style.css:426` | selector |
-| `.modal-box input` | `build_mini_dist\tea_agent\server\static\style.css:427` | selector |
-| `.modal-box input:focus` | `build_mini_dist\tea_agent\server\static\style.css:441` | selector |
-| `.modal-box label` | `build_mini_dist\tea_agent\server\static\style.css:444` | selector |
-| `.modal-box select` | `build_mini_dist\tea_agent\server\static\style.css:429` | selector |
-| `.modal-box select:focus` | `build_mini_dist\tea_agent\server\static\style.css:443` | selector |
-| `.modal-box textarea` | `build_mini_dist\tea_agent\server\static\style.css:428` | selector |
-| `.modal-box textarea:focus` | `build_mini_dist\tea_agent\server\static\style.css:442` | selector |
-| `.msg-bubble code` | `build_mini_dist\tea_agent\server\static\style.css:161` | selector |
-| `.msg-bubble pre` | `build_mini_dist\tea_agent\server\static\style.css:160` | selector |
-| `.param-val code` | `build_mini_dist\tea_agent\server\static\style.css:255` | selector |
-| `.result-val code` | `build_mini_dist\tea_agent\server\static\style.css:277` | selector |
-| `.think-block summary` | `build_mini_dist\tea_agent\server\static\style.css:175` | selector |
-| `.tool-call-item .tool-name code` | `build_mini_dist\tea_agent\server\static\style.css:233` | selector |
-| `.welcome h2` | `build_mini_dist\tea_agent\server\static\style.css:146` | selector |
-| `.welcome p` | `build_mini_dist\tea_agent\server\static\style.css:147` | selector |
-| `::-webkit-scrollbar` | `build_mini_dist\tea_agent\server\static\style.css:565` | selector |
-| `::-webkit-scrollbar-thumb` | `build_mini_dist\tea_agent\server\static\style.css:567` | selector |
-| `::-webkit-scrollbar-thumb:hover` | `build_mini_dist\tea_agent\server\static\style.css:568` | selector |
-| `::-webkit-scrollbar-track` | `build_mini_dist\tea_agent\server\static\style.css:566` | selector |
-| `:root` | `build_mini_dist\tea_agent\server\static\style.css:2` | selector |
-| `Content-Type` | `build_mini_dist\tea_agent\server\static\app.js:136` | property |
-| `Content-Type` | `build_mini_dist\tea_agent\server\static\app.js:205` | property |
-| `Content-Type` | `build_mini_dist\tea_agent\server\static\app.js:571` | property |
-| `Content-Type` | `build_mini_dist\tea_agent\server\static\app.js:688` | property |
-| `Content-Type` | `build_mini_dist\tea_agent\server\static\app.js:717` | property |
-| `Content-Type` | `build_mini_dist\tea_agent\server\static\app.js:733` | property |
-| `Content-Type` | `build_mini_dist\tea_agent\server\static\app.js:863` | property |
-| `Content-Type` | `build_mini_dist\tea_agent\server\static\app.js:909` | property |
-| `Content-Type` | `build_mini_dist\tea_agent\server\static\app.js:948` | property |
-| `Content-Type` | `build_mini_dist\tea_agent\server\static\app.js:1146` | property |
-| `Content-Type` | `build_mini_dist\tea_agent\server\static\app.js:1238` | property |
-| `Content-Type` | `build_mini_dist\tea_agent\server\static\app.js:1249` | property |
-| `Tea Agent` | `build_mini_dist\tea_agent\server\static\index.html:6` | heading3 |
-| `Tea Agent` | `build_mini_dist\tea_agent\server\static\index.html:43` | heading2 |
-| `_doUploadConfig` | `build_mini_dist\tea_agent\server\static\app.js:1056` | function |
-| `_ensureConfigUploadInput` | `build_mini_dist\tea_agent\server\static\app.js:1034` | function |
-| `_initScrollTracking` | `build_mini_dist\tea_agent\server\static\app.js:1571` | function |
-| `_isNearBottom` | `build_mini_dist\tea_agent\server\static\app.js:93` | function |
-| `addLoading` | `build_mini_dist\tea_agent\server\static\app.js:108` | function |
-| `addMemory` | `build_mini_dist\tea_agent\server\static\app.js:684` | function |
-| `addMessage` | `build_mini_dist\tea_agent\server\static\app.js:51` | function |
-| `addTask` | `build_mini_dist\tea_agent\server\static\app.js:711` | function |
-| `anonymousFunctiond3e155210100` | `build_mini_dist\tea_agent\server\static\app.js:5` | function |
-| `anonymousFunctiond3e155210300` | `build_mini_dist\tea_agent\server\static\app.js:62` | function |
-| `anonymousFunctiond3e155210400` | `build_mini_dist\tea_agent\server\static\app.js:72` | function |
-| `anonymousFunctiond3e155210500` | `build_mini_dist\tea_agent\server\static\app.js:73` | function |
-| `anonymousFunctiond3e155210700` | `build_mini_dist\tea_agent\server\static\app.js:86` | function |
-| `anonymousFunctiond3e155210e00` | `build_mini_dist\tea_agent\server\static\app.js:445` | function |
-| `anonymousFunctiond3e155210f00` | `build_mini_dist\tea_agent\server\static\app.js:452` | function |
-| `anonymousFunctiond3e155211000` | `build_mini_dist\tea_agent\server\static\app.js:463` | function |
-| `anonymousFunctiond3e155211100` | `build_mini_dist\tea_agent\server\static\app.js:464` | function |
-| `anonymousFunctiond3e155211200` | `build_mini_dist\tea_agent\server\static\app.js:465` | function |
-| `anonymousFunctiond3e155211300` | `build_mini_dist\tea_agent\server\static\app.js:466` | function |
-| `anonymousFunctiond3e155211400` | `build_mini_dist\tea_agent\server\static\app.js:482` | function |
-| `anonymousFunctiond3e155211500` | `build_mini_dist\tea_agent\server\static\app.js:484` | function |
-| `anonymousFunctiond3e155211600` | `build_mini_dist\tea_agent\server\static\app.js:486` | function |
-| `anonymousFunctiond3e155211700` | `build_mini_dist\tea_agent\server\static\app.js:520` | function |
-| `anonymousFunctiond3e155211800` | `build_mini_dist\tea_agent\server\static\app.js:559` | function |
-| `anonymousFunctiond3e155213e00` | `build_mini_dist\tea_agent\server\static\app.js:1009` | function |
-| `anonymousFunctiond3e155213f00` | `build_mini_dist\tea_agent\server\static\app.js:1015` | function |
-| `anonymousFunctiond3e155214000` | `build_mini_dist\tea_agent\server\static\app.js:1019` | function |
-| `anonymousFunctiond3e155214200` | `build_mini_dist\tea_agent\server\static\app.js:1041` | function |
-| `anonymousFunctiond3e155214500` | `build_mini_dist\tea_agent\server\static\app.js:1121` | function |
-| `anonymousFunctiond3e155214900` | `build_mini_dist\tea_agent\server\static\app.js:1198` | function |
-| `anonymousFunctiond3e155214b00` | `build_mini_dist\tea_agent\server\static\app.js:1234` | function |
-| `anonymousFunctiond3e155214e00` | `build_mini_dist\tea_agent\server\static\app.js:1245` | function |
-| `anonymousFunctiond3e155215200` | `build_mini_dist\tea_agent\server\static\app.js:1305` | function |
-| `anonymousFunctiond3e155215300` | `build_mini_dist\tea_agent\server\static\app.js:1308` | function |
-| `anonymousFunctiond3e155215400` | `build_mini_dist\tea_agent\server\static\app.js:1308` | function |
-| `anonymousFunctiond3e155215500` | `build_mini_dist\tea_agent\server\static\app.js:1317` | function |
-| `anonymousFunctiond3e155215600` | `build_mini_dist\tea_agent\server\static\app.js:1317` | function |
-| `anonymousFunctiond3e155215700` | `build_mini_dist\tea_agent\server\static\app.js:1399` | function |
-| `anonymousFunctiond3e155215800` | `build_mini_dist\tea_agent\server\static\app.js:1409` | function |
-| `anonymousFunctiond3e155215900` | `build_mini_dist\tea_agent\server\static\app.js:1423` | function |
-| `anonymousFunctiond3e155215a00` | `build_mini_dist\tea_agent\server\static\app.js:1437` | function |
-| `anonymousFunctiond3e155215b00` | `build_mini_dist\tea_agent\server\static\app.js:1497` | function |
-| `anonymousFunctiond3e155215d00` | `build_mini_dist\tea_agent\server\static\app.js:1511` | function |
-| `anonymousFunctiond3e155215f00` | `build_mini_dist\tea_agent\server\static\app.js:1525` | function |
-| `anonymousFunctiond3e155216100` | `build_mini_dist\tea_agent\server\static\app.js:1574` | function |
-| `anonymousObjectd3e155210905` | `build_mini_dist\tea_agent\server\static\app.js:134` | variable |
-| `anonymousObjectd3e155210a05` | `build_mini_dist\tea_agent\server\static\app.js:137` | variable |
-| `anonymousObjectd3e155210c05` | `build_mini_dist\tea_agent\server\static\app.js:203` | variable |
-| `anonymousObjectd3e155210d05` | `build_mini_dist\tea_agent\server\static\app.js:218` | variable |
-| `anonymousObjectd3e155211905` | `build_mini_dist\tea_agent\server\static\app.js:569` | variable |
-| `anonymousObjectd3e155211a05` | `build_mini_dist\tea_agent\server\static\app.js:572` | variable |
-| `anonymousObjectd3e155211b05` | `build_mini_dist\tea_agent\server\static\app.js:591` | variable |
-| `anonymousObjectd3e155212405` | `build_mini_dist\tea_agent\server\static\app.js:688` | variable |
-| `anonymousObjectd3e155212505` | `build_mini_dist\tea_agent\server\static\app.js:688` | variable |
-| `anonymousObjectd3e155212705` | `build_mini_dist\tea_agent\server\static\app.js:694` | variable |
-| `anonymousObjectd3e155212a05` | `build_mini_dist\tea_agent\server\static\app.js:717` | variable |
-| `anonymousObjectd3e155212b05` | `build_mini_dist\tea_agent\server\static\app.js:717` | variable |
-| `anonymousObjectd3e155212d05` | `build_mini_dist\tea_agent\server\static\app.js:723` | variable |
-| `anonymousObjectd3e155213005` | `build_mini_dist\tea_agent\server\static\app.js:733` | variable |
-| `anonymousObjectd3e155213105` | `build_mini_dist\tea_agent\server\static\app.js:733` | variable |
-| `anonymousObjectd3e155213505` | `build_mini_dist\tea_agent\server\static\app.js:861` | variable |
-| `anonymousObjectd3e155213605` | `build_mini_dist\tea_agent\server\static\app.js:907` | variable |
-| `anonymousObjectd3e155213905` | `build_mini_dist\tea_agent\server\static\app.js:946` | variable |
-| `anonymousObjectd3e155214405` | `build_mini_dist\tea_agent\server\static\app.js:1062` | variable |
-| `anonymousObjectd3e155214705` | `build_mini_dist\tea_agent\server\static\app.js:1144` | variable |
-| `anonymousObjectd3e155214805` | `build_mini_dist\tea_agent\server\static\app.js:1147` | variable |
-| `anonymousObjectd3e155214c05` | `build_mini_dist\tea_agent\server\static\app.js:1236` | variable |
-| `anonymousObjectd3e155214d05` | `build_mini_dist\tea_agent\server\static\app.js:1239` | variable |
-| `anonymousObjectd3e155214f05` | `build_mini_dist\tea_agent\server\static\app.js:1247` | variable |
-| `anonymousObjectd3e155215005` | `build_mini_dist\tea_agent\server\static\app.js:1250` | variable |
-| `anonymousObjectd3e155215c05` | `build_mini_dist\tea_agent\server\static\app.js:1509` | variable |
-| `anonymousObjectd3e155215e05` | `build_mini_dist\tea_agent\server\static\app.js:1523` | variable |
-| `anonymousObjectd3e155216005` | `build_mini_dist\tea_agent\server\static\app.js:1555` | variable |
-| `anonymousObjectd3e155216205` | `build_mini_dist\tea_agent\server\static\app.js:1576` | variable |
-| `api-key` | `build_mini_dist\tea_agent\server\static\index.html:124` | id |
-| `api-url` | `build_mini_dist\tea_agent\server\static\index.html:123` | id |
-| `app` | `build_mini_dist\tea_agent\server\static\index.html:10` | id |
-| `applyConfig` | `build_mini_dist\tea_agent\server\static\app.js:810` | function |
-| `applyTheme` | `build_mini_dist\tea_agent\server\static\app.js:40` | function |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:137` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:199` | variable |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:206` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:572` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:688` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:717` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:733` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:864` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:910` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:940` | variable |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:949` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:1064` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:1147` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:1239` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\app.js:1250` | property |
-| `body` | `build_mini_dist\tea_agent\server\static\style.css:18` | selector |
-| `body.cheap_options` | `build_mini_dist\tea_agent\server\static\app.js:856` | property |
-| `captureFull` | `build_mini_dist\tea_agent\server\static\app.js:1392` | function |
-| `chat-input` | `build_mini_dist\tea_agent\server\static\index.html:54` | id |
-| `cheap-api-key` | `build_mini_dist\tea_agent\server\static\index.html:141` | id |
-| `cheap-api-url` | `build_mini_dist\tea_agent\server\static\index.html:140` | id |
-| `cheap-max-context` | `build_mini_dist\tea_agent\server\static\index.html:148` | id |
-| `cheap-max-tokens` | `build_mini_dist\tea_agent\server\static\index.html:144` | id |
-| `cheap-model-name` | `build_mini_dist\tea_agent\server\static\index.html:139` | id |
-| `cheap-supports-reasoning` | `build_mini_dist\tea_agent\server\static\index.html:152` | id |
-| `cheap-supports-vision` | `build_mini_dist\tea_agent\server\static\index.html:151` | id |
-| `cheap-temperature` | `build_mini_dist\tea_agent\server\static\index.html:143` | id |
-| `cheap-top-p` | `build_mini_dist\tea_agent\server\static\index.html:147` | id |
-| `checkConfigStatus` | `build_mini_dist\tea_agent\server\static\app.js:1081` | function |
-| `checkVisionSupport` | `build_mini_dist\tea_agent\server\static\app.js:1264` | function |
-| `cleanupOverlay` | `build_mini_dist\tea_agent\server\static\app.js:1383` | function |
-| `clear-images-btn` | `build_mini_dist\tea_agent\server\static\index.html:59` | id |
-| `clearChat` | `build_mini_dist\tea_agent\server\static\app.js:632` | function |
-| `clearImages` | `build_mini_dist\tea_agent\server\static\app.js:991` | function |
-| `clientToImage` | `build_mini_dist\tea_agent\server\static\app.js:1343` | function |
-| `command` | `build_mini_dist\tea_agent\server\static\app.js:717` | property |
-| `config-select` | `build_mini_dist\tea_agent\server\static\index.html:117` | id |
-| `config-switcher` | `build_mini_dist\tea_agent\server\static\index.html:27` | id |
-| `config-warning` | `build_mini_dist\tea_agent\server\static\index.html:36` | id |
-| `config-warning-text` | `build_mini_dist\tea_agent\server\static\index.html:38` | id |
-| `config_path` | `build_mini_dist\tea_agent\server\static\app.js:1147` | property |
-| `confirm_id` | `build_mini_dist\tea_agent\server\static\app.js:1239` | property |
-| `confirm_id` | `build_mini_dist\tea_agent\server\static\app.js:1250` | property |
-| `content` | `build_mini_dist\tea_agent\server\static\app.js:688` | property |
-| `continue` | `build_mini_dist\tea_agent\server\static\app.js:1239` | property |
-| `continue` | `build_mini_dist\tea_agent\server\static\app.js:1250` | property |
-| `cs-select` | `build_mini_dist\tea_agent\server\static\index.html:29` | id |
-| `deleteMemory` | `build_mini_dist\tea_agent\server\static\app.js:693` | function |
-| `deleteTask` | `build_mini_dist\tea_agent\server\static\app.js:722` | function |
-| `deleteTopic` | `build_mini_dist\tea_agent\server\static\app.js:588` | function |
-| `doCrop` | `build_mini_dist\tea_agent\server\static\app.js:1365` | function |
-| `doExport` | `build_mini_dist\tea_agent\server\static\app.js:728` | function |
-| `doSearch` | `build_mini_dist\tea_agent\server\static\app.js:647` | function |
-| `esc` | `build_mini_dist\tea_agent\server\static\app.js:17` | function |
-| `escHtml` | `build_mini_dist\tea_agent\server\static\app.js:491` | function |
-| `export-result` | `build_mini_dist\tea_agent\server\static\index.html:105` | id |
-| `filename` | `build_mini_dist\tea_agent\server\static\app.js:940` | property |
-| `formatMarkdown` | `build_mini_dist\tea_agent\server\static\app.js:440` | function |
-| `handleImageSelect` | `build_mini_dist\tea_agent\server\static\app.js:972` | function |
-| `handleInputKey` | `build_mini_dist\tea_agent\server\static\app.js:637` | function |
-| `headers` | `build_mini_dist\tea_agent\server\static\app.js:136` | property |
-| `headers` | `build_mini_dist\tea_agent\server\static\app.js:205` | property |
-| `headers` | `build_mini_dist\tea_agent\server\static\app.js:571` | property |
-| `headers` | `build_mini_dist\tea_agent\server\static\app.js:688` | property |
-| `headers` | `build_mini_dist\tea_agent\server\static\app.js:717` | property |
-| `headers` | `build_mini_dist\tea_agent\server\static\app.js:733` | property |
-| `headers` | `build_mini_dist\tea_agent\server\static\app.js:863` | property |
-| `headers` | `build_mini_dist\tea_agent\server\static\app.js:909` | property |
-| `headers` | `build_mini_dist\tea_agent\server\static\app.js:948` | property |
-| `headers` | `build_mini_dist\tea_agent\server\static\app.js:1146` | property |
-| `headers` | `build_mini_dist\tea_agent\server\static\app.js:1238` | property |
-| `headers` | `build_mini_dist\tea_agent\server\static\app.js:1249` | property |
-| `hide` | `build_mini_dist\tea_agent\server\static\app.js:19` | function |
-| `image-input` | `build_mini_dist\tea_agent\server\static\index.html:51` | id |
-| `image-preview-container` | `build_mini_dist\tea_agent\server\static\index.html:58` | id |
-| `image-preview-row` | `build_mini_dist\tea_agent\server\static\index.html:57` | id |
-| `image-upload-area` | `build_mini_dist\tea_agent\server\static\index.html:49` | id |
-| `image-upload-btn` | `build_mini_dist\tea_agent\server\static\index.html:50` | id |
-| `imgRenderRect` | `build_mini_dist\tea_agent\server\static\app.js:1337` | function |
-| `initApp` | `build_mini_dist\tea_agent\server\static\app.js:1580` | function |
-| `initSplitter` | `build_mini_dist\tea_agent\server\static\app.js:1166` | function |
-| `input-row` | `build_mini_dist\tea_agent\server\static\index.html:48` | id |
-| `interruptChat` | `build_mini_dist\tea_agent\server\static\app.js:125` | function |
-| `loadConfigSwitcher` | `build_mini_dist\tea_agent\server\static\app.js:1105` | function |
-| `main` | `build_mini_dist\tea_agent\server\static\index.html:23` | id |
-| `main-max-context` | `build_mini_dist\tea_agent\server\static\index.html:131` | id |
-| `main-max-tokens` | `build_mini_dist\tea_agent\server\static\index.html:127` | id |
-| `main-supports-reasoning` | `build_mini_dist\tea_agent\server\static\index.html:135` | id |
-| `main-supports-vision` | `build_mini_dist\tea_agent\server\static\index.html:134` | id |
-| `main-temperature` | `build_mini_dist\tea_agent\server\static\index.html:126` | id |
-| `main-top-p` | `build_mini_dist\tea_agent\server\static\index.html:130` | id |
-| `main_api_key` | `build_mini_dist\tea_agent\server\static\app.js:940` | property |
-| `main_api_url` | `build_mini_dist\tea_agent\server\static\app.js:940` | property |
-| `main_model_name` | `build_mini_dist\tea_agent\server\static\app.js:940` | property |
-| `memory-input` | `build_mini_dist\tea_agent\server\static\index.html:78` | id |
-| `memory-list` | `build_mini_dist\tea_agent\server\static\index.html:80` | id |
-| `message` | `build_mini_dist\tea_agent\server\static\app.js:199` | property |
-| `messages` | `build_mini_dist\tea_agent\server\static\index.html:35` | id |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:135` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:204` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:570` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:591` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:688` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:694` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:717` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:723` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:733` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:862` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:908` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:947` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:1063` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:1145` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:1237` | property |
-| `method` | `build_mini_dist\tea_agent\server\static\app.js:1248` | property |
-| `modal-export` | `build_mini_dist\tea_agent\server\static\index.html:102` | id |
-| `modal-memory` | `build_mini_dist\tea_agent\server\static\index.html:76` | id |
-| `modal-new-config` | `build_mini_dist\tea_agent\server\static\index.html:186` | id |
-| `modal-scheduler` | `build_mini_dist\tea_agent\server\static\index.html:87` | id |
-| `modal-search` | `build_mini_dist\tea_agent\server\static\index.html:65` | id |
-| `modal-settings` | `build_mini_dist\tea_agent\server\static\index.html:113` | id |
-| `model-name` | `build_mini_dist\tea_agent\server\static\index.html:122` | id |
-| `name` | `build_mini_dist\tea_agent\server\static\app.js:717` | property |
-| `new-cheap-key` | `build_mini_dist\tea_agent\server\static\index.html:196` | id |
-| `new-cheap-name` | `build_mini_dist\tea_agent\server\static\index.html:194` | id |
-| `new-cheap-url` | `build_mini_dist\tea_agent\server\static\index.html:195` | id |
-| `new-config-filename` | `build_mini_dist\tea_agent\server\static\index.html:188` | id |
-| `new-config-status` | `build_mini_dist\tea_agent\server\static\index.html:197` | id |
-| `new-main-key` | `build_mini_dist\tea_agent\server\static\index.html:192` | id |
-| `new-main-name` | `build_mini_dist\tea_agent\server\static\index.html:190` | id |
-| `new-main-url` | `build_mini_dist\tea_agent\server\static\index.html:191` | id |
-| `newTopic` | `build_mini_dist\tea_agent\server\static\app.js:624` | function |
-| `numVal` | `build_mini_dist\tea_agent\server\static\app.js:824` | function |
-| `numVal` | `build_mini_dist\tea_agent\server\static\app.js:883` | function |
-| `onKey` | `build_mini_dist\tea_agent\server\static\app.js:1558` | function |
-| `onMove` | `build_mini_dist\tea_agent\server\static\app.js:1174` | function |
-| `onUp` | `build_mini_dist\tea_agent\server\static\app.js:1190` | function |
-| `onchange` | `build_mini_dist\tea_agent\server\static\app.js:792` | function |
-| `onload` | `build_mini_dist\tea_agent\server\static\app.js:981` | function |
-| `openImageOverlay` | `build_mini_dist\tea_agent\server\static\app.js:82` | function |
-| `openTopic` | `build_mini_dist\tea_agent\server\static\app.js:608` | function |
-| `options` | `build_mini_dist\tea_agent\server\static\app.js:832` | variable |
-| `passive` | `build_mini_dist\tea_agent\server\static\app.js:1509` | property |
-| `passive` | `build_mini_dist\tea_agent\server\static\app.js:1523` | property |
-| `passive` | `build_mini_dist\tea_agent\server\static\app.js:1555` | property |
-| `passive` | `build_mini_dist\tea_agent\server\static\app.js:1576` | property |
-| `refreshMemory` | `build_mini_dist\tea_agent\server\static\app.js:672` | function |
-| `refreshTasks` | `build_mini_dist\tea_agent\server\static\app.js:699` | function |
-| `refreshTopics` | `build_mini_dist\tea_agent\server\static\app.js:495` | function |
-| `removeImage` | `build_mini_dist\tea_agent\server\static\app.js:1026` | function |
-| `removeLoading` | `build_mini_dist\tea_agent\server\static\app.js:118` | function |
-| `renameTopic` | `build_mini_dist\tea_agent\server\static\app.js:565` | function |
-| `rt-chat-page` | `build_mini_dist\tea_agent\server\static\index.html:172` | id |
-| `rt-enable-thinking` | `build_mini_dist\tea_agent\server\static\index.html:175` | id |
-| `rt-extra-iters` | `build_mini_dist\tea_agent\server\static\index.html:167` | id |
-| `rt-keep-turns` | `build_mini_dist\tea_agent\server\static\index.html:160` | id |
-| `rt-max-history` | `build_mini_dist\tea_agent\server\static\index.html:163` | id |
-| `rt-max-iterations` | `build_mini_dist\tea_agent\server\static\index.html:159` | id |
-| `rt-max-tool-output` | `build_mini_dist\tea_agent\server\static\index.html:164` | id |
-| `rt-mem-dedup` | `build_mini_dist\tea_agent\server\static\index.html:171` | id |
-| `rt-mem-extract` | `build_mini_dist\tea_agent\server\static\index.html:168` | id |
-| `saveNewConfig` | `build_mini_dist\tea_agent\server\static\app.js:924` | function |
-| `saveRuntimeParams` | `build_mini_dist\tea_agent\server\static\app.js:882` | function |
-| `schedule` | `build_mini_dist\tea_agent\server\static\app.js:717` | property |
-| `screenshot-btn` | `build_mini_dist\tea_agent\server\static\index.html:52` | id |
-| `scrollBottom` | `build_mini_dist\tea_agent\server\static\app.js:100` | function |
-| `search-query` | `build_mini_dist\tea_agent\server\static\index.html:67` | id |
-| `search-results` | `build_mini_dist\tea_agent\server\static\index.html:68` | id |
-| `send-btn` | `build_mini_dist\tea_agent\server\static\index.html:55` | id |
-| `sendMessage` | `build_mini_dist\tea_agent\server\static\app.js:151` | function |
-| `settings-status` | `build_mini_dist\tea_agent\server\static\index.html:155` | id |
-| `show` | `build_mini_dist\tea_agent\server\static\app.js:18` | function |
-| `showExport` | `build_mini_dist\tea_agent\server\static\app.js:727` | function |
-| `showMaxIterConfirm` | `build_mini_dist\tea_agent\server\static\app.js:1211` | function |
-| `showMemory` | `build_mini_dist\tea_agent\server\static\app.js:671` | function |
-| `showNewConfig` | `build_mini_dist\tea_agent\server\static\app.js:920` | function |
-| `showScheduler` | `build_mini_dist\tea_agent\server\static\app.js:698` | function |
-| `showSearch` | `build_mini_dist\tea_agent\server\static\app.js:646` | function |
-| `showSettings` | `build_mini_dist\tea_agent\server\static\app.js:741` | function |
-| `sidebar` | `build_mini_dist\tea_agent\server\static\index.html:11` | id |
-| `sidebar-splitter` | `build_mini_dist\tea_agent\server\static\index.html:22` | id |
-| `signal` | `build_mini_dist\tea_agent\server\static\app.js:138` | property |
-| `signal` | `build_mini_dist\tea_agent\server\static\app.js:207` | property |
-| `startScreenshot` | `build_mini_dist\tea_agent\server\static\app.js:1272` | function |
-| `stream` | `build_mini_dist\tea_agent\server\static\app.js:218` | property |
-| `supports_reasoning` | `build_mini_dist\tea_agent\server\static\app.js:834` | property |
-| `supports_reasoning` | `build_mini_dist\tea_agent\server\static\app.js:858` | property |
-| `supports_vision` | `build_mini_dist\tea_agent\server\static\app.js:833` | property |
-| `supports_vision` | `build_mini_dist\tea_agent\server\static\app.js:857` | property |
-| `switchConfig` | `build_mini_dist\tea_agent\server\static\app.js:1139` | function |
-| `task-command` | `build_mini_dist\tea_agent\server\static\index.html:91` | id |
-| `task-list` | `build_mini_dist\tea_agent\server\static\index.html:95` | id |
-| `task-name` | `build_mini_dist\tea_agent\server\static\index.html:90` | id |
-| `task-schedule` | `build_mini_dist\tea_agent\server\static\index.html:92` | id |
-| `theme-btn` | `build_mini_dist\tea_agent\server\static\index.html:32` | id |
-| `title` | `build_mini_dist\tea_agent\server\static\app.js:572` | property |
-| `toast` | `build_mini_dist\tea_agent\server\static\app.js:22` | function |
-| `toggleTheme` | `build_mini_dist\tea_agent\server\static\app.js:35` | function |
-| `toolbar` | `build_mini_dist\tea_agent\server\static\index.html:24` | id |
-| `topic-list` | `build_mini_dist\tea_agent\server\static\index.html:19` | id |
-| `topic-title` | `build_mini_dist\tea_agent\server\static\index.html:25` | id |
-| `topic_id` | `build_mini_dist\tea_agent\server\static\app.js:137` | property |
-| `topic_id` | `build_mini_dist\tea_agent\server\static\app.js:199` | property |
-| `topic_id` | `build_mini_dist\tea_agent\server\static\app.js:733` | property |
-| `touchStart` | `build_mini_dist\tea_agent\server\static\app.js:1500` | variable |
-| `triggerImageUpload` | `build_mini_dist\tea_agent\server\static\app.js:968` | function |
-| `updateImagePreview` | `build_mini_dist\tea_agent\server\static\app.js:996` | function |
-| `updateUsage` | `build_mini_dist\tea_agent\server\static\app.js:426` | function |
-| `uploadConfigFile` | `build_mini_dist\tea_agent\server\static\app.js:1052` | function |
-| `vsplitter` | `build_mini_dist\tea_agent\server\static\index.html:47` | id |
-| `x` | `build_mini_dist\tea_agent\server\static\app.js:1500` | property |
-| `y` | `build_mini_dist\tea_agent\server\static\app.js:1500` | property |
-| `⚙ 模型设置` | `build_mini_dist\tea_agent\server\static\index.html:114` | heading3 |
-| `➕ 新增配置` | `build_mini_dist\tea_agent\server\static\index.html:187` | heading3 |
-| `📄 导出 PDF` | `build_mini_dist\tea_agent\server\static\index.html:103` | heading3 |
-| `📋 定时任务` | `build_mini_dist\tea_agent\server\static\index.html:88` | heading3 |
-| `🔍 搜索` | `build_mini_dist\tea_agent\server\static\index.html:66` | heading3 |
-| `🧠 记忆管理` | `build_mini_dist\tea_agent\server\static\index.html:77` | heading3 |
+| `EXAMPLE_DSL_BOUNCE` | `demo\animator-studio\src\core\animation_dsl.py:245` | variable |
+| `EXAMPLE_DSL_GROUP` | `demo\animator-studio\src\core\animation_dsl.py:290` | variable |
+| `EXAMPLE_DSL_PATH` | `demo\animator-studio\src\core\animation_dsl.py:267` | variable |
+| `SYSTEM_PROMPT` | `demo\animator-studio\src\core\llm_prompts.py:5` | variable |
+| `VALID_EASINGS` | `demo\animator-studio\src\core\animation_dsl.py:103` | variable |
+| `VALID_PROPS` | `demo\animator-studio\src\core\animation_dsl.py:104` | variable |
+| `VALID_SHAPES` | `demo\animator-studio\src\core\animation_dsl.py:101` | variable |
+| `VALID_TYPES` | `demo\animator-studio\src\core\animation_dsl.py:102` | variable |
+| `_ANIMATOR_AVAILABLE` | `demo\animator-studio\src\core\generator.py:15` | variable |
+| `_BUNDLED` | `demo\animator-studio\src\core\script_engine.py:19` | variable |
+| `_DEFAULT_CONFIG_PATH` | `demo\animator-studio\src\core\llm_client.py:19` | variable |
+| `_LLM_CLIENT` | `demo\animator-studio\src\core\generator.py:141` | variable |
+| `_OWN_TEMPLATE` | `demo\animator-studio\src\core\script_engine.py:25` | variable |
+| `_Recorder` | `demo\animator-studio\src\core\recorder.py:33` | unknown |
+| `_TEMPLATE_DIR` | `demo\animator-studio\src\core\script_engine.py:21` | variable |
+| `_TEMPLATE_DIR` | `demo\animator-studio\src\core\script_engine.py:23` | variable |
+| `_TEMPLATE_FILE` | `demo\animator-studio\src\core\script_engine.py:24` | variable |
+| `_check_animator` | `demo\animator-studio\src\core\generator.py:18` | function |
+| `_embed_image` | `demo\animator-studio\src\core\animation_dsl.py:186` | function |
+| `_get_llm` | `demo\animator-studio\src\core\generator.py:143` | function |
+| `_get_model_config` | `demo\animator-studio\src\core\llm_client.py:40` | function |
+| `_get_template` | `demo\animator-studio\src\core\script_engine.py:28` | function |
+| `_json` | `demo\animator-studio\src\core\llm_prompts.py:90` | namespace |
+| `_llm` | `demo\animator-studio\src\core\generator.py:149` | unknown |
+| `_load_config` | `demo\animator-studio\src\core\llm_client.py:22` | function |
+| `_validate_animations` | `demo\animator-studio\src\core\animation_dsl.py:143` | function |
+| `_validate_elements` | `demo\animator-studio\src\core\animation_dsl.py:125` | function |
+| `build_fix_prompt` | `demo\animator-studio\src\core\llm_prompts.py:98` | function |
+| `build_user_message` | `demo\animator-studio\src\core\llm_prompts.py:67` | function |
+| `dsl_to_scene_config` | `demo\animator-studio\src\core\animation_dsl.py:223` | function |
+| `embed_local_images` | `demo\animator-studio\src\core\animation_dsl.py:178` | function |
+| `engine` | `demo\animator-studio\src\core\script_engine.py:108` | variable |
+| `format_dsl_preview` | `demo\animator-studio\src\core\animation_dsl.py:198` | function |
+| `generator` | `demo\animator-studio\src\core\generator.py:138` | variable |
+| `image_to_base64` | `demo\animator-studio\src\core\animation_dsl.py:162` | function |
+| `llm` | `demo\animator-studio\src\core\llm_client.py:172` | variable |
+| `llm_generate` | `demo\animator-studio\src\core\generator.py:154` | function |
+| `parse_llm_output` | `demo\animator-studio\src\core\llm_prompts.py:81` | function |
+| `recorder` | `demo\animator-studio\src\core\recorder.py:99` | variable |
+| `validate_dsl` | `demo\animator-studio\src\core\animation_dsl.py:107` | function |
 
-## 模块 `build_mini_dist\tea_agent\session`
+## 模块 `demo\animator-studio\tests`
+
+### 函数
+
+| 函数名 | 文件:行号 | 类型 |
+|--------|----------|------|
+| `test_generate_particles` | `demo\animator-studio\tests\test_api.py:21` | function |
+| `test_generate_story` | `demo\animator-studio\tests\test_api.py:11` | function |
+| `test_get` | `demo\animator-studio\tests\test_api.py:36` | function |
+| `test_list` | `demo\animator-studio\tests\test_api.py:29` | function |
+
+## 模块 `demo\multi_agent`
 
 ### 类
 
 | 类名 | 文件:行号 | 类型 |
 |------|----------|------|
-| `LoopDetector` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:12` | class |
-| `SessionComponent` | `build_mini_dist\tea_agent\session\context.py:76` | class |
-| `SessionContext` | `build_mini_dist\tea_agent\session\context.py:15` | class |
-| `__init__` | `build_mini_dist\tea_agent\session\context.py:79` | member |
-| `__init__` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:21` | member |
-| `_hash_tool_call` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:33` | member |
-| `_text_similarity` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:44` | member |
-| `check_and_record` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:58` | member |
-| `initialize` | `build_mini_dist\tea_agent\session\context.py:84` | member |
-| `name` | `build_mini_dist\tea_agent\session\context.py:90` | member |
-| `reset` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:173` | member |
-| `save_agent_config` | `build_mini_dist\tea_agent\session\context.py:94` | member |
+| `DebateServer` | `demo\multi_agent\server.py:57` | class |
+| `DebateSession` | `demo\multi_agent\server.py:226` | class |
+| `__init__` | `demo\multi_agent\server.py:60` | member |
+| `__init__` | `demo\multi_agent\server.py:229` | member |
+| `add_round` | `demo\multi_agent\server.py:246` | member |
+| `create_session` | `demo\multi_agent\server.py:63` | member |
+| `list_config_files` | `demo\multi_agent\server.py:74` | member |
+| `run_debate_sync` | `demo\multi_agent\server.py:92` | member |
 
 ### 函数
 
 | 函数名 | 文件:行号 | 类型 |
 |--------|----------|------|
-| `COMPACT_SYSTEM_PROMPT` | `build_mini_dist\tea_agent\session\prompts.py:48` | variable |
-| `HISTORY_SUMMARIZE_SYSTEM` | `build_mini_dist\tea_agent\session\prompts.py:16` | variable |
-| `HISTORY_SUMMARIZE_USER` | `build_mini_dist\tea_agent\session\prompts.py:21` | variable |
-| `SMALL_MODEL_CONSTRAINT` | `build_mini_dist\tea_agent\session\prompts.py:61` | variable |
-| `TOPIC_SUMMARY_SYSTEM` | `build_mini_dist\tea_agent\session\prompts.py:28` | variable |
-| `TOPIC_SUMMARY_USER_TEMPLATE` | `build_mini_dist\tea_agent\session\prompts.py:41` | variable |
-| `_DEFAULTS` | `build_mini_dist\tea_agent\session\params.py:15` | variable |
-| `_OS_STATE_FILE` | `build_mini_dist\tea_agent\session\os_info_injector.py:17` | variable |
-| `_SMALL_MODEL_PATTERNS` | `build_mini_dist\tea_agent\session\prompts.py:86` | variable |
-| `_SkillRegistry` | `build_mini_dist\tea_agent\session\history_builder.py:426` | unknown |
-| `__all__` | `build_mini_dist\tea_agent\session\__init__.py:33` | variable |
-| `_cheap_thinking_supported` | `build_mini_dist\tea_agent\session\context.py:51` | variable |
-| `_current_mode` | `build_mini_dist\tea_agent\session\context.py:70` | variable |
-| `_current_trace` | `build_mini_dist\tea_agent\session\context.py:68` | variable |
-| `_extract_files_from_text` | `build_mini_dist\tea_agent\session\history_builder.py:164` | function |
-| `_find_prune_cutoff` | `build_mini_dist\tea_agent\session\history_builder.py:148` | function |
-| `_format_tool_summary` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:183` | function |
-| `_get_os_signature` | `build_mini_dist\tea_agent\session\os_info_injector.py:20` | function |
-| `_get_validate_rules` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:224` | function |
-| `_history_summary` | `build_mini_dist\tea_agent\session\context.py:64` | variable |
-| `_injected_memories` | `build_mini_dist\tea_agent\session\context.py:61` | variable |
-| `_injected_memories_text` | `build_mini_dist\tea_agent\session\context.py:60` | variable |
-| `_injected_os_info_text` | `build_mini_dist\tea_agent\session\context.py:62` | variable |
-| `_json` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:300` | namespace |
-| `_json` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:471` | namespace |
-| `_key_words` | `build_mini_dist\tea_agent\session\history_builder.py:141` | function |
-| `_last_cheap_usage` | `build_mini_dist\tea_agent\session\context.py:56` | variable |
-| `_last_usage` | `build_mini_dist\tea_agent\session\context.py:52` | variable |
-| `_level2` | `build_mini_dist\tea_agent\session\context.py:67` | variable |
-| `_load_persisted_os_sig` | `build_mini_dist\tea_agent\session\os_info_injector.py:32` | function |
-| `_os_info_injected` | `build_mini_dist\tea_agent\session\context.py:63` | variable |
-| `_plat` | `build_mini_dist\tea_agent\session\os_info_injector.py:26` | namespace |
-| `_progressive_trim` | `build_mini_dist\tea_agent\session\history_builder.py:188` | function |
-| `_rounds_collector` | `build_mini_dist\tea_agent\session\context.py:30` | variable |
-| `_save_os_sig` | `build_mini_dist\tea_agent\session\os_info_injector.py:47` | function |
-| `_semantic_summary` | `build_mini_dist\tea_agent\session\context.py:65` | variable |
-| `_skill_validate_cache` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:221` | variable |
-| `_thinking_supported` | `build_mini_dist\tea_agent\session\context.py:50` | variable |
-| `_tool_chain_summary` | `build_mini_dist\tea_agent\session\context.py:66` | variable |
-| `_try_fix_with_stack` | `build_mini_dist\tea_agent\session\json_sanitizer.py:32` | function |
-| `_validate_output_format` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:265` | function |
-| `_validate_tool_call` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:233` | function |
-| `build_api_messages` | `build_mini_dist\tea_agent\session\history_builder.py:365` | function |
-| `cheap_client` | `build_mini_dist\tea_agent\session\context.py:24` | variable |
-| `cheap_model` | `build_mini_dist\tea_agent\session\context.py:25` | variable |
-| `client` | `build_mini_dist\tea_agent\session\context.py:23` | variable |
-| `disable_summary` | `build_mini_dist\tea_agent\session\context.py:46` | variable |
-| `enable_thinking` | `build_mini_dist\tea_agent\session\context.py:20` | variable |
-| `estimate_messages_tokens` | `build_mini_dist\tea_agent\session\history_builder.py:50` | function |
-| `estimate_tokens` | `build_mini_dist\tea_agent\session\history_builder.py:21` | function |
-| `execute_tool_loop` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:308` | function |
-| `filter_level2_by_relevance` | `build_mini_dist\tea_agent\session\history_builder.py:301` | function |
-| `get_cheap_params` | `build_mini_dist\tea_agent\session\params.py:22` | function |
-| `get_skill_validate_rules` | `build_mini_dist\tea_agent\session\prompts.py:140` | function |
-| `inject_os_info` | `build_mini_dist\tea_agent\session\os_info_injector.py:64` | function |
-| `is_small_model` | `build_mini_dist\tea_agent\session\prompts.py:104` | function |
-| `keep_turns` | `build_mini_dist\tea_agent\session\context.py:38` | variable |
-| `logger` | `build_mini_dist\tea_agent\session\history_builder.py:18` | variable |
-| `logger` | `build_mini_dist\tea_agent\session\json_sanitizer.py:12` | variable |
-| `logger` | `build_mini_dist\tea_agent\session\os_info_injector.py:14` | variable |
-| `logger` | `build_mini_dist\tea_agent\session\params.py:12` | variable |
-| `logger` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:10` | variable |
-| `max_assistant_content` | `build_mini_dist\tea_agent\session\context.py:40` | variable |
-| `max_context_tokens` | `build_mini_dist\tea_agent\session\context.py:41` | variable |
-| `max_tool_output` | `build_mini_dist\tea_agent\session\context.py:39` | variable |
-| `memory` | `build_mini_dist\tea_agent\session\context.py:34` | variable |
-| `memory_dedup_threshold` | `build_mini_dist\tea_agent\session\context.py:43` | variable |
-| `memory_extraction_threshold` | `build_mini_dist\tea_agent\session\context.py:42` | variable |
-| `messages` | `build_mini_dist\tea_agent\session\context.py:18` | variable |
-| `model` | `build_mini_dist\tea_agent\session\context.py:19` | variable |
-| `no_stream_chunk` | `build_mini_dist\tea_agent\session\context.py:47` | variable |
-| `pipeline` | `build_mini_dist\tea_agent\session\context.py:35` | variable |
-| `reflection_manager` | `build_mini_dist\tea_agent\session\context.py:69` | variable |
-| `sanitize_api_messages` | `build_mini_dist\tea_agent\session\json_sanitizer.py:115` | function |
-| `storage` | `build_mini_dist\tea_agent\session\context.py:33` | variable |
-| `supports_reasoning` | `build_mini_dist\tea_agent\session\context.py:45` | variable |
-| `supports_vision` | `build_mini_dist\tea_agent\session\context.py:44` | variable |
-| `to_multimodal` | `build_mini_dist\tea_agent\session\history_builder.py:88` | function |
-| `tool_log` | `build_mini_dist\tea_agent\session\context.py:29` | variable |
-| `toolkit` | `build_mini_dist\tea_agent\session\context.py:28` | variable |
-| `try_fix_truncated_json` | `build_mini_dist\tea_agent\session\json_sanitizer.py:15` | function |
+| `DEBATE_SYSTEM_PROMPT` | `demo\multi_agent\server.py:37` | variable |
+| `INIT_SYSTEM_PROMPT` | `demo\multi_agent\server.py:49` | variable |
+| `MAX_ROUNDS` | `demo\multi_agent\server.py:36` | variable |
+| `_build_debate_context` | `demo\multi_agent\server.py:213` | function |
+| `_load_config` | `demo\multi_agent\server.py:31` | unknown |
+| `_project_root` | `demo\multi_agent\server.py:26` | variable |
+| `_put` | `demo\multi_agent\server.py:98` | function |
+| `_server` | `demo\multi_agent\server.py:259` | variable |
+| `_simulate_work` | `demo\multi_agent\dag_viz_demo.py:43` | function |
+| `_sync_chat` | `demo\multi_agent\server.py:187` | function |
+| `build_demo_dag` | `demo\multi_agent\dag_viz_demo.py:49` | function |
+| `cb` | `demo\multi_agent\server.py:197` | function |
+| `create_app` | `demo\multi_agent\server.py:360` | function |
+| `event_stream` | `demo\multi_agent\server.py:330` | function |
+| `get_server` | `demo\multi_agent\server.py:262` | function |
+| `handle_cancel` | `demo\multi_agent\server.py:348` | function |
+| `handle_configs` | `demo\multi_agent\server.py:277` | function |
+| `handle_root` | `demo\multi_agent\server.py:269` | function |
+| `handle_start_debate` | `demo\multi_agent\server.py:294` | function |
+| `logger` | `demo\multi_agent\server.py:33` | variable |
+| `main` | `demo\multi_agent\dag_viz_demo.py:105` | function |
+| `main` | `demo\multi_agent\server.py:375` | function |
+| `make_task_node` | `demo\multi_agent\dag_viz_demo.py:33` | function |
 
-## 模块 `build_mini_dist\tea_agent\session\.tea_agent_run`
-
-### 函数
-
-| 函数名 | 文件:行号 | 类型 |
-|--------|----------|------|
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:108` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:113` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:119` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:133` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:138` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:143` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:155` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:172` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:183` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:207` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:219` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:224` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:235` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:240` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:246` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:256` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:269` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:276` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:283` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:287` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:296` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:299` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:308` | string |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:3` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:10` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:17` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:24` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:31` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:38` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:45` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:52` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:59` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:66` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:73` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:80` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:87` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:94` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:101` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:108` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:115` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:122` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:129` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:136` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:143` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:150` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:157` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:164` | object |
-| `0` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:171` | object |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:109` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:114` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:120` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:134` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:139` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:144` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:156` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:173` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:184` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:208` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:220` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:225` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:236` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:241` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:247` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:257` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:270` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:277` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:284` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:288` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:300` | string |
-| `1` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:309` | string |
-| `10` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:129` | string |
-| `10` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:165` | string |
-| `10` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:193` | string |
-| `10` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:266` | string |
-| `10` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:318` | string |
-| `11` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:130` | string |
-| `11` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:166` | string |
-| `11` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:194` | string |
-| `11` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:319` | string |
-| `12` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:167` | string |
-| `12` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:195` | string |
-| `12` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:320` | string |
-| `13` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:168` | string |
-| `13` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:196` | string |
-| `13` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:321` | string |
-| `14` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:169` | string |
-| `14` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:197` | string |
-| `14` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:322` | string |
-| `15` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:198` | string |
-| `15` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:323` | string |
-| `16` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:199` | string |
-| `16` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:324` | string |
-| `17` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:200` | string |
-| `17` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:325` | string |
-| `18` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:201` | string |
-| `18` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:326` | string |
-| `19` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:202` | string |
-| `19` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:327` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:110` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:115` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:121` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:135` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:140` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:145` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:157` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:174` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:185` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:209` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:221` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:226` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:237` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:242` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:248` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:258` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:271` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:278` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:289` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:301` | string |
-| `2` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:310` | string |
-| `20` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:203` | string |
-| `20` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:328` | string |
-| `21` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:204` | string |
-| `21` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:329` | string |
-| `22` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:330` | string |
-| `23` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:331` | string |
-| `24` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:332` | string |
-| `25` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:333` | string |
-| `26` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:334` | string |
-| `27` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:335` | string |
-| `28` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:336` | string |
-| `29` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:337` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:116` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:122` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:146` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:158` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:175` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:186` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:210` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:227` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:243` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:249` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:259` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:272` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:279` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:290` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:302` | string |
-| `3` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:311` | string |
-| `30` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:338` | string |
-| `31` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:339` | string |
-| `32` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:340` | string |
-| `33` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:341` | string |
-| `34` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:342` | string |
-| `35` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:343` | string |
-| `36` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:344` | string |
-| `37` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:345` | string |
-| `38` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:346` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:123` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:147` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:159` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:176` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:187` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:211` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:228` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:250` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:260` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:273` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:280` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:291` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:303` | string |
-| `4` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:312` | string |
-| `5` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:124` | string |
-| `5` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:148` | string |
-| `5` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:160` | string |
-| `5` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:177` | string |
-| `5` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:188` | string |
-| `5` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:212` | string |
-| `5` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:229` | string |
-| `5` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:251` | string |
-| `5` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:261` | string |
-| `5` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:292` | string |
-| `5` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:304` | string |
-| `5` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:313` | string |
-| `6` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:125` | string |
-| `6` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:149` | string |
-| `6` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:161` | string |
-| `6` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:178` | string |
-| `6` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:189` | string |
-| `6` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:213` | string |
-| `6` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:230` | string |
-| `6` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:252` | string |
-| `6` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:262` | string |
-| `6` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:293` | string |
-| `6` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:305` | string |
-| `6` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:314` | string |
-| `7` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:126` | string |
-| `7` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:150` | string |
-| `7` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:162` | string |
-| `7` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:179` | string |
-| `7` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:190` | string |
-| `7` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:214` | string |
-| `7` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:231` | string |
-| `7` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:253` | string |
-| `7` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:263` | string |
-| `7` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:315` | string |
-| `8` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:127` | string |
-| `8` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:151` | string |
-| `8` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:163` | string |
-| `8` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:180` | string |
-| `8` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:191` | string |
-| `8` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:215` | string |
-| `8` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:232` | string |
-| `8` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:264` | string |
-| `8` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:316` | string |
-| `9` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:128` | string |
-| `9` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:152` | string |
-| `9` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:164` | string |
-| `9` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:192` | string |
-| `9` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:216` | string |
-| `9` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:265` | string |
-| `9` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:317` | string |
-| `LoopDetector` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:101` | object |
-| `LoopDetector` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:170` | array |
-| `Top 20 被调用函数` | `build_mini_dist\tea_agent\session\.tea_agent_run\kb.md:26` | section |
-| `__init__` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:71` | object |
-| `__init__` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:121` | array |
-| `_extract_files_from_text` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:23` | object |
-| `_extract_files_from_text` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:142` | array |
-| `_extract_files_from_text` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:37` | array |
-| `_find_prune_cutoff` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:19` | object |
-| `_find_prune_cutoff` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:137` | array |
-| `_find_prune_cutoff` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:30` | array |
-| `_format_tool_summary` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:91` | object |
-| `_format_tool_summary` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:298` | array |
-| `_format_tool_summary` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:156` | array |
-| `_get_os_signature` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:51` | object |
-| `_get_os_signature` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:234` | array |
-| `_get_os_signature` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:86` | array |
-| `_hash_tool_call` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:75` | object |
-| `_hash_tool_call` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:275` | array |
-| `_hash_tool_call` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:128` | array |
-| `_key_words` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:15` | object |
-| `_key_words` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:132` | array |
-| `_key_words` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:23` | array |
-| `_load_persisted_os_sig` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:55` | object |
-| `_load_persisted_os_sig` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:239` | array |
-| `_load_persisted_os_sig` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:93` | array |
-| `_progressive_trim` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:27` | object |
-| `_progressive_trim` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:154` | array |
-| `_progressive_trim` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:44` | array |
-| `_save_os_sig` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:59` | object |
-| `_save_os_sig` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:245` | array |
-| `_save_os_sig` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:100` | array |
-| `_text_similarity` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:79` | object |
-| `_text_similarity` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:282` | array |
-| `_text_similarity` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:135` | array |
-| `_try_fix_with_stack` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:43` | object |
-| `_try_fix_with_stack` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:218` | array |
-| `_try_fix_with_stack` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:72` | array |
-| `build_api_messages` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:35` | object |
-| `build_api_messages` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:182` | array |
-| `build_api_messages` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:58` | array |
-| `calls` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:106` | object |
-| `check_and_record` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:83` | object |
-| `check_and_record` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:286` | array |
-| `check_and_record` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:142` | array |
-| `classes` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:100` | object |
-| `estimate_messages_tokens` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:7` | object |
-| `estimate_messages_tokens` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:112` | array |
-| `estimate_messages_tokens` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:9` | array |
-| `estimate_tokens` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:3` | object |
-| `estimate_tokens` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:107` | array |
-| `estimate_tokens` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:2` | array |
-| `execute_tool_loop` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:95` | object |
-| `execute_tool_loop` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:307` | array |
-| `execute_tool_loop` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:163` | array |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:4` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:8` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:12` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:16` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:20` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:24` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:28` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:32` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:36` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:40` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:44` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:48` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:52` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:56` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:60` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:64` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:68` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:72` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:76` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:80` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:84` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:88` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:92` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:96` | string |
-| `file` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:102` | string |
-| `filter_level2_by_relevance` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:31` | object |
-| `filter_level2_by_relevance` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:171` | array |
-| `filter_level2_by_relevance` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:51` | array |
-| `functions` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:2` | object |
-| `get_cheap_params` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:67` | object |
-| `get_cheap_params` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:268` | array |
-| `get_cheap_params` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:114` | array |
-| `inject_os_info` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:63` | object |
-| `inject_os_info` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:255` | array |
-| `inject_os_info` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:107` | array |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:4` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:11` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:18` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:25` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:32` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:39` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:46` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:53` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:60` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:67` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:74` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:81` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:88` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:95` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:102` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:109` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:116` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:123` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:130` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:137` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:144` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:151` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:158` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:165` | string |
-| `kind` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:172` | string |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:5` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:9` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:13` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:17` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:21` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:25` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:29` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:33` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:37` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:41` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:45` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:49` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:53` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:57` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:61` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:65` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:69` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:73` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:77` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:81` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:85` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:89` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:93` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:97` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:103` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:6` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:13` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:20` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:27` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:34` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:41` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:48` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:55` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:62` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:69` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:76` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:83` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:90` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:97` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:104` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:111` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:118` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:125` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:132` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:139` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:146` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:153` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:160` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:167` | number |
-| `line` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:174` | number |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:5` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:12` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:19` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:26` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:33` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:40` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:47` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:54` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:61` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:68` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:75` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:82` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:89` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:96` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:103` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:110` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:117` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:124` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:131` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:138` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:145` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:152` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:159` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:166` | string |
-| `path` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:173` | string |
-| `reset` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:87` | object |
-| `reset` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:295` | array |
-| `reset` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:149` | array |
-| `sanitize_api_messages` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:47` | object |
-| `sanitize_api_messages` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:223` | array |
-| `sanitize_api_messages` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:79` | array |
-| `session 项目知识库` | `build_mini_dist\tea_agent\session\.tea_agent_run\kb.md:1` | chapter |
-| `to_multimodal` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:11` | object |
-| `to_multimodal` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:118` | array |
-| `to_multimodal` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:16` | array |
-| `try_fix_truncated_json` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:39` | object |
-| `try_fix_truncated_json` | `build_mini_dist\tea_agent\session\.tea_agent_run\call_graph.json:206` | array |
-| `try_fix_truncated_json` | `build_mini_dist\tea_agent\session\.tea_agent_run\symbol_index.json:65` | array |
-| `模块索引 (6 文件)` | `build_mini_dist\tea_agent\session\.tea_agent_run\kb.md:15` | section |
-| `生成文件` | `build_mini_dist\tea_agent\session\.tea_agent_run\kb.md:51` | section |
-| `符号种类分布` | `build_mini_dist\tea_agent\session\.tea_agent_run\kb.md:8` | section |
-
-## 模块 `build_mini_dist\tea_agent\skills`
+## 模块 `demo\tetris`
 
 ### 类
 
 | 类名 | 文件:行号 | 类型 |
 |------|----------|------|
-| `Skill` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:39` | class |
-| `SkillCrystallizer` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:79` | class |
-| `SkillRegistry` | `build_mini_dist\tea_agent\skills\skill_registry.py:35` | class |
-| `__init__` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:106` | member |
-| `__init__` | `build_mini_dist\tea_agent\skills\skill_registry.py:38` | member |
-| `__post_init__` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:57` | member |
-| `_extract_intent` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:237` | member |
-| `_extract_steps` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:209` | member |
-| `_extract_success_conditions` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:288` | member |
-| `_extract_tags` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:315` | member |
-| `_extract_task_features` | `build_mini_dist\tea_agent\skills\skill_registry.py:271` | member |
-| `_generate_description` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:275` | member |
-| `_generate_id` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:179` | member |
-| `_generate_name` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:252` | member |
-| `_infer_category` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:194` | member |
-| `_load_index` | `build_mini_dist\tea_agent\skills\skill_registry.py:52` | member |
-| `_match_query` | `build_mini_dist\tea_agent\skills\skill_registry.py:319` | member |
-| `_save_index` | `build_mini_dist\tea_agent\skills\skill_registry.py:70` | member |
-| `_score_relevance` | `build_mini_dist\tea_agent\skills\skill_registry.py:338` | member |
-| `confidence` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:70` | member |
-| `crystallize` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:116` | member |
-| `get_skill` | `build_mini_dist\tea_agent\skills\skill_registry.py:145` | member |
-| `list_all` | `build_mini_dist\tea_agent\skills\skill_registry.py:157` | member |
-| `list_skills` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:367` | member |
-| `load_skill` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:356` | member |
-| `recommend` | `build_mini_dist\tea_agent\skills\skill_registry.py:234` | member |
-| `register` | `build_mini_dist\tea_agent\skills\skill_registry.py:77` | member |
-| `remove_skill` | `build_mini_dist\tea_agent\skills\skill_registry.py:363` | member |
-| `save_skill` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:347` | member |
-| `search` | `build_mini_dist\tea_agent\skills\skill_registry.py:164` | member |
-| `stats` | `build_mini_dist\tea_agent\skills\skill_registry.py:401` | member |
-| `success_rate` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:64` | member |
+| `Input` | `demo\tetris\tetris_ansi.py:265` | class |
+| `Piece` | `demo\tetris\tetris_ansi.py:79` | class |
+| `Tetris` | `demo\tetris\tetris_ansi.py:99` | class |
+| `__init__` | `demo\tetris\tetris_ansi.py:102` | member |
+| `__init__` | `demo\tetris\tetris_ansi.py:268` | member |
+| `__post_init__` | `demo\tetris\tetris_ansi.py:87` | member |
+| `_clear_lines` | `demo\tetris\tetris_ansi.py:188` | member |
+| `_collides` | `demo\tetris\tetris_ansi.py:180` | member |
+| `_get_key_unix` | `demo\tetris\tetris_ansi.py:294` | member |
+| `_get_key_windows` | `demo\tetris\tetris_ansi.py:277` | member |
+| `cells` | `demo\tetris\tetris_ansi.py:92` | member |
+| `get_key` | `demo\tetris\tetris_ansi.py:271` | member |
+| `hard_drop` | `demo\tetris\tetris_ansi.py:153` | member |
+| `lock_piece` | `demo\tetris\tetris_ansi.py:166` | member |
+| `move` | `demo\tetris\tetris_ansi.py:127` | member |
+| `render` | `demo\tetris\tetris_ansi.py:210` | member |
+| `rotate` | `demo\tetris\tetris_ansi.py:138` | member |
+| `soft_drop` | `demo\tetris\tetris_ansi.py:159` | member |
+| `spawn` | `demo\tetris\tetris_ansi.py:117` | member |
+| `update` | `demo\tetris\tetris_ansi.py:253` | member |
 
 ### 函数
 
 | 函数名 | 文件:行号 | 类型 |
 |--------|----------|------|
-| `TOOL_CATEGORIES` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:83` | variable |
-| `__all__` | `build_mini_dist\tea_agent\skills\__init__.py:28` | variable |
-| `created_at` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:53` | variable |
-| `fail_count` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:52` | variable |
-| `last_used` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:54` | variable |
-| `logger` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:35` | variable |
-| `logger` | `build_mini_dist\tea_agent\skills\skill_registry.py:32` | variable |
-| `success_count` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:51` | variable |
-| `tags` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:55` | variable |
-| `time_seconds` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:50` | variable |
-| `token_cost` | `build_mini_dist\tea_agent\skills\skill_crystallize.py:49` | variable |
+| `CLEAR` | `demo\tetris\tetris_ansi.py:54` | variable |
+| `COLORS` | `demo\tetris\tetris_ansi.py:43` | variable |
+| `HEIGHT` | `demo\tetris\tetris_ansi.py:39` | variable |
+| `HIDDEN` | `demo\tetris\tetris_ansi.py:40` | variable |
+| `HIDE_CURSOR` | `demo\tetris\tetris_ansi.py:55` | variable |
+| `IS_WIN` | `demo\tetris\tetris_ansi.py:29` | variable |
+| `RESET` | `demo\tetris\tetris_ansi.py:53` | variable |
+| `SCORE_TABLE` | `demo\tetris\tetris_ansi.py:75` | variable |
+| `SHAPES` | `demo\tetris\tetris_ansi.py:59` | variable |
+| `SHAPE_COLORS` | `demo\tetris\tetris_ansi.py:72` | variable |
+| `SHOW_CURSOR` | `demo\tetris\tetris_ansi.py:56` | variable |
+| `WIDTH` | `demo\tetris\tetris_ansi.py:38` | variable |
+| `color` | `demo\tetris\tetris_ansi.py:85` | variable |
+| `debug_keys` | `demo\tetris\debug_keys.py:5` | function |
+| `main` | `demo\tetris\tetris_ansi.py:321` | function |
+| `rotation` | `demo\tetris\tetris_ansi.py:82` | variable |
+| `x` | `demo\tetris\tetris_ansi.py:83` | variable |
+| `y` | `demo\tetris\tetris_ansi.py:84` | variable |
 
-## 模块 `build_mini_dist\tea_agent\skills\agent-browser`
+## 模块 `demo\tetris\tests`
 
-### 函数
+### 类
 
-| 函数名 | 文件:行号 | 类型 |
-|--------|----------|------|
-| `Observability Dashboard` | `build_mini_dist\tea_agent\skills\agent-browser\SKILL.md:53` | section |
-| `Specialized skills` | `build_mini_dist\tea_agent\skills\agent-browser\SKILL.md:29` | section |
-| `Start here` | `build_mini_dist\tea_agent\skills\agent-browser\SKILL.md:15` | section |
-| `Why agent-browser` | `build_mini_dist\tea_agent\skills\agent-browser\SKILL.md:44` | section |
-| `agent-browser` | `build_mini_dist\tea_agent\skills\agent-browser\SKILL.md:8` | chapter |
+| 类名 | 文件:行号 | 类型 |
+|------|----------|------|
+| `TestPiece` | `demo\tetris\tests\test_tetris.py:11` | class |
+| `TestTetris` | `demo\tetris\tests\test_tetris.py:34` | class |
+| `test_all_shapes_have_color` | `demo\tetris\tests\test_tetris.py:28` | member |
+| `test_hard_drop` | `demo\tetris\tests\test_tetris.py:85` | member |
+| `test_i_piece_cells` | `demo\tetris\tests\test_tetris.py:14` | member |
+| `test_i_piece_rotation` | `demo\tetris\tests\test_tetris.py:24` | member |
+| `test_init` | `demo\tetris\tests\test_tetris.py:37` | member |
+| `test_move_down` | `demo\tetris\tests\test_tetris.py:70` | member |
+| `test_move_left` | `demo\tetris\tests\test_tetris.py:53` | member |
+| `test_move_right` | `demo\tetris\tests\test_tetris.py:62` | member |
+| `test_o_piece_rotation` | `demo\tetris\tests\test_tetris.py:20` | member |
+| `test_rotate` | `demo\tetris\tests\test_tetris.py:78` | member |
+| `test_score_system` | `demo\tetris\tests\test_tetris.py:94` | member |
+| `test_spawn` | `demo\tetris\tests\test_tetris.py:46` | member |
 
-## 模块 `build_mini_dist\tea_agent\skills\ai-elements`
+## 模块 `scripts`
 
-### 函数
+### 类
 
-| 函数名 | 文件:行号 | 类型 |
-|--------|----------|------|
-| `AI Elements` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:6` | chapter |
-| `Available Components` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:158` | section |
-| `Customization` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:83` | section |
-| `Example` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:35` | section |
-| `Extensibility` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:79` | section |
-| `I ran the AI Elements CLI but nothing was added to my project` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:114` | subsection |
-| `Installing Components` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:23` | section |
-| `My AI coding assistant can't access AI Elements components` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:147` | subsection |
-| `Prerequisites` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:14` | section |
-| `Still stuck?` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:154` | subsection |
-| `The component imports fail with “module not found”` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:132` | subsection |
-| `Theme switching doesn’t work — my app stays in light mode` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:128` | subsection |
-| `Troubleshooting` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:108` | section |
-| `Usage` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:31` | section |
-| `Why are my components not styled?` | `build_mini_dist\tea_agent\skills\ai-elements\SKILL.md:110` | subsection |
-
-## 模块 `build_mini_dist\tea_agent\skills\analyze-pdf`
-
-### 函数
-
-| 函数名 | 文件:行号 | 类型 |
-|--------|----------|------|
-| `Real-World Example` | `build_mini_dist\tea_agent\skills\analyze-pdf\SKILL.md:130` | section |
-| `Step 1: Bulk Document Analysis` | `build_mini_dist\tea_agent\skills\analyze-pdf\SKILL.md:26` | subsection |
-| `Step 2: Intelligent Table Extraction` | `build_mini_dist\tea_agent\skills\analyze-pdf\SKILL.md:49` | subsection |
-| `Step 3: Data Quality Validation` | `build_mini_dist\tea_agent\skills\analyze-pdf\SKILL.md:63` | subsection |
-| `Step 4: Automated Analysis and Insights` | `build_mini_dist\tea_agent\skills\analyze-pdf\SKILL.md:85` | subsection |
-| `Step 5: Dashboard Creation` | `build_mini_dist\tea_agent\skills\analyze-pdf\SKILL.md:110` | subsection |
-| `Step-by-Step Walkthrough` | `build_mini_dist\tea_agent\skills\analyze-pdf\SKILL.md:24` | section |
-| `The Problem` | `build_mini_dist\tea_agent\skills\analyze-pdf\SKILL.md:12` | section |
-| `The Solution` | `build_mini_dist\tea_agent\skills\analyze-pdf\SKILL.md:20` | section |
-| `Transform PDF Reports Into Actionable Data and Cut Analysis Time` | `build_mini_dist\tea_agent\skills\analyze-pdf\SKILL.md:10` | chapter |
-
-## 模块 `build_mini_dist\tea_agent\skills\autoresearch`
-
-### 函数
-
-| 函数名 | 文件:行号 | 类型 |
-|--------|----------|------|
-| `Autoresearch — Autonomous Goal-directed Iteration` | `build_mini_dist\tea_agent\skills\autoresearch\SKILL.md:8` | chapter |
-| `Dispatch (bare `$autoresearch`)` | `build_mini_dist\tea_agent\skills\autoresearch\SKILL.md:16` | section |
-| `Orchestration Loop Steps` | `build_mini_dist\tea_agent\skills\autoresearch\SKILL.md:72` | subsection |
-| `Orchestrator` | `build_mini_dist\tea_agent\skills\autoresearch\SKILL.md:64` | section |
-| `Orchestrator Safety Invariants` | `build_mini_dist\tea_agent\skills\autoresearch\SKILL.md:97` | subsection |
-| `Orchestrator State` | `build_mini_dist\tea_agent\skills\autoresearch\SKILL.md:93` | subsection |
-| `Safety Invariants (all subcommands)` | `build_mini_dist\tea_agent\skills\autoresearch\SKILL.md:10` | section |
-| `Subcommands` | `build_mini_dist\tea_agent\skills\autoresearch\SKILL.md:30` | section |
-| `Universal Flags` | `build_mini_dist\tea_agent\skills\autoresearch\SKILL.md:49` | section |
-
-## 模块 `build_mini_dist\tea_agent\skills\browser-trace`
+| 类名 | 文件:行号 | 类型 |
+|------|----------|------|
+| `DbMerger` | `scripts\merge_db.py:66` | class |
+| `__init__` | `scripts\merge_db.py:68` | member |
+| `_accumulate_token_stats` | `scripts\merge_db.py:311` | member |
+| `_find_duplicate` | `scripts\merge_db.py:426` | member |
+| `_get_max_ids` | `scripts\merge_db.py:92` | member |
+| `_get_table_columns` | `scripts\merge_db.py:117` | member |
+| `_merge_agent_rounds` | `scripts\merge_db.py:231` | member |
+| `_merge_config_history` | `scripts\merge_db.py:580` | member |
+| `_merge_conversations` | `scripts\merge_db.py:189` | member |
+| `_merge_memories` | `scripts\merge_db.py:381` | member |
+| `_merge_memory_record` | `scripts\merge_db.py:444` | member |
+| `_merge_meta` | `scripts\merge_db.py:140` | member |
+| `_merge_reflections` | `scripts\merge_db.py:541` | member |
+| `_merge_system_prompts` | `scripts\merge_db.py:480` | member |
+| `_merge_t_conv_summary` | `scripts\merge_db.py:340` | member |
+| `_merge_topic_token_stats` | `scripts\merge_db.py:269` | member |
+| `_merge_topics` | `scripts\merge_db.py:163` | member |
+| `close` | `scripts\merge_db.py:643` | member |
+| `merge` | `scripts\merge_db.py:613` | member |
 
 ### 函数
 
 | 函数名 | 文件:行号 | 类型 |
 |--------|----------|------|
-| `Best practices` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:229` | section |
-| `Browser Trace` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:9` | chapter |
-| `Browserbase remote` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:71` | subsection |
-| `Drilling in with `query.mjs`` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:184` | subsection |
-| `Filesystem layout` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:123` | section |
-| `How it works` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:38` | section |
-| `Local Chrome` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:50` | subsection |
-| `Quickstart` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:48` | section |
-| `Setup check` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:24` | section |
-| `Summary shape` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:155` | subsection |
-| `Top traversal recipes` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:201` | section |
-| `Troubleshooting` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:240` | section |
-| `What you get from the Browserbase platform` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:111` | subsubsection |
-| `When to use` | `build_mini_dist\tea_agent\skills\browser-trace\SKILL.md:15` | section |
+| `ACTION_DESC_MAP` | `scripts\compact_tool_descriptions.py:13` | variable |
+| `CATEGORY_KEYWORDS` | `scripts\fetch_opencode_updates.py:130` | variable |
+| `DB` | `scripts\memory_cleanup.py:5` | variable |
+| `DOC_DIR` | `scripts\fetch_opencode_updates.py:25` | variable |
+| `DOC_FILE` | `scripts\fetch_opencode_updates.py:26` | variable |
+| `EXCLUDE` | `scripts\compact_tool_descriptions.py:6` | variable |
+| `FEATURE_CATEGORIES` | `scripts\fetch_opencode_updates.py:114` | variable |
+| `FUNC_DESC_MAP` | `scripts\compact_tool_descriptions.py:110` | variable |
+| `GITHUB_API` | `scripts\fetch_opencode_updates.py:29` | variable |
+| `HIGHLIGHTS_FILE` | `scripts\fetch_opencode_updates.py:28` | variable |
+| `PARAM_PREFIX_PATTERNS` | `scripts\compact_tool_descriptions.py:131` | variable |
+| `PROMOTE` | `scripts\memory_cleanup.py:57` | variable |
+| `REGRESSIONS` | `scripts\evo_bench_20rounds.py:38` | variable |
+| `REPO` | `scripts\fetch_opencode_updates.py:22` | variable |
+| `ROOT` | `scripts\evo_bench_20rounds.py:34` | variable |
+| `SCORE_THRESHOLD_NOTICE` | `scripts\fetch_opencode_updates.py:33` | variable |
+| `SCORE_THRESHOLD_PROMPT` | `scripts\fetch_opencode_updates.py:32` | variable |
+| `SOFT_DELETE` | `scripts\memory_cleanup.py:11` | variable |
+| `STATE_FILE` | `scripts\fetch_opencode_updates.py:23` | variable |
+| `TK_DIR` | `scripts\compact_tool_descriptions.py:5` | variable |
+| `_connect_ro` | `scripts\tmp_l_level_stats.py:50` | function |
+| `_extract_keywords` | `scripts\merge_db.py:33` | function |
+| `_jaccard_similarity` | `scripts\merge_db.py:48` | function |
+| `_resolve_db_path` | `scripts\tmp_l_level_stats.py:23` | function |
+| `_serialize` | `scripts\diag_cache_prefix.py:29` | function |
+| `_tokens` | `scripts\diag_cache_prefix.py:24` | function |
+| `append_to_doc` | `scripts\fetch_opencode_updates.py:89` | function |
+| `build_analysis_section` | `scripts\fetch_opencode_updates.py:295` | function |
+| `build_daily_update` | `scripts\fetch_opencode_updates.py:348` | function |
+| `build_fixed` | `scripts\diag_cache_prefix.py:81` | function |
+| `build_old_style` | `scripts\diag_cache_prefix.py:86` | function |
+| `by_cat` | `scripts\memory_cleanup.py:101` | variable |
+| `by_prio` | `scripts\memory_cleanup.py:99` | variable |
+| `c` | `scripts\memory_cleanup.py:8` | variable |
+| `categorize` | `scripts\fetch_opencode_updates.py:146` | function |
+| `clean_func` | `scripts\compact_tool_descriptions.py:194` | function |
+| `clean_func_desc` | `scripts\compact_tool_descriptions.py:137` | function |
+| `clean_param` | `scripts\compact_tool_descriptions.py:179` | function |
+| `clean_param_desc` | `scripts\compact_tool_descriptions.py:146` | function |
+| `common_prefix_ratio` | `scripts\diag_cache_prefix.py:33` | function |
+| `conn` | `scripts\memory_cleanup.py:6` | variable |
+| `cur` | `scripts\memory_cleanup.py:85` | variable |
+| `cur` | `scripts\memory_cleanup.py:90` | variable |
+| `deleted` | `scripts\memory_cleanup.py:83` | variable |
+| `fetch_json` | `scripts\fetch_opencode_updates.py:37` | function |
+| `format_analysis_section` | `scripts\fetch_opencode_updates.py:327` | function |
+| `get_live_context` | `scripts\tmp_l_level_stats.py:66` | function |
+| `load_doc` | `scripts\fetch_opencode_updates.py:81` | function |
+| `load_state` | `scripts\fetch_opencode_updates.py:63` | function |
+| `logger` | `scripts\merge_db.py:27` | variable |
+| `main` | `scripts\compact_tool_descriptions.py:215` | function |
+| `main` | `scripts\diag_cache_prefix.py:99` | function |
+| `main` | `scripts\fetch_opencode_updates.py:458` | function |
+| `main` | `scripts\merge_db.py:652` | function |
+| `main` | `scripts\tmp_l_level_stats.py:76` | function |
+| `make_context` | `scripts\diag_cache_prefix.py:44` | function |
+| `parse_datetime` | `scripts\fetch_opencode_updates.py:103` | function |
+| `process_file` | `scripts\compact_tool_descriptions.py:156` | function |
+| `promoted` | `scripts\memory_cleanup.py:88` | variable |
+| `save_state` | `scripts\fetch_opencode_updates.py:74` | function |
+| `score_feature` | `scripts\fetch_opencode_updates.py:160` | function |
+| `score_to_badge` | `scripts\fetch_opencode_updates.py:281` | function |
+| `total` | `scripts\memory_cleanup.py:97` | variable |
 
-## 模块 `build_mini_dist\tea_agent\skills\caveman`
+## 模块 `sdk`
 
-### 函数
+### 类
 
-| 函数名 | 文件:行号 | 类型 |
-|--------|----------|------|
-| `Auto-Clarity` | `build_mini_dist\tea_agent\skills\caveman\SKILL.md:58` | section |
-| `Boundaries` | `build_mini_dist\tea_agent\skills\caveman\SKILL.md:76` | section |
-| `Intensity` | `build_mini_dist\tea_agent\skills\caveman\SKILL.md:32` | section |
-| `Persistence` | `build_mini_dist\tea_agent\skills\caveman\SKILL.md:13` | section |
-| `Rules` | `build_mini_dist\tea_agent\skills\caveman\SKILL.md:19` | section |
-
-## 模块 `build_mini_dist\tea_agent\skills\codebase-design`
-
-### 函数
-
-| 函数名 | 文件:行号 | 类型 |
-|--------|----------|------|
-| `Codebase Design` | `build_mini_dist\tea_agent\skills\codebase-design\SKILL.md:6` | chapter |
-| `Deep vs shallow` | `build_mini_dist\tea_agent\skills\codebase-design\SKILL.md:30` | section |
-| `Designing for testability` | `build_mini_dist\tea_agent\skills\codebase-design\SKILL.md:67` | section |
-| `Glossary` | `build_mini_dist\tea_agent\skills\codebase-design\SKILL.md:10` | section |
-| `Going deeper` | `build_mini_dist\tea_agent\skills\codebase-design\SKILL.md:111` | section |
-| `Principles` | `build_mini_dist\tea_agent\skills\codebase-design\SKILL.md:60` | section |
-| `Rejected framings` | `build_mini_dist\tea_agent\skills\codebase-design\SKILL.md:105` | section |
-| `Relationships` | `build_mini_dist\tea_agent\skills\codebase-design\SKILL.md:97` | section |
-
-## 模块 `build_mini_dist\tea_agent\skills\debug-incident`
-
-### 函数
-
-| 函数名 | 文件:行号 | 类型 |
-|--------|----------|------|
-| `Debug Production Incidents with AI Log Analysis` | `build_mini_dist\tea_agent\skills\debug-incident\SKILL.md:10` | chapter |
-| `Real-World Example` | `build_mini_dist\tea_agent\skills\debug-incident\SKILL.md:130` | section |
-| `Step 1: Feed in the Logs` | `build_mini_dist\tea_agent\skills\debug-incident\SKILL.md:26` | subsection |
-| `Step 2: Identify the Error Pattern` | `build_mini_dist\tea_agent\skills\debug-incident\SKILL.md:38` | subsection |
-| `Step 3: Correlate Across Services` | `build_mini_dist\tea_agent\skills\debug-incident\SKILL.md:56` | subsection |
-| `Step 4: Build the Incident Timeline` | `build_mini_dist\tea_agent\skills\debug-incident\SKILL.md:80` | subsection |
-| `Step 5: Analyze Error Rate Trends` | `build_mini_dist\tea_agent\skills\debug-incident\SKILL.md:118` | subsection |
-| `Step-by-Step Walkthrough` | `build_mini_dist\tea_agent\skills\debug-incident\SKILL.md:22` | section |
-| `The Problem` | `build_mini_dist\tea_agent\skills\debug-incident\SKILL.md:12` | section |
-| `The Solution` | `build_mini_dist\tea_agent\skills\debug-incident\SKILL.md:18` | section |
-
-## 模块 `build_mini_dist\tea_agent\skills\manage-docker`
-
-### 函数
-
-| 函数名 | 文件:行号 | 类型 |
-|--------|----------|------|
-| `Optimize Docker Workflows and Cut Build Times by 70%` | `build_mini_dist\tea_agent\skills\manage-docker\SKILL.md:10` | chapter |
-| `Real-World Example` | `build_mini_dist\tea_agent\skills\manage-docker\SKILL.md:201` | section |
-| `Step 1: Audit the Current Docker Setup` | `build_mini_dist\tea_agent\skills\manage-docker\SKILL.md:26` | subsection |
-| `Step 2: Multi-Stage Build Optimization` | `build_mini_dist\tea_agent\skills\manage-docker\SKILL.md:40` | subsection |
-| `Step 3: Fix Orchestration with Proper Health Checks` | `build_mini_dist\tea_agent\skills\manage-docker\SKILL.md:98` | subsection |
-| `Step 4: Optimize the CI/CD Pipeline` | `build_mini_dist\tea_agent\skills\manage-docker\SKILL.md:148` | subsection |
-| `Step 5: Standardize the Developer Workflow` | `build_mini_dist\tea_agent\skills\manage-docker\SKILL.md:182` | subsection |
-| `Step-by-Step Walkthrough` | `build_mini_dist\tea_agent\skills\manage-docker\SKILL.md:24` | section |
-| `The Problem` | `build_mini_dist\tea_agent\skills\manage-docker\SKILL.md:12` | section |
-| `The Solution` | `build_mini_dist\tea_agent\skills\manage-docker\SKILL.md:20` | section |
-
-## 模块 `build_mini_dist\tea_agent\skills\manage-monorepo`
-
-### 函数
-
-| 函数名 | 文件:行号 | 类型 |
-|--------|----------|------|
-| `Manage Monorepo Dependencies with AI` | `build_mini_dist\tea_agent\skills\manage-monorepo\SKILL.md:10` | chapter |
-| `Real-World Example` | `build_mini_dist\tea_agent\skills\manage-monorepo\SKILL.md:128` | section |
-| `Step 1: Map the Monorepo Structure` | `build_mini_dist\tea_agent\skills\manage-monorepo\SKILL.md:26` | subsection |
-| `Step 2: Audit Dependency Versions` | `build_mini_dist\tea_agent\skills\manage-monorepo\SKILL.md:49` | subsection |
-| `Step 3: Fix Mismatches with a Plan` | `build_mini_dist\tea_agent\skills\manage-monorepo\SKILL.md:69` | subsection |
-| `Step 4: Check for Security Issues` | `build_mini_dist\tea_agent\skills\manage-monorepo\SKILL.md:92` | subsection |
-| `Step 5: Set Up Ongoing Enforcement` | `build_mini_dist\tea_agent\skills\manage-monorepo\SKILL.md:108` | subsection |
-| `Step-by-Step Walkthrough` | `build_mini_dist\tea_agent\skills\manage-monorepo\SKILL.md:24` | section |
-| `The Problem` | `build_mini_dist\tea_agent\skills\manage-monorepo\SKILL.md:12` | section |
-| `The Solution` | `build_mini_dist\tea_agent\skills\manage-monorepo\SKILL.md:20` | section |
-
-## 模块 `build_mini_dist\tea_agent\skills\optimize-sql`
+| 类名 | 文件:行号 | 类型 |
+|------|----------|------|
+| `AgentSDK` | `sdk\client.py:56` | class |
+| `__init__` | `sdk\client.py:65` | member |
+| `_decode` | `sdk\client.py:110` | member |
+| `_extract_content` | `sdk\client.py:142` | member |
+| `_request` | `sdk\client.py:72` | member |
+| `chat` | `sdk\client.py:129` | member |
+| `create_session` | `sdk\client.py:179` | member |
+| `delete_session` | `sdk\client.py:189` | member |
+| `get_config` | `sdk\client.py:193` | member |
+| `get_session` | `sdk\client.py:184` | member |
+| `health` | `sdk\client.py:197` | member |
+| `list_sessions` | `sdk\client.py:175` | member |
+| `list_tools` | `sdk\client.py:164` | member |
+| `run_tool` | `sdk\client.py:168` | member |
 
 ### 函数
 
 | 函数名 | 文件:行号 | 类型 |
 |--------|----------|------|
-| `Optimize SQL Queries and Database Performance` | `build_mini_dist\tea_agent\skills\optimize-sql\SKILL.md:10` | chapter |
-| `Real-World Example` | `build_mini_dist\tea_agent\skills\optimize-sql\SKILL.md:150` | section |
-| `Step 1: Identify and Profile the Slowest Queries` | `build_mini_dist\tea_agent\skills\optimize-sql\SKILL.md:26` | subsection |
-| `Step 2: Analyze Execution Plans to Find Bottlenecks` | `build_mini_dist\tea_agent\skills\optimize-sql\SKILL.md:48` | subsection |
-| `Step 3: Rewrite Queries and Add Indexes` | `build_mini_dist\tea_agent\skills\optimize-sql\SKILL.md:78` | subsection |
-| `Step 4: Set Up Performance Monitoring` | `build_mini_dist\tea_agent\skills\optimize-sql\SKILL.md:126` | subsection |
-| `Step-by-Step Walkthrough` | `build_mini_dist\tea_agent\skills\optimize-sql\SKILL.md:24` | section |
-| `The Problem` | `build_mini_dist\tea_agent\skills\optimize-sql\SKILL.md:12` | section |
-| `The Solution` | `build_mini_dist\tea_agent\skills\optimize-sql\SKILL.md:20` | section |
+| `_LOCAL_HOSTS` | `sdk\client.py:16` | variable |
+| `__all__` | `sdk\__init__.py:3` | variable |
+| `__version__` | `sdk\__init__.py:4` | variable |
+| `_no_proxy_opener` | `sdk\client.py:19` | function |
+| `assemble_sse` | `sdk\client.py:24` | function |
+| `logger` | `sdk\client.py:11` | variable |
 
-## 模块 `build_mini_dist\tea_agent\skills\output-format-constraint`
+## 模块 `tea_agent`
+
+### 类
+
+| 类名 | 文件:行号 | 类型 |
+|------|----------|------|
+| `Agent` | `tea_agent\agent.py:81` | class |
+| `AgentConfig` | `tea_agent\config.py:239` | class |
+| `AuditLog` | `tea_agent\audit_log.py:159` | class |
+| `AutoCompactStep` | `tea_agent\auto_compact.py:492` | class |
+| `AutoFixAgent` | `tea_agent\auto_fix.py:32` | class |
+| `AutoMemoryExtractor` | `tea_agent\session_memory_component.py:148` | class |
+| `BaseChatSession` | `tea_agent\basesession.py:242` | class |
+| `BuiltinProviderError` | `tea_agent\model_manager.py:72` | class |
+| `CompactionPipeline` | `tea_agent\auto_compact.py:364` | class |
+| `CompactionSettings` | `tea_agent\auto_compact.py:111` | class |
+| `ContextFragment` | `tea_agent\context_fragments.py:69` | class |
+| `CrossTopicSummarizer` | `tea_agent\cross_topic_summarizer.py:43` | class |
+| `DuplicateProviderError` | `tea_agent\model_manager.py:58` | class |
+| `EvolutionActor` | `tea_agent\agent_evolution.py:204` | class |
+| `EvolutionAnalyzer` | `tea_agent\agent_evolution.py:138` | class |
+| `EvolutionEvaluator` | `tea_agent\agent_evolution.py:551` | class |
+| `EvolutionTrigger` | `tea_agent\agent_evolution.py:78` | class |
+| `FixResult` | `tea_agent\auto_fix.py:23` | class |
+| `LiteSession` | `tea_agent\litesession.py:16` | class |
+| `LoadedAgentsMd` | `tea_agent\agents_md_loader.py:44` | class |
+| `MemoryComponent` | `tea_agent\session_memory_component.py:22` | class |
+| `MemoryManager` | `tea_agent\memory.py:49` | class |
+| `ModelConfig` | `tea_agent\config.py:87` | class |
+| `ModelConfigError` | `tea_agent\model_config.py:129` | class |
+| `ModelConfigStore` | `tea_agent\model_config.py:236` | class |
+| `OnlineToolSession` | `tea_agent\onlinesession.py:199` | class |
+| `PathsConfig` | `tea_agent\config.py:136` | class |
+| `PermissionManager` | `tea_agent\permission.py:15` | class |
+| `PipelineStep` | `tea_agent\session_pipeline.py:23` | class |
+| `ProjectMemoryManager` | `tea_agent\project_memory.py:28` | class |
+| `ProviderError` | `tea_agent\model_manager.py:49` | class |
+| `ProviderNotFoundError` | `tea_agent\model_manager.py:65` | class |
+| `ProviderService` | `tea_agent\model_manager.py:121` | class |
+| `ProviderStore` | `tea_agent\provider_store.py:190` | class |
+| `ProviderStoreError` | `tea_agent\provider_store.py:75` | class |
+| `ReflectionManager` | `tea_agent\reflection.py:53` | class |
+| `SessionPipeline` | `tea_agent\session_pipeline.py:34` | class |
+| `SessionTrace` | `tea_agent\reflection.py:28` | class |
+| `SimpleFunction` | `tea_agent\litesession.py:486` | class |
+| `SimpleToolCall` | `tea_agent\litesession.py:491` | class |
+| `SkillDecision` | `tea_agent\skill_loader.py:63` | class |
+| `SkillDomain` | `tea_agent\skill_loader.py:84` | class |
+| `SkillLoadEvaluator` | `tea_agent\skill_loader.py:190` | class |
+| `SystemPromptManager` | `tea_agent\prompt_manager.py:87` | class |
+| `ToolCallRecord` | `tea_agent\reflection.py:20` | class |
+| `ToolHookRegistry` | `tea_agent\tool_hooks.py:35` | class |
+| `Toolkit` | `tea_agent\tlk.py:278` | class |
+| `WizardCancelled` | `tea_agent\setup_wizard.py:58` | class |
+| `_ModeBehavior` | `tea_agent\agent.py:36` | class |
+| `__call__` | `tea_agent\auto_compact.py:507` | member |
+| `__del__` | `tea_agent\onlinesession.py:1807` | member |
+| `__enter__` | `tea_agent\agent.py:932` | member |
+| `__exit__` | `tea_agent\agent.py:935` | member |
+| `__init__` | `tea_agent\agent.py:84` | member |
+| `__init__` | `tea_agent\agent_evolution.py:84` | member |
+| `__init__` | `tea_agent\agent_evolution.py:166` | member |
+| `__init__` | `tea_agent\agent_evolution.py:212` | member |
+| `__init__` | `tea_agent\agent_evolution.py:564` | member |
+| `__init__` | `tea_agent\audit_log.py:167` | member |
+| `__init__` | `tea_agent\auto_compact.py:381` | member |
+| `__init__` | `tea_agent\auto_compact.py:500` | member |
+| `__init__` | `tea_agent\auto_fix.py:24` | member |
+| `__init__` | `tea_agent\auto_fix.py:33` | member |
+| `__init__` | `tea_agent\basesession.py:321` | member |
+| `__init__` | `tea_agent\cross_topic_summarizer.py:68` | member |
+| `__init__` | `tea_agent\litesession.py:19` | member |
+| `__init__` | `tea_agent\memory.py:52` | member |
+| `__init__` | `tea_agent\model_config.py:132` | member |
+| `__init__` | `tea_agent\model_config.py:239` | member |
+| `__init__` | `tea_agent\model_manager.py:52` | member |
+| `__init__` | `tea_agent\model_manager.py:61` | member |
+| `__init__` | `tea_agent\model_manager.py:68` | member |
+| `__init__` | `tea_agent\model_manager.py:75` | member |
+| `__init__` | `tea_agent\model_manager.py:124` | member |
+| `__init__` | `tea_agent\onlinesession.py:218` | member |
+| `__init__` | `tea_agent\permission.py:18` | member |
+| `__init__` | `tea_agent\project_memory.py:34` | member |
+| `__init__` | `tea_agent\prompt_manager.py:116` | member |
+| `__init__` | `tea_agent\provider_store.py:78` | member |
+| `__init__` | `tea_agent\provider_store.py:193` | member |
+| `__init__` | `tea_agent\reflection.py:79` | member |
+| `__init__` | `tea_agent\session_memory_component.py:157` | member |
+| `__init__` | `tea_agent\session_pipeline.py:37` | member |
+| `__init__` | `tea_agent\skill_loader.py:193` | member |
+| `__init__` | `tea_agent\tlk.py:295` | member |
+| `__init__` | `tea_agent\tool_hooks.py:44` | member |
+| `_analyze_intent` | `tea_agent\onlinesession.py:1393` | member |
+| `_annotate_models` | `tea_agent\model_manager.py:381` | member |
+| `_append_runtime_status` | `tea_agent\basesession.py:401` | member |
+| `_apply` | `tea_agent\auto_fix.py:221` | member |
+| `_auto_detect_and_save_thinking_config` | `tea_agent\onlinesession.py:379` | member |
+| `_auto_detect_mode` | `tea_agent\onlinesession.py:1437` | member |
+| `_binding_error` | `tea_agent\tlk.py:320` | member |
+| `_bootstrap` | `tea_agent\model_config.py:348` | member |
+| `_bootstrap` | `tea_agent\provider_store.py:328` | member |
+| `_build_api_messages` | `tea_agent\onlinesession.py:1374` | member |
+| `_build_assistant_message` | `tea_agent\litesession.py:304` | member |
+| `_build_chat_result` | `tea_agent\litesession.py:342` | member |
+| `_build_initial_messages` | `tea_agent\litesession.py:188` | member |
+| `_build_lite_session` | `tea_agent\agent.py:242` | member |
+| `_build_online_session` | `tea_agent\agent.py:285` | member |
+| `_build_tool_stats` | `tea_agent\reflection.py:287` | member |
+| `_build_tools` | `tea_agent\litesession.py:101` | member |
+| `_build_tools` | `tea_agent\onlinesession.py:682` | member |
+| `_build_tools` | `tea_agent\onlinesession.py:1401` | member |
+| `_builtin_name_for_url` | `tea_agent\provider_store.py:548` | member |
+| `_builtin_registry` | `tea_agent\provider_store.py:296` | member |
+| `_calculate_similarity` | `tea_agent\session_memory_component.py:249` | member |
+| `_call_api` | `tea_agent\litesession.py:366` | member |
+| `_call_eval_loop` | `tea_agent\agent_evolution.py:571` | member |
+| `_call_llm` | `tea_agent\cross_topic_summarizer.py:144` | member |
+| `_cap_message_text` | `tea_agent\basesession.py:438` | member |
+| `_catalog` | `tea_agent\model_manager.py:245` | member |
+| `_cfg_dir` | `tea_agent\provider_store.py:202` | member |
+| `_chain_head` | `tea_agent\audit_log.py:325` | member |
+| `_chat_endpoint` | `tea_agent\provider_store.py:825` | member |
+| `_chat_impl` | `tea_agent\agent.py:404` | member |
+| `_check_dependencies` | `tea_agent\tlk.py:455` | member |
+| `_collect_evidence` | `tea_agent\skill_loader.py:408` | member |
+| `_collect_tools` | `tea_agent\skill_loader.py:430` | member |
+| `_compress_json_args` | `tea_agent\basesession.py:577` | member |
+| `_compress_tool_content` | `tea_agent\basesession.py:494` | member |
+| `_compress_tool_rounds` | `tea_agent\basesession.py:764` | member |
+| `_compute_recency` | `tea_agent\memory.py:246` | member |
+| `_compute_relevance` | `tea_agent\memory.py:194` | member |
+| `_compute_similarity` | `tea_agent\memory.py:596` | member |
+| `_convert_custom` | `tea_agent\provider_store.py:369` | member |
+| `_create_api_clients` | `tea_agent\onlinesession.py:437` | member |
+| `_create_session_context` | `tea_agent\onlinesession.py:521` | member |
+| `_create_tool` | `tea_agent\agent_evolution.py:385` | member |
+| `_crystallize_skill` | `tea_agent\agent.py:828` | member |
+| `_default_system_prompt` | `tea_agent\litesession.py:95` | member |
+| `_do_async_summaries` | `tea_agent\agent.py:640` | member |
+| `_do_cross_topic_analysis` | `tea_agent\cross_topic_summarizer.py:110` | member |
+| `_do_cross_topic_summary` | `tea_agent\agent.py:757` | member |
+| `_do_evolution` | `tea_agent\agent.py:686` | member |
+| `_do_task_evaluation` | `tea_agent\agent.py:646` | member |
+| `_ensure_model_entry` | `tea_agent\provider_store.py:525` | member |
+| `_ensure_ref_model` | `tea_agent\provider_store.py:499` | member |
+| `_ensure_store` | `tea_agent\project_memory.py:45` | member |
+| `_evaluate_task` | `tea_agent\agent.py:794` | member |
+| `_evolve_code` | `tea_agent\agent_evolution.py:311` | member |
+| `_evolve_prompt` | `tea_agent\agent_evolution.py:347` | member |
+| `_execute_chat_loop` | `tea_agent\litesession.py:202` | member |
+| `_execute_one` | `tea_agent\agent_evolution.py:253` | member |
+| `_execute_tool` | `tea_agent\litesession.py:520` | member |
+| `_execute_tool_loop` | `tea_agent\onlinesession.py:1397` | member |
+| `_existing_key` | `tea_agent\model_manager.py:818` | member |
+| `_extract_keywords` | `tea_agent\memory.py:221` | member |
+| `_extract_tools_used` | `tea_agent\agent.py:773` | member |
+| `_extract_user_text` | `tea_agent\agent.py:574` | member |
+| `_extract_with_llm` | `tea_agent\session_memory_component.py:267` | member |
+| `_fallback_analysis` | `tea_agent\cross_topic_summarizer.py:181` | member |
+| `_fallback_extract` | `tea_agent\session_memory_component.py:318` | member |
+| `_find_by_url` | `tea_agent\provider_store.py:560` | member |
+| `_find_duplicate` | `tea_agent\memory.py:615` | member |
+| `_find_provider` | `tea_agent\model_config.py:399` | member |
+| `_find_provider` | `tea_agent\provider_store.py:569` | member |
+| `_fix_ast` | `tea_agent\auto_fix.py:158` | member |
+| `_fix_llm` | `tea_agent\auto_fix.py:182` | member |
+| `_fix_ruff` | `tea_agent\auto_fix.py:131` | member |
+| `_generate_new_code` | `tea_agent\agent_evolution.py:282` | member |
+| `_get_effective_params` | `tea_agent\onlinesession.py:851` | member |
+| `_get_model` | `tea_agent\model_config.py:499` | member |
+| `_get_provider` | `tea_agent\model_config.py:487` | member |
+| `_get_recent_topics` | `tea_agent\cross_topic_summarizer.py:89` | member |
+| `_get_summarize_client` | `tea_agent\onlinesession.py:845` | member |
+| `_get_topic_system_prompt` | `tea_agent\onlinesession.py:1362` | member |
+| `_get_unextracted_conversations` | `tea_agent\session_memory_component.py:230` | member |
+| `_guess_tool_threshold` | `tea_agent\basesession.py:701` | member |
+| `_handle_tool_calls` | `tea_agent\litesession.py:260` | member |
+| `_history_summary` | `tea_agent\onlinesession.py:810` | member |
+| `_history_summary` | `tea_agent\onlinesession.py:814` | member |
+| `_init_chat_state` | `tea_agent\litesession.py:172` | member |
+| `_init_continue_control` | `tea_agent\onlinesession.py:647` | member |
+| `_init_llm` | `tea_agent\auto_fix.py:39` | member |
+| `_init_pipeline` | `tea_agent\onlinesession.py:732` | member |
+| `_init_reflection_and_prompt_manager` | `tea_agent\onlinesession.py:690` | member |
+| `_init_session` | `tea_agent\agent.py:215` | member |
+| `_init_session_info_str` | `tea_agent\agent.py:128` | member |
+| `_init_storage` | `tea_agent\agent.py:196` | member |
+| `_init_toolkit` | `tea_agent\agent.py:180` | member |
+| `_initialize_components` | `tea_agent\onlinesession.py:600` | member |
+| `_inject_interruption_knowledge` | `tea_agent\onlinesession.py:1516` | member |
+| `_inject_os_info` | `tea_agent\onlinesession.py:1243` | member |
+| `_is_duplicate` | `tea_agent\session_memory_component.py:333` | member |
+| `_last_cheap_usage` | `tea_agent\onlinesession.py:802` | member |
+| `_last_cheap_usage` | `tea_agent\onlinesession.py:806` | member |
+| `_last_usage` | `tea_agent\onlinesession.py:794` | member |
+| `_last_usage` | `tea_agent\onlinesession.py:798` | member |
+| `_level2` | `tea_agent\onlinesession.py:834` | member |
+| `_level2` | `tea_agent\onlinesession.py:838` | member |
+| `_load_cfg` | `tea_agent\model_manager.py:203` | member |
+| `_load_config` | `tea_agent\agent.py:137` | member |
+| `_load_config` | `tea_agent\session_memory_component.py:162` | member |
+| `_load_custom` | `tea_agent\model_manager.py:139` | member |
+| `_load_single_conversation` | `tea_agent\basesession.py:951` | member |
+| `_load_topic_history_into_session` | `tea_agent\agent.py:134` | member |
+| `_log_assistant_chunk` | `tea_agent\onlinesession.py:864` | member |
+| `_log_turn_end_marker` | `tea_agent\onlinesession.py:901` | member |
+| `_manage_http_clients` | `tea_agent\onlinesession.py:657` | member |
+| `_mark_conversations_extracted` | `tea_agent\session_memory_component.py:355` | member |
+| `_merge_catalog_meta` | `tea_agent\model_manager.py:649` | member |
+| `_merge_config_profiles` | `tea_agent\provider_store.py:401` | member |
+| `_merge_conversations` | `tea_agent\session_memory_component.py:241` | member |
+| `_merge_memory` | `tea_agent\memory.py:659` | member |
+| `_merge_provider` | `tea_agent\provider_store.py:576` | member |
+| `_merged` | `tea_agent\model_manager.py:194` | member |
+| `_merged_registry` | `tea_agent\model_config.py:317` | member |
+| `_models_endpoint` | `tea_agent\provider_store.py:815` | member |
+| `_necessity` | `tea_agent\skill_loader.py:275` | member |
+| `_new_id` | `tea_agent\project_memory.py:140` | member |
+| `_normalize_keys` | `tea_agent\provider_store.py:272` | member |
+| `_normalize_models_input` | `tea_agent\model_manager.py:406` | member |
+| `_notify` | `tea_agent\agent.py:359` | member |
+| `_parse_front_matter` | `tea_agent\skill_loader.py:249` | member |
+| `_parse_tool_calls` | `tea_agent\litesession.py:479` | member |
+| `_persist_classification` | `tea_agent\onlinesession.py:1595` | member |
+| `_post_chat_pipeline` | `tea_agent\agent.py:462` | member |
+| `_prefix_for` | `tea_agent\memory.py:479` | member |
+| `_probe_writable` | `tea_agent\audit_log.py:221` | member |
+| `_process_response` | `tea_agent\litesession.py:430` | member |
+| `_process_stream_with_reasoning` | `tea_agent\onlinesession.py:986` | member |
+| `_profile_secret` | `tea_agent\model_manager.py:347` | member |
+| `_provider_out` | `tea_agent\model_manager.py:485` | member |
+| `_provider_yaml_catalog` | `tea_agent\model_manager.py:212` | member |
+| `_prune` | `tea_agent\agent_evolution.py:466` | member |
+| `_prune_skills` | `tea_agent\agent_evolution.py:487` | member |
+| `_purge_cache` | `tea_agent\tlk.py:446` | member |
+| `_query_live` | `tea_agent\model_manager.py:663` | member |
+| `_read` | `tea_agent\audit_log.py:422` | member |
+| `_read` | `tea_agent\project_memory.py:51` | member |
+| `_read_last_line` | `tea_agent\audit_log.py:364` | member |
+| `_record_decode_sample` | `tea_agent\onlinesession.py:924` | member |
+| `_record_evolution` | `tea_agent\agent_evolution.py:533` | member |
+| `_record_usage` | `tea_agent\tlk.py:366` | member |
+| `_repair_incomplete_tool_chains` | `tea_agent\basesession.py:855` | member |
+| `_restore_interruption_anchor` | `tea_agent\onlinesession.py:1473` | member |
+| `_rounds_collector` | `tea_agent\onlinesession.py:786` | member |
+| `_rounds_collector` | `tea_agent\onlinesession.py:790` | member |
+| `_save_custom` | `tea_agent\model_manager.py:166` | member |
+| `_save_lessons` | `tea_agent\agent.py:855` | member |
+| `_scan_ast_docstring` | `tea_agent\auto_fix.py:83` | member |
+| `_scan_ruff` | `tea_agent\auto_fix.py:59` | member |
+| `_score_memory` | `tea_agent\memory.py:175` | member |
+| `_semantic_summary` | `tea_agent\onlinesession.py:818` | member |
+| `_semantic_summary` | `tea_agent\onlinesession.py:822` | member |
+| `_setup_compatible_attributes` | `tea_agent\onlinesession.py:610` | member |
+| `_setup_default_pipeline` | `tea_agent\onlinesession.py:1289` | member |
+| `_solidify` | `tea_agent\agent_evolution.py:355` | member |
+| `_start_background_services` | `tea_agent\agent.py:341` | member |
+| `_start_background_tasks` | `tea_agent\agent.py:590` | member |
+| `_stat_mtime` | `tea_agent\model_config.py:292` | member |
+| `_stat_mtime` | `tea_agent\provider_store.py:211` | member |
+| `_store` | `tea_agent\model_manager.py:371` | member |
+| `_strip_reasoning_content` | `tea_agent\basesession.py:475` | member |
+| `_sufficiency` | `tea_agent\skill_loader.py:291` | member |
+| `_summarize_old_history` | `tea_agent\onlinesession.py:1336` | member |
+| `_sync_registry` | `tea_agent\model_config.py:408` | member |
+| `_tool_chain_summary` | `tea_agent\onlinesession.py:826` | member |
+| `_tool_chain_summary` | `tea_agent\onlinesession.py:830` | member |
+| `_touch_selected` | `tea_agent\memory.py:282` | member |
+| `_trim_messages` | `tea_agent\basesession.py:1062` | member |
+| `_update_dynamic_thresholds` | `tea_agent\memory.py:300` | member |
+| `_update_token_usage` | `tea_agent\agent.py:536` | member |
+| `_validate_name` | `tea_agent\model_manager.py:396` | member |
+| `_validate_payload` | `tea_agent\model_manager.py:448` | member |
+| `_write` | `tea_agent\project_memory.py:66` | member |
+| `_write_unlocked` | `tea_agent\model_config.py:298` | member |
+| `_write_unlocked` | `tea_agent\provider_store.py:252` | member |
+| `active_db_path_abs` | `tea_agent\config.py:197` | member |
+| `add` | `tea_agent\project_memory.py:75` | member |
+| `add_assistant_message` | `tea_agent\basesession.py:421` | member |
+| `add_custom_provider` | `tea_agent\model_manager.py:502` | member |
+| `add_tool_result` | `tea_agent\basesession.py:450` | member |
+| `add_user_message` | `tea_agent\basesession.py:366` | member |
+| `analyze` | `tea_agent\agent_evolution.py:170` | member |
+| `apply_changes` | `tea_agent\config.py:441` | member |
+| `apply_provider` | `tea_agent\model_manager.py:697` | member |
+| `auto_dedup` | `tea_agent\memory.py:858` | member |
+| `available` | `tea_agent\agent_evolution.py:567` | member |
+| `build_evolve_prompt` | `tea_agent\prompt_manager.py:191` | member |
+| `build_extraction_prompt` | `tea_agent\memory.py:525` | member |
+| `build_reflection_prompt` | `tea_agent\reflection.py:159` | member |
+| `call_tool` | `tea_agent\tlk.py:382` | member |
+| `chat` | `tea_agent\agent.py:371` | member |
+| `chat` | `tea_agent\litesession.py:141` | member |
+| `chat_stream` | `tea_agent\basesession.py:351` | member |
+| `chat_stream` | `tea_agent\onlinesession.py:1618` | member |
+| `check_exec` | `tea_agent\permission.py:38` | member |
+| `check_net` | `tea_agent\permission.py:41` | member |
+| `check_read` | `tea_agent\permission.py:32` | member |
+| `check_write` | `tea_agent\permission.py:35` | member |
+| `clear` | `tea_agent\tool_hooks.py:82` | member |
+| `clear_events` | `tea_agent\agent_evolution.py:130` | member |
+| `close` | `tea_agent\agent.py:919` | member |
+| `close` | `tea_agent\auto_fix.py:278` | member |
+| `close` | `tea_agent\litesession.py:561` | member |
+| `close` | `tea_agent\onlinesession.py:1750` | member |
+| `config` | `tea_agent\agent.py:944` | member |
+| `current_prompt` | `tea_agent\prompt_manager.py:162` | member |
+| `current_prompt_id` | `tea_agent\prompt_manager.py:174` | member |
+| `current_topic_id` | `tea_agent\agent.py:968` | member |
+| `current_topic_id` | `tea_agent\agent.py:972` | member |
+| `current_version` | `tea_agent\prompt_manager.py:169` | member |
+| `custom_file` | `tea_agent\model_manager.py:136` | member |
+| `data_dir_abs` | `tea_agent\config.py:234` | member |
+| `db` | `tea_agent\agent.py:964` | member |
+| `db_path_abs` | `tea_agent\config.py:188` | member |
+| `decide` | `tea_agent\agent_evolution.py:601` | member |
+| `degrade_by_age` | `tea_agent\memory.py:378` | member |
+| `delete_custom_provider` | `tea_agent\model_manager.py:552` | member |
+| `delete_model` | `tea_agent\model_config.py:670` | member |
+| `delete_model` | `tea_agent\provider_store.py:774` | member |
+| `detect_duplicates` | `tea_agent\memory.py:793` | member |
+| `directory` | `tea_agent\audit_log.py:192` | member |
+| `disable_step` | `tea_agent\session_pipeline.py:72` | member |
+| `drain_contexts` | `tea_agent\tool_hooks.py:139` | member |
+| `duration_seconds` | `tea_agent\reflection.py:49` | member |
+| `enable_step` | `tea_agent\session_pipeline.py:68` | member |
+| `enable_thinking` | `tea_agent\onlinesession.py:754` | member |
+| `enable_thinking` | `tea_agent\onlinesession.py:758` | member |
+| `ensure_provider` | `tea_agent\model_config.py:600` | member |
+| `evaluate` | `tea_agent\skill_loader.py:299` | member |
+| `evaluate_and_load` | `tea_agent\skill_loader.py:363` | member |
+| `evaluate_target` | `tea_agent\agent_evolution.py:588` | member |
+| `evolve` | `tea_agent\prompt_manager.py:242` | member |
+| `execute` | `tea_agent\agent_evolution.py:217` | member |
+| `execute` | `tea_agent\session_pipeline.py:93` | member |
+| `extract_eval_actions` | `tea_agent\agent_evolution.py:581` | member |
+| `extract_from_topic` | `tea_agent\session_memory_component.py:175` | member |
+| `file_path` | `tea_agent\model_config.py:249` | member |
+| `file_path` | `tea_agent\provider_store.py:208` | member |
+| `files` | `tea_agent\audit_log.py:411` | member |
+| `finish_trace` | `tea_agent\reflection.py:110` | member |
+| `fix` | `tea_agent\auto_fix.py:113` | member |
+| `fix_all` | `tea_agent\auto_fix.py:237` | member |
+| `format_memories` | `tea_agent\memory.py:451` | member |
+| `format_memories` | `tea_agent\project_memory.py:159` | member |
+| `generate_reflection` | `tea_agent\reflection.py:199` | member |
+| `get` | `tea_agent\config.py:402` | member |
+| `get_all` | `tea_agent\project_memory.py:103` | member |
+| `get_effective_params` | `tea_agent\config.py:261` | member |
+| `get_enabled_steps` | `tea_agent\session_pipeline.py:86` | member |
+| `get_extraction_stats` | `tea_agent\session_memory_component.py:364` | member |
+| `get_injected_memories` | `tea_agent\session_memory_component.py:115` | member |
+| `get_interruption` | `tea_agent\config.py:378` | member |
+| `get_memory_stats` | `tea_agent\session_memory_component.py:381` | member |
+| `get_model` | `tea_agent\provider_store.py:646` | member |
+| `get_model_config` | `tea_agent\model_config.py:510` | member |
+| `get_pending_events` | `tea_agent\agent_evolution.py:127` | member |
+| `get_provider` | `tea_agent\model_manager.py:324` | member |
+| `get_provider` | `tea_agent\provider_store.py:638` | member |
+| `get_recent_messages` | `tea_agent\basesession.py:470` | member |
+| `get_stats` | `tea_agent\prompt_manager.py:350` | member |
+| `get_stats` | `tea_agent\reflection.py:308` | member |
+| `get_token_budget` | `tea_agent\config.py:122` | member |
+| `ingest_extracted` | `tea_agent\memory.py:727` | member |
+| `initialize` | `tea_agent\prompt_manager.py:137` | member |
+| `initialize` | `tea_agent\session_memory_component.py:34` | member |
+| `inject_context` | `tea_agent\tool_hooks.py:134` | member |
+| `inject_memories` | `tea_agent\session_memory_component.py:53` | member |
+| `interrupt` | `tea_agent\basesession.py:1054` | member |
+| `interrupt` | `tea_agent\litesession.py:557` | member |
+| `is_configured` | `tea_agent\config.py:110` | member |
+| `is_enabled` | `tea_agent\audit_log.py:186` | member |
+| `is_extraction_needed` | `tea_agent\memory.py:875` | member |
+| `is_reference` | `tea_agent\config.py:118` | member |
+| `kb_dir_abs` | `tea_agent\config.py:230` | member |
+| `last_prompt_suggestion` | `tea_agent\reflection.py:304` | member |
+| `list_providers` | `tea_agent\model_manager.py:287` | member |
+| `list_providers` | `tea_agent\provider_store.py:599` | member |
+| `list_steps` | `tea_agent\session_pipeline.py:131` | member |
+| `list_versions` | `tea_agent\prompt_manager.py:342` | member |
+| `list_versions` | `tea_agent\tlk.py:794` | member |
+| `list_versions_for_llm` | `tea_agent\tlk.py:829` | member |
+| `load` | `tea_agent\model_config.py:254` | member |
+| `load` | `tea_agent\provider_store.py:217` | member |
+| `load_history` | `tea_agent\basesession.py:997` | member |
+| `load_skill_content` | `tea_agent\skill_loader.py:340` | member |
+| `load_topic_history` | `tea_agent\agent.py:876` | member |
+| `manual_set` | `tea_agent\prompt_manager.py:365` | member |
+| `merge_duplicates` | `tea_agent\memory.py:822` | member |
+| `messages` | `tea_agent\onlinesession.py:746` | member |
+| `messages` | `tea_agent\onlinesession.py:750` | member |
+| `name` | `tea_agent\session_memory_component.py:30` | member |
+| `on_post` | `tea_agent\tool_hooks.py:59` | member |
+| `on_pre` | `tea_agent\tool_hooks.py:52` | member |
+| `on_session_complete` | `tea_agent\cross_topic_summarizer.py:73` | member |
+| `on_tool_result` | `tea_agent\agent_evolution.py:91` | member |
+| `panel` | `tea_agent\model_config.py:525` | member |
+| `parse_extraction_result` | `tea_agent\memory.py:533` | member |
+| `parse_reflection_result` | `tea_agent\reflection.py:188` | member |
+| `providers` | `tea_agent\provider_store.py:595` | member |
+| `prune_unconfigured` | `tea_agent\provider_store.py:973` | member |
+| `query_live_models` | `tea_agent\provider_store.py:834` | member |
+| `query_models` | `tea_agent\model_manager.py:577` | member |
+| `reasoning_effort` | `tea_agent\onlinesession.py:770` | member |
+| `reasoning_effort` | `tea_agent\onlinesession.py:774` | member |
+| `record` | `tea_agent\audit_log.py:248` | member |
+| `record_tool_call` | `tea_agent\reflection.py:101` | member |
+| `register_post` | `tea_agent\tool_hooks.py:74` | member |
+| `register_pre` | `tea_agent\tool_hooks.py:66` | member |
+| `register_step` | `tea_agent\session_pipeline.py:42` | member |
+| `reload` | `tea_agent\prompt_manager.py:178` | member |
+| `reload` | `tea_agent\tlk.py:516` | member |
+| `reload_from_dict` | `tea_agent\config.py:474` | member |
+| `remove_provider` | `tea_agent\model_config.py:629` | member |
+| `remove_provider` | `tea_agent\provider_store.py:731` | member |
+| `remove_step` | `tea_agent\session_pipeline.py:81` | member |
+| `render` | `tea_agent\context_fragments.py:88` | member |
+| `report` | `tea_agent\auto_fix.py:270` | member |
+| `reset` | `tea_agent\auto_compact.py:474` | member |
+| `reset` | `tea_agent\auto_compact.py:514` | member |
+| `reset_interrupt` | `tea_agent\basesession.py:1058` | member |
+| `reset_session_state` | `tea_agent\onlinesession.py:1454` | member |
+| `resolve` | `tea_agent\config.py:157` | member |
+| `resolve` | `tea_agent\provider_store.py:665` | member |
+| `roles` | `tea_agent\model_config.py:595` | member |
+| `rollback` | `tea_agent\agent_evolution.py:613` | member |
+| `rollback` | `tea_agent\prompt_manager.py:313` | member |
+| `rollback` | `tea_agent\tlk.py:764` | member |
+| `rollback_for_llm` | `tea_agent\tlk.py:822` | member |
+| `run` | `tea_agent\auto_compact.py:387` | member |
+| `run_post` | `tea_agent\tool_hooks.py:111` | member |
+| `run_pre` | `tea_agent\tool_hooks.py:92` | member |
+| `save` | `tea_agent\model_config.py:282` | member |
+| `save` | `tea_agent\provider_store.py:242` | member |
+| `save` | `tea_agent\tlk.py:620` | member |
+| `scan` | `tea_agent\auto_fix.py:49` | member |
+| `scan` | `tea_agent\skill_loader.py:214` | member |
+| `search` | `tea_agent\project_memory.py:115` | member |
+| `select_memories` | `tea_agent\memory.py:67` | member |
+| `sess` | `tea_agent\agent.py:952` | member |
+| `sess` | `tea_agent\agent.py:956` | member |
+| `session` | `tea_agent\agent.py:960` | member |
+| `set` | `tea_agent\config.py:408` | member |
+| `set_enabled` | `tea_agent\audit_log.py:181` | member |
+| `set_role` | `tea_agent\model_config.py:701` | member |
+| `set_step_position` | `tea_agent\session_pipeline.py:76` | member |
+| `should_reflect` | `tea_agent\reflection.py:119` | member |
+| `start_trace` | `tea_agent\reflection.py:91` | member |
+| `stats` | `tea_agent\audit_log.py:490` | member |
+| `stats` | `tea_agent\tool_hooks.py:145` | member |
+| `success_rate` | `tea_agent\reflection.py:41` | member |
+| `summary` | `tea_agent\auto_compact.py:481` | member |
+| `summary` | `tea_agent\auto_compact.py:486` | member |
+| `summary` | `tea_agent\auto_compact.py:511` | member |
+| `supports_vision` | `tea_agent\config.py:114` | member |
+| `sync_live_models` | `tea_agent\model_config.py:681` | member |
+| `sync_models` | `tea_agent\provider_store.py:788` | member |
+| `tail` | `tea_agent\audit_log.py:443` | member |
+| `test_connection` | `tea_agent\model_manager.py:827` | member |
+| `test_connection` | `tea_agent\provider_store.py:914` | member |
+| `thinking_strength` | `tea_agent\onlinesession.py:762` | member |
+| `thinking_strength` | `tea_agent\onlinesession.py:766` | member |
+| `to_dict` | `tea_agent\auto_compact.py:140` | member |
+| `to_dict` | `tea_agent\auto_fix.py:27` | member |
+| `to_dict` | `tea_agent\config.py:480` | member |
+| `to_full_dict` | `tea_agent\config.py:488` | member |
+| `tool_log` | `tea_agent\onlinesession.py:778` | member |
+| `tool_log` | `tea_agent\onlinesession.py:782` | member |
+| `toolkit` | `tea_agent\agent.py:948` | member |
+| `toolkit_dir_abs` | `tea_agent\config.py:226` | member |
+| `toolkit_reload` | `tea_agent\agent.py:352` | member |
+| `toolkit_save` | `tea_agent\agent.py:345` | member |
+| `update_custom_provider` | `tea_agent\model_manager.py:523` | member |
+| `update_model_config` | `tea_agent\model_config.py:666` | member |
+| `update_tools` | `tea_agent\onlinesession.py:1432` | member |
+| `upsert_model` | `tea_agent\model_config.py:642` | member |
+| `upsert_model` | `tea_agent\provider_store.py:741` | member |
+| `upsert_provider` | `tea_agent\provider_store.py:701` | member |
+| `user_db_path_abs` | `tea_agent\config.py:192` | member |
+| `verify` | `tea_agent\audit_log.py:455` | member |
+| `verify` | `tea_agent\auto_fix.py:258` | member |
 
 ### 函数
 
 | 函数名 | 文件:行号 | 类型 |
 |--------|----------|------|
-| `1. 输出结构` | `build_mini_dist\tea_agent\skills\output-format-constraint\SKILL.md:37` | subsection |
-| `2. 工具使用规范` | `build_mini_dist\tea_agent\skills\output-format-constraint\SKILL.md:56` | subsection |
-| `3. 输出示例` | `build_mini_dist\tea_agent\skills\output-format-constraint\SKILL.md:68` | subsection |
-| `4. 禁止行为` | `build_mini_dist\tea_agent\skills\output-format-constraint\SKILL.md:84` | subsection |
-| `规则（严格遵守）` | `build_mini_dist\tea_agent\skills\output-format-constraint\SKILL.md:35` | section |
-| `输出规范约束（小模型版）` | `build_mini_dist\tea_agent\skills\output-format-constraint\SKILL.md:33` | chapter |
+| `ALWAYS_PINNED` | `tea_agent\tool_shield.py:39` | variable |
+| `ANALYZE_PROMPT` | `tea_agent\agent_evolution.py:141` | variable |
+| `ANALYZE_PROMPT` | `tea_agent\cross_topic_summarizer.py:54` | variable |
+| `AUTO_MAX_TOKENS_FLOOR` | `tea_agent\config.py:661` | variable |
+| `AUTO_MAX_TOKENS_WINDOW_RATIO` | `tea_agent\config.py:660` | variable |
+| `BANNER` | `tea_agent\setup_wizard.py:42` | variable |
+| `CFG_FIELDS` | `tea_agent\model_config.py:41` | variable |
+| `CONFIG_DIR` | `tea_agent\model_config.py:32` | variable |
+| `CONFIG_DIR` | `tea_agent\provider_store.py:58` | variable |
+| `COOLDOWN_SECONDS` | `tea_agent\session_memory_component.py:152` | variable |
+| `CORE_TOOLS` | `tea_agent\onlinesession.py:165` | variable |
+| `CREATE_TOOL_PROMPT` | `tea_agent\agent_evolution.py:366` | variable |
+| `CRITICAL_DEGRADE_DAYS` | `tea_agent\memory.py:45` | variable |
+| `DEFAULT_COMPACTION_SETTINGS` | `tea_agent\auto_compact.py:151` | variable |
+| `DEFAULT_CONFIG_FILE` | `tea_agent\model_config.py:33` | variable |
+| `DEFAULT_FRAGMENT_ORDER` | `tea_agent\context_fragments.py:59` | variable |
+| `DEFAULT_IDLE_DAYS` | `tea_agent\tool_shield.py:32` | variable |
+| `DEFAULT_MAX_BYTES` | `tea_agent\agents_md_loader.py:38` | variable |
+| `DEFAULT_PROJECT_ROOT_MARKERS` | `tea_agent\agents_md_loader.py:37` | variable |
+| `DEFAULT_PROVIDER_FILE` | `tea_agent\provider_store.py:59` | variable |
+| `DEFAULT_SYSTEM_PROMPT` | `tea_agent\prompt_manager.py:31` | variable |
+| `DEFAULT_USER_AGENTS_MD` | `tea_agent\agents_md_loader.py:39` | variable |
+| `EVIDENCE_ROUNDS` | `tea_agent\skill_loader.py:53` | variable |
+| `EVOLVE_PROMPT` | `tea_agent\agent_evolution.py:267` | variable |
+| `EVOLVE_SYSTEM_PROMPT` | `tea_agent\prompt_manager.py:100` | variable |
+| `EXTRACTION_PROMPT` | `tea_agent\session_memory_component.py:125` | variable |
+| `EXTRACTION_SYSTEM_PROMPT` | `tea_agent\memory.py:504` | variable |
+| `FIX_PROMPT` | `tea_agent\auto_fix.py:15` | variable |
+| `GENESIS_HASH` | `tea_agent\audit_log.py:107` | variable |
+| `HAS_YAML` | `tea_agent\config.py:24` | variable |
+| `HAS_YAML` | `tea_agent\config.py:26` | variable |
+| `HAS_YAML` | `tea_agent\provider_store.py:54` | variable |
+| `HAS_YAML` | `tea_agent\provider_store.py:56` | variable |
+| `HIGH_DEGRADE_DAYS` | `tea_agent\memory.py:46` | variable |
+| `INTERRUPT_ABANDONED_TMPL` | `tea_agent\prompt_manager.py:58` | variable |
+| `INTERRUPT_CORRECTED_TMPL` | `tea_agent\prompt_manager.py:51` | variable |
+| `INTERRUPT_SIMILARITY_THRESHOLD` | `tea_agent\onlinesession.py:66` | variable |
+| `LLM_TOOL_EXCLUDES` | `tea_agent\tlk.py:44` | variable |
+| `LOW_RELEVANCE_THRESHOLD` | `tea_agent\memory.py:36` | variable |
+| `MAX_CRITICAL_INJECT` | `tea_agent\memory.py:26` | variable |
+| `MAX_ENTRIES` | `tea_agent\project_memory.py:31` | variable |
+| `MAX_INJECT` | `tea_agent\memory.py:25` | variable |
+| `MAX_INJECT_CHARS` | `tea_agent\memory.py:33` | variable |
+| `MAX_INJECT_CHARS` | `tea_agent\skill_loader.py:55` | variable |
+| `MAX_LOAD_PER_ROUND` | `tea_agent\skill_loader.py:52` | variable |
+| `MEDIUM_DEGRADE_DAYS` | `tea_agent\memory.py:47` | variable |
+| `MIN_EVIDENCE_ROUNDS` | `tea_agent\skill_loader.py:54` | variable |
+| `MIN_HIGH_INJECT` | `tea_agent\memory.py:27` | variable |
+| `MIN_LOW_INJECT` | `tea_agent\memory.py:29` | variable |
+| `MIN_MEDIUM_INJECT` | `tea_agent\memory.py:28` | variable |
+| `MODEL_FIELDS` | `tea_agent\provider_store.py:68` | variable |
+| `NAME_RE` | `tea_agent\model_manager.py:41` | variable |
+| `NAME_RE` | `tea_agent\provider_store.py:72` | variable |
+| `NECESSITY_THRESHOLD` | `tea_agent\skill_loader.py:50` | variable |
+| `OPENCODE_SESSION_HEADER` | `tea_agent\api_headers.py:53` | variable |
+| `OVERRIDE_FILENAME` | `tea_agent\agents_md_loader.py:40` | variable |
+| `PHASE_DEFAULT_TEMP` | `tea_agent\config.py:249` | variable |
+| `PRIORITY_CRITICAL` | `tea_agent\memory.py:13` | variable |
+| `PRIORITY_HIGH` | `tea_agent\memory.py:14` | variable |
+| `PRIORITY_LABELS` | `tea_agent\memory.py:18` | variable |
+| `PRIORITY_LOW` | `tea_agent\memory.py:16` | variable |
+| `PRIORITY_MEDIUM` | `tea_agent\memory.py:15` | variable |
+| `PROFILE_NAMES` | `tea_agent\tool_profiles.py:46` | variable |
+| `PROFILE_THRESHOLDS` | `tea_agent\tool_profiles.py:52` | variable |
+| `PROFILE_TOOLS` | `tea_agent\tool_profiles.py:128` | variable |
+| `PROJECT_RUN_DIR` | `tea_agent\storage_scope.py:33` | variable |
+| `PROVIDERS` | `tea_agent\providers.py:94` | variable |
+| `PROVIDERS` | `tea_agent\providers.py:96` | variable |
+| `PROVIDER_BANNER` | `tea_agent\setup_wizard.py:49` | variable |
+| `PROVIDER_FIELDS` | `tea_agent\provider_store.py:69` | variable |
+| `QUICK_PROVIDERS` | `tea_agent\setup_wizard.py:37` | variable |
+| `REASONING_EFFORT_RANKS` | `tea_agent\config.py:52` | variable |
+| `REASONING_EFFORT_VALUES` | `tea_agent\config.py:47` | variable |
+| `REFLECTION_SYSTEM_PROMPT` | `tea_agent\reflection.py:56` | variable |
+| `RISK_LEVELS` | `tea_agent\tool_approval.py:46` | variable |
+| `ROLES` | `tea_agent\model_config.py:35` | variable |
+| `ROLES` | `tea_agent\model_manager.py:43` | variable |
+| `RUFF_SELECT` | `tea_agent\auto_fix.py:14` | variable |
+| `SCAN_CACHE_TTL` | `tea_agent\skill_loader.py:56` | variable |
+| `SCHEMA_VERSION` | `tea_agent\model_config.py:36` | variable |
+| `SCHEMA_VERSION` | `tea_agent\provider_store.py:60` | variable |
+| `SKILL_DOMAINS` | `tea_agent\skill_loader.py:98` | variable |
+| `STORE_FILE` | `tea_agent\project_memory.py:32` | variable |
+| `SUFFICIENCY_THRESHOLD` | `tea_agent\skill_loader.py:51` | variable |
+| `TRIGGER_INTERVAL` | `tea_agent\cross_topic_summarizer.py:52` | variable |
+| `TeaAgent` | `tea_agent\agent.py:981` | function |
+| `UNKNOWN_CTX_PROFILE` | `tea_agent\tool_profiles.py:49` | variable |
+| `USAGE_TABLE` | `tea_agent\tool_shield.py:28` | unknown |
+| `VALID_SCOPES` | `tea_agent\storage_scope.py:35` | variable |
+| `_ARGS_COMPRESS_BYTES_DEFAULT` | `tea_agent\basesession.py:22` | variable |
+| `_ARGS_KEEP_BYTES_DEFAULT` | `tea_agent\basesession.py:23` | variable |
+| `_BASE_CRITICAL_DEGRADE_DAYS` | `tea_agent\memory.py:40` | variable |
+| `_BASE_HIGH_DEGRADE_DAYS` | `tea_agent\memory.py:41` | variable |
+| `_BASE_MEDIUM_DEGRADE_DAYS` | `tea_agent\memory.py:42` | variable |
+| `_BOOL_FIELDS` | `tea_agent\model_config.py:39` | variable |
+| `_BOOL_FIELDS` | `tea_agent\provider_store.py:64` | variable |
+| `_CACHE_TTL` | `tea_agent\tlk.py:280` | variable |
+| `_CACHE_WHITELIST` | `tea_agent\tlk.py:285` | variable |
+| `_CHUNK_FLUSH_CHARS` | `tea_agent\onlinesession.py:48` | variable |
+| `_COMPACT_SYSTEM_PROMPT` | `tea_agent\onlinesession.py:211` | variable |
+| `_CONFIG_TYPES` | `tea_agent\config.py:383` | variable |
+| `_CRITICAL_TOOLS` | `tea_agent\tool_approval.py:60` | variable |
+| `_CUSTOM_DIR` | `tea_agent\model_manager.py:45` | variable |
+| `_CUSTOM_FILE` | `tea_agent\model_manager.py:46` | variable |
+| `_DEFAULT_CTX` | `tea_agent\model_config.py:49` | variable |
+| `_DEFAULT_OUT` | `tea_agent\model_config.py:50` | variable |
+| `_DEFAULT_REQUIRE_AT` | `tea_agent\tool_approval.py:49` | variable |
+| `_DEFAULT_SKILLS_DIR` | `tea_agent\skill_loader.py:59` | variable |
+| `_DEFAULT_TOOL_THRESHOLD` | `tea_agent\basesession.py:249` | variable |
+| `_ENV_REF_RE` | `tea_agent\api_headers.py:62` | variable |
+| `_EVOLUTION_LOG_DEFAULT` | `tea_agent\agent_evolution.py:20` | variable |
+| `_EVOLUTION_LOG_MAX` | `tea_agent\agent_evolution.py:22` | variable |
+| `_EXEMPT_TOOLS` | `tea_agent\tool_approval.py:52` | variable |
+| `_FLOAT_FIELDS` | `tea_agent\provider_store.py:66` | variable |
+| `_FRAGMENT_REGISTRY` | `tea_agent\context_fragments.py:101` | variable |
+| `_HAVE_TOPIC_SUMMARY` | `tea_agent\agent_pipeline.py:107` | variable |
+| `_HAVE_TOPIC_SUMMARY` | `tea_agent\agent_pipeline.py:109` | variable |
+| `_HEADER_NAME_RE` | `tea_agent\api_headers.py:59` | variable |
+| `_HIGH_TOOLS` | `tea_agent\tool_approval.py:61` | variable |
+| `_INTERRUPT_ABANDONED_TMPL` | `tea_agent\onlinesession.py:215` | variable |
+| `_INTERRUPT_ANALYZE_INTERVAL_H` | `tea_agent\agent_background.py:16` | variable |
+| `_INTERRUPT_ANALYZE_MIN_COUNT` | `tea_agent\agent_background.py:17` | variable |
+| `_INTERRUPT_CORRECTED_TMPL` | `tea_agent\onlinesession.py:216` | variable |
+| `_INTERRUPT_KEEP_DAYS` | `tea_agent\agent_background.py:19` | variable |
+| `_INTERRUPT_SKILL_MIN_COUNT` | `tea_agent\agent_background.py:18` | variable |
+| `_INT_FIELDS` | `tea_agent\model_config.py:38` | variable |
+| `_INT_FIELDS` | `tea_agent\provider_store.py:63` | variable |
+| `_KB_THRESHOLD` | `tea_agent\basesession.py:248` | variable |
+| `_LAZY_EXPORTS` | `tea_agent\__init__.py:58` | variable |
+| `_MASK` | `tea_agent\audit_log.py:109` | variable |
+| `_MAX_IDLE_DAYS` | `tea_agent\tool_shield.py:35` | variable |
+| `_MAX_STR` | `tea_agent\audit_log.py:110` | variable |
+| `_MEDIUM_TOOLS` | `tea_agent\tool_approval.py:66` | variable |
+| `_MODE_BEHAVIORS` | `tea_agent\agent.py:48` | variable |
+| `_MODE_ENV` | `tea_agent\tool_approval.py:54` | variable |
+| `_OPENCODE_HOST_SUFFIX` | `tea_agent\api_headers.py:56` | variable |
+| `_PROFILE_TOOLSETS` | `tea_agent\tool_profiles.py:61` | variable |
+| `_Path` | `tea_agent\model_manager.py:356` | unknown |
+| `_RETRYABLE_EXC_NAMES` | `tea_agent\api_retry.py:30` | variable |
+| `_RETRYABLE_MSG_KEYWORDS` | `tea_agent\api_retry.py:49` | variable |
+| `_RUNTIME_CONFIG_KEYS` | `tea_agent\config.py:342` | variable |
+| `_SECRET_KEY_RE` | `tea_agent\audit_log.py:113` | variable |
+| `_SECRET_VALUE_RE` | `tea_agent\audit_log.py:118` | variable |
+| `_SOURCE_EXTENSIONS` | `tea_agent\basesession.py:255` | variable |
+| `_SOURCE_FILE_THRESHOLD` | `tea_agent\basesession.py:254` | variable |
+| `_SSL_CTX_CACHE` | `tea_agent\api_headers.py:310` | variable |
+| `_SSL_CTX_LOCK` | `tea_agent\api_headers.py:309` | variable |
+| `_STR_FIELDS` | `tea_agent\model_config.py:40` | variable |
+| `_STR_FIELDS` | `tea_agent\provider_store.py:67` | variable |
+| `_TEXT_EXTENSIONS` | `tea_agent\basesession.py:306` | variable |
+| `_TEXT_FILE_THRESHOLD` | `tea_agent\basesession.py:250` | variable |
+| `_TOKEN_ENV` | `tea_agent\tool_approval.py:55` | variable |
+| `_USER_AGENT` | `tea_agent\api_headers.py:65` | variable |
+| `_VALID_MODES` | `tea_agent\agent.py:78` | variable |
+| `_VALID_MODES` | `tea_agent\evolution_gate.py:27` | variable |
+| `_VALID_MODES` | `tea_agent\onlinesession.py:131` | variable |
+| `_VALID_MODES` | `tea_agent\tool_approval.py:56` | variable |
+| `_WRITE_ACTIONS` | `tea_agent\tool_approval.py:73` | variable |
+| `__all__` | `tea_agent\__init__.py:39` | variable |
+| `__all__` | `tea_agent\agents_md_loader.py:28` | variable |
+| `__all__` | `tea_agent\audit_log.py:47` | variable |
+| `__all__` | `tea_agent\config.py:28` | variable |
+| `__all__` | `tea_agent\context_fragments.py:44` | variable |
+| `__all__` | `tea_agent\evolution_gate.py:25` | variable |
+| `__all__` | `tea_agent\permission.py:10` | variable |
+| `__all__` | `tea_agent\project_memory.py:24` | variable |
+| `__all__` | `tea_agent\prompt_manager.py:25` | variable |
+| `__all__` | `tea_agent\session_pipeline.py:16` | variable |
+| `__all__` | `tea_agent\session_ref.py:29` | variable |
+| `__all__` | `tea_agent\setup_wizard.py:28` | variable |
+| `__all__` | `tea_agent\skill_loader.py:41` | variable |
+| `__all__` | `tea_agent\storage_scope.py:25` | variable |
+| `__all__` | `tea_agent\tool_approval.py:32` | variable |
+| `__all__` | `tea_agent\tool_profiles.py:34` | variable |
+| `__dir__` | `tea_agent\__init__.py:80` | function |
+| `__getattr__` | `tea_agent\__init__.py:68` | function |
+| `__version__` | `tea_agent\__init__.py:37` | variable |
+| `_active_config_path` | `tea_agent\config.py:505` | variable |
+| `_agents_md_budget` | `tea_agent\context_fragments.py:356` | function |
+| `_allow_path` | `tea_agent\tool_approval.py:181` | function |
+| `_append_evolution_log` | `tea_agent\agent_evolution.py:41` | function |
+| `_apply_model_into` | `tea_agent\providers.py:619` | function |
+| `_args_compress_threshold` | `tea_agent\basesession.py:42` | function |
+| `_args_keep_bytes` | `tea_agent\basesession.py:47` | function |
+| `_ask` | `tea_agent\setup_wizard.py:62` | function |
+| `_ast` | `tea_agent\agent_evolution.py:400` | namespace |
+| `_audit` | `tea_agent\tool_approval.py:278` | function |
+| `_auto_generate_skill_doc` | `tea_agent\tlk.py:149` | function |
+| `_blank_config` | `tea_agent\model_config.py:53` | function |
+| `_blank_model_cfg` | `tea_agent\provider_store.py:107` | function |
+| `_build_config` | `tea_agent\setup_wizard.py:209` | function |
+| `_build_hook` | `tea_agent\api_headers.py:223` | function |
+| `_builtin_caps_for_url` | `tea_agent\model_config.py:154` | function |
+| `_canonical` | `tea_agent\audit_log.py:154` | function |
+| `_cfg_int` | `tea_agent\agent.py:501` | function |
+| `_chat_endpoint` | `tea_agent\model_manager.py:102` | function |
+| `_clean_model_entry` | `tea_agent\provider_store.py:131` | function |
+| `_clean_provider` | `tea_agent\provider_store.py:165` | function |
+| `_cleanup_old_events` | `tea_agent\agent_background.py:218` | function |
+| `_collect_answers` | `tea_agent\setup_wizard.py:101` | function |
+| `_compress_value` | `tea_agent\basesession.py:647` | function |
+| `_config_cache` | `tea_agent\config.py:1442` | variable |
+| `_config_lock` | `tea_agent\config.py:502` | variable |
+| `_cooldowns` | `tea_agent\session_memory_component.py:155` | variable |
+| `_counter_path` | `tea_agent\cross_topic_summarizer.py:19` | function |
+| `_create_ssl_context` | `tea_agent\api_headers.py:313` | function |
+| `_cross_process_lock` | `tea_agent\audit_log.py:59` | function |
+| `_current_agent` | `tea_agent\session_ref.py:40` | variable |
+| `_current_session` | `tea_agent\session_ref.py:39` | variable |
+| `_data_dir_abs` | `tea_agent\config.py:152` | variable |
+| `_db_path_abs` | `tea_agent\config.py:153` | variable |
+| `_default_cfg` | `tea_agent\model_manager.py:877` | function |
+| `_default_skills_dir` | `tea_agent\agent_background.py:55` | function |
+| `_do_compact` | `tea_agent\auto_compact.py:426` | function |
+| `_dt` | `tea_agent\reflection.py:147` | namespace |
+| `_empty_usage` | `tea_agent\agent_pipeline.py:27` | function |
+| `_ensure_builtin_hooks` | `tea_agent\tool_hooks.py:159` | function |
+| `_ensure_file_handler` | `tea_agent\logging_setup.py:20` | function |
+| `_ensure_interruption_skill` | `tea_agent\agent_background.py:61` | function |
+| `_env_days` | `tea_agent\tool_shield.py:54` | function |
+| `_env_path` | `tea_agent\__init__.py:7` | variable |
+| `_err` | `tea_agent\provider_store.py:887` | namespace |
+| `_err` | `tea_agent\provider_store.py:940` | namespace |
+| `_estimate_context_tokens` | `tea_agent\context_fragments.py:159` | function |
+| `_evaluator` | `tea_agent\skill_loader.py:453` | variable |
+| `_evolution_log_path` | `tea_agent\agent_evolution.py:25` | function |
+| `_file_size` | `tea_agent\audit_log.py:50` | function |
+| `_file_warning_logged` | `tea_agent\logging_setup.py:18` | variable |
+| `_first_provider_ref` | `tea_agent\config.py:722` | function |
+| `_fix_single_quotes` | `tea_agent\basesession.py:154` | function |
+| `_flush_chunk_buf` | `tea_agent\onlinesession.py:1111` | function |
+| `_frag_agents_md` | `tea_agent\context_fragments.py:377` | function |
+| `_frag_current_time` | `tea_agent\context_fragments.py:321` | function |
+| `_frag_session_budget` | `tea_agent\context_fragments.py:241` | function |
+| `_frag_session_mode` | `tea_agent\context_fragments.py:337` | function |
+| `_frag_token_budget` | `tea_agent\context_fragments.py:255` | function |
+| `_generate_config_template` | `tea_agent\config.py:1309` | function |
+| `_get_cfg` | `tea_agent\litesession.py:51` | unknown |
+| `_get_cfg` | `tea_agent\litesession.py:416` | unknown |
+| `_get_icfg` | `tea_agent\agent_background.py:22` | function |
+| `_get_max_tokens` | `tea_agent\context_fragments.py:227` | function |
+| `_get_version` | `tea_agent\__init__.py:16` | function |
+| `_has_token` | `tea_agent\tool_approval.py:242` | function |
+| `_home_abs` | `tea_agent\storage_scope.py:38` | function |
+| `_hook` | `tea_agent\api_headers.py:230` | function |
+| `_host_match_score` | `tea_agent\api_headers.py:155` | function |
+| `_init_builtin_fragments` | `tea_agent\context_fragments.py:404` | function |
+| `_int_env` | `tea_agent\basesession.py:26` | function |
+| `_is_connection_error` | `tea_agent\api_retry.py:72` | function |
+| `_is_retryable` | `tea_agent\api_retry.py:62` | function |
+| `_json` | `tea_agent\agent_evolution.py:401` | namespace |
+| `_json` | `tea_agent\basesession.py:601` | namespace |
+| `_json` | `tea_agent\context_fragments.py:189` | namespace |
+| `_json_gt` | `tea_agent\basesession.py:712` | namespace |
+| `_json_lh` | `tea_agent\basesession.py:965` | namespace |
+| `_k` | `tea_agent\__init__.py:13` | variable |
+| `_kb_dir_abs` | `tea_agent\config.py:155` | variable |
+| `_keyword_similarity` | `tea_agent\onlinesession.py:69` | function |
+| `_last_config_path` | `tea_agent\config.py:499` | variable |
+| `_line` | `tea_agent\__init__.py:11` | variable |
+| `_load_counter` | `tea_agent\cross_topic_summarizer.py:23` | function |
+| `_load_evolution_log` | `tea_agent\agent_evolution.py:29` | function |
+| `_load_yaml_data` | `tea_agent\config.py:637` | function |
+| `_logging_debug` | `tea_agent\logging_setup.py:17` | variable |
+| `_logging_initialized` | `tea_agent\logging_setup.py:16` | variable |
+| `_loop` | `tea_agent\agent_background.py:266` | function |
+| `_main_block_usable` | `tea_agent\config.py:702` | function |
+| `_make_client` | `tea_agent\onlinesession.py:486` | function |
+| `_mark_first_output` | `tea_agent\onlinesession.py:1025` | function |
+| `_mask_key` | `tea_agent\model_manager.py:112` | function |
+| `_mask_key` | `tea_agent\provider_store.py:84` | function |
+| `_md_version` | `tea_agent\__init__.py:31` | unknown |
+| `_md_version` | `tea_agent\api_headers.py:83` | unknown |
+| `_merge_pending_tokens` | `tea_agent\agent_pipeline.py:18` | function |
+| `_merge_usage` | `tea_agent\agent_pipeline.py:31` | function |
+| `_models_endpoint` | `tea_agent\model_manager.py:86` | function |
+| `_normalize_model_entry` | `tea_agent\providers.py:27` | function |
+| `_normalize_url` | `tea_agent\model_config.py:138` | function |
+| `_normalize_url` | `tea_agent\model_manager.py:81` | function |
+| `_now` | `tea_agent\model_config.py:142` | function |
+| `_now` | `tea_agent\provider_store.py:93` | function |
+| `_oc_session_id` | `tea_agent\onlinesession.py:483` | function |
+| `_os` | `tea_agent\__init__.py:5` | namespace |
+| `_package_version` | `tea_agent\api_headers.py:68` | function |
+| `_parse_control_params` | `tea_agent\config.py:953` | function |
+| `_parse_mode_params` | `tea_agent\config.py:857` | function |
+| `_parse_model_configs` | `tea_agent\config.py:751` | function |
+| `_parse_paths_config` | `tea_agent\config.py:878` | function |
+| `_parse_session_params` | `tea_agent\config.py:902` | function |
+| `_parse_token_params` | `tea_agent\config.py:938` | function |
+| `_parse_ts` | `tea_agent\tool_shield.py:86` | function |
+| `_pending_tokens_lock` | `tea_agent\agent_pipeline.py:15` | variable |
+| `_pick_model` | `tea_agent\setup_wizard.py:261` | function |
+| `_pick_top_by_priority` | `tea_agent\memory.py:134` | function |
+| `_post` | `tea_agent\evolution_gate.py:120` | function |
+| `_post` | `tea_agent\tool_approval.py:334` | function |
+| `_post_compact_hooks` | `tea_agent\auto_compact.py:522` | variable |
+| `_pre` | `tea_agent\tool_approval.py:295` | function |
+| `_pre_compact_hooks` | `tea_agent\auto_compact.py:521` | variable |
+| `_prepare_config_data` | `tea_agent\config.py:1069` | function |
+| `_prepare_control_data` | `tea_agent\config.py:1254` | function |
+| `_prepare_model_data` | `tea_agent\config.py:1102` | function |
+| `_prepare_paths_data` | `tea_agent\config.py:1210` | function |
+| `_prepare_ref_model_data` | `tea_agent\config.py:1149` | function |
+| `_prepare_session_data` | `tea_agent\config.py:1227` | function |
+| `_prepare_token_data` | `tea_agent\config.py:1241` | function |
+| `_prune_evolution_log` | `tea_agent\agent_evolution.py:52` | function |
+| `_push_key` | `tea_agent\provider_store.py:414` | function |
+| `_read_file` | `tea_agent\agents_md_loader.py:87` | function |
+| `_record_decode_speed` | `tea_agent\onlinesession.py:1033` | function |
+| `_req` | `tea_agent\provider_store.py:888` | namespace |
+| `_req` | `tea_agent\provider_store.py:941` | namespace |
+| `_require_at` | `tea_agent\tool_approval.py:108` | function |
+| `_resolve` | `tea_agent\config.py:172` | function |
+| `_resolve_path` | `tea_agent\model_config.py:146` | function |
+| `_resolve_path` | `tea_agent\provider_store.py:97` | function |
+| `_resolve_ref_model` | `tea_agent\config.py:682` | function |
+| `_resolve_save_path` | `tea_agent\config.py:1051` | function |
+| `_restore_latest_backup` | `tea_agent\evolution_gate.py:71` | function |
+| `_rmtree` | `tea_agent\agent_evolution.py:68` | function |
+| `_run_dir` | `tea_agent\tool_approval.py:76` | function |
+| `_save_counter` | `tea_agent\cross_topic_summarizer.py:36` | function |
+| `_service` | `tea_agent\model_manager.py:873` | variable |
+| `_service_lock` | `tea_agent\model_manager.py:874` | variable |
+| `_session_ref_lock` | `tea_agent\session_ref.py:42` | variable |
+| `_set_root_level` | `tea_agent\logging_setup.py:117` | function |
+| `_setter_info` | `tea_agent\session_ref.py:41` | variable |
+| `_skill_name_for_tool` | `tea_agent\agent_background.py:49` | function |
+| `_sref` | `tea_agent\agent.py:20` | unknown |
+| `_storage_or_none` | `tea_agent\tool_shield.py:176` | function |
+| `_store` | `tea_agent\model_config.py:715` | variable |
+| `_store` | `tea_agent\provider_store.py:1058` | variable |
+| `_store_lock` | `tea_agent\model_config.py:716` | variable |
+| `_store_lock` | `tea_agent\provider_store.py:1059` | variable |
+| `_time` | `tea_agent\onlinesession.py:1606` | namespace |
+| `_time` | `tea_agent\provider_store.py:939` | namespace |
+| `_tokens` | `tea_agent\onlinesession.py:76` | function |
+| `_toolkit_dir_abs` | `tea_agent\config.py:154` | variable |
+| `_update_config_cache` | `tea_agent\config.py:993` | function |
+| `_v` | `tea_agent\__init__.py:13` | variable |
+| `_write_grants` | `tea_agent\tool_approval.py:203` | function |
+| `_write_template_file` | `tea_agent\config.py:1430` | function |
+| `_write_yaml_file` | `tea_agent\config.py:1271` | function |
+| `_y` | `tea_agent\provider_store.py:1026` | namespace |
+| `action` | `tea_agent\skill_loader.py:77` | variable |
+| `analyze_intent` | `tea_agent\onlinesession.py:52` | function |
+| `analyze_interruptions` | `tea_agent\agent_background.py:119` | function |
+| `api_connect_timeout` | `tea_agent\config.py:336` | variable |
+| `api_headers` | `tea_agent\config.py:297` | variable |
+| `api_key` | `tea_agent\config.py:90` | variable |
+| `api_max_retries` | `tea_agent\config.py:337` | variable |
+| `api_request_timeout` | `tea_agent\config.py:335` | variable |
+| `api_retry_backoff` | `tea_agent\config.py:338` | variable |
+| `api_sleep_recovery_wait` | `tea_agent\config.py:339` | variable |
+| `api_url` | `tea_agent\config.py:91` | variable |
+| `apply_shield` | `tea_agent\tool_shield.py:212` | function |
+| `approval_mode` | `tea_agent\tool_approval.py:86` | function |
+| `approval_status` | `tea_agent\tool_approval.py:263` | function |
+| `assemble_fragments` | `tea_agent\context_fragments.py:423` | function |
+| `audit_log` | `tea_agent\audit_log.py:516` | variable |
+| `auto_max_tokens_cap` | `tea_agent\config.py:664` | function |
+| `auto_summary` | `tea_agent\agent_pipeline.py:113` | function |
+| `branch_summary_length` | `tea_agent\auto_compact.py:118` | variable |
+| `budget_warn_ratio` | `tea_agent\auto_compact.py:114` | variable |
+| `build_http_client` | `tea_agent\api_headers.py:349` | function |
+| `build_interruption_system_msg` | `tea_agent\prompt_manager.py:64` | function |
+| `call_with_retry` | `tea_agent\api_retry.py:85` | function |
+| `chat_page_size` | `tea_agent\config.py:315` | variable |
+| `cheap_model` | `tea_agent\config.py:243` | variable |
+| `check_meta` | `tea_agent\tlk.py:523` | function |
+| `clamp_reasoning_effort` | `tea_agent\config.py:63` | function |
+| `classify_interruption` | `tea_agent\onlinesession.py:91` | function |
+| `classify_risk` | `tea_agent\tool_approval.py:128` | function |
+| `classify_waterline` | `tea_agent\auto_compact.py:154` | function |
+| `clean_model_config` | `tea_agent\model_config.py:93` | function |
+| `clear` | `tea_agent\session_ref.py:100` | function |
+| `clear_cache` | `tea_agent\skill_loader.py:476` | function |
+| `clear_compact_hooks` | `tea_agent\auto_compact.py:565` | function |
+| `clear_fragments` | `tea_agent\context_fragments.py:123` | function |
+| `collect_project_agents_md` | `tea_agent\agents_md_loader.py:97` | function |
+| `compact_messages` | `tea_agent\auto_compact.py:211` | function |
+| `covered_by` | `tea_agent\skill_loader.py:95` | variable |
+| `create_default_config` | `tea_agent\config.py:1284` | function |
+| `critical` | `tea_agent\session_pipeline.py:31` | variable |
+| `data_dir` | `tea_agent\config.py:146` | variable |
+| `db_path` | `tea_agent\config.py:147` | variable |
+| `deco` | `tea_agent\tool_hooks.py:54` | function |
+| `deco` | `tea_agent\tool_hooks.py:61` | function |
+| `default_headers_for` | `tea_agent\api_headers.py:277` | function |
+| `description` | `tea_agent\session_pipeline.py:29` | variable |
+| `detect_mode` | `tea_agent\onlinesession.py:134` | function |
+| `do_async_summaries` | `tea_agent\agent_pipeline.py:36` | function |
+| `duration_ms` | `tea_agent\reflection.py:25` | variable |
+| `enable_thinking` | `tea_agent\config.py:300` | variable |
+| `enabled` | `tea_agent\auto_compact.py:119` | variable |
+| `enabled` | `tea_agent\context_fragments.py:85` | variable |
+| `enabled` | `tea_agent\session_pipeline.py:28` | variable |
+| `end_time` | `tea_agent\reflection.py:38` | variable |
+| `ensure_config_dir` | `tea_agent\config.py:1012` | function |
+| `error` | `tea_agent\reflection.py:24` | variable |
+| `error` | `tea_agent\reflection.py:36` | variable |
+| `estimate_messages_tokens` | `tea_agent\auto_compact.py:45` | function |
+| `estimate_tokens` | `tea_agent\auto_compact.py:36` | function |
+| `evaluate` | `tea_agent\tool_shield.py:98` | function |
+| `evaluate_and_load` | `tea_agent\skill_loader.py:464` | function |
+| `evaluate_evolution` | `tea_agent\evolution_gate.py:90` | function |
+| `extract_mode` | `tea_agent\onlinesession.py:146` | function |
+| `extract_reasoning` | `tea_agent\basesession.py:59` | function |
+| `fcntl` | `tea_agent\audit_log.py:38` | variable |
+| `filter_tools` | `tea_agent\onlinesession.py:175` | function |
+| `filter_tools_by_profile` | `tea_agent\tool_profiles.py:167` | function |
+| `find_project_root` | `tea_agent\agents_md_loader.py:60` | function |
+| `function` | `tea_agent\litesession.py:494` | variable |
+| `gate_mode` | `tea_agent\evolution_gate.py:30` | function |
+| `gate_threshold` | `tea_agent\evolution_gate.py:51` | function |
+| `generate_branch_summary` | `tea_agent\auto_compact.py:319` | function |
+| `generate_config` | `tea_agent\providers.py:541` | function |
+| `get_active_config_path` | `tea_agent\config.py:515` | function |
+| `get_agent` | `tea_agent\session_ref.py:71` | function |
+| `get_bigrams` | `tea_agent\session_memory_component.py:255` | function |
+| `get_config` | `tea_agent\config.py:1445` | function |
+| `get_evaluator` | `tea_agent\skill_loader.py:456` | function |
+| `get_fragment` | `tea_agent\context_fragments.py:131` | function |
+| `get_max_context_tokens` | `tea_agent\auto_compact.py:66` | function |
+| `get_model` | `tea_agent\providers.py:68` | function |
+| `get_model_config_store` | `tea_agent\model_config.py:719` | function |
+| `get_provider` | `tea_agent\providers.py:523` | function |
+| `get_provider_service` | `tea_agent\model_manager.py:884` | function |
+| `get_provider_store` | `tea_agent\provider_store.py:1062` | function |
+| `get_session` | `tea_agent\session_ref.py:45` | function |
+| `get_session_info` | `tea_agent\session_ref.py:119` | function |
+| `grant` | `tea_agent\tool_approval.py:218` | function |
+| `grants` | `tea_agent\tool_approval.py:186` | function |
+| `guess_model_cfg` | `tea_agent\provider_store.py:121` | function |
+| `guess_model_config` | `tea_agent\model_config.py:64` | function |
+| `has_tool` | `tea_agent\onlinesession.py:187` | function |
+| `history_l2_max` | `tea_agent\config.py:316` | variable |
+| `history_l3_batch` | `tea_agent\config.py:317` | variable |
+| `install_builtin_hooks` | `tea_agent\tool_approval.py:357` | function |
+| `install_evolution_gate` | `tea_agent\evolution_gate.py:111` | function |
+| `interrupted` | `tea_agent\reflection.py:35` | variable |
+| `interruption` | `tea_agent\config.py:362` | variable |
+| `is_active` | `tea_agent\session_ref.py:109` | function |
+| `is_granted` | `tea_agent\tool_approval.py:256` | function |
+| `is_opencode_endpoint` | `tea_agent\api_headers.py:98` | function |
+| `kb_dir` | `tea_agent\config.py:150` | variable |
+| `keep_recent` | `tea_agent\auto_compact.py:115` | variable |
+| `keep_turns` | `tea_agent\config.py:308` | variable |
+| `l2_max_chars` | `tea_agent\config.py:325` | variable |
+| `l2_thinking_max_chars` | `tea_agent\config.py:321` | variable |
+| `l2_to_l3_summary` | `tea_agent\agent_pipeline.py:59` | function |
+| `list_fragments` | `tea_agent\context_fragments.py:152` | function |
+| `list_providers` | `tea_agent\providers.py:479` | function |
+| `llm_tool_names` | `tea_agent\tlk.py:50` | function |
+| `load_agents_md` | `tea_agent\agents_md_loader.py:143` | function |
+| `load_config` | `tea_agent\config.py:521` | function |
+| `load_user_agents_md` | `tea_agent\agents_md_loader.py:135` | function |
+| `logger` | `tea_agent\agent.py:32` | variable |
+| `logger` | `tea_agent\agent_background.py:13` | variable |
+| `logger` | `tea_agent\agent_evolution.py:17` | variable |
+| `logger` | `tea_agent\agent_pipeline.py:12` | variable |
+| `logger` | `tea_agent\agents_md_loader.py:26` | variable |
+| `logger` | `tea_agent\api_headers.py:50` | variable |
+| `logger` | `tea_agent\api_retry.py:27` | variable |
+| `logger` | `tea_agent\audit_log.py:45` | variable |
+| `logger` | `tea_agent\auto_compact.py:31` | variable |
+| `logger` | `tea_agent\auto_fix.py:13` | variable |
+| `logger` | `tea_agent\basesession.py:10` | variable |
+| `logger` | `tea_agent\basesession.py:56` | variable |
+| `logger` | `tea_agent\config.py:19` | variable |
+| `logger` | `tea_agent\context_fragments.py:42` | variable |
+| `logger` | `tea_agent\cross_topic_summarizer.py:16` | variable |
+| `logger` | `tea_agent\evolution_gate.py:23` | variable |
+| `logger` | `tea_agent\litesession.py:13` | variable |
+| `logger` | `tea_agent\memory.py:10` | variable |
+| `logger` | `tea_agent\model_config.py:30` | variable |
+| `logger` | `tea_agent\model_manager.py:38` | variable |
+| `logger` | `tea_agent\onlinesession.py:46` | variable |
+| `logger` | `tea_agent\onlinesession.py:158` | variable |
+| `logger` | `tea_agent\onlinesession.py:194` | variable |
+| `logger` | `tea_agent\project_memory.py:22` | variable |
+| `logger` | `tea_agent\prompt_manager.py:23` | variable |
+| `logger` | `tea_agent\provider_store.py:49` | variable |
+| `logger` | `tea_agent\reflection.py:17` | variable |
+| `logger` | `tea_agent\session_memory_component.py:20` | variable |
+| `logger` | `tea_agent\session_pipeline.py:14` | variable |
+| `logger` | `tea_agent\session_ref.py:27` | variable |
+| `logger` | `tea_agent\skill_loader.py:39` | variable |
+| `logger` | `tea_agent\tlk.py:34` | variable |
+| `logger` | `tea_agent\tool_approval.py:30` | variable |
+| `logger` | `tea_agent\tool_hooks.py:32` | variable |
+| `logger` | `tea_agent\tool_profiles.py:32` | variable |
+| `logger` | `tea_agent\tool_shield.py:30` | variable |
+| `main` | `tea_agent\setup_wizard.py:423` | function |
+| `main_model` | `tea_agent\config.py:242` | variable |
+| `make_post_hook` | `tea_agent\tool_approval.py:332` | function |
+| `make_pre_hook` | `tea_agent\tool_approval.py:289` | function |
+| `markers` | `tea_agent\context_fragments.py:84` | variable |
+| `mask_secrets` | `tea_agent\audit_log.py:124` | function |
+| `max_assistant_content` | `tea_agent\config.py:310` | variable |
+| `max_context_tokens` | `tea_agent\config.py:96` | variable |
+| `max_history` | `tea_agent\config.py:293` | variable |
+| `max_iterations` | `tea_agent\config.py:294` | variable |
+| `max_retries` | `tea_agent\auto_compact.py:136` | variable |
+| `max_summary_length` | `tea_agent\auto_compact.py:116` | variable |
+| `max_tokens` | `tea_agent\config.py:95` | variable |
+| `max_tool_output` | `tea_agent\config.py:309` | variable |
+| `memory_dedup_threshold` | `tea_agent\config.py:314` | variable |
+| `memory_extraction_threshold` | `tea_agent\config.py:313` | variable |
+| `meta_toolkit_list_versions` | `tea_agent\tlk.py:127` | function |
+| `meta_toolkit_reload` | `tea_agent\tlk.py:61` | function |
+| `meta_toolkit_rollback` | `tea_agent\tlk.py:103` | function |
+| `meta_toolkit_save` | `tea_agent\tlk.py:76` | function |
+| `migrate_from_configs` | `tea_agent\provider_store.py:1004` | function |
+| `min_messages_before_compact` | `tea_agent\auto_compact.py:117` | variable |
+| `mode_params` | `tea_agent\config.py:246` | variable |
+| `model_entries` | `tea_agent\providers.py:36` | function |
+| `model_ids` | `tea_agent\providers.py:56` | function |
+| `model_name` | `tea_agent\config.py:92` | variable |
+| `msvcrt` | `tea_agent\audit_log.py:43` | variable |
+| `necessity` | `tea_agent\skill_loader.py:75` | variable |
+| `needs_provider_setup` | `tea_agent\setup_wizard.py:237` | function |
+| `new_session_id` | `tea_agent\api_headers.py:113` | function |
+| `opencode_session_header` | `tea_agent\config.py:299` | variable |
+| `opencode_session_header_enabled` | `tea_agent\api_headers.py:213` | function |
+| `options` | `tea_agent\config.py:93` | variable |
+| `osp` | `tea_agent\tlk.py:21` | namespace |
+| `paths` | `tea_agent\config.py:245` | variable |
+| `position` | `tea_agent\session_pipeline.py:30` | variable |
+| `project_run_dir` | `tea_agent\storage_scope.py:67` | function |
+| `protect_tokens` | `tea_agent\auto_compact.py:133` | variable |
+| `provider` | `tea_agent\config.py:106` | variable |
+| `rc_keep_steps` | `tea_agent\config.py:332` | variable |
+| `reason` | `tea_agent\skill_loader.py:78` | variable |
+| `reasoning_effort` | `tea_agent\config.py:302` | variable |
+| `ref_model` | `tea_agent\config.py:107` | variable |
+| `register_fragment` | `tea_agent\context_fragments.py:104` | function |
+| `register_post_compact_hook` | `tea_agent\auto_compact.py:539` | function |
+| `register_pre_compact_hook` | `tea_agent\auto_compact.py:525` | function |
+| `relaxed_json_loads` | `tea_agent\basesession.py:83` | function |
+| `request_event_hooks` | `tea_agent\api_headers.py:249` | function |
+| `resolve_config_path` | `tea_agent\config.py:596` | function |
+| `resolve_db_path` | `tea_agent\storage_scope.py:98` | function |
+| `resolve_extra_headers` | `tea_agent\api_headers.py:172` | function |
+| `resolve_scope` | `tea_agent\storage_scope.py:46` | function |
+| `resolve_tool_profile` | `tea_agent\tool_profiles.py:134` | function |
+| `retry_base_delay` | `tea_agent\auto_compact.py:137` | variable |
+| `retry_max_delay` | `tea_agent\auto_compact.py:138` | variable |
+| `retry_with_backoff` | `tea_agent\auto_compact.py:279` | function |
+| `revoke` | `tea_agent\tool_approval.py:233` | function |
+| `role` | `tea_agent\context_fragments.py:83` | variable |
+| `run_post_compact_hooks` | `tea_agent\auto_compact.py:592` | function |
+| `run_pre_compact_hooks` | `tea_agent\auto_compact.py:571` | function |
+| `run_provider_setup_wizard` | `tea_agent\setup_wizard.py:290` | function |
+| `run_setup_wizard` | `tea_agent\setup_wizard.py:385` | function |
+| `sanitize_headers` | `tea_agent\api_headers.py:118` | function |
+| `save_config` | `tea_agent\config.py:1023` | function |
+| `scan_config_profiles` | `tea_agent\model_config.py:170` | function |
+| `set_active_config_path` | `tea_agent\config.py:508` | function |
+| `set_agent` | `tea_agent\session_ref.py:81` | function |
+| `set_debug` | `tea_agent\logging_setup.py:131` | function |
+| `set_session` | `tea_agent\session_ref.py:55` | function |
+| `setup_logging` | `tea_agent\logging_setup.py:68` | function |
+| `shared_ssl_context` | `tea_agent\api_headers.py:326` | function |
+| `shield_enabled` | `tea_agent\tool_shield.py:79` | function |
+| `shielded_tools` | `tea_agent\tool_shield.py:192` | function |
+| `should_compact` | `tea_agent\auto_compact.py:182` | function |
+| `skills_dir` | `tea_agent\config.py:151` | variable |
+| `snip_threshold` | `tea_agent\auto_compact.py:131` | variable |
+| `sources` | `tea_agent\agents_md_loader.py:55` | variable |
+| `start_interruption_analyzer` | `tea_agent\agent_background.py:235` | function |
+| `start_scheduler` | `tea_agent\agent_background.py:32` | function |
+| `start_time` | `tea_agent\reflection.py:37` | variable |
+| `status_cb` | `tea_agent\agent.py:421` | function |
+| `stop_interruption_analyzer` | `tea_agent\agent_background.py:295` | function |
+| `storage_scope` | `tea_agent\config.py:148` | variable |
+| `stream_cb` | `tea_agent\agent.py:394` | function |
+| `stream_cb` | `tea_agent\agent.py:412` | function |
+| `strong_keywords` | `tea_agent\skill_loader.py:93` | variable |
+| `sufficiency` | `tea_agent\skill_loader.py:76` | variable |
+| `switch_provider` | `tea_agent\providers.py:572` | function |
+| `temperature` | `tea_agent\config.py:94` | variable |
+| `text` | `tea_agent\agents_md_loader.py:54` | variable |
+| `thinking_strength` | `tea_agent\config.py:301` | variable |
+| `threshold` | `tea_agent\auto_compact.py:113` | variable |
+| `tier1_ratio` | `tea_agent\auto_compact.py:127` | variable |
+| `tier2_ratio` | `tea_agent\auto_compact.py:128` | variable |
+| `tier3_ratio` | `tea_agent\auto_compact.py:129` | variable |
+| `token_budget` | `tea_agent\config.py:104` | variable |
+| `tool_calls` | `tea_agent\reflection.py:32` | variable |
+| `tool_hooks` | `tea_agent\tool_hooks.py:156` | variable |
+| `tool_profile` | `tea_agent\config.py:100` | variable |
+| `toolkit` | `tea_agent\tlk.py:39` | variable |
+| `toolkit_dir` | `tea_agent\config.py:149` | variable |
+| `top_p` | `tea_agent\config.py:97` | variable |
+| `topic_id` | `tea_agent\reflection.py:30` | variable |
+| `total_bytes` | `tea_agent\agents_md_loader.py:56` | variable |
+| `total_iterations` | `tea_agent\reflection.py:33` | variable |
+| `truncated` | `tea_agent\agents_md_loader.py:57` | variable |
+| `type` | `tea_agent\litesession.py:493` | variable |
+| `unregister_fragment` | `tea_agent\context_fragments.py:118` | function |
+| `unregister_post_compact_hook` | `tea_agent\auto_compact.py:559` | function |
+| `unregister_pre_compact_hook` | `tea_agent\auto_compact.py:553` | function |
+| `urllib_err` | `tea_agent\model_manager.py:30` | namespace |
+| `urllib_req` | `tea_agent\model_manager.py:31` | namespace |
+| `used_tools` | `tea_agent\reflection.py:34` | variable |
+| `user_agent` | `tea_agent\api_headers.py:90` | function |
+| `user_msg` | `tea_agent\reflection.py:31` | variable |
+| `vision_model` | `tea_agent\config.py:244` | variable |
+| `waterline_name` | `tea_agent\auto_compact.py:174` | function |
+| `weak_keywords` | `tea_agent\skill_loader.py:94` | variable |
+| `weight` | `tea_agent\context_fragments.py:86` | variable |
 
-## 模块 `build_mini_dist\tea_agent\skills\process-excel`
+## 模块 `tea_agent\channel`
+
+### 类
+
+| 类名 | 文件:行号 | 类型 |
+|------|----------|------|
+| `TelegramAdapter` | `tea_agent\channel\telegram_adapter.py:69` | class |
+| `WeChatAdapter` | `tea_agent\channel\wechat_adapter.py:110` | class |
+| `__init__` | `tea_agent\channel\telegram_adapter.py:82` | member |
+| `__init__` | `tea_agent\channel\wechat_adapter.py:125` | member |
+| `_api_get` | `tea_agent\channel\telegram_adapter.py:201` | member |
+| `_api_get` | `tea_agent\channel\wechat_adapter.py:806` | member |
+| `_api_post` | `tea_agent\channel\telegram_adapter.py:211` | member |
+| `_api_post` | `tea_agent\channel\wechat_adapter.py:815` | member |
+| `_call_tea_agent` | `tea_agent\channel\telegram_adapter.py:143` | member |
+| `_call_tea_agent` | `tea_agent\channel\wechat_adapter.py:738` | member |
+| `_clear_credentials` | `tea_agent\channel\wechat_adapter.py:205` | member |
+| `_display_qrcode` | `tea_agent\channel\wechat_adapter.py:329` | member |
+| `_format_configs` | `tea_agent\channel\telegram_adapter.py:249` | member |
+| `_get_current_config_info` | `tea_agent\channel\telegram_adapter.py:228` | member |
+| `_get_or_create_topic` | `tea_agent\channel\telegram_adapter.py:103` | member |
+| `_get_or_create_topic` | `tea_agent\channel\wechat_adapter.py:698` | member |
+| `_get_session_info` | `tea_agent\channel\telegram_adapter.py:245` | member |
+| `_handle_about` | `tea_agent\channel\telegram_adapter.py:334` | member |
+| `_handle_command` | `tea_agent\channel\wechat_adapter.py:491` | member |
+| `_handle_config` | `tea_agent\channel\telegram_adapter.py:352` | member |
+| `_handle_error` | `tea_agent\channel\telegram_adapter.py:297` | member |
+| `_handle_incoming` | `tea_agent\channel\wechat_adapter.py:432` | member |
+| `_handle_message` | `tea_agent\channel\telegram_adapter.py:264` | member |
+| `_handle_new` | `tea_agent\channel\telegram_adapter.py:317` | member |
+| `_handle_start` | `tea_agent\channel\telegram_adapter.py:301` | member |
+| `_handle_topic` | `tea_agent\channel\telegram_adapter.py:428` | member |
+| `_handle_topics` | `tea_agent\channel\telegram_adapter.py:406` | member |
+| `_list_configs` | `tea_agent\channel\telegram_adapter.py:221` | member |
+| `_list_sessions` | `tea_agent\channel\telegram_adapter.py:238` | member |
+| `_load_credentials` | `tea_agent\channel\wechat_adapter.py:180` | member |
+| `_poll_loop` | `tea_agent\channel\wechat_adapter.py:361` | member |
+| `_save_credentials` | `tea_agent\channel\wechat_adapter.py:193` | member |
+| `_send_message` | `tea_agent\channel\wechat_adapter.py:624` | member |
+| `_send_typing` | `tea_agent\channel\wechat_adapter.py:546` | member |
+| `_switch_config` | `tea_agent\channel\telegram_adapter.py:233` | member |
+| `bot_token` | `tea_agent\channel\wechat_adapter.py:173` | member |
+| `is_logged_in` | `tea_agent\channel\wechat_adapter.py:169` | member |
+| `login` | `tea_agent\channel\wechat_adapter.py:223` | member |
+| `start` | `tea_agent\channel\telegram_adapter.py:489` | member |
+| `start` | `tea_agent\channel\wechat_adapter.py:828` | member |
+| `stop` | `tea_agent\channel\telegram_adapter.py:539` | member |
+| `stop` | `tea_agent\channel\wechat_adapter.py:879` | member |
 
 ### 函数
 
 | 函数名 | 文件:行号 | 类型 |
 |--------|----------|------|
-| `Real-World Example` | `build_mini_dist\tea_agent\skills\process-excel\SKILL.md:140` | section |
-| `Step 1: Multi-File Ingestion and Standardization` | `build_mini_dist\tea_agent\skills\process-excel\SKILL.md:26` | subsection |
-| `Step 2: Duplicate Detection and Cleaning` | `build_mini_dist\tea_agent\skills\process-excel\SKILL.md:53` | subsection |
-| `Step 3: Data Quality Analysis` | `build_mini_dist\tea_agent\skills\process-excel\SKILL.md:75` | subsection |
-| `Step 4: Business Insight Generation` | `build_mini_dist\tea_agent\skills\process-excel\SKILL.md:97` | subsection |
-| `Step 5: Automated Dashboard and Reporting` | `build_mini_dist\tea_agent\skills\process-excel\SKILL.md:123` | subsection |
-| `Step-by-Step Walkthrough` | `build_mini_dist\tea_agent\skills\process-excel\SKILL.md:24` | section |
-| `The Problem` | `build_mini_dist\tea_agent\skills\process-excel\SKILL.md:12` | section |
-| `The Solution` | `build_mini_dist\tea_agent\skills\process-excel\SKILL.md:20` | section |
-| `Transform Messy Spreadsheets Into Business Intelligence and Save 20 Hours Weekly` | `build_mini_dist\tea_agent\skills\process-excel\SKILL.md:10` | chapter |
+| `CRED_DIR` | `tea_agent\channel\wechat_adapter.py:53` | variable |
+| `CRED_FILE` | `tea_agent\channel\wechat_adapter.py:54` | variable |
+| `DEFAULT_API_BASE` | `tea_agent\channel\wechat_adapter.py:46` | variable |
+| `ILINK_BASE` | `tea_agent\channel\wechat_adapter.py:44` | variable |
+| `ILINK_PATH_PREFIX` | `tea_agent\channel\wechat_adapter.py:45` | variable |
+| `LONG_POLL_TIMEOUT` | `tea_agent\channel\wechat_adapter.py:48` | variable |
+| `MAX_REPLY_LEN` | `tea_agent\channel\wechat_adapter.py:50` | variable |
+| `POLL_INTERVAL` | `tea_agent\channel\wechat_adapter.py:47` | variable |
+| `SEND_TIMEOUT` | `tea_agent\channel\wechat_adapter.py:49` | variable |
+| `SESSIONS_FILE` | `tea_agent\channel\wechat_adapter.py:55` | variable |
+| `SESSION_FILE` | `tea_agent\channel\telegram_adapter.py:47` | variable |
+| `__all__` | `tea_agent\channel\__init__.py:18` | variable |
+| `_base_info` | `tea_agent\channel\wechat_adapter.py:80` | function |
+| `_generate_uin` | `tea_agent\channel\wechat_adapter.py:62` | function |
+| `_load_json` | `tea_agent\channel\wechat_adapter.py:85` | function |
+| `_load_sessions` | `tea_agent\channel\telegram_adapter.py:50` | function |
+| `_make_headers` | `tea_agent\channel\wechat_adapter.py:68` | function |
+| `_save_json` | `tea_agent\channel\wechat_adapter.py:96` | function |
+| `_save_sessions` | `tea_agent\channel\telegram_adapter.py:60` | function |
+| `httpx` | `tea_agent\channel\telegram_adapter.py:43` | variable |
+| `logger` | `tea_agent\channel\telegram_adapter.py:45` | variable |
+| `logger` | `tea_agent\channel\wechat_adapter.py:41` | variable |
+| `run_telegram_bot` | `tea_agent\channel\telegram_adapter.py:545` | function |
+| `run_wechat_bot` | `tea_agent\channel\wechat_adapter.py:896` | function |
 
-## 模块 `build_mini_dist\tea_agent\skills\test-api-endpoints`
+## 模块 `tea_agent\demo`
+
+### 类
+
+| 类名 | 文件:行号 | 类型 |
+|------|----------|------|
+| `CSIPredictor` | `tea_agent\demo\csi300_predictor.py:790` | class |
+| `CurveFitter` | `tea_agent\demo\csi300_predictor.py:529` | class |
+| `Vectorizer` | `tea_agent\demo\csi300_predictor.py:649` | class |
+| `__init__` | `tea_agent\demo\csi300_predictor.py:652` | member |
+| `__init__` | `tea_agent\demo\csi300_predictor.py:793` | member |
+| `_fit_tfidf` | `tea_agent\demo\csi300_predictor.py:709` | member |
+| `_load_config` | `tea_agent\demo\csi300_predictor.py:701` | member |
+| `_predict_from_strategy` | `tea_agent\demo\csi300_predictor.py:886` | member |
+| `_print_distribution` | `tea_agent\demo\csi300_predictor.py:822` | member |
+| `_transform_tfidf` | `tea_agent\demo\csi300_predictor.py:738` | member |
+| `_try_embed` | `tea_agent\demo\csi300_predictor.py:674` | member |
+| `curve_to_features` | `tea_agent\demo\csi300_predictor.py:632` | member |
+| `evaluate` | `tea_agent\demo\csi300_predictor.py:951` | member |
+| `extract_keypoints` | `tea_agent\demo\csi300_predictor.py:537` | member |
+| `fit` | `tea_agent\demo\csi300_predictor.py:804` | member |
+| `fit_quadratic` | `tea_agent\demo\csi300_predictor.py:599` | member |
+| `fit_transform` | `tea_agent\demo\csi300_predictor.py:657` | member |
+| `predict` | `tea_agent\demo\csi300_predictor.py:832` | member |
+| `predict_curve` | `tea_agent\demo\csi300_predictor.py:911` | member |
+| `predict_multi` | `tea_agent\demo\csi300_predictor.py:946` | member |
+| `transform` | `tea_agent\demo\csi300_predictor.py:666` | member |
 
 ### 函数
 
 | 函数名 | 文件:行号 | 类型 |
 |--------|----------|------|
-| `1. Define what to test` | `build_mini_dist\tea_agent\skills\test-api-endpoints\SKILL.md:24` | subsection |
-| `2. Build and send requests` | `build_mini_dist\tea_agent\skills\test-api-endpoints\SKILL.md:28` | subsection |
-| `3. Responses are validated` | `build_mini_dist\tea_agent\skills\test-api-endpoints\SKILL.md:32` | subsection |
-| `4. Results are reported clearly` | `build_mini_dist\tea_agent\skills\test-api-endpoints\SKILL.md:40` | subsection |
-| `5. Failures are diagnosed` | `build_mini_dist\tea_agent\skills\test-api-endpoints\SKILL.md:71` | subsection |
-| `Real-World Example` | `build_mini_dist\tea_agent\skills\test-api-endpoints\SKILL.md:75` | section |
-| `Step-by-Step Walkthrough` | `build_mini_dist\tea_agent\skills\test-api-endpoints\SKILL.md:22` | section |
-| `Test API Endpoints with AI` | `build_mini_dist\tea_agent\skills\test-api-endpoints\SKILL.md:10` | chapter |
-| `The Problem` | `build_mini_dist\tea_agent\skills\test-api-endpoints\SKILL.md:12` | section |
-| `The Solution` | `build_mini_dist\tea_agent\skills\test-api-endpoints\SKILL.md:16` | section |
+| `CHANNELS` | `tea_agent\demo\news_CSI300.py:26` | variable |
+| `DB_PATH` | `tea_agent\demo\csi300_predictor.py:49` | variable |
+| `DB_PATH` | `tea_agent\demo\news_CSI300.py:23` | variable |
+| `DEFAULT_K` | `tea_agent\demo\csi300_predictor.py:54` | variable |
+| `DOWN_THRESHOLD` | `tea_agent\demo\csi300_predictor.py:53` | variable |
+| `HAS_MPL` | `tea_agent\demo\csi300_predictor.py:40` | variable |
+| `HAS_MPL` | `tea_agent\demo\csi300_predictor.py:42` | variable |
+| `HEADERS` | `tea_agent\demo\news_CSI300.py:37` | variable |
+| `IDX_END_H` | `tea_agent\demo\news_CSI300.py:36` | variable |
+| `IDX_END_M` | `tea_agent\demo\news_CSI300.py:36` | variable |
+| `IDX_START_H` | `tea_agent\demo\news_CSI300.py:35` | variable |
+| `IDX_START_M` | `tea_agent\demo\news_CSI300.py:35` | variable |
+| `INDEX_INTERVAL_MIN` | `tea_agent\demo\news_CSI300.py:33` | variable |
+| `LOG_PATH` | `tea_agent\demo\csi300_predictor.py:50` | variable |
+| `LOG_PATH` | `tea_agent\demo\news_CSI300.py:24` | variable |
+| `MAX_NEWS_PER_CHANNEL` | `tea_agent\demo\news_CSI300.py:32` | variable |
+| `NEGATIVE_KEYWORDS` | `tea_agent\demo\csi300_predictor.py:63` | variable |
+| `NEWS_H` | `tea_agent\demo\news_CSI300.py:34` | variable |
+| `NEWS_M` | `tea_agent\demo\news_CSI300.py:34` | variable |
+| `POSITIVE_KEYWORDS` | `tea_agent\demo\csi300_predictor.py:57` | variable |
+| `SINA_HEADERS` | `tea_agent\demo\news_CSI300.py:42` | variable |
+| `SINA_INDEX_URL` | `tea_agent\demo\news_CSI300.py:31` | variable |
+| `UP_THRESHOLD` | `tea_agent\demo\csi300_predictor.py:52` | variable |
+| `_describe_curve` | `tea_agent\demo\csi300_predictor.py:252` | function |
+| `_eval_curve` | `tea_agent\demo\csi300_predictor.py:1014` | function |
+| `_eval_curve_silent` | `tea_agent\demo\csi300_predictor.py:271` | function |
+| `_find_closest` | `tea_agent\demo\csi300_predictor.py:505` | function |
+| `_tokenize` | `tea_agent\demo\csi300_predictor.py:753` | function |
+| `build_samples` | `tea_agent\demo\csi300_predictor.py:440` | function |
+| `export_fig_from_db` | `tea_agent\demo\csi300_predictor.py:393` | function |
+| `extract_strategy_features` | `tea_agent\demo\csi300_predictor.py:779` | function |
+| `fetch_all_news` | `tea_agent\demo\news_CSI300.py:207` | function |
+| `fetch_index` | `tea_agent\demo\news_CSI300.py:177` | function |
+| `fetch_xinhua_channel` | `tea_agent\demo\news_CSI300.py:125` | function |
+| `init_db` | `tea_agent\demo\csi300_predictor.py:81` | function |
+| `init_db` | `tea_agent\demo\news_CSI300.py:51` | function |
+| `is_index_time` | `tea_agent\demo\news_CSI300.py:228` | function |
+| `load_data` | `tea_agent\demo\csi300_predictor.py:412` | function |
+| `logger` | `tea_agent\demo\csi300_predictor.py:75` | variable |
+| `logger` | `tea_agent\demo\news_CSI300.py:49` | variable |
+| `main` | `tea_agent\demo\csi300_predictor.py:1071` | function |
+| `main` | `tea_agent\demo\news_CSI300.py:254` | function |
+| `news_fetched_today` | `tea_agent\demo\news_CSI300.py:117` | function |
+| `next_aligned_minute` | `tea_agent\demo\news_CSI300.py:222` | function |
+| `np` | `tea_agent\demo\csi300_predictor.py:44` | namespace |
+| `np` | `tea_agent\demo\csi300_predictor.py:273` | namespace |
+| `np` | `tea_agent\demo\csi300_predictor.py:313` | namespace |
+| `plot_and_save_fig` | `tea_agent\demo\csi300_predictor.py:304` | function |
+| `plt` | `tea_agent\demo\csi300_predictor.py:36` | namespace |
+| `run_index_loop` | `tea_agent\demo\news_CSI300.py:234` | function |
+| `save_index` | `tea_agent\demo\news_CSI300.py:103` | function |
+| `save_model_snapshot` | `tea_agent\demo\csi300_predictor.py:197` | function |
+| `save_news` | `tea_agent\demo\news_CSI300.py:84` | function |
+| `save_prediction` | `tea_agent\demo\csi300_predictor.py:135` | function |
+| `sentiment_score` | `tea_agent\demo\csi300_predictor.py:769` | function |
+| `update_actual_outcome` | `tea_agent\demo\csi300_predictor.py:156` | function |
+
+## 模块 `tea_agent\demo\snake`
+
+### 类
+
+| 类名 | 文件:行号 | 类型 |
+|------|----------|------|
+| `Board` | `tea_agent\demo\snake\engine.py:77` | class |
+| `Direction` | `tea_agent\demo\snake\engine.py:12` | class |
+| `Game` | `tea_agent\demo\snake\engine.py:88` | class |
+| `Position` | `tea_agent\demo\snake\engine.py:33` | class |
+| `Renderer` | `tea_agent\demo\snake\renderer.py:37` | class |
+| `Snake` | `tea_agent\demo\snake\engine.py:44` | class |
+| `__add__` | `tea_agent\demo\snake\engine.py:37` | member |
+| `__init__` | `tea_agent\demo\snake\engine.py:47` | member |
+| `__init__` | `tea_agent\demo\snake\engine.py:80` | member |
+| `__init__` | `tea_agent\demo\snake\engine.py:91` | member |
+| `__init__` | `tea_agent\demo\snake\renderer.py:40` | member |
+| `_any_snake_at` | `tea_agent\demo\snake\engine.py:164` | member |
+| `_draw` | `tea_agent\demo\snake\renderer.py:133` | member |
+| `_draw_board` | `tea_agent\demo\snake\renderer.py:152` | member |
+| `_draw_sidebar` | `tea_agent\demo\snake\renderer.py:197` | member |
+| `_find_start_pos` | `tea_agent\demo\snake\engine.py:128` | member |
+| `_handle_input` | `tea_agent\demo\snake\renderer.py:103` | member |
+| `_init_snakes` | `tea_agent\demo\snake\engine.py:107` | member |
+| `_run` | `tea_agent\demo\snake\renderer.py:68` | member |
+| `_safe_dirs` | `tea_agent\demo\snake\engine.py:310` | member |
+| `_show_game_over` | `tea_agent\demo\snake\renderer.py:242` | member |
+| `_spawn_initial_strawberries` | `tea_agent\demo\snake\engine.py:159` | member |
+| `_spawn_one_strawberry` | `tea_agent\demo\snake\engine.py:192` | member |
+| `alive_snakes` | `tea_agent\demo\snake\engine.py:367` | member |
+| `all` | `tea_agent\demo\snake\engine.py:28` | member |
+| `all_occupied_positions` | `tea_agent\demo\snake\engine.py:167` | member |
+| `bfs_distance` | `tea_agent\demo\snake\engine.py:346` | member |
+| `decide` | `tea_agent\demo\snake\engine.py:72` | member |
+| `flood_fill` | `tea_agent\demo\snake\engine.py:330` | member |
+| `has_strawberry_at` | `tea_agent\demo\snake\engine.py:189` | member |
+| `head` | `tea_agent\demo\snake\engine.py:65` | member |
+| `in_bounds` | `tea_agent\demo\snake\engine.py:84` | member |
+| `length` | `tea_agent\demo\snake\engine.py:69` | member |
+| `manhattan` | `tea_agent\demo\snake\engine.py:40` | member |
+| `opposite` | `tea_agent\demo\snake\engine.py:18` | member |
+| `run` | `tea_agent\demo\snake\renderer.py:57` | member |
+| `strawberries` | `tea_agent\demo\snake\engine.py:186` | member |
+| `tick` | `tea_agent\demo\snake\engine.py:205` | member |
+| `user_quit` | `tea_agent\demo\snake\renderer.py:64` | member |
+
+### 函数
+
+| 函数名 | 文件:行号 | 类型 |
+|--------|----------|------|
+| `DEAD_COLOR` | `tea_agent\demo\snake\renderer.py:15` | variable |
+| `DOWN` | `tea_agent\demo\snake\engine.py:14` | variable |
+| `HUMAN_COLOR` | `tea_agent\demo\snake\renderer.py:16` | variable |
+| `LEFT` | `tea_agent\demo\snake\engine.py:15` | variable |
+| `RIGHT` | `tea_agent\demo\snake\engine.py:16` | variable |
+| `STATUS_COLOR` | `tea_agent\demo\snake\renderer.py:14` | variable |
+| `STRATEGIES` | `tea_agent\demo\snake\strategies.py:234` | variable |
+| `STRAWBERRY_COLOR` | `tea_agent\demo\snake\renderer.py:12` | variable |
+| `UP` | `tea_agent\demo\snake\engine.py:13` | variable |
+| `WALL_COLOR` | `tea_agent\demo\snake\renderer.py:13` | variable |
+| `_direction_toward` | `tea_agent\demo\snake\strategies.py:34` | function |
+| `_init_colors` | `tea_agent\demo\snake\renderer.py:19` | function |
+| `_put` | `tea_agent\demo\snake\renderer.py:198` | function |
+| `_safe_directions` | `tea_agent\demo\snake\strategies.py:13` | function |
+| `aggressive_strategy` | `tea_agent\demo\snake\strategies.py:134` | function |
+| `greedy_strategy` | `tea_agent\demo\snake\strategies.py:67` | function |
+| `human_strategy` | `tea_agent\demo\snake\renderer.py:259` | function |
+| `hybrid_strategy` | `tea_agent\demo\snake\strategies.py:205` | function |
+| `main` | `tea_agent\demo\snake\main.py:45` | function |
+| `make_human_strategy` | `tea_agent\demo\snake\renderer.py:255` | function |
+| `parse_args` | `tea_agent\demo\snake\main.py:32` | function |
+| `random_strategy` | `tea_agent\demo\snake\strategies.py:59` | function |
+| `safe_greedy_strategy` | `tea_agent\demo\snake\strategies.py:90` | function |
+| `survival_strategy` | `tea_agent\demo\snake\strategies.py:116` | function |
+| `test_basic` | `tea_agent\demo\snake\test_headless.py:13` | function |
+| `test_head_collision` | `tea_agent\demo\snake\test_headless.py:41` | function |
+| `test_strawberry_eating` | `tea_agent\demo\snake\test_headless.py:77` | function |
+| `test_wall_death` | `tea_agent\demo\snake\test_headless.py:63` | function |
+| `wall_hugger_strategy` | `tea_agent\demo\snake\strategies.py:170` | function |
+
+## 模块 `tea_agent\demo\tetris`
+
+### 类
+
+| 类名 | 文件:行号 | 类型 |
+|------|----------|------|
+| `ANSIHelper` | `tea_agent\demo\tetris\tetris_ansi.py:88` | class |
+| `HeadlessTetrisGame` | `tea_agent\demo\tetris\generate_tetris_data.py:130` | class |
+| `InputHandler` | `tea_agent\demo\tetris\tetris_ansi.py:135` | class |
+| `TetrisGame` | `tea_agent\demo\tetris\tetris_ansi.py:202` | class |
+| `TetrisGame` | `tea_agent\demo\tetris\tetris_console.py:70` | class |
+| `__init__` | `tea_agent\demo\tetris\generate_tetris_data.py:131` | member |
+| `__init__` | `tea_agent\demo\tetris\tetris_ansi.py:138` | member |
+| `__init__` | `tea_agent\demo\tetris\tetris_ansi.py:205` | member |
+| `__init__` | `tea_agent\demo\tetris\tetris_console.py:73` | member |
+| `_clear_lines` | `tea_agent\demo\tetris\tetris_ansi.py:341` | member |
+| `_clear_lines` | `tea_agent\demo\tetris\tetris_console.py:232` | member |
+| `_draw_board` | `tea_agent\demo\tetris\tetris_ansi.py:511` | member |
+| `_draw_board` | `tea_agent\demo\tetris\tetris_console.py:265` | member |
+| `_draw_info` | `tea_agent\demo\tetris\tetris_ansi.py:553` | member |
+| `_draw_info` | `tea_agent\demo\tetris\tetris_console.py:314` | member |
+| `_draw_pause` | `tea_agent\demo\tetris\tetris_ansi.py:641` | member |
+| `_draw_pause` | `tea_agent\demo\tetris\tetris_console.py:350` | member |
+| `_drop_piece` | `tea_agent\demo\tetris\tetris_ansi.py:316` | member |
+| `_drop_piece` | `tea_agent\demo\tetris\tetris_console.py:207` | member |
+| `_evaluate_board` | `tea_agent\demo\tetris\tetris_ansi.py:374` | member |
+| `_generate_piece` | `tea_agent\demo\tetris\tetris_ansi.py:227` | member |
+| `_generate_piece` | `tea_agent\demo\tetris\tetris_console.py:118` | member |
+| `_get_piece_cells` | `tea_agent\demo\tetris\tetris_ansi.py:251` | member |
+| `_get_piece_cells` | `tea_agent\demo\tetris\tetris_console.py:142` | member |
+| `_handle_input` | `tea_agent\demo\tetris\generate_tetris_data.py:151` | member |
+| `_handle_input` | `tea_agent\demo\tetris\tetris_ansi.py:651` | member |
+| `_handle_input` | `tea_agent\demo\tetris\tetris_console.py:366` | member |
+| `_hard_drop` | `tea_agent\demo\tetris\tetris_ansi.py:323` | member |
+| `_hard_drop` | `tea_agent\demo\tetris\tetris_console.py:214` | member |
+| `_init_colors` | `tea_agent\demo\tetris\tetris_console.py:102` | member |
+| `_is_valid_position` | `tea_agent\demo\tetris\tetris_ansi.py:264` | member |
+| `_is_valid_position` | `tea_agent\demo\tetris\tetris_console.py:155` | member |
+| `_load_model` | `tea_agent\demo\tetris\tetris_ansi.py:462` | member |
+| `_lock_piece` | `tea_agent\demo\tetris\tetris_ansi.py:331` | member |
+| `_lock_piece` | `tea_agent\demo\tetris\tetris_console.py:222` | member |
+| `_model_predict_action` | `tea_agent\demo\tetris\tetris_ansi.py:484` | member |
+| `_move_piece` | `tea_agent\demo\tetris\tetris_ansi.py:305` | member |
+| `_move_piece` | `tea_agent\demo\tetris\tetris_console.py:196` | member |
+| `_rotate_piece` | `tea_agent\demo\tetris\tetris_ansi.py:285` | member |
+| `_rotate_piece` | `tea_agent\demo\tetris\tetris_console.py:176` | member |
+| `_search_best_next_move` | `tea_agent\demo\tetris\tetris_ansi.py:412` | member |
+| `_spawn_piece` | `tea_agent\demo\tetris\tetris_ansi.py:239` | member |
+| `_spawn_piece` | `tea_agent\demo\tetris\tetris_console.py:130` | member |
+| `_update` | `tea_agent\demo\tetris\tetris_ansi.py:704` | member |
+| `_update` | `tea_agent\demo\tetris\tetris_console.py:404` | member |
+| `cleanup` | `tea_agent\demo\tetris\tetris_ansi.py:196` | member |
+| `clear_screen` | `tea_agent\demo\tetris\tetris_ansi.py:92` | member |
+| `get_key` | `tea_agent\demo\tetris\tetris_ansi.py:147` | member |
+| `hide_cursor` | `tea_agent\demo\tetris\tetris_ansi.py:111` | member |
+| `move_cursor` | `tea_agent\demo\tetris\tetris_ansi.py:105` | member |
+| `move_home` | `tea_agent\demo\tetris\tetris_ansi.py:99` | member |
+| `reset_color` | `tea_agent\demo\tetris\tetris_ansi.py:129` | member |
+| `run` | `tea_agent\demo\tetris\generate_tetris_data.py:153` | member |
+| `run` | `tea_agent\demo\tetris\tetris_ansi.py:750` | member |
+| `run` | `tea_agent\demo\tetris\tetris_console.py:413` | member |
+| `set_color` | `tea_agent\demo\tetris\tetris_ansi.py:123` | member |
+| `show_cursor` | `tea_agent\demo\tetris\tetris_ansi.py:117` | member |
+
+### 函数
+
+| 函数名 | 文件:行号 | 类型 |
+|--------|----------|------|
+| `ACTION_NAMES` | `tea_agent\demo\tetris\train_tetris_cnn.py:24` | variable |
+| `ANSI_BOLD` | `tea_agent\demo\tetris\tetris_ansi.py:29` | variable |
+| `ANSI_CLEAR` | `tea_agent\demo\tetris\tetris_ansi.py:24` | variable |
+| `ANSI_COLORS` | `tea_agent\demo\tetris\tetris_ansi.py:33` | variable |
+| `ANSI_DIM` | `tea_agent\demo\tetris\tetris_ansi.py:30` | variable |
+| `ANSI_HIDE_CURSOR` | `tea_agent\demo\tetris\tetris_ansi.py:26` | variable |
+| `ANSI_HOME` | `tea_agent\demo\tetris\tetris_ansi.py:25` | variable |
+| `ANSI_RESET` | `tea_agent\demo\tetris\tetris_ansi.py:28` | variable |
+| `ANSI_SHOW_CURSOR` | `tea_agent\demo\tetris\tetris_ansi.py:27` | variable |
+| `BOARD_H` | `tea_agent\demo\tetris\train_tetris_cnn.py:22` | variable |
+| `BOARD_HEIGHT` | `tea_agent\demo\tetris\tetris_ansi.py:45` | variable |
+| `BOARD_HEIGHT` | `tea_agent\demo\tetris\tetris_console.py:16` | variable |
+| `BOARD_W` | `tea_agent\demo\tetris\train_tetris_cnn.py:22` | variable |
+| `BOARD_WIDTH` | `tea_agent\demo\tetris\tetris_ansi.py:44` | variable |
+| `BOARD_WIDTH` | `tea_agent\demo\tetris\tetris_console.py:15` | variable |
+| `CELL_EMPTY` | `tea_agent\demo\tetris\tetris_ansi.py:46` | variable |
+| `CELL_EMPTY` | `tea_agent\demo\tetris\tetris_console.py:17` | variable |
+| `CELL_FILLED` | `tea_agent\demo\tetris\tetris_ansi.py:47` | variable |
+| `CELL_FILLED` | `tea_agent\demo\tetris\tetris_console.py:18` | variable |
+| `CELL_GHOST` | `tea_agent\demo\tetris\tetris_console.py:19` | variable |
+| `NUM_CLASSES` | `tea_agent\demo\tetris\train_tetris_cnn.py:23` | variable |
+| `PIECE_COLORS` | `tea_agent\demo\tetris\tetris_console.py:60` | variable |
+| `TETROMINOES` | `tea_agent\demo\tetris\tetris_ansi.py:51` | variable |
+| `TETROMINOES` | `tea_agent\demo\tetris\tetris_console.py:23` | variable |
+| `_get_cells` | `tea_agent\demo\tetris\generate_tetris_data.py:31` | function |
+| `build_light_cnn` | `tea_agent\demo\tetris\train_tetris_cnn.py:26` | function |
+| `build_state_image` | `tea_agent\demo\tetris\generate_tetris_data.py:36` | function |
+| `evaluate_board` | `tea_agent\demo\tetris\generate_tetris_data.py:48` | function |
+| `find_best_first_action` | `tea_agent\demo\tetris\generate_tetris_data.py:95` | function |
+| `generate_dataset` | `tea_agent\demo\tetris\generate_tetris_data.py:180` | function |
+| `main` | `tea_agent\demo\tetris\generate_tetris_data.py:209` | function |
+| `main` | `tea_agent\demo\tetris\tetris_ansi.py:804` | function |
+| `main` | `tea_agent\demo\tetris\tetris_console.py:453` | function |
+| `main` | `tea_agent\demo\tetris\train_tetris_cnn.py:56` | function |
+| `mp` | `tea_agent\demo\tetris\generate_tetris_data.py:17` | namespace |
+| `np` | `tea_agent\demo\tetris\generate_tetris_data.py:24` | namespace |
+| `np` | `tea_agent\demo\tetris\tetris_ansi.py:489` | namespace |
+| `np` | `tea_agent\demo\tetris\train_tetris_cnn.py:9` | namespace |
+| `play_one_game` | `tea_agent\demo\tetris\generate_tetris_data.py:158` | function |
+| `plot_history` | `tea_agent\demo\tetris\train_tetris_cnn.py:43` | function |
+| `plt` | `tea_agent\demo\tetris\train_tetris_cnn.py:20` | namespace |
+| `run_all_tests` | `tea_agent\demo\tetris\test_tetris.py:113` | function |
+| `simulate_landing` | `tea_agent\demo\tetris\generate_tetris_data.py:75` | function |
+| `success` | `tea_agent\demo\tetris\test_tetris.py:136` | variable |
+| `test_collision_detection` | `tea_agent\demo\tetris\test_tetris.py:76` | function |
+| `test_game_initialization` | `tea_agent\demo\tetris\test_tetris.py:15` | function |
+| `test_game_logic` | `tea_agent\demo\tetris\test_tetris_simple.py:15` | function |
+| `test_line_clearing` | `tea_agent\demo\tetris\test_tetris.py:94` | function |
+| `test_piece_movement` | `tea_agent\demo\tetris\test_tetris.py:34` | function |
+| `test_piece_rotation` | `tea_agent\demo\tetris\test_tetris.py:57` | function |
+| `tf` | `tea_agent\demo\tetris\tetris_ansi.py:473` | namespace |
+| `tf` | `tea_agent\demo\tetris\train_tetris_cnn.py:13` | namespace |
+| `tflite` | `tea_agent\demo\tetris\tetris_ansi.py:471` | namespace |

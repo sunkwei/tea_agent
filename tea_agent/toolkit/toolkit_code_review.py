@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from tea_agent.lsp.lsp_engine import semantic_diagnose
+from tea_agent.path_filters import iter_files
 
 logger = logging.getLogger("toolkit.code_review")
 
@@ -300,7 +301,7 @@ def toolkit_code_review(filepath="", directory="", output="", level="standard", 
         elif directory:
             d = os.path.abspath(directory)
             if os.path.isdir(d):
-                for p in Path(d).rglob(glob_pattern):
+                for p in iter_files(d, glob_pattern):
                     files_to_review.append(str(p))
                     if len(files_to_review) >= max_files:
                         break

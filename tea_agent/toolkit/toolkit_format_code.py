@@ -10,6 +10,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
+from tea_agent.path_filters import iter_files
 
 logger = logging.getLogger("toolkit.format_code")
 
@@ -57,8 +58,9 @@ def _detect_language(path: str) -> str:
             return "cpp"
     elif os.path.isdir(path):
         # 检查目录中的文件类型
-        py_files = list(Path(path).rglob("*.py"))
-        cpp_files = list(Path(path).rglob("*.cpp")) + list(Path(path).rglob("*.h"))
+        # 经共享裁剪遍历（本工具会**写回文件**，绝不能碰第三方依赖）
+        py_files = list(iter_files(path, "*.py"))
+        cpp_files = list(iter_files(path, "*.cpp")) + list(iter_files(path, "*.h"))
 
         if py_files:
             return "python"
@@ -144,7 +146,7 @@ def _format_cpp(action: str, path: str, style: str) -> str:
         # 递归处理目录中的 C/C++ 文件
         results = []
         for ext in ('*.c', '*.cpp', '*.cc', '*.h', '*.hpp'):
-            for file in Path(path).rglob(ext):
+            for file in iter_files(path, ext):
                 result = _format_cpp(action, str(file), style)
                 results.append(result)
         return "\n".join(results)

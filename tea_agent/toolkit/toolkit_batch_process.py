@@ -19,6 +19,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
+from tea_agent.path_filters import iter_files
 
 logger = logging.getLogger("toolkit.batch_process")
 
@@ -125,11 +126,10 @@ def _resolve_files(glob_pattern: str, directory: str = "", max_files: int = 100)
         return [os.path.abspath(glob_pattern)]
     base = os.path.abspath(directory) if directory else os.getcwd()
     matched = []
-    for f in Path(base).rglob(glob_pattern):
-        if f.is_file():
-            matched.append(str(f))
-            if len(matched) >= max_files:
-                break
+    for f in iter_files(base, glob_pattern):
+        matched.append(str(f))
+        if len(matched) >= max_files:
+            break
     return matched
 
 

@@ -9,6 +9,7 @@ import os
 import subprocess
 from collections import defaultdict
 from pathlib import Path
+from tea_agent.path_filters import is_junk_path, iter_files
 
 logger = logging.getLogger("AutoFix")
 RUFF_SELECT = "F401,F841,F811,W291,W293,E225,E231,E302,E303,E305,W391,E401,E701,E711,E712,E713,E714"
@@ -82,10 +83,13 @@ class AutoFixAgent:
 
     def _scan_ast_docstring(self, filepath: str | None = None) -> list[dict]:
         issues = []
-        py_files = [Path(filepath)] if filepath else list(self.project_root.rglob("*.py"))
+        # 经共享裁剪遍历：旧实现只挡了 4 个内联目录名，node_modules /
+        # build_mini_dist / .venv 全漏 —— 而本模块会**改写文件**，
+        # 扫进第三方代码就会去「修复」别人的实现。
+        py_files = [filepath] if filepath else list(iter_files(self.project_root, "*.py"))
         for pf in py_files:
             s = str(pf)
-            if any(x in s for x in (".tea_agent_run", "__pycache__", ".git", "build")):
+            if is_junk_path(s):
                 continue
             rel = os.path.relpath(s, str(self.project_root)).replace("\\", "/")
             try:

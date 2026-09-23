@@ -51,6 +51,46 @@ logger = logging.getLogger("toolkit")
 
 _RUN_DIR = ".tea_agent_run"
 
+# ── 目录遍历排除集：统一由 tea_agent.path_filters 提供（唯一事实源）──
+# 历史问题：本文件曾有 5 套各不相同的内联排除列表，且**每一套都漏掉**
+# node_modules / build_mini_dist（另有两处连 .venv 都没排除）。后果不是
+# 性能问题而是**正确性问题**：generate_docs 会把 agent-calendar-viewer/
+# node_modules 下第三方捆绑的 Python 当作本项目 API 文档化 —— 实测
+# docs/API参考.md 混入 344 条 node_modules 伪路径，symbol_index.json
+# 从 1.9 MB 膨胀到 48 MB（符号数 8865 → 59182）。
+# 改为共用 path_filters 后，其它扫描器（auto_fix / format_code /
+# code_review / batch_process）也统一走同一份排除集，不再各自漂移。
+from tea_agent.path_filters import PRUNE_DIRS  # noqa: E402
+
+# 兼容别名：既有调用点与测试沿用旧名
+_SKIP_DIRS = PRUNE_DIRS
+
+
+def _prune_dirs(dirs, extra=()):
+    """原地裁剪 ``os.walk`` 的 dirs：剔除隐藏目录与 _SKIP_DIRS（外附 extra）。
+
+    隐藏目录一律排除：实测仓库内隐藏目录下的 .py 全为垃圾（``_probe_*.py``、
+    ``.backup_cache_fix/`` 的已删模块备份），无真实源码 —— 而 ``.venv``
+    这类虚拟环境正是漏排除的重灾区。
+    """
+    skip = _SKIP_DIRS | frozenset(extra)
+    dirs[:] = [d for d in dirs if not d.startswith(".") and d not in skip]
+    return dirs
+
+
+def _is_junk_path(rel_path):
+    """判断相对路径是否落在垃圾目录内（用于输出侧二次过滤）。
+
+    ``ctags -R`` 不认 Python 侧的排除集：只要顶层目录（如
+    ``agent-calendar-viewer/``）不被排除，ctags 就会递归进去把
+    ``node_modules`` 下第三方捆绑的 Python 一并索引 —— 实测产出
+    97 MB ctags.json、24 万条 node_modules 符号。故除给 ctags 传
+    ``--exclude`` 外，解析结果也必须再过滤一遍（双保险）。
+    """
+    parts = str(rel_path).replace("\\", "/").split("/")
+    return any(pt.startswith(".") or pt in _SKIP_DIRS for pt in parts if pt)
+
+
 def _log(msg):
     """打印构建日志到 stdout。"""
     print(f"[explr] {msg}")
@@ -65,8 +105,12 @@ def _build_ctags(directory, run_dir):
     src_dirs = []
     for entry in sorted(os.listdir(directory)):
         epath = os.path.join(directory, entry)
-        if os.path.isdir(epath) and not entry.startswith('.') and entry not in ('build', '__pycache__', 'tmp', 'dist'):
+        if os.path.isdir(epath) and not entry.startswith('.') and entry not in _SKIP_DIRS:
             for _root, _dirs, files in os.walk(epath):
+                # 必须裁剪：否则会深入 node_modules 才发现 .py，把
+                # agent-calendar-viewer 这类「自身无 Python 但依赖里全是」的
+                # 目录误判为源码目录并整体纳入 ctags 扫描
+                _prune_dirs(_dirs)
                 if any(f.endswith('.py') for f in files):
                     src_dirs.append(epath)
                     break
@@ -76,9 +120,16 @@ def _build_ctags(directory, run_dir):
         return None, {}
 
     _log(f"ctags 扫描: {', '.join(src_dirs)}")
+    # ctags 不会继承 Python 侧的排除集，必须显式排除；否则顶层目录里的
+    # node_modules / build_mini_dist 会被整体递归索引（实测 97 MB ctags.json）
+    exclude_args = []
+    for _d in sorted(_SKIP_DIRS):
+        exclude_args += [f'--exclude={_d}']
     try:
         result = subprocess.run(
-            [ctags_bin, '-R', '--fields=+nKzS', '--python-kinds=+cfmv', '--output-format=json'] + src_dirs,
+            [ctags_bin, '-R', '--languages=Python',
+             '--fields=+nKzS', '--python-kinds=+cfmv', '--output-format=json']
+            + exclude_args + src_dirs,
             capture_output=True, text=True, encoding='utf-8', errors='replace',
             timeout=60, cwd=directory
         )
@@ -102,11 +153,14 @@ def _build_ctags(directory, run_dir):
             line_num = entry.get('line', '')
             kind = entry.get('kind', '')
             if name:
+                _rel = os.path.relpath(path, directory) if os.path.isabs(path) else path
+                if _is_junk_path(_rel):
+                    continue  # 双保险：ctags 若因版本差异未支持 --exclude，此处兜住
                 if name not in index:
                     index[name] = []
                 index[name].append({
                     'kind': kind,
-                    'path': os.path.relpath(path, directory) if os.path.isabs(path) else path,
+                    'path': _rel,
                     'line': line_num,
                 })
         except json.JSONDecodeError:
@@ -150,7 +204,7 @@ def _build_call_graph(directory):
             self.generic_visit(node)
 
     for root, dirs, files in os.walk(directory):
-        dirs[:] = [d for d in dirs if d not in ('__pycache__', 'build', 'dist', '.git', '.tea_agent_run', 'tmp')]
+        _prune_dirs(dirs)
         for fname in files:
             if not fname.endswith('.py'):
                 continue
@@ -215,7 +269,7 @@ def _build_kb_md(directory, index, calls, defs, classes, run_dir):
 
     modules = {}
     for root, dirs, files in os.walk(directory):
-        dirs[:] = [d for d in dirs if d not in ('__pycache__', 'build', 'dist', '.git', '.tea_agent_run', 'tmp')]
+        _prune_dirs(dirs)
         for fname in files:
             if not fname.endswith('.py'):
                 continue
@@ -318,7 +372,7 @@ def _check_index_stale(directory, run_dir):
     max_src_mtime = 0
     for root, dirs, files in os.walk(directory):
         # 跳过隐藏目录和虚拟环境
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('__pycache__', 'node_modules', 'venv', 'build', 'dist', '.git')]
+        _prune_dirs(dirs)
         for f in files:
             if f.endswith('.py'):
                 mtime = os.path.getmtime(os.path.join(root, f))
@@ -636,7 +690,7 @@ def _action_generate_docs(directory):
     # 收集模块级统计
     mod_stats = defaultdict(lambda: {"lines": 0, "funcs": 0, "classes": 0, "imports": set()})
     for root, dirs, files in os.walk(directory):
-        dirs[:] = [d for d in dirs if d not in ('__pycache__', 'build', 'dist', '.git', '.tea_agent_run', 'tmp', 'docs')]
+        _prune_dirs(dirs, extra=('docs',))
         for fname in files:
             if not fname.endswith('.py'):
                 continue

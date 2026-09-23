@@ -2,6 +2,101 @@
 
 
 ## [Unreleased]
+### Bug Fixes
+- fix(paths): 项目树扫描统一排除第三方依赖与构建产物（新增 `tea_agent/path_filters.py`）
+  - **根因是「各自维护」**：多个扫描器各自内联一份目录排除列表，且普遍漏掉
+    `node_modules` / `build_mini_dist`（部分连 `.venv` 都没排除）。本缺陷
+    已在 `toolkit_explr` 造成实测事故，但**同一模式扩散到了 4 个其它扫描器**：
+    - `auto_fix.py`：`project_root.rglob("*.py")` 缺 node_modules/.venv/dist
+      —— 该模块**会改写文件**，理论上会去「自动修复」第三方捆绑的 Python
+    - `toolkit_format_code.py`：**会原地写回**（black `-i` / clang-format `-i`）
+    - `toolkit_code_review.py`：审查报告混入第三方代码
+    - `toolkit_batch_process.py`：`replace` 动作**会改写**命中的文件
+  - 新增 `tea_agent/path_filters.py` 作为唯一事实源：
+    `PRUNE_DIRS`（27 个排除目录）/ `prune_dirs()`（os.walk 就地裁剪）/
+    `iter_files()`（带裁剪的递归遍历）/ `is_junk_path()`（路径判定）
+  - `toolkit_explr` 改为复用该模块（`_SKIP_DIRS` / `_prune_dirs` /
+    `_is_junk_path` 保留为兼容别名，既有调用点与测试不受影响）
+  - tests: 新增 `test_path_filters.py` 20 项。除常规行为断言外，含**元测试**
+    「禁止任何扫描器再出现内联排除列表」—— 直接钉住本缺陷的根因（各自维护），
+    而非只钉住单次修复结果
+  - 说明：`agent-calendar-viewer/` 是用户自己的 Electron 项目（非外来污染），
+    其 `node_modules/`（348 MB）本就**未被 git 跟踪**（本地 .gitignore 已覆盖）。
+    本次修复针对的是「扫描器不该进这些目录」，与版本控制无关
+
+- fix(explr): 知识库/文档生成把 node_modules 与构建产物当项目源码索引
+  - **现象**：`toolkit_explr` 的 build / generate_docs 扫描了
+    `agent-calendar-viewer/node_modules` 与 `build_mini_dist/`，产物被严重污染 ——
+    `docs/API参考.md` 混入 **344 条 node_modules 伪路径**（如
+    `node_modules/@electron/asar`）、`docs/模块概览.md` 混入 159 处构建产物；
+    `symbol_index.json` 膨胀到 48 MB、`ctags.json` 97 MB，符号数 **59182**（实际仅 ~8800）。
+    这类「新鲜但错误」的产物比「过期但干净」更有害 —— 看不出污染。
+  - **四层根因**（逐层修复，任一层不修都会复发）：
+    1. `_build_ctags` 判断「目录是否含 .py」时用了**未裁剪**的 `os.walk`，
+       深入 node_modules 才发现 .py，于是把 `agent-calendar-viewer/`
+       整体误判为源码目录纳入扫描
+    2. `ctags -R` 未限定语言 → 连 `package-lock.json` 也解析，
+       把其中 `node_modules/xxx` 键当符号写入索引
+    3. 排除集在文件内**散落 5 份且互不相同**，每一份都漏掉
+       `node_modules` / `build_mini_dist`（两处连 `.venv` 都没排除）
+    4. 旧索引文件一旦存在即被复用，陈旧行**永不清理**（`--force` 也不重置）
+  - **修复**：排除集收敛为唯一事实源 `_SKIP_DIRS` + `_prune_dirs()`；
+    ctags 显式传 `--exclude` 且限定 `--languages=Python`；解析输出侧二次过滤兜底；
+    内层 walk 同步裁剪
+  - **效果**：符号数 59182 → 8865；`symbol_index.json` 48 MB → 1.9 MB；
+    文档产物 node_modules/build_mini_dist 路径污染 **归零**，`API参考.md` 3619 → 2052 行
+  - tests: 新增 `test_explr_traversal_excludes.py` 18 项，含端到端用例
+    （在临时工程内构造同名垃圾目录，断言遍历结果不含其中 .py）与元测试
+    （禁止再出现内联排除列表）。已做元验证：移除 `node_modules` 排除后 4 项稳定变红
+
+### Breaking Changes
+- 移除 GUI / CLI / TUI 交互面（交互统一为 Web + REST API）
+  - **`toolkit_question`**：删除 tkinter 弹窗（`_ask_gui` / `_is_gui_running`）与
+    终端 `input()`（`_ask_cli`）两条路径，仅保留 Web 回调 + 无交互兜底。
+    *移除 CLI 路径的首要动因是它会在 main thread 上等 `input()`* ——
+    server 场景下等于挂死；新测试用「一调用即失败的 input」钉住该回归。
+    该工具此前**零测试覆盖**，本次补齐 9 项（含首次让可见性与签名漂移暴露的用例）
+  - **`os_info_injector`**：接口类型收敛为 `web` / `mcp`。两处硬编码的
+    `iface_labels` 去掉 `Tkinter` / `命令行终端` / `终端 TUI`；
+    `_get_interface_hints` 对未知值由「返回空串」改为**回退 web 提示** ——
+    空串会让模型失去全部格式约定（旧行为被既有测试固化成契约，同步修正）
+  - **`config.py`**：删除死配置 `font_size`（HtmlFrame）、`app_font_size`（App GUI）。
+    二者全仓零消费者（仅配置类自引用），属 GUI 删除后的孤儿；同时从运行时白名单
+    与类型表摘除。`chat_page_size` 仍经 API 暴露故保留，仅中性化注释
+  - **`TEA_AGENT_INTERFACE`**：取值由 `web/gui/cli/tui/mcp` 收敛为 `web/mcp`；
+    检测不到特征时回退 **web**（旧实现回退 `cli`，会让提示词按「纯文本、无 HTML
+    渲染」组装，与实际渲染能力相反）
+  - 文档同步：README.md / README.en.md / AGENTS.md / 使用手册 / USER_MANUAL /
+    CACHE_PREFIX_STABILITY / 进化路线图（后者标注为历史快照）；口径统一为
+    **55 工具模块 / 64 注册 / 62 可见**
+
+### Cleanup
+- cleanup(repo): 清除 GUI 残留与包内误置缓存（回收 20.9 MB）
+  - 删除 `tea_agent/_gui/`：GUI 移除后仅剩 `icon.png` 与 explr 产物，无任何源码
+  - 删除 5 个误置在包内的 `.tea_agent_run/`（`tea_agent/`、`server/static/`、
+    `store/`、`toolkit/`、`_gui/`）。它们会让符号扫描把**陈旧索引**当成真实代码
+    读入（本次排查即被其中的 kb.md 误导，翻出已删除的工具名）
+- cleanup(tools): 移除桌面通知能力（`toolkit_notify`）—— 交互面已收敛为 Web
+  - 删除 `tea_agent/toolkit/toolkit_notify.py`：五条平台实现路径（Linux `gi`
+    GI Notify / `notify-send` / `kdialog` / `zenity`、macOS `osascript`、Windows
+    PowerShell Toast）整体下线。这些路径依赖 `gi`（未声明的系统级依赖）
+    与外部可执行文件，在纯 Web 部署下属纯负担
+  - `toolkit_scheduler.py`：删除内部 `_notify`（`notify-send`/`osascript`）及其
+    **5 处调用点**（调度器启动、任务执行结果、新增定时任务、手动执行、新增脚本任务）
+  - `onlinesession.py`：删除 `_notify` / `_notify_reflection_done` /
+    `_notify_prompt_evolved` —— 三者**均为死代码**（全仓无调用方），
+    删除不改变行为
+  - `session/os_info_injector.py`：GUI 提示不再宣传 `toolkit_notify`
+  - `toolkit_harness_schema.py`：`monitoring` 能力位移除 `system_notifications`
+  - `toolkit_diff.py`：工具分类 `导出与分享` → `导出`（分享项仅剩已删除的通知）
+  - 保留：`agent.py` / `server/modules/agent_module.py` 的同名 `_notify`
+    是**回调推送机制**（Web UI 消息流），与桌面通知无关，不属删除范围
+  - 口径同步：**55** 个工具模块 / **64** 注册 / **62** 对模型可见
+  - tests：`test_os_info_injector.py` 的 GUI 提示断言改为「不得再出现通知」
+    （钉住删除，而非仅删断言）；`test_sdk_client.py` 两处 `run_tool` 夹具
+    由 `toolkit_notify` 换为 `toolkit_todo`（该用例验的是 SDK 传参契约，
+    与具体工具无关）
+
 ### Features
 - feat(web): 页面底部显示解码速度 tok/s（usage-bar 新增实时 + 实测两段式）
   - 口径对齐 llama.cpp / vLLM 的 *decode speed*：`本轮输出 token / (首个输出增量 → 流结束)`，

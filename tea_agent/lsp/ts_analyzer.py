@@ -10,6 +10,8 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+from tea_agent.path_filters import is_junk_path, iter_files
+
 logger = logging.getLogger("ts_analyzer")
 
 _TS_LANG = None
@@ -288,10 +290,10 @@ def impact_analysis(project_root: str, filepath: str, symbol: str) -> dict:
     direct_callers = []
     all_calls = defaultdict(list)
 
-    py_files = list(Path(project_root).rglob("*.py"))
+    py_files = iter_files(project_root, "*.py")
     for pf in py_files:
         pf_str = str(pf)
-        if any(s in pf_str for s in (".tea_agent_run", "__pycache__", ".git", "build", "dist")):
+        if is_junk_path(os.path.relpath(pf_str, project_root)):
             continue
         if pf_str == filepath:
             continue
@@ -353,11 +355,11 @@ def impact_analysis(project_root: str, filepath: str, symbol: str) -> dict:
 def build_dependency_graph(project_root: str) -> dict:
     """构建模块级依赖图，检测循环依赖和孤立模块。"""
     graph = defaultdict(lambda: {"imports": [], "imported_by": [], "symbols": []})
-    py_files = list(Path(project_root).rglob("*.py"))
+    py_files = iter_files(project_root, "*.py")
 
     for pf in py_files:
         pf_str = str(pf)
-        if any(s in pf_str for s in (".tea_agent_run", "__pycache__", ".git", "build", "dist")):
+        if is_junk_path(os.path.relpath(pf_str, project_root)):
             continue
         rel = os.path.relpath(pf_str, project_root).replace("\\", "/")
         mod = rel.replace("/", ".").replace(".py", "")

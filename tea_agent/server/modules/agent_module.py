@@ -34,7 +34,7 @@ from .state import (
 from .state import (
     queue_pop,
 )
-from tea_agent.session.message_queue import attach_followup_provider, attach_steering_provider
+from tea_agent.session.message_queue import attach_steering_provider
 
 logger = logging.getLogger("hot_reload.agent")
 
@@ -427,37 +427,11 @@ class AgentModule(HotReloadModule):
 
     # ── 插话（steering）接线 ───────────────────────────────
     @staticmethod
-    def _pi_module():
-        """取 Pi 模块类：优先热重载注册表（拿最新类），未注册则退回直接导入。
-
-        回退很重要：进程内直接跑回合（如 ACP/脚本）时服务端注册表可能尚未初始化，
-        此时若直接放弃，/api/pi/queue 入队的插话/后续任务会静默丢失。
-        """
-        try:
-            from tea_agent.server.module import get_registry
-
-            pi = get_registry().get("pi_features")
-            if pi is not None:
-                return pi
-        except Exception:
-            logger.exception("pi module registry lookup failed")
-        try:
-            from tea_agent.server.modules.pi_features_module import PiFeaturesModule
-
-            return PiFeaturesModule
-        except Exception:
-            logger.exception("pi module import failed")
-            return None
-
-    @staticmethod
     def _steering_drain(topic_id: str) -> list[dict]:
         """按 topic 消费**所有**插话来源，返回待注入项 [{id, message, images?}]。
 
         来源：
           1. 服务端排队队列 ``state.message_queue``（/api/chat/steering、/api/queue）
-          2. Pi 队列 ``pi_features_module``（/api/pi/queue）——它用的是模块私有
-             ``_queues``，与来源 1 不是同一个队列；此处一并对接，否则该接口入队的
-             插话永远到不了模型。
         """
         items: list[dict] = []
         if not topic_id:
@@ -473,45 +447,6 @@ class AgentModule(HotReloadModule):
         except Exception:
             logger.exception("steering drain (server queue) failed")
 
-        # 来源 2：Pi 队列
-        try:
-            pi = AgentModule._pi_module()
-            if pi is not None:
-                drained = pi.queue_drain(topic_id, "steering") or {}
-                for msg in drained.get("messages", []):
-                    items.append({
-                        "id": msg.get("id", ""),
-                        "message": msg.get("content", ""),
-                        "images": [],
-                        "source": "pi_queue",
-                    })
-        except Exception:
-            logger.exception("steering drain (pi queue) failed")
-
-        return items
-
-    @staticmethod
-    def _followup_drain(topic_id: str) -> list[dict]:
-        """按 topic 消费 follow-up 消息（Pi 队列的 type=followup）。
-
-        follow-up 与 steering 共用 Pi 队列，但投递时机不同：steering 在工具轮边界
-        注入；follow-up 在"本轮所有工作完成后"由工具循环投递。
-        """
-        items: list[dict] = []
-        if not topic_id:
-            return items
-        try:
-            pi = AgentModule._pi_module()
-            if pi is not None:
-                drained = pi.queue_drain(topic_id, "followup") or {}
-                for msg in drained.get("messages", []):
-                    items.append({
-                        "id": msg.get("id", ""),
-                        "message": msg.get("content", ""),
-                        "source": "pi_queue",
-                    })
-        except Exception:
-            logger.exception("followup drain (pi queue) failed")
         return items
 
     @classmethod
@@ -537,7 +472,6 @@ class AgentModule(HotReloadModule):
                 })
 
         attach_steering_provider(session, cls._steering_drain, _notify)
-        attach_followup_provider(session, cls._followup_drain)
 
     @classmethod
     def chat_completion(cls, model: str, messages: list[dict],

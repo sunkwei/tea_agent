@@ -1348,6 +1348,20 @@ body {
   background: var(--primary-bg); color: var(--primary);
   border-color: var(--primary);
 }
+/* 选中的历史 tag（作为 #分叉 的分叉点） */
+.jump-chip.selected {
+  background: var(--primary); color: #fff;
+  border-color: var(--primary); font-weight: 600;
+}
+.jump-chip.selected::after {
+  content: ' ⑂'; font-size: 11px;
+}
+/* #分叉 提示条 */
+.jump-fork-hint {
+  font-size: 12px; color: var(--primary);
+  margin-left: auto; padding-left: 10px;
+  flex-shrink: 0; user-select: none;
+}
 /* 跳转高亮闪烁 */
 @keyframes jump-blink {
   0% { background: transparent; }

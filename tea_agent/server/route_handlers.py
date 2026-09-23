@@ -888,6 +888,58 @@ async def handle_web_new_topic(request):
     return JSONResponse({"topic_id": tid, "title": title})
 
 
+async def handle_web_fork_topic(request):
+    """POST /api/topic/{topic_id}/fork — 从指定历史消息处分叉出新主题。
+
+    body:
+        boundary_conv_id: 分叉点会话 ID（**包含**该条）；空则复制全部历史
+        title: 分支描述（可选；默认取边界消息的用户文本摘要）
+
+    新主题标题为 ``#分叉: <描述>`` —— 该前缀受 ``store._topics.is_title_protected``
+    保护，**不会被自动摘要覆盖**（用户显式命名的分支不应被改写）。
+
+    实现复用 ``session_fork.fork_session``（与 toolkit_fork_session 同一事实源）。
+    """
+    topic_id = request.path_params.get("topic_id", "")
+    if not topic_id:
+        return JSONResponse({"ok": False, "error": "topic_id required"}, status_code=400)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    boundary = str(body.get("boundary_conv_id") or "").strip()
+    label = str(body.get("title") or "").strip()
+
+    storage = get_server()._get_storage()
+
+    # 未给描述 → 用边界消息的用户文本作摘要，避免一堆同名的「#分叉: 分支」
+    if not label and boundary:
+        try:
+            convs = storage.get_conversations(topic_id, limit=-1, include_rounds=False)
+            for c in convs:
+                if str(c.get("id")) == boundary:
+                    label = (c.get("user_msg") or "").replace("\n", " ").strip()[:30]
+                    break
+        except Exception:
+            logger.debug("fork: 取边界消息摘要失败", exc_info=True)
+    if not label:
+        label = "分支"
+
+    from tea_agent.session_fork import fork_session
+
+    result = fork_session(
+        storage,
+        source_topic_id=topic_id,
+        title=f"#分叉: {label}",
+        boundary_conv_id=boundary,
+    )
+    if not result.get("ok"):
+        return JSONResponse(result, status_code=400)
+    logger.info("web fork: %s -> %s (boundary=%s)", topic_id,
+                result.get("target_topic_id"), boundary or "-")
+    return JSONResponse(result)
+
+
 async def handle_web_sessions(request):
     """GET /api/sessions — 返回话题列表，包含每个话题的活跃状态。
 
@@ -2134,143 +2186,6 @@ async def handle_reload_routes(request):
     result = get_server().rebuild_routes()
     return JSONResponse(result)
 
-
-# ================================================================
-#  Pi Features — 会话树 / 消息队列 / 手动压缩
-#  借鉴 earendil-works/pi (Agent Harness)：server + web 接口暴露
-# ================================================================
-
-def _pi_module():
-    """惰性获取 PiFeaturesModule（热重载后仍拿到最新类）。"""
-    from tea_agent.server.module import get_registry
-    registry = get_registry()
-    return registry.get("pi_features")
-
-
-async def handle_pi_tree(request):
-    """GET /api/pi/tree/{topic_id} — 查看会话树结构 + 分支列表。"""
-    topic_id = request.path_params.get("topic_id", "")
-    if not topic_id:
-        return JSONResponse({"error": "topic_id required"}, status_code=400)
-    mod = _pi_module()
-    if mod is None:
-        return JSONResponse({"error": "pi_features module not loaded"}, status_code=500)
-    return JSONResponse(mod.tree_get(topic_id))
-
-
-async def handle_pi_tree_branch(request):
-    """POST /api/pi/tree/{topic_id}/branch — 从当前位置创建分支。"""
-    topic_id = request.path_params.get("topic_id", "")
-    if not topic_id:
-        return JSONResponse({"error": "topic_id required"}, status_code=400)
-    body = await request.json()
-    content = (body.get("content") or "").strip()
-    if not content:
-        return JSONResponse({"error": "content required"}, status_code=400)
-    label = (body.get("label") or "").strip()
-    mod = _pi_module()
-    if mod is None:
-        return JSONResponse({"error": "pi_features module not loaded"}, status_code=500)
-    return JSONResponse(mod.tree_branch(topic_id, content, label))
-
-
-async def handle_pi_tree_switch(request):
-    """POST /api/pi/tree/{topic_id}/switch — 切换到指定节点。"""
-    topic_id = request.path_params.get("topic_id", "")
-    body = await request.json()
-    node_id = (body.get("node_id") or "").strip()
-    if not topic_id or not node_id:
-        return JSONResponse({"error": "topic_id and node_id required"}, status_code=400)
-    mod = _pi_module()
-    if mod is None:
-        return JSONResponse({"error": "pi_features module not loaded"}, status_code=500)
-    return JSONResponse(mod.tree_switch(topic_id, node_id))
-
-
-async def handle_pi_tree_summary(request):
-    """GET /api/pi/tree/{topic_id}/summary?node_id=xxx — 分支摘要。"""
-    topic_id = request.path_params.get("topic_id", "")
-    node_id = request.query_params.get("node_id", "") or None
-    if not topic_id:
-        return JSONResponse({"error": "topic_id required"}, status_code=400)
-    mod = _pi_module()
-    if mod is None:
-        return JSONResponse({"error": "pi_features module not loaded"}, status_code=500)
-    return JSONResponse(mod.tree_summary(topic_id, node_id))
-
-
-async def handle_pi_tree_append(request):
-    """POST /api/pi/tree/{topic_id}/append — 向当前分支追加消息。"""
-    topic_id = request.path_params.get("topic_id", "")
-    body = await request.json()
-    role = (body.get("role") or "user").strip()
-    content = body.get("content")
-    if not topic_id or content is None:
-        return JSONResponse({"error": "topic_id and content required"}, status_code=400)
-    mod = _pi_module()
-    if mod is None:
-        return JSONResponse({"error": "pi_features module not loaded"}, status_code=500)
-    return JSONResponse(mod.tree_append(topic_id, role, content))
-
-
-async def handle_pi_queue_push(request):
-    """POST /api/pi/queue/{topic_id} — 推送 steering/followup 消息。"""
-    topic_id = request.path_params.get("topic_id", "")
-    body = await request.json()
-    content = (body.get("content") or "").strip()
-    msg_type = (body.get("type") or "steering").strip()
-    if not topic_id or not content:
-        return JSONResponse({"error": "topic_id and content required"}, status_code=400)
-    if msg_type not in ("steering", "followup"):
-        return JSONResponse({"error": "type must be steering|followup"}, status_code=400)
-    mod = _pi_module()
-    if mod is None:
-        return JSONResponse({"error": "pi_features module not loaded"}, status_code=500)
-    return JSONResponse(mod.queue_push(topic_id, content, msg_type))
-
-
-async def handle_pi_queue_status(request):
-    """GET /api/pi/queue/{topic_id} — 查看消息队列状态。"""
-    topic_id = request.path_params.get("topic_id", "")
-    if not topic_id:
-        return JSONResponse({"error": "topic_id required"}, status_code=400)
-    mod = _pi_module()
-    if mod is None:
-        return JSONResponse({"error": "pi_features module not loaded"}, status_code=500)
-    return JSONResponse(mod.queue_status(topic_id))
-
-
-async def handle_pi_queue_clear(request):
-    """DELETE /api/pi/queue/{topic_id} — 清空消息队列。"""
-    topic_id = request.path_params.get("topic_id", "")
-    if not topic_id:
-        return JSONResponse({"error": "topic_id required"}, status_code=400)
-    mod = _pi_module()
-    if mod is None:
-        return JSONResponse({"error": "pi_features module not loaded"}, status_code=500)
-    return JSONResponse(mod.queue_clear(topic_id))
-
-
-async def handle_pi_compact(request):
-    """POST /api/pi/compact/{topic_id} — 手动压缩 topic 上下文。"""
-    topic_id = request.path_params.get("topic_id", "")
-    if not topic_id:
-        return JSONResponse({"error": "topic_id required"}, status_code=400)
-    body = await request.json() if request.headers.get("content-length") else {}
-    force = bool(body.get("force", False))
-    instructions = (body.get("instructions") or "").strip()
-    mod = _pi_module()
-    if mod is None:
-        return JSONResponse({"error": "pi_features module not loaded"}, status_code=500)
-    return JSONResponse(mod.compact_topic(topic_id, force=force, instructions=instructions))
-
-
-async def handle_pi_stats(request):
-    """GET /api/pi/stats — Pi 功能模块统计。"""
-    mod = _pi_module()
-    if mod is None:
-        return JSONResponse({"error": "pi_features module not loaded"}, status_code=500)
-    return JSONResponse(mod.stats())
 
 # ================================================================
 #  Model Management (providers / models / custom providers)

@@ -6,6 +6,27 @@ from ._component import StoreComponent
 
 logger = logging.getLogger("Storage.Topics")
 
+# ── 受保护的标题前缀（唯一事实源）────────────────────────────────
+# 命中任一前缀的标题视为「用户/系统显式设定」，禁止被自动摘要覆盖：
+#   ※     — toolkit_set_topic_title 手动设置
+#   #分叉  — 会话分叉生成（用户显式命名分支，见 server fork API）
+# 消费方：TopicStore.update_topic_title（写侧）+ agent_pipeline.auto_summary（读侧）。
+# 两处必须用同一判定，否则会出现「读侧跳过、写侧仍覆盖」的静默失效。
+PROTECTED_TITLE_PREFIXES = ("※", "#分叉")
+
+
+def is_title_protected(title: str | None) -> bool:
+    """标题是否受保护（不可被自动摘要覆盖）。
+
+    Args:
+        title: 主题标题（None / 空串视为未保护）
+
+    Returns:
+        True 表示受保护
+    """
+    return any((title or "").startswith(p) for p in PROTECTED_TITLE_PREFIXES)
+
+
 class TopicStore(StoreComponent):
     """主题管理：创建、更新、删除、列表，以及 Token 消耗统计。"""
 
@@ -28,11 +49,11 @@ class TopicStore(StoreComponent):
             return tid
 
     def update_topic_title(self, topic_id: str, new_title: str):
-        """Update topic title. ※ 前缀的主题标题不可被自动摘要覆盖。
+        """Update topic title. 受保护前缀的标题不可被自动摘要覆盖。
 
         Args:
-            topic_id: Description.
-            new_title: Description.
+            topic_id: 主题 ID
+            new_title: 新标题
         """
         old = self.get_topic(topic_id)
         if old:
@@ -40,9 +61,9 @@ class TopicStore(StoreComponent):
             if old_title.startswith("chat_room_"):
                 logger.debug(f"拒绝修改 chat_room 主题标题: {old_title}")
                 return
-            # ※ 前缀表示手动设置的标题，禁止自动摘要覆盖（竞态安全）
-            if old_title.startswith("※") and not new_title.startswith("※"):
-                logger.debug(f"拒绝覆盖 ※ 手动标题: {old_title}")
+            # 受保护前缀（※ 手动标题 / #分叉 分支标题）禁止被自动摘要覆盖（竞态安全）
+            if is_title_protected(old_title) and not is_title_protected(new_title):
+                logger.debug(f"拒绝覆盖受保护标题: {old_title}")
                 return
         c = self.conn.cursor()
         c.execute(

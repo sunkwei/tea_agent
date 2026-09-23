@@ -56,7 +56,7 @@ python -c "import pathlib; print(len(list(pathlib.Path('tea_agent/toolkit').glob
 ## 项目结构
 
 ```
-tea_agent/                          # 40 个顶层模块 + 15 个子包
+tea_agent/                          # 40 个顶层模块 + 14 个子包（截至 2026-09-23 实测）
 ├── agent.py                        # 统一 Agent 类（三种模式入口）+ 后台线程投递
 ├── agent_pipeline.py / session_pipeline.py   # 后处理流水线（摘要/记忆提取/任务评估）
 ├── agent_background.py             # 后台线程：定时任务调度 + 打断模式分析（M3/M4）
@@ -74,6 +74,8 @@ tea_agent/                          # 40 个顶层模块 + 15 个子包
 ├── tool_hooks.py                   # pre/post 工具 hook（approval/audit 以此挂载）
 ├── evolution_gate.py               # ★ 进化闸门（EvolutionBench keep-or-rollback）
 ├── storage_scope.py                # 存储作用域：项目级 .tea_agent_run/storage.db → 临时目录回退
+├── session_fork.py                 # ★ 会话分叉共享实现（Web `#分叉` 与 toolkit_fork_session 同一事实源）
+├── path_filters.py                 # ★ 项目树遍历排除集（唯一事实源：PRUNE_DIRS/prune_dirs/iter_files）
 ├── audit_log.py                    # 审计日志（hash 链防篡改）
 ├── memory.py / project_memory.py / cross_topic_summarizer.py   # 记忆与跨主题汇总
 ├── prompt_manager.py               # 系统提示词管理

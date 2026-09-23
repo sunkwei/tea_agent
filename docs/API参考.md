@@ -1,6 +1,6 @@
 # tea_agent API 参考
 
-> 自动生成: 2026-09-23 17:17  |  函数: 4802  |  类: 633  |  符号: 6462
+> 自动生成: 2026-09-23 17:42  |  函数: 4762  |  类: 630  |  符号: 6414
 
 ## 模块 `benchmark`
 
@@ -1241,6 +1241,7 @@
 | `__all__` | `tea_agent\permission.py:10` | variable |
 | `__all__` | `tea_agent\project_memory.py:24` | variable |
 | `__all__` | `tea_agent\prompt_manager.py:25` | variable |
+| `__all__` | `tea_agent\session_fork.py:26` | variable |
 | `__all__` | `tea_agent\session_pipeline.py:16` | variable |
 | `__all__` | `tea_agent\session_ref.py:29` | variable |
 | `__all__` | `tea_agent\setup_wizard.py:28` | variable |
@@ -1490,6 +1491,7 @@
 | `filter_tools` | `tea_agent\onlinesession.py:175` | function |
 | `filter_tools_by_profile` | `tea_agent\tool_profiles.py:167` | function |
 | `find_project_root` | `tea_agent\agents_md_loader.py:60` | function |
+| `fork_session` | `tea_agent\session_fork.py:30` | function |
 | `function` | `tea_agent\litesession.py:494` | variable |
 | `gate_mode` | `tea_agent\evolution_gate.py:30` | function |
 | `gate_threshold` | `tea_agent\evolution_gate.py:51` | function |
@@ -1525,6 +1527,7 @@
 | `is_junk_path` | `tea_agent\path_filters.py:67` | function |
 | `is_opencode_endpoint` | `tea_agent\api_headers.py:98` | function |
 | `is_temp_fallback` | `tea_agent\storage_scope.py:157` | function |
+| `is_title_protected` | `tea_agent\agent_pipeline.py:141` | function |
 | `iter_files` | `tea_agent\path_filters.py:85` | function |
 | `kb_dir` | `tea_agent\config.py:151` | variable |
 | `keep_recent` | `tea_agent\auto_compact.py:115` | variable |
@@ -1565,6 +1568,7 @@
 | `logger` | `tea_agent\prompt_manager.py:23` | variable |
 | `logger` | `tea_agent\provider_store.py:49` | variable |
 | `logger` | `tea_agent\reflection.py:17` | variable |
+| `logger` | `tea_agent\session_fork.py:23` | variable |
 | `logger` | `tea_agent\session_memory_component.py:20` | variable |
 | `logger` | `tea_agent\session_pipeline.py:14` | variable |
 | `logger` | `tea_agent\session_ref.py:27` | variable |

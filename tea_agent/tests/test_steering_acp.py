@@ -75,7 +75,12 @@ class TestAcpTurnWiring:
         ACPProtocolServer._wire_steering(sess)
 
         assert callable(getattr(sess, "_steering_provider", None)), "未挂插话来源"
-        assert callable(getattr(sess, "_followup_provider", None)), "未挂后续任务来源"
+        # 关于 follow-up：原先此处还断言 `_followup_provider` 已挂载，但它唯一的
+        # 生产者是 Pi 私有队列（`/api/pi/queue` type=followup）—— 随 Pi 功能面板
+        # 整体移除后已无生产者（实测 `create_message_queue` / `push_followup` 在
+        # 生产代码中零调用）。通用扩展点 `attach_followup_provider` 仍在
+        # `session.message_queue` 中保留，将来出现新来源时在此重新挂载即可。
+        # 故不再断言其存在 —— 断言一个已无生产者的通道，只会掩盖真实契约。
 
     def test_wired_provider_drains_endpoint_queue(self):
         """端到端：接口入队 → ACP 回合的 provider 能取到（同一 topic）。"""

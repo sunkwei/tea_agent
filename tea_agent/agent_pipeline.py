@@ -133,7 +133,15 @@ def auto_summary(
     if not _HAVE_TOPIC_SUMMARY:
         return None, _empty_usage()
     tp = agent._db.get_topic(topic_id)
-    if tp and (tp.get("title") or "").startswith("※"):
+    # 受保护前缀（※ 手动标题 / #分叉 分支标题）跳过自动摘要。
+    # 判定与写侧 TopicStore.update_topic_title 共用同一函数，避免两处漂移。
+    try:
+        from tea_agent.store._topics import is_title_protected
+    except Exception:  # 极端环境下退化为内联判定，不阻断摘要主流程
+        def is_title_protected(_t: str | None) -> bool:
+            return (_t or "").startswith(("※", "#分叉"))
+
+    if tp and is_title_protected(tp.get("title")):
         return None, _empty_usage()
     recent = agent._db.get_recent_conversations(topic_id, limit=3)
     if not recent:

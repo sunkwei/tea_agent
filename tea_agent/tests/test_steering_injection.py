@@ -6,7 +6,7 @@
   使输入无需等待会话结束即可在下一轮生效；注入后通过 _steering_notify
   通知前端（SSE steering_injected），前端据此移除本地排队项避免重复发送。
 
-  follow-up（/api/pi/queue type=followup）语义不同：**本轮工作完成后**投递，
+  follow-up 语义不同：**本轮工作完成后**投递，
   由工具循环自然收尾时注入（[后续任务] 前缀）并再跑一轮。
 """
 
@@ -362,25 +362,6 @@ class TestServerEntryPointsWired:
         assert items[0]["message"] == "插话内容"
         # 已被消费（幂等：再次 drain 为空）
         assert AgentModule._steering_drain("topic-drain") == []
-
-    def test_steering_drain_pulls_pi_queue(self, monkeypatch):
-        """Pi 队列（/api/pi/queue）必须一并对接，否则该接口入队的插话永远到不了模型。"""
-        from tea_agent.server.module import get_registry
-        from tea_agent.server.modules.agent_module import AgentModule
-
-        class _FakePi:
-            def queue_drain(self, topic_id, msg_type="steering"):
-                if topic_id == "topic-pi":
-                    return {"ok": True, "messages": [
-                        {"id": "p1", "content": "来自 Pi 队列", "type": "steering"},
-                    ]}
-                return {"ok": True, "messages": []}
-
-        monkeypatch.setattr(get_registry(), "get", lambda name: _FakePi() if name == "pi_features" else None)
-        items = AgentModule._steering_drain("topic-pi")
-        assert any(i["id"] == "p1" and i["message"] == "来自 Pi 队列" for i in items)
-        assert all(i.get("source") == "pi_queue" for i in items)
-
 
 class TestMessageQueueThreadSafety:
     def test_concurrent_push_ids_are_unique(self):

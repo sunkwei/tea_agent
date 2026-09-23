@@ -365,7 +365,7 @@ def drain_followup_items(session) -> list[dict]:
     """收集所有来源的 follow-up 消息（消费式）。
 
     来源：
-      1. ``session._followup_provider``（由服务端回合入口挂载，如 /api/pi/queue）
+      1. ``session._followup_provider``（由回合入口挂载的通用扩展点）
       2. ``session.context.message_queue`` 的 followup 队列
 
     Returns:

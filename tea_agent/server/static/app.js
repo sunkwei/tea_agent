@@ -625,13 +625,18 @@ window.openImageOverlay = function(src) {
 let _msgCounter = 0; // 全局递增消息计数器
 let _turnCounter = 0; // 对话轮次计数器（每条用户消息 = 1 轮）
 
-function addMessage(role, content, images) {
+function addMessage(role, content, images, convId) {
   const welcome = document.querySelector('.welcome');
   if (welcome) welcome.remove();
 
   const div = document.createElement('div');
   div.className = 'msg ' + (role === 'user' ? 'user' : 'assistant');
   div.dataset.msgIdx = _msgCounter++; // 给每条消息一个唯一递增索引
+  // 后端会话 ID：分叉（#分叉）需要它作为边界点。仅历史加载时已知；
+  // 刚发出的消息尚未落库，此时为空 —— 分叉以历史 tag 为锚点，属预期。
+  if (convId !== undefined && convId !== null && convId !== '') {
+    div.dataset.convId = String(convId);
+  }
 
   // 轮次标记：每条用户消息视为一轮，插入明显的分隔条
   if (role === 'user') {
@@ -735,8 +740,15 @@ function removeLoading() {
 
 // ── 历史会话跳转栏 ──
 /**
+ * 选中的分叉点（历史 tag）：{convId, idx, snippet} | null
+ * 由跳转栏点选，供输入框的 `#分叉` 前缀消费。
+ */
+let _forkAnchor = null;
+
+/**
  * 渲染跳转栏：遍历 #msgs 中的 .msg.user，生成可点击的 chip
- * 每个 chip 显示用户消息的前 20 字摘要，点击滚动到对应消息
+ * 每个 chip 显示用户消息的前 20 字摘要，点击滚动到对应消息；
+ * 若该消息有后端会话 ID（历史消息），点击同时选为 `#分叉` 的分叉点。
  */
 function renderJumpBar() {
   const bar = document.getElementById('jump-bar');
@@ -751,6 +763,7 @@ function renderJumpBar() {
   let html = '<span class="jump-bar-label">📜 跳转</span>';
   userMsgs.forEach(function(msg) {
     const idx = msg.dataset.msgIdx;
+    const convId = msg.dataset.convId || '';
     // 提取消息文本摘要（前 20 字）
     const bubble = msg.querySelector('.msg-bubble');
     let snippet = '';
@@ -761,10 +774,87 @@ function renderJumpBar() {
     snippet = snippet.replace(/\(图片\)/g, '').trim();
     if (snippet.length > 20) snippet = snippet.slice(0, 20) + '…';
     if (!snippet) snippet = '(图片)';
-    html += '<span class="jump-chip" onclick="jumpToMessage(' + idx + ')" title="' + escAttr(bubble ? bubble.textContent.trim().slice(0, 60) : '') + '">'
+    const isSel = (_forkAnchor && _forkAnchor.idx === idx) ? ' selected' : '';
+    // 无 convId（本会话刚发、尚未回填）→ 只能跳转，不能作分叉点
+    const action = convId
+      ? 'onclick="selectJumpChip(' + idx + ',\'' + convId + '\')"'
+      : 'onclick="jumpToMessage(' + idx + ')"';
+    const tip = convId
+      ? '点击跳转，并选为 #分叉 的分叉点'
+      : (bubble ? bubble.textContent.trim().slice(0, 60) : '');
+    html += '<span class="jump-chip' + isSel + '" ' + action
+      + ' title="' + escAttr(tip) + '">'
       + esc(snippet) + '</span>';
   });
+  if (_forkAnchor) {
+    html += '<span class="jump-fork-hint">⑂ 已选分叉点 · 输入 #分叉 从此处分叉</span>';
+  }
   bar.innerHTML = html;
+}
+
+/**
+ * 点选跳转 chip：跳转到该消息，并把它设为 `#分叉` 的分叉点。
+ * 再次点击同一个 chip → 取消选择。
+ */
+window.selectJumpChip = function selectJumpChip(idx, convId) {
+  if (_forkAnchor && _forkAnchor.idx === idx) {
+    _forkAnchor = null;
+  } else {
+    const el = document.querySelector('.msg[data-msg-idx="' + idx + '"]');
+    const bubble = el ? el.querySelector('.msg-bubble') : null;
+    _forkAnchor = {
+      idx: idx,
+      convId: convId,
+      snippet: bubble
+        ? bubble.textContent.replace(/\s+/g, ' ').trim().replace(/\(图片\)/g, '').slice(0, 30)
+        : ''
+    };
+  }
+  jumpToMessage(idx);
+  renderJumpBar();
+};
+
+/**
+ * 执行 `#分叉`：以选中的历史 tag 为分叉点，把该 tag **及其之前**的对话
+ * 复制成新主题。新主题标题为 `#分叉: <描述>`，该前缀受后端保护，
+ * 不会被自动摘要改写。
+ *
+ * @param {string} raw 输入框原文（形如 `#分叉 实验A` 或 `#分叉: 实验A`）
+ */
+async function _doForkTopic(raw) {
+  const input = $('ci');
+  if (!currentTopicId) {
+    toast('请先打开一个话题再分叉', 'warning');
+    return;
+  }
+  if (!_forkAnchor) {
+    toast('请先在上方「📜 跳转」区点选一个历史 tag 作为分叉点', 'warning');
+    return;
+  }
+  // 描述：`#分叉` 之后的文本（容忍 `:` / `：` 分隔）；缺省用分叉点消息摘要
+  const desc = raw.replace(/^#分叉\s*[:：]?\s*/, '').trim();
+  const label = desc || _forkAnchor.snippet || '分支';
+
+  try {
+    const r = await fetch('/api/topic/' + encodeURIComponent(currentTopicId) + '/fork', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ boundary_conv_id: _forkAnchor.convId, title: label }),
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      toast('❌ 分叉失败: ' + (d.error || '未知错误'), 'error');
+      return;
+    }
+    input.value = '';
+    input.style.height = 'auto';
+    _forkAnchor = null;
+    toast('⑂ 已分叉到新主题：' + (d.title || ''), 'success');
+    await refreshTopics();
+    if (d.target_topic_id) openTopic(d.target_topic_id, d.title || '');
+  } catch (e) {
+    toast('❌ 分叉请求失败: ' + e.message, 'error');
+  }
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1284,6 +1374,13 @@ function _processQueueAfterStream() {
 }
 
 window.sendMessage = async function() {
+  // ── #分叉：从选中的历史 tag 分叉出新主题（属控制命令，不发送消息）──
+  const _forkRaw = $('ci').value.trim();
+  if (_forkRaw.startsWith('#分叉')) {
+    await _doForkTopic(_forkRaw);
+    return;
+  }
+
   // 如果正在生成中 → 入队排队，不中断
   if (isStreaming) {
     const input = $('ci');
@@ -1947,10 +2044,12 @@ window.openTopic = async function(id, title) {
     $('msgs').innerHTML = '';
     _msgCounter = 0;  // 切换话题重置消息计数器
     _turnCounter = 0; // 切换话题重置轮次计数器
+    _forkAnchor = null; // 分叉点属于具体话题，切换即失效
     _userNearBottom = true;  // 切换话题重置滚动状态
     d.conversations.forEach(function(c) {
-      if (c.user_msg) addMessage('user', c.user_msg);
-      if (c.ai_msg) addMessage('assistant', c.ai_msg);
+      // 传入会话 id：跳转栏据此把「历史 tag」映射为分叉边界点
+      if (c.user_msg) addMessage('user', c.user_msg, null, c.id);
+      if (c.ai_msg) addMessage('assistant', c.ai_msg, null, c.id);
     });
     // 加载旧话题 → 滚动到底部（显示最新消息）
     scrollBottom();
@@ -3684,156 +3783,6 @@ window.closeFileView = function(btn) {
 window.showModal = showModal;
 window.closeModal = closeModal;
 window.toast = toast;
-
-// ═══════════════════════════════════════════════════════
-//   Pi Features — 会话树 / 消息队列 / 压缩 (server+web)
-//   借鉴 earendil-works/pi Agent Harness
-// ═══════════════════════════════════════════════════════
-
-function _piTopicId() {
-  if (!currentTopicId) { toast('请先选择/创建话题', 'warning'); return null; }
-  return currentTopicId;
-}
-
-window.showPiModal = function() {
-  showModal('modal-pi');
-  piRefresh();
-};
-
-function _piFetch(url, opts) {
-  // 8s 超时兜底：任何情况下都不得让面板永远停在"加载中…"
-  opts = opts || {};
-  if (!opts.signal) opts.signal = AbortSignal.timeout(8000);
-  return fetch(url, opts).then(function(r) { return r.json(); });
-}
-
-// 刷新面板：会话树 + 队列状态
-window.piRefresh = function() {
-  if (!currentTopicId) {
-    // 无当前话题（页面刷新/新对话后）→ 自动选择最近活跃话题，
-    // 避免面板永远停留在"加载中…"
-    fetch('/api/sessions').then(function(r) { return r.json(); }).then(function(d) {
-      var topics = d.sessions || d.data || [];
-      var best = topics[0] || null;
-      if (best && best.id) {
-        currentTopicId = best.id;
-        openTopic(best.id, best.title || '');
-        piRefresh();
-      } else {
-        var treeEl = $('pi-tree-view');
-        if (treeEl) treeEl.textContent = '⚠️ 暂无会话。请先发送消息或选择左侧话题。';
-      }
-    }).catch(function() {
-      var treeEl = $('pi-tree-view');
-      if (treeEl) treeEl.textContent = '⚠️ 请先选择/创建话题';
-    });
-    return;
-  }
-  _piRenderTree(currentTopicId);
-  _piRenderQueue(currentTopicId);
-};
-
-// 渲染会话树视图
-function _piRenderTree(tid) {
-  var treeEl = $('pi-tree-view');
-  if (treeEl) treeEl.textContent = '加载中…';
-  _piFetch('/api/pi/tree/' + encodeURIComponent(tid)).then(function(d) {
-    if (!treeEl) return;
-    if (!d.ok) { treeEl.textContent = '错误: ' + (d.error || 'unknown'); return; }
-    var lines = [];
-    lines.push('📊 节点 ' + d.stats.total_nodes + ' | 分支 ' + d.stats.branch_count + ' | 深度 ' + d.stats.current_depth);
-    lines.push('── 当前路径 ──');
-    (d.current_path || []).forEach(function(n) {
-      lines.push('  [' + n.role + '] ' + (n.content || '').replace(/\n/g, ' ').slice(0, 50));
-    });
-    lines.push('── 分支 ──');
-    (d.branches || []).forEach(function(b) {
-      lines.push('  🌿 ' + b.node_id + ' 「' + b.label + '」' + (b.summary ? ' — ' + b.summary.slice(0, 40) : ''));
-    });
-    treeEl.textContent = lines.join('\n');
-  }).catch(function(e) { if (treeEl) treeEl.textContent = '加载失败: ' + e; });
-}
-
-// 渲染消息队列状态
-function _piRenderQueue(tid) {
-  _piFetch('/api/pi/queue/' + encodeURIComponent(tid)).then(function(d) {
-    var qEl = $('pi-queue-view');
-    if (!qEl) return;
-    if (!d.ok) { qEl.textContent = '错误'; return; }
-    var parts = [];
-    (d.steering || []).forEach(function(m) { parts.push('⚡steering: ' + m.content.slice(0, 40)); });
-    (d.followup || []).forEach(function(m) { parts.push('🔁followup: ' + m.content.slice(0, 40)); });
-    qEl.textContent = parts.length ? parts.join('\n') : '（队列为空）';
-  });
-}
-
-// 创建分支
-window.piBranch = function() {
-  var tid = _piTopicId(); if (!tid) return;
-  var content = ($('pi-branch-content') || {}).value || '';
-  var label = ($('pi-branch-label') || {}).value || '';
-  if (!content.trim()) { toast('请输入分支消息', 'warning'); return; }
-  _piFetch('/api/pi/tree/' + encodeURIComponent(tid) + '/branch', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: content, label: label })
-  }).then(function(d) {
-    var el = $('pi-branch-result');
-    if (el) el.textContent = d.ok ? '✅ 分支已创建: ' + d.node_id + (d.label ? ' 「' + d.label + '」' : '') : '❌ ' + (d.error || '');
-    if ($('pi-branch-content')) $('pi-branch-content').value = '';
-    piRefresh();
-  });
-};
-
-// 推送队列消息
-window.piQueuePush = function() {
-  var tid = _piTopicId(); if (!tid) return;
-  var content = ($('pi-queue-content') || {}).value || '';
-  var type = ($('pi-queue-type') || {}).value || 'steering';
-  if (!content.trim()) { toast('请输入消息内容', 'warning'); return; }
-  _piFetch('/api/pi/queue/' + encodeURIComponent(tid), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: content, type: type })
-  }).then(function(d) {
-    if (d.ok) { toast('📨 ' + type + ' 已入队', 'success'); }
-    else toast('❌ ' + (d.error || '入队失败'), 'error');
-    if ($('pi-queue-content')) $('pi-queue-content').value = '';
-    piRefresh();
-  });
-};
-
-// 清空队列
-window.piQueueClear = function() {
-  var tid = _piTopicId(); if (!tid) return;
-  _piFetch('/api/pi/queue/' + encodeURIComponent(tid), { method: 'DELETE' })
-    .then(function(d) {
-      toast(d.ok ? '🗑 队列已清空' : '清空失败', d.ok ? 'success' : 'error');
-      piRefresh();
-    });
-};
-
-// 手动压缩
-window.piCompact = function() {
-  var tid = _piTopicId(); if (!tid) return;
-  var el = $('pi-compact-result');
-  if (el) el.textContent = '压缩中…';
-  _piFetch('/api/pi/compact/' + encodeURIComponent(tid), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ force: true })
-  }).then(function(d) {
-    if (el) {
-      if (d.ok && d.compacted) {
-        el.textContent = '✅ 压缩完成: ' + d.tokens_before + '→' + d.tokens_after + ' tokens';
-      } else if (d.ok) {
-        el.textContent = 'ℹ️ 未触发压缩 ' + (d.tokens_before || 0) + ' tokens';
-      } else {
-        el.textContent = '❌ ' + (d.error || '压缩失败');
-      }
-    }
-  });
-};
 
 // ══════════════════════════════════════════════════
 //  MODEL SWITCH (供应商 → 模型 两级切换，模型自带窗口/输出上限)

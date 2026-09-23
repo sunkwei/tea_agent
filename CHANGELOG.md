@@ -2,7 +2,31 @@
 
 
 ## [Unreleased]
+### Features
+- feat(web): 跳转栏选「历史 tag」+ 输入 `#分叉` 前缀创建分支主题
+  - **入口**：输入框上方的「📜 跳转」区点选某条历史消息（该 chip 高亮并显示 `⑂`），
+    再在输入框以 `#分叉` 开头（如 `#分叉 实验A`）回车 → 以该 tag **及其之前**的
+    对话为历史，创建新主题
+  - **标题**：`#分叉: <描述>`；描述缺省时取分叉点消息摘要。该前缀受
+    `store._topics.is_title_protected` 保护，**不会被自动摘要改写**（与 `※` 同级）
+  - **边界语义**：`fork_topic` 用 `rowid <= boundary_rowid`，即**包含**选中的 tag
+  - **共享实现**：新增 `tea_agent/session_fork.py`，Web 端与 `toolkit_fork_session`
+    共用同一套「建主题 → 复制会话 → 复制事件流 → 取血统」逻辑，避免两处漂移
+  - 新 API：`POST /api/topic/{topic_id}/fork`（body: `boundary_conv_id` / `title`）
+  - 标题保护收敛为唯一判定 `is_title_protected`（`PROTECTED_TITLE_PREFIXES`），
+    读侧 `auto_summary` 与写侧 `update_topic_title` **共用**，杜绝「读侧跳过、写侧覆盖」
+
 ### Breaking Changes
+- 移除 Web 顶栏「🧩 Pi 功能」面板及其全部相关功能（会话树 / 消息队列 / 手动压缩）
+  - 删除 `server/modules/pi_features_module.py`、`session/session_tree.py`
+    （删除 Pi 后成为死代码）及 `/api/pi/*` 全部 10 条路由
+  - 删除接线：`store/_conversations._sync_tree`（会话树同步钩子）、
+    `AgentModule._pi_module` / `_followup_drain`（Pi 私有队列消费者）
+  - 前端：移除 🧩 按钮、`modal-pi` 面板与 `showPiModal`/`piRefresh`/`piBranch`/
+    `piQueuePush`/`piQueueClear`/`piCompact` 六个函数
+  - **不受影响**：插话（steering）与 follow-up 的主通路走
+    `state.message_queue` + `session.message_queue`，与 Pi 私有队列无关；
+    上下文压缩的自动通路（`summarize_old_history` + 水位线裁剪）保持不变
 - 存储位置改为**启动目录** `.tea_agent_run/storage.db`，不可写时回退系统临时目录并提示备份
   - **db 改名**：`chat_history.db` → `storage.db`。同名目录下若存在旧库而新名不存在，
     启动时**自动迁移**（连带 `-wal` / `-shm`，避免留下半套 WAL 导致数据不一致）；

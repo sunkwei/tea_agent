@@ -3228,11 +3228,21 @@ window.applyConfig = async function() {
     updates.enable_thinking = $('cfg-thinking').checked;
 
     if (Object.keys(updates).length > 0) {
-      await fetch('/api/config', {
+      // 运行时参数（max_iterations/keep_turns/enable_thinking）走 PUT /api/config。
+      // 必须检查响应：后端在长驻 Agent 未加载时返回 {"ok": false, errors:["Agent not loaded"]}，
+      // 早期实现只 await 不看结果，界面仍报「✅ 已应用」—— 参数没落地却显示成功。
+      const rc = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
+      let rd = {};
+      try { rd = await rc.json(); } catch(e) { rd = {}; }
+      if (!rc.ok || rd.ok === false) {
+        const msg = (rd.errors && rd.errors.join(', ')) || rd.error || ('HTTP ' + rc.status);
+        showCfgStatus('失败: 运行时参数未生效 — ' + msg, 'error');
+        return;
+      }
     }
 
     showCfgStatus('✅ 已应用: ' + d.model, 'success');

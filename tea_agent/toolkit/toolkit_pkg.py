@@ -57,7 +57,6 @@ def toolkit_pkg(action: str, packages: str = None, module: str = None):
             "PIL": "Pillow",
             "jieba": "jieba",
             "mss": "mss",
-            "numpy": "numpy",
             "requests": "requests",
             "pytesseract": "pytesseract",
             "pydantic": "pydantic",

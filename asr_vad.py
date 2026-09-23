@@ -13,6 +13,10 @@ Usage:
     segs = vad.finalize()
 
 Dependencies: numpy, onnxruntime, scipy (for test only)
+
+注：本脚本位于仓库根目录，**不属于** `tea_agent` 包，因此它的 numpy 依赖
+不由包安装（`pyproject.toml` 的 dependencies 已移除 numpy，仅 `[demo]` extra 保留）。
+直接运行本脚本前请自行 `pip install numpy onnxruntime`。
 """
 import os, math
 from typing import List

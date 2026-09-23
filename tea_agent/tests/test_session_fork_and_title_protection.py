@@ -66,7 +66,7 @@ def test_protected_prefixes_include_both():
 
 @pytest.fixture()
 def storage(tmp_path):
-    return Storage(str(tmp_path / "storage.db"))
+    return Storage(str(tmp_path / "chat_history.db"))
 
 
 @pytest.mark.parametrize("protected_title", ["※手动标题", "#分叉: 实验A"])

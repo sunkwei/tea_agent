@@ -924,7 +924,7 @@ class OnlineToolSession(BaseChatSession):
     def _emit_storage_notice(self, callback: Callable[[str], None]) -> None:
         """临时目录回退时，向用户明示 db 路径并要求手动备份。
 
-        仅当 storage.db 落在**系统临时目录**（启动目录不可写）时发声 —— 这是
+        仅当数据库落在**系统临时目录**（启动目录不可写）时发声 —— 这是
         唯一会让用户丢数据的情形（重启 / 清理临时文件即消失）。
 
         ⚠️ 经 ``callback`` 发出而**不并入 full_reply**：full_reply 会被 server

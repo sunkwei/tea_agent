@@ -27,10 +27,10 @@
   - **不受影响**：插话（steering）与 follow-up 的主通路走
     `state.message_queue` + `session.message_queue`，与 Pi 私有队列无关；
     上下文压缩的自动通路（`summarize_old_history` + 水位线裁剪）保持不变
-- 存储位置改为**启动目录** `.tea_agent_run/storage.db`，不可写时回退系统临时目录并提示备份
-  - **db 改名**：`chat_history.db` → `storage.db`。同名目录下若存在旧库而新名不存在，
-    启动时**自动迁移**（连带 `-wal` / `-shm`，避免留下半套 WAL 导致数据不一致）；
-    迁移失败时**沿用旧路径**而不是新建空库 —— 宁可名字旧，也不能让用户以为历史丢了
+- 存储位置改为**启动目录** `.tea_agent_run/chat_history.db`，不可写时回退系统临时目录并提示备份
+  - **db 名固定 `chat_history.db`，不做改名迁移**：旧库本来就叫这个名字，原地沿用即可。
+    初版曾改名为 `storage.db` 并附自动迁移，后判定「只为改个名就去移动用户数据」风险不划算
+    （Windows 上文件被占用时 `os.replace` 会失败，还要处理半迁移状态）→ **改名与迁移代码已全部删除**
   - **临时目录回退**（本次需求核心）：启动目录无法创建 `.tea_agent_run`（无权限 /
     无磁盘空间 / 只读）时，db 落到 `<tempdir>/tea_agent_<项目名>_<hash8>.db`，
     并**每轮会话结束明确提示**具体路径与「需要手动复制到可靠位置」
@@ -49,6 +49,19 @@
   - 文档同步：AGENTS.md（存储作用域不变式）/ USER_MANUAL / 使用手册 ×2 / 设计文档 ×2 / TOOLS.md
 
 ### Bug Fixes
+- fix(trace): 工具事件从不落库 → 轨迹视图工具段永久空白（`_log_tool_event` 取错属性）
+  - **根因**：`session/components/tool.py` 的 `_log_tool_event` 用
+    `getattr(self, "current_topic_id", None)` 取主题，但 `self` 是 `ToolComponent` ——
+    该属性只存在于 session/agent 上，恒为 `None` → 函数静默早退。
+    实测 `session_events` 表 3303 条事件中 `tool/call` / `tool/result` **均为 0 条**
+  - **修法（方案 A）**：`SessionContext` 新增 `topic_id` 字段，回合入口
+    `OnlineToolSession.chat_stream` 每轮同步写入；`_log_tool_event` 改从
+    `ctx.topic_id` 取值（保留 `self.current_topic_id` 作兜底）
+  - **缺陷被测试掩盖**：`test_tool_trace_events.py` 的替身手动设了
+    `self.current_topic_id`（真实组件并无该属性）→ 测试常绿。替身已换成
+    **真实 ToolComponent + 真实 SessionContext**
+  - 新增 2 项接线回归（`chat_stream` 必须同步 / 同步后事件确实落库）。
+    **元验证**：还原缺陷写法 → 4 项变红；移除同步语句 → 1 项变红
 - fix(paths): 项目树扫描统一排除第三方依赖与构建产物（新增 `tea_agent/path_filters.py`）
   - **根因是「各自维护」**：多个扫描器各自内联一份目录排除列表，且普遍漏掉
     `node_modules` / `build_mini_dist`（部分连 `.venv` 都没排除）。本缺陷

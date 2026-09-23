@@ -74,7 +74,7 @@ tool/call 事件(执行前记录) → pre-execute 瀑布(hooks/权限/沙箱)
 | 项 | 借鉴点 | 落地思路 |
 |----|--------|----------|
 | 工具执行 hooks | pre/post 瀑布 + approval + 结果改写 + additionalContexts | 在 permission.py 前置检查基础上，加 post-execute 钩子与结果改写链 |
-| Session fork | `ctx.sessions.fork()` 分支实验 | 会话库（storage.db）增加 fork lineage（复制事件流到新 topic） |
+| Session fork | `ctx.sessions.fork()` 分支实验 | 会话库（chat_history.db）增加 fork lineage（复制事件流到新 topic） |
 | 防御模式落地 | 正交结果独立报告 / 回调异常隔离 / dispose 静止态 | 直接写入 toolkit_exec 与后台线程代码 |
 
 ### P2 — 中期

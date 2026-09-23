@@ -193,7 +193,7 @@ class Storage:
         """初始化存储，每次操作独立连接（短连接模式）。
 
         Args:
-            db_path: 数据库文件路径。空则用默认名（storage.db）。
+            db_path: 数据库文件路径。空则用默认名（chat_history.db）。
         """
         if not db_path:
             from tea_agent.storage_scope import DEFAULT_DB_NAME

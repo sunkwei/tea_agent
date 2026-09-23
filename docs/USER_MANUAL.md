@@ -1043,7 +1043,7 @@ toolkit_reload()  # 重载后立即可用
 
 **Q: 数据存储在哪里？**
 
-默认: **启动目录** `.tea_agent_run/storage.db` (SQLite)，随项目隔离；启动目录不可写
+默认: **启动目录** `.tea_agent_run/chat_history.db` (SQLite)，随项目隔离；启动目录不可写
 （无权限 / 无磁盘空间）时回退**系统临时目录**并每轮提示手动备份。可用 `paths.db_path`
 自定义文件名，`TEA_STORAGE_SCOPE=user` 强制用户级 `~/.tea_agent/`。
 

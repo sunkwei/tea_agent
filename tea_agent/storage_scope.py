@@ -2,8 +2,8 @@
 
 ## 默认行为（TEA_STORAGE_SCOPE 未设置 / auto）
 
-1. **启动目录可写** → ``<启动目录>/.tea_agent_run/storage.db``（项目级，随项目隔离）
-2. **启动目录 == 用户主目录** → ``~/.tea_agent/storage.db``
+1. **启动目录可写** → ``<启动目录>/.tea_agent_run/chat_history.db``（项目级，随项目隔离）
+2. **启动目录 == 用户主目录** → ``~/.tea_agent/chat_history.db``
    （主目录即项目，有意不另建 ``.tea_agent_run`` 以免污染 ``~``）
 3. **启动目录不可写**（无法创建 / 无权限 / 无磁盘空间）→ 系统临时目录
    ``<tempdir>/tea_agent_<项目名>_<hash8>.db``，且每轮会话结束时**明确提示**用户
@@ -15,16 +15,16 @@
 - ``storage_scope=user`` → 用户级（durable，用户主动选择，不提示）
 - 显式 ``data_dir`` / 绝对 ``db_path`` → 尊重用户配置，不自动项目化
 
-## 旧库迁移
+## 关于 db 文件名
 
-同目录下若存在旧名 ``chat_history.db`` 而新名 ``storage.db`` 不存在，自动改名
-（连带 ``-wal`` / ``-shm``，避免留下半套 WAL 导致数据不一致）。
-迁移失败时**沿用旧路径**而不是新建空库 —— 宁可名字旧，也不能让用户看不到历史。
+默认名固定为 ``chat_history.db``（历史沿用的名字），**不做改名迁移** ——
+旧库本来就叫这个名字，原地沿用即可，改名只会平添一次「移动用户数据」的风险
+（Windows 上文件被占用时 os.replace 会失败，反而要处理半迁移状态）。
 
 用法::
 
     from tea_agent.storage_scope import resolve_db_path, storage_notice
-    db = resolve_db_path(user_db_abs="/home/u/.tea_agent/storage.db")
+    db = resolve_db_path(user_db_abs="/home/u/.tea_agent/chat_history.db")
     if notice := storage_notice(db):
         print(notice)
 """
@@ -36,14 +36,12 @@ import logging
 import os
 import re
 import tempfile
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "PROJECT_RUN_DIR",
     "DEFAULT_DB_NAME",
-    "LEGACY_DB_NAME",
     "VALID_SCOPES",
     "project_run_dir",
     "temp_db_path",
@@ -55,11 +53,8 @@ __all__ = [
 
 PROJECT_RUN_DIR = ".tea_agent_run"
 
-#: 项目级 / 用户级 db 的默认文件名
-DEFAULT_DB_NAME = "storage.db"
-
-#: 历史文件名（自动迁移，见模块 docstring）
-LEGACY_DB_NAME = "chat_history.db"
+#: 项目级 / 用户级 db 的默认文件名（沿用历史名，不做改名迁移）
+DEFAULT_DB_NAME = "chat_history.db"
 
 VALID_SCOPES = ("auto", "project", "user")
 
@@ -83,6 +78,7 @@ def _same_path(a: str, b: str) -> bool:
 def _is_home_dir(cwd: str | None = None) -> bool:
     """启动目录是否就是用户主目录。"""
     return _same_path(os.path.abspath(cwd or os.getcwd()), _home_abs())
+
 
 
 def resolve_scope(storage_scope_cfg: str | None = None) -> str:
@@ -154,6 +150,7 @@ def temp_db_path(cwd: str | None = None) -> str:
     return os.path.join(tempfile.gettempdir(), f"tea_agent_{name[:24]}_{digest}.db")
 
 
+
 def is_temp_fallback(db_path: str) -> bool:
     """判断 db 路径是否为「临时目录回退」产物。
 
@@ -187,53 +184,14 @@ def storage_notice(db_path: str) -> str | None:
     """
     if not is_temp_fallback(db_path):
         return None
+    name = os.path.basename(db_path) or "db"
     return (
         "\n\n---\n"
-        f"⚠️ **存储位置提示**：当前 storage.db 为 `{db_path}`\n\n"
+        f"⚠️ **存储位置提示**：当前数据库为 `{db_path}`\n\n"
         "启动目录无法创建 `.tea_agent_run`（无权限 / 无磁盘空间 / 只读），"
         "数据已写入**系统临时目录**，重启或清理临时文件后**可能丢失**。\n\n"
-        "**需要手动复制到可靠的存储位置。**\n"
+        f"**需要手动把 `{name}` 复制到可靠的存储位置。**\n"
     )
-
-
-def _migrate_legacy_db(target: str) -> str:
-    """把旧名 db（``chat_history.db``）迁移为 ``storage.db``。
-
-    仅在「目标不存在 + 旧文件存在 + 目标确为默认名」时执行；连带 ``-wal`` /
-    ``-shm`` 一起搬，避免留下半套 WAL 导致数据不一致。
-
-    迁移失败时**返回旧路径**（而非新路径）—— 否则调用方会新建一个空库，
-    用户会以为历史丢失。宁可文件名旧，也不能让数据不可见。
-
-    Args:
-        target: 期望使用的 db 路径
-
-    Returns:
-        实际应使用的 db 路径
-    """
-    try:
-        if os.path.basename(target) != DEFAULT_DB_NAME:
-            return target  # 用户显式命名 → 不迁移
-        if os.path.exists(target):
-            return target
-        d = os.path.dirname(target) or "."
-        legacy = os.path.join(d, LEGACY_DB_NAME)
-        if not os.path.exists(legacy):
-            return target
-        os.replace(legacy, target)
-        for suffix in ("-wal", "-shm"):
-            lf, tf = legacy + suffix, target + suffix
-            if os.path.exists(lf):
-                os.replace(lf, tf)
-        logger.info("存储库已迁移: %s → %s", legacy, target)
-        return target
-    except Exception as e:
-        logger.warning("存储库迁移失败，沿用旧路径: %s", e)
-        try:
-            legacy = os.path.join(os.path.dirname(target) or ".", LEGACY_DB_NAME)
-            return legacy if os.path.exists(legacy) else target
-        except Exception:
-            return target
 
 
 def _ensure_parent_writable(path: str) -> bool:
@@ -250,6 +208,7 @@ def _ensure_parent_writable(path: str) -> bool:
         return False
 
 
+
 def resolve_db_path(
     user_db_abs: str,
     db_path_cfg: str = "",
@@ -262,12 +221,12 @@ def resolve_db_path(
     1. scope == "user"                    → 用户级 db（旧行为，durable）
     2. db_path 显式绝对路径                → 尊重显式（不项目化）
     3. 启动目录 == 主目录                   → 用户级 db（主目录即项目）
-    4. scope 为 auto/project 且项目可写     → <项目>/.tea_agent_run/storage.db
+    4. scope 为 auto/project 且项目可写     → <项目>/.tea_agent_run/chat_history.db
     5. 项目目录不可用                      → 系统临时目录（**会提示用户备份**）
     6. 临时目录也不可用                    → 用户级 db（最后兜底）
 
     注：db 文件名沿用 ``user_db_abs`` 的 basename —— 未配置时为
-    ``storage.db``；用户配置了相对 ``db_path`` 时尊重其自定义名。
+    ``chat_history.db``；用户配置了相对 ``db_path`` 时尊重其自定义名。
 
     Args:
         user_db_abs: 用户级 db 绝对路径（config 原有解析结果）
@@ -280,32 +239,30 @@ def resolve_db_path(
     """
     scope = resolve_scope(storage_scope_cfg)
     if scope == "user":
-        return _migrate_legacy_db(user_db_abs)
+        return user_db_abs
     # 用户显式指定了绝对 db 路径 → 尊重自定义位置
     if db_path_cfg and os.path.isabs(os.path.expanduser(db_path_cfg)):
-        return _migrate_legacy_db(user_db_abs)
+        return user_db_abs
 
     fname = os.path.basename(user_db_abs) or DEFAULT_DB_NAME
 
     run = project_run_dir(cwd)
     if run is not None:
-        return _migrate_legacy_db(os.path.join(run, fname))
+        return os.path.join(run, fname)
 
     # 启动目录 == 主目录：主目录即项目，用用户级 db（durable，无需提示）
     if _is_home_dir(cwd):
-        return _migrate_legacy_db(user_db_abs)
+        return user_db_abs
 
     # 项目目录不可用 → 临时目录回退（会向用户提示手动备份）
     tmp_db = temp_db_path(cwd)
     if _ensure_parent_writable(tmp_db):
         logger.warning(
-            "启动目录不可写，storage.db 回退到临时目录: %s（数据可能丢失，请手动备份）",
+            "启动目录不可写，db 回退到临时目录: %s（数据可能丢失，请手动备份）",
             tmp_db,
         )
         return tmp_db
 
     # 临时目录也不可用 → 最后兜底用户级
-    logger.warning(
-        "临时目录亦不可写，storage.db 回退到用户级: %s", user_db_abs
-    )
-    return _migrate_legacy_db(user_db_abs)
+    logger.warning("临时目录亦不可写，db 回退到用户级: %s", user_db_abs)
+    return user_db_abs

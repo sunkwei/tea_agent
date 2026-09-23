@@ -2,7 +2,7 @@
 
 ## 需求（本次变更）
 
-1. 默认用**启动目录** ``.tea_agent_run/storage.db``（随项目隔离）
+1. 默认用**启动目录** ``.tea_agent_run/chat_history.db``（随项目隔离）
 2. 启动目录不可写（无权限 / 无磁盘空间 / 只读）→ 回退**系统临时目录**
 3. 使用临时目录时，每轮会话结束**明确提示** db 路径并要求手动复制
 
@@ -45,24 +45,26 @@ def user_db(tmp_path):
 
 # ─────────────────────── 命名 ───────────────────────
 
-def test_default_db_name_is_storage_db():
-    """默认 db 名应为 storage.db（本次需求）。"""
-    assert ss.DEFAULT_DB_NAME == "storage.db"
-    assert ss.LEGACY_DB_NAME == "chat_history.db"
+def test_default_db_name_is_chat_history_db():
+    """默认 db 名固定 chat_history.db（沿用历史名，不做改名迁移）。"""
+    assert ss.DEFAULT_DB_NAME == "chat_history.db"
+    # 迁移代码已删除：不应再有 LEGACY_DB_NAME / _migrate_legacy_db
+    assert not hasattr(ss, "LEGACY_DB_NAME"), "迁移代码应已移除"
+    assert not hasattr(ss, "_migrate_legacy_db"), "迁移代码应已移除"
 
 
 # ─────────────────────── 项目级（默认） ───────────────────────
 
 def test_project_writable_uses_tea_agent_run(proj, user_db, monkeypatch):
-    """启动目录可写 → <项目>/.tea_agent_run/storage.db。"""
+    """启动目录可写 → <项目>/.tea_agent_run/chat_history.db。"""
     run = proj / ss.PROJECT_RUN_DIR
     run.mkdir()
     monkeypatch.setattr(ss, "project_run_dir", lambda cwd=None: str(run))
 
     got = ss.resolve_db_path(user_db_abs=user_db, cwd=str(proj))
 
-    assert got == str(run / "storage.db")
-    assert os.path.basename(got) == "storage.db"
+    assert got == str(run / ss.DEFAULT_DB_NAME)
+    assert os.path.basename(got) == ss.DEFAULT_DB_NAME
     assert not ss.is_temp_fallback(got)
     assert ss.storage_notice(got) is None, "项目级不应提示"
 
@@ -144,7 +146,7 @@ def test_temp_db_path_differs_across_projects(tmp_path, monkeypatch):
 
 def test_is_temp_fallback_rejects_non_temp(tmp_path, proj):
     """项目内路径、用户级路径都不得被误判为临时回退。"""
-    assert not ss.is_temp_fallback(str(proj / ss.PROJECT_RUN_DIR / "storage.db"))
+    assert not ss.is_temp_fallback(str(proj / ss.PROJECT_RUN_DIR / ss.DEFAULT_DB_NAME))
     assert not ss.is_temp_fallback("")
     assert not ss.is_temp_fallback(str(tmp_path / "chat_history.db"))
 
@@ -170,76 +172,6 @@ def test_storage_notice_none_for_project_db(proj, user_db, monkeypatch):
     monkeypatch.setattr(ss, "project_run_dir", lambda cwd=None: str(run))
     got = ss.resolve_db_path(user_db_abs=user_db, cwd=str(proj))
     assert ss.storage_notice(got) is None
-
-
-# ─────────────────────── 旧库迁移 ───────────────────────
-
-def test_migrate_legacy_db_renames(tmp_path):
-    """旧名 chat_history.db → storage.db（防用户以为历史丢失）。"""
-    legacy = tmp_path / ss.LEGACY_DB_NAME
-    legacy.write_text("old-data", encoding="utf-8")
-    target = str(tmp_path / ss.DEFAULT_DB_NAME)
-
-    got = ss._migrate_legacy_db(target)
-
-    assert got == target
-    assert pathlib.Path(target).read_text(encoding="utf-8") == "old-data"
-    assert not legacy.exists()
-
-
-def test_migrate_moves_wal_and_shm(tmp_path):
-    """-wal / -shm 必须一起搬 —— 只搬主库会留下半套 WAL 导致数据不一致。"""
-    (tmp_path / ss.LEGACY_DB_NAME).write_text("d", encoding="utf-8")
-    (tmp_path / (ss.LEGACY_DB_NAME + "-wal")).write_text("w", encoding="utf-8")
-    (tmp_path / (ss.LEGACY_DB_NAME + "-shm")).write_text("s", encoding="utf-8")
-    target = str(tmp_path / ss.DEFAULT_DB_NAME)
-
-    ss._migrate_legacy_db(target)
-
-    assert pathlib.Path(target + "-wal").read_text(encoding="utf-8") == "w"
-    assert pathlib.Path(target + "-shm").read_text(encoding="utf-8") == "s"
-    assert not (tmp_path / (ss.LEGACY_DB_NAME + "-wal")).exists()
-
-
-def test_migrate_skips_when_target_exists(tmp_path):
-    """新库已存在 → 不覆盖（否则会丢新数据）。"""
-    (tmp_path / ss.LEGACY_DB_NAME).write_text("old", encoding="utf-8")
-    tgt = tmp_path / ss.DEFAULT_DB_NAME
-    tgt.write_text("new", encoding="utf-8")
-
-    got = ss._migrate_legacy_db(str(tgt))
-
-    assert got == str(tgt)
-    assert tgt.read_text(encoding="utf-8") == "new"
-    assert (tmp_path / ss.LEGACY_DB_NAME).exists(), "旧库应原样保留"
-
-
-def test_migrate_skips_custom_name(tmp_path):
-    """用户自定义名 → 不迁移（只迁移默认名）。"""
-    (tmp_path / ss.LEGACY_DB_NAME).write_text("old", encoding="utf-8")
-    custom = str(tmp_path / "mine.db")
-
-    got = ss._migrate_legacy_db(custom)
-
-    assert got == custom
-    assert not os.path.exists(custom)
-
-
-def test_migrate_failure_keeps_legacy_path(tmp_path, monkeypatch):
-    """迁移失败必须**沿用旧路径**，而不是返回新路径建空库（那会让历史"消失"）。"""
-    legacy = tmp_path / ss.LEGACY_DB_NAME
-    legacy.write_text("old", encoding="utf-8")
-    target = str(tmp_path / ss.DEFAULT_DB_NAME)
-
-    def _boom(*a, **k):
-        raise OSError("disk full")
-
-    monkeypatch.setattr(ss.os, "replace", _boom)
-
-    got = ss._migrate_legacy_db(target)
-
-    assert got == str(legacy), "失败时应沿用旧路径，保住用户历史"
-    assert legacy.exists()
 
 
 # ─────────────────────── 提示接线（关键契约） ───────────────────────
@@ -285,7 +217,7 @@ def test_emit_notice_sent_for_temp_db(tmp_path, monkeypatch):
 
 def test_emit_notice_silent_for_project_db(proj):
     """项目级 db → 不打扰用户。"""
-    assert _emit(str(proj / ss.PROJECT_RUN_DIR / "storage.db"), None) == []
+    assert _emit(str(proj / ss.PROJECT_RUN_DIR / ss.DEFAULT_DB_NAME), None) == []
 
 
 def test_emit_notice_never_raises(monkeypatch):
@@ -336,7 +268,7 @@ def test_finalize_turn_reply_silent_for_project_db(proj):
 
     got = []
     reply, _ = OnlineToolSession._finalize_turn_reply(
-        _make_session(str(proj / ss.PROJECT_RUN_DIR / "storage.db")),
+        _make_session(str(proj / ss.PROJECT_RUN_DIR / ss.DEFAULT_DB_NAME)),
         "正文", False, got.append,
     )
     assert reply == "正文"

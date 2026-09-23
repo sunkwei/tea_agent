@@ -73,7 +73,7 @@ tea_agent/                          # 40 个顶层模块 + 14 个子包（截至
 ├── tool_approval.py                # ★ 风险分级 + 审批闸门 + 审计接线（A2/A3 安全底座）
 ├── tool_hooks.py                   # pre/post 工具 hook（approval/audit 以此挂载）
 ├── evolution_gate.py               # ★ 进化闸门（EvolutionBench keep-or-rollback）
-├── storage_scope.py                # 存储作用域：项目级 .tea_agent_run/storage.db → 临时目录回退
+├── storage_scope.py                # 存储作用域：项目级 .tea_agent_run/chat_history.db → 临时目录回退
 ├── session_fork.py                 # ★ 会话分叉共享实现（Web `#分叉` 与 toolkit_fork_session 同一事实源）
 ├── path_filters.py                 # ★ 项目树遍历排除集（唯一事实源：PRUNE_DIRS/prune_dirs/iter_files）
 ├── audit_log.py                    # 审计日志（hash 链防篡改）
@@ -134,9 +134,10 @@ tea_agent/                          # 40 个顶层模块 + 14 个子包（截至
 3. **下划线前缀不注册**：`toolkit/_xxx.py` 形式的模块不会被扫描注册（如 `_git_snapshot.py`），适合放共享基础设施
 4. **自进化边界**：后台自进化线程可优化工具代码、整理技能、调整提示词，但**不得修改用户对话历史**
 5. **工具列表顺序稳定**：工具列表顺序是 DeepSeek 前缀缓存的一部分 —— 任何收缩/筛选（`tool_shield` / `tool_profiles`）必须产出**确定性排序**，集合抖动会让每轮缓存 100% 失效
-6. **存储作用域**：默认 db 为**启动目录** `$pwd/.tea_agent_run/storage.db`（`TEA_STORAGE_SCOPE=auto/project`）；
+6. **存储作用域**：默认 db 为**启动目录** `$pwd/.tea_agent_run/chat_history.db`（`TEA_STORAGE_SCOPE=auto/project`）；
    启动目录不可写（无权限 / 无磁盘空间）→ 回退**系统临时目录**并在每轮会话结束提示用户手动备份；
-   启动目录 == 用户主目录 → `~/.tea_agent/storage.db`；显式 `user` → 用户级（durable）。
+   启动目录 == 用户主目录 → `~/.tea_agent/chat_history.db`；显式 `user` → 用户级（durable）。
+   **db 名固定 `chat_history.db`，不做改名迁移**（旧库本就叫这名，原地沿用）。
    新增持久化数据时须走 `storage_scope.resolve_db_path`，不要硬编码路径
    （**临时回退是唯一会丢数据的情形**，故 `storage_notice()` 必须保持接线，且提示只能经
    `callback` 送达 UI —— 并入 `full_reply` 会被持久化进对话历史，见 `_finalize_turn_reply`）
@@ -280,7 +281,7 @@ Agent 侧可调用 `toolkit_evo_bench(action='run'|'history'|'compare')`。
 | ✅ 可修改 | ❌ 不可修改 |
 |-----------|-------------|
 | `toolkit/*.py` — 工具代码 | `.chat_history_protected` — 对话历史 |
-| `config.yaml` — 配置 | `storage.db` — 数据库（启动目录 `.tea_agent_run/`） |
+| `config.yaml` — 配置 | `chat_history.db` — 数据库（启动目录 `.tea_agent_run/`） |
 | `prompt_manager.py` — 提示词 | 用户 `~/.tea_agent/` 个人配置 |
 | 自进化生成的 `skills/` | 版本发布后的 CHANGELOG 只追加不修改 |
 

@@ -874,7 +874,7 @@ Authorization: Bearer <your-api-key>
 
 ### 9.4 存储
 
-所有数据存储在 SQLite 数据库中，默认路径为**启动目录** `.tea_agent_run/storage.db`
+所有数据存储在 SQLite 数据库中，默认路径为**启动目录** `.tea_agent_run/chat_history.db`
 （随项目隔离）。启动目录不可写时回退系统临时目录，并每轮提示手动备份。
 
 主要表：
@@ -945,7 +945,7 @@ curl http://localhost:8080/api/tools | python -m json.tool
 
 ```bash
 # 删除聊天历史（谨慎）
-rm <启动目录>/.tea_agent_run/storage.db
+rm <启动目录>/.tea_agent_run/chat_history.db
 
 # 重置 Agent
 # 重启服务器即可自动重新初始化

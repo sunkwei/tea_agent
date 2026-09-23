@@ -39,7 +39,7 @@
 | \toolkit_proactive\ | 自主心跳：Agent 的自我目标管理系统。action=check/goal/done/list_goals。 |
 | \toolkit_prompt_evolve\ | 管理系统提示词的多版本进化。evolve=基于反思自动优化提示词, rollback=回滚到历史版本, list=查看版本历史。Agent 可以自主改进自己的核心指令。 |
 | \toolkit_publish_doc\ | 发布文档到可下载目录并返回下载链接。当用户明确要求创建文档（接口文档、README、md 等）并已用 toolkit_file 保存后，调用此工具发布，然后在最终回复中输出 Mar... |
-| \toolkit_query_chat_history\ | 查询 chat_history.db 中的 conversations 表。action=schema查看表结构, query按UUID查记录, topic按topic_id列所有... |
+| \toolkit_query_chat_history\ | 查询会话库（storage.db）中的 conversations 表。action=schema查看表结构, query按UUID查记录, topic按topic_id列所有... |
 | \toolkit_question\ | 执行过程中向用户提问。支持选项列表和自定义输入。 使用场景： - 收集用户偏好或需求 - 澄清模糊的指令 - 获取实现方案的决策 - 提供方向选择的选项 返回：用户选择的答案字符串 |
 | \toolkit_release_version\ | 自动化版本发布工具。更新版本号、CHANGELOG，并构建项目。 |
 | \toolkit_reload\ | 重新加载所有工具函数，并注册为全局可用的方法，所有方法使用 toolkit_ 为前缀 |

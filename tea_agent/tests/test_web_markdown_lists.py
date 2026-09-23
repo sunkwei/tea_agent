@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -70,15 +71,30 @@ def render():
 
     def _render(cases: dict[str, str]) -> dict[str, str]:
         payload = json.dumps({"app": str(APP_JS), "cases": cases}, ensure_ascii=False)
-        proc = subprocess.run(
-            ["node", "-e", _HARNESS],
-            input=payload,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=120,
-        )
+        # harness 必须**落盘后执行**，不能走 `node -e <多行脚本>`：
+        # Windows 上 node 常由 Volta shim 转发，多行脚本会被静默吞掉 ——
+        # 进程 rc=0、stdout 为空，脚本根本没跑。此时旧的
+        # 「assert returncode == 0」照样通过，测试要么以 JSONDecodeError 报错，
+        # 要么把「整测试静默失效」固化成绿色契约（本文件曾在 Windows 上
+        # 因此 14 例永久变红，而产品代码 formatMarkdown 实为正确）。
+        with tempfile.TemporaryDirectory() as _tmpdir:
+            _script = Path(_tmpdir) / "format_markdown_harness.js"
+            _script.write_text(_HARNESS, encoding="utf-8")
+            proc = subprocess.run(
+                ["node", str(_script)],
+                input=payload,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=120,
+            )
         assert proc.returncode == 0, f"node 执行失败:\n{proc.stderr}"
+        # 关键契约：rc=0 **不代表**脚本真的执行过（shim 静默空跑正是 rc=0）。
+        # 无输出必须判失败，否则「测试从未真正运行」会长期伪装成通过。
+        assert proc.stdout.strip(), (
+            "node 未产出任何输出（rc=0 但 stdout 为空）—— harness 静默空跑，"
+            f"本测试并未真正执行 formatMarkdown。stderr={proc.stderr[:500]!r}"
+        )
         return json.loads(proc.stdout)
 
     return _render

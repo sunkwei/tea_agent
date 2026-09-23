@@ -36,7 +36,13 @@ class SummarizerComponent(SessionComponent):
         if self.ctx.disable_summary or getattr(self.ctx, "disable_l3", False):
             return
 
-        topic_id = getattr(self.ctx, "current_topic_id", None)
+        # ⚠️ topic_id 必须取 ctx.topic_id（回合入口在 chat_stream 里同步）。
+        # Component 不持有 session，而 SessionContext 上**没有** current_topic_id
+        # 这个字段 —— 早期版本写成 getattr(self.ctx, "current_topic_id", None)，
+        # 恒为 None → 本函数每次都在此静默早退，L3 历史摘要**完全失效**
+        # （实测：连 get_unsummarized_conversations 都不会被调用）。
+        # 与 session/components/tool.py 的 _log_tool_event 是同一类缺陷。
+        topic_id = self.ctx.topic_id or getattr(self.ctx, "current_topic_id", None)
         storage = self.ctx.storage
         if not (topic_id and storage):
             return

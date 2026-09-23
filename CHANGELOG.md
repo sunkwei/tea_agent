@@ -49,6 +49,24 @@
   - 文档同步：AGENTS.md（存储作用域不变式）/ USER_MANUAL / 使用手册 ×2 / 设计文档 ×2 / TOOLS.md
 
 ### Bug Fixes
+- fix(session): L3 历史摘要完全失效 —— 摘要组件读错主题字段
+  - **根因**：`session/components/summarizer.py` 用
+    `getattr(self.ctx, "current_topic_id", None)` 取主题，但 `SessionContext`
+    上**没有**该字段（只在 session/agent 上）→ 恒为 `None` → 函数每次都在 guard
+    处静默早退。实测：连 `get_unsummarized_conversations` 都不会被调用，
+    历史摘要与 L3 摘要生成从未运行
+  - **与 `_log_tool_event` 是同一类缺陷**：Component 只持有 `ctx`，却按 session
+    的属性名取值。本次一并扫描全部组件，确认仅此两处（`onlinesession.py` 的
+    5 处 `self.current_topic_id` 中 `self` 就是 session，是正确的）
+  - **修法**：改读 `ctx.topic_id`（回合入口 `chat_stream` 每轮同步），
+    保留 `current_topic_id` 作兜底
+  - **影响面**：L3 摘要失效意味着长会话的旧历史从不被 LLM 收拢，只靠本地水位线
+    裁剪 → 上下文语义信息持续丢失，且更易逼近 token 上限
+  - tests: 新增 `test_summarizer_topic_wiring.py` 7 项。断言钉在
+    **「是否越过 guard」**（`get_unsummarized_conversations` 是否被调用）而非
+    「摘要是否生成」—— 后者依赖 LLM stub，一旦 stub 异常被 except 吞掉，
+    「没生成」与「早退」就分不清，正是本缺陷长期潜伏的原因。
+    **元验证**：还原缺陷写法 → 1 项变红
 - fix(trace): 工具事件从不落库 → 轨迹视图工具段永久空白（`_log_tool_event` 取错属性）
   - **根因**：`session/components/tool.py` 的 `_log_tool_event` 用
     `getattr(self, "current_topic_id", None)` 取主题，但 `self` 是 `ToolComponent` ——
@@ -600,6 +618,20 @@
   合并到 master 的 ff-only 流程与「推送是远端副作用」约定；安全注意事项改为按真实现状
   陈述（`permission.py` 已禁用、真实闸门为 `tool_approval`、提权硬拒绝、SQL 校验助手、
   审计 hash 链）
+
+### Dependencies
+- 移除零使用依赖 `numpy`（核心依赖 → `[demo]` extra）
+  - **依据**：核心包（`tea_agent/` 非 `demo/` 部分）**零 numpy 使用**，实测 8 处
+    import 全部落在 `tea_agent/demo/`（3 个顶层 + 4 个函数内惰性）或包外
+    `asr_vad.py`（仓库根目录，不属于本包）。向量检索下线后 numpy 已无核心消费者
+  - **验证**：`build_mini.py` 实测 wheel 内 `numpy imports = 0`（"No numpy - good!"），
+    Mini 构建不受影响
+  - 同步清理 `toolkit_pkg._list_installed` 的 `key_pkgs` 中陈旧 `numpy` 条目
+    （该表仅用于 `action=list` 诊断展示，非依赖声明）
+  - `asr_vad.py` docstring 补注：该脚本在包外，需自行 `pip install numpy onnxruntime`
+  - tests: 新增 3 项守卫 —— numpy 不在核心依赖 / 必须在 demo extra /
+    **核心包不得出现 numpy import**（后者是「可安全移除」的不变式，
+    将来有人往核心包塞 numpy 会立刻变红）。元验证：3 项变异各自变红
 
 ## [0.15.4] - 2026-08-28
 ### Features

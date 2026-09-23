@@ -544,32 +544,56 @@ def load_config(config_path: str | None = None) -> AgentConfig:
     # 步骤2: 创建默认配置
     cfg = AgentConfig()
 
-    # 步骤3: 如果找到配置文件，加载并解析
+    # 步骤3: 加载配置数据（config.yaml 可缺失 —— 身份三元组由 provider.yaml 提供）
+    data: dict = {}
     if HAS_YAML and yaml_path and os.path.isfile(yaml_path):
         try:
-            data = _load_yaml_data(yaml_path)
-            if data:
-                # 解析模型配置
-                _parse_model_configs(cfg, data)
+            data = _load_yaml_data(yaml_path) or {}
+        except Exception:
+            logger.warning(f"配置文件读取失败，已回退默认值: {yaml_path}")
+            data = {}
 
-                # 解析模式参数
-                _parse_mode_params(cfg, data)
+    # 步骤3.5: main_model 缺失/全空 → provider.yaml 第一个提供商的第一个模型（引用式补位）
+    if not _main_block_usable(data):
+        ref = _first_provider_ref()
+        if ref:
+            data["main_model"] = ref
+            logger.info(
+                "main_model 兜底: config 未提供身份三元组，改用 provider.yaml %s/%s",
+                ref["provider"], ref["model"],
+            )
 
-                # 解析路径配置
-                _parse_paths_config(cfg, data, yaml_path)
+    if data:
+        try:
+            # 解析模型配置
+            _parse_model_configs(cfg, data)
 
-                # 解析会话参数
-                _parse_session_params(cfg, data)
+            # 解析模式参数
+            _parse_mode_params(cfg, data)
 
-                # 解析Token优化参数
-                _parse_token_params(cfg, data)
+            # 解析路径配置
+            _parse_paths_config(cfg, data, yaml_path)
 
-                # 解析交互控制参数
-                _parse_control_params(cfg, data)
+            # 解析会话参数
+            _parse_session_params(cfg, data)
+
+            # 解析Token优化参数
+            _parse_token_params(cfg, data)
+
+            # 解析交互控制参数
+            _parse_control_params(cfg, data)
         except Exception:
             # 单字段坏值不应静默丢弃整个配置：记录日志，保留已解析的部分
             import traceback
             logger.warning(f"配置文件解析部分失败，已回退默认值: {yaml_path}\n{traceback.format_exc(limit=2)}")
+
+    # paths 解析兜底：无 config.yaml（或解析中途失败）时 _parse_paths_config 不会 resolve，
+    # 留空会让 ensure_config_dir / toolkit_dir_abs 等拿到空串 —— 按默认目录补解析
+    if not cfg.paths.data_dir_abs:
+        cfg.paths.resolve(
+            os.path.dirname(os.path.abspath(yaml_path)) if yaml_path
+            else str(Path.home() / ".tea_agent")
+        )
 
     # 步骤4: 更新全局缓存
     _update_config_cache(cfg, yaml_path)
@@ -680,6 +704,55 @@ def _resolve_ref_model(provider: str, model: str) -> dict | None:
         return get_provider_store().resolve(provider, model)
     except Exception as e:
         logger.debug("provider ref resolve skipped (%s/%s): %s", provider, model, e)
+        return None
+
+
+def _main_block_usable(data: dict) -> bool:
+    """config 数据的 main_model 块是否含用户配置（有则尊重，不被 provider.yaml 兜底覆盖）。
+
+    可用 = 引用式 provider+model 齐，或传统内嵌任一身份字段非空。
+    块缺失 / 非 dict / 身份字段全空串 → False（视为未配置，交给 provider.yaml 补位）。
+
+    Args:
+        data: 配置文件解析出的字典（可为空）
+
+    Returns:
+        True=块提供了配置，False=未配置
+    """
+    mb = data.get("main_model")
+    if not isinstance(mb, dict):
+        return False
+    if str(mb.get("provider") or "").strip() and str(mb.get("model") or "").strip():
+        return True
+    return any(str(mb.get(k) or "").strip() for k in ("api_url", "api_key", "model_name"))
+
+
+def _first_provider_ref() -> dict | None:
+    """provider.yaml 第一个提供商（文档序）的第一个模型 → {provider, model} 引用块。
+
+    「第一个提供商」按 YAML 文档序（= 写入序）：首次引导先配置的那家即默认主模型，
+    与「provider 中第一个提供商的第一个模型」字面语义一致。
+    模型取 default_model（引导写入时 = 所选模型），缺省时取 models 键序第一个。
+
+    Returns:
+        引用式块 dict；provider.yaml 为空/无模型/基础设施异常 → None
+    """
+    try:
+        from tea_agent.provider_store import get_provider_store
+
+        providers = get_provider_store().load().get("providers") or {}
+        if not providers:
+            return None
+        first = next(iter(providers))  # dict 插入序 = YAML 文档序
+        p = providers[first] or {}
+        model = str(p.get("default_model") or "").strip()
+        if not model:
+            model = next(iter(p.get("models") or {}), "")
+        if not model:
+            return None
+        return {"provider": first, "model": model}
+    except Exception as e:
+        logger.debug("provider.yaml 首模型兜底跳过: %s", e)
         return None
 
 

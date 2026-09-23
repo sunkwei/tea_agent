@@ -27,6 +27,8 @@ from tea_agent.providers import get_provider
 
 __all__ = [
     "run_setup_wizard",
+    "run_provider_setup_wizard",
+    "needs_provider_setup",
     "QUICK_PROVIDERS",
     "WizardCancelled",
 ]
@@ -41,6 +43,14 @@ BANNER = r"""
   ┌───────────────────────────────────────────────┐
   │   🍵 Tea Agent 首次配置向导                    │
   │   只需几步即可完成基础配置，随时可 Ctrl+C 取消  │
+  └───────────────────────────────────────────────┘
+"""
+
+PROVIDER_BANNER = r"""
+  ┌───────────────────────────────────────────────┐
+  │   🍵 Tea Agent 首启提供商配置（provider.yaml） │
+  │   选服务商 → 选模型 → 输入 API Key（可多家）   │
+  │   config.yaml 不再是前提，随时可 Ctrl+C 取消   │
   └───────────────────────────────────────────────┘
 """
 
@@ -71,8 +81,8 @@ def _ask(prompt: str, default: str = "", required: bool = False,
         suffix = f" [{default}]" if default else ""
         try:
             raw = input_fn(f"{prompt}{suffix}: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            raise WizardCancelled()
+        except (EOFError, KeyboardInterrupt) as exc:
+            raise WizardCancelled() from exc
         if raw.lower() in ("q", "quit", "exit"):
             raise WizardCancelled()
         if not raw and default:
@@ -125,14 +135,12 @@ def _collect_answers(input_fn: Callable[[str], str]) -> dict:
         )
         model_name = _ask("模型名称", required=True, input_fn=input_fn)
         supports_vision = False
-        default_api_url = ""
     else:
         provider = get_provider(provider_name)
         api_url = provider["api_url"]
         model_name = _ask("模型名称", default=provider["default_model"],
                           input_fn=input_fn)
         supports_vision = provider.get("supports_vision", False)
-        default_api_url = api_url
 
     api_key = _ask("API Key", required=True, input_fn=input_fn)
 
@@ -226,6 +234,154 @@ def _build_config(answers: dict) -> AgentConfig:
     return cfg
 
 
+def needs_provider_setup(store=None) -> bool:
+    """是否需要首启提供商引导：provider.yaml 缺失（bootstrap 迁移后）providers 仍为空。
+
+    判定语义：
+      - 文件不存在 → store.load() 触发 bootstrap（config*.yaml/custom_providers.yaml
+        迁移；无任何迁移源则创建空文件）
+      - 迁移后 providers 非空 → 老用户已有真实配置 → 不需要引导，直接启动
+      - providers 为空（全新安装 / 被清空）→ 需要引导
+
+    Args:
+        store: ProviderStore 注入（测试用）；None 时用全局单例
+
+    Returns:
+        True=需要引导；provider 基础设施异常时 False（不阻塞启动）
+    """
+    try:
+        from tea_agent.provider_store import get_provider_store
+
+        data = (store or get_provider_store()).load()
+        return not (data.get("providers") or {})
+    except Exception:
+        return False
+
+
+def _pick_model(provider_name: str, input_fn: Callable[[str], str]) -> str:
+    """选择模型：内置目录编号列表（default_model 默认）；无目录时手输 id。"""
+    from tea_agent.providers import get_provider, model_ids
+
+    p = get_provider(provider_name)
+    ids = model_ids(p)
+    if not ids:
+        return _ask("模型名称", required=True, input_fn=input_fn)
+
+    print("\n  可用模型：")
+    default_id = str(p.get("default_model") or "")
+    default_idx = 1
+    for i, mid in enumerate(ids, 1):
+        if mid == default_id:
+            default_idx = i
+        mark = " (默认)" if mid == default_id else ""
+        print(f"  {i:>2}. {mid}{mark}")
+    while True:
+        raw = _ask(
+            f"请选择模型 [1-{len(ids)}，或直接输入模型 id]",
+            default=str(default_idx), input_fn=input_fn,
+        )
+        if raw.isdigit() and 1 <= int(raw) <= len(ids):
+            return ids[int(raw) - 1]
+        if raw and not raw.isdigit():
+            return raw  # 直接输入目录外的模型 id
+        print("  ⚠ 请输入有效的选项编号")
+
+
+def run_provider_setup_wizard(input_fn: Callable[[str], str] | None = None,
+                               store=None) -> bool:
+    """首启提供商引导：选供应商 → 选模型 → 输入 api_key，可循环添加多个。
+
+    结果写入 provider.yaml（不生成 config.yaml —— 身份三元组唯一事实源 = provider.yaml）。
+    首个完成的条目即启动默认主模型：文档序第一个提供商，default_model = 所选模型，
+    且所选模型置于 models 首位（两条「第一个」口径都指向本次选择）。
+
+    Args:
+        input_fn: 输入函数（测试注入用）；None 用内置 input()
+        store: ProviderStore 注入（测试用）；None 用全局单例
+
+    Returns:
+        True=至少完成一个提供商；False=未写入任何条目即取消
+    """
+    if input_fn is None:
+        input_fn = input
+    from tea_agent.provider_store import get_provider_store
+    from tea_agent.providers import get_provider, model_ids
+
+    st = store or get_provider_store()
+    print(PROVIDER_BANNER)
+    written = 0
+    try:
+        while True:
+            # ── 1. 选择供应商 ──
+            print("\n第 1 步：选择服务商\n")
+            options = QUICK_PROVIDERS + ["custom"]
+            for i, name in enumerate(options, 1):
+                if name == "custom":
+                    print(f"  {i:>2}. ✍️  自定义（手动输入 URL / 模型名）")
+                else:
+                    info = get_provider(name)
+                    print(f"  {i:>2}. {name:<12} {info.get('description', '')}")
+            print()
+            while True:
+                raw = _ask(f"请选择 [1-{len(options)}]", default="1", input_fn=input_fn)
+                try:
+                    idx = int(raw)
+                    if 1 <= idx <= len(options):
+                        break
+                except ValueError:
+                    pass
+                print("  ⚠ 请输入有效的选项编号")
+            name = options[idx - 1]
+
+            # ── 2. 模型与端点 ──
+            if name == "custom":
+                api_url = _ask(
+                    "模型 API URL", required=True, input_fn=input_fn,
+                    validate=lambda u: (
+                        None if u.startswith(("http://", "https://"))
+                        else "URL 需以 http:// 或 https:// 开头"
+                    ),
+                )
+                model = _ask("模型名称", required=True, input_fn=input_fn)
+                description, source, models = "custom", "custom", [model]
+            else:
+                info = get_provider(name)
+                api_url = str(info.get("api_url") or "")
+                model = _pick_model(name, input_fn)
+                description = str(info.get("description") or "")
+                source = "builtin"
+                # 所选模型置首 →「第一个提供商的第一个模型」= 本次所选
+                ids = model_ids(info)
+                models = [model] + [m for m in ids if m != model]
+
+            # ── 3. API Key ──
+            api_key = _ask("API Key", required=True, input_fn=input_fn)
+
+            st.upsert_provider(name, {
+                "api_url": api_url,
+                "api_key": api_key,
+                "default_model": model,
+                "description": description,
+                "source": source,
+                "models": models,
+            })
+            written += 1
+            print(f"  ✓ 已写入 provider.yaml: {name} / {model}")
+
+            more = _ask("\n继续添加下一个提供商？[y/N]", default="n", input_fn=input_fn)
+            if more.lower() not in ("y", "yes", "是"):
+                break
+    except WizardCancelled:
+        pass
+
+    if not written:
+        print("\n✋ 向导已取消，未写入任何提供商。")
+        return False
+    print(f"\n✅ 已配置 {written} 个提供商 → {st.file_path}")
+    print("   启动将默认使用第一个提供商的第一个模型。")
+    return True
+
+
 def run_setup_wizard(config_path: str | None = None,
                      input_fn: Callable[[str], str] | None = None) -> str | None:
     """运行首次配置向导。
@@ -265,13 +421,17 @@ def run_setup_wizard(config_path: str | None = None,
 
 
 def main() -> None:
-    """独立运行入口: python -m tea_agent.setup_wizard [--config PATH]"""
+    """独立运行入口: python -m tea_agent.setup_wizard [--config PATH | --provider]"""
     import argparse
 
     parser = argparse.ArgumentParser(description="Tea Agent 配置向导")
     parser.add_argument("--config", type=str, default=None,
                         help="目标配置文件路径（默认 ~/.tea_agent/config.yaml）")
+    parser.add_argument("--provider", action="store_true",
+                        help="提供商引导（写 provider.yaml，身份三元组唯一事实源）")
     args = parser.parse_args()
+    if args.provider:
+        sys.exit(0 if run_provider_setup_wizard() else 1)
     saved = run_setup_wizard(args.config)
     sys.exit(0 if saved else 1)
 

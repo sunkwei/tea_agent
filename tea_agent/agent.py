@@ -151,13 +151,16 @@ class Agent:
             config_path = str(Path.home() / ".tea_agent" / self._config_fname)
 
         actual_path = resolve_config_path(config_path)
-        if not actual_path or not os.path.isfile(actual_path):
+        # 显式指定的配置文件不存在 → 仍报错（意图落空）；默认路径缺失不再致命 ——
+        # config.yaml 不再是前提，身份三元组由 provider.yaml 提供（load_config 内自动兜底）
+        if config_path and not (actual_path and os.path.isfile(actual_path)):
             raise FileNotFoundError(
                 f"未找到配置文件: {actual_path or '无'}。\n"
                 f"请创建 ~/.tea_agent/config.yaml 或指定 --config"
             )
+        has_file = bool(actual_path and os.path.isfile(actual_path))
 
-        cfg = load_config(actual_path)
+        cfg = load_config(actual_path if has_file else None)
 
         main_m = cfg.main_model
         if not main_m.is_configured:
@@ -166,11 +169,12 @@ class Agent:
                 f"  api_key: {'✓' if main_m.api_key else '✗'}\n"
                 f"  api_url: {'✓' if main_m.api_url else '✗'}\n"
                 f"  model:   {'✓' if main_m.model_name else '✗'}\n"
-                f"  config:  {actual_path}"
+                f"  请运行 python -m tea_agent.setup_wizard --provider 或在 Web 配置页完成配置\n"
+                f"  config:  {actual_path or '(无 config.yaml，身份三元组取自 provider.yaml)'}"
             )
 
         self._config_path = actual_path
-        logger.info(f"配置加载: {actual_path} | 模型: {main_m.model_name}")
+        logger.info(f"配置加载: {actual_path or 'provider.yaml 兜底'} | 模型: {main_m.model_name}")
         return cfg
 
     def _init_toolkit(self) -> None:

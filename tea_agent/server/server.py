@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import os
-import threading
 from pathlib import Path
 
 logger = logging.getLogger("api_server")
@@ -17,10 +16,10 @@ logger = logging.getLogger("api_server")
 try:
     from starlette.applications import Starlette
     from starlette.responses import JSONResponse
-    from starlette.routing import Mount, Route, WebSocketRoute
-    from starlette.staticfiles import StaticFiles
+    from starlette.routing import Mount, Route, WebSocketRoute  # noqa: F401
+    from starlette.staticfiles import StaticFiles  # noqa: F401
 except ImportError:
-    raise ImportError("pip install starlette uvicorn")
+    raise ImportError("pip install starlette uvicorn") from None
 
 from tea_agent import __version__
 from tea_agent.server.module import get_registry
@@ -712,7 +711,7 @@ def run_server(host="127.0.0.1", port=8282,
     try:
         import uvicorn
     except ImportError:
-        raise ImportError("pip install starlette uvicorn")
+        raise ImportError("pip install starlette uvicorn") from None
 
     actual_config = config_path or os.environ.get("TEA_CONFIG", "")
     if not actual_config:
@@ -783,30 +782,35 @@ def main():
 
     config_path = args.config or os.path.join(
         os.path.expanduser("~"), ".tea_agent", "config.yaml")
+    if args.config and not os.path.isfile(config_path):
+        # 用户显式指定路径但不存在 → 报错，不启动向导
+        print(f"Error: Config file not found: {config_path}")
+        sys.exit(1)
 
-    if not os.path.isfile(config_path):
-        if args.config:
-            # 用户显式指定路径但不存在 → 报错，不启动向导
-            print(f"Error: Config file not found: {config_path}")
-            sys.exit(1)
-        # 首次运行：启动交互式配置向导引导输入主模型 url/key 等
-        from tea_agent.setup_wizard import run_setup_wizard
-        print("\n检测到首次运行：未找到配置文件，启动配置向导...\n")
-        created = run_setup_wizard(config_path)
-        if not created:
-            print("\n配置向导已取消，Server 退出。")
-            sys.exit(1)
-        config_path = created
+    # ── 首启判定：以 provider.yaml 为唯一事实源（config.yaml 不再是启动前提）──
+    # 存在且非空 → 直接启动（默认用第一个提供商的第一个模型）；
+    # 缺失/为空 → TTY 下交互引导写 provider.yaml，非 TTY 打印指引不阻塞
+    from tea_agent.setup_wizard import needs_provider_setup, run_provider_setup_wizard
+    if needs_provider_setup():
+        if sys.stdin.isatty():
+            print("\n检测到首次运行：provider.yaml 无可用提供商，启动配置向导...\n")
+            if not run_provider_setup_wizard():
+                print("\n⚠ 配置向导已取消，将无模型配置继续启动（对话前请完成配置）。")
+        else:
+            print("\n⚠ 未找到可用的 provider.yaml（非交互环境，跳过配置向导）。\n"
+                  "   请运行 `python -m tea_agent.setup_wizard --provider` 或在 Web 配置页完成配置。\n")
 
     from tea_agent.config import load_config
     try:
-        cfg = load_config(config_path)
-        if not cfg.main_model.is_configured:
-            print(f"Error: Config file '{config_path}' is invalid!")
-            sys.exit(1)
+        # config 文件可能不存在：load_config 容忍缺失，身份三元组由 provider.yaml 提供
+        cfg = load_config(config_path if os.path.isfile(config_path) else None)
     except Exception as e:
         print(f"Error: Failed to load config: {e}")
         sys.exit(1)
+    if not cfg.main_model.is_configured:
+        # 不再退出：provider.yaml 缺 api_key 时仍启动进程，配置页/向导可随时补齐
+        print("⚠ 主模型未配置（provider.yaml 缺少可用提供商或 api_key），对话功能暂不可用。\n"
+              "   请运行 `python -m tea_agent.setup_wizard --provider` 或在配置页完成配置。\n")
 
     run_server(host=args.host, port=args.port,
                api_key=args.api_key or None,

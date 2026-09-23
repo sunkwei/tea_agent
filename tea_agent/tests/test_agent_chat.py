@@ -94,7 +94,6 @@ def _write_config(path, **overrides):
         "keep_turns": 5,
         "max_tool_output": 131072,
         "max_assistant_content": 131072,
-        "extra_iterations_on_continue": 5,
         "memory_extraction_threshold": 2,
     }
     with open(path, "w", encoding="utf-8") as f:

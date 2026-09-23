@@ -134,9 +134,6 @@ class SessionContext:
     reflection_manager: Any = None
     _current_mode: str = "mixed"
 
-    # ── 额外迭代 ──
-    extra_iterations_on_continue: int = 5
-
     # ── 消息队列（Steering/Follow-up） ──
     message_queue: Any = None          # MessageQueue 实例（延迟初始化）
     queue_mode: str = "one-at-a-time"  # one-at-a-time / all

@@ -41,7 +41,6 @@ max_iterations: 50
 keep_turns: 5
 max_tool_output: 131072
 max_assistant_content: 131072
-extra_iterations_on_continue: 5
 memory_extraction_threshold: 2
 """
     with open(path, "w") as f:

@@ -3422,13 +3422,35 @@ function showQuestionDialog(qid, title, question, options, defaultVal) {
   }
 }
 
+var _maxIterConfirmId = null;
+
 function showMaxIterConfirm(confirmId, text) {
-  const cont = confirm((text || '已达到工具调用次数上限') + '\n\n继续执行吗？');
+  _maxIterConfirmId = confirmId;
+  const t = $('mi-text');
+  if (t) t.textContent = text || '已达到工具调用次数上限';
+  const inp = $('mi-extra');
+  if (inp) { inp.value = '10'; }
+  showModal('modal-maxiter');
+  if (inp) { inp.focus(); inp.select(); }
+}
+
+function maxIterDecision(cont) {
+  const cid = _maxIterConfirmId;
+  _maxIterConfirmId = null;
+  closeModal('modal-maxiter');
+  if (!cid) return;
+  let extra = 10;
+  if (cont) {
+    const inp = $('mi-extra');
+    const v = parseInt(inp && inp.value, 10);
+    if (!isNaN(v)) extra = Math.max(1, Math.min(1000, v));
+  }
   fetch('/api/chat/continue', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confirm_id: confirmId, continue: cont })
+    body: JSON.stringify({ confirm_id: cid, continue: !!cont, extra: extra })
   }).catch(function(){});
+  if (cont) addLoading();  // 续命后流恢复，重新挂 loading；终止则等 done 事件清理
 }
 
 // ══════════════════════════════════════════════════

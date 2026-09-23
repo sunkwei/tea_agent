@@ -954,7 +954,6 @@ enable_thinking: true
 keep_turns: 5
 max_tool_output: 128000
 max_assistant_content: 128000
-extra_iterations_on_continue: 25
 memory_extraction_threshold: 2
 ```
 

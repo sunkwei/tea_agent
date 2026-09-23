@@ -316,7 +316,6 @@ class Agent:
             max_assistant_content=cfg.max_assistant_content,
             max_context_tokens=main_m.max_context_tokens,
             tool_profile=main_m.tool_profile,
-            extra_iterations_on_continue=cfg.extra_iterations_on_continue,
             memory_extraction_threshold=cfg.memory_extraction_threshold,
             memory_dedup_threshold=cfg.memory_dedup_threshold,
             storage=self._db,
@@ -417,13 +416,14 @@ class Agent:
 
         def status_cb(status_msg: str):
             if status_msg.startswith("!MAX_ITER:"):
-                self._sess._continue_after_max = True
-                extra = getattr(self._sess.context, "extra_iterations_on_continue", 10)
-                # 注意：_extra_iterations 累加由 tool_loop_runner 负责（唯一累加点），
-                # 此处只通知，避免同一次续命被双倍累加
+                # 非交互路径（Agent.chat 无弹框）：静默自动续命会让 max_iterations
+                # 形同虚设（已实测单回合可无限续到数千次工具调用）。
+                # 改为按上限终止 + 显式通知；Web 端由 AgentModule 弹框走
+                # /api/chat/continue 用户决定续命/终止。
+                self._sess._continue_after_max = False
                 self._sess._max_iter_wait.set()
                 self._notify(
-                    {"type": "status", "text": f"已达最大轮次，自动续命 {extra} 轮..."}
+                    {"type": "status", "text": "已达最大轮次上限，本回合终止（Web 端可在确认弹框中输入续命轮数）"}
                 )
             elif on_status:
                 on_status(status_msg)

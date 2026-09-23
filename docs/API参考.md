@@ -415,7 +415,6 @@
 | `ensure_config_dir` | `build_mini_dist\tea_agent\config.py:404` | function |
 | `error` | `build_mini_dist\tea_agent\reflection.py:24` | variable |
 | `error` | `build_mini_dist\tea_agent\reflection.py:36` | variable |
-| `extra_iterations_on_continue` | `build_mini_dist\tea_agent\config.py:186` | variable |
 | `extract_mode` | `build_mini_dist\tea_agent\onlinesession.py:67` | function |
 | `filter_tools` | `build_mini_dist\tea_agent\onlinesession.py:306` | function |
 | `font_size` | `build_mini_dist\tea_agent\config.py:192` | variable |
@@ -1265,7 +1264,6 @@
 | `estimate_messages_tokens` | `build_mini_dist\tea_agent\session\history_builder.py:50` | function |
 | `estimate_tokens` | `build_mini_dist\tea_agent\session\history_builder.py:21` | function |
 | `execute_tool_loop` | `build_mini_dist\tea_agent\session\tool_loop_runner.py:308` | function |
-| `extra_iterations_on_continue` | `build_mini_dist\tea_agent\session\context.py:73` | variable |
 | `filter_level2_by_relevance` | `build_mini_dist\tea_agent\session\history_builder.py:301` | function |
 | `get_cheap_params` | `build_mini_dist\tea_agent\session\params.py:22` | function |
 | `get_skill_validate_rules` | `build_mini_dist\tea_agent\session\prompts.py:140` | function |

@@ -1073,6 +1073,21 @@ def execute_tool_loop(session, context: dict) -> dict:
 
         valid_tool_calls = session.tools_comp.parse_tool_calls_from_stream(tool_calls_data)
 
+        # 单轮 tool_calls 封顶（5727 事件修复）：退化输出可在单轮塞入 2958 个调用
+        # （实测正常 p90≈21），不设上限会在一轮内烧掉数千次工具执行。
+        # 超限直接截断并告警；被截断的调用不进 assistant 消息历史，
+        # 模型不会期待其结果（保持上下文一致），下轮可重新发起合理数量的调用。
+        _MAX_TC_PER_ROUND = 64
+        if len(valid_tool_calls) > _MAX_TC_PER_ROUND:
+            _total = len(valid_tool_calls)
+            valid_tool_calls = valid_tool_calls[:_MAX_TC_PER_ROUND]
+            _warn = (
+                f"[警告] 单轮工具调用 {_total} 个，超过上限 {_MAX_TC_PER_ROUND}，"
+                f"已截断保留前 {_MAX_TC_PER_ROUND} 个（疑似模型输出退化）"
+            )
+            logger.warning(_warn)
+            callback(_warn)
+
         # M1: 记录最近调用的工具名，供打断锚点记录
         if valid_tool_calls:
             last_tool_names = [tc.function.name for tc in valid_tool_calls]
@@ -1229,10 +1244,16 @@ def execute_tool_loop(session, context: dict) -> dict:
                         session.add_assistant_message(full_reply)
                         session.tools_comp.collect_max_iterations_round(full_reply)
                         break
-                    session._extra_iterations += session.context.extra_iterations_on_continue
+                    # 续命轮数由用户在达限弹框输入（确认端点写入 pending），未设置/非法回退 10
+                    try:
+                        extra = int(getattr(session, "_max_iter_extra_pending", 10) or 10)
+                    except (TypeError, ValueError):
+                        extra = 10
+                    extra = max(1, min(1000, extra))
+                    session._extra_iterations += extra
                     session._continue_after_max = False
                     session._max_iter_wait.clear()
-                    extra = session.context.extra_iterations_on_continue
+                    session._max_iter_extra_pending = 10
                     on_status(f"⏳ 已续命{extra}轮，继续生成... (ESC 打断)")
                     continue
                 else:

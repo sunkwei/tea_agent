@@ -411,7 +411,6 @@ class AgentModule(HotReloadModule):
             max_assistant_content=cfg.max_assistant_content,
             max_context_tokens=main_m.max_context_tokens,
             tool_profile=main_m.tool_profile,
-            extra_iterations_on_continue=cfg.extra_iterations_on_continue,
             memory_extraction_threshold=cfg.memory_extraction_threshold,
             storage=_storage,
             cheap_api_key=cheap_m.api_key, cheap_api_url=cheap_m.api_url,
@@ -1217,7 +1216,6 @@ class AgentModule(HotReloadModule):
             "enable_thinking": cfg.enable_thinking,
             "max_tool_output": cfg.max_tool_output,
             "max_assistant_content": cfg.max_assistant_content,
-            "extra_iterations_on_continue": cfg.extra_iterations_on_continue,
             "memory_extraction_threshold": cfg.memory_extraction_threshold,
             "memory_dedup_threshold": cfg.memory_dedup_threshold,
             "chat_page_size": cfg.chat_page_size,
@@ -1348,7 +1346,6 @@ class AgentModule(HotReloadModule):
         lines.append("keep_turns: 5")
         lines.append("max_tool_output: 128000")
         lines.append("max_assistant_content: 128000")
-        lines.append("extra_iterations_on_continue: 25")
         lines.append("memory_extraction_threshold: 2")
         lines.append("memory_dedup_threshold: 0.3")
         lines.append("chat_page_size: 50")

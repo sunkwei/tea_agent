@@ -531,7 +531,6 @@ curl -X POST http://localhost:8080/v1/upload \
 | `keep_turns` | int | 保留最新轮数 |
 | `max_tool_output` | int | 工具输出最大字符数 |
 | `max_assistant_content` | int | AI 回复最大字符数 |
-| `extra_iterations_on_continue` | int | 用户确认后续加轮数 |
 | `memory_extraction_threshold` | float | 记忆提取阈值 |
 | `memory_dedup_threshold` | float | 记忆去重阈值 |
 | `chat_page_size` | int | 聊天分页大小 |
@@ -715,7 +714,6 @@ enable_thinking: true
 keep_turns: 5
 max_tool_output: 128000
 max_assistant_content: 128000
-extra_iterations_on_continue: 25
 memory_extraction_threshold: 2
 memory_dedup_threshold: 0.3
 chat_page_size: 50

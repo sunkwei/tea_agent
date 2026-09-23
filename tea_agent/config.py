@@ -310,7 +310,6 @@ class AgentConfig:
     max_assistant_content: int = 128 * 1024  # 助手回复截断字符数
 
     # 交互与控制参数
-    extra_iterations_on_continue: int = 5  # 续命时追加的工具调用轮数
     memory_extraction_threshold: int = 2  # 触发记忆提取的最低未摘要消息数
     memory_dedup_threshold: float = 0.3  # 记忆去重相似度阈值 (0~1)，bigram Jaccard
     chat_page_size: int = 50  # GUI 单页加载的对话轮数（最多50条）
@@ -353,7 +352,6 @@ class AgentConfig:
         "keep_turns",
         "max_tool_output",
         "max_assistant_content",
-        "extra_iterations_on_continue",
         "memory_extraction_threshold",
         "memory_dedup_threshold",
         "chat_page_size",
@@ -397,7 +395,6 @@ class AgentConfig:
         "keep_turns": int,
         "max_tool_output": int,
         "max_assistant_content": int,
-        "extra_iterations_on_continue": int,
         "memory_extraction_threshold": int,
         "memory_dedup_threshold": float,
         "chat_page_size": int,
@@ -895,9 +892,6 @@ def _parse_control_params(cfg: AgentConfig, data: dict) -> None:
         cfg: AgentConfig实例
         data: 配置数据字典
     """
-    cfg.extra_iterations_on_continue = int(
-        data.get("extra_iterations_on_continue", cfg.extra_iterations_on_continue)
-    )
     # 打断知识闭环配置节（M4）：合并 yaml 覆盖默认值
     if isinstance(data.get("interruption"), dict):
         cfg.interruption = {**cfg.interruption, **data["interruption"]}
@@ -1201,7 +1195,6 @@ def _prepare_control_data(cfg: AgentConfig, data: dict) -> None:
         cfg: AgentConfig实例
         data: 配置数据字典（会被修改）
     """
-    data["extra_iterations_on_continue"] = cfg.extra_iterations_on_continue
     data["memory_extraction_threshold"] = cfg.memory_extraction_threshold
     data["memory_dedup_threshold"] = cfg.memory_dedup_threshold
     data["chat_page_size"] = cfg.chat_page_size
@@ -1349,8 +1342,6 @@ def _generate_config_template() -> str:
         "# 助手回复截断字符数（超过此长度的助手回复会被截断）\n"
         "max_assistant_content: 131072  # 128KB\n\n"
         "# ──────────────────── 交互与控制参数 ────────────────────\n"
-        "# 工具调用达到上限后续命时追加的轮数\n"
-        "extra_iterations_on_continue: 5\n\n"
         "# 触发自动记忆提取的最少未摘要消息数\n"
         "memory_extraction_threshold: 2\n\n"
         "# 记忆去重相似度阈值，超过此值视为重复并合并(0~1)\n"

@@ -18,8 +18,7 @@ def toolkit_config(action: str = "list", key: str = "", value: str = "") -> str:
     可修改的配置项:
         max_history, max_iterations, enable_thinking,
         keep_turns, max_tool_output, max_assistant_content,
-        extra_iterations_on_continue, memory_extraction_threshold,
-        memory_dedup_threshold, chat_page_size
+        memory_extraction_threshold, memory_dedup_threshold, chat_page_size
     """
     logger.info(f"toolkit_config called: action={action!r}, key={key!r}, value={value!r}")
 

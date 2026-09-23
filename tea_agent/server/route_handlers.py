@@ -757,10 +757,18 @@ async def handle_chat_continue(request):
 
     session = pending["session"]
     try:
+        # 用户输入的续命轮数（弹框输入，默认 10；钳位 1..1000 防误填爆轮）
+        try:
+            extra = int(body.get("extra", 10))
+        except (TypeError, ValueError):
+            extra = 10
+        extra = max(1, min(1000, extra))
         session._continue_after_max = decision
+        if decision:
+            session._max_iter_extra_pending = extra
         session._max_iter_wait.set()
-        logger.info(f"User confirmed max_iter: continue={decision}")
-        return JSONResponse({"ok": True, "continue": decision})
+        logger.info(f"User confirmed max_iter: continue={decision} extra={extra}")
+        return JSONResponse({"ok": True, "continue": decision, "extra": extra})
     except Exception as e:
         logger.exception(f"Handle max_iter confirm failed: {e}")
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)

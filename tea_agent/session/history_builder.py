@@ -1239,17 +1239,43 @@ def _dynamic_state_token() -> tuple:
     Plan 仍每轮注入「有 1 个未完成的 Plan (进度: 0/11)」，既误导模型又浪费
     token（与用户「不浪费 tokens」要求相悖）。
 
-    这里用轻量指纹（Plan 文件数 + mtime 之和）在读取时校验：
-    指纹不变则复用（工具循环内前缀稳定），一变即重算（反映真实状态）。
+    这里用轻量指纹在读取时校验：指纹不变则复用（工具循环内前缀稳定），
+    一变即重算（反映真实状态）。指纹 = Plan 文件（数量+mtime）+ 当前主题
+    TODO 聚合（2026-09-23 修复：旧指纹不含 TODO，实测 create 覆盖旧 8 项
+    清单后注入块跨回合持续渲染已删除条目，误导模型反复「继续旧任务」）。
     """
     try:
         import glob
         import os as _os
 
         plans = glob.glob(_os.path.join(".tea_agent_run", "plans", "*.json"))
-        return (len(plans), sum(int(_os.path.getmtime(f)) for f in plans))
+        plan_fp = (len(plans), sum(int(_os.path.getmtime(f)) for f in plans))
     except OSError:
-        return (0, 0)
+        plan_fp = (0, 0)
+
+    # TODO 聚合指纹（按当前主题，读取口径与 toolkit_task_resume 一致）：
+    # COUNT 变化=create/delete，SUM(done) 变化=勾选，SUM(LENGTH(desc)) 变化=改文案。
+    try:
+        from tea_agent.session_ref import get_agent
+
+        agent = get_agent()
+        todo_fp = (0, 0, 0)
+        if agent is not None and hasattr(agent, "db"):
+            topic_id = getattr(agent, "current_topic_id", None) or ""
+            conn = agent.db.conn
+            _sql = (
+                "SELECT COUNT(*), COALESCE(SUM(done),0), COALESCE(SUM(LENGTH(desc)),0)"
+                " FROM todo_items"
+            )
+            if topic_id:
+                row = conn.execute(_sql + " WHERE topic_id=?", (topic_id,)).fetchone()
+            else:
+                row = conn.execute(_sql).fetchone()
+            todo_fp = tuple(int(x) for x in (row or (0, 0, 0)))
+    except Exception:
+        todo_fp = (0, 0, 0)
+
+    return plan_fp + todo_fp
 
 
 def _get_dynamic_context(context: Any) -> str:

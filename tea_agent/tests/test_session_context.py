@@ -58,7 +58,6 @@ class TestSessionContextDefaults:
         assert ctx.supports_reasoning is True
         assert ctx.disable_summary is False
         assert ctx.no_stream_chunk is False
-        assert ctx.extra_iterations_on_continue == 5
 
     def test_runtime_state_defaults(self):
         """运行时状态字段应有合理的默认值"""
@@ -120,14 +119,12 @@ class TestSessionContextCustomInit:
             keep_turns=10,
             supports_vision=True,
             disable_summary=True,
-            extra_iterations_on_continue=8,
         )
         assert ctx.model == "gpt-4o"
         assert ctx.enable_thinking is False
         assert ctx.keep_turns == 10
         assert ctx.supports_vision is True
         assert ctx.disable_summary is True
-        assert ctx.extra_iterations_on_continue == 8
 
     def test_custom_messages(self):
         """传入消息列表应正确存储"""

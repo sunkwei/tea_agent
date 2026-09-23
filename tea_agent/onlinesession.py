@@ -239,7 +239,6 @@ class OnlineToolSession(BaseChatSession):
         max_assistant_content: int = 128 * 1024,
         max_context_tokens: int = 0,
         tool_profile: str = "auto",
-        extra_iterations_on_continue: int = 5,
         memory_extraction_threshold: int = 2,
         memory_dedup_threshold: float = 0.6,
         supports_vision: bool = False,
@@ -271,7 +270,6 @@ class OnlineToolSession(BaseChatSession):
             max_tool_output: 工具输出截断字符数
             max_assistant_content: 助手回复截断字符数
             max_context_tokens: 最大上下文 token 数，0=不限制
-            extra_iterations_on_continue: 续命时追加的工具调用轮数
             memory_extraction_threshold: 触发记忆提取的最低未摘要消息数
             memory_dedup_threshold: 记忆去重相似度阈值 (0~1)
             supports_vision: 是否支持视觉输入
@@ -320,7 +318,6 @@ class OnlineToolSession(BaseChatSession):
             supports_reasoning=supports_reasoning,
             disable_summary=disable_summary,
             no_stream_chunk=no_stream_chunk,
-            extra_iterations_on_continue=extra_iterations_on_continue,
         )
 
         # 步骤4: 调用基类初始化
@@ -544,7 +541,6 @@ class OnlineToolSession(BaseChatSession):
         supports_reasoning: bool,
         disable_summary: bool,
         no_stream_chunk: bool,
-        extra_iterations_on_continue: int,
     ) -> SessionContext:
         """创建会话上下文。
 
@@ -570,7 +566,6 @@ class OnlineToolSession(BaseChatSession):
             supports_reasoning: 是否支持推理
             disable_summary: 是否禁用摘要
             no_stream_chunk: 是否禁用流式输出
-            extra_iterations_on_continue: 续命轮数
 
         Returns:
             SessionContext实例
@@ -599,7 +594,6 @@ class OnlineToolSession(BaseChatSession):
             supports_reasoning=supports_reasoning,
             disable_summary=disable_summary,
             no_stream_chunk=no_stream_chunk,
-            extra_iterations_on_continue=extra_iterations_on_continue,
         )
 
     def _initialize_components(self) -> None:
@@ -656,6 +650,8 @@ class OnlineToolSession(BaseChatSession):
         self._extra_iterations = 0
         self._continue_after_max = False
         self._max_iter_wait = threading.Event()
+        # 达限确认后用户输入的续命轮数（/api/chat/continue 写入，默认 10）
+        self._max_iter_extra_pending = 10
 
     def _manage_http_clients(
         self,
@@ -740,7 +736,7 @@ class OnlineToolSession(BaseChatSession):
 
     # ── 属性桥接（仅保留外部代码实际使用的 7 个）──
     # 移除了 14 个冗余属性：model, _last_cheap_usage, _level2, max_tool_output,
-    # max_assistant_content, max_context_tokens, keep_turns, extra_iterations_on_continue,
+    # max_assistant_content, max_context_tokens, keep_turns,
     # memory_extraction_threshold, memory_dedup_threshold, disable_summary, no_stream_chunk,
     # supports_vision, supports_reasoning
     # 这些属性在外部代码中未被使用，直接使用 self.context.xxx 访问
@@ -1460,6 +1456,7 @@ class OnlineToolSession(BaseChatSession):
         self._rounds_collector = []
         self._extra_iterations = 0
         self._max_iter_wait.clear()
+        self._max_iter_extra_pending = 10
         # RC 400 自愈标志只在本回合生效：新用户回合清除，thinking 恢复正常
         self.context._rc400_recovery = False
         # A8: 溢出自愈的一次性紧急预算只在本回合生效；输出上限由下次

@@ -300,6 +300,19 @@
   </div>
 </div></div>
 
+<!-- Max Iter 续命确认 Modal（达限弹框：输入续命 N 轮 / 取消终止） -->
+<div id="modal-maxiter" class="modal"><div class="modal-box" style="max-width:420px">
+  <h3>⏳ 工具调用达上限</h3>
+  <p id="mi-text" style="font-size:13px;color:var(--text-dim);margin-bottom:12px;white-space:pre-wrap">已达到工具调用次数上限</p>
+  <label for="mi-extra">继续执行的追加轮数</label>
+  <input type="number" id="mi-extra" value="10" min="1" max="1000"
+         onkeydown="if(event.key==='Enter')maxIterDecision(true)">
+  <div class="modal-actions">
+    <button class="btn btn-g" onclick="maxIterDecision(false)">⛔ 取消终止</button>
+    <button class="btn btn-p" onclick="maxIterDecision(true)">▶ 确定续命</button>
+  </div>
+</div></div>
+
 <script src="/static/app.js?v=20260919_bar"></script>
 <!-- ═══ DAG 灯箱（双击放大） ═══ -->
 <div id="dag-lightbox" class="dag-lightbox" onclick="closeDagLightbox()">
